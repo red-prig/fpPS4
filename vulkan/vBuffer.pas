@@ -21,6 +21,7 @@ type
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
+  procedure   UnBindMem;
   procedure   OnReleaseMem(Sender:TObject); virtual;
   //
   function    Acquire:Boolean;
@@ -136,6 +137,8 @@ end;
 
 Destructor TvBuffer.Destroy;
 begin
+ UnBindMem;
+ //
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
@@ -174,6 +177,11 @@ function TvBuffer.BindMem(P:TvPointer):TVkResult;
 begin
  if P.Acquire then
  begin
+  if ((P.FOffset+self.FSize)>P.FMemory.FSize) then
+  begin
+   Assert(False);
+  end;
+
   Result:=vkBindBufferMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
   //
   if (Result=VK_SUCCESS) then
@@ -191,9 +199,18 @@ begin
  end;
 end;
 
+procedure TvBuffer.UnBindMem;
+begin
+ if (FBind.FMemory<>nil) then
+ begin
+  FBind.Release;
+ end;
+ FBind.FMemory:=nil;
+end;
+
 procedure TvBuffer.OnReleaseMem(Sender:TObject);
 begin
- FBind.FMemory:=nil;
+ UnBindMem;
  //
  if (FHandle<>VK_NULL_HANDLE) then
  begin

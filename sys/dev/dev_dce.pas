@@ -445,9 +445,9 @@ begin
 
         dce_page^.filter_id:=-13;
 
-        dce_page^.ident_flip   :=$06000000000000;
-        dce_page^.ident_vblank :=$07000000000000;
-        dce_page^.ident_setmode:=$51000000000000;
+        dce_page^.ident_flip   :=QWORD($06000000000000);
+        dce_page^.ident_vblank :=QWORD($07000000000000);
+        dce_page^.ident_setmode:=QWORD($51000000000000);
         dce_page^.vopen_counter:=f_vopen_counter;
 
         f_eop_count:=1;
@@ -502,11 +502,11 @@ begin
 
       close_vblank;
 
-      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$06000000000000);
-      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$07000000000000);
-      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$51000000000000);
-      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$58000000000000);
-      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,$59000000000000);
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,QWORD($06000000000000));
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,QWORD($07000000000000));
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,QWORD($51000000000000));
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,QWORD($58000000000000));
+      kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,QWORD($59000000000000));
 
       Exit(0);
      end;
@@ -1107,7 +1107,7 @@ begin
  end;
 
  off:=offset^;
- if ((off and $fffffffffc003fff)<>0) then //0..3FFC000
+ if ((off and QWORD($fffffffffc003fff))<>0) then //0..3FFC000
  begin
   Exit(EINVAL);
  end;
@@ -1169,7 +1169,7 @@ var
 begin
  kn^.kn_flags:=kn^.kn_flags or EV_CLEAR; { automatically set }
 
- if ((kn^.kn_kevent.ident and $f00000000000)=0) then
+ if ((kn^.kn_kevent.ident and QWORD($f00000000000))=0) then
  begin
   //_display_attach(&kn->kn_kevent);
  end;
@@ -1224,7 +1224,7 @@ begin
   else;
  end;
 
- if ((kn^.kn_kevent.ident and $f00000000000)=0) then
+ if ((kn^.kn_kevent.ident and QWORD($f00000000000))=0) then
  begin
   //_display_detach(&kn->kn_kevent);
  end;
@@ -1261,7 +1261,7 @@ begin
     mask:=(DWORD(kn^.kn_kevent.data) + $1000) and $f000;
    end;
    i:=1;
-   kn^.kn_kevent.data:=mask or QWORD(DWORD(time) and $fff) or (hint and $ffffffffffff0000);
+   kn^.kn_kevent.data:=mask or QWORD(DWORD(time) and $fff) or (hint and QWORD($ffffffffffff0000));
   end;
  end;
 

@@ -172,7 +172,7 @@ type
  p_pm4_node_WriteData=^t_pm4_node_WriteData;
  t_pm4_node_WriteData=packed object(t_pm4_node)
   dst   :QWORD;
-  src   :QWORD;
+  src   :Pointer;
   num_dw:Word;
   dstSel:Byte;
  end;
@@ -232,7 +232,7 @@ type
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
   procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
-  procedure WriteData    (dstSel:Byte;dst,src:QWORD;num_dw:Word);
+  procedure WriteData    (dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word);
   procedure WaitRegMem   (pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
@@ -370,17 +370,19 @@ begin
  add_node(node);
 end;
 
-procedure t_pm4_stream.WriteData(dstSel:Byte;dst,src:QWORD;num_dw:Word);
+procedure t_pm4_stream.WriteData(dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word);
 var
  node:p_pm4_node_WriteData;
 begin
- node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData));
+ node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData)+num_dw*SizeOf(DWORD));
 
  node^.ntype :=ntWriteData;
  node^.dst   :=dst;
- node^.src   :=src;
+ node^.src   :=Pointer(node+1);
  node^.num_dw:=num_dw;
  node^.dstSel:=dstSel;
+
+ Move(src^,node^.src^,num_dw*SizeOf(DWORD));
 
  add_node(node);
 end;

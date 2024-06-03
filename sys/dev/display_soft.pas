@@ -674,11 +674,6 @@ begin
  Flip^.submit   :=Node;
  Flip^.submit_id:=submit_id;
 
- if (submit^.bufferIndex<>-1) then
- begin
-  dce_page^.labels[submit^.bufferIndex]:=1;
- end;
-
  System.InterlockedIncrement(last_status.gcQueueNum);
 
  Result:=0;
@@ -688,6 +683,7 @@ function TDisplayHandleSoft.TriggerFlipEop(submit_id:QWORD):Integer;
 var
  Node:PQNodeSubmit;
  Flip:PQNodeFlip;
+ submit:p_submit_flip;
  i:Integer;
 begin
  Result:=0;
@@ -711,6 +707,15 @@ begin
    System.InterlockedDecrement(last_status.gcQueueNum);
 
    //
+
+   submit:=@Node^.submit;
+
+   if (submit^.bufferIndex<>-1) then
+   begin
+    dce_page^.labels[submit^.bufferIndex]:=1;
+   end;
+
+   //
    Node^.tsc:=rdtsc();
 
    System.InterlockedIncrement(last_status.flipPendingNum0);
@@ -719,7 +724,7 @@ begin
 
    FSubmitQueue.Push(Node);
 
-   if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+   //if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
    begin
     RTLEventSetEvent(FEvent);
    end;

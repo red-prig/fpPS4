@@ -138,11 +138,11 @@ begin
  ColorAtd[AtdCount].samples:=TVkSampleCountFlagBits(samples);
 
  With ColorAtd[AtdCount] do
-  if (IMAGE_USAGE and TM_CLEAR<>0) then
+  if ((IMAGE_USAGE and TM_CLEAR)<>0) then
   begin
    loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
   end else
-  if (IMAGE_USAGE and TM_READ<>0) then
+  if ((IMAGE_USAGE and TM_READ)<>0) then
   begin
    loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
   end else
@@ -151,7 +151,7 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if (IMAGE_USAGE and TM_WRITE<>0) then
+  if ((IMAGE_USAGE and TM_WRITE)<>0) then
   begin
    storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
   end else
@@ -163,7 +163,7 @@ begin
  ColorAtd[AtdCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
  With ColorAtd[AtdCount] do
-  if (IMAGE_USAGE and TM_READ<>0) then
+  if ((IMAGE_USAGE and TM_READ)<>0) then
   begin
    initialLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   end else
@@ -190,11 +190,11 @@ begin
  ColorAtd[AtdCount].samples:=VK_SAMPLE_COUNT_1_BIT;
 
  With ColorAtd[AtdCount] do
-  if (DEPTH_USAGE and TM_CLEAR<>0) then
+  if ((DEPTH_USAGE and TM_CLEAR)<>0) then
   begin
    loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
   end else
-  if (DEPTH_USAGE and TM_READ<>0) then
+  if ((DEPTH_USAGE and TM_READ)<>0) then
   begin
    loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
   end else
@@ -203,7 +203,7 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if (DEPTH_USAGE and TM_WRITE<>0) then
+  if ((DEPTH_USAGE and TM_WRITE)<>0) then
   begin
    storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
   end else
@@ -212,11 +212,11 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if (STENCIL_USAGE and TM_CLEAR<>0) then
+  if ((STENCIL_USAGE and TM_CLEAR)<>0) then
   begin
    stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
   end else
-  if (STENCIL_USAGE and TM_READ<>0) then
+  if ((STENCIL_USAGE and TM_READ)<>0) then
   begin
    stencilLoadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
   end else
@@ -225,7 +225,7 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if (STENCIL_USAGE and TM_WRITE<>0) then
+  if ((STENCIL_USAGE and TM_WRITE)<>0) then
   begin
    stencilStoreOp:=VK_ATTACHMENT_STORE_OP_STORE;
   end else
@@ -234,7 +234,7 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if ((DEPTH_USAGE or STENCIL_USAGE) and TM_READ<>0) then
+  if (((DEPTH_USAGE or STENCIL_USAGE) and TM_READ)<>0) then
   begin
    initialLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
   end else

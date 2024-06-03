@@ -12,6 +12,7 @@ uses
 
  Vulkan,
  vDevice,
+ vMemory,
  vBuffer,
  vHostBufferManager,
  vImage,
@@ -31,6 +32,8 @@ uses
  vSamplerManager,
 
  shader_dump,
+
+ ps4_Tiling,
 
  renderdoc,
 
@@ -163,46 +166,616 @@ end;
 
 //
 
-Function GetAlignWidth(format:TVkFormat;width:DWORD):DWORD;
+Function GetLinearAlignWidth(bpp,width:Ptruint):Ptruint; inline;
 var
- bpp,size,align_m:Ptruint;
+ align_m:Ptruint;
 begin
- size:=width;
- bpp:=getFormatSize(format);
- align_m:=(128 div bpp)-1;
- size:=(size+align_m) and (not align_m);
- Result:=size;
+ align_m:=(64 div bpp)-1;
+ Result:=(width+align_m) and (not align_m);
 end;
 
 Function GetLinearSize(image:TvImage2;align:Boolean):Ptruint;
 var
- extend:TvExtent3D;
+ m_bytePerElement:Ptruint;
+ m_level,m_width,m_height:Ptruint;
+ m_padwidth,m_padheight:Ptruint;
+ m_slice:Ptruint;
 begin
- extend.width :=image.key.params.width;
- extend.height:=image.key.params.height;
- extend.depth :=image.key.params.depth;
+ m_bytePerElement:=getFormatSize(image.key.cformat);
 
- if align then
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ Result:=0;
+
+ while (m_level>0) do
  begin
-  extend.width:=GetAlignWidth(image.key.cformat,extend.width);
+  m_padwidth :=m_width;
+  m_padheight:=m_height;
+
+  if align then
+  begin
+   m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth);
+  end;
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_padwidth +3) shr 2;
+   m_padheight:=(m_padheight+3) shr 2;
+  end;
+
+  m_slice:=m_padwidth*
+           m_padheight*
+           m_bytePerElement;
+
+  m_slice:=(m_slice+255) and (not Ptruint(255));
+
+  Result:=Result+m_slice;
+
+  Dec(m_level);
+  m_width :=m_width  shr 1;
+  m_height:=m_height shr 1;
+  if (m_width =0) then m_width :=1;
+  if (m_height=0) then m_height:=1;
  end;
 
- if IsTexelFormat(image.key.cformat) then
+ Result:=Result*
+         image.key.params.depth*
+         image.key.params.arrayLayers;
+end;
+
+Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
+var
+ align_m:Ptruint;
+begin
+ align_m:=(32 div bpp)-1;
+ Result:=(width+align_m) and (not align_m);
+end;
+
+Function Get1dThinSize(image:TvImage2):Ptruint;
+var
+ m_bytePerElement:Ptruint;
+ m_level,m_width,m_height:Ptruint;
+ m_padwidth,m_padheight:Ptruint;
+ m_slice:Ptruint;
+begin
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ Result:=0;
+
+ while (m_level>0) do
  begin
-  extend.width  :=(extend.width  +3) div 4;
-  extend.height :=(extend.height +3) div 4;
+  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_width);
+  m_padheight:=(m_height+7) and (not 7);
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_padwidth +3) shr 2;
+   m_padheight:=(m_padheight+3) shr 2;
+  end;
+
+  m_slice:=m_padwidth*
+           m_padheight*
+           m_bytePerElement;
+
+  m_slice:=(m_slice+255) and (not Ptruint(255));
+
+  Result:=Result+m_slice;
+
+  Dec(m_level);
+  m_width :=m_width  shr 1;
+  m_height:=m_height shr 1;
+  if (m_width =0) then m_width :=1;
+  if (m_height=0) then m_height:=1;
  end;
 
- Result:=extend.width*
-         extend.height*
-         extend.depth*
-         image.key.params.arrayLayers*
-         getFormatSize(image.key.cformat);
+ Result:=Result*
+         image.key.params.depth*
+         image.key.params.arrayLayers;
 end;
 
 function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 begin
  Result:=addr-(addr mod alignment);
+end;
+
+type
+ t_load_from_cb=procedure(cmd:TvCustomCmdBuffer;image:TvImage2);
+
+type
+ TvTempBuffer=class(TvBuffer)
+  procedure Release(Sender:TObject); register;
+ end;
+
+procedure TvTempBuffer.Release(Sender:TObject); register;
+begin
+ MemManager.Free(FBind);
+ Free;
+end;
+
+procedure load_clear(cmd:TvCustomCmdBuffer;image:TvImage2);
+var
+ Color:TVkClearColorValue;
+ DepthStencil:TVkClearDepthStencilValue;
+ Range:TVkImageSubresourceRange;
+begin
+
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ case image.key.cformat of
+  //stencil
+  VK_FORMAT_S8_UINT,
+  //depth
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT,
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   begin
+    DepthStencil:=Default(TVkClearDepthStencilValue);
+    Range:=image.GetSubresRange;
+
+    {
+    vkCmdClearDepthStencilImage(cmd.FCmdbuf,
+                                image.FHandle,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                @DepthStencil,
+                                1,
+                                @Range);}
+
+   end;
+  else
+   begin
+    Color:=Default(TVkClearColorValue);
+    Range:=image.GetSubresRange;
+
+    {
+    vkCmdClearColorImage(cmd.FCmdbuf,
+                         image.FHandle,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         @Color,
+                         1,
+                         @Range);}
+
+   end;
+ end;
+
+
+end;
+
+type
+ TTGAHeader=packed record
+  idlength       :Byte;
+  colourmaptype  :Byte;
+  datatypecode   :Byte;
+  colourmaporigin:Word;
+  colourmaplength:Word;
+  colourmapdepth :Byte;
+  x_origin       :Word;
+  y_origin       :Word;
+  width          :Word;
+  height         :Word;
+  bitsperpixel   :Byte;
+  imagedescriptor:Byte;
+ end;
+
+Procedure SaveToTGA(const name:RawByteString;pData:Pointer;width,height,bpp:Ptruint);
+var
+ F:THandle;
+ Header:TTGAHeader;
+ slice:Ptruint;
+begin
+ slice:=(width*height*bpp+7) div 8;
+
+ Header:=Default(TTGAHeader);
+
+ Header.datatypecode   :=3;
+
+ Header.width          :=width;
+ Header.height         :=height;
+ Header.bitsperpixel   :=bpp;
+ Header.imagedescriptor:=32;
+
+ F:=FileCreate(name);
+ FileWrite(F,Header,SizeOf(TTGAHeader));
+ FileWrite(F,pData^,slice);
+ FileClose(F);
+end;
+
+Procedure copy_1dThin(var tiler:Tiler1d;src,dst:Pointer);
+var
+ m_bytePerElement:Ptruint;
+ m_slice_size:Ptruint;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+begin
+ m_bytePerElement:=tiler.m_bitsPerElement div 8;
+ m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
+ //
+ For z:=0 to tiler.m_linearDepth-1 do
+  For y:=0 to tiler.m_linearHeight-1 do
+   For x:=0 to tiler.m_linearWidth-1 do
+    begin
+     i:=0;
+     tiler.getTiledElementByteOffset(i,x,y,z);
+     pSrc:=@PByte(src)[i];
+     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     Move(pSrc^,pDst^,m_bytePerElement);
+    end;
+end;
+
+Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvImage2);
+var
+ BufferImageCopy:TVkBufferImageCopy;
+ size:Ptruint;
+
+ BufferImageCopyA:array of TVkBufferImageCopy;
+
+ m_bytePerElement:Ptruint;
+ m_level,m_width,m_height:Ptruint;
+ m_slice :Ptruint;
+ m_offset:Ptruint;
+
+ a,d,b:Ptruint;
+begin
+
+ cmd.AddDependence(@buf.Release);
+
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+
+ size:=GetLinearSize(image,false);
+
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ vkBufferMemoryBarrier(cmd.FCmdbuf,
+                       buf.FHandle,
+                       ord(VK_ACCESS_SHADER_WRITE_BIT),
+                       ord(VK_ACCESS_MEMORY_READ_BIT),
+                       0,size,
+                       ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                       );
+
+ BufferImageCopy:=Default(TVkBufferImageCopy);
+ BufferImageCopy.imageSubresource:=image.GetSubresLayer;
+ BufferImageCopy.imageSubresource.layerCount:=1;
+ BufferImageCopy.imageExtent.depth:=1;
+
+ BufferImageCopyA:=nil;
+ SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
+ b:=0;
+
+ m_offset:=0;
+
+ for a:=0 to image.key.params.arrayLayers-1 do
+ for d:=0 to image.key.params.depth-1 do
+ begin
+  BufferImageCopy.imageSubresource.baseArrayLayer:=a;
+  BufferImageCopy.imageOffset.z:=d;
+
+  m_level :=image.key.params.mipLevels;
+  m_width :=image.key.params.width;
+  m_height:=image.key.params.height;
+
+  while (m_level>0) do
+  begin
+   //BufferImageCopy.bufferOffset:=m_offset;
+   BufferImageCopy.bufferOffset:=0;
+
+   BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
+
+   BufferImageCopy.imageExtent.width :=m_width;
+   BufferImageCopy.imageExtent.height:=m_height;
+
+   BufferImageCopyA[b]:=BufferImageCopy;
+   Inc(b);
+
+   m_slice:=m_width*m_height*m_bytePerElement;
+
+   m_offset:=m_offset+m_slice;
+
+   Dec(m_level);
+   m_width :=m_width  shr 1;
+   m_height:=m_height shr 1;
+   if (m_width =0) then m_width :=1;
+   if (m_height=0) then m_height:=1;
+  end;
+
+ end;
+
+ vkCmdCopyBufferToImage(cmd.FCmdbuf,
+                        buf.FHandle,
+                        image.FHandle,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        Length(BufferImageCopyA),
+                        @BufferImageCopyA[0]);
+
+
+end;
+
+Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvImage2);
+var
+ buf:TvTempBuffer;
+
+ tiler:Tiler1d;
+
+ m_bytePerElement:Ptruint;
+ m_level,m_width,m_height:Ptruint;
+ m_padwidth,m_padheight:Ptruint;
+ //m_slice:Ptruint;
+
+ m_full_linear_size:Ptruint;
+
+ m_base:Pointer;
+
+ src:Pointer;
+ dst:Pointer;
+begin
+ Assert(image.key.params.samples<=1,'image.key.params.samples>1');
+
+ m_full_linear_size:=GetLinearSize(image,False);
+ //m_base:=GetMem(m_full_linear_size);
+
+ buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
+ buf.BindMem(MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)));
+
+ m_base:=nil;
+ vkMapMemory(Device.FHandle,
+             buf.FBind.FMemory.FHandle,
+             buf.FBind.FOffset,
+             m_full_linear_size,
+             0,
+             @m_base);
+
+ dst:=m_base;
+
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+
+ tiler.init_surface(m_bytePerElement*8,image.key.params.tiling.idx,image.key.params.tiling.alt);
+
+ //TvBuffer
+
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ src:=image.key.Addr;
+
+ while (m_level>0) do
+ begin
+  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_width);
+  m_padheight:=(m_height+7) and (not 7);
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_padwidth +3) shr 2;
+   m_padheight:=(m_padheight+3) shr 2;
+  end;
+
+  {
+  m_slice:=m_padwidth*
+           m_padheight*
+           m_bytePerElement;
+
+  m_slice:=(m_slice+255) and (not Ptruint(255));
+  }
+
+  //
+  tiler.m_linearWidth    :=m_width;
+  tiler.m_linearHeight   :=m_height;
+  tiler.m_linearDepth    :=1;
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   tiler.m_linearWidth :=(tiler.m_linearWidth +3) shr 2;
+   tiler.m_linearHeight:=(tiler.m_linearHeight+3) shr 2;
+  end;
+
+  tiler.m_paddedWidth    :=m_padwidth;
+  tiler.m_paddedHeight   :=m_padheight;
+  tiler.m_paddedDepth    :=1;
+
+  tiler.m_linearSizeBytes:=tiler.m_linearWidth*tiler.m_linearHeight*tiler.m_linearDepth*m_bytePerElement;
+  tiler.m_tiledSizeBytes :=tiler.m_paddedWidth*tiler.m_paddedHeight*tiler.m_paddedDepth*m_bytePerElement;
+  tiler.m_tiledSizeBytes:=(tiler.m_tiledSizeBytes+255) and (not Ptruint(255));
+
+  tiler.m_tilesPerRow    :=tiler.m_paddedWidth div kMicroTileWidth;
+  tiler.m_tilesPerSlice  :=tiler.m_tilesPerRow * (tiler.m_paddedHeight div kMicroTileHeight);
+  //
+
+  if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
+  begin
+   Writeln(ptruint(dst-m_base)+tiler.m_linearSizeBytes,'>',m_full_linear_size);
+   Assert(false);
+  end;
+
+  copy_1dThin(tiler,src,dst);
+
+  {
+  SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+'.tga',
+            dst,
+            tiler.m_linearWidth,
+            tiler.m_linearHeight,
+            tiler.m_bitsPerElement);
+  }
+
+  src:=src+tiler.m_tiledSizeBytes;
+  dst:=dst+tiler.m_linearSizeBytes;
+
+  Dec(m_level);
+  m_width :=m_width  shr 1;
+  m_height:=m_height shr 1;
+  if (m_width =0) then m_width :=1;
+  if (m_height=0) then m_height:=1;
+ end;
+
+ vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
+ //FreeMem(m_base);
+
+ _Copy_Linear(cmd,buf,image);
+end;
+
+Procedure load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
+var
+ buf:TvHostBuffer;
+ BufferImageCopy:TVkBufferImageCopy;
+ size:Ptruint;
+
+ addr:Pointer;
+
+ BufferImageCopyA:array of TVkBufferImageCopy;
+
+ m_bytePerElement:Ptruint;
+ m_level,m_width,m_height:Ptruint;
+ m_slice :Ptruint;
+ m_offset:Ptruint;
+
+ a,d,b:Ptruint;
+begin
+
+ m_bytePerElement:=getFormatSize(image.key.cformat);
+
+ size:=GetLinearSize(image,(image.key.params.tiling.idx=8));
+
+ addr:=image.key.Addr;
+
+ if not get_dmem_ptr(addr,@addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
+ end;
+
+ buf:=FetchHostBuffer(cmd,
+                      QWORD(addr),
+                      size,
+                      ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+
+ image.PushBarrier(cmd,
+                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ vkBufferMemoryBarrier(cmd.FCmdbuf,
+                       buf.FHandle,
+                       ord(VK_ACCESS_SHADER_WRITE_BIT),
+                       ord(VK_ACCESS_MEMORY_READ_BIT),
+                       0,size,
+                       ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                       );
+
+ BufferImageCopy:=Default(TVkBufferImageCopy);
+ BufferImageCopy.imageSubresource:=image.GetSubresLayer;
+ BufferImageCopy.imageSubresource.layerCount:=1;
+ BufferImageCopy.imageExtent.depth:=1;
+
+ BufferImageCopyA:=nil;
+ SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
+ b:=0;
+
+ m_offset:=buf.FAddr-QWORD(addr);
+
+ for a:=0 to image.key.params.arrayLayers-1 do
+ for d:=0 to image.key.params.depth-1 do
+ begin
+  BufferImageCopy.imageSubresource.baseArrayLayer:=a;
+  BufferImageCopy.imageOffset.z:=d;
+
+  m_level :=image.key.params.mipLevels;
+  m_width :=image.key.params.width;
+  m_height:=image.key.params.height;
+
+  while (m_level>0) do
+  begin
+   BufferImageCopy.bufferOffset:=m_offset;
+   //BufferImageCopy.bufferOffset:=0;
+
+   BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
+
+   BufferImageCopy.imageExtent.width :=m_width;
+   BufferImageCopy.imageExtent.height:=m_height;
+
+   if (image.key.params.tiling.idx=8) then
+   begin
+    BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
+   end;
+
+   BufferImageCopyA[b]:=BufferImageCopy;
+   Inc(b);
+
+   m_slice:=m_width*m_height*m_bytePerElement;
+
+   //m_offset:=m_offset+m_slice;
+
+   Dec(m_level);
+   m_width :=m_width  shr 1;
+   m_height:=m_height shr 1;
+   if (m_width =0) then m_width :=1;
+   if (m_height=0) then m_height:=1;
+  end;
+
+ end;
+
+ vkCmdCopyBufferToImage(cmd.FCmdbuf,
+                        buf.FHandle,
+                        image.FHandle,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        Length(BufferImageCopyA),
+                        @BufferImageCopyA[0]);
+
+
+end;
+
+var
+ a_load_from:array[0..63] of t_load_from_cb;
+
+procedure pm4_load_from(cmd:TvCustomCmdBuffer;ri:TvImage2;IMAGE_USAGE:Byte);
+var
+ cb:t_load_from_cb;
+begin
+ if (IMAGE_USAGE and TM_READ)=0 then Exit;
+
+ //if (ri.data_usage and TM_READ)<>0 then Exit;
+ //ri.data_usage:=ri.data_usage or TM_READ;
+
+ IMAGE_USAGE:=IMAGE_USAGE and (not TM_READ);
+
+ a_load_from[10   ]:=@load_Linear;//@load_clear;
+ a_load_from[10+32]:=@load_Linear;//@load_clear;
+
+ a_load_from[2    ]:=@load_Linear;//@load_clear;
+ a_load_from[2+32 ]:=@load_Linear;//@load_clear;
+
+ a_load_from[0    ]:=@load_Linear;//@load_clear;
+ a_load_from[0+32 ]:=@load_Linear;//@load_clear;
+
+ a_load_from[13   ]:=@load_1dThin;
+ a_load_from[13+32]:=@load_1dThin;
+
+ a_load_from[8    ]:=@load_Linear;
+ a_load_from[8+32 ]:=@load_Linear;
+
+ cb:=a_load_from[Byte(ri.key.params.tiling)];
+
+ if (cb=nil) then
+ begin
+  Writeln(stderr,'tiling:'+IntToStr(ri.key.params.tiling.idx)+' alt:'+IntToStr(ri.key.params.tiling.alt));
+  Assert(false,'tiling:'+IntToStr(ri.key.params.tiling.idx)+' alt:'+IntToStr(ri.key.params.tiling.alt));
+ end;
+
+ cb(cmd,ri);
 end;
 
 var
@@ -240,6 +813,38 @@ var
  FDescriptorGroup:TvDescriptorGroup;
 begin
 
+ {
+ if (rt_info.RT_COUNT=0) and
+    (rt_info.DB_ENABLE) then
+ begin
+  //ClearDepthTarget
+
+  ri:=FetchImage(CmdBuffer,
+                 rt_info.DB_INFO.FImageInfo,
+                 iu_depth,
+                 rt_info.DB_INFO.DEPTH_USAGE
+                 );
+
+  ri.PushBarrier(CmdBuffer,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+  ri.PushBarrier(CmdBuffer,
+                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+  CmdBuffer.ClearDepthStencilImage(ri.FHandle,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
+                                   ri.GetSubresRange);
+
+  Exit;
+ end;
+ }
+
+
  RP_KEY.Clear;
 
  RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
@@ -253,11 +858,16 @@ begin
                      RenderCmd.RT_INFO[i].FImageInfo.cformat,
                      RenderCmd.RT_INFO[i].IMAGE_USAGE,
                      RenderCmd.RT_INFO[i].FImageInfo.params.samples);
+
   end;
+
+ //rt_info.DB_ENABLE:=False;
 
  if rt_info.DB_ENABLE then
  begin
   RenderCmd.DB_INFO:=rt_info.DB_INFO;
+
+ // RenderCmd.DB_INFO.DEPTH_USAGE:=RenderCmd.DB_INFO.DEPTH_USAGE or TM_CLEAR;
 
   RP_KEY.AddDepthAt(RenderCmd.RT_COUNT, //add to last attachment id
                     RenderCmd.DB_INFO.FImageInfo.cformat,
@@ -360,6 +970,8 @@ begin
                   RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
+   //pm4_load_from(CmdBuffer,ri,RenderCmd.RT_INFO[i].IMAGE_USAGE);
+
    iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
 
    ri.PushBarrier(CmdBuffer,
@@ -395,12 +1007,20 @@ begin
                  RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
+  //pm4_load_from(CmdBuffer,ri,RenderCmd.DB_INFO.DEPTH_USAGE);
+
   iv:=ri.FetchView(CmdBuffer,iu_depth);
 
   ri.PushBarrier(CmdBuffer,
                  ord(VK_ACCESS_TRANSFER_READ_BIT),
                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+  ri.PushBarrier(CmdBuffer,
+                 GetColorAccessMask(RenderCmd.DB_INFO.DEPTH_USAGE),
+                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                 ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
 
   //
   if limits.VK_KHR_imageless_framebuffer then
@@ -435,6 +1055,8 @@ begin
                   iu_sampled,
                   TM_READ
                  );
+
+   pm4_load_from(CmdBuffer,ri,TM_READ);
 
    iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
 
@@ -625,7 +1247,7 @@ begin
 
    if true {align} then
    begin
-    BufferImageCopy.bufferRowLength:=GetAlignWidth(ri.key.cformat,ri.key.params.width);
+    BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(getFormatSize(ri.key.cformat),ri.key.params.width);
    end;
 
    vkCmdCopyImageToBuffer(CmdBuffer.FCmdbuf,
@@ -758,6 +1380,8 @@ procedure pm4_SubmitFlipEop(node:p_pm4_node_SubmitFlipEop;me:p_pm4_me);
 var
  curr:QWORD;
 begin
+ EndFrameCapture;
+
  if (me^.on_submit_flip_eop<>nil) then
  begin
   me^.on_submit_flip_eop(node^.eop_value);
@@ -769,6 +1393,70 @@ begin
  begin
   me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
+end;
+
+procedure pm4_EventWriteEos(node:p_pm4_node_EventWriteEos;me:p_pm4_me);
+begin
+
+ if (node^.addr<>nil) then
+ Case node^.command of
+
+   //32bit data
+  EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY:PDWORD(node^.addr)^:=node^.data;
+
+  else
+   Assert(false,'pm4_EventWriteEos');
+ end;
+
+ //interrupt???
+end;
+
+procedure pm4_WriteData(node:p_pm4_node_WriteData);
+var
+ addr:PDWORD;
+begin
+
+ case node^.dstSel of
+  WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
+  WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
+  WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+    begin
+     addr:=Pointer(node^.dst);
+     Move(node^.src^,addr^,node^.num_dw*SizeOf(DWORD));
+    end;
+  else
+    Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
+ end;
+
+end;
+
+Function me_test_mem(node:p_pm4_node_WaitRegMem):Boolean;
+var
+ val,ref:DWORD;
+begin
+ val:=PDWORD(node^.pollAddr)^ and node^.mask;
+ ref:=node^.refValue;
+ Case node^.compareFunc of
+  WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
+  WAIT_REG_MEM_FUNC_LESS         :Result:=(val<ref);
+  WAIT_REG_MEM_FUNC_LESS_EQUAL   :Result:=(val<=ref);
+  WAIT_REG_MEM_FUNC_EQUAL        :Result:=(val=ref);
+  WAIT_REG_MEM_FUNC_NOT_EQUAL    :Result:=(val<>ref);
+  WAIT_REG_MEM_FUNC_GREATER_EQUAL:Result:=(val>ref);
+  WAIT_REG_MEM_FUNC_GREATER      :Result:=(val>=ref);
+  else
+   Assert(false,'me_test_mem');
+ end;
+end;
+
+procedure pm4_WaitRegMem(node:p_pm4_node_WaitRegMem);
+begin
+
+ while not me_test_mem(node) do
+ begin
+  sleep(1);
+ end;
+
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
@@ -806,6 +1494,9 @@ begin
      ntDrawIndexAuto:pm4_Draw         (Pointer(node));
      ntEventWriteEop:pm4_EventWriteEop(Pointer(node),me);
      ntSubmitFlipEop:pm4_SubmitFlipEop(Pointer(node),me);
+     ntEventWriteEos:pm4_EventWriteEos(Pointer(node),me);
+     ntWriteData    :pm4_WriteData    (Pointer(node));
+     ntWaitRegMem   :pm4_WaitRegMem   (Pointer(node));
      else
     end;
 

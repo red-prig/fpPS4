@@ -96,6 +96,12 @@ type
                          rangeCount:TVkUInt32;
                          const pRanges:PVkImageSubresourceRange);
 
+  Procedure   ClearDepthStencilImage(
+                         image:TVkImage;
+                         imageLayout:TVkImageLayout;
+                         const pDepthStencil:PVkClearDepthStencilValue;
+                         const range:TVkImageSubresourceRange);
+
   Procedure   ClearColorImage(
                          image:TVkImage;
                          imageLayout:TVkImageLayout;
@@ -616,6 +622,19 @@ begin
    rangeCount,
    pRanges);
 
+end;
+
+Procedure TvCustomCmdBuffer.ClearDepthStencilImage(
+                       image:TVkImage;
+                       imageLayout:TVkImageLayout;
+                       const pDepthStencil:PVkClearDepthStencilValue;
+                       const range:TVkImageSubresourceRange);
+begin
+ ClearDepthStencilImage(image,
+                        imageLayout,
+                        pDepthStencil,
+                        1,
+                        @range);
 end;
 
 Procedure TvCustomCmdBuffer.ClearColorImage(

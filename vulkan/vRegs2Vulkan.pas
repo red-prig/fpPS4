@@ -8,6 +8,7 @@ uses
  sysutils,
  bittype,
  half16,
+ sys_bootparam,
  Vulkan,
  vImage,
  vShader,
@@ -217,9 +218,9 @@ begin
  if (VTE_CNTL.VPORT_Z_SCALE_ENA =0) then V.ZSCALE :=1;
  if (VTE_CNTL.VPORT_Z_OFFSET_ENA=0) then V.ZOFFSET:=0;
 
- Assert(VTE_CNTL.VTX_XY_FMT=0);
- Assert(VTE_CNTL.VTX_Z_FMT =0);
- Assert(VTE_CNTL.VTX_W0_FMT=1);
+ Assert(VTE_CNTL.VTX_XY_FMT=0,'VTE_CNTL.VTX_XY_FMT');
+ Assert(VTE_CNTL.VTX_Z_FMT =0,'VTE_CNTL.VTX_Z_FMT' );
+ Assert(VTE_CNTL.VTX_W0_FMT=1,'VTE_CNTL.VTX_W0_FMT');
 
  Result.x       :=V.XOFFSET-V.XSCALE;
  Result.y       :=V.YOFFSET-V.YSCALE;
@@ -701,7 +702,7 @@ begin
 
  if (num=NUMBER_SNORM) then
  begin
-  Assert(false,'TODO');
+  Assert(false,'TODO NUMBER_SNORM');
  end;
 
  clr.float32[0]:=i[0];
@@ -876,9 +877,17 @@ begin
  Result.FImageInfo.cformat:=GetRenderTargetFormat(FORMAT,NUMBER_TYPE);
 
  if (RENDER_TARGET.INFO.LINEAR_GENERAL<>0) then
-  Result.FImageInfo.params.tiling_idx:=kTileModeDisplay_LinearGeneral
- else
-  Result.FImageInfo.params.tiling_idx:=RENDER_TARGET.ATTRIB.TILE_MODE_INDEX;
+ begin
+  Result.FImageInfo.params.tiling.idx:=kTileModeDisplay_LinearGeneral;
+ end else
+ begin
+  Result.FImageInfo.params.tiling.idx:=RENDER_TARGET.ATTRIB.TILE_MODE_INDEX;
+ end;
+
+ if (p_neomode<>0) then
+ begin
+  Result.FImageInfo.params.tiling.alt:=RENDER_TARGET.INFO.ALT_TILE_MODE;
+ end;
 
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
  Result.FImageInfo.params.samples    :=1 shl (RENDER_TARGET.ATTRIB.NUM_SAMPLES and 3);
@@ -1079,54 +1088,72 @@ begin
  end;
 end;
 
+const
+ DB_Z_FORMATS:array[0..3,0..1] of TVkFormat=
+ (
+  //STENCIL_INVALID             ,STENCIL_8
+  (VK_FORMAT_UNDEFINED          ,VK_FORMAT_S8_UINT           ), //Z_INVALID
+  (VK_FORMAT_D16_UNORM          ,VK_FORMAT_D16_UNORM_S8_UINT ), //Z_16
+  (VK_FORMAT_X8_D24_UNORM_PACK32,VK_FORMAT_D24_UNORM_S8_UINT ), //Z_24
+  (VK_FORMAT_D32_SFLOAT         ,VK_FORMAT_D32_SFLOAT_S8_UINT)  //Z_32_FLOAT
+ );
+
 Function TGPU_REGS.GET_DB_INFO:TDB_INFO;
 var
+ RENDER_CONTROL :TDB_RENDER_CONTROL;
  DEPTH_CONTROL  :TDB_DEPTH_CONTROL;
  STENCIL_CONTROL:TDB_STENCIL_CONTROL;
  SHADER_CONTROL :TDB_SHADER_CONTROL;
 begin
  Result:=Default(TDB_INFO);
 
+ RENDER_CONTROL :=CX_REG^.DB_RENDER_CONTROL;
  DEPTH_CONTROL  :=CX_REG^.DB_DEPTH_CONTROL;
  STENCIL_CONTROL:=CX_REG^.DB_STENCIL_CONTROL;
  SHADER_CONTROL :=CX_REG^.DB_SHADER_CONTROL;
 
- //Result.extend:=GET_SCREEN_SIZE;
+ //
 
- //DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE  :=1;
- //DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE:=1;
-
- Result.FImageInfo.params.pad_width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
- Result.FImageInfo.params.pad_height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
-
- Result.DEPTH_USAGE  :=((TM_WRITE or TM_CLEAR)*CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE);
- Result.STENCIL_USAGE:=((TM_WRITE or TM_CLEAR)*CX_REG^.DB_RENDER_CONTROL.STENCIL_CLEAR_ENABLE);
-
- if (Result.DEPTH_USAGE=0) then
+ if (DEPTH_CONTROL.Z_ENABLE<>0) then
  begin
-  Result.DEPTH_USAGE:=Result.DEPTH_USAGE or TM_READ;
+  if (CX_REG^.DB_DEPTH_VIEW.Z_READ_ONLY<>0) then
+  begin
+   //readonly
+   Result.DEPTH_USAGE:=TM_READ;
+  end else
+  if (RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0) then
+  begin
+    //clear
+   Result.DEPTH_USAGE:=TM_WRITE or TM_CLEAR;
+  end else
+  begin
+   //read before
+   Result.DEPTH_USAGE:=TM_READ or TM_WRITE;
+  end;
  end;
 
- if (CX_REG^.DB_DEPTH_VIEW.Z_READ_ONLY=0) then
+ if (DEPTH_CONTROL.STENCIL_ENABLE<>0) then
  begin
-  Result.DEPTH_USAGE:=Result.DEPTH_USAGE or TM_WRITE;
+  if (CX_REG^.DB_DEPTH_VIEW.STENCIL_READ_ONLY<>0) then
+  begin
+   //readonly
+   Result.STENCIL_USAGE:=TM_READ;
+  end else
+  if (RENDER_CONTROL.STENCIL_CLEAR_ENABLE<>0) then
+  begin
+    //clear
+   Result.STENCIL_USAGE:=TM_WRITE or TM_CLEAR;
+  end else
+  begin
+   //read before
+   Result.STENCIL_USAGE:=TM_READ or TM_WRITE;
+  end;
  end;
 
- if (CX_REG^.DB_DEPTH_VIEW.STENCIL_READ_ONLY=0) then
- begin
-  Result.STENCIL_USAGE:=Result.STENCIL_USAGE or TM_WRITE;
- end;
-
- //Result.DEPTH_CLEAR  :=DEPTH.RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0;
- //Result.STENCIL_CLEAR:=DEPTH.RENDER_CONTROL.STENCIL_CLEAR_ENABLE<>0;
-
- //Result.Z_READ_ONLY      :=DEPTH.DEPTH_VIEW.Z_READ_ONLY<>0;
- //Result.STENCIL_READ_ONLY:=DEPTH.DEPTH_VIEW.STENCIL_READ_ONLY<>0;
-
- Assert(CX_REG^.DB_RENDER_CONTROL.DEPTH_COPY=0);
- Assert(CX_REG^.DB_RENDER_CONTROL.STENCIL_COPY=0);
- Assert(CX_REG^.DB_RENDER_CONTROL.COPY_CENTROID=0);
- Assert(CX_REG^.DB_RENDER_CONTROL.COPY_SAMPLE=0);
+ Assert(RENDER_CONTROL.DEPTH_COPY   =0,'RENDER_CONTROL.DEPTH_COPY'   );
+ Assert(RENDER_CONTROL.STENCIL_COPY =0,'RENDER_CONTROL.STENCIL_COPY' );
+ Assert(RENDER_CONTROL.COPY_CENTROID=0,'RENDER_CONTROL.COPY_CENTROID');
+ Assert(RENDER_CONTROL.COPY_SAMPLE  =0,'RENDER_CONTROL.COPY_SAMPLE'  );
 
  Result.CLEAR_VALUE.depthStencil.depth  :=PSingle(@CX_REG^.DB_DEPTH_CLEAR)^;
  Result.CLEAR_VALUE.depthStencil.stencil:=CX_REG^.DB_STENCIL_CLEAR.CLEAR;
@@ -1139,15 +1166,30 @@ begin
  Result.ds_state.depthBoundsTestEnable:=DEPTH_CONTROL.DEPTH_BOUNDS_ENABLE; //1:1
  Result.ds_state.stencilTestEnable    :=DEPTH_CONTROL.STENCIL_ENABLE;      //1:1
 
- Result.ds_state.depthCompareOp:=TVkCompareOp(DEPTH_CONTROL.ZFUNC); //1:1
+ if ((Result.DEPTH_USAGE and TM_CLEAR)=0) then
+ begin
+  Result.ds_state.depthCompareOp:=TVkCompareOp(DEPTH_CONTROL.ZFUNC); //1:1
+ end else
+ begin
+  //force clear all
+  Result.ds_state.depthCompareOp:=VK_COMPARE_OP_NEVER;
+ end;
 
  Result.ds_state.minDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MIN)^;
  Result.ds_state.maxDepthBounds:=PSingle(@CX_REG^.DB_DEPTH_BOUNDS_MAX)^;
 
- Assert(DEPTH_CONTROL.DISABLE_COLOR_WRITES_ON_DEPTH_PASS=0);
+ Assert(DEPTH_CONTROL.ENABLE_COLOR_WRITES_ON_DEPTH_FAIL =0,'ENABLE_COLOR_WRITES_ON_DEPTH_FAIL' );
+ Assert(DEPTH_CONTROL.DISABLE_COLOR_WRITES_ON_DEPTH_PASS=0,'DISABLE_COLOR_WRITES_ON_DEPTH_PASS');
 
- //if (DEPTH.DEPTH_CONTROL.DISABLE_COLOR_WRITES_ON_DEPTH_PASS<>0) then
+ //CX_REG^.PA_CL_CLIP_CNTL
+
+ if ((Result.STENCIL_USAGE and TM_CLEAR)<>0) then
  begin
+  //force clear all
+  //VK_COMPARE_OP_NEVER|VK_STENCIL_OP_KEEP
+ end else
+ begin
+
   Result.ds_state.front.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL);
   Result.ds_state.front.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS);
   Result.ds_state.front.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL);
@@ -1155,62 +1197,28 @@ begin
   Result.ds_state.front.compareMask:=CX_REG^.DB_STENCILREFMASK.STENCILMASK;
   Result.ds_state.front.writeMask  :=CX_REG^.DB_STENCILREFMASK.STENCILWRITEMASK;
   Result.ds_state.front.reference  :=GetStencilRef_FF(STENCIL_CONTROL,CX_REG^.DB_STENCILREFMASK);
- end;
 
- Assert(DEPTH_CONTROL.ENABLE_COLOR_WRITES_ON_DEPTH_FAIL=0);
- //if (DEPTH.DEPTH_CONTROL.ENABLE_COLOR_WRITES_ON_DEPTH_FAIL<>0) then
- //begin
- //end;
+  if (DEPTH_CONTROL.BACKFACE_ENABLE<>0) then
+  begin
+   Result.ds_state.back:=Result.ds_state.front;
+  end else
+  begin
+   Result.ds_state.back.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL_BF);
+   Result.ds_state.back.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS_BF);
+   Result.ds_state.back.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL_BF);
+   Result.ds_state.back.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC_BF);   //1:1
+   Result.ds_state.back.compareMask:=CX_REG^.DB_STENCILREFMASK_BF.STENCILMASK_BF;
+   Result.ds_state.back.writeMask  :=CX_REG^.DB_STENCILREFMASK_BF.STENCILWRITEMASK_BF;
+   Result.ds_state.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,TDB_STENCILREFMASK(CX_REG^.DB_STENCILREFMASK_BF));
+  end;
 
- if (DEPTH_CONTROL.BACKFACE_ENABLE<>0) then
- begin
-  Result.ds_state.back:=Result.ds_state.front;
- end else
- begin
-  Result.ds_state.back.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL_BF);
-  Result.ds_state.back.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS_BF);
-  Result.ds_state.back.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL_BF);
-  Result.ds_state.back.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC_BF);   //1:1
-  Result.ds_state.back.compareMask:=CX_REG^.DB_STENCILREFMASK_BF.STENCILMASK_BF;
-  Result.ds_state.back.writeMask  :=CX_REG^.DB_STENCILREFMASK_BF.STENCILWRITEMASK_BF;
-  Result.ds_state.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,TDB_STENCILREFMASK(CX_REG^.DB_STENCILREFMASK_BF));
  end;
 
  ////
 
- Assert(CX_REG^.DB_DEPTH_VIEW.SLICE_START=0);
+ Assert(CX_REG^.DB_DEPTH_VIEW.SLICE_START=0,'DB_DEPTH_VIEW.SLICE_START');
 
- Case CX_REG^.DB_Z_INFO.FORMAT of
-  Z_INVALID:
-   if (CX_REG^.DB_STENCIL_INFO.FORMAT=STENCIL_8) then
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_S8_UINT;
-   end;
-  Z_16:
-   if (CX_REG^.DB_STENCIL_INFO.FORMAT=STENCIL_8) then
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_D16_UNORM_S8_UINT;
-   end else
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_D16_UNORM;
-   end;
-  Z_24:
-   if (CX_REG^.DB_STENCIL_INFO.FORMAT=STENCIL_8) then
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_D24_UNORM_S8_UINT;
-   end else
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_X8_D24_UNORM_PACK32;
-   end;
-  Z_32_FLOAT:
-   if (CX_REG^.DB_STENCIL_INFO.FORMAT=STENCIL_8) then
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_D32_SFLOAT_S8_UINT;
-   end else
-   begin
-    Result.FImageInfo.cformat:=VK_FORMAT_D32_SFLOAT;
-   end;
- end;
+ Result.FImageInfo.cformat:=DB_Z_FORMATS[CX_REG^.DB_Z_INFO.FORMAT,CX_REG^.DB_STENCIL_INFO.FORMAT];
 
  Result.Z_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_Z_READ_BASE ) shl 8);
  Result.Z_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_Z_WRITE_BASE) shl 8);
@@ -1218,17 +1226,39 @@ begin
  Result.STENCIL_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_STENCIL_READ_BASE ) shl 8);
  Result.STENCIL_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_STENCIL_WRITE_BASE) shl 8);
 
- Assert(SHADER_CONTROL.Z_EXPORT_ENABLE=0);
- Assert(SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0);
+ Assert(SHADER_CONTROL.Z_EXPORT_ENABLE=0               ,'Z_EXPORT_ENABLE');
+ Assert(SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0,'STENCIL_TEST_VAL_EXPORT_ENABLE');
 
- Case SHADER_CONTROL.Z_ORDER of
-  LATE_Z,
-  RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
 
-  EARLY_Z_THEN_LATE_Z,
-  EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
-                                           ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
- end;
+  //SHADER_CONTROL.CONSERVATIVE_Z_EXPORT ->
+  //VkPhysicalDeviceConservativeRasterizationPropertiesEXT::conservativeRasterizationPostDepthCoverage
+
+ Assert(SHADER_CONTROL.DEPTH_BEFORE_SHADER=0,'DEPTH_BEFORE_SHADER');
+ Assert(CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER=0,'FORCE_SHADER_Z_ORDER');
+
+  //SHADER_CONTROL.DEPTH_BEFORE_SHADER
+
+ //CX_REG^.CB_COLOR_CONTROL
+ //CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER
+
+ {if (CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER<>0) then
+ begin}
+  Case SHADER_CONTROL.Z_ORDER of
+   LATE_Z,
+   RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+
+   EARLY_Z_THEN_LATE_Z,
+   EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
+                                            ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+  end;
+ {end else
+ if (SHADER_CONTROL.DEPTH_BEFORE_SHADER<>0) then
+ begin
+  Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+ end else
+ begin
+  Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+ end;}
 
  Result.FImageInfo.Addr:=Result.Z_READ_ADDR;
 
@@ -1236,16 +1266,15 @@ begin
  Result.FImageInfo.params.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
  Result.FImageInfo.params.depth :=1;
 
- Result.FImageInfo.params.tiling_idx:=CX_REG^.DB_Z_INFO.TILE_MODE_INDEX;
+ Result.FImageInfo.params.tiling.idx:=CX_REG^.DB_Z_INFO.TILE_MODE_INDEX;
 
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
  Result.FImageInfo.params.samples    :=1 shl (CX_REG^.DB_Z_INFO.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
 
- //TODO: Calculate padding by tilling mode
- Result.FImageInfo.params.pad_width :=Result.FImageInfo.params.width;
- Result.FImageInfo.params.pad_height:=Result.FImageInfo.params.height;
+ Result.FImageInfo.params.pad_width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
+ Result.FImageInfo.params.pad_height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
 end;
 
 function get_polygon_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkPolygonMode;
@@ -1294,9 +1323,14 @@ begin
  Result:=Default(TVkPipelineRasterizationStateCreateInfo);
  Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 
+ if (SH_REG^.SPI_SHADER_PGM_LO_PS<>0) and
+    (SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE<>0) then
+ begin
+  Result.rasterizerDiscardEnable:=CX_REG^.DB_SHADER_CONTROL.KILL_ENABLE;
+ end;
+
  //VkPhysicalDeviceDepthClampZeroOneFeaturesEXT::depthClampZeroOne
  Result.depthClampEnable       :=CX_REG^.PA_CL_CLIP_CNTL.DX_CLIP_SPACE_DEF;
- Result.rasterizerDiscardEnable:=CX_REG^.DB_SHADER_CONTROL.KILL_ENABLE;
  Result.polygonMode            :=get_polygon_mode(SU_SC_MODE_CNTL);
  Result.cullMode               :=get_cull_mode   (SU_SC_MODE_CNTL);
  Result.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE); //1:1
@@ -1769,7 +1803,8 @@ begin
    Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
  end;
 
- Result.params.tiling_idx:=PT^.tiling_idx;
+ Result.params.tiling.idx:=PT^.tiling_idx;
+ Result.params.tiling.alt:=0;
  Result.params.width     :=PT^.width +1;
  Result.params.height    :=PT^.height+1;
  Result.params.depth     :=1;
@@ -1797,6 +1832,11 @@ end;
 function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
 begin
  Result:=_get_tsharp4_image_info(PTSharpResource4(PT));
+ //
+ if (p_neomode<>0) then
+ begin
+  Result.params.tiling.alt:=PT^.alt_tile_mode;
+ end;
  //
  Case PT^._type of
   SQ_RSRC_IMG_3D:

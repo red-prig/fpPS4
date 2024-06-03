@@ -964,8 +964,8 @@ var
  addr:Pointer;
 begin
  Case Body^.eventType of
-  CS_DONE:;
-  PS_DONE:;
+  CS_DONE:Writeln(' CS_DONE');
+  PS_DONE:Writeln(' PS_DONE');
   else
    Assert(False,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
  end;
@@ -977,12 +977,11 @@ begin
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
- if get_dmem_ptr(Pointer(Body^.address),@addr,nil) then
+ addr:=Pointer(Body^.address);
+
+ if not get_dmem_ptr(addr,@addr,nil) then
  begin
-  //
- end else
- begin
-  Assert(false,'addr:0x'+HexStr(Body^.address,16)+' not in dmem!');
+  Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
  end;
 
  pctx^.stream_dcb.EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
@@ -1059,13 +1058,17 @@ begin
  count:=Body^.header.count;
  if (count<3) then Exit;
 
+ count:=count-2;
+
+ addr:=Pointer(Body^.dstAddr);
+
  engineSel:=Body^.CONTROL.engineSel;
- dstSel:=Body^.CONTROL.dstSel;
+ dstSel   :=Body^.CONTROL.dstSel;
 
  Case engineSel of
   WRITE_DATA_ENGINE_ME:
     begin
-     pctx^.stream_dcb.WriteData(dstSel,QWORD(addr),QWORD(@Body^.DATA),count);
+     pctx^.stream_dcb.WriteData(dstSel,QWORD(addr),@Body^.DATA,count);
     end;
   WRITE_DATA_ENGINE_PFP:
     begin
@@ -1075,8 +1078,6 @@ begin
       WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
       WRITE_DATA_DST_SEL_MEMORY_ASYNC:
         begin
-         count:=count-2;
-         addr:=Pointer(Body^.dstAddr);
          Move(Body^.DATA,addr^,count*SizeOf(DWORD));
         end;
       else
@@ -1091,6 +1092,8 @@ begin
 end;
 
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
+var
+ addr:Pointer;
 begin
 
  Case Body^.memSpace of
@@ -1102,7 +1105,14 @@ begin
  Case Body^.engine of
   WAIT_REG_MEM_ENGINE_ME:
     begin
-     pctx^.stream_dcb.WaitRegMem(Body^.pollAddress,Body^.reference,Body^.mask,Body^.compareFunc);
+     addr:=Pointer(Body^.pollAddress);
+
+     if not get_dmem_ptr(addr,@addr,nil) then
+     begin
+      //Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
+     end;
+
+     pctx^.stream_dcb.WaitRegMem(QWORD(addr),Body^.reference,Body^.mask,Body^.compareFunc);
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin

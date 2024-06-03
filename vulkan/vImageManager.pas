@@ -711,7 +711,7 @@ begin
   if not cmd.IsRenderPass then
   begin
 
-   if ((Result.data_usage and TM_READ)<>0) and (Result.submit_id<>cmd.submit_id) then
+   //if ((Result.data_usage and TM_READ)<>0) and (Result.submit_id<>cmd.submit_id) then
    begin
     //hash test
 
@@ -731,16 +731,18 @@ begin
 
    end;
 
+   {
    if ((Result.data_usage and TM_READ)=0) and ((data_usage and TM_READ)<>0) then
    begin
     Result.submit_id:=cmd.submit_id;
     Result.data_usage:=Result.data_usage or TM_READ;
     //LoadFromBuffer(cmd,Result);
    end;
+   }
 
   end;
 
-  Result.data_usage:=Result.data_usage or (data_usage and TM_WRITE);
+  //Result.data_usage:=Result.data_usage or (data_usage and TM_WRITE);
 
  end;
 

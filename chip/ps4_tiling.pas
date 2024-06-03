@@ -321,26 +321,28 @@ type
  end;
 
  Tiler1d=object
-  m_minGpuMode:DWORD;
-  m_tileMode:DWORD;
-  m_arrayMode:DWORD;
-  m_linearWidth:DWORD;
-  m_linearHeight:DWORD;
-  m_linearDepth:DWORD;
-  m_paddedWidth:DWORD;
-  m_paddedHeight:DWORD;
-  m_paddedDepth:DWORD;
-  m_bitsPerElement:DWORD;
+  m_minGpuMode     :DWORD;
+  m_tileMode       :DWORD;
+  m_arrayMode      :DWORD;
+  m_linearWidth    :DWORD;
+  m_linearHeight   :DWORD;
+  m_linearDepth    :DWORD;
+  m_paddedWidth    :DWORD;
+  m_paddedHeight   :DWORD;
+  m_paddedDepth    :DWORD;
+  m_bitsPerElement :DWORD;
   m_linearSizeBytes:DWORD;
-  m_tiledSizeBytes:DWORD;
+  m_tiledSizeBytes :DWORD;
 
-  m_microTileMode:DWORD;
-  m_tileThickness:DWORD;
-  m_tileBytes:DWORD;
-  m_tilesPerRow:DWORD;
-  m_tilesPerSlice:DWORD;
+  m_microTileMode  :DWORD;
+  m_tileThickness  :DWORD;
+  m_tileBytes      :DWORD;
+  m_tilesPerRow    :DWORD;
+  m_tilesPerSlice  :DWORD;
 
-  function  getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
+  procedure init_surface(bpe,tile_idx,tile_alt:DWORD);
+  function  getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
+  function  getTiledElementBitOffset (var outTiledBitOffset :QWORD;x,y,z:DWORD):integer;
  end;
 
 {
@@ -1472,6 +1474,10 @@ const
  function getMicroTileMode(outMicroTileMode:PByte;tmode:Byte):Integer;
  Function computeSurfaceMacroTileMode(outMacroTileMode:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
 
+ function getArrayMode(outArrayMode:PByte;tmode:Byte):Integer;
+
+ function getMicroTileThickness(arrayMode:Byte):Byte;
+
 implementation
 
 function GetTiler2d(Width,m_bitsPerElement:DWORD):Tiler2d;
@@ -1769,7 +1775,7 @@ end;
 
 function TRENDER_TARGET.getMinimumGpuMode:Byte; inline;
 begin
- Result:=INFO.RESERVED0;
+ Result:=INFO.ALT_TILE_MODE;
 end;
 
 function TRENDER_TARGET.getNumFragments:Byte; inline;
@@ -2598,6 +2604,24 @@ begin
  Result:=bank;
 end;
 
+procedure Tiler1d.init_surface(bpe,tile_idx,tile_alt:DWORD);
+begin
+ m_minGpuMode    :=tile_alt;
+ m_tileMode      :=tile_idx;
+
+ m_arrayMode     :=0;
+ getArrayMode(@m_arrayMode,m_tileMode);
+
+ m_bitsPerElement:=bpe;
+
+ m_microTileMode :=0;
+ getMicroTileMode(@m_microTileMode,m_tileMode);
+
+ m_tileThickness :=getMicroTileThickness(m_arrayMode);
+
+ m_tileBytes     := (kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bitsPerElement + 7) div 8;
+end;
+
 function Tiler1d.getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
 var
  element_index:QWORD;
@@ -2623,6 +2647,12 @@ begin
  outTiledBitOffset := final_offset;
 
  Result:=0;
+end;
+
+function Tiler1d.getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
+begin
+ Result:=getTiledElementBitOffset(outTiledByteOffset,x,y,z);
+ outTiledByteOffset:=outTiledByteOffset shr 3;
 end;
 
 function Tiler2d.init(var tp:TilingParameters):integer;

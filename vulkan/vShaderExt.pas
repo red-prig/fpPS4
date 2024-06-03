@@ -1171,6 +1171,7 @@ begin
  For i:=Low(TvShaderStage) to High(TvShaderStage) do
   if (FShaders[i]<>nil) then
   begin
+   Assert(FShaders[i].FHandle<>VK_NULL_HANDLE);
    Stages[c].sType :=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
    Stages[c].stage :=FShaders[i].FStage;
    Stages[c].module:=FShaders[i].FHandle;

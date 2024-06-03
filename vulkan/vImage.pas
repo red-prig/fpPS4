@@ -94,13 +94,18 @@ type
   __end:QWORD;
  end;
 
+ TvTiling=bitpacked record
+  idx:0..31; //0..31 (5)
+  alt:0..1;  //1
+ end;
+
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
   Addr   :Pointer;
   cformat:TVkFormat;
   params :packed record
    itype      :Byte; //TVkImageType 0..2 (2)
-   tiling_idx :Byte; //0..31 (5)
+   tiling     :TvTiling;
    samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
    mipLevels  :Byte; //(0..15) (4)
    width      :Word; //(0..16383)
@@ -1645,7 +1650,7 @@ end;
 
 Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 begin
- if ((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) then
+ if (((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR))<>0) then
  begin
   Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
  end else
@@ -1656,14 +1661,14 @@ end;
 
 Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
 begin
- Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord((DEPTH_USAGE or STENCIL_USAGE) and TM_READ <>0) ) or
-         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR)<>0) );
+ Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord(((DEPTH_USAGE or STENCIL_USAGE) and TM_READ               )<>0) ) or
+         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord(((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR))<>0) );
 end;
 
 Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 begin
- Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord(IMAGE_USAGE and TM_READ<>0) ) or
-         (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord(IMAGE_USAGE and (TM_WRITE or TM_CLEAR)<>0) );
+ Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord((IMAGE_USAGE and TM_READ               )<>0) ) or
+         (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
 end;
 
 Procedure TvImageBarrier.Init({_image:TVkImage;_sub:TVkImageSubresourceRange});

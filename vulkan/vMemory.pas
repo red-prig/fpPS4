@@ -176,7 +176,7 @@ procedure TvDeviceMemory.Release;
 begin
  if (System.InterlockedDecrement(Pointer(FRefs))=nil) then
  begin
-  Free
+  Free;
  end;
 end;
 
@@ -865,6 +865,8 @@ begin
    FAllcSet.Insert(key);
   end;
   Result:=True;
+  //
+  P.FMemory.Release;
  end;
  //
  rw_wunlock(global_mem_lock);
@@ -1000,6 +1002,7 @@ var
  tmp,tmp2:QWORD;
  node:TvHostMemory;
  FHandle:TVkDeviceMemory;
+ found:Boolean;
 begin
  Result:=Default(TvPointer);
  if (Addr=0) or (Size=0) then Exit;
@@ -1010,12 +1013,16 @@ begin
  rw_wlock(global_mem_lock);
  //
 
+ found:=False;
+
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
  while (node<>nil) do
  begin
 
-  if (F__End>node.FStart) and (FStart<node.F__End) then
+  if (FStart>=node.FStart) and
+     (F__End<=node.F__End) then
   begin
+   found:=True;
    Break;
   end;
 
@@ -1095,6 +1102,12 @@ begin
  begin
   Result.FMemory:=TvDeviceMemory(node);
   Result.FOffset:=Addr-node.FStart;
+
+  if ((Result.FOffset+Size)>node.FSize) then
+  begin
+   Assert(false);
+  end;
+
  end;
 end;
 
