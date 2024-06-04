@@ -96,6 +96,8 @@ type
 
    FDevBlocks:array of TvDeviceMemory;
 
+   FBacked:TvDeviceMemory;
+
   private
    FFreeSet:TFreeDevNodeSet;
    FAllcSet:TAllcDevNodeSet;
@@ -592,10 +594,28 @@ var
  i:Word;
 begin
  Result:=False;
- FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
- if (FHandle=VK_NULL_HANDLE) then Exit;
- //
- FDeviceMemory:=TvDeviceMemory.Create(FHandle,Size,mtindex,@FProperties.memoryTypes[mtindex]);
+
+ FDeviceMemory:=nil;
+
+ if (FBacked<>nil) then
+ begin
+  if (FBacked.FSize>=Size) and
+     (FBacked.FMemInfo.mem_type=mtindex) then
+  begin
+   FDeviceMemory:=FBacked;
+   FBacked:=nil;
+  end;
+ end;
+
+ if (FDeviceMemory=nil) then
+ begin
+  FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
+  if (FHandle=VK_NULL_HANDLE) then Exit;
+  //
+  FDeviceMemory:=TvDeviceMemory.Create(FHandle,Size,mtindex,@FProperties.memoryTypes[mtindex]);
+ end;
+
+
  //
  if Length(FDevBlocks)<>0 then
  For i:=0 to High(FDevBlocks) do
@@ -625,8 +645,24 @@ begin
  Result:=False;
  if (i>=Length(FDevBlocks)) then Exit;
  if (FDevBlocks[i]=nil) then Exit;
- //
- ReleaseAndNil(FDevBlocks[i]);
+
+ if (FBacked<>nil) then
+ begin
+  if (FDevBlocks[i].FSize>FBacked.FSize) then
+  begin
+   ReleaseAndNil(FBacked);
+   FBacked:=FDevBlocks[i];
+   FDevBlocks[i]:=nil;
+  end else
+  begin
+   ReleaseAndNil(FDevBlocks[i]);
+  end;
+ end else
+ begin
+  FBacked:=FDevBlocks[i];
+  FDevBlocks[i]:=nil;
+ end;
+
  //
  Result:=True;
  //shrink
@@ -877,6 +913,13 @@ var
  i,c:Word;
 begin
  Result:=0;
+
+ if (FBacked<>nil) then
+ begin
+  Result:=Result+FBacked.FSize;
+  ReleaseAndNil(FBacked);
+  if (Result>=max) then Exit;
+ end;
 
  if (Length(FDevBlocks)<>0) then
  For i:=High(FDevBlocks) to 0 do

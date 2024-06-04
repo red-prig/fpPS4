@@ -209,7 +209,7 @@ begin
            m_padheight*
            m_bytePerElement;
 
-  m_slice:=(m_slice+255) and (not Ptruint(255));
+  //m_slice:=(m_slice+255) and (not Ptruint(255));
 
   Result:=Result+m_slice;
 
@@ -263,7 +263,7 @@ begin
            m_padheight*
            m_bytePerElement;
 
-  m_slice:=(m_slice+255) and (not Ptruint(255));
+  //m_slice:=(m_slice+255) and (not Ptruint(255));
 
   Result:=Result+m_slice;
 
@@ -273,6 +273,8 @@ begin
   if (m_width =0) then m_width :=1;
   if (m_height=0) then m_height:=1;
  end;
+
+ Result:=(Result+255) and (not Ptruint(255));
 
  Result:=Result*
          image.key.params.depth*
@@ -423,6 +425,7 @@ var
 
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
+ m_padwidth,m_padheight:Ptruint;
  m_slice :Ptruint;
  m_offset:Ptruint;
 
@@ -472,8 +475,7 @@ begin
 
   while (m_level>0) do
   begin
-   //BufferImageCopy.bufferOffset:=m_offset;
-   BufferImageCopy.bufferOffset:=0;
+   BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
 
@@ -483,7 +485,17 @@ begin
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   m_slice:=m_width*m_height*m_bytePerElement;
+   if IsTexelFormat(image.key.cformat) then
+   begin
+    m_padwidth :=(m_width +3) shr 2;
+    m_padheight:=(m_height+3) shr 2;
+   end else
+   begin
+    m_padwidth :=m_width ;
+    m_padheight:=m_height;
+   end;
+
+   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
 
    m_offset:=m_offset+m_slice;
 
@@ -509,6 +521,7 @@ end;
 Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvImage2);
 var
  buf:TvTempBuffer;
+ vmem:TvPointer;
 
  tiler:Tiler1d;
 
@@ -530,7 +543,16 @@ begin
  //m_base:=GetMem(m_full_linear_size);
 
  buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
- buf.BindMem(MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)));
+
+ vmem:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
+                                            ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+
+ if (vmem.FMemory=nil) then
+ begin
+  vmem:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+ end;
+
+ buf.BindMem(vmem);
 
  m_base:=nil;
  vkMapMemory(Device.FHandle,
@@ -590,7 +612,7 @@ begin
 
   tiler.m_linearSizeBytes:=tiler.m_linearWidth*tiler.m_linearHeight*tiler.m_linearDepth*m_bytePerElement;
   tiler.m_tiledSizeBytes :=tiler.m_paddedWidth*tiler.m_paddedHeight*tiler.m_paddedDepth*m_bytePerElement;
-  tiler.m_tiledSizeBytes:=(tiler.m_tiledSizeBytes+255) and (not Ptruint(255));
+  //tiler.m_tiledSizeBytes:=(tiler.m_tiledSizeBytes+255) and (not Ptruint(255));
 
   tiler.m_tilesPerRow    :=tiler.m_paddedWidth div kMicroTileWidth;
   tiler.m_tilesPerSlice  :=tiler.m_tilesPerRow * (tiler.m_paddedHeight div kMicroTileHeight);
@@ -605,7 +627,10 @@ begin
   copy_1dThin(tiler,src,dst);
 
   {
-  SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+'.tga',
+  SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+
+                                  '_'+IntToStr(m_width)+
+                                  'x'+IntToStr(m_height)+
+                                      '.tga',
             dst,
             tiler.m_linearWidth,
             tiler.m_linearHeight,
@@ -640,6 +665,7 @@ var
 
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
+ m_padwidth,m_padheight:Ptruint;
  m_slice :Ptruint;
  m_offset:Ptruint;
 
@@ -700,7 +726,6 @@ begin
   while (m_level>0) do
   begin
    BufferImageCopy.bufferOffset:=m_offset;
-   //BufferImageCopy.bufferOffset:=0;
 
    BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
 
@@ -715,9 +740,19 @@ begin
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   m_slice:=m_width*m_height*m_bytePerElement;
+   if IsTexelFormat(image.key.cformat) then
+   begin
+    m_padwidth :=(m_width +3) shr 2;
+    m_padheight:=(m_height+3) shr 2;
+   end else
+   begin
+    m_padwidth :=m_width ;
+    m_padheight:=m_height;
+   end;
 
-   //m_offset:=m_offset+m_slice;
+   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+
+   m_offset:=m_offset+m_slice;
 
    Dec(m_level);
    m_width :=m_width  shr 1;
@@ -750,7 +785,7 @@ begin
  //if (ri.data_usage and TM_READ)<>0 then Exit;
  //ri.data_usage:=ri.data_usage or TM_READ;
 
- IMAGE_USAGE:=IMAGE_USAGE and (not TM_READ);
+ //IMAGE_USAGE:=IMAGE_USAGE and (not TM_READ);
 
  a_load_from[10   ]:=@load_Linear;//@load_clear;
  a_load_from[10+32]:=@load_Linear;//@load_clear;
@@ -761,8 +796,16 @@ begin
  a_load_from[0    ]:=@load_Linear;//@load_clear;
  a_load_from[0+32 ]:=@load_Linear;//@load_clear;
 
+ //
+ a_load_from[ 5   ]:=@load_1dThin;
+ a_load_from[ 5+32]:=@load_1dThin;
+
+ a_load_from[ 9   ]:=@load_1dThin;
+ a_load_from[ 9+32]:=@load_1dThin;
+
  a_load_from[13   ]:=@load_1dThin;
  a_load_from[13+32]:=@load_1dThin;
+ //
 
  a_load_from[8    ]:=@load_Linear;
  a_load_from[8+32 ]:=@load_Linear;
@@ -1344,7 +1387,7 @@ procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop;me:p_pm4_me);
 var
  curr,diff:QWORD;
 begin
- EndFrameCapture;
+ //EndFrameCapture;
 
  curr:=md_rdtsc_unit;
  diff:=curr-me^.rel_time;
@@ -1380,7 +1423,7 @@ procedure pm4_SubmitFlipEop(node:p_pm4_node_SubmitFlipEop;me:p_pm4_me);
 var
  curr:QWORD;
 begin
- EndFrameCapture;
+ //EndFrameCapture;
 
  if (me^.on_submit_flip_eop<>nil) then
  begin
@@ -1505,9 +1548,14 @@ begin
    end;
 
    me^.free_stream(stream);
+
+   //EndFrameCapture;
+
    //
    Continue;
   end;
+
+  EndFrameCapture;
 
   me^.rel_time:=0; //reset time
   //

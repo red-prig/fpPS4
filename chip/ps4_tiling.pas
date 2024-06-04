@@ -2650,9 +2650,30 @@ begin
 end;
 
 function Tiler1d.getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
+var
+ element_index:QWORD;
+ slice_offset:QWORD;
+ tile_row_index:QWORD;
+ tile_column_index:QWORD;
+ tile_offset:QWORD;
+ element_offset:QWORD;
+ final_offset:QWORD;
 begin
- Result:=getTiledElementBitOffset(outTiledByteOffset,x,y,z);
- outTiledByteOffset:=outTiledByteOffset shr 3;
+ element_index := getElementIndex(x, y, z, m_bitsPerElement, m_microTileMode, m_arrayMode);
+
+ slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
+
+ tile_row_index    := y div kMicroTileHeight;
+ tile_column_index := x div kMicroTileWidth;
+ tile_offset       := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
+
+ element_offset    := element_index * (m_bitsPerElement shr 3);
+
+ final_offset      := (slice_offset + tile_offset) + (element_offset);
+
+ outTiledByteOffset:= final_offset;
+
+ Result:=0;
 end;
 
 function Tiler2d.init(var tp:TilingParameters):integer;
