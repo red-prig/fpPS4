@@ -108,7 +108,7 @@ type
 
    Constructor Create;
 
-   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
+   function    findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags;start:Integer):Integer;
    procedure   LoadMemoryHeaps;
    procedure   PrintMemoryHeaps;
    procedure   PrintMemoryType(typeFilter:TVkUInt32);
@@ -126,7 +126,7 @@ type
   public
 
    Function    Alloc(const mr:TVkMemoryRequirements;pr:TVkMemoryPropertyFlags):TvPointer;
-   Function    Alloc(Size,Align:TVkDeviceSize;mtindex:Byte):TvPointer;
+   Function    Alloc(Size,Align:TVkDeviceSize;mtindex:Byte;test_free:Boolean):TvPointer;
    Function    Free(P:TvPointer):Boolean;
 
   private
@@ -377,12 +377,13 @@ begin
  TAILQ_INIT(@FHosts);
 end;
 
-function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags):Integer;
+function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags;start:Integer):Integer;
 var
- i:TVkUInt32;
+ i:Integer;
 begin
  Result:=-1;
- For i:=0 to FProperties.memoryTypeCount-1 do
+ if (start<0) or (start>=FProperties.memoryTypeCount) then Exit;
+ For i:=start to FProperties.memoryTypeCount-1 do
  begin
   if  ((Filter and (1 shl i))<>0) and ((FProperties.memoryTypes[i].propertyFlags and prop)=prop) then
   begin
@@ -781,12 +782,26 @@ Function TvMemManager.Alloc(const mr:TVkMemoryRequirements;pr:TVkMemoryPropertyF
 var
  mt:Integer;
 begin
- mt:=findMemoryType(mr.memoryTypeBits,pr);
+ Result:=Default(TvPointer);
+ mt:=-1;
+
+ repeat
+
+  mt:=findMemoryType(mr.memoryTypeBits,pr,mt+1);
+  if (mt=-1) then Break;
+
+  Result:=Alloc(mr.size,mr.alignment,mt,True);
+  if (Result.FMemory<>nil) then Exit;
+
+ until false;
+
+ mt:=findMemoryType(mr.memoryTypeBits,pr,0);
  if (mt=-1) then Exit(Default(TvPointer));
- Result:=Alloc(mr.size,mr.alignment,mt);
+
+ Result:=Alloc(mr.size,mr.alignment,mt,False);
 end;
 
-Function TvMemManager.Alloc(Size,Align:TVkDeviceSize;mtindex:Byte):TvPointer;
+Function TvMemManager.Alloc(Size,Align:TVkDeviceSize;mtindex:Byte;test_free:Boolean):TvPointer;
 var
  key:TDevNode;
  Offset:TVkDeviceSize;
@@ -828,25 +843,28 @@ begin
   Result.FMemory:=FDevBlocks[key.FBlockId];
   Result.FOffset:=key.FOffset;
  end else
- if _AllcDevBlock(System.Align(Size,GRANULAR_DEV_BLOCK_SIZE),mtindex,key.FBlockId) then
  begin
-  //alloc save
-  key.Fisfree:=False;
-  key.FSize  :=Size;
-  key.FOffset:=0;
-  key.FmType :=mtindex;
-  FAllcSet.Insert(key);
-  Result.FMemory:=FDevBlocks[key.FBlockId];
-  Result.FOffset:=0;
-  //next free save
-  FSize:=FDevBlocks[key.FBlockId].FSize;
-  if (Size<>FSize) then
+  if not test_free then
+  if _AllcDevBlock(System.Align(Size,GRANULAR_DEV_BLOCK_SIZE),mtindex,key.FBlockId) then
   begin
-   key.Fisfree:=True;
-   key.FOffset:=Size;
-   key.FSize  :=FSize-Size;
-   FFreeSet.Insert(key);
+   //alloc save
+   key.Fisfree:=False;
+   key.FSize  :=Size;
+   key.FOffset:=0;
+   key.FmType :=mtindex;
    FAllcSet.Insert(key);
+   Result.FMemory:=FDevBlocks[key.FBlockId];
+   Result.FOffset:=0;
+   //next free save
+   FSize:=FDevBlocks[key.FBlockId].FSize;
+   if (Size<>FSize) then
+   begin
+    key.Fisfree:=True;
+    key.FOffset:=Size;
+    key.FSize  :=FSize-Size;
+    FFreeSet.Insert(key);
+    FAllcSet.Insert(key);
+   end;
   end;
  end;
  //

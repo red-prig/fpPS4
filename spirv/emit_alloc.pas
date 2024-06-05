@@ -7,7 +7,9 @@ interface
 uses
   sysutils,
   spirv,
+
   srNode,
+  srInterface,
   srType,
   srTypes,
   srConst,
@@ -33,6 +35,7 @@ type
   procedure AllocBinding;
   procedure AllocTypeBinding;
   procedure AllocEntryPoint;
+  function  AddExecutionMode(mode:PtrUint):PSpirvOp;
   procedure AllocHeader;
   procedure AllocOpListId(node:PspirvOp);
   procedure AllocListId(node:PsrNode);
@@ -165,6 +168,16 @@ begin
  OutputList    .AllocEntryPoint(node);
 end;
 
+function TSprvEmit_alloc.AddExecutionMode(mode:PtrUint):PSpirvOp;
+var
+ node:PSpirvOp;
+begin
+ node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
+ node^.AddParam(Main);
+ node^.AddLiteral(mode,ExecutionMode.GetStr(mode));
+ Result:=node;
+end;
+
 procedure TSprvEmit_alloc.AllocHeader;
 var
  node:PSpirvOp;
@@ -178,44 +191,30 @@ begin
  Case FExecutionModel of
   ExecutionModel.Fragment:
     begin
-     node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-     node^.AddParam(Main);
-     node^.AddLiteral(ExecutionMode.OriginUpperLeft,ExecutionMode.GetStr(ExecutionMode.OriginUpperLeft));
+     AddExecutionMode(ExecutionMode.OriginUpperLeft);
 
-     if (foDepthReplacing in DecorateList.FfemOpSet) then
+     if FPixelCenter then
      begin
-      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-      node^.AddParam(Main);
-      node^.AddLiteral(ExecutionMode.DepthReplacing,ExecutionMode.GetStr(ExecutionMode.DepthReplacing));
+      AddExecutionMode(ExecutionMode.PixelCenterInteger);
      end;
 
-     if (foDepthGreater in DecorateList.FfemOpSet) then
+     if FEarlyFragmentTests then
      begin
-      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-      node^.AddParam(Main);
-      node^.AddLiteral(ExecutionMode.DepthGreater,ExecutionMode.GetStr(ExecutionMode.DepthGreater));
+      AddExecutionMode(ExecutionMode.EarlyFragmentTests);
      end;
 
-     if (foDepthLess in DecorateList.FfemOpSet) then
-     begin
-      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-      node^.AddParam(Main);
-      node^.AddLiteral(ExecutionMode.DepthLess,ExecutionMode.GetStr(ExecutionMode.DepthLess));
-     end;
-
-     if (foDepthUnchanged in DecorateList.FfemOpSet) then
-     begin
-      node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-      node^.AddParam(Main);
-      node^.AddLiteral(ExecutionMode.DepthUnchanged,ExecutionMode.GetStr(ExecutionMode.DepthUnchanged));
+     case FDepthMode of
+      foDepthReplacing:AddExecutionMode(ExecutionMode.DepthReplacing);
+      foDepthGreater  :AddExecutionMode(ExecutionMode.DepthGreater);
+      foDepthLess     :AddExecutionMode(ExecutionMode.DepthLess);
+      foDepthUnchanged:AddExecutionMode(ExecutionMode.DepthUnchanged);
+      else;
      end;
 
     end;
   ExecutionModel.GLCompute:
     begin
-     node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
-     node^.AddParam(Main);
-     node^.AddLiteral(ExecutionMode.LocalSize,ExecutionMode.GetStr(ExecutionMode.LocalSize));
+     node:=AddExecutionMode(ExecutionMode.LocalSize);
      node^.AddLiteral(FLocalSize.x);
      node^.AddLiteral(FLocalSize.y);
      node^.AddLiteral(FLocalSize.z);

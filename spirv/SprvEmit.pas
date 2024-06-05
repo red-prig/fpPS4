@@ -10,6 +10,7 @@ uses
   spirv,
   si_ci_vi_merged_registers,
   ps4_pssl,
+  srInterface,
   srAllocator,
   srLiteral,
   srType,
@@ -44,6 +45,9 @@ type
   Procedure   InitPs(RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
                      RSRC2:TSPI_SHADER_PGM_RSRC2_PS;
                      ENA:TSPI_PS_INPUT_ENA);
+
+  Procedure   SET_PIX_CENTER(val:Byte);
+  Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
 
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
                      RSRC2:TCOMPUTE_PGM_RSRC2;
@@ -428,6 +432,22 @@ begin
  FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
  AddCapability(Capability.Shader);
+end;
+
+Procedure TSprvEmit.SET_PIX_CENTER(val:Byte);
+begin
+ FPixelCenter:=(val<>0);
+end;
+
+Procedure TSprvEmit.SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
+begin
+ case SHADER_CONTROL.CONSERVATIVE_Z_EXPORT of
+  1:FDepthMode:=foDepthLess;    //EXPORT_LESS_THAN_Z
+  2:FDepthMode:=foDepthGreater; //EXPORT_GREATER_THAN_Z
+  else;
+ end;
+ //
+ FEarlyFragmentTests:=(SHADER_CONTROL.DEPTH_BEFORE_SHADER<>0);
 end;
 
 Procedure TSprvEmit.InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;

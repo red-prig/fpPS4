@@ -292,6 +292,9 @@ begin
                    GPU_REGS.CX_REG^.SPI_PS_INPUT_ENA);
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
+
+   SprvEmit.SET_PIX_CENTER    (GPU_REGS.CX_REG^.PA_SU_VTX_CNTL.PIX_CENTER);
+   SprvEmit.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
   end;
   vShaderStageVs:
   begin

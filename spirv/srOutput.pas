@@ -131,7 +131,6 @@ begin
       end;
     etMrtz:
       begin
-       pDecorateList^.FfemOpSet:=pDecorateList^.FfemOpSet+[foDepthReplacing,foDepthGreater];
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragDepth);
       end;
     etPos0:

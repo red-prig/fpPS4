@@ -1229,36 +1229,26 @@ begin
  Assert(SHADER_CONTROL.Z_EXPORT_ENABLE=0               ,'Z_EXPORT_ENABLE');
  Assert(SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0,'STENCIL_TEST_VAL_EXPORT_ENABLE');
 
-
-  //SHADER_CONTROL.CONSERVATIVE_Z_EXPORT ->
-  //VkPhysicalDeviceConservativeRasterizationPropertiesEXT::conservativeRasterizationPostDepthCoverage
-
- Assert(SHADER_CONTROL.DEPTH_BEFORE_SHADER=0,'DEPTH_BEFORE_SHADER');
- Assert(CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER=0,'FORCE_SHADER_Z_ORDER');
-
-  //SHADER_CONTROL.DEPTH_BEFORE_SHADER
+ //SHADER_CONTROL.CONSERVATIVE_Z_EXPORT -> SPIRV DepthGreater/DepthLess
+ //CX_REG^.PA_SU_VTX_CNTL.PIX_CENTER    -> SPIRV PixelCenterInteger
+ //SHADER_CONTROL.DEPTH_BEFORE_SHADER   -> SPIRV EarlyFragmentTests
 
  //CX_REG^.CB_COLOR_CONTROL
  //CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER
 
- {if (CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER<>0) then
- begin}
-  Case SHADER_CONTROL.Z_ORDER of
-   LATE_Z,
-   RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+ Case SHADER_CONTROL.Z_ORDER of
+  LATE_Z,
+  RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
 
-   EARLY_Z_THEN_LATE_Z,
-   EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
-                                            ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
-  end;
- {end else
+  EARLY_Z_THEN_LATE_Z,
+  EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
+                                           ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+ end;
+
  if (SHADER_CONTROL.DEPTH_BEFORE_SHADER<>0) then
  begin
-  Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
- end else
- begin
-  Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
- end;}
+  Result.zorder_stage:=Result.zorder_stage or ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+ end;
 
  Result.FImageInfo.Addr:=Result.Z_READ_ADDR;
 
@@ -1317,20 +1307,24 @@ end;
 Function TGPU_REGS.GET_RASTERIZATION:TVkPipelineRasterizationStateCreateInfo;
 var
  SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL;
+ PA_CL_CLIP_CNTL:TPA_CL_CLIP_CNTL;
 begin
  SU_SC_MODE_CNTL:=CX_REG^.PA_SU_SC_MODE_CNTL;
+ PA_CL_CLIP_CNTL:=CX_REG^.PA_CL_CLIP_CNTL;
 
  Result:=Default(TVkPipelineRasterizationStateCreateInfo);
  Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 
- if (SH_REG^.SPI_SHADER_PGM_LO_PS<>0) and
+ if (SH_REG^.SPI_SHADER_PGM_LO_PS<>0) or
     (SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE<>0) then
+ if (CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE=0) and
+    (CX_REG^.DB_RENDER_CONTROL.STENCIL_CLEAR_ENABLE=0) then
  begin
-  Result.rasterizerDiscardEnable:=CX_REG^.DB_SHADER_CONTROL.KILL_ENABLE;
+  Result.rasterizerDiscardEnable:=PA_CL_CLIP_CNTL.DX_RASTERIZATION_KILL;
  end;
 
  //VkPhysicalDeviceDepthClampZeroOneFeaturesEXT::depthClampZeroOne
- Result.depthClampEnable       :=CX_REG^.PA_CL_CLIP_CNTL.DX_CLIP_SPACE_DEF;
+ Result.depthClampEnable       :=PA_CL_CLIP_CNTL.ZCLIP_NEAR_DISABLE or PA_CL_CLIP_CNTL.ZCLIP_FAR_DISABLE;
  Result.polygonMode            :=get_polygon_mode(SU_SC_MODE_CNTL);
  Result.cullMode               :=get_cull_mode   (SU_SC_MODE_CNTL);
  Result.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE); //1:1
@@ -1363,23 +1357,28 @@ begin
 end;
 
 Function TGPU_REGS.GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
+var
+ ps_iter_samples,num_samples:Integer;
 begin
  Result:=Default(TVkPipelineMultisampleStateCreateInfo);
  Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 
- if (CX_REG^.PA_SC_MODE_CNTL_1.PS_ITER_SAMPLE<>0) then
+ if (CX_REG^.DB_EQAA.PS_ITER_SAMPLES<>0) or
+    (CX_REG^.PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES<>0) then
  begin
+  ps_iter_samples:=1 shl CX_REG^.DB_EQAA.PS_ITER_SAMPLES;
+  num_samples    :=1 shl CX_REG^.PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES;
+
   Result.sampleShadingEnable  :=VK_TRUE;
-  Result.rasterizationSamples :=TVkSampleCountFlagBits(1 shl CX_REG^.PA_SC_AA_CONFIG.MSAA_NUM_SAMPLES);
-  Result.minSampleShading     :=0.5;
-  Result.pSampleMask          :=nil;
+  Result.rasterizationSamples :=TVkSampleCountFlagBits(num_samples);
+  Result.minSampleShading     :=ps_iter_samples/num_samples;
+  Result.pSampleMask          :=nil; //TODO
   Result.alphaToCoverageEnable:=CX_REG^.DB_ALPHA_TO_MASK.ALPHA_TO_MASK_ENABLE;
   Result.alphaToOneEnable     :=VK_FALSE;
  end else
  begin
   Result.rasterizationSamples:=VK_SAMPLE_COUNT_1_BIT;
  end;
-
 end;
 
 function TGPU_REGS.GET_PRIM_RESET:TVkBool32;

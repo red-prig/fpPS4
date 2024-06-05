@@ -273,7 +273,7 @@ begin
  until false;
 end;
 
-procedure load_pssl(base:Pointer);
+procedure load_pssl(base:Pointer;ShaderType:Byte);
 var
  info:PShaderBinaryInfo;
  Slots:PInputUsageSlot;
@@ -360,11 +360,9 @@ begin
   end;
  end;
 
- Assert(info<>nil);
-
  SprvEmit:=TSprvEmit.Create;
 
- case info^.m_type of
+ case ShaderType of
   kShaderTypePs  :
   begin
    if cfg.FPrintInfo then
@@ -372,6 +370,9 @@ begin
 
    SprvEmit.InitPs(GPU_REGS.PS.RSRC1,GPU_REGS.PS.RSRC2,GPU_REGS.PS.INPUT_ENA);
    SprvEmit.SetUserData(@GPU_REGS.PS.USER_DATA);
+
+   SprvEmit.SET_PIX_CENTER(0); //PA_SU_VTX_CNTL.PIX_CENTER
+   SprvEmit.SET_SHADER_CONTROL(GPU_REGS.PS.SHADER_CONTROL);
   end;
   kShaderTypeVsVs:
   begin
@@ -512,10 +513,9 @@ begin
   load_dump(cfg.FName);
  end;
 
- load_pssl(GPU_REGS.CS.Addr);
-
- load_pssl(GPU_REGS.VS.Addr);
- load_pssl(GPU_REGS.PS.Addr);
+ load_pssl(GPU_REGS.CS.Addr,kShaderTypeCs);
+ load_pssl(GPU_REGS.VS.Addr,kShaderTypeVsVs);
+ load_pssl(GPU_REGS.PS.Addr,kShaderTypePs);
 
  if cfg.FPrintInfo then
  begin

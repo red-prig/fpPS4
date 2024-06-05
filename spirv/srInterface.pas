@@ -38,8 +38,19 @@ type
   x,y,z:DWORD;
  end;
 
+ TDepthMode=(
+  foDepthNone,
+  foDepthReplacing,
+  foDepthGreater,
+  foDepthLess,
+  foDepthUnchanged
+ );
+
  TEmitInterface=class(TCustomEmit)
   FExecutionModel:Word;
+  FDepthMode:TDepthMode;
+  FPixelCenter:Boolean;
+  FEarlyFragmentTests:Boolean;
   FLocalSize:TLocalSize;
   Config:TsrConfig;
   //
