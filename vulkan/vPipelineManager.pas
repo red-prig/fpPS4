@@ -132,7 +132,7 @@ end;
 
 function TvComputePipelineKey2Compare.c(a,b:PvComputePipelineKey):Integer;
 begin
- Result:=Integer(Pointer(a)>Pointer(b))-Integer(Pointer(a)<Pointer(b));
+ Result:=Integer(Pointer(a^)>Pointer(b^))-Integer(Pointer(a^)<Pointer(b^));
 end;
 
 //

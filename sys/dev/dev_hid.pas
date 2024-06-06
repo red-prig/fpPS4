@@ -301,16 +301,22 @@ begin
       u.pad_state:=Default(t_pad_state);
 
       u.pad_state.timestamp:=$101010;
-      u.pad_state.buttons:=SCE_PAD_BUTTON_UP or SCE_PAD_BUTTON_LEFT;
+      //u.pad_state.buttons:=SCE_PAD_BUTTON_UP or SCE_PAD_BUTTON_LEFT;
 
-      u.pad_state.leftStick.x:=1;
-      u.pad_state.leftStick.y:=2;
+      u.pad_state.leftStick.x   :=$80;
+      u.pad_state.leftStick.y   :=$80;
 
-      u.pad_state.rightStick.x:=3;
-      u.pad_state.rightStick.y:=4;
+      u.pad_state.rightStick.x  :=$80;
+      u.pad_state.rightStick.y  :=$80;
 
-      u.pad_state.analogButtons.l2:=5;
-      u.pad_state.analogButtons.r2:=6;
+      //u.pad_state.leftStick.x:=1;
+      //u.pad_state.leftStick.y:=2;
+      //
+      //u.pad_state.rightStick.x:=3;
+      //u.pad_state.rightStick.y:=4;
+
+      //u.pad_state.analogButtons.l2:=5;
+      //u.pad_state.analogButtons.r2:=6;
 
 
       u.pad_state.touch_gcount:=1;
