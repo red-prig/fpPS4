@@ -193,11 +193,6 @@ begin
     begin
      AddExecutionMode(ExecutionMode.OriginUpperLeft);
 
-     if FPixelCenter then
-     begin
-      AddExecutionMode(ExecutionMode.PixelCenterInteger);
-     end;
-
      if FEarlyFragmentTests then
      begin
       AddExecutionMode(ExecutionMode.EarlyFragmentTests);

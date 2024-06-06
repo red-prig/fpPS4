@@ -137,7 +137,7 @@ var
 begin
  submit_id:=Body^.DATA;
 
- Writeln('submit eop flip:',submit_id);
+ Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
 
  pctx^.stream_dcb.SubmitFlipEop(Body^.DATA,(Body^.intSel shr 1));
 end;

@@ -210,7 +210,16 @@ type
 
  p_pm4_node_DispatchDirect=^t_pm4_node_DispatchDirect;
  t_pm4_node_DispatchDirect=object(t_pm4_node)
-  SH_REG:TSH_REG_GROUP;         // 0x2C00
+
+  USER_DATA_CS:TSPI_USER_DATA;
+
+  ShaderGroup:TvShaderGroup;
+
+  DIM_X:DWORD;
+  DIM_Y:DWORD;
+  DIM_Z:DWORD;
+
+  //SH_REG:TSH_REG_GROUP;         // 0x2C00
  end;
 
  p_pm4_stream=^t_pm4_stream;
@@ -248,6 +257,7 @@ type
   procedure DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
+  procedure Build_cs_info (node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
   procedure DispatchDirect(var SH_REG:TSH_REG_GROUP);
  end;
 
@@ -469,10 +479,7 @@ begin
   Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
  end;
 
- GPU_REGS.export_user_data(@rt_info.USERDATA);
-
- {fdump_ps:=}DumpPS(GPU_REGS);
- {fdump_vs:=}DumpVS(GPU_REGS);
+ GPU_REGS.export_user_data_rt(@rt_info.USERDATA);
 
  rt_info.ShaderGroup:=FetchShaderGroupRT(GPU_REGS,nil{@pa});
  Assert(rt_info.ShaderGroup<>nil);
@@ -570,14 +577,37 @@ begin
  BuildDraw(ntDrawIndexAuto,SH_REG,CX_REG,UC_REG);
 end;
 
+procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
+var
+ dst:PGPU_USERDATA;
+begin
+ //hack
+ dst:=Pointer(@node^.USER_DATA_CS)-Ptruint(@TGPU_USERDATA(nil^).A[vShaderStageCs]);
+
+ GPU_REGS.export_user_data_cs(dst);
+
+ node^.ShaderGroup:=FetchShaderGroupCS(GPU_REGS,nil{@pa});
+ Assert(node^.ShaderGroup<>nil);
+
+ node^.DIM_X:=GPU_REGS.SH_REG^.COMPUTE_DIM_X;
+ node^.DIM_Y:=GPU_REGS.SH_REG^.COMPUTE_DIM_Y;
+ node^.DIM_Z:=GPU_REGS.SH_REG^.COMPUTE_DIM_Z;
+end;
+
 procedure t_pm4_stream.DispatchDirect(var SH_REG:TSH_REG_GROUP);
 var
+ GPU_REGS:TGPU_REGS;
+
  node:p_pm4_node_DispatchDirect;
 begin
+ GPU_REGS:=Default(TGPU_REGS);
+ GPU_REGS.SH_REG:=@SH_REG;
+
  node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchDirect));
 
+ Build_cs_info(node,GPU_REGS);
+
  node^.ntype :=ntDispatchDirect;
- node^.SH_REG:=SH_REG;
 
  add_node(node);
 end;

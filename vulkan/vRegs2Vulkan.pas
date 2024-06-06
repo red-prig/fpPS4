@@ -114,7 +114,8 @@ type
 
   Function  get_code_addr(FStage:TvShaderStage):Pointer;
   Function  get_user_data(FStage:TvShaderStage):Pointer;
-  procedure export_user_data(dst:PGPU_USERDATA);
+  procedure export_user_data_rt(dst:PGPU_USERDATA);
+  procedure export_user_data_cs(dst:PGPU_USERDATA);
  end;
 
  TGPU_USERDATA=packed object
@@ -1098,6 +1099,18 @@ const
   (VK_FORMAT_D32_SFLOAT         ,VK_FORMAT_D32_SFLOAT_S8_UINT)  //Z_32_FLOAT
  );
 
+ DB_Z_ORDER:array[0..3] of TVkPipelineStageFlags=(
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT),    //LATE_Z
+
+  ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or //EARLY_Z_THEN_LATE_Z
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT),
+
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT),    //RE_Z
+
+  ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or //EARLY_Z_THEN_RE_Z
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+ );
+
 Function TGPU_REGS.GET_DB_INFO:TDB_INFO;
 var
  RENDER_CONTROL :TDB_RENDER_CONTROL;
@@ -1229,6 +1242,9 @@ begin
  Assert(SHADER_CONTROL.Z_EXPORT_ENABLE=0               ,'Z_EXPORT_ENABLE');
  Assert(SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0,'STENCIL_TEST_VAL_EXPORT_ENABLE');
 
+ //VK_EXT_depth_range_unrestricted
+ Assert(CX_REG^.DB_RENDER_OVERRIDE.DISABLE_VIEWPORT_CLAMP=0,'DISABLE_VIEWPORT_CLAMP');
+
  //SHADER_CONTROL.CONSERVATIVE_Z_EXPORT -> SPIRV DepthGreater/DepthLess
  //CX_REG^.PA_SU_VTX_CNTL.PIX_CENTER    -> SPIRV PixelCenterInteger
  //SHADER_CONTROL.DEPTH_BEFORE_SHADER   -> SPIRV EarlyFragmentTests
@@ -1236,14 +1252,7 @@ begin
  //CX_REG^.CB_COLOR_CONTROL
  //CX_REG^.DB_RENDER_OVERRIDE.FORCE_SHADER_Z_ORDER
 
- Case SHADER_CONTROL.Z_ORDER of
-  LATE_Z,
-  RE_Z               :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
-
-  EARLY_Z_THEN_LATE_Z,
-  EARLY_Z_THEN_RE_Z  :Result.zorder_stage:=ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
-                                           ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
- end;
+ Result.zorder_stage:=DB_Z_ORDER[SHADER_CONTROL.Z_ORDER];
 
  if (SHADER_CONTROL.DEPTH_BEFORE_SHADER<>0) then
  begin
@@ -1517,7 +1526,7 @@ begin
  end;
 end;
 
-procedure TGPU_REGS.export_user_data(dst:PGPU_USERDATA);
+procedure TGPU_REGS.export_user_data_rt(dst:PGPU_USERDATA);
 begin
  dst^.A[vShaderStageLs]:=SH_REG^.SPI_SHADER_USER_DATA_LS;
  dst^.A[vShaderStageHs]:=SH_REG^.SPI_SHADER_USER_DATA_HS;
@@ -1525,6 +1534,10 @@ begin
  dst^.A[vShaderStageGs]:=SH_REG^.SPI_SHADER_USER_DATA_GS;
  dst^.A[vShaderStageVs]:=SH_REG^.SPI_SHADER_USER_DATA_VS;
  dst^.A[vShaderStagePs]:=SH_REG^.SPI_SHADER_USER_DATA_PS;
+end;
+
+procedure TGPU_REGS.export_user_data_cs(dst:PGPU_USERDATA);
+begin
  dst^.A[vShaderStageCs]:=SH_REG^.COMPUTE_USER_DATA;
 end;
 

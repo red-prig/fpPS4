@@ -62,9 +62,21 @@ type
 
  AShaderFuncKey=array of TShaderFuncKey;
 
+ TvShaderParserExt=class(TvShaderParser)
+  procedure OnDescriptorSet(var Target,id:DWORD); override;
+  procedure OnSourceExtension(P:PChar);           override;
+  procedure OnDataLayout(P:PChar);
+  procedure OnVertLayout(P:PChar);
+  procedure OnBuffLayout(P:PChar);
+  procedure OnUnifLayout(P:PChar);
+  procedure OnFuncLayout(P:PChar);
+ end;
+
  TvShaderExt=class(TvShader)
 
   FDescSetId:Integer;
+
+  FHash:QWORD;
 
   FSetLayout:TvSetLayout;
 
@@ -79,26 +91,20 @@ type
 
   procedure  ClearInfo; override;
   Destructor Destroy;   override;
+  function   parser:CvShaderParser; override;
   procedure  InitSetLayout;
   procedure  AddToPipeline(p:TvPipelineLayout);
-  procedure  OnDescriptorSet(var Target,id:DWORD); override;
-  procedure  OnSourceExtension(P:PChar); override;
   Procedure  AddDataLayout(rtype:TvResourceType;parent,offset:DWORD);
-  procedure  OnDataLayout(P:PChar);
   Procedure  EnumFuncLayout(cb:TvFuncCb);
   function   GetLayoutAddr(parent:DWORD):ADataLayout;
   Procedure  AddVertLayout(parent,bind:DWORD);
-  procedure  OnVertLayout(P:PChar);
   Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   Procedure  AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset:DWORD);
   Procedure  SetPushConst(parent,size:DWORD);
-  procedure  OnBuffLayout(P:PChar);
   Function   GetPushConstData(pUserData:Pointer):Pointer;
   Procedure  AddUnifLayout(dtype:TVkDescriptorType;parent,bind:DWORD);
-  procedure  OnUnifLayout(P:PChar);
   Procedure  EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   Procedure  AddFuncLayout(parent,size:DWORD);
-  procedure  OnFuncLayout(P:PChar);
   Procedure  EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   procedure  FreeShaderFuncs;
   Procedure  PreloadShaderFuncs(pUserData:Pointer);
@@ -295,6 +301,11 @@ begin
  inherited;
 end;
 
+function TvShaderExt.parser:CvShaderParser;
+begin
+ Result:=TvShaderParserExt;
+end;
+
 procedure TvShaderExt.InitSetLayout;
 var
  i:Integer;
@@ -328,9 +339,12 @@ begin
  end;
 end;
 
-procedure TvShaderExt.OnDescriptorSet(var Target,id:DWORD);
+procedure TvShaderParserExt.OnDescriptorSet(var Target,id:DWORD);
 begin
- if (FDescSetId>=0) then id:=FDescSetId;
+ with TvShaderExt(FOwner) do
+ begin
+  if (FDescSetId>=0) then id:=FDescSetId;
+ end;
 end;
 
 function _get_hex_dword(P:PChar):DWord;
@@ -370,7 +384,7 @@ end;
 //UI;PID=00000001;BND=00000000
 //US;PID=00000002;BND=00000001
 
-procedure TvShaderExt.OnSourceExtension(P:PChar);
+procedure TvShaderParserExt.OnSourceExtension(P:PChar);
 begin
  //Writeln(P);
  Case P^ of
@@ -395,8 +409,9 @@ begin
  AddToDataLayout(FDataLayouts,v);
 end;
 
-procedure TvShaderExt.OnDataLayout(P:PChar);
+procedure TvShaderParserExt.OnDataLayout(P:PChar);
 begin
+ with TvShaderExt(FOwner) do
  Case P[1] of
   'R':AddDataLayout(vtRoot   ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'B':AddDataLayout(vtBufPtr2,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
@@ -452,8 +467,9 @@ begin
  AddToCustomLayout(FVertLayouts,v);
 end;
 
-procedure TvShaderExt.OnVertLayout(P:PChar);
+procedure TvShaderParserExt.OnVertLayout(P:PChar);
 begin
+ with TvShaderExt(FOwner) do
  Case P[1] of
   'A':AddVertLayout(_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   else;
@@ -507,8 +523,9 @@ end;
 //BS;PID=00000002;BND=00000001;LEN=FFFFFFFF;OFS=00000000"
 //0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
 //0               1               2
-procedure TvShaderExt.OnBuffLayout(P:PChar);
+procedure TvShaderParserExt.OnBuffLayout(P:PChar);
 begin
+ with TvShaderExt(FOwner) do
  Case P[1] of
   'P':SetPushConst(_get_hex_dword(@P[7]),_get_hex_dword(@P[$21]));
   'U':AddBuffLayout(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -555,8 +572,9 @@ begin
  AddToCustomLayout(FUnifLayouts,v);
 end;
 
-procedure TvShaderExt.OnUnifLayout(P:PChar);
+procedure TvShaderParserExt.OnUnifLayout(P:PChar);
 begin
+ with TvShaderExt(FOwner) do
  Case P[1] of
   'I':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLER      ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
@@ -587,8 +605,9 @@ begin
  AddToCustomLayout(FFuncLayouts,v);
 end;
 
-procedure TvShaderExt.OnFuncLayout(P:PChar);
+procedure TvShaderParserExt.OnFuncLayout(P:PChar);
 begin
+ with TvShaderExt(FOwner) do
  Case P[1] of
   'F':AddFuncLayout(_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   else;

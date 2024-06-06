@@ -922,7 +922,13 @@ begin
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
- Writeln(' eventType  =0x',HexStr(Body^.eventType,2));
+ Case Body^.eventType of
+  kEopFlushCbDbCaches             :Writeln(' eventType  =','FlushCbDbCaches');
+  kEopFlushAndInvalidateCbDbCaches:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
+  kEopCbDbReadsDone               :Writeln(' eventType  =','CbDbReadsDone');
+  else;
+ end;
+
  Writeln(' interrupt  =0x',HexStr(Body^.intSel shr 1,2));
  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));

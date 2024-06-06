@@ -24,37 +24,42 @@ type
 
  TvSupportDescriptorType=array[0..1] of TVkDescriptorType;
 
- {PvShaderBind=^TvShaderBind;
- TvShaderBind=packed object
-  FDVID:DWORD;
-  FDSET:DWORD;
-  FBIND:DWORD;
-  FSCLS:DWORD;
-  FTYPE:DWORD;
- end;}
+ TvShader=class;
+
+ TvShaderParser=class
+  FOwner:TvShader;
+  procedure Parse(data:Pointer;size:Ptruint);     virtual;
+  procedure OnEntryPoint(Stage:DWORD;P:PChar);    virtual;
+  procedure OnSourceExtension(P:PChar);           virtual;
+  procedure OnLocalSize(var x,y,z:DWORD);         virtual;
+  procedure OnBinding(var Target,id:DWORD);       virtual;
+  procedure OnDescriptorSet(var Target,id:DWORD); virtual;
+ end;
+
+ CvShaderParser=class of TvShaderParser;
 
  TvShader=class
   FHandle:TVkShaderModule;
   FStage:TVkShaderStageFlagBits;
   FEntry:RawByteString;
-  //FBinds:array of TvShaderBind;
   Destructor  Destroy; override;
   procedure   ClearInfo; virtual;
+  function    parser:CvShaderParser; virtual;
   procedure   LoadFromMemory(data:Pointer;size:Ptruint);
   procedure   LoadFromStream(Stream:TStream);
   procedure   LoadFromFile(const FileName:RawByteString);
   procedure   LoadFromResource(const FileName:RawByteString);
-  procedure   Parse(data:Pointer;size:Ptruint);
-  procedure   OnEntryPoint(Stage:DWORD;P:PChar); virtual;
-  procedure   OnSourceExtension(P:PChar); virtual;
-  procedure   OnLocalSize(var x,y,z:DWORD); virtual;
-  procedure   OnBinding(var Target,id:DWORD); virtual;
-  procedure   OnDescriptorSet(var Target,id:DWORD); virtual;
+ end;
+
+ ///
+
+ TvShaderParserCompute=class(TvShaderParser)
+  procedure OnLocalSize(var x,y,z:DWORD); override;
  end;
 
  TvShaderCompute=class(TvShader)
   FLocalSize:TVkOffset3D;
-  procedure   OnLocalSize(var x,y,z:DWORD); override;
+  function parser:CvShaderParser; override;
  end;
 
 implementation
@@ -74,8 +79,14 @@ begin
  //SetLength(FBinds,0);
 end;
 
+function TvShader.parser:CvShaderParser;
+begin
+ Result:=TvShaderParser;
+end;
+
 procedure TvShader.LoadFromMemory(data:Pointer;size:Ptruint);
 var
+ parser_instance:TvShaderParser;
  cinfo:TVkShaderModuleCreateInfo;
  r:TVkResult;
 begin
@@ -85,7 +96,12 @@ begin
  end;
  FHandle:=VK_NULL_HANDLE;
  ClearInfo;
- Parse(data,size);
+
+ parser_instance:=parser.Create;
+ parser_instance.FOwner:=Self;
+ parser_instance.Parse(data,size);
+ parser_instance.Free;
+
  cinfo:=Default(TVkShaderModuleCreateInfo);
  cinfo.sType   :=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
  cinfo.codeSize:=size;
@@ -151,6 +167,7 @@ var
 begin
  Stream:=GetResourceStream(FileName,'SPV');
  LoadFromStream(Stream);
+ Stream.Free;
 end;
 
 type
@@ -251,7 +268,7 @@ begin
  end;
 end;
 
-procedure TvShader.Parse(data:Pointer;size:Ptruint);
+procedure TvShaderParser.Parse(data:Pointer;size:Ptruint);
 var
  //orig_data:Pointer;
  //orig_size:Ptruint;
@@ -368,9 +385,6 @@ begin
     if (I.COUNT>=4) then
     begin
      OnEntryPoint(PDWORD(data)[1],PChar(@PDWORD(data)[3]));
-
-     FStage:=GetStageFlag(PDWORD(data)[1]);
-     FEntry:=PChar(@PDWORD(data)[3]);
     end;
    OpExecutionMode:
     if (I.COUNT>=3) then
@@ -438,39 +452,47 @@ begin
  until false;
 end;
 
-procedure TvShader.OnEntryPoint(Stage:DWORD;P:PChar);
+procedure TvShaderParser.OnEntryPoint(Stage:DWORD;P:PChar);
 begin
- FStage:=GetStageFlag(Stage);
- FEntry:=P;
+ FOwner.FStage:=GetStageFlag(Stage);
+ FOwner.FEntry:=P;
 end;
 
-procedure TvShader.OnSourceExtension(P:PChar);
-begin
- //
-end;
-
-procedure TvShader.OnLocalSize(var x,y,z:DWORD);
+procedure TvShaderParser.OnSourceExtension(P:PChar);
 begin
  //
 end;
 
-procedure TvShader.OnBinding(var Target,id:DWORD);
+procedure TvShaderParser.OnLocalSize(var x,y,z:DWORD);
 begin
  //
 end;
 
-procedure TvShader.OnDescriptorSet(var Target,id:DWORD);
+procedure TvShaderParser.OnBinding(var Target,id:DWORD);
+begin
+ //
+end;
+
+procedure TvShaderParser.OnDescriptorSet(var Target,id:DWORD);
 begin
  //
 end;
 
 //
 
-procedure TvShaderCompute.OnLocalSize(var x,y,z:DWORD);
+procedure TvShaderParserCompute.OnLocalSize(var x,y,z:DWORD);
 begin
- if (FLocalSize.x>0) then x:=FLocalSize.x else FLocalSize.x:=x;
- if (FLocalSize.y>0) then y:=FLocalSize.y else FLocalSize.y:=y;
- if (FLocalSize.z>0) then z:=FLocalSize.z else FLocalSize.z:=z;
+ with TvShaderCompute(FOwner) do
+ begin
+  if (FLocalSize.x>0) then x:=FLocalSize.x else FLocalSize.x:=x;
+  if (FLocalSize.y>0) then y:=FLocalSize.y else FLocalSize.y:=y;
+  if (FLocalSize.z>0) then z:=FLocalSize.z else FLocalSize.z:=z;
+ end;
+end;
+
+function TvShaderCompute.parser:CvShaderParser;
+begin
+ Result:=TvShaderParserCompute;
 end;
 
 //  =0,

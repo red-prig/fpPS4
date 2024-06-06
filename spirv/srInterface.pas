@@ -49,7 +49,6 @@ type
  TEmitInterface=class(TCustomEmit)
   FExecutionModel:Word;
   FDepthMode:TDepthMode;
-  FPixelCenter:Boolean;
   FEarlyFragmentTests:Boolean;
   FLocalSize:TLocalSize;
   Config:TsrConfig;

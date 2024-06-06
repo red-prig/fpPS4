@@ -22,14 +22,10 @@ uses
   vImage;
 
 type
- TvComputePipeline2=class(TvComputePipeline)
-  FRefs:ptruint;
-  Procedure  Acquire(Sender:TObject);
-  Procedure  Release(Sender:TOBject);
- end;
-
  TvRenderTargets=class
-  RT_COUNT:Byte;
+  RT_COUNT :Byte;
+  DB_ENABLE:Boolean;
+
   RT_INFO:array[0..7] of TRT_INFO;
   DB_INFO:TDB_INFO;
   //
@@ -127,19 +123,6 @@ begin
 end;
 
 Procedure TvRenderTargets.Release(Sender:TOBject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
-Procedure TvComputePipeline2.Acquire(Sender:TObject);
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-Procedure TvComputePipeline2.Release(Sender:TOBject);
 begin
  if System.InterlockedDecrement(Pointer(FRefs))=nil then
  begin

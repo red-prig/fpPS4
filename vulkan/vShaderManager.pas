@@ -31,6 +31,7 @@ type
   FStage:TvShaderStage;
   FLen  :Ptruint;
   pData :PDWORD;
+  FHash :QWORD;
   function  c(a,b:PShaderDataKey):Integer; static;
   Procedure SetData(Stage:TvShaderStage;Src:Pointer);
   Procedure Free;
@@ -155,6 +156,8 @@ var
  i:Integer;
 begin
  Result:=TvShaderExt.Create;
+ Result.FHash:=key.FHash;
+
  Result.FDescSetId:=FDescSetId; //set before loading
  Result.LoadFromStream(Stream);
  Result.PreloadShaderFuncs(pUserData);
@@ -179,6 +182,8 @@ begin
  pData :=AllocMem(FLen);
 
  Move(Src^,pData^,FLen);
+
+ FHash:=MurmurHash64A(pData,FLen,0);
 end;
 
 Procedure TShaderDataKey.Free;
@@ -293,7 +298,6 @@ begin
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
 
-   SprvEmit.SET_PIX_CENTER    (GPU_REGS.CX_REG^.PA_SU_VTX_CNTL.PIX_CENTER);
    SprvEmit.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
   end;
   vShaderStageVs:
@@ -352,8 +356,6 @@ begin
  SprvEmit.SaveToStream(Result);
 
  SprvEmit.Free;
-
- //DumpSpv(FStage,Result);
 end;
 
 function test_func(FShader:TvShaderExt;pUserData:Pointer):Boolean;
@@ -478,7 +480,18 @@ begin
 
   FShader:=t.AddShader(FDescSetId,M,pUserData);
 
+  DumpSpv(FStage,M);
+
   M.Free;
+
+  case FStage of
+   vShaderStagePs:DumpPS(GPU_REGS,FShader.FHash);
+   vShaderStageVs:DumpVS(GPU_REGS,FShader.FHash);
+   vShaderStageCs:DumpCS(GPU_REGS,FShader.FHash);
+   else;
+  end;
+
+  //
 
   if (FShader.FPushConst.size<>0) and (pc<>nil) then //push const used?
   begin

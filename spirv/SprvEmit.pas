@@ -46,7 +46,6 @@ type
                      RSRC2:TSPI_SHADER_PGM_RSRC2_PS;
                      ENA:TSPI_PS_INPUT_ENA);
 
-  Procedure   SET_PIX_CENTER(val:Byte);
   Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
 
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
@@ -432,11 +431,6 @@ begin
  FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
  AddCapability(Capability.Shader);
-end;
-
-Procedure TSprvEmit.SET_PIX_CENTER(val:Byte);
-begin
- FPixelCenter:=(val<>0);
 end;
 
 Procedure TSprvEmit.SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);

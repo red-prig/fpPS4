@@ -824,6 +824,154 @@ end;
 var
  FCmdPool:TvCmdPool;
 
+procedure Prepare_Uniforms(var FUniformBuilder:TvUniformBuilder;
+                           CmdBuffer:TvCmdBuffer);
+var
+ i:Integer;
+
+ ri:TvImage2;
+begin
+ if (Length(FUniformBuilder.FImages)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FImages) do
+  With FUniformBuilder.FImages[i] do
+  begin
+
+   ri:=FetchImage(CmdBuffer,
+                  FImage,
+                  iu_sampled,
+                  TM_READ
+                 );
+
+   pm4_load_from(CmdBuffer,ri,TM_READ);
+
+   begin
+
+    ri.PushBarrier(CmdBuffer,
+                   ord(VK_ACCESS_SHADER_READ_BIT),
+                   VK_IMAGE_LAYOUT_GENERAL,
+                   ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
+   end;
+
+  end;
+ end;
+end;
+
+procedure Bind_Uniforms(var FUniformBuilder:TvUniformBuilder;
+                        var FDescriptorGroup:TvDescriptorGroup;
+                        ShaderGroup:TvShaderGroup;
+                        CmdBuffer:TvCmdBuffer);
+
+ procedure _init; inline;
+ begin
+  if (FDescriptorGroup=nil) then
+  begin
+   FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,ShaderGroup.FLayout);
+  end;
+ end;
+
+var
+ i:Integer;
+
+ ri:TvImage2;
+ iv:TvImageView2;
+ sm:TvSampler;
+
+ addr_dst:Pointer;
+
+ buf:TvHostBuffer;
+
+ diff :TVkDeviceSize;
+ align:TVkDeviceSize;
+ range:TVkDeviceSize;
+begin
+
+ //images
+ if (Length(FUniformBuilder.FImages)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FImages) do
+  With FUniformBuilder.FImages[i] do
+  begin
+
+   ri:=FetchImage(CmdBuffer,
+                  FImage,
+                  iu_sampled,
+                  TM_READ
+                 );
+
+   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
+
+   _init;
+
+   FDescriptorGroup.FSets[fset].BindImg(bind,0,
+                                        iv.FHandle,
+                                        VK_IMAGE_LAYOUT_GENERAL);
+
+
+  end;
+ end;
+ //images
+
+ //samplers
+ if (Length(FUniformBuilder.FSamplers)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FSamplers) do
+  With FUniformBuilder.FSamplers[i] do
+  begin
+   sm:=FetchSampler(CmdBuffer,PS);
+
+   _init;
+
+   FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
+
+  end;
+ end;
+ //samplers
+
+ //buffers
+ if (Length(FUniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FBuffers) do
+  With FUniformBuilder.FBuffers[i] do
+  begin
+
+   addr_dst:=nil;
+   if not get_dmem_ptr(addr,@addr_dst,nil) then
+   begin
+    Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
+   end;
+
+   buf:=FetchHostBuffer(CmdBuffer,QWORD(addr_dst),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+
+   diff:=QWORD(addr_dst)-buf.FAddr;
+
+   align:=diff-AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+   if (align<>offset) then
+   begin
+    Assert(false,'wrong buffer align '+IntToStr(align)+'<>'+IntToStr(offset));
+   end;
+
+   diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+   range:=size;
+
+   _init;
+
+   FDescriptorGroup.FSets[fset].BindBuf(bind,0,
+                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                        buf.FHandle,
+                                        diff,
+                                        range {VK_WHOLE_SIZE});
+
+
+  end;
+ end;
+ //buffers
+
+end;
+
 procedure pm4_DrawPrepare(var rt_info:t_pm4_rt_info;
                           CmdBuffer:TvCmdBuffer;
                           RenderCmd:TvRenderTargets);
@@ -846,12 +994,6 @@ var
 
  ri:TvImage2;
  iv:TvImageView2;
- sm:TvSampler;
-
- buf:TvHostBuffer;
-
- diff  :TVkUInt32;
- align :TVkUInt32;
 
  FDescriptorGroup:TvDescriptorGroup;
 begin
@@ -905,6 +1047,8 @@ begin
   end;
 
  //rt_info.DB_ENABLE:=False;
+
+ RenderCmd.DB_ENABLE:=rt_info.DB_ENABLE;
 
  if rt_info.DB_ENABLE then
  begin
@@ -1013,7 +1157,7 @@ begin
                   RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   //pm4_load_from(CmdBuffer,ri,RenderCmd.RT_INFO[i].IMAGE_USAGE);
+   pm4_load_from(CmdBuffer,ri,RenderCmd.RT_INFO[i].IMAGE_USAGE);
 
    iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
 
@@ -1087,37 +1231,12 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
 
- if (Length(FUniformBuilder.FImages)<>0) then
- begin
-  For i:=0 to High(FUniformBuilder.FImages) do
-  With FUniformBuilder.FImages[i] do
-  begin
-
-   ri:=FetchImage(CmdBuffer,
-                  FImage,
-                  iu_sampled,
-                  TM_READ
-                 );
-
-   pm4_load_from(CmdBuffer,ri,TM_READ);
-
-   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
-
-   begin
-
-    ri.PushBarrier(CmdBuffer,
-                   ord(VK_ACCESS_SHADER_READ_BIT),
-                   VK_IMAGE_LAYOUT_GENERAL,
-                   ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
-                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
-   end;
-
-  end;
- end;
+ Prepare_Uniforms(FUniformBuilder,CmdBuffer);
  ////////
 
  if not CmdBuffer.BeginRenderPass(RenderCmd) then
  begin
+  Writeln(stderr,'BeginRenderPass(FRenderCmd)');
   Assert(false,'BeginRenderPass(FRenderCmd)');
  end;
 
@@ -1126,94 +1245,10 @@ begin
 
  FDescriptorGroup:=nil;
 
- //
- if (Length(FUniformBuilder.FImages)<>0) then
- begin
-  For i:=0 to High(FUniformBuilder.FImages) do
-  With FUniformBuilder.FImages[i] do
-  begin
-
-   ri:=FetchImage(CmdBuffer,
-                  FImage,
-                  iu_sampled,
-                  TM_READ
-                 );
-
-   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
-
-   if (FDescriptorGroup=nil) then
-   begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
-   end;
-
-   FDescriptorGroup.FSets[fset].BindImg(bind,0,
-                                        iv.FHandle,
-                                        VK_IMAGE_LAYOUT_GENERAL);
-
-
-  end;
- end;
- //
-
- //
- if (Length(FUniformBuilder.FSamplers)<>0) then
- begin
-  For i:=0 to High(FUniformBuilder.FSamplers) do
-  With FUniformBuilder.FSamplers[i] do
-  begin
-   sm:=FetchSampler(CmdBuffer,PS);
-
-   if (FDescriptorGroup=nil) then
-   begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
-   end;
-
-   FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
-
-  end;
- end;
- //
-
- //
- if (Length(FUniformBuilder.FBuffers)<>0) then
- begin
-  For i:=0 to High(FUniformBuilder.FBuffers) do
-  With FUniformBuilder.FBuffers[i] do
-  begin
-
-   if not get_dmem_ptr(addr,@addr,nil) then
-   begin
-    Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
-   end;
-
-   buf:=FetchHostBuffer(CmdBuffer,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-
-   diff:=QWORD(addr)-buf.FAddr;
-
-   align:=diff-AlignDw(diff,limits.minStorageBufferOffsetAlignment);
-
-   if (align<>offset) then
-   begin
-    Assert(false,'wrong buffer align '+IntToStr(align)+'<>'+IntToStr(offset));
-   end;
-
-   diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
-
-   if (FDescriptorGroup=nil) then
-   begin
-    FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,rt_info.ShaderGroup.FLayout);
-   end;
-
-   FDescriptorGroup.FSets[fset].BindBuf(bind,0,
-                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                        buf.FHandle,
-                                        diff,
-                                        VK_WHOLE_SIZE);
-
-
-  end;
- end;
- //
+ Bind_Uniforms(FUniformBuilder,
+               FDescriptorGroup,
+               rt_info.ShaderGroup,
+               CmdBuffer);
 
  if (FDescriptorGroup<>nil) then
  begin
@@ -1302,6 +1337,23 @@ begin
 
   end;
 
+ if RenderCmd.DB_ENABLE then
+ begin
+
+  ri:=FetchImage(CmdBuffer,
+                 RenderCmd.DB_INFO.FImageInfo,
+                 iu_depth,
+                 RenderCmd.DB_INFO.DEPTH_USAGE
+                 );
+
+  ri.PushBarrier(CmdBuffer,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+  //
+ end;
+
  //write back
 end;
 
@@ -1354,6 +1406,101 @@ begin
  CmdBuffer.EndRenderPass;
 
  pm4_Writeback(CmdBuffer,RenderCmd);
+
+ r:=CmdBuffer.QueueSubmit;
+
+ if (r<>VK_SUCCESS) then
+ begin
+  Assert(false,'QueueSubmit');
+ end;
+
+ Writeln('QueueSubmit:',r);
+
+ r:=CmdBuffer.Wait(QWORD(-1));
+
+ Writeln('CmdBuffer:',r);
+
+ r:=RenderQueue.WaitIdle;
+ Writeln('WaitIdle:',r);
+
+ CmdBuffer.ReleaseResource;
+
+ CmdBuffer.Free;
+end;
+
+procedure pm4_DispatchPrepare(node:p_pm4_node_DispatchDirect;
+                              CmdBuffer:TvCmdBuffer);
+var
+ dst:PGPU_USERDATA;
+
+ CP_KEY:TvComputePipelineKey;
+ CP:TvComputePipeline2;
+
+ FUniformBuilder:TvUniformBuilder;
+
+ FDescriptorGroup:TvDescriptorGroup;
+begin
+ CP_KEY.FShaderGroup:=node^.ShaderGroup;
+ CP:=FetchComputePipeline(CmdBuffer,@CP_KEY);
+
+ ////////
+
+ //hack
+ dst:=Pointer(@node^.USER_DATA_CS)-Ptruint(@TGPU_USERDATA(nil^).A[vShaderStageCs]);
+
+ FUniformBuilder:=Default(TvUniformBuilder);
+ CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
+
+ Prepare_Uniforms(FUniformBuilder,CmdBuffer);
+ ////////
+
+ if not CmdBuffer.BindCompute(CP) then
+ begin
+  Writeln(stderr,'BindCompute(CP)');
+  Assert(false,'BindCompute(CP)');
+ end;
+
+ FDescriptorGroup:=nil;
+
+ Bind_Uniforms(FUniformBuilder,
+               FDescriptorGroup,
+               CP_KEY.FShaderGroup,
+               CmdBuffer);
+
+ if (FDescriptorGroup<>nil) then
+ begin
+  CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_COMPUTE,FDescriptorGroup);
+ end;
+
+end;
+
+procedure pm4_DispatchDirect(node:p_pm4_node_DispatchDirect);
+var
+ CmdBuffer:TvCmdBuffer;
+
+ r:TVkResult;
+begin
+
+ StartFrameCapture;
+
+ //
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+
+ CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ //CmdBuffer.submit_id:=submit_id;
+
+ //
+ CmdBuffer.EndRenderPass;
+
+ pm4_DispatchPrepare(node,
+                     CmdBuffer);
+
+ CmdBuffer.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
+
+ /////////
 
  r:=CmdBuffer.QueueSubmit;
 
@@ -1463,6 +1610,7 @@ begin
   WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
   WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
   WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+    if (node^.dst<>0) then
     begin
      addr:=Pointer(node^.dst);
      Move(node^.src^,addr^,node^.num_dw*SizeOf(DWORD));
@@ -1533,13 +1681,14 @@ begin
     Writeln('+',node^.ntype);
 
     case node^.ntype of
-     ntDrawIndex2   :pm4_Draw         (Pointer(node));
-     ntDrawIndexAuto:pm4_Draw         (Pointer(node));
-     ntEventWriteEop:pm4_EventWriteEop(Pointer(node),me);
-     ntSubmitFlipEop:pm4_SubmitFlipEop(Pointer(node),me);
-     ntEventWriteEos:pm4_EventWriteEos(Pointer(node),me);
-     ntWriteData    :pm4_WriteData    (Pointer(node));
-     ntWaitRegMem   :pm4_WaitRegMem   (Pointer(node));
+     ntDrawIndex2    :pm4_Draw          (Pointer(node));
+     ntDrawIndexAuto :pm4_Draw          (Pointer(node));
+     ntDispatchDirect:pm4_DispatchDirect(Pointer(node));
+     ntEventWriteEop :pm4_EventWriteEop (Pointer(node),me);
+     ntSubmitFlipEop :pm4_SubmitFlipEop (Pointer(node),me);
+     ntEventWriteEos :pm4_EventWriteEos (Pointer(node),me);
+     ntWriteData     :pm4_WriteData     (Pointer(node));
+     ntWaitRegMem    :pm4_WaitRegMem    (Pointer(node));
      else
     end;
 

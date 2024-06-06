@@ -73,14 +73,6 @@ type
   Destructor Destroy; override;
  end;
 
- TvComputePipeline=class(TvPipeline)
-  FLayout:TvPipelineLayout;
-  FComputeShader:TvShader;
-  procedure   SetLayout(Layout:TvPipelineLayout);
-  Procedure   SetShader(Shader:TvShader);
-  function    Compile:Boolean;
- end;
-
  TvSetsPool=class;
 
  TvDescriptorSet=class
@@ -402,65 +394,7 @@ begin
  end;
 end;
 
-procedure TvComputePipeline.SetLayout(Layout:TvPipelineLayout);
-begin
- if (FLayout<>Layout) then
- begin
-  FLayout:=Layout;
- end;
-end;
-
-Procedure TvComputePipeline.SetShader(Shader:TvShader);
-begin
- if (FComputeShader<>Shader) then
- begin
-  if (Shader=nil) then
-  begin
-   FComputeShader:=nil;
-  end else
-  if (Shader.FStage=VK_SHADER_STAGE_COMPUTE_BIT) then
-  begin
-   FComputeShader:=Shader;
-  end;
- end;
-end;
-
-function TvComputePipeline.Compile:Boolean;
-var
- FCache:TVkPipelineCache;
-
- info:TVkComputePipelineCreateInfo;
- r:TVkResult;
-begin
- Result:=False;
- if (FLayout=nil) or (FComputeShader=nil) then Exit;
-
- if (FHandle<>VK_NULL_HANDLE) then Exit(True);
-
- if not FLayout.Compile then Exit;
-
- info:=Default(TVkComputePipelineCreateInfo);
- info.sType:=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
- info.stage.sType:=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
- info.stage.stage:=VK_SHADER_STAGE_COMPUTE_BIT;
- info.stage.module:=FComputeShader.FHandle;
- info.stage.pName:=PChar(FComputeShader.FEntry);
- info.layout:=FLayout.FHandle;
-
- FCache:=VK_NULL_HANDLE;
- if (FPCache<>nil) then
- begin
-  FCache:=FPCache.FHandle;
- end;
-
- r:=vkCreateComputePipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
- if (r<>VK_SUCCESS) then
- begin
-  Writeln(StdErr,'vkCreateComputePipelines:',r);
-  Exit;
- end;
- Result:=True;
-end;
+//
 
 Destructor TvSetsPool.Destroy;
 var

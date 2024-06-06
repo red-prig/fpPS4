@@ -11,6 +11,7 @@ uses
  vDevice,
  vDependence,
  vPipeline,
+ vShader,
  vShaderExt,
  si_ci_vi_merged_enum;
 
@@ -69,7 +70,24 @@ type
   procedure Release(Sender:TObject);
  end;
 
+ //
+
+ PvComputePipelineKey=^TvComputePipelineKey;
+ TvComputePipelineKey=packed object
+  FShaderGroup:TvShaderGroup;
+ end;
+
+ TvComputePipeline2=class(TvPipeline)
+  Key:TvComputePipelineKey;
+  //
+  FRefs:ptruint;
+  Function  Compile:Boolean;
+  Procedure Acquire;
+  procedure Release(Sender:TObject);
+ end;
+
 function FetchGraphicsPipeline(cmd:TvDependenciesObject;P:PvGraphicsPipelineKey):TvGraphicsPipeline2;
+function FetchComputePipeline (cmd:TvDependenciesObject;P:PvComputePipelineKey ):TvComputePipeline2;
 
 implementation
 
@@ -83,14 +101,28 @@ type
   function c(a,b:PvGraphicsPipelineKey):Integer; static;
  end;
 
+ TvComputePipelineKey2Compare=object
+  function c(a,b:PvComputePipelineKey):Integer; static;
+ end;
+
  TvGraphicsPipeline2Set=specialize T23treeSet<PvGraphicsPipelineKey,TvGraphicsPipelineKey2Compare>;
 
-var
- global_lock:Pointer=nil;
+ TvComputePipeline2Set =specialize T23treeSet<PvComputePipelineKey,TvComputePipelineKey2Compare>;
 
- FGlobalCache:TvPipelineCache;
+var
+ global_lock_rt:Pointer=nil;
+ global_lock_cs:Pointer=nil;
+
+ FGlobalCache_rt:TvPipelineCache=nil;
+ FGlobalCache_cs:TvPipelineCache=nil;
 
  FGraphicsPipeline2Set:TvGraphicsPipeline2Set;
+ FComputePipeline2Set :TvComputePipeline2Set;
+
+//
+
+
+
 
 
 function TvGraphicsPipelineKey2Compare.c(a,b:PvGraphicsPipelineKey):Integer;
@@ -98,14 +130,9 @@ begin
  Result:=CompareByte(a^,b^,SizeOf(TvGraphicsPipelineKey));
 end;
 
-Procedure Global_Lock_wr;
+function TvComputePipelineKey2Compare.c(a,b:PvComputePipelineKey):Integer;
 begin
- rw_wlock(global_lock);
-end;
-
-Procedure Global_Unlock_wr;
-begin
- rw_wunlock(global_lock);
+ Result:=Integer(Pointer(a)>Pointer(b))-Integer(Pointer(a)<Pointer(b));
 end;
 
 //
@@ -221,7 +248,8 @@ type
  AVkPipelineShaderStageCreateInfo=array[0..6] of TVkPipelineShaderStageCreateInfo;
 
 var
- FCache:TVkPipelineCache;
+ FLayout:TvPipelineLayout;
+ FCache :TVkPipelineCache;
 
  r:TVkResult;
  Stages:AVkPipelineShaderStageCreateInfo; // info.stageCount
@@ -238,11 +266,18 @@ var
 begin
  Result:=False;
 
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
  if (Key.FRenderPass =nil) then Exit;
  if (Key.FShaderGroup=nil) then Exit;
  if (Key.viewportCount=0)  then Exit;
 
- if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+ if (Key.FRenderPass.FHandle=VK_NULL_HANDLE) then Exit;
+
+ FLayout:=Key.FShaderGroup.FLayout;
+
+ if (FLayout=nil) then Exit;
+ if (FLayout.FHandle=VK_NULL_HANDLE) then Exit;
 
  info:=Default(TVkGraphicsPipelineCreateInfo);
 
@@ -308,7 +343,7 @@ begin
  info.pDepthStencilState :=@Key.DepthStencil;
  info.pColorBlendState   :=@colorBlending;
  info.pDynamicState      :=@dynamicState;
- info.layout             :=Key.FShaderGroup.FLayout.FHandle;
+ info.layout             :=FLayout.FHandle;
  info.renderPass         :=Key.FRenderPass.FHandle;
  info.subpass            :=0;
  info.basePipelineHandle :=VK_NULL_HANDLE;
@@ -345,7 +380,70 @@ end;
 
 ///
 
-function _Find(P:PvGraphicsPipelineKey):TvGraphicsPipeline2;
+function TvComputePipeline2.Compile:Boolean;
+var
+ FLayout:TvPipelineLayout;
+ FCache :TVkPipelineCache;
+ FShader:TvShaderExt;
+
+ info:TVkComputePipelineCreateInfo;
+ r:TVkResult;
+begin
+ Result:=False;
+
+ if (FHandle<>VK_NULL_HANDLE) then Exit(True);
+
+ if (Key.FShaderGroup=nil) then Exit;
+
+ FLayout:=Key.FShaderGroup.FLayout;
+
+ if (FLayout=nil) then Exit;
+ if (FLayout.FHandle=VK_NULL_HANDLE) then Exit;
+
+ FShader:=Key.FShaderGroup.FKey.FShaders[vShaderStageCs];
+
+ if (FShader=nil) then Exit;
+ if (FShader.FHandle=VK_NULL_HANDLE) then Exit;
+
+ info:=Default(TVkComputePipelineCreateInfo);
+ info.sType       :=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+ info.stage.sType :=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+ info.stage.stage :=VK_SHADER_STAGE_COMPUTE_BIT;
+ info.stage.module:=FShader.FHandle;
+ info.stage.pName :=PChar(FShader.FEntry);
+ info.layout      :=FLayout.FHandle;
+
+ FCache:=VK_NULL_HANDLE;
+ if (FPCache<>nil) then
+ begin
+  FCache:=FPCache.FHandle;
+ end;
+
+ r:=vkCreateComputePipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateComputePipelines:',r);
+  Exit;
+ end;
+ Result:=True;
+end;
+
+Procedure TvComputePipeline2.Acquire;
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+end;
+
+procedure TvComputePipeline2.Release(Sender:TObject);
+begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
+end;
+
+///
+
+function _FindGraphics(P:PvGraphicsPipelineKey):TvGraphicsPipeline2;
 var
  i:TvGraphicsPipeline2Set.Iterator;
 begin
@@ -363,18 +461,18 @@ var
 begin
  Result:=nil;
 
- t:=_Find(P);
+ t:=_FindGraphics(P);
 
  if (t=nil) then
  begin
 
-  if (FGlobalCache=nil) then
+  if (FGlobalCache_rt=nil) then
   begin
-   FGlobalCache:=TvPipelineCache.Create(nil,0);
+   FGlobalCache_rt:=TvPipelineCache.Create(nil,0);
   end;
 
   t:=TvGraphicsPipeline2.Create;
-  t.FPCache:=FGlobalCache;
+  t.FPCache:=FGlobalCache_rt;
 
   t.key:=P^;
 
@@ -396,7 +494,7 @@ begin
  Result:=nil;
  if (P=nil) then Exit;
 
- Global_Lock_wr;
+ rw_wlock(global_lock_rt);
 
  Result:=_FetchGraphicsPipeline(P);
 
@@ -408,10 +506,76 @@ begin
   end;
  end;
 
- Global_Unlock_wr;
+ rw_wunlock(global_lock_rt);
 end;
 
+//
 
+function _FindCompute(P:PvComputePipelineKey):TvComputePipeline2;
+var
+ i:TvComputePipeline2Set.Iterator;
+begin
+ Result:=nil;
+ i:=FComputePipeline2Set.find(P);
+ if (i.Item<>nil) then
+ begin
+  Result:=TvComputePipeline2(ptruint(i.Item^)-ptruint(@TvComputePipeline2(nil).key));
+ end;
+end;
+
+function _FetchComputePipeline(P:PvComputePipelineKey):TvComputePipeline2;
+var
+ t:TvComputePipeline2;
+begin
+ Result:=nil;
+
+ t:=_FindCompute(P);
+
+ if (t=nil) then
+ begin
+
+  if (FGlobalCache_cs=nil) then
+  begin
+   FGlobalCache_cs:=TvPipelineCache.Create(nil,0);
+  end;
+
+  t:=TvComputePipeline2.Create;
+  t.FPCache:=FGlobalCache_cs;
+
+  t.key:=P^;
+
+  if not t.Compile then
+  begin
+   FreeAndNil(t);
+  end else
+  begin
+   t.Acquire; //map ref
+   FComputePipeline2Set.Insert(@t.key);
+  end;
+ end;
+
+ Result:=t;
+end;
+
+function FetchComputePipeline(cmd:TvDependenciesObject;P:PvComputePipelineKey):TvComputePipeline2;
+begin
+ Result:=nil;
+ if (P=nil) then Exit;
+
+ rw_wlock(global_lock_cs);
+
+ Result:=_FetchComputePipeline(P);
+
+ if (cmd<>nil) and (Result<>nil) then
+ begin
+  if cmd.AddDependence(@Result.Release) then
+  begin
+   Result.Acquire;
+  end;
+ end;
+
+ rw_wunlock(global_lock_cs);
+end;
 
 end.
 

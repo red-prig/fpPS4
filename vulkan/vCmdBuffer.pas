@@ -19,6 +19,7 @@ uses
   vShaderExt,
   vImage,
   vPipeline,
+  vPipelineManager,
   //vSetsPools,
   vRender;
 
@@ -273,8 +274,8 @@ begin
   Exit(True);
  end;
 
- if (RT.FRenderPass=nil) then Exit;
- if (RT.FPipeline=nil) then Exit;
+ if (RT.FRenderPass =nil) then Exit;
+ if (RT.FPipeline   =nil) then Exit;
  if (RT.FFramebuffer=nil) then Exit;
 
  if (RT.FRenderPass.FHandle=FRenderPass) then Exit(True);
@@ -336,11 +337,11 @@ begin
  if (Self=nil) or (CP=nil) then Exit;
 
  BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,CP.FHandle);
- BindLayout  (VK_PIPELINE_BIND_POINT_COMPUTE,CP.FLayout);
+ BindLayout  (VK_PIPELINE_BIND_POINT_COMPUTE,CP.Key.FShaderGroup.FLayout);
 
  if AddDependence(@CP.Release) then
  begin
-  CP.Acquire(Self);
+  CP.Acquire;
  end;
 
  Result:=True;
