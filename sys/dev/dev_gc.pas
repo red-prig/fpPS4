@@ -30,6 +30,7 @@ uses
  md_sleep,
  pm4defs,
  pm4_ring,
+ pm4_stream,
  pm4_pfp,
  pm4_me,
 
@@ -139,7 +140,7 @@ begin
 
  Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
 
- pctx^.stream_dcb.SubmitFlipEop(Body^.DATA,(Body^.intSel shr 1));
+ pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,(Body^.intSel shr 1));
 end;
 
 function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
@@ -156,13 +157,15 @@ begin
     begin
      Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
-    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb) then
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb,stGfxCcb) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
      if (i<>0) then
      begin
       pctx^.add_stall(@ibuf);
      end;
+
+     pm4_me_gfx.Push(pfp_ctx.stream[stGfxCcb]);
     end;
    end;
   $c0023f00:
@@ -171,13 +174,15 @@ begin
     begin
      Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
-    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb) then
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb,stGfxDcb) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
      if (i<>0) then
      begin
       pctx^.add_stall(@ibuf);
      end;
+
+     pm4_me_gfx.Push(pfp_ctx.stream[stGfxDcb]);
     end;
    end;
   $c0008b00:
@@ -202,6 +207,7 @@ var
  i,size:DWORD;
 
  ibuf:t_pm4_ibuffer;
+ buft:t_pm4_stream_type;
 begin
 
  if LoadVulkan then
@@ -215,22 +221,28 @@ begin
   begin
    //Writeln('packet:0x',HexStr(buff),':',size);
 
-   if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_ring) then
+   if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_ring,stGfxRing) then
    begin
     i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
 
     if (i<>0) then
     begin
-     pm4_me_gfx.Push(pfp_ctx.stream_dcb);
-     pm4_me_gfx.Push(pfp_ctx.stream_ccb);
+     //pm4_me_gfx.Push(pfp_ctx.stream_dcb);
+     //pm4_me_gfx.Push(pfp_ctx.stream_ccb);
 
      pfp_ctx.add_stall(@ibuf);
     end;
 
    end;
 
-   pm4_me_gfx.Push(pfp_ctx.stream_ccb);
-   pm4_me_gfx.Push(pfp_ctx.stream_dcb);
+
+   for buft:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+   begin
+    pm4_me_gfx.Push(pfp_ctx.stream[buft]);
+   end;
+
+   //pm4_me_gfx.Push(pfp_ctx.stream_ccb,stGfxDcb);
+   //pm4_me_gfx.Push(pfp_ctx.stream_dcb,stGfxCcb);
 
    gc_ring_pm4_drain(@ring_gfx,size);
    //
@@ -247,6 +259,7 @@ procedure start_gfx_ring;
 begin
  if (System.InterlockedExchange(parse_gfx_started,Pointer(1))=nil) then
  begin
+  pfp_ctx.init;
   pfp_ctx.print_hint:=true;
   pfp_ctx.print_ops :=true;
 
@@ -319,9 +332,10 @@ begin
              Exit(19);
             end;
 
-  $C004811F: //sceGnmGetNumTcaUnits
+  $C004811F: //sceGnmGetNumTcaUnits -> 0x01
+             //ext_gpu_timer        -> 0x08
             begin
-             Exit(19);
+             PInteger(data)^:=0;
             end;
 
   $C00C8110: //sceGnmSetGsRingSizes

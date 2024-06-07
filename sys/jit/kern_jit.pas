@@ -1079,14 +1079,17 @@ begin
  //debug
 end;
 
-procedure op_jit2native(var ctx:t_jit_context2);
+procedure op_jit2native(var ctx:t_jit_context2;pcb:Boolean);
 const
  and_desc:t_op_type=(op:$80;index:4);
 begin
  with ctx.builder do
  begin
   //reset PCB_IS_JIT
-  _MI8(and_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_JIT));
+  if pcb then
+  begin
+   _MI8(and_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_JIT));
+  end;
 
   //save internal stack
   movq([r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rsp)],rsp);
@@ -1109,7 +1112,7 @@ begin
  end;
 end;
 
-procedure op_native2jit(var ctx:t_jit_context2);
+procedure op_native2jit(var ctx:t_jit_context2;pcb:Boolean);
 const
  or_desc:t_op_type=(op:$80;index:1);
 begin
@@ -1147,7 +1150,10 @@ begin
   movq(rbp,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.td_jctx.rbp)]);
 
   //set PCB_IS_JIT
-  _MI8(or_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_JIT));
+  if pcb then
+  begin
+   _MI8(or_desc,[r13-jit_frame_offset+Integer(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_JIT));
+  end;
  end;
 end;
 
@@ -1212,11 +1218,11 @@ begin
   Exit(True);
  end;
 
- op_jit2native(ctx);
+ op_jit2native(ctx,false);
 
  add_orig(ctx);
 
- op_native2jit(ctx);
+ op_native2jit(ctx,false);
 
  Result:=True;
 end;
@@ -1446,9 +1452,9 @@ begin
 
   link_curr:=ctx.builder.get_curr_label.after;
   //
-  op_jit2native(ctx);
+  op_jit2native(ctx,true);
   ctx.builder.call_far(node^.native);
-  op_native2jit(ctx);
+  op_native2jit(ctx,true);
   //
   op_pop_rip(ctx,0); //out:r14
   op_jmp_dispatcher(ctx);

@@ -29,14 +29,14 @@ type
   size:Ptruint;
   bpos:Ptruint;
   picb:t_pm4_parse_cb;
+  buft:t_pm4_stream_type;
  end;
 
  t_pfp_ctx=object
-  lastn:TAILQ_HEAD;
-  stall:TAILQ_HEAD;
+  freen:TAILQ_HEAD;
+  stall:array[t_pm4_stream_type] of TAILQ_HEAD;
   //
-  stream_dcb:t_pm4_stream;
-  stream_ccb:t_pm4_stream;
+  stream:array[t_pm4_stream_type] of t_pm4_stream;
   //
   SH_REG:TSH_REG_GROUP;         // 0x2C00
   CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
@@ -46,6 +46,7 @@ type
   print_hint:Boolean;
   LastSetReg:Word;
   //
+  procedure init;
   procedure add_stall(ibuf:p_pm4_ibuffer);
   procedure free;
   //
@@ -58,8 +59,16 @@ type
   procedure clear_state;
  end;
 
-function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buff:Pointer;size:Ptruint;icb:t_pm4_parse_cb):Boolean;
-function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buf:PPM4CMDINDIRECTBUFFER;icb:t_pm4_parse_cb):Boolean;
+function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
+                      buff:Pointer;
+                      size:Ptruint;
+                       icb:t_pm4_parse_cb;
+                      buft:t_pm4_stream_type):Boolean;
+
+function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
+                        buf:PPM4CMDINDIRECTBUFFER;
+                        icb:t_pm4_parse_cb;
+                       buft:t_pm4_stream_type):Boolean;
 
 function pm4_ibuf_parse(pctx:p_pfp_ctx;ibuf:p_pm4_ibuffer):Integer;
 
@@ -81,7 +90,11 @@ begin
  Result:=((token shr 14) and $FFFC) + 8;
 end;
 
-function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buff:Pointer;size:Ptruint;icb:t_pm4_parse_cb):Boolean;
+function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
+                       buff:Pointer;
+                       size:Ptruint;
+                        icb:t_pm4_parse_cb;
+                       buft:t_pm4_stream_type):Boolean;
 begin
  Result:=True;
  ibuf^.next:=Default(TAILQ_ENTRY);
@@ -89,9 +102,13 @@ begin
  ibuf^.size:=size;
  ibuf^.bpos:=0;
  ibuf^.picb:=icb;
+ ibuf^.buft:=buft;
 end;
 
-function pm4_ibuf_init(ibuf:p_pm4_ibuffer;buf:PPM4CMDINDIRECTBUFFER;icb:t_pm4_parse_cb):Boolean;
+function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
+                        buf:PPM4CMDINDIRECTBUFFER;
+                        icb:t_pm4_parse_cb;
+                       buft:t_pm4_stream_type):Boolean;
 var
  op:DWORD;
  ib_base:QWORD;
@@ -128,6 +145,7 @@ begin
    ibuf^.size:=ib_size;
    ibuf^.bpos:=0;
    ibuf^.picb:=icb;
+   ibuf^.buft:=buft;
 
    Result:=True;
   end;
@@ -182,14 +200,26 @@ begin
  ibuf^.bpos:=ibuf^.size-i;
 end;
 
+procedure t_pfp_ctx.init;
+var
+ i:t_pm4_stream_type;
+begin
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+ begin
+  stream[i]:=Default(t_pm4_stream);
+  stream[i].buft:=i;
+ end;
+end;
+
 procedure t_pfp_ctx.add_stall(ibuf:p_pm4_ibuffer);
 var
  node:p_pm4_ibuffer;
+ buft:t_pm4_stream_type;
 begin
- node:=TAILQ_FIRST(@lastn);
+ node:=TAILQ_FIRST(@freen);
  if (node<>nil) then
  begin
-  TAILQ_REMOVE(@lastn,node,@node^.next);
+  TAILQ_REMOVE(@freen,node,@node^.next);
  end else
  begin
   node:=AllocMem(SizeOf(t_pm4_ibuffer));
@@ -197,32 +227,38 @@ begin
 
  node^:=ibuf^;
 
- if (stall.tqh_first=nil) and (stall.tqh_last=nil) then
+ buft:=node^.buft;
+
+ if (stall[buft].tqh_first=nil) and (stall[buft].tqh_last=nil) then
  begin
-  TAILQ_INIT(@stall);
+  TAILQ_INIT(@stall[buft]);
  end;
 
- TAILQ_INSERT_TAIL(@stall,node,@node^.next);
+ TAILQ_INSERT_TAIL(@stall[buft],node,@node^.next);
+end;
+
+procedure free_nodes(head:P_TAILQ_HEAD);
+var
+ node:p_pm4_ibuffer;
+begin
+ node:=TAILQ_FIRST(head);
+ while (node<>nil) do
+ begin
+  TAILQ_REMOVE(head,node,@node^.next);
+  FreeMem(node);
+  node:=TAILQ_FIRST(head);
+ end;
 end;
 
 procedure t_pfp_ctx.free;
 var
- node:p_pm4_ibuffer;
+ i:t_pm4_stream_type;
 begin
- node:=TAILQ_FIRST(@lastn);
- while (node<>nil) do
+ free_nodes(@freen);
+
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
  begin
-  TAILQ_REMOVE(@lastn,node,@node^.next);
-  FreeMem(node);
-  node:=TAILQ_FIRST(@lastn);
- end;
- //
- node:=TAILQ_FIRST(@stall);
- while (node<>nil) do
- begin
-  TAILQ_REMOVE(@stall,node,@node^.next);
-  FreeMem(node);
-  node:=TAILQ_FIRST(@stall);
+  free_nodes(@stall[i]);
  end;
 end;
 
@@ -833,7 +869,7 @@ begin
 
  if get_dmem_ptr(Pointer(Body^.addr),@addr,@size) then
  begin
-  pctx^.stream_ccb.LoadConstRam(addr,Body^.numDwords,Body^.offset);
+  pctx^.stream[stGfxCcb].LoadConstRam(addr,Body^.numDwords,Body^.offset);
  end else
  begin
   Assert(false,'addr:0x'+HexStr(Body^.addr,16)+' not in dmem!');
@@ -900,7 +936,7 @@ begin
                               Writeln(' eventType=0x',HexStr(Body^.eventType,2));
  end;
 
- pctx^.stream_dcb.EventWrite(Body^.eventType);
+ pctx^.stream[stGfxDcb].EventWrite(Body^.eventType);
 end;
 
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
@@ -961,7 +997,7 @@ begin
   end;
  end;
 
- pctx^.stream_dcb.EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,(Body^.intSel shr 1));
+ pctx^.stream[stGfxDcb].EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,(Body^.intSel shr 1));
 
 end;
 
@@ -990,7 +1026,7 @@ begin
   Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
  end;
 
- pctx^.stream_dcb.EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
+ pctx^.stream[stGfxDcb].EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
 
 end;
 
@@ -1021,7 +1057,7 @@ begin
  Case Body^.Flags1.engine of
   CP_DMA_ENGINE_ME:
    begin
-    pctx^.stream_dcb.DmaData(dstSel,adrDst,srcSel,adrSrc,byteCount,Body^.Flags1.cpSync);
+    pctx^.stream[stGfxDcb].DmaData(dstSel,adrDst,srcSel,adrSrc,byteCount,Body^.Flags1.cpSync);
    end;
   CP_DMA_ENGINE_PFP:
    begin
@@ -1074,7 +1110,7 @@ begin
  Case engineSel of
   WRITE_DATA_ENGINE_ME:
     begin
-     pctx^.stream_dcb.WriteData(dstSel,QWORD(addr),@Body^.DATA,count);
+     pctx^.stream[stGfxDcb].WriteData(dstSel,QWORD(addr),@Body^.DATA,count);
     end;
   WRITE_DATA_ENGINE_PFP:
     begin
@@ -1118,7 +1154,7 @@ begin
       //Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
      end;
 
-     pctx^.stream_dcb.WaitRegMem(QWORD(addr),Body^.reference,Body^.mask,Body^.compareFunc);
+     pctx^.stream[stGfxDcb].WaitRegMem(QWORD(addr),Body^.reference,Body^.mask,Body^.compareFunc);
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin
@@ -1353,9 +1389,9 @@ begin
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
 
- pctx^.stream_dcb.DrawIndex2(pctx^.SH_REG,
-                             pctx^.CX_REG,
-                             pctx^.UC_REG);
+ pctx^.stream[stGfxDcb].DrawIndex2(pctx^.SH_REG,
+                                   pctx^.CX_REG,
+                                   pctx^.UC_REG);
 end;
 
 procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
@@ -1369,9 +1405,9 @@ begin
  pctx^.UC_REG.VGT_NUM_INDICES   :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
 
- pctx^.stream_dcb.DrawIndexAuto(pctx^.SH_REG,
-                                pctx^.CX_REG,
-                                pctx^.UC_REG);
+ pctx^.stream[stGfxDcb].DrawIndexAuto(pctx^.SH_REG,
+                                      pctx^.CX_REG,
+                                      pctx^.UC_REG);
 end;
 
 procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
@@ -1382,7 +1418,7 @@ begin
  pctx^.SH_REG.COMPUTE_DIM_Z:=Body^.dimZ;
  pctx^.SH_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
 
- pctx^.stream_dcb.DispatchDirect(pctx^.SH_REG);
+ pctx^.stream[stGfxDcb].DispatchDirect(pctx^.SH_REG);
 end;
 
 procedure onPushMarker(Body:PChar);

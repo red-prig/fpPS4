@@ -267,8 +267,8 @@ begin
 
  if (left=nil) then Exit(EINVAL);
 
-left_dmem :=nil;
-right_dmem:=nil;
+ left_dmem :=nil;
+ right_dmem:=nil;
 
  //TODO: check size!
  if not get_dmem_ptr(left,@left_dmem,nil) then
@@ -578,7 +578,7 @@ begin
  yofs:=bi.bmiHeader.biHeight-attr^.attr.height;
  bi.bmiHeader.biHeight:=-bi.bmiHeader.biHeight;
 
- //SetStretchBltMode(hdc, HALFTONE);
+ SetStretchBltMode(hdc, HALFTONE);
 
  StretchDIBits(hdc,
                0,0,
@@ -626,7 +626,8 @@ begin
 
  if (submit^.bufferIndex<>-1) then
  begin
-  dce_page^.labels[submit^.bufferIndex]:=1;
+  //Sets libSceGnm in usermode
+  //dce_page^.labels[submit^.bufferIndex]:=1;
  end;
 
  //
@@ -712,7 +713,8 @@ begin
 
    if (submit^.bufferIndex<>-1) then
    begin
-    dce_page^.labels[submit^.bufferIndex]:=1;
+    //Sets libSceGnm in usermode
+    //dce_page^.labels[submit^.bufferIndex]:=1;
    end;
 
    //
@@ -724,7 +726,7 @@ begin
 
    FSubmitQueue.Push(Node);
 
-   //if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+   if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
    begin
     RTLEventSetEvent(FEvent);
    end;
@@ -792,7 +794,7 @@ begin
   begin
    dce_page^.labels[submit^.bufferIndex]:=0;
   end;
-  dce_page^.label_:=0;
+  dce_page^.label_:=0; //bufferIndex = -1 ???
 
   System.InterlockedDecrement(last_status.flipPendingNum0);
 

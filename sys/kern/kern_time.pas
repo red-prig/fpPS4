@@ -58,7 +58,7 @@ var
 begin
  time:=md_rdtsc_unit();
  tvp^.tv_sec :=(time div UNIT_PER_SEC);
- tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
+ tvp^.tv_usec:=(time mod UNIT_PER_SEC) div UNIT_PER_USEC;
 end;
 
 procedure getnanotime(tp:p_timespec);
@@ -68,7 +68,7 @@ begin
  unittime(@time);
  time:=time-DELTA_EPOCH_IN_UNIT;
  tp^.tv_sec :=(time div UNIT_PER_SEC);
- tp^.tv_nsec:=(time mod UNIT_PER_SEC)*100;
+ tp^.tv_nsec:=(time mod UNIT_PER_SEC)*NSEC_PER_UNIT;
 end;
 
 procedure getmicrotime(tvp:p_timeval);
@@ -78,7 +78,7 @@ begin
  unittime(@time);
  time:=time-DELTA_EPOCH_IN_UNIT;
  tvp^.tv_sec :=(time div UNIT_PER_SEC);
- tvp^.tv_usec:=(time mod UNIT_PER_SEC) div 10;
+ tvp^.tv_usec:=(time mod UNIT_PER_SEC) div UNIT_PER_USEC;
 end;
 
 function sys_clock_gettime(clock_id:Integer;tp:Pointer):Integer;

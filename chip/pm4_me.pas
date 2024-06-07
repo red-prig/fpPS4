@@ -140,6 +140,7 @@ end;
 procedure t_pm4_me.Push(var stream:t_pm4_stream);
 var
  node:p_pm4_stream;
+ buft:t_pm4_stream_type;
 begin
  if (stream.First=nil) then Exit;
  //self alloc
@@ -147,7 +148,9 @@ begin
  //
  node^:=stream;
  //
+ buft:=stream.buft;
  stream:=Default(t_pm4_stream);
+ stream.buft:=buft;
  //
  queue.Push(node);
  //
@@ -1530,6 +1533,13 @@ asm
  divq d
 end;
 
+const
+ GLOBAL_CLOCK_FREQUENCY  =100*1000*1000; //100MHz
+ GPU_CORE_CLOCK_FREQUENCY=800*1000*1000; //800MHz
+
+ //neo mode & ext_gpu_timer -> 911*000*000
+
+
 procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop;me:p_pm4_me);
 var
  curr,diff:QWORD;
@@ -1545,16 +1555,28 @@ begin
   EVENTWRITEEOP_DATA_SEL_DISCARD:;
 
    //32bit data
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA32:PDWORD(node^.addr)^:=node^.data;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA32:
+   begin
+    PDWORD(node^.addr)^:=node^.data;
+   end;
 
    //64bit data
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA64:PQWORD(node^.addr)^:=node^.data;
+  EVENTWRITEEOP_DATA_SEL_SEND_DATA64:
+   begin
+    PQWORD(node^.addr)^:=node^.data;
+   end;
 
     //system 100Mhz global clock. (relative time)
-  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK:PQWORD(node^.addr)^:=mul_div_u64(100*1000000,UNIT_PER_SEC,diff);
+  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK:
+   begin
+    PQWORD(node^.addr)^:=mul_div_u64(GLOBAL_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+   end;
 
     //GPU 800Mhz clock.           (relative time)
-  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:PQWORD(node^.addr)^:=mul_div_u64(800*1000000,UNIT_PER_SEC,diff);
+  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:
+   begin
+    PQWORD(node^.addr)^:=mul_div_u64(GPU_CORE_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+   end;
 
   else
    Assert(false,'pm4_EventWriteEop');
@@ -1699,6 +1721,11 @@ begin
    me^.free_stream(stream);
 
    //EndFrameCapture;
+
+   if (me^.on_idle<>nil) then
+   begin
+    me^.on_idle();
+   end;
 
    //
    Continue;

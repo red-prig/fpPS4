@@ -99,6 +99,8 @@ begin
  if (vblank.refs<>0) then
  begin
 
+  knote_eventid(EVENTID_PREVBLANK, i, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
+
   mtx_lock(dce_mtx);
 
    if (dce_handle<>nil) then
@@ -113,7 +115,7 @@ begin
   i:=vblank.count;
   vblank.count:=vblank.count+1;
 
-  knote_eventid(EVENTID_PREVBLANK, i, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
+  //knote_eventid(EVENTID_PREVBLANK, i, 0); //SCE_VIDEO_OUT_EVENT_PRE_VBLANK_START
   //
   callout_reset(@vblank.callout, vblank.callout.c_time, @vblank_expire, nil);
   //

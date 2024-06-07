@@ -102,6 +102,19 @@ type
   PROVOKING :Byte;
  end;
 
+ t_pm4_stream_type=(
+  stGfxRing,
+  stGfxDcb,
+  stGfxCcb,
+  stCompute0,
+  stCompute1,
+  stCompute2,
+  stCompute3,
+  stCompute4,
+  stCompute5,
+  stCompute6
+ );
+
  t_pm4_node_type=(
   ntLoadConstRam,
   ntEventWrite,
@@ -229,6 +242,8 @@ type
   allocator:t_pm4_allocator;
   //
   list:TAILQ_HEAD; //t_pm4_node
+  //
+  buft:t_pm4_stream_type;
   //
   procedure Free;
   Procedure add_node(node:p_pm4_node);
