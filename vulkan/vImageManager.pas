@@ -50,7 +50,6 @@ type
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
-  procedure   Release(Sender:TObject);
   Function    GetSubresRange:TVkImageSubresourceRange;
   Function    GetSubresLayer:TVkImageSubresourceLayers;
  end;
@@ -103,11 +102,11 @@ type
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
-  function    Acquire(Sender:TObject):Boolean;
-  procedure   Release(Sender:TObject);
+  function    Acquire(Sender:TObject):Boolean; override;
+  procedure   Release(Sender:TObject);         override;
  end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 const
@@ -199,11 +198,6 @@ begin
 
 end;
 
-procedure TvImageView2.Release(Sender:TObject);
-begin
- inherited Release;
-end;
-
 Function TvImageView2.GetSubresRange:TVkImageSubresourceRange;
 begin
  Result:=Default(TVkImageSubresourceRange);
@@ -240,7 +234,7 @@ begin
  While (i.Item<>nil) do
  begin
   t:=TvImageView2(ptruint(i.Item^)-ptruint(@TvImageView2(nil).key));
-  t.Release(nil);
+  t.Release(Self);
   i.Next;
  end;
  FViews.Free;
@@ -393,17 +387,11 @@ begin
   t.Parent :=Self;
   t.key    :=key2;
 
-  t.Acquire; //map ref
+  t.Acquire(Self); //map ref
   FViews.Insert(@t.key);
  end;
 
- if (cmd<>nil) and (t<>nil) then
- begin
-  if cmd.AddDependence(@t.Release) then
-  begin
-   t.Acquire;
-  end;
- end;
+ cmd.RefTo(t);
 
  rw_wunlock(lock);
 
@@ -571,7 +559,7 @@ end;
 
 function TvImage2.Acquire(Sender:TObject):Boolean;
 begin
- Result:=inherited Acquire;
+ Result:=inherited Acquire(Sender);
  if Result and (Sender<>nil) then
  begin
   if FDeps.Insert(Sender) then
@@ -594,7 +582,7 @@ begin
    FLastCmd:=nil;
   end;
  end;
- inherited Release;
+ inherited Release(Sender);
 end;
 
 function _Find(const F:TvImageKey):TvImage2;
@@ -643,7 +631,8 @@ begin
   begin
    //mem is deleted, free img
    FImage2Set.delete(@t.key);
-   FreeAndNil(t);
+   t._Release(nil); //map ref
+   t:=nil;
    goto _repeat;
   end;
  end else
@@ -664,7 +653,10 @@ begin
    );
    t.BindMem(Fdevc); // <-Acquire
 
-   FImage2Set.Insert(@t.key);
+   if FImage2Set.Insert(@t.key) then
+   begin
+    t._Acquire(nil); //map ref
+   end;
   end;
 
  end;
@@ -694,56 +686,17 @@ begin
  Result:=t;
 end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage;data_usage:Byte):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
 begin
  FImage2Set.Lock_wr;
 
  Result:=_FetchImage(F,usage); // <-Acquire
 
- if (cmd<>nil) and (Result<>nil) then
+ cmd.RefTo(Result);
+
+ if (Result<>nil) then
  begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire(cmd);
-   Result.Release(nil); // <-_FetchImage
-  end;
-
-  if not cmd.IsRenderPass then
-  begin
-
-   //if ((Result.data_usage and TM_READ)<>0) and (Result.submit_id<>cmd.submit_id) then
-   begin
-    //hash test
-
-    {
-    if not IMAGE_LOAD_HACK then
-    begin
-     if IMAGE_TEST_HACK then
-     begin
-      Result.data_usage:=Result.data_usage and (not TM_READ);
-     end else
-     if CheckFromBuffer(Result) then
-     begin
-      Result.data_usage:=Result.data_usage and (not TM_READ);
-     end;
-    end;
-    }
-
-   end;
-
-   {
-   if ((Result.data_usage and TM_READ)=0) and ((data_usage and TM_READ)<>0) then
-   begin
-    Result.submit_id:=cmd.submit_id;
-    Result.data_usage:=Result.data_usage or TM_READ;
-    //LoadFromBuffer(cmd,Result);
-   end;
-   }
-
-  end;
-
-  //Result.data_usage:=Result.data_usage or (data_usage and TM_WRITE);
-
+  Result.Release(nil); // <-_FetchImage
  end;
 
  FImage2Set.Unlock_wr;
@@ -755,13 +708,7 @@ begin
 
  Result:=_FindImage(Addr,cformat);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire(cmd);
-  end;
- end;
+ cmd.RefTo(Result);
 
  FImage2Set.Unlock_wr;
 end;

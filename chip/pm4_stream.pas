@@ -237,7 +237,7 @@ type
 
  p_pm4_stream=^t_pm4_stream;
  t_pm4_stream=object
-  next_:Pointer;
+  next_:TAILQ_HEAD;
   //
   allocator:t_pm4_allocator;
   //

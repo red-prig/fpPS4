@@ -38,7 +38,6 @@ type
  TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
 
  TvCustomCmdBuffer=class(TvDependenciesObject)
-  FRefs  :ptruint;
 
   FParent:TvCmdPool;
   FQueue :TvQueue;
@@ -301,10 +300,7 @@ begin
  vkCmdBeginRenderPass(FCmdbuf,@rinfo,VK_SUBPASS_CONTENTS_INLINE);
  vkCmdBindPipeline   (FCmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
 
- if AddDependence(@RT.Release) then
- begin
-  RT.Acquire(Self);
- end;
+ RefTo(RT);
 
  FRenderPass:=rinfo.renderPass;
 
@@ -339,10 +335,7 @@ begin
  BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,CP.FHandle);
  BindLayout  (VK_PIPELINE_BIND_POINT_COMPUTE,CP.Key.FShaderGroup.FLayout);
 
- if AddDependence(@CP.Release) then
- begin
-  CP.Acquire;
- end;
+ RefTo(CP);
 
  Result:=True;
 end;

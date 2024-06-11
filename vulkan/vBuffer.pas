@@ -7,10 +7,11 @@ interface
 uses
  Vulkan,
  vDevice,
- vMemory;
+ vMemory,
+ vDependence;
 
 type
- TvBuffer=class
+ TvBuffer=class(TvRefsObject)
   FHandle:TVkBuffer;
   FSize  :TVkDeviceSize;
   FUsage :TVkFlags;
@@ -24,8 +25,10 @@ type
   procedure   UnBindMem;
   procedure   OnReleaseMem(Sender:TObject); virtual;
   //
-  function    Acquire:Boolean;
-  procedure   Release;
+  function    _Acquire(Sender:TObject):Boolean;
+  procedure   _Release(Sender:TObject);
+  function    Acquire(Sender:TObject):Boolean; override;
+  procedure   Release(Sender:TObject);         override;
  end;
 
 function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
@@ -137,12 +140,13 @@ end;
 
 Destructor TvBuffer.Destroy;
 begin
- UnBindMem;
- //
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
  end;
+ //
+ UnBindMem;
+ //
  inherited;
 end;
 
@@ -203,6 +207,7 @@ procedure TvBuffer.UnBindMem;
 begin
  if (FBind.FMemory<>nil) then
  begin
+  MemManager.Free(FBind);
   FBind.Release;
  end;
  FBind.FMemory:=nil;
@@ -210,21 +215,31 @@ end;
 
 procedure TvBuffer.OnReleaseMem(Sender:TObject);
 begin
- UnBindMem;
- //
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
   FHandle:=VK_NULL_HANDLE;
  end;
+ //
+ UnBindMem;
 end;
 
-function TvBuffer.Acquire:Boolean;
+function TvBuffer._Acquire(Sender:TObject):Boolean;
+begin
+ Result:=inherited Acquire(Sender);
+end;
+
+procedure TvBuffer._Release(Sender:TObject);
+begin
+ inherited Release(Sender);
+end;
+
+function TvBuffer.Acquire(Sender:TObject):Boolean;
 begin
  Result:=FBind.Acquire;
 end;
 
-procedure TvBuffer.Release;
+procedure TvBuffer.Release(Sender:TObject);
 begin
  FBind.Release;
 end;

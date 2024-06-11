@@ -36,10 +36,7 @@ type
  TvRenderPass2=class(TvRenderPass)
   Key:TvRenderPassKey;
   //
-  FRefs:ptruint;
   Function  Compile:Boolean;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
  end;
 
 function FetchRenderPass(cmd:TvDependenciesObject;P:PvRenderPassKey):TvRenderPass2;
@@ -303,19 +300,6 @@ begin
  Result:=True;
 end;
 
-Procedure TvRenderPass2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvRenderPass2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
 function _Find(P:PvRenderPassKey):TvRenderPass2;
 var
  i:TvRenderPass2Set.Iterator;
@@ -347,7 +331,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire; //map ref
+   t.Acquire(nil); //map ref
    FRenderPass2Set.Insert(@t.key);
   end;
  end;
@@ -364,13 +348,7 @@ begin
 
  Result:=_FetchRenderPass(P);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@TvRenderPass2(Result).Release) then
-  begin
-   TvRenderPass2(Result).Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  FRenderPass2Set.Unlock_wr;
 end;

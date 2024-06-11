@@ -8,7 +8,8 @@ uses
  g23tree,
  Vulkan,
  vDevice,
- vShader;
+ vShader,
+ vDependence;
 
 type
  AVkDescriptorSetLayoutBinding=array of TVkDescriptorSetLayoutBinding;
@@ -62,13 +63,13 @@ type
   Destructor  Destroy; override;
  end;
 
- TvPipeline=class
+ TvPipeline=class(TvRefsObject)
   FHandle:TVkPipeline;
   FPCache:TvPipelineCache;
   Destructor  Destroy; override;
  end;
 
- TvRenderPass=class
+ TvRenderPass=class(TvRefsObject)
   FHandle:TVkRenderPass;
   Destructor Destroy; override;
  end;
@@ -130,7 +131,7 @@ type
 
  AvDescriptorSet2=Array of TvDescriptorSet2;
 
- TvDescriptorGroup=class
+ TvDescriptorGroup=class(TvRefsObject)
   //lock:Ptruint;
   FSets:AvDescriptorSet2;
   //Procedure Release;

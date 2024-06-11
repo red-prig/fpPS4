@@ -16,8 +16,6 @@ uses
 type
  TvHostBuffer=class(TvBuffer)
   FAddr:QWORD;
-  //
-  procedure OnReleaseCmd(Sender:TObject);
  end;
 
 function FetchHostBuffer(cmd:TvDependenciesObject;
@@ -48,11 +46,6 @@ type
   Procedure Lock_wr;
   Procedure Unlock_wr;
  end;
-
-procedure TvHostBuffer.OnReleaseCmd(Sender:TObject);
-begin
- Release;
-end;
 
 var
  FHostBufferSet:TvHostBufferSet;
@@ -115,7 +108,7 @@ begin
 
   if (buf.FAddr>=__end) then Exit;
 
-  if buf.Acquire then
+  if buf.Acquire(nil) then
   begin
 
    if (__end>buf.FAddr) and
@@ -125,12 +118,13 @@ begin
     Exit(buf);
    end;
 
-   buf.Release;
+   buf.Release(nil);
   end else
   begin
    //mem is deleted, free buf
    FHostBufferSet.erase(It);
-   FreeAndNil(buf);
+   buf._Release(nil); //map ref
+   buf:=nil;
    goto _repeat;
   end;
 
@@ -219,11 +213,14 @@ begin
   FHostBufferSet.Lock_wr;
   //
 
-  if not FHostBufferSet.Insert(key) then
+  if FHostBufferSet.Insert(key) then
+  begin
+   key.FBuffer._Acquire(nil); //map ref
+  end else
   begin
    //collision?
 
-   key.FBuffer.Release; //release [BindMem]
+   //key.FBuffer.Release(nil); //release [BindMem]
    FreeAndNil(key.FBuffer);
 
    //
@@ -237,19 +234,16 @@ begin
   //create new
  end;
 
+ Result:=key.FBuffer;
+
  //add dep
- if (cmd<>nil) and (key.FBuffer<>nil) then
+ cmd.RefTo(Result);
+
+ if (Result<>nil) then
  begin
-  if cmd.AddDependence(@key.FBuffer.OnReleaseCmd) then
-  begin
-   //
-  end else
-  begin
-   key.FBuffer.Release; //release [BindMem]/[_FindHostBuffer]
-  end;
+  Result.Release(nil); //release [BindMem]/[_FindHostBuffer]
  end;
 
- Result:=key.FBuffer;
 end;
 
 

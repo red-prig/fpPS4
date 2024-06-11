@@ -25,11 +25,8 @@ type
  TvDeviceMemory=class(TvDependenciesObject)
   FHandle :TVkDeviceMemory;
   FSize   :TVkDeviceSize;
-  FRefs   :Ptruint;
   FMemInfo:TvMemInfo;
   //
-  Procedure   Acquire;
-  procedure   Release;
   Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
   Destructor  Destroy; override;
  end;
@@ -45,7 +42,7 @@ type
   FMemory:TvDeviceMemory;
   FOffset:TVkDeviceSize;
   function  Acquire:Boolean;
-  procedure Release;
+  function  Release:Boolean;
  end;
 
 Const
@@ -169,25 +166,6 @@ uses
 var
  global_mem_lock:Pointer=nil;
 
-Procedure TvDeviceMemory.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvDeviceMemory.Release;
-begin
- if (System.InterlockedDecrement(Pointer(FRefs))=nil) then
- begin
-  Free;
- end;
-end;
-
-procedure ReleaseAndNil(var obj:TvDeviceMemory); inline;
-begin
- obj.Release;
- obj:=nil;
-end;
-
 Constructor TvDeviceMemory.Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
 begin
  FHandle:=Handle;
@@ -228,20 +206,21 @@ begin
 
  if (FMemory<>nil) then
  begin
-  FMemory.Acquire;
-  Result:=True;
+  Result:=FMemory.Acquire(nil);
  end;
 
  //
  rw_runlock(global_mem_lock);
 end;
 
-procedure TvPointer.Release;
+function TvPointer.Release:Boolean;
 begin
- if (FMemory<>nil) then
- begin
-  FMemory.Release;
- end;
+ Result:=False;
+ if (FMemory=nil) then Exit;
+
+ FMemory.Release(nil);
+
+ Result:=True;
 end;
 
 //
@@ -632,7 +611,7 @@ begin
  //
  _set:
  //
- FDeviceMemory.Acquire;
+ FDeviceMemory.Acquire(nil);
  FDevBlocks[i]:=FDeviceMemory;
  //
  R:=i;
@@ -870,7 +849,7 @@ begin
  //
  if (Result.FMemory<>nil) then
  begin
-  Result.FMemory.Acquire;
+  Result.FMemory.Acquire(nil);
  end;
  //
  rw_wunlock(global_mem_lock);
@@ -920,7 +899,7 @@ begin
   end;
   Result:=True;
   //
-  P.FMemory.Release;
+  P.FMemory.Release(nil);
  end;
  //
  rw_wunlock(global_mem_lock);
@@ -1015,7 +994,7 @@ begin
     //full in
     _full:
     TAILQ_REMOVE(@FHosts,node,@node.entry);
-    node.Release;
+    node.Release(nil);
     node:=nil;
    end else
    if rmem_map_test_lock(node.FStart,node.F__End) then
@@ -1147,11 +1126,11 @@ begin
   node.FStart:=FStart_align;
   node.F__End:=F__End_align;
 
-  node.Acquire;
+  node.Acquire(nil); //map ref
   TAILQ_INSERT_HEAD(@FHosts,node,@node.entry);
  end;
 
- node.Acquire;
+ node.Acquire(nil);
 
  _fail:
 

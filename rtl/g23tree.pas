@@ -592,9 +592,9 @@ begin
 end;
 
 // -1; //less first key
-// -2; //big first key
-// -3; //less two key
-// -4; //big two key
+// -2; //big  first key
+// -3; //less two   key
+// -4; //big  two   key
 
 Function T23treeSet.find_be(Const R:TKey):Iterator;
 begin

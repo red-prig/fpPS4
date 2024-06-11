@@ -64,10 +64,7 @@ type
  TvGraphicsPipeline2=class(TvPipeline)
   Key:TvGraphicsPipelineKey;
   //
-  FRefs:ptruint;
   Function  Compile:Boolean;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
  end;
 
  //
@@ -80,10 +77,7 @@ type
  TvComputePipeline2=class(TvPipeline)
   Key:TvComputePipelineKey;
   //
-  FRefs:ptruint;
   Function  Compile:Boolean;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
  end;
 
 function FetchGraphicsPipeline(cmd:TvDependenciesObject;P:PvGraphicsPipelineKey):TvGraphicsPipeline2;
@@ -365,19 +359,6 @@ begin
  Result:=True;
 end;
 
-Procedure TvGraphicsPipeline2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvGraphicsPipeline2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
 ///
 
 function TvComputePipeline2.Compile:Boolean;
@@ -428,19 +409,6 @@ begin
  Result:=True;
 end;
 
-Procedure TvComputePipeline2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvComputePipeline2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
 ///
 
 function _FindGraphics(P:PvGraphicsPipelineKey):TvGraphicsPipeline2;
@@ -481,7 +449,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire; //map ref
+   t.Acquire(nil); //map ref
    FGraphicsPipeline2Set.Insert(@t.key);
   end;
  end;
@@ -498,13 +466,7 @@ begin
 
  Result:=_FetchGraphicsPipeline(P);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  rw_wunlock(global_lock_rt);
 end;
@@ -549,7 +511,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire; //map ref
+   t.Acquire(nil); //map ref
    FComputePipeline2Set.Insert(@t.key);
   end;
  end;
@@ -566,13 +528,7 @@ begin
 
  Result:=_FetchComputePipeline(P);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  rw_wunlock(global_lock_cs);
 end;

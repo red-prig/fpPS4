@@ -624,11 +624,11 @@ begin
  Node^.submit:=submit^;
  Node^.tsc   :=rdtsc();
 
- if (submit^.bufferIndex<>-1) then
- begin
-  //Sets libSceGnm in usermode
-  //dce_page^.labels[submit^.bufferIndex]:=1;
- end;
+ //Sets libSceGnm in usermode
+ //if (submit^.bufferIndex<>-1) then
+ //begin
+ // dce_page^.labels[submit^.bufferIndex]:=1;
+ //end;
 
  //
  System.InterlockedIncrement(last_status.flipPendingNum0);
@@ -684,7 +684,6 @@ function TDisplayHandleSoft.TriggerFlipEop(submit_id:QWORD):Integer;
 var
  Node:PQNodeSubmit;
  Flip:PQNodeFlip;
- submit:p_submit_flip;
  i:Integer;
 begin
  Result:=0;
@@ -709,13 +708,11 @@ begin
 
    //
 
-   submit:=@Node^.submit;
-
-   if (submit^.bufferIndex<>-1) then
-   begin
-    //Sets libSceGnm in usermode
-    //dce_page^.labels[submit^.bufferIndex]:=1;
-   end;
+   //Sets libSceGnm in usermode
+   //if (submit^.bufferIndex<>-1) then
+   //begin
+   // dce_page^.labels[submit^.bufferIndex]:=1;
+   //end;
 
    //
    Node^.tsc:=rdtsc();
@@ -790,6 +787,7 @@ begin
 
  mtx_lock(mtx^);
 
+  //reset label
   if (submit^.bufferIndex<>-1) then
   begin
    dce_page^.labels[submit^.bufferIndex]:=0;

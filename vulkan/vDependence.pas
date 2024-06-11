@@ -16,10 +16,17 @@ type
 
  TvRelease=specialize T23treeSet<TvReleaseCb,TvReleaseCompare>;
 
- TvDependenciesObject=class
+ TvRefsObject=class
+  FRefs:ptruint;
+  function   Acquire(Sender:TObject):Boolean; virtual;
+  procedure  Release(Sender:TObject);         virtual;
+ end;
+
+ TvDependenciesObject=class(TvRefsObject)
   FDep_lock    :Pointer;
   FDependencies:TvRelease;
   //
+  Procedure  RefTo(obj:TvRefsObject);
   function   AddDependence(cb:TvReleaseCb):Boolean;
   function   DelDependence(cb:TvReleaseCb):Boolean;
   Procedure  ReleaseAllDependencies(Sender:TObject);
@@ -44,6 +51,8 @@ type
   Function  Release (Const R:TObject):Boolean;
  end;
 
+procedure ReleaseAndNil(var obj);
+
 implementation
 
 uses
@@ -57,6 +66,39 @@ begin
 end;
 
 //
+
+procedure ReleaseAndNil(var obj);
+begin
+ TvRefsObject(obj).Release(nil);
+ TvRefsObject(obj):=nil;
+end;
+
+//
+
+function TvRefsObject.Acquire(Sender:TObject):Boolean;
+begin
+ System.InterlockedIncrement(Pointer(FRefs));
+ Result:=True;
+end;
+
+procedure TvRefsObject.Release(Sender:TObject);
+begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ begin
+  Free;
+ end;
+end;
+
+//
+
+Procedure TvDependenciesObject.RefTo(obj:TvRefsObject);
+begin
+ if (Self=nil) or (obj=nil) then Exit;
+ if AddDependence(@obj.Release) then
+ begin
+  obj.Acquire(Self);
+ end;
+end;
 
 function TvDependenciesObject.AddDependence(cb:TvReleaseCb):Boolean;
 begin

@@ -19,10 +19,11 @@ uses
   vPipeline,
   vPipelineManager,
   //vSetsPools,
-  vImage;
+  vImage,
+  vDependence;
 
 type
- TvRenderTargets=class
+ TvRenderTargets=class(TvRefsObject)
   RT_COUNT :Byte;
   DB_ENABLE:Boolean;
 
@@ -40,16 +41,12 @@ type
   FImagesCount:TVkUInt32;
   FImageViews :AvImageViews;
   //
-  FRefs:ptruint;
-  //
   Procedure  AddClearColor(clr:TVkClearValue);
   Procedure  AddClearColor(clr:TVkClearColorValue);
   Procedure  AddImageView(v:TvImageView);
   Function   GetRInfo:TVkRenderPassBeginInfo;
   Function   GetAInfo:TVkRenderPassAttachmentBeginInfo;
   class function c(const a,b:TvRenderTargets):Integer;
-  Procedure  Acquire(Sender:TObject);
-  Procedure  Release(Sender:TOBject);
  end;
 
  TvRenderTargetsSet=specialize T23treeSet<TvRenderTargets,TvRenderTargets>;
@@ -115,19 +112,6 @@ end;
 class function TvRenderTargets.c(const a,b:TvRenderTargets):Integer;
 begin
  Result:=CompareByte(a,b,SizeOf(Pointer));
-end;
-
-Procedure TvRenderTargets.Acquire(Sender:TObject);
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-Procedure TvRenderTargets.Release(Sender:TOBject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
 end;
 
 //////////////

@@ -9,7 +9,8 @@ uses
  Vulkan,
  vDevice,
  vPipeline,
- vMemory;
+ vMemory,
+ vDependence;
 
 type
  PvImageBarrier=^TvImageBarrier;
@@ -49,15 +50,12 @@ type
   Destructor  Destroy; override;
  end;
 
- TvImageView=class
+ TvImageView=class(TvRefsObject)
   FHandle:TVkImageView;
-  FRefs  :ptruint;
-  Procedure   Acquire;
-  Procedure   Release;
   Destructor  Destroy; override;
  end;
 
- TvCustomImage=class
+ TvCustomImage=class(TvRefsObject)
   FHandle:TVkImage;
   FBind  :TvPointer;
   Destructor  Destroy; override;
@@ -66,10 +64,13 @@ type
   function    GetDedicatedAllocation:Boolean;
   function    Compile(ext:Pointer):Boolean;
   function    BindMem(P:TvPointer):TVkResult;
+  procedure   UnBindMem;
   procedure   OnReleaseMem(Sender:TObject); virtual;
   //
-  function    Acquire:Boolean;
-  procedure   Release;
+  function    _Acquire(Sender:TObject):Boolean;
+  procedure   _Release(Sender:TObject);
+  function    Acquire(Sender:TObject):Boolean; override;
+  procedure   Release(Sender:TObject);         override;
  end;
 
 const
@@ -178,7 +179,7 @@ type
  AvFramebufferImages=array[0..8] of TvImageView;
  AvImageViews       =array[0..8] of TVkImageView;
 
- TvFramebuffer=class
+ TvFramebuffer=class(TvRefsObject)
   FHandle:TVkFramebuffer;
   function   IsImageless:Boolean; virtual;
   Destructor Destroy; override;
@@ -1034,7 +1035,7 @@ begin
  if (Key.FImages[i]<>nil) then
  if (not FAcquire[i]) then
  begin
-  Key.FImages[i].Acquire;
+  Key.FImages[i].Acquire(Self);
   FAcquire[i]:=True;
  end;
 end;
@@ -1048,7 +1049,7 @@ begin
  if (Key.FImages[i]<>nil) then
  if (FAcquire[i]) then
  begin
-  Key.FImages[i].Release;
+  Key.FImages[i].Release(Self);
   FAcquire[i]:=False;
  end;
 end;
@@ -1232,6 +1233,9 @@ begin
  begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
  end;
+ //
+ UnBindMem;
+ //
  inherited;
 end;
 
@@ -1318,23 +1322,43 @@ begin
  end;
 end;
 
+procedure TvCustomImage.UnBindMem;
+begin
+ if (FBind.FMemory<>nil) then
+ begin
+  MemManager.Free(FBind);
+  FBind.Release;
+ end;
+ FBind.FMemory:=nil;
+end;
+
 procedure TvCustomImage.OnReleaseMem(Sender:TObject);
 begin
- FBind.FMemory:=nil;
- //
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
   FHandle:=VK_NULL_HANDLE;
  end;
+ //
+ UnBindMem;
 end;
 
-function TvCustomImage.Acquire:Boolean;
+function TvCustomImage._Acquire(Sender:TObject):Boolean;
+begin
+ Result:=inherited Acquire(Sender);
+end;
+
+procedure TvCustomImage._Release(Sender:TObject);
+begin
+ inherited Release(Sender);
+end;
+
+function TvCustomImage.Acquire(Sender:TObject):Boolean;
 begin
  Result:=FBind.Acquire;
 end;
 
-procedure TvCustomImage.Release;
+procedure TvCustomImage.Release(Sender:TObject);
 begin
  FBind.Release;
 end;
@@ -1499,19 +1523,6 @@ begin
               dstAccessMask,
               newImageLayout,
               dstStageMask);
-end;
-
-Procedure TvImageView.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-Procedure TvImageView.Release;
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
 end;
 
 Destructor TvImageView.Destroy;

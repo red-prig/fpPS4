@@ -13,16 +13,12 @@ uses
 
 type
  TvFramebufferImageless2=class(TvFramebufferImageless)
-  FRefs:ptruint;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
+  //
  end;
 
  TvFramebufferBinded2=class(TvFramebufferBinded)
   FEntry:TAILQ_ENTRY;
-  FRefs :ptruint;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
+  //
  end;
 
 function FetchFramebufferImageless(cmd:TvDependenciesObject;P:PvFramebufferImagelessKey):TvFramebufferImageless2;
@@ -61,32 +57,6 @@ var
 function TvFramebufferImagelessKey2Compare.c(a,b:PvFramebufferImagelessKey):Integer;
 begin
  Result:=CompareByte(a^,b^,SizeOf(TvFramebufferImagelessKey));
-end;
-
-Procedure TvFramebufferImageless2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvFramebufferImageless2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
-Procedure TvFramebufferBinded2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvFramebufferBinded2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
 end;
 
 Procedure Global_Lock_wr;
@@ -130,7 +100,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire; //map ref
+   t.Acquire(nil); //map ref
    FFramebufferImageless2Set.Insert(@t.key);
   end;
  end;
@@ -147,13 +117,7 @@ begin
 
  Result:=_FetchImageless(P);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  Global_Unlock_wr;
 end;
@@ -224,7 +188,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire; //map ref
+   t.Acquire(nil); //map ref
    TAILQ_INSERT_HEAD(@FFramebufferBinded.Queue,t,@t.FEntry);
    Inc(FFramebufferBinded.Count);
 
@@ -244,13 +208,7 @@ begin
 
  Result:=_FetchBinded(P);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@Result.Release) then
-  begin
-   Result.Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  Global_Unlock_wr;
 end;

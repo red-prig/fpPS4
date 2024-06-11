@@ -57,6 +57,9 @@ type
  t_pm4_me=object
   //
   queue:TIntrusiveMPSCQueue; //p_pm4_stream
+  //
+  stall:array[t_pm4_stream_type] of TAILQ_HEAD; //p_pm4_stream
+  //
   event:PRTLEvent;
   on_idle:TProcedure;
   on_submit_flip_eop:t_on_submit_flip_eop;
@@ -73,7 +76,9 @@ type
   procedure trigger;
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
-  procedure free_stream(node:p_pm4_stream); static;
+  procedure add_stream (stream:p_pm4_stream;var iter:t_pm4_stream_type);
+  function  get_next   (iter:t_pm4_stream_type):p_pm4_stream;
+  procedure free_stream(stream:p_pm4_stream);
  end;
 
 var
@@ -107,8 +112,16 @@ begin
 end;
 
 procedure t_pm4_me.Init(knlist:p_knlist);
+var
+ i:t_pm4_stream_type;
 begin
  queue.Create;
+
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+ begin
+  TAILQ_INIT(@stall[i]);
+ end;
+
  gc_knlist:=knlist;
 end;
 
@@ -159,11 +172,42 @@ begin
  trigger;
 end;
 
-procedure t_pm4_me.free_stream(node:p_pm4_stream);
+procedure t_pm4_me.add_stream(stream:p_pm4_stream;var iter:t_pm4_stream_type);
+var
+ i:t_pm4_stream_type;
+begin
+ i:=stream^.buft;
+ TAILQ_INSERT_TAIL(@stall[i],stream,@stream^.next_);
+
+ //if first
+ if (stream=TAILQ_FIRST(@stall[i])) then
+ if (iter>i) then
+ begin
+  iter:=i;
+ end;
+end;
+
+function t_pm4_me.get_next(iter:t_pm4_stream_type):p_pm4_stream;
+var
+ i:t_pm4_stream_type;
+begin
+ for i:=iter to t_pm4_stream_type(ord(iter)+ord(High(t_pm4_stream_type))) do
+ begin
+  Result:=TAILQ_FIRST(@stall[t_pm4_stream_type(ord(i) mod Succ(ord(High(t_pm4_stream_type))))]);
+  if (Result<>nil) then Break;
+ end;
+end;
+
+procedure t_pm4_me.free_stream(stream:p_pm4_stream);
 var
  tmp:t_pm4_stream;
+ i:t_pm4_stream_type;
 begin
- tmp:=node^;
+ //pop
+ i:=stream^.buft;
+ TAILQ_REMOVE(@stall[i],stream,@stream^.next_);
+ //
+ tmp:=stream^;
  tmp.Free;
 end;
 
@@ -294,12 +338,11 @@ type
 
 type
  TvTempBuffer=class(TvBuffer)
-  procedure Release(Sender:TObject); register;
+  procedure ReleaseTmp(Sender:TObject); register;
  end;
 
-procedure TvTempBuffer.Release(Sender:TObject); register;
+procedure TvTempBuffer.ReleaseTmp(Sender:TObject); register;
 begin
- MemManager.Free(FBind);
  Free;
 end;
 
@@ -435,7 +478,7 @@ var
  a,d,b:Ptruint;
 begin
 
- cmd.AddDependence(@buf.Release);
+ cmd.AddDependence(@buf.ReleaseTmp);
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
@@ -842,8 +885,8 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   FImage,
-                  iu_sampled,
-                  TM_READ
+                  iu_sampled
+                  //TM_READ
                  );
 
    pm4_load_from(CmdBuffer,ri,TM_READ);
@@ -899,8 +942,8 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   FImage,
-                  iu_sampled,
-                  TM_READ
+                  iu_sampled
+                  //TM_READ
                  );
 
    iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
@@ -1156,8 +1199,8 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   RenderCmd.RT_INFO[i].FImageInfo,
-                  iu_attachment,
-                  RenderCmd.RT_INFO[i].IMAGE_USAGE
+                  iu_attachment
+                  //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
    pm4_load_from(CmdBuffer,ri,RenderCmd.RT_INFO[i].IMAGE_USAGE);
@@ -1193,8 +1236,8 @@ begin
 
   ri:=FetchImage(CmdBuffer,
                  RenderCmd.DB_INFO.FImageInfo,
-                 iu_depth,
-                 RenderCmd.DB_INFO.DEPTH_USAGE
+                 iu_depth
+                 //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
   //pm4_load_from(CmdBuffer,ri,RenderCmd.DB_INFO.DEPTH_USAGE);
@@ -1281,8 +1324,8 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   RenderCmd.RT_INFO[i].FImageInfo,
-                  iu_attachment,
-                  RenderCmd.RT_INFO[i].IMAGE_USAGE
+                  iu_attachment
+                  //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
    ri.PushBarrier(CmdBuffer,
@@ -1345,8 +1388,8 @@ begin
 
   ri:=FetchImage(CmdBuffer,
                  RenderCmd.DB_INFO.FImageInfo,
-                 iu_depth,
-                 RenderCmd.DB_INFO.DEPTH_USAGE
+                 iu_depth
+                 //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
   ri.PushBarrier(CmdBuffer,
@@ -1586,6 +1629,11 @@ begin
  begin
   me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
+
+ if (me^.on_idle<>nil) then
+ begin
+  me^.on_idle();
+ end;
 end;
 
 procedure pm4_SubmitFlipEop(node:p_pm4_node_SubmitFlipEop;me:p_pm4_me);
@@ -1605,6 +1653,11 @@ begin
  begin
   me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
+
+ if (me^.on_idle<>nil) then
+ begin
+  me^.on_idle();
+ end;
 end;
 
 procedure pm4_EventWriteEos(node:p_pm4_node_EventWriteEos;me:p_pm4_me);
@@ -1621,6 +1674,11 @@ begin
  end;
 
  //interrupt???
+
+ if (me^.on_idle<>nil) then
+ begin
+  me^.on_idle();
+ end;
 end;
 
 procedure pm4_WriteData(node:p_pm4_node_WriteData);
@@ -1662,13 +1720,16 @@ begin
  end;
 end;
 
-procedure pm4_WaitRegMem(node:p_pm4_node_WaitRegMem);
+function pm4_WaitRegMem(node:p_pm4_node_WaitRegMem):Boolean;
 begin
+ Result:=me_test_mem(node);
 
+ {
  while not me_test_mem(node) do
  begin
   sleep(1);
  end;
+ }
 
 end;
 
@@ -1676,6 +1737,8 @@ procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
 var
  stream:p_pm4_stream;
  node:p_pm4_node;
+ i,start:t_pm4_stream_type;
+ switch:Boolean;
 begin
 
  if use_renderdoc_capture then
@@ -1683,6 +1746,9 @@ begin
   renderdoc.LoadRenderDoc;
   renderdoc.UnloadCrashHandler;
  end;
+
+ //reset stall iterator
+ start:=Low(t_pm4_stream_type);
 
  repeat
 
@@ -1696,6 +1762,16 @@ begin
   stream:=nil;
   if me^.queue.Pop(stream) then
   begin
+   me^.add_stream(stream,start);
+   //
+   stream:=nil;
+  end;
+
+  stream:=me^.get_next(start);
+
+  if (stream<>nil) then
+  begin
+   switch:=False;
    //
    node:=stream^.First;
    while (node<>nil) do
@@ -1710,7 +1786,18 @@ begin
      ntSubmitFlipEop :pm4_SubmitFlipEop (Pointer(node),me);
      ntEventWriteEos :pm4_EventWriteEos (Pointer(node),me);
      ntWriteData     :pm4_WriteData     (Pointer(node));
-     ntWaitRegMem    :pm4_WaitRegMem    (Pointer(node));
+     ntWaitRegMem:
+      begin
+       if pm4_WaitRegMem(Pointer(node)) then
+       begin
+        //
+       end else
+       begin
+        switch:=True;
+        Break;
+       end;
+      end;
+
      else
     end;
 
@@ -1718,20 +1805,42 @@ begin
     node:=stream^.Next(node);
    end;
 
+   if switch then
+   begin
+    i:=stream^.buft;
+    if (i=High(t_pm4_stream_type)) then
+    begin
+     //wait
+     sleep(1);
+     //reset stall iterator
+     start:=Low(t_pm4_stream_type);
+     //
+     Continue;
+    end else
+    begin
+     //next
+     start:=Succ(i);
+     //
+     Continue;
+    end;
+   end else
+   begin
+    //reset stall iterator
+    start:=Low(t_pm4_stream_type);
+   end;
+
    me^.free_stream(stream);
 
-   //EndFrameCapture;
-
-   if (me^.on_idle<>nil) then
-   begin
-    me^.on_idle();
-   end;
+   EndFrameCapture;
 
    //
    Continue;
   end;
 
-  EndFrameCapture;
+  //stall is empty!
+
+  //reset stall iterator
+  start:=Low(t_pm4_stream_type);
 
   me^.rel_time:=0; //reset time
   //

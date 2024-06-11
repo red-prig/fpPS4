@@ -25,7 +25,7 @@ type
  TvDescriptorGroupNode=class(TvDescriptorGroup)
   parent:TvSetsPoolUnbound;
   pNext:Pointer;
-  Procedure Release(Sender:TObject);
+  procedure Release(Sender:TObject); override;
  end;
 
  TvSetsPool2Compare=object
@@ -136,6 +136,7 @@ end;
 
 Procedure TvDescriptorGroupNode.Release(Sender:TObject);
 begin
+ if System.InterlockedDecrement(Pointer(FRefs))=nil then
  if (parent<>nil) then
  begin
   parent.PushNode(Self);
@@ -185,10 +186,7 @@ begin
 
  Result:=_Fetch(Pipeline);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  cmd.AddDependence(@TvDescriptorGroupNode(Result).Release);
- end;
+ cmd.RefTo(Result);
 
  FSetsPoolUnbounds.Unlock_wr;
 end;
