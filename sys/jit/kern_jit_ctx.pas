@@ -1602,7 +1602,7 @@ begin
   end;
 
   //zero bits
-  movi(new_reg_size(rbits,os32),24); //mov  $24,%ebp
+  movi(new_reg_size(rbits,os8),24); //mov  $24,%bpl
 
   //clear hi
   _VVV(shlx_desc,r14,rbits,r14,os64); //1 3 2 | shlx %rbp,%r14,%r14

@@ -111,8 +111,8 @@ begin
   if buf.Acquire(nil) then
   begin
 
-   if (__end>buf.FAddr) and
-      (Addr<(buf.FAddr+buf.FSize)) and
+   if (buf.FAddr<=Addr) and
+      ((buf.FAddr+buf.FSize)>=__end) and
       ((buf.FUsage and usage)=usage) then
    begin
     Exit(buf);

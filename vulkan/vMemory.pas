@@ -13,9 +13,9 @@ uses
  vDependence;
 
 type
- TvMemInfo=packed record
-  heap_index     :Byte;
-  mem_type       :Byte;
+ TvMemInfo=bitpacked record
+  heap_index     :0..VK_MAX_MEMORY_HEAPS-1;
+  mem_type       :0..VK_MAX_MEMORY_TYPES-1;
   device_local   :Boolean;
   device_coherent:Boolean;
   host_visible   :Boolean;
@@ -73,10 +73,10 @@ type
  TAllcDevNodeSet=specialize T23treeSet<TDevNode,TAllcCompare>;
 
  PvHeap=^TvHeap;
- TvHeap=packed record
+ TvHeap=bitpacked record
   heap_size      :TVkDeviceSize;
-  heap_index     :Byte;
-  def_mem_type   :Byte;
+  heap_index     :0..VK_MAX_MEMORY_HEAPS-1;
+  def_mem_type   :0..VK_MAX_MEMORY_TYPES-1;
   device_local   :Boolean;
   device_coherent:Boolean;
   host_visible   :Boolean;
@@ -681,7 +681,7 @@ begin
  Result:=false;
  key:=Default(TDevNode);
  key.FmType:=mtindex;
- key.FSize:=Size;
+ key.FSize :=Size;
  It:=FFreeSet.find_be(key);
  if (It.Item=nil) then Exit;
  repeat
