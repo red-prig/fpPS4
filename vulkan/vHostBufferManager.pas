@@ -27,7 +27,8 @@ function FetchHostBuffer(cmd:TvDependenciesObject;
 implementation
 
 uses
- kern_rwlock;
+ kern_rwlock,
+ kern_dmem;
 
 type
  TvHostBufferKey=packed record
@@ -141,13 +142,20 @@ function FetchHostBuffer(cmd:TvDependenciesObject;
 label
  _repeat;
 var
+ dmem_addr:QWORD;
  key:TvHostBufferKey;
  mem:TvPointer;
 begin
  Result:=nil;
  Assert(Size<>0);
 
- _fix_buf_size(Addr,Size,usage);
+ dmem_addr:=0;
+ if not get_dmem_ptr(Pointer(Addr),@dmem_addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(Pointer(Addr))+' not in dmem!');
+ end;
+
+ dmem_addr:=dmem_addr-_fix_buf_size(Addr,Size,usage);
 
  key:=Default(TvHostBufferKey);
  key.FAddr :=Addr;
@@ -172,14 +180,14 @@ begin
  begin
   //create new
 
-  mem:=MemManager.FetchHostMap(Addr,Size,device_local);
+  mem:=MemManager.FetchHostMap(dmem_addr,Size,device_local);
 
   if (mem.FMemory=nil) then
   begin
 
    if device_local then
    begin
-    mem:=MemManager.FetchHostMap(Addr,Size,False);
+    mem:=MemManager.FetchHostMap(dmem_addr,Size,False);
 
     if (mem.FMemory=nil) then
     begin

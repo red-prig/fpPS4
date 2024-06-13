@@ -64,10 +64,6 @@ type
   Constructor Create(pool:TvCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
 
-  Procedure   Acquire;
-  procedure   Release;
-  procedure   OnReleaseCmd(Sender:TObject);
-
   function    BeginCmdBuffer:Boolean;
   Procedure   EndCmdBuffer;
   Procedure   BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
@@ -144,8 +140,7 @@ implementation
 
 uses
  vBuffer,
- vHostBufferManager,
- kern_dmem;
+ vHostBufferManager;
 
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
@@ -178,24 +173,6 @@ begin
   FParent.Free(FCmdbuf);
  end;
  inherited;
-end;
-
-Procedure TvCustomCmdBuffer.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvCustomCmdBuffer.Release;
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
-end;
-
-procedure TvCustomCmdBuffer.OnReleaseCmd(Sender:TObject);
-begin
- Release;
 end;
 
 function TvCustomCmdBuffer.BeginCmdBuffer:Boolean;
@@ -522,8 +499,6 @@ var
 
  last_binding:TVkUInt32;
  last_size   :TVkUInt32;
-
- addr:QWORD;
 begin
  c:=FAttrBuilder.FBindDescsCount;
  if (c=0) then Exit;
@@ -538,12 +513,7 @@ begin
  With FAttrBuilder.FBindVBufs[i] do
  begin
 
-  if not get_dmem_ptr(min_addr,@addr,nil) then
-  begin
-   Assert(false,'addr:0x'+HexStr(min_addr)+' not in dmem!');
-  end;
-
-  rb:=FetchHostBuffer(Self,addr,GetSize,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+  rb:=FetchHostBuffer(Self,QWORD(min_addr),GetSize,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
 
   if (last_binding<>binding) then
   begin
@@ -558,7 +528,7 @@ begin
   end;
 
   Buffers[last_size]:=rb.FHandle;
-  Offsets[last_size]:=QWORD(addr)-rb.FAddr;
+  Offsets[last_size]:=QWORD(min_addr)-rb.FAddr;
 
   last_size:=last_size+1;
  end;
@@ -894,7 +864,6 @@ end;
 
 Procedure TvCmdBuffer.DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
 var
- Addr:Pointer;
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
  BufOffset:TVkDeviceSize;
@@ -909,18 +878,12 @@ begin
 
  Size:=(indexOffset+indexCount)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
 
- Addr:=nil;
- if not get_dmem_ptr(IndexBase,@Addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(IndexBase)+' not in dmem!');
- end;
-
- rb:=FetchHostBuffer(Self,QWORD(Addr),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+ rb:=FetchHostBuffer(Self,QWORD(IndexBase),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
  Assert(rb<>nil);
 
  Inc(cmd_count);
 
- BufOffset:=QWORD(Addr)-rb.FAddr;
+ BufOffset:=QWORD(IndexBase)-rb.FAddr;
 
  vkCmdBindIndexBuffer(
      Fcmdbuf,

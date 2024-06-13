@@ -1029,6 +1029,10 @@
         <Filename Value="sys\kern\kern_rangelock.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="vulkan\vImageTiling.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
