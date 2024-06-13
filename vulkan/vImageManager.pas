@@ -242,8 +242,6 @@ begin
  Fdevc:=FBind;
  FBind:=Default(TvPointer);
 
- MemManager.Free(Fdevc);
-
  inherited;
 end;
 
@@ -647,16 +645,18 @@ begin
   end else
   begin
 
-   Fdevc:=MemManager.Alloc(
+   Fdevc:=MemManager.FetchMemory(
      t.GetRequirements,
-     ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+     V_PROP_DEVICE_LOCAL or V_PROP_BEST_FIT
    );
-   t.BindMem(Fdevc); // <-Acquire
+
+   t.BindMem(Fdevc);
 
    if FImage2Set.Insert(@t.key) then
    begin
     t._Acquire(nil); //map ref
    end;
+
   end;
 
  end;
@@ -690,13 +690,13 @@ function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage
 begin
  FImage2Set.Lock_wr;
 
- Result:=_FetchImage(F,usage); // <-Acquire
+ Result:=_FetchImage(F,usage); // <- Acquire(nil)/FetchMemory
 
  cmd.RefTo(Result);
 
  if (Result<>nil) then
  begin
-  Result.Release(nil); // <-_FetchImage
+  Result.Release(nil); //<- Acquire(nil)/FetchMemory
  end;
 
  FImage2Set.Unlock_wr;

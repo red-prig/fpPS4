@@ -207,8 +207,6 @@ begin
    Exit(nil);
   end;
 
-  mem.Release; //release [FetchHostMap]
-
   //
   FHostBufferSet.Lock_wr;
   //
@@ -220,8 +218,8 @@ begin
   begin
    //collision?
 
-   //key.FBuffer.Release(nil); //release [BindMem]
    FreeAndNil(key.FBuffer);
+   mem.Release; //release [FetchHostMap]
 
    //
    goto _repeat;
@@ -241,7 +239,7 @@ begin
 
  if (Result<>nil) then
  begin
-  Result.Release(nil); //release [BindMem]/[_FindHostBuffer]
+  Result.Release(nil); //release [FetchHostMap]/[_FindHostBuffer]
  end;
 
 end;

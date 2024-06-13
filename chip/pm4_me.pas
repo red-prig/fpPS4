@@ -343,6 +343,7 @@ type
 
 procedure TvTempBuffer.ReleaseTmp(Sender:TObject); register;
 begin
+ Release(nil);
  Free;
 end;
 
@@ -590,15 +591,16 @@ begin
 
  buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
 
- vmem:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) or
-                                            ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
 
  if (vmem.FMemory=nil) then
  begin
-  vmem:=MemManager.Alloc(buf.GetRequirements,ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
  end;
 
  buf.BindMem(vmem);
+
+ //Release ref in ReleaseTmp
 
  m_base:=nil;
  vkMapMemory(Device.FHandle,

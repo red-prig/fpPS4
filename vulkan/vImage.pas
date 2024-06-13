@@ -64,7 +64,7 @@ type
   function    GetDedicatedAllocation:Boolean;
   function    Compile(ext:Pointer):Boolean;
   function    BindMem(P:TvPointer):TVkResult;
-  procedure   UnBindMem;
+  procedure   UnBindMem(do_free:Boolean);
   procedure   OnReleaseMem(Sender:TObject); virtual;
   //
   function    _Acquire(Sender:TObject):Boolean;
@@ -1234,7 +1234,7 @@ begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
  end;
  //
- UnBindMem;
+ UnBindMem(True);
  //
  inherited;
 end;
@@ -1303,7 +1303,7 @@ end;
 
 function TvCustomImage.BindMem(P:TvPointer):TVkResult;
 begin
- if P.Acquire then
+ if P.Acquire then //try Acquire
  begin
   Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
   //
@@ -1311,23 +1311,23 @@ begin
   begin
    FBind:=P;
    P.FMemory.AddDependence(@Self.OnReleaseMem);
-  end else
-  begin
-   P.Release;
   end;
   //
+  P.Release; //release Acquire
  end else
  begin
   Result:=VK_ERROR_UNKNOWN;
  end;
 end;
 
-procedure TvCustomImage.UnBindMem;
+procedure TvCustomImage.UnBindMem(do_free:Boolean);
 begin
  if (FBind.FMemory<>nil) then
  begin
-  MemManager.Free(FBind);
-  FBind.Release;
+  if do_free then
+  begin
+   MemManager.FreeMemory(FBind);
+  end;
  end;
  FBind.FMemory:=nil;
 end;
@@ -1340,7 +1340,7 @@ begin
   FHandle:=VK_NULL_HANDLE;
  end;
  //
- UnBindMem;
+ UnBindMem(False);
 end;
 
 function TvCustomImage._Acquire(Sender:TObject):Boolean;
