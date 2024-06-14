@@ -305,6 +305,19 @@ begin
  Result:=0;
 end;
 
+var                        //    y    x
+ element_index_table_32:array[0..7,0..7] of Byte=
+ (
+  (  0,   4,   8,  12,  32,  36,  40,  44),
+  ( 16,  20,  24,  28,  48,  52,  56,  60),
+  ( 64,  68,  72,  76,  96, 100, 104, 108),
+  ( 80,  84,  88,  92, 112, 116, 120, 124),
+  (128, 132, 136, 140, 160, 164, 168, 172),
+  (144, 148, 152, 156, 176, 180, 184, 188),
+  (192, 196, 200, 204, 224, 228, 232, 236),
+  (208, 212, 216, 220, 240, 244, 248, 252)
+ );
+
 function getTiledElementByteOffset_32(PITCH,x,y:DWORD):QWORD;
 var
  element_index:DWORD;
@@ -312,12 +325,14 @@ var
  total_offset:QWORD;
 begin
  //getElementIndex [0..5]
- element_index:=                 ( (x      ) and 1) shl 2;
- element_index:=element_index or ( (x shr 1) and 1) shl 3;
- element_index:=element_index or ( (y      ) and 1) shl 4;
- element_index:=element_index or ( (x shr 2) and 1) shl 5;
- element_index:=element_index or ( (y shr 1) and 1) shl 6;
- element_index:=element_index or ( (y shr 2) and 1) shl 7;
+ //element_index:=                 ( (x      ) and 1) shl 2;
+ //element_index:=element_index or ( (x shr 1) and 1) shl 3;
+ //element_index:=element_index or ( (y      ) and 1) shl 4;
+ //element_index:=element_index or ( (x shr 2) and 1) shl 5;
+ //element_index:=element_index or ( (y shr 1) and 1) shl 6;
+ //element_index:=element_index or ( (y shr 2) and 1) shl 7;
+
+ element_index:=element_index_table_32[y and 7,x and 7];
 
  //getPipeIndex [6..8]
  pipe:=        ( ((x shr 3) xor (y shr 3) xor (x shr 4)) and 1) shl 8;
@@ -343,12 +358,14 @@ var
  total_offset:QWORD;
 begin
  //getElementIndex [0..5]
- element_index:=                 ( (x      ) and 1) shl 2;
- element_index:=element_index or ( (x shr 1) and 1) shl 3;
- element_index:=element_index or ( (y      ) and 1) shl 4;
- element_index:=element_index or ( (x shr 2) and 1) shl 5;
- element_index:=element_index or ( (y shr 1) and 1) shl 6;
- element_index:=element_index or ( (y shr 2) and 1) shl 7;
+ //element_index:=                 ( (x      ) and 1) shl 2;
+ //element_index:=element_index or ( (x shr 1) and 1) shl 3;
+ //element_index:=element_index or ( (y      ) and 1) shl 4;
+ //element_index:=element_index or ( (x shr 2) and 1) shl 5;
+ //element_index:=element_index or ( (y shr 1) and 1) shl 6;
+ //element_index:=element_index or ( (y shr 2) and 1) shl 7;
+
+ element_index:=element_index_table_32[y and 7,x and 7];
 
  //getPipeIndex  [6..9]
  pipe:=        ( ((x shr 3) xor (y shr 3) xor (x shr 4)) and 1) shl 8;

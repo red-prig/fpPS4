@@ -259,8 +259,8 @@ type
  end;
 
  TilingParameters=object
-  m_tileMode:DWORD;
-  m_minGpuMode:DWORD;
+  m_tileMode            :DWORD;
+  m_minGpuMode          :DWORD;
 
   m_linearWidth         :DWORD;
   m_linearHeight        :DWORD;
@@ -279,41 +279,45 @@ type
   function initFromRenderTargetSpec(var target:RenderTargetSpec;arraySlice:DWORD):Integer;
  end;
 
- Tiler2d=object
-  m_minGpuMode:DWORD;
-  m_tileMode:DWORD;
-  m_arrayMode:DWORD;
-  m_linearWidth:DWORD;
-  m_linearHeight:DWORD;
-  m_linearDepth:DWORD;
-  m_paddedWidth:DWORD;
-  m_paddedHeight:DWORD;
-  m_paddedDepth:DWORD;
-  m_bitsPerElement:DWORD;
-  m_linearSizeBytes:DWORD;
-  m_tiledSizeBytes:DWORD;
+ p_element_table_xyz=^t_element_table_xyz;
+ //                           z    y    x
+ t_element_table_xyz=array[0..7,0..7,0..7] of WORD;
 
-  m_microTileMode:DWORD;
-  m_pipeConfig:DWORD;
-  m_arraySlice:DWORD;
+ Tiler2d=object
+  m_minGpuMode          :DWORD;
+  m_tileMode            :DWORD;
+  m_arrayMode           :DWORD;
+  m_linearWidth         :DWORD;
+  m_linearHeight        :DWORD;
+  m_linearDepth         :DWORD;
+  m_paddedWidth         :DWORD;
+  m_paddedHeight        :DWORD;
+  m_paddedDepth         :DWORD;
+  m_bitsPerElement      :DWORD;
+  m_linearSizeBytes     :DWORD;
+  m_tiledSizeBytes      :DWORD;
+
+  m_microTileMode       :DWORD;
+  m_pipeConfig          :DWORD;
+  m_arraySlice          :DWORD;
   m_numFragmentsPerPixel:DWORD;
-  m_bankWidth:DWORD;
-  m_bankHeight:DWORD;
-  m_numBanks:DWORD;
-  m_macroTileAspect:DWORD;
-  m_tileSplitBytes:DWORD;
-  m_numPipes:DWORD;
-  m_tileThickness:DWORD;
-  m_macroTileWidth:DWORD;
-  m_macroTileHeight:DWORD;
-  m_pipeInterleaveBytes:DWORD;
-  m_pipeInterleaveBits:DWORD;
-  m_pipeInterleaveMask:DWORD;
-  m_pipeBits:DWORD;
-  m_bankBits:DWORD;
-  m_pipeMask:DWORD;
-  m_bankSwizzleMask:DWORD;
-  m_pipeSwizzleMask:DWORD;
+  m_bankWidth           :DWORD;
+  m_bankHeight          :DWORD;
+  m_numBanks            :DWORD;
+  m_macroTileAspect     :DWORD;
+  m_tileSplitBytes      :DWORD;
+  m_numPipes            :DWORD;
+  m_tileThickness       :DWORD;
+  m_macroTileWidth      :DWORD;
+  m_macroTileHeight     :DWORD;
+  m_pipeInterleaveBytes :DWORD;
+  m_pipeInterleaveBits  :DWORD;
+  m_pipeInterleaveMask  :DWORD;
+  m_pipeBits            :DWORD;
+  m_bankBits            :DWORD;
+  m_pipeMask            :DWORD;
+  m_bankSwizzleMask     :DWORD;
+  m_pipeSwizzleMask     :DWORD;
 
   function  init(var tp:TilingParameters):integer;
   function  getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z,fragmentIndex:DWORD):integer;
@@ -331,6 +335,7 @@ type
   m_paddedHeight   :DWORD;
   m_paddedDepth    :DWORD;
   m_bitsPerElement :DWORD;
+  m_bytePerElement :DWORD;
   m_linearSizeBytes:DWORD;
   m_tiledSizeBytes :DWORD;
 
@@ -340,7 +345,12 @@ type
   m_tilesPerRow    :DWORD;
   m_tilesPerSlice  :DWORD;
 
-  procedure init_surface(bpe,tile_idx,tile_alt:DWORD);
+  m_isBlockCompressed:DWORD;
+
+  m_element_table  :p_element_table_xyz;
+
+  procedure init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
+  procedure init_size_2d(width,height:DWORD);
   function  getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
   function  getTiledElementBitOffset (var outTiledBitOffset :QWORD;x,y,z:DWORD):integer;
  end;
@@ -1758,6 +1768,18 @@ begin
  end;
 end;
 
+function getPipeConfig(outPipeConfig:PDWORD;tileMode:Byte):Integer;
+begin
+ outPipeConfig^:=GB_TILE_MODE[tileMode].B.PIPE_CONFIG;
+ Result:=0;
+end;
+
+function getAltPipeConfig(outAltPipeConfig:PDWORD;tileMode:Byte):Integer;
+begin
+ outAltPipeConfig^:=GB_TILE_MODE[tileMode].B.ALT_PIPE_CONFIG;
+ Result:=0;
+end;
+
 function TRENDER_TARGET.getTileMode:Byte; inline;
 begin
  Result:=ATTRIB.TILE_MODE_INDEX;
@@ -1993,98 +2015,73 @@ begin
  end;
 end;
 
+function fastIntLog2(i:DWORD):DWORD; inline;
+begin
+ Result:=BsrDWord(i or 1);
+end;
+
 Function computeSurfaceMacroTileMode(outMacroTileMode:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
 var
- NumIsPower1:Boolean;
- _MacroTiled:Boolean;
- NumIsPower2:Boolean;
- is_Thick_pow:Boolean;
- isParRes:Boolean;
- uVar1:DWORD;
- uVar2:DWORD;
- Thick:DWORD;
- _TileSplit:Byte;
- _SampleSplit:Byte;
- _MicroTileMode:Byte;
- _MicroTileThick:Byte;
- _ArrayMode:Byte;
+ colorTileSplit:DWORD;
+ tileSplit:DWORD;
+ tileSplitC:DWORD;
+ tileBytes1x:DWORD;
+ tileBytes:DWORD;
+ mtmIndex:DWORD;
+ tileSplitHw:Byte;
+ sampleSplitHw:Byte;
+ microTileMode:Byte;
+ tileThickness:Byte;
+ arrayMode:Byte;
 begin
  Result:=-$7f2d0000;
- if (outMacroTileMode <> nil) then
- begin
-   NumIsPower1 := isPowerOfTwo(numFragmentsPerPixel);
-   if ((numFragmentsPerPixel < 9) and (NumIsPower1 <> false)) then
-   begin
-     Result := getArrayMode(@_ArrayMode,tileMode);
-     if (Result = 0) then
-     begin
-       _MacroTiled := isMacroTiled(_ArrayMode);
-       Result := -$7f2d0000;
-       if ((bitsPerElement - 1 < $80) and (_MacroTiled <> false)) then
-       begin
-         NumIsPower2 := isPowerOfTwo(numFragmentsPerPixel);
-         if ((numFragmentsPerPixel - 1 < $10) and (NumIsPower2 <> false)) then
-         begin
-           Result := getMicroTileMode(@_MicroTileMode,tileMode);
-           if (Result = 0) then
-           begin
-             Result := getSampleSplit(@_SampleSplit,tileMode);
-             if (Result = 0) then
-             begin
-               Result := getTileSplit(@_TileSplit,tileMode);
-               if (Result = 0) then
-               begin
-                 _MicroTileThick := getMicroTileThickness(_ArrayMode);
-                 Thick := bitsPerElement * _MicroTileThick * $40 shr 3;
-                 uVar1 := Thick shl (_SampleSplit and $1f);
-                 uVar2 := $100;
-                 if ($100 < uVar1) then
-                 begin
-                   uVar2 := uVar1;
-                 end;
-                 uVar1 := ($40 shl (_TileSplit and $3f));
-                 if (_MicroTileMode <> 2) then
-                 begin
-                   uVar1 := uVar2;
-                 end;
-                 uVar2 := $400;
-                 if (uVar1 < $400) then
-                 begin
-                   uVar2 := uVar1;
-                 end;
-                 Thick := Thick * numFragmentsPerPixel;
-                 if (uVar2 <= Thick) then
-                 begin
-                   Thick := uVar2;
-                 end;
-                 is_Thick_pow := isPowerOfTwo(Thick);
-                 Result := -$7f2d0000;
-                 if ((is_Thick_pow <> false) and (Thick - $40 < $fc1)) then
-                 begin
-                   uVar2 := 0;
-                   Thick:=(Thick shr 6);
-                   While ((Thick and $80000000) = 0) do
-                   begin
-                    uVar2 := uVar2 + 1;
-                    Thick := (Thick or 1) shl 1;
-                   end;
-                   isParRes := isPartiallyResidentTexture(_ArrayMode);
-                   Thick := (uVar2 xor $1f) + 8;
-                   if (isParRes = false) then
-                   begin
-                     Thick := uVar2 xor $1f;
-                   end;
-                   Result := 0;
-                   outMacroTileMode^ := Thick;
-                 end;
-               end;
-             end;
-           end;
-         end;
-       end;
-     end;
-   end;
- end;
+ if (outMacroTileMode <> nil) then Exit;
+
+ if (numFragmentsPerPixel > 8) or (not isPowerOfTwo(numFragmentsPerPixel)) then Exit;
+
+ Result := getArrayMode(@arrayMode,tileMode);
+ if (Result <> 0) then Exit;
+
+ Result := -$7f2d0000;
+
+ if (bitsPerElement < 1) or (bitsPerElement > 128) or (not isMacroTiled(arrayMode)) then Exit;
+
+ if (numFragmentsPerPixel < 1) or (numFragmentsPerPixel > 16) or (not isPowerOfTwo(numFragmentsPerPixel)) then Exit;
+
+ Result := getMicroTileMode(@microTileMode,tileMode);
+ if (Result <> 0) then Exit;
+
+ Result := getSampleSplit(@sampleSplitHw,tileMode);
+ if (Result <> 0) then Exit;
+
+ Result := getTileSplit(@tileSplitHw,tileMode);
+ if (Result <> 0) then Exit;
+
+ tileThickness := getMicroTileThickness(arrayMode);
+ tileBytes1x := bitsPerElement * tileThickness * $40 shr 3;
+
+ colorTileSplit:=max(256, tileBytes1x shl (sampleSplitHw and $1f));
+
+ if (microTileMode=kMicroTileModeDepth) then
+  tileSplit:=(64 shl tileSplitHw)
+ else
+  tileSplit:=colorTileSplit;
+
+ tileSplitC:=min(kDramRowSize, tileSplit);
+
+ tileBytes:=min(tileSplitC, numFragmentsPerPixel*tileBytes1x);
+
+ Result := -$7f2d0000;
+
+ if (not isPowerOfTwo(tileBytes)) or (tileBytes < 64) or (tileBytes > 4096) then Exit;
+
+ mtmIndex:=fastIntLog2(tileBytes shr 6); //div 64
+
+ if isPartiallyResidentTexture(arrayMode) then
+  outMacroTileMode^:=mtmIndex+8
+ else
+  outMacroTileMode^:=mtmIndex;
+
 end;
 
 Function getAltNumBanks(outAltNumBanks:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
@@ -2116,6 +2113,71 @@ begin
    end;
  end;
 end;
+
+function getAllMacroTileData(tileMode,
+                             bitsPerElement,
+                             numFragmentsPerPixel:Byte;
+                             outBankWidth,
+                             outBankHeight,
+                             outMacroTileAspect,
+                             outNumBanks:PDWORD):Integer;
+var
+ mtmReg:TMACRO_TILE_MODE_REG;
+ macroTileMode:Byte;
+begin
+ Result:=computeSurfaceMacroTileMode(@macroTileMode,tileMode,bitsPerElement,numFragmentsPerPixel);
+
+ if (Result=0) then
+ begin
+  mtmReg:=GB_MACROTILE_MODE[macroTileMode].B;
+
+  if (outBankWidth<>nil) then
+   outBankWidth^:=mtmReg.BANK_WIDTH;
+
+  if (outBankHeight<>nil) then
+   outBankHeight^:=mtmReg.BANK_HEIGHT;
+
+  if (outMacroTileAspect<>nil) then
+   outMacroTileAspect^:=mtmReg.MACRO_TILE_ASPECT;
+
+  if (outNumBanks<>nil) then
+   outNumBanks^:=mtmReg.NUM_BANKS;
+
+ end;
+end;
+
+function getAllAltMacroTileData(tileMode,
+                                bitsPerElement,
+                                numFragmentsPerPixel:Byte;
+                                outBankWidth,
+                                outAltBankHeight,
+                                outAltMacroTileAspect,
+                                outAltNumBanks:PDWORD):Integer;
+var
+ mtmReg:TMACRO_TILE_MODE_REG;
+ macroTileMode:Byte;
+begin
+ Result:=computeSurfaceMacroTileMode(@macroTileMode,tileMode,bitsPerElement,numFragmentsPerPixel);
+
+ if (Result=0) then
+ begin
+  mtmReg:=GB_MACROTILE_MODE[macroTileMode].B;
+
+  if (outBankWidth<>nil) then
+   outBankWidth^:=mtmReg.BANK_WIDTH;
+
+  if (outAltBankHeight<>nil) then
+   outAltBankHeight^:=mtmReg.ALT_BANK_HEIGHT;
+
+  if (outAltMacroTileAspect<>nil) then
+   outAltMacroTileAspect^:=mtmReg.ALT_MACRO_TILE_ASPECT;
+
+  if (outAltNumBanks<>nil) then
+   outAltNumBanks^:=mtmReg.ALT_NUM_BANKS;
+
+ end;
+end;
+
 
 function TRENDER_TARGET.getTileSwizzleMask:Byte;
 var
@@ -2391,7 +2453,7 @@ begin
   Result:=0;
 end;
 
-function getElementIndex(x,y,z,bitsPerElement,microTileMode,arrayMode:DWORD):DWORD;
+function _getElementIndex(x,y,z,bitsPerElement,microTileMode,arrayMode:DWORD):DWORD;
 var
  elem:DWORD;
 begin
@@ -2402,21 +2464,21 @@ begin
      case bitsPerElement of
       8:
         begin
- 	 elem:=elem or ( (x shr 0) and $1 ) shl 0;
- 	 elem:=elem or ( (x shr 1) and $1 ) shl 1;
- 	 elem:=elem or ( (x shr 2) and $1 ) shl 2;
- 	 elem:=elem or ( (y shr 1) and $1 ) shl 3;
- 	 elem:=elem or ( (y shr 0) and $1 ) shl 4;
- 	 elem:=elem or ( (y shr 2) and $1 ) shl 5;
+         elem:=elem or ( (x shr 0) and $1 ) shl 0;
+         elem:=elem or ( (x shr 1) and $1 ) shl 1;
+         elem:=elem or ( (x shr 2) and $1 ) shl 2;
+         elem:=elem or ( (y shr 1) and $1 ) shl 3;
+         elem:=elem or ( (y shr 0) and $1 ) shl 4;
+         elem:=elem or ( (y shr 2) and $1 ) shl 5;
         end;
       16:
         begin
- 	 elem:=elem or ( (x shr 0) and $1 ) shl 0;
- 	 elem:=elem or ( (x shr 1) and $1 ) shl 1;
- 	 elem:=elem or ( (x shr 2) and $1 ) shl 2;
- 	 elem:=elem or ( (y shr 0) and $1 ) shl 3;
- 	 elem:=elem or ( (y shr 1) and $1 ) shl 4;
- 	 elem:=elem or ( (y shr 2) and $1 ) shl 5;
+         elem:=elem or ( (x shr 0) and $1 ) shl 0;
+         elem:=elem or ( (x shr 1) and $1 ) shl 1;
+         elem:=elem or ( (x shr 2) and $1 ) shl 2;
+         elem:=elem or ( (y shr 0) and $1 ) shl 3;
+         elem:=elem or ( (y shr 1) and $1 ) shl 4;
+         elem:=elem or ( (y shr 2) and $1 ) shl 5;
         end;
       32:
         begin
@@ -2436,8 +2498,8 @@ begin
  	 elem:=elem or ( (y shr 1) and $1 ) shl 4;
  	 elem:=elem or ( (y shr 2) and $1 ) shl 5;
         end;
-      else
-       Assert(false,'Unsupported bitsPerElement (%u) for displayable surface.');
+      else;
+       //Assert(false,'Unsupported bitsPerElement (%u) for displayable surface.');
      end;
     end;
    kMicroTileModeThin,
@@ -2465,6 +2527,7 @@ begin
           elem:=elem or ( (z shr 0) and $1 ) shl 6;
           elem:=elem or ( (z shr 1) and $1 ) shl 7;
          end;
+       else;
       end;
      end;
    kMicroTileModeThick:
@@ -2515,16 +2578,66 @@ begin
     	    elem:=elem or ( (x shr 2) and $1 ) shl 6;
     	    elem:=elem or ( (y shr 2) and $1 ) shl 7;
            end;
-          else
-           Assert(false,'Invalid bitsPerElement (%u) for microTileMode=kMicroTileModeThick.');
+          else;
+           //Assert(false,'Invalid bitsPerElement (%u) for microTileMode=kMicroTileModeThick.');
         end;
-      else
-       Assert(false,'Invalid arrayMode (0x%02X) for thick/xthick microTileMode=kMicroTileModeThick.');
+      else;
+       //Assert(false,'Invalid arrayMode (0x%02X) for thick/xthick microTileMode=kMicroTileModeThick.');
       end;
      end;
  end;
 
  Result:=elem;
+end;
+
+{
+type
+ p_element_table_xyz=^t_element_table_xyz;
+ //                           z    y    x
+ t_element_table_xyz=array[0..7,0..7,0..7] of WORD;
+}
+
+var
+ //                         bpe  mtm    am
+ element_index_table:array[0..4,0..4,0..15] of t_element_table_xyz;
+
+procedure init_element_index_table;
+var
+ x,y,z,bpe,mtm,am:Byte;
+ bitsPerElement:DWORD;
+ elem:DWORD;
+begin
+ For x:=0 to 7 do
+ For y:=0 to 7 do
+ For z:=0 to 7 do
+ For bpe:=0 to 4 do
+ For mtm:=0 to 4 do
+ For am:=0 to 15 do
+ begin
+  bitsPerElement:=(1 shl bpe) shl 3;
+
+  elem:=_getElementIndex(x,y,z,bitsPerElement,mtm,am);
+
+  element_index_table[bpe,mtm,am][z,y,x]:=elem;
+ end;
+end;
+
+function getElementIndex(x,y,z,bitsPerElement,microTileMode,arrayMode:DWORD):DWORD; inline;
+var
+ bpe:Byte;
+begin
+ bpe:=fastIntLog2(bitsPerElement shr 3);
+
+ Result:=element_index_table[bpe,microTileMode,arrayMode][z and 7,y and 7,x and 7];
+end;
+
+function getElementTableXYZ(bitsPerElement,microTileMode,arrayMode:DWORD):p_element_table_xyz; inline;
+var
+ bpe:Byte;
+begin
+ bpe:=fastIntLog2(bitsPerElement shr 3);
+
+ Result:=@element_index_table[bpe,microTileMode,arrayMode];
 end;
 
 function getPipeIndex(x,y,pipeCfg:DWORD):DWORD;
@@ -2556,11 +2669,6 @@ begin
    Assert(false,'Unsupported pipeCfg (0x%02X).');
  end;
  Result:=pipe;
-end;
-
-function fastIntLog2(i:DWORD):DWORD; inline;
-begin
- Result:=BsrDWord(i or 1);
 end;
 
 function getBankIndex(x,y,bank_width,bank_height,num_banks,num_pipes:DWORD):DWORD;
@@ -2604,7 +2712,7 @@ begin
  Result:=bank;
 end;
 
-procedure Tiler1d.init_surface(bpe,tile_idx,tile_alt:DWORD);
+procedure Tiler1d.init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
 begin
  m_minGpuMode    :=tile_alt;
  m_tileMode      :=tile_idx;
@@ -2612,7 +2720,8 @@ begin
  m_arrayMode     :=0;
  getArrayMode(@m_arrayMode,m_tileMode);
 
- m_bitsPerElement:=bpe;
+ m_bitsPerElement:=bytePerElement*8;
+ m_bytePerElement:=bytePerElement;
 
  m_microTileMode :=0;
  getMicroTileMode(@m_microTileMode,m_tileMode);
@@ -2620,6 +2729,46 @@ begin
  m_tileThickness :=getMicroTileThickness(m_arrayMode);
 
  m_tileBytes     := (kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bitsPerElement + 7) div 8;
+
+ m_isBlockCompressed := isBlockCompressed;
+
+ m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
+end;
+
+Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
+var
+ align_m:Ptruint;
+begin
+ align_m:=(32 div bpp)-1;
+ Result:=(width+align_m) and (not align_m);
+end;
+
+procedure Tiler1d.init_size_2d(width,height:DWORD);
+begin
+ m_paddedWidth :=Get1dThinAlignWidth(m_bytePerElement,width);
+ m_paddedHeight:=(height+7) and (not 7);
+ m_paddedDepth :=1;
+
+ m_linearWidth :=width;
+ m_linearHeight:=height;
+ m_linearDepth :=1;
+
+ if (m_isBlockCompressed<>0) then
+ begin
+  m_paddedWidth :=(m_paddedWidth +3) shr 2;
+  m_paddedHeight:=(m_paddedHeight+3) shr 2;
+  //
+  m_linearWidth :=(m_linearWidth +3) shr 2;
+  m_linearHeight:=(m_linearHeight+3) shr 2;
+ end;
+
+ m_linearSizeBytes:=m_linearWidth*m_linearHeight*m_linearDepth*m_bytePerElement;
+ m_tiledSizeBytes :=m_paddedWidth*m_paddedHeight*m_paddedDepth*m_bytePerElement;
+
+ //tiler.m_tiledSizeBytes:=(tiler.m_tiledSizeBytes+255) and (not Ptruint(255));
+
+ m_tilesPerRow    :=m_paddedWidth div kMicroTileWidth;
+ m_tilesPerSlice  :=m_tilesPerRow * (m_paddedHeight div kMicroTileHeight);
 end;
 
 function Tiler1d.getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
@@ -2632,12 +2781,12 @@ var
  element_offset:QWORD;
  final_offset:QWORD;
 begin
- element_index := getElementIndex(x, y, z, m_bitsPerElement, m_microTileMode, m_arrayMode);
+ element_index := m_element_table^[z and 7,y and 7,x and 7];
 
  slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
 
- tile_row_index    := y div kMicroTileHeight;
- tile_column_index := x div kMicroTileWidth;
+ tile_row_index    := y shr 3;// div kMicroTileHeight;
+ tile_column_index := x shr 3;// div kMicroTileWidth;
  tile_offset       := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
 
  element_offset    := element_index * m_bitsPerElement;
@@ -2659,15 +2808,15 @@ var
  element_offset:QWORD;
  final_offset:QWORD;
 begin
- element_index := getElementIndex(x, y, z, m_bitsPerElement, m_microTileMode, m_arrayMode);
+ element_index := m_element_table^[z and 7,y and 7,x and 7];
 
  slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
 
- tile_row_index    := y div kMicroTileHeight;
- tile_column_index := x div kMicroTileWidth;
+ tile_row_index    := y shr 3;// div kMicroTileHeight;
+ tile_column_index := x shr 3;// div kMicroTileWidth;
  tile_offset       := ((tile_row_index * m_tilesPerRow) + tile_column_index) * m_tileBytes;
 
- element_offset    := element_index * (m_bitsPerElement shr 3);
+ element_offset    := element_index * m_bytePerElement;
 
  final_offset      := (slice_offset + tile_offset) + (element_offset);
 
@@ -2676,7 +2825,38 @@ begin
  Result:=0;
 end;
 
+function max(a,b:DWORD):DWORD; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
+function min(a,b:DWORD):DWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+function getPipeCount(pipeConfig:Byte):DWORD;
+begin
+ case pipeConfig of
+  kPipeConfigP8_32x32_8x16 :Result:=8;
+  kPipeConfigP8_32x32_16x16:Result:=8;
+  kPipeConfigP16           :Result:=16;
+  else
+                            Result:=0;
+ end;
+end;
+
 function Tiler2d.init(var tp:TilingParameters):integer;
+var
+ bankWidthHW:DWORD;
+ bankHeightHW:DWORD;
+ macroAspectHW:DWORD;
+ numBanksHW:DWORD;
+ tileBytes1x:DWORD;
+ sampleSplitHw:Byte;
+ tileSplitHw:Byte;
+ sampleSplit:DWORD;
+ tileSplitC:DWORD;
 begin
  if @tp=nil then Exit(-$7f2d0000);
 
@@ -2695,23 +2875,8 @@ begin
  getMicroTileMode(@m_microTileMode,m_tileMode);
 
  //// other constants
- Case m_arrayMode of
-   kArrayMode2dTiledThin,
-   kArrayMode3dTiledThin,
-   kArrayModeTiledThinPrt,
-   kArrayMode2dTiledThinPrt,
-   kArrayMode3dTiledThinPrt:
-   	m_tileThickness:=1;
-   kArrayMode2dTiledThick,
-   kArrayMode3dTiledThick,
-   kArrayModeTiledThickPrt,
-   kArrayMode2dTiledThickPrt,
-   kArrayMode3dTiledThickPrt:
-   	m_tileThickness:=4;
-   kArrayMode2dTiledXThick,
-   kArrayMode3dTiledXThick:
-   	m_tileThickness:=8;
- end;
+ m_tileThickness:=getMicroTileThickness(m_arrayMode);
+
 
  m_linearWidth   :=tp.m_linearWidth; // unpadded
  m_linearHeight  :=tp.m_linearHeight; // unpadded
@@ -2722,102 +2887,64 @@ begin
  //m_paddedDepth   :=surfInfoOut.m_depth;
  m_numFragmentsPerPixel:=tp.m_numFragmentsPerPixel;
 
+ if tp.m_isBlockCompressed then
+ begin
+  m_linearWidth :=max((m_linearWidth +3) shr 2, 1);
+  m_linearHeight:=max((m_linearHeight+3) shr 2, 1);
+  m_paddedWidth :=max((m_paddedWidth +3) shr 2, 1);
+  m_paddedHeight:=max((m_paddedHeight+3) shr 2, 1);
+  //
+  m_bitsPerElement:=m_bitsPerElement*8;
+ end;
 
+ m_linearSizeBytes:=(m_linearWidth * m_linearHeight * m_linearDepth * m_bitsPerElement * m_numFragmentsPerPixel + 7) div 8;
+ //m_tiledSizeBytes :=surfInfoOut.m_surfaceSize;
 
+ if (tp.m_minGpuMode=kGpuModeNeo) then
+ begin
+  getAltPipeConfig(@m_pipeConfig, m_tileMode);
+  getAllAltMacroTileData(m_tileMode, m_bitsPerElement, m_numFragmentsPerPixel, @bankWidthHW, @bankHeightHW, @macroAspectHW, @numBanksHW);
+ end else
+ begin
+  getPipeConfig(@m_pipeConfig, m_tileMode);
+  getAllMacroTileData(m_tileMode, m_bitsPerElement, m_numFragmentsPerPixel, @bankWidthHW, @bankHeightHW, @macroAspectHW, @numBanksHW);
+ end;
+
+ m_bankWidth      :=1 shl bankWidthHW;
+ m_bankHeight     :=1 shl bankHeightHW;
+ m_numBanks       :=2 shl numBanksHW;
+ m_macroTileAspect:=1 shl macroAspectHW;
+
+ tileBytes1x:=(m_tileThickness*m_bitsPerElement*kMicroTileWidth*kMicroTileHeight + 7) div 8;
+
+ getSampleSplit(@sampleSplitHw, tp.m_tileMode);
+ getTileSplit  (@tileSplitHw  , tp.m_tileMode);
+
+ sampleSplit:=1 shl sampleSplitHw;
+
+ if (m_microTileMode=kMicroTileModeDepth) then
+  tileSplitC:=(64 shl tileSplitHw) // depth modes store tile split directly
+ else
+  tileSplitC:=max(256, tileBytes1x*sampleSplit); // other modes store a sample split multiplier
+
+ m_tileSplitBytes:=min(kDramRowSize, tileSplitC);
+
+ m_pipeInterleaveBytes:=kPipeInterleaveBytes;
+ m_numPipes:=getPipeCount(m_pipeConfig);
+ m_pipeInterleaveBits:=fastIntLog2(m_pipeInterleaveBytes);
+ m_pipeInterleaveMask:=(1 shl m_pipeInterleaveBits) - 1;
+ m_pipeBits:=fastIntLog2(m_numPipes);
+ m_bankBits:=fastIntLog2(m_numBanks);
+ m_pipeMask:=(m_numPipes-1) shl m_pipeInterleaveBits;
+ m_bankSwizzleMask:=tp.m_tileSwizzleMask;
+ m_pipeSwizzleMask:=0; // not currently used
+ m_macroTileWidth :=(kMicroTileWidth  * m_bankWidth  * m_numPipes) *   m_macroTileAspect;
+ m_macroTileHeight:=(kMicroTileHeight * m_bankHeight * m_numBanks) div m_macroTileAspect;
+
+ m_arraySlice:=tp.m_arraySlice;
+
+ Result:=0;
 end;
-
-
-{
-
-
-
-
-
-	// For multi-texel-per-element formats, each block is treated as an element for tiling purposes.
-	// This affects a few of the above variables.
-	if (tp->m_isBlockCompressed)
-	{
-		switch(tp->m_bitsPerFragment)
-		{
-		case 1:
-			SCE_GNM_ASSERT_MSG_RETURN(m_microTileMode == Gnm::kMicroTileModeDisplay, kStatusInvalidArgument, "1bpp surfaces must use Gnm::kMicroTileModeDisplay");
-			m_bitsPerElement *= 8;
-			m_linearWidth  = std::max((m_linearWidth+7)/8, 1U);
-			m_paddedWidth  = std::max((m_paddedWidth+7)/8, 1U);
-			break;
-		case 4:
-		case 8:
-			m_bitsPerElement *= 16;
-			m_linearWidth  = std::max((m_linearWidth+3)/4, 1U);
-			m_linearHeight = std::max((m_linearHeight+3)/4, 1U);
-			m_paddedWidth  = std::max((m_paddedWidth+3)/4, 1U);
-			m_paddedHeight = std::max((m_paddedHeight+3)/4, 1U);
-			break;
-		case 16:
-			// TODO
-			break;
-		default:
-			SCE_GNM_ASSERT_MSG_RETURN(!tp->m_isBlockCompressed, kStatusInvalidArgument, "Unknown bit depth %u for block-compressed format", m_bitsPerElement);
-			break;
-		}
-	}
-	m_linearSizeBytes = (m_linearWidth * m_linearHeight * m_linearDepth * m_bitsPerElement * m_numFragmentsPerPixel + 7) / 8;
-	m_tiledSizeBytes = surfInfoOut.m_surfaceSize;
-
-	Gnm::BankWidth bankWidthHW;
-	Gnm::BankHeight bankHeightHW;
-	Gnm::MacroTileAspect macroAspectHW;
-	Gnm::NumBanks numBanksHW;
-	if (tp->m_minGpuMode == Gnm::kGpuModeNeo)
-	{
-		getAltPipeConfig(&m_pipeConfig, m_tileMode);
-		getAllAltMacroTileData(m_tileMode, m_bitsPerElement, m_numFragmentsPerPixel,
-			&bankWidthHW, &bankHeightHW, &macroAspectHW, &numBanksHW);
-	}
-	else
-	{
-		getPipeConfig(&m_pipeConfig, m_tileMode);
-		getAllMacroTileData(m_tileMode, m_bitsPerElement, m_numFragmentsPerPixel,
-			&bankWidthHW, &bankHeightHW, &macroAspectHW, &numBanksHW);
-	}
-	m_bankWidth        = 1  << bankWidthHW;
-	m_bankHeight       = 1  << bankHeightHW;
-	m_numBanks         = 2  << numBanksHW;
-	m_macroTileAspect  = 1  << macroAspectHW;
-	uint32_t tileBytes1x = (m_tileThickness*m_bitsPerElement*kMicroTileWidth*kMicroTileHeight + 7)/8;
-	Gnm::SampleSplit sampleSplitHw;
-	Gnm::TileSplit tileSplitHw;
-	GpuAddress::getSampleSplit(&sampleSplitHw, tp->m_tileMode);
-	GpuAddress::getTileSplit(&tileSplitHw, tp->m_tileMode);
-	uint32_t sampleSplit = 1 << sampleSplitHw;
-	uint32_t tileSplitC   = (m_microTileMode == Gnm::kMicroTileModeDepth)
-		? (64 << tileSplitHw) // depth modes store tile split directly
-		: std::max(256U, tileBytes1x*sampleSplit); // other modes store a sample split multiplier
-	m_tileSplitBytes = std::min(kDramRowSize, tileSplitC);
-	// Hardware constants -- see GB_ADDR_CONFIG register
-	m_pipeInterleaveBytes = kPipeInterleaveBytes;
-	m_numPipes = getPipeCount(m_pipeConfig);
-	m_pipeInterleaveBits = fastIntLog2(m_pipeInterleaveBytes);
-	m_pipeInterleaveMask = (1 << (m_pipeInterleaveBits)) - 1;
-	m_pipeBits = fastIntLog2(m_numPipes);
-	m_bankBits = fastIntLog2(m_numBanks);
-	m_pipeMask = (m_numPipes-1) << m_pipeInterleaveBits;
-	m_bankSwizzleMask = tp->m_tileSwizzleMask;
-	m_pipeSwizzleMask = 0; // not currently used
-	m_macroTileWidth  = (kMicroTileWidth  * m_bankWidth  * m_numPipes) * m_macroTileAspect;
-	m_macroTileHeight = (kMicroTileHeight * m_bankHeight * m_numBanks) / m_macroTileAspect;
-
-	m_arraySlice = tp->m_arraySlice;
-
-	// Verify 2D tiled addressing restrictions
-	// These restrictions should be addressed by the computeSurfaceInfo() function.  If any of these
-	// asserts fire, it probably means computeSurfaceInfo() isn't doing its job correctly.
-	SCE_GNM_ASSERT_MSG_RETURN(m_paddedWidth % m_macroTileWidth == 0, kStatusInternalTilingError, "internal consistency check failed.");
-	SCE_GNM_ASSERT_MSG_RETURN(m_paddedHeight % m_macroTileHeight == 0, kStatusInternalTilingError, "internal consistency check failed.");
-	SCE_GNM_ASSERT_MSG_RETURN(m_numBanks * m_numPipes >= 4, kStatusInternalTilingError, "internal consistency check failed.");
-	return kStatusSuccess;
-}
-
 
 function Tiler2d.getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z,fragmentIndex:DWORD):integer;
 var
@@ -2970,9 +3097,9 @@ begin
  offset := total_offset shr m_pipeInterleaveBits;
 
  finalByteOffset := pipe_interleave_offset or
- 	(pipe   shl (m_pipeInterleaveBits)) or
- 	(bank   shl (m_pipeInterleaveBits + m_pipeBits)) or
- 	(offset shl (m_pipeInterleaveBits + m_pipeBits + m_bankBits));
+  (pipe   shl (m_pipeInterleaveBits)) or
+  (bank   shl (m_pipeInterleaveBits + m_pipeBits)) or
+  (offset shl (m_pipeInterleaveBits + m_pipeBits + m_bankBits));
 
  outTiledBitOffset := (finalByteOffset shl 3) or bitOffset;
 
@@ -3000,10 +3127,10 @@ var
  begin
   x := x shr 3;
   Result:= 0;
-  Result:=Result or ( ((x shr 3) xor (y shr 6))		and $1 )  shl  0;
-  Result:=Result or ( ((x shr 4) xor (y shr 5) xor (y shr 6))	and $1 )  shl  1;
-  Result:=Result or ( ((x shr 5) xor (y shr 4))		and $1 )  shl  2;
-  Result:=Result or ( ((x shr 6) xor (y shr 3))		and $1 )  shl  3;
+  Result:=Result or ( ((x shr 3) xor (y shr 6))  and $1 )  shl  0;
+  Result:=Result or ( ((x shr 4) xor (y shr 5) xor (y shr 6)) and $1 )  shl  1;
+  Result:=Result or ( ((x shr 5) xor (y shr 4))  and $1 )  shl  2;
+  Result:=Result or ( ((x shr 6) xor (y shr 3))  and $1 )  shl  3;
  end;
 
 begin
@@ -3039,9 +3166,9 @@ begin
  offset := total_offset shr 8;
 
  outTiledByteOffset := (total_offset and 255) or
- 	(pipe   shl (8)) or
- 	(bank   shl (11)) or
- 	(offset shl (15));
+  (pipe   shl (8)) or
+  (bank   shl (11)) or
+  (offset shl (15));
 end;
 
 {
@@ -3092,9 +3219,9 @@ ys := (y shr 1);
 
 bank:= 0;
 
-   bank :=bank or ( ((xs shr 3) xor (ys shr 5))			and $1 )  shl  0;
-   bank :=bank or ( ((xs shr 4) xor (ys shr 4) xor (ys shr 5))	and $1 )  shl  1;
-   bank :=bank or ( ((xs shr 5) xor (ys shr 3))			and $1 )  shl  2;
+   bank :=bank or ( ((xs shr 3) xor (ys shr 5))   and $1 )  shl  0;
+   bank :=bank or ( ((xs shr 4) xor (ys shr 4) xor (ys shr 5)) and $1 )  shl  1;
+   bank :=bank or ( ((xs shr 5) xor (ys shr 3))   and $1 )  shl  2;
 
 Result:=bank;
 end;
@@ -3160,9 +3287,9 @@ pipe_interleave_offset := total_offset and 255;
 offset := total_offset shr 8;
 
 finalByteOffset := pipe_interleave_offset or
-	(pipe   shl (8)) or
-	(bank   shl (12)) or
-	(offset shl (15));
+ (pipe   shl (8)) or
+ (bank   shl (12)) or
+ (offset shl (15));
 
 outTiledBitOffset := (finalByteOffset shl 3) or bitOffset;
 
@@ -3170,97 +3297,97 @@ Result:=0;
 end;
 }
 
-//xorl	%r8d, %r8d 3
-//xorl	%edx, %edx 2
-//xorl	%ecx, %ecx 1
+//xorl %r8d, %r8d 3
+//xorl %edx, %edx 2
+//xorl %ecx, %ecx 1
 
 procedure detile32bppDisplaySse2(dst,src:Pointer;destPitch:DWORD); assembler; nostackframe; MS_ABI_CDecl;
 asm
- //subq	$40, %rsp               //unsafe
- //movaps	%xmm6, (%rsp)
- //movaps	%xmm7, 16(%rsp)
- movdqa	16(%rdx), %xmm5
- movdqa	32(%rdx), %xmm6
- movdqa	48(%rdx), %xmm4
- movdqa	64(%rdx), %xmm3
- movdqa	80(%rdx), %xmm1
- leal	(%r8,%r8,2), %eax
- movdqa	96(%rdx), %xmm2
- leal	0(,%r8,8), %r9d
- sall	$2, %eax
- movdqa	112(%rdx), %xmm0
- leal	0(,%r8,4), %r10d
- sall	$4, %r8d
- movdqa	(%rdx), %xmm7
- movups	%xmm6, 16(%rcx)
- movups	%xmm7, (%rcx)
- movups	%xmm5, (%rcx,%r10)
- movups	%xmm4, 16(%rcx,%r10)
- movups	%xmm3, (%rcx,%r9)
- movups	%xmm2, 16(%rcx,%r9)
- movups	%xmm1, (%rcx,%rax)
- movups	%xmm0, 16(%rcx,%rax)
- movdqa	128(%rdx), %xmm7
- addq	%r8, %rcx
- movdqa	144(%rdx), %xmm5
- movdqa	160(%rdx), %xmm6
- movdqa	176(%rdx), %xmm4
- movdqa	192(%rdx), %xmm3
- movdqa	208(%rdx), %xmm1
- movdqa	224(%rdx), %xmm2
- movdqa	240(%rdx), %xmm0
- movups	%xmm7, (%rcx)
- movups	%xmm6, 16(%rcx)
- movups	%xmm5, (%rcx,%r10)
- movups	%xmm4, 16(%rcx,%r10)
- movups	%xmm3, (%rcx,%r9)
- movups	%xmm2, 16(%rcx,%r9)
- movups	%xmm1, (%rcx,%rax)
- movups	%xmm0, 16(%rcx,%rax)
- //movaps	(%rsp), %xmm6
- //movaps	16(%rsp), %xmm7
- //addq	$40, %rsp
+ //subq $40, %rsp               //unsafe
+ //movaps %xmm6, (%rsp)
+ //movaps %xmm7, 16(%rsp)
+ movdqa 16(%rdx), %xmm5
+ movdqa 32(%rdx), %xmm6
+ movdqa 48(%rdx), %xmm4
+ movdqa 64(%rdx), %xmm3
+ movdqa 80(%rdx), %xmm1
+ leal (%r8,%r8,2), %eax
+ movdqa 96(%rdx), %xmm2
+ leal 0(,%r8,8), %r9d
+ sall $2, %eax
+ movdqa 112(%rdx), %xmm0
+ leal 0(,%r8,4), %r10d
+ sall $4, %r8d
+ movdqa (%rdx), %xmm7
+ movups %xmm6, 16(%rcx)
+ movups %xmm7, (%rcx)
+ movups %xmm5, (%rcx,%r10)
+ movups %xmm4, 16(%rcx,%r10)
+ movups %xmm3, (%rcx,%r9)
+ movups %xmm2, 16(%rcx,%r9)
+ movups %xmm1, (%rcx,%rax)
+ movups %xmm0, 16(%rcx,%rax)
+ movdqa 128(%rdx), %xmm7
+ addq %r8, %rcx
+ movdqa 144(%rdx), %xmm5
+ movdqa 160(%rdx), %xmm6
+ movdqa 176(%rdx), %xmm4
+ movdqa 192(%rdx), %xmm3
+ movdqa 208(%rdx), %xmm1
+ movdqa 224(%rdx), %xmm2
+ movdqa 240(%rdx), %xmm0
+ movups %xmm7, (%rcx)
+ movups %xmm6, 16(%rcx)
+ movups %xmm5, (%rcx,%r10)
+ movups %xmm4, 16(%rcx,%r10)
+ movups %xmm3, (%rcx,%r9)
+ movups %xmm2, 16(%rcx,%r9)
+ movups %xmm1, (%rcx,%rax)
+ movups %xmm0, 16(%rcx,%rax)
+ //movaps (%rsp), %xmm6
+ //movaps 16(%rsp), %xmm7
+ //addq $40, %rsp
 end;
 
 procedure detile32bppDisplayAvx(dst,src:Pointer;destPitch:DWORD); assembler; nostackframe; MS_ABI_CDecl;
 asm
- vmovdqa	32(%rdx), %ymm2
- vmovdqa	64(%rdx), %ymm1
- vmovdqa	96(%rdx), %ymm0
- vmovaps	(%rdx), %ymm3
- leal	        (%r8,%r8,2), %eax
- leal	        0(,%r8,8), %r9d
- sall	        $2, %eax
- vmovups	%xmm3, (%rcx)
- leal	        0(,%r8,4), %r10d
- sall	        $4, %r8d
- vextractf128	$0x1, %ymm3, (%rcx,%r10)
- vmovups	%xmm2, 16(%rcx)
- vextractf128	$0x1, %ymm2, 16(%rcx,%r10)
- vmovups	%xmm1, (%rcx,%r9)
- vextractf128	$0x1, %ymm1, (%rcx,%rax)
- vmovups	%xmm0, 16(%rcx,%r9)
- vextractf128	$0x1, %ymm0, 16(%rcx,%rax)
+ vmovdqa 32(%rdx), %ymm2
+ vmovdqa 64(%rdx), %ymm1
+ vmovdqa 96(%rdx), %ymm0
+ vmovaps (%rdx), %ymm3
+ leal         (%r8,%r8,2), %eax
+ leal         0(,%r8,8), %r9d
+ sall         $2, %eax
+ vmovups %xmm3, (%rcx)
+ leal         0(,%r8,4), %r10d
+ sall         $4, %r8d
+ vextractf128 $0x1, %ymm3, (%rcx,%r10)
+ vmovups %xmm2, 16(%rcx)
+ vextractf128 $0x1, %ymm2, 16(%rcx,%r10)
+ vmovups %xmm1, (%rcx,%r9)
+ vextractf128 $0x1, %ymm1, (%rcx,%rax)
+ vmovups %xmm0, 16(%rcx,%r9)
+ vextractf128 $0x1, %ymm0, 16(%rcx,%rax)
 
- vmovdqa	160(%rdx), %ymm2
- addq	        %r8, %rcx
- vmovdqa	192(%rdx), %ymm1
- vmovdqa	224(%rdx), %ymm0
- vmovaps	128(%rdx), %ymm3
- vmovups	%xmm3, (%rcx)
- vextractf128	$0x1, %ymm3, (%rcx,%r10)
- vmovups	%xmm2, 16(%rcx)
- vextractf128	$0x1, %ymm2, 16(%rcx,%r10)
- vmovups	%xmm1, (%rcx,%r9)
- vextractf128	$0x1, %ymm1, (%rcx,%rax)
- vmovups	%xmm0, 16(%rcx,%r9)
- vextractf128	$0x1, %ymm0, 16(%rcx,%rax)
+ vmovdqa 160(%rdx), %ymm2
+ addq         %r8, %rcx
+ vmovdqa 192(%rdx), %ymm1
+ vmovdqa 224(%rdx), %ymm0
+ vmovaps 128(%rdx), %ymm3
+ vmovups %xmm3, (%rcx)
+ vextractf128 $0x1, %ymm3, (%rcx,%r10)
+ vmovups %xmm2, 16(%rcx)
+ vextractf128 $0x1, %ymm2, 16(%rcx,%r10)
+ vmovups %xmm1, (%rcx,%r9)
+ vextractf128 $0x1, %ymm1, (%rcx,%rax)
+ vmovups %xmm0, 16(%rcx,%r9)
+ vextractf128 $0x1, %ymm0, 16(%rcx,%rax)
  //vzeroupper
 end;
 
-//xorl	%r8 , %r8  3 destPitch
-//xorl	%rdx, %rdx 2 src
-//xorl	%rcx, %rcx 1 dst
+//xorl %r8 , %r8  3 destPitch
+//xorl %rdx, %rdx 2 src
+//xorl %rcx, %rcx 1 dst
 
 //[3] ymm0 = ymm4 [7]
 //[2] ymm1 = ymm5 [6]
@@ -3269,41 +3396,41 @@ end;
 
 procedure detile32bppDisplayAvx_cached(dst,src:Pointer;destPitch:DWORD); assembler; nostackframe; MS_ABI_CDecl;
 asm
- leal	        (%r8,%r8,2), %eax
- leal	        0(,%r8,8), %r9d
- sall	        $2, %eax
- vmovups	%xmm3, (%rcx)
- leal	        0(,%r8,4), %r10d
- sall	        $4, %r8d
- vextractf128	$0x1, %ymm3, (%rcx,%r10)
- vmovups	%xmm2, 16(%rcx)
- vextractf128	$0x1, %ymm2, 16(%rcx,%r10)
- vmovups	%xmm1, (%rcx,%r9)
- vextractf128	$0x1, %ymm1, (%rcx,%rax)
- vmovups	%xmm0, 16(%rcx,%r9)
- vextractf128	$0x1, %ymm0, 16(%rcx,%rax)
+ leal         (%r8,%r8,2), %eax
+ leal         0(,%r8,8), %r9d
+ sall         $2, %eax
+ vmovups %xmm3, (%rcx)
+ leal         0(,%r8,4), %r10d
+ sall         $4, %r8d
+ vextractf128 $0x1, %ymm3, (%rcx,%r10)
+ vmovups %xmm2, 16(%rcx)
+ vextractf128 $0x1, %ymm2, 16(%rcx,%r10)
+ vmovups %xmm1, (%rcx,%r9)
+ vextractf128 $0x1, %ymm1, (%rcx,%rax)
+ vmovups %xmm0, 16(%rcx,%r9)
+ vextractf128 $0x1, %ymm0, 16(%rcx,%rax)
 
- addq	        %r8, %rcx
- vmovups	%xmm7, (%rcx)
- vextractf128	$0x1, %ymm7, (%rcx,%r10)
- vmovups	%xmm6, 16(%rcx)
- vextractf128	$0x1, %ymm6, 16(%rcx,%r10)
- vmovups	%xmm5, (%rcx,%r9)
- vextractf128	$0x1, %ymm5, (%rcx,%rax)
- vmovups	%xmm4, 16(%rcx,%r9)
- vextractf128	$0x1, %ymm4, 16(%rcx,%rax)
+ addq         %r8, %rcx
+ vmovups %xmm7, (%rcx)
+ vextractf128 $0x1, %ymm7, (%rcx,%r10)
+ vmovups %xmm6, 16(%rcx)
+ vextractf128 $0x1, %ymm6, 16(%rcx,%r10)
+ vmovups %xmm5, (%rcx,%r9)
+ vextractf128 $0x1, %ymm5, (%rcx,%rax)
+ vmovups %xmm4, 16(%rcx,%r9)
+ vextractf128 $0x1, %ymm4, 16(%rcx,%rax)
 end;
 
 procedure move64_sse(dst,src:Pointer); assembler; nostackframe; MS_ABI_CDecl;
 asm
- movdqa	 0(%rdx), %xmm0
- movdqa	16(%rdx), %xmm1
- movdqa	32(%rdx), %xmm2
- movdqa	48(%rdx), %xmm3
- movdqa	   %xmm0,  0(%rcx)
- movdqa	   %xmm1, 16(%rcx)
- movdqa	   %xmm2, 32(%rcx)
- movdqa	   %xmm3, 48(%rcx)
+ movdqa  0(%rdx), %xmm0
+ movdqa 16(%rdx), %xmm1
+ movdqa 32(%rdx), %xmm2
+ movdqa 48(%rdx), %xmm3
+ movdqa    %xmm0,  0(%rcx)
+ movdqa    %xmm1, 16(%rcx)
+ movdqa    %xmm2, 32(%rcx)
+ movdqa    %xmm3, 48(%rcx)
 end;
 
 procedure move64_avx(dst,src:Pointer); assembler; nostackframe; MS_ABI_CDecl;
@@ -3319,9 +3446,9 @@ end;
 //[1] ymm2 = ymm6 [5]  9   13
 //[0] ymm3 = ymm7 [4]  8   12
 
-//xorl	%r8 , %r8  3 destPitch
-//xorl	%rdx, %rdx 2 src
-//xorl	%rcx, %rcx 1 dst
+//xorl %r8 , %r8  3 destPitch
+//xorl %rdx, %rdx 2 src
+//xorl %rcx, %rcx 1 dst
 
 procedure move64_avx_cached(dst,src:Pointer;id:Byte);  MS_ABI_CDecl;
 begin
@@ -3367,16 +3494,16 @@ begin
  end;
 end;
 
-//vmovaps	0(%rdx),  %ymm3
-//vmovdqa	32(%rdx), %ymm2
-//vmovdqa	64(%rdx), %ymm1
-//vmovdqa	96(%rdx), %ymm0
+//vmovaps 0(%rdx),  %ymm3
+//vmovdqa 32(%rdx), %ymm2
+//vmovdqa 64(%rdx), %ymm1
+//vmovdqa 96(%rdx), %ymm0
 //
 //
-//vmovaps	128(%rdx), %ymm3
-//vmovdqa	160(%rdx), %ymm2
-//vmovdqa	192(%rdx), %ymm1
-//vmovdqa	224(%rdx), %ymm0
+//vmovaps 128(%rdx), %ymm3
+//vmovdqa 160(%rdx), %ymm2
+//vmovdqa 192(%rdx), %ymm1
+//vmovdqa 224(%rdx), %ymm0
 
 
 type
@@ -3579,27 +3706,27 @@ end;
 {
         const auto region = *srcRegion;
 
-	const auto in_bytes = static_cast<const uint8_t*>(inTiledPixels);
-   	const auto out_bytes = static_cast<uint8_t*>(outUntiledPixels);
-	const auto bytesPerElement = m_bitsPerElement / 8;
+ const auto in_bytes = static_cast<const uint8_t*>(inTiledPixels);
+    const auto out_bytes = static_cast<uint8_t*>(outUntiledPixels);
+ const auto bytesPerElement = m_bitsPerElement / 8;
 
-	if(m_microTileMode == Gnm::kMicroTileModeDepth && m_numFragmentsPerPixel > 1)
-	{
-		for(auto z = 0; z < depth(region); ++z)
-			for(auto y = 0; y < height(region); ++y)
-			{
-				uint64_t linear_offset;
-				computeLinearElementByteOffset(&linear_offset, 0, y, z, 0, destPitch, destSlicePitch, m_bitsPerElement, 1);
-				for(auto x = 0; x < width(region); ++x)
-				{
-					uint64_t tiled_offset;
-					getTiledElementByteOffset(&tiled_offset, region.m_left + x, region.m_top + y, region.m_front + z, fragment);
-					small_memcpy(out_bytes + linear_offset, in_bytes + tiled_offset, bytesPerElement);
-					linear_offset += bytesPerElement;
-				}
-			}
-		return kStatusSuccess;
-	}
+ if(m_microTileMode == Gnm::kMicroTileModeDepth && m_numFragmentsPerPixel > 1)
+ {
+  for(auto z = 0; z < depth(region); ++z)
+   for(auto y = 0; y < height(region); ++y)
+   {
+    uint64_t linear_offset;
+    computeLinearElementByteOffset(&linear_offset, 0, y, z, 0, destPitch, destSlicePitch, m_bitsPerElement, 1);
+    for(auto x = 0; x < width(region); ++x)
+    {
+     uint64_t tiled_offset;
+     getTiledElementByteOffset(&tiled_offset, region.m_left + x, region.m_top + y, region.m_front + z, fragment);
+     small_memcpy(out_bytes + linear_offset, in_bytes + tiled_offset, bytesPerElement);
+     linear_offset += bytesPerElement;
+    }
+   }
+  return kStatusSuccess;
+ }
 
     bool canTakeFastPath = true;
     if(m_microTileMode >= sizeof(g_offsetOfCacheLine)/sizeof(g_offsetOfCacheLine[0]))
@@ -3616,9 +3743,9 @@ end;
             const int dx = regions.m_aligned.m_left   - region.m_left;
             const int dy = regions.m_aligned.m_top    - region.m_top;
             const int dz = regions.m_aligned.m_front  - region.m_front;
-	        for(auto z = 0; z < depth(regions.m_aligned); z += m_tileThickness)
-		        for(auto y = 0; y < height(regions.m_aligned); y += kMicroTileHeight)
-			        for(auto x = 0; x < width(regions.m_aligned); x += kMicroTileWidth)
+         for(auto z = 0; z < depth(regions.m_aligned); z += m_tileThickness)
+          for(auto y = 0; y < height(regions.m_aligned); y += kMicroTileHeight)
+           for(auto x = 0; x < width(regions.m_aligned); x += kMicroTileWidth)
                     {
                         // Due to tile split, the cache lines of a microtile may be stored non-contiguously.
                         // But to use the optimized microtile detiler, all cache lines of a microtile must be stored contiguously.
@@ -3629,15 +3756,15 @@ end;
                             const auto cacheLineX = regions.m_aligned.m_left  + x + offsetOfCacheLine->m_offset[cacheLine].m_x;
                             const auto cacheLineY = regions.m_aligned.m_top   + y + offsetOfCacheLine->m_offset[cacheLine].m_y;
                             const auto cacheLineZ = regions.m_aligned.m_front + z + offsetOfCacheLine->m_offset[cacheLine].m_z;
-					        uint64_t tiled_offset;
-					        getTiledElementByteOffset(&tiled_offset, cacheLineX, cacheLineY, cacheLineZ, fragment);
+             uint64_t tiled_offset;
+             getTiledElementByteOffset(&tiled_offset, cacheLineX, cacheLineY, cacheLineZ, fragment);
                             memcpy(contiguous[cacheLine], in_bytes + tiled_offset, 64);
                         }
                         // Now that we have one contiguous microtile, we can pass it to the optimized microtile detiler...
-    			        uint64_t linear_offset;
-				        computeLinearElementByteOffset(&linear_offset, dx + x, dy + y, dz + z, 0, destPitch, destSlicePitch, m_bitsPerElement, 1);
+               uint64_t linear_offset;
+            computeLinearElementByteOffset(&linear_offset, dx + x, dy + y, dz + z, 0, destPitch, destSlicePitch, m_bitsPerElement, 1);
                         microTileFunc(out_bytes + linear_offset, contiguous, destPitch, destSlicePitch);
-			        }
+           }
             for(auto i = 0; i < regions.m_unaligneds; ++i)
                 slowDetileOneFragment<Tiler2d>(this, region, regions.m_unaligned[i], fragment, destPitch, destSlicePitch, out_bytes, in_bytes, bytesPerElement);
             return kStatusSuccess;
@@ -3646,6 +3773,9 @@ end;
     slowDetileOneFragment<Tiler2d>(this, region, region, fragment, destPitch, destSlicePitch, out_bytes, in_bytes, bytesPerElement);
     return kStatusSuccess;
 }
+
+initialization
+ init_element_index_table;
 
 end.
 

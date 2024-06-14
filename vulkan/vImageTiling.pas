@@ -131,7 +131,7 @@ begin
   if (m_height=0) then m_height:=1;
  end;
 
- Result:=(Result+255) and (not Ptruint(255));
+ //Result:=(Result+255) and (not Ptruint(255));
 
  Result:=Result*
          image.key.params.depth*
@@ -385,7 +385,7 @@ var
 
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
+ //m_padwidth,m_padheight:Ptruint;
  //m_slice:Ptruint;
 
  m_full_linear_size:Ptruint;
@@ -425,7 +425,10 @@ begin
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
- tiler.init_surface(m_bytePerElement*8,image.key.params.tiling.idx,image.key.params.tiling.alt);
+ tiler.init_surface(m_bytePerElement,
+                    ord(IsTexelFormat(image.key.cformat)),
+                    image.key.params.tiling.idx,
+                    image.key.params.tiling.alt);
 
  //TvBuffer
 
@@ -437,44 +440,8 @@ begin
 
  while (m_level>0) do
  begin
-  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_width);
-  m_padheight:=(m_height+7) and (not 7);
+  tiler.init_size_2d(m_width,m_height);
 
-  if IsTexelFormat(image.key.cformat) then
-  begin
-   m_padwidth :=(m_padwidth +3) shr 2;
-   m_padheight:=(m_padheight+3) shr 2;
-  end;
-
-  {
-  m_slice:=m_padwidth*
-           m_padheight*
-           m_bytePerElement;
-
-  m_slice:=(m_slice+255) and (not Ptruint(255));
-  }
-
-  //
-  tiler.m_linearWidth    :=m_width;
-  tiler.m_linearHeight   :=m_height;
-  tiler.m_linearDepth    :=1;
-
-  if IsTexelFormat(image.key.cformat) then
-  begin
-   tiler.m_linearWidth :=(tiler.m_linearWidth +3) shr 2;
-   tiler.m_linearHeight:=(tiler.m_linearHeight+3) shr 2;
-  end;
-
-  tiler.m_paddedWidth    :=m_padwidth;
-  tiler.m_paddedHeight   :=m_padheight;
-  tiler.m_paddedDepth    :=1;
-
-  tiler.m_linearSizeBytes:=tiler.m_linearWidth*tiler.m_linearHeight*tiler.m_linearDepth*m_bytePerElement;
-  tiler.m_tiledSizeBytes :=tiler.m_paddedWidth*tiler.m_paddedHeight*tiler.m_paddedDepth*m_bytePerElement;
-  //tiler.m_tiledSizeBytes:=(tiler.m_tiledSizeBytes+255) and (not Ptruint(255));
-
-  tiler.m_tilesPerRow    :=tiler.m_paddedWidth div kMicroTileWidth;
-  tiler.m_tilesPerSlice  :=tiler.m_tilesPerRow * (tiler.m_paddedHeight div kMicroTileHeight);
   //
 
   if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
@@ -631,6 +598,38 @@ end;
 var
  a_load_from:array[0..63] of t_load_from_cb;
 
+function TileIdx(idx,alt:Byte):Byte; inline;
+begin
+ Result:=idx;
+ TvTiling(Result).alt:=alt;
+end;
+
+procedure Init;
+begin
+ a_load_from[TileIdx(kTileModeDisplay_2dThin       ,0)]:=@load_Linear;//@load_clear;
+ a_load_from[TileIdx(kTileModeDisplay_2dThin       ,1)]:=@load_Linear;//@load_clear;
+
+ a_load_from[TileIdx(kTileModeDepth_2dThin_256     ,0)]:=@load_Linear;//@load_clear;
+ a_load_from[TileIdx(kTileModeDepth_2dThin_256     ,1)]:=@load_Linear;//@load_clear;
+
+ a_load_from[TileIdx(kTileModeDepth_2dThin_64      ,0)]:=@load_Linear;//@load_clear;
+ a_load_from[TileIdx(kTileModeDepth_2dThin_64      ,1)]:=@load_Linear;//@load_clear;
+
+ //
+ a_load_from[TileIdx(kTileModeDepth_1dThin         ,0)]:=@load_1dThin;
+ a_load_from[TileIdx(kTileModeDepth_1dThin         ,1)]:=@load_1dThin;
+
+ a_load_from[TileIdx(kTileModeDisplay_1dThin       ,0)]:=@load_1dThin;
+ a_load_from[TileIdx(kTileModeDisplay_1dThin       ,1)]:=@load_1dThin;
+
+ a_load_from[TileIdx(kTileModeThin_1dThin          ,0)]:=@load_1dThin;
+ a_load_from[TileIdx(kTileModeThin_1dThin          ,1)]:=@load_1dThin;
+ //
+
+ a_load_from[TileIdx(kTileModeDisplay_LinearAligned,0)]:=@load_Linear;
+ a_load_from[TileIdx(kTileModeDisplay_LinearAligned,1)]:=@load_Linear;
+end;
+
 procedure pm4_load_from(cmd:TvCustomCmdBuffer;ri:TvImage2;IMAGE_USAGE:Byte);
 var
  cb:t_load_from_cb;
@@ -641,29 +640,6 @@ begin
  //ri.data_usage:=ri.data_usage or TM_READ;
 
  //IMAGE_USAGE:=IMAGE_USAGE and (not TM_READ);
-
- a_load_from[10   ]:=@load_Linear;//@load_clear;
- a_load_from[10+32]:=@load_Linear;//@load_clear;
-
- a_load_from[2    ]:=@load_Linear;//@load_clear;
- a_load_from[2+32 ]:=@load_Linear;//@load_clear;
-
- a_load_from[0    ]:=@load_Linear;//@load_clear;
- a_load_from[0+32 ]:=@load_Linear;//@load_clear;
-
- //
- a_load_from[ 5   ]:=@load_1dThin;
- a_load_from[ 5+32]:=@load_1dThin;
-
- a_load_from[ 9   ]:=@load_1dThin;
- a_load_from[ 9+32]:=@load_1dThin;
-
- a_load_from[13   ]:=@load_1dThin;
- a_load_from[13+32]:=@load_1dThin;
- //
-
- a_load_from[8    ]:=@load_Linear;
- a_load_from[8+32 ]:=@load_Linear;
 
  cb:=a_load_from[Byte(ri.key.params.tiling)];
 
@@ -712,6 +688,9 @@ begin
 
 end;
 }
+
+initialization
+ Init;
 
 end.
 
