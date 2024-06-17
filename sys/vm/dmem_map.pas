@@ -6,6 +6,7 @@ unit dmem_map;
 interface
 
 uses
+ mqueue,
  vm,
  vmparam,
  sys_vm_object,
@@ -193,27 +194,9 @@ begin
  Result:=mtx_trylock(map^.lock);
 end;
 
-procedure dmem_map_process_deferred;
-var
- td:p_kthread;
- entry,next:p_dmem_map_entry;
-begin
- td:=curkthread;
- if (td=nil) then Exit;
- entry:=td^.td_dmap_def_user;
- td^.td_dmap_def_user:=nil;
- while (entry<>nil) do
- begin
-  next:=entry^.next;
-  dmem_map_entry_deallocate(entry);
-  entry:=next;
- end;
-end;
-
 procedure dmem_map_unlock(map:p_dmem_map);
 begin
  mtx_unlock(map^.lock);
- dmem_map_process_deferred();
 end;
 
 function dmem_map_locked(map:p_dmem_map):Boolean; inline;
@@ -895,13 +878,32 @@ begin
 
 end;
 
+procedure rmem_entry_del_vmap(vmap:vm_map_t;entry:p_rmem_map_entry);
+var
+ node:p_rmem_vaddr_instance;
+ vaddr,size:QWORD;
+begin
+ size:=IDX_TO_OFF(entry^.__end-entry^.start);
+
+ node:=TAILQ_FIRST(@entry^.vlist);
+
+ while (node<>nil) do
+ begin
+  vaddr:=node^.vaddr;
+
+  vm_map_delete(vmap, vaddr, vaddr + size, False);
+
+  node:=TAILQ_NEXT(node,@node^.entry);
+ end;
+end;
+
 Function dmem_map_release(map:p_dmem_map;start,len:QWORD;check:Boolean):Integer;
 var
  offset:QWORD;
  rmap:p_rmem_map;
  vmap:vm_map_t;
  td:p_kthread;
- entry,next:p_rmem_map_entry;
+ entry:p_rmem_map_entry;
 begin
  if (((len or start) and QWORD($8000000000003fff))<>0) then
  begin
@@ -948,7 +950,7 @@ begin
 
   rmem_map_lock(rmap);
 
-   Result:=rmem_map_delete_any(rmap,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
+   Result:=rmem_map_delete(rmap,0,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
 
   //dont call this rmem_map_process_deferred
   mtx_unlock(rmap^.lock);
@@ -964,21 +966,20 @@ begin
     //iterate rmem_map_process_deferred
 
     entry:=td^.td_rmap_def_user;
-    td^.td_rmap_def_user:=nil;
 
     vm_map_lock(vmap);
 
      while (entry<>nil) do
      begin
-      next:=entry^.next;
+      rmem_entry_del_vmap(vmap,entry);
 
-      vm_map_delete(vmap, IDX_TO_OFF(entry^.vaddr), IDX_TO_OFF(entry^.vaddr+(entry^.__end-entry^.start)), False);
-
-      rmem_map_entry_deallocate(entry);
-      entry:=next;
+      entry:=entry^.next;
      end;
 
     vm_map_unlock(vmap);
+
+    //free all
+    rmem_map_process_deferred;
    end;
   end;
  end;
@@ -1205,8 +1206,7 @@ begin
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
 
- entry^.next:=curkthread^.td_dmap_def_user;
- curkthread^.td_dmap_def_user:=entry;
+ dmem_map_entry_deallocate(entry);
 end;
 
 function dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD):Integer;
@@ -1244,13 +1244,8 @@ begin
 
   next:=entry^.next;
 
-  {
-   * Delete the entry only after removing all pmap
-   * entries pointing to its pages.  (Otherwise, its
-   * page frames may be reallocated, and any modify bits
-   * will be set in the wrong object!)
-   }
   dmem_map_entry_delete(map, entry);
+
   entry:=next;
  end;
  Result:=(0);

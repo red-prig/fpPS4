@@ -1381,7 +1381,9 @@ begin
   end;
 
   //lock pageflt read-only
-  _pmap_prot_int(map^.pmap,ctx.text_start,ctx.text___end,PAGE_PROT_READ);
+  //vm_map_lock(map);
+  // _pmap_prot_int(map^.pmap,ctx.text_start,ctx.text___end,PAGE_PROT_READ);
+  //vm_map_unlock(map);
 
   if (cmInternal in ctx.modes) then
   begin
@@ -1392,7 +1394,9 @@ begin
   end;
 
   //restore non tracked
-  _pmap_prot_fix(map^.pmap,ctx.text_start,ctx.text___end,TRACK_PROT or REMAP_PROT);
+  //vm_map_lock(map);
+  // _pmap_prot_fix(map^.pmap,ctx.text_start,ctx.text___end,TRACK_PROT or REMAP_PROT);
+  //vm_map_unlock(map);
 
  _exit:
  pmap_unlock(map^.pmap,lock);

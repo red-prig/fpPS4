@@ -10,6 +10,8 @@ uses
  mqueue,
  LFQueue,
 
+ vm_tracking_map,
+
  Vulkan,
  vDevice,
  vBuffer,

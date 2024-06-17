@@ -238,6 +238,8 @@ begin
   if ((obj^.flags and OBJ_DEAD)=0) then
   begin
    vm_object_terminate(obj);
+   //object deleted
+   Exit;
   end;
 
  VM_OBJECT_UNLOCK(obj);

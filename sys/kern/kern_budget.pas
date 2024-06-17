@@ -643,7 +643,9 @@ begin
         FMEM_SIZE:=bigapp_max_fmem_size;
        end;
       end;
+
      end;
+
     end;
    end;
 

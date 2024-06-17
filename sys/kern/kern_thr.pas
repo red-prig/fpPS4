@@ -238,7 +238,6 @@ type
   td_rlqe         :Pointer;
   td_fpop         :Pointer;
   td_map_def_user :Pointer;
-  td_dmap_def_user:Pointer;
   td_rmap_def_user:Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;

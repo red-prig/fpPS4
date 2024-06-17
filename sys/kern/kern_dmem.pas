@@ -847,7 +847,7 @@ begin
 
   if (obj<>nil) then
   begin
-   Result:=(obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0;
+   Result:=(obj^.flags and OBJ_DMEM_EXT)<>0;
   end;
 
   if Result then
