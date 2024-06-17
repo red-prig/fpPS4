@@ -229,6 +229,8 @@ function  get_segment_value(const Operand:TOperand):Byte;
 function  flags(const i:TInstruction):t_jit_lea;
 function  flags(const ctx:t_jit_context2):t_jit_lea;
 
+procedure op_jit_interrupt(var ctx:t_jit_context2);
+
 procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
 
@@ -1450,6 +1452,17 @@ begin
  end else
  begin
   Assert(false);
+ end;
+end;
+
+//
+
+procedure op_jit_interrupt(var ctx:t_jit_context2);
+begin
+ with ctx.builder do
+ begin
+  //[65 FF 14 25] [00 07 00 00] call gs:[$00000700]
+  call([GS+Integer(teb_jit_trp)]);
  end;
 end;
 

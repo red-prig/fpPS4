@@ -883,7 +883,7 @@ begin
   end;
  end;
 
- Result:=rmem_map_insert(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+ Result:=rmem_map_insert(rmap, start, OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
 
  rmem_map_unlock(rmap);
 end;
@@ -902,7 +902,7 @@ begin
 
  rmem_map_lock(rmap);
 
-  Result:=rmem_map_delete(rmap, OFF_TO_IDX(start), OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
+  Result:=rmem_map_delete(rmap, start, OFF_TO_IDX(offset), OFF_TO_IDX(offset+length));
 
  rmem_map_unlock(rmap);
 end;
@@ -926,7 +926,7 @@ begin
 
  if (obj<>nil) then
  begin
-  if ((obj^.flags and OBJ_DMEM_EXT2)<>0) or
+  if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
      (obj^.otype=OBJT_PHYSHM) then
   begin
    Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
@@ -1103,7 +1103,7 @@ charged:
 
  end else
  if (obj^.otype in [OBJT_DEFAULT,OBJT_SWAP,OBJT_VNODE,OBJT_SELF]) and
-    ((obj^.flags and OBJ_DMEM_EXT2)=0) then
+    ((obj^.flags and OBJ_JITSHM_EXT)=0) then
  begin
   goto _budget;
  end;
@@ -2456,7 +2456,7 @@ begin
 
   if rmap_free and (obj<>nil) then
   begin
-   if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_DMEM_EXT2))<>0) or
+   if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
       (obj^.otype=OBJT_PHYSHM) then
    begin
     Result:=vm_object_rmap_release(map,

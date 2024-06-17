@@ -35,15 +35,13 @@ type
  pp_vm_track_map_entry=^p_vm_track_map_entry;
  p_vm_track_map_entry=^t_vm_track_map_entry;
  t_vm_track_map_entry=packed record
-  prev       :p_vm_track_map_entry; // previous entry
-  next       :p_vm_track_map_entry; // next entry
-  left       :p_vm_track_map_entry; // left child in binary search tree
-  right      :p_vm_track_map_entry; // right child in binary search tree
-  start      :vm_offset_t;          // start address
-  __end      :vm_offset_t;          // end address
-  adj_free   :vm_offset_t;          // amount of adjacent free space
-  max_free   :vm_offset_t;          // max free space in subtree
-  instances  :TAILQ_HEAD;           // p_vm_track_object_instance
+  prev     :p_vm_track_map_entry; // previous entry
+  next     :p_vm_track_map_entry; // next entry
+  left     :p_vm_track_map_entry; // left child in binary search tree
+  right    :p_vm_track_map_entry; // right child in binary search tree
+  start    :vm_offset_t;          // start address
+  __end    :vm_offset_t;          // end address
+  instances:TAILQ_HEAD;           // p_vm_track_object_instance
  end;
 
  p_vm_track_object_instance=^t_vm_track_object_instance;
@@ -58,7 +56,6 @@ type
  t_vm_track_map=object
   header   :t_vm_track_map_entry; // List of entries
   lock     :mtx;                  // Lock for map data
-  size     :vm_size_t;            // virtual size
   root     :p_vm_track_map_entry; // Root of a binary search tree
   nentries :Integer;              // Number of entries
   timestamp:DWORD;
@@ -75,7 +72,7 @@ procedure vm_track_object_reference (obj:p_vm_track_object);
 
 //
 
-function  vm_track_map_insert       (map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
+function  vm_track_map_insert_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
 function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t):Integer;
@@ -353,8 +350,6 @@ begin
  map^.header.prev:=@map^.header;
  map^.min_offset:=min;
  map^.max_offset:=max;
- map^.header.adj_free:=(max-min);
- map^.header.max_free:=(max-min);
  map^.root:=nil;
  //
  mtx_init(map^.lock,'vm_track_map');
@@ -379,21 +374,6 @@ begin
  Result:=new_entry;
 end;
 
-procedure vm_track_entry_set_max_free(entry:p_vm_track_map_entry);
-begin
- entry^.max_free:=entry^.adj_free;
- if (entry^.left<>nil) then
- if (entry^.left^.max_free>entry^.max_free) then
- begin
-  entry^.max_free:=entry^.left^.max_free;
- end;
- if (entry^.right<>nil) then
- if (entry^.right^.max_free>entry^.max_free) then
- begin
-  entry^.max_free:=entry^.right^.max_free;
- end;
-end;
-
 function vm_track_entry_splay(addr:vm_offset_t;root:p_vm_track_map_entry):p_vm_track_map_entry;
 var
  llist,rlist:p_vm_track_map_entry;
@@ -416,7 +396,6 @@ begin
     { Rotate right and put y on rlist. }
     root^.left:=y^.right;
     y^.right:=root;
-    vm_track_entry_set_max_free(root);
     root:=y^.left;
     y^.left:=rlist;
     rlist:=y;
@@ -437,7 +416,6 @@ begin
     { Rotate left and put y on llist. }
     root^.right:=y^.left;
     y^.left:=root;
-    vm_track_entry_set_max_free(root);
     root:=y^.right;
     y^.right:=llist;
     llist:=y;
@@ -464,7 +442,6 @@ begin
  begin
   y:=llist^.right;
   llist^.right:=ltree;
-  vm_track_entry_set_max_free(llist);
   ltree:=llist;
   llist:=y;
  end;
@@ -473,7 +450,6 @@ begin
  begin
   y:=rlist^.left;
   rlist^.left:=rtree;
-  vm_track_entry_set_max_free(rlist);
   rtree:=rlist;
   rlist:=y;
  end;
@@ -483,7 +459,6 @@ begin
   }
  root^.left:=ltree;
  root^.right:=rtree;
- vm_track_entry_set_max_free(root);
 
  Result:=(root);
 end;
@@ -510,21 +485,12 @@ begin
   entry^.right:=after_where^.right;
   entry^.left:=after_where;
   after_where^.right:=nil;
-  after_where^.adj_free:=entry^.start - after_where^.__end;
-  vm_track_entry_set_max_free(after_where);
  end else
  begin
   entry^.right:=map^.root;
   entry^.left:=nil;
  end;
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
- vm_track_entry_set_max_free(entry);
+
  map^.root:=entry;
 end;
 
@@ -547,14 +513,6 @@ begin
  begin
   root:=vm_track_entry_splay(entry^.start, entry^.left);
   root^.right:=entry^.right;
-  if (root^.next=@map^.header) then
-  begin
-   root^.adj_free:=map^.max_offset-root^.__end;
-  end else
-  begin
-   root^.adj_free:=entry^.next^.start-root^.__end;
-  end;
-  vm_track_entry_set_max_free(root);
  end;
  map^.root:=root;
 
@@ -563,24 +521,6 @@ begin
  next^.prev:=prev;
  prev^.next:=next;
  Dec(map^.nentries);
-end;
-
-procedure vm_track_map_entry_resize_free(map:p_vm_track_map;entry:p_vm_track_map_entry);
-begin
- if (entry<>map^.root) then
- begin
-  map^.root:=vm_track_entry_splay(entry^.start, map^.root);
- end;
-
- if (entry^.next=@map^.header) then
- begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
- end else
- begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
- end;
-
- vm_track_entry_set_max_free(entry);
 end;
 
 function vm_track_map_lookup_entry(
@@ -660,7 +600,6 @@ begin
   * Insert the new after into the list
   }
  vm_track_map_entry_link(map, after, new_entry);
- map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
 
  //vm_track_entry_simplify_entry(map, new_entry);
 
@@ -680,12 +619,6 @@ begin
    vm_track_map_entry_unlink(map, prev);
    entry^.start:=prev^.start;
 
-   //change
-   if (entry^.prev<>@map^.header) then
-   begin
-    vm_track_map_entry_resize_free(map, entry^.prev);
-   end;
-
    vm_track_entry_dispose(map, prev);
   end;
  end;
@@ -698,9 +631,6 @@ begin
   begin
    vm_track_map_entry_unlink(map, next);
    entry^.__end:=next^.__end;
-
-   //change
-   vm_track_map_entry_resize_free(map, entry);
 
    vm_track_entry_dispose(map, next);
   end;
@@ -770,12 +700,7 @@ begin
   Exit(KERN_SUCCESS);
  end;
 
- if (map=nil) or (obj=nil) then
- begin
-  Exit(KERN_INVALID_ARGUMENT);
- end;
-
- vm_track_map_lock(map);
+ VM_MAP_ASSERT_LOCKED(map);
 
  vm_track_map_RANGE_CHECK(map, start, __end);
 
@@ -799,77 +724,29 @@ begin
   current:=current^.next;
  end;
 
- vm_track_map_unlock(map);
-
  Result:=(KERN_SUCCESS);
+end;
+
+function vm_track_map_insert_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
+begin
+ if (map=nil) or (obj=nil) then
+ begin
+  Exit(KERN_INVALID_ARGUMENT);
+ end;
+
+ vm_track_map_lock(map);
+
+  Result:=vm_track_map_insert(map,obj^.main.start,obj^.main.__end,obj);
+
+ vm_track_map_unlock(map);
 end;
 
 procedure vm_track_map_entry_delete(map:p_vm_track_map;entry:p_vm_track_map_entry);
-var
- size:vm_ooffset_t;
 begin
  vm_track_map_entry_unlink(map, entry);
 
- size:=entry^.__end - entry^.start;
- map^.size:=map^.size-size;
-
  vm_track_entry_dispose(map, entry);
 end;
-
-{
-function vm_track_map_delete(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
-var
- entry      :p_vm_track_map_entry;
- first_entry:p_vm_track_map_entry;
- next       :p_vm_track_map_entry;
-begin
- VM_MAP_ASSERT_LOCKED(map);
-
- if (start=__end) then
- begin
-  Exit(KERN_SUCCESS);
- end;
-
- if (not vm_track_map_lookup_entry(map, start, @first_entry)) then
- begin
-  entry:=first_entry^.next;
- end else
- begin
-  entry:=first_entry;
-
-  vm_track_map_clip_start(map, entry, start);
- end;
-
- while (entry<>@map^.header) and (entry^.start<__end) do
- begin
-
-  vm_track_map_clip_end(map, entry, __end);
-
-  next:=entry^.next;
-
-  if (obj=nil) then
-  begin
-   //all
-   vm_track_entry_delete(map, entry);
-  end else
-  if vm_track_map_entry_del_obj(entry,obj) then
-  begin
-   //zero
-   vm_track_entry_delete(map, entry);
-  end else
-  begin
-   //exclude one
-
-   vm_track_entry_simplify_entry(map,entry);
-
-   next:=entry^.next;
-  end;
-
-  entry:=next;
- end;
- Result:=(KERN_SUCCESS);
-end;
-}
 
 procedure vm_track_map_delete_object(map:p_vm_track_map;obj:p_vm_track_object);
 var

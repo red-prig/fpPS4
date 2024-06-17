@@ -327,6 +327,11 @@ begin
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 
+ if (td^.td_teb^.jit_trp=nil) then
+ begin
+  td^.td_teb^.jit_trp:=@jit_interrupt_nop;
+ end;
+
  //teb stack
  td^.td_teb^.sttop:=td^.td_kstack.sttop;
  td^.td_teb^.stack:=td^.td_kstack.stack;

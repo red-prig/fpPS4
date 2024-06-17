@@ -68,6 +68,8 @@ procedure sys_save_to_jit_save(td:p_kthread);
 
 procedure strict_ps4_rdtsc_jit; assembler;
 
+procedure jit_interrupt_nop; assembler;
+
 implementation
 
 uses
@@ -589,6 +591,10 @@ asm
  addb $127, %al
  sahf
  movq %r14, %rax
+end;
+
+procedure jit_interrupt_nop; assembler; nostackframe;
+asm
 end;
 
 function IS_JIT_FUNC(rip:qword):Boolean; public;

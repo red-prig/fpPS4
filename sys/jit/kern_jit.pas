@@ -24,7 +24,6 @@ implementation
 uses
  sysutils,
  time,
- vm,
  vmparam,
  vm_pmap_prot,
  vm_pmap,
@@ -373,6 +372,8 @@ var
  new1,new2:TRegValue;
  link:t_jit_i_link;
 begin
+ op_jit_interrupt(ctx);
+
  op_push_rip(ctx);
 
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
@@ -450,6 +451,8 @@ procedure op_ret(var ctx:t_jit_context2);
 var
  imm:Int64;
 begin
+ op_jit_interrupt(ctx);
+
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
@@ -468,6 +471,8 @@ var
  new1,new2:TRegValue;
  link:t_jit_i_link;
 begin
+ op_jit_interrupt(ctx);
+
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
   //imm offset
@@ -569,6 +574,8 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
+ op_jit_interrupt(ctx);
+
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
@@ -619,6 +626,8 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
+ op_jit_interrupt(ctx);
+
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
@@ -663,6 +672,8 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
+ op_jit_interrupt(ctx);
+
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
 
@@ -1726,6 +1737,8 @@ begin
    cb(ctx);
   end;
   }
+
+  //op_jit_interrupt(ctx);
 
   cb(ctx);
 

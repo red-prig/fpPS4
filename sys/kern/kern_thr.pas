@@ -144,8 +144,8 @@ type
   fsbase :Pointer;                 //0x1C8
   gsbase :Pointer;                 //0x1D0
   _align3:array[0..164] of QWORD;
-  jit_rsp:Pointer;                 //0x700
-  jit_rbp:Pointer;                 //0x708
+  jit_trp:Pointer;                 //0x700
+  jit____:Pointer;                 //0x708
   iflag  :Integer;                 //0x710
  end;
 
@@ -156,12 +156,12 @@ const
  teb_thread =ptruint(@teb(nil^).thread );
  teb_fsbase =ptruint(@teb(nil^).fsbase );
  teb_gsbase =ptruint(@teb(nil^).gsbase );
- teb_jit_rsp=ptruint(@teb(nil^).jit_rsp);
+ teb_jit_trp=ptruint(@teb(nil^).jit_trp);
  teb_iflag  =ptruint(@teb(nil^).iflag  );
 
  {$IF teb_jitcall<>$0C0}{$STOP teb_jitcall<>$0C0}{$ENDIF}
  {$IF teb_thread <>$1C0}{$STOP teb_thread <>$1C0}{$ENDIF}
- {$IF teb_jit_rsp<>$700}{$STOP teb_jit_rsp<>$700}{$ENDIF}
+ {$IF teb_jit_trp<>$700}{$STOP teb_jit_trp<>$700}{$ENDIF}
  {$IF teb_iflag  <>$710}{$STOP teb_iflag  <>$710}{$ENDIF}
 
 type

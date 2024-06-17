@@ -31,6 +31,11 @@ begin
  Result:=(width+align_m) and (not align_m);
 end;
 
+function Max(a,b:Ptruint):Ptruint; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
 Function GetLinearSize(image:TvImage2;align:Boolean):Ptruint;
 var
  m_bytePerElement:Ptruint;
@@ -71,10 +76,8 @@ begin
   Result:=Result+m_slice;
 
   Dec(m_level);
-  m_width :=m_width  shr 1;
-  m_height:=m_height shr 1;
-  if (m_width =0) then m_width :=1;
-  if (m_height=0) then m_height:=1;
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
 
  Result:=Result*
@@ -125,10 +128,8 @@ begin
   Result:=Result+m_slice;
 
   Dec(m_level);
-  m_width :=m_width  shr 1;
-  m_height:=m_height shr 1;
-  if (m_width =0) then m_width :=1;
-  if (m_height=0) then m_height:=1;
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
 
  //Result:=(Result+255) and (not Ptruint(255));
@@ -358,10 +359,8 @@ begin
    m_offset:=m_offset+m_slice;
 
    Dec(m_level);
-   m_width :=m_width  shr 1;
-   m_height:=m_height shr 1;
-   if (m_width =0) then m_width :=1;
-   if (m_height=0) then m_height:=1;
+   m_width :=Max(1,m_width  shr 1);
+   m_height:=Max(1,m_height shr 1);
   end;
 
  end;
@@ -467,10 +466,8 @@ begin
   dst:=dst+tiler.m_linearSizeBytes;
 
   Dec(m_level);
-  m_width :=m_width  shr 1;
-  m_height:=m_height shr 1;
-  if (m_width =0) then m_width :=1;
-  if (m_height=0) then m_height:=1;
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
 
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
@@ -577,10 +574,8 @@ begin
    m_offset:=m_offset+m_slice;
 
    Dec(m_level);
-   m_width :=m_width  shr 1;
-   m_height:=m_height shr 1;
-   if (m_width =0) then m_width :=1;
-   if (m_height=0) then m_height:=1;
+   m_width :=Max(1,m_width  shr 1);
+   m_height:=Max(1,m_height shr 1);
   end;
 
  end;
@@ -646,7 +641,7 @@ begin
  if (cb=nil) then
  begin
   Writeln(stderr,'tiling:'+IntToStr(ri.key.params.tiling.idx)+' alt:'+IntToStr(ri.key.params.tiling.alt));
-  Assert(false,'tiling:'+IntToStr(ri.key.params.tiling.idx)+' alt:'+IntToStr(ri.key.params.tiling.alt));
+  Assert (false ,'tiling:'+IntToStr(ri.key.params.tiling.idx)+' alt:'+IntToStr(ri.key.params.tiling.alt));
  end;
 
  cb(cmd,ri);

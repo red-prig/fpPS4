@@ -319,7 +319,7 @@ begin
  Result:=new_entry;
 end;
 
-function rmem_entry_splay(addr:vm_offset_t;root:p_rmem_map_entry):p_rmem_map_entry;
+function rmem_entry_splay(addr:DWORD;root:p_rmem_map_entry):p_rmem_map_entry;
 var
  llist,rlist:p_rmem_map_entry;
  ltree,rtree:p_rmem_map_entry;
@@ -533,8 +533,7 @@ end;
 function rmem_map_insert_internal(
            map  :p_rmem_map;
            after:p_rmem_map_entry;
-           start:vm_offset_t;
-           __end:vm_offset_t):p_rmem_map_entry;
+           start,__end:DWORD):p_rmem_map_entry;
 var
  new_entry:p_rmem_map_entry;
 begin
@@ -613,7 +612,7 @@ begin
  end;
 end;
 
-procedure _rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:vm_offset_t);
+procedure _rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:DWORD);
 var
  new_entry:p_rmem_map_entry;
 begin
@@ -633,7 +632,7 @@ begin
  rmem_entry_link(map, entry^.prev, new_entry);
 end;
 
-procedure rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:vm_offset_t); inline;
+procedure rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:DWORD); inline;
 begin
  if (start>entry^.start) then
  begin
@@ -641,7 +640,7 @@ begin
  end;
 end;
 
-procedure _rmem_map_clip_end(map:p_rmem_map;entry:p_rmem_map_entry;__end:vm_offset_t);
+procedure _rmem_map_clip_end(map:p_rmem_map;entry:p_rmem_map_entry;__end:DWORD);
 var
  new_entry:p_rmem_map_entry;
 begin
@@ -659,7 +658,7 @@ begin
  rmem_entry_link(map, entry, new_entry);
 end;
 
-procedure rmem_map_clip_end(map:p_rmem_map;entry:p_rmem_map_entry;__end:vm_offset_t); inline;
+procedure rmem_map_clip_end(map:p_rmem_map;entry:p_rmem_map_entry;__end:DWORD); inline;
 begin
  if (__end<entry^.__end) then
  begin

@@ -330,6 +330,7 @@ type
   //
   Procedure jmp(reg:TRegValue);
   Procedure call(reg:TRegValue);
+  Procedure call(mem:t_jit_leas);
   Procedure reta;
   Procedure ud2;
   //
@@ -1536,6 +1537,13 @@ begin
  Assert(is_reg_size(reg,[os64]));
 
  _R(desc,reg);
+end;
+
+Procedure t_jit_builder.call(mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$FF;index:2);
+begin
+ _M(desc,mem);
 end;
 
 Procedure t_jit_builder.reta;

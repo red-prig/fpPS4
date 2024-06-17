@@ -2058,7 +2058,7 @@ begin
  if (Result <> 0) then Exit;
 
  tileThickness := getMicroTileThickness(arrayMode);
- tileBytes1x := bitsPerElement * tileThickness * $40 shr 3;
+ tileBytes1x := bitsPerElement * tileThickness * 8 {64 shr 3};
 
  colorTileSplit:=max(256, tileBytes1x shl (sampleSplitHw and $1f));
 
