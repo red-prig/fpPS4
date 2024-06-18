@@ -59,7 +59,7 @@ type
   busy     :Integer;
   root     :vm_map_entry_t; // Root of a binary search tree
   pmap     :pmap_t;         // (c) Physical map
-  rmap     :Pointer;
+  rmap     :Pointer;        // p_rmem_map
   entry_id :QWORD;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
@@ -81,7 +81,7 @@ type
   vm_daddr    :caddr_t; // (c) user virtual address of data
   vm_maxsaddr :caddr_t; // user VA at max stack growth
   //
-  vm_pmap     :_pmap;   // private physical map
+  vm_pmap     :t_pmap;  // private physical map
  end;
 
 const
@@ -276,6 +276,8 @@ procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
 
+procedure vm_map_track(map:vm_map_t;start,__end:vm_offset_t;tobj:Pointer);
+
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
 procedure vm_map_entry_deallocate(entry:vm_map_entry_t);
@@ -288,6 +290,7 @@ uses
  md_map,
  kern_proc,
  rmem_map,
+ vm_tracking_map,
  kern_budget;
 
 var
@@ -3292,10 +3295,94 @@ begin
  vm_map_unlock(map);
 end;
 
+procedure vm_map_track(map:vm_map_t;start,__end:vm_offset_t;tobj:Pointer);
+var
+ entry:vm_map_entry_t;
+ obj:vm_object_t;
+
+ e_start:vm_offset_t;
+ e___end:vm_offset_t;
+
+ diff:DWORD;
+ size:DWORD;
+ offset:DWORD;
+begin
+ vm_map_lock(map);
+
+ VM_MAP_RANGE_CHECK(map, start, __end);
+
+ if (vm_map_lookup_entry(map, start, @entry)) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  e_start:=entry^.start;
+  e___end:=entry^.__end;
+
+  if (start>e_start) then
+  begin
+   e_start:=start;
+  end;
+
+  if (__end<e___end) then
+  begin
+   e___end:=__end;
+  end;
+
+  if (e___end>e_start) then
+  begin
+   obj:=entry^.vm_obj;
+
+   if (obj<>nil) then
+   begin
+    if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+    begin
+     //ext rmap track
+
+     diff:=OFF_TO_IDX(e_start-entry^.start);
+     size:=OFF_TO_IDX(e___end-e_start);
+
+     offset:=OFF_TO_IDX(entry^.offset);
+     offset:=offset+diff;
+
+     rmem_map_track(map^.rmap,
+                    offset,
+                    offset + size,
+                    tobj);
+
+     //next
+     entry:=entry^.next;
+     Continue;
+    end;
+
+    //file mirrors TODO
+   end;
+
+   //one map track
+   vm_track_map_lock(@map^.pmap^.tr_map);
+    _vm_track_map_insert(@map^.pmap^.tr_map,e_start,e___end,tobj);
+   vm_track_map_unlock(@map^.pmap^.tr_map)
+  end; //
+
+  entry:=entry^.next;
+ end;
+
+ vm_map_unlock(map);
+end;
+
 procedure vminit;
 begin
  p_proc.p_vmspace:=vmspace_alloc();
 end;
 
+
 end.
+
+
 

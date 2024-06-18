@@ -36,6 +36,7 @@ type
   lock    :mtx;              // Lock for map data
   root    :p_rmem_map_entry; // Root of a binary search tree
   nentries:DWORD;            // Number of entries
+  tmap    :Pointer;          // p_vm_track_map
   property min_offset:DWORD read header.start write header.start;
   property max_offset:DWORD read header.__end write header.__end;
  end;
@@ -59,11 +60,16 @@ function  rmem_map_delete(map:p_rmem_map;
                           vaddr:QWORD;
                           start,__end:DWORD):Integer;
 
+procedure rmem_map_track(map:p_rmem_map;
+                         start,__end:DWORD;
+                         tobj:Pointer);
+
 implementation
 
 uses
  errno,
- kern_thr;
+ kern_thr,
+ vm_tracking_map;
 
 function IDX_TO_OFF(x:DWORD):QWORD; inline;
 begin
@@ -102,7 +108,7 @@ begin
  TAILQ_INSERT_TAIL(@entry^.vlist,node,@node^.entry);
 end;
 
-procedure rmem_entry_add_vaddr(entry:p_rmem_map_entry;vaddr:QWORD);
+function rmem_entry_add_vaddr(entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
 var
  node:p_rmem_vaddr_instance;
 begin
@@ -113,13 +119,43 @@ begin
 
   if (node^.vaddr=vaddr) then
   begin
-   Exit;
+   Exit(False);
   end;
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
 
+ //if not one vaddr
+ Result:=(TAILQ_FIRST(@entry^.vlist)<>nil);
+
  _rmem_entry_add_vaddr(entry,vaddr);
+end;
+
+procedure rmem_entry_add_track(tmap:Pointer;entry:p_rmem_map_entry;vaddr:QWORD);
+var
+ node:p_rmem_vaddr_instance;
+ size:vm_offset_t;
+begin
+ //try add mirror track
+
+ size:=IDX_TO_OFF(entry^.__end-entry^.start);
+
+ vm_track_map_lock(tmap);
+
+ node:=TAILQ_FIRST(@entry^.vlist);
+
+ while (node<>nil) do
+ begin
+
+  if (node^.vaddr<>vaddr) then
+  begin
+   _vm_track_map_insert_mirror(tmap,node^.vaddr,vaddr,size);
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.entry);
+ end;
+
+  vm_track_map_unlock(tmap);
 end;
 
 function _rmem_entry_del_node(entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
@@ -211,18 +247,18 @@ begin
  Result:=True;
 end;
 
-procedure copy_vaddr_list(const src:TAILQ_HEAD;entry:p_rmem_map_entry);
+procedure copy_vaddr_list(src,dst:p_rmem_map_entry);
 var
  node:p_rmem_vaddr_instance;
 begin
 
- TAILQ_INIT(@entry^.vlist);
+ TAILQ_INIT(@dst^.vlist);
 
- node:=TAILQ_FIRST(@src);
+ node:=TAILQ_FIRST(@src^.vlist);
 
  while (node<>nil) do
  begin
-  _rmem_entry_add_vaddr(entry,node^.vaddr);
+  _rmem_entry_add_vaddr(dst,node^.vaddr);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
@@ -625,7 +661,7 @@ begin
 
  new_entry^.__end:=start;
 
- copy_vaddr_list(entry^.vlist,new_entry);
+ copy_vaddr_list(entry,new_entry);
 
  entry^.start:=start;
 
@@ -653,7 +689,7 @@ begin
 
  entry^.__end:=__end;
 
- copy_vaddr_list(entry^.vlist,new_entry);
+ copy_vaddr_list(entry,new_entry);
 
  rmem_entry_link(map, entry, new_entry);
 end;
@@ -701,7 +737,10 @@ begin
 
   current:=rmem_map_insert_internal(map,current,current^.__end,__end);
 
-  rmem_entry_add_vaddr(current,vaddr);
+  if rmem_entry_add_vaddr(current,vaddr) then
+  begin
+   rmem_entry_add_track(map^.tmap,entry,vaddr);
+  end;
 
   current:=current^.next;
  end;
@@ -772,9 +811,9 @@ begin
  until false;
 end;
 
-function  rmem_map_delete(map:p_rmem_map;
-                          vaddr:QWORD;
-                          start,__end:DWORD):Integer;
+function rmem_map_delete(map:p_rmem_map;
+                         vaddr:QWORD;
+                         start,__end:DWORD):Integer;
 var
  entry      :p_rmem_map_entry;
  first_entry:p_rmem_map_entry;
@@ -839,6 +878,84 @@ begin
 
  Result:=(KERN_SUCCESS);
 end;
+
+procedure rmem_entry_track(tmap:Pointer;entry:p_rmem_map_entry;diff,size:QWORD;tobj:Pointer);
+var
+ node:p_rmem_vaddr_instance;
+ start:vm_offset_t;
+ __end:vm_offset_t;
+begin
+ node:=TAILQ_FIRST(@entry^.vlist);
+
+ while (node<>nil) do
+ begin
+
+  start:=node^.vaddr+diff;
+  __end:=start+size;
+
+  _vm_track_map_insert(tmap,start,__end,tobj);
+
+  node:=TAILQ_NEXT(node,@node^.entry);
+ end;
+end;
+
+procedure rmem_map_track(map:p_rmem_map;
+                         start,__end:DWORD;
+                         tobj:Pointer);
+var
+ entry:p_rmem_map_entry;
+
+ e_start:DWORD;
+ e___end:DWORD;
+
+ diff:QWORD;
+ size:QWORD;
+begin
+ rmem_map_lock(map);
+
+ vm_track_map_lock(map^.tmap);
+
+ if (rmem_map_lookup_entry(map, start, @entry)) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  e_start:=entry^.start;
+  e___end:=entry^.__end;
+
+  if (start>e_start) then
+  begin
+   e_start:=start;
+  end;
+
+  if (__end<e___end) then
+  begin
+   e___end:=__end;
+  end;
+
+  if (e___end>e_start) then
+  begin
+   diff:=IDX_TO_OFF(e_start-entry^.start);
+   size:=IDX_TO_OFF(e___end-e_start);
+
+   rmem_entry_track(map^.tmap,entry,diff,size,tobj);
+  end;
+
+  entry:=entry^.next;
+ end;
+
+ vm_track_map_unlock(map^.tmap);
+
+ rmem_map_unlock(map);
+end;
+
+
 
 
 end.

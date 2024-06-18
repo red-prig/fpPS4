@@ -58,8 +58,8 @@ type
   offset     :vm_ooffset_t;      // offset into object
  end;
 
- p_vm_nt_map=^_vm_nt_map;
- _vm_nt_map=object
+ p_vm_nt_map=^t_vm_nt_map;
+ t_vm_nt_map=object
   header     :vm_nt_entry;   // List of entries
   size       :vm_size_t;     // virtual size
   nentries   :Integer;       // Number of entries
@@ -206,6 +206,7 @@ var
  next:vm_offset_t;
  base,size:vm_size_t;
  prot:Integer;
+ mask:Integer;
  r:Integer;
 begin
  if (PAGE_PROT=nil) then Exit;
@@ -218,19 +219,23 @@ begin
    next:=pmap_scan_rwx(start,__end);
 
    prot:=pmap_get_prot(start);
+
    prot:=(prot and VM_RW);
   end else
   begin
    next:=pmap_scan(start,__end);
 
    prot:=pmap_get_prot(start);
-   prot:=(prot and VM_RW) and (not (prot shr PAGE_TRACK_SHIFT));
+
+   mask:=not (prot shr PAGE_TRACK_SHIFT);
+
+   prot:=(prot and VM_RW) and mask;
   end;
 
   base:=start;
   size:=next-start;
 
-  if ((mode and REMAP_PROT)=0) or (prot<>(max and VM_RW)) then
+  if ((mode and REMAP_PROT)<>0) or (prot<>(max and VM_RW)) then
   begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
@@ -1152,7 +1157,8 @@ procedure vm_nt_map_protect(map:p_vm_nt_map;
                             prot  :Integer);
 var
  entry:p_vm_nt_entry;
- base,size:vm_size_t;
+ e_start:vm_offset_t;
+ e___end:vm_offset_t;
  max:Integer;
  r:Integer;
 begin
@@ -1168,34 +1174,37 @@ begin
 
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
-  base:=entry^.start;
-  size:=entry^.__end;
+  e_start:=entry^.start;
+  e___end:=entry^.__end;
 
-  if (base<start) then
+  if (e_start<start) then
   begin
-   base:=start;
+   e_start:=start;
   end;
 
-  if (size>__end) then
+  if (e___end>__end) then
   begin
-   size:=__end;
+   e___end:=__end;
   end;
 
-  size:=size-base;
+  if (e___end>e_start) then
+  begin
 
-  if (entry^.obj<>nil) then
-  begin
-   max:=entry^.obj^.maxp;
-  end else
-  begin
-   max:=0;
-  end;
+   if (entry^.obj<>nil) then
+   begin
+    max:=entry^.obj^.maxp;
+   end else
+   begin
+    max:=0;
+   end;
 
-  r:=md_protect(Pointer(base),size,(prot and max and VM_RW));
-  if (r<>0) then
-  begin
-   Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
-   Assert(false,'vm_nt_map_protect');
+   r:=md_protect(Pointer(e_start),e___end-e_start,(prot and max and VM_RW));
+   if (r<>0) then
+   begin
+    Writeln('failed md_protect(',HexStr(e_start,11),',',HexStr(e___end,11),'):0x',HexStr(r,8));
+    Assert(false,'vm_nt_map_protect');
+   end;
+
   end;
 
   entry:=entry^.next;
@@ -1208,7 +1217,8 @@ procedure vm_nt_map_prot_fix(map:p_vm_nt_map;
                              mode :Integer);
 var
  entry:p_vm_nt_entry;
- e_start,e___end:vm_size_t;
+ e_start:vm_offset_t;
+ e___end:vm_offset_t;
 begin
  if (start=__end) then Exit;
 
@@ -1238,7 +1248,10 @@ begin
     e___end:=__end;
    end;
 
-   vm_prot_fixup(map,e_start,e___end,entry^.obj^.maxp,mode);
+   if (e___end>e_start) then
+   begin
+    vm_prot_fixup(map,e_start,e___end,entry^.obj^.maxp,mode);
+   end;
   end;
 
   entry:=entry^.next;

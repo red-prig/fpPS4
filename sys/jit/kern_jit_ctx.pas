@@ -265,9 +265,17 @@ procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 
 procedure print_disassemble(addr:Pointer;vsize:Integer);
 
+type
+ t_instruction_info=record
+  code_size:Byte;
+  mema_size:Byte;
+ end;
+
+function get_instruction_info(addr:Pointer):t_instruction_info;
+
 var
  jit_relative_analize:Boolean=True;
- jit_memory_guard:Boolean=False;
+ jit_memory_guard    :Boolean=False;
 
 implementation
 
@@ -3906,6 +3914,40 @@ begin
 
  end;
 end;
+
+//
+
+function get_instruction_info(addr:Pointer):t_instruction_info;
+var
+ ptr:Pointer;
+
+ dis:TX86Disassembler;
+ din:TInstruction;
+
+ i:Byte;
+begin
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ ptr:=addr;
+
+ dis.Disassemble(dm64,ptr,din);
+
+ Result.code_size:=(ptr-addr);
+ Result.mema_size:=0;
+
+ if (din.OperCnt<>0) then
+ For i:=1 to din.OperCnt do
+ if is_memory(din.Operand[i]) then
+ begin
+  Result.mema_size:=OPERAND_BYTES[din.Operand[i].Size];
+  Exit;
+ end;
+
+ Assert(false,'get_instruction_info');
+end;
+
+//
 
 end.
 

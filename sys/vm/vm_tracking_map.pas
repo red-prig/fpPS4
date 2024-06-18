@@ -17,8 +17,14 @@ type
   __end:vm_offset_t;
  end;
 
- t_on_destroy=function (handle:Pointer):Boolean;
- t_on_trigger=procedure(handle:Pointer;start,__end:vm_offset_t);
+const
+ DO_NOTHING  =0;
+ DO_DELETE   =1;
+ DO_INCREMENT=2;
+
+type
+ t_on_destroy=function(handle:Pointer):Integer;
+ t_on_trigger=function(handle:Pointer;start,__end:vm_offset_t):Integer;
 
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=record
@@ -63,12 +69,22 @@ type
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
 
+procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 
 //
 
-function  vm_track_object_allocate  (handle:TObject;start,__end:vm_offset_t):p_vm_track_object;
+function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t):p_vm_track_object;
 procedure vm_track_object_deallocate(obj:p_vm_track_object);
 procedure vm_track_object_reference (obj:p_vm_track_object);
+
+//
+
+procedure vm_track_map_lock  (map:p_vm_track_map);
+procedure vm_track_map_unlock(map:p_vm_track_map);
+
+function  _vm_track_map_insert(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
+
+function  _vm_track_map_insert_mirror(map:p_vm_track_map;src,dst,size:vm_offset_t):Integer;
 
 //
 
@@ -79,7 +95,7 @@ function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t)
 
 implementation
 
-function vm_track_object_allocate(handle:TObject;start,__end:vm_offset_t):p_vm_track_object;
+function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t):p_vm_track_object;
 begin
  Result:=AllocMem(SizeOf(t_vm_track_object));
 
@@ -106,7 +122,7 @@ begin
 
   if (obj^.on_destroy<>nil) then
   begin
-   if not obj^.on_destroy(obj^.handle) then
+   if ((obj^.on_destroy(obj^.handle) and DO_DELETE)=0) then
    begin
     Exit;
    end;
@@ -123,8 +139,9 @@ begin
  System.InterlockedIncrement(obj^.ref_count);
 end;
 
-procedure vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t);
+function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t):Integer;
 begin
+ Result:=DO_NOTHING;
  if (obj=nil) then Exit;
 
  if (obj^.timestamp<>map^.timestamp) then
@@ -133,7 +150,10 @@ begin
 
   if (obj^.on_trigger<>nil) then
   begin
-   obj^.on_trigger(obj^.handle,start,__end);
+   Result:=obj^.on_trigger(obj^.handle,start,__end);
+  end else
+  begin
+   Result:=DO_INCREMENT;
   end;
 
  end;
@@ -230,21 +250,6 @@ begin
  end;
 end;
 
-procedure vm_track_entry_trigger(map:p_vm_track_map;entry:p_vm_track_map_entry;start,__end:vm_offset_t);
-var
- node:p_vm_track_object_instance;
-begin
- node:=TAILQ_FIRST(@entry^.instances);
-
- while (node<>nil) do
- begin
-
-  vm_track_object_trigger(map,node^.obj,start,__end);
-
-  node:=TAILQ_NEXT(node,@node^.entry_link);
- end;
-end;
-
 //
 
 function in_obj_list(const b:TAILQ_HEAD;obj:p_vm_track_object):Boolean;
@@ -287,19 +292,19 @@ begin
  Result:=True;
 end;
 
-procedure copy_obj_list(const src:TAILQ_HEAD;entry:p_vm_track_map_entry);
+procedure copy_obj_list(src,dst:p_vm_track_map_entry);
 var
  node:p_vm_track_object_instance;
 begin
 
- TAILQ_INIT(@entry^.instances);
+ TAILQ_INIT(@dst^.instances);
 
- node:=TAILQ_FIRST(@src);
+ node:=TAILQ_FIRST(@src^.instances);
 
  while (node<>nil) do
  begin
 
-  _vm_track_entry_add_obj(entry,node^.obj);
+  _vm_track_entry_add_obj(dst,node^.obj);
 
   node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
@@ -650,7 +655,7 @@ begin
 
  new_entry^.__end:=start;
 
- copy_obj_list(entry^.instances,new_entry);
+ copy_obj_list(entry,new_entry);
 
  entry^.start:=start;
 
@@ -678,7 +683,7 @@ begin
 
  entry^.__end:=__end;
 
- copy_obj_list(entry^.instances,new_entry);
+ copy_obj_list(entry,new_entry);
 
  vm_track_map_entry_link(map, entry, new_entry);
 end;
@@ -691,11 +696,11 @@ begin
  end;
 end;
 
-function vm_track_map_insert(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
+function _vm_track_map_insert(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
 var
  current,entry:p_vm_track_map_entry;
 begin
- if (start=__end) then
+ if (start>=__end) then
  begin
   Exit(KERN_SUCCESS);
  end;
@@ -736,7 +741,7 @@ begin
 
  vm_track_map_lock(map);
 
-  Result:=vm_track_map_insert(map,obj^.main.start,obj^.main.__end,obj);
+  Result:=_vm_track_map_insert(map,obj^.main.start,obj^.main.__end,obj);
 
  vm_track_map_unlock(map);
 end;
@@ -889,24 +894,37 @@ begin
 end;
 
 function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
+label
+ _repeat;
 var
+ last:vm_offset_t;
  current,entry:p_vm_track_map_entry;
+ node,next:p_vm_track_object_instance;
+ ret:Integer;
+ change:Boolean;
 begin
- if (start=__end) then
+ Result:=0; //count
+
+ if (start>=__end) or (map=nil) then
  begin
-  Exit(KERN_SUCCESS);
+  Exit;
  end;
 
- if (map=nil) then
- begin
-  Exit(KERN_INVALID_ARGUMENT);
- end;
+ last:=start;
 
  vm_track_map_lock(map);
 
- vm_track_map_RANGE_CHECK(map, start, __end);
+ vm_track_map_RANGE_CHECK(map, last, __end);
 
- if (vm_track_map_lookup_entry(map, start, @entry)) then
+ _repeat:
+
+ if (last>=__end) then
+ begin
+  vm_track_map_unlock(map);
+  Exit;
+ end;
+
+ if (vm_track_map_lookup_entry(map, last, @entry)) then
  begin
   //
  end else
@@ -918,12 +936,121 @@ begin
  while (current<>@map^.header) and (current^.start<__end) do
  begin
 
-  vm_track_entry_trigger(map,current,start,__end);
+  last:=current^.__end;
+
+  change:=False;
+
+  node:=TAILQ_FIRST(@entry^.instances);
+
+  while (node<>nil) do
+  begin
+   next:=TAILQ_NEXT(node,@node^.entry_link);
+
+   ret:=vm_track_object_trigger(map,node^.obj,start,__end);
+
+   if ((ret and DO_DELETE)<>0) then
+   begin
+    //delete full object
+    vm_track_map_delete_object(map, node^.obj);
+    change:=True;
+   end;
+
+   if ((ret and DO_INCREMENT)<>0) then
+   begin
+    Inc(Result);
+   end;
+
+   node:=next;
+  end;
+
+  if change then
+  begin
+   goto _repeat;
+  end;
 
   current:=current^.next;
  end;
 
  vm_track_map_unlock(map);
+end;
+
+function _vm_track_map_insert_mirror(map:p_vm_track_map;src,dst,size:vm_offset_t):Integer;
+label
+ _repeat;
+var
+ last :vm_offset_t;
+ start:vm_offset_t;
+ __end:vm_offset_t;
+ e_start:vm_offset_t;
+ e___end:vm_offset_t;
+ d_start:vm_offset_t;
+ d___end:vm_offset_t;
+ entry:p_vm_track_map_entry;
+ node,next:p_vm_track_object_instance;
+begin
+ start:=src;
+ __end:=src+size;
+
+ VM_MAP_ASSERT_LOCKED(map);
+
+ vm_track_map_RANGE_CHECK(map, start, __end);
+
+ last:=start;
+
+ _repeat:
+
+ if (last>=__end) then
+ begin
+  Exit;
+ end;
+
+ if (vm_track_map_lookup_entry(map, start, @entry)) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+
+  e_start:=entry^.start;
+  e___end:=entry^.__end;
+
+  last:=e___end;
+
+  if (e_start<start) then
+  begin
+   e_start:=start;
+  end;
+
+  if (e___end>__end) then
+  begin
+   e___end:=__end;
+  end;
+
+  if (e___end>e_start) then
+  begin
+   d_start:=dst+(e_start-src);
+   d___end:=d_start+(e___end-e_start);
+
+   node:=TAILQ_FIRST(@entry^.instances);
+
+   while (node<>nil) do
+   begin
+    next:=TAILQ_NEXT(node,@node^.entry_link);
+
+    _vm_track_map_insert(map,d_start,d___end,node^.obj);
+
+    node:=next;
+   end;
+
+   goto _repeat;
+  end;
+
+  entry:=entry^.next;
+ end;
 
  Result:=(KERN_SUCCESS);
 end;

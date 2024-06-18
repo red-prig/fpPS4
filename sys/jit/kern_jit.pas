@@ -1374,11 +1374,17 @@ var
  map:vm_map_t;
  lock:Pointer;
  node:p_jit_entry_point;
+
+ lock_start:QWORD;
+ lock___end:QWORD;
 begin
  map:=p_proc.p_vmspace;
 
+ lock_start:=ctx.text_start;
+ lock___end:=ctx.text___end;
+
  //vm_map_lock(map);
- lock:=pmap_wlock(map^.pmap,ctx.text_start,ctx.text___end);
+ lock:=pmap_wlock(map^.pmap,lock_start,lock___end);
 
   if (preload<>nil) then
   begin
@@ -1391,10 +1397,10 @@ begin
    end;
   end;
 
-  //lock pageflt read-only
-  //vm_map_lock(map);
-  // _pmap_prot_int(map^.pmap,ctx.text_start,ctx.text___end,PAGE_PROT_READ);
-  //vm_map_unlock(map);
+  //lock pageflt read-only  (mirrors?)
+  vm_map_lock(map);
+   _pmap_prot_int(map^.pmap,lock_start,lock___end,PAGE_PROT_READ);
+  vm_map_unlock(map);
 
   if (cmInternal in ctx.modes) then
   begin
@@ -1404,36 +1410,14 @@ begin
    pick_locked(ctx);
   end;
 
-  //restore non tracked
-  //vm_map_lock(map);
-  // _pmap_prot_fix(map^.pmap,ctx.text_start,ctx.text___end,TRACK_PROT or REMAP_PROT);
-  //vm_map_unlock(map);
+  //restore non tracked  (mirrors?)
+  vm_map_lock(map);
+   _pmap_prot_fix(map^.pmap,lock_start,lock___end,TRACK_PROT or REMAP_PROT);
+  vm_map_unlock(map);
 
  _exit:
  pmap_unlock(map^.pmap,lock);
  //vm_map_unlock(map);
-end;
-
-procedure pick_track(var ctx:t_jit_context2);
-var
- chunk:p_jit_code_chunk;
-begin
- chunk:=TAILQ_FIRST(@ctx.builder.ACodeChunkList);
-
- while (chunk<>nil) do
- begin
-  if (chunk^.start<>chunk^.__end) then
-  begin
-
-   pmap_track(chunk^.start,
-              chunk^.__end+PAGE_MASK,
-              PAGE_TRACK_W or PAGE_TRACK_X);
-
-  end;
-  //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
- end;
-
 end;
 
 procedure pick_locked_internal(var ctx:t_jit_context2);
@@ -1493,9 +1477,8 @@ begin
 
  ctx.end_chunk(ctx.ptr_next);
 
- pick_track(ctx);
-
  build(ctx);
+
  ctx.Free;
 end;
 
@@ -1909,9 +1892,8 @@ begin
  ctx.builder.int3;
  ctx.builder.ud2;
 
- pick_track(ctx);
-
  build(ctx);
+
  ctx.Free;
 
 end;

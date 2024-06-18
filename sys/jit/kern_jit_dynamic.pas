@@ -54,11 +54,12 @@ type
   pLeft :p_jcode_chunk;
   pRight:p_jcode_chunk;
   blob  :p_jit_dynamic_blob;
-  start :QWORD; //<-guest
-  __end :QWORD; //<-guest
-  dest  :QWORD; //<-host
-  d_end :QWORD; //<-host
-  hash  :QWORD; //MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
+  tobj  :Pointer; //p_vm_track_object
+  start :QWORD;   //<-guest
+  __end :QWORD;   //<-guest
+  dest  :QWORD;   //<-host
+  d_end :QWORD;   //<-host
+  hash  :QWORD;   //MurmurHash64A(Pointer(start),__end-start,$010CA1C0DE);
   count :QWORD;
   table :record end; //p_jinstr_len[]
   function  c(n1,n2:p_jcode_chunk):Integer; static;
@@ -162,9 +163,13 @@ uses
  sysutils,
  vmparam,
  sys_bootparam,
+ kern_proc,
+ vm,
+ vm_map,
  vm_pmap_prot,
  vm_pmap,
  md_map,
+ vm_tracking_map,
  kern_dlsym;
 
 //
@@ -1348,6 +1353,51 @@ begin
  detach_chunk;
  dec_ref
 end;
+
+function on_destroy(handle:Pointer):Integer;
+begin
+ p_jcode_chunk(handle)^.tobj:=nil;
+ Result:=DO_DELETE;
+end;
+
+function on_trigger(handle:Pointer;start,__end:vm_offset_t):Integer;
+begin
+ Result:=DO_INCREMENT;
+end;
+
+procedure blob_track(blob:p_jit_dynamic_blob);
+var
+ node:p_jcode_chunk;
+ tobj:p_vm_track_object;
+begin
+ node:=blob^.chunk_list;
+
+ while (node<>nil) do
+ begin
+  if (node^.start<>node^.__end) then
+  begin
+
+   tobj:=vm_track_object_allocate(node,node^.start,node^.__end);
+   tobj^.on_destroy:=@on_destroy;
+   tobj^.on_trigger:=@on_trigger;
+
+   node^.tobj:=tobj;
+
+   vm_map_track(p_proc.p_vmspace,node^.start,node^.__end,tobj);
+
+   vm_track_object_deallocate(tobj);
+
+   //pmap_track(node^.start,
+   //           node^.__end+PAGE_MASK,
+   //           PAGE_TRACK_W or PAGE_TRACK_X);
+   //
+  end;
+  //
+    node:=node^.next;
+ end;
+
+end;
+
 
 end.
 

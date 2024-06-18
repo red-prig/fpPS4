@@ -16,6 +16,7 @@ uses
  kern_rangelock,
  md_map,
  vm_pmap_prot,
+ vm_tracking_map,
  vm_nt_map;
 
 const
@@ -41,11 +42,12 @@ function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
 
 type
- p_pmap=^_pmap;
- _pmap=packed object
+ p_pmap=^t_pmap;
+ t_pmap=packed object
   rmlock:rangelock;
   rm_mtx:mtx;
-  nt_map:_vm_nt_map;
+  nt_map:t_vm_nt_map;
+  tr_map:t_vm_track_map;
  end;
 
  pmap_t=p_pmap;
@@ -305,6 +307,8 @@ begin
                     0);
   end;
  end;
+
+ vm_track_map_init(@pmap^.tr_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
 end;
 
@@ -626,12 +630,12 @@ end;
  * is mapped; only those for which a resident page exists with the
  * corresponding offset from m_start are mapped.
 }
-procedure pmap_enter_object(pmap   :pmap_t;
-                            obj    :vm_object_t;
-                            offset :vm_ooffset_t;
-                            start  :vm_offset_t;
-                            __end  :vm_offset_t;
-                            prot   :vm_prot_t);
+procedure pmap_enter_object(pmap  :pmap_t;
+                            obj   :vm_object_t;
+                            offset:vm_ooffset_t;
+                            start :vm_offset_t;
+                            __end :vm_offset_t;
+                            prot  :vm_prot_t);
 label
  _default;
 var
@@ -968,7 +972,7 @@ begin
      vm_nt_map_prot_fix(@pmap^.nt_map,
                         start,
                         __end,
-                        TRACK_PROT);
+                        TRACK_PROT or REMAP_PROT);
 
      //vm_nt_map_protect(@pmap^.nt_map,
      //                  start,
@@ -1123,6 +1127,8 @@ begin
  pmap_unmark_rwx(start,__end);
  pmap_untrack   (start,__end,PAGE_TRACK_RWX);
  //untrack?
+
+ vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
 
  r:=0;
  case vm_object_type(obj) of

@@ -31,8 +31,8 @@ const
  PAGE_TRACK_RWX   =PAGE_TRACK_R or PAGE_TRACK_W or PAGE_TRACK_X;
  PAGE_TRACK_SHIFT =3;
 
- TRACK_PROT=1;
- REMAP_PROT=2;
+ TRACK_PROT=1; //Take tracking bits into account
+ REMAP_PROT=2; //Ignore protect bit checking
 
 var
  PAGE_PROT:PBYTE=nil;

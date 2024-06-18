@@ -149,6 +149,8 @@ begin
 
  dmem.vmap:=vmap;
  dmem.rmap:=@rmap;
+
+ rmap.tmap:=@vmap^.pmap^.tr_map;
 end;
 
 const

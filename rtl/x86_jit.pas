@@ -329,10 +329,12 @@ type
   function  leap(reg:TRegValue):t_jit_i_link;
   //
   Procedure jmp(reg:TRegValue);
+  Procedure jmp(mem:t_jit_leas);
   Procedure call(reg:TRegValue);
   Procedure call(mem:t_jit_leas);
   Procedure reta;
   Procedure ud2;
+  Procedure nop(length:DWORD);
   //
   Function  GetInstructionsSize:Integer;
   Function  GetDataSize:Integer;
@@ -1530,6 +1532,13 @@ begin
  _R(desc,reg);
 end;
 
+Procedure t_jit_builder.jmp(mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$FF;index:4);
+begin
+ _M(desc,mem);
+end;
+
 Procedure t_jit_builder.call(reg:TRegValue);
 const
  desc:t_op_type=(op:$FF;index:2);
@@ -1554,6 +1563,43 @@ end;
 Procedure t_jit_builder.ud2;
 begin
  _O($0F0B);
+end;
+
+Procedure t_jit_builder.nop(length:DWORD);
+var
+ i:DWORD;
+
+ ji:t_jit_instruction;
+begin
+ if (length=0) then Exit;
+
+ ji:=default_jit_instruction;
+
+ i:=length div 9;
+ while (i<>0) do
+ begin
+
+  ji.EmitInt64($00000000841F0F66);
+  ji.EmitByte ($00);
+
+  Dec(i);
+ end;
+
+ i:=length mod 9;
+
+ case i of
+  1: ji.EmitByte($90);
+  2: ji.EmitWord($9066);
+  3: begin ji.EmitWord($1F0F);      ji.EmitByte($00); end;
+  4: ji.EmitInt32($00401F0F);
+  5: begin ji.EmitInt32($00441F0F); ji.EmitByte($00); end;
+  6: begin ji.EmitInt32($441F0F66); ji.EmitWord($00); end;
+  7: begin ji.EmitInt32($00801F0F); ji.EmitWord($00); ji.EmitByte($00); end;
+  8: ji.EmitInt64($0000000000841F0F);
+  else;
+ end;
+
+ _add(ji);
 end;
 
 Function t_jit_builder.GetInstructionsSize:Integer;
