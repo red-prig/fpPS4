@@ -8,6 +8,7 @@ interface
 uses
  vm,
  mqueue,
+ vm_pmap_prot,
  kern_mtx;
 
 type
@@ -36,6 +37,8 @@ type
   //
   on_destroy:t_on_destroy;
   on_trigger:t_on_trigger;
+  //
+  prot:Byte;
  end;
 
  pp_vm_track_map_entry=^p_vm_track_map_entry;
@@ -48,6 +51,11 @@ type
   start    :vm_offset_t;          // start address
   __end    :vm_offset_t;          // end address
   instances:TAILQ_HEAD;           // p_vm_track_object_instance
+  //
+  track_r  :DWORD;
+  track_w  :DWORD;
+  //
+  prot:Byte;
  end;
 
  p_vm_track_object_instance=^t_vm_track_object_instance;
@@ -161,8 +169,6 @@ end;
 
 //
 
-//
-
 procedure _vm_track_entry_add_obj(entry:p_vm_track_map_entry;obj:p_vm_track_object);
 var
  node:p_vm_track_object_instance;
@@ -171,6 +177,18 @@ begin
 
  node^.entry:=entry;
  node^.obj  :=obj;
+
+ if (obj^.prot and PAGE_TRACK_R)<>0 then
+ begin
+  Inc(entry^.track_r);
+ end;
+
+ if (obj^.prot and PAGE_TRACK_W)<>0 then
+ begin
+  Inc(entry^.track_w);
+ end;
+
+ entry^.prot:=ord(entry^.track_r<>0)*PAGE_TRACK_R or ord(entry^.track_w<>0)*PAGE_TRACK_W;
 
  TAILQ_INSERT_TAIL(@entry^.instances,node,@node^.entry_link);
 
@@ -200,12 +218,28 @@ begin
 end;
 
 function _vm_track_entry_del_node(entry:p_vm_track_map_entry;node:p_vm_track_object_instance):Boolean;
+var
+ obj:p_vm_track_object;
 begin
+ obj:=node^.obj;
+
  TAILQ_REMOVE(@entry^.instances,node,@node^.entry_link);
 
- TAILQ_REMOVE(@node^.obj^.instances,node,@node^.obj_link);
+ TAILQ_REMOVE(@obj^.instances,node,@node^.obj_link);
 
- vm_track_object_deallocate(node^.obj);
+ if (obj^.prot and PAGE_TRACK_R)<>0 then
+ begin
+  Dec(entry^.track_r);
+ end;
+
+ if (obj^.prot and PAGE_TRACK_W)<>0 then
+ begin
+  Dec(entry^.track_w);
+ end;
+
+ entry^.prot:=ord(entry^.track_r<>0)*PAGE_TRACK_R or ord(entry^.track_w<>0)*PAGE_TRACK_W;
+
+ vm_track_object_deallocate(obj);
 
  FreeMem(node);
 

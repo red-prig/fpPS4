@@ -1124,9 +1124,7 @@ begin
 
  lock:=pmap_wlock(pmap,start,__end);
 
- pmap_unmark_rwx(start,__end);
- pmap_untrack   (start,__end,PAGE_TRACK_RWX);
- //untrack?
+ pmap_unmark(start,__end);
 
  vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
 

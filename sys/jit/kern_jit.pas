@@ -98,185 +98,34 @@ asm
  jmp  jit_exit_proc
 end;
 
-procedure _jit_cpuid(tf_rip,rax:qword);
-var
- td:p_kthread;
-begin
- td:=curkthread;
- jit_save_to_sys_save(td);
- td^.td_frame.tf_rip:=tf_rip;
- print_error_td('TODO:jit_cpuid:0x'+HexStr(rax,16));
- Assert(False);
-end;
-
-//cpuid(0x0)       :eax=0xd        ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
-//cpuid(0x1)       :eax=0x710f31   ebx=0x7080800  ecx=0x3ed8220b edx=0x178bfbff
-//0x4
-//0x6
-//cpuid(0x7)       :eax=0x0        ebx=0x0        ecx=0x0        edx=0x0
-//0xb
-
-//0x40000000
-//0x40000010
-
-//cpuid(0x80000000):eax=0x8000001e ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
-//cpuid(0x80000001):eax=0x710f31   ebx=0x0        ecx=0x154837ff edx=0x2fd3fbff
-//0x80000002
-//0x80000004
-//0x80000005
-//0x80000006
-//cpuid(0x80000008):eax=0x3028     ebx=0x0        ecx=0x3007     edx=0x0
-
-//0xc0000000
-//0xc0000001
-procedure jit_cpuid; assembler; nostackframe;
-label
- _cpuid_0,
- _cpuid_1,
- _cpuid_7,
- _cpuid_80000000,
- _cpuid_80000001,
- _cpuid_80000008,
- _exit;
-asm
- movq %rax, %r14
- seto %al
- lahf
- xchg %rax, %r14
-
- cmp $0,%eax
- je _cpuid_0
-
- cmp $1,%eax
- je _cpuid_1
-
- cmp $7,%eax
- je _cpuid_7
-
- cmp $0x80000000,%eax
- je _cpuid_80000000
-
- cmp $0x80000001,%eax
- je _cpuid_80000001
-
- cmp $0x80000008,%eax
- je _cpuid_80000008
-
- //unknow id
-
- xchg %r14, %rax
- addb $127, %al
- sahf
-
- mov  %r14, %r15
- call jit_save_ctx
- mov  %r14, %rdi
- mov  %r15, %rsi
- jmp  _jit_cpuid
-
- //not reach
-
- _cpuid_0:
-
- //cpu_high
- mov $0xD,%eax
-
- //cpu_vendor
- mov $0x68747541,%ebx
- mov $0x69746E65,%edx
- mov $0x444D4163,%ecx
-
- jmp _exit
-
- _cpuid_1:
-
- //get host
- cpuid
-
- //if ((cpu_id & 0xffffff80) == 0x740f00) then
- //if "machdep.bootparams.base_ps4_mode" then sceKernelHasNeoMode
-
- //if ((cpu_id & 0xffffff80) == 0x740f00) then sceKernelIsAuthenticNeo
-
- mov p_cpuid    ,%eax //cpu_id
-
- mov $0x178bfbff,%edx //cpu_feature
- mov $0x3ed8220b,%ecx //cpu_feature2
-
-//                    0x07080800
-//CPUID_BRAND_INDEX   0x000000ff
-//CPUID_CLFUSH_SIZE   0x0000ff00
-//CPUID_HTT_CORES     0x00ff0000  //sceKernelGetCurrentCpu 0..7
-//CPUID_LOCAL_APIC_ID 0xff000000
-
- and $0xFF000000,%ebx //filter CPUID_LOCAL_APIC_ID
-
- or  $0x00080800,%ebx //cpu_procinfo
-
- jmp _exit
-
- _cpuid_7:
-
- mov $0x0,%eax
- mov $0x0,%ebx
- mov $0x0,%edx
- mov $0x0,%ecx
-
- jmp _exit
-
- _cpuid_80000000:
-
- //cpu_exthigh
- mov $0x8000001E,%eax
-
- //cpu_vendor
- mov $0x68747541,%ebx
- mov $0x69746e65,%edx
- mov $0x444d4163,%ecx
-
- jmp _exit
-
- _cpuid_80000001:
-
- mov $0x00710f31,%eax
- mov $0x00000000,%ebx
- mov $0x2fd3fbff,%edx //amd_feature
- mov $0x154837ff,%ecx //amd_feature2
-
- jmp _exit
-
- _cpuid_80000008:
-
- mov $0x00003028,%eax
- mov $0x00000000,%ebx
- mov $0x00000000,%edx
- mov $0x00003007,%ecx //cpu_procinfo2
-
- _exit:
-
- xchg %r14, %rax
- addb $127, %al
- sahf
- movq %r14, %rax
-
-end;
-
-procedure op_jmp_dispatcher(var ctx:t_jit_context2);
+procedure op_jmp_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
 begin
  with ctx.builder do
  begin
   leap(r15);
   call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
+
+  if (cb<>nil) then
+  begin
+   cb(ctx);
+  end;
+
   jmp(r14);
  end;
 end;
 
-procedure op_call_dispatcher(var ctx:t_jit_context2);
+procedure op_call_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
 begin
  with ctx.builder do
  begin
   leap(r15);
   call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
+
+  if (cb<>nil) then
+  begin
+   cb(ctx);
+  end;
+
   jmp(r14);
  end;
 end;
@@ -286,7 +135,7 @@ begin
  ctx.trim:=True;
 end;
 
-procedure op_push_rip(var ctx:t_jit_context2);
+procedure op_push_rip_part0(var ctx:t_jit_context2);
 var
  stack:TRegValue;
  imm:Int64;
@@ -301,7 +150,7 @@ begin
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-8]);
 
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,stack,os64); //in/out:r14
 
   imm:=Int64(ctx.ptr_next);
 
@@ -329,12 +178,33 @@ begin
   //then we update the register
   //[op_uplift] op_load_rsp(ctx,stack);
   //[op_uplift] leaq(stack,[stack-8]);
+  //op_save_rsp(ctx,stack);
+
+ end;
+end;
+
+procedure op_push_rip_part1(var ctx:t_jit_context2);
+var
+ stack:TRegValue;
+begin
+ //lea rsp,[rsp-8]
+ //mov [rsp],r14
+
+ with ctx.builder do
+ begin
+  stack:=r_tmp1;
+
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack-8]);
   op_save_rsp(ctx,stack);
 
  end;
 end;
 
-procedure op_pop_rip(var ctx:t_jit_context2;imm:Word); //out:r14
+procedure op_pop_rip_part0(var ctx:t_jit_context2;imm:Word); //out:r14
 var
  stack:TRegValue;
 begin
@@ -347,20 +217,40 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,stack,os64); //in/out:r14
 
   //load to tmp
-  movq(r_tmp1,[stack]);
+  movq(r_tmp0,[stack]);
 
   //For transactionality,
   //first we move the memory,
   //then we update the register
   //[op_uplift] op_load_rsp(ctx,stack);
-  leaq(stack,[stack+8+imm]);
-  op_save_rsp(ctx,stack);
+  //leaq(stack,[stack+8+imm]);
+  //op_save_rsp(ctx,stack);
 
   //out:r14
-  movq(r_tmp0,r_tmp1);
+ end;
+end;
+
+procedure op_pop_rip_part1(var ctx:t_jit_context2);
+var
+ stack:TRegValue;
+begin
+ //mov r14,[rsp]
+ //lea rsp,[rsp+8+imm]
+
+ with ctx.builder do
+ begin
+  stack:=r_tmp1;
+
+  //For transactionality,
+  //first we move the memory,
+  //then we update the register
+  op_load_rsp(ctx,stack);
+  leaq(stack,[stack+8+ctx.imm]);
+  op_save_rsp(ctx,stack);
+
  end;
 end;
 
@@ -372,9 +262,9 @@ var
  new1,new2:TRegValue;
  link:t_jit_i_link;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
- op_push_rip(ctx);
+ op_push_rip_part0(ctx);
 
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -389,6 +279,8 @@ begin
      (not exist_entry(dst)) then
   begin
    //near
+
+   op_push_rip_part1(ctx);
 
    link:=ctx.get_link(dst);
 
@@ -405,7 +297,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(dst));
    //
-   op_call_dispatcher(ctx);
+   op_call_dispatcher(ctx,@op_push_rip_part1);
   end;
 
  end else
@@ -413,13 +305,13 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  build_lea(ctx,1,new1,[inc8_rsp,code_ref]);
+  build_lea(ctx,1,new1,[{inc8_rsp,}code_ref]);
   //
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,new1,os64); //in/out:r14
   //
   ctx.builder.movq(new1,[new1]);
   //
-  op_call_dispatcher(ctx);
+  op_call_dispatcher(ctx,@op_push_rip_part1);
  end else
  if is_preserved(ctx.din) then
  begin
@@ -432,7 +324,7 @@ begin
    ctx.builder.leaq(new1,[new1+8]);
   end;
   //
-  op_call_dispatcher(ctx);
+  op_call_dispatcher(ctx,@op_push_rip_part1);
  end else
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
@@ -440,7 +332,7 @@ begin
   //
   ctx.builder.movq(new1,new2);
   //
-  op_call_dispatcher(ctx);
+  op_call_dispatcher(ctx,@op_push_rip_part1);
  end;
 
  //
@@ -451,14 +343,16 @@ procedure op_ret(var ctx:t_jit_context2);
 var
  imm:Int64;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
- op_pop_rip(ctx,imm); //out:r14
+ op_pop_rip_part0(ctx,imm); //out:r14
  //
- op_jmp_dispatcher(ctx);
+ ctx.imm:=imm;
+
+ op_jmp_dispatcher(ctx,@op_pop_rip_part1);
  //
  trim_flow(ctx);
 end;
@@ -471,7 +365,7 @@ var
  new1,new2:TRegValue;
  link:t_jit_i_link;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
  if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
  begin
@@ -502,7 +396,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(dst));
    //
-   op_jmp_dispatcher(ctx);
+   op_jmp_dispatcher(ctx,nil);
   end;
 
  end else
@@ -512,11 +406,11 @@ begin
   //
   build_lea(ctx,1,new1,[code_ref]);
   //
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,new1,os64); //in/out:r14
   //
   ctx.builder.movq(new1,[new1]);
   //
-  op_jmp_dispatcher(ctx);
+  op_jmp_dispatcher(ctx,nil);
  end else
  if is_preserved(ctx.din) then
  begin
@@ -524,7 +418,7 @@ begin
   //
   op_load(ctx,new1,1);
   //
-  op_jmp_dispatcher(ctx);
+  op_jmp_dispatcher(ctx,nil);
  end else
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
@@ -532,7 +426,7 @@ begin
   //
   ctx.builder.movq(new1,new2);
   //
-  op_jmp_dispatcher(ctx);
+  op_jmp_dispatcher(ctx,nil);
  end;
  //
  trim_flow(ctx);
@@ -574,7 +468,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -604,7 +498,7 @@ begin
   //invert cond jump
   id1:=ctx.builder.jcc(invert_cond(ctx.din.OpCode.Suffix),nil_link,os8);
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx);
+   op_jmp_dispatcher(ctx,nil);
   id1._label:=ctx.builder.get_curr_label.after;
 
   {
@@ -626,7 +520,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -656,10 +550,12 @@ begin
   end;
  end else
  begin
+  //far
+
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx);
+   op_jmp_dispatcher(ctx,nil);
   id2._label:=ctx.builder.get_curr_label.after;
 
  end;
@@ -672,7 +568,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- op_jit_interrupt(ctx);
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -684,6 +580,8 @@ begin
  if ctx.is_text_addr(QWORD(dst)) and
     (not exist_entry(dst)) then
  begin
+  //near
+
   link:=ctx.get_link(dst);
 
   id2:=ctx.builder.jmp(nil_link,os8);
@@ -700,11 +598,12 @@ begin
   end;
  end else
  begin
+  //far
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1._label:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx);
+   op_jmp_dispatcher(ctx,nil);
   id2._label:=ctx.builder.get_curr_label.after;
 
  end;
@@ -730,7 +629,7 @@ begin
   begin
    build_lea(ctx,1,r_tmp0);
 
-   op_uplift(ctx,os64); //in/out:r14
+   op_uplift(ctx,r_tmp0,os64); //in/out:r14
 
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
@@ -775,10 +674,10 @@ begin
 
   if (new.AIndex=r_tmp1.AIndex) then
   begin
-   op_uplift(ctx,new.ASize,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,stack,new.ASize,[not_use_r_tmp1]); //in/out:r14
   end else
   begin
-   op_uplift(ctx,new.ASize); //in/out:r14
+   op_uplift(ctx,stack,new.ASize); //in/out:r14
   end;
 
   movq([stack],new);
@@ -812,7 +711,7 @@ begin
   op_load_rsp(ctx,stack);
   leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
 
-  op_uplift(ctx,mem_size); //in/out:r14
+  op_uplift(ctx,stack,mem_size); //in/out:r14
 
   //get all flags
   pushfq(mem_size);
@@ -845,7 +744,7 @@ begin
 
   op_load_rbp(ctx,stack);
 
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,stack,os64); //in/out:r14
 
   movq(new,[stack]);
 
@@ -881,7 +780,7 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  op_uplift(ctx,mem_size); //in/out:r14
+  op_uplift(ctx,stack,mem_size); //in/out:r14
 
   movq(new,[stack]);
   push(new);
@@ -910,7 +809,7 @@ begin
 
   op_load_rsp(ctx,stack);
 
-  op_uplift(ctx,os64); //in/out:r14
+  op_uplift(ctx,stack,os64); //in/out:r14
 
   reload_rsp:=False;
 
@@ -922,7 +821,7 @@ begin
 
    build_lea(ctx,1,stack,[not_use_r_tmp1]);
 
-   op_uplift(ctx,os64,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,stack,os64,[not_use_r_tmp1]); //in/out:r14
 
    movq([stack],new);
 
@@ -956,6 +855,8 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
+ ctx.label_flags:=ctx.label_flags or LF_JMP;
+
  ctx.add_forward_point(fpCall,ctx.ptr_curr);
  ctx.add_forward_point(fpCall,ctx.ptr_next);
  //
@@ -1077,6 +978,7 @@ begin
  begin
   link_jmp:=ctx.builder.jmp(nil_link,os8);
   //
+  //ctx.builder.int3;
   ctx.builder.cli;
   //op_set_r14_imm(ctx,$FACEADD7);
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
@@ -1455,8 +1357,9 @@ begin
   ctx.builder.call_far(node^.native);
   op_native2jit(ctx,true);
   //
-  op_pop_rip(ctx,0); //out:r14
-  op_jmp_dispatcher(ctx);
+  op_pop_rip_part0(ctx,0); //out:r14
+  ctx.imm:=0;
+  op_jmp_dispatcher(ctx,@op_pop_rip_part1);
   //
   if (node^.dst<>nil) then
   begin
@@ -1468,7 +1371,8 @@ begin
   ctx.add_label(ctx.ptr_curr,
                 ctx.ptr_next,
                 link_curr,
-                link_next);
+                link_next,
+                LF_JMP);
   //
   ctx.add_entry_point(ctx.ptr_curr,link_curr);
   //
@@ -1570,6 +1474,8 @@ begin
    end;
    goto _invalid;
   end;
+
+  ctx.label_flags:=0;
 
   ctx.ptr_curr:=ptr;
 
@@ -1721,6 +1627,22 @@ begin
   end;
   }
 
+  {
+  The main idea of interrupting JIT code:
+
+   If the LF_JMP flag is set for the label,
+    then it is enough to set the value to %gs:teb.jit_trp.
+   Otherwise, for each thread, generate
+    an individual lacuna with JIT code,
+    containing:
+     instructions to the end of the current guest instruction (start...rip...t_jinstr_len.recompil)
+     then jmp_dispatcher to return to the code.
+   If necessary, you can generate a page lock
+    recovery after the current command:
+    current instruction
+    then jmp_dispatcher
+  }
+
   //op_jit_interrupt(ctx);
 
   cb(ctx);
@@ -1830,7 +1752,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(ctx.ptr_next));
    //
-   op_jmp_dispatcher(ctx);
+   op_jmp_dispatcher(ctx,nil);
    //
    ctx.trim:=True;
   end;
@@ -1843,7 +1765,10 @@ begin
    ctx.add_label(ctx.ptr_curr,
                  ctx.ptr_next,
                  link_curr,
-                 link_next);
+                 link_next,
+                 ctx.label_flags);
+
+   ctx.label_flags:=0;
   end;
 
   if ctx.trim then

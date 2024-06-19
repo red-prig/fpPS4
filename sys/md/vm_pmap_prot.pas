@@ -38,6 +38,7 @@ var
  PAGE_PROT:PBYTE=nil;
 
 procedure pmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
+procedure pmap_unmark    (start,__end:vm_offset_t);
 procedure pmap_unmark_rwx(start,__end:vm_offset_t);
 procedure pmap_track     (start,__end:vm_offset_t;prots:Byte);
 procedure pmap_untrack   (start,__end:vm_offset_t;prots:Byte);
@@ -88,6 +89,20 @@ begin
  WriteBarrier;
 end;
 
+procedure pmap_unmark(start,__end:vm_offset_t);
+begin
+ start:=OFF_TO_IDX(start);
+ __end:=OFF_TO_IDX(__end);
+ start:=MAX_IDX(start);
+ __end:=MAX_IDX(__end);
+ while (start<__end) do
+ begin
+  //PAGE_PROT[start]:=0;
+  Inc(start);
+ end;
+ WriteBarrier;
+end;
+
 procedure pmap_unmark_rwx(start,__end:vm_offset_t);
 begin
  start:=OFF_TO_IDX(start);
@@ -97,7 +112,6 @@ begin
  while (start<__end) do
  begin
   atomic_clear_byte(@PAGE_PROT[start],PAGE_PROT_RWX);
-  //PAGE_PROT[start]:=0;
   Inc(start);
  end;
  WriteBarrier;

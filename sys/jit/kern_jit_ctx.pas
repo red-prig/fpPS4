@@ -10,6 +10,9 @@ uses
  x86_fpdbgdisas,
  x86_jit;
 
+const
+ LF_JMP=1;
+
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
@@ -42,12 +45,13 @@ type
 
    p_label=^t_label;
    t_label=object
-    pLeft     :p_label;
-    pRight    :p_label;
-    curr      :Pointer;
-    next      :Pointer;
+    pLeft    :p_label;
+    pRight   :p_label;
+    curr     :Pointer;
+    next     :Pointer;
     link_curr:t_jit_i_link;
     link_next:t_jit_i_link;
+    flags    :Integer;
     function c(n1,n2:p_label):Integer; static;
    end;
    t_label_set=specialize TNodeSplay<t_label>;
@@ -86,6 +90,8 @@ type
    ptr_curr:Pointer;
    ptr_next:Pointer;
 
+   label_flags:Integer;
+   imm:Word;
    trim:Boolean;
 
    dis:TX86Disassembler;
@@ -105,7 +111,7 @@ type
   procedure end_chunk(__end:Pointer);
   function  max_forward_point():Pointer;
   function  fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
-  function  add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link):p_label;
+  function  add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link;flags:Integer):p_label;
   function  get_label(src:Pointer):p_label;
   function  get_link (src:Pointer):t_jit_i_link;
   procedure add_entry_point(src:Pointer;label_id:t_jit_i_link);
@@ -246,7 +252,7 @@ procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
 
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize;hint:t_lea_hint=[]);
+procedure op_uplift(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize;hint:t_lea_hint=[]);
 
 procedure add_orig(var ctx:t_jit_context2);
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
@@ -457,7 +463,7 @@ begin
  end;
 end;
 
-function t_jit_context2.add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link):p_label;
+function t_jit_context2.add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link;flags:Integer):p_label;
 var
  node:t_label;
 begin
@@ -471,6 +477,7 @@ begin
  Result^.next     :=next;
  Result^.link_curr:=link_curr;
  Result^.link_next:=link_next;
+ Result^.flags    :=flags;
  //
  label_set.Insert(Result);
 end;
@@ -1470,7 +1477,9 @@ begin
  with ctx.builder do
  begin
   //[65 FF 14 25] [00 07 00 00] call gs:[$00000700]
-  call([GS+Integer(teb_jit_trp)]);
+  //call([GS+Integer(teb_jit_trp)]);
+
+  //ctx.label_flags:=ctx.label_flags or LF_JMP_INTERRUPT;
  end;
 end;
 
@@ -1600,7 +1609,7 @@ end;
 // $10000000000 = 1 shl 40
 // 64-40 = 24
 
-procedure op_uplift(var ctx:t_jit_context2;mem_size:TOperandSize;hint:t_lea_hint=[]);
+procedure op_uplift(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize;hint:t_lea_hint=[]);
 const
  shlx_desc:t_op_type=(
   op:$F7;simdop:1;mm:2;vw_mode:vwR64;
@@ -1611,25 +1620,37 @@ const
 var
  rbits:TRegValue;
 begin
- if jit_memory_guard then
+ if not jit_memory_guard then Exit;
+
+ case dst.AIndex of
+  14:hint:=hint+[not_use_r_tmp0]; //r14
+  15:hint:=hint+[not_use_r_tmp1]; //r15
+  else;
+ end;
+
  with ctx.builder do
  begin
-  if (not_use_r_tmp1 in hint) then
+  if (not_use_r_tmp0 in hint) and
+     (not_use_r_tmp1 in hint) then
   begin
    rbits:=rbp;
   end else
+  if (not_use_r_tmp0 in hint) then
   begin
    rbits:=r_tmp1;
+  end else
+  begin
+   rbits:=r_tmp0;
   end;
 
   //zero bits
   movi(new_reg_size(rbits,os8),24); //mov  $24,%bpl
 
   //clear hi
-  _VVV(shlx_desc,r14,rbits,r14,os64); //1 3 2 | shlx %rbp,%r14,%r14
-  _VVV(shrx_desc,r14,rbits,r14,os64); //1 3 2 | shrx %rbp,%r14,%r14
+  _VVV(shlx_desc,dst,rbits,dst,os64); //1 3 2 | shlx %rbp,%r14,%r14
+  _VVV(shrx_desc,dst,rbits,dst,os64); //1 3 2 | shrx %rbp,%r14,%r14
 
-  if (not_use_r_tmp1 in hint) then
+  if (rbits.AIndex=rbp.AIndex) then
   begin
    //restore rbp
    movq(rbp,rsp);
@@ -1717,7 +1738,7 @@ begin
          (mem_size=os4096) or
          (his_rw in hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -1740,7 +1761,7 @@ begin
          (his_rw in hint) then
       begin
 
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2366,7 +2387,7 @@ begin
        if (mem_size=os8) or
           (his_rw in desc.hint) then
        begin
-        op_uplift(ctx,mem_size); //in/out:r14
+        op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
         mem_in;
        end else
@@ -2380,7 +2401,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2399,7 +2420,7 @@ begin
       if (mem_size=os8) or
          (his_rw in desc.hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -2715,7 +2736,7 @@ begin
      begin
       if true then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -2896,7 +2917,7 @@ begin
      begin
       if true then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -3093,7 +3114,7 @@ begin
       if (mem_size=os8) or
          (his_rw in hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3115,7 +3136,7 @@ begin
          (his_rw in hint) then
       begin
 
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -3276,7 +3297,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_out;
       end else
@@ -3294,7 +3315,7 @@ begin
      begin
       if (his_align in desc.hint) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3413,7 +3434,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx,mem_size); //in/out:r14
+    op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
     mem_in;
    end else
@@ -3466,7 +3487,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx,mem_size); //in/out:r14
+    op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
     mem_out;
    end else
@@ -3547,7 +3568,7 @@ begin
 
      if (mem_size=os8) then
      begin
-      op_uplift(ctx,mem_size); //in/out:r14
+      op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
       mem_out;
      end else
@@ -3568,7 +3589,7 @@ begin
 
       if (mem_size=os8) then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3680,7 +3701,7 @@ begin
      begin
       if false then
       begin
-       op_uplift(ctx,mem_size); //in/out:r14
+       op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
        mem_in;
       end else
@@ -3774,7 +3795,7 @@ begin
 
    if false then
    begin
-    op_uplift(ctx,mem_size); //in/out:r14
+    op_uplift(ctx,r_tmp0,mem_size); //in/out:r14
 
     mem_in;
    end else

@@ -59,12 +59,11 @@ begin
   //repeat
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
-   movq(r_tmp0,rsi);
-   op_uplift(ctx,size); //in/out:r14
-   movq(r_tmp1,r_tmp0);
-
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
+
+   movq(r_tmp1,rsi);
+   op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -179,7 +178,7 @@ begin
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    movq([r_tmp0],new); // mov [r14],rax
 
@@ -270,12 +269,11 @@ begin
   //repeat
    link_jmp0:=jcxz(nil_link,ctx.dis.AddressSize);
 
-   movq(r_tmp0,rsi);
-   op_uplift(ctx,size); //in/out:r14
-   movq(r_tmp1,r_tmp0);
-
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
+
+   movq(r_tmp1,rsi);
+   op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
    //[RSI] -> [RDI].
 
@@ -365,12 +363,11 @@ begin
  with ctx.builder do
  begin
 
-   movq(r_tmp0,rsi);
-   op_uplift(ctx,size); //in/out:r14
-   movq(r_tmp1,r_tmp0);
-
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
+
+   movq(r_tmp1,rsi);
+   op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
    xchgq(rdi,r_tmp0);
    xchgq(rsi,r_tmp1);
@@ -447,12 +444,11 @@ begin
  with ctx.builder do
  begin
 
-   movq(r_tmp0,rsi);
-   op_uplift(ctx,size); //in/out:r14
-   movq(r_tmp1,r_tmp0);
-
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
+
+   movq(r_tmp1,rsi);
+   op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
    //[RSI] -> [RDI].
 
@@ -535,7 +531,7 @@ begin
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    movq([r_tmp0],new);
 
@@ -608,7 +604,7 @@ begin
   new:=new_reg_size(rax,size);
 
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    movq(new,[r_tmp0]);
 
@@ -677,7 +673,7 @@ begin
  begin
 
    movq(r_tmp0,rdi);
-   op_uplift(ctx,size); //in/out:r14
+   op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    xchgq(rdi,r_tmp0);
 

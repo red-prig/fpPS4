@@ -44,7 +44,10 @@ type
 
  p_jinstr_len=^t_jinstr_len;
  t_jinstr_len=packed record
-  original:Byte;
+  original:0..31; //5
+  LF_JMP  :0..1;
+  bit6    :0..1;
+  bit7    :0..1;
   recompil:Byte;
  end;
 
@@ -693,7 +696,7 @@ begin
   original:=QWORD(next)-QWORD(curr);
   recompil:=link_next.offset-link_curr.offset;
 
-  if (original>255) or (recompil>255) then
+  if (original>16) or (recompil>255) then
   begin
    Writeln('0x',HexStr(curr));
    Writeln(original,':',recompil);
@@ -702,6 +705,8 @@ begin
 
   table[i].original:=Byte(original);
   table[i].recompil:=Byte(recompil);
+
+  table[i].LF_JMP  :=ord((clabel^.flags and LF_JMP)<>0);
 
   {
   writeln('|0x',HexStr(curr),'..',HexStr(next),
