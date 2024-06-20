@@ -156,6 +156,8 @@ procedure jit_ctx_free(td:p_kthread);
 procedure switch_to_jit(td:p_kthread);
 function  jmp_dispatcher(addr:Pointer;plt:p_jit_plt;from:Pointer):Pointer;
 
+procedure blob_track(blob:p_jit_dynamic_blob);
+
 procedure build(var ctx:t_jit_context2);
 
 procedure preload(addr:Pointer);
@@ -189,7 +191,7 @@ begin
  begin
   Result:=addr;
 
-  if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    Break;
   end;
@@ -207,7 +209,7 @@ begin
  begin
   Result:=addr;
 
-  if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    Break;
   end;
@@ -577,7 +579,7 @@ begin
 
  _start:
 
- if ((pmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+ if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
  begin
   writeln('not excec:0x',HexStr(addr));
   Assert(False,'TODO');
@@ -1280,6 +1282,8 @@ procedure t_jit_dynamic_blob.attach;
 begin
  attach_entry;
  attach_chunk;
+
+ blob_track(@self);
 end;
 
 function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
@@ -1382,23 +1386,18 @@ begin
   if (node^.start<>node^.__end) then
   begin
 
-   tobj:=vm_track_object_allocate(node,node^.start,node^.__end);
+   tobj:=vm_track_object_allocate(node,node^.start,node^.__end,PAGE_TRACK_W);
    tobj^.on_destroy:=@on_destroy;
    tobj^.on_trigger:=@on_trigger;
 
    node^.tobj:=tobj;
 
-   vm_map_track(p_proc.p_vmspace,node^.start,node^.__end,tobj);
+   vm_map_track(p_proc.p_vmspace,tobj);
 
-   vm_track_object_deallocate(tobj);
-
-   //pmap_track(node^.start,
-   //           node^.__end+PAGE_MASK,
-   //           PAGE_TRACK_W or PAGE_TRACK_X);
-   //
+   vm_track_object_deallocate(tobj); //<-vm_track_object_allocate
   end;
   //
-    node:=node^.next;
+  node:=node^.next;
  end;
 
 end;

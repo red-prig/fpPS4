@@ -267,7 +267,7 @@ function  vmspace_exec(minuser,maxuser:vm_offset_t):Integer;
 
 procedure vm_map_lock(map:vm_map_t;tm:Boolean=True);
 function  vm_map_trylock(map:vm_map_t):Boolean;
-procedure vm_map_unlock(map:vm_map_t);
+procedure vm_map_unlock(map:vm_map_t;def:Boolean=True);
 
 function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;rmap_free:Boolean):Integer;
 function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
@@ -276,7 +276,8 @@ procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
 
-procedure vm_map_track(map:vm_map_t;start,__end:vm_offset_t;tobj:Pointer);
+procedure vm_map_track  (map:vm_map_t;tobj:Pointer);
+procedure vm_map_untrack(map:vm_map_t;tobj:Pointer);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -381,7 +382,7 @@ var
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm));
+ pmap_pinit(vmspace_pmap(vm),@vm^.vm_map);
 
  vm_map_init(@vm^.vm_map,vmspace_pmap(vm),VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
@@ -410,7 +411,7 @@ begin
  Result:=vm;
 end;
 
-procedure vm_map_lock(map:vm_map_t;tm:Boolean=True);
+procedure vm_map_lock(map:vm_map_t;tm:Boolean=True); public;
 begin
  mtx_lock(map^.lock);
  if tm then
@@ -449,10 +450,13 @@ begin
  end;
 end;
 
-procedure vm_map_unlock(map:vm_map_t);
+procedure vm_map_unlock(map:vm_map_t;def:Boolean=True); public;
 begin
  mtx_unlock(map^.lock);
- vm_map_process_deferred();
+ if def then
+ begin
+  vm_map_process_deferred();
+ end;
 end;
 
 {
@@ -3295,19 +3299,27 @@ begin
  vm_map_unlock(map);
 end;
 
-procedure vm_map_track(map:vm_map_t;start,__end:vm_offset_t;tobj:Pointer);
+procedure vm_map_track(map:vm_map_t;tobj:Pointer);
 var
  entry:vm_map_entry_t;
  obj:vm_object_t;
 
+ start:vm_offset_t;
+ __end:vm_offset_t;
+
  e_start:vm_offset_t;
  e___end:vm_offset_t;
 
- diff:DWORD;
- size:DWORD;
- offset:DWORD;
+ diff:QWORD;
+ size:QWORD;
+ offset:QWORD;
 begin
+ if (tobj=nil) then Exit;
+
  vm_map_lock(map);
+
+ start:=p_vm_track_object(tobj)^.main.start;
+ __end:=p_vm_track_object(tobj)^.main.__end;
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
@@ -3345,15 +3357,14 @@ begin
     begin
      //ext rmap track
 
-     diff:=OFF_TO_IDX(e_start-entry^.start);
-     size:=OFF_TO_IDX(e___end-e_start);
+     diff:=e_start-entry^.start;
+     size:=e___end-e_start;
 
-     offset:=OFF_TO_IDX(entry^.offset);
-     offset:=offset+diff;
+     offset:=entry^.offset+diff;
 
      rmem_map_track(map^.rmap,
-                    offset,
-                    offset + size,
+                    OFF_TO_IDX(offset),
+                    OFF_TO_IDX(offset + size + PAGE_MASK), //align up
                     tobj);
 
      //next
@@ -3372,6 +3383,17 @@ begin
 
   entry:=entry^.next;
  end;
+
+ vm_map_unlock(map);
+end;
+
+procedure vm_map_untrack(map:vm_map_t;tobj:Pointer);
+begin
+ if (tobj=nil) then Exit;
+
+ vm_map_lock(map); //lock to prevent deadlock
+
+ vm_track_map_remove_object(@map^.pmap^.tr_map,tobj);
 
  vm_map_unlock(map);
 end;

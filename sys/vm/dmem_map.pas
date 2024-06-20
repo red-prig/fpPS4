@@ -953,7 +953,7 @@ begin
    Result:=rmem_map_delete(rmap,0,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
 
   //dont call this rmem_map_process_deferred
-  mtx_unlock(rmap^.lock);
+  rmem_map_unlock(rmap,False);
 
   if (Result=0) then
   begin

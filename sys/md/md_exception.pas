@@ -281,14 +281,14 @@ begin
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
-         if ((pmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_READ)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_READ)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_READ');
          end;
         end;
       VM_PROT_WRITE:
         begin
-         if ((pmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_WRITE');
          end;

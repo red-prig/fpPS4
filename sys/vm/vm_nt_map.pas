@@ -216,16 +216,16 @@ begin
  begin
   if ((mode and TRACK_PROT)=0) then
   begin
-   next:=pmap_scan_rwx(start,__end);
+   next:=ppmap_scan_rwx(start,__end);
 
-   prot:=pmap_get_prot(start);
+   prot:=ppmap_get_prot(start);
 
    prot:=(prot and VM_RW);
   end else
   begin
-   next:=pmap_scan(start,__end);
+   next:=ppmap_scan(start,__end);
 
-   prot:=pmap_get_prot(start);
+   prot:=ppmap_get_prot(start);
 
    mask:=not (prot shr PAGE_TRACK_SHIFT);
 

@@ -44,7 +44,7 @@ type
 procedure rmem_map_process_deferred;
 
 procedure rmem_map_lock(map:p_rmem_map);
-procedure rmem_map_unlock(map:p_rmem_map);
+procedure rmem_map_unlock(map:p_rmem_map;def:Boolean=True);
 function  rmem_map_locked(map:p_rmem_map):Boolean; inline;
 
 procedure rmem_map_init(map:p_rmem_map;min,max:QWORD);
@@ -131,10 +131,11 @@ begin
  _rmem_entry_add_vaddr(entry,vaddr);
 end;
 
-procedure rmem_entry_add_track(tmap:Pointer;entry:p_rmem_map_entry;vaddr:QWORD);
+procedure rmem_entry_add_track(tmap:Pointer;entry:p_rmem_map_entry;dst:QWORD);
 var
  node:p_rmem_vaddr_instance;
  size:vm_offset_t;
+ vaddr:QWORD;
 begin
  //try add mirror track
 
@@ -147,15 +148,16 @@ begin
  while (node<>nil) do
  begin
 
-  if (node^.vaddr<>vaddr) then
+  vaddr:=node^.vaddr;
+  if (vaddr<>dst) then
   begin
-   _vm_track_map_insert_mirror(tmap,node^.vaddr,vaddr,size);
+   _vm_track_map_insert_mirror(tmap,vaddr,vaddr+size,dst);
   end;
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
 
-  vm_track_map_unlock(tmap);
+ vm_track_map_unlock(tmap);
 end;
 
 function _rmem_entry_del_node(entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
@@ -311,10 +313,13 @@ begin
  end;
 end;
 
-procedure rmem_map_unlock(map:p_rmem_map);
+procedure rmem_map_unlock(map:p_rmem_map;def:Boolean=True);
 begin
  mtx_unlock(map^.lock);
- rmem_map_process_deferred;
+ if def then
+ begin
+  rmem_map_process_deferred;
+ end;
 end;
 
 function rmem_map_locked(map:p_rmem_map):Boolean; inline;
@@ -893,7 +898,7 @@ begin
   start:=node^.vaddr+diff;
   __end:=start+size;
 
-  _vm_track_map_insert(tmap,start,__end,tobj);
+  _vm_track_map_insert_deferred(tmap,start,__end,tobj);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;

@@ -939,7 +939,7 @@ begin
 
   if not (cmDontScanRipRel in ctx.modes) then
   if ctx.is_map_addr(ofs) then
-  if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
+  if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
    ofs:=0;
 
@@ -947,7 +947,7 @@ begin
    begin
     if ctx.is_text_addr(ofs) then
     if (ofs<=ctx.max_rel) then
-    if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+    if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
     begin
      ctx.add_forward_point(fpCall,Pointer(ofs));
     end;
@@ -963,7 +963,7 @@ begin
   if ctx.is_text_addr(ofs) then
   begin
    if (ofs<=ctx.max_rel) then
-   if ((pmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+   if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
    begin
     ctx.add_forward_point(fpData,Pointer(ofs));
    end;

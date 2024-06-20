@@ -24,10 +24,12 @@ implementation
 uses
  sysutils,
  time,
+ vm,
  vmparam,
  vm_pmap_prot,
  vm_pmap,
  vm_map,
+ vm_tracking_map,
  sys_bootparam,
  kern_proc,
  kern_jit_ops,
@@ -1269,6 +1271,20 @@ begin
  proc.Free;
 end;
 
+function pick_on_destroy(handle:Pointer):Integer;
+begin
+ Result:=DO_NOTHING;
+
+ Assert(false,'TODO: destroy in code analize');
+end;
+
+function pick_on_trigger(handle:Pointer;start,__end:vm_offset_t):Integer;
+begin
+ Result:=DO_NOTHING;
+
+ Assert(false,'TODO: trigger in code analize');
+end;
+
 procedure pick(var ctx:t_jit_context2;preload:Pointer); [public, alias:'kern_jit_pick'];
 label
  _exit;
@@ -1279,13 +1295,14 @@ var
 
  lock_start:QWORD;
  lock___end:QWORD;
+
+ tobj:p_vm_track_object;
 begin
  map:=p_proc.p_vmspace;
 
  lock_start:=ctx.text_start;
  lock___end:=ctx.text___end;
 
- //vm_map_lock(map);
  lock:=pmap_wlock(map^.pmap,lock_start,lock___end);
 
   if (preload<>nil) then
@@ -1300,9 +1317,14 @@ begin
   end;
 
   //lock pageflt read-only  (mirrors?)
-  vm_map_lock(map);
-   _pmap_prot_int(map^.pmap,lock_start,lock___end,PAGE_PROT_READ);
-  vm_map_unlock(map);
+
+  tobj:=vm_track_object_allocate(node,lock_start,lock___end,PAGE_TRACK_W);
+  tobj^.on_destroy:=@pick_on_destroy;
+  tobj^.on_trigger:=@pick_on_trigger;
+
+  vm_map_track(p_proc.p_vmspace,tobj);
+
+  //_pmap_prot_int(map^.pmap,lock_start,lock___end,PAGE_PROT_READ);
 
   if (cmInternal in ctx.modes) then
   begin
@@ -1313,13 +1335,17 @@ begin
   end;
 
   //restore non tracked  (mirrors?)
-  vm_map_lock(map);
-   _pmap_prot_fix(map^.pmap,lock_start,lock___end,TRACK_PROT or REMAP_PROT);
-  vm_map_unlock(map);
+  //_pmap_prot_fix(map^.pmap,lock_start,lock___end,TRACK_PROT or REMAP_PROT);
+
+  vm_map_untrack(p_proc.p_vmspace,tobj);
+
+  tobj^.on_destroy:=nil;
+  tobj^.on_trigger:=nil;
+
+  vm_track_object_deallocate(tobj); //<-vm_track_object_allocate
 
  _exit:
  pmap_unlock(map^.pmap,lock);
- //vm_map_unlock(map);
 end;
 
 procedure pick_locked_internal(var ctx:t_jit_context2);
@@ -1466,7 +1492,7 @@ begin
    goto _invalid;
   end;
 
-  if ((pmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
+  if ((ppmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
    if (p_print_jit_preload) then
    begin

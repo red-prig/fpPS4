@@ -8,12 +8,13 @@ interface
 uses
  atomic,
  vm,
- vmparam;
+ vmparam,
+ md_map;
 
 const
- PMAPP_SHIFT=12;
- PMAPP_SIZE =1 shl PMAPP_SHIFT;
- PMAPP_MASK =PMAPP_SIZE-1;
+ PMAPP_SHIFT=MD_PAGE_SHIFT; //12;
+ PMAPP_SIZE =MD_PAGE_SIZE;  //1 shl PMAPP_SHIFT; //4*1024
+ PMAPP_MASK =MD_PAGE_MASK;  //PMAPP_SIZE-1;
 
  PAGE_MAP_COUNT   =(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
  PAGE_MAP_MASK    =PAGE_MAP_COUNT-1;
@@ -37,15 +38,15 @@ const
 var
  PAGE_PROT:PBYTE=nil;
 
-procedure pmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
-procedure pmap_unmark    (start,__end:vm_offset_t);
-procedure pmap_unmark_rwx(start,__end:vm_offset_t);
-procedure pmap_track     (start,__end:vm_offset_t;prots:Byte);
-procedure pmap_untrack   (start,__end:vm_offset_t;prots:Byte);
-function  pmap_scan      (start,__end:vm_offset_t):vm_offset_t;
-function  pmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
-function  pmap_get_prot  (addr:vm_offset_t):Byte;
-function  pmap_get_prot  (addr,size:vm_offset_t):Byte;
+procedure ppmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
+procedure ppmap_unmark    (start,__end:vm_offset_t);
+procedure ppmap_unmark_rwx(start,__end:vm_offset_t);
+procedure ppmap_track     (start,__end:vm_offset_t;prots:Byte);
+//procedure ppmap_untrack   (start,__end:vm_offset_t;prots:Byte);
+function  ppmap_scan      (start,__end:vm_offset_t):vm_offset_t;
+function  ppmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
+function  ppmap_get_prot  (addr:vm_offset_t):Byte;
+function  ppmap_get_prot  (addr,size:vm_offset_t):Byte;
 
 implementation
 
@@ -69,7 +70,7 @@ begin
   Result:=x;
 end;
 
-procedure pmap_mark_rwx(start,__end:vm_offset_t;prots:Byte);
+procedure ppmap_mark_rwx(start,__end:vm_offset_t;prots:Byte);
 var
  clear:Byte;
 begin
@@ -89,7 +90,7 @@ begin
  WriteBarrier;
 end;
 
-procedure pmap_unmark(start,__end:vm_offset_t);
+procedure ppmap_unmark(start,__end:vm_offset_t);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
@@ -103,7 +104,7 @@ begin
  WriteBarrier;
 end;
 
-procedure pmap_unmark_rwx(start,__end:vm_offset_t);
+procedure ppmap_unmark_rwx(start,__end:vm_offset_t);
 begin
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
@@ -117,22 +118,29 @@ begin
  WriteBarrier;
 end;
 
-procedure pmap_track(start,__end:vm_offset_t;prots:Byte);
+procedure ppmap_track(start,__end:vm_offset_t;prots:Byte);
+var
+ s_prots:Byte;
+ c_prots:Byte;
 begin
- prots:=prots and PAGE_TRACK_RWX;
+ s_prots:=prots and PAGE_TRACK_RWX;
+ c_prots:=(not prots) and PAGE_TRACK_RWX;
+
  start:=OFF_TO_IDX(start);
  __end:=OFF_TO_IDX(__end);
  start:=MAX_IDX(start);
  __end:=MAX_IDX(__end);
  while (start<__end) do
  begin
-  atomic_set_byte(@PAGE_PROT[start],prots);
+  atomic_set_byte  (@PAGE_PROT[start],s_prots);
+  atomic_clear_byte(@PAGE_PROT[start],c_prots);
   Inc(start);
  end;
  WriteBarrier;
 end;
 
-procedure pmap_untrack(start,__end:vm_offset_t;prots:Byte);
+{
+procedure ppmap_untrack(start,__end:vm_offset_t;prots:Byte);
 begin
  prots:=prots and PAGE_TRACK_RWX;
  start:=OFF_TO_IDX(start);
@@ -146,8 +154,9 @@ begin
  end;
  WriteBarrier;
 end;
+}
 
-function pmap_scan(start,__end:vm_offset_t):vm_offset_t;
+function ppmap_scan(start,__end:vm_offset_t):vm_offset_t;
 var
  b,v:Byte;
 begin
@@ -179,7 +188,7 @@ begin
  Result:=__end;
 end;
 
-function pmap_scan_rwx(start,__end:vm_offset_t):vm_offset_t;
+function ppmap_scan_rwx(start,__end:vm_offset_t):vm_offset_t;
 var
  b,v:Byte;
 begin
@@ -211,7 +220,7 @@ begin
  Result:=__end;
 end;
 
-function pmap_get_prot(addr:vm_offset_t):Byte;
+function ppmap_get_prot(addr:vm_offset_t):Byte;
 begin
  addr:=OFF_TO_IDX(addr);
  if (addr>PAGE_MAP_MASK) then
@@ -223,9 +232,9 @@ begin
  end;
 end;
 
-function pmap_get_prot(addr,size:vm_offset_t):Byte;
+function ppmap_get_prot(addr,size:vm_offset_t):Byte;
 begin
- Result:=pmap_get_prot(addr) or pmap_get_prot(addr+size);
+ Result:=ppmap_get_prot(addr) or ppmap_get_prot(addr+size);
 end;
 
 

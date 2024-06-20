@@ -29,16 +29,21 @@ type
 
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=record
+  del_link  :TAILQ_ENTRY; //p_vm_track_map->delete_deferred
+  iter_link :TAILQ_ENTRY;
+  //
   handle    :Pointer;
+  //
   ref_count :DWORD;
-  timestamp :DWORD;
+  mark_del  :Byte;
+  prot      :Byte;
+  //
   main      :t_vm_track_interval;
   instances :TAILQ_HEAD; //p_vm_track_object_instance
   //
   on_destroy:t_on_destroy;
   on_trigger:t_on_trigger;
   //
-  prot:Byte;
  end;
 
  pp_vm_track_map_entry=^p_vm_track_map_entry;
@@ -50,7 +55,7 @@ type
   right    :p_vm_track_map_entry; // right child in binary search tree
   start    :vm_offset_t;          // start address
   __end    :vm_offset_t;          // end address
-  instances:TAILQ_HEAD;           // p_vm_track_object_instance
+  instances:Pointer;              // p_vm_track_object_instance
   //
   track_r  :DWORD;
   track_w  :DWORD;
@@ -60,10 +65,20 @@ type
 
  p_vm_track_object_instance=^t_vm_track_object_instance;
  t_vm_track_object_instance=record
-  entry_link:TAILQ_ENTRY; //p_vm_track_map_entry->instances
+  pLeft     :p_vm_track_object_instance; //p_vm_track_map_entry->instances
+  pRight    :p_vm_track_object_instance; //p_vm_track_map_entry->instances
+  //entry_link:TAILQ_ENTRY; //p_vm_track_map_entry->instances
   obj_link  :TAILQ_ENTRY; //p_vm_track_object   ->instances
   entry     :p_vm_track_map_entry;
   obj       :p_vm_track_object;
+ end;
+
+ p_vm_track_deferred=^t_vm_track_deferred;
+ t_vm_track_deferred=record
+  entry:TAILQ_ENTRY;
+  start:vm_offset_t;
+  __end:vm_offset_t;
+  obj  :p_vm_track_object;
  end;
 
  p_vm_track_map=^t_vm_track_map;
@@ -73,6 +88,18 @@ type
   root     :p_vm_track_map_entry; // Root of a binary search tree
   nentries :Integer;              // Number of entries
   timestamp:DWORD;
+
+  insert_deferred:record
+   free:TAILQ_HEAD;               //p_vm_track_deferred
+   list:TAILQ_HEAD;               //p_vm_track_deferred
+   stub:array[0..3] of t_vm_track_deferred;
+  end;
+
+  delete_deferred:TAILQ_HEAD;     //p_vm_track_object
+
+  //qdelete_d:p_vm_track_object_instance;
+
+  pmap     :Pointer;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -81,29 +108,36 @@ procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 
 //
 
-function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t):p_vm_track_object;
+function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t;prot:Byte):p_vm_track_object;
 procedure vm_track_object_deallocate(obj:p_vm_track_object);
 procedure vm_track_object_reference (obj:p_vm_track_object);
 
 //
 
 procedure vm_track_map_lock  (map:p_vm_track_map);
-procedure vm_track_map_unlock(map:p_vm_track_map);
+procedure vm_track_map_unlock(map:p_vm_track_map;def:Boolean=True);
 
 function  _vm_track_map_insert(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object):Integer;
 
-function  _vm_track_map_insert_mirror(map:p_vm_track_map;src,dst,size:vm_offset_t):Integer;
+procedure _vm_track_map_insert_deferred(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object);
+procedure _vm_track_map_delete_deferred(map:p_vm_track_map;obj:p_vm_track_object);
+
+function  _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offset_t):Integer;
 
 //
 
-function  vm_track_map_insert_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
 function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t):Integer;
 
 implementation
 
-function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t):p_vm_track_object;
+procedure pmap_prot_track(pmap :Pointer;
+                          start:vm_offset_t;
+                          __end:vm_offset_t;
+                          prots:Byte); external;
+
+function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;prot:Byte):p_vm_track_object;
 begin
  Result:=AllocMem(SizeOf(t_vm_track_object));
 
@@ -112,8 +146,13 @@ begin
 
  TAILQ_INIT(@Result^.instances);
 
+ start:=start              and (not PMAPP_MASK);
+ __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
+
  Result^.main.start:=start;
  Result^.main.__end:=__end;
+
+ Result^.prot:=prot;
 end;
 
 procedure vm_track_object_destroy(obj:p_vm_track_object);
@@ -147,60 +186,293 @@ begin
  System.InterlockedIncrement(obj^.ref_count);
 end;
 
+procedure vm_track_list_add_obj(var list:TAILQ_HEAD;obj:p_vm_track_object);
+begin
+ if (obj=nil) then Exit;
+
+ if (obj^.mark_del<>0) then Exit;
+
+ if (obj^.iter_link.tqe_prev<>nil) then Exit;
+
+ TAILQ_INSERT_TAIL(@list,obj,@obj^.iter_link);
+end;
+
 function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t):Integer;
 begin
  Result:=DO_NOTHING;
+
  if (obj=nil) then Exit;
 
- if (obj^.timestamp<>map^.timestamp) then
+ if (obj^.mark_del<>0) then Exit;
+
+ if (obj^.on_trigger<>nil) then
  begin
-  obj^.timestamp:=map^.timestamp;
-
-  if (obj^.on_trigger<>nil) then
-  begin
-   Result:=obj^.on_trigger(obj^.handle,start,__end);
-  end else
-  begin
-   Result:=DO_INCREMENT;
-  end;
-
+  Result:=obj^.on_trigger(obj^.handle,start,__end);
+ end else
+ begin
+  Result:=DO_INCREMENT;
  end;
+
 end;
 
 //
 
-procedure _vm_track_entry_add_obj(entry:p_vm_track_map_entry;obj:p_vm_track_object);
+procedure _vm_track_splay_instance(var root:p_vm_track_object_instance;obj:p_vm_track_object);
+label
+ _left,
+ _right;
+var
+ llist,rlist:p_vm_track_object_instance;
+ ltree,rtree:p_vm_track_object_instance;
+ y          :p_vm_track_object_instance;
+begin
+ if (root=nil) or (obj=nil) then Exit;
+
+ llist:=nil;
+ rlist:=nil;
+ repeat
+
+  if (obj<root^.obj) then
+  begin
+   y:=root^.pLeft;
+   if (y=nil) then break;
+   if (y^.pLeft=nil) then
+   begin
+    _left:
+    root^.pLeft:=rlist;
+    rlist:=root;
+    root:=y;
+   end else
+   if (obj<y^.obj) then
+   begin
+    root^.pLeft:=y^.pRight;
+    y^.pRight:=root;
+    root:=y^.pLeft;
+    y^.pLeft:=rlist;
+    rlist:=y;
+   end else
+   begin
+    goto _left;
+   end;
+  end else
+  if (obj>root^.obj) then
+  begin
+   y:=root^.pRight;
+   if (y=nil) then break;
+   if (y^.pRight=nil) then
+   begin
+    _right:
+    root^.pRight:=llist;
+    llist:=root;
+    root:=y;
+   end else
+   if (obj>y^.obj) then
+   begin
+    root^.pRight:=y^.pLeft;
+    y^.pLeft:=root;
+    root:=y^.pRight;
+    y^.pRight:=llist;
+    llist:=y;
+   end else
+   begin
+    goto _right;
+   end;
+  end else
+  begin
+   Break;
+  end;
+ until false;
+
+ ltree:=root^.pLeft;
+ while (llist<>nil) do
+ begin
+  y:=llist^.pRight;
+  llist^.pRight:=ltree;
+  ltree:=llist;
+  llist:=y;
+ end;
+
+ rtree:=root^.pRight;
+ while (rlist<>nil) do
+ begin
+  y:=rlist^.pLeft;
+  rlist^.pLeft:=rtree;
+  rtree:=rlist;
+  rlist:=y;
+ end;
+
+ root^.pLeft :=ltree;
+ root^.pRight:=rtree;
+end;
+
+procedure vm_track_insert_instance(var root:p_vm_track_object_instance;node:p_vm_track_object_instance);
+begin
+ _vm_track_splay_instance(root,node^.obj);
+
+ if (root=nil) then
+ begin
+  //
+ end else
+ if (node^.obj>root^.obj) then
+ begin
+  node^.pRight:=root^.pRight;
+  node^.pLeft :=root;
+  root^.pRight:=nil;
+ end else
+ begin
+  node^.pLeft :=root^.pLeft;
+  node^.pRight:=root;
+  root^.pLeft :=nil;
+ end;
+
+ root:=node;
+end;
+
+procedure vm_track_delete_instance(var root:p_vm_track_object_instance;node:p_vm_track_object_instance);
+var
+ pLeft :p_vm_track_object_instance;
+ pRight:p_vm_track_object_instance;
+ pMax  :p_vm_track_object_instance;
+begin
+ _vm_track_splay_instance(root,node^.obj);
+
+ if (root=node) then
+ begin
+  pLeft :=root^.pLeft;
+  pRight:=root^.pRight;
+
+  if (pLeft<>nil) then
+  begin
+   pMax:=pLeft;
+   while (pMax^.pRight<>nil) do
+   begin
+    pMax:=pMax^.pRight;
+   end;
+
+   root:=pLeft;
+
+   _vm_track_splay_instance(root,pMax^.obj);
+
+   root^.pRight:=pRight;
+  end else
+  begin
+   root:=pRight;
+  end;
+ end;
+
+end;
+
+function vm_track_first_instance(root:p_vm_track_object_instance):p_vm_track_object_instance;
 var
  node:p_vm_track_object_instance;
+begin
+ Result:=nil;
+ node:=root;
+ While (node<>nil) do
+ begin
+  Result:=node;
+  node:=node^.pLeft;
+ end;
+end;
+
+function vm_track_next_instance(root,node:p_vm_track_object_instance):p_vm_track_object_instance;
+var
+ y,r:p_vm_track_object_instance;
+begin
+ Result:=nil;
+
+ if (root=nil) or (node=nil) then Exit;
+
+ r:=root;
+ y:=nil;
+
+ if (node^.pRight<>nil) then
+ begin
+  y:=node^.pRight;
+  while (y^.pLeft<>nil) do y:=y^.pLeft;
+  Exit(y);
+ end;
+
+ while (r<>nil) do
+ begin
+  if (node^.obj=r^.obj) then
+  begin
+   Break;
+  end else
+  if (node^.obj<r^.obj) then
+  begin
+   y:=r;
+   r:=r^.pLeft;
+  end else
+  begin
+   r:=r^.pRight;
+  end;
+ end;
+
+ Exit(y);
+end;
+
+procedure _vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object);
+var
+ node:p_vm_track_object_instance;
+ prot:Byte;
 begin
  node:=AllocMem(SizeOf(t_vm_track_object_instance));
 
  node^.entry:=entry;
  node^.obj  :=obj;
 
- if (obj^.prot and PAGE_TRACK_R)<>0 then
- begin
-  Inc(entry^.track_r);
- end;
+ vm_track_insert_instance(entry^.instances,node);
 
- if (obj^.prot and PAGE_TRACK_W)<>0 then
- begin
-  Inc(entry^.track_w);
- end;
-
- entry^.prot:=ord(entry^.track_r<>0)*PAGE_TRACK_R or ord(entry^.track_w<>0)*PAGE_TRACK_W;
-
- TAILQ_INSERT_TAIL(@entry^.instances,node,@node^.entry_link);
+ //TAILQ_INSERT_TAIL(@entry^.instances,node,@node^.entry_link);
 
  TAILQ_INSERT_TAIL(@obj^.instances,node,@node^.obj_link);
 
  vm_track_object_reference(obj);
+
+ //update prot
+ if (pmap<>nil) then
+ begin
+
+  if (obj^.prot and PAGE_TRACK_R)<>0 then
+  begin
+   Inc(entry^.track_r);
+  end;
+
+  if (obj^.prot and PAGE_TRACK_W)<>0 then
+  begin
+   Inc(entry^.track_w);
+  end;
+
+  prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
+        (ord(entry^.track_w<>0)*PAGE_TRACK_W);
+
+  if (prot<>entry^.prot) then
+  begin
+   entry^.prot:=prot;
+
+   pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
+  end;
+
+ end;
+ //
 end;
 
-procedure vm_track_entry_add_obj(entry:p_vm_track_map_entry;obj:p_vm_track_object);
+procedure vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object);
 var
- node:p_vm_track_object_instance;
+ root:p_vm_track_object_instance;
 begin
+ _vm_track_splay_instance(entry^.instances,obj);
+ root:=entry^.instances;
+
+ if (root<>nil) then
+ if (root^.obj=obj) then
+ begin
+  Exit;
+ end;
+
+
+ {
  node:=TAILQ_FIRST(@entry^.instances);
 
  while (node<>nil) do
@@ -213,43 +485,81 @@ begin
 
   node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
+ }
 
- _vm_track_entry_add_obj(entry,obj);
+ _vm_track_entry_add_obj(pmap,entry,obj);
 end;
 
-function _vm_track_entry_del_node(entry:p_vm_track_map_entry;node:p_vm_track_object_instance):Boolean;
+function _vm_track_entry_del_node(pmap:Pointer;entry:p_vm_track_map_entry;node:p_vm_track_object_instance):Boolean;
 var
  obj:p_vm_track_object;
+ prot:Byte;
 begin
  obj:=node^.obj;
 
- TAILQ_REMOVE(@entry^.instances,node,@node^.entry_link);
+ //update prot
+ if (pmap<>nil) then
+ begin
+
+  if (obj^.prot and PAGE_TRACK_R)<>0 then
+  begin
+   Dec(entry^.track_r);
+  end;
+
+  if (obj^.prot and PAGE_TRACK_W)<>0 then
+  begin
+   Dec(entry^.track_w);
+  end;
+
+  prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
+        (ord(entry^.track_w<>0)*PAGE_TRACK_W);
+
+  if (prot<>entry^.prot) then
+  begin
+   entry^.prot:=prot;
+
+   pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
+  end;
+
+ end;
+ //
+
+ vm_track_delete_instance(entry^.instances,node);
+
+ //TAILQ_REMOVE(@entry^.instances,node,@node^.entry_link);
 
  TAILQ_REMOVE(@obj^.instances,node,@node^.obj_link);
-
- if (obj^.prot and PAGE_TRACK_R)<>0 then
- begin
-  Dec(entry^.track_r);
- end;
-
- if (obj^.prot and PAGE_TRACK_W)<>0 then
- begin
-  Dec(entry^.track_w);
- end;
-
- entry^.prot:=ord(entry^.track_r<>0)*PAGE_TRACK_R or ord(entry^.track_w<>0)*PAGE_TRACK_W;
 
  vm_track_object_deallocate(obj);
 
  FreeMem(node);
 
- Result:=(TAILQ_FIRST(@entry^.instances)=nil);
+ //Result:=(TAILQ_FIRST(@entry^.instances)=nil);
+ Result:=(entry^.instances=nil);
 end;
 
-function vm_track_entry_del_obj(entry:p_vm_track_map_entry;obj:p_vm_track_object):Boolean;
+function vm_track_entry_del_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object):Boolean;
 var
- node:p_vm_track_object_instance;
+ root:p_vm_track_object_instance;
 begin
+ Result:=False;
+
+ _vm_track_splay_instance(entry^.instances,obj);
+ root:=entry^.instances;
+
+ if (root=nil) then
+ begin
+  Exit;
+ end;
+
+ if (root^.obj<>obj) then
+ begin
+  Exit;
+ end;
+
+ Result:=_vm_track_entry_del_node(pmap,entry,root);
+
+ {
  node:=TAILQ_FIRST(@entry^.instances);
 
  while (node<>nil) do
@@ -264,21 +574,26 @@ begin
 
   node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
+ }
 
- Result:=False;
+ //Result:=False;
 end;
 
-procedure vm_track_entry_del_obj_all(entry:p_vm_track_map_entry);
+procedure vm_track_entry_del_obj_all(pmap:Pointer;entry:p_vm_track_map_entry);
 var
  node,next:p_vm_track_object_instance;
 begin
- node:=TAILQ_FIRST(@entry^.instances);
+ //node:=TAILQ_FIRST(@entry^.instances);
+
+ node:=vm_track_first_instance(entry^.instances);
 
  while (node<>nil) do
  begin
-  next:=TAILQ_NEXT(node,@node^.entry_link);
+  //next:=TAILQ_NEXT(node,@node^.entry_link);
 
-  _vm_track_entry_del_node(entry,node);
+  next:=vm_track_next_instance(entry^.instances,node);
+
+  _vm_track_entry_del_node(pmap,entry,node);
 
   node:=next;
  end;
@@ -286,12 +601,23 @@ end;
 
 //
 
-function in_obj_list(const b:TAILQ_HEAD;obj:p_vm_track_object):Boolean;
+function in_obj_list(b:p_vm_track_map_entry;obj:p_vm_track_object):Boolean;
 var
- node:p_vm_track_object_instance;
+ root:p_vm_track_object_instance;
 begin
  Result:=False;
 
+ _vm_track_splay_instance(b^.instances,obj);
+ root:=b^.instances;
+
+ if (root=nil) then
+ begin
+  Exit;
+ end;
+
+ Result:=(root^.obj=obj);
+
+ {
  node:=TAILQ_FIRST(@b);
 
  while (node<>nil) do
@@ -304,13 +630,16 @@ begin
 
   node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
+ }
 end;
 
-function compare_obj_list(const a,b:TAILQ_HEAD):Boolean;
+function compare_obj_list(a,b:p_vm_track_map_entry):Boolean;
 var
  node:p_vm_track_object_instance;
 begin
- node:=TAILQ_FIRST(@a);
+ //node:=TAILQ_FIRST(@a);
+
+ node:=vm_track_first_instance(a^.instances);
 
  while (node<>nil) do
  begin
@@ -320,7 +649,9 @@ begin
    Exit(False);
   end;
 
-  node:=TAILQ_NEXT(node,@node^.entry_link);
+  node:=vm_track_next_instance(a^.instances,node);
+
+  //node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
 
  Result:=True;
@@ -331,16 +662,22 @@ var
  node:p_vm_track_object_instance;
 begin
 
- TAILQ_INIT(@dst^.instances);
+ //TAILQ_INIT(@dst^.instances);
 
- node:=TAILQ_FIRST(@src^.instances);
+ dst^.instances:=nil;
+
+ //node:=TAILQ_FIRST(@src^.instances);
+
+ node:=vm_track_first_instance(src^.instances);
 
  while (node<>nil) do
  begin
 
-  _vm_track_entry_add_obj(dst,node^.obj);
+  _vm_track_entry_add_obj(nil,dst,node^.obj);
 
-  node:=TAILQ_NEXT(node,@node^.entry_link);
+  node:=vm_track_next_instance(src^.instances,node);
+
+  //node:=TAILQ_NEXT(node,@node^.entry_link);
  end;
 end;
 
@@ -348,6 +685,9 @@ end;
 
 procedure vm_track_map_RANGE_CHECK(map:p_vm_track_map;var start,__end:vm_offset_t); inline;
 begin
+ start:=start              and (not PMAPP_MASK);
+ __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
+
  if (start<map^.min_offset) then
  begin
   start:=map^.min_offset;
@@ -368,35 +708,58 @@ begin
  Inc(map^.timestamp);
 end;
 
-procedure vm_track_map_unlock(map:p_vm_track_map); inline;
+procedure _vm_track_map_process_deferred(map:p_vm_track_map); forward;
+
+procedure vm_track_map_unlock(map:p_vm_track_map;def:Boolean=True);
 begin
+ if def then
+ begin
+  _vm_track_map_process_deferred(map);
+ end;
  mtx_unlock(map^.lock);
 end;
 
-function vm_map_locked(map:p_vm_track_map):Boolean; inline;
+function vm_track_locked(map:p_vm_track_map):Boolean; inline;
 begin
  Result:=mtx_owned(map^.lock);
 end;
 
 procedure VM_MAP_ASSERT_LOCKED(map:p_vm_track_map); inline;
 begin
- Assert(vm_map_locked(map));
+ Assert(vm_track_locked(map));
 end;
 
 procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
+var
+ i:Integer;
 begin
  map^.header.next:=@map^.header;
  map^.header.prev:=@map^.header;
  map^.min_offset:=min;
  map^.max_offset:=max;
  map^.root:=nil;
+
+ //
+ TAILQ_INIT(@map^.insert_deferred.free);
+ For i:=Low(map^.insert_deferred.stub) to High(map^.insert_deferred.stub) do
+ begin
+  TAILQ_INSERT_TAIL(@map^.insert_deferred.free,
+                    @map^.insert_deferred.stub[i],
+                    @map^.insert_deferred.stub[i].entry);
+ end;
+
+ TAILQ_INIT(@map^.insert_deferred.list);
+ //TAILQ_INIT(@map^.qdelete_d);
+
+ TAILQ_INIT(@map^.delete_deferred);
+
  //
  mtx_init(map^.lock,'vm_track_map');
 end;
 
-procedure vm_track_entry_dispose(map:p_vm_track_map;entry:p_vm_track_map_entry); inline;
+procedure vm_track_entry_dispose(map:p_vm_track_map;pmap:Pointer;entry:p_vm_track_map_entry); inline;
 begin
- vm_track_entry_del_obj_all(entry);
+ vm_track_entry_del_obj_all(pmap,entry);
  //
  FreeMem(entry);
 end;
@@ -408,7 +771,9 @@ begin
  new_entry:=AllocMem(SizeOf(t_vm_track_map_entry));
  Assert((new_entry<>nil),'vm_track_map_entry_create: kernel resources exhausted');
 
- TAILQ_INIT(@new_entry^.instances);
+ //TAILQ_INIT(@new_entry^.instances);
+
+ new_entry^.instances:=nil;
 
  Result:=new_entry;
 end;
@@ -653,12 +1018,12 @@ begin
  if (prev<>@map^.header) then
  begin
   if (prev^.__end=entry^.start) and
-     compare_obj_list(prev^.instances,entry^.instances) then
+     compare_obj_list(prev,entry) then
   begin
    vm_track_map_entry_unlink(map, prev);
    entry^.start:=prev^.start;
 
-   vm_track_entry_dispose(map, prev);
+   vm_track_entry_dispose(map, nil, prev);
   end;
  end;
 
@@ -666,12 +1031,12 @@ begin
  if (next<>@map^.header) then
  begin
   if (entry^.__end=next^.start) and
-     compare_obj_list(entry^.instances,next^.instances) then
+     compare_obj_list(entry,next) then
   begin
    vm_track_map_entry_unlink(map, next);
    entry^.__end:=next^.__end;
 
-   vm_track_entry_dispose(map, next);
+   vm_track_entry_dispose(map, nil, next);
   end;
  end;
 end;
@@ -741,6 +1106,8 @@ begin
 
  VM_MAP_ASSERT_LOCKED(map);
 
+ if (obj^.mark_del<>0) then Exit(KERN_SUCCESS);
+
  vm_track_map_RANGE_CHECK(map, start, __end);
 
  if (vm_track_map_lookup_entry(map, start, @entry)) then
@@ -758,7 +1125,7 @@ begin
 
   current:=vm_track_map_insert_internal(map,current,current^.__end,__end);
 
-  vm_track_entry_add_obj(current,obj);
+  vm_track_entry_add_obj(map^.pmap,current,obj);
 
   current:=current^.next;
  end;
@@ -773,6 +1140,8 @@ begin
   Exit(KERN_INVALID_ARGUMENT);
  end;
 
+ if (obj^.mark_del<>0) then Exit(KERN_SUCCESS);
+
  vm_track_map_lock(map);
 
   Result:=_vm_track_map_insert(map,obj^.main.start,obj^.main.__end,obj);
@@ -784,7 +1153,7 @@ procedure vm_track_map_entry_delete(map:p_vm_track_map;entry:p_vm_track_map_entr
 begin
  vm_track_map_entry_unlink(map, entry);
 
- vm_track_entry_dispose(map, entry);
+ vm_track_entry_dispose(map, map^.pmap, entry);
 end;
 
 procedure vm_track_map_delete_object(map:p_vm_track_map;obj:p_vm_track_object);
@@ -794,6 +1163,8 @@ var
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
+ obj^.mark_del:=1;
+
  node:=TAILQ_FIRST(@obj^.instances);
 
  while (node<>nil) do
@@ -802,7 +1173,7 @@ begin
 
   entry:=node^.entry;
 
-  if _vm_track_entry_del_node(entry,node) then
+  if _vm_track_entry_del_node(map^.pmap,entry,node) then
   begin
    //zero
    vm_track_map_entry_delete(map, entry);
@@ -823,6 +1194,8 @@ begin
   Exit(KERN_INVALID_ARGUMENT);
  end;
 
+ obj^.mark_del:=1;
+
  vm_track_map_lock(map);
   vm_track_map_delete_object(map, obj);
  vm_track_map_unlock(map);
@@ -839,11 +1212,15 @@ begin
 
  VM_MAP_ASSERT_LOCKED(map);
 
- node:=TAILQ_FIRST(@entry^.instances);
+ //node:=TAILQ_FIRST(@entry^.instances);
+
+ node:=vm_track_first_instance(entry^.instances);
 
  while (node<>nil) do
  begin
-  next:=TAILQ_NEXT(node,@node^.entry_link);
+  //next:=TAILQ_NEXT(node,@node^.entry_link);
+
+  next:=vm_track_next_instance(entry^.instances,node);
 
   obj:=node^.obj;
 
@@ -851,7 +1228,8 @@ begin
   if (obj^.main.__end>start) and (obj^.main.start<__end) then
   begin
    //delete full object
-   vm_track_map_delete_object(map,obj);
+   //vm_track_map_delete_object(map,obj);
+   _vm_track_map_delete_deferred(map,obj);
 
    Result:=True;
   end;
@@ -861,17 +1239,19 @@ begin
 end;
 
 function vm_track_map_delete_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-label
- _repeat;
+//label
+// _repeat;
 var
  entry      :p_vm_track_map_entry;
  first_entry:p_vm_track_map_entry;
  next       :p_vm_track_map_entry;
  last       :vm_offset_t;
 begin
+ vm_track_map_RANGE_CHECK(map,start,__end);
+
  VM_MAP_ASSERT_LOCKED(map);
 
- _repeat:
+ //_repeat:
 
  if (start>=__end) then
  begin
@@ -901,7 +1281,7 @@ begin
   begin
    //unknow intervals is deleted, repeat lookup
    start:=last;
-   goto _repeat;
+   //goto _repeat;
   end else
   begin
    //delete entry
@@ -922,116 +1302,174 @@ begin
  end;
 
  vm_track_map_lock(map);
- vm_track_map_RANGE_CHECK(map, start, __end);
   Result:=vm_track_map_delete_memory(map, start, __end);
  vm_track_map_unlock(map);
 end;
 
-function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-label
- _repeat;
-var
- last:vm_offset_t;
- current,entry:p_vm_track_map_entry;
- node,next:p_vm_track_object_instance;
- ret:Integer;
- change:Boolean;
+function _new_deferred(map:p_vm_track_map):p_vm_track_deferred;
 begin
- Result:=0; //count
+ Result:=TAILQ_FIRST(@map^.insert_deferred.free);
 
- if (start>=__end) or (map=nil) then
+ if (Result<>nil) then
  begin
-  Exit;
- end;
-
- last:=start;
-
- vm_track_map_lock(map);
-
- vm_track_map_RANGE_CHECK(map, last, __end);
-
- _repeat:
-
- if (last>=__end) then
- begin
-  vm_track_map_unlock(map);
-  Exit;
- end;
-
- if (vm_track_map_lookup_entry(map, last, @entry)) then
- begin
-  //
+  TAILQ_REMOVE(@map^.insert_deferred.free,Result,@Result^.entry);
  end else
  begin
-  entry:=entry^.next;
+  Result:=GetMem(SizeOf(t_vm_track_deferred));
  end;
-
- current:=entry;
- while (current<>@map^.header) and (current^.start<__end) do
- begin
-
-  last:=current^.__end;
-
-  change:=False;
-
-  node:=TAILQ_FIRST(@entry^.instances);
-
-  while (node<>nil) do
-  begin
-   next:=TAILQ_NEXT(node,@node^.entry_link);
-
-   ret:=vm_track_object_trigger(map,node^.obj,start,__end);
-
-   if ((ret and DO_DELETE)<>0) then
-   begin
-    //delete full object
-    vm_track_map_delete_object(map, node^.obj);
-    change:=True;
-   end;
-
-   if ((ret and DO_INCREMENT)<>0) then
-   begin
-    Inc(Result);
-   end;
-
-   node:=next;
-  end;
-
-  if change then
-  begin
-   goto _repeat;
-  end;
-
-  current:=current^.next;
- end;
-
- vm_track_map_unlock(map);
 end;
 
-function _vm_track_map_insert_mirror(map:p_vm_track_map;src,dst,size:vm_offset_t):Integer;
-label
- _repeat;
+procedure _free_deferred(map:p_vm_track_map;node:p_vm_track_deferred);
+begin
+
+ if (Ptruint(node)>=Ptruint(@map^.insert_deferred.stub)) and
+    (Ptruint(node)< (Ptruint(@map^.insert_deferred.stub)+SizeOf(map^.insert_deferred.stub))) then
+ begin
+  TAILQ_INSERT_TAIL(@map^.insert_deferred.free,node,@node^.entry);
+ end else
+ begin
+  FreeMem(node);
+ end;
+
+end;
+
+procedure _vm_track_map_insert_deferred(map:p_vm_track_map;start,__end:vm_offset_t;obj:p_vm_track_object);
+var
+ new:p_vm_track_deferred;
+begin
+ vm_track_map_RANGE_CHECK(map,start,__end);
+
+ VM_MAP_ASSERT_LOCKED(map);
+
+ if (obj^.mark_del<>0) then Exit;
+
+ new:=_new_deferred(map);
+ new^:=Default(t_vm_track_deferred);
+
+ new^.start:=start;
+ new^.__end:=__end;
+ new^.obj  :=obj;
+
+ TAILQ_INSERT_TAIL(@map^.insert_deferred.list,new,@new^.entry);
+end;
+
+procedure _vm_track_map_delete_deferred(map:p_vm_track_map;obj:p_vm_track_object);
+//var
+// new:p_vm_track_object_instance;
+begin
+ VM_MAP_ASSERT_LOCKED(map);
+
+ if (obj=nil) then Exit;
+
+ obj^.mark_del:=1;
+
+ if (obj^.del_link.tqe_prev<>nil) then Exit;
+
+ TAILQ_INSERT_TAIL(@map^.delete_deferred,obj,@obj^.del_link);
+
+ {
+ _vm_track_splay_instance(map^.qdelete_d,obj);
+
+ if (map^.qdelete_d<>nil) then
+ if (map^.qdelete_d^.obj=obj) then
+ begin
+  Exit;
+ end;
+ }
+
+ {
+ node:=TAILQ_FIRST(@map^.qdelete_d);
+
+ while (node<>nil) do
+ begin
+
+  if (node^.obj=obj) then
+  begin
+   Exit;
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.entry);
+ end;
+ }
+
+ {
+ new:=_new_deferred(map);
+ new^:=Default(t_vm_track_object_instance);
+
+ new^.obj:=obj;
+
+ vm_track_insert_instance(map^.qdelete_d,new);
+ }
+
+ //TAILQ_INSERT_TAIL(@map^.qdelete_d,new,@new^.entry);
+end;
+
+procedure _vm_track_map_process_deferred(map:p_vm_track_map);
+var
+ inode,inext:p_vm_track_deferred;
+
+ dnode,dnext:p_vm_track_object;
+begin
+
+ inode:=TAILQ_FIRST(@map^.insert_deferred.list);
+
+ while (inode<>nil) do
+ begin
+  inext:=TAILQ_NEXT(inode,@inode^.entry);
+
+  TAILQ_REMOVE(@map^.insert_deferred.list,inode,@inode^.entry);
+
+  _vm_track_map_insert(map,inode^.start,inode^.__end,inode^.obj);
+
+  _free_deferred(map,inode);
+
+  inode:=inext;
+ end;
+
+ //
+
+ dnode:=TAILQ_FIRST(@map^.delete_deferred);
+
+ //dnode:=vm_track_first_instance(map^.qdelete_d);
+
+ while (dnode<>nil) do
+ begin
+  dnext:=TAILQ_NEXT(dnode,@dnode^.del_link);
+
+  //dnext:=vm_track_next_instance(map^.qdelete_d,dnode);
+
+  TAILQ_REMOVE(@map^.delete_deferred,dnode,@dnode^.del_link);
+
+  dnode^.del_link:=Default(TAILQ_ENTRY);
+
+  //vm_track_delete_instance(map^.qdelete_d,dnode);
+
+  vm_track_map_delete_object(map,dnode);
+
+  //_free_deferred(map,dnode);
+
+  dnode:=dnext;
+ end;
+end;
+
+function _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offset_t):Integer;
+//label
+// _repeat;
 var
  last :vm_offset_t;
- start:vm_offset_t;
- __end:vm_offset_t;
  e_start:vm_offset_t;
  e___end:vm_offset_t;
  d_start:vm_offset_t;
  d___end:vm_offset_t;
  entry:p_vm_track_map_entry;
  node,next:p_vm_track_object_instance;
+ obj:p_vm_track_object;
 begin
- start:=src;
- __end:=src+size;
-
  VM_MAP_ASSERT_LOCKED(map);
-
- vm_track_map_RANGE_CHECK(map, start, __end);
 
  last:=start;
 
- _repeat:
+ //_repeat:
 
  if (last>=__end) then
  begin
@@ -1066,21 +1504,31 @@ begin
 
   if (e___end>e_start) then
   begin
-   d_start:=dst+(e_start-src);
+   d_start:=dst    +(e_start-start);
    d___end:=d_start+(e___end-e_start);
 
-   node:=TAILQ_FIRST(@entry^.instances);
+   //node:=TAILQ_FIRST(@entry^.instances);
+
+   node:=vm_track_first_instance(entry^.instances);
 
    while (node<>nil) do
    begin
-    next:=TAILQ_NEXT(node,@node^.entry_link);
+    //next:=TAILQ_NEXT(node,@node^.entry_link);
 
-    _vm_track_map_insert(map,d_start,d___end,node^.obj);
+    next:=vm_track_next_instance(entry^.instances,node);
+
+    obj:=node^.obj;
+
+    if (obj^.main.__end>start) and (obj^.main.start<__end) then
+    begin
+     //_vm_track_map_insert(map,d_start,d___end,obj);
+     _vm_track_map_insert_deferred(map,d_start,d___end,obj);
+    end;
 
     node:=next;
    end;
 
-   goto _repeat;
+   //goto _repeat;
   end;
 
   entry:=entry^.next;
@@ -1088,6 +1536,135 @@ begin
 
  Result:=(KERN_SUCCESS);
 end;
+
+function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
+//label
+// _repeat;
+var
+ last:vm_offset_t;
+ current,entry:p_vm_track_map_entry;
+ node,next:p_vm_track_object_instance;
+
+ ret:Integer;
+ //change:Boolean;
+
+ list:TAILQ_HEAD;
+ onode,onext:p_vm_track_object;
+begin
+ Result:=0; //count
+
+ if (start>=__end) or (map=nil) then
+ begin
+  Exit;
+ end;
+
+ TAILQ_INIT(@list);
+
+ last:=start;
+
+ vm_track_map_lock(map);
+
+ vm_track_map_RANGE_CHECK(map, last, __end);
+
+ //_repeat:
+
+ if (last>=__end) then
+ begin
+  vm_track_map_unlock(map);
+  Exit; //goto end
+ end;
+
+ if (vm_track_map_lookup_entry(map, last, @entry)) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ current:=entry;
+ while (current<>@map^.header) and (current^.start<__end) do
+ begin
+
+  last:=current^.__end;
+
+  //change:=False;
+
+  //node:=TAILQ_FIRST(@entry^.instances);
+
+  node:=vm_track_first_instance(entry^.instances);
+
+  while (node<>nil) do
+  begin
+   //next:=TAILQ_NEXT(node,@node^.entry_link);
+
+   next:=vm_track_next_instance(entry^.instances,node);
+
+   vm_track_list_add_obj(list,node^.obj);
+
+   {
+   ret:=vm_track_object_trigger(map,node^.obj,start,__end);
+
+   if ((ret and DO_DELETE)<>0) then
+   begin
+    //delete full object
+    //vm_track_map_delete_object(map, node^.obj);
+    _vm_track_map_delete_deferred(map, node^.obj);
+    //change:=True;
+   end;
+
+   if ((ret and DO_INCREMENT)<>0) then
+   begin
+    Inc(Result);
+   end;
+   }
+
+   node:=next;
+  end;
+
+  //if change then
+  //begin
+  // goto _repeat;
+  //end;
+
+  current:=current^.next;
+ end;
+
+ //iterate
+
+ onode:=TAILQ_FIRST(@list);
+
+ while (node<>nil) do
+ begin
+  onext:=TAILQ_NEXT(onode,@onode^.iter_link);
+
+  TAILQ_REMOVE(@list,onode,@onode^.iter_link);
+
+  onode^.iter_link:=Default(TAILQ_ENTRY);
+
+  ret:=vm_track_object_trigger(map,onode,start,__end);
+
+  if ((ret and DO_DELETE)<>0) then
+  begin
+   //delete full object
+   //vm_track_map_delete_object(map, node^.obj);
+   _vm_track_map_delete_deferred(map,onode);
+   //change:=True;
+  end;
+
+  if ((ret and DO_INCREMENT)<>0) then
+  begin
+   Inc(Result);
+  end;
+
+  onode:=onext;
+ end;
+
+ //iterate
+
+ vm_track_map_unlock(map);
+end;
+
 
 
 end.
