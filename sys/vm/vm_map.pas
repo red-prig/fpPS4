@@ -2368,7 +2368,7 @@ end;
 
 //
 
-procedure unmap_jit_cache(start,__end:QWORD); external name 'kern_unmap_jit_cache';
+//procedure unmap_jit_cache(start,__end:QWORD); external name 'kern_unmap_jit_cache';
 
 //
 
@@ -2479,7 +2479,7 @@ begin
               entry^.start,
               entry^.__end);
 
-  unmap_jit_cache(entry^.start,entry^.__end);
+  //unmap_jit_cache(entry^.start,entry^.__end);
 
   //if (entry^.wired_count<>0) then
   //begin
@@ -3377,7 +3377,7 @@ begin
 
    //one map track
    vm_track_map_lock(@map^.pmap^.tr_map);
-    _vm_track_map_insert(@map^.pmap^.tr_map,e_start,e___end,tobj);
+    _vm_track_map_insert(@map^.pmap^.tr_map,e_start,e___end,e_start,tobj);
    vm_track_map_unlock(@map^.pmap^.tr_map)
   end; //
 

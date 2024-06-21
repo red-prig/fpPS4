@@ -28,6 +28,7 @@ type
   start:DWORD;            // start address
   __end:DWORD;            // end address
   vlist:TAILQ_HEAD;       // virtual addr mapping
+  count:QWORD;
  end;
 
  p_rmem_map=^t_rmem_map;
@@ -106,6 +107,7 @@ begin
  node^.vaddr:=vaddr;
 
  TAILQ_INSERT_TAIL(@entry^.vlist,node,@node^.entry);
+ Inc(entry^.count);
 end;
 
 function rmem_entry_add_vaddr(entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
@@ -162,6 +164,7 @@ end;
 
 function _rmem_entry_del_node(entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
 begin
+ Dec(entry^.count);
  TAILQ_REMOVE(@entry^.vlist,node,@node^.entry);
 
  FreeMem(node);
@@ -229,16 +232,21 @@ begin
  end;
 end;
 
-function compare_vaddr_list(const a:TAILQ_HEAD;offset:DWORD;const b:TAILQ_HEAD):Boolean;
+function compare_vaddr_list(a:p_rmem_map_entry;offset:DWORD;b:p_rmem_map_entry):Boolean;
 var
  node:p_rmem_vaddr_instance;
 begin
- node:=TAILQ_FIRST(@a);
+ if (a^.count<>b^.count) then
+ begin
+  Exit(False);
+ end;
+
+ node:=TAILQ_FIRST(@a^.vlist);
 
  while (node<>nil) do
  begin
 
-  if not in_vaddr_list(b,node^.vaddr + IDX_TO_OFF(offset)) then
+  if not in_vaddr_list(b^.vlist,node^.vaddr + IDX_TO_OFF(offset)) then
   begin
    Exit(False);
   end;
@@ -254,7 +262,8 @@ var
  node:p_rmem_vaddr_instance;
 begin
 
- TAILQ_INIT(@dst^.vlist);
+ TAILQ_INIT(@dst^.vlist); //init
+ dst^.count:=0;
 
  node:=TAILQ_FIRST(@src^.vlist);
 
@@ -624,7 +633,7 @@ begin
  begin
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
-     compare_vaddr_list(prev^.vlist,prevsize,entry^.vlist) then
+     compare_vaddr_list(prev,prevsize,entry) then
   begin
    rmem_entry_unlink(map, prev);
    entry^.start:=prev^.start;
@@ -643,7 +652,7 @@ begin
  begin
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
-     compare_vaddr_list(entry^.vlist,esize,next^.vlist) then
+     compare_vaddr_list(entry,esize,next) then
   begin
    rmem_entry_unlink(map, next);
    entry^.__end:=next^.__end;
@@ -898,7 +907,7 @@ begin
   start:=node^.vaddr+diff;
   __end:=start+size;
 
-  _vm_track_map_insert_deferred(tmap,start,__end,tobj);
+  _vm_track_map_insert_deferred(tmap,start,__end,node^.vaddr,tobj);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;

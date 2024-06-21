@@ -8,7 +8,7 @@ interface
 uses
  mqueue,
  hamt,
- g23tree,
+ //g23tree,
  g_node_splay,
  murmurhash,
  x86_jit,
@@ -53,9 +53,11 @@ type
 
  p_jcode_chunk=^t_jcode_chunk;
  t_jcode_chunk=object
-  next  :p_jcode_chunk;
-  pLeft :p_jcode_chunk;
-  pRight:p_jcode_chunk;
+  entry:TAILQ_ENTRY;    //entry_chunk_list
+
+  next  :p_jcode_chunk; //t_jit_dynamic_blob.chunk_list
+  //pLeft :p_jcode_chunk;
+  //pRight:p_jcode_chunk;
   blob  :p_jit_dynamic_blob;
   tobj  :Pointer; //p_vm_track_object
   start :QWORD;   //<-guest
@@ -68,13 +70,14 @@ type
   function  c(n1,n2:p_jcode_chunk):Integer; static;
   procedure inc_ref;
   procedure dec_ref;
+  function  is_mark_del:Boolean;
   function  find_host_by_guest(addr:QWORD):QWORD;
   function  find_guest_by_host(addr:QWORD):QWORD;
   function  cross_guest(c_start,c___end:QWORD):Boolean;
   function  cross_host (c_start,c___end:QWORD):Boolean;
  end;
 
- t_jcode_chunk_set=specialize T23treeSet<p_jcode_chunk,t_jcode_chunk>;
+ //t_jcode_chunk_set=specialize T23treeSet<p_jcode_chunk,t_jcode_chunk>;
 
  p_jplt_cache=^t_jplt_cache;
  t_jplt_cache=object(t_jplt_cache_asm)
@@ -139,7 +142,10 @@ var
  entry_hamt:TSTUB_HAMT64;
 
  entry_chunk_lock:Pointer=nil;
- entry_chunk:t_jcode_chunk_set;
+
+ entry_chunk_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@entry_chunk_list.tqh_first);
+
+ //entry_chunk:t_jcode_chunk_set;
 
 function  fetch_entry(src:Pointer):p_jit_entry_point;
 function  exist_entry(src:Pointer):Boolean;
@@ -148,8 +154,8 @@ function  fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
 function  fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
 function  exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean;
 
-function  next_chunk(node:p_jcode_chunk):p_jcode_chunk;
-procedure unmap_jit_cache(start,__end:QWORD);
+function  next_chunk(node:p_jcode_chunk;src:Pointer):p_jcode_chunk;
+//procedure unmap_jit_cache(start,__end:QWORD);
 function  preload_entry(addr:Pointer):p_jit_entry_point;
 
 procedure jit_ctx_free(td:p_kthread);
@@ -350,13 +356,33 @@ end;
 
 function fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
 var
- i:t_jcode_chunk_set.Iterator;
- node:t_jcode_chunk;
+ //i:t_jcode_chunk_set.Iterator;
+ //node:t_jcode_chunk;
+
+ obj:p_vm_track_object;
 begin
  Result:=nil;
+
+ obj:=vm_track_map_next_object(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
+                               vm_offset_t(src),
+                               nil);
+
+ if (obj<>nil) then
+ begin
+  Result:=obj^.handle;
+
+  if (Result<>nil) then
+  begin
+   Result^.inc_ref;
+  end;
+
+  vm_track_object_deallocate(obj); //<-vm_track_map_next_object
+ end;
+
+ {
  node:=Default(t_jcode_chunk);
  node.start:=QWORD(src);
- //
+
  rw_rlock(entry_chunk_lock);
 
  i:=entry_chunk.Find_le(@node);
@@ -372,11 +398,61 @@ begin
  end;
 
  rw_runlock(entry_chunk_lock);
+ }
+end;
+
+function next_chunk(node:p_jcode_chunk;src:Pointer):p_jcode_chunk;
+var
+ //i:t_jcode_chunk_set.Iterator;
+
+ obj:p_vm_track_object;
+begin
+ Result:=nil;
+ //
+
+ obj:=vm_track_map_next_object(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
+                               vm_offset_t(src),
+                               node^.tobj);
+
+ if (obj<>nil) then
+ begin
+  Result:=obj^.handle;
+
+  if (Result<>nil) then
+  begin
+   Result^.inc_ref;
+  end;
+
+  vm_track_object_deallocate(obj); //<-vm_track_map_next_object
+ end;
+
+ {
+ rw_rlock(entry_chunk_lock);
+
+ i:=entry_chunk.find_be(node);
+
+ if (i.Item<>nil) then
+ begin
+  i.Next;
+ end;
+
+ if (i.Item<>nil) then
+ begin
+  Result:=i.Item^;
+ end;
+
+ if (Result<>nil) then
+ begin
+  Result^.inc_ref;
+ end;
+
+ rw_runlock(entry_chunk_lock);
+ }
 end;
 
 function fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
 var
- i:t_jcode_chunk_set.Iterator;
+ //i:t_jcode_chunk_set.Iterator;
  node:p_jcode_chunk;
  prev:p_jit_dynamic_blob;
  blob:p_jit_dynamic_blob;
@@ -388,13 +464,17 @@ begin
  //
  rw_rlock(entry_chunk_lock);
 
- i:=entry_chunk.cbegin;
+ node:=TAILQ_FIRST(@entry_chunk_list);
 
- while (i.Item<>nil) do
+ //i:=entry_chunk.cbegin;
+
+ //while (i.Item<>nil) do
+
+ while (node>nil) do
  begin
 
-  node:=i.Item^;
-  if (node<>nil) then
+  //node:=i.Item^;
+  //if (node<>nil) then
   begin
    blob:=node^.blob;
    if (blob<>nil) and (blob<>prev) then
@@ -408,7 +488,9 @@ begin
    end;
   end;
 
-  i.Next;
+  //i.Next;
+
+  node:=TAILQ_NEXT(node,@node^.entry);
  end;
 
  rw_runlock(entry_chunk_lock);
@@ -435,34 +517,7 @@ begin
  end;
 end;
 
-function next_chunk(node:p_jcode_chunk):p_jcode_chunk;
-var
- i:t_jcode_chunk_set.Iterator;
-begin
- Result:=nil;
- //
- rw_rlock(entry_chunk_lock);
-
- i:=entry_chunk.find_be(node);
-
- if (i.Item<>nil) then
- begin
-  i.Next;
- end;
-
- if (i.Item<>nil) then
- begin
-  Result:=i.Item^;
- end;
-
- if (Result<>nil) then
- begin
-  Result^.inc_ref;
- end;
-
- rw_runlock(entry_chunk_lock);
-end;
-
+{
 procedure unmap_jit_cache(start,__end:QWORD); [public, alias:'kern_unmap_jit_cache'];
 var
  curr,next:p_jcode_chunk;
@@ -495,6 +550,7 @@ begin
   curr^.dec_ref;
  end;
 end;
+}
 
 function preload_entry(addr:Pointer):p_jit_entry_point;
 var
@@ -510,7 +566,7 @@ begin
 
   //Writeln(HexStr(addr),':',HexStr(curr^.start,16),'..',HexStr(curr^.__end,16));
 
-  if (QWORD(addr)<curr^.start) then Break;
+  //if (QWORD(addr)<curr^.start) then Break;
 
   dest:=curr^.find_host_by_guest(QWORD(addr));
 
@@ -532,7 +588,7 @@ begin
    Exit;
   end;
 
-  next:=next_chunk(curr);
+  next:=next_chunk(curr,addr);
   curr^.dec_ref;
   curr:=next;
  end;
@@ -967,6 +1023,11 @@ begin
  blob^.dec_ref;
 end;
 
+function t_jcode_chunk.is_mark_del:Boolean;
+begin
+ Result:=(tobj=nil);
+end;
+
 //
 
 procedure t_jit_dynamic_blob.inc_ref;
@@ -1260,9 +1321,12 @@ begin
 end;
 
 procedure t_jit_dynamic_blob.attach_chunk;
-var
- node,next:p_jcode_chunk;
+//var
+// node,next:p_jcode_chunk;
 begin
+ blob_track(@self);
+
+ {
  node:=chunk_list;
  while (node<>nil) do
  begin
@@ -1276,14 +1340,13 @@ begin
 
   node:=next;
  end;
+ }
 end;
 
 procedure t_jit_dynamic_blob.attach;
 begin
  attach_entry;
  attach_chunk;
-
- blob_track(@self);
 end;
 
 function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
@@ -1332,9 +1395,25 @@ begin
 end;
 
 procedure t_jit_dynamic_blob.detach_chunk(node:p_jcode_chunk);
+var
+ tobj:p_vm_track_object;
 begin
+ tobj:=node^.tobj;
+ if (tobj<>nil) then
+ begin
+  node^.tobj:=nil;
+
+  _vm_track_map_delete_deferred(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
+                                tobj);
+
+  //vm_map_untrack(p_proc.p_vmspace,tobj);
+ end;
+
  rw_wlock(entry_chunk_lock);
-  entry_chunk.Delete(node);
+
+  TAILQ_REMOVE(@entry_chunk_list,node,@node^.entry);
+
+  //entry_chunk.Delete(node);
  rw_wunlock(entry_chunk_lock);
 
  node^.dec_ref;
@@ -1360,12 +1439,36 @@ begin
  inc_ref;
  detach_entry;
  detach_chunk;
- dec_ref
+ dec_ref;
+end;
+
+procedure delete_jit_cache(chunk:p_jcode_chunk);
+var
+ blob:p_jit_dynamic_blob;
+begin
+ if (chunk=nil) then Exit;
+
+ //delete full in blob
+ blob:=chunk^.blob;
+ blob^.detach;
+
+ {
+ blob:=chunk^.blob;
+ rw_wlock(blob^.lock);
+
+  blob^.detach_chunk(chunk);
+  blob^.detach_entry(start,__end);
+
+ rw_wunlock(blob^.lock);
+ }
 end;
 
 function on_destroy(handle:Pointer):Integer;
 begin
- p_jcode_chunk(handle)^.tobj:=nil;
+ p_jcode_chunk(handle)^.tobj:=nil; //mark delete
+
+ delete_jit_cache(p_jcode_chunk(handle));
+
  Result:=DO_DELETE;
 end;
 
@@ -1385,6 +1488,14 @@ begin
  begin
   if (node^.start<>node^.__end) then
   begin
+
+   node^.inc_ref;
+
+   rw_wlock(entry_chunk_lock);
+
+    TAILQ_INSERT_TAIL(@entry_chunk_list,node,@node^.entry);
+
+   rw_wunlock(entry_chunk_lock);
 
    tobj:=vm_track_object_allocate(node,node^.start,node^.__end,PAGE_TRACK_W);
    tobj^.on_destroy:=@on_destroy;
