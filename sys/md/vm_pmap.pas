@@ -552,6 +552,8 @@ function pmap_wlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer;
 begin
+ //Writeln('pmap_wlock:',HexStr(start,10),'..',HexStr(__end,10));
+
  Result:=rangelock_wlock(@pmap^.rmlock,start,__end,@pmap^.rm_mtx);
 end;
 
@@ -559,11 +561,15 @@ function pmap_rlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer;
 begin
+ //Writeln('pmap_rlock:',HexStr(start,10),'..',HexStr(__end,10));
+
  Result:=rangelock_rlock(@pmap^.rmlock,start,__end,@pmap^.rm_mtx);
 end;
 
 procedure pmap_unlock(pmap:pmap_t;cookie:Pointer);
 begin
+ //Writeln('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,10),'..',HexStr(p_rl_q_entry(cookie)^.rl_q_end,10));
+
  rangelock_unlock(@pmap^.rmlock,cookie,@pmap^.rm_mtx);
 end;
 

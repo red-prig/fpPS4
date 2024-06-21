@@ -38,8 +38,8 @@ type
   blob:p_jit_dynamic_blob;
   src :Pointer; //<-guest
   dst :Pointer; //<-host
-  procedure inc_ref;
-  procedure dec_ref;
+  procedure inc_ref(name:pchar);
+  procedure dec_ref(name:pchar);
  end;
 
  p_jinstr_len=^t_jinstr_len;
@@ -68,8 +68,8 @@ type
   count :QWORD;
   table :record end; //p_jinstr_len[]
   function  c(n1,n2:p_jcode_chunk):Integer; static;
-  procedure inc_ref;
-  procedure dec_ref;
+  procedure inc_ref(name:pchar);
+  procedure dec_ref(name:pchar);
   function  is_mark_del:Boolean;
   function  find_host_by_guest(addr:QWORD):QWORD;
   function  find_guest_by_host(addr:QWORD):QWORD;
@@ -81,8 +81,10 @@ type
 
  p_jplt_cache=^t_jplt_cache;
  t_jplt_cache=object(t_jplt_cache_asm)
-  pLeft :p_jplt_cache;
-  pRight:p_jplt_cache;
+  pLeft :p_jplt_cache; //jpltc_curr
+  pRight:p_jplt_cache; //jpltc_curr
+  //
+  entry:TAILQ_ENTRY;   //jpltc_attc
   function c(n1,n2:p_jplt_cache):Integer; static;
  end;
 
@@ -92,7 +94,9 @@ type
   var
    entry_list:p_jit_entry_point;
    chunk_list:p_jcode_chunk;
-   jpltc_list:t_jplt_cache_set;
+
+   jpltc_curr:t_jplt_cache_set;
+   jpltc_attc:TAILQ_HEAD;
 
    mchunk:p_stub_chunk;
 
@@ -109,8 +113,8 @@ type
 
    attach_count:Integer;
 
-  procedure inc_ref;
-  procedure dec_ref;
+  procedure inc_ref(name:pchar);
+  procedure dec_ref(name:pchar);
   procedure inc_attach_count;
   function  dec_attach_count:Boolean;
   function  find_guest_by_host(addr:QWORD):QWORD;
@@ -119,6 +123,10 @@ type
   function  add_entry_point(src,dst:Pointer):p_jit_entry_point;
   procedure free_entry_point(node:p_jit_entry_point);
   procedure init_plt;
+  procedure attach_plt_cache(node:p_jplt_cache);
+  procedure detach_plt_cache(node:p_jplt_cache);
+  procedure detach_all_attc;
+  procedure detach_all_curr;
   function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic_blob):p_jplt_cache;
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
@@ -128,10 +136,10 @@ type
   procedure attach_chunk;
   procedure attach;
   function  detach_entry(node:p_jit_entry_point):Boolean;
-  procedure detach_entry;
+  procedure detach_all_entry;
   procedure detach_entry(c_start,c___end:QWORD);
   procedure detach_chunk(node:p_jcode_chunk);
-  procedure detach_chunk;
+  procedure detach_all_chunk;
   procedure detach;
  end;
 
@@ -252,7 +260,7 @@ begin
   pick(ctx,addr);
  end else
  begin
-  node^.dec_ref;
+  node^.dec_ref('preload_entry');
  end;
 end;
 
@@ -352,6 +360,9 @@ begin
  td^.td_teb^.sttop:=td^.td_kstack.sttop;
  td^.td_teb^.stack:=td^.td_kstack.stack;
  //teb stack
+
+ //
+ node^.dec_ref('fetch_entry')
 end;
 
 function fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
@@ -373,7 +384,7 @@ begin
 
   if (Result<>nil) then
   begin
-   Result^.inc_ref;
+   Result^.inc_ref('fetch_chunk_by_guest');
   end;
 
   vm_track_object_deallocate(obj); //<-vm_track_map_next_object
@@ -420,7 +431,7 @@ begin
 
   if (Result<>nil) then
   begin
-   Result^.inc_ref;
+   Result^.inc_ref('next_chunk');
   end;
 
   vm_track_object_deallocate(obj); //<-vm_track_map_next_object
@@ -470,18 +481,23 @@ begin
 
  //while (i.Item<>nil) do
 
- while (node>nil) do
+ while (node<>nil) do
  begin
 
   //node:=i.Item^;
   //if (node<>nil) then
+
+  if not node^.is_mark_del then
   begin
    blob:=node^.blob;
    if (blob<>nil) and (blob<>prev) then
    begin
     if blob^.cross_host(QWORD(src),QWORD(src)+1) then
     begin
-     blob^.inc_ref;
+     blob^.inc_ref('fetch_blob_by_host');
+
+     rw_runlock(entry_chunk_lock);
+
      Exit(blob);
     end;
     prev:=blob;
@@ -509,7 +525,7 @@ begin
    tf_tip^:=blob^.find_guest_by_host(QWORD(src));
    rw_runlock(blob^.lock);
   end;
-  blob^.dec_ref;
+  blob^.dec_ref('fetch_blob_by_host');
   Result:=True;
  end else
  begin
@@ -580,7 +596,10 @@ begin
    blob:=curr^.blob;
 
    rw_wlock(blob^.lock);
-    Result:=blob^.add_entry_point(addr,Pointer(dest));
+    if not curr^.is_mark_del then
+    begin
+     Result:=blob^.add_entry_point(addr,Pointer(dest));
+    end;
    rw_wunlock(blob^.lock);
 
    blob^.attach_entry(Result);
@@ -589,13 +608,13 @@ begin
   end;
 
   next:=next_chunk(curr,addr);
-  curr^.dec_ref;
+  curr^.dec_ref('preload_entry');
   curr:=next;
  end;
 
  if (curr<>nil) then
  begin
-  curr^.dec_ref;
+  curr^.dec_ref('preload_entry');
  end;
 end;
 
@@ -667,6 +686,9 @@ begin
  end;
 
  Result:=node^.dst;
+
+ //
+ node^.dec_ref('fetch_entry')
 end;
 
 function t_jcode_chunk.c(n1,n2:p_jcode_chunk):Integer;
@@ -969,7 +991,7 @@ begin
 
  if (Result<>nil) then
  begin
-  Result^.inc_ref;
+  Result^.inc_ref('fetch_entry');
  end;
 
  rw_runlock(entry_hamt_lock);
@@ -982,7 +1004,7 @@ begin
  entry:=fetch_entry(src);
  if (entry<>nil) then
  begin
-  entry^.dec_ref;
+  entry^.dec_ref('fetch_entry');
   Result:=True;
  end else
  begin
@@ -996,31 +1018,33 @@ function new_blob(_size:ptruint):p_jit_dynamic_blob;
 begin
  Result:=AllocMem(SizeOf(t_jit_dynamic_blob));
  Result^.alloc_base(_size);
+
+ TAILQ_INIT(@Result^.jpltc_attc);
 end;
 
 //
 
-procedure t_jit_entry_point.inc_ref;
+procedure t_jit_entry_point.inc_ref(name:pchar);
 begin
- blob^.inc_ref;
+ blob^.inc_ref(name);
 end;
 
-procedure t_jit_entry_point.dec_ref;
+procedure t_jit_entry_point.dec_ref(name:pchar);
 begin
- blob^.dec_ref;
+ blob^.dec_ref(name);
 end;
 
 
 //
 
-procedure t_jcode_chunk.inc_ref;
+procedure t_jcode_chunk.inc_ref(name:pchar);
 begin
- blob^.inc_ref;
+ blob^.inc_ref(name);
 end;
 
-procedure t_jcode_chunk.dec_ref;
+procedure t_jcode_chunk.dec_ref(name:pchar);
 begin
- blob^.dec_ref;
+ blob^.dec_ref(name);
 end;
 
 function t_jcode_chunk.is_mark_del:Boolean;
@@ -1030,13 +1054,17 @@ end;
 
 //
 
-procedure t_jit_dynamic_blob.inc_ref;
+procedure t_jit_dynamic_blob.inc_ref(name:pchar);
 begin
+ //Writeln('inc_ref:0x',HexStr(@self),' ',name);
+
  System.InterlockedIncrement(refs);
 end;
 
-procedure t_jit_dynamic_blob.dec_ref;
+procedure t_jit_dynamic_blob.dec_ref(name:pchar);
 begin
+ //Writeln('dec_ref:0x',HexStr(@self),' ',name);
+
  if (System.InterlockedDecrement(refs)=0) then
  begin
   Free;
@@ -1122,6 +1150,95 @@ begin
  end;
 end;
 
+procedure t_jit_dynamic_blob.attach_plt_cache(node:p_jplt_cache);
+begin
+ rw_wlock(lock);
+
+ TAILQ_INSERT_TAIL(@jpltc_attc,node,@node^.entry);
+
+ rw_wunlock(lock);
+end;
+
+procedure t_jit_dynamic_blob.detach_plt_cache(node:p_jplt_cache);
+begin
+ rw_wlock(lock);
+
+ if (node^.entry.tqe_prev<>nil) then
+ begin
+  TAILQ_REMOVE(@jpltc_attc,node,@node^.entry);
+
+  node^.entry:=Default(TAILQ_ENTRY);
+ end;
+
+ rw_wunlock(lock);
+end;
+
+procedure _reset_plt(node:p_jplt_cache);
+var
+ plt:p_jit_plt;
+begin
+ plt:=node^.plt;
+ if (plt<>nil) then
+ begin
+  //one element plt reset
+  System.InterlockedCompareExchange(plt^.cache,nil,node);
+ end;
+end;
+
+procedure t_jit_dynamic_blob.detach_all_attc;
+var
+ node,next:p_jplt_cache;
+begin
+ node:=TAILQ_FIRST(@jpltc_attc);
+
+ while (node<>nil) do
+ begin
+  next:=TAILQ_NEXT(node,@node^.entry);
+
+  TAILQ_REMOVE(@jpltc_attc,node,@node^.entry);
+
+  node^.entry:=Default(TAILQ_ENTRY);
+
+  _reset_plt(node);
+
+  //force deref
+  if (System.InterlockedCompareExchange(node^.blk,nil,@Self)=@Self) then
+  begin
+   Self.dec_ref('add_plt_cache');
+  end;
+
+  node:=next;
+ end;
+end;
+
+procedure t_jit_dynamic_blob.detach_all_curr;
+var
+ node:p_jplt_cache;
+ blk :p_jit_dynamic_blob;
+begin
+ node:=jpltc_curr.Min;
+
+ while (node<>nil) do
+ begin
+  jpltc_curr.Delete(node);
+
+  _reset_plt(node);
+
+  blk:=node^.blk;
+
+  if (blk<>nil) then
+  begin
+   blk^.detach_plt_cache(node);
+   blk^.dec_ref('add_plt_cache');
+   node^.blk:=nil;
+  end;
+
+  FreeMem(node);
+
+  node:=jpltc_curr.Min;
+ end;
+end;
+
 function t_jit_dynamic_blob.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;blk:p_jit_dynamic_blob):p_jplt_cache;
 var
  node:t_jplt_cache;
@@ -1139,7 +1256,7 @@ begin
  repeat
 
   rw_wlock(lock);
-   Result:=jpltc_list.Find(@node);
+   Result:=jpltc_curr.Find(@node);
    if (Result<>nil) then
    begin
     //update
@@ -1147,16 +1264,23 @@ begin
     if (Result^.blk<>blk) then
     begin
      dec_blk:=Result^.blk;
+
      Result^.blk:=blk;
      //
-     blk^.inc_ref;
+     blk^.inc_ref('add_plt_cache');
     end;
    end;
   rw_wunlock(lock);
 
   if (dec_blk<>nil) then
   begin
-   dec_blk^.dec_ref;
+   //del
+   if (Result<>nil) then
+   begin
+    dec_blk^.detach_plt_cache(Result);
+   end;
+
+   dec_blk^.dec_ref('add_plt_cache');
    dec_blk:=nil;
   end;
 
@@ -1172,20 +1296,27 @@ begin
    Result^.blk:=blk;
    //
    rw_wlock(lock);
-    _insert:=jpltc_list.Insert(Result);
+    _insert:=jpltc_curr.Insert(Result);
     if _insert then
     begin
-     blk^.inc_ref;
+     blk^.inc_ref('add_plt_cache');
     end;
    rw_wunlock(lock);
    //
    if _insert then
    begin
+    //add
+
     Break;
    end;
   end;
 
  until false;
+
+ if (Result<>nil) then
+ begin
+  blk^.attach_plt_cache(Result);
+ end;
 
 end;
 
@@ -1297,7 +1428,7 @@ end;
 
 procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point);
 begin
- node^.inc_ref;
+ node^.inc_ref('attach_entry');
  self.inc_attach_count;
 
  rw_wlock(entry_hamt_lock);
@@ -1356,10 +1487,10 @@ begin
  rw_wunlock(entry_hamt_lock);
 
  Result:=self.dec_attach_count;
- node^.dec_ref;
+ node^.dec_ref('attach_entry');
 end;
 
-procedure t_jit_dynamic_blob.detach_entry;
+procedure t_jit_dynamic_blob.detach_all_entry;
 var
  node,next:p_jit_entry_point;
 begin
@@ -1416,10 +1547,10 @@ begin
   //entry_chunk.Delete(node);
  rw_wunlock(entry_chunk_lock);
 
- node^.dec_ref;
+ node^.dec_ref('blob_track');
 end;
 
-procedure t_jit_dynamic_blob.detach_chunk;
+procedure t_jit_dynamic_blob.detach_all_chunk;
 var
  node,next:p_jcode_chunk;
 begin
@@ -1436,10 +1567,18 @@ end;
 
 procedure t_jit_dynamic_blob.detach;
 begin
- inc_ref;
- detach_entry;
- detach_chunk;
- dec_ref;
+ inc_ref('detach');
+
+ rw_wlock(lock);
+
+ detach_all_entry;
+ detach_all_attc;
+ detach_all_curr;
+ detach_all_chunk;
+
+ rw_wunlock(lock);
+
+ dec_ref('detach');
 end;
 
 procedure delete_jit_cache(chunk:p_jcode_chunk);
@@ -1489,7 +1628,7 @@ begin
   if (node^.start<>node^.__end) then
   begin
 
-   node^.inc_ref;
+   node^.inc_ref('blob_track');
 
    rw_wlock(entry_chunk_lock);
 

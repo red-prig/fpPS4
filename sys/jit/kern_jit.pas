@@ -1311,7 +1311,7 @@ begin
    node:=preload_entry(preload);
    if (node<>nil) then
    begin
-    node^.dec_ref;
+    node^.dec_ref('preload_entry');
     goto _exit;
    end;
   end;

@@ -35,10 +35,15 @@ type
 
 procedure rangelock_init        (lock:p_rangelock);
 procedure rangelock_destroy     (lock:p_rangelock);
+
 procedure rangelock_unlock      (lock:p_rangelock;cookie:Pointer;ilk:p_mtx);
 function  rangelock_unlock_range(lock:p_rangelock;cookie:Pointer;start,__end:off_t;ilk:p_mtx):Pointer;
+
 function  rangelock_rlock       (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+function  rangelock_tryrlock    (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
 function  rangelock_wlock       (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+function  rangelock_trywlock    (lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+
 procedure rlqentry_free         (rleq:p_rl_q_entry);
 
 implementation
@@ -80,19 +85,11 @@ begin
 end;
 
 {
- * Verifies the supplied rl_q_entries for compatibility.  Returns true
- * if the rangelock queue entries are not compatible, false if they are.
- *
  * Two entries are compatible if their ranges do not overlap, or both
  * entries are for read.
 }
-function rangelock_incompatible(e1,e2:p_rl_q_entry):Integer;
+function ranges_overlap(e1,e2:p_rl_q_entry):Integer;
 begin
- if ((e1^.rl_q_flags and RL_LOCK_TYPE_MASK)=RL_LOCK_READ) and
-    ((e2^.rl_q_flags and RL_LOCK_TYPE_MASK)=RL_LOCK_READ) then
- begin
-  Exit(0);
- end;
  if (e1^.rl_q_start < e2^.rl_q_end) and (e1^.rl_q_end > e2^.rl_q_start) then
  begin
   Exit(1);
@@ -107,68 +104,102 @@ procedure rangelock_calc_block(lock:p_rangelock);
 label
  _out;
 var
- entry,entry1,whead:p_rl_q_entry;
+ entry,nextentry,entry1:p_rl_q_entry;
 begin
 
- if (lock^.rl_currdep=TAILQ_FIRST(@lock^.rl_waiters)) and
-    (lock^.rl_currdep<>nil) then
- begin
-  lock^.rl_currdep:=TAILQ_NEXT(lock^.rl_currdep, @lock^.rl_currdep^.rl_q_link);
- end;
-
+ //for
  entry:=lock^.rl_currdep;
-
  while (entry<>nil) do
  begin
-  entry1:=TAILQ_FIRST(@lock^.rl_waiters);
+  nextentry:=TAILQ_NEXT(entry, @entry^.rl_q_link);
 
-  while (entry1<>nil) do
+  if (entry^.rl_q_flags and RL_LOCK_READ)<>0 then
   begin
-   if (rangelock_incompatible(entry, entry1)<>0) then
+   // Reads must not overlap with granted writes.
+
+   //for
+   entry1:=TAILQ_FIRST(@lock^.rl_waiters);
+   while ((entry1^.rl_q_flags and RL_LOCK_READ)=0) do
    begin
-    goto _out;
+    if (ranges_overlap(entry, entry1)<>0) then
+    begin
+     goto _out;
+    end;
+    //
+    entry1:=TAILQ_NEXT(entry1, @entry1^.rl_q_link);
    end;
-   if (entry1=entry) then
+   //for
+
+  end else
+  begin
+   // Write must not overlap with any granted locks.
+
+   //for
+   entry1:=TAILQ_FIRST(@lock^.rl_waiters);
+   while (entry1<>entry) do
    begin
-    break;
+    if (ranges_overlap(entry, entry1)<>0) then
+    begin
+     goto _out;
+    end;
+    //
+    entry1:=TAILQ_NEXT(entry1, @entry1^.rl_q_link);
    end;
-   //
-   entry1:=TAILQ_NEXT(entry1, @entry1^.rl_q_link)
+   //for
+
+   // Move grantable write locks to the front.
+   TAILQ_REMOVE     (@lock^.rl_waiters, entry, @entry^.rl_q_link);
+   TAILQ_INSERT_HEAD(@lock^.rl_waiters, entry, @entry^.rl_q_link);
   end;
 
-  //next
-  entry:=TAILQ_NEXT(entry, @entry^.rl_q_link);
+  // Grant this lock.
+  entry^.rl_q_flags:=entry^.rl_q_flags or RL_LOCK_GRANTED;
+  wakeup(entry);
+
+  entry:=nextentry;
  end;
+ //for
 
-_out:
- lock^.rl_currdep:=entry;
-
- whead:=TAILQ_FIRST(@lock^.rl_waiters);
-
- while (whead<>nil) do
- begin
-  if (whead=lock^.rl_currdep) then
-  begin
-   break;
-  end;
-  if ((whead^.rl_q_flags and RL_LOCK_GRANTED)=0) then
-  begin
-   whead^.rl_q_flags:=whead^.rl_q_flags or RL_LOCK_GRANTED;
-   wakeup(whead);
-  end;
-  //
-  whead:=TAILQ_NEXT(whead, @whead^.rl_q_link)
- end;
+ _out:
+  lock^.rl_currdep:=entry;
 end;
 
-procedure rangelock_unlock_locked(lock:p_rangelock;entry:p_rl_q_entry;ilk:p_mtx);
+procedure rangelock_unlock_locked(lock:p_rangelock;entry:p_rl_q_entry;ilk:p_mtx;do_calc_block:Boolean);
 begin
  Assert((lock<>nil) and (entry<>nil) and (ilk<>nil));
  mtx_assert(ilk^);
- Assert(entry<>lock^.rl_currdep, 'stuck currdep');
+
+ if (not do_calc_block) then
+ begin
+  {
+   * This is the case where rangelock_enqueue() has been called
+   * with trylock=true and just inserted this entry in the
+   * queue.
+   * If rl_currdep is this entry, rl_currdep needs to
+   * be set to the next entry in the rl_waiters list.
+   * However, since this entry is the last entry in the
+   * list, the next entry is NULL.
+  }
+
+  if (lock^.rl_currdep=entry) then
+  begin
+   Assert(TAILQ_NEXT(lock^.rl_currdep, @lock^.rl_currdep^.rl_q_link)=nil, 'rangelock_enqueue: next entry not NULL');
+
+   lock^.rl_currdep:=nil;
+  end;
+ end else
+ begin
+  Assert(entry<>lock^.rl_currdep, 'stuck currdep');
+ end;
 
  TAILQ_REMOVE(@lock^.rl_waiters, entry, @entry^.rl_q_link);
- rangelock_calc_block(lock);
+ entry^.rl_q_link:=Default(TAILQ_ENTRY);
+
+ if (do_calc_block) then
+ begin
+  rangelock_calc_block(lock);
+ end;
+
  mtx_unlock(ilk^);
 
  if (curkthread^.td_rlqe=nil) then
@@ -182,7 +213,7 @@ begin
  Assert((lock<>nil) and (cookie<>nil) and (ilk<>nil));
 
  mtx_lock(ilk^);
- rangelock_unlock_locked(lock, cookie, ilk);
+ rangelock_unlock_locked(lock, cookie, ilk, true);
 end;
 
 {
@@ -204,7 +235,7 @@ begin
 
  if (entry^.rl_q_end=__end) then
  begin
-  rangelock_unlock_locked(lock, cookie, ilk);
+  rangelock_unlock_locked(lock, cookie, ilk, true);
   Exit(nil);
  end;
 
@@ -215,10 +246,10 @@ begin
 end;
 
 {
- * Add the lock request to the queue of the pending requests for
- * rangelock.  Sleep until the request can be granted.
+* Add the lock request to the queue of the pending requests for
+* rangelock.  Sleep until the request can be granted unless trylock=true.
 }
-function rangelock_enqueue(lock:p_rangelock;start,__end:off_t;mode:Integer;ilk:p_mtx):Pointer;
+function rangelock_enqueue(lock:p_rangelock;start,__end:off_t;mode:Integer;ilk:p_mtx;trylock:Boolean):Pointer;
 var
  entry:p_rl_q_entry;
  td:p_kthread;
@@ -249,6 +280,13 @@ begin
 
  TAILQ_INSERT_TAIL(@lock^.rl_waiters, entry, @entry^.rl_q_link);
 
+ {
+  * If rl_currdep=NULL, there is no entry waiting for a conflicting
+  * range to be resolved, so set rl_currdep to this entry.  If there is
+  * no conflicting entry for this entry, rl_currdep will be set back to
+  * NULL by rangelock_calc_block().
+ }
+
  if (lock^.rl_currdep=nil) then
  begin
   lock^.rl_currdep:=entry;
@@ -258,6 +296,19 @@ begin
 
  while ((entry^.rl_q_flags and RL_LOCK_GRANTED)=0) do
  begin
+
+  if (trylock) then
+  begin
+   {
+    * For this case, the range is not actually locked
+    * yet, but removal from the list requires the same
+    * steps, except for not doing a rangelock_calc_block()
+    * call, since rangelock_calc_block() was called above.
+   }
+   rangelock_unlock_locked(lock, entry, ilk, false);
+   Exit(nil);
+  end;
+
   msleep(entry, ilk, 0, 'range', 0);
  end;
 
@@ -267,14 +318,23 @@ end;
 
 function rangelock_rlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
 begin
- Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_READ, ilk);
+ Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_READ, ilk, false);
+end;
+
+function rangelock_tryrlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+begin
+ Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_READ, ilk, true);
 end;
 
 function rangelock_wlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
 begin
- Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_WRITE, ilk);
+ Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_WRITE, ilk, false);
 end;
 
+function rangelock_trywlock(lock:p_rangelock;start,__end:off_t;ilk:p_mtx):Pointer;
+begin
+ Result:=rangelock_enqueue(lock, start, __end, RL_LOCK_WRITE, ilk, true);
+end;
 
 
 end.
