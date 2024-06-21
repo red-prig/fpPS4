@@ -965,7 +965,7 @@ begin
   else;
  end;
 
- Writeln(' interrupt  =0x',HexStr(Body^.intSel shr 1,2));
+ Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
  Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
@@ -997,7 +997,7 @@ begin
   end;
  end;
 
- pctx^.stream[stGfxDcb].EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,(Body^.intSel shr 1));
+ pctx^.stream[stGfxDcb].EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
 end;
 

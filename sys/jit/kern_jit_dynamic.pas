@@ -374,9 +374,10 @@ var
 begin
  Result:=nil;
 
- obj:=vm_track_map_next_object(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
-                               vm_offset_t(src),
-                               nil);
+ obj:=vm_map_track_next(p_proc.p_vmspace,
+                        vm_offset_t(src),
+                        nil,
+                        H_JIT_CHUNK);
 
  if (obj<>nil) then
  begin
@@ -421,9 +422,10 @@ begin
  Result:=nil;
  //
 
- obj:=vm_track_map_next_object(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
-                               vm_offset_t(src),
-                               node^.tobj);
+ obj:=vm_map_track_next(p_proc.p_vmspace,
+                        vm_offset_t(src),
+                        node^.tobj,
+                        H_JIT_CHUNK);
 
  if (obj<>nil) then
  begin
@@ -1534,10 +1536,9 @@ begin
  begin
   node^.tobj:=nil;
 
-  _vm_track_map_delete_deferred(@vm_map_t(p_proc.p_vmspace)^.pmap^.tr_map,
-                                tobj);
+  _vm_map_track_delete_deferred(p_proc.p_vmspace,tobj);
 
-  //vm_map_untrack(p_proc.p_vmspace,tobj);
+  //vm_map_track_remove(p_proc.p_vmspace,tobj);
  end;
 
  rw_wlock(entry_chunk_lock);
@@ -1636,13 +1637,13 @@ begin
 
    rw_wunlock(entry_chunk_lock);
 
-   tobj:=vm_track_object_allocate(node,node^.start,node^.__end,PAGE_TRACK_W);
+   tobj:=vm_track_object_allocate(node,node^.start,node^.__end,H_JIT_CHUNK,PAGE_TRACK_W);
    tobj^.on_destroy:=@on_destroy;
    tobj^.on_trigger:=@on_trigger;
 
    node^.tobj:=tobj;
 
-   vm_map_track(p_proc.p_vmspace,tobj);
+   vm_map_track_insert(p_proc.p_vmspace,tobj);
 
    vm_track_object_deallocate(tobj); //<-vm_track_object_allocate
   end;

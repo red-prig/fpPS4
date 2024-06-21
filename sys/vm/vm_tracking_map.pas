@@ -23,6 +23,11 @@ const
  DO_DELETE   =1;
  DO_INCREMENT=2;
 
+ H_ZERO     =0;
+ H_JIT_CHUNK=1;
+ H_GPU_IMAGE=2;
+ H_GPU_BUF  =3;
+
 type
  t_on_destroy=function(handle:Pointer):Integer;
  t_on_trigger=function(handle:Pointer;start,__end:vm_offset_t):Integer;
@@ -35,6 +40,7 @@ type
   handle    :Pointer;
   //
   ref_count :DWORD;
+  htype     :Byte;
   mark_del  :Byte;
   prot      :Byte;
   //
@@ -107,7 +113,7 @@ procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 
 //
 
-function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t;prot:Byte):p_vm_track_object;
+function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t;htype,prot:Byte):p_vm_track_object;
 procedure vm_track_object_deallocate(obj:p_vm_track_object);
 procedure vm_track_object_reference (obj:p_vm_track_object);
 
@@ -129,7 +135,7 @@ function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):I
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
 function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t):Integer;
 
-function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object):p_vm_track_object;
+function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
 
 implementation
 
@@ -138,7 +144,7 @@ procedure pmap_prot_track(pmap :Pointer;
                           __end:vm_offset_t;
                           prots:Byte); external;
 
-function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;prot:Byte):p_vm_track_object;
+function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;htype,prot:Byte):p_vm_track_object;
 begin
  Result:=AllocMem(SizeOf(t_vm_track_object));
 
@@ -153,7 +159,8 @@ begin
  Result^.main.start:=start;
  Result^.main.__end:=__end;
 
- Result^.prot:=prot;
+ Result^.prot :=prot;
+ Result^.htype:=htype;
 end;
 
 procedure vm_track_object_destroy(obj:p_vm_track_object);
@@ -1496,7 +1503,7 @@ begin
  vm_track_map_unlock(map);
 end;
 
-function vm_track_map_next_object(map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object):p_vm_track_object;
+function vm_track_map_next_object(map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
 var
  entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;
@@ -1524,10 +1531,18 @@ begin
    node:=vm_track_next_instance(entry^.instances,node);
   end;
 
-  if (node<>nil) then
+  while (node<>nil) do
   begin
-   Result:=node^.obj;
+
+   if (node^.obj^.htype=htype) then
+   begin
+    Result:=node^.obj;
+    Break;
+   end;
+
+   node:=vm_track_next_instance(entry^.instances,node);
   end;
+
  end;
 
  //inc ref

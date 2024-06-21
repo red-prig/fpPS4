@@ -276,8 +276,10 @@ procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
 
-procedure vm_map_track  (map:vm_map_t;tobj:Pointer);
-procedure vm_map_untrack(map:vm_map_t;tobj:Pointer);
+procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
+procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
+function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:Byte):Pointer;
+procedure _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -3299,7 +3301,7 @@ begin
  vm_map_unlock(map);
 end;
 
-procedure vm_map_track(map:vm_map_t;tobj:Pointer);
+procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
 var
  entry:vm_map_entry_t;
  obj:vm_object_t;
@@ -3387,7 +3389,7 @@ begin
  vm_map_unlock(map);
 end;
 
-procedure vm_map_untrack(map:vm_map_t;tobj:Pointer);
+procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
 begin
  if (tobj=nil) then Exit;
 
@@ -3397,6 +3399,17 @@ begin
 
  vm_map_unlock(map);
 end;
+
+function vm_map_track_next(map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:Byte):Pointer;
+begin
+ Result:=vm_track_map_next_object(@map^.pmap^.tr_map,start,tobj,htype);
+end;
+
+procedure _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer);
+begin
+ _vm_track_map_delete_deferred(@map^.pmap^.tr_map,tobj);
+end;
+
 
 procedure vminit;
 begin

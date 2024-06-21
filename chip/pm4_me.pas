@@ -955,7 +955,8 @@ begin
    Assert(false,'pm4_EventWriteEop');
  end;
 
- if (node^.intSel<>0) then
+ if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
+    (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM) then
  begin
   me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
@@ -979,7 +980,8 @@ begin
 
  curr:=md_rdtsc_unit;
 
- if (node^.intSel<>0) then
+ if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
+    (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM) then
  begin
   me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;

@@ -1318,11 +1318,11 @@ begin
 
   //lock pageflt read-only  (mirrors?)
 
-  tobj:=vm_track_object_allocate(node,lock_start,lock___end,PAGE_TRACK_W);
+  tobj:=vm_track_object_allocate(node,lock_start,lock___end,H_ZERO,PAGE_TRACK_W);
   tobj^.on_destroy:=@pick_on_destroy;
   tobj^.on_trigger:=@pick_on_trigger;
 
-  vm_map_track(p_proc.p_vmspace,tobj);
+  vm_map_track_insert(p_proc.p_vmspace,tobj);
 
   //_pmap_prot_int(map^.pmap,lock_start,lock___end,PAGE_PROT_READ);
 
@@ -1337,7 +1337,7 @@ begin
   //restore non tracked  (mirrors?)
   //_pmap_prot_fix(map^.pmap,lock_start,lock___end,TRACK_PROT or REMAP_PROT);
 
-  vm_map_untrack(p_proc.p_vmspace,tobj);
+  vm_map_track_remove(p_proc.p_vmspace,tobj);
 
   tobj^.on_destroy:=nil;
   tobj^.on_trigger:=nil;

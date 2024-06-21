@@ -140,7 +140,7 @@ begin
 
  Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
 
- pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,(Body^.intSel shr 1));
+ pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
 end;
 
 function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;

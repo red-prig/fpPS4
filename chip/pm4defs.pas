@@ -392,9 +392,9 @@ const
  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER=4; //GPU 800Mhz clock.
 
  EVENTWRITEEOP_INT_SEL_NONE                =0;
- EVENTWRITEEOP_INT_SEL_SEND_INT            =1;
- EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM =2;
- EVENTWRITEEOP_INT_SEL_SEND_DATA_ON_CONFIRM=3;
+ EVENTWRITEEOP_INT_SEL_SEND_INT            =1; //interrupt only
+ EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM =2; //interrupt after data write confirm
+ EVENTWRITEEOP_INT_SEL_SEND_DATA_ON_CONFIRM=3; //wait on data write confirm
 
  //event type
  kEopFlushCbDbCaches              = $00000004;  //end of read CB/DB, wait fence, label .....EOP
