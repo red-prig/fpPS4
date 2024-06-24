@@ -3363,11 +3363,15 @@ begin
      diff:=e_start-entry^.start;
      size:=e___end-e_start;
 
-     offset:=entry^.offset+diff;
+     offset:=entry^.offset;
+     offset:=offset+diff;
+
+     //Writeln('rmem_map_track:  ',HexStr(e_start,16),'..',HexStr(e___end,16));
 
      rmem_map_track(map^.rmap,
-                    OFF_TO_IDX(offset),
-                    OFF_TO_IDX(offset + size + PAGE_MASK), //align up
+                    offset,
+                    offset+size,
+                    e_start,
                     tobj);
 
      //next

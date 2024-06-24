@@ -1236,8 +1236,12 @@ begin
  Result.Z_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_Z_READ_BASE ) shl 8);
  Result.Z_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_Z_WRITE_BASE) shl 8);
 
+ Assert(Result.Z_READ_ADDR=Result.Z_WRITE_ADDR,'Z_READ_ADDR<>Z_WRITE_ADDR');
+
  Result.STENCIL_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_STENCIL_READ_BASE ) shl 8);
  Result.STENCIL_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_STENCIL_WRITE_BASE) shl 8);
+
+ Assert(Result.STENCIL_READ_ADDR=Result.STENCIL_WRITE_ADDR,'STENCIL_READ_ADDR<>STENCIL_WRITE_ADDR');
 
  Assert(SHADER_CONTROL.Z_EXPORT_ENABLE=0               ,'Z_EXPORT_ENABLE');
  Assert(SHADER_CONTROL.STENCIL_TEST_VAL_EXPORT_ENABLE=0,'STENCIL_TEST_VAL_EXPORT_ENABLE');
@@ -1259,7 +1263,8 @@ begin
   Result.zorder_stage:=Result.zorder_stage or ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
  end;
 
- Result.FImageInfo.Addr:=Result.Z_READ_ADDR;
+ Result.FImageInfo.Addr   :=Result.Z_READ_ADDR;
+ Result.FImageInfo.Stencil:=Result.STENCIL_READ_ADDR;
 
  Result.FImageInfo.params.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
  Result.FImageInfo.params.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);

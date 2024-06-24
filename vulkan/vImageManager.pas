@@ -53,7 +53,7 @@ type
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
   Function    GetSubresRange:TVkImageSubresourceRange;
-  Function    GetSubresLayer:TVkImageSubresourceLayers;
+  Function    GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
  end;
 
  TvImageView2Set=specialize T23treeSet<PvImageViewKey,TvImageView2Compare>;
@@ -102,7 +102,7 @@ type
   procedure   assign_vm_track(_size:Ptruint);
   function    GetImageInfo:TVkImageCreateInfo; override;
   Function    GetSubresRange:TVkImageSubresourceRange;
-  Function    GetSubresLayer:TVkImageSubresourceLayers;
+  Function    GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
   function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
   function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
   function    FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
@@ -166,6 +166,9 @@ begin
  //1 Addr
  Result:=Integer(a^.Addr>b^.Addr)-Integer(a^.Addr<b^.Addr);
  if (Result<>0) then Exit;
+ //1 Stencil
+ Result:=Integer(a^.Stencil>b^.Stencil)-Integer(a^.Stencil<b^.Stencil);
+ if (Result<>0) then Exit;
  //2 cformat
  Result:=Integer(a^.cformat>b^.cformat)-Integer(a^.cformat<b^.cformat);
  if (Result<>0) then Exit;
@@ -219,10 +222,12 @@ begin
  Result.layerCount    :=key.last_array-key.base_array+1;
 end;
 
-Function TvImageView2.GetSubresLayer:TVkImageSubresourceLayers;
+Function TvImageView2.GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
 begin
+ if (cformat=VK_FORMAT_UNDEFINED) then cformat:=key.cformat;
+
  Result:=Default(TVkImageSubresourceLayers);
- Result.aspectMask    :=GetAspectMaskByFormat(key.cformat);
+ Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.mipLevel      :=key.base_level;
  Result.baseArrayLayer:=key.base_array;
  Result.layerCount    :=key.last_array-key.base_array+1;
@@ -367,10 +372,12 @@ begin
  Result.layerCount:=key.params.arrayLayers;
 end;
 
-Function TvImage2.GetSubresLayer:TVkImageSubresourceLayers;
+Function TvImage2.GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
 begin
+ if (cformat=VK_FORMAT_UNDEFINED) then cformat:=key.cformat;
+
  Result:=Default(TVkImageSubresourceLayers);
- Result.aspectMask    :=GetAspectMaskByFormat(key.cformat);
+ Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.mipLevel      :=0;
  Result.baseArrayLayer:=0;
  Result.layerCount    :=key.params.arrayLayers;

@@ -103,6 +103,7 @@ type
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
   Addr   :Pointer;
+  Stencil:Pointer;
   cformat:TVkFormat;
   params :packed record
    itype      :Byte; //TVkImageType 0..2 (2)
@@ -236,6 +237,8 @@ Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
 function IsDepthOrStencilFormat(cformat:TVkFormat):Boolean;
+function GetDepthOrImageFormat (cformat:TVkFormat):TVkFormat;
+function GetStencilOnlyFormat  (cformat:TVkFormat):TVkFormat;
 
 function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
 function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
@@ -372,6 +375,41 @@ begin
    Result:=True;
   else
    Result:=False;
+ end;
+end;
+
+function GetDepthOrImageFormat(cformat:TVkFormat):TVkFormat;
+begin
+ Case cformat of
+  //stencil
+  VK_FORMAT_S8_UINT:
+   Result:=VK_FORMAT_UNDEFINED;
+  //depth
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT:
+   Result:=cformat;
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT :Result:=VK_FORMAT_D16_UNORM;
+  VK_FORMAT_D24_UNORM_S8_UINT :Result:=VK_FORMAT_X8_D24_UNORM_PACK32;
+  VK_FORMAT_D32_SFLOAT_S8_UINT:Result:=VK_FORMAT_D32_SFLOAT;
+  else
+   Result:=cformat;
+ end;
+end;
+
+function GetStencilOnlyFormat(cformat:TVkFormat):TVkFormat;
+begin
+ Case cformat of
+  //stencil
+  VK_FORMAT_S8_UINT,
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   Result:=VK_FORMAT_S8_UINT;
+  else
+   Result:=VK_FORMAT_UNDEFINED;
  end;
 end;
 

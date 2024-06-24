@@ -286,7 +286,7 @@ begin
     end;
 end;
 
-Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvImage2);
+Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvImage2;cformat:TVkFormat);
 var
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
@@ -304,7 +304,7 @@ begin
 
  cmd.AddDependence(@buf.ReleaseTmp);
 
- m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bytePerElement:=getFormatSize(cformat);
 
  size:=GetLinearSize(image.key,false);
 
@@ -323,7 +323,7 @@ begin
                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
- BufferImageCopy.imageSubresource:=image.GetSubresLayer;
+ BufferImageCopy.imageSubresource:=image.GetSubresLayer(cformat);
  BufferImageCopy.imageSubresource.layerCount:=1;
  BufferImageCopy.imageExtent.depth:=1;
 
@@ -356,7 +356,7 @@ begin
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
+   if IsTexelFormat(cformat) then
    begin
     m_padwidth :=(m_width +3) shr 2;
     m_padheight:=(m_height+3) shr 2;
@@ -387,7 +387,7 @@ begin
 
 end;
 
-Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvImage2);
+Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvImage2;addr:Pointer;cformat:TVkFormat);
 var
  buf:TvTempBuffer;
  vmem:TvPointer;
@@ -434,10 +434,10 @@ begin
 
  dst:=m_base;
 
- m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bytePerElement:=getFormatSize(cformat);
 
  tiler.init_surface(m_bytePerElement,
-                    ord(IsTexelFormat(image.key.cformat)),
+                    ord(IsTexelFormat(cformat)),
                     image.key.params.tiling.idx,
                     image.key.params.tiling.alt);
 
@@ -447,7 +447,7 @@ begin
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
 
- src:=image.key.Addr;
+ src:=addr;
 
  while (m_level>0) do
  begin
@@ -485,16 +485,14 @@ begin
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
  //FreeMem(m_base);
 
- _Copy_Linear(cmd,buf,image);
+ _Copy_Linear(cmd,buf,image,cformat);
 end;
 
-Procedure load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
+Procedure Load_Linear(cmd:TvCustomCmdBuffer;image:TvImage2;addr:Pointer;cformat:TVkFormat);
 var
  buf:TvHostBuffer;
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
-
- addr:Pointer;
 
  BufferImageCopyA:array of TVkBufferImageCopy;
 
@@ -507,11 +505,9 @@ var
  a,d,b:Ptruint;
 begin
 
- m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bytePerElement:=getFormatSize(cformat);
 
  size:=GetLinearSize(image.key,(image.key.params.tiling.idx<>kTileModeDisplay_LinearGeneral));
-
- addr:=image.key.Addr;
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(addr),
@@ -536,7 +532,7 @@ begin
                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
- BufferImageCopy.imageSubresource:=image.GetSubresLayer;
+ BufferImageCopy.imageSubresource:=image.GetSubresLayer(cformat);
  BufferImageCopy.imageSubresource.layerCount:=1;
  BufferImageCopy.imageExtent.depth:=1;
 
@@ -572,7 +568,7 @@ begin
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
+   if IsTexelFormat(cformat) then
    begin
     m_padwidth :=(m_width +3) shr 2;
     m_padheight:=(m_height+3) shr 2;
@@ -603,13 +599,11 @@ begin
 
 end;
 
-Procedure Writeback_Linear(cmd:TvCustomCmdBuffer;image:TvImage2);
+Procedure Writeback_Linear(cmd:TvCustomCmdBuffer;image:TvImage2;addr:Pointer;cformat:TVkFormat);
 var
  buf:TvHostBuffer;
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
-
- addr:Pointer;
 
  BufferImageCopyA:array of TVkBufferImageCopy;
 
@@ -622,11 +616,9 @@ var
  a,d,b:Ptruint;
 begin
 
- m_bytePerElement:=getFormatSize(image.key.cformat);
+ m_bytePerElement:=getFormatSize(cformat);
 
  size:=GetLinearSize(image.key,(image.key.params.tiling.idx<>kTileModeDisplay_LinearGeneral));
-
- addr:=image.key.Addr;
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(addr),
@@ -651,7 +643,7 @@ begin
                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
- BufferImageCopy.imageSubresource:=image.GetSubresLayer;
+ BufferImageCopy.imageSubresource:=image.GetSubresLayer(cformat);
  BufferImageCopy.imageSubresource.layerCount:=1;
  BufferImageCopy.imageExtent.depth:=1;
 
@@ -687,7 +679,7 @@ begin
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
+   if IsTexelFormat(cformat) then
    begin
     m_padwidth :=(m_width +3) shr 2;
     m_padheight:=(m_height+3) shr 2;
@@ -719,7 +711,7 @@ begin
 end;
 
 type
- t_load_from_cb =procedure(cmd:TvCustomCmdBuffer;image:TvImage2);
+ t_load_from_cb =procedure(cmd:TvCustomCmdBuffer;image:TvImage2;addr:Pointer;cformat:TVkFormat);
  t_write_back_cb=t_load_from_cb;
  t_get_size_cb  =function(const key:TvImageKey):Ptruint;
 
@@ -754,14 +746,14 @@ end;
 
 procedure Init;
 begin
- set_tiling_cbs(kTileModeDisplay_2dThin       ,0,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
- set_tiling_cbs(kTileModeDisplay_2dThin       ,1,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDisplay_2dThin       ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDisplay_2dThin       ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
- set_tiling_cbs(kTileModeDepth_2dThin_256     ,0,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
- set_tiling_cbs(kTileModeDepth_2dThin_256     ,1,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDepth_2dThin_256     ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDepth_2dThin_256     ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
- set_tiling_cbs(kTileModeDepth_2dThin_64      ,0,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
- set_tiling_cbs(kTileModeDepth_2dThin_64      ,1,@load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDepth_2dThin_64      ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeDepth_2dThin_64      ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
  //
  set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,nil,@Get1dThinSize);
@@ -774,13 +766,14 @@ begin
  set_tiling_cbs(kTileModeThin_1dThin          ,1,@load_1dThin,nil,@Get1dThinSize);
  //
 
- set_tiling_cbs(kTileModeDisplay_LinearAligned,0,@load_Linear,@Writeback_Linear,@GetLinearAlignSize);
- set_tiling_cbs(kTileModeDisplay_LinearAligned,1,@load_Linear,@Writeback_Linear,@GetLinearAlignSize);
+ set_tiling_cbs(kTileModeDisplay_LinearAligned,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
+ set_tiling_cbs(kTileModeDisplay_LinearAligned,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
 end;
 
 procedure pm4_load_from(cmd:TvCustomCmdBuffer;image:TvImage2;IMAGE_USAGE:Byte);
 var
  cb:t_load_from_cb;
+ cformat:array[0..1] of TVkFormat;
 begin
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
 
@@ -799,7 +792,18 @@ begin
   Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
 
- cb(cmd,image);
+ cformat[0]:=GetDepthOrImageFormat(image.key.cformat);
+ cformat[1]:=GetStencilOnlyFormat (image.key.cformat);
+
+ if (cformat[0]<>VK_FORMAT_UNDEFINED) then
+ begin
+  cb(cmd,image,image.key.Addr,cformat[0]);
+ end;
+
+ if (cformat[1]<>VK_FORMAT_UNDEFINED) then
+ begin
+  cb(cmd,image,image.key.Stencil,cformat[1]);
+ end;
 
  image.ref_load:=image.ref_trig;
 
@@ -812,6 +816,7 @@ end;
 procedure pm4_write_back(cmd:TvCustomCmdBuffer;image:TvImage2);
 var
  cb:t_write_back_cb;
+ cformat:array[0..1] of TVkFormat;
 begin
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].write_back;
@@ -822,7 +827,18 @@ begin
   Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
 
- cb(cmd,image);
+ cformat[0]:=GetDepthOrImageFormat(image.key.cformat);
+ cformat[1]:=GetStencilOnlyFormat (image.key.cformat);
+
+ if (cformat[0]<>VK_FORMAT_UNDEFINED) then
+ begin
+  cb(cmd,image,image.key.Addr,cformat[0]);
+ end;
+
+ if (cformat[1]<>VK_FORMAT_UNDEFINED) then
+ begin
+  cb(cmd,image,image.key.Stencil,cformat[1]);
+ end;
 
  if (image.size=0) then
  begin

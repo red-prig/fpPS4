@@ -38,7 +38,7 @@ type
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=record
   del_link  :TAILQ_ENTRY; //p_vm_track_map->delete_deferred
-  iter_link :TAILQ_ENTRY;
+  //iter_link :TAILQ_ENTRY;
   //
   handle    :Pointer;
   //
@@ -197,6 +197,7 @@ begin
  System.InterlockedIncrement(obj^.ref_count);
 end;
 
+{
 procedure vm_track_list_add_obj(var list:TAILQ_HEAD;obj:p_vm_track_object);
 begin
  if (obj=nil) then Exit;
@@ -207,6 +208,7 @@ begin
 
  TAILQ_INSERT_TAIL(@list,obj,@obj^.iter_link);
 end;
+}
 
 function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t):Integer;
 begin
@@ -1432,10 +1434,16 @@ var
  current,entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;
 
+ diff:vm_offset_t;
+ size:vm_offset_t;
+
+ s_start:vm_offset_t;
+ s___end:vm_offset_t;
+
  ret:Integer;
 
- list:TAILQ_HEAD;
- onode,onext:p_vm_track_object;
+ //list:TAILQ_HEAD;
+ //onode,onext:p_vm_track_object;
 begin
  Result:=0; //count
 
@@ -1444,11 +1452,13 @@ begin
   Exit;
  end;
 
- TAILQ_INIT(@list);
+ size:=(__end-start);
+
+ //TAILQ_INIT(@list);
 
  vm_track_map_lock(map);
 
- vm_track_map_RANGE_CHECK(map, start, __end);
+ //vm_track_map_RANGE_CHECK(map, start, __end);
 
  if (vm_track_map_lookup_entry(map, start, @entry)) then
  begin
@@ -1463,9 +1473,32 @@ begin
  begin
   node:=vm_track_first_instance(entry^.instances);
 
+  //remap with source
+  //diff:=entry^.start-start;
+  //
+  //s_start:=entry^.source-diff;
+  //s___end:=s_start+size;
+
+  s_start:=start;
+  s___end:=__end;
+
   while (node<>nil) do
   begin
-   vm_track_list_add_obj(list,node^.obj); //deferred
+   //vm_track_list_add_obj(list,node^.obj); //deferred
+
+   //remap with source
+   ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end);
+
+   if ((ret and DO_DELETE)<>0) then
+   begin
+    //delete full object
+    _vm_track_map_delete_deferred(map,node^.obj);
+   end;
+
+   if ((ret and DO_INCREMENT)<>0) then
+   begin
+    Inc(Result);
+   end;
 
    node:=vm_track_next_instance(entry^.instances,node);
   end;
@@ -1475,6 +1508,7 @@ begin
 
  //iterate
 
+{
  onode:=TAILQ_FIRST(@list);
 
  while (onode<>nil) do
@@ -1500,6 +1534,7 @@ begin
 
   onode:=onext;
  end;
+}
 
  //iterate
 
