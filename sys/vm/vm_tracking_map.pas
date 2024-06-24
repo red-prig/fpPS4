@@ -19,6 +19,9 @@ type
  end;
 
 const
+ PAGE_TRACK_R=vm_pmap_prot.PAGE_TRACK_R;
+ PAGE_TRACK_W=vm_pmap_prot.PAGE_TRACK_W;
+
  DO_NOTHING  =0;
  DO_DELETE   =1;
  DO_INCREMENT=2;
@@ -1474,7 +1477,7 @@ begin
 
  onode:=TAILQ_FIRST(@list);
 
- while (node<>nil) do
+ while (onode<>nil) do
  begin
   onext:=TAILQ_NEXT(onode,@onode^.iter_link);
 

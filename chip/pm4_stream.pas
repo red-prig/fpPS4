@@ -126,6 +126,7 @@ type
   ntWaitRegMem,
   ntFastClear,
   ntResolve,
+  ntClearDepth,
   ntDrawIndex2,
   ntDrawIndexAuto,
   ntDispatchDirect
@@ -570,6 +571,27 @@ begin
 
  node^.INDEX_TYPE:=ord(GPU_REGS.GET_INDEX_TYPE);
  node^.SWAP_MODE :=CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
+
+ //heuristic
+ if (ntype=ntDrawIndexAuto) and
+    (node^.rt_info.RT_COUNT=0) and
+    (node^.rt_info.DB_ENABLE) then
+
+ if (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageLs]=nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageHs]=nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageEs]=nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageGs]=nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageVs]<>nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStagePs]<>nil) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageCs]=nil) then
+
+ if (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageVs].FHash=QWORD($00DF6E6331449451)) and
+    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStagePs].FHash=QWORD($E9FF5D4699E5B9AD)) then
+ begin
+  //ClearDepthTarget
+
+  node^.ntype:=ntClearDepth;
+ end;
 
  add_node(node);
 end;

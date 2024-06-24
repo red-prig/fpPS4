@@ -235,6 +235,7 @@ Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
+function IsDepthOrStencilFormat(cformat:TVkFormat):Boolean;
 
 function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
 function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
@@ -349,6 +350,25 @@ begin
  Case cformat of
   VK_FORMAT_BC1_RGB_UNORM_BLOCK..
   VK_FORMAT_BC7_SRGB_BLOCK:
+   Result:=True;
+  else
+   Result:=False;
+ end;
+end;
+
+function IsDepthOrStencilFormat(cformat:TVkFormat):Boolean;
+begin
+ Case cformat of
+  //stencil
+  VK_FORMAT_S8_UINT,
+  //depth
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT,
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
    Result:=True;
   else
    Result:=False;

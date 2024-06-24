@@ -79,7 +79,8 @@ var
 implementation
 
 uses
- kern_dmem;
+ kern_proc,
+ vm_map;
 
 procedure StartFrameCapture;
 begin
@@ -346,10 +347,42 @@ begin
                                         diff,
                                         range {VK_WHOLE_SIZE});
 
+   //TODO: check write flag
+   vm_map_track_trigger(p_proc.p_vmspace,QWORD(addr),QWORD(addr)+size);
 
   end;
  end;
  //buffers
+
+end;
+
+procedure pm4_ClearDepth(var rt_info:t_pm4_rt_info;
+                         CmdBuffer:TvCmdBuffer);
+var
+ ri:TvImage2;
+begin
+ //ClearDepthTarget
+
+ ri:=FetchImage(CmdBuffer,
+                rt_info.DB_INFO.FImageInfo,
+                iu_depth
+                //rt_info.DB_INFO.DEPTH_USAGE
+                );
+
+ ri.PushBarrier(CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_READ_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ ri.PushBarrier(CmdBuffer,
+                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ CmdBuffer.ClearDepthStencilImage(ri.FHandle,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
+                                  ri.GetSubresRange);
 
 end;
 
@@ -378,39 +411,6 @@ var
 
  FDescriptorGroup:TvDescriptorGroup;
 begin
-
- {
- if (rt_info.RT_COUNT=0) and
-    (rt_info.DB_ENABLE) then
- begin
-  //ClearDepthTarget
-
-  ri:=FetchImage(CmdBuffer,
-                 rt_info.DB_INFO.FImageInfo,
-                 iu_depth,
-                 rt_info.DB_INFO.DEPTH_USAGE
-                 );
-
-  ri.PushBarrier(CmdBuffer,
-                 ord(VK_ACCESS_TRANSFER_READ_BIT),
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-  ri.PushBarrier(CmdBuffer,
-                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-  CmdBuffer.ClearDepthStencilImage(ri.FHandle,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                   @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
-                                   ri.GetSubresRange);
-
-  Exit;
- end;
- }
-
-
  RP_KEY.Clear;
 
  RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
@@ -575,7 +575,7 @@ begin
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  //pm4_load_from(CmdBuffer,ri,RenderCmd.DB_INFO.DEPTH_USAGE);
+  pm4_load_from(CmdBuffer,ri,RenderCmd.DB_INFO.DEPTH_USAGE);
 
   iv:=ri.FetchView(CmdBuffer,iu_depth);
 
@@ -639,93 +639,38 @@ begin
 end;
 
 procedure pm4_Writeback(CmdBuffer:TvCmdBuffer;
-                        RenderCmd:TvRenderTargets);
+                        var rt_info:t_pm4_rt_info);
 var
  i:Integer;
 
  ri:TvImage2;
-
- buf:TvHostBuffer;
- addr,size,offset:Ptruint;
-
- BufferImageCopy:TVkBufferImageCopy;
 begin
  //write back
 
- if (RenderCmd.RT_COUNT<>0) then
- For i:=0 to RenderCmd.RT_COUNT-1 do
-  if (RenderCmd.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
+ if (rt_info.RT_COUNT<>0) then
+ For i:=0 to rt_info.RT_COUNT-1 do
+  if (rt_info.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
 
    ri:=FetchImage(CmdBuffer,
-                  RenderCmd.RT_INFO[i].FImageInfo,
+                  rt_info.RT_INFO[i].FImageInfo,
                   iu_attachment
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   ri.PushBarrier(CmdBuffer,
-                  ord(VK_ACCESS_TRANSFER_READ_BIT),
-                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-   addr:=QWORD(ri.key.Addr);
-
-   size:=GetLinearSize(ri,true);
-
-   buf:=FetchHostBuffer(CmdBuffer,
-                        addr,
-                        size,
-                        ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
-
-   offset:=buf.FAddr-addr;
-
-   vkBufferMemoryBarrier(CmdBuffer.FCmdbuf,
-                         buf.FHandle,
-                         ord(VK_ACCESS_MEMORY_READ_BIT),
-                         ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                         offset,
-                         size,
-                         ord(VK_PIPELINE_STAGE_HOST_BIT),
-                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                         );
-
-   BufferImageCopy:=Default(TVkBufferImageCopy);
-
-   BufferImageCopy.bufferOffset     :=offset;
-   BufferImageCopy.bufferRowLength  :=0;
-   BufferImageCopy.bufferImageHeight:=0;
-   BufferImageCopy.imageSubresource :=ri.GetSubresLayer;
-   BufferImageCopy.imageExtent.Create(ri.key.params.width,
-                                      ri.key.params.height,
-                                      ri.key.params.depth);
-
-   if true {align} then
-   begin
-    BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(getFormatSize(ri.key.cformat),ri.key.params.width);
-   end;
-
-   vkCmdCopyImageToBuffer(CmdBuffer.FCmdbuf,
-                          ri.FHandle,
-                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                          buf.FHandle,
-                          1,
-                          @BufferImageCopy);
-
+   pm4_write_back(CmdBuffer,ri);
   end;
 
- if RenderCmd.DB_ENABLE then
+ if rt_info.DB_ENABLE then
  begin
 
   ri:=FetchImage(CmdBuffer,
-                 RenderCmd.DB_INFO.FImageInfo,
+                 rt_info.DB_INFO.FImageInfo,
                  iu_depth
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  ri.PushBarrier(CmdBuffer,
-                 ord(VK_ACCESS_TRANSFER_READ_BIT),
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  pm4_write_back(CmdBuffer,ri);
 
   //
  end;
@@ -755,11 +700,15 @@ begin
 
  //
 
- RenderCmd:=TvRenderTargets.Create;
+ if (node^.ntype<>ntClearDepth) then
+ begin
+  RenderCmd:=TvRenderTargets.Create;
 
- pm4_DrawPrepare(node^.rt_info,
-                 CmdBuffer,
-                 RenderCmd);
+  pm4_DrawPrepare(node^.rt_info,
+                  CmdBuffer,
+                  RenderCmd);
+
+ end;
 
  CmdBuffer.FinstanceCount:=node^.numInstances;
  CmdBuffer.FINDEX_TYPE   :=TVkIndexType(node^.INDEX_TYPE);
@@ -773,6 +722,10 @@ begin
    begin
     CmdBuffer.DrawIndexAuto(node^.indexCount);
    end;
+  ntClearDepth:
+   begin
+    pm4_ClearDepth(node^.rt_info,CmdBuffer);
+   end;
   else;
    Assert(false);
  end;
@@ -781,7 +734,7 @@ begin
 
  CmdBuffer.EndRenderPass;
 
- pm4_Writeback(CmdBuffer,RenderCmd);
+ pm4_Writeback(CmdBuffer,node^.rt_info);
 
  r:=CmdBuffer.QueueSubmit;
 
@@ -1108,11 +1061,12 @@ begin
    node:=stream^.First;
    while (node<>nil) do
    begin
-    Writeln('+',node^.ntype);
+    //Writeln('+',node^.ntype);
 
     case node^.ntype of
      ntDrawIndex2    :pm4_Draw          (Pointer(node));
      ntDrawIndexAuto :pm4_Draw          (Pointer(node));
+     ntClearDepth    :pm4_Draw          (Pointer(node));
      ntDispatchDirect:pm4_DispatchDirect(Pointer(node));
      ntEventWriteEop :pm4_EventWriteEop (Pointer(node),me);
      ntSubmitFlipEop :pm4_SubmitFlipEop (Pointer(node),me);
@@ -1131,6 +1085,9 @@ begin
       end;
 
      else
+      begin
+       Writeln('me:+',node^.ntype);
+      end;
     end;
 
     //

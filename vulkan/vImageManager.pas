@@ -7,13 +7,15 @@ interface
 uses
  SysUtils,
  g23tree,
- //sys_types,
  Vulkan,
  vDevice,
  vDependence,
  vMemory,
  vImage,
- vCmdBuffer{,
+ vCmdBuffer,
+ kern_proc,
+ vm_map,
+ vm_tracking_map{,
  vImageTiling};
 
 {
@@ -73,7 +75,13 @@ type
  }
 
  TvImage2=class(TvCustomImage)
-  key:TvImageKey;
+  key :TvImageKey;
+  size:Ptruint;
+  //
+  tobj:p_vm_track_object;
+  //
+  ref_trig:Ptruint;
+  ref_load:Ptruint;
   //
   FUsage:s_image_usage;
   //
@@ -91,6 +99,7 @@ type
   data_usage:Byte;
   Constructor Create;
   Destructor  Destroy; override;
+  procedure   assign_vm_track(_size:Ptruint);
   function    GetImageInfo:TVkImageCreateInfo; override;
   Function    GetSubresRange:TVkImageSubresourceRange;
   Function    GetSubresLayer:TVkImageSubresourceLayers;
@@ -108,6 +117,8 @@ type
 
 function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
+
+//Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
 
 const
  img_ext:TVkExternalMemoryImageCreateInfo=(
@@ -227,7 +238,6 @@ Destructor TvImage2.Destroy;
 var
  i:TvImageView2Set.Iterator;
  t:TvImageView2;
- Fdevc:TvPointer;
 begin
 
  i:=FViews.cbegin;
@@ -239,10 +249,63 @@ begin
  end;
  FViews.Free;
 
- Fdevc:=FBind;
- FBind:=Default(TvPointer);
+ if (tobj<>nil) then
+ begin
+  vm_map_track_remove(p_proc.p_vmspace,tobj);
+ end;
 
  inherited;
+end;
+
+function on_destroy(handle:Pointer):Integer; SysV_ABI_CDecl;
+begin
+ TvImage2(handle).tobj:=nil;
+ //
+ Result:=DO_DELETE;
+end;
+
+function on_trigger(handle:Pointer;start,__end:QWORD):Integer; SysV_ABI_CDecl;
+var
+ image:TvImage2;
+begin
+ Result:=DO_NOTHING;
+
+ image:=TvImage2(handle);
+
+ if (__end>QWORD(image.key.Addr)) and (start<(QWORD(image.key.Addr)+image.size)) then
+ begin
+  //Writeln('on_trigger image');
+
+  System.InterlockedIncrement64(image.ref_trig);
+
+  Result:=DO_INCREMENT;
+ end;
+
+end;
+
+procedure TvImage2.assign_vm_track(_size:Ptruint);
+var
+ start,__end:QWORD;
+begin
+ rw_wlock(lock);
+
+ if (tobj=nil) then
+ begin
+  size:=_size;
+
+  start:=QWORD(key.Addr);
+  __end:=start+size;
+
+  tobj:=vm_track_object_allocate(Pointer(self),start,__end,H_GPU_IMAGE,PAGE_TRACK_W);
+  tobj^.on_destroy:=@on_destroy;
+  tobj^.on_trigger:=@on_trigger;
+
+  vm_map_track_insert(p_proc.p_vmspace,tobj);
+
+  vm_track_object_deallocate(tobj);
+ end;
+
+ rw_wunlock(lock)
 end;
 
 function TvImage2.GetImageInfo:TVkImageCreateInfo;
@@ -637,6 +700,7 @@ begin
  begin
   t:=TvImage2.Create;
   t.key   :=F;
+  //t.size  :=get_image_size(F);
   t.FUsage:=[usage];
 
   if not t.Compile(nil) then

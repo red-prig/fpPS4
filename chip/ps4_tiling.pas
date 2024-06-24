@@ -2728,7 +2728,7 @@ begin
 
  m_tileThickness :=getMicroTileThickness(m_arrayMode);
 
- m_tileBytes     := (kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bitsPerElement + 7) div 8;
+ m_tileBytes     := kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bytePerElement;
 
  m_isBlockCompressed := isBlockCompressed;
 
