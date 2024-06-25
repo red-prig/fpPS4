@@ -87,7 +87,9 @@ type
    Function  erase(Const it:Iterator):Boolean;
    Function  find(Const R:TKey):Iterator;
    Function  find_be(Const R:TKey):Iterator;
+   Function  find_bg(Const R:TKey):Iterator;
    Function  find_le(Const R:TKey):Iterator;
+   Function  find_ls(Const R:TKey):Iterator;
    function  cbegin:Iterator;
    function  cend:Iterator;
  end;
@@ -613,10 +615,54 @@ begin
  end;
 end;
 
+Function T23treeSet.find_bg(Const R:TKey):Iterator;
+begin
+ Result:=Iterator(TStuff._find_node(pRoot,R));
+ Case Result.P of
+   0:begin
+      Result.P:=0;
+      if not Result.Next then Result:=Default(Iterator);
+     end;
+   1:begin
+      Result.P:=1;
+      if not Result.Next then Result:=Default(Iterator);
+     end;
+  -1:Result.P:=0;
+  -2:begin
+      Result.P:=0;
+      if not Result.Next then Result:=Default(Iterator);
+     end;
+  -3:Result.P:=1;
+  -4:begin
+      Result.P:=1;
+      if not Result.Next then Result:=Default(Iterator);
+     end;
+ end;
+end;
+
 Function T23treeSet.find_le(Const R:TKey):Iterator;
 begin
  Result:=Iterator(TStuff._find_node(pRoot,R));
  Case Result.P of
+  -1:begin
+      Result.P:=0;
+      if not Result.Prev then Result:=Default(Iterator);
+     end;
+  -2:Result.P:=0;
+  -3:Result.P:=0;
+  -4:Result.P:=1;
+ end;
+end;
+
+Function T23treeSet.find_ls(Const R:TKey):Iterator;
+begin
+ Result:=Iterator(TStuff._find_node(pRoot,R));
+ Case Result.P of
+   0:begin
+      Result.P:=0;
+      if not Result.Prev then Result:=Default(Iterator);
+     end;
+   1:Result.P:=0;
   -1:begin
       Result.P:=0;
       if not Result.Prev then Result:=Default(Iterator);

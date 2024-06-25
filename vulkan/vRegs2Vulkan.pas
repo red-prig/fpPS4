@@ -24,13 +24,10 @@ type
 
   attachment:TVkUInt32;
 
-  //padded:TVkExtent2D;
-
   FImageInfo:TvImageKey;
   FImageView:TvImageViewKey;
 
   COMP_SWAP :Byte;
-  //FAST_CLEAR:Boolean;
 
   IMAGE_USAGE:Byte;
 
@@ -47,25 +44,16 @@ type
   STENCIL_READ_ADDR :Pointer;
   STENCIL_WRITE_ADDR:Pointer;
 
-  //padded:TVkExtent2D;
-
-  //DEPTH_CLEAR   :Boolean;
-  //STENCIL_CLEAR :Boolean;
-
-  //Z_READ_ONLY      :Boolean;
-  //STENCIL_READ_ONLY:Boolean;
-
   CLEAR_VALUE:TVkClearValue;
 
   ds_state:TVkPipelineDepthStencilStateCreateInfo;
 
-  DEPTH_USAGE:Byte;
+  DEPTH_USAGE  :Byte;
   STENCIL_USAGE:Byte;
 
   FImageInfo:TvImageKey;
 
   zorder_stage:TVkPipelineStageFlags;
-
  end;
 
  TBLEND_INFO=packed record
@@ -1117,6 +1105,8 @@ var
  DEPTH_CONTROL  :TDB_DEPTH_CONTROL;
  STENCIL_CONTROL:TDB_STENCIL_CONTROL;
  SHADER_CONTROL :TDB_SHADER_CONTROL;
+ DB_Z_INFO      :TDB_Z_INFO;
+ DB_STENCIL_INFO:TDB_STENCIL_INFO;
 begin
  Result:=Default(TDB_INFO);
 
@@ -1124,6 +1114,8 @@ begin
  DEPTH_CONTROL  :=CX_REG^.DB_DEPTH_CONTROL;
  STENCIL_CONTROL:=CX_REG^.DB_STENCIL_CONTROL;
  SHADER_CONTROL :=CX_REG^.DB_SHADER_CONTROL;
+ DB_Z_INFO      :=CX_REG^.DB_Z_INFO;
+ DB_STENCIL_INFO:=CX_REG^.DB_STENCIL_INFO;
 
  //
 
@@ -1231,8 +1223,6 @@ begin
 
  Assert(CX_REG^.DB_DEPTH_VIEW.SLICE_START=0,'DB_DEPTH_VIEW.SLICE_START');
 
- Result.FImageInfo.cformat:=DB_Z_FORMATS[CX_REG^.DB_Z_INFO.FORMAT,CX_REG^.DB_STENCIL_INFO.FORMAT];
-
  Result.Z_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_Z_READ_BASE ) shl 8);
  Result.Z_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_Z_WRITE_BASE) shl 8);
 
@@ -1263,17 +1253,28 @@ begin
   Result.zorder_stage:=Result.zorder_stage or ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
  end;
 
+ //
+
+ if (DB_STENCIL_INFO.FORMAT<>0) then
+ begin
+  Assert(DB_Z_INFO.TILE_MODE_INDEX=DB_STENCIL_INFO.TILE_MODE_INDEX,'DB_Z_INFO.TILE_MODE_INDEX<>DB_STENCIL_INFO.TILE_MODE_INDEX');
+ end;
+
+ //
+
+ Result.FImageInfo.cformat:=DB_Z_FORMATS[DB_Z_INFO.FORMAT,DB_STENCIL_INFO.FORMAT];
+
  Result.FImageInfo.Addr   :=Result.Z_READ_ADDR;
- Result.FImageInfo.Stencil:=Result.STENCIL_READ_ADDR;
+ Result.FImageInfo.Addr2  :=Result.STENCIL_READ_ADDR;
 
  Result.FImageInfo.params.width :=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_X);
  Result.FImageInfo.params.height:=_fix_scissor_range(CX_REG^.PA_SC_SCREEN_SCISSOR_BR.BR_Y);
  Result.FImageInfo.params.depth :=1;
 
- Result.FImageInfo.params.tiling.idx:=CX_REG^.DB_Z_INFO.TILE_MODE_INDEX;
+ Result.FImageInfo.params.tiling.idx:=DB_Z_INFO.TILE_MODE_INDEX;
 
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
- Result.FImageInfo.params.samples    :=1 shl (CX_REG^.DB_Z_INFO.NUM_SAMPLES and 3);
+ Result.FImageInfo.params.samples    :=1 shl (DB_Z_INFO.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
  Result.FImageInfo.params.arrayLayers:=1;
 

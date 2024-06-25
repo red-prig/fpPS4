@@ -302,7 +302,7 @@ begin
  buf^.eventIndex  :=5;
  buf^.invalidateL2:=1;
  buf^.address     :=QWORD(addr);
- buf^.intSel      :=ord(intSel<>0)*2;
+ buf^.intSel      :=ord(intSel<>0)*EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM;
  buf^.dataSel     :=EVENTWRITEEOP_DATA_SEL_SEND_DATA64;
  buf^.DATA        :=data;
 

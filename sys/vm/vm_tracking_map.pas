@@ -136,7 +136,7 @@ function  _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offs
 
 function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t):Integer;
+function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer):Integer;
 
 function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
 
@@ -1429,7 +1429,7 @@ begin
  Result:=(KERN_SUCCESS);
 end;
 
-function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
+function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer):Integer;
 var
  current,entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;
@@ -1487,17 +1487,20 @@ begin
    //vm_track_list_add_obj(list,node^.obj); //deferred
 
    //remap with source
-   ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end);
-
-   if ((ret and DO_DELETE)<>0) then
+   if (node^.obj<>exclude) then
    begin
-    //delete full object
-    _vm_track_map_delete_deferred(map,node^.obj);
-   end;
+    ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end);
 
-   if ((ret and DO_INCREMENT)<>0) then
-   begin
-    Inc(Result);
+    if ((ret and DO_DELETE)<>0) then
+    begin
+     //delete full object
+     _vm_track_map_delete_deferred(map,node^.obj);
+    end;
+
+    if ((ret and DO_INCREMENT)<>0) then
+    begin
+     Inc(Result);
+    end;
    end;
 
    node:=vm_track_next_instance(entry^.instances,node);

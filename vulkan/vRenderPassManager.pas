@@ -118,7 +118,7 @@ begin
  DepCount:=1;
 
  DepthRef.attachment:=id;
- DepthRef.layout    :=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
+ DepthRef.layout    :=GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE);
 
  am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
 
@@ -169,9 +169,9 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
- begin
-  finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
- end;
+  begin
+   finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  end;
 
  Inc(AtdCount);
 
@@ -231,18 +231,14 @@ begin
   end;
 
  With ColorAtd[AtdCount] do
-  if (((DEPTH_USAGE or STENCIL_USAGE) and TM_READ)<>0) then
   begin
-   initialLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
-  end else
-  begin
-   initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+   initialLayout:=GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE);
   end;
 
  With ColorAtd[AtdCount] do
- begin
-  finalLayout:=GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE);
- end;
+  begin
+   finalLayout:=GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE);
+  end;
 
  Inc(AtdCount);
 

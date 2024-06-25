@@ -88,26 +88,27 @@ label
  _repeat;
 var
  It:TvHostBufferSet.Iterator;
- key:TvHostBufferKey;
+ tmp:TvHostBufferKey;
  buf:TvHostBuffer;
  __end:QWORD;
 begin
  Result:=nil;
  __end:=Addr+Size;
 
- key:=Default(TvHostBufferKey);
- key.FAddr :=Addr;
- key.FUsage:=0;
+ tmp:=Default(TvHostBufferKey);
+ tmp.FAddr :=__end;
+ tmp.FUsage:=High(TVkFlags);
+
+ //[s|new|e] ->
+ //      [s|old|e]
 
  _repeat:
 
- It:=FHostBufferSet.find_be(key);
+ It:=FHostBufferSet.find_ls(tmp);
 
  while (It.Item<>nil) do
  begin
   buf:=It.Item^.FBuffer;
-
-  if (buf.FAddr>=__end) then Exit;
 
   if buf.Acquire(nil) then
   begin
@@ -129,7 +130,7 @@ begin
    goto _repeat;
   end;
 
-  It.Next;
+  if not It.Prev then Break;
  end;
 
 end;

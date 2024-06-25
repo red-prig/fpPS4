@@ -32,7 +32,7 @@ uses
 }
 
 type
- t_image_usage=(iu_attachment,iu_depth,iu_sampled,iu_storage);
+ t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer);
  s_image_usage=set of t_image_usage;
 
  TvImageView2Compare=object
@@ -47,45 +47,67 @@ type
   //
   Barrier:TvImageBarrier;
   //
-  //Constructor Create;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
                           dstStageMask:TVkPipelineStageFlags);
-  Function    GetSubresRange:TVkImageSubresourceRange;
+  Function    GetSubresRange(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceRange;
   Function    GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
  end;
 
  TvImageView2Set=specialize T23treeSet<PvImageViewKey,TvImageView2Compare>;
 
- {
- TvHostImage2=class(TvCustomImage)
-  Parent:TvImage2;
-
+ TvCustomImage2=class(TvCustomImage)
   //
-  Barrier:TvImageBarrier;
-  //
-  Constructor Create;
-  function    GetImageInfo:TVkImageCreateInfo; override;
-  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
-                          dstAccessMask:TVkAccessFlags;
-                          newImageLayout:TVkImageLayout;
-                          dstStageMask:TVkPipelineStageFlags);
- end;
- }
-
- TvImage2=class(TvCustomImage)
   key :TvImageKey;
-  size:Ptruint;
   //
+  size:Ptruint;
   tobj:p_vm_track_object;
   //
   ref_trig:Ptruint;
   ref_load:Ptruint;
   //
-  FUsage:s_image_usage;
+  Parent     :TvCustomImage2;
+  DepthOnly  :TvCustomImage2;
+  StencilOnly:TvCustomImage2;
   //
   lock:Pointer;
+  //
+  Constructor Create;
+  Destructor  Destroy; override;
+  procedure   assign_vm_track; virtual;
+  Function    GetSubresRange:TVkImageSubresourceRange;  virtual;
+  Function    GetSubresLayer:TVkImageSubresourceLayers; virtual;
+  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; virtual; abstract;
+  function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
+  function    FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
+  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags); virtual; abstract;
+  procedure   ForceBarrier(dstAccessMask:TVkAccessFlags;
+                           newImageLayout:TVkImageLayout;
+                           dstStageMask:TVkPipelineStageFlags); virtual; abstract;
+ end;
+
+ TvChildImage2=class(TvCustomImage2)
+  procedure   FreeHandle; override;
+  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
+  procedure   PushBarrier(cmd:TvCustomCmdBuffer;
+                          dstAccessMask:TVkAccessFlags;
+                          newImageLayout:TVkImageLayout;
+                          dstStageMask:TVkPipelineStageFlags); override;
+  procedure   ForceBarrier(dstAccessMask:TVkAccessFlags;
+                           newImageLayout:TVkImageLayout;
+                           dstStageMask:TVkPipelineStageFlags); override;
+  function    Acquire(Sender:TObject):Boolean; override;
+  procedure   Release(Sender:TObject);         override;
+ end;
+
+ TvImage2=class(TvCustomImage2)
+  //
+  FUsage:s_image_usage;
+  //
   FViews:TvImageView2Set;
   //
   Barrier:TvImageBarrier;
@@ -96,29 +118,31 @@ type
   submit_id:ptruint;
   hash:qword;
   //
-  data_usage:Byte;
   Constructor Create;
   Destructor  Destroy; override;
-  procedure   assign_vm_track(_size:Ptruint);
   function    GetImageInfo:TVkImageCreateInfo; override;
-  Function    GetSubresRange:TVkImageSubresourceRange;
-  Function    GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
-  function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
-  function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
-  function    FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
-  //function    FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
+  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
-                          dstStageMask:TVkPipelineStageFlags);
+                          dstStageMask:TVkPipelineStageFlags); override;
+  procedure   ForceBarrier(dstAccessMask:TVkAccessFlags;
+                           newImageLayout:TVkImageLayout;
+                           dstStageMask:TVkPipelineStageFlags); override;
   function    Acquire(Sender:TObject):Boolean; override;
   procedure   Release(Sender:TObject);         override;
+ end;
+
+ TvDepthStencilImage2=class(TvImage2)
+  function    Compile(ext:Pointer):Boolean; override;
+  procedure   assign_vm_track; override;
+  Destructor  Destroy; override;
  end;
 
 function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
-//Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
+Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
 
 const
  img_ext:TVkExternalMemoryImageCreateInfo=(
@@ -126,10 +150,6 @@ const
   pNext:nil;
   handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
  );
-
-var
- IMAGE_TEST_HACK:Boolean=False;
- IMAGE_LOAD_HACK:Boolean=False;
 
 implementation
 
@@ -167,7 +187,7 @@ begin
  Result:=Integer(a^.Addr>b^.Addr)-Integer(a^.Addr<b^.Addr);
  if (Result<>0) then Exit;
  //1 Stencil
- Result:=Integer(a^.Stencil>b^.Stencil)-Integer(a^.Stencil<b^.Stencil);
+ Result:=Integer(a^.Addr2>b^.Addr2)-Integer(a^.Addr2<b^.Addr2);
  if (Result<>0) then Exit;
  //2 cformat
  Result:=Integer(a^.cformat>b^.cformat)-Integer(a^.cformat<b^.cformat);
@@ -181,13 +201,143 @@ begin
  Result:=CompareByte(a^,b^,SizeOf(TvImageViewKey));
 end;
 
-{
-Constructor TvImageView2.Create;
+//
+
+function on_destroy(handle:Pointer):Integer; SysV_ABI_CDecl;
+var
+ image:TvCustomImage2;
+begin
+ image:=TvCustomImage2(handle);
+ image.tobj:=nil;
+
+ //
+ Result:=DO_DELETE;
+end;
+
+function on_trigger(handle:Pointer;start,__end:QWORD):Integer; SysV_ABI_CDecl;
+var
+ image:TvCustomImage2;
+begin
+ Result:=DO_NOTHING;
+
+ image:=TvCustomImage2(handle);
+
+ if (__end>QWORD(image.key.Addr)) and (start<(QWORD(image.key.Addr)+image.size)) then
+ begin
+  //Writeln('on_trigger image');
+
+  System.InterlockedIncrement64(image.ref_trig);
+
+  Result:=DO_INCREMENT;
+ end;
+
+end;
+
+//
+
+Constructor TvCustomImage2.Create;
 begin
  inherited;
- Barrier.Init;
+ ref_trig:=1;
 end;
-}
+
+Destructor TvCustomImage2.Destroy;
+begin
+ if (tobj<>nil) then
+ begin
+  vm_map_track_remove(p_proc.p_vmspace,tobj);
+ end;
+
+ inherited;
+end;
+
+procedure TvCustomImage2.assign_vm_track;
+var
+ start,__end:QWORD;
+begin
+ if (tobj<>nil) then Exit;
+
+ rw_wlock(lock);
+
+ if (tobj=nil) then
+ begin
+  size:=get_image_size(key);
+
+  start:=QWORD(key.Addr);
+  __end:=start+size;
+
+  tobj:=vm_track_object_allocate(Pointer(self),start,__end,H_GPU_IMAGE,PAGE_TRACK_W);
+  tobj^.on_destroy:=@on_destroy;
+  tobj^.on_trigger:=@on_trigger;
+
+  vm_map_track_insert(p_proc.p_vmspace,tobj);
+
+  vm_track_object_deallocate(tobj);
+ end;
+
+ rw_wunlock(lock)
+end;
+
+Function TvCustomImage2.GetSubresRange:TVkImageSubresourceRange;
+begin
+ Result:=Default(TVkImageSubresourceRange);
+ Result.aspectMask:=GetAspectMaskByFormat(key.cformat);
+ Result.levelCount:=key.params.mipLevels;
+ Result.layerCount:=key.params.arrayLayers;
+end;
+
+Function TvCustomImage2.GetSubresLayer:TVkImageSubresourceLayers;
+begin
+ Result:=Default(TVkImageSubresourceLayers);
+ Result.aspectMask    :=GetAspectMaskByFormat(key.cformat);
+ Result.mipLevel      :=0;
+ Result.baseArrayLayer:=0;
+ Result.layerCount    :=key.params.arrayLayers;
+end;
+
+//
+
+procedure TvChildImage2.FreeHandle;
+begin
+ //nothing
+end;
+
+function TvChildImage2._FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
+begin
+ Result:=Parent._FetchView(cmd,F,usage);
+end;
+
+procedure TvChildImage2.PushBarrier(cmd:TvCustomCmdBuffer;
+                                    dstAccessMask:TVkAccessFlags;
+                                    newImageLayout:TVkImageLayout;
+                                    dstStageMask:TVkPipelineStageFlags);
+begin
+ Parent.PushBarrier(cmd,
+                    dstAccessMask,
+                    newImageLayout,
+                    dstStageMask);
+end;
+
+procedure TvChildImage2.ForceBarrier(dstAccessMask:TVkAccessFlags;
+                                     newImageLayout:TVkImageLayout;
+                                     dstStageMask:TVkPipelineStageFlags);
+begin
+ Parent.ForceBarrier(dstAccessMask,
+                     newImageLayout,
+                     dstStageMask);
+end;
+
+function TvChildImage2.Acquire(Sender:TObject):Boolean;
+begin
+ Result:=Parent.Acquire(Sender);
+end;
+
+procedure TvChildImage2.Release(Sender:TObject);
+begin
+ Parent.Release(Sender);
+end;
+
+//
 
 procedure TvImageView2.PushBarrier(cmd:TvCustomCmdBuffer;
                                    dstAccessMask:TVkAccessFlags;
@@ -212,10 +362,12 @@ begin
 
 end;
 
-Function TvImageView2.GetSubresRange:TVkImageSubresourceRange;
+Function TvImageView2.GetSubresRange(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceRange;
 begin
+ if (cformat=VK_FORMAT_UNDEFINED) then cformat:=key.cformat;
+
  Result:=Default(TVkImageSubresourceRange);
- Result.aspectMask    :=GetAspectMaskByFormat(key.cformat);
+ Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.baseMipLevel  :=key.base_level;
  Result.levelCount    :=key.last_level-key.base_level+1;
  Result.baseArrayLayer:=key.base_array;
@@ -237,6 +389,7 @@ Constructor TvImage2.Create;
 begin
  inherited;
  Barrier.Init;
+ ref_trig:=1;
 end;
 
 Destructor TvImage2.Destroy;
@@ -254,63 +407,7 @@ begin
  end;
  FViews.Free;
 
- if (tobj<>nil) then
- begin
-  vm_map_track_remove(p_proc.p_vmspace,tobj);
- end;
-
  inherited;
-end;
-
-function on_destroy(handle:Pointer):Integer; SysV_ABI_CDecl;
-begin
- TvImage2(handle).tobj:=nil;
- //
- Result:=DO_DELETE;
-end;
-
-function on_trigger(handle:Pointer;start,__end:QWORD):Integer; SysV_ABI_CDecl;
-var
- image:TvImage2;
-begin
- Result:=DO_NOTHING;
-
- image:=TvImage2(handle);
-
- if (__end>QWORD(image.key.Addr)) and (start<(QWORD(image.key.Addr)+image.size)) then
- begin
-  //Writeln('on_trigger image');
-
-  System.InterlockedIncrement64(image.ref_trig);
-
-  Result:=DO_INCREMENT;
- end;
-
-end;
-
-procedure TvImage2.assign_vm_track(_size:Ptruint);
-var
- start,__end:QWORD;
-begin
- rw_wlock(lock);
-
- if (tobj=nil) then
- begin
-  size:=_size;
-
-  start:=QWORD(key.Addr);
-  __end:=start+size;
-
-  tobj:=vm_track_object_allocate(Pointer(self),start,__end,H_GPU_IMAGE,PAGE_TRACK_W);
-  tobj^.on_destroy:=@on_destroy;
-  tobj^.on_trigger:=@on_trigger;
-
-  vm_map_track_insert(p_proc.p_vmspace,tobj);
-
-  vm_track_object_deallocate(tobj);
- end;
-
- rw_wunlock(lock)
 end;
 
 function TvImage2.GetImageInfo:TVkImageCreateInfo;
@@ -329,61 +426,7 @@ begin
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 end;
 
-{
-Constructor TvHostImage2.Create;
-begin
- inherited;
- Barrier.Init;
-end;
-
-function TvHostImage2.GetImageInfo:TVkImageCreateInfo;
-var
- bpp,size:qword;
-begin
- Result:=Parent.GetImageInfo;
- Result.tiling:=VK_IMAGE_TILING_LINEAR;
- Result.usage :=FUsage;
- Result.flags :=ord(VK_IMAGE_CREATE_ALIAS_BIT);
- if (Parent.key.params.tiling_idx=8) then
- begin
-  size:=Result.extent.width;
-  bpp:=getFormatSize(Result.format);
-  if IsTexelFormat(Result.format) then
-  begin
-   size:=(size+3) div 4;
-  end;
-  size:=size*bpp;
-  size:=AlignUp(size,128);
-  size:=size div bpp;
-  if IsTexelFormat(Result.format) then
-  begin
-   size:=size*4;
-  end;
-  Result.extent.width:=size;
- end;
-end;
-}
-
-Function TvImage2.GetSubresRange:TVkImageSubresourceRange;
-begin
- Result:=Default(TVkImageSubresourceRange);
- Result.aspectMask:=GetAspectMaskByFormat(key.cformat);
- Result.levelCount:=key.params.mipLevels;
- Result.layerCount:=key.params.arrayLayers;
-end;
-
-Function TvImage2.GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
-begin
- if (cformat=VK_FORMAT_UNDEFINED) then cformat:=key.cformat;
-
- Result:=Default(TVkImageSubresourceLayers);
- Result.aspectMask    :=GetAspectMaskByFormat(cformat);
- Result.mipLevel      :=0;
- Result.baseArrayLayer:=0;
- Result.layerCount    :=key.params.arrayLayers;
-end;
-
-function TvImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
+function TvImage2._FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
 var
  key2:TvImageViewKey;
 
@@ -466,7 +509,7 @@ begin
  Result:=t;
 end;
 
-function TvImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
+function TvCustomImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
 var
  tmp:TvImageViewKey;
 begin
@@ -475,14 +518,14 @@ begin
    begin
     tmp:=F;
     tmp.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=FetchView(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    Result:=_FetchView(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
    end;
   else
-   Result:=FetchView(cmd,F,0);
+   Result:=_FetchView(cmd,F,0);
  end;
 end;
 
-function TvImage2.FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
+function TvCustomImage2.FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
 var
  F:TvImageViewKey;
 begin
@@ -518,68 +561,13 @@ begin
   iu_storage:
    begin
     F.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=FetchView(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    Result:=_FetchView(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
    end;
   else
-   Result:=FetchView(cmd,F,0);
+   Result:=_FetchView(cmd,F,0);
  end;
 
 end;
-
-{
-function TvImage2.FetchHostImage(cmd:TvCustomCmdBuffer;usage:TVkFlags):TvHostImage2;
-var
- t:TvHostImage2;
- Fhost:TvPointer;
-begin
- Result:=nil;
- t:=FHostImage;
-
- if (t<>nil) then
- begin
-  if ((t.FUsage and usage)<>usage) then
-  begin
-   Assert(false,'TODO');
-  end;
-  Exit(t);
- end;
-
- t:=TvHostImage2.Create;
- t.Parent:=Self;
- t.FUsage:=usage;
-
- if not t.Compile(@img_ext) then
- begin
-  t.Free;
-  Exit;
- end;
-
- if TryGetHostPointerByAddr(key.Addr,Fhost) then
- begin
-  if (t.BindMem(Fhost)<>VK_SUCCESS) then
-  begin
-   t.Free;
-   Exit;
-  end;
- end else
- begin
-  t.Free;
-  Exit;
- end;
-
- FHostImage:=t;
- Result:=t;
-
- if (cmd<>nil) and (Self<>nil) then
- begin
-  if cmd.AddDependence(@Self.Release) then
-  begin
-   Self.Acquire(cmd);
-  end;
- end;
-
-end;
-}
 
 procedure TvImage2.PushBarrier(cmd:TvCustomCmdBuffer;
                                dstAccessMask:TVkAccessFlags;
@@ -604,26 +592,18 @@ begin
  rw_wunlock(lock);
 end;
 
-{
-procedure TvHostImage2.PushBarrier(cmd:TvCustomCmdBuffer;
-                                   dstAccessMask:TVkAccessFlags;
-                                   newImageLayout:TVkImageLayout;
-                                   dstStageMask:TVkPipelineStageFlags);
+procedure TvImage2.ForceBarrier(dstAccessMask:TVkAccessFlags;
+                                newImageLayout:TVkImageLayout;
+                                dstStageMask:TVkPipelineStageFlags);
 begin
- if (cmd=nil) then Exit;
- if (not cmd.BeginCmdBuffer) then Exit;
+ rw_wlock(lock);
 
- if Barrier.Push(cmd.cmdbuf,
-                 FHandle,
-                 Parent.GetSubresRange,
-                 dstAccessMask,
-                 newImageLayout,
-                 dstStageMask) then
- begin
-  Inc(cmd.cmd_count);
- end;
+ Barrier.AccessMask:=dstAccessMask;
+ Barrier.ImgLayout :=newImageLayout;
+ Barrier.StageMask :=dstStageMask;
+
+ rw_wunlock(lock);
 end;
-}
 
 function TvImage2.Acquire(Sender:TObject):Boolean;
 begin
@@ -653,6 +633,58 @@ begin
  inherited Release(Sender);
 end;
 
+//
+
+function TvDepthStencilImage2.Compile(ext:Pointer):Boolean;
+begin
+ Result:=inherited Compile(ext);
+ //
+ if Result then
+ begin
+  if (DepthOnly<>nil) then
+  begin
+   DepthOnly.FHandle:=FHandle;
+  end;
+
+  if (StencilOnly<>nil) then
+  begin
+   StencilOnly.FHandle:=FHandle;
+  end;
+ end;
+end;
+
+procedure TvDepthStencilImage2.assign_vm_track;
+begin
+ if (DepthOnly<>nil) then
+ begin
+  DepthOnly.assign_vm_track;
+ end;
+
+ if (StencilOnly<>nil) then
+ begin
+  StencilOnly.assign_vm_track;
+ end;
+end;
+
+Destructor TvDepthStencilImage2.Destroy;
+begin
+ if (DepthOnly<>nil) and
+    (DepthOnly<>Self) then
+ begin
+  FreeAndNil(DepthOnly);
+ end;
+
+ if (StencilOnly<>nil) and
+    (StencilOnly<>Self) then
+ begin
+  FreeAndNil(StencilOnly);
+ end;
+
+ inherited;
+end;
+
+//
+
 function _Find(const F:TvImageKey):TvImage2;
 var
  i:TvImage2Set.Iterator;
@@ -675,6 +707,59 @@ begin
  if (usage and ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))<>0 then Write(' DEPTH_STENCIL_ATTACHMENT');
  if (usage and ord(VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT    ))<>0 then Write(' TRANSIENT_ATTACHMENT');
  if (usage and ord(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ))<>0 then Write(' INPUT_ATTACHMENT');
+end;
+
+function _NewImage(const F:TvImageKey;usage:t_image_usage):TvImage2;
+begin
+ Case F.cformat of
+  //stencil
+  VK_FORMAT_S8_UINT:
+   begin
+    Result:=TvDepthStencilImage2.Create;
+    Result.key   :=F;
+    Result.FUsage:=[usage];
+
+    Result.StencilOnly:=TvChildImage2.Create;
+    Result.StencilOnly.key   :=GetStencilOnly(F);
+    Result.StencilOnly.Parent:=Result;
+   end;
+  //depth
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT:
+   begin
+    Result:=TvImage2.Create;
+    Result.key   :=F;
+    Result.FUsage:=[usage];
+    //
+    Result.Parent   :=Result;
+    Result.DepthOnly:=Result;
+   end;
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   begin
+    Result:=TvDepthStencilImage2.Create;
+    Result.key   :=F;
+    Result.FUsage:=[usage];
+
+    Result.DepthOnly:=TvChildImage2.Create;
+    Result.DepthOnly.key   :=GetDepthOnly(F);
+    Result.DepthOnly.Parent:=Result;
+
+    Result.StencilOnly:=TvChildImage2.Create;
+    Result.StencilOnly.key   :=GetStencilOnly(F);
+    Result.StencilOnly.Parent:=Result;
+   end;
+  else
+   begin
+    Result:=TvImage2.Create;
+    Result.key   :=F;
+    Result.FUsage:=[usage];
+   end;
+ end;
+
 end;
 
 function _FetchImage(const F:TvImageKey;usage:t_image_usage):TvImage2;
@@ -705,10 +790,7 @@ begin
   end;
  end else
  begin
-  t:=TvImage2.Create;
-  t.key   :=F;
-  //t.size  :=get_image_size(F);
-  t.FUsage:=[usage];
+  t:=_NewImage(F,usage);
 
   if not t.Compile(nil) then
   begin

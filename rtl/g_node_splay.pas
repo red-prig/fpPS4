@@ -16,9 +16,9 @@ type
   function  Next(node:PNode):PNode;
   function  Prev(node:PNode):PNode;
   function  Find(node:PNode):PNode;
-  function  Find_b(node:PNode):PNode;
+  function  Find_bg(node:PNode):PNode;
   function  Find_be(node:PNode):PNode;
-  function  Find_l(node:PNode):PNode;
+  function  Find_ls(node:PNode):PNode;
   function  Find_le(node:PNode):PNode;
   function  Insert(node:PNode):Boolean;
   function  Delete(node:PNode):Boolean;
@@ -225,7 +225,7 @@ begin
  if (_Splay(node)=0) then Result:=pRoot;
 end;
 
-function TNodeSplay.Find_b(node:PNode):PNode;
+function TNodeSplay.Find_bg(node:PNode):PNode;
 var
  c:Integer;
 begin
@@ -271,7 +271,7 @@ begin
  end;
 end;
 
-function TNodeSplay.Find_l(node:PNode):PNode;
+function TNodeSplay.Find_ls(node:PNode):PNode;
 var
  c:Integer;
 begin

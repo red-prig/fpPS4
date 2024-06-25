@@ -54,6 +54,7 @@ type
   //
   Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
   Destructor  Destroy; override;
+  Procedure   Flush;
  end;
 
  TvHostMemory=class(TvDeviceMemory)
@@ -143,6 +144,8 @@ type
 
    Function    FetchHostMap(Addr,Size:TVkDeviceSize;mtindex:Byte):TvPointer;
    Function    FetchHostMap(Addr,Size:TVkDeviceSize;device_local:Boolean):TvPointer;
+
+   Procedure   Flush;
  end;
 
 var
@@ -824,6 +827,22 @@ begin
  end;
  //
  inherited;
+end;
+
+Procedure TvDeviceMemory.Flush;
+var
+ range:TVkMappedMemoryRange;
+begin
+ if (not FMemInfo.host_coherent) then
+ begin
+  range:=Default(TVkMappedMemoryRange);
+  range.sType :=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+  range.memory:=FHandle;
+  range.offset:=0;
+  range.size  :=FSize;
+  //
+  vkFlushMappedMemoryRanges(Device.FHandle,1,@range);
+ end;
 end;
 
 //
@@ -1719,6 +1738,28 @@ begin
   Exit(FetchHostMap(Addr,Size,FHeaps[i].def_mem_type));
  end;
 
+end;
+
+Procedure TvMemManager.Flush;
+var
+ node:TvHostMemory;
+begin
+ if (Self=nil) then Exit;
+
+ rw_wlock(global_mem_lock);
+ //
+
+ node:=TvHostMemory(TAILQ_FIRST(@FHosts));
+ while (node<>nil) do
+ begin
+
+  node.Flush;
+
+  node:=TvHostMemory(TAILQ_NEXT(node,@node.entry));
+ end;
+
+ //
+ rw_wunlock(global_mem_lock);
 end;
 
 //

@@ -58,11 +58,12 @@ type
  TvCustomImage=class(TvRefsObject)
   FHandle:TVkImage;
   FBind  :TvPointer;
+  procedure   FreeHandle; virtual;
   Destructor  Destroy; override;
   function    GetImageInfo:TVkImageCreateInfo; virtual; abstract;
   function    GetRequirements:TVkMemoryRequirements;
   function    GetDedicatedAllocation:Boolean;
-  function    Compile(ext:Pointer):Boolean;
+  function    Compile(ext:Pointer):Boolean; virtual;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   UnBindMem(do_free:Boolean);
   procedure   OnReleaseMem(Sender:TObject); virtual;
@@ -103,7 +104,7 @@ type
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
   Addr   :Pointer;
-  Stencil:Pointer;
+  Addr2  :Pointer;
   cformat:TVkFormat;
   params :packed record
    itype      :Byte; //TVkImageType 0..2 (2)
@@ -230,15 +231,19 @@ type
 
 Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
 
-Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+Function GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+Function GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
 Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
 function IsDepthOrStencilFormat(cformat:TVkFormat):Boolean;
-function GetDepthOrImageFormat (cformat:TVkFormat):TVkFormat;
+function GetDepthOnlyFormat    (cformat:TVkFormat):TVkFormat;
 function GetStencilOnlyFormat  (cformat:TVkFormat):TVkFormat;
+
+function GetDepthOnly  (const key:TvImageKey):TvImageKey;
+function GetStencilOnly(const key:TvImageKey):TvImageKey;
 
 function vkGetFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):Boolean;
 function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
@@ -328,9 +333,9 @@ begin
   VK_FORMAT_X8_D24_UNORM_PACK32  :Result:=4;
   VK_FORMAT_D32_SFLOAT           :Result:=4;
   //depth stencil
-  VK_FORMAT_D16_UNORM_S8_UINT    :Result:=3;
-  VK_FORMAT_D24_UNORM_S8_UINT    :Result:=4;
-  VK_FORMAT_D32_SFLOAT_S8_UINT   :Result:=5;
+  VK_FORMAT_D16_UNORM_S8_UINT    :Assert(false,'getFormatSize:VK_FORMAT_D16_UNORM_S8_UINT');
+  VK_FORMAT_D24_UNORM_S8_UINT    :Assert(false,'getFormatSize:VK_FORMAT_D24_UNORM_S8_UINT');
+  VK_FORMAT_D32_SFLOAT_S8_UINT   :Assert(false,'getFormatSize:VK_FORMAT_D32_SFLOAT_S8_UINT');
 
   //texel size
   VK_FORMAT_BC1_RGB_UNORM_BLOCK..
@@ -378,12 +383,9 @@ begin
  end;
 end;
 
-function GetDepthOrImageFormat(cformat:TVkFormat):TVkFormat;
+function GetDepthOnlyFormat(cformat:TVkFormat):TVkFormat;
 begin
  Case cformat of
-  //stencil
-  VK_FORMAT_S8_UINT:
-   Result:=VK_FORMAT_UNDEFINED;
   //depth
   VK_FORMAT_D16_UNORM,
   VK_FORMAT_X8_D24_UNORM_PACK32,
@@ -394,7 +396,7 @@ begin
   VK_FORMAT_D24_UNORM_S8_UINT :Result:=VK_FORMAT_X8_D24_UNORM_PACK32;
   VK_FORMAT_D32_SFLOAT_S8_UINT:Result:=VK_FORMAT_D32_SFLOAT;
   else
-   Result:=cformat;
+   Result:=VK_FORMAT_UNDEFINED;
  end;
 end;
 
@@ -411,6 +413,24 @@ begin
   else
    Result:=VK_FORMAT_UNDEFINED;
  end;
+end;
+
+//
+
+function GetDepthOnly(const key:TvImageKey):TvImageKey;
+begin
+ Result.Addr   :=key.Addr;
+ Result.Addr2  :=nil;
+ Result.cformat:=GetDepthOnlyFormat(key.cformat);
+ Result.params :=key.params;
+end;
+
+function GetStencilOnly(const key:TvImageKey):TvImageKey;
+begin
+ Result.Addr   :=key.Addr2;
+ Result.Addr2  :=nil;
+ Result.cformat:=GetStencilOnlyFormat(key.cformat);
+ Result.params :=key.params;
 end;
 
 //
@@ -1285,12 +1305,18 @@ begin
  end;
 end;
 
-Destructor TvCustomImage.Destroy;
+procedure TvCustomImage.FreeHandle;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyImage(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
  end;
+end;
+
+Destructor TvCustomImage.Destroy;
+begin
+ FreeHandle;
  //
  UnBindMem(True);
  //
@@ -1392,11 +1418,7 @@ end;
 
 procedure TvCustomImage.OnReleaseMem(Sender:TObject);
 begin
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  vkDestroyImage(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+ FreeHandle;
  //
  UnBindMem(False);
 end;
@@ -1717,9 +1739,46 @@ begin
  end;
 end;
 
-Function GetDepthStencilLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+{
+WW  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+RR  VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+
+RW  VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+WR  VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
+
+W_  VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+R_  VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL
+
+_W  VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL
+_R  VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL
+}
+
+Function GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+var
+ IMAGE_USAGE:Byte;
 begin
- if (((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR))<>0) then
+ IMAGE_USAGE:=(DEPTH_USAGE or STENCIL_USAGE);
+ //
+ if ((IMAGE_USAGE and TM_READ)=0) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_UNDEFINED;
+ end else
+ if ((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+ end else
+ begin
+  Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+ end;
+end;
+
+Function GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
+var
+ IMAGE_USAGE:Byte;
+begin
+ IMAGE_USAGE:=(DEPTH_USAGE or STENCIL_USAGE);
+ //
+ if ((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) then
  begin
   Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
  end else
@@ -1729,9 +1788,13 @@ begin
 end;
 
 Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+var
+ IMAGE_USAGE:Byte;
 begin
- Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord(((DEPTH_USAGE or STENCIL_USAGE) and TM_READ               )<>0) ) or
-         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord(((DEPTH_USAGE or STENCIL_USAGE) and (TM_WRITE or TM_CLEAR))<>0) );
+ IMAGE_USAGE:=(DEPTH_USAGE or STENCIL_USAGE);
+ //
+ Result:=(ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) *ord((IMAGE_USAGE and TM_READ               )<>0) ) or
+         (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
 end;
 
 Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;

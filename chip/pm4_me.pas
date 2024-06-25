@@ -209,7 +209,8 @@ end;
 var
  FCmdPool:TvCmdPool;
 
-procedure Prepare_Uniforms(var FUniformBuilder:TvUniformBuilder;
+procedure Prepare_Uniforms(node:p_pm4_node;
+                           var FUniformBuilder:TvUniformBuilder;
                            CmdBuffer:TvCmdBuffer);
 var
  i:Integer;
@@ -248,7 +249,8 @@ begin
  Result:=addr-(addr mod alignment);
 end;
 
-procedure Bind_Uniforms(var FUniformBuilder:TvUniformBuilder;
+procedure Bind_Uniforms(node:p_pm4_node;
+                        var FUniformBuilder:TvUniformBuilder;
                         var FDescriptorGroup:TvDescriptorGroup;
                         ShaderGroup:TvShaderGroup;
                         CmdBuffer:TvCmdBuffer);
@@ -273,6 +275,8 @@ var
  diff :TVkDeviceSize;
  align:TVkDeviceSize;
  range:TVkDeviceSize;
+
+ resource_instance:p_pm4_resource_instance;
 begin
 
  //images
@@ -281,6 +285,16 @@ begin
   For i:=0 to High(FUniformBuilder.FImages) do
   With FUniformBuilder.FImages[i] do
   begin
+
+   resource_instance:=node^.scope.find_curr_image_resource(FImage);
+
+   if (resource_instance<>nil) then
+   begin
+    Writeln('ri:curr:',HexStr(resource_instance^.curr_mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
+              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+           );
+   end;
 
    ri:=FetchImage(CmdBuffer,
                   FImage,
@@ -324,6 +338,21 @@ begin
   With FUniformBuilder.FBuffers[i] do
   begin
 
+   resource_instance:=node^.scope.find_curr_buffer_resource(addr,size);
+
+   if (resource_instance<>nil) then
+   begin
+    if (resource_instance^.prev_mem_usage<>0) then
+    begin
+     writeln;
+    end;
+
+    Writeln('rb:curr:',HexStr(resource_instance^.curr_mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
+              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+           );
+   end;
+
    buf:=FetchHostBuffer(CmdBuffer,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
    diff:=QWORD(addr)-buf.FAddr;
@@ -348,7 +377,7 @@ begin
                                         range {VK_WHOLE_SIZE});
 
    //TODO: check write flag
-   vm_map_track_trigger(p_proc.p_vmspace,QWORD(addr),QWORD(addr)+size);
+   vm_map_track_trigger(p_proc.p_vmspace,QWORD(addr),QWORD(addr)+size,nil);
 
   end;
  end;
@@ -360,33 +389,48 @@ procedure pm4_ClearDepth(var rt_info:t_pm4_rt_info;
                          CmdBuffer:TvCmdBuffer);
 var
  ri:TvImage2;
+ cclear:array[0..1] of Boolean;
+ range :TVkImageSubresourceRange;
 begin
  //ClearDepthTarget
 
  ri:=FetchImage(CmdBuffer,
                 rt_info.DB_INFO.FImageInfo,
-                iu_depth
+                iu_depthstenc
                 //rt_info.DB_INFO.DEPTH_USAGE
                 );
-
+ {
  ri.PushBarrier(CmdBuffer,
                 ord(VK_ACCESS_TRANSFER_READ_BIT),
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ }
 
  ri.PushBarrier(CmdBuffer,
                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
+ cclear[0]:=((rt_info.DB_INFO.DEPTH_USAGE   and TM_CLEAR)<>0) and
+            (GetDepthOnlyFormat  (ri.key.cformat)<>VK_FORMAT_UNDEFINED);
+
+ cclear[1]:=((rt_info.DB_INFO.STENCIL_USAGE and TM_CLEAR)<>0) and
+            (GetStencilOnlyFormat(ri.key.cformat)<>VK_FORMAT_UNDEFINED);
+
+ range:=ri.GetSubresRange;
+
+ range.aspectMask:=(ord(VK_IMAGE_ASPECT_DEPTH_BIT  )*ord(cclear[0])) or
+                   (ord(VK_IMAGE_ASPECT_STENCIL_BIT)*ord(cclear[1]));
+
  CmdBuffer.ClearDepthStencilImage(ri.FHandle,
                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                   @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
-                                  ri.GetSubresRange);
+                                  range);
 
 end;
 
-procedure pm4_DrawPrepare(var rt_info:t_pm4_rt_info;
+procedure pm4_DrawPrepare(node:p_pm4_node;
+                          var rt_info:t_pm4_rt_info;
                           CmdBuffer:TvCmdBuffer;
                           RenderCmd:TvRenderTargets);
 var
@@ -410,6 +454,8 @@ var
  iv:TvImageView2;
 
  FDescriptorGroup:TvDescriptorGroup;
+
+ resource_instance:p_pm4_resource_instance;
 begin
  RP_KEY.Clear;
 
@@ -530,6 +576,16 @@ begin
  For i:=0 to RenderCmd.RT_COUNT-1 do
   begin
 
+   resource_instance:=node^.scope.find_curr_image_resource(RenderCmd.RT_INFO[i].FImageInfo);
+
+   if (resource_instance<>nil) then
+   begin
+    Writeln('ra:curr:',HexStr(resource_instance^.curr_mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
+              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+           );
+   end;
+
    RenderCmd.AddClearColor(RenderCmd.RT_INFO[i].CLEAR_COLOR);
 
    ri:=FetchImage(CmdBuffer,
@@ -542,10 +598,12 @@ begin
 
    iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
 
+   {
    ri.PushBarrier(CmdBuffer,
                   ord(VK_ACCESS_TRANSFER_READ_BIT),
                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+   }
 
    ri.PushBarrier(CmdBuffer,
                   GetColorAccessMask(RenderCmd.RT_INFO[i].IMAGE_USAGE),
@@ -567,28 +625,55 @@ begin
 
  if rt_info.DB_ENABLE then
  begin
+
+  resource_instance:=node^.scope.find_curr_image_resource(GetDepthOnly(RenderCmd.DB_INFO.FImageInfo));
+
+  if (resource_instance<>nil) then
+  begin
+   Writeln('rd:curr:',HexStr(resource_instance^.curr_mem_usage,1),
+             ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
+             ' next:',HexStr(resource_instance^.next_mem_usage,1)
+          );
+  end;
+
+  resource_instance:=node^.scope.find_curr_image_resource(GetStencilOnly(RenderCmd.DB_INFO.FImageInfo));
+
+  if (resource_instance<>nil) then
+  begin
+   Writeln('rs:curr:',HexStr(resource_instance^.curr_mem_usage,1),
+             ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
+             ' next:',HexStr(resource_instance^.next_mem_usage,1)
+          );
+  end;
+
+  //
+
   RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
 
   ri:=FetchImage(CmdBuffer,
                  RenderCmd.DB_INFO.FImageInfo,
-                 iu_depth
+                 iu_depthstenc
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  pm4_load_from(CmdBuffer,ri,RenderCmd.DB_INFO.DEPTH_USAGE);
+  pm4_load_from(CmdBuffer,ri.DepthOnly  ,RenderCmd.DB_INFO.DEPTH_USAGE);
+  pm4_load_from(CmdBuffer,ri.StencilOnly,RenderCmd.DB_INFO.STENCIL_USAGE);
 
-  iv:=ri.FetchView(CmdBuffer,iu_depth);
+  iv:=ri.FetchView(CmdBuffer,iu_depthstenc);
 
+  {
   ri.PushBarrier(CmdBuffer,
                  ord(VK_ACCESS_TRANSFER_READ_BIT),
                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+  }
 
   ri.PushBarrier(CmdBuffer,
-                 GetColorAccessMask(RenderCmd.DB_INFO.DEPTH_USAGE),
-                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                 GetDepthStencilAccessMask(RenderCmd.DB_INFO.DEPTH_USAGE,RenderCmd.DB_INFO.STENCIL_USAGE),
+                 GetDepthStencilSendLayout(RenderCmd.DB_INFO.DEPTH_USAGE,RenderCmd.DB_INFO.STENCIL_USAGE),
                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                 ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+                 RenderCmd.DB_INFO.zorder_stage
+                 );
 
   //
   if limits.VK_KHR_imageless_framebuffer then
@@ -612,13 +697,13 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
 
- Prepare_Uniforms(FUniformBuilder,CmdBuffer);
+ Prepare_Uniforms(node,FUniformBuilder,CmdBuffer);
  ////////
 
  if not CmdBuffer.BeginRenderPass(RenderCmd) then
  begin
   Writeln(stderr,'BeginRenderPass(FRenderCmd)');
-  Assert(false,'BeginRenderPass(FRenderCmd)');
+  Assert (false ,'BeginRenderPass(FRenderCmd)');
  end;
 
  CmdBuffer.SetVertexInput   (FAttrBuilder);
@@ -626,7 +711,8 @@ begin
 
  FDescriptorGroup:=nil;
 
- Bind_Uniforms(FUniformBuilder,
+ Bind_Uniforms(node,
+               FUniformBuilder,
                FDescriptorGroup,
                rt_info.ShaderGroup,
                CmdBuffer);
@@ -666,11 +752,12 @@ begin
 
   ri:=FetchImage(CmdBuffer,
                  rt_info.DB_INFO.FImageInfo,
-                 iu_depth
+                 iu_depthstenc
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  pm4_write_back(CmdBuffer,ri);
+  pm4_write_back(CmdBuffer,ri.DepthOnly  );
+  pm4_write_back(CmdBuffer,ri.StencilOnly);
 
   //
  end;
@@ -704,7 +791,8 @@ begin
  begin
   RenderCmd:=TvRenderTargets.Create;
 
-  pm4_DrawPrepare(node^.rt_info,
+  pm4_DrawPrepare(node,
+                  node^.rt_info,
                   CmdBuffer,
                   RenderCmd);
 
@@ -780,7 +868,7 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
 
- Prepare_Uniforms(FUniformBuilder,CmdBuffer);
+ Prepare_Uniforms(node,FUniformBuilder,CmdBuffer);
  ////////
 
  if not CmdBuffer.BindCompute(CP) then
@@ -791,7 +879,8 @@ begin
 
  FDescriptorGroup:=nil;
 
- Bind_Uniforms(FUniformBuilder,
+ Bind_Uniforms(node,
+               FUniformBuilder,
                FDescriptorGroup,
                CP_KEY.FShaderGroup,
                CmdBuffer);

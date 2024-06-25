@@ -402,6 +402,10 @@ const
  kEopCbDbReadsDone                = $00000028;  //end read CB/DB, label .....EOP
  kEopCsDone                       = $00000028;  //wait cs shader, label .....EOP
 
+ //CACHE_FLUSH_TS                                  =$00000004;
+ //CACHE_FLUSH_AND_INV_TS_EVENT                    =$00000014;
+ //BOTTOM_OF_PIPE_TS                               =$00000028;
+
 type
  PPM4CMDEVENTWRITEEOP=^PM4CMDEVENTWRITEEOP;
  PM4CMDEVENTWRITEEOP=bitpacked record

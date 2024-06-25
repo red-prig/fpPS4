@@ -37,6 +37,9 @@ uses
  vSampler,
  vSamplerManager,
 
+ vImageTiling,
+ g_node_splay,
+
  shader_dump
  ;
 
@@ -132,9 +135,64 @@ type
   ntDispatchDirect
  );
 
+const
+ R_IMG=0;
+ R_BUF=1;
+
+type
+ p_pm4_resource_instance=^t_pm4_resource_instance;
+
+ p_pm4_resource_scope=^t_pm4_resource_scope;
+ t_pm4_resource_scope=object
+  list:TAILQ_HEAD; //p_pm4_resource
+  function  empty:Boolean;
+  function  last:p_pm4_resource_instance;
+  procedure insert_init(i:p_pm4_resource_instance);
+  procedure insert_curr(i:p_pm4_resource_instance);
+  function  find_curr_image_resource (const rkey:TvImageKey):p_pm4_resource_instance;
+  function  find_curr_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+ end;
+
+ p_pm4_resource=^t_pm4_resource;
+ t_pm4_resource=object
+  pLeft :p_pm4_resource;
+  pRight:p_pm4_resource;
+  //
+  rwrite:p_pm4_resource_instance;
+  //
+  rtype :Integer;
+  rsize :DWORD;
+  rkey  :TvImageKey;
+  //
+  function c(n1,n2:p_pm4_resource):Integer; static;
+ end;
+
+ t_pm4_resource_set=specialize TNodeSplay<t_pm4_resource>;
+
+ t_pm4_resource_instance=record
+  init_entry:TAILQ_ENTRY;
+  curr_entry:TAILQ_ENTRY;
+  //
+  init_scope:p_pm4_resource_scope;
+  curr_scope:p_pm4_resource_scope;
+  //
+  resource:p_pm4_resource;
+  //
+  curr_mem_usage:Integer;
+  prev_mem_usage:Integer;
+  next_mem_usage:Integer;
+  //
+  curr_img_usage:s_image_usage;
+  prev_img_usage:s_image_usage;
+  next_img_usage:s_image_usage;
+ end;
+
  p_pm4_node=^t_pm4_node;
  t_pm4_node=object
   entry:TAILQ_ENTRY;
+  //
+  scope:t_pm4_resource_scope;
+  //
   ntype:t_pm4_node_type;
  end;
 
@@ -244,12 +302,21 @@ type
   //
   list:TAILQ_HEAD; //t_pm4_node
   //
+  resource_set:t_pm4_resource_set;
+  init_scope:t_pm4_resource_scope;
+  //
   buft:t_pm4_stream_type;
   //
   procedure Free;
   Procedure add_node(node:p_pm4_node);
   function  First:p_pm4_node;
   function  Next(node:p_pm4_node):p_pm4_node; static;
+  //
+  function  fetch_image_resource   (const rkey:TvImageKey):p_pm4_resource;
+  function  fetch_buffer_resource  (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  fetch_resource_instance(r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+  function  insert_image_resource  (node:p_pm4_node;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+  function  insert_buffer_resource (node:p_pm4_node;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
   //
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
@@ -262,7 +329,10 @@ type
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
-  procedure Build_rt_info(var rt_info:t_pm4_rt_info;var GPU_REGS:TGPU_REGS);
+  procedure Init_Uniforms(node:p_pm4_node;var FUniformBuilder:TvUniformBuilder);
+  procedure Build_rt_info(node:p_pm4_node;
+                          var rt_info:t_pm4_rt_info;
+                          var GPU_REGS:TGPU_REGS);
   procedure BuildDraw    (ntype:t_pm4_node_type;
                           var SH_REG:TSH_REG_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
@@ -281,6 +351,112 @@ implementation
 
 var
  cache_block_allocator:t_cache_block_allocator;
+
+//
+
+function t_pm4_resource.c(n1,n2:p_pm4_resource):Integer;
+begin
+ //0 rtype
+ Result:=Integer(n1^.rtype>n2^.rtype)-Integer(n1^.rtype<n2^.rtype);
+ if (Result<>0) then Exit;
+ //1 Addr
+ Result:=Integer(n1^.rkey.Addr>n2^.rkey.Addr)-Integer(n1^.rkey.Addr<n2^.rkey.Addr);
+ if (Result<>0) then Exit;
+ //1 Stencil
+ Result:=Integer(n1^.rkey.Addr2>n2^.rkey.Addr2)-Integer(n1^.rkey.Addr2<n2^.rkey.Addr2);
+ if (Result<>0) then Exit;
+ //2 cformat
+ Result:=Integer(n1^.rkey.cformat>n2^.rkey.cformat)-Integer(n1^.rkey.cformat<n2^.rkey.cformat);
+ if (Result<>0) then Exit;
+ //3 params
+ Result:=CompareByte(n1^.rkey.params,n2^.rkey.params,SizeOf(TvImageKey.params));
+end;
+
+//
+
+function t_pm4_resource_scope.empty:Boolean;
+begin
+ Result:=(TAILQ_FIRST(@list)=nil);
+end;
+
+function t_pm4_resource_scope.last:p_pm4_resource_instance;
+begin
+ if (list.tqh_last=nil) then Exit(nil);
+ Result:=TAILQ_LAST(@list);
+end;
+
+procedure t_pm4_resource_scope.insert_init(i:p_pm4_resource_instance);
+begin
+ if (list.tqh_first=nil) and
+    (list.tqh_last =nil) then
+ begin
+  TAILQ_INIT(@list);
+ end;
+
+ TAILQ_INSERT_TAIL(@list,i,@i^.init_entry);
+
+ i^.init_scope:=@self;
+end;
+
+procedure t_pm4_resource_scope.insert_curr(i:p_pm4_resource_instance);
+begin
+ if (list.tqh_first=nil) and
+    (list.tqh_last =nil) then
+ begin
+  TAILQ_INIT(@list);
+ end;
+
+ TAILQ_INSERT_TAIL(@list,i,@i^.curr_entry);
+
+ i^.curr_scope:=@self;
+end;
+
+function t_pm4_resource_scope.find_curr_image_resource(const rkey:TvImageKey):p_pm4_resource_instance;
+var
+ node:p_pm4_resource_instance;
+begin
+ Result:=nil;
+
+ if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit;
+
+ node:=TAILQ_FIRST(@list);
+
+ while (node<>nil) do
+ begin
+
+  if (node^.resource^.rtype=R_IMG) and
+     (CompareByte(node^.resource^.rkey,rkey,sizeOf(TvImageKey))=0) then
+  begin
+   Exit(node);
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.curr_entry);
+ end;
+end;
+
+function t_pm4_resource_scope.find_curr_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+var
+ node:p_pm4_resource_instance;
+begin
+ Result:=nil;
+
+ node:=TAILQ_FIRST(@list);
+
+ while (node<>nil) do
+ begin
+
+  if (node^.resource^.rtype=R_BUF) and
+     (node^.resource^.rkey.Addr=addr) and
+     (node^.resource^.rsize=size) then
+  begin
+   Exit(node);
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.curr_entry);
+ end;
+end;
+
+//
 
 procedure t_pm4_stream.Free;
 begin
@@ -309,6 +485,153 @@ begin
  Result:=TAILQ_NEXT(node,@node^.entry);
 end;
 
+//
+
+//  resource_set:t_pm4_resource_set;
+
+function t_pm4_stream.fetch_image_resource(const rkey:TvImageKey):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_IMG;
+ tmp.rkey :=rkey;
+
+ Result:=resource_set.Find(@tmp);
+
+ if (Result=nil) then
+ begin
+  tmp.rsize:=get_image_size(rkey);
+
+  Result:=allocator.Alloc(SizeOf(t_pm4_resource));
+  Result^:=tmp;
+
+  resource_set.Insert(Result);
+ end;
+end;
+
+function t_pm4_stream.fetch_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_BUF;
+ tmp.rkey.Addr:=addr;
+
+ Result:=resource_set.Find(@tmp);
+
+ if (Result=nil) then
+ begin
+  tmp.rsize:=size;
+
+  Result:=allocator.Alloc(SizeOf(t_pm4_resource));
+  Result^:=tmp;
+
+  resource_set.Insert(Result);
+ end;
+end;
+
+function t_pm4_stream.fetch_resource_instance(r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+var
+ start:Pointer;
+ __end:Pointer;
+ node:p_pm4_resource;
+ prev:p_pm4_resource_instance;
+ tmp:t_pm4_resource;
+begin
+ Result:=allocator.Alloc(SizeOf(t_pm4_resource_instance));
+
+ Result^:=Default(t_pm4_resource_instance);
+
+ Result^.resource  :=r;
+ Result^.curr_mem_usage:=mem_usage;
+ Result^.curr_img_usage:=img_usage;
+
+ tmp:=Default(t_pm4_resource);
+ tmp:=r^;
+
+ start:=tmp.rkey.Addr;
+ __end:=start+tmp.rsize;
+
+ tmp.rtype:=High(Integer);
+ tmp.rkey.Addr:=start;
+
+ //[s|new|e] ->
+ //      [s|old|e]
+
+ node:=resource_set.Find_ls(@tmp);
+
+ while (node<>nil) do
+ begin
+  //
+
+  if (__end>(node^.rkey.Addr)) and (start<(node^.rkey.Addr+node^.rsize)) then
+  begin
+   prev:=node^.rwrite;
+   if (prev<>nil) then
+   begin
+    //sum prev of curr
+    Result^.prev_mem_usage:=Result^.prev_mem_usage or prev^.curr_mem_usage;
+    Result^.prev_img_usage:=Result^.prev_img_usage +  prev^.curr_img_usage;
+    //sum next of prev
+    prev^.next_mem_usage:=prev^.next_mem_usage or mem_usage;
+    prev^.next_img_usage:=prev^.next_img_usage +  img_usage;
+   end;
+   //
+   if ((mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
+   begin
+    node^.rwrite:=Result;
+   end;
+  end;
+
+  node:=resource_set.Prev(node);
+ end;
+end;
+
+function t_pm4_stream.insert_image_resource(node:p_pm4_node;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+var
+ r:p_pm4_resource;
+ i:p_pm4_resource_instance;
+begin
+ if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit;
+
+ r:=fetch_image_resource(rkey);
+ i:=fetch_resource_instance(r,mem_usage,img_usage);
+
+ if ((mem_usage and TM_READ)<>0) then
+ if (i^.prev_mem_usage=0) then //no prev usage
+ begin
+  //init
+  init_scope.insert_init(i);
+ end;
+
+ node^.scope.insert_curr(i);
+
+ Result:=i;
+end;
+
+function t_pm4_stream.insert_buffer_resource(node:p_pm4_node;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+var
+ r:p_pm4_resource;
+ i:p_pm4_resource_instance;
+begin
+ r:=fetch_buffer_resource(addr,size);
+ i:=fetch_resource_instance(r,mem_usage,[iu_buffer]);
+
+ if ((mem_usage and TM_READ)<>0) then
+ if (i^.prev_mem_usage=0) then //no prev usage
+ begin
+  //init
+  init_scope.insert_init(i);
+ end;
+
+ node^.scope.insert_curr(i);
+
+ Result:=i;
+end;
+
+//
+
 procedure t_pm4_stream.LoadConstRam(addr:Pointer;num_dw,offset:Word);
 var
  node:p_pm4_node_LoadConstRam;
@@ -316,6 +639,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_LoadConstRam));
 
  node^.ntype :=ntLoadConstRam;
+ node^.scope :=Default(t_pm4_resource_scope);
  node^.addr  :=addr;
  node^.num_dw:=num_dw;
  node^.offset:=offset;
@@ -330,6 +654,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWrite));
 
  node^.ntype    :=ntEventWrite;
+ node^.scope    :=Default(t_pm4_resource_scope);
  node^.eventType:=eventType;
 
  add_node(node);
@@ -342,6 +667,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEop));
 
  node^.ntype    :=ntEventWriteEop;
+ node^.scope    :=Default(t_pm4_resource_scope);
  node^.addr     :=addr;
  node^.data     :=data;
  node^.eventType:=eventType;
@@ -358,6 +684,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEos));
 
  node^.ntype    :=ntEventWriteEos;
+ node^.scope    :=Default(t_pm4_resource_scope);
  node^.addr     :=addr;
  node^.data     :=data;
  node^.eventType:=eventType;
@@ -373,6 +700,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_SubmitFlipEop));
 
  node^.ntype    :=ntSubmitFlipEop;
+ node^.scope    :=Default(t_pm4_resource_scope);
  node^.eop_value:=eop_value;
  node^.intSel   :=intSel;
 
@@ -386,6 +714,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_DmaData));
 
  node^.ntype   :=ntDmaData;
+ node^.scope   :=Default(t_pm4_resource_scope);
  node^.dst     :=dst;
  node^.src     :=srcOrData;
  node^.numBytes:=numBytes;
@@ -403,6 +732,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData)+num_dw*SizeOf(DWORD));
 
  node^.ntype :=ntWriteData;
+ node^.scope :=Default(t_pm4_resource_scope);
  node^.dst   :=dst;
  node^.src   :=Pointer(node+1);
  node^.num_dw:=num_dw;
@@ -420,6 +750,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_WaitRegMem));
 
  node^.ntype      :=ntWaitRegMem;
+ node^.scope      :=Default(t_pm4_resource_scope);
  node^.pollAddr   :=pollAddr;
  node^.refValue   :=refValue;
  node^.mask       :=mask;
@@ -435,6 +766,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_FastClear));
 
  node^.ntype :=ntFastClear;
+ node^.scope :=Default(t_pm4_resource_scope);
  node^.CX_REG:=CX_REG;
 
  add_node(node);
@@ -447,6 +779,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_Resolve));
 
  node^.ntype :=ntResolve;
+ node^.scope :=Default(t_pm4_resource_scope);
  node^.CX_REG:=CX_REG;
 
  add_node(node);
@@ -480,9 +813,48 @@ begin
 
 end;
 
-procedure t_pm4_stream.Build_rt_info(var rt_info:t_pm4_rt_info;var GPU_REGS:TGPU_REGS);
+procedure t_pm4_stream.Init_Uniforms(node:p_pm4_node;var FUniformBuilder:TvUniformBuilder);
+
 var
  i:Integer;
+begin
+
+ //images
+ if (Length(FUniformBuilder.FImages)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FImages) do
+  With FUniformBuilder.FImages[i] do
+  begin
+
+   insert_image_resource(node,FImage,TM_READ,[iu_sampled]);
+
+  end;
+ end;
+ //images
+
+ //buffers
+ if (Length(FUniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(FUniformBuilder.FBuffers) do
+  With FUniformBuilder.FBuffers[i] do
+  begin
+
+   //TODO: check write flag
+   insert_buffer_resource(node,addr,size,TM_READ or TM_WRITE);
+
+  end;
+ end;
+ //buffers
+
+end;
+
+procedure t_pm4_stream.Build_rt_info(node:p_pm4_node;
+                                     var rt_info:t_pm4_rt_info;
+                                     var GPU_REGS:TGPU_REGS);
+var
+ i:Integer;
+ RT:TRT_INFO;
+ FUniformBuilder:TvUniformBuilder;
 begin
  for i:=0 to 31 do
  begin
@@ -505,7 +877,15 @@ begin
  if GPU_REGS.COMP_ENABLE then
  For i:=0 to GPU_REGS.GET_HI_RT do
   begin
-   rt_info.RT_INFO[rt_info.RT_COUNT]:=GPU_REGS.GET_RT_INFO(i);
+   RT:=GPU_REGS.GET_RT_INFO(i);
+
+   //
+
+   insert_image_resource(node,RT.FImageInfo,RT.IMAGE_USAGE,[iu_attachment]);
+
+   //
+
+   rt_info.RT_INFO[rt_info.RT_COUNT]:=RT;
 
    Inc(rt_info.RT_COUNT);
   end;
@@ -515,6 +895,11 @@ begin
  if rt_info.DB_ENABLE then
  begin
   rt_info.DB_INFO:=GPU_REGS.GET_DB_INFO;
+
+  //
+
+  insert_image_resource(node,GetDepthOnly  (rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.DEPTH_USAGE  ,[iu_depthstenc]);
+  insert_image_resource(node,GetStencilOnly(rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.STENCIL_USAGE,[iu_depthstenc]);
  end;
 
  rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;
@@ -527,8 +912,8 @@ begin
  For i:=0 to 15 do
   if GPU_REGS.VP_ENABLE(i) then
   begin
-   rt_info.VPORT  [rt_info.VP_COUNT]:=GPU_REGS.GET_VPORT(i);
-   rt_info.SCISSOR[rt_info.VP_COUNT]:=GPU_REGS.GET_SCISSOR(i) ;
+   rt_info.VPORT  [rt_info.VP_COUNT]:=GPU_REGS.GET_VPORT  (i);
+   rt_info.SCISSOR[rt_info.VP_COUNT]:=GPU_REGS.GET_SCISSOR(i);
 
    Inc(rt_info.VP_COUNT);
   end;
@@ -541,6 +926,31 @@ begin
  rt_info.SCREEN_RECT:=GPU_REGS.GET_SCREEN;
  rt_info.SCREEN_SIZE:=GPU_REGS.GET_SCREEN_SIZE;
 
+ //
+
+ FUniformBuilder:=Default(TvUniformBuilder);
+ rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
+
+ Init_Uniforms(node,FUniformBuilder);
+end;
+
+function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
+begin
+ Result:=False;
+
+ if (FShaders[vShaderStageLs]=nil) and
+    (FShaders[vShaderStageHs]=nil) and
+    (FShaders[vShaderStageEs]=nil) and
+    (FShaders[vShaderStageGs]=nil) and
+    (FShaders[vShaderStageVs]<>nil) and
+    (FShaders[vShaderStagePs]<>nil) and
+    (FShaders[vShaderStageCs]=nil) then
+
+ if (FShaders[vShaderStageVs].FHash=QWORD($00DF6E6331449451)) and
+    (FShaders[vShaderStagePs].FHash=QWORD($E9FF5D4699E5B9AD)) then
+ begin
+  Result:=True;
+ end;
 end;
 
 procedure t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
@@ -561,8 +971,9 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_draw));
 
  node^.ntype :=ntype;
+ node^.scope :=Default(t_pm4_resource_scope);
 
- Build_rt_info(node^.rt_info,GPU_REGS);
+ Build_rt_info(node,node^.rt_info,GPU_REGS);
 
  node^.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
  node^.indexOffset :=CX_REG.VGT_INDX_OFFSET;
@@ -574,19 +985,15 @@ begin
 
  //heuristic
  if (ntype=ntDrawIndexAuto) and
+    (node^.numInstances<=1) and
     (node^.rt_info.RT_COUNT=0) and
-    (node^.rt_info.DB_ENABLE) then
+    (node^.rt_info.DB_ENABLE) and
+    (
+     ((node^.rt_info.DB_INFO.DEPTH_USAGE   and TM_CLEAR)<>0) or
+     ((node^.rt_info.DB_INFO.STENCIL_USAGE and TM_CLEAR)<>0)
+    ) then
 
- if (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageLs]=nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageHs]=nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageEs]=nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageGs]=nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageVs]<>nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStagePs]<>nil) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageCs]=nil) then
-
- if (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStageVs].FHash=QWORD($00DF6E6331449451)) and
-    (node^.rt_info.ShaderGroup.FKey.FShaders[vShaderStagePs].FHash=QWORD($E9FF5D4699E5B9AD)) then
+ if IsClearDepthShaders(node^.rt_info.ShaderGroup.FKey.FShaders) then
  begin
   //ClearDepthTarget
 
@@ -617,6 +1024,7 @@ end;
 procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
 var
  dst:PGPU_USERDATA;
+ FUniformBuilder:TvUniformBuilder;
 begin
  //hack
  dst:=Pointer(@node^.USER_DATA_CS)-Ptruint(@TGPU_USERDATA(nil^).A[vShaderStageCs]);
@@ -629,6 +1037,13 @@ begin
  node^.DIM_X:=GPU_REGS.SH_REG^.COMPUTE_DIM_X;
  node^.DIM_Y:=GPU_REGS.SH_REG^.COMPUTE_DIM_Y;
  node^.DIM_Z:=GPU_REGS.SH_REG^.COMPUTE_DIM_Z;
+
+ //
+
+ FUniformBuilder:=Default(TvUniformBuilder);
+ node^.ShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
+
+ Init_Uniforms(node,FUniformBuilder);
 end;
 
 procedure t_pm4_stream.DispatchDirect(var SH_REG:TSH_REG_GROUP);
@@ -642,9 +1057,10 @@ begin
 
  node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchDirect));
 
- Build_cs_info(node,GPU_REGS);
+ node^.ntype:=ntDispatchDirect;
+ node^.scope:=Default(t_pm4_resource_scope);
 
- node^.ntype :=ntDispatchDirect;
+ Build_cs_info(node,GPU_REGS);
 
  add_node(node);
 end;

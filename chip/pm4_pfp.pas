@@ -32,11 +32,15 @@ type
   buft:t_pm4_stream_type;
  end;
 
+ t_flush_stream=procedure(var stream:t_pm4_stream) of object;
+
  t_pfp_ctx=object
   freen:TAILQ_HEAD;
   stall:array[t_pm4_stream_type] of TAILQ_HEAD;
   //
   stream:array[t_pm4_stream_type] of t_pm4_stream;
+  //
+  on_flush_stream:t_flush_stream;
   //
   SH_REG:TSH_REG_GROUP;         // 0x2C00
   CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
@@ -49,6 +53,8 @@ type
   procedure init;
   procedure add_stall(ibuf:p_pm4_ibuffer);
   procedure free;
+  //
+  Procedure Flush_stream(t:t_pm4_stream_type);
   //
   procedure set_esgs_gsvs_ring_size(esgsRingSize,gsvsRingSize:DWORD);
   //
@@ -260,6 +266,13 @@ begin
  begin
   free_nodes(@stall[i]);
  end;
+end;
+
+Procedure t_pfp_ctx.Flush_stream(t:t_pm4_stream_type);
+begin
+ Assert(on_flush_stream<>nil,'on_flush_stream');
+
+ on_flush_stream(stream[t]);
 end;
 
 procedure t_pfp_ctx.set_esgs_gsvs_ring_size(esgsRingSize,gsvsRingSize:DWORD);
@@ -999,6 +1012,7 @@ begin
 
  pctx^.stream[stGfxDcb].EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
+ pctx^.Flush_stream(stGfxDcb);
 end;
 
 procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);

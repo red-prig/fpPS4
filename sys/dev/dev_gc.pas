@@ -165,7 +165,7 @@ begin
       pctx^.add_stall(@ibuf);
      end;
 
-     pm4_me_gfx.Push(pfp_ctx.stream[stGfxCcb]);
+     //pm4_me_gfx.Push(pfp_ctx.stream[stGfxCcb]);
     end;
    end;
   $c0023f00:
@@ -182,7 +182,7 @@ begin
       pctx^.add_stall(@ibuf);
      end;
 
-     pm4_me_gfx.Push(pfp_ctx.stream[stGfxDcb]);
+     //pm4_me_gfx.Push(pfp_ctx.stream[stGfxDcb]);
     end;
    end;
   $c0008b00:
@@ -238,11 +238,8 @@ begin
 
    for buft:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
    begin
-    pm4_me_gfx.Push(pfp_ctx.stream[buft]);
+    pfp_ctx.Flush_stream(buft);;
    end;
-
-   //pm4_me_gfx.Push(pfp_ctx.stream_ccb,stGfxDcb);
-   //pm4_me_gfx.Push(pfp_ctx.stream_dcb,stGfxCcb);
 
    gc_ring_pm4_drain(@ring_gfx,size);
    //
@@ -260,6 +257,8 @@ begin
  if (System.InterlockedExchange(parse_gfx_started,Pointer(1))=nil) then
  begin
   pfp_ctx.init;
+  pfp_ctx.on_flush_stream:=@pm4_me_gfx.Push;
+
   pfp_ctx.print_hint:=true;
   pfp_ctx.print_ops :=true;
 
@@ -409,6 +408,8 @@ begin
   $C0048114: //sceGnmFlushGarlic
             begin
              Writeln('sceGnmFlushGarlic');
+
+             MemManager.Flush;
             end;
 
   $C0108102: //submit
