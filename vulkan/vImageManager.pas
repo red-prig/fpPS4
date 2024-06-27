@@ -139,7 +139,7 @@ type
   Destructor  Destroy; override;
  end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
@@ -709,7 +709,7 @@ begin
  if (usage and ord(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT        ))<>0 then Write(' INPUT_ATTACHMENT');
 end;
 
-function _NewImage(const F:TvImageKey;usage:t_image_usage):TvImage2;
+function _NewImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
 begin
  Case F.cformat of
   //stencil
@@ -717,7 +717,7 @@ begin
    begin
     Result:=TvDepthStencilImage2.Create;
     Result.key   :=F;
-    Result.FUsage:=[usage];
+    Result.FUsage:=usage;
 
     Result.StencilOnly:=TvChildImage2.Create;
     Result.StencilOnly.key   :=GetStencilOnly(F);
@@ -730,7 +730,7 @@ begin
    begin
     Result:=TvImage2.Create;
     Result.key   :=F;
-    Result.FUsage:=[usage];
+    Result.FUsage:=usage;
     //
     Result.Parent   :=Result;
     Result.DepthOnly:=Result;
@@ -742,7 +742,7 @@ begin
    begin
     Result:=TvDepthStencilImage2.Create;
     Result.key   :=F;
-    Result.FUsage:=[usage];
+    Result.FUsage:=usage;
 
     Result.DepthOnly:=TvChildImage2.Create;
     Result.DepthOnly.key   :=GetDepthOnly(F);
@@ -756,13 +756,13 @@ begin
    begin
     Result:=TvImage2.Create;
     Result.key   :=F;
-    Result.FUsage:=[usage];
+    Result.FUsage:=usage;
    end;
  end;
 
 end;
 
-function _FetchImage(const F:TvImageKey;usage:t_image_usage):TvImage2;
+function _FetchImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
 label
  _repeat;
 var
@@ -779,7 +779,7 @@ begin
  begin
   if t.Acquire(nil) then
   begin
-   t.FUsage:=t.FUsage+[usage];
+   t.FUsage:=t.FUsage+usage;
   end else
   begin
    //mem is deleted, free img
@@ -839,7 +839,7 @@ begin
  Result:=t;
 end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:t_image_usage):TvImage2;
+function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;
 begin
  FImage2Set.Lock_wr;
 

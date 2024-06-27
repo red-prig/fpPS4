@@ -10,6 +10,8 @@ uses
  mqueue,
  LFQueue,
 
+ md_sleep,
+
  vm_tracking_map,
 
  Vulkan,
@@ -52,6 +54,11 @@ type
   //
   stall:array[t_pm4_stream_type] of TAILQ_HEAD; //p_pm4_stream
   //
+  sheduler:record
+   start :t_pm4_stream_type;
+   switch:Boolean;
+  end;
+  //
   event:PRTLEvent;
   on_idle:TProcedure;
   on_submit_flip_eop:t_on_submit_flip_eop;
@@ -68,8 +75,10 @@ type
   procedure trigger;
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
-  procedure add_stream (stream:p_pm4_stream;var iter:t_pm4_stream_type);
-  function  get_next   (iter:t_pm4_stream_type):p_pm4_stream;
+  procedure reset_sheduler;
+  procedure switch_task;
+  procedure add_stream (stream:p_pm4_stream);
+  function  get_next   :p_pm4_stream;
   procedure free_stream(stream:p_pm4_stream);
  end;
 
@@ -165,7 +174,31 @@ begin
  trigger;
 end;
 
-procedure t_pm4_me.add_stream(stream:p_pm4_stream;var iter:t_pm4_stream_type);
+procedure t_pm4_me.reset_sheduler;
+begin
+ //reset stall iterator
+ sheduler.start :=Low(t_pm4_stream_type);
+ sheduler.switch:=False;
+end;
+
+procedure t_pm4_me.switch_task;
+begin
+ sheduler.switch:=True;
+ //
+ if (sheduler.start=High(t_pm4_stream_type)) then
+ begin
+  //wait
+  msleep_td(hz div 1000);
+  //reset stall iterator
+  sheduler.start:=Low(t_pm4_stream_type);
+ end else
+ begin
+  //next
+  sheduler.start:=Succ(sheduler.start);
+ end;
+end;
+
+procedure t_pm4_me.add_stream(stream:p_pm4_stream);
 var
  i:t_pm4_stream_type;
 begin
@@ -174,17 +207,17 @@ begin
 
  //if first
  if (stream=TAILQ_FIRST(@stall[i])) then
- if (iter>i) then
+ if (sheduler.start>i) then
  begin
-  iter:=i;
+  sheduler.start:=i;
  end;
 end;
 
-function t_pm4_me.get_next(iter:t_pm4_stream_type):p_pm4_stream;
+function t_pm4_me.get_next:p_pm4_stream;
 var
  i:t_pm4_stream_type;
 begin
- for i:=iter to t_pm4_stream_type(ord(iter)+ord(High(t_pm4_stream_type))) do
+ for i:=sheduler.start to t_pm4_stream_type(ord(sheduler.start)+ord(High(t_pm4_stream_type))) do
  begin
   Result:=TAILQ_FIRST(@stall[t_pm4_stream_type(ord(i) mod Succ(ord(High(t_pm4_stream_type))))]);
   if (Result<>nil) then Break;
@@ -225,7 +258,7 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   FImage,
-                  iu_sampled
+                  [iu_sampled]
                   //TM_READ
                  );
 
@@ -298,7 +331,7 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   FImage,
-                  iu_sampled
+                  [iu_sampled]
                   //TM_READ
                  );
 
@@ -385,6 +418,73 @@ begin
 
 end;
 
+procedure pm4_InitStream(stream:p_pm4_stream;me:p_pm4_me);
+var
+ CmdBuffer:TvCmdBuffer;
+ r:TVkResult;
+
+ i:p_pm4_resource_instance;
+ resource:p_pm4_resource;
+
+ ri:TvImage2;
+begin
+
+ i:=stream^.init_scope.first;
+
+ if (i=nil) then Exit;
+
+
+ if (FCmdPool=nil) then
+ begin
+  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
+ end;
+
+ CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
+ //CmdBuffer.submit_id:=submit_id;
+
+ while (i<>nil) do
+ begin
+
+  resource:=i^.resource;
+
+  if (resource^.rtype=R_IMG) then
+  begin
+   Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
+
+   ri:=FetchImage(CmdBuffer,
+                  resource^.rkey,
+                  i^.curr_img_usage + i^.next_img_usage
+                 );
+
+   pm4_load_from(CmdBuffer,ri,i^.curr_mem_usage);
+  end;
+
+  i:=TAILQ_NEXT(i,@i^.init_entry);
+ end;
+
+
+ r:=CmdBuffer.QueueSubmit;
+
+ if (r<>VK_SUCCESS) then
+ begin
+  Assert(false,'QueueSubmit');
+ end;
+
+ Writeln('QueueSubmit:',r);
+
+ r:=CmdBuffer.Wait(QWORD(-1));
+
+ Writeln('CmdBuffer:',r);
+
+ r:=RenderQueue.WaitIdle;
+ Writeln('WaitIdle:',r);
+
+ CmdBuffer.ReleaseResource;
+
+ CmdBuffer.Free;
+end;
+
+
 procedure pm4_ClearDepth(var rt_info:t_pm4_rt_info;
                          CmdBuffer:TvCmdBuffer);
 var
@@ -396,7 +496,7 @@ begin
 
  ri:=FetchImage(CmdBuffer,
                 rt_info.DB_INFO.FImageInfo,
-                iu_depthstenc
+                [iu_depthstenc]
                 //rt_info.DB_INFO.DEPTH_USAGE
                 );
  {
@@ -590,7 +690,7 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   RenderCmd.RT_INFO[i].FImageInfo,
-                  iu_attachment
+                  [iu_attachment]
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
@@ -652,7 +752,7 @@ begin
 
   ri:=FetchImage(CmdBuffer,
                  RenderCmd.DB_INFO.FImageInfo,
-                 iu_depthstenc
+                 [iu_depthstenc]
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
@@ -740,7 +840,7 @@ begin
 
    ri:=FetchImage(CmdBuffer,
                   rt_info.RT_INFO[i].FImageInfo,
-                  iu_attachment
+                  [iu_attachment]
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
@@ -752,7 +852,7 @@ begin
 
   ri:=FetchImage(CmdBuffer,
                  rt_info.DB_INFO.FImageInfo,
-                 iu_depthstenc
+                 [iu_depthstenc]
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
@@ -1094,9 +1194,12 @@ begin
  end;
 end;
 
-function pm4_WaitRegMem(node:p_pm4_node_WaitRegMem):Boolean;
+procedure pm4_WaitRegMem(node:p_pm4_node_WaitRegMem;me:p_pm4_me);
 begin
- Result:=me_test_mem(node);
+ if not me_test_mem(node) then
+ begin
+  me^.switch_task;
+ end;
 
  {
  while not me_test_mem(node) do
@@ -1111,8 +1214,6 @@ procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
 var
  stream:p_pm4_stream;
  node:p_pm4_node;
- i,start:t_pm4_stream_type;
- switch:Boolean;
 begin
 
  if use_renderdoc_capture then
@@ -1121,33 +1222,39 @@ begin
   renderdoc.UnloadCrashHandler;
  end;
 
- //reset stall iterator
- start:=Low(t_pm4_stream_type);
+ me^.reset_sheduler;
 
  repeat
-
-  //start relative timer
-  if (me^.rel_time=0) then
-  begin
-   me^.rel_time:=md_rdtsc_unit;
-  end;
-  //
 
   stream:=nil;
   if me^.queue.Pop(stream) then
   begin
-   me^.add_stream(stream,start);
+   me^.add_stream(stream);
    //
    stream:=nil;
   end;
 
-  stream:=me^.get_next(start);
+  stream:=me^.get_next;
 
   if (stream<>nil) then
   begin
-   switch:=False;
+
+   //start relative timer
+   if (me^.rel_time=0) then
+   begin
+    me^.rel_time:=md_rdtsc_unit;
+   end;
    //
-   node:=stream^.First;
+
+   node:=stream^.curr;
+   if (node=nil) then
+   begin
+    node:=stream^.First;
+    stream^.curr:=node;
+    //
+    pm4_InitStream(stream,me);
+   end;
+
    while (node<>nil) do
    begin
     //Writeln('+',node^.ntype);
@@ -1161,17 +1268,7 @@ begin
      ntSubmitFlipEop :pm4_SubmitFlipEop (Pointer(node),me);
      ntEventWriteEos :pm4_EventWriteEos (Pointer(node),me);
      ntWriteData     :pm4_WriteData     (Pointer(node));
-     ntWaitRegMem:
-      begin
-       if pm4_WaitRegMem(Pointer(node)) then
-       begin
-        //
-       end else
-       begin
-        switch:=True;
-        Break;
-       end;
-      end;
+     ntWaitRegMem    :pm4_WaitRegMem    (Pointer(node),me);
 
      else
       begin
@@ -1179,32 +1276,26 @@ begin
       end;
     end;
 
+    if me^.sheduler.switch then
+    begin
+     //save position
+     stream^.curr:=node;
+     //
+     Break;
+    end;
+
     //
     node:=stream^.Next(node);
    end;
 
-   if switch then
+   if me^.sheduler.switch then
    begin
-    i:=stream^.buft;
-    if (i=High(t_pm4_stream_type)) then
-    begin
-     //wait
-     sleep(1);
-     //reset stall iterator
-     start:=Low(t_pm4_stream_type);
-     //
-     Continue;
-    end else
-    begin
-     //next
-     start:=Succ(i);
-     //
-     Continue;
-    end;
+    me^.sheduler.switch:=False;
+    //
+    Continue;
    end else
    begin
-    //reset stall iterator
-    start:=Low(t_pm4_stream_type);
+    me^.reset_sheduler;
    end;
 
    me^.free_stream(stream);
@@ -1217,8 +1308,7 @@ begin
 
   //stall is empty!
 
-  //reset stall iterator
-  start:=Low(t_pm4_stream_type);
+  me^.reset_sheduler;
 
   me^.rel_time:=0; //reset time
   //

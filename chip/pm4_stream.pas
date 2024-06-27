@@ -146,6 +146,7 @@ type
  t_pm4_resource_scope=object
   list:TAILQ_HEAD; //p_pm4_resource
   function  empty:Boolean;
+  function  first:p_pm4_resource_instance;
   function  last:p_pm4_resource_instance;
   procedure insert_init(i:p_pm4_resource_instance);
   procedure insert_curr(i:p_pm4_resource_instance);
@@ -307,6 +308,8 @@ type
   //
   buft:t_pm4_stream_type;
   //
+  curr:p_pm4_node;
+  //
   procedure Free;
   Procedure add_node(node:p_pm4_node);
   function  First:p_pm4_node;
@@ -377,6 +380,11 @@ end;
 function t_pm4_resource_scope.empty:Boolean;
 begin
  Result:=(TAILQ_FIRST(@list)=nil);
+end;
+
+function t_pm4_resource_scope.first:p_pm4_resource_instance;
+begin
+ Result:=TAILQ_FIRST(@list);
 end;
 
 function t_pm4_resource_scope.last:p_pm4_resource_instance;

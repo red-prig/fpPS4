@@ -334,6 +334,12 @@ begin
  if (Self=nil) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
+ if not FCBState then
+ begin
+  //zero cmd buffer
+  Exit(VK_SUCCESS);
+ end;
+
  EndCmdBuffer;
 
  info:=Default(TVkSubmitInfo);
