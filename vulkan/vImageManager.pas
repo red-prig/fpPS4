@@ -32,9 +32,6 @@ uses
 }
 
 type
- t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer);
- s_image_usage=set of t_image_usage;
-
  TvImageView2Compare=object
   function c(a,b:PvImageViewKey):Integer; static;
  end;
@@ -134,6 +131,7 @@ type
  end;
 
  TvDepthStencilImage2=class(TvImage2)
+  procedure   FreeHandle; override;
   function    Compile(ext:Pointer):Boolean; override;
   procedure   assign_vm_track; override;
   Destructor  Destroy; override;
@@ -299,7 +297,7 @@ end;
 
 procedure TvChildImage2.FreeHandle;
 begin
- //nothing
+ FHandle:=VK_NULL_HANDLE;
 end;
 
 function TvChildImage2._FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
@@ -634,6 +632,21 @@ begin
 end;
 
 //
+
+procedure TvDepthStencilImage2.FreeHandle;
+begin
+ if (DepthOnly<>nil) then
+ begin
+  DepthOnly.FHandle:=VK_NULL_HANDLE;
+ end;
+
+ if (StencilOnly<>nil) then
+ begin
+  StencilOnly.FHandle:=VK_NULL_HANDLE;
+ end;
+
+ inherited;
+end;
 
 function TvDepthStencilImage2.Compile(ext:Pointer):Boolean;
 begin

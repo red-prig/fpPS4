@@ -235,13 +235,13 @@ begin
 
    end;
 
+   gc_ring_pm4_drain(@ring_gfx,size);
 
+   //
    for buft:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
    begin
     pfp_ctx.Flush_stream(buft);;
    end;
-
-   gc_ring_pm4_drain(@ring_gfx,size);
    //
    Continue;
   end;

@@ -75,10 +75,14 @@ type
  end;
 
 const
- //useage image
+ //usage image
  TM_READ =1;
  TM_WRITE=2;
  TM_CLEAR=4;
+
+type
+ t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer);
+ s_image_usage=set of t_image_usage;
 
 type
  TvExtent3D=packed record

@@ -47,16 +47,24 @@ uses
 type
  t_on_submit_flip_eop=function(submit_id:QWORD):Integer;
 
+ p_pm4_stall=^t_pm4_stall;
+ t_pm4_stall=record
+  next:p_pm4_stall;
+  //
+  list:TAILQ_HEAD; //p_pm4_stream
+ end;
+
  p_pm4_me=^t_pm4_me;
  t_pm4_me=object
   //
   queue:TIntrusiveMPSCQueue; //p_pm4_stream
   //
-  stall:array[t_pm4_stream_type] of TAILQ_HEAD; //p_pm4_stream
+  stall:array[t_pm4_stream_type] of t_pm4_stall;
   //
   sheduler:record
-   start :t_pm4_stream_type;
+   start :p_pm4_stall;
    switch:Boolean;
+   count :Byte;
   end;
   //
   event:PRTLEvent;
@@ -76,6 +84,7 @@ type
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
   procedure reset_sheduler;
+  procedure next_task;
   procedure switch_task;
   procedure add_stream (stream:p_pm4_stream);
   function  get_next   :p_pm4_stream;
@@ -121,7 +130,15 @@ begin
 
  for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
  begin
-  TAILQ_INIT(@stall[i]);
+  if (i=High(t_pm4_stream_type)) then
+  begin
+   stall[i].next:=@stall[Low(t_pm4_stream_type)];
+  end else
+  begin
+   stall[i].next:=@stall[Succ(i)];
+  end;
+  //
+  TAILQ_INIT(@stall[i].list);
  end;
 
  gc_knlist:=knlist;
@@ -177,25 +194,32 @@ end;
 procedure t_pm4_me.reset_sheduler;
 begin
  //reset stall iterator
- sheduler.start :=Low(t_pm4_stream_type);
+ sheduler.start :=@stall[Low(t_pm4_stream_type)];
  sheduler.switch:=False;
+ sheduler.count :=0;
+end;
+
+procedure t_pm4_me.next_task;
+begin
+ //next
+ sheduler.start:=sheduler.start^.next;
 end;
 
 procedure t_pm4_me.switch_task;
 begin
  sheduler.switch:=True;
  //
- if (sheduler.start=High(t_pm4_stream_type)) then
+ Inc(sheduler.count);
+ //
+ if (sheduler.count=Length(stall)) then
  begin
   //wait
   msleep_td(hz div 1000);
-  //reset stall iterator
-  sheduler.start:=Low(t_pm4_stream_type);
- end else
- begin
-  //next
-  sheduler.start:=Succ(sheduler.start);
+  //
+  sheduler.count:=0;
  end;
+ //next
+ next_task;
 end;
 
 procedure t_pm4_me.add_stream(stream:p_pm4_stream);
@@ -203,24 +227,19 @@ var
  i:t_pm4_stream_type;
 begin
  i:=stream^.buft;
- TAILQ_INSERT_TAIL(@stall[i],stream,@stream^.next_);
-
- //if first
- if (stream=TAILQ_FIRST(@stall[i])) then
- if (sheduler.start>i) then
- begin
-  sheduler.start:=i;
- end;
+ TAILQ_INSERT_TAIL(@stall[i].list,stream,@stream^.next_);
 end;
 
 function t_pm4_me.get_next:p_pm4_stream;
 var
  i:t_pm4_stream_type;
 begin
- for i:=sheduler.start to t_pm4_stream_type(ord(sheduler.start)+ord(High(t_pm4_stream_type))) do
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
  begin
-  Result:=TAILQ_FIRST(@stall[t_pm4_stream_type(ord(i) mod Succ(ord(High(t_pm4_stream_type))))]);
+  Result:=TAILQ_FIRST(@sheduler.start^.list);
   if (Result<>nil) then Break;
+  //next
+  next_task;
  end;
 end;
 
@@ -231,7 +250,7 @@ var
 begin
  //pop
  i:=stream^.buft;
- TAILQ_REMOVE(@stall[i],stream,@stream^.next_);
+ TAILQ_REMOVE(@stall[i].list,stream,@stream^.next_);
  //
  tmp:=stream^;
  tmp.Free;
@@ -319,7 +338,7 @@ begin
   With FUniformBuilder.FImages[i] do
   begin
 
-   resource_instance:=node^.scope.find_curr_image_resource(FImage);
+   resource_instance:=node^.scope.find_image_resource_instance(FImage);
 
    if (resource_instance<>nil) then
    begin
@@ -371,7 +390,7 @@ begin
   With FUniformBuilder.FBuffers[i] do
   begin
 
-   resource_instance:=node^.scope.find_curr_buffer_resource(addr,size);
+   resource_instance:=node^.scope.find_buffer_resource_instance(addr,size);
 
    if (resource_instance<>nil) then
    begin
@@ -676,7 +695,7 @@ begin
  For i:=0 to RenderCmd.RT_COUNT-1 do
   begin
 
-   resource_instance:=node^.scope.find_curr_image_resource(RenderCmd.RT_INFO[i].FImageInfo);
+   resource_instance:=node^.scope.find_image_resource_instance(RenderCmd.RT_INFO[i].FImageInfo);
 
    if (resource_instance<>nil) then
    begin
@@ -726,7 +745,7 @@ begin
  if rt_info.DB_ENABLE then
  begin
 
-  resource_instance:=node^.scope.find_curr_image_resource(GetDepthOnly(RenderCmd.DB_INFO.FImageInfo));
+  resource_instance:=node^.scope.find_image_resource_instance(GetDepthOnly(RenderCmd.DB_INFO.FImageInfo));
 
   if (resource_instance<>nil) then
   begin
@@ -736,7 +755,7 @@ begin
           );
   end;
 
-  resource_instance:=node^.scope.find_curr_image_resource(GetStencilOnly(RenderCmd.DB_INFO.FImageInfo));
+  resource_instance:=node^.scope.find_image_resource_instance(GetStencilOnly(RenderCmd.DB_INFO.FImageInfo));
 
   if (resource_instance<>nil) then
   begin
@@ -1295,7 +1314,7 @@ begin
     Continue;
    end else
    begin
-    me^.reset_sheduler;
+    me^.next_task;
    end;
 
    me^.free_stream(stream);

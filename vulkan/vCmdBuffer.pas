@@ -7,9 +7,7 @@ interface
 uses
   Classes,
   SysUtils,
-  //ps4_types,
   g23tree,
-  //ps4_libSceVideoOut,
   si_ci_vi_merged_enum,
   Vulkan,
   vDependence,
@@ -20,7 +18,6 @@ uses
   vImage,
   vPipeline,
   vPipelineManager,
-  //vSetsPools,
   vRender;
 
 type
@@ -366,7 +363,7 @@ begin
 
   info.waitSemaphoreCount:=i;
   info.pWaitSemaphores   :=@FHandles[0];
-  info.pWaitDstStageMask  :=@FStages[0];
+  info.pWaitDstStageMask :=@FStages[0];
 
  end;
 

@@ -12,35 +12,23 @@ uses
  md_map,
  bittype,
  pm4defs,
- si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
  si_ci_vi_merged_groups,
 
  Vulkan,
- vDevice,
- vBuffer,
- vHostBufferManager,
+
  vImage,
- vImageManager,
- vRender,
- vRenderPassManager,
- vPipelineManager,
- vFramebufferManager,
+
  vShader,
  vShaderExt,
  vShaderManager,
+
  vRegs2Vulkan,
- vCmdBuffer,
- vPipeline,
- vSetsPoolManager,
- vSampler,
- vSamplerManager,
 
  vImageTiling,
- g_node_splay,
+ g_node_splay
 
- shader_dump
  ;
 
 type
@@ -140,24 +128,21 @@ const
  R_BUF=1;
 
 type
- p_pm4_resource_instance=^t_pm4_resource_instance;
+ p_pm4_resource_instance    =^t_pm4_resource_instance;
+ p_pm4_resource_curr_scope  =^t_pm4_resource_curr_scope;
+ p_pm4_resource_stream_scope=^t_pm4_resource_stream_scope;
 
- p_pm4_resource_scope=^t_pm4_resource_scope;
- t_pm4_resource_scope=object
-  list:TAILQ_HEAD; //p_pm4_resource
-  function  empty:Boolean;
+ p_pm4_resource_init_scope=^t_pm4_resource_init_scope;
+ t_pm4_resource_init_scope=object
+  list:TAILQ_HEAD; //p_pm4_resource_instance
   function  first:p_pm4_resource_instance;
-  function  last:p_pm4_resource_instance;
-  procedure insert_init(i:p_pm4_resource_instance);
-  procedure insert_curr(i:p_pm4_resource_instance);
-  function  find_curr_image_resource (const rkey:TvImageKey):p_pm4_resource_instance;
-  function  find_curr_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+  procedure insert(i:p_pm4_resource_instance);
  end;
 
  p_pm4_resource=^t_pm4_resource;
  t_pm4_resource=object
-  pLeft :p_pm4_resource;
-  pRight:p_pm4_resource;
+  pLeft :p_pm4_resource; //t_pm4_resource_set
+  pRight:p_pm4_resource; //t_pm4_resource_set
   //
   rwrite:p_pm4_resource_instance;
   //
@@ -170,12 +155,14 @@ type
 
  t_pm4_resource_set=specialize TNodeSplay<t_pm4_resource>;
 
- t_pm4_resource_instance=record
-  init_entry:TAILQ_ENTRY;
-  curr_entry:TAILQ_ENTRY;
+ t_pm4_resource_instance=object
+  init_entry:TAILQ_ENTRY; //p_pm4_resource_init_scope
   //
-  init_scope:p_pm4_resource_scope;
-  curr_scope:p_pm4_resource_scope;
+  pLeft :p_pm4_resource_instance; //t_pm4_resource_instance_set
+  pRight:p_pm4_resource_instance; //t_pm4_resource_instance_set
+  //
+  init_scope:p_pm4_resource_init_scope;
+  curr_scope:p_pm4_resource_curr_scope;
   //
   resource:p_pm4_resource;
   //
@@ -186,13 +173,44 @@ type
   curr_img_usage:s_image_usage;
   prev_img_usage:s_image_usage;
   next_img_usage:s_image_usage;
+  //
+  function c(n1,n2:p_pm4_resource_instance):Integer; static;
+ end;
+
+ t_pm4_resource_instance_set=specialize TNodeSplay<t_pm4_resource_instance>;
+
+ t_pm4_resource_curr_scope=object
+  resource_instance_set:t_pm4_resource_instance_set;
+  procedure insert(i:p_pm4_resource_instance);
+  function  find_resource_instance(r:p_pm4_resource):p_pm4_resource_instance;
+  function  find_image_resource_instance (const rkey:TvImageKey):p_pm4_resource_instance;
+  function  find_buffer_resource_instance(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+ end;
+
+ t_pm4_resource_stream_scope=object
+  next_:TAILQ_HEAD; //Must be the first element in memory
+  //
+  allocator:t_pm4_allocator;
+  //
+  resource_set:t_pm4_resource_set;
+  init_scope:t_pm4_resource_init_scope;
+  //
+  function  find_image_resource          (const rkey:TvImageKey):p_pm4_resource;
+  function  fetch_image_resource         (const rkey:TvImageKey):p_pm4_resource;
+  function  find_buffer_resource         (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  fetch_buffer_resource        (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  fetch_resource_instance      (scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+  function  insert_image_resource        (scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+  function  insert_buffer_resource       (scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+  procedure connect_resource_instance    (i:p_pm4_resource_instance);
+  procedure connect_resource_scope       (scope:p_pm4_resource_curr_scope);
  end;
 
  p_pm4_node=^t_pm4_node;
  t_pm4_node=object
   entry:TAILQ_ENTRY;
   //
-  scope:t_pm4_resource_scope;
+  scope:t_pm4_resource_curr_scope;
   //
   ntype:t_pm4_node_type;
  end;
@@ -296,15 +314,9 @@ type
  end;
 
  p_pm4_stream=^t_pm4_stream;
- t_pm4_stream=object
-  next_:TAILQ_HEAD;
-  //
-  allocator:t_pm4_allocator;
+ t_pm4_stream=object(t_pm4_resource_stream_scope)
   //
   list:TAILQ_HEAD; //t_pm4_node
-  //
-  resource_set:t_pm4_resource_set;
-  init_scope:t_pm4_resource_scope;
   //
   buft:t_pm4_stream_type;
   //
@@ -314,12 +326,6 @@ type
   Procedure add_node(node:p_pm4_node);
   function  First:p_pm4_node;
   function  Next(node:p_pm4_node):p_pm4_node; static;
-  //
-  function  fetch_image_resource   (const rkey:TvImageKey):p_pm4_resource;
-  function  fetch_buffer_resource  (addr:Pointer;size:DWORD):p_pm4_resource;
-  function  fetch_resource_instance(r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
-  function  insert_image_resource  (node:p_pm4_node;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
-  function  insert_buffer_resource (node:p_pm4_node;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
   //
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
@@ -365,36 +371,45 @@ begin
  //1 Addr
  Result:=Integer(n1^.rkey.Addr>n2^.rkey.Addr)-Integer(n1^.rkey.Addr<n2^.rkey.Addr);
  if (Result<>0) then Exit;
- //1 Stencil
- Result:=Integer(n1^.rkey.Addr2>n2^.rkey.Addr2)-Integer(n1^.rkey.Addr2<n2^.rkey.Addr2);
- if (Result<>0) then Exit;
- //2 cformat
- Result:=Integer(n1^.rkey.cformat>n2^.rkey.cformat)-Integer(n1^.rkey.cformat<n2^.rkey.cformat);
- if (Result<>0) then Exit;
- //3 params
- Result:=CompareByte(n1^.rkey.params,n2^.rkey.params,SizeOf(TvImageKey.params));
+
+ case n1^.rtype of
+  R_IMG:
+   begin
+    //2 cformat
+    Result:=Integer(n1^.rkey.cformat>n2^.rkey.cformat)-Integer(n1^.rkey.cformat<n2^.rkey.cformat);
+    if (Result<>0) then Exit;
+    //3 params
+    Result:=CompareByte(n1^.rkey.params,n2^.rkey.params,SizeOf(TvImageKey.params));
+   end;
+  R_BUF:
+   begin
+    //2 rsize
+    Result:=Integer(n1^.rsize>n2^.rsize)-Integer(n1^.rsize<n2^.rsize);
+   end;
+  else;
+ end;
+
+end;
+
+function t_pm4_resource_instance.c(n1,n2:p_pm4_resource_instance):Integer;
+begin
+ Result:=t_pm4_resource.c(n1^.resource,n2^.resource);
 end;
 
 //
 
-function t_pm4_resource_scope.empty:Boolean;
-begin
- Result:=(TAILQ_FIRST(@list)=nil);
-end;
 
-function t_pm4_resource_scope.first:p_pm4_resource_instance;
+function  t_pm4_resource_init_scope.first:p_pm4_resource_instance;
 begin
  Result:=TAILQ_FIRST(@list);
 end;
 
-function t_pm4_resource_scope.last:p_pm4_resource_instance;
-begin
- if (list.tqh_last=nil) then Exit(nil);
- Result:=TAILQ_LAST(@list);
-end;
 
-procedure t_pm4_resource_scope.insert_init(i:p_pm4_resource_instance);
+procedure t_pm4_resource_init_scope.insert(i:p_pm4_resource_instance);
 begin
+ if (i^.init_entry.tqe_next<>nil) or
+    (i^.init_entry.tqe_prev<>nil) then Exit;
+
  if (list.tqh_first=nil) and
     (list.tqh_last =nil) then
  begin
@@ -406,98 +421,81 @@ begin
  i^.init_scope:=@self;
 end;
 
-procedure t_pm4_resource_scope.insert_curr(i:p_pm4_resource_instance);
-begin
- if (list.tqh_first=nil) and
-    (list.tqh_last =nil) then
- begin
-  TAILQ_INIT(@list);
- end;
-
- TAILQ_INSERT_TAIL(@list,i,@i^.curr_entry);
-
- i^.curr_scope:=@self;
-end;
-
-function t_pm4_resource_scope.find_curr_image_resource(const rkey:TvImageKey):p_pm4_resource_instance;
-var
- node:p_pm4_resource_instance;
-begin
- Result:=nil;
-
- if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit;
-
- node:=TAILQ_FIRST(@list);
-
- while (node<>nil) do
- begin
-
-  if (node^.resource^.rtype=R_IMG) and
-     (CompareByte(node^.resource^.rkey,rkey,sizeOf(TvImageKey))=0) then
-  begin
-   Exit(node);
-  end;
-
-  node:=TAILQ_NEXT(node,@node^.curr_entry);
- end;
-end;
-
-function t_pm4_resource_scope.find_curr_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource_instance;
-var
- node:p_pm4_resource_instance;
-begin
- Result:=nil;
-
- node:=TAILQ_FIRST(@list);
-
- while (node<>nil) do
- begin
-
-  if (node^.resource^.rtype=R_BUF) and
-     (node^.resource^.rkey.Addr=addr) and
-     (node^.resource^.rsize=size) then
-  begin
-   Exit(node);
-  end;
-
-  node:=TAILQ_NEXT(node,@node^.curr_entry);
- end;
-end;
-
 //
 
-procedure t_pm4_stream.Free;
+procedure t_pm4_resource_curr_scope.insert(i:p_pm4_resource_instance);
+var
+ f:p_pm4_resource_instance;
 begin
- list:=Default(TAILQ_HEAD);
- allocator.Free;
-end;
+ f:=resource_instance_set.Find(i);
 
-Procedure t_pm4_stream.add_node(node:p_pm4_node);
-begin
- if (list.tqh_first=nil) and
-    (list.tqh_last =nil) then
+ if (f<>nil) then
  begin
-  TAILQ_INIT(@list);
+  //union
+
+  f^.curr_mem_usage:=f^.curr_mem_usage or i^.curr_mem_usage;
+  f^.prev_mem_usage:=f^.prev_mem_usage or i^.prev_mem_usage;
+  f^.next_mem_usage:=f^.next_mem_usage or i^.next_mem_usage;
+
+  f^.curr_img_usage:=f^.curr_img_usage +  i^.curr_img_usage;
+  f^.prev_img_usage:=f^.prev_img_usage +  i^.prev_img_usage;
+  f^.next_img_usage:=f^.next_img_usage +  i^.next_img_usage;
+ end else
+ begin
+  resource_instance_set.Insert(i);
  end;
 
- TAILQ_INSERT_TAIL(@list,node,@node^.entry);
+ //
 end;
 
-function t_pm4_stream.First:p_pm4_node;
+function t_pm4_resource_curr_scope.find_resource_instance(r:p_pm4_resource):p_pm4_resource_instance;
+var
+ tmp:t_pm4_resource_instance;
 begin
- Result:=TAILQ_FIRST(@list);
+ if (r=nil) then Exit(nil);
+
+ tmp:=Default(t_pm4_resource_instance);
+ tmp.resource:=r;
+
+ Result:=resource_instance_set.Find(@tmp);
 end;
 
-function t_pm4_stream.Next(node:p_pm4_node):p_pm4_node;
+function t_pm4_resource_curr_scope.find_image_resource_instance(const rkey:TvImageKey):p_pm4_resource_instance;
+var
+ tmp:t_pm4_resource;
 begin
- Result:=TAILQ_NEXT(node,@node^.entry);
+ if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit(nil);
+
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_IMG;
+ tmp.rkey :=rkey;
+
+ Result:=find_resource_instance(@tmp);
 end;
 
-//
+function t_pm4_resource_curr_scope.find_buffer_resource_instance(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_BUF;
+ tmp.rkey.Addr:=addr;
 
-//  resource_set:t_pm4_resource_set;
+ Result:=find_resource_instance(@tmp);
+end;
 
-function t_pm4_stream.fetch_image_resource(const rkey:TvImageKey):p_pm4_resource;
+function t_pm4_resource_stream_scope.find_image_resource(const rkey:TvImageKey):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_IMG;
+ tmp.rkey :=rkey;
+
+ Result:=resource_set.Find(@tmp);
+end;
+
+function t_pm4_resource_stream_scope.fetch_image_resource(const rkey:TvImageKey):p_pm4_resource;
 var
  tmp:t_pm4_resource;
 begin
@@ -518,20 +516,31 @@ begin
  end;
 end;
 
-function t_pm4_stream.fetch_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+function t_pm4_resource_stream_scope.find_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource;
 var
  tmp:t_pm4_resource;
 begin
  tmp:=Default(t_pm4_resource);
  tmp.rtype:=R_BUF;
  tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
+
+ Result:=resource_set.Find(@tmp);
+end;
+
+function t_pm4_resource_stream_scope.fetch_buffer_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_BUF;
+ tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
 
  Result:=resource_set.Find(@tmp);
 
  if (Result=nil) then
  begin
-  tmp.rsize:=size;
-
   Result:=allocator.Alloc(SizeOf(t_pm4_resource));
   Result^:=tmp;
 
@@ -539,7 +548,69 @@ begin
  end;
 end;
 
-function t_pm4_stream.fetch_resource_instance(r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+function t_pm4_resource_stream_scope.fetch_resource_instance(scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+begin
+ Result:=scope^.find_resource_instance(r);
+
+ if (Result=nil) then
+ begin
+  Result:=allocator.Alloc(SizeOf(t_pm4_resource_instance));
+  Result^:=Default(t_pm4_resource_instance);
+  //
+  Result^.resource:=r;
+  Result^.curr_mem_usage:=mem_usage;
+  Result^.curr_img_usage:=img_usage;
+ end else
+ begin
+  Result^.curr_mem_usage:=Result^.curr_mem_usage or mem_usage;
+  Result^.curr_img_usage:=Result^.curr_img_usage +  img_usage;
+ end;
+
+end;
+
+function t_pm4_resource_stream_scope.insert_image_resource(scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+var
+ r:p_pm4_resource;
+ i:p_pm4_resource_instance;
+begin
+ if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit;
+
+ r:=fetch_image_resource(rkey);
+ i:=fetch_resource_instance(scope,r,mem_usage,img_usage);
+
+ if ((mem_usage and TM_READ)<>0) then
+ if (i^.prev_mem_usage=0) then //no prev usage
+ begin
+  //init
+  init_scope.insert(i);
+ end;
+
+ scope^.insert(i);
+
+ Result:=i;
+end;
+
+function t_pm4_resource_stream_scope.insert_buffer_resource(scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+var
+ r:p_pm4_resource;
+ i:p_pm4_resource_instance;
+begin
+ r:=fetch_buffer_resource(addr,size);
+ i:=fetch_resource_instance(scope,r,mem_usage,[iu_buffer]);
+
+ if ((mem_usage and TM_READ)<>0) then
+ if (i^.prev_mem_usage=0) then //no prev usage
+ begin
+  //init
+  init_scope.insert(i);
+ end;
+
+ scope^.insert(i);
+
+ Result:=i;
+end;
+
+procedure t_pm4_resource_stream_scope.connect_resource_instance(i:p_pm4_resource_instance);
 var
  start:Pointer;
  __end:Pointer;
@@ -547,16 +618,10 @@ var
  prev:p_pm4_resource_instance;
  tmp:t_pm4_resource;
 begin
- Result:=allocator.Alloc(SizeOf(t_pm4_resource_instance));
-
- Result^:=Default(t_pm4_resource_instance);
-
- Result^.resource  :=r;
- Result^.curr_mem_usage:=mem_usage;
- Result^.curr_img_usage:=img_usage;
+ //find cross
 
  tmp:=Default(t_pm4_resource);
- tmp:=r^;
+ tmp:=i^.resource^;
 
  start:=tmp.rkey.Addr;
  __end:=start+tmp.rsize;
@@ -576,19 +641,19 @@ begin
   if (__end>(node^.rkey.Addr)) and (start<(node^.rkey.Addr+node^.rsize)) then
   begin
    prev:=node^.rwrite;
-   if (prev<>nil) then
+   if (prev<>nil) and (prev<>i) then
    begin
     //sum prev of curr
-    Result^.prev_mem_usage:=Result^.prev_mem_usage or prev^.curr_mem_usage;
-    Result^.prev_img_usage:=Result^.prev_img_usage +  prev^.curr_img_usage;
+    i^.prev_mem_usage:=i^.prev_mem_usage or prev^.curr_mem_usage;
+    i^.prev_img_usage:=i^.prev_img_usage +  prev^.curr_img_usage;
     //sum next of prev
-    prev^.next_mem_usage:=prev^.next_mem_usage or mem_usage;
-    prev^.next_img_usage:=prev^.next_img_usage +  img_usage;
+    prev^.next_mem_usage:=prev^.next_mem_usage or i^.curr_mem_usage;
+    prev^.next_img_usage:=prev^.next_img_usage +  i^.curr_img_usage;
    end;
    //
-   if ((mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
+   if ((i^.curr_mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
    begin
-    node^.rwrite:=Result;
+    node^.rwrite:=i;
    end;
   end;
 
@@ -596,46 +661,51 @@ begin
  end;
 end;
 
-function t_pm4_stream.insert_image_resource(node:p_pm4_node;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+procedure t_pm4_resource_stream_scope.connect_resource_scope(scope:p_pm4_resource_curr_scope);
 var
- r:p_pm4_resource;
- i:p_pm4_resource_instance;
+ node:p_pm4_resource_instance;
 begin
- if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit;
+ node:=scope^.resource_instance_set.Min;
 
- r:=fetch_image_resource(rkey);
- i:=fetch_resource_instance(r,mem_usage,img_usage);
-
- if ((mem_usage and TM_READ)<>0) then
- if (i^.prev_mem_usage=0) then //no prev usage
+ while (node<>nil) do
  begin
-  //init
-  init_scope.insert_init(i);
+
+  connect_resource_instance(node);
+
+  node:=scope^.resource_instance_set.Next(node);
  end;
 
- node^.scope.insert_curr(i);
-
- Result:=i;
 end;
 
-function t_pm4_stream.insert_buffer_resource(node:p_pm4_node;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
-var
- r:p_pm4_resource;
- i:p_pm4_resource_instance;
-begin
- r:=fetch_buffer_resource(addr,size);
- i:=fetch_resource_instance(r,mem_usage,[iu_buffer]);
+//
 
- if ((mem_usage and TM_READ)<>0) then
- if (i^.prev_mem_usage=0) then //no prev usage
+procedure t_pm4_stream.Free;
+begin
+ list:=Default(TAILQ_HEAD);
+ allocator.Free;
+end;
+
+Procedure t_pm4_stream.add_node(node:p_pm4_node);
+begin
+ if (list.tqh_first=nil) and
+    (list.tqh_last =nil) then
  begin
-  //init
-  init_scope.insert_init(i);
+  TAILQ_INIT(@list);
  end;
 
- node^.scope.insert_curr(i);
+ TAILQ_INSERT_TAIL(@list,node,@node^.entry);
 
- Result:=i;
+ connect_resource_scope(@node^.scope);
+end;
+
+function t_pm4_stream.First:p_pm4_node;
+begin
+ Result:=TAILQ_FIRST(@list);
+end;
+
+function t_pm4_stream.Next(node:p_pm4_node):p_pm4_node;
+begin
+ Result:=TAILQ_NEXT(node,@node^.entry);
 end;
 
 //
@@ -647,7 +717,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_LoadConstRam));
 
  node^.ntype :=ntLoadConstRam;
- node^.scope :=Default(t_pm4_resource_scope);
+ node^.scope :=Default(t_pm4_resource_curr_scope);
  node^.addr  :=addr;
  node^.num_dw:=num_dw;
  node^.offset:=offset;
@@ -662,7 +732,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWrite));
 
  node^.ntype    :=ntEventWrite;
- node^.scope    :=Default(t_pm4_resource_scope);
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.eventType:=eventType;
 
  add_node(node);
@@ -675,7 +745,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEop));
 
  node^.ntype    :=ntEventWriteEop;
- node^.scope    :=Default(t_pm4_resource_scope);
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.addr     :=addr;
  node^.data     :=data;
  node^.eventType:=eventType;
@@ -692,7 +762,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEos));
 
  node^.ntype    :=ntEventWriteEos;
- node^.scope    :=Default(t_pm4_resource_scope);
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.addr     :=addr;
  node^.data     :=data;
  node^.eventType:=eventType;
@@ -708,7 +778,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_SubmitFlipEop));
 
  node^.ntype    :=ntSubmitFlipEop;
- node^.scope    :=Default(t_pm4_resource_scope);
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.eop_value:=eop_value;
  node^.intSel   :=intSel;
 
@@ -722,7 +792,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_DmaData));
 
  node^.ntype   :=ntDmaData;
- node^.scope   :=Default(t_pm4_resource_scope);
+ node^.scope   :=Default(t_pm4_resource_curr_scope);
  node^.dst     :=dst;
  node^.src     :=srcOrData;
  node^.numBytes:=numBytes;
@@ -740,7 +810,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData)+num_dw*SizeOf(DWORD));
 
  node^.ntype :=ntWriteData;
- node^.scope :=Default(t_pm4_resource_scope);
+ node^.scope :=Default(t_pm4_resource_curr_scope);
  node^.dst   :=dst;
  node^.src   :=Pointer(node+1);
  node^.num_dw:=num_dw;
@@ -758,7 +828,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_WaitRegMem));
 
  node^.ntype      :=ntWaitRegMem;
- node^.scope      :=Default(t_pm4_resource_scope);
+ node^.scope      :=Default(t_pm4_resource_curr_scope);
  node^.pollAddr   :=pollAddr;
  node^.refValue   :=refValue;
  node^.mask       :=mask;
@@ -774,7 +844,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_FastClear));
 
  node^.ntype :=ntFastClear;
- node^.scope :=Default(t_pm4_resource_scope);
+ node^.scope :=Default(t_pm4_resource_curr_scope);
  node^.CX_REG:=CX_REG;
 
  add_node(node);
@@ -787,7 +857,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_Resolve));
 
  node^.ntype :=ntResolve;
- node^.scope :=Default(t_pm4_resource_scope);
+ node^.scope :=Default(t_pm4_resource_curr_scope);
  node^.CX_REG:=CX_REG;
 
  add_node(node);
@@ -834,7 +904,7 @@ begin
   With FUniformBuilder.FImages[i] do
   begin
 
-   insert_image_resource(node,FImage,TM_READ,[iu_sampled]);
+   insert_image_resource(@node^.scope,FImage,TM_READ,[iu_sampled]);
 
   end;
  end;
@@ -848,7 +918,7 @@ begin
   begin
 
    //TODO: check write flag
-   insert_buffer_resource(node,addr,size,TM_READ or TM_WRITE);
+   insert_buffer_resource(@node^.scope,addr,size,TM_READ or TM_WRITE);
 
   end;
  end;
@@ -889,7 +959,7 @@ begin
 
    //
 
-   insert_image_resource(node,RT.FImageInfo,RT.IMAGE_USAGE,[iu_attachment]);
+   insert_image_resource(@node^.scope,RT.FImageInfo,RT.IMAGE_USAGE,[iu_attachment]);
 
    //
 
@@ -906,8 +976,8 @@ begin
 
   //
 
-  insert_image_resource(node,GetDepthOnly  (rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.DEPTH_USAGE  ,[iu_depthstenc]);
-  insert_image_resource(node,GetStencilOnly(rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.STENCIL_USAGE,[iu_depthstenc]);
+  insert_image_resource(@node^.scope,GetDepthOnly  (rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.DEPTH_USAGE  ,[iu_depthstenc]);
+  insert_image_resource(@node^.scope,GetStencilOnly(rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.STENCIL_USAGE,[iu_depthstenc]);
  end;
 
  rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;
@@ -979,7 +1049,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_draw));
 
  node^.ntype :=ntype;
- node^.scope :=Default(t_pm4_resource_scope);
+ node^.scope :=Default(t_pm4_resource_curr_scope);
 
  Build_rt_info(node,node^.rt_info,GPU_REGS);
 
@@ -1066,7 +1136,7 @@ begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchDirect));
 
  node^.ntype:=ntDispatchDirect;
- node^.scope:=Default(t_pm4_resource_scope);
+ node^.scope:=Default(t_pm4_resource_curr_scope);
 
  Build_cs_info(node,GPU_REGS);
 

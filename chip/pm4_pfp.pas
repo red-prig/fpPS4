@@ -1019,6 +1019,8 @@ procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
 var
  addr:Pointer;
 begin
+ Assert(Body^.header.shaderType=1,'shaderType<>CS');
+
  Case Body^.eventType of
   CS_DONE:Writeln(' CS_DONE');
   PS_DONE:Writeln(' PS_DONE');
@@ -1041,7 +1043,6 @@ begin
  end;
 
  pctx^.stream[stGfxDcb].EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
-
 end;
 
 procedure onDmaData(pctx:p_pfp_ctx;Body:PPM4DMADATA);
@@ -1426,6 +1427,12 @@ end;
 
 procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
 begin
+ Assert(Body^.header.shaderType=1,'shaderType<>CS');
+
+ if (DWORD(Body^.dispatchInitiator)<>1) then
+ begin
+  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+ end;
 
  pctx^.SH_REG.COMPUTE_DIM_X:=Body^.dimX;
  pctx^.SH_REG.COMPUTE_DIM_Y:=Body^.dimY;
