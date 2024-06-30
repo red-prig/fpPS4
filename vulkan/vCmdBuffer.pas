@@ -56,7 +56,7 @@ type
 
   FFence:TvFence;
 
-  FCBState:Boolean;
+  FCBState:(cbInit,cbBegin,cbEnd,cbSubmit);
 
   Constructor Create(pool:TvCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
@@ -155,7 +155,7 @@ begin
 
  FSignalSemaphore:=TvSemaphore.Create;
 
- FCBState:=False;
+ FCBState:=cbInit;
 end;
 
 Destructor TvCustomCmdBuffer.Destroy;
@@ -179,7 +179,19 @@ var
 begin
  Result:=False;
  if (Self=nil) then Exit;
- if FCBState then Exit(True);
+
+ case FCBState of
+  cbInit:; //need start
+  cbBegin:
+   begin
+    //is started
+    Exit(True);
+   end;
+  else
+   //idk why it called in this state
+   Exit(False);
+ end;
+
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  Info:=Default(TVkCommandBufferBeginInfo);
  Info.sType:=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -191,7 +203,7 @@ begin
   Writeln(StdErr,'vkBeginCommandBuffer:',r);
   Exit;
  end;
- FCBState:=True;
+ FCBState:=cbBegin;
  Result:=True;
 end;
 
@@ -200,23 +212,23 @@ var
  r:TVkResult;
 begin
  if (Self=nil) then Exit;
- if FCBState then
+ if (FCBState<>cbBegin) then Exit;
+
+ EndRenderPass;
+
+ FCurrLayout[0]:=VK_NULL_HANDLE;
+ FCurrLayout[1]:=VK_NULL_HANDLE;
+
+ FCurrPipeline[0]:=VK_NULL_HANDLE;
+ FCurrPipeline[1]:=VK_NULL_HANDLE;
+
+ r:=vkEndCommandBuffer(FCmdbuf);
+ if (r<>VK_SUCCESS) then
  begin
-  EndRenderPass;
-
-  FCurrLayout[0]:=VK_NULL_HANDLE;
-  FCurrLayout[1]:=VK_NULL_HANDLE;
-
-  FCurrPipeline[0]:=VK_NULL_HANDLE;
-  FCurrPipeline[1]:=VK_NULL_HANDLE;
-
-  r:=vkEndCommandBuffer(FCmdbuf);
-  if (r<>VK_SUCCESS) then
-  begin
-   Writeln(StdErr,'vkEndCommandBuffer:',r);
-  end;
-  FCBState:=False;
+  Writeln(StdErr,'vkEndCommandBuffer:',r);
  end;
+
+ FCBState:=cbEnd;
 end;
 
 Procedure TvCustomCmdBuffer.BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
@@ -331,10 +343,18 @@ begin
  if (Self=nil) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
- if not FCBState then
- begin
-  //zero cmd buffer
-  Exit(VK_SUCCESS);
+ case FCBState of
+  cbInit:
+   begin
+    //zero cmd buffer
+    Exit(VK_SUCCESS);
+   end;
+  cbSubmit:
+   begin
+    //cmd buffer submitted
+    Exit(VK_SUCCESS);
+   end;
+  else;
  end;
 
  EndCmdBuffer;
@@ -396,7 +416,22 @@ begin
  if (Self=nil) then Exit;
  if (FFence=nil) then Exit;
 
- Result:=FFence.Wait(timeout);
+ case FCBState of
+  cbInit:
+   begin
+    //zero cmd buffer
+    Exit(VK_SUCCESS);
+   end;
+  cbSubmit:
+   begin
+    //cmd buffer submitted
+    Result:=FFence.Wait(timeout);
+   end;
+  else
+   //idk why it called in this state
+   Exit(VK_ERROR_UNKNOWN);
+ end;
+
 end;
 
 Procedure TvCustomCmdBuffer.ReleaseResource;
