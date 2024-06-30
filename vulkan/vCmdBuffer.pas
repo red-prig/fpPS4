@@ -7,7 +7,8 @@ interface
 uses
   Classes,
   SysUtils,
-  g23tree,
+  //g23tree,
+  g_node_splay,
   si_ci_vi_merged_enum,
   Vulkan,
   vDependence,
@@ -23,17 +24,33 @@ uses
 type
  TvCmdBuffer=class;
 
- TvSemaphoreWait=record
-  FSemaphore:TvSemaphore;
+ PvSemaphoreWait=^TvSemaphoreWait;
+ TvSemaphoreWait=object
+  //
+  FSemaphore:TvSemaphore; //Must be the first element in memory
   FWaitStage:TVkPipelineStageFlags;
+  //
+  pLeft :PvSemaphoreWait;
+  pRight:PvSemaphoreWait;
+  //
+  function c(a,b:PvSemaphoreWait):Integer; static;
  end;
 
+ TvSemaphoreWaitSet=specialize TNodeSplay<TvSemaphoreWait>;
+
+ {
  TvSemaphoreWaitCompare=object
   function c(a,b:TvSemaphoreWait):Integer; static;
  end;
 
  TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
+ }
 
+const
+ BP_GRAPHICS=VK_PIPELINE_BIND_POINT_GRAPHICS;
+ BP_COMPUTE =VK_PIPELINE_BIND_POINT_COMPUTE;
+
+type
  TvCustomCmdBuffer=class(TvDependenciesObject)
 
   FParent:TvCmdPool;
@@ -45,12 +62,13 @@ type
 
   submit_id:ptruint;
 
-  FCurrPipeline:array[0..1] of TVkPipeline;
-  FCurrLayout  :array[0..1] of TVkPipelineLayout;
+  FCurrPipeline:array[BP_GRAPHICS..BP_COMPUTE] of TVkPipeline;
+  FCurrLayout  :array[BP_GRAPHICS..BP_COMPUTE] of TVkPipelineLayout;
 
   FRenderPass:TVkRenderPass;
 
   FWaitSemaphores:TvSemaphoreWaitSet;
+  FWaitSemaphoresCount:Integer;
 
   FSignalSemaphore:TvSemaphore;
 
@@ -71,6 +89,7 @@ type
   function    Wait(timeout:TVkUInt64):TVkResult;
 
   Procedure   ReleaseResource;
+  Procedure   FreeAllSemaphores;
   Procedure   AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
   function    GetSignaledSemaphore:TvSemaphore;
 
@@ -82,33 +101,42 @@ type
   Procedure   BindVertexBuffers(const FAttrBuilder:TvAttrBuilder);
   Procedure   SetVertexInput(const FAttrBuilder:TvAttrBuilder);
 
-  Procedure   ClearDepthStencilImage(
-                         image:TVkImage;
-                         imageLayout:TVkImageLayout;
-                         const pDepthStencil:PVkClearDepthStencilValue;
-                         rangeCount:TVkUInt32;
-                         const pRanges:PVkImageSubresourceRange);
+  Procedure   ClearDepthStencilImage(image:TVkImage;
+                                     imageLayout:TVkImageLayout;
+                                     const pDepthStencil:PVkClearDepthStencilValue;
+                                     rangeCount:TVkUInt32;
+                                     const pRanges:PVkImageSubresourceRange);
 
-  Procedure   ClearDepthStencilImage(
-                         image:TVkImage;
-                         imageLayout:TVkImageLayout;
-                         const pDepthStencil:PVkClearDepthStencilValue;
-                         const range:TVkImageSubresourceRange);
+  Procedure   ClearDepthStencilImage(image:TVkImage;
+                                     imageLayout:TVkImageLayout;
+                                     const pDepthStencil:PVkClearDepthStencilValue;
+                                     const range:TVkImageSubresourceRange);
 
-  Procedure   ClearColorImage(
-                         image:TVkImage;
-                         imageLayout:TVkImageLayout;
-                         const pColor:PVkClearColorValue;
-                         rangeCount:TVkUInt32;
-                         const pRanges:PVkImageSubresourceRange);
+  Procedure   ClearColorImage(image:TVkImage;
+                              imageLayout:TVkImageLayout;
+                              const pColor:PVkClearColorValue;
+                              rangeCount:TVkUInt32;
+                              const pRanges:PVkImageSubresourceRange);
 
-  Procedure   ResolveImage(
-                         srcImage:TVkImage;
-                         srcImageLayout:TVkImageLayout;
-                         dstImage:TVkImage;
-                         dstImageLayout:TVkImageLayout;
-                         regionCount:TVkUInt32;
-                         const pRegions:PVkImageResolve);
+  Procedure   ResolveImage(srcImage:TVkImage;
+                           srcImageLayout:TVkImageLayout;
+                           dstImage:TVkImage;
+                           dstImageLayout:TVkImageLayout;
+                           regionCount:TVkUInt32;
+                           const pRegions:PVkImageResolve);
+
+  procedure   CopyBufferToImage(srcBuffer:TVkBuffer;
+                                dstImage:TVkImage;
+                                dstImageLayout:
+                                TVkImageLayout;
+                                regionCount:TVkUInt32;
+                                const pRegions:PVkBufferImageCopy);
+
+  procedure   CopyImageToBuffer(srcImage:TVkImage;
+                                srcImageLayout:TVkImageLayout;
+                                dstBuffer:TVkBuffer;
+                                regionCount:TVkUInt32;
+                                const pRegions:PVkBufferImageCopy);
 
  end;
 
@@ -139,9 +167,16 @@ uses
  vBuffer,
  vHostBufferManager;
 
+{
 function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
 begin
  Result:=Integer(Pointer(a.FSemaphore)>Pointer(b.FSemaphore))-Integer(Pointer(a.FSemaphore)<Pointer(b.FSemaphore));
+end;
+}
+
+function TvSemaphoreWait.c(a,b:PvSemaphoreWait):Integer;
+begin
+ Result:=Integer(Pointer(a^.FSemaphore)>Pointer(b^.FSemaphore))-Integer(Pointer(a^.FSemaphore)<Pointer(b^.FSemaphore));
 end;
 
 Constructor TvCustomCmdBuffer.Create(pool:TvCmdPool;Queue:TvQueue);
@@ -216,11 +251,11 @@ begin
 
  EndRenderPass;
 
- FCurrLayout[0]:=VK_NULL_HANDLE;
- FCurrLayout[1]:=VK_NULL_HANDLE;
+ FCurrLayout[BP_GRAPHICS]:=VK_NULL_HANDLE;
+ FCurrLayout[BP_COMPUTE ]:=VK_NULL_HANDLE;
 
- FCurrPipeline[0]:=VK_NULL_HANDLE;
- FCurrPipeline[1]:=VK_NULL_HANDLE;
+ FCurrPipeline[BP_GRAPHICS]:=VK_NULL_HANDLE;
+ FCurrPipeline[BP_COMPUTE ]:=VK_NULL_HANDLE;
 
  r:=vkEndCommandBuffer(FCmdbuf);
  if (r<>VK_SUCCESS) then
@@ -234,14 +269,14 @@ end;
 Procedure TvCustomCmdBuffer.BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
 begin
  if (Self=nil) then Exit;
- if (FCurrPipeline[ord(BindPoint)]=F) then Exit;
+ if (FCurrPipeline[BindPoint]=F) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
  vkCmdBindPipeline(FCmdbuf,BindPoint,F);
- FCurrPipeline[ord(BindPoint)]:=F;
+ FCurrPipeline[BindPoint]:=F;
 end;
 
 function TvCmdBuffer.BeginRenderPass(RT:TvRenderTargets):Boolean;
@@ -277,14 +312,14 @@ begin
   rinfo.pNext:=@ainfo;
  end;
 
- FCurrPipeline[0]:=RT.FPipeline.FHandle;
- FCurrLayout  [0]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
+ FCurrPipeline[BP_GRAPHICS]:=RT.FPipeline.FHandle;
+ FCurrLayout  [BP_GRAPHICS]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
  Femulate_primtype:=RT.FPipeline.Key.emulate_primtype;
 
  Inc(cmd_count);
 
  vkCmdBeginRenderPass(FCmdbuf,@rinfo,VK_SUBPASS_CONTENTS_INLINE);
- vkCmdBindPipeline   (FCmdbuf,VK_PIPELINE_BIND_POINT_GRAPHICS,FCurrPipeline[0]);
+ vkCmdBindPipeline   (FCmdbuf,BP_GRAPHICS,FCurrPipeline[BP_GRAPHICS]);
 
  RefTo(RT);
 
@@ -318,8 +353,8 @@ begin
 
  if (Self=nil) or (CP=nil) then Exit;
 
- BindPipeline(VK_PIPELINE_BIND_POINT_COMPUTE,CP.FHandle);
- BindLayout  (VK_PIPELINE_BIND_POINT_COMPUTE,CP.Key.FShaderGroup.FLayout);
+ BindPipeline(BP_COMPUTE,CP.FHandle);
+ BindLayout  (BP_COMPUTE,CP.Key.FShaderGroup.FLayout);
 
  RefTo(CP);
 
@@ -336,7 +371,7 @@ var
  FStages :array of TVkPipelineStageFlags;
 
  i:Integer;
- t:TvSemaphoreWaitSet.Iterator;
+ t:PvSemaphoreWait;
 begin
  Result:=VK_ERROR_UNKNOWN;
 
@@ -364,21 +399,22 @@ begin
  info.commandBufferCount :=1;
  info.pCommandBuffers    :=@FCmdbuf;
 
- if (FWaitSemaphores.Size<>0) then
+ if (FWaitSemaphoresCount<>0) then
  begin
   FHandles:=nil;
   FStages :=nil;
-  SetLength(FHandles,FWaitSemaphores.Size);
-  SetLength(FStages ,FWaitSemaphores.Size);
+  SetLength(FHandles,FWaitSemaphoresCount);
+  SetLength(FStages ,FWaitSemaphoresCount);
 
   i:=0;
-  t:=FWaitSemaphores.cbegin;
-  While (t.Item<>nil) do
+  t:=FWaitSemaphores.Min;
+  While (t<>nil) do
   begin
-   FHandles[i]:=t.Item^.FSemaphore.FHandle;
-   FStages [i]:=t.Item^.FWaitStage;
+   FHandles[i]:=t^.FSemaphore.FHandle;
+   FStages [i]:=t^.FWaitStage;
    Inc(i);
-   t.Next;
+   //
+   t:=FWaitSemaphores.Next(t);
   end;
 
   info.waitSemaphoreCount:=i;
@@ -440,30 +476,48 @@ begin
 
  ReleaseAllDependencies(Self);
 
- FWaitSemaphores.Free;
+ FreeAllSemaphores;
 
  cmd_count:=0;
  ret:=0;
 end;
 
+Procedure TvCustomCmdBuffer.FreeAllSemaphores;
+var
+ node:PvSemaphoreWait;
+begin
+ node:=FWaitSemaphores.Min;
+
+ while (node<>nil) do
+ begin
+  FWaitSemaphores.delete(node);
+  OnFree(node);
+
+  node:=FWaitSemaphores.Min;
+ end;
+
+ FWaitSemaphoresCount:=0;
+end;
+
 Procedure TvCustomCmdBuffer.AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
 Var
- I:TvSemaphoreWaitSet.Iterator;
- F:TvSemaphoreWait;
+ node:PvSemaphoreWait;
 begin
  if (S=nil) then Exit;
- F:=Default(TvSemaphoreWait);
- F.FSemaphore:=S;
- F.FWaitStage:=W;
 
- I:=FWaitSemaphores.find(F);
- if (i.Item<>nil) then
+ node:=FWaitSemaphores.Find(@S);
+
+ if (node=nil) then
  begin
-  i.Item^.FWaitStage:=i.Item^.FWaitStage or W;
- end else
- begin
-  FWaitSemaphores.Insert(F);
+  node:=OnAlloc(SizeOf(TvSemaphoreWait));
+  node^.FSemaphore:=S;
+  node^.FWaitStage:=W;
+  //
+  FWaitSemaphores.Insert(node);
+  //
+  Inc(FWaitSemaphoresCount);
  end;
+
 end;
 
 function TvCustomCmdBuffer.GetSignaledSemaphore:TvSemaphore;
@@ -475,7 +529,7 @@ Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipeli
 begin
  if (Self=nil) then Exit;
  if (F=nil) then Exit;
- FCurrLayout[ord(BindPoint)]:=F.FHandle;
+ FCurrLayout[BindPoint]:=F.FHandle;
 end;
 
 Procedure TvCustomCmdBuffer.BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -483,13 +537,13 @@ begin
  if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
- if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
+ if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
 
  Inc(cmd_count);
 
  vkCmdBindDescriptorSets(FCmdbuf,
                          BindPoint,
-                         FCurrLayout[ord(BindPoint)],
+                         FCurrLayout[BindPoint],
                          fset,1,
                          @FHandle,
                          0,nil);
@@ -500,14 +554,14 @@ Procedure TvCustomCmdBuffer.PushConstant(BindPoint:TVkPipelineBindPoint;stageFla
 begin
  if (Self=nil) then Exit;
  if (pValues=nil) or (size=0) then Exit;
- if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
+ if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
  vkCmdPushConstants(FCmdbuf,
-                    FCurrLayout[ord(BindPoint)],
+                    FCurrLayout[BindPoint],
                     stageFlags,
                     offset,size,
                     pValues);
@@ -517,7 +571,7 @@ end;
 Procedure TvCustomCmdBuffer.DispatchDirect(X,Y,Z:TVkUInt32);
 begin
  if (Self=nil) then Exit;
- if (FCurrPipeline[1]=VK_NULL_HANDLE) then Exit;
+ if (FCurrPipeline[BP_COMPUTE]=VK_NULL_HANDLE) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
@@ -602,12 +656,11 @@ begin
                         @input.VertexAttributeDescriptions[0]);
 end;
 
-Procedure TvCustomCmdBuffer.ClearDepthStencilImage(
-                       image:TVkImage;
-                       imageLayout:TVkImageLayout;
-                       const pDepthStencil:PVkClearDepthStencilValue;
-                       rangeCount:TVkUInt32;
-                       const pRanges:PVkImageSubresourceRange);
+Procedure TvCustomCmdBuffer.ClearDepthStencilImage(image:TVkImage;
+                                                   imageLayout:TVkImageLayout;
+                                                   const pDepthStencil:PVkClearDepthStencilValue;
+                                                   rangeCount:TVkUInt32;
+                                                   const pRanges:PVkImageSubresourceRange);
 begin
  if (Self=nil) then Exit;
 
@@ -626,11 +679,10 @@ begin
 
 end;
 
-Procedure TvCustomCmdBuffer.ClearDepthStencilImage(
-                       image:TVkImage;
-                       imageLayout:TVkImageLayout;
-                       const pDepthStencil:PVkClearDepthStencilValue;
-                       const range:TVkImageSubresourceRange);
+Procedure TvCustomCmdBuffer.ClearDepthStencilImage(image:TVkImage;
+                                                   imageLayout:TVkImageLayout;
+                                                   const pDepthStencil:PVkClearDepthStencilValue;
+                                                   const range:TVkImageSubresourceRange);
 begin
  ClearDepthStencilImage(image,
                         imageLayout,
@@ -639,12 +691,11 @@ begin
                         @range);
 end;
 
-Procedure TvCustomCmdBuffer.ClearColorImage(
-                       image:TVkImage;
-                       imageLayout:TVkImageLayout;
-                       const pColor:PVkClearColorValue;
-                       rangeCount:TVkUInt32;
-                       const pRanges:PVkImageSubresourceRange);
+Procedure TvCustomCmdBuffer.ClearColorImage(image:TVkImage;
+                                            imageLayout:TVkImageLayout;
+                                            const pColor:PVkClearColorValue;
+                                            rangeCount:TVkUInt32;
+                                            const pRanges:PVkImageSubresourceRange);
 begin
  if (Self=nil) then Exit;
 
@@ -662,13 +713,12 @@ begin
   pRanges);
 end;
 
-Procedure TvCustomCmdBuffer.ResolveImage(
-                       srcImage:TVkImage;
-                       srcImageLayout:TVkImageLayout;
-                       dstImage:TVkImage;
-                       dstImageLayout:TVkImageLayout;
-                       regionCount:TVkUInt32;
-                       const pRegions:PVkImageResolve);
+Procedure TvCustomCmdBuffer.ResolveImage(srcImage:TVkImage;
+                                         srcImageLayout:TVkImageLayout;
+                                         dstImage:TVkImage;
+                                         dstImageLayout:TVkImageLayout;
+                                         regionCount:TVkUInt32;
+                                         const pRegions:PVkImageResolve);
 begin
  if (Self=nil) then Exit;
 
@@ -676,7 +726,6 @@ begin
  if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
-
 
  vkCmdResolveImage(
   FCmdbuf,
@@ -688,28 +737,103 @@ begin
   pRegions);
 end;
 
+procedure TvCustomCmdBuffer.CopyBufferToImage(srcBuffer:TVkBuffer;
+                                              dstImage:TVkImage;
+                                              dstImageLayout:
+                                              TVkImageLayout;
+                                              regionCount:TVkUInt32;
+                                              const pRegions:PVkBufferImageCopy);
+begin
+ if (Self=nil) then Exit;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkCmdCopyBufferToImage(
+  FCmdbuf,
+  srcBuffer,
+  dstImage,
+  dstImageLayout,
+  regionCount,
+  pRegions);
+end;
+
+procedure TvCustomCmdBuffer.CopyImageToBuffer(srcImage:TVkImage;
+                                              srcImageLayout:TVkImageLayout;
+                                              dstBuffer:TVkBuffer;
+                                              regionCount:TVkUInt32;
+                                              const pRegions:PVkBufferImageCopy);
+begin
+ if (Self=nil) then Exit;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkCmdCopyImageToBuffer(
+  FCmdbuf,
+  srcImage,
+  srcImageLayout,
+  dstBuffer,
+  regionCount,
+  pRegions);
+end;
+
 Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 var
- i:Integer;
-begin
- if (F=nil) then Exit;
- if (Self=nil) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
- if (FCurrLayout[ord(BindPoint)]=VK_NULL_HANDLE) then Exit;
- if (Length(F.FSets)=0) then Exit;
- For i:=0 to High(F.FSets) do
-  if F.FSets[i].IsValid then
-  begin
+ A:array of TVkDescriptorSet;
+ i,start,pos:Integer;
 
+ procedure Flush; inline;
+ begin
+  if (pos<>0) then
+  begin
    Inc(cmd_count);
 
    vkCmdBindDescriptorSets(FCmdbuf,
                            BindPoint,
-                           FCurrLayout[ord(BindPoint)],
-                           i,1,
-                           @F.FSets[i].FHandle,
+                           FCurrLayout[BindPoint],
+                           start,pos,
+                           @A[0],
                            0,nil);
+
+   pos:=0;
   end;
+ end;
+
+begin
+ if (F=nil) then Exit;
+ if (Self=nil) then Exit;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
+ if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
+ if (Length(F.FSets)=0) then Exit;
+
+ A:=nil;
+ SetLength(A,Length(F.FSets));
+ pos:=0;
+
+ For i:=0 to High(F.FSets) do
+ begin
+  if F.FSets[i].IsValid then
+  begin
+
+   if (pos=0) then
+   begin
+    start:=i;
+   end;
+
+   A[pos]:=F.FSets[i].FHandle;
+   Inc(pos);
+  end else
+  begin
+   Flush;
+  end;
+ end;
+
+ Flush;
 end;
 
 Const
@@ -910,7 +1034,7 @@ begin
  if (Self=nil) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
- if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
+ if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
 
  if (FinstanceCount=0) then FinstanceCount:=1;
 
@@ -977,7 +1101,7 @@ begin
  if (Self=nil) then Exit;
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
- if (FCurrPipeline[0]=VK_NULL_HANDLE) then Exit;
+ if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
 
  if (FinstanceCount=0) then FinstanceCount:=1;
 

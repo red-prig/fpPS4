@@ -838,7 +838,7 @@ begin
 
  if (FDescriptorGroup<>nil) then
  begin
-  CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_GRAPHICS,FDescriptorGroup);
+  CmdBuffer.BindSets(BP_GRAPHICS,FDescriptorGroup);
  end;
 
 end;
@@ -1006,7 +1006,7 @@ begin
 
  if (FDescriptorGroup<>nil) then
  begin
-  CmdBuffer.BindSets(VK_PIPELINE_BIND_POINT_COMPUTE,FDescriptorGroup);
+  CmdBuffer.BindSets(BP_COMPUTE,FDescriptorGroup);
  end;
 
 end;

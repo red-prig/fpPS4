@@ -5,16 +5,32 @@ unit vDependence;
 interface
 
 uses
+ g_node_splay,
  g23tree;
 
 type
  TvReleaseCb=procedure(Sender:TObject) of object;
 
+ {
  TvReleaseCompare=object
   function c(a,b:TvReleaseCb):Integer; static;
  end;
 
  TvRelease=specialize T23treeSet<TvReleaseCb,TvReleaseCompare>;
+ }
+
+ PvReleaseNode=^TvReleaseNode;
+ TvReleaseNode=object
+  //
+  OnRelease:TvReleaseCb; //Must be the first element in memory
+  //
+  pLeft :PvReleaseNode;
+  pRight:PvReleaseNode;
+  //
+  function c(a,b:PvReleaseNode):Integer; static;
+ end;
+
+ TvRelease=specialize TNodeSplay<TvReleaseNode>;
 
  TvRefsObject=class
   FRefs:ptruint;
@@ -26,10 +42,13 @@ type
   FDep_lock    :Pointer;
   FDependencies:TvRelease;
   //
+  function   OnAlloc(size:Ptruint):Pointer; virtual;
+  Procedure  OnFree (P:Pointer   );         virtual;
   Procedure  RefTo(obj:TvRefsObject);
   function   AddDependence(cb:TvReleaseCb):Boolean;
   function   DelDependence(cb:TvReleaseCb):Boolean;
   Procedure  ReleaseAllDependencies(Sender:TObject);
+  Procedure  FreeAllDependencies;
   Destructor Destroy; override;
  end;
 
@@ -58,11 +77,23 @@ implementation
 uses
  kern_rwlock;
 
+{
 function TvReleaseCompare.c(a,b:TvReleaseCb):Integer;
 begin
  Result:=Integer(TMethod(a).Code>TMethod(b).Code)-Integer(TMethod(a).Code<TMethod(b).Code);
  if (Result<>0) then Exit;
  Result:=Integer(TMethod(a).Data>TMethod(b).Data)-Integer(TMethod(a).Data<TMethod(b).Data);
+end;
+}
+
+function TvReleaseNode.c(a,b:PvReleaseNode):Integer;
+begin
+ Result:=Integer(TMethod(a^.OnRelease).Code>TMethod(b^.OnRelease).Code)-
+         Integer(TMethod(a^.OnRelease).Code<TMethod(b^.OnRelease).Code);
+ if (Result<>0) then Exit;
+ //
+ Result:=Integer(TMethod(a^.OnRelease).Data>TMethod(b^.OnRelease).Data)-
+         Integer(TMethod(a^.OnRelease).Data<TMethod(b^.OnRelease).Data);
 end;
 
 //
@@ -91,6 +122,16 @@ end;
 
 //
 
+function TvDependenciesObject.OnAlloc(size:Ptruint):Pointer;
+begin
+ Result:=AllocMem(size);
+end;
+
+Procedure TvDependenciesObject.OnFree(P:Pointer);
+begin
+ FreeMem(P);
+end;
+
 Procedure TvDependenciesObject.RefTo(obj:TvRefsObject);
 begin
  if (Self=nil) or (obj=nil) then Exit;
@@ -101,42 +142,61 @@ begin
 end;
 
 function TvDependenciesObject.AddDependence(cb:TvReleaseCb):Boolean;
+var
+ node:PvReleaseNode;
 begin
  Result:=False;
  if (cb=nil) then Exit;
 
  rw_wlock(FDep_lock);
 
- Result:=FDependencies.Insert(cb);
+ node:=FDependencies.Find(@cb);
+
+ if (node=nil) then
+ begin
+  node:=OnAlloc(SizeOf(TvReleaseNode));
+  node^.OnRelease:=cb;
+  Result:=FDependencies.Insert(node);
+ end;
 
  rw_wunlock(FDep_lock);
 end;
 
 function TvDependenciesObject.DelDependence(cb:TvReleaseCb):Boolean;
+var
+ node:PvReleaseNode;
 begin
  Result:=False;
  if (cb=nil) then Exit;
 
  rw_wlock(FDep_lock);
 
- Result:=FDependencies.delete(cb);
+ node:=FDependencies.Find(@cb);
+
+ if (node<>nil) then
+ begin
+  Result:=FDependencies.delete(node);
+  OnFree(node);
+ end;
 
  rw_wunlock(FDep_lock);
 end;
 
 Procedure TvDependenciesObject.ReleaseAllDependencies(Sender:TObject);
 var
- It:TvRelease.Iterator;
+ node:PvReleaseNode;
  cb:TvReleaseCb;
 begin
  rw_wlock(FDep_lock);
 
- while (FDependencies.size<>0) do
+ node:=FDependencies.Min;
+
+ while (node<>nil) do
  begin
-  It:=FDependencies.cbegin;
-  if (It.Item=nil) then Break;
-  cb:=It.Item^;
-  FDependencies.erase(It);
+  cb:=node^.OnRelease;
+
+  FDependencies.delete(node);
+  OnFree(node);
 
   if (cb<>nil) then
   begin
@@ -146,14 +206,36 @@ begin
 
    rw_wlock(FDep_lock);
   end;
+
+  node:=FDependencies.Min;
  end;
 
  rw_wunlock(FDep_lock);
 end;
 
+Procedure TvDependenciesObject.FreeAllDependencies;
+var
+ node,next:PvReleaseNode;
+begin
+ rw_wlock(FDep_lock);
+
+ node:=FDependencies.Min;
+
+ while (node<>nil) do
+ begin
+  FDependencies.delete(node);
+  OnFree(node);
+
+  node:=FDependencies.Min;
+ end;
+
+ rw_wunlock(FDep_lock);
+end;
+
+
 Destructor TvDependenciesObject.Destroy;
 begin
- FDependencies.Free;
+ FreeAllDependencies;
  inherited;
 end;
 

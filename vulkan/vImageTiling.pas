@@ -374,12 +374,11 @@ begin
 
  end;
 
- vkCmdCopyBufferToImage(cmd.FCmdbuf,
-                        buf.FHandle,
-                        image.FHandle,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        Length(BufferImageCopyA),
-                        @BufferImageCopyA[0]);
+ cmd.CopyBufferToImage(buf.FHandle,
+                       image.FHandle,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       Length(BufferImageCopyA),
+                       @BufferImageCopyA[0]);
 
 
 end;
@@ -526,7 +525,7 @@ begin
                        size,
                        ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
                        ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                       );
+                      );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
@@ -697,12 +696,11 @@ begin
 
  end;
 
- vkCmdCopyImageToBuffer(cmd.FCmdbuf,
-                        image.FHandle,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        buf.FHandle,
-                        Length(BufferImageCopyA),
-                        @BufferImageCopyA[0]);
+ cmd.CopyImageToBuffer(image.FHandle,
+                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       buf.FHandle,
+                       Length(BufferImageCopyA),
+                       @BufferImageCopyA[0]);
 
 
 end;
