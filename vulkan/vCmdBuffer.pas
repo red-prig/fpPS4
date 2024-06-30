@@ -443,6 +443,7 @@ begin
   Writeln(StdErr,'vkQueueSubmit:',Result);
  end;
 
+ FCBState:=cbSubmit;
 end;
 
 function TvCustomCmdBuffer.Wait(timeout:TVkUInt64):TVkResult;
@@ -784,24 +785,21 @@ end;
 
 Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 var
- A:array of TVkDescriptorSet;
+ A:array[0..6] of TVkDescriptorSet;
  i,start,pos:Integer;
 
  procedure Flush; inline;
  begin
-  if (pos<>0) then
-  begin
-   Inc(cmd_count);
+  Inc(cmd_count);
 
-   vkCmdBindDescriptorSets(FCmdbuf,
-                           BindPoint,
-                           FCurrLayout[BindPoint],
-                           start,pos,
-                           @A[0],
-                           0,nil);
+  vkCmdBindDescriptorSets(FCmdbuf,
+                          BindPoint,
+                          FCurrLayout[BindPoint],
+                          start,pos,
+                          @A[0],
+                          0,nil);
 
-   pos:=0;
-  end;
+  pos:=0;
  end;
 
 begin
@@ -811,8 +809,6 @@ begin
  if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
  if (Length(F.FSets)=0) then Exit;
 
- A:=nil;
- SetLength(A,Length(F.FSets));
  pos:=0;
 
  For i:=0 to High(F.FSets) do
@@ -827,13 +823,23 @@ begin
 
    A[pos]:=F.FSets[i].FHandle;
    Inc(pos);
+
+   if (pos=7) then
+   begin
+    Flush;
+   end;
+
   end else
+  if (pos<>0) then
   begin
    Flush;
   end;
  end;
 
- Flush;
+ if (pos<>0) then
+ begin
+  Flush;
+ end;
 end;
 
 Const
