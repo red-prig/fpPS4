@@ -423,7 +423,7 @@ begin
   //
   if (P^.FRType=nil) then
   begin
-   if (Pointer(FCtx)=nil) then
+   if (CompareByte(FCtx,Default(TRTTIContext),SizeOf(TRTTIContext))=0) then
    begin
     FCtx:=TRTTIContext.Create;
    end;
