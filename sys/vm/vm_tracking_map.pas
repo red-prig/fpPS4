@@ -33,7 +33,7 @@ const
 
 type
  t_on_destroy=function(handle:Pointer):Integer;
- t_on_trigger=function(handle:Pointer;start,__end:vm_offset_t):Integer;
+ t_on_trigger=function(handle:Pointer;mode:Integer):Integer;
 
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=record
@@ -48,6 +48,7 @@ type
   prot      :Byte;
   //
   main      :t_vm_track_interval;
+  align     :t_vm_track_interval;
   instances :TAILQ_HEAD; //p_vm_track_object_instance
   //
   on_destroy:t_on_destroy;
@@ -136,7 +137,7 @@ function  _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offs
 
 function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer):Integer;
+function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
 
 function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
 
@@ -156,11 +157,11 @@ begin
 
  TAILQ_INIT(@Result^.instances);
 
- start:=start              and (not PMAPP_MASK);
- __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
-
  Result^.main.start:=start;
  Result^.main.__end:=__end;
+
+ Result^.align.start:=start              and (not PMAPP_MASK);
+ Result^.align.__end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
  Result^.prot :=prot;
  Result^.htype:=htype;
@@ -210,7 +211,7 @@ begin
 end;
 }
 
-function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t):Integer;
+function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t;mode:Integer):Integer;
 begin
  Result:=DO_NOTHING;
 
@@ -218,12 +219,16 @@ begin
 
  if (obj^.mark_del<>0) then Exit;
 
- if (obj^.on_trigger<>nil) then
+ //cross with main
+ if (obj^.main.__end>start) and (obj^.main.start<__end) then
  begin
-  Result:=obj^.on_trigger(obj^.handle,start,__end);
- end else
- begin
-  Result:=DO_INCREMENT;
+  if (obj^.on_trigger<>nil) then
+  begin
+   Result:=obj^.on_trigger(obj^.handle,mode);
+  end else
+  begin
+   Result:=DO_INCREMENT;
+  end;
  end;
 
 end;
@@ -1097,23 +1102,6 @@ begin
  Result:=(KERN_SUCCESS);
 end;
 
-//not used
-function vm_track_map_insert_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
-begin
- if (map=nil) or (obj=nil) then
- begin
-  Exit(KERN_INVALID_ARGUMENT);
- end;
-
- if (obj^.mark_del<>0) then Exit(KERN_SUCCESS);
-
- vm_track_map_lock(map);
-
-  Result:=_vm_track_map_insert(map,obj^.main.start,obj^.main.__end,obj^.main.start,obj);
-
- vm_track_map_unlock(map);
-end;
-
 procedure vm_track_map_entry_delete(map:p_vm_track_map;entry:p_vm_track_map_entry);
 begin
  vm_track_map_entry_unlink(map, entry);
@@ -1186,7 +1174,7 @@ begin
   obj:=node^.obj;
 
   //cross with main
-  if (obj^.main.__end>start) and (obj^.main.start<__end) then
+  if (obj^.align.__end>start) and (obj^.align.start<__end) then
   begin
    //delete full object
    _vm_track_map_delete_deferred(map,obj);
@@ -1413,7 +1401,7 @@ begin
     obj:=node^.obj;
 
     //Don't try to add mirroring for mirroring
-    if (obj^.main.__end>e_start) and (obj^.main.start<e___end) then
+    if (obj^.align.__end>e_start) and (obj^.align.start<e___end) then
     begin
      _vm_track_map_insert_deferred(map,d_start,d___end,e_start,obj);
     end;
@@ -1429,7 +1417,7 @@ begin
  Result:=(KERN_SUCCESS);
 end;
 
-function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer):Integer;
+function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
 var
  current,entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;
@@ -1489,7 +1477,7 @@ begin
    //remap with source
    if (node^.obj<>exclude) then
    begin
-    ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end);
+    ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end,mode);
 
     if ((ret and DO_DELETE)<>0) then
     begin

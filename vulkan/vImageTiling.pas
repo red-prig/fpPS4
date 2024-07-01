@@ -22,10 +22,6 @@ Function  get_image_size(const key:TvImageKey):Ptruint;
 
 implementation
 
-uses
- kern_proc,
- vm_map;
-
 Function GetLinearAlignWidth(bpp,width:Ptruint):Ptruint; inline;
 var
  align_m:Ptruint;
@@ -768,12 +764,18 @@ end;
 procedure pm4_load_from(cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte);
 var
  cb:t_load_from_cb;
+ ref_trigger:Ptruint;
+ ref_planned:Ptruint;
 begin
  if (cmd=nil) or (image=nil) then Exit;
 
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
 
- if (image.ref_load=image.ref_trig) then Exit;
+ ref_trigger:=System.InterlockedExchangeAdd64(image.ref_trigger,0);
+ ref_planned:=System.InterlockedExchangeAdd64(image.ref_planned,0);
+
+ if (ref_trigger=0) and
+    (ref_planned=0) then Exit;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].load_from;
 
@@ -785,7 +787,8 @@ begin
 
  cb(cmd,image);
 
- image.ref_load:=image.ref_trig;
+ System.InterlockedExchangeAdd64(image.ref_trigger,-ref_trigger);
+ System.InterlockedExchangeAdd64(image.ref_planned,-ref_planned);
 
  image.assign_vm_track;
 end;
@@ -808,7 +811,7 @@ begin
 
  image.assign_vm_track;
 
- vm_map_track_trigger(p_proc.p_vmspace,QWORD(image.key.Addr),QWORD(image.key.Addr)+image.size,image.tobj);
+ cmd.AddPlannedTrigger(QWORD(image.key.Addr),QWORD(image.key.Addr)+image.size,image.tobj);
 end;
 
 Function get_image_size(const key:TvImageKey):Ptruint; [public, alias:'tiling_get_image_size'];

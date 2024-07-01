@@ -280,7 +280,7 @@ procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
 procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
 function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:Byte):Pointer;
 procedure _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer);
-function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer):Integer;
+function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -3321,8 +3321,8 @@ begin
 
  vm_map_lock(map);
 
- start:=p_vm_track_object(tobj)^.main.start;
- __end:=p_vm_track_object(tobj)^.main.__end;
+ start:=p_vm_track_object(tobj)^.align.start;
+ __end:=p_vm_track_object(tobj)^.align.__end;
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
@@ -3415,9 +3415,9 @@ begin
  _vm_track_map_delete_deferred(@map^.pmap^.tr_map,tobj);
 end;
 
-function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer):Integer;
+function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
 begin
- Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude);
+ Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
 end;
 
 procedure vminit;

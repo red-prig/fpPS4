@@ -61,8 +61,8 @@ type
   size:Ptruint;
   tobj:p_vm_track_object;
   //
-  ref_trig:Ptruint;
-  ref_load:Ptruint;
+  ref_trigger:Ptruint;
+  ref_planned:Ptruint;
   //
   Parent     :TvCustomImage2;
   DepthOnly  :TvCustomImage2;
@@ -212,23 +212,37 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;start,__end:QWORD):Integer; SysV_ABI_CDecl;
+function on_trigger(handle:Pointer;mode:Integer):Integer; SysV_ABI_CDecl;
 var
  image:TvCustomImage2;
+ i:Ptruint;
 begin
  Result:=DO_NOTHING;
 
  image:=TvCustomImage2(handle);
 
- if (__end>QWORD(image.key.Addr)) and (start<(QWORD(image.key.Addr)+image.size)) then
- begin
-  //Writeln('on_trigger image');
+ //Writeln('on_trigger image');
 
-  System.InterlockedIncrement64(image.ref_trig);
+ case mode of
+  0://direct
+    begin
+     System.InterlockedIncrement64(image.ref_trigger);
+    end;
+  1://planned
+    begin
+     System.InterlockedIncrement64(image.ref_planned);
+    end;
+  2://differed
+    begin
+     i:=System.InterlockedExchangeAdd64(image.ref_planned,0);
 
-  Result:=DO_INCREMENT;
+     System.InterlockedExchangeAdd64(image.ref_trigger,+i);
+     System.InterlockedExchangeAdd64(image.ref_planned,-i);
+    end;
+  else;
  end;
 
+ Result:=DO_INCREMENT;
 end;
 
 //
@@ -236,7 +250,7 @@ end;
 Constructor TvCustomImage2.Create;
 begin
  inherited;
- ref_trig:=1;
+ ref_trigger:=1;
 end;
 
 Destructor TvCustomImage2.Destroy;
@@ -387,7 +401,6 @@ Constructor TvImage2.Create;
 begin
  inherited;
  Barrier.Init;
- ref_trig:=1;
 end;
 
 Destructor TvImage2.Destroy;

@@ -1278,8 +1278,10 @@ begin
  Assert(false,'TODO: destroy in code analize');
 end;
 
-function pick_on_trigger(handle:Pointer;start,__end:vm_offset_t):Integer;
+function pick_on_trigger(handle:Pointer;mode:Integer):Integer;
 begin
+ if (mode<>0) then Exit(DO_NOTHING);
+
  Result:=DO_NOTHING;
 
  Assert(false,'TODO: trigger in code analize');

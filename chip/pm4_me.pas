@@ -96,10 +96,6 @@ var
 
 implementation
 
-uses
- kern_proc,
- vm_map;
-
 procedure StartFrameCapture;
 begin
  if use_renderdoc_capture then
@@ -429,7 +425,7 @@ begin
                                         range {VK_WHOLE_SIZE});
 
    //TODO: check write flag
-   vm_map_track_trigger(p_proc.p_vmspace,QWORD(addr),QWORD(addr)+size,nil);
+   CmdBuffer.AddPlannedTrigger(QWORD(addr),QWORD(addr)+size,nil)
 
   end;
  end;

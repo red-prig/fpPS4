@@ -7,9 +7,12 @@ interface
 uses
   Classes,
   SysUtils,
-  //g23tree,
   g_node_splay,
   si_ci_vi_merged_enum,
+
+  kern_proc,
+  vm_map,
+
   Vulkan,
   vDependence,
   vDevice,
@@ -38,13 +41,20 @@ type
 
  TvSemaphoreWaitSet=specialize TNodeSplay<TvSemaphoreWait>;
 
- {
- TvSemaphoreWaitCompare=object
-  function c(a,b:TvSemaphoreWait):Integer; static;
+ p_cmd_track_deferred=^t_cmd_track_deferred;
+ t_cmd_track_deferred=object
+  //
+  start  :QWORD;
+   __end :QWORD;
+  exclude:Pointer;
+  //
+  pLeft :p_cmd_track_deferred;
+  pRight:p_cmd_track_deferred;
+  //
+  function c(a,b:p_cmd_track_deferred):Integer; static;
  end;
 
- TvSemaphoreWaitSet=specialize T23treeSet<TvSemaphoreWait,TvSemaphoreWaitCompare>;
- }
+ t_cmd_track_deferred_set=specialize TNodeSplay<t_cmd_track_deferred>;
 
 const
  BP_GRAPHICS=VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -76,6 +86,8 @@ type
 
   FCBState:(cbInit,cbBegin,cbEnd,cbSubmit);
 
+  FPlannedTriggers:t_cmd_track_deferred_set;
+
   Constructor Create(pool:TvCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
 
@@ -92,6 +104,9 @@ type
   Procedure   FreeAllSemaphores;
   Procedure   AddWaitSemaphore(S:TvSemaphore;W:TVkPipelineStageFlags);
   function    GetSignaledSemaphore:TvSemaphore;
+
+  Procedure   ReleaseAllPlannedTriggers;
+  Procedure   AddPlannedTrigger(start,__end:QWORD;exclude:Pointer);
 
   Procedure   BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -167,17 +182,25 @@ uses
  vBuffer,
  vHostBufferManager;
 
-{
-function TvSemaphoreWaitCompare.c(a,b:TvSemaphoreWait):Integer;
-begin
- Result:=Integer(Pointer(a.FSemaphore)>Pointer(b.FSemaphore))-Integer(Pointer(a.FSemaphore)<Pointer(b.FSemaphore));
-end;
-}
-
 function TvSemaphoreWait.c(a,b:PvSemaphoreWait):Integer;
 begin
  Result:=Integer(Pointer(a^.FSemaphore)>Pointer(b^.FSemaphore))-Integer(Pointer(a^.FSemaphore)<Pointer(b^.FSemaphore));
 end;
+
+function t_cmd_track_deferred.c(a,b:p_cmd_track_deferred):Integer;
+begin
+ //start
+ Result:=Integer(a^.start>b^.start)-Integer(a^.start<b^.start);
+ if (Result<>0) then Exit;
+ //__end
+ Result:=Integer(a^.__end>b^.__end)-Integer(a^.__end<b^.__end);
+ if (Result<>0) then Exit;
+ //exclude
+ Result:=Integer(a^.exclude>b^.exclude)-Integer(a^.exclude<b^.exclude);
+ if (Result<>0) then Exit;
+end;
+
+//
 
 Constructor TvCustomCmdBuffer.Create(pool:TvCmdPool;Queue:TvQueue);
 begin
@@ -477,6 +500,8 @@ begin
 
  ReleaseAllDependencies(Self);
 
+ ReleaseAllPlannedTriggers;
+
  FreeAllSemaphores;
 
  cmd_count:=0;
@@ -524,6 +549,51 @@ end;
 function TvCustomCmdBuffer.GetSignaledSemaphore:TvSemaphore;
 begin
  Result:=FSignalSemaphore;
+end;
+
+Procedure TvCustomCmdBuffer.ReleaseAllPlannedTriggers;
+var
+ node:p_cmd_track_deferred;
+begin
+ node:=FPlannedTriggers.Min;
+
+ while (node<>nil) do
+ begin
+
+  //deffered trigger
+  vm_map_track_trigger(p_proc.p_vmspace,node^.start,node^.__end,node^.exclude,2);
+
+  FPlannedTriggers.delete(node);
+  OnFree(node);
+
+  node:=FPlannedTriggers.Min;
+ end;
+
+end;
+
+Procedure TvCustomCmdBuffer.AddPlannedTrigger(start,__end:QWORD;exclude:Pointer);
+Var
+ tmp:t_cmd_track_deferred;
+ node:p_cmd_track_deferred;
+begin
+ //planned trigger
+ vm_map_track_trigger(p_proc.p_vmspace,start,__end,exclude,1);
+
+ tmp:=Default(t_cmd_track_deferred);
+ tmp.start  :=start;
+ tmp. __end :=__end;
+ tmp.exclude:=exclude;
+
+ node:=FPlannedTriggers.Find(@tmp);
+
+ if (node=nil) then
+ begin
+  node:=OnAlloc(SizeOf(t_cmd_track_deferred));
+  node^:=tmp;
+  //
+  FPlannedTriggers.Insert(node);
+ end;
+
 end;
 
 Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);

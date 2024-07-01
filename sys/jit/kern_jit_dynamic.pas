@@ -1612,8 +1612,10 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;start,__end:vm_offset_t):Integer;
+function on_trigger(handle:Pointer;mode:Integer):Integer;
 begin
+ if (mode<>0) then Exit(DO_NOTHING);
+ //TODO
  Result:=DO_INCREMENT;
 end;
 
