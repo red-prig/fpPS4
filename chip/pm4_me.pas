@@ -52,6 +52,9 @@ type
   next:p_pm4_stall;
   //
   list:TAILQ_HEAD; //p_pm4_stream
+  //
+  count:Ptruint;
+  flow :Ptruint;
  end;
 
  p_pm4_me=^t_pm4_me;
@@ -76,25 +79,71 @@ type
   //
   gc_knlist:p_knlist;
   //
-  rel_time:QWORD;
+  imdone_count:QWORD;
   //
   procedure Init(knlist:p_knlist);
   procedure start;
   procedure trigger;
+  procedure imdone;
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
   procedure reset_sheduler;
-  procedure next_task;
+  procedure next_step;
+  function  next_task:Boolean;
   procedure switch_task;
-  procedure add_stream (stream:p_pm4_stream);
-  function  get_next   :p_pm4_stream;
-  procedure free_stream(stream:p_pm4_stream);
+  procedure add_stream   (stream:p_pm4_stream);
+  function  get_next     :p_pm4_stream;
+  procedure remove_stream(stream:p_pm4_stream);
+ end;
+
+ t_pool_line=array[0..3] of TvCustomCmdPool;
+ t_pool_cache=object
+  queue:TvQueue;
+  line :t_pool_line;
+  last :TvCustomCmdPool;
+  Procedure Init(Q:TvQueue);
+  function  fetch(i:QWORD):TvCustomCmdPool;
+ end;
+
+ TvStreamCmdBuffer=class(TvCmdBuffer)
+  entry :TAILQ_ENTRY;  //stall
+  stream:p_pm4_stream;
+  //
+ end;
+
+ t_me_render_context=object
+  me      :p_pm4_me;
+  stream  :p_pm4_stream;
+  node    :p_pm4_node;
+  //
+  rel_time:QWORD;
+  //
+  rt_info :p_pm4_rt_info;
+  Render  :TvRenderPassBeginInfo;
+  //
+  gfx_pool:t_pool_cache;
+  //
+  Cmd     :TvStreamCmdBuffer;
+  stall   :array[t_pm4_stream_type] of TAILQ_HEAD; //TvStreamCmdBuffer
+  //
+  procedure Init;
+  procedure BeginCmdBuffer;
+  procedure FinishCmdBuffer;
+  function  CmdStatus(i:t_pm4_stream_type):TVkResult;
+  function  CmdStatusCurrent:Boolean;
+  //
+  procedure switch_task;
+  procedure next_task;
+  procedure on_idle;
  end;
 
 var
  use_renderdoc_capture:Boolean=False;
 
 implementation
+
+uses
+ kern_dmem;
 
 procedure StartFrameCapture;
 begin
@@ -160,6 +209,12 @@ begin
  end;
 end;
 
+procedure t_pm4_me.imdone;
+begin
+ System.InterlockedIncrement64(imdone_count);
+ trigger;
+end;
+
 procedure t_pm4_me.knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
 begin
  knote(gc_knlist, event_id or (me_id shl 8) or (timestamp shl 16), lockflags);
@@ -195,10 +250,32 @@ begin
  sheduler.count :=0;
 end;
 
-procedure t_pm4_me.next_task;
+procedure t_pm4_me.next_step;
 begin
  //next
  sheduler.start:=sheduler.start^.next;
+ //
+ if (sheduler.start^.flow=0) then
+ begin
+  sheduler.start^.flow:=sheduler.start^.count;
+ end;
+end;
+
+function t_pm4_me.next_task:Boolean;
+begin
+ if TAILQ_EMPTY(@sheduler.start^.list) or
+    (sheduler.start^.flow=0) then
+ begin
+  //next
+  next_step;
+  //
+  Result:=True;
+ end else
+ begin
+  Dec(sheduler.start^.flow);
+  //
+  Result:=False;
+ end;
 end;
 
 procedure t_pm4_me.switch_task;
@@ -215,7 +292,7 @@ begin
   sheduler.count:=0;
  end;
  //next
- next_task;
+ next_step;
 end;
 
 procedure t_pm4_me.add_stream(stream:p_pm4_stream);
@@ -224,6 +301,10 @@ var
 begin
  i:=stream^.buft;
  TAILQ_INSERT_TAIL(@stall[i].list,stream,@stream^.next_);
+ //
+ Inc(stall[i].count);
+ //
+ stream^.Acquire; //stall
 end;
 
 function t_pm4_me.get_next:p_pm4_stream;
@@ -235,53 +316,296 @@ begin
   Result:=TAILQ_FIRST(@sheduler.start^.list);
   if (Result<>nil) then Break;
   //next
-  next_task;
+  next_step;
  end;
 end;
 
-procedure t_pm4_me.free_stream(stream:p_pm4_stream);
+procedure free_stream(stream:p_pm4_stream);
 var
  tmp:t_pm4_stream;
+begin
+ tmp:=stream^;
+ tmp.Free;
+end;
+
+procedure t_pm4_me.remove_stream(stream:p_pm4_stream);
+var
  i:t_pm4_stream_type;
 begin
  //pop
  i:=stream^.buft;
  TAILQ_REMOVE(@stall[i].list,stream,@stream^.next_);
  //
- tmp:=stream^;
- tmp.Free;
+ Dec(stall[i].count);
+ //
+ if stream^.Release then //stall
+ begin
+  //
+  free_stream(stream);
+ end;
 end;
 
 //
 
-var
- FCmdPool:TvCmdPool;
+type
+ PvCmdFreeNode=^TvCmdFreeNode;
+ TvCmdFreeNode=record
+  entry:STAILQ_ENTRY;
+  FCmd :TVkCommandBuffer;
+ end;
 
-procedure Prepare_Uniforms(node:p_pm4_node;
-                           var FUniformBuilder:TvUniformBuilder;
-                           CmdBuffer:TvCmdBuffer);
+ TvCmdCachedPool=class(TvCmdPool)
+  FMemCache:STAILQ_HEAD; //PvCmdFreeNode
+  FDeffered:STAILQ_HEAD; //PvCmdFreeNode
+  FTrimCount:Integer;
+  Constructor Create(FFamily:TVkUInt32);
+  procedure   Free(cmd:TVkCommandBuffer); register; override;
+  procedure   Trim;                       register; override;
+ end;
+
+Constructor TvCmdCachedPool.Create(FFamily:TVkUInt32);
+begin
+ inherited;
+
+ STAILQ_INIT(@FMemCache);
+ STAILQ_INIT(@FDeffered);
+end;
+
+procedure TvCmdCachedPool.Free(cmd:TVkCommandBuffer); register;
+var
+ node:PvCmdFreeNode;
+begin
+ if STAILQ_EMPTY(@FMemCache) then
+ begin
+  node:=AllocMem(SizeOf(TvCmdFreeNode));
+ end else
+ begin
+  node:=STAILQ_FIRST(@FMemCache);
+  STAILQ_REMOVE(@FMemCache,node,@node^.entry);
+ end;
+
+ node^.FCmd:=cmd;
+
+ STAILQ_INSERT_TAIL(@FDeffered,node,@node^.entry);
+end;
+
+procedure TvCmdCachedPool.Trim; register;
+var
+ node:PvCmdFreeNode;
+begin
+ node:=STAILQ_FIRST(@FDeffered);
+
+ while (node<>nil) do
+ begin
+  STAILQ_REMOVE(@FDeffered,node,@node^.entry);
+
+  inherited Free(node^.FCmd);
+
+  STAILQ_INSERT_TAIL(@FMemCache,node,@node^.entry);
+
+  //
+  node:=STAILQ_FIRST(@FDeffered);
+ end;
+
+ Inc(FTrimCount);
+
+ if (FTrimCount>=5000) then
+ begin
+  FTrimCount:=0;
+  inherited Trim;
+ end;
+end;
+
+//
+
+Procedure t_pool_cache.Init(Q:TvQueue);
+begin
+ queue:=Q;
+end;
+
+function t_pool_cache.fetch(i:QWORD):TvCustomCmdPool;
+var
+ p:Byte;
+begin
+ p:=i mod Length(t_pool_line);
+
+ if (line[p]=nil) then
+ begin
+  line[p]:=TvCmdCachedPool.Create(queue.FFamily);
+ end;
+
+ if (last<>line[p]) then
+ begin
+  last:=line[p];
+  last.Trim;
+ end;
+
+ Result:=last;
+end;
+
+//
+
+procedure t_me_render_context.Init;
+var
+ i:t_pm4_stream_type;
+begin
+ gfx_pool.Init(RenderQueue);
+
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+ begin
+  TAILQ_INIT(@stall[i]);
+ end;
+
+end;
+
+procedure t_me_render_context.BeginCmdBuffer;
+var
+ buft:t_pm4_stream_type;
+ imdone_count:QWORD;
+ Pool:TvCustomCmdPool;
+begin
+ if (Cmd<>nil) then Exit; //Already allocated
+
+ buft:=stream^.buft;
+
+ if (buft<>stGfxDcb) and
+    (buft<>stGfxCcb) then
+ begin
+  Assert(false,'TODO');
+ end;
+
+ imdone_count:=me^.imdone_count;
+
+ Pool:=gfx_pool.fetch(imdone_count);
+
+ Cmd:=TvStreamCmdBuffer.Create(Pool,gfx_pool.queue);
+ Cmd.stream:=stream;
+
+ stream^.Acquire; //TvStreamCmdBuffer
+end;
+
+//
+procedure t_me_render_context.FinishCmdBuffer;
+var
+ buft:t_pm4_stream_type;
+
+ r:TVkResult;
+begin
+ if (Cmd=nil) then Exit;
+
+ r:=Cmd.QueueSubmit;
+
+ Writeln('QueueSubmit:',r);
+
+ if (r<>VK_SUCCESS) then
+ begin
+  Assert(false,'QueueSubmit');
+ end;
+
+ buft:=Cmd.stream^.buft;
+
+ TAILQ_INSERT_TAIL(@stall[buft],Cmd,@Cmd.entry);
+
+ Cmd:=nil;
+end;
+
+function t_me_render_context.CmdStatus(i:t_pm4_stream_type):TVkResult;
+var
+ last:TvStreamCmdBuffer;
+ cmd_stream:p_pm4_stream;
+begin
+ last:=TvStreamCmdBuffer(TAILQ_FIRST(@stall[i]));
+
+ while (last<>nil) do
+ begin
+
+  Result:=last.Status;
+
+  case Result of
+   VK_SUCCESS  :;
+   VK_NOT_READY:Exit;
+   else
+    Writeln(stderr,'last.Status=',Result); //error
+  end;
+
+  TAILQ_REMOVE(@stall[i],last,@last.entry);
+
+  cmd_stream:=last.stream;
+
+  //
+  last.ReleaseResource;
+  last.Free;
+  //
+
+  if cmd_stream^.Release then //TvStreamCmdBuffer
+  begin
+   free_stream(cmd_stream);
+  end;
+
+  last:=TvStreamCmdBuffer(TAILQ_FIRST(@stall[i]));
+ end;
+
+ Result:=VK_SUCCESS;
+end;
+
+function t_me_render_context.CmdStatusCurrent:Boolean;
+var
+ buft:t_pm4_stream_type;
+begin
+ buft:=stream^.buft;
+
+ Result:=(CmdStatus(buft)<>VK_NOT_READY);
+end;
+
+procedure t_me_render_context.switch_task;
+begin
+ FinishCmdBuffer;
+ //
+ me^.switch_task;
+end;
+
+procedure t_me_render_context.next_task;
+begin
+ if me^.next_task then
+ begin
+  FinishCmdBuffer;
+ end;
+end;
+
+procedure t_me_render_context.on_idle;
+begin
+ if (me^.on_idle<>nil) then
+ begin
+  me^.on_idle();
+ end;
+end;
+
+//
+
+procedure Prepare_Uniforms(var ctx:t_me_render_context;
+                           var UniformBuilder:TvUniformBuilder);
 var
  i:Integer;
 
  ri:TvImage2;
 begin
- if (Length(FUniformBuilder.FImages)<>0) then
+ if (Length(UniformBuilder.FImages)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FImages) do
-  With FUniformBuilder.FImages[i] do
+  For i:=0 to High(UniformBuilder.FImages) do
+  With UniformBuilder.FImages[i] do
   begin
 
-   ri:=FetchImage(CmdBuffer,
+   ri:=FetchImage(ctx.Cmd,
                   FImage,
                   [iu_sampled]
                   //TM_READ
                  );
 
-   pm4_load_from(CmdBuffer,ri,TM_READ);
+   pm4_load_from(ctx.Cmd,ri,TM_READ);
 
    begin
 
-    ri.PushBarrier(CmdBuffer,
+    ri.PushBarrier(ctx.Cmd,
                    ord(VK_ACCESS_SHADER_READ_BIT),
                    VK_IMAGE_LAYOUT_GENERAL,
                    ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
@@ -297,17 +621,16 @@ begin
  Result:=addr-(addr mod alignment);
 end;
 
-procedure Bind_Uniforms(node:p_pm4_node;
-                        var FUniformBuilder:TvUniformBuilder;
-                        var FDescriptorGroup:TvDescriptorGroup;
-                        ShaderGroup:TvShaderGroup;
-                        CmdBuffer:TvCmdBuffer);
+procedure Bind_Uniforms(var ctx:t_me_render_context;
+                        var UniformBuilder:TvUniformBuilder;
+                        var DescriptorGroup:TvDescriptorGroup;
+                        ShaderGroup:TvShaderGroup);
 
  procedure _init; inline;
  begin
-  if (FDescriptorGroup=nil) then
+  if (DescriptorGroup=nil) then
   begin
-   FDescriptorGroup:=FetchDescriptorGroup(CmdBuffer,ShaderGroup.FLayout);
+   DescriptorGroup:=FetchDescriptorGroup(ctx.Cmd,ShaderGroup.FLayout);
   end;
  end;
 
@@ -328,13 +651,13 @@ var
 begin
 
  //images
- if (Length(FUniformBuilder.FImages)<>0) then
+ if (Length(UniformBuilder.FImages)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FImages) do
-  With FUniformBuilder.FImages[i] do
+  For i:=0 to High(UniformBuilder.FImages) do
+  With UniformBuilder.FImages[i] do
   begin
 
-   resource_instance:=node^.scope.find_image_resource_instance(FImage);
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
 
    if (resource_instance<>nil) then
    begin
@@ -344,19 +667,19 @@ begin
            );
    end;
 
-   ri:=FetchImage(CmdBuffer,
+   ri:=FetchImage(ctx.Cmd,
                   FImage,
                   [iu_sampled]
                   //TM_READ
                  );
 
-   iv:=ri.FetchView(CmdBuffer,FView,iu_sampled);
+   iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
    _init;
 
-   FDescriptorGroup.FSets[fset].BindImg(bind,0,
-                                        iv.FHandle,
-                                        VK_IMAGE_LAYOUT_GENERAL);
+   DescriptorGroup.FSets[fset].BindImg(bind,0,
+                                       iv.FHandle,
+                                       VK_IMAGE_LAYOUT_GENERAL);
 
 
   end;
@@ -364,29 +687,29 @@ begin
  //images
 
  //samplers
- if (Length(FUniformBuilder.FSamplers)<>0) then
+ if (Length(UniformBuilder.FSamplers)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FSamplers) do
-  With FUniformBuilder.FSamplers[i] do
+  For i:=0 to High(UniformBuilder.FSamplers) do
+  With UniformBuilder.FSamplers[i] do
   begin
-   sm:=FetchSampler(CmdBuffer,PS);
+   sm:=FetchSampler(ctx.Cmd,PS);
 
    _init;
 
-   FDescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
+   DescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
 
   end;
  end;
  //samplers
 
  //buffers
- if (Length(FUniformBuilder.FBuffers)<>0) then
+ if (Length(UniformBuilder.FBuffers)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FBuffers) do
-  With FUniformBuilder.FBuffers[i] do
+  For i:=0 to High(UniformBuilder.FBuffers) do
+  With UniformBuilder.FBuffers[i] do
   begin
 
-   resource_instance:=node^.scope.find_buffer_resource_instance(addr,size);
+   resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
 
    if (resource_instance<>nil) then
    begin
@@ -401,7 +724,7 @@ begin
            );
    end;
 
-   buf:=FetchHostBuffer(CmdBuffer,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+   buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
    diff:=QWORD(addr)-buf.FAddr;
 
@@ -418,14 +741,14 @@ begin
 
    _init;
 
-   FDescriptorGroup.FSets[fset].BindBuf(bind,0,
-                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                        buf.FHandle,
-                                        diff,
-                                        range {VK_WHOLE_SIZE});
+   DescriptorGroup.FSets[fset].BindBuf(bind,0,
+                                       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                       buf.FHandle,
+                                       diff,
+                                       range {VK_WHOLE_SIZE});
 
    //TODO: check write flag
-   CmdBuffer.AddPlannedTrigger(QWORD(addr),QWORD(addr)+size,nil)
+   ctx.Cmd.AddPlannedTrigger(QWORD(addr),QWORD(addr)+size,nil)
 
   end;
  end;
@@ -433,29 +756,21 @@ begin
 
 end;
 
-procedure pm4_InitStream(stream:p_pm4_stream;me:p_pm4_me);
+procedure pm4_InitStream(var ctx:t_me_render_context);
 var
- CmdBuffer:TvCmdBuffer;
- r:TVkResult;
-
  i:p_pm4_resource_instance;
  resource:p_pm4_resource;
 
  ri:TvImage2;
 begin
 
- i:=stream^.init_scope.first;
+ StartFrameCapture;
+
+ ctx.BeginCmdBuffer;
+
+ i:=ctx.stream^.init_scope.first;
 
  if (i=nil) then Exit;
-
-
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- //CmdBuffer.submit_id:=submit_id;
 
  while (i<>nil) do
  begin
@@ -466,37 +781,17 @@ begin
   begin
    Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
 
-   ri:=FetchImage(CmdBuffer,
+   ri:=FetchImage(ctx.Cmd,
                   resource^.rkey,
                   i^.curr_img_usage + i^.next_img_usage
                  );
 
-   pm4_load_from(CmdBuffer,ri,i^.curr_mem_usage);
+   pm4_load_from(ctx.Cmd,ri,i^.curr_mem_usage);
   end;
 
   i:=TAILQ_NEXT(i,@i^.init_entry);
  end;
 
-
- r:=CmdBuffer.QueueSubmit;
-
- if (r<>VK_SUCCESS) then
- begin
-  Assert(false,'QueueSubmit');
- end;
-
- Writeln('QueueSubmit:',r);
-
- r:=CmdBuffer.Wait(QWORD(-1));
-
- Writeln('CmdBuffer:',r);
-
- r:=RenderQueue.WaitIdle;
- Writeln('WaitIdle:',r);
-
- CmdBuffer.ReleaseResource;
-
- CmdBuffer.Free;
 end;
 
 
@@ -544,10 +839,7 @@ begin
 
 end;
 
-procedure pm4_DrawPrepare(node:p_pm4_node;
-                          var rt_info:t_pm4_rt_info;
-                          CmdBuffer:TvCmdBuffer;
-                          RenderCmd:TvRenderTargets);
+procedure pm4_DrawPrepare(var ctx:t_me_render_context);
 var
  i:Integer;
 
@@ -563,7 +855,7 @@ var
 
  FB_KEY:TvFramebufferImagelessKey;
  FB_KEY2:TvFramebufferBindedKey;
- FFramebuffer:TvFramebuffer;
+ FB:TvFramebuffer;
 
  ri:TvImage2;
  iv:TvImageView2;
@@ -574,124 +866,124 @@ var
 begin
  RP_KEY.Clear;
 
- RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
+ //RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
 
- if (rt_info.RT_COUNT<>0) then
- For i:=0 to rt_info.RT_COUNT-1 do
+ if (ctx.rt_info^.RT_COUNT<>0) then
+ For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
-   RenderCmd.RT_INFO[i]:=rt_info.RT_INFO[i];
+   //RenderCmd.RT_INFO[i]:=rt_info.RT_INFO[i];
 
-   RP_KEY.AddColorAt(RenderCmd.RT_INFO[i].attachment,
-                     RenderCmd.RT_INFO[i].FImageInfo.cformat,
-                     RenderCmd.RT_INFO[i].IMAGE_USAGE,
-                     RenderCmd.RT_INFO[i].FImageInfo.params.samples);
+   RP_KEY.AddColorAt(ctx.rt_info^.RT_INFO[i].attachment,
+                     ctx.rt_info^.RT_INFO[i].FImageInfo.cformat,
+                     ctx.rt_info^.RT_INFO[i].IMAGE_USAGE,
+                     ctx.rt_info^.RT_INFO[i].FImageInfo.params.samples);
 
   end;
 
  //rt_info.DB_ENABLE:=False;
 
- RenderCmd.DB_ENABLE:=rt_info.DB_ENABLE;
+ //RenderCmd.DB_ENABLE:=rt_info.DB_ENABLE;
 
- if rt_info.DB_ENABLE then
+ if ctx.rt_info^.DB_ENABLE then
  begin
-  RenderCmd.DB_INFO:=rt_info.DB_INFO;
+  //RenderCmd.DB_INFO:=rt_info.DB_INFO;
 
  // RenderCmd.DB_INFO.DEPTH_USAGE:=RenderCmd.DB_INFO.DEPTH_USAGE or TM_CLEAR;
 
-  RP_KEY.AddDepthAt(RenderCmd.RT_COUNT, //add to last attachment id
-                    RenderCmd.DB_INFO.FImageInfo.cformat,
-                    RenderCmd.DB_INFO.DEPTH_USAGE,
-                    RenderCmd.DB_INFO.STENCIL_USAGE);
+  RP_KEY.AddDepthAt(ctx.rt_info^.RT_COUNT, //add to last attachment id
+                    ctx.rt_info^.DB_INFO.FImageInfo.cformat,
+                    ctx.rt_info^.DB_INFO.DEPTH_USAGE,
+                    ctx.rt_info^.DB_INFO.STENCIL_USAGE);
 
-  RP_KEY.SetZorderStage(RenderCmd.DB_INFO.zorder_stage);
+  RP_KEY.SetZorderStage(ctx.rt_info^.DB_INFO.zorder_stage);
 
  end;
 
- RP:=FetchRenderPass(CmdBuffer,@RP_KEY);
+ RP:=FetchRenderPass(ctx.Cmd,@RP_KEY);
 
  GP_KEY.Clear;
 
  GP_KEY.FRenderPass :=RP;
- GP_KEY.FShaderGroup:=rt_info.ShaderGroup;
+ GP_KEY.FShaderGroup:=ctx.rt_info^.ShaderGroup;
 
- GP_KEY.SetBlendInfo(rt_info.BLEND_INFO.logicOp,@rt_info.BLEND_INFO.blendConstants);
+ GP_KEY.SetBlendInfo(ctx.rt_info^.BLEND_INFO.logicOp,@ctx.rt_info^.BLEND_INFO.blendConstants);
 
- GP_KEY.SetPrimType (TVkPrimitiveTopology(rt_info.PRIM_TYPE));
- GP_KEY.SetPrimReset(rt_info.PRIM_RESET);
+ GP_KEY.SetPrimType (TVkPrimitiveTopology(ctx.rt_info^.PRIM_TYPE));
+ GP_KEY.SetPrimReset(ctx.rt_info^.PRIM_RESET);
 
- if (rt_info.VP_COUNT<>0) then
- For i:=0 to rt_info.VP_COUNT-1 do
+ if (ctx.rt_info^.VP_COUNT<>0) then
+ For i:=0 to ctx.rt_info^.VP_COUNT-1 do
   begin
-   GP_KEY.AddVPort(rt_info.VPORT[i],rt_info.SCISSOR[i]);
+   GP_KEY.AddVPort(ctx.rt_info^.VPORT[i],ctx.rt_info^.SCISSOR[i]);
   end;
 
- if (RenderCmd.RT_COUNT<>0) then
- For i:=0 to RenderCmd.RT_COUNT-1 do
+ if (ctx.rt_info^.RT_COUNT<>0) then
+ For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
-   GP_KEY.AddBlend(RenderCmd.RT_INFO[i].blend);
+   GP_KEY.AddBlend(ctx.rt_info^.RT_INFO[i].blend);
   end;
 
  FAttrBuilder:=Default(TvAttrBuilder);
- rt_info.ShaderGroup.ExportAttrBuilder(FAttrBuilder,@rt_info.USERDATA);
+ ctx.rt_info^.ShaderGroup.ExportAttrBuilder(FAttrBuilder,@ctx.rt_info^.USERDATA);
 
  if not limits.VK_EXT_vertex_input_dynamic_state then
  begin
   GP_KEY.SetVertexInput(FAttrBuilder);
  end;
 
- GP_KEY.rasterizer   :=rt_info.RASTERIZATION;
- GP_KEY.multisampling:=rt_info.MULTISAMPLE;
+ GP_KEY.rasterizer   :=ctx.rt_info^.RASTERIZATION;
+ GP_KEY.multisampling:=ctx.rt_info^.MULTISAMPLE;
 
- GP_KEY.SetProvoking(TVkProvokingVertexModeEXT(rt_info.PROVOKING));
+ GP_KEY.SetProvoking(TVkProvokingVertexModeEXT(ctx.rt_info^.PROVOKING));
 
- if rt_info.DB_ENABLE then
+ if ctx.rt_info^.DB_ENABLE then
  begin
-  GP_KEY.DepthStencil:=RenderCmd.DB_INFO.ds_state;
+  GP_KEY.DepthStencil:=ctx.rt_info^.DB_INFO.ds_state;
  end;
 
- GP:=FetchGraphicsPipeline(CmdBuffer,@GP_KEY);
+ GP:=FetchGraphicsPipeline(ctx.Cmd,@GP_KEY);
 
  if limits.VK_KHR_imageless_framebuffer then
  begin
   FB_KEY:=Default(TvFramebufferImagelessKey);
 
   FB_KEY.SetRenderPass(RP);
-  FB_KEY.SetSize(rt_info.SCREEN_SIZE);
+  FB_KEY.SetSize(ctx.rt_info^.SCREEN_SIZE);
 
-  if (RenderCmd.RT_COUNT<>0) then
-  For i:=0 to RenderCmd.RT_COUNT-1 do
+  if (ctx.rt_info^.RT_COUNT<>0) then
+  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
    begin
-    FB_KEY.AddImageAt(RenderCmd.RT_INFO[i].FImageInfo);
+    FB_KEY.AddImageAt(ctx.rt_info^.RT_INFO[i].FImageInfo);
    end;
 
-  if rt_info.DB_ENABLE then
+  if ctx.rt_info^.DB_ENABLE then
   begin
-   FB_KEY.AddImageAt(RenderCmd.DB_INFO.FImageInfo);
+   FB_KEY.AddImageAt(ctx.rt_info^.DB_INFO.FImageInfo);
   end;
  end else
  begin
   FB_KEY2:=Default(TvFramebufferBindedKey);
 
   FB_KEY2.SetRenderPass(RP);
-  FB_KEY2.SetSize(rt_info.SCREEN_SIZE);
+  FB_KEY2.SetSize(ctx.rt_info^.SCREEN_SIZE);
  end;
 
- RenderCmd.FRenderPass:=RP;
- RenderCmd.FPipeline  :=GP;
+ ctx.Render:=Default(TvRenderPassBeginInfo);
 
- RenderCmd.FRenderArea:=rt_info.SCREEN_RECT;
+ ctx.Render.SetRenderPass(RP);
+ ctx.Render.SetRenderArea(ctx.rt_info^.SCREEN_RECT);
 
  if limits.VK_KHR_imageless_framebuffer then
  begin
-  FFramebuffer:=FetchFramebufferImageless(CmdBuffer,@FB_KEY);
-  RenderCmd.FFramebuffer:=FFramebuffer;
+  FB:=FetchFramebufferImageless(ctx.Cmd,@FB_KEY);
+  ctx.Render.SetFramebuffer(FB);
  end;
 
- if (RenderCmd.RT_COUNT<>0) then
- For i:=0 to RenderCmd.RT_COUNT-1 do
+ if (ctx.rt_info^.RT_COUNT<>0) then
+ For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
 
-   resource_instance:=node^.scope.find_image_resource_instance(RenderCmd.RT_INFO[i].FImageInfo);
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
 
    if (resource_instance<>nil) then
    begin
@@ -701,17 +993,17 @@ begin
            );
    end;
 
-   RenderCmd.AddClearColor(RenderCmd.RT_INFO[i].CLEAR_COLOR);
+   ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
 
-   ri:=FetchImage(CmdBuffer,
-                  RenderCmd.RT_INFO[i].FImageInfo,
+   ri:=FetchImage(ctx.Cmd,
+                  ctx.rt_info^.RT_INFO[i].FImageInfo,
                   [iu_attachment]
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   pm4_load_from(CmdBuffer,ri,RenderCmd.RT_INFO[i].IMAGE_USAGE);
+   pm4_load_from(ctx.Cmd,ri,ctx.rt_info^.RT_INFO[i].IMAGE_USAGE);
 
-   iv:=ri.FetchView(CmdBuffer,RenderCmd.RT_INFO[i].FImageView,iu_attachment);
+   iv:=ri.FetchView(ctx.Cmd,ctx.rt_info^.RT_INFO[i].FImageView,iu_attachment);
 
    {
    ri.PushBarrier(CmdBuffer,
@@ -720,8 +1012,8 @@ begin
                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
    }
 
-   ri.PushBarrier(CmdBuffer,
-                  GetColorAccessMask(RenderCmd.RT_INFO[i].IMAGE_USAGE),
+   ri.PushBarrier(ctx.Cmd,
+                  GetColorAccessMask(ctx.rt_info^.RT_INFO[i].IMAGE_USAGE),
                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL {VK_IMAGE_LAYOUT_GENERAL},
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
@@ -729,7 +1021,7 @@ begin
    //
    if limits.VK_KHR_imageless_framebuffer then
    begin
-    RenderCmd.AddImageView(iv);
+    ctx.Render.AddImageView(iv);
    end else
    begin
     FB_KEY2.AddImageView(iv);
@@ -738,10 +1030,10 @@ begin
 
   end;
 
- if rt_info.DB_ENABLE then
+ if ctx.rt_info^.DB_ENABLE then
  begin
 
-  resource_instance:=node^.scope.find_image_resource_instance(GetDepthOnly(RenderCmd.DB_INFO.FImageInfo));
+  resource_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
   if (resource_instance<>nil) then
   begin
@@ -751,7 +1043,7 @@ begin
           );
   end;
 
-  resource_instance:=node^.scope.find_image_resource_instance(GetStencilOnly(RenderCmd.DB_INFO.FImageInfo));
+  resource_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
   if (resource_instance<>nil) then
   begin
@@ -763,18 +1055,18 @@ begin
 
   //
 
-  RenderCmd.AddClearColor(RenderCmd.DB_INFO.CLEAR_VALUE);
+  ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
 
-  ri:=FetchImage(CmdBuffer,
-                 RenderCmd.DB_INFO.FImageInfo,
+  ri:=FetchImage(ctx.Cmd,
+                 ctx.rt_info^.DB_INFO.FImageInfo,
                  [iu_depthstenc]
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  pm4_load_from(CmdBuffer,ri.DepthOnly  ,RenderCmd.DB_INFO.DEPTH_USAGE);
-  pm4_load_from(CmdBuffer,ri.StencilOnly,RenderCmd.DB_INFO.STENCIL_USAGE);
+  pm4_load_from(ctx.Cmd,ri.DepthOnly  ,ctx.rt_info^.DB_INFO.DEPTH_USAGE);
+  pm4_load_from(ctx.Cmd,ri.StencilOnly,ctx.rt_info^.DB_INFO.STENCIL_USAGE);
 
-  iv:=ri.FetchView(CmdBuffer,iu_depthstenc);
+  iv:=ri.FetchView(ctx.Cmd,iu_depthstenc);
 
   {
   ri.PushBarrier(CmdBuffer,
@@ -783,17 +1075,17 @@ begin
                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
   }
 
-  ri.PushBarrier(CmdBuffer,
-                 GetDepthStencilAccessMask(RenderCmd.DB_INFO.DEPTH_USAGE,RenderCmd.DB_INFO.STENCIL_USAGE),
-                 GetDepthStencilSendLayout(RenderCmd.DB_INFO.DEPTH_USAGE,RenderCmd.DB_INFO.STENCIL_USAGE),
+  ri.PushBarrier(ctx.Cmd,
+                 GetDepthStencilAccessMask(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
+                 GetDepthStencilSendLayout(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                 RenderCmd.DB_INFO.zorder_stage
+                 ctx.rt_info^.DB_INFO.zorder_stage
                  );
 
   //
   if limits.VK_KHR_imageless_framebuffer then
   begin
-   RenderCmd.AddImageView(iv);
+   ctx.Render.AddImageView(iv);
   end else
   begin
    FB_KEY2.AddImageView(iv);
@@ -804,43 +1096,41 @@ begin
 
  if not limits.VK_KHR_imageless_framebuffer then
  begin
-  FFramebuffer:=FetchFramebufferBinded(CmdBuffer,@FB_KEY2);
-  RenderCmd.FFramebuffer:=FFramebuffer;
+  FB:=FetchFramebufferBinded(ctx.Cmd,@FB_KEY2);
+  ctx.Render.SetFramebuffer(FB);
  end;
 
  ////////
  FUniformBuilder:=Default(TvUniformBuilder);
- rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
+ ctx.rt_info^.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@ctx.rt_info^.USERDATA);
 
- Prepare_Uniforms(node,FUniformBuilder,CmdBuffer);
+ Prepare_Uniforms(ctx,FUniformBuilder);
  ////////
 
- if not CmdBuffer.BeginRenderPass(RenderCmd) then
+ if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
  begin
-  Writeln(stderr,'BeginRenderPass(FRenderCmd)');
-  Assert (false ,'BeginRenderPass(FRenderCmd)');
+  Writeln(stderr,'BeginRenderPass(ctx.Render)');
+  Assert (false ,'BeginRenderPass(ctx.Render)');
  end;
 
- CmdBuffer.SetVertexInput   (FAttrBuilder);
- CmdBuffer.BindVertexBuffers(FAttrBuilder);
+ ctx.Cmd.SetVertexInput   (FAttrBuilder);
+ ctx.Cmd.BindVertexBuffers(FAttrBuilder);
 
  FDescriptorGroup:=nil;
 
- Bind_Uniforms(node,
+ Bind_Uniforms(ctx,
                FUniformBuilder,
                FDescriptorGroup,
-               rt_info.ShaderGroup,
-               CmdBuffer);
+               ctx.rt_info^.ShaderGroup);
 
  if (FDescriptorGroup<>nil) then
  begin
-  CmdBuffer.BindSets(BP_GRAPHICS,FDescriptorGroup);
+  ctx.Cmd.BindSets(BP_GRAPHICS,FDescriptorGroup);
  end;
 
 end;
 
-procedure pm4_Writeback(CmdBuffer:TvCmdBuffer;
-                        var rt_info:t_pm4_rt_info);
+procedure pm4_Writeback(var ctx:t_me_render_context);
 var
  i:Integer;
 
@@ -848,31 +1138,31 @@ var
 begin
  //write back
 
- if (rt_info.RT_COUNT<>0) then
- For i:=0 to rt_info.RT_COUNT-1 do
-  if (rt_info.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
+ if (ctx.rt_info^.RT_COUNT<>0) then
+ For i:=0 to ctx.rt_info^.RT_COUNT-1 do
+  if (ctx.rt_info^.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
 
-   ri:=FetchImage(CmdBuffer,
-                  rt_info.RT_INFO[i].FImageInfo,
+   ri:=FetchImage(ctx.Cmd,
+                  ctx.rt_info^.RT_INFO[i].FImageInfo,
                   [iu_attachment]
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   pm4_write_back(CmdBuffer,ri);
+   pm4_write_back(ctx.Cmd,ri);
   end;
 
- if rt_info.DB_ENABLE then
+ if ctx.rt_info^.DB_ENABLE then
  begin
 
-  ri:=FetchImage(CmdBuffer,
-                 rt_info.DB_INFO.FImageInfo,
+  ri:=FetchImage(ctx.Cmd,
+                 ctx.rt_info^.DB_INFO.FImageInfo,
                  [iu_depthstenc]
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  pm4_write_back(CmdBuffer,ri.DepthOnly  );
-  pm4_write_back(CmdBuffer,ri.StencilOnly);
+  pm4_write_back(ctx.Cmd,ri.DepthOnly  );
+  pm4_write_back(ctx.Cmd,ri.StencilOnly);
 
   //
  end;
@@ -880,88 +1170,48 @@ begin
  //write back
 end;
 
-procedure pm4_Draw(node:p_pm4_node_draw);
-var
- RenderCmd:TvRenderTargets;
-
- CmdBuffer:TvCmdBuffer;
-
- r:TVkResult;
+procedure pm4_Draw(var ctx:t_me_render_context;node:p_pm4_node_draw);
 begin
+ ctx.rt_info:=@node^.rt_info;
 
  StartFrameCapture;
 
- //
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- //CmdBuffer.submit_id:=submit_id;
+ ctx.BeginCmdBuffer;
 
  //
 
  if (node^.ntype<>ntClearDepth) then
  begin
-  RenderCmd:=TvRenderTargets.Create;
-
-  pm4_DrawPrepare(node,
-                  node^.rt_info,
-                  CmdBuffer,
-                  RenderCmd);
-
+  pm4_DrawPrepare(ctx);
  end;
 
- CmdBuffer.FinstanceCount:=node^.numInstances;
- CmdBuffer.FINDEX_TYPE   :=TVkIndexType(node^.INDEX_TYPE);
+ ctx.Cmd.FinstanceCount:=node^.numInstances;
+ ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.INDEX_TYPE);
 
  case node^.ntype of
   ntDrawIndex2:
    begin
-    CmdBuffer.DrawIndex2(Pointer(node^.indexBase),node^.indexCount);
+    ctx.Cmd.DrawIndex2(Pointer(node^.indexBase),node^.indexCount);
    end;
   ntDrawIndexAuto:
    begin
-    CmdBuffer.DrawIndexAuto(node^.indexCount);
+    ctx.Cmd.DrawIndexAuto(node^.indexCount);
    end;
   ntClearDepth:
    begin
-    pm4_ClearDepth(node^.rt_info,CmdBuffer);
+    pm4_ClearDepth(node^.rt_info,ctx.Cmd);
    end;
   else;
-   Assert(false);
+   Assert(false,'pm4_Draw');
  end;
 
  /////////
 
- CmdBuffer.EndRenderPass;
+ pm4_Writeback(ctx);
 
- pm4_Writeback(CmdBuffer,node^.rt_info);
-
- r:=CmdBuffer.QueueSubmit;
-
- if (r<>VK_SUCCESS) then
- begin
-  Assert(false,'QueueSubmit');
- end;
-
- Writeln('QueueSubmit:',r);
-
- r:=CmdBuffer.Wait(QWORD(-1));
-
- Writeln('CmdBuffer:',r);
-
- r:=RenderQueue.WaitIdle;
- Writeln('WaitIdle:',r);
-
- CmdBuffer.ReleaseResource;
-
- CmdBuffer.Free;
 end;
 
-procedure pm4_DispatchPrepare(node:p_pm4_node_DispatchDirect;
-                              CmdBuffer:TvCmdBuffer);
+procedure pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
 var
  dst:PGPU_USERDATA;
 
@@ -973,7 +1223,7 @@ var
  FDescriptorGroup:TvDescriptorGroup;
 begin
  CP_KEY.FShaderGroup:=node^.ShaderGroup;
- CP:=FetchComputePipeline(CmdBuffer,@CP_KEY);
+ CP:=FetchComputePipeline(ctx.Cmd,@CP_KEY);
 
  ////////
 
@@ -983,77 +1233,43 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
 
- Prepare_Uniforms(node,FUniformBuilder,CmdBuffer);
+ Prepare_Uniforms(ctx,FUniformBuilder);
  ////////
 
- if not CmdBuffer.BindCompute(CP) then
+ if not ctx.Cmd.BindCompute(CP) then
  begin
   Writeln(stderr,'BindCompute(CP)');
-  Assert(false,'BindCompute(CP)');
+  Assert(false  ,'BindCompute(CP)');
  end;
 
  FDescriptorGroup:=nil;
 
- Bind_Uniforms(node,
+ Bind_Uniforms(ctx,
                FUniformBuilder,
                FDescriptorGroup,
-               CP_KEY.FShaderGroup,
-               CmdBuffer);
+               CP_KEY.FShaderGroup);
 
  if (FDescriptorGroup<>nil) then
  begin
-  CmdBuffer.BindSets(BP_COMPUTE,FDescriptorGroup);
+  ctx.Cmd.BindSets(BP_COMPUTE,FDescriptorGroup);
  end;
 
 end;
 
-procedure pm4_DispatchDirect(node:p_pm4_node_DispatchDirect);
-var
- CmdBuffer:TvCmdBuffer;
-
- r:TVkResult;
+procedure pm4_DispatchDirect(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
 begin
-
  StartFrameCapture;
 
- //
- if (FCmdPool=nil) then
- begin
-  FCmdPool:=TvCmdPool.Create(VulkanApp.FGFamily);
- end;
-
- CmdBuffer:=TvCmdBuffer.Create(FCmdPool,RenderQueue);
- //CmdBuffer.submit_id:=submit_id;
+ ctx.BeginCmdBuffer;
 
  //
- CmdBuffer.EndRenderPass;
+ ctx.Cmd.EndRenderPass;
 
- pm4_DispatchPrepare(node,
-                     CmdBuffer);
+ pm4_DispatchPrepare(ctx,node);
 
- CmdBuffer.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
+ ctx.Cmd.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
 
  /////////
-
- r:=CmdBuffer.QueueSubmit;
-
- if (r<>VK_SUCCESS) then
- begin
-  Assert(false,'QueueSubmit');
- end;
-
- Writeln('QueueSubmit:',r);
-
- r:=CmdBuffer.Wait(QWORD(-1));
-
- Writeln('CmdBuffer:',r);
-
- r:=RenderQueue.WaitIdle;
- Writeln('WaitIdle:',r);
-
- CmdBuffer.ReleaseResource;
-
- CmdBuffer.Free;
 end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
@@ -1070,14 +1286,21 @@ const
  //neo mode & ext_gpu_timer -> 911*000*000
 
 
-procedure pm4_EventWriteEop(node:p_pm4_node_EventWriteEop;me:p_pm4_me);
+procedure pm4_EventWriteEop(var ctx:t_me_render_context;node:p_pm4_node_EventWriteEop);
 var
  curr,diff:QWORD;
 begin
- //EndFrameCapture;
+
+ ctx.FinishCmdBuffer;
+
+ if not ctx.CmdStatusCurrent then
+ begin
+  ctx.switch_task;
+  Exit;
+ end;
 
  curr:=md_rdtsc_unit;
- diff:=curr-me^.rel_time;
+ diff:=curr-ctx.rel_time;
 
  if (node^.addr<>nil) then
  Case node^.dataSel of
@@ -1115,24 +1338,28 @@ begin
  if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
     (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM) then
  begin
-  me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
+  ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- if (me^.on_idle<>nil) then
- begin
-  me^.on_idle();
- end;
+ ctx.on_idle;
 end;
 
-procedure pm4_SubmitFlipEop(node:p_pm4_node_SubmitFlipEop;me:p_pm4_me);
+procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFlipEop);
 var
  curr:QWORD;
 begin
- //EndFrameCapture;
 
- if (me^.on_submit_flip_eop<>nil) then
+ ctx.FinishCmdBuffer;
+
+ if not ctx.CmdStatusCurrent then
  begin
-  me^.on_submit_flip_eop(node^.eop_value);
+  ctx.switch_task;
+  Exit;
+ end;
+
+ if (ctx.me^.on_submit_flip_eop<>nil) then
+ begin
+  ctx.me^.on_submit_flip_eop(node^.eop_value);
  end;
 
  curr:=md_rdtsc_unit;
@@ -1140,52 +1367,94 @@ begin
  if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
     (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM) then
  begin
-  me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
+  ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- if (me^.on_idle<>nil) then
- begin
-  me^.on_idle();
- end;
+ ctx.on_idle;
 end;
 
-procedure pm4_EventWriteEos(node:p_pm4_node_EventWriteEos;me:p_pm4_me);
+procedure pm4_EventWriteEos(var ctx:t_me_render_context;node:p_pm4_node_EventWriteEos);
+var
+ Addr:Pointer;
 begin
 
  if (node^.addr<>nil) then
  Case node^.command of
 
    //32bit data
-  EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY:PDWORD(node^.addr)^:=node^.data;
+  EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY:
+   begin
+
+    if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
+    begin
+     //GPU
+     ctx.Cmd.WriteEos(node^.eventType,node^.addr,node^.data);
+    end else
+    begin
+     //soft
+
+     ctx.FinishCmdBuffer;
+
+     {
+     if not ctx.CmdStatusCurrent then
+     begin
+      ctx.switch_task;
+      Exit;
+     end;
+     }
+
+     Addr:=nil;
+     if not get_dmem_ptr(Pointer(node^.addr),@Addr,nil) then
+     begin
+      Assert(false,'addr:0x'+HexStr(Pointer(node^.addr))+' not in dmem!');
+     end;
+
+     PDWORD(Addr)^:=node^.data;
+    end;
+
+   end;
 
   else
    Assert(false,'pm4_EventWriteEos');
  end;
 
- //interrupt???
-
- if (me^.on_idle<>nil) then
- begin
-  me^.on_idle();
- end;
+ //ctx.on_idle;
 end;
 
-procedure pm4_WriteData(node:p_pm4_node_WriteData);
+procedure pm4_WriteData(var ctx:t_me_render_context;node:p_pm4_node_WriteData);
 var
  addr:PDWORD;
 begin
 
- case node^.dstSel of
-  WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
-  WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
-  WRITE_DATA_DST_SEL_MEMORY_ASYNC:
-    if (node^.dst<>0) then
-    begin
-     addr:=Pointer(node^.dst);
-     Move(node^.src^,addr^,node^.num_dw*SizeOf(DWORD));
-    end;
-  else
-    Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
+ if node^.mark then
+ begin
+  case node^.dstSel of
+   WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
+   WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
+   WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+     if (node^.dst<>0) then
+     begin
+      //TODO: Move on GPU
+      addr:=Pointer(node^.dst);
+      Move(node^.src^,addr^,node^.num_dw*SizeOf(DWORD));
+     end;
+   else
+     Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
+  end;
+
+  node^.mark:=False
+ end;
+
+ //wait after
+ if node^.wrConfirm then
+ begin
+  ctx.FinishCmdBuffer;
+
+  if not ctx.CmdStatusCurrent then
+  begin
+   ctx.switch_task;
+   Exit;
+  end;
  end;
 
 end;
@@ -1209,27 +1478,34 @@ begin
  end;
 end;
 
-procedure pm4_WaitRegMem(node:p_pm4_node_WaitRegMem;me:p_pm4_me);
+procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
 begin
- if not me_test_mem(node) then
+ ctx.FinishCmdBuffer;
+
+ if not ctx.CmdStatusCurrent then
  begin
-  me^.switch_task;
+  ctx.switch_task;
+  Exit;
  end;
 
- {
- while not me_test_mem(node) do
+ if not me_test_mem(node) then
  begin
-  sleep(1);
+  ctx.switch_task;
+  Exit;
  end;
- }
 
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
 var
- stream:p_pm4_stream;
- node:p_pm4_node;
+ ctx:t_me_render_context;
+ imdone_count:QWORD;
 begin
+ ctx:=Default(t_me_render_context);
+ ctx.Init;
+ ctx.me:=me;
+
+ imdone_count:=QWORD(-1);
 
  if use_renderdoc_capture then
  begin
@@ -1241,66 +1517,72 @@ begin
 
  repeat
 
-  stream:=nil;
-  if me^.queue.Pop(stream) then
+  if (me^.imdone_count<>imdone_count) then
   begin
-   me^.add_stream(stream);
-   //
-   stream:=nil;
+   imdone_count:=me^.imdone_count;
+   EndFrameCapture;
   end;
 
-  stream:=me^.get_next;
+  ctx.stream:=nil;
+  if me^.queue.Pop(ctx.stream) then
+  begin
+   me^.add_stream(ctx.stream);
+   //
+   ctx.stream:=nil;
+  end;
 
-  if (stream<>nil) then
+  ctx.stream:=me^.get_next;
+
+  if (ctx.stream<>nil) then
   begin
 
    //start relative timer
-   if (me^.rel_time=0) then
+   if (ctx.rel_time=0) then
    begin
-    me^.rel_time:=md_rdtsc_unit;
+    ctx.rel_time:=md_rdtsc_unit;
    end;
    //
 
-   node:=stream^.curr;
-   if (node=nil) then
+   ctx.node:=ctx.stream^.curr;
+   if (ctx.node=nil) then
    begin
-    node:=stream^.First;
-    stream^.curr:=node;
+    ctx.node:=ctx.stream^.First;
+    ctx.stream^.curr:=ctx.node;
     //
-    pm4_InitStream(stream,me);
+    pm4_InitStream(ctx);
    end;
 
-   while (node<>nil) do
+   while (ctx.node<>nil) do
    begin
-    //Writeln('+',node^.ntype);
+    //Writeln('+',ctx.node^.ntype);
 
-    case node^.ntype of
-     ntDrawIndex2    :pm4_Draw          (Pointer(node));
-     ntDrawIndexAuto :pm4_Draw          (Pointer(node));
-     ntClearDepth    :pm4_Draw          (Pointer(node));
-     ntDispatchDirect:pm4_DispatchDirect(Pointer(node));
-     ntEventWriteEop :pm4_EventWriteEop (Pointer(node),me);
-     ntSubmitFlipEop :pm4_SubmitFlipEop (Pointer(node),me);
-     ntEventWriteEos :pm4_EventWriteEos (Pointer(node),me);
-     ntWriteData     :pm4_WriteData     (Pointer(node));
-     ntWaitRegMem    :pm4_WaitRegMem    (Pointer(node),me);
+    case ctx.node^.ntype of
+     ntDrawIndex2    :pm4_Draw          (ctx,Pointer(ctx.node));
+     ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
+     ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));
+     ntDispatchDirect:pm4_DispatchDirect(ctx,Pointer(ctx.node));
+     ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
+     ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
+     ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));
+     ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
+     ntWaitRegMem    :pm4_WaitRegMem    (ctx,Pointer(ctx.node));
 
      else
       begin
-       Writeln('me:+',node^.ntype);
+       Writeln('me:+',ctx.node^.ntype);
       end;
     end;
 
     if me^.sheduler.switch then
     begin
      //save position
-     stream^.curr:=node;
+     ctx.stream^.curr:=ctx.node;
      //
      Break;
     end;
 
     //
-    node:=stream^.Next(node);
+    ctx.node:=ctx.stream^.Next(ctx.node);
    end;
 
    if me^.sheduler.switch then
@@ -1310,12 +1592,11 @@ begin
     Continue;
    end else
    begin
-    me^.next_task;
+    ctx.next_task;
    end;
 
-   me^.free_stream(stream);
-
-   EndFrameCapture;
+   me^.remove_stream(ctx.stream);
+   ctx.stream:=nil;
 
    //
    Continue;
@@ -1325,13 +1606,11 @@ begin
 
   me^.reset_sheduler;
 
-  me^.rel_time:=0; //reset time
+  ctx.rel_time:=0; //reset time
   //
-  if (me^.on_idle<>nil) then
-  begin
-   me^.on_idle();
-  end;
+  ctx.on_idle;
   //
+
   RTLEventWaitFor(me^.event);
  until false;
 

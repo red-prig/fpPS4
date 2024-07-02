@@ -91,20 +91,28 @@ type
 
  TvQueue=class
   FHandle:TVkQueue;
+  FFamily:TVkUInt32;
   FLock:System.TRTLCriticalSection;
-  Constructor Create;
+  Constructor Create(Family:TVkUInt32);
   Destructor  Destroy; override;
   function    Submit(submitCount:TVkUInt32;const pSubmits:PVkSubmitInfo;fence:TVkFence):TVkResult;
   function    WaitIdle:TVkResult;
   function    PresentKHR(const pPresentInfo:PVkPresentInfoKHR):TVkResult;
  end;
 
- TvCmdPool=class
+ TvCustomCmdPool=class
+  function    Alloc:TVkCommandBuffer;    virtual; abstract;
+  procedure   Free(cmd:TVkCommandBuffer);virtual; abstract;
+  procedure   Trim;                      virtual; abstract;
+ end;
+
+ TvCmdPool=class(TvCustomCmdPool)
   FHandle:TVkCommandPool;
   Constructor Create(FFamily:TVkUInt32);
-  Destructor  Destroy; override;
-  function    Alloc:TVkCommandBuffer;
-  procedure   Free(cmd:TVkCommandBuffer);
+  Destructor  Destroy;                    override;
+  function    Alloc:TVkCommandBuffer;     override;
+  procedure   Free(cmd:TVkCommandBuffer); override;
+  procedure   Trim;                       override;
  end;
 
  TvFence=class
@@ -113,7 +121,7 @@ type
   Destructor  Destroy; override;
   function    Reset:TVkResult;
   function    Wait(timeout:TVkUInt64):TVkResult;
-  function    Status:TVkResult;
+  function    Status:TVkResult; //[VK_SUCCESS,VK_NOT_READY]
  end;
 
  TvSemaphore=class
@@ -171,10 +179,12 @@ procedure vkMemoryBarrier(
 	   srcStageMask:TVkPipelineStageFlags;
 	   dstStageMask:TVkPipelineStageFlags);
 
+{
 procedure vkBarrier(
 	   cmdbuffer:TVkCommandBuffer;
 	   srcStageMask:TVkPipelineStageFlags;
 	   dstStageMask:TVkPipelineStageFlags);
+}
 
 Procedure vkCmdBindVertexBuffer(commandBuffer:TVkCommandBuffer;
                                 Binding:TVkUInt32;
@@ -1122,7 +1132,7 @@ begin
  System.InitCriticalSection(FLock);
 
  DeviceFeature:=VulkanApp.FDeviceFeature;
- DeviceFeature.robustBufferAccess:=0;
+ DeviceFeature.robustBufferAccess:=VK_FALSE;
 
  DeviceInfo:=Default(TVkDeviceCreateInfo);
  DeviceInfo.sType:=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1185,8 +1195,9 @@ end;
 
 //
 
-Constructor TvQueue.Create;
+Constructor TvQueue.Create(Family:TVkUInt32);
 begin
+ FFamily:=Family;
  System.InitCriticalSection(FLock);
 end;
 
@@ -1263,12 +1274,18 @@ end;
 
 procedure TvCmdPool.Free(cmd:TVkCommandBuffer);
 begin
+ if (cmd=VK_NULL_HANDLE) then Exit;
  {
   It is recommended to use vkQueueWaitIdle,
    it seems that vkWaitForFences does not always ensure
    the safety of free the cmd buffer
  }
  vkFreeCommandBuffers(Device.FHandle,FHandle,1,@cmd);
+end;
+
+procedure TvCmdPool.Trim;
+begin
+ vkTrimCommandPool(Device.FHandle,FHandle,0);
 end;
 
 //
@@ -1433,7 +1450,7 @@ var
 begin
  info:=Default(TVkMemoryBarrier);
  info.sType:=VK_STRUCTURE_TYPE_MEMORY_BARRIER;
- info.srcAccessMask:=dstAccessMask;
+ info.srcAccessMask:=srcAccessMask;
  info.dstAccessMask:=dstAccessMask;
 
  vkCmdPipelineBarrier(cmdbuffer,
@@ -1627,13 +1644,13 @@ begin
 
  if (VulkanApp.FGFamilyCount>1) then
  begin
-  FlipQueue  :=TvQueue.Create;
-  RenderQueue:=TvQueue.Create;
+  FlipQueue  :=TvQueue.Create(VulkanApp.FGFamily);
+  RenderQueue:=TvQueue.Create(VulkanApp.FGFamily);
   DeviceInfo.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
   DeviceInfo.add_queue(VulkanApp.FGFamily,@RenderQueue.FHandle);
  end else
  begin
-  FlipQueue  :=TvQueue.Create;
+  FlipQueue  :=TvQueue.Create(VulkanApp.FGFamily);
   RenderQueue:=FlipQueue;
   DeviceInfo.add_queue(VulkanApp.FGFamily,@FlipQueue  .FHandle);
  end;

@@ -302,19 +302,27 @@ begin
 end;
 
 procedure gc_imdone;
+var
+ prev:QWORD;
 begin
  if (GC_SRI_event=nil)       then Exit;
  if (pm4_me_gfx.started=nil) then Exit;
 
  gc_wait_GC_SRI;
- GC_SRI_label:=1;
 
- if (gc_submits_allowed_vmirr<>nil) then
+ prev:=System.InterlockedExchange64(GC_SRI_label,1);
+
+ if (prev=0) then
  begin
-  gc_submits_allowed_vmirr^:=1; //false
+
+  if (gc_submits_allowed_vmirr<>nil) then
+  begin
+   gc_submits_allowed_vmirr^:=1; //false
+  end;
+
+  pm4_me_gfx.imdone;
  end;
 
- pm4_me_gfx.trigger;
 end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;

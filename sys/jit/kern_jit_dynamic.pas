@@ -1614,7 +1614,7 @@ end;
 
 function on_trigger(handle:Pointer;mode:Integer):Integer;
 begin
- if (mode<>0) then Exit(DO_NOTHING);
+ if (mode=1) then Exit(DO_NOTHING);
  //TODO
  Result:=DO_INCREMENT;
 end;

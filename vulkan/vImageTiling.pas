@@ -306,14 +306,13 @@ begin
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
- vkBufferMemoryBarrier(cmd.FCmdbuf,
-                       buf.FHandle,
-                       ord(VK_ACCESS_SHADER_WRITE_BIT),
-                       ord(VK_ACCESS_MEMORY_READ_BIT),
-                       0,size,
-                       ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                       );
+ cmd.BufferMemoryBarrier(buf.FHandle,
+                         ord(VK_ACCESS_SHADER_WRITE_BIT),
+                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         0,size,
+                         ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
@@ -513,15 +512,14 @@ begin
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
- vkBufferMemoryBarrier(cmd.FCmdbuf,
-                       buf.FHandle,
-                       ord(VK_ACCESS_SHADER_WRITE_BIT),
-                       ord(VK_ACCESS_MEMORY_READ_BIT),
-                       m_offset,
-                       size,
-                       ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                      );
+ cmd.BufferMemoryBarrier(buf.FHandle,
+                         ord(VK_ACCESS_SHADER_WRITE_BIT),
+                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         m_offset,
+                         size,
+                         ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
@@ -581,12 +579,11 @@ begin
 
  end;
 
- vkCmdCopyBufferToImage(cmd.FCmdbuf,
-                        buf.FHandle,
-                        image.FHandle,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        Length(BufferImageCopyA),
-                        @BufferImageCopyA[0]);
+ cmd.CopyBufferToImage(buf.FHandle,
+                       image.FHandle,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       Length(BufferImageCopyA),
+                       @BufferImageCopyA[0]);
 
 
 end;
@@ -624,15 +621,14 @@ begin
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
- vkBufferMemoryBarrier(cmd.FCmdbuf,
-                       buf.FHandle,
-                       ord(VK_ACCESS_MEMORY_READ_BIT),
-                       ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                       m_offset,
-                       size,
-                       ord(VK_PIPELINE_STAGE_HOST_BIT),
-                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                       );
+ cmd.BufferMemoryBarrier(buf.FHandle,
+                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                         m_offset,
+                         size,
+                         ord(VK_PIPELINE_STAGE_HOST_BIT),
+                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                        );
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
@@ -785,6 +781,8 @@ begin
   Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
 
+ cmd.EndRenderPass;
+
  cb(cmd,image);
 
  System.InterlockedExchangeAdd64(image.ref_trigger,-ref_trigger);
@@ -806,6 +804,8 @@ begin
   Writeln(stderr,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
   Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
+
+ cmd.EndRenderPass;
 
  cb(cmd,image);
 

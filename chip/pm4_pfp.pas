@@ -985,18 +985,6 @@ begin
 
  if (Body^.destTcL2<>0) then Exit; //write to L2
 
- {
- Case Body^.dataSel of
-  //
-  EVENTWRITEEOP_DATA_SEL_DISCARD            :;
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA32        :PDWORD(Body^.address)^:=Body^.DATA;
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA64        :PQWORD(Body^.address)^:=Body^.DATA;
-  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     :; //system 100Mhz global clock.
-  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:; //GPU 800Mhz clock.
-  else;
- end;
- }
-
  addr:=nil;
 
  if (Body^.dataSel in [1..4]) then
@@ -1037,11 +1025,6 @@ begin
 
  addr:=Pointer(Body^.address);
 
- if not get_dmem_ptr(addr,@addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
- end;
-
  pctx^.stream[stGfxDcb].EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
 end;
 
@@ -1078,12 +1061,22 @@ begin
    begin
     //Execute on the parser side
 
+    if not get_dmem_ptr(Pointer(adrDst),@adrDst,nil) then
+    begin
+     Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
+    end;
+
     case (srcSel or (dstSel shl 4)) of
      (kDmaDataSrcMemory        or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcMemory        or (kDmaDataDstMemoryUsingL2 shl 4)),
      (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
+        if not get_dmem_ptr(Pointer(adrSrc),@adrSrc,nil) then
+        begin
+         Assert(false,'addr:0x'+HexStr(Pointer(adrSrc))+' not in dmem!');
+        end;
+
         Move(Pointer(adrSrc)^,Pointer(adrDst)^,byteCount);
        end;
      (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
@@ -1125,7 +1118,7 @@ begin
  Case engineSel of
   WRITE_DATA_ENGINE_ME:
     begin
-     pctx^.stream[stGfxDcb].WriteData(dstSel,QWORD(addr),@Body^.DATA,count);
+     pctx^.stream[stGfxDcb].WriteData(dstSel,QWORD(addr),@Body^.DATA,count,Body^.CONTROL.wrConfirm);
     end;
   WRITE_DATA_ENGINE_PFP:
     begin

@@ -7,9 +7,8 @@ interface
 uses
   Classes,
   SysUtils,
-  g23tree,
-  //ps4_libSceVideoOut,
-  si_ci_vi_merged_enum,
+
+  //si_ci_vi_merged_enum,
   vRegs2Vulkan,
   Vulkan,
   vDevice,
@@ -18,71 +17,71 @@ uses
   vShaderExt,
   vPipeline,
   vPipelineManager,
-  //vSetsPools,
+
   vImage,
   vDependence;
 
 type
- TvRenderTargets=class(TvRefsObject)
-  RT_COUNT :Byte;
-  DB_ENABLE:Boolean;
+ AvClearValues=array[0..8] of TVkClearValue;
 
-  RT_INFO:array[0..7] of TRT_INFO;
-  DB_INFO:TDB_INFO;
-  //
+ PvRenderPassBeginInfo=^TvRenderPassBeginInfo;
+ TvRenderPassBeginInfo=object
   FRenderPass :TvRenderPass;
-  FPipeline   :TvGraphicsPipeline2;
-  FFramebuffer:TvFramebuffer;
   FRenderArea :TVkRect2D;
-  //
-  FClearValuesCount:TVkUInt32;
-  FClearValues:array[0..8] of TVkClearValue;
+  FClearCount :TVkUInt32;
+  FClearValues:AvClearValues;
+  FFramebuffer:TvFramebuffer;
   //
   FImagesCount:TVkUInt32;
   FImageViews :AvImageViews;
   //
+  Procedure  SetRenderPass(RP:TvRenderPass);
+  Procedure  SetRenderArea(RA:TVkRect2D);
+  Procedure  SetFramebuffer(FB:TvFramebuffer);
+  //
   Procedure  AddClearColor(clr:TVkClearValue);
   Procedure  AddClearColor(clr:TVkClearColorValue);
+  //
   Procedure  AddImageView(v:TvImageView);
+  //
   Function   GetRInfo:TVkRenderPassBeginInfo;
   Function   GetAInfo:TVkRenderPassAttachmentBeginInfo;
-  class function c(const a,b:TvRenderTargets):Integer;
  end;
-
- TvRenderTargetsSet=specialize T23treeSet<TvRenderTargets,TvRenderTargets>;
 
 implementation
 
-{
-const
- buf_ext:TVkExternalMemoryBufferCreateInfo=(
-  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
-  pNext:nil;
-  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
- );
-
- img_ext:TVkExternalMemoryImageCreateInfo=(
-  sType:VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-  pNext:nil;
-  handleTypes:ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT);
- );
-}
-
 /////////
 
-Procedure TvRenderTargets.AddClearColor(clr:TVkClearValue);
+Procedure TvRenderPassBeginInfo.SetRenderPass(RP:TvRenderPass);
 begin
- if (FClearValuesCount>8) then Exit;
- FClearValues[FClearValuesCount]:=clr;
- Inc(FClearValuesCount);
+ FRenderPass:=RP;
 end;
 
-Procedure TvRenderTargets.AddClearColor(clr:TVkClearColorValue);
+Procedure TvRenderPassBeginInfo.SetRenderArea(RA:TVkRect2D);
+begin
+ FRenderArea:=RA;
+end;
+
+Procedure TvRenderPassBeginInfo.SetFramebuffer(FB:TvFramebuffer);
+begin
+ FFramebuffer:=FB;
+end;
+
+Procedure TvRenderPassBeginInfo.AddClearColor(clr:TVkClearValue);
+begin
+ if (FClearCount>8) then Exit;
+ FClearValues[FClearCount]:=clr;
+ Inc(FClearCount);
+end;
+
+Procedure TvRenderPassBeginInfo.AddClearColor(clr:TVkClearColorValue);
 begin
  AddClearColor(TVkClearValue(clr));
 end;
 
-Procedure TvRenderTargets.AddImageView(v:TvImageView);
+//
+
+Procedure TvRenderPassBeginInfo.AddImageView(v:TvImageView);
 begin
  Assert(v<>nil,'AddImageView');
  if (FImagesCount>=Length(AvImageViews)) then Exit;
@@ -90,28 +89,23 @@ begin
  Inc(FImagesCount);
 end;
 
-Function TvRenderTargets.GetRInfo:TVkRenderPassBeginInfo;
+Function TvRenderPassBeginInfo.GetRInfo:TVkRenderPassBeginInfo;
 begin
  Result:=Default(TVkRenderPassBeginInfo);
  Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
  Result.renderPass     :=FRenderPass.FHandle;
  Result.renderArea     :=FRenderArea;
- Result.clearValueCount:=FClearValuesCount;
+ Result.clearValueCount:=FClearCount;
  Result.pClearValues   :=@FClearValues[0];
  Result.framebuffer    :=FFramebuffer.FHandle;
 end;
 
-Function TvRenderTargets.GetAInfo:TVkRenderPassAttachmentBeginInfo;
+Function TvRenderPassBeginInfo.GetAInfo:TVkRenderPassAttachmentBeginInfo;
 begin
  Result:=Default(TVkRenderPassAttachmentBeginInfo);
  Result.sType          :=VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO;
  Result.attachmentCount:=FImagesCount;
  Result.pAttachments   :=@FImageViews[0];
-end;
-
-class function TvRenderTargets.c(const a,b:TvRenderTargets):Integer;
-begin
- Result:=CompareByte(a,b,SizeOf(Pointer));
 end;
 
 //////////////

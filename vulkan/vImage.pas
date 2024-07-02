@@ -105,23 +105,25 @@ type
   alt:0..1;  //1
  end;
 
+ TvImageKeyParams=packed record
+  itype      :Byte; //TVkImageType 0..2 (2)
+  tiling     :TvTiling;
+  samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
+  mipLevels  :Byte; //(0..15) (4)
+  width      :Word; //(0..16383)
+  height     :Word; //(0..16383)
+  depth      :Word; //(0..8192)
+  arrayLayers:Word; //(0..16383)
+  pad_width  :Word;
+  pad_height :Word;
+ end;
+
  PvImageKey=^TvImageKey;
  TvImageKey=packed object
   Addr   :Pointer;
   Addr2  :Pointer;
   cformat:TVkFormat;
-  params :packed record
-   itype      :Byte; //TVkImageType 0..2 (2)
-   tiling     :TvTiling;
-   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
-   mipLevels  :Byte; //(0..15) (4)
-   width      :Word; //(0..16383)
-   height     :Word; //(0..16383)
-   depth      :Word; //(0..8192)
-   arrayLayers:Word; //(0..16383)
-   pad_width  :Word;
-   pad_height :Word;
-  end;
+  params :TvImageKeyParams;
  end;
 
  PvImageViewKey=^TvImageViewKey;
@@ -259,6 +261,9 @@ function GET_VK_FORMAT_STORAGE(cformat:TVkFormat):TVkFormat;
 
 function GET_VK_IMAGE_USAGE_DEFAULT (cformat:TVkFormat):TVkFlags;
 function GET_VK_IMAGE_CREATE_DEFAULT(cformat:TVkFormat):TVkFlags;
+
+Function GetNormalizedParams(const key:TvImageKey):TvImageKeyParams;
+Function CompareNormalized(const a,b:TvImageKey):Integer;
 
 implementation
 
@@ -984,6 +989,41 @@ begin
            ord(VK_IMAGE_CREATE_EXTENDED_USAGE_BIT);
  end;
 end;
+
+Function GetNormalizedParams(const key:TvImageKey):TvImageKeyParams;
+begin
+ Result:=key.params;
+
+ if IsTexelFormat(key.cformat) then
+ begin
+  Result.width :=(Result.width +3) shr 2;
+  Result.height:=(Result.height+3) shr 2;
+  //
+  Result.pad_width :=(Result.pad_width +3) shr 2;
+  Result.pad_height:=(Result.pad_height+3) shr 2;
+ end;
+end;
+
+Function CompareNormalized(const a,b:TvImageKey):Integer;
+var
+ ma,mb:Pointer;
+begin
+ //1 Addr
+ Result:=Integer(a.Addr>b.Addr)-Integer(a.Addr<b.Addr);
+ if (Result<>0) then Exit;
+ //1 Stencil
+ Result:=Integer(a.Addr2>b.Addr2)-Integer(a.Addr2<b.Addr2);
+ if (Result<>0) then Exit;
+ //2 cformat
+ ma:=GET_VK_IMAGE_MUTABLE(a.cformat);
+ mb:=GET_VK_IMAGE_MUTABLE(b.cformat);
+ Result:=Integer(ma>mb)-Integer(ma<mb);
+ if (Result<>0) then Exit;
+ //3 params
+ Result:=CompareByte(GetNormalizedParams(a),GetNormalizedParams(b),SizeOf(TvImageKeyParams));
+end;
+
+//
 
 Procedure TvFramebufferImagelessKey.SetRenderPass(r:TvRenderPass);
 begin

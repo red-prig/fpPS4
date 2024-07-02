@@ -63,7 +63,7 @@ const
 type
  TvCustomCmdBuffer=class(TvDependenciesObject)
 
-  FParent:TvCmdPool;
+  FParent:TvCustomCmdPool;
   FQueue :TvQueue;
   FCmdbuf:TVkCommandBuffer;
 
@@ -84,13 +84,15 @@ type
 
   FFence:TvFence;
 
-  FCBState:(cbInit,cbBegin,cbEnd,cbSubmit);
+  FCBState:(cbFree,cbInit,cbBegin,cbEnd,cbSubmit);
 
   FPlannedTriggers:t_cmd_track_deferred_set;
 
-  Constructor Create(pool:TvCmdPool;Queue:TvQueue);
+  Constructor Create(pool:TvCustomCmdPool;Queue:TvQueue);
   Destructor  Destroy; override;
 
+  function    AllocCmdBuffer:Boolean;
+  Function    IsAllocated:Boolean;
   function    BeginCmdBuffer:Boolean;
   Procedure   EndCmdBuffer;
   Procedure   BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
@@ -99,6 +101,7 @@ type
 
   function    QueueSubmit:TVkResult;
   function    Wait(timeout:TVkUInt64):TVkResult;
+  function    Status:TVkResult;
 
   Procedure   ReleaseResource;
   Procedure   FreeAllSemaphores;
@@ -153,15 +156,23 @@ type
                                 regionCount:TVkUInt32;
                                 const pRegions:PVkBufferImageCopy);
 
+  procedure   BufferMemoryBarrier(buffer:TVkBuffer;
+                                  srcAccessMask:TVkAccessFlags;
+                                  dstAccessMask:TVkAccessFlags;
+                                  offset,size:TVkDeviceSize;
+                                  srcStageMask:TVkPipelineStageFlags;
+                                  dstStageMask:TVkPipelineStageFlags);
  end;
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
+
+  FRender:TvRenderPassBeginInfo;
 
   Femulate_primtype:Integer;
   FinstanceCount:DWORD;
   FINDEX_TYPE:TVkIndexType;
 
-  function    BeginRenderPass(RT:TvRenderTargets):Boolean;
+  function    BeginRenderPass(RT:PvRenderPassBeginInfo;GP:TvGraphicsPipeline2):Boolean;
 
   function    BindCompute(CP:TvComputePipeline2):Boolean;
 
@@ -169,7 +180,7 @@ type
 
   //Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
-  //Procedure   writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
+  Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD);
 
   Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
   Procedure   DrawIndex2(IndexBase:Pointer;indexCount:DWORD);
@@ -202,18 +213,16 @@ end;
 
 //
 
-Constructor TvCustomCmdBuffer.Create(pool:TvCmdPool;Queue:TvQueue);
+Constructor TvCustomCmdBuffer.Create(pool:TvCustomCmdPool;Queue:TvQueue);
 begin
  FParent:=pool;
  FQueue:=Queue;
- FCmdbuf:=pool.Alloc;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
  FFence:=TvFence.Create(False);
 
  FSignalSemaphore:=TvSemaphore.Create;
 
- FCBState:=cbInit;
+ FCBState:=cbFree;
 end;
 
 Destructor TvCustomCmdBuffer.Destroy;
@@ -230,13 +239,45 @@ begin
  inherited;
 end;
 
+function TvCustomCmdBuffer.AllocCmdBuffer:Boolean;
+begin
+ if (FCmdbuf<>VK_NULL_HANDLE) then Exit(True);
+
+ FCmdbuf:=FParent.Alloc;
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit(False);
+
+ FCBState:=cbInit;
+
+ Result:=True;
+end;
+
+Function TvCustomCmdBuffer.IsAllocated:Boolean;
+begin
+ Result:=False;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ Result:=(FCmdbuf<>VK_NULL_HANDLE);
+end;
+
 function TvCustomCmdBuffer.BeginCmdBuffer:Boolean;
 var
  r:TVkResult;
  Info:TVkCommandBufferBeginInfo;
 begin
  Result:=False;
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (not AllocCmdBuffer) then Exit;
 
  case FCBState of
   cbInit:; //need start
@@ -250,7 +291,6 @@ begin
    Exit(False);
  end;
 
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  Info:=Default(TVkCommandBufferBeginInfo);
  Info.sType:=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
  Info.flags:=ord(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -269,7 +309,12 @@ Procedure TvCustomCmdBuffer.EndCmdBuffer;
 var
  r:TVkResult;
 begin
- if (Self=nil) then Exit;
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FCBState<>cbBegin) then Exit;
 
  EndRenderPass;
@@ -291,7 +336,12 @@ end;
 
 Procedure TvCustomCmdBuffer.BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
 begin
- if (Self=nil) then Exit;
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FCurrPipeline[BindPoint]=F) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
@@ -302,51 +352,58 @@ begin
  FCurrPipeline[BindPoint]:=F;
 end;
 
-function TvCmdBuffer.BeginRenderPass(RT:TvRenderTargets):Boolean;
+function TvCmdBuffer.BeginRenderPass(RT:PvRenderPassBeginInfo;GP:TvGraphicsPipeline2):Boolean;
 var
  rinfo:TVkRenderPassBeginInfo;
  ainfo:TVkRenderPassAttachmentBeginInfo;
 begin
  Result:=False;
 
- if (Self=nil) then Exit;
-
- if (RT=nil) then
+ if (Self=nil) then
  begin
-  EndRenderPass;
-  Exit(True);
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
  end;
 
- if (RT.FRenderPass =nil) then Exit;
- if (RT.FPipeline   =nil) then Exit;
- if (RT.FFramebuffer=nil) then Exit;
+ if (RT=nil) then Exit;
 
- if (RT.FRenderPass.FHandle=FRenderPass) then Exit(True);
+ if (RT^.FRenderPass =nil) then Exit;
+ if (RT^.FFramebuffer=nil) then Exit;
+ if (GP=nil) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
- EndRenderPass;
-
- rinfo:=RT.GetRInfo;
-
- if RT.FFramebuffer.IsImageless then
+ if (FRenderPass=VK_NULL_HANDLE) or
+    (CompareByte(FRender,RT^,SizeOf(TvRenderPassBeginInfo))<>0) then
  begin
-  ainfo:=RT.GetAInfo;
-  rinfo.pNext:=@ainfo;
+  //reset render pass
+  EndRenderPass;
+
+  FRender:=RT^;
+
+  rinfo:=FRender.GetRInfo;
+
+  if FRender.FFramebuffer.IsImageless then
+  begin
+   ainfo:=FRender.GetAInfo;
+   rinfo.pNext:=@ainfo;
+  end;
+
+  Inc(cmd_count);
+
+  //start render pass
+  vkCmdBeginRenderPass(FCmdbuf,@rinfo,VK_SUBPASS_CONTENTS_INLINE);
+  FRenderPass:=rinfo.renderPass;
  end;
 
- FCurrPipeline[BP_GRAPHICS]:=RT.FPipeline.FHandle;
- FCurrLayout  [BP_GRAPHICS]:=RT.FPipeline.Key.FShaderGroup.FLayout.FHandle;
- Femulate_primtype:=RT.FPipeline.Key.emulate_primtype;
+ Femulate_primtype:=GP.Key.emulate_primtype;
 
- Inc(cmd_count);
+ BindPipeline(BP_GRAPHICS,GP.FHandle);
+ BindLayout  (BP_GRAPHICS,GP.Key.FShaderGroup.FLayout);
 
- vkCmdBeginRenderPass(FCmdbuf,@rinfo,VK_SUBPASS_CONTENTS_INLINE);
- vkCmdBindPipeline   (FCmdbuf,BP_GRAPHICS,FCurrPipeline[BP_GRAPHICS]);
-
- RefTo(RT);
-
- FRenderPass:=rinfo.renderPass;
+ RefTo(FRender.FRenderPass );
+ RefTo(FRender.FFramebuffer);
+ RefTo(GP);
 
  Result:=True;
 end;
@@ -354,19 +411,35 @@ end;
 Function TvCustomCmdBuffer.IsRenderPass:Boolean;
 begin
  Result:=False;
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  Result:=(FRenderPass<>VK_NULL_HANDLE);
 end;
 
 Procedure TvCustomCmdBuffer.EndRenderPass;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FRenderPass<>VK_NULL_HANDLE) then
  begin
   Inc(cmd_count);
   vkCmdEndRenderPass(FCmdbuf);
   FRenderPass:=VK_NULL_HANDLE;
+  //
+  FCurrLayout[BP_GRAPHICS]:=VK_NULL_HANDLE;
+  //
+  FCurrPipeline[BP_GRAPHICS]:=VK_NULL_HANDLE;
  end;
 end;
 
@@ -374,7 +447,15 @@ function TvCmdBuffer.BindCompute(CP:TvComputePipeline2):Boolean;
 begin
  Result:=False;
 
- if (Self=nil) or (CP=nil) then Exit;
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (CP=nil) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  BindPipeline(BP_COMPUTE,CP.FHandle);
  BindLayout  (BP_COMPUTE,CP.Key.FShaderGroup.FLayout);
@@ -398,10 +479,14 @@ var
 begin
  Result:=VK_ERROR_UNKNOWN;
 
- if (Self=nil) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  case FCBState of
+  cbFree,
   cbInit:
    begin
     //zero cmd buffer
@@ -414,6 +499,8 @@ begin
    end;
   else;
  end;
+
+ if (FCmdbuf=VK_NULL_HANDLE) then Exit;
 
  EndCmdBuffer;
 
@@ -473,10 +560,16 @@ function TvCustomCmdBuffer.Wait(timeout:TVkUInt64):TVkResult;
 begin
  Result:=VK_ERROR_UNKNOWN;
 
- if (Self=nil) then Exit;
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FFence=nil) then Exit;
 
  case FCBState of
+  cbFree,
   cbInit:
    begin
     //zero cmd buffer
@@ -494,9 +587,45 @@ begin
 
 end;
 
+function TvCustomCmdBuffer.Status:TVkResult;
+begin
+ Result:=VK_ERROR_UNKNOWN;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (FFence=nil) then Exit;
+
+ case FCBState of
+  cbFree,
+  cbInit:
+   begin
+    //zero cmd buffer
+    Exit(VK_SUCCESS);
+   end;
+  cbSubmit:
+   begin
+    //cmd buffer submitted
+    Result:=FFence.Status;
+   end;
+  else
+   //idk why it called in this state
+   Exit(VK_ERROR_UNKNOWN);
+ end;
+
+end;
+
 Procedure TvCustomCmdBuffer.ReleaseResource;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  ReleaseAllDependencies(Self);
 
@@ -598,17 +727,30 @@ end;
 
 Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (F=nil) then Exit;
  FCurrLayout[BindPoint]:=F.FHandle;
 end;
 
 Procedure TvCustomCmdBuffer.BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FHandle=VK_NULL_HANDLE) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
@@ -623,7 +765,13 @@ end;
 
 Procedure TvCustomCmdBuffer.PushConstant(BindPoint:TVkPipelineBindPoint;stageFlags:TVkShaderStageFlags;offset,size:TVkUInt32;const pValues:PVkVoid);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (pValues=nil) or (size=0) then Exit;
  if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
 
@@ -641,7 +789,13 @@ end;
 
 Procedure TvCustomCmdBuffer.DispatchDirect(X,Y,Z:TVkUInt32);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FCurrPipeline[BP_COMPUTE]=VK_NULL_HANDLE) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
@@ -663,10 +817,14 @@ var
  last_binding:TVkUInt32;
  last_size   :TVkUInt32;
 begin
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  c:=FAttrBuilder.FBindDescsCount;
  if (c=0) then Exit;
-
- if (Self=nil) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
@@ -707,7 +865,12 @@ Procedure TvCustomCmdBuffer.SetVertexInput(const FAttrBuilder:TvAttrBuilder);
 var
  input:TvVertexInputEXT;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  if not limits.VK_EXT_vertex_input_dynamic_state then Exit;
 
@@ -733,7 +896,12 @@ Procedure TvCustomCmdBuffer.ClearDepthStencilImage(image:TVkImage;
                                                    rangeCount:TVkUInt32;
                                                    const pRanges:PVkImageSubresourceRange);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -768,7 +936,12 @@ Procedure TvCustomCmdBuffer.ClearColorImage(image:TVkImage;
                                             rangeCount:TVkUInt32;
                                             const pRanges:PVkImageSubresourceRange);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -791,7 +964,12 @@ Procedure TvCustomCmdBuffer.ResolveImage(srcImage:TVkImage;
                                          regionCount:TVkUInt32;
                                          const pRegions:PVkImageResolve);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -815,7 +993,12 @@ procedure TvCustomCmdBuffer.CopyBufferToImage(srcBuffer:TVkBuffer;
                                               regionCount:TVkUInt32;
                                               const pRegions:PVkBufferImageCopy);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -837,7 +1020,12 @@ procedure TvCustomCmdBuffer.CopyImageToBuffer(srcImage:TVkImage;
                                               regionCount:TVkUInt32;
                                               const pRegions:PVkBufferImageCopy);
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -851,6 +1039,33 @@ begin
   dstBuffer,
   regionCount,
   pRegions);
+end;
+
+procedure TvCustomCmdBuffer.BufferMemoryBarrier(buffer:TVkBuffer;
+                                                srcAccessMask:TVkAccessFlags;
+                                                dstAccessMask:TVkAccessFlags;
+                                                offset,size:TVkDeviceSize;
+                                                srcStageMask:TVkPipelineStageFlags;
+                                                dstStageMask:TVkPipelineStageFlags);
+begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkBufferMemoryBarrier(FCmdbuf,
+                       buffer,
+                       srcAccessMask,
+                       dstAccessMask,
+                       offset,size,
+                       srcStageMask,
+                       dstStageMask);
 end;
 
 Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
@@ -873,11 +1088,18 @@ var
  end;
 
 begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (F=nil) then Exit;
- if (Self=nil) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
  if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
  if (Length(F.FSets)=0) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  pos:=0;
 
@@ -938,12 +1160,17 @@ var
  srcb,dstb:TvHostBuffer;
  info:TVkBufferCopy;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
- srcb:=FetchHostBuffer(Self,src,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+ srcb:=FetchHostBuffer(Self,QWORD(src),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
  Assert(srcb<>nil);
 
  if (srcb.Foffset+byteCount>srcb.FSize) then
@@ -1004,7 +1231,12 @@ Procedure TvCmdBuffer.dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:B
 var
  dstb:TvHostBuffer;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  byteCount:=byteCount and (not 3); //4 byte align
 
@@ -1039,12 +1271,29 @@ begin
             ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
  end;
 end;
+}
 
-Procedure TvCmdBuffer.writeAtEndOfShader(eventType:Byte;dst:Pointer;value:DWORD);
+const
+ VK_ACCESS_CS=
+  ord(VK_ACCESS_UNIFORM_READ_BIT) or
+  ord(VK_ACCESS_SHADER_READ_BIT ) or
+  ord(VK_ACCESS_SHADER_WRITE_BIT);
+
+ VK_ACCESS_PS=
+  ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT ) or
+  ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+Procedure TvCmdBuffer.WriteEos(eventType:Byte;dst:Pointer;value:DWORD);
 var
  rb:TvHostBuffer;
+ BufOffset:TVkDeviceSize;
 begin
- if (Self=nil) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
@@ -1053,42 +1302,38 @@ begin
   CS_DONE:
    begin
     Inc(cmd_count);
-    vkBarrier(cmdbuf,
-    	      ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-    	      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-    rb:=FetchHostBuffer(Self,dst,4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
-    Assert(rb<>nil);
-
-    Inc(cmd_count);
-
-    vkCmdFillBuffer(cmdbuf,
-                    rb.FHandle,
-                    rb.Foffset,
-                    4,value);
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_CS,                              //srcAccessMask
+                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),         //dstAccessMask
+    	            ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT), //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));      //dstStageMask
    end;
   PS_DONE:
    begin
     Inc(cmd_count);
-    vkBarrier(cmdbuf,
-    	      ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT),
-    	      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
-    rb:=FetchHostBuffer(Self,dst,4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
-    Assert(rb<>nil);
-
-    Inc(cmd_count);
-
-    vkCmdFillBuffer(cmdbuf,
-                    rb.FHandle,
-                    rb.Foffset,
-                    4,value);
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_PS,                                       //srcAccessMask
+                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),                  //dstAccessMask
+    	            ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT), //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));               //dstStageMask
    end;
   else
-   Assert(False);
+   Assert(false,'WriteEos.eventType');
  end;
+
+ rb:=FetchHostBuffer(Self,QWORD(dst),4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ Assert(rb<>nil);
+
+ BufOffset:=QWORD(dst)-rb.FAddr;
+
+ Inc(cmd_count);
+
+ vkCmdFillBuffer(FCmdbuf,
+                 rb.FHandle,
+                 BufOffset,
+                 4,value);
+
 end;
-}
 
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
 begin
@@ -1107,10 +1352,17 @@ var
  BufOffset:TVkDeviceSize;
  i,h:DWORD;
 begin
- if (Self=nil) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  if (FinstanceCount=0) then FinstanceCount:=1;
 
@@ -1174,10 +1426,17 @@ Procedure TvCmdBuffer.DrawIndexAuto(indexCount:DWORD);
 var
  i,h:DWORD;
 begin
- if (Self=nil) then Exit;
- if (FCmdbuf=VK_NULL_HANDLE) then Exit;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
 
  if (FinstanceCount=0) then FinstanceCount:=1;
 

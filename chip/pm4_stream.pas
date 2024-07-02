@@ -262,10 +262,12 @@ type
 
  p_pm4_node_WriteData=^t_pm4_node_WriteData;
  t_pm4_node_WriteData=packed object(t_pm4_node)
-  dst   :QWORD;
-  src   :Pointer;
-  num_dw:Word;
-  dstSel:Byte;
+  dst      :QWORD;
+  src      :Pointer;
+  num_dw   :Word;
+  dstSel   :Byte;
+  wrConfirm:Boolean;
+  mark     :Boolean;
  end;
 
  p_pm4_node_WaitRegMem=^t_pm4_node_WaitRegMem;
@@ -322,10 +324,15 @@ type
   //
   curr:p_pm4_node;
   //
+  refs:Ptruint;
+  //
   procedure Free;
   Procedure add_node(node:p_pm4_node);
   function  First:p_pm4_node;
   function  Next(node:p_pm4_node):p_pm4_node; static;
+  //
+  procedure Acquire;
+  function  Release:Boolean;
   //
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
@@ -333,7 +340,7 @@ type
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
   procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
-  procedure WriteData    (dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word);
+  procedure WriteData    (dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word;wrConfirm:Byte);
   procedure WaitRegMem   (pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
@@ -365,21 +372,18 @@ var
 
 function t_pm4_resource.c(n1,n2:p_pm4_resource):Integer;
 begin
- //0 rtype
- Result:=Integer(n1^.rtype>n2^.rtype)-Integer(n1^.rtype<n2^.rtype);
- if (Result<>0) then Exit;
- //1 Addr
+ //0 Addr
  Result:=Integer(n1^.rkey.Addr>n2^.rkey.Addr)-Integer(n1^.rkey.Addr<n2^.rkey.Addr);
+ if (Result<>0) then Exit;
+
+ //1 rtype
+ Result:=Integer(n1^.rtype>n2^.rtype)-Integer(n1^.rtype<n2^.rtype);
  if (Result<>0) then Exit;
 
  case n1^.rtype of
   R_IMG:
    begin
-    //2 cformat
-    Result:=Integer(n1^.rkey.cformat>n2^.rkey.cformat)-Integer(n1^.rkey.cformat<n2^.rkey.cformat);
-    if (Result<>0) then Exit;
-    //3 params
-    Result:=CompareByte(n1^.rkey.params,n2^.rkey.params,SizeOf(TvImageKey.params));
+    Result:=CompareNormalized(n1^.rkey,n2^.rkey);
    end;
   R_BUF:
    begin
@@ -710,6 +714,18 @@ end;
 
 //
 
+procedure t_pm4_stream.Acquire;
+begin
+ System.InterlockedIncrement(Pointer(refs));
+end;
+
+function t_pm4_stream.Release:Boolean;
+begin
+ Result:=System.InterlockedDecrement(Pointer(refs))=nil;
+end;
+
+//
+
 procedure t_pm4_stream.LoadConstRam(addr:Pointer;num_dw,offset:Word);
 var
  node:p_pm4_node_LoadConstRam;
@@ -803,18 +819,20 @@ begin
  add_node(node);
 end;
 
-procedure t_pm4_stream.WriteData(dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word);
+procedure t_pm4_stream.WriteData(dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word;wrConfirm:Byte);
 var
  node:p_pm4_node_WriteData;
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData)+num_dw*SizeOf(DWORD));
 
- node^.ntype :=ntWriteData;
- node^.scope :=Default(t_pm4_resource_curr_scope);
- node^.dst   :=dst;
- node^.src   :=Pointer(node+1);
- node^.num_dw:=num_dw;
- node^.dstSel:=dstSel;
+ node^.ntype    :=ntWriteData;
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
+ node^.dst      :=dst;
+ node^.src      :=Pointer(node+1);
+ node^.num_dw   :=num_dw;
+ node^.dstSel   :=dstSel;
+ node^.wrConfirm:=(wrConfirm<>0);
+ node^.mark     :=True;
 
  Move(src^,node^.src^,num_dw*SizeOf(DWORD));
 

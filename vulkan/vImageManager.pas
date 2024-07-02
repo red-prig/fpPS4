@@ -181,17 +181,7 @@ end;
 
 function TvImageKeyCompare.c(a,b:PvImageKey):Integer;
 begin
- //1 Addr
- Result:=Integer(a^.Addr>b^.Addr)-Integer(a^.Addr<b^.Addr);
- if (Result<>0) then Exit;
- //1 Stencil
- Result:=Integer(a^.Addr2>b^.Addr2)-Integer(a^.Addr2<b^.Addr2);
- if (Result<>0) then Exit;
- //2 cformat
- Result:=Integer(a^.cformat>b^.cformat)-Integer(a^.cformat<b^.cformat);
- if (Result<>0) then Exit;
- //3 params
- Result:=CompareByte(a^.params,b^.params,SizeOf(TvImageKey.params));
+ Result:=CompareNormalized(a^,b^);
 end;
 
 function TvImageView2Compare.c(a,b:PvImageViewKey):Integer;
