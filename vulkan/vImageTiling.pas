@@ -760,18 +760,15 @@ end;
 procedure pm4_load_from(cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte);
 var
  cb:t_load_from_cb;
- ref_trigger:Ptruint;
- ref_planned:Ptruint;
+ change_rate:t_change_rate;
 begin
  if (cmd=nil) or (image=nil) then Exit;
 
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
 
- ref_trigger:=System.InterlockedExchangeAdd64(image.ref_trigger,0);
- ref_planned:=System.InterlockedExchangeAdd64(image.ref_planned,0);
+ change_rate:=image.get_change_rate;
 
- if (ref_trigger=0) and
-    (ref_planned=0) then Exit;
+ if not change_rate.need_read then Exit;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].load_from;
 
@@ -785,8 +782,9 @@ begin
 
  cb(cmd,image);
 
- System.InterlockedExchangeAdd64(image.ref_trigger,-ref_trigger);
- System.InterlockedExchangeAdd64(image.ref_planned,-ref_planned);
+ change_rate.mark_init;
+
+ image.apply_change_rate(change_rate);
 
  image.assign_vm_track;
 end;
@@ -808,6 +806,8 @@ begin
  cmd.EndRenderPass;
 
  cb(cmd,image);
+
+ image.mark_init;
 
  image.assign_vm_track;
 

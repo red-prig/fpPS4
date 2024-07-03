@@ -54,6 +54,14 @@ type
 
  TvImageView2Set=specialize T23treeSet<PvImageViewKey,TvImageView2Compare>;
 
+ t_change_rate=object
+  state  :Integer;
+  trigger:Integer;
+  planned:Integer;
+  procedure mark_init;
+  function  need_read:Boolean;
+ end;
+
  TvCustomImage2=class(TvCustomImage)
   //
   key :TvImageKey;
@@ -61,8 +69,7 @@ type
   size:Ptruint;
   tobj:p_vm_track_object;
   //
-  ref_trigger:Ptruint;
-  ref_planned:Ptruint;
+  change_rate:t_change_rate;
   //
   Parent     :TvCustomImage2;
   DepthOnly  :TvCustomImage2;
@@ -70,9 +77,11 @@ type
   //
   lock:Pointer;
   //
-  Constructor Create;
   Destructor  Destroy; override;
   procedure   assign_vm_track; virtual;
+  procedure   mark_init;
+  function    get_change_rate:t_change_rate;
+  procedure   apply_change_rate(r:t_change_rate);
   Function    GetSubresRange:TVkImageSubresourceRange;  virtual;
   Function    GetSubresLayer:TVkImageSubresourceLayers; virtual;
   function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; virtual; abstract;
@@ -205,7 +214,7 @@ end;
 function on_trigger(handle:Pointer;mode:Integer):Integer; SysV_ABI_CDecl;
 var
  image:TvCustomImage2;
- i:Ptruint;
+ i:Integer;
 begin
  Result:=DO_NOTHING;
 
@@ -216,18 +225,18 @@ begin
  case mode of
   0://direct
     begin
-     System.InterlockedIncrement64(image.ref_trigger);
+     System.InterlockedIncrement(image.change_rate.trigger);
     end;
   1://planned
     begin
-     System.InterlockedIncrement64(image.ref_planned);
+     System.InterlockedIncrement(image.change_rate.planned);
     end;
   2://differed
     begin
-     i:=System.InterlockedExchangeAdd64(image.ref_planned,0);
+     i:=System.InterlockedExchangeAdd(image.change_rate.planned,0);
 
-     System.InterlockedExchangeAdd64(image.ref_trigger,+i);
-     System.InterlockedExchangeAdd64(image.ref_planned,-i);
+     System.InterlockedExchangeAdd(image.change_rate.trigger,+i);
+     System.InterlockedExchangeAdd(image.change_rate.planned,-i);
     end;
   else;
  end;
@@ -236,12 +245,6 @@ begin
 end;
 
 //
-
-Constructor TvCustomImage2.Create;
-begin
- inherited;
- ref_trigger:=1;
-end;
 
 Destructor TvCustomImage2.Destroy;
 begin
@@ -278,6 +281,35 @@ begin
  end;
 
  rw_wunlock(lock)
+end;
+
+procedure t_change_rate.mark_init;
+begin
+ state:=1;
+end;
+
+function t_change_rate.need_read:Boolean;
+begin
+ Result:=(state=0) or (trigger<>0) or (planned<>0);
+end;
+
+procedure TvCustomImage2.mark_init;
+begin
+ System.InterlockedExchange(change_rate.state,1);
+end;
+
+function TvCustomImage2.get_change_rate:t_change_rate;
+begin
+ Result.state  :=System.InterlockedExchangeAdd(change_rate.state  ,0);
+ Result.trigger:=System.InterlockedExchangeAdd(change_rate.trigger,0);
+ Result.planned:=System.InterlockedExchangeAdd(change_rate.planned,0);
+end;
+
+procedure TvCustomImage2.apply_change_rate(r:t_change_rate);
+begin
+ System.InterlockedExchange   (change_rate.state  ,   r.state);
+ System.InterlockedExchangeAdd(change_rate.trigger,-r.trigger);
+ System.InterlockedExchangeAdd(change_rate.planned,-r.planned);
 end;
 
 Function TvCustomImage2.GetSubresRange:TVkImageSubresourceRange;

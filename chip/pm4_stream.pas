@@ -158,6 +158,8 @@ type
   rsize :DWORD;
   rkey  :TvImageKey;
   //
+  rwriteback:Boolean;
+  //
   function c(n1,n2:p_pm4_resource):Integer; static;
  end;
 

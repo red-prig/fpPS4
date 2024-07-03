@@ -504,6 +504,8 @@ begin
  end;
 end;
 
+procedure pm4_Writeback_Finish(var ctx:t_me_render_context); forward;
+
 //
 procedure t_me_render_context.FinishCmdBuffer;
 var
@@ -512,6 +514,8 @@ var
  r:TVkResult;
 begin
  if (Cmd=nil) then Exit;
+
+ pm4_Writeback_Finish(Self);
 
  r:=Cmd.QueueSubmit;
 
@@ -1169,11 +1173,15 @@ begin
 
 end;
 
-procedure pm4_Writeback(var ctx:t_me_render_context);
+procedure pm4_Writeback_After(var ctx:t_me_render_context);
 var
  i:Integer;
 
  ri:TvImage2;
+ rd:TvCustomImage2;
+ rs:TvCustomImage2;
+
+ resource_instance:p_pm4_resource_instance;
 begin
  //write back
 
@@ -1181,14 +1189,28 @@ begin
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   if (ctx.rt_info^.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
-
    ri:=FetchImage(ctx.Cmd,
                   ctx.rt_info^.RT_INFO[i].FImageInfo,
                   [iu_attachment]
                   //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
-   pm4_write_back(ctx.Cmd,ri);
+   ri.mark_init;
+
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
+   Assert(resource_instance<>nil);
+
+   if (resource_instance^.next_overlap.mem_usage<>0) then
+   begin
+    pm4_write_back(ctx.Cmd,ri);
+    //
+    resource_instance^.resource^.rwriteback:=False;
+   end else
+   begin
+    //
+    resource_instance^.resource^.rwriteback:=True;
+   end;
+
   end;
 
  if ctx.rt_info^.DB_ENABLE then
@@ -1200,10 +1222,92 @@ begin
                  //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
-  pm4_write_back(ctx.Cmd,ri.DepthOnly  );
-  pm4_write_back(ctx.Cmd,ri.StencilOnly);
+  rd:=ri.DepthOnly;
+  rs:=ri.StencilOnly;
+
+  if (rd<>nil) then
+  begin
+   rd.mark_init;
+
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(rd.key);
+   Assert(resource_instance<>nil);
+
+   if (resource_instance^.next_overlap.mem_usage<>0) then
+   begin
+    pm4_write_back(ctx.Cmd,rd);
+    //
+    resource_instance^.resource^.rwriteback:=False;
+   end else
+   begin
+    //
+    resource_instance^.resource^.rwriteback:=True;
+   end;
+
+  end;
+
+
+
+  if (rs<>nil) then
+  begin
+   rs.mark_init;
+
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(rs.key);
+   Assert(resource_instance<>nil);
+
+   if (resource_instance^.next_overlap.mem_usage<>0) then
+   begin
+    pm4_write_back(ctx.Cmd,rs);
+    //
+    resource_instance^.resource^.rwriteback:=False;
+   end else
+   begin
+    //
+    resource_instance^.resource^.rwriteback:=True;
+   end;
+
+  end;
 
   //
+ end;
+
+ //write back
+end;
+
+procedure pm4_Writeback_Finish(var ctx:t_me_render_context);
+var
+ i:Integer;
+
+ ri:TvImage2;
+
+ resource:p_pm4_resource;
+begin
+ if (ctx.stream=nil) then Exit;
+
+ //write back
+
+ resource:=ctx.stream^.resource_set.Min;
+
+ while (resource<>nil) do
+ begin
+
+  if resource^.rwriteback then
+  begin
+
+   if (resource^.rtype=R_IMG) then
+   begin
+
+    ri:=FetchImage(ctx.Cmd,
+                   resource^.rkey,
+                   []);
+    //
+    pm4_write_back(ctx.Cmd,ri);
+    //
+    resource^.rwriteback:=False;
+   end;
+
+  end;
+
+  resource:=ctx.stream^.resource_set.Next(resource);
  end;
 
  //write back
@@ -1250,7 +1354,7 @@ begin
 
  /////////
 
- pm4_Writeback(ctx);
+ pm4_Writeback_After(ctx);
 
 end;
 
