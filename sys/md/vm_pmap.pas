@@ -179,11 +179,11 @@ begin
  end;
 end;
 
-procedure dev_mem_init(pages:Integer);
+procedure dev_mem_init;
 var
  r:Integer;
 begin
- DEV_INFO.DEV_SIZE:=pages*PAGE_SIZE;
+ DEV_INFO.DEV_SIZE:=VM_MAX_DEV_ADDRESS-VM_MIN_DEV_ADDRESS;
 
  R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
@@ -194,11 +194,20 @@ begin
 
  DEV_INFO.DEV_FD.maxp:=VM_RW;
 
- DEV_INFO.DEV_PTR:=nil;
+ DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS);
  r:=md_reserve_ex(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
  if (r<>0) then
  begin
   Writeln('failed md_reserve(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert(false,'dev_mem_init');
+ end;
+
+ DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS); //force
+
+ r:=md_split(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
+ if (r<>0) then
+ begin
+  Writeln('failed md_split(',HexStr(DEV_INFO.DEV_PTR),',',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert(false,'dev_mem_init');
  end;
 
@@ -288,7 +297,7 @@ begin
  Assert(r=0,'pmap_pinit');
 
  dmem_init;
- dev_mem_init(4);
+ dev_mem_init;
 
  if (PAGE_PROT=nil) then
  begin
@@ -404,78 +413,73 @@ end;
 procedure get_dmem_fd(var info:t_fd_info);
 var
  base:Pointer;
+ BLK_SIZE:QWORD;
+ MEM_SIZE:QWORD;
  o:QWORD;
  e:QWORD;
- d:QWORD;
  i:DWORD;
  r:DWORD;
 begin
  o:=info.offset;
 
- //current block id
- i:=o shr PMAPP_BLK_SHIFT;
+ //get mem size
+ MEM_SIZE:=(info.__end-info.start);
 
- if (DMEM_FD[i].hfile=0) then
+ if (o>=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS)) then
  begin
-  R:=md_memfd_create(DMEM_FD[i].hfile,PMAPP_BLK_SIZE,VM_RW);
+  //dev
+  BLK_SIZE:=DEV_INFO.DEV_SIZE;
 
-  DMEM_FD[i].maxp:=VM_RW;
+  info.obj:=@DEV_INFO.DEV_FD;
+ end else
+ begin
+  //dmem
+  BLK_SIZE:=PMAPP_BLK_SIZE;
 
-  if (r<>0) then
+  //current block id
+  i:=o shr PMAPP_BLK_SHIFT;
+
+  if (DMEM_FD[i].hfile=0) then
   begin
-   Writeln('failed md_memfd_create(',HexStr(PMAPP_BLK_SIZE,11),'):0x',HexStr(r,8));
-   Assert(false,'get_dmem_fd');
+   R:=md_memfd_create(DMEM_FD[i].hfile,BLK_SIZE,VM_RW);
+
+   DMEM_FD[i].maxp:=VM_RW;
+
+   if (r<>0) then
+   begin
+    Writeln('failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
+    Assert(false,'get_dmem_fd');
+   end;
+
+   //dmem mirror
+   base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
+   r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,BLK_SIZE,VM_RW);
+   if (r<>0) then
+   begin
+    Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+BLK_SIZE),'):0x',HexStr(r,8));
+    Assert(false,'get_dmem_fd');
+   end;
   end;
 
-  //dmem mirror
-  base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
-  r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,PMAPP_BLK_SIZE,VM_RW);
-  if (r<>0) then
-  begin
-   Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+PMAPP_BLK_SIZE),'):0x',HexStr(r,8));
-   Assert(false,'get_dmem_fd');
-  end;
+  info.obj:=@DMEM_FD[i];
  end;
-
- info.obj:=@DMEM_FD[i];
 
  vm_nt_file_obj_reference(info.obj);
 
  //current block offset
  o:=o and PMAPP_BLK_MASK;
 
- //mem size
- d:=info.__end-info.start;
-
  //max offset
- e:=o+d;
+ e:=o+MEM_SIZE;
 
  // |start         end|
  // |offset  |max
- if (e>PMAPP_BLK_SIZE) then
+ if (e>BLK_SIZE) then
  begin
-  e:=PMAPP_BLK_SIZE-o;
+  e:=BLK_SIZE-o;
   e:=e+info.start;
   info.__end:=e;
  end;
-end;
-
-procedure get_dev_fd(ptr:Pointer;var info:t_fd_info);
-var
- o:QWORD;
-begin
- o:=QWORD(ptr)-QWORD(DEV_INFO.DEV_PTR);
-
- if (o>DEV_INFO.DEV_SIZE) then
- begin
-  Assert(false,'get_dev_fd wrong');
-  Exit();
- end;
-
- info.offset:=info.offset+o;
- info.obj:=@DEV_INFO.DEV_FD;
-
- vm_nt_file_obj_reference(info.obj);
 end;
 
 {
@@ -747,6 +751,9 @@ begin
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
+      //transform by base addr
+      offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
       if (p_print_pmap) then
       begin
        Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
@@ -793,36 +800,7 @@ begin
 
      end else
      begin
-      if (p_print_pmap) then
-      begin
-       Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
-      end;
-
-      info.start:=start;
-      info.__end:=__end;
-      info.offset:=offset;
-
-      get_dev_fd(obj^.un_pager.map_base,info);
-
-      delta:=(info.__end-info.start);
-
-      vm_map_lock(pmap^.vm_map);
-
-      r:=vm_nt_map_insert(@pmap^.nt_map,
-                          info.obj,
-                          info.offset, //one block for all dev
-                          info.start,
-                          info.__end,
-                          delta,
-                          (prot and VM_RW));
-
-      vm_map_unlock(pmap^.vm_map,False);
-
-      if (r<>0) then
-      begin
-       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-       Assert(false,'pmap_enter_object');
-      end;
+      Assert(false,'non dmem OBJT_DEVICE');
      end;
 
     end;

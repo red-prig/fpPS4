@@ -140,8 +140,8 @@ procedure init_dmem_map;
 var
  vmap:vm_map_t;
 begin
- dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
- rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
+ dmem_map_init(@dmem,0,{SCE_KERNEL_MAIN_DMEM_SIZE} (VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) );
+ rmem_map_init(@rmap,0,{SCE_KERNEL_MAIN_DMEM_SIZE} (VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) );
 
  vmap:=p_proc.p_vmspace;
 
@@ -854,7 +854,12 @@ begin
 
   if Result then
   begin
-   offset:=entry^.offset+(addr-entry^.start);
+   offset:=entry^.offset;
+
+   //transform by base addr
+   offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
+   offset:=offset+(addr-entry^.start);
 
    if (p_offset<>nil) then
    begin

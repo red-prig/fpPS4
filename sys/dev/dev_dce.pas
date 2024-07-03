@@ -1093,7 +1093,7 @@ begin
 
  offset:=(foff and $1fffff) { or (uVar1 and $fffffffe00000)};
 
- paddr^:=DWORD(offset) {+ };
+ paddr^:=DWORD(offset) + (QWORD(dce_page)-VM_MIN_GPU_ADDRESS);
 end;
 
 Function dce_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;pobj:p_vm_object_t;nprot:Integer):Integer;
@@ -1125,6 +1125,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
+ obj^.flags:=obj^.flags or OBJ_DMEM_EXT;
  obj^.un_pager.map_base:=dce_page;
 
  if (obj=nil) then

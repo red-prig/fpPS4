@@ -178,9 +178,9 @@ type
 
   Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 
-  //Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+  Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
-  Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD);
+  Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD;isBlocking:Boolean);
 
   Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
   Procedure   DrawIndex2(IndexBase:Pointer;indexCount:DWORD);
@@ -1154,7 +1154,6 @@ Const
   ord(VK_ACCESS_MEMORY_READ_BIT                   ) or
   ord(VK_ACCESS_MEMORY_WRITE_BIT                  );
 
-{
 Procedure TvCmdBuffer.dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
 var
  srcb,dstb:TvHostBuffer;
@@ -1173,47 +1172,37 @@ begin
  srcb:=FetchHostBuffer(Self,QWORD(src),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
  Assert(srcb<>nil);
 
- if (srcb.Foffset+byteCount>srcb.FSize) then
- begin
-  Assert(False,'FetchHostBuffer:Insufficient buffer size!');
- end;
-
- dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
 
- if (dstb.Foffset+byteCount>dstb.FSize) then
- begin
-  Assert(False,'FetchHostBuffer:Insufficient buffer size!');
- end;
-
- Inc(cmd_count);
-
- vkBufferMemoryBarrier(cmdbuf,
-                       srcb.FHandle,
-                       VK_ACCESS_ANY,
-                       ord(VK_ACCESS_TRANSFER_READ_BIT),
-                       srcb.Foffset,byteCount,
-                       ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
-                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
- Inc(cmd_count);
-
- vkBufferMemoryBarrier(cmdbuf,
-                       dstb.FHandle,
-                       VK_ACCESS_ANY,
-                       ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                       dstb.Foffset,byteCount,
-                       ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
-                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-
  info:=Default(TVkBufferCopy);
- info.srcOffset:=srcb.Foffset;
- info.dstOffset:=dstb.Foffset;
+ info.srcOffset:=QWORD(src)-srcb.FAddr;
+ info.dstOffset:=QWORD(dst)-dstb.FAddr;
  info.size     :=byteCount;
 
  Inc(cmd_count);
 
- vkCmdCopyBuffer(cmdbuf,
+ vkBufferMemoryBarrier(FCmdbuf,
+                       srcb.FHandle,
+                       VK_ACCESS_ANY,
+                       ord(VK_ACCESS_TRANSFER_READ_BIT),
+                       info.srcOffset,byteCount,
+                       ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
+                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ Inc(cmd_count);
+
+ vkBufferMemoryBarrier(FCmdbuf,
+                       dstb.FHandle,
+                       VK_ACCESS_ANY,
+                       ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                       info.dstOffset,byteCount,
+                       ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
+                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ Inc(cmd_count);
+
+ vkCmdCopyBuffer(FCmdbuf,
                  srcb.FHandle,
                  dstb.FHandle,
                  1,@info);
@@ -1221,12 +1210,18 @@ begin
  if isBlocking then
  begin
   Inc(cmd_count);
-  vkBarrier(cmdbuf,
-            ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
+
+  vkMemoryBarrier(FCmdbuf,
+                  ord(VK_ACCESS_TRANSFER_WRITE_BIT),        //srcAccessMask
+                  VK_ACCESS_ANY,                            //dstAccessMask
+  	          ord(VK_PIPELINE_STAGE_TRANSFER_BIT),      //srcStageMask
+  	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
+
+ AddPlannedTrigger(QWORD(dst),QWORD(dst)+byteCount,nil);
 end;
 
+{
 Procedure TvCmdBuffer.dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
 var
  dstb:TvHostBuffer;
@@ -1266,9 +1261,12 @@ begin
  if isBlocking then
  begin
   Inc(cmd_count);
-  vkBarrier(cmdbuf,
-            ord(VK_PIPELINE_STAGE_TRANSFER_BIT),
-            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));
+
+  vkMemoryBarrier(FCmdbuf,
+                  ord(VK_ACCESS_TRANSFER_WRITE_BIT),        //srcAccessMask
+                  VK_ACCESS_ANY,                            //dstAccessMask
+  	          ord(VK_PIPELINE_STAGE_TRANSFER_BIT),      //srcStageMask
+  	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
 end;
 }
@@ -1283,7 +1281,7 @@ const
   ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT ) or
   ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
-Procedure TvCmdBuffer.WriteEos(eventType:Byte;dst:Pointer;value:DWORD);
+Procedure TvCmdBuffer.WriteEos(eventType:Byte;dst:Pointer;value:DWORD;isBlocking:Boolean);
 var
  rb:TvHostBuffer;
  BufOffset:TVkDeviceSize;
@@ -1333,6 +1331,18 @@ begin
                  BufOffset,
                  4,value);
 
+ if isBlocking then
+ begin
+  Inc(cmd_count);
+
+  vkMemoryBarrier(FCmdbuf,
+                  ord(VK_ACCESS_TRANSFER_WRITE_BIT),        //srcAccessMask
+                  VK_ACCESS_ANY,                            //dstAccessMask
+  	          ord(VK_PIPELINE_STAGE_TRANSFER_BIT),      //srcStageMask
+  	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
+ end;
+
+ AddPlannedTrigger(QWORD(dst),QWORD(dst)+4,nil);
 end;
 
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;

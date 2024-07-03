@@ -7,6 +7,7 @@ interface
 uses
  sysutils,
  mqueue,
+ vmparam,
  Vulkan,
  vDevice,
  vDependence;
@@ -187,6 +188,17 @@ function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 begin
  Result:=addr-(addr mod alignment);
 end;
+
+function Max(a,b:Ptruint):Ptruint; inline;
+begin
+ if (a>b) then Result:=a else Result:=b;
+end;
+
+function Min(a,b:Ptruint):Ptruint; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
 
 //
 
@@ -1667,8 +1679,8 @@ begin
 
  if (node=nil) then
  begin
-  FStart_align:=AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE);
-  F__End_align:=AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE);
+  FStart_align:=Max(AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE),VM_MIN_GPU_ADDRESS);
+  F__End_align:=Min(AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE),VM_MAX_GPU_ADDRESS);
 
   _retry:
 

@@ -882,6 +882,9 @@ begin
  rmap:=map^.rmap;
  length:=__end-start;
 
+ //transform by base addr
+ offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
  rmem_map_lock(rmap);
 
  if not alias then
@@ -909,6 +912,9 @@ var
 begin
  rmap:=map^.rmap;
  length:=__end-start;
+
+ //transform by base addr
+ offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
 
  rmem_map_lock(rmap);
 
@@ -3364,6 +3370,10 @@ begin
      size:=e___end-e_start;
 
      offset:=entry^.offset;
+
+     //transform by base addr
+     offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
      offset:=offset+diff;
 
      //Writeln('rmem_map_track:  ',HexStr(e_start,16),'..',HexStr(e___end,16));

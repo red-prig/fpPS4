@@ -25,6 +25,7 @@ type
  p_pm4_ibuffer=^t_pm4_ibuffer;
  t_pm4_ibuffer=record
   next:TAILQ_ENTRY;
+  base:Pointer;
   buff:Pointer;
   size:Ptruint;
   bpos:Ptruint;
@@ -46,6 +47,8 @@ type
   CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
   UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
   //
+  curr_ibuf :p_pm4_ibuffer;
+  //
   print_ops :Boolean;
   print_hint:Boolean;
   LastSetReg:Word;
@@ -66,10 +69,10 @@ type
  end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
-                      buff:Pointer;
-                      size:Ptruint;
-                       icb:t_pm4_parse_cb;
-                      buft:t_pm4_stream_type):Boolean;
+                       buff:Pointer;
+                       size:Ptruint;
+                        icb:t_pm4_parse_cb;
+                       buft:t_pm4_stream_type):Boolean;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         buf:PPM4CMDINDIRECTBUFFER;
@@ -84,7 +87,9 @@ function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 implementation
 
 uses
- kern_dmem;
+ kern_dmem,
+ kern_proc,
+ vm_map;
 
 function PM4_TYPE(token:DWORD):Byte; inline;
 begin
@@ -104,6 +109,7 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
 begin
  Result:=True;
  ibuf^.next:=Default(TAILQ_ENTRY);
+ ibuf^.base:=nil;
  ibuf^.buff:=buff;
  ibuf^.size:=size;
  ibuf^.bpos:=0;
@@ -147,6 +153,7 @@ begin
    //Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
 
    ibuf^.next:=Default(TAILQ_ENTRY);
+   ibuf^.base:=Pointer(ib_base);
    ibuf^.buff:=addr;
    ibuf^.size:=ib_size;
    ibuf^.bpos:=0;
@@ -170,6 +177,7 @@ begin
  Result:=0;
 
  pctx^.LastSetReg:=0;
+ pctx^.curr_ibuf :=ibuf;
 
  i:=ibuf^.bpos;
  buff:=ibuf^.buff+i;
@@ -204,6 +212,8 @@ begin
  end;
 
  ibuf^.bpos:=ibuf^.size-i;
+
+ pctx^.curr_ibuf:=nil;
 end;
 
 procedure t_pfp_ctx.init;
@@ -867,9 +877,6 @@ end;
 ///
 
 procedure onLoadConstRam(pctx:p_pfp_ctx;Body:PPM4CMDCONSTRAMLOAD);
-var
- addr:Pointer;
- size:QWORD;
 begin
  {
  Writeln(' adr=0x',HexStr(Body^.addr,16));
@@ -877,16 +884,7 @@ begin
  Writeln(' ofs=0x',HexStr(Body^.offset,4));
  }
 
- addr:=nil;
- size:=0;
-
- if get_dmem_ptr(Pointer(Body^.addr),@addr,@size) then
- begin
-  pctx^.stream[stGfxCcb].LoadConstRam(addr,Body^.numDwords,Body^.offset);
- end else
- begin
-  Assert(false,'addr:0x'+HexStr(Body^.addr,16)+' not in dmem!');
- end;
+ pctx^.stream[stGfxCcb].LoadConstRam(Pointer(Body^.addr),Body^.numDwords,Body^.offset);
 end;
 
 const
@@ -953,8 +951,6 @@ begin
 end;
 
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
-var
- addr:Pointer;
 begin
  Case Body^.eventType of
   kEopFlushCbDbCaches:;
@@ -985,27 +981,12 @@ begin
 
  if (Body^.destTcL2<>0) then Exit; //write to L2
 
- addr:=nil;
-
- if (Body^.dataSel in [1..4]) then
- begin
-  if get_dmem_ptr(Pointer(Body^.address),@addr,nil) then
-  begin
-   //
-  end else
-  begin
-   Assert(false,'addr:0x'+HexStr(Body^.address,16)+' not in dmem!');
-  end;
- end;
-
- pctx^.stream[stGfxDcb].EventWriteEop(addr,Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
+ pctx^.stream[stGfxDcb].EventWriteEop(Pointer(Body^.address),Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
  pctx^.Flush_stream(stGfxDcb);
 end;
 
 procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
-var
- addr:Pointer;
 begin
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
@@ -1023,14 +1004,15 @@ begin
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
- addr:=Pointer(Body^.address);
-
- pctx^.stream[stGfxDcb].EventWriteEos(addr,Body^.data,Body^.eventType,Body^.command);
+ pctx^.stream[stGfxDcb].EventWriteEos(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.command);
 end;
 
 procedure onDmaData(pctx:p_pfp_ctx;Body:PPM4DMADATA);
 var
- adrSrc,adrDst:QWORD;
+ adrSrc:QWORD;
+ adrDst:QWORD;
+ adrSrc_dmem:QWORD;
+ adrDst_dmem:QWORD;
  byteCount:DWORD;
  srcSel,dstSel:Byte;
 begin
@@ -1061,7 +1043,7 @@ begin
    begin
     //Execute on the parser side
 
-    if not get_dmem_ptr(Pointer(adrDst),@adrDst,nil) then
+    if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
     begin
      Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
     end;
@@ -1072,17 +1054,21 @@ begin
      (kDmaDataSrcMemory        or (kDmaDataDstMemoryUsingL2 shl 4)),
      (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
-        if not get_dmem_ptr(Pointer(adrSrc),@adrSrc,nil) then
+        if not get_dmem_ptr(Pointer(adrSrc),@adrSrc_dmem,nil) then
         begin
          Assert(false,'addr:0x'+HexStr(Pointer(adrSrc))+' not in dmem!');
         end;
 
-        Move(Pointer(adrSrc)^,Pointer(adrDst)^,byteCount);
+        Move(Pointer(adrSrc_dmem)^,Pointer(adrDst_dmem)^,byteCount);
+
+        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,0);
        end;
      (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
-        FillDWORD(Pointer(adrDst)^,(byteCount div 4),DWORD(adrSrc));
+        FillDWORD(Pointer(adrDst_dmem)^,(byteCount div 4),DWORD(adrSrc));
+
+        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,0);
        end;
     else
        Assert(false,'DmaData: srcSel=0x'+HexStr(srcSel,1)+' dstSel=0x'+HexStr(dstSel,1));
@@ -1097,7 +1083,10 @@ end;
 
 procedure onWriteData(pctx:p_pfp_ctx;Body:PPM4CMDWRITEDATA);
 var
- addr:PDWORD;
+ src:PDWORD;
+ dst:PDWORD;
+ src_dmem:PDWORD;
+ dst_dmem:PDWORD;
  count:Word;
  engineSel:Byte;
  dstSel:Byte;
@@ -1110,7 +1099,8 @@ begin
 
  count:=count-2;
 
- addr:=Pointer(Body^.dstAddr);
+ dst:=Pointer(Body^.dstAddr);
+ src_dmem:=@Body^.DATA;
 
  engineSel:=Body^.CONTROL.engineSel;
  dstSel   :=Body^.CONTROL.dstSel;
@@ -1118,7 +1108,14 @@ begin
  Case engineSel of
   WRITE_DATA_ENGINE_ME:
     begin
-     pctx^.stream[stGfxDcb].WriteData(dstSel,QWORD(addr),@Body^.DATA,count,Body^.CONTROL.wrConfirm);
+     //convert src_dmem -> src
+
+     with pctx^.curr_ibuf^ do
+     begin
+      src:=base+(QWORD(src_dmem)-QWORD(buff));
+     end;
+
+     pctx^.stream[stGfxDcb].WriteData(dstSel,dst,src,count,Body^.CONTROL.wrConfirm);
     end;
   WRITE_DATA_ENGINE_PFP:
     begin
@@ -1128,7 +1125,14 @@ begin
       WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
       WRITE_DATA_DST_SEL_MEMORY_ASYNC:
         begin
-         Move(Body^.DATA,addr^,count*SizeOf(DWORD));
+         if not get_dmem_ptr(dst,@dst_dmem,nil) then
+         begin
+          Assert(false,'addr:0x'+HexStr(dst)+' not in dmem!');
+         end;
+
+         Move(src_dmem^,dst_dmem^,count*SizeOf(DWORD));
+
+         vm_map_track_trigger(p_proc.p_vmspace,QWORD(dst),QWORD(dst)+count*SizeOf(DWORD),nil,0);
         end;
       else
         Assert(false,'WriteData: dstSel=0x'+HexStr(dstSel,1));
@@ -1142,8 +1146,6 @@ begin
 end;
 
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
-var
- addr:Pointer;
 begin
 
  Case Body^.memSpace of
@@ -1155,14 +1157,7 @@ begin
  Case Body^.engine of
   WAIT_REG_MEM_ENGINE_ME:
     begin
-     addr:=Pointer(Body^.pollAddress);
-
-     if not get_dmem_ptr(addr,@addr,nil) then
-     begin
-      //Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
-     end;
-
-     pctx^.stream[stGfxDcb].WaitRegMem(QWORD(addr),Body^.reference,Body^.mask,Body^.compareFunc);
+     pctx^.stream[stGfxDcb].WaitRegMem(Pointer(Body^.pollAddress),Body^.reference,Body^.mask,Body^.compareFunc);
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin

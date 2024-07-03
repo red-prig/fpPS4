@@ -509,6 +509,7 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,nprot,offset^);
+ obj^.flags:=obj^.flags or OBJ_DMEM_EXT;
  obj^.un_pager.map_base:=gc_page;
 
  if (obj=nil) then
@@ -533,7 +534,7 @@ begin
   Exit(EPERM);
  end;
 
- paddr^:=offset {+ };
+ paddr^:=offset + (QWORD(gc_page)-VM_MIN_GPU_ADDRESS);
  memattr^:=0;
 
  Result:=0;

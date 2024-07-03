@@ -262,17 +262,16 @@ type
 
  p_pm4_node_WriteData=^t_pm4_node_WriteData;
  t_pm4_node_WriteData=packed object(t_pm4_node)
-  dst      :QWORD;
+  dst      :Pointer;
   src      :Pointer;
   num_dw   :Word;
   dstSel   :Byte;
   wrConfirm:Boolean;
-  mark     :Boolean;
  end;
 
  p_pm4_node_WaitRegMem=^t_pm4_node_WaitRegMem;
  t_pm4_node_WaitRegMem=packed object(t_pm4_node)
-  pollAddr    :QWORD;
+  pollAddr    :Pointer;
   refValue    :DWORD;
   mask        :DWORD;
   compareFunc :Byte;
@@ -322,6 +321,8 @@ type
   //
   buft:t_pm4_stream_type;
   //
+  init:Boolean;
+  //
   curr:p_pm4_node;
   //
   refs:Ptruint;
@@ -340,8 +341,8 @@ type
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
   procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
-  procedure WriteData    (dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word;wrConfirm:Byte);
-  procedure WaitRegMem   (pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
+  procedure WriteData    (dstSel:Byte;dst,src:Pointer;num_dw:Word;wrConfirm:Byte);
+  procedure WaitRegMem   (pollAddr:Pointer;refValue,mask:DWORD;compareFunc:Byte);
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
@@ -819,27 +820,30 @@ begin
  add_node(node);
 end;
 
-procedure t_pm4_stream.WriteData(dstSel:Byte;dst:QWORD;src:Pointer;num_dw:Word;wrConfirm:Byte);
+procedure t_pm4_stream.WriteData(dstSel:Byte;dst,src:Pointer;num_dw:Word;wrConfirm:Byte);
 var
  node:p_pm4_node_WriteData;
 begin
- node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData)+num_dw*SizeOf(DWORD));
+ //Can I copy the link?
+ //Or do I have to copy the data?
+
+ node:=allocator.Alloc(SizeOf(t_pm4_node_WriteData){+num_dw*SizeOf(DWORD)});
 
  node^.ntype    :=ntWriteData;
  node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.dst      :=dst;
- node^.src      :=Pointer(node+1);
+ //node^.src      :=Pointer(node+1);
+ node^.src      :=src;
  node^.num_dw   :=num_dw;
  node^.dstSel   :=dstSel;
  node^.wrConfirm:=(wrConfirm<>0);
- node^.mark     :=True;
 
- Move(src^,node^.src^,num_dw*SizeOf(DWORD));
+ //Move(src^,node^.src^,num_dw*SizeOf(DWORD));
 
  add_node(node);
 end;
 
-procedure t_pm4_stream.WaitRegMem(pollAddr:QWORD;refValue,mask:DWORD;compareFunc:Byte);
+procedure t_pm4_stream.WaitRegMem(pollAddr:Pointer;refValue,mask:DWORD;compareFunc:Byte);
 var
  node:p_pm4_node_WaitRegMem;
 begin

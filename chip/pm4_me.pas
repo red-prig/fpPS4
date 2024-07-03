@@ -10,9 +10,9 @@ uses
  mqueue,
  LFQueue,
 
- md_sleep,
+ si_ci_vi_merged_enum,
 
- vm_tracking_map,
+ md_sleep,
 
  Vulkan,
  vDevice,
@@ -130,7 +130,7 @@ type
   procedure BeginCmdBuffer;
   procedure FinishCmdBuffer;
   function  CmdStatus(i:t_pm4_stream_type):TVkResult;
-  function  CmdStatusCurrent:Boolean;
+  function  WaitConfirmOrSwitch:Boolean;
   //
   procedure switch_task;
   procedure next_task;
@@ -143,7 +143,10 @@ var
 implementation
 
 uses
- kern_dmem;
+ vmparam,
+ kern_dmem,
+ kern_proc,
+ vm_map;
 
 procedure StartFrameCapture;
 begin
@@ -484,6 +487,23 @@ begin
  stream^.Acquire; //TvStreamCmdBuffer
 end;
 
+procedure free_cmd_buffer(cmd:TvStreamCmdBuffer);
+var
+ stream:p_pm4_stream;
+begin
+ stream:=cmd.stream;
+
+ //
+ cmd.ReleaseResource;
+ cmd.Free;
+ //
+
+ if stream^.Release then //TvStreamCmdBuffer
+ begin
+  free_stream(stream);
+ end;
+end;
+
 //
 procedure t_me_render_context.FinishCmdBuffer;
 var
@@ -502,9 +522,27 @@ begin
   Assert(false,'QueueSubmit');
  end;
 
- buft:=Cmd.stream^.buft;
+ r:=Cmd.Status;
 
- TAILQ_INSERT_TAIL(@stall[buft],Cmd,@Cmd.entry);
+ case r of
+  VK_SUCCESS  :;
+  VK_NOT_READY:
+   begin
+    //insert
+
+    buft:=Cmd.stream^.buft;
+
+    TAILQ_INSERT_TAIL(@stall[buft],Cmd,@Cmd.entry);
+
+    Cmd:=nil;
+
+    Exit;
+   end;
+  else
+   Writeln(stderr,'last.Status=',r); //error
+ end;
+
+ free_cmd_buffer(Cmd);
 
  Cmd:=nil;
 end;
@@ -512,7 +550,6 @@ end;
 function t_me_render_context.CmdStatus(i:t_pm4_stream_type):TVkResult;
 var
  last:TvStreamCmdBuffer;
- cmd_stream:p_pm4_stream;
 begin
  last:=TvStreamCmdBuffer(TAILQ_FIRST(@stall[i]));
 
@@ -530,17 +567,7 @@ begin
 
   TAILQ_REMOVE(@stall[i],last,@last.entry);
 
-  cmd_stream:=last.stream;
-
-  //
-  last.ReleaseResource;
-  last.Free;
-  //
-
-  if cmd_stream^.Release then //TvStreamCmdBuffer
-  begin
-   free_stream(cmd_stream);
-  end;
+  free_cmd_buffer(last);
 
   last:=TvStreamCmdBuffer(TAILQ_FIRST(@stall[i]));
  end;
@@ -548,13 +575,18 @@ begin
  Result:=VK_SUCCESS;
 end;
 
-function t_me_render_context.CmdStatusCurrent:Boolean;
-var
- buft:t_pm4_stream_type;
+function t_me_render_context.WaitConfirmOrSwitch:Boolean;
 begin
- buft:=stream^.buft;
+ FinishCmdBuffer;
 
- Result:=(CmdStatus(buft)<>VK_NOT_READY);
+ if (stream=nil) then Exit(True);
+
+ Result:=(CmdStatus(stream^.buft)<>VK_NOT_READY);
+
+ if not Result then
+ begin
+  switch_task;
+ end;
 end;
 
 procedure t_me_render_context.switch_task;
@@ -763,10 +795,7 @@ var
 
  ri:TvImage2;
 begin
-
- StartFrameCapture;
-
- ctx.BeginCmdBuffer;
+ if ctx.stream^.init then Exit;
 
  i:=ctx.stream^.init_scope.first;
 
@@ -779,6 +808,15 @@ begin
 
   if (resource^.rtype=R_IMG) then
   begin
+
+   //start on demaind
+
+   StartFrameCapture;
+
+   ctx.BeginCmdBuffer;
+
+   //
+
    Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
 
    ri:=FetchImage(ctx.Cmd,
@@ -792,6 +830,7 @@ begin
   i:=TAILQ_NEXT(i,@i^.init_entry);
  end;
 
+ ctx.stream^.init:=True;
 end;
 
 
@@ -1172,6 +1211,10 @@ end;
 
 procedure pm4_Draw(var ctx:t_me_render_context;node:p_pm4_node_draw);
 begin
+ //
+ pm4_InitStream(ctx);
+ //
+
  ctx.rt_info:=@node^.rt_info;
 
  StartFrameCapture;
@@ -1258,6 +1301,10 @@ end;
 
 procedure pm4_DispatchDirect(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
 begin
+ //
+ pm4_InitStream(ctx);
+ //
+
  StartFrameCapture;
 
  ctx.BeginCmdBuffer;
@@ -1289,50 +1336,67 @@ const
 procedure pm4_EventWriteEop(var ctx:t_me_render_context;node:p_pm4_node_EventWriteEop);
 var
  curr,diff:QWORD;
+ addr_dmem:Pointer;
+ data_size:Byte;
 begin
 
- ctx.FinishCmdBuffer;
-
- if not ctx.CmdStatusCurrent then
- begin
-  ctx.switch_task;
-  Exit;
- end;
+ if not ctx.WaitConfirmOrSwitch then Exit;
 
  curr:=md_rdtsc_unit;
  diff:=curr-ctx.rel_time;
 
  if (node^.addr<>nil) then
- Case node^.dataSel of
-  //
-  EVENTWRITEEOP_DATA_SEL_DISCARD:;
-
-   //32bit data
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA32:
+ begin
+  if (node^.dataSel<>EVENTWRITEEOP_DATA_SEL_DISCARD) then
+  begin
+   if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
    begin
-    PDWORD(node^.addr)^:=node^.data;
+    Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
    end;
+  end;
 
-   //64bit data
-  EVENTWRITEEOP_DATA_SEL_SEND_DATA64:
-   begin
-    PQWORD(node^.addr)^:=node^.data;
-   end;
+  Case node^.dataSel of
+   //
+   EVENTWRITEEOP_DATA_SEL_DISCARD:
+    data_size:=0;
 
-    //system 100Mhz global clock. (relative time)
-  EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK:
-   begin
-    PQWORD(node^.addr)^:=mul_div_u64(GLOBAL_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
-   end;
+    //32bit data
+   EVENTWRITEEOP_DATA_SEL_SEND_DATA32:
+    begin
+     PDWORD(addr_dmem)^:=node^.data;
 
-    //GPU 800Mhz clock.           (relative time)
-  EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:
-   begin
-    PQWORD(node^.addr)^:=mul_div_u64(GPU_CORE_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
-   end;
+     data_size:=4;
+    end;
 
-  else
-   Assert(false,'pm4_EventWriteEop');
+    //64bit data
+   EVENTWRITEEOP_DATA_SEL_SEND_DATA64:
+    begin
+     PQWORD(addr_dmem)^:=node^.data;
+
+     data_size:=8;
+    end;
+
+     //system 100Mhz global clock. (relative time)
+   EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK:
+    begin
+     PQWORD(addr_dmem)^:=mul_div_u64(GLOBAL_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+
+     data_size:=8;
+    end;
+
+     //GPU 800Mhz clock.           (relative time)
+   EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:
+    begin
+     PQWORD(addr_dmem)^:=mul_div_u64(GPU_CORE_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+
+     data_size:=8;
+    end;
+
+   else
+    Assert(false,'pm4_EventWriteEop');
+  end;
+
+  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,0);
  end;
 
  if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
@@ -1349,13 +1413,7 @@ var
  curr:QWORD;
 begin
 
- ctx.FinishCmdBuffer;
-
- if not ctx.CmdStatusCurrent then
- begin
-  ctx.switch_task;
-  Exit;
- end;
+ if not ctx.WaitConfirmOrSwitch then Exit;
 
  if (ctx.me^.on_submit_flip_eop<>nil) then
  begin
@@ -1373,9 +1431,37 @@ begin
  ctx.on_idle;
 end;
 
+procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
+begin
+
+ Case node^.eventType of
+  //CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
+  //FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
+  //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
+  //FLUSH_AND_INV_DB_META      :Writeln(' eventType=FLUSH_AND_INV_DB_META');
+  //FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
+  //FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
+  THREAD_TRACE_MARKER:
+   begin
+    //
+   end;
+  PIPELINESTAT_STOP:
+   begin
+    //
+   end;
+  else
+   begin
+    Writeln(stderr,'EventWrite eventType=0x',HexStr(node^.eventType,2));
+    Assert(false,'EventWrite eventType=0x'+HexStr(node^.eventType,2));
+   end;
+
+ end;
+
+end;
+
 procedure pm4_EventWriteEos(var ctx:t_me_render_context;node:p_pm4_node_EventWriteEos);
 var
- Addr:Pointer;
+ addr_dmem:Pointer;
 begin
 
  if (node^.addr<>nil) then
@@ -1388,28 +1474,20 @@ begin
     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
     begin
      //GPU
-     ctx.Cmd.WriteEos(node^.eventType,node^.addr,node^.data);
+     ctx.Cmd.WriteEos(node^.eventType,node^.addr,node^.data,false);
     end else
     begin
      //soft
 
-     ctx.FinishCmdBuffer;
-
-     {
-     if not ctx.CmdStatusCurrent then
-     begin
-      ctx.switch_task;
-      Exit;
-     end;
-     }
-
-     Addr:=nil;
-     if not get_dmem_ptr(Pointer(node^.addr),@Addr,nil) then
+     addr_dmem:=nil;
+     if not get_dmem_ptr(Pointer(node^.addr),@addr_dmem,nil) then
      begin
       Assert(false,'addr:0x'+HexStr(Pointer(node^.addr))+' not in dmem!');
      end;
 
-     PDWORD(Addr)^:=node^.data;
+     PDWORD(addr_dmem)^:=node^.data;
+
+     vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+4,nil,0);
     end;
 
    end;
@@ -1423,47 +1501,62 @@ end;
 
 procedure pm4_WriteData(var ctx:t_me_render_context;node:p_pm4_node_WriteData);
 var
- addr:PDWORD;
+ src_dmem:PDWORD;
+ dst_dmem:PDWORD;
+ byteSize:QWORD;
 begin
 
- if node^.mark then
- begin
-  case node^.dstSel of
-   WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
-   WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
-   WRITE_DATA_DST_SEL_MEMORY_ASYNC:
-     if (node^.dst<>0) then
+ case node^.dstSel of
+  WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
+  WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
+  WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+    if (node^.dst<>nil) then
+    begin
+
+     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
      begin
-      //TODO: Move on GPU
-      addr:=Pointer(node^.dst);
-      Move(node^.src^,addr^,node^.num_dw*SizeOf(DWORD));
+      //GPU
+      byteSize:=node^.num_dw*SizeOf(DWORD);
+
+      ctx.Cmd.dmaData(node^.src,node^.dst,byteSize,node^.wrConfirm);
+     end else
+     begin
+      //soft
+
+      if not get_dmem_ptr(node^.src,@src_dmem,nil) then
+      begin
+       Assert(false,'addr:0x'+HexStr(node^.src)+' not in dmem!');
+      end;
+
+      if not get_dmem_ptr(node^.dst,@dst_dmem,nil) then
+      begin
+       Assert(false,'addr:0x'+HexStr(node^.dst)+' not in dmem!');
+      end;
+
+      byteSize:=node^.num_dw*SizeOf(DWORD);
+
+      Move(src_dmem^,dst_dmem^,byteSize);
+
+      vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.dst),QWORD(node^.dst)+byteSize,nil,0);
      end;
-   else
-     Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
-  end;
-
-  node^.mark:=False
- end;
-
- //wait after
- if node^.wrConfirm then
- begin
-  ctx.FinishCmdBuffer;
-
-  if not ctx.CmdStatusCurrent then
-  begin
-   ctx.switch_task;
-   Exit;
-  end;
+    end;
+  else
+    Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
  end;
 
 end;
 
 Function me_test_mem(node:p_pm4_node_WaitRegMem):Boolean;
 var
+ addr_dmem:Pointer;
  val,ref:DWORD;
 begin
- val:=PDWORD(node^.pollAddr)^ and node^.mask;
+ if not get_dmem_ptr(node^.pollAddr,@addr_dmem,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(node^.pollAddr)+' not in dmem!');
+ end;
+
+ val:=PDWORD(addr_dmem)^ and node^.mask;
  ref:=node^.refValue;
  Case node^.compareFunc of
   WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
@@ -1480,13 +1573,7 @@ end;
 
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
 begin
- ctx.FinishCmdBuffer;
-
- if not ctx.CmdStatusCurrent then
- begin
-  ctx.switch_task;
-  Exit;
- end;
+ if not ctx.WaitConfirmOrSwitch then Exit;
 
  if not me_test_mem(node) then
  begin
@@ -1548,8 +1635,6 @@ begin
    begin
     ctx.node:=ctx.stream^.First;
     ctx.stream^.curr:=ctx.node;
-    //
-    pm4_InitStream(ctx);
    end;
 
    while (ctx.node<>nil) do
@@ -1561,6 +1646,7 @@ begin
      ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
      ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));
      ntDispatchDirect:pm4_DispatchDirect(ctx,Pointer(ctx.node));
+     ntEventWrite    :pm4_EventWrite    (ctx,Pointer(ctx.node));
      ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
      ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
      ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));

@@ -1375,6 +1375,9 @@ begin
   Exit(EINVAL);
  end;
 
+ //transform by base addr
+ offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
  dmem_map_lock(map);
 
  if (dmem_map_lookup_entry(map, OFF_TO_IDX(offset), @entry)) then
