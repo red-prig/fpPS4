@@ -21,6 +21,8 @@ type
     BtnLogOpen: TButton;
     BtnDataOpen: TButton;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
+    Edt_BootparamInfo_print_gpu_ops: TCheckBox;
+    Edt_BootparamInfo_print_gpu_hint: TCheckBox;
     Edt_JITInfo_debug_info: TCheckBox;
     Edt_MiscInfo_strict_ps4_freq: TCheckBox;
     Edt_JITInfo_relative_analize: TCheckBox;

@@ -22,6 +22,9 @@ var
  p_print_pmap         :Boolean=False;
  p_print_jit_preload  :Boolean=False;
 
+ p_print_gpu_ops      :Boolean=False;
+ p_print_gpu_hint     :Boolean=False;
+
  p_host_ipc           :THostIpcInterface=nil;
 
 function p_host_ipc_td:Pointer;

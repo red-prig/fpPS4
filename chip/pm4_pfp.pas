@@ -49,8 +49,6 @@ type
   //
   curr_ibuf :p_pm4_ibuffer;
   //
-  print_ops :Boolean;
-  print_hint:Boolean;
   LastSetReg:Word;
   //
   procedure init;
@@ -87,6 +85,7 @@ function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 implementation
 
 uses
+ sys_bootparam,
  kern_dmem,
  kern_proc,
  vm_map;
@@ -310,8 +309,9 @@ begin
   $C24D:PDWORD(@UC_REG.VGT_NUM_INSTANCES )^:=data;
   $C258:PDWORD(@CX_REG.IA_MULTI_VGT_PARAM)^:=data;
   else
+   if p_print_gpu_ops then
    begin
-    Writeln(stderr,getRegName(i),':=0x',HexStr(data,8));
+    Writeln(stderr,'Unknow:',getRegName(i),':=0x',HexStr(data,8));
    end;
  end;
 end;
@@ -322,8 +322,9 @@ begin
  begin
   PDWORD(@SH_REG)[i]:=data;
  end else
+ if p_print_gpu_ops then
  begin
-  Writeln(stderr,getRegName(i+$2C00),':=0x',HexStr(data,8));
+  Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -333,8 +334,9 @@ begin
  begin
   PDWORD(@CX_REG)[i]:=data;
  end else
+ if p_print_gpu_ops then
  begin
-  Writeln(stderr,getRegName(i+$A000),':=0x',HexStr(data,8));
+  Writeln(stderr,'Unknow:',getRegName(i+$A000),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -896,16 +898,16 @@ begin
 
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
-     if pctx^.print_ops then Writeln('PM4_TYPE_0');
+     if p_print_gpu_ops then Writeln('PM4_TYPE_0');
     end;
   2:begin //PM4_TYPE_2
-     if pctx^.print_ops then Writeln('PM4_TYPE_2');
+     if p_print_gpu_ops then Writeln('PM4_TYPE_2');
      //no body
     end;
   3:begin //PM4_TYPE_3
-     if pctx^.print_ops then
+     if p_print_gpu_ops then
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
-        (not pctx^.print_hint) then
+        (not p_print_gpu_hint) then
      begin
       Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
                 ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
@@ -934,6 +936,7 @@ procedure onEventWrite(pctx:p_pfp_ctx;Body:PTPM4CMDEVENTWRITE);
 begin
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
+ if p_print_gpu_ops then
  Case Body^.eventType of
   CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
   FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
@@ -967,17 +970,20 @@ begin
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
- Case Body^.eventType of
-  kEopFlushCbDbCaches             :Writeln(' eventType  =','FlushCbDbCaches');
-  kEopFlushAndInvalidateCbDbCaches:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
-  kEopCbDbReadsDone               :Writeln(' eventType  =','CbDbReadsDone');
-  else;
- end;
+ if p_print_gpu_ops then
+ begin
+  Case Body^.eventType of
+   kEopFlushCbDbCaches             :Writeln(' eventType  =','FlushCbDbCaches');
+   kEopFlushAndInvalidateCbDbCaches:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
+   kEopCbDbReadsDone               :Writeln(' eventType  =','CbDbReadsDone');
+   else;
+  end;
 
- Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
- Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
- Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
- Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
+  Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
+  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
+  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
+  Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
+ end;
 
  if (Body^.destTcL2<>0) then Exit; //write to L2
 
@@ -991,10 +997,17 @@ begin
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
  Case Body^.eventType of
-  CS_DONE:Writeln(' CS_DONE');
-  PS_DONE:Writeln(' PS_DONE');
+  CS_DONE:;
+  PS_DONE:;
   else
    Assert(False,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
+ end;
+
+ if p_print_gpu_ops then
+ Case Body^.eventType of
+  CS_DONE:Writeln(' CS_DONE');
+  PS_DONE:Writeln(' PS_DONE');
+  else;
  end;
 
  if (Body^.eventIndex<>EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP) then
@@ -1205,6 +1218,7 @@ procedure onContextControl(Body:PPM4CMDCONTEXTCONTROL);
 begin
  if (DWORD(Body^.loadControl )<>$80000000) or
     (DWORD(Body^.shadowEnable)<>$80000000) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' loadControl =b',revbinstr(DWORD(Body^.loadControl ),32));
   Writeln(stderr,' shadowEnable=b',revbinstr(DWORD(Body^.shadowEnable),32));
@@ -1217,6 +1231,7 @@ var
 begin
  addr:=QWORD(Body^.address);
  if (addr<>0) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' baseIndex=0x',HexStr(Body^.baseIndex,4));
   Writeln(stderr,' address  =0x',HexStr(addr,16));
@@ -1229,6 +1244,7 @@ var
 begin
  addr:=QWORD(Body^.startAddress);
  if (addr<>0) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' startAddress=0x',HexStr(addr,16));
   Writeln(stderr,' pred        =',Body^.predicationBoolean);
@@ -1381,6 +1397,7 @@ end;
 procedure onDrawIndex2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEX2);
 begin
  if (DWORD(Body^.drawInitiator)<>0) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
@@ -1400,6 +1417,7 @@ end;
 procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
 begin
  if (DWORD(Body^.drawInitiator)<>2) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
@@ -1418,6 +1436,7 @@ begin
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
  if (DWORD(Body^.dispatchInitiator)<>1) then
+ if p_print_gpu_ops then
  begin
   Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
  end;
@@ -1489,7 +1508,7 @@ begin
 
   mmDB_HTILE_SURFACE:
    begin
-    if pctx^.print_hint then
+    if p_print_gpu_hint then
     begin
      onWidthHeight(@Body[1]);
     end;
@@ -1501,37 +1520,37 @@ begin
  case Body[1] of
 
   OP_HINT_PUSH_MARKER:
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     onPushMarker(@Body[2]);
    end;
 
   OP_HINT_SET_MARKER:
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     onSetMarker(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_LABEL:
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     onPrepareFlipLabel(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_VOID:
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     onPrepareFlipWithEopInterrupt(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     onPrepareFlipWithEopInterruptLabel(@Body[2]);
    end;
 
   else
-   if pctx^.print_hint then
+   if p_print_gpu_hint then
    begin
     Writeln('\HINT_',get_hint_name(Body[1]));
    end;
@@ -1544,17 +1563,17 @@ begin
 
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
-     if pctx^.print_ops then Writeln('PM4_TYPE_0 len:',PM4_LENGTH(token));
+     if p_print_gpu_ops then Writeln('PM4_TYPE_0 len:',PM4_LENGTH(token));
      onPm40(pctx,buff);
     end;
   2:begin //PM4_TYPE_2
-     if pctx^.print_ops then Writeln('PM4_TYPE_2');
+     if p_print_gpu_ops then Writeln('PM4_TYPE_2');
      //no body
     end;
   3:begin //PM4_TYPE_3
-     if pctx^.print_ops then
+     if p_print_gpu_ops then
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
-        (not pctx^.print_hint) then
+        (not p_print_gpu_hint) then
      begin
       Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
                 ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],

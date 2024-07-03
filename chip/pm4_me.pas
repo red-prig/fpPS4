@@ -693,9 +693,9 @@ begin
 
    if (resource_instance<>nil) then
    begin
-    Writeln('ri:curr:',HexStr(resource_instance^.curr_mem_usage,1),
-              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
-              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+    Writeln('ri:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
+              ' next:',HexStr(resource_instance^.next.mem_usage,1)
            );
    end;
 
@@ -745,14 +745,14 @@ begin
 
    if (resource_instance<>nil) then
    begin
-    if (resource_instance^.prev_mem_usage<>0) then
+    if (resource_instance^.prev.mem_usage<>0) then
     begin
      writeln;
     end;
 
-    Writeln('rb:curr:',HexStr(resource_instance^.curr_mem_usage,1),
-              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
-              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+    Writeln('rb:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
+              ' next:',HexStr(resource_instance^.next.mem_usage,1)
            );
    end;
 
@@ -821,10 +821,10 @@ begin
 
    ri:=FetchImage(ctx.Cmd,
                   resource^.rkey,
-                  i^.curr_img_usage + i^.next_img_usage
+                  i^.curr.img_usage + i^.next.img_usage
                  );
 
-   pm4_load_from(ctx.Cmd,ri,i^.curr_mem_usage);
+   pm4_load_from(ctx.Cmd,ri,i^.curr.mem_usage);
   end;
 
   i:=TAILQ_NEXT(i,@i^.init_entry);
@@ -1026,9 +1026,9 @@ begin
 
    if (resource_instance<>nil) then
    begin
-    Writeln('ra:curr:',HexStr(resource_instance^.curr_mem_usage,1),
-              ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
-              ' next:',HexStr(resource_instance^.next_mem_usage,1)
+    Writeln('ra:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+              ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
+              ' next:',HexStr(resource_instance^.next.mem_usage,1)
            );
    end;
 
@@ -1076,9 +1076,9 @@ begin
 
   if (resource_instance<>nil) then
   begin
-   Writeln('rd:curr:',HexStr(resource_instance^.curr_mem_usage,1),
-             ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
-             ' next:',HexStr(resource_instance^.next_mem_usage,1)
+   Writeln('rd:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+             ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
+             ' next:',HexStr(resource_instance^.next.mem_usage,1)
           );
   end;
 
@@ -1086,9 +1086,9 @@ begin
 
   if (resource_instance<>nil) then
   begin
-   Writeln('rs:curr:',HexStr(resource_instance^.curr_mem_usage,1),
-             ' prev:',HexStr(resource_instance^.prev_mem_usage,1),
-             ' next:',HexStr(resource_instance^.next_mem_usage,1)
+   Writeln('rs:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+             ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
+             ' next:',HexStr(resource_instance^.next.mem_usage,1)
           );
   end;
 

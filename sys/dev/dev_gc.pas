@@ -39,6 +39,8 @@ uses
  vDevice,
  vMemory,
 
+ sys_bootparam,
+
  subr_backtrace;
 
 var
@@ -138,7 +140,10 @@ var
 begin
  submit_id:=Body^.DATA;
 
- Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
+ if p_print_gpu_ops then
+ begin
+  Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
+ end;
 
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
 end;
@@ -153,7 +158,7 @@ begin
  case token of
   $c0023300:
    begin
-    if pctx^.print_ops then
+    if p_print_gpu_ops then
     begin
      Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
@@ -170,7 +175,7 @@ begin
    end;
   $c0023f00:
    begin
-    if pctx^.print_ops then
+    if p_print_gpu_ops then
     begin
      Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
@@ -187,7 +192,7 @@ begin
    end;
   $c0008b00:
    begin
-    if pctx^.print_ops then
+    if p_print_gpu_ops then
     begin
      Writeln('SWITCH_BUFFER');
     end;
@@ -258,9 +263,6 @@ begin
  begin
   pfp_ctx.init;
   pfp_ctx.on_flush_stream:=@pm4_me_gfx.Push;
-
-  pfp_ctx.print_hint:=true;
-  pfp_ctx.print_ops :=true;
 
   ring_gfx_event:=RTLEventCreate;
   GC_SRI_event  :=RTLEventCreate;

@@ -106,12 +106,16 @@ type
   Fprint_guest_syscall:Boolean;
   Fprint_pmap         :Boolean;
   Fprint_jit_preload  :Boolean;
+  Fprint_gpu_ops      :Boolean;
+  Fprint_gpu_hint     :Boolean;
  published
   property neo                :Boolean read FNeo                 write FNeo                ;
   property halt_on_exit       :Boolean read Fhalt_on_exit        write Fhalt_on_exit       ;
   property print_guest_syscall:Boolean read Fprint_guest_syscall write Fprint_guest_syscall;
   property print_pmap         :Boolean read Fprint_pmap          write Fprint_pmap         ;
   property print_jit_preload  :Boolean read Fprint_jit_preload   write Fprint_jit_preload  ;
+  property print_gpu_ops      :Boolean read Fprint_gpu_ops       write Fprint_gpu_ops      ;
+  property print_gpu_hint     :Boolean read Fprint_gpu_hint      write Fprint_gpu_hint     ;
  end;
 
  TJITInfo=class(TAbstractObject)

@@ -128,6 +128,14 @@ const
  R_BUF=1;
 
 type
+ t_pm4_usage=record
+  mem_usage:Integer;
+  img_usage:s_image_usage;
+ end;
+
+operator + (a,b:t_pm4_usage):t_pm4_usage;
+
+type
  p_pm4_resource_instance    =^t_pm4_resource_instance;
  p_pm4_resource_curr_scope  =^t_pm4_resource_curr_scope;
  p_pm4_resource_stream_scope=^t_pm4_resource_stream_scope;
@@ -166,13 +174,12 @@ type
   //
   resource:p_pm4_resource;
   //
-  curr_mem_usage:Integer;
-  prev_mem_usage:Integer;
-  next_mem_usage:Integer;
+  curr:t_pm4_usage;
+  prev:t_pm4_usage;
+  next:t_pm4_usage;
   //
-  curr_img_usage:s_image_usage;
-  prev_img_usage:s_image_usage;
-  next_img_usage:s_image_usage;
+  prev_overlap:t_pm4_usage;
+  next_overlap:t_pm4_usage;
   //
   function c(n1,n2:p_pm4_resource_instance):Integer; static;
  end;
@@ -366,8 +373,19 @@ type
 
 implementation
 
+uses
+ sys_bootparam;
+
 var
  cache_block_allocator:t_cache_block_allocator;
+
+//
+
+operator + (a,b:t_pm4_usage):t_pm4_usage;
+begin
+ Result.mem_usage:=a.mem_usage or b.mem_usage;
+ Result.img_usage:=b.img_usage +  b.img_usage;
+end;
 
 //
 
@@ -438,13 +456,10 @@ begin
  begin
   //union
 
-  f^.curr_mem_usage:=f^.curr_mem_usage or i^.curr_mem_usage;
-  f^.prev_mem_usage:=f^.prev_mem_usage or i^.prev_mem_usage;
-  f^.next_mem_usage:=f^.next_mem_usage or i^.next_mem_usage;
+  f^.curr:=f^.curr + i^.curr;
+  f^.prev:=f^.prev + i^.prev;
+  f^.next:=f^.next + i^.next;
 
-  f^.curr_img_usage:=f^.curr_img_usage +  i^.curr_img_usage;
-  f^.prev_img_usage:=f^.prev_img_usage +  i^.prev_img_usage;
-  f^.next_img_usage:=f^.next_img_usage +  i^.next_img_usage;
  end else
  begin
   resource_instance_set.Insert(i);
@@ -563,12 +578,12 @@ begin
   Result^:=Default(t_pm4_resource_instance);
   //
   Result^.resource:=r;
-  Result^.curr_mem_usage:=mem_usage;
-  Result^.curr_img_usage:=img_usage;
+  Result^.curr.mem_usage:=mem_usage;
+  Result^.curr.img_usage:=img_usage;
  end else
  begin
-  Result^.curr_mem_usage:=Result^.curr_mem_usage or mem_usage;
-  Result^.curr_img_usage:=Result^.curr_img_usage +  img_usage;
+  Result^.curr.mem_usage:=Result^.curr.mem_usage or mem_usage;
+  Result^.curr.img_usage:=Result^.curr.img_usage +  img_usage;
  end;
 
 end;
@@ -584,7 +599,7 @@ begin
  i:=fetch_resource_instance(scope,r,mem_usage,img_usage);
 
  if ((mem_usage and TM_READ)<>0) then
- if (i^.prev_mem_usage=0) then //no prev usage
+ if (i^.prev.mem_usage=0) then //no prev usage
  begin
   //init
   init_scope.insert(i);
@@ -604,7 +619,7 @@ begin
  i:=fetch_resource_instance(scope,r,mem_usage,[iu_buffer]);
 
  if ((mem_usage and TM_READ)<>0) then
- if (i^.prev_mem_usage=0) then //no prev usage
+ if (i^.prev.mem_usage=0) then //no prev usage
  begin
   //init
   init_scope.insert(i);
@@ -649,14 +664,21 @@ begin
    if (prev<>nil) and (prev<>i) then
    begin
     //sum prev of curr
-    i^.prev_mem_usage:=i^.prev_mem_usage or prev^.curr_mem_usage;
-    i^.prev_img_usage:=i^.prev_img_usage +  prev^.curr_img_usage;
+       i^.prev:=   i^.prev + prev^.curr;
     //sum next of prev
-    prev^.next_mem_usage:=prev^.next_mem_usage or i^.curr_mem_usage;
-    prev^.next_img_usage:=prev^.next_img_usage +  i^.curr_img_usage;
+    prev^.next:=prev^.next + i^.curr;
+
+    if (prev^.resource<>i^.resource) then
+    begin
+     //sum prev of curr
+        i^.prev_overlap:=   i^.prev_overlap + prev^.curr;
+     //sum next of prev
+     prev^.next_overlap:=prev^.next_overlap + i^.curr;
+    end;
+
    end;
    //
-   if ((i^.curr_mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
+   if ((i^.curr.mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
    begin
     node^.rwrite:=i;
    end;
@@ -890,8 +912,12 @@ begin
  Result:=False;
 
  case CX_REG.CB_COLOR_CONTROL.MODE of
-  CB_DISABLE             :Writeln('DISABLE');
-  CB_NORMAL              :;
+  CB_DISABLE:
+   if p_print_gpu_ops then
+   begin
+    Writeln('DISABLE');
+   end;
+  CB_NORMAL:; //next
   CB_ELIMINATE_FAST_CLEAR:
    // Expand latest specified clear color into pixel data for the fast cleared color/depth resource.
    begin
@@ -904,9 +930,21 @@ begin
     Resolve(CX_REG);
     Exit(True);
    end;
-  CB_DECOMPRESS          :Writeln('DECOMPRESS');
-  CB_FMASK_DECOMPRESS    :Writeln('FMASK_DECOMPRESS'); // Fmask decompression for shader readability.
-  CB_DCC_DECOMPRESS      :Writeln('DCC_DECOMPRESS');   // Indicates this color target view is for a DCC decompress
+  CB_DECOMPRESS:
+   if p_print_gpu_ops then
+   begin
+    Writeln('DECOMPRESS');
+   end;
+  CB_FMASK_DECOMPRESS: // Fmask decompression for shader readability.
+   if p_print_gpu_ops then
+   begin
+    Writeln('FMASK_DECOMPRESS');
+   end;
+  CB_DCC_DECOMPRESS: // Indicates this color target view is for a DCC decompress
+   if p_print_gpu_ops then
+   begin
+    Writeln('DCC_DECOMPRESS');
+   end;
   else
    Assert(False,'unknow color control:0x'+HexStr(CX_REG.CB_COLOR_CONTROL.MODE,1));
  end;

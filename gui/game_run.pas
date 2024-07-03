@@ -126,6 +126,8 @@ begin
  sys_bootparam.p_print_guest_syscall:=ConfInfo.BootParamInfo.print_guest_syscall;
  sys_bootparam.p_print_pmap         :=ConfInfo.BootParamInfo.print_pmap;
  sys_bootparam.p_print_jit_preload  :=ConfInfo.BootParamInfo.print_jit_preload;
+ sys_bootparam.p_print_gpu_ops      :=ConfInfo.BootParamInfo.print_gpu_ops;
+ sys_bootparam.p_print_gpu_hint     :=ConfInfo.BootParamInfo.print_gpu_hint;
 
  //
 
