@@ -49,6 +49,7 @@ type
    function  GetItem(i:SizeInt):TGameItem;
    function  GetItemRow(i:SizeInt):TGameItem;
    procedure AddItem(Item:TGameItem);
+   procedure InsertItem(Item:TGameItem);
    procedure UpdateItem(i:SizeInt);
    procedure UpdateItem(Item:TGameItem);
    procedure DelItem(Item:TGameItem);
@@ -323,6 +324,26 @@ var
 begin
  i:=FGrid.RowCount;
  FGrid.RowCount:=i+1;
+ //
+ FGrid.Cells[0,i]:=Item.FGameInfo.Name;
+ FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
+ FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ //
+ FGrid.Objects[0,i]:=Item;
+end;
+
+procedure TGameList.InsertItem(Item:TGameItem);
+var
+ i:SizeInt;
+begin
+ i:=FGrid.Row;
+ if (i<1) then i:=1;
+
+ //i:=i+1;
+ //if (i>FGrid.RowCount) then i:=FGrid.RowCount;
+
+ FGrid.InsertColRow(False,i);
+
  //
  FGrid.Cells[0,i]:=Item.FGameInfo.Name;
  FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
@@ -1087,7 +1108,7 @@ begin
 
  form.Item:=nil;
 
- FGameList.AddItem(Item);
+ FGameList.InsertItem(Item);
  //
  SaveGameList;
 end;

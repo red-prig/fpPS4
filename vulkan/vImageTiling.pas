@@ -780,6 +780,8 @@ begin
 
  cmd.EndRenderPass;
 
+ image.restore_vm_track;
+
  cb(cmd,image);
 
  change_rate.mark_init;

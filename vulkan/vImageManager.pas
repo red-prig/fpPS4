@@ -78,13 +78,14 @@ type
   lock:Pointer;
   //
   Destructor  Destroy; override;
-  procedure   assign_vm_track; virtual;
+  procedure   restore_vm_track; virtual;
+  procedure   assign_vm_track;  virtual;
   procedure   mark_init;
   function    get_change_rate:t_change_rate;
   procedure   apply_change_rate(r:t_change_rate);
   Function    GetSubresRange:TVkImageSubresourceRange;  virtual;
   Function    GetSubresLayer:TVkImageSubresourceLayers; virtual;
-  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; virtual; abstract;
+  function    FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; virtual; abstract;
   function    FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
   function    FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
@@ -98,7 +99,7 @@ type
 
  TvChildImage2=class(TvCustomImage2)
   procedure   FreeHandle; override;
-  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
+  function    FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
@@ -127,7 +128,7 @@ type
   Constructor Create;
   Destructor  Destroy; override;
   function    GetImageInfo:TVkImageCreateInfo; override;
-  function    _FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
+  function    FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; override;
   procedure   PushBarrier(cmd:TvCustomCmdBuffer;
                           dstAccessMask:TVkAccessFlags;
                           newImageLayout:TVkImageLayout;
@@ -142,7 +143,8 @@ type
  TvDepthStencilImage2=class(TvImage2)
   procedure   FreeHandle; override;
   function    Compile(ext:Pointer):Boolean; override;
-  procedure   assign_vm_track; override;
+  procedure   restore_vm_track; override;
+  procedure   assign_vm_track;  override;
   Destructor  Destroy; override;
  end;
 
@@ -258,6 +260,17 @@ begin
  inherited;
 end;
 
+procedure TvCustomImage2.restore_vm_track;
+begin
+ if (tobj=nil) then Exit;
+
+ rw_wlock(lock);
+
+ vm_map_track_restore(p_proc.p_vmspace,tobj);
+
+ rw_wunlock(lock)
+end;
+
 procedure TvCustomImage2.assign_vm_track;
 var
  start,__end:QWORD;
@@ -338,9 +351,9 @@ begin
  FHandle:=VK_NULL_HANDLE;
 end;
 
-function TvChildImage2._FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
+function TvChildImage2.FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
 begin
- Result:=Parent._FetchView(cmd,F,usage);
+ Result:=Parent.FetchViewRaw(cmd,F,usage);
 end;
 
 procedure TvChildImage2.PushBarrier(cmd:TvCustomCmdBuffer;
@@ -461,7 +474,7 @@ begin
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 end;
 
-function TvImage2._FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
+function TvImage2.FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
 var
  key2:TvImageViewKey;
 
@@ -553,10 +566,10 @@ begin
    begin
     tmp:=F;
     tmp.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=_FetchView(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    Result:=FetchViewRaw(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
    end;
   else
-   Result:=_FetchView(cmd,F,0);
+   Result:=FetchViewRaw(cmd,F,0);
  end;
 end;
 
@@ -596,10 +609,10 @@ begin
   iu_storage:
    begin
     F.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=_FetchView(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    Result:=FetchViewRaw(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
    end;
   else
-   Result:=_FetchView(cmd,F,0);
+   Result:=FetchViewRaw(cmd,F,0);
  end;
 
 end;
@@ -700,6 +713,19 @@ begin
   begin
    StencilOnly.FHandle:=FHandle;
   end;
+ end;
+end;
+
+procedure TvDepthStencilImage2.restore_vm_track;
+begin
+ if (DepthOnly<>nil) then
+ begin
+  DepthOnly.restore_vm_track;
+ end;
+
+ if (StencilOnly<>nil) then
+ begin
+  StencilOnly.restore_vm_track;
  end;
 end;
 

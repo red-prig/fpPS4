@@ -282,6 +282,7 @@ procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
 function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
 procedure _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer);
 function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
+procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -3424,6 +3425,13 @@ end;
 function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 begin
  Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
+end;
+
+procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);
+begin
+ if (tobj=nil) then Exit;
+
+ vm_track_map_restore_object(@map^.pmap^.tr_map,tobj);
 end;
 
 procedure vminit;

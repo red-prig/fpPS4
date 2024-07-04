@@ -1215,7 +1215,7 @@ begin
  end;
 end;
 
-procedure onContextControl(Body:PPM4CMDCONTEXTCONTROL);
+procedure onContextControl(pctx:p_pfp_ctx;Body:PPM4CMDCONTEXTCONTROL);
 begin
  if (DWORD(Body^.loadControl )<>$80000000) or
     (DWORD(Body^.shadowEnable)<>$80000000) then
@@ -1226,7 +1226,7 @@ begin
  end;
 end;
 
-procedure onSetBase(Body:PPM4CMDDRAWSETBASE);
+procedure onSetBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
 begin
@@ -1239,7 +1239,7 @@ begin
  end;
 end;
 
-procedure onSetPredication(Body:PPM4CMDSETPREDICATION);
+procedure onSetPredication(pctx:p_pfp_ctx;Body:PPM4CMDSETPREDICATION);
 var
  addr:QWORD;
 begin
@@ -1432,6 +1432,11 @@ begin
                                       pctx^.UC_REG);
 end;
 
+procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTMULTI);
+begin
+ Assert(false,'IT_DRAW_INDEX_INDIRECT_COUNT_MULTI')
+end;
+
 procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
 begin
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
@@ -1448,6 +1453,14 @@ begin
  pctx^.SH_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
 
  pctx^.stream[stGfxDcb].DispatchDirect(pctx^.SH_REG);
+end;
+
+procedure onPfpSyncMe(pctx:p_pfp_ctx;Body:Pointer);
+begin
+ //stallCommandBufferParser
+ //wait idle me?
+
+ pctx^.Flush_stream(stGfxDcb);
 end;
 
 procedure onPushMarker(Body:PChar);
@@ -1582,33 +1595,34 @@ begin
      end;
 
      case PM4_TYPE_3_HEADER(token).opcode of
-      IT_NOP                :onNop(pctx,buff);
-      IT_WRITE_DATA         :onWriteData      (pctx,buff);
-      IT_EVENT_WRITE        :onEventWrite     (pctx,buff);
-      IT_EVENT_WRITE_EOP    :onEventWriteEop  (pctx,buff);
-      IT_EVENT_WRITE_EOS    :onEventWriteEos  (pctx,buff);
-      IT_DMA_DATA           :onDmaData        (pctx,buff);
-      IT_WAIT_REG_MEM       :onWaitRegMem     (pctx,buff);
-      IT_ACQUIRE_MEM        :onAcquireMem     (pctx,buff);
-      IT_CONTEXT_CONTROL    :onContextControl (buff);
-      IT_DRAW_PREAMBLE      :onDrawPreamble   (pctx,buff);
-      IT_CLEAR_STATE        :onClearState     (pctx,buff);
-      IT_SET_CONFIG_REG     :onSetConfigReg   (pctx,buff);
-      IT_SET_CONTEXT_REG    :onSetContextReg  (pctx,buff);
-      IT_SET_SH_REG         :onSetShReg       (pctx,buff);
-      IT_SET_UCONFIG_REG    :onSetUConfigReg  (pctx,buff);
-      IT_INDEX_BUFFER_SIZE  :onIndexBufferSize(pctx,buff);
-      IT_INDEX_TYPE         :onIndexType      (pctx,buff);
-      IT_INDEX_BASE         :onIndexBase      (pctx,buff);
-      IT_NUM_INSTANCES      :onNumInstances   (pctx,buff);
-      IT_DRAW_INDEX_2       :onDrawIndex2     (pctx,buff);
-      IT_DRAW_INDEX_OFFSET_2:Assert(false,'IT_DRAW_INDEX_OFFSET_2');
-      IT_DRAW_INDEX_AUTO    :onDrawIndexAuto  (pctx,buff);
-      IT_DISPATCH_DIRECT    :onDispatchDirect (pctx,buff);
-      IT_PFP_SYNC_ME        :Assert(false,'IT_PFP_SYNC_ME');
+      IT_NOP                            :onNop                        (pctx,buff);
+      IT_WRITE_DATA                     :onWriteData                  (pctx,buff);
+      IT_EVENT_WRITE                    :onEventWrite                 (pctx,buff);
+      IT_EVENT_WRITE_EOP                :onEventWriteEop              (pctx,buff);
+      IT_EVENT_WRITE_EOS                :onEventWriteEos              (pctx,buff);
+      IT_DMA_DATA                       :onDmaData                    (pctx,buff);
+      IT_WAIT_REG_MEM                   :onWaitRegMem                 (pctx,buff);
+      IT_ACQUIRE_MEM                    :onAcquireMem                 (pctx,buff);
+      IT_CONTEXT_CONTROL                :onContextControl             (pctx,buff);
+      IT_DRAW_PREAMBLE                  :onDrawPreamble               (pctx,buff);
+      IT_CLEAR_STATE                    :onClearState                 (pctx,buff);
+      IT_SET_CONFIG_REG                 :onSetConfigReg               (pctx,buff);
+      IT_SET_CONTEXT_REG                :onSetContextReg              (pctx,buff);
+      IT_SET_SH_REG                     :onSetShReg                   (pctx,buff);
+      IT_SET_UCONFIG_REG                :onSetUConfigReg              (pctx,buff);
+      IT_INDEX_BUFFER_SIZE              :onIndexBufferSize            (pctx,buff);
+      IT_INDEX_TYPE                     :onIndexType                  (pctx,buff);
+      IT_INDEX_BASE                     :onIndexBase                  (pctx,buff);
+      IT_NUM_INSTANCES                  :onNumInstances               (pctx,buff);
+      IT_DRAW_INDEX_2                   :onDrawIndex2                 (pctx,buff);
+      IT_DRAW_INDEX_OFFSET_2            :Assert(false,'IT_DRAW_INDEX_OFFSET_2');
+      IT_DRAW_INDEX_AUTO                :onDrawIndexAuto              (pctx,buff);
+      IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:onDrawIndexIndirectCountMulti(pctx,buff);
+      IT_DISPATCH_DIRECT                :onDispatchDirect             (pctx,buff);
+      IT_PFP_SYNC_ME                    :onPfpSyncMe                  (pctx,buff);
 
-      IT_SET_BASE           :onSetBase(buff);
-      IT_SET_PREDICATION    :onSetPredication(buff);
+      IT_SET_BASE                       :onSetBase                    (pctx,buff);
+      IT_SET_PREDICATION                :onSetPredication             (pctx,buff);
 
       else
        begin

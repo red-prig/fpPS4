@@ -182,6 +182,7 @@ type
   Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD;isBlocking:Boolean);
+  Procedure   WriteEvent(eventType:Byte);
 
   Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
   Procedure   DrawIndex2(IndexBase:Pointer;indexCount:DWORD);
@@ -1344,6 +1345,45 @@ begin
  end;
 
  AddPlannedTrigger(QWORD(dst),QWORD(dst)+4,nil);
+end;
+
+const
+ VK_ACCESS_DB=
+  ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT ) or
+  ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+ VK_STAGE_DB=
+  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT);
+
+Procedure TvCmdBuffer.WriteEvent(eventType:Byte);
+begin
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ Case eventType of
+  FLUSH_AND_INV_DB_META:
+   begin
+    Inc(cmd_count);
+
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_DB,                             //srcAccessMask
+                    VK_ACCESS_ANY,                            //dstAccessMask
+    	            VK_STAGE_DB,                              //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
+
+   end;
+
+  else
+   Assert(false,'WriteEvent.eventType');
+ end;
+
 end;
 
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;

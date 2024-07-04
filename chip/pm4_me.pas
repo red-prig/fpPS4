@@ -44,6 +44,9 @@ uses
  pm4defs,
  pm4_stream;
 
+Const
+ CONST_RAM_SIZE=48*1024;
+
 type
  t_on_submit_flip_eop=function(submit_id:QWORD):Integer;
 
@@ -80,6 +83,8 @@ type
   gc_knlist:p_knlist;
   //
   imdone_count:QWORD;
+  //
+  CONST_RAM:array[0..CONST_RAM_SIZE-1] of Byte; //48KB
   //
   procedure Init(knlist:p_knlist);
   procedure start;
@@ -161,7 +166,6 @@ var
 implementation
 
 uses
- vmparam,
  kern_dmem,
  kern_proc,
  vm_map,
@@ -1569,7 +1573,14 @@ begin
   //CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
   //FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
   //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
-  //FLUSH_AND_INV_DB_META      :Writeln(' eventType=FLUSH_AND_INV_DB_META');
+  FLUSH_AND_INV_DB_META:
+   begin
+    if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
+    begin
+     //GPU
+     ctx.Cmd.WriteEvent(node^.eventType);
+    end;
+   end;
   //FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
   //FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
   THREAD_TRACE_MARKER:
@@ -1583,7 +1594,7 @@ begin
   else
    begin
     Writeln(stderr,'EventWrite eventType=0x',HexStr(node^.eventType,2));
-    Assert(false,'EventWrite eventType=0x'+HexStr(node^.eventType,2));
+    Assert (false ,'EventWrite eventType=0x'+HexStr(node^.eventType,2));
    end;
 
  end;
@@ -1714,6 +1725,41 @@ begin
 
 end;
 
+//
+
+procedure pm4_LoadConstRam(var ctx:t_me_render_context;node:p_pm4_node_LoadConstRam);
+var
+ addr_dmem:Pointer;
+
+ start:DWORD;
+ __end:DWORD;
+ size :DWORD;
+begin
+ if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
+ end;
+
+ start:=node^.offset;
+ __end:=start+(node^.num_dw*SizeOf(DWORD));
+
+ if (start>CONST_RAM_SIZE) then
+ begin
+  start:=CONST_RAM_SIZE;
+ end;
+
+ if (__end>CONST_RAM_SIZE) then
+ begin
+  __end:=CONST_RAM_SIZE;
+ end;
+
+ size:=(__end-start);
+
+ Move(addr_dmem^,ctx.me^.CONST_RAM[start],size);
+end;
+
+//
+
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
 var
  ctx:t_me_render_context;
@@ -1784,9 +1830,12 @@ begin
      ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
      ntWaitRegMem    :pm4_WaitRegMem    (ctx,Pointer(ctx.node));
 
+     ntLoadConstRam  :pm4_LoadConstRam  (ctx,Pointer(ctx.node));
+
      else
       begin
-       Writeln('me:+',ctx.node^.ntype);
+       Writeln(stderr,'me:+',ctx.node^.ntype);
+       Assert(false,'me:+');
       end;
     end;
 

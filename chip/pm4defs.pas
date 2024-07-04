@@ -734,6 +734,25 @@ type
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
+ PPM4CMDDRAWINDEXINDIRECTMULTI=^TPM4CMDDRAWINDEXINDIRECTMULTI;
+ TPM4CMDDRAWINDEXINDIRECTMULTI=bitpacked record
+  header             :PM4_TYPE_3_HEADER;
+  dataOffset         :DWORD; // < DWORD aligned offset
+  baseVtxLoc         :WORD;  // < base vertex location
+  reserved1          :WORD;
+  startInstLoc       :WORD;  // < start instance location
+  reserved2          :WORD;
+  drawIndexLoc       :WORD;  // < register offset to write the Draw Index count
+  reserved3          :bit14;
+  countIndirectEnable:bit1;  // < Indicates the data structure count is in memory
+  drawIndexEnable    :bit1;  // < Enables writing of Draw Index count to DRAW_INDEX_LOC
+  count              :DWORD; // < Count of data structures to loop through before going to next packet
+  countAddrLo        :DWORD; // < Lower bits of DWord aligned Address[31:2]; Valid if countIndirectEnable is set
+  countAddrHi        :DWORD; // < Upper bits of Address[63:32]; Valid if countIndirectEnable is set
+  stride             :DWORD; // < Stride in memory from one data structure to the next
+  drawInitiator      :TVGT_DRAW_INITIATOR;
+ end;
+
  PPM4CMDDISPATCHDIRECT=^TPM4CMDDISPATCHDIRECT;
  TPM4CMDDISPATCHDIRECT=packed record
   header           :PM4_TYPE_3_HEADER;

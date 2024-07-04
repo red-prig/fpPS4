@@ -69,7 +69,8 @@ type
   track_r  :DWORD;
   track_w  :DWORD;
   //
-  prot:Byte;
+  prot     :Byte;
+  mark     :Boolean;
  end;
 
  p_vm_track_object_instance=^t_vm_track_object_instance;
@@ -138,6 +139,8 @@ function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t)
 function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 
 function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:T_THANDLE_TYPE):p_vm_track_object;
+
+procedure vm_track_map_restore_object(map:p_vm_track_map;obj:p_vm_track_object);
 
 implementation
 
@@ -463,9 +466,11 @@ begin
   prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
         (ord(entry^.track_w<>0)*PAGE_TRACK_W);
 
-  if (prot<>entry^.prot) then
+  if entry^.mark or
+     (prot<>entry^.prot) then
   begin
    entry^.prot:=prot;
+   entry^.mark:=False;
 
    pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
   end;
@@ -514,9 +519,11 @@ begin
   prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
         (ord(entry^.track_w<>0)*PAGE_TRACK_W);
 
-  if (prot<>entry^.prot) then
+  if entry^.mark or
+     (prot<>entry^.prot) then
   begin
    entry^.prot:=prot;
+   entry^.mark:=False;
 
    pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
   end;
@@ -1500,6 +1507,10 @@ begin
     begin
      //delete full object
      _vm_track_map_delete_deferred(map,node^.obj);
+    end else
+    if (mode=M_CPU_WRITE) then
+    begin
+     entry^.mark:=True;
     end;
 
     if ((ret and DO_INCREMENT)<>0) then
@@ -1595,6 +1606,34 @@ begin
  if (Result<>nil) then
  begin
   vm_track_object_reference(Result);
+ end;
+
+ vm_track_map_unlock(map);
+end;
+
+procedure vm_track_map_restore_object(map:p_vm_track_map;obj:p_vm_track_object);
+var
+ node:p_vm_track_object_instance;
+ entry:p_vm_track_map_entry;
+begin
+ if (obj=nil) then Exit;
+
+ vm_track_map_lock(map);
+
+ node:=TAILQ_FIRST(@obj^.instances);
+
+ while (node<>nil) do
+ begin
+  entry:=node^.entry;
+
+  if entry^.mark then
+  begin
+   entry^.mark:=False;
+
+   pmap_prot_track(map^.pmap,entry^.start,entry^.__end,entry^.prot);
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.obj_link);
  end;
 
  vm_track_map_unlock(map);
