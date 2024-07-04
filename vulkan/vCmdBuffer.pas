@@ -12,6 +12,7 @@ uses
 
   kern_proc,
   vm_map,
+  vm_tracking_map,
 
   Vulkan,
   vDependence,
@@ -690,7 +691,7 @@ begin
  begin
 
   //deffered trigger
-  vm_map_track_trigger(p_proc.p_vmspace,node^.start,node^.__end,node^.exclude,2);
+  vm_map_track_trigger(p_proc.p_vmspace,node^.start,node^.__end,node^.exclude,M_GPU_APPLY);
 
   FPlannedTriggers.delete(node);
   OnFree(node);
@@ -706,7 +707,7 @@ Var
  node:p_cmd_track_deferred;
 begin
  //planned trigger
- vm_map_track_trigger(p_proc.p_vmspace,start,__end,exclude,1);
+ vm_map_track_trigger(p_proc.p_vmspace,start,__end,exclude,M_GPU_PLANNED);
 
  tmp:=Default(t_cmd_track_deferred);
  tmp.start  :=start;

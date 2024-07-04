@@ -15,7 +15,8 @@ uses
  kern_mtx,
  kern_thr,
  sys_resource,
- kern_resource;
+ kern_resource,
+ vm_tracking_map;
 
 type
  vm_flags_t =type Byte;
@@ -278,9 +279,9 @@ procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar
 
 procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
 procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
-function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:Byte):Pointer;
+function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
 procedure _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer);
-function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
+function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -294,7 +295,6 @@ uses
  md_map,
  kern_proc,
  rmem_map,
- vm_tracking_map,
  kern_budget;
 
 var
@@ -385,7 +385,7 @@ var
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm),@vm^.vm_map);
+ pmap_pinit(vmspace_pmap(vm));
 
  vm_map_init(@vm^.vm_map,vmspace_pmap(vm),VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
@@ -3408,14 +3408,10 @@ procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
 begin
  if (tobj=nil) then Exit;
 
- vm_map_lock(map); //lock to prevent deadlock
-
  vm_track_map_remove_object(@map^.pmap^.tr_map,tobj);
-
- vm_map_unlock(map);
 end;
 
-function vm_map_track_next(map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:Byte):Pointer;
+function vm_map_track_next(map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
 begin
  Result:=vm_track_map_next_object(@map^.pmap^.tr_map,start,tobj,htype);
 end;
@@ -3425,7 +3421,7 @@ begin
  _vm_track_map_delete_deferred(@map^.pmap^.tr_map,tobj);
 end;
 
-function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
+function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 begin
  Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
 end;

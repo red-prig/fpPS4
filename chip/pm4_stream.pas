@@ -1298,13 +1298,11 @@ Procedure t_pm4_allocator.Free;
 var
  node:PAllocNode;
 begin
- node:=pHead.slh_first;
- if (node<>nil) then
- begin
-  pHead.slh_first:=node^.link;
- end;
+ node:=SLIST_FIRST(@pHead);
+
  While (node<>nil) do
  begin
+  SLIST_REMOVE(@pHead,node,@node^.link);
 
   if (node^.size=cache_block_allocator.mem_size) then
   begin
@@ -1314,11 +1312,7 @@ begin
    md_unmap(node,node^.size);
   end;
 
-  node:=pHead.slh_first;
-  if (node<>nil) then
-  begin
-   pHead.slh_first:=node^.link;
-  end;
+  node:=SLIST_FIRST(@pHead);
  end;
  Self:=Default(t_pm4_allocator);
 end;

@@ -1612,9 +1612,15 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;mode:Integer):Integer;
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
 begin
- if (mode=1) then Exit(DO_NOTHING);
+ case mode of
+  M_CPU_WRITE :;
+  M_DMEM_WRITE:;
+  else
+   Exit;
+ end;
+
  //TODO
  Result:=DO_INCREMENT;
 end;

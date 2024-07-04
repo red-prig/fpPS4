@@ -65,6 +65,7 @@ type
   nentries   :Integer;       // Number of entries
   root       :p_vm_nt_entry; // Root of a binary search tree
   danger_zone:t_danger_zone;
+  lock       :mtx;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
@@ -78,11 +79,6 @@ function  vm_nt_map_max(map:p_vm_nt_map):vm_offset_t;
 function  vm_nt_map_min(map:p_vm_nt_map):vm_offset_t;
 
 procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
-
-function  vm_nt_map_lookup_entry(
-            map    :p_vm_nt_map;
-            address:vm_offset_t;
-            entry  :pp_vm_nt_entry):Boolean;
 
 function  vm_nt_map_insert(
              map   :p_vm_nt_map;
@@ -113,8 +109,6 @@ procedure vm_nt_map_madvise(map:p_vm_nt_map;
 function  vm_nt_map_mirror(map:p_vm_nt_map;
                            start:vm_offset_t;
                            __end:vm_offset_t):Pointer;
-
-procedure vm_nt_entry_deallocate(entry:p_vm_nt_entry);
 
 implementation
 
@@ -678,6 +672,17 @@ begin
  map^.max_offset:=max;
  map^.root:=nil;
  map^.danger_zone.Init;
+ mtx_init(map^.lock,'vm_nt_map');
+end;
+
+procedure vm_nt_map_lock(map:p_vm_nt_map); inline;
+begin
+ mtx_lock(map^.lock);
+end;
+
+procedure vm_nt_map_unlock(map:p_vm_nt_map); inline;
+begin
+ mtx_unlock(map^.lock);
 end;
 
 procedure vm_nt_entry_dispose(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
@@ -863,7 +868,7 @@ end;
 
 function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_range_stat):Boolean; forward;
 
-function vm_nt_map_insert(
+function _vm_nt_map_insert(
            map   :p_vm_nt_map;
            obj   :p_vm_nt_file_obj;
            offset:vm_ooffset_t;
@@ -912,6 +917,34 @@ begin
  vm_remap(map,new_entry,nil,nil,stat);
 
  Result:=KERN_SUCCESS;
+end;
+
+function vm_nt_map_insert(
+           map   :p_vm_nt_map;
+           obj   :p_vm_nt_file_obj;
+           offset:vm_ooffset_t;
+           start :vm_offset_t;
+           __end :vm_offset_t;
+           size  :vm_offset_t; //unaligned size
+           prot  :Integer):Integer;
+begin
+ if (start=__end) then
+ begin
+  Exit(KERN_SUCCESS);
+ end;
+
+ vm_nt_map_lock(map);
+
+ Result:=_vm_nt_map_insert(
+           map   ,
+           obj   ,
+           offset,
+           start ,
+           __end ,
+           size  ,
+           prot  );
+
+ vm_nt_map_unlock(map);
 end;
 
 function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_range_stat):Boolean;
@@ -1124,6 +1157,8 @@ begin
   Exit(KERN_SUCCESS);
  end;
 
+ vm_nt_map_lock(map);
+
  if (not vm_nt_map_lookup_entry(map, start, @first_entry)) then
  begin
   entry:=first_entry^.next;
@@ -1148,6 +1183,9 @@ begin
 
   entry:=next;
  end;
+
+ vm_nt_map_unlock(map);
+
  Result:=(KERN_SUCCESS);
 end;
 
@@ -1163,6 +1201,8 @@ var
  r:Integer;
 begin
  if (start=__end) then Exit;
+
+ vm_nt_map_lock(map);
 
  if (not vm_nt_map_lookup_entry(map, start, @entry)) then
  begin
@@ -1209,6 +1249,8 @@ begin
 
   entry:=entry^.next;
  end;
+
+ vm_nt_map_unlock(map);
 end;
 
 procedure vm_nt_map_prot_fix(map:p_vm_nt_map;
@@ -1221,6 +1263,8 @@ var
  e___end:vm_offset_t;
 begin
  if (start=__end) then Exit;
+
+ vm_nt_map_lock(map);
 
  if (not vm_nt_map_lookup_entry(map, start, @entry)) then
  begin
@@ -1256,6 +1300,8 @@ begin
 
   entry:=entry^.next;
  end;
+
+ vm_nt_map_unlock(map);
 end;
 
 //rdi, rsi
@@ -1291,6 +1337,8 @@ var
  mirror:Pointer;
 begin
  if (start=__end) then Exit;
+
+ vm_nt_map_lock(map);
 
  if (not vm_nt_map_lookup_entry(map, start, @entry)) then
  begin
@@ -1343,6 +1391,8 @@ begin
 
   entry:=entry^.next;
  end;
+
+ vm_nt_map_unlock(map);
 end;
 
 
@@ -1368,6 +1418,8 @@ begin
   Assert(false,'vm_map');
   Exit;
  end;
+
+ vm_nt_map_lock(map);
 
  if (not vm_nt_map_lookup_entry(map, start, @entry)) then
  begin
@@ -1436,6 +1488,8 @@ begin
 
   entry:=entry^.next;
  end;
+
+ vm_nt_map_unlock(map);
 end;
 
 

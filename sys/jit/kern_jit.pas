@@ -1278,9 +1278,14 @@ begin
  Assert(false,'TODO: destroy in code analize');
 end;
 
-function pick_on_trigger(handle:Pointer;mode:Integer):Integer;
+function pick_on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
 begin
- if (mode=1) then Exit(DO_NOTHING);
+ case mode of
+  M_CPU_WRITE :;
+  M_DMEM_WRITE:;
+  else
+   Exit;
+ end;
 
  Result:=DO_NOTHING;
 

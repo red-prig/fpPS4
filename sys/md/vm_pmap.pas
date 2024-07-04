@@ -44,7 +44,6 @@ procedure iov_uplift(iov:p_iovec);
 type
  p_pmap=^t_pmap;
  t_pmap=packed object
-  vm_map:Pointer;
   rmlock:rangelock;
   rm_mtx:mtx;
   nt_map:t_vm_nt_map;
@@ -63,7 +62,7 @@ function  dev_mem_alloc(pages:Integer):Pointer;
 
 function  pmap_reserve(wr:Boolean):DWORD;
 
-procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -287,12 +286,10 @@ begin
  end;
 end;
 
-procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 var
  i,r:Integer;
 begin
- pmap^.vm_map:=vm_map;
-
  r:=pmap_reserve(True);
  Assert(r=0,'pmap_pinit');
 
@@ -707,8 +704,6 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
-       vm_map_lock(pmap^.vm_map);
-
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.start and PMAPP_BLK_MASK, //block local offset
@@ -717,23 +712,17 @@ begin
                            delta,
                            (prot and VM_RW));
 
-       vm_map_unlock(pmap^.vm_map,False);
-
        if (r<>0) then
        begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
        end;
 
-       vm_map_lock(pmap^.vm_map);
-
        //fill zero if needed
        vm_nt_map_madvise(@pmap^.nt_map,
                          info.start,
                          info.__end,
                          MADV_NORMAL);
-
-       vm_map_unlock(pmap^.vm_map,False);
 
        info.start :=info.start+delta;
        info.__end :=__end;
@@ -775,8 +764,6 @@ begin
         Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
        end;
 
-       vm_map_lock(pmap^.vm_map);
-
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.offset and PMAPP_BLK_MASK, //block local offset
@@ -784,8 +771,6 @@ begin
                            info.__end,
                            delta,
                            (prot and VM_RW));
-
-       vm_map_unlock(pmap^.vm_map,False);
 
        if (r<>0) then
        begin
@@ -873,8 +858,6 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
-       vm_map_lock(pmap^.vm_map);
-
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.start and PMAPP_BLK_MASK, //block local offset
@@ -883,23 +866,17 @@ begin
                            delta,
                            (prot and VM_RW));
 
-       vm_map_unlock(pmap^.vm_map,False);
-
        if (r<>0) then
        begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
        end;
 
-       vm_map_lock(pmap^.vm_map);
-
        //restore
        vm_nt_map_madvise(@pmap^.nt_map,
                          info.start,
                          info.__end,
                          MADV_WILLNEED);
-
-       vm_map_unlock(pmap^.vm_map,False);
 
        //copy
        pmap_copy(cow,
@@ -925,8 +902,6 @@ begin
       info.start :=start;
       info.__end :=start+paddi;
 
-      vm_map_lock(pmap^.vm_map);
-
       r:=vm_nt_map_insert(@pmap^.nt_map,
                           info.obj,
                           info.offset, //offset in file
@@ -934,8 +909,6 @@ begin
                           info.__end,
                           size,
                           (prot and VM_RW));
-
-      vm_map_unlock(pmap^.vm_map,False);
 
       if (r<>0) then
       begin
@@ -994,8 +967,6 @@ begin
     begin
      _default:
 
-     vm_map_lock(pmap^.vm_map);
-
      vm_nt_map_prot_fix(@pmap^.nt_map,
                         start,
                         __end,
@@ -1005,8 +976,6 @@ begin
      //                  start,
      //                  __end,
      //                  (prot and VM_RW));
-
-     vm_map_unlock(pmap^.vm_map,False);
 
     end;
   OBJT_DEVICE:
@@ -1051,14 +1020,10 @@ begin
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
- vm_map_lock(pmap^.vm_map);
-
  vm_nt_map_prot_fix(@pmap^.nt_map,
                     start,
                     __end,
                     mode);
-
- vm_map_unlock(pmap^.vm_map,False);
 end;
 
 procedure _pmap_prot_int(pmap :pmap_t;
@@ -1069,14 +1034,10 @@ begin
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
- vm_map_lock(pmap^.vm_map);
-
  vm_nt_map_protect(@pmap^.nt_map,
                    start,
                    __end,
                    (prot and VM_RW));
-
- vm_map_unlock(pmap^.vm_map,False);
 end;
 
 procedure pmap_prot_track(pmap :pmap_t;
@@ -1087,16 +1048,12 @@ begin
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
- vm_map_lock(pmap^.vm_map);
-
  ppmap_track(start,__end,prots);
 
  vm_nt_map_prot_fix(@pmap^.nt_map,
                     start,
                     __end,
                     TRACK_PROT or REMAP_PROT);
-
- vm_map_unlock(pmap^.vm_map,False);
 end;
 
 procedure pmap_madvise(pmap  :pmap_t;
@@ -1126,14 +1083,10 @@ begin
     begin
      _default:
 
-     vm_map_lock(pmap^.vm_map);
-
      vm_nt_map_madvise(@pmap^.nt_map,
                        start,
                        __end,
                        advise);
-
-     vm_map_unlock(pmap^.vm_map,False);
     end;
   OBJT_DEVICE:
     begin
@@ -1195,24 +1148,17 @@ begin
 
   OBJT_DEFAULT:
     begin
-     vm_map_lock(pmap^.vm_map);
 
      vm_nt_map_madvise(@pmap^.nt_map,
                        start,
                        __end,
                        MADV_FREE);
 
-     vm_map_unlock(pmap^.vm_map,False);
-
      _default:
-
-     vm_map_lock(pmap^.vm_map);
 
      r:=vm_nt_map_delete(@pmap^.nt_map,
                          start,
                          __end);
-
-     vm_map_unlock(pmap^.vm_map,False);
     end;
   OBJT_DEVICE:
     begin
@@ -1262,13 +1208,9 @@ var
 begin
  lock:=pmap_rlock(pmap,start,__end);
 
- vm_map_lock(pmap^.vm_map);
-
  Result:=vm_nt_map_mirror(@pmap^.nt_map,
                           start,
                           __end);
-
- vm_map_unlock(pmap^.vm_map,False);
 
  pmap_unlock(pmap,lock);
 end;

@@ -26,26 +26,20 @@ const
  DO_DELETE   =1;
  DO_INCREMENT=2;
 
- H_ZERO     =0;
- H_JIT_CHUNK=1;
- H_GPU_IMAGE=2;
- H_GPU_BUF  =3;
+type
+ T_THANDLE_TYPE=(H_ZERO,H_JIT_CHUNK,H_GPU_IMAGE,H_GPU_BUF);
+ T_TRIGGER_MODE=(M_CPU_WRITE,M_DMEM_WRITE,M_GPU_PLANNED,M_GPU_APPLY);
 
 type
  t_on_destroy=function(handle:Pointer):Integer;
- t_on_trigger=function(handle:Pointer;mode:Integer):Integer;
+ t_on_trigger=function(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
 
  p_vm_track_object=^t_vm_track_object;
- t_vm_track_object=record
+ t_vm_track_object=packed record
   del_link  :TAILQ_ENTRY; //p_vm_track_map->delete_deferred
   //iter_link :TAILQ_ENTRY;
   //
   handle    :Pointer;
-  //
-  ref_count :DWORD;
-  htype     :Byte;
-  mark_del  :Byte;
-  prot      :Byte;
   //
   main      :t_vm_track_interval;
   align     :t_vm_track_interval;
@@ -54,6 +48,10 @@ type
   on_destroy:t_on_destroy;
   on_trigger:t_on_trigger;
   //
+  ref_count :DWORD;
+  htype     :T_THANDLE_TYPE;
+  mark_del  :Byte;
+  prot      :Byte;
  end;
 
  pp_vm_track_map_entry=^p_vm_track_map_entry;
@@ -65,7 +63,6 @@ type
   right    :p_vm_track_map_entry; // right child in binary search tree
   start    :vm_offset_t;          // start address
   __end    :vm_offset_t;          // end address
-  source   :vm_offset_t;          // source of mirror
   instances:Pointer;              // p_vm_track_object_instance
   instcount:QWORD;
   //
@@ -82,6 +79,7 @@ type
   obj_link  :TAILQ_ENTRY;                //p_vm_track_object   ->instances
   entry     :p_vm_track_map_entry;
   obj       :p_vm_track_object;
+  source    :vm_offset_t;                // source of mirror
  end;
 
  p_vm_track_deferred=^t_vm_track_deferred;
@@ -117,7 +115,7 @@ procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 
 //
 
-function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t;htype,prot:Byte):p_vm_track_object;
+function  vm_track_object_allocate  (handle:Pointer;start,__end:vm_offset_t;htype:T_THANDLE_TYPE;prot:Byte):p_vm_track_object;
 procedure vm_track_object_deallocate(obj:p_vm_track_object);
 procedure vm_track_object_reference (obj:p_vm_track_object);
 
@@ -137,9 +135,9 @@ function  _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offs
 
 function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
 function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
+function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 
-function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
+function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:T_THANDLE_TYPE):p_vm_track_object;
 
 implementation
 
@@ -148,7 +146,7 @@ procedure pmap_prot_track(pmap :Pointer;
                           __end:vm_offset_t;
                           prots:Byte); external;
 
-function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;htype,prot:Byte):p_vm_track_object;
+function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;htype:T_THANDLE_TYPE;prot:Byte):p_vm_track_object;
 begin
  Result:=AllocMem(SizeOf(t_vm_track_object));
 
@@ -211,7 +209,7 @@ begin
 end;
 }
 
-function vm_track_object_trigger(map:p_vm_track_map;obj:p_vm_track_object;start,__end:vm_offset_t;mode:Integer):Integer;
+function vm_track_object_trigger(obj:p_vm_track_object;start,__end:vm_offset_t;mode:T_TRIGGER_MODE):Integer;
 begin
  Result:=DO_NOTHING;
 
@@ -430,15 +428,16 @@ begin
  Exit(y);
 end;
 
-procedure _vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object);
+procedure _vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object;source:vm_offset_t);
 var
  node:p_vm_track_object_instance;
  prot:Byte;
 begin
  node:=AllocMem(SizeOf(t_vm_track_object_instance));
 
- node^.entry:=entry;
- node^.obj  :=obj;
+ node^.entry :=entry;
+ node^.obj   :=obj;
+ node^.source:=source;
 
  vm_track_insert_instance(entry^.instances,node);
  Inc(entry^.instcount);
@@ -475,7 +474,7 @@ begin
  //
 end;
 
-procedure vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object);
+procedure vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object;source:vm_offset_t);
 var
  root:p_vm_track_object_instance;
 begin
@@ -488,7 +487,7 @@ begin
   Exit;
  end;
 
- _vm_track_entry_add_obj(pmap,entry,obj);
+ _vm_track_entry_add_obj(pmap,entry,obj,source);
 end;
 
 function _vm_track_entry_del_node(pmap:Pointer;entry:p_vm_track_map_entry;node:p_vm_track_object_instance):Boolean;
@@ -577,7 +576,7 @@ end;
 
 //
 
-function in_obj_list(b:p_vm_track_map_entry;obj:p_vm_track_object):Boolean;
+function in_obj_list(b:p_vm_track_map_entry;obj:p_vm_track_object;source:vm_offset_t):Boolean;
 var
  root:p_vm_track_object_instance;
 begin
@@ -591,10 +590,10 @@ begin
   Exit;
  end;
 
- Result:=(root^.obj=obj);
+ Result:=(root^.obj=obj) and (root^.source=source);
 end;
 
-function compare_obj_list(a,b:p_vm_track_map_entry):Boolean;
+function compare_obj_list(a:p_vm_track_map_entry;offset:vm_offset_t;b:p_vm_track_map_entry):Boolean;
 var
  node:p_vm_track_object_instance;
 begin
@@ -608,7 +607,7 @@ begin
  while (node<>nil) do
  begin
 
-  if not in_obj_list(b,node^.obj) then
+  if not in_obj_list(b,node^.obj,node^.source+offset) then
   begin
    Exit(False);
   end;
@@ -619,7 +618,35 @@ begin
  Result:=True;
 end;
 
-procedure copy_obj_list(src,dst:p_vm_track_map_entry);
+procedure inc_obj_list(src:p_vm_track_map_entry;offset:vm_offset_t);
+var
+ node:p_vm_track_object_instance;
+begin
+ node:=vm_track_first_instance(src^.instances);
+
+ while (node<>nil) do
+ begin
+  node^.source:=node^.source+offset;
+
+  node:=vm_track_next_instance(src^.instances,node);
+ end;
+end;
+
+procedure dec_obj_list(src:p_vm_track_map_entry;offset:vm_offset_t);
+var
+ node:p_vm_track_object_instance;
+begin
+ node:=vm_track_first_instance(src^.instances);
+
+ while (node<>nil) do
+ begin
+  node^.source:=node^.source-offset;
+
+  node:=vm_track_next_instance(src^.instances,node);
+ end;
+end;
+
+procedure copy_obj_list(src,dst:p_vm_track_map_entry;offset:vm_offset_t);
 var
  node:p_vm_track_object_instance;
 begin
@@ -630,7 +657,7 @@ begin
 
  while (node<>nil) do
  begin
-  _vm_track_entry_add_obj(nil,dst,node^.obj);
+  _vm_track_entry_add_obj(nil,dst,node^.obj,node^.source+offset);
 
   node:=vm_track_next_instance(src^.instances,node);
  end;
@@ -921,8 +948,7 @@ function vm_track_map_insert_internal(
            map   :p_vm_track_map;
            after :p_vm_track_map_entry;
            start :vm_offset_t;
-           __end :vm_offset_t;
-           source:vm_offset_t):p_vm_track_map_entry;
+           __end :vm_offset_t):p_vm_track_map_entry;
 var
  new_entry:p_vm_track_map_entry;
 begin
@@ -931,8 +957,6 @@ begin
  if (after<>@map^.header) and
     (start<after^.__end) then
  begin
-  source:=source+(after^.__end-start);
-
   start:=after^.__end;
  end;
 
@@ -953,7 +977,6 @@ begin
  new_entry:=vm_track_entry_create(map);
  new_entry^.start :=start;
  new_entry^.__end :=__end;
- new_entry^.source:=source;
 
  {
   * Insert the new after into the list
@@ -975,12 +998,12 @@ begin
  begin
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
-     (prev^.source + prevsize=entry^.source) and
-     compare_obj_list(prev,entry) then
+     compare_obj_list(prev,prevsize,entry) then
   begin
    vm_track_map_entry_unlink(map, prev);
    entry^.start :=prev^.start;
-   entry^.source:=prev^.source;
+
+   dec_obj_list(entry,prevsize);
 
    vm_track_entry_dispose(map, nil, prev);
   end;
@@ -991,8 +1014,7 @@ begin
  begin
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
-     (entry^.source + esize=next^.source) and
-     compare_obj_list(entry,next) then
+     compare_obj_list(entry,esize,next) then
   begin
    vm_track_map_entry_unlink(map, next);
    entry^.__end:=next^.__end;
@@ -1000,6 +1022,7 @@ begin
    vm_track_entry_dispose(map, nil, next);
   end;
  end;
+
 end;
 
 procedure _vm_track_map_clip_start(map:p_vm_track_map;entry:p_vm_track_map_entry;start:vm_offset_t);
@@ -1015,10 +1038,11 @@ begin
 
  new_entry^.__end:=start;
 
- entry^.source:=entry^.source + (start - entry^.start);
- entry^.start :=start;
+ copy_obj_list(entry,new_entry,0);
 
- copy_obj_list(entry,new_entry);
+ inc_obj_list(entry,(start - entry^.start));
+
+ entry^.start:=start;
 
  vm_track_map_entry_link(map, entry^.prev, new_entry);
 end;
@@ -1044,9 +1068,7 @@ begin
 
  entry^.__end:=__end;
 
- new_entry^.source:=new_entry^.source + (__end - entry^.start);
-
- copy_obj_list(entry,new_entry);
+ copy_obj_list(entry,new_entry,(__end - entry^.start));
 
  vm_track_map_entry_link(map, entry, new_entry);
 end;
@@ -1061,7 +1083,7 @@ end;
 
 function _vm_track_map_insert(map:p_vm_track_map;start,__end,source:vm_offset_t;obj:p_vm_track_object):Integer;
 var
- current,entry:p_vm_track_map_entry;
+ entry:p_vm_track_map_entry;
 begin
  if (start>=__end) then
  begin
@@ -1080,23 +1102,21 @@ begin
   vm_track_map_clip_start(map, entry, start);
  end else
  begin
-  entry:=vm_track_map_insert_internal(map,entry,start,__end,source);
+  entry:=vm_track_map_insert_internal(map,entry,start,__end);
  end;
 
- current:=entry;
- while (current<>@map^.header) and (current^.start<__end) do
+ while (entry<>@map^.header) and (entry^.start<__end) do
  begin
-  vm_track_map_clip_end(map, current, __end);
+  vm_track_map_clip_end(map, entry, __end);
 
-  current:=vm_track_map_insert_internal(map,current,
-                                        current^.__end, //start
-                                        __end,          //__end
-                                        source+(current^.__end-start)
+  entry:=vm_track_map_insert_internal(map,entry,
+                                        entry^.__end, //start
+                                        __end         //__end
                                        );
 
-  vm_track_entry_add_obj(map^.pmap,current,obj);
+  vm_track_entry_add_obj(map^.pmap,entry,obj,source+(entry^.start-start));
 
-  current:=current^.next;
+  entry:=entry^.next;
  end;
 
  Result:=(KERN_SUCCESS);
@@ -1417,9 +1437,9 @@ begin
  Result:=(KERN_SUCCESS);
 end;
 
-function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:Integer):Integer;
+function vm_track_map_trigger(map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 var
- current,entry:p_vm_track_map_entry;
+ entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;
 
  diff:vm_offset_t;
@@ -1456,19 +1476,9 @@ begin
   entry:=entry^.next;
  end;
 
- current:=entry;
- while (current<>@map^.header) and (current^.start<__end) do
+ while (entry<>@map^.header) and (entry^.start<__end) do
  begin
   node:=vm_track_first_instance(entry^.instances);
-
-  //remap with source
-  //diff:=entry^.start-start;
-  //
-  //s_start:=entry^.source-diff;
-  //s___end:=s_start+size;
-
-  s_start:=start;
-  s___end:=__end;
 
   while (node<>nil) do
   begin
@@ -1477,7 +1487,14 @@ begin
    //remap with source
    if (node^.obj<>exclude) then
    begin
-    ret:=vm_track_object_trigger(map,node^.obj,s_start,s___end,mode);
+
+    //remap with source
+    diff:=entry^.start-start;
+    //
+    s_start:=node^.source-diff;
+    s___end:=s_start+size;
+
+    ret:=vm_track_object_trigger(node^.obj,s_start,s___end,mode);
 
     if ((ret and DO_DELETE)<>0) then
     begin
@@ -1494,7 +1511,7 @@ begin
    node:=vm_track_next_instance(entry^.instances,node);
   end;
 
-  current:=current^.next;
+  entry:=entry^.next;
  end;
 
  //iterate
@@ -1532,7 +1549,7 @@ begin
  vm_track_map_unlock(map);
 end;
 
-function vm_track_map_next_object(map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:Byte):p_vm_track_object;
+function vm_track_map_next_object(map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:T_THANDLE_TYPE):p_vm_track_object;
 var
  entry:p_vm_track_map_entry;
  node:p_vm_track_object_instance;

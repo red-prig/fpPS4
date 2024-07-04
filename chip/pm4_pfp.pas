@@ -88,7 +88,8 @@ uses
  sys_bootparam,
  kern_dmem,
  kern_proc,
- vm_map;
+ vm_map,
+ vm_tracking_map;
 
 function PM4_TYPE(token:DWORD):Byte; inline;
 begin
@@ -1074,14 +1075,14 @@ begin
 
         Move(Pointer(adrSrc_dmem)^,Pointer(adrDst_dmem)^,byteCount);
 
-        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,0);
+        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
      (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
         FillDWORD(Pointer(adrDst_dmem)^,(byteCount div 4),DWORD(adrSrc));
 
-        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,0);
+        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
     else
        Assert(false,'DmaData: srcSel=0x'+HexStr(srcSel,1)+' dstSel=0x'+HexStr(dstSel,1));
@@ -1145,7 +1146,7 @@ begin
 
          Move(src_dmem^,dst_dmem^,count*SizeOf(DWORD));
 
-         vm_map_track_trigger(p_proc.p_vmspace,QWORD(dst),QWORD(dst)+count*SizeOf(DWORD),nil,0);
+         vm_map_track_trigger(p_proc.p_vmspace,QWORD(dst),QWORD(dst)+count*SizeOf(DWORD),nil,M_DMEM_WRITE);
         end;
       else
         Assert(false,'WriteData: dstSel=0x'+HexStr(dstSel,1));

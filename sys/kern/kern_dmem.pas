@@ -140,8 +140,8 @@ procedure init_dmem_map;
 var
  vmap:vm_map_t;
 begin
- dmem_map_init(@dmem,0,{SCE_KERNEL_MAIN_DMEM_SIZE} (VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) );
- rmem_map_init(@rmap,0,{SCE_KERNEL_MAIN_DMEM_SIZE} (VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) );
+ dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
+ rmem_map_init(@rmap,0,(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS));
 
  vmap:=p_proc.p_vmspace;
 
@@ -523,6 +523,8 @@ var
  start:QWORD;
  relofs:Int64;
 
+ offset:QWORD;
+
  d_start,d_start2:QWORD;
  d_end,d_end2:QWORD;
  d_mtype:DWORD;
@@ -564,20 +566,42 @@ begin
 
   if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
   begin
+   offset:=entry^.offset;
+
+   //transform by base addr
+   offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+
    qinfo^.protection:=qinfo^.protection and (VM_PROT_GPU_ALL or VM_PROT_RW);
 
    start :=entry^.start;
-   relofs:=entry^.offset - start;
+   relofs:=offset - start;
 
    if (addr < start) then
    begin
     addr:=start;
    end;
 
-   ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,obj,addr + relofs,@d_start2,@d_end2,@d_mtype);
-   if (ret<>0) then
+   if (offset>=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS)) then
    begin
-    Assert(false,'dmem_vmo_get_type error %d');
+    //dev
+
+    d_start2:=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
+    d_end2  :=(VM_MAX_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
+    d_mtype :=SCE_KERNEL_WB_ONION;
+   end else
+   begin
+    //dmem
+
+    ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,
+                            obj,
+                            addr + (entry^.offset - start), //send not transformed offset
+                            @d_start2,@d_end2,
+                            @d_mtype);
+    if (ret<>0) then
+    begin
+     Assert(false,'dmem_vmo_get_type error %d');
+    end;
+
    end;
 
    qinfo^.bits.isDirectMemory:=1;

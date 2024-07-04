@@ -96,6 +96,21 @@ type
   procedure remove_stream(stream:p_pm4_stream);
  end;
 
+ PvCmdFreeNode=^TvCmdFreeNode;
+ TvCmdFreeNode=record
+  entry:STAILQ_ENTRY;
+  FCmd :TVkCommandBuffer;
+ end;
+
+ TvCmdCachedPool=class(TvCmdPool)
+  FMemCache:STAILQ_HEAD; //PvCmdFreeNode
+  FDeffered:STAILQ_HEAD; //PvCmdFreeNode
+  FTrimCount:Integer;
+  Constructor Create(FFamily:TVkUInt32);
+  procedure   Free(cmd:TVkCommandBuffer); register; override;
+  procedure   Trim;                       register; override;
+ end;
+
  t_pool_line=array[0..3] of TvCustomCmdPool;
  t_pool_cache=object
   queue:TvQueue;
@@ -109,6 +124,8 @@ type
   entry :TAILQ_ENTRY;  //stall
   stream:p_pm4_stream;
   //
+  function  OnAlloc(size:Ptruint):Pointer; register; override;
+  Procedure OnFree (P:Pointer   );         register; override;
  end;
 
  t_me_render_context=object
@@ -130,6 +147,7 @@ type
   procedure BeginCmdBuffer;
   procedure FinishCmdBuffer;
   function  CmdStatus(i:t_pm4_stream_type):TVkResult;
+  procedure PingCmd;
   function  WaitConfirmOrSwitch:Boolean;
   //
   procedure switch_task;
@@ -146,7 +164,8 @@ uses
  vmparam,
  kern_dmem,
  kern_proc,
- vm_map;
+ vm_map,
+ vm_tracking_map;
 
 procedure StartFrameCapture;
 begin
@@ -350,22 +369,6 @@ end;
 
 //
 
-type
- PvCmdFreeNode=^TvCmdFreeNode;
- TvCmdFreeNode=record
-  entry:STAILQ_ENTRY;
-  FCmd :TVkCommandBuffer;
- end;
-
- TvCmdCachedPool=class(TvCmdPool)
-  FMemCache:STAILQ_HEAD; //PvCmdFreeNode
-  FDeffered:STAILQ_HEAD; //PvCmdFreeNode
-  FTrimCount:Integer;
-  Constructor Create(FFamily:TVkUInt32);
-  procedure   Free(cmd:TVkCommandBuffer); register; override;
-  procedure   Trim;                       register; override;
- end;
-
 Constructor TvCmdCachedPool.Create(FFamily:TVkUInt32);
 begin
  inherited;
@@ -445,6 +448,20 @@ begin
 
  Result:=last;
 end;
+
+//
+
+function TvStreamCmdBuffer.OnAlloc(size:Ptruint):Pointer; register;
+begin
+ Result:=stream^.allocator.Alloc(size);
+ FillChar(Result^,size,0);
+end;
+
+Procedure TvStreamCmdBuffer.OnFree(P:Pointer); register;
+begin
+ //
+end;
+
 
 //
 
@@ -577,6 +594,16 @@ begin
  end;
 
  Result:=VK_SUCCESS;
+end;
+
+procedure t_me_render_context.PingCmd;
+var
+ i:t_pm4_stream_type;
+begin
+ for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+ begin
+  CmdStatus(i);
+ end;
 end;
 
 function t_me_render_context.WaitConfirmOrSwitch:Boolean;
@@ -1500,7 +1527,7 @@ begin
     Assert(false,'pm4_EventWriteEop');
   end;
 
-  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,0);
+  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
  end;
 
  if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
@@ -1591,7 +1618,7 @@ begin
 
      PDWORD(addr_dmem)^:=node^.data;
 
-     vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+4,nil,0);
+     vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+4,nil,M_DMEM_WRITE);
     end;
 
    end;
@@ -1641,7 +1668,7 @@ begin
 
       Move(src_dmem^,dst_dmem^,byteSize);
 
-      vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.dst),QWORD(node^.dst)+byteSize,nil,0);
+      vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.dst),QWORD(node^.dst)+byteSize,nil,M_DMEM_WRITE);
      end;
     end;
   else
@@ -1791,6 +1818,8 @@ begin
    //
    Continue;
   end;
+
+  ctx.PingCmd;
 
   //stall is empty!
 

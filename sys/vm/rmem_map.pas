@@ -736,7 +736,7 @@ function rmem_map_insert(map:p_rmem_map;
                          vaddr:QWORD;
                          start,__end:DWORD):Integer;
 var
- current,entry:p_rmem_map_entry;
+ entry:p_rmem_map_entry;
 begin
  if (start=__end) then
  begin
@@ -760,19 +760,18 @@ begin
   entry:=rmem_map_insert_internal(map,entry,start,__end);
  end;
 
- current:=entry;
- while (current<>@map^.header) and (current^.start<__end) do
+ while (entry<>@map^.header) and (entry^.start<__end) do
  begin
-  rmem_map_clip_end(map, current, __end);
+  rmem_map_clip_end(map, entry, __end);
 
-  current:=rmem_map_insert_internal(map,current,current^.__end,__end);
+  entry:=rmem_map_insert_internal(map,entry,entry^.__end,__end);
 
-  if rmem_entry_add_vaddr(current,vaddr) then
+  if rmem_entry_add_vaddr(entry,vaddr) then
   begin
    rmem_entry_add_track(map^.tmap,entry,vaddr);
   end;
 
-  current:=current^.next;
+  entry:=entry^.next;
  end;
 
  rmem_map_unlock(map);

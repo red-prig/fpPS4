@@ -211,7 +211,7 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;mode:Integer):Integer; SysV_ABI_CDecl;
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer; SysV_ABI_CDecl;
 var
  image:TvCustomImage2;
  i:Integer;
@@ -223,15 +223,17 @@ begin
  //Writeln('on_trigger image');
 
  case mode of
-  0://direct
+  M_CPU_WRITE,
+  M_DMEM_WRITE:
+    //direct
     begin
      System.InterlockedIncrement(image.change_rate.trigger);
     end;
-  1://planned
+  M_GPU_PLANNED://planned
     begin
      System.InterlockedIncrement(image.change_rate.planned);
     end;
-  2://differed
+  M_GPU_APPLY://differed
     begin
      i:=System.InterlockedExchangeAdd(image.change_rate.planned,0);
 
