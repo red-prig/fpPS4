@@ -172,6 +172,11 @@ const
  kDccBlockSize128 = 1; ///< 128-byte blocks.
  kDccBlockSize256 = 2; ///< 256-byte blocks.
 
+ kNumBanks2  = $0;
+ kNumBanks4  = $1;
+ kNumBanks8  = $2;
+ kNumBanks16 = $3;
+
 type
  TDATA_FORMAT=bitpacked record
   m_surfaceFormat :bit8; //0  < Gnm::SurfaceFormat.
@@ -192,7 +197,7 @@ type
   reserved                            :0..134217727; ///< This field must be set to zero.
  end;
 
- TRENDER_TARGET=packed object
+ RenderTarget=packed object
   BASE       :TCB_COLOR0_BASE       ; //0  mmCB_COLOR0_BASE_DEFAULT
   PITCH      :TCB_COLOR0_PITCH      ; //1  mmCB_COLOR0_PITCH_DEFAULT
   SLICE      :TCB_COLOR0_SLICE      ; //2  mmCB_COLOR0_SLICE_DEFAULT
@@ -236,7 +241,7 @@ type
   m_numFragments:DWORD; ///< The number of fragments per pixel. This must not be greater than <c><i>numSamples</i></c>.
   m_flags:RenderTargetInitFlags; ///< Used to enable additional RenderTarget features.
 
-  m_regs:TRENDER_TARGET;
+  m_regs:RenderTarget;
  end;
 
  PSurfaceFlags=^SurfaceFlags;
@@ -275,7 +280,7 @@ type
   m_isBlockCompressed   :Boolean;
   m_tileSwizzleMask     :Byte;
 
-  function initFromRenderTarget(var target:TRENDER_TARGET;arraySlice:DWORD):Integer;
+  function initFromRenderTarget(var target:RenderTarget;arraySlice:DWORD):Integer;
   function initFromRenderTargetSpec(var target:RenderTargetSpec;arraySlice:DWORD):Integer;
  end;
 
@@ -1484,6 +1489,20 @@ const
  function getMicroTileMode(outMicroTileMode:PByte;tmode:Byte):Integer;
  Function computeSurfaceMacroTileMode(outMacroTileMode:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
 
+ procedure computeHtileInfo(outHtileSizeBytes:PPtruint;
+                            outHtileAlign    :PPtruint;
+                            outHtilePitch    :PPtruint;
+                            outHtileHeight   :PPtruint;
+                            //
+                            Pitch              :DWORD;
+                            Height             :DWORD;
+                            LastArraySliceIndex:DWORD;
+                            //
+                            isHtileLinear :Boolean;
+                            isTcCompatible:Boolean;
+                            tileMode      :Byte
+                           );
+
  function getArrayMode(outArrayMode:PByte;tmode:Byte):Integer;
 
  function getMicroTileThickness(arrayMode:Byte):Byte;
@@ -1780,42 +1799,42 @@ begin
  Result:=0;
 end;
 
-function TRENDER_TARGET.getTileMode:Byte; inline;
+function RenderTarget.getTileMode:Byte; inline;
 begin
  Result:=ATTRIB.TILE_MODE_INDEX;
 end;
 
-function TRENDER_TARGET.getWidth:WORD; inline;
+function RenderTarget.getWidth:WORD; inline;
 begin
  Result:=Width;
 end;
 
-function TRENDER_TARGET.getHeight:WORD; inline;
+function RenderTarget.getHeight:WORD; inline;
 begin
  Result:=Height;
 end;
 
-function TRENDER_TARGET.getMinimumGpuMode:Byte; inline;
+function RenderTarget.getMinimumGpuMode:Byte; inline;
 begin
  Result:=INFO.ALT_TILE_MODE;
 end;
 
-function TRENDER_TARGET.getNumFragments:Byte; inline;
+function RenderTarget.getNumFragments:Byte; inline;
 begin
  Result:=ATTRIB.NUM_FRAGMENTS;
 end;
 
-function TRENDER_TARGET.getPitchDiv8Minus1:Word; inline;
+function RenderTarget.getPitchDiv8Minus1:Word; inline;
 begin
  Result:=PITCH.TILE_MAX;
 end;
 
-function TRENDER_TARGET.getPitch:DWORD; inline;
+function RenderTarget.getPitch:DWORD; inline;
 begin
  Result:=(getPitchDiv8Minus1+1)*8;
 end;
 
-function TRENDER_TARGET.getDccCompressionEnable:Boolean; inline;
+function RenderTarget.getDccCompressionEnable:Boolean; inline;
 begin
  Result:=INFO.DCC_ENABLE<>0;
 end;
@@ -1965,7 +1984,7 @@ begin
  Result.m_unused       :=0;
 end;
 
-function TRENDER_TARGET.getDataFormat:TDATA_FORMAT;
+function RenderTarget.getDataFormat:TDATA_FORMAT;
 begin
  Result:=sce_Gnm_DataFormat_build(INFO.FORMAT,INFO.NUMBER_TYPE,INFO.COMP_SWAP);
 end;
@@ -2084,6 +2103,106 @@ begin
 
 end;
 
+function getPipeCount(pipeConfig:Byte):DWORD; forward;
+
+procedure computeHtileInfo(outHtileSizeBytes:PPtruint;
+                           outHtileAlign    :PPtruint;
+                           outHtilePitch    :PPtruint;
+                           outHtileHeight   :PPtruint;
+                           //
+                           Pitch              :DWORD;
+                           Height             :DWORD;
+                           LastArraySliceIndex:DWORD;
+                           //
+                           isHtileLinear :Boolean;
+                           isTcCompatible:Boolean;
+                           tileMode      :Byte
+                          );
+const
+ bitsPerElement    =32;
+ cacheBits         =kHtileCacheBits;
+ htileCacheLineSize=kHtileCacheBits div 8;
+var
+ NumSlices   :DWORD;
+ pipeConfig  :DWORD;
+ numPipes    :DWORD;
+ numTiles    :DWORD;
+ macroWidth  :DWORD;
+ macroHeight :DWORD;
+ w,h:DWORD;
+ htilePitch  :DWORD;
+ htileHeight :DWORD;
+ htileAlign  :DWORD;
+ surfaceBytes:Ptruint;
+ cacheAlign  :Ptruint;
+ htileBytes  :Ptruint;
+begin
+ PipeConfig:=0;
+ getPipeConfig(@pipeConfig,tileMode);
+ numPipes:=getPipeCount(pipeConfig);
+
+ //Pitch   = getPitch  -> (DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
+ //Height  = getHeight -> (DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
+ //LastArraySliceIndex -> DB_DEPTH_VIEW.SLICE_MAX
+ NumSlices:=1+LastArraySliceIndex;
+
+ if isHtileLinear then
+ begin
+  numTiles   :=8;
+  macroWidth :=numTiles*kMicroTileWidth;
+  macroHeight:=numTiles*kMicroTileHeight;
+ end else
+ begin
+  h:=1;
+  w:=cacheBits div bitsPerElement;
+
+  while ((w>h*2*numPipes) and ((w and 1)=0)) do
+  begin
+   w:=w shr 1;
+   h:=h shl 1;
+  end;
+
+  macroWidth :=8*w;
+  macroHeight:=8*h*numPipes;
+ end;
+
+ htilePitch :=(Pitch +(macroWidth -1)) and (not (macroWidth -1));
+ htileHeight:=(Height+(macroHeight-1)) and (not (macroHeight-1));
+
+ surfaceBytes:=htilePitch*htileHeight*(bitsPerElement div 8)*NumSlices div 64;
+
+ cacheAlign:=htileCacheLineSize*numPipes;
+
+ if (outHtileSizeBytes<>nil) then
+ begin
+  htileBytes:=(surfaceBytes+(cacheAlign-1)) and (not (cacheAlign-1));
+  outHtileSizeBytes^:=htileBytes;
+ end;
+
+ if (outHtileAlign<>nil) then
+ begin
+  htileAlign:=kPipeInterleaveBytes*numPipes;
+
+  if isTcCompatible then
+  begin
+   htileAlign:=htileAlign*(2 shl kNumBanks8);
+  end;
+
+  outHtileAlign^:=htileAlign;
+ end;
+
+ if (outHtilePitch<>nil) then
+ begin
+  outHtilePitch^:=htilePitch;
+ end;
+
+ if (outHtileHeight<>nil) then
+ begin
+  outHtileHeight^:=htileHeight;
+ end;
+
+end;
+
 Function getAltNumBanks(outAltNumBanks:PByte;tileMode,bitsPerElement,numFragmentsPerPixel:Byte):Integer;
 var
  _MacroTileMode:Byte;
@@ -2179,7 +2298,7 @@ begin
 end;
 
 
-function TRENDER_TARGET.getTileSwizzleMask:Byte;
+function RenderTarget.getTileSwizzleMask:Byte;
 var
  _isMacroTiled:Boolean;
  dataFormat:TDATA_FORMAT;
@@ -2266,61 +2385,61 @@ end;
 {
 int32_t sce::GpuAddress::TilingParameters::initFromTexture(const Gnm::Texture *texture, uint32_t mipLevel, uint32_t arraySlice)
 
-	SCE_GNM_ASSERT_MSG_RETURN(texture != 0, kStatusInvalidArgument, "texture must not be NULL.");
-	SCE_GNM_ASSERT_MSG_RETURN(mipLevel <= texture->getLastMipLevel(), kStatusInvalidArgument, "mipLevel (%u) is out of range for texture; last level is %u", mipLevel, texture->getLastMipLevel());
-	bool isCubemap = (texture->getTextureType() == Gnm::kTextureTypeCubemap);
-	bool isVolume = (texture->getTextureType() == Gnm::kTextureType3d);
-	// Building surface flags manually is error-prone, but we don't know exactly what type of texture this is.
-	m_surfaceFlags.m_value = 0;
-	Gnm::MicroTileMode microTileMode;
-	int32_t status = getMicroTileMode(&microTileMode, texture->getTileMode());
-	if (status != kStatusSuccess)
-		return status;
-	m_surfaceFlags.m_depthTarget   = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getZFormat()       != Gnm::kZFormatInvalid)) ? 1 : 0;
-	m_surfaceFlags.m_stencilTarget = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getStencilFormat() != Gnm::kStencilInvalid)) ? 1 : 0;
-	m_surfaceFlags.m_cube = isCubemap ? 1 : 0;
-	m_surfaceFlags.m_volume = isVolume ? 1 : 0;
-	m_surfaceFlags.m_pow2Pad = texture->isPaddedToPow2() ? 1 : 0;
-	if (texture->getMinimumGpuMode() == Gnm::kGpuModeNeo)
-	{
-		m_surfaceFlags.m_texCompatible = 1;
-	}
-	m_tileMode = texture->getTileMode(); // see below, though
-	m_minGpuMode = texture->getMinimumGpuMode();
-	Gnm::DataFormat dataFormat = texture->getDataFormat();
-	m_bitsPerFragment = dataFormat.getTotalBitsPerElement() / dataFormat.getTexelsPerElement();
-	m_isBlockCompressed = (dataFormat.getTexelsPerElement() > 1);
-	m_tileSwizzleMask = texture->getTileSwizzleMask();
-	m_linearWidth = std::max(texture->getWidth() >> mipLevel, 1U);
-	m_linearHeight = std::max(texture->getHeight() >> mipLevel, 1U);
-	m_linearDepth = m_surfaceFlags.m_volume ? std::max(texture->getDepth() >> mipLevel, 1U) : 1;
-	m_numFragmentsPerPixel = 1 << texture->getNumFragments();
-	m_baseTiledPitch = texture->getPitch();
-	m_mipLevel = mipLevel;
-	SCE_GNM_ASSERT_MSG_RETURN(arraySlice == 0 || !m_surfaceFlags.m_volume, kStatusInvalidArgument, "for volume textures, arraySlice must be 0."); // volume textures can't be arrays
-	uint32_t arraySliceCount = texture->getTotalArraySliceCount();
-	if (isCubemap)
-		arraySliceCount *= 6; // Cube maps store 6 faces per array slice
-	else if (isVolume)
-		arraySliceCount = 1;
-	if (texture->isPaddedToPow2())
-		arraySliceCount = nextPowerOfTwo(arraySliceCount); // array slice counts are padded to a power of two as well
-	SCE_GNM_ASSERT_MSG_RETURN(arraySlice < arraySliceCount, kStatusInvalidArgument, "arraySlice (%u) is out of range for texture (0x%p) with %u slices.", arraySlice, texture, arraySliceCount);
-	m_arraySlice = arraySlice;
-	// Use computeSurfaceInfo() to determine what array mode we REALLY need to use, since it's occasionally not the one the Texture uses.
-	// (e.g. for a 2D-tiled texture, the smaller mip levels will implicitly use a 1D array mode to cut down on wasted padding space)
-	SurfaceInfo surfInfoOut = {0};
-	status = computeSurfaceInfo(&surfInfoOut, this);
-	if (status != kStatusSuccess)
-		return status;
-	status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
-	if (status != kStatusSuccess)
-		return status;
-	return kStatusSuccess;
+ SCE_GNM_ASSERT_MSG_RETURN(texture != 0, kStatusInvalidArgument, "texture must not be NULL.");
+ SCE_GNM_ASSERT_MSG_RETURN(mipLevel <= texture->getLastMipLevel(), kStatusInvalidArgument, "mipLevel (%u) is out of range for texture; last level is %u", mipLevel, texture->getLastMipLevel());
+ bool isCubemap = (texture->getTextureType() == Gnm::kTextureTypeCubemap);
+ bool isVolume = (texture->getTextureType() == Gnm::kTextureType3d);
+ // Building surface flags manually is error-prone, but we don't know exactly what type of texture this is.
+ m_surfaceFlags.m_value = 0;
+ Gnm::MicroTileMode microTileMode;
+ int32_t status = getMicroTileMode(&microTileMode, texture->getTileMode());
+ if (status != kStatusSuccess)
+  return status;
+ m_surfaceFlags.m_depthTarget   = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getZFormat()       != Gnm::kZFormatInvalid)) ? 1 : 0;
+ m_surfaceFlags.m_stencilTarget = (!isVolume && (microTileMode == Gnm::kMicroTileModeDepth) && (texture->getDataFormat().getStencilFormat() != Gnm::kStencilInvalid)) ? 1 : 0;
+ m_surfaceFlags.m_cube = isCubemap ? 1 : 0;
+ m_surfaceFlags.m_volume = isVolume ? 1 : 0;
+ m_surfaceFlags.m_pow2Pad = texture->isPaddedToPow2() ? 1 : 0;
+ if (texture->getMinimumGpuMode() == Gnm::kGpuModeNeo)
+ {
+  m_surfaceFlags.m_texCompatible = 1;
+ }
+ m_tileMode = texture->getTileMode(); // see below, though
+ m_minGpuMode = texture->getMinimumGpuMode();
+ Gnm::DataFormat dataFormat = texture->getDataFormat();
+ m_bitsPerFragment = dataFormat.getTotalBitsPerElement() / dataFormat.getTexelsPerElement();
+ m_isBlockCompressed = (dataFormat.getTexelsPerElement() > 1);
+ m_tileSwizzleMask = texture->getTileSwizzleMask();
+ m_linearWidth = std::max(texture->getWidth() >> mipLevel, 1U);
+ m_linearHeight = std::max(texture->getHeight() >> mipLevel, 1U);
+ m_linearDepth = m_surfaceFlags.m_volume ? std::max(texture->getDepth() >> mipLevel, 1U) : 1;
+ m_numFragmentsPerPixel = 1 << texture->getNumFragments();
+ m_baseTiledPitch = texture->getPitch();
+ m_mipLevel = mipLevel;
+ SCE_GNM_ASSERT_MSG_RETURN(arraySlice == 0 || !m_surfaceFlags.m_volume, kStatusInvalidArgument, "for volume textures, arraySlice must be 0."); // volume textures can't be arrays
+ uint32_t arraySliceCount = texture->getTotalArraySliceCount();
+ if (isCubemap)
+  arraySliceCount *= 6; // Cube maps store 6 faces per array slice
+ else if (isVolume)
+  arraySliceCount = 1;
+ if (texture->isPaddedToPow2())
+  arraySliceCount = nextPowerOfTwo(arraySliceCount); // array slice counts are padded to a power of two as well
+ SCE_GNM_ASSERT_MSG_RETURN(arraySlice < arraySliceCount, kStatusInvalidArgument, "arraySlice (%u) is out of range for texture (0x%p) with %u slices.", arraySlice, texture, arraySliceCount);
+ m_arraySlice = arraySlice;
+ // Use computeSurfaceInfo() to determine what array mode we REALLY need to use, since it's occasionally not the one the Texture uses.
+ // (e.g. for a 2D-tiled texture, the smaller mip levels will implicitly use a 1D array mode to cut down on wasted padding space)
+ SurfaceInfo surfInfoOut = {0};
+ status = computeSurfaceInfo(&surfInfoOut, this);
+ if (status != kStatusSuccess)
+  return status;
+ status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
+ if (status != kStatusSuccess)
+  return status;
+ return kStatusSuccess;
 }
 
 
-function TilingParameters.initFromRenderTarget(var target:TRENDER_TARGET;arraySlice:DWORD):Integer;
+function TilingParameters.initFromRenderTarget(var target:RenderTarget;arraySlice:DWORD):Integer;
 var
  dataFormat:TDATA_FORMAT;
  status:Integer;
@@ -2379,14 +2498,14 @@ end;
 //int32_t sce::GpuAddress::TilingParameters::initFromRenderTarget(const Gnm::RenderTarget *target, uint32_t arraySlice)
 //{
 
-//	SurfaceInfo surfInfoOut = {0};
-//	status = computeSurfaceInfo(&surfInfoOut, this);
-//	if (status != kStatusSuccess)
-//		return status;
-//	status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
-//	if (status != kStatusSuccess)
-//		return status;
-//	return kStatusSuccess;
+// SurfaceInfo surfInfoOut = {0};
+// status = computeSurfaceInfo(&surfInfoOut, this);
+// if (status != kStatusSuccess)
+//  return status;
+// status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
+// if (status != kStatusSuccess)
+//  return status;
+// return kStatusSuccess;
 //}
 
 function TilingParameters.initFromRenderTargetSpec(var target:RenderTargetSpec;arraySlice:DWORD):Integer;
@@ -2444,10 +2563,10 @@ begin
   SurfaceInfo surfInfoOut = {0};
   status = computeSurfaceInfo(&surfInfoOut, this);
   if (status != kStatusSuccess)
-  	return status;
+   return status;
   status = adjustTileMode(m_minGpuMode, &m_tileMode, m_tileMode, surfInfoOut.m_arrayMode);
   if (status != kStatusSuccess)
-  	return status;
+   return status;
   return kStatusSuccess;}
 
   Result:=0;
@@ -2482,21 +2601,21 @@ begin
         end;
       32:
         begin
- 	 elem:=elem or ( (x shr 0) and $1 ) shl 0;
- 	 elem:=elem or ( (x shr 1) and $1 ) shl 1;
- 	 elem:=elem or ( (y shr 0) and $1 ) shl 2;
- 	 elem:=elem or ( (x shr 2) and $1 ) shl 3;
- 	 elem:=elem or ( (y shr 1) and $1 ) shl 4;
- 	 elem:=elem or ( (y shr 2) and $1 ) shl 5;
+   elem:=elem or ( (x shr 0) and $1 ) shl 0;
+   elem:=elem or ( (x shr 1) and $1 ) shl 1;
+   elem:=elem or ( (y shr 0) and $1 ) shl 2;
+   elem:=elem or ( (x shr 2) and $1 ) shl 3;
+   elem:=elem or ( (y shr 1) and $1 ) shl 4;
+   elem:=elem or ( (y shr 2) and $1 ) shl 5;
         end;
       64:
         begin
- 	 elem:=elem or ( (x shr 0) and $1 ) shl 0;
- 	 elem:=elem or ( (y shr 0) and $1 ) shl 1;
- 	 elem:=elem or ( (x shr 1) and $1 ) shl 2;
- 	 elem:=elem or ( (x shr 2) and $1 ) shl 3;
- 	 elem:=elem or ( (y shr 1) and $1 ) shl 4;
- 	 elem:=elem or ( (y shr 2) and $1 ) shl 5;
+   elem:=elem or ( (x shr 0) and $1 ) shl 0;
+   elem:=elem or ( (y shr 0) and $1 ) shl 1;
+   elem:=elem or ( (x shr 1) and $1 ) shl 2;
+   elem:=elem or ( (x shr 2) and $1 ) shl 3;
+   elem:=elem or ( (y shr 1) and $1 ) shl 4;
+   elem:=elem or ( (y shr 2) and $1 ) shl 5;
         end;
       else;
        //Assert(false,'Unsupported bitsPerElement (%u) for displayable surface.');
@@ -2536,7 +2655,7 @@ begin
        kArrayMode2dTiledXThick,
        kArrayMode3dTiledXThick:
          begin
-	  elem:=elem or ( (z shr 2) and $1 ) shl 8;
+   elem:=elem or ( (z shr 2) and $1 ) shl 8;
          end;
        kArrayMode1dTiledThick,
        kArrayMode2dTiledThick,
@@ -2547,36 +2666,36 @@ begin
         case bitsPerElement of
          8,16:
            begin
-    	    elem:=elem or ( (x shr 0) and $1 ) shl 0;
-    	    elem:=elem or ( (y shr 0) and $1 ) shl 1;
-    	    elem:=elem or ( (x shr 1) and $1 ) shl 2;
-    	    elem:=elem or ( (y shr 1) and $1 ) shl 3;
-    	    elem:=elem or ( (z shr 0) and $1 ) shl 4;
-    	    elem:=elem or ( (z shr 1) and $1 ) shl 5;
-    	    elem:=elem or ( (x shr 2) and $1 ) shl 6;
-    	    elem:=elem or ( (y shr 2) and $1 ) shl 7;
+         elem:=elem or ( (x shr 0) and $1 ) shl 0;
+         elem:=elem or ( (y shr 0) and $1 ) shl 1;
+         elem:=elem or ( (x shr 1) and $1 ) shl 2;
+         elem:=elem or ( (y shr 1) and $1 ) shl 3;
+         elem:=elem or ( (z shr 0) and $1 ) shl 4;
+         elem:=elem or ( (z shr 1) and $1 ) shl 5;
+         elem:=elem or ( (x shr 2) and $1 ) shl 6;
+         elem:=elem or ( (y shr 2) and $1 ) shl 7;
            end;
          32:
            begin
-    	    elem:=elem or ( (x shr 0) and $1 ) shl 0;
-    	    elem:=elem or ( (y shr 0) and $1 ) shl 1;
-    	    elem:=elem or ( (x shr 1) and $1 ) shl 2;
-    	    elem:=elem or ( (z shr 0) and $1 ) shl 3;
-    	    elem:=elem or ( (y shr 1) and $1 ) shl 4;
-    	    elem:=elem or ( (z shr 1) and $1 ) shl 5;
-    	    elem:=elem or ( (x shr 2) and $1 ) shl 6;
-    	    elem:=elem or ( (y shr 2) and $1 ) shl 7;
+         elem:=elem or ( (x shr 0) and $1 ) shl 0;
+         elem:=elem or ( (y shr 0) and $1 ) shl 1;
+         elem:=elem or ( (x shr 1) and $1 ) shl 2;
+         elem:=elem or ( (z shr 0) and $1 ) shl 3;
+         elem:=elem or ( (y shr 1) and $1 ) shl 4;
+         elem:=elem or ( (z shr 1) and $1 ) shl 5;
+         elem:=elem or ( (x shr 2) and $1 ) shl 6;
+         elem:=elem or ( (y shr 2) and $1 ) shl 7;
            end;
          64,128:
            begin
-    	    elem:=elem or ( (x shr 0) and $1 ) shl 0;
-    	    elem:=elem or ( (y shr 0) and $1 ) shl 1;
-    	    elem:=elem or ( (z shr 0) and $1 ) shl 2;
-    	    elem:=elem or ( (x shr 1) and $1 ) shl 3;
-    	    elem:=elem or ( (y shr 1) and $1 ) shl 4;
-    	    elem:=elem or ( (z shr 1) and $1 ) shl 5;
-    	    elem:=elem or ( (x shr 2) and $1 ) shl 6;
-    	    elem:=elem or ( (y shr 2) and $1 ) shl 7;
+         elem:=elem or ( (x shr 0) and $1 ) shl 0;
+         elem:=elem or ( (y shr 0) and $1 ) shl 1;
+         elem:=elem or ( (z shr 0) and $1 ) shl 2;
+         elem:=elem or ( (x shr 1) and $1 ) shl 3;
+         elem:=elem or ( (y shr 1) and $1 ) shl 4;
+         elem:=elem or ( (z shr 1) and $1 ) shl 5;
+         elem:=elem or ( (x shr 2) and $1 ) shl 6;
+         elem:=elem or ( (y shr 2) and $1 ) shl 7;
            end;
           else;
            //Assert(false,'Invalid bitsPerElement (%u) for microTileMode=kMicroTileModeThick.');
@@ -2686,25 +2805,25 @@ begin
  case num_banks of
   2:
    begin
-    bank :=bank or ( ((xs shr 3) xor (ys shr 3))			and $1 )  shl  0;
+    bank :=bank or ( ((xs shr 3) xor (ys shr 3))   and $1 )  shl  0;
    end;
   4:
    begin
-    bank :=bank or ( ((xs shr 3) xor (ys shr 4))			and $1 )  shl  0;
-    bank :=bank or ( ((xs shr 4) xor (ys shr 3))			and $1 )  shl  1;
+    bank :=bank or ( ((xs shr 3) xor (ys shr 4))   and $1 )  shl  0;
+    bank :=bank or ( ((xs shr 4) xor (ys shr 3))   and $1 )  shl  1;
    end;
   8:
    begin
-    bank :=bank or ( ((xs shr 3) xor (ys shr 5))			and $1 )  shl  0;
-    bank :=bank or ( ((xs shr 4) xor (ys shr 4) xor (ys shr 5))	and $1 )  shl  1;
-    bank :=bank or ( ((xs shr 5) xor (ys shr 3))			and $1 )  shl  2;
+    bank :=bank or ( ((xs shr 3) xor (ys shr 5))   and $1 )  shl  0;
+    bank :=bank or ( ((xs shr 4) xor (ys shr 4) xor (ys shr 5)) and $1 )  shl  1;
+    bank :=bank or ( ((xs shr 5) xor (ys shr 3))   and $1 )  shl  2;
    end;
   16:
    begin
-    bank :=bank or ( ((xs shr 3) xor (ys shr 6))			and $1 )  shl  0;
-    bank :=bank or ( ((xs shr 4) xor (ys shr 5) xor (ys shr 6))	and $1 )  shl  1;
-    bank :=bank or ( ((xs shr 5) xor (ys shr 4))			and $1 )  shl  2;
-    bank :=bank or ( ((xs shr 6) xor (ys shr 3))			and $1 )  shl  3;
+    bank :=bank or ( ((xs shr 3) xor (ys shr 6))   and $1 )  shl  0;
+    bank :=bank or ( ((xs shr 4) xor (ys shr 5)    xor (ys shr 6)) and $1 )  shl  1;
+    bank :=bank or ( ((xs shr 5) xor (ys shr 4))   and $1 )  shl  2;
+    bank :=bank or ( ((xs shr 6) xor (ys shr 3))   and $1 )  shl  3;
    end;
   else
    Assert(false,'invalid num_banks (%u) -- must be 2, 4, 8, or 16.');

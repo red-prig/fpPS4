@@ -665,7 +665,6 @@ begin
    ri:=FetchImage(ctx.Cmd,
                   FImage,
                   [iu_sampled]
-                  //TM_READ
                  );
 
    pm4_load_from(ctx.Cmd,ri,TM_READ);
@@ -737,7 +736,6 @@ begin
    ri:=FetchImage(ctx.Cmd,
                   FImage,
                   [iu_sampled]
-                  //TM_READ
                  );
 
    iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
@@ -780,6 +778,7 @@ begin
 
    if (resource_instance<>nil) then
    begin
+
     if (resource_instance^.prev.mem_usage<>0) then
     begin
      writeln;
@@ -789,6 +788,7 @@ begin
               ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
               ' next:',HexStr(resource_instance^.next.mem_usage,1)
            );
+
    end;
 
    buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
@@ -881,7 +881,6 @@ begin
  ri:=FetchImage(CmdBuffer,
                 rt_info.DB_INFO.FImageInfo,
                 [iu_depthstenc]
-                //rt_info.DB_INFO.DEPTH_USAGE
                 );
  {
  ri.PushBarrier(CmdBuffer,
@@ -940,12 +939,9 @@ var
 begin
  RP_KEY.Clear;
 
- //RenderCmd.RT_COUNT:=rt_info.RT_COUNT;
-
  if (ctx.rt_info^.RT_COUNT<>0) then
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
-   //RenderCmd.RT_INFO[i]:=rt_info.RT_INFO[i];
 
    RP_KEY.AddColorAt(ctx.rt_info^.RT_INFO[i].attachment,
                      ctx.rt_info^.RT_INFO[i].FImageInfo.cformat,
@@ -954,15 +950,28 @@ begin
 
   end;
 
- //rt_info.DB_ENABLE:=False;
-
- //RenderCmd.DB_ENABLE:=rt_info.DB_ENABLE;
-
  if ctx.rt_info^.DB_ENABLE then
  begin
-  //RenderCmd.DB_INFO:=rt_info.DB_INFO;
 
- // RenderCmd.DB_INFO.DEPTH_USAGE:=RenderCmd.DB_INFO.DEPTH_USAGE or TM_CLEAR;
+  //set clear flag on cleared htile
+  if (ctx.rt_info^.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
+  begin
+   resource_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.ADDR,
+                                                                   ctx.rt_info^.DB_INFO.HTILE_INFO.SIZE);
+
+   Assert(resource_instance<>nil);
+
+   if resource_instance^.resource^.rclear then
+   begin
+    //clear TM_READ
+    ctx.rt_info^.DB_INFO.DEPTH_USAGE:=ctx.rt_info^.DB_INFO.DEPTH_USAGE and (not TM_READ);
+    //set   TM_CLEAR
+    ctx.rt_info^.DB_INFO.DEPTH_USAGE:=ctx.rt_info^.DB_INFO.DEPTH_USAGE or TM_CLEAR;
+
+    resource_instance^.resource^.rclear:=False;
+   end;
+
+  end;
 
   RP_KEY.AddDepthAt(ctx.rt_info^.RT_COUNT, //add to last attachment id
                     ctx.rt_info^.DB_INFO.FImageInfo.cformat,
@@ -1072,7 +1081,6 @@ begin
    ri:=FetchImage(ctx.Cmd,
                   ctx.rt_info^.RT_INFO[i].FImageInfo,
                   [iu_attachment]
-                  //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
    pm4_load_from(ctx.Cmd,ri,ctx.rt_info^.RT_INFO[i].IMAGE_USAGE);
@@ -1134,7 +1142,6 @@ begin
   ri:=FetchImage(ctx.Cmd,
                  ctx.rt_info^.DB_INFO.FImageInfo,
                  [iu_depthstenc]
-                 //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
   pm4_load_from(ctx.Cmd,ri.DepthOnly  ,ctx.rt_info^.DB_INFO.DEPTH_USAGE);
@@ -1223,7 +1230,6 @@ begin
    ri:=FetchImage(ctx.Cmd,
                   ctx.rt_info^.RT_INFO[i].FImageInfo,
                   [iu_attachment]
-                  //RenderCmd.RT_INFO[i].IMAGE_USAGE
                   );
 
    ri.mark_init;
@@ -1250,7 +1256,6 @@ begin
   ri:=FetchImage(ctx.Cmd,
                  ctx.rt_info^.DB_INFO.FImageInfo,
                  [iu_depthstenc]
-                 //RenderCmd.DB_INFO.DEPTH_USAGE
                  );
 
   rd:=ri.DepthOnly;
@@ -1306,8 +1311,6 @@ end;
 
 procedure pm4_Writeback_Finish(var ctx:t_me_render_context);
 var
- i:Integer;
-
  ri:TvImage2;
 
  resource:p_pm4_resource;
@@ -1389,6 +1392,46 @@ begin
 
 end;
 
+procedure Prepare_htile(var ctx:t_me_render_context;
+                        var UniformBuilder:TvUniformBuilder);
+var
+ i:Integer;
+
+ resource_instance:p_pm4_resource_instance;
+ resource:p_pm4_resource;
+begin
+
+ //buffers
+ if (Length(UniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(UniformBuilder.FBuffers) do
+  With UniformBuilder.FBuffers[i] do
+  begin
+
+   resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
+
+   if (resource_instance<>nil) then
+   begin
+
+    if (iu_htile in resource_instance^.next.img_usage) then
+    begin
+     resource:=ctx.stream^.find_htile_resource(addr,size);
+
+     if (resource<>nil) then
+     begin
+      resource^.rclear:=True;
+     end;
+
+    end;
+
+   end;
+
+  end;
+ end;
+ //buffers
+
+end;
+
 procedure pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
 var
  dst:PGPU_USERDATA;
@@ -1399,6 +1442,8 @@ var
  FUniformBuilder:TvUniformBuilder;
 
  FDescriptorGroup:TvDescriptorGroup;
+
+ resource_instance:p_pm4_resource_instance;
 begin
  CP_KEY.FShaderGroup:=node^.ShaderGroup;
  CP:=FetchComputePipeline(ctx.Cmd,@CP_KEY);
@@ -1410,6 +1455,12 @@ begin
 
  FUniformBuilder:=Default(TvUniformBuilder);
  CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
+
+ //htile heuristic
+ if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash=$7DCE68F83F66B337) then
+ begin
+  Prepare_htile(ctx,FUniformBuilder);
+ end;
 
  Prepare_Uniforms(ctx,FUniformBuilder);
  ////////

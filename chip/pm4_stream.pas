@@ -124,8 +124,9 @@ type
  );
 
 const
- R_IMG=0;
- R_BUF=1;
+ R_IMG  =0;
+ R_BUF  =1;
+ R_HTILE=2;
 
 type
  t_pm4_usage=record
@@ -158,6 +159,7 @@ type
   rsize :DWORD;
   rkey  :TvImageKey;
   //
+  rclear    :Boolean;
   rwriteback:Boolean;
   //
   function c(n1,n2:p_pm4_resource):Integer; static;
@@ -194,6 +196,7 @@ type
   function  find_resource_instance(r:p_pm4_resource):p_pm4_resource_instance;
   function  find_image_resource_instance (const rkey:TvImageKey):p_pm4_resource_instance;
   function  find_buffer_resource_instance(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+  function  find_htile_resource_instance (addr:Pointer;size:DWORD):p_pm4_resource_instance;
  end;
 
  t_pm4_resource_stream_scope=object
@@ -208,9 +211,12 @@ type
   function  fetch_image_resource         (const rkey:TvImageKey):p_pm4_resource;
   function  find_buffer_resource         (addr:Pointer;size:DWORD):p_pm4_resource;
   function  fetch_buffer_resource        (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  find_htile_resource          (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  fetch_htile_resource         (addr:Pointer;size:DWORD):p_pm4_resource;
   function  fetch_resource_instance      (scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
   function  insert_image_resource        (scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
   function  insert_buffer_resource       (scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+  function  insert_htile_resource        (scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
   procedure connect_resource_instance    (i:p_pm4_resource_instance);
   procedure connect_resource_scope       (scope:p_pm4_resource_curr_scope);
  end;
@@ -406,7 +412,8 @@ begin
    begin
     Result:=CompareNormalized(n1^.rkey,n2^.rkey);
    end;
-  R_BUF:
+  R_BUF,
+  R_HTILE:
    begin
     //2 rsize
     Result:=Integer(n1^.rsize>n2^.rsize)-Integer(n1^.rsize<n2^.rsize);
@@ -502,6 +509,19 @@ begin
  tmp:=Default(t_pm4_resource);
  tmp.rtype:=R_BUF;
  tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
+
+ Result:=find_resource_instance(@tmp);
+end;
+
+function t_pm4_resource_curr_scope.find_htile_resource_instance(addr:Pointer;size:DWORD):p_pm4_resource_instance;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_HTILE;
+ tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
 
  Result:=find_resource_instance(@tmp);
 end;
@@ -556,6 +576,38 @@ var
 begin
  tmp:=Default(t_pm4_resource);
  tmp.rtype:=R_BUF;
+ tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
+
+ Result:=resource_set.Find(@tmp);
+
+ if (Result=nil) then
+ begin
+  Result:=allocator.Alloc(SizeOf(t_pm4_resource));
+  Result^:=tmp;
+
+  resource_set.Insert(Result);
+ end;
+end;
+
+function t_pm4_resource_stream_scope.find_htile_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_HTILE;
+ tmp.rkey.Addr:=addr;
+ tmp.rsize:=size;
+
+ Result:=resource_set.Find(@tmp);
+end;
+
+function t_pm4_resource_stream_scope.fetch_htile_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+var
+ tmp:t_pm4_resource;
+begin
+ tmp:=Default(t_pm4_resource);
+ tmp.rtype:=R_HTILE;
  tmp.rkey.Addr:=addr;
  tmp.rsize:=size;
 
@@ -631,6 +683,28 @@ begin
 
  Result:=i;
 end;
+
+function t_pm4_resource_stream_scope.insert_htile_resource(scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+var
+ r:p_pm4_resource;
+ i:p_pm4_resource_instance;
+begin
+ r:=fetch_htile_resource(addr,size);
+ i:=fetch_resource_instance(scope,r,mem_usage,[iu_htile]); //iu_htile
+
+ if ((mem_usage and TM_READ)<>0) then
+ if (i^.prev.mem_usage=0) then //no prev usage
+ begin
+  //init
+  init_scope.insert(i);
+ end;
+
+ scope^.insert(i);
+
+ Result:=i;
+end;
+
+//
 
 procedure t_pm4_resource_stream_scope.connect_resource_instance(i:p_pm4_resource_instance);
 var
@@ -966,7 +1040,10 @@ begin
   With FUniformBuilder.FImages[i] do
   begin
 
-   insert_image_resource(@node^.scope,FImage,TM_READ,[iu_sampled]);
+   insert_image_resource(@node^.scope,
+                         FImage,
+                         TM_READ,
+                         [iu_sampled]);
 
   end;
  end;
@@ -980,7 +1057,10 @@ begin
   begin
 
    //TODO: check write flag
-   insert_buffer_resource(@node^.scope,addr,size,TM_READ or TM_WRITE);
+   insert_buffer_resource(@node^.scope,
+                          addr,
+                          size,
+                          TM_READ or TM_WRITE);
 
   end;
  end;
@@ -1021,7 +1101,10 @@ begin
 
    //
 
-   insert_image_resource(@node^.scope,RT.FImageInfo,RT.IMAGE_USAGE,[iu_attachment]);
+   insert_image_resource(@node^.scope,
+                         RT.FImageInfo,
+                         RT.IMAGE_USAGE,
+                         [iu_attachment]);
 
    //
 
@@ -1038,8 +1121,24 @@ begin
 
   //
 
-  insert_image_resource(@node^.scope,GetDepthOnly  (rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.DEPTH_USAGE  ,[iu_depthstenc]);
-  insert_image_resource(@node^.scope,GetStencilOnly(rt_info.DB_INFO.FImageInfo),rt_info.DB_INFO.STENCIL_USAGE,[iu_depthstenc]);
+  insert_image_resource(@node^.scope,
+                        GetDepthOnly(rt_info.DB_INFO.FImageInfo),
+                        rt_info.DB_INFO.DEPTH_USAGE,
+                        [iu_depthstenc]);
+
+  insert_image_resource(@node^.scope,
+                        GetStencilOnly(rt_info.DB_INFO.FImageInfo),
+                        rt_info.DB_INFO.STENCIL_USAGE,
+                        [iu_depthstenc]);
+
+  if (rt_info.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
+  begin
+   insert_htile_resource(@node^.scope,
+                         rt_info.DB_INFO.HTILE_INFO.ADDR,
+                         rt_info.DB_INFO.HTILE_INFO.SIZE,
+                         rt_info.DB_INFO.DEPTH_USAGE);
+  end;
+
  end;
 
  rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;

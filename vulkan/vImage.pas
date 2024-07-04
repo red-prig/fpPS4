@@ -81,7 +81,7 @@ const
  TM_CLEAR=4;
 
 type
- t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer);
+ t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer,iu_htile);
  s_image_usage=set of t_image_usage;
 
 type

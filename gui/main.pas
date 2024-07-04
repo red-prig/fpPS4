@@ -100,6 +100,7 @@ type
     TBUp: TToolButton;
     TBSep3: TToolButton;
 
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ListGridDblClick(Sender: TObject);
@@ -601,6 +602,13 @@ begin
  SetButtonsState(mbsStopped);
 
  //InitVulkan;
+end;
+
+procedure TfrmMain.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+ TBPauseClick(Sender);
+ //
+ CloseAction:=caFree;
 end;
 
 procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);

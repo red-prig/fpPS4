@@ -36,6 +36,15 @@ type
   blend:TVkPipelineColorBlendAttachmentState;
  end;
 
+ THTILE_INFO=record
+  ADDR               :Pointer;
+  SIZE               :Ptruint;
+  LINEAR             :Byte;
+  TC_COMPATIBLE      :Byte;
+  TILE_SURFACE_ENABLE:Byte;
+  TILE_STENCIL_ENABLE:Byte;
+ end;
+
  TDB_INFO=record
 
   Z_READ_ADDR :Pointer;
@@ -54,6 +63,8 @@ type
   FImageInfo:TvImageKey;
 
   zorder_stage:TVkPipelineStageFlags;
+
+  HTILE_INFO:THTILE_INFO;
  end;
 
  TBLEND_INFO=packed record
@@ -141,6 +152,9 @@ function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
 function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
 
 implementation
+
+uses
+ ps4_Tiling;
 
 Function TGPU_REGS._SHADER_MASK(i:Byte):Byte; inline; //0..7
 begin
@@ -1101,27 +1115,31 @@ const
 
 Function TGPU_REGS.GET_DB_INFO:TDB_INFO;
 var
- RENDER_CONTROL :TDB_RENDER_CONTROL;
- DEPTH_CONTROL  :TDB_DEPTH_CONTROL;
- STENCIL_CONTROL:TDB_STENCIL_CONTROL;
- SHADER_CONTROL :TDB_SHADER_CONTROL;
- DB_Z_INFO      :TDB_Z_INFO;
- DB_STENCIL_INFO:TDB_STENCIL_INFO;
+ RENDER_CONTROL  :TDB_RENDER_CONTROL;
+ DEPTH_CONTROL   :TDB_DEPTH_CONTROL;
+ STENCIL_CONTROL :TDB_STENCIL_CONTROL;
+ SHADER_CONTROL  :TDB_SHADER_CONTROL;
+ DB_Z_INFO       :TDB_Z_INFO;
+ DB_DEPTH_VIEW   :TDB_DEPTH_VIEW;
+ DB_STENCIL_INFO :TDB_STENCIL_INFO;
+ DB_HTILE_SURFACE:TDB_HTILE_SURFACE;
 begin
  Result:=Default(TDB_INFO);
 
- RENDER_CONTROL :=CX_REG^.DB_RENDER_CONTROL;
- DEPTH_CONTROL  :=CX_REG^.DB_DEPTH_CONTROL;
- STENCIL_CONTROL:=CX_REG^.DB_STENCIL_CONTROL;
- SHADER_CONTROL :=CX_REG^.DB_SHADER_CONTROL;
- DB_Z_INFO      :=CX_REG^.DB_Z_INFO;
- DB_STENCIL_INFO:=CX_REG^.DB_STENCIL_INFO;
+ RENDER_CONTROL  :=CX_REG^.DB_RENDER_CONTROL;
+ DEPTH_CONTROL   :=CX_REG^.DB_DEPTH_CONTROL;
+ STENCIL_CONTROL :=CX_REG^.DB_STENCIL_CONTROL;
+ SHADER_CONTROL  :=CX_REG^.DB_SHADER_CONTROL;
+ DB_Z_INFO       :=CX_REG^.DB_Z_INFO;
+ DB_DEPTH_VIEW   :=CX_REG^.DB_DEPTH_VIEW;
+ DB_STENCIL_INFO :=CX_REG^.DB_STENCIL_INFO;
+ DB_HTILE_SURFACE:=CX_REG^.DB_HTILE_SURFACE;
 
  //
 
  if (DEPTH_CONTROL.Z_ENABLE<>0) then
  begin
-  if (CX_REG^.DB_DEPTH_VIEW.Z_READ_ONLY<>0) then
+  if (DB_DEPTH_VIEW.Z_READ_ONLY<>0) then
   begin
    //readonly
    Result.DEPTH_USAGE:=TM_READ;
@@ -1139,7 +1157,7 @@ begin
 
  if (DEPTH_CONTROL.STENCIL_ENABLE<>0) then
  begin
-  if (CX_REG^.DB_DEPTH_VIEW.STENCIL_READ_ONLY<>0) then
+  if (DB_DEPTH_VIEW.STENCIL_READ_ONLY<>0) then
   begin
    //readonly
    Result.STENCIL_USAGE:=TM_READ;
@@ -1221,7 +1239,7 @@ begin
 
  ////
 
- Assert(CX_REG^.DB_DEPTH_VIEW.SLICE_START=0,'DB_DEPTH_VIEW.SLICE_START');
+ Assert(DB_DEPTH_VIEW.SLICE_START=0,'DB_DEPTH_VIEW.SLICE_START');
 
  Result.Z_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_Z_READ_BASE ) shl 8);
  Result.Z_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_Z_WRITE_BASE) shl 8);
@@ -1280,6 +1298,38 @@ begin
 
  Result.FImageInfo.params.pad_width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
  Result.FImageInfo.params.pad_height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
+
+ if (DB_Z_INFO.TILE_SURFACE_ENABLE<>0) and
+    (CX_REG^.DB_HTILE_DATA_BASE<>0) then
+ begin
+  Result.HTILE_INFO.ADDR  :=Pointer(QWORD(CX_REG^.DB_HTILE_DATA_BASE) shl 8);
+  Result.HTILE_INFO.LINEAR:=DB_HTILE_SURFACE.LINEAR;
+
+  if (p_neomode<>0) then
+  begin
+   Result.HTILE_INFO.TC_COMPATIBLE:=DB_HTILE_SURFACE.TC_COMPATIBLE;
+  end;
+
+  Result.HTILE_INFO.TILE_SURFACE_ENABLE:=1;
+  Result.HTILE_INFO.TILE_STENCIL_ENABLE:=ord(DB_STENCIL_INFO.TILE_STENCIL_DISABLE=0);
+
+  computeHtileInfo(@Result.HTILE_INFO.SIZE,
+                   nil,
+                   nil,
+                   nil,
+                   //
+                   Result.FImageInfo.params.pad_width,
+                   Result.FImageInfo.params.pad_height,
+                   DB_DEPTH_VIEW.SLICE_MAX,
+                   //
+                   Boolean(Result.HTILE_INFO.LINEAR),
+                   Boolean(Result.HTILE_INFO.TC_COMPATIBLE),
+                   DB_Z_INFO.TILE_MODE_INDEX
+                  );
+
+
+ end;
+
 end;
 
 function get_polygon_mode(SU_SC_MODE_CNTL:TPA_SU_SC_MODE_CNTL):TVkPolygonMode;
