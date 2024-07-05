@@ -1134,7 +1134,7 @@ begin
   if (rt_info.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin
    insert_htile_resource(@node^.scope,
-                         rt_info.DB_INFO.HTILE_INFO.ADDR,
+                         rt_info.DB_INFO.HTILE_INFO.KEY.Addr,
                          rt_info.DB_INFO.HTILE_INFO.SIZE,
                          rt_info.DB_INFO.DEPTH_USAGE);
   end;

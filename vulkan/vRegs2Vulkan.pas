@@ -37,7 +37,7 @@ type
  end;
 
  THTILE_INFO=record
-  ADDR               :Pointer;
+  KEY                :TvImageKey;
   SIZE               :Ptruint;
   LINEAR             :Byte;
   TC_COMPATIBLE      :Byte;
@@ -1302,7 +1302,7 @@ begin
  if (DB_Z_INFO.TILE_SURFACE_ENABLE<>0) and
     (CX_REG^.DB_HTILE_DATA_BASE<>0) then
  begin
-  Result.HTILE_INFO.ADDR  :=Pointer(QWORD(CX_REG^.DB_HTILE_DATA_BASE) shl 8);
+  Result.HTILE_INFO.KEY.ADDR:=Pointer(QWORD(CX_REG^.DB_HTILE_DATA_BASE) shl 8);
   Result.HTILE_INFO.LINEAR:=DB_HTILE_SURFACE.LINEAR;
 
   if (p_neomode<>0) then
@@ -1315,8 +1315,8 @@ begin
 
   computeHtileInfo(@Result.HTILE_INFO.SIZE,
                    nil,
-                   nil,
-                   nil,
+                   @Result.HTILE_INFO.KEY.params.pad_width,
+                   @Result.HTILE_INFO.KEY.params.pad_height,
                    //
                    Result.FImageInfo.params.pad_width,
                    Result.FImageInfo.params.pad_height,
@@ -1327,6 +1327,15 @@ begin
                    DB_Z_INFO.TILE_MODE_INDEX
                   );
 
+  Result.HTILE_INFO.KEY.cformat:=VK_FORMAT_R32_UINT;
+  Result.HTILE_INFO.KEY.params.itype      :=ord(VK_IMAGE_TYPE_2D);
+  Result.HTILE_INFO.KEY.params.tiling     :=Result.FImageInfo.params.tiling;
+  Result.HTILE_INFO.KEY.params.samples    :=1;
+  Result.HTILE_INFO.KEY.params.mipLevels  :=1;
+  Result.HTILE_INFO.KEY.params.width      :=Result.HTILE_INFO.KEY.params.pad_width;
+  Result.HTILE_INFO.KEY.params.height     :=Result.HTILE_INFO.KEY.params.pad_height;
+  Result.HTILE_INFO.KEY.params.depth      :=1;
+  Result.HTILE_INFO.KEY.params.arrayLayers:=1;
 
  end;
 

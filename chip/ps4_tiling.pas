@@ -1491,12 +1491,12 @@ const
 
  procedure computeHtileInfo(outHtileSizeBytes:PPtruint;
                             outHtileAlign    :PPtruint;
-                            outHtilePitch    :PPtruint;
-                            outHtileHeight   :PPtruint;
+                            outHtilePitch    :PWord;
+                            outHtileHeight   :PWord;
                             //
-                            Pitch              :DWORD;
-                            Height             :DWORD;
-                            LastArraySliceIndex:DWORD;
+                            Pitch :DWORD;
+                            Height:DWORD;
+                            Slice :DWORD;
                             //
                             isHtileLinear :Boolean;
                             isTcCompatible:Boolean;
@@ -2107,12 +2107,12 @@ function getPipeCount(pipeConfig:Byte):DWORD; forward;
 
 procedure computeHtileInfo(outHtileSizeBytes:PPtruint;
                            outHtileAlign    :PPtruint;
-                           outHtilePitch    :PPtruint;
-                           outHtileHeight   :PPtruint;
+                           outHtilePitch    :PWord;
+                           outHtileHeight   :PWord;
                            //
-                           Pitch              :DWORD;
-                           Height             :DWORD;
-                           LastArraySliceIndex:DWORD;
+                           Pitch :DWORD;
+                           Height:DWORD;
+                           Slice :DWORD;
                            //
                            isHtileLinear :Boolean;
                            isTcCompatible:Boolean;
@@ -2122,14 +2122,13 @@ const
  bitsPerElement    =32;
  cacheBits         =kHtileCacheBits;
  htileCacheLineSize=kHtileCacheBits div 8;
+ numTiles          =8;
 var
  NumSlices   :DWORD;
  pipeConfig  :DWORD;
  numPipes    :DWORD;
- numTiles    :DWORD;
  macroWidth  :DWORD;
  macroHeight :DWORD;
- w,h:DWORD;
  htilePitch  :DWORD;
  htileHeight :DWORD;
  htileAlign  :DWORD;
@@ -2141,29 +2140,34 @@ begin
  getPipeConfig(@pipeConfig,tileMode);
  numPipes:=getPipeCount(pipeConfig);
 
- //Pitch   = getPitch  -> (DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
- //Height  = getHeight -> (DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
- //LastArraySliceIndex -> DB_DEPTH_VIEW.SLICE_MAX
- NumSlices:=1+LastArraySliceIndex;
+ //Pitch  = getPitch  -> (DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
+ //Height = getHeight -> (DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
+ //Slice  -> DB_DEPTH_VIEW.SLICE_MAX
+ NumSlices:=1+Slice;
 
  if isHtileLinear then
  begin
-  numTiles   :=8;
   macroWidth :=numTiles*kMicroTileWidth;
   macroHeight:=numTiles*kMicroTileHeight;
  end else
  begin
-  h:=1;
-  w:=cacheBits div bitsPerElement;
-
-  while ((w>h*2*numPipes) and ((w and 1)=0)) do
-  begin
-   w:=w shr 1;
-   h:=h shl 1;
+  case numPipes of
+   8:
+    begin
+     macroWidth :=512; //8*64
+     macroHeight:=512; //8*8*8
+    end;
+   16:
+    begin
+     macroWidth :=1024; //8*128
+     macroHeight:=512;  //8*4*16
+    end;
+   else
+    begin
+     macroWidth :=0;
+     macroHeight:=0;
+    end;
   end;
-
-  macroWidth :=8*w;
-  macroHeight:=8*h*numPipes;
  end;
 
  htilePitch :=(Pitch +(macroWidth -1)) and (not (macroWidth -1));

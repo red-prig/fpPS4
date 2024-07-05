@@ -118,7 +118,7 @@ begin
  DepCount:=1;
 
  DepthRef.attachment:=id;
- DepthRef.layout    :=GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE);
+ DepthRef.layout    :=GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE);
 
  am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
 

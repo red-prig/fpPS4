@@ -956,7 +956,7 @@ begin
   //set clear flag on cleared htile
   if (ctx.rt_info^.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin
-   resource_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.ADDR,
+   resource_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.KEY.Addr,
                                                                    ctx.rt_info^.DB_INFO.HTILE_INFO.SIZE);
 
    Assert(resource_instance<>nil);

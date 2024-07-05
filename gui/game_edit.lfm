@@ -1,14 +1,14 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 710
+  Left = 632
   Height = 319
-  Top = 188
+  Top = 214
   Width = 397
   Caption = 'Game editor'
   ClientHeight = 319
   ClientWidth = 397
   OnClose = FormClose
   Position = poMainFormCenter
-  LCLVersion = '3.2.0.0'
+  LCLVersion = '3.4.0.0'
   object EditPages: TPageControl
     AnchorSideBottom.Control = BtnOk
     Left = 0
