@@ -269,6 +269,10 @@ begin
       begin
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.VertexIndex);
       end;
+    itVInstance:
+      begin
+       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.InstanceIndex);
+      end;
     itFrontFace:
       begin
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FrontFacing);

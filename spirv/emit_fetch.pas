@@ -66,6 +66,7 @@ type
   procedure OpConvFloatToHalf2(dst:PsrRegSlot;src0,src1:PsrRegNode);
   //
   function  AddInput(dst:PsrRegSlot;rtype:TsrDataType;itype:TpsslInputType;id:Byte=0):PsrRegNode;
+  function  AddInstance(dst:PsrRegSlot;id:Byte;step_rate:DWORD):PsrRegNode;
   function  AddAncillary(dst:PsrRegSlot):PsrRegNode;
   function  AddVertLayout(pLayout:PsrDataLayout;rtype:TsrDataType):PsrRegNode;
   function  AddFragLayout(itype:TpsslInputType;rtype:TsrDataType;location:DWORD):PsrRegNode;
@@ -451,6 +452,24 @@ begin
  Result:=r;
 end;
 
+function TEmitFetch.AddInstance(dst:PsrRegSlot;id:Byte;step_rate:DWORD):PsrRegNode;
+var
+ src:PsrRegNode;
+begin
+ if (step_rate>1) then
+ begin
+  src:=AddInput(@RegsStory.FUnattach,dtUInt32,itVInstance,id);
+  src:=OpIDivTo(src,step_rate);
+
+  MakeCopy(dst,src);
+ end else
+ begin
+  src:=AddInput(dst,dtUInt32,itVInstance,id);
+ end;
+
+ Result:=src;
+end;
+
 function TEmitFetch.AddAncillary(dst:PsrRegSlot):PsrRegNode;
 var
  src:array[0..2] of PsrRegNode;
@@ -466,8 +485,8 @@ begin
  //Primitive type[1:0]               0..3
 
  //IL_REGTYPE_PRIMTYPE vPrimType
- //The first component has sign bit = 1, this is a point. Values in other bits are undefined.
- //The second component has sign bit = 1, this is a line. Values in other bits are undefined.
+ //The first component  has sign bit = 1, this is a point. Values in other bits are undefined.
+ //The second component has sign bit = 1, this is a line.  Values in other bits are undefined.
 
  //PID       ISID      RTAI
  //01|234567|89AB|CDEF|0123456789A|

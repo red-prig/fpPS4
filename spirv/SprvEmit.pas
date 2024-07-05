@@ -40,7 +40,7 @@ type
 
   Procedure   InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
                      RSRC2:TSPI_SHADER_PGM_RSRC2_VS;
-                     instance:Byte);
+                     STEP_RATE_0,STEP_RATE_1:DWORD);
 
   Procedure   InitPs(RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
                      RSRC2:TSPI_SHADER_PGM_RSRC2_PS;
@@ -167,7 +167,7 @@ end;
 
 Procedure TSprvEmit.InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
                            RSRC2:TSPI_SHADER_PGM_RSRC2_VS;
-                           instance:Byte);
+                           STEP_RATE_0,STEP_RATE_1:DWORD);
 var
  p:Byte;
 begin
@@ -255,21 +255,25 @@ begin
  p:=1;
  AddInput(@RegsStory.VGRP[0],dtUint32,itVIndex);
 
- if (instance>=1) then
+ //0 plain
+ //1 step rate 0
+ //2 step rate 1
+
+ if (RSRC1.VGPR_COMP_CNT>=1) then
  begin
-  AddInput(@RegsStory.VGRP[p],dtUint32,itVInstance,1);
+  AddInstance(@RegsStory.VGRP[p],1,STEP_RATE_0);
   p:=p+1;
  end;
 
- if (instance>=2) then
+ if (RSRC1.VGPR_COMP_CNT>=2) then
  begin
-  AddInput(@RegsStory.VGRP[p],dtUint32,itVInstance,2);
+  AddInstance(@RegsStory.VGRP[p],2,STEP_RATE_1);
   p:=p+1;
  end;
 
- if (instance>=3) then
+ if (RSRC1.VGPR_COMP_CNT>=3) then
  begin
-  AddInput(@RegsStory.VGRP[p],dtUint32,itVInstance,0);
+  AddInstance(@RegsStory.VGRP[p],0,1);
  end;
 
  FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);

@@ -1711,7 +1711,7 @@ begin
       //GPU
       byteSize:=node^.num_dw*SizeOf(DWORD);
 
-      ctx.Cmd.dmaData(node^.src,node^.dst,byteSize,node^.wrConfirm);
+      ctx.Cmd.dmaData1(node^.src,node^.dst,byteSize,node^.wrConfirm);
      end else
      begin
       //soft
@@ -1736,6 +1736,94 @@ begin
   else
     Assert(false,'WriteData: dstSel=0x'+HexStr(node^.dstSel,1));
  end;
+
+end;
+
+procedure pm4_DmaData(var ctx:t_me_render_context;node:p_pm4_node_DmaData);
+var
+ adrSrc:QWORD;
+ adrDst:QWORD;
+ adrSrc_dmem:QWORD;
+ adrDst_dmem:QWORD;
+ byteCount:DWORD;
+ srcSel,dstSel:Byte;
+begin
+
+ adrDst   :=node^.dst;
+ adrSrc   :=node^.src;
+ byteCount:=node^.numBytes;
+ srcSel   :=node^.srcSel;
+ dstSel   :=node^.dstSel;
+
+ case (srcSel or (dstSel shl 4)) of
+  (kDmaDataSrcMemory        or (kDmaDataDstMemory        shl 4)),
+  (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemory        shl 4)),
+  (kDmaDataSrcMemory        or (kDmaDataDstMemoryUsingL2 shl 4)),
+  (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemoryUsingL2 shl 4)):
+    begin
+
+     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
+     begin
+      //GPU
+
+      ctx.Cmd.dmaData1(Pointer(adrSrc),Pointer(adrDst),byteCount,node^.cpSync<>0);
+
+      //GPU
+     end else
+     begin
+      //soft
+
+      if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
+      begin
+       Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
+      end;
+
+      if not get_dmem_ptr(Pointer(adrSrc),@adrSrc_dmem,nil) then
+      begin
+       Assert(false,'addr:0x'+HexStr(Pointer(adrSrc))+' not in dmem!');
+      end;
+
+      Move(Pointer(adrSrc_dmem)^,Pointer(adrDst_dmem)^,byteCount);
+
+      vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+
+      //soft
+     end;
+
+    end;
+  (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
+  (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
+    begin
+
+     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
+     begin
+      //GPU
+
+      ctx.Cmd.dmaData2(DWORD(adrSrc),Pointer(adrDst),byteCount,node^.cpSync<>0);
+
+      //GPU
+     end else
+     begin
+      //soft
+
+      if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
+      begin
+       Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
+      end;
+
+      FillDWORD(Pointer(adrDst_dmem)^,(byteCount div 4),DWORD(adrSrc));
+
+      vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+
+      //soft
+     end;
+
+    end;
+ else
+    Assert(false,'DmaData: srcSel=0x'+HexStr(srcSel,1)+' dstSel=0x'+HexStr(dstSel,1));
+ end;
+
+
 
 end;
 
@@ -1879,6 +1967,7 @@ begin
      ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
      ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));
      ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
+     ntDmaData       :pm4_DmaData       (ctx,Pointer(ctx.node));
      ntWaitRegMem    :pm4_WaitRegMem    (ctx,Pointer(ctx.node));
 
      ntLoadConstRam  :pm4_LoadConstRam  (ctx,Pointer(ctx.node));

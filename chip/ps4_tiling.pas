@@ -2173,7 +2173,8 @@ begin
  htilePitch :=(Pitch +(macroWidth -1)) and (not (macroWidth -1));
  htileHeight:=(Height+(macroHeight-1)) and (not (macroHeight-1));
 
- surfaceBytes:=htilePitch*htileHeight*(bitsPerElement div 8)*NumSlices div 64;
+ //surfaceBytes:=htilePitch*htileHeight*(bitsPerElement div 8)*NumSlices div 64;
+ surfaceBytes:=htilePitch*htileHeight*NumSlices div 16;
 
  cacheAlign:=htileCacheLineSize*numPipes;
 

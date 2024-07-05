@@ -1118,7 +1118,7 @@ begin
   Result:=OpShlTo (src0,src1,ppLine);
  end else
  begin
-  Result:=OpIMulTo(src0,src1,ppLine);
+  Result:=OpIMulTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
  end;
 end;
 
@@ -1146,7 +1146,7 @@ begin
   Result:=OpShrTo (src0,src1,ppLine);
  end else
  begin
-  Result:=OpIDivTo(src0,src1,ppLine);
+  Result:=OpIDivTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
  end;
 end;
 

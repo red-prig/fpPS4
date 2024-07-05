@@ -66,7 +66,8 @@ uses
  vfs_syscalls,
  signal,
  trap,
- md_context;
+ md_context,
+ subr_backtrace;
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
@@ -1767,14 +1768,19 @@ exec_fail:
 done2:
 
  VFS_UNLOCK_GIANT(vfslocked);
- exec_free_args(args);
 
  if (error<>0) then
  begin
+  print_error_td('error execve "'+args^.fname+'" code='+IntToStr(error));
+
+  exec_free_args(args);
+
   // sorry, no more process anymore. exit gracefully
   exit1(W_EXITCODE(0, SIGABRT));
   // NOT REACHED
  end;
+
+ exec_free_args(args);
 
  Exit(error);
 end;

@@ -179,8 +179,8 @@ type
 
   Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 
-  Procedure   dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
-  //Procedure   dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+  Procedure   dmaData1(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+  Procedure   dmaData2(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD;isBlocking:Boolean);
   Procedure   WriteEvent(eventType:Byte);
 
@@ -1156,7 +1156,7 @@ Const
   ord(VK_ACCESS_MEMORY_READ_BIT                   ) or
   ord(VK_ACCESS_MEMORY_WRITE_BIT                  );
 
-Procedure TvCmdBuffer.dmaData(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+Procedure TvCmdBuffer.dmaData1(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
 var
  srcb,dstb:TvHostBuffer;
  info:TVkBufferCopy;
@@ -1223,10 +1223,10 @@ begin
  AddPlannedTrigger(QWORD(dst),QWORD(dst)+byteCount,nil);
 end;
 
-{
-Procedure TvCmdBuffer.dmaData(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
+Procedure TvCmdBuffer.dmaData2(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
 var
  dstb:TvHostBuffer;
+ dstOffset:TVkDeviceSize;
 begin
 
  if (Self=nil) then
@@ -1240,25 +1240,28 @@ begin
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
- dstb:=FetchHostBuffer(Self,dst,byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
+
+ dstOffset:=QWORD(dst)-dstb.FAddr;
 
  Inc(cmd_count);
 
- vkBufferMemoryBarrier(cmdbuf,
+ vkBufferMemoryBarrier(FCmdbuf,
                        dstb.FHandle,
                        VK_ACCESS_ANY,
                        ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                       dstb.Foffset,byteCount,
+                       dstOffset,byteCount,
                        ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT),
                        ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  Inc(cmd_count);
 
- vkCmdFillBuffer(cmdbuf,
+ vkCmdFillBuffer(FCmdbuf,
                  dstb.FHandle,
-                 dstb.Foffset,
-                 byteCount,src);
+                 dstOffset,
+                 byteCount,
+                 src);
 
  if isBlocking then
  begin
@@ -1271,7 +1274,6 @@ begin
   	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
 end;
-}
 
 const
  VK_ACCESS_CS=

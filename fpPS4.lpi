@@ -1037,6 +1037,269 @@
         <Filename Value="sys\vm\vm_tracking_map.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="vulkan\vSampler.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="vulkan\vSamplerManager.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srFlow.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srCFGCursor.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srCFGParser.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\SprvEmit.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\pssl-spirv.lpr"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_post_op.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vbuf_load.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_alloc.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srInput.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srInterface.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_bin.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_exp.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_EXP"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_fetch.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_mimg.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_MIMG"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_mtbuf.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_MTBUF"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_mubuf.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_MUBUF"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_op.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_post.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_print.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_smrd.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SMRD"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_sop1.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SOP1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_sop2.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SOP2"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_sopc.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SOPC"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_sopk.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SOPK"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_sopp.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_SOPP"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vbuf_chain.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vbuf_store.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vintrp.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_VINTRP"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vop1.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_VOP1"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vop2.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_VOP2"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vop3.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_VOP3"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_vopc.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_VOPC"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\ginodes.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\Half16.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\spirv.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srAllocator.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srBitcast.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srBuffer.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srCacheOp.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srCapability.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srCFGLabel.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srConfig.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srConst.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srDecorate.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srFragLayout.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srLayout.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srLiteral.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srNode.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srOp.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srOpUtils.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srOutput.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srPrivate.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srRefId.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srReg.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srType.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srTypes.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srUniform.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srVariable.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srVBufInfo.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\srVertLayout.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

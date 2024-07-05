@@ -304,7 +304,8 @@ begin
   begin
    SprvEmit.InitVs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS,
                    GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_VS,
-                   GPU_REGS.CX_REG^.VGT_DMA_NUM_INSTANCES);
+                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
+                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
   end;

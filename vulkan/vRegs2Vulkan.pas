@@ -1327,6 +1327,8 @@ begin
                    DB_Z_INFO.TILE_MODE_INDEX
                   );
 
+  Result.HTILE_INFO.KEY.params.pad_width:=Result.HTILE_INFO.KEY.params.pad_width div 16;
+
   Result.HTILE_INFO.KEY.cformat:=VK_FORMAT_R32_UINT;
   Result.HTILE_INFO.KEY.params.itype      :=ord(VK_IMAGE_TYPE_2D);
   Result.HTILE_INFO.KEY.params.tiling     :=Result.FImageInfo.params.tiling;
