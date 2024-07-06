@@ -1273,6 +1273,8 @@ begin
   	          ord(VK_PIPELINE_STAGE_TRANSFER_BIT),      //srcStageMask
   	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
+
+ AddPlannedTrigger(QWORD(dst),QWORD(dst)+byteCount,nil);
 end;
 
 const

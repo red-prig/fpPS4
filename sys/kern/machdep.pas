@@ -587,6 +587,12 @@ begin
  regs^.tf_gs    :=_ugssel;
  regs^.tf_flags :=TF_HASSEGS;
 
+ //init FPU
+ fpuinit(td);
+
+ Set8087CW(__INITIAL_FPUCW__);
+ SetMXCSR (__INITIAL_MXCSR__);
+
  //teb stack
  td^.td_ustack.stack:=Pointer(stack_top );
  td^.td_ustack.sttop:=Pointer(stack_base);

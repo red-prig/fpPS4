@@ -368,6 +368,9 @@ asm
  {$IFDEF USE_XSAVE}
   mov   $7,%eax
   xor %edx,%edx
+
+  and __INITIAL_MXCSR_MASK__, t_fpstate.XMM_SAVE_AREA.MxCsr_Mask(%rdi)
+
   //xrstor (%rdi) //0FAE2F
   .byte 0x0F, 0xAE, 0x2F
   //

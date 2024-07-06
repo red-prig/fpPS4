@@ -95,7 +95,7 @@ function  _get_ctx_flags(src:p_ucontext_t):DWORD;
 procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
 procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
 
-procedure fpuinit(xstate:Pointer);
+procedure fpuinit(td:p_kthread);
 
 procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
 procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
@@ -176,6 +176,8 @@ function InitializeContextExtended(data:Pointer;ContextFlags:DWORD):Pointer;
 var
  ContextSize:DWORD;
  FeatureMask:QWORD;
+ XstateMaskf:QWORD;
+ XstateMaskr:QWORD;
 begin
  Result:=nil;
 
@@ -193,16 +195,25 @@ begin
   Exit(nil);
  end;
 
- FeatureMask:=GetEnabledXStateFeatures;
-
  if ((ContextFlags and $40)<>0) then
- if ((FeatureMask and XSTATE_MASK_AVX)<>0) then
  begin
-  if not SetXStateFeaturesMask(Result,XSTATE_MASK_AVX) then
+  FeatureMask:=GetEnabledXStateFeatures;
+
+  XstateMaskf:=FeatureMask  and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
+  XstateMaskr:=ContextFlags and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
+
+  if (XstateMaskf<>XstateMaskr) then
   begin
    Exit(nil);
   end;
+
+  if not SetXStateFeaturesMask(Result,XstateMaskr) then
+  begin
+   Exit(nil);
+  end;
+
  end;
+
 end;
 
 function _get_ctx_flags(src:p_ucontext_t):DWORD;
@@ -273,18 +284,20 @@ begin
  uc_xsave :=PXmmSaveArea(xstate);
  uc_xstate:=PXSTATE(uc_xsave+1);
 
+ dst^.MxCsr:=uc_xsave^.MxCsr;
+
  dst^.FltSave:=uc_xsave^;
           xs^:=uc_xstate^;
 end;
 
-procedure fpuinit(xstate:Pointer);
+procedure fpuinit(td:p_kthread);
 var
  uc_xsave :PXmmSaveArea;
  uc_xstate:PXSTATE;
 begin
- if (xstate=nil) then Exit;
+ if (td=nil) then Exit;
 
- uc_xsave :=PXmmSaveArea(xstate);
+ uc_xsave :=PXmmSaveArea(@td^.td_fpstate);
  uc_xstate:=PXSTATE(uc_xsave+1);
 
  //uc_xstate^.Mask:=
@@ -294,6 +307,8 @@ begin
  //uc_xsave^.StatusWord: WORD;
  uc_xsave^.MxCsr      :=__INITIAL_MXCSR__;
  uc_xsave^.MxCsr_Mask :=__INITIAL_MXCSR_MASK__;
+
+ td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_HASFPXSTATE;
 end;
 
 procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
@@ -647,6 +662,8 @@ begin
  Context^.SegCs:=KGDT64_R3_CODE  or RPL_MASK;
  Context^.SegSs:=KGDT64_R3_DATA  or RPL_MASK;
  Context^.SegFs:=KGDT64_R3_CMTEB or RPL_MASK;
+
+ Context^.MxCsr:=td^.td_fpstate.XMM_SAVE_AREA.MxCsr;
 
  //xmm,ymm
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then

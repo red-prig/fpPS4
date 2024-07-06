@@ -328,7 +328,7 @@ var
  //backup:array[0..1] of QWORD;
  name:shortstring;
 begin
- name:=shortstring(prefix)+shortstring(newtd^.td_name);
+ name:=shortstring(prefix)+shortstring(newtd^.td_name)+':'+IntToStr(newtd^.td_tid);
 
  cpu_thread_set_name(newtd,name);
 
@@ -355,18 +355,12 @@ begin
  }
 end;
 
-const
- p__INITIAL_FPUCW__:Word =__INITIAL_FPUCW__;
- p__INITIAL_MXCSR__:DWord=__INITIAL_MXCSR__;
-
 procedure before_start(td:p_kthread);
 begin
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
 
- asm
-  fldcw   p__INITIAL_FPUCW__(%rip)
-  ldmxcsr p__INITIAL_MXCSR__(%rip)
- end;
+ Set8087CW(__INITIAL_FPUCW__);
+ SetMXCSR (__INITIAL_MXCSR__);
 
  if (init_tty_cb<>nil) then
  begin
@@ -384,10 +378,8 @@ type
 begin
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
 
- asm
-  fldcw   p__INITIAL_FPUCW__(%rip)
-  ldmxcsr p__INITIAL_MXCSR__(%rip)
- end;
+ Set8087CW(__INITIAL_FPUCW__);
+ SetMXCSR (__INITIAL_MXCSR__);
 
  if (init_tty_cb<>nil) then
  begin
@@ -565,9 +557,8 @@ begin
   // Setup user TLS address and TLS pointer register.
   cpu_set_fsbase(newtd,tls_base);
   Writeln('set_fsbase=0x',HexStr(tls_base));
-  //
-  fpuinit(@newtd^.td_fpstate);
-  newtd^.td_frame.tf_flags:=newtd^.td_frame.tf_flags or TF_HASFPXSTATE;
+  //init FPU
+  fpuinit(newtd);
  end;
 
  //jit wrapper
@@ -675,8 +666,8 @@ begin
 
  cpu_set_upcall_kse(newtd,func,arg,@stack);
 
- fpuinit(@newtd^.td_fpstate);
- newtd^.td_frame.tf_flags:=newtd^.td_frame.tf_flags or TF_HASFPXSTATE;
+ //init FPU
+ fpuinit(newtd);
 
  //jit wrapper
  switch_to_jit(newtd);

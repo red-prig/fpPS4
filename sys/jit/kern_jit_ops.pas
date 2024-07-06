@@ -1109,6 +1109,10 @@ procedure op_bsf(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
+  //If the second operand contains 0,
+  //the instruction sets ZF to 1
+  //and does not change the contents
+  //of the destination register.
   op_emit2(ctx,bsf_desc);
  end else
  begin
@@ -1129,6 +1133,10 @@ procedure op_bsr(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
+  //If the second operand contains 0,
+  //the instruction sets ZF to 1
+  //and does not change the contents
+  //of the destination register.
   op_emit2(ctx,bsr_desc);
  end else
  begin

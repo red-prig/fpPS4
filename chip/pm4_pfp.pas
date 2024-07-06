@@ -1282,6 +1282,12 @@ begin
   begin
    r:=CONFIG_SPACE_START+Body^.REG_OFFSET+i;
    v:=PDWORD(@Body^.REG_DATA)[i];
+   //
+   if p_print_gpu_ops then
+   begin
+    Writeln(' SET:',getRegName(r),':=0x',HexStr(v,8));
+   end;
+   //
    pctx^.set_reg(r,v);
   end;
   //
@@ -1304,6 +1310,12 @@ begin
   begin
    r:=Body^.REG_OFFSET+i;
    v:=PDWORD(@Body^.REG_DATA)[i];
+   //
+   if p_print_gpu_ops then
+   begin
+    Writeln(' SET:',getRegName(r+$A000),':=0x',HexStr(v,8));
+   end;
+   //
    pctx^.set_ctx_reg(r,v);
   end;
   //
@@ -1326,6 +1338,12 @@ begin
   begin
    r:=Body^.REG_OFFSET+i;
    v:=PDWORD(@Body^.REG_DATA)[i];
+   //
+   if p_print_gpu_ops then
+   begin
+    Writeln(' SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+   end;
+   //
    pctx^.set_sh_reg(r,v);
   end;
   //
@@ -1348,6 +1366,12 @@ begin
   begin
    r:=USERCONFIG_REG_BASE+Body^.REG_OFFSET+i;
    v:=PDWORD(@Body^.REG_DATA)[i];
+   //
+   if p_print_gpu_ops then
+   begin
+    Writeln(' SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+   end;
+   //
    pctx^.set_reg(r,v);
   end;
   //

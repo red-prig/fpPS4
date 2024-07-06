@@ -9,8 +9,32 @@ uses
  signal;
 
 type
+ M128=packed record
+  Low :QWORD;
+  High:QWORD;
+ end;
+
+ XMM_SAVE_AREA=packed record
+  ControlWord   :WORD;
+  StatusWord    :WORD;
+  TagWord       :BYTE;
+  Reserved1     :BYTE;
+  ErrorOpcode   :WORD;
+  ErrorOffset   :DWORD;
+  ErrorSelector :WORD;
+  Reserved2     :WORD;
+  DataOffset    :DWORD;
+  DataSelector  :WORD;
+  Reserved3     :WORD;
+  MxCsr         :DWORD;
+  MxCsr_Mask    :DWORD;
+  FloatRegisters:array[0..7 ] of M128;
+  XmmRegisters  :array[0..15] of M128;
+  Reserved4     :array[0..95] of BYTE;
+ end;
+
  t_fpstate=packed record
-  XMM_SAVE_AREA:array[0..63] of QWORD;
+  XMM_SAVE_AREA:XMM_SAVE_AREA;
   XSTATE_BV    :QWORD;
   XCOMP_BV     :QWORD;
   XSTATE       :array[0..37] of QWORD;

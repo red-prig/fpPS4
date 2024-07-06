@@ -1829,8 +1829,8 @@ begin
  rw_wunlock(_lazy_wait);
 end;
 
-initialization
- SetExceptionMask([exInvalidOp, exDenormalized, exPrecision, exUnderflow]);
+//initialization
+// SetExceptionMask([exInvalidOp, exDenormalized, exPrecision, exUnderflow]);
 
 end.
 

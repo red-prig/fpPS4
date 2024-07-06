@@ -211,18 +211,23 @@ var
   Byte(ptruint(@p_trapframe(nil)^.tf_r9 ) div SizeOf(QWORD))
  );
 
-procedure print_syscall_args(td_frame:p_trapframe);
+procedure print_syscall_args(var f:text;const header:RawByteString;td_frame:p_trapframe);
 var
  i,count:Integer;
+ str:shortstring;
 begin
+ str:=header+#13#10;
+
  count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
  if (count<>0) then
  begin
   For i:=0 to count-1 do
   begin
-   Writeln(' [',i+1,']:0x',HexStr(PQWORD(td_frame)[sys_args_idx[i]],16));
+   str:=str+' ['+IntToStr(i+1)+']:0x'+HexStr(PQWORD(td_frame)[sys_args_idx[i]],16)+#13#10;
   end;
  end;
+
+ Write(f,str);
 end;
 
 procedure print_error_syscall(td_frame:p_trapframe);
@@ -239,9 +244,7 @@ begin
        IntToSTr(td_frame^.tf_rax)+':'+
        p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name;
 
- Writeln(StdErr,str);
-
- print_syscall_args(td_frame);
+ print_syscall_args(StdErr,str,td_frame);
 
  print_backtrace_td(StdErr);
 
@@ -258,11 +261,30 @@ var
  rip:QWORD;
  error:Integer;
  is_guest:Boolean;
+ //
+ FPUCW:WORD;
+ MXCSR:DWORD;
 begin
+ FPUCW:=Get8087CW;
+ MXCSR:=GetMXCSR;
+
  //Call by ID table
 
  td:=curkthread;
  td_frame:=@td^.td_frame;
+
+ if (FPUCW<>__INITIAL_FPUCW__) then
+ begin
+  writeln('changed FPUCW(0x',HexStr(FPUCW,4),') on ',td^.td_name);
+ end;
+
+ if ((MXCSR and __INITIAL_MXCSR__)<>__INITIAL_MXCSR__) then
+ begin
+  writeln('changed MXCSR(0x',HexStr((MXCSR  and __INITIAL_MXCSR__),8),') on ',td^.td_name);
+ end;
+
+ td^.td_fpstate.XMM_SAVE_AREA.ControlWord:=FPUCW;
+ td^.td_fpstate.XMM_SAVE_AREA.MxCsr      :=MXCSR;
 
  cpu_fetch_syscall_args(td);
 
@@ -290,9 +312,7 @@ begin
     if is_guest_addr(td_frame^.tf_rip) then
     begin
      is_guest:=True;
-     Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name);
-
-     print_syscall_args(td_frame);
+     print_syscall_args(stdout,'Guest syscall:'+p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name,td_frame);
     end;
 
   error:=scall(td_frame^.tf_rdi,
@@ -325,6 +345,10 @@ begin
  cpu_set_syscall_retval(td,error);
 
  jit_prepare(td,rip);
+
+ //move to pcb?
+ Set8087CW(FPUCW);
+ SetMXCSR (MXCSR);
 end;
 
 procedure jit_prepare(td:p_kthread;rip:QWORD);

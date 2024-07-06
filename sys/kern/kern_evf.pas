@@ -595,7 +595,6 @@ function sys_evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
 var
  evf:p_evf;
  num:Integer;
- r:Integer;
 begin
  Result:=ESRCH;
  num:=0;
@@ -607,10 +606,12 @@ begin
  num:=evf_cancel(evf,setPattern);
  id_release(evf);
 
- if (pNumWait<>nil) then
+ if (pNumWait=nil) then
  begin
-  r:=copyout(@num,pNumWait,SizeOf(Integer));
-  if (r<>0) then Result:=r;
+  Result:=0;
+ end else
+ begin
+  Result:=copyout(@num,pNumWait,SizeOf(Integer));
  end;
 end;
 
@@ -648,34 +649,35 @@ function sys_evf_trywait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD
 var
  evf:p_evf;
  res:QWORD;
- r:Integer;
+ ret_c,ret_w:Integer;
 begin
- Result:=EINVAL;
 
  if ((waitMode and 3)=0) or
     ((waitMode and 3)=3) or
     ((waitMode and $30)=$30) or
-    (bitPattern=0) then Exit;
-
- Result:=ESRCH;
+    (bitPattern=0) then
+ begin
+  Exit(EINVAL);
+ end;
 
  evf:=id_name_get(@named_table,key,EVF_OBJT);
- if (evf=nil) then Exit;
+ if (evf=nil) then Exit(ESRCH);
 
  if (pRes=nil) then
  begin
-  Result:=evf_trywait(evf,bitPattern,waitMode,nil);
-  r:=0;
+  ret_w:=evf_trywait(evf,bitPattern,waitMode,nil);
+  ret_c:=0;
  end else
  begin
   res:=0;
-  Result:=evf_trywait(evf,bitPattern,waitMode,@res);
-  r:=copyout(@res,pRes,SizeOf(QWORD));
+  ret_w:=evf_trywait(evf,bitPattern,waitMode,@res);
+  ret_c:=copyout(@res,pRes,SizeOf(QWORD));
  end;
 
  id_release(evf);
 
- if (r<>0) then Result:=r;
+ if (ret_w<>0) then ret_c:=ret_w;
+ Result:=ret_c;
 end;
 
 function sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;pTimeout:PDWORD):Integer;
@@ -684,49 +686,50 @@ var
  res:QWORD;
  timeout:PDWORD;
  time:DWORD;
- r:Integer;
+ ret_c,ret_w:Integer;
 begin
- Result:=EINVAL;
 
  if ((waitMode and 3)=0) or
     ((waitMode and 3)=3) or
     ((waitMode and $30)=$30) or
-    (bitPattern=0) then Exit;
+    (bitPattern=0) then
+ begin
+  Exit(EINVAL);
+ end;
 
  time:=0;
  timeout:=nil;
 
  if (pTimeout<>nil) then
  begin
-  Result:=copyin(pTimeout,@time,SizeOf(DWORD));
-  if (Result<>0) then Exit;
+  ret_c:=copyin(pTimeout,@time,SizeOf(DWORD));
+  if (ret_c<>0) then Exit(ret_c);
   timeout:=@time;
  end;
 
- Result:=ESRCH;
-
  evf:=id_name_get(@named_table,key,EVF_OBJT);
- if (evf=nil) then Exit;
+ if (evf=nil) then Exit(ESRCH);
 
  if (pRes=nil) then
  begin
-  Result:=evf_wait(evf,bitPattern,waitMode,nil,timeout);
-  r:=0;
+  ret_w:=evf_wait(evf,bitPattern,waitMode,nil,timeout);
+  ret_c:=0;
  end else
  begin
   res:=0;
-  Result:=evf_wait(evf,bitPattern,waitMode,@res,timeout);
-  r:=copyout(@res,pRes,SizeOf(QWORD));
+  ret_w:=evf_wait(evf,bitPattern,waitMode,@res,timeout);
+  ret_c:=copyout(@res,pRes,SizeOf(QWORD));
  end;
 
  id_release(evf);
 
- if (r=0) and (pTimeout<>nil) then
+ if (ret_c=0) and (pTimeout<>nil) then
  begin
-  r:=copyout(@time,pTimeout,SizeOf(DWORD));
+  ret_c:=copyout(@time,pTimeout,SizeOf(DWORD));
  end;
 
- if (r<>0) then Result:=r;
+ if (ret_w<>0) then ret_c:=ret_w;
+ Result:=ret_c;
 end;
 
 function sys_evf_open(name:PChar):Integer;
