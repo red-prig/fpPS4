@@ -251,6 +251,8 @@ begin
    Continue;
   end;
 
+  pm4_me_gfx.on_idle();
+
   RTLEventWaitFor(ring_gfx_event);
  until false;
 

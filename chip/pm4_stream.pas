@@ -294,7 +294,7 @@ type
 
  p_pm4_node_FastClear=^t_pm4_node_FastClear;
  t_pm4_node_FastClear=object(t_pm4_node)
-  CX_REG:TCONTEXT_REG_GROUP; // 0xA000
+  RT:TRT_INFO;
  end;
 
  p_pm4_node_Resolve=^t_pm4_node_Resolve;
@@ -959,13 +959,40 @@ end;
 
 procedure t_pm4_stream.FastClear(var CX_REG:TCONTEXT_REG_GROUP);
 var
+ GPU_REGS:TGPU_REGS;
+ RT:TRT_INFO;
+
  node:p_pm4_node_FastClear;
 begin
+ GPU_REGS:=Default(TGPU_REGS);
+ GPU_REGS.CX_REG:=@CX_REG;
+
  node:=allocator.Alloc(SizeOf(t_pm4_node_FastClear));
 
  node^.ntype :=ntFastClear;
  node^.scope :=Default(t_pm4_resource_curr_scope);
- node^.CX_REG:=CX_REG;
+
+ //
+ RT:=GPU_REGS.GET_RT_INFO(0);
+
+ {
+ //clear TM_READ
+ RT.IMAGE_USAGE:=RT.IMAGE_USAGE and (not TM_READ);
+ //set   TM_CLEAR
+ RT.IMAGE_USAGE:=RT.IMAGE_USAGE or TM_CLEAR;
+
+ //
+
+ insert_image_resource(@node^.scope,
+                       RT.FImageInfo,
+                       RT.IMAGE_USAGE,
+                       [iu_attachment]);
+
+ }
+
+ //
+ node^.RT:=RT;
+ //
 
  add_node(node);
 end;

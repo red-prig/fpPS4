@@ -367,13 +367,15 @@ var
 begin
  if (size<=SizeOf(TSPIRVHeader)) then Exit;
  if (PSPIRVHeader(data)^.MAGIC<>MagicNumber) then Exit;
+
  data:=data+SizeOf(TSPIRVHeader);
  size:=size-SizeOf(TSPIRVHeader);
 
  //orig_data:=data;
  //orig_size:=size;
 
- repeat
+ while (size<>0) do
+ begin
   I:=PSPIRVInstruction(data)^;
   Case I.OP of
    OpSourceExtension:
@@ -449,7 +451,7 @@ begin
   if (size<f) then Break;
   data:=data+f;
   size:=size-f;
- until false;
+ end;
 end;
 
 procedure TvShaderParser.OnEntryPoint(Stage:DWORD;P:PChar);

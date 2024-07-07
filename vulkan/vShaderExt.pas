@@ -89,6 +89,12 @@ type
 
   FShaderFuncs:AShaderFuncKey;
 
+  FInstance:record
+   VGPR_COMP_CNT:Byte;
+   STEP_RATE_0:DWORD;
+   STEP_RATE_1:DWORD;
+  end;
+
   procedure  ClearInfo; override;
   Destructor Destroy;   override;
   function   parser:CvShaderParser; override;
@@ -108,6 +114,7 @@ type
   Procedure  EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   procedure  FreeShaderFuncs;
   Procedure  PreloadShaderFuncs(pUserData:Pointer);
+  Procedure  SetInstance(VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
  end;
 
  TBufBindExt=packed record
@@ -663,6 +670,22 @@ begin
   end;
 
  end;
+end;
+
+Procedure TvShaderExt.SetInstance(VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
+begin
+ FInstance.VGPR_COMP_CNT:=VGPR_COMP_CNT;
+
+ if (VGPR_COMP_CNT>=1) then
+ begin
+  FInstance.STEP_RATE_0:=STEP_RATE_0;
+ end;
+
+ if (VGPR_COMP_CNT>=2) then
+ begin
+  FInstance.STEP_RATE_1:=STEP_RATE_1;
+ end;
+
 end;
 
 ///

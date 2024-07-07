@@ -878,6 +878,8 @@ var
 begin
  //ClearDepthTarget
 
+ CmdBuffer.EndRenderPass;
+
  ri:=FetchImage(CmdBuffer,
                 rt_info.DB_INFO.FImageInfo,
                 [iu_depthstenc]
@@ -1392,6 +1394,63 @@ begin
 
 end;
 
+procedure pm4_FastClear(var ctx:t_me_render_context;node:p_pm4_node_FastClear);
+{
+var
+ ri:TvImage2;
+ range:TVkImageSubresourceRange;
+
+ resource_instance:p_pm4_resource_instance;
+}
+begin
+{
+ //
+ pm4_InitStream(ctx);
+ //
+
+ StartFrameCapture;
+
+ ctx.BeginCmdBuffer;
+
+ ctx.Cmd.EndRenderPass;
+
+ ri:=FetchImage(ctx.Cmd,
+                node^.RT.FImageInfo,
+                [iu_attachment]
+                );
+
+ ri.PushBarrier(ctx.Cmd,
+                ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ range:=ri.GetSubresRange;
+
+ ctx.Cmd.ClearColorImage(ri.FHandle,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         @node^.RT.CLEAR_COLOR,
+                         1,@range);
+
+ //writeback
+ ri.mark_init;
+
+ resource_instance:=ctx.node^.scope.find_image_resource_instance(node^.RT.FImageInfo);
+ Assert(resource_instance<>nil);
+
+ if (resource_instance^.next_overlap.mem_usage<>0) then
+ begin
+  pm4_write_back(ctx.Cmd,ri);
+  //
+  resource_instance^.resource^.rwriteback:=False;
+ end else
+ begin
+  //
+  resource_instance^.resource^.rwriteback:=True;
+ end;
+ //writeback
+}
+end;
+
 procedure Prepare_htile(var ctx:t_me_render_context;
                         var UniformBuilder:TvUniformBuilder);
 var
@@ -1591,7 +1650,7 @@ begin
   ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- ctx.on_idle;
+ //ctx.on_idle;
 end;
 
 procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFlipEop);
@@ -1614,7 +1673,7 @@ begin
   ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- ctx.on_idle;
+ //ctx.on_idle;
 end;
 
 procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
@@ -1624,7 +1683,8 @@ begin
   //CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
   //FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
   //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
-  FLUSH_AND_INV_DB_META:
+  FLUSH_AND_INV_DB_META, //HTILE
+  FLUSH_AND_INV_CB_META: //CMASK
    begin
     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
     begin
@@ -1633,7 +1693,6 @@ begin
     end;
    end;
   //FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
-  //FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
   THREAD_TRACE_MARKER:
    begin
     //
@@ -1961,6 +2020,7 @@ begin
      ntDrawIndex2    :pm4_Draw          (ctx,Pointer(ctx.node));
      ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
      ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));
+     ntFastClear     :pm4_FastClear     (ctx,Pointer(ctx.node));
      ntDispatchDirect:pm4_DispatchDirect(ctx,Pointer(ctx.node));
      ntEventWrite    :pm4_EventWrite    (ctx,Pointer(ctx.node));
      ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
@@ -2016,7 +2076,7 @@ begin
 
   ctx.rel_time:=0; //reset time
   //
-  ctx.on_idle;
+  //ctx.on_idle;
   //
 
   RTLEventWaitFor(me^.event);

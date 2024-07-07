@@ -1369,6 +1369,7 @@ begin
   Exit;
  end;
 
+ EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
  Case eventType of
@@ -1381,6 +1382,17 @@ begin
                     VK_ACCESS_ANY,                            //dstAccessMask
     	            VK_STAGE_DB,                              //srcStageMask
     	            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
+
+   end;
+  FLUSH_AND_INV_CB_META:
+   begin
+    Inc(cmd_count);
+
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_PS,                                       //srcAccessMask
+                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),                  //dstAccessMask
+    	            ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT), //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));               //dstStageMask
 
    end;
 

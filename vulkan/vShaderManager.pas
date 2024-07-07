@@ -391,6 +391,29 @@ begin
  end;
 end;
 
+function test_instance(FShader:TvShaderExt;FStage:TvShaderStage;var GPU_REGS:TGPU_REGS):Boolean;
+var
+ VGPR_COMP_CNT:Byte;
+begin
+ if (FStage<>vShaderStageVs) then Exit(True);
+
+ VGPR_COMP_CNT:=GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT;
+
+ if (FShader.FInstance.VGPR_COMP_CNT<>VGPR_COMP_CNT) then Exit(False);
+
+ if (VGPR_COMP_CNT>=1) then
+ begin
+  if (FShader.FInstance.STEP_RATE_0<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0) then Exit(False);
+ end;
+
+ if (VGPR_COMP_CNT>=2) then
+ begin
+  if (FShader.FInstance.STEP_RATE_1<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1) then Exit(False);
+ end;
+
+ Result:=True;
+end;
+
 function test_unif(FShader:TvShaderExt;FDescSetId:Integer;pUserData:Pointer):Boolean;
 var
  ch:TvBufOffsetChecker;
@@ -460,6 +483,7 @@ begin
    FShader:=t.FShaderAliases[i];
 
    if test_func(FShader,pUserData) then
+   if test_instance(FShader,FStage,GPU_REGS) then
    if test_unif(FShader,FDescSetId,pUserData) then //Checking offsets within a shader
    if test_push_const(FShader,pc_offset,pc_size) then
    begin
@@ -480,6 +504,13 @@ begin
   pUserData:=GPU_REGS.get_user_data(FStage);
 
   FShader:=t.AddShader(FDescSetId,M,pUserData);
+
+  if (FStage=vShaderStageVs) then
+  begin
+   FShader.SetInstance(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT,
+                       GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
+                       GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
+  end;
 
   DumpSpv(FStage,M);
 
