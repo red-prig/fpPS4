@@ -79,7 +79,8 @@ type
 
   FDescSetId:Integer;
 
-  FHash:QWORD;
+  FHash_gcn:QWORD;
+  FHash_spv:QWORD;
 
   FSetLayout:TvSetLayout;
 

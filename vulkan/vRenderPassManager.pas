@@ -254,7 +254,7 @@ var
  info:TVkRenderPassCreateInfo;
 begin
  Result:=False;
- if (Key.AtdCount=0) then Exit;
+ if (Key.AtdCount=0) and (Key.DepCount=0) then Exit;
 
  if (FHandle<>VK_NULL_HANDLE) then Exit(True);
 

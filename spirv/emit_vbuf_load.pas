@@ -202,6 +202,7 @@ begin
   rsl:=NewReg(lc.elem_resl.AsVector(4));
   idx:=lc.v.data[1];
 
+  //scalar or vector
   OpImageRead(line,lc.v.data[0],rsl,idx);
 
   lc.rsl:=rsl;

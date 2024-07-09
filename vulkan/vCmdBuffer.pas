@@ -1373,7 +1373,7 @@ begin
  if (not BeginCmdBuffer) then Exit;
 
  Case eventType of
-  FLUSH_AND_INV_DB_META:
+  FLUSH_AND_INV_DB_META: //HTILE
    begin
     Inc(cmd_count);
 
@@ -1384,7 +1384,7 @@ begin
     	            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
 
    end;
-  FLUSH_AND_INV_CB_META:
+  FLUSH_AND_INV_CB_META: //CMASK
    begin
     Inc(cmd_count);
 

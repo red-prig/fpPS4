@@ -1346,6 +1346,8 @@ function TEmitOp.OpImageSampleImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:P
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isVector,'dst must be vector');
+
  node:=AddSpirvOp(pLine,Op.OpImageSampleImplicitLod); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
@@ -1362,6 +1364,8 @@ function TEmitOp.OpImageSampleExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coord:P
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isVector,'dst must be vector');
+
  node:=AddSpirvOp(pLine,Op.OpImageSampleExplicitLod); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
@@ -1377,6 +1381,8 @@ function TEmitOp.OpImageSampleDrefImplicitLod(pLine:PspirvOp;img:PsrNode;dst,coo
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isScalar,'dst must be scalar');
+
  node:=AddSpirvOp(pLine,Op.OpImageSampleDrefImplicitLod); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
@@ -1394,6 +1400,8 @@ function TEmitOp.OpImageSampleDrefExplicitLod(pLine:PspirvOp;img:PsrNode;dst,coo
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isScalar,'dst must be scalar');
+
  node:=AddSpirvOp(pLine,Op.OpImageSampleDrefExplicitLod); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
@@ -1412,10 +1420,12 @@ Var
  node:PSpirvOp;
  comp:PsrRegNode;
 begin
+ Assert(dst^.dtype.isVector,'dst must be vector');
+
  Case id of
   0..3:;
   else
-   Assert(False);
+   Assert(False,'unknow id');
  end;
 
  comp:=NewReg_i(dtUint32,id);
@@ -1437,6 +1447,8 @@ function TEmitOp.OpImageDrefGather(pLine:PspirvOp;img:PsrNode;dst,coord,pcf:PsrR
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isVector,'dst must be vector');
+
  node:=AddSpirvOp(pLine,Op.OpImageDrefGather); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);
@@ -1454,6 +1466,8 @@ function TEmitOp.OpImageFetch(pLine:PspirvOp;Tgrp:PsrNode;dst,coord:PsrRegNode):
 Var
  node:PSpirvOp;
 begin
+ Assert(dst^.dtype.isVector,'dst must be vector');
+
  node:=AddSpirvOp(pLine,Op.OpImageFetch); //need first
 
  node^.pType:=TypeList.Fetch(dst^.dtype);

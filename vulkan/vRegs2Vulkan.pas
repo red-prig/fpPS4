@@ -1303,6 +1303,7 @@ begin
     (CX_REG^.DB_HTILE_DATA_BASE<>0) then
  begin
   Result.HTILE_INFO.KEY.ADDR:=Pointer(QWORD(CX_REG^.DB_HTILE_DATA_BASE) shl 8);
+
   Result.HTILE_INFO.LINEAR:=DB_HTILE_SURFACE.LINEAR;
 
   if (p_neomode<>0) then
@@ -1312,6 +1313,11 @@ begin
 
   Result.HTILE_INFO.TILE_SURFACE_ENABLE:=1;
   Result.HTILE_INFO.TILE_STENCIL_ENABLE:=ord(DB_STENCIL_INFO.TILE_STENCIL_DISABLE=0);
+
+  if (Result.HTILE_INFO.TILE_STENCIL_ENABLE<>0) then
+  begin
+   Result.HTILE_INFO.KEY.Addr2:=Result.HTILE_INFO.KEY.ADDR;
+  end;
 
   computeHtileInfo(@Result.HTILE_INFO.SIZE,
                    nil,
@@ -1331,7 +1337,17 @@ begin
 
   Result.HTILE_INFO.KEY.cformat:=VK_FORMAT_R32_UINT;
   Result.HTILE_INFO.KEY.params.itype      :=ord(VK_IMAGE_TYPE_2D);
-  Result.HTILE_INFO.KEY.params.tiling     :=Result.FImageInfo.params.tiling;
+
+  if (Result.HTILE_INFO.LINEAR<>0) then
+  begin
+   Result.HTILE_INFO.KEY.params.tiling.idx:=kTileModeDisplay_LinearAligned;
+   Result.HTILE_INFO.KEY.params.tiling.alt:=Result.HTILE_INFO.TC_COMPATIBLE;
+  end else
+  begin
+   Result.HTILE_INFO.KEY.params.tiling.idx:=DB_Z_INFO.TILE_MODE_INDEX;
+   Result.HTILE_INFO.KEY.params.tiling.alt:=Result.HTILE_INFO.TC_COMPATIBLE;
+  end;
+
   Result.HTILE_INFO.KEY.params.samples    :=1;
   Result.HTILE_INFO.KEY.params.mipLevels  :=1;
   Result.HTILE_INFO.KEY.params.width      :=Result.HTILE_INFO.KEY.params.pad_width;

@@ -505,7 +505,7 @@ begin
    Inc(d);
    Assert(pSlot<>nil);
 
-   if (info^.tinfo.Depth=1) then
+   if (dst^.dtype.isScalar) then
    begin
     if (i=0) then
     begin
@@ -551,7 +551,13 @@ begin
   Assert(src[i]<>nil,'TODO: zero or prev value?');
  end;
 
- Result:=OpMakeVec(line,telem.AsVector(m+1),@src);
+ if (m=0) then
+ begin
+  Result:=src[0];
+ end else
+ begin
+  Result:=OpMakeVec(line,telem.AsVector(m+1),@src);
+ end;
 end;
 
 Function TEmit_MIMG.GatherCoord_f(var offset:DWORD;info:PsrImageInfo):PsrRegNode; //src
@@ -816,7 +822,12 @@ begin
 
  cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
 
- if (info^.tinfo.Depth=1) then
+ //gather
+ param:=Default(TImgSampleParam);
+ Gather_sample_param(param,info);
+ //gather
+
+ if (imDref in param.mods) then
  begin
   dst:=NewReg(info^.dtype);
  end else
@@ -824,21 +835,17 @@ begin
   dst:=NewReg(info^.dtype.AsVector(4));
  end;
 
- //gather
- param:=Default(TImgSampleParam);
- Gather_sample_param(param,info);
- //gather
-
  //OpImage
-
  if (imDref in param.mods) then
  begin
   if (FExecutionModel=ExecutionModel.Fragment) and
      ((param.img_op and ImageOperands.Lod)=0) then
   begin
+   //scalar
    node:=OpImageSampleDrefImplicitLod(line,cmb,dst,param.coord,param.pcf);
   end else
   begin
+   //scalar
    node:=OpImageSampleDrefExplicitLod(line,cmb,dst,param.coord,param.pcf);
   end;
  end else
@@ -846,9 +853,11 @@ begin
   if (FExecutionModel=ExecutionModel.Fragment) and
      ((param.img_op and ImageOperands.Lod)=0) then
   begin
+   //vector
    node:=OpImageSampleImplicitLod(line,cmb,dst,param.coord);
   end else
   begin
+   //vector
    node:=OpImageSampleExplicitLod(line,cmb,dst,param.coord);
   end;
  end;
@@ -882,13 +891,7 @@ begin
 
  cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
 
- if (info^.tinfo.Depth=1) then
- begin
-  dst:=NewReg(info^.dtype);
- end else
- begin
-  dst:=NewReg(info^.dtype.AsVector(4));
- end;
+ dst:=NewReg(info^.dtype.AsVector(4));
 
  //gather
  param:=Default(TImgSampleParam);
@@ -900,9 +903,11 @@ begin
  if (imDref in param.mods) then
  begin
   Assert(id=0,'gather pcf with non red component');
+  //vector
   node:=OpImageDrefGather(line,cmb,dst,param.coord,param.pcf);
  end else
  begin
+  //vector
   node:=OpImageGather(line,cmb,dst,param.coord,id);
  end;
  //OpImage
@@ -938,6 +943,8 @@ begin
   IMAGE_LOAD:
     begin
      coord:=GatherCoord_u(roffset,info);
+
+     //vector
      node:=OpImageFetch(line,Tgrp,dst,coord);
 
      if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
@@ -951,6 +958,8 @@ begin
   IMAGE_LOAD_MIP: //All except MSAA
     begin
      coord:=GatherCoord_u(roffset,info);
+
+     //vector
      node:=OpImageFetch(line,Tgrp,dst,coord);
 
      lod:=Gather_value(roffset,dtUint32);
@@ -981,6 +990,8 @@ begin
   IMAGE_STORE:
     begin
      coord:=GatherCoord_u(roffset,info);
+
+     //scalar or vector
      node:=OpImageWrite(line,Tgrp,coord,dst);
 
      if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
@@ -994,6 +1005,8 @@ begin
   IMAGE_STORE_MIP: //All except MSAA
     begin
      coord:=GatherCoord_u(roffset,info);
+
+     //scalar or vector
      node:=OpImageWrite(line,Tgrp,coord,dst);
 
      lod:=Gather_value(roffset,dtUint32);

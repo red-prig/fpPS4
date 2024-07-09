@@ -212,11 +212,11 @@ type
   function  find_buffer_resource         (addr:Pointer;size:DWORD):p_pm4_resource;
   function  fetch_buffer_resource        (addr:Pointer;size:DWORD):p_pm4_resource;
   function  find_htile_resource          (addr:Pointer;size:DWORD):p_pm4_resource;
-  function  fetch_htile_resource         (addr:Pointer;size:DWORD):p_pm4_resource;
+  function  fetch_htile_resource         (const rkey:TvImageKey;size:DWORD):p_pm4_resource;
   function  fetch_resource_instance      (scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
   function  insert_image_resource        (scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
   function  insert_buffer_resource       (scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
-  function  insert_htile_resource        (scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+  function  insert_htile_resource        (scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
   procedure connect_resource_instance    (i:p_pm4_resource_instance);
   procedure connect_resource_scope       (scope:p_pm4_resource_curr_scope);
  end;
@@ -602,13 +602,13 @@ begin
  Result:=resource_set.Find(@tmp);
 end;
 
-function t_pm4_resource_stream_scope.fetch_htile_resource(addr:Pointer;size:DWORD):p_pm4_resource;
+function t_pm4_resource_stream_scope.fetch_htile_resource(const rkey:TvImageKey;size:DWORD):p_pm4_resource;
 var
  tmp:t_pm4_resource;
 begin
  tmp:=Default(t_pm4_resource);
  tmp.rtype:=R_HTILE;
- tmp.rkey.Addr:=addr;
+ tmp.rkey :=rkey;
  tmp.rsize:=size;
 
  Result:=resource_set.Find(@tmp);
@@ -684,12 +684,12 @@ begin
  Result:=i;
 end;
 
-function t_pm4_resource_stream_scope.insert_htile_resource(scope:p_pm4_resource_curr_scope;addr:Pointer;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
+function t_pm4_resource_stream_scope.insert_htile_resource(scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;size:DWORD;mem_usage:Integer):p_pm4_resource_instance;
 var
  r:p_pm4_resource;
  i:p_pm4_resource_instance;
 begin
- r:=fetch_htile_resource(addr,size);
+ r:=fetch_htile_resource(rkey,size);
  i:=fetch_resource_instance(scope,r,mem_usage,[iu_htile]); //iu_htile
 
  if ((mem_usage and TM_READ)<>0) then
@@ -1101,6 +1101,8 @@ var
  i:Integer;
  RT:TRT_INFO;
  FUniformBuilder:TvUniformBuilder;
+
+ resource_instance:p_pm4_resource_instance;
 begin
  for i:=0 to 31 do
  begin
@@ -1153,12 +1155,17 @@ begin
 
   if (rt_info.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin
-   insert_htile_resource(@node^.scope,
-                         rt_info.DB_INFO.HTILE_INFO.KEY.Addr,
-                         rt_info.DB_INFO.HTILE_INFO.SIZE,
-                         rt_info.DB_INFO.DEPTH_USAGE);
+   resource_instance:=insert_htile_resource(@node^.scope,
+                                            rt_info.DB_INFO.HTILE_INFO.KEY,
+                                            rt_info.DB_INFO.HTILE_INFO.SIZE,
+                                            rt_info.DB_INFO.DEPTH_USAGE);
   end;
 
+ end;
+
+ if (rt_info.RT_COUNT=0) and (not rt_info.DB_ENABLE) then
+ begin
+  Writeln('zero attachment???');
  end;
 
  rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;
@@ -1205,8 +1212,8 @@ begin
     (FShaders[vShaderStagePs]<>nil) and
     (FShaders[vShaderStageCs]=nil) then
 
- if (FShaders[vShaderStageVs].FHash=QWORD($00DF6E6331449451)) and
-    (FShaders[vShaderStagePs].FHash=QWORD($E9FF5D4699E5B9AD)) then
+ if (FShaders[vShaderStageVs].FHash_gcn=QWORD($00DF6E6331449451)) and
+    (FShaders[vShaderStagePs].FHash_gcn=QWORD($E9FF5D4699E5B9AD)) then
  begin
   Result:=True;
  end;

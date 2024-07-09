@@ -923,12 +923,12 @@ begin
 
  cmd.RefTo(Result);
 
+ FImage2Set.Unlock_wr;
+
  if (Result<>nil) then
  begin
   Result.Release(nil); //<- Acquire(nil)/FetchMemory
  end;
-
- FImage2Set.Unlock_wr;
 end;
 
 function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;

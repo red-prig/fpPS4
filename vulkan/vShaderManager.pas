@@ -25,6 +25,16 @@ uses
   SprvEmit,
   emit_bin;
 
+const
+ STAGE_NAME:array[TvShaderStage] of PChar=(
+  'Ls',
+  'Hs',
+  'Es',
+  'Gs',
+  'Vs',
+  'Ps',
+  'Cs');
+
 type
  PShaderDataKey=^TShaderDataKey;
  TShaderDataKey=packed object
@@ -75,6 +85,8 @@ function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_R
 function FetchShaderGroup(F:PvShadersKey):TvShaderGroup;
 function FetchShaderGroupRT(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
 function FetchShaderGroupCS(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
+
+function GetDumpSpvName(FStage:TvShaderStage;hash:QWORD):RawByteString;
 
 implementation
 
@@ -156,7 +168,7 @@ var
  i:Integer;
 begin
  Result:=TvShaderExt.Create;
- Result.FHash:=key.FHash;
+ Result.FHash_gcn:=key.FHash;
 
  Result.FDescSetId:=FDescSetId; //set before loading
  Result.LoadFromStream(Stream);
@@ -225,23 +237,24 @@ begin
  Result:=t;
 end;
 
-Procedure DumpSpv(FStage:TvShaderStage;M:TMemoryStream);
+function GetDumpSpvName(FStage:TvShaderStage;hash:QWORD):RawByteString;
+begin
+ Result:=get_dev_progname+'_'+LowerCase(STAGE_NAME[FStage])+'_'+HexStr(hash,16)+'.spv';
+end;
+
+Procedure DumpSpv(FStage:TvShaderStage;M:TMemoryStream;hash:QWORD);
 var
- hash:QWORD;
  F:THandle;
  fname:RawByteString;
 begin
- hash:=MurmurHash64A(M.Memory,M.Size,0);
-
- case FStage of
-  vShaderStagePs:fname:='_ps_';
-  vShaderStageVs:fname:='_vs_';
-  vShaderStageCs:fname:='_cs_';
-  else
-    Exit;
+ if (hash=0) then
+ begin
+  hash:=MurmurHash64A(M.Memory,M.Size,0);
  end;
 
- fname:='shader_dump\'+get_dev_progname+fname+HexStr(hash,16)+'.spv';
+ fname:=GetDumpSpvName(FStage,hash);
+
+ fname:='shader_dump\'+fname;
 
  if FileExists(fname) then Exit;
 
@@ -271,16 +284,6 @@ procedure TPushConstAllocator.Apply(i:DWORD);
 begin
  offset:=offset+i;
 end;
-
-const
- STAGE_NAME:array[TvShaderStage] of PChar=(
-  'Ls',
-  'Hs',
-  'Es',
-  'Gs',
-  'Vs',
-  'Ps',
-  'Cs');
 
 function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TMemoryStream;
 var
@@ -540,14 +543,16 @@ begin
    else;
   end;
 
-  DumpSpv(FStage,M);
+  FShader.FHash_spv:=MurmurHash64A(M.Memory,M.Size,0);
+
+  DumpSpv(FStage,M,FShader.FHash_spv);
 
   M.Free;
 
   case FStage of
-   vShaderStagePs:DumpPS(GPU_REGS,FShader.FHash);
-   vShaderStageVs:DumpVS(GPU_REGS,FShader.FHash);
-   vShaderStageCs:DumpCS(GPU_REGS,FShader.FHash);
+   vShaderStagePs:DumpPS(GPU_REGS,FShader.FHash_gcn);
+   vShaderStageVs:DumpVS(GPU_REGS,FShader.FHash_gcn);
+   vShaderStageCs:DumpCS(GPU_REGS,FShader.FHash_gcn);
    else;
   end;
 

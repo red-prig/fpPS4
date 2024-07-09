@@ -26,12 +26,14 @@ uses
  vFramebufferManager,
  vShader,
  vShaderExt,
+ vShaderManager,
  vRegs2Vulkan,
  vCmdBuffer,
  vPipeline,
  vSetsPoolManager,
  vSampler,
  vSamplerManager,
+ vMetaManager,
 
  vImageTiling,
 
@@ -831,6 +833,7 @@ var
  resource:p_pm4_resource;
 
  ri:TvImage2;
+ ht:TvHtile;
 begin
  if ctx.stream^.init then Exit;
 
@@ -862,6 +865,12 @@ begin
                  );
 
    pm4_load_from(ctx.Cmd,ri,i^.curr.mem_usage);
+  end else
+  if (resource^.rtype=R_HTILE) then
+  begin
+   ht:=FetchHtile(ctx.Cmd,resource^.rkey,resource^.rsize);
+
+   resource^.rclear:=ht.rclear;
   end;
 
   i:=TAILQ_NEXT(i,@i^.init_entry);
@@ -914,6 +923,21 @@ begin
                                   @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
                                   range);
 
+end;
+
+procedure DumpShaderGroup(ShaderGroup:TvShaderGroup);
+var
+ i:TvShaderStage;
+ str:RawByteString;
+begin
+ str:='[DumpShaderGroup]'#13#10;
+ For i:=Low(TvShaderStage) to High(TvShaderStage) do
+ if (ShaderGroup.FKey.FShaders[i]<>nil) then
+ begin
+  str:=str+' ('+HexStr(ShaderGroup.FKey.FShaders[i].FHash_gcn,16)+') '+GetDumpSpvName(i,ShaderGroup.FKey.FShaders[i].FHash_spv)+#13#10;
+ end;
+
+ Writeln(stderr,str);
 end;
 
 procedure pm4_DrawPrepare(var ctx:t_me_render_context);
@@ -987,6 +1011,13 @@ begin
  end;
 
  RP:=FetchRenderPass(ctx.Cmd,@RP_KEY);
+
+ if (RP=nil) then
+ begin
+  DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+
+  Assert(false,'FetchRenderPass');
+ end;
 
  GP_KEY.Clear;
 
@@ -1194,6 +1225,8 @@ begin
 
  if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
  begin
+  DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+
   Writeln(stderr,'BeginRenderPass(ctx.Render)');
   Assert (false ,'BeginRenderPass(ctx.Render)');
  end;
@@ -1316,6 +1349,7 @@ end;
 procedure pm4_Writeback_Finish(var ctx:t_me_render_context);
 var
  ri:TvImage2;
+ ht:TvHtile;
 
  resource:p_pm4_resource;
 begin
@@ -1345,6 +1379,13 @@ begin
 
   end;
 
+  if (resource^.rtype=R_HTILE) then
+  begin
+   ht:=FetchHtile(ctx.Cmd,resource^.rkey,resource^.rsize);
+
+   ht.rclear:=resource^.rclear;
+  end;
+
   resource:=ctx.stream^.resource_set.Next(resource);
  end;
 
@@ -1353,11 +1394,17 @@ end;
 
 procedure pm4_Draw(var ctx:t_me_render_context;node:p_pm4_node_draw);
 begin
+ ctx.rt_info:=@node^.rt_info;
+
+ if (ctx.rt_info^.RT_COUNT=0) and (not ctx.rt_info^.DB_ENABLE) then
+ begin
+  //zero attachment (decompress Dcc/Depth/Fmask) skip
+  Exit;
+ end;
+
  //
  pm4_InitStream(ctx);
  //
-
- ctx.rt_info:=@node^.rt_info;
 
  StartFrameCapture;
 
@@ -1518,7 +1565,7 @@ begin
  CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
 
  //htile heuristic
- if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash=$7DCE68F83F66B337) then
+ if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn=$7DCE68F83F66B337) then
  begin
   Prepare_htile(ctx,FUniformBuilder);
  end;
@@ -1702,6 +1749,21 @@ begin
   PIPELINESTAT_STOP:
    begin
     //
+   end;
+  PERFCOUNTER_START:
+   begin
+    //
+    Writeln('PERFCOUNTER_START');
+   end;
+  PERFCOUNTER_STOP:
+   begin
+    //
+    Writeln('PERFCOUNTER_STOP');
+   end;
+  PERFCOUNTER_SAMPLE:
+   begin
+    //
+    Writeln('PERFCOUNTER_SAMPLE');
    end;
   else
    begin
