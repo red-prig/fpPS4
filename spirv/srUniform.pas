@@ -66,6 +66,7 @@ type
    function  pReg:PsrRegUniform; inline;
    function  GetStorageName:RawByteString;
    function  GetTypeChar:String2;
+   function  GetRw:Char;
    function  GetString:RawByteString;
  end;
 
@@ -255,6 +256,19 @@ begin
    end;
 end;
 
+function TsrUniform.GetRw:Char;
+begin
+ Result:='0';
+ if (FReg.read_count<>0) then
+ begin
+  Result:='1';
+ end;
+ if (FReg.write_count<>0) then
+ begin
+  Result:=Char(ord(Result) or ord('2'));
+ end;
+end;
+
 function TsrUniform.GetString:RawByteString;
 var
  PID:DWORD;
@@ -266,7 +280,8 @@ begin
  end;
  Result:=GetTypeChar+
          ';PID='+HexStr(PID,8)+
-         ';BND='+HexStr(FBinding,8);
+         ';BND='+HexStr(FBinding,8)+
+         ';MRW='+GetRw;
 end;
 
 procedure TsrUniformList.Init(Emit:TCustomEmit); inline;

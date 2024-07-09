@@ -46,10 +46,19 @@ type
   foDepthUnchanged
  );
 
+ PPSInputCntl=^TPSInputCntl;
+ TPSInputCntl=packed record
+  OFFSET     :Byte;
+  USE_DEFAULT:Boolean;
+  DEFAULT_VAL:Byte;
+  FLAT_SHADE :Boolean;
+ end;
+
  TEmitInterface=class(TCustomEmit)
   FExecutionModel:Word;
   FDepthMode:TDepthMode;
   FEarlyFragmentTests:Boolean;
+  FPSInputCntl:array[0..31] of TPSInputCntl;
   FLocalSize:TLocalSize;
   Config:TsrConfig;
   //

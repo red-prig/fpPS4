@@ -1083,11 +1083,10 @@ begin
   With FUniformBuilder.FBuffers[i] do
   begin
 
-   //TODO: check write flag
    insert_buffer_resource(@node^.scope,
                           addr,
                           size,
-                          TM_READ or TM_WRITE);
+                          memuse);
 
   end;
  end;
@@ -1105,12 +1104,6 @@ var
 begin
  for i:=0 to 31 do
  begin
-  if (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>0) and (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET<>i) then
-  begin
-   Assert(false,                                         'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].OFFSET='          +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].OFFSET          ));
-  end;
-  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].DEFAULT_VAL='     +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].DEFAULT_VAL     ));
-  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      =0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FLAT_SHADE='      +IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FLAT_SHADE      ));
   Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
  end;
 

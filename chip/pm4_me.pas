@@ -814,8 +814,10 @@ begin
                                        diff,
                                        range {VK_WHOLE_SIZE});
 
-   //TODO: check write flag
-   ctx.Cmd.AddPlannedTrigger(QWORD(addr),QWORD(addr)+size,nil)
+   if ((memuse and TM_WRITE)<>0) then
+   begin
+    ctx.Cmd.AddPlannedTrigger(QWORD(addr),QWORD(addr)+size,nil);
+   end;
 
   end;
  end;

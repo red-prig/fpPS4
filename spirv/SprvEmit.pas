@@ -28,6 +28,8 @@ uses
   emit_bin;
 
 type
+ PSPI_PS_INPUT_CNTL_0=^TSPI_PS_INPUT_CNTL_0;
+
  TSprvEmit=class(TEmitFetch)
 
   function    NewMain:PSpirvFunc;
@@ -47,6 +49,7 @@ type
                      ENA:TSPI_PS_INPUT_ENA);
 
   Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
+  Procedure   SET_INPUT_CNTL    (INPUT_CNTL:PSPI_PS_INPUT_CNTL_0;NUM_INTERP:Byte);
 
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
                      RSRC2:TCOMPUTE_PGM_RSRC2;
@@ -446,6 +449,20 @@ begin
  end;
  //
  FEarlyFragmentTests:=(SHADER_CONTROL.DEPTH_BEFORE_SHADER<>0);
+end;
+
+Procedure TSprvEmit.SET_INPUT_CNTL(INPUT_CNTL:PSPI_PS_INPUT_CNTL_0;NUM_INTERP:Byte);
+var
+ i:Byte;
+begin
+ if (NUM_INTERP<>0) then
+ for i:=0 to NUM_INTERP-1 do
+ begin
+  FPSInputCntl[i].OFFSET     :=(INPUT_CNTL[i].OFFSET and 31);
+  FPSInputCntl[i].USE_DEFAULT:=(INPUT_CNTL[i].OFFSET shr 5)<>0;
+  FPSInputCntl[i].DEFAULT_VAL:=(INPUT_CNTL[i].DEFAULT_VAL);
+  FPSInputCntl[i].FLAT_SHADE :=(INPUT_CNTL[i].FLAT_SHADE)<>0;
+ end;
 end;
 
 Procedure TSprvEmit.InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;

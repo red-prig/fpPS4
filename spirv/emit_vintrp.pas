@@ -9,6 +9,7 @@ uses
   spirv,
   ps4_pssl,
   srType,
+  srInterface,
   srInput,
   srReg,
   emit_fetch;
@@ -20,6 +21,14 @@ type
 
 implementation
 
+const
+ DEFAULT_VAL:array[0..3] of Tvec4f=(
+  (0.0, 0.0, 0.0, 0.0),
+  (0.0, 0.0, 0.0, 1.0),
+  (1.0, 1.0, 1.0, 0.0),
+  (1.0, 1.0, 1.0, 1.0)
+ );
+
 procedure TEmit_VINTRP.emit_VINTRP;
 var
  inp_M0:PsrInput;
@@ -28,8 +37,39 @@ var
  dst:PsrRegSlot;
 
  inp_SRC:PsrInput;
+ itype:TpsslInputType;
 
- rsl,elm:PsrRegNode;
+ procedure ExportValue(itype:TpsslInputType);
+ var
+  InputCntl:PPSInputCntl;
+
+  rsl,elm:PsrRegNode;
+ begin
+  //
+  InputCntl:=@FPSInputCntl[FSPI.VINTRP.ATTR];
+
+  if InputCntl^.USE_DEFAULT then
+  begin
+   elm:=NewReg_s(dtFloat32,DEFAULT_VAL[InputCntl^.DEFAULT_VAL][FSPI.VINTRP.ATTRCHAN]);
+
+   MakeCopy(dst,elm);
+  end else
+  begin
+   //force flat
+   if InputCntl^.FLAT_SHADE then
+   begin
+    itype:=itFlat;
+   end;
+
+   //remap id
+   rsl:=AddFragLayout(itype,dtVec4f,InputCntl^.OFFSET);
+
+   elm:=dst^.New(line,dtFloat32);
+
+   OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
+  end;
+  //
+ end;
 
 begin
  Assert(FExecutionModel=ExecutionModel.Fragment); //only pixel shader
@@ -50,7 +90,9 @@ begin
 
      Assert(inp_SRC<>nil);
 
-     Case inp_SRC^.itype of
+     itype:=inp_SRC^.itype;
+
+     Case itype of
       itPerspSample,
       itPerspCenter,   //barycentrics with perspective interpolation
       itPerspCentroid,
@@ -63,11 +105,7 @@ begin
 
      Assert(inp_SRC^.typeid=0);            //I
 
-     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
-
-     elm:=dst^.New(line,dtFloat32);
-
-     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
+     ExportValue(itype);
     end;
 
   V_INTERP_P2_F32:
@@ -78,7 +116,9 @@ begin
 
      Assert(inp_SRC<>nil);
 
-     Case inp_SRC^.itype of
+     itype:=inp_SRC^.itype;
+
+     Case itype of
       itPerspSample,
       itPerspCenter,   //barycentrics with perspective interpolation
       itPerspCentroid,
@@ -91,11 +131,7 @@ begin
 
      Assert(inp_SRC^.typeid=1);            //J
 
-     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
-
-     elm:=dst^.New(line,dtFloat32);
-
-     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
+     ExportValue(itype);
     end;
 
    V_INTERP_MOV_F32:
@@ -103,13 +139,13 @@ begin
      //src ignore
 
      //just use nointerpolation
-     inp_SRC:=InputList.Fetch(dtVec4f,itFlat,0);
+     inp_SRC:=InputList.Fetch(dtFloat32,itFlat,0);
 
-     rsl:=AddFragLayout(inp_SRC^.itype,dtVec4f,FSPI.VINTRP.ATTR);
+     Assert(inp_SRC<>nil);
 
-     elm:=dst^.New(line,dtFloat32);
+     itype:=inp_SRC^.itype;
 
-     OpExtract(line,elm,rsl,FSPI.VINTRP.ATTRCHAN);
+     ExportValue(itype);
     end;
 
 

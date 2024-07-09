@@ -112,6 +112,7 @@ type
   function  chain_write:DWORD;
   function  GetStorageName:RawByteString;
   function  GetTypeChar:Char;
+  function  GetRw:Char;
   function  GetString:RawByteString;
   function  GetStructName:RawByteString;
   function  GetSize:PtrUint;
@@ -697,6 +698,19 @@ begin
  end;
 end;
 
+function TsrBuffer.GetRw:Char;
+begin
+ Result:='0';
+ if (chain_read<>0) then
+ begin
+  Result:='1';
+ end;
+ if (chain_write<>0) then
+ begin
+  Result:=Char(ord(Result) or ord('2'));
+ end;
+end;
+
 function TsrBuffer.GetString:RawByteString;
 var
  PID:DWORD;
@@ -710,7 +724,8 @@ begin
          ';PID='+HexStr(PID,8)+
          ';BND='+HexStr(FBinding,8)+
          ';LEN='+HexStr(GetSize,8)+
-         ';OFS='+HexStr(align_offset,8);
+         ';OFS='+HexStr(align_offset,8)+
+         ';MRW='+GetRw;
 end;
 
 function TsrBuffer.GetStructName:RawByteString;

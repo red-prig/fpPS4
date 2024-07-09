@@ -15,8 +15,8 @@ uses
   vShader,
   vImage,
   vSetLayoutManager,
-  vPipelineLayoutManager{,
-  vSetsPoolManager};
+  vPipelineLayoutManager,
+  si_ci_vi_merged_registers;
 
 
 type
@@ -45,6 +45,7 @@ type
   bind  :DWORD;
   size  :DWORD;
   offset:DWORD;
+  flags :DWORD;
   addr  :ADataLayout;
  end;
 
@@ -72,6 +73,8 @@ type
   procedure OnFuncLayout(P:PChar);
  end;
 
+ A_INPUT_CNTL=array[0..31] of TSPI_PS_INPUT_CNTL_0;
+
  TvShaderExt=class(TvShader)
 
   FDescSetId:Integer;
@@ -89,10 +92,16 @@ type
 
   FShaderFuncs:AShaderFuncKey;
 
-  FInstance:record
+  FParams:record
    VGPR_COMP_CNT:Byte;
+   //
+   NUM_INTERP:Byte;
+
    STEP_RATE_0:DWORD;
    STEP_RATE_1:DWORD;
+   //
+   SHADER_CONTROL:TDB_SHADER_CONTROL;
+   INPUT_CNTL    :A_INPUT_CNTL;
   end;
 
   procedure  ClearInfo; override;
@@ -105,22 +114,25 @@ type
   function   GetLayoutAddr(parent:DWORD):ADataLayout;
   Procedure  AddVertLayout(parent,bind:DWORD);
   Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
-  Procedure  AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset:DWORD);
+  Procedure  AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset,flags:DWORD);
   Procedure  SetPushConst(parent,size:DWORD);
   Function   GetPushConstData(pUserData:Pointer):Pointer;
-  Procedure  AddUnifLayout(dtype:TVkDescriptorType;parent,bind:DWORD);
+  Procedure  AddUnifLayout(dtype:TVkDescriptorType;parent,bind,flags:DWORD);
   Procedure  EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   Procedure  AddFuncLayout(parent,size:DWORD);
   Procedure  EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
   procedure  FreeShaderFuncs;
   Procedure  PreloadShaderFuncs(pUserData:Pointer);
-  Procedure  SetInstance(VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
+  Procedure  SetInstance       (VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
+  Procedure  SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
+  Procedure  SET_INPUT_CNTL    (const INPUT_CNTL:A_INPUT_CNTL;NUM_INTERP:Byte);
  end;
 
  TBufBindExt=packed record
   fset  :TVkUInt32;
   bind  :TVkUInt32;
   offset:TVkUInt32;
+  memuse:TVkUInt32;
 
   addr  :Pointer;
   size  :TVkUInt32;
@@ -146,8 +158,8 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
-  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord);
-  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord);
+  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset,flags:DWord);
+  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset,flags:DWord);
 
   Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
   Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
@@ -366,6 +378,14 @@ begin
  Val(s,Result,Error);
 end;
 
+function _get_hex_char(P:PChar):DWord;
+begin
+ case P^ of
+  '0'..'9':Result:=ord(P^)-ord('0');
+  'A'..'F':Result:=ord(P^)-ord('A')+$A;
+ end;
+end;
+
 Procedure AddToCustomLayout(var A:ACustomLayout;const v:TvCustomLayout);
 var
  i:Integer;
@@ -400,7 +420,8 @@ begin
   'B':OnBuffLayout(P);
   'U':OnUnifLayout(P);
   'F':OnFuncLayout(P);
-  else;
+  else
+   Assert(false,'TODO OnSourceExtension:"'+P^+'"');
  end;
 end;
 
@@ -495,7 +516,7 @@ begin
  end;
 end;
 
-Procedure TvShaderExt.AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset:DWORD);
+Procedure TvShaderExt.AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset,flags:DWORD);
 var
  v:TvCustomLayout;
 begin
@@ -511,11 +532,12 @@ begin
  end;
 
  v:=Default(TvCustomLayout);
- v.dtype:=ord(dtype);
- v.bind:=bind;
- v.size:=size;
+ v.dtype :=ord(dtype);
+ v.bind  :=bind;
+ v.size  :=size;
  v.offset:=offset;
- v.addr:=GetLayoutAddr(parent);
+ v.flags :=flags;
+ v.addr  :=GetLayoutAddr(parent);
 
  AddToCustomLayout(FUnifLayouts,v);
 end;
@@ -527,9 +549,9 @@ begin
  FPushConst.addr:=GetLayoutAddr(parent)
 end;
 
-//BS;PID=00000002;BND=00000001;LEN=FFFFFFFF;OFS=00000000"
-//0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
-//0               1               2
+//BS;PID=00000002;BND=00000001;LEN=FFFFFFFF;OFS=00000000;MRW=1"
+//0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789AB
+//0               1               2               3
 procedure TvShaderParserExt.OnBuffLayout(P:PChar);
 begin
  with TvShaderExt(FOwner) do
@@ -539,12 +561,14 @@ begin
                     _get_hex_dword(@P[7]),
                     _get_hex_dword(@P[$14]),
                     _get_hex_dword(@P[$21]),
-                    _get_hex_dword(@P[$2E]));
+                    _get_hex_dword(@P[$2E]),
+                    _get_hex_char (@P[$3B]));
   'S':AddBuffLayout(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     _get_hex_dword(@P[7]),
                     _get_hex_dword(@P[$14]),
                     _get_hex_dword(@P[$21]),
-                    _get_hex_dword(@P[$2E]));
+                    _get_hex_dword(@P[$2E]),
+                    _get_hex_char (@P[$3B]));
   else;
  end;
 end;
@@ -567,24 +591,36 @@ begin
 
 end;
 
-Procedure TvShaderExt.AddUnifLayout(dtype:TVkDescriptorType;parent,bind:DWORD);
+Procedure TvShaderExt.AddUnifLayout(dtype:TVkDescriptorType;parent,bind,flags:DWORD);
 var
  v:TvCustomLayout;
 begin
  v:=Default(TvCustomLayout);
  v.dtype:=ord(dtype);
- v.bind:=bind;
- v.addr:=GetLayoutAddr(parent);
+ v.bind :=bind;
+ v.flags:=flags;
+ v.addr :=GetLayoutAddr(parent);
 
  AddToCustomLayout(FUnifLayouts,v);
 end;
+
+//UI;PID=00000001;BND=00000000;MRW=1
+//US;PID=00000002;BND=00000001;MRW=1
+//0123456789ABCDEF0123456789ABCDEF01
+//0               1               2
 
 procedure TvShaderParserExt.OnUnifLayout(P:PChar);
 begin
  with TvShaderExt(FOwner) do
  Case P[1] of
-  'I':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
-  'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLER      ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
+  'I':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
+  'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLER,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
   else;
  end;
 end;
@@ -674,19 +710,32 @@ end;
 
 Procedure TvShaderExt.SetInstance(VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
 begin
- FInstance.VGPR_COMP_CNT:=VGPR_COMP_CNT;
+ FParams.VGPR_COMP_CNT:=VGPR_COMP_CNT;
 
  if (VGPR_COMP_CNT>=1) then
  begin
-  FInstance.STEP_RATE_0:=STEP_RATE_0;
+  FParams.STEP_RATE_0:=STEP_RATE_0;
  end;
 
  if (VGPR_COMP_CNT>=2) then
  begin
-  FInstance.STEP_RATE_1:=STEP_RATE_1;
+  FParams.STEP_RATE_1:=STEP_RATE_1;
  end;
 
 end;
+
+Procedure TvShaderExt.SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
+begin
+ FParams.SHADER_CONTROL:=SHADER_CONTROL;
+end;
+
+Procedure TvShaderExt.SET_INPUT_CNTL(const INPUT_CNTL:A_INPUT_CNTL;NUM_INTERP:Byte);
+begin
+ FParams.NUM_INTERP:=NUM_INTERP;
+
+ Move(INPUT_CNTL,FParams.INPUT_CNTL,SizeOf(TSPI_PS_INPUT_CNTL_0)*NUM_INTERP);
+end;
+
 
 ///
 
@@ -922,7 +971,13 @@ end;
 
 //
 
-Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord);
+function _get_buf_mem_usage(b:Byte):Byte; inline;
+begin
+ Result:=((b and 1)*TM_READ) or
+         (((b shr 1) and 1)*TM_WRITE);
+end;
+
+Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset,flags:DWord);
 var
  b:TBufBindExt;
  i,stride,num_records:Integer;
@@ -936,6 +991,7 @@ begin
  b.fset:=fset;
  b.bind:=bind;
  b.offset:=offset;
+ b.memuse:=_get_buf_mem_usage(flags);
 
  b.addr:=Pointer(PV^.base);
 
@@ -950,7 +1006,7 @@ begin
  FBuffers[i]:=b;
 end;
 
-Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,size,bind,offset:DWord);
+Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,size,bind,offset,flags:DWord);
 var
  b:TBufBindExt;
  i:Integer;
@@ -962,6 +1018,7 @@ begin
  b.fset:=fset;
  b.bind:=bind;
  b.offset:=offset;
+ b.memuse:=_get_buf_mem_usage(flags);
 
  b.addr:=P;
  b.size:=size;
@@ -1043,8 +1100,8 @@ begin
   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     Case b.addr[0].rtype of
      vtRoot,
-     vtBufPtr2:AddBufPtr(P,Fset,b.size,b.bind,b.offset);
-     vtVSharp4:AddVSharp(P,Fset,b.bind,b.offset);
+     vtBufPtr2:AddBufPtr(P,Fset,b.size,b.bind,b.offset,b.flags);
+     vtVSharp4:AddVSharp(P,Fset,b.bind,b.offset,b.flags);
      else
       Assert(false);
     end;

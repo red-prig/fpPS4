@@ -15,7 +15,7 @@ uses
   vRegs2Vulkan,
   shader_dump,
 
-  //ps4_program,
+  si_ci_vi_merged_registers,
 
   vDevice,
 
@@ -299,6 +299,8 @@ begin
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
 
    SprvEmit.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
+   SprvEmit.SET_INPUT_CNTL    (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
+                               GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
   end;
   vShaderStageVs:
   begin
@@ -399,17 +401,32 @@ begin
 
  VGPR_COMP_CNT:=GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT;
 
- if (FShader.FInstance.VGPR_COMP_CNT<>VGPR_COMP_CNT) then Exit(False);
+ if (FShader.FParams.VGPR_COMP_CNT<>VGPR_COMP_CNT) then Exit(False);
 
  if (VGPR_COMP_CNT>=1) then
  begin
-  if (FShader.FInstance.STEP_RATE_0<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0) then Exit(False);
+  if (FShader.FParams.STEP_RATE_0<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0) then Exit(False);
  end;
 
  if (VGPR_COMP_CNT>=2) then
  begin
-  if (FShader.FInstance.STEP_RATE_1<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1) then Exit(False);
+  if (FShader.FParams.STEP_RATE_1<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1) then Exit(False);
  end;
+
+ Result:=True;
+end;
+
+function test_ps_params(FShader:TvShaderExt;FStage:TvShaderStage;var GPU_REGS:TGPU_REGS):Boolean;
+begin
+ if (FStage<>vShaderStagePs) then Exit(True);
+
+ if (DWORD(FShader.FParams.SHADER_CONTROL)<>DWORD(GPU_REGS.CX_REG^.DB_SHADER_CONTROL)) then Exit(False);
+
+ if (FShader.FParams.NUM_INTERP<>GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP) then Exit(False);
+
+ if (CompareByte(FShader.FParams.INPUT_CNTL,
+                 GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
+                 SizeOf(TSPI_PS_INPUT_CNTL_0)*FShader.FParams.NUM_INTERP)<>0) then Exit(False);
 
  Result:=True;
 end;
@@ -484,6 +501,7 @@ begin
 
    if test_func(FShader,pUserData) then
    if test_instance(FShader,FStage,GPU_REGS) then
+   if test_ps_params(FShader,FStage,GPU_REGS) then
    if test_unif(FShader,FDescSetId,pUserData) then //Checking offsets within a shader
    if test_push_const(FShader,pc_offset,pc_size) then
    begin
@@ -505,11 +523,21 @@ begin
 
   FShader:=t.AddShader(FDescSetId,M,pUserData);
 
-  if (FStage=vShaderStageVs) then
-  begin
-   FShader.SetInstance(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT,
-                       GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
-                       GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
+  case FStage of
+   vShaderStageVs:
+    begin
+     FShader.SetInstance(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT,
+                         GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
+                         GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
+    end;
+   vShaderStagePs:
+    begin
+     FShader.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
+     FShader.SET_INPUT_CNTL    (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
+                                GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
+
+    end;
+   else;
   end;
 
   DumpSpv(FStage,M);
