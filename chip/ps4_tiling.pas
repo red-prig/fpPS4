@@ -1507,7 +1507,26 @@ const
 
  function getMicroTileThickness(arrayMode:Byte):Byte;
 
+function IsTileModeDepth(tiling_idx:Byte):Boolean;
+
 implementation
+
+function IsTileModeDepth(tiling_idx:Byte):Boolean;
+begin
+ case tiling_idx of
+   kTileModeDepth_2dThin_64,
+   kTileModeDepth_2dThin_128,
+   kTileModeDepth_2dThin_256,
+   kTileModeDepth_2dThin_512,
+   kTileModeDepth_2dThin_1K,
+   kTileModeDepth_1dThin,
+   kTileModeDepth_2dThinPrt_256,
+   kTileModeDepth_2dThinPrt_1K:
+    Result:=True;
+  else
+    Result:=False;
+ end;
+end;
 
 function GetTiler2d(Width,m_bitsPerElement:DWORD):Tiler2d;
 begin

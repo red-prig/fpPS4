@@ -658,6 +658,8 @@ var
 
  ri:TvImage2;
 begin
+ //Writeln('[Prepare_Uniforms]->');
+
  if (Length(UniformBuilder.FImages)<>0) then
  begin
   For i:=0 to High(UniformBuilder.FImages) do
@@ -668,6 +670,8 @@ begin
                   FImage,
                   [iu_sampled]
                  );
+
+   //Writeln(ri.key.cformat);
 
    pm4_load_from(ctx.Cmd,ri,TM_READ);
 
@@ -682,6 +686,8 @@ begin
 
   end;
  end;
+
+ //Writeln('<-[Prepare_Uniforms]');
 end;
 
 function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
@@ -780,11 +786,6 @@ begin
 
    if (resource_instance<>nil) then
    begin
-
-    if (resource_instance^.prev.mem_usage<>0) then
-    begin
-     writeln;
-    end;
 
     Writeln('rb:curr:',HexStr(resource_instance^.curr.mem_usage,1),
               ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
@@ -1225,9 +1226,10 @@ begin
 
  if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
  begin
+  Writeln(stderr,'BeginRenderPass(ctx.Render)');
+
   DumpShaderGroup(ctx.rt_info^.ShaderGroup);
 
-  Writeln(stderr,'BeginRenderPass(ctx.Render)');
   Assert (false ,'BeginRenderPass(ctx.Render)');
  end;
 
@@ -1507,7 +1509,10 @@ var
 
  resource_instance:p_pm4_resource_instance;
  resource:p_pm4_resource;
+
+ ht:TvHtile;
 begin
+ resource:=nil;
 
  //buffers
  if (Length(UniformBuilder.FBuffers)<>0) then
@@ -1525,11 +1530,7 @@ begin
     begin
      resource:=ctx.stream^.find_htile_resource(addr,size);
 
-     if (resource<>nil) then
-     begin
-      resource^.rclear:=True;
-     end;
-
+     Break;
     end;
 
    end;
@@ -1537,6 +1538,18 @@ begin
   end;
  end;
  //buffers
+
+ if (resource<>nil) then
+ begin
+  resource^.rclear:=True;
+ end else
+ if Length(UniformBuilder.FBuffers)>2 then
+ With UniformBuilder.FBuffers[2] do
+ begin
+  ht:=FetchHtile(ctx.Cmd,addr,size);
+
+  ht.rclear:=True;
+ end;
 
 end;
 
@@ -1550,8 +1563,6 @@ var
  FUniformBuilder:TvUniformBuilder;
 
  FDescriptorGroup:TvDescriptorGroup;
-
- resource_instance:p_pm4_resource_instance;
 begin
  CP_KEY.FShaderGroup:=node^.ShaderGroup;
  CP:=FetchComputePipeline(ctx.Cmd,@CP_KEY);
@@ -1576,6 +1587,9 @@ begin
  if not ctx.Cmd.BindCompute(CP) then
  begin
   Writeln(stderr,'BindCompute(CP)');
+
+  DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+
   Assert(false  ,'BindCompute(CP)');
  end;
 

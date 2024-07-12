@@ -400,6 +400,7 @@ begin
  if (not cmd.BeginCmdBuffer) then Exit;
 
  if Barrier.Push(cmd.FCmdbuf,
+                 @cmd.EndRenderPass,
                  Parent.FHandle,
                  GetSubresRange,
                  dstAccessMask,
@@ -559,62 +560,98 @@ end;
 
 function TvCustomImage2.FetchView(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:t_image_usage):TvImageView2;
 var
- tmp:TvImageViewKey;
+ fkey:TvImageViewKey;
+ fusage:TVkFlags;
 begin
+ fkey:=F;
+ //
  case usage of
+  iu_attachment:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+   end;
+  iu_depthstenc:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+   end;
+  iu_sampled:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_SAMPLED_BIT);
+   end;
   iu_storage:
    begin
-    tmp:=F;
-    tmp.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=FetchViewRaw(cmd,tmp,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    //Separate storage access for special cases?
+    fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
+    fusage:=ord(VK_IMAGE_USAGE_STORAGE_BIT);
    end;
   else
-   Result:=FetchViewRaw(cmd,F,0);
+   fusage:=0; //default
  end;
+ //
+ Result:=FetchViewRaw(cmd,fkey,fusage);
 end;
 
 function TvCustomImage2.FetchView(cmd:TvCustomCmdBuffer;usage:t_image_usage):TvImageView2;
 var
- F:TvImageViewKey;
+ fkey:TvImageViewKey;
+ fusage:TVkFlags;
 begin
  if (Self=nil) then Exit;
 
- F:=Default(TvImageViewKey);
- F.cformat:=key.cformat;
+ fkey:=Default(TvImageViewKey);
+ fkey.cformat:=key.cformat;
 
  Case TVkImageType(key.params.itype) of
   VK_IMAGE_TYPE_1D:
    begin
     if (key.params.arrayLayers>1) then
-     F.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D_ARRAY)
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D_ARRAY)
     else
-     F.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D);
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D);
    end;
   VK_IMAGE_TYPE_2D:
    begin
     if (key.params.arrayLayers>1) then
-     F.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY)
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY)
     else
-     F.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
     //VK_IMAGE_VIEW_TYPE_CUBE
     //VK_IMAGE_VIEW_TYPE_CUBE_ARRAY
    end;
-  VK_IMAGE_TYPE_3D:F.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
+  VK_IMAGE_TYPE_3D:fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
  end;
 
- F.last_level:=key.params.mipLevels  -1;
- F.last_array:=key.params.arrayLayers-1;
+ fkey.last_level:=key.params.mipLevels  -1;
+ fkey.last_array:=key.params.arrayLayers-1;
 
+ fusage:=0;
+
+ //
  case usage of
+  iu_attachment:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+   end;
+  iu_depthstenc:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+   end;
+  iu_sampled:
+   begin
+    fusage:=ord(VK_IMAGE_USAGE_SAMPLED_BIT);
+   end;
   iu_storage:
    begin
-    F.cformat:=GET_VK_FORMAT_STORAGE(F.cformat);
-    Result:=FetchViewRaw(cmd,F,ord(VK_IMAGE_USAGE_STORAGE_BIT));
+    //Separate storage access for special cases?
+    fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
+    fusage:=ord(VK_IMAGE_USAGE_STORAGE_BIT);
    end;
   else
-   Result:=FetchViewRaw(cmd,F,0);
+   fusage:=0; //default
  end;
+ //
 
+ Result:=FetchViewRaw(cmd,fkey,fusage);
 end;
 
 procedure TvImage2.PushBarrier(cmd:TvCustomCmdBuffer;
@@ -628,6 +665,7 @@ begin
  rw_wlock(lock);
 
  if Barrier.Push(cmd.FCmdbuf,
+                 @cmd.EndRenderPass,
                  FHandle,
                  GetSubresRange,
                  dstAccessMask,
@@ -761,7 +799,7 @@ end;
 
 //
 
-function _Find(const F:TvImageKey):TvImage2;
+function _Find(const F:TvImageKey):TvCustomImage2;
 var
  i:TvImage2Set.Iterator;
 begin
@@ -770,6 +808,11 @@ begin
  if (i.Item<>nil) then
  begin
   Result:=TvImage2(ptruint(i.Item^)-ptruint(@TvImage2(nil).key));
+
+  if (Result.Parent<>nil) then
+  begin
+   Result:=Result.Parent;
+  end;
  end;
 end;
 
@@ -838,6 +881,82 @@ begin
 
 end;
 
+procedure _DeleteImage(t:TvCustomImage2);
+begin
+ FImage2Set.delete(@t.key);
+ t._Release(nil); //map ref
+
+ if (t.DepthOnly<>nil) and
+    (t.DepthOnly<>t) then
+ begin
+  FImage2Set.delete(@t.DepthOnly.key);
+ end;
+
+ if (t.StencilOnly<>nil) and
+    (t.StencilOnly<>t) then
+ begin
+  FImage2Set.delete(@t.StencilOnly.key);
+ end;
+
+end;
+
+procedure _DeleteAlias(const F:TvImageKey);
+var
+ t:TvCustomImage2;
+begin
+ t:=_Find(F);
+ if (t=nil) then Exit;
+
+ _DeleteImage(t);
+end;
+
+function _InsertImage(t:TvCustomImage2):Boolean;
+begin
+ if FImage2Set.Insert(@t.key) then
+ begin
+  t._Acquire(nil); //map ref
+ end else
+ begin
+  Exit(False);
+ end;
+
+ if (t.DepthOnly<>nil) and
+    (t.DepthOnly<>t) then
+ begin
+  if not FImage2Set.Insert(@t.DepthOnly.key) then
+  begin
+   //alias? -> delete
+   _DeleteAlias(t.DepthOnly.key);
+   //again
+   if not FImage2Set.Insert(@t.DepthOnly.key) then
+   begin
+    //wtf?
+    _DeleteImage(t);
+    Exit(False);
+   end;
+  end;
+ end;
+
+ if (t.StencilOnly<>nil) and
+    (t.StencilOnly<>t) then
+ begin
+  if not FImage2Set.Insert(@t.StencilOnly.key) then
+  begin
+   //alias? -> delete
+   _DeleteAlias(t.StencilOnly.key);
+   //again
+   if not FImage2Set.Insert(@t.StencilOnly.key) then
+   begin
+    //wtf?
+    _DeleteImage(t);
+    Exit(False);
+   end;
+  end;
+ end;
+
+ Result:=True;
+end;
+
 function _FetchImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
 label
  _repeat;
@@ -849,7 +968,7 @@ begin
 
  _repeat:
 
- t:=_Find(F);
+ t:=TvImage2(_Find(F));
 
  if (t<>nil) then
  begin
@@ -859,8 +978,7 @@ begin
   end else
   begin
    //mem is deleted, free img
-   FImage2Set.delete(@t.key);
-   t._Release(nil); //map ref
+   _DeleteImage(t);
    t:=nil;
    goto _repeat;
   end;
@@ -881,7 +999,7 @@ begin
 
    t.BindMem(Fdevc);
 
-   if FImage2Set.Insert(@t.key) then
+   if _InsertImage(t) then
    begin
     t._Acquire(nil); //map ref
    end;

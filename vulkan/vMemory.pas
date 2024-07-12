@@ -482,7 +482,13 @@ function gpu_map_adj_free(map:p_gpu_map;
 begin
  if (entry=@map^.header) then
  begin
-  Result:=entry^.adj_free;
+  if (entry^.next=@map^.header) then
+  begin
+   Result:=entry^.adj_free - start;
+  end else
+  begin
+   Result:=entry^.next^.start - start;
+  end;
  end else
  begin
   Result:=entry^.adj_free - (start - entry^.__end);
@@ -518,6 +524,13 @@ begin
  end;
 
  _size:=gpu_map_adj_free(map,start,entry);
+
+ if (entry^.next<>@map^.header) then
+ if (entry^.next^.start<(start + _size)) then
+ begin
+  //something is wrong
+  Exit(GPU_NO_SPACE);
+ end;
 
  if (_size<(__end-start)) then
  begin

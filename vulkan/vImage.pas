@@ -15,14 +15,18 @@ uses
 type
  PvImageBarrier=^TvImageBarrier;
  TvImageBarrier=object
-  //image:TVkImage;
-  //range:TVkImageSubresourceRange;
-  //
-  AccessMask:TVkAccessFlags;
-  ImgLayout :TVkImageLayout;
-  StageMask :TVkPipelineStageFlags;
+  type
+   t_push_cb=procedure of object;
+  var
+   //image:TVkImage;
+   //range:TVkImageSubresourceRange;
+   //
+   AccessMask:TVkAccessFlags;
+   ImgLayout :TVkImageLayout;
+   StageMask :TVkPipelineStageFlags;
   Procedure Init({_image:TVkImage;_sub:TVkImageSubresourceRange});
   function  Push(cmd:TVkCommandBuffer;
+                 cb:t_push_cb;
                  image:TVkImage;
                  range:TVkImageSubresourceRange;
                  dstAccessMask:TVkAccessFlags;
@@ -259,8 +263,9 @@ function GET_VK_IMAGE_MUTABLE(cformat:TVkFormat):PVkFormat;
 
 function GET_VK_FORMAT_STORAGE(cformat:TVkFormat):TVkFormat;
 
-function GET_VK_IMAGE_USAGE_DEFAULT (cformat:TVkFormat):TVkFlags;
-function GET_VK_IMAGE_CREATE_DEFAULT(cformat:TVkFormat):TVkFlags;
+function GET_VK_IMAGE_USAGE_DEFAULT   (cformat:TVkFormat):TVkFlags;
+function GET_VK_IMAGE_USAGE_ATTACHMENT(cformat:TVkFormat):TVkFlags;
+function GET_VK_IMAGE_CREATE_DEFAULT  (cformat:TVkFormat):TVkFlags;
 
 Function GetNormalizedParams(const key:TvImageKey):TvImageKeyParams;
 Function CompareNormalized(const a,b:TvImageKey):Integer;
@@ -944,8 +949,12 @@ const
    ord(VK_IMAGE_USAGE_TRANSFER_DST_BIT) or
    ord(VK_IMAGE_USAGE_SAMPLED_BIT);
 
+ VK_IMAGE_USAGE_DEFAULT_COLOR=
+   VK_IMAGE_USAGE_DEFAULT or
+   ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+
  VK_IMAGE_USAGE_DEFAULT_DEPTH=
-   (VK_IMAGE_USAGE_DEFAULT and (not ord(VK_IMAGE_USAGE_SAMPLED_BIT))) or
+   (VK_IMAGE_USAGE_DEFAULT {and (not ord(VK_IMAGE_USAGE_SAMPLED_BIT))}) or
    ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
 function GET_VK_IMAGE_USAGE_DEFAULT(cformat:TVkFormat):TVkFlags;
@@ -970,8 +979,33 @@ begin
    Result:=VK_IMAGE_USAGE_DEFAULT;
 
   else
-   Result:=VK_IMAGE_USAGE_DEFAULT or
-           ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+   Result:=VK_IMAGE_USAGE_DEFAULT_COLOR;
+ end;
+end;
+
+function GET_VK_IMAGE_USAGE_ATTACHMENT(cformat:TVkFormat):TVkFlags;
+begin
+ Case cformat of
+  VK_FORMAT_R4G4_UNORM_PACK8..
+  VK_FORMAT_A1R5G5B5_UNORM_PACK16,
+
+  VK_FORMAT_A8B8G8R8_UNORM_PACK32..
+  VK_FORMAT_A2B10G10R10_SINT_PACK32,
+
+  VK_FORMAT_B10G11R11_UFLOAT_PACK32..
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+   Result:=ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+
+  VK_FORMAT_D16_UNORM..
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   Result:=ord(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+  VK_FORMAT_BC1_RGB_UNORM_BLOCK..
+  VK_FORMAT_BC7_SRGB_BLOCK:
+   Result:=0; //prohibited
+
+  else
+   Result:=ord(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
  end;
 end;
 
@@ -1084,8 +1118,8 @@ begin
   begin
    sType          :=VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO;
    pNext          :=nil;
-   flags          :=GET_VK_IMAGE_CREATE_DEFAULT(cformat);
-   usage          :=GET_VK_IMAGE_USAGE_DEFAULT (cformat);
+   flags          :=GET_VK_IMAGE_CREATE_DEFAULT  (cformat);
+   usage          :=GET_VK_IMAGE_USAGE_ATTACHMENT(cformat);
    width          :=FImages[i].width;
    height         :=FImages[i].height;
    layerCount     :=FImages[i].layerCount;
@@ -1626,6 +1660,7 @@ begin
  if (cmd=VK_NULL_HANDLE) then Exit;
 
  Barrier.Push(cmd,
+              nil,
               FHandle,
               range,
               dstAccessMask,
@@ -1642,6 +1677,7 @@ begin
  if (cmd=VK_NULL_HANDLE) then Exit;
 
  Barrier.Push(cmd,
+              nil,
               FHandle,
               range,
               dstAccessMask,
@@ -1857,11 +1893,12 @@ begin
 end;
 
 function TvImageBarrier.Push(cmd:TVkCommandBuffer;
-                              image:TVkImage;
-                              range:TVkImageSubresourceRange;
-                              dstAccessMask:TVkAccessFlags;
-	                      newImageLayout:TVkImageLayout;
-	                      dstStageMask:TVkPipelineStageFlags):Boolean;
+                             cb:t_push_cb;
+                             image:TVkImage;
+                             range:TVkImageSubresourceRange;
+                             dstAccessMask:TVkAccessFlags;
+	                     newImageLayout:TVkImageLayout;
+	                     dstStageMask:TVkPipelineStageFlags):Boolean;
 var
  info:TVkImageMemoryBarrier;
 begin
@@ -1872,6 +1909,11 @@ begin
     (StageMask <>dstStageMask) then
  begin
   Result:=True;
+
+  if (cb<>nil) then
+  begin
+   cb();
+  end;
 
   info:=Default(TVkImageMemoryBarrier);
   info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

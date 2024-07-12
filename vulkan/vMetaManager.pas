@@ -14,9 +14,9 @@ uses
 type
  PMetaKey=^TMetaKey;
  TMetaKey=packed object
-  mkey :TvImageKey;
   mtype:t_image_usage;
   msize:DWORD;
+  mkey :TvImageKey;
   function c(a,b:PMetaKey):Integer; static;
  end;
 
@@ -31,6 +31,7 @@ type
  end;
 
 function FetchHtile(cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD):TvHtile;
+function FetchHtile(cmd:TvDependenciesObject;addr:Pointer;size:DWORD):TvHtile;
 
 implementation
 
@@ -42,33 +43,93 @@ type
 
 function TMetaKey.c(a,b:PMetaKey):Integer;
 begin
+ //type
  Result:=ord(ord(a^.mtype)>ord(b^.mtype))-ord(ord(a^.mtype)<ord(b^.mtype));
  if (Result<>0) then Exit;
- //
- Result:=CompareNormalized(a^.mkey,b^.mkey);
+ //addr
+ Result:=ord(a^.mkey.Addr>b^.mkey.Addr)-ord(a^.mkey.Addr<b^.mkey.Addr);
  if (Result<>0) then Exit;
- //
+ //size
  Result:=ord(a^.msize>b^.msize)-ord(a^.msize<b^.msize);
+ if (Result<>0) then Exit;
+ //params
+ Result:=CompareNormalized(a^.mkey,b^.mkey);
 end;
 
 var
  lock:Pointer=nil;
  FMeta2Set:TvCustomMeta2Set;
 
+function Key2CustomMeta(P:PMetaKey):TvCustomMeta; inline;
+begin
+ Result:=TvCustomMeta(ptruint(P)-ptruint(@TvCustomMeta(nil).key));
+end;
 
 function _Find(const F:TMetaKey):TvCustomMeta;
+label
+ _repeat;
 var
+ T:TMetaKey;
  i:TvCustomMeta2Set.Iterator;
+ P:PMetaKey;
 begin
  Result:=nil;
+
+ _repeat:
+
  i:=FMeta2Set.find(@F);
+
+ if (i.Item=nil) then
+ begin
+  T:=F;
+  T.mkey:=Default(TvImageKey);
+  T.mkey.Addr:=F.mkey.Addr;
+  //
+  i:=FMeta2Set.find(@T);
+  //
+  if (i.Item<>nil) then
+  begin
+   P:=i.Item^;
+   //
+   FMeta2Set.erase(i);
+   //
+   P^:=F;
+   //
+   FMeta2Set.Insert(P);
+   //
+   goto _repeat;
+  end;
+ end;
+
  if (i.Item<>nil) then
  begin
-  Result:=TvCustomMeta(ptruint(i.Item^)-ptruint(@TvCustomMeta(nil).key));
+  Result:=Key2CustomMeta(i.Item^);
  end;
 end;
 
-function _FetchHtile(const F:TvImageKey;size:DWORD):TvHtile;
+function _Find_be(const F:TMetaKey):TvCustomMeta;
+var
+ i:TvCustomMeta2Set.Iterator;
+ P:PMetaKey;
+begin
+ Result:=nil;
+
+ i:=FMeta2Set.find_be(@F);
+
+ if (i.Item<>nil) then
+ begin
+  P:=i.Item^;
+
+  if (P^.mtype<>F.mtype) then Exit(nil);
+  if (P^.msize<>F.msize) then Exit(nil);
+  if (P^.mkey.Addr<>F.mkey.Addr) then Exit(nil);
+
+  Result:=Key2CustomMeta(P);
+ end;
+
+end;
+
+function _FetchHtile(const F:TvImageKey;size:DWORD;is_full:Boolean):TvHtile;
 var
  t:TvHtile;
  M:TMetaKey;
@@ -79,7 +140,13 @@ begin
  M.mkey :=F;
  M.msize:=size;
 
- t:=TvHtile(_Find(M));
+ if is_full then
+ begin
+  t:=TvHtile(_Find(M));
+ end else
+ begin
+  t:=TvHtile(_Find_be(M));
+ end;
 
  if (t<>nil) then
  begin
@@ -102,12 +169,29 @@ function FetchHtile(cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD):TvHt
 begin
  rw_wlock(lock);
 
- Result:=_FetchHtile(F,size);
+ Result:=_FetchHtile(F,size,True);
 
  cmd.RefTo(Result);
 
  rw_wunlock(lock);
 end;
+
+function FetchHtile(cmd:TvDependenciesObject;addr:Pointer;size:DWORD):TvHtile;
+var
+ F:TvImageKey;
+begin
+ F:=Default(TvImageKey);
+ F.Addr:=addr;
+
+ rw_wlock(lock);
+
+ Result:=_FetchHtile(F,size,False);
+
+ cmd.RefTo(Result);
+
+ rw_wunlock(lock);
+end;
+
 
 end.
 

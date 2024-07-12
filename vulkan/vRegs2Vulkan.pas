@@ -714,7 +714,7 @@ begin
  clr.float32[3]:=i[3];
 end;
 
-function GetRenderTargetFormat(FORMAT,NUMBER_TYPE:Byte):TVkFormat;
+function GetRenderTargetFormat(FORMAT,NUMBER_TYPE,TILING_ID:Byte):TVkFormat;
 begin
  Result:=VK_FORMAT_UNDEFINED;
 
@@ -774,6 +774,10 @@ begin
    end;
 
   COLOR_32:
+   if IsTileModeDepth(TILING_ID) then
+   begin
+    Result:=VK_FORMAT_D32_SFLOAT;
+   end else
    Case NUMBER_TYPE of
     NUMBER_UINT   :Result:=VK_FORMAT_R32_UINT;
     NUMBER_SINT   :Result:=VK_FORMAT_R32_SINT;
@@ -877,8 +881,6 @@ begin
  FORMAT     :=RENDER_TARGET.INFO.FORMAT;
  NUMBER_TYPE:=RENDER_TARGET.INFO.NUMBER_TYPE;
 
- Result.FImageInfo.cformat:=GetRenderTargetFormat(FORMAT,NUMBER_TYPE);
-
  if (RENDER_TARGET.INFO.LINEAR_GENERAL<>0) then
  begin
   Result.FImageInfo.params.tiling.idx:=kTileModeDisplay_LinearGeneral;
@@ -886,6 +888,10 @@ begin
  begin
   Result.FImageInfo.params.tiling.idx:=RENDER_TARGET.ATTRIB.TILE_MODE_INDEX;
  end;
+
+ Result.FImageInfo.cformat:=GetRenderTargetFormat(FORMAT,
+                                                  NUMBER_TYPE,
+                                                  Result.FImageInfo.params.tiling.idx);
 
  if (p_neomode<>0) then
  begin
@@ -1828,7 +1834,16 @@ begin
     IMG_DATA_FORMAT_16          :Result:=VK_FORMAT_R16_UINT;
     IMG_DATA_FORMAT_16_16       :Result:=VK_FORMAT_R16G16_UINT;
     IMG_DATA_FORMAT_16_16_16_16 :Result:=VK_FORMAT_R16G16B16A16_UINT;
-    IMG_DATA_FORMAT_32          :Result:=VK_FORMAT_R32_UINT;
+
+    IMG_DATA_FORMAT_32          :
+     if IsTileModeDepth(PT^.tiling_idx) then
+     begin
+      Result:=VK_FORMAT_D32_SFLOAT;
+     end else
+     begin
+      Result:=VK_FORMAT_R32_UINT;
+     end;
+
     IMG_DATA_FORMAT_32_32       :Result:=VK_FORMAT_R32G32_UINT;
     IMG_DATA_FORMAT_32_32_32    :Result:=VK_FORMAT_R32G32B32_UINT;
     IMG_DATA_FORMAT_32_32_32_32 :Result:=VK_FORMAT_R32G32B32A32_UINT;
@@ -1849,7 +1864,16 @@ begin
     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SINT;
     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SINT;
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
-    IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SINT;
+
+    IMG_DATA_FORMAT_32         :
+     if IsTileModeDepth(PT^.tiling_idx) then
+     begin
+      Result:=VK_FORMAT_D32_SFLOAT;
+     end else
+     begin
+      Result:=VK_FORMAT_R32_SINT;
+     end;
+
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SINT;
     IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SINT;
     IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SINT;
@@ -1861,7 +1885,16 @@ begin
     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_SFLOAT;
     IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_SFLOAT;
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SFLOAT;
-    IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_SFLOAT;
+
+    IMG_DATA_FORMAT_32         :
+     if IsTileModeDepth(PT^.tiling_idx) then
+     begin
+      Result:=VK_FORMAT_D32_SFLOAT;
+     end else
+     begin
+      Result:=VK_FORMAT_R32_SFLOAT;
+     end;
+
     IMG_DATA_FORMAT_32_32      :Result:=VK_FORMAT_R32G32_SFLOAT;
     IMG_DATA_FORMAT_32_32_32   :Result:=VK_FORMAT_R32G32B32_SFLOAT;
     IMG_DATA_FORMAT_32_32_32_32:Result:=VK_FORMAT_R32G32B32A32_SFLOAT;
