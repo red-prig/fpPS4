@@ -65,7 +65,8 @@ type
 
   hWindow:THandle;
 
-  FEvent:PRTLEvent;
+  FHEvent:PRTLEvent;
+  FVEvent:PRTLEvent;
   Ftd:p_kthread;
 
   FSubmitAlloc:TSubmitAlloc;
@@ -183,7 +184,8 @@ begin
 
  Writeln('OpenMainWindows:',hWindow);
 
- FEvent:=RTLEventCreate;
+ FHEvent:=RTLEventCreate;
+ FVEvent:=RTLEventCreate;
 
  FSubmitAlloc.Init;
  FSubmitQueue.Create;
@@ -201,12 +203,14 @@ begin
  if (Ftd<>nil) then
  begin
   FTerminate:=True;
-  RTLEventSetEvent(FEvent);
+  RTLEventSetEvent(FHEvent);
+  RTLEventSetEvent(FVEvent);
   WaitForThreadTerminate(Ftd^.td_handle,0);
   thread_dec_ref(Ftd);
   Ftd:=nil;
  end;
- RTLEventDestroy(FEvent);
+ RTLEventDestroy(FHEvent);
+ RTLEventDestroy(FVEvent);
  FreeMem(dst_cache);
  inherited;
 end;
@@ -819,7 +823,7 @@ begin
  bi.bmiHeader.biBitCount   :=32;
  bi.bmiHeader.biCompression:=BI_RGB;
 
- if (attr^.attr.tilingMode<>0) then
+ if {(attr^.attr.tilingMode<>0)} false then
  begin
   //alloc aligned 128x128
   bi.bmiHeader.biWidth :=(attr^.attr.pitchPixel+127) and (not 127);
@@ -910,7 +914,7 @@ begin
 
  if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
  begin
-  RTLEventSetEvent(FEvent);
+  RTLEventSetEvent(FHEvent);
  end;
  //
 
@@ -998,7 +1002,7 @@ begin
 
    if (Node^.submit.flipMode=SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
    begin
-    RTLEventSetEvent(FEvent);
+    RTLEventSetEvent(FHEvent);
    end;
    //
 
@@ -1019,7 +1023,8 @@ begin
  if (vblank_count>flip_rate) then
  begin
   vblank_count:=0;
-  RTLEventSetEvent(FEvent);
+  RTLEventSetEvent(FHEvent);
+  RTLEventSetEvent(FVEvent);
  end;
 
  Result:=0;
@@ -1096,13 +1101,25 @@ begin
  dce:=TDisplayHandleSoft(parameter);
 
  repeat
-  RTLEventWaitFor(dce.FEvent);
 
   Node:=nil;
   if dce.FSubmitQueue.Pop(Node) then
   begin
+   //
+   if (Node^.submit.flipMode<>SCE_VIDEO_OUT_FLIP_MODE_HSYNC) then
+   begin
+    RTLEventWaitFor(dce.FVEvent);
+   end else
+   begin
+    RTLEventResetEvent(dce.FVEvent);
+   end;
+   //
    dce.OnSubmit(Node);
    dce.FSubmitAlloc.Free(Node);
+   //
+  end else
+  begin
+   RTLEventWaitFor(dce.FHEvent);
   end;
 
  until dce.FTerminate;

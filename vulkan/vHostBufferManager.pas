@@ -207,6 +207,8 @@ begin
   key.FBuffer:=TvHostBuffer.Create(Size,usage,@buf_ext);
   key.FBuffer.FAddr:=Addr;
 
+  key.FBuffer.SetObjectName('HB_0x'+HexStr(Addr,10)+'..'+HexStr(Addr+Size,10));
+
   if (key.FBuffer.BindMem(mem)<>VK_SUCCESS) then
   begin
    //unknow error

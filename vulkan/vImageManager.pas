@@ -83,6 +83,7 @@ type
   procedure   mark_init;
   function    get_change_rate:t_change_rate;
   procedure   apply_change_rate(r:t_change_rate);
+  Function    IsDepthAndStencil:Boolean;
   Function    GetSubresRange:TVkImageSubresourceRange;  virtual;
   Function    GetSubresLayer:TVkImageSubresourceLayers; virtual;
   function    FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2; virtual; abstract;
@@ -325,6 +326,18 @@ begin
  System.InterlockedExchange   (change_rate.state  ,   r.state);
  System.InterlockedExchangeAdd(change_rate.trigger,-r.trigger);
  System.InterlockedExchangeAdd(change_rate.planned,-r.planned);
+end;
+
+Function TvCustomImage2.IsDepthAndStencil:Boolean;
+begin
+ Case key.cformat of
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   Result:=True;
+  else
+   Result:=False;
+ end;
 end;
 
 Function TvCustomImage2.GetSubresRange:TVkImageSubresourceRange;
@@ -837,7 +850,7 @@ begin
     Result:=TvDepthStencilImage2.Create;
     Result.key   :=F;
     Result.FUsage:=usage;
-
+    //
     Result.StencilOnly:=TvChildImage2.Create;
     Result.StencilOnly.key   :=GetStencilOnly(F);
     Result.StencilOnly.Parent:=Result;
@@ -862,11 +875,11 @@ begin
     Result:=TvDepthStencilImage2.Create;
     Result.key   :=F;
     Result.FUsage:=usage;
-
+    //
     Result.DepthOnly:=TvChildImage2.Create;
     Result.DepthOnly.key   :=GetDepthOnly(F);
     Result.DepthOnly.Parent:=Result;
-
+    //
     Result.StencilOnly:=TvChildImage2.Create;
     Result.StencilOnly.key   :=GetStencilOnly(F);
     Result.StencilOnly.Parent:=Result;
@@ -991,6 +1004,8 @@ begin
    FreeAndNil(t);
   end else
   begin
+
+   t.SetObjectName('I_0x'+HexStr(QWORD(F.Addr),10)+'_'+IntToStr(F.params.width)+'x'+IntToStr(F.params.height));
 
    Fdevc:=MemManager.FetchMemory(
      t.GetRequirements,

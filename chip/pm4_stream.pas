@@ -107,6 +107,7 @@ type
  );
 
  t_pm4_node_type=(
+  ntHint,
   ntLoadConstRam,
   ntEventWrite,
   ntEventWriteEop,
@@ -230,6 +231,11 @@ type
   ntype:t_pm4_node_type;
  end;
 
+ p_pm4_node_Hint=^t_pm4_node_Hint;
+ t_pm4_node_Hint=packed object(t_pm4_node)
+  data:record end; //@pchar
+ end;
+
  p_pm4_node_LoadConstRam=^t_pm4_node_LoadConstRam;
  t_pm4_node_LoadConstRam=packed object(t_pm4_node)
   addr  :Pointer;
@@ -350,6 +356,7 @@ type
   procedure Acquire;
   function  Release:Boolean;
   //
+  procedure Hint         (P:PChar);
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
@@ -824,6 +831,22 @@ begin
 end;
 
 //
+
+procedure t_pm4_stream.Hint(P:PChar);
+var
+ len:ptruint;
+ node:p_pm4_node_Hint;
+begin
+ len:=StrLen(P);
+ node:=allocator.Alloc(SizeOf(t_pm4_node_Hint)+len+1);
+
+ node^.ntype :=ntHint;
+ node^.scope :=Default(t_pm4_resource_curr_scope);
+
+ Move(P^,node^.data,len+1);
+
+ add_node(node);
+end;
 
 procedure t_pm4_stream.LoadConstRam(addr:Pointer;num_dw,offset:Word);
 var

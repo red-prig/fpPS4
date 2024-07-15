@@ -156,6 +156,9 @@ type
   function  CmdStatus(i:t_pm4_stream_type):TVkResult;
   procedure PingCmd;
   function  WaitConfirmOrSwitch:Boolean;
+  Procedure InsertLabel(pLabelName:PVkChar);
+  Procedure BeginLabel(pLabelName:PVkChar);
+  Procedure EndLabel();
   //
   procedure switch_task;
   procedure next_task;
@@ -626,6 +629,31 @@ begin
  end;
 end;
 
+Procedure t_me_render_context.InsertLabel(pLabelName:PVkChar);
+begin
+ if (DebugReport.FCmdInsertDebugUtilsLabel=nil) then Exit;
+
+ BeginCmdBuffer;
+
+ Cmd.InsertLabel(pLabelName);
+end;
+
+Procedure t_me_render_context.BeginLabel(pLabelName:PVkChar);
+begin
+ if (DebugReport.FCmdBeginDebugUtilsLabel=nil) then Exit;
+
+ BeginCmdBuffer;
+
+ Cmd.BeginLabel(pLabelName);
+end;
+
+Procedure t_me_render_context.EndLabel();
+begin
+ if (Cmd=nil) then Exit;
+
+ Cmd.EndLabel();
+end;
+
 procedure t_me_render_context.switch_task;
 begin
  FinishCmdBuffer;
@@ -892,6 +920,8 @@ begin
 
  CmdBuffer.EndRenderPass;
 
+ CmdBuffer.BeginLabel('ClearDepth');
+
  ri:=FetchImage(CmdBuffer,
                 rt_info.DB_INFO.FImageInfo,
                 [iu_depthstenc]
@@ -924,6 +954,7 @@ begin
                                   @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
                                   range);
 
+ CmdBuffer.EndLabel();
 end;
 
 procedure DumpShaderGroup(ShaderGroup:TvShaderGroup);
@@ -1394,12 +1425,18 @@ begin
  //write back
 end;
 
+procedure pm4_Hint(var ctx:t_me_render_context;node:p_pm4_node_hint);
+begin
+ ctx.InsertLabel(PChar(@node^.data));
+end;
+
 procedure pm4_Draw(var ctx:t_me_render_context;node:p_pm4_node_draw);
 begin
  ctx.rt_info:=@node^.rt_info;
 
  if (ctx.rt_info^.RT_COUNT=0) and (not ctx.rt_info^.DB_ENABLE) then
  begin
+  ctx.InsertLabel('decompress Dcc/Depth/Fmask');
   //zero attachment (decompress Dcc/Depth/Fmask) skip
   Exit;
  end;
@@ -1579,6 +1616,8 @@ begin
  if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn=$7DCE68F83F66B337) then
  begin
   Prepare_htile(ctx,FUniformBuilder);
+  //
+  ctx.InsertLabel('clear htile/rendertarget');
  end;
 
  Prepare_Uniforms(ctx,FUniformBuilder);
@@ -1647,6 +1686,7 @@ var
  addr_dmem:Pointer;
  data_size:Byte;
 begin
+ ctx.InsertLabel(PChar('WriteEop:0x'+HexStr(QWORD(node^.addr),10)));
 
  if not ctx.WaitConfirmOrSwitch then Exit;
 
@@ -1720,6 +1760,7 @@ procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFl
 var
  curr:QWORD;
 begin
+ ctx.InsertLabel('SubmitFlipEop');
 
  if not ctx.WaitConfirmOrSwitch then Exit;
 
@@ -1758,26 +1799,23 @@ begin
   //FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
   THREAD_TRACE_MARKER:
    begin
-    //
+    ctx.InsertLabel('THREAD_TRACE_MARKER');
    end;
   PIPELINESTAT_STOP:
    begin
-    //
+    ctx.InsertLabel('PIPELINESTAT_STOP');
    end;
   PERFCOUNTER_START:
    begin
-    //
-    Writeln('PERFCOUNTER_START');
+    ctx.InsertLabel('PERFCOUNTER_START');
    end;
   PERFCOUNTER_STOP:
    begin
-    //
-    Writeln('PERFCOUNTER_STOP');
+    ctx.InsertLabel('PERFCOUNTER_STOP');
    end;
   PERFCOUNTER_SAMPLE:
    begin
-    //
-    Writeln('PERFCOUNTER_SAMPLE');
+    ctx.InsertLabel('PERFCOUNTER_SAMPLE');
    end;
   else
    begin
@@ -1991,6 +2029,9 @@ end;
 
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
 begin
+
+ ctx.InsertLabel(PChar('WaitRegMem:0x'+HexStr(QWORD(node^.pollAddr),10)));
+
  if not ctx.WaitConfirmOrSwitch then Exit;
 
  if not me_test_mem(node) then
@@ -2095,6 +2136,7 @@ begin
     //Writeln('+',ctx.node^.ntype);
 
     case ctx.node^.ntype of
+     ntHint          :pm4_Hint          (ctx,Pointer(ctx.node));
      ntDrawIndex2    :pm4_Draw          (ctx,Pointer(ctx.node));
      ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
      ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));

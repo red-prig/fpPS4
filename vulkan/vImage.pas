@@ -71,6 +71,7 @@ type
   function    BindMem(P:TvPointer):TVkResult;
   procedure   UnBindMem(do_free:Boolean);
   procedure   OnReleaseMem(Sender:TObject); virtual;
+  procedure   SetObjectName(const name:RawByteString);
   //
   function    _Acquire(Sender:TObject):Boolean;
   procedure   _Release(Sender:TObject);
@@ -1499,6 +1500,11 @@ begin
  FreeHandle;
  //
  UnBindMem(False);
+end;
+
+procedure TvCustomImage.SetObjectName(const name:RawByteString);
+begin
+ DebugReport.SetObjectName(VK_OBJECT_TYPE_IMAGE,FHandle,PChar(name));
 end;
 
 function TvCustomImage._Acquire(Sender:TObject):Boolean;

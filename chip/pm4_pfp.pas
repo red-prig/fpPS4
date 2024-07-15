@@ -1487,34 +1487,63 @@ begin
  pctx^.Flush_stream(stGfxDcb);
 end;
 
-procedure onPushMarker(Body:PChar);
+procedure onPushMarker(pctx:p_pfp_ctx;Body:PChar);
 begin
- Writeln('\HINT_PUSH_MARKER:',Body);
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_PUSH_MARKER:',Body);
+ end;
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint(PChar('\HINT_PUSH_MARKER:'+Body));
 end;
 
-procedure onSetMarker(Body:PChar);
+procedure onPopMarker(pctx:p_pfp_ctx);
 begin
- Writeln('\HINT_SET_MARKER:',Body);
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_POP_MARKER');
+ end;
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_POP_MARKER');
+end;
+
+procedure onSetMarker(pctx:p_pfp_ctx;Body:PChar);
+begin
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_SET_MARKER:',Body);
+ end;
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint(PChar('\HINT_SET_MARKER:'+Body));
 end;
 
 procedure onWidthHeight(Body:PWORD);
 begin
- Writeln('\HINT_',Body[0],'_',Body[1]);
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_',Body[0],'_',Body[1]);
+ end;
 end;
 
 procedure onPrepareFlipLabel(Body:PPM4PrepareFlip);
 begin
- Writeln('\HINT_PREPARE_FLIP_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_PREPARE_FLIP_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ end;
 end;
 
 procedure onPrepareFlipWithEopInterrupt(Body:PPM4PrepareFlipWithEopInterrupt);
 begin
- Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ end;
 end;
 
 procedure onPrepareFlipWithEopInterruptLabel(Body:PPM4PrepareFlipWithEopInterrupt);
 begin
- Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ if p_print_gpu_hint then
+ begin
+  Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+ end;
 end;
 
 procedure onNop(pctx:p_pfp_ctx;Body:PDWORD);
@@ -1546,10 +1575,7 @@ begin
 
   mmDB_HTILE_SURFACE:
    begin
-    if p_print_gpu_hint then
-    begin
-     onWidthHeight(@Body[1]);
-    end;
+    onWidthHeight(@Body[1]);
     Exit;
    end;
   else;
@@ -1558,31 +1584,31 @@ begin
  case Body[1] of
 
   OP_HINT_PUSH_MARKER:
-   if p_print_gpu_hint then
    begin
-    onPushMarker(@Body[2]);
+    onPushMarker(pctx,@Body[2]);
+   end;
+
+  OP_HINT_POP_MARKER:
+   begin
+    onPopMarker(pctx);
    end;
 
   OP_HINT_SET_MARKER:
-   if p_print_gpu_hint then
    begin
-    onSetMarker(@Body[2]);
+    onSetMarker(pctx,@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_LABEL:
-   if p_print_gpu_hint then
    begin
     onPrepareFlipLabel(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_VOID:
-   if p_print_gpu_hint then
    begin
     onPrepareFlipWithEopInterrupt(@Body[2]);
    end;
 
   OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:
-   if p_print_gpu_hint then
    begin
     onPrepareFlipWithEopInterruptLabel(@Body[2]);
    end;

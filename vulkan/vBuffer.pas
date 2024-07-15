@@ -24,6 +24,7 @@ type
   function    BindMem(P:TvPointer):TVkResult;
   procedure   UnBindMem(do_free:Boolean);
   procedure   OnReleaseMem(Sender:TObject); virtual;
+  procedure   SetObjectName(const name:RawByteString);
   //
   function    _Acquire(Sender:TObject):Boolean;
   procedure   _Release(Sender:TObject);
@@ -222,6 +223,11 @@ begin
  end;
  //
  UnBindMem(False);
+end;
+
+procedure TvBuffer.SetObjectName(const name:RawByteString);
+begin
+ DebugReport.SetObjectName(VK_OBJECT_TYPE_BUFFER,FHandle,PChar(name));
 end;
 
 function TvBuffer._Acquire(Sender:TObject):Boolean;

@@ -35,17 +35,29 @@ type
  end;
 
  TvDebugReport=class
-  FHandle:TVkDebugReportCallbackEXT;
-  FCreateDebugReportCallback:TvkCreateDebugReportCallbackEXT;
-  FDestroyDebugReportCallback:TvkDestroyDebugReportCallbackEXT;
+  FHandle:TVkDebugUtilsMessengerEXT;
+  //
+  FCreateDebugUtilsMessenger :TvkCreateDebugUtilsMessengerEXT;
+  FDestroyDebugUtilsMessenger:TvkDestroyDebugUtilsMessengerEXT;
+  //
+  FSetDebugUtilsObjectName   :TvkSetDebugUtilsObjectNameEXT;
+  FCmdBeginDebugUtilsLabel   :TvkCmdBeginDebugUtilsLabelEXT;
+  FCmdEndDebugUtilsLabel     :TvkCmdEndDebugUtilsLabelEXT;
+  FCmdInsertDebugUtilsLabel  :TvkCmdInsertDebugUtilsLabelEXT;
+  //
   Constructor Create;
   Destructor  Destroy; override;
-  procedure   ReportCallback(flags:TVkDebugReportFlagsEXT;
-                             objectType:TVkDebugReportObjectTypeEXT;
-                             object_:TVkUInt64;
-                             location:DWORD;
-                             pLayerPrefix:PVkChar;
-                             pMessage:PVkChar); virtual;
+  //
+  procedure   SetObjectName (objectType:TVkObjectType;objectHandle:TVkUInt64;pObjectName:PVkChar);
+  procedure   CmdBeginLabel (commandBuffer:TVkCommandBuffer;pLabelName:PVkChar);
+  procedure   CmdEndLabel   (commandBuffer:TVkCommandBuffer);
+  procedure   CmdInsertLabel(commandBuffer:TVkCommandBuffer;pLabelName:PVkChar);
+  //
+  procedure   ReportCallback(messageSeverity:TVkDebugUtilsMessageSeverityFlagBitsEXT;
+                             messageTypes:TVkDebugUtilsMessageTypeFlagsEXT;
+                             const pCallbackData:PVkDebugUtilsMessengerCallbackDataEXT
+                            ); virtual;
+  //
  end;
 
  TvSurface=class
@@ -540,46 +552,47 @@ begin
  FreeMem(pFamily);
 end;
 
-function MyDebugReportCallback(flags:TVkDebugReportFlagsEXT;
-                               objectType:TVkDebugReportObjectTypeEXT;
-                               object_:TVkUInt64;
-                               location:TVkSize;
-                               messageCode:TVkInt32;
-                               const pLayerPrefix:PVkChar;
-                               const pMessage:PVkChar;
+function MyDebugReportCallback(messageSeverity:TVkDebugUtilsMessageSeverityFlagBitsEXT;
+                               messageTypes:TVkDebugUtilsMessageTypeFlagsEXT;
+                               const pCallbackData:PVkDebugUtilsMessengerCallbackDataEXT;
                                pUserData:PVkVoid):TVkBool32; {$ifdef Windows}stdcall;{$else}{$ifdef Android}{$ifdef cpuarm}hardfloat;{$else}cdecl;{$endif}{$else}cdecl;{$endif}{$endif}
 begin
- TVDebugReport(pUserData).ReportCallback(
-   flags,objectType,object_,location,pLayerPrefix,pMessage);
+ TVDebugReport(pUserData).ReportCallback(messageSeverity,messageTypes,pCallbackData);
  Result:=TVkBool32(False);
 end;
 
 Constructor TVDebugReport.Create;
 var
- cinfo:TVkDebugReportCallbackCreateInfoEXT;
+ cinfo:TVkDebugUtilsMessengerCreateInfoEXT;
  r:TVkResult;
 begin
-
- TPFN_vkVoidFunction(FCreateDebugReportCallback) :=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCreateDebugReportCallbackEXT');
- TPFN_vkVoidFunction(FDestroyDebugReportCallback):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkDestroyDebugReportCallbackEXT');
-
- if (FCreateDebugReportCallback<>nil) then
+ //
+ Pointer(FCreateDebugUtilsMessenger ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCreateDebugUtilsMessengerEXT');
+ Pointer(FDestroyDebugUtilsMessenger):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkDestroyDebugUtilsMessengerEXT');
+ //
+ Pointer(FSetDebugUtilsObjectName   ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkSetDebugUtilsObjectNameEXT');
+ Pointer(FCmdBeginDebugUtilsLabel   ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdBeginDebugUtilsLabelEXT');
+ Pointer(FCmdEndDebugUtilsLabel     ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdEndDebugUtilsLabelEXT');
+ Pointer(FCmdInsertDebugUtilsLabel  ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdInsertDebugUtilsLabelEXT');
+ //
+ if (FCreateDebugUtilsMessenger<>nil) then
  begin
-  cinfo:=Default(TVkDebugReportCallbackCreateInfoEXT);
-  cinfo.sType:=VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT;
-  cinfo.flags:=
-                            ord(VK_DEBUG_REPORT_INFORMATION_BIT_EXT        ) or
-                            ord(VK_DEBUG_REPORT_WARNING_BIT_EXT            ) or
-                            ord(VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) or
-                            ord(VK_DEBUG_REPORT_ERROR_BIT_EXT              ){ or
-                            ord(VK_DEBUG_REPORT_DEBUG_BIT_EXT              )};
-
-
-
-
-  cinfo.pfnCallback:=@MyDebugReportCallback;
+  cinfo:=Default(TVkDebugUtilsMessengerCreateInfoEXT);
+  cinfo.sType:=VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  //
+  cinfo.messageSeverity:=ord(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) or
+                         ord(VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT   ) or
+                         ord(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) or
+                         ord(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT  );
+  //
+  cinfo.messageType:=ord(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT    ) or
+                     ord(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT ){ or
+                     ord(VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)};
+  //
+  cinfo.pfnUserCallback:=@MyDebugReportCallback;
   cinfo.pUserData:=Pointer(Self);
-  r:=FCreateDebugReportCallback(VulkanApp.FInstance,@cinfo,nil,@FHandle);
+  //
+  r:=FCreateDebugUtilsMessenger(VulkanApp.FInstance,@cinfo,nil,@FHandle);
   if (r<>VK_SUCCESS) then
   begin
    Writeln(StdErr,'CreateDebugReportCallback:',r);
@@ -590,22 +603,93 @@ end;
 
 Destructor TVDebugReport.Destroy;
 begin
- if (FDestroyDebugReportCallback<>nil) then
+ if (FDestroyDebugUtilsMessenger<>nil) then
  begin
-  FDestroyDebugReportCallback(VulkanApp.FInstance,FHandle,nil);
+  FDestroyDebugUtilsMessenger(VulkanApp.FInstance,FHandle,nil);
  end;
 end;
 
-procedure TVDebugReport.ReportCallback(flags:TVkDebugReportFlagsEXT;
-                           objectType:TVkDebugReportObjectTypeEXT;
-                           object_:TVkUInt64;
-                           location:DWORD;
-                           pLayerPrefix:PVkChar;
-                           pMessage:PVkChar);
+procedure TVDebugReport.SetObjectName(objectType:TVkObjectType;objectHandle:TVkUInt64;pObjectName:PVkChar);
 var
- i:Integer;
+ info:TVkDebugUtilsObjectNameInfoEXT;
+begin
+ if (FSetDebugUtilsObjectName<>nil) and (objectHandle<>VK_NULL_HANDLE) then
+ begin
+  info:=Default(TVkDebugUtilsObjectNameInfoEXT);
+  info.sType:=VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+  info.objectType  :=objectType;
+  info.objectHandle:=objectHandle;
+  info.pObjectName :=pObjectName;
+  //
+  FSetDebugUtilsObjectName(Device.FHandle,@info);
+ end;
+end;
+
+procedure TVDebugReport.CmdBeginLabel(commandBuffer:TVkCommandBuffer;pLabelName:PVkChar);
+var
+ info:TVkDebugUtilsLabelEXT;
+begin
+ if (FCmdBeginDebugUtilsLabel<>nil) and (commandBuffer<>VK_NULL_HANDLE) then
+ begin
+  info:=Default(TVkDebugUtilsLabelEXT);
+  info.sType:=VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+  info.pLabelName:=pLabelName;
+  //
+  FCmdBeginDebugUtilsLabel(commandBuffer,@info);
+ end;
+end;
+
+procedure TVDebugReport.CmdEndLabel(commandBuffer:TVkCommandBuffer);
+begin
+ if (FCmdEndDebugUtilsLabel<>nil) and (commandBuffer<>VK_NULL_HANDLE) then
+ begin
+  FCmdEndDebugUtilsLabel(commandBuffer);
+ end;
+end;
+
+procedure TVDebugReport.CmdInsertLabel(commandBuffer:TVkCommandBuffer;pLabelName:PVkChar);
+var
+ info:TVkDebugUtilsLabelEXT;
+begin
+ if (FCmdInsertDebugUtilsLabel<>nil) and (commandBuffer<>VK_NULL_HANDLE) then
+ begin
+  info:=Default(TVkDebugUtilsLabelEXT);
+  info.sType:=VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+  info.pLabelName:=pLabelName;
+  //
+  FCmdInsertDebugUtilsLabel(commandBuffer,@info);
+ end;
+end;
+
+procedure TVDebugReport.ReportCallback(messageSeverity:TVkDebugUtilsMessageSeverityFlagBitsEXT;
+                                       messageTypes:TVkDebugUtilsMessageTypeFlagsEXT;
+                                       const pCallbackData:PVkDebugUtilsMessengerCallbackDataEXT
+                                      );
+//var
+ //i:Integer;
 begin
 
+ if Pos('not consumed by fragment shader',pCallbackData^.pMessage)<>0 then Exit;
+ if Pos('fragment shader writes to output location 0 with no matching attachment',pCallbackData^.pMessage)<>0 then Exit;
+
+ Writeln(pCallbackData^.pMessage);
+
+ {
+ sType:TVkStructureType;
+ pNext:PVkVoid;
+ flags:TVkDebugUtilsMessengerCallbackDataFlagsEXT;
+ pMessageIdName:PVkChar;
+ messageIdNumber:TVkInt32;
+ pMessage:PVkChar;
+ queueLabelCount:TVkUInt32;
+ pQueueLabels:PVkDebugUtilsLabelEXT;
+ cmdBufLabelCount:TVkUInt32;
+ pCmdBufLabels:PVkDebugUtilsLabelEXT;
+ objectCount:TVkUInt32;
+ pObjects:PVkDebugUtilsObjectNameInfoEXT;
+ }
+
+ {
  Case objectType of
 
   VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT:
@@ -642,6 +726,7 @@ begin
  end;
 
  Writeln(pMessage);
+ }
 
 end;
 
@@ -731,8 +816,6 @@ begin
  vkExtList[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
  vkExtList[3]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
 
- //VK_EXT_debug_utils
-
  vkExtLen:=4;
 
  vkCInfo:=Default(TVkInstanceCreateInfo);
@@ -741,7 +824,7 @@ begin
 
  if debug then
  begin
-  vkExtList[vkExtLen]:=VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+  vkExtList[vkExtLen]:=VK_EXT_DEBUG_UTILS_EXTENSION_NAME; //VK_EXT_debug_utils
   Inc(vkExtLen);
 
   if validate and InstanceLayersIsExist(dlayer) then
@@ -764,7 +847,7 @@ begin
   vkPrintf.enabledValidationFeatureCount:=1;
   vkPrintf.pEnabledValidationFeatures   :=@vkFeature;
 
-  vkCInfo.pNext:=@vkPrintf;;
+  vkCInfo.pNext:=@vkPrintf;
  end;
 
  Writeln('vkCreateInstance->');
@@ -1637,7 +1720,7 @@ begin
 
  DebugReport:=TVDebugReport.Create;
 
- FillDeviceExtension(VulkanApp.FPhysicalDevice);
+ FillDeviceExtension (VulkanApp.FPhysicalDevice);
  FillDeviceProperties(VulkanApp.FPhysicalDevice);
 
  DeviceInfo:=TvDeviceCreateInfo.Create;

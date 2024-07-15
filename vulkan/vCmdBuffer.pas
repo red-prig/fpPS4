@@ -163,6 +163,10 @@ type
                                   offset,size:TVkDeviceSize;
                                   srcStageMask:TVkPipelineStageFlags;
                                   dstStageMask:TVkPipelineStageFlags);
+
+  Procedure   InsertLabel(pLabelName:PVkChar);
+  Procedure   BeginLabel(pLabelName:PVkChar);
+  Procedure   EndLabel();
  end;
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
@@ -1171,6 +1175,8 @@ begin
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
+ DebugReport.CmdBeginLabel(FCmdbuf,'dmaData');
+
  srcb:=FetchHostBuffer(Self,QWORD(src),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
  Assert(srcb<>nil);
 
@@ -1220,6 +1226,8 @@ begin
   	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
 
+ DebugReport.CmdEndLabel(FCmdbuf);
+
  AddPlannedTrigger(QWORD(dst),QWORD(dst)+byteCount,nil);
 end;
 
@@ -1239,6 +1247,8 @@ begin
 
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
+
+ DebugReport.CmdBeginLabel(FCmdbuf,'dmaData');
 
  dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
  Assert(dstb<>nil);
@@ -1274,6 +1284,8 @@ begin
   	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
 
+ DebugReport.CmdEndLabel(FCmdbuf);
+
  AddPlannedTrigger(QWORD(dst),QWORD(dst)+byteCount,nil);
 end;
 
@@ -1302,10 +1314,15 @@ begin
  EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
+ DebugReport.CmdBeginLabel(FCmdbuf,'WriteEos');
+
  Case eventType of
   CS_DONE:
    begin
     Inc(cmd_count);
+
+    DebugReport.CmdInsertLabel(FCmdbuf,'CS_DONE');
+
     vkMemoryBarrier(FCmdbuf,
                     VK_ACCESS_CS,                              //srcAccessMask
                     ord(VK_ACCESS_TRANSFER_WRITE_BIT),         //dstAccessMask
@@ -1315,6 +1332,9 @@ begin
   PS_DONE:
    begin
     Inc(cmd_count);
+
+    DebugReport.CmdInsertLabel(FCmdbuf,'PS_DONE');
+
     vkMemoryBarrier(FCmdbuf,
                     VK_ACCESS_PS,                                       //srcAccessMask
                     ord(VK_ACCESS_TRANSFER_WRITE_BIT),                  //dstAccessMask
@@ -1348,6 +1368,8 @@ begin
   	          ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
  end;
 
+ DebugReport.CmdEndLabel(FCmdbuf);
+
  AddPlannedTrigger(QWORD(dst),QWORD(dst)+4,nil);
 end;
 
@@ -1377,6 +1399,8 @@ begin
    begin
     Inc(cmd_count);
 
+    DebugReport.CmdInsertLabel(FCmdbuf,'FLUSH_AND_INV_DB_META');
+
     vkMemoryBarrier(FCmdbuf,
                     VK_ACCESS_DB,                             //srcAccessMask
                     VK_ACCESS_ANY,                            //dstAccessMask
@@ -1387,6 +1411,8 @@ begin
   FLUSH_AND_INV_CB_META: //CMASK
    begin
     Inc(cmd_count);
+
+    DebugReport.CmdInsertLabel(FCmdbuf,'FLUSH_AND_INV_CB_META');
 
     vkMemoryBarrier(FCmdbuf,
                     VK_ACCESS_PS,                                       //srcAccessMask
@@ -1400,6 +1426,35 @@ begin
    Assert(false,'WriteEvent.eventType');
  end;
 
+end;
+
+Procedure TvCustomCmdBuffer.InsertLabel(pLabelName:PVkChar);
+begin
+ if (Self=nil) then Exit;
+ if (DebugReport.FCmdInsertDebugUtilsLabel=nil) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ DebugReport.CmdInsertLabel(FCmdbuf,pLabelName);
+end;
+
+Procedure TvCustomCmdBuffer.BeginLabel(pLabelName:PVkChar);
+begin
+ if (Self=nil) then Exit;
+ if (DebugReport.FCmdBeginDebugUtilsLabel=nil) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ DebugReport.CmdBeginLabel(FCmdbuf,pLabelName);
+end;
+
+Procedure TvCustomCmdBuffer.EndLabel();
+begin
+ if (Self=nil) then Exit;
+
+ if (not IsAllocated) then Exit;
+
+ DebugReport.CmdEndLabel(FCmdbuf);
 end;
 
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;

@@ -766,6 +766,13 @@ begin
 
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
 
+ if image.IsDepthAndStencil then
+ begin
+  pm4_load_from(cmd,image.DepthOnly  ,IMAGE_USAGE);
+  pm4_load_from(cmd,image.StencilOnly,IMAGE_USAGE);
+  Exit;
+ end;
+
  change_rate:=image.get_change_rate;
 
  if not change_rate.need_read then Exit;
@@ -782,7 +789,11 @@ begin
 
  image.restore_vm_track;
 
+ cmd.BeginLabel('loadfrom');
+
  cb(cmd,image);
+
+ cmd.EndLabel();
 
  change_rate.mark_init;
 
@@ -797,6 +808,13 @@ var
 begin
  if (cmd=nil) or (image=nil) then Exit;
 
+ if image.IsDepthAndStencil then
+ begin
+  pm4_write_back(cmd,image.DepthOnly  );
+  pm4_write_back(cmd,image.StencilOnly);
+  Exit;
+ end;
+
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].write_back;
 
  if (cb=nil) then
@@ -807,7 +825,11 @@ begin
 
  cmd.EndRenderPass;
 
+ cmd.BeginLabel('writeback');
+
  cb(cmd,image);
+
+ cmd.EndLabel();
 
  image.mark_init;
 

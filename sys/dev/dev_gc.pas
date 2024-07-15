@@ -324,6 +324,7 @@ begin
    gc_submits_allowed_vmirr^:=1; //false
   end;
 
+  trigger_gfx_ring;
   pm4_me_gfx.imdone;
  end;
 
