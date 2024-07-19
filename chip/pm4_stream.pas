@@ -356,7 +356,7 @@ type
   procedure Acquire;
   function  Release:Boolean;
   //
-  procedure Hint         (P:PChar);
+  procedure Hint         (P1,P2:PChar);
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
   procedure EventWrite   (eventType:Byte);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
@@ -368,7 +368,10 @@ type
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
-  procedure Init_Uniforms(node:p_pm4_node;var FUniformBuilder:TvUniformBuilder);
+  procedure Init_Uniforms(node:p_pm4_node;var UniformBuilder:TvUniformBuilder);
+  procedure Init_Pushs   (node:p_pm4_node;
+                          ShaderGroup:TvShaderGroup;
+                          var GPU_REGS:TGPU_REGS);
   procedure Build_rt_info(node:p_pm4_node;
                           var rt_info:t_pm4_rt_info;
                           var GPU_REGS:TGPU_REGS);
@@ -832,18 +835,20 @@ end;
 
 //
 
-procedure t_pm4_stream.Hint(P:PChar);
+procedure t_pm4_stream.Hint(P1,P2:PChar);
 var
- len:ptruint;
+ len1,len2:ptruint;
  node:p_pm4_node_Hint;
 begin
- len:=StrLen(P);
- node:=allocator.Alloc(SizeOf(t_pm4_node_Hint)+len+1);
+ len1:=StrLen(P1);
+ len2:=StrLen(P2);
+ node:=allocator.Alloc(SizeOf(t_pm4_node_Hint)+len1+len2+1);
 
  node^.ntype :=ntHint;
  node^.scope :=Default(t_pm4_resource_curr_scope);
 
- Move(P^,node^.data,len+1);
+ Move(P1^,node^.data,len1);
+ Move(P2^,PChar(@node^.data)[len1],len2+1);
 
  add_node(node);
 end;
@@ -1077,17 +1082,16 @@ begin
 
 end;
 
-procedure t_pm4_stream.Init_Uniforms(node:p_pm4_node;var FUniformBuilder:TvUniformBuilder);
-
+procedure t_pm4_stream.Init_Uniforms(node:p_pm4_node;var UniformBuilder:TvUniformBuilder);
 var
  i:Integer;
 begin
 
  //images
- if (Length(FUniformBuilder.FImages)<>0) then
+ if (Length(UniformBuilder.FImages)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FImages) do
-  With FUniformBuilder.FImages[i] do
+  For i:=0 to High(UniformBuilder.FImages) do
+  With UniformBuilder.FImages[i] do
   begin
 
    insert_image_resource(@node^.scope,
@@ -1100,10 +1104,10 @@ begin
  //images
 
  //buffers
- if (Length(FUniformBuilder.FBuffers)<>0) then
+ if (Length(UniformBuilder.FBuffers)<>0) then
  begin
-  For i:=0 to High(FUniformBuilder.FBuffers) do
-  With FUniformBuilder.FBuffers[i] do
+  For i:=0 to High(UniformBuilder.FBuffers) do
+  With UniformBuilder.FBuffers[i] do
   begin
 
    insert_buffer_resource(@node^.scope,
@@ -1117,6 +1121,33 @@ begin
 
 end;
 
+procedure t_pm4_stream.Init_Pushs(node:p_pm4_node;
+                                  ShaderGroup:TvShaderGroup;
+                                  var GPU_REGS:TGPU_REGS);
+var
+ Shader:TvShaderExt;
+ i:TvShaderStage;
+ FData:PDWORD;
+ addr:Pointer;
+begin
+ For i:=Low(TvShaderStage) to High(TvShaderStage) do
+ begin
+  Shader:=ShaderGroup.FKey.FShaders[i];
+  if (Shader<>nil) then
+  if (Shader.FPushConst.size<>0) then
+  begin
+   FData:=GPU_REGS.get_user_data(i);
+   addr :=Shader.GetPushConstData(FData);
+
+   insert_buffer_resource(@node^.scope,
+                          addr,
+                          Shader.FPushConst.size,
+                          TM_READ);
+
+  end;
+ end;
+end;
+
 procedure t_pm4_stream.Build_rt_info(node:p_pm4_node;
                                      var rt_info:t_pm4_rt_info;
                                      var GPU_REGS:TGPU_REGS);
@@ -1124,6 +1155,9 @@ var
  i:Integer;
  RT:TRT_INFO;
  FUniformBuilder:TvUniformBuilder;
+
+ pa:TPushConstAllocator;
+ pp:PPushConstAllocator;
 
  resource_instance:p_pm4_resource_instance;
 begin
@@ -1133,9 +1167,6 @@ begin
  end;
 
  GPU_REGS.export_user_data_rt(@rt_info.USERDATA);
-
- rt_info.ShaderGroup:=FetchShaderGroupRT(GPU_REGS,nil{@pa});
- Assert(rt_info.ShaderGroup<>nil);
 
  rt_info.RT_COUNT:=0;
 
@@ -1214,6 +1245,14 @@ begin
 
  rt_info.SCREEN_RECT:=GPU_REGS.GET_SCREEN;
  rt_info.SCREEN_SIZE:=GPU_REGS.GET_SCREEN_SIZE;
+
+ //
+
+ pa.Init;
+ pp:=@pa;
+
+ rt_info.ShaderGroup:=FetchShaderGroupRT(GPU_REGS,pp);
+ Assert(rt_info.ShaderGroup<>nil);
 
  //
 
@@ -1314,13 +1353,19 @@ procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS
 var
  dst:PGPU_USERDATA;
  FUniformBuilder:TvUniformBuilder;
+
+ pa:TPushConstAllocator;
+ pp:PPushConstAllocator;
 begin
  //hack
  dst:=Pointer(@node^.USER_DATA_CS)-Ptruint(@TGPU_USERDATA(nil^).A[vShaderStageCs]);
 
  GPU_REGS.export_user_data_cs(dst);
 
- node^.ShaderGroup:=FetchShaderGroupCS(GPU_REGS,nil{@pa});
+ pa.Init;
+ pp:=@pa;
+
+ node^.ShaderGroup:=FetchShaderGroupCS(GPU_REGS,pp);
  Assert(node^.ShaderGroup<>nil);
 
  node^.DIM_X:=GPU_REGS.SH_REG^.COMPUTE_DIM_X;

@@ -12,6 +12,9 @@ uses
  vMemory,
  vDependence;
 
+const
+ VK_FORMAT_R10G11B11_UFLOAT_FAKE32=TVkFormat(ord(VK_FORMAT_B10G11R11_UFLOAT_PACK32)+1000000000);
+
 type
  PvImageBarrier=^TvImageBarrier;
  TvImageBarrier=object
@@ -141,6 +144,7 @@ type
   last_level:Byte;      //last  mip level   (0..15)
   base_array:Word;      //first array index (0..16383)
   last_array:Word;      //texture height    (0..16383)
+  minLod    :TVkFloat;
  end;
 
  TvImage=class(TvCustomImage)
@@ -339,6 +343,8 @@ begin
   VK_FORMAT_A2B10G10R10_UNORM_PACK32:Result:=4;
 
   VK_FORMAT_B10G11R11_UFLOAT_PACK32 :Result:=4;
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32 :Result:=4;
+
   VK_FORMAT_E5B9G9R9_UFLOAT_PACK32  :Result:=4;
 
   //stencil
@@ -773,6 +779,7 @@ begin
   VK_FORMAT_R32_SINT                  :Result:=@MUTABLE_8888;
   VK_FORMAT_R32_SFLOAT                :Result:=@MUTABLE_8888;
   VK_FORMAT_B10G11R11_UFLOAT_PACK32   :Result:=@MUTABLE_8888;
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32   :Result:=@MUTABLE_8888;
 
   VK_FORMAT_R16G16B16A16_UNORM  :Result:=@MUTABLE_3232;
   VK_FORMAT_R16G16B16A16_SNORM  :Result:=@MUTABLE_3232;
@@ -913,6 +920,8 @@ begin
   VK_FORMAT_R32_SFLOAT,
   VK_FORMAT_B10G11R11_UFLOAT_PACK32:Result:=VK_FORMAT_R32_UINT;
 
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32:Result:=VK_FORMAT_R32_UINT;
+
   VK_FORMAT_R16G16B16A16_SNORM,
   VK_FORMAT_R16G16B16A16_USCALED,
   VK_FORMAT_R16G16B16A16_SSCALED,
@@ -967,6 +976,8 @@ begin
   VK_FORMAT_A8B8G8R8_UNORM_PACK32..
   VK_FORMAT_A2B10G10R10_SINT_PACK32,
 
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32,
+
   VK_FORMAT_B10G11R11_UFLOAT_PACK32..
   VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
    Result:=VK_IMAGE_USAGE_DEFAULT;
@@ -992,6 +1003,8 @@ begin
 
   VK_FORMAT_A8B8G8R8_UNORM_PACK32..
   VK_FORMAT_A2B10G10R10_SINT_PACK32,
+
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32,
 
   VK_FORMAT_B10G11R11_UFLOAT_PACK32..
   VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
@@ -1033,10 +1046,10 @@ begin
  begin
   Result.width :=(Result.width +3) shr 2;
   Result.height:=(Result.height+3) shr 2;
-  //
-  Result.pad_width :=(Result.pad_width +3) shr 2;
-  Result.pad_height:=(Result.pad_height+3) shr 2;
  end;
+
+ Result.pad_width :=0;
+ Result.pad_height:=0;
 end;
 
 Function CompareNormalized(const a,b:TvImageKey):Integer;
@@ -1575,8 +1588,8 @@ begin
 
 end;
 
-//D16_UNORM_S8_UINT   -> D24_UNORM_S8_UINT -> D32_SFLOAT_S8_UINT
-//X8_D24_UNORM_PACK32 -> D32_SFLOAT
+//D16_UNORM_S8_UINT -> D24_UNORM_S8_UINT   -> D32_SFLOAT_S8_UINT
+//D16_UNORM         -> X8_D24_UNORM_PACK32 -> D32_SFLOAT
 
 function vkFixFormatSupport(format:TVkFormat;tiling:TVkImageTiling;usage:TVkImageUsageFlags):TVkFormat;
 begin
@@ -1596,6 +1609,12 @@ begin
     begin
      if vkGetFormatSupport(Result,tiling,usage) then Break;
      Result:=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    end;
+
+   VK_FORMAT_D16_UNORM:
+    begin
+     if vkGetFormatSupport(Result,tiling,usage) then Break;
+     Result:=VK_FORMAT_X8_D24_UNORM_PACK32;
     end;
 
    VK_FORMAT_X8_D24_UNORM_PACK32:

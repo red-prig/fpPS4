@@ -22,7 +22,12 @@ type
   vShaderStageCs
  );
 
- TvSupportDescriptorType=array[0..1] of TVkDescriptorType;
+const
+ LO_DESCRIPTOR_ID=ord(VK_DESCRIPTOR_TYPE_SAMPLER);
+ HI_DESCRIPTOR_ID=ord(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+
+type
+ TvCountsGroup=array[LO_DESCRIPTOR_ID..HI_DESCRIPTOR_ID] of TVkUInt32;
 
  TvShader=class;
 
@@ -61,6 +66,9 @@ type
   FLocalSize:TVkOffset3D;
   function parser:CvShaderParser; override;
  end;
+
+function _GetTypeById(i:Byte):TVkDescriptorType;
+function _GetIdByType(i:TVkDescriptorType):Byte;
 
 implementation
 
@@ -497,36 +505,21 @@ begin
  Result:=TvShaderParserCompute;
 end;
 
-//  =0,
-//  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER=1,
-//  VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE=2,
-//  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE=3,
-//  VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER=4,
-//  VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER=5,
-//  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER=6,
-//  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER=7,
-//  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC=8,
-//  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC=9,
-//  VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT=10,
-//  VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT=1000138000,
-//  VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR=1000150000,
-//  VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV=1000165000,
-//  VK_DESCRIPTOR_TYPE_MUTABLE_VALVE=1000351000
+//
 
-{
-function TvShaderBind.GetSupportTypes:TvSupportDescriptorType;
+function _GetTypeById(i:Byte):TVkDescriptorType;
 begin
- Result:=Default(TvSupportDescriptorType);
- case FType of
-  Sample shl 16   :begin Result[0]:=VK_DESCRIPTOR_TYPE_SAMPLER; end;;
-  UniformConstant :begin Result[0]:=; end;;
-  Uniform         :begin Result[0]:=; end;;
-  Workgroup       :begin Result[0]:=; end;;
-  CrossWorkgroup  :begin Result[0]:=; end;;
-  Image           :begin Result[0]:=; end;;
-  StorageBuffer   :begin Result[0]:=; end;;
- end;
-end;}
+ Assert(i<=HI_DESCRIPTOR_ID);
+ //
+ Result:=TVkDescriptorType(i);
+end;
+
+function _GetIdByType(i:TVkDescriptorType):Byte;
+begin
+ Assert(i<=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+ //
+ Result:=ord(i);
+end;
 
 end.
 

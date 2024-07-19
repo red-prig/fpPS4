@@ -11,6 +11,7 @@ type
   UseVertexInput:Boolean; //True
   UseTexelBuffer:Boolean;
   UseOutput16:Boolean;
+  UseOnlyUserdataPushConst:Boolean;
   //
   DescriptorSet:DWORD; //0
   //

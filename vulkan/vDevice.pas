@@ -6,7 +6,6 @@ interface
 
 uses
   SysUtils,
-  Math,
   atomic,
   Vulkan;
 
@@ -27,6 +26,7 @@ type
   F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
   FSF_8:TVkPhysicalDevice8BitStorageFeatures;
   FSF16:TVkPhysicalDevice16BitStorageFeatures;
+  FSFRF:TVkPhysicalDeviceRobustness2FeaturesEXT;
   //
   Constructor Create(debug,printf,validate:Boolean);
   Destructor  Destroy; override;
@@ -268,6 +268,8 @@ var
   VK_KHR_shader_non_semantic_info  :Boolean;
   VK_EXT_index_type_uint8          :Boolean;
   VK_EXT_scalar_block_layout       :Boolean;
+  VK_EXT_robustness2               :Boolean;
+  VK_EXT_image_view_min_lod        :Boolean;
 
   VK_AMD_device_coherent_memory    :Boolean;
 
@@ -445,6 +447,8 @@ begin
     VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME  :limits.VK_KHR_shader_non_semantic_info  :=True;
     VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME          :limits.VK_EXT_index_type_uint8          :=True;
     VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME       :limits.VK_EXT_scalar_block_layout       :=True;
+    VK_EXT_ROBUSTNESS_2_EXTENSION_NAME              :limits.VK_EXT_robustness2               :=True;
+    VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME        :limits.VK_EXT_image_view_min_lod        :=True;
 
     VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME    :limits.VK_AMD_device_coherent_memory    :=True;
    end;
@@ -870,6 +874,7 @@ begin
  F16_8:=Default(TVkPhysicalDeviceShaderFloat16Int8Features);
  FSF_8:=Default(TVkPhysicalDevice8BitStorageFeatures);
  FSF16:=Default(TVkPhysicalDevice16BitStorageFeatures);
+ FSFRF:=Default(TVkPhysicalDeviceRobustness2FeaturesEXT);
 
  if (vkGetPhysicalDeviceFeatures2<>nil) then
  begin
@@ -885,6 +890,9 @@ begin
   FSF_8.pNext:=@FSF16;
 
   FSF16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+  FSF16.pNext:=@FSFRF;
+
+  FSFRF.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
 
   vkGetPhysicalDeviceFeatures2(FPhysicalDevice,@Features2);
 
@@ -1702,6 +1710,8 @@ var
  F16_8:TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8:TVkPhysicalDevice8BitStorageFeatures;
  FSF16:TVkPhysicalDevice16BitStorageFeatures;
+ FSFRF:TVkPhysicalDeviceRobustness2FeaturesEXT;
+ FIVML:TVkPhysicalDeviceImageViewMinLodFeaturesEXT;
 
  FScalar:TVkPhysicalDeviceScalarBlockLayoutFeatures;
 
@@ -1877,6 +1887,28 @@ begin
   FSF16.storageInputOutput16              :=VulkanApp.FSF16.storageInputOutput16;
 
   DeviceInfo.add_feature(@FSF16);
+ end;
+
+ if limits.VK_EXT_robustness2 then
+ begin
+  DeviceInfo.add_ext(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
+
+  FSFRF:=Default(TVkPhysicalDeviceRobustness2FeaturesEXT);
+  FSFRF.sType         :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+  FSFRF.nullDescriptor:=VulkanApp.FSFRF.nullDescriptor;
+
+  DeviceInfo.add_feature(@FSFRF);
+ end;
+
+ if limits.VK_EXT_image_view_min_lod then
+ begin
+  DeviceInfo.add_ext(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
+
+  FIVML:=Default(TVkPhysicalDeviceImageViewMinLodFeaturesEXT);
+  FIVML.sType :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_VIEW_MIN_LOD_FEATURES_EXT;
+  FIVML.minLod:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FIVML);
  end;
 
  Device:=TvDevice.Create(DeviceInfo);

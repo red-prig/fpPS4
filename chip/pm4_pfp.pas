@@ -1493,7 +1493,7 @@ begin
  begin
   Writeln('\HINT_PUSH_MARKER:',Body);
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint(PChar('\HINT_PUSH_MARKER:'+Body));
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_PUSH_MARKER:',Body);
 end;
 
 procedure onPopMarker(pctx:p_pfp_ctx);
@@ -1502,7 +1502,7 @@ begin
  begin
   Writeln('\HINT_POP_MARKER');
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_POP_MARKER');
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_POP_MARKER','');
 end;
 
 procedure onSetMarker(pctx:p_pfp_ctx;Body:PChar);
@@ -1511,7 +1511,7 @@ begin
  begin
   Writeln('\HINT_SET_MARKER:',Body);
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint(PChar('\HINT_SET_MARKER:'+Body));
+ pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_SET_MARKER:',Body);
 end;
 
 procedure onWidthHeight(Body:PWORD);

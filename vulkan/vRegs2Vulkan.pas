@@ -126,22 +126,8 @@ function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
 
 //
 
-const
- // Provided by VK_EXT_image_view_min_lod
- VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT = 1000391001;
-
-type
- PVkImageViewMinLodCreateInfoEXT=^TVkImageViewMinLodCreateInfoEXT;
- TVkImageViewMinLodCreateInfoEXT=record
-  sType :TVkStructureType; //< Must be VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT
-  pNext :PVkVoid;
-  minLod:TVkFloat;
- end;
-
 function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
 function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
-
-function _get_tsharp4_min_lod(PT:PTSharpResource4):TVkImageViewMinLodCreateInfoEXT;
 
 function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
 function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
@@ -813,7 +799,7 @@ begin
 
   COLOR_11_11_10: //R:10 G:11 B:11
    Case NUMBER_TYPE of
-    NUMBER_FLOAT  :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32; //Not directly handled to a vulkan
+    NUMBER_FLOAT  :Result:=VK_FORMAT_R10G11B11_UFLOAT_FAKE32; //Not directly handled to a vulkan
     else;
    end;
 
@@ -1901,6 +1887,7 @@ begin
 
     IMG_DATA_FORMAT_5_9_9_9    :Result:=VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
     IMG_DATA_FORMAT_10_11_11   :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+    IMG_DATA_FORMAT_11_11_10   :Result:=VK_FORMAT_R10G11B11_UFLOAT_FAKE32;
     else;
    end;
 
@@ -1999,21 +1986,12 @@ begin
  end;
 end;
 
-function _get_lod(w:Word):TVkFloat; forward;
-
-function _get_tsharp4_min_lod(PT:PTSharpResource4):TVkImageViewMinLodCreateInfoEXT;
-begin
- Result:=Default(TVkImageViewMinLodCreateInfoEXT);
- if (PT=nil) then Exit;
-
- ord(Result.sType):=VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT;
- Result.minLod:=_get_lod(PT^.min_lod);
-end;
-
 //perf_mod:bit3;  //0=0/16, 1=2/16, 2=5/16, 3=7/16, 4=9/16, 5=11/16, 6=14/16, 7=16/16
 //interlaced:bit1;  //texture is interlaced
 //tiling_idx:bit5;  //index into lookup table of surface tiling settings
 //pow2pad:bit1;  //memory footprint is padded to power of 2 dimensions
+
+function _get_lod(w:Word):TVkFloat; forward;
 
 function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
 var
@@ -2058,6 +2036,8 @@ begin
   Result.base_level:=PT^.base_level;
   Result.last_level:=PT^.last_level;
  end;
+
+ Result.minLod:=_get_lod(PT^.min_lod);
 
  //Result.base_level:=0; /////
  //Result.last_level:=0; /////

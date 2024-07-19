@@ -952,8 +952,10 @@ begin
  pConfig:=FEmit.GetConfig;
 
  node:=FindUserDataBuf;
- if (node<>nil) and (FPushConstant=nil) then
- if (node^.write_count=0) and
+ if (node<>nil) and
+    (FPushConstant=nil) then
+ if (node^.bType=btStorageBuffer) and
+    (node^.chain_write=0) and
     (node^.GetSize<=pConfig^.maxPushConstantsSize) then
  begin
   node^.bType   :=btPushConstant;
@@ -969,7 +971,8 @@ begin
 
    fchain_write:=node^.chain_write;
 
-   if (FPushConstant=nil) and
+   if (not pConfig^.UseOnlyUserdataPushConst) and
+      (FPushConstant=nil) and
       (fchain_write=0) and
       (node^.GetSize<=pConfig^.maxPushConstantsSize) then
    begin

@@ -633,6 +633,8 @@ Procedure t_me_render_context.InsertLabel(pLabelName:PVkChar);
 begin
  if (DebugReport.FCmdInsertDebugUtilsLabel=nil) then Exit;
 
+ if (Cmd=nil) then Exit;
+
  BeginCmdBuffer;
 
  Cmd.InsertLabel(pLabelName);
@@ -641,6 +643,8 @@ end;
 Procedure t_me_render_context.BeginLabel(pLabelName:PVkChar);
 begin
  if (DebugReport.FCmdBeginDebugUtilsLabel=nil) then Exit;
+
+ if (Cmd=nil) then Exit;
 
  BeginCmdBuffer;
 
@@ -778,9 +782,9 @@ begin
 
    _init;
 
-   DescriptorGroup.FSets[fset].BindImg(bind,0,
-                                       iv.FHandle,
-                                       VK_IMAGE_LAYOUT_GENERAL);
+   DescriptorGroup.FSets[fset].BindImage(bind,0,
+                                         iv.FHandle,
+                                         VK_IMAGE_LAYOUT_GENERAL);
 
 
   end;
@@ -797,7 +801,7 @@ begin
 
    _init;
 
-   DescriptorGroup.FSets[fset].BindSmp(bind,0,sm.FHandle);
+   DescriptorGroup.FSets[fset].BindSampler(bind,0,sm.FHandle);
 
   end;
  end;
@@ -839,11 +843,11 @@ begin
 
    _init;
 
-   DescriptorGroup.FSets[fset].BindBuf(bind,0,
-                                       VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                       buf.FHandle,
-                                       diff,
-                                       range {VK_WHOLE_SIZE});
+   DescriptorGroup.FSets[fset].BindBuffer(bind,0,
+                                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                          buf.FHandle,
+                                          diff,
+                                          range {VK_WHOLE_SIZE});
 
    if ((memuse and TM_WRITE)<>0) then
    begin
@@ -856,13 +860,45 @@ begin
 
 end;
 
+procedure Bind_Pushs(var ctx:t_me_render_context;
+                     ShaderGroup:TvShaderGroup;
+                     dst:PGPU_USERDATA);
+const
+ bind_points:array[Boolean] of TVkPipelineBindPoint=(VK_PIPELINE_BIND_POINT_GRAPHICS,VK_PIPELINE_BIND_POINT_COMPUTE);
+var
+ Shader:TvShaderExt;
+ i:TvShaderStage;
+ FData:PDWORD;
+ addr:Pointer;
+begin
+ For i:=Low(TvShaderStage) to High(TvShaderStage) do
+ begin
+  Shader:=ShaderGroup.FKey.FShaders[i];
+  if (Shader<>nil) then
+  if (Shader.FPushConst.size<>0) then
+  begin
+   FData:=dst^.get_user_data(i);
+   addr :=Shader.GetPushConstData(FData);
+
+   Assert(addr<>nil,'push const');
+
+   ctx.Cmd.PushConstant(bind_points[Shader.FStage=VK_SHADER_STAGE_COMPUTE_BIT],
+                        ord(Shader.FStage),
+                        Shader.FPushConst.offset,
+                        Shader.FPushConst.size,
+                        addr);
+
+  end;
+ end;
+end;
+
 procedure pm4_InitStream(var ctx:t_me_render_context);
 var
  i:p_pm4_resource_instance;
  resource:p_pm4_resource;
 
  ri:TvImage2;
- ht:TvHtile;
+ ht:TvMetaHtile;
 begin
  if ctx.stream^.init then Exit;
 
@@ -1279,6 +1315,8 @@ begin
   ctx.Cmd.BindSets(BP_GRAPHICS,FDescriptorGroup);
  end;
 
+ Bind_Pushs(ctx,ctx.rt_info^.ShaderGroup,@ctx.rt_info^.USERDATA);
+
 end;
 
 procedure pm4_Writeback_After(var ctx:t_me_render_context);
@@ -1382,7 +1420,7 @@ end;
 procedure pm4_Writeback_Finish(var ctx:t_me_render_context);
 var
  ri:TvImage2;
- ht:TvHtile;
+ ht:TvMetaHtile;
 
  resource:p_pm4_resource;
 begin
@@ -1547,7 +1585,8 @@ var
  resource_instance:p_pm4_resource_instance;
  resource:p_pm4_resource;
 
- ht:TvHtile;
+ //ht:TvMetaHtile;
+ hb:TvMetaBuffer;
 begin
  resource:=nil;
 
@@ -1558,34 +1597,35 @@ begin
   With UniformBuilder.FBuffers[i] do
   begin
 
-   resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
-
-   if (resource_instance<>nil) then
+   if ((memuse and TM_WRITE)<>0) then
    begin
-
-    if (iu_htile in resource_instance^.next.img_usage) then
+    resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
+    if (resource_instance<>nil) then
     begin
-     resource:=ctx.stream^.find_htile_resource(addr,size);
-
+     resource:=resource_instance^.resource;
      Break;
     end;
-
    end;
 
   end;
  end;
  //buffers
 
- if (resource<>nil) then
- begin
-  resource^.rclear:=True;
- end else
- if Length(UniformBuilder.FBuffers)>2 then
- With UniformBuilder.FBuffers[2] do
- begin
-  ht:=FetchHtile(ctx.Cmd,addr,size);
+ Assert(resource<>nil);
 
-  ht.rclear:=True;
+ resource^.rclear:=True;
+
+ hb:=FetchBuffer(ctx.Cmd,resource^.rkey.Addr,resource^.rsize);
+ hb.rclear:=True;
+
+ if (iu_htile in resource_instance^.next.img_usage) then
+ begin
+  resource:=ctx.stream^.find_htile_resource(resource^.rkey.Addr,resource^.rsize);
+  //
+  if (resource<>nil) then
+  begin
+   resource^.rclear:=True;
+  end;
  end;
 
 end;
@@ -1643,6 +1683,8 @@ begin
  begin
   ctx.Cmd.BindSets(BP_COMPUTE,FDescriptorGroup);
  end;
+
+ Bind_Pushs(ctx,CP_KEY.FShaderGroup,dst);
 
 end;
 

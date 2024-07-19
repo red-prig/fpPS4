@@ -165,7 +165,7 @@ type
   Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
   Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
   Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
-  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+  procedure AddAttr   (const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
  end;
 
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
@@ -1319,13 +1319,15 @@ Procedure TvShaderGroup.ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;GP
 var
  Shader:TvShaderExt;
  i:TvShaderStage;
+ FData:PDWORD;
 begin
  For i:=Low(TvShaderStage) to High(TvShaderStage) do
  begin
   Shader:=FKey.FShaders[i];
   if (Shader<>nil) then
   begin
-   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,GPU_USERDATA^.get_user_data(i));
+   FData:=GPU_USERDATA^.get_user_data(i);
+   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,FData);
   end;
  end;
 end;

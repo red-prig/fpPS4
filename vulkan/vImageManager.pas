@@ -497,6 +497,7 @@ var
 
  cinfo:TVkImageViewCreateInfo;
  uinfo:TVkImageViewUsageCreateInfo;
+ minfo:TVkImageViewMinLodCreateInfoEXT;
 
  FView:TVkImageView;
  r:TVkResult;
@@ -540,11 +541,19 @@ begin
 
   cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,usage);
 
+  cinfo.pNext:=@uinfo;
+
   uinfo:=Default(TVkImageViewUsageCreateInfo);
   uinfo.sType:=VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
   uinfo.usage:=usage;
 
-  cinfo.pNext:=@uinfo;
+  if limits.VK_EXT_image_view_min_lod and
+     (F.minLod<>0) then
+  begin
+   minfo:=Default(TVkImageViewMinLodCreateInfoEXT);
+   minfo.sType :=VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT;
+   minfo.minLod:=F.minLod;
+  end;
 
   FView:=VK_NULL_HANDLE;
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);

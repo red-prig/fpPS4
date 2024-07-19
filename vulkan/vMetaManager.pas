@@ -8,8 +8,7 @@ uses
  SysUtils,
  g23tree,
  vDependence,
- vImage,
- vRegs2Vulkan;
+ vImage;
 
 type
  PMetaKey=^TMetaKey;
@@ -24,14 +23,22 @@ type
   Key:TMetaKey;
  end;
 
- //
-
- TvHtile=class(TvCustomMeta)
+ TvMetaBuffer=class(TvCustomMeta)
   rclear:Boolean;
  end;
 
-function FetchHtile(cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD):TvHtile;
-function FetchHtile(cmd:TvDependenciesObject;addr:Pointer;size:DWORD):TvHtile;
+ //
+ TvMetaHtile=class(TvCustomMeta)
+  private
+   function  get_rclear:Boolean;
+   procedure set_rclear(b:Boolean);
+  public
+   buffer:TvMetaBuffer;
+   property rclear:Boolean read get_rclear write set_rclear;
+ end;
+
+function FetchHtile (cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD;force:Boolean=True):TvMetaHtile;
+function FetchBuffer(cmd:TvDependenciesObject;addr:Pointer;size:DWORD;force:Boolean=True):TvMetaBuffer;
 
 implementation
 
@@ -60,46 +67,32 @@ var
  lock:Pointer=nil;
  FMeta2Set:TvCustomMeta2Set;
 
+//
+
+function TvMetaHtile.get_rclear:Boolean; inline;
+begin
+ Result:=buffer.rclear;
+end;
+
+procedure TvMetaHtile.set_rclear(b:Boolean); inline;
+begin
+ buffer.rclear:=b;
+end;
+
+//
+
 function Key2CustomMeta(P:PMetaKey):TvCustomMeta; inline;
 begin
  Result:=TvCustomMeta(ptruint(P)-ptruint(@TvCustomMeta(nil).key));
 end;
 
 function _Find(const F:TMetaKey):TvCustomMeta;
-label
- _repeat;
 var
- T:TMetaKey;
  i:TvCustomMeta2Set.Iterator;
- P:PMetaKey;
 begin
  Result:=nil;
 
- _repeat:
-
  i:=FMeta2Set.find(@F);
-
- if (i.Item=nil) then
- begin
-  T:=F;
-  T.mkey:=Default(TvImageKey);
-  T.mkey.Addr:=F.mkey.Addr;
-  //
-  i:=FMeta2Set.find(@T);
-  //
-  if (i.Item<>nil) then
-  begin
-   P:=i.Item^;
-   //
-   FMeta2Set.erase(i);
-   //
-   P^:=F;
-   //
-   FMeta2Set.Insert(P);
-   //
-   goto _repeat;
-  end;
- end;
 
  if (i.Item<>nil) then
  begin
@@ -107,6 +100,7 @@ begin
  end;
 end;
 
+{
 function _Find_be(const F:TMetaKey):TvCustomMeta;
 var
  i:TvCustomMeta2Set.Iterator;
@@ -126,66 +120,93 @@ begin
 
   Result:=Key2CustomMeta(P);
  end;
-
 end;
 
-function _FetchHtile(const F:TvImageKey;size:DWORD;is_full:Boolean):TvHtile;
+function _Find_buffer(const F:TvImageKey;size:DWORD):TvCustomMeta;
 var
- t:TvHtile;
+ M:TMetaKey;
+begin
+ M.mtype:=iu_buffer;
+ M.mkey :=F;
+ M.msize:=size;
+ //
+ Result:=_Find_be(M);
+end;
+}
+
+function _FetchMeta(mtype:t_image_usage;const F:TvImageKey;size:DWORD;force:Boolean):TvCustomMeta;
+var
+ t:TvCustomMeta;
  M:TMetaKey;
 begin
  Result:=nil;
 
- M.mtype:=iu_htile;
+ M.mtype:=mtype;
  M.mkey :=F;
  M.msize:=size;
 
- if is_full then
- begin
-  t:=TvHtile(_Find(M));
- end else
- begin
-  t:=TvHtile(_Find_be(M));
- end;
+ t:=_Find(M);
 
  if (t<>nil) then
  begin
   //
  end else
+ if force then
  begin
-  t:=TvHtile.Create;
-  t.Key:=M;
-
-  if FMeta2Set.Insert(@t.key) then
-  begin
-   t.Acquire(nil); //map ref
+  case mtype of
+   iu_buffer:t:=TvMetaBuffer.Create;
+   iu_htile :t:=TvMetaHtile .Create;
+   else;
   end;
+
+  if (t<>nil) then
+  begin
+   t.Key:=M;
+
+   if FMeta2Set.Insert(@t.key) then
+   begin
+    t.Acquire(nil); //map ref
+   end;
+  end;
+
  end;
 
  Result:=t;
 end;
 
-function FetchHtile(cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD):TvHtile;
+function FetchHtile(cmd:TvDependenciesObject;const F:TvImageKey;size:DWORD;force:Boolean=True):TvMetaHtile;
+var
+ B:TvImageKey;
 begin
  rw_wlock(lock);
 
- Result:=_FetchHtile(F,size,True);
+ Result:=TvMetaHtile(_FetchMeta(iu_htile,F,size,force));
+
+ if (Result<>nil) then
+ if (Result.buffer=nil) then
+ begin
+  //link buffer
+  B:=Default(TvImageKey);
+  B.Addr:=F.Addr;
+  //
+  Result.buffer:=TvMetaBuffer(_FetchMeta(iu_buffer,B,size,True));
+ end;
 
  cmd.RefTo(Result);
 
  rw_wunlock(lock);
 end;
 
-function FetchHtile(cmd:TvDependenciesObject;addr:Pointer;size:DWORD):TvHtile;
+function FetchBuffer(cmd:TvDependenciesObject;addr:Pointer;size:DWORD;force:Boolean=True):TvMetaBuffer;
 var
- F:TvImageKey;
+ B:TvImageKey;
 begin
- F:=Default(TvImageKey);
- F.Addr:=addr;
+ B:=Default(TvImageKey);
+ B.Addr:=addr;
 
  rw_wlock(lock);
 
- Result:=_FetchHtile(F,size,False);
+ Result:=TvMetaBuffer(_FetchMeta(iu_buffer,B,size,force));
 
  cmd.RefTo(Result);
 

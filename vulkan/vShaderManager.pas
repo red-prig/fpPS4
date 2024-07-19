@@ -333,6 +333,7 @@ begin
  SprvEmit.Config.UseVertexInput:=True;
  SprvEmit.Config.UseTexelBuffer:=False;
  SprvEmit.Config.UseOutput16   :=storageInputOutput16;
+ SprvEmit.Config.UseOnlyUserdataPushConst:=True;
 
  SprvEmit.Config.maxUniformBufferRange          :=0; // $FFFF
  SprvEmit.Config.PushConstantsOffset            :=0; // 0
