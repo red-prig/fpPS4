@@ -64,6 +64,7 @@ type
 
  TvCustomImage=class(TvRefsObject)
   FHandle:TVkImage;
+  FFormat:TVkFormat; //real used format
   FBind  :TvPointer;
   procedure   FreeHandle; virtual;
   Destructor  Destroy; override;
@@ -148,7 +149,6 @@ type
  end;
 
  TvImage=class(TvCustomImage)
-  FFormat:TVkFormat;
   FExtent:TVkExtent3D;
   FUsage :TVkFlags;
   Fflags :TVkImageCreateFlags;
@@ -281,82 +281,125 @@ Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 begin
  Result:=0;
  Case cformat of
+  VK_FORMAT_UNDEFINED                 :Result:=0;
+
   //pixel size
 
-  VK_FORMAT_R8_UNORM             :Result:=1;
-  VK_FORMAT_R8_SNORM             :Result:=1;
-  VK_FORMAT_R8_UINT              :Result:=1;
-  VK_FORMAT_R8_SINT              :Result:=1;
-  VK_FORMAT_R8_SRGB              :Result:=1;
+  VK_FORMAT_R8_UNORM                  ,
+  VK_FORMAT_R8_SNORM                  ,
+  VK_FORMAT_R8_USCALED                ,
+  VK_FORMAT_R8_SSCALED                ,
+  VK_FORMAT_R8_UINT                   ,
+  VK_FORMAT_R8_SINT                   ,
+  VK_FORMAT_R8_SRGB                   :Result:=1;
 
-  VK_FORMAT_R8G8_UNORM           :Result:=2;
-  VK_FORMAT_R8G8_SNORM           :Result:=2;
-  VK_FORMAT_R8G8_UINT            :Result:=2;
-  VK_FORMAT_R8G8_SINT            :Result:=2;
+  VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT ,
+  VK_FORMAT_A4B4G4R4_UNORM_PACK16_EXT ,
+  VK_FORMAT_R4G4B4A4_UNORM_PACK16     ,
+  VK_FORMAT_B4G4R4A4_UNORM_PACK16     ,
+  VK_FORMAT_R5G6B5_UNORM_PACK16       ,
+  VK_FORMAT_B5G6R5_UNORM_PACK16       ,
 
-  VK_FORMAT_R8G8B8A8_UNORM       :Result:=4;
-  VK_FORMAT_R8G8B8A8_SRGB        :Result:=4;
-  VK_FORMAT_R8G8B8A8_SNORM       :Result:=4;
-  VK_FORMAT_R8G8B8A8_UINT        :Result:=4;
-  VK_FORMAT_R8G8B8A8_SINT        :Result:=4;
+  VK_FORMAT_R8G8_UNORM                ,
+  VK_FORMAT_R8G8_SNORM                ,
+  VK_FORMAT_R8G8_USCALED              ,
+  VK_FORMAT_R8G8_SSCALED              ,
+  VK_FORMAT_R8G8_UINT                 ,
+  VK_FORMAT_R8G8_SINT                 ,
+  VK_FORMAT_R8G8_SRGB                 ,
 
-  VK_FORMAT_B8G8R8A8_UNORM       :Result:=4;
-  VK_FORMAT_B8G8R8A8_SRGB        :Result:=4;
-  VK_FORMAT_B8G8R8A8_SNORM       :Result:=4;
-  VK_FORMAT_B8G8R8A8_UINT        :Result:=4;
-  VK_FORMAT_B8G8R8A8_SINT        :Result:=4;
+  VK_FORMAT_R16_UNORM                 ,
+  VK_FORMAT_R16_SNORM                 ,
+  VK_FORMAT_R16_USCALED               ,
+  VK_FORMAT_R16_SSCALED               ,
+  VK_FORMAT_R16_UINT                  ,
+  VK_FORMAT_R16_SINT                  ,
+  VK_FORMAT_R16_SFLOAT                :Result:=2;
 
-  VK_FORMAT_R16_UNORM            :Result:=2;
-  VK_FORMAT_R16_SNORM            :Result:=2;
-  VK_FORMAT_R16_UINT             :Result:=2;
-  VK_FORMAT_R16_SINT             :Result:=2;
-  VK_FORMAT_R16_SFLOAT           :Result:=2;
+  VK_FORMAT_R8G8B8A8_UNORM            ,
+  VK_FORMAT_R8G8B8A8_SNORM            ,
+  VK_FORMAT_R8G8B8A8_USCALED          ,
+  VK_FORMAT_R8G8B8A8_SSCALED          ,
+  VK_FORMAT_R8G8B8A8_UINT             ,
+  VK_FORMAT_R8G8B8A8_SINT             ,
+  VK_FORMAT_R8G8B8A8_SRGB             ,
 
-  VK_FORMAT_R16G16_UNORM         :Result:=4;
-  VK_FORMAT_R16G16_SNORM         :Result:=4;
-  VK_FORMAT_R16G16_UINT          :Result:=4;
-  VK_FORMAT_R16G16_SINT          :Result:=4;
-  VK_FORMAT_R16G16_SFLOAT        :Result:=4;
+  VK_FORMAT_B8G8R8A8_UNORM            ,
+  VK_FORMAT_B8G8R8A8_SNORM            ,
+  VK_FORMAT_B8G8R8A8_USCALED          ,
+  VK_FORMAT_B8G8R8A8_SSCALED          ,
+  VK_FORMAT_B8G8R8A8_UINT             ,
+  VK_FORMAT_B8G8R8A8_SINT             ,
+  VK_FORMAT_B8G8R8A8_SRGB             ,
 
-  VK_FORMAT_R16G16B16A16_UNORM   :Result:=8;
-  VK_FORMAT_R16G16B16A16_SNORM   :Result:=8;
-  VK_FORMAT_R16G16B16A16_UINT    :Result:=8;
-  VK_FORMAT_R16G16B16A16_SINT    :Result:=8;
-  VK_FORMAT_R16G16B16A16_SFLOAT  :Result:=8;
+  VK_FORMAT_A8B8G8R8_UNORM_PACK32     ,
+  VK_FORMAT_A8B8G8R8_SNORM_PACK32     ,
+  VK_FORMAT_A8B8G8R8_USCALED_PACK32   ,
+  VK_FORMAT_A8B8G8R8_SSCALED_PACK32   ,
+  VK_FORMAT_A8B8G8R8_UINT_PACK32      ,
+  VK_FORMAT_A8B8G8R8_SINT_PACK32      ,
+  VK_FORMAT_A8B8G8R8_SRGB_PACK32      ,
 
-  VK_FORMAT_R32_UINT             :Result:=4;
-  VK_FORMAT_R32_SINT             :Result:=4;
-  VK_FORMAT_R32_SFLOAT           :Result:=4;
+  VK_FORMAT_A2R10G10B10_UNORM_PACK32  ,
+  VK_FORMAT_A2R10G10B10_SNORM_PACK32  ,
+  VK_FORMAT_A2R10G10B10_USCALED_PACK32,
+  VK_FORMAT_A2R10G10B10_SSCALED_PACK32,
+  VK_FORMAT_A2R10G10B10_UINT_PACK32   ,
+  VK_FORMAT_A2R10G10B10_SINT_PACK32   ,
+  VK_FORMAT_A2B10G10R10_UNORM_PACK32  ,
+  VK_FORMAT_A2B10G10R10_SNORM_PACK32  ,
+  VK_FORMAT_A2B10G10R10_USCALED_PACK32,
+  VK_FORMAT_A2B10G10R10_SSCALED_PACK32,
+  VK_FORMAT_A2B10G10R10_UINT_PACK32   ,
+  VK_FORMAT_A2B10G10R10_SINT_PACK32   ,
 
-  VK_FORMAT_R32G32_UINT          :Result:=8;
-  VK_FORMAT_R32G32_SINT          :Result:=8;
-  VK_FORMAT_R32G32_SFLOAT        :Result:=8;
+  VK_FORMAT_R16G16_UNORM              ,
+  VK_FORMAT_R16G16_SNORM              ,
+  VK_FORMAT_R16G16_USCALED            ,
+  VK_FORMAT_R16G16_SSCALED            ,
+  VK_FORMAT_R16G16_UINT               ,
+  VK_FORMAT_R16G16_SINT               ,
+  VK_FORMAT_R16G16_SFLOAT             ,
 
-  VK_FORMAT_R32G32B32A32_UINT    :Result:=16;
-  VK_FORMAT_R32G32B32A32_SINT    :Result:=16;
-  VK_FORMAT_R32G32B32A32_SFLOAT  :Result:=16;
+  VK_FORMAT_R32_UINT                  ,
+  VK_FORMAT_R32_SINT                  ,
+  VK_FORMAT_R32_SFLOAT                ,
 
-  VK_FORMAT_R5G6B5_UNORM_PACK16  :Result:=2;
-  VK_FORMAT_R4G4B4A4_UNORM_PACK16:Result:=2;
+  VK_FORMAT_B10G11R11_UFLOAT_PACK32   ,
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32   ,
 
-  VK_FORMAT_A2R10G10B10_UNORM_PACK32:Result:=4;
-  VK_FORMAT_A2B10G10R10_UNORM_PACK32:Result:=4;
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32    :Result:=4;
 
-  VK_FORMAT_B10G11R11_UFLOAT_PACK32 :Result:=4;
-  VK_FORMAT_R10G11B11_UFLOAT_FAKE32 :Result:=4;
+  VK_FORMAT_R16G16B16A16_UNORM        ,
+  VK_FORMAT_R16G16B16A16_SNORM        ,
+  VK_FORMAT_R16G16B16A16_USCALED      ,
+  VK_FORMAT_R16G16B16A16_SSCALED      ,
+  VK_FORMAT_R16G16B16A16_UINT         ,
+  VK_FORMAT_R16G16B16A16_SINT         ,
+  VK_FORMAT_R16G16B16A16_SFLOAT       ,
 
-  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32  :Result:=4;
+  VK_FORMAT_R32G32_UINT               ,
+  VK_FORMAT_R32G32_SINT               ,
+  VK_FORMAT_R32G32_SFLOAT             :Result:=8;
+
+  VK_FORMAT_R32G32B32_UINT            ,
+  VK_FORMAT_R32G32B32_SINT            ,
+  VK_FORMAT_R32G32B32_SFLOAT          :Result:=12;
+
+  VK_FORMAT_R32G32B32A32_UINT         ,
+  VK_FORMAT_R32G32B32A32_SINT         ,
+  VK_FORMAT_R32G32B32A32_SFLOAT       :Result:=16;
 
   //stencil
-  VK_FORMAT_S8_UINT              :Result:=1;
+  VK_FORMAT_S8_UINT                   :Result:=1;
   //depth
-  VK_FORMAT_D16_UNORM            :Result:=2;
-  VK_FORMAT_X8_D24_UNORM_PACK32  :Result:=4;
-  VK_FORMAT_D32_SFLOAT           :Result:=4;
+  VK_FORMAT_D16_UNORM                 :Result:=2;
+  VK_FORMAT_X8_D24_UNORM_PACK32       :Result:=4;
+  VK_FORMAT_D32_SFLOAT                :Result:=4;
   //depth stencil
-  VK_FORMAT_D16_UNORM_S8_UINT    :Assert(false,'getFormatSize:VK_FORMAT_D16_UNORM_S8_UINT');
-  VK_FORMAT_D24_UNORM_S8_UINT    :Assert(false,'getFormatSize:VK_FORMAT_D24_UNORM_S8_UINT');
-  VK_FORMAT_D32_SFLOAT_S8_UINT   :Assert(false,'getFormatSize:VK_FORMAT_D32_SFLOAT_S8_UINT');
+  VK_FORMAT_D16_UNORM_S8_UINT         :Result:=3;
+  VK_FORMAT_D24_UNORM_S8_UINT         :Result:=4;
+  VK_FORMAT_D32_SFLOAT_S8_UINT        :Result:=5;
 
   //texel size
   VK_FORMAT_BC1_RGB_UNORM_BLOCK..
@@ -578,6 +621,11 @@ const
   VK_FORMAT_UNDEFINED
  );
 
+ MUTABLE_5999:array[0..1] of TVkFormat=(
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32,
+  VK_FORMAT_UNDEFINED
+ );
+
  MUTABLE_3232:array[0..10] of TVkFormat=(
   VK_FORMAT_R16G16B16A16_UNORM,
   VK_FORMAT_R16G16B16A16_SNORM,
@@ -781,6 +829,8 @@ begin
   VK_FORMAT_B10G11R11_UFLOAT_PACK32   :Result:=@MUTABLE_8888;
   VK_FORMAT_R10G11B11_UFLOAT_FAKE32   :Result:=@MUTABLE_8888;
 
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32    :Result:=@MUTABLE_5999;
+
   VK_FORMAT_R16G16B16A16_UNORM  :Result:=@MUTABLE_3232;
   VK_FORMAT_R16G16B16A16_SNORM  :Result:=@MUTABLE_3232;
   VK_FORMAT_R16G16B16A16_USCALED:Result:=@MUTABLE_3232;
@@ -922,6 +972,8 @@ begin
 
   VK_FORMAT_R10G11B11_UFLOAT_FAKE32:Result:=VK_FORMAT_R32_UINT;
 
+  VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:Result:=VK_FORMAT_R32_UINT;
+
   VK_FORMAT_R16G16B16A16_SNORM,
   VK_FORMAT_R16G16B16A16_USCALED,
   VK_FORMAT_R16G16B16A16_SSCALED,
@@ -1053,8 +1105,6 @@ begin
 end;
 
 Function CompareNormalized(const a,b:TvImageKey):Integer;
-var
- ma,mb:Pointer;
 begin
  //1 Addr
  Result:=Integer(a.Addr>b.Addr)-Integer(a.Addr<b.Addr);
@@ -1063,9 +1113,7 @@ begin
  Result:=Integer(a.Addr2>b.Addr2)-Integer(a.Addr2<b.Addr2);
  if (Result<>0) then Exit;
  //2 cformat
- ma:=GET_VK_IMAGE_MUTABLE(a.cformat);
- mb:=GET_VK_IMAGE_MUTABLE(b.cformat);
- Result:=Integer(ma>mb)-Integer(ma<mb);
+ Result:=getFormatSize(a.cformat)-getFormatSize(b.cformat);
  if (Result<>0) then Exit;
  //3 params
  Result:=CompareByte(GetNormalizedParams(a),GetNormalizedParams(b),SizeOf(TvImageKeyParams));
@@ -1455,6 +1503,9 @@ begin
 
  cinfo:=GetImageInfo;
  cinfo.format:=vkFixFormatSupport(cinfo.format,cinfo.tiling,cinfo.usage);
+
+ //save real format
+ FFormat:=cinfo.format;
 
  cinfo.pNext:=@clist;
 

@@ -44,6 +44,7 @@ type
   //
   function   OnAlloc(size:Ptruint):Pointer; virtual;
   Procedure  OnFree (P:Pointer   );         virtual;
+  function   IsLinearAlloc:Boolean;         virtual;
   Procedure  RefTo(obj:TvRefsObject);
   function   AddDependence(cb:TvReleaseCb):Boolean;
   function   DelDependence(cb:TvReleaseCb):Boolean;
@@ -130,6 +131,11 @@ end;
 Procedure TvDependenciesObject.OnFree(P:Pointer);
 begin
  FreeMem(P);
+end;
+
+function TvDependenciesObject.IsLinearAlloc:Boolean;
+begin
+ Result:=False;
 end;
 
 Procedure TvDependenciesObject.RefTo(obj:TvRefsObject);

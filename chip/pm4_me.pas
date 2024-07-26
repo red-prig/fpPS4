@@ -29,8 +29,7 @@ uses
  vShaderManager,
  vRegs2Vulkan,
  vCmdBuffer,
- vPipeline,
- vSetsPoolManager,
+ vDescriptorSet,
  vSampler,
  vSamplerManager,
  vMetaManager,
@@ -133,6 +132,7 @@ type
   //
   function  OnAlloc(size:Ptruint):Pointer; register; override;
   Procedure OnFree (P:Pointer   );         register; override;
+  function  IsLinearAlloc:Boolean;         register; override;
  end;
 
  t_me_render_context=object
@@ -471,6 +471,10 @@ begin
  //
 end;
 
+function TvStreamCmdBuffer.IsLinearAlloc:Boolean; register;
+begin
+ Result:=True;
+end;
 
 //
 
@@ -728,20 +732,14 @@ begin
 end;
 
 procedure Bind_Uniforms(var ctx:t_me_render_context;
+                        BindPoint:TVkPipelineBindPoint;
                         var UniformBuilder:TvUniformBuilder;
-                        var DescriptorGroup:TvDescriptorGroup;
                         ShaderGroup:TvShaderGroup);
-
- procedure _init; inline;
- begin
-  if (DescriptorGroup=nil) then
-  begin
-   DescriptorGroup:=FetchDescriptorGroup(ctx.Cmd,ShaderGroup.FLayout);
-  end;
- end;
 
 var
  i:Integer;
+
+ DescriptorGroup:TvDescriptorInterface;
 
  ri:TvImage2;
  iv:TvImageView2;
@@ -755,6 +753,7 @@ var
 
  resource_instance:p_pm4_resource_instance;
 begin
+ DescriptorGroup:=ctx.Cmd.FetchDescriptorInterface(BindPoint);
 
  //images
  if (Length(UniformBuilder.FImages)<>0) then
@@ -780,11 +779,9 @@ begin
 
    iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
-   _init;
-
-   DescriptorGroup.FSets[fset].BindImage(bind,0,
-                                         iv.FHandle,
-                                         VK_IMAGE_LAYOUT_GENERAL);
+   DescriptorGroup.BindImage(fset,bind,
+                             iv.FHandle,
+                             VK_IMAGE_LAYOUT_GENERAL);
 
 
   end;
@@ -799,9 +796,7 @@ begin
   begin
    sm:=FetchSampler(ctx.Cmd,PS);
 
-   _init;
-
-   DescriptorGroup.FSets[fset].BindSampler(bind,0,sm.FHandle);
+   DescriptorGroup.BindSampler(fset,bind,sm.FHandle);
 
   end;
  end;
@@ -841,13 +836,10 @@ begin
 
    range:=size;
 
-   _init;
-
-   DescriptorGroup.FSets[fset].BindBuffer(bind,0,
-                                          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                          buf.FHandle,
-                                          diff,
-                                          range {VK_WHOLE_SIZE});
+   DescriptorGroup.BindBuffer(fset,bind,
+                              buf.FHandle,
+                              diff,
+                              range {VK_WHOLE_SIZE});
 
    if ((memuse and TM_WRITE)<>0) then
    begin
@@ -1028,8 +1020,6 @@ var
 
  ri:TvImage2;
  iv:TvImageView2;
-
- FDescriptorGroup:TvDescriptorGroup;
 
  resource_instance:p_pm4_resource_instance;
 begin
@@ -1303,17 +1293,10 @@ begin
  ctx.Cmd.SetVertexInput   (FAttrBuilder);
  ctx.Cmd.BindVertexBuffers(FAttrBuilder);
 
- FDescriptorGroup:=nil;
-
  Bind_Uniforms(ctx,
+               BP_GRAPHICS,
                FUniformBuilder,
-               FDescriptorGroup,
                ctx.rt_info^.ShaderGroup);
-
- if (FDescriptorGroup<>nil) then
- begin
-  ctx.Cmd.BindSets(BP_GRAPHICS,FDescriptorGroup);
- end;
 
  Bind_Pushs(ctx,ctx.rt_info^.ShaderGroup,@ctx.rt_info^.USERDATA);
 
@@ -1639,7 +1622,6 @@ var
 
  FUniformBuilder:TvUniformBuilder;
 
- FDescriptorGroup:TvDescriptorGroup;
 begin
  CP_KEY.FShaderGroup:=node^.ShaderGroup;
  CP:=FetchComputePipeline(ctx.Cmd,@CP_KEY);
@@ -1672,17 +1654,10 @@ begin
   Assert(false  ,'BindCompute(CP)');
  end;
 
- FDescriptorGroup:=nil;
-
  Bind_Uniforms(ctx,
+               BP_COMPUTE,
                FUniformBuilder,
-               FDescriptorGroup,
                CP_KEY.FShaderGroup);
-
- if (FDescriptorGroup<>nil) then
- begin
-  ctx.Cmd.BindSets(BP_COMPUTE,FDescriptorGroup);
- end;
 
  Bind_Pushs(ctx,CP_KEY.FShaderGroup,dst);
 

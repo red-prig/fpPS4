@@ -23,6 +23,8 @@ uses
   vImage,
   vPipeline,
   vPipelineManager,
+  vSetsPoolManager,
+  vDescriptorSet,
   vRender;
 
 type
@@ -74,7 +76,11 @@ type
   submit_id:ptruint;
 
   FCurrPipeline:array[BP_GRAPHICS..BP_COMPUTE] of TVkPipeline;
-  FCurrLayout  :array[BP_GRAPHICS..BP_COMPUTE] of TVkPipelineLayout;
+  FCurrLayout  :array[BP_GRAPHICS..BP_COMPUTE] of TvPipelineLayout;
+  FCurrBinds   :array[BP_GRAPHICS..BP_COMPUTE] of PvDescriptorCache;
+  FCurrGroup   :array[BP_GRAPHICS..BP_COMPUTE] of TvDescriptorGroup;
+
+  FDescriptorCacheSet:TvDescriptorCacheSet;
 
   FRenderPass:TVkRenderPass;
 
@@ -111,6 +117,8 @@ type
 
   Procedure   ReleaseAllPlannedTriggers;
   Procedure   AddPlannedTrigger(start,__end:QWORD;exclude:Pointer);
+
+  Procedure   FreeAllDescriptorCache;
 
   Procedure   BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -167,6 +175,13 @@ type
   Procedure   InsertLabel(pLabelName:PVkChar);
   Procedure   BeginLabel(pLabelName:PVkChar);
   Procedure   EndLabel();
+
+  function    FetchDescriptorCache(layout:TvPipelineLayout):PvDescriptorCache;
+  function    FetchDescriptorCache(BindPoint:TVkPipelineBindPoint):PvDescriptorCache;
+  function    FetchDescriptorInterface(BindPoint:TVkPipelineBindPoint):TvDescriptorInterface;
+  Procedure   ApplyDescriptorCache(BindPoint:TVkPipelineBindPoint);
+
+  Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
  end;
 
  TvCmdBuffer=class(TvCustomCmdBuffer)
@@ -180,8 +195,6 @@ type
   function    BeginRenderPass(RT:PvRenderPassBeginInfo;GP:TvGraphicsPipeline2):Boolean;
 
   function    BindCompute(CP:TvComputePipeline2):Boolean;
-
-  Procedure   BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
 
   Procedure   dmaData1(src,dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
   Procedure   dmaData2(src:DWORD;dst:Pointer;byteCount:DWORD;isBlocking:Boolean);
@@ -325,8 +338,14 @@ begin
 
  EndRenderPass;
 
- FCurrLayout[BP_GRAPHICS]:=VK_NULL_HANDLE;
- FCurrLayout[BP_COMPUTE ]:=VK_NULL_HANDLE;
+ FCurrLayout[BP_GRAPHICS]:=nil;
+ FCurrLayout[BP_COMPUTE ]:=nil;
+
+ FCurrBinds[BP_GRAPHICS]:=nil;
+ FCurrBinds[BP_COMPUTE ]:=nil;
+
+ FCurrGroup[BP_GRAPHICS]:=nil;
+ FCurrGroup[BP_COMPUTE ]:=nil;
 
  FCurrPipeline[BP_GRAPHICS]:=VK_NULL_HANDLE;
  FCurrPipeline[BP_COMPUTE ]:=VK_NULL_HANDLE;
@@ -443,7 +462,9 @@ begin
   vkCmdEndRenderPass(FCmdbuf);
   FRenderPass:=VK_NULL_HANDLE;
   //
-  FCurrLayout[BP_GRAPHICS]:=VK_NULL_HANDLE;
+  FCurrLayout[BP_GRAPHICS]:=nil;
+  FCurrBinds [BP_GRAPHICS]:=nil;
+  FCurrGroup [BP_GRAPHICS]:=nil;
   //
   FCurrPipeline[BP_GRAPHICS]:=VK_NULL_HANDLE;
  end;
@@ -637,6 +658,8 @@ begin
 
  ReleaseAllPlannedTriggers;
 
+ FreeAllDescriptorCache;
+
  FreeAllSemaphores;
 
  cmd_count:=0;
@@ -647,14 +670,20 @@ Procedure TvCustomCmdBuffer.FreeAllSemaphores;
 var
  node:PvSemaphoreWait;
 begin
- node:=FWaitSemaphores.Min;
-
- while (node<>nil) do
+ if IsLinearAlloc then
  begin
-  FWaitSemaphores.delete(node);
-  OnFree(node);
-
+  FWaitSemaphores:=Default(TvSemaphoreWaitSet);
+ end else
+ begin
   node:=FWaitSemaphores.Min;
+
+  while (node<>nil) do
+  begin
+   FWaitSemaphores.delete(node);
+   OnFree(node);
+
+   node:=FWaitSemaphores.Min;
+  end;
  end;
 
  FWaitSemaphoresCount:=0;
@@ -698,12 +727,23 @@ begin
   //deffered trigger
   vm_map_track_trigger(p_proc.p_vmspace,node^.start,node^.__end,node^.exclude,M_GPU_APPLY);
 
-  FPlannedTriggers.delete(node);
-  OnFree(node);
+  if IsLinearAlloc then
+  begin
+   node:=FPlannedTriggers.Next(node);
+  end else
+  begin
+   FPlannedTriggers.delete(node);
+   OnFree(node);
+   //
+   node:=FPlannedTriggers.Min;
+  end;
 
-  node:=FPlannedTriggers.Min;
  end;
 
+ if IsLinearAlloc then
+ begin
+  FPlannedTriggers:=Default(t_cmd_track_deferred_set);
+ end;
 end;
 
 Procedure TvCustomCmdBuffer.AddPlannedTrigger(start,__end:QWORD;exclude:Pointer);
@@ -731,6 +771,27 @@ begin
 
 end;
 
+Procedure TvCustomCmdBuffer.FreeAllDescriptorCache;
+var
+ node:PvDescriptorCache;
+begin
+ if IsLinearAlloc then
+ begin
+  FDescriptorCacheSet:=Default(TvDescriptorCacheSet);
+ end else
+ begin
+  node:=FDescriptorCacheSet.Min;
+
+  while (node<>nil) do
+  begin
+   FDescriptorCacheSet.delete(node);
+   OnFree(node);
+
+   node:=FDescriptorCacheSet.Min;
+  end;
+ end;
+end;
+
 Procedure TvCustomCmdBuffer.BindLayout(BindPoint:TVkPipelineBindPoint;F:TvPipelineLayout);
 begin
 
@@ -741,7 +802,13 @@ begin
  end;
 
  if (F=nil) then Exit;
- FCurrLayout[BindPoint]:=F.FHandle;
+
+ if (FCurrLayout[BindPoint]<>F) then
+ begin
+  FCurrLayout[BindPoint]:=F;
+  FCurrBinds [BindPoint]:=nil;
+  FCurrGroup [BindPoint]:=nil;
+ end;
 end;
 
 Procedure TvCustomCmdBuffer.BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
@@ -754,7 +821,7 @@ begin
  end;
 
  if (FHandle=VK_NULL_HANDLE) then Exit;
- if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
+ if (FCurrLayout[BindPoint]=nil) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
@@ -762,7 +829,7 @@ begin
 
  vkCmdBindDescriptorSets(FCmdbuf,
                          BindPoint,
-                         FCurrLayout[BindPoint],
+                         FCurrLayout[BindPoint].FHandle,
                          fset,1,
                          @FHandle,
                          0,nil);
@@ -779,14 +846,14 @@ begin
  end;
 
  if (pValues=nil) or (size=0) then Exit;
- if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
+ if (FCurrLayout[BindPoint]=nil) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
 
  vkCmdPushConstants(FCmdbuf,
-                    FCurrLayout[BindPoint],
+                    FCurrLayout[BindPoint].FHandle,
                     stageFlags,
                     offset,size,
                     pValues);
@@ -805,6 +872,8 @@ begin
  if (FCurrPipeline[BP_COMPUTE]=VK_NULL_HANDLE) then Exit;
 
  if (not BeginCmdBuffer) then Exit;
+
+ ApplyDescriptorCache(BP_COMPUTE);
 
  Inc(cmd_count);
 
@@ -1072,72 +1141,6 @@ begin
                        offset,size,
                        srcStageMask,
                        dstStageMask);
-end;
-
-Procedure TvCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
-var
- A:array[0..6] of TVkDescriptorSet;
- i,start,pos:Integer;
-
- procedure Flush; inline;
- begin
-  Inc(cmd_count);
-
-  vkCmdBindDescriptorSets(FCmdbuf,
-                          BindPoint,
-                          FCurrLayout[BindPoint],
-                          start,pos,
-                          @A[0],
-                          0,nil);
-
-  pos:=0;
- end;
-
-begin
-
- if (Self=nil) then
- begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
-  Exit;
- end;
-
- if (F=nil) then Exit;
- if (FCurrLayout[BindPoint]=VK_NULL_HANDLE) then Exit;
- if (Length(F.FSets)=0) then Exit;
-
- if (not BeginCmdBuffer) then Exit;
-
- pos:=0;
-
- For i:=0 to High(F.FSets) do
- begin
-  if F.FSets[i].IsValid then
-  begin
-
-   if (pos=0) then
-   begin
-    start:=i;
-   end;
-
-   A[pos]:=F.FSets[i].FHandle;
-   Inc(pos);
-
-   if (pos=7) then
-   begin
-    Flush;
-   end;
-
-  end else
-  if (pos<>0) then
-  begin
-   Flush;
-  end;
- end;
-
- if (pos<>0) then
- begin
-  Flush;
- end;
 end;
 
 Const
@@ -1486,6 +1489,8 @@ begin
 
  if (not BeginCmdBuffer) then Exit;
 
+ ApplyDescriptorCache(BP_GRAPHICS);
+
  if (FinstanceCount=0) then FinstanceCount:=1;
 
  Size:=(indexOffset+indexCount)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
@@ -1560,6 +1565,8 @@ begin
 
  if (not BeginCmdBuffer) then Exit;
 
+ ApplyDescriptorCache(BP_GRAPHICS);
+
  if (FinstanceCount=0) then FinstanceCount:=1;
 
  Case Femulate_primtype of
@@ -1626,6 +1633,155 @@ begin
 
 end;
 
+//
+
+function TvCustomCmdBuffer.FetchDescriptorCache(layout:TvPipelineLayout):PvDescriptorCache;
+begin
+ Result:=FDescriptorCacheSet.Find(@layout);
+
+ if (Result=nil) then
+ begin
+  Result:=AllocDescriptorCache(Self,layout);
+  FDescriptorCacheSet.Insert(Result);
+ end;
+end;
+
+function TvCustomCmdBuffer.FetchDescriptorCache(BindPoint:TVkPipelineBindPoint):PvDescriptorCache;
+begin
+ Result:=nil;
+
+ if (FCurrLayout[BindPoint]=nil) then Exit;
+
+ Result:=FCurrBinds[BindPoint];
+
+ if (Result=nil) then
+ begin
+  Result:=FetchDescriptorCache(FCurrLayout[BindPoint]);
+  //
+  FCurrBinds[BindPoint]:=Result;
+  //
+  Result^.SetAllChange;
+ end;
+end;
+
+function TvCustomCmdBuffer.FetchDescriptorInterface(BindPoint:TVkPipelineBindPoint):TvDescriptorInterface;
+begin
+ Result:=Default(TvDescriptorInterface);
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ Result:=TvDescriptorInterface(FetchDescriptorCache(BindPoint));
+end;
+
+Procedure TvCustomCmdBuffer.ApplyDescriptorCache(BindPoint:TVkPipelineBindPoint);
+var
+ Cache:PvDescriptorCache;
+ Group:TvDescriptorGroup;
+begin
+ if (FCurrLayout[BindPoint]=nil) then Exit;
+
+ Cache:=FCurrBinds[BindPoint];
+ if (Cache=nil) then Exit;
+
+ if (Cache^.p_count_all=0) then Exit; //no sets
+
+ Group:=FCurrGroup[BindPoint];
+
+ if (Cache^.p_change_any) or
+    (Group=nil) then
+ begin
+  Group:=FetchDescriptorGroup(Self,FCurrLayout[BindPoint]);
+  //
+  FCurrGroup[BindPoint]:=Group;
+  //
+  Group.Bind(Cache);
+  //
+  BindSets(BindPoint,Group);
+  //
+  Cache^.ClearAllChange;
+ end;
+
+ //VK_KHR_push_descriptor vkCmdPushDescriptorSetKHR TODO
+end;
+
+Procedure TvCustomCmdBuffer.BindSets(BindPoint:TVkPipelineBindPoint;F:TvDescriptorGroup);
+var
+ A:array[0..6] of TVkDescriptorSet;
+ i,start,pos:Integer;
+
+ procedure Flush; inline;
+ begin
+  Inc(cmd_count);
+
+  vkCmdBindDescriptorSets(FCmdbuf,
+                          BindPoint,
+                          FCurrLayout[BindPoint].FHandle,
+                          start,pos,
+                          @A[0],
+                          0,nil);
+
+  pos:=0;
+ end;
+
+begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (F=nil) then Exit;
+ if (FCurrLayout[BindPoint]=nil) then Exit;
+ if (Length(F.FSets)=0) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ pos:=0;
+
+ For i:=0 to High(F.FSets) do
+ begin
+  if F.FSets[i].IsValid then
+  begin
+
+   if (pos=0) then
+   begin
+    start:=i;
+   end;
+
+   A[pos]:=F.FSets[i].FHandle;
+   Inc(pos);
+
+   if (pos=7) then
+   begin
+    Flush;
+   end;
+
+  end else
+  if (pos<>0) then
+  begin
+   Flush;
+  end;
+ end;
+
+ if (pos<>0) then
+ begin
+  Flush;
+ end;
+end;
+
+//
+
+
+
+
 
 end.
+
+
+
 

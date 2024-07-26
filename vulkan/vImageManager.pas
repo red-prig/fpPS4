@@ -550,6 +550,8 @@ begin
   if limits.VK_EXT_image_view_min_lod and
      (F.minLod<>0) then
   begin
+   uinfo.pNext:=@minfo;
+   //
    minfo:=Default(TVkImageViewMinLodCreateInfoEXT);
    minfo.sType :=VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT;
    minfo.minLod:=F.minLod;

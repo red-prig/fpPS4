@@ -10,9 +10,11 @@ uses
  g23tree,
  Vulkan,
  vPipeline,
- vCmdBuffer;
+ vSetsPool,
+ vDescriptorSet,
+ vDependence;
 
-Function FetchDescriptorGroup(cmd:TvCustomCmdBuffer;Pipeline:TvPipelineLayout):TvDescriptorGroup;
+Function FetchDescriptorGroup(cmd:TvDependenciesObject;Layout:TvPipelineLayout):TvDescriptorGroup;
 
 implementation
 
@@ -41,11 +43,11 @@ type
  end;
 
  TvSetsPoolUnbound=class
-  FPipeline:TvPipelineLayout;
+  FLayout:TvPipelineLayout;
   FQueue:TIntrusiveMPSCQueue;
   FPools:TvSetsPool2Set;
   FLast:TvSetsPool2;
-  Constructor Create(Pipeline:TvPipelineLayout);
+  Constructor Create(Layout:TvPipelineLayout);
   Procedure   NewPool;
   function    Alloc:TvDescriptorGroupNode;
   procedure   PushNode(N:TvDescriptorGroupNode);
@@ -82,9 +84,9 @@ begin
  Result:=Integer(Pointer(a^)>Pointer(b^))-Integer(Pointer(a^)<Pointer(b^));
 end;
 
-Constructor TvSetsPoolUnbound.Create(Pipeline:TvPipelineLayout);
+Constructor TvSetsPoolUnbound.Create(Layout:TvPipelineLayout);
 begin
- FPipeline:=Pipeline;
+ FLayout:=Layout;
  FQueue.Create;
 end;
 
@@ -92,7 +94,7 @@ Procedure TvSetsPoolUnbound.NewPool;
 var
  N:TvSetsPool2;
 begin
- N:=TvSetsPool2.Create(FPipeline,2);
+ N:=TvSetsPool2.Create(FLayout,2);
  if N.Compile then
  begin
   FPools.Insert(N);
@@ -113,8 +115,10 @@ begin
  if FLast.IsFull then NewPool;
 
  Result:=TvDescriptorGroupNode.Create;
- Result.parent:=Self;
- Result.FSets:=FLast.Alloc;
+ Result.parent :=Self;
+ //
+ Result.FLayout:=FLayout;
+ Result.FSets  :=FLast.Alloc;
 end;
 
 procedure TvSetsPoolUnbound.PushNode(N:TvDescriptorGroupNode);
@@ -143,19 +147,19 @@ begin
  end;
 end;
 
-function _Find(Pipeline:TvPipelineLayout):TvSetsPoolUnbound;
+function _Find(Layout:TvPipelineLayout):TvSetsPoolUnbound;
 var
  i:TvSetsPoolUnbounds.Iterator;
 begin
  Result:=nil;
- i:=FSetsPoolUnbounds.find(@Pipeline);
+ i:=FSetsPoolUnbounds.find(@Layout);
  if (i.Item<>nil) then
  begin
-  Result:=TvSetsPoolUnbound(ptruint(i.Item^)-ptruint(@TvSetsPoolUnbound(nil).FPipeline));
+  Result:=TvSetsPoolUnbound(ptruint(i.Item^)-ptruint(@TvSetsPoolUnbound(nil).FLayout));
  end;
 end;
 
-Function _Fetch(Pipeline:TvPipelineLayout):TvDescriptorGroupNode;
+Function _Fetch(Layout:TvPipelineLayout):TvDescriptorGroupNode;
 var
  t:TvSetsPoolUnbound;
  n:TvDescriptorGroupNode;
@@ -163,12 +167,12 @@ var
 begin
  Result:=nil;
 
- t:=_Find(Pipeline);
+ t:=_Find(Layout);
 
  if (t=nil) then
  begin
-  t:=TvSetsPoolUnbound.Create(Pipeline);
-  FSetsPoolUnbounds.Insert(@t.FPipeline);
+  t:=TvSetsPoolUnbound.Create(Layout);
+  FSetsPoolUnbounds.Insert(@t.FLayout);
  end;
 
  n:=t.Alloc;
@@ -176,15 +180,15 @@ begin
  Result:=n;
 end;
 
-Function FetchDescriptorGroup(cmd:TvCustomCmdBuffer;Pipeline:TvPipelineLayout):TvDescriptorGroup;
+Function FetchDescriptorGroup(cmd:TvDependenciesObject;Layout:TvPipelineLayout):TvDescriptorGroup;
 begin
  Result:=nil;
- if (Pipeline=nil) then Exit;
- if Pipeline.isSpace then Exit;
+ if (Layout=nil) then Exit;
+ if Layout.isSpace then Exit;
 
  FSetsPoolUnbounds.Lock_wr;
 
- Result:=_Fetch(Pipeline);
+ Result:=_Fetch(Layout);
 
  cmd.RefTo(Result);
 
