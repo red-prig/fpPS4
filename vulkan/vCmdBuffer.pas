@@ -105,6 +105,7 @@ type
   Procedure   BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPipeline);
   Function    IsRenderPass:Boolean;
   Procedure   EndRenderPass;
+  function    BeforePushBarrier:TVkCommandBuffer;
 
   function    QueueSubmit:TVkResult;
   function    Wait(timeout:TVkUInt64):TVkResult;
@@ -468,6 +469,23 @@ begin
   //
   FCurrPipeline[BP_GRAPHICS]:=VK_NULL_HANDLE;
  end;
+end;
+
+function TvCustomCmdBuffer.BeforePushBarrier:TVkCommandBuffer;
+begin
+ Result:=0;
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ EndRenderPass;
+
+ Result:=FCmdbuf;
 end;
 
 function TvCmdBuffer.BindCompute(CP:TvComputePipeline2):Boolean;

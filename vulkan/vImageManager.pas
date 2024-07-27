@@ -413,7 +413,7 @@ begin
  if (not cmd.BeginCmdBuffer) then Exit;
 
  if Barrier.Push(cmd.FCmdbuf,
-                 @cmd.EndRenderPass,
+                 @cmd.BeforePushBarrier,
                  Parent.FHandle,
                  GetSubresRange,
                  dstAccessMask,
@@ -689,7 +689,7 @@ begin
  rw_wlock(lock);
 
  if Barrier.Push(cmd.FCmdbuf,
-                 @cmd.EndRenderPass,
+                 @cmd.BeforePushBarrier,
                  FHandle,
                  GetSubresRange,
                  dstAccessMask,

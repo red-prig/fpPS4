@@ -19,7 +19,7 @@ type
  PvImageBarrier=^TvImageBarrier;
  TvImageBarrier=object
   type
-   t_push_cb=procedure of object;
+   t_push_cb=function():TVkCommandBuffer of object;
   var
    //image:TVkImage;
    //range:TVkImageSubresourceRange;
@@ -88,6 +88,7 @@ const
  TM_READ =1;
  TM_WRITE=2;
  TM_CLEAR=4;
+ TM_MIXED=8;
 
 type
  t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_buffer,iu_htile);
@@ -248,8 +249,9 @@ Function GetAspectMaskByFormat(cformat:TVkFormat):DWORD;
 
 Function GetDepthStencilInitLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
 Function GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkImageLayout;
-Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
-Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
+Function GetDepthStencilAccessAttachMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+function GetColorSendLayout(IMAGE_USAGE:Byte):TVkImageLayout;
+Function GetColorAccessAttachMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
@@ -1943,7 +1945,7 @@ begin
  end;
 end;
 
-Function GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
+Function GetDepthStencilAccessAttachMask(DEPTH_USAGE,STENCIL_USAGE:Byte):TVkAccessFlags;
 var
  IMAGE_USAGE:Byte;
 begin
@@ -1953,7 +1955,18 @@ begin
          (ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
 end;
 
-Function GetColorAccessMask(IMAGE_USAGE:Byte):TVkAccessFlags;
+function GetColorSendLayout(IMAGE_USAGE:Byte):TVkImageLayout;
+begin
+ if ((IMAGE_USAGE and TM_MIXED)<>0) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_GENERAL;
+ end else
+ begin
+  Result:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+ end;
+end;
+
+Function GetColorAccessAttachMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 begin
  Result:=(ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) *ord((IMAGE_USAGE and TM_READ               )<>0) ) or
          (ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
@@ -1968,6 +1981,72 @@ begin
  StageMask :=ord(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 end;
 
+function IsRead(dstAccessMask:TVkAccessFlags):Boolean; inline;
+begin
+ Result:=dstAccessMask and
+         (
+          ord(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) or
+          ord(VK_ACCESS_INDEX_READ_BIT) or
+          ord(VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT) or
+          ord(VK_ACCESS_UNIFORM_READ_BIT) or
+          ord(VK_ACCESS_INPUT_ATTACHMENT_READ_BIT) or
+          ord(VK_ACCESS_SHADER_READ_BIT) or
+          ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) or
+          ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT) or
+          ord(VK_ACCESS_TRANSFER_READ_BIT) or
+          ord(VK_ACCESS_HOST_READ_BIT) or
+          ord(VK_ACCESS_MEMORY_READ_BIT)
+         )<>0;
+end;
+
+function IsWrite(dstAccessMask:TVkAccessFlags):Boolean; inline;
+begin
+ Result:=dstAccessMask and
+         (
+          ord(VK_ACCESS_SHADER_WRITE_BIT) or
+          ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) or
+          ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) or
+          ord(VK_ACCESS_TRANSFER_WRITE_BIT) or
+          ord(VK_ACCESS_HOST_WRITE_BIT) or
+          ord(VK_ACCESS_MEMORY_WRITE_BIT)
+         )<>0;
+end;
+
+const
+ ALL_GRAPHICS_STAGE:TVkPipelineStageFlags=(
+  ord(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) or
+  ord(VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT) or
+  ord(VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT) or
+  ord(VK_PIPELINE_STAGE_VERTEX_INPUT_BIT) or
+  ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+  ord(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT) or
+  ord(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT) or
+  ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) or
+  ord(VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT) or
+  ord(VK_PIPELINE_STAGE_TRANSFORM_FEEDBACK_BIT_EXT) or
+  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR) or
+  ord(VK_PIPELINE_STAGE_FRAGMENT_DENSITY_PROCESS_BIT_EXT)
+ );
+
+function ChangeStage(curr,next:TVkPipelineStageFlags):Boolean;
+begin
+ if ((curr and ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT))<>0) then
+ begin
+  curr:=(curr and (not ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT))) or ALL_GRAPHICS_STAGE;
+ end;
+
+ if ((next and ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT))<>0) then
+ begin
+  next:=(next and (not ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT))) or ALL_GRAPHICS_STAGE;
+ end;
+
+ Result:=((curr and next)<>next);
+end;
+
 function TvImageBarrier.Push(cmd:TVkCommandBuffer;
                              cb:t_push_cb;
                              image:TVkImage;
@@ -1980,16 +2059,28 @@ var
 begin
  Result:=False;
 
- if (AccessMask<>dstAccessMask) or
+ //RAW
+ //WAR
+ //WAW
+
+ if (AccessMask<>dstAccessMask ) or
     (ImgLayout <>newImageLayout) or
-    (StageMask <>dstStageMask) then
+    ChangeStage(StageMask,dstStageMask) or
+
+    (IsRead (AccessMask) and IsWrite(dstAccessMask)) or
+    (IsWrite(AccessMask) and IsRead (dstAccessMask)) or
+    (IsWrite(AccessMask) and IsWrite(dstAccessMask))
+
+    then
  begin
   Result:=True;
 
   if (cb<>nil) then
   begin
-   cb();
+   cmd:=cb();
   end;
+
+  if (cmd=0) then Exit;
 
   info:=Default(TVkImageMemoryBarrier);
   info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2003,7 +2094,7 @@ begin
   vkCmdPipelineBarrier(cmd,
                        StageMask,
                        dstStageMask,
-                       0,
+                       ord(VK_DEPENDENCY_BY_REGION_BIT),
                        0, nil,
                        0, nil,
                        1, @info);

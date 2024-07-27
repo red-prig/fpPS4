@@ -29,8 +29,8 @@ type
   Procedure  SetZorderStage(s:TVkPipelineStageFlags);
   Procedure  _AddColorRef(id:TVkUInt32;IMAGE_USAGE:Byte);
   Procedure  _SetDepthRef(id:TVkUInt32;DEPTH_USAGE,STENCIL_USAGE:Byte);
-  Procedure  AddColorAt(id:TVkUInt32;format:TVkFormat;IMAGE_USAGE,samples:Byte);
-  Procedure  AddDepthAt(id:TVkUInt32;format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
+  Procedure  AddColorAt(id:TVkUInt32;aformat:TVkFormat;IMAGE_USAGE,asamples:Byte);
+  Procedure  AddDepthAt(id:TVkUInt32;aformat:TVkFormat;DEPTH_USAGE,STENCIL_USAGE,asamples:Byte);
  end;
 
  TvRenderPass2=class(TvRenderPass)
@@ -95,8 +95,23 @@ var
  am:TVkAccessFlags;
 begin
  if (RefCount>7) then Exit;
- ColorRef[RefCount].attachment:=id;
- ColorRef[RefCount].layout    :=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL{VK_IMAGE_LAYOUT_GENERAL};
+
+ if (id<>VK_ATTACHMENT_UNUSED) then
+ begin
+  with ColorRef[RefCount] do
+  begin
+   attachment:=id;
+   layout:=GetColorSendLayout(IMAGE_USAGE);
+  end;
+ end else
+ begin
+  with ColorRef[RefCount] do
+  begin
+   attachment:=VK_ATTACHMENT_UNUSED;
+   layout:=VK_IMAGE_LAYOUT_UNDEFINED;
+  end;
+ end;
+
  Inc(RefCount);
 
  if (id<>VK_ATTACHMENT_UNUSED) then
@@ -104,7 +119,7 @@ begin
   Dependency.srcStageMask :=Dependency.srcStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
   Dependency.dstStageMask :=Dependency.dstStageMask or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  am:=GetColorAccessMask(IMAGE_USAGE);
+  am:=GetColorAccessAttachMask(IMAGE_USAGE);
 
   Dependency.srcAccessMask:=Dependency.srcAccessMask or am;
   Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
@@ -120,71 +135,92 @@ begin
  DepthRef.attachment:=id;
  DepthRef.layout    :=GetDepthStencilSendLayout(DEPTH_USAGE,STENCIL_USAGE);
 
- am:=GetDepthStencilAccessMask(DEPTH_USAGE,STENCIL_USAGE);
+ am:=GetDepthStencilAccessAttachMask(DEPTH_USAGE,STENCIL_USAGE);
 
  Dependency.srcAccessMask:=Dependency.srcAccessMask or am;
  Dependency.dstAccessMask:=Dependency.dstAccessMask or am;
 end;
 
-Procedure TvRenderPassKey.AddColorAt(id:TVkUInt32;format:TVkFormat;IMAGE_USAGE,samples:Byte);
+Procedure TvRenderPassKey.AddColorAt(id:TVkUInt32;aformat:TVkFormat;IMAGE_USAGE,asamples:Byte);
 begin
  if (AtdCount>8) then Exit;
 
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
- ColorAtd[AtdCount].format :=format;
- ColorAtd[AtdCount].samples:=TVkSampleCountFlagBits(samples);
 
  With ColorAtd[AtdCount] do
-  if ((IMAGE_USAGE and TM_CLEAR)<>0) then
-  begin
-   loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
-  end else
-  if ((IMAGE_USAGE and TM_READ)<>0) then
-  begin
-   loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
-  end else
-  begin
-   loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-  end;
+ begin
+  format :=aformat;
+  samples:=TVkSampleCountFlagBits(asamples);
 
- With ColorAtd[AtdCount] do
-  if ((IMAGE_USAGE and TM_WRITE)<>0) then
+  stencilLoadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+ end;
+
+ if (id<>VK_ATTACHMENT_UNUSED) then
+ begin
+  With ColorAtd[AtdCount] do
+   if ((IMAGE_USAGE and TM_CLEAR)<>0) then
+   begin
+    loadOp:=VK_ATTACHMENT_LOAD_OP_CLEAR;
+   end else
+   if ((IMAGE_USAGE and TM_READ)<>0) then
+   begin
+    loadOp:=VK_ATTACHMENT_LOAD_OP_LOAD;
+   end else
+   begin
+    loadOp:=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+   end;
+
+  With ColorAtd[AtdCount] do
+   if ((IMAGE_USAGE and TM_WRITE)<>0) then
+   begin
+    storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
+   end else
+   begin
+    storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
+   end;
+
+  With ColorAtd[AtdCount] do
+   if ((IMAGE_USAGE and TM_READ)<>0) then
+   begin
+    initialLayout:=GetColorSendLayout(IMAGE_USAGE);
+   end else
+   begin
+    initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+   end;
+
+  With ColorAtd[AtdCount] do
+   begin
+    finalLayout:=GetColorSendLayout(IMAGE_USAGE);
+   end;
+ end else
+ begin
+  With ColorAtd[AtdCount] do
   begin
-   storeOp:=VK_ATTACHMENT_STORE_OP_STORE;
-  end else
-  begin
+   loadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
    storeOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  end;
 
- ColorAtd[AtdCount].stencilLoadOp :=VK_ATTACHMENT_LOAD_OP_DONT_CARE;
- ColorAtd[AtdCount].stencilStoreOp:=VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
- With ColorAtd[AtdCount] do
-  if ((IMAGE_USAGE and TM_READ)<>0) then
-  begin
-   initialLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  end else
-  begin
    initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+   finalLayout  :=VK_IMAGE_LAYOUT_UNDEFINED;
   end;
-
- With ColorAtd[AtdCount] do
-  begin
-   finalLayout:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  end;
+ end;
 
  Inc(AtdCount);
 
  _AddColorRef(id,IMAGE_USAGE);
 end;
 
-Procedure TvRenderPassKey.AddDepthAt(id:TVkUInt32;format:TVkFormat;DEPTH_USAGE,STENCIL_USAGE:Byte);
+Procedure TvRenderPassKey.AddDepthAt(id:TVkUInt32;aformat:TVkFormat;DEPTH_USAGE,STENCIL_USAGE,asamples:Byte);
 begin
  if (AtdCount>8) then Exit;
 
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
- ColorAtd[AtdCount].format :=format;
- ColorAtd[AtdCount].samples:=VK_SAMPLE_COUNT_1_BIT;
+
+ With ColorAtd[AtdCount] do
+ begin
+  format :=aformat;
+  samples:=TVkSampleCountFlagBits(asamples);
+ end;
 
  With ColorAtd[AtdCount] do
   if ((DEPTH_USAGE and TM_CLEAR)<>0) then

@@ -687,12 +687,76 @@ end;
 
 //
 
+function GetMixedFlag(const curr:t_pm4_usage):Byte;
+begin
+ if (PopCnt(DWORD(curr.img_usage))>1) then
+ begin
+  Result:=TM_MIXED;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
+function GetImageLayout(const curr:t_pm4_usage):TVkImageLayout;
+begin
+ if (PopCnt(DWORD(curr.img_usage))>1) then
+ begin
+  Result:=VK_IMAGE_LAYOUT_GENERAL;
+ end else
+ case t_image_usage(BsfDWord(DWORD(curr.img_usage))) of
+  iu_attachment:
+   begin
+    Result:=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+   end;
+  iu_depthstenc:
+   begin
+    if ((curr.shd_usage and (TM_WRITE or TM_CLEAR))<>0) then
+    begin
+     Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    end else
+    begin
+     Result:=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    end;
+   end;
+  iu_sampled,
+  iu_storage:
+   begin
+    if ((curr.shd_usage and (TM_WRITE or TM_CLEAR))<>0) then
+    begin
+     Result:=VK_IMAGE_LAYOUT_GENERAL;
+    end else
+    begin
+     Result:=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    end;
+   end;
+  else
+   Result:=VK_IMAGE_LAYOUT_UNDEFINED;
+ end;
+end;
+
+function ConvertRW(IMAGE_USAGE:Byte;R,W:TVkAccessFlagBits):TVkAccessFlags; inline;
+begin
+ Result:=(ord(R)*ord((IMAGE_USAGE and TM_READ               )<>0) ) or
+         (ord(W)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
+end;
+
+function GetAccessMask(const curr:t_pm4_usage):TVkAccessFlags;
+begin
+ Result:=
+  ConvertRW(curr.shd_usage,VK_ACCESS_SHADER_READ_BIT                  ,VK_ACCESS_SHADER_WRITE_BIT                  ) or
+  ConvertRW(curr.clr_usage,VK_ACCESS_COLOR_ATTACHMENT_READ_BIT        ,VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT        ) or
+  ConvertRW(curr.dsa_usage,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+end;
+
 procedure Prepare_Uniforms(var ctx:t_me_render_context;
                            var UniformBuilder:TvUniformBuilder);
 var
  i:Integer;
 
  ri:TvImage2;
+
+ resource_instance:p_pm4_resource_instance;
 begin
  //Writeln('[Prepare_Uniforms]->');
 
@@ -702,23 +766,30 @@ begin
   With UniformBuilder.FImages[i] do
   begin
 
-   ri:=FetchImage(ctx.Cmd,
-                  FImage,
-                  [iu_sampled]
-                 );
+   resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
+
+   Assert(resource_instance<>nil);
+
+   ri:=TvImage2(resource_instance^.resource^.rimage);
+
+   if (ri=nil) then
+   begin
+    ri:=FetchImage(ctx.Cmd,
+                   FImage,
+                   {[iu_sampled]} resource_instance^.curr.img_usage
+                  );
+
+    resource_instance^.resource^.rimage:=ri;
+   end;
 
    //Writeln(ri.key.cformat);
 
    pm4_load_from(ctx.Cmd,ri,TM_READ);
 
-   begin
-
-    ri.PushBarrier(ctx.Cmd,
-                   ord(VK_ACCESS_SHADER_READ_BIT),
-                   VK_IMAGE_LAYOUT_GENERAL,
-                   ord(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT) or
-                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) );
-   end;
+   ri.PushBarrier(ctx.Cmd,
+                  GetAccessMask(resource_instance^.curr),
+                  GetImageLayout(resource_instance^.curr),
+                  ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
   end;
  end;
@@ -733,8 +804,7 @@ end;
 
 procedure Bind_Uniforms(var ctx:t_me_render_context;
                         BindPoint:TVkPipelineBindPoint;
-                        var UniformBuilder:TvUniformBuilder;
-                        ShaderGroup:TvShaderGroup);
+                        var UniformBuilder:TvUniformBuilder);
 
 var
  i:Integer;
@@ -764,24 +834,24 @@ begin
 
    resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
 
-   if (resource_instance<>nil) then
-   begin
-    Writeln('ri:curr:',HexStr(resource_instance^.curr.mem_usage,1),
-              ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
-              ' next:',HexStr(resource_instance^.next.mem_usage,1)
-           );
-   end;
+   Assert(resource_instance<>nil);
 
+   ri:=TvImage2(resource_instance^.resource^.rimage);
+
+   Assert(ri<>nil);
+
+   {
    ri:=FetchImage(ctx.Cmd,
                   FImage,
                   [iu_sampled]
                  );
+   }
 
    iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
    DescriptorGroup.BindImage(fset,bind,
                              iv.FHandle,
-                             VK_IMAGE_LAYOUT_GENERAL);
+                             GetImageLayout(resource_instance^.curr));
 
 
   end;
@@ -811,6 +881,7 @@ begin
 
    resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
 
+   {
    if (resource_instance<>nil) then
    begin
 
@@ -820,6 +891,7 @@ begin
            );
 
    end;
+   }
 
    buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 
@@ -914,12 +986,14 @@ begin
 
    //
 
-   Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
+   //Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
 
    ri:=FetchImage(ctx.Cmd,
                   resource^.rkey,
                   i^.curr.img_usage + i^.next.img_usage
                  );
+
+   resource^.rimage:=ri;
 
    pm4_load_from(ctx.Cmd,ri,i^.curr.mem_usage);
   end else
@@ -954,12 +1028,6 @@ begin
                 rt_info.DB_INFO.FImageInfo,
                 [iu_depthstenc]
                 );
- {
- ri.PushBarrier(CmdBuffer,
-                ord(VK_ACCESS_TRANSFER_READ_BIT),
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
- }
 
  ri.PushBarrier(CmdBuffer,
                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
@@ -1021,7 +1089,9 @@ var
  ri:TvImage2;
  iv:TvImageView2;
 
- resource_instance:p_pm4_resource_instance;
+ color_instance:array[0..7] of p_pm4_resource_instance;
+
+ htile_instance:p_pm4_resource_instance;
 begin
  RP_KEY.Clear;
 
@@ -1029,9 +1099,16 @@ begin
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
 
+   color_instance[i]:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
+
+   Assert(color_instance[i]<>nil);
+
+   //TODO: fixup cformat
+
    RP_KEY.AddColorAt(ctx.rt_info^.RT_INFO[i].attachment,
                      ctx.rt_info^.RT_INFO[i].FImageInfo.cformat,
-                     ctx.rt_info^.RT_INFO[i].IMAGE_USAGE,
+                     ctx.rt_info^.RT_INFO[i].IMAGE_USAGE or
+                     GetMixedFlag(color_instance[i]^.curr),
                      ctx.rt_info^.RT_INFO[i].FImageInfo.params.samples);
 
   end;
@@ -1042,27 +1119,29 @@ begin
   //set clear flag on cleared htile
   if (ctx.rt_info^.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin
-   resource_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.KEY.Addr,
+   htile_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.KEY.Addr,
                                                                    ctx.rt_info^.DB_INFO.HTILE_INFO.SIZE);
+   Assert(htile_instance<>nil);
 
-   Assert(resource_instance<>nil);
-
-   if resource_instance^.resource^.rclear then
+   if htile_instance^.resource^.rclear then
    begin
     //clear TM_READ
     ctx.rt_info^.DB_INFO.DEPTH_USAGE:=ctx.rt_info^.DB_INFO.DEPTH_USAGE and (not TM_READ);
     //set   TM_CLEAR
     ctx.rt_info^.DB_INFO.DEPTH_USAGE:=ctx.rt_info^.DB_INFO.DEPTH_USAGE or TM_CLEAR;
 
-    resource_instance^.resource^.rclear:=False;
+    htile_instance^.resource^.rclear:=False;
    end;
 
   end;
 
+  //TODO: fixup cformat
+
   RP_KEY.AddDepthAt(ctx.rt_info^.RT_COUNT, //add to last attachment id
                     ctx.rt_info^.DB_INFO.FImageInfo.cformat,
                     ctx.rt_info^.DB_INFO.DEPTH_USAGE,
-                    ctx.rt_info^.DB_INFO.STENCIL_USAGE);
+                    ctx.rt_info^.DB_INFO.STENCIL_USAGE,
+                    ctx.rt_info^.DB_INFO.FImageInfo.params.samples);
 
   RP_KEY.SetZorderStage(ctx.rt_info^.DB_INFO.zorder_stage);
 
@@ -1129,11 +1208,15 @@ begin
   if (ctx.rt_info^.RT_COUNT<>0) then
   For i:=0 to ctx.rt_info^.RT_COUNT-1 do
    begin
+    //TODO: fixup cformat
+
     FB_KEY.AddImageAt(ctx.rt_info^.RT_INFO[i].FImageInfo);
    end;
 
   if ctx.rt_info^.DB_ENABLE then
   begin
+   //TODO: fixup cformat
+
    FB_KEY.AddImageAt(ctx.rt_info^.DB_INFO.FImageInfo);
   end;
  end else
@@ -1159,39 +1242,31 @@ begin
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
 
-   resource_instance:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
+   ri:=TvImage2(color_instance[i]^.resource^.rimage);
 
-   if (resource_instance<>nil) then
+   if (ri=nil) then
    begin
-    Writeln('ra:curr:',HexStr(resource_instance^.curr.mem_usage,1),
-              ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
-              ' next:',HexStr(resource_instance^.next.mem_usage,1)
-           );
+    ri:=FetchImage(ctx.Cmd,
+                   ctx.rt_info^.RT_INFO[i].FImageInfo,
+                   {[iu_attachment]}  color_instance[i]^.curr.img_usage
+                   );
+
+    color_instance[i]^.resource^.rimage:=ri;
    end;
-
-   ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
-
-   ri:=FetchImage(ctx.Cmd,
-                  ctx.rt_info^.RT_INFO[i].FImageInfo,
-                  [iu_attachment]
-                  );
 
    pm4_load_from(ctx.Cmd,ri,ctx.rt_info^.RT_INFO[i].IMAGE_USAGE);
 
    iv:=ri.FetchView(ctx.Cmd,ctx.rt_info^.RT_INFO[i].FImageView,iu_attachment);
 
-   {
-   ri.PushBarrier(CmdBuffer,
-                  ord(VK_ACCESS_TRANSFER_READ_BIT),
-                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-   }
-
    ri.PushBarrier(ctx.Cmd,
-                  GetColorAccessMask(ctx.rt_info^.RT_INFO[i].IMAGE_USAGE),
-                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL {VK_IMAGE_LAYOUT_GENERAL},
+                  GetAccessMask(color_instance[i]^.curr),
+                  GetImageLayout(color_instance[i]^.curr),
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+
+   //
+
+   ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
 
    //
    if limits.VK_KHR_imageless_framebuffer then
@@ -1208,8 +1283,9 @@ begin
  if ctx.rt_info^.DB_ENABLE then
  begin
 
-  resource_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly(ctx.rt_info^.DB_INFO.FImageInfo));
+  //resource_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
+  {
   if (resource_instance<>nil) then
   begin
    Writeln('rd:curr:',HexStr(resource_instance^.curr.mem_usage,1),
@@ -1217,9 +1293,11 @@ begin
              ' next:',HexStr(resource_instance^.next.mem_usage,1)
           );
   end;
+  }
 
-  resource_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
+  //resource_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
+  {
   if (resource_instance<>nil) then
   begin
    Writeln('rs:curr:',HexStr(resource_instance^.curr.mem_usage,1),
@@ -1227,6 +1305,7 @@ begin
              ' next:',HexStr(resource_instance^.next.mem_usage,1)
           );
   end;
+  }
 
   //
 
@@ -1242,15 +1321,8 @@ begin
 
   iv:=ri.FetchView(ctx.Cmd,iu_depthstenc);
 
-  {
-  ri.PushBarrier(CmdBuffer,
-                 ord(VK_ACCESS_TRANSFER_READ_BIT),
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
-  }
-
   ri.PushBarrier(ctx.Cmd,
-                 GetDepthStencilAccessMask(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
+                 GetDepthStencilAccessAttachMask(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
                  GetDepthStencilSendLayout(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                  ctx.rt_info^.DB_INFO.zorder_stage
@@ -1295,8 +1367,7 @@ begin
 
  Bind_Uniforms(ctx,
                BP_GRAPHICS,
-               FUniformBuilder,
-               ctx.rt_info^.ShaderGroup);
+               FUniformBuilder);
 
  Bind_Pushs(ctx,ctx.rt_info^.ShaderGroup,@ctx.rt_info^.USERDATA);
 
@@ -1318,15 +1389,16 @@ begin
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   if (ctx.rt_info^.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
   begin
-   ri:=FetchImage(ctx.Cmd,
-                  ctx.rt_info^.RT_INFO[i].FImageInfo,
-                  [iu_attachment]
-                  );
-
-   ri.mark_init;
 
    resource_instance:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
+
    Assert(resource_instance<>nil);
+
+   ri:=TvImage2(resource_instance^.resource^.rimage);
+
+   Assert(ri<>nil);
+
+   ri.mark_init;
 
    if (resource_instance^.next_overlap.mem_usage<>0) then
    begin
@@ -1422,9 +1494,10 @@ begin
    if (resource^.rtype=R_IMG) then
    begin
 
-    ri:=FetchImage(ctx.Cmd,
-                   resource^.rkey,
-                   []);
+    ri:=TvImage2(resource^.rimage);
+
+    Assert(ri<>nil);
+
     //
     pm4_write_back(ctx.Cmd,ri);
     //
@@ -1656,8 +1729,7 @@ begin
 
  Bind_Uniforms(ctx,
                BP_COMPUTE,
-               FUniformBuilder,
-               CP_KEY.FShaderGroup);
+               FUniformBuilder);
 
  Bind_Pushs(ctx,CP_KEY.FShaderGroup,dst);
 

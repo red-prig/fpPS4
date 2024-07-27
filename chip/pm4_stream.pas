@@ -130,10 +130,17 @@ const
  R_HTILE=2;
 
 type
- t_pm4_usage=record
-  mem_usage:Integer;
-  img_usage:s_image_usage;
+ t_pm4_usage=packed record
+  case Byte of
+   0:(DATA:QWORD);
+   1:(mem_usage:Byte;
+      shd_usage:Byte;
+      clr_usage:Byte;
+      dsa_usage:Byte;
+      img_usage:s_image_usage
+     );
  end;
+ {$IF sizeof(s_image_usage)<>4}{$STOP sizeof(s_image_usage)<>4}{$ENDIF}
 
 operator + (a,b:t_pm4_usage):t_pm4_usage;
 
@@ -159,6 +166,8 @@ type
   rtype :Integer;
   rsize :DWORD;
   rkey  :TvImageKey;
+  //
+  rimage:TObject;
   //
   rclear    :Boolean;
   rwriteback:Boolean;
@@ -399,10 +408,10 @@ var
 
 //
 
-operator + (a,b:t_pm4_usage):t_pm4_usage;
+operator + (a,b:t_pm4_usage):t_pm4_usage; inline;
 begin
- Result.mem_usage:=a.mem_usage or b.mem_usage;
- Result.img_usage:=b.img_usage +  b.img_usage;
+ //hack
+ Result.DATA:=a.DATA or b.DATA;
 end;
 
 //
@@ -633,6 +642,8 @@ begin
 end;
 
 function t_pm4_resource_stream_scope.fetch_resource_instance(scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
+var
+ curr:t_pm4_usage;
 begin
  Result:=scope^.find_resource_instance(r);
 
@@ -642,14 +653,29 @@ begin
   Result^:=Default(t_pm4_resource_instance);
   //
   Result^.resource:=r;
-  Result^.curr.mem_usage:=mem_usage;
-  Result^.curr.img_usage:=img_usage;
- end else
- begin
-  Result^.curr.mem_usage:=Result^.curr.mem_usage or mem_usage;
-  Result^.curr.img_usage:=Result^.curr.img_usage +  img_usage;
  end;
 
+ curr.mem_usage:=mem_usage;
+ curr.shd_usage:=0;
+ curr.clr_usage:=0;
+ curr.dsa_usage:=0;
+
+ if ([iu_sampled,iu_storage]*img_usage<>[]) then
+ begin
+  curr.shd_usage:=mem_usage;
+ end;
+
+ if (iu_attachment in img_usage) then
+ begin
+  curr.clr_usage:=mem_usage;
+ end;
+
+ if (iu_depthstenc in img_usage) then
+ begin
+  curr.dsa_usage:=mem_usage;
+ end;
+
+ Result^.curr:=Result^.curr + curr;
 end;
 
 function t_pm4_resource_stream_scope.insert_image_resource(scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
