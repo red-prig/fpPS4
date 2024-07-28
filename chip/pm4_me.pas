@@ -1087,11 +1087,15 @@ var
  FB:TvFramebuffer;
 
  ri:TvImage2;
+ rd:TvCustomImage2;
+ rs:TvCustomImage2;
  iv:TvImageView2;
 
  color_instance:array[0..7] of p_pm4_resource_instance;
 
  htile_instance:p_pm4_resource_instance;
+ d_instance:p_pm4_resource_instance;
+ s_instance:p_pm4_resource_instance;
 begin
  RP_KEY.Clear;
 
@@ -1282,42 +1286,68 @@ begin
 
  if ctx.rt_info^.DB_ENABLE then
  begin
+  d_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly  (ctx.rt_info^.DB_INFO.FImageInfo));
+  s_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
-  //resource_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly(ctx.rt_info^.DB_INFO.FImageInfo));
+  ri:=nil;
+  rd:=nil;
+  rs:=nil;
 
-  {
-  if (resource_instance<>nil) then
+  if (d_instance<>nil) then
   begin
-   Writeln('rd:curr:',HexStr(resource_instance^.curr.mem_usage,1),
-             ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
-             ' next:',HexStr(resource_instance^.next.mem_usage,1)
-          );
+   rd:=TvCustomImage2(d_instance^.resource^.rimage);
   end;
-  }
 
-  //resource_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
-
-  {
-  if (resource_instance<>nil) then
+  if (s_instance<>nil) then
   begin
-   Writeln('rs:curr:',HexStr(resource_instance^.curr.mem_usage,1),
-             ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
-             ' next:',HexStr(resource_instance^.next.mem_usage,1)
-          );
+   rs:=TvCustomImage2(s_instance^.resource^.rimage);
   end;
-  }
+
+  if (rd<>nil) then
+  begin
+   ri:=TvImage2(rd.Parent);
+  end else
+  if (rs<>nil) then
+  begin
+   ri:=TvImage2(rs.Parent);
+  end;
+
+  if (ri<>nil) then
+  if (ri.DepthOnly  <>rd) or
+     (ri.StencilOnly<>rs) then
+  begin
+   ri:=nil;
+   rd:=nil;
+   rs:=nil;
+  end;
 
   //
 
-  ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
+  if (ri=nil) then
+  begin
+   ri:=FetchImage(ctx.Cmd,
+                  ctx.rt_info^.DB_INFO.FImageInfo,
+                  [iu_depthstenc]
+                  );
 
-  ri:=FetchImage(ctx.Cmd,
-                 ctx.rt_info^.DB_INFO.FImageInfo,
-                 [iu_depthstenc]
-                 );
+   rd:=ri.DepthOnly;
+   rs:=ri.StencilOnly;
 
-  pm4_load_from(ctx.Cmd,ri.DepthOnly  ,ctx.rt_info^.DB_INFO.DEPTH_USAGE);
-  pm4_load_from(ctx.Cmd,ri.StencilOnly,ctx.rt_info^.DB_INFO.STENCIL_USAGE);
+   if (d_instance<>nil) then
+   begin
+    d_instance^.resource^.rimage:=rd;
+   end;
+
+   if (s_instance<>nil) then
+   begin
+    s_instance^.resource^.rimage:=rs;
+   end;
+  end;
+
+  //
+
+  pm4_load_from(ctx.Cmd,rd,ctx.rt_info^.DB_INFO.DEPTH_USAGE);
+  pm4_load_from(ctx.Cmd,rs,ctx.rt_info^.DB_INFO.STENCIL_USAGE);
 
   iv:=ri.FetchView(ctx.Cmd,iu_depthstenc);
 
@@ -1327,6 +1357,10 @@ begin
                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                  ctx.rt_info^.DB_INFO.zorder_stage
                  );
+
+  //
+
+  ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
 
   //
   if limits.VK_KHR_imageless_framebuffer then
@@ -1382,6 +1416,9 @@ var
  rs:TvCustomImage2;
 
  resource_instance:p_pm4_resource_instance;
+
+ d_instance:p_pm4_resource_instance;
+ s_instance:p_pm4_resource_instance;
 begin
  //write back
 
@@ -1416,52 +1453,59 @@ begin
  if ctx.rt_info^.DB_ENABLE then
  begin
 
-  ri:=FetchImage(ctx.Cmd,
-                 ctx.rt_info^.DB_INFO.FImageInfo,
-                 [iu_depthstenc]
-                 );
+  d_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly  (ctx.rt_info^.DB_INFO.FImageInfo));
+  s_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 
-  rd:=ri.DepthOnly;
-  rs:=ri.StencilOnly;
+  ri:=nil;
+  rd:=nil;
+  rs:=nil;
+
+  if (d_instance<>nil) then
+  begin
+   rd:=TvCustomImage2(d_instance^.resource^.rimage);
+  end;
+
+  if (s_instance<>nil) then
+  begin
+   rs:=TvCustomImage2(s_instance^.resource^.rimage);
+  end;
 
   if (rd<>nil) then
   begin
    rd.mark_init;
 
-   resource_instance:=ctx.node^.scope.find_image_resource_instance(rd.key);
-   Assert(resource_instance<>nil);
+   Assert(d_instance<>nil);
 
-   if (resource_instance^.next_overlap.mem_usage<>0) then
+   if (d_instance^.next_overlap.mem_usage<>0) then
    begin
     pm4_write_back(ctx.Cmd,rd);
     //
-    resource_instance^.resource^.rwriteback:=False;
+    d_instance^.resource^.rwriteback:=False;
    end else
    begin
     //
-    resource_instance^.resource^.rwriteback:=True;
+    d_instance^.resource^.rwriteback:=True;
    end;
 
   end;
 
-
+  //
 
   if (rs<>nil) then
   begin
    rs.mark_init;
 
-   resource_instance:=ctx.node^.scope.find_image_resource_instance(rs.key);
-   Assert(resource_instance<>nil);
+   Assert(s_instance<>nil);
 
-   if (resource_instance^.next_overlap.mem_usage<>0) then
+   if (s_instance^.next_overlap.mem_usage<>0) then
    begin
     pm4_write_back(ctx.Cmd,rs);
     //
-    resource_instance^.resource^.rwriteback:=False;
+    s_instance^.resource^.rwriteback:=False;
    end else
    begin
     //
-    resource_instance^.resource^.rwriteback:=True;
+    s_instance^.resource^.rwriteback:=True;
    end;
 
   end;

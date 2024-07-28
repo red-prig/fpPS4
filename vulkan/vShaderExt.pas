@@ -765,7 +765,7 @@ begin
 
       if not get_dmem_ptr(pData,@pData,nil) then
       begin
-       Assert(false,'vtBufPtr2:get_dmem_ptr');
+       Assert(false,'vtBufPtr2:get_dmem_ptr($'+HexStr(pData)+')');
       end;
 
       pSharp:=pData;
@@ -776,7 +776,7 @@ begin
 
       if not get_dmem_ptr(pData,@pData,nil) then
       begin
-       Assert(false,'vtFunPtr2:get_dmem_ptr');
+       Assert(false,'vtFunPtr2:get_dmem_ptr($'+HexStr(pData)+')');
       end;
 
       pSharp:=pData;
@@ -788,7 +788,7 @@ begin
 
       if not get_dmem_ptr(pData,@pData,nil) then
       begin
-       Assert(false,'vtVSharp4:get_dmem_ptr');
+       Assert(false,'vtVSharp4:get_dmem_ptr($'+HexStr(pData)+')');
       end;
 
      end;
@@ -805,7 +805,7 @@ begin
 
       if not get_dmem_ptr(pData,@pData,nil) then
       begin
-       Assert(false,'vtTSharp:get_dmem_ptr');
+       Assert(false,'vtTSharp:get_dmem_ptr($'+HexStr(pData)+')');
       end;
 
      end;
