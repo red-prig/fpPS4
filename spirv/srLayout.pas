@@ -154,9 +154,13 @@ type
 
  PsrDataImm=^TsrDataImm;
  TsrDataImm=object
-  FImmSize  :PtrUint;
-  FImmOffset:PtrUint;
-  data      :record end;
+  var
+   pLeft,pRight:PsrDataImm;
+   //----
+   FImmSize  :PtrUint;
+   FImmOffset:PtrUint;
+   pData     :PDWORD;
+  function c(a,b:PsrDataImm):Integer; static;
   function GetStringDword(i:PtrUint):RawByteString;
  end;
 
@@ -164,10 +168,12 @@ type
  TsrDataLayoutList=object
   type
    TNodeFetch=specialize TNodeFetch<PsrDataLayout,TsrDataLayout>;
+   TDataImmFetch=specialize TNodeFetch<PsrDataImm,TsrDataImm>;
   var
    FTop:TsrDataLayout;
    FNTree:TNodeFetch;
    FImmOffset:PtrUint;
+   FImmData:TDataImmFetch;
   procedure Init(Emit:TCustomEmit);
   procedure SetUserData(pData:Pointer);
   function  pRoot:PsrDataLayout;
@@ -175,6 +181,7 @@ type
   Function  First:PsrDataLayout;
   Function  Next(node:PsrDataLayout):PsrDataLayout;
   function  Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
+  function  FetchImmData(size:Integer;pData:Pointer):PsrDataImm;
   function  FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
   function  EnumChain(cb:TChainCb):Integer;
   Procedure AllocID;
@@ -405,7 +412,7 @@ begin
    rtVSharp4:Result:={%H-}Pointer(PVSharpResource4(pData)^.base);
    rtTSharp4,
    rtTSharp8:Result:={%H-}Pointer(PTSharpResource4(pData)^.base shl 8);
-   rtImmData:Result:=@PsrDataImm(pData)^.data;
+   rtImmData:Result:=PsrDataImm(pData)^.pData;
    else;
   end;
 end;
@@ -463,9 +470,18 @@ begin
          ';LEN='+HexStr(LEN,8);
 end;
 
+function TsrDataImm.c(a,b:PsrDataImm):Integer;
+begin
+ //first size
+ Result:=Integer(a^.FImmSize>b^.FImmSize)-Integer(a^.FImmSize<b^.FImmSize);
+ if (Result<>0) then Exit;
+ //second data
+ Result:=CompareByte(a^.pData^,b^.pData^,a^.FImmSize);
+end;
+
 function TsrDataImm.GetStringDword(i:PtrUint):RawByteString;
 begin
- Result:='!D;'+HexStr(PDWORD(@data)[i],8);
+ Result:='!D;'+HexStr(pData[i],8);
 end;
 
 procedure TsrDataLayoutList.Init(Emit:TCustomEmit);
@@ -563,25 +579,46 @@ begin
  Result:=Fetch(parent,chain[0]^.offset,rtype,parent^.GetData);
 end;
 
+function TsrDataLayoutList.FetchImmData(size:Integer;pData:Pointer):PsrDataImm;
+var
+ node:TsrDataImm;
+ dst :PsrDataImm;
+begin
+ node:=Default(TsrDataImm);
+ node.FImmSize:=size;
+ node.pData   :=pData;
+
+ dst:=FImmData.Find(@node);
+ if (dst=nil) then
+ begin
+  dst:=FTop.FEmit.Alloc(SizeOf(TsrDataImm)+size);
+
+  dst^.FImmSize  :=size;
+  dst^.FImmOffset:=FImmOffset;
+  dst^.pData     :=Pointer(dst+1);
+
+  Move(pData^,dst^.pData^,size);
+
+  FImmData.Insert(dst);
+
+  FImmOffset:=FImmOffset+size;
+ end;
+
+ Result:=dst;
+end;
+
 function TsrDataLayoutList.FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
 var
  parent:PsrDataLayout;
- dst:PsrDataImm;
+ dst :PsrDataImm;
  size:Integer;
 begin
  Result:=nil;
  size:=GetResourceSizeDw(rtype)*SizeOf(DWORD);
 
- dst:=FTop.FEmit.Alloc(SizeOf(TsrDataImm)+size);
- 
- dst^.FImmSize  :=size;
- dst^.FImmOffset:=FImmOffset;
+ dst:=FetchImmData(size,pData);
 
- Move(pData^,dst^.data,size);
-
- parent:=Fetch(pRoot,FImmOffset,rtImmData,dst);
-
- FImmOffset:=FImmOffset+size;
+ parent:=Fetch(pRoot,dst^.FImmOffset,rtImmData,dst);
 
  Result:=Fetch(parent,0,rtype,parent^.GetData);
 end;
