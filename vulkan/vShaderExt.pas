@@ -22,6 +22,7 @@ uses
 type
  TvResourceType=(
   vtRoot,
+  vtImmData,
   vtBufPtr2,
   vtFunPtr2,
   vtVSharp4,
@@ -51,7 +52,7 @@ type
 
  ACustomLayout=array of TvCustomLayout;
 
- TvCustomLayoutCb=procedure(const L:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD) of object;
+ TvCustomLayoutCb=procedure(const L:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD) of object;
 
  TShaderFuncKey=packed object
   FLen :Ptruint;
@@ -67,6 +68,7 @@ type
   procedure OnDescriptorSet(var Target,id:DWORD); override;
   procedure OnSourceExtension(P:PChar);           override;
   procedure OnDataLayout(P:PChar);
+  procedure OnIExtLayout(P:PChar);
   procedure OnVertLayout(P:PChar);
   procedure OnBuffLayout(P:PChar);
   procedure OnUnifLayout(P:PChar);
@@ -93,6 +95,8 @@ type
 
   FShaderFuncs:AShaderFuncKey;
 
+  FImmData:array of DWORD;
+
   FParams:record
    VGPR_COMP_CNT:Byte;
    //
@@ -114,14 +118,16 @@ type
   Procedure  EnumFuncLayout(cb:TvFuncCb);
   function   GetLayoutAddr(parent:DWORD):ADataLayout;
   Procedure  AddVertLayout(parent,bind:DWORD);
-  Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+  Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
   Procedure  AddBuffLayout(dtype:TVkDescriptorType;parent,bind,size,offset,flags:DWORD);
   Procedure  SetPushConst(parent,size:DWORD);
   Function   GetPushConstData(pUserData:Pointer):Pointer;
   Procedure  AddUnifLayout(dtype:TVkDescriptorType;parent,bind,flags:DWORD);
-  Procedure  EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+  Procedure  EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
   Procedure  AddFuncLayout(parent,size:DWORD);
-  Procedure  EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+  Procedure  EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
+  Procedure  AddImmData(D:DWORD);
+  function   GetImmData:PDWORD;
   procedure  FreeShaderFuncs;
   Procedure  PreloadShaderFuncs(pUserData:Pointer);
   Procedure  SetInstance       (VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
@@ -165,7 +171,7 @@ type
   Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
   Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
   Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
-  procedure AddAttr   (const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+  procedure AddAttr   (const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
  end;
 
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
@@ -222,13 +228,13 @@ type
   procedure NewAttrDesc(location,binding,offset:TVkUInt32;format:TVkFormat);
   procedure PatchAttr(binding,offset:TVkUInt32);
   Procedure AddVSharp(PV:PVSharpResource4;location:DWord);
-  procedure AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+  procedure AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
   Procedure Export2(var input:TvVertexInputEXT);
  end;
 
  TvBufOffsetChecker=object
   FResult:Boolean;
-  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
  end;
 
  TvFuncLayout=object
@@ -245,7 +251,7 @@ type
   Procedure ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;GPU_USERDATA:PGPU_USERDATA);
  end;
 
-function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
+function GetSharpByPatch(pUserData,pImmData:Pointer;const addr:ADataLayout):Pointer;
 
 implementation
 
@@ -310,6 +316,8 @@ begin
  FFuncLayouts:=Default(ACustomLayout);
 
  FPushConst:=Default(TvCustomLayout);
+
+ SetLength(FImmData,0);
 
  FreeShaderFuncs;
 end;
@@ -417,6 +425,7 @@ begin
  //Writeln(P);
  Case P^ of
   '#':OnDataLayout(P);
+  '!':OnIExtLayout(P);
   'V':OnVertLayout(P);
   'B':OnBuffLayout(P);
   'U':OnUnifLayout(P);
@@ -443,13 +452,25 @@ begin
  with TvShaderExt(FOwner) do
  Case P[1] of
   'R':AddDataLayout(vtRoot   ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
+  'D':AddDataLayout(vtImmData,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'B':AddDataLayout(vtBufPtr2,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'F':AddDataLayout(vtFunPtr2,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'V':AddDataLayout(vtVSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'S':AddDataLayout(vtSSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   't':AddDataLayout(vtTSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'T':AddDataLayout(vtTSharp8,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
-  else;
+  else
+   Assert(false,'TODO OnDataLayout:"'+P[1]+'"');
+ end;
+end;
+
+procedure TvShaderParserExt.OnIExtLayout(P:PChar);
+begin
+ with TvShaderExt(FOwner) do
+ Case P[1] of
+  'D':AddImmData(_get_hex_dword(@P[3]));
+  else
+   Assert(false,'TODO OnIExtLayout:"'+P[1]+'"');
  end;
 end;
 
@@ -505,7 +526,7 @@ begin
  end;
 end;
 
-Procedure TvShaderExt.EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+Procedure TvShaderExt.EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  i:Integer;
 begin
@@ -513,7 +534,7 @@ begin
  if (Length(FVertLayouts)=0) then Exit;
  For i:=0 to High(FVertLayouts) do
  begin
-  cb(FVertLayouts[i],Fset,FData);
+  cb(FVertLayouts[i],Fset,pUserData,pImmData);
  end;
 end;
 
@@ -579,7 +600,7 @@ begin
  Result:=nil;
  if (pUserData=nil) then Exit;
  if (FPushConst.size=0) then Exit;
- Result:=GetSharpByPatch(pUserData,FPushConst.addr);
+ Result:=GetSharpByPatch(pUserData,GetImmData,FPushConst.addr);
 
  if (Result=nil) then Exit;
 
@@ -626,7 +647,7 @@ begin
  end;
 end;
 
-Procedure TvShaderExt.EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+Procedure TvShaderExt.EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  i:Integer;
 begin
@@ -634,7 +655,7 @@ begin
  if (Length(FUnifLayouts)=0) then Exit;
  For i:=0 to High(FUnifLayouts) do
  begin
-  cb(FUnifLayouts[i],Fset,FData);
+  cb(FUnifLayouts[i],Fset,pUserData,pImmData);
  end;
 end;
 
@@ -658,7 +679,7 @@ begin
  end;
 end;
 
-Procedure TvShaderExt.EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;FData:PDWORD);
+Procedure TvShaderExt.EnumFuncLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  i:Integer;
 begin
@@ -666,8 +687,22 @@ begin
  if (Length(FFuncLayouts)=0) then Exit;
  For i:=0 to High(FFuncLayouts) do
  begin
-  cb(FFuncLayouts[i],Fset,FData);
+  cb(FFuncLayouts[i],Fset,pUserData,pImmData);
  end;
+end;
+
+Procedure TvShaderExt.AddImmData(D:DWORD);
+var
+ i:Integer;
+begin
+ i:=Length(FImmData);
+ SetLength(FImmData,i+1);
+ FImmData[i]:=D;
+end;
+
+function TvShaderExt.GetImmData:PDWORD;
+begin
+ Result:=@FImmData[0];
 end;
 
 procedure TvShaderExt.FreeShaderFuncs;
@@ -697,7 +732,7 @@ begin
  For i:=0 to High(FFuncLayouts) do
  begin
 
-  P:=GetSharpByPatch(pUserData,FFuncLayouts[i].addr);
+  P:=GetSharpByPatch(pUserData,GetImmData,FFuncLayouts[i].addr);
   if (P=nil) then
   begin
    FShaderFuncs[i]:=Default(TShaderFuncKey);
@@ -740,14 +775,16 @@ end;
 
 ///
 
-function GetSharpByPatch(pData:Pointer;const addr:ADataLayout):Pointer;
+function GetSharpByPatch(pUserData,pImmData:Pointer;const addr:ADataLayout):Pointer;
 var
  i:Integer;
+ pData :Pointer;
  pSharp:Pointer;
 begin
  Result:=nil;
  if (Length(addr)=0) then Exit;
 
+ pData :=pUserData;
  pSharp:=pData;
 
  For i:=High(addr) downto 0 do
@@ -757,6 +794,11 @@ begin
   Case addr[i].rtype of
    vtRoot:
      begin
+      pSharp:=pData;
+     end;
+   vtImmData:
+     begin
+      pData :=pImmData+addr[i].offset;
       pSharp:=pData;
      end;
    vtBufPtr2:
@@ -784,11 +826,15 @@ begin
    vtVSharp4:
      begin
       pSharp:=pData;
-      pData:=Pointer(PVSharpResource4(pData)^.base);
 
-      if not get_dmem_ptr(pData,@pData,nil) then
+      if (i<>0) then
       begin
-       Assert(false,'vtVSharp4:get_dmem_ptr($'+HexStr(pData)+')');
+       pData:=Pointer(PVSharpResource4(pData)^.base);
+
+       if not get_dmem_ptr(pData,@pData,nil) then
+       begin
+        Assert(false,'vtVSharp4:get_dmem_ptr($'+HexStr(pData)+')');
+       end;
       end;
 
      end;
@@ -801,16 +847,20 @@ begin
    vtTSharp8:
      begin
       pSharp:=pData;
-      pData:=Pointer(PTSharpResource4(pData)^.base shl 8);
 
-      if not get_dmem_ptr(pData,@pData,nil) then
+      if (i<>0) then
       begin
-       Assert(false,'vtTSharp:get_dmem_ptr($'+HexStr(pData)+')');
+       pData:=Pointer(PTSharpResource4(pData)^.base shl 8);
+
+       if not get_dmem_ptr(pData,@pData,nil) then
+       begin
+        Assert(false,'vtTSharp:get_dmem_ptr($'+HexStr(pData)+')');
+       end;
       end;
 
      end;
    else
-    Assert(false);
+    Assert(false,'GetSharpByPatch');
   end;
 
  end;
@@ -930,11 +980,11 @@ begin
 
 end;
 
-procedure TvAttrBuilder.AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+procedure TvAttrBuilder.AddAttr(const v:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  PV:PVSharpResource4;
 begin
- PV:=GetSharpByPatch(FData,v.addr);
+ PV:=GetSharpByPatch(pUserData,pImmData,v.addr);
  //print_vsharp(PV);
  AddVSharp(PV,v.bind);
 end;
@@ -1073,11 +1123,11 @@ begin
  FImages[i]:=b;
 end;
 
-procedure TvUniformBuilder.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+procedure TvUniformBuilder.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
 begin
- P:=GetSharpByPatch(FData,b.addr);
+ P:=GetSharpByPatch(pUserData,pImmData,b.addr);
  Assert(P<>nil);
  if (P=nil) then Exit;
 
@@ -1307,11 +1357,14 @@ end;
 Procedure TvShaderGroup.ExportAttrBuilder(var AttrBuilder:TvAttrBuilder;GPU_USERDATA:PGPU_USERDATA);
 var
  Shader:TvShaderExt;
+ pUserData,pImmData:PDWORD;
 begin
  Shader:=FKey.FShaders[vShaderStageVs];
  if (Shader<>nil) then
  begin
-  Shader.EnumVertLayout(@AttrBuilder.AddAttr,Shader.FDescSetId,GPU_USERDATA^.get_user_data(vShaderStageVs))
+  pUserData:=GPU_USERDATA^.get_user_data(vShaderStageVs);
+  pImmData :=Shader.GetImmData;
+  Shader.EnumVertLayout(@AttrBuilder.AddAttr,Shader.FDescSetId,pUserData,pImmData);
  end;
 end;
 
@@ -1319,27 +1372,28 @@ Procedure TvShaderGroup.ExportUnifBuilder(var UniformBuilder:TvUniformBuilder;GP
 var
  Shader:TvShaderExt;
  i:TvShaderStage;
- FData:PDWORD;
+ pUserData,pImmData:PDWORD;
 begin
  For i:=Low(TvShaderStage) to High(TvShaderStage) do
  begin
   Shader:=FKey.FShaders[i];
   if (Shader<>nil) then
   begin
-   FData:=GPU_USERDATA^.get_user_data(i);
-   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,FData);
+   pUserData:=GPU_USERDATA^.get_user_data(i);
+   pImmData :=Shader.GetImmData;
+   Shader.EnumUnifLayout(@UniformBuilder.AddAttr,Shader.FDescSetId,pUserData,pImmData);
   end;
  end;
 end;
 
-procedure TvBufOffsetChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;FData:PDWORD);
+procedure TvBufOffsetChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
  a:QWORD;
 begin
  if not FResult then Exit;
 
- P:=GetSharpByPatch(FData,b.addr);
+ P:=GetSharpByPatch(pUserData,pImmData,b.addr);
  if (P=nil) then Exit;
 
  Case TVkDescriptorType(b.dtype) of

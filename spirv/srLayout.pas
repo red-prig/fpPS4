@@ -24,6 +24,7 @@ uses
 type
  TsrResourceType=(
   rtRoot,
+  rtImmData,
   rtBufPtr2,
   rtFunPtr2,
   rtVSharp4,
@@ -130,10 +131,10 @@ type
    key:packed record
     parent:PsrDataLayout;
     offset:PtrUint;
-    rtype:TsrResourceType;
+    rtype :TsrResourceType;
    end;
    pData:Pointer;
-   FID:Integer;
+   FID  :Integer;
    FEmit:TCustomEmit;
    FList:TChainFetch;
   function c(n1,n2:PsrDataLayout):Integer; static;
@@ -151,6 +152,14 @@ type
   function GetFuncString(LEN:DWORD):RawByteString;
  end;
 
+ PsrDataImm=^TsrDataImm;
+ TsrDataImm=object
+  FImmSize  :PtrUint;
+  FImmOffset:PtrUint;
+  data      :record end;
+  function GetStringDword(i:PtrUint):RawByteString;
+ end;
+
  PsrDataLayoutList=^TsrDataLayoutList;
  TsrDataLayoutList=object
   type
@@ -158,17 +167,20 @@ type
   var
    FTop:TsrDataLayout;
    FNTree:TNodeFetch;
+   FImmOffset:PtrUint;
   procedure Init(Emit:TCustomEmit);
   procedure SetUserData(pData:Pointer);
   function  pRoot:PsrDataLayout;
-  function  Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType):PsrDataLayout;
+  function  Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):PsrDataLayout;
   Function  First:PsrDataLayout;
   Function  Next(node:PsrDataLayout):PsrDataLayout;
   function  Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
+  function  FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
   function  EnumChain(cb:TChainCb):Integer;
   Procedure AllocID;
   procedure AllocSourceExtension;
   procedure AllocFuncExt;
+  procedure AllocImmExt;
  end;
 
 //----
@@ -393,6 +405,7 @@ begin
    rtVSharp4:Result:={%H-}Pointer(PVSharpResource4(pData)^.base);
    rtTSharp4,
    rtTSharp8:Result:={%H-}Pointer(PTSharpResource4(pData)^.base shl 8);
+   rtImmData:Result:=@PsrDataImm(pData)^.data;
    else;
   end;
 end;
@@ -419,6 +432,7 @@ begin
  Result:=#0;
  case key.rtype of
   rtRoot   :Result:='R';
+  rtImmData:Result:='D';
   rtBufPtr2:Result:='B';
   rtFunPtr2:Result:='F';
   rtVSharp4:Result:='V';
@@ -449,6 +463,11 @@ begin
          ';LEN='+HexStr(LEN,8);
 end;
 
+function TsrDataImm.GetStringDword(i:PtrUint):RawByteString;
+begin
+ Result:='!D;'+HexStr(PDWORD(@data)[i],8);
+end;
+
 procedure TsrDataLayoutList.Init(Emit:TCustomEmit);
 begin
  FTop.FEmit:=Emit;
@@ -465,10 +484,9 @@ begin
  Result:=@FTop;
 end;
 
-function TsrDataLayoutList.Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType):PsrDataLayout;
+function TsrDataLayoutList.Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):PsrDataLayout;
 var
  node:TsrDataLayout;
- pData:Pointer;
 begin
  Assert(p<>nil);
  node:=Default(TsrDataLayout);
@@ -485,7 +503,6 @@ begin
 
   Result^.FID:=-1;
 
-  pData:=p^.GetData;
   if (pData<>nil) then
    case t of
     rtRoot,
@@ -495,6 +512,7 @@ begin
     rtSSharp4,
     rtTSharp4,
     rtTSharp8:Result^.pData:=pData+o;
+    rtImmData:Result^.pData:=pData;
    end;
 
  end;
@@ -525,6 +543,8 @@ begin
 end;
 
 function TsrDataLayoutList.Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
+var
+ parent:PsrDataLayout;
 begin
  Result:=nil;
 
@@ -538,7 +558,32 @@ begin
   Assert(False,'indexed chain not support');
  end;
 
- Result:=Fetch(chain[0]^.Parent,chain[0]^.offset,rtype);
+ parent:=chain[0]^.Parent;
+
+ Result:=Fetch(parent,chain[0]^.offset,rtype,parent^.GetData);
+end;
+
+function TsrDataLayoutList.FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
+var
+ parent:PsrDataLayout;
+ dst:PsrDataImm;
+ size:Integer;
+begin
+ Result:=nil;
+ size:=GetResourceSizeDw(rtype)*SizeOf(DWORD);
+
+ dst:=FTop.FEmit.Alloc(SizeOf(TsrDataImm)+size);
+ 
+ dst^.FImmSize  :=size;
+ dst^.FImmOffset:=FImmOffset;
+
+ Move(pData^,dst^.data,size);
+
+ parent:=Fetch(pRoot,FImmOffset,rtImmData,dst);
+
+ FImmOffset:=FImmOffset+size;
+
+ Result:=Fetch(parent,0,rtype,parent^.GetData);
 end;
 
 function TsrDataLayoutList.EnumChain(cb:TChainCb):Integer;
@@ -585,6 +630,9 @@ begin
   pDebugInfoList^.OpSource(node^.GetString);
   node:=Next(node);
  end;
+ //
+ AllocFuncExt;
+ AllocImmExt;
 end;
 
 procedure TsrDataLayoutList.AllocFuncExt;
@@ -606,6 +654,34 @@ begin
    begin
     pDebugInfoList^.OpSource(node^.GetFuncString(block^.Size));
    end;
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrDataLayoutList.AllocImmExt;
+var
+ pDebugInfoList:PsrDebugInfoList;
+ node:PsrDataLayout;
+ imm:PsrDataImm;
+ i,c:PtrUint;
+begin
+ pDebugInfoList:=FTop.FEmit.GetDebugInfoList;
+ node:=First;
+ While (node<>nil) do
+ begin
+  if (node^.key.rtype=rtImmData) then
+  begin
+   imm:=node^.pData;
+
+   c:=imm^.FImmSize div SizeOf(DWORD);
+
+   if (c<>0) then
+   For i:=0 to c-1 do
+   begin
+    pDebugInfoList^.OpSource(imm^.GetStringDword(i));
+   end;
+
   end;
   node:=Next(node);
  end;

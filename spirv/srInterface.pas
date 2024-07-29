@@ -100,6 +100,7 @@ type
   RefIdAlloc:TsrRefIdAlloc;
   //
   function  Alloc(Size:ptruint):Pointer; override;
+  Function  GetDmem(P:Pointer) :Pointer; override;
   Function  GetExecutionModel  :Word;    override;
   Function  GetConfig          :Pointer; override;
   Function  GetCodeHeap        :Pointer; override;
@@ -175,6 +176,17 @@ implementation
 function TEmitInterface.Alloc(Size:ptruint):Pointer;
 begin
  Result:=Allocator.Alloc(Size);
+end;
+
+Function TEmitInterface.GetDmem(P:Pointer):Pointer;
+begin
+ if (Config.OnGetDmem<>nil) then
+ begin
+  Result:=Config.OnGetDmem(P);
+ end else
+ begin
+  Result:=P;
+ end;
 end;
 
 Function TEmitInterface.GetExecutionModel:Word;

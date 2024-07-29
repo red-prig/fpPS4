@@ -107,7 +107,7 @@ begin
 
  if (pLBlock^.bType=btAdr) then //set new adr
  begin
-  SetPtr(adr.get_pc,btAdr);
+  set_code_ptr(adr.get_code_ptr,btAdr);
  end;
 end;
 
@@ -144,13 +144,13 @@ begin
  pOpLabel:=nil;
 
  FVolMark:=vmNone;
- if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is continue?
+ if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
  begin
   pOpLabel:=pOpBlock^.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
   pOpBlock^.Cond.FUseCont:=True;
   FVolMark:=vmCont;
  end else
- if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is break?
+ if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
  begin
   pOpLabel:=pOpBlock^.Labels.pEndOp;
   FVolMark:=vmBreak;
@@ -200,13 +200,13 @@ begin
  pOpLabel[0]:=nil;
 
  FVolMark:=vmNone;
- if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is continue?
+ if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
  begin
   pOpLabel[0]:=pOpBlock^.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
   pOpBlock^.Cond.FUseCont:=True;
   FVolMark:=vmCont;
  end else
- if (pOpBlock^.Block.b_adr.get_pc=adr.get_pc) then //is break?
+ if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
  begin
   pOpLabel[0]:=pOpBlock^.Labels.pEndOp;
   FVolMark:=vmBreak;
@@ -239,7 +239,7 @@ begin
  node:=Cursor.pBlock^.FindUpLoop;
  if (node<>nil) then
  begin
-  Result:=node^.pBLabel^.Adr.get_pc=Adr.get_pc;
+  Result:=node^.pBLabel^.Adr.get_code_ptr=Adr.get_code_ptr;
  end;
 end;
 
@@ -251,7 +251,7 @@ begin
  node:=Cursor.pBlock^.FindUpLoop;
  if (node<>nil) then
  begin
-  Result:=node^.pELabel^.Adr.get_pc=Adr.get_pc;
+  Result:=node^.pELabel^.Adr.get_code_ptr=Adr.get_code_ptr;
  end;
 end;
 
@@ -310,9 +310,9 @@ begin
  Info:=Default(TsrBlockInfo);
 
  c_adr:=Cursor.Adr;                       //get current
- SetPtr(adr.get_pc,btAdrBranch);          //set new
+ set_code_ptr(adr.get_code_ptr,btAdrBranch);          //set new
  e_adr:=Cursor.pCode^.FTop.pELabel^.Adr;  //get end of code
- SetPtr(c_adr.get_pc,btMain);             //ret current
+ set_code_ptr(c_adr.get_code_ptr,btMain);             //ret current
 
  Info.b_adr:=adr;
  Info.e_adr:=e_adr;
@@ -323,7 +323,7 @@ begin
  pOpChild^.SetInfo(Info);
  PushBlockOp(line,pOpChild,nil);
 
- SetPtr(adr.get_pc,btAdrBranch);
+ set_code_ptr(adr.get_code_ptr,btAdrBranch);
 end;
 
 procedure TEmit_SOPP.emit_S_BRANCH;

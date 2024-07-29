@@ -218,10 +218,20 @@ begin
  end;
 end;
 
-function _FetchShaderCodeCache(const key:TShaderDataKey):TShaderCodeCache;
+function _FetchShaderCodeCache(FStage:TvShaderStage;pData:PDWORD):TShaderCodeCache;
 var
+ key:TShaderDataKey;
  t:TShaderCodeCache;
 begin
+
+ key:=Default(TShaderDataKey);
+ key.FStage:=FStage;
+
+ if not get_dmem_ptr(pData,@key.pData,nil) then
+ begin
+  Assert(false,'_FetchShaderCodeCache');
+ end;
+
  t:=_FindShaderCodeCache(key);
 
  if (t=nil) then
@@ -283,6 +293,15 @@ end;
 procedure TPushConstAllocator.Apply(i:DWORD);
 begin
  offset:=offset+i;
+end;
+
+function _GetDmem(P:Pointer):Pointer; register;
+begin
+ Result:=nil;
+ if not get_dmem_ptr(P,@Result,nil) then
+ begin
+  Assert(false,'_GetDmem');
+ end;
 end;
 
 function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TMemoryStream;
@@ -349,6 +368,8 @@ begin
 
  //SprvEmit.Config.UseVertexInput:=False;
 
+ SprvEmit.Config.OnGetDmem:=@_GetDmem;
+
  if (SprvEmit.ParseStage(pData)>1) then
  begin
   Writeln(StdErr,'Shader Parse Err');
@@ -381,7 +402,7 @@ begin
  if (FShader.FShaderFuncs[i].pData<>nil) then
  begin
 
-  P:=GetSharpByPatch(pUserData,FShader.FFuncLayouts[i].addr);
+  P:=GetSharpByPatch(pUserData,FShader.GetImmData,FShader.FFuncLayouts[i].addr);
 
   if (P<>nil) then
   begin
@@ -441,7 +462,7 @@ var
 begin
  if (FShader.FDescSetId<>FDescSetId) then Exit(False);
  ch.FResult:=True;
- FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData);
+ FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData,FShader.GetImmData);
  Result:=ch.FResult;
 end;
 
@@ -454,23 +475,22 @@ begin
  end;
 end;
 
-function _FetchShader(FStage:TvShaderStage;pData:PDWORD;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
+function _FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
 var
- F:TShaderDataKey;
-
  i:Integer;
  FShader:TvShaderExt;
  t:TShaderCodeCache;
 
  M:TMemoryStream;
 
+ pData:PDWORD;
  pUserData:Pointer;
 
  pc_offset,pc_size,pc_diff:DWORD;
+
+ FHash_spv:QWORD;
 begin
- F:=Default(TShaderDataKey);
- F.FStage:=FStage;
- F.pData :=pData;
+ pData:=GPU_REGS.get_code_addr(FStage);
 
  {
   ...start <-\
@@ -490,7 +510,7 @@ begin
   pc_size  :=0;
  end;
 
- t:=_FetchShaderCodeCache(F);
+ t:=_FetchShaderCodeCache(FStage,pData);
 
  FShader:=nil;
 
@@ -523,9 +543,20 @@ begin
   M:=ParseShader(FStage,pData,GPU_REGS,pc);
   Assert(M<>nil);
 
+  //hach/dump
+  FHash_spv:=MurmurHash64A(M.Memory,M.Size,0);
+  DumpSpv(FStage,M,FHash_spv);
+  //
+
   pUserData:=GPU_REGS.get_user_data(FStage);
 
   FShader:=t.AddShader(FDescSetId,M,pUserData);
+
+  //set hash
+  FShader.FHash_spv:=FHash_spv;
+
+  //free spv data
+  M.Free;
 
   case FStage of
    vShaderStageVs:
@@ -544,12 +575,7 @@ begin
    else;
   end;
 
-  FShader.FHash_spv:=MurmurHash64A(M.Memory,M.Size,0);
-
-  DumpSpv(FStage,M,FShader.FHash_spv);
-
-  M.Free;
-
+  //dump gcn
   case FStage of
    vShaderStagePs:DumpPS(GPU_REGS,FShader.FHash_gcn);
    vShaderStageVs:DumpVS(GPU_REGS,FShader.FHash_gcn);
@@ -585,25 +611,10 @@ begin
 end;
 
 function FetchShader(FStage:TvShaderStage;FDescSetId:Integer;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderExt;
-var
- pData0:PDWORD;
- pData1:PDWORD;
 begin
-
- pData0:=GPU_REGS.get_code_addr(FStage);
-
- if (pData0=nil) then Exit(nil);
- //Assert(pData<>nil);
-
- pData1:=nil;
- if not get_dmem_ptr(pData0,@pData1,nil) then
- begin
-  Assert(false,'get_dmem_ptr');
- end;
-
  FShaderCacheSet.Lock_wr;
 
- Result:=_FetchShader(FStage,pData1,FDescSetId,GPU_REGS,pc);
+ Result:=_FetchShader(FStage,FDescSetId,GPU_REGS,pc);
 
  FShaderCacheSet.Unlock_wr;
 end;

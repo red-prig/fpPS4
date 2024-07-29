@@ -615,7 +615,7 @@ end;
 
 function TsrOpBlock.IsEndOf(Adr:TSrcAdr):Boolean;
 begin
- Result:=(Block.e_adr.get_pc<=Adr.get_pc);
+ Result:=(Block.e_adr.get_code_ptr<=Adr.get_code_ptr);
 end;
 
 function TsrOpBlock.FindUpLoop:PsrOpBlock;

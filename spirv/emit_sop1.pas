@@ -142,7 +142,7 @@ Var
 begin
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
- oldptr:=GetPtr;
+ oldptr:=get_code_ptr;
 
  SetConst_q(dst[0],dtUint32,QWORD(oldptr));
  SetConst_q(dst[1],dtUint32,QWORD(oldptr) shr 32);
@@ -158,7 +158,7 @@ begin
 
  newptr:=GetFuncPtr(@src);
 
- SetPtr(newptr,btMain);
+ set_code_ptr(newptr,btMain);
 end;
 
 procedure TEmit_SOP1.emit_S_SWAPPC_B64;
@@ -174,12 +174,12 @@ begin
 
  newptr:=GetFuncPtr(@src);
 
- oldptr:=GetPtr;
+ oldptr:=get_code_ptr;
 
  SetConst_q(dst[0],dtUint32,QWORD(oldptr));
  SetConst_q(dst[1],dtUint32,QWORD(oldptr) shr 32);
 
- SetPtr(newptr,btSetpc);
+ set_code_ptr(newptr,btSetpc);
 end;
 
 procedure TEmit_SOP1.emit_S_AND_SAVEEXEC_B64; //sdst.du = EXEC;| EXEC = (ssrc.du & EXEC);| SCC = (sdst != 0)

@@ -27,8 +27,8 @@ type
   function  CheckBlockBeg:Boolean;
   function  CheckBlockEnd:Boolean;
   //
-  function  GetPtr:Pointer;
-  procedure SetPtr(base:Pointer;bType:TsrBlockType);
+  function  get_code_ptr:Pointer;
+  procedure set_code_ptr(base:Pointer;bType:TsrBlockType);
   function  IsFinalize:Boolean;
   function  FindLabel(Adr:TSrcAdr):PsrLabel;
   //
@@ -331,14 +331,14 @@ end;
 
 //
 
-function TEmitFlow.GetPtr:Pointer;
+function TEmitFlow.get_code_ptr:Pointer;
 begin
- Result:=Cursor.Adr.get_pc;
+ Result:=Cursor.Adr.get_code_ptr;
 end;
 
-procedure TEmitFlow.SetPtr(base:Pointer;bType:TsrBlockType);
+procedure TEmitFlow.set_code_ptr(base:Pointer;bType:TsrBlockType);
 begin
- if (Cursor.Adr.get_pc=base) then Exit;
+ if (Cursor.Adr.get_code_ptr=base) then Exit;
  Cursor:=CodeHeap.FetchByPtr(base,bType);
 end;
 
@@ -423,7 +423,7 @@ end;
 function TEmitFlow.ParseStage(base:Pointer):Byte;
 begin
  Result:=0;
- SetPtr(base,btMain);
+ set_code_ptr(base,btMain);
  Main^.pTop^.SetCFGBlock(Cursor.pBlock);
  While (CheckBlockBeg) do;
  repeat

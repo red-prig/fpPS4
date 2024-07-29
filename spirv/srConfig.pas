@@ -5,6 +5,8 @@ unit srConfig;
 interface
 
 type
+ TcbGetDmem=function(P:Pointer):Pointer; register;
+
  PsrConfig=^TsrConfig;
  TsrConfig=packed object
   PrintAsm:Boolean;
@@ -21,6 +23,8 @@ type
   maxPushConstantsSize:PtrUint;            // 128
   minStorageBufferOffsetAlignment:PtrUint; // $10
   minUniformBufferOffsetAlignment:PtrUint; // $100
+  //
+  OnGetDmem:TcbGetDmem;
   //
   Procedure Init;
   Function  CanUseStorageBufferClass:Boolean;

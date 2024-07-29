@@ -5,6 +5,8 @@ unit emit_fetch;
 interface
 
 uses
+ spirv,
+ ps4_shader,
  ps4_pssl,
  srNode,
  srBitcast,
@@ -26,6 +28,7 @@ uses
 type
  TEmitFetch=class(TEmitFlow)
   //
+  function  GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):PsrDataLayout;
   function  GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):PsrDataLayout;
   //
   procedure PrepTypeSlot(pSlot:PsrRegSlot;rtype:TsrDataType);
@@ -96,18 +99,124 @@ end;
 
 //
 
-function TEmitFetch.GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):PsrDataLayout;
+Function GetRegPairOp(reg:PsrRegNode):PSpirvOp;
 var
+ pair:PsrRegPair;
+begin
+ Result:=nil;
+
+ pair:=RegDown(reg)^.pWriter^.AsType(ntRegPair);
+ if (pair=nil) then Exit;
+
+ Result:=pair^.pWriter^.AsType(ntOp);
+end;
+
+Function GetRegConst(reg:PsrRegNode):PsrConst;
+begin
+ Result:=RegDown(reg)^.pWriter^.AsType(ntConst);
+end;
+
+Function GetRegPairConst(reg:PsrRegNode):PsrConst;
+var
+ pair:PsrRegPair;
+begin
+ Result:=nil;
+
+ pair:=RegDown(reg)^.pWriter^.AsType(ntRegPair);
+ if (pair=nil) then Exit;
+
+ Result:=pair^.pWriter^.AsType(ntConst);
+end;
+
+function TEmitFetch.GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):PsrDataLayout;
+var
+ vsharp:TVSharpResource4;
+
+ pop_1:array[0..1] of PSpirvOp;
+ pop_2:array[0..1] of PSpirvOp;
+
+ imms_p0:array[0..1] of PsrConst;
+ imms_p1:array[0..1] of PsrConst;
+ imms_p2:PsrConst;
+ imms_p3:PsrConst;
+begin
+ Result:=nil;
+
+ if (rtype<>rtVSharp4) then Exit;
+
+ imms_p2:=GetRegConst(regs[2]);
+ imms_p3:=GetRegConst(regs[3]);
+
+ if (imms_p2=nil) then Exit;
+ if (imms_p3=nil) then Exit;
+
+ pop_1[0]:=GetRegPairOp(regs[0]);
+ pop_1[1]:=GetRegPairOp(regs[1]);
+
+ //S_GETPC_B64   s[0:1]
+ //S_ADD_U32     s0, #0x0000011C, s0
+ //S_ADDC_U32    s1, 0, s1
+ //S_MOV_B32     s2, 20
+ //S_MOV_B32     s3, #0x2000C004
+
+ if (pop_1[0]=nil) then Exit;
+ if (pop_1[1]=nil) then Exit;
+
+ if (pop_1[0]^.OpId<>srOpUtils.OpIAddExt) then Exit;
+ if (pop_1[1]^.OpId<>srOpUtils.OpIAddExt) then Exit;
+
+ //S_ADD_U32
+ imms_p0[0]:=GetRegConst(pop_1[0]^.ParamNode(0)^.AsReg); //const
+ imms_p0[1]:=GetRegConst(pop_1[0]^.ParamNode(1)^.AsReg); //s0
+
+ //(src0+src1)+SCC
+ pop_2[0]:=GetRegPairOp(pop_1[1]^.ParamNode(0)^.AsReg); //(src0+src1)
+ pop_2[1]:=GetRegPairOp(pop_1[1]^.ParamNode(1)^.AsReg); //SCC
+
+ if (pop_1[0]<>pop_2[1]) then Exit;
+
+ //S_ADDC_U32
+ imms_p1[0]:=GetRegConst(pop_2[0]^.ParamNode(0)^.AsReg);
+ imms_p1[1]:=GetRegConst(pop_2[0]^.ParamNode(1)^.AsReg);
+
+ vsharp:=Default(TVSharpResource4);
+
+ PQWORD(@vsharp)[0]:=imms_p0[0]^.AsInt32 + imms_p0[1]^.AsInt32;
+
+ PDWORD(@vsharp)[1]:=PDWORD(@vsharp)[1] + imms_p1[0]^.AsInt32 + imms_p1[1]^.AsInt32;
+
+ PDWORD(@vsharp)[2]:=imms_p2^.AsInt32;
+ PDWORD(@vsharp)[3]:=imms_p3^.AsInt32;
+
+ //print_vsharp(@vsharp);
+
+ Result:=DataLayoutList.FetchImm(@vsharp,rtype);
+end;
+
+function TEmitFetch.GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):PsrDataLayout;
+type
+ TsrRegs=array[0..7] of PsrRegNode;
+var
+ regs:TsrRegs;
  chain:TsrChains;
  i,n:Byte;
 begin
  Result:=nil;
  chain:=Default(TsrChains);
+ regs :=Default(TsrRegs);
  n:=GetResourceSizeDw(rtype);
 
  For i:=0 to n-1 do
  begin
-  chain[i]:=GetChainRegNode(src[i]^.current);
+  regs[i]:=RegDown(src[i]^.current);
+ end;
+
+ Result:=GroupingVImm(@regs,rtype);
+ if (Result<>nil) then Exit;
+
+ For i:=0 to n-1 do
+ begin
+  chain[i]:=GetChainRegNode(regs[i]);
  end;
 
  Result:=DataLayoutList.Grouping(chain,rtype);

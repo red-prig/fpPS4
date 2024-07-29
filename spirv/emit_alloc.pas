@@ -57,7 +57,6 @@ begin
 
  //Source Extension
  DataLayoutList.AllocSourceExtension;
- DataLayoutList.AllocFuncExt;
  VertLayoutList.AllocSourceExtension;
  UniformList   .AllocSourceExtension;
  BufferList    .AllocSourceExtension;

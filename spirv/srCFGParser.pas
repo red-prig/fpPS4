@@ -39,27 +39,20 @@ type
  end;
 
  PsrCodeBlock=^TsrCodeBlock;
- TsrCodeBlock=object
+ TsrCodeBlock=object(TsrLabelBlock)
   pNext:PsrCodeBlock;
   //----
-  FEmit:TCustomEmit;
-  Body:Pointer;
-  Size:ptruint;
-  FLabels:TsrLabels;
   FTop:TsrCFGBlock;
-  Function  FindLabel(Adr:TSrcAdr):PsrLabel;
-  Function  FetchLabel(Adr:TSrcAdr):PsrLabel;
-  Function  IsContain(P:Pointer):Boolean;
  end;
 
  TsrCFGParser=object
   FCursor:TsrLCursor;
-  pCode:PsrCodeBlock;
-  pBlock:PsrCFGBlock;
+  pCode  :PsrCodeBlock;
+  pBlock :PsrCFGBlock;
   FSPI:TSPI;
   procedure _print_label(Adr:TSrcAdr);
-  procedure Print(base:Pointer);
-  function  Parse(base:Pointer):Byte;
+  procedure Print();
+  function  Parse():Byte;
   function  NextParse:Byte;
   Procedure Finalize;
   function  CheckBlock:Boolean;
@@ -73,20 +66,21 @@ type
   procedure emit_S_BRANCH;
  end;
 
-function parse_code_cfg(bType:TsrBlockType;base:Pointer;pCode:PsrCodeBlock):Byte;
+function parse_code_cfg(bType:TsrBlockType;pCode:PsrCodeBlock):Byte;
 
 implementation
 
-function parse_code_cfg(bType:TsrBlockType;base:Pointer;pCode:PsrCodeBlock):Byte;
+function parse_code_cfg(bType:TsrBlockType;pCode:PsrCodeBlock):Byte;
 var
  LParser:TsrCFGParser;
 begin
  pCode^.FTop.bType:=bType;
+
  LParser:=Default(TsrCFGParser);
  LParser.pCode:=pCode;
- Result:=LParser.Parse(base);
+ Result:=LParser.Parse();
 
- //LParser.Print(base);
+ //LParser.Print();
 end;
 
 function TsrCFGBlock.IsEndOf(Adr:TSrcAdr):Boolean;
@@ -94,7 +88,7 @@ begin
  Result:=False;
  if (pELabel<>nil) then
  begin
-  Result:=(pELabel^.Adr.get_pc<=Adr.get_pc);
+  Result:=(pELabel^.Adr.get_code_ptr<=Adr.get_code_ptr);
  end;
 end;
 
@@ -103,7 +97,7 @@ begin
  Result:=False;
  if (pELabel<>nil) then
  begin
-  Result:=(pELabel^.Adr.get_pc<Adr.get_pc);
+  Result:=(pELabel^.Adr.get_code_ptr<Adr.get_code_ptr);
  end;
 end;
 
@@ -114,12 +108,12 @@ begin
  b:=true;
  if (pBLabel<>nil) then
  begin
-  b:=(pBLabel^.Adr.get_pc<=Adr.get_pc);
+  b:=(pBLabel^.Adr.get_code_ptr<=Adr.get_code_ptr);
  end;
  e:=true;
  if (pELabel<>nil) then
  begin
-  e:=(pELabel^.Adr.get_pc>Adr.get_pc);
+  e:=(pELabel^.Adr.get_code_ptr>Adr.get_code_ptr);
  end;
  Result:=b and e;
 end;
@@ -228,13 +222,13 @@ begin
  end;
 end;
 
-procedure TsrCFGParser.Print(base:Pointer);
+procedure TsrCFGParser.Print();
 var
  Adr:TSrcAdr;
  level:DWORD;
  i:Byte;
 begin
- FCursor.Init(base);
+ FCursor.Init(pCode);
  pBlock:=@pCode^.FTop;
  repeat
   Adr:=FCursor.Adr;
@@ -265,11 +259,10 @@ begin
  _print_label(Adr);
 end;
 
-function TsrCFGParser.Parse(base:Pointer):Byte;
+function TsrCFGParser.Parse():Byte;
 begin
  if (pCode=nil) then Exit(4);
- pCode^.Body:=base;
- FCursor.Init(base);
+ FCursor.Init(pCode);
  pBlock:=@pCode^.FTop;
  pCode^.FTop.pBLabel:=pCode^.FetchLabel(FCursor.Adr);
  repeat
@@ -455,37 +448,6 @@ begin
  end;
 end;
 
-Function TsrCodeBlock.FindLabel(Adr:TSrcAdr):PsrLabel;
-var
- node:TsrLabel;
-begin
- Result:=nil;
- node:=Default(TsrLabel);
- node.Adr:=Adr;
- Result:=FLabels.FNTree.Find(@node);
-end;
-
-Function TsrCodeBlock.FetchLabel(Adr:TSrcAdr):PsrLabel;
-var
- node:TsrLabel;
-begin
- Result:=nil;
- node:=Default(TsrLabel);
- node.Adr:=Adr;
- Result:=FLabels.FNTree.Find(@node);
- if (Result=nil) then
- begin
-  Result:=FEmit.Alloc(SizeOf(TsrLabel));
-  Result^.Adr:=Adr;
-  FLabels.FNTree.Insert(Result);
- end;
-end;
-
-Function TsrCodeBlock.IsContain(P:Pointer):Boolean;
-begin
- Result:=(Body<=P) and ((Body+Size)>P);
-end;
-
 Function TsrCFGParser.NewBlock:PsrCFGBlock;
 begin
  Result:=pCode^.FEmit.Alloc(SizeOf(TsrCFGBlock));
@@ -539,7 +501,8 @@ begin
     t_adr:=parent^.pBLabel^.Adr;
    end;
 
-   if (parent^.bType=btLoop) and (t_adr.get_pc=b_adr.get_pc) then //is exist loop
+   if (parent^.bType=btLoop) and
+      (t_adr.get_code_ptr=b_adr.get_code_ptr) then //is exist loop
    begin
     pLabel[0]^.RemType(ltUnknow); //ltEndLoop later
     if (parent^.pELabel=nil) then
@@ -548,7 +511,7 @@ begin
     end else
     begin
      t_adr:=parent^.pELabel^.Adr;
-     if (t_adr.get_pc<c_adr.get_pc) then
+     if (t_adr.get_code_ptr<c_adr.get_code_ptr) then
      begin
       parent^.pELabel:=pLabel[0]; //update end of loop
      end;
@@ -556,7 +519,7 @@ begin
     Exit;
    end;
 
-   if (t_adr.get_pc<=b_adr.get_pc) then Break;
+   if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
    if (parent^.pParent=nil) then Break;
 
    child:=parent;
@@ -578,7 +541,7 @@ begin
     t_adr:=prev^.pELabel^.Adr;
    end;
 
-   if (t_adr.get_pc<=b_adr.get_pc) then Break;
+   if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
 
    child:=prev;
   until false;
@@ -599,7 +562,7 @@ begin
  begin
 
   if (pBlock^.pELabel<>nil) then
-  if (pBlock^.pELabel^.Adr.get_pc<b_adr.get_pc) then
+  if (pBlock^.pELabel^.Adr.get_code_ptr<b_adr.get_code_ptr) then
   begin
    //push adr or loop end
    if not pLabel[1]^.IsType(ltBegAdr) then

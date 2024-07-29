@@ -13,9 +13,10 @@ uses
 type
  PsrCursor=^TsrCursor;
  TsrCursor=object(TsrLCursor)
-  pCode:PsrCodeBlock;
+  pCode :PsrCodeBlock;
   pBlock:PsrCFGBlock;
-  function PopBlock:Boolean;
+  procedure Init(Code:PsrCodeBlock);
+  function  PopBlock:Boolean;
  end;
 
  TsrCodeList=specialize TNodeQueue<PsrCodeBlock>;
@@ -24,7 +25,7 @@ type
  TsrCodeHeap=object(TsrCodeList)
   FEmit:TCustomEmit;
   Procedure Init(Emit:TCustomEmit);
-  function  FindByPtr(base:Pointer):PsrCodeBlock;
+  function  FindByPtr (base:Pointer):PsrCodeBlock;
   function  FetchByPtr(base:Pointer;bType:TsrBlockType):TsrCursor;
  end;
 
@@ -55,29 +56,40 @@ end;
 
 function TsrCodeHeap.FetchByPtr(base:Pointer;bType:TsrBlockType):TsrCursor;
 var
- node:PsrCodeBlock;
+ pCode:PsrCodeBlock;
  adr:TSrcAdr;
 begin
- node:=FindByPtr(base);
- if (node=nil) then
+ pCode:=FindByPtr(base);
+ if (pCode=nil) then
  begin
-  node:=FEmit.Alloc(SizeOf(TsrCodeBlock));
-  node^.FEmit:=FEmit;
-  if parse_code_cfg(bType,base,node)>1 then Assert(False);
-  Push_tail(node);
+  pCode:=FEmit.Alloc(SizeOf(TsrCodeBlock));
+  pCode^.FEmit:=FEmit;
+  pCode^.Body :=base;
+  pCode^.DMem :=FEmit.GetDmem(base);
+
+  //
+  if parse_code_cfg(bType,pCode)>1 then Assert(False);
+  //
+  Push_tail(pCode);
  end;
 
  Result:=Default(TsrCursor);
- Result.Init(node^.Body);
- Result.pCode :=node;
- Result.pBlock:=@node^.FTop;
+ Result.Init(pCode);
 
  adr:=Default(TSrcAdr);
- adr.pBody:=node^.Body;
- adr.Offdw:=(Pointer(base)-Pointer(adr.pBody)) div 4;
+ adr.pCode:=pCode;
+ adr.Offdw:=(Pointer(base)-Pointer(pCode^.Body)) div 4;
+
  Result.Adr:=adr;
 
  Result.pBlock:=Result.pBlock^.DownBlock(adr);
+end;
+
+procedure TsrCursor.Init(Code:PsrCodeBlock);
+begin
+ inherited Init(Pointer(Code));
+ pCode :=Code;
+ pBlock:=@Code^.FTop;
 end;
 
 function TsrCursor.PopBlock:Boolean;
