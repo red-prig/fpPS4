@@ -77,13 +77,12 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                        size:Ptruint;
                         icb:t_pm4_parse_cb;
                        buft:t_pm4_stream_type;
-                       c_id:Byte):Boolean;
+                       c_id:Byte=0):Boolean;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         buf:PPM4CMDINDIRECTBUFFER;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type;
-                       c_id:Byte):Boolean;
+                       buft:t_pm4_stream_type):Boolean;
 
 function pm4_ibuf_parse(pctx:p_pfp_ctx;ibuf:p_pm4_ibuffer):Integer;
 
@@ -115,7 +114,7 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                        size:Ptruint;
                         icb:t_pm4_parse_cb;
                        buft:t_pm4_stream_type;
-                       c_id:Byte):Boolean;
+                       c_id:Byte=0):Boolean;
 begin
  Result:=True;
  ibuf^.next:=Default(TAILQ_ENTRY);
@@ -131,8 +130,7 @@ end;
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         buf:PPM4CMDINDIRECTBUFFER;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type;
-                       c_id:Byte):Boolean;
+                       buft:t_pm4_stream_type):Boolean;
 var
  op:DWORD;
  ib_base:QWORD;
@@ -165,13 +163,13 @@ begin
    //Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
 
    ibuf^.next:=Default(TAILQ_ENTRY);
-   ibuf^.base:=Pointer(ib_base);
+   ibuf^.base:=Pointer(ib_base); //adjust guest addr
    ibuf^.buff:=addr;
    ibuf^.size:=ib_size;
    ibuf^.bpos:=0;
    ibuf^.picb:=icb;
    ibuf^.buft:=buft;
-   ibuf^.c_id:=c_id;
+   ibuf^.c_id:=0;
 
    Result:=True;
   end;
@@ -965,7 +963,11 @@ begin
 
       IT_LOAD_CONST_RAM:onLoadConstRam(pctx,buff);
 
-      else;
+      else
+       begin
+        Writeln(stderr,'PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        Assert(False);
+       end;
      end;
 
     end;
@@ -1158,8 +1160,6 @@ var
  engineSel:Byte;
  dstSel:Byte;
 begin
- Assert(pctx^.stream_type=stGfxDcb);
-
  Assert(Body^.CONTROL.wrOneAddr=0,'WriteData: wrOneAddr<>0');
 
  count:=Body^.header.count;
@@ -1180,10 +1180,10 @@ begin
 
      with pctx^.curr_ibuf^ do
      begin
-      src:=base+(QWORD(src_dmem)-QWORD(buff));
+      src:=base+(Int64(src_dmem)-Int64(buff));
      end;
 
-     pctx^.stream[stGfxDcb].WriteData(dstSel,dst,src,count,Body^.CONTROL.wrConfirm);
+     pctx^.stream[pctx^.stream_type].WriteData(dstSel,dst,src,count,Body^.CONTROL.wrConfirm);
     end;
   WRITE_DATA_ENGINE_PFP:
     begin
@@ -1215,7 +1215,6 @@ end;
 
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
 begin
- Assert(pctx^.stream_type=stGfxDcb);
 
  Case Body^.memSpace of
   WAIT_REG_MEM_SPACE_MEMORY:;
@@ -1226,7 +1225,7 @@ begin
  Case Body^.engine of
   WAIT_REG_MEM_ENGINE_ME:
     begin
-     pctx^.stream[stGfxDcb].WaitRegMem(Pointer(Body^.pollAddress),Body^.reference,Body^.mask,Body^.compareFunc);
+     pctx^.stream[pctx^.stream_type].WaitRegMem(Pointer(Body^.pollAddress),Body^.reference,Body^.mask,Body^.compareFunc);
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin
@@ -1778,7 +1777,7 @@ begin
 
       else
        begin
-        Writeln(stderr,'PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+        Writeln(stderr,'PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
         Assert(False);
        end;
      end;
@@ -1925,12 +1924,14 @@ begin
 
      case PM4_TYPE_3_HEADER(token).opcode of
       IT_NOP                            :onNop                  (pctx,buff);
+      IT_WRITE_DATA                     :onWriteData            (pctx,buff);
       IT_SET_SH_REG                     :onSetShRegCompute      (pctx,buff);
       IT_DISPATCH_DIRECT                :onDispatchDirectCompute(pctx,buff);
       IT_RELEASE_MEM                    :onReleaseMemCompute    (pctx,buff);
+      IT_WAIT_REG_MEM                   :onWaitRegMem           (pctx,buff);
       else
        begin
-        Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+        Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
         Assert(False);
        end;
      end;

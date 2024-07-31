@@ -500,12 +500,7 @@ begin
  if (Cmd<>nil) then Exit; //Already allocated
 
  buft:=stream^.buft;
-
- if (buft<>stGfxDcb) and
-    (buft<>stGfxCcb) then
- begin
-  Assert(false,'TODO');
- end;
+ //Select Vulkan compute only queue?
 
  imdone_count:=me^.imdone_count;
 
@@ -1913,6 +1908,94 @@ begin
  //ctx.on_idle;
 end;
 
+function get_compute_pipe_id(buft:t_pm4_stream_type):Byte; inline;
+begin
+ Result:=ord(buft) - ord(stCompute0);
+end;
+
+procedure pm4_ReleaseMem(var ctx:t_me_render_context;node:p_pm4_node_ReleaseMem);
+var
+ curr,diff:QWORD;
+ addr_dmem:Pointer;
+ data_size:Byte;
+begin
+ ctx.InsertLabel(PChar('ReleaseMem:0x'+HexStr(QWORD(node^.addr),10)));
+
+ if not ctx.WaitConfirmOrSwitch then Exit;
+
+ curr:=md_rdtsc_unit;
+ diff:=curr-ctx.rel_time;
+
+ if (node^.addr<>nil) then
+ begin
+  if (node^.srcSel<>RELEASEMEM_DATA_SEL_DISCARD) then
+  begin
+   if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
+   begin
+    Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
+   end;
+  end;
+
+  Case node^.dstSel of
+   RELEASEMEM_DST_SEL_MEMORY:;
+   RELEASEMEM_DST_SEL_L2    :Assert(false,'RELEASEMEM_DST_SEL_L2');
+   else
+    Assert(false,'pm4_ReleaseMem:dstSel');
+  end;
+
+  Case node^.srcSel of
+   //
+   RELEASEMEM_DATA_SEL_DISCARD:
+    data_size:=0;
+
+    //32bit data
+   RELEASEMEM_DATA_SEL_SEND_DATA32:
+    begin
+     PDWORD(addr_dmem)^:=node^.data;
+
+     data_size:=4;
+    end;
+
+    //64bit data
+   RELEASEMEM_DATA_SEL_SEND_DATA64:
+    begin
+     PQWORD(addr_dmem)^:=node^.data;
+
+     data_size:=8;
+    end;
+
+     //system 100Mhz global clock. (relative time)
+   RELEASEMEM_DATA_SEL_SEND_GPU_CLOCK:
+    begin
+     PQWORD(addr_dmem)^:=mul_div_u64(GLOBAL_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+
+     data_size:=8;
+    end;
+
+     //GPU 800Mhz clock.           (relative time)
+   RELEASEMEM_DATA_SEL_SEND_CP_PERFCOUNTER:
+    begin
+     PQWORD(addr_dmem)^:=mul_div_u64(GPU_CORE_CLOCK_FREQUENCY,UNIT_PER_SEC,diff);
+
+     data_size:=8;
+    end;
+
+   else
+    Assert(false,'pm4_ReleaseMem:srcSel');
+  end;
+
+  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
+ end;
+
+ if (node^.intSel=RELEASEMEM_INT_SEL_SEND_INT) or
+    (node^.intSel=RELEASEMEM_INT_SEL_SEND_INT_ON_CONFIRM) then
+ begin
+  ctx.me^.knote_eventid(get_compute_pipe_id(ctx.stream^.buft),0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
+ end;
+
+ //ctx.on_idle;
+end;
+
 procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
 begin
 
@@ -2278,6 +2361,7 @@ begin
      ntEventWrite    :pm4_EventWrite    (ctx,Pointer(ctx.node));
      ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
      ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
+     ntReleaseMem    :pm4_ReleaseMem    (ctx,Pointer(ctx.node));
      ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));
      ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
      ntDmaData       :pm4_DmaData       (ctx,Pointer(ctx.node));
