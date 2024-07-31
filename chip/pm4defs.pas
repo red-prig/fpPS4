@@ -374,7 +374,7 @@ type
    wrConfirm  :bit1;  ///< Wait or not wait for confirmation
    reserved4  :bit3;
    atc        :bit1;
-   cachePolicy:bit2;  ///< Cache olicy settings for write requests to the TCL2
+   cachePolicy:bit2;  ///< Cache policy settings for write requests to the TCL2
    volatile   :bit1;  ///< Volatile setting for write requests to the TCL2
    reserved5  :bit2;
    engineSel  :bit2;  ///< engine select

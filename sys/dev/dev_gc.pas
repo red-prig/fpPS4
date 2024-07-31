@@ -34,6 +34,8 @@ uses
  pm4_pfp,
  pm4_me,
 
+ kern_dmem,
+
  dev_dce,
 
  vDevice,
@@ -117,6 +119,27 @@ type
   cmds :PQWORD;
   eop_v:QWORD;
   wait :Integer;
+ end;
+
+ p_map_compute_queue_args=^t_map_compute_queue_args;
+ t_map_compute_queue_args=packed record
+  pipeHi         :DWORD;
+  pipeLo         :DWORD;
+  queueId        :DWORD;
+  g_queueId      :DWORD;
+  ringBaseAddress:Pointer;
+  readPtrAddress :Pointer;
+  dingDongPtr    :Pointer;
+  lenLog2        :DWORD;
+  pipePriority   :DWORD;
+ end;
+
+ p_ding_dong_args=^t_ding_dong_args;
+ t_ding_dong_args=packed record
+  pipeHi             :DWORD;
+  pipeLo             :DWORD;
+  queueId            :DWORD;
+  nextStartOffsetInDw:DWORD;
  end;
 
 var
@@ -330,6 +353,253 @@ begin
 
 end;
 
+type
+ p_gc_hqd=^t_gc_hqd;
+ t_gc_hqd=record
+  base_guest_addr:Pointer;
+  base_dmem_addr :Pointer;
+  read_guest_addr:PDWORD;
+  read_dmem_addr :PDWORD;
+  lenLog2        :DWORD;
+  pipePriority   :DWORD;
+  ringSize       :DWORD;
+  NextOffsetDw   :DWORD;
+ end;
+
+var
+ map_queue_valid:array[0..63] of Boolean;
+ map_queue_hqd  :array[0..63] of t_gc_hqd;
+
+ //asc_queues
+
+Function gc_map_hqd(ringBaseAddress:Pointer;
+                    readPtrAddress :Pointer;
+                    lenLog2        :DWORD;
+                    g_queueId      :DWORD;
+                    pipePriority   :DWORD;
+                    hqd:p_gc_hqd):Integer;
+var
+ base_dmem_addr:Pointer;
+ read_dmem_addr:PDWORD;
+begin
+ Result:=0;
+
+ if ((lenLog2 - 8) >= 23) then
+ begin
+  Exit(Integer($804c000c));
+ end;
+
+ if ((g_queueId - 1) >= 511) then
+ begin
+  Exit(Integer($804c000d));
+ end;
+
+ base_dmem_addr:=nil;
+ if not get_dmem_ptr(ringBaseAddress,@base_dmem_addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(ringBaseAddress)+' not in dmem!');
+ end;
+
+ read_dmem_addr:=nil;
+ if not get_dmem_ptr(readPtrAddress,@read_dmem_addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(readPtrAddress)+' not in dmem!');
+ end;
+
+ hqd^.base_guest_addr:=ringBaseAddress;
+ hqd^.base_dmem_addr :=base_dmem_addr;
+ hqd^.read_guest_addr:=readPtrAddress;
+ hqd^.read_dmem_addr :=read_dmem_addr;
+ hqd^.lenLog2        :=lenLog2;
+ hqd^.pipePriority   :=pipePriority;
+ hqd^.ringSize       :=1 shl lenLog2;
+
+end;
+
+Function gc_map_compute_queue(data:p_map_compute_queue_args):Integer;
+var
+ g_queueId   :DWORD;
+ pipeHi      :DWORD;
+ pipeLo      :DWORD;
+ queueId     :DWORD;
+ pipePriority:DWORD;
+ id          :DWORD;
+begin
+ Result:=0;
+
+ g_queueId   :=data^.g_queueId;
+ pipeHi      :=data^.pipeHi;
+ pipeLo      :=data^.pipeLo;
+ queueId     :=data^.queueId;
+ pipePriority:=data^.pipePriority;
+
+ //if (not IsDevKit) or
+
+ if (pipeHi  <> $0769c766) or (pipeLo    <> $72e8e3c1) or
+    (queueId <> $db72af28) or (g_queueId <> $d245ed58) then
+ begin
+  //if (not IsDevKit) or (not IsDiag)
+
+  if (pipeHi  <> $e13ec1f1) or (pipeLo    <> $76c0801c) or
+     (queueId <> $75c36152) or (g_queueId <> $4be587dd) then
+  begin
+
+   if (pipeHi = 2) and
+      (pipeLo = 3) then
+   begin
+    Exit(Integer($804c000a));
+   end;
+
+   if (1 < (pipeHi - 1)) then
+   begin
+    Exit(Integer($804c000b));
+   end;
+
+   if (3 < pipeLo) then
+   begin
+    Exit(Integer($804c000b));
+   end;
+
+   if (7 < queueId) then
+   begin
+    Exit(Integer($804c000b));
+   end;
+
+  end else
+  begin
+   pipeHi   :=2;
+   g_queueId:=19;
+   pipeLo   :=3;
+   queueId  :=3;
+  end;
+ end else
+ begin
+  pipeHi   :=2;
+  g_queueId:=20;
+  queueId  :=4;
+  pipeLo   :=3;
+ end;
+
+ if (pipePriority >= 2) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
+
+ if (map_queue_valid[id]) then
+ begin
+  Exit(Integer($804c0012));
+ end;
+
+ Result:=gc_map_hqd(data^.ringBaseAddress,
+                    data^.readPtrAddress,
+                    data^.lenLog2,
+                    g_queueId,
+                    pipePriority,
+                    @map_queue_hqd[id]);
+
+ if (Result=0) then
+ begin
+  map_queue_valid[id] := True;
+  map_queue_valid[(pipeHi - 1) * 4 + (pipeLo - 8)] := True;
+ end;
+
+end;
+
+Function gc_map_hdq_ding_dong(hqd:p_gc_hqd;next_offs_dw:DWORD):Integer;
+var
+ acb_ptr :Pointer;
+ acb_read:DWORD;
+ acb_size:DWORD;
+begin
+ Result:=0;
+
+ if (next_offs_dw <= (hqd^.ringSize shr 2)) then
+ begin
+  hqd^.NextOffsetDw:=next_offs_dw;
+
+  acb_read:=hqd^.read_dmem_addr^;
+
+  acb_ptr:=hqd^.base_dmem_addr + acb_read;
+
+  if (next_offs_dw<>0) then
+  begin
+   acb_size:=(next_offs_dw shl 2) - acb_read;
+  end else
+  begin
+   acb_size:=hqd^.ringSize - acb_read;
+  end;
+
+  //SubmitAsc(vqid, acb_span);
+
+  hqd^.read_dmem_addr^ := (acb_read + acb_size) mod hqd^.ringSize;
+ end else
+ begin
+  Result:=EINVAL;
+ end;
+end;
+
+Function gc_ding_dong(data:p_ding_dong_args):Integer;
+var
+ pipeHi :DWORD;
+ pipeLo :DWORD;
+ queueId:DWORD;
+ id     :DWORD;
+begin
+ Result:=0;
+
+ pipeHi :=data^.pipeHi;
+ pipeLo :=data^.pipeLo;
+ queueId:=data^.queueId;
+
+ //if (not IsDevKit) or (not IsDiag)
+
+ if (pipeHi  <> $0769c766) or
+    (pipeLo  <> $72e8e3c1) or
+    (queueId <> $db72af28) then
+ begin
+
+  if (pipeHi = 2) and
+     (pipeLo = 3) then
+  begin
+   Exit(Integer($804c000a));
+  end;
+
+  if (1 < (pipeHi - 1)) then
+  begin
+   Exit(Integer($804c000b));
+  end;
+
+  if (3 < pipeLo) then
+  begin
+   Exit(Integer($804c000b));
+  end;
+
+  if (7 < queueId) then
+  begin
+   Exit(Integer($804c000b));
+  end;
+
+ end else
+ begin
+  queueId:=4;
+  pipeLo :=3;
+  pipeHi :=2;
+ end;
+
+ id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
+
+ if (map_queue_valid[id] = false) then
+ begin
+  Exit(Integer($804c0001));
+ end;
+
+ Result:=gc_map_hdq_ding_dong(@map_queue_hqd[id],
+                              data^.nextStartOffsetInDw);
+
+end;
+
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  vaddr:QWORD;
@@ -483,6 +753,23 @@ begin
              trigger_gfx_ring;
             end;
 
+  $C030810D: //sceGnmMapComputeQueue
+            begin
+             rw_wlock(ring_gfx_lock);
+
+              Result:=gc_map_compute_queue(data);
+
+             rw_wunlock(ring_gfx_lock);
+            end;
+
+  $C010811C: //sceGnmDingDong
+            begin
+             rw_wlock(ring_gfx_lock);
+
+              Result:=gc_ding_dong(data);
+
+             rw_wunlock(ring_gfx_lock);
+            end;
 
   else
    begin
