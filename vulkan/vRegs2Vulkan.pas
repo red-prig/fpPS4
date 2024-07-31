@@ -72,15 +72,17 @@ type
   blendConstants:array[0..3] of TVkFloat;
  end;
 
- PSH_REG_GROUP        =^TSH_REG_GROUP;
- PCONTEXT_REG_GROUP   =^TCONTEXT_REG_GROUP;
+ PSH_REG_GFX_GROUP    =^TSH_REG_GFX_GROUP;     // 0x2C00
+ PSH_REG_COMPUTE_GROUP=^TSH_REG_COMPUTE_GROUP; // 0x2E00
+ PCONTEXT_REG_GROUP   =^TCONTEXT_REG_GROUP;    // 0xA000
  PUSERCONFIG_REG_SHORT=^TUSERCONFIG_REG_SHORT;
 
  PGPU_USERDATA=^TGPU_USERDATA;
 
  PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
-  SH_REG:PSH_REG_GROUP;         // 0x2C00
+  SG_REG:PSH_REG_GFX_GROUP;     // 0x2C00
+  SC_REG:PSH_REG_COMPUTE_GROUP; // 0x2E00
   CX_REG:PCONTEXT_REG_GROUP;    // 0xA000
   UC_REG:PUSERCONFIG_REG_SHORT; // 0xC000
 
@@ -1399,8 +1401,8 @@ begin
  Result:=Default(TVkPipelineRasterizationStateCreateInfo);
  Result.sType:=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 
- if (SH_REG^.SPI_SHADER_PGM_LO_PS<>0) or
-    (SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE<>0) then
+ if (SG_REG^.SPI_SHADER_PGM_LO_PS<>0) or
+    (SG_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE<>0) then
  if (CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE=0) and
     (CX_REG^.DB_RENDER_CONTROL.STENCIL_CLEAR_ENABLE=0) then
  begin
@@ -1554,7 +1556,8 @@ end;
 function TGPU_REGS.get_reg(i:word):DWORD;
 begin
  case i of
-  $2C00..$2E7F:Result:=PDWORD(SH_REG)[i-$2C00];
+  $2C00..$2D8C:Result:=PDWORD(SG_REG)[i-$2C00];
+  $2E00..$2E7F:Result:=PDWORD(SC_REG)[i-$2E00];
   $A000..$A38F:Result:=PDWORD(CX_REG)[i-$A000];
   $C079:Result:=PDWORD(@UC_REG^.CP_COHER_BASE_HI  )^;
   $C07C:Result:=PDWORD(@UC_REG^.CP_COHER_CNTL     )^;
@@ -1577,13 +1580,13 @@ Function TGPU_REGS.get_code_addr(FStage:TvShaderStage):Pointer;
 begin
  Result:=nil;
  case FStage of
-  vShaderStageLs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_LS,SH_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
-  vShaderStageHs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_HS,SH_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
-  vShaderStageEs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_ES,SH_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
-  vShaderStageGs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_GS,SH_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
-  vShaderStageVs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_VS,SH_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
-  vShaderStagePs:Result:=getCodeAddress(SH_REG^.SPI_SHADER_PGM_LO_PS,SH_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
-  vShaderStageCs:Result:=getCodeAddress(SH_REG^.COMPUTE_PGM_LO      ,SH_REG^.COMPUTE_PGM_HI.DATA);
+  vShaderStageLs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_LS,SG_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
+  vShaderStageHs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_HS,SG_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
+  vShaderStageEs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_ES,SG_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
+  vShaderStageGs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_GS,SG_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
+  vShaderStageVs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_VS,SG_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
+  vShaderStagePs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_PS,SG_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
+  vShaderStageCs:Result:=getCodeAddress(SC_REG^.COMPUTE_PGM_LO      ,SC_REG^.COMPUTE_PGM_HI.DATA);
  end;
 end;
 
@@ -1591,29 +1594,29 @@ Function TGPU_REGS.get_user_data(FStage:TvShaderStage):Pointer;
 begin
  Result:=nil;
  case FStage of
-  vShaderStageLs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_LS;
-  vShaderStageHs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_HS;
-  vShaderStageEs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_ES;
-  vShaderStageGs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_GS;
-  vShaderStageVs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_VS;
-  vShaderStagePs:Result:=@SH_REG^.SPI_SHADER_USER_DATA_PS;
-  vShaderStageCs:Result:=@SH_REG^.COMPUTE_USER_DATA;
+  vShaderStageLs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_LS;
+  vShaderStageHs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_HS;
+  vShaderStageEs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_ES;
+  vShaderStageGs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_GS;
+  vShaderStageVs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_VS;
+  vShaderStagePs:Result:=@SG_REG^.SPI_SHADER_USER_DATA_PS;
+  vShaderStageCs:Result:=@SC_REG^.COMPUTE_USER_DATA;
  end;
 end;
 
 procedure TGPU_REGS.export_user_data_rt(dst:PGPU_USERDATA);
 begin
- dst^.A[vShaderStageLs]:=SH_REG^.SPI_SHADER_USER_DATA_LS;
- dst^.A[vShaderStageHs]:=SH_REG^.SPI_SHADER_USER_DATA_HS;
- dst^.A[vShaderStageEs]:=SH_REG^.SPI_SHADER_USER_DATA_ES;
- dst^.A[vShaderStageGs]:=SH_REG^.SPI_SHADER_USER_DATA_GS;
- dst^.A[vShaderStageVs]:=SH_REG^.SPI_SHADER_USER_DATA_VS;
- dst^.A[vShaderStagePs]:=SH_REG^.SPI_SHADER_USER_DATA_PS;
+ dst^.A[vShaderStageLs]:=SG_REG^.SPI_SHADER_USER_DATA_LS;
+ dst^.A[vShaderStageHs]:=SG_REG^.SPI_SHADER_USER_DATA_HS;
+ dst^.A[vShaderStageEs]:=SG_REG^.SPI_SHADER_USER_DATA_ES;
+ dst^.A[vShaderStageGs]:=SG_REG^.SPI_SHADER_USER_DATA_GS;
+ dst^.A[vShaderStageVs]:=SG_REG^.SPI_SHADER_USER_DATA_VS;
+ dst^.A[vShaderStagePs]:=SG_REG^.SPI_SHADER_USER_DATA_PS;
 end;
 
 procedure TGPU_REGS.export_user_data_cs(dst:PGPU_USERDATA);
 begin
- dst^.A[vShaderStageCs]:=SH_REG^.COMPUTE_USER_DATA;
+ dst^.A[vShaderStageCs]:=SC_REG^.COMPUTE_USER_DATA;
 end;
 
 Function TGPU_USERDATA.get_user_data(FStage:TvShaderStage):Pointer;

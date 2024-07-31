@@ -31,6 +31,7 @@ type
   bpos:Ptruint;
   picb:t_pm4_parse_cb;
   buft:t_pm4_stream_type;
+  c_id:Byte;
  end;
 
  t_flush_stream=procedure(var stream:t_pm4_stream) of object;
@@ -43,14 +44,18 @@ type
   //
   on_flush_stream:t_flush_stream;
   //
-  SH_REG:TSH_REG_GROUP;         // 0x2C00
+  SG_REG:TSH_REG_GFX_GROUP;     // 0x2C00
+  SC_REG:TSH_REG_COMPUTE_GROUP; // 0x2E00
   CX_REG:TCONTEXT_REG_GROUP;    // 0xA000
   UC_REG:TUSERCONFIG_REG_SHORT; // 0xC000
+  //
+  ASC_COMPUTE:array[0..63] of TSH_REG_COMPUTE_GROUP;
   //
   curr_ibuf :p_pm4_ibuffer;
   //
   LastSetReg:Word;
   //
+  function  stream_type:t_pm4_stream_type;
   procedure init;
   procedure add_stall(ibuf:p_pm4_ibuffer);
   procedure free;
@@ -61,6 +66,7 @@ type
   //
   procedure set_reg(i:word;data:DWORD);
   procedure set_sh_reg(i:word;data:DWORD);
+  procedure set_sh_reg_compute(i:word;data:DWORD);
   procedure set_ctx_reg(i:word;data:DWORD);
   function  get_reg(i:word):DWORD;
   procedure clear_state;
@@ -70,17 +76,20 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                        buff:Pointer;
                        size:Ptruint;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type):Boolean;
+                       buft:t_pm4_stream_type;
+                       c_id:Byte):Boolean;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         buf:PPM4CMDINDIRECTBUFFER;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type):Boolean;
+                       buft:t_pm4_stream_type;
+                       c_id:Byte):Boolean;
 
 function pm4_ibuf_parse(pctx:p_pfp_ctx;ibuf:p_pm4_ibuffer):Integer;
 
 function pm4_parse_ccb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+function pm4_parse_compute_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 
 implementation
 
@@ -105,7 +114,8 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                        buff:Pointer;
                        size:Ptruint;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type):Boolean;
+                       buft:t_pm4_stream_type;
+                       c_id:Byte):Boolean;
 begin
  Result:=True;
  ibuf^.next:=Default(TAILQ_ENTRY);
@@ -115,12 +125,14 @@ begin
  ibuf^.bpos:=0;
  ibuf^.picb:=icb;
  ibuf^.buft:=buft;
+ ibuf^.c_id:=c_id;
 end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         buf:PPM4CMDINDIRECTBUFFER;
                         icb:t_pm4_parse_cb;
-                       buft:t_pm4_stream_type):Boolean;
+                       buft:t_pm4_stream_type;
+                       c_id:Byte):Boolean;
 var
  op:DWORD;
  ib_base:QWORD;
@@ -159,6 +171,7 @@ begin
    ibuf^.bpos:=0;
    ibuf^.picb:=icb;
    ibuf^.buft:=buft;
+   ibuf^.c_id:=c_id;
 
    Result:=True;
   end;
@@ -176,8 +189,13 @@ var
 begin
  Result:=0;
 
- pctx^.LastSetReg:=0;
  pctx^.curr_ibuf :=ibuf;
+
+ case pctx^.stream_type of
+  stGfxDcb,
+  stGfxCcb:pctx^.LastSetReg:=0;
+  else;
+ end;
 
  i:=ibuf^.bpos;
  buff:=ibuf^.buff+i;
@@ -214,6 +232,11 @@ begin
  ibuf^.bpos:=ibuf^.size-i;
 
  pctx^.curr_ibuf:=nil;
+end;
+
+function t_pfp_ctx.stream_type:t_pm4_stream_type;
+begin
+ Result:=curr_ibuf^.buft;
 end;
 
 procedure t_pfp_ctx.init;
@@ -294,7 +317,8 @@ end;
 procedure t_pfp_ctx.set_reg(i:word;data:DWORD);
 begin
  case i of
-  $2C00..$2E7F:PDWORD(@SH_REG)[i-$2C00]:=data;
+  $2C00..$2D8C:PDWORD(@SG_REG)[i-$2C00]:=data;
+  $2E00..$2E7F:PDWORD(@SC_REG)[i-$2E00]:=data;
   $A000..$A38F:PDWORD(@CX_REG)[i-$A000]:=data;
   $C079:PDWORD(@UC_REG.CP_COHER_BASE_HI  )^:=data;
   $C07C:PDWORD(@UC_REG.CP_COHER_CNTL     )^:=data;
@@ -319,14 +343,32 @@ end;
 
 procedure t_pfp_ctx.set_sh_reg(i:word;data:DWORD);
 begin
- if (i<=$27F) then
- begin
-  PDWORD(@SH_REG)[i]:=data;
- end else
- if p_print_gpu_ops then
- begin
-  Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
+ case i of
+  $000..$18C:PDWORD(@SG_REG)[i]:=data;
+  $200..$27F:PDWORD(@SC_REG)[i-$200]:=data;
+  else
+   if p_print_gpu_ops then
+   begin
+    Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
+   end;
  end;
+end;
+
+procedure t_pfp_ctx.set_sh_reg_compute(i:word;data:DWORD);
+var
+ c_id:Byte;
+begin
+ c_id:=curr_ibuf^.c_id;
+
+ case i of
+  $200..$27F:PDWORD(@ASC_COMPUTE[c_id])[i-$200]:=data;
+  else
+   if p_print_gpu_ops then
+   begin
+    Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
+   end;
+ end;
+
 end;
 
 procedure t_pfp_ctx.set_ctx_reg(i:word;data:DWORD);
@@ -344,7 +386,8 @@ end;
 function t_pfp_ctx.get_reg(i:word):DWORD;
 begin
  case i of
-  $2C00..$2E7F:Result:=PDWORD(@SH_REG)[i-$2C00];
+  $2C00..$2D8C:Result:=PDWORD(@SG_REG)[i-$2C00];
+  $2E00..$2E7F:Result:=PDWORD(@SC_REG)[i-$2E00];
   $A000..$A38F:Result:=PDWORD(@CX_REG)[i-$A000];
   $C079:Result:=PDWORD(@UC_REG.CP_COHER_BASE_HI  )^;
   $C07C:Result:=PDWORD(@UC_REG.CP_COHER_CNTL     )^;
@@ -881,6 +924,8 @@ end;
 
 procedure onLoadConstRam(pctx:p_pfp_ctx;Body:PPM4CMDCONSTRAMLOAD);
 begin
+ Assert(pctx^.stream_type=stGfxCcb);
+
  {
  Writeln(' adr=0x',HexStr(Body^.addr,16));
  Writeln(' len=0x',HexStr(Body^.numDwords*4,4));
@@ -935,6 +980,8 @@ end;
 
 procedure onEventWrite(pctx:p_pfp_ctx;Body:PTPM4CMDEVENTWRITE);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
  if p_print_gpu_ops then
@@ -956,10 +1003,12 @@ end;
 
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  Case Body^.eventType of
-  kEopFlushCbDbCaches:;
-  kEopFlushAndInvalidateCbDbCaches:;
-  kEopCbDbReadsDone:;
+  CACHE_FLUSH_TS,               //FlushCbDbCaches
+  CACHE_FLUSH_AND_INV_TS_EVENT, //FlushAndInvalidateCbDbCaches
+  BOTTOM_OF_PIPE_TS:;           //CbDbReadsDone
   else
    Assert(False,'EventWriteEop: eventType=0x'+HexStr(Body^.eventType,1));
  end;
@@ -974,9 +1023,9 @@ begin
  if p_print_gpu_ops then
  begin
   Case Body^.eventType of
-   kEopFlushCbDbCaches             :Writeln(' eventType  =','FlushCbDbCaches');
-   kEopFlushAndInvalidateCbDbCaches:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
-   kEopCbDbReadsDone               :Writeln(' eventType  =','CbDbReadsDone');
+   CACHE_FLUSH_TS              :Writeln(' eventType  =','FlushCbDbCaches');
+   CACHE_FLUSH_AND_INV_TS_EVENT:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
+   BOTTOM_OF_PIPE_TS           :Writeln(' eventType  =','CbDbReadsDone');
    else;
   end;
 
@@ -995,6 +1044,8 @@ end;
 
 procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
  Case Body^.eventType of
@@ -1030,6 +1081,8 @@ var
  byteCount:DWORD;
  srcSel,dstSel:Byte;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  srcSel:=((PDWORD(Body)[1] shr $1d) and 3) or ((PDWORD(Body)[6] shr $19) and 8) or ((PDWORD(Body)[6] shr $18) and 4);
  dstSel:=((PDWORD(Body)[1] shr $14) and 1) or ((PDWORD(Body)[6] shr $1a) and 8) or ((PDWORD(Body)[6] shr $19) and 4);
 
@@ -1105,6 +1158,7 @@ var
  engineSel:Byte;
  dstSel:Byte;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
 
  Assert(Body^.CONTROL.wrOneAddr=0,'WriteData: wrOneAddr<>0');
 
@@ -1161,6 +1215,7 @@ end;
 
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
 
  Case Body^.memSpace of
   WAIT_REG_MEM_SPACE_MEMORY:;
@@ -1187,6 +1242,8 @@ procedure onAcquireMem(pctx:p_pfp_ctx;Body:PPM4ACQUIREMEM);
 {var
  addr,size:QWORD;}
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.UC_REG.CP_COHER_BASE_HI.COHER_BASE_HI_256B:=Body^.coherBaseHi;
  DWORD(pctx^.UC_REG.CP_COHER_CNTL)               :=Body^.coherCntl;
  pctx^.UC_REG.CP_COHER_SIZE                      :=Body^.coherSizeLo;
@@ -1217,6 +1274,8 @@ end;
 
 procedure onContextControl(pctx:p_pfp_ctx;Body:PPM4CMDCONTEXTCONTROL);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  if (DWORD(Body^.loadControl )<>$80000000) or
     (DWORD(Body^.shadowEnable)<>$80000000) then
  if p_print_gpu_ops then
@@ -1230,6 +1289,8 @@ procedure onSetBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  addr:=QWORD(Body^.address);
  if (addr<>0) then
  if p_print_gpu_ops then
@@ -1243,6 +1304,8 @@ procedure onSetPredication(pctx:p_pfp_ctx;Body:PPM4CMDSETPREDICATION);
 var
  addr:QWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  addr:=QWORD(Body^.startAddress);
  if (addr<>0) then
  if p_print_gpu_ops then
@@ -1257,6 +1320,8 @@ end;
 
 procedure onDrawPreamble(pctx:p_pfp_ctx;Body:PPM4CMDDRAWPREAMBLE);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.UC_REG.VGT_PRIMITIVE_TYPE:=Body^.control1;
  pctx^.CX_REG.IA_MULTI_VGT_PARAM:=Body^.control2;
  pctx^.CX_REG.VGT_LS_HS_CONFIG  :=Body^.control3;
@@ -1264,6 +1329,8 @@ end;
 
 procedure onClearState(pctx:p_pfp_ctx;Body:Pointer);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.clear_state;
 end;
 
@@ -1275,6 +1342,8 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  c:=Body^.header.count;
  if (c<>0) then
  begin
@@ -1303,6 +1372,8 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  c:=Body^.header.count;
  if (c<>0) then
  begin
@@ -1331,6 +1402,8 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  c:=Body^.header.count;
  if (c<>0) then
  begin
@@ -1359,6 +1432,8 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  c:=Body^.header.count;
  if (c<>0) then
  begin
@@ -1396,11 +1471,15 @@ end;
 
 procedure onIndexBufferSize(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.UC_REG.VGT_NUM_INDICES:=Body^.numIndices;
 end;
 
 procedure onIndexType(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXTYPE);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE:=Body^.indexType;
  pctx^.CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE :=Body^.swapMode;
  pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE    :=Body^.indexType;
@@ -1408,6 +1487,8 @@ end;
 
 procedure onIndexBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBASE);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  Assert(Body^.baseSelect=0);
  pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
  pctx^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
@@ -1415,12 +1496,16 @@ end;
 
 procedure onNumInstances(pctx:p_pfp_ctx;Body:PPM4CMDDRAWNUMINSTANCES);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  pctx^.CX_REG.VGT_DMA_NUM_INSTANCES:=Body^.numInstances;
  pctx^.UC_REG.VGT_NUM_INSTANCES    :=Body^.numInstances;
 end;
 
 procedure onDrawIndex2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEX2);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  if (DWORD(Body^.drawInitiator)<>0) then
  if p_print_gpu_ops then
  begin
@@ -1434,13 +1519,15 @@ begin
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
 
- pctx^.stream[stGfxDcb].DrawIndex2(pctx^.SH_REG,
+ pctx^.stream[stGfxDcb].DrawIndex2(pctx^.SG_REG,
                                    pctx^.CX_REG,
                                    pctx^.UC_REG);
 end;
 
 procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  if (DWORD(Body^.drawInitiator)<>2) then
  if p_print_gpu_ops then
  begin
@@ -1451,18 +1538,22 @@ begin
  pctx^.UC_REG.VGT_NUM_INDICES   :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
 
- pctx^.stream[stGfxDcb].DrawIndexAuto(pctx^.SH_REG,
+ pctx^.stream[stGfxDcb].DrawIndexAuto(pctx^.SG_REG,
                                       pctx^.CX_REG,
                                       pctx^.UC_REG);
 end;
 
 procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTMULTI);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  Assert(false,'IT_DRAW_INDEX_INDIRECT_COUNT_MULTI')
 end;
 
 procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
  if (DWORD(Body^.dispatchInitiator)<>1) then
@@ -1471,16 +1562,18 @@ begin
   Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
  end;
 
- pctx^.SH_REG.COMPUTE_DIM_X:=Body^.dimX;
- pctx^.SH_REG.COMPUTE_DIM_Y:=Body^.dimY;
- pctx^.SH_REG.COMPUTE_DIM_Z:=Body^.dimZ;
- pctx^.SH_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
+ pctx^.SC_REG.COMPUTE_DIM_X:=Body^.dimX;
+ pctx^.SC_REG.COMPUTE_DIM_Y:=Body^.dimY;
+ pctx^.SC_REG.COMPUTE_DIM_Z:=Body^.dimZ;
+ pctx^.SC_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
 
- pctx^.stream[stGfxDcb].DispatchDirect(pctx^.SH_REG);
+ pctx^.stream[stGfxDcb].DispatchDirect(pctx^.SC_REG);
 end;
 
 procedure onPfpSyncMe(pctx:p_pfp_ctx;Body:Pointer);
 begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
  //stallCommandBufferParser
  //wait idle me?
 
@@ -1493,7 +1586,7 @@ begin
  begin
   Writeln('\HINT_PUSH_MARKER:',Body);
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_PUSH_MARKER:',Body);
+ pctx^.stream[pctx^.stream_type].Hint('\HINT_PUSH_MARKER:',Body);
 end;
 
 procedure onPopMarker(pctx:p_pfp_ctx);
@@ -1502,7 +1595,7 @@ begin
  begin
   Writeln('\HINT_POP_MARKER');
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_POP_MARKER','');
+ pctx^.stream[pctx^.stream_type].Hint('\HINT_POP_MARKER','');
 end;
 
 procedure onSetMarker(pctx:p_pfp_ctx;Body:PChar);
@@ -1511,7 +1604,7 @@ begin
  begin
   Writeln('\HINT_SET_MARKER:',Body);
  end;
- pctx^.stream[pctx^.curr_ibuf^.buft].Hint('\HINT_SET_MARKER:',Body);
+ pctx^.stream[pctx^.stream_type].Hint('\HINT_SET_MARKER:',Body);
 end;
 
 procedure onWidthHeight(Body:PWORD);
@@ -1549,35 +1642,44 @@ end;
 procedure onNop(pctx:p_pfp_ctx;Body:PDWORD);
 begin
 
- Case pctx^.LastSetReg of
-  mmPA_SC_SCREEN_SCISSOR_BR,
+ case pctx^.stream_type of
+  stGfxDcb,
+  stGfxCcb:
+    begin
 
-  mmCB_COLOR0_FMASK_SLICE,
-  mmCB_COLOR1_FMASK_SLICE,
-  mmCB_COLOR2_FMASK_SLICE,
-  mmCB_COLOR3_FMASK_SLICE,
-  mmCB_COLOR4_FMASK_SLICE,
-  mmCB_COLOR5_FMASK_SLICE,
-  mmCB_COLOR6_FMASK_SLICE,
-  mmCB_COLOR7_FMASK_SLICE,
+     Case pctx^.LastSetReg of
+      mmPA_SC_SCREEN_SCISSOR_BR,
 
-  mmCB_COLOR0_DCC_BASE,
-  mmCB_COLOR1_DCC_BASE,
-  mmCB_COLOR2_DCC_BASE,
-  mmCB_COLOR3_DCC_BASE,
-  mmCB_COLOR4_DCC_BASE,
-  mmCB_COLOR5_DCC_BASE,
-  mmCB_COLOR6_DCC_BASE,
-  mmCB_COLOR7_DCC_BASE,
+      mmCB_COLOR0_FMASK_SLICE,
+      mmCB_COLOR1_FMASK_SLICE,
+      mmCB_COLOR2_FMASK_SLICE,
+      mmCB_COLOR3_FMASK_SLICE,
+      mmCB_COLOR4_FMASK_SLICE,
+      mmCB_COLOR5_FMASK_SLICE,
+      mmCB_COLOR6_FMASK_SLICE,
+      mmCB_COLOR7_FMASK_SLICE,
 
-  mmDB_STENCIL_CLEAR,
-  mmDB_RENDER_CONTROL,
+      mmCB_COLOR0_DCC_BASE,
+      mmCB_COLOR1_DCC_BASE,
+      mmCB_COLOR2_DCC_BASE,
+      mmCB_COLOR3_DCC_BASE,
+      mmCB_COLOR4_DCC_BASE,
+      mmCB_COLOR5_DCC_BASE,
+      mmCB_COLOR6_DCC_BASE,
+      mmCB_COLOR7_DCC_BASE,
 
-  mmDB_HTILE_SURFACE:
-   begin
-    onWidthHeight(@Body[1]);
-    Exit;
-   end;
+      mmDB_STENCIL_CLEAR,
+      mmDB_RENDER_CONTROL,
+
+      mmDB_HTILE_SURFACE:
+       begin
+        onWidthHeight(@Body[1]);
+        Exit;
+       end;
+      else;
+     end;
+
+    end;
   else;
  end;
 
@@ -1700,6 +1802,151 @@ begin
  end;
 
 end;
+
+procedure onSetShRegCompute(pctx:p_pfp_ctx;Body:PPM4CMDSETDATA);
+var
+ i,c,r:WORD;
+ v:DWORD;
+begin
+ c:=Body^.header.count;
+ if (c<>0) then
+ begin
+  For i:=0 to c-1 do
+  begin
+   r:=Body^.REG_OFFSET+i;
+   v:=PDWORD(@Body^.REG_DATA)[i];
+   //
+   if p_print_gpu_ops then
+   begin
+    Writeln(' [ASC]SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+   end;
+   //
+   pctx^.set_sh_reg_compute(r,v);
+  end;
+  //
+ end;
+end;
+
+procedure onDispatchDirectCompute(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
+var
+ c_id:Byte;
+begin
+ Assert(Body^.header.shaderType=1,'shaderType<>CS');
+
+ if (DWORD(Body^.dispatchInitiator)<>1) then
+ if p_print_gpu_ops then
+ begin
+  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+ end;
+
+ c_id:=pctx^.curr_ibuf^.c_id;
+
+ pctx^.ASC_COMPUTE[c_id].COMPUTE_DIM_X:=Body^.dimX;
+ pctx^.ASC_COMPUTE[c_id].COMPUTE_DIM_Y:=Body^.dimY;
+ pctx^.ASC_COMPUTE[c_id].COMPUTE_DIM_Z:=Body^.dimZ;
+ pctx^.ASC_COMPUTE[c_id].COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
+
+ pctx^.stream[pctx^.stream_type].DispatchDirect(pctx^.ASC_COMPUTE[c_id]);
+end;
+
+procedure onReleaseMemCompute(pctx:p_pfp_ctx;Body:PPM4CMDRELEASEMEM);
+begin
+ Case Body^.eventType of
+  CS_DONE,
+  CACHE_FLUSH_TS,               //FlushCbDbCache
+  CACHE_FLUSH_AND_INV_TS_EVENT, //FlushAndInvalidateCbDbCaches
+  BOTTOM_OF_PIPE_TS,            //CbDbReadsDone
+  FLUSH_AND_INV_DB_DATA_TS,     //FlushAndInvalidateDbCache
+  FLUSH_AND_INV_CB_DATA_TS:;    //FlushAndInvalidateCbCache
+  else
+   Assert(False,'ReleaseMem: eventType=0x'+HexStr(Body^.eventType,1));
+ end;
+
+ case Body^.eventIndex of
+  EVENT_WRITE_INDEX_ANY_EOP_TIMESTAMP:;
+  EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP:;
+  else
+   Assert(False,'ReleaseMem: eventIndex=0x'+HexStr(Body^.eventIndex,1));
+ end;
+
+ DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
+
+ if p_print_gpu_ops then
+ begin
+  Case Body^.eventType of
+   CS_DONE,
+   CACHE_FLUSH_TS              :Writeln(' eventType  =','FlushCbDbCache');
+   CACHE_FLUSH_AND_INV_TS_EVENT:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
+   BOTTOM_OF_PIPE_TS           :Writeln(' eventType  =','CbDbReadsDone');
+   FLUSH_AND_INV_DB_DATA_TS    :Writeln(' eventType  =','FlushAndInvalidateDbCache');
+   FLUSH_AND_INV_CB_DATA_TS    :Writeln(' eventType  =','FlushAndInvalidateCbCache');
+   else;
+  end;
+
+  Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
+  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
+  Writeln(' dstSelector=0x',HexStr(Body^.dstSel,2));
+  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
+  Writeln(' immValue   =0x',HexStr(Body^.data,16));
+ end;
+
+ pctx^.stream[pctx^.stream_type].ReleaseMem(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.dataSel,Body^.dstSel,Body^.intSel);
+
+ pctx^.Flush_stream(pctx^.stream_type);
+end;
+
+function pm4_parse_compute_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+var
+ ibuf:t_pm4_ibuffer;
+ i:Integer;
+begin
+ Result:=0;
+
+ Result:=0;
+
+ case PM4_TYPE(token) of
+  0:begin //PM4_TYPE_0
+     if p_print_gpu_ops then Writeln('[ASC]PM4_TYPE_0 len:',PM4_LENGTH(token));
+     onPm40(pctx,buff);
+    end;
+  2:begin //PM4_TYPE_2
+     if p_print_gpu_ops then Writeln('[ASC]PM4_TYPE_2');
+     //no body
+    end;
+  3:begin //PM4_TYPE_3
+     if p_print_gpu_ops then
+     if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
+        (not p_print_gpu_hint) then
+     begin
+      Writeln('[ASC]IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+                ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
+              ' len:',PM4_LENGTH(token));
+     end;
+
+     case PM4_TYPE_3_HEADER(token).opcode of
+      IT_NOP                            :onNop                  (pctx,buff);
+      IT_SET_SH_REG                     :onSetShRegCompute      (pctx,buff);
+      IT_DISPATCH_DIRECT                :onDispatchDirectCompute(pctx,buff);
+      IT_RELEASE_MEM                    :onReleaseMemCompute    (pctx,buff);
+      else
+       begin
+        Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:0x',HexStr(PM4_TYPE_3_HEADER(token).opcode,2));
+        Assert(False);
+       end;
+     end;
+
+    end;
+  else
+   begin
+    Writeln(stderr,'[ASC]PM4_TYPE_',PM4_TYPE(token));
+    Assert(False);
+   end;
+ end;
+
+end;
+
+
+
 
 end.
 

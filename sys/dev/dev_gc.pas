@@ -13,6 +13,7 @@ procedure gc_initialize();
 implementation
 
 uses
+ atomic,
  errno,
  kern_mtx,
  sys_event,
@@ -157,6 +158,14 @@ var
 
  pm4_me_gfx:t_pm4_me;
 
+var
+ map_queue_valid:array[0..63] of Boolean;
+ map_queue_hqd  :array[0..63] of t_gc_hqd;
+
+ map_queue_bits :QWORD=0;
+
+ //asc_queues
+
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 var
  submit_id:DWORD;
@@ -171,7 +180,7 @@ begin
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
 end;
 
-function pm4_parse_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
+function pm4_parse_gfx_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 var
  ibuf:t_pm4_ibuffer;
  i:Integer;
@@ -185,7 +194,7 @@ begin
     begin
      Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
-    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb,stGfxCcb) then
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb,stGfxCcb,0) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
      if (i<>0) then
@@ -202,7 +211,7 @@ begin
     begin
      Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
-    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb,stGfxDcb) then
+    if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb,stGfxDcb,0) then
     begin
      i:=pm4_ibuf_parse(pctx,@ibuf);
      if (i<>0) then
@@ -223,10 +232,15 @@ begin
   $C0044700: //IT_EVENT_WRITE_EOP
    begin
     onEventWriteEop(pctx,buff);
-   end
+   end;
   else;
  end;
 
+end;
+
+function get_compute_stream_type(c_id:DWORD):t_pm4_stream_type; inline;
+begin
+ Result:=t_pm4_stream_type(ord(stCompute0) + (c_id div 8)); //pipe id
 end;
 
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
@@ -236,6 +250,10 @@ var
 
  ibuf:t_pm4_ibuffer;
  buft:t_pm4_stream_type;
+
+ bits:QWORD;
+ c_id:DWORD;
+ tmp :Pointer;
 begin
 
  if LoadVulkan then
@@ -249,7 +267,7 @@ begin
   begin
    //Writeln('packet:0x',HexStr(buff),':',size);
 
-   if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_ring,stGfxRing) then
+   if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_gfx_ring,stGfxRing,0) then
    begin
     i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
 
@@ -266,9 +284,67 @@ begin
    gc_ring_pm4_drain(@ring_gfx,size);
 
    //
-   for buft:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
+   for buft:=stGfxDcb to stGfxCcb do
    begin
-    pfp_ctx.Flush_stream(buft);;
+    pfp_ctx.Flush_stream(buft);
+   end;
+   //
+   Continue;
+  end;
+
+  bits:=System.InterlockedExchange64(map_queue_bits,0);
+
+  if (bits<>0) then
+  begin
+
+   while (bits<>0) do
+   begin
+    c_id:=BsfQWord(bits);
+
+    tmp:=nil;
+
+    rw_wlock(ring_gfx_lock);
+
+     i:=gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff);
+
+     if (i<>0) then
+     begin
+      if (i=2) then
+      begin
+       tmp:=AllocMem(size);
+
+       gc_map_hdq_copy(@map_queue_hqd[c_id],size,tmp);
+
+       buff:=tmp;
+      end;
+
+      if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_compute_ring,get_compute_stream_type(c_id),c_id) then
+      begin
+       i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
+
+       pfp_ctx.add_stall(@ibuf);
+      end;
+
+      if (tmp<>nil) then
+      begin
+       FreeMem(tmp);
+       tmp:=nil;
+      end;
+
+      gc_map_hdq_drain(@map_queue_hqd[c_id],size);
+
+     end;
+
+    rw_wunlock(ring_gfx_lock);
+
+    //clear
+    bits:=bits and (not (1 shl c_id));
+   end;
+
+   //
+   for buft:=stCompute0 to stCompute6 do
+   begin
+    pfp_ctx.Flush_stream(buft);
    end;
    //
    Continue;
@@ -350,69 +426,6 @@ begin
   trigger_gfx_ring;
   pm4_me_gfx.imdone;
  end;
-
-end;
-
-type
- p_gc_hqd=^t_gc_hqd;
- t_gc_hqd=record
-  base_guest_addr:Pointer;
-  base_dmem_addr :Pointer;
-  read_guest_addr:PDWORD;
-  read_dmem_addr :PDWORD;
-  lenLog2        :DWORD;
-  pipePriority   :DWORD;
-  ringSize       :DWORD;
-  NextOffsetDw   :DWORD;
- end;
-
-var
- map_queue_valid:array[0..63] of Boolean;
- map_queue_hqd  :array[0..63] of t_gc_hqd;
-
- //asc_queues
-
-Function gc_map_hqd(ringBaseAddress:Pointer;
-                    readPtrAddress :Pointer;
-                    lenLog2        :DWORD;
-                    g_queueId      :DWORD;
-                    pipePriority   :DWORD;
-                    hqd:p_gc_hqd):Integer;
-var
- base_dmem_addr:Pointer;
- read_dmem_addr:PDWORD;
-begin
- Result:=0;
-
- if ((lenLog2 - 8) >= 23) then
- begin
-  Exit(Integer($804c000c));
- end;
-
- if ((g_queueId - 1) >= 511) then
- begin
-  Exit(Integer($804c000d));
- end;
-
- base_dmem_addr:=nil;
- if not get_dmem_ptr(ringBaseAddress,@base_dmem_addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(ringBaseAddress)+' not in dmem!');
- end;
-
- read_dmem_addr:=nil;
- if not get_dmem_ptr(readPtrAddress,@read_dmem_addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(readPtrAddress)+' not in dmem!');
- end;
-
- hqd^.base_guest_addr:=ringBaseAddress;
- hqd^.base_dmem_addr :=base_dmem_addr;
- hqd^.read_guest_addr:=readPtrAddress;
- hqd^.read_dmem_addr :=read_dmem_addr;
- hqd^.lenLog2        :=lenLog2;
- hqd^.pipePriority   :=pipePriority;
- hqd^.ringSize       :=1 shl lenLog2;
 
 end;
 
@@ -507,39 +520,6 @@ begin
 
 end;
 
-Function gc_map_hdq_ding_dong(hqd:p_gc_hqd;next_offs_dw:DWORD):Integer;
-var
- acb_ptr :Pointer;
- acb_read:DWORD;
- acb_size:DWORD;
-begin
- Result:=0;
-
- if (next_offs_dw <= (hqd^.ringSize shr 2)) then
- begin
-  hqd^.NextOffsetDw:=next_offs_dw;
-
-  acb_read:=hqd^.read_dmem_addr^;
-
-  acb_ptr:=hqd^.base_dmem_addr + acb_read;
-
-  if (next_offs_dw<>0) then
-  begin
-   acb_size:=(next_offs_dw shl 2) - acb_read;
-  end else
-  begin
-   acb_size:=hqd^.ringSize - acb_read;
-  end;
-
-  //SubmitAsc(vqid, acb_span);
-
-  hqd^.read_dmem_addr^ := (acb_read + acb_size) mod hqd^.ringSize;
- end else
- begin
-  Result:=EINVAL;
- end;
-end;
-
 Function gc_ding_dong(data:p_ding_dong_args):Integer;
 var
  pipeHi :DWORD;
@@ -597,6 +577,11 @@ begin
 
  Result:=gc_map_hdq_ding_dong(@map_queue_hqd[id],
                               data^.nextStartOffsetInDw);
+
+ if (Result=0) then
+ begin
+  fetch_or(map_queue_bits,(1 shl id));
+ end;
 
 end;
 
@@ -707,7 +692,10 @@ begin
 
              rw_wunlock(ring_gfx_lock);
 
-             trigger_gfx_ring;
+             if (Result=0) then
+             begin
+              trigger_gfx_ring;
+             end;
             end;
 
   $C020810C: //submit eop
@@ -737,7 +725,10 @@ begin
 
              rw_wunlock(ring_gfx_lock);
 
-             trigger_gfx_ring;
+             if (Result=0) then
+             begin
+              trigger_gfx_ring;
+             end;
             end;
 
   $C0088101: //switch_buffer
@@ -750,7 +741,10 @@ begin
 
              rw_wunlock(ring_gfx_lock);
 
-             trigger_gfx_ring;
+             if (Result=0) then
+             begin
+              trigger_gfx_ring;
+             end;
             end;
 
   $C030810D: //sceGnmMapComputeQueue
@@ -764,11 +758,18 @@ begin
 
   $C010811C: //sceGnmDingDong
             begin
+             start_gfx_ring;
+
              rw_wlock(ring_gfx_lock);
 
               Result:=gc_ding_dong(data);
 
              rw_wunlock(ring_gfx_lock);
+
+             if (Result=0) then
+             begin
+              trigger_gfx_ring;
+             end;
             end;
 
   else

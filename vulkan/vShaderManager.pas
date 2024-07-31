@@ -314,8 +314,8 @@ begin
  case FStage of
   vShaderStagePs:
   begin
-   SprvEmit.InitPs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_PS,
-                   GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_PS,
+   SprvEmit.InitPs(GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_PS,
+                   GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC2_PS,
                    GPU_REGS.CX_REG^.SPI_PS_INPUT_ENA);
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
@@ -326,8 +326,8 @@ begin
   end;
   vShaderStageVs:
   begin
-   SprvEmit.InitVs(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS,
-                   GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC2_VS,
+   SprvEmit.InitVs(GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_VS,
+                   GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC2_VS,
                    GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
                    GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
 
@@ -335,11 +335,11 @@ begin
   end;
   vShaderStageCs:
   begin
-   SprvEmit.InitCs(GPU_REGS.SH_REG^.COMPUTE_PGM_RSRC1,
-                   GPU_REGS.SH_REG^.COMPUTE_PGM_RSRC2,
-                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_X,
-                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Y,
-                   GPU_REGS.SH_REG^.COMPUTE_NUM_THREAD_Z);
+   SprvEmit.InitCs(GPU_REGS.SC_REG^.COMPUTE_PGM_RSRC1,
+                   GPU_REGS.SC_REG^.COMPUTE_PGM_RSRC2,
+                   GPU_REGS.SC_REG^.COMPUTE_NUM_THREAD_X,
+                   GPU_REGS.SC_REG^.COMPUTE_NUM_THREAD_Y,
+                   GPU_REGS.SC_REG^.COMPUTE_NUM_THREAD_Z);
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
   end;
@@ -424,7 +424,7 @@ var
 begin
  if (FStage<>vShaderStageVs) then Exit(True);
 
- VGPR_COMP_CNT:=GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT;
+ VGPR_COMP_CNT:=GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT;
 
  if (FShader.FParams.VGPR_COMP_CNT<>VGPR_COMP_CNT) then Exit(False);
 
@@ -561,7 +561,7 @@ begin
   case FStage of
    vShaderStageVs:
     begin
-     FShader.SetInstance(GPU_REGS.SH_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT,
+     FShader.SetInstance(GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_VS.VGPR_COMP_CNT,
                          GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
                          GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
     end;

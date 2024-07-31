@@ -113,6 +113,7 @@ type
   ntEventWriteEop,
   ntEventWriteEos,
   ntSubmitFlipEop,
+  ntReleaseMem,
   ntDmaData,
   ntWriteData,
   ntWaitRegMem,
@@ -280,6 +281,16 @@ type
   intSel   :Byte
  end;
 
+ p_pm4_node_ReleaseMem=^t_pm4_node_ReleaseMem;
+ t_pm4_node_ReleaseMem=packed object(t_pm4_node)
+  addr     :Pointer;
+  data     :QWORD;
+  eventType:Byte;
+  srcSel   :Byte;
+  dstSel   :Byte;
+  intSel   :Byte;
+ end;
+
  p_pm4_node_DmaData=^t_pm4_node_DmaData;
  t_pm4_node_DmaData=packed object(t_pm4_node)
   dst     :QWORD;
@@ -341,7 +352,6 @@ type
   DIM_Y:DWORD;
   DIM_Z:DWORD;
 
-  //SH_REG:TSH_REG_GROUP;         // 0x2C00
  end;
 
  p_pm4_stream=^t_pm4_stream;
@@ -371,6 +381,7 @@ type
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
+  procedure ReleaseMem   (addr:Pointer;data:QWORD;eventType,srcSel,dstSel,intSel:Byte);
   procedure DmaData      (dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
   procedure WriteData    (dstSel:Byte;dst,src:Pointer;num_dw:Word;wrConfirm:Byte);
   procedure WaitRegMem   (pollAddr:Pointer;refValue,mask:DWORD;compareFunc:Byte);
@@ -385,17 +396,17 @@ type
                           var rt_info:t_pm4_rt_info;
                           var GPU_REGS:TGPU_REGS);
   procedure BuildDraw    (ntype:t_pm4_node_type;
-                          var SH_REG:TSH_REG_GROUP;
+                          var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
-  procedure DrawIndex2   (var SH_REG:TSH_REG_GROUP;
+  procedure DrawIndex2   (var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
-  procedure DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
+  procedure DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
   procedure Build_cs_info (node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
-  procedure DispatchDirect(var SH_REG:TSH_REG_GROUP);
+  procedure DispatchDirect(var SC_REG:TSH_REG_COMPUTE_GROUP);
  end;
 
 implementation
@@ -954,6 +965,24 @@ begin
  add_node(node);
 end;
 
+procedure t_pm4_stream.ReleaseMem(addr:Pointer;data:QWORD;eventType,srcSel,dstSel,intSel:Byte);
+var
+ node:p_pm4_node_ReleaseMem;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_ReleaseMem));
+
+ node^.ntype    :=ntReleaseMem;
+ node^.scope    :=Default(t_pm4_resource_curr_scope);
+ node^.addr     :=addr;
+ node^.data     :=data;
+ node^.eventType:=eventType;
+ node^.srcSel   :=srcSel;
+ node^.dstSel   :=dstSel;
+ node^.intSel   :=intSel;
+
+ add_node(node);
+end;
+
 procedure t_pm4_stream.DmaData(dstSel:Byte;dst:QWORD;srcSel:Byte;srcOrData:QWORD;numBytes:DWORD;isBlocking:Byte);
 var
  node:p_pm4_node_DmaData;
@@ -1308,7 +1337,7 @@ begin
 end;
 
 procedure t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
-                                 var SH_REG:TSH_REG_GROUP;
+                                 var SG_REG:TSH_REG_GFX_GROUP;
                                  var CX_REG:TCONTEXT_REG_GROUP;
                                  var UC_REG:TUSERCONFIG_REG_SHORT);
 var
@@ -1318,7 +1347,7 @@ var
 
 begin
  GPU_REGS:=Default(TGPU_REGS);
- GPU_REGS.SH_REG:=@SH_REG;
+ GPU_REGS.SG_REG:=@SG_REG;
  GPU_REGS.CX_REG:=@CX_REG;
  GPU_REGS.UC_REG:=@UC_REG;
 
@@ -1357,22 +1386,22 @@ begin
  add_node(node);
 end;
 
-procedure t_pm4_stream.DrawIndex2(var SH_REG:TSH_REG_GROUP;
+procedure t_pm4_stream.DrawIndex2(var SG_REG:TSH_REG_GFX_GROUP;
                                   var CX_REG:TCONTEXT_REG_GROUP;
                                   var UC_REG:TUSERCONFIG_REG_SHORT);
 begin
  if ColorControl(CX_REG) then Exit;
 
- BuildDraw(ntDrawIndex2,SH_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndex2,SG_REG,CX_REG,UC_REG);
 end;
 
-procedure t_pm4_stream.DrawIndexAuto(var SH_REG:TSH_REG_GROUP;
+procedure t_pm4_stream.DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
                                      var CX_REG:TCONTEXT_REG_GROUP;
                                      var UC_REG:TUSERCONFIG_REG_SHORT);
 begin
  if ColorControl(CX_REG) then Exit;
 
- BuildDraw(ntDrawIndexAuto,SH_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndexAuto,SG_REG,CX_REG,UC_REG);
 end;
 
 procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
@@ -1394,9 +1423,9 @@ begin
  node^.ShaderGroup:=FetchShaderGroupCS(GPU_REGS,pp);
  Assert(node^.ShaderGroup<>nil);
 
- node^.DIM_X:=GPU_REGS.SH_REG^.COMPUTE_DIM_X;
- node^.DIM_Y:=GPU_REGS.SH_REG^.COMPUTE_DIM_Y;
- node^.DIM_Z:=GPU_REGS.SH_REG^.COMPUTE_DIM_Z;
+ node^.DIM_X:=GPU_REGS.SC_REG^.COMPUTE_DIM_X;
+ node^.DIM_Y:=GPU_REGS.SC_REG^.COMPUTE_DIM_Y;
+ node^.DIM_Z:=GPU_REGS.SC_REG^.COMPUTE_DIM_Z;
 
  //
 
@@ -1406,14 +1435,14 @@ begin
  Init_Uniforms(node,FUniformBuilder);
 end;
 
-procedure t_pm4_stream.DispatchDirect(var SH_REG:TSH_REG_GROUP);
+procedure t_pm4_stream.DispatchDirect(var SC_REG:TSH_REG_COMPUTE_GROUP);
 var
  GPU_REGS:TGPU_REGS;
 
  node:p_pm4_node_DispatchDirect;
 begin
  GPU_REGS:=Default(TGPU_REGS);
- GPU_REGS.SH_REG:=@SH_REG;
+ GPU_REGS.SC_REG:=@SC_REG;
 
  node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchDirect));
 

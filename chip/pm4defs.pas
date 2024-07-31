@@ -397,10 +397,10 @@ const
  EVENTWRITEEOP_INT_SEL_SEND_DATA_ON_CONFIRM=3; //wait on data write confirm
 
  //event type
- kEopFlushCbDbCaches              = $00000004;  //end of read CB/DB, wait fence, label .....EOP
- kEopFlushAndInvalidateCbDbCaches = $00000014;
- kEopCbDbReadsDone                = $00000028;  //end read CB/DB, label .....EOP
- kEopCsDone                       = $00000028;  //wait cs shader, label .....EOP
+ //FlushCbDbCaches              = $00000004;  //end of read CB/DB, wait fence, label .....EOP
+ //FlushAndInvalidateCbDbCaches = $00000014;
+ //CbDbReadsDone                = $00000028;  //end read CB/DB, label .....EOP
+ //CsDone                       = $00000028;  //wait cs shader, label .....EOP
 
  //CACHE_FLUSH_TS                                  =$00000004;
  //CACHE_FLUSH_AND_INV_TS_EVENT                    =$00000014;
@@ -781,6 +781,60 @@ type
  PM4CMDSWITCHBUFFER=bitpacked record
   header:DWORD;
   data  :DWORD;
+ end;
+
+const
+ RELEASEMEM_DST_SEL_MEMORY              =0;
+ RELEASEMEM_DST_SEL_L2                  =1;
+
+ RELEASEMEM_DATA_SEL_DISCARD            =0;
+ RELEASEMEM_DATA_SEL_SEND_DATA32        =1;
+ RELEASEMEM_DATA_SEL_SEND_DATA64        =2;
+ RELEASEMEM_DATA_SEL_SEND_GPU_CLOCK     =3;
+ RELEASEMEM_DATA_SEL_SEND_CP_PERFCOUNTER=4;
+ RELEASEMEM_DATA_SEL_STORE_GDS_DATA     =5;
+
+ RELEASEMEM_INT_SEL_NONE                =0;
+ RELEASEMEM_INT_SEL_SEND_INT            =1;
+ RELEASEMEM_INT_SEL_SEND_INT_ON_CONFIRM =2;
+ RELEASEMEM_INT_SEL_SEND_DATA_ON_CONFIRM=3;
+
+type
+ PPM4CMDRELEASEMEM=^PM4CMDRELEASEMEM;
+ PM4CMDRELEASEMEM =bitpacked record
+  header:PM4_TYPE_3_HEADER;
+  //
+  eventType       :bit6;    //00 < (eventType) event type written to VGT_EVENT_INITIATOR
+  reserved1       :bit2;    //06 < reserved
+  eventIndex      :bit4;    //08 < (5 | (eventType == 0x2F [CsDone])) event index
+  tcl1VolActionEna:bit1;    //12 < (cacheAction)
+  tcVolActionEna  :bit1;    //13 <
+  reserved2       :bit1;    //14
+  tcWbActionEna   :bit1;    //15 <
+  tcl1ActionEna   :bit1;    //16 <
+  tcActionEna     :bit1;    //17
+  reserved3       :bit7;    //18
+  cachePolicy     :bit2;    //25 < (writePolicy) Cache Policy setting used for writing fences and timestamps to the TCL2
+  _volatile__CI   :bit1;    //27 < (dstSelector & 16) >> 4) Volatile setting used for writing fences and timestamps to the TCL2.
+  reserved5       :bit4;    //28
+  //
+  reserved6       :Word;    //00 < reserved
+  dstSel          :bit2;    //16 < (dstSelector & 1) destination select
+  reserved7       :bit6;    //18 < reserved
+  intSel          :bit3;    //24 < (2,3) selects interrupt action for end-of-pipe
+  reserved8       :bit2;    //27 < reserved
+  dataSel         :bit3;    //29 < (srcSelector) selects source of data
+
+  address         :QWORD;   // < bits of address
+
+  Case byte of
+   0:(
+      gdsIndex:Word;        // < Byte offset into GDS to copy from
+      size    :Word;        // < Number of DWORDS of GDS to copy
+   );
+   1:(
+      data:QWORD;           // < value that will be written to memory when event occurs
+   );
  end;
 
  TUSERCONFIG_REG_SHORT=packed record

@@ -9,6 +9,7 @@ uses
  errno,
  md_map,
  systm,
+ si_ci_vi_merged_enum,
  pm4defs,
  bittype;
 
@@ -26,6 +27,20 @@ type
   aptr:DWORD;
  end;
 
+ p_gc_hqd=^t_gc_hqd;
+ t_gc_hqd=record
+  base_guest_addr:Pointer;
+  base_dmem_addr :Pointer;
+  read_guest_addr:PDWORD;
+  read_dmem_addr :PDWORD;
+  lenLog2        :DWORD;
+  g_queueId      :DWORD;
+  pipePriority   :DWORD;
+  ringSizeDw     :DWORD;
+  ReadOffsetDw   :DWORD;
+  NextOffsetDw   :DWORD;
+ end;
+
 function  gc_ring_create(ring:p_pm4_ring;size:ptruint):Integer;
 function  gc_ring_free  (ring:p_pm4_ring):Integer;
 
@@ -40,7 +55,21 @@ function  gc_submit_internal       (ring:p_pm4_ring;count:DWORD;cmds:Pointer):In
 function  gc_switch_buffer_internal(ring:p_pm4_ring):Integer;
 function  gc_pm4_event_write_eop   (ring:p_pm4_ring;addr:Pointer;data:QWORD;intSel,wait:Integer):Integer;
 
+Function  gc_map_hqd(ringBaseAddress:Pointer;
+                     readPtrAddress :Pointer;
+                     lenLog2        :DWORD;
+                     g_queueId      :DWORD;
+                     pipePriority   :DWORD;
+                     hqd:p_gc_hqd):Integer;
+Function  gc_map_hdq_ding_dong(hqd:p_gc_hqd;NextOffsetDw:DWORD):Integer;
+function  gc_map_hdq_peek     (hqd:p_gc_hqd;size:PDWORD;buff:PPointer):Byte;
+function  gc_map_hdq_drain    (hqd:p_gc_hqd;size:DWORD):Boolean;
+function  gc_map_hdq_copy     (hqd:p_gc_hqd;size:DWORD;dst:Pointer):Boolean;
+
 implementation
+
+uses
+ kern_dmem;
 
 function gc_ring_create(ring:p_pm4_ring;size:ptruint):Integer;
 var
@@ -293,10 +322,10 @@ begin
 
  if (wait=0) then
  begin
-  buf^.eventType:=kEopCbDbReadsDone;
+  buf^.eventType:=BOTTOM_OF_PIPE_TS; //CbDbReadsDone
  end else
  begin
-  buf^.eventType:=kEopFlushCbDbCaches;
+  buf^.eventType:=CACHE_FLUSH_TS;    //FlushCbDbCaches
  end;
 
  buf^.eventIndex  :=5;
@@ -307,6 +336,181 @@ begin
  buf^.DATA        :=data;
 
  gc_ring_pm4_submit(ring);
+end;
+
+Function gc_map_hqd(ringBaseAddress:Pointer;
+                    readPtrAddress :Pointer;
+                    lenLog2        :DWORD;
+                    g_queueId      :DWORD;
+                    pipePriority   :DWORD;
+                    hqd:p_gc_hqd):Integer;
+var
+ base_dmem_addr:Pointer;
+ read_dmem_addr:PDWORD;
+begin
+ Result:=0;
+
+ if ((lenLog2 - 8) >= 23) then
+ begin
+  Exit(Integer($804c000c));
+ end;
+
+ if ((g_queueId - 1) >= 511) then
+ begin
+  Exit(Integer($804c000d));
+ end;
+
+ base_dmem_addr:=nil;
+ if not get_dmem_ptr(ringBaseAddress,@base_dmem_addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(ringBaseAddress)+' not in dmem!');
+ end;
+
+ read_dmem_addr:=nil;
+ if not get_dmem_ptr(readPtrAddress,@read_dmem_addr,nil) then
+ begin
+  Assert(false,'addr:0x'+HexStr(readPtrAddress)+' not in dmem!');
+ end;
+
+ hqd^.base_guest_addr:=ringBaseAddress;
+ hqd^.base_dmem_addr :=base_dmem_addr;
+ hqd^.read_guest_addr:=readPtrAddress;
+ hqd^.read_dmem_addr :=read_dmem_addr;
+ hqd^.lenLog2        :=lenLog2;
+ hqd^.g_queueId      :=g_queueId;
+ hqd^.pipePriority   :=pipePriority;
+ hqd^.ringSizeDw     :=1 shl (lenLog2-2);
+ hqd^.ReadOffsetDw   :=0;
+ hqd^.NextOffsetDw   :=0;
+
+end;
+
+//single producer
+Function gc_map_hdq_ding_dong(hqd:p_gc_hqd;NextOffsetDw:DWORD):Integer;
+begin
+ if (NextOffsetDw <= hqd^.ringSizeDw) then
+ begin
+  hqd^.NextOffsetDw:=NextOffsetDw;
+  Result:=0;
+ end else
+ begin
+  Result:=EINVAL;
+ end;
+end;
+
+//single consumer
+function gc_map_hdq_peek(hqd:p_gc_hqd;size:PDWORD;buff:PPointer):Byte;
+var
+ ReadOffsetDw:DWORD;
+ NextOffsetDw:DWORD;
+begin
+ Result:=0;
+
+ ReadOffsetDw:=hqd^.ReadOffsetDw and (hqd^.ringSizeDw-1);
+ NextOffsetDw:=hqd^.NextOffsetDw and (hqd^.ringSizeDw-1);
+
+ if (ReadOffsetDw=NextOffsetDw) then Exit;
+
+ if (NextOffsetDw>ReadOffsetDw) then
+ begin
+  size^:=(NextOffsetDw-ReadOffsetDw) shl 2;
+  buff^:=hqd^.base_dmem_addr + (ReadOffsetDw*4);
+  Result:=1;
+ end else
+ begin
+  size^:=(hqd^.ringSizeDw-ReadOffsetDw+NextOffsetDw) shl 2;
+  Result:=2;
+ end;
+
+end;
+
+//single consumer
+function gc_map_hdq_drain(hqd:p_gc_hqd;size:DWORD):Boolean;
+var
+ ReadOffsetDw:DWORD;
+ NextOffsetDw:DWORD;
+ s           :DWORD;
+begin
+ Result:=False;
+
+ ReadOffsetDw:=hqd^.ReadOffsetDw and (hqd^.ringSizeDw-1);
+ NextOffsetDw:=hqd^.NextOffsetDw and (hqd^.ringSizeDw-1);
+
+ if (ReadOffsetDw=NextOffsetDw) then Exit;
+
+ if (NextOffsetDw>ReadOffsetDw) then
+ begin
+  s:=(NextOffsetDw-ReadOffsetDw) shl 2;
+ end else
+ begin
+  s:=(hqd^.ringSizeDw-ReadOffsetDw+NextOffsetDw) shl 2;
+ end;
+
+ if (size>s) then Exit;
+
+ ReadOffsetDw:=(NextOffsetDw + (size shr 2)) and (hqd^.ringSizeDw-1);
+
+ hqd^.ReadOffsetDw   :=ReadOffsetDw;
+ hqd^.read_dmem_addr^:=(ReadOffsetDw shl 2);
+
+ Result:=True;
+end;
+
+//single consumer
+function gc_map_hdq_copy(hqd:p_gc_hqd;size:DWORD;dst:Pointer):Boolean;
+var
+ ReadOffsetDw:DWORD;
+ NextOffsetDw:DWORD;
+ s           :DWORD;
+begin
+ Result:=False;
+
+ ReadOffsetDw:=hqd^.ReadOffsetDw and (hqd^.ringSizeDw-1);
+ NextOffsetDw:=hqd^.NextOffsetDw and (hqd^.ringSizeDw-1);
+
+ if (ReadOffsetDw=NextOffsetDw) then Exit;
+
+ if (NextOffsetDw>ReadOffsetDw) then
+ begin
+  s:=(NextOffsetDw-ReadOffsetDw) shl 2;
+  if (size>s) then Exit;
+
+  Move((hqd^.base_dmem_addr + (ReadOffsetDw*4))^,dst^,size);
+ end else
+ begin
+  s:=(hqd^.ringSizeDw-ReadOffsetDw+NextOffsetDw) shl 2;
+  if (size>s) then Exit;
+
+  //ReadOffsetDw..ringSizeDw
+
+  s:=(hqd^.ringSizeDw-ReadOffsetDw) shl 2;
+
+  if (s>size) then
+  begin
+   s:=size;
+   size:=0;
+  end;
+
+  Move((hqd^.base_dmem_addr + (ReadOffsetDw*4))^,dst^,s);
+  dst:=dst + s;
+
+  if (size<>0) then
+  begin
+   //0..NextOffsetDw
+
+   s:=NextOffsetDw shl 2;
+
+   if (s>size) then
+   begin
+    s:=size;
+   end;
+
+   Move(hqd^.base_dmem_addr^,dst^,s);
+  end;
+
+ end;
+
+ Result:=True;
 end;
 
 

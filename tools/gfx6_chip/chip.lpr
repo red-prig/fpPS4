@@ -163,8 +163,14 @@ const
  MAX_OFFSET=$DC46;
 
  //per ring
- SH_REG_BASE = $2C00;
- SH_REG_END  = $3000;
+ _SH_REG_BASE = $2C00;
+ _SH_REG_END  = $3000;
+
+ SH_REG_GFX_BASE = $2C00;
+ SH_REG_GFX_END  = $2E00;
+
+ SH_REG_COMPUTE_BASE = $2E00;
+ SH_REG_COMPUTE_END  = $3000;
 
  //8 context
  CONTEXT_REG_BASE = $A000;
@@ -185,8 +191,9 @@ type
  end;
 
 const
- ofs_groups:array[0..3] of t_ofs_group=(
-  (lo:SH_REG_BASE        ;hi:SH_REG_END        ;name:'SH_REG'),
+ ofs_groups:array[0..4] of t_ofs_group=(
+  (lo:SH_REG_GFX_BASE    ;hi:SH_REG_GFX_END    ;name:'SH_REG_GFX'),
+  (lo:SH_REG_COMPUTE_BASE;hi:SH_REG_COMPUTE_END;name:'SH_REG_COMPUTE'),
   (lo:CONTEXT_REG_BASE   ;hi:CONTEXT_REG_END   ;name:'CONTEXT_REG'),
   (lo:CONFIG_SPACE_START ;hi:CONFIG_SPACE_END  ;name:'CONFIG_SPACE'),
   (lo:USERCONFIG_REG_BASE;hi:USERCONFIG_REG_END;name:'USERCONFIG_REG')
@@ -219,6 +226,20 @@ begin
  begin
   if (v>=ofs_groups[i].lo) and
      (v< ofs_groups[i].hi) then
+  begin
+   Exit(i);
+  end;
+ end;
+end;
+
+function get_group_by_name(const name:RawByteString):Integer;
+var
+ i:Integer;
+begin
+ Result:=-1;
+ For i:=0 to High(ofs_groups) do
+ begin
+  if (ofs_groups[i].name=name) then
   begin
    Exit(i);
   end;
@@ -899,7 +920,7 @@ begin
  end;
 
  //
- group:=@groups[1];
+ group:=@groups[get_group_by_name('CONTEXT_REG')];
 
  fill_name(group,$A318,$A38E,'(skip)');
  group^[$A318]._name:='RENDER_TARGET';
@@ -941,7 +962,7 @@ begin
 
 
  //
- group:=@groups[0];
+ group:=@groups[get_group_by_name('SH_REG_GFX')];
 
  fill_name(group,$2C0C,$2C1B,'(skip)');
  group^[$2C0C]._name:='SPI_SHADER_USER_DATA_PS';
@@ -966,6 +987,8 @@ begin
  fill_name(group,$2D4C,$2D5B,'(skip)');
  group^[$2D4C]._name:='SPI_SHADER_USER_DATA_LS';
  group^[$2D4C]._type:='TSPI_USER_DATA';
+
+ group:=@groups[get_group_by_name('SH_REG_COMPUTE')];
 
  fill_name(group,$2E40,$2E4F,'(skip)');
  group^[$2E40]._name:='COMPUTE_USER_DATA';
