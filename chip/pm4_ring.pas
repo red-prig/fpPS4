@@ -489,6 +489,9 @@ begin
   begin
    s:=size;
    size:=0;
+  end else
+  begin
+   size:=size - s;
   end;
 
   Move((hqd^.base_dmem_addr + (ReadOffsetDw*4))^,dst^,s);
