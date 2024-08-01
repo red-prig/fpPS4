@@ -132,7 +132,6 @@ function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
                         icb:t_pm4_parse_cb;
                        buft:t_pm4_stream_type):Boolean;
 var
- op:DWORD;
  ib_base:QWORD;
  ib_size:QWORD;
  addr:Pointer;
@@ -140,11 +139,14 @@ var
 begin
  Result:=False;
 
- op:=buf^.header;
-
- if ((op<>$c0023300) and (op<>$c0023f00)) then
- begin
-  Assert(false,'init not indirect buffer');
+ case buf^.header.opcode of
+  IT_INDIRECT_BUFFER_CNST:;
+  IT_INDIRECT_BUFFER     :;
+  else
+   begin
+    Writeln('init not indirect buffer:0x',HexStr(DWORD(buf^.header),8));
+    Assert(false,'init not indirect buffer');
+   end;
  end;
 
  ib_base:=QWORD(buf^.ibBase);
@@ -1894,6 +1896,32 @@ begin
  pctx^.Flush_stream(pctx^.stream_type);
 end;
 
+procedure onIndirectBufferCompute(pctx:p_pfp_ctx;Body:PPM4CMDINDIRECTBUFFER);
+var
+ curr_ibuf:p_pm4_ibuffer;
+ ibuf:t_pm4_ibuffer;
+ i:Integer;
+begin
+ if p_print_gpu_ops then
+ begin
+  Writeln('[ASC]INDIRECT_BUFFER (CS) 0x',HexStr(Body^.ibBase,10));
+ end;
+
+ if pm4_ibuf_init(@ibuf,Body,@pm4_parse_compute_ring,pctx^.stream_type) then
+ begin
+  curr_ibuf:=pctx^.curr_ibuf;
+
+  i:=pm4_ibuf_parse(pctx,@ibuf);
+
+  if (i<>0) then
+  begin
+   pctx^.add_stall(@ibuf);
+  end;
+
+  pctx^.curr_ibuf:=curr_ibuf;
+ end;
+end;
+
 function pm4_parse_compute_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 var
  ibuf:t_pm4_ibuffer;
@@ -1929,6 +1957,7 @@ begin
       IT_DISPATCH_DIRECT                :onDispatchDirectCompute(pctx,buff);
       IT_RELEASE_MEM                    :onReleaseMemCompute    (pctx,buff);
       IT_WAIT_REG_MEM                   :onWaitRegMem           (pctx,buff);
+      IT_INDIRECT_BUFFER                :onIndirectBufferCompute(pctx,buff);
       else
        begin
         Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));

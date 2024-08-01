@@ -33,12 +33,13 @@ type
   base_dmem_addr :Pointer;
   read_guest_addr:PDWORD;
   read_dmem_addr :PDWORD;
+  next_dmem_addr :PDWORD;
+  enable         :DWORD;
   lenLog2        :DWORD;
   g_queueId      :DWORD;
   pipePriority   :DWORD;
   ringSizeDw     :DWORD;
   ReadOffsetDw   :DWORD;
-  NextOffsetDw   :DWORD;
  end;
 
 function  gc_ring_create(ring:p_pm4_ring;size:ptruint):Integer;
@@ -57,6 +58,7 @@ function  gc_pm4_event_write_eop   (ring:p_pm4_ring;addr:Pointer;data:QWORD;intS
 
 Function  gc_map_hqd(ringBaseAddress:Pointer;
                      readPtrAddress :Pointer;
+                     nextPtrAddress :Pointer;
                      lenLog2        :DWORD;
                      g_queueId      :DWORD;
                      pipePriority   :DWORD;
@@ -259,7 +261,7 @@ begin
 
  while (count<>0) do
  begin
-  op:=buf^.header;
+  op:=DWORD(buf^.header);
 
   if ((op<>$c0023300) and (op<>$c0023f00)) then
   begin
@@ -341,12 +343,13 @@ end;
 
 Function gc_map_hqd(ringBaseAddress:Pointer;
                     readPtrAddress :Pointer;
+                    nextPtrAddress :Pointer;
                     lenLog2        :DWORD;
                     g_queueId      :DWORD;
                     pipePriority   :DWORD;
                     hqd:p_gc_hqd):Integer;
 var
- base_dmem_addr:Pointer;
+ base_dmem_addr:PDWORD;
  read_dmem_addr:PDWORD;
 begin
  Result:=0;
@@ -377,13 +380,14 @@ begin
  hqd^.base_dmem_addr :=base_dmem_addr;
  hqd^.read_guest_addr:=readPtrAddress;
  hqd^.read_dmem_addr :=read_dmem_addr;
+ hqd^.next_dmem_addr :=nextPtrAddress;
  hqd^.lenLog2        :=lenLog2;
  hqd^.g_queueId      :=g_queueId;
  hqd^.pipePriority   :=pipePriority;
  hqd^.ringSizeDw     :=1 shl (lenLog2-2);
  hqd^.ReadOffsetDw   :=0;
- hqd^.NextOffsetDw   :=0;
 
+ hqd^.enable         :=1;
 end;
 
 Function gc_unmap_hqd(hqd:p_gc_hqd):Integer;
@@ -396,9 +400,14 @@ end;
 //single producer
 Function gc_map_hdq_ding_dong(hqd:p_gc_hqd;NextOffsetDw:DWORD):Integer;
 begin
+ if (hqd^.enable=0) then Exit(EINVAL);
+
  if (NextOffsetDw <= hqd^.ringSizeDw) then
  begin
-  hqd^.NextOffsetDw:=NextOffsetDw;
+  hqd^.next_dmem_addr^:=NextOffsetDw;
+
+  //hqd^.read_dmem_addr^:=NextOffsetDw;
+
   Result:=0;
  end else
  begin
@@ -414,8 +423,10 @@ var
 begin
  Result:=False;
 
- ReadOffsetDw:=hqd^.ReadOffsetDw and (hqd^.ringSizeDw-1);
- NextOffsetDw:=hqd^.NextOffsetDw and (hqd^.ringSizeDw-1);
+ if (hqd^.enable=0) then Exit;
+
+ ReadOffsetDw:=hqd^.ReadOffsetDw    and (hqd^.ringSizeDw-1);
+ NextOffsetDw:=hqd^.next_dmem_addr^ and (hqd^.ringSizeDw-1);
 
  if (ReadOffsetDw=NextOffsetDw) then Exit;
 
@@ -441,8 +452,10 @@ var
 begin
  Result:=False;
 
- ReadOffsetDw:=hqd^.ReadOffsetDw and (hqd^.ringSizeDw-1);
- NextOffsetDw:=hqd^.NextOffsetDw and (hqd^.ringSizeDw-1);
+ if (hqd^.enable=0) then Exit;
+
+ ReadOffsetDw:=hqd^.ReadOffsetDw    and (hqd^.ringSizeDw-1);
+ NextOffsetDw:=hqd^.next_dmem_addr^ and (hqd^.ringSizeDw-1);
 
  if (ReadOffsetDw=NextOffsetDw) then Exit;
 
@@ -459,7 +472,7 @@ begin
  ReadOffsetDw:=(ReadOffsetDw + (size shr 2)) and (hqd^.ringSizeDw-1);
 
  hqd^.ReadOffsetDw   :=ReadOffsetDw;
- hqd^.read_dmem_addr^:=(ReadOffsetDw shl 2);
+ hqd^.read_dmem_addr^:=ReadOffsetDw;
 
  Result:=True;
 end;

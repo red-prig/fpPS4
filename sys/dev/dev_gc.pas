@@ -13,7 +13,6 @@ procedure gc_initialize();
 implementation
 
 uses
- atomic,
  errno,
  kern_mtx,
  sys_event,
@@ -28,14 +27,13 @@ uses
  kern_rwlock,
  kern_proc,
  kern_thr,
+ time,
  md_sleep,
  pm4defs,
  pm4_ring,
  pm4_stream,
  pm4_pfp,
  pm4_me,
-
- kern_dmem,
 
  dev_dce,
 
@@ -47,13 +45,13 @@ uses
  subr_backtrace;
 
 var
- gc_page:Pointer;
+ gc_page:PDWORD; //SceGnmDingDongArea
 
  gc_submits_allowed_vaddr:PInteger=nil; //0=true,1=false (0xfe0100000)
  gc_submits_allowed_vmirr:PInteger=nil;
 
  gc_knl_lock:mtx;
- gc_knlist:t_knlist;
+ gc_knlist  :t_knlist;
 
 procedure unmap_dmem_gc(start,__end:DWORD); public;
 begin
@@ -153,7 +151,9 @@ type
 var
  ring_gfx      :t_pm4_ring;
  ring_gfx_lock :Pointer=nil;
- ring_gfx_event:PRTLEvent=nil;
+
+ ring_watchdog :PRTLEvent=nil;
+ watchdog_label:QWORD=0;
 
  GC_SRI_event:PRTLEvent=nil;
  GC_SRI_label:QWORD=0;
@@ -166,10 +166,8 @@ var
  pm4_me_gfx:t_pm4_me;
 
 var
- map_queue_valid:array[0..63] of Boolean;
+ map_queue_valid:QWORD=0;
  map_queue_hqd  :array[0..63] of t_gc_hqd;
-
- map_queue_bits :QWORD=0;
 
  //asc_queues
 
@@ -250,6 +248,8 @@ begin
  Result:=t_pm4_stream_type(ord(stCompute0) + (c_id div 8)); //pipe id
 end;
 
+procedure gc_idle; forward;
+
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
  buff:Pointer;
@@ -258,6 +258,7 @@ var
  ibuf:t_pm4_ibuffer;
  buft:t_pm4_stream_type;
 
+ base_guest_addr:Pointer;
  bits:QWORD;
  c_id:DWORD;
 begin
@@ -298,7 +299,7 @@ begin
    Continue;
   end;
 
-  bits:=System.InterlockedExchange64(map_queue_bits,0);
+  bits:=map_queue_valid;
 
   if (bits<>0) then
   begin
@@ -307,27 +308,41 @@ begin
    begin
     c_id:=BsfQWord(bits);
 
+    //start
     rw_wlock(ring_gfx_lock);
 
-     while gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff) do
+    if gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff) then
+    begin
+
+     //adjust guest addr
+     base_guest_addr:=map_queue_hqd[c_id].base_guest_addr + (buff - map_queue_hqd[c_id].base_dmem_addr);
+
+     //
+     rw_wunlock(ring_gfx_lock);
+     //
+
+     if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_compute_ring,get_compute_stream_type(c_id),c_id) then
      begin
-      if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_compute_ring,get_compute_stream_type(c_id),c_id) then
+      //adjust guest addr
+      ibuf.base:=base_guest_addr;
+
+      i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
+
+      if (i<>0) then
       begin
-       //adjust guest addr
-       ibuf.base:=map_queue_hqd[c_id].base_guest_addr + (buff - map_queue_hqd[c_id].base_dmem_addr);
-
-       i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
-
-       if (i<>0) then
-       begin
-        pfp_ctx.add_stall(@ibuf);
-       end;
+       pfp_ctx.add_stall(@ibuf);
       end;
+     end;
 
-      gc_map_hdq_drain(@map_queue_hqd[c_id],size);
-     end; //while
+     //
+     rw_wlock(ring_gfx_lock);
+     //
+
+     gc_map_hdq_drain(@map_queue_hqd[c_id],size);
+    end; //while
 
     rw_wunlock(ring_gfx_lock);
+    //end
 
     //clear
     bits:=bits and (not (1 shl c_id));
@@ -342,9 +357,15 @@ begin
    Continue;
   end;
 
-  pm4_me_gfx.on_idle();
+  gc_idle;
 
-  RTLEventWaitFor(ring_gfx_event);
+  if (watchdog_label=0) then
+  begin
+   RTLEventWaitFor(ring_watchdog);
+  end else
+  begin
+   msleep_td(hz div 1000);
+  end;
  until false;
 
 
@@ -357,18 +378,19 @@ begin
   pfp_ctx.init;
   pfp_ctx.on_flush_stream:=@pm4_me_gfx.Push;
 
-  ring_gfx_event:=RTLEventCreate;
-  GC_SRI_event  :=RTLEventCreate;
+  ring_watchdog:=RTLEventCreate;
+  GC_SRI_event :=RTLEventCreate;
 
   kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,(8*1024*1024) div (16*1024),'[GFX_PFP]');
  end;
 end;
 
-procedure trigger_gfx_ring;
+procedure retrigger_watchdog;
 begin
- if (ring_gfx_event<>nil) then
+ if (ring_watchdog<>nil) then
  begin
-  RTLEventSetEvent(ring_gfx_event);
+  watchdog_label:=1; //thread can`t wait
+  RTLEventSetEvent(ring_watchdog);
  end;
 end;
 
@@ -382,7 +404,7 @@ begin
  end;
 end;
 
-procedure gc_idle; register;
+procedure gc_idle; {register;}
 begin
  if (GC_SRI_event<>nil) then
  begin
@@ -415,8 +437,10 @@ begin
    gc_submits_allowed_vmirr^:=1; //false
   end;
 
-  trigger_gfx_ring;
+  retrigger_watchdog;
   pm4_me_gfx.imdone;
+
+  watchdog_label:=0; //thread can wait
  end;
 
 end;
@@ -492,13 +516,14 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- if (map_queue_valid[id]) then
+ if ((map_queue_valid and (1 shl id))<>0) then
  begin
   Exit(Integer($804c0012));
  end;
 
  Result:=gc_map_hqd(data^.ringBaseAddress,
                     data^.readPtrAddress,
+                    @gc_page[id],
                     data^.lenLog2,
                     g_queueId,
                     pipePriority,
@@ -506,8 +531,12 @@ begin
 
  if (Result=0) then
  begin
-  map_queue_valid[id] := True;
-  map_queue_valid[(pipeHi - 1) * 4 + (pipeLo - 8)] := True;
+  map_queue_valid:=map_queue_valid or (1 shl id);
+
+  //what is it?
+  id:=(pipeHi - 1) * 4 + (pipeLo - 8);
+
+  map_queue_valid:=map_queue_valid or (1 shl id);
  end;
 
 end;
@@ -575,9 +604,14 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- gc_unmap_hqd(@map_queue_hqd[id]);
+ if ((map_queue_valid and (1 shl id))<>0) then
+ begin
 
- map_queue_valid[id]:=False;
+  gc_unmap_hqd(@map_queue_hqd[id]);
+
+  map_queue_valid:=map_queue_valid and (not (1 shl id));
+
+ end;
 end;
 
 Function gc_ding_dong(data:p_ding_dong_args):Integer;
@@ -630,18 +664,13 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- if (map_queue_valid[id] = false) then
+ if ((map_queue_valid and (1 shl id))=0) then
  begin
   Exit(Integer($804c0001));
  end;
 
  Result:=gc_map_hdq_ding_dong(@map_queue_hqd[id],
                               data^.nextStartOffsetInDw);
-
- if (Result=0) then
- begin
-  fetch_or(map_queue_bits,(1 shl id));
- end;
 
 end;
 
@@ -754,7 +783,7 @@ begin
 
              if (Result=0) then
              begin
-              trigger_gfx_ring;
+              retrigger_watchdog;
              end;
             end;
 
@@ -787,7 +816,7 @@ begin
 
              if (Result=0) then
              begin
-              trigger_gfx_ring;
+              retrigger_watchdog;
              end;
             end;
 
@@ -803,7 +832,7 @@ begin
 
              if (Result=0) then
              begin
-              trigger_gfx_ring;
+              retrigger_watchdog;
              end;
             end;
 
@@ -814,6 +843,25 @@ begin
               Result:=gc_map_compute_queue(data);
 
              rw_wunlock(ring_gfx_lock);
+
+             if (Result=0) then
+             begin
+              retrigger_watchdog;
+             end;
+            end;
+
+  $C030811A: //sceGnmMapComputeQueueWithPriority
+            begin
+             rw_wlock(ring_gfx_lock);
+
+              Result:=gc_map_compute_queue(data);
+
+             rw_wunlock(ring_gfx_lock);
+
+             if (Result=0) then
+             begin
+              retrigger_watchdog;
+             end;
             end;
 
   $C00C810E: //sceGnmUnmapComputeQueue
@@ -837,7 +885,7 @@ begin
 
              if (Result=0) then
              begin
-              trigger_gfx_ring;
+              retrigger_watchdog;
              end;
             end;
 
@@ -1062,7 +1110,7 @@ begin
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
  pm4_me_gfx.Init(@gc_knlist);
- pm4_me_gfx.on_idle:=@gc_idle;
+ //pm4_me_gfx.on_idle:=@gc_idle;
  pm4_me_gfx.on_submit_flip_eop:=@dev_dce.TriggerFlipEop;
 end;
 

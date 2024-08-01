@@ -75,7 +75,7 @@ type
   end;
   //
   event:PRTLEvent;
-  on_idle:TProcedure;
+  //on_idle:TProcedure;
   on_submit_flip_eop:t_on_submit_flip_eop;
   //
   started:Pointer;
@@ -162,7 +162,7 @@ type
   //
   procedure switch_task;
   procedure next_task;
-  procedure on_idle;
+  //procedure on_idle;
  end;
 
 var
@@ -672,6 +672,7 @@ begin
  end;
 end;
 
+{
 procedure t_me_render_context.on_idle;
 begin
  if (me^.on_idle<>nil) then
@@ -679,6 +680,7 @@ begin
   me^.on_idle();
  end;
 end;
+}
 
 //
 
