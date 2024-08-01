@@ -935,6 +935,49 @@ begin
  pctx^.stream[stGfxCcb].LoadConstRam(Pointer(Body^.addr),Body^.numDwords,Body^.offset);
 end;
 
+procedure onWriteConstRam(pctx:p_pfp_ctx;Body:PPM4CMDCONSTRAMWRITE);
+var
+ count:Word;
+
+ src:PDWORD;
+ src_dmem:PDWORD;
+
+begin
+ Assert(pctx^.stream_type=stGfxCcb);
+
+ count:=Body^.header.count;
+ if (count<2) then Exit;
+
+ count:=count-1;
+
+ src_dmem:=@Body^.data;
+
+ //convert src_dmem -> src
+
+ with pctx^.curr_ibuf^ do
+ begin
+  src:=base+(Int64(src_dmem)-Int64(buff));
+ end;
+
+ pctx^.stream[stGfxCcb].LoadConstRam(src,count,Body^.offset);
+end;
+
+procedure onIncrementCECounter(pctx:p_pfp_ctx;Body:Pointer);
+begin
+ Assert(pctx^.stream_type=stGfxCcb);
+
+ pctx^.stream[stGfxCcb].IncrementCE();
+end;
+
+procedure onWaitOnDECounterDiff(pctx:p_pfp_ctx;Body:PPM4CMDWAITONDECOUNTERDIFF);
+begin
+ Assert(pctx^.stream_type=stGfxCcb);
+
+ //(DE_COUNT - CE_COMPARE_COUNT) < DIFF
+
+ pctx^.stream[stGfxCcb].WaitOnDECounterDiff(Body^.counterDiff);
+end;
+
 const
  ShdrType:array[0..1] of Pchar=('(GX)','(CS)');
 
@@ -963,7 +1006,11 @@ begin
      case PM4_TYPE_3_HEADER(token).opcode of
       IT_NOP:;
 
-      IT_LOAD_CONST_RAM:onLoadConstRam(pctx,buff);
+      IT_LOAD_CONST_RAM         :onLoadConstRam       (pctx,buff);
+      IT_WRITE_CONST_RAM        :onWriteConstRam      (pctx,buff);
+
+      IT_INCREMENT_CE_COUNTER   :onIncrementCECounter (pctx,buff);
+      IT_WAIT_ON_DE_COUNTER_DIFF:onWaitOnDECounterDiff(pctx,buff);
 
       else
        begin
@@ -1445,7 +1492,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+    Writeln(' SET:',getRegName(r),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_reg(r,v);
@@ -1696,7 +1743,8 @@ begin
     onPopMarker(pctx);
    end;
 
-  OP_HINT_SET_MARKER:
+  OP_HINT_SET_MARKER,
+  OP_HINT_MARKER:
    begin
     onSetMarker(pctx,@Body[2]);
    end;

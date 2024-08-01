@@ -102,6 +102,7 @@ const
  IT_WAIT_ON_CE_COUNTER                 = $00000086;
  IT_WAIT_ON_DE_COUNTER_DIFF            = $00000088;
  IT_SWITCH_BUFFER                      = $0000008b;
+ IT_DISPATCH_DRAW_PREAMBLE             = $0000008c;
  IT_FRAME_CONTROL                      = $00000090;
  IT_INDEX_ATTRIBUTES_INDIRECT          = $00000091;
  IT_WAIT_REG_MEM64                     = $00000093;
@@ -151,6 +152,7 @@ const
  OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL    =$68750781;
  OP_HINT_INLINE_DATA1                             =$68752000;
  OP_HINT_INLINE_DATA2                             =$68753000;
+ OP_HINT_MARKER                                   =$68754000;
 
  OP_HINT_SET_DB_RENDER_CONTROL                    =$00000000;
  OP_HINT_SET_DB_COUNT_CONTROL                     =$00000001;
@@ -294,6 +296,21 @@ type
   reserved1:bit17;
   offset   :bit16; // < Byte offset in the RAM, must be 32 byte aligned
   reserved2:bit16;
+ end;
+
+ PPM4CMDCONSTRAMWRITE=^PM4CMDCONSTRAMWRITE;
+ PM4CMDCONSTRAMWRITE=bitpacked record
+  header   :PM4_TYPE_3_HEADER;
+  offset   :Word; // < DWord offset in the constant RAM, must
+  reserved1:Word;
+  // This is a variable length packet. So, based on size in header, the layout following this
+  data     :record end;
+ end;
+
+ PPM4CMDWAITONDECOUNTERDIFF=^PM4CMDWAITONDECOUNTERDIFF;
+ PM4CMDWAITONDECOUNTERDIFF=bitpacked record
+  header     :PM4_TYPE_3_HEADER;
+  counterDiff:DWORD; // < diff counter value
  end;
 
 const
@@ -959,6 +976,7 @@ begin
   IT_WAIT_ON_CE_COUNTER             :Result:='WAIT_ON_CE_COUNTER';
   IT_WAIT_ON_DE_COUNTER_DIFF        :Result:='WAIT_ON_DE_COUNTER_DIFF';
   IT_SWITCH_BUFFER                  :Result:='SWITCH_BUFFER';
+  IT_DISPATCH_DRAW_PREAMBLE         :Result:='IT_DISPATCH_DRAW_PREAMBLE';
   IT_FRAME_CONTROL                  :Result:='FRAME_CONTROL';
   IT_INDEX_ATTRIBUTES_INDIRECT      :Result:='INDEX_ATTRIBUTES_INDIRECT';
   IT_WAIT_REG_MEM64                 :Result:='WAIT_REG_MEM64';
@@ -1013,6 +1031,7 @@ begin
   OP_HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL    :Result:='PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL';
   OP_HINT_INLINE_DATA1                             :Result:='INLINE_DATA1';
   OP_HINT_INLINE_DATA2                             :Result:='INLINE_DATA2';
+  OP_HINT_MARKER                                   :Result:='MARKER';
   OP_HINT_SET_DB_RENDER_CONTROL                    :Result:='SET_DB_RENDER_CONTROL';
   OP_HINT_SET_DB_COUNT_CONTROL                     :Result:='SET_DB_COUNT_CONTROL';
   OP_HINT_SET_RENDER_OVERRIDE_CONTROL              :Result:='SET_RENDER_OVERRIDE_CONTROL';

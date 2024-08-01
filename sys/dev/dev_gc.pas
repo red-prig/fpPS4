@@ -261,6 +261,7 @@ var
  base_guest_addr:Pointer;
  bits:QWORD;
  c_id:DWORD;
+ p_id:DWORD;
 begin
 
  if LoadVulkan then
@@ -311,7 +312,9 @@ begin
     //start
     rw_wlock(ring_gfx_lock);
 
-    if gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff) then
+    p_id:=2; //double check
+
+    while (p_id<>0) and gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff) do
     begin
 
      //adjust guest addr
@@ -339,6 +342,8 @@ begin
      //
 
      gc_map_hdq_drain(@map_queue_hqd[c_id],size);
+
+     Dec(p_id);
     end; //while
 
     rw_wunlock(ring_gfx_lock);
@@ -839,6 +844,9 @@ begin
   $C030810D: //sceGnmMapComputeQueue
             begin
              rw_wlock(ring_gfx_lock);
+
+              //reset prio
+              p_map_compute_queue_args(data)^.pipePriority:=0;
 
               Result:=gc_map_compute_queue(data);
 

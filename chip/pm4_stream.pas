@@ -109,6 +109,8 @@ type
  t_pm4_node_type=(
   ntHint,
   ntLoadConstRam,
+  ntIncrementCE,
+  ntWaitOnDECounterDiff,
   ntEventWrite,
   ntEventWriteEop,
   ntEventWriteEos,
@@ -253,6 +255,11 @@ type
   offset:Word;
  end;
 
+ p_pm4_node_WaitOnDECounterDiff=^t_pm4_node_WaitOnDECounterDiff;
+ t_pm4_node_WaitOnDECounterDiff=packed object(t_pm4_node)
+  diff:DWORD;
+ end;
+
  p_pm4_node_EventWrite=^t_pm4_node_EventWrite;
  t_pm4_node_EventWrite=packed object(t_pm4_node)
   eventType:Byte;
@@ -377,6 +384,8 @@ type
   //
   procedure Hint         (P1,P2:PChar);
   procedure LoadConstRam (addr:Pointer;num_dw,offset:Word);
+  procedure IncrementCE  ();
+  procedure WaitOnDECounterDiff(diff:DWORD);
   procedure EventWrite   (eventType:Byte);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
@@ -901,6 +910,31 @@ begin
  node^.addr  :=addr;
  node^.num_dw:=num_dw;
  node^.offset:=offset;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.IncrementCE();
+var
+ node:p_pm4_node;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node));
+
+ node^.ntype:=ntIncrementCE;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.WaitOnDECounterDiff(diff:DWORD);
+var
+ node:p_pm4_node_WaitOnDECounterDiff;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_WaitOnDECounterDiff));
+
+ node^.ntype:=ntWaitOnDECounterDiff;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+ node^.diff :=diff;
 
  add_node(node);
 end;
