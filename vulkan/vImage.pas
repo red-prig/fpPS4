@@ -115,8 +115,10 @@ type
   alt:0..1;  //1
  end;
 
- TvImageKeyParams=packed record
-  itype      :Byte; //TVkImageType 0..2 (2)
+ TvImageKeyParams=bitpacked record
+  itype      :0..3;  //2 TVkImageType 0..2
+  cube       :0..1;  //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+  reserved   :0..31; //5
   tiling     :TvTiling;
   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
   mipLevels  :Byte; //(0..15) (4)
@@ -256,6 +258,7 @@ Function GetColorAccessAttachMask(IMAGE_USAGE:Byte):TVkAccessFlags;
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 function IsTexelFormat(cformat:TVkFormat):Boolean;
 function IsDepthOrStencilFormat(cformat:TVkFormat):Boolean;
+Function IsDepthAndStencil     (cformat:TVkFormat):Boolean;
 function GetDepthOnlyFormat    (cformat:TVkFormat):TVkFormat;
 function GetStencilOnlyFormat  (cformat:TVkFormat):TVkFormat;
 
@@ -440,6 +443,18 @@ begin
   VK_FORMAT_X8_D24_UNORM_PACK32,
   VK_FORMAT_D32_SFLOAT,
   //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   Result:=True;
+  else
+   Result:=False;
+ end;
+end;
+
+Function IsDepthAndStencil(cformat:TVkFormat):Boolean;
+begin
+ Case cformat of
   VK_FORMAT_D16_UNORM_S8_UINT,
   VK_FORMAT_D24_UNORM_S8_UINT,
   VK_FORMAT_D32_SFLOAT_S8_UINT:

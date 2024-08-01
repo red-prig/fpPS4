@@ -172,6 +172,7 @@ type
   //
   rimage:TObject;
   //
+  rcombined :Boolean;
   rclear    :Boolean;
   rwriteback:Boolean;
   //
@@ -1286,15 +1287,27 @@ begin
 
   //
 
-  insert_image_resource(@node^.scope,
-                        GetDepthOnly(rt_info.DB_INFO.FImageInfo),
-                        rt_info.DB_INFO.DEPTH_USAGE,
-                        [iu_depthstenc]);
+  resource_instance:=insert_image_resource(@node^.scope,
+                                           GetDepthOnly(rt_info.DB_INFO.FImageInfo),
+                                           rt_info.DB_INFO.DEPTH_USAGE,
+                                           [iu_depthstenc]);
 
-  insert_image_resource(@node^.scope,
-                        GetStencilOnly(rt_info.DB_INFO.FImageInfo),
-                        rt_info.DB_INFO.STENCIL_USAGE,
-                        [iu_depthstenc]);
+  if (resource_instance<>nil) then
+  with resource_instance^.resource^ do
+  begin
+   rcombined:=rcombined or IsDepthAndStencil(rt_info.DB_INFO.FImageInfo.cformat);
+  end;
+
+  resource_instance:=insert_image_resource(@node^.scope,
+                                           GetStencilOnly(rt_info.DB_INFO.FImageInfo),
+                                           rt_info.DB_INFO.STENCIL_USAGE,
+                                           [iu_depthstenc]);
+
+  if (resource_instance<>nil) then
+  with resource_instance^.resource^ do
+  begin
+   rcombined:=rcombined or IsDepthAndStencil(rt_info.DB_INFO.FImageInfo.cformat);
+  end;
 
   if (rt_info.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin

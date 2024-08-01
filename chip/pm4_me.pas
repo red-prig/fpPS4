@@ -972,7 +972,8 @@ begin
 
   resource:=i^.resource;
 
-  if (resource^.rtype=R_IMG) then
+  if (resource^.rtype=R_IMG) and
+     (not resource^.rcombined) then
   begin
 
    //start on demaind
@@ -1283,6 +1284,7 @@ begin
 
  if ctx.rt_info^.DB_ENABLE then
  begin
+
   d_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly  (ctx.rt_info^.DB_INFO.FImageInfo));
   s_instance:=ctx.node^.scope.find_image_resource_instance(GetStencilOnly(ctx.rt_info^.DB_INFO.FImageInfo));
 

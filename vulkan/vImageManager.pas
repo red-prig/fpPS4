@@ -330,14 +330,7 @@ end;
 
 Function TvCustomImage2.IsDepthAndStencil:Boolean;
 begin
- Case key.cformat of
-  VK_FORMAT_D16_UNORM_S8_UINT,
-  VK_FORMAT_D24_UNORM_S8_UINT,
-  VK_FORMAT_D32_SFLOAT_S8_UINT:
-   Result:=True;
-  else
-   Result:=False;
- end;
+ Result:=vImage.IsDepthAndStencil(key.cformat);
 end;
 
 Function TvCustomImage2.GetSubresRange:TVkImageSubresourceRange;
@@ -476,7 +469,7 @@ function TvImage2.GetImageInfo:TVkImageCreateInfo;
 begin
  Result:=Default(TVkImageCreateInfo);
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
- Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat);
+ Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat) or (key.params.cube)*ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
  Result.imageType    :=TVkImageType(key.params.itype);
  Result.format       :=key.cformat;
  Result.extent.Create(key.params.width,key.params.height,key.params.depth);
@@ -486,6 +479,11 @@ begin
  Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
  Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+
+ if (key.params.cube<>0) then
+ begin
+  Assert(key.params.arrayLayers=6,'VK_IMAGE_VIEW_TYPE_CUBE layerCount must be 6');
+ end;
 end;
 
 function TvImage2.FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
@@ -538,6 +536,11 @@ begin
   cinfo.subresourceRange.levelCount    :=F.last_level-F.base_level+1;
   cinfo.subresourceRange.baseArrayLayer:=F.base_array;
   cinfo.subresourceRange.layerCount    :=F.last_array-F.base_array+1;
+
+  if (cinfo.viewType=VK_IMAGE_VIEW_TYPE_CUBE) then
+  begin
+   Assert(cinfo.subresourceRange.layerCount=6,'VK_IMAGE_VIEW_TYPE_CUBE layerCount must be 6');
+  end;
 
   cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,usage);
 
@@ -636,11 +639,24 @@ begin
   VK_IMAGE_TYPE_2D:
    begin
     if (key.params.arrayLayers>1) then
-     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY)
-    else
-     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
-    //VK_IMAGE_VIEW_TYPE_CUBE
-    //VK_IMAGE_VIEW_TYPE_CUBE_ARRAY
+    begin
+     if (key.params.cube<>0) then
+     begin
+      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
+     end else
+     begin
+      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+     end;
+    end else
+    begin
+     if (key.params.cube<>0) then
+     begin
+      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
+     end else
+     begin
+      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
+     end;
+    end;
    end;
   VK_IMAGE_TYPE_3D:fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
  end;

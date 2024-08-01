@@ -1912,7 +1912,11 @@ begin
   SQ_RSRC_IMG_1D           :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
   SQ_RSRC_IMG_2D           :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   SQ_RSRC_IMG_3D           :Result.params.itype:=ord(VK_IMAGE_TYPE_3D);
-  SQ_RSRC_IMG_CUBE         :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_CUBE         :
+   begin
+    Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+    Result.params.cube :=1;
+   end;
   SQ_RSRC_IMG_1D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
   SQ_RSRC_IMG_2D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
@@ -1965,8 +1969,9 @@ begin
  end;
  //
  Case PT^._type of
-  SQ_RSRC_IMG_1D_ARRAY     ,
-  SQ_RSRC_IMG_2D_ARRAY     ,
+  SQ_RSRC_IMG_CUBE,
+  SQ_RSRC_IMG_1D_ARRAY,
+  SQ_RSRC_IMG_2D_ARRAY,
   SQ_RSRC_IMG_2D_MSAA_ARRAY:
    begin
     Result.params.arrayLayers:=PT^.last_array+1;
@@ -2051,13 +2056,14 @@ begin
  Result:=_get_tsharp4_image_view(PTSharpResource4(PT));
  //
  Case PT^._type of
+  SQ_RSRC_IMG_CUBE,
   SQ_RSRC_IMG_1D_ARRAY     ,
   SQ_RSRC_IMG_2D_ARRAY     ,
   SQ_RSRC_IMG_2D_MSAA_ARRAY:
    begin
     Result.base_array:=PT^.base_array;
     Result.last_array:=PT^.last_array;
-   end
+   end;
   else;
  end;
 end;

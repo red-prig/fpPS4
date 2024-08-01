@@ -262,6 +262,7 @@ var
  bits:QWORD;
  c_id:DWORD;
  p_id:DWORD;
+ send:DWORD;
 begin
 
  if LoadVulkan then
@@ -297,6 +298,7 @@ begin
     pfp_ctx.Flush_stream(buft);
    end;
    //
+
    Continue;
   end;
 
@@ -304,6 +306,8 @@ begin
 
   if (bits<>0) then
   begin
+   //init sended bits
+   send:=0;
 
    while (bits<>0) do
    begin
@@ -343,6 +347,9 @@ begin
 
      gc_map_hdq_drain(@map_queue_hqd[c_id],size);
 
+     //set sended bits
+     send:=send or (1 shl (c_id div 8)); //by pipe id
+
      Dec(p_id);
     end; //while
 
@@ -353,14 +360,25 @@ begin
     bits:=bits and (not (1 shl c_id));
    end; //while
 
-   //
-   for buft:=stCompute0 to stCompute6 do
+   if (send<>0) then
    begin
-    pfp_ctx.Flush_stream(buft);
-   end;
-   //
-   Continue;
-  end;
+
+    //
+    while (send<>0) do
+    begin
+     c_id:=BsfDWord(send);
+
+     pfp_ctx.Flush_stream( t_pm4_stream_type(ord(stCompute0) + c_id) );
+
+     //clear
+     send:=send and (not (1 shl c_id));
+    end;
+    //
+
+    Continue;
+   end; //(send<>0)
+
+  end; //(bits<>0)
 
   gc_idle;
 
