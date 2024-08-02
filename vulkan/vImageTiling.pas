@@ -70,9 +70,11 @@ begin
 
   m_slice:=m_padwidth*
            m_padheight*
+           key.params.depth*
+           key.params.arrayLayers*
            m_bytePerElement;
 
-  //m_slice:=(m_slice+255) and (not Ptruint(255));
+  //64?
 
   Result:=Result+m_slice;
 
@@ -81,9 +83,6 @@ begin
   m_height:=Max(1,m_height shr 1);
  end;
 
- Result:=Result*
-         key.params.depth*
-         key.params.arrayLayers;
 end;
 
 Function GetLinearAlignSize(const key:TvImageKey):Ptruint;
@@ -91,35 +90,53 @@ begin
  Result:=GetLinearSize(key,true);
 end;
 
-Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
-var
- align_m:Ptruint;
+function nextPowerOfTwo(x:Ptruint):Ptruint; inline;
 begin
- align_m:=(32 div bpp)-1;
- Result:=(width+align_m) and (not align_m);
+ x:=(x-1);
+ x:=x or (x shr 1);
+ x:=x or (x shr 2);
+ x:=x or (x shr 4);
+ x:=x or (x shr 8);
+ x:=x or (x shr 16);
+ x:=x or (x shr 32);
+ Result:=(x+1);
 end;
 
 Function Get1dThinSize(const key:TvImageKey):Ptruint;
 var
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
+ m_padwidth   :Ptruint;
+ m_padheight  :Ptruint;
+ m_depth      :Ptruint;
+ m_arrayLayers:Ptruint;
  m_slice:Ptruint;
 begin
  Assert(key.params.samples<=1,'key.params.samples>1');
 
  m_bytePerElement:=getFormatSize(key.cformat);
 
- m_level :=key.params.mipLevels;
- m_width :=key.params.width;
- m_height:=key.params.height;
+ m_level      :=key.params.mipLevels;
+ //
+ m_width      :=key.params.width;
+ m_height     :=key.params.height;
+ m_depth      :=key.params.depth;
+ m_arrayLayers:=key.params.arrayLayers;
+
+ if (key.params.pow2pad<>0) then
+ begin
+  m_width      :=nextPowerOfTwo(m_width);
+  m_height     :=nextPowerOfTwo(m_height);
+  m_depth      :=nextPowerOfTwo(m_depth);
+  m_arrayLayers:=nextPowerOfTwo(m_arrayLayers);
+ end;
 
  Result:=0;
 
  while (m_level>0) do
  begin
-  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_width);
-  m_padheight:=(m_height+7) and (not 7);
+  m_padwidth :=m_width;
+  m_padheight:=m_height;
 
   if IsTexelFormat(key.cformat) then
   begin
@@ -127,11 +144,16 @@ begin
    m_padheight:=(m_padheight+3) shr 2;
   end;
 
+  m_padwidth :=(m_padwidth +7) and (not 7);
+  m_padheight:=(m_padheight+7) and (not 7);
+
   m_slice:=m_padwidth*
            m_padheight*
+           m_depth*
+           m_arrayLayers*
            m_bytePerElement;
 
-  //m_slice:=(m_slice+255) and (not Ptruint(255));
+  m_slice:=(m_slice+255) and (not Ptruint(255));
 
   Result:=Result+m_slice;
 
@@ -140,11 +162,6 @@ begin
   m_height:=Max(1,m_height shr 1);
  end;
 
- //Result:=(Result+255) and (not Ptruint(255));
-
- Result:=Result*
-         key.params.depth*
-         key.params.arrayLayers;
 end;
 
 function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
@@ -257,28 +274,6 @@ begin
  FileClose(F);
 end;
 
-Procedure copy_1dThin(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_bytePerElement:Ptruint;
- m_slice_size:Ptruint;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-begin
- m_bytePerElement:=tiler.m_bitsPerElement div 8;
- m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
- //
- For z:=0 to tiler.m_linearDepth-1 do
-  For y:=0 to tiler.m_linearHeight-1 do
-   For x:=0 to tiler.m_linearWidth-1 do
-    begin
-     i:=0;
-     tiler.getTiledElementByteOffset(i,x,y,z);
-     pSrc:=@PByte(src)[i];
-     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
-     Move(pSrc^,pDst^,m_bytePerElement);
-    end;
-end;
-
 Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvCustomImage2);
 var
  BufferImageCopy:TVkBufferImageCopy;
@@ -325,49 +320,52 @@ begin
 
  m_offset:=0;
 
- for a:=0 to image.key.params.arrayLayers-1 do
- for d:=0 to image.key.params.depth-1 do
+ //mips
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ while (m_level>0) do
  begin
-  BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-  BufferImageCopy.imageOffset.z:=d;
+  BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
 
-  m_level :=image.key.params.mipLevels;
-  m_width :=image.key.params.width;
-  m_height:=image.key.params.height;
+  BufferImageCopy.imageExtent.width :=m_width;
+  BufferImageCopy.imageExtent.height:=m_height;
 
-  while (m_level>0) do
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_width +3) shr 2;
+   m_padheight:=(m_height+3) shr 2;
+  end else
+  begin
+   m_padwidth :=m_width ;
+   m_padheight:=m_height;
+  end;
+
+  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+
+  //array
+  for a:=0 to image.key.params.arrayLayers-1 do
+  for d:=0 to image.key.params.depth-1 do
   begin
    Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
-   BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
-
-   BufferImageCopy.imageExtent.width :=m_width;
-   BufferImageCopy.imageExtent.height:=m_height;
+   BufferImageCopy.imageSubresource.baseArrayLayer:=a;
+   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
-   begin
-    m_padwidth :=(m_width +3) shr 2;
-    m_padheight:=(m_height+3) shr 2;
-   end else
-   begin
-    m_padwidth :=m_width ;
-    m_padheight:=m_height;
-   end;
-
-   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
-
    m_offset:=m_offset+m_slice;
-
-   Dec(m_level);
-   m_width :=Max(1,m_width  shr 1);
-   m_height:=Max(1,m_height shr 1);
   end;
+  //array
 
+  Dec(m_level);
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
+ //mips
 
  cmd.CopyBufferToImage(buf.FHandle,
                        image.FHandle,
@@ -376,6 +374,28 @@ begin
                        @BufferImageCopyA[0]);
 
 
+end;
+
+Procedure copy_1dThin(var tiler:Tiler1d;src,dst:Pointer);
+var
+ m_bytePerElement:Ptruint;
+ m_slice_size:Ptruint;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+begin
+ m_bytePerElement:=tiler.m_bytePerElement;
+ m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
+ //
+ For z:=0 to tiler.m_linearDepth-1 do
+  For y:=0 to tiler.m_linearHeight-1 do
+   For x:=0 to tiler.m_linearWidth-1 do
+    begin
+     i:=0;
+     tiler.getTiledElementByteOffset(i,x,y,z);
+     pSrc:=@PByte(src)[i];
+     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     Move(pSrc^,pDst^,m_bytePerElement);
+    end;
 end;
 
 Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
@@ -396,6 +416,8 @@ var
 
  src:Pointer;
  dst:Pointer;
+
+ a:Ptruint;
 begin
  Assert(image.key.params.samples<=1,'image.key.params.samples>1');
 
@@ -434,9 +456,17 @@ begin
 
  //TvBuffer
 
+ //mips
  m_level :=image.key.params.mipLevels;
+ //
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
+
+ if (image.key.params.pow2pad<>0) then
+ begin
+  m_width :=nextPowerOfTwo(m_width);
+  m_height:=nextPowerOfTwo(m_height);
+ end;
 
  src:=image.key.addr;
 
@@ -444,34 +474,57 @@ begin
  begin
   tiler.init_size_2d(m_width,m_height);
 
-  //
-
-  if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
+  //array
+  for a:=0 to image.key.params.arrayLayers-1 do
   begin
-   Writeln(ptruint(dst-m_base)+tiler.m_linearSizeBytes,'>',m_full_linear_size);
-   Assert(false);
+
+   if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
+   begin
+    Writeln(ptruint(dst-m_base)+tiler.m_linearSizeBytes,'>',m_full_linear_size);
+    Assert(false);
+   end;
+
+   //x,y,z
+   copy_1dThin(tiler,src,dst);
+   //x,y,z
+
+   {
+   SaveToTGA('shader_dump\texture_a'+IntToStr(a)+
+                                   '_mip'+IntToStr(m_level)+
+                                   '_'+IntToStr(m_width)+
+                                   'x'+IntToStr(m_height)+
+                                       '.tga',
+             dst,
+             tiler.m_linearWidth,
+             tiler.m_linearHeight,
+            tiler.m_bitsPerElement);
+   }
+
+   src:=src+tiler.m_tiledSizeBytes;
+   dst:=dst+tiler.m_linearSizeBytes;
+
+  end;
+  //array
+
+  if (image.key.params.pow2pad<>0) then
+  begin
+   a:=nextPowerOfTwo(image.key.params.arrayLayers)-image.key.params.arrayLayers;
+
+   src:=src+tiler.m_tiledSizeBytes*a;
   end;
 
-  copy_1dThin(tiler,src,dst);
+  //Writeln('nextPowerOfTwo =',nextPowerOfTwo(image.key.params.arrayLayers));
 
-  {
-  SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+
-                                  '_'+IntToStr(m_width)+
-                                  'x'+IntToStr(m_height)+
-                                      '.tga',
-            dst,
-            tiler.m_linearWidth,
-            tiler.m_linearHeight,
-            tiler.m_bitsPerElement);
-  }
-
-  src:=src+tiler.m_tiledSizeBytes;
-  dst:=dst+tiler.m_linearSizeBytes;
+  src:=Pointer((qword(src)+255) and (not 255));
 
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
   m_height:=Max(1,m_height shr 1);
  end;
+ //mips
+
+ Writeln('size1=',(src-image.key.addr));
+ Writeln('size2=',Get1dThinSize(image.key));
 
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
  //FreeMem(m_base);
@@ -530,54 +583,57 @@ begin
  SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
  b:=0;
 
- for a:=0 to image.key.params.arrayLayers-1 do
- for d:=0 to image.key.params.depth-1 do
+ //mips
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ while (m_level>0) do
  begin
-  BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-  BufferImageCopy.imageOffset.z:=d;
+  BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
 
-  m_level :=image.key.params.mipLevels;
-  m_width :=image.key.params.width;
-  m_height:=image.key.params.height;
+  BufferImageCopy.imageExtent.width :=m_width;
+  BufferImageCopy.imageExtent.height:=m_height;
 
-  while (m_level>0) do
+  if (image.key.params.tiling.idx=8) then
+  begin
+   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
+  end;
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_width +3) shr 2;
+   m_padheight:=(m_height+3) shr 2;
+  end else
+  begin
+   m_padwidth :=m_width ;
+   m_padheight:=m_height;
+  end;
+
+  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+
+  //array
+  for a:=0 to image.key.params.arrayLayers-1 do
+  for d:=0 to image.key.params.depth-1 do
   begin
    Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
-   BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
-
-   BufferImageCopy.imageExtent.width :=m_width;
-   BufferImageCopy.imageExtent.height:=m_height;
-
-   if (image.key.params.tiling.idx=8) then
-   begin
-    BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
-   end;
+   BufferImageCopy.imageSubresource.baseArrayLayer:=a;
+   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
-   begin
-    m_padwidth :=(m_width +3) shr 2;
-    m_padheight:=(m_height+3) shr 2;
-   end else
-   begin
-    m_padwidth :=m_width ;
-    m_padheight:=m_height;
-   end;
-
-   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
-
    m_offset:=m_offset+m_slice;
-
-   Dec(m_level);
-   m_width :=Max(1,m_width  shr 1);
-   m_height:=Max(1,m_height shr 1);
   end;
+  //array
 
+  Dec(m_level);
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
+ //mips
 
  cmd.CopyBufferToImage(buf.FHandle,
                        image.FHandle,
@@ -639,54 +695,57 @@ begin
  SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
  b:=0;
 
- for a:=0 to image.key.params.arrayLayers-1 do
- for d:=0 to image.key.params.depth-1 do
+ //mips
+ m_level :=image.key.params.mipLevels;
+ m_width :=image.key.params.width;
+ m_height:=image.key.params.height;
+
+ while (m_level>0) do
  begin
-  BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-  BufferImageCopy.imageOffset.z:=d;
+  BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
 
-  m_level :=image.key.params.mipLevels;
-  m_width :=image.key.params.width;
-  m_height:=image.key.params.height;
+  BufferImageCopy.imageExtent.width :=m_width;
+  BufferImageCopy.imageExtent.height:=m_height;
 
-  while (m_level>0) do
+  if (image.key.params.tiling.idx=8) then
+  begin
+   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
+  end;
+
+  if IsTexelFormat(image.key.cformat) then
+  begin
+   m_padwidth :=(m_width +3) shr 2;
+   m_padheight:=(m_height+3) shr 2;
+  end else
+  begin
+   m_padwidth :=m_width ;
+   m_padheight:=m_height;
+  end;
+
+  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+
+  //array
+  for a:=0 to image.key.params.arrayLayers-1 do
+  for d:=0 to image.key.params.depth-1 do
   begin
    Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
-   BufferImageCopy.imageSubresource.mipLevel:=image.key.params.mipLevels-m_level;
-
-   BufferImageCopy.imageExtent.width :=m_width;
-   BufferImageCopy.imageExtent.height:=m_height;
-
-   if (image.key.params.tiling.idx=8) then
-   begin
-    BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
-   end;
+   BufferImageCopy.imageSubresource.baseArrayLayer:=a;
+   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
 
-   if IsTexelFormat(image.key.cformat) then
-   begin
-    m_padwidth :=(m_width +3) shr 2;
-    m_padheight:=(m_height+3) shr 2;
-   end else
-   begin
-    m_padwidth :=m_width ;
-    m_padheight:=m_height;
-   end;
-
-   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
-
    m_offset:=m_offset+m_slice;
-
-   Dec(m_level);
-   m_width :=Max(1,m_width  shr 1);
-   m_height:=Max(1,m_height shr 1);
   end;
+  //array
 
+  Dec(m_level);
+  m_width :=Max(1,m_width  shr 1);
+  m_height:=Max(1,m_height shr 1);
  end;
+ //mips
 
  cmd.CopyImageToBuffer(image.FHandle,
                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,

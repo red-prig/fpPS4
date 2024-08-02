@@ -1909,22 +1909,27 @@ begin
  Result.cformat:=_get_tsharp4_cformat(PT);
 
  Case PT^._type of
-  SQ_RSRC_IMG_1D           :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
-  SQ_RSRC_IMG_2D           :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_1D,
+  SQ_RSRC_IMG_1D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
+  SQ_RSRC_IMG_2D,
+  SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   SQ_RSRC_IMG_3D           :Result.params.itype:=ord(VK_IMAGE_TYPE_3D);
   SQ_RSRC_IMG_CUBE         :
    begin
     Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
     Result.params.cube :=1;
    end;
-  SQ_RSRC_IMG_1D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
-  SQ_RSRC_IMG_2D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
-  SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
-  SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_2D_ARRAY     ,
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:
+   begin
+    Result.params.itype   :=ord(VK_IMAGE_TYPE_2D);
+    Result.params.array_2d:=1;
+   end;
   else;
    Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
  end;
 
+ Result.params.pow2pad   :=PT^.pow2pad;
  Result.params.tiling.idx:=PT^.tiling_idx;
  Result.params.tiling.alt:=0;
  Result.params.width     :=PT^.width +1;
@@ -1954,6 +1959,8 @@ end;
 function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
 begin
  Result:=_get_tsharp4_image_info(PTSharpResource4(PT));
+ //
+ Result.params.pitch:=PT^.pitch+1;
  //
  if (p_neomode<>0) then
  begin
@@ -2056,7 +2063,16 @@ begin
  Result:=_get_tsharp4_image_view(PTSharpResource4(PT));
  //
  Case PT^._type of
-  SQ_RSRC_IMG_CUBE,
+  SQ_RSRC_IMG_CUBE:
+   begin
+    Result.base_array:=PT^.base_array;
+    Result.last_array:=PT^.last_array;
+    //
+    if (Result.last_array-Result.base_array)>5 then
+    begin
+     Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
+    end;
+   end;
   SQ_RSRC_IMG_1D_ARRAY     ,
   SQ_RSRC_IMG_2D_ARRAY     ,
   SQ_RSRC_IMG_2D_MSAA_ARRAY:
@@ -2066,6 +2082,7 @@ begin
    end;
   else;
  end;
+ //
 end;
 
 function _get_xy_filter(b:Byte):TVkFilter;

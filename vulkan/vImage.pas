@@ -116,9 +116,11 @@ type
  end;
 
  TvImageKeyParams=bitpacked record
-  itype      :0..3;  //2 TVkImageType 0..2
-  cube       :0..1;  //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
-  reserved   :0..31; //5
+  itype      :0..3; //2 TVkImageType 0..2
+  cube       :0..1; //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+  array_2d   :0..1; //1 VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT
+  pow2pad    :0..1; //1
+  reserved   :0..7; //3
   tiling     :TvTiling;
   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
   mipLevels  :Byte; //(0..15) (4)
@@ -126,6 +128,7 @@ type
   height     :Word; //(0..16383)
   depth      :Word; //(0..8192)
   arrayLayers:Word; //(0..16383)
+  pitch      :Word; //(0..16383)
   pad_width  :Word;
   pad_height :Word;
  end;

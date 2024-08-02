@@ -469,7 +469,9 @@ function TvImage2.GetImageInfo:TVkImageCreateInfo;
 begin
  Result:=Default(TVkImageCreateInfo);
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
- Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat) or (key.params.cube)*ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+ Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat) or
+                       (key.params.cube    )*ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) or
+                       (key.params.array_2d)*ord(VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT);
  Result.imageType    :=TVkImageType(key.params.itype);
  Result.format       :=key.cformat;
  Result.extent.Create(key.params.width,key.params.height,key.params.depth);
@@ -482,7 +484,7 @@ begin
 
  if (key.params.cube<>0) then
  begin
-  Assert(key.params.arrayLayers=6,'VK_IMAGE_VIEW_TYPE_CUBE layerCount must be 6');
+  Assert((key.params.arrayLayers mod 6)=0,'CUBE: layerCount must be a multiple of 6');
  end;
 end;
 
@@ -537,9 +539,16 @@ begin
   cinfo.subresourceRange.baseArrayLayer:=F.base_array;
   cinfo.subresourceRange.layerCount    :=F.last_array-F.base_array+1;
 
-  if (cinfo.viewType=VK_IMAGE_VIEW_TYPE_CUBE) then
-  begin
-   Assert(cinfo.subresourceRange.layerCount=6,'VK_IMAGE_VIEW_TYPE_CUBE layerCount must be 6');
+  case cinfo.viewType of
+   VK_IMAGE_VIEW_TYPE_CUBE:
+    begin
+     Assert(cinfo.subresourceRange.layerCount=6,'VK_IMAGE_VIEW_TYPE_CUBE: layerCount must be 6');
+    end;
+   VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
+    begin
+     Assert((cinfo.subresourceRange.layerCount mod 6)=0,'VK_IMAGE_VIEW_TYPE_CUBE_ARRAY: layerCount must be a multiple of 6');
+    end;
+   else;
   end;
 
   cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,usage);
@@ -638,24 +647,22 @@ begin
    end;
   VK_IMAGE_TYPE_2D:
    begin
-    if (key.params.arrayLayers>1) then
+    if (key.params.cube<>0) then
     begin
-     if (key.params.cube<>0) then
+     if (key.params.arrayLayers>6) then
      begin
       fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
      end else
      begin
-      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
      end;
     end else
+    if (key.params.array_2d<>0) then
     begin
-     if (key.params.cube<>0) then
-     begin
-      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
-     end else
-     begin
-      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
-     end;
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
+    end else
+    begin
+     fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
     end;
    end;
   VK_IMAGE_TYPE_3D:fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
