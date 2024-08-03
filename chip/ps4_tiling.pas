@@ -2878,12 +2878,17 @@ begin
  m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
 end;
 
+Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
+var
+ align_m:Ptruint;
+begin
+ align_m:=(32 div bpp)-1;
+ Result:=(width+align_m) and (not align_m);
+ Result:=(Result+7) and (not 7);
+end;
+
 procedure Tiler1d.init_size_2d(width,height:DWORD);
 begin
- //m_paddedWidth :=(width+7) and (not 7);
-
- //m_paddedWidth :=Get1dThinAlignWidth(m_bytePerElement,width);
- //m_paddedHeight:=(height+7) and (not 7);
  m_paddedDepth :=1;
 
  m_linearWidth :=width;
@@ -2892,14 +2897,11 @@ begin
 
  if (m_isBlockCompressed<>0) then
  begin
-  //m_paddedWidth :=(m_paddedWidth +3) shr 2;
-  //m_paddedHeight:=(m_paddedHeight+3) shr 2;
-  //
   m_linearWidth :=(m_linearWidth +3) shr 2;
   m_linearHeight:=(m_linearHeight+3) shr 2;
  end;
 
- m_paddedWidth :=(m_linearWidth +7) and (not 7);
+ m_paddedWidth :=Get1dThinAlignWidth(m_bytePerElement,m_linearWidth);
  m_paddedHeight:=(m_linearHeight+7) and (not 7);
 
  m_linearSizeBytes:=m_linearWidth*m_linearHeight*m_linearDepth*m_bytePerElement;

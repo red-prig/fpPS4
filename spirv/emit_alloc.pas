@@ -197,7 +197,7 @@ begin
       AddExecutionMode(ExecutionMode.EarlyFragmentTests);
      end;
 
-     case FDepthMode of
+     case OutputList.FDepthMode of
       foDepthReplacing:AddExecutionMode(ExecutionMode.DepthReplacing);
       foDepthGreater  :AddExecutionMode(ExecutionMode.DepthGreater);
       foDepthLess     :AddExecutionMode(ExecutionMode.DepthLess);

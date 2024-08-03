@@ -38,14 +38,6 @@ type
   x,y,z:DWORD;
  end;
 
- TDepthMode=(
-  foDepthNone,
-  foDepthReplacing,
-  foDepthGreater,
-  foDepthLess,
-  foDepthUnchanged
- );
-
  PPSInputCntl=^TPSInputCntl;
  TPSInputCntl=packed record
   OFFSET     :Byte;
@@ -56,7 +48,6 @@ type
 
  TEmitInterface=class(TCustomEmit)
   FExecutionModel:Word;
-  FDepthMode:TDepthMode;
   FEarlyFragmentTests:Boolean;
   FPSInputCntl:array[0..31] of TPSInputCntl;
   FLocalSize:TLocalSize;

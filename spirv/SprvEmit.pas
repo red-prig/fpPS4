@@ -18,6 +18,7 @@ uses
   srReg,
   srOp,
   srInput,
+  srOutput,
   srLayout,
   srFlow,
   emit_fetch,
@@ -443,8 +444,8 @@ end;
 Procedure TSprvEmit.SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
 begin
  case SHADER_CONTROL.CONSERVATIVE_Z_EXPORT of
-  1:FDepthMode:=foDepthLess;    //EXPORT_LESS_THAN_Z
-  2:FDepthMode:=foDepthGreater; //EXPORT_GREATER_THAN_Z
+  1:OutputList.FDepthMode:=foDepthLess;    //EXPORT_LESS_THAN_Z
+  2:OutputList.FDepthMode:=foDepthGreater; //EXPORT_GREATER_THAN_Z
   else;
  end;
  //

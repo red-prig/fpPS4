@@ -1452,313 +1452,323 @@ begin
  end;
 end;
 
-procedure _print_sdst7(SDST:Byte);
+function _get_sdst7(SDST:Byte):RawByteString;
 begin
  Case SDST of
-  0..103:Write('s',SDST);
-  106:Write('VCC_LO');
-  107:Write('VCC_HI');
-  124:Write('M0');
-  126:Write('EXEC_LO');
-  127:Write('EXEC_HI');
+  0..103:Result:='s'+IntToStr(SDST);
+  106:Result:='VCC_LO';
+  107:Result:='VCC_HI';
+  124:Result:='M0';
+  126:Result:='EXEC_LO';
+  127:Result:='EXEC_HI';
   else
-      Write('?');
+      Result:='?';
  end;
 end;
 
-procedure _print_ssrc8(SSRC:Byte);
+function _get_ssrc8(SSRC:Byte):RawByteString;
 begin
  Case SSRC of
-  0..103:Write('s',SSRC);
-  106:Write('VCC_LO');
-  107:Write('VCC_HI');
-  124:Write('M0');
-  126:Write('EXEC_LO');
-  127:Write('EXEC_HI');
+  0..103:Result:='s'+IntToStr(SSRC);
+  106:Result:='VCC_LO';
+  107:Result:='VCC_HI';
+  124:Result:='M0';
+  126:Result:='EXEC_LO';
+  127:Result:='EXEC_HI';
 
-  128..192:Write(SSRC-128);
-  193..208:Write(-(SSRC-192));
-  240:Write('0.5');
-  241:Write('-0.5');
-  242:Write('1.0');
-  243:Write('-1.0');
-  244:Write('2.0');
-  245:Write('-2.0');
-  246:Write('4.0');
-  247:Write('-4.0');
+  128..192:Result:=IntToStr(SSRC-128);
+  193..208:Result:=IntToStr(-(SSRC-192));
+  240:Result:='0.5';
+  241:Result:='-0.5';
+  242:Result:='1.0';
+  243:Result:='-1.0';
+  244:Result:='2.0';
+  245:Result:='-2.0';
+  246:Result:='4.0';
+  247:Result:='-4.0';
 
-  251:Write('VCCZ');
-  252:Write('EXECZ');
-  253:Write('SCC');
-  254:Write('LDS_DIRECT');
+  251:Result:='VCCZ';
+  252:Result:='EXECZ';
+  253:Result:='SCC';
+  254:Result:='LDS_DIRECT';
   else
-      Write('?');
+      Result:='?';
  end;
 end;
 
-procedure _print_ssrc8(SSRC:Byte;d2:DWORD);
+function _get_ssrc8(SSRC:Byte;d2:DWORD):RawByteString;
 begin
  Case SSRC of
-  0..103:Write('s',SSRC);
-  106:Write('VCC_LO');
-  107:Write('VCC_HI');
-  124:Write('M0');
-  126:Write('EXEC_LO');
-  127:Write('EXEC_HI');
+  0..103:Result:='s'+IntToStr(SSRC);
+  106:Result:='VCC_LO';
+  107:Result:='VCC_HI';
+  124:Result:='M0';
+  126:Result:='EXEC_LO';
+  127:Result:='EXEC_HI';
 
-  128..192:Write(SSRC-128);
-  193..208:Write(-(SSRC-192));
-  240:Write('0.5');
-  241:Write('-0.5');
-  242:Write('1.0');
-  243:Write('-1.0');
-  244:Write('2.0');
-  245:Write('-2.0');
-  246:Write('4.0');
-  247:Write('-4.0');
+  128..192:Result:=IntToStr(SSRC-128);
+  193..208:Result:=IntToStr(-(SSRC-192));
+  240:Result:='0.5';
+  241:Result:='-0.5';
+  242:Result:='1.0';
+  243:Result:='-1.0';
+  244:Result:='2.0';
+  245:Result:='-2.0';
+  246:Result:='4.0';
+  247:Result:='-4.0';
 
-  251:Write('VCCZ');
-  252:Write('EXECZ');
-  253:Write('SCC');
-  254:Write('LDS_DIRECT');
-  255:Write('#0x',HexStr(d2,8));
+  251:Result:='VCCZ';
+  252:Result:='EXECZ';
+  253:Result:='SCC';
+  254:Result:='LDS_DIRECT';
+  255:Result:='#0x'+HexStr(d2,8);
   else
-      Write('?');
+      Result:='?';
  end;
 end;
 
-procedure _print_ssrc9(SSRC:Word);
+function _get_ssrc9(SSRC:Word):RawByteString;
 begin
  Case SSRC of
-  0..103:Write('s',SSRC);
-  106:Write('VCC_LO');
-  107:Write('VCC_HI');
-  124:Write('M0');
-  126:Write('EXEC_LO');
-  127:Write('EXEC_HI');
+  0..103:Result:='s'+IntToStr(SSRC);
+  106:Result:='VCC_LO';
+  107:Result:='VCC_HI';
+  124:Result:='M0';
+  126:Result:='EXEC_LO';
+  127:Result:='EXEC_HI';
 
-  128..192:Write(SSRC-128);
-  193..208:Write(-(SSRC-192));
-  240:Write('0.5');
-  241:Write('-0.5');
-  242:Write('1.0');
-  243:Write('-1.0');
-  244:Write('2.0');
-  245:Write('-2.0');
-  246:Write('4.0');
-  247:Write('-4.0');
+  128..192:Result:=IntToStr(SSRC-128);
+  193..208:Result:=IntToStr(-(SSRC-192));
+  240:Result:='0.5';
+  241:Result:='-0.5';
+  242:Result:='1.0';
+  243:Result:='-1.0';
+  244:Result:='2.0';
+  245:Result:='-2.0';
+  246:Result:='4.0';
+  247:Result:='-4.0';
 
-  251:Write('VCCZ');
-  252:Write('EXECZ');
-  253:Write('SCC');
-  254:Write('LDS_DIRECT');
+  251:Result:='VCCZ';
+  252:Result:='EXECZ';
+  253:Result:='SCC';
+  254:Result:='LDS_DIRECT';
 
   256..511:
-      Write('v',SSRC-256);
+      Result:='v'+IntToStr(SSRC-256);
 
   else
-      Write('?');
+      Result:='?';
  end;
 end;
 
-procedure _print_ssrc9(SSRC:Word;d2:DWORD);
+function _get_ssrc9(SSRC:Word;d2:DWORD):RawByteString;
 begin
  Case SSRC of
-  0..103:Write('s',SSRC);
-  106:Write('VCC_LO');
-  107:Write('VCC_HI');
-  124:Write('M0');
-  126:Write('EXEC_LO');
-  127:Write('EXEC_HI');
+  0..103:Result:='s'+IntToStr(SSRC);
+  106:Result:='VCC_LO';
+  107:Result:='VCC_HI';
+  124:Result:='M0';
+  126:Result:='EXEC_LO';
+  127:Result:='EXEC_HI';
 
-  128..192:Write(SSRC-128);
-  193..208:Write(-(SSRC-192));
-  240:Write('0.5');
-  241:Write('-0.5');
-  242:Write('1.0');
-  243:Write('-1.0');
-  244:Write('2.0');
-  245:Write('-2.0');
-  246:Write('4.0');
-  247:Write('-4.0');
+  128..192:Result:=IntToStr(SSRC-128);
+  193..208:Result:=IntToStr(-(SSRC-192));
+  240:Result:='0.5';
+  241:Result:='-0.5';
+  242:Result:='1.0';
+  243:Result:='-1.0';
+  244:Result:='2.0';
+  245:Result:='-2.0';
+  246:Result:='4.0';
+  247:Result:='-4.0';
 
-  251:Write('VCCZ');
-  252:Write('EXECZ');
-  253:Write('SCC');
-  254:Write('LDS_DIRECT');
-  255:Write('#0x',HexStr(d2,8));
+  251:Result:='VCCZ';
+  252:Result:='EXECZ';
+  253:Result:='SCC';
+  254:Result:='LDS_DIRECT';
+  255:Result:='#0x'+HexStr(d2,8);
   256..511:
-      Write('v',SSRC-256);
+      Result:='v'+IntToStr(SSRC-256);
 
   else
-      Write('?');
+      Result:='?';
  end;
 end;
 
-procedure _print_vdst8(SDST:Byte); inline;
+function _get_vdst8(SDST:Byte):RawByteString; inline;
 begin
- Write('v'+IntToStr(SDST));
+ Result:='v'+IntToStr(SDST);
 end;
 
 procedure _print_SOP2(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.SOP2.OP of
 
-  S_ADD_U32       :Write('S_ADD_U32');
-  S_SUB_U32       :Write('S_SUB_U32');
-  S_ADD_I32       :Write('S_ADD_I32');
-  S_SUB_I32       :Write('S_SUB_I32');
-  S_ADDC_U32      :Write('S_ADDC_U32');
-  S_SUBB_U32      :Write('S_SUBB_U32');
-  S_MIN_I32       :Write('S_MIN_I32');
-  S_MIN_U32       :Write('S_MIN_U32');
-  S_MAX_I32       :Write('S_MAX_I32');
-  S_MAX_U32       :Write('S_MAX_U32');
-  S_CSELECT_B32   :Write('S_CSELECT_B32');
-  S_CSELECT_B64   :Write('S_CSELECT_B64');
+  S_ADD_U32       :str:='S_ADD_U32';
+  S_SUB_U32       :str:='S_SUB_U32';
+  S_ADD_I32       :str:='S_ADD_I32';
+  S_SUB_I32       :str:='S_SUB_I32';
+  S_ADDC_U32      :str:='S_ADDC_U32';
+  S_SUBB_U32      :str:='S_SUBB_U32';
+  S_MIN_I32       :str:='S_MIN_I32';
+  S_MIN_U32       :str:='S_MIN_U32';
+  S_MAX_I32       :str:='S_MAX_I32';
+  S_MAX_U32       :str:='S_MAX_U32';
+  S_CSELECT_B32   :str:='S_CSELECT_B32';
+  S_CSELECT_B64   :str:='S_CSELECT_B64';
 
-  S_AND_B32       :Write('S_AND_B32');
-  S_AND_B64       :Write('S_AND_B64');
-  S_OR_B32        :Write('S_OR_B32');
-  S_OR_B64        :Write('S_OR_B64');
-  S_XOR_B32       :Write('S_XOR_B32');
-  S_XOR_B64       :Write('S_XOR_B64');
-  S_ANDN2_B32     :Write('S_ANDN2_B32');
-  S_ANDN2_B64     :Write('S_ANDN2_B64');
-  S_ORN2_B32      :Write('S_ORN2_B32');
-  S_ORN2_B64      :Write('S_ORN2_B64');
-  S_NAND_B32      :Write('S_NAND_B32');
-  S_NAND_B64      :Write('S_NAND_B64');
-  S_NOR_B32       :Write('S_NOR_B32');
-  S_NOR_B64       :Write('S_NOR_B64');
-  S_XNOR_B32      :Write('S_XNOR_B32');
-  S_XNOR_B64      :Write('S_XNOR_B64');
-  S_LSHL_B32      :Write('S_LSHL_B32');
-  S_LSHL_B64      :Write('S_LSHL_B64');
-  S_LSHR_B32      :Write('S_LSHR_B32');
-  S_LSHR_B64      :Write('S_LSHR_B64');
-  S_ASHR_I32      :Write('S_ASHR_I32');
-  S_ASHR_I64      :Write('S_ASHR_I64');
-  S_BFM_B32       :Write('S_BFM_B32');
-  S_BFM_B64       :Write('S_BFM_B64');
-  S_MUL_I32       :Write('S_MUL_I32');
-  S_BFE_U32       :Write('S_BFE_U32');
-  S_BFE_I32       :Write('S_BFE_I32');
-  S_BFE_U64       :Write('S_BFE_U64');
-  S_BFE_I64       :Write('S_BFE_I64');
-  S_CBRANCH_G_FORK:Write('S_CBRANCH_G_FORK');
-  S_ABSDIFF_I32   :Write('S_ABSDIFF_I32');
+  S_AND_B32       :str:='S_AND_B32';
+  S_AND_B64       :str:='S_AND_B64';
+  S_OR_B32        :str:='S_OR_B32';
+  S_OR_B64        :str:='S_OR_B64';
+  S_XOR_B32       :str:='S_XOR_B32';
+  S_XOR_B64       :str:='S_XOR_B64';
+  S_ANDN2_B32     :str:='S_ANDN2_B32';
+  S_ANDN2_B64     :str:='S_ANDN2_B64';
+  S_ORN2_B32      :str:='S_ORN2_B32';
+  S_ORN2_B64      :str:='S_ORN2_B64';
+  S_NAND_B32      :str:='S_NAND_B32';
+  S_NAND_B64      :str:='S_NAND_B64';
+  S_NOR_B32       :str:='S_NOR_B32';
+  S_NOR_B64       :str:='S_NOR_B64';
+  S_XNOR_B32      :str:='S_XNOR_B32';
+  S_XNOR_B64      :str:='S_XNOR_B64';
+  S_LSHL_B32      :str:='S_LSHL_B32';
+  S_LSHL_B64      :str:='S_LSHL_B64';
+  S_LSHR_B32      :str:='S_LSHR_B32';
+  S_LSHR_B64      :str:='S_LSHR_B64';
+  S_ASHR_I32      :str:='S_ASHR_I32';
+  S_ASHR_I64      :str:='S_ASHR_I64';
+  S_BFM_B32       :str:='S_BFM_B32';
+  S_BFM_B64       :str:='S_BFM_B64';
+  S_MUL_I32       :str:='S_MUL_I32';
+  S_BFE_U32       :str:='S_BFE_U32';
+  S_BFE_I32       :str:='S_BFE_I32';
+  S_BFE_U64       :str:='S_BFE_U64';
+  S_BFE_I64       :str:='S_BFE_I64';
+  S_CBRANCH_G_FORK:str:='S_CBRANCH_G_FORK';
+  S_ABSDIFF_I32   :str:='S_ABSDIFF_I32';
 
   else
-      Write('SOP2?',SPI.SOP2.OP);
+      str:='SOP2?'+IntToStr(SPI.SOP2.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_sdst7(SPI.SOP2.SDST);
- Write(', ');
- _print_ssrc8(SPI.SOP2.SSRC0,SPI.INLINE32);
- Write(', ');
- _print_ssrc8(SPI.SOP2.SSRC1,SPI.INLINE32);
+ str:=str+_get_sdst7(SPI.SOP2.SDST);
+ str:=str+', ';
 
- Writeln;
+ str:=str+_get_ssrc8(SPI.SOP2.SSRC0,SPI.INLINE32);
+ str:=str+', ';
+
+ str:=str+_get_ssrc8(SPI.SOP2.SSRC1,SPI.INLINE32);
+
+ Writeln(str);
 end;
 
 procedure _print_SOP1(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.SOP1.OP of
-  S_MOV_B32           :Write('S_MOV_B32');
-  S_MOV_B64           :Write('S_MOV_B64');
-  S_CMOV_B32          :Write('S_CMOV_B32');
-  S_CMOV_B64          :Write('S_CMOV_B64');
-  S_NOT_B32           :Write('S_NOT_B32');
-  S_NOT_B64           :Write('S_NOT_B64');
-  S_WQM_B32           :Write('S_WQM_B32');
-  S_WQM_B64           :Write('S_WQM_B64');
-  S_BREV_B32          :Write('S_BREV_B32');
-  S_BREV_B64          :Write('S_BREV_B64');
-  S_BCNT0_I32_B32     :Write('S_BCNT0_I32_B32');
-  S_BCNT0_I32_B64     :Write('S_BCNT0_I32_B64');
-  S_BCNT1_I32_B32     :Write('S_BCNT1_I32_B32');
-  S_BCNT1_I32_B64     :Write('S_BCNT1_I32_B64');
-  S_FF0_I32_B32       :Write('S_FF0_I32_B32');
-  S_FF0_I32_B64       :Write('S_FF0_I32_B64');
-  S_FF1_I32_B32       :Write('S_FF1_I32_B32');
-  S_FF1_I32_B64       :Write('S_FF1_I32_B64');
-  S_FLBIT_I32_B32     :Write('S_FLBIT_I32_B32');
-  S_FLBIT_I32_B64     :Write('S_FLBIT_I32_B64');
-  S_FLBIT_I32         :Write('S_FLBIT_I32');
-  S_FLBIT_I32_I64     :Write('S_FLBIT_I32_I64');
-  S_SEXT_I32_I8       :Write('S_SEXT_I32_I8');
-  S_SEXT_I32_I16      :Write('S_SEXT_I32_I16');
-  S_BITSET0_B32       :Write('S_BITSET0_B32');
-  S_BITSET0_B64       :Write('S_BITSET0_B64');
-  S_BITSET1_B32       :Write('S_BITSET1_B32');
-  S_BITSET1_B64       :Write('S_BITSET1_B64');
-  S_GETPC_B64         :Write('S_GETPC_B64');
-  S_SETPC_B64         :Write('S_SETPC_B64');
-  S_SWAPPC_B64        :Write('S_SWAPPC_B64');
+  S_MOV_B32           :str:='S_MOV_B32';
+  S_MOV_B64           :str:='S_MOV_B64';
+  S_CMOV_B32          :str:='S_CMOV_B32';
+  S_CMOV_B64          :str:='S_CMOV_B64';
+  S_NOT_B32           :str:='S_NOT_B32';
+  S_NOT_B64           :str:='S_NOT_B64';
+  S_WQM_B32           :str:='S_WQM_B32';
+  S_WQM_B64           :str:='S_WQM_B64';
+  S_BREV_B32          :str:='S_BREV_B32';
+  S_BREV_B64          :str:='S_BREV_B64';
+  S_BCNT0_I32_B32     :str:='S_BCNT0_I32_B32';
+  S_BCNT0_I32_B64     :str:='S_BCNT0_I32_B64';
+  S_BCNT1_I32_B32     :str:='S_BCNT1_I32_B32';
+  S_BCNT1_I32_B64     :str:='S_BCNT1_I32_B64';
+  S_FF0_I32_B32       :str:='S_FF0_I32_B32';
+  S_FF0_I32_B64       :str:='S_FF0_I32_B64';
+  S_FF1_I32_B32       :str:='S_FF1_I32_B32';
+  S_FF1_I32_B64       :str:='S_FF1_I32_B64';
+  S_FLBIT_I32_B32     :str:='S_FLBIT_I32_B32';
+  S_FLBIT_I32_B64     :str:='S_FLBIT_I32_B64';
+  S_FLBIT_I32         :str:='S_FLBIT_I32';
+  S_FLBIT_I32_I64     :str:='S_FLBIT_I32_I64';
+  S_SEXT_I32_I8       :str:='S_SEXT_I32_I8';
+  S_SEXT_I32_I16      :str:='S_SEXT_I32_I16';
+  S_BITSET0_B32       :str:='S_BITSET0_B32';
+  S_BITSET0_B64       :str:='S_BITSET0_B64';
+  S_BITSET1_B32       :str:='S_BITSET1_B32';
+  S_BITSET1_B64       :str:='S_BITSET1_B64';
+  S_GETPC_B64         :str:='S_GETPC_B64';
+  S_SETPC_B64         :str:='S_SETPC_B64';
+  S_SWAPPC_B64        :str:='S_SWAPPC_B64';
 
-  S_AND_SAVEEXEC_B64  :Write('S_AND_SAVEEXEC_B64');
-  S_OR_SAVEEXEC_B64   :Write('S_OR_SAVEEXEC_B64');
-  S_XOR_SAVEEXEC_B64  :Write('S_XOR_SAVEEXEC_B64');
-  S_ANDN2_SAVEEXEC_B64:Write('S_ANDN2_SAVEEXEC_B64');
-  S_ORN2_SAVEEXEC_B64 :Write('S_ORN2_SAVEEXEC_B64');
-  S_NAND_SAVEEXEC_B64 :Write('S_NAND_SAVEEXEC_B64');
-  S_NOR_SAVEEXEC_B64  :Write('S_NOR_SAVEEXEC_B64');
-  S_XNOR_SAVEEXEC_B64 :Write('S_XNOR_SAVEEXEC_B64');
-  S_QUADMASK_B32      :Write('S_QUADMASK_B32');
-  S_QUADMASK_B64      :Write('S_QUADMASK_B64');
-  S_MOVRELS_B32       :Write('S_MOVRELS_B32');
-  S_MOVRELS_B64       :Write('S_MOVRELS_B64');
-  S_MOVRELD_B32       :Write('S_MOVRELD_B32');
-  S_MOVRELD_B64       :Write('S_MOVRELD_B64');
-  S_CBRANCH_JOIN      :Write('S_CBRANCH_JOIN');
+  S_AND_SAVEEXEC_B64  :str:='S_AND_SAVEEXEC_B64';
+  S_OR_SAVEEXEC_B64   :str:='S_OR_SAVEEXEC_B64';
+  S_XOR_SAVEEXEC_B64  :str:='S_XOR_SAVEEXEC_B64';
+  S_ANDN2_SAVEEXEC_B64:str:='S_ANDN2_SAVEEXEC_B64';
+  S_ORN2_SAVEEXEC_B64 :str:='S_ORN2_SAVEEXEC_B64';
+  S_NAND_SAVEEXEC_B64 :str:='S_NAND_SAVEEXEC_B64';
+  S_NOR_SAVEEXEC_B64  :str:='S_NOR_SAVEEXEC_B64';
+  S_XNOR_SAVEEXEC_B64 :str:='S_XNOR_SAVEEXEC_B64';
+  S_QUADMASK_B32      :str:='S_QUADMASK_B32';
+  S_QUADMASK_B64      :str:='S_QUADMASK_B64';
+  S_MOVRELS_B32       :str:='S_MOVRELS_B32';
+  S_MOVRELS_B64       :str:='S_MOVRELS_B64';
+  S_MOVRELD_B32       :str:='S_MOVRELD_B32';
+  S_MOVRELD_B64       :str:='S_MOVRELD_B64';
+  S_CBRANCH_JOIN      :str:='S_CBRANCH_JOIN';
 
-  S_ABS_I32           :Write('S_ABS_I32');
+  S_ABS_I32           :str:='S_ABS_I32';
 
 
   else
-      Write('SOP1?',SPI.SOP1.OP);
+      str:='SOP1?'+IntToStr(SPI.SOP1.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_sdst7(SPI.SOP1.SDST);
- Write(', ');
- _print_ssrc8(SPI.SOP1.SSRC,SPI.INLINE32);
+ str:=str+_get_sdst7(SPI.SOP1.SDST);
+ str:=str+', ';
 
- Writeln;
+ str:=str+_get_ssrc8(SPI.SOP1.SSRC,SPI.INLINE32);
+
+ Writeln(str);
 end;
 
 procedure _print_SOPC(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.SOPC.OP of
-  S_CMP_EQ_I32 :Write('S_CMP_EQ_I32');
-  S_CMP_LG_I32 :Write('S_CMP_LG_I32');
-  S_CMP_GT_I32 :Write('S_CMP_GT_I32');
-  S_CMP_GE_I32 :Write('S_CMP_GE_I32');
-  S_CMP_LT_I32 :Write('S_CMP_LT_I32');
-  S_CMP_LE_I32 :Write('S_CMP_LE_I32');
-  S_CMP_EQ_U32 :Write('S_CMP_EQ_U32');
-  S_CMP_LG_U32 :Write('S_CMP_LG_U32');
-  S_CMP_GT_U32 :Write('S_CMP_GT_U32');
-  S_CMP_GE_U32 :Write('S_CMP_GE_U32');
-  S_CMP_LT_U32 :Write('S_CMP_LT_U32');
-  S_CMP_LE_U32 :Write('S_CMP_LE_U32');
-  S_BITCMP0_B32:Write('S_BITCMP0_B32');
-  S_BITCMP1_B32:Write('S_BITCMP1_B32');
-  S_BITCMP0_B64:Write('S_BITCMP0_B64');
-  S_BITCMP1_B64:Write('S_BITCMP1_B64');
-  S_SETVSKIP   :Write('S_SETVSKIP');
+  S_CMP_EQ_I32 :str:='S_CMP_EQ_I32';
+  S_CMP_LG_I32 :str:='S_CMP_LG_I32';
+  S_CMP_GT_I32 :str:='S_CMP_GT_I32';
+  S_CMP_GE_I32 :str:='S_CMP_GE_I32';
+  S_CMP_LT_I32 :str:='S_CMP_LT_I32';
+  S_CMP_LE_I32 :str:='S_CMP_LE_I32';
+  S_CMP_EQ_U32 :str:='S_CMP_EQ_U32';
+  S_CMP_LG_U32 :str:='S_CMP_LG_U32';
+  S_CMP_GT_U32 :str:='S_CMP_GT_U32';
+  S_CMP_GE_U32 :str:='S_CMP_GE_U32';
+  S_CMP_LT_U32 :str:='S_CMP_LT_U32';
+  S_CMP_LE_U32 :str:='S_CMP_LE_U32';
+  S_BITCMP0_B32:str:='S_BITCMP0_B32';
+  S_BITCMP1_B32:str:='S_BITCMP1_B32';
+  S_BITCMP0_B64:str:='S_BITCMP0_B64';
+  S_BITCMP1_B64:str:='S_BITCMP1_B64';
+  S_SETVSKIP   :str:='S_SETVSKIP';
   else
-      Write('SOPC?',SPI.SOPC.OP);
+      str:='SOPC?'+IntToStr(SPI.SOPC.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_ssrc8(SPI.SOPC.SSRC0,SPI.INLINE32);
- Write(', ');
- _print_ssrc8(SPI.SOPC.SSRC1,SPI.INLINE32);
+ str:=str+_get_ssrc8(SPI.SOPC.SSRC0,SPI.INLINE32);
+ str:=str+', ';
 
- Writeln;
+ str:=str+_get_ssrc8(SPI.SOPC.SSRC1,SPI.INLINE32);
+
+ Writeln(str);
 end;
 
 function _text_branch_offset(OFFSET_DW:DWORD;S:SmallInt):RawByteString;
@@ -1767,225 +1777,249 @@ begin
 end;
 
 procedure _print_SOPP(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.SOPP.OP of
-  S_NOP:Writeln('S_NOP');
-  S_ENDPGM:Writeln('S_ENDPGM');
+  S_NOP   :str:='S_NOP';
+  S_ENDPGM:str:='S_ENDPGM';
 
-  S_BRANCH        :Writeln('S_BRANCH '        ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_SCC0  :Writeln('S_CBRANCH_SCC0 '  ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_SCC1  :Writeln('S_CBRANCH_SCC1 '  ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_VCCZ  :Writeln('S_CBRANCH_VCCZ '  ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_VCCNZ :Writeln('S_CBRANCH_VCCNZ ' ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_EXECZ :Writeln('S_CBRANCH_EXECZ ' ,_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
-  S_CBRANCH_EXECNZ:Writeln('S_CBRANCH_EXECNZ ',_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM));
+  S_BRANCH        :str:='S_BRANCH '        +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_SCC0  :str:='S_CBRANCH_SCC0 '  +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_SCC1  :str:='S_CBRANCH_SCC1 '  +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_VCCZ  :str:='S_CBRANCH_VCCZ '  +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_VCCNZ :str:='S_CBRANCH_VCCNZ ' +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_EXECZ :str:='S_CBRANCH_EXECZ ' +_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
+  S_CBRANCH_EXECNZ:str:='S_CBRANCH_EXECNZ '+_text_branch_offset(SPI.OFFSET_DW,SPI.SOPP.SIMM);
 
-  S_BARRIER:Writeln('S_BARRIER');
+  S_BARRIER:str:='S_BARRIER';
 
   S_WAITCNT:
     begin
-     Write('S_WAITCNT ');
+     str:='S_WAITCNT ';
      if Twaitcnt_simm(SPI.SOPP.SIMM).lgkmcnt<>15 then
-      Write('lgkmcnt(',Twaitcnt_simm(SPI.SOPP.SIMM).lgkmcnt,') ');
+     begin
+      str:=str+'lgkmcnt('+IntToSTr(Twaitcnt_simm(SPI.SOPP.SIMM).lgkmcnt)+') ';
+     end;
      if Twaitcnt_simm(SPI.SOPP.SIMM).expcnt<>7 then
-      Write('expcnt(',Twaitcnt_simm(SPI.SOPP.SIMM).expcnt,') ');
+     begin
+      str:=str+'expcnt('+IntToSTr(Twaitcnt_simm(SPI.SOPP.SIMM).expcnt)+') ';
+     end;
      if Twaitcnt_simm(SPI.SOPP.SIMM).vmcnt<>15 then
-      Write('vmcnt(',Twaitcnt_simm(SPI.SOPP.SIMM).vmcnt,')');
-     Writeln;
+     begin
+      str:=str+'vmcnt('+IntToSTr(Twaitcnt_simm(SPI.SOPP.SIMM).vmcnt)+')';
+     end;
     end;
 
-  S_SLEEP         :Writeln('S_SLEEP');
-  S_SETPRIO       :Writeln('S_SETPRIO');
-  S_SENDMSG       :Writeln('S_SENDMSG');
+  S_SLEEP         :str:='S_SLEEP';
+  S_SETPRIO       :str:='S_SETPRIO';
+  S_SENDMSG       :str:='S_SENDMSG';
 
-  S_ICACHE_INV    :Writeln('S_ICACHE_INV');
-  S_INCPERFLEVEL  :Writeln('S_INCPERFLEVEL');
-  S_DECPERFLEVEL  :Writeln('S_DECPERFLEVEL');
-  S_TTRACEDATA    :Writeln('S_TTRACEDATA');
+  S_ICACHE_INV    :str:='S_ICACHE_INV';
+  S_INCPERFLEVEL  :str:='S_INCPERFLEVEL';
+  S_DECPERFLEVEL  :str:='S_DECPERFLEVEL';
+  S_TTRACEDATA    :str:='S_TTRACEDATA';
 
   else
-      Writeln('SOPP?',SPI.SOPP.OP);
+      str:='SOPP?'+IntToStr(SPI.SOPP.OP);
  end;
+
+ Writeln(str);
 end;
 
 procedure _print_SMRD(Var SPI:TSPI);
 var
- t1,t2:Byte;
+ str:RawByteString;
+ t1,t2,t3:Byte;
 begin
  t1:=0;
  t2:=0;
+ t3:=0;
 
  Case SPI.SMRD.OP of
 
   S_LOAD_DWORD:
     begin
-     Write('S_LOAD_DWORD');
+     str:='S_LOAD_DWORD';
      t1:=1;
      t2:=2;
+     t3:=1;
     end;
 
   S_LOAD_DWORDX2:
     begin
-     Write('S_LOAD_DWORDX2');
+     str:='S_LOAD_DWORDX2';
      t1:=2;
      t2:=2;
+     t3:=1;
     end;
 
   S_LOAD_DWORDX4:
     begin
-     Write('S_LOAD_DWORDX4');
+     str:='S_LOAD_DWORDX4';
      t1:=4;
      t2:=2;
+     t3:=1;
     end;
 
    S_LOAD_DWORDX8:
     begin
-     Write('S_LOAD_DWORDX8');
+     str:='S_LOAD_DWORDX8';
      t1:=8;
      t2:=2;
+     t3:=1;
     end;
 
   S_LOAD_DWORDX16:
     begin
-     Write('S_LOAD_DWORDX16');
+     str:='S_LOAD_DWORDX16';
      t1:=16;
      t2:=2;
+     t3:=1;
     end;
 
   //--
 
   S_BUFFER_LOAD_DWORD:
     begin
-     Write('S_BUFFER_LOAD_DWORD');
+     str:='S_BUFFER_LOAD_DWORD';
      t1:=1;
      t2:=4;
+     t3:=1;
     end;
 
   S_BUFFER_LOAD_DWORDX2:
     begin
-     Write('S_BUFFER_LOAD_DWORDX2');
+     str:='S_BUFFER_LOAD_DWORDX2';
      t1:=2;
      t2:=4;
+     t3:=1;
     end;
 
   S_BUFFER_LOAD_DWORDX4:
     begin
-     Write('S_BUFFER_LOAD_DWORDX4');
+     str:='S_BUFFER_LOAD_DWORDX4';
      t1:=4;
      t2:=4;
+     t3:=1;
     end;
 
   S_BUFFER_LOAD_DWORDX8:
     begin
-     Write('S_BUFFER_LOAD_DWORDX8');
+     str:='S_BUFFER_LOAD_DWORDX8';
      t1:=8;
      t2:=4;
+     t3:=1;
     end;
 
   S_BUFFER_LOAD_DWORDX16:
     begin
-     Write('S_BUFFER_LOAD_DWORDX16');
+     str:='S_BUFFER_LOAD_DWORDX16';
      t1:=16;
      t2:=4;
+     t3:=1;
     end;
 
   S_MEMTIME:
     begin
-     Write('S_MEMTIME');
-     Write(' ');
-     With SPI.SMRD do
-      Write('s[',SDST,':',SDST+1,']');
-     Writeln;
-     Exit;
+     str:='S_MEMTIME';
+     t1:=2;
     end;
   S_DCACHE_INV:
    begin
-    Writeln('S_DCACHE_INV');
-    Exit;
+    str:='S_DCACHE_INV';
    end
 
   else
-      Write('SMRD?',SPI.SMRD.OP);
+      str:='SMRD?'+IntToStr(SPI.SMRD.OP);
  end;
- Write(' ');
 
+ if (t1<>0) then
+ begin
+  str:=str+' ';
+ end;
 
  case t1 of
   1:begin
      With SPI.SMRD do
-      Write('s[',SDST,'], ');
+     begin
+      str:=str+'s['+IntToStr(SDST)+']';
+     end;
     end;
-  2:begin
-     With SPI.SMRD do
-      Write('s[',SDST,':',SDST+1,'], ');
-    end;
-  4:begin
-     With SPI.SMRD do
-      Write('s[',SDST,':',SDST+3,'], ');
-    end;
-  8:begin
-     With SPI.SMRD do
-      Write('s[',SDST,':',SDST+7,'], ');
-    end;
-  16:
+  2,4,8,16:
     begin
      With SPI.SMRD do
-      Write('s[',SDST,':',SDST+15,'], ');
+     begin
+      str:=str+'s['+IntToStr(SDST)+':'+IntToStr(SDST+t1-1)+']';
+     end;
     end;
+ end;
+
+ if (t2<>0) then
+ begin
+  str:=str+', ';
  end;
 
  case t2 of
-  2:begin
+  2,4:
+    begin
      With SPI.SMRD do
-      Write('s[',SBASE*2,':',SBASE*2+1,'], ');
-    end;
-  4:begin
-     With SPI.SMRD do
-      Write('s[',SBASE*2,':',SBASE*2+3,'], ');
+     begin
+      str:=str+'s['+IntToStr(SBASE*2)+':'+IntToStr(SBASE*2+t2-1)+']';
+     end;
     end;
  end;
 
+ if (t3<>0) then
+ begin
+  str:=str+', ';
+ end;
+
+ if (t3<>0) then
  With SPI.SMRD do
   Case IMM of
-   0:_print_ssrc8(OFFSET,SPI.INLINE32);
-   1:Write('0x',HexStr(OFFSET,2));
+   0:str:=str+_get_ssrc8(OFFSET,SPI.INLINE32);
+   1:str:=str+'0x'+HexStr(OFFSET,2);
   end;
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_SOPK(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.SOPK.OP of
 
-  S_MOVK_I32        :Write('S_MOVK_I32');
-  S_MOVK_HI_I32     :Write('S_MOVK_HI_I32');
-  S_CMOVK_I32       :Write('S_CMOVK_I32');
-  S_CMPK_EQ_I32     :Write('S_CMPK_EQ_I32');
-  S_CMPK_LG_I32     :Write('S_CMPK_LG_I32');
-  S_CMPK_GT_I32     :Write('S_CMPK_GT_I32');
-  S_CMPK_GE_I32     :Write('S_CMPK_GE_I32');
-  S_CMPK_LT_I32     :Write('S_CMPK_LT_I32');
-  S_CMPK_LE_I32     :Write('S_CMPK_LE_I32');
-  S_CMPK_EQ_U32     :Write('S_CMPK_EQ_U32');
-  S_CMPK_LG_U32     :Write('S_CMPK_LG_U32');
-  S_CMPK_GT_U32     :Write('S_CMPK_GT_U32');
-  S_CMPK_GE_U32     :Write('S_CMPK_GE_U32');
-  S_CMPK_LT_U32     :Write('S_CMPK_LT_U32');
-  S_CMPK_LE_U32     :Write('S_CMPK_LE_U32');
-  S_ADDK_I32        :Write('S_ADDK_I32');
-  S_MULK_I32        :Write('S_MULK_I32');
-  S_CBRANCH_I_FORK  :Write('S_CBRANCH_I_FORK');
-  S_GETREG_B32      :Write('S_GETREG_B32');
-  S_SETREG_B32      :Write('S_SETREG_B32');
-  S_SETREG_IMM32_B32:Write('S_SETREG_IMM32_B32');
+  S_MOVK_I32        :str:='S_MOVK_I32';
+  S_MOVK_HI_I32     :str:='S_MOVK_HI_I32';
+  S_CMOVK_I32       :str:='S_CMOVK_I32';
+  S_CMPK_EQ_I32     :str:='S_CMPK_EQ_I32';
+  S_CMPK_LG_I32     :str:='S_CMPK_LG_I32';
+  S_CMPK_GT_I32     :str:='S_CMPK_GT_I32';
+  S_CMPK_GE_I32     :str:='S_CMPK_GE_I32';
+  S_CMPK_LT_I32     :str:='S_CMPK_LT_I32';
+  S_CMPK_LE_I32     :str:='S_CMPK_LE_I32';
+  S_CMPK_EQ_U32     :str:='S_CMPK_EQ_U32';
+  S_CMPK_LG_U32     :str:='S_CMPK_LG_U32';
+  S_CMPK_GT_U32     :str:='S_CMPK_GT_U32';
+  S_CMPK_GE_U32     :str:='S_CMPK_GE_U32';
+  S_CMPK_LT_U32     :str:='S_CMPK_LT_U32';
+  S_CMPK_LE_U32     :str:='S_CMPK_LE_U32';
+  S_ADDK_I32        :str:='S_ADDK_I32';
+  S_MULK_I32        :str:='S_MULK_I32';
+  S_CBRANCH_I_FORK  :str:='S_CBRANCH_I_FORK';
+  S_GETREG_B32      :str:='S_GETREG_B32';
+  S_SETREG_B32      :str:='S_SETREG_B32';
+  S_SETREG_IMM32_B32:str:='S_SETREG_IMM32_B32';
 
   else
-      Write('SOPK?',SPI.SOPK.OP);
+      str:='SOPK?'+IntTostr(SPI.SOPK.OP);
  end;
- Write(' ');
- _print_sdst7(SPI.SOPK.SDST);
- Write(', ');
+ str:=str+' ';
+
+ str:=str+_get_sdst7(SPI.SOPK.SDST);
+ str:=str+', ';
 
  Case SPI.SOPK.OP of
   S_MOVK_I32   ,
@@ -1998,461 +2032,469 @@ begin
   S_CMPK_LT_I32,
   S_CMPK_LE_I32,
   S_ADDK_I32   ,
-  S_MULK_I32   :Write(SmallInt(SPI.SOPK.SIMM));
+  S_MULK_I32   :str:=str+IntToStr(SmallInt(SPI.SOPK.SIMM));
 
   S_CMPK_EQ_U32,
   S_CMPK_LG_U32,
   S_CMPK_GT_U32,
   S_CMPK_GE_U32,
   S_CMPK_LT_U32,
-  S_CMPK_LE_U32:Write(SPI.SOPK.SIMM);
+  S_CMPK_LE_U32:str:=str+IntToStr(SPI.SOPK.SIMM);
 
   else
-                Write('#0x',HexStr(SPI.SOPK.SIMM,8));
+                str:=str+'#0x'+HexStr(SPI.SOPK.SIMM,8);
  end;
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_VOP3c(Var VOP3:TVOP3a);
+var
+ str:RawByteString;
 begin
  Case VOP3.OP of
 
-  V_CMP_F_F32     :Write('V_CMP_F_F32');
-  V_CMP_LT_F32    :Write('V_CMP_LT_F32');
-  V_CMP_EQ_F32    :Write('V_CMP_EQ_F32');
-  V_CMP_LE_F32    :Write('V_CMP_LE_F32');
-  V_CMP_GT_F32    :Write('V_CMP_GT_F32');
-  V_CMP_LG_F32    :Write('V_CMP_LG_F32');
-  V_CMP_GE_F32    :Write('V_CMP_GE_F32');
-  V_CMP_O_F32     :Write('V_CMP_O_F32');
-  V_CMP_U_F32     :Write('V_CMP_U_F32');
-  V_CMP_NGE_F32   :Write('V_CMP_NGE_F32');
-  V_CMP_NLG_F32   :Write('V_CMP_NLG_F32');
-  V_CMP_NGT_F32   :Write('V_CMP_NGT_F32');
-  V_CMP_NLE_F32   :Write('V_CMP_NLE_F32');
-  V_CMP_NEQ_F32   :Write('V_CMP_NEQ_F32');
-  V_CMP_NLT_F32   :Write('V_CMP_NLT_F32');
-  V_CMP_T_F32     :Write('V_CMP_T_F32');
+  V_CMP_F_F32     :str:='V_CMP_F_F32';
+  V_CMP_LT_F32    :str:='V_CMP_LT_F32';
+  V_CMP_EQ_F32    :str:='V_CMP_EQ_F32';
+  V_CMP_LE_F32    :str:='V_CMP_LE_F32';
+  V_CMP_GT_F32    :str:='V_CMP_GT_F32';
+  V_CMP_LG_F32    :str:='V_CMP_LG_F32';
+  V_CMP_GE_F32    :str:='V_CMP_GE_F32';
+  V_CMP_O_F32     :str:='V_CMP_O_F32';
+  V_CMP_U_F32     :str:='V_CMP_U_F32';
+  V_CMP_NGE_F32   :str:='V_CMP_NGE_F32';
+  V_CMP_NLG_F32   :str:='V_CMP_NLG_F32';
+  V_CMP_NGT_F32   :str:='V_CMP_NGT_F32';
+  V_CMP_NLE_F32   :str:='V_CMP_NLE_F32';
+  V_CMP_NEQ_F32   :str:='V_CMP_NEQ_F32';
+  V_CMP_NLT_F32   :str:='V_CMP_NLT_F32';
+  V_CMP_T_F32     :str:='V_CMP_T_F32';
 
-  V_CMPX_F_F32    :Write('V_CMPX_F_F32');
-  V_CMPX_LT_F32   :Write('V_CMPX_LT_F32');
-  V_CMPX_EQ_F32   :Write('V_CMPX_EQ_F32');
-  V_CMPX_LE_F32   :Write('V_CMPX_LE_F32');
-  V_CMPX_GT_F32   :Write('V_CMPX_GT_F32');
-  V_CMPX_LG_F32   :Write('V_CMPX_LG_F32');
-  V_CMPX_GE_F32   :Write('V_CMPX_GE_F32');
-  V_CMPX_O_F32    :Write('V_CMPX_O_F32');
-  V_CMPX_U_F32    :Write('V_CMPX_U_F32');
-  V_CMPX_NGE_F32  :Write('V_CMPX_NGE_F32');
-  V_CMPX_NLG_F32  :Write('V_CMPX_NLG_F32');
-  V_CMPX_NGT_F32  :Write('V_CMPX_NGT_F32');
-  V_CMPX_NLE_F32  :Write('V_CMPX_NLE_F32');
-  V_CMPX_NEQ_F32  :Write('V_CMPX_NEQ_F32');
-  V_CMPX_NLT_F32  :Write('V_CMPX_NLT_F32');
-  V_CMPX_T_F32    :Write('V_CMPX_T_F32');
+  V_CMPX_F_F32    :str:='V_CMPX_F_F32';
+  V_CMPX_LT_F32   :str:='V_CMPX_LT_F32';
+  V_CMPX_EQ_F32   :str:='V_CMPX_EQ_F32';
+  V_CMPX_LE_F32   :str:='V_CMPX_LE_F32';
+  V_CMPX_GT_F32   :str:='V_CMPX_GT_F32';
+  V_CMPX_LG_F32   :str:='V_CMPX_LG_F32';
+  V_CMPX_GE_F32   :str:='V_CMPX_GE_F32';
+  V_CMPX_O_F32    :str:='V_CMPX_O_F32';
+  V_CMPX_U_F32    :str:='V_CMPX_U_F32';
+  V_CMPX_NGE_F32  :str:='V_CMPX_NGE_F32';
+  V_CMPX_NLG_F32  :str:='V_CMPX_NLG_F32';
+  V_CMPX_NGT_F32  :str:='V_CMPX_NGT_F32';
+  V_CMPX_NLE_F32  :str:='V_CMPX_NLE_F32';
+  V_CMPX_NEQ_F32  :str:='V_CMPX_NEQ_F32';
+  V_CMPX_NLT_F32  :str:='V_CMPX_NLT_F32';
+  V_CMPX_T_F32    :str:='V_CMPX_T_F32';
 
-  V_CMP_F_F64     :Write('V_CMP_F_F64');
-  V_CMP_LT_F64    :Write('V_CMP_LT_F64');
-  V_CMP_EQ_F64    :Write('V_CMP_EQ_F64');
-  V_CMP_LE_F64    :Write('V_CMP_LE_F64');
-  V_CMP_GT_F64    :Write('V_CMP_GT_F64');
-  V_CMP_LG_F64    :Write('V_CMP_LG_F64');
-  V_CMP_GE_F64    :Write('V_CMP_GE_F64');
-  V_CMP_O_F64     :Write('V_CMP_O_F64');
-  V_CMP_U_F64     :Write('V_CMP_U_F64');
-  V_CMP_NGE_F64   :Write('V_CMP_NGE_F64');
-  V_CMP_NLG_F64   :Write('V_CMP_NLG_F64');
-  V_CMP_NGT_F64   :Write('V_CMP_NGT_F64');
-  V_CMP_NLE_F64   :Write('V_CMP_NLE_F64');
-  V_CMP_NEQ_F64   :Write('V_CMP_NEQ_F64');
-  V_CMP_NLT_F64   :Write('V_CMP_NLT_F64');
-  V_CMP_T_F64     :Write('V_CMP_T_F64');
+  V_CMP_F_F64     :str:='V_CMP_F_F64';
+  V_CMP_LT_F64    :str:='V_CMP_LT_F64';
+  V_CMP_EQ_F64    :str:='V_CMP_EQ_F64';
+  V_CMP_LE_F64    :str:='V_CMP_LE_F64';
+  V_CMP_GT_F64    :str:='V_CMP_GT_F64';
+  V_CMP_LG_F64    :str:='V_CMP_LG_F64';
+  V_CMP_GE_F64    :str:='V_CMP_GE_F64';
+  V_CMP_O_F64     :str:='V_CMP_O_F64';
+  V_CMP_U_F64     :str:='V_CMP_U_F64';
+  V_CMP_NGE_F64   :str:='V_CMP_NGE_F64';
+  V_CMP_NLG_F64   :str:='V_CMP_NLG_F64';
+  V_CMP_NGT_F64   :str:='V_CMP_NGT_F64';
+  V_CMP_NLE_F64   :str:='V_CMP_NLE_F64';
+  V_CMP_NEQ_F64   :str:='V_CMP_NEQ_F64';
+  V_CMP_NLT_F64   :str:='V_CMP_NLT_F64';
+  V_CMP_T_F64     :str:='V_CMP_T_F64';
 
-  V_CMPX_F_F64    :Write('V_CMPX_F_F64');
-  V_CMPX_LT_F64   :Write('V_CMPX_LT_F64');
-  V_CMPX_EQ_F64   :Write('V_CMPX_EQ_F64');
-  V_CMPX_LE_F64   :Write('V_CMPX_LE_F64');
-  V_CMPX_GT_F64   :Write('V_CMPX_GT_F64');
-  V_CMPX_LG_F64   :Write('V_CMPX_LG_F64');
-  V_CMPX_GE_F64   :Write('V_CMPX_GE_F64');
-  V_CMPX_O_F64    :Write('V_CMPX_O_F64');
-  V_CMPX_U_F64    :Write('V_CMPX_U_F64');
-  V_CMPX_NGE_F64  :Write('V_CMPX_NGE_F64');
-  V_CMPX_NLG_F64  :Write('V_CMPX_NLG_F64');
-  V_CMPX_NGT_F64  :Write('V_CMPX_NGT_F64');
-  V_CMPX_NLE_F64  :Write('V_CMPX_NLE_F64');
-  V_CMPX_NEQ_F64  :Write('V_CMPX_NEQ_F64');
-  V_CMPX_NLT_F64  :Write('V_CMPX_NLT_F64');
-  V_CMPX_T_F64    :Write('V_CMPX_T_F64');
-
-
-  V_CMPS_F_F32    :Write('V_CMPS_F_F32');
-  V_CMPS_LT_F32   :Write('V_CMPS_LT_F32');
-  V_CMPS_EQ_F32   :Write('V_CMPS_EQ_F32');
-  V_CMPS_LE_F32   :Write('V_CMPS_LE_F32');
-  V_CMPS_GT_F32   :Write('V_CMPS_GT_F32');
-  V_CMPS_LG_F32   :Write('V_CMPS_LG_F32');
-  V_CMPS_GE_F32   :Write('V_CMPS_GE_F32');
-  V_CMPS_O_F32    :Write('V_CMPS_O_F32');
-  V_CMPS_U_F32    :Write('V_CMPS_U_F32');
-  V_CMPS_NGE_F32  :Write('V_CMPS_NGE_F32');
-  V_CMPS_NLG_F32  :Write('V_CMPS_NLG_F32');
-  V_CMPS_NGT_F32  :Write('V_CMPS_NGT_F32');
-  V_CMPS_NLE_F32  :Write('V_CMPS_NLE_F32');
-  V_CMPS_NEQ_F32  :Write('V_CMPS_NEQ_F32');
-  V_CMPS_NLT_F32  :Write('V_CMPS_NLT_F32');
-  V_CMPS_T_F32    :Write('V_CMPS_T_F32');
-
-  V_CMPSX_F_F32   :Write('V_CMPSX_F_F32');
-  V_CMPSX_LT_F32  :Write('V_CMPSX_LT_F32');
-  V_CMPSX_EQ_F32  :Write('V_CMPSX_EQ_F32');
-  V_CMPSX_LE_F32  :Write('V_CMPSX_LE_F32');
-  V_CMPSX_GT_F32  :Write('V_CMPSX_GT_F32');
-  V_CMPSX_LG_F32  :Write('V_CMPSX_LG_F32');
-  V_CMPSX_GE_F32  :Write('V_CMPSX_GE_F32');
-  V_CMPSX_O_F32   :Write('V_CMPSX_O_F32');
-  V_CMPSX_U_F32   :Write('V_CMPSX_U_F32');
-  V_CMPSX_NGE_F32 :Write('V_CMPSX_NGE_F32');
-  V_CMPSX_NLG_F32 :Write('V_CMPSX_NLG_F32');
-  V_CMPSX_NGT_F32 :Write('V_CMPSX_NGT_F32');
-  V_CMPSX_NLE_F32 :Write('V_CMPSX_NLE_F32');
-  V_CMPSX_NEQ_F32 :Write('V_CMPSX_NEQ_F32');
-  V_CMPSX_NLT_F32 :Write('V_CMPSX_NLT_F32');
-  V_CMPSX_T_F32   :Write('V_CMPSX_T_F32');
-
-  V_CMPS_F_F64    :Write('V_CMPS_F_F64');
-  V_CMPS_LT_F64   :Write('V_CMPS_LT_F64');
-  V_CMPS_EQ_F64   :Write('V_CMPS_EQ_F64');
-  V_CMPS_LE_F64   :Write('V_CMPS_LE_F64');
-  V_CMPS_GT_F64   :Write('V_CMPS_GT_F64');
-  V_CMPS_LG_F64   :Write('V_CMPS_LG_F64');
-  V_CMPS_GE_F64   :Write('V_CMPS_GE_F64');
-  V_CMPS_O_F64    :Write('V_CMPS_O_F64');
-  V_CMPS_U_F64    :Write('V_CMPS_U_F64');
-  V_CMPS_NGE_F64  :Write('V_CMPS_NGE_F64');
-  V_CMPS_NLG_F64  :Write('V_CMPS_NLG_F64');
-  V_CMPS_NGT_F64  :Write('V_CMPS_NGT_F64');
-  V_CMPS_NLE_F64  :Write('V_CMPS_NLE_F64');
-  V_CMPS_NEQ_F64  :Write('V_CMPS_NEQ_F64');
-  V_CMPS_NLT_F64  :Write('V_CMPS_NLT_F64');
-  V_CMPS_T_F64    :Write('V_CMPS_T_F64');
-
-  V_CMPSX_F_F64   :Write('V_CMPSX_F_F64');
-  V_CMPSX_LT_F64  :Write('V_CMPSX_LT_F64');
-  V_CMPSX_EQ_F64  :Write('V_CMPSX_EQ_F64');
-  V_CMPSX_LE_F64  :Write('V_CMPSX_LE_F64');
-  V_CMPSX_GT_F64  :Write('V_CMPSX_GT_F64');
-  V_CMPSX_LG_F64  :Write('V_CMPSX_LG_F64');
-  V_CMPSX_GE_F64  :Write('V_CMPSX_GE_F64');
-  V_CMPSX_O_F64   :Write('V_CMPSX_O_F64');
-  V_CMPSX_U_F64   :Write('V_CMPSX_U_F64');
-  V_CMPSX_NGE_F64 :Write('V_CMPSX_NGE_F64');
-  V_CMPSX_NLG_F64 :Write('V_CMPSX_NLG_F64');
-  V_CMPSX_NGT_F64 :Write('V_CMPSX_NGT_F64');
-  V_CMPSX_NLE_F64 :Write('V_CMPSX_NLE_F64');
-  V_CMPSX_NEQ_F64 :Write('V_CMPSX_NEQ_F64');
-  V_CMPSX_NLT_F64 :Write('V_CMPSX_NLT_F64');
-  V_CMPSX_T_F64   :Write('V_CMPSX_T_F64');
+  V_CMPX_F_F64    :str:='V_CMPX_F_F64';
+  V_CMPX_LT_F64   :str:='V_CMPX_LT_F64';
+  V_CMPX_EQ_F64   :str:='V_CMPX_EQ_F64';
+  V_CMPX_LE_F64   :str:='V_CMPX_LE_F64';
+  V_CMPX_GT_F64   :str:='V_CMPX_GT_F64';
+  V_CMPX_LG_F64   :str:='V_CMPX_LG_F64';
+  V_CMPX_GE_F64   :str:='V_CMPX_GE_F64';
+  V_CMPX_O_F64    :str:='V_CMPX_O_F64';
+  V_CMPX_U_F64    :str:='V_CMPX_U_F64';
+  V_CMPX_NGE_F64  :str:='V_CMPX_NGE_F64';
+  V_CMPX_NLG_F64  :str:='V_CMPX_NLG_F64';
+  V_CMPX_NGT_F64  :str:='V_CMPX_NGT_F64';
+  V_CMPX_NLE_F64  :str:='V_CMPX_NLE_F64';
+  V_CMPX_NEQ_F64  :str:='V_CMPX_NEQ_F64';
+  V_CMPX_NLT_F64  :str:='V_CMPX_NLT_F64';
+  V_CMPX_T_F64    :str:='V_CMPX_T_F64';
 
 
-  V_CMP_F_I32     :Write('V_CMP_F_I32');
-  V_CMP_LT_I32    :Write('V_CMP_LT_I32');
-  V_CMP_EQ_I32    :Write('V_CMP_EQ_I32');
-  V_CMP_LE_I32    :Write('V_CMP_LE_I32');
-  V_CMP_GT_I32    :Write('V_CMP_GT_I32');
-  V_CMP_LG_I32    :Write('V_CMP_LG_I32');
-  V_CMP_GE_I32    :Write('V_CMP_GE_I32');
-  V_CMP_T_I32     :Write('V_CMP_T_I32');
+  V_CMPS_F_F32    :str:='V_CMPS_F_F32';
+  V_CMPS_LT_F32   :str:='V_CMPS_LT_F32';
+  V_CMPS_EQ_F32   :str:='V_CMPS_EQ_F32';
+  V_CMPS_LE_F32   :str:='V_CMPS_LE_F32';
+  V_CMPS_GT_F32   :str:='V_CMPS_GT_F32';
+  V_CMPS_LG_F32   :str:='V_CMPS_LG_F32';
+  V_CMPS_GE_F32   :str:='V_CMPS_GE_F32';
+  V_CMPS_O_F32    :str:='V_CMPS_O_F32';
+  V_CMPS_U_F32    :str:='V_CMPS_U_F32';
+  V_CMPS_NGE_F32  :str:='V_CMPS_NGE_F32';
+  V_CMPS_NLG_F32  :str:='V_CMPS_NLG_F32';
+  V_CMPS_NGT_F32  :str:='V_CMPS_NGT_F32';
+  V_CMPS_NLE_F32  :str:='V_CMPS_NLE_F32';
+  V_CMPS_NEQ_F32  :str:='V_CMPS_NEQ_F32';
+  V_CMPS_NLT_F32  :str:='V_CMPS_NLT_F32';
+  V_CMPS_T_F32    :str:='V_CMPS_T_F32';
 
-  V_CMPX_F_I32    :Write('V_CMPX_F_I32');
-  V_CMPX_LT_I32   :Write('V_CMPX_LT_I32');
-  V_CMPX_EQ_I32   :Write('V_CMPX_EQ_I32');
-  V_CMPX_LE_I32   :Write('V_CMPX_LE_I32');
-  V_CMPX_GT_I32   :Write('V_CMPX_GT_I32');
-  V_CMPX_LG_I32   :Write('V_CMPX_LG_I32');
-  V_CMPX_GE_I32   :Write('V_CMPX_GE_I32');
-  V_CMPX_T_I32    :Write('V_CMPX_T_I32');
+  V_CMPSX_F_F32   :str:='V_CMPSX_F_F32';
+  V_CMPSX_LT_F32  :str:='V_CMPSX_LT_F32';
+  V_CMPSX_EQ_F32  :str:='V_CMPSX_EQ_F32';
+  V_CMPSX_LE_F32  :str:='V_CMPSX_LE_F32';
+  V_CMPSX_GT_F32  :str:='V_CMPSX_GT_F32';
+  V_CMPSX_LG_F32  :str:='V_CMPSX_LG_F32';
+  V_CMPSX_GE_F32  :str:='V_CMPSX_GE_F32';
+  V_CMPSX_O_F32   :str:='V_CMPSX_O_F32';
+  V_CMPSX_U_F32   :str:='V_CMPSX_U_F32';
+  V_CMPSX_NGE_F32 :str:='V_CMPSX_NGE_F32';
+  V_CMPSX_NLG_F32 :str:='V_CMPSX_NLG_F32';
+  V_CMPSX_NGT_F32 :str:='V_CMPSX_NGT_F32';
+  V_CMPSX_NLE_F32 :str:='V_CMPSX_NLE_F32';
+  V_CMPSX_NEQ_F32 :str:='V_CMPSX_NEQ_F32';
+  V_CMPSX_NLT_F32 :str:='V_CMPSX_NLT_F32';
+  V_CMPSX_T_F32   :str:='V_CMPSX_T_F32';
 
-  V_CMP_F_I64     :Write('V_CMP_F_I64');
-  V_CMP_LT_I64    :Write('V_CMP_LT_I64');
-  V_CMP_EQ_I64    :Write('V_CMP_EQ_I64');
-  V_CMP_LE_I64    :Write('V_CMP_LE_I64');
-  V_CMP_GT_I64    :Write('V_CMP_GT_I64');
-  V_CMP_LG_I64    :Write('V_CMP_LG_I64');
-  V_CMP_GE_I64    :Write('V_CMP_GE_I64');
-  V_CMP_T_I64     :Write('V_CMP_T_I64');
+  V_CMPS_F_F64    :str:='V_CMPS_F_F64';
+  V_CMPS_LT_F64   :str:='V_CMPS_LT_F64';
+  V_CMPS_EQ_F64   :str:='V_CMPS_EQ_F64';
+  V_CMPS_LE_F64   :str:='V_CMPS_LE_F64';
+  V_CMPS_GT_F64   :str:='V_CMPS_GT_F64';
+  V_CMPS_LG_F64   :str:='V_CMPS_LG_F64';
+  V_CMPS_GE_F64   :str:='V_CMPS_GE_F64';
+  V_CMPS_O_F64    :str:='V_CMPS_O_F64';
+  V_CMPS_U_F64    :str:='V_CMPS_U_F64';
+  V_CMPS_NGE_F64  :str:='V_CMPS_NGE_F64';
+  V_CMPS_NLG_F64  :str:='V_CMPS_NLG_F64';
+  V_CMPS_NGT_F64  :str:='V_CMPS_NGT_F64';
+  V_CMPS_NLE_F64  :str:='V_CMPS_NLE_F64';
+  V_CMPS_NEQ_F64  :str:='V_CMPS_NEQ_F64';
+  V_CMPS_NLT_F64  :str:='V_CMPS_NLT_F64';
+  V_CMPS_T_F64    :str:='V_CMPS_T_F64';
 
-  V_CMPX_F_I64    :Write('V_CMPX_F_I64');
-  V_CMPX_LT_I64   :Write('V_CMPX_LT_I64');
-  V_CMPX_EQ_I64   :Write('V_CMPX_EQ_I64');
-  V_CMPX_LE_I64   :Write('V_CMPX_LE_I64');
-  V_CMPX_GT_I64   :Write('V_CMPX_GT_I64');
-  V_CMPX_LG_I64   :Write('V_CMPX_LG_I64');
-  V_CMPX_GE_I64   :Write('V_CMPX_GE_I64');
-  V_CMPX_T_I64    :Write('V_CMPX_T_I64');
+  V_CMPSX_F_F64   :str:='V_CMPSX_F_F64';
+  V_CMPSX_LT_F64  :str:='V_CMPSX_LT_F64';
+  V_CMPSX_EQ_F64  :str:='V_CMPSX_EQ_F64';
+  V_CMPSX_LE_F64  :str:='V_CMPSX_LE_F64';
+  V_CMPSX_GT_F64  :str:='V_CMPSX_GT_F64';
+  V_CMPSX_LG_F64  :str:='V_CMPSX_LG_F64';
+  V_CMPSX_GE_F64  :str:='V_CMPSX_GE_F64';
+  V_CMPSX_O_F64   :str:='V_CMPSX_O_F64';
+  V_CMPSX_U_F64   :str:='V_CMPSX_U_F64';
+  V_CMPSX_NGE_F64 :str:='V_CMPSX_NGE_F64';
+  V_CMPSX_NLG_F64 :str:='V_CMPSX_NLG_F64';
+  V_CMPSX_NGT_F64 :str:='V_CMPSX_NGT_F64';
+  V_CMPSX_NLE_F64 :str:='V_CMPSX_NLE_F64';
+  V_CMPSX_NEQ_F64 :str:='V_CMPSX_NEQ_F64';
+  V_CMPSX_NLT_F64 :str:='V_CMPSX_NLT_F64';
+  V_CMPSX_T_F64   :str:='V_CMPSX_T_F64';
 
-  V_CMP_F_U32     :Write('V_CMP_F_U32');
-  V_CMP_LT_U32    :Write('V_CMP_LT_U32');
-  V_CMP_EQ_U32    :Write('V_CMP_EQ_U32');
-  V_CMP_LE_U32    :Write('V_CMP_LE_U32');
-  V_CMP_GT_U32    :Write('V_CMP_GT_U32');
-  V_CMP_LG_U32    :Write('V_CMP_LG_U32');
-  V_CMP_GE_U32    :Write('V_CMP_GE_U32');
-  V_CMP_T_U32     :Write('V_CMP_T_U32');
 
-  V_CMPX_F_U32    :Write('V_CMPX_F_U32');
-  V_CMPX_LT_U32   :Write('V_CMPX_LT_U32');
-  V_CMPX_EQ_U32   :Write('V_CMPX_EQ_U32');
-  V_CMPX_LE_U32   :Write('V_CMPX_LE_U32');
-  V_CMPX_GT_U32   :Write('V_CMPX_GT_U32');
-  V_CMPX_LG_U32   :Write('V_CMPX_LG_U32');
-  V_CMPX_GE_U32   :Write('V_CMPX_GE_U32');
-  V_CMPX_T_U32    :Write('V_CMPX_T_U32');
+  V_CMP_F_I32     :str:='V_CMP_F_I32';
+  V_CMP_LT_I32    :str:='V_CMP_LT_I32';
+  V_CMP_EQ_I32    :str:='V_CMP_EQ_I32';
+  V_CMP_LE_I32    :str:='V_CMP_LE_I32';
+  V_CMP_GT_I32    :str:='V_CMP_GT_I32';
+  V_CMP_LG_I32    :str:='V_CMP_LG_I32';
+  V_CMP_GE_I32    :str:='V_CMP_GE_I32';
+  V_CMP_T_I32     :str:='V_CMP_T_I32';
 
-  V_CMP_F_U64     :Write('V_CMP_F_U64');
-  V_CMP_LT_U64    :Write('V_CMP_LT_U64');
-  V_CMP_EQ_U64    :Write('V_CMP_EQ_U64');
-  V_CMP_LE_U64    :Write('V_CMP_LE_U64');
-  V_CMP_GT_U64    :Write('V_CMP_GT_U64');
-  V_CMP_LG_U64    :Write('V_CMP_LG_U64');
-  V_CMP_GE_U64    :Write('V_CMP_GE_U64');
-  V_CMP_T_U64     :Write('V_CMP_T_U64');
+  V_CMPX_F_I32    :str:='V_CMPX_F_I32';
+  V_CMPX_LT_I32   :str:='V_CMPX_LT_I32';
+  V_CMPX_EQ_I32   :str:='V_CMPX_EQ_I32';
+  V_CMPX_LE_I32   :str:='V_CMPX_LE_I32';
+  V_CMPX_GT_I32   :str:='V_CMPX_GT_I32';
+  V_CMPX_LG_I32   :str:='V_CMPX_LG_I32';
+  V_CMPX_GE_I32   :str:='V_CMPX_GE_I32';
+  V_CMPX_T_I32    :str:='V_CMPX_T_I32';
 
-  V_CMPX_F_U64    :Write('V_CMPX_F_U64');
-  V_CMPX_LT_U64   :Write('V_CMPX_LT_U64');
-  V_CMPX_EQ_U64   :Write('V_CMPX_EQ_U64');
-  V_CMPX_LE_U64   :Write('V_CMPX_LE_U64');
-  V_CMPX_GT_U64   :Write('V_CMPX_GT_U64');
-  V_CMPX_LG_U64   :Write('V_CMPX_LG_U64');
-  V_CMPX_GE_U64   :Write('V_CMPX_GE_U64');
-  V_CMPX_T_U64    :Write('V_CMPX_T_U64');
+  V_CMP_F_I64     :str:='V_CMP_F_I64';
+  V_CMP_LT_I64    :str:='V_CMP_LT_I64';
+  V_CMP_EQ_I64    :str:='V_CMP_EQ_I64';
+  V_CMP_LE_I64    :str:='V_CMP_LE_I64';
+  V_CMP_GT_I64    :str:='V_CMP_GT_I64';
+  V_CMP_LG_I64    :str:='V_CMP_LG_I64';
+  V_CMP_GE_I64    :str:='V_CMP_GE_I64';
+  V_CMP_T_I64     :str:='V_CMP_T_I64';
 
-  V_CMP_CLASS_F32 :Write('V_CMP_CLASS_F32');
-  V_CMPX_CLASS_F32:Write('V_CMPX_CLASS_F32');
-  V_CMP_CLASS_F64 :Write('V_CMP_CLASS_F64');
-  V_CMPX_CLASS_F64:Write('V_CMPX_CLASS_F64');
+  V_CMPX_F_I64    :str:='V_CMPX_F_I64';
+  V_CMPX_LT_I64   :str:='V_CMPX_LT_I64';
+  V_CMPX_EQ_I64   :str:='V_CMPX_EQ_I64';
+  V_CMPX_LE_I64   :str:='V_CMPX_LE_I64';
+  V_CMPX_GT_I64   :str:='V_CMPX_GT_I64';
+  V_CMPX_LG_I64   :str:='V_CMPX_LG_I64';
+  V_CMPX_GE_I64   :str:='V_CMPX_GE_I64';
+  V_CMPX_T_I64    :str:='V_CMPX_T_I64';
+
+  V_CMP_F_U32     :str:='V_CMP_F_U32';
+  V_CMP_LT_U32    :str:='V_CMP_LT_U32';
+  V_CMP_EQ_U32    :str:='V_CMP_EQ_U32';
+  V_CMP_LE_U32    :str:='V_CMP_LE_U32';
+  V_CMP_GT_U32    :str:='V_CMP_GT_U32';
+  V_CMP_LG_U32    :str:='V_CMP_LG_U32';
+  V_CMP_GE_U32    :str:='V_CMP_GE_U32';
+  V_CMP_T_U32     :str:='V_CMP_T_U32';
+
+  V_CMPX_F_U32    :str:='V_CMPX_F_U32';
+  V_CMPX_LT_U32   :str:='V_CMPX_LT_U32';
+  V_CMPX_EQ_U32   :str:='V_CMPX_EQ_U32';
+  V_CMPX_LE_U32   :str:='V_CMPX_LE_U32';
+  V_CMPX_GT_U32   :str:='V_CMPX_GT_U32';
+  V_CMPX_LG_U32   :str:='V_CMPX_LG_U32';
+  V_CMPX_GE_U32   :str:='V_CMPX_GE_U32';
+  V_CMPX_T_U32    :str:='V_CMPX_T_U32';
+
+  V_CMP_F_U64     :str:='V_CMP_F_U64';
+  V_CMP_LT_U64    :str:='V_CMP_LT_U64';
+  V_CMP_EQ_U64    :str:='V_CMP_EQ_U64';
+  V_CMP_LE_U64    :str:='V_CMP_LE_U64';
+  V_CMP_GT_U64    :str:='V_CMP_GT_U64';
+  V_CMP_LG_U64    :str:='V_CMP_LG_U64';
+  V_CMP_GE_U64    :str:='V_CMP_GE_U64';
+  V_CMP_T_U64     :str:='V_CMP_T_U64';
+
+  V_CMPX_F_U64    :str:='V_CMPX_F_U64';
+  V_CMPX_LT_U64   :str:='V_CMPX_LT_U64';
+  V_CMPX_EQ_U64   :str:='V_CMPX_EQ_U64';
+  V_CMPX_LE_U64   :str:='V_CMPX_LE_U64';
+  V_CMPX_GT_U64   :str:='V_CMPX_GT_U64';
+  V_CMPX_LG_U64   :str:='V_CMPX_LG_U64';
+  V_CMPX_GE_U64   :str:='V_CMPX_GE_U64';
+  V_CMPX_T_U64    :str:='V_CMPX_T_U64';
+
+  V_CMP_CLASS_F32 :str:='V_CMP_CLASS_F32';
+  V_CMPX_CLASS_F32:str:='V_CMPX_CLASS_F32';
+  V_CMP_CLASS_F64 :str:='V_CMP_CLASS_F64';
+  V_CMPX_CLASS_F64:str:='V_CMPX_CLASS_F64';
 
   else
-      Write('VOP3c?',VOP3.OP);
+      str:='VOP3c?'+IntToStr(VOP3.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_sdst7(VOP3.VDST);
+ str:=str+_get_sdst7(VOP3.VDST);
+ str:=str+', ';
 
+ if Byte(VOP3.NEG).TestBit(0) then str:=str+'-';
+ if Byte(VOP3.ABS).TestBit(0) then str:=str+'abs(';
+ str:=str+_get_ssrc9(VOP3.SRC0);
+ if Byte(VOP3.ABS).TestBit(0) then str:=str+')';
  Write(', ');
- if Byte(VOP3.NEG).TestBit(0) then Write('-');
- if Byte(VOP3.ABS).TestBit(0) then Write('abs(');
- _print_ssrc9(VOP3.SRC0);
- if Byte(VOP3.ABS).TestBit(0) then Write(')');
- Write(', ');
- if Byte(VOP3.NEG).TestBit(1) then Write('-');
- if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
- _print_ssrc9(VOP3.SRC1);
- if Byte(VOP3.ABS).TestBit(1) then Write(')');
 
- Writeln(' ; VOP3c');
+ if Byte(VOP3.NEG).TestBit(1) then str:=str+'-';
+ if Byte(VOP3.ABS).TestBit(1) then str:=str+'abs(';
+ str:=str+_get_ssrc9(VOP3.SRC1);
+ if Byte(VOP3.ABS).TestBit(1) then str:=str+')';
+
+ str:=str+' ; VOP3c';
+
+ Writeln(str);
 end;
 
 procedure _print_VOP3a(Var VOP3:TVOP3a);
+var
+ str:RawByteString;
 begin
  Case VOP3.OP of
 
-  256+V_CNDMASK_B32       :Write('V_CNDMASK_B32');
-  256+V_READLANE_B32      :Write('V_READLANE_B32');
-  256+V_WRITELANE_B32     :Write('V_WRITELANE_B32');
-  256+V_ADD_F32           :Write('V_ADD_F32');
-  256+V_SUB_F32           :Write('V_SUB_F32');
-  256+V_SUBREV_F32        :Write('V_SUBREV_F32');
-  256+V_MAC_LEGACY_F32    :Write('V_MAC_LEGACY_F32');
-  256+V_MUL_LEGACY_F32    :Write('V_MUL_LEGACY_F32');
-  256+V_MUL_F32           :Write('V_MUL_F32');
-  256+V_MUL_I32_I24       :Write('V_MUL_I32_I24');
-  256+V_MUL_HI_I32_I24    :Write('V_MUL_HI_I32_I24');
-  256+V_MUL_U32_U24       :Write('V_MUL_U32_U24');
-  256+V_MUL_HI_U32_U24    :Write('V_MUL_HI_U32_U24');
-  256+V_MIN_LEGACY_F32    :Write('V_MIN_LEGACY_F32');
-  256+V_MAX_LEGACY_F32    :Write('V_MAX_LEGACY_F32');
-  256+V_MIN_F32           :Write('V_MIN_F32');
-  256+V_MAX_F32           :Write('V_MAX_F32');
-  256+V_MIN_I32           :Write('V_MIN_I32');
-  256+V_MAX_I32           :Write('V_MAX_I32');
-  256+V_MIN_U32           :Write('V_MIN_U32');
-  256+V_MAX_U32           :Write('V_MAX_U32');
-  256+V_LSHR_B32          :Write('V_LSHR_B32');
-  256+V_LSHRREV_B32       :Write('V_LSHRREV_B32');
-  256+V_ASHR_I32          :Write('V_ASHR_I32');
-  256+V_ASHRREV_I32       :Write('V_ASHRREV_I32');
-  256+V_LSHL_B32          :Write('V_LSHL_B32');
-  256+V_LSHLREV_B32       :Write('V_LSHLREV_B32');
-  256+V_AND_B32           :Write('V_AND_B32');
-  256+V_OR_B32            :Write('V_OR_B32');
-  256+V_XOR_B32           :Write('V_XOR_B32');
-  256+V_BFM_B32           :Write('V_BFM_B32');
-  256+V_MAC_F32           :Write('V_MAC_F32');
+  256+V_CNDMASK_B32       :str:='V_CNDMASK_B32';
+  256+V_READLANE_B32      :str:='V_READLANE_B32';
+  256+V_WRITELANE_B32     :str:='V_WRITELANE_B32';
+  256+V_ADD_F32           :str:='V_ADD_F32';
+  256+V_SUB_F32           :str:='V_SUB_F32';
+  256+V_SUBREV_F32        :str:='V_SUBREV_F32';
+  256+V_MAC_LEGACY_F32    :str:='V_MAC_LEGACY_F32';
+  256+V_MUL_LEGACY_F32    :str:='V_MUL_LEGACY_F32';
+  256+V_MUL_F32           :str:='V_MUL_F32';
+  256+V_MUL_I32_I24       :str:='V_MUL_I32_I24';
+  256+V_MUL_HI_I32_I24    :str:='V_MUL_HI_I32_I24';
+  256+V_MUL_U32_U24       :str:='V_MUL_U32_U24';
+  256+V_MUL_HI_U32_U24    :str:='V_MUL_HI_U32_U24';
+  256+V_MIN_LEGACY_F32    :str:='V_MIN_LEGACY_F32';
+  256+V_MAX_LEGACY_F32    :str:='V_MAX_LEGACY_F32';
+  256+V_MIN_F32           :str:='V_MIN_F32';
+  256+V_MAX_F32           :str:='V_MAX_F32';
+  256+V_MIN_I32           :str:='V_MIN_I32';
+  256+V_MAX_I32           :str:='V_MAX_I32';
+  256+V_MIN_U32           :str:='V_MIN_U32';
+  256+V_MAX_U32           :str:='V_MAX_U32';
+  256+V_LSHR_B32          :str:='V_LSHR_B32';
+  256+V_LSHRREV_B32       :str:='V_LSHRREV_B32';
+  256+V_ASHR_I32          :str:='V_ASHR_I32';
+  256+V_ASHRREV_I32       :str:='V_ASHRREV_I32';
+  256+V_LSHL_B32          :str:='V_LSHL_B32';
+  256+V_LSHLREV_B32       :str:='V_LSHLREV_B32';
+  256+V_AND_B32           :str:='V_AND_B32';
+  256+V_OR_B32            :str:='V_OR_B32';
+  256+V_XOR_B32           :str:='V_XOR_B32';
+  256+V_BFM_B32           :str:='V_BFM_B32';
+  256+V_MAC_F32           :str:='V_MAC_F32';
 
-  256+V_BCNT_U32_B32      :Write('V_BCNT_U32_B32');
-  256+V_MBCNT_LO_U32_B32  :Write('V_MBCNT_LO_U32_B32');
-  256+V_MBCNT_HI_U32_B32  :Write('V_MBCNT_HI_U32_B32');
+  256+V_BCNT_U32_B32      :str:='V_BCNT_U32_B32';
+  256+V_MBCNT_LO_U32_B32  :str:='V_MBCNT_LO_U32_B32';
+  256+V_MBCNT_HI_U32_B32  :str:='V_MBCNT_HI_U32_B32';
 
-  256+V_LDEXP_F32         :Write('V_LDEXP_F32');
-  256+V_CVT_PKACCUM_U8_F32:Write('V_CVT_PKACCUM_U8_F32');
-  256+V_CVT_PKNORM_I16_F32:Write('V_CVT_PKNORM_I16_F32');
-  256+V_CVT_PKNORM_U16_F32:Write('V_CVT_PKNORM_U16_F32');
-  256+V_CVT_PKRTZ_F16_F32 :Write('V_CVT_PKRTZ_F16_F32');
-  256+V_CVT_PK_U16_U32    :Write('V_CVT_PK_U16_U32');
-  256+V_CVT_PK_I16_I32    :Write('V_CVT_PK_I16_I32');
+  256+V_LDEXP_F32         :str:='V_LDEXP_F32';
+  256+V_CVT_PKACCUM_U8_F32:str:='V_CVT_PKACCUM_U8_F32';
+  256+V_CVT_PKNORM_I16_F32:str:='V_CVT_PKNORM_I16_F32';
+  256+V_CVT_PKNORM_U16_F32:str:='V_CVT_PKNORM_U16_F32';
+  256+V_CVT_PKRTZ_F16_F32 :str:='V_CVT_PKRTZ_F16_F32';
+  256+V_CVT_PK_U16_U32    :str:='V_CVT_PK_U16_U32';
+  256+V_CVT_PK_I16_I32    :str:='V_CVT_PK_I16_I32';
 
-  V_MAD_LEGACY_F32        :Write('V_MAD_LEGACY_F32');
-  V_MAD_F32               :Write('V_MAD_F32');
-  V_MAD_I32_I24           :Write('V_MAD_I32_I24');
-  V_MAD_U32_U24           :Write('V_MAD_U32_U24');
-  V_CUBEID_F32            :Write('V_CUBEID_F32');
-  V_CUBESC_F32            :Write('V_CUBESC_F32');
-  V_CUBETC_F32            :Write('V_CUBETC_F32');
-  V_CUBEMA_F32            :Write('V_CUBEMA_F32');
-  V_BFE_U32               :Write('V_BFE_U32');
-  V_BFE_I32               :Write('V_BFE_I32');
-  V_BFI_B32               :Write('V_BFI_B32');
-  V_FMA_F32               :Write('V_FMA_F32');
-  V_FMA_F64               :Write('V_FMA_F64');
-  V_LERP_U8               :Write('V_LERP_U8');
-  V_ALIGNBIT_B32          :Write('V_ALIGNBIT_B32');
-  V_ALIGNBYTE_B32         :Write('V_ALIGNBYTE_B32');
-  V_MULLIT_F32            :Write('V_MULLIT_F32');
-  V_MIN3_F32              :Write('V_MIN3_F32');
-  V_MIN3_I32              :Write('V_MIN3_I32');
-  V_MIN3_U32              :Write('V_MIN3_U32');
-  V_MAX3_F32              :Write('V_MAX3_F32');
-  V_MAX3_I32              :Write('V_MAX3_I32');
-  V_MAX3_U32              :Write('V_MAX3_U32');
-  V_MED3_F32              :Write('V_MED3_F32');
-  V_MED3_I32              :Write('V_MED3_I32');
-  V_MED3_U32              :Write('V_MED3_U32');
-  V_SAD_U8                :Write('V_SAD_U8');
-  V_SAD_HI_U8             :Write('V_SAD_HI_U8');
-  V_SAD_U16               :Write('V_SAD_U16');
-  V_SAD_U32               :Write('V_SAD_U32');
-  V_CVT_PK_U8_F32         :Write('V_CVT_PK_U8_F32');
-  V_DIV_FIXUP_F32         :Write('V_DIV_FIXUP_F32');
-  V_DIV_FIXUP_F64         :Write('V_DIV_FIXUP_F64');
-  V_LSHL_B64              :Write('V_LSHL_B64');
-  V_LSHR_B64              :Write('V_LSHR_B64');
-  V_ASHR_I64              :Write('V_ASHR_I64');
-  V_ADD_F64               :Write('V_ADD_F64');
-  V_MUL_F64               :Write('V_MUL_F64');
-  V_MIN_F64               :Write('V_MIN_F64');
-  V_MAX_F64               :Write('V_MAX_F64');
-  V_LDEXP_F64             :Write('V_LDEXP_F64');
-  V_MUL_LO_U32            :Write('V_MUL_LO_U32');
-  V_MUL_HI_U32            :Write('V_MUL_HI_U32');
-  V_MUL_LO_I32            :Write('V_MUL_LO_I32');
-  V_MUL_HI_I32            :Write('V_MUL_HI_I32');
+  V_MAD_LEGACY_F32        :str:='V_MAD_LEGACY_F32';
+  V_MAD_F32               :str:='V_MAD_F32';
+  V_MAD_I32_I24           :str:='V_MAD_I32_I24';
+  V_MAD_U32_U24           :str:='V_MAD_U32_U24';
+  V_CUBEID_F32            :str:='V_CUBEID_F32';
+  V_CUBESC_F32            :str:='V_CUBESC_F32';
+  V_CUBETC_F32            :str:='V_CUBETC_F32';
+  V_CUBEMA_F32            :str:='V_CUBEMA_F32';
+  V_BFE_U32               :str:='V_BFE_U32';
+  V_BFE_I32               :str:='V_BFE_I32';
+  V_BFI_B32               :str:='V_BFI_B32';
+  V_FMA_F32               :str:='V_FMA_F32';
+  V_FMA_F64               :str:='V_FMA_F64';
+  V_LERP_U8               :str:='V_LERP_U8';
+  V_ALIGNBIT_B32          :str:='V_ALIGNBIT_B32';
+  V_ALIGNBYTE_B32         :str:='V_ALIGNBYTE_B32';
+  V_MULLIT_F32            :str:='V_MULLIT_F32';
+  V_MIN3_F32              :str:='V_MIN3_F32';
+  V_MIN3_I32              :str:='V_MIN3_I32';
+  V_MIN3_U32              :str:='V_MIN3_U32';
+  V_MAX3_F32              :str:='V_MAX3_F32';
+  V_MAX3_I32              :str:='V_MAX3_I32';
+  V_MAX3_U32              :str:='V_MAX3_U32';
+  V_MED3_F32              :str:='V_MED3_F32';
+  V_MED3_I32              :str:='V_MED3_I32';
+  V_MED3_U32              :str:='V_MED3_U32';
+  V_SAD_U8                :str:='V_SAD_U8';
+  V_SAD_HI_U8             :str:='V_SAD_HI_U8';
+  V_SAD_U16               :str:='V_SAD_U16';
+  V_SAD_U32               :str:='V_SAD_U32';
+  V_CVT_PK_U8_F32         :str:='V_CVT_PK_U8_F32';
+  V_DIV_FIXUP_F32         :str:='V_DIV_FIXUP_F32';
+  V_DIV_FIXUP_F64         :str:='V_DIV_FIXUP_F64';
+  V_LSHL_B64              :str:='V_LSHL_B64';
+  V_LSHR_B64              :str:='V_LSHR_B64';
+  V_ASHR_I64              :str:='V_ASHR_I64';
+  V_ADD_F64               :str:='V_ADD_F64';
+  V_MUL_F64               :str:='V_MUL_F64';
+  V_MIN_F64               :str:='V_MIN_F64';
+  V_MAX_F64               :str:='V_MAX_F64';
+  V_LDEXP_F64             :str:='V_LDEXP_F64';
+  V_MUL_LO_U32            :str:='V_MUL_LO_U32';
+  V_MUL_HI_U32            :str:='V_MUL_HI_U32';
+  V_MUL_LO_I32            :str:='V_MUL_LO_I32';
+  V_MUL_HI_I32            :str:='V_MUL_HI_I32';
 
-  V_DIV_FMAS_F32          :Write('V_DIV_FMAS_F32');
-  V_DIV_FMAS_F64          :Write('V_DIV_FMAS_F64');
-  V_MSAD_U8               :Write('V_MSAD_U8');
-  V_QSAD_PK_U16_U8        :Write('V_QSAD_PK_U16_U8');
-  V_MQSAD_PK_U16_U8       :Write('V_MQSAD_PK_U16_U8');
-  V_TRIG_PREOP_F64        :Write('V_TRIG_PREOP_F64');
-  V_MQSAD_U32_U8          :Write('V_MQSAD_U32_U8');
-  V_MAD_U64_U32           :Write('V_MAD_U64_U32');
-  V_MAD_I64_I32           :Write('V_MAD_I64_I32');
+  V_DIV_FMAS_F32          :str:='V_DIV_FMAS_F32';
+  V_DIV_FMAS_F64          :str:='V_DIV_FMAS_F64';
+  V_MSAD_U8               :str:='V_MSAD_U8';
+  V_QSAD_PK_U16_U8        :str:='V_QSAD_PK_U16_U8';
+  V_MQSAD_PK_U16_U8       :str:='V_MQSAD_PK_U16_U8';
+  V_TRIG_PREOP_F64        :str:='V_TRIG_PREOP_F64';
+  V_MQSAD_U32_U8          :str:='V_MQSAD_U32_U8';
+  V_MAD_U64_U32           :str:='V_MAD_U64_U32';
+  V_MAD_I64_I32           :str:='V_MAD_I64_I32';
 
-  384+V_NOP               :Write('V_NOP');
-  384+V_MOV_B32           :Write('V_MOV_B32');
-  384+V_READFIRSTLANE_B32 :Write('V_READFIRSTLANE_B32');
-  384+V_CVT_I32_F64       :Write('V_CVT_I32_F64');
-  384+V_CVT_F64_I32       :Write('V_CVT_F64_I32');
-  384+V_CVT_F32_I32       :Write('V_CVT_F32_I32');
-  384+V_CVT_F32_U32       :Write('V_CVT_F32_U32');
-  384+V_CVT_U32_F32       :Write('V_CVT_U32_F32');
-  384+V_CVT_I32_F32       :Write('V_CVT_I32_F32');
-  384+V_MOV_FED_B32       :Write('V_MOV_FED_B32');
-  384+V_CVT_F16_F32       :Write('V_CVT_F16_F32');
-  384+V_CVT_F32_F16       :Write('V_CVT_F32_F16');
-  384+V_CVT_RPI_I32_F32   :Write('V_CVT_RPI_I32_F32');
-  384+V_CVT_FLR_I32_F32   :Write('V_CVT_FLR_I32_F32');
-  384+V_CVT_OFF_F32_I4    :Write('V_CVT_OFF_F32_I4');
-  384+V_CVT_F32_F64       :Write('V_CVT_F32_F64');
-  384+V_CVT_F64_F32       :Write('V_CVT_F64_F32');
-  384+V_CVT_F32_UBYTE0    :Write('V_CVT_F32_UBYTE0');
-  384+V_CVT_F32_UBYTE1    :Write('V_CVT_F32_UBYTE1');
-  384+V_CVT_F32_UBYTE2    :Write('V_CVT_F32_UBYTE2');
-  384+V_CVT_F32_UBYTE3    :Write('V_CVT_F32_UBYTE3');
-  384+V_CVT_U32_F64       :Write('V_CVT_U32_F64');
-  384+V_CVT_F64_U32       :Write('V_CVT_F64_U32');
-  384+V_TRUNC_F64         :Write('V_TRUNC_F64');
-  384+V_CEIL_F64          :Write('V_CEIL_F64');
-  384+V_RNDNE_F64         :Write('V_RNDNE_F64');
-  384+V_FLOOR_F64         :Write('V_FLOOR_F64');
-  384+V_FRACT_F32         :Write('V_FRACT_F32');
-  384+V_TRUNC_F32         :Write('V_TRUNC_F32');
-  384+V_CEIL_F32          :Write('V_CEIL_F32');
-  384+V_RNDNE_F32         :Write('V_RNDNE_F32');
-  384+V_FLOOR_F32         :Write('V_FLOOR_F32');
-  384+V_EXP_F32           :Write('V_EXP_F32');
-  384+V_LOG_CLAMP_F32     :Write('V_LOG_CLAMP_F32');
-  384+V_LOG_F32           :Write('V_LOG_F32');
-  384+V_RCP_CLAMP_F32     :Write('V_RCP_CLAMP_F32');
-  384+V_RCP_LEGACY_F32    :Write('V_RCP_LEGACY_F32');
-  384+V_RCP_F32           :Write('V_RCP_F32');
-  384+V_RCP_IFLAG_F32     :Write('V_RCP_IFLAG_F32');
-  384+V_RSQ_CLAMP_F32     :Write('V_RSQ_CLAMP_F32');
-  384+V_RSQ_LEGACY_F32    :Write('V_RSQ_LEGACY_F32');
-  384+V_RSQ_F32           :Write('V_RSQ_F32');
-  384+V_RCP_F64           :Write('V_RCP_F64');
-  384+V_RCP_CLAMP_F64     :Write('V_RCP_CLAMP_F64');
-  384+V_RSQ_F64           :Write('V_RSQ_F64');
-  384+V_RSQ_CLAMP_F64     :Write('V_RSQ_CLAMP_F64');
-  384+V_SQRT_F32          :Write('V_SQRT_F32');
-  384+V_SQRT_F64          :Write('V_SQRT_F64');
-  384+V_SIN_F32           :Write('V_SIN_F32');
-  384+V_COS_F32           :Write('V_COS_F32');
-  384+V_NOT_B32           :Write('V_NOT_B32');
-  384+V_BFREV_B32         :Write('V_BFREV_B32');
-  384+V_FFBH_U32          :Write('V_FFBH_U32');
-  384+V_FFBL_B32          :Write('V_FFBL_B32');
-  384+V_FFBH_I32          :Write('V_FFBH_I32');
-  384+V_FREXP_EXP_I32_F64 :Write('V_FREXP_EXP_I32_F64');
-  384+V_FREXP_MANT_F64    :Write('V_FREXP_MANT_F64');
-  384+V_FRACT_F64         :Write('V_FRACT_F64');
-  384+V_FREXP_EXP_I32_F32 :Write('V_FREXP_EXP_I32_F32');
-  384+V_FREXP_MANT_F32    :Write('V_FREXP_MANT_F32');
-  384+V_CLREXCP           :Write('V_CLREXCP');
-  384+V_MOVRELD_B32       :Write('V_MOVRELD_B32');
-  384+V_MOVRELS_B32       :Write('V_MOVRELS_B32');
-  384+V_MOVRELSD_B32      :Write('V_MOVRELSD_B32');
+  384+V_NOP               :str:='V_NOP';
+  384+V_MOV_B32           :str:='V_MOV_B32';
+  384+V_READFIRSTLANE_B32 :str:='V_READFIRSTLANE_B32';
+  384+V_CVT_I32_F64       :str:='V_CVT_I32_F64';
+  384+V_CVT_F64_I32       :str:='V_CVT_F64_I32';
+  384+V_CVT_F32_I32       :str:='V_CVT_F32_I32';
+  384+V_CVT_F32_U32       :str:='V_CVT_F32_U32';
+  384+V_CVT_U32_F32       :str:='V_CVT_U32_F32';
+  384+V_CVT_I32_F32       :str:='V_CVT_I32_F32';
+  384+V_MOV_FED_B32       :str:='V_MOV_FED_B32';
+  384+V_CVT_F16_F32       :str:='V_CVT_F16_F32';
+  384+V_CVT_F32_F16       :str:='V_CVT_F32_F16';
+  384+V_CVT_RPI_I32_F32   :str:='V_CVT_RPI_I32_F32';
+  384+V_CVT_FLR_I32_F32   :str:='V_CVT_FLR_I32_F32';
+  384+V_CVT_OFF_F32_I4    :str:='V_CVT_OFF_F32_I4';
+  384+V_CVT_F32_F64       :str:='V_CVT_F32_F64';
+  384+V_CVT_F64_F32       :str:='V_CVT_F64_F32';
+  384+V_CVT_F32_UBYTE0    :str:='V_CVT_F32_UBYTE0';
+  384+V_CVT_F32_UBYTE1    :str:='V_CVT_F32_UBYTE1';
+  384+V_CVT_F32_UBYTE2    :str:='V_CVT_F32_UBYTE2';
+  384+V_CVT_F32_UBYTE3    :str:='V_CVT_F32_UBYTE3';
+  384+V_CVT_U32_F64       :str:='V_CVT_U32_F64';
+  384+V_CVT_F64_U32       :str:='V_CVT_F64_U32';
+  384+V_TRUNC_F64         :str:='V_TRUNC_F64';
+  384+V_CEIL_F64          :str:='V_CEIL_F64';
+  384+V_RNDNE_F64         :str:='V_RNDNE_F64';
+  384+V_FLOOR_F64         :str:='V_FLOOR_F64';
+  384+V_FRACT_F32         :str:='V_FRACT_F32';
+  384+V_TRUNC_F32         :str:='V_TRUNC_F32';
+  384+V_CEIL_F32          :str:='V_CEIL_F32';
+  384+V_RNDNE_F32         :str:='V_RNDNE_F32';
+  384+V_FLOOR_F32         :str:='V_FLOOR_F32';
+  384+V_EXP_F32           :str:='V_EXP_F32';
+  384+V_LOG_CLAMP_F32     :str:='V_LOG_CLAMP_F32';
+  384+V_LOG_F32           :str:='V_LOG_F32';
+  384+V_RCP_CLAMP_F32     :str:='V_RCP_CLAMP_F32';
+  384+V_RCP_LEGACY_F32    :str:='V_RCP_LEGACY_F32';
+  384+V_RCP_F32           :str:='V_RCP_F32';
+  384+V_RCP_IFLAG_F32     :str:='V_RCP_IFLAG_F32';
+  384+V_RSQ_CLAMP_F32     :str:='V_RSQ_CLAMP_F32';
+  384+V_RSQ_LEGACY_F32    :str:='V_RSQ_LEGACY_F32';
+  384+V_RSQ_F32           :str:='V_RSQ_F32';
+  384+V_RCP_F64           :str:='V_RCP_F64';
+  384+V_RCP_CLAMP_F64     :str:='V_RCP_CLAMP_F64';
+  384+V_RSQ_F64           :str:='V_RSQ_F64';
+  384+V_RSQ_CLAMP_F64     :str:='V_RSQ_CLAMP_F64';
+  384+V_SQRT_F32          :str:='V_SQRT_F32';
+  384+V_SQRT_F64          :str:='V_SQRT_F64';
+  384+V_SIN_F32           :str:='V_SIN_F32';
+  384+V_COS_F32           :str:='V_COS_F32';
+  384+V_NOT_B32           :str:='V_NOT_B32';
+  384+V_BFREV_B32         :str:='V_BFREV_B32';
+  384+V_FFBH_U32          :str:='V_FFBH_U32';
+  384+V_FFBL_B32          :str:='V_FFBL_B32';
+  384+V_FFBH_I32          :str:='V_FFBH_I32';
+  384+V_FREXP_EXP_I32_F64 :str:='V_FREXP_EXP_I32_F64';
+  384+V_FREXP_MANT_F64    :str:='V_FREXP_MANT_F64';
+  384+V_FRACT_F64         :str:='V_FRACT_F64';
+  384+V_FREXP_EXP_I32_F32 :str:='V_FREXP_EXP_I32_F32';
+  384+V_FREXP_MANT_F32    :str:='V_FREXP_MANT_F32';
+  384+V_CLREXCP           :str:='V_CLREXCP';
+  384+V_MOVRELD_B32       :str:='V_MOVRELD_B32';
+  384+V_MOVRELS_B32       :str:='V_MOVRELS_B32';
+  384+V_MOVRELSD_B32      :str:='V_MOVRELSD_B32';
 
   else
-      Write('VOP3a?',VOP3.OP);
+      str:='VOP3a?'+IntToStr(VOP3.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(VOP3.VDST);
+ str:=str+_get_vdst8(VOP3.VDST);
 
  Case VOP3.OMOD of
   0:;
-  1:Write('*2');
-  2:Write('*4');
-  3:Write('/2');
+  1:str:=str+'*2';
+  2:str:=str+'*4';
+  3:str:=str+'/2';
  end;
 
- Write(', ');
- if Byte(VOP3.NEG).TestBit(0) then Write('-');
- if Byte(VOP3.ABS).TestBit(0) then Write('abs(');
- _print_ssrc9(VOP3.SRC0);
- if Byte(VOP3.ABS).TestBit(0) then Write(')');
+ str:=str+', ';
+
+ if Byte(VOP3.NEG).TestBit(0) then str:=str+'-';
+ if Byte(VOP3.ABS).TestBit(0) then str:=str+'abs(';
+ str:=str+_get_ssrc9(VOP3.SRC0);
+ if Byte(VOP3.ABS).TestBit(0) then str:=str+')';
 
  Case VOP3.OP of
   384+V_NOP..384+V_MOVRELSD_B32:;
   else
    begin
-    Write(', ');
-    if Byte(VOP3.NEG).TestBit(1) then Write('-');
-    if Byte(VOP3.ABS).TestBit(1) then Write('abs(');
-    _print_ssrc9(VOP3.SRC1);
-    if Byte(VOP3.ABS).TestBit(1) then Write(')');
+    str:=str+', ';
+    if Byte(VOP3.NEG).TestBit(1) then str:=str+'-';
+    if Byte(VOP3.ABS).TestBit(1) then str:=str+'abs(';
+    str:=str+_get_ssrc9(VOP3.SRC1);
+    if Byte(VOP3.ABS).TestBit(1) then str:=str+')';
    end;
  end;
 
@@ -2460,63 +2502,71 @@ begin
   V_MAD_LEGACY_F32..V_DIV_FIXUP_F64,
   V_DIV_FMAS_F32..V_MAD_I64_I32:
     begin
-     Write(', ');
-     if Byte(VOP3.NEG).TestBit(2) then Write('-');
-     if Byte(VOP3.ABS).TestBit(2) then Write('abs(');
-     _print_ssrc9(VOP3.SRC2);
-     if Byte(VOP3.ABS).TestBit(2) then Write(')');
+     str:=str+', ';
+     if Byte(VOP3.NEG).TestBit(2) then str:=str+'-';
+     if Byte(VOP3.ABS).TestBit(2) then str:=str+'abs(';
+     str:=str+_get_ssrc9(VOP3.SRC2);
+     if Byte(VOP3.ABS).TestBit(2) then str:=str+')';
     end;
   else;
  end;
 
- if (VOP3.CLAMP<>0) then
-  Write(' clamp');
+ if (VOP3.CLAMP<>0) then str:=str+' clamp';
 
- Writeln(' ; VOP3a');
+ str:=str+' ; VOP3a';
+
+ Writeln(str);
 end;
 
 procedure _print_VOP3b(Var VOP3:TVOP3b);
+var
+ str:RawByteString;
 begin
  Case VOP3.OP of
 
-  256+V_ADD_I32    :Write('V_ADD_I32');
-  256+V_SUB_I32    :Write('V_SUB_I32');
-  256+V_SUBREV_I32 :Write('V_SUBREV_I32');
-  256+V_ADDC_U32   :Write('V_ADDC_U32');
-  256+V_SUBB_U32   :Write('V_SUBB_U32');
-  256+V_SUBBREV_U32:Write('V_SUBBREV_U32');
+  256+V_ADD_I32    :str:='V_ADD_I32';
+  256+V_SUB_I32    :str:='V_SUB_I32';
+  256+V_SUBREV_I32 :str:='V_SUBREV_I32';
+  256+V_ADDC_U32   :str:='V_ADDC_U32';
+  256+V_SUBB_U32   :str:='V_SUBB_U32';
+  256+V_SUBBREV_U32:str:='V_SUBBREV_U32';
 
-  V_DIV_SCALE_F32  :Write('V_DIV_SCALE_F32');
-  V_DIV_SCALE_F64  :Write('V_DIV_SCALE_F64');
+  V_DIV_SCALE_F32  :str:='V_DIV_SCALE_F32';
+  V_DIV_SCALE_F64  :str:='V_DIV_SCALE_F64';
 
   else
-      Write('VOP3b?',VOP3.OP);
+      str:='VOP3b?'+IntToStr(VOP3.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(VOP3.VDST);
+ str:=str+_get_vdst8(VOP3.VDST);
 
  Case VOP3.OMOD of
   0:;
-  1:Write('*2');
-  2:Write('*4');
-  3:Write('/2');
+  1:str:=str+'*2';
+  2:str:=str+'*4';
+  3:str:=str+'/2';
  end;
 
- Write(', ');
- _print_sdst7(VOP3.SDST);
+ str:=str+', ';
 
- Write(', ');
- if Byte(VOP3.NEG).TestBit(0) then Write('-');
- _print_ssrc9(VOP3.SRC0);
- Write(', ');
- if Byte(VOP3.NEG).TestBit(1) then Write('-');
- _print_ssrc9(VOP3.SRC1);
- Write(', ');
- if Byte(VOP3.NEG).TestBit(2) then Write('-');
- _print_ssrc9(VOP3.SRC2);
+ str:=str+_get_sdst7(VOP3.SDST);
+ str:=str+', ';
 
- Writeln(' ; VOP3b');
+ if Byte(VOP3.NEG).TestBit(0) then str:=str+'-';
+ str:=str+_get_ssrc9(VOP3.SRC0);
+ str:=str+', ';
+
+ if Byte(VOP3.NEG).TestBit(1) then str:=str+'-';
+ str:=str+_get_ssrc9(VOP3.SRC1);
+ str:=str+', ';
+
+ if Byte(VOP3.NEG).TestBit(2) then str:=str+'-';
+ str:=str+_get_ssrc9(VOP3.SRC2);
+
+ str:=str+' ; VOP3b';
+
+ Writeln(str);
 end;
 
 procedure _print_VOP3(Var SPI:TSPI);
@@ -2531,690 +2581,698 @@ begin
 end;
 
 procedure _print_VOP2(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.VOP2.OP of
-  V_CNDMASK_B32       :Write('V_CNDMASK_B32');
-  V_READLANE_B32      :Write('V_READLANE_B32');
-  V_WRITELANE_B32     :Write('V_WRITELANE_B32');
-  V_ADD_F32           :Write('V_ADD_F32');
-  V_SUB_F32           :Write('V_SUB_F32');
-  V_SUBREV_F32        :Write('V_SUBREV_F32');
-  V_MAC_LEGACY_F32    :Write('V_MAC_LEGACY_F32');
-  V_MUL_LEGACY_F32    :Write('V_MUL_LEGACY_F32');
-  V_MUL_F32           :Write('V_MUL_F32');
-  V_MUL_I32_I24       :Write('V_MUL_I32_I24');
-  V_MUL_HI_I32_I24    :Write('V_MUL_HI_I32_I24');
-  V_MUL_U32_U24       :Write('V_MUL_U32_U24');
-  V_MUL_HI_U32_U24    :Write('V_MUL_HI_U32_U24');
-  V_MIN_LEGACY_F32    :Write('V_MIN_LEGACY_F32');
-  V_MAX_LEGACY_F32    :Write('V_MAX_LEGACY_F32');
-  V_MIN_F32           :Write('V_MIN_F32');
-  V_MAX_F32           :Write('V_MAX_F32');
-  V_MIN_I32           :Write('V_MIN_I32');
-  V_MAX_I32           :Write('V_MAX_I32');
-  V_MIN_U32           :Write('V_MIN_U32');
-  V_MAX_U32           :Write('V_MAX_U32');
-  V_LSHR_B32          :Write('V_LSHR_B32');
-  V_LSHRREV_B32       :Write('V_LSHRREV_B32');
-  V_ASHR_I32          :Write('V_ASHR_I32');
-  V_ASHRREV_I32       :Write('V_ASHRREV_I32');
-  V_LSHL_B32          :Write('V_LSHL_B32');
-  V_LSHLREV_B32       :Write('V_LSHLREV_B32');
-  V_AND_B32           :Write('V_AND_B32');
-  V_OR_B32            :Write('V_OR_B32');
-  V_XOR_B32           :Write('V_XOR_B32');
-  V_BFM_B32           :Write('V_BFM_B32');
-  V_MAC_F32           :Write('V_MAC_F32');
-  V_MADMK_F32         :Write('V_MADMK_F32');
-  V_MADAK_F32         :Write('V_MADAK_F32');
-  V_BCNT_U32_B32      :Write('V_BCNT_U32_B32');
-  V_MBCNT_LO_U32_B32  :Write('V_MBCNT_LO_U32_B32');
-  V_MBCNT_HI_U32_B32  :Write('V_MBCNT_HI_U32_B32');
-  V_ADD_I32           :Write('V_ADD_I32');
-  V_SUB_I32           :Write('V_SUB_I32');
-  V_SUBREV_I32        :Write('V_SUBREV_I32');
-  V_ADDC_U32          :Write('V_ADDC_U32');
-  V_SUBB_U32          :Write('V_SUBB_U32');
-  V_SUBBREV_U32       :Write('V_SUBBREV_U32');
-  V_LDEXP_F32         :Write('V_LDEXP_F32');
-  V_CVT_PKACCUM_U8_F32:Write('V_CVT_PKACCUM_U8_F32');
-  V_CVT_PKNORM_I16_F32:Write('V_CVT_PKNORM_I16_F32');
-  V_CVT_PKNORM_U16_F32:Write('V_CVT_PKNORM_U16_F32');
-  V_CVT_PKRTZ_F16_F32 :Write('V_CVT_PKRTZ_F16_F32');
-  V_CVT_PK_U16_U32    :Write('V_CVT_PK_U16_U32');
-  V_CVT_PK_I16_I32    :Write('V_CVT_PK_I16_I32');
+  V_CNDMASK_B32       :str:='V_CNDMASK_B32';
+  V_READLANE_B32      :str:='V_READLANE_B32';
+  V_WRITELANE_B32     :str:='V_WRITELANE_B32';
+  V_ADD_F32           :str:='V_ADD_F32';
+  V_SUB_F32           :str:='V_SUB_F32';
+  V_SUBREV_F32        :str:='V_SUBREV_F32';
+  V_MAC_LEGACY_F32    :str:='V_MAC_LEGACY_F32';
+  V_MUL_LEGACY_F32    :str:='V_MUL_LEGACY_F32';
+  V_MUL_F32           :str:='V_MUL_F32';
+  V_MUL_I32_I24       :str:='V_MUL_I32_I24';
+  V_MUL_HI_I32_I24    :str:='V_MUL_HI_I32_I24';
+  V_MUL_U32_U24       :str:='V_MUL_U32_U24';
+  V_MUL_HI_U32_U24    :str:='V_MUL_HI_U32_U24';
+  V_MIN_LEGACY_F32    :str:='V_MIN_LEGACY_F32';
+  V_MAX_LEGACY_F32    :str:='V_MAX_LEGACY_F32';
+  V_MIN_F32           :str:='V_MIN_F32';
+  V_MAX_F32           :str:='V_MAX_F32';
+  V_MIN_I32           :str:='V_MIN_I32';
+  V_MAX_I32           :str:='V_MAX_I32';
+  V_MIN_U32           :str:='V_MIN_U32';
+  V_MAX_U32           :str:='V_MAX_U32';
+  V_LSHR_B32          :str:='V_LSHR_B32';
+  V_LSHRREV_B32       :str:='V_LSHRREV_B32';
+  V_ASHR_I32          :str:='V_ASHR_I32';
+  V_ASHRREV_I32       :str:='V_ASHRREV_I32';
+  V_LSHL_B32          :str:='V_LSHL_B32';
+  V_LSHLREV_B32       :str:='V_LSHLREV_B32';
+  V_AND_B32           :str:='V_AND_B32';
+  V_OR_B32            :str:='V_OR_B32';
+  V_XOR_B32           :str:='V_XOR_B32';
+  V_BFM_B32           :str:='V_BFM_B32';
+  V_MAC_F32           :str:='V_MAC_F32';
+  V_MADMK_F32         :str:='V_MADMK_F32';
+  V_MADAK_F32         :str:='V_MADAK_F32';
+  V_BCNT_U32_B32      :str:='V_BCNT_U32_B32';
+  V_MBCNT_LO_U32_B32  :str:='V_MBCNT_LO_U32_B32';
+  V_MBCNT_HI_U32_B32  :str:='V_MBCNT_HI_U32_B32';
+  V_ADD_I32           :str:='V_ADD_I32';
+  V_SUB_I32           :str:='V_SUB_I32';
+  V_SUBREV_I32        :str:='V_SUBREV_I32';
+  V_ADDC_U32          :str:='V_ADDC_U32';
+  V_SUBB_U32          :str:='V_SUBB_U32';
+  V_SUBBREV_U32       :str:='V_SUBBREV_U32';
+  V_LDEXP_F32         :str:='V_LDEXP_F32';
+  V_CVT_PKACCUM_U8_F32:str:='V_CVT_PKACCUM_U8_F32';
+  V_CVT_PKNORM_I16_F32:str:='V_CVT_PKNORM_I16_F32';
+  V_CVT_PKNORM_U16_F32:str:='V_CVT_PKNORM_U16_F32';
+  V_CVT_PKRTZ_F16_F32 :str:='V_CVT_PKRTZ_F16_F32';
+  V_CVT_PK_U16_U32    :str:='V_CVT_PK_U16_U32';
+  V_CVT_PK_I16_I32    :str:='V_CVT_PK_I16_I32';
   else
-      Write('VOP2?',SPI.VOP2.OP);
+      str:='VOP2?'+IntToStr(SPI.VOP2.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(SPI.VOP2.VDST);
- Write(', ');
- _print_ssrc9(SPI.VOP2.SRC0,SPI.INLINE32);
- Write(', ');
+ str:=str+_get_vdst8(SPI.VOP2.VDST);
+ str:=str+', ';
+
+ str:=str+_get_ssrc9(SPI.VOP2.SRC0,SPI.INLINE32);
+ str:=str+', ';
 
  Case SPI.VOP2.OP of
   V_READLANE_B32,
   V_WRITELANE_B32:
     begin
-     _print_ssrc8(SPI.VOP2.VSRC1);
+     str:=str+_get_ssrc8(SPI.VOP2.VSRC1);
     end;
   else
    begin
-    _print_vdst8(SPI.VOP2.VSRC1);
+    str:=str+_get_vdst8(SPI.VOP2.VSRC1);
    end;
  end;
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_VOPC(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.VOPC.OP of
 
-  V_CMP_F_F32     :Write('V_CMP_F_F32');
-  V_CMP_LT_F32    :Write('V_CMP_LT_F32');
-  V_CMP_EQ_F32    :Write('V_CMP_EQ_F32');
-  V_CMP_LE_F32    :Write('V_CMP_LE_F32');
-  V_CMP_GT_F32    :Write('V_CMP_GT_F32');
-  V_CMP_LG_F32    :Write('V_CMP_LG_F32');
-  V_CMP_GE_F32    :Write('V_CMP_GE_F32');
-  V_CMP_O_F32     :Write('V_CMP_O_F32');
-  V_CMP_U_F32     :Write('V_CMP_U_F32');
-  V_CMP_NGE_F32   :Write('V_CMP_NGE_F32');
-  V_CMP_NLG_F32   :Write('V_CMP_NLG_F32');
-  V_CMP_NGT_F32   :Write('V_CMP_NGT_F32');
-  V_CMP_NLE_F32   :Write('V_CMP_NLE_F32');
-  V_CMP_NEQ_F32   :Write('V_CMP_NEQ_F32');
-  V_CMP_NLT_F32   :Write('V_CMP_NLT_F32');
-  V_CMP_T_F32     :Write('V_CMP_T_F32');
+  V_CMP_F_F32     :str:='V_CMP_F_F32';
+  V_CMP_LT_F32    :str:='V_CMP_LT_F32';
+  V_CMP_EQ_F32    :str:='V_CMP_EQ_F32';
+  V_CMP_LE_F32    :str:='V_CMP_LE_F32';
+  V_CMP_GT_F32    :str:='V_CMP_GT_F32';
+  V_CMP_LG_F32    :str:='V_CMP_LG_F32';
+  V_CMP_GE_F32    :str:='V_CMP_GE_F32';
+  V_CMP_O_F32     :str:='V_CMP_O_F32';
+  V_CMP_U_F32     :str:='V_CMP_U_F32';
+  V_CMP_NGE_F32   :str:='V_CMP_NGE_F32';
+  V_CMP_NLG_F32   :str:='V_CMP_NLG_F32';
+  V_CMP_NGT_F32   :str:='V_CMP_NGT_F32';
+  V_CMP_NLE_F32   :str:='V_CMP_NLE_F32';
+  V_CMP_NEQ_F32   :str:='V_CMP_NEQ_F32';
+  V_CMP_NLT_F32   :str:='V_CMP_NLT_F32';
+  V_CMP_T_F32     :str:='V_CMP_T_F32';
 
-  V_CMPX_F_F32    :Write('V_CMPX_F_F32');
-  V_CMPX_LT_F32   :Write('V_CMPX_LT_F32');
-  V_CMPX_EQ_F32   :Write('V_CMPX_EQ_F32');
-  V_CMPX_LE_F32   :Write('V_CMPX_LE_F32');
-  V_CMPX_GT_F32   :Write('V_CMPX_GT_F32');
-  V_CMPX_LG_F32   :Write('V_CMPX_LG_F32');
-  V_CMPX_GE_F32   :Write('V_CMPX_GE_F32');
-  V_CMPX_O_F32    :Write('V_CMPX_O_F32');
-  V_CMPX_U_F32    :Write('V_CMPX_U_F32');
-  V_CMPX_NGE_F32  :Write('V_CMPX_NGE_F32');
-  V_CMPX_NLG_F32  :Write('V_CMPX_NLG_F32');
-  V_CMPX_NGT_F32  :Write('V_CMPX_NGT_F32');
-  V_CMPX_NLE_F32  :Write('V_CMPX_NLE_F32');
-  V_CMPX_NEQ_F32  :Write('V_CMPX_NEQ_F32');
-  V_CMPX_NLT_F32  :Write('V_CMPX_NLT_F32');
-  V_CMPX_T_F32    :Write('V_CMPX_T_F32');
+  V_CMPX_F_F32    :str:='V_CMPX_F_F32';
+  V_CMPX_LT_F32   :str:='V_CMPX_LT_F32';
+  V_CMPX_EQ_F32   :str:='V_CMPX_EQ_F32';
+  V_CMPX_LE_F32   :str:='V_CMPX_LE_F32';
+  V_CMPX_GT_F32   :str:='V_CMPX_GT_F32';
+  V_CMPX_LG_F32   :str:='V_CMPX_LG_F32';
+  V_CMPX_GE_F32   :str:='V_CMPX_GE_F32';
+  V_CMPX_O_F32    :str:='V_CMPX_O_F32';
+  V_CMPX_U_F32    :str:='V_CMPX_U_F32';
+  V_CMPX_NGE_F32  :str:='V_CMPX_NGE_F32';
+  V_CMPX_NLG_F32  :str:='V_CMPX_NLG_F32';
+  V_CMPX_NGT_F32  :str:='V_CMPX_NGT_F32';
+  V_CMPX_NLE_F32  :str:='V_CMPX_NLE_F32';
+  V_CMPX_NEQ_F32  :str:='V_CMPX_NEQ_F32';
+  V_CMPX_NLT_F32  :str:='V_CMPX_NLT_F32';
+  V_CMPX_T_F32    :str:='V_CMPX_T_F32';
 
-  V_CMP_F_F64     :Write('V_CMP_F_F64');
-  V_CMP_LT_F64    :Write('V_CMP_LT_F64');
-  V_CMP_EQ_F64    :Write('V_CMP_EQ_F64');
-  V_CMP_LE_F64    :Write('V_CMP_LE_F64');
-  V_CMP_GT_F64    :Write('V_CMP_GT_F64');
-  V_CMP_LG_F64    :Write('V_CMP_LG_F64');
-  V_CMP_GE_F64    :Write('V_CMP_GE_F64');
-  V_CMP_O_F64     :Write('V_CMP_O_F64');
-  V_CMP_U_F64     :Write('V_CMP_U_F64');
-  V_CMP_NGE_F64   :Write('V_CMP_NGE_F64');
-  V_CMP_NLG_F64   :Write('V_CMP_NLG_F64');
-  V_CMP_NGT_F64   :Write('V_CMP_NGT_F64');
-  V_CMP_NLE_F64   :Write('V_CMP_NLE_F64');
-  V_CMP_NEQ_F64   :Write('V_CMP_NEQ_F64');
-  V_CMP_NLT_F64   :Write('V_CMP_NLT_F64');
-  V_CMP_T_F64     :Write('V_CMP_T_F64');
+  V_CMP_F_F64     :str:='V_CMP_F_F64';
+  V_CMP_LT_F64    :str:='V_CMP_LT_F64';
+  V_CMP_EQ_F64    :str:='V_CMP_EQ_F64';
+  V_CMP_LE_F64    :str:='V_CMP_LE_F64';
+  V_CMP_GT_F64    :str:='V_CMP_GT_F64';
+  V_CMP_LG_F64    :str:='V_CMP_LG_F64';
+  V_CMP_GE_F64    :str:='V_CMP_GE_F64';
+  V_CMP_O_F64     :str:='V_CMP_O_F64';
+  V_CMP_U_F64     :str:='V_CMP_U_F64';
+  V_CMP_NGE_F64   :str:='V_CMP_NGE_F64';
+  V_CMP_NLG_F64   :str:='V_CMP_NLG_F64';
+  V_CMP_NGT_F64   :str:='V_CMP_NGT_F64';
+  V_CMP_NLE_F64   :str:='V_CMP_NLE_F64';
+  V_CMP_NEQ_F64   :str:='V_CMP_NEQ_F64';
+  V_CMP_NLT_F64   :str:='V_CMP_NLT_F64';
+  V_CMP_T_F64     :str:='V_CMP_T_F64';
 
-  V_CMPX_F_F64    :Write('V_CMPX_F_F64');
-  V_CMPX_LT_F64   :Write('V_CMPX_LT_F64');
-  V_CMPX_EQ_F64   :Write('V_CMPX_EQ_F64');
-  V_CMPX_LE_F64   :Write('V_CMPX_LE_F64');
-  V_CMPX_GT_F64   :Write('V_CMPX_GT_F64');
-  V_CMPX_LG_F64   :Write('V_CMPX_LG_F64');
-  V_CMPX_GE_F64   :Write('V_CMPX_GE_F64');
-  V_CMPX_O_F64    :Write('V_CMPX_O_F64');
-  V_CMPX_U_F64    :Write('V_CMPX_U_F64');
-  V_CMPX_NGE_F64  :Write('V_CMPX_NGE_F64');
-  V_CMPX_NLG_F64  :Write('V_CMPX_NLG_F64');
-  V_CMPX_NGT_F64  :Write('V_CMPX_NGT_F64');
-  V_CMPX_NLE_F64  :Write('V_CMPX_NLE_F64');
-  V_CMPX_NEQ_F64  :Write('V_CMPX_NEQ_F64');
-  V_CMPX_NLT_F64  :Write('V_CMPX_NLT_F64');
-  V_CMPX_T_F64    :Write('V_CMPX_T_F64');
-
-
-  V_CMPS_F_F32    :Write('V_CMPS_F_F32');
-  V_CMPS_LT_F32   :Write('V_CMPS_LT_F32');
-  V_CMPS_EQ_F32   :Write('V_CMPS_EQ_F32');
-  V_CMPS_LE_F32   :Write('V_CMPS_LE_F32');
-  V_CMPS_GT_F32   :Write('V_CMPS_GT_F32');
-  V_CMPS_LG_F32   :Write('V_CMPS_LG_F32');
-  V_CMPS_GE_F32   :Write('V_CMPS_GE_F32');
-  V_CMPS_O_F32    :Write('V_CMPS_O_F32');
-  V_CMPS_U_F32    :Write('V_CMPS_U_F32');
-  V_CMPS_NGE_F32  :Write('V_CMPS_NGE_F32');
-  V_CMPS_NLG_F32  :Write('V_CMPS_NLG_F32');
-  V_CMPS_NGT_F32  :Write('V_CMPS_NGT_F32');
-  V_CMPS_NLE_F32  :Write('V_CMPS_NLE_F32');
-  V_CMPS_NEQ_F32  :Write('V_CMPS_NEQ_F32');
-  V_CMPS_NLT_F32  :Write('V_CMPS_NLT_F32');
-  V_CMPS_T_F32    :Write('V_CMPS_T_F32');
-
-  V_CMPSX_F_F32   :Write('V_CMPSX_F_F32');
-  V_CMPSX_LT_F32  :Write('V_CMPSX_LT_F32');
-  V_CMPSX_EQ_F32  :Write('V_CMPSX_EQ_F32');
-  V_CMPSX_LE_F32  :Write('V_CMPSX_LE_F32');
-  V_CMPSX_GT_F32  :Write('V_CMPSX_GT_F32');
-  V_CMPSX_LG_F32  :Write('V_CMPSX_LG_F32');
-  V_CMPSX_GE_F32  :Write('V_CMPSX_GE_F32');
-  V_CMPSX_O_F32   :Write('V_CMPSX_O_F32');
-  V_CMPSX_U_F32   :Write('V_CMPSX_U_F32');
-  V_CMPSX_NGE_F32 :Write('V_CMPSX_NGE_F32');
-  V_CMPSX_NLG_F32 :Write('V_CMPSX_NLG_F32');
-  V_CMPSX_NGT_F32 :Write('V_CMPSX_NGT_F32');
-  V_CMPSX_NLE_F32 :Write('V_CMPSX_NLE_F32');
-  V_CMPSX_NEQ_F32 :Write('V_CMPSX_NEQ_F32');
-  V_CMPSX_NLT_F32 :Write('V_CMPSX_NLT_F32');
-  V_CMPSX_T_F32   :Write('V_CMPSX_T_F32');
-
-  V_CMPS_F_F64    :Write('V_CMPS_F_F64');
-  V_CMPS_LT_F64   :Write('V_CMPS_LT_F64');
-  V_CMPS_EQ_F64   :Write('V_CMPS_EQ_F64');
-  V_CMPS_LE_F64   :Write('V_CMPS_LE_F64');
-  V_CMPS_GT_F64   :Write('V_CMPS_GT_F64');
-  V_CMPS_LG_F64   :Write('V_CMPS_LG_F64');
-  V_CMPS_GE_F64   :Write('V_CMPS_GE_F64');
-  V_CMPS_O_F64    :Write('V_CMPS_O_F64');
-  V_CMPS_U_F64    :Write('V_CMPS_U_F64');
-  V_CMPS_NGE_F64  :Write('V_CMPS_NGE_F64');
-  V_CMPS_NLG_F64  :Write('V_CMPS_NLG_F64');
-  V_CMPS_NGT_F64  :Write('V_CMPS_NGT_F64');
-  V_CMPS_NLE_F64  :Write('V_CMPS_NLE_F64');
-  V_CMPS_NEQ_F64  :Write('V_CMPS_NEQ_F64');
-  V_CMPS_NLT_F64  :Write('V_CMPS_NLT_F64');
-  V_CMPS_T_F64    :Write('V_CMPS_T_F64');
-
-  V_CMPSX_F_F64   :Write('V_CMPSX_F_F64');
-  V_CMPSX_LT_F64  :Write('V_CMPSX_LT_F64');
-  V_CMPSX_EQ_F64  :Write('V_CMPSX_EQ_F64');
-  V_CMPSX_LE_F64  :Write('V_CMPSX_LE_F64');
-  V_CMPSX_GT_F64  :Write('V_CMPSX_GT_F64');
-  V_CMPSX_LG_F64  :Write('V_CMPSX_LG_F64');
-  V_CMPSX_GE_F64  :Write('V_CMPSX_GE_F64');
-  V_CMPSX_O_F64   :Write('V_CMPSX_O_F64');
-  V_CMPSX_U_F64   :Write('V_CMPSX_U_F64');
-  V_CMPSX_NGE_F64 :Write('V_CMPSX_NGE_F64');
-  V_CMPSX_NLG_F64 :Write('V_CMPSX_NLG_F64');
-  V_CMPSX_NGT_F64 :Write('V_CMPSX_NGT_F64');
-  V_CMPSX_NLE_F64 :Write('V_CMPSX_NLE_F64');
-  V_CMPSX_NEQ_F64 :Write('V_CMPSX_NEQ_F64');
-  V_CMPSX_NLT_F64 :Write('V_CMPSX_NLT_F64');
-  V_CMPSX_T_F64   :Write('V_CMPSX_T_F64');
+  V_CMPX_F_F64    :str:='V_CMPX_F_F64';
+  V_CMPX_LT_F64   :str:='V_CMPX_LT_F64';
+  V_CMPX_EQ_F64   :str:='V_CMPX_EQ_F64';
+  V_CMPX_LE_F64   :str:='V_CMPX_LE_F64';
+  V_CMPX_GT_F64   :str:='V_CMPX_GT_F64';
+  V_CMPX_LG_F64   :str:='V_CMPX_LG_F64';
+  V_CMPX_GE_F64   :str:='V_CMPX_GE_F64';
+  V_CMPX_O_F64    :str:='V_CMPX_O_F64';
+  V_CMPX_U_F64    :str:='V_CMPX_U_F64';
+  V_CMPX_NGE_F64  :str:='V_CMPX_NGE_F64';
+  V_CMPX_NLG_F64  :str:='V_CMPX_NLG_F64';
+  V_CMPX_NGT_F64  :str:='V_CMPX_NGT_F64';
+  V_CMPX_NLE_F64  :str:='V_CMPX_NLE_F64';
+  V_CMPX_NEQ_F64  :str:='V_CMPX_NEQ_F64';
+  V_CMPX_NLT_F64  :str:='V_CMPX_NLT_F64';
+  V_CMPX_T_F64    :str:='V_CMPX_T_F64';
 
 
-  V_CMP_F_I32     :Write('V_CMP_F_I32');
-  V_CMP_LT_I32    :Write('V_CMP_LT_I32');
-  V_CMP_EQ_I32    :Write('V_CMP_EQ_I32');
-  V_CMP_LE_I32    :Write('V_CMP_LE_I32');
-  V_CMP_GT_I32    :Write('V_CMP_GT_I32');
-  V_CMP_LG_I32    :Write('V_CMP_LG_I32');
-  V_CMP_GE_I32    :Write('V_CMP_GE_I32');
-  V_CMP_T_I32     :Write('V_CMP_T_I32');
+  V_CMPS_F_F32    :str:='V_CMPS_F_F32';
+  V_CMPS_LT_F32   :str:='V_CMPS_LT_F32';
+  V_CMPS_EQ_F32   :str:='V_CMPS_EQ_F32';
+  V_CMPS_LE_F32   :str:='V_CMPS_LE_F32';
+  V_CMPS_GT_F32   :str:='V_CMPS_GT_F32';
+  V_CMPS_LG_F32   :str:='V_CMPS_LG_F32';
+  V_CMPS_GE_F32   :str:='V_CMPS_GE_F32';
+  V_CMPS_O_F32    :str:='V_CMPS_O_F32';
+  V_CMPS_U_F32    :str:='V_CMPS_U_F32';
+  V_CMPS_NGE_F32  :str:='V_CMPS_NGE_F32';
+  V_CMPS_NLG_F32  :str:='V_CMPS_NLG_F32';
+  V_CMPS_NGT_F32  :str:='V_CMPS_NGT_F32';
+  V_CMPS_NLE_F32  :str:='V_CMPS_NLE_F32';
+  V_CMPS_NEQ_F32  :str:='V_CMPS_NEQ_F32';
+  V_CMPS_NLT_F32  :str:='V_CMPS_NLT_F32';
+  V_CMPS_T_F32    :str:='V_CMPS_T_F32';
 
-  V_CMPX_F_I32    :Write('V_CMPX_F_I32');
-  V_CMPX_LT_I32   :Write('V_CMPX_LT_I32');
-  V_CMPX_EQ_I32   :Write('V_CMPX_EQ_I32');
-  V_CMPX_LE_I32   :Write('V_CMPX_LE_I32');
-  V_CMPX_GT_I32   :Write('V_CMPX_GT_I32');
-  V_CMPX_LG_I32   :Write('V_CMPX_LG_I32');
-  V_CMPX_GE_I32   :Write('V_CMPX_GE_I32');
-  V_CMPX_T_I32    :Write('V_CMPX_T_I32');
+  V_CMPSX_F_F32   :str:='V_CMPSX_F_F32';
+  V_CMPSX_LT_F32  :str:='V_CMPSX_LT_F32';
+  V_CMPSX_EQ_F32  :str:='V_CMPSX_EQ_F32';
+  V_CMPSX_LE_F32  :str:='V_CMPSX_LE_F32';
+  V_CMPSX_GT_F32  :str:='V_CMPSX_GT_F32';
+  V_CMPSX_LG_F32  :str:='V_CMPSX_LG_F32';
+  V_CMPSX_GE_F32  :str:='V_CMPSX_GE_F32';
+  V_CMPSX_O_F32   :str:='V_CMPSX_O_F32';
+  V_CMPSX_U_F32   :str:='V_CMPSX_U_F32';
+  V_CMPSX_NGE_F32 :str:='V_CMPSX_NGE_F32';
+  V_CMPSX_NLG_F32 :str:='V_CMPSX_NLG_F32';
+  V_CMPSX_NGT_F32 :str:='V_CMPSX_NGT_F32';
+  V_CMPSX_NLE_F32 :str:='V_CMPSX_NLE_F32';
+  V_CMPSX_NEQ_F32 :str:='V_CMPSX_NEQ_F32';
+  V_CMPSX_NLT_F32 :str:='V_CMPSX_NLT_F32';
+  V_CMPSX_T_F32   :str:='V_CMPSX_T_F32';
 
-  V_CMP_F_I64     :Write('V_CMP_F_I64');
-  V_CMP_LT_I64    :Write('V_CMP_LT_I64');
-  V_CMP_EQ_I64    :Write('V_CMP_EQ_I64');
-  V_CMP_LE_I64    :Write('V_CMP_LE_I64');
-  V_CMP_GT_I64    :Write('V_CMP_GT_I64');
-  V_CMP_LG_I64    :Write('V_CMP_LG_I64');
-  V_CMP_GE_I64    :Write('V_CMP_GE_I64');
-  V_CMP_T_I64     :Write('V_CMP_T_I64');
+  V_CMPS_F_F64    :str:='V_CMPS_F_F64';
+  V_CMPS_LT_F64   :str:='V_CMPS_LT_F64';
+  V_CMPS_EQ_F64   :str:='V_CMPS_EQ_F64';
+  V_CMPS_LE_F64   :str:='V_CMPS_LE_F64';
+  V_CMPS_GT_F64   :str:='V_CMPS_GT_F64';
+  V_CMPS_LG_F64   :str:='V_CMPS_LG_F64';
+  V_CMPS_GE_F64   :str:='V_CMPS_GE_F64';
+  V_CMPS_O_F64    :str:='V_CMPS_O_F64';
+  V_CMPS_U_F64    :str:='V_CMPS_U_F64';
+  V_CMPS_NGE_F64  :str:='V_CMPS_NGE_F64';
+  V_CMPS_NLG_F64  :str:='V_CMPS_NLG_F64';
+  V_CMPS_NGT_F64  :str:='V_CMPS_NGT_F64';
+  V_CMPS_NLE_F64  :str:='V_CMPS_NLE_F64';
+  V_CMPS_NEQ_F64  :str:='V_CMPS_NEQ_F64';
+  V_CMPS_NLT_F64  :str:='V_CMPS_NLT_F64';
+  V_CMPS_T_F64    :str:='V_CMPS_T_F64';
 
-  V_CMPX_F_I64    :Write('V_CMPX_F_I64');
-  V_CMPX_LT_I64   :Write('V_CMPX_LT_I64');
-  V_CMPX_EQ_I64   :Write('V_CMPX_EQ_I64');
-  V_CMPX_LE_I64   :Write('V_CMPX_LE_I64');
-  V_CMPX_GT_I64   :Write('V_CMPX_GT_I64');
-  V_CMPX_LG_I64   :Write('V_CMPX_LG_I64');
-  V_CMPX_GE_I64   :Write('V_CMPX_GE_I64');
-  V_CMPX_T_I64    :Write('V_CMPX_T_I64');
+  V_CMPSX_F_F64   :str:='V_CMPSX_F_F64';
+  V_CMPSX_LT_F64  :str:='V_CMPSX_LT_F64';
+  V_CMPSX_EQ_F64  :str:='V_CMPSX_EQ_F64';
+  V_CMPSX_LE_F64  :str:='V_CMPSX_LE_F64';
+  V_CMPSX_GT_F64  :str:='V_CMPSX_GT_F64';
+  V_CMPSX_LG_F64  :str:='V_CMPSX_LG_F64';
+  V_CMPSX_GE_F64  :str:='V_CMPSX_GE_F64';
+  V_CMPSX_O_F64   :str:='V_CMPSX_O_F64';
+  V_CMPSX_U_F64   :str:='V_CMPSX_U_F64';
+  V_CMPSX_NGE_F64 :str:='V_CMPSX_NGE_F64';
+  V_CMPSX_NLG_F64 :str:='V_CMPSX_NLG_F64';
+  V_CMPSX_NGT_F64 :str:='V_CMPSX_NGT_F64';
+  V_CMPSX_NLE_F64 :str:='V_CMPSX_NLE_F64';
+  V_CMPSX_NEQ_F64 :str:='V_CMPSX_NEQ_F64';
+  V_CMPSX_NLT_F64 :str:='V_CMPSX_NLT_F64';
+  V_CMPSX_T_F64   :str:='V_CMPSX_T_F64';
 
-  V_CMP_F_U32     :Write('V_CMP_F_U32');
-  V_CMP_LT_U32    :Write('V_CMP_LT_U32');
-  V_CMP_EQ_U32    :Write('V_CMP_EQ_U32');
-  V_CMP_LE_U32    :Write('V_CMP_LE_U32');
-  V_CMP_GT_U32    :Write('V_CMP_GT_U32');
-  V_CMP_LG_U32    :Write('V_CMP_LG_U32');
-  V_CMP_GE_U32    :Write('V_CMP_GE_U32');
-  V_CMP_T_U32     :Write('V_CMP_T_U32');
 
-  V_CMPX_F_U32    :Write('V_CMPX_F_U32');
-  V_CMPX_LT_U32   :Write('V_CMPX_LT_U32');
-  V_CMPX_EQ_U32   :Write('V_CMPX_EQ_U32');
-  V_CMPX_LE_U32   :Write('V_CMPX_LE_U32');
-  V_CMPX_GT_U32   :Write('V_CMPX_GT_U32');
-  V_CMPX_LG_U32   :Write('V_CMPX_LG_U32');
-  V_CMPX_GE_U32   :Write('V_CMPX_GE_U32');
-  V_CMPX_T_U32    :Write('V_CMPX_T_U32');
+  V_CMP_F_I32     :str:='V_CMP_F_I32';
+  V_CMP_LT_I32    :str:='V_CMP_LT_I32';
+  V_CMP_EQ_I32    :str:='V_CMP_EQ_I32';
+  V_CMP_LE_I32    :str:='V_CMP_LE_I32';
+  V_CMP_GT_I32    :str:='V_CMP_GT_I32';
+  V_CMP_LG_I32    :str:='V_CMP_LG_I32';
+  V_CMP_GE_I32    :str:='V_CMP_GE_I32';
+  V_CMP_T_I32     :str:='V_CMP_T_I32';
 
-  V_CMP_F_U64     :Write('V_CMP_F_U64');
-  V_CMP_LT_U64    :Write('V_CMP_LT_U64');
-  V_CMP_EQ_U64    :Write('V_CMP_EQ_U64');
-  V_CMP_LE_U64    :Write('V_CMP_LE_U64');
-  V_CMP_GT_U64    :Write('V_CMP_GT_U64');
-  V_CMP_LG_U64    :Write('V_CMP_LG_U64');
-  V_CMP_GE_U64    :Write('V_CMP_GE_U64');
-  V_CMP_T_U64     :Write('V_CMP_T_U64');
+  V_CMPX_F_I32    :str:='V_CMPX_F_I32';
+  V_CMPX_LT_I32   :str:='V_CMPX_LT_I32';
+  V_CMPX_EQ_I32   :str:='V_CMPX_EQ_I32';
+  V_CMPX_LE_I32   :str:='V_CMPX_LE_I32';
+  V_CMPX_GT_I32   :str:='V_CMPX_GT_I32';
+  V_CMPX_LG_I32   :str:='V_CMPX_LG_I32';
+  V_CMPX_GE_I32   :str:='V_CMPX_GE_I32';
+  V_CMPX_T_I32    :str:='V_CMPX_T_I32';
 
-  V_CMPX_F_U64    :Write('V_CMPX_F_U64');
-  V_CMPX_LT_U64   :Write('V_CMPX_LT_U64');
-  V_CMPX_EQ_U64   :Write('V_CMPX_EQ_U64');
-  V_CMPX_LE_U64   :Write('V_CMPX_LE_U64');
-  V_CMPX_GT_U64   :Write('V_CMPX_GT_U64');
-  V_CMPX_LG_U64   :Write('V_CMPX_LG_U64');
-  V_CMPX_GE_U64   :Write('V_CMPX_GE_U64');
-  V_CMPX_T_U64    :Write('V_CMPX_T_U64');
+  V_CMP_F_I64     :str:='V_CMP_F_I64';
+  V_CMP_LT_I64    :str:='V_CMP_LT_I64';
+  V_CMP_EQ_I64    :str:='V_CMP_EQ_I64';
+  V_CMP_LE_I64    :str:='V_CMP_LE_I64';
+  V_CMP_GT_I64    :str:='V_CMP_GT_I64';
+  V_CMP_LG_I64    :str:='V_CMP_LG_I64';
+  V_CMP_GE_I64    :str:='V_CMP_GE_I64';
+  V_CMP_T_I64     :str:='V_CMP_T_I64';
 
-  V_CMP_CLASS_F32 :Write('V_CMP_CLASS_F32');
-  V_CMPX_CLASS_F32:Write('V_CMPX_CLASS_F32');
-  V_CMP_CLASS_F64 :Write('V_CMP_CLASS_F64');
-  V_CMPX_CLASS_F64:Write('V_CMPX_CLASS_F64');
+  V_CMPX_F_I64    :str:='V_CMPX_F_I64';
+  V_CMPX_LT_I64   :str:='V_CMPX_LT_I64';
+  V_CMPX_EQ_I64   :str:='V_CMPX_EQ_I64';
+  V_CMPX_LE_I64   :str:='V_CMPX_LE_I64';
+  V_CMPX_GT_I64   :str:='V_CMPX_GT_I64';
+  V_CMPX_LG_I64   :str:='V_CMPX_LG_I64';
+  V_CMPX_GE_I64   :str:='V_CMPX_GE_I64';
+  V_CMPX_T_I64    :str:='V_CMPX_T_I64';
+
+  V_CMP_F_U32     :str:='V_CMP_F_U32';
+  V_CMP_LT_U32    :str:='V_CMP_LT_U32';
+  V_CMP_EQ_U32    :str:='V_CMP_EQ_U32';
+  V_CMP_LE_U32    :str:='V_CMP_LE_U32';
+  V_CMP_GT_U32    :str:='V_CMP_GT_U32';
+  V_CMP_LG_U32    :str:='V_CMP_LG_U32';
+  V_CMP_GE_U32    :str:='V_CMP_GE_U32';
+  V_CMP_T_U32     :str:='V_CMP_T_U32';
+
+  V_CMPX_F_U32    :str:='V_CMPX_F_U32';
+  V_CMPX_LT_U32   :str:='V_CMPX_LT_U32';
+  V_CMPX_EQ_U32   :str:='V_CMPX_EQ_U32';
+  V_CMPX_LE_U32   :str:='V_CMPX_LE_U32';
+  V_CMPX_GT_U32   :str:='V_CMPX_GT_U32';
+  V_CMPX_LG_U32   :str:='V_CMPX_LG_U32';
+  V_CMPX_GE_U32   :str:='V_CMPX_GE_U32';
+  V_CMPX_T_U32    :str:='V_CMPX_T_U32';
+
+  V_CMP_F_U64     :str:='V_CMP_F_U64';
+  V_CMP_LT_U64    :str:='V_CMP_LT_U64';
+  V_CMP_EQ_U64    :str:='V_CMP_EQ_U64';
+  V_CMP_LE_U64    :str:='V_CMP_LE_U64';
+  V_CMP_GT_U64    :str:='V_CMP_GT_U64';
+  V_CMP_LG_U64    :str:='V_CMP_LG_U64';
+  V_CMP_GE_U64    :str:='V_CMP_GE_U64';
+  V_CMP_T_U64     :str:='V_CMP_T_U64';
+
+  V_CMPX_F_U64    :str:='V_CMPX_F_U64';
+  V_CMPX_LT_U64   :str:='V_CMPX_LT_U64';
+  V_CMPX_EQ_U64   :str:='V_CMPX_EQ_U64';
+  V_CMPX_LE_U64   :str:='V_CMPX_LE_U64';
+  V_CMPX_GT_U64   :str:='V_CMPX_GT_U64';
+  V_CMPX_LG_U64   :str:='V_CMPX_LG_U64';
+  V_CMPX_GE_U64   :str:='V_CMPX_GE_U64';
+  V_CMPX_T_U64    :str:='V_CMPX_T_U64';
+
+  V_CMP_CLASS_F32 :str:='V_CMP_CLASS_F32';
+  V_CMPX_CLASS_F32:str:='V_CMPX_CLASS_F32';
+  V_CMP_CLASS_F64 :str:='V_CMP_CLASS_F64';
+  V_CMPX_CLASS_F64:str:='V_CMPX_CLASS_F64';
 
   else
-      Write('VOPC?',SPI.VOPC.OP);
+      str:='VOPC?'+IntToStr(SPI.VOPC.OP);
  end;
- Write(' VCC, ');
+ str:=str+' VCC, ';
 
- _print_ssrc9(SPI.VOPC.SRC0,SPI.INLINE32);
- Write(', ');
- _print_vdst8(SPI.VOPC.VSRC1);
+ str:=str+_get_ssrc9(SPI.VOPC.SRC0,SPI.INLINE32);
+ str:=str+', ';
 
- Writeln;
+ str:=str+_get_vdst8(SPI.VOPC.VSRC1);
+
+ Writeln(str);
 end;
 
 procedure _print_VOP1(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
 
  Case SPI.VOP1.OP of
 
-  V_NOP              :Write('V_NOP');
-  V_MOV_B32          :Write('V_MOV_B32');
-  V_READFIRSTLANE_B32:Write('V_READFIRSTLANE_B32');
-  V_CVT_I32_F64      :Write('V_CVT_I32_F64');
-  V_CVT_F64_I32      :Write('V_CVT_F64_I32');
-  V_CVT_F32_I32      :Write('V_CVT_F32_I32');
-  V_CVT_F32_U32      :Write('V_CVT_F32_U32');
-  V_CVT_U32_F32      :Write('V_CVT_U32_F32');
-  V_CVT_I32_F32      :Write('V_CVT_I32_F32');
-  V_MOV_FED_B32      :Write('V_MOV_FED_B32');
-  V_CVT_F16_F32      :Write('V_CVT_F16_F32');
-  V_CVT_F32_F16      :Write('V_CVT_F32_F16');
-  V_CVT_RPI_I32_F32  :Write('V_CVT_RPI_I32_F32');
-  V_CVT_FLR_I32_F32  :Write('V_CVT_FLR_I32_F32');
-  V_CVT_OFF_F32_I4   :Write('V_CVT_OFF_F32_I4');
-  V_CVT_F32_F64      :Write('V_CVT_F32_F64');
-  V_CVT_F64_F32      :Write('V_CVT_F64_F32');
-  V_CVT_F32_UBYTE0   :Write('V_CVT_F32_UBYTE0');
-  V_CVT_F32_UBYTE1   :Write('V_CVT_F32_UBYTE1');
-  V_CVT_F32_UBYTE2   :Write('V_CVT_F32_UBYTE2');
-  V_CVT_F32_UBYTE3   :Write('V_CVT_F32_UBYTE3');
-  V_CVT_U32_F64      :Write('V_CVT_U32_F64');
-  V_CVT_F64_U32      :Write('V_CVT_F64_U32');
-  V_TRUNC_F64        :Write('V_TRUNC_F64');
-  V_CEIL_F64         :Write('V_CEIL_F64');
-  V_RNDNE_F64        :Write('V_RNDNE_F64');
-  V_FLOOR_F64        :Write('V_FLOOR_F64');
-  V_FRACT_F32        :Write('V_FRACT_F32');
-  V_TRUNC_F32        :Write('V_TRUNC_F32');
-  V_CEIL_F32         :Write('V_CEIL_F32');
-  V_RNDNE_F32        :Write('V_RNDNE_F32');
-  V_FLOOR_F32        :Write('V_FLOOR_F32');
-  V_EXP_F32          :Write('V_EXP_F32');
-  V_LOG_CLAMP_F32    :Write('V_LOG_CLAMP_F32');
-  V_LOG_F32          :Write('V_LOG_F32');
-  V_RCP_CLAMP_F32    :Write('V_RCP_CLAMP_F32');
-  V_RCP_LEGACY_F32   :Write('V_RCP_LEGACY_F32');
-  V_RCP_F32          :Write('V_RCP_F32');
-  V_RCP_IFLAG_F32    :Write('V_RCP_IFLAG_F32');
-  V_RSQ_CLAMP_F32    :Write('V_RSQ_CLAMP_F32');
-  V_RSQ_LEGACY_F32   :Write('V_RSQ_LEGACY_F32');
-  V_RSQ_F32          :Write('V_RSQ_F32');
-  V_RCP_F64          :Write('V_RCP_F64');
-  V_RCP_CLAMP_F64    :Write('V_RCP_CLAMP_F64');
-  V_RSQ_F64          :Write('V_RSQ_F64');
-  V_RSQ_CLAMP_F64    :Write('V_RSQ_CLAMP_F64');
-  V_SQRT_F32         :Write('V_SQRT_F32');
-  V_SQRT_F64         :Write('V_SQRT_F64');
-  V_SIN_F32          :Write('V_SIN_F32');
-  V_COS_F32          :Write('V_COS_F32');
-  V_NOT_B32          :Write('V_NOT_B32');
-  V_BFREV_B32        :Write('V_BFREV_B32');
-  V_FFBH_U32         :Write('V_FFBH_U32');
-  V_FFBL_B32         :Write('V_FFBL_B32');
-  V_FFBH_I32         :Write('V_FFBH_I32');
-  V_FREXP_EXP_I32_F64:Write('V_FREXP_EXP_I32_F64');
-  V_FREXP_MANT_F64   :Write('V_FREXP_MANT_F64');
-  V_FRACT_F64        :Write('V_FRACT_F64');
-  V_FREXP_EXP_I32_F32:Write('V_FREXP_EXP_I32_F32');
-  V_FREXP_MANT_F32   :Write('V_FREXP_MANT_F32');
-  V_CLREXCP          :Write('V_CLREXCP');
-  V_MOVRELD_B32      :Write('V_MOVRELD_B32');
-  V_MOVRELS_B32      :Write('V_MOVRELS_B32');
-  V_MOVRELSD_B32     :Write('V_MOVRELSD_B32');
+  V_NOP              :str:='V_NOP';
+  V_MOV_B32          :str:='V_MOV_B32';
+  V_READFIRSTLANE_B32:str:='V_READFIRSTLANE_B32';
+  V_CVT_I32_F64      :str:='V_CVT_I32_F64';
+  V_CVT_F64_I32      :str:='V_CVT_F64_I32';
+  V_CVT_F32_I32      :str:='V_CVT_F32_I32';
+  V_CVT_F32_U32      :str:='V_CVT_F32_U32';
+  V_CVT_U32_F32      :str:='V_CVT_U32_F32';
+  V_CVT_I32_F32      :str:='V_CVT_I32_F32';
+  V_MOV_FED_B32      :str:='V_MOV_FED_B32';
+  V_CVT_F16_F32      :str:='V_CVT_F16_F32';
+  V_CVT_F32_F16      :str:='V_CVT_F32_F16';
+  V_CVT_RPI_I32_F32  :str:='V_CVT_RPI_I32_F32';
+  V_CVT_FLR_I32_F32  :str:='V_CVT_FLR_I32_F32';
+  V_CVT_OFF_F32_I4   :str:='V_CVT_OFF_F32_I4';
+  V_CVT_F32_F64      :str:='V_CVT_F32_F64';
+  V_CVT_F64_F32      :str:='V_CVT_F64_F32';
+  V_CVT_F32_UBYTE0   :str:='V_CVT_F32_UBYTE0';
+  V_CVT_F32_UBYTE1   :str:='V_CVT_F32_UBYTE1';
+  V_CVT_F32_UBYTE2   :str:='V_CVT_F32_UBYTE2';
+  V_CVT_F32_UBYTE3   :str:='V_CVT_F32_UBYTE3';
+  V_CVT_U32_F64      :str:='V_CVT_U32_F64';
+  V_CVT_F64_U32      :str:='V_CVT_F64_U32';
+  V_TRUNC_F64        :str:='V_TRUNC_F64';
+  V_CEIL_F64         :str:='V_CEIL_F64';
+  V_RNDNE_F64        :str:='V_RNDNE_F64';
+  V_FLOOR_F64        :str:='V_FLOOR_F64';
+  V_FRACT_F32        :str:='V_FRACT_F32';
+  V_TRUNC_F32        :str:='V_TRUNC_F32';
+  V_CEIL_F32         :str:='V_CEIL_F32';
+  V_RNDNE_F32        :str:='V_RNDNE_F32';
+  V_FLOOR_F32        :str:='V_FLOOR_F32';
+  V_EXP_F32          :str:='V_EXP_F32';
+  V_LOG_CLAMP_F32    :str:='V_LOG_CLAMP_F32';
+  V_LOG_F32          :str:='V_LOG_F32';
+  V_RCP_CLAMP_F32    :str:='V_RCP_CLAMP_F32';
+  V_RCP_LEGACY_F32   :str:='V_RCP_LEGACY_F32';
+  V_RCP_F32          :str:='V_RCP_F32';
+  V_RCP_IFLAG_F32    :str:='V_RCP_IFLAG_F32';
+  V_RSQ_CLAMP_F32    :str:='V_RSQ_CLAMP_F32';
+  V_RSQ_LEGACY_F32   :str:='V_RSQ_LEGACY_F32';
+  V_RSQ_F32          :str:='V_RSQ_F32';
+  V_RCP_F64          :str:='V_RCP_F64';
+  V_RCP_CLAMP_F64    :str:='V_RCP_CLAMP_F64';
+  V_RSQ_F64          :str:='V_RSQ_F64';
+  V_RSQ_CLAMP_F64    :str:='V_RSQ_CLAMP_F64';
+  V_SQRT_F32         :str:='V_SQRT_F32';
+  V_SQRT_F64         :str:='V_SQRT_F64';
+  V_SIN_F32          :str:='V_SIN_F32';
+  V_COS_F32          :str:='V_COS_F32';
+  V_NOT_B32          :str:='V_NOT_B32';
+  V_BFREV_B32        :str:='V_BFREV_B32';
+  V_FFBH_U32         :str:='V_FFBH_U32';
+  V_FFBL_B32         :str:='V_FFBL_B32';
+  V_FFBH_I32         :str:='V_FFBH_I32';
+  V_FREXP_EXP_I32_F64:str:='V_FREXP_EXP_I32_F64';
+  V_FREXP_MANT_F64   :str:='V_FREXP_MANT_F64';
+  V_FRACT_F64        :str:='V_FRACT_F64';
+  V_FREXP_EXP_I32_F32:str:='V_FREXP_EXP_I32_F32';
+  V_FREXP_MANT_F32   :str:='V_FREXP_MANT_F32';
+  V_CLREXCP          :str:='V_CLREXCP';
+  V_MOVRELD_B32      :str:='V_MOVRELD_B32';
+  V_MOVRELS_B32      :str:='V_MOVRELS_B32';
+  V_MOVRELSD_B32     :str:='V_MOVRELSD_B32';
 
   else
-      Write('VOP1?',SPI.VOP1.OP);
+      str:='VOP1?'+IntToStr(SPI.VOP1.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(SPI.VOP1.VDST);
- Write(', ');
- _print_ssrc9(SPI.VOP1.SRC0,SPI.INLINE32);
+ str:=str+_get_vdst8(SPI.VOP1.VDST);
+ str:=str+', ';
 
- Writeln;
+ str:=str+_get_ssrc9(SPI.VOP1.SRC0,SPI.INLINE32);
+
+ Writeln(str);
 end;
 
 procedure _print_MUBUF(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  case SPI.MUBUF.OP of
-  BUFFER_LOAD_FORMAT_X    :Write('BUFFER_LOAD_FORMAT_X');
-  BUFFER_LOAD_FORMAT_XY   :Write('BUFFER_LOAD_FORMAT_XY');
-  BUFFER_LOAD_FORMAT_XYZ  :Write('BUFFER_LOAD_FORMAT_XYZ');
-  BUFFER_LOAD_FORMAT_XYZW :Write('BUFFER_LOAD_FORMAT_XYZW');
-  BUFFER_STORE_FORMAT_X   :Write('BUFFER_STORE_FORMAT_X');
-  BUFFER_STORE_FORMAT_XY  :Write('BUFFER_STORE_FORMAT_XY');
-  BUFFER_STORE_FORMAT_XYZ :Write('BUFFER_STORE_FORMAT_XYZ');
-  BUFFER_STORE_FORMAT_XYZW:Write('BUFFER_STORE_FORMAT_XYZW');
+  BUFFER_LOAD_FORMAT_X    :str:='BUFFER_LOAD_FORMAT_X';
+  BUFFER_LOAD_FORMAT_XY   :str:='BUFFER_LOAD_FORMAT_XY';
+  BUFFER_LOAD_FORMAT_XYZ  :str:='BUFFER_LOAD_FORMAT_XYZ';
+  BUFFER_LOAD_FORMAT_XYZW :str:='BUFFER_LOAD_FORMAT_XYZW';
+  BUFFER_STORE_FORMAT_X   :str:='BUFFER_STORE_FORMAT_X';
+  BUFFER_STORE_FORMAT_XY  :str:='BUFFER_STORE_FORMAT_XY';
+  BUFFER_STORE_FORMAT_XYZ :str:='BUFFER_STORE_FORMAT_XYZ';
+  BUFFER_STORE_FORMAT_XYZW:str:='BUFFER_STORE_FORMAT_XYZW';
 
-  BUFFER_LOAD_UBYTE       :Write('BUFFER_LOAD_UBYTE');
-  BUFFER_LOAD_SBYTE       :Write('BUFFER_LOAD_SBYTE');
-  BUFFER_LOAD_USHORT      :Write('BUFFER_LOAD_USHORT');
-  BUFFER_LOAD_SSHORT      :Write('BUFFER_LOAD_SSHORT');
-  BUFFER_LOAD_DWORD       :Write('BUFFER_LOAD_DWORD');
-  BUFFER_LOAD_DWORDX2     :Write('BUFFER_LOAD_DWORDX2');
-  BUFFER_LOAD_DWORDX4     :Write('BUFFER_LOAD_DWORDX4');
-  BUFFER_LOAD_DWORDX3     :Write('BUFFER_LOAD_DWORDX3');
+  BUFFER_LOAD_UBYTE       :str:='BUFFER_LOAD_UBYTE';
+  BUFFER_LOAD_SBYTE       :str:='BUFFER_LOAD_SBYTE';
+  BUFFER_LOAD_USHORT      :str:='BUFFER_LOAD_USHORT';
+  BUFFER_LOAD_SSHORT      :str:='BUFFER_LOAD_SSHORT';
+  BUFFER_LOAD_DWORD       :str:='BUFFER_LOAD_DWORD';
+  BUFFER_LOAD_DWORDX2     :str:='BUFFER_LOAD_DWORDX2';
+  BUFFER_LOAD_DWORDX4     :str:='BUFFER_LOAD_DWORDX4';
+  BUFFER_LOAD_DWORDX3     :str:='BUFFER_LOAD_DWORDX3';
 
-  BUFFER_STORE_BYTE       :Write('BUFFER_STORE_BYTE');
-  BUFFER_STORE_SHORT      :Write('BUFFER_STORE_SHORT');
-  BUFFER_STORE_DWORD      :Write('BUFFER_STORE_DWORD');
-  BUFFER_STORE_DWORDX2    :Write('BUFFER_STORE_DWORDX2');
-  BUFFER_STORE_DWORDX4    :Write('BUFFER_STORE_DWORDX4');
-  BUFFER_STORE_DWORDX3    :Write('BUFFER_STORE_DWORDX3');
+  BUFFER_STORE_BYTE       :str:='BUFFER_STORE_BYTE';
+  BUFFER_STORE_SHORT      :str:='BUFFER_STORE_SHORT';
+  BUFFER_STORE_DWORD      :str:='BUFFER_STORE_DWORD';
+  BUFFER_STORE_DWORDX2    :str:='BUFFER_STORE_DWORDX2';
+  BUFFER_STORE_DWORDX4    :str:='BUFFER_STORE_DWORDX4';
+  BUFFER_STORE_DWORDX3    :str:='BUFFER_STORE_DWORDX3';
   else
-      Write('MUBUF?',SPI.MUBUF.OP);
+      str:='MUBUF?'+IntToStr(SPI.MUBUF.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(SPI.MUBUF.VDATA);
- Write(', ');
- _print_vdst8(SPI.MUBUF.VADDR);
- Write(', ');
- Write('s[',SPI.MUBUF.SRSRC*4,':',SPI.MUBUF.SRSRC*4+3,']');
- Write(', ');
- Write(SPI.MUBUF.OFFSET);
- Write(', ');
- Write('[');
- _print_ssrc8(SPI.MUBUF.SOFFSET);
- Write(']');
+ str:=str+_get_vdst8(SPI.MUBUF.VDATA);
+ str:=str+', ';
 
- if SPI.MUBUF.OFFEN=1 then
-  Write(' OFFEN');
- if SPI.MUBUF.IDXEN=1 then
-  Write(' IDXEN');
- if SPI.MUBUF.GLC=1 then
-  Write(' GLC');
- if SPI.MUBUF.LDS=1 then
-  Write(' LDS');
- if SPI.MUBUF.SLC=1 then
-  Write(' SLC');
- if SPI.MUBUF.TFE=1 then
-  Write(' TFE');
+ str:=str+_get_vdst8(SPI.MUBUF.VADDR);
+ str:=str+', ';
 
- Writeln;
+ str:=str+'s['+IntToStr(SPI.MUBUF.SRSRC*4)+':'+IntToStr(SPI.MUBUF.SRSRC*4+3)+']';
+ str:=str+', ';
+
+ str:=str+IntToStr(SPI.MUBUF.OFFSET);
+ str:=str+', ';
+
+ str:=str+'[';
+ str:=str+_get_ssrc8(SPI.MUBUF.SOFFSET);
+ str:=str+']';
+
+ if SPI.MUBUF.OFFEN=1 then str:=str+' OFFEN';
+ if SPI.MUBUF.IDXEN=1 then str:=str+' IDXEN';
+ if SPI.MUBUF.GLC=1   then str:=str+' GLC';
+ if SPI.MUBUF.LDS=1   then str:=str+' LDS';
+ if SPI.MUBUF.SLC=1   then str:=str+' SLC';
+ if SPI.MUBUF.TFE=1   then str:=str+' TFE';
+
+ Writeln(str);
 end;
 
 procedure _print_MTBUF(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  case SPI.MTBUF.OP of
-  TBUFFER_LOAD_FORMAT_X    :Write('TBUFFER_LOAD_FORMAT_X');
-  TBUFFER_LOAD_FORMAT_XY   :Write('TBUFFER_LOAD_FORMAT_XY');
-  TBUFFER_LOAD_FORMAT_XYZ  :Write('TBUFFER_LOAD_FORMAT_XYZ');
-  TBUFFER_LOAD_FORMAT_XYZW :Write('TBUFFER_LOAD_FORMAT_XYZ');
+  TBUFFER_LOAD_FORMAT_X    :str:='TBUFFER_LOAD_FORMAT_X';
+  TBUFFER_LOAD_FORMAT_XY   :str:='TBUFFER_LOAD_FORMAT_XY';
+  TBUFFER_LOAD_FORMAT_XYZ  :str:='TBUFFER_LOAD_FORMAT_XYZ';
+  TBUFFER_LOAD_FORMAT_XYZW :str:='TBUFFER_LOAD_FORMAT_XYZ';
 
-  TBUFFER_STORE_FORMAT_X   :Write('TBUFFER_STORE_FORMAT_X');
-  TBUFFER_STORE_FORMAT_XY  :Write('TBUFFER_STORE_FORMAT_XY');
-  TBUFFER_STORE_FORMAT_XYZ :Write('TBUFFER_STORE_FORMAT_XYZ');
-  TBUFFER_STORE_FORMAT_XYZW:Write('TBUFFER_STORE_FORMAT_XYZW');
+  TBUFFER_STORE_FORMAT_X   :str:='TBUFFER_STORE_FORMAT_X';
+  TBUFFER_STORE_FORMAT_XY  :str:='TBUFFER_STORE_FORMAT_XY';
+  TBUFFER_STORE_FORMAT_XYZ :str:='TBUFFER_STORE_FORMAT_XYZ';
+  TBUFFER_STORE_FORMAT_XYZW:str:='TBUFFER_STORE_FORMAT_XYZW';
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(SPI.MTBUF.VDATA);
- Write(', ');
- _print_vdst8(SPI.MTBUF.VADDR);
- Write(', ');
- Write('s[',SPI.MTBUF.SRSRC*4,':',SPI.MTBUF.SRSRC*4+3,']');
- Write(', ');
- Write(SPI.MTBUF.OFFSET);
- Write(', ');
+ str:=str+_get_vdst8(SPI.MTBUF.VDATA);
+ str:=str+', ';
+
+ str:=str+_get_vdst8(SPI.MTBUF.VADDR);
+ str:=str+', ';
+
+ str:=str+'s['+IntToStr(SPI.MTBUF.SRSRC*4)+':'+IntToStr(SPI.MTBUF.SRSRC*4+3)+']';
+ str:=str+', ';
+
+ str:=str+IntToStr(SPI.MTBUF.OFFSET);
+ str:=str+', ';
+
  Write('[');
- _print_ssrc8(SPI.MTBUF.SOFFSET);
+ str:=str+_get_ssrc8(SPI.MTBUF.SOFFSET);
  Write(']');
 
- if SPI.MTBUF.OFFEN=1 then
-  Write(' OFFEN');
- if SPI.MTBUF.IDXEN=1 then
-  Write(' IDXEN');
- if SPI.MTBUF.GLC=1 then
-  Write(' GLC');
- if SPI.MTBUF.SLC=1 then
-  Write(' SLC');
- if SPI.MTBUF.TFE=1 then
-  Write(' TFE');
+ if SPI.MTBUF.OFFEN=1 then str:=str+' OFFEN';
+ if SPI.MTBUF.IDXEN=1 then str:=str+' IDXEN';
+ if SPI.MTBUF.GLC=1   then str:=str+' GLC';
+ if SPI.MTBUF.SLC=1   then str:=str+' SLC';
+ if SPI.MTBUF.TFE=1   then str:=str+' TFE';
 
- Write(' format:[');
+ str:=str+' format:[';
 
  Case SPI.MTBUF.DFMT of
-  BUF_DATA_FORMAT_INVALID    :Write('INVALID');
-  BUF_DATA_FORMAT_8          :Write('8');
-  BUF_DATA_FORMAT_16         :Write('16');
-  BUF_DATA_FORMAT_8_8        :Write('8_8');
-  BUF_DATA_FORMAT_32         :Write('32');
-  BUF_DATA_FORMAT_16_16      :Write('16_16');
-  BUF_DATA_FORMAT_10_11_11   :Write('10_11_11');
-  BUF_DATA_FORMAT_11_11_10   :Write('11_11_10');
-  BUF_DATA_FORMAT_10_10_10_2 :Write('10_10_10_2');
-  BUF_DATA_FORMAT_2_10_10_10 :Write('2_10_10_10');
-  BUF_DATA_FORMAT_8_8_8_8    :Write('8_8_8_8');
-  BUF_DATA_FORMAT_32_32      :Write('32_32');
-  BUF_DATA_FORMAT_16_16_16_16:Write('16_16_16_16');
-  BUF_DATA_FORMAT_32_32_32   :Write('32_32_32');
-  BUF_DATA_FORMAT_32_32_32_32:Write('32_32_32_32');
-  BUF_DATA_FORMAT_RESERVED   :Write('RESERVED');
+  BUF_DATA_FORMAT_INVALID    :str:=str+'INVALID';
+  BUF_DATA_FORMAT_8          :str:=str+'8';
+  BUF_DATA_FORMAT_16         :str:=str+'16';
+  BUF_DATA_FORMAT_8_8        :str:=str+'8_8';
+  BUF_DATA_FORMAT_32         :str:=str+'32';
+  BUF_DATA_FORMAT_16_16      :str:=str+'16_16';
+  BUF_DATA_FORMAT_10_11_11   :str:=str+'10_11_11';
+  BUF_DATA_FORMAT_11_11_10   :str:=str+'11_11_10';
+  BUF_DATA_FORMAT_10_10_10_2 :str:=str+'10_10_10_2';
+  BUF_DATA_FORMAT_2_10_10_10 :str:=str+'2_10_10_10';
+  BUF_DATA_FORMAT_8_8_8_8    :str:=str+'8_8_8_8';
+  BUF_DATA_FORMAT_32_32      :str:=str+'32_32';
+  BUF_DATA_FORMAT_16_16_16_16:str:=str+'16_16_16_16';
+  BUF_DATA_FORMAT_32_32_32   :str:=str+'32_32_32';
+  BUF_DATA_FORMAT_32_32_32_32:str:=str+'32_32_32_32';
+  BUF_DATA_FORMAT_RESERVED   :str:=str+'RESERVED';
  end;
 
- Write(',');
+ str:=str+',';
 
  Case SPI.MTBUF.NFMT of
-  BUF_NUM_FORMAT_UNORM   :Write('UNORM');
-  BUF_NUM_FORMAT_SNORM   :Write('SNORM');
-  BUF_NUM_FORMAT_USCALED :Write('USCALED');
-  BUF_NUM_FORMAT_SSCALED :Write('SSCALED');
-  BUF_NUM_FORMAT_UINT    :Write('UINT');
-  BUF_NUM_FORMAT_SINT    :Write('SINT');
-  BUF_NUM_FORMAT_SNORM_NZ:Write('SNORM_NZ');
-  BUF_NUM_FORMAT_FLOAT   :Write('FLOAT');
+  BUF_NUM_FORMAT_UNORM   :str:=str+'UNORM';
+  BUF_NUM_FORMAT_SNORM   :str:=str+'SNORM';
+  BUF_NUM_FORMAT_USCALED :str:=str+'USCALED';
+  BUF_NUM_FORMAT_SSCALED :str:=str+'SSCALED';
+  BUF_NUM_FORMAT_UINT    :str:=str+'UINT';
+  BUF_NUM_FORMAT_SINT    :str:=str+'SINT';
+  BUF_NUM_FORMAT_SNORM_NZ:str:=str+'SNORM_NZ';
+  BUF_NUM_FORMAT_FLOAT   :str:=str+'FLOAT';
  end;
 
- Write(']');
+ str:=str+']';
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_MIMG(Var SPI:TSPI);
+var
+ str:RawByteString;
+ t:Byte;
 begin
  Case SPI.MIMG.OP of
 
-  IMAGE_LOAD            :Write('IMAGE_LOAD');
-  IMAGE_LOAD_MIP        :Write('IMAGE_LOAD_MIP');
-  IMAGE_LOAD_PCK        :Write('IMAGE_LOAD_PCK');
-  IMAGE_LOAD_PCK_SGN    :Write('IMAGE_LOAD_PCK_SGN');
-  IMAGE_LOAD_MIP_PCK    :Write('IMAGE_LOAD_MIP_PCK');
-  IMAGE_LOAD_MIP_PCK_SGN:Write('IMAGE_LOAD_MIP_PCK_SGN');
-  IMAGE_STORE           :Write('IMAGE_STORE');
-  IMAGE_STORE_MIP       :Write('IMAGE_STORE_MIP');
-  IMAGE_STORE_PCK       :Write('IMAGE_STORE_PCK');
-  IMAGE_STORE_MIP_PCK   :Write('IMAGE_STORE_MIP_PCK');
-  IMAGE_GET_RESINFO     :Write('IMAGE_GET_RESINFO');
-  IMAGE_ATOMIC_SWAP     :Write('IMAGE_ATOMIC_SWAP');
-  IMAGE_ATOMIC_CMPSWAP  :Write('IMAGE_ATOMIC_CMPSWAP');
-  IMAGE_ATOMIC_ADD      :Write('IMAGE_ATOMIC_ADD');
-  IMAGE_ATOMIC_SUB      :Write('IMAGE_ATOMIC_SUB');
-  IMAGE_ATOMIC_SMIN     :Write('IMAGE_ATOMIC_SMIN');
-  IMAGE_ATOMIC_UMIN     :Write('IMAGE_ATOMIC_UMIN');
-  IMAGE_ATOMIC_SMAX     :Write('IMAGE_ATOMIC_SMAX');
-  IMAGE_ATOMIC_UMAX     :Write('IMAGE_ATOMIC_UMAX');
-  IMAGE_ATOMIC_AND      :Write('IMAGE_ATOMIC_AND');
-  IMAGE_ATOMIC_OR       :Write('IMAGE_ATOMIC_OR');
-  IMAGE_ATOMIC_XOR      :Write('IMAGE_ATOMIC_XOR');
-  IMAGE_ATOMIC_INC      :Write('IMAGE_ATOMIC_INC');
-  IMAGE_ATOMIC_DEC      :Write('IMAGE_ATOMIC_DEC');
-  IMAGE_ATOMIC_FCMPSWAP :Write('IMAGE_ATOMIC_FCMPSWAP');
-  IMAGE_ATOMIC_FMIN     :Write('IMAGE_ATOMIC_FMIN');
-  IMAGE_ATOMIC_FMAX     :Write('IMAGE_ATOMIC_FMAX');
-  IMAGE_SAMPLE          :Write('IMAGE_SAMPLE');
-  IMAGE_SAMPLE_CL       :Write('IMAGE_SAMPLE_CL');
-  IMAGE_SAMPLE_D        :Write('IMAGE_SAMPLE_D');
-  IMAGE_SAMPLE_D_CL     :Write('IMAGE_SAMPLE_D_CL');
-  IMAGE_SAMPLE_L        :Write('IMAGE_SAMPLE_L');
-  IMAGE_SAMPLE_B        :Write('IMAGE_SAMPLE_B');
-  IMAGE_SAMPLE_B_CL     :Write('IMAGE_SAMPLE_B_CL');
-  IMAGE_SAMPLE_LZ       :Write('IMAGE_SAMPLE_LZ');
-  IMAGE_SAMPLE_C        :Write('IMAGE_SAMPLE_C');
-  IMAGE_SAMPLE_C_CL     :Write('IMAGE_SAMPLE_C_CL');
-  IMAGE_SAMPLE_C_D      :Write('IMAGE_SAMPLE_C_D');
-  IMAGE_SAMPLE_C_D_CL   :Write('IMAGE_SAMPLE_C_D_CL');
-  IMAGE_SAMPLE_C_L      :Write('IMAGE_SAMPLE_C_L');
-  IMAGE_SAMPLE_C_B      :Write('IMAGE_SAMPLE_C_B');
-  IMAGE_SAMPLE_C_B_CL   :Write('IMAGE_SAMPLE_C_B_CL');
-  IMAGE_SAMPLE_C_LZ     :Write('IMAGE_SAMPLE_C_LZ');
-  IMAGE_SAMPLE_O        :Write('IMAGE_SAMPLE_O');
-  IMAGE_SAMPLE_CL_O     :Write('IMAGE_SAMPLE_CL_O');
-  IMAGE_SAMPLE_D_O      :Write('IMAGE_SAMPLE_D_O');
-  IMAGE_SAMPLE_D_CL_O   :Write('IMAGE_SAMPLE_D_CL_O');
-  IMAGE_SAMPLE_L_O      :Write('IMAGE_SAMPLE_L_O');
-  IMAGE_SAMPLE_B_O      :Write('IMAGE_SAMPLE_B_O');
-  IMAGE_SAMPLE_B_CL_O   :Write('IMAGE_SAMPLE_B_CL_O');
-  IMAGE_SAMPLE_LZ_O     :Write('IMAGE_SAMPLE_LZ_O');
-  IMAGE_SAMPLE_C_O      :Write('IMAGE_SAMPLE_C_O');
-  IMAGE_SAMPLE_C_CL_O   :Write('IMAGE_SAMPLE_C_CL_O');
-  IMAGE_SAMPLE_C_D_O    :Write('IMAGE_SAMPLE_C_D_O');
-  IMAGE_SAMPLE_C_D_CL_O :Write('IMAGE_SAMPLE_C_D_CL_O');
-  IMAGE_SAMPLE_C_L_O    :Write('IMAGE_SAMPLE_C_L_O');
-  IMAGE_SAMPLE_C_B_O    :Write('IMAGE_SAMPLE_C_B_O');
-  IMAGE_SAMPLE_C_B_CL_O :Write('IMAGE_SAMPLE_C_B_CL_O');
-  IMAGE_SAMPLE_C_LZ_O   :Write('IMAGE_SAMPLE_C_LZ_O');
-  IMAGE_GATHER4         :Write('IMAGE_GATHER4');
-  IMAGE_GATHER4_CL      :Write('IMAGE_GATHER4_CL');
-  IMAGE_GATHER4_L       :Write('IMAGE_GATHER4_L');
-  IMAGE_GATHER4_B       :Write('IMAGE_GATHER4_B');
-  IMAGE_GATHER4_B_CL    :Write('IMAGE_GATHER4_B_CL');
-  IMAGE_GATHER4_LZ      :Write('IMAGE_GATHER4_LZ');
-  IMAGE_GATHER4_C       :Write('IMAGE_GATHER4_C');
-  IMAGE_GATHER4_C_CL    :Write('IMAGE_GATHER4_C_CL');
-  IMAGE_GATHER4_C_L     :Write('IMAGE_GATHER4_C_L');
-  IMAGE_GATHER4_C_B     :Write('IMAGE_GATHER4_C_B');
-  IMAGE_GATHER4_C_B_CL  :Write('IMAGE_GATHER4_C_B_CL');
-  IMAGE_GATHER4_C_LZ    :Write('IMAGE_GATHER4_C_LZ');
-  IMAGE_GATHER4_O       :Write('IMAGE_GATHER4_O');
-  IMAGE_GATHER4_CL_O    :Write('IMAGE_GATHER4_CL_O');
-  IMAGE_GATHER4_L_O     :Write('IMAGE_GATHER4_L_O');
-  IMAGE_GATHER4_B_O     :Write('IMAGE_GATHER4_B_O');
-  IMAGE_GATHER4_B_CL_O  :Write('IMAGE_GATHER4_B_CL_O');
-  IMAGE_GATHER4_LZ_O    :Write('IMAGE_GATHER4_LZ_O');
-  IMAGE_GATHER4_C_O     :Write('IMAGE_GATHER4_C_O');
-  IMAGE_GATHER4_C_CL_O  :Write('IMAGE_GATHER4_C_CL_O');
-  IMAGE_GATHER4_C_L_O   :Write('IMAGE_GATHER4_C_L_O');
-  IMAGE_GATHER4_C_B_O   :Write('IMAGE_GATHER4_C_B_O');
-  IMAGE_GATHER4_C_B_CL_O:Write('IMAGE_GATHER4_C_B_CL_O');
-  IMAGE_GATHER4_C_LZ_O  :Write('IMAGE_GATHER4_C_LZ_O');
-  IMAGE_GET_LOD         :Write('IMAGE_GET_LOD');
-  IMAGE_SAMPLE_CD       :Write('IMAGE_SAMPLE_CD');
-  IMAGE_SAMPLE_CD_CL    :Write('IMAGE_SAMPLE_CD_CL');
-  IMAGE_SAMPLE_C_CD     :Write('IMAGE_SAMPLE_C_CD');
-  IMAGE_SAMPLE_C_CD_CL  :Write('IMAGE_SAMPLE_C_CD_CL');
-  IMAGE_SAMPLE_CD_O     :Write('IMAGE_SAMPLE_CD_O');
-  IMAGE_SAMPLE_CD_CL_O  :Write('IMAGE_SAMPLE_CD_CL_O');
-  IMAGE_SAMPLE_C_CD_O   :Write('IMAGE_SAMPLE_C_CD_O');
-  IMAGE_SAMPLE_C_CD_CL_O:Write('IMAGE_SAMPLE_C_CD_CL_O');
+  IMAGE_LOAD            :str:='IMAGE_LOAD';
+  IMAGE_LOAD_MIP        :str:='IMAGE_LOAD_MIP';
+  IMAGE_LOAD_PCK        :str:='IMAGE_LOAD_PCK';
+  IMAGE_LOAD_PCK_SGN    :str:='IMAGE_LOAD_PCK_SGN';
+  IMAGE_LOAD_MIP_PCK    :str:='IMAGE_LOAD_MIP_PCK';
+  IMAGE_LOAD_MIP_PCK_SGN:str:='IMAGE_LOAD_MIP_PCK_SGN';
+  IMAGE_STORE           :str:='IMAGE_STORE';
+  IMAGE_STORE_MIP       :str:='IMAGE_STORE_MIP';
+  IMAGE_STORE_PCK       :str:='IMAGE_STORE_PCK';
+  IMAGE_STORE_MIP_PCK   :str:='IMAGE_STORE_MIP_PCK';
+  IMAGE_GET_RESINFO     :str:='IMAGE_GET_RESINFO';
+  IMAGE_ATOMIC_SWAP     :str:='IMAGE_ATOMIC_SWAP';
+  IMAGE_ATOMIC_CMPSWAP  :str:='IMAGE_ATOMIC_CMPSWAP';
+  IMAGE_ATOMIC_ADD      :str:='IMAGE_ATOMIC_ADD';
+  IMAGE_ATOMIC_SUB      :str:='IMAGE_ATOMIC_SUB';
+  IMAGE_ATOMIC_SMIN     :str:='IMAGE_ATOMIC_SMIN';
+  IMAGE_ATOMIC_UMIN     :str:='IMAGE_ATOMIC_UMIN';
+  IMAGE_ATOMIC_SMAX     :str:='IMAGE_ATOMIC_SMAX';
+  IMAGE_ATOMIC_UMAX     :str:='IMAGE_ATOMIC_UMAX';
+  IMAGE_ATOMIC_AND      :str:='IMAGE_ATOMIC_AND';
+  IMAGE_ATOMIC_OR       :str:='IMAGE_ATOMIC_OR';
+  IMAGE_ATOMIC_XOR      :str:='IMAGE_ATOMIC_XOR';
+  IMAGE_ATOMIC_INC      :str:='IMAGE_ATOMIC_INC';
+  IMAGE_ATOMIC_DEC      :str:='IMAGE_ATOMIC_DEC';
+  IMAGE_ATOMIC_FCMPSWAP :str:='IMAGE_ATOMIC_FCMPSWAP';
+  IMAGE_ATOMIC_FMIN     :str:='IMAGE_ATOMIC_FMIN';
+  IMAGE_ATOMIC_FMAX     :str:='IMAGE_ATOMIC_FMAX';
+  IMAGE_SAMPLE          :str:='IMAGE_SAMPLE';
+  IMAGE_SAMPLE_CL       :str:='IMAGE_SAMPLE_CL';
+  IMAGE_SAMPLE_D        :str:='IMAGE_SAMPLE_D';
+  IMAGE_SAMPLE_D_CL     :str:='IMAGE_SAMPLE_D_CL';
+  IMAGE_SAMPLE_L        :str:='IMAGE_SAMPLE_L';
+  IMAGE_SAMPLE_B        :str:='IMAGE_SAMPLE_B';
+  IMAGE_SAMPLE_B_CL     :str:='IMAGE_SAMPLE_B_CL';
+  IMAGE_SAMPLE_LZ       :str:='IMAGE_SAMPLE_LZ';
+  IMAGE_SAMPLE_C        :str:='IMAGE_SAMPLE_C';
+  IMAGE_SAMPLE_C_CL     :str:='IMAGE_SAMPLE_C_CL';
+  IMAGE_SAMPLE_C_D      :str:='IMAGE_SAMPLE_C_D';
+  IMAGE_SAMPLE_C_D_CL   :str:='IMAGE_SAMPLE_C_D_CL';
+  IMAGE_SAMPLE_C_L      :str:='IMAGE_SAMPLE_C_L';
+  IMAGE_SAMPLE_C_B      :str:='IMAGE_SAMPLE_C_B';
+  IMAGE_SAMPLE_C_B_CL   :str:='IMAGE_SAMPLE_C_B_CL';
+  IMAGE_SAMPLE_C_LZ     :str:='IMAGE_SAMPLE_C_LZ';
+  IMAGE_SAMPLE_O        :str:='IMAGE_SAMPLE_O';
+  IMAGE_SAMPLE_CL_O     :str:='IMAGE_SAMPLE_CL_O';
+  IMAGE_SAMPLE_D_O      :str:='IMAGE_SAMPLE_D_O';
+  IMAGE_SAMPLE_D_CL_O   :str:='IMAGE_SAMPLE_D_CL_O';
+  IMAGE_SAMPLE_L_O      :str:='IMAGE_SAMPLE_L_O';
+  IMAGE_SAMPLE_B_O      :str:='IMAGE_SAMPLE_B_O';
+  IMAGE_SAMPLE_B_CL_O   :str:='IMAGE_SAMPLE_B_CL_O';
+  IMAGE_SAMPLE_LZ_O     :str:='IMAGE_SAMPLE_LZ_O';
+  IMAGE_SAMPLE_C_O      :str:='IMAGE_SAMPLE_C_O';
+  IMAGE_SAMPLE_C_CL_O   :str:='IMAGE_SAMPLE_C_CL_O';
+  IMAGE_SAMPLE_C_D_O    :str:='IMAGE_SAMPLE_C_D_O';
+  IMAGE_SAMPLE_C_D_CL_O :str:='IMAGE_SAMPLE_C_D_CL_O';
+  IMAGE_SAMPLE_C_L_O    :str:='IMAGE_SAMPLE_C_L_O';
+  IMAGE_SAMPLE_C_B_O    :str:='IMAGE_SAMPLE_C_B_O';
+  IMAGE_SAMPLE_C_B_CL_O :str:='IMAGE_SAMPLE_C_B_CL_O';
+  IMAGE_SAMPLE_C_LZ_O   :str:='IMAGE_SAMPLE_C_LZ_O';
+  IMAGE_GATHER4         :str:='IMAGE_GATHER4';
+  IMAGE_GATHER4_CL      :str:='IMAGE_GATHER4_CL';
+  IMAGE_GATHER4_L       :str:='IMAGE_GATHER4_L';
+  IMAGE_GATHER4_B       :str:='IMAGE_GATHER4_B';
+  IMAGE_GATHER4_B_CL    :str:='IMAGE_GATHER4_B_CL';
+  IMAGE_GATHER4_LZ      :str:='IMAGE_GATHER4_LZ';
+  IMAGE_GATHER4_C       :str:='IMAGE_GATHER4_C';
+  IMAGE_GATHER4_C_CL    :str:='IMAGE_GATHER4_C_CL';
+  IMAGE_GATHER4_C_L     :str:='IMAGE_GATHER4_C_L';
+  IMAGE_GATHER4_C_B     :str:='IMAGE_GATHER4_C_B';
+  IMAGE_GATHER4_C_B_CL  :str:='IMAGE_GATHER4_C_B_CL';
+  IMAGE_GATHER4_C_LZ    :str:='IMAGE_GATHER4_C_LZ';
+  IMAGE_GATHER4_O       :str:='IMAGE_GATHER4_O';
+  IMAGE_GATHER4_CL_O    :str:='IMAGE_GATHER4_CL_O';
+  IMAGE_GATHER4_L_O     :str:='IMAGE_GATHER4_L_O';
+  IMAGE_GATHER4_B_O     :str:='IMAGE_GATHER4_B_O';
+  IMAGE_GATHER4_B_CL_O  :str:='IMAGE_GATHER4_B_CL_O';
+  IMAGE_GATHER4_LZ_O    :str:='IMAGE_GATHER4_LZ_O';
+  IMAGE_GATHER4_C_O     :str:='IMAGE_GATHER4_C_O';
+  IMAGE_GATHER4_C_CL_O  :str:='IMAGE_GATHER4_C_CL_O';
+  IMAGE_GATHER4_C_L_O   :str:='IMAGE_GATHER4_C_L_O';
+  IMAGE_GATHER4_C_B_O   :str:='IMAGE_GATHER4_C_B_O';
+  IMAGE_GATHER4_C_B_CL_O:str:='IMAGE_GATHER4_C_B_CL_O';
+  IMAGE_GATHER4_C_LZ_O  :str:='IMAGE_GATHER4_C_LZ_O';
+  IMAGE_GET_LOD         :str:='IMAGE_GET_LOD';
+  IMAGE_SAMPLE_CD       :str:='IMAGE_SAMPLE_CD';
+  IMAGE_SAMPLE_CD_CL    :str:='IMAGE_SAMPLE_CD_CL';
+  IMAGE_SAMPLE_C_CD     :str:='IMAGE_SAMPLE_C_CD';
+  IMAGE_SAMPLE_C_CD_CL  :str:='IMAGE_SAMPLE_C_CD_CL';
+  IMAGE_SAMPLE_CD_O     :str:='IMAGE_SAMPLE_CD_O';
+  IMAGE_SAMPLE_CD_CL_O  :str:='IMAGE_SAMPLE_CD_CL_O';
+  IMAGE_SAMPLE_C_CD_O   :str:='IMAGE_SAMPLE_C_CD_O';
+  IMAGE_SAMPLE_C_CD_CL_O:str:='IMAGE_SAMPLE_C_CD_CL_O';
 
   else
-      Write('MIMG?',SPI.MIMG.OP);
+      str:='MIMG?'+IntToStr(SPI.MIMG.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- Case PopCnt(SPI.MIMG.DMASK) of
-  2:begin
-     Write('v[',SPI.MIMG.VDATA,':',SPI.MIMG.VDATA+1,']');
-     Write(', ');
-     Write('v[',SPI.MIMG.VADDR,':',SPI.MIMG.VADDR+1,']');
-    end;
-  3:begin
-     Write('v[',SPI.MIMG.VDATA,':',SPI.MIMG.VDATA+2,']');
-     Write(', ');
-     Write('v[',SPI.MIMG.VADDR,':',SPI.MIMG.VADDR+2,']');
-    end;
-  4:begin
-     Write('v[',SPI.MIMG.VDATA,':',SPI.MIMG.VDATA+3,']');
-     Write(', ');
-     Write('v[',SPI.MIMG.VADDR,':',SPI.MIMG.VADDR+3,']');
+ t:=PopCnt(Byte(SPI.MIMG.DMASK));
+
+ Case t of
+  2,3,4:
+    begin
+     str:=str+'v['+IntToStr(SPI.MIMG.VDATA)+':'+IntToStr(SPI.MIMG.VDATA+t-1)+']';
+     str:=str+', ';
+     str:=str+'v['+IntToStr(SPI.MIMG.VADDR)+':'+IntToStr(SPI.MIMG.VADDR+t-1)+']';
     end;
   else
     begin
-     _print_vdst8(SPI.MIMG.VDATA);
-     Write(', ');
-     _print_vdst8(SPI.MIMG.VADDR);
+     str:=str+_get_vdst8(SPI.MIMG.VDATA);
+     str:=str+', ';
+     str:=str+_get_vdst8(SPI.MIMG.VADDR);
     end;
  end;
+ str:=str+', ';
 
- Write(', ');
- Write('s[',SPI.MIMG.SRSRC*4,':',SPI.MIMG.SRSRC*4+7,']');
+ str:=str+'s['+IntToStr(SPI.MIMG.SRSRC*4)+':'+IntToStr(SPI.MIMG.SRSRC*4+7)+']';
 
  Case SPI.MIMG.OP of
   IMAGE_SAMPLE..IMAGE_SAMPLE_C_CD_CL_O:
    begin
-    Write(', ');
-    Write('s[',SPI.MIMG.SSAMP*4,':',SPI.MIMG.SSAMP*4+3,']');
+    str:=str+', ';
+    str:=str+'s['+IntToStr(SPI.MIMG.SSAMP*4)+':'+IntToStr(SPI.MIMG.SSAMP*4+3)+']';
    end;
   else;
  end;
 
- Write(' dmask:0x',HexStr(SPI.MIMG.DMASK,1));
+ str:=str+' dmask:0x'+HexStr(SPI.MIMG.DMASK,1);
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_EXP(Var SPI:TSPI);
 var
+ str:RawByteString;
+var
  f:Byte;
 begin
- Write('EXP ');
+ str:='EXP ';
 
  case SPI.EXP.TGT of
-    0..7:Write('mrt',IntToStr(SPI.EXP.TGT));
-       8:Write('mrtz');
-       9:Write('null');
-  12..15:Write('pos',IntToStr(SPI.EXP.TGT-12));
-  32..63:Write('param',IntToStr(SPI.EXP.TGT-32));
+    0..7:str:=str+'mrt'+IntToStr(SPI.EXP.TGT);
+       8:str:=str+'mrtz';
+       9:str:=str+'null';
+  12..15:str:=str+'pos'+IntToStr(SPI.EXP.TGT-12);
+  32..63:str:=str+'param'+IntToStr(SPI.EXP.TGT-32);
   else
-   Write('?');
+   str:=str+'?';
  end;
 
  //half 0=0000 3=0011 C=1100 F=1111
@@ -3225,72 +3283,70 @@ begin
   0:
     begin
 
-     Write(', ');
+     str:=str+', ';
      if (f and $1<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC0);
+      str:=str+_get_vdst8(SPI.EXP.VSRC0);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
-     Write(', ');
+     str:=str+', ';
      if (f and $2<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC1);
+      str:=str+_get_vdst8(SPI.EXP.VSRC1);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
-     Write(', ');
+     str:=str+', ';
      if (f and $4<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC2);
+      str:=str+_get_vdst8(SPI.EXP.VSRC2);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
-     Write(', ');
+     str:=str+', ';
      if (f and $8<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC3);
+      str:=str+_get_vdst8(SPI.EXP.VSRC3);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
     end;
   1: //is half16 compressed
     begin
 
-     Write(', ');
+     str:=str+', ';
      if (f and $1<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC0);
+      str:=str+_get_vdst8(SPI.EXP.VSRC0);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
-     Write(', ');
+     str:=str+', ';
      if (f and $2<>0) then
      begin
-      _print_vdst8(SPI.EXP.VSRC1);
+      str:=str+_get_vdst8(SPI.EXP.VSRC1);
      end else
      begin
-      Write('off');
+      str:=str+'off';
      end;
 
     end;
  end;
 
- if SPI.EXP.COMPR<>0 then
-  Write(' compr');       //is half float compressed
+ if SPI.EXP.COMPR<>0 then str:=str+' compr'; //is half float compressed
 
- if SPI.EXP.vm<>0 then
-  Write(' vm');
+ if SPI.EXP.vm<>0 then str:=str+' vm';
 
  {
  Valid Mask. When set to 1, this indicates that the EXEC mask represents the valid-mask
@@ -3303,201 +3359,204 @@ begin
  if VM<>0 and EXEC<>0 = set pixel else discard pixel
  }
 
- if SPI.EXP.DONE<>0 then //this is the last MRT
-  Write(' done');
+ if SPI.EXP.DONE<>0 then str:=str+' done'; //this is the last MRT
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_VINTRP(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.VINTRP.OP of
-  V_INTERP_P1_F32 :Write('V_INTERP_P1_F32');
-  V_INTERP_P2_F32 :Write('V_INTERP_P2_F32');
-  V_INTERP_MOV_F32:Write('V_INTERP_MOV_F32');
+  V_INTERP_P1_F32 :str:='V_INTERP_P1_F32';
+  V_INTERP_P2_F32 :str:='V_INTERP_P2_F32';
+  V_INTERP_MOV_F32:str:='V_INTERP_MOV_F32';
   else
-      Write('VINTRP?',SPI.VINTRP.OP);
+      str:='VINTRP?'+IntToStr(SPI.VINTRP.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
- _print_vdst8(SPI.VINTRP.VDST);
- Write(', ');
- _print_vdst8(SPI.VINTRP.VSRC);
+ str:=str+_get_vdst8(SPI.VINTRP.VDST);
+ str:=str+', ';
 
- Write(', attr',SPI.VINTRP.ATTR,'.');
+ str:=str+_get_vdst8(SPI.VINTRP.VSRC);
+
+ str:=str+', attr'+IntToStr(SPI.VINTRP.ATTR)+'.';
 
  case SPI.VINTRP.ATTRCHAN of
-  0:Write('x');
-  1:Write('y');
-  2:Write('z');
-  3:Write('w');
+  0:str:=str+'x';
+  1:str:=str+'y';
+  2:str:=str+'z';
+  3:str:=str+'w';
  end;
 
- Writeln;
+ Writeln(str);
 end;
 
 procedure _print_DS(Var SPI:TSPI);
+var
+ str:RawByteString;
 begin
  Case SPI.DS.OP of
 
-  DS_ADD_U32            :Write('DS_ADD_U32');
-  DS_SUB_U32            :Write('DS_SUB_U32');
-  DS_RSUB_U32           :Write('DS_RSUB_U32');
-  DS_INC_U32            :Write('DS_INC_U32');
-  DS_DEC_U32            :Write('DS_DEC_U32');
-  DS_MIN_I32            :Write('DS_MIN_I32');
-  DS_MAX_I32            :Write('DS_MAX_I32');
-  DS_MIN_U32            :Write('DS_MIN_U32');
-  DS_MAX_U32            :Write('DS_MAX_U32');
-  DS_AND_B32            :Write('DS_AND_B32');
-  DS_OR_B32             :Write('DS_OR_B32');
-  DS_XOR_B32            :Write('DS_XOR_B32');
-  DS_MSKOR_B32          :Write('DS_MSKOR_B32');
-  DS_WRITE_B32          :Write('DS_WRITE_B32');
-  DS_WRITE2_B32         :Write('DS_WRITE2_B32');
-  DS_WRITE2ST64_B32     :Write('DS_WRITE2ST64_B32');
-  DS_CMPST_B32          :Write('DS_CMPST_B32');
-  DS_CMPST_F32          :Write('DS_CMPST_F32');
-  DS_MIN_F32            :Write('DS_MIN_F32');
-  DS_MAX_F32            :Write('DS_MAX_F32');
-  DS_NOP                :Write('DS_NOP');
-  DS_GWS_INIT           :Write('DS_GWS_INIT');
-  DS_GWS_SEMA_V         :Write('DS_GWS_SEMA_V');
-  DS_GWS_SEMA_BR        :Write('DS_GWS_SEMA_BR');
-  DS_GWS_SEMA_P         :Write('DS_GWS_SEMA_P');
-  DS_GWS_BARRIER        :Write('DS_GWS_BARRIER');
-  DS_WRITE_B8           :Write('DS_WRITE_B8');
-  DS_WRITE_B16          :Write('DS_WRITE_B16');
-  DS_ADD_RTN_U32        :Write('DS_ADD_RTN_U32');
-  DS_SUB_RTN_U32        :Write('DS_SUB_RTN_U32');
-  DS_RSUB_RTN_U32       :Write('DS_RSUB_RTN_U32');
-  DS_INC_RTN_U32        :Write('DS_INC_RTN_U32');
-  DS_DEC_RTN_U32        :Write('DS_DEC_RTN_U32');
-  DS_MIN_RTN_I32        :Write('DS_MIN_RTN_I32');
-  DS_MAX_RTN_I32        :Write('DS_MAX_RTN_I32');
-  DS_MIN_RTN_U32        :Write('DS_MIN_RTN_U32');
-  DS_MAX_RTN_U32        :Write('DS_MAX_RTN_U32');
-  DS_AND_RTN_B32        :Write('DS_AND_RTN_B32');
-  DS_OR_RTN_B32         :Write('DS_OR_RTN_B32');
-  DS_XOR_RTN_B32        :Write('DS_XOR_RTN_B32');
-  DS_MSKOR_RTN_B32      :Write('DS_MSKOR_RTN_B32');
-  DS_WRXCHG_RTN_B32     :Write('DS_WRXCHG_RTN_B32');
-  DS_WRXCHG2_RTN_B32    :Write('DS_WRXCHG2_RTN_B32');
-  DS_WRXCHG2ST64_RTN_B32:Write('DS_WRXCHG2ST64_RTN_B32');
-  DS_CMPST_RTN_B32      :Write('DS_CMPST_RTN_B32');
-  DS_CMPST_RTN_F32      :Write('DS_CMPST_RTN_F32');
-  DS_MIN_RTN_F32        :Write('DS_MIN_RTN_F32');
-  DS_MAX_RTN_F32        :Write('DS_MAX_RTN_F32');
-  DS_WRAP_RTN_B32       :Write('DS_WRAP_RTN_B32');
-  DS_SWIZZLE_B32        :Write('DS_SWIZZLE_B32');
-  DS_READ_B32           :Write('DS_READ_B32');
-  DS_READ2_B32          :Write('DS_READ2_B32');
-  DS_READ2ST64_B32      :Write('DS_READ2ST64_B32');
-  DS_READ_I8            :Write('DS_READ_I8');
-  DS_READ_U8            :Write('DS_READ_U8');
-  DS_READ_I16           :Write('DS_READ_I16');
-  DS_READ_U16           :Write('DS_READ_U16');
-  DS_CONSUME            :Write('DS_CONSUME');
-  DS_APPEND             :Write('DS_APPEND');
-  DS_ORDERED_COUNT      :Write('DS_ORDERED_COUNT');
-  DS_ADD_U64            :Write('DS_ADD_U64');
-  DS_SUB_U64            :Write('DS_SUB_U64');
-  DS_RSUB_U64           :Write('DS_RSUB_U64');
-  DS_INC_U64            :Write('DS_INC_U64');
-  DS_DEC_U64            :Write('DS_DEC_U64');
-  DS_MIN_I64            :Write('DS_MIN_I64');
-  DS_MAX_I64            :Write('DS_MAX_I64');
-  DS_MIN_U64            :Write('DS_MIN_U64');
-  DS_MAX_U64            :Write('DS_MAX_U64');
-  DS_OR_B64             :Write('DS_OR_B64');
-  DS_XOR_B64            :Write('DS_XOR_B64');
-  DS_MSKOR_B64          :Write('DS_MSKOR_B64');
-  DS_WRITE_B64          :Write('DS_WRITE_B64');
-  DS_WRITE2_B64         :Write('DS_WRITE2_B64');
-  DS_WRITE2ST64_B64     :Write('DS_WRITE2ST64_B64');
-  DS_CMPST_B64          :Write('DS_CMPST_B64');
-  DS_CMPST_F64          :Write('DS_CMPST_F64');
-  DS_MIN_F64            :Write('DS_MIN_F64');
-  DS_MAX_F64            :Write('DS_MAX_F64');
-  DS_ADD_RTN_U64        :Write('DS_ADD_RTN_U64');
-  DS_SUB_RTN_U64        :Write('DS_SUB_RTN_U64');
-  DS_RSUB_RTN_U64       :Write('DS_RSUB_RTN_U64');
-  DS_INC_RTN_U64        :Write('DS_INC_RTN_U64');
-  DS_DEC_RTN_U64        :Write('DS_DEC_RTN_U64');
-  DS_MIN_RTN_I64        :Write('DS_MIN_RTN_I64');
-  DS_MAX_RTN_I64        :Write('DS_MAX_RTN_I64');
-  DS_MIN_RTN_U64        :Write('DS_MIN_RTN_U64');
-  DS_MAX_RTN_U64        :Write('DS_MAX_RTN_U64');
-  DS_AND_RTN_B64        :Write('DS_AND_RTN_B64');
-  DS_OR_RTN_B64         :Write('DS_OR_RTN_B64');
-  DS_XOR_RTN_B64        :Write('DS_XOR_RTN_B64');
-  DS_MSKOR_RTN_B64      :Write('DS_MSKOR_RTN_B64');
-  DS_WRXCHG_RTN_B64     :Write('DS_WRXCHG_RTN_B64');
-  DS_WRXCHG2_RTN_B64    :Write('DS_WRXCHG2_RTN_B64');
-  DS_WRXCHG2ST64_RTN_B64:Write('DS_WRXCHG2ST64_RTN_B64');
-  DS_CMPST_RTN_B64      :Write('DS_CMPST_RTN_B64');
-  DS_CMPST_RTN_F64      :Write('DS_CMPST_RTN_F64');
-  DS_MIN_RTN_F64        :Write('DS_MIN_RTN_F64');
-  DS_MAX_RTN_F64        :Write('DS_MAX_RTN_F64');
-  DS_READ_B64           :Write('DS_READ_B64');
-  DS_READ2_B64          :Write('DS_READ2_B64');
-  DS_READ2ST64_B64      :Write('DS_READ2ST64_B64');
-  DS_CONDXCHG32_RTN_B64 :Write('DS_CONDXCHG32_RTN_B64');
-  DS_ADD_SRC2_U32       :Write('DS_ADD_SRC2_U32');
-  DS_SUB_SRC2_U32       :Write('DS_SUB_SRC2_U32');
-  DS_RSUB_SRC2_U32      :Write('DS_RSUB_SRC2_U32');
-  DS_INC_SRC2_U32B      :Write('DS_INC_SRC2_U32B');
-  DS_DEC_SRC2_U32       :Write('DS_DEC_SRC2_U32');
-  DS_MIN_SRC2_I32       :Write('DS_MIN_SRC2_I32');
-  DS_MAX_SRC2_I32       :Write('DS_MAX_SRC2_I32');
-  DS_MIN_SRC2_U32       :Write('DS_MIN_SRC2_U32');
-  DS_MAX_SRC2_U32       :Write('DS_MAX_SRC2_U32');
-  DS_AND_SRC2_B32B      :Write('DS_AND_SRC2_B32B');
-  DS_OR_SRC2_B32        :Write('DS_OR_SRC2_B32');
-  DS_XOR_SRC2_B32       :Write('DS_XOR_SRC2_B32');
-  DS_WRITE_SRC2_B32     :Write('DS_WRITE_SRC2_B32');
-  DS_MIN_SRC2_F32       :Write('DS_MIN_SRC2_F32');
-  DS_MAX_SRC2_F32       :Write('DS_MAX_SRC2_F32');
-  DS_ADD_SRC2_U64       :Write('DS_ADD_SRC2_U64');
-  DS_SUB_SRC2_U64       :Write('DS_SUB_SRC2_U64');
-  DS_RSUB_SRC2_U64      :Write('DS_RSUB_SRC2_U64');
-  DS_INC_SRC2_U64       :Write('DS_INC_SRC2_U64');
-  DS_DEC_SRC2_U64       :Write('DS_DEC_SRC2_U64');
-  DS_MIN_SRC2_I64       :Write('DS_MIN_SRC2_I64');
-  DS_MAX_SRC2_I64       :Write('DS_MAX_SRC2_I64');
-  DS_MIN_SRC2_U64       :Write('DS_MIN_SRC2_U64');
-  DS_MAX_SRC2_U64       :Write('DS_MAX_SRC2_U64');
-  DS_AND_SRC2_B64       :Write('DS_AND_SRC2_B64');
-  DS_OR_SRC2_B64        :Write('DS_OR_SRC2_B64');
-  DS_XOR_SRC2_B64       :Write('DS_XOR_SRC2_B64');
-  DS_MIN_SRC2_F64       :Write('DS_MIN_SRC2_F64');
-  DS_MAX_SRC2_F64       :Write('DS_MAX_SRC2_F64');
+  DS_ADD_U32            :str:='DS_ADD_U32';
+  DS_SUB_U32            :str:='DS_SUB_U32';
+  DS_RSUB_U32           :str:='DS_RSUB_U32';
+  DS_INC_U32            :str:='DS_INC_U32';
+  DS_DEC_U32            :str:='DS_DEC_U32';
+  DS_MIN_I32            :str:='DS_MIN_I32';
+  DS_MAX_I32            :str:='DS_MAX_I32';
+  DS_MIN_U32            :str:='DS_MIN_U32';
+  DS_MAX_U32            :str:='DS_MAX_U32';
+  DS_AND_B32            :str:='DS_AND_B32';
+  DS_OR_B32             :str:='DS_OR_B32';
+  DS_XOR_B32            :str:='DS_XOR_B32';
+  DS_MSKOR_B32          :str:='DS_MSKOR_B32';
+  DS_WRITE_B32          :str:='DS_WRITE_B32';
+  DS_WRITE2_B32         :str:='DS_WRITE2_B32';
+  DS_WRITE2ST64_B32     :str:='DS_WRITE2ST64_B32';
+  DS_CMPST_B32          :str:='DS_CMPST_B32';
+  DS_CMPST_F32          :str:='DS_CMPST_F32';
+  DS_MIN_F32            :str:='DS_MIN_F32';
+  DS_MAX_F32            :str:='DS_MAX_F32';
+  DS_NOP                :str:='DS_NOP';
+  DS_GWS_INIT           :str:='DS_GWS_INIT';
+  DS_GWS_SEMA_V         :str:='DS_GWS_SEMA_V';
+  DS_GWS_SEMA_BR        :str:='DS_GWS_SEMA_BR';
+  DS_GWS_SEMA_P         :str:='DS_GWS_SEMA_P';
+  DS_GWS_BARRIER        :str:='DS_GWS_BARRIER';
+  DS_WRITE_B8           :str:='DS_WRITE_B8';
+  DS_WRITE_B16          :str:='DS_WRITE_B16';
+  DS_ADD_RTN_U32        :str:='DS_ADD_RTN_U32';
+  DS_SUB_RTN_U32        :str:='DS_SUB_RTN_U32';
+  DS_RSUB_RTN_U32       :str:='DS_RSUB_RTN_U32';
+  DS_INC_RTN_U32        :str:='DS_INC_RTN_U32';
+  DS_DEC_RTN_U32        :str:='DS_DEC_RTN_U32';
+  DS_MIN_RTN_I32        :str:='DS_MIN_RTN_I32';
+  DS_MAX_RTN_I32        :str:='DS_MAX_RTN_I32';
+  DS_MIN_RTN_U32        :str:='DS_MIN_RTN_U32';
+  DS_MAX_RTN_U32        :str:='DS_MAX_RTN_U32';
+  DS_AND_RTN_B32        :str:='DS_AND_RTN_B32';
+  DS_OR_RTN_B32         :str:='DS_OR_RTN_B32';
+  DS_XOR_RTN_B32        :str:='DS_XOR_RTN_B32';
+  DS_MSKOR_RTN_B32      :str:='DS_MSKOR_RTN_B32';
+  DS_WRXCHG_RTN_B32     :str:='DS_WRXCHG_RTN_B32';
+  DS_WRXCHG2_RTN_B32    :str:='DS_WRXCHG2_RTN_B32';
+  DS_WRXCHG2ST64_RTN_B32:str:='DS_WRXCHG2ST64_RTN_B32';
+  DS_CMPST_RTN_B32      :str:='DS_CMPST_RTN_B32';
+  DS_CMPST_RTN_F32      :str:='DS_CMPST_RTN_F32';
+  DS_MIN_RTN_F32        :str:='DS_MIN_RTN_F32';
+  DS_MAX_RTN_F32        :str:='DS_MAX_RTN_F32';
+  DS_WRAP_RTN_B32       :str:='DS_WRAP_RTN_B32';
+  DS_SWIZZLE_B32        :str:='DS_SWIZZLE_B32';
+  DS_READ_B32           :str:='DS_READ_B32';
+  DS_READ2_B32          :str:='DS_READ2_B32';
+  DS_READ2ST64_B32      :str:='DS_READ2ST64_B32';
+  DS_READ_I8            :str:='DS_READ_I8';
+  DS_READ_U8            :str:='DS_READ_U8';
+  DS_READ_I16           :str:='DS_READ_I16';
+  DS_READ_U16           :str:='DS_READ_U16';
+  DS_CONSUME            :str:='DS_CONSUME';
+  DS_APPEND             :str:='DS_APPEND';
+  DS_ORDERED_COUNT      :str:='DS_ORDERED_COUNT';
+  DS_ADD_U64            :str:='DS_ADD_U64';
+  DS_SUB_U64            :str:='DS_SUB_U64';
+  DS_RSUB_U64           :str:='DS_RSUB_U64';
+  DS_INC_U64            :str:='DS_INC_U64';
+  DS_DEC_U64            :str:='DS_DEC_U64';
+  DS_MIN_I64            :str:='DS_MIN_I64';
+  DS_MAX_I64            :str:='DS_MAX_I64';
+  DS_MIN_U64            :str:='DS_MIN_U64';
+  DS_MAX_U64            :str:='DS_MAX_U64';
+  DS_OR_B64             :str:='DS_OR_B64';
+  DS_XOR_B64            :str:='DS_XOR_B64';
+  DS_MSKOR_B64          :str:='DS_MSKOR_B64';
+  DS_WRITE_B64          :str:='DS_WRITE_B64';
+  DS_WRITE2_B64         :str:='DS_WRITE2_B64';
+  DS_WRITE2ST64_B64     :str:='DS_WRITE2ST64_B64';
+  DS_CMPST_B64          :str:='DS_CMPST_B64';
+  DS_CMPST_F64          :str:='DS_CMPST_F64';
+  DS_MIN_F64            :str:='DS_MIN_F64';
+  DS_MAX_F64            :str:='DS_MAX_F64';
+  DS_ADD_RTN_U64        :str:='DS_ADD_RTN_U64';
+  DS_SUB_RTN_U64        :str:='DS_SUB_RTN_U64';
+  DS_RSUB_RTN_U64       :str:='DS_RSUB_RTN_U64';
+  DS_INC_RTN_U64        :str:='DS_INC_RTN_U64';
+  DS_DEC_RTN_U64        :str:='DS_DEC_RTN_U64';
+  DS_MIN_RTN_I64        :str:='DS_MIN_RTN_I64';
+  DS_MAX_RTN_I64        :str:='DS_MAX_RTN_I64';
+  DS_MIN_RTN_U64        :str:='DS_MIN_RTN_U64';
+  DS_MAX_RTN_U64        :str:='DS_MAX_RTN_U64';
+  DS_AND_RTN_B64        :str:='DS_AND_RTN_B64';
+  DS_OR_RTN_B64         :str:='DS_OR_RTN_B64';
+  DS_XOR_RTN_B64        :str:='DS_XOR_RTN_B64';
+  DS_MSKOR_RTN_B64      :str:='DS_MSKOR_RTN_B64';
+  DS_WRXCHG_RTN_B64     :str:='DS_WRXCHG_RTN_B64';
+  DS_WRXCHG2_RTN_B64    :str:='DS_WRXCHG2_RTN_B64';
+  DS_WRXCHG2ST64_RTN_B64:str:='DS_WRXCHG2ST64_RTN_B64';
+  DS_CMPST_RTN_B64      :str:='DS_CMPST_RTN_B64';
+  DS_CMPST_RTN_F64      :str:='DS_CMPST_RTN_F64';
+  DS_MIN_RTN_F64        :str:='DS_MIN_RTN_F64';
+  DS_MAX_RTN_F64        :str:='DS_MAX_RTN_F64';
+  DS_READ_B64           :str:='DS_READ_B64';
+  DS_READ2_B64          :str:='DS_READ2_B64';
+  DS_READ2ST64_B64      :str:='DS_READ2ST64_B64';
+  DS_CONDXCHG32_RTN_B64 :str:='DS_CONDXCHG32_RTN_B64';
+  DS_ADD_SRC2_U32       :str:='DS_ADD_SRC2_U32';
+  DS_SUB_SRC2_U32       :str:='DS_SUB_SRC2_U32';
+  DS_RSUB_SRC2_U32      :str:='DS_RSUB_SRC2_U32';
+  DS_INC_SRC2_U32B      :str:='DS_INC_SRC2_U32B';
+  DS_DEC_SRC2_U32       :str:='DS_DEC_SRC2_U32';
+  DS_MIN_SRC2_I32       :str:='DS_MIN_SRC2_I32';
+  DS_MAX_SRC2_I32       :str:='DS_MAX_SRC2_I32';
+  DS_MIN_SRC2_U32       :str:='DS_MIN_SRC2_U32';
+  DS_MAX_SRC2_U32       :str:='DS_MAX_SRC2_U32';
+  DS_AND_SRC2_B32B      :str:='DS_AND_SRC2_B32B';
+  DS_OR_SRC2_B32        :str:='DS_OR_SRC2_B32';
+  DS_XOR_SRC2_B32       :str:='DS_XOR_SRC2_B32';
+  DS_WRITE_SRC2_B32     :str:='DS_WRITE_SRC2_B32';
+  DS_MIN_SRC2_F32       :str:='DS_MIN_SRC2_F32';
+  DS_MAX_SRC2_F32       :str:='DS_MAX_SRC2_F32';
+  DS_ADD_SRC2_U64       :str:='DS_ADD_SRC2_U64';
+  DS_SUB_SRC2_U64       :str:='DS_SUB_SRC2_U64';
+  DS_RSUB_SRC2_U64      :str:='DS_RSUB_SRC2_U64';
+  DS_INC_SRC2_U64       :str:='DS_INC_SRC2_U64';
+  DS_DEC_SRC2_U64       :str:='DS_DEC_SRC2_U64';
+  DS_MIN_SRC2_I64       :str:='DS_MIN_SRC2_I64';
+  DS_MAX_SRC2_I64       :str:='DS_MAX_SRC2_I64';
+  DS_MIN_SRC2_U64       :str:='DS_MIN_SRC2_U64';
+  DS_MAX_SRC2_U64       :str:='DS_MAX_SRC2_U64';
+  DS_AND_SRC2_B64       :str:='DS_AND_SRC2_B64';
+  DS_OR_SRC2_B64        :str:='DS_OR_SRC2_B64';
+  DS_XOR_SRC2_B64       :str:='DS_XOR_SRC2_B64';
+  DS_MIN_SRC2_F64       :str:='DS_MIN_SRC2_F64';
+  DS_MAX_SRC2_F64       :str:='DS_MAX_SRC2_F64';
 
   else
-      Writeln('DS?',SPI.DS.OP);
+      str:='DS?'+IntToStr(SPI.DS.OP);
  end;
- Write(' ');
+ str:=str+' ';
 
  //VDST vbindex vsrc0 vsrc1 OFFSET0 OFFSET1 GDS
 
- _print_vdst8(SPI.DS.VDST);
- Write(' ');
+ str:=str+_get_vdst8(SPI.DS.VDST);
+ str:=str+', ';
 
  //vbindex
- _print_vdst8(SPI.DS.ADDR);
- Write(' ');
+ str:=str+_get_vdst8(SPI.DS.ADDR);
+ str:=str+', ';
 
  //vsrc0
- _print_vdst8(SPI.DS.DATA0);
- Write(' ');
+ str:=str+_get_vdst8(SPI.DS.DATA0);
+ str:=str+', ';
 
  //vsrc1
- _print_vdst8(SPI.DS.DATA1);
- Write(' ');
+ str:=str+_get_vdst8(SPI.DS.DATA1);
 
- Write('OFFSET:0x',HexStr(SPI.DS.OFFSET1,2),HexStr(SPI.DS.OFFSET0,2),' ');
+ str:=str+' OFFSET:0x'+HexStr(SPI.DS.OFFSET1,2)+HexStr(SPI.DS.OFFSET0,2);
 
- Write('GDS:',SPI.DS.GDS);
+ str:=str+' GDS:'+IntToSTr(SPI.DS.GDS);
 
  Writeln;
 end;

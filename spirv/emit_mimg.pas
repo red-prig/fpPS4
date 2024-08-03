@@ -1061,8 +1061,6 @@ var
  dst,cmb:PsrRegNode;
 
  param:TImgSampleParam;
-
- mask:Byte;
 begin
  if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 
@@ -1071,27 +1069,18 @@ begin
 
  cmb:=OpSampledImage(line,Tgrp,Sgrp,info^.dtype,info^.tinfo);
 
- Assert(FSPI.MIMG.DMASK=1,'FSPI.MIMG.DMASK<>1');
+ //DMASK: {lod, lod_unclamped, 0, 0}
 
  //gather
  param:=Default(TImgSampleParam);
  param.coord:=GatherCoord_f(param.roffset,info);
  //gather
 
- dst:=NewReg(param.coord^.dtype);
+ dst:=NewReg(dtVec2f);
 
  _Op2(line,Op.OpImageQueryLod,dst,PsrRegNode(cmb),param.coord);
 
- case param.coord^.dtype.Count of
-  1:mask:=1;
-  2:mask:=3;
-  3:mask:=7;
-  4:mask:=15;
-  else
-    mask:=0;
- end;
-
- DistribDmask(mask,dst,info);
+ DistribDmask(FSPI.MIMG.DMASK,dst,info);
 
  AddCapability(Capability.ImageQuery);
 end;

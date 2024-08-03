@@ -40,6 +40,14 @@ type
   etParam28,etParam29,etParam30,etParam31
  );
 
+ TDepthMode=(
+  foDepthNone,
+  foDepthReplacing,
+  foDepthGreater,
+  foDepthLess,
+  foDepthUnchanged
+ );
+
  ntOutput=class(ntDescriptor)
   class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
   class function  GetStorageName(node:PsrNode):RawByteString; override;
@@ -55,6 +63,7 @@ type
  PsrOutputList=^TsrOutputList;
  TsrOutputList=object
   FEmit:TCustomEmit;
+  FDepthMode:TDepthMode;
   data:array[TpsslExportType] of TsrOutput;
   Procedure Init(Emit:TCustomEmit); inline;
   function  Fetch(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
@@ -131,6 +140,9 @@ begin
       end;
     etMrtz:
       begin
+       //force Depth Replacing
+       FDepthMode:=foDepthReplacing;
+       //
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragDepth);
       end;
     etPos0:

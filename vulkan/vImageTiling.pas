@@ -102,6 +102,15 @@ begin
  Result:=(x+1);
 end;
 
+Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
+var
+ align_m:Ptruint;
+begin
+ align_m:=(32 div bpp)-1;
+ Result:=(width+align_m) and (not align_m);
+ Result:=(Result+7) and (not 7);
+end;
+
 Function Get1dThinSize(const key:TvImageKey):Ptruint;
 var
  m_bytePerElement:Ptruint;
@@ -144,16 +153,29 @@ begin
    m_padheight:=(m_padheight+3) shr 2;
   end;
 
-  m_padwidth :=(m_padwidth +7) and (not 7);
+  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_padwidth);
   m_padheight:=(m_padheight+7) and (not 7);
 
-  m_slice:=m_padwidth*
-           m_padheight*
-           m_depth*
-           m_arrayLayers*
-           m_bytePerElement;
+  if (m_level<>1) then
+  begin
+   m_slice:=m_padwidth*
+            m_padheight*
+            m_depth*
+            m_arrayLayers*
+            m_bytePerElement;
 
-  m_slice:=(m_slice+255) and (not Ptruint(255));
+   m_slice:=(m_slice+255) and (not Ptruint(255));
+  end else
+  begin
+   //Trim the last layer
+
+   m_slice:=m_padwidth*
+            m_padheight*
+            key.params.depth*
+            key.params.arrayLayers*
+            m_bytePerElement;
+
+  end;
 
   Result:=Result+m_slice;
 
@@ -523,8 +545,8 @@ begin
  end;
  //mips
 
- Writeln('size1=',(src-image.key.addr));
- Writeln('size2=',Get1dThinSize(image.key));
+ //Writeln('size1=',(src-image.key.addr));
+ //Writeln('size2=',Get1dThinSize(image.key));
 
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
  //FreeMem(m_base);
