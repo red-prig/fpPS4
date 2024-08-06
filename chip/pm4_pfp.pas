@@ -1045,6 +1045,9 @@ begin
   FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
   THREAD_TRACE_MARKER        :Writeln(' eventType=THREAD_TRACE_MARKER');
   PIPELINESTAT_STOP          :Writeln(' eventType=PIPELINESTAT_STOP');
+  PERFCOUNTER_START          :Writeln(' eventType=PERFCOUNTER_START');
+  PERFCOUNTER_STOP           :Writeln(' eventType=PERFCOUNTER_STOP');
+  PERFCOUNTER_SAMPLE         :Writeln(' eventType=PERFCOUNTER_SAMPLE');
   else
                               Writeln(' eventType=0x',HexStr(Body^.eventType,2));
  end;

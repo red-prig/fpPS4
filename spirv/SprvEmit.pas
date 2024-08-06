@@ -9,6 +9,7 @@ uses
   classes,
   spirv,
   si_ci_vi_merged_registers,
+  si_ci_vi_merged_groups,
   ps4_pssl,
   srInterface,
   srAllocator,
@@ -30,6 +31,7 @@ uses
 
 type
  PSPI_PS_INPUT_CNTL_0=^TSPI_PS_INPUT_CNTL_0;
+ PRENDER_TARGET      =^TRENDER_TARGET;
 
  TSprvEmit=class(TEmitFetch)
 
@@ -51,6 +53,7 @@ type
 
   Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
   Procedure   SET_INPUT_CNTL    (INPUT_CNTL:PSPI_PS_INPUT_CNTL_0;NUM_INTERP:Byte);
+  Procedure   SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
 
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
                      RSRC2:TCOMPUTE_PGM_RSRC2;
@@ -465,6 +468,18 @@ begin
   FPSInputCntl[i].USE_DEFAULT:=(INPUT_CNTL[i].OFFSET shr 5)<>0;
   FPSInputCntl[i].DEFAULT_VAL:=(INPUT_CNTL[i].DEFAULT_VAL);
   FPSInputCntl[i].FLAT_SHADE :=(INPUT_CNTL[i].FLAT_SHADE)<>0;
+ end;
+end;
+
+Procedure TSprvEmit.SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
+var
+ i:Byte;
+begin
+ if (COUNT<>0) then
+ for i:=0 to COUNT-1 do
+ begin
+  FExportInfo[i].NUMBER_TYPE:=R[i].INFO.NUMBER_TYPE;
+  FExportInfo[i].COMP_SWAP  :=R[i].INFO.COMP_SWAP;
  end;
 end;
 

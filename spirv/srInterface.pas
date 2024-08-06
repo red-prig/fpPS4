@@ -53,12 +53,19 @@ type
   FLAT_SHADE :Boolean;
  end;
 
+ TExportInfo=packed record
+  NUMBER_TYPE:Byte;
+  COMP_SWAP  :Byte;
+ end;
+
  TEmitInterface=class(TCustomEmit)
-  FExecutionModel:Word;
+  FExecutionModel    :Word;
   FEarlyFragmentTests:Boolean;
-  FPSInputCntl:array[0..31] of TPSInputCntl;
-  FLocalSize:TLocalSize;
-  FGeometryInfo:TGeometryInfo;
+  FPSInputCntl       :array[0..31] of TPSInputCntl;
+  FExportInfo        :array[0..7] of TExportInfo;
+  FLocalSize         :TLocalSize;
+  FGeometryInfo      :TGeometryInfo;
+  //
   Config:TsrConfig;
   //
   FSPI:TSPI;

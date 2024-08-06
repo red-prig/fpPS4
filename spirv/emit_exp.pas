@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  si_ci_vi_merged_enum,
   srCFGLabel,
   srConfig,
   srFlow,
@@ -21,9 +22,26 @@ uses
 type
  TEmit_EXP=class(TEmitFetch)
   procedure emit_EXP;
+  function  get_export_type(TGT:Byte):TsrDataType;
  end;
 
 implementation
+
+function TEmit_EXP.get_export_type(TGT:Byte):TsrDataType;
+begin
+ Result:=dtFloat32;
+ case TpsslExportType(TGT) of
+  etMrt0..etMrt7:
+   begin
+    case FExportInfo[TGT].NUMBER_TYPE of
+     NUMBER_UINT:Result:=dtUint32;
+     NUMBER_SINT:Result:=dtInt32;
+    else;
+    end;
+   end;
+ else;
+ end;
+end;
 
 procedure TEmit_EXP.emit_EXP;
 Var
@@ -34,7 +52,6 @@ Var
  dout:PsrVariable;
  dst:PsrRegNode;
  src:array[0..3] of PsrRegNode;
- //rsl:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
  f,i,p:DWORD;
 
@@ -87,53 +104,55 @@ begin
 
  f:=FSPI.EXP.EN;
 
- if (FSPI.EXP.COMPR=0) then //float32
+ if (FSPI.EXP.COMPR=0) then //float32,int32,uint32
  begin
 
   p:=PopCnt(f);
 
   if (p=1) then
   begin
+   //scalar
+
+   rtype:=get_export_type(FSPI.EXP.TGT);
+
    Case f of
-    $1:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC0,dtFloat32);
-    $2:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC1,dtFloat32);
-    $4:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC2,dtFloat32);
-    $8:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC3,dtFloat32);
+    $1:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC0,rtype);
+    $2:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC1,rtype);
+    $4:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC2,rtype);
+    $8:src[0]:=fetch_vsrc8(FSPI.EXP.VSRC3,rtype);
     else
      Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
    end;
-   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),dtFloat32); //output in FSPI.EXP.TGT
+
+   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
    OpStore(line,dout,src[0]);
   end else
   begin
+   //vector
 
-   Case p of
-    2:rtype:=dtVec2f;
-    3:rtype:=dtVec3f;
-    4:rtype:=dtVec4f;
-    else
-      Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
-   end;
+   rtype:=get_export_type(FSPI.EXP.TGT);
+
+   rtype:=rtype.AsVector(p);
 
    i:=0;
    if (f and $1<>0) then
    begin
-    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC0,dtFloat32);
+    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC0,rtype.Child);
     Inc(i);
    end;
    if (f and $2<>0) then
    begin
-    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC1,dtFloat32);
+    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC1,rtype.Child);
     Inc(i);
    end;
    if (f and $4<>0) then
    begin
-    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC2,dtFloat32);
+    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC2,rtype.Child);
     Inc(i);
    end;
    if (f and $8<>0) then
    begin
-    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC3,dtFloat32);
+    src[i]:=fetch_vsrc8(FSPI.EXP.VSRC3,rtype.Child);
     Inc(i);
    end;
 

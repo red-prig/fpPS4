@@ -990,7 +990,8 @@ begin
 
  if (RENDER_TARGET.ATTRIB.FORCE_DST_ALPHA_1<>0) then
  begin
-  Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_ONE);
+  Assert(false,'RENDER_TARGET.ATTRIB.FORCE_DST_ALPHA_1<>0');
+  //Result.FImageView.dstSel.a:=ord(VK_COMPONENT_SWIZZLE_ONE);
  end;
 
 end;

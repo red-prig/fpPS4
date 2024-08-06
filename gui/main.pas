@@ -340,9 +340,6 @@ begin
  i:=FGrid.Row;
  if (i<1) then i:=1;
 
- //i:=i+1;
- //if (i>FGrid.RowCount) then i:=FGrid.RowCount;
-
  FGrid.InsertColRow(False,i);
 
  //
@@ -351,6 +348,8 @@ begin
  FGrid.Cells[2,i]:=Item.FGameInfo.Version;
  //
  FGrid.Objects[0,i]:=Item;
+ //
+ FGrid.Row:=i;
 end;
 
 procedure TGameList.UpdateItem(i:SizeInt);

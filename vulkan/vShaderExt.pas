@@ -16,7 +16,8 @@ uses
   vImage,
   vSetLayoutManager,
   vPipelineLayoutManager,
-  si_ci_vi_merged_registers;
+  si_ci_vi_merged_registers,
+  si_ci_vi_merged_groups;
 
 
 type
@@ -77,6 +78,14 @@ type
 
  A_INPUT_CNTL=array[0..31] of TSPI_PS_INPUT_CNTL_0;
 
+ PRENDER_TARGET=^TRENDER_TARGET;
+
+ TEXPORT_INFO=packed record
+  NUMBER_TYPE:Byte;
+  COMP_SWAP  :Byte;
+ end;
+ AEXPORT_INFO=array[0..7] of TEXPORT_INFO;
+
  TvShaderExt=class(TvShader)
 
   FDescSetId:Integer;
@@ -100,13 +109,15 @@ type
   FParams:record
    VGPR_COMP_CNT:Byte;
    //
-   NUM_INTERP:Byte;
+   NUM_INTERP   :Byte;
+   EXPORT_COUNT :Byte;
 
    STEP_RATE_0:DWORD;
    STEP_RATE_1:DWORD;
    //
    SHADER_CONTROL:TDB_SHADER_CONTROL;
    INPUT_CNTL    :A_INPUT_CNTL;
+   EXPORT_INFO   :AEXPORT_INFO;
   end;
 
   FGeomRectList:TvShaderExt;
@@ -135,6 +146,9 @@ type
   Procedure  SetInstance       (VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
   Procedure  SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
   Procedure  SET_INPUT_CNTL    (const INPUT_CNTL:A_INPUT_CNTL;NUM_INTERP:Byte);
+  Procedure  SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
+  function   IsPSSimpleShader:Boolean;
+  function   IsVSSimpleShader:Boolean;
   function   IsCSClearShader:Boolean;
   function   IsVSRectListShader:Boolean;
  end;
@@ -779,18 +793,47 @@ begin
  Move(INPUT_CNTL,FParams.INPUT_CNTL,SizeOf(TSPI_PS_INPUT_CNTL_0)*NUM_INTERP);
 end;
 
+Procedure TvShaderExt.SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
+var
+ i:Byte;
+begin
+ FParams.EXPORT_COUNT:=COUNT;
+ if (COUNT<>0) then
+ for i:=0 to COUNT-1 do
+ begin
+  FParams.EXPORT_INFO[i].NUMBER_TYPE:=R[i].INFO.NUMBER_TYPE;
+  FParams.EXPORT_INFO[i].COMP_SWAP  :=R[i].INFO.COMP_SWAP;
+ end;
+end;
+
+//
+
+function TvShaderExt.IsPSSimpleShader:Boolean;
+begin
+ if (self=nil) then Exit(False);
+
+ Result:=(FHash_gcn=QWORD($E9FF5D4699E5B9AD));
+end;
+
+function TvShaderExt.IsVSSimpleShader:Boolean;
+begin
+ if (self=nil) then Exit(False);
+
+ Result:=(FHash_gcn=QWORD($00DF6E6331449451));
+end;
+
 function TvShaderExt.IsCSClearShader:Boolean;
 begin
  if (self=nil) then Exit(False);
 
- Result:=(FHash_gcn=$7DCE68F83F66B337);
+ Result:=(FHash_gcn=($7DCE68F83F66B337));
 end;
 
 function TvShaderExt.IsVSRectListShader:Boolean;
 begin
  if (self=nil) then Exit(False);
 
- Result:=(FHash_gcn=$00DF6E6331449451);
+ Result:=(FHash_gcn=QWORD($00DF6E6331449451));
 end;
 
 function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
@@ -801,14 +844,16 @@ begin
     (FShaders[vShaderStageHs]=nil) and
     (FShaders[vShaderStageEs]=nil) and
     (FShaders[vShaderStageGs]=nil) and
-    (FShaders[vShaderStageVs]<>nil) and
-    (FShaders[vShaderStagePs]<>nil) and
     (FShaders[vShaderStageCs]=nil) then
 
- if (FShaders[vShaderStageVs].FHash_gcn=QWORD($00DF6E6331449451)) and
-    (FShaders[vShaderStagePs].FHash_gcn=QWORD($E9FF5D4699E5B9AD)) then
+ if (FShaders[vShaderStageVs].IsVSSimpleShader) and
+    (
+     FShaders[vShaderStagePs].IsPSSimpleShader or
+     (FShaders[vShaderStagePs]=nil)
+    ) then
  begin
   Result:=True;
+
  end;
 end;
 

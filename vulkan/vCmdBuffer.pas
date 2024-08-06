@@ -1444,6 +1444,19 @@ begin
     	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));               //dstStageMask
 
    end;
+  FLUSH_AND_INV_CB_PIXEL_DATA:
+   begin
+    Inc(cmd_count);
+
+    DebugReport.CmdInsertLabel(FCmdbuf,'FLUSH_AND_INV_CB_PIXEL_DATA');
+
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_PS,                                       //srcAccessMask
+                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),                  //dstAccessMask
+    	            ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT), //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));               //dstStageMask
+
+   end;
 
   else
    Assert(false,'WriteEvent.eventType');

@@ -2005,7 +2005,7 @@ begin
 
  Case node^.eventType of
   //CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
-  //FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
+  FLUSH_AND_INV_CB_PIXEL_DATA,
   //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
   FLUSH_AND_INV_DB_META, //HTILE
   FLUSH_AND_INV_CB_META: //CMASK
@@ -2037,6 +2037,7 @@ begin
    begin
     ctx.InsertLabel('PERFCOUNTER_SAMPLE');
    end;
+
   else
    begin
     Writeln(stderr,'EventWrite eventType=0x',HexStr(node^.eventType,2));

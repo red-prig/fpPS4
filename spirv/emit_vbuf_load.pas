@@ -271,7 +271,7 @@ var
  i,d,count:Byte;
 begin
 
- if info.IsExtFormat then Assert(false,'TODO');
+ if info.IsExtFormat then Assert(false,'TODO ExtFormat='+IntToStr(info.DFMT));
 
  lc:=Default(Tload_cache);
  lc.info      :=info;

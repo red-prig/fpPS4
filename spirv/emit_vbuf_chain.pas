@@ -232,7 +232,7 @@ begin
  //adr.csize  :=Min(info.GetElemSize*info.count,adr.fsize);
  adr.ioffset:=FSPI.MUBUF.OFFSET;
 
- if (adr.stride=0) then adr.stride:=1;
+ //if (adr.stride=0) then adr.stride:=1;
 
  get_reg_adr(adr);
 

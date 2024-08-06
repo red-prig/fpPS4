@@ -327,6 +327,7 @@ begin
    SprvEmit.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
    SprvEmit.SET_INPUT_CNTL    (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
                                GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
+   SprvEmit.SET_RENDER_TARGETS(@GPU_REGS.CX_REG^.RENDER_TARGET,GPU_REGS.GET_HI_RT+1);
   end;
   vShaderStageVs:
   begin
@@ -445,6 +446,20 @@ begin
  Result:=True;
 end;
 
+function CompareExportInfo(FShader:TvShaderExt;R:PRENDER_TARGET):Boolean;
+var
+ i:Byte;
+begin
+ if (FShader.FParams.EXPORT_COUNT<>0) then
+ for i:=0 to FShader.FParams.EXPORT_COUNT-1 do
+ begin
+  if (FShader.FParams.EXPORT_INFO[i].NUMBER_TYPE<>R[i].INFO.NUMBER_TYPE) then Exit(False);
+  if (FShader.FParams.EXPORT_INFO[i].COMP_SWAP  <>R[i].INFO.COMP_SWAP  ) then Exit(False);
+ end;
+ //
+ Result:=True;
+end;
+
 function test_ps_params(FShader:TvShaderExt;FStage:TvShaderStage;var GPU_REGS:TGPU_REGS):Boolean;
 begin
  if (FStage<>vShaderStagePs) then Exit(True);
@@ -456,6 +471,8 @@ begin
  if (CompareByte(FShader.FParams.INPUT_CNTL,
                  GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
                  SizeOf(TSPI_PS_INPUT_CNTL_0)*FShader.FParams.NUM_INTERP)<>0) then Exit(False);
+
+ if (not CompareExportInfo(FShader,@GPU_REGS.CX_REG^.RENDER_TARGET)) then Exit(False);
 
  Result:=True;
 end;
@@ -579,7 +596,7 @@ begin
      FShader.SET_SHADER_CONTROL(GPU_REGS.CX_REG^.DB_SHADER_CONTROL);
      FShader.SET_INPUT_CNTL    (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
                                 GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
-
+     FShader.SET_RENDER_TARGETS(@GPU_REGS.CX_REG^.RENDER_TARGET,GPU_REGS.GET_HI_RT+1);
     end;
    else;
   end;
