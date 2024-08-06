@@ -698,7 +698,7 @@ begin
 
   if (GS=nil) then
   begin
-   M:=CompileRectangleGeometryShader();
+   M:=CompileRectangleGeometryShader(GPU_REGS);
    //M.SaveToFile('rect_geom.spv');
 
    GS:=TvShaderExt.Create;

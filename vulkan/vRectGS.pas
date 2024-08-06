@@ -9,6 +9,8 @@ uses
 
  Vulkan,
 
+ vRegs2Vulkan,
+
  spirv,
  srNode,
  srType,
@@ -19,7 +21,7 @@ uses
 
  SprvEmit;
 
-function CompileRectangleGeometryShader():TMemoryStream;
+function CompileRectangleGeometryShader(var GPU_REGS:TGPU_REGS):TMemoryStream;
 
 implementation
 
@@ -42,7 +44,8 @@ begin
  Result:=SprvEmit.OpFAddTo(Result,tmp[2]);
 end;
 
-function CompileRectangleGeometryShader():TMemoryStream;
+//source: [amdilc_rect_gs_compiler.c]
+function CompileRectangleGeometryShader(var GPU_REGS:TGPU_REGS):TMemoryStream;
 var
  SprvEmit:TSprvEmit;
  //
@@ -67,6 +70,12 @@ var
  i:Byte;
 begin
  Result:=nil;
+
+ if (GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP>0) then
+ begin
+  Assert(false,'TODO:input attr');
+ end;
+
  SprvEmit:=TSprvEmit.Create;
 
  SprvEmit.InitCustomGs();
