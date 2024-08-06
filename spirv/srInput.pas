@@ -11,6 +11,7 @@ uses
  ginodes,
  srNode,
  srType,
+ srTypes,
  srReg,
  srOp,
  srConst,
@@ -59,7 +60,9 @@ type
   itSampleId,
   itLayer,
 
-  itSubgroupLocalInvocationId
+  itSubgroupLocalInvocationId,
+
+  itPosition
  );
 
  ntInput=class(ntDescriptor)
@@ -95,6 +98,7 @@ type
   Procedure Init(Emit:TCustomEmit); inline;
   function  Search(itype:TpsslInputType;id:Byte):PsrInput;
   function  Fetch(rtype:TsrDataType;itype:TpsslInputType;id:Byte):PsrInput;
+  function  Fetch(pType:PsrType;itype:TpsslInputType;id:Byte):PsrInput;
   Function  First:PsrInput;
   Function  Next(node:PsrInput):PsrInput;
   procedure Test;
@@ -150,6 +154,15 @@ end;
 
 function TsrInputList.Fetch(rtype:TsrDataType;itype:TpsslInputType;id:Byte):PsrInput;
 var
+ pTypeList:PsrTypeList;
+begin
+ pTypeList:=FEmit.GetTypeList;
+ //
+ Result:=Fetch(pTypeList^.Fetch(rtype),itype,id);
+end;
+
+function TsrInputList.Fetch(pType:PsrType;itype:TpsslInputType;id:Byte):PsrInput;
+var
  node:TsrInput;
 begin
  node:=Default(TsrInput);
@@ -162,7 +175,7 @@ begin
   Result:=FEmit.Alloc(SizeOf(TsrInput));
   Move(node,Result^,SizeOf(TsrInput));
   //
-  Result^.InitType(rtype,FEmit);
+  Result^.pType:=pType;
   Result^.InitVar(FEmit);
   //
   FNTree.Insert(Result);
@@ -298,6 +311,11 @@ begin
     itLinearCentroid:
       begin
        //
+      end;
+
+    itPosition:
+      begin
+       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
       end;
 
     else

@@ -79,6 +79,7 @@ type
   function  FetchChain(grp:PsrDataLayout;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1):PsrRegNode;
   function  MakeChain(pSlot:PsrRegSlot;grp:PsrDataLayout;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1):PsrRegNode;
   Procedure AddVecInput(dst:PsrRegSlot;vtype,rtype:TsrDataType;itype:TpsslInputType;id:Byte);
+  function  AddPositionsInput(count:Byte):PsrVariable;
   function  FetchUniform(src:PsrDataLayout;pType:PsrType):PsrNode;
   function  FetchImage(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo):PsrNode;
   function  FetchSampler(src:PsrDataLayout):PsrNode;
@@ -697,6 +698,18 @@ var
 begin
  rsl:=AddInput(@RegsStory.FUnattach,vtype,itype,0);
  OpExtract(init_line,dst^.New(line,rtype),rsl,id);
+end;
+
+function TEmitFetch.AddPositionsInput(count:Byte):PsrVariable;
+var
+ i:PsrInput;
+ t:PsrType;
+begin
+ t:=TypeList.FetchArray(TypeList.Fetch(dtVec4f),count);
+
+ i:=InputList.Fetch(t,itPosition,0);
+
+ Result:=i^.pVar;
 end;
 
 ////

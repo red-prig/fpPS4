@@ -213,6 +213,19 @@ begin
      node^.AddLiteral(FLocalSize.y);
      node^.AddLiteral(FLocalSize.z);
     end;
+
+  ExecutionModel.Geometry:
+    begin
+     node:=AddExecutionMode(ExecutionMode.OutputVertices);
+     node^.AddLiteral(FGeometryInfo.outputVertCount);
+     //
+     node:=AddExecutionMode(ExecutionMode.Invocations);
+     node^.AddLiteral(FGeometryInfo.invocationCount);
+     //
+     node:=AddExecutionMode(FGeometryInfo.InputMode);
+     node:=AddExecutionMode(FGeometryInfo.OutputMode);
+    end;
+
  end;
 
 end;

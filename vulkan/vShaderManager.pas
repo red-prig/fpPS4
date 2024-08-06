@@ -7,6 +7,7 @@ interface
 uses
   SysUtils,
   Classes,
+  Vulkan,
   murmurhash,
   g23tree,
   ps4_pssl,
@@ -15,6 +16,7 @@ uses
   vRegs2Vulkan,
   shader_dump,
 
+  si_ci_vi_merged_enum,
   si_ci_vi_merged_registers,
 
   vDevice,
@@ -91,6 +93,8 @@ function GetDumpSpvName(FStage:TvShaderStage;hash:QWORD):RawByteString;
 implementation
 
 uses
+ vRectGS,
+ //
  kern_rwlock,
  kern_dmem;
 
@@ -555,6 +559,11 @@ begin
   //set hash
   FShader.FHash_spv:=FHash_spv;
 
+  //setname
+  FShader.SetObjectName(LowerCase(STAGE_NAME[FStage])+
+                        '_gcn:0x'+HexStr(FShader.FHash_gcn,16)+
+                        '_spv:0x'+HexStr(FShader.FHash_spv,16));
+
   //free spv data
   M.Free;
 
@@ -671,6 +680,43 @@ begin
  FShaderGroupSet.Unlock_wr;
 end;
 
+procedure EmitShaderGroupExtension(var GPU_REGS:TGPU_REGS;F:PvShadersKey);
+Var
+ M:TMemoryStream;
+ VS:TvShaderExt;
+ GS:TvShaderExt;
+begin
+ VS:=F^.FShaders[vShaderStageVs];
+
+ if (VS<>nil) and
+    (not VS.IsVSRectListShader) and
+    (ord(GPU_REGS.GET_PRIM_TYPE)=DI_PT_RECTLIST) then
+ begin
+  Assert(F^.FShaders[vShaderStageGs]=nil,'Geometry shader is already present');
+
+  GS:=VS.FGeomRectList;
+
+  if (GS=nil) then
+  begin
+   M:=CompileRectangleGeometryShader();
+   //M.SaveToFile('rect_geom.spv');
+
+   GS:=TvShaderExt.Create;
+   GS.LoadFromStream(M);
+
+   GS.SetObjectName('GS_RECT');
+
+   M.Free;
+
+   VS.FGeomRectList:=GS;
+  end;
+
+  F^.FShaders[vShaderStageGs]:=GS;
+  F^.FPrimtype:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+  //
+ end;
+end;
+
 function FetchShaderGroupRT(var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TvShaderGroup;
 var
  FShadersKey:TvShadersKey;
@@ -678,6 +724,7 @@ var
  FDescSetId:Integer;
 begin
  FShadersKey:=Default(TvShadersKey);
+ FShadersKey.FPrimtype:=-1;
 
  FDescSetId:=0;
 
@@ -691,6 +738,8 @@ begin
   end;
  end;
 
+ EmitShaderGroupExtension(GPU_REGS,@FShadersKey);
+
  Result:=FetchShaderGroup(@FShadersKey);
 end;
 
@@ -699,6 +748,7 @@ var
  FShadersKey:TvShadersKey;
 begin
  FShadersKey:=Default(TvShadersKey);
+ FShadersKey.FPrimtype:=-1;
 
  FShadersKey.FShaders[vShaderStageCs]:=FetchShader(vShaderStageCs,0,GPU_REGS,pc);
 

@@ -1364,25 +1364,6 @@ begin
  Init_Uniforms(node,FUniformBuilder);
 end;
 
-function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
-begin
- Result:=False;
-
- if (FShaders[vShaderStageLs]=nil) and
-    (FShaders[vShaderStageHs]=nil) and
-    (FShaders[vShaderStageEs]=nil) and
-    (FShaders[vShaderStageGs]=nil) and
-    (FShaders[vShaderStageVs]<>nil) and
-    (FShaders[vShaderStagePs]<>nil) and
-    (FShaders[vShaderStageCs]=nil) then
-
- if (FShaders[vShaderStageVs].FHash_gcn=QWORD($00DF6E6331449451)) and
-    (FShaders[vShaderStagePs].FHash_gcn=QWORD($E9FF5D4699E5B9AD)) then
- begin
-  Result:=True;
- end;
-end;
-
 procedure t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
                                  var SG_REG:TSH_REG_GFX_GROUP;
                                  var CX_REG:TCONTEXT_REG_GROUP;

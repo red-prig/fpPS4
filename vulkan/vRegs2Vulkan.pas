@@ -108,7 +108,7 @@ type
   Function  GET_MULTISAMPLE:TVkPipelineMultisampleStateCreateInfo;
 
   function  GET_PRIM_RESET:TVkBool32;
-  function  GET_PRIM_TYPE :TVkPrimitiveTopology;
+  function  GET_PRIM_TYPE :Integer;
   function  GET_INDEX_TYPE:TVkIndexType;
 
   function  get_reg(i:word):DWORD;
@@ -1483,26 +1483,26 @@ begin
  end;
 end;
 
-function TGPU_REGS.GET_PRIM_TYPE:TVkPrimitiveTopology;
+function TGPU_REGS.GET_PRIM_TYPE:Integer;
 begin
  case UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE of
-  DI_PT_POINTLIST    :Result:=VK_PRIMITIVE_TOPOLOGY_POINT_LIST                   ;
-  DI_PT_LINELIST     :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST                    ;
-  DI_PT_LINESTRIP    :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP                   ;
-  DI_PT_TRILIST      :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST                ;
-  DI_PT_TRIFAN       :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN                 ;
-  DI_PT_TRISTRIP     :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP               ;
-  DI_PT_PATCH        :Result:=VK_PRIMITIVE_TOPOLOGY_PATCH_LIST                   ;
-  DI_PT_LINELIST_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY     ;
-  DI_PT_LINESTRIP_ADJ:Result:=VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY    ;
-  DI_PT_TRILIST_ADJ  :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY ;
-  DI_PT_TRISTRIP_ADJ :Result:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
+  DI_PT_POINTLIST    :Result:=ord(VK_PRIMITIVE_TOPOLOGY_POINT_LIST)                   ;
+  DI_PT_LINELIST     :Result:=ord(VK_PRIMITIVE_TOPOLOGY_LINE_LIST)                    ;
+  DI_PT_LINESTRIP    :Result:=ord(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP)                   ;
+  DI_PT_TRILIST      :Result:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)                ;
+  DI_PT_TRIFAN       :Result:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)                 ;
+  DI_PT_TRISTRIP     :Result:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)               ;
+  DI_PT_PATCH        :Result:=ord(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST)                   ;
+  DI_PT_LINELIST_ADJ :Result:=ord(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY)     ;
+  DI_PT_LINESTRIP_ADJ:Result:=ord(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY)    ;
+  DI_PT_TRILIST_ADJ  :Result:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY) ;
+  DI_PT_TRISTRIP_ADJ :Result:=ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY);
 
   DI_PT_RECTLIST     ,
   DI_PT_LINELOOP     ,
   DI_PT_QUADLIST     ,
   DI_PT_QUADSTRIP    ,
-  DI_PT_POLYGON      :Result:=TVkPrimitiveTopology(UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE); //need to emulate
+  DI_PT_POLYGON      :Result:=UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE; //need to emulate
 
   else
    Assert(False,'unknow prim type:0x'+HexStr(UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE,1));
@@ -1946,10 +1946,8 @@ begin
   Result.params.mipLevels:=PT^.last_level+1;
  end;
 
- //Assert(Result.params.mipLevels=1,'TODO');
- //Result.params.mipLevels:=1; /////
-
  Result.params.arrayLayers:=1;
+ Result.params.pitch      :=Result.params.width;
 
  //TODO: Calculate padding by tilling mode
  Result.params.pad_width :=Result.params.width;

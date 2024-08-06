@@ -144,6 +144,7 @@ begin
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
+  FHandle:=VK_NULL_HANDLE;
  end;
  //
  UnBindMem(True);

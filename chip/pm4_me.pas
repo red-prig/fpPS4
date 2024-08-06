@@ -1165,7 +1165,7 @@ begin
 
  GP_KEY.SetBlendInfo(ctx.rt_info^.BLEND_INFO.logicOp,@ctx.rt_info^.BLEND_INFO.blendConstants);
 
- GP_KEY.SetPrimType (TVkPrimitiveTopology(ctx.rt_info^.PRIM_TYPE));
+ GP_KEY.SetPrimType (ctx.rt_info^.PRIM_TYPE,GP_KEY.FShaderGroup.FKey.FPrimtype);
  GP_KEY.SetPrimReset(ctx.rt_info^.PRIM_RESET);
 
  if (ctx.rt_info^.VP_COUNT<>0) then
@@ -1751,7 +1751,7 @@ begin
  CP_KEY.FShaderGroup.ExportUnifBuilder(FUniformBuilder,dst);
 
  //htile heuristic
- if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn=$7DCE68F83F66B337) then
+ if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].IsCSClearShader) then
  begin
   Prepare_htile(ctx,FUniformBuilder);
   //

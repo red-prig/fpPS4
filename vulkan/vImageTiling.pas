@@ -823,6 +823,9 @@ begin
  set_tiling_cbs(kTileModeDepth_2dThin_64      ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
  set_tiling_cbs(kTileModeDepth_2dThin_64      ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
+ set_tiling_cbs(kTileModeThin_2dThin          ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeThin_2dThin          ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+
  //
  set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,nil,@Get1dThinSize);
  set_tiling_cbs(kTileModeDepth_1dThin         ,1,@load_1dThin,nil,@Get1dThinSize);
@@ -836,6 +839,47 @@ begin
 
  set_tiling_cbs(kTileModeDisplay_LinearAligned,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
  set_tiling_cbs(kTileModeDisplay_LinearAligned,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
+end;
+
+function get_tiling_name(i:Byte):RawByteString;
+begin
+ case i of
+  // Depth modes (for depth buffers)
+  kTileModeDepth_2dThin_64    :Result:='Depth_2dThin_64';
+  kTileModeDepth_2dThin_128   :Result:='Depth_2dThin_128';
+  kTileModeDepth_2dThin_256   :Result:='Depth_2dThin_256';
+  kTileModeDepth_2dThin_512   :Result:='Depth_2dThin_512';
+  kTileModeDepth_2dThin_1K    :Result:='Depth_2dThin_1K';
+  kTileModeDepth_1dThin       :Result:='Depth_1dThin';
+  kTileModeDepth_2dThinPrt_256:Result:='Depth_2dThinPrt_256';
+  kTileModeDepth_2dThinPrt_1K :Result:='Depth_2dThinPrt_1K';
+  // Display modes
+  kTileModeDisplay_LinearAligned:Result:='LinearAligned';
+  kTileModeDisplay_1dThin       :Result:='Display_1dThin';
+  kTileModeDisplay_2dThin       :Result:='Display_2dThin';
+  kTileModeDisplay_ThinPrt      :Result:='Display_ThinPrt';
+  kTileModeDisplay_2dThinPrt    :Result:='Display_2dThinPrt';
+  // Thin modes (for non-displayable 1D/2D/3D
+  kTileModeThin_1dThin   :Result:='Thin_1dThin';
+  kTileModeThin_2dThin   :Result:='Thin_2dThin';
+  kTileModeThin_3dThin   :Result:='Thin_3dThin';
+  kTileModeThin_ThinPrt  :Result:='Thin_ThinPrt';
+  kTileModeThin_2dThinPrt:Result:='Thin_2dThinPrt';
+  kTileModeThin_3dThinPrt:Result:='Thin_3dThinPrt';
+  // Thick modes (for 3D textures)
+  kTileModeThick_1dThick   :Result:='Thick_1dThick';
+  kTileModeThick_2dThick   :Result:='Thick_2dThick';
+  kTileModeThick_3dThick   :Result:='Thick_3dThick';
+  kTileModeThick_ThickPrt  :Result:='Thick_ThickPrt';
+  kTileModeThick_2dThickPrt:Result:='Thick_2dThickPrt';
+  kTileModeThick_3dThickPrt:Result:='Thick_3dThickPrt';
+  kTileModeThick_2dXThick  :Result:='Thick_2dXThick';
+  kTileModeThick_3dXThick  :Result:='Thick_3dXThick';
+  // Hugely inefficient linear display mode -
+  kTileModeDisplay_LinearGeneral:Result:='LinearGeneral';
+  else
+   Result:=IntToStr(i);
+ end;
 end;
 
 procedure pm4_load_from(cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte);
@@ -862,8 +906,8 @@ begin
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
-  Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  Writeln(stderr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  Assert (false ,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
 
  cmd.EndRenderPass;
@@ -900,8 +944,8 @@ begin
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
-  Assert (false ,'tiling:'+IntToStr(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  Writeln(stderr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  Assert (false ,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
  end;
 
  cmd.EndRenderPass;
@@ -928,8 +972,8 @@ begin
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+IntToStr(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
-  Assert (false ,'tiling:'+IntToStr(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
+  Writeln(stderr,'tiling:'+get_tiling_name(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
+  Assert (false ,'tiling:'+get_tiling_name(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
  end;
 
  Result:=cb(key);

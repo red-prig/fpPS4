@@ -109,6 +109,8 @@ type
    INPUT_CNTL    :A_INPUT_CNTL;
   end;
 
+  FGeomRectList:TvShaderExt;
+
   procedure  ClearInfo; override;
   Destructor Destroy;   override;
   function   parser:CvShaderParser; override;
@@ -133,6 +135,8 @@ type
   Procedure  SetInstance       (VGPR_COMP_CNT:Byte;STEP_RATE_0,STEP_RATE_1:DWORD);
   Procedure  SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
   Procedure  SET_INPUT_CNTL    (const INPUT_CNTL:A_INPUT_CNTL;NUM_INTERP:Byte);
+  function   IsCSClearShader:Boolean;
+  function   IsVSRectListShader:Boolean;
  end;
 
  TBufBindExt=packed record
@@ -179,6 +183,7 @@ type
  PvShadersKey=^TvShadersKey;
  TvShadersKey=object
   FShaders:AvShaderStage;
+  FPrimtype:Integer;
   Procedure SetLSShader(Shader:TvShaderExt);
   Procedure SetHSShader(Shader:TvShaderExt);
   Procedure SetESShader(Shader:TvShaderExt);
@@ -252,6 +257,8 @@ type
  end;
 
 function GetSharpByPatch(pUserData,pImmData:Pointer;const addr:ADataLayout):Pointer;
+
+function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
 
 implementation
 
@@ -772,6 +779,38 @@ begin
  Move(INPUT_CNTL,FParams.INPUT_CNTL,SizeOf(TSPI_PS_INPUT_CNTL_0)*NUM_INTERP);
 end;
 
+function TvShaderExt.IsCSClearShader:Boolean;
+begin
+ if (self=nil) then Exit(False);
+
+ Result:=(FHash_gcn=$7DCE68F83F66B337);
+end;
+
+function TvShaderExt.IsVSRectListShader:Boolean;
+begin
+ if (self=nil) then Exit(False);
+
+ Result:=(FHash_gcn=$00DF6E6331449451);
+end;
+
+function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
+begin
+ Result:=False;
+
+ if (FShaders[vShaderStageLs]=nil) and
+    (FShaders[vShaderStageHs]=nil) and
+    (FShaders[vShaderStageEs]=nil) and
+    (FShaders[vShaderStageGs]=nil) and
+    (FShaders[vShaderStageVs]<>nil) and
+    (FShaders[vShaderStagePs]<>nil) and
+    (FShaders[vShaderStageCs]=nil) then
+
+ if (FShaders[vShaderStageVs].FHash_gcn=QWORD($00DF6E6331449451)) and
+    (FShaders[vShaderStagePs].FHash_gcn=QWORD($E9FF5D4699E5B9AD)) then
+ begin
+  Result:=True;
+ end;
+end;
 
 ///
 

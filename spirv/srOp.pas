@@ -510,7 +510,7 @@ begin
  Result:=False;
  if not can_clear then Exit;
 
- Assert(read_count=0);
+ Assert(read_count=0,IntToStr(OpId));
 
  if is_write_op(OpId) then
  begin

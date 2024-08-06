@@ -38,6 +38,13 @@ type
   x,y,z:DWORD;
  end;
 
+ TGeometryInfo=record
+  outputVertCount:DWORD; //4
+  invocationCount:DWORD; //1
+  InputMode      :DWORD; //Triangles
+  OutputMode     :DWORD; //OutputTriangleStrip
+ end;
+
  PPSInputCntl=^TPSInputCntl;
  TPSInputCntl=packed record
   OFFSET     :Byte;
@@ -51,6 +58,7 @@ type
   FEarlyFragmentTests:Boolean;
   FPSInputCntl:array[0..31] of TPSInputCntl;
   FLocalSize:TLocalSize;
+  FGeometryInfo:TGeometryInfo;
   Config:TsrConfig;
   //
   FSPI:TSPI;

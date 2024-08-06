@@ -49,11 +49,12 @@ type
 
   viewportCount   :Byte;
   provokingVertex :Byte;
-  emulate_primtype:Byte;
+  emulate_primtype:ShortInt;
+  shader_primtype :ShortInt;
 
   Procedure Clear;
   Procedure SetVertexInput(const FAttrBuilder:TvAttrBuilder);
-  Procedure SetPrimType(t:TVkPrimitiveTopology);
+  Procedure SetPrimType(t,s:Integer);
   Procedure SetPrimReset(enable:TVkBool32);
   Procedure SetProvoking(t:TVkProvokingVertexModeEXT);
   Procedure AddVPort(const V:TVkViewport;const S:TVkRect2D);
@@ -166,19 +167,28 @@ begin
  vertexInputInfo.VertexAttributeDescriptions    :=FAttrBuilder.FAttrDescs;
 end;
 
-Procedure TvGraphicsPipelineKey.SetPrimType(t:TVkPrimitiveTopology);
+Procedure TvGraphicsPipelineKey.SetPrimType(t,s:Integer);
 begin
  Case ord(t) of
   ord(VK_PRIMITIVE_TOPOLOGY_POINT_LIST)..ord(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY):
   begin
-   inputAssembly.topology:=t;
+   inputAssembly.topology:=TVkPrimitiveTopology(t);
    emulate_primtype:=0;
+   shader_primtype :=-1;
   end;
 
   DI_PT_RECTLIST:
    begin
-    inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     emulate_primtype:=ord(t);
+    if (s<>-1) then
+    begin
+     inputAssembly.topology:=TVkPrimitiveTopology(s);
+     shader_primtype:=s;
+    end else
+    begin
+     inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+     shader_primtype :=-1;
+    end;
    end;
   DI_PT_LINELOOP ,
   DI_PT_QUADLIST ,
@@ -187,6 +197,7 @@ begin
   begin
    inputAssembly.topology:=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
    emulate_primtype:=ord(t);
+   shader_primtype :=-1;
   end;
 
  end;

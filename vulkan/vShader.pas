@@ -54,6 +54,7 @@ type
   procedure   LoadFromStream(Stream:TStream);
   procedure   LoadFromFile(const FileName:RawByteString);
   procedure   LoadFromResource(const FileName:RawByteString);
+  procedure   SetObjectName(const name:RawByteString);
  end;
 
  ///
@@ -176,6 +177,11 @@ begin
  Stream:=GetResourceStream(FileName,'SPV');
  LoadFromStream(Stream);
  Stream.Free;
+end;
+
+procedure TvShader.SetObjectName(const name:RawByteString);
+begin
+ DebugReport.SetObjectName(VK_OBJECT_TYPE_SHADER_MODULE,FHandle,PChar(name));
 end;
 
 type

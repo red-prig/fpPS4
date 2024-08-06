@@ -42,7 +42,7 @@ type
  TSVInstrBuffer=object
   Data:array of DWORD;
   COUNT:DWORD;
-  Procedure AllocData;
+  function  FetchData(dcount:DWORD):PDWORD;
   Procedure NewOp(OpId:WORD);
   Procedure Reset;
   Procedure Flush(Stream:TStream);
@@ -65,12 +65,19 @@ type
 
 implementation
 
-Procedure TSVInstrBuffer.AllocData;
+function TSVInstrBuffer.FetchData(dcount:DWORD):PDWORD;
+var
+ i:DWORD;
 begin
+ i:=COUNT;
+ COUNT:=COUNT+dcount;
+ //
  if (Length(Data)<COUNT) then
  begin
   SetLength(Data,COUNT);
  end;
+ //
+ Result:=@Data[i];
 end;
 
 Procedure TSVInstrBuffer.NewOp(OpId:WORD);
@@ -78,14 +85,12 @@ var
  I:TSPIRVInstruction;
 begin
  Assert(COUNT=0,'prev op not flushed');
-
- COUNT:=1;
- AllocData;
+ COUNT:=0;
 
  I.OP:=OpId;
  I.COUNT:=0;
 
- Data[0]:=DWORD(I);
+ FetchData(1)^:=DWORD(I);
 end;
 
 Procedure TSVInstrBuffer.Reset;
@@ -102,20 +107,17 @@ begin
 end;
 
 procedure TSVInstrBuffer.AddParam(P:DWORD);
-var
- I:DWORD;
 begin
  Assert(COUNT<>0,'new op not created');
- I:=COUNT;
- Inc(COUNT);
- AllocData;
- Data[i]:=P;
+
+ FetchData(1)^:=DWORD(P);
 end;
 
 procedure TSVInstrBuffer.AddNode(node:PsrNode);
 var
  R:PsrRefId;
- I,L,D:DWORD;
+ L,D:DWORD;
+ P:PDWORD;
 begin
  Assert(node<>nil);
  Assert(COUNT<>0,'new op not created');
@@ -123,22 +125,17 @@ begin
  R:=node^.GetRef;
  if (R<>nil) then
  begin
-  I:=COUNT;
-  Inc(COUNT);
-  AllocData;
-  Data[i]:=R^.ID;
+  FetchData(1)^:=R^.ID;
  end else
  begin
   L:=node^.GetData(nil);          //get size
   D:=(L+(SizeOf(DWORD)-1)) div 4; //align
   Assert(D<>0,'AddNode:'+node^.ntype.ClassName);
 
-  I:=COUNT;
-  COUNT:=COUNT+D;
-  AllocData;
+  P:=FetchData(D);
 
-  FillDWord(Data[i],D,0);
-  node^.GetData(@Data[i]);
+  FillDWord(P^,D,0);
+  node^.GetData(P);
  end;
 end;
 
@@ -222,14 +219,38 @@ begin
  While (node<>nil) do
  begin
   buf.NewOp(node^.OpId);
-  buf.AddNode(node);
 
-  if (node^.ItemCount<>0) then
+  if (node^.OpId=Op.OpConstant) then
   begin
-   For i:=0 to node^.ItemCount-1 do
+   //Array Const
+   if (node^.ItemCount>0) then
    begin
-    buf.AddNode(node^.GetItem(i));
+    buf.AddNode(node^.GetItem(0));
    end;
+
+   buf.AddNode(node);
+
+   if (node^.ItemCount>1) then
+   begin
+    For i:=1 to node^.ItemCount-1 do
+    begin
+     buf.AddNode(node^.GetItem(i));
+    end;
+   end;
+   //Array Const
+  end else
+  begin
+   //Types
+   buf.AddNode(node);
+
+   if (node^.ItemCount<>0) then
+   begin
+    For i:=0 to node^.ItemCount-1 do
+    begin
+     buf.AddNode(node^.GetItem(i));
+    end;
+   end;
+   //Types
   end;
 
   buf.Flush(Stream);

@@ -58,6 +58,8 @@ type
                      NTY:TCOMPUTE_NUM_THREAD_Y;
                      NTZ:TCOMPUTE_NUM_THREAD_Z);
 
+  Procedure   InitCustomGs();
+
   procedure   emit_spi; override;
 
   Procedure   PostStage;
@@ -556,6 +558,19 @@ begin
  FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
 
  AddCapability(Capability.Shader);
+end;
+
+Procedure TSprvEmit.InitCustomGs();
+begin
+ FExecutionModel:=ExecutionModel.Geometry;
+
+ FGeometryInfo.outputVertCount:=4;
+ FGeometryInfo.invocationCount:=1;
+ FGeometryInfo.InputMode      :=ExecutionMode.Triangles;
+ FGeometryInfo.OutputMode     :=ExecutionMode.OutputTriangleStrip;
+
+ AddCapability(Capability.Shader);
+ AddCapability(Capability.Geometry);
 end;
 
 //

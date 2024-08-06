@@ -11,7 +11,6 @@ uses
  srTypes,
  srConst,
  srReg,
- srLayout,
  srVariable,
  srOp,
  srCFGLabel,
@@ -49,21 +48,29 @@ type
   function  OpStore(nLine,      dst,src:PsrNode):PsrNode; override;
   //
   function  OpLoad(pLine:PspirvOp;dst:PsrRegNode;src:PsrNode):PSpirvOp;
+  function  OpLoadTo(nLine:PspirvOp;pType:PsrType;src:PsrNode):PsrRegNode;
   //
   function  OpExtract(pLine:PspirvOp;dst,src:PsrRegNode;id:DWORD):PSpirvOp;
   function  OpConstruct(pLine:PspirvOp;dst:PsrRegNode):PSpirvOp;
-  function  OpAccessChain(pLine:PspirvOp;vType:PsrType;dst:PsrChain;src:PsrVariable):PSpirvOp;
+  function  OpAccessChain(pLine:PspirvOp;vType:PsrType;dst:PsrNode;src:PsrVariable):PSpirvOp;
+  function  OpAccessChainTo(pLine:PspirvOp;vType:PsrType;src:PsrVariable;idx0:PsrNode):PsrNode;
   function  OpCondMerge(pLine,pLabel:PspirvOp):PSpirvOp;
   function  OpLoopMerge(pLine,pLabel0,pLabel1:PspirvOp):PSpirvOp;
   function  OpBranch(pLine,pLabel:PspirvOp):PSpirvOp;
   function  OpBranchCond(pLine,pLabel0,pLabel1:PspirvOp;src:PsrRegNode):PSpirvOp;
   function  OpReturnValue(pLine:PspirvOp;src:PsrRegNode):PSpirvOp;
   //
+  function  OpReturn(pLine:PspirvOp):PSpirvOp;
+  function  OpFunctionEnd(pLine:PspirvOp):PSpirvOp;
+  function  OpEmitVertex(pLine:PspirvOp):PSpirvOp;
+  function  OpEndPrimitive(pLine:PspirvOp):PSpirvOp;
+  //
   procedure OpFmaF32(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
   procedure OpFmaI32(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
   procedure OpFmaU32(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
   //
   procedure OpSelect(dst:PsrRegSlot;src0,src1,cond:PsrRegNode);
+  function  OpSelectTo(src0,src1,cond:PsrRegNode):PsrRegNode;
   //
   procedure OpIAddCar(pLine:PspirvOp;dst,car,src0,src1:PsrRegNode);
   procedure OpIAddExt(dst,car:PsrRegSlot;src0,src1:PsrRegNode);
@@ -117,6 +124,7 @@ type
   function  OpIMulTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpIDivTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpIDivTo(src0:PsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
+  function  OpIModTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   function  OpFAddTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
   function  OpFSubTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
@@ -420,6 +428,13 @@ begin
  Result:=PSpirvOp(OpLoad(pLine,dtype,dst,src));
 end;
 
+function TEmitOp.OpLoadTo(nLine:PspirvOp;pType:PsrType;src:PsrNode):PsrRegNode;
+begin
+ Result:=NewReg(pType^.dtype);
+ //
+ OpLoad(line,pType,Result,src);
+end;
+
 function TEmitOp.OpExtract(pLine:PspirvOp;dst,src:PsrRegNode;id:DWORD):PSpirvOp;
 Var
  node:PSpirvOp;
@@ -445,7 +460,7 @@ begin
  //child add later
 end;
 
-function TEmitOp.OpAccessChain(pLine:PspirvOp;vType:PsrType;dst:PsrChain;src:PsrVariable):PSpirvOp;
+function TEmitOp.OpAccessChain(pLine:PspirvOp;vType:PsrType;dst:PsrNode;src:PsrVariable):PSpirvOp;
 Var
  node:PSpirvOp;
 begin
@@ -457,6 +472,16 @@ begin
  //dst^.pLine:=node;
  Result:=node;
  //index add later
+end;
+
+function TEmitOp.OpAccessChainTo(pLine:PspirvOp;vType:PsrType;src:PsrVariable;idx0:PsrNode):PsrNode;
+Var
+ node:PSpirvOp;
+begin
+ Result:=NewRefNode;
+ //
+ node:=OpAccessChain(line,vType,Result,src);
+ node^.AddParam(idx0);
 end;
 
 function TEmitOp.OpCondMerge(pLine,pLabel:PspirvOp):PSpirvOp;
@@ -511,6 +536,28 @@ end;
 
 //
 
+function TEmitOp.OpReturn(pLine:PspirvOp):PSpirvOp;
+begin
+ Result:=AddSpirvOp(pLine,Op.OpReturn);
+end;
+
+function TEmitOp.OpFunctionEnd(pLine:PspirvOp):PSpirvOp;
+begin
+ Result:=AddSpirvOp(pLine,Op.OpFunctionEnd);
+end;
+
+function TEmitOp.OpEmitVertex(pLine:PspirvOp):PSpirvOp;
+begin
+ Result:=AddSpirvOp(pLine,Op.OpEmitVertex);
+end;
+
+function TEmitOp.OpEndPrimitive(pLine:PspirvOp):PSpirvOp;
+begin
+ Result:=AddSpirvOp(pLine,Op.OpEndPrimitive);
+end;
+
+//
+
 procedure TEmitOp.OpFmaF32(dst:PsrRegSlot;src0,src1,src2:PsrRegNode);
 begin
  //vdst = vsrc0.f * vsrc1.f + vdst.f  -> fma
@@ -547,6 +594,13 @@ end;
 procedure TEmitOp.OpSelect(dst:PsrRegSlot;src0,src1,cond:PsrRegNode);
 begin
  Op3(Op.OpSelect,LazyType2(src0^.dtype,src1^.dtype),dst,cond,src1,src0);
+end;
+
+function TEmitOp.OpSelectTo(src0,src1,cond:PsrRegNode):PsrRegNode;
+begin
+ Result:=NewReg(LazyType2(src0^.dtype,src1^.dtype));
+ //
+ _Op3(line,Op.OpSelect,Result,cond,src1,src0);
 end;
 
 procedure TEmitOp.OpIAddCar(pLine:PspirvOp;dst,car,src0,src1:PsrRegNode);
@@ -1147,6 +1201,20 @@ begin
  end else
  begin
   Result:=OpIDivTo(src0,NewReg_q(src0^.dtype,src1,ppLine),ppLine);
+ end;
+end;
+
+function TEmitOp.OpIModTo(src0,src1:PsrRegNode;ppLine:PPspirvOp=nil):PsrRegNode;
+begin
+ if (src1=nil) then Exit(src0);
+
+ Result:=NewReg(src0^.dtype);
+ if (src0^.dtype.Sign<>0) then
+ begin
+  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpSMod,Result,src0,src1));
+ end else
+ begin
+  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpUMod,Result,src0,src1));
  end;
 end;
 

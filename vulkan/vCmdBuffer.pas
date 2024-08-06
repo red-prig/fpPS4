@@ -189,7 +189,8 @@ type
 
   FRender:TvRenderPassBeginInfo;
 
-  Femulate_primtype:Integer;
+  Femulate_primtype:SmallInt;
+  Fshader_primtype :SmallInt;
   FinstanceCount:DWORD;
   FINDEX_TYPE:TVkIndexType;
 
@@ -423,6 +424,7 @@ begin
  end;
 
  Femulate_primtype:=GP.Key.emulate_primtype;
+ Fshader_primtype :=GP.Key.shader_primtype;
 
  BindPipeline(BP_GRAPHICS,GP.FHandle);
  BindLayout  (BP_GRAPHICS,GP.Key.FShaderGroup.FLayout);
@@ -1541,6 +1543,8 @@ begin
     end;
   DI_PT_QUADLIST:
     begin
+     InsertLabel('DI_PT_QUADLIST');
+
      Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
      Assert(indexOffset=0,'OFFSET DI_PT_QUADLIST');
      h:=indexCount div 4;
@@ -1590,6 +1594,7 @@ begin
  Case Femulate_primtype of
   0:
     begin
+     Inc(cmd_count);
      vkCmdDraw(
       FCmdbuf,
       indexCount,     //vertexCount
@@ -1598,8 +1603,10 @@ begin
       0);             //firstInstance
     end;
 
-  DI_PT_RECTLIST :
+  DI_PT_RECTLIST:
     begin
+     InsertLabel('DI_PT_RECTLIST');
+
      Assert(FinstanceCount<=1,'instance DI_PT_RECTLIST');
      {
      VK_EXT_primitive_topology_list_restart ???
@@ -1610,23 +1617,41 @@ begin
      //0 1 2
      //0 2 3
 
-     h:=indexCount div 3;
-     if (h>0) then h:=h-1;
-     For i:=0 to h do
+     if (Fshader_primtype=-1) then
      begin
+
+      h:=indexCount div 3;
+      if (h>0) then h:=h-1;
+      For i:=0 to h do
+      begin
+       Inc(cmd_count);
+       vkCmdDraw(
+           FCmdbuf,
+           4,       //vertexCount
+           1,       //instanceCount
+           0,       //firstVertex
+           0);      //firstInstance
+      end;
+
+     end else
+     begin
+      //geom shader emulate
+
       Inc(cmd_count);
       vkCmdDraw(
-          FCmdbuf,
-          4,       //vertexCount
-          1,       //instanceCount
-          0,       //firstVertex
-          0);      //firstInstance
+       FCmdbuf,
+       indexCount,     //vertexCount
+       FinstanceCount, //instanceCount
+       0,              //firstVertex
+       0);             //firstInstance
      end;
 
     end;
   //DI_PT_LINELOOP :;
   DI_PT_QUADLIST:
     begin
+     InsertLabel('DI_PT_QUADLIST');
+
      Assert(FinstanceCount<=1,'instance DI_PT_QUADLIST');
      h:=indexCount div 4;
      if (h>0) then h:=h-1;
