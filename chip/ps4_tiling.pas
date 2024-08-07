@@ -172,10 +172,17 @@ const
  kDccBlockSize128 = 1; ///< 128-byte blocks.
  kDccBlockSize256 = 2; ///< 256-byte blocks.
 
- kNumBanks2  = $0;
- kNumBanks4  = $1;
- kNumBanks8  = $2;
- kNumBanks16 = $3;
+ kNumBanks2  = 0;
+ kNumBanks4  = 1;
+ kNumBanks8  = 2;
+ kNumBanks16 = 3;
+
+ kTextureChannel0 = 0;
+ kTextureChannel1 = 1;
+ kTextureChannelX = 4;
+ kTextureChannelY = 5;
+ kTextureChannelZ = 6;
+ kTextureChannelW = 7;
 
 type
  TDATA_FORMAT=bitpacked record
@@ -1859,22 +1866,22 @@ begin
 end;
 
 const
- chY_1:array[0..2] of Integer=(5,0,4);
- chX_1:array[0..2] of Integer=(4,4,5);
- chW_1:array[0..2] of Integer=(1,5,1);
+ chY_1:array[0..2] of Integer=(kTextureChannelY,kTextureChannel0,kTextureChannelX); //(5,0,4);
+ chX_1:array[0..2] of Integer=(kTextureChannelX,kTextureChannelX,kTextureChannelY); //(4,4,5);
+ chW_1:array[0..2] of Integer=(kTextureChannel1,kTextureChannelY,kTextureChannel1); //(1,5,1);
 
- chY_2:array[0..2] of Integer=(5,5,6);
- chZ_2:array[0..2] of Integer=(6,4,5);
- chX_2:array[0..2] of Integer=(4,6,7);
- chW_2:array[0..2] of Integer=(7,7,4);
+ chY_2:array[0..2] of Integer=(kTextureChannelY,kTextureChannelY,kTextureChannelZ); //(5,5,6);
+ chZ_2:array[0..2] of Integer=(kTextureChannelZ,kTextureChannelX,kTextureChannelY); //(6,4,5);
+ chX_2:array[0..2] of Integer=(kTextureChannelX,kTextureChannelZ,kTextureChannelW); //(4,6,7);
+ chW_2:array[0..2] of Integer=(kTextureChannelW,kTextureChannelW,kTextureChannelX); //(7,7,4);
 
- chZ_3:array[0..2] of Integer=(6,0,4);
- chX_3:array[0..2] of Integer=(4,4,6);
- chW_3:array[0..2] of Integer=(1,6,1);
+ chZ_3:array[0..2] of Integer=(kTextureChannelZ,kTextureChannel0,kTextureChannelX); //(6,0,4);
+ chX_3:array[0..2] of Integer=(kTextureChannelX,kTextureChannelX,kTextureChannelZ); //(4,4,6);
+ chW_3:array[0..2] of Integer=(kTextureChannel1,kTextureChannelZ,kTextureChannel1); //(1,6,1);
 
- chZ_4:array[0..2] of Integer=(0,0,4);
- chY_4:array[0..2] of Integer=(0,4,0);
- chX_4:array[0..2] of Integer=(4,0,0);
+ chZ_4:array[0..2] of Integer=(kTextureChannel0,kTextureChannel0,kTextureChannelX); //(0,0,4);
+ chY_4:array[0..2] of Integer=(kTextureChannel0,kTextureChannelX,kTextureChannel0); //(0,4,0);
+ chX_4:array[0..2] of Integer=(kTextureChannelX,kTextureChannel0,kTextureChannel0); //(4,0,0);
 
 function sce_Gnm_DataFormat_build(FORMAT,NUMBER_TYPE,COMP_SWAP:Byte):TDATA_FORMAT;
 var
@@ -1888,34 +1895,34 @@ label
  _end,_zero;
 begin
 
- if (($1800004000000016 shr (FORMAT and $3f) and 1)=0) then
+ if ((QWORD($1800004000000016) shr (FORMAT and $3f) and 1)=0) then
  begin
 
-  if (($3fff08000700828 shr (FORMAT and $3f) and 1)<>0) then
+  if ((QWORD($3fff08000700828) shr (FORMAT and $3f) and 1)<>0) then
   begin
-   IS_SWAP_ALT_REV:=COMP_SWAP=3;
-   if (COMP_SWAP<3) then
+   IS_SWAP_ALT_REV:=(COMP_SWAP=SWAP_ALT_REV);
+   if (COMP_SWAP<SWAP_ALT_REV) then
    begin
     m_channelY:=chY_1[COMP_SWAP];
     m_channelX:=chX_1[COMP_SWAP];
     m_channelW:=chW_1[COMP_SWAP];
-    m_channelZ:=0;
+    m_channelZ:=kTextureChannel0;
    end else
    begin
-    m_channelY:=0;
+    m_channelY:=kTextureChannel0;
     m_channelX:=ord(IS_SWAP_ALT_REV)+ord(IS_SWAP_ALT_REV)*4;
     m_channelW:=ord(IS_SWAP_ALT_REV)*3+1;
-    m_channelZ:=0;
+    m_channelZ:=kTextureChannel0;
    end;
    goto _end;
   end;
 
-  if (($4000107000120c0 shr (FORMAT and $3f) and 1)=0) then
+  if ((QWORD($4000107000120c0) shr (FORMAT and $3f) and 1)=0) then
   begin
 
-   if (($238000e5700 shr (FORMAT and $3f) and 1)=0) then
+   if ((QWORD($238000e5700) shr (FORMAT and $3f) and 1)=0) then
    begin
-    m_channelW:=1;
+    m_channelW:=kTextureChannel1;
     goto _zero;
    end;
 
@@ -1928,35 +1935,35 @@ begin
     goto _end;
    end;
 
-   IS_SWAP_ALT_REV:=COMP_SWAP=3;
+   IS_SWAP_ALT_REV:=(COMP_SWAP=SWAP_ALT_REV);
    m_channelX:=ord(IS_SWAP_ALT_REV)*5;
-   m_channelY:=6;
-   m_channelZ:=7;
+   m_channelY:=kTextureChannelZ;
+   m_channelZ:=kTextureChannelW;
    if (not IS_SWAP_ALT_REV) then
    begin
-    m_channelZ:=0;
-    m_channelY:=0;
+    m_channelZ:=kTextureChannel0;
+    m_channelY:=kTextureChannel0;
    end;
 
 
   end else
   begin
 
-   if (COMP_SWAP<3) then
+   if (COMP_SWAP<SWAP_ALT_REV) then
    begin
     m_channelZ:=chZ_3[COMP_SWAP];
     m_channelX:=chX_3[COMP_SWAP];
     m_channelW:=chW_3[COMP_SWAP];
-    m_channelY:=5;
+    m_channelY:=kTextureChannelY;
     goto _end;
    end;
 
-   m_channelX:=6;
-   m_channelY:=ord(COMP_SWAP=3)*5;
-   m_channelZ:=0;
+   m_channelX:=kTextureChannelZ;
+   m_channelY:=ord(COMP_SWAP=SWAP_ALT_REV)*5;
+   m_channelZ:=kTextureChannel0;
    if (COMP_SWAP<>3) then
    begin
-    m_channelX:=0;
+    m_channelX:=kTextureChannel0;
    end;
 
   end;
@@ -1966,30 +1973,30 @@ begin
  end else
  begin
 
-  if (COMP_SWAP<3) then
+  if (COMP_SWAP<SWAP_ALT_REV) then
   begin
-   m_channelW:=1;
+   m_channelW:=kTextureChannel1;
    m_channelZ:=chZ_4[COMP_SWAP];
    m_channelY:=chY_4[COMP_SWAP];
    m_channelX:=chX_4[COMP_SWAP];
    goto _end;
   end;
 
-  m_channelW:=ord(COMP_SWAP=3)*3+1;
+  m_channelW:=ord(COMP_SWAP=SWAP_ALT_REV)*3+1;
 
   _zero:
 
-  m_channelZ:=0;
-  m_channelY:=0;
-  m_channelX:=0;
+  m_channelZ:=kTextureChannel0;
+  m_channelY:=kTextureChannel0;
+  m_channelX:=kTextureChannel0;
 
  end;
 
  _end:
 
- m_channelType:=$9;
+ m_channelType:=9;
 
- if (NUMBER_TYPE<>6) then
+ if (NUMBER_TYPE<>NUMBER_SRGB) then
  begin
   m_channelType:=(NUMBER_TYPE and $F);
  end;

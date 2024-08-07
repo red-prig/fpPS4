@@ -1122,7 +1122,7 @@ begin
   if (ctx.rt_info^.DB_INFO.HTILE_INFO.TILE_SURFACE_ENABLE<>0) then
   begin
    htile_instance:=ctx.node^.scope.find_htile_resource_instance(ctx.rt_info^.DB_INFO.HTILE_INFO.KEY.Addr,
-                                                                   ctx.rt_info^.DB_INFO.HTILE_INFO.SIZE);
+                                                                ctx.rt_info^.DB_INFO.HTILE_INFO.SIZE);
    Assert(htile_instance<>nil);
 
    if htile_instance^.resource^.rclear then
@@ -1712,19 +1712,19 @@ begin
 
  Assert(resource<>nil);
 
+ //set flag by buffer in current stream
  resource^.rclear:=True;
 
+ //set flag by buffer to next stream
  hb:=FetchBuffer(ctx.Cmd,resource^.rkey.Addr,resource^.rsize);
  hb.rclear:=True;
 
- if (iu_htile in resource_instance^.next.img_usage) then
+ //set flag by htile in current stream
+ resource:=ctx.stream^.find_htile_resource(resource^.rkey.Addr,resource^.rsize);
+ //
+ if (resource<>nil) then
  begin
-  resource:=ctx.stream^.find_htile_resource(resource^.rkey.Addr,resource^.rsize);
-  //
-  if (resource<>nil) then
-  begin
-   resource^.rclear:=True;
-  end;
+  resource^.rclear:=True;
  end;
 
 end;
@@ -2311,8 +2311,15 @@ begin
 
  if use_renderdoc_capture then
  begin
-  renderdoc.LoadRenderDoc;
-  renderdoc.UnloadCrashHandler;
+  if not IsRenderDocPreLoaded then
+  begin
+   //disable capture if we are not working with Renderdoc GUI
+   use_renderdoc_capture:=False;
+  end else
+  begin
+   renderdoc.LoadRenderDoc;
+   renderdoc.UnloadCrashHandler;
+  end;
  end;
 
  me^.reset_sheduler;

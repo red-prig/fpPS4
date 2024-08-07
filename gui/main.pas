@@ -75,6 +75,7 @@ type
 
   TfrmMain = class(TForm)
     MainImageList: TImageList;
+    MIShowExplorer: TMenuItem;
     MIDevide3: TMenuItem;
     MIRun: TMenuItem;
     MIEdit: TMenuItem;
@@ -107,6 +108,7 @@ type
     procedure ListGridDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
     procedure ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);
     procedure ListGridMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure MIShowExplorerClick(Sender: TObject);
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
     procedure MIAddClick(Sender: TObject);
     procedure MIAddFolderClick(Sender: TObject);
@@ -922,6 +924,32 @@ begin
  FileTruncate(FAddHandle,0);
  FList.Reset(True);
  //
+end;
+
+procedure TfrmMain.MIShowExplorerClick(Sender: TObject);
+var
+ Item:TGameItem;
+ aRow:Integer;
+ S:RawByteString;
+begin
+ aRow:=ListGrid.Row;
+
+ if (aRow=0) then Exit;
+ if (aRow>ListGrid.RowCount) then Exit;
+
+ Item:=FGameList.GetItemRow(aRow);
+
+ S:=ExtractRelativePath('/app0/',Item.GameInfo.Exec);
+
+ if Length(S)<Length(Item.GameInfo.Exec) then
+ begin
+  S:=IncludeTrailingPathDelimiter(Item.MountList.app0)+ExtractFilePath(S);
+ end else
+ begin
+  S:=Item.MountList.app0;
+ end;
+
+ OpenDocument(S);
 end;
 
 procedure TfrmMain.MIRunClick(Sender: TObject);

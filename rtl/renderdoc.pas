@@ -5,7 +5,9 @@ unit renderdoc;
 interface
 
 uses
-  Classes, SysUtils;
+  Windows,
+  Classes,
+  SysUtils;
 
 type
  RENDERDOC_Version=(
@@ -184,6 +186,7 @@ type
  RENDERDOC_DevicePointer=THandle;
  RENDERDOC_WindowHandle =THandle;
 
+function  IsRenderDocPreLoaded:Boolean;
 procedure LoadRenderDoc;
 
 procedure GetAPIVersion(major,minor,patch:PInteger);
@@ -295,6 +298,11 @@ var
  RENDERDOC_GetAPI:pRENDERDOC_GetAPI=nil;
  RENDERDOC_API   :PRENDERDOC_API_1_6_0=nil;
 
+function IsRenderDocPreLoaded:Boolean;
+begin
+ Result:=Windows.GetModuleHandle('renderdoc.dll')<>0;
+end;
+
 procedure LoadRenderDoc;
 var
  fname:RawByteString;
@@ -302,12 +310,12 @@ var
 begin
  if (LibHandle<>0) then Exit;
 
- fname:=GetEnvironmentVariable('ProgramFiles')+DirectorySeparator+'RenderDoc'+DirectorySeparator+'renderdoc.dll';
+ fname:=Sysutils.GetEnvironmentVariable('ProgramFiles')+DirectorySeparator+'RenderDoc'+DirectorySeparator+'renderdoc.dll';
 
- LibHandle:=LoadLibrary(fname);
+ LibHandle:=System.LoadLibrary(fname);
  if (LibHandle=NilHandle) then Exit;
 
- Pointer(RENDERDOC_GetAPI):=GetProcedureAddress(LibHandle,'RENDERDOC_GetAPI');
+ Pointer(RENDERDOC_GetAPI):=System.GetProcedureAddress(LibHandle,'RENDERDOC_GetAPI');
  if (RENDERDOC_GetAPI=nil) then Exit;
 
  r:=RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0,@RENDERDOC_API);

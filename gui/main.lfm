@@ -1,7 +1,7 @@
 object frmMain: TfrmMain
-  Left = 430
+  Left = 390
   Height = 343
-  Top = 264
+  Top = 308
   Width = 623
   Caption = 'fpPS4'
   ClientHeight = 343
@@ -154,6 +154,10 @@ object frmMain: TfrmMain
     object MIRun: TMenuItem
       Caption = 'Run'
       OnClick = MIRunClick
+    end
+    object MIShowExplorer: TMenuItem
+      Caption = 'Show in Explorer'
+      OnClick = MIShowExplorerClick
     end
     object MIDevide3: TMenuItem
       Caption = '-'

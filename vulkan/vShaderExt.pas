@@ -81,6 +81,7 @@ type
  PRENDER_TARGET=^TRENDER_TARGET;
 
  TEXPORT_INFO=packed record
+  FORMAT     :Byte;
   NUMBER_TYPE:Byte;
   COMP_SWAP  :Byte;
  end;
@@ -801,6 +802,7 @@ begin
  if (COUNT<>0) then
  for i:=0 to COUNT-1 do
  begin
+  FParams.EXPORT_INFO[i].FORMAT     :=R[i].INFO.FORMAT;
   FParams.EXPORT_INFO[i].NUMBER_TYPE:=R[i].INFO.NUMBER_TYPE;
   FParams.EXPORT_INFO[i].COMP_SWAP  :=R[i].INFO.COMP_SWAP;
  end;

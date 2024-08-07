@@ -478,6 +478,7 @@ begin
  if (COUNT<>0) then
  for i:=0 to COUNT-1 do
  begin
+  FExportInfo[i].FORMAT     :=R[i].INFO.FORMAT;
   FExportInfo[i].NUMBER_TYPE:=R[i].INFO.NUMBER_TYPE;
   FExportInfo[i].COMP_SWAP  :=R[i].INFO.COMP_SWAP;
  end;

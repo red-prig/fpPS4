@@ -54,6 +54,7 @@ type
  end;
 
  TExportInfo=packed record
+  FORMAT     :Byte;
   NUMBER_TYPE:Byte;
   COMP_SWAP  :Byte;
  end;

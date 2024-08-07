@@ -453,6 +453,7 @@ begin
  if (FShader.FParams.EXPORT_COUNT<>0) then
  for i:=0 to FShader.FParams.EXPORT_COUNT-1 do
  begin
+  if (FShader.FParams.EXPORT_INFO[i].FORMAT     <>R[i].INFO.FORMAT     ) then Exit(False);
   if (FShader.FParams.EXPORT_INFO[i].NUMBER_TYPE<>R[i].INFO.NUMBER_TYPE) then Exit(False);
   if (FShader.FParams.EXPORT_INFO[i].COMP_SWAP  <>R[i].INFO.COMP_SWAP  ) then Exit(False);
  end;

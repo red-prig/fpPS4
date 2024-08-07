@@ -62,7 +62,6 @@ type
   function  fetch_ssrc9_pair(SSRC:Word;src:PPsrRegNode;rtype:TsrDataType):Boolean;
   function  fetch_vsrc8(VSRC:Word;rtype:TsrDataType):PsrRegNode;
   function  fetch_vdst8(VDST:Word;rtype:TsrDataType):PsrRegNode;
-  procedure fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:PsrRegNode);
   //
   procedure OpCmpV(OpId:DWORD;dst:PsrRegSlot;src0,src1:PsrRegNode);
   procedure OpCmpS(OpId:DWORD;dst:PsrRegSlot;src0,src1:PsrRegNode);
@@ -484,23 +483,6 @@ begin
  src:=RegsStory.get_vdst8(VDST);
  Result:=MakeRead(src,rtype);
  Assert(Result<>nil,'fetch_vdst8');
-end;
-
-procedure TEmitFetch.fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:PsrRegNode);
-var
- pSlot:PsrRegSlot;
- dst:PsrRegNode;
-begin
- pSlot:=RegsStory.get_vsrc8(VSRC);
-
- dst:=MakeRead(pSlot,dtVec2h);
- Assert(dst<>nil,'fetch_vsrc8_vec2h');
-
- dst0:=NewReg(dtHalf16);
- dst1:=NewReg(dtHalf16);;
-
- OpExtract(line,dst0,dst,0);
- OpExtract(line,dst1,dst,1);
 end;
 
 //
