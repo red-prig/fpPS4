@@ -2292,10 +2292,21 @@ begin
 
  ctx.stream^.hint_repeat:=False;
 
- if not me_test_mem(node) then
+ if me_test_mem(node) then
  begin
+  ctx.stream^.hint_loop:=0;
+ end else
+ begin
+  Inc(ctx.stream^.hint_loop);
+  //
+  if (ctx.stream^.hint_loop>1000) then
+  begin
+   //loop detection
+   Writeln(stderr,'WaitReg loop detected -> skip');
+   Exit;
+  end;
+  //
   ctx.switch_task;
-  Exit;
  end;
 
 end;
