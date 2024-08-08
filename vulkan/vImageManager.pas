@@ -887,7 +887,6 @@ begin
     //
     Result.StencilOnly:=TvChildImage2.Create;
     Result.StencilOnly.key   :=GetStencilOnly(F);
-    Result.StencilOnly.Parent:=Result;
    end;
   //depth
   VK_FORMAT_D16_UNORM,
@@ -898,7 +897,6 @@ begin
     Result.key   :=F;
     Result.FUsage:=usage;
     //
-    Result.Parent   :=Result;
     Result.DepthOnly:=Result;
    end;
   //depth stencil
@@ -1004,6 +1002,56 @@ begin
  Result:=True;
 end;
 
+procedure _SetName(t:TvCustomImage2);
+var
+ ch:Char;
+begin
+
+ Case t.key.cformat of
+  //stencil
+  VK_FORMAT_S8_UINT:
+   begin
+    Ch:='S';
+   end;
+  //depth
+  VK_FORMAT_D16_UNORM,
+  VK_FORMAT_X8_D24_UNORM_PACK32,
+  VK_FORMAT_D32_SFLOAT:
+   begin
+    Ch:='D';
+   end;
+  //depth stencil
+  VK_FORMAT_D16_UNORM_S8_UINT,
+  VK_FORMAT_D24_UNORM_S8_UINT,
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   begin
+    Ch:='X';
+   end;
+  else
+   begin
+    if (t.key.params.cube<>0) then
+    begin
+     Ch:='C';
+    end else
+    if (t.key.params.arrayLayers>1) then
+    begin
+     Ch:='A';
+    end else
+    begin
+     Ch:='I';
+    end;
+   end;
+ end;
+
+ t.SetObjectName(Ch+'_0x'+HexStr(QWORD(t.key.Addr),10)+
+                      '_'+IntToStr(t.key.params.width)+'x'+IntToStr(t.key.params.height)+
+                     '_m'+IntToStr(t.key.params.mipLevels)+
+                     '_a'+IntToStr(t.key.params.arrayLayers)+
+                     '_t'+IntToStr(t.key.params.tiling.idx)+'|'+IntToStr(t.key.params.tiling.alt)
+                );
+
+end;
+
 function _FetchImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
 label
  _repeat;
@@ -1039,7 +1087,7 @@ begin
   end else
   begin
 
-   t.SetObjectName('I_0x'+HexStr(QWORD(F.Addr),10)+'_'+IntToStr(F.params.width)+'x'+IntToStr(F.params.height));
+   _SetName(t);
 
    Fdevc:=MemManager.FetchMemory(
      t.GetRequirements,

@@ -103,7 +103,7 @@ begin
   sleepq_set_timeout(ident,timo);
  end;
 
- if (timo<>catch) then
+ if (timo<>0) and (catch<>0) then
   Result:=sleepq_timedwait_sig(ident,pri)
  else if (timo<>0) then
   Result:=sleepq_timedwait(ident,pri)

@@ -370,6 +370,7 @@ type
   buft:t_pm4_stream_type;
   //
   init:Boolean;
+  hint_repeat:Boolean;
   //
   curr:p_pm4_node;
   //
@@ -912,6 +913,11 @@ begin
  node^.num_dw:=num_dw;
  node^.offset:=offset;
 
+ insert_buffer_resource(@node^.scope,
+                        addr,
+                        num_dw*SizeOf(DWORD),
+                        TM_READ);
+
  add_node(node);
 end;
 
@@ -956,6 +962,20 @@ end;
 procedure t_pm4_stream.EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
 var
  node:p_pm4_node_EventWriteEop;
+
+ function get_data_size:DWORD; inline;
+ begin
+  Result:=0;
+  //
+  Case dataSel of
+   EVENTWRITEEOP_DATA_SEL_SEND_DATA32        :Result:=4;
+   EVENTWRITEEOP_DATA_SEL_SEND_DATA64        :Result:=8;
+   EVENTWRITEEOP_DATA_SEL_SEND_GPU_CLOCK     :Result:=8;
+   EVENTWRITEEOP_DATA_SEL_SEND_CP_PERFCOUNTER:Result:=8;
+   else;
+  end;
+ end;
+
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEop));
 
@@ -967,12 +987,31 @@ begin
  node^.dataSel  :=dataSel;
  node^.intSel   :=intSel;
 
+ if (addr<>nil) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         addr,
+                         get_data_size,
+                         TM_WRITE);
+ end;
+
  add_node(node);
 end;
 
 procedure t_pm4_stream.EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
 var
  node:p_pm4_node_EventWriteEos;
+
+ function get_data_size:DWORD; inline;
+ begin
+  Result:=0;
+  //
+  Case command of
+   EVENT_WRITE_EOS_CMD_STORE_32BIT_DATA_TO_MEMORY:Result:=4;
+   else;
+  end;
+ end;
+
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_EventWriteEos));
 
@@ -982,6 +1021,14 @@ begin
  node^.data     :=data;
  node^.eventType:=eventType;
  node^.command  :=command;
+
+ if (addr<>nil) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         addr,
+                         get_data_size,
+                         TM_WRITE);
+ end;
 
  add_node(node);
 end;
@@ -1003,6 +1050,20 @@ end;
 procedure t_pm4_stream.ReleaseMem(addr:Pointer;data:QWORD;eventType,srcSel,dstSel,intSel:Byte);
 var
  node:p_pm4_node_ReleaseMem;
+
+ function get_data_size:DWORD; inline;
+ begin
+  Result:=0;
+  //
+  Case srcSel of
+   RELEASEMEM_DATA_SEL_SEND_DATA32        :Result:=4;
+   RELEASEMEM_DATA_SEL_SEND_DATA64        :Result:=8;
+   RELEASEMEM_DATA_SEL_SEND_GPU_CLOCK     :Result:=8;
+   RELEASEMEM_DATA_SEL_SEND_CP_PERFCOUNTER:Result:=8;
+   else;
+  end;
+ end;
+
 begin
  node:=allocator.Alloc(SizeOf(t_pm4_node_ReleaseMem));
 
@@ -1014,6 +1075,14 @@ begin
  node^.srcSel   :=srcSel;
  node^.dstSel   :=dstSel;
  node^.intSel   :=intSel;
+
+ if (addr<>nil) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         addr,
+                         get_data_size,
+                         TM_WRITE);
+ end;
 
  add_node(node);
 end;
@@ -1032,6 +1101,31 @@ begin
  node^.srcSel  :=srcSel;
  node^.dstSel  :=dstSel;
  node^.cpSync  :=isBlocking;
+
+ case srcSel of
+  kDmaDataSrcMemory,
+  kDmaDataSrcMemoryUsingL2:
+   if (srcOrData<>0) then
+   begin
+    insert_buffer_resource(@node^.scope,
+                           Pointer(srcOrData),
+                           numBytes,
+                           TM_READ);
+   end;
+  else;
+ end;
+
+ case dstSel of
+  kDmaDataDstMemory,
+  kDmaDataDstMemoryUsingL2:
+  if (dst<>0) then
+  begin
+   insert_buffer_resource(@node^.scope,
+                          Pointer(dst),
+                          numBytes,
+                          TM_WRITE);
+  end;
+ end;
 
  add_node(node);
 end;
@@ -1055,6 +1149,28 @@ begin
  node^.wrConfirm:=(wrConfirm<>0);
 
  //Move(src^,node^.src^,num_dw*SizeOf(DWORD));
+
+ if (src<>nil) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         src,
+                         num_dw*SizeOf(DWORD),
+                         TM_READ);
+ end;
+
+ case dstSel of
+  WRITE_DATA_DST_SEL_MEMORY_SYNC,
+  WRITE_DATA_DST_SEL_TCL2,
+  WRITE_DATA_DST_SEL_MEMORY_ASYNC:
+   if (dst<>nil) then
+   begin
+    insert_buffer_resource(@node^.scope,
+                           Pointer(dst),
+                           num_dw*SizeOf(DWORD),
+                           TM_WRITE);
+   end;
+  else;
+ end;
 
  add_node(node);
 end;

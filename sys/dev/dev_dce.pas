@@ -1008,6 +1008,8 @@ begin
 
     submit_eop:=(QWORD(f_eop_count) shl 32) or QWORD($ff00a5a5);
 
+    Writeln('submit_eop=0x',HexStr(submit_eop,16));
+
     f_eop_count:=f_eop_count+1;
 
     Result:=dce_handle.SubmitFlipEop(@submit,submit_eop);
@@ -1019,6 +1021,8 @@ begin
   end;
 
  mtx_unlock(dce_mtx);
+
+ //print_backtrace_td(stderr);
 
  Writeln('submit_flip: ','bufferIndex=',data^.bufferIndex,' ',
                             'flipMode=',data^.flipMode,' ',

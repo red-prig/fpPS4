@@ -171,15 +171,16 @@ var
 
  //asc_queues
 
+//gfx ring only
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 var
- submit_id:DWORD;
+ submit_id:QWORD;
 begin
  submit_id:=Body^.DATA;
 
  if p_print_gpu_ops then
  begin
-  Writeln('submit_eop_flip=0x',HexStr(submit_id,8));
+  Writeln('[R]IT_EVENT_WRITE_EOP=0x',HexStr(submit_id,16),' ',Body^.intSel);
  end;
 
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
@@ -197,7 +198,7 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
+     Writeln('[R]INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb,stGfxCcb) then
     begin
@@ -214,7 +215,7 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
+     Writeln('[R]INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb,stGfxDcb) then
     begin
@@ -231,14 +232,17 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('SWITCH_BUFFER');
+     Writeln('[R]SWITCH_BUFFER');
     end;
    end;
   $C0044700: //IT_EVENT_WRITE_EOP
    begin
     onEventWriteEop(pctx,buff);
    end;
-  else;
+  else
+   begin
+    Assert(False);
+   end;
  end;
 
 end;
@@ -826,6 +830,8 @@ begin
                 The original data is an incremental "submit_id | (vmid << 32)",
                 now this is directly sended "eop_v"
                }
+
+               Writeln('submit_eop=0x',HexStr(p_submit_args(data)^.eop_v,16),' ',p_submit_args(data)^.wait);
 
                Result:=gc_pm4_event_write_eop(@ring_gfx,
                                               nil,

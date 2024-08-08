@@ -1085,7 +1085,7 @@ begin
 
   Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
   Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
-  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
+  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,10));
   Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
  end;
 
@@ -1125,6 +1125,9 @@ begin
 
  pctx^.stream[stGfxDcb].EventWriteEos(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.command);
 end;
+
+const
+ engine_str:array[0..3] of RawByteString=('ME','PFP','CE','3');
 
 procedure onDmaData(pctx:p_pfp_ctx;Body:PPM4DMADATA);
 var
@@ -1197,7 +1200,7 @@ begin
 
    end;
   else
-   Assert(false,'DmaData: engine=0x'+HexStr(Body^.Flags1.engine,1));
+   Assert(false,'DmaData: engine='+engine_str[Body^.Flags1.engine]);
  end;
 
 end;
@@ -1213,6 +1216,20 @@ var
  dstSel:Byte;
 begin
  Assert(Body^.CONTROL.wrOneAddr=0,'WriteData: wrOneAddr<>0');
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' engine     =',engine_str[Body^.CONTROL.engineSel]);
+  Writeln(' dstSel     =',Body^.CONTROL.dstSel,' ',Body^.CONTROL.wrConfirm);
+  Writeln(' dstAddr    =0x',HexStr(Body^.dstAddr,10));
+  Writeln(' length     =',(Body^.header.count-2)*4);
+
+  case Body^.header.count of
+   3:Writeln(' data       =0x',HexStr(PDWORD(@Body^.DATA)^,8));
+   4:Writeln(' data       =0x',HexStr(PQWORD(@Body^.DATA)^,16));
+   else;
+  end;
+ end;
 
  count:=Body^.header.count;
  if (count<3) then Exit;
@@ -1260,13 +1277,26 @@ begin
 
     end;
   else
-    Assert(false,'WriteData: engineSel=0x'+HexStr(engineSel,1));
+    Assert(false,'WriteData: engineSel='+engine_str[engineSel]);
  end;
 
 end;
 
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
 begin
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' engine     =',engine_str[Body^.engine]);
+  Writeln(' memSpace   =',Body^.memSpace);
+  Writeln(' operation  =',Body^.operation);
+  Writeln(' pollAddress=0x',HexStr(Body^.pollAddress,10));
+  Writeln(' reference  =0x',HexStr(Body^.reference,8));
+  Writeln(' mask       =0x',HexStr(Body^.mask,8));
+  Writeln(' compareFunc=0x',HexStr(Body^.compareFunc,1));
+ end;
+
+ Assert(Body^.operation=0,'WaitRegMem: operation=0x'+HexStr(Body^.operation,1));
 
  Case Body^.memSpace of
   WAIT_REG_MEM_SPACE_MEMORY:;
@@ -1281,10 +1311,10 @@ begin
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin
-     Assert(false,'WaitRegMem: engine=0x'+HexStr(Body^.engine,1));
+     Assert(false,'WaitRegMem: engine='+engine_str[Body^.engine]);
     end;
   else
-    Assert(false,'WaitRegMem: engine=0x'+HexStr(Body^.engine,1));
+    Assert(false,'WaitRegMem: engine='+engine_str[Body^.engine]);
  end;
 
 end;
@@ -1411,7 +1441,7 @@ begin
    pctx^.set_reg(r,v);
   end;
   //
-  pctx^.LastSetReg:=CONFIG_SPACE_START+c-1;
+  pctx^.LastSetReg:=CONFIG_SPACE_START+Body^.REG_OFFSET+c-1;
  end;
 end;
 
@@ -1435,13 +1465,13 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r+$A000),':=0x',HexStr(v,8));
+    Writeln(' SET:',getRegName(r+CONTEXT_REG_BASE),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_ctx_reg(r,v);
   end;
   //
-  pctx^.LastSetReg:=CONTEXT_REG_BASE+c-1;
+  pctx^.LastSetReg:=CONTEXT_REG_BASE+Body^.REG_OFFSET+c-1;
  end;
 end;
 
@@ -1465,13 +1495,13 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+    Writeln(' SET:',getRegName(r+SH_REG_BASE),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_sh_reg(r,v);
   end;
   //
-  pctx^.LastSetReg:=SH_REG_BASE+c-1;
+  pctx^.LastSetReg:=SH_REG_BASE+Body^.REG_OFFSET+c-1;
  end;
 end;
 
@@ -1501,7 +1531,7 @@ begin
    pctx^.set_reg(r,v);
   end;
   //
-  pctx^.LastSetReg:=USERCONFIG_REG_BASE+c-1;
+  pctx^.LastSetReg:=USERCONFIG_REG_BASE+Body^.REG_OFFSET+c-1;
  end;
 end;
 
@@ -1720,7 +1750,7 @@ begin
       mmCB_COLOR7_DCC_BASE,
 
       mmDB_STENCIL_CLEAR,
-      mmDB_RENDER_CONTROL,
+      //mmDB_RENDER_CONTROL,
 
       mmDB_HTILE_SURFACE:
        begin
@@ -1938,7 +1968,7 @@ begin
   Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
   Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
   Writeln(' dstSelector=0x',HexStr(Body^.dstSel,2));
-  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,16));
+  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,10));
   Writeln(' immValue   =0x',HexStr(Body^.data,16));
  end;
 

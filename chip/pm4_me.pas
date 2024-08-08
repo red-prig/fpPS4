@@ -174,7 +174,8 @@ uses
  kern_dmem,
  kern_proc,
  vm_map,
- vm_tracking_map;
+ vm_tracking_map,
+ dev_dce;
 
 procedure StartFrameCapture;
 begin
@@ -1818,9 +1819,15 @@ var
  addr_dmem:Pointer;
  data_size:Byte;
 begin
- ctx.InsertLabel(PChar('WriteEop:0x'+HexStr(QWORD(node^.addr),10)));
+ if not ctx.stream^.hint_repeat then
+ begin
+  ctx.InsertLabel(PChar('WriteEop:0x'+HexStr(QWORD(node^.addr),10)));
+  ctx.stream^.hint_repeat:=True;
+ end;
 
  if not ctx.WaitConfirmOrSwitch then Exit;
+
+ ctx.stream^.hint_repeat:=False;
 
  curr:=md_rdtsc_unit;
  diff:=curr-ctx.rel_time;
@@ -1892,9 +1899,15 @@ procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFl
 var
  curr:QWORD;
 begin
- ctx.InsertLabel('SubmitFlipEop');
+ if not ctx.stream^.hint_repeat then
+ begin
+  ctx.InsertLabel(PChar('SubmitFlipEop:0x'+HexStr(node^.eop_value,16)));
+  ctx.stream^.hint_repeat:=True;
+ end;
 
  if not ctx.WaitConfirmOrSwitch then Exit;
+
+ ctx.stream^.hint_repeat:=False;
 
  if (ctx.me^.on_submit_flip_eop<>nil) then
  begin
@@ -1923,9 +1936,15 @@ var
  addr_dmem:Pointer;
  data_size:Byte;
 begin
- ctx.InsertLabel(PChar('ReleaseMem:0x'+HexStr(QWORD(node^.addr),10)));
+ if not ctx.stream^.hint_repeat then
+ begin
+  ctx.InsertLabel(PChar('ReleaseMem:0x'+HexStr(QWORD(node^.addr),10)));
+  ctx.stream^.hint_repeat:=True;
+ end;
 
  if not ctx.WaitConfirmOrSwitch then Exit;
+
+ ctx.stream^.hint_repeat:=False;
 
  curr:=md_rdtsc_unit;
  diff:=curr-ctx.rel_time;
@@ -2223,6 +2242,17 @@ begin
 
 end;
 
+function get_dce_label_id(addr_dmem:Pointer):Integer;
+begin
+ Result:=-1;
+
+ if (QWORD(addr_dmem)>=QWORD(@dev_dce.dce_page^.labels)  ) and
+    (QWORD(addr_dmem)< QWORD(@dev_dce.dce_page^.label_)+8) then
+ begin
+  Result:=(QWORD(addr_dmem)-QWORD(@dev_dce.dce_page^.labels)) div 8;
+ end;
+end;
+
 Function me_test_mem(node:p_pm4_node_WaitRegMem):Boolean;
 var
  addr_dmem:Pointer;
@@ -2232,6 +2262,8 @@ begin
  begin
   Assert(false,'addr:0x'+HexStr(node^.pollAddr)+' not in dmem!');
  end;
+
+ //Writeln('me_test_mem:',get_dce_label_id(addr_dmem),' ',node^.refValue);
 
  val:=PDWORD(addr_dmem)^ and node^.mask;
  ref:=node^.refValue;
@@ -2250,10 +2282,15 @@ end;
 
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
 begin
-
- ctx.InsertLabel(PChar('WaitRegMem:0x'+HexStr(QWORD(node^.pollAddr),10)));
+ if not ctx.stream^.hint_repeat then
+ begin
+  ctx.InsertLabel(PChar('WaitRegMem:0x'+HexStr(QWORD(node^.pollAddr),10)));
+  ctx.stream^.hint_repeat:=True;
+ end;
 
  if not ctx.WaitConfirmOrSwitch then Exit;
+
+ ctx.stream^.hint_repeat:=False;
 
  if not me_test_mem(node) then
  begin
