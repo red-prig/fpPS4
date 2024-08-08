@@ -75,7 +75,7 @@ type
   end;
   //
   event:PRTLEvent;
-  //on_idle:TProcedure;
+  on_idle:TProcedure;
   on_submit_flip_eop:t_on_submit_flip_eop;
   //
   started:Pointer;
@@ -162,7 +162,7 @@ type
   //
   procedure switch_task;
   procedure next_task;
-  //procedure on_idle;
+  procedure on_idle;
  end;
 
 var
@@ -673,7 +673,6 @@ begin
  end;
 end;
 
-{
 procedure t_me_render_context.on_idle;
 begin
  if (me^.on_idle<>nil) then
@@ -681,7 +680,6 @@ begin
   me^.on_idle();
  end;
 end;
-}
 
 //
 
@@ -1892,7 +1890,6 @@ begin
   ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- //ctx.on_idle;
 end;
 
 procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFlipEop);
@@ -1922,7 +1919,6 @@ begin
   ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- //ctx.on_idle;
 end;
 
 function get_compute_pipe_id(buft:t_pm4_stream_type):Byte; inline;
@@ -2016,7 +2012,6 @@ begin
   ctx.me^.knote_eventid(get_compute_pipe_id(ctx.stream^.buft),0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
  end;
 
- //ctx.on_idle;
 end;
 
 procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
@@ -2104,7 +2099,6 @@ begin
    Assert(false,'pm4_EventWriteEos');
  end;
 
- //ctx.on_idle;
 end;
 
 procedure pm4_WriteData(var ctx:t_me_render_context;node:p_pm4_node_WriteData);
@@ -2299,7 +2293,7 @@ begin
  begin
   Inc(ctx.stream^.hint_loop);
   //
-  if (ctx.stream^.hint_loop>1000) then
+  if (ctx.stream^.hint_loop>10000) then
   begin
    //loop detection
    Writeln(stderr,'WaitReg loop detected -> skip');
@@ -2472,8 +2466,9 @@ begin
   me^.reset_sheduler;
 
   ctx.rel_time:=0; //reset time
+
   //
-  //ctx.on_idle;
+  ctx.on_idle;
   //
 
   RTLEventWaitFor(me^.event);

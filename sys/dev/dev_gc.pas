@@ -10,6 +10,9 @@ uses
 
 procedure gc_initialize();
 
+var
+ sync_me_submit:Boolean=False; //forced wait for all tasks to complete on the GPU side after submit
+
 implementation
 
 uses
@@ -157,6 +160,9 @@ var
 
  GC_SRI_event:PRTLEvent=nil;
  GC_SRI_label:QWORD=0;
+
+ me_idle_event:PRTLEvent=nil;
+ me_idle_label:QWORD=0;
 
  parse_gfx_started:Pointer=nil;
  parse_gfx_td:p_kthread;
@@ -431,7 +437,7 @@ begin
  end;
 end;
 
-procedure gc_idle; {register;}
+procedure gc_idle;
 begin
  if (GC_SRI_event<>nil) then
  begin
@@ -442,6 +448,38 @@ begin
  if (gc_submits_allowed_vmirr<>nil) then
  begin
   gc_submits_allowed_vmirr^:=0; //true
+ end;
+end;
+
+procedure me_idle; register;
+begin
+ if (me_idle_event<>nil) then
+ begin
+  RTLEventSetEvent(me_idle_event);
+ end;
+ me_idle_label:=0;
+end;
+
+procedure wait_me_idle;
+begin
+ if (me_idle_label=0) then Exit;
+
+ if (me_idle_event<>nil) then
+ begin
+  RTLEventWaitFor(me_idle_event);
+ end;
+end;
+
+procedure reset_me_idle;
+begin
+ me_idle_label:=1;
+
+ if (me_idle_event=nil) then
+ begin
+  me_idle_event:=RTLEventCreate;
+ end else
+ begin
+  RTLEventResetEvent(me_idle_event);
  end;
 end;
 
@@ -798,6 +836,12 @@ begin
 
   $C0108102: //submit
             begin
+             if sync_me_submit then
+             begin
+              reset_me_idle;
+             end;
+             //
+
              start_gfx_ring;
 
              rw_wlock(ring_gfx_lock);
@@ -811,7 +855,15 @@ begin
              if (Result=0) then
              begin
               retrigger_watchdog;
+
+              if sync_me_submit then
+              begin
+               //force wait GPU idle
+               wait_me_idle;
+              end;
+              //msleep_td(hz);
              end;
+
             end;
 
   $C020810C: //submit eop
@@ -1142,7 +1194,7 @@ begin
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
  pm4_me_gfx.Init(@gc_knlist);
- //pm4_me_gfx.on_idle:=@gc_idle;
+ pm4_me_gfx.on_idle:=@me_idle;
  pm4_me_gfx.on_submit_flip_eop:=@dev_dce.TriggerFlipEop;
 end;
 
