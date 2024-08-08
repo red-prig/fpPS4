@@ -48,12 +48,12 @@ type
   function  OpStore(nLine,      dst,src:PsrNode):PsrNode; override;
   //
   function  OpLoad(pLine:PspirvOp;dst:PsrRegNode;src:PsrNode):PSpirvOp;
-  function  OpLoadTo(nLine:PspirvOp;pType:PsrType;src:PsrNode):PsrRegNode;
+  function  OpLoadTo(pType:PsrType;src:PsrNode;ppLine:PPspirvOp=nil):PsrRegNode;
   //
   function  OpExtract(pLine:PspirvOp;dst,src:PsrRegNode;id:DWORD):PSpirvOp;
   function  OpConstruct(pLine:PspirvOp;dst:PsrRegNode):PSpirvOp;
   function  OpAccessChain(pLine:PspirvOp;vType:PsrType;dst:PsrNode;src:PsrVariable):PSpirvOp;
-  function  OpAccessChainTo(pLine:PspirvOp;vType:PsrType;src:PsrVariable;idx0:PsrNode):PsrNode;
+  function  OpAccessChainTo(vType:PsrType;src:PsrVariable;idx0:PsrNode;ppLine:PPspirvOp=nil):PsrNode;
   function  OpCondMerge(pLine,pLabel:PspirvOp):PSpirvOp;
   function  OpLoopMerge(pLine,pLabel0,pLabel1:PspirvOp):PSpirvOp;
   function  OpBranch(pLine,pLabel:PspirvOp):PSpirvOp;
@@ -428,11 +428,11 @@ begin
  Result:=PSpirvOp(OpLoad(pLine,dtype,dst,src));
 end;
 
-function TEmitOp.OpLoadTo(nLine:PspirvOp;pType:PsrType;src:PsrNode):PsrRegNode;
+function TEmitOp.OpLoadTo(pType:PsrType;src:PsrNode;ppLine:PPspirvOp=nil):PsrRegNode;
 begin
  Result:=NewReg(pType^.dtype);
  //
- OpLoad(line,pType,Result,src);
+ _set_line(ppLine,PspirvOp(OpLoad(_get_line(ppLine),pType,Result,src)));
 end;
 
 function TEmitOp.OpExtract(pLine:PspirvOp;dst,src:PsrRegNode;id:DWORD):PSpirvOp;
@@ -474,14 +474,15 @@ begin
  //index add later
 end;
 
-function TEmitOp.OpAccessChainTo(pLine:PspirvOp;vType:PsrType;src:PsrVariable;idx0:PsrNode):PsrNode;
+function TEmitOp.OpAccessChainTo(vType:PsrType;src:PsrVariable;idx0:PsrNode;ppLine:PPspirvOp=nil):PsrNode;
 Var
  node:PSpirvOp;
 begin
  Result:=NewRefNode;
  //
- node:=OpAccessChain(line,vType,Result,src);
+ node:=OpAccessChain(_get_line(ppLine),vType,Result,src);
  node^.AddParam(idx0);
+ _set_line(ppLine,node);
 end;
 
 function TEmitOp.OpCondMerge(pLine,pLabel:PspirvOp):PSpirvOp;

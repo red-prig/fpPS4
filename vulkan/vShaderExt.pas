@@ -73,6 +73,9 @@ type
   procedure OnVertLayout(P:PChar);
   procedure OnBuffLayout(P:PChar);
   procedure OnUnifLayout(P:PChar);
+  procedure OnTexlLayout(P:PChar);
+  procedure OnImgsLayout(P:PChar);
+  procedure OnRuntLayout(P:PChar);
   procedure OnFuncLayout(P:PChar);
  end;
 
@@ -451,9 +454,12 @@ begin
   'V':OnVertLayout(P);
   'B':OnBuffLayout(P);
   'U':OnUnifLayout(P);
+  'T':OnTexlLayout(P);
+  'I':OnImgsLayout(P);
+  'R':OnRuntLayout(P);
   'F':OnFuncLayout(P);
   else
-   Assert(false,'TODO OnSourceExtension:"'+P^+'"');
+   Assert(false,'TODO: OnSourceExtension:"'+P^+'"');
  end;
 end;
 
@@ -482,7 +488,7 @@ begin
   't':AddDataLayout(vtTSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'T':AddDataLayout(vtTSharp8,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   else
-   Assert(false,'TODO OnDataLayout:"'+P[1]+'"');
+   Assert(false,'TODO: OnDataLayout:"'+P[1]+'"');
  end;
 end;
 
@@ -492,7 +498,7 @@ begin
  Case P[1] of
   'D':AddImmData(_get_hex_dword(@P[3]));
   else
-   Assert(false,'TODO OnIExtLayout:"'+P[1]+'"');
+   Assert(false,'TODO: OnIExtLayout:"'+P[1]+'"');
  end;
 end;
 
@@ -544,7 +550,8 @@ begin
  with TvShaderExt(FOwner) do
  Case P[1] of
   'A':AddVertLayout(_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
-  else;
+  else
+   Assert(false,'TODO: OnVertLayout:"'+P[1]+'"');
  end;
 end;
 
@@ -613,7 +620,8 @@ begin
                     _get_hex_dword(@P[$21]),
                     _get_hex_dword(@P[$2E]),
                     _get_hex_char (@P[$3B]));
-  else;
+  else
+   Assert(false,'TODO: OnBuffLayout:"'+P[1]+'"');
  end;
 end;
 
@@ -648,7 +656,7 @@ begin
  AddToCustomLayout(FUnifLayouts,v);
 end;
 
-//UI;PID=00000001;BND=00000000;MRW=1
+//IU;PID=00000001;BND=00000000;MRW=1
 //US;PID=00000002;BND=00000001;MRW=1
 //0123456789ABCDEF0123456789ABCDEF01
 //0               1               2
@@ -657,16 +665,36 @@ procedure TvShaderParserExt.OnUnifLayout(P:PChar);
 begin
  with TvShaderExt(FOwner) do
  Case P[1] of
-  'I':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                    _get_hex_dword(@P[7]),
-                    _get_hex_dword(@P[$14]),
-                    _get_hex_char (@P[$21]));
   'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLER,
                     _get_hex_dword(@P[7]),
                     _get_hex_dword(@P[$14]),
                     _get_hex_char (@P[$21]));
-  else;
+  else
+   Assert(false,'TODO: OnUnifLayout:"'+P[1]+'"');
  end;
+end;
+
+procedure TvShaderParserExt.OnTexlLayout(P:PChar);
+begin
+ Assert(false,'TODO: OnTexlLayout:"'+P[1]+'"');
+end;
+
+procedure TvShaderParserExt.OnImgsLayout(P:PChar);
+begin
+ with TvShaderExt(FOwner) do
+ Case P[1] of
+  'U':AddUnifLayout(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
+  else
+   Assert(false,'TODO: OnImgsLayout:"'+P[1]+'"');
+ end;
+end;
+
+procedure TvShaderParserExt.OnRuntLayout(P:PChar);
+begin
+ Assert(false,'TODO: OnRuntLayout:"'+P[1]+'"');
 end;
 
 Procedure TvShaderExt.EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
@@ -697,7 +725,8 @@ begin
  with TvShaderExt(FOwner) do
  Case P[1] of
   'F':AddFuncLayout(_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
-  else;
+  else
+   Assert(false,'TODO: OnFuncLayout:"'+P[1]+'"');
  end;
 end;
 

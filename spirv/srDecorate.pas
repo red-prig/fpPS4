@@ -14,7 +14,15 @@ type
  PsrHeaderList=^TsrHeaderList;
  TsrHeaderList=object(TsrOpBlockCustom)
   FGLSL_std_450:PSpirvOp;
-  function emit_glsl_ext:PSpirvOp;
+  //
+  FSPV_EXT_descriptor_indexing:Boolean;
+  //
+  function  OpExtension(const n:RawByteString):PSpirvOp;
+  function  OpExtInstImport(const n:RawByteString):PSpirvOp;
+  //
+  function  GLSL_std_450:PSpirvOp;
+  //
+  procedure SPV_EXT_descriptor_indexing;
  end;
 
  PsrDecorate=^TsrDecorate;
@@ -53,15 +61,41 @@ implementation
 
 //
 
-function TsrHeaderList.emit_glsl_ext:PSpirvOp;
+function TsrHeaderList.OpExtension(const n:RawByteString):PSpirvOp;
+var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(Op.OpExtension);
+ node^.AddString(n);
+ Result:=node;
+end;
+
+function TsrHeaderList.OpExtInstImport(const n:RawByteString):PSpirvOp;
+var
+ node:PSpirvOp;
+begin
+ node:=AddSpirvOp(Op.OpExtInstImport);
+ node^.pDst:=Emit.NewRefNode;
+ node^.AddString(n);
+ Result:=node;
+end;
+
+function TsrHeaderList.GLSL_std_450:PSpirvOp;
 begin
  if (FGLSL_std_450=nil) then
  begin
-  FGLSL_std_450:=AddSpirvOp(Op.OpExtInstImport);
-  FGLSL_std_450^.pDst:=Emit.NewRefNode;
-  FGLSL_std_450^.AddString('GLSL.std.450');
+  FGLSL_std_450:=OpExtInstImport('GLSL.std.450');
  end;
  Result:=FGLSL_std_450;
+end;
+
+procedure TsrHeaderList.SPV_EXT_descriptor_indexing;
+begin
+ if not FSPV_EXT_descriptor_indexing then
+ begin
+  OpExtension('SPV_EXT_descriptor_indexing');
+  FSPV_EXT_descriptor_indexing:=True;
+ end;
 end;
 
 //

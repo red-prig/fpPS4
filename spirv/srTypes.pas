@@ -45,8 +45,11 @@ type
    function  GetItem(i:Word):PsrNode;
    function  GetDWORD(i:Word):DWORD;
    function  array_stride:DWORD;
+   function  is_array_image:Boolean;
+   function  array_image_info:TsrTypeImageInfo;
    function  array_count:DWORD;
    function  storage_class:DWORD;
+   function  is_image:Boolean;
    function  image_info:TsrTypeImageInfo;
    function  GetPrintName:RawByteString;
  end;
@@ -196,6 +199,44 @@ begin
  Result:=child^.fsize;
 end;
 
+function TsrType.is_array_image:Boolean;
+var
+ child:PsrType;
+begin
+ Result:=False;
+
+ Case fdtype of
+   dtTypeArray:;
+   dtTypeRuntimeArray:;
+  else
+   Exit;
+ end;
+
+ child:=GetItem(0)^.AsType(ntType);
+ if (child=nil) then Exit;
+
+ Result:=child^.is_image;
+end;
+
+function TsrType.array_image_info:TsrTypeImageInfo;
+var
+ child:PsrType;
+begin
+ Result:=Default(TsrTypeImageInfo);
+
+ Case fdtype of
+   dtTypeArray:;
+   dtTypeRuntimeArray:;
+  else
+   Exit;
+ end;
+
+ child:=GetItem(0)^.AsType(ntType);
+ if (child=nil) then Exit;
+
+ Result:=child^.image_info;
+end;
+
 function TsrType.array_count:DWORD;
 var
  pConst:PsrType;
@@ -214,8 +255,12 @@ begin
  Result:=GetDWORD(0);
 end;
 
-function TsrType.image_info:TsrTypeImageInfo;
+function TsrType.is_image:Boolean;
+begin
+ Result:=(fdtype=dtTypeImage);
+end;
 
+function TsrType.image_info:TsrTypeImageInfo;
 begin
  Result:=Default(TsrTypeImageInfo);
  if (fdtype<>dtTypeImage) then Exit;

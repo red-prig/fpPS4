@@ -12,6 +12,7 @@ uses
  srRefId,
  srType,
  srTypes,
+ srReg,
  srLayout,
  srVariable,
  srCapability,
@@ -50,6 +51,15 @@ type
    function  GetPrintName:RawByteString;
  end;
 
+ PsrArrayChain=^TsrArrayChain;
+ TsrArrayChain=packed object(TsrRegUniform)
+  pNext:PsrArrayChain;
+  //
+  idx0:PsrNode;
+ end;
+
+ TsrArrayChainList=specialize TNodeStack<PsrArrayChain>;
+
  PsrUniform=^TsrUniform;
  TsrUniform=object(TsrDescriptor)
   public
@@ -61,9 +71,14 @@ type
    fwrite_count:DWORD;
    //
    FReg:TsrRegUniform;
+   FArrayChainList:TsrArrayChainList;
   public
-   Procedure Init; inline;
+   FEmit:TCustomEmit;
+   Procedure Init(Emit:TCustomEmit); inline;
    function  pReg:PsrRegUniform; inline;
+   function  FetchArrayChain(pLine:Pointer;idx0:PsrNode):PsrArrayChain;
+   function  chain_read:DWORD;
+   function  chain_write:DWORD;
    function  GetStorageName:RawByteString;
    function  GetTypeChar:String2;
    function  GetRw:Char;
@@ -86,6 +101,9 @@ type
  end;
 
 implementation
+
+uses
+ emit_op;
 
 class function ntRegUniform.Down(node:PsrNode):Pointer;
 begin
@@ -179,11 +197,13 @@ begin
  Result:=Integer(n1^.FType>n2^.FType)-Integer(n1^.FType<n2^.FType);
 end;
 
-Procedure TsrUniform.Init; inline;
+Procedure TsrUniform.Init(Emit:TCustomEmit); inline;
 begin
  fntype  :=ntUniform;
  FStorage:=StorageClass.UniformConstant;
  FBinding:=-1;
+ //
+ FEmit:=Emit;
 end;
 
 function TsrUniform.pReg:PsrRegUniform; inline;
@@ -191,9 +211,35 @@ begin
  Result:=@FReg;
 end;
 
+function TsrUniform.FetchArrayChain(pLine:Pointer;idx0:PsrNode):PsrArrayChain;
+var
+ iType:PsrType;
+ pChain:PsrNode;
+begin
+ Result:=nil;
+
+ iType:=pType^.GetItem(0)^.AsType(ntType); //Image
+ if (iType=nil) then Exit;
+
+ //Check dublicate?
+ pChain:=TEmitOp(FEmit).OpAccessChainTo(iType,pVar,idx0,@pLine);
+
+ Result:=FEmit.Alloc(SizeOf(TsrArrayChain));
+ Result^.Init(pVar);
+ Result^.idx0:=idx0;
+
+ TEmitOp(FEmit).OpLoad(pLine,iType,Result,pChain);
+
+ //
+ FArrayChainList.Push_head(Result);
+end;
+
 function TsrUniform.GetStorageName:RawByteString;
+label
+ _image_info;
 var
  image_info:TsrTypeImageInfo;
+ pChild:PsrType;
 begin
  Result:='';
  if (FType<>nil) then
@@ -201,6 +247,8 @@ begin
     dtTypeImage:
      begin
       image_info:=FType^.image_info;
+
+      _image_info:
 
       if (image_info.Dim=Dim.Buffer) then
       begin
@@ -218,15 +266,50 @@ begin
        end;
       end;
      end;
+    //
     dtTypeSampler:Result:='uSmp'+IntToStr(FBinding);
+    //
+    dtTypeRuntimeArray:
+     begin
+      pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
+
+      if (pChild^.dtype=dtTypeImage) then
+      begin
+       image_info:=pChild^.image_info;
+
+       goto _image_info;
+      end;
+
+     end;
     else;
    end;
 end;
 
+//TU
+//TS
+//TR
+
+//IU
+//IS
+//IR
+
+//US
+
+//RU
+
+function GetSampledTypeChar(Sampled:Byte):Char;
+begin
+ Case Sampled of
+     1:Result:='U'; //VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER | VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+     2:Result:='S'; //VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER | VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+  else Result:='R'; //runtime texel buffer
+ end;
+end;
 
 function TsrUniform.GetTypeChar:String2;
 var
  image_info:TsrTypeImageInfo;
+ pChild:PsrType;
 begin
  Result:='';
  if (FType<>nil) then
@@ -237,33 +320,88 @@ begin
 
       if (image_info.Dim=Dim.Buffer) then
       begin
-       Case image_info.Sampled of
-           1:Result:='UB'; //VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER
-           2:Result:='SB'; //VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER
-        else Result:='RB'; //runtime texel buffer
-       end;
+       Result:='T'+GetSampledTypeChar(image_info.Sampled);
       end else
       begin
-       Case image_info.Sampled of
-           1:Result:='UI'; //VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-           2:Result:='SI'; //VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-        else Result:='RI'; //runtime image
-       end;
+       Result:='I'+GetSampledTypeChar(image_info.Sampled);
       end;
      end;
+    //
     dtTypeSampler:Result:='US'; //VK_DESCRIPTOR_TYPE_SAMPLER
-    else;
+    //
+    dtTypeRuntimeArray:
+     begin
+      pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
+
+      if (pChild^.dtype=dtTypeImage) then
+      begin
+       image_info:=pChild^.image_info;
+
+       if (image_info.Dim=Dim.Buffer) then
+       begin
+        Assert(false,'GetTypeChar');
+       end else
+       begin
+        Result:='R'+GetSampledTypeChar(image_info.Sampled);
+       end;
+      end;
+
+     end;
+    else
+     Assert(false,'GetTypeChar');
    end;
+end;
+
+function TsrUniform.chain_read:DWORD;
+var
+ node:PsrArrayChain;
+begin
+ Result:=0;
+ if FReg.IsUsed then
+ begin
+  Result:=FReg.read_count;
+ end;
+ //
+ node:=FArrayChainList.pHead;
+ While (node<>nil) do
+ begin
+  if node^.IsUsed then
+  begin
+   Result:=Result+node^.read_count;
+  end;
+  node:=node^.pNext;
+ end;
+end;
+
+function TsrUniform.chain_write:DWORD;
+var
+ node:PsrArrayChain;
+begin
+ Result:=0;
+ if FReg.IsUsed then
+ begin
+  Result:=FReg.write_count;
+ end;
+ //
+ node:=FArrayChainList.pHead;
+ While (node<>nil) do
+ begin
+  if node^.IsUsed then
+  begin
+   Result:=Result+node^.write_count;
+  end;
+  node:=node^.pNext;
+ end;
 end;
 
 function TsrUniform.GetRw:Char;
 begin
  Result:='0';
- if (FReg.read_count<>0) then
+ if (chain_read<>0) then
  begin
   Result:='1';
  end;
- if (FReg.write_count<>0) then
+ if (chain_write<>0) then
  begin
   Result:=Char(ord(Result) or ord('2'));
  end;
@@ -294,7 +432,7 @@ var
  node:TsrUniform;
 begin
  node:=Default(TsrUniform);
- node.Init;
+ node.Init(FEmit);
  node.pLayout:=s;
  node.FType  :=t;
  Result:=FNTree.Find(@node);
@@ -358,11 +496,11 @@ begin
 
        if (image_info.Sampled=2) then //storage image
        begin
-        if (node^.FReg.read_count=0) then
+        if (node^.chain_read=0) then
         begin
          pDecorateList^.OpDecorate(pVar,Decoration.NonReadable,0);
         end;
-        if (node^.FReg.write_count=0) then
+        if (node^.chain_write=0) then
         begin
          pDecorateList^.OpDecorate(pVar,Decoration.NonWritable,0);
         end;

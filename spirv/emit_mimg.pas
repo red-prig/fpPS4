@@ -12,9 +12,11 @@ uses
   ps4_pssl,
   srNode,
   srType,
+  srTypes,
   srReg,
   srLayout,
   srOp,
+  srUniform,
   emit_fetch;
 
 type
@@ -1006,13 +1008,15 @@ begin
     begin
      coord:=GatherCoord_u(roffset,info);
 
-     //scalar or vector
-     node:=OpImageWrite(line,Tgrp,coord,dst);
-
      lod:=Gather_value(roffset,dtUint32);
 
-     node^.AddLiteral(ImageOperands.Lod,'Lod');
-     node^.AddParam(lod);
+     //lod:=OpNonUniform(lod); TODO
+
+     //fetch image by index
+     Tgrp:=PsrUniform(Tgrp)^.FetchArrayChain(line,lod);
+
+     //scalar or vector
+     node:=OpImageWrite(line,Tgrp,coord,dst);
     end;
   else
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
@@ -1146,10 +1150,20 @@ begin
      emit_image_load(Tgrp,@info);
     end;
 
-  IMAGE_STORE..IMAGE_STORE_MIP_PCK: //stored
+  IMAGE_STORE,
+  IMAGE_STORE_PCK: //stored
     begin
      info.tinfo.Sampled:=2;
      Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+
+     emit_image_store(Tgrp,@info);
+    end;
+
+  IMAGE_STORE_MIP,
+  IMAGE_STORE_MIP_PCK: //stored mip
+    begin
+     info.tinfo.Sampled:=2;
+     Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo);
 
      emit_image_store(Tgrp,@info);
     end;

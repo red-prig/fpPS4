@@ -79,8 +79,9 @@ type
   function  MakeChain(pSlot:PsrRegSlot;grp:PsrDataLayout;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1):PsrRegNode;
   Procedure AddVecInput(dst:PsrRegSlot;vtype,rtype:TsrDataType;itype:TpsslInputType;id:Byte);
   function  AddPositionsInput(count:Byte):PsrVariable;
-  function  FetchUniform(src:PsrDataLayout;pType:PsrType):PsrNode;
+  function  FetchUniformSimple(src:PsrDataLayout;pType:PsrType):PsrNode;
   function  FetchImage(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo):PsrNode;
+  function  FetchImageRuntimeArray(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo):PsrNode;
   function  FetchSampler(src:PsrDataLayout):PsrNode;
   function  FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrVariable;
  end;
@@ -696,7 +697,7 @@ end;
 
 ////
 
-function TEmitFetch.FetchUniform(src:PsrDataLayout;pType:PsrType):PsrNode;
+function TEmitFetch.FetchUniformSimple(src:PsrDataLayout;pType:PsrType):PsrNode;
 var
  u:PsrUniform;
  v:PsrVariable;
@@ -718,7 +719,17 @@ var
 begin
  pType:=TypeList.Fetch(dtype);
  pType:=TypeList.FetchImage(pType,info);
- Result:=FetchUniform(src,pType);
+ Result:=FetchUniformSimple(src,pType);
+end;
+
+function TEmitFetch.FetchImageRuntimeArray(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo):PsrNode;
+var
+ pType:PsrType;
+begin
+ pType:=TypeList.Fetch(dtype);
+ pType:=TypeList.FetchImage(pType,info);
+ pType:=TypeList.FetchRuntimeArray(pType);
+ Result:=UniformList.Fetch(src,pType);
 end;
 
 function TEmitFetch.FetchSampler(src:PsrDataLayout):PsrNode;
@@ -726,7 +737,7 @@ var
  pType:PsrType;
 begin
  pType:=TypeList.Fetch(dtTypeSampler);
- Result:=FetchUniform(src,pType);
+ Result:=FetchUniformSimple(src,pType);
 end;
 
 function TEmitFetch.FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrVariable;

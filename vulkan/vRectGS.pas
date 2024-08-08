@@ -94,9 +94,9 @@ begin
  //load positions
  For i:=0 to 2 do
  begin
-  pChain:=SprvEmit.OpAccessChainTo(SprvEmit.line,pVec4f,InputPos,UintId[i]);
+  pChain:=SprvEmit.OpAccessChainTo(pVec4f,InputPos,UintId[i]);
   //
-  Positions[i]:=SprvEmit.OpLoadTo(SprvEmit.line,pVec4f,pChain);
+  Positions[i]:=SprvEmit.OpLoadTo(pVec4f,pChain);
  end;
 
  //extract
@@ -143,9 +143,9 @@ begin
  //Send vertex by index
  For i:=0 to 2 do
  begin
-  pChain:=SprvEmit.OpAccessChainTo(SprvEmit.line,pVec4f,InputPos,pIndex);
+  pChain:=SprvEmit.OpAccessChainTo(pVec4f,InputPos,pIndex);
   //
-  Positions[i]:=SprvEmit.OpLoadTo(SprvEmit.line,pVec4f,pChain);
+  Positions[i]:=SprvEmit.OpLoadTo(pVec4f,pChain);
   //
 
   SprvEmit.OpStore(SprvEmit.line,OutputPos,Positions[i]);

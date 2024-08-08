@@ -462,7 +462,7 @@ function TEmitInterface.AddSGlslOp(pLine:PspirvOp;OpId:DWORD):PSpirvOp;
 var
  ext,node:PSpirvOp;
 begin
- ext:=HeaderList.emit_glsl_ext;
+ ext:=HeaderList.GLSL_std_450;
  node:=AddSpirvOp(pLine,Op.OpExtInst);
  node^.AddParam(ext^.pDst);
  node^.AddLiteral(OpId,GlslOp.GetStr(OpId));

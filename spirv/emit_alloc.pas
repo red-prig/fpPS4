@@ -112,7 +112,16 @@ begin
    Op.OpTypeArray,
    Op.OpTypeRuntimeArray:
     begin
-     DecorateList.OpDecorate(node,Decoration.ArrayStride,node^.array_stride);
+     if (node^.array_stride<>0) then
+     begin
+      DecorateList.OpDecorate(node,Decoration.ArrayStride,node^.array_stride);
+     end;
+     //
+     if (node^.is_array_image) then
+     begin
+      AddCapability(Capability.RuntimeDescriptorArray);
+      HeaderList.SPV_EXT_descriptor_indexing;
+     end;
     end;
 
    Op.OpTypeFloat:
