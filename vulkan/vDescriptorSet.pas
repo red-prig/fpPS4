@@ -23,6 +23,7 @@ type
   //            set      bind
   p_count:array[0..6] of Byte;
   p_binds:array[0..6] of PVkWriteDescriptorSet;
+  P_bmaxd:array[0..6] of PByte;
   //
   p_change_any:Boolean;
   p_change:array[0..6] of Boolean;
@@ -35,6 +36,7 @@ type
   procedure SetAllChange;
   procedure BindBuffer (aSet,aBind:TVkUInt32;dtype:TVkDescriptorType;buffer:TVkBuffer;offset,range:TVkDeviceSize);
   procedure BindImage  (aSet,aBind:TVkUInt32;dtype:TVkDescriptorType;img:TVkImageView;aLayout:TVkImageLayout);
+  procedure BindImages (aSet,aBind,aElem,aCount:TVkUInt32;dtype:TVkDescriptorType;img:PVkImageView;aLayout:TVkImageLayout);
   procedure BindSampler(aSet,aBind:TVkUInt32;smp:TVkSampler);
  end;
 
@@ -42,11 +44,12 @@ type
 
  TvDescriptorInterface=object
   FHandle:PvDescriptorCache;
-  Procedure  BindBuffer (aSet,aBind:TVkUInt32;buffer:TVkBuffer;offset,range:TVkDeviceSize);
-  Procedure  BindUniform(aSet,aBind:TVkUInt32;buffer:TVkBuffer;offset,range:TVkDeviceSize);
-  Procedure  BindStorage(aSet,aBind:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
-  Procedure  BindImage  (aSet,aBind:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
-  Procedure  BindSampler(aSet,aBind:TVkUInt32;smp:TVkSampler);
+  Procedure  BindBuffer  (aSet,aBind:TVkUInt32;buffer:TVkBuffer;offset,range:TVkDeviceSize);
+  Procedure  BindUniform (aSet,aBind:TVkUInt32;buffer:TVkBuffer;offset,range:TVkDeviceSize);
+  Procedure  BindStorage (aSet,aBind:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+  Procedure  BindStorages(aSet,aBind,aElem,aCount:TVkUInt32;img:PVkImageView;Layout:TVkImageLayout);
+  Procedure  BindImage   (aSet,aBind:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
+  Procedure  BindSampler (aSet,aBind:TVkUInt32;smp:TVkSampler);
  end;
 
  TvDescriptorSet2=object
@@ -238,6 +241,13 @@ begin
  FHandle^.BindImage(aSet,aBind,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,img,Layout);
 end;
 
+Procedure TvDescriptorInterface.BindStorages(aSet,aBind,aElem,aCount:TVkUInt32;img:PVkImageView;Layout:TVkImageLayout);
+begin
+ if (FHandle=nil) then Exit;
+
+ FHandle^.BindImages(aSet,aBind,aElem,aCount,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,img,Layout);
+end;
+
 Procedure TvDescriptorInterface.BindImage(aSet,aBind:TVkUInt32;img:TVkImageView;Layout:TVkImageLayout);
 begin
  if (FHandle=nil) then Exit;
@@ -261,6 +271,7 @@ var
  dwrite_count:Integer;
  dimg_count  :Integer;
  dbuf_count  :Integer;
+ dmax_count  :Integer;
  size        :Integer;
  base        :Pointer;
  ends        :Pointer;
@@ -304,8 +315,11 @@ begin
   layout.FCounts[ord(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)]+
   layout.FCounts[ord(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)];
 
+ dmax_count:=dwrite_count;
+
  size:=SizeOf(TvDescriptorCache)+
        dwrite_count*SizeOf(TVkWriteDescriptorSet)+
+       dmax_count  *SizeOf(Byte)+
        dimg_count  *SizeOf(TVkDescriptorImageInfo)+
        dbuf_count  *SizeOf(TVkDescriptorBufferInfo);
 
@@ -331,15 +345,18 @@ begin
 
      Result^.p_count[i]:=Length(key.FBinds);
      Result^.p_binds[i]:=AllocWrite(Length(key.FBinds));
+     Result^.P_bmaxd[i]:=AllocBase (Length(key.FBinds)*SizeOf(Byte));
 
      For b:=0 to High(key.FBinds) do
       with key.FBinds[b] do
       begin
 
-       Result^.p_binds[i][b].sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-       Result^.p_binds[i][b].dstBinding     :=b;
-       Result^.p_binds[i][b].descriptorCount:=1;
-       Result^.p_binds[i][b].descriptorType :=descriptorType;
+       Result^.p_binds[i][binding].sType          :=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+       Result^.p_binds[i][binding].dstBinding     :=binding;
+       Result^.p_binds[i][binding].descriptorCount:=1; //initial
+       Result^.p_binds[i][binding].descriptorType :=descriptorType;
+
+       Result^.P_bmaxd[i][binding]:=descriptorCount; //max
 
        case descriptorType of
         VK_DESCRIPTOR_TYPE_SAMPLER,
@@ -347,13 +364,13 @@ begin
         VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
         VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
           begin
-           Result^.p_binds[i][b].pImageInfo:=AllocBase(SizeOf(TVkDescriptorImageInfo));
+           Result^.p_binds[i][binding].pImageInfo:=AllocBase(SizeOf(TVkDescriptorImageInfo)*descriptorCount);
           end;
 
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
           begin
-           Result^.p_binds[i][b].pBufferInfo:=AllocBase(SizeOf(TVkDescriptorBufferInfo));
+           Result^.p_binds[i][binding].pBufferInfo:=AllocBase(SizeOf(TVkDescriptorBufferInfo)*descriptorCount);
           end;
 
         else;
@@ -444,6 +461,52 @@ begin
 
  dimg^.imageView  :=img;
  dimg^.imageLayout:=aLayout;
+
+ if change then
+ begin
+  p_change_any:=True;
+  p_change[aSet]:=True;
+ end;
+end;
+
+procedure TvDescriptorCache.BindImages(aSet,aBind,aElem,aCount:TVkUInt32;dtype:TVkDescriptorType;img:PVkImageView;aLayout:TVkImageLayout);
+var
+ dwrite:PVkWriteDescriptorSet;
+ dimg  :PVkDescriptorImageInfo;
+ i     :TVkUInt32;
+ change:Boolean;
+begin
+ Assert(aSet<7);
+ Assert(aBind<p_count[aSet]);
+ Assert(aCount>0);
+ Assert(p_binds[aSet]<>nil);
+
+ dwrite:=@p_binds[aSet][aBind];
+
+ Assert(dwrite^.descriptorType=dtype);
+
+ Assert((aElem+aCount)<=P_bmaxd[aSet][aBind]);
+
+ dimg:=dwrite^.pImageInfo;
+
+ Assert(dimg<>nil);
+
+ change:=False;
+
+ change:=change or (dwrite^.dstArrayElement<>aElem );
+ change:=change or (dwrite^.descriptorCount<>aCount);
+
+ dwrite^.dstArrayElement:=aElem;
+ dwrite^.descriptorCount:=aCount;
+
+ For i:=0 to aCount-1 do
+ begin
+  change:=change or (dimg[i].imageView  <>img[i] );
+  change:=change or (dimg[i].imageLayout<>aLayout);
+
+  dimg[i].imageView  :=img[i];
+  dimg[i].imageLayout:=aLayout;
+ end;
 
  if change then
  begin

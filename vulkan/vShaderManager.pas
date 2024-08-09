@@ -701,9 +701,13 @@ end;
 procedure EmitShaderGroupExtension(var GPU_REGS:TGPU_REGS;F:PvShadersKey);
 Var
  M:TMemoryStream;
+ PS:TvShaderExt;
  VS:TvShaderExt;
  GS:TvShaderExt;
 begin
+ //
+
+ PS:=F^.FShaders[vShaderStagePs];
  VS:=F^.FShaders[vShaderStageVs];
 
  if (VS<>nil) and
@@ -712,7 +716,15 @@ begin
  begin
   Assert(F^.FShaders[vShaderStageGs]=nil,'Geometry shader is already present');
 
-  GS:=VS.FGeomRectList;
+  //load cache
+  if (PS<>nil) then
+  begin
+   GS:=PS.FGeomRectList;
+  end else
+  begin
+   GS:=VS.FGeomRectList;
+  end;
+  //load cache
 
   if (GS=nil) then
   begin
@@ -726,7 +738,15 @@ begin
 
    M.Free;
 
-   VS.FGeomRectList:=GS;
+   //save cache
+   if (PS<>nil) then
+   begin
+    PS.FGeomRectList:=GS;
+   end else
+   begin
+    VS.FGeomRectList:=GS;
+   end;
+   //save cache
   end;
 
   F^.FShaders[vShaderStageGs]:=GS;

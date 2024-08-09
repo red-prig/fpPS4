@@ -42,12 +42,14 @@ type
 
  TvFuncCb=procedure(addr:ADataLayout) of object;
 
+ TvLayoutFlags=Set of (vMemoryRead,vMemoryWrite,vMipArray);
+
  TvCustomLayout=packed record
   dtype :DWORD;
   bind  :DWORD;
   size  :DWORD;
   offset:DWORD;
-  flags :DWORD;
+  flags :TvLayoutFlags;
   addr  :ADataLayout;
  end;
 
@@ -76,6 +78,7 @@ type
   procedure OnTexlLayout(P:PChar);
   procedure OnImgsLayout(P:PChar);
   procedure OnRuntLayout(P:PChar);
+  procedure OnArrsLayout(P:PChar);
   procedure OnFuncLayout(P:PChar);
  end;
 
@@ -167,9 +170,13 @@ type
   size  :TVkUInt32;
  end;
 
+ TvBindImageType=(vbSampled,vbStorage,vbMipStorage);
+
  TImageBindExt=packed record
-  fset:TVkUInt32;
-  bind:TVkUInt32;
+  btype :TvBindImageType;
+  fset  :TVkUInt32;
+  bind  :TVkUInt32;
+  memuse:TVkUInt32;
 
   FImage:TvImageKey;
   FView :TvImageViewKey;
@@ -187,11 +194,11 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
-  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset,flags:DWord);
-  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset,flags:DWord);
+  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord;flags:TvLayoutFlags);
 
-  Procedure AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
-  Procedure AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
+  Procedure AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
+  Procedure AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
   Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
   procedure AddAttr   (const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
  end;
@@ -361,22 +368,40 @@ end;
 
 procedure TvShaderExt.InitSetLayout;
 var
- i:Integer;
+ i,p:Integer;
+ descriptorCount:TVkUInt32;
  A:AVkDescriptorSetLayoutBinding;
 begin
  if (FSetLayout<>nil) then Exit;
  A:=Default(AVkDescriptorSetLayoutBinding);
- SetLength(A,Length(FUnifLayouts)); //++ other todo
 
+  //++ other todo
+ SetLength(A,
+           Length(FUnifLayouts)
+          );
+
+ p:=0;
  if (Length(FUnifLayouts)<>0) then
+ begin
   For i:=0 to High(FUnifLayouts) do
   begin
-   A[i]:=Default(TVkDescriptorSetLayoutBinding);
-   A[i].binding        :=FUnifLayouts[i].bind;
-   A[i].descriptorType :=TVkDescriptorType(FUnifLayouts[i].dtype);
-   A[i].descriptorCount:=1;
-   A[i].stageFlags     :=ord(FStage);
+   if (vMipArray in FUnifLayouts[i].flags) then
+   begin
+    descriptorCount:=16;
+   end else
+   begin
+    descriptorCount:=1;
+   end;
+   //
+   A[p]:=Default(TVkDescriptorSetLayoutBinding);
+   A[p].binding        :=FUnifLayouts[i].bind;
+   A[p].descriptorType :=TVkDescriptorType(FUnifLayouts[i].dtype);
+   A[p].descriptorCount:=descriptorCount;
+   A[p].stageFlags     :=ord(FStage);
+   //
+   Inc(p);
   end;
+ end;
 
  FSetLayout:=FetchSetLayout(ord(FStage),0,A);
 end;
@@ -456,6 +481,7 @@ begin
   'U':OnUnifLayout(P);
   'T':OnTexlLayout(P);
   'I':OnImgsLayout(P);
+  'A':OnArrsLayout(P);
   'R':OnRuntLayout(P);
   'F':OnFuncLayout(P);
   else
@@ -587,7 +613,7 @@ begin
  v.bind  :=bind;
  v.size  :=size;
  v.offset:=offset;
- v.flags :=flags;
+ v.flags :=TvLayoutFlags(flags);
  v.addr  :=GetLayoutAddr(parent);
 
  AddToCustomLayout(FUnifLayouts,v);
@@ -650,7 +676,7 @@ begin
  v:=Default(TvCustomLayout);
  v.dtype:=ord(dtype);
  v.bind :=bind;
- v.flags:=flags;
+ v.flags:=TvLayoutFlags(flags);
  v.addr :=GetLayoutAddr(parent);
 
  AddToCustomLayout(FUnifLayouts,v);
@@ -694,7 +720,28 @@ end;
 
 procedure TvShaderParserExt.OnRuntLayout(P:PChar);
 begin
- Assert(false,'TODO: OnRuntLayout:"'+P[1]+'"');
+ with TvShaderExt(FOwner) do
+ Case P[1] of
+  'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
+  else
+   Assert(false,'TODO: OnRuntLayout:"'+P[1]+'"');
+ end;
+end;
+
+procedure TvShaderParserExt.OnArrsLayout(P:PChar);
+begin
+ with TvShaderExt(FOwner) do
+ Case P[1] of
+  'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
+  else
+   Assert(false,'TODO: OnArrsLayout:"'+P[1]+'"');
+ end;
 end;
 
 Procedure TvShaderExt.EnumUnifLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
@@ -1137,13 +1184,13 @@ end;
 
 //
 
-function _get_buf_mem_usage(b:Byte):Byte; inline;
+function _get_buf_mem_usage(flags:TvLayoutFlags):Byte; inline;
 begin
- Result:=((b and 1)*TM_READ) or
-         (((b shr 1) and 1)*TM_WRITE);
+ Result:=(ord(vMemoryRead  in flags)*TM_READ) or
+         (ord(vMemoryWrite in flags)*TM_WRITE);
 end;
 
-Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset,flags:DWord);
+Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  i,stride,num_records:Integer;
@@ -1172,7 +1219,7 @@ begin
  FBuffers[i]:=b;
 end;
 
-Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,size,bind,offset,flags:DWord);
+Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,size,bind,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  i:Integer;
@@ -1194,7 +1241,7 @@ begin
  FBuffers[i]:=b;
 end;
 
-Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;fset,bind:DWord);
+Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
  i:Integer;
@@ -1205,8 +1252,10 @@ begin
  //print_tsharp4(PT);
 
  b:=Default(TImageBindExt);
- b.fset:=fset;
- b.bind:=bind;
+ b.btype :=btype;
+ b.fset  :=fset;
+ b.bind  :=bind;
+ b.memuse:=_get_buf_mem_usage(flags);
 
  b.FImage:=_get_tsharp4_image_info(PT);
  b.FView :=_get_tsharp4_image_view(PT);
@@ -1216,7 +1265,7 @@ begin
  FImages[i]:=b;
 end;
 
-Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;fset,bind:DWord);
+Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
  i:Integer;
@@ -1227,8 +1276,10 @@ begin
  //print_tsharp8(PT);
 
  b:=Default(TImageBindExt);
- b.fset:=fset;
- b.bind:=bind;
+ b.btype :=btype;
+ b.fset  :=fset;
+ b.bind  :=bind;
+ b.memuse:=_get_buf_mem_usage(flags);
 
  b.FImage:=_get_tsharp8_image_info(PT);
  b.FView :=_get_tsharp8_image_view(PT);
@@ -1251,15 +1302,36 @@ begin
     Case b.addr[0].rtype of
      vtSSharp4:AddSSharp4(P,fset,b.bind);
      else
-      Assert(false);
+      Assert(false,'AddAttr');
     end;
+  //
   VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
     Case b.addr[0].rtype of
-     vtTSharp4:AddTSharp4(P,fset,b.bind);
-     vtTSharp8:AddTSharp8(P,fset,b.bind);
+     vtTSharp4:AddTSharp4(P,vbSampled,fset,b.bind,b.flags);
+     vtTSharp8:AddTSharp8(P,vbSampled,fset,b.bind,b.flags);
      else
-      Assert(false);
+      Assert(false,'AddAttr');
     end;
+  //
+  VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+    if (vMipArray in b.flags) then
+    begin
+     Case b.addr[0].rtype of
+      vtTSharp4:AddTSharp4(P,vbMipStorage,fset,b.bind,b.flags);
+      vtTSharp8:AddTSharp8(P,vbMipStorage,fset,b.bind,b.flags);
+      else
+       Assert(false,'AddAttr');
+     end;
+    end else
+    begin
+     Case b.addr[0].rtype of
+      vtTSharp4:AddTSharp4(P,vbStorage,fset,b.bind,b.flags);
+      vtTSharp8:AddTSharp8(P,vbStorage,fset,b.bind,b.flags);
+      else
+       Assert(false,'AddAttr');
+     end;
+    end;
+  //
   //VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER=4,
   //VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER=5,
   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1269,11 +1341,11 @@ begin
      vtBufPtr2:AddBufPtr(P,Fset,b.size,b.bind,b.offset,b.flags);
      vtVSharp4:AddVSharp(P,Fset,b.bind,b.offset,b.flags);
      else
-      Assert(false);
+      Assert(false,'AddAttr');
     end;
 
   else
-   Assert(false);
+   Assert(false,'AddAttr');
  end;
 
  //Writeln('----');

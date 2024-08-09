@@ -617,7 +617,7 @@ begin
   iu_storage:
    begin
     //Separate storage access for special cases?
-    fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
+    //fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
     fusage:=ord(VK_IMAGE_USAGE_STORAGE_BIT);
    end;
   else
@@ -690,7 +690,7 @@ begin
   iu_storage:
    begin
     //Separate storage access for special cases?
-    fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
+    //fkey.cformat:=GET_VK_FORMAT_STORAGE(fkey.cformat);
     fusage:=ord(VK_IMAGE_USAGE_STORAGE_BIT);
    end;
   else

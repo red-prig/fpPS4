@@ -12,7 +12,6 @@ uses
  srRefId,
  srType,
  srTypes,
- srReg,
  srLayout,
  srVariable,
  srCapability,
@@ -74,6 +73,7 @@ type
    FArrayChainList:TsrArrayChainList;
   public
    FEmit:TCustomEmit;
+   FMipArray:Boolean;
    Procedure Init(Emit:TCustomEmit); inline;
    function  pReg:PsrRegUniform; inline;
    function  FetchArrayChain(pLine:Pointer;idx0:PsrNode):PsrArrayChain;
@@ -269,10 +269,12 @@ begin
     //
     dtTypeSampler:Result:='uSmp'+IntToStr(FBinding);
     //
+    dtTypeArray,
     dtTypeRuntimeArray:
      begin
       pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
 
+      if (pChild<>nil) then
       if (pChild^.dtype=dtTypeImage) then
       begin
        image_info:=pChild^.image_info;
@@ -329,10 +331,12 @@ begin
     //
     dtTypeSampler:Result:='US'; //VK_DESCRIPTOR_TYPE_SAMPLER
     //
+    dtTypeArray,
     dtTypeRuntimeArray:
      begin
       pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
 
+      if (pChild<>nil) then
       if (pChild^.dtype=dtTypeImage) then
       begin
        image_info:=pChild^.image_info;
@@ -342,7 +346,11 @@ begin
         Assert(false,'GetTypeChar');
        end else
        begin
-        Result:='R'+GetSampledTypeChar(image_info.Sampled);
+        Case FType^.dtype of
+         dtTypeArray       :Result:='A'+GetSampledTypeChar(image_info.Sampled);
+         dtTypeRuntimeArray:Result:='R'+GetSampledTypeChar(image_info.Sampled);
+         else;
+        end;
        end;
       end;
 
@@ -404,6 +412,10 @@ begin
  if (chain_write<>0) then
  begin
   Result:=Char(ord(Result) or ord('2'));
+ end;
+ if (FMipArray) then
+ begin
+  Result:=Char(ord(Result) or ord('4'));
  end;
 end;
 

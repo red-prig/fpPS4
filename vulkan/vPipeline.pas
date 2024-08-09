@@ -116,7 +116,11 @@ end;
 function TvSetLayout.Compile:Boolean;
 var
  cinfo:TVkDescriptorSetLayoutCreateInfo;
+ binfo:TVkDescriptorSetLayoutBindingFlagsCreateInfo;
+ bflag:array of TVkDescriptorBindingFlags;
  r:TVkResult;
+ i,c:Integer;
+ partially:Boolean;
 begin
  Result:=False;
 
@@ -126,10 +130,50 @@ begin
  cinfo.sType:=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
  cinfo.flags:=key.FFlags;
  cinfo.bindingCount:=Length(key.FBinds);
+ //
  if (cinfo.bindingCount<>0) then
  begin
   cinfo.pBindings:=@key.FBinds[0];
  end;
+ //
+ {
+ if (limits.DescriptorIndexingFeatures.descriptorBindingPartiallyBound<>0) then
+ begin
+  partially:=False;
+  c:=Length(key.FBinds);
+  if (c<>0) then
+  begin
+   For i:=0 to c-1 do
+   if (key.FBinds[i].descriptorCount>1) then
+   begin
+    partially:=True;
+    Break;
+   end;
+  end;
+  //
+  if partially then
+  begin
+   SetLength(bflag,c);
+   For i:=0 to c-1 do
+   begin
+    bflag[i]:=0;
+    if (key.FBinds[i].descriptorCount>1) then
+    begin
+     bflag[i]:=ord(VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT) or
+               ord(VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT);
+    end;
+   end;
+   //
+   binfo:=Default(TVkDescriptorSetLayoutBindingFlagsCreateInfo);
+   binfo.sType:=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+   binfo.bindingCount :=c;
+   binfo.pBindingFlags:=@bflag[0];
+   //
+   cinfo.pNext:=@binfo;
+  end;
+ end;
+ }
+ //
  r:=vkCreateDescriptorSetLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin

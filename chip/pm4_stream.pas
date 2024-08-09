@@ -1301,10 +1301,25 @@ begin
   With UniformBuilder.FImages[i] do
   begin
 
-   insert_image_resource(@node^.scope,
-                         FImage,
-                         TM_READ,
-                         [iu_sampled]);
+   case btype of
+    vbSampled:
+     begin
+      insert_image_resource(@node^.scope,
+                            FImage,
+                            memuse,
+                            [iu_sampled]);
+     end;
+    vbStorage,
+    vbMipStorage:
+     begin
+      insert_image_resource(@node^.scope,
+                            FImage,
+                            memuse,
+                            [iu_storage]);
+     end;
+    else
+     Assert(false);
+   end;
 
   end;
  end;

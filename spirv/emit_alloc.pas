@@ -117,6 +117,7 @@ begin
       DecorateList.OpDecorate(node,Decoration.ArrayStride,node^.array_stride);
      end;
      //
+     if (node^.OpId=Op.OpTypeRuntimeArray) then
      if (node^.is_array_image) then
      begin
       AddCapability(Capability.RuntimeDescriptorArray);

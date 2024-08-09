@@ -1010,6 +1010,10 @@ begin
 
      lod:=Gather_value(roffset,dtUint32);
 
+     lod:=OpAndTo(lod,15);
+
+     //lod:=NewReg_i(dtUint32,0);
+
      //lod:=OpNonUniform(lod); TODO
 
      //fetch image by index
@@ -1163,7 +1167,9 @@ begin
   IMAGE_STORE_MIP_PCK: //stored mip
     begin
      info.tinfo.Sampled:=2;
-     Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo);
+     //Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImageArray(pLayout,info.dtype,info.tinfo,16);
+     PsrUniform(Tgrp)^.FMipArray:=True;
 
      emit_image_store(Tgrp,@info);
     end;

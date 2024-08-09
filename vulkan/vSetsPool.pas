@@ -111,6 +111,7 @@ begin
  ainfo.descriptorPool    :=FHandle;
  ainfo.descriptorSetCount:=1;
  ainfo.pSetLayouts       :=@L.FHandle;
+ //VkDescriptorSetVariableDescriptorCountAllocateInfo -> RuntimeArray
  r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FResult);
  if (r<>VK_SUCCESS) then
  begin

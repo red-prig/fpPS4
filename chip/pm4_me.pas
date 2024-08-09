@@ -549,6 +549,7 @@ begin
 
  if (r<>VK_SUCCESS) then
  begin
+  EndFrameCapture;
   Assert(false,'QueueSubmit');
  end;
 
@@ -772,7 +773,7 @@ begin
    begin
     ri:=FetchImage(ctx.Cmd,
                    FImage,
-                   {[iu_sampled]} resource_instance^.curr.img_usage
+                   resource_instance^.curr.img_usage
                   );
 
     resource_instance^.resource^.rimage:=ri;
@@ -780,7 +781,7 @@ begin
 
    //Writeln(ri.key.cformat);
 
-   pm4_load_from(ctx.Cmd,ri,TM_READ);
+   pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
 
    ri.PushBarrier(ctx.Cmd,
                   GetAccessMask(resource_instance^.curr),
@@ -796,6 +797,52 @@ end;
 function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 begin
  Result:=addr-(addr mod alignment);
+end;
+
+procedure BindMipStorage(var ctx:t_me_render_context;
+                         fset,bind:TVkUInt32;
+                         DescriptorGroup:TvDescriptorInterface;
+                         ri:TvImage2;
+                         const FView:TvImageViewKey;
+                         Layout:TVkImageLayout);
+var
+ i,p:Integer;
+ iv:TvImageView2;
+ aiv:array[0..15] of TVkImageView;
+ MView:TvImageViewKey;
+begin
+ p:=0;
+ For i:=FView.base_array to FView.last_level do
+ begin
+  MView:=FView;
+  MView.last_level:=i;
+  //
+  iv:=ri.FetchView(ctx.Cmd,MView,iu_storage);
+  aiv[p]:=iv.FHandle;
+  //
+  Inc(p);
+ end;
+
+ //fill by 16?
+
+ while (p<16) do
+ begin
+  aiv[p]:=iv.FHandle;
+  //
+  Inc(p);
+ end;
+
+ //For i:=0 to p-1 do
+ //begin
+ // aiv[i]:=VK_NULL_HANDLE;
+ //end;
+
+
+ DescriptorGroup.BindStorages(fset,bind,
+                              0,p,
+                              @aiv[0],
+                              Layout);
+
 end;
 
 procedure Bind_Uniforms(var ctx:t_me_render_context;
@@ -836,19 +883,36 @@ begin
 
    Assert(ri<>nil);
 
-   {
-   ri:=FetchImage(ctx.Cmd,
-                  FImage,
-                  [iu_sampled]
-                 );
-   }
+   case btype of
+    vbSampled:
+     begin
+      iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
-   iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
+      DescriptorGroup.BindImage(fset,bind,
+                                iv.FHandle,
+                                GetImageLayout(resource_instance^.curr));
+     end;
+    vbStorage:
+     begin
+      iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
 
-   DescriptorGroup.BindImage(fset,bind,
-                             iv.FHandle,
-                             GetImageLayout(resource_instance^.curr));
+      DescriptorGroup.BindImage(fset,bind,
+                                iv.FHandle,
+                                GetImageLayout(resource_instance^.curr));
+     end;
+    vbMipStorage:
+     begin
+      BindMipStorage(ctx,
+                     fset,bind,
+                     DescriptorGroup,
+                     ri,
+                     FView,
+                     GetImageLayout(resource_instance^.curr));
 
+     end;
+    else
+     Assert(false);
+   end;
 
   end;
  end;

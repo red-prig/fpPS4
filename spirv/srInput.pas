@@ -62,7 +62,8 @@ type
 
   itSubgroupLocalInvocationId,
 
-  itPosition
+  itPositions,
+  itParameters
  );
 
  ntInput=class(ntDescriptor)
@@ -313,9 +314,14 @@ begin
        //
       end;
 
-    itPosition:
+    itPositions:
       begin
        pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
+      end;
+
+    itParameters:
+      begin
+       pDecorateList^.OpDecorate(pVar,Decoration.Location,node^.key.typeid);
       end;
 
     else
