@@ -95,14 +95,38 @@ begin
  Result:=nil;
  __end:=Addr+Size;
 
+ _repeat:
+
+ tmp:=Default(TvHostBufferKey);
+ tmp.FAddr :=Addr;
+ tmp.FUsage:=usage;
+
+ It:=FHostBufferSet.find(tmp);
+
+ if (It.Item<>nil) then
+ begin
+  buf:=It.Item^.FBuffer;
+
+  if buf.Acquire(nil) then
+  begin
+   Exit(buf);
+  end else
+  begin
+   //mem is deleted, free buf
+   FHostBufferSet.erase(It);
+   buf._Release(nil); //map ref
+   buf:=nil;
+   goto _repeat;
+  end;
+
+ end;
+
  tmp:=Default(TvHostBufferKey);
  tmp.FAddr :=__end;
  tmp.FUsage:=High(TVkFlags);
 
  //[s|new|e] ->
  //      [s|old|e]
-
- _repeat:
 
  It:=FHostBufferSet.find_ls(tmp);
 

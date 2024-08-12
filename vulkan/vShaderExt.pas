@@ -194,8 +194,8 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
-  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord;flags:TvLayoutFlags);
-  Procedure AddBufPtr(P:Pointer;fset,size,bind,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddBufPtr(P:Pointer          ;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 
   Procedure AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
   Procedure AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
@@ -1190,7 +1190,7 @@ begin
          (ord(vMemoryWrite in flags)*TM_WRITE);
 end;
 
-Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,offset:DWord;flags:TvLayoutFlags);
+Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  i,stride,num_records:Integer;
@@ -1208,18 +1208,22 @@ begin
 
  b.addr:=Pointer(PV^.base);
 
- stride:=PV^.stride;
+ stride     :=PV^.stride;
  num_records:=PV^.num_records;
- if (stride=0) then stride:=1;
+ //
+ if (stride=0)      then stride:=1;
  if (num_records=0) then num_records:=1;
+ //
  b.size:=stride*num_records;
+ //
+ if (b.size>size) then b.size:=size;
 
  i:=Length(FBuffers);
  SetLength(FBuffers,i+1);
  FBuffers[i]:=b;
 end;
 
-Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,size,bind,offset:DWord;flags:TvLayoutFlags);
+Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  i:Integer;
@@ -1338,8 +1342,8 @@ begin
   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
     Case b.addr[0].rtype of
      vtRoot,
-     vtBufPtr2:AddBufPtr(P,Fset,b.size,b.bind,b.offset,b.flags);
-     vtVSharp4:AddVSharp(P,Fset,b.bind,b.offset,b.flags);
+     vtBufPtr2:AddBufPtr(P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtVSharp4:AddVSharp(P,Fset,b.bind,b.size,b.offset,b.flags);
      else
       Assert(false,'AddAttr');
     end;

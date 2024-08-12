@@ -1803,7 +1803,7 @@ begin
  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkAllocateMemory:',r);
+  Writeln(StdErr,'vkAllocateMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex);
  end;
 end;
 
@@ -1828,7 +1828,7 @@ begin
  r:=vkAllocateMemory(device,@ainfo,nil,@Result);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkAllocateMemory:',r);
+  Writeln(StdErr,'vkAllocHostMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex,' addr=',HexStr(addr));
  end;
 end;
 

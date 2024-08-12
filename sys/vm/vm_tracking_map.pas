@@ -33,6 +33,7 @@ type
 type
  t_on_destroy=function(handle:Pointer):Integer;
  t_on_trigger=function(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+ t_on_overlap=function(handle:Pointer;data:Pointer):Integer;
 
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=packed record
@@ -47,6 +48,7 @@ type
   //
   on_destroy:t_on_destroy;
   on_trigger:t_on_trigger;
+  on_overlap:t_on_overlap;
   //
   ref_count :DWORD;
   htype     :T_THANDLE_TYPE;
@@ -70,7 +72,7 @@ type
   track_w  :DWORD;
   //
   prot     :Byte;
-  mark     :Boolean;
+  mark_cpu :Boolean;
  end;
 
  p_vm_track_object_instance=^t_vm_track_object_instance;
@@ -134,13 +136,17 @@ function  _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offs
 
 //
 
-function  vm_track_map_remove_object(map:p_vm_track_map;obj:p_vm_track_object):Integer;
-function  vm_track_map_remove_memory(map:p_vm_track_map;start,__end:vm_offset_t):Integer;
-function  vm_track_map_trigger      (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
+function  vm_track_map_remove_object (map:p_vm_track_map;obj:p_vm_track_object):Integer;
+function  vm_track_map_remove_memory (map:p_vm_track_map;start,__end:vm_offset_t):Integer;
+function  vm_track_map_trigger       (map:p_vm_track_map;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 
-function  vm_track_map_next_object  (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:T_THANDLE_TYPE):p_vm_track_object;
+function  vm_track_map_next_object   (map:p_vm_track_map;start:vm_offset_t;obj:p_vm_track_object;htype:T_THANDLE_TYPE):p_vm_track_object;
 
 procedure vm_track_map_restore_object(map:p_vm_track_map;obj:p_vm_track_object);
+
+procedure vm_track_map_set_prot      (map:p_vm_track_map;obj:p_vm_track_object;prot:Byte);
+
+function  vm_track_map_overlap       (map:p_vm_track_map;obj:p_vm_track_object;data:Pointer):Integer;
 
 implementation
 
@@ -431,10 +437,53 @@ begin
  Exit(y);
 end;
 
+procedure _vm_track_entry_change_prot(pmap:Pointer;entry:p_vm_track_map_entry;add_prot,del_prot:Byte);
+var
+ prot:Byte;
+begin
+ //update prot
+
+ if (add_prot and PAGE_TRACK_R)<>0 then
+ begin
+  Inc(entry^.track_r);
+ end;
+
+ if (add_prot and PAGE_TRACK_W)<>0 then
+ begin
+  Inc(entry^.track_w);
+ end;
+
+ if (del_prot and PAGE_TRACK_R)<>0 then
+ begin
+  Dec(entry^.track_r);
+ end;
+
+ if (del_prot and PAGE_TRACK_W)<>0 then
+ begin
+  Dec(entry^.track_w);
+ end;
+
+ prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
+       (ord(entry^.track_w<>0)*PAGE_TRACK_W);
+
+ if entry^.mark_cpu or
+    (prot<>entry^.prot) then
+ begin
+  entry^.prot:=prot;
+
+  if (pmap<>nil) then
+  begin
+   entry^.mark_cpu:=False;
+
+   pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
+  end;
+ end;
+
+end;
+
 procedure _vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_vm_track_object;source:vm_offset_t);
 var
  node:p_vm_track_object_instance;
- prot:Byte;
 begin
  node:=AllocMem(SizeOf(t_vm_track_object_instance));
 
@@ -450,31 +499,9 @@ begin
  vm_track_object_reference(obj);
 
  //update prot
- if (pmap<>nil) then
+ if (pmap=nil) then //if not copy_obj_list
  begin
-
-  if (obj^.prot and PAGE_TRACK_R)<>0 then
-  begin
-   Inc(entry^.track_r);
-  end;
-
-  if (obj^.prot and PAGE_TRACK_W)<>0 then
-  begin
-   Inc(entry^.track_w);
-  end;
-
-  prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
-        (ord(entry^.track_w<>0)*PAGE_TRACK_W);
-
-  if entry^.mark or
-     (prot<>entry^.prot) then
-  begin
-   entry^.prot:=prot;
-   entry^.mark:=False;
-
-   pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
-  end;
-
+  _vm_track_entry_change_prot(pmap,entry,obj^.prot,0);
  end;
  //
 end;
@@ -498,36 +525,13 @@ end;
 function _vm_track_entry_del_node(pmap:Pointer;entry:p_vm_track_map_entry;node:p_vm_track_object_instance):Boolean;
 var
  obj:p_vm_track_object;
- prot:Byte;
 begin
  obj:=node^.obj;
 
  //update prot
- if (pmap<>nil) then
+ if (pmap<>nil) then //if not vm_track_map_simplify_entry -> vm_track_entry_dispose -> vm_track_entry_del_obj_all
  begin
-
-  if (obj^.prot and PAGE_TRACK_R)<>0 then
-  begin
-   Dec(entry^.track_r);
-  end;
-
-  if (obj^.prot and PAGE_TRACK_W)<>0 then
-  begin
-   Dec(entry^.track_w);
-  end;
-
-  prot:=(ord(entry^.track_r<>0)*PAGE_TRACK_R) or
-        (ord(entry^.track_w<>0)*PAGE_TRACK_W);
-
-  if entry^.mark or
-     (prot<>entry^.prot) then
-  begin
-   entry^.prot:=prot;
-   entry^.mark:=False;
-
-   pmap_prot_track(pmap,entry^.start,entry^.__end,prot);
-  end;
-
+  _vm_track_entry_change_prot(pmap,entry,0,obj^.prot);
  end;
  //
 
@@ -1510,7 +1514,7 @@ begin
     end else
     if (mode=M_CPU_WRITE) then
     begin
-     entry^.mark:=True;
+     entry^.mark_cpu:=True;
     end;
 
     if ((ret and DO_INCREMENT)<>0) then
@@ -1567,10 +1571,7 @@ var
 begin
  Result:=nil;
 
- if (map=nil) then
- begin
-  Exit;
- end;
+ if (map=nil) then Exit;
 
  vm_track_map_lock(map);
 
@@ -1616,7 +1617,7 @@ var
  node:p_vm_track_object_instance;
  entry:p_vm_track_map_entry;
 begin
- if (obj=nil) then Exit;
+ if (map=nil) or (obj=nil) then Exit;
 
  vm_track_map_lock(map);
 
@@ -1626,9 +1627,9 @@ begin
  begin
   entry:=node^.entry;
 
-  if entry^.mark then
+  if entry^.mark_cpu then
   begin
-   entry^.mark:=False;
+   entry^.mark_cpu:=False;
 
    pmap_prot_track(map^.pmap,entry^.start,entry^.__end,entry^.prot);
   end;
@@ -1639,6 +1640,84 @@ begin
  vm_track_map_unlock(map);
 end;
 
+procedure vm_track_map_set_prot(map:p_vm_track_map;obj:p_vm_track_object;prot:Byte);
+var
+ node:p_vm_track_object_instance;
+ entry:p_vm_track_map_entry;
+begin
+ if (map=nil) or (obj=nil) then Exit;
+
+ if (obj^.prot=prot) then Exit;
+
+ vm_track_map_lock(map);
+
+ node:=TAILQ_FIRST(@obj^.instances);
+
+ while (node<>nil) do
+ begin
+  entry:=node^.entry;
+
+  if entry^.mark_cpu then
+  begin
+   //dont change mark_cpu
+   _vm_track_entry_change_prot(nil,entry,prot,obj^.prot);
+  end else
+  begin
+   _vm_track_entry_change_prot(map^.pmap,entry,prot,obj^.prot);
+  end;
+
+  node:=TAILQ_NEXT(node,@node^.obj_link);
+ end;
+
+ obj^.prot:=prot;
+
+ vm_track_map_unlock(map);
+end;
+
+function _vm_track_entry_overlap(entry:p_vm_track_map_entry;exclude,data:Pointer):Integer;
+var
+ node:p_vm_track_object_instance;
+ obj :p_vm_track_object;
+begin
+ Result:=0;
+
+ node:=vm_track_first_instance(entry^.instances);
+
+ while (node<>nil) do
+ begin
+  obj:=node^.obj;
+
+  if (obj<>exclude) then
+  if (obj^.on_overlap<>nil) then
+  begin
+   Result:=Result+obj^.on_overlap(obj^.handle,data);
+  end;
+
+  node:=vm_track_next_instance(entry^.instances,node);
+ end;
+end;
+
+function vm_track_map_overlap(map:p_vm_track_map;obj:p_vm_track_object;data:Pointer):Integer;
+var
+ node:p_vm_track_object_instance;
+ entry:p_vm_track_map_entry;
+begin
+ Result:=0;
+ if (map=nil) or (obj=nil) then Exit;
+
+ vm_track_map_lock(map);
+
+ node:=TAILQ_FIRST(@obj^.instances);
+
+ while (node<>nil) do
+ begin
+  Result:=Result+_vm_track_entry_overlap(node^.entry,obj,data);
+
+  node:=TAILQ_NEXT(node,@node^.obj_link);
+ end;
+
+ vm_track_map_unlock(map);
+end;
 
 end.
 

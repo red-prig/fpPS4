@@ -515,13 +515,14 @@ begin
   BUF_NUM_FORMAT_SINT   :Result:='SINT';
   BUF_NUM_FORMAT_FLOAT  :Result:='FLOAT';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
 function _get_buf_dfmt_str(b:Byte):RawByteString;
 begin
  Case b of
+  BUF_DATA_FORMAT_INVALID    :Result:='INVALID';
   BUF_DATA_FORMAT_8          :Result:='8';
   BUF_DATA_FORMAT_16         :Result:='16';
   BUF_DATA_FORMAT_8_8        :Result:='8_8';
@@ -537,7 +538,7 @@ begin
   BUF_DATA_FORMAT_32_32_32   :Result:='32_32_32';
   BUF_DATA_FORMAT_32_32_32_32:Result:='32_32_32_32';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -549,7 +550,7 @@ begin
   2:Result:='8';
   3:Result:='16';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -561,7 +562,7 @@ begin
   2:Result:='32';
   3:Result:='64';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -577,13 +578,14 @@ begin
   SQ_RSRC_IMG_2D_MSAA      :Result:='2D_MSAA';
   SQ_RSRC_IMG_2D_MSAA_ARRAY:Result:='2D_MSAA_ARRAY';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
 function _get_tex_dfmt_str(b:Byte):RawByteString;
 begin
  Case b of
+  IMG_DATA_FORMAT_INVALID          :Result:='INVALID';
   IMG_DATA_FORMAT_8                :Result:='8';
   IMG_DATA_FORMAT_16               :Result:='16';
   IMG_DATA_FORMAT_8_8              :Result:='8_8';
@@ -640,7 +642,7 @@ begin
   IMG_DATA_FORMAT_32_AS_8_8        :Result:='32_AS_8_8';
   IMG_DATA_FORMAT_32_AS_32_32_32_32:Result:='32_AS_32_32_32_32';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -656,7 +658,7 @@ begin
   IMG_NUM_FORMAT_FLOAT  :Result:='FLOAT';
   IMG_NUM_FORMAT_SRGB   :Result:='SRGB';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -672,7 +674,7 @@ begin
   6:Result:='14/16';
   7:Result:='16/16';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -693,7 +695,7 @@ begin
   SQ_TEX_CLAMP_BORDER           :Result:='CLAMP_BORDER';
   SQ_TEX_MIRROR_ONCE_BORDER     :Result:='MIRROR_ONCE_BORDER';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -706,7 +708,7 @@ begin
   SQ_TEX_ANISO_RATIO_8 :Result:='8';
   SQ_TEX_ANISO_RATIO_16:Result:='16';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -722,7 +724,7 @@ begin
   SQ_TEX_DEPTH_COMPARE_GREATEREQUAL:Result:='GREATEREQUAL';
   SQ_TEX_DEPTH_COMPARE_ALWAYS      :Result:='ALWAYS';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -765,7 +767,7 @@ begin
   SQ_IMG_FILTER_MODE_MIN  :Result:='MIN';
   SQ_IMG_FILTER_MODE_MAX  :Result:='MAX';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -777,7 +779,7 @@ begin
   TEX_XYFilter_AnisoPoint :Result:='AnisoPoint';
   TEX_XYFilter_AnisoLinear:Result:='AnisoLinear';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -788,7 +790,7 @@ begin
   TEX_ZFilter_Point :Result:='Point';
   TEX_ZFilter_Linear:Result:='Linear';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -800,7 +802,7 @@ begin
   TEX_MipFilter_Linear         :Result:='Linear';
   TEX_MipFilter_Point_Aniso_Adj:Result:='Point_Aniso_Adj';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -812,7 +814,7 @@ begin
   TEX_BorderColor_OpaqueWhite     :Result:='OpaqueWhite';
   TEX_BorderColor_Register        :Result:='Register';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 
@@ -896,7 +898,7 @@ begin
   $1A:Result:='Thick_3dXThick';
   $1F:Result:='Display_LinearGeneral';
   else
-    Result:='';
+    Result:='['+IntToStr(b)+']';
  end;
 end;
 

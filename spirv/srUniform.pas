@@ -492,7 +492,7 @@ begin
   pVar:=node^.pVar;
   if (pVar<>nil) and node^.IsUsed and (node^.FBinding=-1) then
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Binding,FBinding);
+   pDecorateList^.OpDecorate(pVar,Decoration.Binding      ,FBinding);
    pDecorateList^.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
 
    node^.FBinding:=FBinding;
@@ -543,12 +543,13 @@ begin
        Case image_info.Format of
 
         ImageFormat.Unknown:
+         if (image_info.Sampled=2) then //storage image
          begin
-          if (node^.FReg.read_count<>0) then
+          if (node^.chain_read<>0) then
           begin
            pCapabilityList^.Add(Capability.StorageImageWriteWithoutFormat);
           end;
-          if (node^.FReg.write_count<>0) then
+          if (node^.chain_write<>0) then
           begin
            pCapabilityList^.Add(Capability.StorageImageWriteWithoutFormat);
           end;

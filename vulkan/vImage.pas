@@ -66,6 +66,7 @@ type
   FHandle:TVkImage;
   FFormat:TVkFormat; //real used format
   FBind  :TvPointer;
+  FName  :RawByteString;
   procedure   FreeHandle; virtual;
   Destructor  Destroy; override;
   function    GetImageInfo:TVkImageCreateInfo; virtual; abstract;
@@ -1591,6 +1592,7 @@ end;
 
 procedure TvCustomImage.SetObjectName(const name:RawByteString);
 begin
+ FName:=name;
  DebugReport.SetObjectName(VK_OBJECT_TYPE_IMAGE,FHandle,PChar(name));
 end;
 

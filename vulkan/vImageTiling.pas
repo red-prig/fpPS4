@@ -193,7 +193,7 @@ end;
 
 type
  TvTempBuffer=class(TvBuffer)
-  procedure ReleaseTmp(Sender:TObject); register;
+  procedure ReleaseTmp(Sender:TObject); virtual; register;
  end;
 
 procedure TvTempBuffer.ReleaseTmp(Sender:TObject); register;
@@ -296,7 +296,10 @@ begin
  FileClose(F);
 end;
 
-Procedure _Copy_Linear(cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvCustomImage2);
+type
+ t_copy_type=(BufferToImage,ImageToBuffer);
+
+Procedure _Copy_Linear(ctype:t_copy_type;cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvCustomImage2);
 var
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
@@ -318,18 +321,38 @@ begin
 
  size:=GetLinearSize(image.key,false);
 
- image.PushBarrier(cmd,
-                   ord(VK_ACCESS_TRANSFER_WRITE_BIT),
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+ case ctype of
+  BufferToImage:
+   begin
+    image.PushBarrier(cmd,
+                      ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
- cmd.BufferMemoryBarrier(buf.FHandle,
-                         ord(VK_ACCESS_SHADER_WRITE_BIT),
-                         ord(VK_ACCESS_MEMORY_READ_BIT),
-                         0,size,
-                         ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
-                         ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
-                        );
+    cmd.BufferMemoryBarrier(buf.FHandle,
+                            ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                            ord(VK_ACCESS_TRANSFER_READ_BIT),
+                            0,size,
+                            ord(VK_PIPELINE_STAGE_HOST_BIT),
+                            ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                           );
+   end;
+  ImageToBuffer:
+   begin
+    image.PushBarrier(cmd,
+                      ord(VK_ACCESS_TRANSFER_READ_BIT),
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+    cmd.BufferMemoryBarrier(buf.FHandle,
+                            ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                            ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                            0,size,
+                            ord(VK_PIPELINE_STAGE_HOST_BIT),
+                            ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
+                           );
+   end;
+ end;
 
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
@@ -389,16 +412,28 @@ begin
  end;
  //mips
 
- cmd.CopyBufferToImage(buf.FHandle,
-                       image.FHandle,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       Length(BufferImageCopyA),
-                       @BufferImageCopyA[0]);
-
+ case ctype of
+  BufferToImage:
+   begin
+    cmd.CopyBufferToImage(buf.FHandle,
+                          image.FHandle,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          Length(BufferImageCopyA),
+                          @BufferImageCopyA[0]);
+   end;
+  ImageToBuffer:
+   begin
+    cmd.CopyImageToBuffer(image.FHandle,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          buf.FHandle,
+                          Length(BufferImageCopyA),
+                          @BufferImageCopyA[0]);
+   end;
+ end;
 
 end;
 
-Procedure copy_1dThin(var tiler:Tiler1d;src,dst:Pointer);
+Procedure copy_1dThin_to_linear(var tiler:Tiler1d;src,dst:Pointer);
 var
  m_bytePerElement:Ptruint;
  m_slice_size:Ptruint;
@@ -415,57 +450,52 @@ begin
      i:=0;
      tiler.getTiledElementByteOffset(i,x,y,z);
      pSrc:=@PByte(src)[i];
+     //
      pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     //
      Move(pSrc^,pDst^,m_bytePerElement);
     end;
 end;
 
-Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+Procedure copy_linear_to_1dThin(var tiler:Tiler1d;src,dst:Pointer);
 var
- buf:TvTempBuffer;
- vmem:TvPointer;
+ m_bytePerElement:Ptruint;
+ m_slice_size:Ptruint;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+begin
+ m_bytePerElement:=tiler.m_bytePerElement;
+ m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
+ //
+ For z:=0 to tiler.m_linearDepth-1 do
+  For y:=0 to tiler.m_linearHeight-1 do
+   For x:=0 to tiler.m_linearWidth-1 do
+    begin
+     pSrc:=@PByte(src)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     //
+     i:=0;
+     tiler.getTiledElementByteOffset(i,x,y,z);
+     pDst:=@PByte(dst)[i];
+     //
+     Move(pSrc^,pDst^,m_bytePerElement);
+    end;
+end;
 
+Procedure load_write_1dThin(ctype:t_copy_type;
+                            image:TvCustomImage2;
+                            m_full_linear_size:Ptruint;
+                            m_base:Pointer);
+var
  tiler:Tiler1d;
 
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
- //m_padwidth,m_padheight:Ptruint;
- //m_slice:Ptruint;
-
- m_full_linear_size:Ptruint;
-
- m_base:Pointer;
 
  src:Pointer;
  dst:Pointer;
 
  a:Ptruint;
 begin
- Assert(image.key.params.samples<=1,'image.key.params.samples>1');
-
- m_full_linear_size:=GetLinearSize(image.key,False);
- //m_base:=GetMem(m_full_linear_size);
-
- buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
-
- vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
-
- if (vmem.FMemory=nil) then
- begin
-  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
- end;
-
- buf.BindMem(vmem);
-
- //Release ref in ReleaseTmp
-
- m_base:=nil;
- vkMapMemory(Device.FHandle,
-             buf.FBind.FMemory.FHandle,
-             buf.FBind.FOffset,
-             m_full_linear_size,
-             0,
-             @m_base);
 
  dst:=m_base;
 
@@ -507,7 +537,10 @@ begin
    end;
 
    //x,y,z
-   copy_1dThin(tiler,src,dst);
+   case ctype of
+    BufferToImage:copy_1dThin_to_linear(tiler,src,dst);
+    ImageToBuffer:copy_linear_to_1dThin(tiler,dst,src);
+   end;
    //x,y,z
 
    {
@@ -548,10 +581,111 @@ begin
  //Writeln('size1=',(src-image.key.addr));
  //Writeln('size2=',Get1dThinSize(image.key));
 
- vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
- //FreeMem(m_base);
+end;
 
- _Copy_Linear(cmd,buf,image);
+Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+var
+ buf:TvTempBuffer;
+ vmem:TvPointer;
+
+ m_full_linear_size:Ptruint;
+
+ m_base:Pointer;
+begin
+ Assert(image.key.params.samples<=1,'image.key.params.samples>1');
+
+ m_full_linear_size:=GetLinearSize(image.key,False);
+
+ buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
+
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
+
+ if (vmem.FMemory=nil) then
+ begin
+  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
+ end;
+
+ buf.BindMem(vmem);
+
+ //Release ref in ReleaseTmp
+
+ m_base:=nil;
+ vkMapMemory(Device.FHandle,
+             buf.FBind.FMemory.FHandle,
+             buf.FBind.FOffset,
+             m_full_linear_size,
+             0,
+             @m_base);
+
+ load_write_1dThin(BufferToImage,
+                   image,
+                   m_full_linear_size,
+                   m_base);
+
+ vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
+
+ _Copy_Linear(BufferToImage,cmd,buf,image);
+end;
+
+type
+ TvTempBufferWriteback=class(TvTempBuffer)
+  image:TvCustomImage2;
+  m_full_linear_size:Ptruint;
+  procedure ReleaseTmp(Sender:TObject); override; register;
+ end;
+
+procedure TvTempBufferWriteback.ReleaseTmp(Sender:TObject); register;
+var
+ m_base:Pointer;
+begin
+ m_base:=nil;
+ vkMapMemory(Device.FHandle,
+             FBind.FMemory.FHandle,
+             FBind.FOffset,
+             m_full_linear_size,
+             0,
+             @m_base);
+
+ load_write_1dThin(ImageToBuffer,
+                   image,
+                   m_full_linear_size,
+                   m_base);
+
+ vkUnmapMemory(Device.FHandle,FBind.FMemory.FHandle);
+
+ image.Release(Self);
+ inherited;
+end;
+
+Procedure write_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+var
+ buf:TvTempBufferWriteback;
+ vmem:TvPointer;
+
+ m_full_linear_size:Ptruint;
+
+begin
+ Assert(image.key.params.samples<=1,'image.key.params.samples>1');
+
+ m_full_linear_size:=GetLinearSize(image.key,False);
+
+ buf:=TvTempBufferWriteback.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT),nil);
+
+ buf.image:=image;
+ buf.m_full_linear_size:=m_full_linear_size;
+
+ image.Acquire(buf);
+
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
+
+ if (vmem.FMemory=nil) then
+ begin
+  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
+ end;
+
+ buf.BindMem(vmem);
+
+ _Copy_Linear(ImageToBuffer,cmd,buf,image);
 end;
 
 Procedure Load_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
@@ -588,11 +722,11 @@ begin
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  cmd.BufferMemoryBarrier(buf.FHandle,
-                         ord(VK_ACCESS_SHADER_WRITE_BIT),
-                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                         ord(VK_ACCESS_TRANSFER_READ_BIT),
                          m_offset,
                          size,
-                         ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT),
+                         ord(VK_PIPELINE_STAGE_HOST_BIT),
                          ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
                         );
 
@@ -700,7 +834,7 @@ begin
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  cmd.BufferMemoryBarrier(buf.FHandle,
-                         ord(VK_ACCESS_MEMORY_READ_BIT),
+                         ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
                          ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                          m_offset,
                          size,
@@ -827,14 +961,14 @@ begin
  set_tiling_cbs(kTileModeThin_2dThin          ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
  //
- set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,nil,@Get1dThinSize);
- set_tiling_cbs(kTileModeDepth_1dThin         ,1,@load_1dThin,nil,@Get1dThinSize);
+ set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
+ set_tiling_cbs(kTileModeDepth_1dThin         ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
 
- set_tiling_cbs(kTileModeDisplay_1dThin       ,0,@load_1dThin,nil,@Get1dThinSize);
- set_tiling_cbs(kTileModeDisplay_1dThin       ,1,@load_1dThin,nil,@Get1dThinSize);
+ set_tiling_cbs(kTileModeDisplay_1dThin       ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
+ set_tiling_cbs(kTileModeDisplay_1dThin       ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
 
- set_tiling_cbs(kTileModeThin_1dThin          ,0,@load_1dThin,nil,@Get1dThinSize);
- set_tiling_cbs(kTileModeThin_1dThin          ,1,@load_1dThin,nil,@Get1dThinSize);
+ set_tiling_cbs(kTileModeThin_1dThin          ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
+ set_tiling_cbs(kTileModeThin_1dThin          ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
  //
 
  set_tiling_cbs(kTileModeDisplay_LinearAligned,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
@@ -902,6 +1036,8 @@ begin
 
  if not change_rate.need_read then Exit;
 
+ Writeln('loadfrom: ',image.FName);
+
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].load_from;
 
  if (cb=nil) then
@@ -939,6 +1075,8 @@ begin
   pm4_write_back(cmd,image.StencilOnly);
   Exit;
  end;
+
+  Writeln('writeback:',image.FName);
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].write_back;
 

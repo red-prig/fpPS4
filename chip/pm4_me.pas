@@ -154,14 +154,15 @@ type
   procedure BeginCmdBuffer;
   procedure FinishCmdBuffer;
   function  CmdStatus(i:t_pm4_stream_type):TVkResult;
-  procedure PingCmd;
+  function  PingCmd:Boolean;
+  function  WaitConfirm:Boolean;
   function  WaitConfirmOrSwitch:Boolean;
   Procedure InsertLabel(pLabelName:PVkChar);
   Procedure BeginLabel(pLabelName:PVkChar);
   Procedure EndLabel();
   //
   procedure switch_task;
-  procedure next_task;
+  procedure complete_and_next_task;
   procedure on_idle;
  end;
 
@@ -183,6 +184,7 @@ begin
  begin
   if (renderdoc.IsFrameCapturing()=0) then
   begin
+   SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources,1);
    renderdoc.StartFrameCapture(0,0);
   end;
  end;
@@ -606,13 +608,24 @@ begin
  Result:=VK_SUCCESS;
 end;
 
-procedure t_me_render_context.PingCmd;
+function t_me_render_context.PingCmd:Boolean;
 var
  i:t_pm4_stream_type;
 begin
+ Result:=False;
  for i:=Low(t_pm4_stream_type) to High(t_pm4_stream_type) do
  begin
-  CmdStatus(i);
+  Result:=Result or (CmdStatus(i)=VK_NOT_READY);
+ end;
+end;
+
+function t_me_render_context.WaitConfirm:Boolean;
+begin
+ Result:=(CmdStatus(stream^.buft)<>VK_NOT_READY);
+
+ if not Result then
+ begin
+  switch_task;
  end;
 end;
 
@@ -666,12 +679,11 @@ begin
  me^.switch_task;
 end;
 
-procedure t_me_render_context.next_task;
+procedure t_me_render_context.complete_and_next_task;
 begin
- if me^.next_task then
- begin
-  FinishCmdBuffer;
- end;
+ FinishCmdBuffer;
+ //
+ me^.next_task;
 end;
 
 procedure t_me_render_context.on_idle;
@@ -812,9 +824,10 @@ var
  MView:TvImageViewKey;
 begin
  p:=0;
- For i:=FView.base_array to FView.last_level do
+ For i:=FView.base_level to FView.last_level do
  begin
   MView:=FView;
+  MView.base_level:=i;
   MView.last_level:=i;
   //
   iv:=ri.FetchView(ctx.Cmd,MView,iu_storage);
@@ -831,12 +844,6 @@ begin
   //
   Inc(p);
  end;
-
- //For i:=0 to p-1 do
- //begin
- // aiv[i]:=VK_NULL_HANDLE;
- //end;
-
 
  DescriptorGroup.BindStorages(fset,bind,
                               0,p,
@@ -1471,47 +1478,59 @@ end;
 
 procedure pm4_Writeback_After(var ctx:t_me_render_context);
 var
- i:Integer;
+ //i:Integer;
 
  ri:TvImage2;
- rd:TvCustomImage2;
- rs:TvCustomImage2;
+ //rd:TvCustomImage2;
+ //rs:TvCustomImage2;
 
  resource_instance:p_pm4_resource_instance;
 
- d_instance:p_pm4_resource_instance;
- s_instance:p_pm4_resource_instance;
+ //d_instance:p_pm4_resource_instance;
+ //s_instance:p_pm4_resource_instance;
 begin
  //write back
 
- if (ctx.rt_info^.RT_COUNT<>0) then
- For i:=0 to ctx.rt_info^.RT_COUNT-1 do
-  if (ctx.rt_info^.RT_INFO[i].attachment<>VK_ATTACHMENT_UNUSED) then
+ resource_instance:=ctx.node^.scope.Min;
+
+ while (resource_instance<>nil) do
+ begin
+
+  if (resource_instance^.resource^.rtype=R_IMG) then
   begin
-
-   resource_instance:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
-
-   Assert(resource_instance<>nil);
-
    ri:=TvImage2(resource_instance^.resource^.rimage);
 
-   Assert(ri<>nil);
-
-   ri.mark_init;
-
-   if (resource_instance^.next_overlap.mem_usage<>0) then
+   if (ri<>nil) then
    begin
-    pm4_write_back(ctx.Cmd,ri);
-    //
-    resource_instance^.resource^.rwriteback:=False;
-   end else
-   begin
-    //
-    resource_instance^.resource^.rwriteback:=True;
+    Assert(not ri.IsDepthAndStencil);
+
+    //is write on current stage
+    if ((resource_instance^.curr.mem_usage and TM_WRITE)<>0) then
+    begin
+
+     ri.mark_init;
+
+     //is used in fuzzy match resources
+     if (resource_instance^.next_overlap.mem_usage<>0) then
+     begin
+      pm4_write_back(ctx.Cmd,ri);
+      //
+      resource_instance^.resource^.rwriteback:=False;
+     end else
+     begin
+      //
+      resource_instance^.resource^.rwriteback:=True;
+     end;
+
+    end;
    end;
 
   end;
 
+  resource_instance:=ctx.node^.scope.Next(resource_instance);
+ end;
+
+ {
  if ctx.rt_info^.DB_ENABLE then
  begin
 
@@ -1574,6 +1593,7 @@ begin
 
   //
  end;
+ }
 
  //write back
 end;
@@ -1666,6 +1686,8 @@ begin
    end;
   ntDrawIndexAuto:
    begin
+   DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+
     ctx.Cmd.DrawIndexAuto(node^.indexCount);
    end;
   ntClearDepth:
@@ -1759,6 +1781,7 @@ begin
   With UniformBuilder.FBuffers[i] do
   begin
 
+   //get buffer with write usege
    if ((memuse and TM_WRITE)<>0) then
    begin
     resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
@@ -2171,6 +2194,7 @@ var
  dst_dmem:PDWORD;
  byteSize:QWORD;
 begin
+ StartFrameCapture;
 
  case node^.dstSel of
   WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
@@ -2221,6 +2245,8 @@ var
  byteCount:DWORD;
  srcSel,dstSel:Byte;
 begin
+
+ StartFrameCapture;
 
  adrDst   :=node^.dst;
  adrSrc   :=node^.src;
@@ -2413,7 +2439,7 @@ begin
  ctx.Init;
  ctx.me:=me;
 
- imdone_count:=QWORD(-1);
+ imdone_count:=0;
 
  if use_renderdoc_capture then
  begin
@@ -2432,12 +2458,14 @@ begin
 
  repeat
 
+  //test submit done
   if (me^.imdone_count<>imdone_count) then
   begin
    imdone_count:=me^.imdone_count;
    EndFrameCapture;
   end;
 
+  //read from queue
   ctx.stream:=nil;
   if me^.queue.Pop(ctx.stream) then
   begin
@@ -2446,6 +2474,7 @@ begin
    ctx.stream:=nil;
   end;
 
+  //get next task
   ctx.stream:=me^.get_next;
 
   if (ctx.stream<>nil) then
@@ -2458,6 +2487,7 @@ begin
    end;
    //
 
+   //restore cursor
    ctx.node:=ctx.stream^.curr;
    if (ctx.node=nil) then
    begin
@@ -2467,55 +2497,62 @@ begin
 
    while (ctx.node<>nil) do
    begin
-    //Writeln('+',ctx.node^.ntype);
+    Writeln('+',ctx.node^.ntype);
 
-    case ctx.node^.ntype of
-     ntHint          :pm4_Hint          (ctx,Pointer(ctx.node));
-     ntDrawIndex2    :pm4_Draw          (ctx,Pointer(ctx.node));
-     ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
-     ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));
-     ntFastClear     :pm4_FastClear     (ctx,Pointer(ctx.node));
-     ntDispatchDirect:pm4_DispatchDirect(ctx,Pointer(ctx.node));
-     ntEventWrite    :pm4_EventWrite    (ctx,Pointer(ctx.node));
-     ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
-     ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
-     ntReleaseMem    :pm4_ReleaseMem    (ctx,Pointer(ctx.node));
-     ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));
-     ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
-     ntDmaData       :pm4_DmaData       (ctx,Pointer(ctx.node));
-     ntWaitRegMem    :pm4_WaitRegMem    (ctx,Pointer(ctx.node));
+     //wait last stall cmd ???
+    //if ctx.WaitConfirm then
+    begin
+     case ctx.node^.ntype of
+      ntHint          :pm4_Hint          (ctx,Pointer(ctx.node));
+      ntDrawIndex2    :pm4_Draw          (ctx,Pointer(ctx.node));
+      ntDrawIndexAuto :pm4_Draw          (ctx,Pointer(ctx.node));
+      ntClearDepth    :pm4_Draw          (ctx,Pointer(ctx.node));
+      ntFastClear     :pm4_FastClear     (ctx,Pointer(ctx.node));
+      ntDispatchDirect:pm4_DispatchDirect(ctx,Pointer(ctx.node));
+      ntEventWrite    :pm4_EventWrite    (ctx,Pointer(ctx.node));
+      ntEventWriteEop :pm4_EventWriteEop (ctx,Pointer(ctx.node));
+      ntSubmitFlipEop :pm4_SubmitFlipEop (ctx,Pointer(ctx.node));
+      ntReleaseMem    :pm4_ReleaseMem    (ctx,Pointer(ctx.node));
+      ntEventWriteEos :pm4_EventWriteEos (ctx,Pointer(ctx.node));
+      ntWriteData     :pm4_WriteData     (ctx,Pointer(ctx.node));
+      ntDmaData       :pm4_DmaData       (ctx,Pointer(ctx.node));
+      ntWaitRegMem    :pm4_WaitRegMem    (ctx,Pointer(ctx.node));
 
-     ntLoadConstRam  :pm4_LoadConstRam  (ctx,Pointer(ctx.node));
+      ntLoadConstRam  :pm4_LoadConstRam  (ctx,Pointer(ctx.node));
 
-     else
-      begin
-       Writeln(stderr,'me:+',ctx.node^.ntype);
-       Assert(false,'me:+');
-      end;
+      else
+       begin
+        Writeln(stderr,'me:+',ctx.node^.ntype);
+        Assert(false,'me:+');
+       end;
+     end;
     end;
 
     if me^.sheduler.switch then
     begin
      //save position
      ctx.stream^.curr:=ctx.node;
-     //
+     //Switching to another task
      Break;
     end;
 
-    //
+    //next command
     ctx.node:=ctx.stream^.Next(ctx.node);
    end;
 
    if me^.sheduler.switch then
    begin
-    me^.sheduler.switch:=False;
     //
+    me^.sheduler.switch:=False;
+    //Switching to another task
     Continue;
    end else
    begin
-    ctx.next_task;
+    //Complete the task and switch to the next one
+    ctx.complete_and_next_task;
    end;
 
+   //
    me^.remove_stream(ctx.stream);
    ctx.stream:=nil;
 
@@ -2523,19 +2560,20 @@ begin
    Continue;
   end;
 
-  ctx.PingCmd;
-
   //stall is empty!
 
   me^.reset_sheduler;
 
   ctx.rel_time:=0; //reset time
 
-  //
-  ctx.on_idle;
-  //
+  //TOD: Timeline semaphore
+  if not ctx.PingCmd then
+  begin
+   ctx.on_idle;
+  end;
 
-  RTLEventWaitFor(me^.event);
+  RTLEventWaitFor(me^.event,100);
+
  until false;
 
 end;

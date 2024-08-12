@@ -453,27 +453,26 @@ end;
 
 procedure me_idle; register;
 begin
+ if (me_idle_label=0) then Exit;
+ //
  if (me_idle_event<>nil) then
  begin
   RTLEventSetEvent(me_idle_event);
  end;
+ //
  me_idle_label:=0;
 end;
 
 procedure wait_me_idle;
 begin
- if (me_idle_label=0) then Exit;
-
- if (me_idle_event<>nil) then
+ //first wait PFP
+ if (GC_SRI_event<>nil) then
  begin
-  RTLEventWaitFor(me_idle_event);
+  RTLEventWaitFor(GC_SRI_event);
  end;
-end;
-
-procedure reset_me_idle;
-begin
- me_idle_label:=1;
-
+ //
+ me_idle_label:=0; //dont SetEvent
+ //
  if (me_idle_event=nil) then
  begin
   me_idle_event:=RTLEventCreate;
@@ -481,6 +480,11 @@ begin
  begin
   RTLEventResetEvent(me_idle_event);
  end;
+ //
+ me_idle_label:=1; //can SetEvent
+ //
+ pm4_me_gfx.trigger; //update if wait
+ RTLEventWaitFor(me_idle_event);
 end;
 
 procedure gc_imdone;
@@ -836,12 +840,6 @@ begin
 
   $C0108102: //submit
             begin
-             if sync_me_submit then
-             begin
-              reset_me_idle;
-             end;
-             //
-
              start_gfx_ring;
 
              rw_wlock(ring_gfx_lock);

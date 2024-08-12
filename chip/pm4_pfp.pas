@@ -1376,8 +1376,8 @@ begin
  if (addr<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' baseIndex=0x',HexStr(Body^.baseIndex,4));
-  Writeln(stderr,' address  =0x',HexStr(addr,16));
+  Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
+  Writeln(' address  =0x',HexStr(addr,16));
  end;
 end;
 
@@ -1391,11 +1391,11 @@ begin
  if (addr<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' startAddress=0x',HexStr(addr,16));
-  Writeln(stderr,' pred        =',Body^.predicationBoolean);
-  Writeln(stderr,' hint        =',Body^.hint);
-  Writeln(stderr,' predOp      =',Body^.predOp);
-  Writeln(stderr,' continueBit =',Body^.continueBit);
+  Writeln(' startAddress=0x',HexStr(addr,16));
+  Writeln(' pred        =',Body^.predicationBoolean);
+  Writeln(' hint        =',Body^.hint);
+  Writeln(' predOp      =',Body^.predOp);
+  Writeln(' continueBit =',Body^.continueBit);
  end;
 end;
 
@@ -1571,6 +1571,12 @@ begin
  Assert(pctx^.stream_type=stGfxDcb);
 
  Assert(Body^.baseSelect=0);
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' indexBase=',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
+ end;
+
  pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
  pctx^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
 end;
@@ -1578,6 +1584,11 @@ end;
 procedure onNumInstances(pctx:p_pfp_ctx;Body:PPM4CMDDRAWNUMINSTANCES);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' numInstances=',Body^.numInstances);
+ end;
 
  pctx^.CX_REG.VGT_DMA_NUM_INSTANCES:=Body^.numInstances;
  pctx^.UC_REG.VGT_NUM_INSTANCES    :=Body^.numInstances;
@@ -1591,6 +1602,12 @@ begin
  if p_print_gpu_ops then
  begin
   Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' indexBase =',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
+  Writeln(' indexCount=',Body^.indexCount);
  end;
 
  pctx^.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
@@ -1613,6 +1630,11 @@ begin
  if p_print_gpu_ops then
  begin
   Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' indexCount=',Body^.indexCount);
  end;
 
  pctx^.CX_REG.VGT_DMA_SIZE      :=Body^.indexCount;
@@ -1641,6 +1663,11 @@ begin
  if p_print_gpu_ops then
  begin
   Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' dim=',Body^.dimX,' ',Body^.dimY,' ',Body^.dimZ);
  end;
 
  pctx^.SC_REG.COMPUTE_DIM_X:=Body^.dimX;

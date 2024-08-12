@@ -206,6 +206,8 @@ type
 
  t_pm4_resource_curr_scope=object
   resource_instance_set:t_pm4_resource_instance_set;
+  function  Min:p_pm4_resource_instance;
+  function  Next(node:p_pm4_resource_instance):p_pm4_resource_instance;
   procedure insert(i:p_pm4_resource_instance);
   function  find_resource_instance(r:p_pm4_resource):p_pm4_resource_instance;
   function  find_image_resource_instance (const rkey:TvImageKey):p_pm4_resource_instance;
@@ -497,6 +499,16 @@ end;
 
 //
 
+function t_pm4_resource_curr_scope.Min:p_pm4_resource_instance;
+begin
+ Result:=resource_instance_set.Min;
+end;
+
+function t_pm4_resource_curr_scope.Next(node:p_pm4_resource_instance):p_pm4_resource_instance;
+begin
+ Result:=resource_instance_set.Next(node);
+end;
+
 procedure t_pm4_resource_curr_scope.insert(i:p_pm4_resource_instance);
 var
  f:p_pm4_resource_instance;
@@ -682,6 +694,7 @@ begin
  curr.shd_usage:=0;
  curr.clr_usage:=0;
  curr.dsa_usage:=0;
+ curr.img_usage:=img_usage;
 
  if ([iu_sampled,iu_storage]*img_usage<>[]) then
  begin
