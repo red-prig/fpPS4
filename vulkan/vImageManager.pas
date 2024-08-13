@@ -469,9 +469,7 @@ function TvImage2.GetImageInfo:TVkImageCreateInfo;
 begin
  Result:=Default(TVkImageCreateInfo);
  Result.sType        :=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
- Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat) or
-                       (key.params.cube    )*ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) or
-                       (key.params.array_2d)*ord(VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT);
+ Result.flags        :=GET_VK_IMAGE_CREATE_DEFAULT(key.cformat);
  Result.imageType    :=TVkImageType(key.params.itype);
  Result.format       :=key.cformat;
  Result.extent.Create(key.params.width,key.params.height,key.params.depth);
@@ -481,6 +479,18 @@ begin
  Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
  Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
+
+ if (key.params.cube<>0) then
+ begin
+  Result.flags:=Result.flags or ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+ end;
+
+ if (Result.imageType=VK_IMAGE_TYPE_3D) then
+ begin
+  Result.flags:=Result.flags or ord(VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT);
+ end;
+
+ //
 
  if (key.params.cube<>0) then
  begin
@@ -657,7 +667,7 @@ begin
       fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
      end;
     end else
-    if (key.params.array_2d<>0) then
+    if (key.params.arrayLayers>1) then
     begin
      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
     end else

@@ -476,6 +476,8 @@ begin
   dtUint64,
   dtVec4u16,
   dtVec4i16,
+  dtVec2u,
+  dtVec2i,
   dtVec2f,
   dtVec4h,
   dtStruct2i,

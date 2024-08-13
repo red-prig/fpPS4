@@ -1913,18 +1913,14 @@ begin
   SQ_RSRC_IMG_1D,
   SQ_RSRC_IMG_1D_ARRAY     :Result.params.itype:=ord(VK_IMAGE_TYPE_1D);
   SQ_RSRC_IMG_2D,
-  SQ_RSRC_IMG_2D_MSAA      :Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
+  SQ_RSRC_IMG_2D_ARRAY,
+  SQ_RSRC_IMG_2D_MSAA,
+  SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
   SQ_RSRC_IMG_3D           :Result.params.itype:=ord(VK_IMAGE_TYPE_3D);
   SQ_RSRC_IMG_CUBE         :
    begin
     Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
     Result.params.cube :=1;
-   end;
-  SQ_RSRC_IMG_2D_ARRAY     ,
-  SQ_RSRC_IMG_2D_MSAA_ARRAY:
-   begin
-    Result.params.itype   :=ord(VK_IMAGE_TYPE_2D);
-    Result.params.array_2d:=1;
    end;
   else;
    Assert(false,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));

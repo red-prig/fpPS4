@@ -19,7 +19,7 @@ type
   procedure emit_VOP3b;
   procedure emit_VOP3a;
   procedure emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
-  procedure emit_V_CMP_C(r,x:Boolean);
+  procedure emit_V_CMP_C (r,x:Boolean);
 
   procedure emit_src_neg_bit(src:PPsrRegNode;count:Byte);
   procedure emit_src_abs(src:PPsrRegNode);
@@ -54,7 +54,10 @@ type
   procedure emit_V_MAD_F32;
   procedure emit_V_MAD_LEGACY_F32;
   procedure emit_V_MAD_I32_I24;
+  function  fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
+  procedure MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
   procedure emit_V_MAD_U32_U24;
+  procedure emit_V_MAD_U64_U32;
   procedure emit_V_SAD_U32;
   procedure emit_V_MAX3_F32;
   procedure emit_V_MIN3_F32;
@@ -106,7 +109,9 @@ begin
  if not get_sdst7_pair(FSPI.VOP3a.VDST,@dst) then Exit;
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
  SetConst_b(dst[0],r);
  SetConst_q(dst[1],dtUnknow,0); //set zero
@@ -704,8 +709,8 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //FSPI.VOP3a.ABS   ignored
+ //FSPI.VOP3a.CLAMP ignored
  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
@@ -732,8 +737,8 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //FSPI.VOP3a.ABS   ignored
+ //FSPI.VOP3a.CLAMP ignored
  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
@@ -749,6 +754,66 @@ begin
  src[1]^.PrepType(ord(dtUInt32));
 
  OpFmaU32(dst,src[0],src[1],src[2]);
+end;
+
+function TEmit_VOP3.fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
+var
+ src:array[0..1] of PsrRegNode;
+ dst:PsrRegNode;
+begin
+ if not fetch_ssrc9_pair(SSRC,@src,dtUint32) then Assert(false);
+
+ dst:=NewReg(dtVec2u);
+ OpMakeCon(line,dst,@src);
+
+ Result:=BitcastList.FetchRead(rtype,dst);
+end;
+
+procedure TEmit_VOP3.MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
+var
+ dst:PsrRegNode;
+ node:array[0..1] of PsrRegNode;
+begin
+ dst:=BitcastList.FetchRead(dtVec2u,src);
+
+ node[0]:=dst0^.New(line,dtUint32);
+ node[1]:=dst1^.New(line,dtUint32);
+
+ OpExtract(line,node[0],dst,0);
+ OpExtract(line,node[1],dst,1);
+end;
+
+//vdst.du = vsrc0.u * vsrc1.u + vsrc2.du; VCC = carry & EXEC
+procedure TEmit_VOP3.emit_V_MAD_U64_U32;
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src:array[0..2] of PsrRegNode;
+ mul,sum:PsrRegNode;
+begin
+ dst[0]:=get_vdst8(FSPI.VOP3a.VDST+0);
+ dst[1]:=get_vdst8(FSPI.VOP3a.VDST+1);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ //FSPI.VOP3a.ABS   ignored
+ //FSPI.VOP3a.CLAMP ignored
+ Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+
+ src[0]:=fetch_ssrc9   (FSPI.VOP3a.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9   (FSPI.VOP3a.SRC1,dtUInt32);
+ src[2]:=fetch_ssrc9_64(FSPI.VOP3a.SRC2,dtUint64);
+
+ src[0]:=OpUToU(src[0],dtUint64);
+ src[1]:=OpUToU(src[1],dtUint64);
+
+ mul:=NewReg(dtUint64);
+ sum:=NewReg(dtUint64);
+
+ _Op2(line,Op.OpIMul,mul,src[0],src[1]);
+ _Op2(line,Op.OpIAdd,sum,mul   ,src[2]);
+
+ //TODO: VCC = carry & EXEC
+
+ MakeCopy64(dst[0],dst[1],sum);
 end;
 
 procedure TEmit_VOP3.emit_V_SAD_U32; //dst.u = abs(vsrc0.u - vsrc1.u) + vaccum.u
@@ -1314,6 +1379,7 @@ begin
 
   V_MAD_I32_I24: emit_V_MAD_I32_I24;
   V_MAD_U32_U24: emit_V_MAD_U32_U24;
+  V_MAD_U64_U32: emit_V_MAD_U64_U32;
 
   V_SAD_U32 : emit_V_SAD_U32;
   V_MAX3_F32: emit_V_MAX3_F32;

@@ -16,7 +16,7 @@ type
  TEmit_VOPC=class(TEmitFetch)
   procedure emit_VOPC;
   procedure emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
-  procedure emit_V_CMP_C(r,x:Boolean);
+  procedure emit_V_CMP_C (r,x:Boolean);
  end;
 
 implementation

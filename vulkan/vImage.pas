@@ -119,9 +119,8 @@ type
  TvImageKeyParams=bitpacked record
   itype      :0..3; //2 TVkImageType 0..2
   cube       :0..1; //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
-  array_2d   :0..1; //1 VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT
   pow2pad    :0..1; //1
-  reserved   :0..7; //3
+  reserved   :0..15; //4
   tiling     :TvTiling;
   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
   mipLevels  :Byte; //(0..15) (4)
