@@ -198,7 +198,7 @@ type
 
 procedure TvTempBuffer.ReleaseTmp(Sender:TObject); register;
 begin
- Release(nil);
+ //force free
  Free;
 end;
 
@@ -711,8 +711,7 @@ begin
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(image.key.addr),
-                      size,
-                      ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+                      size);
 
  m_offset:=buf.FAddr-QWORD(image.key.addr);
 
@@ -823,8 +822,7 @@ begin
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(image.key.addr),
-                      size,
-                      ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+                      size);
 
  m_offset:=buf.FAddr-QWORD(image.key.addr);
 

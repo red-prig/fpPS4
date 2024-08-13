@@ -1012,8 +1012,6 @@ begin
 
      lod:=OpAndTo(lod,15);
 
-     //lod:=NewReg_i(dtUint32,0);
-
      //lod:=OpNonUniform(lod); TODO
 
      //fetch image by index

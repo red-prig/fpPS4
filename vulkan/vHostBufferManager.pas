@@ -8,7 +8,6 @@ uses
  SysUtils,
  g23tree,
  Vulkan,
- vDevice,
  vMemory,
  vBuffer,
  vDependence;
@@ -21,7 +20,6 @@ type
 function FetchHostBuffer(cmd:TvDependenciesObject;
                          Addr:QWORD;
                          Size:TVkDeviceSize;
-                         usage:TVkFlags;
                          device_local:Boolean=False):TvHostBuffer;
 
 implementation
@@ -33,7 +31,6 @@ uses
 type
  TvHostBufferKey=packed record
   FAddr  :QWORD;
-  FUsage :TVkFlags;
   FBuffer:TvHostBuffer;
  end;
 
@@ -67,25 +64,31 @@ begin
  //1 FAddr
  Result:=Integer(a.FAddr>b.FAddr)-Integer(a.FAddr<b.FAddr);
  if (Result<>0) then Exit;
- //2 FUsage
- Result:=Integer(a.FUsage>b.FUsage)-Integer(a.FUsage<b.FUsage);
 end;
+
+var
+ host_alignment:TVkDeviceSize=0;
 
 function _fix_buf_size(var Addr:QWORD;var Size:TVkDeviceSize;usage:TVkFlags):TVkDeviceSize;
 var
  mr:TVkMemoryRequirements;
 begin
- mr:=GetRequirements(false,Size,usage,@buf_ext);
+ if (host_alignment=0) then
+ begin
+  mr:=GetRequirements(false,Size,usage,@buf_ext);
+  host_alignment:=mr.alignment;
+ end;
 
- Result:=(Addr mod mr.alignment);
+ Result:=(Addr mod host_alignment);
 
  Addr:=Addr-Result;
  Size:=Size+Result;
 end;
 
-function _FindHostBuffer(Addr:QWORD;Size:TVkDeviceSize;usage:TVkFlags):TvHostBuffer;
+function _FindHostBuffer(Addr:QWORD;Size:TVkDeviceSize):TvHostBuffer;
 label
- _repeat;
+ _repeat,
+ _delete;
 var
  It:TvHostBufferSet.Iterator;
  tmp:TvHostBufferKey;
@@ -99,7 +102,6 @@ begin
 
  tmp:=Default(TvHostBufferKey);
  tmp.FAddr :=Addr;
- tmp.FUsage:=usage;
 
  It:=FHostBufferSet.find(tmp);
 
@@ -109,9 +111,20 @@ begin
 
   if buf.Acquire(nil) then
   begin
-   Exit(buf);
+
+   if ((buf.FAddr+buf.FSize)>=__end) then
+   begin
+    Exit(buf);
+   end else
+   begin
+    buf.Release(nil);
+    //The search key matches but the size does not.
+    goto _delete;
+   end;
+
   end else
   begin
+   _delete:
    //mem is deleted, free buf
    FHostBufferSet.erase(It);
    buf._Release(nil); //map ref
@@ -123,7 +136,6 @@ begin
 
  tmp:=Default(TvHostBufferKey);
  tmp.FAddr :=__end;
- tmp.FUsage:=High(TVkFlags);
 
  //[s|new|e] ->
  //      [s|old|e]
@@ -138,8 +150,7 @@ begin
   begin
 
    if (buf.FAddr<=Addr) and
-      ((buf.FAddr+buf.FSize)>=__end) and
-      ((buf.FUsage and usage)=usage) then
+      ((buf.FAddr+buf.FSize)>=__end) then
    begin
     Exit(buf);
    end;
@@ -147,11 +158,7 @@ begin
    buf.Release(nil);
   end else
   begin
-   //mem is deleted, free buf
-   FHostBufferSet.erase(It);
-   buf._Release(nil); //map ref
-   buf:=nil;
-   goto _repeat;
+   goto _delete;
   end;
 
   if not It.Prev then Break;
@@ -159,10 +166,19 @@ begin
 
 end;
 
+const
+ ALL_BUFFER_USAGE=
+  ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or
+  ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT) or
+  ord(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) or
+  ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) or
+  ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) or
+  ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) or
+  ord(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+
 function FetchHostBuffer(cmd:TvDependenciesObject;
                          Addr:QWORD;
                          Size:TVkDeviceSize;
-                         usage:TVkFlags;
                          device_local:Boolean=False):TvHostBuffer;
 label
  _repeat;
@@ -180,11 +196,10 @@ begin
   Assert(false,'addr:0x'+HexStr(Pointer(Addr))+' not in dmem!');
  end;
 
- dmem_addr:=dmem_addr-_fix_buf_size(Addr,Size,usage);
+ dmem_addr:=dmem_addr-_fix_buf_size(Addr,Size,ALL_BUFFER_USAGE);
 
  key:=Default(TvHostBufferKey);
- key.FAddr :=Addr;
- key.FUsage:=usage;
+ key.FAddr:=Addr;
 
  //
  FHostBufferSet.Lock_wr;
@@ -192,7 +207,7 @@ begin
 
  _repeat:
 
- key.FBuffer:=_FindHostBuffer(Addr,Size,usage);
+ key.FBuffer:=_FindHostBuffer(Addr,Size);
 
  //
  FHostBufferSet.Unlock_wr;
@@ -200,7 +215,7 @@ begin
 
  if (key.FBuffer<>nil) then
  begin
-  //
+  mem:=Default(TvPointer);
  end else
  begin
   //create new
@@ -228,7 +243,7 @@ begin
 
   end;
 
-  key.FBuffer:=TvHostBuffer.Create(Size,usage,@buf_ext);
+  key.FBuffer:=TvHostBuffer.Create(Size,ALL_BUFFER_USAGE,@buf_ext);
   key.FBuffer.FAddr:=Addr;
 
   key.FBuffer.SetObjectName('HB_0x'+HexStr(Addr,10)+'..'+HexStr(Addr+Size,10));
@@ -260,6 +275,8 @@ begin
    goto _repeat;
   end;
 
+  key.FBuffer.Acquire(nil); //analog ref in [_FindHostBuffer]
+
   //
   FHostBufferSet.Unlock_wr;
   //
@@ -274,7 +291,8 @@ begin
 
  if (Result<>nil) then
  begin
-  Result.Release(nil); //release [FetchHostMap]/[_FindHostBuffer]
+  Result.Release(nil); //release [_FindHostBuffer]
+  mem.Release;         //release [FetchHostMap]
  end;
 
 end;

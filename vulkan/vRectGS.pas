@@ -110,7 +110,7 @@ begin
 
  //postion i/o
  InputPos :=SprvEmit.AddPositionsInput(3);
- OutputPos:=SprvEmit.FetchOutput(etPos0,dtVec4f);
+ OutputPos:=SprvEmit.FetchOutput(etPos0,dtVec4f)^.pVar;
 
  //input param i/o
  if (INPUT_COUNT<>0) then
@@ -118,7 +118,7 @@ begin
   for a:=0 to INPUT_COUNT-1 do
   begin
    InputParams [a]:=SprvEmit.AddParametersInput(INPUT_INFO[a].LAYOUT_ID,3);
-   OutputParams[a]:=SprvEmit.FetchOutput(TpsslExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f);
+   OutputParams[a]:=SprvEmit.FetchOutput(TpsslExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f)^.pVar;
   end;
  end;
 

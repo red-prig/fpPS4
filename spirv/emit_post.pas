@@ -17,6 +17,7 @@ uses
   srBuffer,
   srBitcast,
   srPrivate,
+  srOutput,
   srOp,
   srOpUtils,
   emit_fetch;
@@ -37,6 +38,7 @@ type
   function  RegVTStrict(pLine:PspirvOp;var node:PsrRegNode):Integer;
 
   //function  NodeOpSameOp(node:PSpirvOp):Integer;
+
   function  NodeOpStrict(node:PSpirvOp):Integer;
 
   function  OnOpStep1(node:PSpirvOp):Integer; //backward
@@ -462,6 +464,8 @@ begin
 
 end;
 
+//
+
 function TSprvEmit_post.OnOpStep1(node:PSpirvOp):Integer; //backward
 begin
  Result:=0;
@@ -645,6 +649,8 @@ begin
   //UpdateRegType OpLoad/OpStore
   DataLayoutList.EnumChain(@OnChainUpdate);
   PrivateList.Post;
+
+  OutputList.Post;
 
   repeat //OnOpStep6 Typecast
    i:=EnumBlockOpBackward(@OnOpStep6,pFunc^.pTop);

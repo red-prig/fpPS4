@@ -13,7 +13,6 @@ uses
   srFlow,
   srType,
   srReg,
-  srVariable,
   srOutput,
   srOp,
   srOpUtils,
@@ -194,7 +193,7 @@ Var
  node:PSpirvOp;
  pOpBlock:PsrOpBlock;
 
- dout:PsrVariable;
+ dout:PsrOutput;
  dst:PsrRegNode;
  src:array[0..3] of PsrRegNode;
  rtype:TsrDataType;
@@ -275,7 +274,7 @@ begin
    //shuffle ???
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   OpStore(line,dout,src[0]);
+   dout^.FetchStore(line,src[0]);
   end else
   begin
    //vector
@@ -313,7 +312,7 @@ begin
    dst:=OpMakeVec(line,rtype,@src);
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   OpStore(line,dout,dst);
+   dout^.FetchStore(line,dst);
   end;
 
  end else
@@ -355,7 +354,7 @@ begin
   dst:=OpMakeVec(line,rtype,@src);
 
   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-  OpStore(line,dout,dst);
+  dout^.FetchStore(line,dst);
  end;
 
  While (push_count<>0) do

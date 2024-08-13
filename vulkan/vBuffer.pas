@@ -16,6 +16,7 @@ type
   FSize  :TVkDeviceSize;
   FUsage :TVkFlags;
   FBind  :TvPointer;
+  FBRefs :ptruint;
   Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Constructor CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Destructor  Destroy; override;
@@ -23,6 +24,7 @@ type
   function    GetDedicatedAllocation:Boolean;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   UnBindMem(do_free:Boolean);
+  procedure   FreeHandle;
   procedure   OnReleaseMem(Sender:TObject); virtual;
   procedure   SetObjectName(const name:RawByteString);
   //
@@ -141,11 +143,7 @@ end;
 
 Destructor TvBuffer.Destroy;
 begin
- if (FHandle<>VK_NULL_HANDLE) then
- begin
-  vkDestroyBuffer(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
- end;
+ FreeHandle;
  //
  UnBindMem(True);
  //
@@ -204,24 +202,41 @@ begin
 end;
 
 procedure TvBuffer.UnBindMem(do_free:Boolean);
+var
+ B:TvPointer;
+ R:ptruint;
 begin
  if (FBind.FMemory<>nil) then
  begin
+  B:=FBind;
+  FBind.FMemory:=nil;
+  //
+  R:=ptruint(System.InterlockedExchange(Pointer(FBRefs),nil));
+  while (R<>0) do
+  begin
+   B.Release;
+   Dec(R);
+  end;
+  //
   if do_free then
   begin
-   MemManager.FreeMemory(FBind);
+   MemManager.FreeMemory(B);
   end;
  end;
- FBind.FMemory:=nil;
 end;
 
-procedure TvBuffer.OnReleaseMem(Sender:TObject);
+procedure TvBuffer.FreeHandle;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkDestroyBuffer(Device.FHandle,FHandle,nil);
   FHandle:=VK_NULL_HANDLE;
  end;
+end;
+
+procedure TvBuffer.OnReleaseMem(Sender:TObject);
+begin
+ FreeHandle;
  //
  UnBindMem(False);
 end;
@@ -243,12 +258,43 @@ end;
 
 function TvBuffer.Acquire(Sender:TObject):Boolean;
 begin
- Result:=FBind.Acquire;
+ if (FBind.FMemory<>nil) then
+ begin
+  Result:=FBind.Acquire;
+  if Result then
+  begin
+   System.InterlockedIncrement(Pointer(FBRefs));
+   inherited Acquire(Sender);
+  end;
+ end else
+ begin
+  Result:=inherited Acquire(Sender);
+ end;
 end;
 
 procedure TvBuffer.Release(Sender:TObject);
+var
+ B:TvPointer;
+ R:ptruint;
 begin
- FBind.Release;
+ while True do
+ begin
+  B:=FBind;
+  if (B.FMemory<>nil) and (FBRefs<>0) then
+  begin
+   R:=FBRefs;
+   if (System.InterlockedCompareExchange(Pointer(FBRefs),Pointer(R-1),Pointer(R))=Pointer(R)) then
+   begin
+    B.Release;
+    inherited Release(Sender);
+    Break;
+   end;
+  end else
+  begin
+   inherited Release(Sender);
+   Break;
+  end;
+ end;
 end;
 
 

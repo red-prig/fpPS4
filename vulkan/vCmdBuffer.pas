@@ -929,7 +929,7 @@ begin
  With FAttrBuilder.FBindVBufs[i] do
  begin
 
-  rb:=FetchHostBuffer(Self,QWORD(min_addr),GetSize,ord(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+  rb:=FetchHostBuffer(Self,QWORD(min_addr),GetSize);
 
   if (last_binding<>binding) then
   begin
@@ -1200,10 +1200,10 @@ begin
 
  DebugReport.CmdBeginLabel(FCmdbuf,'dmaData');
 
- srcb:=FetchHostBuffer(Self,QWORD(src),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+ srcb:=FetchHostBuffer(Self,QWORD(src),byteCount);
  Assert(srcb<>nil);
 
- dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount);
  Assert(dstb<>nil);
 
  info:=Default(TVkBufferCopy);
@@ -1273,7 +1273,7 @@ begin
 
  DebugReport.CmdBeginLabel(FCmdbuf,'dmaData');
 
- dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ dstb:=FetchHostBuffer(Self,QWORD(dst),byteCount);
  Assert(dstb<>nil);
 
  dstOffset:=QWORD(dst)-dstb.FAddr;
@@ -1368,7 +1368,7 @@ begin
    Assert(false,'WriteEos.eventType');
  end;
 
- rb:=FetchHostBuffer(Self,QWORD(dst),4,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT));
+ rb:=FetchHostBuffer(Self,QWORD(dst),4);
  Assert(rb<>nil);
 
  BufOffset:=QWORD(dst)-rb.FAddr;
@@ -1528,7 +1528,7 @@ begin
 
  Size:=(indexOffset+indexCount)*GET_INDEX_TYPE_SIZE(FINDEX_TYPE);
 
- rb:=FetchHostBuffer(Self,QWORD(IndexBase),Size,ord(VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+ rb:=FetchHostBuffer(Self,QWORD(IndexBase),Size);
  Assert(rb<>nil);
 
  Inc(cmd_count);

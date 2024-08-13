@@ -85,7 +85,7 @@ type
   function  FetchImageArray(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;array_count:DWORD):PsrNode;
   function  FetchImageRuntimeArray(src:PsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo):PsrNode;
   function  FetchSampler(src:PsrDataLayout):PsrNode;
-  function  FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrVariable;
+  function  FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
  end;
 
 function  GetInputRegNode(node:PsrRegNode):PsrInput;
@@ -764,12 +764,9 @@ begin
  Result:=FetchUniformSimple(src,pType);
 end;
 
-function TEmitFetch.FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrVariable;
-var
- o:PsrOutput;
+function TEmitFetch.FetchOutput(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
 begin
- o:=OutputList.Fetch(etype,rtype);
- Result:=o^.pVar;
+ Result:=OutputList.Fetch(etype,rtype);
 end;
 
 end.

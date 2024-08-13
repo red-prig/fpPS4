@@ -960,7 +960,7 @@ begin
    end;
    }
 
-   buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size,ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+   buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size);
 
    diff:=QWORD(addr)-buf.FAddr;
 
@@ -2497,7 +2497,7 @@ begin
 
    while (ctx.node<>nil) do
    begin
-    Writeln('+',ctx.node^.ntype);
+    //Writeln('+',ctx.node^.ntype);
 
      //wait last stall cmd ???
     //if ctx.WaitConfirm then
