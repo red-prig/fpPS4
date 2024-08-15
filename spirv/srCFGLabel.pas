@@ -10,10 +10,11 @@ uses
  srNode;
 
 type
- PsrLabelBlock=^TsrLabelBlock;
+ TsrLabelBlock=class;
 
+ PSrcAdr=^TSrcAdr;
  TSrcAdr=object
-  pCode:PsrLabelBlock;
+  pCode:TsrLabelBlock;
   Offdw:ptrint;
   function get_code_ptr:PDWORD;
   function get_dmem_ptr:PDWORD;
@@ -21,11 +22,11 @@ type
 
  TsrLCursor=object(TShaderParser)
   private
-   pCode:PsrLabelBlock;
+   pCode:TsrLabelBlock;
    function  get_src_adr:TSrcAdr;
    Procedure set_src_adr(src:TSrcAdr);
   public
-   procedure Init(Code:PsrLabelBlock);
+   procedure Init(Code:TsrLabelBlock);
    property  Adr:TSrcAdr read get_src_adr write set_src_adr;
  end;
 
@@ -35,28 +36,30 @@ type
 
  TsrBlockType=(btMain,btAdr,btAdrBranch,btSetpc,btCond,btLoop,btOther);
 
- PsrLabel=^TsrLabel;
- TsrLabel=object
-  pLeft,pRight:PsrLabel;
-  //----
-  Adr:TSrcAdr;
-  lType:TsrSetLabelType;
-  function  c(n1,n2:PsrLabel):Integer; static;
-  Procedure AddType(t:TsrLabelType);
-  Procedure RemType(t:TsrLabelType);
-  function  IsType(t:TsrLabelType):Boolean;
+ TsrLabel=class
+  public
+   pLeft,pRight:TsrLabel;
+  private
+   key:TSrcAdr;
+  public
+   lType:TsrSetLabelType;
+   class function c(n1,n2:PSrcAdr):Integer; static;
+   property  Adr:TSrcAdr read key;
+   Procedure AddType(t:TsrLabelType);
+   Procedure RemType(t:TsrLabelType);
+   function  IsType(t:TsrLabelType):Boolean;
  end;
 
- TsrLabels=specialize TNodeFetch<PsrLabel,TsrLabel>;
+ TsrLabels=specialize TNodeTreeClass<TsrLabel>;
 
- TsrLabelBlock=object
+ TsrLabelBlock=class
   FEmit:TCustomEmit;
   Body:Pointer;
   DMem:Pointer;
   Size:ptruint;
   FLabels:TsrLabels;
-  Function  FindLabel (Adr:TSrcAdr):PsrLabel;
-  Function  FetchLabel(Adr:TSrcAdr):PsrLabel;
+  Function  FindLabel (Adr:TSrcAdr):TsrLabel;
+  Function  FetchLabel(Adr:TSrcAdr):TsrLabel;
   Function  IsContain (P:Pointer):Boolean;
  end;
 
@@ -71,7 +74,7 @@ begin
   Result:=nil;
  end else
  begin
-  Result:=PDWORD(pCode^.Body);
+  Result:=PDWORD(pCode.Body);
  end;
  //
  Result:=PDWORD(Result)+Offdw;
@@ -84,17 +87,17 @@ begin
   Result:=nil
  end else
  begin
-  Result:=PDWORD(pCode^.DMem);
+  Result:=PDWORD(pCode.DMem);
  end;
  //
  Result:=PDWORD(Result)+Offdw;
 end;
 
 
-procedure TsrLCursor.Init(Code:PsrLabelBlock);
+procedure TsrLCursor.Init(Code:TsrLabelBlock);
 begin
  pCode    :=Code;
- Body     :=Code^.DMem;
+ Body     :=Code.DMem;
  OFFSET_DW:=0;
 end;
 
@@ -108,17 +111,17 @@ end;
 Procedure TsrLCursor.set_src_adr(src:TSrcAdr);
 begin
  pCode    :=src.pCode;
- Body     :=pCode^.DMem;
+ Body     :=pCode.DMem;
  OFFSET_DW:=src.Offdw;
 end;
 
-function TsrLabel.c(n1,n2:PsrLabel):Integer;
+class function TsrLabel.c(n1,n2:PSrcAdr):Integer;
 var
  p1,p2:Pointer;
 begin
- p1:=n1^.Adr.get_code_ptr;
- p2:=n2^.Adr.get_code_ptr;
- Result:=Integer(p1>p2)-Integer(p1<p2);
+ p1:=n1^.get_code_ptr;
+ p2:=n2^.get_code_ptr;
+ Result:=ord(p1>p2)-ord(p1<p2);
 end;
 
 Procedure TsrLabel.AddType(t:TsrLabelType);
@@ -141,30 +144,21 @@ begin
  Result:=FSPI.OFFSET_DW+Smallint(FSPI.SOPP.SIMM)+1;
 end;
 
-Function TsrLabelBlock.FindLabel(Adr:TSrcAdr):PsrLabel;
-var
- node:TsrLabel;
+Function TsrLabelBlock.FindLabel(Adr:TSrcAdr):TsrLabel;
 begin
- Assert(Adr.pCode=@self);
- Result:=nil;
- node:=Default(TsrLabel);
- node.Adr:=Adr;
- Result:=FLabels.Find(@node);
+ Assert(Adr.pCode=self);
+ Result:=FLabels.Find(@Adr);
 end;
 
-Function TsrLabelBlock.FetchLabel(Adr:TSrcAdr):PsrLabel;
-var
- node:TsrLabel;
+Function TsrLabelBlock.FetchLabel(Adr:TSrcAdr):TsrLabel;
 begin
- Assert(Adr.pCode=@self);
+ Assert(Adr.pCode=self);
  Result:=nil;
- node:=Default(TsrLabel);
- node.Adr:=Adr;
- Result:=FLabels.Find(@node);
+ Result:=FLabels.Find(@Adr);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrLabel));
-  Result^.Adr:=Adr;
+  Result:=FEmit.specialize New<TsrLabel>;
+  Result.key:=Adr;
   FLabels.Insert(Result);
  end;
 end;

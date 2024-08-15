@@ -9,32 +9,32 @@ uses
  srNode;
 
 type
- PsrCapability=^TsrCapability;
- TsrCapability=object
-  pLeft,pRight:PsrCapability;
+ TsrCapability=class
+  pLeft,pRight:TsrCapability;
   //----
-  ID:DWORD;
-  function c(n1,n2:PsrCapability):Integer; static;
+  KEY:DWORD; //ID
+  class function c(n1,n2:PDWORD):Integer; static;
+  property ID:DWORD read KEY;
  end;
 
  PsrCapabilityList=^TsrCapabilityList;
  TsrCapabilityList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrCapability,TsrCapability>;
+   TNodeTree=specialize TNodeTreeClass<TsrCapability>;
   var
    FEmit:TCustomEmit;
-   FNTree:TNodeFetch;
+   FTree:TNodeTree;
   Procedure Init(Emit:TCustomEmit);
   procedure Add(ID:DWORD);
-  Function  First:PsrCapability;
-  Function  Next(node:PsrCapability):PsrCapability;
+  Function  First:TsrCapability;
+  Function  Next(node:TsrCapability):TsrCapability;
  end;
 
 implementation
 
-function TsrCapability.c(n1,n2:PsrCapability):Integer;
+class function TsrCapability.c(n1,n2:PDWORD):Integer;
 begin
- Result:=Integer(n1^.ID>n2^.ID)-Integer(n1^.ID<n2^.ID);
+ Result:=ord(n1^>n2^)-ord(n1^<n2^);
 end;
 
 Procedure TsrCapabilityList.Init(Emit:TCustomEmit);
@@ -44,25 +44,22 @@ end;
 
 procedure TsrCapabilityList.Add(ID:DWORD);
 var
- fnode:TsrCapability;
- pnode:PsrCapability;
+ node:TsrCapability;
 begin
- fnode:=Default(TsrCapability);
- fnode.ID:=ID;
- if (FNTree.Find(@fnode)<>nil) then Exit;
- pnode:=FEmit.Alloc(SizeOf(TsrCapability));
- Move(fnode,pnode^,SizeOf(TsrCapability));
- FNTree.Insert(pnode);
+ if (FTree.Find(@ID)<>nil) then Exit;
+ node:=FEmit.specialize New<TsrCapability>;
+ node.KEY:=ID;
+ FTree.Insert(node);
 end;
 
-Function TsrCapabilityList.First:PsrCapability;
+Function TsrCapabilityList.First:TsrCapability;
 begin
- Result:=FNTree.Min;
+ Result:=FTree.Min;
 end;
 
-Function TsrCapabilityList.Next(node:PsrCapability):PsrCapability;
+Function TsrCapabilityList.Next(node:TsrCapability):TsrCapability;
 begin
- Result:=FNTree.Next(node);
+ Result:=FTree.Next(node);
 end;
 
 end.

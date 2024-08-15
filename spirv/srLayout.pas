@@ -19,7 +19,8 @@ uses
  srVariable,
  srBitcast,
  srRefId,
- srDecorate;
+ srDecorate,
+ srConfig;
 
 type
  TsrResourceType=(
@@ -36,26 +37,11 @@ type
  );
 
 type
- ntChain=class(TsrNodeVmt)
-  class Procedure zero_read   (node:PsrNode);               override;
-  class Procedure zero_unread (node:PsrNode);               override;
-  class Function  pwrite_count(node:PsrNode):PDWORD;        override;
-  class Procedure SetWriter   (node,w,line:PsrNode);        override;
-  class Procedure ResetWriter (node,w:PsrNode);             override;
-  class function  Down        (node:PsrNode):Pointer;       override;
-  class function  Next        (node:PsrNode):Pointer;       override;
-  class function  Prev        (node:PsrNode):Pointer;       override;
-  class function  Parent      (node:PsrNode):Pointer;       override;
-  class Procedure PrepType    (node:PPrepTypeNode);         override;
-  class function  GetPrintName(node:PsrNode):RawByteString; override;
-  class function  GetRef      (node:PsrNode):Pointer;       override;
- end;
-
- PsrDataLayout=^TsrDataLayout;
+ TsrDataLayout=class;
 
  PsrChainLvl_1=^TsrChainLvl_1;
  TsrChainLvl_1=object
-  pIndex:PsrRegNode;
+  pIndex:TsrRegNode;
   stride:PtrUint;
   function c(n1,n2:PsrChainLvl_1):Integer; static;
  end;
@@ -67,126 +53,167 @@ type
   function c(n1,n2:PsrChainLvl_0):Integer; static;
  end;
 
- PsrChain=^TsrChain;
- TsrChain=object(TsrNode)
-  type
-   PVNode=^TVNode;
-   TVNode=record
-    pPrev,pNext:PVNode;
-    pLine:PspirvOp;
-   end;
-   TNodeList=specialize TNodeList<PVNode>;
+ TsrChainFlags=bitpacked record
+  dtype:TsrDataType; //dtUnknow=weak type
+  GLC  :Boolean;     //Coherent
+  SLC  :Boolean;     //Volatile
+ end;
+
+type
+ PsrChainKey=^TsrChainKey;
+ TsrChainKey=packed record
+  lvl_1:TsrChainLvl_1;
+  lvl_0:TsrChainLvl_0;
+  Flags:TsrChainFlags;
+ end;
+
+ TsrChain=class(TsrNode)
   public
-   pLeft,pRight:PsrChain;
-   function  c(n1,n2:PsrChain):Integer; static;
+   pPrev,pNext :TsrChain;
+   pLeft,pRight:TsrChain;
+   class function c(n1,n2:PsrChainKey):Integer; static;
   private
-   fwrite_count:DWORD;
    //--
    ID:TsrRefId; //post id
-   FParent:PsrDataLayout;
-   key:packed record
-    lvl_1:TsrChainLvl_1;
-    lvl_0:TsrChainLvl_0;
-   end;
-   FBuffer:PsrNode;
-   FWriter:PsrNode;
+   FParent:TsrDataLayout;
+   key:TsrChainKey;
+   FBuffer:TsrNode;
+   FWriter:TsrNode;
    Fdtype:TsrDataType;
-   FList:TNodeList;
-   Procedure SetWriter(t:PsrNode);
-   Function  GetWriter:PsrNode;
-   Procedure SetBuffer(t:PsrNode);
-   Function  GetBuffer:PsrNode;
+   FList:TDependenceNodeList;
+   Procedure SetWriter(t:TsrNode);
+   Function  GetWriter:TsrNode;
+   Procedure SetBuffer(t:TsrNode);
+   Function  GetBuffer:TsrNode;
    Procedure SetRegType(rtype:TsrDataType);
+   Procedure SetIndex(t:TsrRegNode);
+   Procedure SetOffset(t:PtrUint);
   public
-   pField:Pointer;
-   property  Parent:PsrDataLayout read FParent;
-   property  pIndex:PsrRegNode    read key.lvl_1.pIndex;
+   pField:TObject;
+   //
+   FUndoIndex :TsrNode;
+   FUndoOffset:PtrUint;
+   //
+   Procedure _zero_read   ;                     override;
+   Procedure _zero_unread ;                     override;
+   Procedure _SetWriter   (w,line:TsrNode);     override;
+   Procedure _ResetWriter (w:TsrNode);          override;
+   function  _Down        :TsrNode;             override;
+   function  _Next        :TsrNode;             override;
+   function  _Prev        :TsrNode;             override;
+   function  _Parent      :TsrNode;             override;
+   Function  _GetStorageClass:DWORD;            override;
+   Procedure _PrepType    (node:PPrepTypeNode); override;
+   function  _GetPrintName:RawByteString;       override;
+   function  _GetRef      :Pointer;             override;
+   //
+   property  Parent:TsrDataLayout read FParent;
+   property  pIndex:TsrRegNode    read key.lvl_1.pIndex write SetIndex;
    property  stride:PtrUint       read key.lvl_1.stride;
    property  size  :PtrUint       read key.lvl_0.size;
-   property  offset:PtrUint       read key.lvl_0.offset;
-   property  dtype:TsrDataType    read Fdtype write SetRegType;
-   property  pWriter:PsrNode      read GetWriter write SetWriter;
-   property  pBuffer:PsrNode      read GetBuffer write SetBuffer;
-   Procedure Init(L:PsrDataLayout);
-   function  Emit:TCustomEmit;
+   property  offset:PtrUint       read key.lvl_0.offset write SetOffset;
+   property  Flags:TsrChainFlags  read key.Flags;
+   property  dtype :TsrDataType   read Fdtype    write SetRegType;
+   property  pWriter:TsrNode      read GetWriter write SetWriter;
+   property  pBuffer:TsrNode      read GetBuffer write SetBuffer;
+   function  dweak:Boolean;
+   Procedure Init(L:TsrDataLayout);
    Procedure UpdateRegType;
    Procedure PrepType(new:TsrDataType);
-   procedure AddLine(pLine:PspirvOp);
-   function  FirstLine:PspirvOp;
-   procedure FetchLoad(pLine:PspirvOp;dst:PsrRegNode);
-   Procedure FetchStore(pLine:PspirvOp;src:PsrRegNode);
+   procedure AddLine(pLine:TSpirvOp);
+   function  FirstLine:TSpirvOp;
+   procedure FetchLoad (pLine:TSpirvOp;dst:TsrRegNode);
+   Procedure FetchStore(pLine:TSpirvOp;src:TsrRegNode);
    function  GetPrintName:RawByteString;
  end;
 
- TsrChains=array[0..7] of PsrChain;
+ ntChain=TsrChain;
 
- TChainCb=function(node:PsrChain):Integer of object;
+ TsrChains=array[0..7] of TsrChain;
+
+ TChainCb=function(node:TsrChain):Integer of object;
 
  //----
 
- TsrDataLayout=object
-  type
-   TChainFetch=specialize TNodeFetch<PsrChain,TsrChain>;
-  var
-   pLeft,pRight:PsrDataLayout;
-   //----
-   key:packed record
-    parent:PsrDataLayout;
-    offset:PtrUint;
-    rtype :TsrResourceType;
-   end;
-   pData:Pointer;
-   FID  :Integer;
-   FEmit:TCustomEmit;
-   FList:TChainFetch;
-  function c(n1,n2:PsrDataLayout):Integer; static;
-  function Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1):PsrChain;
-  Function First:PsrChain;
-  Function Last:PsrChain;
-  Function NextChain(node:PsrChain):PsrChain;
-  Function PrevChain(node:PsrChain):PsrChain;
-  function EnumChain(cb:TChainCb):Integer;
-  function GetData:Pointer;
-  function IsUserData:Boolean; inline;
-  function GetStride:PtrUint;
-  function GetTypeChar:Char;
-  function GetString:RawByteString;
-  function GetFuncString(LEN:DWORD):RawByteString;
+ PsrDataLayoutKey=^TsrDataLayoutKey;
+ TsrDataLayoutKey=packed record
+  parent:TsrDataLayout;
+  offset:PtrUint;
+  rtype :TsrResourceType;
  end;
 
- PsrDataImm=^TsrDataImm;
- TsrDataImm=object
+ TsrDataLayout=class
+  type
+   TChainList=specialize TNodeListClass<TsrChain>;
+   TChainTree=specialize TNodeTreeClass<TsrChain>;
   var
-   pLeft,pRight:PsrDataImm;
+   pLeft,pRight:TsrDataLayout;
    //----
-   FImmSize  :PtrUint;
+   key:TsrDataLayoutKey;
+   pData :Pointer;
+   FID   :Integer;
+   FOrder:Integer;
+   FSetid:Integer;
+   FCache:Integer;
+   FEmit :TCustomEmit;
+   FList :TChainList;
+   FTree :TChainTree;
+  class function c(n1,n2:PsrDataLayoutKey):Integer; static;
+  function  Order:Integer;
+  function  Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
+  Procedure UpdateCache;
+  Function  First:TsrChain;
+  Function  Last :TsrChain;
+  function  EnumChain(cb:TChainCb):Integer;
+  function  GetData:Pointer;
+  function  IsUserData:Boolean; inline;
+  function  IsLocalDataShare:Boolean; inline;
+  function  IsGlobalDataShare:Boolean; inline;
+  function  UseBitcast:Boolean;
+  function  GetStride:PtrUint;
+  function  GetTypeChar:Char;
+  function  GetString:RawByteString;
+  function  GetFuncString(LEN:DWORD):RawByteString;
+ end;
+
+ PsrDataImmKey=^TsrDataImmKey;
+ TsrDataImmKey=record
+  FImmSize:PtrUint;
+  pData   :PDWORD;
+ end;
+
+ TsrDataImm=class
+  var
+   pLeft,pRight:TsrDataImm;
+   //----
+   key:TsrDataImmKey;
    FImmOffset:PtrUint;
-   pData     :PDWORD;
-  function c(a,b:PsrDataImm):Integer; static;
+  class function c(a,b:PsrDataImmKey):Integer; static;
   function GetStringDword(i:PtrUint):RawByteString;
  end;
 
  PsrDataLayoutList=^TsrDataLayoutList;
  TsrDataLayoutList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrDataLayout,TsrDataLayout>;
-   TDataImmFetch=specialize TNodeFetch<PsrDataImm,TsrDataImm>;
+   TNodeTree=specialize TNodeTreeClass<TsrDataLayout>;
+   TDataImmTree=specialize TNodeTreeClass<TsrDataImm>;
   var
-   FTop:TsrDataLayout;
-   FNTree:TNodeFetch;
-   FImmOffset:PtrUint;
-   FImmData:TDataImmFetch;
+   FTop      :TsrDataLayout;
+   FTree     :TNodeTree;
+   FOrder    :Integer;
+   FImmOffset:DWORD;
+   FImmData  :TDataImmTree;
   procedure Init(Emit:TCustomEmit);
   procedure SetUserData(pData:Pointer);
-  function  pRoot:PsrDataLayout;
-  function  Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):PsrDataLayout;
-  Function  First:PsrDataLayout;
-  Function  Next(node:PsrDataLayout):PsrDataLayout;
-  function  Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
-  function  FetchImmData(size:Integer;pData:Pointer):PsrDataImm;
-  function  FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
-  function  FetchLDS():PsrDataLayout;
-  function  FetchGDS():PsrDataLayout;
+  function  pRoot:TsrDataLayout;
+  function  Fetch(p:TsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
+  Function  First:TsrDataLayout;
+  Function  Next(node:TsrDataLayout):TsrDataLayout;
+  function  Grouping(const chain:TsrChains;rtype:TsrResourceType):TsrDataLayout;
+  function  FetchImmData(size:Integer;pData:Pointer):TsrDataImm;
+  function  FetchImm(pData:PDWORD;rtype:TsrResourceType):TsrDataLayout;
+  function  FetchLDS():TsrDataLayout;
+  function  FetchGDS():TsrDataLayout;
   function  EnumChain(cb:TChainCb):Integer;
   Procedure AllocID;
   procedure AllocSourceExtension;
@@ -196,212 +223,246 @@ type
 
 //----
 
- ntDescriptor=class(TsrNodeVmt)
-  class Procedure zero_read      (node:PsrNode);         override;
-  class Procedure zero_unread    (node:PsrNode);         override;
-  class Function  GetPtype       (node:PsrNode):PsrNode; override;
-  class Function  GetStorageClass(node:PsrNode):DWORD;   override;
- end;
-
- PsrDescriptor=^TsrDescriptor;
- TsrDescriptor=packed object(TsrNode)
+ TsrDescriptor=class(TsrNode)
   protected
-   FVar:PsrVariable;
-   FType:PsrType;
+   FVar:TsrVariable;
+   FType:TsrType;
    FStorage:DWORD;
    FBinding:Integer;
-   procedure InitVar(Emit:TCustomEmit);
-   procedure InitType(rtype:TsrDataType;Emit:TCustomEmit);
-   procedure SetType(t:PsrType);
+   procedure InitVar();
+   procedure InitType(rtype:TsrDataType);
+   procedure SetType(t:TsrType);
   public
-   property  pVar:PsrVariable read FVar;
-   property  pType:PsrType    read FType write SetType;
+   Flags:bitpacked record
+    Coherent:Boolean;
+    Volatile:Boolean;
+    Aliased :Boolean;
+    Bitcast :Boolean;
+   end;
+   //
+   Procedure _zero_read      ;         override;
+   Procedure _zero_unread    ;         override;
+   Function  _GetPtype       :TsrNode; override;
+   Function  _GetStorageClass:DWORD;   override;
+   //
+   property  pVar:TsrVariable read FVar;
+   property  pType:TsrType    read FType write SetType;
  end;
+
+ ntDescriptor=TsrDescriptor;
 
 function is_consistents(const chains:TsrChains;count:Byte):Boolean;
 function is_no_index_chains(const chains:TsrChains;count:Byte):Boolean;
 function is_userdata_chains(const chains:TsrChains;count:Byte):Boolean;
 function GetResourceSizeDw(r:TsrResourceType):Byte;
 
+operator := (i:TsrNode):TsrChain; inline;
+
+function cflags(dtype:TsrDataType;GLC:Byte=0;SLC:Byte=0):Byte;
+
 implementation
 
-class Procedure ntChain.zero_read(node:PsrNode);
+operator := (i:TsrNode):TsrChain; inline;
 begin
- With PsrChain(node)^ do
- begin
-  key.lvl_1.pIndex^.mark_read(node);
-  FBuffer^.mark_read(node);
- end;
+ Result:=TsrChain(Pointer(i)); //typecast hack
 end;
 
-class Procedure ntChain.zero_unread(node:PsrNode);
+function cflags(dtype:TsrDataType;GLC:Byte=0;SLC:Byte=0):Byte;
 begin
- With PsrChain(node)^ do
- begin
-  key.lvl_1.pIndex^.mark_unread(node);
-  FBuffer^.mark_unread(node);
- end;
+ TsrChainFlags(Result).dtype:=dtype;
+ TsrChainFlags(Result).GLC  :=(GLC<>0);
+ TsrChainFlags(Result).SLC  :=(SLC<>0);
 end;
 
-class Function ntChain.pwrite_count(node:PsrNode):PDWORD;
+Procedure TsrChain._zero_read;
 begin
- Result:=@PsrChain(node)^.fwrite_count;
+ key.lvl_1.pIndex.mark_read(Self);
+ FBuffer.mark_read(Self);
 end;
 
-class Procedure ntChain.SetWriter(node,w,line:PsrNode);
+Procedure TsrChain._zero_unread;
 begin
- With PsrChain(node)^ do
- begin
-  SetWriter(w);
- end;
+ key.lvl_1.pIndex.mark_unread(Self);
+ FBuffer.mark_unread(Self);
 end;
 
-class Procedure ntChain.ResetWriter(node,w:PsrNode);
+Procedure TsrChain._SetWriter(w,line:TsrNode);
 begin
- With PsrChain(node)^ do
+ SetWriter(w);
+end;
+
+Procedure TsrChain._ResetWriter(w:TsrNode);
+begin
  if (FWriter=w) then
  begin
   SetWriter(nil);
  end;
 end;
 
-class function ntChain.Down(node:PsrNode):Pointer;
+function TsrChain._Down:TsrNode;
 begin
- Result:=PsrChain(node)^.FWriter;
+ Result:=FWriter;
 end;
 
-class function ntChain.Next(node:PsrNode):Pointer;
+function TsrChain._Next:TsrNode;
 begin
- Result:=PsrChain(node)^.FParent^.NextChain(PsrChain(node));
+ Result:=pNext;
 end;
 
-class function ntChain.Prev(node:PsrNode):Pointer;
+function TsrChain._Prev:TsrNode;
 begin
- Result:=PsrChain(node)^.FParent^.PrevChain(PsrChain(node));
+ Result:=pPrev;
 end;
 
-class function ntChain.Parent(node:PsrNode):Pointer;
+function TsrChain._Parent:TsrNode;
 begin
- Result:=PsrChain(node)^.FParent;
+ Result:=TsrNode(FParent);
 end;
 
-class Procedure ntChain.PrepType(node:PPrepTypeNode);
+Procedure TsrChain._PrepType(node:PPrepTypeNode);
 begin
- PsrChain(node^.dnode)^.PrepType(TsrDataType(node^.rtype));
+ TsrChain(node^.dnode).PrepType(TsrDataType(node^.rtype));
  node^.dnode:=nil;
 end;
 
-class function ntChain.GetPrintName(node:PsrNode):RawByteString;
+Function TsrChain._GetStorageClass:DWORD;
 begin
- Result:=PsrChain(node)^.GetPrintName;
+ Result:=FBuffer.GetStorageClass;
 end;
 
-class function ntChain.GetRef(node:PsrNode):Pointer;
+function TsrChain._GetPrintName:RawByteString;
 begin
- Result:=@PsrChain(node)^.ID;
+ Result:=GetPrintName;
 end;
 
-//
-
-class Procedure ntDescriptor.zero_read(node:PsrNode);
+function TsrChain._GetRef:Pointer;
 begin
- With PsrDescriptor(node)^ do
- begin
-  pType^.mark_read(node);
- end;
-end;
-
-class Procedure ntDescriptor.zero_unread(node:PsrNode);
-begin
- With PsrDescriptor(node)^ do
- begin
-  pType^.mark_unread(node);
- end;
-end;
-
-class Function ntDescriptor.GetPtype(node:PsrNode):PsrNode;
-begin
- Result:=PsrDescriptor(node)^.FType;
-end;
-
-class Function ntDescriptor.GetStorageClass(node:PsrNode):DWORD;
-begin
- Result:=PsrDescriptor(node)^.FStorage;
+ Result:=@ID;
 end;
 
 //
 
-function TsrDataLayout.c(n1,n2:PsrDataLayout):Integer;
+Procedure TsrDescriptor._zero_read;
+begin
+ pType.mark_read(Self);
+end;
+
+Procedure TsrDescriptor._zero_unread;
+begin
+ pType.mark_unread(Self);
+end;
+
+Function TsrDescriptor._GetPtype:TsrNode;
+begin
+ Result:=FType;
+end;
+
+Function TsrDescriptor._GetStorageClass:DWORD;
+begin
+ Result:=FStorage;
+end;
+
+//
+
+class function TsrDataLayout.c(n1,n2:PsrDataLayoutKey):Integer;
 begin
  //first parent
- Result:=Integer(n1^.key.parent>n2^.key.parent)-Integer(n1^.key.parent<n2^.key.parent);
+ Result:=ord(n1^.parent.Order>n2^.parent.Order)-ord(n1^.parent.Order<n2^.parent.Order);
  if (Result<>0) then Exit;
  //second offset
- Result:=Integer(n1^.key.offset>n2^.key.offset)-Integer(n1^.key.offset<n2^.key.offset);
+ Result:=ord(n1^.offset>n2^.offset)-ord(n1^.offset<n2^.offset);
  if (Result<>0) then Exit;
  //third rtype
- Result:=Integer(n1^.key.rtype>n2^.key.rtype)-Integer(n1^.key.rtype<n2^.key.rtype);
+ Result:=ord(n1^.rtype>n2^.rtype)-ord(n1^.rtype<n2^.rtype);
 end;
 
-function TsrDataLayout.Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1):PsrChain;
+function TsrDataLayout.Order:Integer;
+begin
+ Result:=0;
+ if (Self<>nil) then
+ begin
+  Result:=FOrder;
+ end;
+end;
+
+function TsrDataLayout.Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
+var
+ _key:TsrChainKey;
+begin
+ _key:=Default(TsrChainKey);
+ //
+ if (lvl_0<>nil) then
+ begin
+  _key.lvl_0:=lvl_0^;
+ end;
+ //
+ if (lvl_1<>nil) then
+ begin
+  _key.lvl_1:=lvl_1^;
+ end;
+ //
+ _key.Flags:=TsrChainFlags(cflags);
+ //
+ Result:=FTree.Find(@_key);
+ if (Result=nil) then
+ begin
+  Result:=FEmit.specialize New<TsrChain>;
+  Result.Init(Self);
+  Result.key   :=_key;
+  Result.Fdtype:=_key.Flags.dtype;
+  FTree.Insert(Result);
+  //
+  Inc(FSetid);
+ end;
+end;
+
+Procedure TsrDataLayout.UpdateCache;
 var
  node:TsrChain;
 begin
- node:=Default(TsrChain);
- if (lvl_0<>nil) then
+ if (FSetid<>FCache) then
  begin
-  node.key.lvl_0:=lvl_0^;
- end;
- if (lvl_1<>nil) then
- begin
-  node.key.lvl_1:=lvl_1^;
- end;
-
- Result:=FList.Find(@node);
- if (Result=nil) then
- begin
-  Result:=FEmit.Alloc(SizeOf(TsrChain));
-  Move(node,Result^,SizeOf(TsrChain));
-
-  Result^.Init(@Self);
-
-  FList.Insert(Result);
+  FCache:=FSetid;
+  //Clear
+  repeat
+   node:=FList.Pop_tail;
+  until (node=nil);
+  //Load
+  node:=FTree.Min;
+  while (node<>nil) do
+  begin
+   FList.Push_tail(node);
+   //
+   node:=FTree.Next(node);
+  end;
  end;
 end;
 
-Function TsrDataLayout.First:PsrChain;
+Function TsrDataLayout.First:TsrChain;
 begin
- Result:=FList.Min;
+ UpdateCache;
+ Result:=FList.pHead;
 end;
 
-Function TsrDataLayout.Last:PsrChain;
+Function TsrDataLayout.Last:TsrChain;
 begin
- Result:=FList.Max;
-end;
-
-Function TsrDataLayout.NextChain(node:PsrChain):PsrChain;
-begin
- Result:=FList.Next(node);
-end;
-
-Function TsrDataLayout.PrevChain(node:PsrChain):PsrChain;
-begin
- Result:=FList.Prev(node);
+ UpdateCache;
+ Result:=FList.pTail;
 end;
 
 function TsrDataLayout.EnumChain(cb:TChainCb):Integer;
 var
- node:PsrChain;
+ node:TsrChain;
 begin
  Result:=0;
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.IsUsed then
   begin
    Result:=Result+cb(node);
   end;
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
@@ -416,7 +477,7 @@ begin
    rtVSharp4:Result:={%H-}Pointer(PVSharpResource4(pData)^.base);
    rtTSharp4,
    rtTSharp8:Result:={%H-}Pointer(PTSharpResource4(pData)^.base shl 8);
-   rtImmData:Result:=PsrDataImm(pData)^.pData;
+   rtImmData:Result:=TsrDataImm(pData).key.pData;
    else;
   end;
 end;
@@ -436,6 +497,38 @@ end;
 function TsrDataLayout.IsUserData:Boolean; inline;
 begin
  Result:=(key.rtype=rtRoot);
+end;
+
+function TsrDataLayout.IsLocalDataShare:Boolean; inline;
+begin
+ Result:=(key.rtype=rtLDS);
+end;
+
+function TsrDataLayout.IsGlobalDataShare:Boolean; inline;
+begin
+ Result:=(key.rtype=rtGDS);
+end;
+
+function TsrDataLayout.UseBitcast:Boolean;
+var
+ pConfig:PsrConfig;
+begin
+ pConfig:=FEmit.GetConfig;
+
+ if IsLocalDataShare then
+ begin
+  if (FEmit.GetExecutionModel=ExecutionModel.GLCompute) then
+  begin
+   Result:=pConfig^.BitcastPointer.Workgroup;
+  end else
+  begin
+   //private
+   Result:=true;
+  end;
+ end else
+ begin
+  Result:=pConfig^.BitcastPointer.Storage;
+ end;
 end;
 
 function TsrDataLayout.GetTypeChar:Char;
@@ -462,7 +555,7 @@ begin
  PID:=0;
  if (key.parent<>nil) then
  begin
-  PID:=key.parent^.FID;
+  PID:=key.parent.FID;
  end;
  Result:='#'+GetTypeChar+
          ';PID='+HexStr(PID,8)+
@@ -476,10 +569,10 @@ begin
          ';LEN='+HexStr(LEN,8);
 end;
 
-function TsrDataImm.c(a,b:PsrDataImm):Integer;
+class function TsrDataImm.c(a,b:PsrDataImmKey):Integer;
 begin
  //first size
- Result:=Integer(a^.FImmSize>b^.FImmSize)-Integer(a^.FImmSize<b^.FImmSize);
+ Result:=ord(a^.FImmSize>b^.FImmSize)-ord(a^.FImmSize<b^.FImmSize);
  if (Result<>0) then Exit;
  //second data
  Result:=CompareByte(a^.pData^,b^.pData^,a^.FImmSize);
@@ -487,13 +580,14 @@ end;
 
 function TsrDataImm.GetStringDword(i:PtrUint):RawByteString;
 begin
- Result:='!D;'+HexStr(pData[i],8);
+ Result:='!D;'+HexStr(key.pData[i],8);
 end;
 
 procedure TsrDataLayoutList.Init(Emit:TCustomEmit);
 begin
+ FTop:=Emit.specialize New<TsrDataLayout>;
  FTop.FEmit:=Emit;
- FNTree.Insert(@FTop);
+ FTree.Insert(FTop);
 end;
 
 procedure TsrDataLayoutList.SetUserData(pData:Pointer);
@@ -501,53 +595,57 @@ begin
  FTop.pData:=pData;
 end;
 
-function TsrDataLayoutList.pRoot:PsrDataLayout;
+function TsrDataLayoutList.pRoot:TsrDataLayout;
 begin
- Result:=@FTop;
+ Result:=FTop;
 end;
 
-function TsrDataLayoutList.Fetch(p:PsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):PsrDataLayout;
+function TsrDataLayoutList.Fetch(p:TsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
 var
- node:TsrDataLayout;
+ key:TsrDataLayoutKey;
 begin
  Assert(p<>nil);
- node:=Default(TsrDataLayout);
- node.FEmit:=FTop.FEmit;
- node.key.parent:=p;
- node.key.offset:=o;
- node.key.rtype :=t;
- Result:=FNTree.Find(@node);
+ key:=Default(TsrDataLayoutKey);
+ key.parent:=p;
+ key.offset:=o;
+ key.rtype :=t;
+ //
+ Result:=FTree.Find(@key);
  if (Result=nil) then
  begin
-  Result:=FTop.FEmit.Alloc(SizeOf(TsrDataLayout));
-  Move(node,Result^,SizeOf(TsrDataLayout));
-  FNTree.Insert(Result);
+  Inc(FOrder);
 
-  Result^.FID:=-1;
+  Result:=FTop.FEmit.specialize New<TsrDataLayout>;
+  Result.FID   :=-1;
+  Result.FOrder:=FOrder;
+  Result.FEmit :=FTop.FEmit;
+  Result.key   :=key;
+
+  FTree.Insert(Result);
 
   if (pData<>nil) then
    case t of
     rtRoot,
     rtBufPtr2,
-    rtFunPtr2:Result^.pData:={%H-}Pointer(PPtrUint(pData+o)^ and (not 3));
+    rtFunPtr2:Result.pData:={%H-}Pointer(PPtrUint(pData+o)^ and (not 3));
     rtVSharp4,
     rtSSharp4,
     rtTSharp4,
-    rtTSharp8:Result^.pData:=pData+o;
-    rtImmData:Result^.pData:=pData;
+    rtTSharp8:Result.pData:=pData+o;
+    rtImmData:Result.pData:=pData;
    end;
 
  end;
 end;
 
-Function TsrDataLayoutList.First:PsrDataLayout;
+Function TsrDataLayoutList.First:TsrDataLayout;
 begin
- Result:=FNTree.Min;
+ Result:=FTree.Min;
 end;
 
-Function TsrDataLayoutList.Next(node:PsrDataLayout):PsrDataLayout;
+Function TsrDataLayoutList.Next(node:TsrDataLayout):TsrDataLayout;
 begin
- Result:=FNTree.Next(node);
+ Result:=FTree.Next(node);
 end;
 
 function GetResourceSizeDw(r:TsrResourceType):Byte;
@@ -564,9 +662,9 @@ begin
  end;
 end;
 
-function TsrDataLayoutList.Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
+function TsrDataLayoutList.Grouping(const chain:TsrChains;rtype:TsrResourceType):TsrDataLayout;
 var
- parent:PsrDataLayout;
+ parent:TsrDataLayout;
 begin
  Result:=nil;
 
@@ -580,30 +678,30 @@ begin
   Assert(False,'indexed chain not support');
  end;
 
- parent:=chain[0]^.Parent;
+ parent:=chain[0].Parent;
 
- Result:=Fetch(parent,chain[0]^.offset,rtype,parent^.GetData);
+ Result:=Fetch(parent,chain[0].offset,rtype,parent.GetData);
 end;
 
-function TsrDataLayoutList.FetchImmData(size:Integer;pData:Pointer):PsrDataImm;
+function TsrDataLayoutList.FetchImmData(size:Integer;pData:Pointer):TsrDataImm;
 var
- node:TsrDataImm;
- dst :PsrDataImm;
+ key:TsrDataImmKey;
+ dst:TsrDataImm;
 begin
- node:=Default(TsrDataImm);
- node.FImmSize:=size;
- node.pData   :=pData;
+ key:=Default(TsrDataImmKey);
+ key.FImmSize:=size;
+ key.pData   :=pData;
 
- dst:=FImmData.Find(@node);
+ dst:=FImmData.Find(@key);
  if (dst=nil) then
  begin
-  dst:=FTop.FEmit.Alloc(SizeOf(TsrDataImm)+size);
+  dst:=FTop.FEmit.specialize New<TsrDataImm>;
 
-  dst^.FImmSize  :=size;
-  dst^.FImmOffset:=FImmOffset;
-  dst^.pData     :=Pointer(dst+1);
+  dst.key:=key;
+  dst.FImmOffset:=FImmOffset;
+  dst.key.pData :=FTop.FEmit.Alloc(size);
 
-  Move(pData^,dst^.pData^,size);
+  Move(pData^,dst.key.pData^,size);
 
   FImmData.Insert(dst);
 
@@ -613,10 +711,10 @@ begin
  Result:=dst;
 end;
 
-function TsrDataLayoutList.FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
+function TsrDataLayoutList.FetchImm(pData:PDWORD;rtype:TsrResourceType):TsrDataLayout;
 var
- parent:PsrDataLayout;
- dst :PsrDataImm;
+ parent:TsrDataLayout;
+ dst :TsrDataImm;
  size:Integer;
 begin
  Result:=nil;
@@ -624,47 +722,47 @@ begin
 
  dst:=FetchImmData(size,pData);
 
- parent:=Fetch(pRoot,dst^.FImmOffset,rtImmData,dst);
+ parent:=Fetch(pRoot,dst.FImmOffset,rtImmData,dst);
 
- Result:=Fetch(parent,0,rtype,parent^.GetData);
+ Result:=Fetch(parent,0,rtype,parent.GetData);
 end;
 
-function TsrDataLayoutList.FetchLDS():PsrDataLayout;
+function TsrDataLayoutList.FetchLDS():TsrDataLayout;
 begin
  Result:=Fetch(pRoot,0,rtLDS,nil);
 end;
 
-function TsrDataLayoutList.FetchGDS():PsrDataLayout;
+function TsrDataLayoutList.FetchGDS():TsrDataLayout;
 begin
  Result:=Fetch(pRoot,0,rtGDS,nil);
 end;
 
 function TsrDataLayoutList.EnumChain(cb:TChainCb):Integer;
 var
- node:PsrDataLayout;
+ node:TsrDataLayout;
 begin
  Result:=0;
  if (cb=nil) then Exit;
  node:=First;
  While (node<>nil) do
  begin
-  Result:=Result+node^.EnumChain(cb);
+  Result:=Result+node.EnumChain(cb);
   node:=Next(node);
  end;
 end;
 
 Procedure TsrDataLayoutList.AllocID;
 var
- node:PsrDataLayout;
+ node:TsrDataLayout;
  FID:Integer;
 begin
  FID:=1;
  node:=First;
  While (node<>nil) do
  begin
-  if (node^.FID=-1) then
+  if (node.FID=-1) then
   begin
-   node^.FID:=FID;
+   node.FID:=FID;
    Inc(FID);
   end;
   node:=Next(node);
@@ -674,13 +772,13 @@ end;
 procedure TsrDataLayoutList.AllocSourceExtension;
 var
  pDebugInfoList:PsrDebugInfoList;
- node:PsrDataLayout;
+ node:TsrDataLayout;
 begin
  pDebugInfoList:=FTop.FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  pDebugInfoList^.OpSource(node^.GetString);
+  pDebugInfoList^.OpSource(node.GetString);
   node:=Next(node);
  end;
  //
@@ -692,20 +790,20 @@ procedure TsrDataLayoutList.AllocFuncExt;
 var
  pDebugInfoList:PsrDebugInfoList;
  pHeap:PsrCodeHeap;
- node:PsrDataLayout;
- block:PsrCodeBlock;
+ node:TsrDataLayout;
+ block:TsrCodeBlock;
 begin
  pDebugInfoList:=FTop.FEmit.GetDebugInfoList;
  pHeap:=FTop.FEmit.GetCodeHeap;
  node:=First;
  While (node<>nil) do
  begin
-  if (node^.key.rtype=rtFunPtr2) then
+  if (node.key.rtype=rtFunPtr2) then
   begin
-   block:=pHeap^.FindByPtr(node^.pData);
+   block:=pHeap^.FindByPtr(node.pData);
    if (block<>nil) then
    begin
-    pDebugInfoList^.OpSource(node^.GetFuncString(block^.Size));
+    pDebugInfoList^.OpSource(node.GetFuncString(block.Size));
    end;
   end;
   node:=Next(node);
@@ -715,24 +813,24 @@ end;
 procedure TsrDataLayoutList.AllocImmExt;
 var
  pDebugInfoList:PsrDebugInfoList;
- node:PsrDataLayout;
- imm:PsrDataImm;
+ node:TsrDataLayout;
+ imm:TsrDataImm;
  i,c:PtrUint;
 begin
  pDebugInfoList:=FTop.FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  if (node^.key.rtype=rtImmData) then
+  if (node.key.rtype=rtImmData) then
   begin
-   imm:=node^.pData;
+   imm:=TsrDataImm(node.pData);
 
-   c:=imm^.FImmSize div SizeOf(DWORD);
+   c:=imm.key.FImmSize div SizeOf(DWORD);
 
    if (c<>0) then
    For i:=0 to c-1 do
    begin
-    pDebugInfoList^.OpSource(imm^.GetStringDword(i));
+    pDebugInfoList^.OpSource(imm.GetStringDword(i));
    end;
 
   end;
@@ -742,94 +840,100 @@ end;
 
 //
 
-Procedure TsrChain.Init(L:PsrDataLayout);
+function TsrChain.dweak:Boolean;
 begin
- fntype:=ntChain;
+ Result:=(key.Flags.dtype=dtUnknow);
+end;
+
+Procedure TsrChain.Init(L:TsrDataLayout);
+begin
  FParent:=L;
 end;
 
 function TsrChainLvl_1.c(n1,n2:PsrChainLvl_1):Integer;
 begin
- //first pIndex backward
- Result:=Integer(n1^.pIndex<n2^.pIndex)-Integer(n1^.pIndex>n2^.pIndex);
+ //1 pIndex backward (order sort)
+ Result:=ord(n1^.pIndex.Order<n2^.pIndex.Order)-ord(n1^.pIndex.Order>n2^.pIndex.Order);
  if (Result<>0) then Exit;
 
- //second stride forward
- Result:=Integer(n1^.stride>n2^.stride)-Integer(n1^.stride<n2^.stride);
+ //2 stride forward
+ Result:=ord(n1^.stride>n2^.stride)-ord(n1^.stride<n2^.stride);
 end;
 
 function TsrChainLvl_0.c(n1,n2:PsrChainLvl_0):Integer;
 begin
- //first size backward
- Result:=Integer(n1^.size<n2^.size)-Integer(n1^.size>n2^.size);
+ //1 size backward
+ Result:=ord(n1^.size<n2^.size)-ord(n1^.size>n2^.size);
  if (Result<>0) then Exit;
 
- //second offset forward
- Result:=Integer(n1^.offset>n2^.offset)-Integer(n1^.offset<n2^.offset);
+ //2 offset forward
+ Result:=ord(n1^.offset>n2^.offset)-ord(n1^.offset<n2^.offset);
 end;
 
-function TsrChain.c(n1,n2:PsrChain):Integer;
+class function TsrChain.c(n1,n2:PsrChainKey):Integer;
 begin
- //first lvl_1
- Result:=TsrChainLvl_1.c(@n1^.key.lvl_1,@n2^.key.lvl_1);
+
+ //1 lvl_0
+ Result:=TsrChainLvl_0.c(@n1^.lvl_0,@n2^.lvl_0);
  if (Result<>0) then Exit;
 
- //second lvl_0
- Result:=TsrChainLvl_0.c(@n1^.key.lvl_0,@n2^.key.lvl_0);
+ //2 lvl_1
+ Result:=TsrChainLvl_1.c(@n1^.lvl_1,@n2^.lvl_1);
+ if (Result<>0) then Exit;
+
+ //3 flags
+ Result:=ord(Byte(n1^.Flags)>Byte(n2^.Flags))-ord(Byte(n1^.Flags)<Byte(n2^.Flags));
 end;
 
-function TsrChain.Emit:TCustomEmit;
+Procedure TsrChain.SetWriter(t:TsrNode);
 begin
- Result:=FParent^.FEmit;
-end;
-
-Procedure TsrChain.SetWriter(t:PsrNode);
-begin
- if (@Self=nil) then Exit;
+ if (Self=nil) then Exit;
  if (FWriter=t) then Exit;
 
  if isUsed then
  begin
-        t^.mark_read  (@Self);
-  FWriter^.mark_unread(@Self);
+        t.mark_read  (Self);
+  FWriter.mark_unread(Self);
  end;
  FWriter:=t;
 end;
 
-Function TsrChain.GetWriter:PsrNode;
+Function TsrChain.GetWriter:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
+ if (Self=nil) then Exit;
  Result:=FWriter;
 end;
 
-Procedure TsrChain.SetBuffer(t:PsrNode);
+Procedure TsrChain.SetBuffer(t:TsrNode);
 begin
- if (@Self=nil) then Exit;
+ if (Self=nil) then Exit;
  if (FBuffer=t) then Exit;
 
  if isUsed then
  begin
-        t^.mark_read  (@Self);
-  FBuffer^.mark_unread(@Self);
+        t.mark_read  (Self);
+  FBuffer.mark_unread(Self);
  end;
  FBuffer:=t;
 end;
 
-Function TsrChain.GetBuffer:PsrNode;
+Function TsrChain.GetBuffer:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
+ if (Self=nil) then Exit;
  Result:=FBuffer;
 end;
 
 Procedure TsrChain.SetRegType(rtype:TsrDataType);
 var
  pTypeList:PsrTypeList;
- FType:PsrType;
- node:PVNode;
- pLine:PspirvOp;
+ FType:TsrType;
+ node:TDependenceNode;
+ pLine:TSpirvOp;
 begin
+ if (Fdtype=rtype) then Exit;
+
  Assert(rtype.BitSize div 8=size);
 
  Fdtype:=rtype;
@@ -840,36 +944,84 @@ begin
  node:=FList.pHead;
  While (node<>nil) do
  begin
-  pLine:=node^.pLine;
+  pLine:=node.pNode;
 
-  Case pLine^.OpId of
+  Case pLine.OpId of
 
    Op.OpLoad:
     begin
-     pLine^.pDst^.PrepType(ord(rtype));
-     pLine^.pType:=Ftype;
+     pLine.pDst.PrepType(ord(rtype));
+     pLine.pType:=Ftype;
     end;
 
-   Op.OpStore:
+   Op.OpStore,
+   Op.OpAtomicStore,
+   Op.OpAtomicExchange,
+   Op.OpAtomicCompareExchange,
+   Op.OpAtomicCompareExchangeWeak,
+   Op.OpAtomicIIncrement,
+   Op.OpAtomicIDecrement,
+   Op.OpAtomicIAdd,
+   Op.OpAtomicISub,
+   Op.OpAtomicSMin,
+   Op.OpAtomicUMin,
+   Op.OpAtomicSMax,
+   Op.OpAtomicUMax,
+   Op.OpAtomicAnd,
+   Op.OpAtomicOr,
+   Op.OpAtomicXor:
     begin
-     pLine^.ParamFirst^.Value^.PrepType(ord(rtype));
+     pLine.ParamNode(1).Value.PrepType(ord(rtype));
     end;
 
    else;
   end;
 
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
+end;
+
+Procedure TsrChain.SetIndex(t:TsrRegNode);
+begin
+ if (Self=nil) then Exit;
+ if (key.lvl_1.pIndex=t) then Exit;
+
+ //update count
+ if isUsed then
+ begin
+                 t.mark_read  (Self);
+  key.lvl_1.pIndex.mark_unread(Self);
+ end;
+
+ //unlink
+ FParent.FTree.Delete(Self);
+ //set
+ key.lvl_1.pIndex:=t;
+ //link
+ FParent.FTree.Insert(Self);
+end;
+
+Procedure TsrChain.SetOffset(t:PtrUint);
+begin
+ if (Self=nil) then Exit;
+ if (key.lvl_0.offset=t) then Exit;
+
+ //unlink
+ FParent.FTree.Delete(Self);
+ //set
+ key.lvl_0.offset:=t;
+ //link
+ FParent.FTree.Insert(Self);
 end;
 
 Procedure TsrChain.UpdateRegType;
 var
  pTypeList:PsrTypeList;
  pBitcastList:PsrBitcastList;
- FType:PsrType;
- node:PVNode;
- pLine:PspirvOp;
- dst:PsrRegNode;
+ FType:TsrType;
+ node:TDependenceNode;
+ pLine:TSpirvOp;
+ dst:TsrRegNode;
  old,rtype:TsrDataType;
 begin
  rtype:=Fdtype;
@@ -882,43 +1034,56 @@ begin
  node:=FList.pHead;
  While (node<>nil) do
  begin
-  pLine:=node^.pLine;
+  pLine:=node.pNode;
 
-  Case pLine^.OpId of
+  Case pLine.OpId of
 
    Op.OpLoad:
     begin
-     pLine^.pDst^.PrepType(ord(rtype));
-     pLine^.pType:=Ftype;
+     pLine.pDst.PrepType(ord(rtype));
+     pLine.pType:=Ftype;
 
-     dst:=pLine^.pDst^.AsType(ntReg);
+     dst:=pLine.pDst.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
-      old:=dst^.dtype;
+      old:=dst.dtype;
       if (old<>dtUnknow) and (not CompareType(rtype,old)) then
       begin
        //OpLoad -> new -> dst
-       pBitcastList:=Emit.GetBitcastList;
        dst:=pBitcastList^.FetchDstr(rtype,dst);
-       pLine^.pDst:=dst;
+       pLine.pDst:=dst;
       end;
      end;
     end;
 
-   Op.OpStore:
+   Op.OpStore,
+   Op.OpAtomicStore,
+   Op.OpAtomicExchange,
+   Op.OpAtomicCompareExchange,
+   Op.OpAtomicCompareExchangeWeak,
+   Op.OpAtomicIIncrement,
+   Op.OpAtomicIDecrement,
+   Op.OpAtomicIAdd,
+   Op.OpAtomicISub,
+   Op.OpAtomicSMin,
+   Op.OpAtomicUMin,
+   Op.OpAtomicSMax,
+   Op.OpAtomicUMax,
+   Op.OpAtomicAnd,
+   Op.OpAtomicOr,
+   Op.OpAtomicXor:
     begin
-     pLine^.ParamFirst^.Value^.PrepType(ord(rtype));
+     pLine.ParamNode(1).Value.PrepType(ord(rtype));
 
-     dst:=pLine^.ParamFirst^.Value^.AsType(ntReg);
+     dst:=pLine.ParamNode(1).Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
-      old:=dst^.dtype;
+      old:=dst.dtype;
       if (old<>dtUnknow) and (rtype<>old) then
       begin
        //OpStore <- new <- dst
-       pBitcastList:=Emit.GetBitcastList;
        dst:=pBitcastList^.FetchRead(rtype,dst);
-       pLine^.ParamFirst^.Value:=dst;
+       pLine.ParamNode(1).Value:=dst;
       end;
      end;
     end;
@@ -926,7 +1091,7 @@ begin
    else;
   end;
 
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
 end;
 
@@ -936,55 +1101,55 @@ var
 begin
  if (new=dtUnknow) then Exit;
  old:=Fdtype;
- if is_unprep_type(old,new,True) then
+ if is_unprep_type(old,new,dweak) then
  begin
   old:=StoreType(new);
   SetRegType(old);
  end;
 end;
 
-procedure TsrChain.AddLine(pLine:PspirvOp);
+procedure TsrChain.AddLine(pLine:TSpirvOp);
 var
- node:PVNode;
+ node:TDependenceNode;
 begin
- node:=Emit.Alloc(SizeOf(TVNode));
- node^.pLine:=pLine;
+ node:=NewDependence;
+ node.pNode:=pLine;
  FList.Push_tail(node);
 end;
 
-function TsrChain.FirstLine:PspirvOp;
+function TsrChain.FirstLine:TSpirvOp;
 var
- node:PVNode;
+ node:TDependenceNode;
 begin
  Result:=nil;
  node:=FList.pHead;
  if (node<>nil) then
  begin
-  Result:=node^.pLine;
+  Result:=node.pNode;
  end;
 end;
 
-procedure TsrChain.FetchLoad(pLine:PspirvOp;dst:PsrRegNode);
+procedure TsrChain.FetchLoad(pLine:TSpirvOp;dst:TsrRegNode);
 var
  pTypeList:PsrTypeList;
 begin
  Assert(dst<>nil);
 
- PrepType(dst^.dtype);
+ PrepType(dst.dtype);
 
  pTypeList:=Emit.GetTypeList;
- pLine:=PspirvOp(Emit.OpLoad(pLine,pTypeList^.Fetch(Fdtype),dst,@Self));
+ pLine:=Emit.OpLoad(pLine,pTypeList^.Fetch(dtype),dst,Self);
 
  AddLine(pLine);
 end;
 
-Procedure TsrChain.FetchStore(pLine:PspirvOp;src:PsrRegNode);
+Procedure TsrChain.FetchStore(pLine:TSpirvOp;src:TsrRegNode);
 begin
  if (src=nil) then Exit;
 
- PrepType(src^.dtype);
+ PrepType(src.dtype);
 
- pLine:=PspirvOp(Emit.OpStore(pLine,@Self,src));
+ pLine:=Emit.OpStore(pLine,Self,src);
 
  AddLine(pLine);
 end;
@@ -997,24 +1162,22 @@ end;
 
 //
 
-procedure TsrDescriptor.InitVar(Emit:TCustomEmit);
+procedure TsrDescriptor.InitVar();
 var
  pVariableList:PsrVariableList;
 begin
- if (Emit=nil) then Exit;
  if (FVar<>nil) then Exit;
  //
  pVariableList:=Emit.GetVariableList;
  //
  FVar:=pVariableList^.Fetch;
- FVar^.pSource:=@Self;
+ FVar.pSource:=Self;
 end;
 
-procedure TsrDescriptor.InitType(rtype:TsrDataType;Emit:TCustomEmit);
+procedure TsrDescriptor.InitType(rtype:TsrDataType);
 var
  pTypeList:PsrTypeList;
 begin
- if (Emit=nil) then Exit;
  if (FType<>nil) then Exit;
  //
  pTypeList:=Emit.GetTypeList;
@@ -1022,21 +1185,21 @@ begin
  SetType(pTypeList^.Fetch(rtype));
 end;
 
-procedure TsrDescriptor.SetType(t:PsrType);
+procedure TsrDescriptor.SetType(t:TsrType);
 begin
  if (FType=t) then Exit;
 
  if isUsed then
  begin
-      t^.mark_read  (@Self);
-  FType^.mark_unread(@Self);
+      t.mark_read  (Self);
+  FType.mark_unread(Self);
  end;
  FType:=t;
 end;
 
 function is_consistents(const chains:TsrChains;count:Byte):Boolean;
 var
- parent:PsrDataLayout;
+ parent:TsrDataLayout;
  offset,t:PtrUint;
  i:Byte;
 begin
@@ -1045,15 +1208,15 @@ begin
  if (count<2) then Exit(True);
  Result:=False;
  if (chains[0]=nil) then Exit;
- parent:=chains[0]^.parent;
- offset:=chains[0]^.offset;
+ parent:=chains[0].parent;
+ offset:=chains[0].offset;
  For i:=1 to count-1 do
  begin
-  t:=chains[i-1]^.size;
+  t:=chains[i-1].size;
   offset:=offset+t;
   if (chains[i]=nil) then Exit;
-  if (chains[i]^.parent<>parent) then Exit;
-  t:=chains[i]^.offset;
+  if (chains[i].parent<>parent) then Exit;
+  t:=chains[i].offset;
   if (offset<>t) then Exit;
  end;
  Result:=True;
@@ -1068,14 +1231,14 @@ begin
  For i:=0 to count-1 do
  begin
   if (chains[i]=nil) then Exit;
-  if (chains[i]^.key.lvl_1.pIndex<>nil) then Exit;
+  if (chains[i].key.lvl_1.pIndex<>nil) then Exit;
  end;
  Result:=True;
 end;
 
 function is_userdata_chains(const chains:TsrChains;count:Byte):Boolean;
 var
- parent:PsrDataLayout;
+ parent:TsrDataLayout;
  i:Byte;
 begin
  Result:=False;
@@ -1083,9 +1246,9 @@ begin
  For i:=0 to count-1 do
  begin
   if (chains[i]=nil) then Exit;
-  parent:=chains[i]^.parent;
+  parent:=chains[i].parent;
   if (parent=nil) then Exit;
-  if (parent^.key.parent<>nil) then Exit;
+  if (parent.key.parent<>nil) then Exit;
  end;
  Result:=True;
 end;

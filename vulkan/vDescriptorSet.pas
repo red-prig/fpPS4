@@ -5,6 +5,7 @@ unit vDescriptorSet;
 interface
 
 uses
+ sysutils,
  g_node_splay,
  Vulkan,
  vDevice,
@@ -407,9 +408,9 @@ var
  dbuf  :PVkDescriptorBufferInfo;
  change:Boolean;
 begin
- Assert(aSet<7);
- Assert(aBind<p_count[aSet]);
- Assert(p_binds[aSet]<>nil);
+ Assert(aSet<7,IntToStr(aSet)+'<7');
+ Assert(aBind<p_count[aSet],IntToStr(aBind)+'<'+IntToStr(p_count[aSet]));
+ Assert(p_binds[aSet]<>nil,'0x'+HexStr(p_binds[aSet])+'<>nil');
 
  dwrite:=@p_binds[aSet][aBind];
 
@@ -442,9 +443,9 @@ var
  dimg  :PVkDescriptorImageInfo;
  change:Boolean;
 begin
- Assert(aSet<7);
- Assert(aBind<p_count[aSet]);
- Assert(p_binds[aSet]<>nil);
+ Assert(aSet<7,IntToStr(aSet)+'<7');
+ Assert(aBind<p_count[aSet],IntToStr(aBind)+'<'+IntToStr(p_count[aSet]));
+ Assert(p_binds[aSet]<>nil,'0x'+HexStr(p_binds[aSet])+'<>nil');
 
  dwrite:=@p_binds[aSet][aBind];
 
@@ -476,10 +477,10 @@ var
  i     :TVkUInt32;
  change:Boolean;
 begin
- Assert(aSet<7);
- Assert(aBind<p_count[aSet]);
- Assert(aCount>0);
- Assert(p_binds[aSet]<>nil);
+ Assert(aSet<7,IntToStr(aSet)+'<7');
+ Assert(aBind<p_count[aSet],IntToStr(aBind)+'<'+IntToStr(p_count[aSet]));
+ Assert(aCount>0,IntToStr(aCount)+'>0');
+ Assert(p_binds[aSet]<>nil,'0x'+HexStr(p_binds[aSet])+'<>nil');
 
  dwrite:=@p_binds[aSet][aBind];
 
@@ -521,9 +522,9 @@ var
  dimg  :PVkDescriptorImageInfo;
  change:Boolean;
 begin
- Assert(aSet<7);
- Assert(aBind<p_count[aSet]);
- Assert(p_binds[aSet]<>nil);
+ Assert(aSet<7,IntToStr(aSet)+'<7');
+ Assert(aBind<p_count[aSet],IntToStr(aBind)+'<'+IntToStr(p_count[aSet]));
+ Assert(p_binds[aSet]<>nil,'0x'+HexStr(p_binds[aSet])+'<>nil');
 
  dwrite:=@p_binds[aSet][aBind];
 

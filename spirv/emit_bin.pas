@@ -47,20 +47,20 @@ type
   Procedure Reset;
   Procedure Flush(Stream:TStream);
   procedure AddParam(P:DWORD);
-  procedure AddNode(node:PsrNode);
+  procedure AddNode(node:TsrNode);
  end;
 
  TSprvEmit_bin=class(TEmitFetch)
   procedure SaveToStream(Stream:TStream);
   procedure SaveHeader(Stream:TStream;var Header:TSPIRVHeader);
   procedure SaveCaps(Stream:TStream);
-  procedure SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
+  procedure SaveOpBlock(Stream:TStream;pBlock:TsrOpBlock);
   procedure SaveHeaderInfo(Stream:TStream);
   procedure SaveTypes(Stream:TStream);
   procedure SaveConst(Stream:TStream);
   procedure SaveVariable(Stream:TStream);
   procedure SaveFunc(Stream:TStream);
-  procedure SaveOp(Stream:TStream;node:PSpirvOp);
+  procedure SaveOp(Stream:TStream;node:TSpirvOp);
  end;
 
 implementation
@@ -113,7 +113,7 @@ begin
  FetchData(1)^:=DWORD(P);
 end;
 
-procedure TSVInstrBuffer.AddNode(node:PsrNode);
+procedure TSVInstrBuffer.AddNode(node:TsrNode);
 var
  R:PsrRefId;
  L,D:DWORD;
@@ -122,20 +122,20 @@ begin
  Assert(node<>nil);
  Assert(COUNT<>0,'new op not created');
 
- R:=node^.GetRef;
+ R:=node.GetRef;
  if (R<>nil) then
  begin
   FetchData(1)^:=R^.ID;
  end else
  begin
-  L:=node^.GetData(nil);          //get size
+  L:=node.GetData(nil);           //get size
   D:=(L+(SizeOf(DWORD)-1)) div 4; //align
-  Assert(D<>0,'AddNode:'+node^.ntype.ClassName);
+  Assert(D<>0,'AddNode:'+node.ntype.ClassName);
 
   P:=FetchData(D);
 
   FillDWord(P^,D,0);
-  node^.GetData(P);
+  node.GetData(P);
  end;
 end;
 
@@ -172,29 +172,29 @@ end;
 procedure TSprvEmit_bin.SaveCaps(Stream:TStream);
 var
  buf:TSVInstrBuffer;
- node:PsrCapability;
+ node:TsrCapability;
 begin
  buf:=Default(TSVInstrBuffer);
  node:=CapabilityList.First;
  While (node<>nil) do
  begin
   buf.NewOp(Op.OpCapability);
-  buf.AddParam(node^.ID);
+  buf.AddParam(node.ID);
   buf.Flush(Stream);
   node:=CapabilityList.Next(node);
  end;
 end;
 
-procedure TSprvEmit_bin.SaveOpBlock(Stream:TStream;pBlock:PsrOpBlock);
+procedure TSprvEmit_bin.SaveOpBlock(Stream:TStream;pBlock:TsrOpBlock);
 var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  if (pBlock=nil) then Exit;
- node:=pBlock^.First;
+ node:=pBlock.First;
 
  While (node<>nil) do
  begin
-  if node^.IsType(ntOp) then
+  if node.IsType(ntOp) then
   begin
    SaveOp(Stream,node);
   end;
@@ -204,37 +204,38 @@ end;
 
 procedure TSprvEmit_bin.SaveHeaderInfo(Stream:TStream);
 begin
- SaveOpBlock(Stream,@HeaderList);
- SaveOpBlock(Stream,@DebugInfoList);
- SaveOpBlock(Stream,@DecorateList);
+ SaveOpBlock(Stream,HeaderList);
+ SaveOpBlock(Stream,DebugInfoList);
+ SaveOpBlock(Stream,DecorateList);
 end;
 
 procedure TSprvEmit_bin.SaveTypes(Stream:TStream);
 var
  buf:TSVInstrBuffer;
- node:PsrType;
+ node:TsrType;
  i:Word;
 begin
+ buf:=Default(TSVInstrBuffer);
  node:=TypeList.First;
  While (node<>nil) do
  begin
-  buf.NewOp(node^.OpId);
+  buf.NewOp(node.OpId);
 
-  if (node^.OpId=Op.OpConstant) then
+  if (node.OpId=Op.OpConstant) then
   begin
    //Array Const
-   if (node^.ItemCount>0) then
+   if (node.ItemCount>0) then
    begin
-    buf.AddNode(node^.GetItem(0));
+    buf.AddNode(node.GetItem(0));
    end;
 
    buf.AddNode(node);
 
-   if (node^.ItemCount>1) then
+   if (node.ItemCount>1) then
    begin
-    For i:=1 to node^.ItemCount-1 do
+    For i:=1 to node.ItemCount-1 do
     begin
-     buf.AddNode(node^.GetItem(i));
+     buf.AddNode(node.GetItem(i));
     end;
    end;
    //Array Const
@@ -243,11 +244,11 @@ begin
    //Types
    buf.AddNode(node);
 
-   if (node^.ItemCount<>0) then
+   if (node.ItemCount<>0) then
    begin
-    For i:=0 to node^.ItemCount-1 do
+    For i:=0 to node.ItemCount-1 do
     begin
-     buf.AddNode(node^.GetItem(i));
+     buf.AddNode(node.GetItem(i));
     end;
    end;
    //Types
@@ -255,75 +256,75 @@ begin
 
   buf.Flush(Stream);
 
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
 procedure TSprvEmit_bin.SaveConst(Stream:TStream);
 var
  buf:TSVInstrBuffer;
- node:PsrConst;
+ node:TsrConst;
  i:Word;
 begin
  buf:=Default(TSVInstrBuffer);
  node:=ConstList.FList.pHead;
  While (node<>nil) do
  begin
-  if (node^.dtype<>dtUnknow) then
+  if (node.dtype<>dtUnknow) then
   begin
-   buf.NewOp(node^.OpId);
-   buf.AddNode(node^.pType);
+   buf.NewOp(node.OpId);
+   buf.AddNode(node.pType);
    buf.AddNode(node);
 
-   if (node^.dtype<>dtBool) and (node^.ItemCount<>0) then
+   if (node.dtype<>dtBool) and (node.ItemCount<>0) then
    begin
-    For i:=0 to node^.ItemCount-1 do
+    For i:=0 to node.ItemCount-1 do
     begin
-     buf.AddNode(node^.GetItem(i));
+     buf.AddNode(node.GetItem(i));
     end;
    end;
 
    buf.Flush(Stream);
   end;
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
 procedure TSprvEmit_bin.SaveVariable(Stream:TStream);
 var
  buf:TSVInstrBuffer;
- node:PsrVariable;
+ node:TsrVariable;
 begin
  buf:=Default(TSVInstrBuffer);
  node:=VariableList.First;
  While (node<>nil) do
  begin
-  if (node^.pType<>nil) then
+  if (node.pType<>nil) then
   begin
    buf.NewOp(Op.OpVariable);
-   buf.AddNode(node^.pType);
+   buf.AddNode(TsrNode(node.pType));
    buf.AddNode(node);
-   buf.AddParam(node^.GetStorageClass);
+   buf.AddParam(node.GetStorageClass);
 
    buf.Flush(Stream);
   end;
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
 procedure TSprvEmit_bin.SaveFunc(Stream:TStream);
 var
- pFunc:PSpirvFunc;
+ pFunc:TSpirvFunc;
 begin
  pFunc:=FuncList.First;
  While (pFunc<>nil) do
  begin
-  SaveOpBlock(Stream,pFunc^.pTop);
-  pFunc:=pFunc^.Next;
+  SaveOpBlock(Stream,pFunc.pTop);
+  pFunc:=pFunc.Next;
  end;
 end;
 
-procedure TSprvEmit_bin.SaveOp(Stream:TStream;node:PSpirvOp);
+procedure TSprvEmit_bin.SaveOp(Stream:TStream;node:TSpirvOp);
 var
  buf:TSVInstrBuffer;
  Param:POpParamNode;
@@ -332,16 +333,16 @@ begin
  if (node=nil) then Exit;
  buf:=Default(TSVInstrBuffer);
 
- Info:=Op.GetInfo(node^.OpId);
+ Info:=Op.GetInfo(node.OpId);
 
- buf.NewOp(node^.OpId);
+ buf.NewOp(node.OpId);
 
  if Info.rstype then //dst type
  begin
-  Assert(node^.pType<>nil,'SaveOp$1');
-  if (node^.pType<>nil) then
+  Assert(node.pType<>nil,'SaveOp$1');
+  if (node.pType<>nil) then
   begin
-   buf.AddNode(node^.pType);
+   buf.AddNode(node.pType);
   end else
   begin
    buf.Reset;
@@ -351,10 +352,10 @@ begin
 
  if Info.result then //dst
  begin
-  Assert(node^.pDst<>nil,'SaveOp$2');
-  if (node^.pDst<>nil) then
+  Assert(node.pDst<>nil,'SaveOp$2');
+  if (node.pDst<>nil) then
   begin
-   buf.AddNode(node^.pDst);
+   buf.AddNode(node.pDst);
   end else
   begin
    buf.Reset;
@@ -362,17 +363,17 @@ begin
   end;
  end else
  begin  //no dst
-  if (node^.pDst<>nil) then
+  if (node.pDst<>nil) then
   begin
-   buf.AddNode(node^.pDst);
+   buf.AddNode(node.pDst);
   end;
  end;
 
- Param:=node^.ParamFirst;
+ Param:=node.ParamFirst;
  While (Param<>nil) do
  begin
-  buf.AddNode(Param^.Value);
-  Param:=Param^.Next;
+  buf.AddNode(Param.Value);
+  Param:=Param.Next;
  end;
 
  buf.Flush(Stream);

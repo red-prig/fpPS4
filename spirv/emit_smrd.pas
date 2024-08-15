@@ -15,18 +15,18 @@ uses
 type
  TEmit_SMRD=class(TEmitFetch)
   procedure emit_SMRD;
-  procedure emit_LOAD_DWORDX(grp:PsrDataLayout;count:Byte);
+  procedure emit_LOAD_DWORDX(grp:TsrDataLayout;count:Byte);
   procedure emit_LOAD_DWORDX(count:Byte);
   procedure emit_BUFFER_LOAD_DWORDX(count:Byte);
  end;
 
 implementation
 
-procedure TEmit_SMRD.emit_LOAD_DWORDX(grp:PsrDataLayout;count:Byte);
+procedure TEmit_SMRD.emit_LOAD_DWORDX(grp:TsrDataLayout;count:Byte);
 var
  dst:PsrRegSlot;
 
- ofs_r,idx_r:PsrRegNode;
+ ofs_r,idx_r:TsrRegNode;
 
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
@@ -81,7 +81,7 @@ end;
 procedure TEmit_SMRD.emit_LOAD_DWORDX(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
 begin
  if not get_sbase(FSPI.SMRD.SBASE,2,@src) then Assert(false);
  grp:=GroupingSharp(@src,rtBufPtr2);
@@ -91,7 +91,7 @@ end;
 procedure TEmit_SMRD.emit_BUFFER_LOAD_DWORDX(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
 begin
  if not get_sbase(FSPI.SMRD.SBASE,4,@src) then Assert(false);
  grp:=GroupingSharp(@src,rtVSharp4);

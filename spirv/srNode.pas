@@ -4,86 +4,114 @@ unit srNode;
 
 interface
 
+uses
+ ginodes;
+
 type
- PsrNode=^TsrNode;
- PPsrNode=^PsrNode;
+ TsrNode=class;
+ PPsrNode=^TsrNode;
+
+ TDependenceNode=class
+  pLeft,pRight:TDependenceNode;
+  //
+  key:TsrNode;
+  fread_count :DWORD;
+  fwrite_count:DWORD;
+  //
+  class function c(n1,n2:PPsrNode):Integer; static;
+  //
+  property pNode:TsrNode         read key    write key;
+  property pPrev:TDependenceNode read pLeft  write pLeft;
+  property pNext:TDependenceNode read pRight write pRight;
+ end;
+ TDependenceNodeList=specialize TNodeListClass<TDependenceNode>;
+ TDependenceNodeTree=specialize TNodeTreeClass<TDependenceNode>;
 
  PPrepTypeNode=^TPrepTypeNode;
  TPrepTypeNode=record
-  dnode:PsrNode;
+  dnode:TsrNode;
   rtype:Integer;
  end;
 
- TsrNodeVmt=class
-   class Procedure add_read    (node,src:PsrNode);             virtual;
-   class Procedure rem_read    (node,src:PsrNode);             virtual;
-   //
-   class Procedure add_write   (node,src:PsrNode);             virtual;
-   class Procedure rem_write   (node,src:PsrNode);             virtual;
-   //
-   class Procedure mark_read   (node,src:PsrNode);             virtual;
-   class Procedure mark_unread (node,src:PsrNode);             virtual;
-   //
-   class Procedure zero_read   (node:PsrNode);                 virtual;
-   class Procedure zero_unread (node:PsrNode);                 virtual;
-   //
-   class Procedure mark_write  (node,src:PsrNode);             virtual;
-   class Procedure mark_unwrite(node,src:PsrNode);             virtual;
-   //
-   class Function  pwrite_count(node:PsrNode):PDWORD           virtual;
-   class Procedure SetWriter(node,w,line:PsrNode);             virtual;
-   class Procedure ResetWriter(node,w:PsrNode);                virtual;
-   class Function  is_used(node:PsrNode):Boolean               virtual;
-   class Function  GetPtype(node:PsrNode):PsrNode;             virtual;
-   class Function  GetStorageClass(node:PsrNode):DWORD;        virtual;
-   class function  GetStorageName(node:PsrNode):RawByteString; virtual;
-   class function  GetPrintName(node:PsrNode):RawByteString;   virtual;
-   class function  GetPrintData(node:PsrNode):RawByteString;   virtual;
-   class function  Down(node:PsrNode):Pointer;                 virtual;
-   class function  Next(node:PsrNode):Pointer;                 virtual;
-   class function  Prev(node:PsrNode):Pointer;                 virtual;
-   class function  Parent(node:PsrNode):Pointer;               virtual;
-   class function  First(node:PsrNode):Pointer;                virtual;
-   class function  Last(node:PsrNode):Pointer;                 virtual;
-   class Procedure PrepType(node:PPrepTypeNode);               virtual;
-   //
-   class function  GetIndexCount(node:PsrNode):DWORD;          virtual;
-   //
-   class function  GetRef(node:PsrNode):Pointer;               virtual;
-   //
-   class function  GetData(node:PsrNode;data:Pointer):Ptruint; virtual;
- end;
+ TsrNodeType=class of TsrNode;
 
- TsrNodeType=class of TsrNodeVmt;
+ TCustomEmit=class;
 
- TsrNode=packed object
-  protected
-   fntype:TsrNodeType;
+ TsrNode=class
   private
-   fread_count:DWORD;
+   fread_count :DWORD;
+   fwrite_count:DWORD;
+   FOrder      :Ptruint;
+   FDependence :TDependenceNodeTree;
+   FEmit       :TCustomEmit;
   public
-   property    ntype:TsrNodeType read fntype;
-   property    read_count:DWORD  read fread_count;
+   function  Order:Ptruint;
+   property  Emit:TCustomEmit read FEmit;
+   //
+   function  NewDependence:TDependenceNode;
+   procedure FreeDependence(D:TDependenceNode);
+   function  FirstDependence:TDependenceNode;
+   function  NextDependence(D:TDependenceNode):TDependenceNode;
+   //
+   Procedure add_read(src:TsrNode);          virtual;
+   Procedure rem_read(src:TsrNode);          virtual;
+   //
+   Procedure add_write(src:TsrNode);         virtual;
+   Procedure rem_write(src:TsrNode);         virtual;
+   //
+   Procedure _mark_read(src:TsrNode);        virtual;
+   Procedure _mark_unread(src:TsrNode);      virtual;
+   //
+   Procedure _zero_read;                     virtual;
+   Procedure _zero_unread;                   virtual;
+   //
+   Procedure _mark_write(src:TsrNode);       virtual;
+   Procedure _mark_unwrite(src:TsrNode);     virtual;
+   //
+   Procedure _SetWriter(w,line:TsrNode);     virtual;
+   Procedure _ResetWriter(w:TsrNode);        virtual;
+   Function  _is_used:Boolean                virtual;
+   Function  _GetPtype:TsrNode;              virtual;
+   Function  _GetStorageClass:DWORD;         virtual;
+   function  _GetStorageName:RawByteString;  virtual;
+   function  _GetPrintName:RawByteString;    virtual;
+   function  _GetPrintData:RawByteString;    virtual;
+   function  _Down:TsrNode;                  virtual;
+   function  _Next:TsrNode;                  virtual;
+   function  _Prev:TsrNode;                  virtual;
+   function  _Parent:TsrNode;                virtual;
+   function  _First:TsrNode;                 virtual;
+   function  _Last:TsrNode;                  virtual;
+   Procedure _PrepType(node:PPrepTypeNode);  virtual;
+   //
+   function  _GetIndexCount:DWORD;           virtual;
+   //
+   function  _GetRef:Pointer;                virtual;
+   //
+   function  _GetData(data:Pointer):Ptruint; virtual;
+   //
+   function    ntype:TsrNodeType;
+   property    read_count :DWORD read fread_count;
+   property    write_count:DWORD read fwrite_count;
    function    IsType(t:TsrNodeType):Boolean;
-   function    AsType(t:TsrNodeType):Pointer;
-   Procedure   mark_read   (src:PsrNode);
-   Procedure   mark_unread (src:PsrNode);
-   Procedure   mark_write  (src:PsrNode);
-   Procedure   mark_unwrite(src:PsrNode);
-   function    write_count:DWORD;
-   Procedure   SetWriter(w,line:PsrNode);
-   Procedure   ResetWriter(w:PsrNode);
+   generic function AsType<T>:T;
+   Procedure   mark_read   (src:TsrNode);
+   Procedure   mark_unread (src:TsrNode);
+   Procedure   mark_write  (src:TsrNode);
+   Procedure   mark_unwrite(src:TsrNode);
+   Procedure   SetWriter(w,line:TsrNode);
+   Procedure   ResetWriter(w:TsrNode);
    function    IsUsed:Boolean;
-   Function    pType:Pointer;
+   Function    pType:TsrNode;
    Function    GetStorageClass:DWORD;
    function    GetStorageName:RawByteString;
    function    GetPrintName:RawByteString;
    function    GetPrintData:RawByteString;
-   function    Next:Pointer;
-   function    Prev:Pointer;
-   function    Parent:Pointer;
-   function    First:Pointer;
-   function    Last:Pointer;
+   function    Next:TsrNode;
+   function    Prev:TsrNode;
+   function    Parent:TsrNode;
+   function    First:TsrNode;
+   function    Last:TsrNode;
    procedure   PrepType(rtype:Integer);
    function    GetIndexCount:DWORD;
    function    GetRef:Pointer;
@@ -91,7 +119,13 @@ type
  end;
 
  TCustomEmit=class
+  private
+   FOrder:Ptruint;
+   FDependenceCache:TDependenceNodeList;
+  public
+  //
   Function  Alloc(Size:ptruint):Pointer;                   virtual abstract;
+  generic Function New<T>:T;
   Function  GetDmem(P:Pointer) :Pointer;                   virtual abstract;
   Function  GetExecutionModel  :Word;                      virtual abstract;
   Function  GetConfig          :Pointer;                   virtual abstract;
@@ -116,396 +150,487 @@ type
   Function  GetCacheOpList     :Pointer;                   virtual abstract;
   Function  GetFuncList        :Pointer;                   virtual abstract;
   Function  GetCursor          :Pointer;                   virtual abstract;
-  function  curr_line          :Pointer;                   virtual abstract;
-  function  init_line          :Pointer;                   virtual abstract;
-  function  NewRefNode         :PsrNode;                   virtual abstract;
-  function  OpCast  (pLine,      dst,src:PsrNode):PsrNode; virtual abstract;
-  function  OpLoad  (pLine,dtype,dst,src:PsrNode):PsrNode; virtual abstract;
-  function  OpStore (pLine,      dst,src:PsrNode):PsrNode; virtual abstract;
-  procedure PostLink(pLine,      dst:PsrNode);             virtual abstract;
+  function  curr_line          :TsrNode;                   virtual abstract;
+  function  init_line          :TsrNode;                   virtual abstract;
+  function  NewRefNode         :TsrNode;                   virtual abstract;
+  function  OpCast  (pLine,      dst,src:TsrNode):TsrNode; virtual abstract;
+  function  OpLoad  (pLine,dtype,dst,src:TsrNode):TsrNode; virtual abstract;
+  function  OpStore (pLine,      dst,src:TsrNode):TsrNode; virtual abstract;
+  procedure PostLink(pLine,      dst:TsrNode);             virtual abstract;
   procedure emit_spi;                                      virtual abstract;
  end;
 
+function CompareNodes(buf1,buf2:PPsrNode;count:PtrUint):Integer;
+
 implementation
 
-class Procedure TsrNodeVmt.add_read(node,src:PsrNode);
+class function TDependenceNode.c(n1,n2:PPsrNode):Integer;
 begin
- Inc(node^.fread_count);
+ Result:=ord(ptruint(n1^)>ptruint(n2^))-ord(ptruint(n1^)<ptruint(n2^));
 end;
 
-class Procedure TsrNodeVmt.rem_read(node,src:PsrNode);
+function TsrNode.Order:Ptruint;
 begin
- Assert(node^.fread_count<>0,node^.ntype.ClassName);
- if (node^.fread_count=0) then Exit;
- Dec(node^.fread_count);
-end;
-
-class Procedure TsrNodeVmt.add_write(node,src:PsrNode);
-var
- p:PDWORD;
-begin
- p:=node^.fntype.pwrite_count(node);
- if (p<>nil) then
+ Result:=0;
+ if (Self<>nil) then
  begin
-  Inc(p^);
+  Result:=FOrder;
  end;
 end;
 
-class Procedure TsrNodeVmt.rem_write(node,src:PsrNode);
-var
- p:PDWORD;
+function TsrNode.NewDependence:TDependenceNode;
 begin
- p:=node^.fntype.pwrite_count(node);
- if (p<>nil) then
+ if (Self=nil) then Exit(nil);
+ Result:=FEmit.FDependenceCache.Pop_tail;
+ if (Result=nil) then
  begin
-  Assert(p^<>0);
-  if (p^=0) then Exit;
-  Dec(p^);
+  Result:=FEmit.specialize New<TDependenceNode>;
  end;
 end;
 
-class Procedure TsrNodeVmt.mark_read(node,src:PsrNode);
+procedure TsrNode.FreeDependence(D:TDependenceNode);
+begin
+ if (Self=nil) then Exit;
+ if (D=nil) then Exit;
+ D.pNode:=nil;
+ FEmit.FDependenceCache.Push_head(D);
+end;
+
+function TsrNode.FirstDependence:TDependenceNode;
+begin
+ Result:=FDependence.Min;
+end;
+
+function TsrNode.NextDependence(D:TDependenceNode):TDependenceNode;
+begin
+ Result:=FDependence.Next(D);
+end;
+
+Procedure TsrNode.add_read(src:TsrNode);
+Var
+ D:TDependenceNode;
+begin
+ D:=FDependence.Find(@src);
+ if (D=nil) then
+ begin
+  D:=NewDependence;
+  //
+  D.pNode:=src;
+  FDependence.Insert(D);
+ end;
+
+ Inc(D.fread_count);
+ Inc(fread_count);
+end;
+
+Procedure TsrNode.rem_read(src:TsrNode);
+Var
+ D:TDependenceNode;
+begin
+ Assert(fread_count<>0,'zero read deref:'+ntype.ClassName);
+ //
+ D:=FDependence.Find(@src);
+ if (D<>nil) then
+ begin
+  Assert(D.fread_count<>0,'zero read deref:'+ntype.ClassName);
+  //
+  Dec(D.fread_count);
+  //
+  if (D.fread_count=0) and (D.fwrite_count=0) then
+  begin
+   FDependence.Delete(D);
+   //
+   FreeDependence(D);
+  end;
+  //
+  Dec(fread_count);
+ end else
+ begin
+  Assert(false,'unknow read deref:'+ntype.ClassName);
+ end;
+end;
+
+Procedure TsrNode.add_write(src:TsrNode);
+Var
+ D:TDependenceNode;
+begin
+ D:=FDependence.Find(@src);
+ if (D=nil) then
+ begin
+  D:=NewDependence;
+  //
+  D.pNode:=src;
+  FDependence.Insert(D);
+ end;
+
+ Inc(D.fwrite_count);
+ Inc(fwrite_count);
+end;
+
+Procedure TsrNode.rem_write(src:TsrNode);
+Var
+ D:TDependenceNode;
+begin
+ Assert(fwrite_count<>0,'zero write deref:'+ntype.ClassName);
+ //
+ D:=FDependence.Find(@src);
+ if (D<>nil) then
+ begin
+  Assert(D.fwrite_count<>0,'zero write deref:'+ntype.ClassName);
+  //
+  Dec(D.fwrite_count);
+  //
+  if (D.fread_count=0) and (D.fwrite_count=0) then
+  begin
+   FDependence.Delete(D);
+   //
+   FreeDependence(D);
+  end;
+  //
+  Dec(fwrite_count);
+ end else
+ begin
+  Assert(false,'unknow write deref:'+ntype.ClassName);
+ end;
+end;
+
+Procedure TsrNode._mark_read(src:TsrNode);
 var
+ node:TsrNode;
  prv:Boolean;
 begin
+ node:=Self;
  repeat
-  Assert(node^.fntype<>nil);
+  //Assert(node^.fntype<>nil);
 
-  prv:=node^.IsUsed;
+  prv:=node.IsUsed;
 
-  node^.fntype.add_read(node,src);
+  node.add_read(src);
 
-  if (prv=node^.IsUsed) then Exit;
+  if (prv=node.IsUsed) then Exit;
 
-  node^.fntype.zero_read(node);
+  node._zero_read;
 
   src :=node;
-  node:=node^.fntype.Down(node);
+  node:=node._Down;
  until (node=nil);
 end;
 
-class Procedure TsrNodeVmt.mark_unread(node,src:PsrNode);
+Procedure TsrNode._mark_unread(src:TsrNode);
 var
+ node:TsrNode;
  prv:Boolean;
 begin
+ node:=Self;
  repeat
-  Assert(node^.fntype<>nil);
+  //Assert(node^.fntype<>nil);
 
-  prv:=node^.IsUsed;
+  prv:=node.IsUsed;
 
-  node^.fntype.rem_read(node,src);
+  node.rem_read(src);
 
-  if (prv=node^.IsUsed) then Exit;
+  if (prv=node.IsUsed) then Exit;
 
-  node^.fntype.zero_unread(node);
+  node._zero_unread;
 
   src :=node;
-  node:=node^.fntype.Down(node);
+  node:=node._Down;
  until (node=nil);
 end;
 
-class Procedure TsrNodeVmt.zero_read(node:PsrNode);
+Procedure TsrNode._zero_read;
 begin
  //
 end;
 
-class Procedure TsrNodeVmt.zero_unread(node:PsrNode);
+Procedure TsrNode._zero_unread;
 begin
  //
 end;
 
-class Procedure TsrNodeVmt.mark_write(node,src:PsrNode);
+Procedure TsrNode._mark_write(src:TsrNode);
 var
+ node:TsrNode;
  prv:Boolean;
 begin
+ node:=Self;
  repeat
-  Assert(node^.fntype<>nil);
+  //Assert(node^.fntype<>nil);
 
-  prv:=node^.IsUsed;
+  prv:=node.IsUsed;
 
-  node^.fntype.add_write(node,src);
+  node.add_write(src);
 
-  if (prv=node^.IsUsed) then Exit;
+  if (prv=node.IsUsed) then Exit;
 
-  node^.fntype.zero_read(node);
+  node._zero_read;
 
   src :=node;
-  node:=node^.fntype.Down(node);
+  node:=node._Down;
  until (node=nil);
 end;
 
-class Procedure TsrNodeVmt.mark_unwrite(node,src:PsrNode);
+Procedure TsrNode._mark_unwrite(src:TsrNode);
 var
+ node:TsrNode;
  prv:Boolean;
 begin
+ node:=Self;
  repeat
-  Assert(node^.fntype<>nil);
+  //Assert(node^.fntype<>nil);
 
-  prv:=node^.IsUsed;
+  prv:=node.IsUsed;
 
-  node^.fntype.rem_write(node,src);
+  node.rem_write(src);
 
-  if (prv=node^.IsUsed) then Exit;
+  if (prv=node.IsUsed) then Exit;
 
-  node^.fntype.zero_unread(node);
+  node._zero_unread;
 
   src :=node;
-  node:=node^.fntype.Down(node);
+  node:=node._Down;
  until (node=nil);
 end;
 
-class Function TsrNodeVmt.pwrite_count(node:PsrNode):PDWORD;
+Procedure TsrNode._SetWriter(w,line:TsrNode);
+begin
+ w.mark_read(Self);
+end;
+
+Procedure TsrNode._ResetWriter(w:TsrNode);
+begin
+ w.mark_unread(Self);
+end;
+
+function TsrNode._is_used:Boolean;
+begin
+ Result:=(read_count<>0) or (write_count<>0);
+end;
+
+function TsrNode._GetPtype:TsrNode;
 begin
  Result:=nil;
 end;
 
-class Procedure TsrNodeVmt.SetWriter(node,w,line:PsrNode);
-begin
- w^.mark_read(node);
-end;
-
-class Procedure TsrNodeVmt.ResetWriter(node,w:PsrNode);
-begin
- w^.mark_unread(node);
-end;
-
-class Function TsrNodeVmt.is_used(node:PsrNode):Boolean;
-begin
- Result:=(node^.read_count<>0) or (node^.write_count<>0);
-end;
-
-class Function TsrNodeVmt.GetPtype(node:PsrNode):PsrNode;
-begin
- Result:=nil;
-end;
-
-class Function TsrNodeVmt.GetStorageClass(node:PsrNode):DWORD;
+function TsrNode._GetStorageClass:DWORD;
 begin
  Result:=6;
 end;
 
-class function TsrNodeVmt.GetStorageName(node:PsrNode):RawByteString;
+function TsrNode._GetStorageName:RawByteString;
 begin
  Result:='';
 end;
 
-class function TsrNodeVmt.GetPrintName(node:PsrNode):RawByteString;
+function TsrNode._GetPrintName:RawByteString;
 begin
  Result:='';
 end;
 
-class function TsrNodeVmt.GetPrintData(node:PsrNode):RawByteString;
+function TsrNode._GetPrintData:RawByteString;
 begin
  Result:='';
 end;
 
-class function TsrNodeVmt.Down(node:PsrNode):Pointer;
+function TsrNode._Down:TsrNode;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.Next(node:PsrNode):Pointer;
+function TsrNode._Next:TsrNode;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.Prev(node:PsrNode):Pointer;
+function TsrNode._Prev:TsrNode;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.Parent(node:PsrNode):Pointer;
+function TsrNode._Parent:TsrNode;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.First(node:PsrNode):Pointer;
+function TsrNode._First:TsrNode;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.Last(node:PsrNode):Pointer;
+function TsrNode._Last:TsrNode;
 begin
  Result:=nil;
 end;
 
-class Procedure TsrNodeVmt.PrepType(node:PPrepTypeNode);
+Procedure TsrNode._PrepType(node:PPrepTypeNode);
 begin
  node^.dnode:=nil;
 end;
 
-class function TsrNodeVmt.GetIndexCount(node:PsrNode):DWORD;
+function TsrNode._GetIndexCount:DWORD;
 begin
  Result:=0;
 end;
 
-class function TsrNodeVmt.GetRef(node:PsrNode):Pointer;
+function TsrNode._GetRef:Pointer;
 begin
  Result:=nil;
 end;
 
-class function TsrNodeVmt.GetData(node:PsrNode;data:Pointer):Ptruint;
+function TsrNode._GetData(data:Pointer):Ptruint;
 begin
  Result:=0;
 end;
 
 //
+function TsrNode.ntype:TsrNodeType;
+begin
+ Result:=TsrNodeType(ClassType);
+end;
 
 function TsrNode.IsType(t:TsrNodeType):Boolean;
 begin
  Result:=False;
- if (@Self=nil) then Exit;
- Result:=fntype.InheritsFrom(t);
+ if (Self=nil) then Exit;
+ Result:=InheritsFrom(t);
 end;
 
-function TsrNode.AsType(t:TsrNodeType):Pointer;
+generic function TsrNode.AsType<T>:T;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- if not fntype.InheritsFrom(t) then Exit;
- Result:=@Self;
+ if (Self=nil) then Exit;
+ if not InheritsFrom(T) then Exit;
+ Result:=T(Self);
 end;
 
-Procedure TsrNode.mark_read(src:PsrNode);
+Procedure TsrNode.mark_read(src:TsrNode);
 begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.mark_read(@Self,src);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _mark_read(src);
 end;
 
-Procedure TsrNode.mark_unread(src:PsrNode);
+Procedure TsrNode.mark_unread(src:TsrNode);
 begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.mark_unread(@Self,src);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _mark_unread(src);
 end;
 
-Procedure TsrNode.mark_write(src:PsrNode);
+Procedure TsrNode.mark_write(src:TsrNode);
 begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.mark_write(@Self,src);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _mark_write(src);
 end;
 
-Procedure TsrNode.mark_unwrite(src:PsrNode);
+Procedure TsrNode.mark_unwrite(src:TsrNode);
 begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.mark_unwrite(@Self,src);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _mark_unwrite(src);
 end;
 
-function TsrNode.write_count:DWORD;
-var
- p:PDWORD;
+Procedure TsrNode.SetWriter(w,line:TsrNode);
 begin
- Result:=0;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- p:=fntype.pwrite_count(@Self);
- if (p=nil) then Exit;
- Result:=p^;
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _SetWriter(w,line);
 end;
 
-Procedure TsrNode.SetWriter(w,line:PsrNode);
+Procedure TsrNode.ResetWriter(w:TsrNode);
 begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.SetWriter(@Self,w,line);
-end;
-
-Procedure TsrNode.ResetWriter(w:PsrNode);
-begin
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- fntype.ResetWriter(@Self,w);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ _ResetWriter(w);
 end;
 
 function TsrNode.IsUsed:Boolean;
 begin
  Result:=False;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.is_used(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_is_used;
 end;
 
-Function TsrNode.pType:Pointer;
+Function TsrNode.pType:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetPtype(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetPtype;
 end;
 
 Function TsrNode.GetStorageClass:DWORD;
 begin
  Result:=6;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetStorageClass(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetStorageClass;
 end;
 
 function TsrNode.GetStorageName:RawByteString;
 begin
  Result:='';
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetStorageName(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetStorageName;
 end;
 
 function TsrNode.GetPrintName:RawByteString;
 begin
  Result:='';
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetPrintName(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetPrintName;
 end;
 
 function TsrNode.GetPrintData:RawByteString;
 begin
  Result:='';
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetPrintData(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetPrintData;
 end;
 
-function TsrNode.Next:Pointer;
+function TsrNode.Next:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.Next(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_Next;
 end;
 
-function TsrNode.Prev:Pointer;
+function TsrNode.Prev:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.Prev(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_Prev;
 end;
 
-function TsrNode.Parent:Pointer;
+function TsrNode.Parent:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.Parent(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_Parent;
 end;
 
-function TsrNode.First:Pointer;
+function TsrNode.First:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.First(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_First;
 end;
 
-function TsrNode.Last:Pointer;
+function TsrNode.Last:TsrNode;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.Last(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_Last;
 end;
 
 procedure TsrNode.PrepType(rtype:Integer);
@@ -513,37 +638,69 @@ var
  node:TPrepTypeNode;
 begin
  node:=Default(TPrepTypeNode);
- node.dnode:=@Self;
+ node.dnode:=Self;
  node.rtype:=rtype;
  While (node.dnode<>nil) do
  begin
-  Assert(node.dnode^.fntype<>nil);
-  node.dnode^.fntype.PrepType(@node);
+  //Assert(node.dnode^.fntype<>nil);
+  node.dnode._PrepType(@node);
  end;
 end;
 
 function TsrNode.GetIndexCount:DWORD;
 begin
  Result:=0;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetIndexCount(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetIndexCount;
 end;
 
 function TsrNode.GetRef:Pointer;
 begin
  Result:=nil;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetRef(@Self);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetRef;
 end;
 
 function TsrNode.GetData(data:Pointer):Ptruint;
 begin
  Result:=0;
- if (@Self=nil) then Exit;
- Assert(fntype<>nil);
- Result:=fntype.GetData(@Self,data);
+ if (Self=nil) then Exit;
+ //Assert(fntype<>nil);
+ Result:=_GetData(data);
+end;
+
+//
+
+generic Function TCustomEmit.New<T>:T;
+begin
+ Result:=nil;
+ if (Self=nil) then Exit;
+ //
+ Result:=T(Alloc(TObject(T).InstanceSize));
+ TObject(T).InitInstance(Result);
+ //
+ if TObject(T).InheritsFrom(TsrNode) then
+ begin
+  Inc(FOrder);
+  //
+  TsrNode(Result).FOrder:=FOrder;
+  TsrNode(Result).FEmit :=Self;
+ end;
+end;
+
+function CompareNodes(buf1,buf2:PPsrNode;count:PtrUint):Integer;
+begin
+ Result:=0;
+ While (count<>0) do
+ begin
+  Result:=Integer(buf1^.Order>buf2^.Order)-Integer(buf1^.Order<buf2^.Order);
+  if (Result<>0) then Exit;
+  Inc(buf1);
+  Inc(buf2);
+  Dec(count);
+ end;
 end;
 
 end.

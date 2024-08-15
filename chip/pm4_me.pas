@@ -903,9 +903,9 @@ begin
      begin
       iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
 
-      DescriptorGroup.BindImage(fset,bind,
-                                iv.FHandle,
-                                GetImageLayout(resource_instance^.curr));
+      DescriptorGroup.BindStorage(fset,bind,
+                                  iv.FHandle,
+                                  GetImageLayout(resource_instance^.curr));
      end;
     vbMipStorage:
      begin
@@ -1686,8 +1686,6 @@ begin
    end;
   ntDrawIndexAuto:
    begin
-   DumpShaderGroup(ctx.rt_info^.ShaderGroup);
-
     ctx.Cmd.DrawIndexAuto(node^.indexCount);
    end;
   ntClearDepth:
@@ -1851,7 +1849,7 @@ begin
  begin
   Writeln(stderr,'BindCompute(CP)');
 
-  DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+  DumpShaderGroup(CP_KEY.FShaderGroup);
 
   Assert(false  ,'BindCompute(CP)');
  end;
@@ -2386,7 +2384,7 @@ begin
   if (ctx.stream^.hint_loop>10000) then
   begin
    //loop detection
-   Writeln(stderr,'WaitReg loop detected -> skip');
+   Writeln(stderr,'WaitReg loop detected 0x',HexStr(QWORD(node^.pollAddr),10),' -> skip');
    Exit;
   end;
   //
@@ -2497,9 +2495,14 @@ begin
 
    while (ctx.node<>nil) do
    begin
-    //Writeln('+',ctx.node^.ntype);
 
-     //wait last stall cmd ???
+    if not ctx.stream^.hint_cmds then
+    begin
+     Writeln('+',ctx.node^.ntype);
+     ctx.stream^.hint_cmds:=True;
+    end;
+
+    //wait last stall cmd ???
     //if ctx.WaitConfirm then
     begin
      case ctx.node^.ntype of
@@ -2535,6 +2538,9 @@ begin
      //Switching to another task
      Break;
     end;
+
+    //reset hint
+    ctx.stream^.hint_cmds:=False;
 
     //next command
     ctx.node:=ctx.stream^.Next(ctx.node);

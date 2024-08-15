@@ -17,7 +17,7 @@ uses
 type
  TEmit_MTBUF=class(TEmitFetch)
   procedure emit_MTBUF;
-  procedure emit_TBUFFER_LOAD_FORMAT(count:Byte);
+  procedure emit_TBUFFER_LOAD_FORMAT (count:Byte);
   procedure emit_TBUFFER_STORE_FORMAT(count:Byte);
  end;
 
@@ -27,7 +27,7 @@ procedure TEmit_MTBUF.emit_TBUFFER_LOAD_FORMAT(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
 
 begin
  if not get_srsrc(FSPI.MTBUF.SRSRC,4,@src) then Assert(false);
@@ -39,7 +39,9 @@ begin
            dst_sel_identity,
            FSPI.MTBUF.DFMT,
            FSPI.MTBUF.NFMT,
-           count)
+           count,
+           FSPI.MTBUF.GLC,
+           FSPI.MTBUF.SLC)
  );
 
 end;
@@ -48,7 +50,7 @@ procedure TEmit_MTBUF.emit_TBUFFER_STORE_FORMAT(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
 
 begin
  if not get_srsrc(FSPI.MTBUF.SRSRC,4,@src) then Assert(false);
@@ -60,7 +62,9 @@ begin
            dst_sel_identity,
            FSPI.MTBUF.DFMT,
            FSPI.MTBUF.NFMT,
-           count)
+           count,
+           FSPI.MTBUF.GLC,
+           FSPI.MTBUF.SLC)
  );
 
 end;

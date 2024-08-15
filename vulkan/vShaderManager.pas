@@ -570,6 +570,18 @@ begin
   DumpSpv(FStage,M,FHash_spv);
   //
 
+  //dump gcn
+  if (Length(t.FShaderAliases)=0) then
+  begin
+   case FStage of
+    vShaderStagePs:DumpPS(GPU_REGS,t.key.FHash);
+    vShaderStageVs:DumpVS(GPU_REGS,t.key.FHash);
+    vShaderStageCs:DumpCS(GPU_REGS,t.key.FHash);
+    else;
+   end;
+  end;
+  //
+
   pUserData:=GPU_REGS.get_user_data(FStage);
 
   FShader:=t.AddShader(FDescSetId,M,pUserData);
@@ -599,14 +611,6 @@ begin
                                 GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
      FShader.SET_RENDER_TARGETS(@GPU_REGS.CX_REG^.RENDER_TARGET,GPU_REGS.GET_HI_RT+1);
     end;
-   else;
-  end;
-
-  //dump gcn
-  case FStage of
-   vShaderStagePs:DumpPS(GPU_REGS,FShader.FHash_gcn);
-   vShaderStageVs:DumpVS(GPU_REGS,FShader.FHash_gcn);
-   vShaderStageCs:DumpCS(GPU_REGS,FShader.FHash_gcn);
    else;
   end;
 

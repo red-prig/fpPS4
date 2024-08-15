@@ -42,8 +42,8 @@ procedure TEmit_SOPK.emit_S_ADDK_I32; //sdst.s = (sdst.s + signExtend(imm16)); S
 Var
  dst:PsrRegSlot;
  car:PsrRegSlot;
- src:PsrRegNode;
- imm:PsrRegNode;
+ src:TsrRegNode;
+ imm:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOPK.SDST);
  car:=get_scc;
@@ -57,8 +57,8 @@ end;
 procedure TEmit_SOPK.emit_S_CMPK_I32(OpId:DWORD); //SCC = compareOp(sdst.s, signExtend(imm16.s))
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- imm:PsrRegNode;
+ src:TsrRegNode;
+ imm:TsrRegNode;
 begin
  dst:=get_scc;
 
@@ -71,8 +71,8 @@ end;
 procedure TEmit_SOPK.emit_S_CMPK_U32(OpId:DWORD); //SCC = compareOp(sdst.u, imm16.u)
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- imm:PsrRegNode;
+ src:TsrRegNode;
+ imm:TsrRegNode;
 begin
  dst:=get_scc;
 

@@ -20,7 +20,7 @@ type
   procedure emit_S_SUB_B32(rtype:TsrDataType);
   procedure emit_S_ADDC_U32;
   procedure emit_S_MUL_I32;
-  procedure OpISccNotZero(src:PsrRegNode);
+  procedure OpISccNotZero(src:TsrRegNode);
   procedure emit_S_SH(OpId:DWORD;rtype:TsrDataType);
   procedure emit_S_AND_B32;
   procedure emit_S_AND_B64;
@@ -43,7 +43,7 @@ implementation
 procedure TEmit_SOP2.emit_S_ADD_B32(rtype:TsrDataType);
 Var
  dst,car:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  car:=get_scc;
@@ -57,7 +57,7 @@ end;
 procedure TEmit_SOP2.emit_S_SUB_B32(rtype:TsrDataType);
 Var
  dst,bor:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  bor:=get_scc;
@@ -71,7 +71,7 @@ end;
 procedure TEmit_SOP2.emit_S_ADDC_U32;
 Var
  dst,car:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  car:=get_scc;
@@ -95,7 +95,7 @@ end;
 procedure TEmit_SOP2.emit_S_MUL_I32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -105,16 +105,16 @@ begin
  OpIMul(dst,src[0],src[1]);
 end;
 
-procedure TEmit_SOP2.OpISccNotZero(src:PsrRegNode); //SCC = (sdst.u != 0)
+procedure TEmit_SOP2.OpISccNotZero(src:TsrRegNode); //SCC = (sdst.u != 0)
 begin
  MakeCopy(get_scc,src);
- get_scc^.current^.dtype:=dtBool; //implict cast (int != 0)
+ get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_SH(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -122,9 +122,9 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
  src[1]:=OpAndTo(src[1],31);
- src[1]^.PrepType(ord(dtUInt32));
+ src[1].PrepType(ord(dtUInt32));
 
- Op2(OpId,src[0]^.dtype,dst,src[0],src[1]);
+ Op2(OpId,src[0].dtype,dst,src[0],src[1]);
 
  OpISccNotZero(dst^.current); //SCC = (sdst.u != 0)
 end;
@@ -132,7 +132,7 @@ end;
 procedure TEmit_SOP2.emit_S_AND_B32; //sdst = (ssrc0 & ssrc1); SCC = (sdst != 0)
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -147,7 +147,7 @@ end;
 procedure TEmit_SOP2.emit_S_AND_B64; //sdst[2] = (ssrc0[2] & ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -166,7 +166,7 @@ end;
 procedure TEmit_SOP2.emit_S_ANDN2_B64; //sdst[2] = (ssrc0[2] & ~ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -188,7 +188,7 @@ end;
 procedure TEmit_SOP2.emit_S_OR_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -203,7 +203,7 @@ end;
 procedure TEmit_SOP2.emit_S_OR_B64; //sdst[2] = (ssrc0[2] | ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -222,7 +222,7 @@ end;
 procedure TEmit_SOP2.emit_S_XOR_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -237,7 +237,7 @@ end;
 procedure TEmit_SOP2.emit_S_XOR_B64; //sdst[2] = (ssrc0[2] ^ ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -256,7 +256,7 @@ end;
 procedure TEmit_SOP2.emit_S_ORN2_B64; //sdst[2] = (ssrc0[2] | ~ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -278,7 +278,7 @@ end;
 procedure TEmit_SOP2.emit_S_NAND_B64; //sdst[2] = ~(ssrc0[2] & ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -300,7 +300,7 @@ end;
 procedure TEmit_SOP2.emit_S_NOR_B64; //sdst[2] = ~(ssrc0[2] | ssrc1[2]); SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1,src2:array[0..1] of PsrRegNode;
+ src0,src1,src2:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -322,8 +322,8 @@ end;
 procedure TEmit_SOP2.emit_S_CSELECT_B32; //sdst = SCC ? ssrc0 : ssrc1
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- scc:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ scc:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -337,8 +337,8 @@ end;
 procedure TEmit_SOP2.emit_S_CSELECT_B64; //sdst[2] = SCC ? ssrc0[2] : ssrc1[2]
 Var
  dst:array[0..1] of PsrRegSlot;
- src0,src1:array[0..1] of PsrRegNode;
- scc:PsrRegNode;
+ src0,src1:array[0..1] of TsrRegNode;
+ scc:TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
 
@@ -356,8 +356,8 @@ end;
 procedure TEmit_SOP2.emit_S_BFE_U32; //sdst.u = bitFieldExtract(ssrc0); SCC = (sdst.u != 0)
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- offset,count:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ offset,count:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -375,8 +375,8 @@ end;
 procedure TEmit_SOP2.emit_S_BFM_B32; //sdst.u = ((1 << ssrc0.u[4:0])-1) << ssrc1[4:0]
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- one:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ one:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
@@ -386,8 +386,8 @@ begin
  src[0]:=OpAndTo(src[0],31);
  src[1]:=OpAndTo(src[1],31);
 
- src[0]^.PrepType(ord(dtUInt32));
- src[1]^.PrepType(ord(dtUInt32));
+ src[0].PrepType(ord(dtUInt32));
+ src[1].PrepType(ord(dtUInt32));
 
  one:=NewReg_q(dtUInt32,1);
 

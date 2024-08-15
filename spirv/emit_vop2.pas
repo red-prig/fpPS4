@@ -15,7 +15,7 @@ uses
 type
  TEmit_VOP2=class(TEmitFetch)
   procedure emit_VOP2;
-  function  get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
+  function  get_legacy_cmp(src0,src1,zero:TsrRegNode):TsrRegNode;
   procedure emit_V_CNDMASK_B32;
   procedure emit_V_AND_B32;
   procedure emit_V_OR_B32;
@@ -45,9 +45,9 @@ type
 
 implementation
 
-function TEmit_VOP2.get_legacy_cmp(src0,src1,zero:PsrRegNode):PsrRegNode;
+function TEmit_VOP2.get_legacy_cmp(src0,src1,zero:TsrRegNode):TsrRegNode;
 var
- eql:array[0..1] of PsrRegNode;
+ eql:array[0..1] of TsrRegNode;
 begin
  if CompareReg(src0,src1) then
  begin
@@ -69,7 +69,7 @@ end;
 procedure TEmit_VOP2.emit_V_CNDMASK_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -83,7 +83,7 @@ end;
 procedure TEmit_VOP2.emit_V_AND_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -96,7 +96,7 @@ end;
 procedure TEmit_VOP2.emit_V_OR_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -109,7 +109,7 @@ end;
 procedure TEmit_VOP2.emit_V_XOR_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -122,7 +122,7 @@ end;
 procedure TEmit_VOP2.emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -130,15 +130,15 @@ begin
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUInt32);
 
  src[1]:=OpAndTo(src[1],31);
- src[1]^.PrepType(ord(dtUInt32));
+ src[1].PrepType(ord(dtUInt32));
 
- Op2(OpId,src[0]^.dtype,dst,src[0],src[1]);
+ Op2(OpId,src[0].dtype,dst,src[0],src[1]);
 end;
 
 procedure TEmit_VOP2.emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -146,16 +146,16 @@ begin
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,rtype);
 
  src[0]:=OpAndTo(src[0],31);
- src[0]^.PrepType(ord(dtUInt32));
+ src[0].PrepType(ord(dtUInt32));
 
- Op2(OpId,src[1]^.dtype,dst,src[1],src[0]);
+ Op2(OpId,src[1].dtype,dst,src[1],src[0]);
 end;
 
 procedure TEmit_VOP2.emit_V_ADD_I32; //vdst = vsrc0.s + vsrc1.s; sdst[thread_id:] = carry_out & EXEC
 Var
  dst,car:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- exc:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ exc:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  car:=get_vcc0;
@@ -172,8 +172,8 @@ end;
 procedure TEmit_VOP2.emit_V_SUB_I32; //vdst = vsrc0.u - vsub.u; sdst[thread_id:] = borrow_out & EXEC
 Var
  dst,bor:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- exc:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ exc:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  bor:=get_vcc0;
@@ -190,8 +190,8 @@ end;
 procedure TEmit_VOP2.emit_V_SUBREV_I32; //vdst = vsrc1.u - vsub.u; sdst[thread_id:] = borrow_out & EXEC
 Var
  dst,bor:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- exc:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ exc:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  bor:=get_vcc0;
@@ -208,7 +208,7 @@ end;
 procedure TEmit_VOP2.emit_V2_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -221,10 +221,10 @@ end;
 procedure TEmit_VOP2.emit_V_MUL_LEGACY_F32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- zero:PsrRegNode;
- cmp:PsrRegNode;
- mul:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ zero:TsrRegNode;
+ cmp:TsrRegNode;
+ mul:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -244,7 +244,7 @@ end;
 procedure TEmit_VOP2.emit_V_SUBREV_F32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -257,7 +257,7 @@ end;
 procedure TEmit_VOP2.emit_V_CVT_PKRTZ_F16_F32;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -270,8 +270,8 @@ end;
 procedure TEmit_VOP2.emit_V_MUL_I32_I24;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- bit24:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ bit24:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -281,10 +281,10 @@ begin
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
  src[0]:=OpAndTo(src[0],bit24);
- src[0]^.PrepType(ord(dtInt32));
+ src[0].PrepType(ord(dtInt32));
 
  src[1]:=OpAndTo(src[1],bit24);
- src[1]^.PrepType(ord(dtInt32));
+ src[1].PrepType(ord(dtInt32));
 
  OpIMul(dst,src[0],src[1]);
 end;
@@ -292,8 +292,8 @@ end;
 procedure TEmit_VOP2.emit_V_MUL_U32_U24;
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- bit24:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ bit24:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -303,10 +303,10 @@ begin
  bit24:=NewReg_q(dtUInt32,$FFFFFF);
 
  src[0]:=OpAndTo(src[0],bit24);
- src[0]^.PrepType(ord(dtUInt32));
+ src[0].PrepType(ord(dtUInt32));
 
  src[1]:=OpAndTo(src[1],bit24);
- src[1]^.PrepType(ord(dtUInt32));
+ src[1].PrepType(ord(dtUInt32));
 
  OpIMul(dst,src[0],src[1]);
 end;
@@ -314,7 +314,7 @@ end;
 procedure TEmit_VOP2.emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f  -> fma
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -328,10 +328,10 @@ end;
 procedure TEmit_VOP2.emit_V_MAC_LEGACY_F32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
- zero:PsrRegNode;
- cmp:PsrRegNode;
- mul:PsrRegNode;
+ src:array[0..2] of TsrRegNode;
+ zero:TsrRegNode;
+ cmp:TsrRegNode;
+ mul:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -354,7 +354,7 @@ end;
 procedure TEmit_VOP2.emit_V_MADAK_F32; //vdst = vsrc0.f * vsrc1.f + kadd.f
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -368,7 +368,7 @@ end;
 procedure TEmit_VOP2.emit_V_MADMK_F32; //vdst = vsrc0.f * kmul.f + vadd.f
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -382,7 +382,7 @@ end;
 procedure TEmit_VOP2.emit_V_BCNT_U32_B32; //vdst = bit_count(vsrc0) + vsrc1.u
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -397,7 +397,7 @@ end;
 procedure TEmit_VOP2.emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -410,8 +410,8 @@ end;
 procedure TEmit_VOP2.emit_V_LDEXP_F32; //vdst.f = vsrc0.f * pow(2.0, vsrc1.s)
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
- two:PsrRegNode;
+ src:array[0..2] of TsrRegNode;
+ two:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
@@ -429,8 +429,8 @@ end;
 procedure TEmit_VOP2.emit_V_ADDC_U32;
 Var
  dst,car:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
- exc:PsrRegNode;
+ src:array[0..2] of TsrRegNode;
+ exc:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  car:=get_vcc0;
@@ -440,7 +440,7 @@ begin
  src[2]:=MakeRead(get_vcc0,dtUInt32);
 
  src[2]:=OpAndTo(src[2],1);
- src[2]^.PrepType(ord(dtUInt32));
+ src[2].PrepType(ord(dtUInt32));
 
  OpIAddExt(dst,car,src[0],src[1]); //src0+src1
 
@@ -464,7 +464,7 @@ end;
 procedure TEmit_VOP2.emit_V_MBCNT_LO_U32_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  //V_MBCNT_LO_U32_B32 vdst, vsrc, vaccum
  //mask_lo_threads_before= (thread_id>32) ? 0xffffffff : (1<<thread_id)-1
@@ -484,7 +484,7 @@ end;
 procedure TEmit_VOP2.emit_V_MBCNT_HI_U32_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of PsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  //V_MBCNT_HI_U32_B3 vdst, vsrc, vaccum
  //mask_hi_threads_before= (thread_id>32) ? (1<<(thread_id-32))-1 : 0

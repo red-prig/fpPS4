@@ -23,7 +23,7 @@ implementation
 procedure TEmit_SOPC.emit_S_CMP_32(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst:=get_scc;
 

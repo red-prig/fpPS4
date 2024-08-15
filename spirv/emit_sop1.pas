@@ -23,7 +23,7 @@ type
   Function  GetFuncPtr(src:PPsrRegNode):Pointer;
   procedure emit_S_MOV_B32;
   procedure emit_S_MOV_B64;
-  procedure OpISccNotZero(src:PsrRegNode);
+  procedure OpISccNotZero(src:TsrRegNode);
   procedure emit_S_NOT_B32;
   procedure emit_S_NOT_B64;
   procedure emit_S_GETPC_B64;
@@ -41,8 +41,8 @@ implementation
 Function TEmit_SOP1.GetFuncPtr(src:PPsrRegNode):Pointer;
 var
  chain:TsrChains;
- pConst:array[0..1] of PsrConst;
- pLayout:PsrDataLayout;
+ pConst:array[0..1] of TsrConst;
+ pLayout:TsrDataLayout;
 begin
  Result:=nil;
 
@@ -52,12 +52,12 @@ begin
  Assert(src[0]<>nil);
  Assert(src[1]<>nil);
 
- if (src[0]^.is_const) and (src[1]^.is_const) then
+ if (src[0].is_const) and (src[1].is_const) then
  begin
-  pConst[0]:=src[0]^.AsConst;
-  pConst[1]:=src[1]^.AsConst;
+  pConst[0]:=src[0].AsConst;
+  pConst[1]:=src[1].AsConst;
 
-  QWORD(Result):=QWORD(pConst[0]^.AsUint32) or (QWORD(pConst[1]^.AsUint32) shl 32);
+  QWORD(Result):=QWORD(pConst[0].AsUint32) or (QWORD(pConst[1].AsUint32) shl 32);
  end else
  begin
   chain:=Default(TsrChains);
@@ -65,7 +65,7 @@ begin
   chain[1]:=GetChainRegNode(src[1]);
 
   pLayout:=DataLayoutList.Grouping(chain,rtFunPtr2);
-  Result:=pLayout^.pData;
+  Result:=pLayout.pData;
  end;
 
  Assert(Result<>nil);
@@ -74,7 +74,7 @@ end;
 procedure TEmit_SOP1.emit_S_MOV_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
@@ -85,7 +85,7 @@ end;
 procedure TEmit_SOP1.emit_S_MOV_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
@@ -95,16 +95,16 @@ begin
  MakeCopy(dst[1],src[1]);
 end;
 
-procedure TEmit_SOP1.OpISccNotZero(src:PsrRegNode); //SCC = (sdst.u != 0)
+procedure TEmit_SOP1.OpISccNotZero(src:TsrRegNode); //SCC = (sdst.u != 0)
 begin
  MakeCopy(get_scc,src);
- get_scc^.current^.dtype:=dtBool; //implict cast (int != 0)
+ get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP1.emit_S_NOT_B32; //sdst = ~ssrc; SCC = (sdst != 0)
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
@@ -119,7 +119,7 @@ end;
 procedure TEmit_SOP1.emit_S_NOT_B64; //sdst[2] = ~ssrc0[2]; SCC = (sdst[2] != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
@@ -150,7 +150,7 @@ end;
 
 procedure TEmit_SOP1.emit_S_SETPC_B64;
 Var
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 
  newptr:Pointer;
 begin
@@ -164,7 +164,7 @@ end;
 procedure TEmit_SOP1.emit_S_SWAPPC_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 
  oldptr,newptr:Pointer;
 begin
@@ -185,8 +185,8 @@ end;
 procedure TEmit_SOP1.emit_S_AND_SAVEEXEC_B64; //sdst.du = EXEC;| EXEC = (ssrc.du & EXEC);| SCC = (sdst != 0)
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- exc:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ exc:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(False);
 
@@ -211,7 +211,7 @@ end;
 procedure TEmit_SOP1.emit_S_WQM_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
@@ -222,7 +222,7 @@ end;
 procedure TEmit_SOP1.emit_S_WQM_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 
 begin
  //S_WQM_B64 EXEC_LO, EXEC_LO   //sdst.du = wholeQuadMode(ssrc.du); SCC = (sdst.du != 0)
@@ -242,7 +242,7 @@ end;
 procedure TEmit_SOP1.emit_S_BREV_B32; //sdst[31:0] = ssrc[0:31]
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUInt32);
@@ -253,7 +253,7 @@ end;
 procedure TEmit_SOP1.emit_S_BREV_B64; //sdst[63:0] = ssrc[0:63]
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 

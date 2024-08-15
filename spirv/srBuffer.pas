@@ -11,104 +11,121 @@ uses
  srNode,
  srType,
  srTypes,
- srReg,
  srVariable,
  srLayout,
  srDecorate,
  srConfig;
 
 type
- ntBuffer=class(ntDescriptor)
-  class Procedure add_read      (node,src:PsrNode);           override;
-  class Procedure rem_read      (node,src:PsrNode);           override;
-  //
-  class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
-  class function  GetStorageName(node:PsrNode):RawByteString; override;
- end;
+ TsrBuffer=class;
 
- PsrBuffer=^TsrBuffer;
-
- PsrField=^TsrField;
+ TsrField=class;
 
  TsrFieldValue=(frNotFit,frIdent,frVectorAsValue,frValueInVector,frValueInArray);
 
  TFieldFetchValue=record
   fValue:TsrFieldValue;
-  pField:PsrField;
+  pField:TsrField;
  end;
 
- TFieldEnumCb=procedure(pField:PsrField) of object;
- TsrField=object
+ TFieldEnumCb=procedure(pField:TsrField) of object;
+ TsrField=class
   type
-   TFieldFetch=specialize TNodeFetch<PsrField,TsrField>;
+   TFieldTree=specialize TNodeTreeClass<TsrField>;
   var
-   pLeft,pRight:PsrField;
+   pLeft,pRight:TsrField;
    //----
 
-   pBuffer:PsrBuffer;
-   pParent:PsrField;
-   offset:PtrUint;
-   size:PtrUint;
-   stride:PtrUint;
+   pBuffer:TsrBuffer;
+   pParent:TsrField;
+   //
+   key:PtrUint;  //offset
+   //
+   FFSize :PtrUint; //full size of struct/array (cached)
+   stride :PtrUint; //value size/stride in array
+   count  :PtrUint; //count in array
 
-   FCount:PtrUint;
-   dtype:TsrDataType;
+   FCount:PtrUint;     //field count
+   Fdtype:TsrDataType; //field type
 
-   sType,pType:PsrType;
+   sType,vType:TsrType;
 
    FID:Integer; //alloc late
 
    //
 
-   FList:TFieldFetch;
+   FList:TFieldTree;
 
-  function  c(n1,n2:PsrField):Integer; static;
+  class function c(n1,n2:PPtrUint):Integer; static;
+  property  offset:PtrUint read key write key;
   function  Cross(o,s:PtrUint):Boolean;
-  function  Find_be(o:PtrUint):PsrField;
-  function  Find_le(o:PtrUint):PsrField;
-  function  First:PsrField;
-  function  Last:PsrField;
-  function  Next(p:PsrField):PsrField;
-  function  Prev(p:PsrField):PsrField;
-  function  Fetch(o:PtrUint):PsrField;
-  function  FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType):TFieldFetchValue;
+  function  Find_be(o:PtrUint):TsrField;
+  function  Find_le(o:PtrUint):TsrField;
+  function  Find_ls(o:PtrUint):TsrField;
+  function  First:TsrField;
+  function  Last:TsrField;
+  function  Next(p:TsrField):TsrField;
+  function  Prev(p:TsrField):TsrField;
+  function  Fetch(o:PtrUint):TsrField;
+  Procedure ClearSize;
+  function  FindIntersect(_offset,_size:PtrUint):TsrField;
+  function  FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType;_weak:Boolean):TFieldFetchValue;
+  function  FetchArray(_offset,_size,_stride:PtrUint):TFieldFetchValue;
   function  FetchRuntimeArray(_offset,_stride:PtrUint):TFieldFetchValue;
   function  IsStructUsedRuntimeArray:Boolean;
   function  IsStructNotUsed:Boolean;
   function  IsTop:Boolean;
   function  GetStructDecorate:DWORD;
   procedure UpdateSize;
-  function  GetSize:PtrUint;
+  function  Size:PtrUint;
   procedure FillNode(o,s:PtrUint);
   function  FillSpace:Integer;
  end;
 
- TsrBufferType=(btStorageBuffer,btUniformBuffer,btPushConstant);
+ TsrBufferType=(btStorageBuffer,btUniformBuffer,btPushConstant,btWorkgroup,btPrivate);
 
- TsrBuffer=packed object(TsrDescriptor)
-  pLeft,pRight:PsrBuffer;
+ PsrBufferKey=^TsrBufferKey;
+ TsrBufferKey=packed record
+  pLayout:TsrDataLayout;
+  AliasId:PtrInt;
+ end;
+
+ TsrBuffer=class(TsrDescriptor)
+  pLeft,pRight:TsrBuffer;
   //----
-  fwrite_count:DWORD;
   //
   align_offset:DWORD;
 
-  FEmit:TCustomEmit;
-  FDList:TRegDNodeList;
+  FDList:TDependenceNodeList;
 
   bType:TsrBufferType;
 
-  key:packed record
-   pLayout:PsrDataLayout;
-   AliasId:PtrInt;
-  end;
+  key:TsrBufferKey;
 
   FTop:TsrField;
 
-  function  c(n1,n2:PsrBuffer):Integer; static;
-  Procedure Init(Emit:TCustomEmit); inline;
-  Procedure AddDep(t:PsrNode);
-  Procedure RemDep(t:PsrNode);
+  pNextAlias:TsrBuffer; // alias cache
+
+  tRef:TsrNode; //bitcast cache
+
+  //
+  Procedure add_read(src:TsrNode);         override;
+  Procedure rem_read(src:TsrNode);         override;
+  //
+  function  _GetStorageName:RawByteString; override;
+  //
+  class function c(n1,n2:PsrBufferKey):Integer; static;
+  //
+  property  pLayout:TsrDataLayout read key.pLayout;
+  property  AliasId:PtrInt        read key.AliasId;
+  //
+  Function  is_export_used:Boolean;
+  Procedure Init(); inline;
+  Procedure AddDep(t:TsrNode);
+  Procedure RemDep(t:TsrNode);
+  function  _chain_read:DWORD;
   function  chain_read :DWORD;
+  function  _chain_write:DWORD;
   function  chain_write:DWORD;
   function  GetStorageName:RawByteString;
   function  GetTypeChar:Char;
@@ -120,217 +137,242 @@ type
   procedure ShiftOffset(Offset:PtrUint);
  end;
 
+ ntBuffer=TsrBuffer;
+
  PsrBufferList=^TsrBufferList;
  TsrBufferList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrBuffer,TsrBuffer>;
+   TNodeTree=specialize TNodeTreeClass<TsrBuffer>;
   var
    FEmit:TCustomEmit;
-   FNTree:TNodeFetch;
-   FPushConstant:PsrBuffer;
+   FTree:TNodeTree;
+   FPushConstant:TsrBuffer;
   procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(s:PsrDataLayout;n:PtrInt):PsrBuffer;
-  function  NextAlias(buf:PsrBuffer):PsrBuffer;
-  Function  First:PsrBuffer;
-  Function  Next(node:PsrBuffer):PsrBuffer;
+  function  Fetch(s:TsrDataLayout;n:PtrInt;GLC,SLC:Boolean):TsrBuffer;
+  function  NextAlias(buf:TsrBuffer;GLC,SLC:Boolean):TsrBuffer;
+  Function  First:TsrBuffer;
+  Function  Next(node:TsrBuffer):TsrBuffer;
   procedure EnumAllField(cb:TFieldEnumCb);
-  procedure OnFillSpace(node:PsrField);
+  procedure OnFillSpace(node:TsrField);
   procedure FillSpace;
-  procedure OnAllocID(pField:PsrField);
+  procedure OnAllocID(pField:TsrField);
   procedure AllocID;
   procedure AllocBinding(Var FBinding:Integer);
   procedure AllocSourceExtension;
-  function  FindUserDataBuf:PsrBuffer;
+  function  FindUserDataBuf:TsrBuffer;
   procedure ApplyBufferType;
-  procedure AlignOffset(node:PsrBuffer;offset:PtrUint);
+  procedure AlignOffset(node:TsrBuffer;offset:PtrUint);
   procedure AlignOffset;
-  procedure OnAllocTypeBinding(pField:PsrField);
+  procedure OnAllocTypeBinding(pField:TsrField);
   procedure AllocTypeBinding;
   procedure AllocName;
  end;
 
+operator := (i:TObject):TsrField; inline;
+
 implementation
 
-class Procedure ntBuffer.add_read(node,src:PsrNode);
+operator := (i:TObject):TsrField; inline;
+begin
+ Result:=TsrField(Pointer(i)); //typecast hack
+end;
+
+Procedure TsrBuffer.add_read(src:TsrNode);
 begin
  inherited;
- if src^.IsType(ntChain) then
+ if src.IsType(ntChain) then
  begin
-  PsrBuffer(node)^.AddDep(src);
+  AddDep(src);
  end;
 end;
 
-class Procedure ntBuffer.rem_read(node,src:PsrNode);
+Procedure TsrBuffer.rem_read(src:TsrNode);
 begin
  inherited;
- if src^.IsType(ntChain) then
+ if src.IsType(ntChain) then
  begin
-  PsrBuffer(node)^.RemDep(src);
+  RemDep(src);
  end;
 end;
 
-//
-
-class Function ntBuffer.pwrite_count(node:PsrNode):PDWORD;
+function TsrBuffer._GetStorageName:RawByteString;
 begin
- Result:=@PsrBuffer(node)^.fwrite_count;
-end;
-
-class function ntBuffer.GetStorageName(node:PsrNode):RawByteString;
-begin
- Result:=PsrBuffer(node)^.GetStorageName;
+ Result:=GetStorageName;
 end;
 
 //---
 
-function TsrField.c(n1,n2:PsrField):Integer;
+class function TsrField.c(n1,n2:PPtrUint):Integer;
 begin
- Result:=Integer(n1^.offset>n2^.offset)-Integer(n1^.offset<n2^.offset);
+ Result:=ord(n1^>n2^)-ord(n1^<n2^);
 end;
 
 function TsrField.Cross(o,s:PtrUint):Boolean;
 begin
- Result:=((o>=offset) and (o<offset+size)) or
-         ((offset>=o) and (offset<o+s));
+ Result:=((o>=offset) and (o<(offset+size))) or
+         ((offset>=o) and (offset<(o+s)));
 end;
 
-function TsrField.Find_be(o:PtrUint):PsrField;
-var
- node:TsrField;
+function TsrField.Find_be(o:PtrUint):TsrField;
 begin
- node:=Default(TsrField);
- node.offset:=o;
- Result:=FList.Find_be(@node);
+ Result:=FList.Find_be(@o);
 end;
 
-function TsrField.Find_le(o:PtrUint):PsrField;
-var
- node:TsrField;
+function TsrField.Find_le(o:PtrUint):TsrField;
 begin
- node:=Default(TsrField);
- node.offset:=o;
- Result:=FList.Find_le(@node);
+ Result:=FList.Find_le(@o);
 end;
 
-function TsrField.First:PsrField;
+function TsrField.Find_ls(o:PtrUint):TsrField;
+begin
+ Result:=FList.Find_ls(@o);
+end;
+
+function TsrField.First:TsrField;
 begin
  Result:=FList.Min;
 end;
 
-function TsrField.Last:PsrField;
+function TsrField.Last:TsrField;
 begin
  Result:=FList.Max;
 end;
 
-function TsrField.Next(p:PsrField):PsrField;
+function TsrField.Next(p:TsrField):TsrField;
 begin
  Result:=FList.Next(p);
 end;
 
-function TsrField.Prev(p:PsrField):PsrField;
+function TsrField.Prev(p:TsrField):TsrField;
 begin
  Result:=FList.Prev(p);
 end;
 
-function TsrField.Fetch(o:PtrUint):PsrField;
-var
- node:TsrField;
+function TsrField.Fetch(o:PtrUint):TsrField;
 begin
- node:=Default(TsrField);
- node.offset:=o;
- Result:=FList.Find(@node);
+ Result:=FList.Find(@o);
  if (Result=nil) then
  begin
-  Assert(pBuffer^.FEmit<>nil);
-  Result:=pBuffer^.FEmit.Alloc(SizeOf(TsrField));
-  Result^.pBuffer:=pBuffer;
-  Result^.pParent:=@Self;
-  Result^.offset :=o;
-  Result^.FID    :=-1;
+  Assert(pBuffer.Emit<>nil);
+  Result:=pBuffer.Emit.specialize New<TsrField>;
+  Result.pBuffer:=pBuffer;
+  Result.pParent:=Self;
+  Result.offset :=o;
+  Result.FID    :=-1;
   FList.Insert(Result);
+  //inc field count
   Inc(FCount);
+  //clear parent size
+  ClearSize;
  end;
 end;
 
-function TsrField.FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType):TFieldFetchValue;
+Procedure TsrField.ClearSize;
 var
- node:PsrField;
+ node:TsrField;
+begin
+ node:=Self;
+ while (node<>nil) do
+ begin
+  //update only struct
+  if (node.Fdtype<>dtTypeStruct) then Exit;
+  //dont clear max size
+  if (node.FFSize=High(PtrUint)) then Exit;
+  //
+  node.FFSize:=0;
+  //
+  node:=node.pParent;
+ end;
+end;
+
+function TsrField.FindIntersect(_offset,_size:PtrUint):TsrField;
+var
+ node:TsrField;
+begin
+ Result:=nil;
+ node:=Find_ls(_offset+_size);
+ //
+ while (node<>nil) do
+ begin
+  if node.Cross(_offset,_size) then
+  begin
+   Exit(node);
+  end;
+  //
+  node:=Prev(node);
+ end;
+end;
+
+function TsrField.FetchValue(_offset,_size:PtrUint;_dtype:TsrDataType;_weak:Boolean):TFieldFetchValue;
+var
+ node:TsrField;
  _stride:PtrUint;
 begin
  Result:=Default(TFieldFetchValue);
 
- _stride:=0;
  if _dtype.isVector then
  begin
   _stride:=_dtype.Child.BitSize div 8;
+ end else
+ begin
+  _stride:=_dtype.BitSize div 8;
  end;
 
  Assert(_size=(_dtype.BitSize div 8));
 
- node:=Find_le(_offset);
- if (node<>nil) then
- begin
-  if not node^.Cross(_offset,_size) then
-  begin
-   node:=Next(node);
-   if (node<>nil) then
-   begin
-    if not node^.Cross(_offset,_size) then
-    begin
-     node:=nil;
-    end;
-   end;
-  end;
- end;
+ //find intersec
+ node:=FindIntersect(_offset,_size);
 
  if (node=nil) then
  begin
   //new
   node:=Fetch(_offset);
-  node^.size  :=_size;
-  node^.stride:=_stride;
-  node^.dtype :=_dtype;
+  node.FFSize:=_size;   //fixed size
+  node.stride:=_stride;
+  node.count :=1;
+  node.Fdtype:=_dtype;
+  //
   Result.fValue:=frIdent;
   Result.pField:=node;
  end else
- Case node^.dtype of
+ Case node.Fdtype of
   dtTypeArray:
    begin
-    if (node^.offset>_offset) then Exit; //ident or big than
-    if (node^.offset+node^.size<_offset+_size) then Exit;
-    if (node^.stride<_size) then Exit;   //ident or min stride
+    if (node.offset>_offset) then Exit; //ident or big than
+    if ((node.offset+node.size)<(_offset+_size)) then Exit;
+    if (node.stride<_size) then Exit;   //ident or min stride
+    //
     Result.fValue:=frValueInArray;
     Result.pField:=node;
    end;
   dtTypeRuntimeArray:
    begin
-    if (node^.offset>_offset) then Exit; //ident or big than
-    if (node^.stride<_size) then Exit;   //ident or min stride
+    if (node.offset>_offset) then Exit; //ident or big than
+    if (node.stride<_size) then Exit;   //ident or min stride
+    //
     Result.fValue:=frValueInArray;
     Result.pField:=node;
-
-    Result.fValue:=frNotFit;
    end;
   else
    begin
-    if node^.dtype.isVector then
+    if node.Fdtype.isVector then
     begin //ftVector
      if _dtype.isVector then
      begin
-      if (node^.offset=_offset) and
-         (node^.size  =_size)   and
-         (node^.stride=_stride) then
+      if (node.offset=_offset) and
+         (node.size  =_size)   and
+         (node.stride=_stride) then
       begin
        Result.fValue:=frIdent; //ident
        Result.pField:=node;
       end;
      end else
      begin
-      if (node^.offset>_offset) then Exit; //ident or big than
-      _offset:=_offset-node^.offset;
+      if (node.offset>_offset) then Exit; //ident or big than
+      _offset:=_offset-node.offset;
 
-      if (node^.stride=_size) and
-         (_offset mod node^.stride=0) then
+      if (node.stride=_size) and
+         (_offset mod node.stride=0) then
       begin
        Result.fValue:=frValueInVector; //down to vector
        Result.pField:=node;
@@ -340,16 +382,16 @@ begin
     begin //ftValue
      if _dtype.isVector then
      begin
-      if (node^.offset=_offset) and
-         (node^.size  =_size)   then
+      if (node.offset=_offset) and
+         (node.size  =_size)   then
       begin
        Result.fValue:=frVectorAsValue; //vector as value?
        Result.pField:=node;
       end;
      end else
      begin
-      if (node^.offset=_offset) and
-         (node^.size  =_size)   then
+      if (node.offset=_offset) and
+         (node.size  =_size)   then
       begin
        Result.fValue:=frIdent; //ident
        Result.pField:=node;
@@ -358,41 +400,136 @@ begin
     end;
    end;
  end;
+
+ if not _weak then
+ begin
+  case Result.fValue of
+   frIdent:
+     begin
+      if (node.Fdtype<>_dtype) then
+      begin
+       Result:=Default(TFieldFetchValue);
+      end;
+     end;
+   frValueInVector:
+     begin
+      if (node.Fdtype.Child<>_dtype) then
+      begin
+       Result:=Default(TFieldFetchValue);
+      end;
+     end;
+   else;
+  end;
+ end;
+ //
+end;
+
+function TsrField.FetchArray(_offset,_size,_stride:PtrUint):TFieldFetchValue;
+var
+ node:TsrField;
+ _count:PtrUint;
+
+ max_old:PtrUint;
+ max_new:PtrUint;
+begin
+ Result:=Default(TFieldFetchValue);
+
+ _count:=_size div _stride;
+ _size :=_count*_stride; //align
+
+ //find intersec
+ node:=FindIntersect(_offset,_size);
+
+ if (node=nil) then
+ begin
+  //new
+  node:=Fetch(_offset);
+  node.FFSize:=_size; //fixed size
+  node.stride:=_stride;
+  node.count :=_count;
+  node.Fdtype:=dtTypeArray;
+  //
+  Result.fValue:=frValueInArray;
+  Result.pField:=node;
+ end else
+ Case node.Fdtype of
+  dtTypeArray:
+   begin
+    if (node.offset>_offset) then Exit; //ident or big than
+    if (node.stride<>_stride) then Exit; //ident stride
+    //
+    max_old:=node.offset+node.size;
+    max_new:=_offset+_size;
+    //
+    if (max_old<max_new) then
+    begin
+     //expand?
+     if FindIntersect(max_old,max_new-max_old)<>nil then
+     begin
+      //dont expand
+      //not fit
+      Exit;
+     end;
+     //
+     _size:=max_new-node.offset;
+     _size:=Align(_size,_stride); //align up
+     _count:=_size div _stride;
+     //
+     node.FFSize:=_size; //fixed size
+     node.count :=_count;
+    end;
+    //
+    Result.fValue:=frValueInArray;
+    Result.pField:=node;
+   end;
+  dtTypeRuntimeArray:
+   begin
+    if (node.offset>_offset) then Exit; //ident or big than
+    if (node.stride<>_stride) then Exit; //ident stride
+    //
+    Result.fValue:=frValueInArray;
+    Result.pField:=node;
+   end;
+  else;
+ end;
 end;
 
 function TsrField.FetchRuntimeArray(_offset,_stride:PtrUint):TFieldFetchValue;
 var
- node:PsrField;
+ node:TsrField;
 begin
  Result:=Default(TFieldFetchValue);
 
  node:=Find_be(_offset); //RA only last item
  if (node<>nil) then
  begin
-  if (node^.offset>_offset) or
-     (node^.dtype<>dtTypeRuntimeArray) or
-     (node^.stride<>_stride) then
+  if (node.offset>_offset) or
+     (node.Fdtype<>dtTypeRuntimeArray) or
+     (node.stride<>_stride) then
   begin
-   Result.fValue:=frNotFit;
-   Result.pField:=nil;
+   //not fit
    Exit;
   end;
  end;
 
- node:=Find_le(_offset);
+ //find intersec
+ node:=FindIntersect(_offset,High(PtrUint)-offset);
+
  if (node=nil) then
  begin
   //new
   node:=Fetch(_offset);
-  node^.size   :=High(PtrUint)-_offset;
-  node^.stride :=_stride;
-  node^.dtype  :=dtTypeRuntimeArray;
+  node.FFSize:=High(PtrUint); //fixed size
+  node.stride:=_stride;
+  node.count :=node.FFSize div _stride;
+  node.Fdtype :=dtTypeRuntimeArray;
+  //
   Result.fValue:=frValueInArray;
   Result.pField:=node;
  end else
- if (node^.stride=_stride) and
-    (node^.dtype =dtTypeRuntimeArray) and
-    (node^.offset<=_offset) then //ident or big than
+ if (node.stride=_stride) and   //ident stride
+    (node.Fdtype=dtTypeRuntimeArray) and
+    (node.offset<=_offset) then //ident or big than
  begin
   Result.fValue:=frValueInArray;
   Result.pField:=node;
@@ -401,23 +538,22 @@ end;
 
 function TsrField.IsStructUsedRuntimeArray:Boolean;
 var
- node:PsrField;
+ node:TsrField;
 begin
  Result:=False;
- if (dtype=dtTypeStruct) then
+ if (Fdtype=dtTypeStruct) then
  begin
   node:=FList.Max;
   if (node<>nil) then
   begin
-   size:=node^.offset+node^.size;
+   Result:=(node.Fdtype=dtTypeRuntimeArray);
   end;
-  Result:=(size=High(PtrUint));
  end;
 end;
 
 function TsrField.IsStructNotUsed:Boolean;
 var
- child:PsrField;
+ child:TsrField;
 begin
  Result:=False;
 
@@ -427,8 +563,8 @@ begin
  child:=First;
  if (child=nil) then Exit;
 
- if (child^.offset<>0) then Exit;
- if (child^.size<>stride) then Exit;
+ if (child.offset<>0) then Exit;
+ if (child.size<>stride) then Exit;
 
  Result:=True;
 end;
@@ -442,11 +578,11 @@ function TsrField.GetStructDecorate:DWORD;
 begin
  Result:=DWORD(-1); //dont use
  if IsTop then
- if (dtype=dtTypeStruct) then  //is struct
+ if (Fdtype=dtTypeStruct) then  //is struct
  begin
 
-  if (pBuffer^.FStorage<>StorageClass.StorageBuffer) and
-     (pBuffer^.bType=btStorageBuffer) then
+  if (pBuffer.FStorage<>StorageClass.StorageBuffer) and
+     (pBuffer.bType=btStorageBuffer) then
   begin
    Result:=Decoration.BufferBlock;
   end else
@@ -459,33 +595,60 @@ end;
 
 procedure TsrField.UpdateSize;
 var
- node:PsrField;
+ node:TsrField;
 begin
- node:=FList.Max;
- if (node<>nil) then
+ if (FFSize<>0) then Exit;
+ //
+ if Fdtype.isVector then
  begin
-  size:=node^.offset+node^.size;
+  FFSize:=Fdtype.BitSize div 8
+ end else
+ if (Fdtype=dtTypeArray) then
+ begin
+  //array
+  FFSize:=count*stride;
+ end else
+ if (Fdtype=dtTypeRuntimeArray) then
+ begin
+  //runtame array
+  FFSize:=High(Ptruint);
+ end else
+ begin
+  //struct
+  node:=FList.Max;
+  if (node<>nil) then
+  begin
+   FFSize:=node.size;
+   //check max
+   if (FFSize=High(PtrUint)) then Exit;
+   FFSize:=node.offset+FFSize;
+  end;
  end;
 end;
 
-function TsrField.GetSize:PtrUint;
+function TsrField.Size:PtrUint;
 begin
  UpdateSize;
- Result:=size;
+ Result:=FFSize;
 end;
 
 procedure TsrField.FillNode(o,s:PtrUint);
 
  procedure _Pad(p,v:PtrUint;_dtype:TsrDataType); //inline;
  var
-  node:PsrField;
+  node:TsrField;
  begin
   if (o mod p<>0) and (s>=v) then
   begin
    node:=Fetch(o);
-   Assert(node^.dtype=dtUnknow,'WTF');
-   node^.size:=v;
-   node^.dtype:=_dtype;
+   Assert(node.Fdtype=dtUnknow,'WTF');
+   node.FFSize:=v; //fixed size
+   node.stride:=v;
+   if _dtype.isVector then
+   begin
+    node.stride:=_dtype.Child.BitSize div 8;
+   end;
+   node.Fdtype:=_dtype;
    o:=o+v;
    s:=s-v;
   end;
@@ -494,15 +657,20 @@ procedure TsrField.FillNode(o,s:PtrUint);
  procedure _Fill(v:PtrUint;_dtype:TsrDataType); //inline;
  var
   count:PtrUint;
-  node:PsrField;
+  node:TsrField;
  begin
   count:=s div v;
   While (count<>0) do
   begin
    node:=Fetch(o);
-   Assert(node^.dtype=dtUnknow,'WTF');
-   node^.size:=v;
-   node^.dtype:=_dtype;
+   Assert(node.Fdtype=dtUnknow,'WTF');
+   node.FFSize:=v; //fixed size
+   node.stride:=v;
+   if _dtype.isVector then
+   begin
+    node.stride:=_dtype.Child.BitSize div 8;
+   end;
+   node.Fdtype:=_dtype;
    o:=o+v;
    s:=s-v;
    Dec(count);
@@ -526,7 +694,7 @@ end;
 
 function TsrField.FillSpace:Integer;
 var
- pNode:PsrField;
+ pNode:TsrField;
  Foffset,Fsize:PtrUint;
 begin
  Result:=0;
@@ -537,35 +705,37 @@ begin
  While (pNode<>nil) do
  begin
 
-  if (pNode^.dtype=dtUnknow) then
+  if (pNode.Fdtype=dtUnknow) then
   begin
-   Case pNode^.size of
-     1:pNode^.dtype:=dtUint8;
-     2:pNode^.dtype:=dtHalf16;
-     4:pNode^.dtype:=dtFloat32;
-     8:pNode^.dtype:=dtVec2f;
-    16:pNode^.dtype:=dtVec4f;
+   Case pNode.size of
+     1:pNode.Fdtype:=dtUint8;
+     2:pNode.Fdtype:=dtHalf16;
+     4:pNode.Fdtype:=dtFloat32;
+     8:pNode.Fdtype:=dtVec2f;
+    16:pNode.Fdtype:=dtVec4f;
     else
      Assert(false);
    end;
   end;
 
-  if (Foffset<pNode^.offset) then
+  if (Foffset<pNode.offset) then
   begin
-   Fsize:=pNode^.offset-Foffset;
+   Fsize:=pNode.offset-Foffset;
    FillNode(Foffset,Fsize);
    Inc(Result);
   end;
-  Foffset:=pNode^.offset+pNode^.size;
+  Foffset:=pNode.offset+pNode.size;
+
   pNode:=Next(pNode);
  end;
 
- if (stride<>0) and (dtype in [dtTypeArray,dtTypeRuntimeArray]) then
+ if (stride<>0) and (Fdtype in [dtTypeArray,dtTypeRuntimeArray]) then
  begin
   pNode:=FList.Max;
+
   if (pNode<>nil) then
   begin
-   Foffset:=pNode^.offset+pNode^.size;
+   Foffset:=pNode.offset+pNode.size;
    Assert(Foffset<=stride);
    if (Foffset<stride) then
    begin
@@ -579,102 +749,136 @@ end;
 
 //--
 
-function TsrBuffer.c(n1,n2:PsrBuffer):Integer;
+class function TsrBuffer.c(n1,n2:PsrBufferKey):Integer;
 begin
  //first pLayout
- Result:=Integer(n1^.key.pLayout>n2^.key.pLayout)-Integer(n1^.key.pLayout<n2^.key.pLayout);
+ Result:=ord(n1^.pLayout.Order>n2^.pLayout.Order)-ord(n1^.pLayout.Order<n2^.pLayout.Order);
  if (Result<>0) then Exit;
- //second CastNum
- Result:=Integer(n1^.key.AliasId>n2^.key.AliasId)-Integer(n1^.key.AliasId<n2^.key.AliasId);
+ //second AliasId
+ Result:=ord(n1^.AliasId>n2^.AliasId)-ord(n1^.AliasId<n2^.AliasId);
 end;
 
-Procedure TsrBuffer.Init(Emit:TCustomEmit); inline;
+Function TsrBuffer.is_export_used:Boolean;
 begin
- FEmit:=Emit;
+ Result:=IsUsed;
+ if Result then
+ begin
+  if (pVar=nil) then Exit(false);
+  Result:=pVar.IsUsed;
+ end;
+end;
 
- fntype  :=ntBuffer;
+Procedure TsrBuffer.Init(); inline;
+begin
  bType   :=btStorageBuffer;
  FStorage:=StorageClass.Uniform;
  FBinding:=-1;
 
- FTop.FID:=-1;
- FTop.dtype:=dtTypeStruct;
+ FTop:=Emit.specialize New<TsrField>;
+
+ FTop.FID    :=-1;
+ FTop.Fdtype :=dtTypeStruct;
+ FTop.pBuffer:=Self;
 end;
 
-Procedure TsrBuffer.AddDep(t:PsrNode);
+Procedure TsrBuffer.AddDep(t:TsrNode);
 var
- pRegsStory:PsrRegsStory;
- node:PRegDNode;
+ node:TDependenceNode;
 begin
- if (t=nil) or (@Self=nil) then Exit;
+ if (t=nil) or (Self=nil) then Exit;
 
- pRegsStory:=FEmit.GetRegsStory;
- node:=pRegsStory^.AllocDep;
+ node:=NewDependence;
+ node.pNode:=t;
 
- node^.pNode:=t;
  FDList.Push_head(node);
 end;
 
-Procedure TsrBuffer.RemDep(t:PsrNode);
+Procedure TsrBuffer.RemDep(t:TsrNode);
 var
- pRegsStory:PsrRegsStory;
- node,_prev:PRegDNode;
+ node:TDependenceNode;
 begin
- if (t=nil) or (@Self=nil) then Exit;
+ if (t=nil) or (Self=nil) then Exit;
  node:=FDList.pHead;
- _prev:=nil;
  While (node<>nil) do
  begin
-  if (node^.pNode=t) then
+  if (node.pNode=t) then
   begin
-   if (_prev=nil) then
-   begin
-    FDList.pHead:=node^.pNext;
-   end else
-   begin
-    _prev^.pNext:=node^.pNext;
-   end;
+   FDList.Remove(node);
 
-   pRegsStory:=FEmit.GetRegsStory;
-   pRegsStory^.FreeDep(node);
+   FreeDependence(node);
 
    Exit;
   end;
-  _prev:=node;
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
  Assert(false,'not found!');
 end;
 
-function TsrBuffer.chain_read:DWORD;
+function TsrBuffer._chain_read:DWORD;
 var
- node:PRegDNode;
+ node:TDependenceNode;
 begin
  Result:=0;
  node:=FDList.pHead;
  While (node<>nil) do
  begin
-  if node^.pNode^.IsType(ntChain) then
+  if node.pNode.IsType(ntChain) then
   begin
-   Result:=Result+PsrChain(node^.pNode)^.read_count;
+   Result:=Result+node.pNode.read_count;
   end;
-  node:=node^.pNext;
+  node:=node.pNext;
+ end;
+end;
+
+function TsrBuffer.chain_read:DWORD;
+var
+ node:TsrBuffer;
+begin
+ if Flags.Bitcast then
+ begin
+  node:=Self;
+  while (node<>nil) do
+  begin
+   Result:=Result+node._chain_read;
+   node:=node.pNextAlias;
+  end;
+ end else
+ begin
+  Result:=_chain_read;
+ end;
+end;
+
+function TsrBuffer._chain_write:DWORD;
+var
+ node:TDependenceNode;
+begin
+ Result:=0;
+ node:=FDList.pHead;
+ While (node<>nil) do
+ begin
+  if node.pNode.IsType(ntChain) then
+  begin
+   Result:=Result+node.pNode.write_count;
+  end;
+  node:=node.pNext;
  end;
 end;
 
 function TsrBuffer.chain_write:DWORD;
 var
- node:PRegDNode;
+ node:TsrBuffer;
 begin
- Result:=0;
- node:=FDList.pHead;
- While (node<>nil) do
+ if Flags.Bitcast then
  begin
-  if node^.pNode^.IsType(ntChain) then
+  node:=Self;
+  while (node<>nil) do
   begin
-   Result:=Result+PsrChain(node^.pNode)^.write_count;
+   Result:=Result+node._chain_write;
+   node:=node.pNextAlias;
   end;
-  node:=node^.pNext;
+ end else
+ begin
+  Result:=_chain_write;
  end;
 end;
 
@@ -682,9 +886,9 @@ function TsrBuffer.GetStorageName:RawByteString;
 begin
  Result:='';
 
- if (key.pLayout<>nil) then
+ if (pLayout<>nil) then
  begin
-  case key.pLayout^.key.rtype of
+  case pLayout.key.rtype of
    rtLDS:
     begin
      Result:='sLds'+IntToStr(FBinding);
@@ -734,9 +938,9 @@ var
  PID:DWORD;
 begin
  PID:=0;
- if (key.pLayout<>nil) then
+ if (pLayout<>nil) then
  begin
-  PID:=key.pLayout^.FID;
+  PID:=pLayout.FID;
  end;
  Result:='B'+GetTypeChar+
          ';PID='+HexStr(PID,8)+
@@ -753,52 +957,51 @@ end;
 
 function TsrBuffer.GetSize:PtrUint;
 begin
- Result:=FTop.GetSize;
+ Result:=FTop.size;
 end;
 
 procedure TsrBuffer.EnumAllField(cb:TFieldEnumCb);
 var
- curr,node:PsrField;
+ curr,node:TsrField;
 begin
  if (cb=nil) then Exit;
- curr:=@FTop;
- node:=curr^.First;
+ curr:=FTop;
+ node:=curr.First;
  repeat
   While (node<>nil) do
   begin
-   if (node^.First<>nil) then //child exist
+   if (node.First<>nil) then //child exist
    begin
     curr:=node;
-    node:=curr^.First;        //down
+    node:=curr.First;        //down
    end else
    begin
     cb(node);
-    node:=curr^.Next(node);
+    node:=curr.Next(node);
    end;
   end;
   cb(curr);
   node:=curr;
-  curr:=curr^.pParent; //up
+  curr:=curr.pParent; //up
   if (curr=nil) then Break;
-  node:=curr^.Next(node);
+  node:=curr.Next(node);
  until false;
 end;
 
 procedure TsrBuffer.ShiftOffset(Offset:PtrUint);
 var
- node:PsrField;
+ node:TsrField;
 begin
  if (Offset=0) then Exit;
  node:=FTop.Last;
  While (node<>nil) do
  begin
-  if (node^.offset+node^.size=High(PtrUint)) then
-  begin
-   node^.size:=node^.size-Offset;
-  end;
-  node^.offset:=node^.offset+Offset;
+  node.offset:=node.offset+Offset;
   node:=FTop.Prev(node);
  end;
+ //
+ FTop.ClearSize;
+ FTop.UpdateSize;
 end;
 
 procedure TsrBufferList.Init(Emit:TCustomEmit); inline;
@@ -806,63 +1009,84 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrBufferList.Fetch(s:PsrDataLayout;n:PtrInt):PsrBuffer;
+function TsrBufferList.Fetch(s:TsrDataLayout;n:PtrInt;GLC,SLC:Boolean):TsrBuffer;
 var
- node:TsrBuffer;
+ key:TsrBufferKey;
 begin
- node:=Default(TsrBuffer);
- node.Init(FEmit);
- node.key.pLayout:=s;
- node.key.AliasId:=n;
- Result:=FNTree.Find(@node);
+ key:=Default(TsrBufferKey);
+ key.pLayout:=s;
+ key.AliasId:=n;
+ //
+ Result:=FTree.Find(@key);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrBuffer));
-  Move(node,Result^,SizeOf(TsrBuffer));
-  Result^.FTop.pBuffer:=Result;
+  Result:=FEmit.specialize New<TsrBuffer>;
+  Result.Init();
+  Result.key:=key;
   //
-  Result^.InitVar(FEmit);
+  Result.InitVar();
   //
-  FNTree.Insert(Result);
+  FTree.Insert(Result);
+ end;
+ //
+ if GLC then
+ begin
+  Result.Flags.Coherent:=True;
+ end;
+ //
+ if SLC then
+ begin
+  Result.Flags.Volatile:=True;
  end;
 end;
 
-function TsrBufferList.NextAlias(buf:PsrBuffer):PsrBuffer;
+function TsrBufferList.NextAlias(buf:TsrBuffer;GLC,SLC:Boolean):TsrBuffer;
 begin
  Result:=nil;
  if (buf=nil) then Exit;
- Result:=Fetch(buf^.key.pLayout,buf^.key.AliasId+1);
+
+ Result:=buf.pNextAlias;
+ if (Result=nil) then
+ begin
+  Result:=Fetch(buf.pLayout,buf.AliasId+1,GLC,SLC);
+  //cache
+  buf.pNextAlias:=Result;
+ end;
+
+ //mark
+    buf.Flags.Aliased:=True;
+ Result.Flags.Aliased:=True;
 end;
 
-Function TsrBufferList.First:PsrBuffer;
+Function TsrBufferList.First:TsrBuffer;
 begin
- Result:=FNTree.Min;
+ Result:=FTree.Min;
 end;
 
-Function TsrBufferList.Next(node:PsrBuffer):PsrBuffer;
+Function TsrBufferList.Next(node:TsrBuffer):TsrBuffer;
 begin
- Result:=FNTree.Next(node);
+ Result:=FTree.Next(node);
 end;
 
 procedure TsrBufferList.EnumAllField(cb:TFieldEnumCb);
 var
- node:PsrBuffer;
+ node:TsrBuffer;
 begin
  if (cb=nil) then Exit;
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.IsUsed then
   begin
-   node^.EnumAllField(cb);
+   node.EnumAllField(cb);
   end;
   node:=Next(node);
  end;
 end;
 
-procedure TsrBufferList.OnFillSpace(node:PsrField);
+procedure TsrBufferList.OnFillSpace(node:TsrField);
 begin
- node^.FillSpace;
+ node.FillSpace;
 end;
 
 procedure TsrBufferList.FillSpace;
@@ -870,25 +1094,25 @@ begin
  EnumAllField(@OnFillSpace);
 end;
 
-procedure TsrBufferList.OnAllocID(pField:PsrField);
+procedure TsrBufferList.OnAllocID(pField:TsrField);
 var
- node:PsrField;
+ node:TsrField;
  ID:Integer;
 begin
  ID:=0;
- node:=pField^.First;
+ node:=pField.First;
  While (node<>nil) do
  begin
-  if pField^.dtype.IsVector then
+  if pField.Fdtype.IsVector then
   begin
-   ID:=node^.offset div pField^.stride;
-   node^.FID:=ID;
+   ID:=node.offset div pField.stride;
+   node.FID:=ID;
   end else
   begin
-   node^.FID:=ID;
+   node.FID:=ID;
    Inc(ID);
   end;
-  node:=pField^.Next(node);
+  node:=pField.Next(node);
  end;
 end;
 
@@ -901,23 +1125,55 @@ procedure TsrBufferList.AllocBinding(Var FBinding:Integer);
 var
  pConfig:PsrConfig;
  pDecorateList:PsrDecorateList;
- node:PsrBuffer;
- pVar:PsrVariable;
+ node:TsrBuffer;
+ FHide:Integer;
 begin
  pConfig:=FEmit.GetConfig;
  pDecorateList:=FEmit.GetDecorateList;
+ //
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed then
-  if (node^.bType<>btPushConstant) then
-  if (node^.FBinding=-1) then //alloc
+  if node.is_export_used then
+  if not (node.bType in [btPushConstant]) then
+  if (node.FBinding=-1) then //alloc
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Binding,FBinding);
-   pDecorateList^.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
-   node^.FBinding:=FBinding;
-   Inc(FBinding);
+   //
+   if not (node.bType in [btWorkgroup,btPrivate]) then
+   begin
+    pDecorateList^.OpDecorate(node.pVar,Decoration.Binding      ,FBinding);
+    pDecorateList^.OpDecorate(node.pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
+    //
+    if (node.Flags.Coherent) then
+    begin
+     pDecorateList^.OpDecorate(node.pVar,Decoration.Coherent,0);
+    end;
+    //
+    if (node.Flags.Volatile) then
+    begin
+     pDecorateList^.OpDecorate(node.pVar,Decoration.Volatile,0);
+    end;
+    //next bind id
+    node.FBinding:=FBinding;
+    Inc(FBinding);
+   end; //
+   //Aliased need for uniform/storage/workgroup
+   if (node.Flags.Aliased) and (not node.Flags.Bitcast) then
+   begin
+    pDecorateList^.OpDecorate(node.pVar,Decoration.Aliased,0);
+   end;
+  end;
+  node:=Next(node);
+ end;
+ //Alloc hide id
+ FHide:=FBinding;
+ node:=First;
+ While (node<>nil) do
+ begin
+  if (node.FBinding=-1) then //alloc
+  begin
+   node.FBinding:=FHide;
+   Inc(FHide);
   end;
   node:=Next(node);
  end;
@@ -926,33 +1182,32 @@ end;
 procedure TsrBufferList.AllocSourceExtension;
 var
  pDebugInfoList:PsrDebugInfoList;
- node:PsrBuffer;
- pVar:PsrVariable;
+ node:TsrBuffer;
 begin
  pDebugInfoList:=FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed then
+  if node.is_export_used then
+  if not (node.bType in [btWorkgroup,btPrivate]) then
   begin
-   pDebugInfoList^.OpSource(node^.GetString);
+   pDebugInfoList^.OpSource(node.GetString);
   end;
   node:=Next(node);
  end;
 end;
 
-function TsrBufferList.FindUserDataBuf:PsrBuffer;
+function TsrBufferList.FindUserDataBuf:TsrBuffer;
 var
- node:PsrBuffer;
+ node:TsrBuffer;
 begin
  Result:=nil;
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.IsUsed then
   begin
-   if node^.key.pLayout^.IsUserData then
+   if node.pLayout.IsUserData then
    begin
     Exit(node);
    end;
@@ -962,9 +1217,11 @@ begin
 end;
 
 procedure TsrBufferList.ApplyBufferType;
+label
+ _storage;
 var
  pConfig:PsrConfig;
- node:PsrBuffer;
+ node:TsrBuffer;
  fchain_write:DWORD;
 begin
  pConfig:=FEmit.GetConfig;
@@ -972,44 +1229,67 @@ begin
  node:=FindUserDataBuf;
  if (node<>nil) and
     (FPushConstant=nil) then
- if (node^.bType=btStorageBuffer) and
-    (node^.chain_write=0) and
-    (node^.GetSize<=pConfig^.maxPushConstantsSize) then
+ if (node.bType=btStorageBuffer) and
+    (node.chain_write=0) and
+    (node.GetSize<=pConfig^.maxPushConstantsSize) then
  begin
-  node^.bType   :=btPushConstant;
-  node^.FStorage:=StorageClass.PushConstant;
+  node.bType   :=btPushConstant;
+  node.FStorage:=StorageClass.PushConstant;
   FPushConstant :=node;
  end;
 
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed and (node^.bType=btStorageBuffer) then
+  if node.IsUsed and (node.bType=btStorageBuffer) then
   begin
 
-   fchain_write:=node^.chain_write;
+   fchain_write:=node.chain_write;
 
+   if node.pLayout.IsGlobalDataShare then
+   begin
+    //global buffer
+    goto _storage;
+    //
+   end else
+   if node.pLayout.IsLocalDataShare then
+   begin
+    //Workgroup? (btWorkgroup) (btPrivate)
+    if (FEmit.GetExecutionModel=ExecutionModel.GLCompute) then
+    begin
+     node.bType   :=btWorkgroup;
+     node.FStorage:=StorageClass.Workgroup;
+    end else
+    begin
+     node.bType   :=btPrivate;
+     node.FStorage:=StorageClass.Private_;
+    end;
+    //
+   end else
    if (not pConfig^.UseOnlyUserdataPushConst) and
       (FPushConstant=nil) and
       (fchain_write=0) and
-      (node^.GetSize<=pConfig^.maxPushConstantsSize) then
+      (node.GetSize<=pConfig^.maxPushConstantsSize) then
    begin
-    node^.bType   :=btPushConstant;
-    node^.FStorage:=StorageClass.PushConstant;
+    node.bType   :=btPushConstant;
+    node.FStorage:=StorageClass.PushConstant;
     FPushConstant :=node;
    end else
    if (fchain_write=0) and
-      (node^.GetSize<=pConfig^.maxUniformBufferRange) then
+      (node.GetSize<=pConfig^.maxUniformBufferRange) then
    begin
-    node^.bType   :=btUniformBuffer;
-    node^.FStorage:=StorageClass.Uniform;
-   end else
-   if pConfig^.CanUseStorageBufferClass then
-   begin
-    node^.FStorage:=StorageClass.StorageBuffer;
+    node.bType   :=btUniformBuffer;
+    node.FStorage:=StorageClass.Uniform;
    end else
    begin
-    node^.FStorage:=StorageClass.Uniform;
+    _storage: //
+    if pConfig^.CanUseStorageBufferClass then
+    begin
+     node.FStorage:=StorageClass.StorageBuffer;
+    end else
+    begin
+     node.FStorage:=StorageClass.Uniform;
+    end;
    end;
 
   end;
@@ -1028,28 +1308,30 @@ begin
  end;
 end;
 
-procedure TsrBufferList.AlignOffset(node:PsrBuffer;offset:PtrUint);
+procedure TsrBufferList.AlignOffset(node:TsrBuffer;offset:PtrUint);
 var
  P:Pointer;
 begin
- P:=node^.key.pLayout^.GetData;
+ P:=node.pLayout.GetData;
  offset:=AlignShift(P,offset);
- node^.align_offset:=offset;
- node^.ShiftOffset(offset);
+ node.align_offset:=offset;
+ node.ShiftOffset(offset);
 end;
 
 procedure TsrBufferList.AlignOffset;
 var
  pConfig:PsrConfig;
- node:PsrBuffer;
+ node:TsrBuffer;
 begin
  pConfig:=FEmit.GetConfig;
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.is_export_used then
+  if not node.pLayout.IsLocalDataShare then
+  if not node.pLayout.IsGlobalDataShare then
   begin
-   Case node^.bType of
+   Case node.bType of
     btStorageBuffer:
       begin
        AlignOffset(node,pConfig^.minStorageBufferOffsetAlignment);
@@ -1060,8 +1342,8 @@ begin
       end;
     btPushConstant:
       begin
-       node^.align_offset:=pConfig^.PushConstantsOffset;
-       node^.ShiftOffset(pConfig^.PushConstantsOffset);
+       node.align_offset:=pConfig^.PushConstantsOffset;
+       node.ShiftOffset(pConfig^.PushConstantsOffset);
       end;
    end;
   end;
@@ -1069,33 +1351,33 @@ begin
  end;
 end;
 
-procedure TsrBufferList.OnAllocTypeBinding(pField:PsrField);
+procedure TsrBufferList.OnAllocTypeBinding(pField:TsrField);
 var
  pDecorateList:PsrDecorateList;
- node:PsrField;
+ node:TsrField;
  SD:DWORD;
 begin
- if (pField^.sType=nil) then Exit;
- if (pField^.sType^.dtype<>dtTypeStruct) then Exit;
+ if (pField.sType=nil) then Exit;
+ if (pField.sType.dtype<>dtTypeStruct) then Exit;
 
  pDecorateList:=FEmit.GetDecorateList;
- SD:=pField^.GetStructDecorate;
+ SD:=pField.GetStructDecorate;
  if (SD<>DWORD(-1)) then
  begin
-  pDecorateList^.OpDecorate(pField^.sType,SD,0);
+  pDecorateList^.OpDecorate(pField.sType,SD,0);
  end;
- node:=pField^.First;
+ node:=pField.First;
  While (node<>nil) do
  begin
-  pDecorateList^.OpMember(pField^.sType,node^.FID,node^.offset);
-  node:=pField^.Next(node);
+  pDecorateList^.OpMember(pField.sType,node.FID,node.offset);
+  node:=pField.Next(node);
  end;
 end;
 
 procedure TsrBufferList.AllocTypeBinding;
 var
  pDecorateList:PsrDecorateList;
- node:PsrBuffer;
+ node:TsrBuffer;
 begin
  EnumAllField(@OnAllocTypeBinding);
  //
@@ -1104,16 +1386,16 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed and (node^.pVar<>nil) then
-  if (node^.bType=btStorageBuffer) then
+  if node.is_export_used then
+  if (node.bType=btStorageBuffer) then
   begin
-   if (node^.chain_read=0) then
+   if (node.chain_read=0) then
    begin
-    pDecorateList^.OpDecorate(node^.pVar,Decoration.NonReadable,0);
+    pDecorateList^.OpDecorate(node.pVar,Decoration.NonReadable,0);
    end;
-   if (node^.chain_write=0) then
+   if (node.chain_write=0) then
    begin
-    pDecorateList^.OpDecorate(node^.pVar,Decoration.NonWritable,0);
+    pDecorateList^.OpDecorate(node.pVar,Decoration.NonWritable,0);
    end;
   end;
   node:=Next(node);
@@ -1123,15 +1405,15 @@ end;
 procedure TsrBufferList.AllocName;
 var
  FDebugInfo:PsrDebugInfoList;
- node:PsrBuffer;
+ node:TsrBuffer;
 begin
  FDebugInfo:=FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  if node^.IsUsed and (node^.FTop.pType<>nil) then
+  if node.IsUsed and (node.FTop.vType<>nil) then
   begin
-   FDebugInfo^.OpName(node^.FTop.pType,node^.GetStructName);
+   FDebugInfo^.OpName(node.FTop.vType,node.GetStructName);
   end;
   node:=Next(node);
  end;

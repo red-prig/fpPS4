@@ -374,6 +374,7 @@ type
   init:Boolean;
   hint_repeat:Boolean;
   hint_loop:Ptruint;
+  hint_cmds:Boolean;
   //
   curr:p_pm4_node;
   //

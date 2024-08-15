@@ -11,17 +11,17 @@ uses
  srCFGLabel;
 
 type
- PsrCFGBlock=^TsrCFGBlock;
+ TsrCFGBlock=class;
 
- TsrCFGBlockList=specialize TNodeList<PsrCFGBlock>;
+ TsrCFGBlockList=specialize TNodeListClass<TsrCFGBlock>;
 
- TsrCFGBlock=object
-  pParent,pPrev,pNext:PsrCFGBlock;
+ TsrCFGBlock=class
+  pParent,pPrev,pNext:TsrCFGBlock;
 
   FList:TsrCFGBlockList;
 
-  pBLabel:PsrLabel;
-  pELabel:PsrLabel;
+  pBLabel:TsrLabel;
+  pELabel:TsrLabel;
 
   bType:TsrBlockType;
 
@@ -30,25 +30,24 @@ type
   function  IsEndOf(Adr:TSrcAdr):Boolean;
   function  IsBigOf(Adr:TSrcAdr):Boolean;
   function  IsContain(Adr:TSrcAdr):Boolean;
-  function  FindBlock(Adr:TSrcAdr):PsrCFGBlock;
-  function  DownBlock(Adr:TSrcAdr):PsrCFGBlock;
-  function  UpBlock(Adr:TSrcAdr):PsrCFGBlock;
-  function  FindUpLoop:PsrCFGBlock;
-  Procedure InsertBlockList(New,child:PsrCFGBlock);
+  function  FindBlock(Adr:TSrcAdr):TsrCFGBlock;
+  function  DownBlock(Adr:TSrcAdr):TsrCFGBlock;
+  function  UpBlock(Adr:TSrcAdr):TsrCFGBlock;
+  function  FindUpLoop:TsrCFGBlock;
+  Procedure InsertBlockList(New,child:TsrCFGBlock);
   function  get_level:DWORD;
  end;
 
- PsrCodeBlock=^TsrCodeBlock;
- TsrCodeBlock=object(TsrLabelBlock)
-  pNext:PsrCodeBlock;
+ TsrCodeBlock=class(TsrLabelBlock)
+  pNext:TsrCodeBlock;
   //----
   FTop:TsrCFGBlock;
  end;
 
  TsrCFGParser=object
   FCursor:TsrLCursor;
-  pCode  :PsrCodeBlock;
-  pBlock :PsrCFGBlock;
+  pCode  :TsrCodeBlock;
+  pBlock :TsrCFGBlock;
   FSPI:TSPI;
   procedure _print_label(Adr:TSrcAdr);
   procedure Print();
@@ -60,21 +59,21 @@ type
   Procedure CheckTerm;
   function  emit_SOP1:Boolean;
   function  emit_SOPP:Boolean;
-  Function  NewBlock:PsrCFGBlock;
-  Procedure PushBlock(New:PsrCFGBlock);
+  Function  NewBlock:TsrCFGBlock;
+  Procedure PushBlock(New:TsrCFGBlock);
   function  PopBlock:Boolean;
   procedure emit_S_BRANCH;
  end;
 
-function parse_code_cfg(bType:TsrBlockType;pCode:PsrCodeBlock):Byte;
+function parse_code_cfg(bType:TsrBlockType;pCode:TsrCodeBlock):Byte;
 
 implementation
 
-function parse_code_cfg(bType:TsrBlockType;pCode:PsrCodeBlock):Byte;
+function parse_code_cfg(bType:TsrBlockType;pCode:TsrCodeBlock):Byte;
 var
  LParser:TsrCFGParser;
 begin
- pCode^.FTop.bType:=bType;
+ pCode.FTop.bType:=bType;
 
  LParser:=Default(TsrCFGParser);
  LParser.pCode:=pCode;
@@ -88,7 +87,7 @@ begin
  Result:=False;
  if (pELabel<>nil) then
  begin
-  Result:=(pELabel^.Adr.get_code_ptr<=Adr.get_code_ptr);
+  Result:=(pELabel.Adr.get_code_ptr<=Adr.get_code_ptr);
  end;
 end;
 
@@ -97,7 +96,7 @@ begin
  Result:=False;
  if (pELabel<>nil) then
  begin
-  Result:=(pELabel^.Adr.get_code_ptr<Adr.get_code_ptr);
+  Result:=(pELabel.Adr.get_code_ptr<Adr.get_code_ptr);
  end;
 end;
 
@@ -108,80 +107,80 @@ begin
  b:=true;
  if (pBLabel<>nil) then
  begin
-  b:=(pBLabel^.Adr.get_code_ptr<=Adr.get_code_ptr);
+  b:=(pBLabel.Adr.get_code_ptr<=Adr.get_code_ptr);
  end;
  e:=true;
  if (pELabel<>nil) then
  begin
-  e:=(pELabel^.Adr.get_code_ptr>Adr.get_code_ptr);
+  e:=(pELabel.Adr.get_code_ptr>Adr.get_code_ptr);
  end;
  Result:=b and e;
 end;
 
-function TsrCFGBlock.FindBlock(Adr:TSrcAdr):PsrCFGBlock;
+function TsrCFGBlock.FindBlock(Adr:TSrcAdr):TsrCFGBlock;
 var
- node:PsrCFGBlock;
+ node:TsrCFGBlock;
 begin
  Result:=nil;
  node:=FList.pHead;
  While (node<>nil) do
  begin
-  if node^.IsContain(Adr) then Exit(node);
-  node:=node^.pNext;
+  if node.IsContain(Adr) then Exit(node);
+  node:=node.pNext;
  end;
 end;
 
-function TsrCFGBlock.DownBlock(Adr:TSrcAdr):PsrCFGBlock;
+function TsrCFGBlock.DownBlock(Adr:TSrcAdr):TsrCFGBlock;
 var
- next:PsrCFGBlock;
+ next:TsrCFGBlock;
 begin
- Result:=@Self;
+ Result:=Self;
  repeat
-  next:=Result^.FindBlock(Adr);
+  next:=Result.FindBlock(Adr);
   if (next=nil) then Exit;
   Result:=next;
  until false;
 end;
 
-function TsrCFGBlock.UpBlock(Adr:TSrcAdr):PsrCFGBlock;
+function TsrCFGBlock.UpBlock(Adr:TSrcAdr):TsrCFGBlock;
 var
- next:PsrCFGBlock;
+ next:TsrCFGBlock;
 begin
- Result:=@Self;
- While (Result^.IsEndOf(Adr)) do
+ Result:=Self;
+ While (Result.IsEndOf(Adr)) do
  begin
-  next:=Result^.pParent;
+  next:=Result.pParent;
   if (next=nil) then Exit;
   Result:=next;
  end;
 end;
 
-function TsrCFGBlock.FindUpLoop:PsrCFGBlock;
+function TsrCFGBlock.FindUpLoop:TsrCFGBlock;
 var
- node:PsrCFGBlock;
+ node:TsrCFGBlock;
 begin
  Result:=nil;
- node:=@Self;
+ node:=Self;
  While (node<>nil) do
  begin
-  if (node^.bType=btLoop) then Exit(node);
-  node:=node^.pParent;
+  if (node.bType=btLoop) then Exit(node);
+  node:=node.pParent;
  end;
 end;
 
-Procedure TsrCFGBlock.InsertBlockList(New,child:PsrCFGBlock);
+Procedure TsrCFGBlock.InsertBlockList(New,child:TsrCFGBlock);
 var
- next:PsrCFGBlock;
+ next:TsrCFGBlock;
 begin
  if (New=nil) then Exit;
- New^.pParent:=@Self;
+ New.pParent:=Self;
  While (child<>nil) do
  begin
-  Assert(child^.pParent=@Self);
-  next:=child^.pNext;
+  Assert(child.pParent=Self);
+  next:=child.pNext;
   FList.Remove(child);
-  New^.FList.Push_tail(child);
-  child^.pParent:=New;
+  New.FList.Push_tail(child);
+  child.pParent:=New;
   child:=next;
  end;
  FList.Push_tail(New);
@@ -189,34 +188,34 @@ end;
 
 function TsrCFGBlock.get_level:DWORD;
 var
- node:PsrCFGBlock;
+ node:TsrCFGBlock;
 begin
- node:=@Self;
+ node:=Self;
  Result:=0;
  While (node<>nil) do
  begin
   Inc(Result);
-  node:=node^.pParent;
+  node:=node.pParent;
  end;
 end;
 
 procedure TsrCFGParser._print_label(Adr:TSrcAdr);
 var
- pLabel:PsrLabel;
+ pLabel:TsrLabel;
 begin
- pLabel:=pCode^.FindLabel(Adr);
+ pLabel:=pCode.FindLabel(Adr);
  if (pLabel<>nil) then
  begin
   Write('label_',HexStr(Adr.Offdw*4,4),': ;');
 
-  if (ltBranch    in pLabel^.lType) then Write('ltBranch ');
-  if (ltUnknow    in pLabel^.lType) then Write('ltUnknow ');
-  if (ltBegAdr    in pLabel^.lType) then Write('ltBegAdr ');
-  if (ltEndAdr    in pLabel^.lType) then Write('ltEndAdr ');
-  if (ltBegCond   in pLabel^.lType) then Write('ltBegCond ');
-  if (ltEndCond   in pLabel^.lType) then Write('ltEndCond ');
-  if (ltBegLoop   in pLabel^.lType) then Write('ltBegLoop ');
-  if (ltEndLoop   in pLabel^.lType) then Write('ltEndLoop ');
+  if (ltBranch    in pLabel.lType) then Write('ltBranch ');
+  if (ltUnknow    in pLabel.lType) then Write('ltUnknow ');
+  if (ltBegAdr    in pLabel.lType) then Write('ltBegAdr ');
+  if (ltEndAdr    in pLabel.lType) then Write('ltEndAdr ');
+  if (ltBegCond   in pLabel.lType) then Write('ltBegCond ');
+  if (ltEndCond   in pLabel.lType) then Write('ltEndCond ');
+  if (ltBegLoop   in pLabel.lType) then Write('ltBegLoop ');
+  if (ltEndLoop   in pLabel.lType) then Write('ltEndLoop ');
 
   writeln;
  end;
@@ -228,14 +227,14 @@ var
  level:DWORD;
  i:Byte;
 begin
- FCursor.Init(pCode);
- pBlock:=@pCode^.FTop;
+ FCursor.Init(TsrLabelBlock(pCode));
+ pBlock:=pCode.FTop;
  repeat
   Adr:=FCursor.Adr;
 
-  pBlock:=pBlock^.DownBlock(Adr);
+  pBlock:=pBlock.DownBlock(Adr);
 
-  level:=pBlock^.get_level;
+  level:=pBlock.get_level;
 
   _print_label(Adr);
 
@@ -250,7 +249,7 @@ begin
         print_spi(FSPI);
 
         Adr:=FCursor.Adr;
-        pBlock:=pBlock^.UpBlock(Adr);
+        pBlock:=pBlock.UpBlock(Adr);
 
        end;
   end;
@@ -262,9 +261,9 @@ end;
 function TsrCFGParser.Parse():Byte;
 begin
  if (pCode=nil) then Exit(4);
- FCursor.Init(pCode);
- pBlock:=@pCode^.FTop;
- pCode^.FTop.pBLabel:=pCode^.FetchLabel(FCursor.Adr);
+ FCursor.Init(TsrLabelBlock(pCode));
+ pBlock:=pCode.FTop;
+ pCode.FTop.pBLabel:=pCode.FetchLabel(FCursor.Adr);
  repeat
   Result:=NextParse;
   Case Result of
@@ -302,30 +301,30 @@ end;
 
 Procedure TsrCFGParser.Finalize;
 begin
- pCode^.FTop.pELabel:=pCode^.FetchLabel(FCursor.Adr);
- pCode^.Size:=FCursor.OFFSET_DW*4;
+ pCode.FTop.pELabel:=pCode.FetchLabel(FCursor.Adr);
+ pCode.Size:=FCursor.OFFSET_DW*4;
 end;
 
 function TsrCFGParser.CheckBlock:Boolean;
 var
- pLabel:PsrLabel;
+ pLabel:TsrLabel;
 begin
  Result:=False;
  if (pBlock=nil) then Exit;
- Result:=pBlock^.IsEndOf(FCursor.Adr);
+ Result:=pBlock.IsEndOf(FCursor.Adr);
  if Result then
  begin
 
-  Case pBlock^.bType of
+  Case pBlock.bType of
    btAdr:
     begin
-     pLabel:=pBlock^.pELabel;
-     pLabel^.AddType(ltEndAdr);
+     pLabel:=pBlock.pELabel;
+     pLabel.AddType(ltEndAdr);
     end;
    btLoop:
     begin
-     pLabel:=pBlock^.pELabel;
-     pLabel^.AddType(ltEndLoop);
+     pLabel:=pBlock.pELabel;
+     pLabel.AddType(ltEndLoop);
     end;
    else;
   end;
@@ -337,45 +336,45 @@ end;
 Procedure TsrCFGParser.CheckLabel;
 var
  c_adr:TSrcAdr;
- pLabel:array[0..1] of PsrLabel;
- node,prev:PsrCFGBlock;
+ pLabel:array[0..1] of TsrLabel;
+ node,prev:TsrCFGBlock;
 begin
  c_adr:=FCursor.Adr;
- pLabel[0]:=pCode^.FindLabel(c_adr);
+ pLabel[0]:=pCode.FindLabel(c_adr);
  if (pLabel[0]=nil) then Exit;
 
- if not (pLabel[0]^.IsType(ltUnknow)) then Exit;
+ if not (pLabel[0].IsType(ltUnknow)) then Exit;
 
- prev:=pBlock^.FList.pTail;
+ prev:=pBlock.FList.pTail;
  While (prev<>nil) do
  begin
-  if prev^.IsContain(c_adr) then Break;
-  prev:=prev^.pPrev;
+  if prev.IsContain(c_adr) then Break;
+  prev:=prev.pPrev;
  end;
  if (prev=nil) then Exit;
 
- if not (prev^.IsContain(c_adr)) then Exit;
+ if not (prev.IsContain(c_adr)) then Exit;
 
- pLabel[1]:=prev^.pBLabel;
+ pLabel[1]:=prev.pBLabel;
 
- pLabel[0]^.RemType(ltUnknow); //ltEndLoop later
- pLabel[1]^.AddType(ltBegLoop);
+ pLabel[0].RemType(ltUnknow); //ltEndLoop later
+ pLabel[1].AddType(ltBegLoop);
 
  node:=NewBlock;
- node^.pBLabel:=pLabel[1];
- node^.pELabel:=pLabel[0];
- node^.bType:=btLoop;
+ node.pBLabel:=pLabel[1];
+ node.pELabel:=pLabel[0];
+ node.bType:=btLoop;
 
- pBlock^.InsertBlockList(node,prev);
+ pBlock.InsertBlockList(node,prev);
 end;
 
 Procedure TsrCFGParser.CheckTerm;
 var
  c_adr:TSrcAdr;
- pLabel:array[0..1] of PsrLabel;
- node,prev:PsrCFGBlock;
+ pLabel:array[0..1] of TsrLabel;
+ node,prev:TsrCFGBlock;
 begin
- With pBlock^ do
+ With pBlock do
  begin
   if (term_id>=0) then Exit;
   term_id:=Abs(term_id);
@@ -383,21 +382,21 @@ begin
 
  c_adr:=FCursor.Adr;
 
- pLabel[0]:=pCode^.FetchLabel(c_adr);
+ pLabel[0]:=pCode.FetchLabel(c_adr);
  pLabel[1]:=nil;
- pLabel[0]^.RemType(ltUnknow);
- pLabel[0]^.AddType(ltBegAdr);
+ pLabel[0].RemType(ltUnknow);
+ pLabel[0].AddType(ltBegAdr);
 
- prev:=pBlock^.pParent;
+ prev:=pBlock.pParent;
  if (prev<>nil) then
  begin
-  pLabel[1]:=prev^.pELabel;
+  pLabel[1]:=prev.pELabel;
  end;
 
  node:=NewBlock;
- node^.pBLabel:=pLabel[0];
- node^.pELabel:=pLabel[1];
- node^.bType:=btAdr;
+ node.pBLabel:=pLabel[0];
+ node.pELabel:=pLabel[1];
+ node.bType:=btAdr;
  PushBlock(node);
 end;
 
@@ -405,14 +404,14 @@ function TsrCFGParser.emit_SOP1:Boolean;
 begin
  Result:=False;
  Case FSPI.SOP1.OP of
-  S_SETPC_B64:if (pBlock^.bType=btSetpc) then Result:=True;
+  S_SETPC_B64:if (pBlock.bType=btSetpc) then Result:=True;
  end;
 end;
 
 function TsrCFGParser.emit_SOPP:Boolean;
 var
  c_adr:TSrcAdr;
- pLabel:PsrLabel;
+ pLabel:TsrLabel;
 begin
  Result:=False;
  Case FSPI.SOPP.OP of
@@ -420,16 +419,16 @@ begin
   S_ENDPGM:
    begin
 
-    if (pBlock^.bType=btAdr) then
+    if (pBlock.bType=btAdr) then
     begin
      c_adr:=FCursor.Adr;
-     pLabel:=pCode^.FetchLabel(c_adr);
-     pLabel^.AddType(ltEndAdr);
-     pBlock^.pELabel:=pLabel;
+     pLabel:=pCode.FetchLabel(c_adr);
+     pLabel.AddType(ltEndAdr);
+     pBlock.pELabel:=pLabel;
      PopBlock;
     end;
 
-    With pBlock^ do
+    With pBlock do
     begin
      term_id:=-(Abs(term_id)+1);
     end;
@@ -448,16 +447,16 @@ begin
  end;
 end;
 
-Function TsrCFGParser.NewBlock:PsrCFGBlock;
+Function TsrCFGParser.NewBlock:TsrCFGBlock;
 begin
- Result:=pCode^.FEmit.Alloc(SizeOf(TsrCFGBlock));
+ Result:=pCode.FEmit.specialize New<TsrCFGBlock>;
 end;
 
-Procedure TsrCFGParser.PushBlock(New:PsrCFGBlock);
+Procedure TsrCFGParser.PushBlock(New:TsrCFGBlock);
 begin
  if (New=nil) then Exit;
- pBlock^.FList.Push_tail(New);
- New^.pParent:=pBlock;
+ pBlock.FList.Push_tail(New);
+ New.pParent:=pBlock;
  pBlock:=New;
 end;
 
@@ -465,103 +464,103 @@ function TsrCFGParser.PopBlock:Boolean;
 begin
  Result:=False;
  if (pBlock=nil) then Exit;
- if (pBlock^.pParent=nil) then Exit;
- pBlock:=pBlock^.pParent;
+ if (pBlock.pParent=nil) then Exit;
+ pBlock:=pBlock.pParent;
  Result:=True;
 end;
 
-function GetBeginAdr(node:PsrCFGBlock):TSrcAdr;
+function GetBeginAdr(node:TsrCFGBlock):TSrcAdr;
 begin
  Result:=Default(TSrcAdr);
  //
  while (node<>nil) do
  begin
-  if (node^.pBLabel=nil) then
+  if (node.pBLabel=nil) then
   begin
-   if (node^.pPrev=nil) then
+   if (node.pPrev=nil) then
    begin
-    node:=node^.pParent;
+    node:=node.pParent;
    end else
    begin
-    node:=node^.pPrev;
+    node:=node.pPrev;
    end;
   end else
   begin
-   Exit(node^.pBLabel^.Adr);
+   Exit(node.pBLabel.Adr);
   end;
  end;
 end;
 
-function GetEndAdr(node:PsrCFGBlock):TSrcAdr;
+function GetEndAdr(node:TsrCFGBlock):TSrcAdr;
 begin
  Result:=Default(TSrcAdr);
  Result.Offdw:=High(DWORD);
  //
  while (node<>nil) do
  begin
-  if (node^.pELabel=nil) then
+  if (node.pELabel=nil) then
   begin
-   if (node^.pNext=nil) then
+   if (node.pNext=nil) then
    begin
-    node:=node^.pParent;
+    node:=node.pParent;
    end else
    begin
-    node:=node^.pNext;
+    node:=node.pNext;
    end;
   end else
   begin
-   Exit(node^.pELabel^.Adr);
+   Exit(node.pELabel.Adr);
   end;
  end;
 end;
 
 procedure TsrCFGParser.emit_S_BRANCH;
 var
- pLabel:array[0..1] of PsrLabel;
+ pLabel:array[0..1] of TsrLabel;
  c_adr,b_adr,t_adr:TSrcAdr;
- node,child,prev,parent:PsrCFGBlock;
+ node,child,prev,parent:TsrCFGBlock;
 begin
  c_adr:=FCursor.Adr;
  b_adr:=c_adr;
  b_adr.Offdw:=get_branch_offset(FSPI);
 
- pLabel[0]:=pCode^.FetchLabel(c_adr);
- pLabel[1]:=pCode^.FetchLabel(b_adr);
- pLabel[0]^.AddType(ltBranch);
+ pLabel[0]:=pCode.FetchLabel(c_adr);
+ pLabel[1]:=pCode.FetchLabel(b_adr);
+ pLabel[0].AddType(ltBranch);
 
  if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
  begin
 
-  child :=pBlock^.FList.pTail;
+  child :=pBlock.FList.pTail;
   parent:=pBlock;
 
   repeat
 
    t_adr:=GetBeginAdr(parent);
 
-   if (parent^.bType=btLoop) and
+   if (parent.bType=btLoop) and
       (t_adr.get_code_ptr=b_adr.get_code_ptr) then //is exist loop
    begin
-    pLabel[0]^.RemType(ltUnknow); //ltEndLoop later
-    if (parent^.pELabel=nil) then
+    pLabel[0].RemType(ltUnknow); //ltEndLoop later
+    if (parent.pELabel=nil) then
     begin
-     parent^.pELabel:=pLabel[0]; //set end
+     parent.pELabel:=pLabel[0]; //set end
     end else
     begin
-     t_adr:=parent^.pELabel^.Adr;
+     t_adr:=parent.pELabel.Adr;
      if (t_adr.get_code_ptr<c_adr.get_code_ptr) then
      begin
-      parent^.pELabel:=pLabel[0]; //update end of loop
+      parent.pELabel:=pLabel[0]; //update end of loop
      end;
     end;
     Exit;
    end;
 
    if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
-   if (parent^.pParent=nil) then Break;
+   if (parent.pParent=nil) then Break;
 
    child :=parent;
-   parent:=parent^.pParent;
+   parent:=parent.pParent;
   until false;
 
   //up child for move
@@ -574,7 +573,7 @@ begin
     child:=nil;
    end else
    repeat
-    prev:=child^.pPrev;
+    prev:=child.pPrev;
     if (prev=nil) then Break;
 
     t_adr:=GetEndAdr(prev);
@@ -597,15 +596,15 @@ begin
 
   //new loop block
 
-  pLabel[0]^.RemType(ltUnknow); //ltEndLoop later
-  pLabel[1]^.AddType(ltBegLoop);
+  pLabel[0].RemType(ltUnknow); //ltEndLoop later
+  pLabel[1].AddType(ltBegLoop);
 
   node:=NewBlock;
-  node^.pBLabel:=pLabel[1];
-  node^.pELabel:=pLabel[0];
-  node^.bType:=btLoop;
+  node.pBLabel:=pLabel[1];
+  node.pELabel:=pLabel[0];
+  node.bType:=btLoop;
 
-  parent^.InsertBlockList(node,child);
+  parent.InsertBlockList(node,child);
 
  end else //down
  begin
@@ -613,20 +612,20 @@ begin
   if (GetEndAdr(pBlock).get_code_ptr<b_adr.get_code_ptr) then
   begin
    //push adr or loop end
-   if not pLabel[1]^.IsType(ltBegAdr) then
+   if not pLabel[1].IsType(ltBegAdr) then
    begin
-    pLabel[1]^.AddType(ltUnknow);
+    pLabel[1].AddType(ltUnknow);
    end;
    Exit;
   end;
 
-  pLabel[0]^.AddType(ltBegCond);
-  pLabel[1]^.AddType(ltEndCond);
+  pLabel[0].AddType(ltBegCond);
+  pLabel[1].AddType(ltEndCond);
 
   node:=NewBlock;
-  node^.pBLabel:=pLabel[0];
-  node^.pELabel:=pLabel[1];
-  node^.bType:=btCond;
+  node.pBLabel:=pLabel[0];
+  node.pELabel:=pLabel[1];
+  node.bType:=btCond;
   PushBlock(node);
 
  end;

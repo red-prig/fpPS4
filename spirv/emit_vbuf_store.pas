@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  srNode,
   srType,
   srReg,
   srLayout,
@@ -21,14 +22,14 @@ type
   elem_orig:TsrDataType;
   elem_resl:TsrDataType;
   elem_count:ptruint;
-  elm:array[0..3] of PsrRegNode;
+  elm:array[0..3] of TsrRegNode;
  end;
 
  TEmit_vbuf_store=class(TEmitFetch)
   procedure buf_store(info:TBuf_info);
-  function  fetch_id(var lc:Tstore_cache;i:Byte):PsrRegNode;
-  function  fetch_zero(var lc:Tstore_cache):PsrRegNode;
-  function  fetch_one(var lc:Tstore_cache):PsrRegNode;
+  function  fetch_id(var lc:Tstore_cache;i:Byte):TsrRegNode;
+  function  fetch_zero(var lc:Tstore_cache):TsrRegNode;
+  function  fetch_one(var lc:Tstore_cache):TsrRegNode;
   procedure make_store_cv(var lc:Tstore_cache);
   procedure make_store_ce(var lc:Tstore_cache);
   procedure make_store_uv(var lc:Tstore_cache);
@@ -56,18 +57,18 @@ begin
  buf_store_cv(info,v);
 end;
 
-function TEmit_vbuf_store.fetch_id(var lc:Tstore_cache;i:Byte):PsrRegNode;
+function TEmit_vbuf_store.fetch_id(var lc:Tstore_cache;i:Byte):TsrRegNode;
 begin
  Result:=fetch_vdst8(FSPI.MUBUF.VDATA+i,lc.elem_resl);
  if (Result=nil) then Assert(false);
 end;
 
-function TEmit_vbuf_store.fetch_zero(var lc:Tstore_cache):PsrRegNode;
+function TEmit_vbuf_store.fetch_zero(var lc:Tstore_cache):TsrRegNode;
 begin
  Result:=NewReg_q(lc.elem_resl,0);
 end;
 
-function TEmit_vbuf_store.fetch_one(var lc:Tstore_cache):PsrRegNode;
+function TEmit_vbuf_store.fetch_one(var lc:Tstore_cache):TsrRegNode;
 begin
  if (lc.elem_resl=dtFloat32) then
  begin
@@ -85,11 +86,11 @@ end;
 
 procedure TEmit_vbuf_store.make_store_cv(var lc:Tstore_cache);
 var
- rsl:PsrRegNode;
+ rsl:TsrRegNode;
  i:Byte;
  csize:PtrUInt;
- orig,new:PsrChain;
- idx:PsrRegNode;
+ orig,mnew:TsrChain;
+ idx:TsrRegNode;
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
 begin
@@ -146,28 +147,28 @@ begin
  //Assert(lc.elem_resl=lc.elem_orig,'TODO CONVERT');
 
  csize:=Min(lc.info.GetElemSize*lc.elem_count,lc.info.GetSizeFormat);
- orig:=lc.v.data[0];
+ orig:=TsrChain(lc.v.data[0]);
 
- if (orig^.size<>csize) then //refetch
+ if (orig.size<>csize) then //refetch
  begin
-  idx:=orig^.pIndex;
+  idx:=orig.pIndex;
   if (idx<>nil) then
   begin
-   lvl_0.offset:=orig^.offset;
+   lvl_0.offset:=orig.offset;
    lvl_0.size  :=csize;
 
    lvl_1.pIndex:=idx;
-   lvl_1.stride:=orig^.stride;
+   lvl_1.stride:=orig.stride;
 
-   new:=lc.info.grp^.Fetch(@lvl_0,@lvl_1);
+   mnew:=lc.info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
   end else
   begin
-   lvl_0.offset:=orig^.offset;
+   lvl_0.offset:=orig.offset;
    lvl_0.size  :=csize;
 
-   new:=lc.info.grp^.Fetch(@lvl_0,nil);
+   mnew:=lc.info.grp.Fetch(@lvl_0,nil,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
   end;
-  orig:=new;
+  orig:=mnew;
  end;
 
  FetchStore(orig,rsl);
@@ -175,14 +176,14 @@ end;
 
 procedure TEmit_vbuf_store.make_store_ce(var lc:Tstore_cache);
 var
- orig,elm:PsrChain;
- sum_d:PsrRegNode;
+ orig,elm:TsrChain;
+ sum_d:TsrRegNode;
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
  i:Byte;
 begin
- orig:=lc.v.data[0];
- sum_d:=orig^.pIndex;
+ orig:=TsrChain(lc.v.data[0]);
+ sum_d:=orig.pIndex;
 
  For i:=0 to lc.elem_count-1 do
   if (lc.elm[i]<>nil) then
@@ -196,12 +197,12 @@ begin
     sum_d:=OpIAddTo(sum_d,i);
 
     lvl_0.offset:=0;
-    lvl_0.size  :=orig^.size;
+    lvl_0.size  :=orig.size;
 
     lvl_1.pIndex:=sum_d;
-    lvl_1.stride:=orig^.stride;
+    lvl_1.stride:=orig.stride;
 
-    elm:=lc.info.grp^.Fetch(@lvl_0,@lvl_1);
+    elm:=lc.info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
    end;
 
    Assert(lc.elem_resl=lc.elem_orig,'TODO CONVERT');
@@ -214,7 +215,7 @@ end;
 
 procedure TEmit_vbuf_store.make_store_uv(var lc:Tstore_cache);
 var
- rsl,idx:PsrRegNode;
+ rsl,idx:TsrRegNode;
  i:Byte;
 begin
 
@@ -236,17 +237,17 @@ begin
    end;
  end;
 
- idx:=lc.v.data[1];
+ idx:=TsrRegNode(lc.v.data[1]);
 
- OpImageWrite(line,lc.v.data[0],idx,rsl);
+ OpImageWrite(line,TsrNode(lc.v.data[0]),idx,rsl);
 end;
 
 procedure TEmit_vbuf_store.make_store_ue(var lc:Tstore_cache);
 var
- sum_d,idx,rsl:PsrRegNode;
+ sum_d,idx,rsl:TsrRegNode;
  i:Byte;
 begin
- idx:=lc.v.data[1];
+ idx:=TsrRegNode(lc.v.data[1]);
 
  For i:=0 to lc.elem_count-1 do
   if (lc.elm[i]<>nil) then
@@ -261,7 +262,7 @@ begin
     sum_d:=OpIAddTo(idx,i);
    end;
 
-   OpImageWrite(line,lc.v.data[0],sum_d,rsl);
+   OpImageWrite(line,TsrNode(lc.v.data[0]),sum_d,rsl);
 
   end;
 end;

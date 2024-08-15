@@ -9,23 +9,22 @@ uses
  srNode;
 
 type
- ntRefId=class(TsrNodeVmt)
-  class function  GetPrintName(node:PsrNode):RawByteString;     override;
-  class function  GetRef(node:PsrNode):Pointer;                 override;
- end;
-
  PsrRefId=^TsrRefId;
  TsrRefId=object
   ID:DWORD;
   function  Alloc:Boolean; inline;
  end;
 
- PsrRefNode=^TsrRefNode;
- TsrRefNode=object(TsrNode)
+ TsrRefNode=class(TsrNode)
   ID:TsrRefId;
-  Procedure Init; inline;
+  //
+  function  _GetPrintName:RawByteString;     override;
+  function  _GetRef:Pointer;                 override;
+  //
   function  GetPrintName:RawByteString;
  end;
+
+ ntRefId=TsrRefNode;
 
  PsrRefIdAlloc=^TsrRefIdAlloc;
  TsrRefIdAlloc=object
@@ -37,19 +36,14 @@ type
 
 implementation
 
-class function ntRefId.GetPrintName(node:PsrNode):RawByteString;
+function TsrRefNode._GetPrintName:RawByteString;
 begin
- Result:=PsrRefNode(node)^.GetPrintName;
+ Result:=GetPrintName;
 end;
 
-class function ntRefId.GetRef(node:PsrNode):Pointer;
+function TsrRefNode._GetRef:Pointer;
 begin
- Result:=@PsrRefNode(node)^.ID;
-end;
-
-Procedure TsrRefNode.Init; inline;
-begin
- fntype:=ntRefId;
+ Result:=@ID;
 end;
 
 function TsrRefNode.GetPrintName:RawByteString;

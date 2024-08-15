@@ -31,19 +31,19 @@ const
 
 procedure TEmit_VINTRP.emit_VINTRP;
 var
- inp_M0:PsrInput;
+ inp_M0:TsrInput;
 
  src:PsrRegSlot;
  dst:PsrRegSlot;
 
- inp_SRC:PsrInput;
+ inp_SRC:TsrInput;
  itype:TpsslInputType;
 
  procedure ExportValue(itype:TpsslInputType);
  var
   InputCntl:PPSInputCntl;
 
-  rsl,elm:PsrRegNode;
+  rsl,elm:TsrRegNode;
  begin
   //
   InputCntl:=@FPSInputCntl[FSPI.VINTRP.ATTR];
@@ -90,7 +90,7 @@ begin
 
      Assert(inp_SRC<>nil);
 
-     itype:=inp_SRC^.itype;
+     itype:=inp_SRC.itype;
 
      Case itype of
       itPerspSample,
@@ -103,7 +103,7 @@ begin
        Assert(false);
      end;
 
-     Assert(inp_SRC^.typeid=0);            //I
+     Assert(inp_SRC.typeid=0);            //I
 
      ExportValue(itype);
     end;
@@ -116,7 +116,7 @@ begin
 
      Assert(inp_SRC<>nil);
 
-     itype:=inp_SRC^.itype;
+     itype:=inp_SRC.itype;
 
      Case itype of
       itPerspSample,
@@ -129,7 +129,7 @@ begin
        Assert(false);
      end;
 
-     Assert(inp_SRC^.typeid=1);            //J
+     Assert(inp_SRC.typeid=1);            //J
 
      ExportValue(itype);
     end;
@@ -143,7 +143,7 @@ begin
 
      Assert(inp_SRC<>nil);
 
-     itype:=inp_SRC^.itype;
+     itype:=inp_SRC.itype;
 
      ExportValue(itype);
     end;

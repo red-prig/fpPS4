@@ -19,64 +19,61 @@ uses
  srConfig;
 
 type
- ntRegUniform=class(TsrNodeVmt)
-  class function  Down        (node:PsrNode):Pointer;       override;
-  class Procedure SetWriter   (node,w,line:PsrNode);        override;
-  class Procedure ResetWriter (node,w:PsrNode);             override;
-  class Function  pwrite_count(node:PsrNode):PDWORD;        override;
-  class function  GetPrintName(node:PsrNode):RawByteString; override;
-  class function  GetRef      (node:PsrNode):Pointer;       override;
- end;
-
- ntUniform=class(ntDescriptor)
-  class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
-  class function  GetStorageName(node:PsrNode):RawByteString; override;
- end;
-
  String2=String[2];
 
- PsrRegUniform=^TsrRegUniform;
- TsrRegUniform=packed object(TsrNode)
+ TsrRegUniform=class(TsrNode)
   private
-   fwrite_count:DWORD;
    ID:TsrRefId;            //post id
    //
-   FWriter:PsrNode;
-   FVar:PsrVariable;
-   Procedure SetWriter(t:PsrNode);
+   FWriter:TsrNode;
+   FVar:TsrVariable;
+   Procedure SetWriter(t:TsrNode);
   public
-   property  pLine:PsrNode read FWriter;
-   Procedure Init(pVar:PsrVariable); inline;
+   //
+   function  _Down        :TsrNode;         override;
+   Procedure _SetWriter   (w,line:TsrNode); override;
+   Procedure _ResetWriter (w:TsrNode);      override;
+   function  _GetPrintName:RawByteString;   override;
+   function  _GetRef      :Pointer;         override;
+   //
+   property  pLine:TsrNode read FWriter;
+   Procedure Init(pVar:TsrVariable); inline;
    function  GetPrintName:RawByteString;
  end;
 
- PsrArrayChain=^TsrArrayChain;
- TsrArrayChain=packed object(TsrRegUniform)
-  pNext:PsrArrayChain;
+ ntRegUniform=TsrRegUniform;
+
+ TsrArrayChain=class(TsrRegUniform)
+  pNext:TsrArrayChain;
   //
-  idx0:PsrNode;
+  idx0:TsrNode;
  end;
 
- TsrArrayChainList=specialize TNodeStack<PsrArrayChain>;
+ TsrArrayChainList=specialize TNodeStackClass<TsrArrayChain>;
 
- PsrUniform=^TsrUniform;
- TsrUniform=object(TsrDescriptor)
+ PsrUniformKey=^TsrUniformKey;
+ TsrUniformKey=record
+  pLayout:TsrDataLayout;
+  FType  :TsrType;
+ end;
+
+ TsrUniform=class(TsrDescriptor)
   public
-   pLeft,pRight:PsrUniform;
-   function  c(n1,n2:PsrUniform):Integer; static;
+   pLeft,pRight:TsrUniform;
+   class function c(n1,n2:PsrUniformKey):Integer; static;
   private
-   pLayout:PsrDataLayout;
-   //
-   fwrite_count:DWORD;
+   key:TsrUniformKey;
    //
    FReg:TsrRegUniform;
    FArrayChainList:TsrArrayChainList;
   public
-   FEmit:TCustomEmit;
    FMipArray:Boolean;
-   Procedure Init(Emit:TCustomEmit); inline;
-   function  pReg:PsrRegUniform; inline;
-   function  FetchArrayChain(pLine:Pointer;idx0:PsrNode):PsrArrayChain;
+   //
+   function  _GetStorageName:RawByteString; override;
+   //
+   Procedure Init(); inline;
+   property  pReg:TsrRegUniform read FReg;
+   function  FetchArrayChain(pLine:TsrNode;idx0:TsrNode):TsrArrayChain;
    function  chain_read:DWORD;
    function  chain_write:DWORD;
    function  GetStorageName:RawByteString;
@@ -85,17 +82,19 @@ type
    function  GetString:RawByteString;
  end;
 
+ ntUniform=TsrUniform;
+
  PsrUniformList=^TsrUniformList;
  TsrUniformList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrUniform,TsrUniform>;
+   TNodeTree=specialize TNodeTreeClass<TsrUniform>;
   var
    FEmit:TCustomEmit;
-   FNTree:TNodeFetch;
-  procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(s:PsrDataLayout;t:PsrType):PsrUniform;
-  Function  First:PsrUniform;
-  Function  Next(node:PsrUniform):PsrUniform;
+   FTree:TNodeTree;
+  procedure Init(Emit:TCustomEmit);
+  function  Fetch(s:TsrDataLayout;t:TsrType):TsrUniform;
+  Function  First:TsrUniform;
+  Function  Next(node:TsrUniform):TsrUniform;
   procedure AllocBinding(Var FBinding:Integer);
   procedure AllocSourceExtension;
  end;
@@ -105,77 +104,62 @@ implementation
 uses
  emit_op;
 
-class function ntRegUniform.Down(node:PsrNode):Pointer;
+function TsrRegUniform._Down:TsrNode;
 begin
- Result:=PsrRegUniform(node)^.FVar;
+ Result:=FVar;
 end;
 
-class Procedure ntRegUniform.SetWriter(node,w,line:PsrNode);
+Procedure TsrRegUniform._SetWriter(w,line:TsrNode);
 begin
- With PsrRegUniform(node)^ do
- begin
-  SetWriter(w);
- end;
+ SetWriter(w);
 end;
 
-class Procedure ntRegUniform.ResetWriter(node,w:PsrNode);
+Procedure TsrRegUniform._ResetWriter(w:TsrNode);
 begin
- With PsrRegUniform(node)^ do
  if (FWriter=w) then
  begin
   SetWriter(nil);
  end;
 end;
 
-class Function ntRegUniform.pwrite_count(node:PsrNode):PDWORD;
+function TsrRegUniform._GetPrintName:RawByteString;
 begin
- Result:=@PsrRegUniform(node)^.fwrite_count;
+ Result:=GetPrintName;
 end;
 
-class function ntRegUniform.GetPrintName(node:PsrNode):RawByteString;
+function TsrRegUniform._GetRef:Pointer;
 begin
- Result:=PsrRegUniform(node)^.GetPrintName;
-end;
-
-class function ntRegUniform.GetRef(node:PsrNode):Pointer;
-begin
- Result:=@PsrRegUniform(node)^.ID;
+ Result:=@ID;
 end;
 
 //
 
-class Function ntUniform.pwrite_count(node:PsrNode):PDWORD;
+function TsrUniform._GetStorageName:RawByteString;
 begin
- Result:=@PsrUniform(node)^.fwrite_count;
-end;
-
-class function ntUniform.GetStorageName(node:PsrNode):RawByteString;
-begin
- Result:=PsrUniform(node)^.GetStorageName;
+ Result:=GetStorageName;
 end;
 
 //
 
-Procedure TsrRegUniform.Init(pVar:PsrVariable); inline;
+Procedure TsrRegUniform.Init(pVar:TsrVariable); inline;
 begin
- fntype:=ntRegUniform;
  FVar:=pVar;
 end;
 
-Procedure TsrRegUniform.SetWriter(t:PsrNode);
+Procedure TsrRegUniform.SetWriter(t:TsrNode);
 begin
  if (FWriter=t) then Exit;
  if isUsed then
  begin
-        t^.mark_read  (@Self);
-  FWriter^.mark_unread(@Self);
+        t.mark_read  (Self);
+  FWriter.mark_unread(Self);
  end;
  FWriter:=t;
 end;
 
 function TsrRegUniform.GetPrintName:RawByteString;
 begin
- Result:=FVar^.GetStorageName;
+ Result:=FVar.GetStorageName;
  if (Result<>'') then
  begin
   Result:='r_'+Result;
@@ -188,47 +172,40 @@ end;
 
 //
 
-function TsrUniform.c(n1,n2:PsrUniform):Integer;
+class function TsrUniform.c(n1,n2:PsrUniformKey):Integer;
 begin
  //first pLayout
- Result:=Integer(n1^.pLayout>n2^.pLayout)-Integer(n1^.pLayout<n2^.pLayout);
+ Result:=ord(n1^.pLayout.Order>n2^.pLayout.Order)-ord(n1^.pLayout.Order<n2^.pLayout.Order);
  if (Result<>0) then Exit;
- //second pType
- Result:=Integer(n1^.FType>n2^.FType)-Integer(n1^.FType<n2^.FType);
+ //second pType (order sort)
+ Result:=ord(n1^.FType.Order>n2^.FType.Order)-ord(n1^.FType.Order<n2^.FType.Order);
 end;
 
-Procedure TsrUniform.Init(Emit:TCustomEmit); inline;
+Procedure TsrUniform.Init(); inline;
 begin
- fntype  :=ntUniform;
  FStorage:=StorageClass.UniformConstant;
  FBinding:=-1;
  //
- FEmit:=Emit;
+ FReg    :=Emit.specialize New<TsrRegUniform>;
 end;
 
-function TsrUniform.pReg:PsrRegUniform; inline;
-begin
- Result:=@FReg;
-end;
-
-function TsrUniform.FetchArrayChain(pLine:Pointer;idx0:PsrNode):PsrArrayChain;
+function TsrUniform.FetchArrayChain(pLine:TsrNode;idx0:TsrNode):TsrArrayChain;
 var
- iType:PsrType;
- pChain:PsrNode;
+ iType:TsrType;
+ pChain:TsrNode;
 begin
  Result:=nil;
 
- iType:=pType^.GetItem(0)^.AsType(ntType); //Image
+ iType:=pType.GetItem(0).specialize AsType<ntType>; //Image
  if (iType=nil) then Exit;
 
  //Check dublicate?
- pChain:=TEmitOp(FEmit).OpAccessChainTo(iType,pVar,idx0,@pLine);
+ pChain:=TEmitOp(Emit).OpAccessChainTo(iType,pVar,idx0,@pLine);
 
- Result:=FEmit.Alloc(SizeOf(TsrArrayChain));
- Result^.Init(pVar);
- Result^.idx0:=idx0;
+ Result:=Emit.specialize New<TsrArrayChain>;
+ Result.idx0:=idx0;
 
- TEmitOp(FEmit).OpLoad(pLine,iType,Result,pChain);
+ TEmitOp(Emit).OpLoad(pLine,iType,Result,pChain);
 
  //
  FArrayChainList.Push_head(Result);
@@ -239,14 +216,14 @@ label
  _image_info;
 var
  image_info:TsrTypeImageInfo;
- pChild:PsrType;
+ pChild:TsrType;
 begin
  Result:='';
  if (FType<>nil) then
-   Case FType^.dtype of
+   Case FType.dtype of
     dtTypeImage:
      begin
-      image_info:=FType^.image_info;
+      image_info:=FType.image_info;
 
       _image_info:
 
@@ -272,12 +249,12 @@ begin
     dtTypeArray,
     dtTypeRuntimeArray:
      begin
-      pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
+      pChild:=pType.GetItem(0).specialize AsType<ntType>; //Image
 
       if (pChild<>nil) then
-      if (pChild^.dtype=dtTypeImage) then
+      if (pChild.dtype=dtTypeImage) then
       begin
-       image_info:=pChild^.image_info;
+       image_info:=pChild.image_info;
 
        goto _image_info;
       end;
@@ -311,14 +288,14 @@ end;
 function TsrUniform.GetTypeChar:String2;
 var
  image_info:TsrTypeImageInfo;
- pChild:PsrType;
+ pChild:TsrType;
 begin
  Result:='';
  if (FType<>nil) then
-   Case FType^.dtype of
+   Case FType.dtype of
     dtTypeImage:
      begin
-      image_info:=FType^.image_info;
+      image_info:=FType.image_info;
 
       if (image_info.Dim=Dim.Buffer) then
       begin
@@ -334,19 +311,19 @@ begin
     dtTypeArray,
     dtTypeRuntimeArray:
      begin
-      pChild:=pType^.GetItem(0)^.AsType(ntType); //Image
+      pChild:=pType.GetItem(0).specialize AsType<ntType>; //Image
 
       if (pChild<>nil) then
-      if (pChild^.dtype=dtTypeImage) then
+      if (pChild.dtype=dtTypeImage) then
       begin
-       image_info:=pChild^.image_info;
+       image_info:=pChild.image_info;
 
        if (image_info.Dim=Dim.Buffer) then
        begin
         Assert(false,'GetTypeChar');
        end else
        begin
-        Case FType^.dtype of
+        Case FType.dtype of
          dtTypeArray       :Result:='A'+GetSampledTypeChar(image_info.Sampled);
          dtTypeRuntimeArray:Result:='R'+GetSampledTypeChar(image_info.Sampled);
          else;
@@ -362,7 +339,7 @@ end;
 
 function TsrUniform.chain_read:DWORD;
 var
- node:PsrArrayChain;
+ node:TsrArrayChain;
 begin
  Result:=0;
  if FReg.IsUsed then
@@ -373,17 +350,17 @@ begin
  node:=FArrayChainList.pHead;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.IsUsed then
   begin
-   Result:=Result+node^.read_count;
+   Result:=Result+node.read_count;
   end;
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
 end;
 
 function TsrUniform.chain_write:DWORD;
 var
- node:PsrArrayChain;
+ node:TsrArrayChain;
 begin
  Result:=0;
  if FReg.IsUsed then
@@ -394,11 +371,11 @@ begin
  node:=FArrayChainList.pHead;
  While (node<>nil) do
  begin
-  if node^.IsUsed then
+  if node.IsUsed then
   begin
-   Result:=Result+node^.write_count;
+   Result:=Result+node.write_count;
   end;
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
 end;
 
@@ -424,9 +401,9 @@ var
  PID:DWORD;
 begin
  PID:=0;
- if (pLayout<>nil) then
+ if (key.pLayout<>nil) then
  begin
-  PID:=pLayout^.FID;
+  PID:=key.pLayout.FID;
  end;
  Result:=GetTypeChar+
          ';PID='+HexStr(PID,8)+
@@ -434,40 +411,42 @@ begin
          ';MRW='+GetRw;
 end;
 
-procedure TsrUniformList.Init(Emit:TCustomEmit); inline;
+procedure TsrUniformList.Init(Emit:TCustomEmit);
 begin
  FEmit:=Emit;
 end;
 
-function TsrUniformList.Fetch(s:PsrDataLayout;t:PsrType):PsrUniform;
+function TsrUniformList.Fetch(s:TsrDataLayout;t:TsrType):TsrUniform;
 var
- node:TsrUniform;
+ key:TsrUniformKey;
 begin
- node:=Default(TsrUniform);
- node.Init(FEmit);
- node.pLayout:=s;
- node.FType  :=t;
- Result:=FNTree.Find(@node);
+ key:=Default(TsrUniformKey);
+ key.pLayout:=s;
+ key.FType  :=t;
+ //
+ Result:=FTree.Find(@key);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrUniform));
-  Move(node,Result^,SizeOf(TsrUniform));
+  Result:=FEmit.specialize New<TsrUniform>;
+  Result.Init();
+  Result.key  :=key;
+  Result.pType:=t;
   //
-  Result^.InitVar(FEmit);
-  Result^.FReg.Init(Result^.FVar);
+  Result.InitVar();
+  Result.FReg.Init(Result.FVar);
   //
-  FNTree.Insert(Result);
+  FTree.Insert(Result);
  end;
 end;
 
-Function TsrUniformList.First:PsrUniform;
+Function TsrUniformList.First:TsrUniform;
 begin
- Result:=FNTree.Min;
+ Result:=FTree.Min;
 end;
 
-Function TsrUniformList.Next(node:PsrUniform):PsrUniform;
+Function TsrUniformList.Next(node:TsrUniform):TsrUniform;
 begin
- Result:=FNTree.Next(node);
+ Result:=FTree.Next(node);
 end;
 
 procedure TsrUniformList.AllocBinding(Var FBinding:Integer);
@@ -476,10 +455,10 @@ var
  pDecorateList:PsrDecorateList;
  pCapabilityList:PsrCapabilityList;
  //
- node:PsrUniform;
- pVar:PsrVariable;
+ node:TsrUniform;
+ pVar:TsrVariable;
  //
- FType:PsrType;
+ FType:TsrType;
  image_info:TsrTypeImageInfo;
 begin
  pConfig        :=FEmit.GetConfig;
@@ -489,30 +468,45 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed and (node^.FBinding=-1) then
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed and (node.FBinding=-1) then
   begin
    pDecorateList^.OpDecorate(pVar,Decoration.Binding      ,FBinding);
    pDecorateList^.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
-
-   node^.FBinding:=FBinding;
+   //
+   if (node.Flags.Coherent) then
+   begin
+    pDecorateList^.OpDecorate(pVar,Decoration.Coherent,0);
+   end;
+   //
+   if (node.Flags.Volatile) then
+   begin
+    pDecorateList^.OpDecorate(pVar,Decoration.Volatile,0);
+   end;
+   //
+   if (node.Flags.Aliased) and (not node.Flags.Bitcast) then
+   begin
+    pDecorateList^.OpDecorate(pVar,Decoration.Aliased,0);
+   end;
+   //
+   node.FBinding:=FBinding;
    Inc(FBinding);
 
-   FType:=node^.pType;
+   FType:=node.pType;
    if (FType<>nil) then
    begin
-    Case FType^.dtype of
+    Case FType.dtype of
      dtTypeImage:
       begin
-       image_info:=FType^.image_info;
+       image_info:=FType.image_info;
 
        if (image_info.Sampled=2) then //storage image
        begin
-        if (node^.chain_read=0) then
+        if (node.chain_read=0) then
         begin
          pDecorateList^.OpDecorate(pVar,Decoration.NonReadable,0);
         end;
-        if (node^.chain_write=0) then
+        if (node.chain_write=0) then
         begin
          pDecorateList^.OpDecorate(pVar,Decoration.NonWritable,0);
         end;
@@ -545,11 +539,11 @@ begin
         ImageFormat.Unknown:
          if (image_info.Sampled=2) then //storage image
          begin
-          if (node^.chain_read<>0) then
+          if (node.chain_read<>0) then
           begin
            pCapabilityList^.Add(Capability.StorageImageWriteWithoutFormat);
           end;
-          if (node^.chain_write<>0) then
+          if (node.chain_write<>0) then
           begin
            pCapabilityList^.Add(Capability.StorageImageWriteWithoutFormat);
           end;
@@ -598,17 +592,17 @@ end;
 procedure TsrUniformList.AllocSourceExtension;
 var
  pDebugInfoList:PsrDebugInfoList;
- node:PsrUniform;
- pVar:PsrVariable;
+ node:TsrUniform;
+ pVar:TsrVariable;
 begin
  pDebugInfoList:=FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed then
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed then
   begin
-   pDebugInfoList^.OpSource(node^.GetString);
+   pDebugInfoList^.OpSource(node.GetString);
   end;
   node:=Next(node);
  end;

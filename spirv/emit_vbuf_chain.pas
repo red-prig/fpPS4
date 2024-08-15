@@ -14,13 +14,14 @@ uses
   srLayout,
   srConfig,
   emit_fetch,
+  srop,
   srVBufInfo;
 
 type
  TBuf_adr=packed record
   stride,align,fsize,csize:PtrInt;
   soffset,ioffset,voffset:PtrInt;
-  sof,ofs,idx:PsrRegNode;
+  sof,ofs,idx:TsrRegNode;
  end;
 
  TvcType=(vcInvalid,vcChainVector,vcChainElement,vcUniformVector,vcUniformElement);
@@ -32,10 +33,10 @@ type
 
  TEmit_vbuf_chain=class(TEmitFetch)
   procedure get_reg_adr(var adr:TBuf_adr);
-  function  get_sum_ofs(var adr:TBuf_adr):PsrRegNode;
-  function  get_idx_elm(var adr:TBuf_adr):PsrRegNode;
-  function  get_idx_fmt(var adr:TBuf_adr):PsrRegNode;
-  function  get_chain(info:TBuf_info):TvarChain;
+  function  get_sum_ofs(var adr:TBuf_adr):TsrRegNode;
+  function  get_idx_elm(var adr:TBuf_adr):TsrRegNode;
+  function  get_idx_fmt(var adr:TBuf_adr):TsrRegNode;
+  function  get_chain  (info:TBuf_info):TvarChain;
  end;
 
 implementation
@@ -55,9 +56,9 @@ begin
    adr.sof:=ofs^.current;
    if (adr.sof<>nil) then
    begin
-    if (adr.sof^.is_const) then
+    if (adr.sof.is_const) then
     begin
-     adr.soffset:=adr.sof^.AsConst^.AsInt32;
+     adr.soffset:=adr.sof.AsConst.AsInt32;
      adr.sof:=nil;
     end else
     begin
@@ -86,9 +87,9 @@ begin
   adr.ofs:=ofs^.current;
   if (adr.ofs<>nil) then
   begin
-   if (adr.ofs^.is_const) then
+   if (adr.ofs.is_const) then
    begin
-    adr.voffset:=adr.ofs^.AsConst^.AsInt32;
+    adr.voffset:=adr.ofs.AsConst.AsInt32;
     adr.ofs:=nil;
    end else
    begin
@@ -98,11 +99,11 @@ begin
  end;
 end;
 
-function TEmit_vbuf_chain.get_sum_ofs(var adr:TBuf_adr):PsrRegNode;
+function TEmit_vbuf_chain.get_sum_ofs(var adr:TBuf_adr):TsrRegNode;
 var
  foffset:PtrInt;
 
- sum_d,ofs_d,idx_m:PsrRegNode;
+ sum_d,ofs_d,idx_m:TsrRegNode;
 
 begin
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
@@ -144,11 +145,11 @@ begin
  Result:=sum_d;
 end;
 
-function TEmit_vbuf_chain.get_idx_elm(var adr:TBuf_adr):PsrRegNode;
+function TEmit_vbuf_chain.get_idx_elm(var adr:TBuf_adr):TsrRegNode;
 var
  foffset:PtrInt;
 
- sum_d,idx_m:PsrRegNode;
+ sum_d,idx_m:TsrRegNode;
 
 begin
  //result=(foffset/Align+idx*(stride/Align)) in elem
@@ -168,11 +169,11 @@ begin
  Result:=sum_d;
 end;
 
-function TEmit_vbuf_chain.get_idx_fmt(var adr:TBuf_adr):PsrRegNode;
+function TEmit_vbuf_chain.get_idx_fmt(var adr:TBuf_adr):TsrRegNode;
 var
  foffset:PtrInt;
 
- sum_d,idx_m:PsrRegNode;
+ sum_d,idx_m:TsrRegNode;
 
 begin
  //result=(foffset/size+idx*(stride/size)) in format
@@ -204,7 +205,7 @@ var
  adr:TBuf_adr;
  foffset:PtrInt;
 
- sum_d:PsrRegNode;
+ sum_d:TsrRegNode;
 
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
@@ -220,7 +221,7 @@ begin
   Exit;
  end;
 
- PV:=info.grp^.pData;
+ PV:=info.grp.pData;
  Assert(PV^.swizzle_en=0,'swizzle_en');
  Assert(PV^.addtid_en =0,'addtid_en');
 
@@ -244,7 +245,7 @@ begin
 
   lvl_0.offset:=foffset;
   lvl_0.size  :=adr.csize;
-  Result.data[0]:=info.grp^.Fetch(@lvl_0,nil);
+  Result.data[0]:=info.grp.Fetch(@lvl_0,nil,cflags(dtUnknow,info.GLC,info.SLC));
 
   Result.vType  :=vcChainVector;
   Exit;
@@ -278,7 +279,7 @@ begin
   lvl_1.pIndex:=sum_d;
   lvl_1.stride:=adr.align;
 
-  Result.data[0]:=info.grp^.Fetch(@lvl_0,@lvl_1);
+  Result.data[0]:=info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,info.GLC,info.SLC));
 
   Result.vType  :=vcChainElement;
   Exit;
@@ -328,7 +329,7 @@ begin
   lvl_1.pIndex:=adr.idx;
   lvl_1.stride:=adr.stride;
 
-  Result.data[0]:=info.grp^.Fetch(@lvl_0,@lvl_1);
+  Result.data[0]:=info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,info.GLC,info.SLC));
 
   Result.vType  :=vcChainVector;
   Exit;

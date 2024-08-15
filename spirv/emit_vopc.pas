@@ -24,7 +24,7 @@ implementation
 procedure TEmit_VOPC.emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
 Var
  dst:array[0..1] of PsrRegSlot;
- src:array[0..1] of PsrRegNode;
+ src:array[0..1] of TsrRegNode;
 begin
  dst[0]:=get_vcc0;
  dst[1]:=get_vcc1;

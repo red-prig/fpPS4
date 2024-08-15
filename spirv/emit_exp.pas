@@ -26,7 +26,7 @@ type
   function  get_export_type(TGT:Byte):TsrDataType;
   function  is_bindless(TGT:Byte):Boolean;
   function  get_export_sel(TGT:Byte):Tdst_sel;
-  procedure fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:PsrRegNode);
+  procedure fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:TsrRegNode);
   procedure shuffle(dst_sel:Tdst_sel;rtype:TsrDataType;src:PPsrRegNode;count:Byte);
  end;
 
@@ -151,10 +151,10 @@ begin
  end;
 end;
 
-procedure TEmit_EXP.fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:PsrRegNode);
+procedure TEmit_EXP.fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:TsrRegNode);
 var
  pSlot:PsrRegSlot;
- dst:PsrRegNode;
+ dst:TsrRegNode;
 begin
  pSlot:=RegsStory.get_vsrc8(VSRC);
 
@@ -171,7 +171,7 @@ end;
 procedure TEmit_EXP.shuffle(dst_sel:Tdst_sel;rtype:TsrDataType;src:PPsrRegNode;count:Byte);
 var
  i:Byte;
- dst:array[0..3] of PsrRegNode;
+ dst:array[0..3] of TsrRegNode;
 begin
  For i:=0 to count-1 do
  begin
@@ -198,13 +198,13 @@ end;
 
 procedure TEmit_EXP.emit_EXP;
 Var
- exc:PsrRegNode;
- node:PSpirvOp;
- pOpBlock:PsrOpBlock;
+ exc:TsrRegNode;
+ node:TSpirvOp;
+ pOpBlock:TsrOpBlock;
 
- dout:PsrOutput;
- dst:PsrRegNode;
- src:array[0..3] of PsrRegNode;
+ dout:TsrOutput;
+ dst:TsrRegNode;
+ src:array[0..3] of TsrRegNode;
  rtype:TsrDataType;
  f,i,p:DWORD;
 
@@ -220,14 +220,14 @@ begin
  if (FSPI.EXP.VM<>0) and (FSPI.EXP.DONE<>0) then
  begin
   pOpBlock:=AllocBlockOp;
-  pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+  pOpBlock.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
 
   PushBlockOp(line,pOpBlock,nil);
   Inc(push_count);
 
   exc:=MakeRead(get_exec0,dtBool);
   node:=AddSpirvOp(OpMakeExp);
-  node^.AddParam(exc); //<-fetch read
+  node.AddParam(exc); //<-fetch read
  end;
 
  //before
@@ -238,7 +238,7 @@ begin
 
   While (push_count<>0) do
   begin
-   Main^.PopBlock;
+   Main.PopBlock;
    Dec(push_count);
   end;
 
@@ -246,7 +246,7 @@ begin
  end;
 
  pOpBlock:=AllocBlockOp; //down
- pOpBlock^.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+ pOpBlock.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
 
  PushBlockOp(line,pOpBlock,nil);
  Inc(push_count);
@@ -283,7 +283,7 @@ begin
    //shuffle ???
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   dout^.FetchStore(line,src[0]);
+   dout.FetchStore(line,src[0]);
   end else
   begin
    //vector
@@ -321,7 +321,7 @@ begin
    dst:=OpMakeVec(line,rtype,@src);
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   dout^.FetchStore(line,dst);
+   dout.FetchStore(line,dst);
   end;
 
  end else
@@ -363,12 +363,12 @@ begin
   dst:=OpMakeVec(line,rtype,@src);
 
   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-  dout^.FetchStore(line,dst);
+  dout.FetchStore(line,dst);
  end;
 
  While (push_count<>0) do
  begin
-  Main^.PopBlock;
+  Main.PopBlock;
   Dec(push_count);
  end;
 end;

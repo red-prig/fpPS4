@@ -12,7 +12,6 @@ uses
   ps4_pssl,
   srNode,
   srType,
-  srTypes,
   srReg,
   srLayout,
   srOp,
@@ -27,25 +26,25 @@ type
   mods:TsrImageMods;
   img_op:Integer;
 
-  coord,pcf,bias,lod,min_lod,offset:PsrRegNode;
+  coord,pcf,bias,lod,min_lod,offset:TsrRegNode;
  end;
 
  TEmit_MIMG=class(TEmitFetch)
   procedure emit_MIMG;
-  procedure DistribDmask(DMASK:Byte;dst:PsrRegNode;info:PsrImageInfo);
-  function  GatherDmask(telem:TsrDataType):PsrRegNode;
-  Function  GatherCoord_f(var offset:DWORD;info:PsrImageInfo):PsrRegNode;
-  Function  GatherCoord_u(var offset:DWORD;info:PsrImageInfo):PsrRegNode;
-  Function  Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
-  Function  Gather_packed_offset(var offset:DWORD;dim:Byte):PsrRegNode;
+  procedure DistribDmask(DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo);
+  function  GatherDmask(telem:TsrDataType):TsrRegNode;
+  Function  GatherCoord_f(var offset:DWORD;info:PsrImageInfo):TsrRegNode;
+  Function  GatherCoord_u(var offset:DWORD;info:PsrImageInfo):TsrRegNode;
+  Function  Gather_value(var offset:DWORD;rtype:TsrDataType):TsrRegNode;
+  Function  Gather_packed_offset(var offset:DWORD;dim:Byte):TsrRegNode;
   procedure Gather_sample_param(var p:TImgSampleParam;info:PsrImageInfo);
-  procedure add_sample_op(var p:TImgSampleParam;node:PSpirvOp);
-  procedure emit_image_sample(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_image_sample_gather(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_image_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
-  procedure emit_image_get_lod(Tgrp:PsrNode;info:PsrImageInfo);
+  procedure add_sample_op(var p:TImgSampleParam;node:TSpirvOp);
+  procedure emit_image_sample(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_sample_gather(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_load(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_store(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_get_resinfo(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_get_lod(Tgrp:TsrNode;info:PsrImageInfo);
  end;
 
 implementation
@@ -490,14 +489,14 @@ begin
  t(ImageOperands.MinLod      ,'MinLod');
 end;
 
-procedure TEmit_MIMG.DistribDmask(DMASK:Byte;dst:PsrRegNode;info:PsrImageInfo); //result
+procedure TEmit_MIMG.DistribDmask(DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo); //result
 var
  pSlot:PsrRegSlot;
  dtype:TsrDataType;
  i,d,max:Byte;
 begin
- dtype:=dst^.dtype.Child;
- max  :=dst^.dtype.Count;
+ dtype:=dst.dtype.Child;
+ max  :=dst.dtype.Count;
 
  d:=0;
  For i:=0 to 3 do
@@ -507,7 +506,7 @@ begin
    Inc(d);
    Assert(pSlot<>nil);
 
-   if (dst^.dtype.isScalar) then
+   if (dst.dtype.isScalar) then
    begin
     if (i=0) then
     begin
@@ -530,9 +529,9 @@ begin
   end;
 end;
 
-function TEmit_MIMG.GatherDmask(telem:TsrDataType):PsrRegNode;
+function TEmit_MIMG.GatherDmask(telem:TsrDataType):TsrRegNode;
 var
- src:array[0..3] of PsrRegNode;
+ src:array[0..3] of TsrRegNode;
  i,d,m:Byte;
 begin
  d:=0;
@@ -550,6 +549,7 @@ begin
  //Result:=telem.AsVector(4);
  For i:=0 to m do
  begin
+  //TODO: zero or prev value?
   Assert(src[i]<>nil,'TODO: zero or prev value?');
  end;
 
@@ -562,9 +562,9 @@ begin
  end;
 end;
 
-Function TEmit_MIMG.GatherCoord_f(var offset:DWORD;info:PsrImageInfo):PsrRegNode; //src
+Function TEmit_MIMG.GatherCoord_f(var offset:DWORD;info:PsrImageInfo):TsrRegNode; //src
 var
- src:array[0..3] of PsrRegNode;
+ src:array[0..3] of TsrRegNode;
  i,count:Byte;
 begin
  Result:=nil;
@@ -580,7 +580,7 @@ begin
   begin
    src[0]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+0,dtFloat32); //x
    src[1]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+1,dtFloat32); //y
-   src[2]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+3,dtFloat32); //face TODO: face-slice*8
+   src[2]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+3,dtFloat32); //TODO: face-slice*8
    src[3]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+2,dtFloat32); //slice
   end else
   begin
@@ -627,9 +627,9 @@ begin
  offset:=offset+count;
 end;
 
-Function TEmit_MIMG.GatherCoord_u(var offset:DWORD;info:PsrImageInfo):PsrRegNode; //src
+Function TEmit_MIMG.GatherCoord_u(var offset:DWORD;info:PsrImageInfo):TsrRegNode; //src
 var
- src:array[0..3] of PsrRegNode;
+ src:array[0..3] of TsrRegNode;
  i,count:Byte;
 begin
  Result:=nil;
@@ -645,7 +645,7 @@ begin
   begin
    src[0]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+0,dtInt32); //x
    src[1]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+1,dtInt32); //y
-   src[2]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+3,dtInt32); //face TODO: face-slice*8
+   src[2]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+3,dtInt32); //TODO: face-slice*8
    src[3]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+2,dtInt32); //slice
   end else
   begin
@@ -692,15 +692,15 @@ begin
  offset:=offset+count;
 end;
 
-Function TEmit_MIMG.Gather_value(var offset:DWORD;rtype:TsrDataType):PsrRegNode;
+Function TEmit_MIMG.Gather_value(var offset:DWORD;rtype:TsrDataType):TsrRegNode;
 begin
  Result:=fetch_vsrc8(FSPI.MIMG.VADDR+offset,rtype);
  Inc(offset);
 end;
 
-Function TEmit_MIMG.Gather_packed_offset(var offset:DWORD;dim:Byte):PsrRegNode;
+Function TEmit_MIMG.Gather_packed_offset(var offset:DWORD;dim:Byte):TsrRegNode;
 var
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  Result:=nil;
 
@@ -743,7 +743,8 @@ begin
 
  if (imGrad in p.mods) then
  begin
-  Assert(false,'TODO imGrad');
+  //TODO: imGrad
+  Assert(false,'TODO: imGrad');
  end;
 
  p.coord:=GatherCoord_f(p.roffset,info);
@@ -767,36 +768,37 @@ begin
  //gather
 end;
 
-procedure TEmit_MIMG.add_sample_op(var p:TImgSampleParam;node:PSpirvOp);
+procedure TEmit_MIMG.add_sample_op(var p:TImgSampleParam;node:TSpirvOp);
 begin
  //ImageOperands
  if (p.img_op<>0) then
  begin
-  node^.AddLiteral(p.img_op,GetImgOpStr(p.img_op));
+  node.AddLiteral(p.img_op,GetImgOpStr(p.img_op));
 
   if ((p.img_op and ImageOperands.Bias)<>0) then
   begin
-   node^.AddParam(p.bias);
+   node.AddParam(p.bias);
   end;
 
   if ((p.img_op and ImageOperands.Lod)<>0) then
   begin
-   node^.AddParam(p.lod);
+   node.AddParam(p.lod);
   end;
 
   if ((p.img_op and ImageOperands.Grad)<>0) then
   begin
-   Assert(false,'TODO imGrad');
+   //TODO: imGrad
+   Assert(false,'TODO: imGrad');
   end;
 
   if ((p.img_op and ImageOperands.ConstOffset)<>0) then
   begin
-   node^.AddParam(p.offset);
+   node.AddParam(p.offset);
   end;
 
   if ((p.img_op and ImageOperands.MinLod)<>0) then
   begin
-   node^.AddParam(p.min_lod);
+   node.AddParam(p.min_lod);
    AddCapability(Capability.MinLod);
   end;
 
@@ -804,18 +806,18 @@ begin
  //ImageOperands
 end;
 
-procedure TEmit_MIMG.emit_image_sample(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_sample(Tgrp:TsrNode;info:PsrImageInfo);
 var
  src:array[0..3] of PsrRegSlot;
 
- pLayout:PsrDataLayout;
- Sgrp:PsrNode;
+ pLayout:TsrDataLayout;
+ Sgrp:TsrNode;
 
- dst,cmb:PsrRegNode;
+ dst,cmb:TsrRegNode;
 
  param:TImgSampleParam;
 
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 
@@ -872,19 +874,19 @@ begin
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
 end;
 
-procedure TEmit_MIMG.emit_image_sample_gather(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_sample_gather(Tgrp:TsrNode;info:PsrImageInfo);
 var
  src:array[0..3] of PsrRegSlot;
 
- pLayout:PsrDataLayout;
- Sgrp:PsrNode;
+ pLayout:TsrDataLayout;
+ Sgrp:TsrNode;
 
- dst,cmb:PsrRegNode;
+ dst,cmb:TsrRegNode;
 
  param:TImgSampleParam;
  id:Byte;
 
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 
@@ -928,13 +930,13 @@ begin
  DistribDmask(15,dst,info);
 end;
 
-procedure TEmit_MIMG.emit_image_load(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_load(Tgrp:TsrNode;info:PsrImageInfo);
 var
- dst,coord,lod,smp:PsrRegNode;
+ dst,coord,lod,smp:TsrRegNode;
 
  roffset:DWORD;
 
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
 
  dst:=NewReg(info^.dtype.AsVector(4));
@@ -953,8 +955,8 @@ begin
      begin
       smp:=Gather_value(roffset,dtUint32);
 
-      node^.AddLiteral(ImageOperands.Sample,'Sample');
-      node^.AddParam(smp);
+      node.AddLiteral(ImageOperands.Sample,'Sample');
+      node.AddParam(smp);
      end;
     end;
   IMAGE_LOAD_MIP: //All except MSAA
@@ -966,8 +968,8 @@ begin
 
      lod:=Gather_value(roffset,dtUint32);
 
-     node^.AddLiteral(ImageOperands.Lod,'Lod');
-     node^.AddParam(lod);
+     node.AddLiteral(ImageOperands.Lod,'Lod');
+     node.AddParam(lod);
     end;
   else
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
@@ -976,13 +978,13 @@ begin
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
 end;
 
-procedure TEmit_MIMG.emit_image_store(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_store(Tgrp:TsrNode;info:PsrImageInfo);
 var
- dst,coord,lod,smp:PsrRegNode;
+ dst,coord,lod,smp:TsrRegNode;
 
  roffset:DWORD;
 
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  dst:=GatherDmask(info^.dtype);
 
@@ -1000,8 +1002,8 @@ begin
      begin
       smp:=Gather_value(roffset,dtUint32);
 
-      node^.AddLiteral(ImageOperands.Sample,'Sample');
-      node^.AddParam(smp);
+      node.AddLiteral(ImageOperands.Sample,'Sample');
+      node.AddParam(smp);
      end;
     end;
   IMAGE_STORE_MIP: //All except MSAA
@@ -1015,7 +1017,7 @@ begin
      //lod:=OpNonUniform(lod); TODO
 
      //fetch image by index
-     Tgrp:=PsrUniform(Tgrp)^.FetchArrayChain(line,lod);
+     Tgrp:=TsrUniform(Tgrp).FetchArrayChain(line,lod);
 
      //scalar or vector
      node:=OpImageWrite(line,Tgrp,coord,dst);
@@ -1026,10 +1028,10 @@ begin
 
 end;
 
-procedure TEmit_MIMG.emit_image_get_resinfo(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_get_resinfo(Tgrp:TsrNode;info:PsrImageInfo);
 var
  offset:DWORD;
- dst,lod:PsrRegNode;
+ dst,lod:TsrRegNode;
 
  dvec:TsrDataType;
  count:Byte;
@@ -1050,21 +1052,19 @@ begin
 
  dst:=NewReg(dvec);
 
- _Op2(line,Op.OpImageQuerySizeLod,dst,PsrRegNode(Tgrp),lod);
+ _Op2(line,Op.OpImageQuerySizeLod,dst,Tgrp,lod);
 
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
-
- AddCapability(Capability.ImageQuery);
 end;
 
-procedure TEmit_MIMG.emit_image_get_lod(Tgrp:PsrNode;info:PsrImageInfo);
+procedure TEmit_MIMG.emit_image_get_lod(Tgrp:TsrNode;info:PsrImageInfo);
 var
  src:array[0..3] of PsrRegSlot;
 
- pLayout:PsrDataLayout;
- Sgrp:PsrNode;
+ pLayout:TsrDataLayout;
+ Sgrp:TsrNode;
 
- dst,cmb:PsrRegNode;
+ dst,cmb:TsrRegNode;
 
  param:TImgSampleParam;
 begin
@@ -1084,7 +1084,7 @@ begin
 
  dst:=NewReg(dtVec2f);
 
- _Op2(line,Op.OpImageQueryLod,dst,PsrRegNode(cmb),param.coord);
+ _Op2(line,Op.OpImageQueryLod,dst,cmb,param.coord);
 
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
 
@@ -1095,10 +1095,10 @@ procedure TEmit_MIMG.emit_MIMG;
 var
  src:array[0..7] of PsrRegSlot;
 
- pLayout:PsrDataLayout;
+ pLayout:TsrDataLayout;
  info:TsrImageInfo;
 
- Tgrp:PsrNode;
+ Tgrp:TsrNode;
 
 begin
  pLayout:=nil;
@@ -1116,7 +1116,7 @@ begin
     end;
  end;
 
- info:=GetImageInfo(pLayout^.pData);
+ info:=GetImageInfo(pLayout.pData);
 
  if (imDref in GetImageMods(FSPI.MIMG.OP)) then
  begin
@@ -1129,7 +1129,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_sample(Tgrp,@info);
     end;
@@ -1139,7 +1139,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_sample_gather(Tgrp,@info);
     end;
@@ -1147,7 +1147,7 @@ begin
   IMAGE_LOAD..IMAGE_LOAD_MIP_PCK_SGN: //loaded
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_load(Tgrp,@info);
     end;
@@ -1156,7 +1156,7 @@ begin
   IMAGE_STORE_PCK: //stored
     begin
      info.tinfo.Sampled:=2;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_store(Tgrp,@info);
     end;
@@ -1165,9 +1165,9 @@ begin
   IMAGE_STORE_MIP_PCK: //stored mip
     begin
      info.tinfo.Sampled:=2;
-     //Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo);
-     Tgrp:=FetchImageArray(pLayout,info.dtype,info.tinfo,16);
-     PsrUniform(Tgrp)^.FMipArray:=True;
+     //Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImageArray(pLayout,info.dtype,info.tinfo,16,FSPI.MIMG.GLC);
+     TsrUniform(Tgrp).FMipArray:=True;
 
      emit_image_store(Tgrp,@info);
     end;
@@ -1175,7 +1175,7 @@ begin
   IMAGE_GET_RESINFO: //get info by mip
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_get_resinfo(Tgrp,@info);
     end;
@@ -1183,7 +1183,7 @@ begin
   IMAGE_GET_LOD:
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo);
+     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
 
      emit_image_get_lod(Tgrp,@info);
     end;

@@ -35,13 +35,13 @@ type
   procedure AllocBinding;
   procedure AllocTypeBinding;
   procedure AllocEntryPoint;
-  function  AddExecutionMode(mode:PtrUint):PSpirvOp;
+  function  AddExecutionMode(mode:PtrUint):TSpirvOp;
   procedure AllocHeader;
-  procedure AllocOpListId(node:PspirvOp);
-  procedure AllocListId(node:PsrNode);
+  procedure AllocOpListId(node:TspirvOp);
+  procedure AllocListId(node:TsrNode);
   procedure AllocFuncId;
-  procedure AllocOpId(node:PSpirvOp);
-  procedure AllocOpBlock(pBlock:PsrOpBlock);
+  procedure AllocOpId(node:TSpirvOp);
+  procedure AllocOpBlock(pBlock:TsrOpBlock);
  end;
 
 implementation
@@ -101,24 +101,24 @@ end;
 
 procedure TSprvEmit_alloc.AllocTypeBinding;
 var
- node:PsrType;
+ node:TsrType;
 begin
  node:=TypeList.First;
  While (node<>nil) do
  begin
 
-  case node^.OpId of
+  case node.OpId of
 
    Op.OpTypeArray,
    Op.OpTypeRuntimeArray:
     begin
-     if (node^.array_stride<>0) then
+     if (node.array_stride<>0) then
      begin
-      DecorateList.OpDecorate(node,Decoration.ArrayStride,node^.array_stride);
+      DecorateList.OpDecorate(node,Decoration.ArrayStride,node.array_stride);
      end;
      //
-     if (node^.OpId=Op.OpTypeRuntimeArray) then
-     if (node^.is_array_image) then
+     if (node.OpId=Op.OpTypeRuntimeArray) then
+     if (node.is_array_image) then
      begin
       AddCapability(Capability.RuntimeDescriptorArray);
       HeaderList.SPV_EXT_descriptor_indexing;
@@ -127,7 +127,7 @@ begin
 
    Op.OpTypeFloat:
      begin
-      case node^.dtype.BitSize of
+      case node.dtype.BitSize of
        16:AddCapability(Capability.Float16);
        64:AddCapability(Capability.Float64);
        else;
@@ -136,7 +136,7 @@ begin
 
    Op.OpTypeInt:
      begin
-      case node^.dtype.BitSize of
+      case node.dtype.BitSize of
         8:AddCapability(Capability.Int8);
        16:AddCapability(Capability.Int16);
        64:AddCapability(Capability.Int64);
@@ -147,29 +147,29 @@ begin
    else;
   end;
 
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
-procedure TSprvEmit_alloc.AllocOpListId(node:PspirvOp);
+procedure TSprvEmit_alloc.AllocOpListId(node:TspirvOp);
 begin
  While (node<>nil) do
  begin
   AllocOpId(node);
-  node:=node^.Next;
+  node:=node.Next;
  end;
 end;
 
 procedure TSprvEmit_alloc.AllocEntryPoint;
 var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  node:=HeaderList.AddSpirvOp(Op.OpEntryPoint);
 
- node^.AddLiteral(FExecutionModel,ExecutionModel.GetStr(FExecutionModel));
+ node.AddLiteral(FExecutionModel,ExecutionModel.GetStr(FExecutionModel));
 
- node^.AddParam(Main);
- node^.AddString(Main^.name);
+ node.AddParam(Main);
+ node.AddString(Main.name);
 
  InputList     .AllocEntryPoint(node);
  VertLayoutList.AllocEntryPoint(node);
@@ -177,23 +177,23 @@ begin
  OutputList    .AllocEntryPoint(node);
 end;
 
-function TSprvEmit_alloc.AddExecutionMode(mode:PtrUint):PSpirvOp;
+function TSprvEmit_alloc.AddExecutionMode(mode:PtrUint):TSpirvOp;
 var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
- node^.AddParam(Main);
- node^.AddLiteral(mode,ExecutionMode.GetStr(mode));
+ node.AddParam(Main);
+ node.AddLiteral(mode,ExecutionMode.GetStr(mode));
  Result:=node;
 end;
 
 procedure TSprvEmit_alloc.AllocHeader;
 var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  node:=HeaderList.AddSpirvOp(Op.OpMemoryModel);
- node^.AddLiteral(AddressingModel.Logical,AddressingModel.GetStr(AddressingModel.Logical));
- node^.AddLiteral(MemoryModel.GLSL450,MemoryModel.GetStr(MemoryModel.GLSL450));
+ node.AddLiteral(AddressingModel.Logical,AddressingModel.GetStr(AddressingModel.Logical));
+ node.AddLiteral(MemoryModel.GLSL450,MemoryModel.GetStr(MemoryModel.GLSL450));
 
  AllocEntryPoint;
 
@@ -219,18 +219,18 @@ begin
   ExecutionModel.GLCompute:
     begin
      node:=AddExecutionMode(ExecutionMode.LocalSize);
-     node^.AddLiteral(FLocalSize.x);
-     node^.AddLiteral(FLocalSize.y);
-     node^.AddLiteral(FLocalSize.z);
+     node.AddLiteral(FLocalSize.x);
+     node.AddLiteral(FLocalSize.y);
+     node.AddLiteral(FLocalSize.z);
     end;
 
   ExecutionModel.Geometry:
     begin
      node:=AddExecutionMode(ExecutionMode.OutputVertices);
-     node^.AddLiteral(FGeometryInfo.outputVertCount);
+     node.AddLiteral(FGeometryInfo.outputVertCount);
      //
      node:=AddExecutionMode(ExecutionMode.Invocations);
-     node^.AddLiteral(FGeometryInfo.invocationCount);
+     node.AddLiteral(FGeometryInfo.invocationCount);
      //
      node:=AddExecutionMode(FGeometryInfo.InputMode);
      node:=AddExecutionMode(FGeometryInfo.OutputMode);
@@ -240,84 +240,84 @@ begin
 
 end;
 
-procedure TSprvEmit_alloc.AllocListId(node:PsrNode);
+procedure TSprvEmit_alloc.AllocListId(node:TsrNode);
 begin
  While (node<>nil) do
  begin
-  AllocSpirvID(node^.GetRef);
-  node:=node^.Next;
+  AllocSpirvID(node.GetRef);
+  node:=node.Next;
  end;
 end;
 
 procedure TSprvEmit_alloc.AllocFuncId;
 var
- pFunc:PSpirvFunc;
+ pFunc:TSpirvFunc;
 begin
  pFunc:=FuncList.First;
  While (pFunc<>nil) do
  begin
-  AllocOpBlock(pFunc^.pTop);
-  pFunc:=pFunc^.Next;
+  AllocOpBlock(pFunc.pTop);
+  pFunc:=pFunc.Next;
  end;
 end;
 
-procedure TSprvEmit_alloc.AllocOpId(node:PSpirvOp);
+procedure TSprvEmit_alloc.AllocOpId(node:TSpirvOp);
 var
  Param:POpParamNode;
  Info:Op.TOpInfo;
- pReg:PsrRegNode;
+ pReg:TsrRegNode;
 begin
  if (node=nil) then Exit;
 
- Info:=Op.GetInfo(node^.OpId);
+ Info:=Op.GetInfo(node.OpId);
 
  if Info.result then //dst
  begin
-  Assert(node^.pDst<>nil,'AllocOp$1');
-  if (node^.pDst<>nil) then
+  Assert(node.pDst<>nil,'AllocOp$1');
+  if (node.pDst<>nil) then
   begin
-   AllocSpirvID(node^.pDst^.GetRef);
+   AllocSpirvID(node.pDst.GetRef);
   end;
  end else
  begin  //no dst
-  if (node^.pDst<>nil) then
+  if (node.pDst<>nil) then
   begin
-   AllocSpirvID(node^.pDst^.GetRef);
+   AllocSpirvID(node.pDst.GetRef);
   end;
  end;
 
  if Info.rstype then //dst type
  begin
-  if (node^.pType=nil) then
+  if (node.pType=nil) then
   begin
-   pReg:=node^.pDst^.AsType(ntReg);
+   pReg:=node.pDst.specialize AsType<ntReg>;
    Assert(pReg<>nil,'AllocOp$2');
-   Assert(pReg^.dtype<>dtUnknow,'AllocOp$3');
+   Assert(pReg.dtype<>dtUnknow,'AllocOp$3');
    if (pReg<>nil) then
    begin
-    node^.pType:=TypeList.Fetch(pReg^.dtype);
+    node.pType:=TypeList.Fetch(pReg.dtype);
    end;
   end;
  end;
 
- Param:=node^.ParamFirst;
+ Param:=node.ParamFirst;
  While (Param<>nil) do
  begin
-  AllocSpirvID(Param^.Value^.GetRef);
-  Param:=Param^.Next;
+  AllocSpirvID(Param.Value.GetRef);
+  Param:=Param.Next;
  end;
 
 end;
 
-procedure TSprvEmit_alloc.AllocOpBlock(pBlock:PsrOpBlock);
+procedure TSprvEmit_alloc.AllocOpBlock(pBlock:TsrOpBlock);
 var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  if (pBlock=nil) then Exit;
- node:=pBlock^.First;
+ node:=pBlock.First;
  While (node<>nil) do
  begin
-  if node^.IsType(ntOp) then
+  if node.IsType(ntOp) then
   begin
    AllocOpId(node);
   end;

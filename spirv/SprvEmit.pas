@@ -35,13 +35,13 @@ type
 
  TSprvEmit=class(TEmitFetch)
 
-  function    NewMain:PSpirvFunc;
+  function    NewMain:TSpirvFunc;
 
   Destructor  Destroy; override;
   Constructor Create;
 
   procedure   SetUserData(pData:Pointer);
-  procedure   FillGPR(VGPRS,USER_SGPR,SGPRS:Byte);
+  procedure   FillGPR(VGPRS,USER_SGPR,SGPRS:Word);
 
   Procedure   InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
                      RSRC2:TSPI_SHADER_PGM_RSRC2_VS;
@@ -71,6 +71,9 @@ type
   Procedure   SaveToStream(Stream:TStream);
  end;
 
+Function ConvertCountVGPRS(VGPRS:Byte):Byte;
+Function ConvertCountSGPRS(SGPRS:Byte):Byte;
+
 implementation
 
 uses
@@ -96,15 +99,15 @@ uses
 //%f_main = OpFunction %void None %f_void;
 //%l_main = OpLabel;
 
-function TSprvEmit.NewMain:PSpirvFunc;
+function TSprvEmit.NewMain:TSpirvFunc;
 var
- tvoid,tftype:PsrType;
- node:PspirvOp;
+ tvoid,tftype:TsrType;
+ node:TspirvOp;
 
 begin
- Main:=Alloc(SizeOf(TSpirvFunc));
- Main^.Init('main',Self);
- Main^.mark_read(nil); //depended itself
+ Main:=specialize New<TSpirvFunc>;
+ Main.Init('main');
+ Main.mark_read(nil); //depended itself
 
  //OpTypeVoid
  tvoid:=TypeList.Fetch(dtTypeVoid);
@@ -112,16 +115,16 @@ begin
  tftype:=TypeList.FetchFunction(tvoid);
 
  //OpFunction
- node:=@Main^.pTop^.dummy;
- node^.OpId:=Op.OpFunction;
- node^.pType:=tvoid;
- node^.pDst :=Main; //self
- node^.AddLiteral(FunctionControl.None,'None');
- node^.AddParam(tftype);
+ node:=Main.pTop.dummy;
+ node.OpId:=Op.OpFunction;
+ node.pType:=tvoid;
+ node.pDst :=Main; //self
+ node.AddLiteral(FunctionControl.None,'None');
+ node.AddParam(tftype);
 
  //OpLabel
  node:=NewLabelOp(True);
- Main^.AddSpirvOp(node);
+ Main.AddSpirvOp(node);
 
  Result:=Main;
 end;
@@ -151,10 +154,13 @@ begin
  DataLayoutList.SetUserData(pData);
 end;
 
-procedure TSprvEmit.FillGPR(VGPRS,USER_SGPR,SGPRS:Byte);
+procedure TSprvEmit.FillGPR(VGPRS,USER_SGPR,SGPRS:Word);
 var
  p:Byte;
 begin
+ if (VGPRS>256) then VGPRS:=256;
+ if (SGPRS>104) then SGPRS:=104;
+
  if (VGPRS<>0) then
  For p:=0 to VGPRS-1 do
  begin
@@ -172,6 +178,16 @@ begin
    SetConst_i(@RegsStory.SGRP[p],dtUnknow,0);
   end;
  end;
+end;
+
+Function ConvertCountVGPRS(VGPRS:Byte):Byte;
+begin
+ Result:=(VGPRS+1)*4
+end;
+
+Function ConvertCountSGPRS(SGPRS:Byte):Byte;
+begin
+ Result:=(SGPRS+1)*8;
 end;
 
 Procedure TSprvEmit.InitVs(RSRC1:TSPI_SHADER_PGM_RSRC1_VS;
@@ -285,7 +301,11 @@ begin
   AddInstance(@RegsStory.VGRP[p],0,1);
  end;
 
- FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
+ FLDS_SIZE:=0;
+
+ FillGPR(ConvertCountVGPRS(RSRC1.VGPRS),
+         RSRC2.USER_SGPR,
+         ConvertCountSGPRS(RSRC1.SGPRS));
 
  AddCapability(Capability.Shader);
 end;
@@ -441,7 +461,11 @@ begin
   //Per-pixel fixed point position Y[31:16], X[15:0]
  end;
 
- FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
+ FLDS_SIZE:=RSRC2.EXTRA_LDS_SIZE*128*4;
+
+ FillGPR(ConvertCountVGPRS(RSRC1.VGPRS),
+         RSRC2.USER_SGPR,
+         ConvertCountSGPRS(RSRC1.SGPRS));
 
  AddCapability(Capability.Shader);
 end;
@@ -571,7 +595,11 @@ begin
  if (FLocalSize.y=0) then FLocalSize.y:=1;
  if (FLocalSize.z=0) then FLocalSize.z:=1;
 
- FillGPR(RSRC1.VGPRS,RSRC2.USER_SGPR,RSRC1.SGPRS);
+ FLDS_SIZE:=RSRC2.LDS_SIZE*128*4;
+
+ FillGPR(ConvertCountVGPRS(RSRC1.VGPRS),
+         RSRC2.USER_SGPR,
+         ConvertCountSGPRS(RSRC1.SGPRS));
 
  AddCapability(Capability.Shader);
 end;
@@ -595,6 +623,9 @@ procedure TSprvEmit.emit_spi;
 var
  obj:TObject absolute Self;
 begin
+ //OpLine(line,Cursor.Adr.Offdw*4,0);
+
+ //
  Case FSPI.CMD.EN of
   W_SOP1  :TEmit_SOP1(obj).emit_SOP1;
   W_SOPC  :TEmit_SOPC(obj).emit_SOPC;

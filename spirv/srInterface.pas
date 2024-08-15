@@ -65,6 +65,7 @@ type
   FPSInputCntl       :array[0..31] of TPSInputCntl;
   FExportInfo        :array[0..7] of TExportInfo;
   FLocalSize         :TLocalSize;
+  FLDS_SIZE          :DWORD;
   FGeometryInfo      :TGeometryInfo;
   //
   Config:TsrConfig;
@@ -101,8 +102,8 @@ type
   //
   CodeHeap :TsrCodeHeap;
   Cursor   :TsrCursor;
-  Main     :PSpirvFunc;
-  InitBlock:PsrOpBlock;
+  Main     :TSpirvFunc;
+  InitBlock:TsrOpBlock;
   //
   RefIdAlloc:TsrRefIdAlloc;
   //
@@ -134,46 +135,46 @@ type
 
   Function  GetCursor          :Pointer; override;
 
-  function  NewRefNode         :PsrNode; override;
+  function  NewRefNode         :TsrNode; override;
   //
-  Function  line               :PspirvOp;
-  Function  curr_line          :Pointer; override;
-  function  init_line          :Pointer; override;
+  Function  line               :TspirvOp;
+  Function  curr_line          :TsrNode; override;
+  function  init_line          :TsrNode; override;
   //
   Procedure InitLists;
   //
   function  NewVariable:Pointer;
   //
-  function  _get_line(ppLine:PPspirvOp):PspirvOp;
+  function  _get_line(ppLine:PPspirvOp):TspirvOp;
   //
-  Function  NewRegPair:PsrRegPair;
-  Function  NewReg(rtype:TsrDataType):PsrRegNode;
-  Function  NewReg(pConst:PsrConst;ppLine:PPspirvOp=nil):PsrRegNode;
+  Function  NewRegPair:TsrRegPair;
+  Function  NewReg(rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+  Function  NewReg(pConst:TsrConst;ppLine:PPspirvOp=nil):TsrRegNode;
   //
-  Function  NewReg_q(dtype:TsrDataType;value:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
-  Function  NewReg_b(value:Boolean;ppLine:PPspirvOp=nil):PsrRegNode;
-  Function  NewReg_i(dtype:TsrDataType;value:Integer;ppLine:PPspirvOp=nil):PsrRegNode;
-  Function  NewReg_s(dtype:TsrDataType;value:Single;ppLine:PPspirvOp=nil):PsrRegNode;
+  Function  NewReg_q(dtype:TsrDataType;value:QWORD;ppLine:PPspirvOp=nil):TsrRegNode;
+  Function  NewReg_b(value:Boolean;ppLine:PPspirvOp=nil):TsrRegNode;
+  Function  NewReg_i(dtype:TsrDataType;value:Integer;ppLine:PPspirvOp=nil):TsrRegNode;
+  Function  NewReg_s(dtype:TsrDataType;value:Single;ppLine:PPspirvOp=nil):TsrRegNode;
   //
-  function  NewSpirvOp(OpId:DWORD):PSpirvOp;
-  function  NewLabelOp(sdep:Boolean):PSpirvOp;
-  function  AddSpirvOp(OpId:DWORD):PSpirvOp;
-  function  AddSpirvOp(pLine:PspirvOp;OpId:DWORD):PSpirvOp;
-  function  AddSpirvOp(pLine,pNew:PspirvOp):PSpirvOp;
-  function  AddSGlslOp(pLine:PspirvOp;OpId:DWORD):PSpirvOp;
+  function  NewSpirvOp(OpId:DWORD):TSpirvOp;
+  function  NewLabelOp(sdep:Boolean):TSpirvOp;
+  function  AddSpirvOp(OpId:DWORD):TSpirvOp;
+  function  AddSpirvOp(pLine:TSpirvOp;OpId:DWORD):TSpirvOp;
+  function  AddSpirvOp(pLine,pNew:TSpirvOp):TSpirvOp;
+  function  AddSGlslOp(pLine:TSpirvOp;OpId:DWORD):TSpirvOp;
   //
-  procedure PostLink(pLine,dst:PsrNode); override;
-  procedure MakeCopy(dst:PsrRegSlot;src:PsrRegNode);
+  procedure PostLink(pLine,dst:TsrNode); override;
+  procedure MakeCopy(dst:PsrRegSlot;src:TsrRegNode);
   //
-  Procedure SetConst(pSlot:PsrRegSlot;pConst:PsrConst);
+  Procedure SetConst(pSlot:PsrRegSlot;pConst:TsrConst);
   Procedure SetConst_q(pSlot:PsrRegSlot;dtype:TsrDataType;value:QWORD);
   Procedure SetConst_b(pSlot:PsrRegSlot;value:Boolean);
   Procedure SetConst_i(pSlot:PsrRegSlot;dtype:TsrDataType;value:Integer);
   Procedure SetConst_s(pSlot:PsrRegSlot;dtype:TsrDataType;value:Single);
   //
-  function  AllocBlockOp:PsrOpBlock;
-  function  NewBlockOp(Snap:TsrRegsSnapshot):PsrOpBlock;
-  function  InsertBlockOp(pLine:PspirvOp;pChild:PsrOpBlock):PspirvOp;
+  function  AllocBlockOp:TsrOpBlock;
+  function  NewBlockOp(Snap:TsrRegsSnapshot):TsrOpBlock;
+  function  InsertBlockOp(pLine:TSpirvOp;pChild:TsrOpBlock):TSpirvOp;
   //
   procedure AddCapability(ID:DWORD);
  end;
@@ -313,34 +314,33 @@ end;
 
 //
 
-function TEmitInterface.NewRefNode:PsrNode;
+function TEmitInterface.NewRefNode:TsrNode;
 begin
- Result:=Alloc(SizeOf(TsrRefNode));
- PsrRefNode(Result)^.Init;
+ Result:=TsrNode(specialize New<TsrRefNode>);
 end;
 
-Function TEmitInterface.line:PspirvOp;
+Function TEmitInterface.line:TSpirvOp;
 begin
  Result:=nil;
  if (Main<>nil) then
  begin
-  Result:=Main^.line;
+  Result:=Main.line;
  end;
 end;
 
-function TEmitInterface.curr_line:Pointer;
+function TEmitInterface.curr_line:TsrNode;
 begin
  Result:=line;
 end;
 
-function TEmitInterface.init_line:Pointer;
+function TEmitInterface.init_line:TsrNode;
 begin
  Assert(InitBlock<>nil);
- if (InitBlock^.dummy.Parent=nil) then //is not init?
+ if (InitBlock.dummy.Parent=nil) then //is not init?
  begin
-  InitBlock^.Init(Self);
+  InitBlock.Init();
  end;
- Result:=InitBlock^.line;
+ Result:=InitBlock.line;
  Assert(Result<>nil);
 end;
 
@@ -353,9 +353,11 @@ begin
  ConstList     .Init(Self);
  RegsStory     .Init(Self);
  CapabilityList.Init(Self);
- HeaderList    .Init(Self);
- DecorateList  .Init(Self);
- DebugInfoList .Init(Self);
+ //
+ HeaderList    :=specialize New<TsrHeaderList>;
+ DecorateList  :=specialize New<TsrDecorateList>;
+ DebugInfoList :=specialize New<TsrDebugInfoList>;
+ //
  VariableList  .Init(Self);
  InputList     .Init(Self);
  OutputList    .Init(Self);
@@ -376,7 +378,7 @@ end;
 
 //
 
-function TEmitInterface._get_line(ppLine:PPspirvOp):PspirvOp;
+function TEmitInterface._get_line(ppLine:PPspirvOp):TSpirvOp;
 begin
  if (ppLine=nil)  then Exit(line);
  if (ppLine^=nil) then Exit(line);
@@ -385,125 +387,125 @@ end;
 
 //
 
-Function TEmitInterface.NewRegPair:PsrRegPair;
+Function TEmitInterface.NewRegPair:TsrRegPair;
 begin
- Result:=Alloc(SizeOf(TsrRegPair));
- Result^.Init;
+ Result:=specialize New<TsrRegPair>;
 end;
 
-Function TEmitInterface.NewReg(rtype:TsrDataType):PsrRegNode;
+Function TEmitInterface.NewReg(rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=RegsStory.FUnattach.New(line,rtype);
+ Result.pLine:=_get_line(ppLine);
 end;
 
-Function TEmitInterface.NewReg(pConst:PsrConst;ppLine:PPspirvOp=nil):PsrRegNode;
+Function TEmitInterface.NewReg(pConst:TsrConst;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  if (pConst=nil) then Exit(nil);
- Result:=NewReg(pConst^.dtype);
- Result^.pWriter:=pConst;
- Result^.pLine:=_get_line(ppLine);
+ Result:=NewReg(pConst.dtype);
+ Result.pWriter:=pConst;
+ Result.pLine:=_get_line(ppLine);
 end;
 
 //
 
-Function TEmitInterface.NewReg_q(dtype:TsrDataType;value:QWORD;ppLine:PPspirvOp=nil):PsrRegNode;
+Function TEmitInterface.NewReg_q(dtype:TsrDataType;value:QWORD;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(ConstList.Fetch(dtype,value),ppLine);
 end;
 
-Function TEmitInterface.NewReg_b(value:Boolean;ppLine:PPspirvOp=nil):PsrRegNode;
+Function TEmitInterface.NewReg_b(value:Boolean;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(ConstList.Fetch_b(value),ppLine);
 end;
 
-Function TEmitInterface.NewReg_i(dtype:TsrDataType;value:Integer;ppLine:PPspirvOp=nil):PsrRegNode;
+Function TEmitInterface.NewReg_i(dtype:TsrDataType;value:Integer;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(ConstList.Fetch_i(dtype,value),ppLine);
 end;
 
-Function TEmitInterface.NewReg_s(dtype:TsrDataType;value:Single;ppLine:PPspirvOp=nil):PsrRegNode;
+Function TEmitInterface.NewReg_s(dtype:TsrDataType;value:Single;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(ConstList.Fetch_s(dtype,value),ppLine);
 end;
 
-function TEmitInterface.NewSpirvOp(OpId:DWORD):PSpirvOp;
+function TEmitInterface.NewSpirvOp(OpId:DWORD):TSpirvOp;
 begin
- Result:=Alloc(SizeOf(TSpirvOp));
- Result^.Init(OpId);
- Result^.adr:=Cursor.Adr;
+ Result:=specialize New<TSpirvOp>;
+ Result.Init(OpId);
+ Result.adr:=Cursor.Adr;
 end;
 
-function TEmitInterface.NewLabelOp(sdep:Boolean):PSpirvOp;
+function TEmitInterface.NewLabelOp(sdep:Boolean):TSpirvOp;
 Var
- node:PSpirvOp;
+ node:TSpirvOp;
 begin
  node:=NewSpirvOp(Op.OpLabel);
- node^.pDst:=NewRefNode;
+ node.pDst:=NewRefNode;
  Result:=node;
- if sdep then node^.pDst^.mark_read(nil);
+ if sdep then node.pDst.mark_read(nil);
 end;
 
-function TEmitInterface.AddSpirvOp(OpId:DWORD):PSpirvOp;
+function TEmitInterface.AddSpirvOp(OpId:DWORD):TSpirvOp;
 begin
  Result:=AddSpirvOp(line,OpId);
 end;
 
-function TEmitInterface.AddSpirvOp(pLine:PspirvOp;OpId:DWORD):PSpirvOp;
+function TEmitInterface.AddSpirvOp(pLine:TSpirvOp;OpId:DWORD):TSpirvOp;
 begin
  Result:=InsSpirvOp(pLine,NewSpirvOp(OpId));
 end;
 
-function TEmitInterface.AddSpirvOp(pLine,pNew:PspirvOp):PSpirvOp;
+function TEmitInterface.AddSpirvOp(pLine,pNew:TSpirvOp):TSpirvOp;
 begin
  Result:=InsSpirvOp(pLine,pNew);
 end;
 
-function TEmitInterface.AddSGlslOp(pLine:PspirvOp;OpId:DWORD):PSpirvOp;
+function TEmitInterface.AddSGlslOp(pLine:TSpirvOp;OpId:DWORD):TSpirvOp;
 var
- ext,node:PSpirvOp;
+ ext,node:TSpirvOp;
 begin
  ext:=HeaderList.GLSL_std_450;
  node:=AddSpirvOp(pLine,Op.OpExtInst);
- node^.AddParam(ext^.pDst);
- node^.AddLiteral(OpId,GlslOp.GetStr(OpId));
+ node.AddParam(ext.pDst);
+ node.AddLiteral(OpId,GlslOp.GetStr(OpId));
  Result:=node;
 end;
 
-procedure TEmitInterface.PostLink(pLine,dst:PsrNode);
+procedure TEmitInterface.PostLink(pLine,dst:TsrNode);
 var
- node:PspirvOp;
+ node:TSpirvOp;
 begin
- node:=pLine^.AsType(ntOpCustom);
+ node:=pLine.specialize AsType<ntOpCustom>;
  Assert(node<>nil);
 
- if node^.IsType(ntOp) then
- if (node^.OpId=Op.OpNop) then
+ if node.IsType(ntOp) then
+ if (node.OpId=Op.OpNop) then
  begin
-  node^.AddParam(dst);
+  node.AddParam(dst);
   Exit;
  end;
 
  node:=AddSpirvOp(node,Op.OpNop);
- node^.AddParam(dst);
- node^.mark_not_used;
+ node.AddParam(dst);
+ node.mark_not_used;
 end;
 
-procedure TEmitInterface.MakeCopy(dst:PsrRegSlot;src:PsrRegNode);
+procedure TEmitInterface.MakeCopy(dst:PsrRegSlot;src:TsrRegNode);
 var
- node:PsrRegNode;
+ node:TsrRegNode;
 begin
- node:=dst^.New(line,src^.dtype);
- node^.pWriter:=src;
+ node:=dst^.New(line,src.dtype);
+ node.pWriter:=src;
 
  PostLink(line,node); //post processing
 end;
 
-Procedure TEmitInterface.SetConst(pSlot:PsrRegSlot;pConst:PsrConst);
+Procedure TEmitInterface.SetConst(pSlot:PsrRegSlot;pConst:TsrConst);
 var
- dst:PsrRegNode;
+ dst:TsrRegNode;
 begin
- dst:=pSlot^.New(line,pConst^.dtype);
- dst^.pWriter:=pConst;
+ dst:=pSlot^.New(line,pConst.dtype);
+ dst.pWriter:=pConst;
 
  PostLink(line,dst); //post processing
 end;
@@ -528,27 +530,27 @@ begin
  SetConst(pSlot,ConstList.Fetch_s(dtype,value));
 end;
 
-function TEmitInterface.AllocBlockOp:PsrOpBlock;
+function TEmitInterface.AllocBlockOp:TsrOpBlock;
 begin
- Result:=Alloc(SizeOf(TsrOpBlock));
- Result^.Init(Self);
+ Result:=specialize New<TsrOpBlock>;
+ Result.Init();
 end;
 
-function TEmitInterface.NewBlockOp(Snap:TsrRegsSnapshot):PsrOpBlock;
+function TEmitInterface.NewBlockOp(Snap:TsrRegsSnapshot):TsrOpBlock;
 begin
  Result:=AllocBlockOp;
- Result^.Regs.pSnap_org :=Alloc(SizeOf(TsrRegsSnapshot));
- Result^.Regs.pSnap_cur :=Alloc(SizeOf(TsrRegsSnapshot));
- Result^.Regs.pSnap_org^:=Snap;
- Result^.Regs.pSnap_cur^:=Snap;
- Result^.Regs.FVolMark:=vmNone;
- Result^.Cond.FUseCont:=false;
+ Result.Regs.pSnap_org :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.pSnap_cur :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.pSnap_org^:=Snap;
+ Result.Regs.pSnap_cur^:=Snap;
+ Result.Regs.FVolMark:=vmNone;
+ Result.Cond.FUseCont:=false;
 end;
 
-function TEmitInterface.InsertBlockOp(pLine:PspirvOp;pChild:PsrOpBlock):PspirvOp;
+function TEmitInterface.InsertBlockOp(pLine:TSpirvOp;pChild:TsrOpBlock):TSpirvOp;
 begin
- pLine:=InsSpirvOp(pLine,PspirvOp(pChild));
- pChild^.UpdateLevel;
+ pLine:=InsSpirvOp(pLine,pChild);
+ pChild.UpdateLevel;
  Result:=pLine;
 end;
 

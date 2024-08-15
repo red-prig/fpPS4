@@ -17,60 +17,62 @@ uses
  srDecorate;
 
 type
- ntVertLayout=class(ntDescriptor)
-  class function  GetStorageName(node:PsrNode):RawByteString; override;
- end;
+ PPsrDataLayout=^TsrDataLayout;
 
- PsrVertLayout=^TsrVertLayout;
- TsrVertLayout=object(TsrDescriptor)
+ TsrVertLayout=class(TsrDescriptor)
   public
-   pLeft,pRight:PsrVertLayout;
-   function  c(n1,n2:PsrVertLayout):Integer; static;
+   pLeft,pRight:TsrVertLayout;
+   class function c(n1,n2:PPsrDataLayout):Integer; static;
   private
-   pLayout:PsrDataLayout;
+   key:TsrDataLayout;
   public
-   pReg:PsrRegNode;
-   procedure Init(p:PsrDataLayout); inline;
+   pReg:TsrRegNode;
+   //
+   function  _GetStorageName:RawByteString; override;
+   //
+   property  pLayout:TsrDataLayout read key;
+   procedure Init(p:TsrDataLayout); inline;
    function  GetString:RawByteString;
    function  GetStorageName:RawByteString;
  end;
 
+ ntVertLayout=TsrVertLayout;
+
  PsrVertLayoutList=^TsrVertLayoutList;
  TsrVertLayoutList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrVertLayout,TsrVertLayout>;
+   TNodeTree=specialize TNodeTreeClass<TsrVertLayout>;
   var
    FEmit:TCustomEmit;
-   FNTree:TNodeFetch;
+   FTree:TNodeTree;
   procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(p:PsrDataLayout;rtype:TsrDataType):PsrVertLayout;
-  Function  First:PsrVertLayout;
-  Function  Next(node:PsrVertLayout):PsrVertLayout;
+  function  Fetch(p:TsrDataLayout;rtype:TsrDataType):TsrVertLayout;
+  Function  First:TsrVertLayout;
+  Function  Next(node:TsrVertLayout):TsrVertLayout;
   procedure AllocBinding;
-  procedure AllocEntryPoint(EntryPoint:PSpirvOp);
+  procedure AllocEntryPoint(EntryPoint:TSpirvOp);
   procedure AllocSourceExtension;
  end;
 
 implementation
 
-class function ntVertLayout.GetStorageName(node:PsrNode):RawByteString;
+function TsrVertLayout._GetStorageName:RawByteString;
 begin
- Result:=PsrVertLayout(node)^.GetStorageName;
+ Result:=GetStorageName;
 end;
 
 //
 
-function TsrVertLayout.c(n1,n2:PsrVertLayout):Integer;
+class function TsrVertLayout.c(n1,n2:PPsrDataLayout):Integer;
 begin
- Result:=Integer(n1^.pLayout>n2^.pLayout)-Integer(n1^.pLayout<n2^.pLayout);
+ Result:=ord(n1^.Order>n2^.Order)-ord(n1^.Order<n2^.Order);
 end;
 
-procedure TsrVertLayout.Init(p:PsrDataLayout); inline;
+procedure TsrVertLayout.Init(p:TsrDataLayout); inline;
 begin
- fntype  :=ntVertLayout;
  FStorage:=StorageClass.Input;
  FBinding:=-1;
- pLayout :=p;
+ key     :=p;
 end;
 
 function TsrVertLayout.GetString:RawByteString;
@@ -80,7 +82,7 @@ begin
  PID:=0;
  if (pLayout<>nil) then
  begin
-  PID:=pLayout^.FID;
+  PID:=pLayout.FID;
  end;
  Result:='VA;PID='+HexStr(PID,8)+
            ';BND='+HexStr(FBinding,8);
@@ -96,40 +98,36 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrVertLayoutList.Fetch(p:PsrDataLayout;rtype:TsrDataType):PsrVertLayout;
-var
- node:TsrVertLayout;
+function TsrVertLayoutList.Fetch(p:TsrDataLayout;rtype:TsrDataType):TsrVertLayout;
 begin
- node:=Default(TsrVertLayout);
- node.Init(p);
- Result:=FNTree.Find(@node);
+ Result:=FTree.Find(@p);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrVertLayout));
-  Move(node,Result^,SizeOf(TsrVertLayout));
+  Result:=FEmit.specialize New<TsrVertLayout>;
+  Result.Init(p);
   //
-  Result^.InitType(rtype,FEmit);
-  Result^.InitVar(FEmit);
+  Result.InitType(rtype);
+  Result.InitVar();
   //
-  FNTree.Insert(Result);
+  FTree.Insert(Result);
  end;
 end;
 
-Function TsrVertLayoutList.First:PsrVertLayout;
+Function TsrVertLayoutList.First:TsrVertLayout;
 begin
- Result:=FNTree.Min;
+ Result:=FTree.Min;
 end;
 
-Function TsrVertLayoutList.Next(node:PsrVertLayout):PsrVertLayout;
+Function TsrVertLayoutList.Next(node:TsrVertLayout):TsrVertLayout;
 begin
- Result:=FNTree.Next(node);
+ Result:=FTree.Next(node);
 end;
 
 procedure TsrVertLayoutList.AllocBinding;
 var
  pDecorateList:PsrDecorateList;
- node:PsrVertLayout;
- pVar:PsrVariable;
+ node:TsrVertLayout;
+ pVar:TsrVariable;
  FBinding:Integer;
 begin
  pDecorateList:=FEmit.GetDecorateList;
@@ -137,30 +135,30 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed and (node^.FBinding=-1) then
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed and (node.FBinding=-1) then
   begin
    pDecorateList^.OpDecorate(pVar,Decoration.Location,FBinding);
-   node^.FBinding:=FBinding;
+   node.FBinding:=FBinding;
    Inc(FBinding);
   end;
   node:=Next(node);
  end;
 end;
 
-procedure TsrVertLayoutList.AllocEntryPoint(EntryPoint:PSpirvOp);
+procedure TsrVertLayoutList.AllocEntryPoint(EntryPoint:TSpirvOp);
 var
- node:PsrVertLayout;
- pVar:PsrVariable;
+ node:TsrVertLayout;
+ pVar:TsrVariable;
 begin
  if (EntryPoint=nil) then Exit;
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed then
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed then
   begin
-   EntryPoint^.AddParam(pVar);
+   EntryPoint.AddParam(pVar);
   end;
   node:=Next(node);
  end;
@@ -169,17 +167,17 @@ end;
 procedure TsrVertLayoutList.AllocSourceExtension;
 var
  FDebugInfo:PsrDebugInfoList;
- node:PsrVertLayout;
- pVar:PsrVariable;
+ node:TsrVertLayout;
+ pVar:TsrVariable;
 begin
  FDebugInfo:=FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  pVar:=node^.pVar;
-  if (pVar<>nil) and node^.IsUsed then
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed then
   begin
-   FDebugInfo^.OpSource(node^.GetString);
+   FDebugInfo^.OpSource(node.GetString);
   end;
   node:=Next(node);
  end;

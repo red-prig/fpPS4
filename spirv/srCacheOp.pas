@@ -13,68 +13,73 @@ uses
  srOp;
 
 type
- PsrCacheOp=^TsrCacheOp;
- TsrCacheOp=object
+ PsrCacheOpKey=^TsrCacheOpKey;
+ TsrCacheOpKey=packed record
+  place:TsrOpBlock;
+  OpId :DWORD;
+  dtype:TsrDataType;
+  count:DWORD;
+  pData:PPsrRegNode;
+ end;
+
+ TsrCacheOp=class
   public
-   pLeft,pRight:PsrCacheOp;
-   function  c(n1,n2:PsrCacheOp):Integer; static;
+   pLeft,pRight:TsrCacheOp;
+   class function c(n1,n2:PsrCacheOpKey):Integer; static;
   private
-   key:packed record
-    place:PsrOpBlock;
-    OpId:DWORD;
-    dtype:TsrDataType;
-    count:DWORD;
-   end;
-   pData:PPsrRegNode;
+   key:TsrCacheOpKey;
   public
-   pDst:PsrNode;
+   pDst:TsrNode;
  end;
 
  PsrCacheOpList=^TsrCacheOpList;
  TsrCacheOpList=object
   type
-   TNodeFetch=specialize TNodeFetch<PsrCacheOp,TsrCacheOp>;
+   TNodeTree=specialize TNodeTreeClass<TsrCacheOp>;
   var
    FEmit:TCustomEmit;
-   FNTree:TNodeFetch;
+   FTree:TNodeTree;
   Procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(place:PsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):PsrCacheOp;
+  function  Fetch(place:TsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):TsrCacheOp;
  end;
 
-function  _up_to_real(t:PsrOpBlock):PsrOpBlock;
+function  _up_to_real(t:TsrOpBlock):TsrOpBlock;
 
 implementation
 
-function _up_to_real(t:PsrOpBlock):PsrOpBlock;
+function _up_to_real(t:TsrOpBlock):TsrOpBlock;
 begin
  repeat
-  if not t^.IsType(ntOpBlock) then Break;
-  Case t^.Block.bType of
+  if not t.IsType(ntOpBlock) then Break;
+  Case t.Block.bType of
    btMain,
    btCond,
    btLoop:Break;
    else;
   end;
-  t:=t^.Parent;
+  t:=t.Parent;
  until false;
  Result:=t;
 end;
 
 //--
 
-function TsrCacheOp.c(n1,n2:PsrCacheOp):Integer;
-var
- count:DWORD;
+class function TsrCacheOp.c(n1,n2:PsrCacheOpKey):Integer;
 begin
- Result:=CompareByte(n1^.key,n2^.key,SizeOf(TsrCacheOp.key));
- if (Result=0) then
- begin
-  count:=n1^.key.count;
-  if (count<>0) then
-  begin
-   Result:=CompareByte(n1^.pData^,n2^.pData^,count*SizeOf(Pointer));
-  end;
- end;
+ //place (not need order sort)
+ Result:=ord(ptruint(n1^.place)>ptruint(n2^.place))-ord(ptruint(n1^.place)<ptruint(n2^.place));
+ if (Result<>0) then Exit;
+ //OpId
+ Result:=ord(n1^.OpId>n2^.OpId)-ord(n1^.OpId<n2^.OpId);
+ if (Result<>0) then Exit;
+ //dtype
+ Result:=ord(n1^.dtype>n2^.dtype)-ord(n1^.dtype<n2^.dtype);
+ if (Result<>0) then Exit;
+ //count
+ Result:=ord(n1^.count>n2^.count)-ord(n1^.count<n2^.count);
+ if (Result<>0) then Exit;
+ //(not need order sort)
+ Result:=ComparePtruint(PPtruint(n1^.pData),PPtruint(n2^.pData),n1^.count);
 end;
 
 Procedure TsrCacheOpList.Init(Emit:TCustomEmit); inline;
@@ -82,31 +87,33 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrCacheOpList.Fetch(place:PsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):PsrCacheOp;
+function TsrCacheOpList.Fetch(place:TsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):TsrCacheOp;
 var
  size:ptruint;
- node:TsrCacheOp;
+ key:TsrCacheOpKey;
 begin
  Assert(place<>nil);
  place:=_up_to_real(place);
  Result:=nil;
- node:=Default(TsrCacheOp);
- node.key.place:=place;
- node.key.OpId :=OpId;
- node.key.dtype:=rtype;
- node.key.count:=count;
- node.pData:=src;
- Result:=FNTree.Find(@node);
+ //
+ key:=Default(TsrCacheOpKey);
+ key.place:=place;
+ key.OpId :=OpId;
+ key.dtype:=rtype;
+ key.count:=count;
+ key.pData:=src;
+ //
+ Result:=FTree.Find(@key);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrCacheOp));
-  Move(node,Result^,SizeOf(TsrCacheOp));
+  Result:=FEmit.specialize New<TsrCacheOp>;
+  Result.key:=key;
 
   size:=count*SizeOf(Pointer);
-  Result^.pData:=FEmit.Alloc(size);
-  Move(src^,Result^.pData^,size);
+  Result.key.pData:=FEmit.Alloc(size);
+  Move(src^,Result.key.pData^,size);
 
-  FNTree.Insert(Result);
+  FTree.Insert(Result);
  end;
 end;
 

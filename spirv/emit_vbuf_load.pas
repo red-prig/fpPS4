@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  srNode,
   srType,
   srReg,
   srLayout,
@@ -22,13 +23,13 @@ type
   elem_orig:TsrDataType;
   elem_resl:TsrDataType;
   elem_count:ptruint;
-  rsl:PsrRegNode;
-  elm:array[0..3] of PsrRegNode;
+  rsl:TsrRegNode;
+  elm:array[0..3] of TsrRegNode;
  end;
 
  TEmit_vbuf_load=class(TEmitFetch)
   procedure buf_load(info:TBuf_info);
-  function  convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
+  function  convert_e(var lc:Tload_cache;src:TsrRegNode):TsrRegNode;
   procedure make_load_cv_id(var lc:Tload_cache;i:Byte);
   procedure make_load_ce_id(var lc:Tload_cache;i:Byte);
   procedure make_load_uv_id(var lc:Tload_cache;i:Byte);
@@ -55,7 +56,7 @@ begin
  buf_load_cv(info,v);
 end;
 
-function TEmit_vbuf_load.convert_e(var lc:Tload_cache;src:PsrRegNode):PsrRegNode;
+function TEmit_vbuf_load.convert_e(var lc:Tload_cache;src:TsrRegNode):TsrRegNode;
 begin
  Result:=src;
  if (lc.elem_resl<>lc.elem_orig) then
@@ -120,12 +121,12 @@ end;
 
 procedure TEmit_vbuf_load.make_load_cv_id(var lc:Tload_cache;i:Byte);
 var
- rsl:PsrRegNode;
+ rsl:TsrRegNode;
 begin
  rsl:=lc.rsl;
  if (rsl=nil) then
  begin
-  rsl:=FetchLoad(lc.v.data[0],lc.elem_orig.AsVector(lc.elem_count));
+  rsl:=FetchLoad(TsrChain(lc.v.data[0]),lc.elem_orig.AsVector(lc.elem_count));
   lc.rsl:=rsl;
  end;
 
@@ -153,17 +154,17 @@ end;
 
 procedure TEmit_vbuf_load.make_load_ce_id(var lc:Tload_cache;i:Byte);
 var
- orig,elm:PsrChain;
- sum_d:PsrRegNode;
+ orig,elm:TsrChain;
+ sum_d:TsrRegNode;
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
- rsl:PsrRegNode;
+ rsl:TsrRegNode;
 begin
 
  if (lc.elm[i]=nil) then
  begin
-  orig:=lc.v.data[0];
-  sum_d:=orig^.pIndex;
+  orig:=TsrChain(lc.v.data[0]);
+  sum_d:=orig.pIndex;
 
   if (i=0) then
   begin
@@ -173,12 +174,12 @@ begin
    sum_d:=OpIAddTo(sum_d,i);
 
    lvl_0.offset:=0;
-   lvl_0.size  :=orig^.size;
+   lvl_0.size  :=orig.size;
 
    lvl_1.pIndex:=sum_d;
-   lvl_1.stride:=orig^.stride;
+   lvl_1.stride:=orig.stride;
 
-   elm:=lc.info.grp^.Fetch(@lvl_0,@lvl_1);
+   elm:=lc.info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
   end;
 
   rsl:=FetchLoad(elm,lc.elem_orig);
@@ -193,17 +194,17 @@ end;
 
 procedure TEmit_vbuf_load.make_load_uv_id(var lc:Tload_cache;i:Byte);
 var
- rsl,idx:PsrRegNode;
+ rsl,idx:TsrRegNode;
 begin
 
  rsl:=lc.rsl;
  if (rsl=nil) then
  begin
   rsl:=NewReg(lc.elem_resl.AsVector(4));
-  idx:=lc.v.data[1];
+  idx:=TsrRegNode(lc.v.data[1]);
 
   //scalar or vector
-  OpImageRead(line,lc.v.data[0],rsl,idx);
+  OpImageRead(line,TsrNode(lc.v.data[0]),rsl,idx);
 
   lc.rsl:=rsl;
  end;
@@ -222,12 +223,12 @@ end;
 
 procedure TEmit_vbuf_load.make_load_ue_id(var lc:Tload_cache;i:Byte);
 var
- rsl,idx,sum_d:PsrRegNode;
+ rsl,idx,sum_d:TsrRegNode;
 begin
 
  if (lc.elm[i]=nil) then
  begin
-  idx:=lc.v.data[1];
+  idx:=TsrRegNode(lc.v.data[1]);
 
   if (i=0) then
   begin
@@ -239,7 +240,7 @@ begin
 
   rsl:=lc.dst^.New(line,lc.elem_resl);
 
-  OpImageRead(line,lc.v.data[0],rsl,sum_d);
+  OpImageRead(line,TsrNode(lc.v.data[0]),rsl,sum_d);
 
   lc.elm[i]:=rsl;
  end else
@@ -271,7 +272,11 @@ var
  i,d,count:Byte;
 begin
 
- if info.IsExtFormat then Assert(false,'TODO ExtFormat='+IntToStr(info.DFMT));
+ if info.IsExtFormat then
+ begin
+  //TODO: ExtFormat
+  Assert(false,'TODO: ExtFormat='+IntToStr(info.DFMT));
+ end;
 
  lc:=Default(Tload_cache);
  lc.info      :=info;

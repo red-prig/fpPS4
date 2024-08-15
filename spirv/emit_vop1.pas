@@ -42,7 +42,7 @@ implementation
 procedure TEmit_VOP1.emit_V_MOV_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
@@ -52,9 +52,9 @@ end;
 procedure TEmit_VOP1.emit_V_READFIRSTLANE_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
- Writeln(stderr,'TODO: V_READFIRSTLANE_B32');
+ //TODO: V_READFIRSTLANE_B32
  //
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
@@ -64,7 +64,7 @@ end;
 procedure TEmit_VOP1.emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,src_type);
@@ -74,8 +74,8 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_F16_F32; //vdst[15:0].hf = ConvertFloatToHalfFloat(vsrc.f)
 Var
  dst:PsrRegSlot;
- src:array[0..1] of PsrRegNode;
- dstv:PsrRegNode;
+ src:array[0..1] of TsrRegNode;
+ dstv:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src[0]:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -85,14 +85,14 @@ begin
 
  dstv:=OpMakeVec(line,dtVec2h,@src);
 
- dst^.New(line,dtVec2h)^.pWriter:=dstv;
+ dst^.New(line,dtVec2h).pWriter:=dstv;
 end;
 
 procedure TEmit_VOP1.emit_V_CVT_F32_F16; //vdst.f = ConvertHalfFloatToFloat(vsrc[15:0].hf)
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- dst0:PsrRegNode;
+ src:TsrRegNode;
+ dst0:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtVec2h{dtUnknow});
@@ -111,14 +111,14 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_OFF_F32_I4;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- num_16:PsrRegNode;
+ src:TsrRegNode;
+ num_16:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
  src:=OpAndTo(src,15);
- src^.PrepType(ord(dtInt32));
+ src.PrepType(ord(dtInt32));
 
  src:=OpISubTo(src,8);
 
@@ -131,7 +131,7 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_FLR_I32_F32; //ConvertFloatToSignedInt(floor(vsrc.f))
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -144,7 +144,7 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_RPI_I32_F32; //ConvertFloatToSignedInt(floor(vsrc.f+0.5))
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -158,13 +158,13 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE0;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
  src:=OpAndTo(src,$FF);
- src^.PrepType(ord(dtUInt32));
+ src.PrepType(ord(dtUInt32));
 
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
@@ -172,14 +172,14 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE1;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
  src:=OpShrTo(src,8);
  src:=OpAndTo(src,$FF);
- src^.PrepType(ord(dtUInt32));
+ src.PrepType(ord(dtUInt32));
 
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
@@ -187,14 +187,14 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE2;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
  src:=OpShrTo(src,16);
  src:=OpAndTo(src,$FF);
- src^.PrepType(ord(dtUInt32));
+ src.PrepType(ord(dtUInt32));
 
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
@@ -202,14 +202,14 @@ end;
 procedure TEmit_VOP1.emit_V_CVT_F32_UBYTE3;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
 
  src:=OpShrTo(src,24);
  src:=OpAndTo(src,$FF);
- src^.PrepType(ord(dtUInt32));
+ src.PrepType(ord(dtUInt32));
 
  Op1(Op.OpConvertUToF,dtFloat32,dst,src);
 end;
@@ -217,7 +217,7 @@ end;
 procedure TEmit_VOP1.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -227,8 +227,8 @@ end;
 procedure TEmit_VOP1.emit_V_RSQ_CLAMP_F32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- flt:PsrRegNode;
+ src:TsrRegNode;
+ flt:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -245,7 +245,7 @@ const
  PI2:Single=2*PI;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -258,7 +258,7 @@ end;
 procedure TEmit_VOP1.emit_V_NOT_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
@@ -269,8 +269,8 @@ end;
 procedure TEmit_VOP1.emit_V_RCP_F32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
- one:PsrRegNode;
+ src:TsrRegNode;
+ one:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
@@ -283,7 +283,7 @@ end;
 procedure TEmit_VOP1.emit_V_FFBL_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtInt32);
@@ -294,7 +294,7 @@ end;
 procedure TEmit_VOP1.emit_V_BFREV_B32;
 Var
  dst:PsrRegSlot;
- src:PsrRegNode;
+ src:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);

@@ -14,35 +14,38 @@ uses
  srRefId;
 
 type
- ntType=class(TsrNodeVmt)
-  class Procedure zero_read   (node:PsrNode);               override;
-  class Procedure zero_unread (node:PsrNode);               override;
-  class function  Next        (node:PsrNode):Pointer;       override;
-  class function  Prev        (node:PsrNode):Pointer;       override;
-  class function  GetPrintName(node:PsrNode):RawByteString; override;
-  class function  GetRef      (node:PsrNode):Pointer;       override;
+ PsrTypeKey=^TsrTypeKey;
+ TsrTypeKey=packed record
+  fdtype:TsrDataType;
+  fsize :DWORD;
+  fOpId :WORD;
+  fcount:WORD;
+  pData :PPsrNode;
  end;
 
- PPsrType=^PsrType;
- PsrType=^TsrType;
- TsrType=packed object(TsrNode)
+ PPsrType=^TsrType;
+ TsrType=class(TsrNode)
   public
-   pPrev,pNext,pLeft,pRight:PsrType;
-   function  c(n1,n2:PsrType):Integer; static;
+   pPrev,pNext,pLeft,pRight:TsrType;
+   class function c(n1,n2:PsrTypeKey):Integer; static;
   private
    ID:TsrRefId; //post id
-   fdtype:TsrDataType;
-   fsize:DWORD;
-   fOpId:WORD;
-   fcount:WORD;
-   pData:PPsrNode;
+   key:TsrTypeKey;
   public
-   property  size:DWORD        read fsize;
-   property  OpId:WORD         read fOpId;
-   property  ItemCount:WORD    read fcount;
-   Procedure Init; inline;
+   //
+   Procedure _zero_read   ;               override;
+   Procedure _zero_unread ;               override;
+   function  _Next        :TsrNode;       override;
+   function  _Prev        :TsrNode;       override;
+   function  _GetPrintName:RawByteString; override;
+   function  _GetRef      :Pointer;       override;
+   //
+   property  size:DWORD        read key.fsize;
+   property  OpId:WORD         read key.fOpId;
+   property  count:WORD        read key.fcount;
+   property  ItemCount:WORD    read key.fcount;
    function  dtype:TsrDataType;
-   function  GetItem(i:Word):PsrNode;
+   function  GetItem(i:Word):TsrNode;
    function  GetDWORD(i:Word):DWORD;
    function  array_stride:DWORD;
    function  is_array_image:Boolean;
@@ -54,217 +57,200 @@ type
    function  GetPrintName:RawByteString;
  end;
 
+ ntType=TsrType;
+
  PsrTypeList=^TsrTypeList;
  TsrTypeList=object
   type
-   TNodeList=specialize TNodeList<PsrType>;
-   TNodeFetch=specialize TNodeFetch<PsrType,TsrType>;
+   TNodeList=specialize TNodeListClass<TsrType>;
+   TNodeTree=specialize TNodeTreeClass<TsrType>;
   var
    FEmit:TCustomEmit;
    FList:TNodeList;
-   FNTree:TNodeFetch;
+   FTree:TNodeTree;
   Procedure Init(Emit:TCustomEmit);
-  function  _Insert(node:PsrType;copy:Boolean):PsrType;
-  function  _Fetch(node:PsrType;copy:Boolean):PsrType;
-  function  _Fetch0(dtype:TsrDataType;OpId:DWORD):PsrType;
-  function  _FetchVector(dtype:TsrDataType):PsrType;
-  function  _FetchInt(dtype:TsrDataType):PsrType;
-  function  _FetchFloat(dtype:TsrDataType):PsrType;
-  function  _FetchStruct2(dtype:TsrDataType):PsrType;
-  function  _FetchConst(dtype:TsrDataType;Value:QWORD):PsrType;
-  function  Fetch(dtype:TsrDataType):PsrType;
-  function  FetchPointer(child:PsrType;storage_class:DWORD):PsrType;
-  function  FetchFunction(ret:PsrType):PsrType;
-  function  FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):PsrType;
-  function  FetchStruct (count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
-  function  InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
-  function  FetchArray(child:PsrType;array_count:DWORD):PsrType;
-  function  FetchRuntimeArray(child:PsrType):PsrType;
-  function  FetchImage(child:PsrType;image_info:TsrTypeImageInfo):PsrType;
-  function  FetchSampledImage(child:PsrType):PsrType;
-  function  First:PsrType; inline;
+  function  _Insert(key:PsrTypeKey;copy:Boolean):TsrType;
+  function  _Fetch(key:PsrTypeKey;copy:Boolean):TsrType;
+  function  _Fetch0(dtype:TsrDataType;OpId:DWORD):TsrType;
+  function  _FetchVector(dtype:TsrDataType):TsrType;
+  function  _FetchInt(dtype:TsrDataType):TsrType;
+  function  _FetchFloat(dtype:TsrDataType):TsrType;
+  function  _FetchStruct2(dtype:TsrDataType):TsrType;
+  function  _FetchConst(dtype:TsrDataType;Value:QWORD):TsrType;
+  function  Fetch(dtype:TsrDataType):TsrType;
+  function  FetchPointer(child:TsrType;storage_class:DWORD):TsrType;
+  function  FetchFunction(ret:TsrType):TsrType;
+  function  FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):TsrType;
+  function  FetchStruct (count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
+  function  InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
+  function  FetchArray(child:TsrType;array_count:DWORD):TsrType;
+  function  FetchRuntimeArray(child:TsrType):TsrType;
+  function  FetchImage(child:TsrType;image_info:TsrTypeImageInfo):TsrType;
+  function  FetchSampledImage(child:TsrType):TsrType;
+  function  First:TsrType; inline;
  end;
+
+operator := (i:TsrNode):TsrType; inline;
 
 implementation
 
-//
-
-class Procedure ntType.zero_read(node:PsrNode);
-var
- i:DWORD;
+operator := (i:TsrNode):TsrType; inline;
 begin
- With PsrType(node)^ do
- begin
-  if (fcount<>0) then
-   For i:=0 to fcount-1 do
-   begin
-    GetItem(i)^.mark_read(node);
-   end;
- end;
-end;
-
-class Procedure ntType.zero_unread(node:PsrNode);
-var
- i:DWORD;
-begin
- With PsrType(node)^ do
- begin
-  if (fcount<>0) then
-   For i:=0 to fcount-1 do
-   begin
-    GetItem(i)^.mark_unread(node);
-   end;
- end;
-end;
-
-class function ntType.Next(node:PsrNode):Pointer;
-begin
- Result:=PsrType(node)^.pNext;
-end;
-
-class function ntType.Prev(node:PsrNode):Pointer;
-begin
- Result:=PsrType(node)^.pPrev;
-end;
-
-class function ntType.GetPrintName(node:PsrNode):RawByteString;
-begin
- Result:=PsrType(node)^.GetPrintName;
-end;
-
-class function ntType.GetRef(node:PsrNode):Pointer;
-begin
- Result:=@PsrType(node)^.ID;
+ Result:=TsrType(Pointer(i)); //typecast hack
 end;
 
 //
 
-Procedure TsrType.Init; inline;
+Procedure TsrType._zero_read;
+var
+ i:DWORD;
 begin
- fntype:=ntType;
+ if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   GetItem(i).mark_read(Self);
+  end;
 end;
 
-function TsrType.c(n1,n2:PsrType):Integer;
+Procedure TsrType._zero_unread;
+var
+ i:DWORD;
+begin
+ if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   GetItem(i).mark_unread(Self);
+  end;
+end;
+
+function TsrType._Next:TsrNode;
+begin
+ Result:=pNext;
+end;
+
+function TsrType._Prev:TsrNode;
+begin
+ Result:=pPrev;
+end;
+
+function TsrType._GetPrintName:RawByteString;
+begin
+ Result:=GetPrintName;
+end;
+
+function TsrType._GetRef:Pointer;
+begin
+ Result:=@ID;
+end;
+
+//
+
+class function TsrType.c(n1,n2:PsrTypeKey):Integer;
 begin
  //first OpId
- Result:=Integer(n1^.fOpId>n2^.fOpId)-Integer(n1^.fOpId<n2^.fOpId);
+ Result:=ord(n1^.fOpId>n2^.fOpId)-ord(n1^.fOpId<n2^.fOpId);
  if (Result<>0) then Exit;
  //second fCount
- Result:=Integer(n1^.fCount>n2^.fCount)-Integer(n1^.fCount<n2^.fCount);
+ Result:=ord(n1^.fCount>n2^.fCount)-ord(n1^.fCount<n2^.fCount);
  if (Result<>0) then Exit;
- //third pData
- Result:=ComparePtruint(PPtruint(n1^.pData),PPtruint(n2^.pData),n1^.fCount);
+ //third pData (order sort)
+ Result:=CompareNodes(n1^.pData,n2^.pData,n1^.fCount);
 end;
 
 function TsrType.dtype:TsrDataType;
 begin
  Result:=dtUnknow;
- if (@Self=nil) then Exit;
- Result:=fdtype;
+ if (Self=nil) then Exit;
+ Result:=key.fdtype;
 end;
 
-function TsrType.GetItem(i:Word):PsrNode;
+function TsrType.GetItem(i:Word):TsrNode;
 begin
- if (i>fCount) then Exit(nil);
- Result:=pData[i];
+ if (i>Count) then Exit(nil);
+ Result:=key.pData[i];
 end;
 
 function TsrType.GetDWORD(i:Word):DWORD;
 var
- pCount:PsrLiteral;
+ pCount:TsrLiteral;
 begin
  Result:=0;
- if (i>fCount) then Exit;
- pCount:=pData[i]^.AsType(ntLiteral);
+ if (i>Count) then Exit;
+ pCount:=key.pData[i].specialize AsType<ntLiteral>;
  if (pCount=nil) then Exit;
- Result:=pCount^.Value;
+ Result:=pCount.Value;
 end;
 
 function TsrType.array_stride:DWORD;
 var
- child:PsrType;
+ child:TsrType;
 begin
  Result:=0;
 
- Case fdtype of
-   dtTypeArray:;
-   dtTypeRuntimeArray:;
-  else
-   Exit;
- end;
+ if not (dtype in [dtTypeArray,dtTypeRuntimeArray]) then Exit;
 
- child:=GetItem(0)^.AsType(ntType);
+ child:=GetItem(0).specialize AsType<ntType>;
  if (child=nil) then Exit;
 
- Result:=child^.fsize;
+ Result:=child.size;
 end;
 
 function TsrType.is_array_image:Boolean;
 var
- child:PsrType;
+ child:TsrType;
 begin
  Result:=False;
 
- Case fdtype of
-   dtTypeArray:;
-   dtTypeRuntimeArray:;
-  else
-   Exit;
- end;
+ if not (dtype in [dtTypeArray,dtTypeRuntimeArray]) then Exit;
 
- child:=GetItem(0)^.AsType(ntType);
+ child:=GetItem(0).specialize AsType<ntType>;
  if (child=nil) then Exit;
 
- Result:=child^.is_image;
+ Result:=child.is_image;
 end;
 
 function TsrType.array_image_info:TsrTypeImageInfo;
 var
- child:PsrType;
+ child:TsrType;
 begin
  Result:=Default(TsrTypeImageInfo);
 
- Case fdtype of
-   dtTypeArray:;
-   dtTypeRuntimeArray:;
-  else
-   Exit;
- end;
+ if not (dtype in [dtTypeArray,dtTypeRuntimeArray]) then Exit;
 
- child:=GetItem(0)^.AsType(ntType);
+ child:=GetItem(0).specialize AsType<ntType>;
  if (child=nil) then Exit;
 
- Result:=child^.image_info;
+ Result:=child.image_info;
 end;
 
 function TsrType.array_count:DWORD;
 var
- pConst:PsrType;
+ pConst:TsrType;
 begin
  Result:=0;
- if (fdtype<>dtTypeArray) then Exit;
- pConst:=GetItem(1)^.AsType(ntType);
+ if (dtype<>dtTypeArray) then Exit;
+ pConst:=GetItem(1).specialize AsType<ntType>;
  if (pConst=nil) then Exit;
- Result:=pConst^.GetDWORD(1);
+ Result:=pConst.GetDWORD(1);
 end;
 
 function TsrType.storage_class:DWORD;
 begin
  Result:=0;
- if (fdtype<>dtTypePointer) then Exit;
+ if (dtype<>dtTypePointer) then Exit;
  Result:=GetDWORD(0);
 end;
 
 function TsrType.is_image:Boolean;
 begin
- Result:=(fdtype=dtTypeImage);
+ Result:=(dtype=dtTypeImage);
 end;
 
 function TsrType.image_info:TsrTypeImageInfo;
 begin
  Result:=Default(TsrTypeImageInfo);
- if (fdtype<>dtTypeImage) then Exit;
- if (fCount<>7) then Exit;
+ if (dtype<>dtTypeImage) then Exit;
+ if (Count<>7) then Exit;
  //
  Result.Dim    :=GetDWORD(1);
  Result.Depth  :=GetDWORD(2);
@@ -274,23 +260,23 @@ begin
  Result.Format :=GetDWORD(6);
 end;
 
-function type_get_base_name2(node:PsrType):RawByteString;
+function type_get_base_name2(node:TsrType):RawByteString;
 var
  R:PsrRefId;
- child:PsrType;
+ child:TsrType;
 begin
  Result:='';
- case node^.dtype of
+ case node.dtype of
   dtTypeImage:
     begin
-     R:=node^.GetRef;
+     R:=node.GetRef;
      Assert(R<>nil  ,'type_get_base_name2$1');
      Assert(R^.Alloc,'type_get_base_name2$2');
      Result:='ti'+IntToStr(R^.ID);
     end;
   dtTypeSampledImage:
     begin
-     child:=node^.GetItem(0)^.AsType(ntType);
+     child:=node.GetItem(0).specialize AsType<ntType>;
      if (child=nil) then Exit;
      Result:=type_get_base_name2(child);
      if (Result='') then Exit;
@@ -298,15 +284,15 @@ begin
     end;
   dtTypeArray:
     begin
-     child:=node^.GetItem(0)^.AsType(ntType);
+     child:=node.GetItem(0).specialize AsType<ntType>;
      if (child=nil) then Exit;
      Result:=type_get_base_name2(child);
      if (Result='') then Exit;
-     Result:='ta'+Result+IntToStr(node^.array_count);
+     Result:='ta'+Result+IntToStr(node.array_count);
     end;
   dtTypeRuntimeArray:
     begin
-     child:=node^.GetItem(0)^.AsType(ntType);
+     child:=node.GetItem(0).specialize AsType<ntType>;
      if (child=nil) then Exit;
      Result:=type_get_base_name2(child);
      if (Result='') then Exit;
@@ -314,12 +300,12 @@ begin
     end;
   dtTypeStruct:
     begin
-     Assert(node^.ID.Alloc);
-     Result:='ts'+IntToStr(node^.ID.ID);
+     Assert(node.ID.Alloc);
+     Result:='ts'+IntToStr(node.ID.ID);
     end;
   dtTypeFunction:
     begin
-     child:=node^.GetItem(0)^.AsType(ntType);
+     child:=node.GetItem(0).specialize AsType<ntType>;
      if (child=nil) then Exit;
      Result:=type_get_base_name2(child);
      if (Result='') then Exit;
@@ -327,25 +313,25 @@ begin
     end;
   dtConstant:
     begin
-     Result:='tc'+IntToStr(node^.GetDWORD(1));
+     Result:='tc'+IntToStr(node.GetDWORD(1));
     end;
   else
-    Result:=type_get_base_name1(node^.dtype);
+    Result:=type_get_base_name1(node.dtype);
  end;
 end;
 
-function type_get_base_name3(node:PsrType):RawByteString;
+function type_get_base_name3(node:TsrType):RawByteString;
 var
- child:PsrType;
+ child:TsrType;
 begin
- case node^.dtype of
+ case node.dtype of
   dtTypePointer:
     begin
-     child:=node^.GetItem(1)^.AsType(ntType);
+     child:=node.GetItem(1).specialize AsType<ntType>;
      if (child=nil) then Exit;
      Result:=type_get_base_name2(child);
      if (Result='') then Exit;
-     Case node^.storage_class of
+     Case node.storage_class of
       StorageClass.UniformConstant :Result:='p'+Result+'_uc';
       StorageClass.Input           :Result:='p'+Result+'_in';
       StorageClass.Uniform         :Result:='p'+Result+'_uf';
@@ -370,7 +356,7 @@ end;
 
 function TsrType.GetPrintName:RawByteString;
 begin
- Result:=type_get_base_name3(@Self);
+ Result:=type_get_base_name3(Self);
  if (Result='') then
  begin
   Assert(ID.Alloc);
@@ -385,52 +371,52 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrTypeList._Insert(node:PsrType;copy:Boolean):PsrType;
+function TsrTypeList._Insert(key:PsrTypeKey;copy:Boolean):TsrType;
 var
  size:ptruint;
 begin
- Result:=FEmit.Alloc(SizeOf(TsrType));
- Move(node^,Result^,SizeOf(TsrType));
+ Result:=FEmit.specialize New<TsrType>;
+ Result.key:=key^;
 
- if copy and (node^.fCount<>0) then
+ if copy and (key^.fCount<>0) then
  begin
-  size:=SizeOf(Pointer)*node^.fCount;
-  Result^.pData:=FEmit.Alloc(size);
-  Move(node^.pData^,Result^.pData^,Size);
+  size:=SizeOf(Pointer)*key^.fCount;
+  Result.key.pData:=FEmit.Alloc(size);
+  Move(key^.pData^,Result.key.pData^,Size);
  end;
 
  FList.Push_tail(Result);
 end;
 
-function TsrTypeList._Fetch(node:PsrType;copy:Boolean):PsrType;
+function TsrTypeList._Fetch(key:PsrTypeKey;copy:Boolean):TsrType;
 begin
- Result:=FNTree.Find(node);
+ Result:=FTree.Find(key);
  if (Result=nil) then
  begin
-  Result:=_Insert(node,copy);
-  FNTree.Insert(Result);
+  Result:=_Insert(key,copy);
+  FTree.Insert(Result);
  end;
 end;
 
-function TsrTypeList._Fetch0(dtype:TsrDataType;OpId:DWORD):PsrType;
+function TsrTypeList._Fetch0(dtype:TsrDataType;OpId:DWORD):TsrType;
 var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Result:=nil;
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtype;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=OpId;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtype;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=OpId;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchVector(dtype:TsrDataType):PsrType;
+function TsrTypeList._FetchVector(dtype:TsrDataType):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..1] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..1] of TsrNode;
 begin
  Result:=nil;
  pLiteralList:=FEmit.GetLiteralList;
@@ -438,21 +424,21 @@ begin
  item[0]:=Fetch(dtype.Child);
  item[1]:=pLiteralList^.FetchLiteral(dtype.Count,nil);
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtype;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=Op.OpTypeVector;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtype;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=Op.OpTypeVector;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchInt(dtype:TsrDataType):PsrType;
+function TsrTypeList._FetchInt(dtype:TsrDataType):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..1] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..1] of TsrNode;
 begin
  Result:=nil;
  pLiteralList:=FEmit.GetLiteralList;
@@ -460,61 +446,61 @@ begin
  item[0]:=pLiteralList^.FetchLiteral(dtype.BitSize,nil);
  item[1]:=pLiteralList^.FetchLiteral(dtype.Sign   ,nil);
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtype;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=Op.OpTypeInt;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtype;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=Op.OpTypeInt;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchFloat(dtype:TsrDataType):PsrType;
+function TsrTypeList._FetchFloat(dtype:TsrDataType):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..0] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..0] of TsrNode;
 begin
  Result:=nil;
  pLiteralList:=FEmit.GetLiteralList;
  //
  item[0]:=pLiteralList^.FetchLiteral(dtype.BitSize,nil);
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtype;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=Op.OpTypeFloat;
- node.fCount:=1;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtype;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=Op.OpTypeFloat;
+ key.fCount:=1;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchStruct2(dtype:TsrDataType):PsrType;
+function TsrTypeList._FetchStruct2(dtype:TsrDataType):TsrType;
 var
- node:TsrType;
- item:array[0..1] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..1] of TsrNode;
 begin
  Result:=nil;
  item[0]:=Fetch(dtype.Child);
  item[1]:=item[0];
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtype;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=Op.OpTypeStruct;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtype;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=Op.OpTypeStruct;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchConst(dtype:TsrDataType;Value:QWORD):PsrType;
+function TsrTypeList._FetchConst(dtype:TsrDataType;Value:QWORD):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..1] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..1] of TsrNode;
 begin
  Result:=nil;
  pLiteralList:=FEmit.GetLiteralList;
@@ -522,17 +508,17 @@ begin
  item[0]:=Fetch(dtype);
  item[1]:=pLiteralList^.FetchConst(dtype,Value);
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtConstant;
- node.fsize :=dtype.BitSize div 8;
- node.fOpId :=Op.OpConstant;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtConstant;
+ key.fsize :=dtype.BitSize div 8;
+ key.fOpId :=Op.OpConstant;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.Fetch(dtype:TsrDataType):PsrType;
+function TsrTypeList.Fetch(dtype:TsrDataType):TsrType;
 begin
  Result:=nil;
 
@@ -627,11 +613,11 @@ begin
 
 end;
 
-function TsrTypeList.FetchPointer(child:PsrType;storage_class:DWORD):PsrType;
+function TsrTypeList.FetchPointer(child:TsrType;storage_class:DWORD):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..1] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..1] of TsrNode;
 begin
  Assert(child<>nil);
  pLiteralList:=FEmit.GetLiteralList;
@@ -639,111 +625,116 @@ begin
  item[0]:=pLiteralList^.FetchLiteral(storage_class,PChar(StorageClass.GetStr(storage_class)));
  item[1]:=child;
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypePointer;
- node.fOpId :=Op.OpTypePointer;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypePointer;
+ key.fOpId :=Op.OpTypePointer;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.FetchFunction(ret:PsrType):PsrType;
+function TsrTypeList.FetchFunction(ret:TsrType):TsrType;
 var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Assert(ret<>nil);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeFunction;
- node.fOpId :=Op.OpTypeFunction;
- node.fCount:=1;
- node.pData :=@ret;
- Result:=_Fetch(@node,True);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeFunction;
+ key.fOpId :=Op.OpTypeFunction;
+ key.fCount:=1;
+ key.pData :=@ret;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):PsrType;
+function TsrTypeList.FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):TsrType;
 var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Assert(count<>0);
  Assert(pData<>nil);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeFunction;
- node.fOpId :=Op.OpTypeFunction;
- node.fCount:=count;
- node.pData :=Pointer(pData);
- Result:=_Fetch(@node,copy);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeFunction;
+ key.fOpId :=Op.OpTypeFunction;
+ key.fCount:=count;
+ key.pData :=Pointer(pData);
+ //
+ Result:=_Fetch(@key,copy);
 end;
 
-function TsrTypeList.FetchStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
+function TsrTypeList.FetchStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
 var
- node:TsrType;
-begin
- Assert(count<>0);
- Assert(pData<>nil);
- Assert(_size<>0);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeStruct;
- node.fsize :=_size;
- node.fOpId :=Op.OpTypeStruct;
- node.fCount:=count;
- node.pData :=Pointer(pData);
- Result:=_Fetch(@node,copy);
-end;
-
-function TsrTypeList.InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):PsrType;
-var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Assert(count<>0);
  Assert(pData<>nil);
  Assert(_size<>0);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeStruct;
- node.fsize :=_size;
- node.fOpId :=Op.OpTypeStruct;
- node.fCount:=count;
- node.pData :=Pointer(pData);
- Result:=_Insert(@node,copy);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeStruct;
+ key.fsize :=_size;
+ key.fOpId :=Op.OpTypeStruct;
+ key.fCount:=count;
+ key.pData :=Pointer(pData);
+ //
+ Result:=_Fetch(@key,copy);
 end;
 
-function TsrTypeList.FetchArray(child:PsrType;array_count:DWORD):PsrType;
+function TsrTypeList.InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
 var
- node:TsrType;
- item:array[0..1] of PsrType;
+ key:TsrTypeKey;
+begin
+ Assert(count<>0);
+ Assert(pData<>nil);
+ Assert(_size<>0);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeStruct;
+ key.fsize :=_size;
+ key.fOpId :=Op.OpTypeStruct;
+ key.fCount:=count;
+ key.pData :=Pointer(pData);
+ //
+ Result:=_Insert(@key,copy);
+end;
+
+function TsrTypeList.FetchArray(child:TsrType;array_count:DWORD):TsrType;
+var
+ key:TsrTypeKey;
+ item:array[0..1] of TsrType;
 begin
  Assert(child<>nil);
  //
  item[0]:=child;
  item[1]:=_FetchConst(dtUInt32,array_count);
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeArray;
- node.fsize :=child^.fsize*array_count;
- node.fOpId :=Op.OpTypeArray;
- node.fCount:=2;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeArray;
+ key.fsize :=child.size*array_count;
+ key.fOpId :=Op.OpTypeArray;
+ key.fCount:=2;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.FetchRuntimeArray(child:PsrType):PsrType;
+function TsrTypeList.FetchRuntimeArray(child:TsrType):TsrType;
 var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Assert(child<>nil);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeRuntimeArray;
- node.fsize :=DWORD(-1);
- node.fOpId :=Op.OpTypeRuntimeArray;
- node.fCount:=1;
- node.pData :=@child;
- Result:=_Fetch(@node,True);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeRuntimeArray;
+ key.fsize :=DWORD(-1);
+ key.fOpId :=Op.OpTypeRuntimeArray;
+ key.fCount:=1;
+ key.pData :=@child;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
 function Dim_GetStr(w:Word):PChar;
@@ -761,11 +752,11 @@ begin
  end;
 end;
 
-function TsrTypeList.FetchImage(child:PsrType;image_info:TsrTypeImageInfo):PsrType;
+function TsrTypeList.FetchImage(child:TsrType;image_info:TsrTypeImageInfo):TsrType;
 var
  pLiteralList:PsrLiteralList;
- node:TsrType;
- item:array[0..6] of PsrNode;
+ key:TsrTypeKey;
+ item:array[0..6] of TsrNode;
 begin
  Assert(child<>nil);
  pLiteralList:=FEmit.GetLiteralList;
@@ -778,30 +769,31 @@ begin
  item[5]:=pLiteralList^.FetchLiteral(image_info.Sampled,nil);
  item[6]:=pLiteralList^.FetchLiteral(image_info.Format ,PChar(ImageFormat.GetStr(image_info.Format)));
  //
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeImage;
- node.fOpId :=Op.OpTypeImage;
- node.fCount:=7;
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeImage;
+ key.fOpId :=Op.OpTypeImage;
+ key.fCount:=7;
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.FetchSampledImage(child:PsrType):PsrType;
+function TsrTypeList.FetchSampledImage(child:TsrType):TsrType;
 var
- node:TsrType;
+ key:TsrTypeKey;
 begin
  Assert(child<>nil);
- node:=Default(TsrType);
- node.Init;
- node.fdtype:=dtTypeSampledImage;
- node.fOpId :=Op.OpTypeSampledImage;
- node.fCount:=1;
- node.pData :=@child;
- Result:=_Fetch(@node,True);
+ //
+ key:=Default(TsrTypeKey);
+ key.fdtype:=dtTypeSampledImage;
+ key.fOpId :=Op.OpTypeSampledImage;
+ key.fCount:=1;
+ key.pData :=@child;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList.First:PsrType; inline;
+function TsrTypeList.First:TsrType; inline;
 begin
  Result:=FList.pHead;
 end;

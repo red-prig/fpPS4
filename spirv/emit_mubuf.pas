@@ -24,11 +24,11 @@ type
   procedure emit_MUBUF;
   procedure make_load_zero(dst:PsrRegSlot;dtype:TsrDataType);
   procedure make_load_one(dst:PsrRegSlot;dtype:TsrDataType);
-  procedure make_load_comp(dst:PsrRegSlot;dtype:TsrDataType;rsl:PsrRegNode;i:Byte);
+  procedure make_load_comp(dst:PsrRegSlot;dtype:TsrDataType;rsl:TsrRegNode;i:Byte);
   function  emit_BUFFER_LOAD_VA(src:PPsrRegSlot;count:Byte):Boolean;
-  procedure emit_BUFFER_LOAD_FORMAT(count:Byte);
+  procedure emit_BUFFER_LOAD_FORMAT (count:Byte);
   procedure emit_BUFFER_STORE_FORMAT(count:Byte);
-  procedure emit_BUFFER_LOAD_DWORDX(count,dfmt:Byte);
+  procedure emit_BUFFER_LOAD_DWORDX (count,dfmt:Byte);
   procedure emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
  end;
 
@@ -50,9 +50,9 @@ begin
  end;
 end;
 
-procedure TEmit_MUBUF.make_load_comp(dst:PsrRegSlot;dtype:TsrDataType;rsl:PsrRegNode;i:Byte);
+procedure TEmit_MUBUF.make_load_comp(dst:PsrRegSlot;dtype:TsrDataType;rsl:TsrRegNode;i:Byte);
 begin
- if rsl^.dtype.isVector then
+ if rsl.dtype.isVector then
  begin
   dst^.New(line,dtype);
   OpExtract(line,dst^.current,rsl,i);
@@ -67,13 +67,13 @@ function TEmit_MUBUF.emit_BUFFER_LOAD_VA(src:PPsrRegSlot;count:Byte):Boolean;
 var
  dst:PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
  PV:PVSharpResource4;
 
- idx:PsrRegNode;
- rsl:PsrRegNode;
+ idx:TsrRegNode;
+ rsl:TsrRegNode;
 
- inp_idx:PsrInput;
+ inp_idx:TsrInput;
 
  info:TBuf_info;
  elem_res:TsrDataType;
@@ -87,11 +87,11 @@ begin
  idx:=get_vsrc8(FSPI.MUBUF.VADDR+0)^.current;
  inp_idx:=GetInputRegNode(idx);
  if (inp_idx<>nil) then
- if (inp_idx^.itype=itVIndex) then //is input attach
+ if (inp_idx.itype=itVIndex) then //is input attach
  begin
 
   grp:=GroupingSharp(src,rtVSharp4);
-  PV:=grp^.pData;
+  PV:=grp.pData;
 
   info:=Buf_info(grp,
                  dst_sel(PV^.dst_sel_x,
@@ -100,7 +100,9 @@ begin
                          PV^.dst_sel_w),
                  PV^.dfmt,
                  PV^.nfmt,
-                 count);
+                 count,
+                 FSPI.MUBUF.GLC,
+                 FSPI.MUBUF.SLC);
 
   elem_res:=info.GetResultType;
   elem_vec:=elem_res.AsVector(info.GetElemCount);
@@ -152,12 +154,16 @@ procedure TEmit_MUBUF.emit_BUFFER_LOAD_FORMAT(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
  PV:PVSharpResource4;
 begin
- Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
-
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
+
+ if (FSPI.MUBUF.LDS<>0) then
+ begin
+  //TODO: FSPI.MUBUF.LDS
+  Assert(false,'TODO: FSPI.MUBUF.LDS');
+ end;
 
  if Config.UseVertexInput then
  if (FExecutionModel=ExecutionModel.Vertex) then //Vertex only
@@ -170,7 +176,7 @@ begin
  end;
 
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp^.pData;
+ PV:=grp.pData;
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
@@ -180,7 +186,9 @@ begin
                    PV^.dst_sel_w),
            PV^.dfmt,
            PV^.nfmt,
-           count)
+           count,
+           FSPI.MUBUF.GLC,
+           FSPI.MUBUF.SLC)
  );
 
 end;
@@ -189,16 +197,20 @@ procedure TEmit_MUBUF.emit_BUFFER_STORE_FORMAT(count:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
  PV:PVSharpResource4;
 
 begin
- Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
-
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.LDS<>0) then
+ begin
+  //TODO: FSPI.MUBUF.LDS
+  Assert(false,'TODO: FSPI.MUBUF.LDS');
+ end;
+
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp^.pData;
+ PV:=grp.pData;
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
@@ -208,7 +220,9 @@ begin
                    PV^.dst_sel_w),
            PV^.dfmt,
            PV^.nfmt,
-           count)
+           count,
+           FSPI.MUBUF.GLC,
+           FSPI.MUBUF.SLC)
  );
 
 end;
@@ -217,23 +231,29 @@ procedure TEmit_MUBUF.emit_BUFFER_LOAD_DWORDX(count,dfmt:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
  PV:PVSharpResource4;
 
 begin
- Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
-
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.LDS<>0) then
+ begin
+  //TODO: FSPI.MUBUF.LDS
+  Assert(false,'TODO: FSPI.MUBUF.LDS');
+ end;
+
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp^.pData;
+ PV:=grp.pData;
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
            dst_sel_identity,
            dfmt,
            PV^.nfmt,
-           count)
+           count,
+           FSPI.MUBUF.GLC,
+           FSPI.MUBUF.SLC)
  );
 
 end;
@@ -242,23 +262,29 @@ procedure TEmit_MUBUF.emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
 var
  src:array[0..3] of PsrRegSlot;
 
- grp:PsrDataLayout;
+ grp:TsrDataLayout;
  PV:PVSharpResource4;
 
 begin
- Assert(FSPI.MUBUF.LDS=0,'FSPI.MUBUF.LDS');
-
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.LDS<>0) then
+ begin
+  //TODO: FSPI.MUBUF.LDS
+  Assert(false,'TODO: FSPI.MUBUF.LDS');
+ end;
+
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp^.pData;
+ PV:=grp.pData;
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
            dst_sel_identity,
            dfmt,
            PV^.nfmt,
-           count)
+           count,
+           FSPI.MUBUF.GLC,
+           FSPI.MUBUF.SLC)
  );
 
 end;

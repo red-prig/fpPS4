@@ -16,11 +16,13 @@ type
  Tdst_sel=array[0..3] of Byte;
 
  TBuf_info=packed object
-  grp:PsrDataLayout;
-  dsel:Tdst_sel;
-  DFMT:Byte;  //BUF_DATA_FORMAT_*
-  NFMT:Byte;  //BUF_NUM_FORMAT_*
+  grp  :TsrDataLayout;
+  dsel :Tdst_sel;
+  DFMT :Byte; //BUF_DATA_FORMAT_*
+  NFMT :Byte; //BUF_NUM_FORMAT_*
   count:Byte; //count reg dst
+  GLC  :Byte; //Coherent
+  SLC  :Byte; //Volatile
   function GetResultType:TsrDataType;
   function GetElemType:TsrDataType;
   function GetElemCount:Byte; inline;
@@ -38,7 +40,7 @@ type
 const
  dst_sel_identity:Tdst_sel=(4,5,6,7);
 
-function Buf_info(grp:PsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count:Byte):TBuf_info; inline;
+function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte):TBuf_info; inline;
 function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
 function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
 function GetElemCount(DFMT:Byte):Byte; inline;
@@ -100,13 +102,15 @@ const
   16, //BUF_DATA_FORMAT_32_32_32_32  //shr 4
   0); //BUF_DATA_FORMAT_RESERVED
 
-function Buf_info(grp:PsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count:Byte):TBuf_info; inline;
+function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte):TBuf_info; inline;
 begin
  Result.grp  :=grp;
  Result.dsel :=dsel;
  Result.DFMT :=DFMT;
  Result.NFMT :=NFMT;
  Result.count:=count;
+ Result.GLC  :=GLC;
+ Result.SLC  :=SLC;
 end;
 
 function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;

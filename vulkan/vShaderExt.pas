@@ -29,7 +29,9 @@ type
   vtVSharp4,
   vtSSharp4,
   vtTSharp4,
-  vtTSharp8
+  vtTSharp8,
+  vtLDS,
+  vtGDS
  );
 
  TvDataLayout=packed record
@@ -472,7 +474,7 @@ end;
 
 procedure TvShaderParserExt.OnSourceExtension(P:PChar);
 begin
- //Writeln(P);
+ Writeln(P);
  Case P^ of
   '#':OnDataLayout(P);
   '!':OnIExtLayout(P);
@@ -513,6 +515,8 @@ begin
   'S':AddDataLayout(vtSSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   't':AddDataLayout(vtTSharp4,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   'T':AddDataLayout(vtTSharp8,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
+  'L':AddDataLayout(vtLDS    ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
+  'G':AddDataLayout(vtGDS    ,_get_hex_dword(@P[7]),_get_hex_dword(@P[$14]));
   else
    Assert(false,'TODO: OnDataLayout:"'+P[1]+'"');
  end;
@@ -713,6 +717,10 @@ begin
                     _get_hex_dword(@P[7]),
                     _get_hex_dword(@P[$14]),
                     _get_hex_char (@P[$21]));
+  'S':AddUnifLayout(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    _get_hex_dword(@P[7]),
+                    _get_hex_dword(@P[$14]),
+                    _get_hex_char (@P[$21]));
   else
    Assert(false,'TODO: OnImgsLayout:"'+P[1]+'"');
  end;
@@ -904,7 +912,7 @@ function TvShaderExt.IsCSClearShader:Boolean;
 begin
  if (self=nil) then Exit(False);
 
- Result:=(FHash_gcn=($7DCE68F83F66B337));
+ Result:=(FHash_gcn=QWORD($7DCE68F83F66B337));
 end;
 
 function TvShaderExt.IsVSRectListShader:Boolean;

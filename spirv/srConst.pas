@@ -19,37 +19,43 @@ const
  FLT_MAX=3.402823466e+38;
 
 type
- ntConst=class(TsrNodeVmt)
-  class Procedure zero_read     (node:PsrNode);               override;
-  class Procedure zero_unread   (node:PsrNode);               override;
-  class function  Next          (node:PsrNode):Pointer;       override;
-  class function  Prev          (node:PsrNode):Pointer;       override;
-  class Function  GetPtype      (node:PsrNode):PsrNode;       override;
-  class function  GetPrintName  (node:PsrNode):RawByteString; override;
-  class function  GetRef        (node:PsrNode):Pointer;       override;
+ TsrConst=class;
+
+ PPsrConst=^TsrConst;
+
+ PsrConstKey=^TsrConstKey;
+ TsrConstKey=packed record
+  fOpId :WORD;
+  fCount:WORD;
+  FType :TsrType;
+  pData :PPsrNode;
  end;
 
- PPsrConst=^PsrConst;
- PsrConst=^TsrConst;
- TsrConst=packed object(TsrNode)
+ TsrConst=class(TsrNode)
   public
-   pPrev,pNext,pLeft,pRight:PsrConst;
-   function  c(n1,n2:PsrConst):Integer; static;
+   pPrev,pNext,pLeft,pRight:TsrConst;
+   class function c(n1,n2:PsrConstKey):Integer; static;
   private
    ID:TsrRefId; //post id
-   fOpId:WORD;
-   fCount:WORD;
-   FType:PsrType;
-   pData:PPsrNode;
+   key:TsrConstKey;
   public
-   property  pType:PsrType     read FType;
-   property  OpId:WORD         read fOpId;
-   property  ItemCount:WORD    read fCount;
-   Procedure Init; inline;
+   //
+   Procedure _zero_read    ;               override;
+   Procedure _zero_unread  ;               override;
+   function  _Next         :TsrNode;       override;
+   function  _Prev         :TsrNode;       override;
+   Function  _GetPtype     :TsrNode;       override;
+   function  _GetPrintName :RawByteString; override;
+   function  _GetRef       :Pointer;       override;
+   //
+   property  pType:TsrType     read key.FType;
+   property  OpId:WORD         read key.fOpId;
+   property  Count:WORD        read key.fCount;
+   property  ItemCount:WORD    read key.fCount;
    function  dtype:TsrDataType;
-   function  GetItem(i:Word):PsrNode;
-   function  GetLiteral(i:Word):PsrLiteral;
-   function  GetConst(i:Word):PsrConst;
+   function  GetItem(i:Word):TsrNode;
+   function  GetLiteral(i:Word):TsrLiteral;
+   function  GetConst(i:Word):TsrConst;
    Function  AsBool:Boolean;   inline;
    function  AsUint8:Byte;     inline;
    function  AsInt8:Shortint;  inline;
@@ -68,196 +74,194 @@ type
    function  GetPrintName:RawByteString;
  end;
 
+ ntConst=TsrConst;
+
  PsrConstList=^TsrConstList;
  TsrConstList=object
   type
-   TNodeList=specialize TNodeList<PsrConst>;
-   TNodeFetch=specialize TNodeFetch<PsrConst,TsrConst>;
+   TNodeList=specialize TNodeListClass<TsrConst>;
+   TNodeTree=specialize TNodeTreeClass<TsrConst>;
   var
    FEmit:TCustomEmit;
    FList:TNodeList;
-   FNTree:TNodeFetch;
+   FTree:TNodeTree;
   Procedure Init(Emit:TCustomEmit); inline;
-  function  _Fetch(node:PsrConst;copy:Boolean):PsrConst;
-  function  _Fetch1(dtype:TsrDataType;OpId:DWORD;value:QWORD):PsrConst;
-  function  _FetchVector(dtype:TsrDataType;value:QWORD):PsrConst;
-  function  Fetch(dtype:TsrDataType;value:QWORD):PsrConst;
-  function  Fetch_b(value:Boolean):PsrConst; inline;
-  function  Fetch_i(dtype:TsrDataType;value:Integer):PsrConst; inline;
-  Function  Fetch_s(dtype:TsrDataType;value:Single):PsrConst; inline;
-  function  FetchVector(pType:PsrType;count:Word;pData:PPsrConst;copy:Boolean):PsrConst;
-  function  FetchVector(dtype:TsrDataType;pData:PPsrConst;copy:Boolean):PsrConst;
-  function  Bitcast(rtype:TsrDataType;old:PsrConst):PsrConst;
-  function  Fetch_ssrc9_const(SSRC:Word;d2:DWORD):PsrConst;
-  function  Fetch_ssrc9_const(SSRC:Word;d2:DWORD;rtype:TsrDataType):PsrConst;
-  function  Fetch_ssrc8_const(SSRC:Byte;d2:DWORD):PsrConst; inline;
-  function  Fetch_ssrc8_const(SSRC:Byte;d2:DWORD;rtype:TsrDataType):PsrConst; inline;
-  function  First:PsrConst; inline;
+  function  _Fetch(key:PsrConstKey;copy:Boolean):TsrConst;
+  function  _Fetch1(dtype:TsrDataType;OpId:DWORD;value:QWORD):TsrConst;
+  function  _FetchVector(dtype:TsrDataType;value:QWORD):TsrConst;
+  function  Fetch(dtype:TsrDataType;value:QWORD):TsrConst;
+  function  Fetch_b(value:Boolean):TsrConst; inline;
+  function  Fetch_i(dtype:TsrDataType;value:Integer):TsrConst; inline;
+  Function  Fetch_s(dtype:TsrDataType;value:Single):TsrConst; inline;
+  function  FetchVector(pType:TsrType;count:Word;pData:PPsrConst;copy:Boolean):TsrConst;
+  function  FetchVector(dtype:TsrDataType;pData:PPsrConst;copy:Boolean):TsrConst;
+  function  Bitcast(rtype:TsrDataType;old:TsrConst):TsrConst;
+  function  Fetch_ssrc9_const(SSRC:Word;d2:DWORD):TsrConst;
+  function  Fetch_ssrc9_const(SSRC:Word;d2:DWORD;rtype:TsrDataType):TsrConst;
+  function  Fetch_ssrc8_const(SSRC:Byte;d2:DWORD):TsrConst; inline;
+  function  Fetch_ssrc8_const(SSRC:Byte;d2:DWORD;rtype:TsrDataType):TsrConst; inline;
+  function  First:TsrConst; inline;
  end;
 
 function get_soffset_const_int(SSRC:Word):Integer;
 function is_const_soffset(SSRC:Byte):Boolean; inline;
 function is_const_ssrc8(SSRC:Byte):Boolean; inline;
 function is_const_ssrc9(SSRC:Word):Boolean; inline;
-function CompareConst(r1,r2:PsrConst):Boolean;
+function CompareConst(r1,r2:TsrConst):Boolean;
 
 Function TryTruncInt64(c:Single;var i:int64):Boolean;
 
+operator := (i:TsrNode):TsrConst; inline;
+
 implementation
 
-class Procedure ntConst.zero_read(node:PsrNode);
+operator := (i:TsrNode):TsrConst; inline;
+begin
+ Result:=TsrConst(Pointer(i)); //typecast hack
+end;
+
+Procedure TsrConst._zero_read;
 var
  i:WORD;
 begin
- With PsrConst(node)^ do
- begin
-  FType^.mark_read(node);
-  if (fCount<>0) then
-   For i:=0 to fCount-1 do
-   begin
-    GetItem(i)^.mark_read(node);
-   end;
- end;
+ pType.mark_read(Self);
+ if (Count<>0) then
+  For i:=0 to Count-1 do
+  begin
+   GetItem(i).mark_read(Self);
+  end;
 end;
 
-class Procedure ntConst.zero_unread(node:PsrNode);
+Procedure TsrConst._zero_unread;
 var
  i:WORD;
 begin
- With PsrConst(node)^ do
- begin
-  FType^.mark_unread(node);
-  if (fCount<>0) then
-   For i:=0 to fCount-1 do
-   begin
-    GetItem(i)^.mark_unread(node);
-   end;
- end;
+ pType.mark_unread(Self);
+ if (Count<>0) then
+  For i:=0 to Count-1 do
+  begin
+   GetItem(i).mark_unread(Self);
+  end;
 end;
 
-class function ntConst.Next(node:PsrNode):Pointer;
+function TsrConst._Next:TsrNode;
 begin
- Result:=PsrConst(node)^.pNext;
+ Result:=pNext;
 end;
 
-class function ntConst.Prev(node:PsrNode):Pointer;
+function TsrConst._Prev:TsrNode;
 begin
- Result:=PsrConst(node)^.pPrev;
+ Result:=pPrev;
 end;
 
-class Function ntConst.GetPtype(node:PsrNode):PsrNode;
+Function TsrConst._GetPtype:TsrNode;
 begin
- Result:=PsrConst(node)^.FType;
+ Result:=pType;
 end;
 
-class function ntConst.GetPrintName(node:PsrNode):RawByteString;
+function TsrConst._GetPrintName:RawByteString;
 begin
- Result:=PsrConst(node)^.GetPrintName;
+ Result:=GetPrintName;
 end;
 
-class function ntConst.GetRef(node:PsrNode):Pointer;
+function TsrConst._GetRef:Pointer;
 begin
- Result:=@PsrConst(node)^.ID;
+ Result:=@ID;
 end;
 
 //
 
-Procedure TsrConst.Init; inline;
+class function TsrConst.c(n1,n2:PsrConstKey):Integer;
 begin
- fntype:=ntConst;
-end;
-
-function TsrConst.c(n1,n2:PsrConst):Integer;
-begin
- //first FType
- Result:=Integer(n1^.FType>n2^.FType)-Integer(n1^.FType<n2^.FType);
+ //first FType (order sort)
+ Result:=ord(n1^.FType.Order>n2^.FType.Order)-ord(n1^.FType.Order<n2^.FType.Order);
  if (Result<>0) then Exit;
  //second fCount
- Result:=Integer(n1^.fCount>n2^.fCount)-Integer(n1^.fCount<n2^.fCount);
+ Result:=ord(n1^.fCount>n2^.fCount)-ord(n1^.fCount<n2^.fCount);
  if (Result<>0) then Exit;
- //third pData
- Result:=ComparePtruint(PPtruint(n1^.pData),PPtruint(n2^.pData),n1^.fCount);
+ //third pData (order sort)
+ Result:=CompareNodes(n1^.pData,n2^.pData,n1^.fCount);
 end;
 
 function TsrConst.dtype:TsrDataType;
 begin
- Result:=FType^.dtype;
+ Result:=pType.dtype;
 end;
 
-function TsrConst.GetItem(i:Word):PsrNode;
+function TsrConst.GetItem(i:Word):TsrNode;
 begin
- if (i>fCount) then Exit(nil);
- Result:=pData[i];
+ if (i>Count) then Exit(nil);
+ Result:=key.pData[i];
 end;
 
-function TsrConst.GetLiteral(i:Word):PsrLiteral;
+function TsrConst.GetLiteral(i:Word):TsrLiteral;
 begin
- Result:=GetItem(i)^.AsType(ntLiteral);
+ Result:=GetItem(i).specialize AsType<ntLiteral>;
 end;
 
-function TsrConst.GetConst(i:Word):PsrConst;
+function TsrConst.GetConst(i:Word):TsrConst;
 begin
- Result:=GetItem(i)^.AsType(ntConst);
+ Result:=GetItem(i).specialize AsType<ntConst>;
 end;
 
 Function TsrConst.AsBool:Boolean; inline;
 begin
- Result:=GetLiteral(0)^.AsBool;
+ Result:=GetLiteral(0).AsBool;
 end;
 
 function TsrConst.AsUint8:Byte; inline;
 begin
- Result:=GetLiteral(0)^.AsUint8;
+ Result:=GetLiteral(0).AsUint8;
 end;
 
 function TsrConst.AsInt8:Shortint; inline;
 begin
- Result:=GetLiteral(0)^.AsInt8;
+ Result:=GetLiteral(0).AsInt8;
 end;
 
 function TsrConst.AsUint16:Word; inline;
 begin
- Result:=GetLiteral(0)^.AsUint16;
+ Result:=GetLiteral(0).AsUint16;
 end;
 
 function TsrConst.AsInt16:Smallint; inline;
 begin
- Result:=GetLiteral(0)^.AsInt16;
+ Result:=GetLiteral(0).AsInt16;
 end;
 
 Function TsrConst.AsUint32:DWORD; inline;
 begin
- Result:=GetLiteral(0)^.AsUint32;
+ Result:=GetLiteral(0).AsUint32;
 end;
 
 function TsrConst.AsInt32:Integer; inline;
 begin
- Result:=GetLiteral(0)^.AsInt32;
+ Result:=GetLiteral(0).AsInt32;
 end;
 
 Function TsrConst.AsUint64:QWORD; inline;
 begin
- Result:=GetLiteral(0)^.AsUint64;
+ Result:=GetLiteral(0).AsUint64;
 end;
 
 Function TsrConst.AsInt64:Int64; inline;
 begin
- Result:=GetLiteral(0)^.AsInt64;
+ Result:=GetLiteral(0).AsInt64;
 end;
 
 function TsrConst.AsHalf16:THalf16; inline;
 begin
- Result:=GetLiteral(0)^.AsHalf16;
+ Result:=GetLiteral(0).AsHalf16;
 end;
 
 function TsrConst.AsFloat32:Single; inline;
 begin
- Result:=GetLiteral(0)^.AsFloat32;
+ Result:=GetLiteral(0).AsFloat32;
 end;
 
 function TsrConst.AsFloat64:Double; inline;
 begin
- Result:=GetLiteral(0)^.AsFloat64;
+ Result:=GetLiteral(0).AsFloat64;
 end;
 
 function TsrConst.GetData:QWORD;
@@ -267,17 +271,17 @@ begin
   dtVec2u8,
   dtVec2i8:
    begin
-    PBYTE(@Result)[0]:=GetConst(0)^.AsUint8;
-    PBYTE(@Result)[1]:=GetConst(1)^.AsUint8;
+    PBYTE(@Result)[0]:=GetConst(0).AsUint8;
+    PBYTE(@Result)[1]:=GetConst(1).AsUint8;
    end;
 
   dtVec4u8,
   dtVec4i8:
    begin
-    PBYTE(@Result)[0]:=GetConst(0)^.AsUint8;
-    PBYTE(@Result)[1]:=GetConst(1)^.AsUint8;
-    PBYTE(@Result)[2]:=GetConst(2)^.AsUint8;
-    PBYTE(@Result)[3]:=GetConst(3)^.AsUint8;
+    PBYTE(@Result)[0]:=GetConst(0).AsUint8;
+    PBYTE(@Result)[1]:=GetConst(1).AsUint8;
+    PBYTE(@Result)[2]:=GetConst(2).AsUint8;
+    PBYTE(@Result)[3]:=GetConst(3).AsUint8;
    end;
 
   dtStruct2u,
@@ -285,31 +289,31 @@ begin
   dtVec2i,
   dtVec2f:
    begin
-    PDWORD(@Result)[0]:=GetConst(0)^.AsUint32;
-    PDWORD(@Result)[1]:=GetConst(1)^.AsUint32;
+    PDWORD(@Result)[0]:=GetConst(0).AsUint32;
+    PDWORD(@Result)[1]:=GetConst(1).AsUint32;
    end;
 
   dtVec2u16,
   dtVec2i16,
   dtVec2h  :
    begin
-    PWORD(@Result)[0]:=GetConst(0)^.AsUint16;
-    PWORD(@Result)[1]:=GetConst(1)^.AsUint16;
+    PWORD(@Result)[0]:=GetConst(0).AsUint16;
+    PWORD(@Result)[1]:=GetConst(1).AsUint16;
    end;
 
   dtVec4u16,
   dtVec4i16,
   dtVec4h  :
    begin
-    PWORD(@Result)[0]:=GetConst(0)^.AsUint16;
-    PWORD(@Result)[1]:=GetConst(1)^.AsUint16;
-    PWORD(@Result)[2]:=GetConst(2)^.AsUint16;
-    PWORD(@Result)[3]:=GetConst(3)^.AsUint16;
+    PWORD(@Result)[0]:=GetConst(0).AsUint16;
+    PWORD(@Result)[1]:=GetConst(1).AsUint16;
+    PWORD(@Result)[2]:=GetConst(2).AsUint16;
+    PWORD(@Result)[3]:=GetConst(3).AsUint16;
    end;
 
   else
      begin
-      Assert(fCount=1,'fCount<>1');
+      Assert(Count=1,'Count<>1');
       Result:=AsUint64;
      end;
  end;
@@ -339,7 +343,7 @@ end;
 
 Function TsrConst.isBoolVal:Boolean; inline;
 begin
- if (fCount<>1) then Exit(False);
+ if (Count<>1) then Exit(False);
  Case AsUint64 of
   0,1:Result:=True;
   else
@@ -434,34 +438,34 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrConstList._Fetch(node:PsrConst;copy:Boolean):PsrConst;
+function TsrConstList._Fetch(key:PsrConstKey;copy:Boolean):TsrConst;
 var
  size:DWORD;
 begin
- Result:=FNTree.Find(node);
+ Result:=FTree.Find(key);
  if (Result=nil) then
  begin
-  Result:=FEmit.Alloc(SizeOf(TsrConst));
-  Move(node^,Result^,SizeOf(TsrConst));
+  Result:=FEmit.specialize New<TsrConst>;
+  Result.key:=key^;
 
-  if copy and (node^.fCount<>0) then
+  if copy and (key^.fCount<>0) then
   begin
-   size:=SizeOf(Pointer)*node^.fCount;
-   Result^.pData:=FEmit.Alloc(size);
-   Move(node^.pData^,Result^.pData^,Size);
+   size:=SizeOf(Pointer)*key^.fCount;
+   Result.key.pData:=FEmit.Alloc(size);
+   Move(key^.pData^,Result.key.pData^,Size);
   end;
 
-  FNTree.Insert(Result);
+  FTree.Insert(Result);
   FList.Push_tail(Result);
  end;
 end;
 
-function TsrConstList._Fetch1(dtype:TsrDataType;OpId:DWORD;value:QWORD):PsrConst;
+function TsrConstList._Fetch1(dtype:TsrDataType;OpId:DWORD;value:QWORD):TsrConst;
 var
  pLiteralList:PsrLiteralList;
  pTypeList:PsrTypeList;
- node:TsrConst;
- item:array[0..0] of PsrNode;
+ key:TsrConstKey;
+ item:array[0..0] of TsrNode;
 begin
  Result:=nil;
  pLiteralList:=FEmit.GetLiteralList;
@@ -469,20 +473,20 @@ begin
  //
  item[0]:=pLiteralList^.FetchConst(dtype,value);
  //
- node:=Default(TsrConst);
- node.Init;
- node.fOpId :=OpId;
- node.fCount:=1;
- node.FType :=pTypeList^.Fetch(dtype);
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrConstKey);
+ key.fOpId :=OpId;
+ key.fCount:=1;
+ key.FType :=pTypeList^.Fetch(dtype);
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrConstList._FetchVector(dtype:TsrDataType;value:QWORD):PsrConst;
+function TsrConstList._FetchVector(dtype:TsrDataType;value:QWORD):TsrConst;
 var
  pTypeList:PsrTypeList;
- node:TsrConst;
- item:array[0..3] of PsrNode;
+ key:TsrConstKey;
+ item:array[0..3] of TsrNode;
  Child:TsrDataType;
  High:QWORD;
  i,BitSize:Byte;
@@ -499,16 +503,16 @@ begin
   value:=value shr BitSize;
  end;
  //
- node:=Default(TsrConst);
- node.Init;
- node.fOpId :=Op.OpConstantComposite;
- node.fCount:=dtype.Count;
- node.FType :=pTypeList^.Fetch(dtype);
- node.pData :=@item;
- Result:=_Fetch(@node,True);
+ key:=Default(TsrConstKey);
+ key.fOpId :=Op.OpConstantComposite;
+ key.fCount:=dtype.Count;
+ key.FType :=pTypeList^.Fetch(dtype);
+ key.pData :=@item;
+ //
+ Result:=_Fetch(@key,True);
 end;
 
-function TsrConstList.Fetch(dtype:TsrDataType;value:QWORD):PsrConst;
+function TsrConstList.Fetch(dtype:TsrDataType;value:QWORD):TsrConst;
 begin
  Result:=nil;
 
@@ -570,37 +574,38 @@ begin
 
 end;
 
-function TsrConstList.Fetch_b(value:Boolean):PsrConst; inline;
+function TsrConstList.Fetch_b(value:Boolean):TsrConst; inline;
 begin
  Result:=Fetch(dtBool,QWORD(value));
 end;
 
-function TsrConstList.Fetch_i(dtype:TsrDataType;value:Integer):PsrConst; inline;
+function TsrConstList.Fetch_i(dtype:TsrDataType;value:Integer):TsrConst; inline;
 begin
  Result:=Fetch(dtype,PDWORD(@value)^);
 end;
 
-Function TsrConstList.Fetch_s(dtype:TsrDataType;value:Single):PsrConst; inline;
+Function TsrConstList.Fetch_s(dtype:TsrDataType;value:Single):TsrConst; inline;
 begin
  Result:=Fetch(dtype,PDWORD(@value)^);
 end;
 
-function TsrConstList.FetchVector(pType:PsrType;count:Word;pData:PPsrConst;copy:Boolean):PsrConst;
+function TsrConstList.FetchVector(pType:TsrType;count:Word;pData:PPsrConst;copy:Boolean):TsrConst;
 var
- node:TsrConst;
+ key:TsrConstKey;
 begin
  Assert(count<>0);
  Assert(pData<>nil);
- node:=Default(TsrConst);
- node.Init;
- node.fOpId :=Op.OpConstantComposite;
- node.fCount:=count;
- node.FType :=pType;
- node.pData :=Pointer(pData);
- Result:=_Fetch(@node,copy);
+ //
+ key:=Default(TsrConstKey);
+ key.fOpId :=Op.OpConstantComposite;
+ key.fCount:=count;
+ key.FType :=pType;
+ key.pData :=Pointer(pData);
+ //
+ Result:=_Fetch(@key,copy);
 end;
 
-function TsrConstList.FetchVector(dtype:TsrDataType;pData:PPsrConst;copy:Boolean):PsrConst;
+function TsrConstList.FetchVector(dtype:TsrDataType;pData:PPsrConst;copy:Boolean):TsrConst;
 var
  pTypeList:PsrTypeList;
 begin
@@ -608,29 +613,29 @@ begin
  Result:=FetchVector(pTypeList^.Fetch(dtype),dtype.Count,pData,copy);
 end;
 
-function TsrConstList.Bitcast(rtype:TsrDataType;old:PsrConst):PsrConst;
+function TsrConstList.Bitcast(rtype:TsrDataType;old:TsrConst):TsrConst;
 var
  data:qword;
 begin
  Result:=nil;
 
- if not old^.IsType(ntConst) then Exit(old);
+ if not old.IsType(ntConst) then Exit(old);
 
- if (rtype=dtUnknow) or (rtype=old^.dtype) then
+ if (rtype=dtUnknow) or (rtype=old.dtype) then
  begin
   Exit(old);
  end;
 
- if (old^.dtype=dtUnknow) then
+ if (old.dtype=dtUnknow) then
  begin
-  data:=old^.GetData;
+  data:=old.GetData;
   Result:=Fetch(rtype,data);
   Exit;
  end;
 
- if TryBitcastType(rtype,old^.dtype) then
+ if TryBitcastType(rtype,old.dtype) then
  begin
-  data:=old^.GetData;
+  data:=old.GetData;
   Result:=Fetch(rtype,data);
  end else
  begin
@@ -638,7 +643,7 @@ begin
  end;
 end;
 
-function TsrConstList.Fetch_ssrc9_const(SSRC:Word;d2:DWORD):PsrConst;
+function TsrConstList.Fetch_ssrc9_const(SSRC:Word;d2:DWORD):TsrConst;
 begin
  Case SSRC of
   128:Result:=Fetch(dtUnknow,0);
@@ -658,7 +663,7 @@ begin
  end;
 end;
 
-function TsrConstList.Fetch_ssrc9_const(SSRC:Word;d2:DWORD;rtype:TsrDataType):PsrConst;
+function TsrConstList.Fetch_ssrc9_const(SSRC:Word;d2:DWORD;rtype:TsrDataType):TsrConst;
 begin
  Case SSRC of
   128:Result:=Fetch(rtype,0);
@@ -696,17 +701,17 @@ begin
  end;
 end;
 
-function TsrConstList.Fetch_ssrc8_const(SSRC:Byte;d2:DWORD):PsrConst; inline;
+function TsrConstList.Fetch_ssrc8_const(SSRC:Byte;d2:DWORD):TsrConst; inline;
 begin
  Result:=Fetch_ssrc9_const(SSRC,d2);
 end;
 
-function TsrConstList.Fetch_ssrc8_const(SSRC:Byte;d2:DWORD;rtype:TsrDataType):PsrConst; inline;
+function TsrConstList.Fetch_ssrc8_const(SSRC:Byte;d2:DWORD;rtype:TsrDataType):TsrConst; inline;
 begin
  Result:=Fetch_ssrc9_const(SSRC,d2,rtype);
 end;
 
-function TsrConstList.First:PsrConst; inline;
+function TsrConstList.First:TsrConst; inline;
 begin
  Result:=FList.pHead;
 end;
@@ -784,21 +789,21 @@ begin
  end;
 end;
 
-function CompareConst(r1,r2:PsrConst):Boolean;
+function CompareConst(r1,r2:TsrConst):Boolean;
 begin
  Result:=false;
  if (r1<>nil) and (r2<>nil) then
  begin
   Result:=(r1=r2);
   if Result then Exit;
-  if CompareType(r1^.dtype,r2^.dtype) and (r1^.fCount=r2^.fCount) then
+  if CompareType(r1.dtype,r2.dtype) and (r1.Count=r2.Count) then
   begin
-   if (r1^.fCount=1) then
+   if (r1.Count=1) then
    begin
-    Result:=(r1^.AsUint64=r2^.AsUint64);
+    Result:=(r1.AsUint64=r2.AsUint64);
    end else
    begin
-    Result:=CompareConstCount(Pointer(r1^.pData),Pointer(r2^.pData),r1^.fCount);
+    Result:=CompareConstCount(Pointer(r1.key.pData),Pointer(r2.key.pData),r1.Count);
    end;
   end;
  end;

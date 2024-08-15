@@ -27,9 +27,9 @@ implementation
 
 function interpolate(SprvEmit:TSprvEmit;
                      rtype   :TsrDataType;
-                     barycentric,inputs:PPsrRegNode):PsrRegNode;
+                     barycentric,inputs:PPsrRegNode):TsrRegNode;
 var
- tmp:array[0..2] of PsrRegNode;
+ tmp:array[0..2] of TsrRegNode;
  //
  i:Byte;
 begin
@@ -58,28 +58,28 @@ var
  //
  SprvEmit:TSprvEmit;
  //
- pVec4f      :PsrType;
- InputPos    :PsrVariable;
- OutputPos   :PsrVariable;
- InputParams :array[0..31] of PsrVariable;
- OutputParams:array[0..31] of PsrVariable;
+ pVec4f      :TsrType;
+ InputPos    :TsrVariable;
+ OutputPos   :TsrVariable;
+ InputParams :array[0..31] of TsrVariable;
+ OutputParams:array[0..31] of TsrVariable;
  //
- pChain      :PsrNode;
- UintId      :array[0..3] of PsrRegNode;
- Positions   :array[0..3] of PsrRegNode;
- positionsX  :array[0..2] of PsrRegNode;
- positionsY  :array[0..2] of PsrRegNode;
- CoordEqualX :array[0..2] of PsrRegNode;
- CoordEqualY :array[0..2] of PsrRegNode;
- EdgeVertex  :array[0..2] of PsrRegNode;
- barycentric :array[0..2] of PsrRegNode;
- Parameters  :array[0..2] of PsrRegNode;
- xyEqual     :PsrRegNode;
- yxEqual     :PsrRegNode;
- pOneId      :PsrRegNode;
- pMinusOne   :PsrRegNode;
- pIndex      :PsrRegNode;
- pLoaded     :PsrRegNode;
+ pChain      :TsrNode;
+ UintId      :array[0..3] of TsrRegNode;
+ Positions   :array[0..3] of TsrRegNode;
+ positionsX  :array[0..2] of TsrRegNode;
+ positionsY  :array[0..2] of TsrRegNode;
+ CoordEqualX :array[0..2] of TsrRegNode;
+ CoordEqualY :array[0..2] of TsrRegNode;
+ EdgeVertex  :array[0..2] of TsrRegNode;
+ barycentric :array[0..2] of TsrRegNode;
+ Parameters  :array[0..2] of TsrRegNode;
+ xyEqual     :TsrRegNode;
+ yxEqual     :TsrRegNode;
+ pOneId      :TsrRegNode;
+ pMinusOne   :TsrRegNode;
+ pIndex      :TsrRegNode;
+ pLoaded     :TsrRegNode;
  //
  i,a:Byte;
 begin
@@ -110,7 +110,7 @@ begin
 
  //postion i/o
  InputPos :=SprvEmit.AddPositionsInput(3);
- OutputPos:=SprvEmit.FetchOutput(etPos0,dtVec4f)^.pVar;
+ OutputPos:=SprvEmit.FetchOutput(etPos0,dtVec4f).pVar;
 
  //input param i/o
  if (INPUT_COUNT<>0) then
@@ -118,7 +118,7 @@ begin
   for a:=0 to INPUT_COUNT-1 do
   begin
    InputParams [a]:=SprvEmit.AddParametersInput(INPUT_INFO[a].LAYOUT_ID,3);
-   OutputParams[a]:=SprvEmit.FetchOutput(TpsslExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f)^.pVar;
+   OutputParams[a]:=SprvEmit.FetchOutput(TpsslExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f).pVar;
   end;
  end;
 

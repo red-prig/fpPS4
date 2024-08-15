@@ -29,7 +29,7 @@ type
   function  IsUnknow(Adr:TSrcAdr):Boolean;
   procedure emit_cond_block(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
   procedure emit_block_unknow(adr:TSrcAdr);
-  procedure UpBuildVol(last:PsrOpBlock);
+  procedure UpBuildVol(last:TsrOpBlock);
   procedure emit_loop(adr:TSrcAdr);
   procedure emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
  end;
@@ -38,11 +38,11 @@ implementation
 
 procedure TEmit_SOPP.emit_cond_block(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
 var
- src:PsrRegNode;
- pOpBlock:PsrOpBlock;
- pOpChild:PsrOpBlock;
- pOpLabel:array[0..1] of PspirvOp;
- pLBlock:PsrCFGBlock;
+ src:TsrRegNode;
+ pOpBlock:TsrOpBlock;
+ pOpChild:TsrOpBlock;
+ pOpLabel:array[0..1] of TspirvOp;
+ pLBlock:TsrCFGBlock;
  Info:array[0..1] of TsrBlockInfo;
 begin
  src:=MakeRead(pSlot,dtBool); //get before OpBranchConditional
@@ -50,27 +50,27 @@ begin
  pOpLabel[0]:=NewLabelOp(False);
  pOpLabel[1]:=NewLabelOp(False);
 
- pLBlock:=Cursor.pCode^.FTop.DownBlock(adr);
- Assert(pLBlock<>@Cursor.pCode^.FTop,'not found');
+ pLBlock:=Cursor.pCode.FTop.DownBlock(adr);
+ Assert(pLBlock<>Cursor.pCode.FTop,'not found');
 
  Info[0]:=Default(TsrBlockInfo);
  Info[1]:=Default(TsrBlockInfo);
 
- Case pLBlock^.bType of
+ Case pLBlock.bType of
   btAdr: //set new adr
    begin
     Info[0].b_adr:=Cursor.Adr;
     Info[0].e_adr:=Cursor.Adr;
     Info[0].bType:=btCond;
     //
-    Info[1].b_adr:=pLBlock^.pBLabel^.Adr;
-    Info[1].e_adr:=pLBlock^.pELabel^.Adr;
+    Info[1].b_adr:=pLBlock.pBLabel.Adr;
+    Info[1].e_adr:=pLBlock.pELabel.Adr;
     Info[1].bType:=btAdr;
    end;
   btCond: //normal cond
    begin
-    Info[0].b_adr:=pLBlock^.pBLabel^.Adr;
-    Info[0].e_adr:=pLBlock^.pELabel^.Adr;
+    Info[0].b_adr:=pLBlock.pBLabel.Adr;
+    Info[0].e_adr:=pLBlock.pELabel.Adr;
     Info[0].bType:=btCond;
     //
     Info[1].b_adr:=Info[0].b_adr;
@@ -81,13 +81,13 @@ begin
    Assert(false,'emit_cond_block');
  end;
 
- pOpLabel[0]^.Adr:=Info[0].b_adr;
- pOpLabel[1]^.Adr:=Info[0].e_adr;
+ pOpLabel[0].Adr:=Info[0].b_adr;
+ pOpLabel[1].Adr:=Info[0].e_adr;
 
  pOpBlock:=NewBlockOp(get_snapshot);
- pOpBlock^.SetLabels(pOpLabel[0],pOpLabel[1],nil);
- pOpBlock^.SetInfo(Info[0]);
- pOpBlock^.SetCond(src,not n);
+ pOpBlock.SetLabels(pOpLabel[0],pOpLabel[1],nil);
+ pOpBlock.SetInfo(Info[0]);
+ pOpBlock.SetCond(src,not n);
 
  PushBlockOp(line,pOpBlock,pLBlock);
 
@@ -102,57 +102,57 @@ begin
 
  //down group
  pOpChild:=AllocBlockOp;
- pOpChild^.SetInfo(Info[1]);
+ pOpChild.SetInfo(Info[1]);
  PushBlockOp(line,pOpChild,nil);
 
- if (pLBlock^.bType=btAdr) then //set new adr
+ if (pLBlock.bType=btAdr) then //set new adr
  begin
   set_code_ptr(adr.get_code_ptr,btAdr);
  end;
 end;
 
-procedure TEmit_SOPP.UpBuildVol(last:PsrOpBlock);
+procedure TEmit_SOPP.UpBuildVol(last:TsrOpBlock);
 var
- node:PsrOpBlock;
+ node:TsrOpBlock;
 begin
- node:=Main^.pBlock;
+ node:=Main.pBlock;
  While (node<>nil) do
  begin
 
-  Case node^.Block.bType of
-   btCond:PrivateList.build_volatile_cur(node^.Regs.pSnap_cur);
-   btLoop:PrivateList.build_volatile_brk(node^.Regs.pSnap_cur);
+  Case node.Block.bType of
+   btCond:PrivateList.build_volatile_cur(node.Regs.pSnap_cur);
+   btLoop:PrivateList.build_volatile_brk(node.Regs.pSnap_cur);
    else;
   end;
 
   if (node=last) then Break;
-  node:=node^.Parent;
+  node:=node.Parent;
  end;
 end;
 
 procedure TEmit_SOPP.emit_loop(adr:TSrcAdr);
 var
- node,pOpBlock:PsrOpBlock;
- pOpLabel:PspirvOp;
+ node,pOpBlock:TsrOpBlock;
+ pOpLabel:TspirvOp;
  FVolMark:TsrVolMark;
  bnew:Boolean;
 begin
- node:=Main^.pBlock;
- pOpBlock:=node^.FindUpLoop;
+ node:=Main.pBlock;
+ pOpBlock:=node.FindUpLoop;
  Assert(pOpBlock<>nil,'not found');
 
  pOpLabel:=nil;
 
  FVolMark:=vmNone;
- if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
+ if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
  begin
-  pOpLabel:=pOpBlock^.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
-  pOpBlock^.Cond.FUseCont:=True;
+  pOpLabel:=pOpBlock.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
+  pOpBlock.Cond.FUseCont:=True;
   FVolMark:=vmCont;
  end else
- if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
+ if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
  begin
-  pOpLabel:=pOpBlock^.Labels.pEndOp;
+  pOpLabel:=pOpBlock.Labels.pEndOp;
   FVolMark:=vmBreak;
  end else
  begin
@@ -162,10 +162,10 @@ begin
  Assert(pOpLabel<>nil);
 
  bnew:=true;
- if Cursor.pBlock^.IsEndOf(Cursor.Adr) then //is last
+ if Cursor.pBlock.IsEndOf(Cursor.Adr) then //is last
  begin
   //Assert(node^.Block.e_adr.get_pc=Cursor.Adr.get_pc);
-  Case node^.Block.bType of
+  Case node.Block.bType of
    btSetpc:;
    else
      begin
@@ -175,7 +175,7 @@ begin
  end;
 
  UpBuildVol(pOpBlock);
- node^.Regs.FVolMark:=FVolMark; //mark end of
+ node.Regs.FVolMark:=FVolMark; //mark end of
 
  OpBranch(line,pOpLabel);
  if bnew then
@@ -186,29 +186,29 @@ end;
 
 procedure TEmit_SOPP.emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
 var
- src:PsrRegNode;
- node,pOpBlock:PsrOpBlock;
- pOpLabel:array[0..1] of PspirvOp;
+ src:TsrRegNode;
+ node,pOpBlock:TsrOpBlock;
+ pOpLabel:array[0..1] of TspirvOp;
  FVolMark:TsrVolMark;
 begin
  src:=MakeRead(pSlot,dtBool);
 
- node:=Main^.pBlock;
- pOpBlock:=node^.FindUpLoop;
+ node:=Main.pBlock;
+ pOpBlock:=node.FindUpLoop;
  Assert(pOpBlock<>nil,'not found');
 
  pOpLabel[0]:=nil;
 
  FVolMark:=vmNone;
- if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
+ if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
  begin
-  pOpLabel[0]:=pOpBlock^.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
-  pOpBlock^.Cond.FUseCont:=True;
+  pOpLabel[0]:=pOpBlock.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
+  pOpBlock.Cond.FUseCont:=True;
   FVolMark:=vmCont;
  end else
- if (pOpBlock^.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
+ if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
  begin
-  pOpLabel[0]:=pOpBlock^.Labels.pEndOp;
+  pOpLabel[0]:=pOpBlock.Labels.pEndOp;
   FVolMark:=vmBreak;
  end else
  begin
@@ -219,7 +219,7 @@ begin
  pOpLabel[1]:=NewLabelOp(False);
 
  UpBuildVol(pOpBlock);
- node^.Regs.FVolMark:=FVolMark; //mark end of
+ node.Regs.FVolMark:=FVolMark; //mark end of
 
  OpCondMerge(line,pOpLabel[1]);
 
@@ -233,42 +233,42 @@ end;
 
 function TEmit_SOPP.IsBegLoop(Adr:TSrcAdr):Boolean;
 var
- node:PsrCFGBlock;
+ node:TsrCFGBlock;
 begin
  Result:=false;
- node:=Cursor.pBlock^.FindUpLoop;
+ node:=Cursor.pBlock.FindUpLoop;
  if (node<>nil) then
  begin
-  Result:=node^.pBLabel^.Adr.get_code_ptr=Adr.get_code_ptr;
+  Result:=node.pBLabel.Adr.get_code_ptr=Adr.get_code_ptr;
  end;
 end;
 
 function TEmit_SOPP.IsEndLoop(Adr:TSrcAdr):Boolean;
 var
- node:PsrCFGBlock;
+ node:TsrCFGBlock;
 begin
  Result:=false;
- node:=Cursor.pBlock^.FindUpLoop;
+ node:=Cursor.pBlock.FindUpLoop;
  if (node<>nil) then
  begin
-  Result:=node^.pELabel^.Adr.get_code_ptr=Adr.get_code_ptr;
+  Result:=node.pELabel.Adr.get_code_ptr=Adr.get_code_ptr;
  end;
 end;
 
 function TEmit_SOPP.IsUnknow(Adr:TSrcAdr):Boolean;
 var
- pLabel:PsrLabel;
+ pLabel:TsrLabel;
 begin
  pLabel:=FindLabel(Adr);
  Assert(pLabel<>nil);
 
- Result:=pLabel^.IsType(ltUnknow);
+ Result:=pLabel.IsType(ltUnknow);
 end;
 
 procedure TEmit_SOPP.emit_S_BRANCH_COND(pSlot:PsrRegSlot;n:Boolean);
 var
  c_adr,b_adr:TSrcAdr;
- pLabel:PsrLabel;
+ pLabel:TsrLabel;
 begin
  c_adr:=Cursor.Adr;
  b_adr:=c_adr;
@@ -278,7 +278,7 @@ begin
  Assert(pLabel<>nil);
  //Assert(not pLabel^.IsType(ltUnknow));
 
- if pLabel^.IsType(ltBegAdr) then //adr
+ if pLabel.IsType(ltBegAdr) then //adr
  begin
   emit_cond_block(pSlot,n,b_adr);
  end else
@@ -288,7 +288,7 @@ begin
   emit_loop_cond(pSlot,n,b_adr);
  end else
  begin //down
-  if Cursor.pBlock^.IsBigOf(b_adr) then
+  if Cursor.pBlock.IsBigOf(b_adr) then
   begin //break?
    if not IsEndLoop(b_adr) then Assert(false,'Unknow');
    emit_loop_cond(pSlot,n,b_adr);
@@ -304,14 +304,14 @@ procedure TEmit_SOPP.emit_block_unknow(adr:TSrcAdr);
 var
  c_adr:TSrcAdr;
  e_adr:TSrcAdr;
- pOpChild:PsrOpBlock;
+ pOpChild:TsrOpBlock;
  Info:TsrBlockInfo;
 begin
  Info:=Default(TsrBlockInfo);
 
  c_adr:=Cursor.Adr;                          //get current
  set_code_ptr(adr.get_code_ptr,btAdrBranch); //set new
- e_adr:=Cursor.pCode^.FTop.pELabel^.Adr;     //get end of code
+ e_adr:=Cursor.pCode.FTop.pELabel.Adr;       //get end of code
  set_code_ptr(c_adr.get_code_ptr,btMain);    //ret current
 
  Info.b_adr:=adr;
@@ -320,7 +320,7 @@ begin
 
  //down group
  pOpChild:=AllocBlockOp;
- pOpChild^.SetInfo(Info);
+ pOpChild.SetInfo(Info);
  PushBlockOp(line,pOpChild,nil);
 
  set_code_ptr(adr.get_code_ptr,btAdrBranch);
@@ -358,7 +358,7 @@ end;
 
 procedure TEmit_SOPP.mark_end_of;
 begin
- Main^.pBlock^.Regs.FVolMark:=vmEnd; //mark end of
+ Main.pBlock.Regs.FVolMark:=vmEnd; //mark end of
 end;
 
 procedure TEmit_SOPP.emit_SOPP;

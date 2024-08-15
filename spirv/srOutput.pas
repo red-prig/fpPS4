@@ -51,30 +51,20 @@ type
   foDepthUnchanged
  );
 
- ntOutput=class(ntDescriptor)
-  class Function  pwrite_count  (node:PsrNode):PDWORD;        override;
-  class function  GetStorageName(node:PsrNode):RawByteString; override;
- end;
-
- PsrOutput=^TsrOutput;
- TsrOutput=object(TsrDescriptor)
-  type
-   PVNode=^TVNode;
-   TVNode=record
-    pPrev,pNext:PVNode;
-    pLine:PspirvOp;
-   end;
-   TNodeList=specialize TNodeList<PVNode>;
+ TsrOutput=class(TsrDescriptor)
   var
-   FEmit:TCustomEmit;
-   fwrite_count:DWORD;
    etype:TpsslExportType;
-   FLineList:TNodeList;
+   FLineList:TDependenceNodeList;
+  //
+  function  _GetStorageName:RawByteString; override;
+  //
   function  GetStorageName:RawByteString;
-  procedure AddLine(pLine:PspirvOp);
-  Procedure FetchStore(pLine:PspirvOp;src:PsrRegNode);
+  procedure AddLine(pLine:TSpirvOp);
+  Procedure FetchStore(pLine:TSpirvOp;src:TsrRegNode);
   Procedure UpdateRegType;
  end;
+
+ ntOutput=TsrOutput;
 
  PsrOutputList=^TsrOutputList;
  TsrOutputList=object
@@ -82,22 +72,17 @@ type
   FDepthMode:TDepthMode;
   data:array[TpsslExportType] of TsrOutput;
   Procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
+  function  Fetch(etype:TpsslExportType;rtype:TsrDataType):TsrOutput;
   procedure Post;
   procedure AllocBinding;
-  procedure AllocEntryPoint(EntryPoint:PSpirvOp);
+  procedure AllocEntryPoint(EntryPoint:TSpirvOp);
  end;
 
 implementation
 
-class Function ntOutput.pwrite_count(node:PsrNode):PDWORD;
+function TsrOutput._GetStorageName:RawByteString;
 begin
- Result:=@PsrOutput(node)^.fwrite_count;
-end;
-
-class function ntOutput.GetStorageName(node:PsrNode):RawByteString;
-begin
- Result:=PsrOutput(node)^.GetStorageName;
+ Result:=GetStorageName;
 end;
 
 //
@@ -107,20 +92,20 @@ begin
  Result:=GetEnumName(TypeInfo(TpsslExportType),ord(etype));
 end;
 
-procedure TsrOutput.AddLine(pLine:PspirvOp);
+procedure TsrOutput.AddLine(pLine:TSpirvOp);
 var
- node:PVNode;
+ node:TDependenceNode;
 begin
- node:=FEmit.Alloc(SizeOf(TVNode));
- node^.pLine:=pLine;
+ node:=NewDependence;
+ node.pNode:=pLine;
  FLineList.Push_tail(node);
 end;
 
-Procedure TsrOutput.FetchStore(pLine:PspirvOp;src:PsrRegNode);
+Procedure TsrOutput.FetchStore(pLine:TSpirvOp;src:TsrRegNode);
 begin
  if (src=nil) then Exit;
 
- pLine:=PspirvOp(FEmit.OpStore(pLine,FVar,src));
+ pLine:=Emit.OpStore(pLine,FVar,src);
 
  AddLine(pLine);
 end;
@@ -128,36 +113,35 @@ end;
 Procedure TsrOutput.UpdateRegType;
 var
  pBitcastList:PsrBitcastList;
- node:PVNode;
- pLine:PspirvOp;
- dst:PsrRegNode;
+ node:TDependenceNode;
+ pLine:TSpirvOp;
+ dst:TsrRegNode;
  old,rtype:TsrDataType;
 begin
- rtype:=FType^.dtype;
+ rtype:=FType.dtype;
 
- pBitcastList:=FEmit.GetBitcastList;
+ pBitcastList:=Emit.GetBitcastList;
 
  node:=FLineList.pHead;
  While (node<>nil) do
  begin
-  pLine:=node^.pLine;
+  pLine:=node.pNode;
 
-  Case pLine^.OpId of
+  Case pLine.OpId of
 
    Op.OpStore:
     begin
-     pLine^.ParamFirst^.Value^.PrepType(ord(rtype));
+     pLine.ParamNode(1).Value.PrepType(ord(rtype));
 
-     dst:=pLine^.ParamFirst^.Value^.AsType(ntReg);
+     dst:=pLine.ParamNode(1).Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
-      old:=dst^.dtype;
+      old:=dst.dtype;
       if (old<>dtUnknow) and (rtype<>old) then
       begin
        //OpStore <- new <- dst
-       pBitcastList:=FEmit.GetBitcastList;
        dst:=pBitcastList^.FetchRead(rtype,dst);
-       pLine^.ParamFirst^.Value:=dst;
+       pLine.ParamNode(1).Value:=dst;
       end;
      end;
     end;
@@ -165,33 +149,33 @@ begin
    else;
   end;
 
-  node:=node^.pNext;
+  node:=node.pNext;
  end;
 end;
 
 //
 
 Procedure TsrOutputList.Init(Emit:TCustomEmit); inline;
-var
- i:TpsslExportType;
 begin
  FEmit:=Emit;
- For i:=Low(TpsslExportType) to High(TpsslExportType) do
- begin
-  data[i].fntype  :=ntOutput;
-  data[i].etype   :=i;
-  data[i].FStorage:=StorageClass.Output;
-  data[i].FBinding:=-1;
- end;
 end;
 
-function TsrOutputList.Fetch(etype:TpsslExportType;rtype:TsrDataType):PsrOutput;
+function TsrOutputList.Fetch(etype:TpsslExportType;rtype:TsrDataType):TsrOutput;
 begin
- Result:=@data[etype];
+ Result:=data[etype];
  //
- Result^.FEmit:=FEmit;
- Result^.InitType(rtype,FEmit);
- Result^.InitVar(FEmit);
+ if (Result=nil) then
+ begin
+  Result:=FEmit.specialize New<TsrOutput>;
+  Result.etype   :=etype;
+  Result.FStorage:=StorageClass.Output;
+  Result.FBinding:=-1;
+  //
+  data[etype]:=Result;
+ end;
+ //
+ Result.InitType(rtype);
+ Result.InitVar();
 end;
 
 //
@@ -201,6 +185,7 @@ var
  i:TpsslExportType;
 begin
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
+ if (data[i]<>nil) then
  begin
   if (data[i].pVar<>nil) and data[i].IsUsed then
   begin
@@ -213,11 +198,12 @@ procedure TsrOutputList.AllocBinding;
 var
  pDecorateList:PsrDecorateList;
  i:TpsslExportType;
- pVar:PsrVariable;
+ pVar:TsrVariable;
  FLocation:Integer;
 begin
  pDecorateList:=FEmit.GetDecorateList;
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
+ if (data[i]<>nil) then
  begin
   pVar:=data[i].pVar;
   if (pVar<>nil) and data[i].IsUsed then
@@ -259,19 +245,20 @@ begin
 
 end;
 
-procedure TsrOutputList.AllocEntryPoint(EntryPoint:PSpirvOp);
+procedure TsrOutputList.AllocEntryPoint(EntryPoint:TSpirvOp);
 var
  i:TpsslExportType;
- pVar:PsrVariable;
+ pVar:TsrVariable;
 begin
  if (EntryPoint=nil) then Exit;
  For i:=Low(TpsslExportType) to High(TpsslExportType) do
+ if (data[i]<>nil) then
  begin
   pVar:=data[i].pVar;
   if (not data[i].IsUsed) and (pVar<>nil) then assert(false);
   if (pVar<>nil) and data[i].IsUsed then
   begin
-   EntryPoint^.AddParam(pVar);
+   EntryPoint.AddParam(pVar);
   end;
  end;
 end;

@@ -24,6 +24,11 @@ type
   minStorageBufferOffsetAlignment:PtrUint; // $10
   minUniformBufferOffsetAlignment:PtrUint; // $100
   //
+  BitcastPointer:packed record
+   Workgroup:Boolean;
+   Storage  :Boolean;
+  end;
+  //
   OnGetDmem:TcbGetDmem;
   //
   Procedure Init;
