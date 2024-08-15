@@ -60,8 +60,12 @@ type
   function  fetch_ssrc8(SOFFSET:Word;rtype:TsrDataType):PsrRegNode;
   function  fetch_ssrc9(SSRC:Word;rtype:TsrDataType):PsrRegNode;
   function  fetch_ssrc9_pair(SSRC:Word;src:PPsrRegNode;rtype:TsrDataType):Boolean;
+  function  fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
   function  fetch_vsrc8(VSRC:Word;rtype:TsrDataType):PsrRegNode;
   function  fetch_vdst8(VDST:Word;rtype:TsrDataType):PsrRegNode;
+  function  fetch_vdst8_64(VDST:Word;rtype:TsrDataType):PsrRegNode;
+  //
+  procedure MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
   //
   procedure OpCmpV(OpId:DWORD;dst:PsrRegSlot;src0,src1:PsrRegNode);
   procedure OpCmpS(OpId:DWORD;dst:PsrRegSlot;src0,src1:PsrRegNode);
@@ -470,6 +474,19 @@ begin
  end;
 end;
 
+function TEmitFetch.fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
+var
+ src:array[0..1] of PsrRegNode;
+ dst:PsrRegNode;
+begin
+ if not fetch_ssrc9_pair(SSRC,@src,dtUint32) then Assert(false);
+
+ dst:=NewReg(dtVec2u);
+ OpMakeCon(line,dst,@src);
+
+ Result:=BitcastList.FetchRead(rtype,dst);
+end;
+
 function TEmitFetch.fetch_vsrc8(VSRC:Word;rtype:TsrDataType):PsrRegNode;
 var
  src:PsrRegSlot;
@@ -486,6 +503,41 @@ begin
  src:=RegsStory.get_vdst8(VDST);
  Result:=MakeRead(src,rtype);
  Assert(Result<>nil,'fetch_vdst8');
+end;
+
+function TEmitFetch.fetch_vdst8_64(VDST:Word;rtype:TsrDataType):PsrRegNode;
+var
+ src:array[0..1] of PsrRegNode;
+ dst:PsrRegNode;
+begin
+ src[0]:=fetch_vdst8(VDST+0,dtUint32);
+ src[1]:=fetch_vdst8(VDST+1,dtUint32);
+
+ if (src[0]=nil) or (src[1]=nil) then
+ begin
+  Assert(False);
+ end;
+
+ dst:=NewReg(dtVec2u);
+ OpMakeCon(line,dst,@src);
+
+ Result:=BitcastList.FetchRead(rtype,dst);
+end;
+
+//
+
+procedure TEmitFetch.MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
+var
+ dst:PsrRegNode;
+ node:array[0..1] of PsrRegNode;
+begin
+ dst:=BitcastList.FetchRead(dtVec2u,src);
+
+ node[0]:=dst0^.New(line,dtUint32);
+ node[1]:=dst1^.New(line,dtUint32);
+
+ OpExtract(line,node[0],dst,0);
+ OpExtract(line,node[1],dst,1);
 end;
 
 //

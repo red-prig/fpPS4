@@ -865,7 +865,19 @@ begin
   Op.OpAtomicStore,
   Op.OpAtomicExchange,
   Op.OpAtomicCompareExchange,
-  Op.OpAtomicCompareExchangeWeak:Result:=True;
+  Op.OpAtomicCompareExchangeWeak,
+  Op.OpAtomicIIncrement,
+  Op.OpAtomicIDecrement,
+  Op.OpAtomicIAdd,
+  Op.OpAtomicISub,
+  Op.OpAtomicSMin,
+  Op.OpAtomicUMin,
+  Op.OpAtomicSMax,
+  Op.OpAtomicUMax,
+  Op.OpAtomicAnd,
+  Op.OpAtomicOr,
+  Op.OpAtomicXor:
+   Result:=True;
   else
    Result:=False;
  end;

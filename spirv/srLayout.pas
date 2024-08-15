@@ -30,7 +30,9 @@ type
   rtVSharp4,
   rtSSharp4,
   rtTSharp4,
-  rtTSharp8
+  rtTSharp8,
+  rtLDS,
+  rtGDS
  );
 
 type
@@ -183,6 +185,8 @@ type
   function  Grouping(const chain:TsrChains;rtype:TsrResourceType):PsrDataLayout;
   function  FetchImmData(size:Integer;pData:Pointer):PsrDataImm;
   function  FetchImm(pData:PDWORD;rtype:TsrResourceType):PsrDataLayout;
+  function  FetchLDS():PsrDataLayout;
+  function  FetchGDS():PsrDataLayout;
   function  EnumChain(cb:TChainCb):Integer;
   Procedure AllocID;
   procedure AllocSourceExtension;
@@ -446,6 +450,8 @@ begin
   rtSSharp4:Result:='S';
   rtTSharp4:Result:='t';
   rtTSharp8:Result:='T';
+  rtLDS    :Result:='L';
+  rtGDS    :Result:='G';
  end;
 end;
 
@@ -621,6 +627,16 @@ begin
  parent:=Fetch(pRoot,dst^.FImmOffset,rtImmData,dst);
 
  Result:=Fetch(parent,0,rtype,parent^.GetData);
+end;
+
+function TsrDataLayoutList.FetchLDS():PsrDataLayout;
+begin
+ Result:=Fetch(pRoot,0,rtLDS,nil);
+end;
+
+function TsrDataLayoutList.FetchGDS():PsrDataLayout;
+begin
+ Result:=Fetch(pRoot,0,rtGDS,nil);
 end;
 
 function TsrDataLayoutList.EnumChain(cb:TChainCb):Integer;

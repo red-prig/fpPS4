@@ -1207,8 +1207,7 @@ type
  end;
 
  TDS=bitpacked record
-  OFFSET0:Byte;
-  OFFSET1:Byte;
+  OFFSET:array[0..1] of Byte;
   reserved1:bit1;
   GDS:bit1;
   OP:Byte;
@@ -2281,7 +2280,7 @@ begin
  if Byte(VOP3.ABS).TestBit(0) then str:=str+'abs(';
  str:=str+_get_ssrc9(VOP3.SRC0);
  if Byte(VOP3.ABS).TestBit(0) then str:=str+')';
- Write(', ');
+ str:=str+', ';
 
  if Byte(VOP3.NEG).TestBit(1) then str:=str+'-';
  if Byte(VOP3.ABS).TestBit(1) then str:=str+'abs(';
@@ -3069,9 +3068,9 @@ begin
  str:=str+IntToStr(SPI.MTBUF.OFFSET);
  str:=str+', ';
 
- Write('[');
+ str:=str+'[';
  str:=str+_get_ssrc8(SPI.MTBUF.SOFFSET);
- Write(']');
+ str:=str+']';
 
  if SPI.MTBUF.OFFEN=1 then str:=str+' OFFEN';
  if SPI.MTBUF.IDXEN=1 then str:=str+' IDXEN';
@@ -3554,11 +3553,11 @@ begin
  //vsrc1
  str:=str+_get_vdst8(SPI.DS.DATA1);
 
- str:=str+' OFFSET:0x'+HexStr(SPI.DS.OFFSET1,2)+HexStr(SPI.DS.OFFSET0,2);
+ str:=str+' OFFSET:0x'+HexStr(WORD(SPI.DS.OFFSET),4);
 
  str:=str+' GDS:'+IntToSTr(SPI.DS.GDS);
 
- Writeln;
+ Writeln(str);
 end;
 
 

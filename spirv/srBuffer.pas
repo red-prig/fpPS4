@@ -681,6 +681,24 @@ end;
 function TsrBuffer.GetStorageName:RawByteString;
 begin
  Result:='';
+
+ if (key.pLayout<>nil) then
+ begin
+  case key.pLayout^.key.rtype of
+   rtLDS:
+    begin
+     Result:='sLds'+IntToStr(FBinding);
+     Exit;
+    end;
+   rtGDS:
+    begin
+     Result:='sGds'+IntToStr(FBinding);
+     Exit;
+    end;
+   else;
+  end;
+ end;
+
  Case bType of
   btStorageBuffer:Result:='sBuf'+IntToStr(FBinding);
   btUniformBuffer:Result:='uBuf'+IntToStr(FBinding);

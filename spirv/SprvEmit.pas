@@ -80,7 +80,7 @@ uses
  emit_VOP1,
  emit_VOPC,
  emit_VOP3,
- //emit_DS,
+ emit_DS,
  emit_MUBUF,
  emit_MTBUF,
  emit_EXP,
@@ -608,7 +608,7 @@ begin
             else
                      TEmit_VOP3(obj).emit_VOP3a;
            end;
-  //W_DS    :TEmit_DS    (obj).emit_DS;
+  W_DS    :TEmit_DS    (obj).emit_DS;
   W_MUBUF :TEmit_MUBUF (obj).emit_MUBUF;
   W_MTBUF :TEmit_MTBUF (obj).emit_MTBUF;
   W_EXP   :TEmit_EXP   (obj).emit_EXP;

@@ -54,8 +54,6 @@ type
   procedure emit_V_MAD_F32;
   procedure emit_V_MAD_LEGACY_F32;
   procedure emit_V_MAD_I32_I24;
-  function  fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
-  procedure MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
   procedure emit_V_MAD_U32_U24;
   procedure emit_V_MAD_U64_U32;
   procedure emit_V_SAD_U32;
@@ -754,33 +752,6 @@ begin
  src[1]^.PrepType(ord(dtUInt32));
 
  OpFmaU32(dst,src[0],src[1],src[2]);
-end;
-
-function TEmit_VOP3.fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):PsrRegNode;
-var
- src:array[0..1] of PsrRegNode;
- dst:PsrRegNode;
-begin
- if not fetch_ssrc9_pair(SSRC,@src,dtUint32) then Assert(false);
-
- dst:=NewReg(dtVec2u);
- OpMakeCon(line,dst,@src);
-
- Result:=BitcastList.FetchRead(rtype,dst);
-end;
-
-procedure TEmit_VOP3.MakeCopy64(dst0,dst1:PsrRegSlot;src:PsrRegNode);
-var
- dst:PsrRegNode;
- node:array[0..1] of PsrRegNode;
-begin
- dst:=BitcastList.FetchRead(dtVec2u,src);
-
- node[0]:=dst0^.New(line,dtUint32);
- node[1]:=dst1^.New(line,dtUint32);
-
- OpExtract(line,node[0],dst,0);
- OpExtract(line,node[1],dst,1);
 end;
 
 //vdst.du = vsrc0.u * vsrc1.u + vsrc2.du; VCC = carry & EXEC

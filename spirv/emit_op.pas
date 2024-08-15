@@ -1034,35 +1034,17 @@ end;
 
 procedure TEmitOp.OpIAdd(dst:PsrRegSlot;src0,src1:PsrRegNode);
 begin
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Op2(Op.OpIAdd,dtInt32,dst,src0,src1);
- end else
- begin
-  Op2(Op.OpIAdd,dtUInt32,dst,src0,src1);
- end;
+ Op2(Op.OpIAdd,LazyIntType(src0^.dtype,src1^.dtype),dst,src0,src1);
 end;
 
 procedure TEmitOp.OpISub(dst:PsrRegSlot;src0,src1:PsrRegNode);
 begin
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Op2(Op.OpISub,dtInt32,dst,src0,src1);
- end else
- begin
-  Op2(Op.OpISub,dtUInt32,dst,src0,src1);
- end;
+ Op2(Op.OpISub,LazyIntType(src0^.dtype,src1^.dtype),dst,src0,src1);
 end;
 
 procedure TEmitOp.OpIMul(dst:PsrRegSlot;src0,src1:PsrRegNode);
 begin
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Op2(Op.OpIMul,dtInt32,dst,src0,src1);
- end else
- begin
-  Op2(Op.OpIMul,dtUInt32,dst,src0,src1);
- end;
+ Op2(Op.OpIMul,LazyIntType(src0^.dtype,src1^.dtype),dst,src0,src1);
 end;
 
 //
@@ -1108,13 +1090,7 @@ begin
  if (src0=nil) then Exit(src1);
  if (src1=nil) then Exit(src0);
 
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Result:=NewReg(dtInt32);
- end else
- begin
-  Result:=NewReg(dtUInt32);
- end;
+ Result:=NewReg(LazyIntType(src0^.dtype,src1^.dtype));
 
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpIAdd,Result,src0,src1));
 end;
@@ -1130,13 +1106,7 @@ begin
  if (src0=nil) then Exit(src1);
  if (src1=nil) then Exit(src0);
 
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Result:=NewReg(dtInt32);
- end else
- begin
-  Result:=NewReg(dtUInt32);
- end;
+ Result:=NewReg(LazyIntType(src0^.dtype,src1^.dtype));
 
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpISub,Result,src0,src1));
 end;
@@ -1152,13 +1122,7 @@ begin
  if (src0=nil) then Exit(src1);
  if (src1=nil) then Exit(src0);
 
- if (src0^.dtype=dtInt32) or (src1^.dtype=dtInt32) then
- begin
-  Result:=NewReg(dtInt32);
- end else
- begin
-  Result:=NewReg(dtUInt32);
- end;
+ Result:=NewReg(LazyIntType(src0^.dtype,src1^.dtype));
 
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpIMul,Result,src0,src1));
 end;

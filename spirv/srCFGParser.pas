@@ -470,6 +470,51 @@ begin
  Result:=True;
 end;
 
+function GetBeginAdr(node:PsrCFGBlock):TSrcAdr;
+begin
+ Result:=Default(TSrcAdr);
+ //
+ while (node<>nil) do
+ begin
+  if (node^.pBLabel=nil) then
+  begin
+   if (node^.pPrev=nil) then
+   begin
+    node:=node^.pParent;
+   end else
+   begin
+    node:=node^.pPrev;
+   end;
+  end else
+  begin
+   Exit(node^.pBLabel^.Adr);
+  end;
+ end;
+end;
+
+function GetEndAdr(node:PsrCFGBlock):TSrcAdr;
+begin
+ Result:=Default(TSrcAdr);
+ Result.Offdw:=High(DWORD);
+ //
+ while (node<>nil) do
+ begin
+  if (node^.pELabel=nil) then
+  begin
+   if (node^.pNext=nil) then
+   begin
+    node:=node^.pParent;
+   end else
+   begin
+    node:=node^.pNext;
+   end;
+  end else
+  begin
+   Exit(node^.pELabel^.Adr);
+  end;
+ end;
+end;
+
 procedure TsrCFGParser.emit_S_BRANCH;
 var
  pLabel:array[0..1] of PsrLabel;
@@ -487,19 +532,12 @@ begin
  if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
  begin
 
-  child:=pBlock^.FList.pTail;
+  child :=pBlock^.FList.pTail;
   parent:=pBlock;
 
   repeat
 
-   if (parent^.pBLabel=nil) then
-   begin
-    t_adr:=c_adr;
-    t_adr.Offdw:=0;
-   end else
-   begin
-    t_adr:=parent^.pBLabel^.Adr;
-   end;
+   t_adr:=GetBeginAdr(parent);
 
    if (parent^.bType=btLoop) and
       (t_adr.get_code_ptr=b_adr.get_code_ptr) then //is exist loop
@@ -522,29 +560,40 @@ begin
    if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
    if (parent^.pParent=nil) then Break;
 
-   child:=parent;
+   child :=parent;
    parent:=parent^.pParent;
   until false;
 
+  //up child for move
   if (child<>nil) then
-  repeat  //up list
-   if child^.IsContain(t_adr) then Assert(false);
+  begin
+   t_adr:=GetEndAdr(child);
 
-   prev:=child^.pPrev;
-   if (prev=nil) then Break;
-
-   if (prev^.pELabel=nil) then
+   if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then
    begin
-    t_adr:=c_adr;
+    child:=nil;
    end else
+   repeat
+    prev:=child^.pPrev;
+    if (prev=nil) then Break;
+
+    t_adr:=GetEndAdr(prev);
+
+    if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
+
+    child:=prev;
+   until false;
+
+   if (child<>nil) then
    begin
-    t_adr:=prev^.pELabel^.Adr;
+    if (GetBeginAdr(child).get_code_ptr<b_adr.get_code_ptr) and
+       (GetEndAdr  (child).get_code_ptr>b_adr.get_code_ptr) then
+    begin
+     Assert(false,'branch betwen condition');
+    end;
    end;
 
-   if (t_adr.get_code_ptr<=b_adr.get_code_ptr) then Break;
-
-   child:=prev;
-  until false;
+  end;
 
   //new loop block
 
@@ -561,8 +610,7 @@ begin
  end else //down
  begin
 
-  if (pBlock^.pELabel<>nil) then
-  if (pBlock^.pELabel^.Adr.get_code_ptr<b_adr.get_code_ptr) then
+  if (GetEndAdr(pBlock).get_code_ptr<b_adr.get_code_ptr) then
   begin
    //push adr or loop end
    if not pLabel[1]^.IsType(ltBegAdr) then

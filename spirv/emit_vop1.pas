@@ -17,6 +17,7 @@ type
  TEmit_VOP1=class(TEmitFetch)
   procedure emit_VOP1;
   procedure emit_V_MOV_B32;
+  procedure emit_V_READFIRSTLANE_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure emit_V_CVT_F16_F32;
   procedure emit_V_CVT_F32_F16;
@@ -30,6 +31,7 @@ type
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_RSQ_CLAMP_F32;
   procedure emit_V_SIN_COS(OpId:DWORD);
+  procedure emit_V_NOT_B32;
   procedure emit_V_RCP_F32;
   procedure emit_V_FFBL_B32;
   procedure emit_V_BFREV_B32;
@@ -42,6 +44,18 @@ Var
  dst:PsrRegSlot;
  src:PsrRegNode;
 begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
+ MakeCopy(dst,src);
+end;
+
+procedure TEmit_VOP1.emit_V_READFIRSTLANE_B32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ Writeln(stderr,'TODO: V_READFIRSTLANE_B32');
+ //
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
  MakeCopy(dst,src);
@@ -241,6 +255,17 @@ begin
  OpGlsl1(OpId,dtFloat32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_NOT_B32;
+Var
+ dst:PsrRegSlot;
+ src:PsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
+
+ OpNot(dst,src);
+end;
+
 procedure TEmit_VOP1.emit_V_RCP_F32;
 Var
  dst:PsrRegSlot;
@@ -270,7 +295,6 @@ procedure TEmit_VOP1.emit_V_BFREV_B32;
 Var
  dst:PsrRegSlot;
  src:PsrRegNode;
- one:PsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUInt32);
@@ -286,6 +310,8 @@ begin
   V_NOP:;
 
   V_MOV_B32: emit_V_MOV_B32;
+
+  V_READFIRSTLANE_B32: emit_V_READFIRSTLANE_B32;
 
   V_CVT_F32_I32: emit_V_CVT(Op.OpConvertSToF,dtFloat32,dtInt32);
   V_CVT_F32_U32: emit_V_CVT(Op.OpConvertUToF,dtFloat32,dtUInt32);
@@ -322,6 +348,8 @@ begin
 
   V_SIN_F32  : emit_V_SIN_COS(GlslOp.Sin);
   V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
+
+  V_NOT_B32  : emit_V_NOT_B32;
 
   V_RCP_F32  : emit_V_RCP_F32;
   V_RCP_IFLAG_F32: emit_V_RCP_F32;

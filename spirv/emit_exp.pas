@@ -103,6 +103,10 @@ begin
  case TpsslExportType(TGT) of
   etMrt0..etMrt7:
    begin
+    if is_bindless(TGT) then
+    begin
+     Result:=dtFloat32;
+    end else
     case (FExportInfo[TGT].NUMBER_TYPE and 7) of
      NUMBER_UINT:Result:=dtUint32;
      NUMBER_SINT:Result:=dtInt32;
@@ -133,10 +137,15 @@ begin
  case TpsslExportType(TGT) of
   etMrt0..etMrt7:
    begin
-    i:=COLOR_COUNT[FExportInfo[TGT].FORMAT and 31];
-    Assert(i<>0);
-    //
-    Result:=shader_swizzle_map[i,FExportInfo[TGT].COMP_SWAP and 3];
+    if is_bindless(TGT) then
+    begin
+     Result:=dst_sel_ident;
+    end else
+    begin
+     i:=COLOR_COUNT[FExportInfo[TGT].FORMAT and 31];
+     //
+     Result:=shader_swizzle_map[i,FExportInfo[TGT].COMP_SWAP and 3];
+    end;
    end;
  else;
  end;
@@ -223,8 +232,8 @@ begin
 
  //before
  if (TpsslExportType(FSPI.EXP.TGT)=etNull) or //only set kill mask
-    (FSPI.EXP.EN=0) or                        //nop
-    is_bindless(FSPI.EXP.TGT) then            //not binded
+    (FSPI.EXP.EN=0){ or                        //nop
+    is_bindless(FSPI.EXP.TGT)} then            //not binded
  begin
 
   While (push_count<>0) do

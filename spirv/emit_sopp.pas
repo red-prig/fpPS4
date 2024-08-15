@@ -309,10 +309,10 @@ var
 begin
  Info:=Default(TsrBlockInfo);
 
- c_adr:=Cursor.Adr;                       //get current
- set_code_ptr(adr.get_code_ptr,btAdrBranch);          //set new
- e_adr:=Cursor.pCode^.FTop.pELabel^.Adr;  //get end of code
- set_code_ptr(c_adr.get_code_ptr,btMain);             //ret current
+ c_adr:=Cursor.Adr;                          //get current
+ set_code_ptr(adr.get_code_ptr,btAdrBranch); //set new
+ e_adr:=Cursor.pCode^.FTop.pELabel^.Adr;     //get end of code
+ set_code_ptr(c_adr.get_code_ptr,btMain);    //ret current
 
  Info.b_adr:=adr;
  Info.e_adr:=e_adr;
@@ -345,8 +345,13 @@ begin
   emit_loop(b_adr);
  end else //down
  begin //break?
-  if not IsEndLoop(b_adr) then Assert(false,'Unknow');
-  emit_loop(b_adr);
+  if IsEndLoop(b_adr) then
+  begin
+   emit_loop(b_adr);
+  end else
+  begin
+   emit_block_unknow(b_adr);
+  end;
  end;
 
 end;

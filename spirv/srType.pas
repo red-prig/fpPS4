@@ -130,6 +130,7 @@ type
 function type_get_base_name1(dtype:TsrDataType):RawByteString;
 function LazyType2(t1,t2:TsrDataType):TsrDataType;
 function LazyType3(t1,t2,t3:TsrDataType):TsrDataType;
+function LazyIntType(dtype0,dtype1:TsrDataType):TsrDataType;
 function StoreType(t:TsrDataType):TsrDataType;
 function CompareType(rtype1,rtype2:TsrDataType):Boolean;
 function TryBitcastType(rtype1,rtype2:TsrDataType):Boolean;
@@ -211,6 +212,21 @@ function LazyType3(t1,t2,t3:TsrDataType):TsrDataType;
 begin
  if (t1<>dtUnknow) then Result:=t1 else Result:=t2;
  if (Result=dtUnknow) then Result:=t3;
+end;
+
+function LazyIntType(dtype0,dtype1:TsrDataType):TsrDataType;
+begin
+ if (dtype0=dtInt32) or (dtype1=dtInt32) then
+ begin
+  Result:=dtInt32;
+ end else
+ if (dtype0=dtInt64) or (dtype1=dtInt64) then
+ begin
+  Result:=dtInt64;
+ end else
+ begin
+  Result:=LazyType2(dtype0,dtype1);
+ end;
 end;
 
 function StoreType(t:TsrDataType):TsrDataType;

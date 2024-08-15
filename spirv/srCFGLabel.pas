@@ -71,19 +71,23 @@ begin
   Result:=nil;
  end else
  begin
-  Result:=PDWORD(pCode^.Body)+Offdw;
+  Result:=PDWORD(pCode^.Body);
  end;
+ //
+ Result:=PDWORD(Result)+Offdw;
 end;
 
 function TSrcAdr.get_dmem_ptr:PDWORD;
 begin
  if (pCode=nil) then
  begin
-  Result:=nil;
+  Result:=nil
  end else
  begin
-  Result:=PDWORD(pCode^.DMem)+Offdw;
+  Result:=PDWORD(pCode^.DMem);
  end;
+ //
+ Result:=PDWORD(Result)+Offdw;
 end;
 
 

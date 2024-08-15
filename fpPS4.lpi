@@ -1316,6 +1316,32 @@
         <Filename Value="vulkan\vRectGS.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="chip\shader_dump.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chip\ps4_tiling.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_Tiling"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chip\ps4_pssl.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\g_node_splay.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="chip\ps4_shader.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="spirv\emit_ds.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="emit_DS"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
