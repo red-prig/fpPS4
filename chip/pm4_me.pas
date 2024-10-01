@@ -779,26 +779,32 @@ begin
 
    Assert(resource_instance<>nil);
 
-   ri:=TvImage2(resource_instance^.resource^.rimage);
-
-   if (ri=nil) then
+   if not resource_instance^.prepared then
    begin
-    ri:=FetchImage(ctx.Cmd,
-                   FImage,
-                   resource_instance^.curr.img_usage
-                  );
+    resource_instance^.prepared:=true;
 
-    resource_instance^.resource^.rimage:=ri;
+    ri:=TvImage2(resource_instance^.resource^.rimage);
+
+    if (ri=nil) then
+    begin
+     ri:=FetchImage(ctx.Cmd,
+                    FImage,
+                    resource_instance^.curr.img_usage
+                   );
+
+     resource_instance^.resource^.rimage:=ri;
+    end;
+
+    //Writeln(ri.key.cformat);
+
+    pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
+
+    ri.PushBarrier(ctx.Cmd,
+                   GetAccessMask(resource_instance^.curr),
+                   GetImageLayout(resource_instance^.curr),
+                   ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+
    end;
-
-   //Writeln(ri.key.cformat);
-
-   pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
-
-   ri.PushBarrier(ctx.Cmd,
-                  GetAccessMask(resource_instance^.curr),
-                  GetImageLayout(resource_instance^.curr),
-                  ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
 
   end;
  end;
@@ -895,6 +901,8 @@ begin
      begin
       iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
+      //Writeln('BindImage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
+
       DescriptorGroup.BindImage(fset,bind,
                                 iv.FHandle,
                                 GetImageLayout(resource_instance^.curr));
@@ -902,6 +910,8 @@ begin
     vbStorage:
      begin
       iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
+
+      //Writeln('BindStorage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
 
       DescriptorGroup.BindStorage(fset,bind,
                                   iv.FHandle,

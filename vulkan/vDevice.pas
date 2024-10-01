@@ -819,7 +819,7 @@ var
  vkLayer  :array[0..0] of PChar;
  vkCInfo  :TVkInstanceCreateInfo;
  vkPrintf :TVkValidationFeaturesEXT;
- vkFeature:TVkValidationFeatureEnableEXT;
+ vkFeature:array[0..4] of TVkValidationFeatureEnableEXT;
  Features2:TVkPhysicalDeviceFeatures2;
  F16_8    :TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8    :TVkPhysicalDevice8BitStorageFeatures;
@@ -865,12 +865,16 @@ begin
 
  if debug and printf then
  begin
-  vkFeature:=VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+  vkFeature[0]:=VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
+  vkFeature[1]:=VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT;
+  //vkFeature[]:=VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
+  //vkFeature[1]:=VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
+  vkFeature[2]:=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
 
   vkPrintf:=Default(TVkValidationFeaturesEXT);
   vkPrintf.sType:=VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-  vkPrintf.enabledValidationFeatureCount:=1;
-  vkPrintf.pEnabledValidationFeatures   :=@vkFeature;
+  vkPrintf.enabledValidationFeatureCount:=3;
+  vkPrintf.pEnabledValidationFeatures   :=@vkFeature[0];
 
   vkCInfo.pNext:=@vkPrintf;
  end;

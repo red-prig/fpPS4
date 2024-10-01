@@ -192,6 +192,8 @@ type
   //
   resource:p_pm4_resource;
   //
+  prepared:Boolean;
+  //
   curr:t_pm4_usage;
   prev:t_pm4_usage;
   next:t_pm4_usage;
