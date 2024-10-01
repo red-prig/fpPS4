@@ -10,26 +10,33 @@ on:
 
 jobs:
   build_windows:
-    runs-on: self-hosted
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
+    - name: Checkout source code
+      uses: actions/checkout@v4
+    
+    - name: Install Lazarus
+      uses: red-prig/setup-lazarus@v3
+      with:
+        lazarus-version: "3.6"
+        with-cache: true
 
-      - name: Hash
-        shell: cmd
-        working-directory: ./
-        run: echo '%GITHUB_SHA:~0,7%' > tag.inc
+    - name: Hash
+      shell: cmd
+      working-directory: ./
+      run: echo '%GITHUB_SHA:~0,7%' > tag.inc
 
-      - name: Compile
-        shell: cmd
-        working-directory: ./
-        run: |
-          lazbuild -B fpPS4.lpi > nul
-          strip fpPS4.exe
+    - name: Compile
+      shell: cmd
+      working-directory: ./
+      run: |
+        lazbuild -B fpPS4.lpi > nul
+        strip fpPS4.exe
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: fpPS4
-          path: fpPS4.exe
-          if-no-files-found: warn
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: fpPS4
+        path: fpPS4.exe
+        if-no-files-found: warn
