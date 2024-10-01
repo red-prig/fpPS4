@@ -52,6 +52,12 @@ type
 
  pmap_t=p_pmap;
 
+ t_pmap_reserve_result=record
+  error:DWORD;
+  base :Pointer;
+  size :QWORD;
+ end;
+
 function  atop(x:QWORD):DWORD; inline;
 function  ptoa(x:DWORD):QWORD; inline;
 
@@ -60,7 +66,7 @@ function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
 
-function  pmap_reserve(wr:Boolean):DWORD;
+function  pmap_reserve:t_pmap_reserve_result;
 
 procedure pmap_pinit(pmap:p_pmap);
 
@@ -235,38 +241,57 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-function pmap_reserve(wr:Boolean):DWORD;
+function pmap_reserve:t_pmap_reserve_result;
 var
  base:Pointer;
  size:QWORD;
  i:Integer;
 begin
- Result:=0;
+ Result:=Default(t_pmap_reserve_result);
+
  if Length(pmap_mem)<>0 then
  begin
   For i:=0 to High(pmap_mem) do
   begin
    base:=Pointer(pmap_mem[i].start);
+
+   //try union range
+   if (base=Pointer(DL_AREA_START)) then
+   begin
+    size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
+
+    Result.error:=md_reserve_ex(base,size);
+    if (Result.error=0) then
+    begin
+     //union range
+     pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
+     pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
+     //
+     Break;
+    end;
+   end;
+
    size:=pmap_mem[i].__end-pmap_mem[i].start;
 
-   Result:=md_reserve_ex(base,size);
+   Result.error:=md_reserve_ex(base,size);
 
-   if (Result<>0) then
+   if (Result.error<>0) then
    begin
-    if wr then
-    begin
-     Writeln('failed md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
-    end;
+    Result.base:=base;
+    Result.size:=size;
     //STATUS_COMMITMENT_LIMIT = $C000012D
     Exit;
    end;
 
+   //update start region
    pmap_mem[i].start:=QWORD(base);
 
+   {
    if wr then
    begin
     Writeln('md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
    end;
+   }
   end;
  end;
 
@@ -274,14 +299,12 @@ begin
  base:=Pointer(VM_MIN_GPU_ADDRESS);
  size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
 
- Result:=md_reserve_ex(base,size);
+ Result.error:=md_reserve_ex(base,size);
 
- if (Result<>0) then
+ if (Result.error<>0) then
  begin
-  if wr then
-  begin
-   Writeln('failed md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
-  end;
+  Result.base:=base;
+  Result.size:=size;
   Exit;
  end;
 end;
@@ -289,9 +312,15 @@ end;
 procedure pmap_pinit(pmap:p_pmap);
 var
  i,r:Integer;
+ m:t_pmap_reserve_result;
 begin
- r:=pmap_reserve(True);
- Assert(r=0,'pmap_pinit');
+ m:=pmap_reserve;
+ if (m.error<>0) then
+ begin
+  Writeln('failed md_reserve_ex(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));
+  Assert(false,'pmap_pinit');
+  Exit;
+ end;
 
  dmem_init;
  dev_mem_init;

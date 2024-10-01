@@ -289,12 +289,7 @@ begin
  err:=md_unmap(hProcess,addr,size);
  if (err<>0) then Exit(err);
 
- addr:=Pointer(WIN_MIN_MOVED_STACK);
-
- if (size>(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK)) then
- begin
-  size:=(WIN_MAX_MOVED_STACK-WIN_MIN_MOVED_STACK);
- end;
+ addr:=Pointer(WIN_MAX_MOVED_STACK-size);
 
  err:=md_mmap(hProcess,addr,size,VM_RW);
  if (err<>0) then Exit(err);
@@ -310,6 +305,20 @@ begin
  err:=NtSetContextThread(hThread,Context);
 
  Exit(err);
+end;
+
+function nt_reserve_ex(hProcess:THandle;base:Pointer;size:QWORD):Integer;
+begin
+ Result:=NtAllocateVirtualMemoryEx(
+          hProcess,
+          @base,
+          @size,
+          MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
+          PAGE_NOACCESS,
+          nil,
+          0
+         );
+
 end;
 
 function NtReserve(hProcess:THandle):Integer;
@@ -334,9 +343,25 @@ begin
   For i:=0 to High(guest_pmap_mem) do
   begin
    base:=Pointer(guest_pmap_mem[i].start);
+
+   //try union range
+   if (base=Pointer(DL_AREA_START)) then
+   begin
+    size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
+
+    r:=nt_reserve_ex(hProcess,base,size);
+    if (r=0) then
+    begin
+     guest_pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
+     guest_pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
+     //
+     Break;
+    end;
+   end;
+
    size:=guest_pmap_mem[i].__end-guest_pmap_mem[i].start;
 
-   r:=md_reserve_ex(hProcess,base,size);
+   r:=nt_reserve_ex(hProcess,base,size);
    if (r<>0) then Exit(r);
   end;
  end;
@@ -345,10 +370,12 @@ begin
  base:=Pointer(VM_MIN_GPU_ADDRESS);
  size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
 
- r:=md_reserve_ex(hProcess,base,size);
+ r:=nt_reserve_ex(hProcess,base,size);
  if (r<>0) then Exit(r);
 
- addr:=Pointer(guest_pmap_mem[0].start);
+ //fill corners
+
+ addr:=Pointer($10000 {guest_pmap_mem[0].start});
 
  repeat
 
@@ -364,7 +391,7 @@ begin
 
   if (info.State=MEM_FREE) then
   begin
-   r:=md_reserve_ex(hProcess,info.BaseAddress,info.RegionSize);
+   r:=nt_reserve_ex(hProcess,info.BaseAddress,info.RegionSize);
   end;
 
   prev:=addr;

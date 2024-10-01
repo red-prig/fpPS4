@@ -19,7 +19,7 @@ uses
 
 begin
   md_systm.md_run_forked;
-  Application.Tag:=vm_pmap.pmap_reserve(False);
+  Application.Tag:=vm_pmap.pmap_reserve.error;
   //
   RequireDerivedFormResource:=True;
   Application.Scaled:=True;

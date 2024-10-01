@@ -90,7 +90,7 @@ begin
  Result:=nil;
 
  fd:=FileOpen(path,fmOpenRead);
- if (fd=-1) then
+ if (fd=feInvalidHandle) then
  begin
   Writeln(StdErr,'Error open:',path);
   Exit;
