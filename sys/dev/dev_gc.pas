@@ -19,6 +19,7 @@ uses
  errno,
  kern_mtx,
  sys_event,
+ sched_ule,
  kern_authinfo,
  vm,
  vmparam,
@@ -274,6 +275,7 @@ var
  p_id:DWORD;
  send:DWORD;
 begin
+ sched_prio(curkthread,64);
 
  if LoadVulkan then
  begin
@@ -397,7 +399,7 @@ begin
    RTLEventWaitFor(ring_watchdog);
   end else
   begin
-   msleep_td(hz div 1000);
+   msleep_td(hz div 10000);
   end;
  until false;
 

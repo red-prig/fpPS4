@@ -9,7 +9,8 @@ uses
  display_interface,
  time,
  kern_thr,
- kern_mtx;
+ kern_mtx,
+ sched_ule;
 
 type
  p_attr=^t_attr;
@@ -1098,6 +1099,8 @@ var
  dce:TDisplayHandleSoft;
  Node:PQNodeSubmit;
 begin
+ sched_prio(curkthread,64);
+
  dce:=TDisplayHandleSoft(parameter);
 
  repeat

@@ -304,6 +304,8 @@ begin
 end;
 
 function run_item(const cfg:TGameRunConfig):TGameProcess;
+label
+ _error;
 var
  r:Integer;
 
@@ -322,6 +324,7 @@ var
  mem:TMemoryStream;
 begin
  Result:=nil;
+ r:=0;
 
  GameStartupInfo:=TGameStartupInfo.Create(False);
  GameStartupInfo.FConfInfo:=cfg.FConfInfo;
@@ -339,7 +342,8 @@ begin
 
   with TGameProcessPipe(Result) do
   begin
-   md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
+   r:=md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
+   if (r<>0) then goto _error;
 
    p_mgui_ipc:=THostIpcPipeMGUI.Create;
    p_mgui_ipc.set_pipe(kern2mgui[0]);
@@ -395,6 +399,7 @@ begin
 
  if (r<>0) then
  begin
+  _error:
   ShowMessage('error run process code=0x'+HexStr(r,8));
   FreeAndNil(Result);
   Exit;

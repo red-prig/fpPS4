@@ -474,7 +474,7 @@ end;
 
 procedure TvShaderParserExt.OnSourceExtension(P:PChar);
 begin
- Writeln(P);
+ //Writeln(P);
  Case P^ of
   '#':OnDataLayout(P);
   '!':OnIExtLayout(P);

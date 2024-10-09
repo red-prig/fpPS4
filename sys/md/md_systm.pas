@@ -333,6 +333,7 @@ var
 
  guest_pmap_mem:array[0..2] of t_addr_range;
 begin
+ Result:=0;
  guest_pmap_mem:=pmap_mem;
  //
  if Length(guest_pmap_mem)<>0 then

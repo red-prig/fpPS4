@@ -322,7 +322,7 @@ begin
  if (sheduler.count=Length(stall)) then
  begin
   //wait
-  msleep_td(hz div 1000);
+  msleep_td(hz div 10000);
   //
   sheduler.count:=0;
  end;
