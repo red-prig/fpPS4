@@ -12,6 +12,7 @@ uses
 
  si_ci_vi_merged_enum,
 
+ sys_bootparam,
  md_sleep,
 
  Vulkan,
@@ -547,7 +548,10 @@ begin
 
  r:=Cmd.QueueSubmit;
 
- Writeln('QueueSubmit:',r);
+ if p_print_gpu_ops then
+ begin
+  Writeln('QueueSubmit:',r);
+ end;
 
  if (r<>VK_SUCCESS) then
  begin
@@ -2507,7 +2511,10 @@ begin
 
     if not ctx.stream^.hint_cmds then
     begin
-     Writeln('+',ctx.node^.ntype);
+     if p_print_gpu_ops then
+     begin
+      Writeln('+',ctx.node^.ntype);
+     end;
      ctx.stream^.hint_cmds:=True;
     end;
 

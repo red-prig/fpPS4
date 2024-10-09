@@ -6,6 +6,7 @@ interface
 
 uses
  SysUtils,
+ sys_bootparam,
  ps4_tiling,
  Vulkan,
  vDevice,
@@ -1034,7 +1035,10 @@ begin
 
  if not change_rate.need_read then Exit;
 
- Writeln('loadfrom: ',image.FName);
+ if p_print_gpu_ops then
+ begin
+  Writeln('loadfrom: ',image.FName);
+ end;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].load_from;
 
@@ -1074,7 +1078,10 @@ begin
   Exit;
  end;
 
+ if p_print_gpu_ops then
+ begin
   Writeln('writeback:',image.FName);
+ end;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].write_back;
 

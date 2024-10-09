@@ -1329,7 +1329,7 @@ begin
  node:=First;
  While (node<>nil) do
  begin
-  if node.is_export_used then
+  if node.IsUsed then //Dont use is_export_used in this stage
   if not node.pLayout.IsLocalDataShare then
   if not node.pLayout.IsGlobalDataShare then
   begin

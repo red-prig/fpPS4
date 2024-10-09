@@ -1209,8 +1209,8 @@ begin
  //print_vsharp(PV);
 
  b:=Default(TBufBindExt);
- b.fset:=fset;
- b.bind:=bind;
+ b.fset  :=fset;
+ b.bind  :=bind;
  b.offset:=offset;
  b.memuse:=_get_buf_mem_usage(flags);
 
@@ -1222,9 +1222,9 @@ begin
  if (stride=0)      then stride:=1;
  if (num_records=0) then num_records:=1;
  //
- b.size:=stride*num_records;
+ b.size:=(stride*num_records)+offset; //take into account the offset inside the shader
  //
- if (b.size>size) then b.size:=size;
+ if (b.size>size) then b.size:=size;  //input size already taking into account offset
 
  i:=Length(FBuffers);
  SetLength(FBuffers,i+1);
@@ -1240,13 +1240,13 @@ begin
  if (P=nil) or (size=0) then Exit;
 
  b:=Default(TBufBindExt);
- b.fset:=fset;
- b.bind:=bind;
+ b.fset  :=fset;
+ b.bind  :=bind;
  b.offset:=offset;
  b.memuse:=_get_buf_mem_usage(flags);
 
  b.addr:=P;
- b.size:=size;
+ b.size:=size; //input size already taking into account offset
 
  i:=Length(FBuffers);
  SetLength(FBuffers,i+1);
