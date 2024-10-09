@@ -202,7 +202,7 @@ end;
 
 procedure TsrVariableList.AllocName;
 var
- FDebugInfo:PsrDebugInfoList;
+ FDebugInfo:TsrDebugInfoList;
  node:TsrVariable;
  n:RawByteString;
 begin
@@ -215,7 +215,7 @@ begin
    n:=node.GetStorageName;
    if (n<>'') then
    begin
-    FDebugInfo^.OpName(node,n);
+    FDebugInfo.OpName(node,n);
    end;
   end;
   node:=node.Next;

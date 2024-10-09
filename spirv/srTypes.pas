@@ -600,11 +600,12 @@ begin
   //
 
   dtStruct2i,
-  dtStruct2u:
+  dtStruct2u,
+  dtStruct2i64,
+  dtStruct2u64:
     begin
      Result:=_FetchStruct2(dtype);
     end;
-
   //
 
   else

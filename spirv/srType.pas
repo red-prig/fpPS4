@@ -39,6 +39,9 @@ type
   dtStruct2i,
   dtStruct2u,
 
+  dtStruct2i64,
+  dtStruct2u64,
+
   dtVec2u8,
   dtVec4u8,
 
@@ -125,6 +128,8 @@ type
  TsrImageInfo=packed record
   dtype:TsrDataType;
   tinfo:TsrTypeImageInfo;
+  GLC:Boolean;
+  SLC:Boolean;
  end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;
@@ -168,6 +173,9 @@ begin
 
   dtStruct2i   :Result:='rec2i';
   dtStruct2u   :Result:='rec2u';
+
+  dtStruct2i64 :Result:='rec2i64';
+  dtStruct2u64 :Result:='rec2u64';
 
   dtVec2u8     :Result:='u8vec2';
   dtVec4u8     :Result:='u8vec4';
@@ -255,6 +263,9 @@ begin
   dtStruct2i,
   dtStruct2u,
 
+  dtStruct2i64,
+  dtStruct2u64,
+
   dtVec2u8,
   dtVec4u8,
 
@@ -327,6 +338,9 @@ begin
 
   dtStruct2i,
   dtStruct2u,
+
+  dtStruct2i64,
+  dtStruct2u64,
 
   dtVec2u8,
   dtVec4u8,
@@ -401,6 +415,10 @@ begin
   dtVec2f,
   dtVec3f,
   dtVec4f:Result:=dtFloat32;
+
+  dtStruct2u64:Result:=dtUint64;
+  dtStruct2i64:Result:=dtInt64;
+
   else
            Result:=dtUnknow;
  end;
@@ -419,7 +437,9 @@ begin
   dtVec2h,
   dtVec2f,
   dtStruct2i,
-  dtStruct2u:Result:=2;
+  dtStruct2u,
+  dtStruct2i64,
+  dtStruct2u64:Result:=2;
 
   dtVec3b,
   dtVec3u,
@@ -449,6 +469,7 @@ begin
   dtInt64,
 
   dtStruct2i,
+  dtStruct2i64,
 
   dtHalf16,
   dtFloat32,
@@ -593,6 +614,8 @@ begin
  Case Self of
   dtInt32 :Result:=dtStruct2i;
   dtUint32:Result:=dtStruct2u;
+  dtInt64 :Result:=dtStruct2i64;
+  dtUint64:Result:=dtStruct2u64;
   else;
  end;
 end;

@@ -169,73 +169,119 @@ function TSprvEmit_post.RegFindCond(pLine:TspirvOp;var node:TsrRegNode):Integer;
 var
  old:TsrRegNode;
  pBlock:TsrOpBlock;
- tmp:TsrOpBlock;
+ pCond :TsrOpBlock;
+ pIf   :TsrOpBlock;
  src:TsrRegNode;
- p:TspirvOp;
- n:Boolean;
+ pOpNot:TspirvOp;
+ Invert:Boolean;
 begin
  Result:=0;
  if (node=nil) then Exit;
 
  old:=node;
+ src:=RegDown(node);
+ Invert:=false;
 
  pBlock:=pLine.Parent;
- src:=RegDown(node);
- n:=false;
+
+ if (pLine.OpId=Op.OpBranchConditional) then
+ begin
+  //move to parent of current "If" block
+  pIf   :=pBlock.FindUpCond;
+  pBlock:=pBlock.Parent;
+  //
+  if (pIf<>nil) then
+  if (RegDown(pIf.Cond.pReg)<>src) then
+  begin
+   //non cond
+   pIf:=nil;
+  end;
+ end else
+ begin
+  pIf:=nil;
+ end;
 
  repeat
   if src.is_const then Exit;
 
-  tmp:=pBlock.FindUpCond(src);
-  if (tmp<>nil) then
+  pCond:=pBlock.FindUpCondByReg(src,True,Invert);
+  if (pCond<>nil) then
   begin
-   if (tmp=pBlock) and (pLine.OpId=Op.OpBranchConditional) then Exit;
+   //Exit(0);
 
-   node:=NewReg(old.dtype,@pLine);
-   node.pWriter:=NewReg_b(n xor tmp.Cond.FVal,@pLine);
+   //Writeln(OpGetStr(pLine));
+
+   //FNormalOrder=true  Invert=false : result=true
+   //FNormalOrder=true  Invert=true  : result=false
+   //FNormalOrder=false Invert=false : result=false
+   //FNormalOrder=false Invert=true  : result=true
+
+   Invert:=Invert xor pCond.Cond.FNormalOrder;
+
+   node:=NewReg_q(old.dtype,ord(Invert),@pLine);
+
+   if (pIf<>nil) then
+   begin
+    //replace cond
+    pIf.Cond.pReg:=node;
+   end;
+
    Exit(1);
   end;
 
-  p:=src.pWriter.specialize AsType<ntOp>;
-  if (p=nil) then Exit;
+  pOpNot:=src.pWriter.specialize AsType<ntOp>;
+  if (pOpNot=nil) then Exit;
 
-  Case p.OpId of
+  Case pOpNot.OpId of
    Op.OpLogicalNot:;
    Op.OpNot:;
    else
     Exit;
   end;
 
-  src:=p.ParamFirst.AsReg;
+  src:=pOpNot.ParamFirst.AsReg;
   if (src=nil) then Exit;
   src:=RegDown(src);
-  n:=not n;
+  Invert:=not Invert;
 
  until false;
 end;
 
 function TSprvEmit_post.RegCollapse(pLine:TspirvOp;var node:TsrRegNode):Integer;
 var
- old:TsrRegNode;
+ rold,rnew:TsrRegNode;
 begin
  Result:=0;
  if (node=nil) then Exit;
  if (node.dtype=dtUnknow) then Exit;
 
- old:=node;
- node:=RegDown(old);
+ rold:=node;
+ rnew:=RegDown(rold);
 
- if (old<>node) then //is change?
+ if (rold<>rnew) then //is change?
  begin
-  if (node.dtype=dtUnknow) or CompareType(node.dtype,old.dtype) then
+  if (rnew.dtype=dtUnknow) or CompareType(rnew.dtype,rold.dtype) then
   begin
-   Inc(Result);
+   rnew.PrepType(ord(rold.dtype));
+   if (rnew.dtype<>dtUnknow) then
+   begin
+    node:=rnew;
+    Inc(Result);
+   end;
   end else
   begin //save to another step
-   old.pWriter:=node;
-   node:=old;
+   rold.pWriter:=rnew;
+   node:=rold;
   end;
  end;
+
+ {
+ if (rold.dtype<>dtUnknow) and (node.dtype=dtUnknow) then
+ begin
+  writeln;
+  assert(false);
+ end;
+ }
 end;
 
 function TSprvEmit_post.RegVResolve(pLine:TspirvOp;var node:TsrRegNode):Integer;
@@ -267,6 +313,14 @@ begin
    node:=old;
   end;
  end;
+
+ {
+ if (old.dtype<>dtUnknow) and (node.dtype=dtUnknow) then
+ begin
+  writeln;
+  assert(false);
+ end;
+ }
 end;
 
 function GetDepType(src:TsrRegNode):TsrDataType;
@@ -363,6 +417,8 @@ end;
 function TSprvEmit_post.RegTypecast(pLine:TspirvOp;var node:TsrRegNode):Integer;
 var
  old:TsrRegNode;
+ cst:TsrConst;
+ dtype:TsrDataType;
 begin
  Result:=0;
  if (node=nil) then Exit;
@@ -380,7 +436,29 @@ begin
    node:=BitcastList.FetchCast(old.dtype,node);
    Inc(Result);
   end;
+ end else
+ if node.pWriter.IsType(ntConst) then
+ begin
+  cst:=node.pWriter.specialize AsType<TsrConst>;
+  //
+  dtype:=LazyType3(old.dtype,node.dtype,cst.dtype);
+  //
+  if (dtype<>dtUnknow) then
+  if not CompareType(cst.dtype,dtype) then
+  begin
+   cst:=ConstList.Bitcast(dtype,cst);
+   old.pWriter:=cst;
+   Inc(Result);
+  end;
  end;
+
+ {
+ if (old.dtype<>dtUnknow) and (node.dtype=dtUnknow) then
+ begin
+  writeln;
+  assert(false);
+ end;
+ }
 end;
 
 function TSprvEmit_post.RegSTStrict(pLine:TspirvOp;var node:TsrRegNode):Integer;
@@ -394,7 +472,9 @@ begin
  if (dst=nil) then Exit;
 
  dtype:=dst.dtype;
- if (dtype<>node.dtype) then
+ if (dtype<>dtUnknow) and
+    (node.dtype<>dtUnknow) and
+    (dtype<>node.dtype) then
  begin
   node:=BitcastList.FetchCast(dtype,node); //strict type
   Inc(Result);
@@ -411,7 +491,9 @@ begin
  if (dst=nil) then Exit;
 
  dtype:=dst.dtype.Child;
- if (dtype<>node.dtype) then
+ if (dtype<>dtUnknow) and
+    (node.dtype<>dtUnknow) and
+    (dtype<>node.dtype) then
  begin
   node:=BitcastList.FetchCast(dtype,node); //strict type
   Inc(Result);
@@ -575,7 +657,13 @@ begin
 
  if node.is_cleared then
  begin
-  Assert(node.read_count=0);
+  //
+  if (node.read_count<>0) then
+  if not node.is_force then
+  begin
+   Assert(false,'Wrong read_count on:'+Op.GetStr(node.OpId));
+  end;
+  //
   node.Remove;
   Inc(Result);
  end else
@@ -602,7 +690,8 @@ begin
     begin
      DecorateList.OpDecorate(node.pDst,Decoration.NoContraction,0);
     end;
-  Op.OpImageQuerySizeLod:
+  Op.OpImageQuerySizeLod,
+  Op.OpImageQueryLod:
     begin
      AddCapability(Capability.ImageQuery);
     end;
@@ -690,18 +779,27 @@ begin
    OutputList.Post;
   end;
 
+  {
   //pass agian
   if data_layout then
   begin
    data_layout:=false;
    goto _pass;
   end;
+  }
 
   repeat //OnOpStep6 Typecast
    i:=EnumBlockOpBackward(@OnOpStep6,pFunc.pTop);
    if (i=0) then Break;
    Result:=Result+i;
   until false;
+
+  //pass agian
+  if data_layout or (i<>0) then
+  begin
+   data_layout:=false;
+   goto _pass;
+  end;
 
   Result:=Result+EnumBlockOpBackward(@OnOpStep7,pFunc.pTop); //OnOpStep7 Remove Lines
 
@@ -779,6 +877,7 @@ begin
    pIndex:=NewReg_q(dtUint32,_count,@pLine);
   end;
   pChain.pIndex:=pIndex;
+  pChain.stride:=_stride;
   pChain.offset:=pChain.offset-(_count*_stride);
  end;
 end;
@@ -852,9 +951,11 @@ begin
     Assert(false,'LDS/GDS big addresing?');
    end;
 
+   Assert(pChain.stride<>0);
    F:=buf.FTop.FetchArray(_offset,(max-_offset),pChain.stride);
   end else
   begin
+   Assert(pChain.stride<>0);
    F:=buf.FTop.FetchRuntimeArray(_offset,pChain.stride);
   end;
 
@@ -1110,6 +1211,9 @@ begin
   pLine:=pLine.Prev;
   Assert(pLine<>nil);
  end;
+
+ //restore
+ pIndex:=node.pIndex;
 
  pLine:=OpAccessChain(pLine,pField.vType,node,src);
 

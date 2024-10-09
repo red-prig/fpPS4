@@ -5,6 +5,7 @@ unit srCFGCursor;
 interface
 
 uses
+ sysutils,
  srCFGLabel,
  srCFGParser,
  ginodes,
@@ -58,6 +59,7 @@ function TsrCodeHeap.FetchByPtr(base:Pointer;bType:TsrBlockType):TsrCursor;
 var
  pCode:TsrCodeBlock;
  adr:TSrcAdr;
+ p_err:Integer;
 begin
  pCode:=FindByPtr(base);
  if (pCode=nil) then
@@ -69,7 +71,11 @@ begin
   pCode.DMem :=FEmit.GetDmem(base);
 
   //
-  if parse_code_cfg(bType,pCode)>1 then Assert(False);
+  p_err:=parse_code_cfg(bType,pCode);
+  if (p_err>1) then
+  begin
+   Assert(False,'parse_code_cfg:'+IntToStr(p_err));
+  end;
   //
   Push_tail(pCode);
  end;
@@ -82,8 +88,7 @@ begin
  adr.Offdw:=(Pointer(base)-Pointer(pCode.Body)) div 4;
 
  Result.Adr:=adr;
-
- Result.pBlock:=Result.pBlock.DownBlock(adr);
+ Result.pBlock:=Result.pBlock.WorkBlock(adr);
 end;
 
 procedure TsrCursor.Init(Code:TsrCodeBlock);

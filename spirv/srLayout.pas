@@ -109,10 +109,10 @@ type
    //
    property  Parent:TsrDataLayout read FParent;
    property  pIndex:TsrRegNode    read key.lvl_1.pIndex write SetIndex;
-   property  stride:PtrUint       read key.lvl_1.stride;
+   property  stride:PtrUint       read key.lvl_1.stride write key.lvl_1.stride;
    property  size  :PtrUint       read key.lvl_0.size;
    property  offset:PtrUint       read key.lvl_0.offset write SetOffset;
-   property  Flags:TsrChainFlags  read key.Flags;
+   property  Flags :TsrChainFlags read key.Flags;
    property  dtype :TsrDataType   read Fdtype    write SetRegType;
    property  pWriter:TsrNode      read GetWriter write SetWriter;
    property  pBuffer:TsrNode      read GetBuffer write SetBuffer;
@@ -399,6 +399,11 @@ begin
  if (lvl_1<>nil) then
  begin
   _key.lvl_1:=lvl_1^;
+ end;
+ //
+ if (_key.lvl_1.pIndex<>nil) then
+ begin
+  Assert((_key.lvl_1.stride<>0),'stride=0');
  end;
  //
  _key.Flags:=TsrChainFlags(cflags);
@@ -771,14 +776,14 @@ end;
 
 procedure TsrDataLayoutList.AllocSourceExtension;
 var
- pDebugInfoList:PsrDebugInfoList;
+ pDebugInfoList:TsrDebugInfoList;
  node:TsrDataLayout;
 begin
  pDebugInfoList:=FTop.FEmit.GetDebugInfoList;
  node:=First;
  While (node<>nil) do
  begin
-  pDebugInfoList^.OpSource(node.GetString);
+  pDebugInfoList.OpSource(node.GetString);
   node:=Next(node);
  end;
  //
@@ -788,7 +793,7 @@ end;
 
 procedure TsrDataLayoutList.AllocFuncExt;
 var
- pDebugInfoList:PsrDebugInfoList;
+ pDebugInfoList:TsrDebugInfoList;
  pHeap:PsrCodeHeap;
  node:TsrDataLayout;
  block:TsrCodeBlock;
@@ -803,7 +808,7 @@ begin
    block:=pHeap^.FindByPtr(node.pData);
    if (block<>nil) then
    begin
-    pDebugInfoList^.OpSource(node.GetFuncString(block.Size));
+    pDebugInfoList.OpSource(node.GetFuncString(block.Size));
    end;
   end;
   node:=Next(node);
@@ -812,7 +817,7 @@ end;
 
 procedure TsrDataLayoutList.AllocImmExt;
 var
- pDebugInfoList:PsrDebugInfoList;
+ pDebugInfoList:TsrDebugInfoList;
  node:TsrDataLayout;
  imm:TsrDataImm;
  i,c:PtrUint;
@@ -830,7 +835,7 @@ begin
    if (c<>0) then
    For i:=0 to c-1 do
    begin
-    pDebugInfoList^.OpSource(imm.GetStringDword(i));
+    pDebugInfoList.OpSource(imm.GetStringDword(i));
    end;
 
   end;
@@ -941,6 +946,9 @@ begin
  pTypeList:=Emit.GetTypeList;
  FType:=pTypeList^.Fetch(rtype);
 
+ UpdateRegType;
+
+ {
  node:=FList.pHead;
  While (node<>nil) do
  begin
@@ -979,6 +987,7 @@ begin
 
   node:=node.pNext;
  end;
+ }
 end;
 
 Procedure TsrChain.SetIndex(t:TsrRegNode);
@@ -1021,6 +1030,7 @@ var
  FType:TsrType;
  node:TDependenceNode;
  pLine:TSpirvOp;
+ Value:TsrNode;
  dst:TsrRegNode;
  old,rtype:TsrDataType;
 begin
@@ -1040,10 +1050,12 @@ begin
 
    Op.OpLoad:
     begin
-     pLine.pDst.PrepType(ord(rtype));
+     Value:=pLine.pDst;
+     Value.PrepType(ord(rtype));
+
      pLine.pType:=Ftype;
 
-     dst:=pLine.pDst.specialize AsType<ntReg>;
+     dst:=Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
       old:=dst.dtype;
@@ -1073,9 +1085,10 @@ begin
    Op.OpAtomicOr,
    Op.OpAtomicXor:
     begin
-     pLine.ParamNode(1).Value.PrepType(ord(rtype));
+     Value:=pLine.ParamNode(1).Value;
+     Value.PrepType(ord(rtype));
 
-     dst:=pLine.ParamNode(1).Value.specialize AsType<ntReg>;
+     dst:=Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
       old:=dst.dtype;
@@ -1100,6 +1113,9 @@ var
  old:TsrDataType;
 begin
  if (new=dtUnknow) then Exit;
+ //dont update with allocated field
+ if (pField<>nil) then Exit;
+ //
  old:=Fdtype;
  if is_unprep_type(old,new,dweak) then
  begin

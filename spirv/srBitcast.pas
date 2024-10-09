@@ -153,7 +153,7 @@ var
  pConstList:PsrConstList;
  dst:TsrRegNode;
  pConst:TsrConst;
-
+ pLine:TsrNode;
 begin
  Result:=src;
  if (src=nil) then Exit;
@@ -182,7 +182,7 @@ begin
   begin
    dst:=rSlot.New(src.pLine,dtype);
 
-   rSlot.Emit.OpCast(src.pLine,dst,src)
+   pLine:=rSlot.Emit.OpCast(src.pLine,dst,src);
   end else
   begin
    Writeln('bitcast:',src.dtype,'<>',dtype);

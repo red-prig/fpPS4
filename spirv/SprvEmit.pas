@@ -159,6 +159,8 @@ var
  p:Byte;
 begin
  if (VGPRS>256) then VGPRS:=256;
+
+ if (SGPRS>=2) then SGPRS:=SGPRS-2; //VCC
  if (SGPRS>104) then SGPRS:=104;
 
  if (VGPRS<>0) then
@@ -623,7 +625,7 @@ procedure TSprvEmit.emit_spi;
 var
  obj:TObject absolute Self;
 begin
- //OpLine(line,Cursor.Adr.Offdw*4,0);
+ //OpLine(line,Cursor.prev_adr.Offdw*4,0);
 
  //
  Case FSPI.CMD.EN of

@@ -267,7 +267,7 @@ var
  i:Word;
 begin
  buf:=Default(TSVInstrBuffer);
- node:=ConstList.FList.pHead;
+ node:=ConstList.First;
  While (node<>nil) do
  begin
   if (node.dtype<>dtUnknow) then

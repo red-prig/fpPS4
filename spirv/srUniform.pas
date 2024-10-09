@@ -452,7 +452,7 @@ end;
 procedure TsrUniformList.AllocBinding(Var FBinding:Integer);
 var
  pConfig:PsrConfig;
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  pCapabilityList:PsrCapabilityList;
  //
  node:TsrUniform;
@@ -471,22 +471,22 @@ begin
   pVar:=node.pVar;
   if (pVar<>nil) and node.IsUsed and (node.FBinding=-1) then
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Binding      ,FBinding);
-   pDecorateList^.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
+   pDecorateList.OpDecorate(pVar,Decoration.Binding      ,FBinding);
+   pDecorateList.OpDecorate(pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
    //
    if (node.Flags.Coherent) then
    begin
-    pDecorateList^.OpDecorate(pVar,Decoration.Coherent,0);
+    pDecorateList.OpDecorate(pVar,Decoration.Coherent,0);
    end;
    //
    if (node.Flags.Volatile) then
    begin
-    pDecorateList^.OpDecorate(pVar,Decoration.Volatile,0);
+    pDecorateList.OpDecorate(pVar,Decoration.Volatile,0);
    end;
    //
    if (node.Flags.Aliased) and (not node.Flags.Bitcast) then
    begin
-    pDecorateList^.OpDecorate(pVar,Decoration.Aliased,0);
+    pDecorateList.OpDecorate(pVar,Decoration.Aliased,0);
    end;
    //
    node.FBinding:=FBinding;
@@ -504,11 +504,11 @@ begin
        begin
         if (node.chain_read=0) then
         begin
-         pDecorateList^.OpDecorate(pVar,Decoration.NonReadable,0);
+         pDecorateList.OpDecorate(pVar,Decoration.NonReadable,0);
         end;
         if (node.chain_write=0) then
         begin
-         pDecorateList^.OpDecorate(pVar,Decoration.NonWritable,0);
+         pDecorateList.OpDecorate(pVar,Decoration.NonWritable,0);
         end;
        end;
 
@@ -591,7 +591,7 @@ end;
 
 procedure TsrUniformList.AllocSourceExtension;
 var
- pDebugInfoList:PsrDebugInfoList;
+ pDebugInfoList:TsrDebugInfoList;
  node:TsrUniform;
  pVar:TsrVariable;
 begin
@@ -602,7 +602,7 @@ begin
   pVar:=node.pVar;
   if (pVar<>nil) and node.IsUsed then
   begin
-   pDebugInfoList^.OpSource(node.GetString);
+   pDebugInfoList.OpSource(node.GetString);
   end;
   node:=Next(node);
  end;

@@ -200,7 +200,7 @@ procedure TEmit_EXP.emit_EXP;
 Var
  exc:TsrRegNode;
  node:TSpirvOp;
- pOpBlock:TsrOpBlock;
+ parent,pOpBlock:TsrOpBlock;
 
  dout:TsrOutput;
  dst:TsrRegNode;
@@ -216,16 +216,16 @@ begin
 
  push_count:=0;
 
- pOpBlock:=nil;
+ parent:=nil;
  if (FSPI.EXP.VM<>0) and (FSPI.EXP.DONE<>0) then
  begin
-  pOpBlock:=AllocBlockOp;
-  pOpBlock.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+  parent:=AllocBlockOp;
+  parent.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
 
-  PushBlockOp(line,pOpBlock,nil);
+  PushBlockOp(line,parent,nil);
   Inc(push_count);
 
-  exc:=MakeRead(get_exec0,dtBool);
+  exc:=MakeRead(get_exec0,dtBool); //It means that lane_id=0
   node:=AddSpirvOp(OpMakeExp);
   node.AddParam(exc); //<-fetch read
  end;
@@ -250,6 +250,12 @@ begin
 
  PushBlockOp(line,pOpBlock,nil);
  Inc(push_count);
+
+ if (parent<>nil) then
+ begin
+  parent  .pElse:=pOpBlock; //if->else
+  pOpBlock.pIf  :=parent;   //else->if
+ end;
 
  //output
 

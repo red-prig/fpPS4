@@ -31,20 +31,6 @@ type
   function  GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
   //
-  procedure PrepTypeSlot(pSlot:PsrRegSlot;rtype:TsrDataType);
-  function  MakeRead(pSlot:PsrRegSlot;rtype:TsrDataType):TsrRegNode;
-  //
-  function  PrepTypeNode(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-  function  PrepTypeDst(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-  function  PrepTypeParam(node:POpParamNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-  //
-  function  get_vcc0:PsrRegSlot;
-  function  get_vcc1:PsrRegSlot;
-  function  get_m0:PsrRegSlot;
-  function  get_exec0:PsrRegSlot;
-  function  get_exec1:PsrRegSlot;
-  function  get_scc:PsrRegSlot;
-  //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
   function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
   function  get_ssrc8(SSRC:Byte):PsrRegSlot;
@@ -85,10 +71,10 @@ type
   Procedure AddVecInput(dst:PsrRegSlot;vtype,rtype:TsrDataType;itype:TpsslInputType;id:Byte);
   function  AddPositionsInput(count:Byte):TsrVariable;
   function  AddParametersInput(id,count:Byte):TsrVariable;
-  function  FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC:Byte=0;SLC:Byte=0):TsrNode;
-  function  FetchImage(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;GLC:Byte=0;SLC:Byte=0):TsrNode;
-  function  FetchImageArray(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;array_count:DWORD;GLC:Byte=0;SLC:Byte=0):TsrNode;
-  function  FetchImageRuntimeArray(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;GLC:Byte=0;SLC:Byte=0):TsrNode;
+  function  FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC:Boolean):TsrNode;
+  function  FetchImage(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
+  function  FetchImageArray(src:TsrDataLayout;info:TsrImageInfo;array_count:DWORD):TsrNode;
+  function  FetchImageRuntimeArray(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
   function  FetchSampler(src:TsrDataLayout):TsrNode;
   function  FetchOutput(etype:TpsslExportType;rtype:TsrDataType):TsrOutput;
  end;
@@ -232,141 +218,6 @@ end;
 
 //
 
-procedure TEmitFetch.PrepTypeSlot(pSlot:PsrRegSlot;rtype:TsrDataType);
-begin
- if (pSlot=nil) then Exit;
- if (pSlot^.current=nil) then
- begin
-  pSlot^.New(line,rtype); //Unresolve
-  Exit;
- end;
-
- pSlot^.current.PrepType(ord(rtype));
-end;
-
-function TEmitFetch.MakeRead(pSlot:PsrRegSlot;rtype:TsrDataType):TsrRegNode;
-var
- node:TsrRegNode;
-begin
- Result:=nil;
- if (pSlot=nil) then Exit;
- PrepTypeSlot(pSlot,rtype);
- node:=pSlot^.current;
- if (rtype<>dtUnknow) and (not CompareType(node.dtype,rtype)) then
- begin
-  Result:=BitcastList.FetchRead(rtype,node);
- end else
- begin
-  Result:=node;
- end;
- if (rtype<>dtUnknow) then
- begin
-  Result.dweak:=False;
- end;
-end;
-
-//
-
-function TEmitFetch.PrepTypeNode(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-begin
- Result:=0;
- if (node=nil) then Exit;
- if (rtype=dtUnknow) then Exit;
-
- if is_unprep_type(node.dtype,rtype,node.dweak) then
- begin
-  node.PrepType(ord(rtype));
-  Inc(Result);
- end else
- begin
-  Case relax of
-   True :relax:=CompareType(node.dtype,rtype);
-   False:relax:=(node.dtype=rtype);
-  end;
-  if not relax then
-  begin
-   node:=BitcastList.FetchRead(rtype,node);
-   Inc(Result);
-  end;
- end;
-end;
-
-function TEmitFetch.PrepTypeDst(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-begin
- Result:=0;
- if (node=nil) then Exit;
- if (rtype=dtUnknow) then Exit;
-
- if is_unprep_type(node.dtype,rtype,node.dweak) then
- begin
-  node.PrepType(ord(rtype));
-  Inc(Result);
- end else
- begin
-  Case relax of
-   True :relax:=CompareType(node.dtype,rtype);
-   False:relax:=(node.dtype=rtype);
-  end;
-  if not relax then
-  begin
-   node:=BitcastList.FetchDstr(rtype,node);
-   Inc(Result);
-  end;
- end;
-end;
-
-function TEmitFetch.PrepTypeParam(node:POpParamNode;rtype:TsrDataType;relax:Boolean=true):Integer;
-var
- pReg:TsrRegNode;
-begin
- Result:=0;
- if (node=nil) then Exit;
- if (rtype=dtUnknow) then Exit;
- if node.Value.IsType(ntReg) then
- begin
-  pReg:=node.AsReg;
-  Result:=PrepTypeNode(pReg,rtype,relax);
-  node.Value:=pReg;
- end else
- begin
-  node.Value.PrepType(ord(rtype));
- end;
-end;
-
-//
-
-function TEmitFetch.get_vcc0:PsrRegSlot;
-begin
- Result:=@RegsStory.VCC[0];
-end;
-
-function TEmitFetch.get_vcc1:PsrRegSlot;
-begin
- Result:=@RegsStory.VCC[1];
-end;
-
-function TEmitFetch.get_m0:PsrRegSlot;
-begin
- Result:=@RegsStory.M0;
-end;
-
-function TEmitFetch.get_exec0:PsrRegSlot;
-begin
- Result:=@RegsStory.EXEC[0];
-end;
-
-function TEmitFetch.get_exec1:PsrRegSlot;
-begin
- Result:=@RegsStory.EXEC[1];
-end;
-
-function TEmitFetch.get_scc:PsrRegSlot;
-begin
- Result:=@RegsStory.SCC;
-end;
-
-//
-
 function TEmitFetch.get_sdst7(SDST:Byte):PsrRegSlot;
 begin
  Result:=RegsStory.get_sdst7(SDST);
@@ -462,7 +313,7 @@ begin
  if is_const_ssrc9(SSRC) then
  begin
   src[0]:=NewReg(ConstList.Fetch_ssrc9_const(SSRC,FSPI.INLINE32,rtype));
-  src[1]:=NewReg(ConstList.Fetch(dtUnknow,0));
+  src[1]:=NewReg(ConstList.Fetch(rtype,0));
   Result:=True;
  end else
  begin
@@ -810,7 +661,7 @@ end;
 
 ////
 
-function TEmitFetch.FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC:Byte=0;SLC:Byte=0):TsrNode;
+function TEmitFetch.FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC:Boolean):TsrNode;
 var
  u:TsrUniform;
  v:TsrVariable;
@@ -818,12 +669,12 @@ var
 begin
  u:=UniformList.Fetch(src,pType);
  //
- if (GLC<>0) then
+ if (GLC) then
  begin
   u.Flags.Coherent:=True;
  end;
  //
- if (SLC<>0) then
+ if (SLC) then
  begin
   u.Flags.Volatile:=True;
  end;
@@ -837,50 +688,50 @@ begin
  Result:=r;
 end;
 
-function TEmitFetch.FetchImage(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;GLC:Byte=0;SLC:Byte=0):TsrNode;
+function TEmitFetch.FetchImage(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
 var
  pType:TsrType;
 begin
- pType:=TypeList.Fetch(dtype);
- pType:=TypeList.FetchImage(pType,info);
- Result:=FetchUniformSimple(src,pType,GLC);
+ pType:=TypeList.Fetch(info.dtype);
+ pType:=TypeList.FetchImage(pType,info.tinfo);
+ Result:=FetchUniformSimple(src,pType,info.GLC,info.SLC);
 end;
 
-function TEmitFetch.FetchImageArray(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;array_count:DWORD;GLC:Byte=0;SLC:Byte=0):TsrNode;
+function TEmitFetch.FetchImageArray(src:TsrDataLayout;info:TsrImageInfo;array_count:DWORD):TsrNode;
 var
  pType:TsrType;
 begin
- pType:=TypeList.Fetch(dtype);
- pType:=TypeList.FetchImage(pType,info);
+ pType:=TypeList.Fetch(info.dtype);
+ pType:=TypeList.FetchImage(pType,info.tinfo);
  pType:=TypeList.FetchArray(pType,array_count);
  Result:=UniformList.Fetch(src,pType);
  //
- if (GLC<>0) then
+ if (info.GLC) then
  begin
   TsrUniform(Result).Flags.Coherent:=True;
  end;
  //
- if (SLC<>0) then
+ if (info.SLC) then
  begin
   TsrUniform(Result).Flags.Volatile:=True;
  end;
 end;
 
-function TEmitFetch.FetchImageRuntimeArray(src:TsrDataLayout;dtype:TsrDataType;info:TsrTypeImageInfo;GLC:Byte=0;SLC:Byte=0):TsrNode;
+function TEmitFetch.FetchImageRuntimeArray(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
 var
  pType:TsrType;
 begin
- pType:=TypeList.Fetch(dtype);
- pType:=TypeList.FetchImage(pType,info);
+ pType:=TypeList.Fetch(info.dtype);
+ pType:=TypeList.FetchImage(pType,info.tinfo);
  pType:=TypeList.FetchRuntimeArray(pType);
  Result:=UniformList.Fetch(src,pType);
  //
- if (GLC<>0) then
+ if (info.GLC) then
  begin
   TsrUniform(Result).Flags.Coherent:=True;
  end;
  //
- if (SLC<>0) then
+ if (info.SLC) then
  begin
   TsrUniform(Result).Flags.Volatile:=True;
  end;
@@ -891,7 +742,7 @@ var
  pType:TsrType;
 begin
  pType:=TypeList.Fetch(dtTypeSampler);
- Result:=FetchUniformSimple(src,pType);
+ Result:=FetchUniformSimple(src,pType,False,False);
 end;
 
 function TEmitFetch.FetchOutput(etype:TpsslExportType;rtype:TsrDataType):TsrOutput;

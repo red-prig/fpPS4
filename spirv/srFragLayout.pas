@@ -150,7 +150,7 @@ end;
 
 procedure TsrFragLayoutList.AllocBinding;
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  pCapabilityList:PsrCapabilityList;
  node:TsrFragLayout;
  pVar:TsrVariable;
@@ -164,36 +164,36 @@ begin
   pVar:=node.pVar;
   if (pVar<>nil) and node.IsUsed then
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Location,node.FBinding);
+   pDecorateList.OpDecorate(pVar,Decoration.Location,node.FBinding);
 
    case node.itype of
     itPerspSample:    //Sample
       begin
        pCapabilityList^.Add(Capability.SampleRateShading);
-       pDecorateList^.OpDecorate(pVar,Decoration.Sample,0);
+       pDecorateList.OpDecorate(pVar,Decoration.Sample,0);
       end;
     itPerspCenter:;   //default
     itPerspCentroid:  //Centroid
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
+       pDecorateList.OpDecorate(pVar,Decoration.Centroid,0);
       end;
     itLinearSample:   //NoPerspective Sample
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
-       pDecorateList^.OpDecorate(pVar,Decoration.Sample,0);
+       pDecorateList.OpDecorate(pVar,Decoration.NoPerspective,0);
+       pDecorateList.OpDecorate(pVar,Decoration.Sample,0);
       end;
     itLinearCenter:   //NoPerspective
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
+       pDecorateList.OpDecorate(pVar,Decoration.NoPerspective,0);
       end;
     itLinearCentroid: //NoPerspective Centroid
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.NoPerspective,0);
-       pDecorateList^.OpDecorate(pVar,Decoration.Centroid,0);
+       pDecorateList.OpDecorate(pVar,Decoration.NoPerspective,0);
+       pDecorateList.OpDecorate(pVar,Decoration.Centroid,0);
       end;
     itFlat:
      begin
-      pDecorateList^.OpDecorate(pVar,Decoration.Flat,0);
+      pDecorateList.OpDecorate(pVar,Decoration.Flat,0);
      end;
 
     else

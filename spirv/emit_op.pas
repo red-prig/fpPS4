@@ -42,6 +42,7 @@ type
   function  OpBitcast(pLine:TspirvOp;pType:TsrType;dst,src:TsrNode):TspirvOp;
   function  OpBoolToInt(pLine:TspirvOp;dst,src:TsrRegNode):TspirvOp;
   function  OpIntToBool(pLine:TspirvOp;dst,src:TsrRegNode):TspirvOp;
+  function  OpIntToBoolTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpCast (nLine,      dst,src:TsrNode):TsrNode; override;
   function  OpLoad (nLine,dtype,dst,src:TsrNode):TsrNode; override;
@@ -75,10 +76,11 @@ type
   function  OpSelectTo(src0,src1,cond:TsrRegNode):TsrRegNode;
   //
   procedure OpIAddCar(pLine:TspirvOp;dst,car,src0,src1:TsrRegNode);
-  procedure OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
+  procedure OpIAddExt(dst,car,src0,src1:TsrRegNode);
   //
   procedure OpISubBor(pLine:TspirvOp;dst,bor,src0,src1:TsrRegNode);
-  procedure OpISubExt(dst,bor:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpISubExt(dst,bor:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
   //
   function  OpAbsDiff(pLine:TspirvOp;dst,src0,src1:TsrRegNode):TspirvOp;
   procedure OpWQM32(dst:PsrRegSlot;src:TsrRegNode);
@@ -146,18 +148,23 @@ type
   function  OpFloorTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpPowTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
-  procedure OpNot(dst:PsrRegSlot;src:TsrRegNode);
+  procedure OpNot       (dst:PsrRegSlot;src:TsrRegNode);
   procedure OpLogicalNot(dst:PsrRegSlot;src:TsrRegNode);
-  procedure OpBitwiseOr(dst:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpBitwiseOr (dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpBitwiseXor(dst:PsrRegSlot;src0,src1:TsrRegNode);
-  procedure OpLogicalOr(dst:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpLogicalOr (dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpBitwiseAnd(dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpLogicalAnd(dst:PsrRegSlot;src0,src1:TsrRegNode);
   //
+  function  OpLogicalNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
-  function  OpOrTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0:TsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):TsrRegNode;
+  //
+  function  OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpNotEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpBitCountTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
@@ -355,6 +362,12 @@ begin
  Result:=_Op2(pLine,Op.OpINotEqual,dst,src,src0);
 end;
 
+function TEmitOp.OpIntToBoolTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpINotEqual,Result,src));
+end;
+
 function TEmitOp.OpCast(nLine,dst,src:TsrNode):TsrNode;
 var
  rdst,rsrc,rtmp:TsrRegNode;
@@ -376,8 +389,8 @@ begin
    else
     begin
      rtmp:=NewReg(dtUint32);
-     OpBoolToInt(pLine,rtmp,rsrc);
-     Result:=OpBitcast(pLine,rdst,rtmp);
+     pLine :=OpBoolToInt(pLine,rtmp,rsrc);
+     Result:=OpBitcast  (pLine,rdst,rtmp);
     end;
   end;
  end else
@@ -389,7 +402,7 @@ begin
    else
     begin
      rtmp:=NewReg(dtUint32);
-     OpBitcast(pLine,rtmp,rsrc);
+     pLine :=OpBitcast  (pLine,rtmp,rsrc);
      Result:=OpIntToBool(pLine,rdst,rtmp);
     end;
   end;
@@ -636,29 +649,35 @@ procedure TEmitOp.OpIAddCar(pLine:TspirvOp;dst,car,src0,src1:TsrRegNode);
 Var
  node:TspirvOp;
  rsl:TsrRegNode;
+ rtype:TsrDataType;
 begin
  node:=AddSpirvOp(pLine,Op.OpIAddCarry); //need first
  node.AddParam(src0);
  node.AddParam(src1);
 
- rsl:=NewReg(dtStruct2u);
+ rtype:=dst.dtype.AsStruct2;
+ Assert(rtype<>dtUnknow);
 
- node.pType:=TypeList.Fetch(dtStruct2u);
+ rsl:=NewReg(rtype);
+
+ node.pType:=TypeList.Fetch(rtype);
  node.pDst:=rsl;
 
- dst:=BitcastList.FetchDstr(TsrDataType(dtStruct2u).Child,dst);
- car:=BitcastList.FetchDstr(TsrDataType(dtStruct2u).Child,car);
+ dst:=BitcastList.FetchDstr(rtype.Child,dst);
+ car:=BitcastList.FetchDstr(rtype.Child,car);
 
  pLine:=node;
  pLine:=OpExtract(pLine,dst,rsl,0);
  pLine:=OpExtract(pLine,car,rsl,1);
 end;
 
-procedure TEmitOp.OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode);
+procedure TEmitOp.OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
 Var
  node:TspirvOp;
  rsl:TsrRegPair;
 begin
+ Assert(rtype.Sign=0);
+
  node:=AddSpirvOp(srOpUtils.OpIAddExt); //need first
  node.AddParam(src0);
  node.AddParam(src1);
@@ -667,37 +686,62 @@ begin
  rsl.pWriter:=node;
  node.pDst:=rsl;
 
- rsl.pDst0:=dst^.New(line,dtUint32);
- rsl.pDst1:=car^.New(line,dtUint32);
+ rsl.pDst0:=dst^.New(line,rtype); //dtUint32,dtUint64
+ rsl.pDst1:=car^.New(line,rtype); //dtUint32,dtUint64
+end;
+
+procedure TEmitOp.OpIAddExt(dst,car,src0,src1:TsrRegNode);
+Var
+ node:TspirvOp;
+ rsl:TsrRegPair;
+begin
+ Assert(dst.dtype.Sign=0);
+
+ node:=AddSpirvOp(srOpUtils.OpIAddExt); //need first
+ node.AddParam(src0);
+ node.AddParam(src1);
+
+ rsl:=NewRegPair;
+ rsl.pWriter:=node;
+ node.pDst:=rsl;
+
+ rsl.pDst0:=dst; //dtUint32,dtUint64
+ rsl.pDst1:=car; //dtUint32,dtUint64
 end;
 
 procedure TEmitOp.OpISubBor(pLine:TspirvOp;dst,bor,src0,src1:TsrRegNode);
 Var
  node:TspirvOp;
  rsl:TsrRegNode;
+ rtype:TsrDataType;
 begin
  node:=AddSpirvOp(pLine,Op.OpISubBorrow); //need first
  node.AddParam(src0);
  node.AddParam(src1);
 
- rsl:=NewReg(dtStruct2u);
+ rtype:=dst.dtype.AsStruct2;
+ Assert(rtype<>dtUnknow);
 
- node.pType:=TypeList.Fetch(dtStruct2u);
+ rsl:=NewReg(rtype);
+
+ node.pType:=TypeList.Fetch(rtype);
  node.pDst:=rsl;
 
- dst:=BitcastList.FetchDstr(TsrDataType(dtStruct2u).Child,dst);
- bor:=BitcastList.FetchDstr(TsrDataType(dtStruct2u).Child,bor);
+ dst:=BitcastList.FetchDstr(rtype.Child,dst);
+ bor:=BitcastList.FetchDstr(rtype.Child,bor);
 
  pLine:=node;
  pLine:=OpExtract(pLine,dst,rsl,0);
  pLine:=OpExtract(pLine,bor,rsl,1);
 end;
 
-procedure TEmitOp.OpISubExt(dst,bor:PsrRegSlot;src0,src1:TsrRegNode);
+procedure TEmitOp.OpISubExt(dst,bor:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
 Var
  node:TspirvOp;
  rsl:TsrRegPair;
 begin
+ Assert(rtype.Sign=0);
+
  node:=AddSpirvOp(srOpUtils.OpISubExt); //need first
  node.AddParam(src0);
  node.AddParam(src1);
@@ -706,8 +750,8 @@ begin
  rsl.pWriter:=node;
  node.pDst:=rsl;
 
- rsl.pDst0:=dst^.New(line,dtUint32);
- rsl.pDst1:=bor^.New(line,dtUint32);
+ rsl.pDst0:=dst^.New(line,rtype); //dtUint32,dtUint64
+ rsl.pDst1:=bor^.New(line,rtype); //dtUint32,dtUint64
 end;
 
 //
@@ -996,7 +1040,7 @@ begin
    if node.IsType(ntOpBlock) then
    begin
     tmp:=nil;
-    if (TsrOpBlock(node).Block.bType in [btCond,btLoop]) then
+    if IsReal(TsrOpBlock(node).Block.bType) then
     begin
      p.pDst:=nil; //reset
      Break;
@@ -1369,6 +1413,12 @@ end;
 
 //
 
+function TEmitOp.OpLogicalNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpLogicalNot,Result,src)); //post type
+end;
+
 function TEmitOp.OpNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(dtUnknow);
@@ -1391,6 +1441,29 @@ function TEmitOp.OpAndTo(src0:TsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):TsrReg
 begin
  if (src0=nil) then Exit(src0);
  Result:=OpAndTo(src0,NewReg_q(src0.dtype,src1,ppLine),ppLine);
+end;
+
+//
+
+function TEmitOp.OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+var
+ zero:TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ zero  :=NewReg_i(src.dtype,0,ppLine);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpSLessThan,Result,src,zero)); //(x<0)
+end;
+
+function TEmitOp.OpEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpLogicalEqual,Result,src0,src1));
+end;
+
+function TEmitOp.OpNotEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpLogicalNotEqual,Result,src0,src1));
 end;
 
 //

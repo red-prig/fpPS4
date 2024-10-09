@@ -56,7 +56,7 @@ type
 
  TsrOpList=specialize TNodeListClass<TsrOpCustom>;
 
- TsoFlags=(soClear,soNotUsed);
+ TsoFlags=(soClear,soNotUsed,soForce);
  TsoSetFlags=Set of TsoFlags;
 
  TspirvOp=class(TsrOpCustom)
@@ -91,14 +91,15 @@ type
    procedure AddLiteral(Value:PtrUint;const name:RawByteString='');
    procedure AddString(const name:RawByteString);
    function  is_cleared:Boolean;
+   function  is_force:Boolean;
    function  Clear:Boolean;
-   procedure mark_not_used;
+   procedure mark_not_used(Force:Boolean=False);
    function  can_clear:Boolean;
  end;
 
  ntOp=TspirvOp;
 
- TsrVolMark=(vmNone,vmEnd,vmBreak,vmCont);
+ TsrVolMark=(vmNone,vmEndpg,vmBreak,vmConti,vmMixed);
 
  TsrBlockInfo=packed record
   b_adr,e_adr:TSrcAdr;
@@ -140,21 +141,31 @@ type
     pBegOp:TspirvOp;
     pEndOp:TspirvOp;
     pMrgOp:TspirvOp;
+    pBcnOp:TspirvOp;
    end;
 
+   pBody :TsrOpBlock;
+   pIf   :TsrOpBlock;
+   pElse :TsrOpBlock;
+
+   vctx  :TsrVolatileContext;
+
+   FLBlock:TsrCFGBlock;
    FCursor:TsrCursor;
 
    Regs:record
-    pSnap_org:PsrRegsSnapshot;
-    pSnap_cur:PsrRegsSnapshot;
-    FVolMark:TsrVolMark;
+    orig:PsrRegsSnapshot;
+    prev:PsrRegsSnapshot;
+    next:PsrRegsSnapshot;
    end;
 
    Cond:record
-    pReg:TsrRegNode;
-    FVal:Boolean;
-    FUseCont:Boolean;
+    pReg        :TsrRegNode;
+    FNormalOrder:Boolean;
+    FUseCont    :Boolean;
    end;
+
+   FVolMark:TsrVolMark;
 
    dummy:TspirvOp;
 
@@ -163,10 +174,11 @@ type
    procedure SetInfo(const b:TsrBlockInfo);
    procedure SetInfo(bType:TsrBlockType;b_adr,e_adr:TSrcAdr);
    procedure SetLabels(pBegOp,pEndOp,pMrgOp:TspirvOp);
-   procedure SetCond(pReg:TsrRegNode;FVal:Boolean);
+   procedure SetCond(pReg:TsrRegNode;FNormalOrder:Boolean);
    function  IsEndOf(Adr:TSrcAdr):Boolean;
    function  FindUpLoop:TsrOpBlock;
-   function  FindUpCond(pReg:TsrRegNode):TsrOpBlock;
+   function  FindUpCond:TsrOpBlock;
+   function  FindUpCondByReg(pReg:TsrRegNode;rDown:Boolean;var Invert:Boolean):TsrOpBlock;
  end;
 
  TSpirvFunc=class(TsrNode)
@@ -186,7 +198,7 @@ type
    function  _GetPrintName:RawByteString; override;
    //
    property  Name:RawByteString read key;
-   property  pBlock:TsrOpBlock  read FBlock;
+   property  pBlock:TsrOpBlock  read FBlock write FBlock;
    Function  pTop:TsrOpBlock;
    Procedure PushBlock(New:TsrOpBlock);
    function  PopBlock:Boolean;
@@ -517,6 +529,11 @@ begin
  Result:=(soClear in flags);
 end;
 
+function TspirvOp.is_force:Boolean;
+begin
+ Result:=(soForce in flags);
+end;
+
 function TspirvOp.Clear:Boolean;
 var
  node:POpParamNode;
@@ -525,7 +542,12 @@ begin
  Result:=False;
  if not can_clear then Exit;
 
- Assert(read_count=0,Op.GetStr(OpId));
+ if (read_count<>0) then
+ if not is_force then
+ begin
+  can_clear;
+  Assert(false,'Wrong read_count on:'+Op.GetStr(OpId));
+ end;
 
  FType.mark_unread(Self);
  node:=pParam.pHead;
@@ -594,9 +616,13 @@ begin
  flags:=flags-[soClear];
 end;
 
-procedure TspirvOp.mark_not_used;
+procedure TspirvOp.mark_not_used(Force:Boolean=False);
 begin
  flags:=flags+[soNotUsed];
+ if Force then
+ begin
+  flags:=flags+[soForce];
+ end;
 end;
 
 function TspirvOp.can_clear:Boolean;
@@ -615,6 +641,8 @@ begin
  dummy:=Emit.specialize New<TspirvOp>;
  dummy.Init(Op.OpNop);
  AddSpirvOp(dummy);
+ //
+ vctx.Emit:=Emit;
 end;
 
 procedure TsrOpBlock.SetCFGBlock(pLBlock:TsrCFGBlock);
@@ -648,10 +676,10 @@ begin
  Labels.pMrgOp:=pMrgOp;
 end;
 
-procedure TsrOpBlock.SetCond(pReg:TsrRegNode;FVal:Boolean);
+procedure TsrOpBlock.SetCond(pReg:TsrRegNode;FNormalOrder:Boolean);
 begin
- Cond.pReg:=pReg;
- Cond.FVal:=FVal;
+ Cond.pReg        :=pReg;
+ Cond.FNormalOrder:=FNormalOrder;
 end;
 
 function TsrOpBlock.IsEndOf(Adr:TSrcAdr):Boolean;
@@ -672,18 +700,65 @@ begin
  end;
 end;
 
-function TsrOpBlock.FindUpCond(pReg:TsrRegNode):TsrOpBlock;
+function TsrOpBlock.FindUpCond:TsrOpBlock;
 var
  node:TsrOpBlock;
 begin
  Result:=nil;
+ node:=Self;
+ While (node<>nil) do
+ begin
+  if (node.Block.bType=btCond) then Exit(node);
+  node:=node.pParent;
+ end;
+end;
+
+function TsrOpBlock.FindUpCondByReg(pReg:TsrRegNode;rDown:Boolean;var Invert:Boolean):TsrOpBlock;
+var
+ node:TsrOpBlock;
+ pCond:TsrRegNode;
+begin
+ Result:=nil;
  if (pReg=nil) then Exit;
- pReg:=RegDown(pReg);
+ if rDown then
+ begin
+  pReg:=RegDown(pReg);
+ end;
  if pReg.is_const then Exit;
  node:=Self;
  While (node<>nil) do
  begin
-  if (node.Block.bType=btCond) and (pReg=RegDown(node.Cond.pReg)) then Exit(node);
+  if (node.Block.bType=btCond) then
+  begin
+   //
+   pCond:=node.Cond.pReg;
+   if rDown then
+   begin
+    pCond:=RegDown(pCond);
+   end;
+   //
+   if (pReg=pCond) then
+   begin
+    Exit(node);
+   end;
+  end else
+  if (node.Block.bType=btElse) then
+  begin
+   Assert(node.pIf<>nil);
+   node:=node.pIf;
+   //
+   pCond:=node.Cond.pReg;
+   if rDown then
+   begin
+    pCond:=RegDown(pCond);
+   end;
+   //
+   if (pReg=pCond) then
+   begin
+    Invert:=not Invert; //reverse
+    Exit(node);
+   end;
+  end;
   node:=node.pParent;
  end;
 end;

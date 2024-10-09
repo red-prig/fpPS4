@@ -24,12 +24,14 @@ type
   procedure emit_S_MOV_B32;
   procedure emit_S_MOV_B64;
   procedure OpISccNotZero(src:TsrRegNode);
+  procedure OpISccNotZero2(src0,src1:TsrRegNode);
   procedure emit_S_NOT_B32;
   procedure emit_S_NOT_B64;
   procedure emit_S_GETPC_B64;
   procedure emit_S_SETPC_B64;
   procedure emit_S_SWAPPC_B64;
   procedure emit_S_AND_SAVEEXEC_B64;
+  procedure _OpWQM32(dst:PsrRegSlot;src:TsrRegNode);
   procedure emit_S_WQM_B32;
   procedure emit_S_WQM_B64;
   procedure emit_S_BREV_B32;
@@ -97,8 +99,28 @@ end;
 
 procedure TEmit_SOP1.OpISccNotZero(src:TsrRegNode); //SCC = (sdst.u != 0)
 begin
- MakeCopy(get_scc,src);
- get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
+ if src.is_const then
+ begin
+  //early optimization
+  SetConst_b(get_scc,src.AsConst.AsBool);
+ end else
+ begin
+  MakeCopy(get_scc,src);
+  get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
+ end;
+end;
+
+procedure TEmit_SOP1.OpISccNotZero2(src0,src1:TsrRegNode);
+begin
+ if src0.is_const and
+    src1.is_const then
+ begin
+  //early optimization
+  SetConst_b(get_scc,src0.AsConst.AsBool or src1.AsConst.AsBool);
+ end else
+ begin
+  OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
+ end;
 end;
 
 procedure TEmit_SOP1.emit_S_NOT_B32; //sdst = ~ssrc; SCC = (sdst != 0)
@@ -128,10 +150,10 @@ begin
  OpNot(dst[0],src[0]);
  OpNot(dst[1],src[1]);
 
- src[0]:=MakeRead(dst[0],dtUnknow);
- src[1]:=MakeRead(dst[1],dtUnknow);
+ src[0]:=dst[0]^.current;
+ src[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src[0],src[1]); //implict cast (int != 0)
+ OpISccNotZero2(src[0],src[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP1.emit_S_GETPC_B64;
@@ -154,11 +176,16 @@ Var
 
  newptr:Pointer;
 begin
+ While (CheckBlockEnd) do;
+
+ //ret
  if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
 
  newptr:=GetFuncPtr(@src);
 
  set_code_ptr(newptr,btMain);
+
+ While (CheckBlockBeg) do;
 end;
 
 procedure TEmit_SOP1.emit_S_SWAPPC_B64;
@@ -168,6 +195,7 @@ Var
 
  oldptr,newptr:Pointer;
 begin
+ //call
  if not get_sdst7_pair(FSPI.SOP1.SDST,@dst) then Assert(false);
 
  if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
@@ -203,9 +231,36 @@ begin
 
  //SCC = ((exc[0] != 0) or ((exc[1] != 0))
 
- OpLogicalOr(get_scc,exc[0],exc[1]); //implict cast (int != 0)
+ OpISccNotZero2(exc[0],exc[1]); //implict cast (int != 0)
 
  //SCC = (sdst != 0)    SCC = ((exc[0] != 0) or ((exc[1] != 0))
+end;
+
+function F_WQM_32(D:DWORD):DWORD;
+var
+ i:Byte;
+begin
+ Result:=0;
+ if (D=0) then Exit;
+ For i:=0 to 7 do
+ begin
+  if (((D shr (i*4)) and 15)<>0) then
+  begin
+   Result:=Result or ($F shl (i*4));
+  end;
+ end;
+end;
+
+procedure TEmit_SOP1._OpWQM32(dst:PsrRegSlot;src:TsrRegNode);
+begin
+ if src.is_const then
+ begin
+  //early optimization
+  SetConst_q(dst,src.dtype,F_WQM_32(src.AsConst.GetData));
+ end else
+ begin
+  OpWQM32(dst,src);
+ end;
 end;
 
 procedure TEmit_SOP1.emit_S_WQM_B32;
@@ -216,9 +271,13 @@ begin
  dst:=get_sdst7(FSPI.SOP1.SDST);
  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUnknow);
 
- OpWQM32(dst,src);
+ _OpWQM32(dst,src);
+
+ src:=MakeRead(dst,dtUnknow);
+ OpISccNotZero(src);
 end;
 
+//TODO: VK_KHR_shader_quad_control:RequireFullQuadsKHR
 procedure TEmit_SOP1.emit_S_WQM_B64;
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -235,8 +294,13 @@ begin
 
  if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(False); //ssrc8
 
- OpWQM32(dst[0],src[0]);
- OpWQM32(dst[1],src[1]);
+ _OpWQM32(dst[0],src[0]);
+ _OpWQM32(dst[1],src[1]);
+
+ src[0]:=dst[0]^.current;
+ src[1]:=dst[1]^.current;
+
+ OpISccNotZero2(src[0],src[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP1.emit_S_BREV_B32; //sdst[31:0] = ssrc[0:31]

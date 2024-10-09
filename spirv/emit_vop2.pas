@@ -163,7 +163,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUInt32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
 
- OpIAddExt(dst,car,src[0],src[1]);
+ OpIAddExt(dst,car,src[0],src[1],dtUint32);
 
  exc:=MakeRead(get_exec0,dtUnknow);
  OpBitwiseAnd(car,car^.current,exc); //carry_out & EXEC
@@ -181,7 +181,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
 
- OpISubExt(dst,bor,src[0],src[1]);
+ OpISubExt(dst,bor,src[0],src[1],dtUint32);
 
  exc:=MakeRead(get_exec0,dtUnknow);
  OpBitwiseAnd(bor,bor^.current,exc); //borrow_out & EXEC
@@ -199,7 +199,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
 
- OpISubExt(dst,bor,src[1],src[0]);
+ OpISubExt(dst,bor,src[1],src[0],dtUint32);
 
  exc:=MakeRead(get_exec0,dtUnknow);
  OpBitwiseAnd(bor,bor^.current,exc); //borrow_out & EXEC
@@ -442,12 +442,12 @@ begin
  src[2]:=OpAndTo(src[2],1);
  src[2].PrepType(ord(dtUInt32));
 
- OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+ OpIAddExt(dst,car,src[0],src[1],dtUint32); //src0+src1
 
  src[0]:=MakeRead(dst,dtUInt32);
  src[1]:=MakeRead(car,dtUInt32);   //save car1
 
- OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+src2
+ OpIAddExt(dst,car,src[0],src[2],dtUint32); //(src0+src1)+src2
 
  src[0]:=MakeRead(car,dtUInt32);
 

@@ -16,11 +16,14 @@ uses
 type
  TEmit_SOP2=class(TEmitFetch)
   procedure emit_SOP2;
-  procedure emit_S_ADD_B32(rtype:TsrDataType);
-  procedure emit_S_SUB_B32(rtype:TsrDataType);
+  procedure emit_S_ADD_I32;
+  procedure emit_S_ADD_U32;
+  procedure emit_S_SUB_I32;
+  procedure emit_S_SUB_U32;
   procedure emit_S_ADDC_U32;
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:TsrRegNode);
+  procedure OpISccNotZero2(src0,src1:TsrRegNode);
   procedure emit_S_SH(OpId:DWORD;rtype:TsrDataType);
   procedure emit_S_AND_B32;
   procedure emit_S_AND_B64;
@@ -40,7 +43,34 @@ type
 
 implementation
 
-procedure TEmit_SOP2.emit_S_ADD_B32(rtype:TsrDataType);
+procedure TEmit_SOP2.emit_S_ADD_I32;
+Var
+ dst,car:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ x,y,d:TsrRegNode;
+ a,b:TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+ car:=get_scc;
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
+
+ OpIAdd(dst,src[0],src[1]);
+
+ //scc = sign(x) == sign(y) && sign(d) != sign(x);
+
+ x:=OpIsSSignTo(src[0]);
+ y:=OpIsSSignTo(src[1]);
+ d:=OpIsSSignTo(dst^.current);
+
+ a:=OpEqualTo(x,y);
+ b:=OpNotEqualTo(d,x);
+
+ OpBitwiseAnd(car,a,b);
+end;
+
+procedure TEmit_SOP2.emit_S_ADD_U32;
 Var
  dst,car:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
@@ -48,13 +78,40 @@ begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  car:=get_scc;
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,rtype);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
- OpIAddExt(dst,car,src[0],src[1]);
+ OpIAddExt(dst,car,src[0],src[1],dtUInt32);
 end;
 
-procedure TEmit_SOP2.emit_S_SUB_B32(rtype:TsrDataType);
+procedure TEmit_SOP2.emit_S_SUB_I32;
+Var
+ dst,bor:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ x,y,d:TsrRegNode;
+ a,b:TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+ bor:=get_scc;
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+
+ OpISub(dst,src[0],src[1]);
+
+ //scc = sign(x) != sign(y) && sign(d) != sign(x);
+
+ x:=OpIsSSignTo(src[0]);
+ y:=OpIsSSignTo(src[1]);
+ d:=OpIsSSignTo(dst^.current);
+
+ a:=OpNotEqualTo(x,y);
+ b:=OpNotEqualTo(d,x);
+
+ OpBitwiseAnd(bor,a,b);
+end;
+
+procedure TEmit_SOP2.emit_S_SUB_U32;
 Var
  dst,bor:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
@@ -62,10 +119,10 @@ begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  bor:=get_scc;
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,rtype);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
- OpISubExt(dst,bor,src[0],src[1]);
+ OpISubExt(dst,bor,src[0],src[1],dtUInt32);
 end;
 
 procedure TEmit_SOP2.emit_S_ADDC_U32;
@@ -80,12 +137,12 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
  src[2]:=MakeRead(car,dtUInt32);
 
- OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+ OpIAddExt(dst,car,src[0],src[1],dtUInt32); //src0+src1
 
  src[0]:=MakeRead(dst,dtUInt32);
  src[1]:=MakeRead(car,dtUInt32);   //save car1
 
- OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+SCC
+ OpIAddExt(dst,car,src[0],src[2],dtUInt32); //(src0+src1)+SCC
 
  src[0]:=MakeRead(car,dtUInt32);
 
@@ -107,8 +164,28 @@ end;
 
 procedure TEmit_SOP2.OpISccNotZero(src:TsrRegNode); //SCC = (sdst.u != 0)
 begin
- MakeCopy(get_scc,src);
- get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
+ if src.is_const then
+ begin
+  //early optimization
+  SetConst_b(get_scc,src.AsConst.AsBool);
+ end else
+ begin
+  MakeCopy(get_scc,src);
+  get_scc^.current.dtype:=dtBool; //implict cast (int != 0)
+ end;
+end;
+
+procedure TEmit_SOP2.OpISccNotZero2(src0,src1:TsrRegNode);
+begin
+ if src0.is_const and
+    src1.is_const then
+ begin
+  //early optimization
+  SetConst_b(get_scc,src0.AsConst.AsBool or src1.AsConst.AsBool);
+ end else
+ begin
+  OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
+ end;
 end;
 
 procedure TEmit_SOP2.emit_S_SH(OpId:DWORD;rtype:TsrDataType);
@@ -160,7 +237,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_ANDN2_B64; //sdst[2] = (ssrc0[2] & ~ssrc1[2]); SCC = (sdst[2] != 0)
@@ -182,7 +259,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_OR_B32;
@@ -216,7 +293,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_XOR_B32;
@@ -250,7 +327,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_ORN2_B64; //sdst[2] = (ssrc0[2] | ~ssrc1[2]); SCC = (sdst[2] != 0)
@@ -272,7 +349,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_NAND_B64; //sdst[2] = ~(ssrc0[2] & ssrc1[2]); SCC = (sdst[2] != 0)
@@ -294,7 +371,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_NOR_B64; //sdst[2] = ~(ssrc0[2] | ssrc1[2]); SCC = (sdst[2] != 0)
@@ -316,7 +393,7 @@ begin
  src2[0]:=dst[0]^.current;
  src2[1]:=dst[1]^.current;
 
- OpLogicalOr(get_scc,src2[0],src2[1]); //implict cast (int != 0)
+ OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
 procedure TEmit_SOP2.emit_S_CSELECT_B32; //sdst = SCC ? ssrc0 : ssrc1
@@ -402,11 +479,11 @@ begin
 
  Case FSPI.SOP2.OP of
 
-  S_ADD_U32: emit_S_ADD_B32(dtUInt32);
-  S_ADD_I32: emit_S_ADD_B32(dtInt32);
+  S_ADD_U32: emit_S_ADD_U32;
+  S_ADD_I32: emit_S_ADD_I32;
 
-  S_SUB_U32: emit_S_SUB_B32(dtUInt32);
-  S_SUB_I32: emit_S_SUB_B32(dtInt32);
+  S_SUB_U32: emit_S_SUB_U32;
+  S_SUB_I32: emit_S_SUB_I32;
 
   S_ADDC_U32: emit_S_ADDC_U32;
 

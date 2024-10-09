@@ -16,6 +16,7 @@ uses
   srRefId,
   srConst,
   srReg,
+  srPrivate,
   srOp,
   srOpUtils,
   emit_fetch;
@@ -179,7 +180,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -201,11 +202,13 @@ var
    node.OpId:=OpId;
    Inc(Result);
   end;
+  //
   dst:=node.pDst.specialize AsType<ntReg>;
   Result:=Result+PrepTypeDst(dst,dtype);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -216,6 +219,7 @@ var
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  //if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -326,7 +330,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -347,6 +351,8 @@ begin
  src[1]:=RegDown(node.ParamNode(1).AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
+
+ Assert(dst.dtype=dtBool);
 
  if src[0].is_const and src[1].is_const then
  begin
@@ -460,7 +466,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -482,11 +488,13 @@ var
    node.OpId:=OpId;
    Inc(Result);
   end;
+  //
   dst:=node.pDst.specialize AsType<ntReg>;
   Result:=Result+PrepTypeDst(dst,dtype);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -497,6 +505,7 @@ var
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  //if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -621,7 +630,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -642,6 +651,8 @@ begin
  src[1]:=RegDown(node.ParamNode(1).AsReg);
 
  if (dst=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
+
+ Assert(dst.dtype=dtBool);
 
  if src[0].is_const and src[1].is_const then
  begin
@@ -683,7 +694,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -697,11 +708,13 @@ var
    node.OpId:=OpId;
    Inc(Result);
   end;
+  //
   dst:=node.pDst.specialize AsType<ntReg>;
   Result:=Result+PrepTypeDst(dst,dtype);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -712,6 +725,7 @@ var
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
+  //if (dtype=dtBool) then dst.dweak:=False;
   node.pType:=TypeList.Fetch(dtype);
  end;
 
@@ -784,6 +798,8 @@ begin
 
  if (dst=nil) or (src=nil) then Exit;
 
+ Assert(dst.dtype=dtBool);
+
  if (src.read_count>1) then Exit;
 
  pop:=src.pWriter.specialize AsType<ntOp>;
@@ -806,27 +822,129 @@ begin
  _SetReg(dst2);
 end;
 
+Procedure mark_not_used_branch_op(pBlock:TsrOpBlock);
+var
+ node:TSpirvOp;
+begin
+ node:=pBlock.First;
+ While (node<>nil) do
+ begin
+  if node.IsType(ntOp) then
+  begin
+   //
+   Case node.OpId of
+    Op.OpLabel,
+    Op.OpSelectionMerge,
+    Op.OpBranch,
+    Op.OpBranchConditional:node.mark_not_used(True);
+    else;
+   end;
+   //
+  end;
+  node:=node.Next;
+ end;
+end;
+
+procedure _restore(var vctx:TsrVolatileContext);
+var
+ node:TsrVolatileNode;
+ V:TsrVolatile;
+ N:TsrRegNode;
+begin
+ node:=vctx.FList.pHead;
+ while (node<>nil) do
+ begin
+  V:=TsrVolatile(node.V);
+  N:=TsrRegNode(node.N);
+
+  if (N.pWriter<>V) then
+  begin
+   Assert(false,'_restore:1');
+  end;
+
+  if (V.FBase=nil) then
+  begin
+   Assert(false,'_restore:2');
+  end;
+
+  //Preventing circular markings
+  V.mark_read(nil);
+
+  N.pWriter:=V.FBase;
+  N.pWriter.PrepType(ord(N.dtype));
+
+  V.mark_unread(nil);
+
+  //
+  node:=node.pNext;
+ end;
+end;
+
 function TEmitPostOp.OnBranchConditional1(node:TSpirvOp):Integer;
 var
  src,prv:TsrRegNode;
- pOp:TSpirvOp;
+ pOpNot:TSpirvOp;
  pLabel:array[0..1] of TsrRefNode;
+ pCond:TsrOpBlock;
+ pMerg:TsrOpBlock;
+ cst  :TsrConst;
 begin
  Result:=0;
  src:=RegDown(node.ParamNode(0).AsReg);
 
  if (src=nil) then Exit;
 
- pOp:=src.pWriter.specialize AsType<ntOp>;
- if (pOp=nil) then Exit;
+ if (src.is_const) then
+ begin
+  cst:=src.AsConst;
+  if (cst<>nil) then
+  begin
+   pCond:=TsrOpBlock(node.Parent).FindUpCond;
+   if (pCond<>nil) then
+   if (pCond.pElse=nil) then //no else
+   if (RegDown(pCond.Cond.pReg)=src) then
+   if ((cst.AsBool=True)  and (pCond.Cond.FNormalOrder=True )) or   //if (true)
+      ((cst.AsBool=False) and (pCond.Cond.FNormalOrder=False)) then //if (!false)
+   begin
+    //Remove the condition block
 
- Case pOp.OpId of
+    //Clear ref in BranchConditional
+    node.ParamNode(0).Value:=nil;
+
+    //Get merge block
+    pMerg:=pCond.Parent;
+    Assert(pMerg.Block.bType=btMerg);
+
+    //set type
+    pMerg.Block.bType:=btOther;
+
+    _restore(pCond.vctx);
+
+    //simplification of connections
+    //PrivateList.build_volatile_ctrue(pCond.pAfter,pCond.Regs.orig,pCond.Regs.prev,pCond.Regs.next);
+
+    //set type
+    pCond.Block.bType:=btOther;
+
+    //clear instructions
+    mark_not_used_branch_op(pMerg);
+    mark_not_used_branch_op(pCond);
+
+    Exit(1);
+   end;
+  end;
+ end;
+
+ pOpNot:=src.pWriter.specialize AsType<ntOp>;
+ if (pOpNot=nil) then Exit;
+
+ Case pOpNot.OpId of
   Op.OpLogicalNot:;
   else
    Exit;
  end;
 
- prv:=pOp.ParamNode(0).AsReg;
+ prv:=pOpNot.ParamNode(0).AsReg;
  if (prv=nil) then Exit;
 
  node.ParamNode(0).Value:=prv; //set new
@@ -837,7 +955,18 @@ begin
  node.ParamNode(1).Value:=pLabel[1]; //swap
  node.ParamNode(2).Value:=pLabel[0]; //swap
 
- Inc(Result);
+ pCond:=TsrOpBlock(node.Parent).FindUpCond;
+ if (pCond<>nil) then
+ if (RegDown(pCond.Cond.pReg)=src) then
+ begin
+  //broken?
+  //set new
+  pCond.Cond.pReg:=prv;
+  //invert mark
+  pCond.Cond.FNormalOrder:=not pCond.Cond.FNormalOrder;
+ end;
+
+ Exit(1);
 end;
 
 function TEmitPostOp.OpBitCount1(node:TSpirvOp):Integer;
@@ -847,7 +976,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -894,7 +1023,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -931,7 +1060,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -940,7 +1069,7 @@ var
  procedure _SetConst_s(dtype:TsrDataType;value:Single);
  begin
   Assert(dtype=dtFloat32);
-  dst.pWriter:=ConstList.Fetch_s(dtype,value);
+  dst.pWriter:=NewReg_s(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1150,7 +1279,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1209,7 +1338,7 @@ begin
 
  dtype:=LazyType3(dst.dtype,src[0].dtype,src[1].dtype);
 
- if (node.pType.dtype<>dtype) then
+ if (dtype<>dtUnknow) and (node.pType.dtype<>dtype) then
  begin
   node.pType:=TypeList.Fetch(dtype);
   if (node.pType.dtype=dtype) then
@@ -1218,7 +1347,7 @@ begin
   end;
  end;
 
- if (dst.dtype<>dtype) then
+ if (dtype<>dtUnknow) and (dst.dtype<>dtype) then
  begin
   Result:=Result+PrepTypeDst(dst,dtype);
   node.pDst:=dst;
@@ -1237,7 +1366,7 @@ var
  procedure _SetConst_s(dtype:TsrDataType;value:Single);
  begin
   Assert(dtype=dtFloat32);
-  dst.pWriter:=ConstList.Fetch_s(dtype,value);
+  dst.pWriter:=NewReg_s(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1278,7 +1407,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1332,7 +1461,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1364,7 +1493,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1440,7 +1569,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1640,7 +1769,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1729,7 +1858,7 @@ var
 
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
-  dst.pWriter:=ConstList.Fetch(dtype,value);
+  dst.pWriter:=NewReg_q(dtype,value,@node);
   node.mark_not_used;
   node.pDst:=nil;
   Inc(Result);
@@ -1763,7 +1892,7 @@ begin
  end else
  begin
   //TODO: WQM32
-  Assert(false,'TODO: WQM32')
+  _SetReg(src);
  end;
 end;
 
@@ -1849,6 +1978,7 @@ begin
  end else
  begin
   //TODO: non constant PackOfs
+  Writeln('TODO: non constant PackOfs ',src.pWriter.ntype.ClassName);
   Assert(false,'TODO: non constant PackOfs');
  end;
 end;
@@ -2442,7 +2572,7 @@ function TEmitPostOp.OnReturn_2(node:TSpirvOp):Integer;
 begin
  Result:=0;
 
- if is_term_op(node.Prev) then
+ if is_term_op(flow_down_prev_up(node)) then
  begin
   node.mark_not_used;
   Inc(Result);
@@ -2455,7 +2585,7 @@ var
  pLine:TSpirvOp;
  pOpBlock:TsrOpBlock;
  pChild:TsrOpBlock;
- pOpLabel:array[0..2] of TspirvOp;
+ pBegOp,pEndOp,pMrgOp:TspirvOp;
  exc:TsrRegNode;
  b_adr:TSrcAdr;
 begin
@@ -2505,7 +2635,7 @@ begin
          Op.OpNop:;
          Op.OpKill:;
          else
-          node.mark_not_used;
+          node.mark_not_used(True);
         end;
        end;
        node:=node.Next;
@@ -2515,6 +2645,9 @@ begin
   Exit;
  end else
  begin
+  //reread
+  exc:=node.ParamNode(0).AsReg;
+
   node.mark_not_used;
 
   b_adr:=pOpBlock.Block.b_adr;
@@ -2523,66 +2656,72 @@ begin
   if (pLine=nil) then //kill or nop
   begin
 
-   pOpLabel[0]:=NewLabelOp(False); //current
-   pOpLabel[1]:=NewLabelOp(False); //end
+   pBegOp:=NewLabelOp(False); //current
+   pEndOp:=NewLabelOp(False); //end
+   pMrgOp:=pEndOp;            //merge
 
-   pOpLabel[0].Adr:=b_adr;
-   pOpLabel[1].Adr:=b_adr;
+   pBegOp.Adr:=b_adr;
+   pEndOp.Adr:=b_adr;
 
-   pOpBlock.SetLabels(pOpLabel[0],pOpLabel[1],nil);
+   pOpBlock.SetLabels(pBegOp,pEndOp,pMrgOp);
    pOpBlock.Block.bType:=btCond;
-   pOpBlock.SetCond(nil,true);
+   pOpBlock.SetCond(exc,false); //reverse
 
    pLine:=node;
-   pLine:=OpCondMerge(pLine,pOpLabel[1]);
-   pLine:=OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
-   pLine:=AddSpirvOp(pLine,pOpLabel[0]);
+   pLine:=OpCondMerge (pLine,pMrgOp);
+   pLine:=OpBranchCond(pLine,pEndOp,pBegOp,exc); //reverse
+   pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
      pChild.SetInfo(btOther,b_adr,b_adr);
      pChild.dummy.OpId:=Op.OpKill; //set kill to dummy
 
+   pOpBlock.pBody:=pChild;
+
    pLine:=InsertBlockOp(pLine,pChild);
 
    //OpBranch not need from kill
-   pLine:=OpBranch(pLine,pOpLabel[1]);
-   pLine:=AddSpirvOp(pLine,pOpLabel[1]);
+   pLine:=AddSpirvOp(pLine,pMrgOp);
 
   end else
   begin //kill or store
    Assert(pLine.IsType(ntOpBlock));
 
-   pOpLabel[0]:=NewLabelOp(False); //current
-   pOpLabel[1]:=NewLabelOp(False); //else
-   pOpLabel[2]:=NewLabelOp(False); //end
+   pBegOp:=NewLabelOp(False); //current
+   pEndOp:=NewLabelOp(False); //end
+   pMrgOp:=NewLabelOp(False); //merge
 
-   pOpLabel[0].Adr:=b_adr;
-   pOpLabel[1].Adr:=b_adr;
-   pOpLabel[2].Adr:=b_adr;
+   pBegOp.Adr:=b_adr;
+   pEndOp.Adr:=b_adr;
+   pMrgOp.Adr:=b_adr;
 
-   pOpBlock.SetLabels(pOpLabel[0],pOpLabel[2],pOpLabel[1]);
+   pOpBlock.SetLabels(pBegOp,pEndOp,pMrgOp);
    pOpBlock.Block.bType:=btCond;
-   pOpBlock.SetCond(nil,true);
+   pOpBlock.SetCond(exc,false); //reverse
+
+   pOpBlock.pElse.Block.bType:=btElse;
 
    pLine:=node;
-   pLine:=OpCondMerge(pLine,pOpLabel[2]);
-   pLine:=OpBranchCond(pLine,pOpLabel[1],pOpLabel[0],exc); //reverse
-   pLine:=AddSpirvOp(pLine,pOpLabel[0]);
+   pLine:=OpCondMerge (pLine,pMrgOp);
+   pLine:=OpBranchCond(pLine,pEndOp,pBegOp,exc); //reverse
+   pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
      pChild.SetInfo(btOther,b_adr,b_adr);
      pChild.dummy.OpId:=Op.OpKill; //set kill to dummy
 
+   pOpBlock.pBody:=pChild;
+
    pLine:=InsertBlockOp(pLine,pChild);
 
    //OpBranch not need from kill
-   pLine:=AddSpirvOp(pLine,pOpLabel[1]);
+   pLine:=AddSpirvOp(pLine,pEndOp);
 
    //OpStore child
 
    pLine:=pOpBlock.Last;
-   pLine:=OpBranch(pLine,pOpLabel[2]);
-   pLine:=AddSpirvOp(pLine,pOpLabel[2]); //end
+   pLine:=OpBranch  (pLine,pMrgOp);
+   pLine:=AddSpirvOp(pLine,pMrgOp); //end
 
   end;
 

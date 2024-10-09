@@ -10,6 +10,7 @@ type
  PsrConfig=^TsrConfig;
  TsrConfig=packed object
   PrintAsm:Boolean;
+  PrintCfg:Boolean;
   UseVertexInput:Boolean; //True
   UseTexelBuffer:Boolean;
   UseOutput16:Boolean;
@@ -33,6 +34,7 @@ type
   //
   Procedure Init;
   Function  CanUseStorageBufferClass:Boolean;
+  Function  IsSpv14:Boolean;
  end;
 
 implementation
@@ -51,6 +53,11 @@ end;
 Function TsrConfig.CanUseStorageBufferClass:Boolean;
 begin
  Result:=(SpvVersion>=$10300);
+end;
+
+Function TsrConfig.IsSpv14:Boolean;
+begin
+ Result:=(SpvVersion>=$10400);
 end;
 
 end.

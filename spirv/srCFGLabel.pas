@@ -26,16 +26,47 @@ type
    function  get_src_adr:TSrcAdr;
    Procedure set_src_adr(src:TSrcAdr);
   public
+   prev_adr:TSrcAdr;
    procedure Init(Code:TsrLabelBlock);
    property  Adr:TSrcAdr read get_src_adr write set_src_adr;
+   Function  Next(Var SPI:TSPI):Integer;
  end;
 
- TsrLabelType=(ltBranch,ltUnknow,ltBegAdr,ltEndAdr,ltBegCond,ltEndCond,ltBegLoop,ltEndLoop);
+ TsrLabelType=(ltUnknow,
+               ltGoto,
+               ltContinue,
+               ltBreak);
 
  TsrSetLabelType=Set of TsrLabelType;
 
- TsrBlockType=(btMain,btAdr,btAdrBranch,btSetpc,btCond,btLoop,btOther);
+ TsrBlockType=(btMain,btSetpc,btCond,btElse,btLoop,btMerg,btExec,btInline,btOther);
 
+ TsrCondition=(
+  cNone,
+  cFalse,
+  cTrue,
+  cScc0,
+  cScc1,
+  cVccz,
+  cVccnz,
+  cExecz,
+  cExecnz
+ );
+
+const
+ InvertCond:array[TsrCondition] of TsrCondition=(
+  cNone,   //cNone,
+  cTrue,   //cFalse,
+  cFalse,  //cTrue,
+  cScc1,   //cScc0,
+  cScc0,   //cScc1,
+  cVccnz,  //cVccz,
+  cVccz,   //cVccnz,
+  cExecnz, //cExecz,
+  cExecz   //cExecnz
+ );
+
+type
  TsrLabel=class
   public
    pLeft,pRight:TsrLabel;
@@ -47,7 +78,52 @@ type
    property  Adr:TSrcAdr read key;
    Procedure AddType(t:TsrLabelType);
    Procedure RemType(t:TsrLabelType);
-   function  IsType(t:TsrLabelType):Boolean;
+   function  IsType (t:TsrLabelType):Boolean;
+ end;
+
+ TsrStatementType=(
+  sCond,
+  sGoto,
+  sVar,
+  sStore,
+  sLoad,
+  sBreak,
+  sNot,
+  sOr,
+  sAnd
+ );
+
+ //sCond  TsrCondition
+ //sGoto  [sLabel]:TsrLabel [sNext]:TsrLabel [cond]:sCond/sLoad/sNot/sOr/sAnd
+
+ //sVar   id
+
+ //sStore [var]:sVar [false]:sCond/sLoad/sNot/sOr/sAnd
+ //sLoad  [var]:sVar
+
+ //sBreak
+
+ //sNot   [cond]:sCond/sLoad/sNot/sOr
+
+ //sOr    [cond]:sCond/sLoad/sNot/sOr/sAnd [cond]:sCond/sLoad/sNot/sOr/sAnd
+ //sAnd   [cond]:sCond/sLoad/sNot/sOr/sAnd [cond]:sCond/sLoad/sNot/sOr/sAnd
+
+ TsrStatement=class
+  pPrev :TsrStatement;
+  pNext :TsrStatement;
+  //
+  sType :TsrStatementType;
+  sLabel:TsrLabel;
+  sNext :TsrLabel;
+  pSrc  :TsrStatement;
+  pDst  :TsrStatement;
+  //
+  pCache:TObject;
+  u:record
+   Case Byte of
+    0:(id  :PtrUint);
+    1:(cond:TsrCondition);
+  end;
  end;
 
  TsrLabels=specialize TNodeTreeClass<TsrLabel>;
@@ -58,14 +134,40 @@ type
   DMem:Pointer;
   Size:ptruint;
   FLabels:TsrLabels;
+  FVarId:Ptruint;
   Function  FindLabel (Adr:TSrcAdr):TsrLabel;
   Function  FetchLabel(Adr:TSrcAdr):TsrLabel;
   Function  IsContain (P:Pointer):Boolean;
+  //
+  Function  NewCond(cond:TsrCondition):TsrStatement;
+  Function  NewGoto(sLabel,sNext:TsrLabel;pCond:TsrStatement):TsrStatement;
+  Function  NewVar:TsrStatement;
+  Function  NewStore(pVar,pCond:TsrStatement):TsrStatement;
+  Function  NewLoad (pVar:TsrStatement):TsrStatement;
+  Function  NewBreak(sLabel:TsrLabel):TsrStatement;
+  Function  NewNot  (pCond:TsrStatement):TsrStatement;
+  Function  NewOr   (pCond1,pCond2:TsrStatement):TsrStatement;
+  Function  NewAnd  (pCond1,pCond2:TsrStatement):TsrStatement;
  end;
 
 function get_branch_offset(var FSPI:TSPI):ptrint;
 
+function IsReal(b:TsrBlockType):Boolean;
+
 implementation
+
+function IsReal(b:TsrBlockType):Boolean;
+begin
+ case b of
+  btMain,
+  btSetpc,
+  btCond,
+  btElse,
+  btLoop:Result:=True;
+  else
+         Result:=False;
+ end;
+end;
 
 function TSrcAdr.get_code_ptr:PDWORD;
 begin
@@ -99,6 +201,13 @@ begin
  pCode    :=Code;
  Body     :=Code.DMem;
  OFFSET_DW:=0;
+ prev_adr :=Adr;
+end;
+
+Function TsrLCursor.Next(Var SPI:TSPI):Integer;
+begin
+ prev_adr:=Adr;
+ Result:=inherited Next(SPI);
 end;
 
 function TsrLCursor.get_src_adr:TSrcAdr;
@@ -166,6 +275,83 @@ end;
 Function TsrLabelBlock.IsContain(P:Pointer):Boolean;
 begin
  Result:=(Body<=P) and ((Body+Size)>P);
+end;
+
+Function TsrLabelBlock.NewCond(cond:TsrCondition):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType :=sCond;
+ Result.u.cond:=cond;
+end;
+
+Function TsrLabelBlock.NewGoto(sLabel,sNext:TsrLabel;pCond:TsrStatement):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType :=sGoto;
+ Result.sLabel:=sLabel;
+ Result.sNext :=sNext;
+ Result.pSrc  :=pCond;
+end;
+
+Function TsrLabelBlock.NewVar:TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType:=sVar;
+ Result.u.id :=FVarId;
+ Inc(FVarId);
+end;
+
+Function TsrLabelBlock.NewStore(pVar,pCond:TsrStatement):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType:=sStore;
+ Result.pDst :=pVar;
+ Result.pSrc :=pCond;
+end;
+
+Function TsrLabelBlock.NewLoad(pVar:TsrStatement):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType:=sLoad;
+ Result.pSrc :=pVar;
+ Result.u.id :=FVarId;
+ Inc(FVarId);
+end;
+
+Function TsrLabelBlock.NewBreak(sLabel:TsrLabel):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType :=sBreak;
+ Result.sLabel:=sLabel;
+end;
+
+Function TsrLabelBlock.NewNot(pCond:TsrStatement):TsrStatement;
+begin
+ case pCond.sType of
+  sCond:Result:=NewCond(InvertCond[pCond.u.cond]);
+  else
+   begin
+    Result:=FEmit.specialize New<TsrStatement>;
+    Result.sType:=sNot;
+    Result.pSrc :=pCond;
+   end;
+ end;
+end;
+
+Function TsrLabelBlock.NewOr(pCond1,pCond2:TsrStatement):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType:=sOr;
+ Result.pSrc :=pCond1;
+ Result.pDst :=pCond2;
+end;
+
+Function TsrLabelBlock.NewAnd(pCond1,pCond2:TsrStatement):TsrStatement;
+begin
+ Result:=FEmit.specialize New<TsrStatement>;
+ Result.sType:=sAnd;
+ Result.pSrc :=pCond1;
+ Result.pDst :=pCond2;
 end;
 
 end.

@@ -27,8 +27,10 @@ type
    pPrev,pNext:TsrVolatile;
    FSource:TsrPrivate;
    FList:TDependenceNodeList;
+   FBase:TsrRegNode;
+   FZeroRead:Boolean;
   //
-  Procedure _zero_read   ;                 override;
+  Procedure _zero_read;                    override;
   Procedure _zero_unread;                  override;
   Procedure _PrepType(node:PPrepTypeNode); override;
   //
@@ -37,8 +39,6 @@ type
   Procedure PushStore(node:TDependenceNode);
   Function  PopStore:TDependenceNode;
   Procedure RemoveAllStore;
-  Procedure zero_read;
-  Procedure zero_unread;
   procedure PrepType(new:TsrDataType);
  end;
 
@@ -48,10 +48,12 @@ type
   type
    TVoltList=specialize TNodeListClass<TsrVolatile>;
   public
+   pPrev,pNext :TsrPrivate;
    pLeft,pRight:TsrPrivate;
    class function c(n1,n2:PPsrRegSlot):Integer; static;
   private
    //
+   FPrivId:Integer;
    key:PsrRegSlot;
    //
    FLineList:TDependenceNodeList;
@@ -67,7 +69,7 @@ type
    property  Source:PsrRegSlot read key;
    Procedure Init; inline;
    function  GetStorageName:RawByteString;
-   function  isBoolOnly:Boolean;
+   function  adjust_type(new:TsrDataType):TsrDataType;
    Procedure UpdateRegType;
    Procedure PrepType(new:TsrDataType);
    Procedure SortLines;
@@ -86,24 +88,29 @@ type
  TsrPrivateList=object
   type
    TNodeTree=specialize TNodeTreeClass<TsrPrivate>;
+   TNodeList=specialize TNodeListClass<TsrPrivate>;
   var
    FEmit:TCustomEmit;
    FTree:TNodeTree;
+   FList:TNodeList;
+   FPrivId:Integer;
   procedure Init(Emit:TCustomEmit); inline;
   function  Fetch(pSource:PsrRegSlot):TsrPrivate;
+  function  FetchCustom(dtype:TsrDataType):TsrPrivate;
   function  First:TsrPrivate; inline;
-  Function  Next(node:TsrPrivate):TsrPrivate;
   //
-  procedure build_slot_dis(pSlot:PsrRegSlot;var old:TsrRegNode);
-  procedure build_slot_cur(pSlot:PsrRegSlot;var old:TsrRegNode);
-  procedure build_slot_brk(pSlot:PsrRegSlot;var old:TsrRegNode);
-  procedure build_slot_old(pSlot:PsrRegSlot;var old:TsrRegNode);
+  procedure build_slot_reset(pSlot:PsrRegSlot;var orig:TsrRegNode);
+  procedure build_slot_ctrue(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
+  procedure build_slot_endif(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
+  procedure build_slot_break(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
+  procedure build_slot_conti(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
   procedure build_test(pSlot:PsrRegSlot);
   procedure build_volatile_test;
-  procedure build_volatile_dis(old:PsrRegsSnapshot);
-  procedure build_volatile_cur(old:PsrRegsSnapshot);
-  procedure build_volatile_brk(old:PsrRegsSnapshot);
-  procedure build_volatile_old(old:PsrRegsSnapshot);
+  procedure build_volatile_reset(orig:PsrRegsSnapshot);
+  procedure build_volatile_ctrue(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
+  procedure build_volatile_endif(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
+  procedure build_volatile_break(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
+  procedure build_volatile_conti(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
   procedure make_copy_slot(pSlot:PsrRegSlot);
   procedure make_copy_all;
   function  PrepVolatile(dst:TspirvOp;src:TsrRegNode):TsrRegNode;
@@ -114,13 +121,35 @@ type
 implementation
 
 Procedure TsrVolatile._zero_read;
+var
+ node:TDependenceNode;
 begin
- zero_read;
+ if FZeroRead then Exit;
+ //
+ node:=FList.pHead;
+ While (node<>nil) do
+ begin
+  TsrRegNode(node.pNode).mark_read(Self);
+  node:=node.pNext;
+ end;
+ //
+ FZeroRead:=True;
 end;
 
 Procedure TsrVolatile._zero_unread;
+var
+ node:TDependenceNode;
 begin
- zero_unread;
+ if not FZeroRead then Exit;
+ //
+ node:=FList.pHead;
+ While (node<>nil) do
+ begin
+  TsrRegNode(node.pNode).mark_unread(Self);
+  node:=node.pNext;
+ end;
+ //
+ FZeroRead:=False;
 end;
 
 Procedure TsrVolatile._PrepType(node:PPrepTypeNode);
@@ -140,10 +169,7 @@ procedure TsrVolatile.PrepType(new:TsrDataType);
 var
  node:TDependenceNode;
 begin
- if FSource.isBoolOnly then
- begin
-  new:=dtBool;
- end;
+ new:=FSource.adjust_type(new);
  if (new=dtUnknow) then exit;
 
  node:=FList.pHead;
@@ -161,7 +187,7 @@ begin
  if (src=nil) then Exit;
  node:=NewDependence;
  node.pNode:=src;
- if IsUsed then
+ if FZeroRead then
  begin
   src.mark_read(Self);
  end;
@@ -171,7 +197,7 @@ end;
 Procedure TsrVolatile.PushStore(node:TDependenceNode);
 begin
  if (node=nil) then Exit;
- if IsUsed then
+ if FZeroRead then
  begin
   TsrRegNode(node.pNode).mark_read(Self);
  end;
@@ -183,7 +209,7 @@ begin
  Result:=FList.Pop_head;
 
  if (Result<>nil) then
- if IsUsed then
+ if FZeroRead then
  begin
   TsrRegNode(Result.pNode).mark_unread(Self);
  end;
@@ -196,30 +222,6 @@ begin
  repeat
   node:=PopStore;
  until (node=nil);
-end;
-
-Procedure TsrVolatile.zero_read;
-var
- node:TDependenceNode;
-begin
- node:=FList.pHead;
- While (node<>nil) do
- begin
-  TsrRegNode(node.pNode).mark_read(Self);
-  node:=node.pNext;
- end;
-end;
-
-Procedure TsrVolatile.zero_unread;
-var
- node:TDependenceNode;
-begin
- node:=FList.pHead;
- While (node<>nil) do
- begin
-  TsrRegNode(node.pNode).mark_unread(Self);
-  node:=node.pNext;
- end;
 end;
 
 //
@@ -250,12 +252,31 @@ end;
 
 function TsrPrivate.GetStorageName:RawByteString;
 begin
- Result:='v'+Source^.rid;
+ if (Source=nil) then
+ begin
+  Result:='h'+IntToStr(FPrivId);
+ end else
+ begin
+  Result:='v'+Source^.rid;
+ end;
 end;
 
-function TsrPrivate.isBoolOnly:Boolean;
+function TsrPrivate.adjust_type(new:TsrDataType):TsrDataType;
 begin
- Result:=(Source^.isBoolOnly);
+ if (Source<>nil) then
+ begin
+  if (Source^.isBoolOnly) then
+  begin
+   Exit(dtBool);
+  end;
+ end;
+
+ if (FType<>nil) then
+ begin
+  Exit(FType.dtype);
+ end;
+
+ Result:=new;
 end;
 
 Procedure TsrPrivate.SetRegType(rtype:TsrDataType);
@@ -267,6 +288,9 @@ begin
  pTypeList:=Emit.GetTypeList;
  Ftype:=pTypeList^.Fetch(rtype);
 
+ UpdateRegType;
+
+ {
  node:=FLineList.pHead;
  While (node<>nil) do
  begin
@@ -281,7 +305,7 @@ begin
     end;
 
    Op.OpStore:
-    begin
+    begin  f
      pLine.ParamNode(1).Value.PrepType(ord(rtype));
     end;
 
@@ -290,6 +314,7 @@ begin
 
   node:=node.pNext;
  end;
+ }
 end;
 
 function TsrPrivate.GetRegType:TsrDataType;
@@ -302,8 +327,11 @@ var
  pBitcastList:PsrBitcastList;
  node:TDependenceNode;
  pLine:TspirvOp;
+ Value:TsrNode;
  dst:TsrRegNode;
  old,rtype:TsrDataType;
+ ConstList:PsrConstList;
+ cst:TsrConst;
 begin
  rtype:=FType.dtype;
 
@@ -318,10 +346,12 @@ begin
 
    Op.OpLoad:
     begin
-     pLine.pDst.PrepType(ord(rtype));
+     Value:=pLine.pDst;
+     Value.PrepType(ord(rtype));
+
      pLine.pType:=Ftype;
 
-     dst:=pLine.pDst.specialize AsType<ntReg>;
+     dst:=Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
       old:=dst.dtype;
@@ -336,11 +366,25 @@ begin
 
    Op.OpStore:
     begin
-     pLine.ParamNode(1).Value.PrepType(ord(rtype));
+     Value:=pLine.ParamNode(1).Value;
+     Value.PrepType(ord(rtype));
 
-     dst:=pLine.ParamNode(1).Value.specialize AsType<ntReg>;
+     dst:=Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
+      //
+      if dst.is_const then
+      begin
+       cst:=dst.pWriter;
+       if (dst.dtype<>cst.dtype) then
+       begin
+        ConstList:=Emit.GetConstList;
+        //
+        cst:=ConstList^.Bitcast(dst.dtype,cst);
+        dst.pWriter:=cst;
+       end;
+      end;
+      //
       old:=dst.dtype;
       if (old<>dtUnknow) and (rtype<>old) then
       begin
@@ -349,6 +393,8 @@ begin
        pLine.ParamNode(1).Value:=dst;
       end;
      end;
+
+
     end;
 
    else;
@@ -362,11 +408,9 @@ Procedure TsrPrivate.PrepType(new:TsrDataType);
 var
  old:TsrDataType;
 begin
- if isBoolOnly then
- begin
-  new:=dtBool;
- end;
- if (new=dtUnknow) then Exit;
+ new:=adjust_type(new);
+ if (new=dtUnknow) then exit;
+
  old:=GetRegType;
  if is_unprep_type(old,new,True) then
  begin
@@ -393,33 +437,33 @@ end;
 
 Procedure TsrPrivate.SortLines;
 var
- pnode,pnext:TDependenceNode;
+ dnode,dnext:TDependenceNode;
  pLine:array[0..1] of TspirvOp;
  nswp:Boolean;
 begin
  repeat
   nswp:=True;
-  pnode:=FLineList.pHead;
+  dnode:=FLineList.pHead;
   While true do
   begin
-   pnext:=pnode.pNext;
-   if (pnext=nil) then Break;
+   dnext:=dnode.pNext;
+   if (dnext=nil) then Break;
 
-   pLine[0]:=pnode.pNode;
-   pLine[1]:=pnext.pNode;
+   pLine[0]:=dnode.pNode;
+   pLine[1]:=dnext.pNode;
 
    _update_store_line(pLine[0]);
    _update_store_line(pLine[1]);
 
-   if (MaxLine(pLine[0],pLine[1])=pLine[0]) then //pnode>pnext
+   if (MaxLine(pLine[0],pLine[1])=pLine[0]) then //dnode>dnext
    begin
     //swap
     nswp:=False;
-    FLineList.Remove(pnode);
-    FLineList.InsertAfter(pnext,pnode);
+    FLineList.Remove(dnode);
+    FLineList.InsertAfter(dnext,dnode);
    end else
    begin
-    pnode:=pnext;
+    dnode:=dnext;
    end;
 
   end;
@@ -428,18 +472,18 @@ end;
 
 Procedure TsrPrivate.Optimize;
 var
- pnode,pprev:TDependenceNode;
+ dnode,dprev:TDependenceNode;
  pLine:array[0..1] of TspirvOp;
  pRegs:array[0..1] of TsrRegNode;
 begin
- pnode:=FLineList.pTail;
+ dnode:=FLineList.pTail;
  While true do
  begin
-  pprev:=pnode.pPrev;
-  if (pprev=nil) then Break;
+  dprev:=dnode.pPrev;
+  if (dprev=nil) then Break;
 
-  pLine[0]:=pnode.pNode;
-  pLine[1]:=pprev.pNode;
+  pLine[0]:=dnode.pNode;
+  pLine[1]:=dprev.pNode;
 
   if (pLine[0].Parent=pLine[1].Parent) then
   begin
@@ -447,29 +491,29 @@ begin
    //OpStore %v %r
    if (pLine[0].OpId=Op.OpStore) and (pLine[1].OpId=Op.OpStore) then
    begin
-    //Remove pprev
-    FLineList.Remove(pprev);
+    //Remove dprev
+    FLineList.Remove(dprev);
     pLine[1].mark_not_used;
     Continue;
    end else
    if (pLine[0].OpId=Op.OpStore) and (pLine[1].OpId=Op.OpLoad) then
    begin
-    //%r = OpLoad %type %v ; pLine[1] ; pprev
-    //OpStore %v %r        ; pLine[0] ; pnode
+    //%r = OpLoad %type %v ; pLine[1] ; dprev
+    //OpStore %v %r        ; pLine[0] ; dnode
 
     pRegs[0]:=RegDown(pLine[0].ParamNode(1).Value.specialize AsType<ntReg>);
     pRegs[1]:=RegDown(pLine[1].pDst.specialize AsType<ntReg>);
 
     if (pRegs[0]<>nil) and (pRegs[1]<>nil) and CompareReg(pRegs[0],pRegs[1]) then
     begin
-     //Remove pnode
-     FLineList.Remove(pnode);
+     //Remove dnode
+     FLineList.Remove(dnode);
      pLine[0].mark_not_used;
 
-     pnode:=pprev;
-     if (pnode.pNext<>nil) then
+     dnode:=dprev;
+     if (dnode.pNext<>nil) then
      begin
-      pnode:=pnode.pNext;
+      dnode:=dnode.pNext;
      end;
 
      Continue;
@@ -477,8 +521,8 @@ begin
    end else
    if (pLine[0].OpId=Op.OpLoad) and (pLine[1].OpId=Op.OpLoad) then
    begin
-    //%r1 = OpLoad %type %v ; pLine[1] ; pprev
-    //%r2 = OpLoad %type %v ; pLine[0] ; pnode
+    //%r1 = OpLoad %type %v ; pLine[1] ; dprev
+    //%r2 = OpLoad %type %v ; pLine[0] ; dnode
 
     pRegs[0]:=pLine[0].pDst.specialize AsType<ntReg>;
     pRegs[1]:=pLine[1].pDst.specialize AsType<ntReg>;
@@ -487,13 +531,13 @@ begin
     begin
      pRegs[0].pWriter:=pRegs[1];
 
-     //Remove pnode
-     FLineList.Remove(pnode);
+     //Remove dnode
+     FLineList.Remove(dnode);
 
-     pnode:=pprev;
-     if (pnode.pNext<>nil) then
+     dnode:=dprev;
+     if (dnode.pNext<>nil) then
      begin
-      pnode:=pnode.pNext;
+      dnode:=dnode.pNext;
      end;
 
      Continue;
@@ -503,7 +547,7 @@ begin
 
   end;
 
-  pnode:=pprev;
+  dnode:=dprev;
  end;
 end;
 
@@ -580,309 +624,359 @@ begin
  begin
   Result:=FEmit.specialize New<TsrPrivate>;
   Result.Init;
+  Result.FPrivId:=FPrivId; Inc(FPrivId);
   Result.key:=pSource;
   //
   FTree.Insert(Result);
+  FList.Push_tail(Result);
  end;
+end;
+
+function TsrPrivateList.FetchCustom(dtype:TsrDataType):TsrPrivate;
+var
+ pTypeList:PsrTypeList;
+begin
+ Result:=FEmit.specialize New<TsrPrivate>;
+ Result.Init;
+ Result.FPrivId:=FPrivId; Inc(FPrivId);
+ //
+ if (dtype<>dtUnknow) then
+ begin
+  pTypeList:=FEmit.GetTypeList;
+  Result.Ftype:=pTypeList^.Fetch(dtype);
+ end;
+ //
+ FList.Push_tail(Result);
 end;
 
 Function TsrPrivateList.First:TsrPrivate;
 begin
- Result:=FTree.Min;
+ Result:=FList.pHead;
 end;
 
-Function TsrPrivateList.Next(node:TsrPrivate):TsrPrivate;
+procedure TsrPrivateList.build_slot_reset(pSlot:PsrRegSlot;var orig:TsrRegNode);
 begin
- Result:=FTree.Next(node);
+ pSlot^.current:=orig;
 end;
 
-procedure TsrPrivateList.build_slot_dis(pSlot:PsrRegSlot;var old:TsrRegNode);
+procedure TsrPrivateList.build_slot_ctrue(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
 begin
-
- pSlot^.current:=old;
-
- //if (pSlot^.current<>nil) then
- //if not IsDominUp(pSlot^.current^.pLine,FEmit.curr_line) then
- //begin
- // Assert(IsDominUp(FEmit.curr_line,pSlot^.current^.pLine)=false);
- //end;
-
+ //restore
+ if (_next<>nil) then
+ if (RegDownSlot(_next)<>RegDownSlot(prev)) then
+ if _next.pWriter.IsType(ntVolatile) then
+ begin
+  _next.pWriter:=prev;
+ end else
+ begin
+  Assert(false,'build_slot_ctrue');
+ end;
 end;
 
-//procedure IsDominUp_print(pNode,pLine:TspirvOp);
-//begin
-// if (pNode=nil) or (pLine=nil) then Exit;
-//
-// Writeln('pNode:',GetGlobalIndex(pNode):3,'..',GetGlobalIndexA(pNode):3,' ',PsrOpBlock(TspirvOp(pNode)^.Parent)^.Level:3);
-// Writeln('pLine:',GetGlobalIndex(pLine):3,'..',GetGlobalIndexA(pLine):3,' ',PsrOpBlock(TspirvOp(pLine)^.Parent)^.Level:3);
-//end;
-
-procedure TsrPrivateList.build_slot_cur(pSlot:PsrRegSlot;var old:TsrRegNode);
+procedure TsrPrivateList.build_slot_endif(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
 var
- cur,prv:TsrRegNode;
+ pLine    :TSpirvOp;
+ org,prv  :TsrRegNode;
+ cur      :TsrRegNode;
  pPrivate :TsrPrivate;
  pVolatile:TsrVolatile;
- rtype:TsrDataType;
-
+ rtype    :TsrDataType;
+ cur_c_org:Boolean;
+ cur_c_prv:Boolean;
 begin
+ org:=RegDownSlot(orig);
+ prv:=RegDownSlot(prev);
  cur:=RegDownSlot(pSlot^.current);
- prv:=RegDownSlot(old);
 
- if CompareReg(cur,prv) then
+ cur_c_org:=CompareReg(cur,org);
+ cur_c_prv:=CompareReg(cur,prv);
+
+ if cur_c_org and cur_c_prv then
  begin
-
-  //if (cur<>nil) then
-  //begin
-  // if not IsDominUp(cur^.pLine,FEmit.curr_line) then
-  // begin
-  //  Writeln(cur^.pWriter^.ntype.ClassName);
-  //  IsDominUp_print(cur^.pLine,FEmit.curr_line);
-  //  Assert(IsDominUp(FEmit.curr_line,cur^.pLine)=false);
-  // end;
-  //end;
-
   Exit;
  end;
 
+ org:=orig;
+ prv:=prev;
  cur:=pSlot^.current;
-
- Assert(cur<>nil,'WTF');
-
- if (old=nil) then
- begin
-  ////old:=pSlot^.New(cur^.pLine,cur^.dtype); //Unresolve
- end;
 
  pPrivate :=Fetch(pSlot);
  pVolatile:=pPrivate.NewVolatile;
 
+ {
+ [orig]
+  if (eval)
+  (
+
+  [prev]
+  ) else (
+
+  ) fork orig->prev/curr -> next
+ [next]
+ }
+
  rtype:=dtUnknow;
 
- if (old<>nil) then
+ if (org<>nil) then
+ if (cur_c_org<>cur_c_prv)  then //Do not add orig if both values are assigned
  begin
-  pVolatile.AddStore(old);
-  rtype:=old.dtype;
+  pVolatile.AddStore(org);
+  rtype:=LazyType2(rtype,org.dtype);
+ end;
+ //
+ if (prv<>nil) then
+ if (not cur_c_prv) then //Do not add prev If the value has not changed
+ begin
+  pVolatile.AddStore(prv);
+  rtype:=LazyType2(rtype,prv.dtype);
  end;
  //
  if (cur<>nil) then
  begin
   pVolatile.AddStore(cur);
-  rtype:=cur.dtype;
+  pVolatile.FBase:=cur;
+  rtype:=LazyType2(rtype,cur.dtype);
  end;
 
- //writeln('cur:',pSlot^.rid,':',GetGlobalIndex(cur^.pLine),':',cur^.pWriter^.ntype.ClassName);
+ pLine:=ctx.after;
 
- //if (old<>nil) then
- //if not IsDominUp(old^.pLine,FEmit.curr_line) then
- //begin
- // Writeln(old^.pWriter^.ntype.ClassName);
- // IsDominUp_print(old^.pLine,FEmit.curr_line);
- //
- // Assert(IsDominUp(FEmit.curr_line,old^.pLine)=false);
- //end;
+ //replace next
+ _next:=pSlot^.New(pLine,rtype);
+ _next.pWriter:=pVolatile;
 
- old:=pSlot^.New(FEmit.curr_line,rtype);
- old.pWriter:=pVolatile;
- FEmit.PostLink(old.pLine,old); //post processing
+ ctx.AddVolatile(pVolatile,_next);
 
- //if not IsDominUp(pSlot^.current^.pLine,FEmit.curr_line) then
- //begin
- // Assert(IsDominUp(FEmit.curr_line,pSlot^.current^.pLine)=false);
- //end;
-
+ pLine.AddParam(_next); //post processing
 end;
 
-procedure TsrPrivateList.build_slot_brk(pSlot:PsrRegSlot;var old:TsrRegNode);
+procedure TsrPrivateList.build_slot_break(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
 var
- cur,prv:TsrRegNode;
+ pLine    :TSpirvOp;
+ cur,nxt  :TsrRegNode;
  pPrivate :TsrPrivate;
- pVol_old:TsrVolatile;
  pVolatile:TsrVolatile;
+ new_vol  :Boolean;
+ rtype    :TsrDataType;
 begin
  cur:=RegDownSlot(pSlot^.current);
- prv:=RegDownSlot(old);
+ nxt:=RegDownSlot(_next);
 
- if CompareReg(cur,prv) then
+ if CompareReg(cur,nxt) then
  begin
-
-  //if (cur<>nil) then
-  //if not IsDominUp(cur^.pLine,FEmit.curr_line) then
-  //begin
-  // Writeln(cur^.pWriter^.ntype.ClassName);
-  // IsDominUp_print(cur^.pLine,FEmit.curr_line);
-  // IsDominUp_print(prv^.pLine,FEmit.curr_line);
-  // Assert(IsDominUp(FEmit.curr_line,cur^.pLine)=false);
-  // CompareReg(cur,prv);
-  //end;
-
   Exit;
  end;
 
  cur:=pSlot^.current;
+ nxt:=_next;
 
  pPrivate:=Fetch(pSlot);
 
- prv:=nil;
+ {
+ [orig]
+ while () do
+ [prev]
+ (
 
- if (old<>nil) then
+  if (eval)
+  (
+   break; --\
+  )         |
+            |
+ )<---------/
+ [next]
+ }
+
+ pVolatile:=nil;
+
+ //get Volatile
+ if (nxt<>nil) then
  begin
+  if nxt.pWriter.IsType(ntVolatile) then
+  begin //next is volatile
+   pVolatile:=nxt.pWriter.specialize AsType<ntVolatile>;
 
-  if old.pWriter.IsType(ntVolatile) then
-  begin //old is volatile
-   pVol_old:=old.pWriter.specialize AsType<ntVolatile>;
-
-   Assert(pVol_old.FSource=pPrivate,'WTF');
-
-   pVol_old.AddStore(cur);
-
-   //if (cur<>nil) then
-   //if not IsDominUp(cur^.pLine,FEmit.curr_line) then
-   //begin
-   // Writeln(cur^.pWriter^.ntype.ClassName);
-   // IsDominUp_print(cur^.pLine,FEmit.curr_line);
-   // Assert(IsDominUp(FEmit.curr_line,cur^.pLine)=false);
-   //end;
-
-   //writeln('brk1:',pSlot^.rid);
-  end else
-  begin //new volatile
-   prv:=old.pWriter.specialize AsType<ntReg>;
-   Assert(prv<>nil);
-   Assert(prv.pSlot=pSlot);
-
-   pVolatile:=pPrivate.NewVolatile;
-
-   pVolatile.AddStore(prv);
-   pVolatile.AddStore(cur);
-
-   old.pWriter:=pVolatile;
-
-   //writeln('brk2:',pSlot^.rid,':',GetGlobalIndex(old^.pLine),':',cur^.pWriter^.ntype.ClassName);
+   if (pVolatile.FSource<>pPrivate) then
+   begin
+    //Reset if it is another register
+    pVolatile:=nil;
+   end;
   end;
-
-  //if not IsDominUp(old^.pLine,FEmit.curr_line) then
-  //begin
-  // if prv<>nil then
-  // begin
-  //  Writeln(prv^.pWriter^.ntype.ClassName);
-  //  IsDominUp_print(prv^.pLine,FEmit.curr_line);
-  // end;
-  //
-  // Writeln(old^.pWriter^.ntype.ClassName);
-  // IsDominUp_print(old^.pLine,FEmit.curr_line);
-  //
-  // Writeln(cur^.pWriter^.ntype.ClassName);
-  // IsDominUp_print(cur^.pLine,FEmit.curr_line);
-  //
-  // Assert(IsDominUp(FEmit.curr_line,old^.pLine)=false);
-  //end;
-
- end else
- if (cur<>nil) then
- begin
-  pVolatile:=pPrivate.NewVolatile;
-  pVolatile.AddStore(cur);
-
-  //prev is unresolve
-  old:=pSlot^.New(FEmit.curr_line,cur.dtype);
-  old.pWriter:=pVolatile;
-  FEmit.PostLink(old.pLine,old); //post processing
-
-  pSlot^.current:=cur; //prev
-
-  //writeln('brk3:',pSlot^.rid,':',cur^.pWriter^.ntype.ClassName);
  end;
 
- //if not IsDominUp(pSlot^.current^.pLine,FEmit.curr_line) then
- //begin
- // Assert(IsDominUp(FEmit.curr_line,pSlot^.current^.pLine)=false);
- //end;
+ //check Volatile
+ if (pVolatile=nil) then
+ begin
+  pVolatile:=pPrivate.NewVolatile;
+  new_vol:=True;
+ end else
+ begin
+  new_vol:=False;
+ end;
+
+ rtype:=dtUnknow;
+
+ if (nxt<>nil) then
+ begin
+  if new_vol then
+  begin
+   //save if new created
+   pVolatile.AddStore(nxt);
+  end;
+  rtype:=LazyType2(rtype,nxt.dtype);
+ end;
+ //
+ if (cur<>nil) then
+ begin
+  pVolatile.AddStore(cur);
+  pVolatile.FBase:=cur;
+  rtype:=LazyType2(rtype,cur.dtype);
+ end;
+
+ //save Volatile
+ if new_vol then
+ begin
+  pLine:=ctx.after;
+
+  //replace next
+  _next:=pSlot^.New(pLine,rtype);
+  _next.pWriter:=pVolatile;
+
+  ctx.AddVolatile(pVolatile,_next);
+
+  pLine.AddParam(_next); //post processing
+ end;
+
+ if (_next<>nil) then
+ begin
+  //update pref type
+  if (rtype<>dtUnknow) then
+  if (_next.dtype=dtUnknow) then
+  begin
+   _next.PrepType(ord(rtype));
+  end;
+ end;
 
 end;
 
-procedure TsrPrivateList.build_slot_old(pSlot:PsrRegSlot;var old:TsrRegNode);
+procedure TsrPrivateList.build_slot_conti(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
 var
- cur,prv:TsrRegNode;
+ pLine    :TSpirvOp;
+ cur,prv  :TsrRegNode;
  pPrivate :TsrPrivate;
- pVol_old:TsrVolatile;
  pVolatile:TsrVolatile;
+ new_vol  :Boolean;
+ rtype    :TsrDataType;
 begin
  cur:=RegDownSlot(pSlot^.current);
- prv:=RegDownSlot(old);
+ prv:=RegDownSlot(prev);
 
  if CompareReg(cur,prv) then
  begin
-
-  //if (cur<>nil) then
-  //if not IsDominUp(cur^.pLine,FEmit.curr_line) then
-  //begin
-  // Writeln(cur^.pWriter^.ntype.ClassName);
-  // IsDominUp_print(cur^.pLine,FEmit.curr_line);
-  // IsDominUp_print(prv^.pLine,FEmit.curr_line);
-  // Assert(IsDominUp(FEmit.curr_line,cur^.pLine)=false);
-  // CompareReg(cur,prv);
-  //end;
-
   Exit;
  end;
 
  cur:=pSlot^.current;
+ prv:=prev;
 
  pPrivate:=Fetch(pSlot);
 
- prv:=nil;
+ {
+ [orig]
+ while () do
+ [prev]
+ (<------------\
+               |
+  if (eval)    |
+  (            |
+   continue; --/
+  )
 
- if (old<>nil) then
+ )
+ [next]
+ }
+
+ pVolatile:=nil;
+
+ //get Volatile
+ if (prv<>nil) then
  begin
+  if prv.pWriter.IsType(ntVolatile) then
+  begin //prev is volatile
+   pVolatile:=prv.pWriter.specialize AsType<ntVolatile>;
 
-  if old.pWriter.IsType(ntVolatile) then
-  begin //old is volatile
-   pVol_old:=old.pWriter.specialize AsType<ntVolatile>;
-
-   Assert(pVol_old.FSource=pPrivate,'WTF');
-
-   pVol_old.AddStore(cur);
-
-   //writeln('old1:',pSlot^.rid);
-  end else
-  begin //new volatile
-   prv:=old.pWriter.specialize AsType<ntReg>;
-   Assert(prv<>nil);
-   Assert(prv.pSlot=pSlot);
-
-   pVolatile:=pPrivate.NewVolatile;
-
-   pVolatile.AddStore(prv);
-   pVolatile.AddStore(cur);
-
-   old.pWriter:=pVolatile;
-
-   //writeln('old2:',pSlot^.rid);
+   if (pVolatile.FSource<>pPrivate) then
+   begin
+    //Reset if it is another register
+    pVolatile:=nil;
+   end;
   end;
-
- end else
- if (cur<>nil) then
- begin
-  pVolatile:=pPrivate.NewVolatile;
-  pVolatile.AddStore(cur);
-
-  //prev is unresolve
-  old:=pSlot^.New(FEmit.curr_line,cur.dtype);
-  old.pWriter:=pVolatile;
-  FEmit.PostLink(old.pLine,old); //post processing
-
-  //writeln('old3:',pSlot^.rid);
  end;
 
- pSlot^.current:=old; //reset
+ //check Volatile
+ if (pVolatile=nil) then
+ begin
+  pVolatile:=pPrivate.NewVolatile;
+  new_vol:=True;
+ end else
+ begin
+  new_vol:=False;
+ end;
 
- //if not IsDominUp(old^.pLine,FEmit.curr_line) then
- //begin
- // Writeln(old^.pWriter^.ntype.ClassName);
- // IsDominUp_print(old^.pLine,FEmit.curr_line);
+ rtype:=dtUnknow;
+
+ if new_vol then
+ begin
+  //use orig
+  if (orig<>nil) then
+  begin
+   //save if new created
+   pVolatile.AddStore(orig);
+   rtype:=LazyType2(rtype,orig.dtype);
+  end;
+ end else
+ begin
+  //use prev
+  if (prv<>nil) then
+  begin
+   rtype:=LazyType2(rtype,prv.dtype);
+  end;
+ end;
  //
- // Assert(IsDominUp(FEmit.curr_line,old^.pLine)=false);
- //end;
+ if (cur<>nil) then
+ begin
+  pVolatile.AddStore(cur);
+  pVolatile.FBase:=cur;
+  rtype:=LazyType2(rtype,cur.dtype);
+ end;
+
+ //save Volatile
+ if new_vol then
+ begin
+  pLine:=ctx.befor;
+
+  if (prev=nil) then
+  begin
+   //The input register is not defined, should it be initialized to make_copy_slot?
+   prev:=pSlot^.New(pLine,rtype);
+  end;
+
+  //set backedge dependence
+  prev.pWriter:=pVolatile;
+
+  ctx.AddVolatile(pVolatile,prev);
+
+  pLine.AddParam(prev); //post processing
+ end;
+
+ if (prev<>nil) then
+ begin
+  //update pref type
+  if (rtype<>dtUnknow) then
+  if (prev.dtype=dtUnknow) then
+  begin
+   prev.PrepType(ord(rtype));
+  end;
+ end;
 
 end;
 
@@ -917,43 +1011,47 @@ begin
  pRegsStory^.ForEachSlot(@build_test);
 end;
 
-procedure TsrPrivateList.build_volatile_dis(old:PsrRegsSnapshot);
+procedure TsrPrivateList.build_volatile_reset(orig:PsrRegsSnapshot);
 var
  pRegsStory:PsrRegsStory;
 begin
- //exit;
  pRegsStory:=FEmit.GetRegsStory;
- pRegsStory^.ForEachSnap(@build_slot_dis,old);
+ pRegsStory^.ForEachSnap(@build_slot_reset,orig);
 end;
 
-procedure TsrPrivateList.build_volatile_cur(old:PsrRegsSnapshot);
+procedure TsrPrivateList.build_volatile_ctrue(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
 var
  pRegsStory:PsrRegsStory;
 begin
- //exit;
  pRegsStory:=FEmit.GetRegsStory;
- //NextVolatileID; FVolatileID:SizeUint;
- pRegsStory^.ForEachSnap(@build_slot_cur,old);
+ pRegsStory^.ForEachSnap(@build_slot_ctrue,ctx,orig,prev,_next);
 end;
 
-procedure TsrPrivateList.build_volatile_brk(old:PsrRegsSnapshot);
+procedure TsrPrivateList.build_volatile_endif(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
 var
  pRegsStory:PsrRegsStory;
 begin
- //exit;
  pRegsStory:=FEmit.GetRegsStory;
  //NextVolatileID; FVolatileID:SizeUint;
- pRegsStory^.ForEachSnap(@build_slot_brk,old);
+ pRegsStory^.ForEachSnap(@build_slot_endif,ctx,orig,prev,_next);
 end;
 
-procedure TsrPrivateList.build_volatile_old(old:PsrRegsSnapshot);
+procedure TsrPrivateList.build_volatile_break(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
 var
  pRegsStory:PsrRegsStory;
 begin
- //exit;
  pRegsStory:=FEmit.GetRegsStory;
  //NextVolatileID; FVolatileID:SizeUint;
- pRegsStory^.ForEachSnap(@build_slot_old,old);
+ pRegsStory^.ForEachSnap(@build_slot_break,ctx,orig,prev,_next);
+end;
+
+procedure TsrPrivateList.build_volatile_conti(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
+var
+ pRegsStory:PsrRegsStory;
+begin
+ pRegsStory:=FEmit.GetRegsStory;
+ //NextVolatileID; FVolatileID:SizeUint;
+ pRegsStory^.ForEachSnap(@build_slot_conti,ctx,orig,prev,_next);
 end;
 
 procedure TsrPrivateList.make_copy_slot(pSlot:PsrRegSlot);
@@ -979,7 +1077,6 @@ procedure TsrPrivateList.make_copy_all;
 var
  pRegsStory:PsrRegsStory;
 begin
- //exit;
  pRegsStory:=FEmit.GetRegsStory;
  pRegsStory^.ForEachSlot(@make_copy_slot);
 end;
@@ -1018,8 +1115,9 @@ var
  pPrivate :TsrPrivate;
  pVolatile:TsrVolatile;
  node:TDependenceNode;
- pLine,pTmp:TspirvOp;
- vtmp:TsrVolatile;
+ pLine:TspirvOp;
+ //pTmp:TspirvOp;
+ //vtmp:TsrVolatile;
 begin
  Result:=src;
  if (src=nil) then Exit;
@@ -1027,7 +1125,7 @@ begin
 
  //move to prev
  Assert(dst<>nil);
- dst:=dst.Prev;
+ dst:=flow_prev_up(dst);
  Assert(dst<>nil);
  up_merge_line(dst);
  Assert(dst<>nil);
@@ -1093,11 +1191,11 @@ Procedure TsrPrivateList.RemoveAllStore;
 var
  node:TsrPrivate;
 begin
- node:=FTree.Min;
+ node:=FList.pHead;
  While (node<>nil) do
  begin
   node.RemoveAllStore;
-  node:=FTree.Next(node);
+  node:=node.pNext;
  end;
 end;
 
@@ -1105,7 +1203,7 @@ Procedure TsrPrivateList.Post;
 var
  node:TsrPrivate;
 begin
- node:=FTree.Min;
+ node:=FList.pHead;
  While (node<>nil) do
  begin
   if node.IsUsed then
@@ -1114,7 +1212,7 @@ begin
    node.Optimize;
    node.UpdateRegType;
   end;
-  node:=FTree.Next(node);
+  node:=node.pNext;
  end;
 end;
 

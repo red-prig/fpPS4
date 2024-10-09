@@ -135,9 +135,9 @@ type
   Function  GetConstList       :Pointer;                   virtual abstract;
   Function  GetRegsStory       :Pointer;                   virtual abstract;
   Function  GetCapabilityList  :Pointer;                   virtual abstract;
-  Function  GetHeaderList      :Pointer;                   virtual abstract;
-  Function  GetDecorateList    :Pointer;                   virtual abstract;
-  Function  GetDebugInfoList   :Pointer;                   virtual abstract;
+  Function  GetHeaderList      :TsrNode;                   virtual abstract;
+  Function  GetDecorateList    :TsrNode;                   virtual abstract;
+  Function  GetDebugInfoList   :TsrNode;                   virtual abstract;
   Function  GetVariableList    :Pointer;                   virtual abstract;
   Function  GetInputList       :Pointer;                   virtual abstract;
   Function  GetOutputList      :Pointer;                   virtual abstract;

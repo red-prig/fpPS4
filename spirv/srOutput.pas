@@ -115,6 +115,7 @@ var
  pBitcastList:PsrBitcastList;
  node:TDependenceNode;
  pLine:TSpirvOp;
+ Value:TsrNode;
  dst:TsrRegNode;
  old,rtype:TsrDataType;
 begin
@@ -131,9 +132,10 @@ begin
 
    Op.OpStore:
     begin
-     pLine.ParamNode(1).Value.PrepType(ord(rtype));
+     Value:=pLine.ParamNode(1).Value;
+     Value.PrepType(ord(rtype));
 
-     dst:=pLine.ParamNode(1).Value.specialize AsType<ntReg>;
+     dst:=Value.specialize AsType<ntReg>;
      if (dst<>nil) then
      begin
       old:=dst.dtype;
@@ -196,7 +198,7 @@ end;
 
 procedure TsrOutputList.AllocBinding;
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  i:TpsslExportType;
  pVar:TsrVariable;
  FLocation:Integer;
@@ -214,7 +216,7 @@ begin
        if (data[i].FBinding=-1) then //alloc
        begin
         FLocation:=ord(i)-ord(etMrt0);
-        pDecorateList^.OpDecorate(pVar,Decoration.Location,FLocation);
+        pDecorateList.OpDecorate(pVar,Decoration.Location,FLocation);
         data[i].FBinding:=FLocation;
        end;
        //Decoration.Index; ???
@@ -224,17 +226,17 @@ begin
        //force Depth Replacing
        FDepthMode:=foDepthReplacing;
        //
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragDepth);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragDepth);
       end;
     etPos0:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
       end;
     //etPos1..etPos3,
     etParam0..etParam31: //interpolate param
      begin
       FLocation:=ord(i)-ord(etParam0);
-      pDecorateList^.OpDecorate(pVar,Decoration.Location,FLocation);
+      pDecorateList.OpDecorate(pVar,Decoration.Location,FLocation);
       data[i].FBinding:=FLocation;
      end;
     else
@@ -255,7 +257,6 @@ begin
  if (data[i]<>nil) then
  begin
   pVar:=data[i].pVar;
-  if (not data[i].IsUsed) and (pVar<>nil) then assert(false);
   if (pVar<>nil) and data[i].IsUsed then
   begin
    EntryPoint.AddParam(pVar);

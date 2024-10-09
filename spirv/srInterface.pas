@@ -118,9 +118,9 @@ type
   Function  GetConstList       :Pointer; override;
   Function  GetRegsStory       :Pointer; override;
   Function  GetCapabilityList  :Pointer; override;
-  Function  GetHeaderList      :Pointer; override;
-  Function  GetDecorateList    :Pointer; override;
-  Function  GetDebugInfoList   :Pointer; override;
+  Function  GetHeaderList      :TsrNode; override;
+  Function  GetDecorateList    :TsrNode; override;
+  Function  GetDebugInfoList   :TsrNode; override;
   Function  GetVariableList    :Pointer; override;
   Function  GetInputList       :Pointer; override;
   Function  GetOutputList      :Pointer; override;
@@ -173,10 +173,28 @@ type
   Procedure SetConst_s(pSlot:PsrRegSlot;dtype:TsrDataType;value:Single);
   //
   function  AllocBlockOp:TsrOpBlock;
-  function  NewBlockOp(Snap:TsrRegsSnapshot):TsrOpBlock;
+  function  NewBlockOp(const curr:TsrRegsSnapshot):TsrOpBlock;
+  function  NewBlockOp(const curr,orig:TsrRegsSnapshot):TsrOpBlock;
   function  InsertBlockOp(pLine:TSpirvOp;pChild:TsrOpBlock):TSpirvOp;
   //
   procedure AddCapability(ID:DWORD);
+  //
+  procedure PrepTypeSlot (pSlot:PsrRegSlot;rtype:TsrDataType);
+  function  MakeRead     (pSlot:PsrRegSlot;rtype:TsrDataType):TsrRegNode;
+  function  PrepTypeNode (var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+  function  PrepTypeDst  (var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+  function  PrepTypeParam(node:POpParamNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+  //
+  function  get_vcc0 :PsrRegSlot;
+  function  get_vcc1 :PsrRegSlot;
+  function  get_m0   :PsrRegSlot;
+  function  get_exec0:PsrRegSlot;
+  function  get_exec1:PsrRegSlot;
+  function  get_scc  :PsrRegSlot;
+  //
+  function  fetch_vccz :TsrRegNode;
+  function  fetch_execz:TsrRegNode;
+  function  fetch_scc  :TsrRegNode;
  end;
 
 implementation
@@ -237,19 +255,19 @@ begin
  Result:=@CapabilityList;
 end;
 
-Function TEmitInterface.GetHeaderList:Pointer;
+Function TEmitInterface.GetHeaderList:TsrNode;
 begin
- Result:=@HeaderList;
+ Result:=HeaderList;
 end;
 
-Function TEmitInterface.GetDecorateList:Pointer;
+Function TEmitInterface.GetDecorateList:TsrNode;
 begin
- Result:=@DecorateList;
+ Result:=DecorateList;
 end;
 
-Function TEmitInterface.GetDebugInfoList:Pointer;
+Function TEmitInterface.GetDebugInfoList:TsrNode;
 begin
- Result:=@DebugInfoList;
+ Result:=DebugInfoList;
 end;
 
 Function TEmitInterface.GetVariableList:Pointer;
@@ -536,14 +554,31 @@ begin
  Result.Init();
 end;
 
-function TEmitInterface.NewBlockOp(Snap:TsrRegsSnapshot):TsrOpBlock;
+function TEmitInterface.NewBlockOp(const curr:TsrRegsSnapshot):TsrOpBlock;
 begin
  Result:=AllocBlockOp;
- Result.Regs.pSnap_org :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.pSnap_cur :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.pSnap_org^:=Snap;
- Result.Regs.pSnap_cur^:=Snap;
- Result.Regs.FVolMark:=vmNone;
+ //
+ Result.Regs.orig :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.prev :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.next :=Alloc(SizeOf(TsrRegsSnapshot));
+ //
+ Result.Regs.orig^:=curr;
+ Result.Regs.prev^:=curr;
+ Result.Regs.next^:=curr;
+ Result.Cond.FUseCont:=false;
+end;
+
+function TEmitInterface.NewBlockOp(const curr,orig:TsrRegsSnapshot):TsrOpBlock;
+begin
+ Result:=AllocBlockOp;
+ //
+ Result.Regs.orig :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.prev :=Alloc(SizeOf(TsrRegsSnapshot));
+ Result.Regs.next :=Alloc(SizeOf(TsrRegsSnapshot));
+ //
+ Result.Regs.orig^:=orig;
+ Result.Regs.prev^:=curr;
+ Result.Regs.next^:=curr;
  Result.Cond.FUseCont:=false;
 end;
 
@@ -560,6 +595,161 @@ procedure TEmitInterface.AddCapability(ID:DWORD);
 begin
  CapabilityList.Add(ID);
 end;
+
+//
+
+procedure TEmitInterface.PrepTypeSlot(pSlot:PsrRegSlot;rtype:TsrDataType);
+begin
+ if (pSlot=nil) then Exit;
+ if (pSlot^.current=nil) then
+ begin
+  pSlot^.New(line,rtype); //Unresolve
+  Exit;
+ end;
+
+ pSlot^.current.PrepType(ord(rtype));
+end;
+
+function TEmitInterface.MakeRead(pSlot:PsrRegSlot;rtype:TsrDataType):TsrRegNode;
+var
+ node:TsrRegNode;
+begin
+ Result:=nil;
+ if (pSlot=nil) then Exit;
+ PrepTypeSlot(pSlot,rtype);
+ node:=pSlot^.current;
+ if (rtype<>dtUnknow) and (not CompareType(node.dtype,rtype)) then
+ begin
+  Result:=BitcastList.FetchRead(rtype,node);
+ end else
+ begin
+  Result:=node;
+ end;
+ if (rtype<>dtUnknow) then
+ begin
+  Result.dweak:=False;
+ end;
+end;
+
+function TEmitInterface.PrepTypeNode(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+begin
+ Result:=0;
+ if (node=nil) then Exit;
+ if (rtype=dtUnknow) then Exit;
+
+ if is_unprep_type(node.dtype,rtype,node.dweak) then
+ begin
+  node.PrepType(ord(rtype));
+  Inc(Result);
+ end else
+ begin
+  Case relax of
+   True :relax:=CompareType(node.dtype,rtype);
+   False:relax:=(node.dtype=rtype);
+  end;
+  if not relax then
+  begin
+   node:=BitcastList.FetchRead(rtype,node);
+   Inc(Result);
+  end;
+ end;
+end;
+
+function TEmitInterface.PrepTypeDst(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+begin
+ Result:=0;
+ if (node=nil) then Exit;
+ if (rtype=dtUnknow) then Exit;
+
+ if is_unprep_type(node.dtype,rtype,node.dweak) then
+ begin
+  node.PrepType(ord(rtype));
+  Inc(Result);
+ end else
+ begin
+  Case relax of
+   True :relax:=CompareType(node.dtype,rtype);
+   False:relax:=(node.dtype=rtype);
+  end;
+  if not relax then
+  begin
+   node:=BitcastList.FetchDstr(rtype,node);
+   Inc(Result);
+  end;
+ end;
+end;
+
+function TEmitInterface.PrepTypeParam(node:POpParamNode;rtype:TsrDataType;relax:Boolean=true):Integer;
+var
+ pReg:TsrRegNode;
+begin
+ Result:=0;
+ if (node=nil) then Exit;
+ if (rtype=dtUnknow) then Exit;
+ if node.Value.IsType(ntReg) then
+ begin
+  pReg:=node.AsReg;
+  Result:=PrepTypeNode(pReg,rtype,relax);
+  node.Value:=pReg;
+ end else
+ begin
+  node.Value.PrepType(ord(rtype));
+ end;
+end;
+
+//
+
+function TEmitInterface.get_vcc0:PsrRegSlot;
+begin
+ Result:=@RegsStory.VCC[0];
+end;
+
+function TEmitInterface.get_vcc1:PsrRegSlot;
+begin
+ Result:=@RegsStory.VCC[1];
+end;
+
+function TEmitInterface.get_m0:PsrRegSlot;
+begin
+ Result:=@RegsStory.M0;
+end;
+
+function TEmitInterface.get_exec0:PsrRegSlot;
+begin
+ Result:=@RegsStory.EXEC[0];
+end;
+
+function TEmitInterface.get_exec1:PsrRegSlot;
+begin
+ Result:=@RegsStory.EXEC[1];
+end;
+
+function TEmitInterface.get_scc:PsrRegSlot;
+begin
+ Result:=@RegsStory.SCC;
+end;
+
+//
+
+
+function TEmitInterface.fetch_vccz:TsrRegNode;
+begin
+ //It means that lane_id=0
+ Result:=MakeRead(get_vcc0,dtBool); //implict cast (int != 0)
+end;
+
+function TEmitInterface.fetch_execz:TsrRegNode;
+begin
+ //It means that lane_id=0
+ Result:=MakeRead(get_exec0,dtBool); //implict cast (int != 0)
+end;
+
+function TEmitInterface.fetch_scc:TsrRegNode;
+begin
+ Result:=MakeRead(get_scc,dtBool);
+end;
+
+//
 
 end.
 

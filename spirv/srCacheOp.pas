@@ -51,12 +51,7 @@ function _up_to_real(t:TsrOpBlock):TsrOpBlock;
 begin
  repeat
   if not t.IsType(ntOpBlock) then Break;
-  Case t.Block.bType of
-   btMain,
-   btCond,
-   btLoop:Break;
-   else;
-  end;
+  if IsReal(t.Block.bType) then Break;
   t:=t.Parent;
  until false;
  Result:=t;

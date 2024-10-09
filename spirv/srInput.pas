@@ -241,7 +241,7 @@ end;
 
 procedure TsrInputList.AllocBinding;
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  pCapabilityList:PsrCapabilityList;
  node:TsrInput;
  pVar:TsrVariable;
@@ -253,7 +253,7 @@ var
   if (node.pReg<>nil) then
   if (node.pReg.dtype.isInt) then //only integer
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Flat,0);
+   pDecorateList.OpDecorate(pVar,Decoration.Flat,0);
   end;
  end;
 
@@ -271,39 +271,39 @@ begin
    Case node.key.itype of
     itFloatPos:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragCoord);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FragCoord);
       end;
     itTgid:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.WorkgroupId);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.WorkgroupId);
       end;
     itThreadId:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.LocalInvocationID);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.LocalInvocationID);
       end;
     itVIndex:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.VertexIndex);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.VertexIndex);
       end;
     itVInstance:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.InstanceIndex);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.InstanceIndex);
       end;
     itFrontFace:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FrontFacing);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.FrontFacing);
       end;
 
     itLayer:
       begin
        TestFlat;
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Layer);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Layer);
        pCapabilityList^.Add(Capability.Geometry);
       end;
     itSampleId:
       begin
        TestFlat;
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.SampleId);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.SampleId);
       end;
 
     itPerspSample,
@@ -318,12 +318,12 @@ begin
 
     itPositions:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.Position);
       end;
 
     itParameters:
       begin
-       pDecorateList^.OpDecorate(pVar,Decoration.Location,node.key.typeid);
+       pDecorateList.OpDecorate(pVar,Decoration.Location,node.key.typeid);
       end;
 
     else

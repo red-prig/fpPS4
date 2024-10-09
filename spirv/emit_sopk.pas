@@ -24,10 +24,8 @@ type
 implementation
 
 function SignExtend16(W:Word):Integer; inline;
-const
- shift=BitSizeOf(Integer)-BitSizeOf(Word);
 begin
- Result:=SarLongint((Integer(W) shl shift),shift);
+ Result:=SmallInt(W);
 end;
 
 procedure TEmit_SOPK.emit_S_MOVK_I32; //sdst.s = signExtend(imm16)
@@ -44,14 +42,34 @@ Var
  car:PsrRegSlot;
  src:TsrRegNode;
  imm:TsrRegNode;
+ a,b:TsrRegNode;
+ i:Integer;
 begin
  dst:=get_sdst7(FSPI.SOPK.SDST);
  car:=get_scc;
+ i:=SignExtend16(FSPI.SOPK.SIMM);
 
  src:=fetch_ssrc8(FSPI.SOPK.SDST,dtInt32);
- imm:=NewReg_i(dtInt32,SignExtend16(FSPI.SOPK.SIMM));
+ imm:=NewReg_i(dtInt32,i);
 
- OpIAddExt(dst,car,src,imm);
+ OpIAdd(dst,src,imm);
+
+ //sign(s) == sign(i) && sign(d) != sign(i)
+
+ a:=OpIsSSignTo(src);
+ b:=OpIsSSignTo(dst^.current);
+
+ if (i<0) then
+ begin
+  //sign(s) && !sign(d)
+  b:=OpLogicalNotTo(b);
+ end else
+ begin
+  //!sign(s) && sign(d)
+  a:=OpLogicalNotTo(a);
+ end;
+
+ OpBitwiseAnd(car,a,b);
 end;
 
 procedure TEmit_SOPK.emit_S_CMPK_I32(OpId:DWORD); //SCC = compareOp(sdst.s, signExtend(imm16.s))

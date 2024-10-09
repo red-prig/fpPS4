@@ -125,7 +125,7 @@ end;
 
 procedure TsrVertLayoutList.AllocBinding;
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  node:TsrVertLayout;
  pVar:TsrVariable;
  FBinding:Integer;
@@ -138,7 +138,7 @@ begin
   pVar:=node.pVar;
   if (pVar<>nil) and node.IsUsed and (node.FBinding=-1) then
   begin
-   pDecorateList^.OpDecorate(pVar,Decoration.Location,FBinding);
+   pDecorateList.OpDecorate(pVar,Decoration.Location,FBinding);
    node.FBinding:=FBinding;
    Inc(FBinding);
   end;
@@ -166,7 +166,7 @@ end;
 
 procedure TsrVertLayoutList.AllocSourceExtension;
 var
- FDebugInfo:PsrDebugInfoList;
+ FDebugInfo:TsrDebugInfoList;
  node:TsrVertLayout;
  pVar:TsrVariable;
 begin
@@ -177,7 +177,7 @@ begin
   pVar:=node.pVar;
   if (pVar<>nil) and node.IsUsed then
   begin
-   FDebugInfo^.OpSource(node.GetString);
+   FDebugInfo.OpSource(node.GetString);
   end;
   node:=Next(node);
  end;

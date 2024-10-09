@@ -14,6 +14,7 @@ uses
   srVariable,
   srOp,
   srOpUtils,
+  strutils,
   srCapability,
   emit_fetch;
 
@@ -32,6 +33,9 @@ type
 
 implementation
 
+const
+ PadAssign=0; //5
+
 procedure TSprvEmit_print.Print;
 begin
  PrintCaps;
@@ -44,21 +48,20 @@ begin
  PrintFunc;
 end;
 
-procedure PrintNode(Node:TsrNode);
+function GetNodeStr(Node:TsrNode):RawByteString;
 var
  name:RawByteString;
- w:TsrNode;
 begin
- Assert(Node<>nil,'PrintNode$1');
+ Assert(Node<>nil,'GetNodeStr$1');
  name:=node.GetPrintName;
  if (name<>'') then
  begin
-  Write('%',name);
+  Result:='%'+name;
  end else
  begin
   name:=node.GetPrintData;
-  Assert(name<>'','PrintNode$2');
-  Write(name);
+  Assert(name<>'','GetNodeStr$2');
+  Result:=name;
  end;
 end;
 
@@ -111,14 +114,12 @@ begin
  node:=TypeList.First;
  While (node<>nil) do
  begin
-  PrintNode(node);
-  Write(' = ',Op.GetStr(node.OpId));
+  Write(PadRight(GetNodeStr(node),PadAssign),' = ',Op.GetStr(node.OpId));
   if (node.ItemCount<>0) then
   begin
    For i:=0 to node.ItemCount-1 do
    begin
-    Write(' ');
-    PrintNode(node.GetItem(i));
+    Write(' ',GetNodeStr(node.GetItem(i)));
    end;
   end;
   Writeln;
@@ -140,15 +141,12 @@ begin
    Writeln(' = dtUnknow: read_count=',node.read_count,' value=',node.GetData);
   end else
   begin
-   PrintNode(node);
-   Write(' = ',Op.GetStr(node.OpId),' ');
-   PrintNode(node.pType);
+   Write(PadRight(GetNodeStr(node),PadAssign),' = ',Op.GetStr(node.OpId),' ',GetNodeStr(node.pType));
    if (node.dtype<>dtBool) then
    begin
     For i:=0 to node.ItemCount-1 do
     begin
-     Write(' ');
-     PrintNode(node.GetItem(i));
+     Write(' ',GetNodeStr(node.GetItem(i)));
     end;
    end;
    Writeln;
@@ -167,10 +165,9 @@ begin
  begin
   if (node.pType<>nil) then
   begin
-   PrintNode(node);
-   Write(' = ',Op.GetStr(Op.OpVariable),' ');
-   PrintNode(TsrNode(node.pType));
-   Writeln(' ',StorageClass.GetStr(node.GetStorageClass));
+   Writeln(PadRight(GetNodeStr(node),PadAssign),' = ',Op.GetStr(Op.OpVariable),
+           ' ',GetNodeStr(node.pType),
+           ' ',StorageClass.GetStr(node.GetStorageClass));
   end;
   node:=node.Next;
  end;
@@ -201,37 +198,29 @@ begin
  if Info.result then //dst
  begin
   Assert(node.pDst<>nil,'PrintOp$1');
-  if (node.pDst<>nil) then
-  begin
-   PrintNode(node.pDst);
-  end;
-  Write(' = ');
-  Write(Op.GetStr(node.OpId));
+  Write(PadRight(GetNodeStr(node.pDst),PadAssign),' = ',Op.GetStr(node.OpId));
  end else
  begin  //no dst
   Write(Op.GetStr(node.OpId));
   if (node.pDst<>nil) then
   begin
-   Write(' ');
-   PrintNode(node.pDst);
+   Write(' ',GetNodeStr(node.pDst));
   end;
  end;
 
  if Info.rstype then //dst type
  begin
   Assert(node.pType<>nil,'PrintOp$2');
-  Write(' ');
   if (node.pType<>nil) then
   begin
-   PrintNode(node.pType);
+   Write(' ',GetNodeStr(node.pType));
   end;
  end;
 
  Param:=node.ParamFirst;
  While (Param<>nil) do
  begin
-  Write(' ');
-  PrintNode(Param.Value);
+  Write(' ',GetNodeStr(Param.Value));
   Param:=Param.Next;
  end;
 
@@ -241,7 +230,7 @@ begin
  end;
 
  Case print_offset of
-  True :Writeln(' ;0x',HexStr(Node.Adr.Offdw*4,4));
+  True :Writeln(' ;0x',HexStr(Node.Adr.Offdw*4,4){,' (',node.Order,')'});
   False:Writeln;
  end;
 end;

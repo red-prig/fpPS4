@@ -39,6 +39,7 @@ Function  get_inverse_not_cmp_op(OpId:DWORD):DWORD;
 Function  is_term_op(OpId:DWORD):Boolean;
 Function  is_merge_op(OpId:DWORD):Boolean;
 Function  is_term_op(pLine:TSpirvOp):Boolean;
+Function  get_next_term_op(pLine:TSpirvOp):TSpirvOp;
 procedure up_merge_line(var pLine:TSpirvOp);
 function  FindUpSameOp(pLine,node:TSpirvOp):TSpirvOp;
 function  IsDominUp(pNodeUp,pLine:TSpirvOp):Boolean;
@@ -58,7 +59,55 @@ function  flow_down_next_up(pLine:TSpirvOp):TSpirvOp;
 function  flow_down_prev_up(pLine:TSpirvOp):TSpirvOp;
 function  flow_prev_up(pLine:TSpirvOp):TSpirvOp;
 
+function  OpGetStr(pLine:TSpirvOp):RawByteString;
+
 implementation
+
+uses
+ srPrivate;
+
+function  OpGetStr(pLine:TSpirvOp):RawByteString;
+var
+ V:PtrUint;
+begin
+ Result:='';
+ if (pLine=nil) then Exit;
+
+ case pLine.OpId of
+  OpIAddExt:Result:='OpIAddExt';
+  OpISubExt:Result:='OpISubExt';
+  OpAbsDiff:Result:='OpAbsDiff';
+  OpWQM32  :Result:='OpWQM32';
+
+  OpBFE_32 :Result:='OpBFE_32';
+  OpBFIB32 :Result:='OpBFIB32';
+
+  OpPackAnc:Result:='OpPackAnc';
+  OpPackOfs:Result:='OpPackOfs';
+  OpMakeExp:Result:='OpMakeExp';
+  OpMakeVec:Result:='OpMakeVec';
+  OpMakeCub:Result:='OpMakeCub';
+
+  OpCUBEID :Result:='OpCUBEID';
+  OpCUBESC :Result:='OpCUBESC';
+  OpCUBETC :Result:='OpCUBETC';
+  OpCUBEMA :Result:='OpCUBEMA';
+
+  Op.OpExtInst:
+    begin
+     V:=0;
+     if pLine.ParamNode(1).TryGetValue(V) then
+     begin
+      Result:=GlslOp.GetStr(V);
+     end;
+    end;
+
+  else
+   begin
+    Result:=Op.GetStr(pLine.OpId);
+   end;
+ end;
+end;
 
 //--
 
@@ -93,7 +142,7 @@ function flow_prev_up(pLine:TSpirvOp):TSpirvOp;
   Result:=nil;
   if (p<>nil) then
   if p.IsType(ntOpBlock) then
-  if not (TsrOpBlock(p).Block.bType in [btCond,btLoop]) then
+  if not IsReal(TsrOpBlock(p).Block.bType) then
   begin
    Result:=p.Last;
   end;
@@ -285,7 +334,8 @@ begin
  For i:=0 to count-1 do
  begin
   if (not src[i].is_const) then
-  if IsParentOfLine(pLine,src[i].pLine) then
+  //Dependencies can be in grouping blocks
+  //if IsParentOfLine(pLine,src[i].pLine) then
   begin
    m:=MaxLine(m,src[i].pLine);
   end;
@@ -409,7 +459,8 @@ begin
    if not pLine.is_cleared then
    begin
     Case pLine.OpId of
-     Op.OpNop:; //
+     Op.OpNop :; //
+     Op.OpLine:; //
      else
       Break;
     end;
@@ -426,6 +477,42 @@ begin
  Result:=is_term_op(pLine.OpId);
 end;
 
+Function get_next_term_op(pLine:TSpirvOp):TSpirvOp;
+begin
+ Result:=nil;
+ if (pLine=nil) then Exit;
+
+ repeat //up
+  pLine:=flow_down_next_up(pLine);
+
+  if pLine.IsType(ntOpBlock) then
+  begin
+   //
+  end else
+  if pLine.IsType(ntOp) then
+  begin
+   if not pLine.is_cleared then
+   begin
+    Case pLine.OpId of
+     Op.OpNop :; //
+     Op.OpLine:; //
+     else
+      Break;
+    end;
+   end;
+  end else
+  begin
+   Exit;
+  end;
+
+ until false;
+
+ if is_term_op(pLine.OpId) then
+ begin
+  Result:=pLine;
+ end;
+end;
+
 procedure up_merge_line(var pLine:TSpirvOp);
 var
  node:TSpirvOp;
@@ -435,7 +522,7 @@ begin
   begin
    if pLine.is_cleared or is_merge_op(pLine.OpId) then
    begin
-    node:=pLine.Prev;
+    node:=flow_prev_up(pLine);
     if (node<>nil) then
     begin
      pLine:=node;
@@ -508,11 +595,26 @@ end;
 function GetChainRegNode(node:TsrRegNode):TsrChain;
 var
  pOp:TSpirvOp;
+ V:TsrVolatile;
 begin
  Result:=nil;
- node:=RegDown(node);
+
+ repeat
+  node:=RegDown(node);
+
+  if node.pWriter.IsType(TsrVolatile) then
+  begin
+   V:=node.pWriter.specialize AsType<TsrVolatile>;
+   node:=V.FList.pTail.pNode;
+  end else
+  begin
+   Break;
+  end;
+ until false;
+
  pOp:=node.pWriter.specialize AsType<ntOp>;
  if (pOp=nil) then Exit;
+
  if (pOp.OpId<>Op.OpLoad) then Exit;
  Result:=pOp.ParamNode(0).Value.specialize AsType<ntChain>;
 end;

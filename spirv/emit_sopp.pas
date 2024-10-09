@@ -21,237 +21,100 @@ uses
 type
  TEmit_SOPP=class(TEmitFetch)
   procedure emit_SOPP;
-  procedure emit_S_BRANCH_COND(pSlot:PsrRegSlot;n:Boolean);
+  procedure emit_S_BRANCH_COND(cond:TsrCondition;invert:Boolean);
   procedure emit_S_BRANCH;
-  procedure mark_end_of;
-  function  IsBegLoop(Adr:TSrcAdr):Boolean;
-  function  IsEndLoop(Adr:TSrcAdr):Boolean;
+  procedure emit_loop_branch(b_adr:TSrcAdr;pCurr:TsrOpBlock);
+  function  FetchCond(Adr:TSrcAdr):TsrOpBlock;
+  function  FetchElse(Adr:TSrcAdr):Boolean;
+  function  IsInLoop(Adr:TSrcAdr):Boolean;
   function  IsUnknow(Adr:TSrcAdr):Boolean;
-  procedure emit_cond_block(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
+  function  get_inline_end_addr(adr:TSrcAdr):TSrcAdr;
   procedure emit_block_unknow(adr:TSrcAdr);
-  procedure UpBuildVol(last:TsrOpBlock);
-  procedure emit_loop(adr:TSrcAdr);
-  procedure emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
  end;
 
 implementation
 
-procedure TEmit_SOPP.emit_cond_block(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
+function TEmit_SOPP.get_inline_end_addr(adr:TSrcAdr):TSrcAdr;
 var
- src:TsrRegNode;
+ cInline:TsrCursor;
+begin
+ cInline:=fetch_cursor_ptr(adr.get_code_ptr,btInline);
+ Result :=cInline.pCode.FTop.pELabel.Adr; //get end of code
+end;
+
+function _up_to_real(t:TsrOpBlock):TsrOpBlock;
+begin
+ repeat
+  if not t.IsType(ntOpBlock) then Break;
+  if IsReal(t.Block.bType) then Break;
+  t:=t.Parent;
+ until false;
+ Result:=t;
+end;
+
+function TEmit_SOPP.FetchCond(Adr:TSrcAdr):TsrOpBlock;
+var
  pOpBlock:TsrOpBlock;
- pOpChild:TsrOpBlock;
- pOpLabel:array[0..1] of TspirvOp;
- pLBlock:TsrCFGBlock;
- Info:array[0..1] of TsrBlockInfo;
 begin
- src:=MakeRead(pSlot,dtBool); //get before OpBranchConditional
+ Result:=nil;
 
- pOpLabel[0]:=NewLabelOp(False);
- pOpLabel[1]:=NewLabelOp(False);
+ pOpBlock:=Main.pBlock.FindUpCond;
+ if (pOpBlock=nil) then Exit;
 
- pLBlock:=Cursor.pCode.FTop.DownBlock(adr);
- Assert(pLBlock<>Cursor.pCode.FTop,'not found');
-
- Info[0]:=Default(TsrBlockInfo);
- Info[1]:=Default(TsrBlockInfo);
-
- Case pLBlock.bType of
-  btAdr: //set new adr
-   begin
-    Info[0].b_adr:=Cursor.Adr;
-    Info[0].e_adr:=Cursor.Adr;
-    Info[0].bType:=btCond;
-    //
-    Info[1].b_adr:=pLBlock.pBLabel.Adr;
-    Info[1].e_adr:=pLBlock.pELabel.Adr;
-    Info[1].bType:=btAdr;
-   end;
-  btCond: //normal cond
-   begin
-    Info[0].b_adr:=pLBlock.pBLabel.Adr;
-    Info[0].e_adr:=pLBlock.pELabel.Adr;
-    Info[0].bType:=btCond;
-    //
-    Info[1].b_adr:=Info[0].b_adr;
-    Info[1].e_adr:=Info[0].e_adr;
-    Info[1].bType:=btOther;
-   end;
-  else
-   Assert(false,'emit_cond_block');
- end;
-
- pOpLabel[0].Adr:=Info[0].b_adr;
- pOpLabel[1].Adr:=Info[0].e_adr;
-
- pOpBlock:=NewBlockOp(get_snapshot);
- pOpBlock.SetLabels(pOpLabel[0],pOpLabel[1],nil);
- pOpBlock.SetInfo(Info[0]);
- pOpBlock.SetCond(src,not n);
-
- PushBlockOp(line,pOpBlock,pLBlock);
-
- OpCondMerge(line,pOpLabel[1]);
-
- Case n of
-  True :OpBranchCond(line,pOpLabel[1],pOpLabel[0],src);
-  False:OpBranchCond(line,pOpLabel[0],pOpLabel[1],src);
- end;
-
- AddSpirvOp(line,pOpLabel[0]);
-
- //down group
- pOpChild:=AllocBlockOp;
- pOpChild.SetInfo(Info[1]);
- PushBlockOp(line,pOpChild,nil);
-
- if (pLBlock.bType=btAdr) then //set new adr
+ if (pOpBlock.Block.b_adr.get_code_ptr=Adr.get_code_ptr) then
  begin
-  set_code_ptr(adr.get_code_ptr,btAdr);
- end;
-end;
-
-procedure TEmit_SOPP.UpBuildVol(last:TsrOpBlock);
-var
- node:TsrOpBlock;
-begin
- node:=Main.pBlock;
- While (node<>nil) do
- begin
-
-  Case node.Block.bType of
-   btCond:PrivateList.build_volatile_cur(node.Regs.pSnap_cur);
-   btLoop:PrivateList.build_volatile_brk(node.Regs.pSnap_cur);
-   else;
-  end;
-
-  if (node=last) then Break;
-  node:=node.Parent;
- end;
-end;
-
-procedure TEmit_SOPP.emit_loop(adr:TSrcAdr);
-var
- node,pOpBlock:TsrOpBlock;
- pOpLabel:TspirvOp;
- FVolMark:TsrVolMark;
- bnew:Boolean;
-begin
- node:=Main.pBlock;
- pOpBlock:=node.FindUpLoop;
- Assert(pOpBlock<>nil,'not found');
-
- pOpLabel:=nil;
-
- FVolMark:=vmNone;
- if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
- begin
-  pOpLabel:=pOpBlock.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
-  pOpBlock.Cond.FUseCont:=True;
-  FVolMark:=vmCont;
- end else
- if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
- begin
-  pOpLabel:=pOpBlock.Labels.pEndOp;
-  FVolMark:=vmBreak;
+  Result:=pOpBlock;
  end else
  begin
-  Assert(false,'emit_loop');
- end;
-
- Assert(pOpLabel<>nil);
-
- bnew:=true;
- if Cursor.pBlock.IsEndOf(Cursor.Adr) then //is last
- begin
-  //Assert(node^.Block.e_adr.get_pc=Cursor.Adr.get_pc);
-  Case node.Block.bType of
-   btSetpc:;
-   else
-     begin
-      bnew:=false;
-     end;
+  //special case
+  if (pOpBlock.Block.b_adr.get_code_ptr=Cursor.prev_adr.get_code_ptr) then
+  if (pOpBlock.Block.e_adr.get_code_ptr=Adr.get_code_ptr) then
+  begin
+   Result:=pOpBlock;
   end;
  end;
 
- UpBuildVol(pOpBlock);
- node.Regs.FVolMark:=FVolMark; //mark end of
+end;
 
- OpBranch(line,pOpLabel);
- if bnew then
+function TEmit_SOPP.FetchElse(Adr:TSrcAdr):Boolean;
+var
+ pOpBlock:TsrOpBlock;
+ pElse   :TsrOpBlock;
+begin
+ Result:=False;
+
+ pOpBlock:=Main.pBlock.FindUpCond;
+ if (pOpBlock=nil) then Exit;
+
+ pElse:=pOpBlock.pElse;
+ if (pElse<>nil) then
  begin
-  AddSpirvOp(line,NewLabelOp(True));
+  if (pElse.Block.e_adr.get_code_ptr=Adr.get_code_ptr) then
+  begin
+   Result:=True;
+  end;
  end;
 end;
 
-procedure TEmit_SOPP.emit_loop_cond(pSlot:PsrRegSlot;n:Boolean;adr:TSrcAdr);
+function TEmit_SOPP.IsInLoop(Adr:TSrcAdr):Boolean;
 var
- src:TsrRegNode;
- node,pOpBlock:TsrOpBlock;
- pOpLabel:array[0..1] of TspirvOp;
- FVolMark:TsrVolMark;
+ pOpBlock:TsrOpBlock;
 begin
- src:=MakeRead(pSlot,dtBool);
+ Result:=false;
 
- node:=Main.pBlock;
- pOpBlock:=node.FindUpLoop;
- Assert(pOpBlock<>nil,'not found');
+ pOpBlock:=Main.pBlock.FindUpLoop;
+ if (pOpBlock=nil) then Exit(False);
 
- pOpLabel[0]:=nil;
-
- FVolMark:=vmNone;
  if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is continue?
  begin
-  pOpLabel[0]:=pOpBlock.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
-  pOpBlock.Cond.FUseCont:=True;
-  FVolMark:=vmCont;
+  Result:=True;
  end else
- if (pOpBlock.Block.b_adr.get_code_ptr=adr.get_code_ptr) then //is break?
+ if (pOpBlock.Block.e_adr.get_code_ptr=adr.get_code_ptr) then //is break?
  begin
-  pOpLabel[0]:=pOpBlock.Labels.pEndOp;
-  FVolMark:=vmBreak;
+  Result:=True;
  end else
  begin
-  Assert(false,'emit_loop');
- end;
-
- Assert(pOpLabel[0]<>nil);
- pOpLabel[1]:=NewLabelOp(False);
-
- UpBuildVol(pOpBlock);
- node.Regs.FVolMark:=FVolMark; //mark end of
-
- OpCondMerge(line,pOpLabel[1]);
-
- Case n of
-  True :OpBranchCond(line,pOpLabel[0],pOpLabel[1],src);
-  False:OpBranchCond(line,pOpLabel[1],pOpLabel[0],src);
- end;
-
- AddSpirvOp(line,pOpLabel[1]);
-end;
-
-function TEmit_SOPP.IsBegLoop(Adr:TSrcAdr):Boolean;
-var
- node:TsrCFGBlock;
-begin
- Result:=false;
- node:=Cursor.pBlock.FindUpLoop;
- if (node<>nil) then
- begin
-  Result:=node.pBLabel.Adr.get_code_ptr=Adr.get_code_ptr;
- end;
-end;
-
-function TEmit_SOPP.IsEndLoop(Adr:TSrcAdr):Boolean;
-var
- node:TsrCFGBlock;
-begin
- Result:=false;
- node:=Cursor.pBlock.FindUpLoop;
- if (node<>nil) then
- begin
-  Result:=node.pELabel.Adr.get_code_ptr=Adr.get_code_ptr;
+  Result:=False;
  end;
 end;
 
@@ -265,100 +128,175 @@ begin
  Result:=pLabel.IsType(ltUnknow);
 end;
 
-procedure TEmit_SOPP.emit_S_BRANCH_COND(pSlot:PsrRegSlot;n:Boolean);
+procedure TEmit_SOPP.emit_S_BRANCH_COND(cond:TsrCondition;invert:Boolean);
 var
  c_adr,b_adr:TSrcAdr;
  pLabel:TsrLabel;
+
+ pCond:TsrOpBlock;
+
+ pBegOp,pEndOp:TspirvOp;
+
+ src:TsrRegNode;
 begin
+ pLabel:=FindLabel(Cursor.prev_adr);
+ if (pLabel<>nil) then
+ begin
+  if (ltGoto in pLabel.lType) then Exit;
+ end;
+
+ While (CheckBlockBeg) do;
+
  c_adr:=Cursor.Adr;
  b_adr:=c_adr;
  b_adr.Offdw:=get_branch_offset(FSPI);
 
  pLabel:=FindLabel(b_adr);
  Assert(pLabel<>nil);
- //Assert(not pLabel^.IsType(ltUnknow));
 
- if pLabel.IsType(ltBegAdr) then //adr
- begin
-  emit_cond_block(pSlot,n,b_adr);
- end else
- if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
- begin //continue?
-  if not IsBegLoop(b_adr) then Assert(false,'Unknow');
-  emit_loop_cond(pSlot,n,b_adr);
- end else
- begin //down
-  if Cursor.pBlock.IsBigOf(b_adr) then
-  begin //break?
-   if not IsEndLoop(b_adr) then Assert(false,'Unknow');
-   emit_loop_cond(pSlot,n,b_adr);
-  end else
-  begin //cond
-   emit_cond_block(pSlot,n,c_adr);
-  end;
+ pCond:=FetchCond(c_adr);
+ Assert(pCond<>nil,'Goto Unknow');
+
+ src:=ConvertCond(cond,pCond.vctx.Befor);
+
+ pBegOp:=pCond.Labels.pBegOp;
+ pEndOp:=pCond.Labels.pEndOp;
+
+ pCond.SetCond(src,invert);
+
+ //OpBranchConditional
+
+ //The instruction specifies which block to skip, so need to invert the condition!
+ //Since the main condition is this condition equal to zero, then we need to invert it again!
+ Case invert of
+  True: //invert of invert of invert!
+   begin
+    pCond.Labels.pBcnOp.AddParam(src);
+    pCond.Labels.pBcnOp.AddParam(pEndOp.pDst); //True
+    pCond.Labels.pBcnOp.AddParam(pBegOp.pDst); //False
+   end;
+  False: //invert of invert!
+   begin
+    pCond.Labels.pBcnOp.AddParam(src);
+    pCond.Labels.pBcnOp.AddParam(pBegOp.pDst); //True
+    pCond.Labels.pBcnOp.AddParam(pEndOp.pDst); //False
+   end;
  end;
 
+ if (pCond.Block.e_adr.get_code_ptr=b_adr.get_code_ptr) then
+ begin
+  //if (eval) {}
+ end else
+ begin
+  emit_loop_branch(b_adr,pCond.pBody);
+ end;
 end;
 
 procedure TEmit_SOPP.emit_block_unknow(adr:TSrcAdr);
 var
- c_adr:TSrcAdr;
- e_adr:TSrcAdr;
  pOpChild:TsrOpBlock;
  Info:TsrBlockInfo;
 begin
  Info:=Default(TsrBlockInfo);
 
- c_adr:=Cursor.Adr;                          //get current
- set_code_ptr(adr.get_code_ptr,btAdrBranch); //set new
- e_adr:=Cursor.pCode.FTop.pELabel.Adr;       //get end of code
- set_code_ptr(c_adr.get_code_ptr,btMain);    //ret current
-
  Info.b_adr:=adr;
- Info.e_adr:=e_adr;
- Info.bType:=btAdrBranch;
+ Info.e_adr:=get_inline_end_addr(adr);
+ Info.bType:=btInline;
 
  //down group
  pOpChild:=AllocBlockOp;
  pOpChild.SetInfo(Info);
  PushBlockOp(line,pOpChild,nil);
 
- set_code_ptr(adr.get_code_ptr,btAdrBranch);
+ set_code_ptr(adr.get_code_ptr,btInline);
+end;
+
+procedure TEmit_SOPP.emit_loop_branch(b_adr:TSrcAdr;pCurr:TsrOpBlock);
+var
+ pOpLabel:TspirvOp;
+
+ pLoop:TsrOpBlock;
+
+ FVolMark:TsrVolMark;
+
+ bnew:Boolean;
+begin
+ pLoop:=Main.pBlock.FindUpLoop;
+ Assert(pLoop<>nil,'Goto Unknow');
+ //break/continue
+
+ pOpLabel:=nil;
+
+ FVolMark:=vmNone;
+ if (pLoop.Block.b_adr.get_code_ptr=b_adr.get_code_ptr) then //is continue?
+ begin
+  pOpLabel:=pLoop.Labels.pMrgOp; //-> OpLoopMerge end -> OpLoopMerge before
+  pLoop.Cond.FUseCont:=True;
+  FVolMark:=vmConti;
+ end else
+ if (pLoop.Block.e_adr.get_code_ptr=b_adr.get_code_ptr) then //is break?
+ begin
+  pOpLabel:=pLoop.Labels.pEndOp;
+  FVolMark:=vmBreak;
+ end else
+ begin
+  Assert(false,'break/continue');
+ end;
+
+ Assert(pOpLabel<>nil);
+
+ bnew:=true;
+ if pCurr.IsEndOf(Cursor.Adr) then //is last
+ begin
+  Case pCurr.Block.bType of
+   btSetpc:;
+   else
+     begin
+      bnew:=false;
+     end;
+  end;
+ end;
+
+ //calc volatile
+ case FVolMark of
+  vmBreak:PrivateList.build_volatile_break(pLoop.vctx,pLoop.Regs.orig,pLoop.Regs.prev,pLoop.Regs.next);
+  vmConti:PrivateList.build_volatile_conti(pLoop.vctx,pLoop.Regs.orig,pLoop.Regs.prev,pLoop.Regs.next);
+ end;
+
+ //mark hints
+ mark_end_of(FVolMark);
+
+ OpBranch(pCurr.line,pOpLabel);
+ if bnew then
+ begin
+  AddSpirvOp(pCurr.line,NewLabelOp(True));
+ end;
 end;
 
 procedure TEmit_SOPP.emit_S_BRANCH;
 var
+ pLabel:TsrLabel;
  c_adr,b_adr:TSrcAdr;
-
 begin
+ pLabel:=FindLabel(Cursor.prev_adr);
+ if (pLabel<>nil) then
+ begin
+  if (ltGoto in pLabel.lType) then Exit;
+ end;
+
+ While (CheckBlockBeg) do;
+
  c_adr:=Cursor.Adr;
  b_adr:=c_adr;
  b_adr.Offdw:=get_branch_offset(FSPI);
 
- if IsUnknow(b_adr) then
+ if FetchElse(b_adr) then
  begin
-  emit_block_unknow(b_adr);
+  //{} else {}
  end else
- if (SmallInt(FSPI.SOPP.SIMM)<0) then //up
- begin  //continue?
-  if not IsBegLoop(b_adr) then Assert(false,'Unknow');
-  emit_loop(b_adr);
- end else //down
- begin //break?
-  if IsEndLoop(b_adr) then
-  begin
-   emit_loop(b_adr);
-  end else
-  begin
-   emit_block_unknow(b_adr);
-  end;
+ begin
+  emit_loop_branch(b_adr,Main.pBlock);
  end;
-
-end;
-
-procedure TEmit_SOPP.mark_end_of;
-begin
- Main.pBlock.Regs.FVolMark:=vmEnd; //mark end of
 end;
 
 procedure TEmit_SOPP.emit_SOPP;
@@ -375,15 +313,16 @@ begin
     begin
      AddSpirvOp(Op.OpReturn);
     end;
-    mark_end_of;
+    //mark hints
+    mark_end_of(vmEndpg);
    end;
 
-  S_CBRANCH_SCC0  :emit_S_BRANCH_COND(get_scc  ,false);
-  S_CBRANCH_SCC1  :emit_S_BRANCH_COND(get_scc  ,true);
-  S_CBRANCH_VCCZ  :emit_S_BRANCH_COND(get_vcc0 ,false);
-  S_CBRANCH_VCCNZ :emit_S_BRANCH_COND(get_vcc0 ,true);
-  S_CBRANCH_EXECZ :emit_S_BRANCH_COND(get_exec0,false);
-  S_CBRANCH_EXECNZ:emit_S_BRANCH_COND(get_exec0,true);
+  S_CBRANCH_SCC0  :emit_S_BRANCH_COND(cScc0 ,false);
+  S_CBRANCH_SCC1  :emit_S_BRANCH_COND(cScc0 ,true);
+  S_CBRANCH_VCCZ  :emit_S_BRANCH_COND(cVccz ,false); //It means that lane_id=0
+  S_CBRANCH_VCCNZ :emit_S_BRANCH_COND(cVccz ,true);  //It means that lane_id=0
+  S_CBRANCH_EXECZ :emit_S_BRANCH_COND(cExecz,false); //It means that lane_id=0
+  S_CBRANCH_EXECNZ:emit_S_BRANCH_COND(cExecz,true);  //It means that lane_id=0
 
   S_BRANCH        :emit_S_BRANCH;
 

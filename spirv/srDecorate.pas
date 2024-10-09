@@ -15,15 +15,18 @@ type
   FGLSL_std_450:TSpirvOp;
   //
   FSPV_EXT_descriptor_indexing:Boolean;
+  FSPV_KHR_workgroup_memory_explicit_layout:Boolean;
   //
   function  OpExtension(const n:RawByteString):TSpirvOp;
   function  OpExtInstImport(const n:RawByteString):TSpirvOp;
   //
   function  GLSL_std_450:TSpirvOp;
   //
+  function  AddExecutionMode(Main:TSpirvFunc;mode:PtrUint):TSpirvOp;
+  //
   procedure SPV_EXT_descriptor_indexing;
+  procedure SPV_KHR_workgroup_memory_explicit_layout;
  end;
- PsrHeaderList=TsrHeaderList;
 
  PsrDecorateKey=^TsrDecorateKey;
  TsrDecorateKey=packed record
@@ -41,7 +44,6 @@ type
    node:TSpirvOp;
  end;
 
- PsrDecorateList=^TsrDecorateList;
  TsrDecorateList=class(TsrOpBlockCustom)
   type
    TNodeTree=specialize TNodeTreeClass<TsrDecorate>;
@@ -52,7 +54,6 @@ type
   procedure OpMember  (Data:TsrNode;index,offset:DWORD);
  end;
 
- PsrDebugInfoList=^TsrDebugInfoList;
  TsrDebugInfoList=class(TsrOpBlockCustom)
   FFileName:TsrNode;
   //
@@ -62,7 +63,26 @@ type
   function  FileName:TsrNode;
  end;
 
+operator := (i:TsrNode):TsrHeaderList; inline;
+operator := (i:TsrNode):TsrDecorateList; inline;
+operator := (i:TsrNode):TsrDebugInfoList; inline;
+
 implementation
+
+operator := (i:TsrNode):TsrHeaderList; inline;
+begin
+ Result:=TsrHeaderList(Pointer(i)); //typecast hack
+end;
+
+operator := (i:TsrNode):TsrDecorateList; inline;
+begin
+ Result:=TsrDecorateList(Pointer(i)); //typecast hack
+end;
+
+operator := (i:TsrNode):TsrDebugInfoList; inline;
+begin
+ Result:=TsrDebugInfoList(Pointer(i)); //typecast hack
+end;
 
 //
 
@@ -70,7 +90,15 @@ function TsrHeaderList.OpExtension(const n:RawByteString):TSpirvOp;
 var
  node:TSpirvOp;
 begin
- node:=AddSpirvOp(Op.OpExtension);
+ if (FGLSL_std_450<>nil) then
+ begin
+  node:=NewSpirvOp(Op.OpExtension);
+  InsertBefore(FGLSL_std_450,node);
+ end else
+ begin
+  node:=AddSpirvOp(Op.OpExtension);
+ end;
+ //
  node.AddString(n);
  Result:=node;
 end;
@@ -94,12 +122,31 @@ begin
  Result:=FGLSL_std_450;
 end;
 
+function TsrHeaderList.AddExecutionMode(Main:TSpirvFunc;mode:PtrUint):TSpirvOp;
+var
+ node:TSpirvOp;
+begin
+ node:=AddSpirvOp(Op.OpExecutionMode);
+ node.AddParam(Main);
+ node.AddLiteral(mode,ExecutionMode.GetStr(mode));
+ Result:=node;
+end;
+
 procedure TsrHeaderList.SPV_EXT_descriptor_indexing;
 begin
  if not FSPV_EXT_descriptor_indexing then
  begin
   OpExtension('SPV_EXT_descriptor_indexing');
   FSPV_EXT_descriptor_indexing:=True;
+ end;
+end;
+
+procedure TsrHeaderList.SPV_KHR_workgroup_memory_explicit_layout;
+begin
+ if not FSPV_KHR_workgroup_memory_explicit_layout then
+ begin
+  OpExtension('SPV_KHR_workgroup_memory_explicit_layout');
+  FSPV_KHR_workgroup_memory_explicit_layout:=True;
  end;
 end;
 

@@ -39,12 +39,12 @@ type
   Function  Gather_packed_offset(var offset:DWORD;dim:Byte):TsrRegNode;
   procedure Gather_sample_param(var p:TImgSampleParam;info:PsrImageInfo);
   procedure add_sample_op(var p:TImgSampleParam;node:TSpirvOp);
-  procedure emit_image_sample(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_sample       (Tgrp:TsrNode;info:PsrImageInfo);
   procedure emit_image_sample_gather(Tgrp:TsrNode;info:PsrImageInfo);
-  procedure emit_image_load(Tgrp:TsrNode;info:PsrImageInfo);
-  procedure emit_image_store(Tgrp:TsrNode;info:PsrImageInfo);
-  procedure emit_image_get_resinfo(Tgrp:TsrNode;info:PsrImageInfo);
-  procedure emit_image_get_lod(Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_load         (Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_store        (Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_get_resinfo  (Tgrp:TsrNode;info:PsrImageInfo);
+  procedure emit_image_get_lod      (Tgrp:TsrNode;info:PsrImageInfo);
  end;
 
 implementation
@@ -1118,6 +1118,8 @@ begin
 
  info:=GetImageInfo(pLayout.pData);
 
+ info.GLC:=(FSPI.MIMG.GLC<>0);
+
  if (imDref in GetImageMods(FSPI.MIMG.OP)) then
  begin
   info.tinfo.Depth:=1;
@@ -1129,7 +1131,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_sample(Tgrp,@info);
     end;
@@ -1139,7 +1141,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_sample_gather(Tgrp,@info);
     end;
@@ -1147,7 +1149,7 @@ begin
   IMAGE_LOAD..IMAGE_LOAD_MIP_PCK_SGN: //loaded
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_load(Tgrp,@info);
     end;
@@ -1156,7 +1158,7 @@ begin
   IMAGE_STORE_PCK: //stored
     begin
      info.tinfo.Sampled:=2;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_store(Tgrp,@info);
     end;
@@ -1165,8 +1167,8 @@ begin
   IMAGE_STORE_MIP_PCK: //stored mip
     begin
      info.tinfo.Sampled:=2;
-     //Tgrp:=FetchImageRuntimeArray(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
-     Tgrp:=FetchImageArray(pLayout,info.dtype,info.tinfo,16,FSPI.MIMG.GLC);
+     //Tgrp:=FetchImageRuntimeArray(pLayout,info);
+     Tgrp:=FetchImageArray(pLayout,info,16);
      TsrUniform(Tgrp).FMipArray:=True;
 
      emit_image_store(Tgrp,@info);
@@ -1175,7 +1177,7 @@ begin
   IMAGE_GET_RESINFO: //get info by mip
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_get_resinfo(Tgrp,@info);
     end;
@@ -1183,7 +1185,7 @@ begin
   IMAGE_GET_LOD:
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout,info.dtype,info.tinfo,FSPI.MIMG.GLC);
+     Tgrp:=FetchImage(pLayout,info);
 
      emit_image_get_lod(Tgrp,@info);
     end;

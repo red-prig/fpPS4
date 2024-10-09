@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ //TypInfo,
  ginodes,
  srNode,
  srRefId,
@@ -111,30 +112,61 @@ type
    procedure Remove(r:TsrRegNode);
  end;
 
+const
+ RegCount=366;
+
+type
  PsrRegsSnapshot=^TsrRegsSnapshot;
- TsrRegsSnapshot=object
-  SGRP:array[0..103] of TsrRegNode;
-  VCC:array[0..1] of TsrRegNode;
-  M0:TsrRegNode;
-  EXEC:array[0..1] of TsrRegNode;
-  SCC:TsrRegNode;
-  VGRP:array[0..255] of TsrRegNode;
+ TsrRegsSnapshot=record
+  //366
+  case Byte of
+   0:(REGS:array[0..365] of TsrRegNode;);
+   1:(
+      SGRP:array[0..103] of TsrRegNode; //104
+      VCC :array[0..1] of TsrRegNode;   //2
+      M0  :TsrRegNode;                  //1
+      EXEC:array[0..1] of TsrRegNode;   //2
+      SCC :TsrRegNode;                  //1
+      VGRP:array[0..255] of TsrRegNode; //256
+     );
+ end;
+
+ TsrVolatileNode=class
+  pPrev,pNext:TsrVolatileNode;
+  //
+  V:TsrNode;
+  N:TsrNode;
+ end;
+ TsrVolatileNodeList=specialize TNodeListClass<TsrVolatileNode>;
+
+ TsrVolatileContext=object
+  Emit:TCustomEmit;
+  //
+  befor:TsrNode;
+  after:TsrNode;
+  //
+  FList:TsrVolatileNodeList;
+  //
+  Procedure AddVolatile(V,N:TsrNode);
  end;
 
  TForEachSlot=procedure(pSlot:PsrRegSlot) of object;
- TForEachSnap=procedure(pSlot:PsrRegSlot;var old:TsrRegNode) of object;
+ TForEachSnp1=procedure(pSlot:PsrRegSlot;var orig:TsrRegNode) of object;
+ TForEachSnp3=procedure(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,next:TsrRegNode) of object;
 
  PsrRegsStory=^TsrRegsStory;
  TsrRegsStory=object
-  SGRP:array[0..103] of TsrRegSlot;
-  VCC:array[0..1] of TsrRegSlot;
-  M0:TsrRegSlot;
-  EXEC:array[0..1] of TsrRegSlot;
-  SCC:TsrRegSlot;
-  VGRP:array[0..255] of TsrRegSlot;
+  //366
+  SGRP:array[0..103] of TsrRegSlot; //104
+  VCC :array[0..1] of TsrRegSlot;   //2
+  M0  :TsrRegSlot;                  //1
+  EXEC:array[0..1] of TsrRegSlot;   //2
+  SCC :TsrRegSlot;                  //1
+  VGRP:array[0..255] of TsrRegSlot; //256
   FUnattach:TsrRegSlot;
   //
   Procedure Init(Emit:TCustomEmit);
+  Function  SLOT:PsrRegSlot; inline;
   //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
   function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
@@ -148,7 +180,8 @@ type
   //
   function  get_snapshot:TsrRegsSnapshot;
   procedure ForEachSlot(cb:TForEachSlot);
-  procedure ForEachSnap(cb:TForEachSnap;old:PsrRegsSnapshot);
+  procedure ForEachSnap(cb:TForEachSnp1;orig:PsrRegsSnapshot);
+  procedure ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:PsrRegsSnapshot);
  end;
 
 function RegDown(node:TsrRegNode):TsrRegNode;
@@ -162,6 +195,28 @@ implementation
 operator := (i:TsrNode):TsrRegNode; inline;
 begin
  Result:=TsrRegNode(Pointer(i)); //typecast hack
+end;
+
+//
+
+{
+TsrVolatileContext=object
+ befor:TsrNode;
+ after:TsrNode;
+ //
+ FList:TDependenceNodeList;
+ //
+}
+
+Procedure TsrVolatileContext.AddVolatile(V,N:TsrNode);
+var
+ node:TsrVolatileNode;
+begin
+ node:=Emit.specialize New<TsrVolatileNode>;
+ node.V:=V;
+ node.N:=N;
+ //
+ FList.Push_tail(node);
 end;
 
 //
@@ -299,6 +354,11 @@ begin
   VGRP[i].Init(Emit,'V'+n);
  end;
  FUnattach.Init(Emit,'UNATT');
+end;
+
+Function TsrRegsStory.SLOT:PsrRegSlot; inline;
+begin
+ Result:=@Self;
 end;
 
 function TsrRegsStory.get_sdst7(SDST:Byte):PsrRegSlot;
@@ -459,73 +519,52 @@ var
  i:Word;
 begin
  Result:=Default(TsrRegsSnapshot);
- For i:=0 to 103 do
+ //
+ For i:=0 to RegCount-1 do
  begin
-  Result.SGRP[i]:=SGRP[i].current;
- end;
- For i:=0 to 1 do
- begin
-  Result.VCC[i] :=VCC[i].current;
- end;
- Result.M0      :=M0.current;
- For i:=0 to 1 do
- begin
-  Result.EXEC[i]:=EXEC[i].current;
- end;
- Result.SCC     :=SCC.current;
- For i:=0 to 255 do
- begin
-  Result.VGRP[i]:=VGRP[i].current;
+  Result.REGS[i]:=SLOT[i].current;
  end;
 end;
 
 procedure TsrRegsStory.ForEachSlot(cb:TForEachSlot);
 var
  i:Word;
+ PTR:PsrRegSlot;
 begin
  if (cb=nil) then Exit;
- For i:=0 to 103 do
+ //
+ PTR:=SLOT;
+ For i:=0 to RegCount-1 do
  begin
-  cb(@SGRP[i]);
- end;
- For i:=0 to 1 do
- begin
-  cb(@VCC[i]);
- end;
- cb(@M0);
- For i:=0 to 1 do
- begin
-  cb(@EXEC[i]);
- end;
- cb(@SCC);
- For i:=0 to 255 do
- begin
-  cb(@VGRP[i]);
+  cb(@PTR[i]);
  end;
 end;
 
-procedure TsrRegsStory.ForEachSnap(cb:TForEachSnap;old:PsrRegsSnapshot);
+procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp1;orig:PsrRegsSnapshot);
 var
  i:Word;
+ PTR:PsrRegSlot;
 begin
- if (cb=nil) or (old=nil) then Exit;
- For i:=0 to 103 do
+ if (cb=nil) then Exit;
+ //
+ PTR:=SLOT;
+ For i:=0 to RegCount-1 do
  begin
-  cb(@SGRP[i],Old^.SGRP[i]);
+  cb(@PTR[i],orig^.REGS[i]);
  end;
- For i:=0 to 1 do
+end;
+
+procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:PsrRegsSnapshot);
+var
+ i:Word;
+ PTR:PsrRegSlot;
+begin
+ if (cb=nil) then Exit;
+ //
+ PTR:=SLOT;
+ For i:=0 to RegCount-1 do
  begin
-  cb(@VCC[i],Old^.VCC[i]);
- end;
- cb(@M0,Old^.M0);
- For i:=0 to 1 do
- begin
-  cb(@EXEC[i],Old^.EXEC[i]);
- end;
- cb(@SCC,Old^.SCC);
- For i:=0 to 255 do
- begin
-  cb(@VGRP[i],Old^.VGRP[i]);
+  cb(ctx,@PTR[i],orig^.REGS[i],prev^.REGS[i],next^.REGS[i]);
  end;
 end;
 
@@ -561,6 +600,14 @@ Procedure TsrRegNode.SetWriter(t:TsrNode);
 begin
  if (Self=nil) then Exit;
  if (FWriter=t) then Exit;
+
+ {
+ if t.IsType(ntConst) then
+ if (dtype<>TsrConst(t).dtype) then
+ begin
+  Assert(false);
+ end;
+ }
 
  Assert(RegDown(t.specialize AsType<ntReg>)<>Self,'Circular reference');
 
@@ -624,7 +671,7 @@ begin
  end else
  begin
   Assert(ID.Alloc);
-  Result:='r'+IntToStr(ID.ID);
+  Result:='r'+IntToStr(ID.ID){+'_'+GetEnumName(typeInfo(TsrDataType), Ord(dtype))};
  end;
 end;
 

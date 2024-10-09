@@ -759,7 +759,7 @@ procedure TEmit_VOP3.emit_V_MAD_U64_U32;
 Var
  dst:array[0..1] of PsrRegSlot;
  src:array[0..2] of TsrRegNode;
- mul,sum:TsrRegNode;
+ mul,sum,car,exc:TsrRegNode;
 begin
  dst[0]:=get_vdst8(FSPI.VOP3a.VDST+0);
  dst[1]:=get_vdst8(FSPI.VOP3a.VDST+1);
@@ -778,21 +778,25 @@ begin
 
  mul:=NewReg(dtUint64);
  sum:=NewReg(dtUint64);
+ car:=NewReg(dtUint64);
 
- _Op2(line,Op.OpIMul,mul,src[0],src[1]);
- _Op2(line,Op.OpIAdd,sum,mul   ,src[2]);
-
- //TODO: VCC = carry & EXEC
+ _Op2(line,Op.OpIMul,mul,src[0],src[1]); //vsrc0.u * vsrc1.u
+ OpIAddExt(sum,car,mul,src[2]);          //mul + vsrc2.du | carry
+ car:=OpIntToBoolTo(car);
 
  MakeCopy64(dst[0],dst[1],sum);
+
+ //VCC = carry & EXEC
+ exc:=MakeRead(get_exec0,dtUnknow);
+ OpBitwiseAnd(get_vcc0,car,exc);
 end;
 
-procedure TEmit_VOP3.emit_V_SAD_U32; //dst.u = abs(vsrc0.u - vsrc1.u) + vaccum.u
+procedure TEmit_VOP3.emit_V_SAD_U32; //dst.u = abs(vsrc0.u - vsrc1.u) + vaccum.u[15:0]
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
  rdif,rvac:TsrRegNode;
- //msk:TsrRegNode;
+ bit16:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -808,10 +812,9 @@ begin
  rdif:=NewReg(dtUInt32);
  OpAbsDiff(line,rdif,src[0],src[1]);
 
- //msk:=NewReg(pConsts^.Fetch(dtUInt32,$FFFF)); mask need?
- //OpBitwiseAnd(tmp,src[2],msk);
- //rvac:=tmp^.current;
- rvac:=src[2];
+ bit16:=NewReg_q(dtUInt32,$FFFF);
+ rvac:=OpAndTo(src[2],bit16);
+ rvac.PrepType(ord(dtUInt32));
 
  OpIAdd(dst,rdif,rvac);
 end;
@@ -1227,12 +1230,12 @@ begin
  src[2]:=OpAndTo(src[2],1);
  src[2].PrepType(ord(dtUInt32));
 
- OpIAddExt(dst,car,src[0],src[1]); //src0+src1
+ OpIAddExt(dst,car,src[0],src[1],dtUInt32); //src0+src1
 
  src[0]:=MakeRead(dst,dtUInt32);
  src[1]:=MakeRead(car,dtUInt32);   //save car1
 
- OpIAddExt(dst,car,src[0],src[2]); //(src0+src1)+src2
+ OpIAddExt(dst,car,src[0],src[2],dtUInt32); //(src0+src1)+src2
 
  src[0]:=MakeRead(car,dtUInt32);
 
@@ -1263,12 +1266,12 @@ begin
  src[2]:=OpAndTo(src[2],1);
  src[2].PrepType(ord(dtUInt32));
 
- OpISubExt(dst,bor,src[0],src[1]); //src0-src1
+ OpISubExt(dst,bor,src[0],src[1],dtUInt32); //src0-src1
 
  src[0]:=MakeRead(dst,dtUInt32);
  src[1]:=MakeRead(bor,dtUInt32);   //save car1
 
- OpISubExt(dst,bor,src[0],src[2]); //(src0-src1)-src2
+ OpISubExt(dst,bor,src[0],src[2],dtUInt32); //(src0-src1)-src2
 
  src[0]:=MakeRead(bor,dtUInt32);
 

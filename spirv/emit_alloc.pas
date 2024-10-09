@@ -178,13 +178,8 @@ begin
 end;
 
 function TSprvEmit_alloc.AddExecutionMode(mode:PtrUint):TSpirvOp;
-var
- node:TSpirvOp;
 begin
- node:=HeaderList.AddSpirvOp(Op.OpExecutionMode);
- node.AddParam(Main);
- node.AddLiteral(mode,ExecutionMode.GetStr(mode));
- Result:=node;
+ Result:=HeaderList.AddExecutionMode(Main,mode);
 end;
 
 procedure TSprvEmit_alloc.AllocHeader;

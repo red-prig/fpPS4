@@ -1124,7 +1124,7 @@ end;
 procedure TsrBufferList.AllocBinding(Var FBinding:Integer);
 var
  pConfig:PsrConfig;
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  node:TsrBuffer;
  FHide:Integer;
 begin
@@ -1141,17 +1141,17 @@ begin
    //
    if not (node.bType in [btWorkgroup,btPrivate]) then
    begin
-    pDecorateList^.OpDecorate(node.pVar,Decoration.Binding      ,FBinding);
-    pDecorateList^.OpDecorate(node.pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
+    pDecorateList.OpDecorate(node.pVar,Decoration.Binding      ,FBinding);
+    pDecorateList.OpDecorate(node.pVar,Decoration.DescriptorSet,pConfig^.DescriptorSet);
     //
     if (node.Flags.Coherent) then
     begin
-     pDecorateList^.OpDecorate(node.pVar,Decoration.Coherent,0);
+     pDecorateList.OpDecorate(node.pVar,Decoration.Coherent,0);
     end;
     //
     if (node.Flags.Volatile) then
     begin
-     pDecorateList^.OpDecorate(node.pVar,Decoration.Volatile,0);
+     pDecorateList.OpDecorate(node.pVar,Decoration.Volatile,0);
     end;
     //next bind id
     node.FBinding:=FBinding;
@@ -1160,9 +1160,10 @@ begin
    //Aliased need for uniform/storage/workgroup
    if (node.Flags.Aliased) and (not node.Flags.Bitcast) then
    begin
-    pDecorateList^.OpDecorate(node.pVar,Decoration.Aliased,0);
+    pDecorateList.OpDecorate(node.pVar,Decoration.Aliased,0);
    end;
   end;
+  //
   node:=Next(node);
  end;
  //Alloc hide id
@@ -1181,7 +1182,7 @@ end;
 
 procedure TsrBufferList.AllocSourceExtension;
 var
- pDebugInfoList:PsrDebugInfoList;
+ pDebugInfoList:TsrDebugInfoList;
  node:TsrBuffer;
 begin
  pDebugInfoList:=FEmit.GetDebugInfoList;
@@ -1191,8 +1192,9 @@ begin
   if node.is_export_used then
   if not (node.bType in [btWorkgroup,btPrivate]) then
   begin
-   pDebugInfoList^.OpSource(node.GetString);
+   pDebugInfoList.OpSource(node.GetString);
   end;
+  //
   node:=Next(node);
  end;
 end;
@@ -1353,7 +1355,7 @@ end;
 
 procedure TsrBufferList.OnAllocTypeBinding(pField:TsrField);
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
  node:TsrField;
  SD:DWORD;
 begin
@@ -1364,47 +1366,62 @@ begin
  SD:=pField.GetStructDecorate;
  if (SD<>DWORD(-1)) then
  begin
-  pDecorateList^.OpDecorate(pField.sType,SD,0);
+  pDecorateList.OpDecorate(pField.sType,SD,0);
  end;
  node:=pField.First;
  While (node<>nil) do
  begin
-  pDecorateList^.OpMember(pField.sType,node.FID,node.offset);
+  pDecorateList.OpMember(pField.sType,node.FID,node.offset);
   node:=pField.Next(node);
  end;
 end;
 
 procedure TsrBufferList.AllocTypeBinding;
 var
- pDecorateList:PsrDecorateList;
+ pDecorateList:TsrDecorateList;
+ pHeaderList  :TsrHeaderList;
+ Config       :PsrConfig;
  node:TsrBuffer;
 begin
  EnumAllField(@OnAllocTypeBinding);
  //
  pDecorateList:=FEmit.GetDecorateList;
+ pHeaderList  :=FEmit.GetHeaderList;
+ Config       :=FEmit.GetConfig;
  //
  node:=First;
  While (node<>nil) do
  begin
   if node.is_export_used then
-  if (node.bType=btStorageBuffer) then
   begin
-   if (node.chain_read=0) then
+   if (node.bType=btStorageBuffer) then
    begin
-    pDecorateList^.OpDecorate(node.pVar,Decoration.NonReadable,0);
+    if (node.chain_read=0) then
+    begin
+     pDecorateList.OpDecorate(node.pVar,Decoration.NonReadable,0);
+    end;
+    if (node.chain_write=0) then
+    begin
+     pDecorateList.OpDecorate(node.pVar,Decoration.NonWritable,0);
+    end;
    end;
-   if (node.chain_write=0) then
+   //
+   if (node.bType=btWorkgroup) then
    begin
-    pDecorateList^.OpDecorate(node.pVar,Decoration.NonWritable,0);
+    if Config^.IsSpv14 then
+    begin
+     pHeaderList.SPV_KHR_workgroup_memory_explicit_layout;
+    end;
    end;
-  end;
+  end; //is_export_used
+  //
   node:=Next(node);
  end;
 end;
 
 procedure TsrBufferList.AllocName;
 var
- FDebugInfo:PsrDebugInfoList;
+ FDebugInfo:TsrDebugInfoList;
  node:TsrBuffer;
 begin
  FDebugInfo:=FEmit.GetDebugInfoList;
@@ -1413,7 +1430,7 @@ begin
  begin
   if node.IsUsed and (node.FTop.vType<>nil) then
   begin
-   FDebugInfo^.OpName(node.FTop.vType,node.GetStructName);
+   FDebugInfo.OpName(node.FTop.vType,node.GetStructName);
   end;
   node:=Next(node);
  end;
