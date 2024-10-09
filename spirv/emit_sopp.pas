@@ -327,7 +327,7 @@ begin
   S_BRANCH        :emit_S_BRANCH;
 
   else
-   Assert(false,'SOPP?'+IntToStr(FSPI.SOPP.OP));
+   Assert(false,'SOPP?'+IntToStr(FSPI.SOPP.OP)+' '+get_str_spi(FSPI));
  end;
 end;
 

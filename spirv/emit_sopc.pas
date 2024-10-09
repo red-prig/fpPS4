@@ -56,7 +56,7 @@ begin
   //S_BITCMP1_B64:;
   //S_SETVSKIP   :;
   else
-    Assert(false,'SOPC?'+IntToStr(FSPI.SOPC.OP));
+    Assert(false,'SOPC?'+IntToStr(FSPI.SOPC.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

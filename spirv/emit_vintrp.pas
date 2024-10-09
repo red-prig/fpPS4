@@ -150,7 +150,7 @@ begin
 
 
   else
-   Assert(False,'VINTRP?'+IntToStr(FSPI.VINTRP.OP));
+   Assert(False,'VINTRP?'+IntToStr(FSPI.VINTRP.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

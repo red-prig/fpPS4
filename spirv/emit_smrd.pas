@@ -115,7 +115,7 @@ begin
   S_LOAD_DWORDX16: emit_LOAD_DWORDX(16);
 
   else
-    Assert(false,'SMRD?'+IntToStr(FSPI.SMRD.OP));
+    Assert(false,'SMRD?'+IntToStr(FSPI.SMRD.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

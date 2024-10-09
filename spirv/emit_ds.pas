@@ -432,7 +432,7 @@ begin
   // end;
 
   else
-   Assert(false,'DS?'+IntToStr(FSPI.DS.OP));
+   Assert(false,'DS?'+IntToStr(FSPI.DS.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

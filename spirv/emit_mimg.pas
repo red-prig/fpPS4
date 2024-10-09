@@ -1191,7 +1191,7 @@ begin
     end;
 
   else
-    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
+    Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP)+' '+get_str_spi(FSPI));
  end;
 
  //Writeln('DMASK=',FSPI.MIMG.DMASK);

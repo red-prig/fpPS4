@@ -313,7 +313,7 @@ begin
   BUFFER_STORE_DWORDX4    : emit_BUFFER_STORE_DWORDX(4,BUF_DATA_FORMAT_32_32_32_32);
 
   else
-      Assert(false,'MUBUF?'+IntToStr(FSPI.MUBUF.OP));
+      Assert(false,'MUBUF?'+IntToStr(FSPI.MUBUF.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

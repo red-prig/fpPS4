@@ -561,7 +561,7 @@ begin
   V_MBCNT_HI_U32_B32: emit_V_MBCNT_HI_U32_B32;
 
   else
-   Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP));
+   Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

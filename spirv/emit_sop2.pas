@@ -525,7 +525,7 @@ begin
   S_BFM_B32: emit_S_BFM_B32;
 
   else
-   Assert(False,'SOP2?'+IntToStr(FSPI.SOP2.OP));
+   Assert(False,'SOP2?'+IntToStr(FSPI.SOP2.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

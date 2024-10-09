@@ -127,7 +127,7 @@ begin
   S_ADDK_I32: emit_S_ADDK_I32;
 
   else
-   Assert(false,'SOPK?'+IntToStr(FSPI.SOPK.OP));
+   Assert(false,'SOPK?'+IntToStr(FSPI.SOPK.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

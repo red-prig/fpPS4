@@ -359,7 +359,7 @@ begin
   V_BFREV_B32: emit_V_BFREV_B32;
 
   else
-   Assert(false,'VOP1?'+IntToStr(FSPI.VOP1.OP));
+   Assert(false,'VOP1?'+IntToStr(FSPI.VOP1.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

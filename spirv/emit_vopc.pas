@@ -195,7 +195,7 @@ begin
    V_CMPX_GE_U32   :emit_V_CMP_32(Op.OpUGreaterThanEqual     ,dtUint32,true);
 
   else
-   Assert(false,'VOPC?');
+   Assert(false,'VOPC?'+IntToStr(FSPI.VOPC.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

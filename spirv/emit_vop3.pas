@@ -1206,7 +1206,7 @@ begin
   V_CMPX_GE_U32   :emit_V_CMP_32(Op.OpUGreaterThanEqual     ,dtUint32,true);
 
   else
-   Assert(false,'VOP3c?'+IntToStr(FSPI.VOP3a.OP));
+   Assert(false,'VOP3c?'+IntToStr(FSPI.VOP3a.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;
@@ -1291,7 +1291,7 @@ begin
   256+V_SUBB_U32: emit_V_SUBB_U32;
 
   else
-   Assert(false,'VOP3b?'+IntToStr(FSPI.VOP3b.OP));
+   Assert(false,'VOP3b?'+IntToStr(FSPI.VOP3b.OP)+' '+get_str_spi(FSPI));
  end;
 end;
 
@@ -1399,7 +1399,7 @@ begin
   384+V_RCP_IFLAG_F32: emit_V_RCP_F32;
 
   else
-   Assert(false,'VOP3a?'+IntToStr(FSPI.VOP3a.OP));
+   Assert(false,'VOP3a?'+IntToStr(FSPI.VOP3a.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;

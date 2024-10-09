@@ -82,6 +82,9 @@ begin
   TBUFFER_STORE_FORMAT_XY  :emit_TBUFFER_STORE_FORMAT(2);
   TBUFFER_STORE_FORMAT_XYZ :emit_TBUFFER_STORE_FORMAT(3);
   TBUFFER_STORE_FORMAT_XYZW:emit_TBUFFER_STORE_FORMAT(4);
+
+  else
+      Assert(false,'MTBUF?'+IntToStr(FSPI.MTBUF.OP)+' '+get_str_spi(FSPI));
  end;
 
  //OFFSET:bit12; //Unsigned byte offset.

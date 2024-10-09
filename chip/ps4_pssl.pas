@@ -1283,6 +1283,8 @@ type
 
 function  _parse_print(Body:Pointer;size_dw:DWORD=0;setpc:Boolean=false):Pointer;
 function  _parse_size (Body:Pointer;size_dw:DWORD=0;setpc:Boolean=false):Pointer;
+
+function  get_str_spi(Var SPI:TSPI):RawByteString;
 procedure print_spi(Var SPI:TSPI);
 
 implementation
@@ -1599,7 +1601,7 @@ begin
  Result:='v'+IntToStr(SDST);
 end;
 
-procedure _print_SOP2(Var SPI:TSPI);
+function _get_str_SOP2(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -1663,10 +1665,10 @@ begin
 
  str:=str+_get_ssrc8(SPI.SOP2.SSRC1,SPI.INLINE32);
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_SOP1(Var SPI:TSPI);
+function _get_str_SOP1(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -1732,10 +1734,10 @@ begin
 
  str:=str+_get_ssrc8(SPI.SOP1.SSRC,SPI.INLINE32);
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_SOPC(Var SPI:TSPI);
+function _get_str_SOPC(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -1767,7 +1769,7 @@ begin
 
  str:=str+_get_ssrc8(SPI.SOPC.SSRC1,SPI.INLINE32);
 
- Writeln(str);
+ Result:=str;
 end;
 
 function _text_branch_offset(OFFSET_DW:DWORD;S:SmallInt):RawByteString;
@@ -1775,7 +1777,7 @@ begin
  Result:='#0x'+HexStr((OFFSET_DW+S+1)*4,8);
 end;
 
-procedure _print_SOPP(Var SPI:TSPI);
+function _get_str_SOPP(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -1823,10 +1825,10 @@ begin
       str:='SOPP?'+IntToStr(SPI.SOPP.OP);
  end;
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_SMRD(Var SPI:TSPI);
+function _get_str_SMRD(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
  t1,t2,t3:Byte;
@@ -1981,10 +1983,10 @@ begin
    1:str:=str+'0x'+HexStr(OFFSET,2);
   end;
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_SOPK(Var SPI:TSPI);
+function _get_str_SOPK(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2044,10 +2046,10 @@ begin
                 str:=str+'#0x'+HexStr(SPI.SOPK.SIMM,8);
  end;
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOP3c(Var VOP3:TVOP3a);
+function _get_str_VOP3c(Var VOP3:TVOP3a):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2289,10 +2291,10 @@ begin
 
  str:=str+' ; VOP3c';
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOP3a(Var VOP3:TVOP3a);
+function _get_str_VOP3a(Var VOP3:TVOP3a):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2514,10 +2516,10 @@ begin
 
  str:=str+' ; VOP3a';
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOP3b(Var VOP3:TVOP3b);
+function _get_str_VOP3b(Var VOP3:TVOP3b):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2565,21 +2567,21 @@ begin
 
  str:=str+' ; VOP3b';
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOP3(Var SPI:TSPI);
+function _get_str_VOP3(Var SPI:TSPI):RawByteString;
 begin
  Case SPI.VOP3a.OP of
-    0..255:_print_VOP3c(SPI.VOP3a);
+    0..255:Result:=_get_str_VOP3c(SPI.VOP3a);
   293..298,
-  365..366:_print_VOP3b(SPI.VOP3b);
+  365..366:Result:=_get_str_VOP3b(SPI.VOP3b);
   else
-           _print_VOP3a(SPI.VOP3a);
+           Result:=_get_str_VOP3a(SPI.VOP3a);
  end;
 end;
 
-procedure _print_VOP2(Var SPI:TSPI);
+function _get_str_VOP2(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2657,10 +2659,10 @@ begin
    end;
  end;
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOPC(Var SPI:TSPI);
+function _get_str_VOPC(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2891,10 +2893,10 @@ begin
 
  str:=str+_get_vdst8(SPI.VOPC.VSRC1);
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VOP1(Var SPI:TSPI);
+function _get_str_VOP1(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -2976,10 +2978,10 @@ begin
 
  str:=str+_get_ssrc9(SPI.VOP1.SRC0,SPI.INLINE32);
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_MUBUF(Var SPI:TSPI);
+function _get_str_MUBUF(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -3036,10 +3038,10 @@ begin
  if SPI.MUBUF.SLC=1   then str:=str+' SLC';
  if SPI.MUBUF.TFE=1   then str:=str+' TFE';
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_MTBUF(Var SPI:TSPI);
+function _get_str_MTBUF(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -3114,10 +3116,10 @@ begin
 
  str:=str+']';
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_MIMG(Var SPI:TSPI);
+function _get_str_MIMG(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
  t:Byte;
@@ -3253,10 +3255,10 @@ begin
 
  str:=str+' dmask:0x'+HexStr(SPI.MIMG.DMASK,1);
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_EXP(Var SPI:TSPI);
+function _get_str_EXP(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 var
@@ -3360,10 +3362,10 @@ begin
 
  if SPI.EXP.DONE<>0 then str:=str+' done'; //this is the last MRT
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_VINTRP(Var SPI:TSPI);
+function _get_str_VINTRP(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -3390,10 +3392,10 @@ begin
   3:str:=str+'w';
  end;
 
- Writeln(str);
+ Result:=str;
 end;
 
-procedure _print_DS(Var SPI:TSPI);
+function _get_str_DS(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
 begin
@@ -3557,32 +3559,37 @@ begin
 
  str:=str+' GDS:'+IntToSTr(SPI.DS.GDS);
 
- Writeln(str);
+ Result:=str;
 end;
 
 
-procedure print_spi(Var SPI:TSPI);
+function get_str_spi(Var SPI:TSPI):RawByteString;
 begin
  Case SPI.CMD.EN of
-  W_SOP1  :_print_SOP1(SPI);
-  W_SOPC  :_print_SOPC(SPI);
-  W_SOPP  :_print_SOPP(SPI);
-  W_VOP1  :_print_VOP1(SPI);
-  W_VOPC  :_print_VOPC(SPI);
-  W_VOP3  :_print_VOP3(SPI);
-  W_DS    :_print_DS(SPI);
-  W_MUBUF :_print_MUBUF(SPI);
-  W_MTBUF :_print_MTBUF(SPI);
-  W_EXP   :_print_EXP(SPI);
-  W_VINTRP:_print_VINTRP(SPI);
-  W_MIMG  :_print_MIMG(SPI);
-  W_SMRD  :_print_SMRD(SPI);
-  W_SOPK  :_print_SOPK(SPI);
-  W_SOP2  :_print_SOP2(SPI);
-  W_VOP2  :_print_VOP2(SPI);
+  W_SOP1  :Result:=_get_str_SOP1  (SPI);
+  W_SOPC  :Result:=_get_str_SOPC  (SPI);
+  W_SOPP  :Result:=_get_str_SOPP  (SPI);
+  W_VOP1  :Result:=_get_str_VOP1  (SPI);
+  W_VOPC  :Result:=_get_str_VOPC  (SPI);
+  W_VOP3  :Result:=_get_str_VOP3  (SPI);
+  W_DS    :Result:=_get_str_DS    (SPI);
+  W_MUBUF :Result:=_get_str_MUBUF (SPI);
+  W_MTBUF :Result:=_get_str_MTBUF (SPI);
+  W_EXP   :Result:=_get_str_EXP   (SPI);
+  W_VINTRP:Result:=_get_str_VINTRP(SPI);
+  W_MIMG  :Result:=_get_str_MIMG  (SPI);
+  W_SMRD  :Result:=_get_str_SMRD  (SPI);
+  W_SOPK  :Result:=_get_str_SOPK  (SPI);
+  W_SOP2  :Result:=_get_str_SOP2  (SPI);
+  W_VOP2  :Result:=_get_str_VOP2  (SPI);
   else
-   Writeln('???');
+           Result:='???';
  end;
+end;
+
+procedure print_spi(Var SPI:TSPI);
+begin
+ Writeln(get_str_spi(SPI));
 end;
 
 function _parse_print(Body:Pointer;size_dw:DWORD=0;setpc:Boolean=false):Pointer;

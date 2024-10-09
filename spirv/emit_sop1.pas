@@ -348,7 +348,7 @@ begin
   S_SWAPPC_B64      : emit_S_SWAPPC_B64;
   S_AND_SAVEEXEC_B64: emit_S_AND_SAVEEXEC_B64;
   else
-   Assert(false,'SOP1?'+IntToStr(FSPI.SOP1.OP));
+   Assert(false,'SOP1?'+IntToStr(FSPI.SOP1.OP)+' '+get_str_spi(FSPI));
  end;
 
 end;
