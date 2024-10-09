@@ -56,6 +56,10 @@ begin
  src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
 
+ //Force type
+ src[0]:=BitcastList.FetchRead(dtInt32,src[0]);
+ src[1]:=BitcastList.FetchRead(dtInt32,src[1]);
+
  OpIAdd(dst,src[0],src[1]);
 
  //scc = sign(x) == sign(y) && sign(d) != sign(x);
@@ -94,8 +98,12 @@ begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
  bor:=get_scc;
 
- src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
- src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtInt32);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
+
+ //Force type
+ src[0]:=BitcastList.FetchRead(dtInt32,src[0]);
+ src[1]:=BitcastList.FetchRead(dtInt32,src[1]);
 
  OpISub(dst,src[0],src[1]);
 

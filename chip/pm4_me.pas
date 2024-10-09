@@ -2111,10 +2111,9 @@ end;
 
 procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
 begin
-
  Case node^.eventType of
-  //CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
-  FLUSH_AND_INV_CB_PIXEL_DATA,
+  CACHE_FLUSH_AND_INV_EVENT,   //CB,DB
+  FLUSH_AND_INV_CB_PIXEL_DATA, //CB
   //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
   FLUSH_AND_INV_DB_META, //HTILE
   FLUSH_AND_INV_CB_META: //CMASK

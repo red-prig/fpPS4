@@ -592,7 +592,11 @@ begin
   FFenceHandle:=FFence.FHandle;
  end;
 
+ //Writeln('vkQueueSubmit>');
+
  Result:=FQueue.Submit(1,@info,FFenceHandle);
+
+ //Writeln('vkQueueSubmit<');
 
  ret:=Integer(Result);
  if (Result<>VK_SUCCESS) then
@@ -1457,7 +1461,16 @@ begin
     	            ord(VK_PIPELINE_STAGE_TRANSFER_BIT));               //dstStageMask
 
    end;
+  CACHE_FLUSH_AND_INV_EVENT: //CB,DB
+   begin
+    Inc(cmd_count);
 
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_PS or VK_ACCESS_DB,                                      //srcAccessMask
+                    VK_ACCESS_ANY,                                                     //dstAccessMask
+    	            VK_STAGE_DB or ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT), //srcStageMask
+    	            ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));                          //dstStageMask
+   end;
   else
    Assert(false,'WriteEvent.eventType');
  end;

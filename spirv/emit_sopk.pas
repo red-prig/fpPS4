@@ -52,6 +52,9 @@ begin
  src:=fetch_ssrc8(FSPI.SOPK.SDST,dtInt32);
  imm:=NewReg_i(dtInt32,i);
 
+ //Force type
+ src:=BitcastList.FetchRead(dtInt32,src);
+
  OpIAdd(dst,src,imm);
 
  //sign(s) == sign(i) && sign(d) != sign(i)
