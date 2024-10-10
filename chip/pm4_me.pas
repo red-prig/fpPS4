@@ -2438,6 +2438,7 @@ begin
   end;
   //
   ctx.switch_task;
+  Exit;
  end;
 
  gc_del_internal_ptr(ctx.me^.gc_kqueue,dmem);
