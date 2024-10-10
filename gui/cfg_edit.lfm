@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 439
+  Left = 494
   Height = 323
-  Top = 101
+  Top = 90
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 323
@@ -432,12 +432,13 @@ object frmCfgEditor: TfrmCfgEditor
       ClientWidth = 389
       object Edt_VulkanInfo_device_cmb: TComboBox
         AnchorSideLeft.Control = Tab_Vulkan
-        AnchorSideTop.Control = Tab_Vulkan
+        AnchorSideTop.Control = Label4
+        AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_Vulkan
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 23
-        Top = 10
+        Top = 35
         Width = 369
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
@@ -446,6 +447,21 @@ object frmCfgEditor: TfrmCfgEditor
         ItemHeight = 15
         Style = csDropDownList
         TabOrder = 0
+      end
+      object Label4: TLabel
+        AnchorSideLeft.Control = Tab_Vulkan
+        AnchorSideTop.Control = Tab_Vulkan
+        AnchorSideRight.Control = Tab_Vulkan
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'GPU:'
       end
     end
   end

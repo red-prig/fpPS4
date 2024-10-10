@@ -273,6 +273,10 @@ begin
  err:=NtGetContextThread(hThread,Context);
  if (err<>0) then Exit(err);
 
+ //RIP -> RtlUserThreadStart
+ //RCX -> entry             (_WinMainCRTStartup)
+ //RDX -> lpThreadParameter
+
  err:=NtQueryTeb(hThread,teb);
  if (err<>0) then Exit(err);
 
