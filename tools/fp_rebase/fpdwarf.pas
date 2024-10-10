@@ -211,6 +211,8 @@ type
   function  ReadValue(AAttribute: Pointer; AForm: Cardinal; out AValue: QWord): Boolean;
   procedure FillLineInfo(AData: Pointer);
   Procedure PrintAttrDef(var AEntry:Pointer;Def:PDwarfAbbrev;level:Integer);
+  Procedure CalcPtrForm(Form:Cardinal;AEntry:Pointer);
+  Procedure CalcBlockForm(Form:Cardinal;AEntry:Pointer);
   Procedure CalcAttrDef(var AEntry:Pointer;Def:PDwarfAbbrev);
   Procedure PrintAll();
   Procedure Calc();
@@ -1126,6 +1128,105 @@ begin
  end;
 end;
 
+Procedure TDwarfCompilationUnit.CalcPtrForm(Form:Cardinal;AEntry:Pointer);
+begin
+  if (DebugFile.cb=nil) then Exit;
+
+ case Form of
+   DW_FORM_addr:
+     begin
+      if (FAddressSize=8) then //64bit
+      begin
+        DebugFile.cb(AEntry);
+      end;
+     end;
+   DW_FORM_ref_addr:
+     begin
+       // In Dwarf-version 3 and higher, the size of a DW_FORM_ref_addr depends
+       // on the Dwarf-format. In prior Dwarf-versions it is equal to the
+       // Addres-size.
+       if (FVersion>2) then
+       begin
+         if FIsDwarf64 then //64bit
+         begin
+           DebugFile.cb(AEntry);
+         end;
+       end else
+       begin
+         if (FAddressSize=8) then //64bit
+         begin
+           DebugFile.cb(AEntry);
+         end;
+       end;
+     end;
+   else;
+ end;
+end;
+
+Procedure TDwarfCompilationUnit.CalcBlockForm(Form:Cardinal;AEntry:Pointer);
+var
+  UValue: QWord;
+begin
+ if (DebugFile.cb=nil) then Exit;
+
+ case Form of
+   DW_FORM_block:
+     begin
+      UValue := ULEB128toOrdinal(AEntry);
+      if (UValue>8) then //64bit
+      begin
+        UValue:=ReadByte(AEntry);
+        if (UValue=DW_OP_addr) then //is addr
+        begin
+         DebugFile.cb(AEntry);
+        end;
+      end;
+     end;
+   DW_FORM_block1:
+     begin
+      UValue:=ReadByte(AEntry);
+      if (UValue>8) then //64bit
+      begin
+       UValue:=ReadByte(AEntry);
+       if (UValue=DW_OP_addr) then //is addr
+       begin
+        DebugFile.cb(AEntry);
+       end;
+      end;
+     end;
+   DW_FORM_block2:
+     begin
+      UValue:=ReadWord(AEntry);
+      if (UValue>8) then //64bit
+      begin
+       UValue:=ReadByte(AEntry);
+       if (UValue=DW_OP_addr) then //is addr
+       begin
+        DebugFile.cb(AEntry);
+       end;
+      end;
+     end;
+   DW_FORM_block4:
+     begin
+      UValue:=ReadDWord(AEntry);
+      if (UValue>8) then //64bit
+      begin
+       UValue:=ReadByte(AEntry);
+       if (UValue=DW_OP_addr) then //is addr
+       begin
+        DebugFile.cb(AEntry);
+       end;
+      end;
+     end;
+   DW_FORM_data8:
+     begin
+      //64bit
+      DebugFile.cb(AEntry);
+     end;
+   else;
+ end;
+end;
+
 Procedure TDwarfCompilationUnit.CalcAttrDef(var AEntry:Pointer;Def:PDwarfAbbrev);
 var
  n: Integer;
@@ -1163,38 +1264,12 @@ begin
    end;
 
   end else
-  case Form of
-    DW_FORM_addr:
-      begin
-       if (FAddressSize=8) then //64bit
-       if (DebugFile.cb<>nil) then
-       begin
-         DebugFile.cb(AEntry);
-       end;
-      end;
-    DW_FORM_ref_addr :
-      begin
-        // In Dwarf-version 3 and higher, the size of a DW_FORM_ref_addr depends
-        // on the Dwarf-format. In prior Dwarf-versions it is equal to the
-        // Addres-size.
-        if (FVersion>2) then
-        begin
-          if FIsDwarf64 then //64bit
-          if (DebugFile.cb<>nil) then
-          begin
-            DebugFile.cb(AEntry);
-          end;
-        end else
-        begin
-          if (FAddressSize=8) then //64bit
-          if (DebugFile.cb<>nil) then
-          begin
-            DebugFile.cb(AEntry);
-          end;
-        end;
-      end;
-    else;
+  if (Attribute=DW_AT_location) then
+  begin
+   CalcBlockForm(Form,AEntry);
   end;
+
+  CalcPtrForm(Form,AEntry);
 
   //next
   if not SkipEntryDataForForm(AEntry,Form,FAddressSize,FIsDwarf64,FVersion) then
