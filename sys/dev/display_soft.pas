@@ -1031,6 +1031,8 @@ begin
  Result:=0;
 end;
 
+procedure gc_wakeup_internal_ptr(ptr:Pointer); external;
+
 procedure TDisplayHandleSoft.OnSubmit(Node:PQNodeSubmit);
 var
  i:Integer;
@@ -1070,6 +1072,7 @@ begin
   if (submit^.bufferIndex<>-1) then
   begin
    dce_page^.labels[submit^.bufferIndex]:=0;
+   gc_wakeup_internal_ptr(@dce_page^.labels[submit^.bufferIndex]);
   end;
   dce_page^.label_:=0; //bufferIndex = -1 ???
 

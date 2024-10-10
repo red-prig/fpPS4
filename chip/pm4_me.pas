@@ -10,6 +10,8 @@ uses
  mqueue,
  LFQueue,
 
+ sys_eventvar,
+
  si_ci_vi_merged_enum,
 
  sys_bootparam,
@@ -46,6 +48,10 @@ uses
  pm4defs,
  pm4_stream;
 
+function  gc_add_internal_ptr   (kq,ptr:Pointer):Integer; external;
+function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer; external;
+procedure gc_wakeup_internal_ptr(ptr:Pointer); external;
+
 Const
  CONST_RAM_SIZE=48*1024;
 
@@ -75,7 +81,7 @@ type
    count :Byte;
   end;
   //
-  event:PRTLEvent;
+  //event:PRTLEvent;
   on_idle:TProcedure;
   on_submit_flip_eop:t_on_submit_flip_eop;
   //
@@ -83,6 +89,7 @@ type
   td:p_kthread;
   //
   gc_knlist:p_knlist;
+  gc_kqueue:p_kqueue;
   //
   imdone_count:QWORD;
   //
@@ -91,6 +98,7 @@ type
   procedure Init(knlist:p_knlist);
   procedure start;
   procedure trigger;
+  procedure wait;
   procedure imdone;
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
@@ -222,6 +230,9 @@ begin
  end;
 
  gc_knlist:=knlist;
+
+ gc_kqueue:=kern_kqueue2('[gc_kqueue]',nil,nil);
+ gc_add_internal_ptr(gc_kqueue,@queue);
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl; forward;
@@ -230,7 +241,7 @@ procedure t_pm4_me.start;
 begin
  if (XCHG(started,Pointer(1))=nil) then
  begin
-  event:=RTLEventCreate;
+  //event:=RTLEventCreate;
   //
   kthread_add(@pm4_me_thread,@self,@td,(8*1024*1024) div (16*1024),'[GFX_ME]');
  end;
@@ -238,10 +249,28 @@ end;
 
 procedure t_pm4_me.trigger;
 begin
+ gc_wakeup_internal_ptr(@queue);
+ {
  if (event<>nil) then
  begin
   RTLEventSetEvent(event);
  end;
+ }
+end;
+
+procedure t_pm4_me.wait;
+var
+ kev:array[0..15] of t_kevent;
+ t:timespec;
+ r:Integer;
+begin
+ t:=Default(timespec);
+
+ t.tv_sec :=0;
+ t.tv_nsec:=1000000000 div 10000;
+
+ r:=0;
+ kern_kevent2(gc_kqueue,nil,0,@kev,Length(kev),@t,@r);
 end;
 
 procedure t_pm4_me.imdone;
@@ -322,7 +351,8 @@ begin
  if (sheduler.count=Length(stall)) then
  begin
   //wait
-  msleep_td(hz div 10000);
+  wait;
+  //msleep_td(hz div 10000);
   //
   sheduler.count:=0;
  end;
@@ -2348,19 +2378,19 @@ begin
  end;
 end;
 
-Function me_test_mem(node:p_pm4_node_WaitRegMem):Boolean;
+Function me_test_mem(node:p_pm4_node_WaitRegMem;var dmem:PDWORD):Boolean;
 var
- addr_dmem:Pointer;
  val,ref:DWORD;
 begin
- if not get_dmem_ptr(node^.pollAddr,@addr_dmem,nil) then
+ dmem:=nil;
+ if not get_dmem_ptr(node^.pollAddr,@dmem,nil) then
  begin
   Assert(false,'addr:0x'+HexStr(node^.pollAddr)+' not in dmem!');
  end;
 
  //Writeln('me_test_mem:',get_dce_label_id(addr_dmem),' ',node^.refValue);
 
- val:=PDWORD(addr_dmem)^ and node^.mask;
+ val:=dmem^ and node^.mask;
  ref:=node^.refValue;
  Case node^.compareFunc of
   WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
@@ -2376,6 +2406,8 @@ begin
 end;
 
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
+var
+ dmem:PDWORD;
 begin
  if not ctx.stream^.hint_repeat then
  begin
@@ -2387,11 +2419,15 @@ begin
 
  ctx.stream^.hint_repeat:=False;
 
- if me_test_mem(node) then
+ dmem:=nil;
+
+ if me_test_mem(node,dmem) then
  begin
   ctx.stream^.hint_loop:=0;
  end else
  begin
+  gc_add_internal_ptr(ctx.me^.gc_kqueue,dmem);
+  //
   Inc(ctx.stream^.hint_loop);
   //
   if (ctx.stream^.hint_loop>10000) then
@@ -2404,6 +2440,7 @@ begin
   ctx.switch_task;
  end;
 
+ gc_del_internal_ptr(ctx.me^.gc_kqueue,dmem);
 end;
 
 //
@@ -2588,13 +2625,14 @@ begin
 
   ctx.rel_time:=0; //reset time
 
-  //TOD: Timeline semaphore
+  //TODO: Timeline semaphore
   if not ctx.PingCmd then
   begin
    ctx.on_idle;
   end;
 
-  RTLEventWaitFor(me^.event,100);
+  //RTLEventWaitFor(me^.event,100);
+  me^.wait;
 
  until false;
 

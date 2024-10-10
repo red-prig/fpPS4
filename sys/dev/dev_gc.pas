@@ -10,6 +10,10 @@ uses
 
 procedure gc_initialize();
 
+function  gc_add_internal_ptr   (kq,ptr:Pointer):Integer;
+function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer;
+procedure gc_wakeup_internal_ptr(ptr:Pointer);
+
 var
  sync_me_submit:Boolean=False; //forced wait for all tasks to complete on the GPU side after submit
 
@@ -19,6 +23,8 @@ uses
  errno,
  kern_mtx,
  sys_event,
+ sys_eventvar,
+ kern_event,
  sched_ule,
  kern_authinfo,
  vm,
@@ -54,8 +60,8 @@ var
  gc_submits_allowed_vaddr:PInteger=nil; //0=true,1=false (0xfe0100000)
  gc_submits_allowed_vmirr:PInteger=nil;
 
- gc_knl_lock:mtx;
- gc_knlist  :t_knlist;
+ gc_knlock:mtx;
+ gc_knlist:t_knlist;
 
 procedure unmap_dmem_gc(start,__end:DWORD); public;
 begin
@@ -1180,14 +1186,101 @@ const
   f_touch :@filterops_graphics_core_touch
  );
 
+////
+
+var
+ gc_internal_knlock:mtx;
+ gc_internal_knlist:t_knlist;
+
+function filterops_internal_attach(kn:p_knote):Integer;
+begin
+ Result:=0;
+
+ kn^.kn_flags:=kn^.kn_flags or EV_CLEAR; { automatically set }
+
+ knlist_add(@gc_internal_knlist,kn,0);
+end;
+
+procedure filterops_internal_detach(kn:p_knote);
+begin
+ knlist_remove(@gc_internal_knlist,kn,0);
+end;
+
+function filterops_internal_event(kn:p_knote;hint:QWORD):Integer;
+begin
+ if (hint=0) then
+ begin
+  Result:=ord(kn^.kn_kevent.data<>0);
+ end else
+ begin
+  Result:=0;
+  if (kn^.kn_kevent.ident=hint) then
+  begin
+   Result:=1;
+   kn^.kn_kevent.data:=1;
+  end;
+ end;
+end;
+
+const
+ filterops_internal:t_filterops=(
+  f_isfd  :0;
+  _align  :0;
+  f_attach:@filterops_internal_attach;
+  f_detach:@filterops_internal_detach;
+  f_event :@filterops_internal_event;
+  f_touch :nil
+ );
+
+procedure gc_init_internal();
+begin
+ mtx_init(gc_internal_knlock,'gc internal kn lock');
+ knlist_init_mtx(@gc_internal_knlist,@gc_internal_knlock);
+end;
+
+function gc_add_internal_ptr(kq,ptr:Pointer):Integer; public;
+var
+ kev:t_kevent;
+ fops:p_filterops;
+begin
+ kev:=Default(t_kevent);
+ kev.ident:=PtrUint(ptr);
+ kev.flags:=EV_ADD;
+ //
+ fops:=@filterops_internal;
+ Result:=kqueue_register2(kq,@kev,fops);
+end;
+
+function gc_del_internal_ptr(kq,ptr:Pointer):Integer; public;
+var
+ kev:t_kevent;
+ fops:p_filterops;
+begin
+ kev:=Default(t_kevent);
+ kev.ident:=PtrUint(ptr);
+ kev.flags:=EV_DELETE;
+ //
+ fops:=@filterops_internal;
+ Result:=kqueue_register2(kq,@kev,fops);
+end;
+
+procedure gc_wakeup_internal_ptr(ptr:Pointer); public;
+begin
+ knote(@gc_internal_knlist, PtrUint(ptr), 0);
+end;
+
+////
+
 procedure gc_initialize();
 begin
  gc_page:=dev_mem_alloc(1);
 
  make_dev(@gc_cdevsw,0,0,0,&666,'gc',[]);
 
- mtx_init(gc_knl_lock,'gc knl lock');
- knlist_init_mtx(@gc_knlist,@gc_knl_lock);
+ mtx_init(gc_knlock,'gc kn lock');
+ knlist_init_mtx(@gc_knlist,@gc_knlock);
+
+ gc_init_internal();
 
  kqueue_add_filteropts(EVFILT_GRAPHICS_CORE,@filterops_graphics_core);
 

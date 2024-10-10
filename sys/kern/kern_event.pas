@@ -31,6 +31,7 @@ uses
 function  kevent_copyout   (arg:Pointer;kevp:p_kevent;count:Integer):Integer;
 function  kevent_copyin    (arg:Pointer;kevp:p_kevent;count:Integer):Integer;
 function  kqueue_register  (kq:p_kqueue;kev:p_kevent):Integer;
+function  kqueue_register2 (kq:p_kqueue;kev:p_kevent;var fops:p_filterops):Integer;
 procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint);
 function  kqueue_acquire   (fp:p_file;kqp:pp_kqueue):Integer;
 procedure kqueue_release   (kq:p_kqueue;locked:Integer);
@@ -1286,9 +1287,25 @@ begin
  end;
 
  mtx_lock(filterops_lock);
- Assert(sysfilt_ops[not filt].ref>0,'filter object refcount not valid on release');
- Dec(sysfilt_ops[not filt].ref);
+  Assert(sysfilt_ops[not filt].ref>0,'filter object refcount not valid on release');
+  Dec(sysfilt_ops[not filt].ref);
  mtx_unlock(filterops_lock);
+end;
+
+function kqueue_register(kq:p_kqueue;kev:p_kevent):Integer;
+var
+ filt:Integer;
+ fops:p_filterops;
+begin
+ filt:=kev^.filter;
+ fops:=kqueue_fo_find(filt);
+ //
+ Result:=kqueue_register2(kq,kev,fops);
+ //
+ if (fops<>nil) then
+ begin
+  kqueue_fo_release(filt);
+ end;
 end;
 
 {
@@ -1296,29 +1313,25 @@ end;
  * influence if memory allocation should wait.  Make sure it is 0 if you
  * hold any mutexes.
  }
-function kqueue_register(kq:p_kqueue;kev:p_kevent):Integer;
+function kqueue_register2(kq:p_kqueue;kev:p_kevent;var fops:p_filterops):Integer;
 label
  findkn,
  done,
  done_ev_add;
 var
- fops:p_filterops;
  fp:p_file;
  kn,tkn:p_knote;
- error,filt,event:Integer;
+ error,event:Integer;
  haskqglobal,filedesc_unlock:Integer;
  list:p_klist;
 begin
+ if (fops=nil) then Exit(EINVAL);
+
  fp:=nil;
  kn:=nil;
  error:=0;
  haskqglobal:=0;
  filedesc_unlock:=0;
-
- filt:=kev^.filter;
- fops:=kqueue_fo_find(filt);
-
- if (fops=nil) then Exit(EINVAL);
 
  tkn:=knote_alloc();  { prevent waiting with locks }
 
@@ -1435,8 +1448,8 @@ findkn:
     error:=ENOMEM;
     goto done;
    end;
-   kn^.kn_fp:=fp;
-   kn^.kn_kq:=kq;
+   kn^.kn_fp :=fp;
+   kn^.kn_kq :=kq;
    kn^.kn_fop:=fops;
    {
     * apply reference counts to knote structure, and
@@ -1544,22 +1557,22 @@ done_ev_add:
 
 done:
  KQ_GLOBAL_UNLOCK(@kq_global, haskqglobal);
+
  if (filedesc_unlock<>0) then
  begin
   FILEDESC_XUNLOCK(@fd_table);
  end;
+
  if (fp<>nil) then
  begin
   fdrop(fp);
  end;
+
  if (tkn<>nil) then
  begin
   knote_free(tkn);
  end;
- if (fops<>nil) then
- begin
-  kqueue_fo_release(filt);
- end;
+
  Exit(error);
 end;
 
