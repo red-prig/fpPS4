@@ -902,6 +902,28 @@ end;
 
 //
 
+function GetCompatibleHostMapped(flags:TVkBufferCreateFlags):Boolean;
+var
+ info:TVkPhysicalDeviceExternalBufferInfo;
+ prop:TVkExternalBufferProperties;
+begin
+ if (vkGetPhysicalDeviceExternalBufferProperties=nil) then Exit(False);
+
+ info:=Default(TVkPhysicalDeviceExternalBufferInfo);
+ info.sType     :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_BUFFER_INFO;
+ info.flags     :=flags;
+ info.usage     :=ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+ info.handleType:=VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
+
+ prop:=Default(TVkExternalBufferProperties);
+ prop.sType:=VK_STRUCTURE_TYPE_EXTERNAL_BUFFER_PROPERTIES;
+
+ vkGetPhysicalDeviceExternalBufferProperties(VulkanApp.FPhysicalDevice,@info,@prop);
+
+ Result:=(prop.externalMemoryProperties.compatibleHandleTypes and
+         ord(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT))<>0;
+end;
+
 function GetHostMappedRequirements:TVkMemoryRequirements;
 var
  cinfo:TVkBufferCreateInfo;
@@ -961,44 +983,59 @@ end;
 
 Constructor TvMemManager.Create;
 var
+ c:Boolean;
  mr:TVkMemoryRequirements;
  s:RawByteString;
  i:Byte;
 begin
- mr:=GetHostMappedRequirements;
-
  Writeln('[HostMappedRequirements]');
- Writeln('  Alignment=',mr.alignment);
 
- s:='';
- For i:=0 to VK_MAX_MEMORY_TYPES-1 do
- if ((1 shl i) and (mr.memoryTypeBits))<>0 then
+ c:=GetCompatibleHostMapped(0);
+ Writeln('  BufferHostMapped=',c);
+
+ if c then
  begin
-  if (s='') then
+  mr:=GetHostMappedRequirements;
+
+  Writeln('  Alignment=',mr.alignment);
+  s:='';
+  For i:=0 to VK_MAX_MEMORY_TYPES-1 do
+  if ((1 shl i) and (mr.memoryTypeBits))<>0 then
   begin
-   s:=IntToStr(i);
-  end else
-  begin
-   s:=s+','+IntToStr(i);
+   if (s='') then
+   begin
+    s:=IntToStr(i);
+   end else
+   begin
+    s:=s+','+IntToStr(i);
+   end;
   end;
+  Writeln('  MemoryType=',S);
  end;
- Writeln('  MemoryType=',S);
 
- FSparceMemoryTypes:=GetSparceMemoryTypes;
+ FSparceMemoryTypes:=0;
 
- s:='';
- For i:=0 to VK_MAX_MEMORY_TYPES-1 do
- if ((1 shl i) and (FSparceMemoryTypes))<>0 then
+ c:=GetCompatibleHostMapped(ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT));
+ Writeln('  SparceHostMapped=',c);
+
+ if c then
  begin
-  if (s='') then
+  FSparceMemoryTypes:=GetSparceMemoryTypes;
+
+  s:='';
+  For i:=0 to VK_MAX_MEMORY_TYPES-1 do
+  if ((1 shl i) and (FSparceMemoryTypes))<>0 then
   begin
-   s:=IntToStr(i);
-  end else
-  begin
-   s:=s+','+IntToStr(i);
+   if (s='') then
+   begin
+    s:=IntToStr(i);
+   end else
+   begin
+    s:=s+','+IntToStr(i);
+   end;
   end;
+  Writeln('  SparceType=',s);
  end;
- Writeln('  SparceType=',s);
 
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
  vkGetPhysicalDeviceMemoryProperties(VulkanApp.FPhysicalDevice,@FProperties);

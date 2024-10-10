@@ -8,9 +8,17 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls,
   ExtCtrls,
 
+  Vulkan,
+  vDevice,
+
   game_info;
 
 type
+  TVulkanDevGuid=class(TComponent)
+   src: TComboBox;
+   Function  GetText:RawByteString;
+   procedure SetText(const s:RawByteString);
+  end;
 
   { TfrmCfgEditor }
 
@@ -20,6 +28,7 @@ type
     BtnOk: TButton;
     BtnLogOpen: TButton;
     BtnDataOpen: TButton;
+    Edt_VulkanInfo_device_cmb: TComboBox;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
     Edt_BootparamInfo_print_gpu_ops: TCheckBox;
     Edt_BootparamInfo_print_gpu_hint: TCheckBox;
@@ -41,6 +50,7 @@ type
     Label1: TLabel;
     Label2: TLabel;
     Label3: TLabel;
+    Tab_Vulkan: TTabSheet;
     Tab_Misc: TTabSheet;
     Tab_JIT: TTabSheet;
     Tab_MainInfo: TTabSheet;
@@ -52,11 +62,13 @@ type
     procedure BtnSysOpenClick(Sender: TObject);
     procedure PageInit(const TabName:RawByteString;obj:TAbstractObject);
     procedure PageSave(const TabName:RawByteString;obj:TAbstractObject);
+    procedure VulkanInit;
     procedure FormInit;
     procedure FormSave;
   private
 
   public
+   Edt_VulkanInfo_device:TVulkanDevGuid;
    OnSave     :TNotifyEvent;
    FConfigInfo:TConfigInfo;
   end;
@@ -71,6 +83,22 @@ implementation
 uses
  TypInfo,
  Rtti;
+
+var
+ FVulkanDeviceInit:Boolean=False;
+ FVulkanDeviceList:APhysicalDeviceProperties=nil;
+
+Procedure InitVulkanDeviceList;
+begin
+ if FVulkanDeviceInit then Exit;
+
+ if vDevice.LoadVulkan then
+ begin
+  FVulkanDeviceList:=GetPhysicalDeviceList();
+ end;
+
+ FVulkanDeviceInit:=True;
+end;
 
 procedure TfrmCfgEditor.BtnCancelClick(Sender: TObject);
 begin
@@ -152,11 +180,57 @@ type
    property Checked;
  end;
 
+//src: TComboBox;
+
+Function TVulkanDevGuid.GetText:RawByteString;
+var
+ i:Integer;
+ ptr:PVkPhysicalDeviceProperties;
+begin
+ Result:='';
+ if (src=nil) then Exit;
+
+ i:=src.ItemIndex;
+ ptr:=PVkPhysicalDeviceProperties(src.Items.Objects[i]);
+
+ if (ptr=nil) then Exit;
+
+ Result:=GUIDToString(TGUID(ptr^.pipelineCacheUUID));
+end;
+
+procedure TVulkanDevGuid.SetText(const s:RawByteString);
+var
+ i:Integer;
+ Guid:TGUID;
+ ptr:PVkPhysicalDeviceProperties;
+begin
+ if (src=nil) then Exit;
+
+ Guid:=Default(TGUID);
+ TryStringToGUID(s,Guid);
+
+ For i:=0 to src.Items.Count-1 do
+ begin
+  ptr:=PVkPhysicalDeviceProperties(src.Items.Objects[i]);
+  if (ptr<>nil) then
+  if CompareByte(Guid,TGUID(ptr^.pipelineCacheUUID),SizeOf(TGUID))=0 then
+  begin
+   src.ItemIndex:=i;
+   Exit;
+  end;
+ end;
+
+end;
+
 procedure SetText(control:TComponent;const Text:RawByteString);
 begin
  if control.InheritsFrom(TControl) then
  begin
   TMyControl(control).Text:=Text;
+ end else
+ if (control is TVulkanDevGuid) then
+ begin
+  TVulkanDevGuid(control).SetText(Text);
  end;
 end;
 
@@ -166,6 +240,10 @@ begin
  if control.InheritsFrom(TControl) then
  begin
   Result:=TMyControl(control).Text;
+ end else
+ if (control is TVulkanDevGuid) then
+ begin
+  Result:=TVulkanDevGuid(control).GetText;
  end;
 end;
 
@@ -272,12 +350,88 @@ begin
  end;
 end;
 
+Function GetApiVersionStr(apiVersion:TVkUInt32):RawByteString;
+begin
+ Result:=IntToStr(VK_API_VERSION_MAJOR(apiVersion))+'.'+
+         IntToStr(VK_API_VERSION_MINOR(apiVersion))+'.'+
+         IntToStr(VK_API_VERSION_PATCH(apiVersion));
+end;
+
+Function GetDriverVerson(driverVersion,vendorID:TVkUInt32):RawByteString;
+const
+ osname='windows';
+begin
+ case vendorid of
+  // NVIDIA
+  4318:
+   begin
+    Result:=IntToStr((driverVersion shr 22) and $3ff)+'.'+
+            IntToStr((driverVersion shr 14) and $0ff)+'.'+
+            IntToStr((driverVersion shr  6) and $0ff)+'.'+
+            IntToStr((driverVersion       ) and $03f);
+    Exit;
+   end;
+  // Intel
+  $8086:
+   if (osname='windows') then
+   begin
+    Result:=IntToStr((driverVersion shr 14)          )+'.'+
+            IntToStr((driverVersion       ) and $3fff);
+    Exit;
+   end;
+ end;
+
+ // Use Vulkan version conventions if vendor mapping is not available
+ Result:=IntToStr(VK_VERSION_MAJOR(driverVersion))+'.'+
+         IntToStr(VK_VERSION_MINOR(driverVersion))+'.'+
+         IntToStr(VK_VERSION_PATCH(driverVersion));
+end;
+
+procedure TfrmCfgEditor.VulkanInit;
+var
+ i:Integer;
+ deviceName:RawByteString;
+begin
+ InitVulkanDeviceList;
+
+ if (Edt_VulkanInfo_device=nil) then
+ begin
+  Edt_VulkanInfo_device:=TVulkanDevGuid.Create(Self);
+  Edt_VulkanInfo_device.Name:='Edt_VulkanInfo_device'; //FindComponent
+  Edt_VulkanInfo_device.src :=Edt_VulkanInfo_device_cmb;
+ end;
+
+ Edt_VulkanInfo_device_cmb.Clear;
+ Edt_VulkanInfo_device_cmb.ItemIndex:=-1;
+
+ if Length(FVulkanDeviceList)=0 then Exit;
+
+ Edt_VulkanInfo_device_cmb.AddItem('Auto',nil);
+ Edt_VulkanInfo_device_cmb.ItemIndex:=0;
+
+ For i:=0 to High(FVulkanDeviceList) do
+ if (VK_API_VERSION_VARIANT(FVulkanDeviceList[i].apiVersion)=0) then
+ begin
+  deviceName:=RawByteString(FVulkanDeviceList[i].deviceName);
+
+  deviceName:=deviceName+' ('+GetApiVersionStr(FVulkanDeviceList[i].apiVersion)+')';
+
+  deviceName:=deviceName+' ('+GetDriverVerson(FVulkanDeviceList[i].driverVersion,
+                                              FVulkanDeviceList[i].vendorID)+')';
+
+  Edt_VulkanInfo_device_cmb.AddItem(deviceName,TObject(@FVulkanDeviceList[i]));
+ end;
+
+end;
+
 procedure TfrmCfgEditor.FormInit;
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
  obj:TObject;
 begin
+ VulkanInit;
+
  EditPages.ActivePageIndex:=0;
 
  i:=FConfigInfo.GetPropertyIterator;

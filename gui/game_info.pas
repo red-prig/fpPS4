@@ -157,17 +157,26 @@ type
   property renderdoc_capture:Boolean read Frenderdoc_capture write Frenderdoc_capture;
  end;
 
+ TVulkanInfo=class(TAbstractObject)
+ private
+  Fdevice:RawByteString;
+ published
+  property device:RawByteString read Fdevice write Fdevice;
+ end;
+
  TConfigInfo=class(TAbstractObject)
   private
    FMainInfo     :TMainInfo;
    FBootParamInfo:TBootParamInfo;
    FJITInfo      :TJITInfo;
    FMiscInfo     :TMiscInfo;
+   FVulkanInfo   :TVulkanInfo;
   published
    property MainInfo     :TMainInfo      read FMainInfo      write FMainInfo;
    property BootParamInfo:TBootParamInfo read FBootParamInfo write FBootParamInfo;
    property JITInfo      :TJITInfo       read FJITInfo       write FJITInfo;
    property MiscInfo     :TMiscInfo      read FMiscInfo      write FMiscInfo;
+   property VulkanInfo   :TVulkanInfo    read FVulkanInfo    write FVulkanInfo;
  end;
 
  TGameInfo=class(TAbstractObject)

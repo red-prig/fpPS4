@@ -61,6 +61,8 @@ uses
  time,
  pm4_me,
 
+ vDevice,
+
  //internal libs
  ps4_libSceSystemService,
  ps4_libSceUserService,
@@ -141,6 +143,11 @@ begin
 
  time.strict_ps4_freq        :=ConfInfo.MiscInfo.strict_ps4_freq;
  pm4_me.use_renderdoc_capture:=ConfInfo.MiscInfo.renderdoc_capture;
+
+ //
+
+ vDevice.VulkanDeviceGuid:=Default(TGUID);
+ TryStringToGUID(ConfInfo.VulkanInfo.device,vDevice.VulkanDeviceGuid);
 end;
 
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;

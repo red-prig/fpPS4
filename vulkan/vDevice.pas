@@ -10,6 +10,9 @@ uses
   Vulkan;
 
 type
+ TExtensionNames=array of PChar;
+ APhysicalDeviceProperties=array of TVkPhysicalDeviceProperties;
+
  TVulkanApp=class
   FInstance:TVkInstance;
   FPhysicalDevice:TVkPhysicalDevice;
@@ -218,6 +221,8 @@ procedure vkCmdWaitEvent(commandBuffer:TVkCommandBuffer;
 
 
 var
+ VulkanDeviceGuid:TGUID;
+
  VulkanApp:TVulkanApp;
  DebugReport:TVDebugReport;
  Device:TvDevice;
@@ -228,6 +233,8 @@ var
 function  LoadVulkan:Boolean;
 Procedure InitVulkan;
 function  IsInitVulkan:Boolean;
+
+function  GetPhysicalDeviceList:APhysicalDeviceProperties;
 
 function  shaderStorageImageExtendedFormats:Boolean;
 function  shaderStorageImageReadWithoutFormat:Boolean;
@@ -765,6 +772,24 @@ begin
  end;
 end;
 
+function vkGetPhysicalDevice4Guid(pPhysicalDevices:PVkPhysicalDevice;count:TVkUInt32;Guid:TGUID):TVkPhysicalDevice;
+var
+ i:TVkUInt32;
+ deviceProperties:TVkPhysicalDeviceProperties;
+begin
+ Result:=VK_NULL_HANDLE;
+ if (count<>0) then
+ For i:=0 to count-1 do
+ begin
+  deviceProperties:=Default(TVkPhysicalDeviceProperties);
+  vkGetPhysicalDeviceProperties(pPhysicalDevices[i],@deviceProperties);
+  if CompareByte(deviceProperties.pipelineCacheUUID,Guid,SizeOf(TGUID))=0 then
+  begin
+   Exit(pPhysicalDevices[i]);
+  end;
+ end;
+end;
+
 function vkGetPhysicalDevice(vkInstance:TVkInstance):TVkPhysicalDevice;
 var
  i,count:TVkUInt32;
@@ -775,8 +800,10 @@ begin
  count:=0;
  vkEnumeratePhysicalDevices(vkInstance,@count,nil);
  if (count=0) then Exit;
+ //
  pPhysicalDevices:=GetMem(count*SizeOf(TVkPhysicalDevice));
  vkEnumeratePhysicalDevices(vkInstance,@count,pPhysicalDevices);
+ //
  For i:=0 to count-1 do
  begin
   deviceProperties:=Default(TVkPhysicalDeviceProperties);
@@ -787,26 +814,119 @@ begin
                         VK_VERSION_PATCH(deviceProperties.apiVersion));
   Writeln('-----------');
  end;
- Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+ //
+ Result:=vkGetPhysicalDevice4Guid(pPhysicalDevices,count,VulkanDeviceGuid);
+ //
  if (Result=VK_NULL_HANDLE) then
  begin
-  Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+  Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+  //
+  if (Result=VK_NULL_HANDLE) then
+  begin
+   Result:=vkGetPhysicalDevice4Type(pPhysicalDevices,count,VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
+  end;
  end;
+ //
  if (Result=VK_NULL_HANDLE) then
  if (count>0) then
  begin
   Result:=pPhysicalDevices[0];
  end;
+ //
  FreeMem(pPhysicalDevices);
 
  Writeln('Select GPU:');
  deviceProperties:=Default(TVkPhysicalDeviceProperties);
  vkGetPhysicalDeviceProperties(Result,@deviceProperties);
- Writeln(deviceProperties.deviceName);
- Writeln('apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
-                       VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
-                       VK_VERSION_PATCH(deviceProperties.apiVersion));
+ Writeln(' ',deviceProperties.deviceName);
+ Writeln(' apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
+                        VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
+                        VK_VERSION_PATCH(deviceProperties.apiVersion));
 
+end;
+
+function GetInstanceExtensionNames:TExtensionNames;
+begin
+ Result:=nil;
+ SetLength(Result,4);
+ Result[0]:=VK_KHR_SURFACE_EXTENSION_NAME;
+ Result[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+ Result[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+ Result[3]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
+end;
+
+function GetVkApplicationInfo:TVkApplicationInfo;
+begin
+ Result:=Default(TVkApplicationInfo);
+ Result.sType             :=VK_STRUCTURE_TYPE_APPLICATION_INFO;
+ Result.pApplicationName  :='fpPS4';
+ Result.applicationVersion:=VK_MAKE_VERSION(0, 0, 1);
+ Result.pEngineName       :='fpPS4';
+ Result.engineVersion     :=VK_MAKE_VERSION(0, 0, 1);
+ Result.apiVersion        :=VK_MAKE_API_VERSION(0, 1, 1, 0); //VK_API_VERSION_1_1
+end;
+
+function GetPhysicalDeviceList(vkInstance:TVkInstance):APhysicalDeviceProperties;
+var
+ i,count:TVkUInt32;
+ pPhysicalDevices:PVkPhysicalDevice;
+begin
+ Result:=nil;
+ count:=0;
+ vkEnumeratePhysicalDevices(vkInstance,@count,nil);
+ if (count=0) then Exit;
+ //
+ pPhysicalDevices:=GetMem(count*SizeOf(TVkPhysicalDevice));
+ SetLength(Result,count);
+ //
+ vkEnumeratePhysicalDevices(vkInstance,@count,pPhysicalDevices);
+ For i:=0 to count-1 do
+ begin
+  Result[i]:=Default(TVkPhysicalDeviceProperties);
+  vkGetPhysicalDeviceProperties(pPhysicalDevices[i],@Result[i]);
+ end;
+ //
+ FreeMem(pPhysicalDevices);
+end;
+
+function GetPhysicalDeviceList:APhysicalDeviceProperties;
+var
+ FInstance:TVkInstance;
+ vkApp    :TVkApplicationInfo;
+ vkExtList:TExtensionNames;
+ vkCInfo  :TVkInstanceCreateInfo;
+ r:TVkResult;
+begin
+ Result:=nil;
+
+ FInstance:=VK_NULL_HANDLE;
+
+ vkApp:=GetVkApplicationInfo;
+
+ vkExtList:=GetInstanceExtensionNames;
+
+ vkCInfo:=Default(TVkInstanceCreateInfo);
+ vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+ vkCInfo.pApplicationInfo:=@vkApp;
+
+ vkCInfo.enabledExtensionCount  :=Length(vkExtList);
+ vkCInfo.ppEnabledExtensionNames:=@vkExtList[0];
+
+ Writeln('vkCreateInstance->');
+ r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
+ if (r<>VK_SUCCESS) then
+ begin
+  Writeln(StdErr,'vkCreateInstance:',r);
+  Exit;
+ end;
+ Writeln('<-vkCreateInstance');
+
+ Result:=GetPhysicalDeviceList(FInstance);
+
+ if (FInstance<>VK_NULL_HANDLE) then
+ begin
+  vkDestroyInstance(FInstance,nil);
+ end;
 end;
 
 Constructor TVulkanApp.Create(debug,printf,validate:Boolean);
@@ -814,8 +934,7 @@ const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
  vkApp    :TVkApplicationInfo;
- vkExtList:array[0..4] of PChar;
- vkExtLen :Ptruint;
+ vkExtList:TExtensionNames;
  vkLayer  :array[0..0] of PChar;
  vkCInfo  :TVkInstanceCreateInfo;
  vkPrintf :TVkValidationFeaturesEXT;
@@ -828,20 +947,9 @@ var
  FDI      :TVkPhysicalDeviceDescriptorIndexingFeatures;
  r:TVkResult;
 begin
- vkApp:=Default(TVkApplicationInfo);
- vkApp.sType             :=VK_STRUCTURE_TYPE_APPLICATION_INFO;
- vkApp.pApplicationName  :='fpPS4';
- vkApp.applicationVersion:=VK_MAKE_VERSION(0, 0, 1);
- vkApp.pEngineName       :='fpPS4';
- vkApp.engineVersion     :=VK_MAKE_VERSION(0, 0, 1);
- vkApp.apiVersion        :=VK_MAKE_API_VERSION(0, 1, 1, 0); //VK_API_VERSION_1_1
+ vkApp:=GetVkApplicationInfo;
 
- vkExtList[0]:=VK_KHR_SURFACE_EXTENSION_NAME;
- vkExtList[1]:=VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
- vkExtList[2]:=VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
- vkExtList[3]:=VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME;
-
- vkExtLen:=4;
+ vkExtList:=GetInstanceExtensionNames;
 
  vkCInfo:=Default(TVkInstanceCreateInfo);
  vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -849,8 +957,8 @@ begin
 
  if debug then
  begin
-  vkExtList[vkExtLen]:=VK_EXT_DEBUG_UTILS_EXTENSION_NAME; //VK_EXT_debug_utils
-  Inc(vkExtLen);
+  //VK_EXT_debug_utils
+  Insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME,vkExtList,Length(vkExtList));
 
   if validate and InstanceLayersIsExist(dlayer) then
   begin
@@ -860,8 +968,8 @@ begin
   end;
  end;
 
- vkCInfo.enabledExtensionCount  :=vkExtLen;
- vkCInfo.ppEnabledExtensionNames:=@vkExtList;
+ vkCInfo.enabledExtensionCount  :=Length(vkExtList);
+ vkCInfo.ppEnabledExtensionNames:=@vkExtList[0];
 
  if debug and printf then
  begin

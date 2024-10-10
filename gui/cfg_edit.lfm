@@ -1,23 +1,23 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 341
+  Left = 439
   Height = 323
-  Top = 119
+  Top = 101
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 323
   ClientWidth = 400
   Position = poMainFormCenter
-  LCLVersion = '3.4.0.0'
+  LCLVersion = '3.6.0.0'
   object EditPages: TPageControl
     Left = 0
     Height = 274
     Top = 0
     Width = 397
-    ActivePage = Tab_BootparamInfo
+    ActivePage = Tab_Vulkan
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 1
+    TabIndex = 4
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
@@ -424,6 +424,28 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Right = 10
         Caption = 'Use renderdoc capture'
         TabOrder = 1
+      end
+    end
+    object Tab_Vulkan: TTabSheet
+      Caption = 'Vulkan'
+      ClientHeight = 246
+      ClientWidth = 389
+      object Edt_VulkanInfo_device_cmb: TComboBox
+        AnchorSideLeft.Control = Tab_Vulkan
+        AnchorSideTop.Control = Tab_Vulkan
+        AnchorSideRight.Control = Tab_Vulkan
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 10
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        ItemHeight = 15
+        Style = csDropDownList
+        TabOrder = 0
       end
     end
   end
