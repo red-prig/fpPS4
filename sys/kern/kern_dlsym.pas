@@ -438,7 +438,7 @@ begin
       ' hex    =0x'+HexStr(nid,16)+#13#10+
       ' nid    ='+EncodeValue64(nid)+#13#10+
       ' name   ='+str+#13#10+
-      ' libname='+str+#13#10+
+      ' libname='+libname+#13#10+
       ' libfrom='+libfrom+#13#10;
 
  print_error_td(str);
