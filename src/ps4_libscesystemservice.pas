@@ -8,7 +8,9 @@ interface
 
 uses
   windows,
-  subr_dynlib;
+  subr_dynlib,
+  ps4_libSceUserService,
+  ps4_libSceNpCommon;
 
 const
  SCE_SYSTEM_SERVICE_PARAM_ID_LANG                =1;
@@ -161,8 +163,8 @@ type
  SceSystemServiceAbnormalTerminationInfo=packed record
  end;
 
- pSceSystemServiceEventType=^SceSystemServiceEventType;
- SceSystemServiceEventType=packed record
+ pSceSystemServiceEvent=^SceSystemServiceEvent;
+ SceSystemServiceEvent=packed record
   eventType:Integer; //SceSystemServiceEventType
   data:packed record
    Case Byte of
@@ -180,18 +182,18 @@ type
         arg :array[0..2019] of Byte;
        end);
     4:(joinEvent:packed record
-        userId      :Integer;
+        userId      :SceUserServiceUserId;
         eventId     :array[0..36]   of Char;
         bootArgument:array[0..7168] of Char;
        end);
     5:(serviceEntitlementUpdate:packed record
-        userId        :Integer;
-        npServiceLabel:DWORD;
+        userId        :SceUserServiceUserId;
+        npServiceLabel:SceNpServiceLabel;
         reserved      :array[0..8183] of Byte;
        end);
     6:(unifiedEntitlementUpdate:packed record
-        userId        :Integer;
-        npServiceLabel:DWORD;
+        userId        :SceUserServiceUserId;
+        npServiceLabel:SceNpServiceLabel;
         reserved      :array[0..8183] of Byte;
        end);
     7:(reserved:array[0..8191] of Byte);
@@ -429,7 +431,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSystemServiceReceiveEvent(event:pSceSystemServiceEventType):Integer;
+function ps4_sceSystemServiceReceiveEvent(event:pSceSystemServiceEvent):Integer;
 begin
  if (event=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
  Result:=SCE_SYSTEM_SERVICE_ERROR_NO_EVENT;

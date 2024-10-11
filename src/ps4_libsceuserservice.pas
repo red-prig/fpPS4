@@ -11,6 +11,9 @@ uses
   Classes,
   SysUtils;
 
+type
+ SceUserServiceUserId=Integer;
+
 const
  SCE_USER_SERVICE_MAX_LOGIN_USERS=4;
  SCE_USER_SERVICE_USER_ID_INVALID=Integer($FFFFFFFF);
@@ -23,7 +26,7 @@ type
 
  PUserServiceLoginUserIdList=^TUserServiceLoginUserIdList;
  TUserServiceLoginUserIdList=packed record
-  userId:array[0..SCE_USER_SERVICE_MAX_LOGIN_USERS-1] of Integer;
+  userId:array[0..SCE_USER_SERVICE_MAX_LOGIN_USERS-1] of SceUserServiceUserId;
  end;
 
 const
@@ -32,10 +35,12 @@ const
  SCE_USER_SERVICE_EVENT_TYPE_LOGOUT =1;
 
 type
+ SceUserServiceEventType=Integer;
+
  pSceUserServiceEvent=^SceUserServiceEvent;
  SceUserServiceEvent=packed record
-  eventType:Integer; //SceUserServiceEventType
-  userId   :Integer; //SceUserServiceUserId
+  eventType:SceUserServiceEventType;
+  userId   :SceUserServiceUserId;
  end;
 
  TUserServiceEventCallback=procedure(event:pSceUserServiceEvent;arg:Pointer);

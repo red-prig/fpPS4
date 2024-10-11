@@ -72,6 +72,10 @@ uses
  ps4_libSceAvSetting,
  ps4_libSceNpCommon,
  ps4_libSceNpManager,
+ ps4_libSceNpTrophy,
+ ps4_libSceNpScoreRanking,
+ ps4_libSceScreenShot,
+ ps4_libSceSaveData,
  //ps4_libSceDiscMap,
  //internal libs
 

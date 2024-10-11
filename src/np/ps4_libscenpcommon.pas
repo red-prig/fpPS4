@@ -7,10 +7,8 @@ interface
 
 uses
  subr_dynlib,
- np_error;
-
-type
- SceUserServiceUserId=Integer;
+ np_error,
+ ps4_libSceUserService;
 
 Const
  SCE_NP_TITLE_ID_LEN=12;

@@ -1428,6 +1428,26 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpCommon"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\np\ps4_libscenptrophy.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpTrophy"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\np\ps4_libscenpscoreranking.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpScoreRanking"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscescreenshot.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceScreenShot"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscesavedata.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSaveData"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

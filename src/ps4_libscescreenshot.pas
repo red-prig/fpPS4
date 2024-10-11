@@ -1,13 +1,12 @@
 unit ps4_libSceScreenShot;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
-  ps4_program,
-  Classes,
-  SysUtils;
+  subr_dynlib;
 
 implementation
 
@@ -46,7 +45,7 @@ function ps4_sceScreenShotSetOverlayImage(
           filePath:PChar;
           offsetx:Integer;
           offsety:Integer
-         ):Integer; SysV_ABI_CDecl;
+         ):Integer;
 begin
  Writeln('sceScreenShotSetOverlayImage:',filePath);
  Result:=0;
@@ -57,48 +56,49 @@ function ps4_sceScreenShotSetOverlayImageWithOrigin(
           marginX:Integer;
           marginY:Integer;
           origin:Integer //SceScreenShotOrigin
-         ):Integer; SysV_ABI_CDecl;
+         ):Integer;
 begin
  Writeln('sceScreenShotSetOverlayImageWithOrigin:',filePath);
  Result:=0;
 end;
 
-function ps4_sceScreenShotEnable():Integer; SysV_ABI_CDecl;
+function ps4_sceScreenShotEnable():Integer;
 begin
  Writeln('sceScreenShotEnable');
  Result:=0;
 end;
 
-function ps4_sceScreenShotDisable():Integer; SysV_ABI_CDecl;
+function ps4_sceScreenShotDisable():Integer;
 begin
  Writeln('sceScreenShotDisable');
  Result:=0;
 end;
 
-function ps4_sceScreenShotSetParam(param:pSceScreenShotParam):Integer; SysV_ABI_CDecl;
+function ps4_sceScreenShotSetParam(param:pSceScreenShotParam):Integer;
 begin
  Writeln('sceScreenShotSetParam');
  Result:=0;
 end;
 
-function Load_libSceScreenShot(Const name:RawByteString):TElf_node;
+function Load_libSceScreenShot(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+  lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceScreenShot');
 
- lib:=Result._add_lib('libSceScreenShot');
-
- lib^.set_proc($6A11E139FF903644,@ps4_sceScreenShotSetOverlayImage);
- lib^.set_proc($EF7590E098F49C92,@ps4_sceScreenShotSetOverlayImageWithOrigin);
- lib^.set_proc($DB1C54B6E0BF4731,@ps4_sceScreenShotEnable);
- lib^.set_proc($B4861FD16E554E2F,@ps4_sceScreenShotDisable);
- lib^.set_proc($1BB2A59886052197,@ps4_sceScreenShotSetParam);
+ lib:=Result^.add_lib('libSceScreenShot');
+ lib.set_proc($6A11E139FF903644,@ps4_sceScreenShotSetOverlayImage);
+ lib.set_proc($EF7590E098F49C92,@ps4_sceScreenShotSetOverlayImageWithOrigin);
+ lib.set_proc($DB1C54B6E0BF4731,@ps4_sceScreenShotEnable);
+ lib.set_proc($B4861FD16E554E2F,@ps4_sceScreenShotDisable);
+ lib.set_proc($1BB2A59886052197,@ps4_sceScreenShotSetParam);
 end;
 
+var
+ stub:t_int_file;
+
 initialization
- ps4_app.RegistredPreLoad('libSceScreenShot.prx',@Load_libSceScreenShot);
+ reg_int_file(stub,'libSceScreenShot.prx',@Load_libSceScreenShot);
 
 end.
 

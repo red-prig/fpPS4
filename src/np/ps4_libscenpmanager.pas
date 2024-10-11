@@ -9,6 +9,7 @@ uses
   windows,
   subr_dynlib,
   np_error,
+  ps4_libSceUserService,
   ps4_libSceNpCommon;
 
 type

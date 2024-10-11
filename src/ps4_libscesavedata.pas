@@ -1,14 +1,16 @@
 unit ps4_libSceSaveData;
 
 {$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
   mpmc_queue,
-  ps4_program,
-  Classes,
-  SysUtils;
+  subr_dynlib,
+  ps4_libSceUserService;
+  {Classes,
+  SysUtils;}
 
 Const
  SCE_SAVE_DATA_ERROR_PARAMETER                           =-2137063424; // 0x809F0000
@@ -66,17 +68,17 @@ type
  PSceSaveDataIcon=^SceSaveDataIcon;
  SceSaveDataIcon=packed record
   buf:Pointer;
-  bufSize:size_t;
-  dataSize:size_t;
+  bufSize:QWORD;
+  dataSize:QWORD;
   reserved:array[0..31] of Byte;
  end;
 
  PSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
  SceSaveDataMemorySetup2=packed record
   option:DWORD;
-  userId:Integer;
-  memorySize:size_t;
-  iconMemorySize:size_t;
+  userId:SceUserServiceUserId;
+  memorySize:QWORD;
+  iconMemorySize:QWORD;
   initParam:PSceSaveDataParam;
   initIcon:PSceSaveDataIcon;
   reserved:array[0..23] of Byte;
@@ -84,7 +86,7 @@ type
 
  PSceSaveDataMemorySetupResult=^SceSaveDataMemorySetupResult;
  SceSaveDataMemorySetupResult=packed record
-  existedMemorySize:size_t;
+  existedMemorySize:QWORD;
   reserved:array[0..15] of Byte;
  end;
 
@@ -98,7 +100,7 @@ type
 
  PSceSaveDataMemoryGet2=^SceSaveDataMemoryGet2;
  SceSaveDataMemoryGet2=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   padding:array[0..3] of Byte;
   data:PSceSaveDataMemoryData;
   param:PSceSaveDataParam;
@@ -109,7 +111,7 @@ type
 
  PSceSaveDataMemorySet2=^SceSaveDataMemorySet2;
  SceSaveDataMemorySet2=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   padding:array[0..3] of Byte;
   data:PSceSaveDataMemoryData;
   param:PSceSaveDataParam;
@@ -121,7 +123,7 @@ type
 
  PSceSaveDataMemorySync=^SceSaveDataMemorySync;
  SceSaveDataMemorySync=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   slotId:DWORD;
   option:DWORD; //SceSaveDataMemorySyncOption
   reserved:array[0..27] of Byte;
@@ -141,7 +143,7 @@ type
 
  pSceSaveDataDelete=^SceSaveDataDelete;
  SceSaveDataDelete=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   align1:Integer;
   titleId:pSceSaveDataTitleId;
   dirName:pSceSaveDataDirName;
@@ -158,7 +160,7 @@ type
 
  pSceSaveDataMount=^SceSaveDataMount;
  SceSaveDataMount=packed record
-  userId:Integer; //SceUserServiceUserId
+  userId:SceUserServiceUserId;
   align1:Integer;
   titleId:pSceSaveDataTitleId;
   dirName:PSceSaveDataDirName;
@@ -170,7 +172,7 @@ type
 
  PSceSaveDataMount2=^SceSaveDataMount2;
  SceSaveDataMount2=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   align1:Integer;
   dirName:PSceSaveDataDirName;
   blocks:QWORD;
@@ -181,7 +183,7 @@ type
 
  pSceSaveDataTransferringMount=^SceSaveDataTransferringMount;
  SceSaveDataTransferringMount=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   align1:Integer;
   titleId:pSceSaveDataTitleId;
   dirName:PSceSaveDataDirName;
@@ -208,7 +210,7 @@ type
 
  pSceSaveDataDirNameSearchCond=^SceSaveDataDirNameSearchCond;
  SceSaveDataDirNameSearchCond=packed record
-  userId:Integer;
+  userId:SceUserServiceUserId;
   _align:Integer;
   titleId:pSceSaveDataTitleId;
   dirName:pSceSaveDataDirName;
@@ -243,7 +245,7 @@ type
  SceSaveDataEvent=packed record
   _type:DWORD; //SceSaveDataEventType;
   errorCode:Integer;
-  userId:Integer;
+  userId:SceUserServiceUserId;
   padding:Integer;
   titleId:SceSaveDataTitleId;
   dirName:SceSaveDataDirName;
@@ -252,15 +254,17 @@ type
 
  pSceSaveDataEventParam=Pointer;
 
- SceSaveDataEventCallbackFunc=procedure(event:pSceSaveDataEvent;userdata:Pointer); SysV_ABI_CDecl;
+ SceSaveDataEventCallbackFunc=procedure(event:pSceSaveDataEvent;userdata:Pointer);
 
  PSceSaveDataCheckBackupData=Pointer;
 
 implementation
 
+{
 uses
  sys_path,
  sys_signal;
+}
 
 type
  t_backup_event_queue=specialize mpmc_bounded_queue<SceSaveDataEvent>;
@@ -288,46 +292,46 @@ begin
  end;
 end;
 
-function ps4_sceSaveDataInitialize(params:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataInitialize(params:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataInitialize2(params:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataInitialize2(params:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataInitialize3(params:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataInitialize3(params:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataTerminate:Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataTerminate:Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory(
-           userId:Integer;
+           userId:SceUserServiceUserId;
            memorySize:QWORD;
-           param:PSceSaveDataParam):Integer; SysV_ABI_CDecl;
+           param:PSceSaveDataParam):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory2(
            setupParam:PSceSaveDataMemorySetup2;
-           _result:PSceSaveDataMemorySetupResult):Integer; SysV_ABI_CDecl;
+           _result:PSceSaveDataMemorySetupResult):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory(
-           userId:Integer;
+           userId:SceUserServiceUserId;
            buf:Pointer;
-           bufSize:size_t;
-           offset:QWORD):Integer; SysV_ABI_CDecl;
+           bufSize:QWORD;
+           offset:QWORD):Integer;
 begin
  if (buf<>nil) then
  begin
@@ -337,7 +341,7 @@ begin
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory2(
-           getParam:PSceSaveDataMemoryGet2):Integer; SysV_ABI_CDecl;
+           getParam:PSceSaveDataMemoryGet2):Integer;
 begin
  if (getParam<>nil) then
  begin
@@ -353,27 +357,27 @@ begin
 end;
 
 function ps4_sceSaveDataSetSaveDataMemory(
-           userId:Integer;
+           userId:SceUserServiceUserId;
            buf:Pointer;
-           bufSize:size_t;
-           offset:QWORD):Integer; SysV_ABI_CDecl;
+           bufSize:QWORD;
+           offset:QWORD):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataSetSaveDataMemory2(
-           setParam:PSceSaveDataMemorySet2):Integer; SysV_ABI_CDecl;
+           setParam:PSceSaveDataMemorySet2):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataSyncSaveDataMemory(
-           syncParam:PSceSaveDataMemorySync):Integer; SysV_ABI_CDecl;
+           syncParam:PSceSaveDataMemorySync):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer;
 begin
  Result:=0;
 end;
@@ -387,14 +391,17 @@ const
  SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
 
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
-                              mountResult:pSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+                              mountResult:pSceSaveDataMountResult):Integer;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
+ Result:=0;
+ {
  _sig_lock;
  Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
+ }
 
  if (Result=0) and
     ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
@@ -405,14 +412,17 @@ begin
 end;
 
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
-                               mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+                               mountResult:PSceSaveDataMountResult):Integer;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
+ Result:=0;
+ {
  _sig_lock;
  Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
  _sig_unlock;
+ }
 
  if (Result=0) and
     ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
@@ -423,28 +433,36 @@ begin
 end;
 
 function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
-                                          mountResult:PSceSaveDataMountResult):Integer; SysV_ABI_CDecl;
+                                          mountResult:PSceSaveDataMountResult):Integer;
 begin
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
+ Result:=0;
+ {
  _sig_lock;
  Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,SCE_SAVE_DATA_MOUNT_MODE_RDONLY);
  _sig_unlock;
+ }
 
 end;
 
-function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer;
 begin
+ Result:=0;
+ {
  _sig_lock;
  Result:=UnMountSavePath(PChar(mountPoint));
  _sig_unlock;
+ }
 end;
 
-function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer;
 var
  event:SceSaveDataEvent;
 begin
+ Result:=0;
+ {
  _sig_lock;
  Result:=UnMountSavePath(PChar(mountPoint));
  //backup this
@@ -459,10 +477,11 @@ begin
  push_event(@event);
 
  _sig_unlock;
+ }
 end;
 
 function ps4_sceSaveDataGetMountInfo(mountPoint:PSceSaveDataMountPoint;
-                                     info:pSceSaveDataMountInfo):Integer; SysV_ABI_CDecl;
+                                     info:pSceSaveDataMountInfo):Integer;
 begin
  Result:=0;
  if (info<>nil) then
@@ -502,6 +521,7 @@ begin
  end;
 end;
 
+{
 function StringListAscCompare(List:TStringList;Index1,Index2:Integer):Integer;
 begin
  Result:=CompareStr(List[Index1],List[Index2]);
@@ -511,14 +531,17 @@ function StringListDscCompare(List:TStringList;Index1,Index2:Integer):Integer;
 begin
  Result:=CompareStr(List[Index2],List[Index1]);
 end;
+}
 
 function ps4_sceSaveDataDirNameSearch(cond:pSceSaveDataDirNameSearchCond;
-                                      sres:pSceSaveDataDirNameSearchResult):Integer; SysV_ABI_CDecl;
+                                      sres:pSceSaveDataDirNameSearchResult):Integer;
+{
 var
  ROut:TRawByteSearchRec;
  S,F:RawByteString;
  List:TStringList;
  i,n:Integer;
+ }
 begin
  Result:=0;
 
@@ -534,6 +557,7 @@ begin
 
  //Assert(cond^.key  =SCE_SAVE_DATA_SORT_KEY_DIRNAME);
 
+ {
  s:=IncludeTrailingPathDelimiter(ps4_app.save_path)+_convert_dir_name_search(Pchar(cond^.dirName));
 
  _sig_lock;
@@ -603,15 +627,16 @@ begin
  end;
 
  _sig_unlock;
+ }
 
 end;
 
 function ps4_sceSaveDataGetParam(mountPoint:PSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
-                                 paramBufSize:size_t;
+                                 paramBufSize:QWORD;
                                  gotSize:PQWORD
-                                ):Integer; SysV_ABI_CDecl;
+                                ):Integer;
 begin
  if (gotSize<>nil) then
  begin
@@ -624,13 +649,13 @@ end;
 function ps4_sceSaveDataSetParam(mountPoint:PSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
-                                 paramBufSize:size_t):Integer; SysV_ABI_CDecl;
+                                 paramBufSize:QWORD):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceSaveDataSaveIcon(mountPoint:PSceSaveDataMountPoint;
-                                 param:pSceSaveDataIcon):Integer; SysV_ABI_CDecl;
+                                 param:pSceSaveDataIcon):Integer;
 begin
  if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
@@ -639,14 +664,14 @@ end;
 
 //Load icon
 function ps4_sceSaveDataLoadIcon(mountPoint:PSceSaveDataMountPoint;
-                                 param:pSceSaveDataIcon):Integer; SysV_ABI_CDecl;
+                                 param:pSceSaveDataIcon):Integer;
 begin
  if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  Result:=SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND;
 end;
 
-function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer;
 begin
  backup.cb:=cb;
  backup.userdata:=userdata;
@@ -654,7 +679,7 @@ begin
 end;
 
 function ps4_sceSaveDataGetEventResult(param:pSceSaveDataEventParam;
-                                       event:pSceSaveDataEvent):Integer; SysV_ABI_CDecl;
+                                       event:pSceSaveDataEvent):Integer;
 begin
  if (event=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
 
@@ -669,7 +694,7 @@ begin
  end;
 end;
 
-function ps4_sceSaveDataClearProgress():Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataClearProgress():Integer;
 begin
  //Сlearing the progress value for:
  //sceSaveDataMount2()
@@ -679,7 +704,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataCheckBackupData(check:PSceSaveDataCheckBackupData):Integer; SysV_ABI_CDecl;
+function ps4_sceSaveDataCheckBackupData(check:PSceSaveDataCheckBackupData):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
 end;
@@ -689,48 +714,49 @@ begin
  backup.queue.Create(32);
 end;
 
-function Load_libSceSaveData(Const name:RawByteString):TElf_node;
+function Load_libSceSaveData(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceSaveData');
 
- lib:=Result._add_lib('libSceSaveData');
+ lib:=Result^.add_lib('libSceSaveData');
+ lib.set_proc($664661B2408F5C5C,@ps4_sceSaveDataInitialize);
+ lib.set_proc($9753660DE0E93465,@ps4_sceSaveDataInitialize2);
+ lib.set_proc($4F2C2B14A0A82C66,@ps4_sceSaveDataInitialize3);
+ lib.set_proc($C8A0F2F12E722C0D,@ps4_sceSaveDataTerminate);
+ lib.set_proc($BFB00000CA342F3E,@ps4_sceSaveDataSetupSaveDataMemory);
+ lib.set_proc($A10C921147E05D10,@ps4_sceSaveDataSetupSaveDataMemory2);
+ lib.set_proc($EC1B79A410BF01CA,@ps4_sceSaveDataGetSaveDataMemory);
+ lib.set_proc($43038EEEF7A09D5F,@ps4_sceSaveDataGetSaveDataMemory2);
+ lib.set_proc($8776144735C64954,@ps4_sceSaveDataSetSaveDataMemory);
+ lib.set_proc($71DBB2F6FE18993E,@ps4_sceSaveDataSetSaveDataMemory2);
+ lib.set_proc($C224FD8DE0BBC4FC,@ps4_sceSaveDataSyncSaveDataMemory);
+ lib.set_proc($4B51A478F235EF34,@ps4_sceSaveDataDelete);
+ lib.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
+ lib.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
+ lib.set_proc($580CD64D99B51FE2,@ps4_sceSaveDataTransferringMount);
+ lib.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
+ lib.set_proc($57069DC0104127CD,@ps4_sceSaveDataUmountWithBackup);
+ lib.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
+ lib.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
+ lib.set_proc($5E0BD2B88767325C,@ps4_sceSaveDataGetParam);
+ lib.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
+ lib.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
+ lib.set_proc($7068CEDF0337576F,@ps4_sceSaveDataLoadIcon);
+ lib.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
+ lib.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
+ lib.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
+ lib.set_proc($4503AA0DB9376D25,@ps4_sceSaveDataCheckBackupData);
 
- lib^.set_proc($664661B2408F5C5C,@ps4_sceSaveDataInitialize);
- lib^.set_proc($9753660DE0E93465,@ps4_sceSaveDataInitialize2);
- lib^.set_proc($4F2C2B14A0A82C66,@ps4_sceSaveDataInitialize3);
- lib^.set_proc($C8A0F2F12E722C0D,@ps4_sceSaveDataTerminate);
- lib^.set_proc($BFB00000CA342F3E,@ps4_sceSaveDataSetupSaveDataMemory);
- lib^.set_proc($A10C921147E05D10,@ps4_sceSaveDataSetupSaveDataMemory2);
- lib^.set_proc($EC1B79A410BF01CA,@ps4_sceSaveDataGetSaveDataMemory);
- lib^.set_proc($43038EEEF7A09D5F,@ps4_sceSaveDataGetSaveDataMemory2);
- lib^.set_proc($8776144735C64954,@ps4_sceSaveDataSetSaveDataMemory);
- lib^.set_proc($71DBB2F6FE18993E,@ps4_sceSaveDataSetSaveDataMemory2);
- lib^.set_proc($C224FD8DE0BBC4FC,@ps4_sceSaveDataSyncSaveDataMemory);
- lib^.set_proc($4B51A478F235EF34,@ps4_sceSaveDataDelete);
- lib^.set_proc($DF61D0010770336A,@ps4_sceSaveDataMount);
- lib^.set_proc($D33E393C81FE48D2,@ps4_sceSaveDataMount2);
- lib^.set_proc($580CD64D99B51FE2,@ps4_sceSaveDataTransferringMount);
- lib^.set_proc($04C47817F51E9371,@ps4_sceSaveDataUmount);
- lib^.set_proc($57069DC0104127CD,@ps4_sceSaveDataUmountWithBackup);
- lib^.set_proc($EB9547D1069ACFAB,@ps4_sceSaveDataGetMountInfo);
- lib^.set_proc($7722219D7ABFD123,@ps4_sceSaveDataDirNameSearch);
- lib^.set_proc($5E0BD2B88767325C,@ps4_sceSaveDataGetParam);
- lib^.set_proc($F39CEE97FFDE197B,@ps4_sceSaveDataSetParam);
- lib^.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
- lib^.set_proc($7068CEDF0337576F,@ps4_sceSaveDataLoadIcon);
- lib^.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
- lib^.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
- lib^.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
- lib^.set_proc($4503AA0DB9376D25,@ps4_sceSaveDataCheckBackupData);
-
- init_save;
+ //init_save;
 end;
 
+var
+ stub:t_int_file;
+
 initialization
- ps4_app.RegistredPreLoad('libSceSaveData.prx',@Load_libSceSaveData);
+ reg_int_file(stub,'libSceSaveData.prx',@Load_libSceSaveData);
 
 end.
 

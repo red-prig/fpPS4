@@ -1,11 +1,13 @@
 unit ps4_libSceNpTrophy;
 
 {$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
-  ps4_program,
+  subr_dynlib,
+  ps4_libSceNpCommon,
   np_error;
 
 const
@@ -131,8 +133,8 @@ implementation
 
 function ps4_sceNpTrophyCreateContext(context     :PInteger;
                                       userId      :Integer;
-                                      serviceLabel:DWORD;
-                                      options     :QWORD):Integer; SysV_ABI_CDecl;
+                                      serviceLabel:SceNpServiceLabel;
+                                      options     :QWORD):Integer;
 begin
  Writeln('sceNpTrophyCreateContext');
  if (context=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
@@ -140,7 +142,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpTrophyCreateHandle(handle:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTrophyCreateHandle(handle:PInteger):Integer;
 begin
  Writeln('sceNpTrophyCreateHandle');
  if (handle=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
@@ -148,26 +150,26 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpTrophyDestroyContext(context:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTrophyDestroyContext(context:Integer):Integer;
 begin
  Writeln('sceNpTrophyDestroyContext');
  Result:=0;
 end;
 
-function ps4_sceNpTrophyDestroyHandle(handle:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTrophyDestroyHandle(handle:Integer):Integer;
 begin
  Writeln('sceNpTrophyDestroyHandle:',handle);
  Result:=0;
 end;
 
-function ps4_sceNpTrophyAbortHandle(handle:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpTrophyAbortHandle(handle:Integer):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceNpTrophyRegisterContext(context:Integer;
                                         handle :Integer;
-                                        options:QWORD):Integer; SysV_ABI_CDecl;
+                                        options:QWORD):Integer;
 begin
  Writeln('sceNpTrophyRegisterContext:',handle);
  Result:=0;
@@ -176,7 +178,7 @@ end;
 function ps4_sceNpTrophyGetTrophyUnlockState(context:Integer;
                                              handle :Integer;
                                              flags  :pSceNpTrophyFlagArray;
-                                             count  :PDWORD):Integer; SysV_ABI_CDecl;
+                                             count  :PDWORD):Integer;
 begin
  Writeln('sceNpTrophyGetTrophyUnlockState:',handle);
  if (flags=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
@@ -189,7 +191,7 @@ end;
 function ps4_sceNpTrophyUnlockTrophy(context   :Integer;
                                      handle    :Integer;
                                      trophyId  :Integer;
-                                     platinumId:PInteger):Integer; SysV_ABI_CDecl;
+                                     platinumId:PInteger):Integer;
 begin
  Writeln('sceNpTrophyUnlockTrophy:',trophyId);
  if (platinumId=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
@@ -200,7 +202,7 @@ end;
 function ps4_sceNpTrophyGetGameInfo(context:Integer;
                                     handle :Integer;
                                     details:pSceNpTrophyGameDetails;
-                                    data   :pSceNpTrophyGameData):Integer; SysV_ABI_CDecl;
+                                    data   :pSceNpTrophyGameData):Integer;
 begin
  Writeln('sceNpTrophyGetGameInfo:',handle);
 
@@ -233,7 +235,7 @@ function ps4_sceNpTrophyGetTrophyInfo(context :Integer;
                                       handle  :Integer;
                                       trophyId:Integer;
                                       details :pSceNpTrophyDetails;
-                                      data    :pSceNpTrophyData):Integer; SysV_ABI_CDecl;
+                                      data    :pSceNpTrophyData):Integer;
 begin
  Result:=0;
  if (details<>nil) then
@@ -257,7 +259,7 @@ function ps4_sceNpTrophyGetGroupInfo(context:Integer;
                                      handle :Integer;
                                      groupId:Integer;
                                      details:pSceNpTrophyGroupDetails;
-                                     data   :pSceNpTrophyGroupData):Integer; SysV_ABI_CDecl;
+                                     data   :pSceNpTrophyGroupData):Integer;
 begin
  Result:=0;
  if (details<>nil) then
@@ -287,7 +289,7 @@ end;
 function ps4_sceNpTrophyGetGameIcon(context:Integer;
                                     handle :Integer;
                                     buffer :Pointer;
-                                    size   :PQWORD):Integer; SysV_ABI_CDecl;
+                                    size   :PQWORD):Integer;
 begin
  Writeln('sceNpTrophyGetGameIcon:',context,' ',handle);
 
@@ -308,7 +310,7 @@ function ps4_sceNpTrophyGetTrophyIcon(context :Integer;
                                       handle  :Integer;
                                       trophyId:Integer;
                                       buffer  :Pointer;
-                                      size    :PQWORD):Integer; SysV_ABI_CDecl;
+                                      size    :PQWORD):Integer;
 begin
  Writeln('sceNpTrophyGetTrophyIcon:',context,' ',handle,' ',trophyId);
 
@@ -324,30 +326,33 @@ begin
  Result:=0;
 end;
 
-function Load_libSceNpTrophy(Const name:RawByteString):TElf_node;
+function Load_libSceNpTrophy(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
- lib:=Result._add_lib('libSceNpTrophy');
- lib^.set_proc($5DB9236E86D99426,@ps4_sceNpTrophyCreateContext);
- lib^.set_proc($ABB53AB440107FB7,@ps4_sceNpTrophyCreateHandle);
- lib^.set_proc($1355ABC1DD3B2EBF,@ps4_sceNpTrophyDestroyContext);
- lib^.set_proc($18D705E2889D6346,@ps4_sceNpTrophyDestroyHandle);
- lib^.set_proc($6939C7B3B5BFF549,@ps4_sceNpTrophyAbortHandle);
- lib^.set_proc($4C9080C6DA3D4845,@ps4_sceNpTrophyRegisterContext);
- lib^.set_proc($2C7B9298EDD22DDF,@ps4_sceNpTrophyGetTrophyUnlockState);
- lib^.set_proc($DBCC6645415AA3AF,@ps4_sceNpTrophyUnlockTrophy);
- lib^.set_proc($6183F77F65B4F688,@ps4_sceNpTrophyGetGameInfo);
- lib^.set_proc($AAA515183810066D,@ps4_sceNpTrophyGetTrophyInfo);
- lib^.set_proc($C1353019FB292A27,@ps4_sceNpTrophyGetGroupInfo);
- lib^.set_proc($1CBC33D5F448C9C0,@ps4_sceNpTrophyGetGameIcon);
- lib^.set_proc($7812FE97A1C6F719,@ps4_sceNpTrophyGetTrophyIcon);
+ Result:=obj_new_int('libSceNpTrophy');
+
+ lib:=Result^.add_lib('libSceNpTrophy');
+ lib.set_proc($5DB9236E86D99426,@ps4_sceNpTrophyCreateContext);
+ lib.set_proc($ABB53AB440107FB7,@ps4_sceNpTrophyCreateHandle);
+ lib.set_proc($1355ABC1DD3B2EBF,@ps4_sceNpTrophyDestroyContext);
+ lib.set_proc($18D705E2889D6346,@ps4_sceNpTrophyDestroyHandle);
+ lib.set_proc($6939C7B3B5BFF549,@ps4_sceNpTrophyAbortHandle);
+ lib.set_proc($4C9080C6DA3D4845,@ps4_sceNpTrophyRegisterContext);
+ lib.set_proc($2C7B9298EDD22DDF,@ps4_sceNpTrophyGetTrophyUnlockState);
+ lib.set_proc($DBCC6645415AA3AF,@ps4_sceNpTrophyUnlockTrophy);
+ lib.set_proc($6183F77F65B4F688,@ps4_sceNpTrophyGetGameInfo);
+ lib.set_proc($AAA515183810066D,@ps4_sceNpTrophyGetTrophyInfo);
+ lib.set_proc($C1353019FB292A27,@ps4_sceNpTrophyGetGroupInfo);
+ lib.set_proc($1CBC33D5F448C9C0,@ps4_sceNpTrophyGetGameIcon);
+ lib.set_proc($7812FE97A1C6F719,@ps4_sceNpTrophyGetTrophyIcon);
 end;
 
+var
+ stub:t_int_file;
+
 initialization
- ps4_app.RegistredPreLoad('libSceNpTrophy.prx',@Load_libSceNpTrophy);
+ reg_int_file(stub,'libSceNpTrophy.prx',@Load_libSceNpTrophy);
 
 end.
 

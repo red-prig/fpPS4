@@ -1,33 +1,34 @@
-unit ps4_libSceNpScore;
+unit ps4_libSceNpScoreRanking;
 
 {$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
-  ps4_program,
+  subr_dynlib,
   ps4_libSceNpCommon,
   ps4_libSceNpManager;
 
 implementation
 
-function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:Integer;selfNpId:PSceNpId):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:SceNpServiceLabel;selfNpId:PSceNpId):Integer;
 begin
  Result:=1;
 end;
 
-function ps4_sceNpScoreCreateNpTitleCtxA(npServiceLabel:Integer;selfId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreCreateNpTitleCtxA(npServiceLabel:SceNpServiceLabel;selfId:Integer):Integer;
 begin
  Result:=2;
 end;
 
-function ps4_sceNpScoreCreateRequest(titleCtxId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreCreateRequest(titleCtxId:Integer):Integer;
 begin
  writeln('ScoreCreateRequest:',titleCtxId);
  Result:=894;
 end;
 
-function ps4_sceNpScoreDeleteRequest(reqId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreDeleteRequest(reqId:Integer):Integer;
 begin
  writeln('sceNpScoreDeleteRequest:',reqId);
  Result:=0;
@@ -120,7 +121,7 @@ function ps4_sceNpScoreGetFriendsRanking(
              arrayNum:size_t;
              lastSortDate:PQWORD;
              totalRecord:PDWORD;
-             option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
+             option:PSceNpScoreGetFriendRankingOptParam):Integer;
 begin
  if (lastSortDate<>nil) then
  begin
@@ -146,7 +147,7 @@ function ps4_sceNpScoreGetFriendsRankingA(
              arrayNum:size_t;
              lastSortDate:PQWORD;
              totalRecord:PDWORD;
-             option:PSceNpScoreGetFriendRankingOptParam):Integer; SysV_ABI_CDecl;
+             option:PSceNpScoreGetFriendRankingOptParam):Integer;
 begin
  if (lastSortDate<>nil) then
  begin
@@ -181,7 +182,7 @@ function ps4_sceNpScoreGetRankingByAccountIdPcId(
              arrayNum:size_t;
              lastSortDate:PQWORD;
              totalRecord:PDWORD;
-             option:Pointer):Integer; SysV_ABI_CDecl;
+             option:Pointer):Integer;
 begin
  if (lastSortDate<>nil) then
  begin
@@ -207,7 +208,7 @@ function ps4_sceNpScoreGetRankingByRange(
              arrayNum:QWORD;
              lastSortDate:PQWORD;
              totalRecord:PDWORD;
-             option:Pointer):Integer; SysV_ABI_CDecl;
+             option:Pointer):Integer;
 begin
  if (lastSortDate<>nil) then
  begin
@@ -228,7 +229,7 @@ function ps4_sceNpScoreRecordScore(
              gameInfo:pSceNpScoreGameInfo;
              tmpRank:pSceNpScoreRankNumber;
              compareDate:PQWORD; //SceRtcTick
-             option:Pointer):Integer; SysV_ABI_CDecl;
+             option:Pointer):Integer;
 begin
  if (tmpRank<>nil) then
  begin
@@ -245,7 +246,7 @@ function ps4_sceNpScoreRecordScoreAsync(
              gameInfo:pSceNpScoreGameInfo;
              tmpRank:pSceNpScoreRankNumber;
              compareDate:PQWORD; //SceRtcTick
-             option:Pointer):Integer; SysV_ABI_CDecl;
+             option:Pointer):Integer;
 begin
  if (tmpRank<>nil) then
  begin
@@ -256,7 +257,7 @@ end;
 
 function ps4_sceNpScorePollAsync(
              reqId:Integer;
-             r_out:Pinteger):Integer; SysV_ABI_CDecl;
+             r_out:Pinteger):Integer;
 begin
  if (r_out<>nil) then
  begin
@@ -265,7 +266,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpScoreGetRankingByNpIdAsync():Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreGetRankingByNpIdAsync():Integer;
 begin
  Result:=0;
 end;
@@ -283,41 +284,45 @@ function ps4_sceNpScoreGetRankingByAccountId(reqId:Integer;
                                              arrayNum:QWORD;
                                              lastSortDate:PQWORD; //SceRtcTick
                                              totalRecord:pSceNpScoreRankNumber;
-                                             option:Pointer):Integer; SysV_ABI_CDecl;
+                                             option:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpScoreDeleteNpTitleCtx(titleCtxId:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpScoreDeleteNpTitleCtx(titleCtxId:Integer):Integer;
 begin
  Result:=0;
 end;
 
-function Load_libSceNpScoreRanking(Const name:RawByteString):TElf_node;
+function Load_libSceNpScoreRanking(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
- lib:=Result._add_lib('libSceNpScore');
- lib^.set_proc($2A7340D53120B412,@ps4_sceNpScoreCreateNpTitleCtx);
- lib^.set_proc($1969D640D5D91F93,@ps4_sceNpScoreCreateNpTitleCtxA);
- lib^.set_proc($816F2ACA362B51B9,@ps4_sceNpScoreCreateRequest);
- lib^.set_proc($74AF3F4A061FEABE,@ps4_sceNpScoreDeleteRequest);
- lib^.set_proc($F24B88CD4C3ABAD4,@ps4_sceNpScoreGetFriendsRanking);
- lib^.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
- lib^.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
- lib^.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
- lib^.set_proc($CD3D1706D82D3922,@ps4_sceNpScoreRecordScore);
- lib^.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
- lib^.set_proc($9B50DF351B2D9124,@ps4_sceNpScorePollAsync);
- lib^.set_proc($45DDBB76A505655F,@ps4_sceNpScoreGetRankingByNpIdAsync);
- lib^.set_proc($2BDB653834D0C777,@ps4_sceNpScoreGetRankingByAccountId);
- lib^.set_proc($1B4A44F91342C1F9,@ps4_sceNpScoreDeleteNpTitleCtx);
+ Result:=obj_new_int('libSceNpScore');
+
+ lib:=Result^.add_lib('libSceNpScore');
+ lib.set_proc($2A7340D53120B412,@ps4_sceNpScoreCreateNpTitleCtx);
+ lib.set_proc($1969D640D5D91F93,@ps4_sceNpScoreCreateNpTitleCtxA);
+ lib.set_proc($816F2ACA362B51B9,@ps4_sceNpScoreCreateRequest);
+ lib.set_proc($74AF3F4A061FEABE,@ps4_sceNpScoreDeleteRequest);
+ lib.set_proc($F24B88CD4C3ABAD4,@ps4_sceNpScoreGetFriendsRanking);
+ lib.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
+ lib.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
+ lib.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
+ lib.set_proc($CD3D1706D82D3922,@ps4_sceNpScoreRecordScore);
+ lib.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
+ lib.set_proc($9B50DF351B2D9124,@ps4_sceNpScorePollAsync);
+ lib.set_proc($45DDBB76A505655F,@ps4_sceNpScoreGetRankingByNpIdAsync);
+ lib.set_proc($2BDB653834D0C777,@ps4_sceNpScoreGetRankingByAccountId);
+ lib.set_proc($1B4A44F91342C1F9,@ps4_sceNpScoreDeleteNpTitleCtx);
 end;
+
+var
+ stub:t_int_file;
 
 initialization
- ps4_app.RegistredPreLoad('libSceNpScoreRanking.prx',@Load_libSceNpScoreRanking);
+ reg_int_file(stub,'libSceNpScoreRanking.prx',@Load_libSceNpScoreRanking);
 
 end.
+
 
