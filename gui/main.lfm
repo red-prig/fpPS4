@@ -6,10 +6,10 @@ object frmMain: TfrmMain
   Caption = 'fpPS4'
   ClientHeight = 343
   ClientWidth = 623
-  OnActivate = FormActivate
   OnClose = FormClose
   OnCreate = FormCreate
   OnKeyDown = FormKeyDown
+  OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '3.6.0.0'
   object Pages: TPageControl

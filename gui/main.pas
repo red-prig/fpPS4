@@ -102,10 +102,10 @@ type
     TBUp: TToolButton;
     TBSep3: TToolButton;
 
-    procedure FormActivate(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure FormShow(Sender: TObject);
     procedure ListGridDblClick(Sender: TObject);
     procedure ListGridDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
     procedure ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);
@@ -617,11 +617,6 @@ begin
  CloseAction:=caFree;
 end;
 
-procedure TfrmMain.FormActivate(Sender: TObject);
-begin
- ListGrid.SetFocus;
-end;
-
 procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 var
  aRow:Integer;
@@ -662,6 +657,11 @@ begin
    else;
   end;
  end;
+end;
+
+procedure TfrmMain.FormShow(Sender: TObject);
+begin
+ ListGrid.SetFocus;
 end;
 
 procedure TfrmMain.ListGridDblClick(Sender: TObject);

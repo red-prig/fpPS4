@@ -123,6 +123,7 @@ var
  i:QWORD;
  td:p_kthread;
 begin
+ Result:=0;
  //init
  BLK:=Default(IO_STATUS_BLOCK);
  OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);

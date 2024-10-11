@@ -28,15 +28,15 @@ type
  t_op_opt=Set of (not_impl,not_os8,not_prefix,verif_vex_len,verif_rexw);
 
  t_op_type=bitpacked object
-  op     :DWORD;
-  index  :Byte;
-  simdop :0..4;
-  mm     :0..3;
-  vx_len :0..3;
-  rexw   :Boolean;
-  vw_mode:t_vw_mode;
-  vl_mode:t_vl_mode;
-  opt    :t_op_opt;
+  op     :DWORD;     //instruction op
+  index  :Byte;      //ModRM index
+  simdop :0..4;      //SimdOpcode (soNone=0, so66=1, soF3=2, soF2=3);
+  mm     :0..3;      //mm         (0F=1, 0F38=2, 0F3A=3)
+  vx_len :0..3;      //VEX len
+  rexw   :Boolean;   //rexw flags
+  vw_mode:t_vw_mode; //rexw flags size mode
+  vl_mode:t_vl_mode; //VEX len size mode
+  opt    :t_op_opt;  //options
  end;
 
  TOperandSizeSet =Set of TOperandSize;

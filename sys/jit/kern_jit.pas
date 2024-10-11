@@ -1325,13 +1325,14 @@ begin
 
   //lock pageflt read-only  (mirrors?)
 
+  //TODO: Works slowly, needs optimization
+  {
   tobj:=vm_track_object_allocate(node,lock_start,lock___end,H_ZERO,PAGE_TRACK_W);
   tobj^.on_destroy:=@pick_on_destroy;
   tobj^.on_trigger:=@pick_on_trigger;
 
   vm_map_track_insert(p_proc.p_vmspace,tobj);
-
-  //_pmap_prot_int(map^.pmap,lock_start,lock___end,PAGE_PROT_READ);
+  }
 
   if (cmInternal in ctx.modes) then
   begin
@@ -1342,14 +1343,16 @@ begin
   end;
 
   //restore non tracked  (mirrors?)
-  //_pmap_prot_fix(map^.pmap,lock_start,lock___end,TRACK_PROT or REMAP_PROT);
 
+  //TODO: Works slowly, needs optimization
+  {
   vm_map_track_remove(p_proc.p_vmspace,tobj);
 
   tobj^.on_destroy:=nil;
   tobj^.on_trigger:=nil;
 
   vm_track_object_deallocate(tobj); //<-vm_track_object_allocate
+  }
 
  _exit:
  pmap_unlock(map^.pmap,lock);
