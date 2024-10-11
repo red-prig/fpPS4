@@ -10,9 +10,9 @@ uses
 
 procedure gc_initialize();
 
-function  gc_add_internal_ptr   (kq,ptr:Pointer):Integer;
-function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer;
-procedure gc_wakeup_internal_ptr(ptr:Pointer);
+function  gc_add_internal_ptr   (kq,ptr,udata:Pointer):Integer; register;
+function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer;       register;
+procedure gc_wakeup_internal_ptr(ptr:Pointer);                  register;
 
 var
  sync_me_submit:Boolean=False; //forced wait for all tasks to complete on the GPU side after submit
@@ -1237,7 +1237,7 @@ begin
  knlist_init_mtx(@gc_internal_knlist,@gc_internal_knlock);
 end;
 
-function gc_add_internal_ptr(kq,ptr:Pointer):Integer; public;
+function gc_add_internal_ptr(kq,ptr,udata:Pointer):Integer; register; [public, alias:'gc_add_internal_ptr'];
 var
  kev:t_kevent;
  fops:p_filterops;
@@ -1245,12 +1245,13 @@ begin
  kev:=Default(t_kevent);
  kev.ident:=PtrUint(ptr);
  kev.flags:=EV_ADD;
+ kev.udata:=udata;
  //
  fops:=@filterops_internal;
  Result:=kqueue_register2(kq,@kev,fops);
 end;
 
-function gc_del_internal_ptr(kq,ptr:Pointer):Integer; public;
+function gc_del_internal_ptr(kq,ptr:Pointer):Integer; register; [public, alias:'gc_del_internal_ptr'];
 var
  kev:t_kevent;
  fops:p_filterops;
@@ -1263,7 +1264,7 @@ begin
  Result:=kqueue_register2(kq,@kev,fops);
 end;
 
-procedure gc_wakeup_internal_ptr(ptr:Pointer); public;
+procedure gc_wakeup_internal_ptr(ptr:Pointer); register; [public, alias:'gc_wakeup_internal_ptr'];
 begin
  knote(@gc_internal_knlist, PtrUint(ptr), 0);
 end;

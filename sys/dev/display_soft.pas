@@ -1031,7 +1031,7 @@ begin
  Result:=0;
 end;
 
-procedure gc_wakeup_internal_ptr(ptr:Pointer); external;
+procedure gc_wakeup_internal_ptr(ptr:Pointer); register; external;
 
 procedure TDisplayHandleSoft.OnSubmit(Node:PQNodeSubmit);
 var

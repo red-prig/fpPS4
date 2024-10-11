@@ -48,9 +48,9 @@ uses
  pm4defs,
  pm4_stream;
 
-function  gc_add_internal_ptr   (kq,ptr:Pointer):Integer; external;
-function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer; external;
-procedure gc_wakeup_internal_ptr(ptr:Pointer); external;
+function  gc_add_internal_ptr   (kq,ptr,udata:Pointer):Integer; register; external;
+function  gc_del_internal_ptr   (kq,ptr:Pointer):Integer;       register; external;
+procedure gc_wakeup_internal_ptr(ptr:Pointer);                  register; external;
 
 Const
  CONST_RAM_SIZE=48*1024;
@@ -66,6 +66,17 @@ type
   //
   count:Ptruint;
   flow :Ptruint;
+ end;
+
+ p_me_wait_addr=^t_me_wait_addr;
+ t_me_wait_addr=object
+  Fcode_addr:Pointer;
+  Fdmem_addr:Pointer;
+  Fregs_addr:Pointer;
+  //
+  procedure add_reg(kq:Pointer);
+  procedure del_reg(kq:Pointer);
+  procedure set_adr(kq,addr:Pointer);
  end;
 
  p_pm4_me=^t_pm4_me;
@@ -91,6 +102,8 @@ type
   gc_knlist:p_knlist;
   gc_kqueue:p_kqueue;
   //
+  wait_ptr:array[t_pm4_stream_type] of t_me_wait_addr;
+  //
   imdone_count:QWORD;
   //
   CONST_RAM:array[0..CONST_RAM_SIZE-1] of Byte; //48KB
@@ -103,6 +116,7 @@ type
   procedure knote_eventid(event_id,me_id:Byte;timestamp:QWORD;lockflags:Integer);
   procedure Push(var stream:t_pm4_stream);
   procedure reset_sheduler;
+  procedure set_step(s:t_pm4_stream_type);
   procedure next_step;
   function  next_task:Boolean;
   procedure switch_task;
@@ -232,7 +246,7 @@ begin
  gc_knlist:=knlist;
 
  gc_kqueue:=kern_kqueue2('[gc_kqueue]',nil,nil);
- gc_add_internal_ptr(gc_kqueue,@queue);
+ gc_add_internal_ptr(gc_kqueue,@queue,@queue);
 end;
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl; forward;
@@ -262,15 +276,42 @@ procedure t_pm4_me.wait;
 var
  kev:array[0..15] of t_kevent;
  t:timespec;
- r:Integer;
+ i,r:Integer;
+ wait_addr:p_me_wait_addr;
+ wmin_addr:p_me_wait_addr;
 begin
  t:=Default(timespec);
 
  t.tv_sec :=0;
- t.tv_nsec:=1000000000 div 10000;
+ t.tv_nsec:=1000000000 div 1000;
 
  r:=0;
  kern_kevent2(gc_kqueue,nil,0,@kev,Length(kev),@t,@r);
+
+ wmin_addr:=nil;
+
+ if (r<>0) then
+ For i:=0 to r-1 do
+ begin
+  if (kev[i].udata=@queue) then
+  begin
+   //
+  end else
+  begin
+   wait_addr:=kev[i].udata;
+   if (wmin_addr=nil) or
+      (wmin_addr>wait_addr) then
+   begin
+    wmin_addr:=wait_addr
+   end;
+  end;
+ end;
+
+ if (wmin_addr<>nil) then
+ begin
+  i:=(PtrUint(wmin_addr)-PtrUint(@wait_ptr)) div SizeOf(t_me_wait_addr);
+  set_step(t_pm4_stream_type(i));
+ end;
 end;
 
 procedure t_pm4_me.imdone;
@@ -314,6 +355,13 @@ begin
  sheduler.count :=0;
 end;
 
+procedure t_pm4_me.set_step(s:t_pm4_stream_type);
+begin
+ sheduler.start :=@stall[s];
+ sheduler.switch:=False;
+ sheduler.count :=0;
+end;
+
 procedure t_pm4_me.next_step;
 begin
  //next
@@ -350,14 +398,18 @@ begin
  //
  if (sheduler.count=Length(stall)) then
  begin
+  //next
+  next_step;
   //wait
   wait;
   //msleep_td(hz div 10000);
   //
   sheduler.count:=0;
+ end else
+ begin
+  //next
+  next_step;
  end;
- //next
- next_step;
 end;
 
 procedure t_pm4_me.add_stream(stream:p_pm4_stream);
@@ -2378,15 +2430,17 @@ begin
  end;
 end;
 
-Function me_test_mem(node:p_pm4_node_WaitRegMem;var dmem:PDWORD):Boolean;
+Function me_test_mem(node:p_pm4_node_WaitRegMem;{var }dmem:PDWORD):Boolean;
 var
  val,ref:DWORD;
 begin
+ {
  dmem:=nil;
  if not get_dmem_ptr(node^.pollAddr,@dmem,nil) then
  begin
   Assert(false,'addr:0x'+HexStr(node^.pollAddr)+' not in dmem!');
  end;
+ }
 
  //Writeln('me_test_mem:',get_dce_label_id(addr_dmem),' ',node^.refValue);
 
@@ -2405,9 +2459,47 @@ begin
  end;
 end;
 
+procedure t_me_wait_addr.add_reg(kq:Pointer);
+begin
+ if (Fdmem_addr<>nil) then
+ begin
+  Fregs_addr:=Fdmem_addr;
+  gc_add_internal_ptr(kq,Fregs_addr,@Self);
+ end;
+end;
+
+procedure t_me_wait_addr.del_reg(kq:Pointer);
+begin
+ if (Fregs_addr<>nil) then
+ begin
+  gc_del_internal_ptr(kq,Fregs_addr);
+  Fregs_addr:=nil;
+ end;
+end;
+
+procedure t_me_wait_addr.set_adr(kq,addr:Pointer);
+begin
+ if (Fcode_addr=addr) then Exit;
+
+ del_reg(kq);
+
+ Fcode_addr:=addr;
+ Fdmem_addr:=nil;
+
+ if (addr<>nil) then
+ begin
+  if not get_dmem_ptr(addr,@Fdmem_addr,nil) then
+  begin
+   Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
+  end;
+ end;
+end;
+
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);
+label
+ _repeat;
 var
- dmem:PDWORD;
+ wait_addr:p_me_wait_addr;
 begin
  if not ctx.stream^.hint_repeat then
  begin
@@ -2419,14 +2511,18 @@ begin
 
  ctx.stream^.hint_repeat:=False;
 
- dmem:=nil;
+ wait_addr:=@ctx.me^.wait_ptr[ctx.stream^.buft];
 
- if me_test_mem(node,dmem) then
+ wait_addr^.set_adr(ctx.me^.gc_kqueue,node^.pollAddr);
+
+ _repeat:
+
+ if me_test_mem(node,wait_addr^.Fdmem_addr) then
  begin
   ctx.stream^.hint_loop:=0;
  end else
  begin
-  gc_add_internal_ptr(ctx.me^.gc_kqueue,dmem);
+  wait_addr^.add_reg(ctx.me^.gc_kqueue);
   //
   Inc(ctx.stream^.hint_loop);
   //
@@ -2438,10 +2534,16 @@ begin
   end;
   //
   ctx.switch_task;
+  //early check
+  if (ctx.me^.sheduler.start=@ctx.me^.stall[ctx.stream^.buft]) then
+  begin
+   goto _repeat;
+  end;
+  //
   Exit;
  end;
 
- gc_del_internal_ptr(ctx.me^.gc_kqueue,dmem);
+ wait_addr^.set_adr(ctx.me^.gc_kqueue,nil);
 end;
 
 //
