@@ -16,12 +16,12 @@ begin
  Result:=0;
 end;
 
-function ps4_sceMbusAddHandleByUserId(unk1  :Integer;
-                                      handle:Integer;
-                                      userId:Integer;
-                                      _type :Integer;
-                                      index :Integer;
-                                      unk2  :qword):Integer;
+function ps4_sceMbusAddHandleByUserId(BusType:Integer;
+                                      handle :Integer;
+                                      userId :Integer;
+                                      _type  :Integer;
+                                      index  :Integer;
+                                      unk2   :qword):Integer;
 begin
  Result:=0;
 end;
