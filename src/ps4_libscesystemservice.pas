@@ -198,10 +198,117 @@ type
   end;
  end;
 
-function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer;
+function GetHostSystemLang:Integer;
 var
  info:DWORD;
+begin
+ Result:=SCE_SYSTEM_PARAM_LANG_ENGLISH_US;
+
+ sig_lock;
+ info:=GetThreadLocale;
+ sig_unlock;
+
+ info:=info and $FFFF;
+
+ Case (info and $3FF) of //LANG_*
+  LANG_JAPANESE  :Result:=SCE_SYSTEM_PARAM_LANG_JAPANESE;
+
+  LANG_ENGLISH   :
+   Case (info shr 10) of //SUBLANG_*
+    SUBLANG_ENGLISH_UK:Result:=SCE_SYSTEM_PARAM_LANG_ENGLISH_GB;
+    else               Result:=SCE_SYSTEM_PARAM_LANG_ENGLISH_US;
+   end;
+
+  LANG_FRENCH    :
+   Case (info shr 10) of //SUBLANG_*
+    SUBLANG_FRENCH_CANADIAN:Result:=SCE_SYSTEM_PARAM_LANG_FRENCH_CA;
+    else                    Result:=SCE_SYSTEM_PARAM_LANG_FRENCH;
+   end;
+
+  LANG_SPANISH   :
+   Case (info shr 10) of //SUBLANG_*
+    SUBLANG_SPANISH,
+    SUBLANG_SPANISH_MEXICAN,
+    SUBLANG_SPANISH_MODERN:Result:=SCE_SYSTEM_PARAM_LANG_SPANISH;
+    else
+                           Result:=SCE_SYSTEM_PARAM_LANG_SPANISH_LA;
+   end;
+
+  LANG_GERMAN    :Result:=SCE_SYSTEM_PARAM_LANG_GERMAN;
+  LANG_ITALIAN   :Result:=SCE_SYSTEM_PARAM_LANG_ITALIAN;
+  LANG_DUTCH     :Result:=SCE_SYSTEM_PARAM_LANG_DUTCH;
+
+  LANG_PORTUGUESE:
+   Case (info shr 10) of //SUBLANG_*
+    SUBLANG_PORTUGUESE:Result:=SCE_SYSTEM_PARAM_LANG_PORTUGUESE_PT;
+    else               Result:=SCE_SYSTEM_PARAM_LANG_PORTUGUESE_BR;
+   end;
+
+  LANG_RUSSIAN   :Result:=SCE_SYSTEM_PARAM_LANG_RUSSIAN;
+  LANG_KOREAN    :Result:=SCE_SYSTEM_PARAM_LANG_KOREAN;
+
+  LANG_CHINESE   :
+   Case (info shr 10) of //SUBLANG_*
+    SUBLANG_CHINESE_SIMPLIFIED:Result:=SCE_SYSTEM_PARAM_LANG_CHINESE_S;
+    else                       Result:=SCE_SYSTEM_PARAM_LANG_CHINESE_T;
+   end;
+
+  LANG_FINNISH   :Result:=SCE_SYSTEM_PARAM_LANG_FINNISH;
+  LANG_SWEDISH   :Result:=SCE_SYSTEM_PARAM_LANG_SWEDISH;
+  LANG_DANISH    :Result:=SCE_SYSTEM_PARAM_LANG_DANISH;
+  LANG_NORWEGIAN :Result:=SCE_SYSTEM_PARAM_LANG_NORWEGIAN;
+  LANG_POLISH    :Result:=SCE_SYSTEM_PARAM_LANG_POLISH;
+  LANG_TURKISH   :Result:=SCE_SYSTEM_PARAM_LANG_TURKISH;
+  LANG_ARABIC    :Result:=SCE_SYSTEM_PARAM_LANG_ARABIC;
+  LANG_CZECH     :Result:=SCE_SYSTEM_PARAM_LANG_CZECH;
+  LANG_HUNGARIAN :Result:=SCE_SYSTEM_PARAM_LANG_HUNGARIAN;
+  LANG_GREEK     :Result:=SCE_SYSTEM_PARAM_LANG_GREEK;
+  LANG_ROMANIAN  :Result:=SCE_SYSTEM_PARAM_LANG_ROMANIAN;
+  LANG_THAI      :Result:=SCE_SYSTEM_PARAM_LANG_THAI;
+  LANG_VIETNAMESE:Result:=SCE_SYSTEM_PARAM_LANG_VIETNAMESE;
+  LANG_INDONESIAN:Result:=SCE_SYSTEM_PARAM_LANG_INDONESIAN;
+
+  else;
+ end;
+end;
+
+function GetHostSystemDateFormat:Integer;
+var
  Format:array[0..0] of AnsiChar;
+begin
+ Result:=0;
+ Format[0]:=#0;
+
+ sig_lock;
+ GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ILDATE,@Format,1);
+ sig_unlock;
+
+ Case Format[0] of
+  '0':Result:=SCE_SYSTEM_PARAM_DATE_FORMAT_MMDDYYYY;
+  '1':Result:=SCE_SYSTEM_PARAM_DATE_FORMAT_DDMMYYYY;
+  '2':Result:=SCE_SYSTEM_PARAM_DATE_FORMAT_YYYYMMDD;
+ end;
+end;
+
+function GetHostSystemTimeFormat:Integer;
+var
+ Format:array[0..0] of AnsiChar;
+begin
+ Result:=0;
+ Format[0]:=#0;
+
+ sig_lock;
+ GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ILDATE,@Format,1);
+ sig_unlock;
+
+ Case Format[0] of
+  '0':Result:=SCE_SYSTEM_PARAM_TIME_FORMAT_12HOUR;
+  '1':Result:=SCE_SYSTEM_PARAM_TIME_FORMAT_24HOUR;
+ end;
+end;
+
+function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer;
+var
  z:timezone;
 begin
  Result:=0;
@@ -212,100 +319,17 @@ begin
  Case paramId of
   SCE_SYSTEM_SERVICE_PARAM_ID_LANG:
    begin
-    sig_lock;
-    info:=GetThreadLocale;
-    sig_unlock;
-    info:=info and $FFFF;
-
-    Case (info and $3FF) of //LANG_*
-     LANG_JAPANESE  :value^:=SCE_SYSTEM_PARAM_LANG_JAPANESE;
-
-     LANG_ENGLISH   :
-      Case (info shr 10) of //SUBLANG_*
-       SUBLANG_ENGLISH_UK:value^:=SCE_SYSTEM_PARAM_LANG_ENGLISH_GB;
-       else               value^:=SCE_SYSTEM_PARAM_LANG_ENGLISH_US;
-      end;
-
-     LANG_FRENCH    :
-      Case (info shr 10) of //SUBLANG_*
-       SUBLANG_FRENCH_CANADIAN:value^:=SCE_SYSTEM_PARAM_LANG_FRENCH_CA;
-       else                    value^:=SCE_SYSTEM_PARAM_LANG_FRENCH;
-      end;
-
-     LANG_SPANISH   :
-      Case (info shr 10) of //SUBLANG_*
-       SUBLANG_SPANISH,
-       SUBLANG_SPANISH_MEXICAN,
-       SUBLANG_SPANISH_MODERN:value^:=SCE_SYSTEM_PARAM_LANG_SPANISH;
-       else
-                              value^:=SCE_SYSTEM_PARAM_LANG_SPANISH_LA;
-      end;
-
-     LANG_GERMAN    :value^:=SCE_SYSTEM_PARAM_LANG_GERMAN;
-     LANG_ITALIAN   :value^:=SCE_SYSTEM_PARAM_LANG_ITALIAN;
-     LANG_DUTCH     :value^:=SCE_SYSTEM_PARAM_LANG_DUTCH;
-
-     LANG_PORTUGUESE:
-      Case (info shr 10) of //SUBLANG_*
-       SUBLANG_PORTUGUESE:value^:=SCE_SYSTEM_PARAM_LANG_PORTUGUESE_PT;
-       else               value^:=SCE_SYSTEM_PARAM_LANG_PORTUGUESE_BR;
-      end;
-
-     LANG_RUSSIAN   :value^:=SCE_SYSTEM_PARAM_LANG_RUSSIAN;
-     LANG_KOREAN    :value^:=SCE_SYSTEM_PARAM_LANG_KOREAN;
-
-     LANG_CHINESE   :
-      Case (info shr 10) of //SUBLANG_*
-       SUBLANG_CHINESE_SIMPLIFIED:value^:=SCE_SYSTEM_PARAM_LANG_CHINESE_S;
-       else                       value^:=SCE_SYSTEM_PARAM_LANG_CHINESE_T;
-      end;
-
-     LANG_FINNISH   :value^:=SCE_SYSTEM_PARAM_LANG_FINNISH;
-     LANG_SWEDISH   :value^:=SCE_SYSTEM_PARAM_LANG_SWEDISH;
-     LANG_DANISH    :value^:=SCE_SYSTEM_PARAM_LANG_DANISH;
-     LANG_NORWEGIAN :value^:=SCE_SYSTEM_PARAM_LANG_NORWEGIAN;
-     LANG_POLISH    :value^:=SCE_SYSTEM_PARAM_LANG_POLISH;
-     LANG_TURKISH   :value^:=SCE_SYSTEM_PARAM_LANG_TURKISH;
-     LANG_ARABIC    :value^:=SCE_SYSTEM_PARAM_LANG_ARABIC;
-     LANG_CZECH     :value^:=SCE_SYSTEM_PARAM_LANG_CZECH;
-     LANG_HUNGARIAN :value^:=SCE_SYSTEM_PARAM_LANG_HUNGARIAN;
-     LANG_GREEK     :value^:=SCE_SYSTEM_PARAM_LANG_GREEK;
-     LANG_ROMANIAN  :value^:=SCE_SYSTEM_PARAM_LANG_ROMANIAN;
-     LANG_THAI      :value^:=SCE_SYSTEM_PARAM_LANG_THAI;
-     LANG_VIETNAMESE:value^:=SCE_SYSTEM_PARAM_LANG_VIETNAMESE;
-     LANG_INDONESIAN:value^:=SCE_SYSTEM_PARAM_LANG_INDONESIAN;
-
-     else
-      value^:=SCE_SYSTEM_PARAM_LANG_ENGLISH_US;
-    end;
-
+    value^:=GetHostSystemLang;
    end;
 
   SCE_SYSTEM_SERVICE_PARAM_ID_DATE_FORMAT:
    begin
-    Format[0]:=#0;
-    sig_lock;
-    GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ILDATE,@Format,1);
-    sig_unlock;
-
-    Case Format[0] of
-     '0':value^:=SCE_SYSTEM_PARAM_DATE_FORMAT_MMDDYYYY;
-     '1':value^:=SCE_SYSTEM_PARAM_DATE_FORMAT_DDMMYYYY;
-     '2':value^:=SCE_SYSTEM_PARAM_DATE_FORMAT_YYYYMMDD;
-    end;
+    value^:=GetHostSystemDateFormat;
    end;
 
   SCE_SYSTEM_SERVICE_PARAM_ID_TIME_FORMAT:
    begin
-    Format[0]:=#0;
-    sig_lock;
-    GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ILDATE,@Format,1);
-    sig_unlock;
-
-    Case Format[0] of
-     '0':value^:=SCE_SYSTEM_PARAM_TIME_FORMAT_12HOUR;
-     '1':value^:=SCE_SYSTEM_PARAM_TIME_FORMAT_24HOUR;
-    end;
+    value^:=GetHostSystemTimeFormat;
    end;
 
   SCE_SYSTEM_SERVICE_PARAM_ID_TIME_ZONE:
@@ -396,7 +420,7 @@ end;
 function ps4_sceSystemServiceGetStatus(status:PSceSystemServiceStatus):Integer;
 begin
  if (status=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
- status^.eventNum:=0;
+ status^.eventNum                :=0;
  status^.isSystemUiOverlaid      :=false;
  status^.isInBackgroundExecution :=false;
  status^.isCpuMode7CpuNormal     :=true;

@@ -35,18 +35,28 @@ type
  pSceUserServiceEvent=^SceUserServiceEvent;
  SceUserServiceEvent=packed record
   eventType:Integer; //SceUserServiceEventType
-  userId:Integer;    //SceUserServiceUserId
+  userId   :Integer; //SceUserServiceUserId
  end;
 
  TUserServiceEventCallback=procedure(event:pSceUserServiceEvent;arg:Pointer);
 
-implementation
+const
+ //SceUserServiceUserColor
+ SCE_USER_SERVICE_USER_COLOR_BLUE =0;
+ SCE_USER_SERVICE_USER_COLOR_RED  =1;
+ SCE_USER_SERVICE_USER_COLOR_GREEN=2;
+ SCE_USER_SERVICE_USER_COLOR_PINK =3;
 
 const
  SCE_USER_SERVICE_ERROR_NOT_INITIALIZED =-2137653246; //0x80960002
  SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT=-2137653243; //0x80960005
  SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
  SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT=-2137653238; //0x8096000A
+
+implementation
+
+const
+ base_user_id=$167a1a93;
 
 function ps4_sceUserServiceInitialize(params:PUserServiceInitializeParams):Integer;
 begin
@@ -69,7 +79,7 @@ var
 begin
  Result:=-1;
  if (List=nil) then Exit;
- List^.userId[0]:=$167a1a93;
+ List^.userId[0]:=base_user_id;
  For i:=1 to SCE_USER_SERVICE_MAX_LOGIN_USERS-1 do
   List^.userId[i]:=SCE_USER_SERVICE_USER_ID_INVALID;
  Result:=0;
@@ -78,7 +88,7 @@ end;
 function ps4_sceUserServiceGetInitialUser(pUserId:PInteger):Integer;
 begin
  if (pUserId=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
- pUserId^:=$167a1a93;
+ pUserId^:=base_user_id;
  Result:=0;
 end;
 
@@ -94,7 +104,7 @@ end;
 
 function ps4_sceUserServiceRegisterEventCallback(func:TUserServiceEventCallback;arg:Pointer):Integer;
 begin
- Writeln('sceUserServiceRegisterEventCallback:',HexStr(func));
+ //Writeln('sceUserServiceRegisterEventCallback:',HexStr(func));
  Result:=0;
 end;
 
@@ -113,18 +123,11 @@ begin
 
   event^:=Default(SceUserServiceEvent);
   event^.eventType:=SCE_USER_SERVICE_EVENT_TYPE_LOGIN;
-  event^.userId   :=$167a1a93;
+  event^.userId   :=base_user_id;
 
   Result:=0;
  end;
 end;
-
-const
- //SceUserServiceUserColor
- SCE_USER_SERVICE_USER_COLOR_BLUE =0;
- SCE_USER_SERVICE_USER_COLOR_RED  =1;
- SCE_USER_SERVICE_USER_COLOR_GREEN=2;
- SCE_USER_SERVICE_USER_COLOR_PINK =3;
 
 function ps4_sceUserServiceGetUserColor(userId:Integer;
                                         color:pInteger  //SceUserServiceUserColor
