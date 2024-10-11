@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 430
+  Left = 473
   Height = 319
-  Top = 204
+  Top = 205
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 319
@@ -479,7 +479,7 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'Vulkan app flags'
+        Caption = 'Vulkan app validation'
         ChildSizing.LeftRightSpacing = 6
         ChildSizing.TopBottomSpacing = 6
         ChildSizing.EnlargeHorizontal = crsHomogenousChildResize
@@ -500,13 +500,13 @@ object frmCfgEditor: TfrmCfgEditor
           'enable best practices'
           'enable debug printf'
           'enable sync validation'
-          'disable shaders'
+          'disable shaders validation'
           'disable thread safety'
           'disable api params'
           'disable obj lifetimes'
           'disable core checks'
           'disable unique handles'
-          'disable shader validation'
+          'disable shader validation cache'
         )
         TabOrder = 1
         Data = {
