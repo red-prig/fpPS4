@@ -70,8 +70,9 @@ uses
  ps4_libSceMbus,
  ps4_libSceDialogs,
  ps4_libSceAvSetting,
+ ps4_libSceNpCommon,
+ ps4_libSceNpManager,
  //ps4_libSceDiscMap,
- //ps4_libSceNpManager,
  //internal libs
 
  kern_rtld,
