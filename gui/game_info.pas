@@ -160,8 +160,10 @@ type
  TVulkanInfo=class(TAbstractObject)
  private
   Fdevice:RawByteString;
+  Fapp_flags:DWORD;
  published
   property device:RawByteString read Fdevice write Fdevice;
+  property app_flags:DWORD read Fapp_flags write Fapp_flags;
  end;
 
  TConfigInfo=class(TAbstractObject)
@@ -379,6 +381,8 @@ begin
   tkSString,
   tkLString,
   tkAString:S:=S+'"'+StringToJSONString(value.AsString,False)+'"';
+
+  tkInteger:S:=S+IntToStr(value.AsInteger);
 
   tkBool:S:=S+BoolToStr(value.AsBoolean,'true','false');
 
@@ -612,6 +616,7 @@ var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
  obj:TObject;
+ TypeKind:TTypeKind;
 begin
  i:=GetPropertyIterator;
  try
@@ -620,11 +625,14 @@ begin
 
    p:=i.GetProperty;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
 
     tkSString,
     tkLString,
     tkAString:Stream.WriteAnsiString(p.GetValue(Self).AsString);
+
+    tkInteger:Stream.WriteDWord(p.GetValue(Self).AsInteger);
 
     tkBool:Stream.WriteByte(Byte(p.GetValue(Self).AsBoolean));
 
@@ -655,6 +663,7 @@ var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
  obj:TObject;
+ TypeKind:TTypeKind;
 begin
  i:=GetPropertyIterator;
  try
@@ -662,10 +671,13 @@ begin
   begin
    p:=i.GetProperty;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
     tkSString,
     tkLString,
     tkAString:p.SetValue(Self,Stream.ReadAnsiString);
+
+    tkInteger:p.SetValue(Self,Integer(Stream.ReadDWord));
 
     tkBool:p.SetValue(Self,Boolean(Stream.ReadByte));
 
@@ -697,6 +709,7 @@ var
  p:TRttiProperty;
  obj_src:TObject;
  obj_dst:TObject;
+ TypeKind:TTypeKind;
 begin
  if (dst=nil) then Exit;
  if (not dst.InheritsFrom(Self.ClassType)) then Exit;
@@ -708,10 +721,12 @@ begin
 
    p:=i.GetProperty;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
     tkSString,
     tkLString,
     tkAString,
+    tkInteger,
     tkBool   :p.SetValue(dst,p.GetValue(Self));
 
     tkClass:
@@ -822,6 +837,7 @@ var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
  obj:TObject;
+ TypeKind:TTypeKind;
 begin
  Stream.WriteStartObject(Name);
  //
@@ -832,11 +848,13 @@ begin
 
    p:=i.GetProperty;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
 
     tkSString,
     tkLString,
     tkAString,
+    tkInteger,
     tkBool   :Stream.WriteValue(p.Name,p.GetValue(Self));
 
     tkClass:
@@ -897,6 +915,7 @@ begin
    tkSString,
    tkLString,
    tkAString,
+   tkInteger,
    tkBool   :Stream.WriteValue('',V);
 
    tkClass:

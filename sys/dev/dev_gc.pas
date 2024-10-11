@@ -23,7 +23,6 @@ uses
  errno,
  kern_mtx,
  sys_event,
- sys_eventvar,
  kern_event,
  sched_ule,
  kern_authinfo,

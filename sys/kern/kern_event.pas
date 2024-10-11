@@ -1205,7 +1205,7 @@ var
  error:Integer;
 begin
  error:=0;
- if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ if (filt >= 0) or (filt + EVFILT_SYSCOUNT < 0) then
  begin
   Writeln('trying to add a filterop that is out of range: ',(not filt),' is beyond ',EVFILT_SYSCOUNT);
   Exit(EINVAL);
@@ -1230,7 +1230,7 @@ var
  error:Integer;
 begin
  error:=0;
- if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ if (filt >= 0) or (filt + EVFILT_SYSCOUNT < 0) then
  begin
   Exit(EINVAL);
  end;
@@ -1256,7 +1256,7 @@ end;
 
 function kqueue_fo_find(filt:Integer):p_filterops;
 begin
- if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ if (filt >= 0) or (filt + EVFILT_SYSCOUNT < 0) then
  begin
   Exit(nil);
  end;
@@ -1281,7 +1281,7 @@ end;
 
 procedure kqueue_fo_release(filt:Integer);
 begin
- if (filt > 0) or (filt + EVFILT_SYSCOUNT < 0) then
+ if (filt >= 0) or (filt + EVFILT_SYSCOUNT < 0) then
  begin
   Exit;
  end;

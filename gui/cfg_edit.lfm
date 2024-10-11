@@ -1,16 +1,16 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 494
-  Height = 323
-  Top = 90
+  Left = 430
+  Height = 319
+  Top = 204
   Width = 400
   Caption = 'Config Editor'
-  ClientHeight = 323
+  ClientHeight = 319
   ClientWidth = 400
   Position = poMainFormCenter
   LCLVersion = '3.6.0.0'
   object EditPages: TPageControl
     Left = 0
-    Height = 274
+    Height = 270
     Top = 0
     Width = 397
     ActivePage = Tab_Vulkan
@@ -21,7 +21,7 @@ object frmCfgEditor: TfrmCfgEditor
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
-      ClientHeight = 246
+      ClientHeight = 242
       ClientWidth = 389
       object Label1: TLabel
         AnchorSideLeft.Control = Tab_MainInfo
@@ -195,7 +195,7 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_BootparamInfo: TTabSheet
       Caption = 'Bootparam'
-      ClientHeight = 246
+      ClientHeight = 242
       ClientWidth = 389
       object Edt_BootparamInfo_neo: TCheckBox
         AnchorSideLeft.Control = Tab_BootparamInfo
@@ -318,7 +318,7 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_JIT: TTabSheet
       Caption = 'JIT'
-      ClientHeight = 246
+      ClientHeight = 242
       ClientWidth = 389
       object Edt_JITInfo_print_asm: TCheckBox
         AnchorSideLeft.Control = Tab_JIT
@@ -390,7 +390,7 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_Misc: TTabSheet
       Caption = 'Misc'
-      ClientHeight = 246
+      ClientHeight = 242
       ClientWidth = 389
       object Edt_MiscInfo_strict_ps4_freq: TCheckBox
         AnchorSideLeft.Control = Tab_Misc
@@ -428,7 +428,7 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_Vulkan: TTabSheet
       Caption = 'Vulkan'
-      ClientHeight = 246
+      ClientHeight = 242
       ClientWidth = 389
       object Edt_VulkanInfo_device_cmb: TComboBox
         AnchorSideLeft.Control = Tab_Vulkan
@@ -463,6 +463,56 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Right = 10
         Caption = 'GPU:'
       end
+      object GrAppFlags: TCheckGroup
+        AnchorSideLeft.Control = Tab_Vulkan
+        AnchorSideTop.Control = Edt_VulkanInfo_device_cmb
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_Vulkan
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 165
+        Top = 68
+        Width = 369
+        Anchors = [akTop, akLeft, akRight]
+        AutoFill = True
+        AutoSize = True
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Vulkan app flags'
+        ChildSizing.LeftRightSpacing = 6
+        ChildSizing.TopBottomSpacing = 6
+        ChildSizing.EnlargeHorizontal = crsHomogenousChildResize
+        ChildSizing.EnlargeVertical = crsHomogenousChildResize
+        ChildSizing.ShrinkHorizontal = crsScaleChilds
+        ChildSizing.ShrinkVertical = crsScaleChilds
+        ChildSizing.Layout = cclTopToBottomThenLeftToRight
+        ChildSizing.ControlsPerLine = 7
+        ClientHeight = 145
+        ClientWidth = 365
+        ColumnLayout = clVerticalThenHorizontal
+        Columns = 2
+        Items.Strings = (
+          'debug utils'
+          'validation layer'
+          'enable gpu assisted'
+          'enable gpu assisted reserve'
+          'enable best practices'
+          'enable debug printf'
+          'enable sync validation'
+          'disable shaders'
+          'disable thread safety'
+          'disable api params'
+          'disable obj lifetimes'
+          'disable core checks'
+          'disable unique handles'
+          'disable shader validation'
+        )
+        TabOrder = 1
+        Data = {
+          0E0000000202020202020202020202020202
+        }
+      end
     end
   end
   object BtnCancel: TButton
@@ -473,7 +523,7 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideBottom.Side = asrBottom
     Left = 315
     Height = 25
-    Top = 288
+    Top = 284
     Width = 75
     Anchors = [akRight, akBottom]
     BorderSpacing.Right = 10
@@ -488,7 +538,7 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideBottom.Side = asrBottom
     Left = 10
     Height = 25
-    Top = 288
+    Top = 284
     Width = 75
     Anchors = [akLeft, akBottom]
     BorderSpacing.Left = 10

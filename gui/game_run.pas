@@ -148,6 +148,8 @@ begin
 
  vDevice.VulkanDeviceGuid:=Default(TGUID);
  TryStringToGUID(ConfInfo.VulkanInfo.device,vDevice.VulkanDeviceGuid);
+
+ vDevice.VulkanAppFlags:=t_vulkan_app_flags(ConfInfo.VulkanInfo.app_flags);
 end;
 
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;

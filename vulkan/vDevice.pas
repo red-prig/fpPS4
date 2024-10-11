@@ -13,6 +13,25 @@ type
  TExtensionNames=array of PChar;
  APhysicalDeviceProperties=array of TVkPhysicalDeviceProperties;
 
+ t_vulkan_app_flags=Set of
+   (va_debug_utils,                  //VK_EXT_debug_utils
+    va_validation_layer,             //VK_LAYER_KHRONOS_validation
+    //
+    va_enable_gpu_assisted,          //VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT
+    va_enable_gpu_assisted_reserve,  //VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
+    va_enable_best_practices,        //VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
+    va_enable_debug_printf,          //VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT
+    va_enable_sync_validation,       //VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+    //
+    va_disable_shaders,              //VK_VALIDATION_FEATURE_DISABLE_SHADERS_EXT
+    va_disable_thread_safety,        //VK_VALIDATION_FEATURE_DISABLE_THREAD_SAFETY_EXT
+    va_disable_api_params,           //VK_VALIDATION_FEATURE_DISABLE_API_PARAMETERS_EXT
+    va_disable_obj_lifetimes,        //VK_VALIDATION_FEATURE_DISABLE_OBJECT_LIFETIMES_EXT
+    va_disable_core_checks,          //VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT
+    va_disable_unique_handles,       //VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT
+    va_disable_shader_validation     //VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT
+   );
+
  TVulkanApp=class
   FInstance:TVkInstance;
   FPhysicalDevice:TVkPhysicalDevice;
@@ -25,7 +44,7 @@ type
   FCFamilyCount:TVkUInt32;
   FTFamilyCount:TVkUInt32;
   //
-  Constructor Create(debug,printf,validate:Boolean);
+  Constructor Create(flags:t_vulkan_app_flags);
   Destructor  Destroy; override;
   Procedure   LoadFamily; virtual;
   function    InstanceLayersIsExist(P:PChar):Boolean;
@@ -222,6 +241,7 @@ procedure vkCmdWaitEvent(commandBuffer:TVkCommandBuffer;
 
 var
  VulkanDeviceGuid:TGUID;
+ VulkanAppFlags  :t_vulkan_app_flags=[];
 
  VulkanApp:TVulkanApp;
  DebugReport:TVDebugReport;
@@ -927,24 +947,52 @@ begin
  begin
   vkDestroyInstance(FInstance,nil);
  end;
+
 end;
 
-Constructor TVulkanApp.Create(debug,printf,validate:Boolean);
+type
+ AVkValidationFeatureEnable =array of TVkValidationFeatureEnableEXT;
+ AVkValidationFeatureDisable=array of TVkValidationFeatureDisableEXT;
+
+function GetEnabledFeatures(flags:t_vulkan_app_flags):AVkValidationFeatureEnable;
+begin
+ Result:=nil;
+ if (va_enable_gpu_assisted         in flags) then Insert(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT                     ,Result,Length(Result));
+ if (va_enable_gpu_assisted_reserve in flags) then Insert(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,Result,Length(Result));
+ if (va_enable_best_practices       in flags) then Insert(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT                   ,Result,Length(Result));
+ if (va_enable_debug_printf         in flags) then Insert(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT                     ,Result,Length(Result));
+ if (va_enable_sync_validation      in flags) then Insert(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT       ,Result,Length(Result));
+end;
+
+function GetDisabledFeatures(flags:t_vulkan_app_flags):AVkValidationFeatureDisable;
+begin
+ Result:=nil;
+ if (va_disable_shaders           in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_SHADERS_EXT                ,Result,Length(Result));
+ if (va_disable_thread_safety     in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_THREAD_SAFETY_EXT          ,Result,Length(Result));
+ if (va_disable_api_params        in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_API_PARAMETERS_EXT         ,Result,Length(Result));
+ if (va_disable_obj_lifetimes     in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_OBJECT_LIFETIMES_EXT       ,Result,Length(Result));
+ if (va_disable_core_checks       in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT            ,Result,Length(Result));
+ if (va_disable_unique_handles    in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT         ,Result,Length(Result));
+ if (va_disable_shader_validation in flags) then Insert(VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT,Result,Length(Result));
+end;
+
+Constructor TVulkanApp.Create(flags:t_vulkan_app_flags);
 const
  dlayer='VK_LAYER_KHRONOS_validation';
 var
- vkApp    :TVkApplicationInfo;
- vkExtList:TExtensionNames;
- vkLayer  :array[0..0] of PChar;
- vkCInfo  :TVkInstanceCreateInfo;
- vkPrintf :TVkValidationFeaturesEXT;
- vkFeature:array[0..4] of TVkValidationFeatureEnableEXT;
- Features2:TVkPhysicalDeviceFeatures2;
- F16_8    :TVkPhysicalDeviceShaderFloat16Int8Features;
- FSF_8    :TVkPhysicalDevice8BitStorageFeatures;
- FSF16    :TVkPhysicalDevice16BitStorageFeatures;
- FRF      :TVkPhysicalDeviceRobustness2FeaturesEXT;
- FDI      :TVkPhysicalDeviceDescriptorIndexingFeatures;
+ vkApp     :TVkApplicationInfo;
+ vkExtList :TExtensionNames;
+ vkLayer   :array[0..0] of PChar;
+ vkCInfo   :TVkInstanceCreateInfo;
+ vkEnabled :AVkValidationFeatureEnable;
+ vkDisabled:AVkValidationFeatureDisable;
+ vkFeatures:TVkValidationFeaturesEXT;
+ Features2 :TVkPhysicalDeviceFeatures2;
+ F16_8     :TVkPhysicalDeviceShaderFloat16Int8Features;
+ FSF_8     :TVkPhysicalDevice8BitStorageFeatures;
+ FSF16     :TVkPhysicalDevice16BitStorageFeatures;
+ FRF       :TVkPhysicalDeviceRobustness2FeaturesEXT;
+ FDI       :TVkPhysicalDeviceDescriptorIndexingFeatures;
  r:TVkResult;
 begin
  vkApp:=GetVkApplicationInfo;
@@ -955,12 +1003,12 @@ begin
  vkCInfo.sType:=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
  vkCInfo.pApplicationInfo:=@vkApp;
 
- if debug then
+ if (va_debug_utils in flags) then
  begin
   //VK_EXT_debug_utils
   Insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME,vkExtList,Length(vkExtList));
 
-  if validate and InstanceLayersIsExist(dlayer) then
+  if (va_validation_layer in flags) and InstanceLayersIsExist(dlayer) then
   begin
    vkLayer[0]:=dlayer;
    vkCInfo.enabledLayerCount  :=1;
@@ -971,20 +1019,24 @@ begin
  vkCInfo.enabledExtensionCount  :=Length(vkExtList);
  vkCInfo.ppEnabledExtensionNames:=@vkExtList[0];
 
- if debug and printf then
+ if (va_debug_utils in flags) then
  begin
-  vkFeature[0]:=VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT;
-  vkFeature[1]:=VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT;
-  //vkFeature[]:=VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
-  //vkFeature[1]:=VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT;
-  vkFeature[2]:=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+  vkEnabled :=GetEnabledFeatures (flags);
+  vkDisabled:=GetDisabledFeatures(flags);
 
-  vkPrintf:=Default(TVkValidationFeaturesEXT);
-  vkPrintf.sType:=VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-  vkPrintf.enabledValidationFeatureCount:=3;
-  vkPrintf.pEnabledValidationFeatures   :=@vkFeature[0];
+  if (Length(vkEnabled)<>0) or
+     (Length(vkDisabled)<>0) then
+  begin
+   vkFeatures:=Default(TVkValidationFeaturesEXT);
+   vkFeatures.sType:=VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
 
-  vkCInfo.pNext:=@vkPrintf;
+   vkFeatures.enabledValidationFeatureCount :=Length(vkEnabled);
+   vkFeatures.pEnabledValidationFeatures    :=@vkEnabled[0];
+   vkFeatures.disabledValidationFeatureCount:=Length(vkDisabled);
+   vkFeatures.pDisabledValidationFeatures   :=@vkDisabled[0];
+
+   vkCInfo.pNext:=@vkFeatures;
+  end;
  end;
 
  Writeln('vkCreateInstance->');
@@ -1882,7 +1934,7 @@ begin
   Exit;
  end;
 
- VulkanApp:=TVulkanApp.Create(true,true,true);
+ VulkanApp:=TVulkanApp.Create(VulkanAppFlags);
 
  DebugReport:=TVDebugReport.Create;
 

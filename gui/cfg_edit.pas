@@ -16,8 +16,16 @@ uses
 type
   TVulkanDevGuid=class(TComponent)
    src: TComboBox;
+   //
    Function  GetText:RawByteString;
    procedure SetText(const s:RawByteString);
+  end;
+
+  TVulkanAppFlags=class(TComponent)
+   src: TCheckGroup;
+   //
+   Function  GetInteger:Integer;
+   procedure SetInteger(v:Integer);
   end;
 
   { TfrmCfgEditor }
@@ -28,6 +36,7 @@ type
     BtnOk: TButton;
     BtnLogOpen: TButton;
     BtnDataOpen: TButton;
+    GrAppFlags: TCheckGroup;
     Edt_VulkanInfo_device_cmb: TComboBox;
     Edt_BootparamInfo_halt_on_exit: TCheckBox;
     Edt_BootparamInfo_print_gpu_ops: TCheckBox;
@@ -69,7 +78,9 @@ type
   private
 
   public
-   Edt_VulkanInfo_device:TVulkanDevGuid;
+   VulkanInfo_device   :TVulkanDevGuid;
+   VulkanInfo_app_flags:TVulkanAppFlags;
+   //
    OnSave     :TNotifyEvent;
    FConfigInfo:TConfigInfo;
   end;
@@ -223,6 +234,36 @@ begin
 
 end;
 
+//
+
+Function TVulkanAppFlags.GetInteger:Integer;
+var
+ i:Integer;
+begin
+ Result:=0;
+ if (src=nil) then Exit;
+
+ For i:=0 to src.Items.Count-1 do
+ if src.Checked[i] then
+ begin
+  Result:=Result or (1 shl i);
+ end;
+end;
+
+procedure TVulkanAppFlags.SetInteger(v:Integer);
+var
+ i:Integer;
+begin
+ if (src=nil) then Exit;
+
+ For i:=0 to src.Items.Count-1 do
+ begin
+  src.Checked[i]:=(v and (1 shl i))<>0;
+ end;
+end;
+
+//
+
 procedure SetText(control:TComponent;const Text:RawByteString);
 begin
  if control.InheritsFrom(TControl) then
@@ -248,6 +289,27 @@ begin
  end;
 end;
 
+//
+
+procedure SetInteger(control:TComponent;i:Integer);
+begin
+ if (control is TVulkanAppFlags) then
+ begin
+  TVulkanAppFlags(control).SetInteger(i);
+ end;
+end;
+
+function GetInteger(control:TComponent):Integer;
+begin
+ Result:=0;
+ if (control is TVulkanAppFlags) then
+ begin
+  Result:=TVulkanAppFlags(control).GetInteger;
+ end;
+end;
+
+//
+
 procedure SetBool(control:TComponent;B:Boolean);
 begin
  if control.InheritsFrom(TButtonControl) then
@@ -265,11 +327,15 @@ begin
  end;
 end;
 
+//
+
 procedure TfrmCfgEditor.PageInit(const TabName:RawByteString;obj:TAbstractObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
+ TypeKind:TTypeKind;
 
+ cname:RawByteString;
  control:TComponent;
 begin
 
@@ -280,16 +346,24 @@ begin
 
    p:=i.GetProperty;
 
-   control:=FindComponent('Edt_'+TabName+'_'+p.Name);
-   Assert(control<>nil,'Edt_'+TabName+'_'+p.Name);
+   cname:='Edt_'+TabName+'_'+p.Name;
+   control:=FindComponent(cname);
+   Assert(control<>nil,cname);
+   if (control=nil) then Exit;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
 
     tkSString,
     tkLString,
     tkAString:
      begin
       SetText(control,p.GetValue(obj).AsString);
+     end;
+
+    tkInteger:
+     begin
+      SetInteger(control,p.GetValue(obj).AsInteger);
      end;
 
     tkBool:
@@ -312,7 +386,9 @@ procedure TfrmCfgEditor.PageSave(const TabName:RawByteString;obj:TAbstractObject
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
+ TypeKind:TTypeKind;
 
+ cname:RawByteString;
  control:TComponent;
 begin
 
@@ -323,16 +399,24 @@ begin
 
    p:=i.GetProperty;
 
-   control:=FindComponent('Edt_'+TabName+'_'+p.Name);
-   Assert(control<>nil,'Edt_'+TabName+'_'+p.Name);
+   cname:='Edt_'+TabName+'_'+p.Name;
+   control:=FindComponent(cname);
+   Assert(control<>nil,cname);
+   if (control=nil) then Exit;
 
-   case p.PropertyType.TypeKind of
+   TypeKind:=p.PropertyType.TypeKind;
+   case TypeKind of
 
     tkSString,
     tkLString,
     tkAString:
      begin
       p.SetValue(obj,GetText(control));
+     end;
+
+    tkInteger:
+     begin
+      p.SetValue(obj,GetInteger(control));
      end;
 
     tkBool:
@@ -358,9 +442,7 @@ begin
          IntToStr(VK_API_VERSION_PATCH(apiVersion));
 end;
 
-Function GetDriverVerson(driverVersion,vendorID:TVkUInt32):RawByteString;
-const
- osname='windows';
+Function GetDrvVersionStr(driverVersion,vendorID:TVkUInt32):RawByteString;
 begin
  case vendorid of
   // NVIDIA
@@ -373,13 +455,15 @@ begin
     Exit;
    end;
   // Intel
+  {$IFDEF WINDOWS}
   $8086:
-   if (osname='windows') then
    begin
     Result:=IntToStr((driverVersion shr 14)          )+'.'+
             IntToStr((driverVersion       ) and $3fff);
     Exit;
    end;
+  {$ENDIF}
+  else;
  end;
 
  // Use Vulkan version conventions if vendor mapping is not available
@@ -395,11 +479,19 @@ var
 begin
  InitVulkanDeviceList;
 
- if (Edt_VulkanInfo_device=nil) then
+ if (VulkanInfo_device=nil) then
  begin
-  Edt_VulkanInfo_device:=TVulkanDevGuid.Create(Self);
-  Edt_VulkanInfo_device.Name:='Edt_VulkanInfo_device'; //FindComponent
-  Edt_VulkanInfo_device.src :=Edt_VulkanInfo_device_cmb;
+  VulkanInfo_device:=TVulkanDevGuid.Create(Self);
+  VulkanInfo_device.Name:='Edt_VulkanInfo_device'; //FindComponent
+  VulkanInfo_device.src :=Edt_VulkanInfo_device_cmb;
+ end;
+
+ if (VulkanInfo_app_flags=nil) then
+ begin
+  VulkanInfo_app_flags:=TVulkanAppFlags.Create(Self);
+  VulkanInfo_app_flags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
+  VulkanInfo_app_flags.src :=GrAppFlags;
+  //////
  end;
 
  Edt_VulkanInfo_device_cmb.Clear;
@@ -417,8 +509,8 @@ begin
 
   deviceName:=deviceName+' ('+GetApiVersionStr(FVulkanDeviceList[i].apiVersion)+')';
 
-  deviceName:=deviceName+' ('+GetDriverVerson(FVulkanDeviceList[i].driverVersion,
-                                              FVulkanDeviceList[i].vendorID)+')';
+  deviceName:=deviceName+' ('+GetDrvVersionStr(FVulkanDeviceList[i].driverVersion,
+                                               FVulkanDeviceList[i].vendorID)+')';
 
   Edt_VulkanInfo_device_cmb.AddItem(deviceName,TObject(@FVulkanDeviceList[i]));
  end;
