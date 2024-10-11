@@ -11,6 +11,7 @@ uses
   main,
   game_edit,
   cfg_edit,
+  game_find,
   sys_crt_gui,
   md_systm,
   vm_pmap;
@@ -25,6 +26,7 @@ begin
   Application.Scaled:=True;
   Application.Initialize;
   Application.CreateForm(TfrmMain, frmMain);
+  Application.CreateForm(TFrmFind, FrmFind);
   //Application.CreateForm(TfrmCfgEditor, frmCfgEditor);
   //Application.CreateForm(TfrmGameEditor, frmGameEditor);
   Application.Run;

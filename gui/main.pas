@@ -75,6 +75,7 @@ type
 
   TfrmMain = class(TForm)
     MainImageList: TImageList;
+    MIFind: TMenuItem;
     MIShowExplorer: TMenuItem;
     MIDevide3: TMenuItem;
     MIRun: TMenuItem;
@@ -101,6 +102,7 @@ type
     TBUp: TToolButton;
     TBSep3: TToolButton;
 
+    procedure FormActivate(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -108,6 +110,7 @@ type
     procedure ListGridDragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
     procedure ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);
     procedure ListGridMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure MIFindClick(Sender: TObject);
     procedure MIShowExplorerClick(Sender: TObject);
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
     procedure MIAddClick(Sender: TObject);
@@ -169,6 +172,8 @@ var
 implementation
 
 uses
+ game_find,
+
  windows,
 
  md_arc4random,
@@ -612,6 +617,11 @@ begin
  CloseAction:=caFree;
 end;
 
+procedure TfrmMain.FormActivate(Sender: TObject);
+begin
+ ListGrid.SetFocus;
+end;
+
 procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 var
  aRow:Integer;
@@ -635,6 +645,12 @@ begin
       ListGrid.Row:=aRow;
      end
    else;
+  end;
+ end else
+ if (Shift=[ssCtrl]) then
+ begin
+  case Key of
+   VK_F:MIFindClick(Sender);
   end;
  end else
  if (Shift=[]) then
@@ -662,6 +678,12 @@ begin
  begin
   FDblClickRow:=ListGrid.MouseToCell(TPoint.Create(X,Y)).Y;
  end;
+end;
+
+procedure TfrmMain.MIFindClick(Sender: TObject);
+begin
+ game_find.FrmFind.ListGrid:=ListGrid;
+ game_find.FrmFind.Show;
 end;
 
 procedure TfrmMain.ListGridEndDrag(Sender, Target: TObject; X, Y: Integer);

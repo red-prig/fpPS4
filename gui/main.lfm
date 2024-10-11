@@ -1,16 +1,17 @@
 object frmMain: TfrmMain
-  Left = 390
+  Left = 334
   Height = 343
-  Top = 308
+  Top = 200
   Width = 623
   Caption = 'fpPS4'
   ClientHeight = 343
   ClientWidth = 623
+  OnActivate = FormActivate
   OnClose = FormClose
   OnCreate = FormCreate
   OnKeyDown = FormKeyDown
   Position = poScreenCenter
-  LCLVersion = '3.4.0.0'
+  LCLVersion = '3.6.0.0'
   object Pages: TPageControl
     Left = 0
     Height = 275
@@ -158,6 +159,10 @@ object frmMain: TfrmMain
     object MIShowExplorer: TMenuItem
       Caption = 'Show in Explorer'
       OnClick = MIShowExplorerClick
+    end
+    object MIFind: TMenuItem
+      Caption = 'Find'
+      OnClick = MIFindClick
     end
     object MIDevide3: TMenuItem
       Caption = '-'

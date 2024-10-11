@@ -1407,6 +1407,12 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceUserService"/>
       </Unit>
+      <Unit>
+        <Filename Value="gui\game_find.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FrmFind"/>
+        <ResourceBaseClass Value="Form"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

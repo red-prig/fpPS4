@@ -1,0 +1,77 @@
+object FrmFind: TFrmFind
+  Left = 400
+  Height = 96
+  Top = 163
+  Width = 382
+  BorderIcons = [biSystemMenu]
+  Caption = 'Find'
+  ClientHeight = 96
+  ClientWidth = 382
+  OnKeyDown = EdtFindKeyDown
+  Position = poDefaultPosOnly
+  LCLVersion = '3.6.0.0'
+  object Label1: TLabel
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 10
+    Height = 15
+    Top = 15
+    Width = 61
+    BorderSpacing.Left = 10
+    BorderSpacing.Top = 15
+    BorderSpacing.Right = 10
+    Caption = 'Text to Find'
+    ParentFont = False
+  end
+  object EdtFind: TEdit
+    AnchorSideLeft.Control = Label1
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = Label1
+    AnchorSideTop.Side = asrCenter
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 81
+    Height = 23
+    Top = 11
+    Width = 291
+    Anchors = [akTop, akLeft, akRight]
+    BorderSpacing.Left = 10
+    BorderSpacing.Top = 10
+    BorderSpacing.Right = 10
+    TabOrder = 0
+    OnKeyDown = EdtFindKeyDown
+  end
+  object BtnNext: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 20
+    Height = 25
+    Top = 51
+    Width = 75
+    Anchors = [akLeft, akBottom]
+    BorderSpacing.Left = 20
+    BorderSpacing.Bottom = 20
+    Caption = 'Next'
+    TabOrder = 1
+    OnClick = BtnNextClick
+  end
+  object BtnPrev: TButton
+    AnchorSideLeft.Control = Owner
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    AnchorSideBottom.Control = Owner
+    AnchorSideBottom.Side = asrBottom
+    Left = 287
+    Height = 25
+    Top = 51
+    Width = 75
+    Anchors = [akRight, akBottom]
+    BorderSpacing.Right = 20
+    BorderSpacing.Bottom = 20
+    Caption = 'Prev'
+    TabOrder = 2
+    OnClick = BtnPrevClick
+  end
+end

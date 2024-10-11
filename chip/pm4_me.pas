@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ TypInfo,
  mqueue,
  LFQueue,
 
@@ -2682,7 +2683,7 @@ begin
       else
        begin
         Writeln(stderr,'me:+',ctx.node^.ntype);
-        Assert(false,'me:+');
+        Assert(false,'me:+'+GetEnumName(TypeInfo(t_pm4_node_type),ord(ctx.node^.ntype)));
        end;
      end;
     end;
