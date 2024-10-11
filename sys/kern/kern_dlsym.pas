@@ -434,7 +434,14 @@ begin
   str:=EncodeValue64(nid);
  end;
 
- print_error_td('unresolve_symbol:0x'+HexStr(nid,16)+':'+str+':'+libname+' from '+libfrom);
+ str:='[unresolve_symbol]'+#13#10+
+      ' hex    =0x'+HexStr(nid,16)+#13#10+
+      ' nid    ='+EncodeValue64(nid)+#13#10+
+      ' name   ='+str+#13#10+
+      ' libname='+str+#13#10+
+      ' libfrom='+libfrom+#13#10;
+
+ print_error_td(str);
  Assert(false);
 end;
 

@@ -9,7 +9,7 @@ uses
 
   LMessages,
   LCLType,
-  LCLIntf,
+  LCLIntf, StdCtrls,
 
   g_bufstream,
   LineStream,
@@ -233,13 +233,96 @@ type
   function OnKevent(kev:p_kevent;count:Integer):Ptruint;
  end;
 
+function GetRealFontSize(Font:TFont):Integer;
+var
+ fd: TFontData;
+begin
+ fd := Graphics.GetFontData(Font.Handle);
+ Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
+end;
+
 function MessageDlgEx(const AMsg:RawByteString;
                       ADlgType:TMsgDlgType;
                       AButtons:TMsgDlgButtons;
                       AParent:TForm):TModalResult;
 var
- MsgFrm:TForm;
+ MsgForm:TForm;
+ MsgMemo:TMemo;
+ MsgBtnz:TButton;
 begin
+ MsgBtnz:=nil;
+
+ MsgForm:=TForm.Create(nil);
+ try
+  MsgForm.Caption    :='Error';
+  MsgForm.Position   :=poDesigned;
+  MsgForm.BorderIcons:=[biSystemMenu];
+  MsgForm.FormStyle  :=fsSystemStayOnTop;
+  MsgForm.Left:= AParent.Left + (AParent.Width  - MsgForm.Width ) div 2;
+  MsgForm.Top := AParent.Top  + (AParent.Height - MsgForm.Height) div 2;
+  MsgForm.Width :=400;
+  MsgForm.Height:=200;
+  //
+  if (mbOK in AButtons) then
+  begin
+   MsgBtnz:=TButton.Create(MsgForm);
+   MsgBtnz.Anchors:=[akLeft,akBottom];
+   MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
+   MsgBtnz.AnchorSide[akLeft  ].Side   :=asrTop;
+   MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
+   MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
+   MsgBtnz.BorderSpacing.Bottom:=10;
+   MsgBtnz.BorderSpacing.Left  :=10;
+   MsgBtnz.Caption:='OK';
+   MsgBtnz.Parent:=MsgForm;
+   MsgBtnz.ModalResult:=mrOK;
+  end;
+  //
+  if (mbAbort in AButtons) then
+  begin
+   MsgBtnz:=TButton.Create(MsgForm);
+   MsgBtnz.Anchors:=[akRight,akBottom];
+   MsgBtnz.AnchorSide[akRight ].Control:=MsgForm;
+   MsgBtnz.AnchorSide[akRight ].Side   :=asrBottom;
+   MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
+   MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
+   MsgBtnz.BorderSpacing.Bottom:=10;
+   MsgBtnz.BorderSpacing.Right :=10;
+   MsgBtnz.Caption:='Abort';
+   MsgBtnz.Parent:=MsgForm;
+   MsgBtnz.ModalResult:=mrAbort;
+  end;
+  //
+  MsgMemo:=TMemo.Create(MsgForm);
+  MsgMemo.ReadOnly:=True;
+  MsgMemo.Font.Name:='Courier New';
+  MsgMemo.Font.Size:=GetRealFontSize(AParent.Font) + 2;
+  //
+  MsgMemo.Anchors:=[akTop,akLeft,akRight,akBottom];
+  MsgMemo.AnchorSide[akTop   ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akTop   ].Side   :=asrTop;
+  MsgMemo.AnchorSide[akLeft  ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akLeft  ].Side   :=asrTop;
+  MsgMemo.AnchorSide[akRight ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akRight ].Side   :=asrBottom;
+  MsgMemo.AnchorSide[akBottom].Control:=MsgForm;
+  MsgMemo.AnchorSide[akBottom].Side   :=asrBottom;
+  if (MsgBtnz<>nil) then
+  begin
+   MsgMemo.AnchorSide[akBottom].Control:=MsgBtnz;
+   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
+  end;
+  MsgMemo.BorderSpacing.Bottom:=10;
+  //
+  MsgMemo.Text  :=AMsg;
+  MsgMemo.Parent:=MsgForm;
+  //
+  Result:=MsgForm.ShowModal;
+ finally
+  MsgForm.Free;
+ end;
+
+ {
  MsgFrm:=CreateMessageDialog(AMsg, ADlgType, AButtons);
  try
   MsgFrm.Position :=poDefaultSizeOnly;
@@ -250,6 +333,7 @@ begin
  finally
   MsgFrm.Free
  end;
+ }
 end;
 
 function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
@@ -259,7 +343,13 @@ begin
   iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
   iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
   iCAPTION_FPS :Form.SetCaptionFPS(PQWORD(buf)^);
-  iERROR       :MessageDlgEx(PChar(buf),mtError,[mbOK],Form);
+  iERROR       :
+    begin
+     if (MessageDlgEx(PChar(buf),mtError,[mbOK,mbAbort],Form)=mrAbort) then
+     begin
+      Form.TBStopClick(nil);
+     end;
+    end
   else;
    ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
  end;
@@ -598,8 +688,8 @@ begin
  Fmlog.BracketHighlightStyle:=sbhsBoth;
 
  Fmlog.Font.Style:=[];
- Fmlog.Font.Name:='Consolas';
- Fmlog.Font.Size:=11;
+ Fmlog.Font.Name:='Courier New';
+ Fmlog.Font.Size:=GetRealFontSize(Font) + 2;
 
  Pages.ActivePageIndex:=0;
 
