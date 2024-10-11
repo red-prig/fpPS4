@@ -26,7 +26,7 @@
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir);sys"/>
             <Libraries Value="gui"/>
-            <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv"/>
+            <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <CodeGeneration>
@@ -1382,6 +1382,31 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="emit_DS"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libsceavsetting.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAvSetting"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libsceipmi.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceIpmi"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscembus.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceMbus"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscesystemservice.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSystemService"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libsceuserservice.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceUserService"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -1393,7 +1418,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);sys"/>
       <Libraries Value="gui"/>
-      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv"/>
+      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
@@ -1407,7 +1432,7 @@
     </CodeGeneration>
     <Linking>
       <Debugging>
-        <DebugInfoType Value="dsDwarf2"/>
+        <DebugInfoType Value="dsDwarf2Set"/>
       </Debugging>
       <LinkSmart Value="True"/>
       <Options>
