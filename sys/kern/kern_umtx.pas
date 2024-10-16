@@ -1244,6 +1244,286 @@ begin
  umtx_key_release(@key);
 end;
 
+function do_wake3_umutex(td:p_kthread;m:p_umutex;flags:DWORD):Integer;
+label
+ _owning,
+ _signaling,
+ _umtxq_count_end;
+var
+ key:umtx_key;
+ ktype:Integer;
+ flag_shr_7:Integer;
+ owner,old:DWORD;
+ count:ptrint;
+
+ uc:p_umtxq_chain;
+ uh:p_umtxq_queue;
+ uq:p_umtx_q;
+
+ tid:Integer;
+
+ is_signal:Boolean;
+ is_cur_td:Boolean;
+begin
+ Result:=0;
+
+ flag_shr_7:=(flags shr 7) and 1;
+
+ Case (flags and (UMUTEX_PRIO_INHERIT or UMUTEX_PRIO_PROTECT)) of
+                    0:ktype:=TYPE_NORMAL_UMUTEX;
+  UMUTEX_PRIO_INHERIT:ktype:=TYPE_PI_UMUTEX;
+  UMUTEX_PRIO_PROTECT:ktype:=TYPE_PP_UMUTEX;
+  else
+   Exit(EINVAL);
+ end;
+
+ Result:=umtx_key_get(m, ktype, GET_SHARE(flags), @key);
+ if (Result<>0) then Exit;
+
+ owner:=0;
+ tid  :=0;
+
+ umtxq_lock(@key);
+ umtxq_busy(@key);
+
+ //[umtxq_count] analog
+  uc:=umtxq_getchain(@key);
+  UMTXQ_LOCKED_ASSERT(uc);
+  uh:=umtxq_queue_lookup(@key, UMTX_SHARED_QUEUE);
+  if (uh<>nil) then
+  begin
+   count    :=uh^.length;
+   tid      :=-1;
+   is_signal:=(count<>0);
+
+   if (flag_shr_7 = 0) or (count = 0) then
+   begin
+    goto _umtxq_count_end;
+   end;
+
+   uh:=uc^.uc_queue[0].lh_first;
+
+   if (uh=nil) then
+   begin
+    is_signal :=true;
+    flag_shr_7:=1;
+    goto _umtxq_count_end;
+   end;
+
+   while (uh<>nil) do
+   begin
+    if ((umtx_key_match(@uh^.key, @key))<>0) then
+    begin
+     uq:=TAILQ_FIRST(@uh^.head);
+     if (uq<>nil) then
+     begin
+      tid:=uq^.uq_thread^.td_tid;
+     end;
+     Break;
+    end;
+    uh:=LIST_NEXT(uh,@uh^.link);
+   end;
+
+   is_signal :=true;
+   flag_shr_7:=1;
+   goto _umtxq_count_end;
+  end;
+
+  tid      :=-1;
+  is_signal:=False;
+  count    :=0;
+ //
+ _umtxq_count_end:
+ //[umtxq_count]
+
+ is_cur_td:=false;
+
+ umtxq_unlock(@key);
+
+ if (count < 2) then
+ begin
+  if (count = 1) then
+  begin
+   if (flag_shr_7 = 0) then
+   begin
+    owner:=fuword32(m^.m_owner);
+    if (owner = DWORD(-1)) then
+    begin
+     Result:=EFAULT;
+     owner :=DWORD(-1);
+     goto _signaling;
+    end;
+   end else
+   begin
+    owner:=casuword32(m^.m_owner,0,tid);
+    if (owner = DWORD(-1)) then
+    begin
+     is_cur_td:=false;
+     Result   :=EFAULT;
+     goto _signaling;
+    end;
+    if (owner = 0) then
+    begin
+     is_cur_td:=true;
+     owner    :=0;
+     Result   :=0;
+     goto _signaling;
+    end;
+   end;
+   is_cur_td:=false;
+
+   old:=owner;
+
+   repeat
+    if ((old and UMUTEX_CONTESTED) <> 0) or ((old and (not UMUTEX_CONTESTED)) = 0) then
+    begin
+     owner    :=old;
+     Result   :=0;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    owner:=casuword32(m^.m_owner,old,old or UMUTEX_CONTESTED);
+
+    if (owner = DWORD(-1)) then
+    begin
+     owner    :=old;
+     Result   :=EFAULT;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    if (owner = old) then
+    begin
+     owner    :=old;
+     Result   :=0;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    Result:=umtxq_check_susp(td);
+
+    old:=owner;
+   until not (Result = 0);
+
+  end else
+  begin //if (count = 1)
+   is_cur_td:=false;
+   owner    :=0;
+   Result   :=0;
+  end;
+ end else //(count < 2)
+ if (flag_shr_7 = 0) then
+ begin
+  owner:=fuword32(m^.m_owner);
+  if (owner <> DWORD(-1)) then
+  begin
+   goto _owning;
+  end;
+  Result:=EFAULT;
+  owner :=DWORD(-1);
+ end else
+ begin
+  owner:=casuword32(m^.m_owner,0,tid or UMUTEX_CONTESTED);
+
+  if (owner = DWORD(-1)) then
+  begin
+   is_cur_td:=false;
+   Result   :=EFAULT;
+  end else
+  begin
+   if (owner = 0) then
+   begin
+    is_cur_td:=true;
+    owner    :=0;
+    Result   :=0;
+    goto _signaling;
+   end;
+
+   ///////
+   _owning:
+   ///////
+
+   is_cur_td:=false;
+
+   old:=owner;
+   repeat
+    if ((old and UMUTEX_CONTESTED) <> 0) then
+    begin
+     owner    :=old;
+     count    :=0;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    owner:=casuword32(m^.m_owner,old,old or UMUTEX_CONTESTED);
+
+    if (owner = DWORD(-1)) then
+    begin
+     owner    :=old;
+     Result   :=EFAULT;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    if (owner = old) then
+    begin
+     owner    :=old;
+     Result   :=0;
+     is_cur_td:=false;
+     goto _signaling;
+    end;
+
+    Result:=umtxq_check_susp(td);
+    old:=owner;
+   until not (Result = 0);
+
+  end;
+
+ end;
+
+ _signaling:
+
+ umtxq_lock(@key);
+
+ if (Result = EFAULT) then
+ begin
+  //umtxq_signal_queue all
+  umtxq_signal_queue(@key,High(Integer),UMTX_SHARED_QUEUE);
+ end else
+ if (is_cur_td) then
+ begin
+  //umtxq_signal_queue by tid
+  uh:=umtxq_queue_lookup(@key,0);
+  if (uh<>nil) then
+  begin
+   uq:=TAILQ_FIRST(@uh^.head);
+   while (uq<>nil) do
+   begin
+    if (uq^.uq_thread^.td_tid=tid) then
+    begin
+     umtxq_remove(uq);
+     wakeup(uq);
+     Break;
+    end;
+    uq:=TAILQ_NEXT(uq, @uq^.uq_link);
+   end;
+  end;
+ end else
+ if (not ((is_signal xor True) or ((owner and (not UMUTEX_CONTESTED)) <> 0))) then
+ begin
+  //umtxq_signal_queue one
+  umtxq_signal_queue(@key,1,UMTX_SHARED_QUEUE);
+ end;
+
+ //unlock and release
+
+ umtxq_unbusy(@key);
+ umtxq_unlock(@key);
+
+ umtx_key_release(@key);
+end;
+
 //
 
 function umtx_pi_alloc():p_umtx_pi; inline;
@@ -3459,6 +3739,7 @@ begin
   UMTX_OP_SEM_WAKE         :Result:=__umtx_op_sem_wake         (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_NWAKE_PRIVATE    :Result:=__umtx_op_nwake_private    (td,obj,val,uaddr1,uaddr2);
   UMTX_OP_MUTEX_WAKE2      :Result:=__umtx_op_wake2_umutex     (td,obj,val,uaddr1,uaddr2);
+                        $17:Result:=do_wake3_umutex            (td,obj,val); //Sony extension
   else
    Exit(EINVAL);
  end;
