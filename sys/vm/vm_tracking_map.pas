@@ -499,7 +499,7 @@ begin
  vm_track_object_reference(obj);
 
  //update prot
- if (pmap=nil) then //if not copy_obj_list
+ if (pmap<>nil) then //if not copy_obj_list
  begin
   _vm_track_entry_change_prot(pmap,entry,obj^.prot,0);
  end;

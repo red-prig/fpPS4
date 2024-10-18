@@ -24,6 +24,7 @@ uses
   vm_map,
   vm_pmap,
   vm_pmap_prot,
+  vm_tracking_map,
   kern_proc,
   kern_jit_dynamic;
 
@@ -110,7 +111,7 @@ begin
  Result:=VM_PROT_NONE;
  case v of
   0:Result:=VM_PROT_READ;
-  2:Result:=VM_PROT_WRITE;
+  1:Result:=VM_PROT_WRITE;
   8:Result:=VM_PROT_EXECUTE;
  end;
 end;
@@ -273,7 +274,8 @@ begin
 
      if pmap_danger_zone(vm_map_t(p_proc.p_vmspace)^.pmap,
                          get_pageflt_addr(p),
-                         256) then
+                         256 //TODO: access len
+                        ) then
      begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
@@ -281,6 +283,7 @@ begin
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
+         //TODO: access len
          if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_READ)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_READ');
@@ -288,9 +291,19 @@ begin
         end;
       VM_PROT_WRITE:
         begin
+         Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
+
+         //TODO: access len
          if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
          begin
-          Writeln(stderr,'Unhandled VM_PROT_WRITE');
+          //trigger and restore
+          vm_map_track_trigger(p_proc.p_vmspace,
+                               get_pageflt_addr(p),
+                               get_pageflt_addr(p)+256, //TODO: access len
+                               nil,
+                               M_CPU_WRITE);
+          //
+          Exit(EXCEPTION_CONTINUE_EXECUTION);
          end;
         end;
       else;

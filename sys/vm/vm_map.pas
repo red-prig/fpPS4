@@ -3425,6 +3425,11 @@ end;
 function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
 begin
  Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
+
+ if (mode=M_CPU_WRITE) then
+ begin
+  pmap_prot_restore(map^.pmap,start,__end);
+ end;
 end;
 
 procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);

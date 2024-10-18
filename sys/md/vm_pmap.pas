@@ -115,6 +115,10 @@ procedure pmap_prot_track(pmap :pmap_t;
                           __end:vm_offset_t;
                           prots:Byte);
 
+procedure pmap_prot_restore(pmap :pmap_t;
+                            start:vm_offset_t;
+                            __end:vm_offset_t);
+
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -1083,6 +1087,19 @@ begin
                     start,
                     __end,
                     TRACK_PROT or REMAP_PROT);
+end;
+
+procedure pmap_prot_restore(pmap :pmap_t;
+                            start:vm_offset_t;
+                            __end:vm_offset_t);
+begin
+ start:=start              and (not PMAPP_MASK);
+ __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
+
+ vm_nt_map_prot_fix(@pmap^.nt_map,
+                    start,
+                    __end,
+                    REMAP_PROT);
 end;
 
 procedure pmap_madvise(pmap  :pmap_t;
