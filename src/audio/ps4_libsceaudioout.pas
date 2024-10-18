@@ -1,6 +1,7 @@
 unit ps4_libSceAudioOut;
 
 {$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 {/$define silent}
 
@@ -8,18 +9,19 @@ interface
 
 uses
   atomic,
-  spinlock,
-  libportaudio,
-  ps4_handles,
-  ps4_program,
+  //spinlock,
+  //libportaudio,
+  subr_dynlib,
   Classes,
   SysUtils;
 
 implementation
 
+{
 uses
  ps4_time,
  sys_signal;
+}
 
 const
  SCE_AUDIO_OUT_ERROR_NOT_OPENED         =-2144993279; // 0x80260001
@@ -102,32 +104,40 @@ const
 type
  pSceAudioOutPortState=^SceAudioOutPortState;
  SceAudioOutPortState=packed record
-  output:Word;
-  channel:Byte;
-  reserved8_1:Byte;
-  volume:Word;
+  output        :Word;
+  channel       :Byte;
+  reserved8_1   :Byte;
+  volume        :Word;
   rerouteCounter:Word;
-  flag:QWord;
-  reserved64:array[0..1] of QWORD;
+  flag          :QWord;
+  reserved64    :array[0..1] of QWORD;
  end;
 
  PSceAudioOutOutputParam=^SceAudioOutOutputParam;
  SceAudioOutOutputParam=packed record
   handle:Integer;
-  align:Integer;
-  ptr:Pointer;
+  align :Integer;
+  ptr   :Pointer;
+ end;
+
+ pSceAudioOutSystemState=^SceAudioOutSystemState;
+ SceAudioOutSystemState=packed record
+  loudness  :single;
+  reserved8 :array[0..3] of Byte;
+  reserved64:array[0..2] of QWORD;
  end;
 
 var
  _lazy_init:Integer=0;
  _lazy_wait:Integer=0;
- HAudioOuts:TIntegerHandles;
+ //HAudioOuts:TIntegerHandles;
 
-function ps4_sceAudioOutInit():Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutInit():Integer;
 begin
 
  if XCHG(_lazy_init,1)=0 then
  begin
+  {
   _sig_lock;
   Result:=Pa_Initialize();
   _sig_unlock;
@@ -140,6 +150,7 @@ begin
  begin
   wait_until_equal(_lazy_wait,0);
   Result:=SCE_AUDIO_OUT_ERROR_ALREADY_INIT;
+  }
  end;
 
  //Writeln('sceAudioOutInit');
@@ -168,6 +179,7 @@ param
 
 }
 
+{
 type
  TAudioOutHandle=class(TClassHandle)
   userId,_type,index:Integer;
@@ -198,10 +210,12 @@ begin
  FreeMem(buf);
  inherited;
 end;
+}
 
 //int32_t SceUserServiceUserId;
 function ps4_sceAudioOutOpen(userId,_type,index:Integer;
-                         len,freq,param:DWORD):Integer; SysV_ABI_CDecl;
+                         len,freq,param:DWORD):Integer;
+{
 Var
  H:TAudioOutHandle;
  i:Byte;
@@ -210,9 +224,12 @@ Var
  pstream:PaStream;
  pnumOutputChannels:Integer;
  psampleFormat:PaSampleFormat;
+ }
 
 begin
  Result:=0;
+
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  case _type of
@@ -370,21 +387,27 @@ begin
  H.Release;
 
  Writeln('AudioOutOpen:',userId,':',_type,':',index,':',len,':',freq,':',param);
+ }
 end;
 
-function ps4_sceAudioOutClose(handle:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutClose(handle:Integer):Integer;
 begin
  Result:=0;
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
  _sig_lock;
  if not HAudioOuts.Delete(handle) then Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAudioOutGetPortState(handle:Integer;state:pSceAudioOutPortState):Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutGetPortState(handle:Integer;state:pSceAudioOutPortState):Integer;
+{
 Var
  H:TAudioOutHandle;
+}
 begin
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
@@ -418,31 +441,29 @@ begin
  state^.volume:=127; //user volume 0..127 (-1)
 
  H.Release;
+ }
  Result:=0;
 end;
 
-type
- pSceAudioOutSystemState=^SceAudioOutSystemState;
- SceAudioOutSystemState=packed record
-  loudness  :single;
-  reserved8 :array[0..3] of Byte;
-  reserved64:array[0..2] of QWORD;
- end;
-
-function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer;
 begin
+ {
  if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  state^.loudness:=1;
+ }
  Result:=0;
 end;
 
-function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer;
+{
 Var
  H:TAudioOutHandle;
  i:Integer;
+ }
 begin
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  if (vol=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
@@ -468,13 +489,17 @@ begin
 
  H.Release;
  //Writeln('sceAudioOutSetVolume:',handle,':',flag);
+ }
  Result:=0;
 end;
 
-function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer;
+{
 Var
  H:TAudioOutHandle;
+ }
 begin
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  _sig_lock;
@@ -484,6 +509,7 @@ begin
  //ignore
 
  H.Release;
+ }
  Result:=0;
 end;
 
@@ -680,7 +706,6 @@ const
  fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
 var
  fvolume:array[0..7] of Single;
- fL,fR:Single;
 begin
  fvolume[_FL]:=(volume[   _FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
  fvolume[_FR]:=(volume[   _FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
@@ -692,12 +717,14 @@ begin
  __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
 end;
 
-function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;  SysV_ABI_CDecl;
+function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;
+{
 Var
  H:TAudioOutHandle;
  count,err:Integer;
-
+ }
 begin
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  if (ptr=nil) then Exit(0);
@@ -806,14 +833,16 @@ begin
  _sig_lock;
  H.Release;
  _sig_unlock;
+ }
 
  Result:=0;
 end;
 
-function ps4_sceAudioOutOutputs(param:PSceAudioOutOutputParam;num:DWORD):Integer;  SysV_ABI_CDecl;
+function ps4_sceAudioOutOutputs(param:PSceAudioOutOutputParam;num:DWORD):Integer;
 var
  i:DWORD;
 begin
+ {
  if (param=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
  if (num=0) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PARAM);
  For i:=0 to num-1 do
@@ -821,13 +850,17 @@ begin
   Result:=ps4_sceAudioOutOutput(param[i].handle,param[i].ptr);
   if (Result<>0) then Exit;
  end;
+ }
+ Result:=0;
 end;
 
-
-function ps4_sceAudioOutGetLastOutputTime(handle:Integer;outputTime:PQWORD):Integer;  SysV_ABI_CDecl;
+function ps4_sceAudioOutGetLastOutputTime(handle:Integer;outputTime:PQWORD):Integer;
+{
 Var
  H:TAudioOutHandle;
+ }
 begin
+ {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
  if (outputTime=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
@@ -843,62 +876,35 @@ begin
  _sig_lock;
  H.Release;
  _sig_unlock;
+ }
 
  Result:=0;
 end;
 
-function Load_libSceAudioOut(Const name:RawByteString):TElf_node;
+function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceAudioOut');
 
- lib:=Result._add_lib('libSceAudioOut');
-
- lib^.set_proc($25F10F5D5C6116A0,@ps4_sceAudioOutInit);
- lib^.set_proc($7A436FB13DB6AEC6,@ps4_sceAudioOutOpen);
- lib^.set_proc($B35FFFB84F66045C,@ps4_sceAudioOutClose);
- lib^.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
- lib^.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
- lib^.set_proc($C15C0F539D294B57,@ps4_sceAudioOutSetMixLevelPadSpk);
- lib^.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
- lib^.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
- lib^.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
- lib^.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
+ lib:=Result^.add_lib('libSceAudioOut');
+ lib.set_proc($25F10F5D5C6116A0,@ps4_sceAudioOutInit);
+ lib.set_proc($7A436FB13DB6AEC6,@ps4_sceAudioOutOpen);
+ lib.set_proc($B35FFFB84F66045C,@ps4_sceAudioOutClose);
+ lib.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
+ lib.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
+ lib.set_proc($C15C0F539D294B57,@ps4_sceAudioOutSetMixLevelPadSpk);
+ lib.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
+ lib.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
+ lib.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
+ lib.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
 end;
 
-const
- SCE_AUDIO_IN_ERROR_NOT_OPENED=$80260109;
-
-function ps4_sceAudioInOpen(userID,busType,index,len,freq,param:Integer):Integer; SysV_ABI_CDecl;
-begin
- Result:=Integer(SCE_AUDIO_IN_ERROR_NOT_OPENED);
-end;
-
-const
- SCE_AUDIO_IN_SILENT_STATE_DEVICE_NONE=$00000001;
-
-
-function ps4_sceAudioInGetSilentState(handle:Integer):Integer; SysV_ABI_CDecl;
-begin
- Result:=SCE_AUDIO_IN_SILENT_STATE_DEVICE_NONE;
-end;
-
-function Load_libSceAudioIn(Const name:RawByteString):TElf_node;
 var
- lib:PLIBRARY;
-begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
- lib:=Result._add_lib('libSceAudioIn');
- lib^.set_proc($E4D13C4A373B542F,@ps4_sceAudioInOpen);
- lib^.set_proc($068844010EC39541,@ps4_sceAudioInGetSilentState);
-end;
+ stub:t_int_file;
 
 initialization
- ps4_app.RegistredPreLoad('libSceAudioOut.prx',@Load_libSceAudioOut);
- ps4_app.RegistredPreLoad('libSceAudioIn.prx',@Load_libSceAudioIn);
+ reg_int_file(stub,'libSceAudioOut.prx',@Load_libSceAudioOut);
 
 end.
 

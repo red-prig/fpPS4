@@ -76,6 +76,8 @@ uses
  ps4_libSceNpScoreRanking,
  ps4_libSceScreenShot,
  ps4_libSceSaveData,
+ ps4_libSceAudioOut,
+ ps4_libSceAudioIn,
  //ps4_libSceDiscMap,
  //internal libs
 
