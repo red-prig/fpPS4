@@ -248,6 +248,8 @@ var
  node:PQNode;
  value:Ptruint;
 begin
+ if FStop then Exit;
+
  node:=Recv;
 
  while (node<>nil) do
@@ -263,6 +265,8 @@ begin
      begin
       value:=Handler.OnMessage(t_mtype(node^.header.mtype),node^.header.mlen,@node^.buf);
 
+      if FStop then Exit;
+
       //is sync
       if (node^.header.mtid<>0) then
       begin
@@ -274,6 +278,8 @@ begin
 
   //
   FreeMem(node); //RenderDoc -> ExceptionCode:0xC0000005
+  //
+  if FStop then Exit;
   //
   node:=Recv;
  end;

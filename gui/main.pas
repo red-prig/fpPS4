@@ -347,7 +347,11 @@ begin
     begin
      if (MessageDlgEx(PChar(buf),mtError,[mbOK,mbAbort],Form)=mrAbort) then
      begin
-      Form.TBStopClick(nil);
+      if (Form.FGameProcess<>nil) then
+      if (Form.FGameProcess.g_ipc<>nil) then
+      begin
+       Form.FGameProcess.g_ipc.FStop:=True;
+      end;
      end;
     end
   else;
@@ -829,7 +833,8 @@ begin
   end;
 
   if (FGameProcess.g_ipc<>nil) then //recheck, must be free in Update()
-  if FGameProcess.is_terminated then
+  if (FGameProcess.is_terminated) or
+     (FGameProcess.g_ipc.FStop) then
   begin
    TBStopClick(Sender);
   end;

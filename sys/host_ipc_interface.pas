@@ -25,6 +25,7 @@ type
  THostIpcInterface=class
   public
    Ftd:Pointer; //p_kthread
+   FStop:Boolean;
    //
    procedure   error(const s:RawByteString);
    procedure   kevent(kev:p_kevent;count:Integer);

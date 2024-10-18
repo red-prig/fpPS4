@@ -236,6 +236,12 @@ type
   reserved   :QWORD;
  end;
 
+ pSceVideoOutColorSettings=^SceVideoOutColorSettings;
+ SceVideoOutColorSettings=packed record
+  gamma :array[0..2] of Single;
+  option:DWORD;
+ end;
+
 type
  p_cursor_enable=^t_cursor_enable;
  t_cursor_enable=packed record
@@ -391,6 +397,7 @@ var
    1:(f_status:t_flip_status);
    2:(i_scaler:t_scaler_info);
    3:(v_vblank:t_vblank_args);
+   4:(color   :SceVideoOutColorSettings)
  end;
 begin
  Result:=0;
@@ -797,7 +804,37 @@ begin
 
      if (data^.arg3>13) then Exit(EINVAL);
 
-     Writeln('dce_flip_control(',data^.id,'):',data^.arg3,' 0x',HexStr(data^.arg4,16));
+     Writeln('dce_flip_control(',data^.id,'):',data^.arg3,' 0x',HexStr(data^.arg4,10));
+    end;
+
+  33: //sceVideoOutAdjustColor_
+    begin
+     //arg2 -> canary
+     //arg3 -> pSetting;
+     //arg4 -> size;
+
+     if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+     ptr:=Pointer(data^.arg3);
+     len:=data^.arg4;
+
+     if (len<>16) and (len<>12) then Exit(EINVAL);
+
+     u.color:=Default(SceVideoOutColorSettings);
+     if (len<>12) then
+     begin
+      u.color.option:=$ffffffff;
+     end;
+
+     Result:=copyin(ptr,@u.color,len);
+
+     if (Result<>0) then Exit;
+
+     Writeln('sceVideoOutAdjustColor(',u.color.gamma[0]:0:2,',',
+                                       u.color.gamma[1]:0:2,',',
+                                       u.color.gamma[2]:0:2,',0x',HexStr(u.color.option,8)+')');
+
+     Exit(0);
     end;
 
   else
