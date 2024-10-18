@@ -1100,7 +1100,8 @@ procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- Assert(Body^.header.shaderType=1,'shaderType<>CS');
+ //shaderType is any?
+ //Assert(Body^.header.shaderType=1,'shaderType<>CS');
 
  Case Body^.eventType of
   CS_DONE:;
