@@ -1462,6 +1462,15 @@
         <Filename Value="src\audio\audioout_interface.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libsceappcontent.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAppContent"/>
+      </Unit>
+      <Unit>
+        <Filename Value="sys\sockopt.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

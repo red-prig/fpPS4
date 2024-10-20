@@ -17,7 +17,9 @@ uses
  }
 type
  sa_family_t=Byte;
- socklen_t  =DWORD;
+
+ p_socklen_t=^socklen_t;
+ socklen_t  =Integer;
 
 const
 //socket types

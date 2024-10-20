@@ -208,7 +208,7 @@ var
   ),
   (//[30]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_accept;
      sy_name:'sys_accept'
   ),
   (//[31]
@@ -578,17 +578,17 @@ var
   ),
   (//[104]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_bind;
      sy_name:'sys_bind'
   ),
   (//[105]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_setsockopt;
      sy_name:'sys_setsockopt'
   ),
   (//[106]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_listen;
      sy_name:'sys_listen'
   ),
   (//[107]

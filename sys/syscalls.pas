@@ -26,6 +26,7 @@ function  unmount(path:PChar;flags:Integer):Integer;
 function  setuid(uid:Integer):Integer;
 function  getuid():Integer;
 function  geteuid():Integer;
+function  _accept(s:Integer;aname,anamelen:Pointer):Integer;
 function  access(path:PChar;flags:Integer):Integer;
 function  chflags(path:PChar;flags:Integer):Integer;
 function  fchflags(fd,flags:Integer):Integer;
@@ -63,6 +64,9 @@ function  socket(domain,stype,protocol:Integer):Integer;
 function  _connect(fd:Integer;name:Pointer;namelen:Integer):Integer;
 function  __sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
 function  getpriority(which,who:Integer):Integer;
+function  _bind(s:Integer;name:Pointer;namelen:Integer):Integer;
+function  _setsockopt(s,level,name:Integer;val:Pointer;valsize:Integer):Integer;
+function  _listen(s,backlog:Integer):Integer;
 function  __sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer;
 function  __sys_socketclose(fd:Integer):Integer;
 function  gettimeofday(tp,tzp:Pointer):Integer;
@@ -395,6 +399,13 @@ asm
  jmp   cerror
 end;
 
+function _accept(s:Integer;aname,anamelen:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $30,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function access(path:PChar;flags:Integer):Integer; assembler; nostackframe;
 asm
  movq  $33,%rax
@@ -650,6 +661,27 @@ end;
 function getpriority(which,who:Integer):Integer; assembler; nostackframe;
 asm
  movq  $100,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function _bind(s:Integer;name:Pointer;namelen:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $104,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function _setsockopt(s,level,name:Integer;val:Pointer;valsize:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $105,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function _listen(s,backlog:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $106,%rax
  call  fast_syscall
  jmp   cerror
 end;

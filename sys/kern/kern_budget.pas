@@ -698,10 +698,10 @@ begin
 
  end;
 
- Writeln('DMEM_LIMIT           =0x',HexStr(DMEM_LIMIT,16));
- Writeln('FMEM_LIMIT           =0x',HexStr(FMEM_LIMIT,16));
- Writeln('BigAppMem            =0x',HexStr(BigAppMemory,16));
- Writeln('game_fmem_size       =0x',HexStr(game_fmem_size,16));
+ Writeln('DMEM_LIMIT          =0x',HexStr(DMEM_LIMIT,16));
+ Writeln('FMEM_LIMIT          =0x',HexStr(FMEM_LIMIT,16));
+ Writeln('BigAppMem           =0x',HexStr(BigAppMemory,16));
+ Writeln('game_fmem_size      =0x',HexStr(game_fmem_size,16));
  //
  Writeln('vm_budget_dmem_alloc=0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_dmem_alloc),16));
  Writeln('vm_budget_mlock     =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mlock     ),16));
