@@ -1,20 +1,21 @@
 unit ps4_libSceAppContent;
 
 {$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
-  ps4_program,
-  Classes,
-  SysUtils;
+ subr_dynlib;
 
 implementation
 
+{
 uses
  sys_path,
  sys_signal,
  param_sfo;
+}
 
 Const
  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            =0;
@@ -87,16 +88,18 @@ begin
  Result:=0;
 end;
 
-function ps4_sceAppContentAppParamGetInt(paramId:DWORD;value:PInteger):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentAppParamGetInt(paramId:DWORD;value:PInteger):Integer;
 begin
  Result:=0;
  if (value=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
  Case SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG of
   SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            :value^:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
+  {
   SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_1');
   SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_2');
   SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_3');
   SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_4');
+  }
   else
    Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
  end;
@@ -105,7 +108,7 @@ end;
 function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
                                              list:pSceAppContentAddcontInfo;
                                              listNum:DWORD;
-                                             hitNum:PDWORD):Integer; SysV_ABI_CDecl;
+                                             hitNum:PDWORD):Integer;
 begin
  Result:=0;
  Writeln('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
@@ -118,96 +121,111 @@ end;
 function ps4_sceAppContentGetAddcontInfo(serviceLabel:SceNpServiceLabel;
                                          entitlementLabel:pSceNpUnifiedEntitlementLabel;
                                          info:pSceAppContentAddcontInfo
-                                        ):Integer; SysV_ABI_CDecl;
+                                        ):Integer;
 begin
  if (entitlementLabel=nil) or (info=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
  Result:=SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT;
 end;
 
-function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer;
 begin
+ {
  _sig_lock;
  Result:=FormatTmpPath(PChar(mountPoint));
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAppContentTemporaryDataMount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentTemporaryDataMount(mountPoint:pSceAppContentMountPoint):Integer;
 begin
+ {
  _sig_lock;
  Result:=FetchTmpMount(PChar(mountPoint),SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT);
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer;
 begin
+ {
  _sig_lock;
  Result:=FetchTmpMount(PChar(mountPoint),option);
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAppContentTemporaryDataUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentTemporaryDataUnmount(mountPoint:pSceAppContentMountPoint):Integer;
 begin
+ {
  _sig_lock;
  Result:=UnMountTmpPath(PChar(mountPoint));
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
 begin
+ {
  _sig_lock;
  Result:=GetTmpPathAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
  _sig_unlock;
+ }
 end;
 
-function ps4_sceAppContentDownloadDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentDownloadDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
 begin
+ {
  _sig_lock;
  Result:=GetDownloadAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
  _sig_unlock;
+ }
 end;
 
 function ps4_sceAppContentGetEntitlementKey(serviceLabel:SceNpServiceLabel;
                                             entitlementLabel:pSceNpUnifiedEntitlementLabel;
                                             key:pSceAppContentEntitlementKey
-                                           ):Integer; SysV_ABI_CDecl;
+                                           ):Integer;
 begin
  if (entitlementLabel=nil) or (key=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
  Result:=0;
 end;
 
-function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer; SysV_ABI_CDecl;
+function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer;
 begin
  Result:=0;
 end;
 
-function Load_libSceAppContent(Const name:RawByteString):TElf_node;
+function Load_libSceAppContent(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ //export module is libSceAppContentUtil
+ Result:=obj_new_int('libSceAppContentUtil');
 
- lib:=Result._add_lib('libSceAppContent');
+ //
 
- lib^.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
- lib^.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
- lib^.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
- lib^.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
- lib^.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
- lib^.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
- lib^.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
- lib^.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
- lib^.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
- lib^.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
- lib^.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
- lib^.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
+ lib:=Result^.add_lib('libSceAppContent');
+ lib.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
+ lib.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
+ lib.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
+ lib.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
+ lib.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
+ lib.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
+ lib.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
+ lib.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
+ lib.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
+ lib.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
+ lib.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
+ lib.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
 end;
 
+var
+ stub:t_int_file;
 
 initialization
- ps4_app.RegistredPreLoad('libSceAppContent.prx',@Load_libSceAppContent);
+ reg_int_file(stub,'libSceAppContent.prx',@Load_libSceAppContent);
 
 end.
 

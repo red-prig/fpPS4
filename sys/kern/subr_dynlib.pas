@@ -18,10 +18,10 @@ uses
 type
  TLIBRARY=object
   lib:Pointer;
-  function set_symb(nid:QWORD;info:Byte;value:Pointer):Boolean;
-  function set_proc(nid:QWORD;value:Pointer):Boolean;
-  function set_data(nid:QWORD;value:Pointer):Boolean;
-  function set_weak(nid:QWORD;value:Pointer):Boolean;
+  function set_symb (nid:QWORD;info:Byte;value:Pointer;mod_id:Word=0):Boolean;
+  function set_proc (nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
+  function set_data (nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
+  function set_weak (nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
   function get_value(nid:QWORD):Pointer;
  end;
 
@@ -145,7 +145,7 @@ type
   procedure init_rel_data;
   function  add_str(str:pchar):QWORD;
   function  add_lib(lib_name:pchar;import:Word=0):TLIBRARY;
-  procedure add_mod(mod_name:pchar;import:Word=0);
+  function  add_mod(mod_name:pchar;import:Word=0):WORD;
  end;
 
  p_Objlist_Entry=^Objlist_Entry;
@@ -479,7 +479,7 @@ begin
  Result.lib:=lib_entry;
 end;
 
-procedure t_lib_info.add_mod(mod_name:pchar;import:Word=0);
+function t_lib_info.add_mod(mod_name:pchar;import:Word=0):WORD;
 label
  rep;
 var
@@ -504,9 +504,11 @@ begin
  mod_entry^.dval.name_offset:=add_str(mod_name);
 
  TAILQ_INSERT_TAIL(@mod_table,mod_entry,@mod_entry^.link);
+
+ Result:=mod_entry^.dval.id;
 end;
 
-function TLIBRARY.set_symb(nid:QWORD;info:Byte;value:Pointer):Boolean;
+function TLIBRARY.set_symb(nid:QWORD;info:Byte;value:Pointer;mod_id:Word=0):Boolean;
 var
  lib_entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
@@ -517,7 +519,7 @@ begin
  h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
  //
  h_entry^.nid   :=nid;
- h_entry^.mod_id:=0; //export
+ h_entry^.mod_id:=mod_id; //export -> mod_id=0
  h_entry^.lib_id:=lib_entry^.dval.id;
  //
  h_entry^.sym.st_info :=info;
@@ -549,19 +551,19 @@ begin
  end;
 end;
 
-function TLIBRARY.set_proc(nid:QWORD;value:Pointer):Boolean;
+function TLIBRARY.set_proc(nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
 begin
- Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_FUN,value);
+ Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_FUN,value,mod_id);
 end;
 
-function TLIBRARY.set_data(nid:QWORD;value:Pointer):Boolean;
+function TLIBRARY.set_data(nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
 begin
- Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_OBJECT,value);
+ Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_OBJECT,value,mod_id);
 end;
 
-function TLIBRARY.set_weak(nid:QWORD;value:Pointer):Boolean;
+function TLIBRARY.set_weak(nid:QWORD;value:Pointer;mod_id:Word=0):Boolean;
 begin
- Result:=set_symb(nid,(STB_WEAK shl 4) or STT_FUN,value);
+ Result:=set_symb(nid,(STB_WEAK shl 4) or STT_FUN,value,mod_id);
 end;
 
 function TLIBRARY.get_value(nid:QWORD):Pointer;
@@ -2428,13 +2430,14 @@ begin
 
  if (obj^.rtld_flags.init_plt<>0) then Exit;
 
- Result:=change_relro_protection(obj,VM_PROT_RW);
- if (Result<>0) then Exit;
-
  entry:=obj^.rel_data^.pltrela_addr;
  count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
 
  if (entry<>nil) and (count<>0) then
+ begin
+  Result:=change_relro_protection(obj,VM_PROT_RW);
+  if (Result<>0) then Exit;
+
   For i:=0 to count-1 do
   begin
    kaddr:=i or QWORD($effffffe00000000);
@@ -2467,7 +2470,8 @@ begin
    Inc(entry);
   end;
 
- err:=change_relro_protection(obj,VM_PROT_READ);
+  err:=change_relro_protection(obj,VM_PROT_READ);
+ end;
 
  obj^.rtld_flags.init_plt:=1;
 end;
@@ -2907,10 +2911,12 @@ const
  );
 
 function preload_prx_internal(name:pchar;flag:ptruint):p_lib_info;
+label
+ _error;
 var
  entry:p_int_file;
  path:pchar;
- error:Integer;
+ err:Integer;
 begin
  Result:=nil;
 
@@ -2942,25 +2948,32 @@ begin
     obj_set_lib_path(Result,path);
     object_add_name(Result,dynlib_basename(Result^.lib_path));
 
-    ///Result^.lib_dirname neded???
-
     alloc_tls(Result);
 
-    error:=map_prx_internal(name,Result);
-    if (error<>0) then
+    //load fake code mem
+    err:=map_prx_internal(name,Result);
+    if (err<>0) then
     begin
-     obj_free(Result);
-     Exit(nil);
+     _error:
+      obj_free(Result);
+      Exit(nil);
     end;
 
-
     //
+
+    err:=digest_dynamic(Result);
+    if (err<>0) then
+    begin
+     Writeln(StdErr,'preload_prx_internal:','digest_dynamic() failed rv=',err);
+     goto _error;
+    end;
 
     //reg lib
     dynlibs_add_obj(Result);
     //
+    Result^.rtld_flags.init_plt :=1;
     Result^.rtld_flags.is_system:=1;
-    Result^.rtld_flags.internal:=1;
+    Result^.rtld_flags.internal :=1;
     Result^.loaded:=1;
 
     Writeln(' preload_prx_internal:',path);

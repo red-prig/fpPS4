@@ -424,7 +424,7 @@ const
                                           libname :nil;
                                           libfrom :nil);
 
-procedure unresolve_symbol_print(nid:QWORD;libname,libfrom:PChar);
+procedure unresolve_symbol_print(nid:QWORD;libname,modname,libfrom:PChar);
 var
  str:shortstring;
 begin
@@ -439,6 +439,7 @@ begin
       ' nid    ='+EncodeValue64(nid)+#13#10+
       ' name   ='+str+#13#10+
       ' libname='+libname+#13#10+
+      ' modname='+modname+#13#10+
       ' libfrom='+libfrom+#13#10;
 
  print_error_td(str);
@@ -454,7 +455,7 @@ begin
 
  td^.td_frame.tf_rip:=PQWORD(td^.td_frame.tf_rsp)^;
 
- unresolve_symbol_print(data^.nid,data^.libname,data^.libfrom);
+ unresolve_symbol_print(data^.nid,data^.libname,nil,data^.libfrom);
 end;
 
 procedure _unresolve_symbol; assembler; nostackframe; public;
@@ -588,7 +589,7 @@ begin
 
  if Result then
  begin
-  unresolve_symbol_print(req.nid,req.libname,dynlib_basename(obj^.lib_path));
+  unresolve_symbol_print(req.nid,req.libname,req.modname,dynlib_basename(obj^.lib_path));
  end;
 end;
 
