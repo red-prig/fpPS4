@@ -7,7 +7,7 @@ unit ps4_libSceAvSetting;
 interface
 
 uses
-  subr_dynlib;
+ subr_dynlib;
 
 implementation
 

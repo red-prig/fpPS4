@@ -1471,6 +1471,11 @@
         <Filename Value="sys\sockopt.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscenetctl.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNetCtl"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

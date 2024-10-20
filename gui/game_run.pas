@@ -79,6 +79,7 @@ uses
  ps4_libSceSaveData,
  ps4_libSceAudioOut,
  ps4_libSceAudioIn,
+ ps4_libSceNetCtl,
  //ps4_libSceDiscMap,
  //internal libs
 

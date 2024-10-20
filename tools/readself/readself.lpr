@@ -1792,6 +1792,7 @@ type
   enc:RawByteString;
   dst:RawByteString;
   nid:QWORD;
+  mib:WORD;
   lib:WORD;
  end;
 
@@ -1820,6 +1821,7 @@ begin
    end;
  end;
 
+ info^.mib:=nModId;
  info^.lib:=nLibId;
 end;
 
@@ -1866,6 +1868,7 @@ var
  lib:TLIBRARY;
 
  lib_array:array of TLIBRARY;
+ mod_array:array of TLIBRARY;
 
  nid_info:t_nid_info;
 
@@ -1880,6 +1883,19 @@ var
    SetLength(lib_array,i);
   end;
   lib_array[id]:=lib;
+ end;
+
+ procedure set_mod(id:Word;lib:TLIBRARY); inline;
+ var
+  i:Integer;
+ begin
+  i:=Length(mod_array);
+  if (i<=id) then
+  begin
+   i:=id+1;
+   SetLength(mod_array,i);
+  end;
+  mod_array[id]:=lib;
  end;
 
 begin
@@ -1906,6 +1922,18 @@ begin
        lib.Import:=(d_entry^.d_tag=DT_SCE_IMPORT_LIB);
 
        set_lib(lu.id,lib);
+      end;
+
+    DT_SCE_MODULE_INFO,
+    DT_SCE_NEEDED_MODULE:
+      begin
+       lu.value:=d_entry^.d_un.d_val;
+       str:=@obj^.dt_strtab_addr[lu.name_offset];
+
+       lib.Name  :=str;
+       lib.Import:=(d_entry^.d_tag=DT_SCE_NEEDED_MODULE);
+
+       set_mod(lu.id,lib);
       end;
 
     else;
@@ -1945,6 +1973,8 @@ begin
     Write('0x',HexStr(nid_info.nid,16),'|');
 
     Write(BaseEncName(PChar(nid_info.enc)),'|');
+
+    Write(mod_array[nid_info.mib].Name,'|');
 
     Write(lib_array[nid_info.lib].Name,'|');
 
