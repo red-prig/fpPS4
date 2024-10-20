@@ -1458,6 +1458,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAudioIn"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\audio\audioout_interface.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

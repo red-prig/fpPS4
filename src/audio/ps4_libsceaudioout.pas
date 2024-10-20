@@ -8,20 +8,41 @@ unit ps4_libSceAudioOut;
 interface
 
 uses
-  atomic,
-  //spinlock,
   //libportaudio,
   subr_dynlib,
-  Classes,
-  SysUtils;
+  audioout_interface;
 
 implementation
+
+uses
+ sysutils,
+ atomic,
+ kern_rwlock,
+ kern_proc,
+ ps4_libSceMbus;
 
 {
 uses
  ps4_time,
  sys_signal;
 }
+
+var
+ g_audioout_interface:TAbstractAudioOut=nil;
+
+ g_port_table:array[0..24] of TAudioOutHandle;
+
+ g_port_lock:Pointer=nil;
+
+function alloc_port_id(a,b:Byte):Integer;
+begin
+ Result:=-1;
+ For a:=a to b do
+ if (g_port_table[a]=nil) then
+ begin
+  Exit(a);
+ end;
+end;
 
 const
  SCE_AUDIO_OUT_ERROR_NOT_OPENED         =-2144993279; // 0x80260001
@@ -87,12 +108,12 @@ const
  SCE_AUDIO_VOLUME_FLAG_LE_CH  =(1 shl 6);
  SCE_AUDIO_VOLUME_FLAG_RE_CH  =(1 shl 7);
 
- SCE_AUDIO_OUT_STATE_OUTPUT_UNKNOWN             =$00;
- SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY   =$01;
- SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_SECONDARY =$02;
- SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_TERTIARY  =$04;
- SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_HEADPHONE =$40;
- SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_EXTERNAL  =$80;
+ SCE_AUDIO_OUT_STATE_OUTPUT_UNKNOWN            =$00;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY  =$01;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_SECONDARY=$02;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_TERTIARY =$04;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_HEADPHONE=$40;
+ SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_EXTERNAL =$80;
 
  SCE_AUDIO_OUT_STATE_CHANNEL_UNKNOWN     =0;
  SCE_AUDIO_OUT_STATE_CHANNEL_DISCONNECTED=0;
@@ -107,7 +128,7 @@ type
   output        :Word;
   channel       :Byte;
   reserved8_1   :Byte;
-  volume        :Word;
+  volume        :Smallint;
   rerouteCounter:Word;
   flag          :QWord;
   reserved64    :array[0..1] of QWORD;
@@ -129,55 +150,22 @@ type
 
 var
  _lazy_init:Integer=0;
- _lazy_wait:Integer=0;
- //HAudioOuts:TIntegerHandles;
 
 function ps4_sceAudioOutInit():Integer;
 begin
 
  if XCHG(_lazy_init,1)=0 then
  begin
-  {
-  _sig_lock;
-  Result:=Pa_Initialize();
-  _sig_unlock;
-  if (Result<>0) then Exit(SCE_AUDIO_OUT_ERROR_TRANS_EVENT);
-  _sig_lock;
-  HAudioOuts:=TIntegerHandles.Create(1);
-  _sig_unlock;
-  fetch_add(_lazy_wait,1);
+
+  g_audioout_interface:=TAudioOutNull;
+
+  Result:=0;
  end else
  begin
-  wait_until_equal(_lazy_wait,0);
   Result:=SCE_AUDIO_OUT_ERROR_ALREADY_INIT;
-  }
  end;
 
- //Writeln('sceAudioOutInit');
- //Result:=111;
 end;
-
-{
-userId
- User ID of the output destination
-
-type
- Virtual device type
-
-index
- Device index (unused; specify 0)
-
-len
- Granularity (number of samples to be output at once; 256, 512, 768, 1024, 1280, 1536, 1792, or 2048)
-
-freq
- Sampling frequency (Hz; specify 48000)
-
-param
- Data format, etc.
-
-
-}
 
 {
 type
@@ -212,9 +200,144 @@ begin
 end;
 }
 
+function _out_open(userId,_type:Integer;
+                   len,param:DWORD):Integer;
+var
+ port_id:Integer;
+ f_channels:DWORD;
+ handle:TAudioOutHandle;
+begin
+ //case   0: port_id[0..7]
+ //case   1: port_id[8..8]
+ //case   2: port_id[9..12]
+ //case   3: port_id[13..16]
+ //case   4: port_id[17..20]
+ //case   5: port_id[21..21]
+ //case   6: port_id[21..21]
+ //case   7: port_id[21..21]
+ //case   8: port_id[21..21]
+ //case   9: break;
+ //case  10: break;
+ //case  11: break;
+ //case  12: break;
+ //case  13: break;
+ //case  14: port_id[22..22]
+ //case 125: port_id[24..24]
+ //case 127: port_id[23..23]
+
+ //alloc id stage
+ case _type of
+    0:port_id:=alloc_port_id(0 ,7);
+    1:port_id:=alloc_port_id(8 ,8);
+    2:port_id:=alloc_port_id(9 ,12);
+    3:port_id:=alloc_port_id(13,16);
+    4:port_id:=alloc_port_id(17,20);
+    5:port_id:=alloc_port_id(21,21);
+    6:port_id:=alloc_port_id(21,21);
+    7:port_id:=alloc_port_id(21,21);
+    8:port_id:=alloc_port_id(21,21);
+   14:port_id:=alloc_port_id(22,22);
+  125:port_id:=alloc_port_id(24,24);
+  127:port_id:=alloc_port_id(23,23);
+  else
+      port_id:=-1;
+ end;
+
+ if (port_id<0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_PORT_FULL);
+ end;
+
+ f_channels:=0;
+
+ case (param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO:
+   begin
+    f_channels:=1;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO:
+   begin
+    f_channels:=2;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
+   begin
+    f_channels:=8;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
+   begin
+    f_channels:=1;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
+   begin
+    f_channels:=2;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
+   begin
+    f_channels:=8;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD:
+   begin
+    f_channels:=8;
+   end;
+  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
+   begin
+    f_channels:=8;
+   end;
+  10..14:
+   begin
+    Assert(false,'Undocumented sample format! :'+IntToStr((param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK)));
+    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+   end;
+  else
+   begin
+    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+   end;
+ end;
+
+ handle:=g_audioout_interface.Create;
+
+ if (handle=nil) then
+ begin
+  Assert(false,'audioout_interface alloc failed');
+  Exit(SCE_AUDIO_OUT_ERROR_OUT_OF_MEMORY);
+ end;
+
+ handle.f_userId   :=userId;
+ handle.f_type     :=_type;
+ handle.f_len      :=len;
+ handle.f_param    :=param;
+ handle.f_channels :=f_channels;
+
+ if not handle.Open('') then
+ begin
+  FreeAndNil(handle);
+  Assert(false,'audioout_interface open failed');
+  Exit(SCE_AUDIO_OUT_ERROR_TRANS_EVENT);
+ end;
+
+ handle.SetVolume(0,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(1,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(2,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(3,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(4,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(5,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(6,SCE_AUDIO_VOLUME_0DB);
+ handle.SetVolume(7,SCE_AUDIO_VOLUME_0DB);
+
+ if (_type=SCE_AUDIO_OUT_PORT_TYPE_PADSPK) then
+ begin
+  handle.SetMixLevelPadSpk(11626);
+ end;
+
+ //save handle
+ g_port_table[port_id]:=handle;
+
+ Result:=port_id;
+end;
+
 //int32_t SceUserServiceUserId;
 function ps4_sceAudioOutOpen(userId,_type,index:Integer;
-                         len,freq,param:DWORD):Integer;
+                             len,freq,param:DWORD):Integer;
 {
 Var
  H:TAudioOutHandle;
@@ -225,88 +348,98 @@ Var
  pnumOutputChannels:Integer;
  psampleFormat:PaSampleFormat;
  }
-
 begin
  Result:=0;
 
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-
- case _type of
-  SCE_AUDIO_OUT_PORT_TYPE_MAIN    :;
-  SCE_AUDIO_OUT_PORT_TYPE_BGM     :;
-  SCE_AUDIO_OUT_PORT_TYPE_VOICE   :;
-  SCE_AUDIO_OUT_PORT_TYPE_PERSONAL:;
-  SCE_AUDIO_OUT_PORT_TYPE_PADSPK  :;
-  SCE_AUDIO_OUT_PORT_TYPE_AUX     :;
-  else
-   Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+ if (_lazy_init=0) or (g_audioout_interface=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
  end;
 
- case len of
-  256,
-  512,
-  768,
-  1024,
-  1280,
-  1536,
-  1792,
-  2048:;
-  else
-   Exit(SCE_AUDIO_OUT_ERROR_INVALID_SIZE);
+ if (len=0) or (len>2048) or ((len and $FF)<>0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_SIZE);
  end;
 
- case freq of
-  48000:;
-  else
-   Exit(SCE_AUDIO_OUT_ERROR_INVALID_SAMPLE_FREQ);
- end;
-
- case (param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO:
-   begin
-    pnumOutputChannels:=1;
-    psampleFormat:=paInt16;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO:
-   begin
-    pnumOutputChannels:=2;
-    psampleFormat:=paInt16;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
-   begin
-    pnumOutputChannels:=8;
-    psampleFormat:=paInt16;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
-   begin
-    pnumOutputChannels:=1;
-    psampleFormat:=paFloat32;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
-   begin
-    pnumOutputChannels:=2;
-    psampleFormat:=paFloat32;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
-   begin
-    pnumOutputChannels:=8;
-    psampleFormat:=paFloat32;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD:
-   begin
-    pnumOutputChannels:=8;
-    psampleFormat:=paInt16;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
-   begin
-    pnumOutputChannels:=8;
-    psampleFormat:=paFloat32;
-   end;
-  else
+ if ((_type <> SCE_AUDIO_OUT_PORT_TYPE_PERSONAL) and ((param and $20000) <> 0)) then
+ begin
    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
  end;
 
+ if ((_type <> SCE_AUDIO_OUT_PORT_TYPE_MAIN) and ((param and $70000000) <> 0)) then
+ begin
+   Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+ end;
+
+ if ({(private = 0) and} ((param and $8ffcff00) <> 0)) then
+ begin
+   Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+ end;
+
+ if (_type<0) then
+ begin
+  case DWORD(_type) of
+   $80000000,
+   $80000001,
+   $80000002,
+   $80000003,
+   $80000004,
+   $8000007f:
+     begin
+      if (freq <> 48000) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_SAMPLE_FREQ);
+      end;
+     end;
+   else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+  end;
+ end else
+ begin
+  case DWORD(_type) of
+   SCE_AUDIO_OUT_PORT_TYPE_MAIN,
+   SCE_AUDIO_OUT_PORT_TYPE_BGM,
+   SCE_AUDIO_OUT_PORT_TYPE_VOICE,
+   SCE_AUDIO_OUT_PORT_TYPE_PERSONAL,
+   SCE_AUDIO_OUT_PORT_TYPE_PADSPK,
+   SCE_AUDIO_OUT_PORT_TYPE_AUX,
+   14:
+     begin
+      if (freq <> 48000) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_SAMPLE_FREQ);
+      end;
+     end;
+   5..13:
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+     end;
+   126:
+     begin
+      Exit(0);
+     end;
+   else
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+     end;
+  end;
+ end;
+
+ DWORD(_type):=DWORD(_type) and $7fffffff;
+
+ rw_wlock(g_port_lock);
+  Result:=_out_open(userId,_type,len,param);
+ rw_wunlock(g_port_lock);
+
+ if (Result<0) then Exit;
+
+ Result:=(DWORD(_type) shl 16) or DWORD(Result) or $20000000;
+
+ ps4_sceMbusAddHandleByUserId(1,Result,userId,_type,index,0);
+
+{
  pstream:=nil;
  err:=0;
  if (_type=SCE_AUDIO_OUT_PORT_TYPE_MAIN) or (_type=SCE_AUDIO_OUT_PORT_TYPE_BGM) then //so far only MAIN/BGM
@@ -390,127 +523,322 @@ begin
  }
 end;
 
+function _out_close(port_id:Integer):Integer;
+begin
+ if (g_port_table[port_id]=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_OPENED);
+ end;
+
+ FreeAndNil(g_port_table[port_id]);
+ Result:=0;
+end;
+
+function _get_port_id(handle:Integer):Integer; inline;
+begin
+ Result:=DWORD(handle) and $FF;
+
+ if (Result > 25) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+ end;
+
+ if ((DWORD(handle) and $3f000000) <> $20000000) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+ end;
+end;
+
 function ps4_sceAudioOutClose(handle:Integer):Integer;
+var
+ port_id  :Integer;
+ port_type:Integer;
 begin
  Result:=0;
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
- _sig_lock;
- if not HAudioOuts.Delete(handle) then Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
- _sig_unlock;
- }
+
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
+
+ ps4_sceMbusRemoveHandle(1,handle);
+
+ port_type:=Byte(handle shr 16);
+
+ case DWORD(port_type) of
+  0..4,14,127:
+    begin
+     //valid
+    end;
+  5..13:
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+  126:
+    begin
+     Exit(0);
+    end;
+  else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+ end;
+
+ rw_wlock(g_port_lock);
+  Result:=_out_close(port_id);
+ rw_wunlock(g_port_lock);
 end;
 
 function ps4_sceAudioOutGetPortState(handle:Integer;state:pSceAudioOutPortState):Integer;
-{
-Var
- H:TAudioOutHandle;
-}
+var
+ port_id  :Integer;
+ port_type:Integer;
 begin
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ Result:=0;
 
- if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
-
- _sig_lock;
- H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
- _sig_unlock;
-
- if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
-
- state^:=Default(SceAudioOutPortState);
-
- state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY;
-
- case (H.param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO,
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
-   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_1;
-
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO,
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
-   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_2;
-
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH,
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH,
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD,
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
-   state^.channel:=SCE_AUDIO_OUT_STATE_CHANNEL_8;
+ if (state=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
  end;
 
- state^.volume:=127; //user volume 0..127 (-1)
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
 
- H.Release;
- }
- Result:=0;
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
+
+ port_type:=Byte(handle shr 16);
+
+ case DWORD(port_type) of
+  0..4,14,125,127:
+    begin
+     //valid
+    end;
+  5..13:
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+    end;
+  else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+ end;
+
+ rw_wlock(g_port_lock);
+
+  if (g_port_table[port_id]<>nil) then
+  begin
+
+   case (g_port_table[port_id].f_type) of
+    SCE_AUDIO_OUT_PORT_TYPE_MAIN,
+    SCE_AUDIO_OUT_PORT_TYPE_BGM:
+     begin
+      state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_PRIMARY;
+     end;
+    SCE_AUDIO_OUT_PORT_TYPE_VOICE,
+    SCE_AUDIO_OUT_PORT_TYPE_PERSONAL:
+     begin
+      state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_HEADPHONE;
+     end;
+    SCE_AUDIO_OUT_PORT_TYPE_PADSPK:
+     begin
+      state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_TERTIARY;
+     end;
+    SCE_AUDIO_OUT_PORT_TYPE_AUX:
+     begin
+      state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_CONNECTED_EXTERNAL;
+     end;
+    else
+     begin
+      state^.output:=SCE_AUDIO_OUT_STATE_OUTPUT_UNKNOWN;
+     end;
+   end;
+
+   state^.channel:=Byte(g_port_table[port_id].f_channels);
+
+   if (g_port_table[port_id].f_type=SCE_AUDIO_OUT_PORT_TYPE_PADSPK) then
+   begin
+    state^.volume:=127; //max
+   end else
+   begin
+    state^.volume:=-1; //invalid
+   end;
+
+   state^.rerouteCounter:=0;
+   state^.flag          :=0;
+
+  end else
+  begin
+   Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
+  end;
+
+ rw_wunlock(g_port_lock);
 end;
 
-function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer;
+function ps4_sceAudioOutSetVolume(handle,flag:Integer;p_vol:PInteger):Integer;
+var
+ volume   :Integer;
+ port_id  :Integer;
+ port_type:Integer;
+ ahandle  :TAudioOutHandle;
 begin
- {
- if (state=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-
- state^.loudness:=1;
- }
  Result:=0;
-end;
 
-function ps4_sceAudioOutSetVolume(handle,flag:Integer;vol:PInteger):Integer;
-{
-Var
- H:TAudioOutHandle;
- i:Integer;
- }
-begin
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ if (p_vol=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ end;
 
- if (vol=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
- i:=vol^;
- if (i>SCE_AUDIO_VOLUME_0DB) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_VOLUME);
+ volume:=p_vol^;
 
- {$ifdef silent}if (i>800) then i:=800;{$endif}
+ if (volume>SCE_AUDIO_VOLUME_0DB) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_VOLUME);
+ end;
 
- _sig_lock;
- H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
- _sig_unlock;
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
 
- if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
 
- if (flag and SCE_AUDIO_VOLUME_FLAG_L_CH  <>0) then H.volume[0]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_R_CH  <>0) then H.volume[1]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_C_CH  <>0) then H.volume[2]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_LFE_CH<>0) then H.volume[3]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_LS_CH <>0) then H.volume[4]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_RS_CH <>0) then H.volume[5]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_LE_CH <>0) then H.volume[6]:=i;
- if (flag and SCE_AUDIO_VOLUME_FLAG_RE_CH <>0) then H.volume[7]:=i;
+ port_type:=Byte(handle shr 16);
 
- H.Release;
- //Writeln('sceAudioOutSetVolume:',handle,':',flag);
- }
+ case DWORD(port_type) of
+  0..4,14,125,127:
+    begin
+     //valid
+    end;
+  5..13:
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+    end;
+  else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+ end;
+
+ {$ifdef silent}if (volume>800) then volume:=800;{$endif}
+
+ rw_wlock(g_port_lock);
+
+  ahandle:=g_port_table[port_id];
+
+  if (ahandle<>nil) then
+  begin
+
+   if (flag and SCE_AUDIO_VOLUME_FLAG_L_CH  <>0) then ahandle.SetVolume(0,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_R_CH  <>0) then ahandle.SetVolume(1,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_C_CH  <>0) then ahandle.SetVolume(2,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_LFE_CH<>0) then ahandle.SetVolume(3,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_LS_CH <>0) then ahandle.SetVolume(4,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_RS_CH <>0) then ahandle.SetVolume(5,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_LE_CH <>0) then ahandle.SetVolume(6,volume);
+   if (flag and SCE_AUDIO_VOLUME_FLAG_RE_CH <>0) then ahandle.SetVolume(7,volume);
+
+  end else
+  begin
+   Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
+  end;
+
+ rw_wunlock(g_port_lock);
+
  Result:=0;
 end;
 
 function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer;
-{
-Var
- H:TAudioOutHandle;
- }
+var
+ port_id:Integer;
 begin
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-
- _sig_lock;
- H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
- _sig_unlock;
-
- //ignore
-
- H.Release;
- }
  Result:=0;
+
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
+
+ if (Byte(handle shr 16)<>SCE_AUDIO_OUT_PORT_TYPE_PADSPK) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+ end;
+
+ if (mixLevel>SCE_AUDIO_VOLUME_0DB) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_MIXLEVEL);
+ end;
+
+ rw_wlock(g_port_lock);
+
+  if (g_port_table[port_id]<>nil) then
+  begin
+   g_port_table[port_id].SetMixLevelPadSpk(mixLevel);
+  end else
+  begin
+   Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
+  end;
+
+ rw_wunlock(g_port_lock);
+end;
+
+function ps4_sceAudioOutGetLastOutputTime(handle:Integer;outputTime:PQWORD):Integer;
+var
+ port_id  :Integer;
+ port_type:Integer;
+begin
+ Result:=0;
+
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
+
+ if (outputTime=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ end;
+
+ port_type:=Byte(handle shr 16);
+
+ case DWORD(port_type) of
+  0..4,14,125,127:
+    begin
+     //valid
+    end;
+  5..13:
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+    end;
+  else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+ end;
+
+ rw_wlock(g_port_lock);
+
+  if (g_port_table[port_id]<>nil) then
+  begin
+   outputTime^:=g_port_table[port_id].GetLastOutputTime;
+  end else
+  begin
+   Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
+  end;
+
+ rw_wunlock(g_port_lock);
 end;
 
 procedure _VecMulI16M(Src,Dst:Pointer;count:Integer;volume:Integer);// inline;
@@ -718,12 +1046,50 @@ begin
 end;
 
 function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;
-{
-Var
- H:TAudioOutHandle;
- count,err:Integer;
- }
+var
+ port_id  :Integer;
+ port_type:Integer;
 begin
+ Result:=0;
+
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ port_id:=_get_port_id(handle);
+ if (port_id<0) then Exit(port_id);
+
+ port_type:=Byte(handle shr 16);
+
+ case DWORD(port_type) of
+  0..4,14,125,127:
+    begin
+     //valid
+    end;
+  5..13:
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+    end;
+  else
+    begin
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+    end;
+ end;
+
+ rw_wlock(g_port_lock);
+
+  if (g_port_table[port_id]<>nil) then
+  begin
+   Result:=g_port_table[port_id].Output(ptr);
+   if (Result<0) then Exit(SCE_AUDIO_OUT_ERROR_BUSY);
+  end else
+  begin
+   Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
+  end;
+
+ rw_wunlock(g_port_lock);
+
  {
  if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
 
@@ -835,50 +1201,122 @@ begin
  _sig_unlock;
  }
 
- Result:=0;
 end;
 
 function ps4_sceAudioOutOutputs(param:PSceAudioOutOutputParam;num:DWORD):Integer;
 var
- i:DWORD;
+ handle   :Integer;
+ port_id  :Integer;
+ port_type:Integer;
+ //
+ i,f:DWORD;
+ //
+ params:array[0..24] of TAudioOutParam;
 begin
- {
- if (param=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
- if (num=0) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PARAM);
+ Result:=0;
+
+  if (_lazy_init=0) or (g_audioout_interface=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ if (num=0) or (num<25) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_PORT_FULL);
+ end;
+
+ if (param=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ end;
+
+ //test all
  For i:=0 to num-1 do
  begin
-  Result:=ps4_sceAudioOutOutput(param[i].handle,param[i].ptr);
-  if (Result<>0) then Exit;
+  handle:=param[i].handle;
+
+  port_id:=_get_port_id(handle);
+  if (port_id<0) then Exit(port_id);
+
+  port_type:=Byte(handle shr 16);
+
+  case DWORD(port_type) of
+   0..4,14,125,127:
+     begin
+      //valid
+     end;
+   5..13:
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+     end;
+   else
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT_TYPE);
+     end;
+  end;
  end;
- }
+
+ rw_wlock(g_port_lock);
+
+  //test opened
+  For i:=0 to num-1 do
+  begin
+   handle:=param[i].handle;
+
+   port_id:=_get_port_id(handle);
+
+   if (g_port_table[port_id]<>nil) then
+   begin
+    //test dublicate
+    if (i<>0) and
+       (num<>1) and
+       (p_proc.p_sdk_version > $44fffff) then
+    begin
+     for f:=0 to num-1 do
+      if (f<>i) then
+      if (handle=param[f].handle) then
+      begin
+       Writeln(stderr,'[AudioOut] use same handles (handle[',i,']:0x',HexStr(handle,8),
+                      ' handle[',f,']:0x',HexStr(handle,8),')');
+
+       rw_wunlock(g_port_lock);
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+      end;
+    end;
+    //
+    params[i].handle:=g_port_table[port_id];
+    params[i].ptr   :=param[i].ptr;
+   end else
+   begin
+    rw_wunlock(g_port_lock);
+    Exit(SCE_AUDIO_OUT_ERROR_NOT_OPENED);
+   end;
+
+  end;
+
+  //output all
+  g_audioout_interface.Outputs(@params,num);
+
+ rw_wunlock(g_port_lock);
+
  Result:=0;
 end;
 
-function ps4_sceAudioOutGetLastOutputTime(handle:Integer;outputTime:PQWORD):Integer;
-{
-Var
- H:TAudioOutHandle;
- }
+function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer;
 begin
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-
- if (outputTime=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
-
- _sig_lock;
- H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
- _sig_unlock;
-
- if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
-
- outputTime^:=H.last_time;
-
- _sig_lock;
- H.Release;
- _sig_unlock;
- }
-
  Result:=0;
+
+ if (state=nil) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ end;
+
+ if (_lazy_init=0) then
+ begin
+  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
+ end;
+
+ state^.loudness:=1;
 end;
 
 function Load_libSceAudioOut(name:pchar):p_lib_info;
@@ -894,9 +1332,9 @@ begin
  lib.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
  lib.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
  lib.set_proc($C15C0F539D294B57,@ps4_sceAudioOutSetMixLevelPadSpk);
+ lib.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
  lib.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
- lib.set_proc($3ED96DB37DBAA5DB,@ps4_sceAudioOutGetLastOutputTime);
  lib.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
 end;
 

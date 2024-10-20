@@ -184,9 +184,9 @@ type
     frameCount : CULong;
     timeInfo : PaStreamCallbackTimeInfo;
     statusFlags : PaStreamCallbackFlags;
-    userData : Pointer) : CInt32;
+    userData : Pointer) : CInt32; cdecl;
 
-  PaStreamFinishedCallback = procedure(userData : Pointer);
+  PaStreamFinishedCallback = procedure(userData : Pointer); cdecl;
 
   PaStreamInfo = record
     structVersion : CInt32;

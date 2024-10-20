@@ -155,6 +155,12 @@ type
   unk3     :Integer;
  end;
 
+ p_close_args=^t_close_args;
+ t_close_args=packed record
+  port_type:Integer;
+  handle   :Integer;
+ end;
+
 const
  //ScePadButtonDataOffset
  SCE_PAD_BUTTON_L3          = $00000002;
@@ -252,6 +258,17 @@ begin
       td^.td_retval[0]:=generateHandle(port_type,0,0);
 
       Writeln('handle=0x',HexStr(td^.td_retval[0],8));
+     end;
+    end;
+
+  $80084803: //sceHidClosePortForUser
+    begin
+     with p_close_args(data)^ do
+     begin
+
+      Writeln('sceHidClosePortForUser(',port_type,',0x',HexStr(handle,8),')');
+
+      Result:=0;
      end;
     end;
 
