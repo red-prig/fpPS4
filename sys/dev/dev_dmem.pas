@@ -23,6 +23,7 @@ uses
  sys_vm_object,
  vm_pager,
  kern_authinfo,
+ kern_budget,
  subr_backtrace;
 
 type
@@ -73,7 +74,8 @@ begin
  case cmd of
   $4008800A: //sceKernelGetDirectMemorySize
             begin
-             PQWORD(data)^:=SCE_KERNEL_MAIN_DMEM_SIZE;
+             PQWORD(data)^:=kern_budget.DMEM_LIMIT;
+             //PQWORD(data)^:=SCE_KERNEL_MAIN_DMEM_SIZE;
             end;
 
   $C0208016: //sceKernelAvailableDirectMemorySize
@@ -88,6 +90,13 @@ begin
             begin
              with PAllocateDirectMemory(data)^ do
              begin
+              {
+              Writeln('dmem_map_alloc(0x',HexStr(start,10),
+                                    ',0x',HexStr(__end,10),
+                                    ',0x',HexStr(len,10),
+                                    ',0x',HexStr(align,10),
+                                    ',',mtype,')');
+              }
               Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,start);
              end;
             end;
