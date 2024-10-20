@@ -141,9 +141,9 @@ begin
  rw_wlock(budget_lock);
 
   case field of
-   field_dmem_alloc:Writeln('vm_set_budget_limit(field_dmem_alloc,0x',HexStr(value,16),')');
-   field_mlock     :Writeln('vm_set_budget_limit(field_mlock     ,0x',HexStr(value,16),')');
-   field_malloc    :Writeln('vm_set_budget_limit(field_malloc    ,0x',HexStr(value,16),')');
+   field_dmem_alloc:Writeln('vm_set_budget_limit(dmem_alloc,0x',HexStr(value,16),')');
+   field_mlock     :Writeln('vm_set_budget_limit(mlock     ,0x',HexStr(value,16),')');
+   field_malloc    :Writeln('vm_set_budget_limit(malloc    ,0x',HexStr(value,16),')');
    else;
   end;
 
@@ -698,6 +698,14 @@ begin
 
  end;
 
+ Writeln('DMEM_LIMIT           =0x',HexStr(DMEM_LIMIT,16));
+ Writeln('FMEM_LIMIT           =0x',HexStr(FMEM_LIMIT,16));
+ Writeln('BigAppMem            =0x',HexStr(BigAppMemory,16));
+ Writeln('game_fmem_size       =0x',HexStr(game_fmem_size,16));
+ //
+ Writeln('vm_budget_dmem_alloc=0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_dmem_alloc),16));
+ Writeln('vm_budget_mlock     =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mlock     ),16));
+ Writeln('vm_budget_malloc    =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_malloc    ),16));
 end;
 
 function get_mlock_avail():QWORD;
