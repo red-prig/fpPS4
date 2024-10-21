@@ -161,6 +161,20 @@ type
   handle   :Integer;
  end;
 
+ pScePadVibrationParam=^ScePadVibrationParam;
+ ScePadVibrationParam=packed record
+  largeMotor:Byte;
+  smallMotor:Byte;
+ end;
+
+ p_vibration_args=^t_vibration_args;
+ t_vibration_args=packed record
+  handle :Integer;
+  _align1:Integer;
+  pParam :pScePadVibrationParam;
+  force  :Byte;
+ end;
+
 const
  //ScePadButtonDataOffset
  SCE_PAD_BUTTON_L3          = $00000002;
@@ -365,7 +379,12 @@ begin
       //num
       td^.td_retval[0]:=1;
      end;
-    end
+    end;
+
+  $80184822: //scePadSetVibration/scePadSetVibrationForce
+    begin
+     //with p_vibration_ioctl(data)^ do
+    end;
 
  else
   begin
