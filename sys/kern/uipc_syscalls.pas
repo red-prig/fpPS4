@@ -20,6 +20,7 @@ uses
  errno,
  mqueue,
  systm,
+ md_sleep,
  kern_thr,
  kern_descrip,
  sys_conf,
@@ -316,6 +317,7 @@ begin
  end;
 
  //////////////////
+ msleep_td(0);
  error:=EWOULDBLOCK;
  goto noconnection;
   //////////////////

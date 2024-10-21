@@ -490,6 +490,10 @@ begin
  newtd:=thread_alloc(0);
  if (newtd=nil) then Exit(ENOMEM);
 
+ writeln('create_thread[',name,']'#13#10,
+         ' newtd:0x',HexStr(newtd)
+        );
+
  thread0_param(newtd);
 
  //user stack

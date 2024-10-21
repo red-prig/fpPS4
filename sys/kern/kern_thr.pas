@@ -234,6 +234,9 @@ type
   td_slptick      :Int64;
   td_slpcallout   :Pointer;
   tdq_lock        :mtx;
+  {$IFDEF DEBUG_MTX}
+  td_debug_mtx    :p_mtx;
+  {$ENDIF}
   //
   td_rlqe         :Pointer;
   td_fpop         :Pointer;

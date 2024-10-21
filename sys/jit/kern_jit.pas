@@ -1310,6 +1310,9 @@ begin
  lock_start:=ctx.text_start;
  lock___end:=ctx.text___end;
 
+ //prevent deadlock
+ vm_map_lock(map);
+
  lock:=pmap_wlock(map^.pmap,lock_start,lock___end);
 
   if (preload<>nil) then
@@ -1339,7 +1342,7 @@ begin
    pick_locked_internal(ctx);
   end else
   begin
-   pick_locked(ctx);
+   pick_locked(ctx); //blob.attach-> blob_track-> vm_map_track_insert
   end;
 
   //restore non tracked  (mirrors?)
@@ -1355,7 +1358,11 @@ begin
   }
 
  _exit:
+
  pmap_unlock(map^.pmap,lock);
+
+ //prevent deadlock
+ vm_map_unlock(map);
 end;
 
 procedure pick_locked_internal(var ctx:t_jit_context2);

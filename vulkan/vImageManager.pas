@@ -338,7 +338,7 @@ begin
  Result:=Default(TVkImageSubresourceRange);
  Result.aspectMask:=GetAspectMaskByFormat(key.cformat);
  Result.levelCount:=key.params.mipLevels;
- Result.layerCount:=key.params.arrayLayers;
+ Result.layerCount:=key.params.layerCount;
 end;
 
 Function TvCustomImage2.GetSubresLayer:TVkImageSubresourceLayers;
@@ -347,7 +347,7 @@ begin
  Result.aspectMask    :=GetAspectMaskByFormat(key.cformat);
  Result.mipLevel      :=0;
  Result.baseArrayLayer:=0;
- Result.layerCount    :=key.params.arrayLayers;
+ Result.layerCount    :=key.params.layerCount;
 end;
 
 //
@@ -427,7 +427,7 @@ begin
  Result.baseMipLevel  :=key.base_level;
  Result.levelCount    :=key.last_level-key.base_level+1;
  Result.baseArrayLayer:=key.base_array;
- Result.layerCount    :=key.last_array-key.base_array+1;
+ Result.layerCount    :=key.layerCount;
 end;
 
 Function TvImageView2.GetSubresLayer(cformat:TVkFormat=VK_FORMAT_UNDEFINED):TVkImageSubresourceLayers;
@@ -438,7 +438,7 @@ begin
  Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.mipLevel      :=key.base_level;
  Result.baseArrayLayer:=key.base_array;
- Result.layerCount    :=key.last_array-key.base_array+1;
+ Result.layerCount    :=key.layerCount;
 end;
 
 Constructor TvImage2.Create;
@@ -474,7 +474,7 @@ begin
  Result.format       :=key.cformat;
  Result.extent.Create(key.params.width,key.params.height,key.params.depth);
  Result.mipLevels    :=key.params.mipLevels;
- Result.arrayLayers  :=key.params.arrayLayers;
+ Result.arrayLayers  :=key.params.layerCount;
  Result.samples      :=TVkSampleCountFlagBits(key.params.samples);
  Result.tiling       :=VK_IMAGE_TILING_OPTIMAL;
  Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
@@ -494,7 +494,7 @@ begin
 
  if (key.params.cube<>0) then
  begin
-  Assert((key.params.arrayLayers mod 6)=0,'CUBE: layerCount must be a multiple of 6');
+  Assert((Result.arrayLayers mod 6)=0,'CUBE: layerCount must be a multiple of 6');
  end;
 end;
 
@@ -547,7 +547,7 @@ begin
   cinfo.subresourceRange.baseMipLevel  :=F.base_level;
   cinfo.subresourceRange.levelCount    :=F.last_level-F.base_level+1;
   cinfo.subresourceRange.baseArrayLayer:=F.base_array;
-  cinfo.subresourceRange.layerCount    :=F.last_array-F.base_array+1;
+  cinfo.subresourceRange.layerCount    :=F.layerCount;
 
   case cinfo.viewType of
    VK_IMAGE_VIEW_TYPE_CUBE:

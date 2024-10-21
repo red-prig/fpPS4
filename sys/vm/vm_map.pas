@@ -2268,13 +2268,13 @@ begin
   begin
    current:=current^.next;
   end;
- end;
+ end; //while
 
  vm_map_unlock(map);
 
  case failed of
   True :Result:=KERN_FAILURE;
-  FAlse:Result:=KERN_SUCCESS;
+  False:Result:=KERN_SUCCESS;
  end;
 end;
 

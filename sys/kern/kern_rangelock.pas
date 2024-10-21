@@ -88,13 +88,9 @@ end;
  * Two entries are compatible if their ranges do not overlap, or both
  * entries are for read.
 }
-function ranges_overlap(e1,e2:p_rl_q_entry):Integer;
+function ranges_overlap(e1,e2:p_rl_q_entry):Boolean;
 begin
- if (e1^.rl_q_start < e2^.rl_q_end) and (e1^.rl_q_end > e2^.rl_q_start) then
- begin
-  Exit(1);
- end;
- Exit(0);
+ Result:=(e1^.rl_q_start < e2^.rl_q_end) and (e1^.rl_q_end > e2^.rl_q_start);
 end;
 
 {
@@ -121,7 +117,7 @@ begin
    entry1:=TAILQ_FIRST(@lock^.rl_waiters);
    while ((entry1^.rl_q_flags and RL_LOCK_READ)=0) do
    begin
-    if (ranges_overlap(entry, entry1)<>0) then
+    if ranges_overlap(entry, entry1) then
     begin
      goto _out;
     end;
@@ -138,8 +134,18 @@ begin
    entry1:=TAILQ_FIRST(@lock^.rl_waiters);
    while (entry1<>entry) do
    begin
-    if (ranges_overlap(entry, entry1)<>0) then
+    if ranges_overlap(entry, entry1) then
     begin
+     {
+     Writeln('ranges_overlap:',
+              HexStr(entry),',',
+              HexStr(entry^.rl_q_start,10),',',
+              HexStr(entry^.rl_q_end,10),
+              ' to ',
+              HexStr(entry1),',',
+              HexStr(entry1^.rl_q_start,10),',',
+              HexStr(entry1^.rl_q_end,10));
+     }
      goto _out;
     end;
     //
@@ -155,7 +161,9 @@ begin
   // Grant this lock.
   entry^.rl_q_flags:=entry^.rl_q_flags or RL_LOCK_GRANTED;
   wakeup(entry);
+  //Writeln('rl_wakeup:',HexStr(entry));
 
+  //
   entry:=nextentry;
  end;
  //for
@@ -309,6 +317,7 @@ begin
    Exit(nil);
   end;
 
+  //Writeln('rl_msleep:',HexStr(entry));
   msleep(entry, ilk, 0, 'range', 0);
  end;
 

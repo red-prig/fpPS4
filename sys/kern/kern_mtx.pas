@@ -10,6 +10,9 @@ type
  mtx=packed record
   n:PChar;
   c:TRTLCriticalSection;
+  {$IFDEF DEBUG_MTX}
+  debug_own:array[0..2] of Pointer;
+  {$ENDIF}
  end;
 
 const
@@ -54,6 +57,11 @@ procedure mtx_assert (var m:mtx);
 
 implementation
 
+{$IFDEF DEBUG_MTX}
+uses
+ kern_thr;
+{$ENDIF}
+
 procedure mtx_init(var m:mtx;name:PChar); inline;
 begin
  m.n:=name;
@@ -65,18 +73,56 @@ begin
  DoneCriticalSection(m.c);
 end;
 
-procedure mtx_lock(var m:mtx); inline;
+procedure mtx_lock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
+{$IFDEF DEBUG_MTX}
+var
+ rbp:Pointer;
+{$ENDIF}
 begin
+ {$IFDEF DEBUG_MTX}
+ curkthread^.td_debug_mtx:=@m;
+ {$ENDIF}
  EnterCriticalSection(m.c);
+ {$IFDEF DEBUG_MTX}
+ curkthread^.td_debug_mtx:=nil;
+ rbp:=nil;
+ asm
+  movq %rbp,rbp
+ end;
+ m.debug_own[0]:=PPointer(rbp)[1]; rbp:=PPointer(rbp)[0];
+ m.debug_own[1]:=PPointer(rbp)[1]; rbp:=PPointer(rbp)[0];
+ m.debug_own[2]:=PPointer(rbp)[1];
+ {$ENDIF}
 end;
 
-function mtx_trylock(var m:mtx):Boolean; inline;
+function mtx_trylock(var m:mtx):Boolean; {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
+{$IFDEF DEBUG_MTX}
+var
+ rbp:Pointer;
+{$ENDIF}
 begin
  Result:=TryEnterCriticalSection(m.c)<>0;
+ {$IFDEF DEBUG_MTX}
+ if Result then
+ begin
+  rbp:=nil;
+  asm
+   movq %rbp,rbp
+  end;
+ m.debug_own[0]:=PPointer(rbp)[1]; rbp:=PPointer(rbp)[0];
+ m.debug_own[1]:=PPointer(rbp)[1]; rbp:=PPointer(rbp)[0];
+ m.debug_own[2]:=PPointer(rbp)[1];
+ end;
+ {$ENDIF}
 end;
 
-procedure mtx_unlock(var m:mtx); inline;
+procedure mtx_unlock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
 begin
+ {$IFDEF DEBUG_MTX}
+ m.debug_own[0]:=nil;
+ m.debug_own[1]:=nil;
+ m.debug_own[2]:=nil;
+ {$ENDIF}
  LeaveCriticalSection(m.c);
 end;
 

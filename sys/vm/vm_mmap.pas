@@ -1047,7 +1047,12 @@ var
 begin
  map:=p_proc.p_vmspace;
 
+ //prevent deadlock
+ vm_map_lock(map);
+
  Result:=pmap_mirror_map(map^.pmap,paddr,paddr+psize);
+
+ vm_map_unlock(map);
 end;
 
 procedure mirror_unmap(base:Pointer;size:QWORD);
@@ -1055,6 +1060,8 @@ var
  map:vm_map_t;
 begin
  map:=p_proc.p_vmspace;
+
+ //Deadlock protection is not needed yet
 
  pmap_mirror_unmap(map^.pmap,base,size);
 end;

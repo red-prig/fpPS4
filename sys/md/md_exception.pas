@@ -291,11 +291,11 @@ begin
         end;
       VM_PROT_WRITE:
         begin
-         Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
-
          //TODO: access len
          if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
          begin
+          Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
+
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,
                                get_pageflt_addr(p),

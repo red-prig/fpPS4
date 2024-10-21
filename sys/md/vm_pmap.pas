@@ -168,9 +168,6 @@ begin
  Result:=((x+PAGE_MASK) shr PAGE_SHIFT);
 end;
 
-procedure vm_map_lock  (map:Pointer;tm:Boolean=True);  external;
-procedure vm_map_unlock(map:Pointer;def:Boolean=True); external;
-
 procedure dmem_init;
 var
  base:Pointer;

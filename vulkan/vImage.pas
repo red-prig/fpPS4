@@ -116,7 +116,7 @@ type
   alt:0..1;  //1
  end;
 
- TvImageKeyParams=bitpacked record
+ TvImageKeyParams=bitpacked object
   itype      :0..3; //2 TVkImageType 0..2
   cube       :0..1; //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
   pow2pad    :0..1; //1
@@ -131,6 +131,7 @@ type
   pitch      :Word; //(0..16383)
   pad_width  :Word;
   pad_height :Word;
+  function layerCount:Word;
  end;
 
  PvImageKey=^TvImageKey;
@@ -152,6 +153,7 @@ type
   base_array:Word;      //first array index (0..16383)
   last_array:Word;      //texture height    (0..16383)
   minLod    :TVkFloat;
+  function layerCount:Word;
  end;
 
  TvImage=class(TvCustomImage)
@@ -284,6 +286,40 @@ Function GetNormalizedParams(const key:TvImageKey):TvImageKeyParams;
 Function CompareNormalized(const a,b:TvImageKey):Integer;
 
 implementation
+
+function TvImageKeyParams.layerCount:Word;
+begin
+ if (TVkImageType(itype)=VK_IMAGE_TYPE_3D) then
+ begin
+  Result:=1; //3D texture array does not exist?
+ end else
+ if (cube<>0) then
+ begin
+  Result:=((arrayLayers+5) div 6)*6; //align up
+ end else
+ begin
+  Result:=arrayLayers;
+ end;
+end;
+
+function TvImageViewKey.layerCount:Word;
+begin
+ case TVkImageViewType(vtype) of
+  VK_IMAGE_VIEW_TYPE_3D:
+   begin
+    Result:=1; //3D texture array does not exist?
+   end;
+  VK_IMAGE_VIEW_TYPE_CUBE:
+   begin
+    Result:=last_array-base_array+1;
+    Result:=((Result+5) div 6)*6; //align up
+   end;
+  else
+   begin
+    Result:=last_array-base_array+1;
+   end;
+ end;
+end;
 
 Function getFormatSize(cformat:TVkFormat):Byte; //in bytes
 begin
@@ -1170,9 +1206,9 @@ begin
   FHeight:=Key.params.height;
  end;
 
- if (Key.params.arrayLayers>FLayers) then
+ if (Key.params.layerCount>FLayers) then
  begin
-  FLayers:=Key.params.arrayLayers;
+  FLayers:=Key.params.layerCount;
  end;
 
  with FImages[FImagesCount] do
@@ -1180,7 +1216,7 @@ begin
   cformat   :=Key.cformat;
   width     :=Key.params.width;
   height    :=Key.params.height;
-  layerCount:=key.params.arrayLayers;
+  layerCount:=key.params.layerCount;
  end;
 
  Inc(FImagesCount);
