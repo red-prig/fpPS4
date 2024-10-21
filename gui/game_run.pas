@@ -80,6 +80,8 @@ uses
  ps4_libSceAudioOut,
  ps4_libSceAudioIn,
  ps4_libSceNetCtl,
+ ps4_libSceGameLiveStreaming,
+ ps4_libSceVideoRecording,
  //ps4_libSceDiscMap,
  //internal libs
 

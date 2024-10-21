@@ -90,14 +90,14 @@ begin
             begin
              with PAllocateDirectMemory(data)^ do
              begin
+              Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,start);
               {
               Writeln('dmem_map_alloc(0x',HexStr(start,10),
                                     ',0x',HexStr(__end,10),
                                     ',0x',HexStr(len,10),
                                     ',0x',HexStr(align,10),
-                                    ',',mtype,')');
+                                    ',',mtype,'):',Result);
               }
-              Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,start);
              end;
             end;
 
@@ -219,6 +219,7 @@ begin
 
  flags:=flagsp^;
 
+ //with the value (mtype=-1) this is a test of memory continuousness
  Result:=dmem_map_set_mtype(dmap^.dmem,
                             OFF_TO_IDX(ofs),
                             OFF_TO_IDX(ofs+size),

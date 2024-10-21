@@ -1476,6 +1476,16 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNetCtl"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscegamelivestreaming.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceGameLiveStreaming"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscevideorecording.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceVideoRecording"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -863,7 +863,8 @@ begin
   next:=curr^.next;
 
   if (next<>@map^.header) then
-  if (curr^.__end<>next^.start) then
+  if (curr^.__end<__end) and
+     (curr^.__end<>next^.start) then
   begin
    Exit(False);
   end;
@@ -1299,7 +1300,8 @@ begin
   next:=current^.next;
 
   if (next<>@map^.header) then
-  if (current^.__end<>next^.start) then
+  if (current^.__end<__end) and
+     (current^.__end<>next^.start) then
   begin
    dmem_map_unlock(map);
    Exit(EACCES);

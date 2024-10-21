@@ -184,7 +184,7 @@ begin
   VFS_UNLOCK_GIANT(vfslocked);
   Exit(error);
  end;
- foff:=foffp^;
+ foff :=foffp^;
  flags:=flagsp^;
 
  obj:=vp^.v_object;
@@ -390,7 +390,10 @@ begin
   Exit(ENOMEM);
  end;
 
- if (foff and PAGE_MASK)<>0 then Exit(EINVAL);
+ if (foff and PAGE_MASK)<>0 then
+ begin
+  Exit(EINVAL);
+ end;
 
  if ((flags and MAP_FIXED)=0) then
  begin

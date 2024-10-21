@@ -1,14 +1,17 @@
 unit ps4_libSceVideoRecording;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
- ps4_program,
- ps4_libkernel;
+ subr_dynlib;
 
 implementation
+
+uses
+ kern_proc;
 
 const
  SCE_VIDEO_RECORDING_INFO_SUBTITLE        =$0002;
@@ -58,10 +61,7 @@ type
  end;
  PSceVideoRecordingParam2=^SceVideoRecordingParam2;
 
-function ps4_sceVideoRecordingSetInfo(info:Integer;pInfo:Pointer;infoLen:size_t):Integer; SysV_ABI_CDecl;
-var
- SDK_VERSION:DWORD;
- ret2:Integer;
+function ps4_sceVideoRecordingSetInfo(info:Integer;pInfo:Pointer;infoLen:size_t):Integer;
 begin
  Writeln('sceVideoRecordingSetInfo,info=',info,',infoLen=',infoLen);
 
@@ -110,13 +110,14 @@ begin
 
    SCE_VIDEO_RECORDING_INFO_USER_META:
      begin
-      SDK_VERSION:=0;
-      ret2:=ps4_sceKernelGetCompiledSdkVersion(@SDK_VERSION);
-      if ((ret2 < 0) or ($24fffff < SDK_VERSION)) and
+      if (p_proc.p_sdk_version > $24fffff) and
          ((infoLen < 176) or
           (PSceVideoRecordingInfoUserMeta(pInfo)^.size < 176) or
           ((PSceVideoRecordingInfoUserMeta(pInfo)^.flags or $ffff7ffc)<>0)
-         ) then Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+         ) then
+      begin
+       Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);
+      end;
       Exit(0);
      end;
    else
@@ -125,25 +126,25 @@ begin
  end;
 end;
 
-function ps4_sceVideoRecordingClose(discard:Integer):Integer; SysV_ABI_CDecl;
+function ps4_sceVideoRecordingClose(discard:Integer):Integer;
 begin
  Writeln('sceVideoRecordingClose,discard=',discard);
  Result:=0;
 end;
 
-function ps4_sceVideoRecordingGetStatus:Integer; SysV_ABI_CDecl;
+function ps4_sceVideoRecordingGetStatus:Integer;
 begin
  Writeln('sceVideoRecordingGetStatus');
  Result:=SCE_VIDEO_RECORDING_STATUS_NONE;
 end;
 
-function ps4_sceVideoRecordingStart:Integer; SysV_ABI_CDecl;
+function ps4_sceVideoRecordingStart:Integer;
 begin
  Writeln('sceVideoRecordingStart');
  Result:=0;
 end;
 
-function ps4_sceVideoRecordingStop:Integer; SysV_ABI_CDecl;
+function ps4_sceVideoRecordingStop:Integer;
 begin
  Writeln('sceVideoRecordingStop');
  Result:=0;
@@ -152,37 +153,38 @@ end;
 function ps4_sceVideoRecordingOpen2(pPath:Pchar;
                                     pParam:PSceVideoRecordingParam2;
                                     pHeap:Pointer;
-                                    heapSize:Integer):Integer; SysV_ABI_CDecl;
+                                    heapSize:Integer):Integer;
 begin
  Writeln('sceVideoRecordingOpen2,pPath=',pPath);
  Result:=0;
 end;
 
-function ps4_sceVideoRecordingQueryMemSize2(pParam:PSceVideoRecordingParam2):Integer; SysV_ABI_CDecl;
+function ps4_sceVideoRecordingQueryMemSize2(pParam:PSceVideoRecordingParam2):Integer;
 begin
  Writeln('sceVideoRecordingQueryMemSize2');
  Result:=1024;
 end;
 
-function Load_libSceVideoRecording(Const name:RawByteString):TElf_node;
+function Load_libSceVideoRecording(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceVideoRecording');
 
- lib:=Result._add_lib('libSceVideoRecording');
-
- lib^.set_proc($15CF2AC652883584,@ps4_sceVideoRecordingSetInfo);
- lib^.set_proc($287BE43D024330B9,@ps4_sceVideoRecordingClose);
- lib^.set_proc($7D9250CC52B81AFE,@ps4_sceVideoRecordingGetStatus);
- lib^.set_proc($B56A1EF48946021B,@ps4_sceVideoRecordingStart);
- lib^.set_proc($38E171ACC63E99F2,@ps4_sceVideoRecordingStop);
- lib^.set_proc($B36F1D6A5070A768,@ps4_sceVideoRecordingOpen2);
- lib^.set_proc($6C662463AAB76C8C,@ps4_sceVideoRecordingQueryMemSize2);
+ lib:=Result^.add_lib('libSceVideoRecording');
+ lib.set_proc($15CF2AC652883584,@ps4_sceVideoRecordingSetInfo);
+ lib.set_proc($287BE43D024330B9,@ps4_sceVideoRecordingClose);
+ lib.set_proc($7D9250CC52B81AFE,@ps4_sceVideoRecordingGetStatus);
+ lib.set_proc($B56A1EF48946021B,@ps4_sceVideoRecordingStart);
+ lib.set_proc($38E171ACC63E99F2,@ps4_sceVideoRecordingStop);
+ lib.set_proc($B36F1D6A5070A768,@ps4_sceVideoRecordingOpen2);
+ lib.set_proc($6C662463AAB76C8C,@ps4_sceVideoRecordingQueryMemSize2);
 end;
 
+var
+ stub:t_int_file;
+
 initialization
- ps4_app.RegistredPreLoad('libSceVideoRecording.prx',@Load_libSceVideoRecording);
+ reg_int_file(stub,'libSceVideoRecording.prx',@Load_libSceVideoRecording);
 
 end.
