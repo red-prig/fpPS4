@@ -988,7 +988,7 @@ begin
      begin
       iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
 
-      //Writeln('BindImage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
+      Writeln('BindImage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
 
       DescriptorGroup.BindImage(fset,bind,
                                 iv.FHandle,
@@ -998,7 +998,7 @@ begin
      begin
       iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
 
-      //Writeln('BindStorage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
+      Writeln('BindStorage:','0x',HexStr(ri.FHandle,16),' 0x',HexStr(iv.FHandle,16));
 
       DescriptorGroup.BindStorage(fset,bind,
                                   iv.FHandle,
@@ -1941,6 +1941,8 @@ begin
 
  Prepare_Uniforms(ctx,FUniformBuilder);
  ////////
+
+ DumpShaderGroup(CP_KEY.FShaderGroup);
 
  if not ctx.Cmd.BindCompute(CP) then
  begin

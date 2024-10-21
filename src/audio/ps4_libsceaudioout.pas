@@ -1220,7 +1220,7 @@ begin
   Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
  end;
 
- if (num=0) or (num<25) then
+ if (num=0) or (num>25) then
  begin
   Exit(SCE_AUDIO_OUT_ERROR_PORT_FULL);
  end;

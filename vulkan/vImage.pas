@@ -2123,6 +2123,8 @@ begin
 
  if (AccessMask<>dstAccessMask ) or
     (ImgLayout <>newImageLayout) or
+    (ImgLayout     =VK_IMAGE_LAYOUT_GENERAL) or
+    (newImageLayout=VK_IMAGE_LAYOUT_GENERAL) or
     ChangeStage(StageMask,dstStageMask) or
 
     (IsRead (AccessMask) and IsWrite(dstAccessMask)) or
@@ -2139,6 +2141,14 @@ begin
   end;
 
   if (cmd=0) then Exit;
+
+  Writeln('Barrier:'#13#10,
+          ' image        =0x',HexStr(image,16),#13#10,
+          ' srcAccessMask=0x',HexStr(AccessMask,8),#13#10,
+          ' dstAccessMask=0x',HexStr(dstAccessMask,8),#13#10,
+          ' oldLayout    ='  ,ImgLayout,#13#10,
+          ' newLayout    ='  ,newImageLayout
+         );
 
   info:=Default(TVkImageMemoryBarrier);
   info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

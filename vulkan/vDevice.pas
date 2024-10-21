@@ -53,6 +53,8 @@ type
  TvDebugReport=class
   FHandle:TVkDebugUtilsMessengerEXT;
   //
+  FStdOut:Text;
+  //
   FCreateDebugUtilsMessenger :TvkCreateDebugUtilsMessengerEXT;
   FDestroyDebugUtilsMessenger:TvkDestroyDebugUtilsMessengerEXT;
   //
@@ -613,6 +615,7 @@ var
  cinfo:TVkDebugUtilsMessengerCreateInfoEXT;
  r:TVkResult;
 begin
+ FStdOut:=StdOut;
  //
  Pointer(FCreateDebugUtilsMessenger ):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCreateDebugUtilsMessengerEXT');
  Pointer(FDestroyDebugUtilsMessenger):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkDestroyDebugUtilsMessengerEXT');
@@ -719,7 +722,7 @@ begin
  if Pos('not consumed by fragment shader',pCallbackData^.pMessage)<>0 then Exit;
  if Pos('fragment shader writes to output location 0 with no matching attachment',pCallbackData^.pMessage)<>0 then Exit;
 
- Writeln(pCallbackData^.pMessage);
+ Writeln(FStdOut,pCallbackData^.pMessage);
 
  {
  sType:TVkStructureType;
