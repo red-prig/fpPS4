@@ -221,13 +221,9 @@ begin
 end;
 
 Procedure TvPipelineLayout.AddLayout(F:TvSetLayout);
-var
- i:Integer;
 begin
  if (F=nil) then Exit;
- i:=Length(key.FLayouts);
- SetLength(key.FLayouts,i+1);
- key.FLayouts[i]:=F;
+ Insert(F,key.FLayouts,Length(key.FLayouts));
 end;
 
 Procedure TvPipelineLayout.SetLayouts(const A:AvSetLayout);

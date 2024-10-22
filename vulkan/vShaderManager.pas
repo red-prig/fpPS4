@@ -168,8 +168,6 @@ begin
 end;
 
 function TShaderCodeCache.AddShader(FDescSetId:Integer;Stream:TStream;pUserData:Pointer):TvShaderExt;
-var
- i:Integer;
 begin
  Result:=TvShaderExt.Create;
  Result.FHash_gcn:=key.FHash;
@@ -178,9 +176,7 @@ begin
  Result.LoadFromStream(Stream);
  Result.PreloadShaderFuncs(pUserData);
 
- i:=Length(FShaderAliases);
- SetLength(FShaderAliases,i+1);
- FShaderAliases[i]:=Result;
+ Insert(Result,FShaderAliases,Length(FShaderAliases));
 end;
 
 Destructor TShaderCodeCache.Destroy;

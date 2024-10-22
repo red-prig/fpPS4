@@ -259,7 +259,7 @@ begin
    end else
    begin
     //nop?
-    value:=0;
+    value:=Ptruint(-1);
    end;
    //is sync
    if (node^.header.mtid<>0) then

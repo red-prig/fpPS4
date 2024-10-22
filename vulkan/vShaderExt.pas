@@ -448,21 +448,13 @@ begin
 end;
 
 Procedure AddToCustomLayout(var A:ACustomLayout;const v:TvCustomLayout);
-var
- i:Integer;
 begin
- i:=Length(A);
- SetLength(A,i+1);
- A[i]:=v;
+ Insert(v,A,Length(A));
 end;
 
 Procedure AddToDataLayout(var A:ADataLayout;const v:TvDataLayout);
-var
- i:Integer;
 begin
- i:=Length(A);
- SetLength(A,i+1);
- A[i]:=v;
+ Insert(v,A,Length(A));
 end;
 
 //0123456789ABCDEF0123456789ABCDEF012345678
@@ -546,8 +538,6 @@ begin
 end;
 
 function TvShaderExt.GetLayoutAddr(parent:DWORD):ADataLayout;
-var
- i:Integer;
 begin
  Result:=Default(ADataLayout);
  repeat
@@ -556,9 +546,9 @@ begin
    SetLength(Result,0);
    Break;
   end;
-  i:=Length(Result);
-  SetLength(Result,i+1);
-  Result[i]:=FDataLayouts[parent];
+
+  Insert(FDataLayouts[parent],Result,Length(Result));
+
   if (parent=0) then Break;
   parent:=FDataLayouts[parent].parent;
  until false;
@@ -798,12 +788,8 @@ begin
 end;
 
 Procedure TvShaderExt.AddImmData(D:DWORD);
-var
- i:Integer;
 begin
- i:=Length(FImmData);
- SetLength(FImmData,i+1);
- FImmData[i]:=D;
+ Insert(D,FImmData,Length(FImmData));
 end;
 
 function TvShaderExt.GetImmData:PDWORD;
@@ -1201,7 +1187,7 @@ end;
 Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
- i,stride,num_records:Integer;
+ stride,num_records:Integer;
 begin
  Assert(PV<>nil);
  if (PV=nil) then Exit;
@@ -1226,15 +1212,12 @@ begin
  //
  if (b.size>size) then b.size:=size;  //input size already taking into account offset
 
- i:=Length(FBuffers);
- SetLength(FBuffers,i+1);
- FBuffers[i]:=b;
+ Insert(b,FBuffers,Length(FBuffers));
 end;
 
 Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
- i:Integer;
 begin
  Assert(P<>nil);
  if (P=nil) or (size=0) then Exit;
@@ -1248,15 +1231,12 @@ begin
  b.addr:=P;
  b.size:=size; //input size already taking into account offset
 
- i:=Length(FBuffers);
- SetLength(FBuffers,i+1);
- FBuffers[i]:=b;
+ Insert(b,FBuffers,Length(FBuffers));
 end;
 
 Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
- i:Integer;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1272,15 +1252,12 @@ begin
  b.FImage:=_get_tsharp4_image_info(PT);
  b.FView :=_get_tsharp4_image_view(PT);
 
- i:=Length(FImages);
- SetLength(FImages,i+1);
- FImages[i]:=b;
+ Insert(b,FImages,Length(FImages));
 end;
 
 Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
- i:Integer;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1296,9 +1273,7 @@ begin
  b.FImage:=_get_tsharp8_image_info(PT);
  b.FView :=_get_tsharp8_image_view(PT);
 
- i:=Length(FImages);
- SetLength(FImages,i+1);
- FImages[i]:=b;
+ Insert(b,FImages,Length(FImages));
 end;
 
 procedure TvUniformBuilder.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
@@ -1377,7 +1352,6 @@ end;
 Procedure TvUniformBuilder.AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
 var
  b:TSamplerBindExt;
- i:Integer;
 begin
  Assert(PS<>nil);
  if (PS=nil) then Exit;
@@ -1389,9 +1363,7 @@ begin
  b.bind:=bind;
  b.PS:=PS;
 
- i:=Length(FSamplers);
- SetLength(FSamplers,i+1);
- FSamplers[i]:=b;
+ Insert(b,FSamplers,Length(FSamplers));
 end;
 
 //
@@ -1621,12 +1593,8 @@ begin
 end;
 
 Procedure TvFuncLayout.Add(const addr:ADataLayout);
-var
- i:Integer;
 begin
- i:=Length(FList);
- SetLength(FList,i+1);
- FList[i]:=addr;
+ Insert(addr,FList,Length(FList));
 end;
 
 end.
