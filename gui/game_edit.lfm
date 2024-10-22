@@ -1,14 +1,14 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 632
+  Left = 497
   Height = 319
-  Top = 214
+  Top = 119
   Width = 397
   Caption = 'Game editor'
   ClientHeight = 319
   ClientWidth = 397
   OnClose = FormClose
   Position = poMainFormCenter
-  LCLVersion = '3.4.0.0'
+  LCLVersion = '3.6.0.0'
   object EditPages: TPageControl
     AnchorSideBottom.Control = BtnOk
     Left = 0
@@ -108,7 +108,7 @@ object frmGameEditor: TfrmGameEditor
     Anchors = [akLeft, akBottom]
     BorderSpacing.Left = 10
     BorderSpacing.Bottom = 10
-    Caption = 'ok'
+    Caption = 'OK'
     TabOrder = 1
     OnClick = BtnOkClick
   end

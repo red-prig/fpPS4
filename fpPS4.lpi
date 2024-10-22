@@ -1486,6 +1486,15 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVideoRecording"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\param_sfo_ipc.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\charstream.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="CharStream"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

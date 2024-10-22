@@ -8,7 +8,7 @@ uses
  host_ipc_interface;
 
 const
- CPUID_BASE_MODE=$710f13; //$710f31
+ CPUID_BASE_MODE=$710f13; // $710f31
  CPUID_NEO_MODE =$740f00;
 
 var
@@ -26,6 +26,7 @@ var
  p_print_gpu_hint     :Boolean=False;
 
  p_host_ipc           :THostIpcInterface=nil;
+ p_host_handler       :THostIpcHandler  =nil;
 
 function p_host_ipc_td:Pointer;
 

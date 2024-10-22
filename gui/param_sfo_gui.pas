@@ -5,7 +5,9 @@ unit param_sfo_gui;
 interface
 
 uses
- sysutils;
+ sysutils,
+ rtti,
+ game_info;
 
 const
  //sfo_value_format
@@ -38,17 +40,33 @@ type
 
 //
 
- TParamSfoValue=packed object
-  format:ptruint;
-  name,value:RawByteString;
-  Function GetString:RawByteString;
-  Function GetUInt  :DWORD;
+ TParamSfoValue=class(TAbstractObject)
+  private
+   Fformat:ptruint;
+   Fname  :RawByteString;
+   Fvalue :RawByteString;
+  published
+   property format:ptruint       read Fformat write Fformat;
+   property name  :RawByteString read Fname   write Fname;
+   property value :RawByteString read Fvalue  write Fvalue;
+  public
+   Function GetString:RawByteString;
+   Function GetUInt  :DWORD;
  end;
 
- TParamSfoFile=class
+ TParamSfoFile=class(TAbstractArray)
   params:array of TParamSfoValue;
-  Function GetString(const name:RawByteString):RawByteString;
-  Function GetUInt  (const name:RawByteString):DWORD;
+  //
+  Destructor Destroy; override;
+  //
+  Function   GetString(const name:RawByteString):RawByteString;
+  Function   GetUInt  (const name:RawByteString):DWORD;
+  //
+  Function   GetArrayCount:SizeInt;          override;
+  Function   GetArrayItem(i:SizeInt):TValue; override;
+  Function   AddObject:TAbstractObject;      override;
+  Function   AddArray :TAbstractArray;       override;
+  procedure  AddValue(Value:TValue);         override;
  end;
 
 function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
@@ -159,6 +177,7 @@ begin
    SetLength(value,size);
    Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,size);
 
+   Result.params[i]:=TParamSfoValue.Create;
    Result.params[i].format:=entry_table[i].format;
    Result.params[i].name  :=name;
    Result.params[i].value :=value;
@@ -213,6 +232,19 @@ begin
  end;
 end;
 
+Destructor TParamSfoFile.Destroy;
+var
+ i:Integer;
+begin
+ if (Length(params)=0) then Exit;
+ For i:=0 to High(params) do
+ begin
+  FreeAndNil(params[i]);
+ end;
+ SetLength(params,0);
+ inherited;
+end;
+
 Function TParamSfoFile.GetString(const name:RawByteString):RawByteString;
 var
  i:Integer;
@@ -247,6 +279,38 @@ begin
  end;
 end;
 
+//////
+
+Function TParamSfoFile.GetArrayCount:SizeInt;
+begin
+ Result:=Length(params);
+end;
+
+Function TParamSfoFile.GetArrayItem(i:SizeInt):TValue;
+begin
+ if (i>=Length(params)) then
+ begin
+  Result:=TValue.Empty;
+ end else
+ begin
+  Result:=params[i];
+ end;
+end;
+
+Function TParamSfoFile.AddObject:TAbstractObject;
+begin
+ Result:=TParamSfoValue.Create;
+end;
+
+Function TParamSfoFile.AddArray:TAbstractArray;
+begin
+ Result:=nil;
+end;
+
+procedure TParamSfoFile.AddValue(Value:TValue);
+begin
+ Insert(Value.AsObject,params,Length(params));
+end;
 
 end.
 

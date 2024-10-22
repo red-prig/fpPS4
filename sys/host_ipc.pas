@@ -52,8 +52,9 @@ type
    procedure   Pack(mtype,mlen,mtid:DWORD;buf:Pointer);
    function    Recv:PQNode;
    procedure   Flush;
-   procedure   RecvSync(node:PQNode);
-   function    RecvKevent(mlen:DWORD;buf:Pointer):Ptruint;
+   procedure   RecvResultNode  (node:PQNode);
+   procedure   RecvResultDirect(mlen,mtid:DWORD;buf:Pointer);
+   function    RecvKevent      (mlen:DWORD;buf:Pointer):Ptruint;
    procedure   UpdateKevent();
    procedure   WakeupKevent(); virtual;
   public
@@ -165,7 +166,7 @@ begin
  end;
 end;
 
-procedure THostIpcConnect.RecvSync(node:PQNode);
+procedure THostIpcConnect.RecvResultNode(node:PQNode);
 var
  value:Ptruint;
  mlen:DWORD;
@@ -181,6 +182,22 @@ begin
  Move(node^.buf,value,mlen);
 
  TriggerNodeSync(node^.header.mtid,value);
+end;
+
+procedure THostIpcConnect.RecvResultDirect(mlen,mtid:DWORD;buf:Pointer);
+var
+ value:Ptruint;
+begin
+ value:=0;
+
+ if (mlen>SizeOf(Ptruint)) then
+ begin
+  mlen:=SizeOf(Ptruint);
+ end;
+
+ Move(buf^,value,mlen);
+
+ TriggerNodeSync(mtid,value);
 end;
 
 procedure kq_wakeup(data:Pointer); SysV_ABI_CDecl;
@@ -249,7 +266,7 @@ begin
 
   if (node^.header.mtype=iRESULT) then
   begin
-   RecvSync(node);
+   RecvResultNode(node);
   end else
   begin
    OnMsg:=GetCallback(node^.header.mtype);
@@ -441,7 +458,14 @@ procedure THostIpcSimpleKERN.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 begin
  if (FDest<>nil) then
  begin
-  FDest.Pack(mtype,mlen,mtid,buf);
+  if (mtype=iRESULT) then
+  begin
+   //Trigger Direct on Simple mode!
+   FDest.RecvResultDirect(mlen,mtid,buf);
+  end else
+  begin
+   FDest.Pack(mtype,mlen,mtid,buf);
+  end;
   //
   if Assigned(Classes.WakeMainThread) then
   begin

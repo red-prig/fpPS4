@@ -8,11 +8,13 @@ uses
  windows,
  Classes,
  SysUtils,
+ CharStream,
  Dialogs,
  kern_thr,
  md_sleep,
  md_pipe,
  host_ipc,
+ host_ipc_interface,
  md_host_ipc,
  game_info;
 
@@ -262,25 +264,6 @@ begin
 
 end;
 
-type
- TPCharStream=class(TCustomMemoryStream)
-  public
-   constructor Create(P:PChar;len:SizeUint); virtual; overload;
-   procedure   SetNew(P:PChar;len:SizeUint);
- end;
-
-constructor TPCharStream.Create(P:PChar;len:SizeUint);
-begin
- inherited Create;
- SetPointer(P,len);
-end;
-
-procedure TPCharStream.SetNew(P:PChar;len:SizeUint);
-begin
- SetPosition(0);
- SetPointer(P,len);
-end;
-
 procedure fork_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
  td:p_kthread;
@@ -314,7 +297,9 @@ begin
  kipc:=THostIpcPipeKERN.Create;
  kipc.set_pipe(pipefd);
 
- p_host_ipc:=kipc;
+ p_host_ipc    :=kipc;
+ p_host_handler:=THostIpcHandler.Create;
+ p_host_ipc    .FHandler:=p_host_handler;
 
  td:=nil;
  r:=kthread_add(@prepare,GameStartupInfo,@td,0,'[main]');
@@ -407,7 +392,9 @@ begin
 
    g_ipc:=s_mgui_ipc;
 
-   p_host_ipc:=s_kern_ipc;
+   p_host_ipc    :=s_kern_ipc;
+   p_host_handler:=THostIpcHandler.Create;
+   p_host_ipc    .FHandler:=p_host_handler;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');

@@ -147,10 +147,11 @@ type
 
     FGameMainForm:TGameMainForm;
 
-    function  OnKevent     (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
-    function  OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
-    function  OnCaptionFPS (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
-    function  OnError      (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+    function  OnKevent      (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
+    function  OnMainWindows (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
+    function  OnCaptionFPS  (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+    function  OnError       (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+    function  OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
 
     function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
@@ -177,6 +178,8 @@ var
 implementation
 
 uses
+ param_sfo_gui,
+
  game_find,
 
  windows,
@@ -394,6 +397,51 @@ begin
    FGameProcess.g_ipc.FStop:=True;
   end;
  end;
+end;
+
+function TfrmMain.OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
+var
+ ParamSfo:TParamSfoFile;
+ mem:TMemoryStream;
+ V:RawByteString;
+begin
+ Result:=Ptruint(-1);
+
+ if (FGameItem=nil) then Exit;
+
+ V:=FGameItem.MountList.app0;
+
+ ParamSfo:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(V)+
+                            DirectorySeparator+
+                            'sce_sys'+
+                            DirectorySeparator+
+                            'param.sfo');
+
+ if (ParamSfo=nil) then
+ begin
+  V:='"{$GAME}/sce_sys/param.sfo" not found, continue?';
+
+  if (MessageDlgEx(V,mtError,[mbOK,mbAbort],Self)=mrOK) then
+  begin
+   Exit(0);
+  end else
+  begin
+   Exit(Ptruint(-1));
+  end;
+ end;
+
+ if (FGameProcess<>nil) then
+ if (FGameProcess.g_ipc<>nil) then
+ begin
+  mem:=TMemoryStream.Create;
+  ParamSfo.Serialize(mem);
+  FreeAndNil(ParamSfo);
+
+  FGameProcess.g_ipc.SendSync(HashIpcStr('PARAM_SFO_LOAD'),mem.Size,mem.Memory);
+ end;
+
+ FreeAndNil(ParamSfo);
+ Result:=0;
 end;
 
 //ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
@@ -675,10 +723,11 @@ var
 begin
  IpcHandler:=THostIpcHandler.Create;
 
- IpcHandler.AddCallback('KEV_EVENT'   ,@OnKevent     );
- IpcHandler.AddCallback('MAIN_WINDOWS',@OnMainWindows);
- IpcHandler.AddCallback('CAPTION_FPS' ,@OnCaptionFPS );
- IpcHandler.AddCallback('ERROR'       ,@OnError      );
+ IpcHandler.AddCallback('KEV_EVENT'     ,@OnKevent      );
+ IpcHandler.AddCallback('MAIN_WINDOWS'  ,@OnMainWindows );
+ IpcHandler.AddCallback('CAPTION_FPS'   ,@OnCaptionFPS  );
+ IpcHandler.AddCallback('ERROR'         ,@OnError       );
+ IpcHandler.AddCallback('PARAM_SFO_INIT',@OnParamSfoInit);
 
  ReadConfigFile;
 

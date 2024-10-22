@@ -383,8 +383,9 @@ begin
   tkAString:S:=S+'"'+StringToJSONString(value.AsString,False)+'"';
 
   tkInteger:S:=S+IntToStr(value.AsInteger);
+  tkQWord  :S:=S+IntToStr(value.AsUInt64);
 
-  tkBool:S:=S+BoolToStr(value.AsBoolean,'true','false');
+  tkBool   :S:=S+BoolToStr(value.AsBoolean,'true','false');
 
   else
    Assert(False);
@@ -633,8 +634,9 @@ begin
     tkAString:Stream.WriteAnsiString(p.GetValue(Self).AsString);
 
     tkInteger:Stream.WriteDWord(p.GetValue(Self).AsInteger);
+    tkQWord  :Stream.WriteQWord(p.GetValue(Self).AsInteger);
 
-    tkBool:Stream.WriteByte(Byte(p.GetValue(Self).AsBoolean));
+    tkBool   :Stream.WriteByte(Byte(p.GetValue(Self).AsBoolean));
 
     tkClass:
       begin
@@ -673,13 +675,15 @@ begin
 
    TypeKind:=p.PropertyType.TypeKind;
    case TypeKind of
+
     tkSString,
     tkLString,
     tkAString:p.SetValue(Self,Stream.ReadAnsiString);
 
     tkInteger:p.SetValue(Self,Integer(Stream.ReadDWord));
+    tkQWord  :p.SetValue(Self,QWord  (Stream.ReadQWord));
 
-    tkBool:p.SetValue(Self,Boolean(Stream.ReadByte));
+    tkBool   :p.SetValue(Self,Boolean(Stream.ReadByte));
 
     tkClass:
       begin
@@ -727,6 +731,7 @@ begin
     tkLString,
     tkAString,
     tkInteger,
+    tkQWord  ,
     tkBool   :p.SetValue(dst,p.GetValue(Self));
 
     tkClass:
@@ -855,6 +860,7 @@ begin
     tkLString,
     tkAString,
     tkInteger,
+    tkQWord  ,
     tkBool   :Stream.WriteValue(p.Name,p.GetValue(Self));
 
     tkClass:
@@ -882,13 +888,101 @@ begin
 end;
 
 Procedure TAbstractArray.Serialize(Stream:TStream);
+var
+ i,c:SizeInt;
+ V:TValue;
+ obj:TObject;
 begin
- Assert(false);
+ c:=GetArrayCount;
+
+ Stream.WriteQWord(c); //Size Header
+
+ if (c<>0) then
+ For i:=0 to c-1 do
+ begin
+  V:=GetArrayItem(i);
+
+  Stream.WriteDWord(DWORD(V.Kind)); //Type Header
+
+  case V.Kind of
+
+   tkSString,
+   tkLString,
+   tkAString:Stream.WriteAnsiString(V.AsString);
+
+   tkInteger:Stream.WriteDWord(V.AsInteger);
+   tkQWord  :Stream.WriteQWord(V.AsUInt64);
+
+   tkBool   :Stream.WriteByte(Byte(V.AsBoolean));
+
+   tkClass:
+     begin
+      //Use Class Header?
+      obj:=V.AsObject;
+
+      if (obj<>nil) then
+      if obj.InheritsFrom(TAbstractObject) then
+      begin
+       TAbstractObject(obj).Serialize(Stream);
+      end;
+     end;
+
+   else
+    Assert(false);
+  end;
+
+ end;
 end;
 
 Procedure TAbstractArray.Deserialize(Stream:TStream);
+var
+ i,c:SizeInt;
+ Kind:TTypeKind;
+ V:TValue;
+ obj:TObject;
 begin
- Assert(false);
+ c:=Stream.ReadQWord; //Size Header
+
+ if (c<>0) then
+ For i:=0 to c-1 do
+ begin
+  V:=Default(TValue);
+
+  Kind:=TTypeKind(Stream.ReadDWord); //Type Header
+
+  case Kind of
+
+   tkSString,
+   tkLString,
+   tkAString:V:=Stream.ReadAnsiString;
+
+   tkInteger:V:=Integer(Stream.ReadDWord);
+   tkQWord  :V:=QWord  (Stream.ReadQWord);
+
+   tkBool   :V:=Boolean(Stream.ReadByte);
+
+   tkClass:
+     begin
+      //Use Class Header?
+      V:=AddObject;
+
+      obj:=V.AsObject;
+
+      if (obj<>nil) then
+      if obj.InheritsFrom(TAbstractObject) then
+      begin
+       TAbstractObject(obj).Deserialize(Stream);
+      end;
+     end;
+
+   else
+    Assert(false);
+  end;
+
+  //save
+  AddValue(V);
+ end;
+
 end;
 
 Procedure TAbstractArray.CopyTo(dst:TAbstractObject);
@@ -916,6 +1010,7 @@ begin
    tkLString,
    tkAString,
    tkInteger,
+   tkQWord  ,
    tkBool   :Stream.WriteValue('',V);
 
    tkClass:

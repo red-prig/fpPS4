@@ -10,6 +10,9 @@ uses
 
 implementation
 
+uses
+ param_sfo_ipc;
+
 {
 uses
  sys_path,
@@ -85,6 +88,8 @@ function ps4_sceAppContentInitialize(initParam:PSceAppContentInitParam;bootParam
 begin
  Writeln('sceAppContentInitialize');
 
+ param_sfo_ipc.init_param_sfo;
+
  Result:=0;
 end;
 
@@ -94,12 +99,10 @@ begin
  if (value=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
  Case SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG of
   SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            :value^:=SCE_APP_CONTENT_APPPARAM_SKU_FLAG_FULL;
-  {
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_1');
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_2');
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_3');
-  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:value^:=ParamSfoGetInt('USER_DEFINED_PARAM_4');
-  }
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1:value^:=ParamSfoGetUInt('USER_DEFINED_PARAM_1');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_2:value^:=ParamSfoGetUInt('USER_DEFINED_PARAM_2');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_3:value^:=ParamSfoGetUInt('USER_DEFINED_PARAM_3');
+  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_4:value^:=ParamSfoGetUInt('USER_DEFINED_PARAM_4');
   else
    Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
  end;
@@ -135,6 +138,7 @@ begin
  Result:=FormatTmpPath(PChar(mountPoint));
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentTemporaryDataMount(mountPoint:pSceAppContentMountPoint):Integer;
@@ -144,6 +148,7 @@ begin
  Result:=FetchTmpMount(PChar(mountPoint),SCE_APP_CONTENT_TEMPORARY_DATA_OPTION_FORMAT);
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer;
@@ -153,6 +158,7 @@ begin
  Result:=FetchTmpMount(PChar(mountPoint),option);
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentTemporaryDataUnmount(mountPoint:pSceAppContentMountPoint):Integer;
@@ -162,6 +168,7 @@ begin
  Result:=UnMountTmpPath(PChar(mountPoint));
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
@@ -171,6 +178,7 @@ begin
  Result:=GetTmpPathAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentDownloadDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
@@ -180,6 +188,7 @@ begin
  Result:=GetDownloadAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
  _sig_unlock;
  }
+ Result:=-1;
 end;
 
 function ps4_sceAppContentGetEntitlementKey(serviceLabel:SceNpServiceLabel;

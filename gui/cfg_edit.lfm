@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 473
+  Left = 422
   Height = 319
-  Top = 205
+  Top = 234
   Width = 400
   Caption = 'Config Editor'
   ClientHeight = 319
@@ -543,7 +543,7 @@ object frmCfgEditor: TfrmCfgEditor
     Anchors = [akLeft, akBottom]
     BorderSpacing.Left = 10
     BorderSpacing.Bottom = 10
-    Caption = 'ok'
+    Caption = 'OK'
     TabOrder = 1
     OnClick = BtnOkClick
   end

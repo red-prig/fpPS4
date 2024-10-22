@@ -44,6 +44,7 @@ type
  THostIpcPipeMGUI=class(THostIpcPipe)
   Ftd_handle:TThreadID;
   procedure   Recv_pipe;   override;
+  Function    Push(Node:Pointer):Boolean; override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
  end;
@@ -131,8 +132,6 @@ begin
 
  if ((events and (BEV_EVENT_ERROR or BEV_EVENT_EOF))<>0) then
  begin
-
-
   Exit;
  end;
 
@@ -211,6 +210,18 @@ begin
  if Assigned(Classes.WakeMainThread) then
  begin
   Classes.WakeMainThread(nil);
+ end;
+end;
+
+Function THostIpcPipeMGUI.Push(Node:Pointer):Boolean;
+begin
+ if (PQNode(Node)^.header.mtype=iRESULT) then
+ begin
+  //Trigger Direct on GUI side!
+  RecvResultNode(Node);
+ end else
+ begin
+  Result:=inherited;
  end;
 end;
 
