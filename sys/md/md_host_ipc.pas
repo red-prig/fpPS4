@@ -9,6 +9,7 @@ uses
  kern_thr,
  evbuffer,
  evpoll,
+ host_ipc_interface,
  host_ipc;
 
 type
@@ -24,17 +25,17 @@ type
 
   FPush  :t_push_cb;
 
-  procedure Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
+  procedure Send(mtype,mlen,mtid:DWORD;buf:Pointer);
   procedure Recv;
  end;
 
  THostIpcPipe=class(THostIpcConnect)
   evpoll:Tevpoll;
-  proto:t_ipc_proto;
+  proto :t_ipc_proto;
   procedure   set_pipe(fd:THandle);
   procedure   Recv_pipe; virtual;
   Function    Push(Node:Pointer):Boolean; virtual;
-  procedure   Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer); override;
+  procedure   Send(mtype,mlen,mtid:DWORD;buf:Pointer); override;
   procedure   WakeupKevent(); override;
   Constructor Create;
   Destructor  Destroy; override;
@@ -48,7 +49,7 @@ type
  end;
 
  THostIpcPipeKERN=class(THostIpcPipe)
-  FHandler:THostIpcHandler;
+  Function    GetCallback(mtype:DWORD):TOnMessage; override;
   procedure   Recv_pipe;   override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
@@ -56,7 +57,7 @@ type
 
 implementation
 
-procedure t_ipc_proto.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
+procedure t_ipc_proto.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 var
  node:PNodeHeader;
 begin
@@ -170,7 +171,7 @@ begin
  Result:=FQueue.Push(node);
 end;
 
-procedure THostIpcPipe.Send(mtype:t_mtype;mlen,mtid:DWORD;buf:Pointer);
+procedure THostIpcPipe.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 begin
  proto.Send(mtype,mlen,mtid,buf);
 end;
@@ -233,11 +234,22 @@ end;
 
 //
 
+Function THostIpcPipeKERN.GetCallback(mtype:DWORD):TOnMessage;
+begin
+ if (iKEV_CHANGE=0) then iKEV_CHANGE:=HashIpcStr('KEV_CHANGE');
+ if (mtype=iKEV_CHANGE) then
+ begin
+  Result:=@RecvKevent;
+ end else
+ begin
+  Result:=inherited;
+ end;
+end;
+
 procedure THostIpcPipeKERN.Recv_pipe;
 begin
  inherited;
-
- Update(FHandler);
+ Update();
 end;
 
 procedure THostIpcPipeKERN.thread_new;

@@ -147,6 +147,11 @@ type
 
     FGameMainForm:TGameMainForm;
 
+    function  OnKevent     (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
+    function  OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
+    function  OnCaptionFPS (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+    function  OnError      (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+
     function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
     Procedure CloseMainWindows();
@@ -225,13 +230,6 @@ end;
 
 const
  section_prefix='game-';
-
-type
- TGuiIpcHandler=class(THostIpcHandler)
-  Form:TfrmMain;
-  function OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint; override;
-  function OnKevent(kev:p_kevent;count:Integer):Ptruint;
- end;
 
 function GetRealFontSize(Font:TFont):Integer;
 var
@@ -336,34 +334,28 @@ begin
  }
 end;
 
-function TGuiIpcHandler.OnMessage(mtype:t_mtype;mlen:DWORD;buf:Pointer):Ptruint;
+function TfrmMain.OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
 begin
- Result:=0;
- case mtype of
-  iKEV_EVENT   :Result:=OnKevent(buf,mlen div sizeof(t_kevent));
-  iMAIN_WINDOWS:Result:=Form.OpenMainWindows();
-  iCAPTION_FPS :Form.SetCaptionFPS(PQWORD(buf)^);
-  iERROR       :
-    begin
-     if (MessageDlgEx(PChar(buf),mtError,[mbOK,mbAbort],Form)=mrAbort) then
-     begin
-      if (Form.FGameProcess<>nil) then
-      if (Form.FGameProcess.g_ipc<>nil) then
-      begin
-       Form.FGameProcess.g_ipc.FStop:=True;
-      end;
-     end;
-    end
-  else;
-   ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
- end;
+ Result:=OpenMainWindows();
 end;
 
-function TGuiIpcHandler.OnKevent(kev:p_kevent;count:Integer):Ptruint;
+function TfrmMain.OnCaptionFPS(mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+begin
+ Result:=0;
+ SetCaptionFPS(PQWORD(buf)^);
+end;
+
+function TfrmMain.OnKevent(mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
 var
+ kev:p_kevent;
+ count:Integer;
+
  i:Integer;
 begin
  Result:=0;
+
+ kev  :=buf;
+ count:=mlen div sizeof(t_kevent);
 
  i:=0;
  while (i<>count) do
@@ -379,7 +371,7 @@ begin
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin
        //ShowMessage('NOTE_EXEC pid:'+IntToStr(kev[i].ident));
-       Form.SetButtonsState(mdsRunned);
+       SetButtonsState(mdsRunned);
       end;
      end;
 
@@ -391,9 +383,23 @@ begin
 
 end;
 
+function TfrmMain.OnError(mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+begin
+ Result:=0;
+ if (MessageDlgEx(PChar(buf),mtError,[mbOK,mbAbort],Self)=mrAbort) then
+ begin
+  if (FGameProcess<>nil) then
+  if (FGameProcess.g_ipc<>nil) then
+  begin
+   FGameProcess.g_ipc.FStop:=True;
+  end;
+ end;
+end;
+
+//ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
 
 var
- IpcHandler:TGuiIpcHandler;
+ IpcHandler:THostIpcHandler;
 
 //
 
@@ -667,8 +673,12 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
- IpcHandler:=TGuiIpcHandler.Create;
- IpcHandler.Form:=Self;
+ IpcHandler:=THostIpcHandler.Create;
+
+ IpcHandler.AddCallback('KEV_EVENT'   ,@OnKevent     );
+ IpcHandler.AddCallback('MAIN_WINDOWS',@OnMainWindows);
+ IpcHandler.AddCallback('CAPTION_FPS' ,@OnCaptionFPS );
+ IpcHandler.AddCallback('ERROR'       ,@OnError      );
 
  ReadConfigFile;
 
@@ -829,7 +839,7 @@ begin
 
   if (FGameProcess.g_ipc<>nil) then
   begin
-   FGameProcess.g_ipc.Update(IpcHandler);
+   FGameProcess.g_ipc.Update();
   end;
 
   if (FGameProcess.g_ipc<>nil) then //recheck, must be free in Update()
@@ -1105,6 +1115,11 @@ begin
   FGameItem:=Item;
 
   SetButtonsState(mdsStarted);
+
+  if (FGameProcess.g_ipc<>nil) then
+  begin
+   FGameProcess.g_ipc.FHandler:=IpcHandler;
+  end;
  end;
 end;
 
