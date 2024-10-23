@@ -97,7 +97,7 @@ type
   function  Parse():Integer;
   function  FindUpCond(cond:TsrCondition;Adr:TSrcAdr):TsrCFGBlock;
   procedure OpenExec;
-  procedure CloseExec;
+  procedure CloseExec(Before:Boolean);
   function  NextParse:Integer;
   Procedure Finalize;
   function  CheckBlockEnd:Boolean;
@@ -897,7 +897,7 @@ begin
  end;
 end;
 
-procedure TsrCFGParser.CloseExec;
+procedure TsrCFGParser.CloseExec(Before:Boolean);
 var
  node:TsrCFGBlock;
 begin
@@ -908,7 +908,15 @@ begin
  end;
 
  node:=pBlock;
- node.pELabel:=pCode.FetchLabel(FCursor.prev_adr);
+
+ if Before then
+ begin
+  node.pELabel:=pCode.FetchLabel(FCursor.prev_adr);
+ end else
+ begin
+  node.pELabel:=pCode.FetchLabel(FCursor.Adr);
+ end;
+
  PopBlock;
 end;
 
@@ -1039,7 +1047,7 @@ begin
  end;
  //
  case GetExecFlow(FSPI) of
-  cFalse:CloseExec;
+  cFalse:CloseExec(True);
   cTrue :OpenExec;
   else;
  end;
@@ -1064,14 +1072,26 @@ begin
 end;
 
 function TsrCFGParser.CheckBlockEnd:Boolean;
+var
+ node:TsrCFGBlock;
 begin
  Result:=False;
  if (pBlock=nil) then Exit;
  if (pBlock.pParent=nil) then Exit;
- Result:=pBlock.IsEndOf(FCursor.Adr);
+
+ node:=pBlock;
+
+ if (node.bType=btExec) then
+ begin
+  node:=node.pParent;
+ end;
+
+ Result:=node.IsEndOf(FCursor.Adr);
+
  if Result then
  begin
-  Assert(pBlock.bType<>btExec);
+  CloseExec(False);
+  Assert(node.bType<>btExec);
 
   PopBlock;
  end;
