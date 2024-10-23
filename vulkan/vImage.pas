@@ -605,9 +605,9 @@ const
   VK_FORMAT_UNDEFINED
  );
 
- MUTABLE_16:array[0..20] of TVkFormat=(
-  VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT,
-  VK_FORMAT_A4B4G4R4_UNORM_PACK16_EXT,
+ MUTABLE_16:array[0..18] of TVkFormat=(
+  //VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT,  //VK1.3
+  //VK_FORMAT_A4B4G4R4_UNORM_PACK16_EXT,  //VK1.3
   VK_FORMAT_R4G4B4A4_UNORM_PACK16,
   VK_FORMAT_B4G4R4A4_UNORM_PACK16,
   VK_FORMAT_R5G6B5_UNORM_PACK16,
@@ -2105,6 +2105,48 @@ begin
  Result:=((curr and next)<>next);
 end;
 
+procedure _test_and_set_to(var str :RawByteString;
+                           test    :TVkAccessFlags;
+                           bit_test:TVkAccessFlagBits;
+                           bit_str :RawByteString);
+begin
+ if ((test and ord(bit_test))<>0) then
+ begin
+  if (str='') then
+  begin
+   str:=bit_str;
+  end else
+  begin
+   str:=str + '|' + bit_str;
+  end;
+ end;
+end;
+
+function GetAccessMaskStr(AccessMask:TVkAccessFlags):RawByteString;
+begin
+ if (AccessMask=0) then Exit('NONE');
+
+ Result:='';
+
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_INDIRECT_COMMAND_READ_BIT         ,'ICR');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_INDEX_READ_BIT                    ,'IR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT         ,'VAR');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_UNIFORM_READ_BIT                  ,'UR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_INPUT_ATTACHMENT_READ_BIT         ,'IAR');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_SHADER_READ_BIT                   ,'SR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_SHADER_WRITE_BIT                  ,'SW' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_COLOR_ATTACHMENT_READ_BIT         ,'CAR');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT        ,'CAW');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT ,'DAR');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,'DAW');
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_TRANSFER_READ_BIT                 ,'TR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_TRANSFER_WRITE_BIT                ,'TW' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_HOST_READ_BIT                     ,'HR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_HOST_WRITE_BIT                    ,'HW' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_MEMORY_READ_BIT                   ,'MR' );
+ _test_and_set_to(Result,AccessMask,VK_ACCESS_MEMORY_WRITE_BIT                  ,'MW' );
+end;
+
 function TvImageBarrier.Push(cmd:TVkCommandBuffer;
                              cb:t_push_cb;
                              image:TVkImage;
@@ -2116,6 +2158,8 @@ var
  info:TVkImageMemoryBarrier;
 begin
  Result:=False;
+
+ //Writeln('Push:0x',HexStr(image,16),' ',HexStr(dstAccessMask,8),' ',(newImageLayout),' ',HexStr(dstStageMask,8));
 
  //RAW
  //WAR
@@ -2144,8 +2188,8 @@ begin
 
   Writeln('Barrier:'#13#10,
           ' image        =0x',HexStr(image,16),#13#10,
-          ' srcAccessMask=0x',HexStr(AccessMask,8),#13#10,
-          ' dstAccessMask=0x',HexStr(dstAccessMask,8),#13#10,
+          ' srcAccessMask=',GetAccessMaskStr(AccessMask),#13#10,
+          ' dstAccessMask=',GetAccessMaskStr(dstAccessMask),#13#10,
           ' oldLayout    ='  ,ImgLayout,#13#10,
           ' newLayout    ='  ,newImageLayout
          );

@@ -1215,7 +1215,7 @@ var
 begin
  Result:=0;
 
-  if (_lazy_init=0) or (g_audioout_interface=nil) then
+ if (_lazy_init=0) or (g_audioout_interface=nil) then
  begin
   Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
  end;

@@ -23,6 +23,10 @@ Function  get_image_size(const key:TvImageKey):Ptruint;
 
 implementation
 
+const
+ VK_ACCESS_BUF_ANY=ord(VK_ACCESS_MEMORY_READ_BIT) or ord(VK_ACCESS_MEMORY_WRITE_BIT);
+ VK_STAGE_BUF_ANY =ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
 Function GetLinearAlignWidth(bpp,width:Ptruint):Ptruint; inline;
 var
  align_m:Ptruint;
@@ -331,10 +335,10 @@ begin
                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     cmd.BufferMemoryBarrier(buf.FHandle,
-                            ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                            VK_ACCESS_BUF_ANY,
                             ord(VK_ACCESS_TRANSFER_READ_BIT),
                             0,size,
-                            ord(VK_PIPELINE_STAGE_HOST_BIT),
+                            VK_STAGE_BUF_ANY,
                             ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
                            );
    end;
@@ -346,10 +350,10 @@ begin
                       ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
     cmd.BufferMemoryBarrier(buf.FHandle,
-                            ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                            VK_ACCESS_BUF_ANY,
                             ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                             0,size,
-                            ord(VK_PIPELINE_STAGE_HOST_BIT),
+                            VK_STAGE_BUF_ANY,
                             ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
                            );
    end;
@@ -722,11 +726,11 @@ begin
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  cmd.BufferMemoryBarrier(buf.FHandle,
-                         ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                         VK_ACCESS_BUF_ANY,
                          ord(VK_ACCESS_TRANSFER_READ_BIT),
                          m_offset,
                          size,
-                         ord(VK_PIPELINE_STAGE_HOST_BIT),
+                         VK_STAGE_BUF_ANY,
                          ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
                         );
 
@@ -833,11 +837,11 @@ begin
                    ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  cmd.BufferMemoryBarrier(buf.FHandle,
-                         ord(VK_ACCESS_HOST_READ_BIT) or ord(VK_ACCESS_HOST_WRITE_BIT),
+                         VK_ACCESS_BUF_ANY,
                          ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                          m_offset,
                          size,
-                         ord(VK_PIPELINE_STAGE_HOST_BIT),
+                         VK_STAGE_BUF_ANY,
                          ord(VK_PIPELINE_STAGE_TRANSFER_BIT)
                         );
 

@@ -837,7 +837,7 @@ begin
          (ord(W)*ord((IMAGE_USAGE and (TM_WRITE or TM_CLEAR))<>0) );
 end;
 
-function GetAccessMask(const curr:t_pm4_usage):TVkAccessFlags;
+function GetAccessMaskImg(const curr:t_pm4_usage):TVkAccessFlags;
 begin
  Result:=
   ConvertRW(curr.shd_usage,VK_ACCESS_SHADER_READ_BIT                  ,VK_ACCESS_SHADER_WRITE_BIT                  ) or
@@ -845,12 +845,39 @@ begin
   ConvertRW(curr.dsa_usage,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 end;
 
+function GetAccessMaskBuf(const curr:t_pm4_usage):TVkAccessFlags;
+begin
+ Result:=ConvertRW(curr.mem_usage,VK_ACCESS_SHADER_READ_BIT,VK_ACCESS_SHADER_WRITE_BIT);
+end;
+
+function GetStageMask(BindPoint:TVkPipelineBindPoint):TVkPipelineStageFlags;
+begin
+ case BindPoint of
+  BP_GRAPHICS:Result:=ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
+  BP_COMPUTE :Result:=ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+  else        Result:=ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+ end;
+end;
+
+function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
+begin
+ Result:=addr-(addr mod alignment);
+end;
+
+const
+ VK_ACCESS_BUF_ANY=ord(VK_ACCESS_MEMORY_READ_BIT) or ord(VK_ACCESS_MEMORY_WRITE_BIT);
+ VK_STAGE_BUF_ANY =ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
 procedure Prepare_Uniforms(var ctx:t_me_render_context;
+                           BindPoint:TVkPipelineBindPoint;
                            var UniformBuilder:TvUniformBuilder);
 var
  i:Integer;
 
  ri:TvImage2;
+
+ buf:TvHostBuffer;
+ diff:TVkDeviceSize;
 
  resource_instance:p_pm4_resource_instance;
 begin
@@ -887,21 +914,60 @@ begin
     pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
 
     ri.PushBarrier(ctx.Cmd,
-                   GetAccessMask(resource_instance^.curr),
+                   GetAccessMaskImg(resource_instance^.curr),
                    GetImageLayout(resource_instance^.curr),
-                   ord(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT));
+                   GetStageMask(BindPoint));
 
    end;
 
   end;
  end;
 
- //Writeln('<-[Prepare_Uniforms]');
-end;
+ //Buffers
 
-function AlignDw(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
-begin
- Result:=addr-(addr mod alignment);
+ //buffers
+ if (Length(UniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(UniformBuilder.FBuffers) do
+  With UniformBuilder.FBuffers[i] do
+  begin
+
+   resource_instance:=ctx.node^.scope.find_buffer_resource_instance(addr,size);
+
+   Assert(resource_instance<>nil);
+
+   if not resource_instance^.prepared then
+   begin
+    resource_instance^.prepared:=true;
+
+    buf:=TvHostBuffer(resource_instance^.resource^.rimage);
+
+    if (buf=nil) then
+    begin
+     buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size);
+
+     resource_instance^.resource^.rimage:=buf;
+    end;
+
+    diff:=QWORD(addr)-buf.FAddr;
+    diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+    //TODO: Barrier state cache
+    ctx.Cmd.BufferMemoryBarrier(buf.FHandle,
+                                VK_ACCESS_BUF_ANY,
+                                GetAccessMaskBuf(resource_instance^.curr),
+                                diff,size,
+                                VK_STAGE_BUF_ANY,
+                                GetStageMask(BindPoint)
+                               );
+
+   end;
+
+  end;
+ end;
+ //buffers
+
+ //Writeln('<-[Prepare_Uniforms]');
 end;
 
 procedure BindMipStorage(var ctx:t_me_render_context;
@@ -1428,7 +1494,7 @@ begin
    iv:=ri.FetchView(ctx.Cmd,ctx.rt_info^.RT_INFO[i].FImageView,iu_attachment);
 
    ri.PushBarrier(ctx.Cmd,
-                  GetAccessMask(color_instance[i]^.curr),
+                  GetAccessMaskImg(color_instance[i]^.curr),
                   GetImageLayout(color_instance[i]^.curr),
                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
@@ -1550,7 +1616,7 @@ begin
  FUniformBuilder:=Default(TvUniformBuilder);
  ctx.rt_info^.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@ctx.rt_info^.USERDATA);
 
- Prepare_Uniforms(ctx,FUniformBuilder);
+ Prepare_Uniforms(ctx,BP_GRAPHICS,FUniformBuilder);
  ////////
 
  if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
@@ -1939,7 +2005,7 @@ begin
   ctx.InsertLabel('clear htile/rendertarget');
  end;
 
- Prepare_Uniforms(ctx,FUniformBuilder);
+ Prepare_Uniforms(ctx,BP_COMPUTE,FUniformBuilder);
  ////////
 
  DumpShaderGroup(CP_KEY.FShaderGroup);
