@@ -153,6 +153,8 @@ type
   base_array:Word;      //first array index (0..16383)
   last_array:Word;      //texture height    (0..16383)
   minLod    :TVkFloat;
+  function arrayLayers:Word;
+  function baseArrayLayer:Word;
   function layerCount:Word;
  end;
 
@@ -302,6 +304,39 @@ begin
  end;
 end;
 
+//
+
+function TvImageViewKey.arrayLayers:Word;
+begin
+ Result:=last_array-base_array+1;
+end;
+
+function TvImageViewKey.baseArrayLayer:Word;
+begin
+ case TVkImageViewType(vtype) of
+  VK_IMAGE_VIEW_TYPE_3D:
+   begin
+    Result:=0; //3D texture array does not exist?
+   end;
+  VK_IMAGE_VIEW_TYPE_CUBE,
+  VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
+   begin
+    if (arrayLayers mod 6)<>0 then
+    begin
+     //broken CUBE?
+     Result:=0;
+    end else
+    begin
+     Result:=base_array;
+    end;
+   end;
+  else
+   begin
+    Result:=base_array;
+   end;
+ end;
+end;
+
 function TvImageViewKey.layerCount:Word;
 begin
  case TVkImageViewType(vtype) of
@@ -309,14 +344,14 @@ begin
    begin
     Result:=1; //3D texture array does not exist?
    end;
-  VK_IMAGE_VIEW_TYPE_CUBE:
+  VK_IMAGE_VIEW_TYPE_CUBE,
+  VK_IMAGE_VIEW_TYPE_CUBE_ARRAY:
    begin
-    Result:=last_array-base_array+1;
-    Result:=((Result+5) div 6)*6; //align up
+    Result:=((arrayLayers+5) div 6)*6; //align up
    end;
   else
    begin
-    Result:=last_array-base_array+1;
+    Result:=arrayLayers;
    end;
  end;
 end;

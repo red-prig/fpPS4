@@ -426,7 +426,7 @@ begin
  Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.baseMipLevel  :=key.base_level;
  Result.levelCount    :=key.last_level-key.base_level+1;
- Result.baseArrayLayer:=key.base_array;
+ Result.baseArrayLayer:=key.baseArrayLayer;
  Result.layerCount    :=key.layerCount;
 end;
 
@@ -437,7 +437,7 @@ begin
  Result:=Default(TVkImageSubresourceLayers);
  Result.aspectMask    :=GetAspectMaskByFormat(cformat);
  Result.mipLevel      :=key.base_level;
- Result.baseArrayLayer:=key.base_array;
+ Result.baseArrayLayer:=key.baseArrayLayer;
  Result.layerCount    :=key.layerCount;
 end;
 
@@ -546,8 +546,15 @@ begin
   cinfo.subresourceRange.aspectMask    :=GetAspectMaskByFormat(F.cformat);
   cinfo.subresourceRange.baseMipLevel  :=F.base_level;
   cinfo.subresourceRange.levelCount    :=F.last_level-F.base_level+1;
-  cinfo.subresourceRange.baseArrayLayer:=F.base_array;
+  cinfo.subresourceRange.baseArrayLayer:=F.baseArrayLayer;
   cinfo.subresourceRange.layerCount    :=F.layerCount;
+
+  if (cinfo.subresourceRange.baseArrayLayer +
+      cinfo.subresourceRange.layerCount) > self.key.params.layerCount
+   then
+  begin
+   Assert(false);
+  end;
 
   case cinfo.viewType of
    VK_IMAGE_VIEW_TYPE_CUBE:
