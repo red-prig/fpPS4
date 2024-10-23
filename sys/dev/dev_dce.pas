@@ -617,6 +617,26 @@ begin
      Exit(EINVAL);
     end;
 
+  7: //sceVideoOutSetWindowModeMargins
+    begin
+     if (data^.arg5=0) and (data^.arg6=0) then
+     begin
+      //arg2 -> canary
+      //arg3 -> top
+      //arg4 -> bottom
+
+      if (DWORD(data^.arg3) > $fff) or (DWORD(data^.arg4) > $fff) then
+      begin
+       Exit(EINVAL);
+      end;
+
+      Writeln('sceVideoOutSetWindowModeMargins:',DWORD(data^.arg3),' ',DWORD(data^.arg4));
+
+      Exit(0);
+     end;
+     Exit(EINVAL);
+    end;
+
   9:
     begin //get page info
      if (data^.arg5=0) and (data^.arg6=0) then
