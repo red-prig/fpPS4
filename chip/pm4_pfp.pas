@@ -2070,7 +2070,7 @@ begin
       else
        begin
         Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
-        Assert(False);
+        Assert (False ,'[ASC]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
 
@@ -2078,7 +2078,7 @@ begin
   else
    begin
     Writeln(stderr,'[ASC]PM4_TYPE_',PM4_TYPE(token));
-    Assert(False);
+    Assert (False ,'[ASC]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;
 

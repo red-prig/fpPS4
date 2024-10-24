@@ -136,7 +136,7 @@ end;
 
 procedure mtx_assert(var m:mtx); inline;
 begin
- Assert(mtx_owned(m),IntToStr(m.c.OwningThread)+'<>'+IntToStr(GetCurrentThreadId));
+ Assert(mtx_owned(m),'mtx_assert:'+IntToStr(m.c.OwningThread)+'<>'+IntToStr(GetCurrentThreadId));
 end;
 
 end.

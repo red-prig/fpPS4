@@ -385,8 +385,7 @@ var
  len,idx:Int64;
  mask:QWORD;
  xmm_a,xmm_b:TRegValue;
- a,b,m:TRegValue;
- a_32:TRegValue;
+ a,b,m,t:TRegValue;
 begin
 
  xmm_a:=new_reg(ctx.din.Operand[1]);
@@ -398,11 +397,6 @@ begin
 
  with ctx.builder do
  begin
-  //swap
-  xchgq(rbp,rax);
-  //load flags to al,ah
-  seto(al);
-  lahf;
 
   if (ctx.din.OperCnt=4) then
   begin
@@ -422,6 +416,31 @@ begin
    mask:=mask shr (64 - len);
    mask:=mask shl idx;
 
+   if (mask=0) then
+   begin
+    //nop
+    Exit;
+   end;
+
+   if (mask=QWORD($FFFFFFFFFFFFFFFF)) then
+   begin
+    //special case
+
+    //b = xmm1[0:63]
+    movq_r_xmm(ctx,b,xmm_b);
+
+    //xmm0[0:63] = b;
+    pinsrq(ctx,xmm_a,b,0);
+
+    Exit;
+   end;
+
+   //swap
+   xchgq(rbp,rax);
+   //load flags to al,ah
+   seto(al);
+   lahf;
+
    if (classif_offset_u64(mask)=os64) then
    begin
     //64bit mask
@@ -435,13 +454,20 @@ begin
    //b = xmm1[0:63]
    movq_r_xmm(ctx,b,xmm_b);
 
-   shli8(b,idx); // b = b shl idx
+   if (idx<>0) then
+   begin
+    shli8(b,idx); // b = b shl idx
+   end;
 
   end else
   begin
    //insertq xmm0,xmm1
 
-   a_32:=new_reg_size(a,os32);
+   //swap
+   xchgq(rbp,rax);
+   //load flags to al,ah
+   seto(al);
+   lahf;
 
    //PEXTRQ r/m64, xmm2, imm8
    pextrq(ctx,m,xmm_b,1);
@@ -449,7 +475,8 @@ begin
    movq (b,m);
    andi8(b,$3F);    //b = len with m[0]
 
-   movi (a_32,64); //a = 64 (zero extended)
+   t:=new_reg_size(a,os32);
+   movi (t,64);    //a = 64 (zero extended)
    subq (a,b);     //a = (64 - len)
 
    andi (m,$3F00); //filter
@@ -474,8 +501,15 @@ begin
 
    shlx (b,b,m);   // b = b shl idx
 
-   movq (a,m);     // a = m (idx)
-   movq (m,b);     // m = b (mask)
+   //reassign
+   //m -> a (idx)
+   //b -> m (mask)
+   //a -> b
+
+   t:=a;
+   a:=m;
+   m:=b;
+   b:=t;
 
    //b = xmm1[0:63]
    movq_r_xmm(ctx,b,xmm_b);
