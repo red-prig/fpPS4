@@ -370,7 +370,7 @@ procedure pinsrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
 const
  desc:t_op_type=(op:$660F3A22;index:0);
 begin
- ctx.builder._RRI8(desc,reg0,reg1,imm8,reg1.ASize);
+ ctx.builder._RRI8(desc,reg1,reg0,imm8,reg1.ASize);
 end;
 
 procedure pextrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
@@ -386,6 +386,7 @@ var
  mask:QWORD;
  xmm_a,xmm_b:TRegValue;
  a,b,m:TRegValue;
+ a_32:TRegValue;
 begin
 
  xmm_a:=new_reg(ctx.din.Operand[1]);
@@ -431,47 +432,59 @@ begin
     movi(new_reg_size(m,os32),mask);
    end;
 
+   //b = xmm1[0:63]
+   movq_r_xmm(ctx,b,xmm_b);
+
+   shli8(b,idx); // b = b shl idx
+
   end else
   begin
    //insertq xmm0,xmm1
+
+   a_32:=new_reg_size(a,os32);
 
    //PEXTRQ r/m64, xmm2, imm8
    pextrq(ctx,m,xmm_b,1);
 
    movq (b,m);
-   andi8(b,$3F); //b = len with m[0]
+   andi8(b,$3F);    //b = len with m[0]
 
-   movi (new_reg_size(a,os32),64); //a = 64
-   subq (a,b); //a = (64 - len)
+   movi (a_32,64); //a = 64 (zero extended)
+   subq (a,b);     //a = (64 - len)
 
    andi (m,$3F00); //filter
 
    movq (b,a);
    andi8(b,$FF);
-   orq  (m,b);   // save (64 - len) to m[0]
+   orq  (m,b);     // save (64 - len) to m[0]
 
    movq (b,m);
    shri8(b,8);
-   andi8(b,$3F); // b = idx with m[1]
+   andi8(b,$3F);   // b = idx with m[1]
 
-   subq (a,b);   // a = (64 - len - idx)
+   subq (a,b);     // a = (64 - len - idx)
 
-   movi (b,-1);  // b = 0xFFFFFFFFFFFFFFFF
+   movi (b,-1);    // b = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
 
-   shlx (b,b,a); // b = b shl (64 - idx - len)
+   shlx (b,b,a);   // b = b shl (64 - idx - len)
 
-   shrx (b,b,m); // b = b shr (64 - len):[0x3F];
+   shrx (b,b,m);   // b = b shr (64 - len):[0x3F];
 
-   shli8(m,8);   // m[0] = m[1]
+   shli8(m,8);     // m[0] = m[1]
 
-   shlx (b,b,m); // b = b shl idx
+   shlx (b,b,m);   // b = b shl idx
 
-   movq (m,b);   // m = b
+   movq (a,m);     // a = m (idx)
+   movq (m,b);     // m = b (mask)
+
+   //b = xmm1[0:63]
+   movq_r_xmm(ctx,b,xmm_b);
+
+   shlx (b,b,a); // b = b shl a (idx)
   end;
 
   //a = xmm0[0:63]
   movq_r_xmm(ctx,a,xmm_a);
-  movq_r_xmm(ctx,b,xmm_b);
 
   andq(b,m);
   notq(m);
