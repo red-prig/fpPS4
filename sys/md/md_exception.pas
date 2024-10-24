@@ -26,6 +26,7 @@ uses
   vm_pmap_prot,
   vm_tracking_map,
   kern_proc,
+  kern_jit_ctx,
   kern_jit_dynamic;
 
 const
@@ -256,6 +257,8 @@ begin
 end;
 
 function ProcessException(p:PExceptionPointers):longint; stdcall;
+var
+ instr:t_instruction_info;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
  if (curkthread=nil) then Exit;
@@ -271,10 +274,11 @@ begin
 
   STATUS_ACCESS_VIOLATION:
     begin
+     instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
 
      if pmap_danger_zone(vm_map_t(p_proc.p_vmspace)^.pmap,
                          get_pageflt_addr(p),
-                         256 //TODO: access len
+                         instr.mema_size
                         ) then
      begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
@@ -283,23 +287,21 @@ begin
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
-         //TODO: access len
-         if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_READ)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_READ)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_READ');
          end;
         end;
       VM_PROT_WRITE:
         begin
-         //TODO: access len
-         if ((ppmap_get_prot(get_pageflt_addr(p),256) and VM_PROT_WRITE)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
           Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,
                                get_pageflt_addr(p),
-                               get_pageflt_addr(p)+256, //TODO: access len
+                               get_pageflt_addr(p)+instr.mema_size,
                                nil,
                                M_CPU_WRITE);
           //

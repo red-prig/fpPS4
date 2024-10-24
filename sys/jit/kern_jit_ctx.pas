@@ -1610,13 +1610,6 @@ end;
 // 64-40 = 24
 
 procedure op_uplift(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize;hint:t_lea_hint=[]);
-const
- shlx_desc:t_op_type=(
-  op:$F7;simdop:1;mm:2;vw_mode:vwR64;
- );
- shrx_desc:t_op_type=(
-  op:$F7;simdop:3;mm:2;vw_mode:vwR64;
- );
 var
  rbits:TRegValue;
 begin
@@ -1647,8 +1640,8 @@ begin
   movi(new_reg_size(rbits,os8),24); //mov  $24,%bpl
 
   //clear hi
-  _VVV(shlx_desc,dst,rbits,dst,os64); //1 3 2 | shlx %rbp,%r14,%r14
-  _VVV(shrx_desc,dst,rbits,dst,os64); //1 3 2 | shrx %rbp,%r14,%r14
+  shlx(dst,dst,rbits); //shlx %rbp,%r14,%r14
+  shrx(dst,dst,rbits); //shrx %rbp,%r14,%r14
 
   if (rbits.AIndex=rbp.AIndex) then
   begin

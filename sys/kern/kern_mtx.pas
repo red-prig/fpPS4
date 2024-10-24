@@ -5,6 +5,9 @@ unit kern_mtx;
 
 interface
 
+uses
+ sysutils;
+
 type
  p_mtx=^mtx;
  mtx=packed record
@@ -133,7 +136,7 @@ end;
 
 procedure mtx_assert(var m:mtx); inline;
 begin
- Assert(mtx_owned(m));
+ Assert(mtx_owned(m),IntToStr(m.c.OwningThread)+'<>'+IntToStr(GetCurrentThreadId));
 end;
 
 end.

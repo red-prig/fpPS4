@@ -387,7 +387,14 @@ type
   procedure subi    (reg:TRegValue  ;imm:Int64);
   procedure subi8   (reg:TRegValue  ;imm:Byte);
   procedure subi8   (mem:t_jit_leas ;imm:Byte);
+  procedure shli8   (reg:TRegValue  ;imm:Byte);
+  procedure shri8   (reg:TRegValue  ;imm:Byte);
+  procedure andi    (reg:TRegValue  ;imm:Int64);
+  procedure andi8   (reg:TRegValue  ;imm:Byte);
+  procedure andq    (reg0:TRegValue ;reg1:TRegValue);
+  procedure orq     (reg0:TRegValue ;reg1:TRegValue);
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
+  procedure notq    (reg:TRegValue);
   procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
   procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
@@ -433,6 +440,8 @@ type
   procedure int3;
   procedure testq(reg0:TRegValue;reg1:TRegValue);
   procedure bti8 (mem:t_jit_leas;imm:Byte);
+  procedure shlx (reg0,reg1,reg2:TRegValue);
+  procedure shrx (reg0,reg1,reg2:TRegValue);
  end;
 
 operator :=(const A:TRegValue):t_jit_lea;
@@ -3746,11 +3755,62 @@ end;
 
 ///
 
+procedure t_jit_builder.shli8(reg:TRegValue;imm:Byte);
+const
+ desc:t_op_type=(op:$C1;index:4);
+begin
+ _RI8(desc,reg,imm);
+end;
+
+procedure t_jit_builder.shri8(reg:TRegValue;imm:Byte);
+const
+ desc:t_op_type=(op:$C1;index:5);
+begin
+ _RI8(desc,reg,imm);
+end;
+
+///
+
+procedure t_jit_builder.andi(reg:TRegValue;imm:Int64);
+const
+ desc:t_op_type=(op:$81;index:4);
+begin
+ _RI(desc,reg,imm);
+end;
+
+procedure t_jit_builder.andi8(reg:TRegValue;imm:Byte);
+const
+ desc:t_op_type=(op:$83;index:4);
+begin
+ _RI8(desc,reg,imm);
+end;
+
+procedure t_jit_builder.andq(reg0:TRegValue;reg1:TRegValue);
+const
+ desc:t_op_type=(op:$21;index:0);
+begin
+ _RR(desc,reg0,reg1);
+end;
+
+procedure t_jit_builder.orq(reg0:TRegValue;reg1:TRegValue);
+const
+ desc:t_op_type=(op:$09;index:0);
+begin
+ _RR(desc,reg0,reg1);
+end;
+
 procedure t_jit_builder.xorq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$31;index:0);
 begin
  _RR(desc,reg0,reg1);
+end;
+
+procedure t_jit_builder.notq(reg:TRegValue);
+const
+ desc:t_op_type=(op:$F7;index:2);
+begin
+ _R(desc,reg);
 end;
 
 ///
@@ -4879,7 +4939,7 @@ end;
 
 procedure t_jit_builder.seto(reg:TRegValue);
 const
- desc:t_op_type=(op:$0F90;opt:[not_prefix]);
+ desc:t_op_type=(op:$0F90;opt:[not_prefix,not_os8]);
 begin
  _R(desc,reg);
 end;
@@ -4903,6 +4963,23 @@ begin
  _MI8(desc,mem,imm);
 end;
 
+procedure t_jit_builder.shlx(reg0,reg1,reg2:TRegValue);
+const
+ desc:t_op_type=(
+  op:$F7;simdop:1;mm:2;vw_mode:vwR64;
+ );
+begin
+ _VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+end;
+
+procedure t_jit_builder.shrx(reg0,reg1,reg2:TRegValue);
+const
+ desc:t_op_type=(
+  op:$F7;simdop:3;mm:2;vw_mode:vwR64;
+ );
+begin
+ _VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+end;
 
 end.
 

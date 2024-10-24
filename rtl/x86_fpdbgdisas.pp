@@ -403,7 +403,6 @@ type
     procedure AddGw;
     procedure AddGy;
     procedure AddGz;
-    procedure AddHdq;
     procedure AddHpd;
     procedure AddHps;
     procedure AddHsd;
@@ -1496,11 +1495,6 @@ begin
   if OperandSize = os16
   then AddModReg(regGeneral, os16)
   else AddModReg(regGeneral, os32);
-end;
-
-procedure TX86Disassembler.AddHdq;
-begin
-  AddVexReg(regXmm, Vex.VectorLength);
 end;
 
 procedure TX86Disassembler.AddHpd;
@@ -3677,8 +3671,8 @@ begin
     $C4: begin
       DecodeSIMD([soNone, so66]);
       case SimdOpcode of
-        soNone: begin SetOpcode(OPpinsr, OPSx_w      ); AddPq;          AddRy_Mw; AddIb end;
-        so66:   begin SetOpcode(OPpinsr, OPSx_w, True); AddVdq; AddHdq; AddRy_Mw; AddIb end;
+        soNone: begin SetOpcode(OPpinsr, OPSx_w      ); AddPq;         AddRy_Mw; AddIb end;
+        so66:   begin SetOpcode(OPpinsr, OPSx_w, True); AddVdq; AddHx; AddRy_Mw; AddIb end;
       end;
     end;
     $C5: begin
@@ -3937,10 +3931,10 @@ begin
         $BE: begin SetOpcode(OPvfnmsub231,  OPS_ps_d      ); AddVx;  AddHx;  AddWx;  CheckVex; end;
         $BF: begin SetOpcode(OPvfnmsub231,  OPS_ss_d      ); AddVx;  AddHx;  AddWx;  CheckVex; end;
         $DB: begin SetOpcode(OPaesimc,      OPSnone,  True); AddVdq; AddWdq;                   end;
-        $DC: begin SetOpcode(OPaesenc,      OPSnone,  True); AddVdq; AddHdq; AddWdq;           end;
-        $DD: begin SetOpcode(OPaesenclast,  OPSnone,  True); AddVdq; AddHdq; AddWdq;           end;
-        $DE: begin SetOpcode(OPaesdec,      OPSnone,  True); AddVdq; AddHdq; AddWdq;           end;
-        $DF: begin SetOpcode(OPaesdeclast,  OPSnone,  True); AddVdq; AddHdq; AddWdq;           end;
+        $DC: begin SetOpcode(OPaesenc,      OPSnone,  True); AddVdq; AddHx;  AddWdq;           end;
+        $DD: begin SetOpcode(OPaesenclast,  OPSnone,  True); AddVdq; AddHx;  AddWdq;           end;
+        $DE: begin SetOpcode(OPaesdec,      OPSnone,  True); AddVdq; AddHx;  AddWdq;           end;
+        $DF: begin SetOpcode(OPaesdeclast,  OPSnone,  True); AddVdq; AddHx;  AddWdq;           end;
         $F0: begin SetOpcode(OPmov,         OPSc_be       ); AddGw;  AddMw;                    end;
         $F1: begin SetOpcode(OPmov,         OPSc_be       ); AddMw;  AddGw;                    end;
         $F6: begin SetOpcode(OPadcx                       ); AddGy;  AddEy;                    end;
@@ -4007,15 +4001,15 @@ begin
         $18: begin SetOpcode(OPinsert,      OPSx_f128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $19: begin SetOpcode(OPextract,     OPSx_f128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
         $1D: begin SetOpcode(OPcvtps2,      OPSx_ph,  True); AddWx_Mq; AddVx;  AddIb;            CheckVex; end;
-        $20: begin SetOpcode(OPpinsr,       OPSx_b,   True); AddVdq;   AddHdq; AddRy_Mb;  AddIb;           end;
-        $21: begin SetOpcode(OPinsert,      OPSx_ps,  True); AddVdq;   AddHdq; AddUdq_Md; AddIb;           end;
-        $22: begin SetOpcode(OPpinsr,       OPS_d_q,  True); AddVdq;   AddHdq; AddEy;     AddIb;           end;
+        $20: begin SetOpcode(OPpinsr,       OPSx_b,   True); AddVdq;   AddHx;  AddRy_Mb;  AddIb;           end;
+        $21: begin SetOpcode(OPinsert,      OPSx_ps,  True); AddVdq;   AddHx;  AddUdq_Md; AddIb;           end;
+        $22: begin SetOpcode(OPpinsr,       OPS_d_q,  True); AddVdq;   AddHx;  AddEy;     AddIb;           end;
         $38: begin SetOpcode(OPinsert,      OPSx_i128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $39: begin SetOpcode(OPextract,     OPSx_i128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
         $40: begin SetOpcode(OPdp,          OPSx_ps,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
         $41: begin SetOpcode(OPdp,          OPSx_pd,  True); AddVdq;   AddHx;  AddWdq;    AddIb;           end;
         $42: begin SetOpcode(OPmpsadbw,     OPSnone,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
-        $44: begin SetOpcode(OPpclmulqdq,   OPSnone,  True); AddVdq;   AddHdq; AddWdq;    AddIb;           end;
+        $44: begin SetOpcode(OPpclmulqdq,   OPSnone,  True); AddVdq;   AddHx;  AddWdq;    AddIb;           end;
         $46: begin SetOpcode(OPvperm2,      OPSx_i128     ); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
         $4A: begin SetOpcode(OPblendv,      OPSx_ps,  True); AddVx;    AddHx;  AddWx;     AddLx; CheckVex; end;
         $4B: begin SetOpcode(OPblendv,      OPSx_pd,  True); AddVx;    AddHx;  AddWx;     AddLx; CheckVex; end;

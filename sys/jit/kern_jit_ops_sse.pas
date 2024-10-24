@@ -8,9 +8,11 @@ interface
 implementation
 
 uses
+ kern_thr,
  x86_fpdbgdisas,
  x86_jit,
  kern_jit_ops,
+ kern_jit_asm,
  kern_jit_ctx;
 
 var
@@ -323,14 +325,180 @@ begin
  end;
 end;
 
-//
+//SSE4a
+
+{
+AMD64 Architecture
+Programmer’s Manual
+Volume 4:
+128-Bit and 256-Bit
+Media Instructions
+}
 
 procedure op_movnt_sd_ss(var ctx:t_jit_context2);
 begin
  op_emit2_simd_mem_reg(ctx,[his_mov,his_wo]);
 end;
 
-//
+{
+ a = xmm0[0:63]
+ b = xmm1[0:63]
+
+ mask = 0xFFFFFFFFFFFFFFFF;
+
+ m = mask shl (64 - (idx + len));
+ m = m    shr (64 - len);
+ m = m    shl idx;
+
+ b = b shl idx;
+ b = b and m;
+
+ a = (not m) and a;
+ a = a or b;
+
+ xmm0[0:63] = a;
+}
+
+procedure movq_r_xmm(var ctx:t_jit_context2;reg0,reg1:TRegValue);
+const
+ desc:t_op_type=(op:$660F7E;index:0);
+begin
+ ctx.builder._RR(desc,reg0,reg1,reg0.ASize); //66 REX.W 0F 7E /r MOVQ r/m64, xmm
+end;
+
+procedure pinsrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
+const
+ desc:t_op_type=(op:$660F3A22;index:0);
+begin
+ ctx.builder._RRI8(desc,reg0,reg1,imm8,reg1.ASize);
+end;
+
+procedure pextrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
+const
+ desc:t_op_type=(op:$660F3A16;index:0);
+begin
+ ctx.builder._RRI8(desc,reg0,reg1,imm8,reg0.ASize);
+end;
+
+procedure op_insertq(var ctx:t_jit_context2);
+var
+ len,idx:Int64;
+ mask:QWORD;
+ xmm_a,xmm_b:TRegValue;
+ a,b,m:TRegValue;
+begin
+
+ xmm_a:=new_reg(ctx.din.Operand[1]);
+ xmm_b:=new_reg(ctx.din.Operand[2]);
+
+ a:=r_tmp0;
+ b:=r_tmp1;
+ m:=r_thrd;
+
+ with ctx.builder do
+ begin
+  //swap
+  xchgq(rbp,rax);
+  //load flags to al,ah
+  seto(al);
+  lahf;
+
+  if (ctx.din.OperCnt=4) then
+  begin
+   //insertq xmm0,xmm1,$10,$30
+
+   len:=0;
+   GetTargetOfs(ctx.din,ctx.code,3,len);
+
+   idx:=0;
+   GetTargetOfs(ctx.din,ctx.code,4,idx);
+
+   len:=len and $3F;
+   idx:=idx and $3F;
+
+   mask:=QWORD($FFFFFFFFFFFFFFFF);
+   mask:=mask shl (64 - (idx + len));
+   mask:=mask shr (64 - len);
+   mask:=mask shl idx;
+
+   if (classif_offset_u64(mask)=os64) then
+   begin
+    //64bit mask
+    movi64(m,mask);
+   end else
+   begin
+    //32bit zero extend
+    movi(new_reg_size(m,os32),mask);
+   end;
+
+  end else
+  begin
+   //insertq xmm0,xmm1
+
+   //PEXTRQ r/m64, xmm2, imm8
+   pextrq(ctx,m,xmm_b,1);
+
+   movq (b,m);
+   andi8(b,$3F); //b = len with m[0]
+
+   movi (new_reg_size(a,os32),64); //a = 64
+   subq (a,b); //a = (64 - len)
+
+   andi (m,$3F00); //filter
+
+   movq (b,a);
+   andi8(b,$FF);
+   orq  (m,b);   // save (64 - len) to m[0]
+
+   movq (b,m);
+   shri8(b,8);
+   andi8(b,$3F); // b = idx with m[1]
+
+   subq (a,b);   // a = (64 - len - idx)
+
+   movi (b,-1);  // b = 0xFFFFFFFFFFFFFFFF
+
+   shlx (b,b,a); // b = b shl (64 - idx - len)
+
+   shrx (b,b,m); // b = b shr (64 - len):[0x3F];
+
+   shli8(m,8);   // m[0] = m[1]
+
+   shlx (b,b,m); // b = b shl idx
+
+   movq (m,b);   // m = b
+  end;
+
+  //a = xmm0[0:63]
+  movq_r_xmm(ctx,a,xmm_a);
+  movq_r_xmm(ctx,b,xmm_b);
+
+  andq(b,m);
+  notq(m);
+  andq(a,m);
+  orq (a,b);
+
+  //xmm0[0:63] = a;
+  //PINSRQ xmm1, r/m64, imm8
+  pinsrq(ctx,xmm_a,a,0);
+
+  //store flags from al,ah
+  addi(al,127);
+  sahf;
+  //swap
+  xchgq(rbp,rax);
+
+  //restore rbp
+  movq(rbp,rsp);
+
+  //restore jit_frame
+  movq(r13,[GS +Integer(teb_thread)]);
+  leaq(r13,[r13+jit_frame_offset   ]);
+ end;
+
+end;
+
+//SSE4a
 
 const
  movl_ps_pd_desc:t_op_desc=(
@@ -633,11 +801,14 @@ begin
  begin
   jit_cbs[OPPnone,OPmovnt,OPSx_sd]:=@op_movnt_sd_ss;
   jit_cbs[OPPnone,OPmovnt,OPSx_ss]:=@op_movnt_sd_ss;
+  jit_cbs[OPPnone,OPinsert,OPSx_q]:=@add_orig;
  end else
  begin
   jit_cbs[OPPnone,OPmovnt,OPSx_sd]:=@op_movsd;
   jit_cbs[OPPnone,OPmovnt,OPSx_ss]:=@op_movss;
+  jit_cbs[OPPnone,OPinsert,OPSx_q]:=@op_insertq;
  end;
+
 
  jit_cbs[OPPnone,OPaeskeygenassist,OPSnone]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPaesimc         ,OPSnone]:=@op_reg_mem_wo;

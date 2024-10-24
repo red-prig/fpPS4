@@ -1037,8 +1037,8 @@ begin
   movq([GS+Integer(teb_jitcall)],r13);
 
   //load curkthread,jit ctx
-  movq(r13,[GS+Integer(teb_thread)]);
-  leaq(r13,[r13+jit_frame_offset]);
+  movq(r13,[GS +Integer(teb_thread)]);
+  leaq(r13,[r13+jit_frame_offset  ]);
 
   //load r14,r15
   movq([r13+Integer(@p_jit_frame(nil)^.tf_r14)],r14);
