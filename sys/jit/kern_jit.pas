@@ -1365,6 +1365,25 @@ begin
  vm_map_unlock(map);
 end;
 
+procedure op_debug_info_addr(var ctx:t_jit_context2;addr:Pointer);
+var
+ link_jmp:t_jit_i_link;
+begin
+ //debug
+ if debug_info then
+ begin
+  link_jmp:=ctx.builder.jmp(nil_link,os8);
+  //
+  ctx.builder.cli;
+  op_set_r14_imm(ctx,Int64(addr));
+  ctx.builder.sti;
+  //
+  link_jmp._label:=ctx.builder.get_curr_label.after;
+ end;
+ //debug
+end;
+
+
 procedure pick_locked_internal(var ctx:t_jit_context2);
 var
  node:t_jit_context2.p_export_point;
@@ -1398,6 +1417,9 @@ begin
   //
   op_jit2native(ctx,true);
   ctx.builder.call_far(node^.native);
+
+  op_debug_info_addr(ctx,node^.native);
+
   op_native2jit(ctx,true);
   //
   op_pop_rip_part0(ctx,0); //out:r14

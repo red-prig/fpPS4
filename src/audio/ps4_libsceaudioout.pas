@@ -1082,7 +1082,7 @@ begin
   if (g_port_table[port_id]<>nil) then
   begin
    Result:=g_port_table[port_id].Output(ptr);
-   if (Result<0) then Exit(SCE_AUDIO_OUT_ERROR_BUSY);
+   if (Result<0) then Result:=SCE_AUDIO_OUT_ERROR_BUSY;
   end else
   begin
    Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;

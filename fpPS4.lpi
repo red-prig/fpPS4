@@ -1530,6 +1530,9 @@
       </Options>
     </Linking>
     <Other>
+      <OtherDefines Count="1">
+        <Define0 Value="DEBUG_MTX"/>
+      </OtherDefines>
       <ExecuteAfter>
         <Command Value="$(ProjPath)\tools\fp_rebase\fp_rebase$(ExeExt) &quot;$(OutputFile)&quot; -rebase 0x30000000000 -dwarf"/>
         <ShowAllMessages Value="True"/>

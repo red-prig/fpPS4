@@ -83,11 +83,13 @@ var
 {$ENDIF}
 begin
  {$IFDEF DEBUG_MTX}
- curkthread^.td_debug_mtx:=@m;
+ if curkthread<>nil then
+  curkthread^.td_debug_mtx:=@m;
  {$ENDIF}
  EnterCriticalSection(m.c);
  {$IFDEF DEBUG_MTX}
- curkthread^.td_debug_mtx:=nil;
+ if curkthread<>nil then
+  curkthread^.td_debug_mtx:=nil;
  rbp:=nil;
  asm
   movq %rbp,rbp
