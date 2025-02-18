@@ -247,9 +247,9 @@ function  cmp_reg(const r1,r2:TRegValue):Boolean;
 function  cmp_reg(const r1,r2:TOperand):Boolean;
 function  cmp_reg_cross(const r1,r2:TRegValue):Boolean;
 function  new_reg(const Operand:TOperand):TRegValue;
-function  new_reg_size(const r:TRegValue;ASize:TOperandSize):TRegValue;
-function  new_reg_size(const r:TRegValue;const RegValue:TRegValues):TRegValue;
-function  new_reg_size(const r:TRegValue;const Operand:TOperand):TRegValue;
+function  new_reg_size(const r:TRegValue;const sizeof:TOperandSize):TRegValue;
+function  new_reg_size(const r:TRegValue;const sizeof:TRegValues):TRegValue;
+function  new_reg_size(const r:TRegValue;const sizeof:TOperand):TRegValue;
 function  fix_size(const r:TRegValue):TRegValue;
 function  is_rep_prefix(const i:TInstruction):Boolean;
 function  is_segment(const r:TOperand):Boolean;
@@ -854,20 +854,20 @@ begin
  Result:=Operand.RegValue[0];
 end;
 
-function new_reg_size(const r:TRegValue;ASize:TOperandSize):TRegValue; inline;
+function new_reg_size(const r:TRegValue;const sizeof:TOperandSize):TRegValue; inline;
 begin
  Result:=r;
- Result.ASize:=ASize;
+ Result.ASize:=sizeof;
 end;
 
-function new_reg_size(const r:TRegValue;const RegValue:TRegValues):TRegValue; inline;
+function new_reg_size(const r:TRegValue;const sizeof:TRegValues):TRegValue; inline;
 begin
- Result:=new_reg_size(r,RegValue[0].ASize);
+ Result:=new_reg_size(r,sizeof[0].ASize);
 end;
 
-function new_reg_size(const r:TRegValue;const Operand:TOperand):TRegValue; inline;
+function new_reg_size(const r:TRegValue;const sizeof:TOperand):TRegValue; inline;
 begin
- Result:=new_reg_size(r,Operand.RegValue[0].ASize);
+ Result:=new_reg_size(r,sizeof.RegValue[0].ASize);
 end;
 
 function fix_size(const r:TRegValue):TRegValue; inline;
@@ -3940,7 +3940,7 @@ var
 
  new1,new2,new3:TRegValue;
 
- pr_result,pr_mem:Boolean;
+ pr_res,pr_mem:Boolean;
 
  tmp_count:Byte;
 
@@ -3964,7 +3964,8 @@ begin
  with ctx.builder do
  begin
 
-  pr_mem:=is_memory(ctx.din.Operand[3]);
+  pr_res:=is_preserved(ctx.din.Operand[1]);
+  pr_mem:=is_memory   (ctx.din.Operand[3]);
 
   //preload addr first
   if pr_mem then
@@ -3979,11 +3980,10 @@ begin
    op_copyin(ctx,mem_size);
   end;
 
-  pr_result:=is_preserved(ctx.din.Operand[1]);
-
-  if pr_result then
+  if pr_res then
   begin
-   new1:=new_reg_size(tmp_alloc,ctx.din.Operand[1]);
+   //The value is always overwritten so it does not need to be allocated.
+   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
    //not need load result
   end else
   begin
@@ -4006,7 +4006,7 @@ begin
   end else
   if is_preserved(ctx.din.Operand[3]) then
   begin
-   new3:=new_reg_size(r_tmp1,ctx.din.Operand[3]);
+   new3:=new_reg_size(tmp_alloc,ctx.din.Operand[3]);
    //
    op_load(ctx,new3,3);
    //
@@ -4026,7 +4026,7 @@ begin
   end;
 
   //store result
-  if pr_result then
+  if pr_res then
   begin
    op_save(ctx,1,fix_size(new1));
   end;
