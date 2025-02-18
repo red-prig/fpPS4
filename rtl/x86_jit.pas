@@ -51,6 +51,17 @@ type
 
  t_jit_target_size=(tz1,tz4);
 
+const
+ MOP_NONE=$00;
+ MOP_JMP =$40;
+ MOP_JCC =$80;
+ MOP_JCX =$C0;
+ MOP_ANY =$C0;
+
+ MT_32BIT=$20;
+ MR_32BIT=$10;
+
+type
  p_jit_instruction=^t_jit_instruction;
  t_jit_instruction=packed object
   entry:TAILQ_ENTRY;
@@ -91,6 +102,15 @@ type
   procedure EmitRvvv(rexR:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
   procedure EmitRXBm(rexB,rexX,rexR:Boolean;mm:Byte); inline;
   procedure EmitWvvv(rexW:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
+  //micro core
+  procedure m_jmp_8 ();
+  procedure m_jmp_32();
+  procedure m_jcc_8 (mop:Byte);
+  procedure m_jcc_32(mop:Byte);
+  procedure m_jcx_8 (mop:Byte);
+  procedure m_jcx_32(mop:Byte);
+  //
+  function  get_micro_op:Byte;
  end;
 
 const
@@ -341,10 +361,10 @@ type
   function  jmp_far (P:Pointer):t_jit_i_link;
   //
   function  call(target:t_jit_i_link):t_jit_i_link;
-  function  jmp (target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
-  function  jcc (op:TOpCodeSuffix;target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
-  function  loop(op:TOpCodeSuffix;target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
-  function  jcxz(target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+  function  jmp (target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
+  function  jcc (op:TOpCodeSuffix;target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
+  function  loop(op:TOpCodeSuffix;target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
+  function  jcxz(target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
   function  movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
   function  movp(reg:TRegValue;P:Pointer):t_jit_i_link;
   function  leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
@@ -1154,6 +1174,142 @@ end;
 
 //
 
+procedure t_jit_instruction.m_jmp_8();
+begin
+ AInstructionSize:=0;
+
+ EmitByte($EB);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+procedure t_jit_instruction.m_jmp_32();
+begin
+ AInstructionSize:=0;
+
+ EmitByte($E9);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+procedure t_jit_instruction.m_jcc_8(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ mop:=$70 or (mop and $F);
+
+ EmitByte(mop);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+procedure t_jit_instruction.m_jcc_32(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ mop:=$80 or (mop and $F);
+
+ EmitByte($0F);
+ EmitByte(mop);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+{
+$E0|0 -> LOOPNE
+$E0|1 -> LOOPE
+$E0|2 -> LOOP
+$E0|3 -> JCXZ
+---
+$10   -> 32bit
+}
+procedure t_jit_instruction.m_jcx_8(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ if ((mop and MR_32BIT)<>0) then
+ begin
+  EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ mop:=$E0 or (mop and $3);
+
+ EmitByte(mop);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+{
+$E3 02          jcxz  [+2]
+$EB 05          jmp   [+5]
+$E9 XX XX XX XX jmp32 [addr]
+}
+procedure t_jit_instruction.m_jcx_32(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ if ((mop and MR_32BIT)<>0) then
+ begin
+  EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ EmitInt32($05EB02E0 or (mop and $3));
+
+ EmitByte($E9);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+function t_jit_instruction.get_micro_op:Byte;
+var
+ ptr:PByte;
+begin
+ if (AInstructionSize=0) then Exit(0);
+ //
+ Result:=(ord(ATargetSize=tz4)*MT_32BIT);
+ //
+ ptr:=@AData;
+ //
+ if (ptr[0]=$67) then
+ begin
+  ptr:=@ptr[1];
+  Result:=Result or MR_32BIT;
+ end;
+ //
+ case ptr[0] of
+  $0F:
+      case ptr[1] of
+       $80..$8F:Result:=Result or MOP_JCC or (ptr[1] and $F); //jcc_32
+       else;
+      end;
+  $70..$7F:Result:=Result or MOP_JCC or (ptr[0] and $F);      //jcc_8
+  $E0..$E3:Result:=Result or MOP_JCX or (ptr[0] and $3);      //jcx_8/32
+       $EB:Result:=Result or MOP_JMP;                         //jmp_8
+       $E9:Result:=Result or MOP_JMP;                         //jmp_32
+  else;
+ end;
+end;
+
+//
+
 Function t_jit_builder_allocator.Alloc(Size:ptruint):Pointer;
 const
  asize=(2*1024*1024)-SizeOf(ptruint)*3;
@@ -1411,33 +1567,22 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jmp(target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+function t_jit_builder.jmp(target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
  ji:=default_jit_instruction;
 
- if (size=os8) then
+ if (osize=os8) then
  begin
-  ji.EmitByte($EB);
-
-  ji.ATargetType  :=target.AType;
-  ji.ATargetSize  :=tz1;
-  ji.ATargetOffset:=ji.AInstructionSize;
-  ji.ATargetAddr  :=target.ALink;
-
-  ji.EmitByte(0);
+  ji.m_jmp_8();
  end else
  begin
-  ji.EmitByte($E9);
-
-  ji.ATargetType  :=target.AType;
-  ji.ATargetSize  :=tz4;
-  ji.ATargetOffset:=ji.AInstructionSize;
-  ji.ATargetAddr  :=target.ALink;
-
-  ji.EmitInt32(0);
+  ji.m_jmp_32();
  end;
+
+ ji.ATargetType:=target.AType;
+ ji.ATargetAddr:=target.ALink;
 
  _add(ji);
 
@@ -1447,17 +1592,12 @@ begin
 end;
 
 const
- COND_8:array[OPSc_o..OPSc_nle] of Byte=(
-  $70,$71,$72,$73,$74,$75,$76,$77,
-  $78,$79,$7A,$7B,$7C,$7D,$7E,$7F
+ COND_OP:array[OPSc_o..OPSc_nle] of Byte=(
+  $0,$1,$2,$3,$4,$5,$6,$7,
+  $8,$9,$A,$B,$C,$D,$E,$F
  );
 
- COND_32:array[OPSc_o..OPSc_nle] of Byte=(
-  $80,$81,$82,$83,$84,$85,$86,$87,
-  $88,$89,$8A,$8B,$8C,$8D,$8E,$8F
- );
-
-function t_jit_builder.jcc(op:TOpCodeSuffix;target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+function t_jit_builder.jcc(op:TOpCodeSuffix;target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1469,28 +1609,16 @@ begin
    Assert(false,'Unknow jcc op');
  end;
 
- if (size=os8) then
+ if (osize=os8) then
  begin
-  ji.EmitByte(COND_8[op]);
-
-  ji.ATargetType  :=target.AType;
-  ji.ATargetSize  :=tz1;
-  ji.ATargetOffset:=ji.AInstructionSize;
-  ji.ATargetAddr  :=target.ALink;
-
-  ji.EmitByte(0);
+  ji.m_jcc_8(COND_OP[op]);
  end else
  begin
-  ji.EmitByte($0F);
-  ji.EmitByte(COND_32[op]);
-
-  ji.ATargetType  :=target.AType;
-  ji.ATargetSize  :=tz4;
-  ji.ATargetOffset:=ji.AInstructionSize;
-  ji.ATargetAddr  :=target.ALink;
-
-  ji.EmitInt32(0);
+  ji.m_jcc_32(COND_OP[op]);
  end;
+
+ ji.ATargetType:=target.AType;
+ ji.ATargetAddr:=target.ALink;
 
  _add(ji);
 
@@ -1500,31 +1628,31 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.loop(op:TOpCodeSuffix;target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+function t_jit_builder.loop(op:TOpCodeSuffix;target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
+ mop:Byte;
 begin
  ji:=default_jit_instruction;
 
- if (size=as32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
  case op of
-  OPSnone:ji.EmitByte($E2);
-  OPSc_ne:ji.EmitByte($E0);
-  OPSc_e :ji.EmitByte($E1);
+  OPSc_ne:mop:=(ord(rsize=as32)*MR_32BIT) or $0;
+  OPSc_e :mop:=(ord(rsize=as32)*MR_32BIT) or $1;
+  OPSnone:mop:=(ord(rsize=as32)*MR_32BIT) or $2;
   else
    Assert(false);
  end;
 
- ji.ATargetType  :=target.AType;
- ji.ATargetSize  :=tz1;
- ji.ATargetOffset:=ji.AInstructionSize;
- ji.ATargetAddr  :=target.ALink;
+ if (osize=os8) then
+ begin
+  ji.m_jcx_8(mop);
+ end else
+ begin
+  ji.m_jcx_32(mop);
+ end;
 
- ji.EmitByte(0);
+ ji.ATargetType:=target.AType;
+ ji.ATargetAddr:=target.ALink;
 
  _add(ji);
 
@@ -1534,25 +1662,25 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jcxz(target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+function t_jit_builder.jcxz(target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
+ mop:Byte;
 begin
  ji:=default_jit_instruction;
 
- if (size=as32) then
+ mop:=(ord(rsize=as32)*MR_32BIT) or $3;
+
+ if (osize=os8) then
  begin
-  ji.EmitByte($67); //Address-size override prefix (32)
+  ji.m_jcx_8(mop);
+ end else
+ begin
+  ji.m_jcx_32(mop);
  end;
 
- ji.EmitByte($E3);
-
- ji.ATargetType  :=target.AType;
- ji.ATargetSize  :=tz1;
- ji.ATargetOffset:=ji.AInstructionSize;
- ji.ATargetAddr  :=target.ALink;
-
- ji.EmitByte(0);
+ ji.ATargetType:=target.AType;
+ ji.ATargetAddr:=target.ALink;
 
  _add(ji);
 
@@ -1880,23 +2008,7 @@ begin
  case d of
   -128..127:Result:=True;
   else
-              Result:=False;
- end;
-end;
-
-function classif_instr(node:p_jit_instruction):Byte; inline;
-begin
- Result:=0;
- case node^.AData[0] of
-       $EB:Result:=1; //jmp8
-       $E9:Result:=2; //jmp32
-  $70..$7F:Result:=3; //jcc8
-       $0F:
-           case node^.AData[1] of
-            $80..$8F:Result:=4; //jcc32
-            else;
-           end;
-  else;
+            Result:=False;
  end;
 end;
 
@@ -1906,8 +2018,9 @@ label
 var
  chunk:p_jit_code_chunk;
  node:p_jit_instruction;
- d,t:Integer;
+ d:Integer;
 
+ mop:Byte;
  is_change:Boolean;
 begin
 
@@ -1942,10 +2055,11 @@ begin
        d:=d+_get_base_offset(ATargetType);
        d:=d-AInstructionEnd;
 
-       t:=classif_instr(node);
+       mop:=node^.get_micro_op;
 
-       if (t<>0) then
+       if ((mop and MOP_ANY)<>MOP_NONE) then
        begin
+
         if (d=0) then
         begin
          //clear instr
@@ -1955,35 +2069,44 @@ begin
 
          is_change:=True;
         end;
-       end;
 
-       if (AInstructionSize<>0) then
-       case t of
-        2:if is_8bit_offset(d) then //jmp32
-          begin
-           //set to jmp8
-
-           AData[0]:=$EB;
-           AInstructionSize:=2;
-
-           ATargetSize:=tz1;
-
-           is_change:=True;
+        if (AInstructionSize<>0) then
+        if is_8bit_offset(d) then
+        begin
+         if ((mop and MT_32BIT)<>0) then
+         begin
+          case (mop and MOP_ANY) of
+           MOP_JMP:
+            begin
+             //jmp_32->jmp_8
+             m_jmp_8();
+             is_change:=True;
+            end;
+           MOP_JCC:
+            begin
+             //jcc_32->jcc_8
+             m_jcc_8(mop);
+             is_change:=True;
+            end;
+           MOP_JCX:
+            begin
+             //jcx_32->jcx_8
+             m_jcx_8(mop);
+             is_change:=True;
+            end;
+           else;
           end;
-        4:if is_8bit_offset(d) then //jcc32
-          begin
-           t:=node^.AData[1] and $F;
+         end;
+        end else
+        begin
+         if ((mop and MT_32BIT)=0) then
+         begin
+          //8 -> 32???
+          Assert(False,'TODO: Link data [8 -> 32]');
+         end;
+        end;
 
-           AData[0]:=$70 or t;
-           AInstructionSize:=2;
-
-           ATargetSize  :=tz1;
-           ATargetOffset:=1;
-
-           is_change:=True;
-          end;
-        else;
-       end;
+       end; //<>MOP_NONE
 
        if not is_change then
        begin

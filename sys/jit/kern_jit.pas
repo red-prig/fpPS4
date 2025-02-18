@@ -345,13 +345,13 @@ begin
 
    link:=ctx.get_link(dst);
 
+   id:=ctx.builder.jmp(link);
+
    if (link<>nil_link) then
    begin
-    ctx.builder.jmp(link);
     ctx.add_forward_point(fpCall,dst);
    end else
    begin
-    id:=ctx.builder.jmp(nil_link);
     ctx.add_forward_point(fpCall,id,dst);
    end;
   end else
@@ -444,13 +444,13 @@ begin
 
    link:=ctx.get_link(dst);
 
+   id:=ctx.builder.jmp(link);
+
    if (link<>nil_link) then
    begin
-    ctx.builder.jmp(link);
     ctx.add_forward_point(fpCall,dst);
    end else
    begin
-    id:=ctx.builder.jmp(nil_link);
     ctx.add_forward_point(fpCall,id,dst);
    end;
   end else
@@ -576,7 +576,7 @@ end;
 
 procedure op_loop(var ctx:t_jit_context2);
 var
- id1,id2,id3:t_jit_i_link;
+ id1,id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
  link:t_jit_i_link;
@@ -588,8 +588,6 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- id1:=ctx.builder.loop(ctx.din.OpCode.Suffix,nil_link,ctx.dis.AddressSize);
-
  if ctx.is_text_addr(QWORD(dst)) and
     (not exist_entry(dst)) then
  begin
@@ -597,21 +595,21 @@ begin
 
   link:=ctx.get_link(dst);
 
-  id2:=ctx.builder.jmp(nil_link,os8);
-   id1.target:=ctx.builder.get_curr_label.after;
-   id3:=ctx.builder.jmp(nil_link);
-  id2.target:=ctx.builder.get_curr_label.after;
+  //case handling in micro core
+  id1:=ctx.builder.loop(ctx.din.OpCode.Suffix,link,ctx.dis.AddressSize);
 
   if (link<>nil_link) then
   begin
    ctx.add_forward_point(fpCall,dst);
   end else
   begin
-   ctx.add_forward_point(fpCall,id3,dst);
+   ctx.add_forward_point(fpCall,id1,dst);
   end;
  end else
  begin
   //far
+
+  id1:=ctx.builder.loop(ctx.din.OpCode.Suffix,nil_link,ctx.dis.AddressSize,os8);
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1.target:=ctx.builder.get_curr_label.after;
@@ -624,7 +622,7 @@ end;
 
 procedure op_jcxz(var ctx:t_jit_context2);
 var
- id1,id2,id3:t_jit_i_link;
+ id1,id2:t_jit_i_link;
  ofs:Int64;
  dst:Pointer;
  link:t_jit_i_link;
@@ -636,8 +634,6 @@ begin
 
  dst:=ctx.ptr_next+ofs;
 
- id1:=ctx.builder.jcxz(nil_link,ctx.dis.AddressSize);
-
  if ctx.is_text_addr(QWORD(dst)) and
     (not exist_entry(dst)) then
  begin
@@ -645,21 +641,21 @@ begin
 
   link:=ctx.get_link(dst);
 
-  id2:=ctx.builder.jmp(nil_link,os8);
-   id1.target:=ctx.builder.get_curr_label.after;
-   id3:=ctx.builder.jmp(nil_link);
-  id2.target:=ctx.builder.get_curr_label.after;
+  //case handling in micro core
+  id1:=ctx.builder.jcxz(link,ctx.dis.AddressSize);
 
   if (link<>nil_link) then
   begin
    ctx.add_forward_point(fpCall,dst);
   end else
   begin
-   ctx.add_forward_point(fpCall,id3,dst);
+   ctx.add_forward_point(fpCall,id1,dst);
   end;
  end else
  begin
   //far
+
+  id1:=ctx.builder.jcxz(nil_link,ctx.dis.AddressSize,os8);
 
   id2:=ctx.builder.jmp(nil_link,os8);
    id1.target:=ctx.builder.get_curr_label.after;
