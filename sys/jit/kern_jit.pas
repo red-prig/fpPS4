@@ -140,7 +140,7 @@ begin
 
   //_non_cache:
   link_exit:=ctx.builder.get_curr_label.after; //_non_cache
-  link_jne._label:=link_exit;
+  link_jne.target:=link_exit;
 
   popfq(os64);
 
@@ -149,7 +149,7 @@ begin
 
   //_exit:
   link_exit:=ctx.builder.get_curr_label.after; //_exit
-  link_jmp._label:=link_exit;
+  link_jmp.target:=link_exit;
  end;
 end;
 
@@ -560,7 +560,7 @@ begin
   id1:=ctx.builder.jcc(invert_cond(ctx.din.OpCode.Suffix),nil_link,os8);
    op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx,nil);
-  id1._label:=ctx.builder.get_curr_label.after;
+  id1.target:=ctx.builder.get_curr_label.after;
 
   {
   id1:=ctx.builder.jcc(ctx.din.OpCode.Suffix,nil_link,os8);
@@ -598,9 +598,9 @@ begin
   link:=ctx.get_link(dst);
 
   id2:=ctx.builder.jmp(nil_link,os8);
-   id1._label:=ctx.builder.get_curr_label.after;
+   id1.target:=ctx.builder.get_curr_label.after;
    id3:=ctx.builder.jmp(nil_link);
-  id2._label:=ctx.builder.get_curr_label.after;
+  id2.target:=ctx.builder.get_curr_label.after;
 
   if (link<>nil_link) then
   begin
@@ -614,10 +614,10 @@ begin
   //far
 
   id2:=ctx.builder.jmp(nil_link,os8);
-   id1._label:=ctx.builder.get_curr_label.after;
+   id1.target:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx,nil);
-  id2._label:=ctx.builder.get_curr_label.after;
+  id2.target:=ctx.builder.get_curr_label.after;
 
  end;
 end;
@@ -646,9 +646,9 @@ begin
   link:=ctx.get_link(dst);
 
   id2:=ctx.builder.jmp(nil_link,os8);
-   id1._label:=ctx.builder.get_curr_label.after;
+   id1.target:=ctx.builder.get_curr_label.after;
    id3:=ctx.builder.jmp(nil_link);
-  id2._label:=ctx.builder.get_curr_label.after;
+  id2.target:=ctx.builder.get_curr_label.after;
 
   if (link<>nil_link) then
   begin
@@ -662,10 +662,10 @@ begin
   //far
 
   id2:=ctx.builder.jmp(nil_link,os8);
-   id1._label:=ctx.builder.get_curr_label.after;
+   id1.target:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
    op_jmp_dispatcher(ctx,nil);
-  id2._label:=ctx.builder.get_curr_label.after;
+  id2.target:=ctx.builder.get_curr_label.after;
 
  end;
 end;
@@ -1087,7 +1087,7 @@ begin
   //op_set_r14_imm(ctx,$FACEADDE);
   ctx.builder.sti;
   //
-  link_jmp._label:=ctx.builder.get_curr_label.after;
+  link_jmp.target:=ctx.builder.get_curr_label.after;
  end;
  //debug
 end;
@@ -1684,7 +1684,7 @@ begin
   op_set_r14_imm(ctx,Int64(addr));
   ctx.builder.sti;
   //
-  link_jmp._label:=ctx.builder.get_curr_label.after;
+  link_jmp.target:=ctx.builder.get_curr_label.after;
  end;
  //debug
 end;
@@ -2176,7 +2176,7 @@ begin
    while (node<>nil) do
    begin
 
-    i:=i+node^.ASize;
+    i:=i+node^.AInstructionSize;
 
     {
     if not test_disassemble(@node^.AData,node^.ASize) then
@@ -2214,7 +2214,7 @@ begin
    while (node<>nil) do
    begin
 
-    print_disassemble(@node^.AData,node^.ASize);
+    print_disassemble(@node^.AData,node^.AInstructionSize);
 
 
     node:=TAILQ_NEXT(node,@node^.entry);

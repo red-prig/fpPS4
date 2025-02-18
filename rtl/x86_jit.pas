@@ -49,19 +49,37 @@ type
 
  t_jit_link_type=(lnkNone,lnkData,lnkPlt,lnkLabelBefore,lnkLabelAfter);
 
+ t_jit_target_size=(tz1,tz4);
+
  p_jit_instruction=^t_jit_instruction;
  t_jit_instruction=packed object
   entry:TAILQ_ENTRY;
-  AData:array[0..15] of Byte;
   AInstructionOffset:Integer;
-  ASize:Byte;
-  ALink:packed record
-   AType  :t_jit_link_type;
-   ASize  :Byte;
-   AOffset:Byte;
-   ALink  :Pointer;
+  ABitInfo:bitpacked record
+   InstructionSize:0..31; //5 [0..16]
+   Uncompressed   :0.. 1; //1 [False,True]
+   TargetSize     :0.. 1; //1 [t_jit_target_size]
+   reserved       :0.. 1; //1
+   TargetType     :0.. 7; //3 [t_jit_link_type]
+   TargetOffset   :0..31; //5 [0..16]
   end;
-  function  AInstructionEnd:Integer; inline;
+  ATargetAddr:Pointer;
+  AData:array[0..15] of Byte;
+  function  AGetInstructionSize:Integer;    inline;
+  procedure ASetInstructionSize(i:Integer); inline;
+  function  AInstructionEnd :Integer; inline;
+  function  AGetTargetSize  :t_jit_target_size;  inline;
+  procedure ASetTargetSize(s:t_jit_target_size); inline;
+  function  AGetTargetType:t_jit_link_type;    inline;
+  procedure ASetTargetType(A:t_jit_link_type); inline;
+  function  AGetTargetOffset   :Integer; inline;
+  procedure ASetTargetOffset(i:Integer); inline;
+  //
+  property  AInstructionSize:Integer           read AGetInstructionSize write ASetInstructionSize;
+  property  ATargetSize     :t_jit_target_size read AGetTargetSize      write ASetTargetSize;
+  property  ATargetType     :t_jit_link_type   read AGetTargetType      write ASetTargetType;
+  property  ATargetOffset   :Integer           read AGetTargetOffset    write ASetTargetOffset;
+  //
   procedure EmitByte(b:byte); inline;
   procedure EmitWord(w:Word); inline;
   procedure EmitInt32(i:Integer); inline;
@@ -113,11 +131,11 @@ type
  t_jit_code_chunk_set=specialize TNodeSplay<t_jit_code_chunk>;
 
  t_jit_i_link=object
-  //private
+  private
    AType:t_jit_link_type;
    ALink:Pointer; //variable
-   procedure set_label(link:t_jit_i_link);
-   function  get_label():t_jit_i_link;
+   procedure set_target(target:t_jit_i_link);
+   function  get_target():t_jit_i_link;
   public
    function  is_valid:Boolean;
    function  offset:Integer;
@@ -126,7 +144,7 @@ type
    function  prev  :t_jit_i_link;
    function  next  :t_jit_i_link;
    function  _node :p_jit_instruction;
-   property  _label:t_jit_i_link read get_label write set_label;
+   property  target:t_jit_i_link read get_target write set_target;
  end;
 
 const
@@ -322,16 +340,16 @@ type
   function  call_far(P:Pointer):t_jit_i_link;
   function  jmp_far (P:Pointer):t_jit_i_link;
   //
-  function  call(_label_id:t_jit_i_link):t_jit_i_link;
-  function  jmp (_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
-  function  jcc (op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
-  function  loop(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
-  function  jcxz(_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
-  function  movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+  function  call(target:t_jit_i_link):t_jit_i_link;
+  function  jmp (target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+  function  jcc (op:TOpCodeSuffix;target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+  function  loop(op:TOpCodeSuffix;target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+  function  jcxz(target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+  function  movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
   function  movp(reg:TRegValue;P:Pointer):t_jit_i_link;
-  function  leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+  function  leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
   function  leap(reg:TRegValue):t_jit_i_link;
-  function  leap(reg:TRegValue;_label_id:t_jit_i_link):t_jit_i_link;
+  function  leap(reg:TRegValue;prev:t_jit_i_link):t_jit_i_link;
   //
   Procedure jmp(reg:TRegValue);
   Procedure jmp(mem:t_jit_leas);
@@ -815,20 +833,31 @@ end;
 
 Procedure LinkLabel(node:p_jit_instruction); forward;
 
-procedure t_jit_i_link.set_label(link:t_jit_i_link);
+procedure t_jit_i_link.set_target(target:t_jit_i_link);
 begin
  if (ALink=nil) then Exit;
- p_jit_instruction(ALink)^.ALink.ALink:=link.ALink;
- p_jit_instruction(ALink)^.ALink.AType:=link.AType;
+ if not (AType in [lnkLabelBefore,lnkLabelAfter]) then Exit;
+ //
+ with p_jit_instruction(ALink)^ do
+ begin
+  ATargetType:=target.AType;
+  ATargetAddr:=target.ALink;
+ end;
+ //
  LinkLabel(ALink);
 end;
 
-function t_jit_i_link.get_label():t_jit_i_link;
+function t_jit_i_link.get_target():t_jit_i_link;
 begin
  Result:=Default(t_jit_i_link);
  if (ALink=nil) then Exit;
- Result.ALink:=p_jit_instruction(ALink)^.ALink.ALink;
- Result.AType:=p_jit_instruction(ALink)^.ALink.AType;
+ if not (AType in [lnkLabelBefore,lnkLabelAfter]) then Exit;
+ //
+ with p_jit_instruction(ALink)^ do
+ begin
+  Result.AType:=ATargetType;
+  Result.ALink:=ATargetAddr;
+ end;
 end;
 
 function t_jit_i_link.is_valid:Boolean;
@@ -836,27 +865,27 @@ begin
  Result:=(ALink<>nil);
 end;
 
-function _get_link_offset(AType:t_jit_link_type;ALink:Pointer):Integer;
+function _get_link_offset(ATargetType:t_jit_link_type;ATargetAddr:Pointer):Integer;
 begin
  Result:=0;
- if (ALink<>nil) then
+ if (ATargetAddr<>nil) then
  begin
-  case AType of
+  case ATargetType of
    lnkData:
     begin
-     Result:=p_jit_data(ALink)^.pId*SizeOf(Pointer);
+     Result:=p_jit_data(ATargetAddr)^.pId*SizeOf(Pointer);
     end;
    lnkPlt:
     begin
-     Result:=QWORD(ALink)*SizeOf(t_jit_plt);
+     Result:=QWORD(ATargetAddr)*SizeOf(t_jit_plt);
     end;
    lnkLabelBefore:
     begin
-     Result:=p_jit_instruction(ALink)^.AInstructionOffset;
+     Result:=p_jit_instruction(ATargetAddr)^.AInstructionOffset;
     end;
    lnkLabelAfter:
     begin
-     Result:=p_jit_instruction(ALink)^.AInstructionEnd;
+     Result:=p_jit_instruction(ATargetAddr)^.AInstructionEnd;
     end;
    else;
   end;
@@ -977,33 +1006,75 @@ end;
 
 ////
 
+function t_jit_instruction.AGetInstructionSize:Integer; inline;
+begin
+ Result:=ABitInfo.InstructionSize;
+end;
+
+procedure t_jit_instruction.ASetInstructionSize(i:Integer); inline;
+begin
+ ABitInfo.InstructionSize:=i;
+end;
+
 function t_jit_instruction.AInstructionEnd:Integer; inline;
 begin
- Result:=AInstructionOffset+ASize;
+ Result:=AInstructionOffset+AInstructionSize;
 end;
+
+function t_jit_instruction.AGetTargetSize:t_jit_target_size;  inline;
+begin
+ Result:=t_jit_target_size(ABitInfo.TargetSize);
+end;
+
+procedure t_jit_instruction.ASetTargetSize(s:t_jit_target_size); inline;
+begin
+ ABitInfo.TargetSize:=ord(s);
+end;
+
+function t_jit_instruction.AGetTargetType:t_jit_link_type; inline;
+begin
+ Result:=t_jit_link_type(ABitInfo.TargetType);
+end;
+
+procedure t_jit_instruction.ASetTargetType(A:t_jit_link_type); inline;
+begin
+ ABitInfo.TargetType:=ord(A);
+end;
+
+function t_jit_instruction.AGetTargetOffset:Integer; inline;
+begin
+ Result:=ABitInfo.TargetOffset;
+end;
+
+procedure t_jit_instruction.ASetTargetOffset(i:Integer); inline;
+begin
+ ABitInfo.TargetOffset:=i;
+end;
+
+//
 
 procedure t_jit_instruction.EmitByte(b:byte); inline;
 begin
- AData[ASize]:=b;
- Inc(ASize);
+ AData[AInstructionSize]:=b;
+ AInstructionSize:=AInstructionSize+SizeOf(Byte);
 end;
 
 procedure t_jit_instruction.EmitWord(w:Word); inline;
 begin
- PWord(@AData[ASize])^:=w;
- Inc(ASize,SizeOf(Word));
+ PWord(@AData[AInstructionSize])^:=w;
+ AInstructionSize:=AInstructionSize+SizeOf(Word);
 end;
 
 procedure t_jit_instruction.EmitInt32(i:Integer); inline;
 begin
- PInteger(@AData[ASize])^:=i;
- Inc(ASize,SizeOf(Integer));
+ PInteger(@AData[AInstructionSize])^:=i;
+ AInstructionSize:=AInstructionSize+SizeOf(Integer);
 end;
 
 procedure t_jit_instruction.EmitInt64(i:Int64); inline;
 begin
- PInt64(@AData[ASize])^:=i;
- Inc(ASize,SizeOf(Int64));
+ PInt64(@AData[AInstructionSize])^:=i;
+ AInstructionSize:=AInstructionSize+SizeOf(Int64);
 end;
 
 procedure t_jit_instruction.EmitSelector(Segments:t_jit_flags); inline;
@@ -1204,7 +1275,7 @@ begin
  node^.AInstructionOffset:=AInstructionSize;
 
  TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.entry);
- Inc(AInstructionSize,ji.ASize);
+ Inc(AInstructionSize,ji.AInstructionSize);
 end;
 
 Function t_jit_builder.get_curr_label:t_jit_i_link;
@@ -1281,10 +1352,10 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($15);
 
- ji.ALink.AType  :=lnkData;
- ji.ALink.ASize  :=4;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_add_data(P);
+ ji.ATargetType  :=lnkData;
+ ji.ATargetSize  :=tz4;
+ ji.ATargetOffset:=ji.AInstructionSize;
+ ji.ATargetAddr  :=_add_data(P);
 
  ji.EmitInt32(0);
 
@@ -1304,10 +1375,10 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($25);
 
- ji.ALink.AType  :=lnkData;
- ji.ALink.ASize  :=4;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_add_data(P);
+ ji.ATargetType  :=lnkData;
+ ji.ATargetSize  :=tz4;
+ ji.ATargetOffset:=ji.AInstructionSize;
+ ji.ATargetAddr  :=_add_data(P);
 
  ji.EmitInt32(0);
 
@@ -1318,7 +1389,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.call(_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.call(target:t_jit_i_link):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1326,10 +1397,10 @@ begin
 
  ji.EmitByte($E8);
 
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=4;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
+ ji.ATargetType  :=target.AType;
+ ji.ATargetSize  :=tz4;
+ ji.ATargetOffset:=ji.AInstructionSize;
+ ji.ATargetAddr  :=target.ALink;
 
  ji.EmitInt32(0);
 
@@ -1340,7 +1411,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jmp(_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+function t_jit_builder.jmp(target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1350,20 +1421,20 @@ begin
  begin
   ji.EmitByte($EB);
 
-  ji.ALink.AType  :=_label_id.AType;
-  ji.ALink.ASize  :=1;
-  ji.ALink.AOffset:=ji.ASize;
-  ji.ALink.ALink  :=_label_id.ALink;
+  ji.ATargetType  :=target.AType;
+  ji.ATargetSize  :=tz1;
+  ji.ATargetOffset:=ji.AInstructionSize;
+  ji.ATargetAddr  :=target.ALink;
 
   ji.EmitByte(0);
  end else
  begin
   ji.EmitByte($E9);
 
-  ji.ALink.AType  :=_label_id.AType;
-  ji.ALink.ASize  :=4;
-  ji.ALink.AOffset:=ji.ASize;
-  ji.ALink.ALink  :=_label_id.ALink;
+  ji.ATargetType  :=target.AType;
+  ji.ATargetSize  :=tz4;
+  ji.ATargetOffset:=ji.AInstructionSize;
+  ji.ATargetAddr  :=target.ALink;
 
   ji.EmitInt32(0);
  end;
@@ -1386,7 +1457,7 @@ const
   $88,$89,$8A,$8B,$8C,$8D,$8E,$8F
  );
 
-function t_jit_builder.jcc(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
+function t_jit_builder.jcc(op:TOpCodeSuffix;target:t_jit_i_link;size:TOperandSize=os32):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1402,10 +1473,10 @@ begin
  begin
   ji.EmitByte(COND_8[op]);
 
-  ji.ALink.AType  :=_label_id.AType;
-  ji.ALink.ASize  :=1;
-  ji.ALink.AOffset:=ji.ASize;
-  ji.ALink.ALink  :=_label_id.ALink;
+  ji.ATargetType  :=target.AType;
+  ji.ATargetSize  :=tz1;
+  ji.ATargetOffset:=ji.AInstructionSize;
+  ji.ATargetAddr  :=target.ALink;
 
   ji.EmitByte(0);
  end else
@@ -1413,10 +1484,10 @@ begin
   ji.EmitByte($0F);
   ji.EmitByte(COND_32[op]);
 
-  ji.ALink.AType  :=_label_id.AType;
-  ji.ALink.ASize  :=4;
-  ji.ALink.AOffset:=ji.ASize;
-  ji.ALink.ALink  :=_label_id.ALink;
+  ji.ATargetType  :=target.AType;
+  ji.ATargetSize  :=tz4;
+  ji.ATargetOffset:=ji.AInstructionSize;
+  ji.ATargetAddr  :=target.ALink;
 
   ji.EmitInt32(0);
  end;
@@ -1429,7 +1500,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.loop(op:TOpCodeSuffix;_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+function t_jit_builder.loop(op:TOpCodeSuffix;target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1448,10 +1519,10 @@ begin
    Assert(false);
  end;
 
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=1;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
+ ji.ATargetType  :=target.AType;
+ ji.ATargetSize  :=tz1;
+ ji.ATargetOffset:=ji.AInstructionSize;
+ ji.ATargetAddr  :=target.ALink;
 
  ji.EmitByte(0);
 
@@ -1463,7 +1534,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.jcxz(_label_id:t_jit_i_link;size:TAddressSize):t_jit_i_link;
+function t_jit_builder.jcxz(target:t_jit_i_link;size:TAddressSize):t_jit_i_link;
 var
  ji:t_jit_instruction;
 begin
@@ -1476,10 +1547,10 @@ begin
 
  ji.EmitByte($E3);
 
- ji.ALink.AType  :=_label_id.AType;
- ji.ALink.ASize  :=1;
- ji.ALink.AOffset:=ji.ASize;
- ji.ALink.ALink  :=_label_id.ALink;
+ ji.ATargetType  :=target.AType;
+ ji.ATargetSize  :=tz1;
+ ji.ATargetOffset:=ji.AInstructionSize;
+ ji.ATargetAddr  :=target.ALink;
 
  ji.EmitByte(0);
 
@@ -1491,7 +1562,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
 var
  jt:p_jit_instruction;
 begin
@@ -1499,8 +1570,8 @@ begin
 
  jt:=last_instruction;
 
- jt^.ALink.AType:=_label_id.AType;
- jt^.ALink.ALink:=_label_id.ALink;
+ jt^.ATargetType:=target.AType;
+ jt^.ATargetAddr:=target.ALink;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1516,8 +1587,8 @@ begin
 
  jt:=last_instruction;
 
- jt^.ALink.AType:=lnkData;
- jt^.ALink.ALink:=_add_data(P);
+ jt^.ATargetType:=lnkData;
+ jt^.ATargetAddr:=_add_data(P);
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1525,7 +1596,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
 var
  jt:p_jit_instruction;
 begin
@@ -1533,8 +1604,8 @@ begin
 
  jt:=last_instruction;
 
- jt^.ALink.AType:=_label_id.AType;
- jt^.ALink.ALink:=_label_id.ALink;
+ jt^.ATargetType:=target.AType;
+ jt^.ATargetAddr:=target.ALink;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1550,8 +1621,8 @@ begin
 
  jt:=last_instruction;
 
- jt^.ALink.AType:=lnkPlt;
- jt^.ALink.ALink:=Pointer(_add_plt);
+ jt^.ATargetType:=lnkPlt;
+ jt^.ATargetAddr:=Pointer(_add_plt);
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1559,22 +1630,22 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.leap(reg:TRegValue;_label_id:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.leap(reg:TRegValue;prev:t_jit_i_link):t_jit_i_link;
 var
  plt:Pointer;
  jt:p_jit_instruction;
 begin
  //
- jt :=_label_id.ALink;
- plt:=jt^.ALink.ALink;
+ jt :=prev.ALink;
+ plt:=jt^.ATargetAddr;
  //
 
  leaq(reg,[rip+$7FFFFFFF]);
 
  jt:=last_instruction;
 
- jt^.ALink.AType:=lnkPlt;
- jt^.ALink.ALink:=plt;
+ jt^.ATargetType:=lnkPlt;
+ jt^.ATargetAddr:=plt;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1685,7 +1756,7 @@ begin
   end;
  end;
 
- if (ji.ASize<>0) then
+ if (ji.AInstructionSize<>0) then
  begin
   _add(ji);
  end;
@@ -1750,7 +1821,7 @@ begin
   while (node<>nil) do
   begin
    node^.AInstructionOffset:=AInstructionSize;
-   Inc(AInstructionSize,node^.ASize);
+   Inc(AInstructionSize,node^.AInstructionSize);
    //
    node:=TAILQ_NEXT(node,@node^.entry);
   end;
@@ -1763,7 +1834,11 @@ procedure _set_data(node:p_jit_instruction;d:Integer); inline;
 begin
  With node^ do
  begin
-  Move(d,node^.AData[ALink.AOffset],ASize);
+  case ATargetSize of
+   tz1:PByte   (@node^.AData[ATargetOffset])^:=d;
+   tz4:PInteger(@node^.AData[ATargetOffset])^:=d;
+   else;
+  end;
  end;
 end;
 
@@ -1774,24 +1849,25 @@ begin
  //Pre-linking, for debugging only
  d:=0;
  if (node=nil) then Exit;
- if (node^.ALink.ALink=nil) and
-    (node^.ALink.AType<>lnkPlt) then Exit;
+ if (node^.ATargetAddr=nil) and
+    (node^.ATargetType<>lnkPlt) then Exit;
+ //
  With node^ do
-  case ALink.AType of
+  case ATargetType of
    lnkData:
      begin
-      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      d:=_get_link_offset(ATargetType,ATargetAddr);
       _set_data(node,d);
      end;
    lnkPlt:
      begin
-      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      d:=_get_link_offset(ATargetType,ATargetAddr);
       _set_data(node,d);
      end;
    lnkLabelBefore,
    lnkLabelAfter:
      begin
-      d:=_get_link_offset(ALink.AType,ALink.ALink);
+      d:=_get_link_offset(ATargetType,ATargetAddr);
       d:=d-AInstructionEnd;
       _set_data(node,d);
      end;
@@ -1849,21 +1925,21 @@ begin
   while (node<>nil) do
   begin
    With node^ do
-    case ALink.AType of
+    case ATargetType of
      lnkData,
      lnkPlt :
        if not is_change then
        begin
-        d:=_get_link_offset(ALink.AType,ALink.ALink);
-        d:=d+_get_base_offset(ALink.AType);
+        d:=_get_link_offset(ATargetType,ATargetAddr);
+        d:=d+_get_base_offset(ATargetType);
         d:=d-AInstructionEnd;
         _set_data(node,d);
        end;
      lnkLabelBefore,
      lnkLabelAfter:
       begin
-       d:=_get_link_offset(ALink.AType,ALink.ALink);
-       d:=d+_get_base_offset(ALink.AType);
+       d:=_get_link_offset(ATargetType,ATargetAddr);
+       d:=d+_get_base_offset(ATargetType);
        d:=d-AInstructionEnd;
 
        t:=classif_instr(node);
@@ -1874,23 +1950,23 @@ begin
         begin
          //clear instr
 
-         ALink.AType:=lnkNone;
-         ASize:=0;
+         ATargetType     :=lnkNone;
+         AInstructionSize:=0;
 
          is_change:=True;
         end;
        end;
 
-       if (ASize<>0) then
+       if (AInstructionSize<>0) then
        case t of
         2:if is_8bit_offset(d) then //jmp32
           begin
            //set to jmp8
 
            AData[0]:=$EB;
-           ASize:=2;
+           AInstructionSize:=2;
 
-           ALink.ASize:=1;
+           ATargetSize:=tz1;
 
            is_change:=True;
           end;
@@ -1899,10 +1975,10 @@ begin
            t:=node^.AData[1] and $F;
 
            AData[0]:=$70 or t;
-           ASize:=2;
+           AInstructionSize:=2;
 
-           ALink.ASize:=1;
-           ALink.AOffset:=1;
+           ATargetSize  :=tz1;
+           ATargetOffset:=1;
 
            is_change:=True;
           end;
@@ -1948,7 +2024,7 @@ begin
   //
   while (node_code<>nil) do
   begin
-   s:=node_code^.ASize;
+   s:=node_code^.AInstructionSize;
    //
    if ((rec.pos+s)>rec.size) then
    begin
@@ -2405,25 +2481,25 @@ begin
     case ModRM.RM of
      4:if (SIB.Base=5) then
        begin
-        ji.ALink.ASize:=4;
-        ji.ALink.AOffset:=ji.ASize;
+        ji.ATargetSize  :=tz4;
+        ji.ATargetOffset:=ji.AInstructionSize;
         ji.EmitInt32(AOffset); //4
        end;
      5:begin
-        ji.ALink.ASize:=4;
-        ji.ALink.AOffset:=ji.ASize;
+        ji.ATargetSize  :=tz4;
+        ji.ATargetOffset:=ji.AInstructionSize;
         ji.EmitInt32(AOffset); //4
        end;
     end;
    end;
    1:begin
-      ji.ALink.ASize:=1;
-      ji.ALink.AOffset:=ji.ASize;
+      ji.ATargetSize  :=tz1;
+      ji.ATargetOffset:=ji.AInstructionSize;
       ji.EmitByte(AOffset); //1
      end;
    2:begin
-      ji.ALink.ASize:=4;
-      ji.ALink.AOffset:=ji.ASize;
+      ji.ATargetSize  :=tz4;
+      ji.ATargetOffset:=ji.AInstructionSize;
       ji.EmitInt32(AOffset); //4
      end;
    else;

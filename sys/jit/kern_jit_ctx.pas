@@ -23,8 +23,8 @@ type
   type
    p_forward_link=^t_forward_link;
    t_forward_link=object
-    next    :p_forward_link;
-    label_id:t_jit_i_link;
+    next       :p_forward_link;
+    instruction:t_jit_i_link;
    end;
 
    t_forward_links=object
@@ -57,13 +57,13 @@ type
 
    p_entry_point=^t_entry_point;
    t_entry_point=object
-    pLeft   :p_entry_point;
-    pRight  :p_entry_point;
+    pLeft      :p_entry_point;
+    pRight     :p_entry_point;
     //
-    next    :p_entry_point;
+    next       :p_entry_point;
     //
-    src     :Pointer;
-    label_id:t_jit_i_link;
+    src        :Pointer;
+    instruction:t_jit_i_link;
     //
     function c(n1,n2:p_entry_point):Integer; static;
    end;
@@ -123,9 +123,9 @@ type
   function  is_map_addr (addr:QWORD):Boolean;
   procedure add_export_point (native:Pointer;dst:PPointer);
   procedure add_import_point (guest,dst:PPointer);
-  procedure add_forward_link (node:p_forward_point;label_id:t_jit_i_link);
-  procedure Resolve_forwards (var links:t_forward_links;label_id:t_jit_i_link);
-  function  add_forward_point(ptype:t_point_type;label_id:t_jit_i_link;dst:Pointer):p_forward_point;
+  procedure add_forward_link (node:p_forward_point;instruction:t_jit_i_link);
+  procedure Resolve_forwards (var links:t_forward_links;target:t_jit_i_link);
+  function  add_forward_point(ptype:t_point_type;instruction:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
   Function  new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
   procedure mark_chunk(ptype:t_point_type);
@@ -387,11 +387,11 @@ begin
  import_list:=node;
 end;
 
-procedure t_jit_context2.add_forward_link(node:p_forward_point;label_id:t_jit_i_link);
+procedure t_jit_context2.add_forward_link(node:p_forward_point;instruction:t_jit_i_link);
 var
  link:p_forward_link;
 begin
- if (node=nil) or (label_id=nil_link) then Exit;
+ if (node=nil) or (instruction=nil_link) then Exit;
  //
  link:=forward_link_cache;
  if (link<>nil) then
@@ -405,12 +405,12 @@ begin
  //
  link:=builder.Alloc(Sizeof(t_forward_link));
  //
- link^.label_id:=label_id;
- link^.next:=node^.links.root;
+ link^.instruction:=instruction;
+ link^.next       :=node^.links.root;
  node^.links.root:=link;
 end;
 
-procedure t_jit_context2.Resolve_forwards(var links:t_forward_links;label_id:t_jit_i_link);
+procedure t_jit_context2.Resolve_forwards(var links:t_forward_links;target:t_jit_i_link);
 var
  node:p_forward_link;
 begin
@@ -422,10 +422,10 @@ begin
   //extract
   links.root:=node^.next;
   //set node
-  node^.label_id._label:=label_id;
+  node^.instruction.target:=target;
   //cache
-  node^.label_id:=Default(t_jit_i_link);
-  node^.next    :=forward_link_cache;
+  node^.instruction:=Default(t_jit_i_link);
+  node^.next       :=forward_link_cache;
   forward_link_cache:=node;
   //next
   node:=links.root;
@@ -433,7 +433,7 @@ begin
 end;
 
 
-function t_jit_context2.add_forward_point(ptype:t_point_type;label_id:t_jit_i_link;dst:Pointer):p_forward_point;
+function t_jit_context2.add_forward_point(ptype:t_point_type;instruction:t_jit_i_link;dst:Pointer):p_forward_point;
 var
  node:t_forward_point;
 begin
@@ -464,7 +464,7 @@ begin
   //
   forward_set.Insert(Result);
  end;
- add_forward_link(Result,label_id);
+ add_forward_link(Result,instruction);
 end;
 
 function t_jit_context2.add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
@@ -590,8 +590,8 @@ begin
  if (src=nil) then Exit;
  //set key
  key:=Default(t_entry_point);
- key.src     :=src;
- key.label_id:=label_id;
+ key.src        :=src;
+ key.instruction:=label_id;
  //find exists
  node:=entry_set.Find(@key);
  if (node<>nil) then Exit; //Already added
@@ -944,7 +944,7 @@ begin
 
  Move(ctx.code^,ji.AData,ctx.dis.CodeIdx);
 
- ji.ASize:=ctx.dis.CodeIdx;
+ ji.AInstructionSize:=ctx.dis.CodeIdx;
 
  ctx.builder._add(ji);
 end;

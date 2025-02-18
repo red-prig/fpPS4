@@ -103,8 +103,8 @@ begin
 
   link___end:=ctx.builder.get_curr_label.after; //exit
 
-  link_jmp0._label:=link___end;
-  link_jmp1._label:=link___end;
+  link_jmp0.target:=link___end;
+  link_jmp1.target:=link___end;
  end;
 
 end;
@@ -128,12 +128,12 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
   _op_rep_cmps(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
  end;
 end;
@@ -199,7 +199,7 @@ begin
 
   link___end:=ctx.builder.get_curr_label.after; //exit
 
-  link_jmp0._label:=link___end;
+  link_jmp0.target:=link___end;
  end;
 
 end;
@@ -222,11 +222,11 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   _op_rep_stos(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
 
@@ -304,7 +304,7 @@ begin
 
   link___end:=ctx.builder.get_curr_label.after; //exit
 
-  link_jmp0._label:=link___end;
+  link_jmp0.target:=link___end;
  end;
 
 end;
@@ -327,11 +327,11 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   _op_rep_movs(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
 
@@ -410,12 +410,12 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
   _op_cmps(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
  end;
 end;
@@ -492,11 +492,11 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   _op_movs(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
 
@@ -565,11 +565,11 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   _op_stos(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
 
@@ -638,11 +638,11 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   _op_lods(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
 
@@ -712,12 +712,12 @@ begin
 
   link_jmp1:=jmp(nil_link,os8);
 
-  link_jmp0._label:=ctx.builder.get_curr_label.after;
+  link_jmp0.target:=ctx.builder.get_curr_label.after;
 
   popfq(os64);
   _op_scas(ctx,1);
 
-  link_jmp1._label:=ctx.builder.get_curr_label.after;
+  link_jmp1.target:=ctx.builder.get_curr_label.after;
 
  end;
 end;

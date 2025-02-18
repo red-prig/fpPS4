@@ -999,7 +999,7 @@ begin
  entry_point:=ctx.entry_list;
  while (entry_point<>nil) do
  begin
-  addr:=blob^.base+entry_point^.label_id.offset;
+  addr:=blob^.base+entry_point^.instruction.offset;
   //
   blob^.add_entry_point(entry_point^.src,addr);
   //
