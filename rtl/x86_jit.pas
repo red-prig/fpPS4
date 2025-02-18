@@ -349,7 +349,7 @@ type
   Procedure Free;
   Function  _new_chunk(start:QWORD):p_jit_code_chunk;
   procedure _end_chunk(__end:QWORD);
-  procedure _add(const ji:t_jit_instruction);
+  procedure _add(const ji:t_jit_instruction;min_isize:Byte=0);
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _add_plt:Integer;
@@ -1416,9 +1416,10 @@ begin
  end;
 end;
 
-procedure t_jit_builder._add(const ji:t_jit_instruction);
+procedure t_jit_builder._add(const ji:t_jit_instruction;min_isize:Byte=0);
 var
  node:p_jit_instruction;
+ i_size:Byte;
 begin
  if (ACodeChunkCurr=nil) then
  begin
@@ -1426,8 +1427,17 @@ begin
   Assert(ACodeChunkCurr<>nil)
  end;
 
- node:=Alloc(SizeOf(t_jit_instruction));
- node^:=ji;
+ i_size:=ji.AInstructionSize;
+
+ if (i_size<min_isize) then i_size:=min_isize;
+
+ node:=Alloc(SizeOf(t_jit_instruction)-16+i_size);
+
+ node^.ABitInfo   :=ji.ABitInfo;
+ node^.ATargetAddr:=ji.ATargetAddr;
+
+ Move(ji.AData,node^.AData,i_size);
+
  node^.AInstructionOffset:=AInstructionSize;
 
  TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.entry);
@@ -1620,7 +1630,7 @@ begin
  ji.ATargetType:=target.AType;
  ji.ATargetAddr:=target.ALink;
 
- _add(ji);
+ _add(ji,6);
 
  Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
@@ -1654,7 +1664,7 @@ begin
  ji.ATargetType:=target.AType;
  ji.ATargetAddr:=target.ALink;
 
- _add(ji);
+ _add(ji,10);
 
  Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
@@ -1682,7 +1692,7 @@ begin
  ji.ATargetType:=target.AType;
  ji.ATargetAddr:=target.ALink;
 
- _add(ji);
+ _add(ji,10);
 
  Result.ALink:=last_instruction;
  Result.AType:=lnkLabelBefore;
