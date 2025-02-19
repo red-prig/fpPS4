@@ -270,7 +270,7 @@ type
   va_uid      :Integer;  // owner user id
   va_gid      :Integer;  // owner group id
   va_fsid     :Int64;    // filesystem id
-  va_fileid   :Integer;  // file id
+  va_fileid   :Int64;    // file id
   va_size     :Int64;    // file size in bytes
   va_blocksize:Integer;  // blocksize preferred for i/o
   va_atime    :timespec; // time of last access
