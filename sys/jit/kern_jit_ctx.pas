@@ -16,7 +16,7 @@ const
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
- t_ctx_modes=Set of (cmDontScanRipRel,cmInternal);
+ t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmInternal);
 
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object
@@ -41,6 +41,18 @@ type
     function c(n1,n2:p_forward_point):Integer; static;
    end;
    t_forward_set=specialize TNodeSplay<t_forward_point>;
+
+   p_switchtable_point=^t_switchtable_point;
+   t_switchtable_point=object
+    pLeft :p_switchtable_point;
+    pRight:p_switchtable_point;
+    //
+    table:PInteger;
+    curr :PInteger;
+    //
+    function c(n1,n2:p_switchtable_point):Integer; static;
+   end;
+   t_switchtable_set=specialize TNodeSplay<t_switchtable_point>;
 
    p_label=^t_label;
    t_label=object
@@ -89,6 +101,9 @@ type
    //
    forward_set:t_forward_set;
    //
+   switchtable_set:t_switchtable_set;
+   min_switchtable:p_switchtable_point;
+   //
    label_set  :t_label_set;
    entry_list :p_entry_point;
    entry_set  :t_entry_point_set;
@@ -102,7 +117,7 @@ type
    text___end:QWORD;
    map____end:QWORD;
 
-   max_rel:QWORD;
+   max_reloc :QWORD;
 
    modes:t_ctx_modes;
 
@@ -127,6 +142,8 @@ type
   procedure Resolve_forwards (var links:t_forward_links;target:t_jit_i_link);
   function  add_forward_point(ptype:t_point_type;instruction:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
+  function  add_switchtable  (table:Pointer):p_switchtable_point;
+  function  fetch_switchtable(var out_table:p_switchtable_point;var out_next:PInteger):Boolean;
   Function  new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
   procedure mark_chunk(ptype:t_point_type);
   function  get_chunk_ptype():t_point_type;
@@ -343,6 +360,11 @@ begin
  Result:=Integer(n1^.dst>n2^.dst)-Integer(n1^.dst<n2^.dst);
 end;
 
+function t_jit_context2.t_switchtable_point.c(n1,n2:p_switchtable_point):Integer;
+begin
+ Result:=Integer(n1^.table>n2^.table)-Integer(n1^.table<n2^.table);
+end;
+
 function t_jit_context2.t_label.c(n1,n2:p_label):Integer;
 begin
  Result:=Integer(n1^.curr>n2^.curr)-Integer(n1^.curr<n2^.curr);
@@ -471,6 +493,96 @@ function t_jit_context2.add_forward_point(ptype:t_point_type;dst:Pointer):p_forw
 begin
  Result:=add_forward_point(ptype,nil_link,dst);
 end;
+
+//
+
+function t_jit_context2.add_switchtable(table:Pointer):p_switchtable_point;
+var
+ node:t_switchtable_point;
+begin
+ if (table=nil) then Exit;
+
+ node.table:=table;
+ //
+ Result:=switchtable_set.Find(@node);
+ if (Result=nil) then
+ begin
+  //
+  Result:=builder.Alloc(Sizeof(t_switchtable_point));
+  //
+  Result^.table:=table;
+  Result^.curr :=table;
+  //
+  switchtable_set.Insert(Result);
+  //
+  //mark minimum address for processing
+  if (min_switchtable=nil) then
+  begin
+   min_switchtable:=Result;
+  end else
+  if (min_switchtable^.table>table) then
+  begin
+   min_switchtable:=Result;
+  end;
+  //
+ end;
+end;
+
+function t_jit_context2.fetch_switchtable(var out_table:p_switchtable_point;var out_next:PInteger):Boolean;
+var
+ node,node_next:p_switchtable_point;
+begin
+ Result:=False;
+
+ //move to min
+ if (min_switchtable=nil) then Exit;
+ switchtable_set._Splay(min_switchtable);
+ node:=switchtable_set.pRoot;
+ if (node=nil) then Exit;
+
+ repeat
+
+  node_next:=switchtable_set.Next(node);
+  if (node_next<>nil) then
+  begin
+   if (node^.curr=nil) or
+      (node^.curr>=node_next^.table) then
+   begin
+    //This is complete, let's move on to the next one.
+    //
+    min_switchtable:=node_next;
+    node           :=node_next;
+   end else
+   begin
+    out_table:=node;
+    out_next :=node_next^.table;
+    //
+    Exit(True);
+   end;
+  end else
+  if (node^.curr=nil) then
+  begin
+   //Terminated
+   min_switchtable:=nil;
+   //
+   out_table:=nil;
+   out_next :=nil;
+   //
+   Exit(False);
+  end else
+  begin
+   //Last in list
+   out_table:=node;
+   out_next :=nil;
+   //
+   Exit(True);
+  end;
+
+ until false;
+
+end;
+
+//
 
 Function t_jit_context2.new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
 begin
@@ -1019,6 +1131,35 @@ begin
  end;
 end;
 
+function scan_switchtable(var ctx:t_jit_context2;start:Int64):Boolean;
+var
+ table:PInteger;
+ rel:Integer;
+begin
+ Result:=False;
+ //
+ if (cmDontScanSwitchTable in ctx.modes) then Exit;
+ //
+ table:=PInteger(start);
+ //
+ if ctx.is_text_addr(QWORD(table)) then
+ begin
+
+  rel:=0;
+  if (copyin(table,@rel,SizeOf(Integer))<>0) then
+  begin
+   Exit;
+  end;
+
+  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  begin
+   ctx.add_switchtable(table);
+   Result:=True;
+  end;
+
+ end;
+end;
+
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 begin
  if not jit_relative_analize then Exit;
@@ -1029,6 +1170,7 @@ begin
   //jmp  [addr]
 
   if not (cmDontScanRipRel in ctx.modes) then
+
   if ctx.is_map_addr(ofs) then
   if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
@@ -1036,9 +1178,7 @@ begin
 
    if (copyin(Pointer(ofs),@ofs,SizeOf(Pointer))=0) then
    begin
-    if ctx.is_text_addr(ofs) then
-    if (ofs<=ctx.max_rel) then
-    if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
+    if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
     begin
      ctx.add_forward_point(fpCall,Pointer(ofs));
     end;
@@ -1051,13 +1191,14 @@ begin
   //lea
 
   if not (cmDontScanRipRel in ctx.modes) then
-  if ctx.is_text_addr(ofs) then
+
+  if scan_switchtable(ctx,ofs) then
   begin
-   if (ofs<=ctx.max_rel) then
-   if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_EXECUTE)<>0) then
-   begin
-    ctx.add_forward_point(fpData,Pointer(ofs));
-   end;
+   //
+  end else
+  if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+  begin
+   ctx.add_forward_point(fpData,Pointer(ofs));
   end;
 
  end;

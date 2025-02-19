@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ systm,
  x86_fpdbgdisas,
  x86_jit,
  kern_jit_ctx;
@@ -1863,17 +1864,83 @@ begin
  ctx.Free;
 end;
 
+function scan_step_switchtable(var  ctx:t_jit_context2;
+                                sw_table:t_jit_context2.p_switchtable_point;
+                                sw_next :PInteger):Boolean;
+var
+ sw_data:PInteger;
+ ofs:Int64;
+ rel:Integer;
+begin
+ Result:=False;
+ Assert(sw_table^.curr<>nil);
+ //
+ sw_data:=sw_table^.curr;
+ //
+ if print_asm then
+ begin
+  Writeln('switchtable:0x',HexStr(QWORD(sw_table^.table),10),'..0x',HexStr(QWORD(sw_next),10));
+ end;
+ //
+ if ctx.is_text_addr(QWORD(sw_data)) and
+       (
+        (sw_next=nil) or
+        (QWORD(sw_data)<QWORD(sw_next))
+       ) then
+ begin
+
+  rel:=0;
+  if (copyin(sw_data,@rel,SizeOf(Integer))<>0) then
+  begin
+   Exit;
+  end;
+
+  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  begin
+   ofs:=Int64(sw_table^.table)+rel;
+
+   if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+   begin
+    if print_asm then
+    begin
+     Writeln(' [0x',HexStr(QWORD(sw_data),10),']->0x',HexStr(ofs,10));
+    end;
+    //
+    ctx.add_forward_point(fpCall,Pointer(ofs));
+    //step up
+    sw_table^.curr:=sw_data+1; //SizeOf(Integer)
+    //
+    Result:=True;
+   end else
+   begin
+    //Terminate
+    sw_table^.curr:=nil;
+   end;
+
+  end else
+  begin
+   //Terminate
+   sw_table^.curr:=nil;
+  end;
+
+ end;
+end;
+
 var
  _print_stat:Integer=0;
 
  function pick_locked_normal(var ctx:t_jit_context2):p_jit_dynamic_blob;
 label
  _next,
- _build,
+ _next_forward,
+ _switchtables,
  _invalid;
 var
  addr:Pointer;
- ptr:Pointer;
+ ptr :Pointer;
+
+ sw_table:t_jit_context2.p_switchtable_point;
+ sw_next :PInteger;
 
  links:t_jit_context2.t_forward_links;
  entry_link:Pointer;
@@ -1896,16 +1963,16 @@ begin
  if (cmDontScanRipRel in ctx.modes) then
  begin
   //dont scan rip relative
-  ctx.max_rel:=0;
+  ctx.max_reloc:=0;
  end else
  begin
-  ctx.max_rel:=QWORD(ctx.max_forward_point);
+  ctx.max_reloc:=QWORD(ctx.max_forward_point);
  end;
 
  if (p_print_jit_preload) then
  begin
   Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
-  Writeln(' ctx.max_rel   :0x',HexStr(ctx.max_rel,16));
+  Writeln(' ctx.max_reloc :0x',HexStr(ctx.max_reloc ,16));
   Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
   Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
  end;
@@ -1920,6 +1987,7 @@ begin
 
  if not ctx.fetch_forward_point(links,addr) then
  begin
+  //No entry points? early exit
   ctx.Free;
   Exit;
  end;
@@ -2282,16 +2350,19 @@ begin
 
   if ctx.trim then
   begin
-   ctx.trim:=False;
 
    //close chunk
    ctx.end_chunk(ctx.ptr_next);
+
+   _next_forward:
+
+   ctx.trim:=False;
 
    repeat
 
     if not ctx.fetch_forward_point(links,addr) then
     begin
-     goto _build;
+     goto _switchtables;
     end;
 
     link_new:=ctx.get_link(addr);
@@ -2317,7 +2388,23 @@ begin
 
  end;
 
- _build:
+ _switchtables:
+
+ //scan switchtables
+ sw_table:=nil;
+ sw_next :=nil;
+ if ctx.fetch_switchtable(sw_table,sw_next) then
+ begin
+  //
+  repeat
+   if scan_step_switchtable(ctx,sw_table,sw_next) then
+   begin
+    goto _next_forward;
+   end;
+  until not ctx.fetch_switchtable(sw_table,sw_next);
+  //
+ end;
+
  //build blob
 
  ctx.builder.int3;
