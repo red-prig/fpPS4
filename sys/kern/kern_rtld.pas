@@ -164,7 +164,7 @@ function  rtld_file_exists(path:pchar):Boolean;
 
 function  convert_prot(flags:Elf64_Word):Byte;
 
-function  rtld_mmap  (addr:PQWORD ;size:QWORD;hint:PChar):Integer;
+function  rtld_mmap  (paddr:PQWORD;size:QWORD;hint:PChar):Integer;
 procedure rtld_munmap(base:Pointer;size:QWORD;hint:PChar);
 
 function  scan_phdr(imgp:p_image_params;phdr:p_elf64_phdr;count:Integer):Integer;
@@ -621,20 +621,31 @@ begin
  if ((flags and PF_R)<>0) then Result:=Result or VM_PROT_READ;
 end;
 
-function rtld_mmap(addr:PQWORD;size:QWORD;hint:PChar):Integer;
+function rtld_mmap(paddr:PQWORD;size:QWORD;hint:PChar):Integer;
 var
  map:vm_map_t;
+ addr:QWORD;
 begin
- Writeln(' rtld_mmap:0x',HexStr(addr^,12),'..0x',HexStr(addr^+size,12),':',hint);
-
  map:=p_proc.p_vmspace;
 
- if (addr^=0) and ((g_appinfo.mmap_flags and 2)<>0) then
+ addr:=paddr^;
+
+ if (addr=0) and ((g_appinfo.mmap_flags and 2)<>0) then
  begin
-  addr^:=SCE_REPLAY_EXEC_START;
+  addr:=SCE_REPLAY_EXEC_START;
  end;
 
- Result:=vm_mmap2(map,addr,size,0,0,MAP_ANON or MAP_PRIVATE or (21 shl MAP_ALIGNMENT_BIT),OBJT_DEFAULT,nil,0,nil);
+ Result:=vm_mmap2(map,@addr,size,0,0,MAP_ANON or MAP_PRIVATE or (21 shl MAP_ALIGNMENT_BIT),OBJT_DEFAULT,nil,0,nil);
+
+ if (Result=0) then
+ begin
+  paddr^:=addr;
+ end else
+ begin
+  paddr^:=0;
+ end;
+
+ Writeln(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+size,12),':',Result,':',hint);
 end;
 
 procedure rtld_munmap(base:Pointer;size:QWORD;hint:PChar);
@@ -1047,6 +1058,17 @@ begin
  Result:=EINVAL;
 end;
 
+function _rwxs(prot:Byte):RawByteString; inline;
+var
+ _R:array[0..1] of AnsiChar='_R';
+ _W:array[0..1] of AnsiChar='_W';
+ _X:array[0..1] of AnsiChar='_X';
+begin
+ Result:=_R[ord((prot and VM_PROT_READ   )<>0)]+
+         _W[ord((prot and VM_PROT_WRITE  )<>0)]+
+         _X[ord((prot and VM_PROT_EXECUTE)<>0)];
+end;
+
 function self_load_section(imgp:p_image_params;
                            id,vaddr,offset,memsz,filesz:QWORD;
                            prot:Byte;
@@ -1147,7 +1169,7 @@ begin
 
  //if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
-  Writeln('P_X:vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
+  Writeln(' ',_rwxs(prot),':vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
   patcher_process_section(imgp,cache,Pointer(vaddr_lo),filesz,memsz,prot);
  end;
 

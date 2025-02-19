@@ -4111,6 +4111,9 @@ begin
   else
     SetOpcode(OPX_InvalidVex);
   end;
+
+ if not HasOpcode
+ then SetOpcode(OPX_InvalidVex)
 end;
 
 procedure TX86Disassembler.DoDisassemble;
