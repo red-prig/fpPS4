@@ -99,6 +99,8 @@ type
  t_scan_mode=(smLazy,smLazyOne,smForce);
 
 function Scan(mode:t_scan_mode):Pointer;
+label
+ _again;
 var
  p_set :TPointerSet;
  p_node:p_pointer_node;
@@ -108,6 +110,8 @@ var
  i     :Byte;
 begin
  Result:=nil;
+
+ _again:
 
  r_node:=LIST_FIRST(@rlist);
  if (r_node=nil) then Exit;
@@ -182,6 +186,12 @@ begin
   FreeMem(p_node);
   //
   p_node:=p_set.Min;
+ end;
+
+ if (mode=smForce) and
+    (LIST_FIRST(@rlist)<>nil) then
+ begin
+  goto _again;
  end;
 end;
 
