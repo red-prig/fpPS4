@@ -46,6 +46,7 @@ procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 
 procedure threads_lock;
+function  threads_trylock:Boolean;
 procedure threads_unlock;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
@@ -63,9 +64,6 @@ procedure thread_resume_all (exclude:p_kthread);
 var
  init_tty_cb:Tprocedure;
 
- p_threads:TAILQ_HEAD=(tqh_first:nil;tqh_last:@p_threads.tqh_first);
- p_numthreads:Integer=0;
-
 implementation
 
 uses
@@ -80,14 +78,15 @@ uses
  kern_proc,
  kern_rangelock,
  sched_ule,
- sys_sleepqueue;
+ sys_sleepqueue,
+ kern_hazard_pointer;
 
 //
 
 procedure umtx_thread_init(td:p_kthread); external;
 procedure umtx_thread_exit(td:p_kthread); external;
 procedure umtx_thread_fini(td:p_kthread); external;
-function  kern_umtx_wake(td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Integer; external;
+function  kern_umtx_wake  (td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Integer; external;
 function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
 
 procedure jit_ctx_free(td:p_kthread);  external;
@@ -95,19 +94,27 @@ procedure jit_ctx_free(td:p_kthread);  external;
 //
 
 var
- tidhashtbl:TSTUB_HAMT32;
+ p_threads   :TAILQ_HEAD=(tqh_first:nil;tqh_last:@p_threads.tqh_first);
+ p_numthreads:Integer=0;
+
+ tidhashtbl  :TSTUB_HAMT32;
  tidhash_lock:Pointer=nil;
 
  zombie_threads:TAILQ_HEAD=(tqh_first:nil;tqh_last:@zombie_threads.tqh_first);
- zombie_lock:Pointer=nil;
+ zombie_lock   :Pointer=nil;
 
 const
  max_threads_per_proc=1500;
 
-function SIGPENDING(td:p_kthread):Boolean;
+function SIGPENDING(td:p_kthread):Boolean; public;
 begin
  Result:=SIGNOTEMPTY(@td^.td_sigqueue.sq_signals) and
          sigsetmasked(@td^.td_sigqueue.sq_signals,@td^.td_sigmask);
+end;
+
+function get_p_threads:Pointer; public;
+begin
+ Result:=@p_threads;
 end;
 
 //
@@ -196,6 +203,7 @@ begin
  rlqentry_free(td^.td_rlqe);
  umtx_thread_fini(td);
  cpu_thread_free(td);
+ tlHpFree;
 end;
 
 procedure thread_inc_ref(td:p_kthread); public;
@@ -315,12 +323,17 @@ begin
  end;
 end;
 
-procedure threads_lock;
+procedure threads_lock; public;
 begin
  rw_wlock(tidhash_lock);
 end;
 
-procedure threads_unlock;
+function threads_trylock:Boolean; public;
+begin
+ Result:=rw_try_wlock(tidhash_lock);
+end;
+
+procedure threads_unlock; public;
 begin
  rw_wunlock(tidhash_lock);
 end;
@@ -365,6 +378,8 @@ begin
 
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
 
+ tlHpInit;
+
  Set8087CW(__INITIAL_FPUCW__);
  SetMXCSR (__INITIAL_MXCSR__);
 
@@ -386,6 +401,8 @@ begin
  td:=curkthread;
 
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
+
+ tlHpInit;
 
  Set8087CW(__INITIAL_FPUCW__);
  SetMXCSR (__INITIAL_MXCSR__);

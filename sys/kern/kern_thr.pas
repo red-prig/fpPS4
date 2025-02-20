@@ -265,6 +265,7 @@ type
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   pcb_onfault     :Pointer;
+  td_guards       :array[0..1] of Pointer;
   td_temp         :t_td_buffer;
   td_padding      :t_td_buffer;
  end;
@@ -348,9 +349,17 @@ procedure THREAD_NO_SLEEPING();
 procedure THREAD_SLEEPING_OK();
 function  THREAD_IS_NOSLEEPING:Boolean;
 
+function  SIGPENDING(td:p_kthread):Boolean; external;
+
 function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
+
+procedure threads_lock;            external;
+function  threads_trylock:Boolean; external;
+procedure threads_unlock;          external;
+
+function  get_p_threads:Pointer;   external;
 
 procedure thread_inc_ref(td:p_kthread); external;
 procedure thread_dec_ref(td:p_kthread); external;

@@ -122,7 +122,6 @@ uses
  systm,
  kern_mtx,
  md_time,
- kern_thread,
  kern_exit,
  kern_prot,
  kern_synch,
@@ -422,7 +421,7 @@ begin
 
  threads_lock;
 
-  td0:=TAILQ_FIRST(@p_threads);
+  td0:=TAILQ_FIRST(get_p_threads);
   while (td0<>nil) do
   begin
 
@@ -1374,7 +1373,7 @@ begin
 
  threads_lock;
 
-   td:=TAILQ_FIRST(@p_threads);
+   td:=TAILQ_FIRST(get_p_threads);
    while (td<>nil) do
    begin
 

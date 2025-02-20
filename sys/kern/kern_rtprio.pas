@@ -22,7 +22,6 @@ uses
  systm,
  errno,
  kern_proc,
- kern_thread,
  sched_ule,
  md_proc;
 
@@ -174,7 +173,7 @@ begin
 
      threads_lock;
 
-       tdp:=TAILQ_FIRST(@p_threads);
+       tdp:=TAILQ_FIRST(get_p_threads);
        while (tdp<>nil) do
        begin
 
@@ -210,7 +209,7 @@ begin
     begin
      threads_lock;
 
-       tdp:=TAILQ_FIRST(@p_threads);
+       tdp:=TAILQ_FIRST(get_p_threads);
        while (tdp<>nil) do
        begin
 

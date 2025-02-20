@@ -180,7 +180,7 @@ type
  {$IF sizeof(t_knlist)<>48}{$STOP sizeof(t_knlist)<>48}{$ENDIF}
 
  p_filterops=^t_filterops;
- t_filterops=packed record
+ t_filterops=packed object
   f_isfd  :Integer;  // true if ident == filedescriptor
   _align  :Integer;
   f_attach:function (kn:p_knote):Integer;
