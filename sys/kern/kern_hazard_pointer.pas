@@ -103,6 +103,7 @@ label
  _again;
 var
  p_set :TPointerSet;
+ p_data:Pointer;
  p_node:p_pointer_node;
  r_node:p_r_node;
  r_next:p_r_node;
@@ -131,12 +132,15 @@ begin
  begin
 
   For i:=0 to High(kthread.td_guards) do
-  if (ttd^.td_guards[i]<>nil) and
-     (ttd^.td_guards[i]<>Pointer(1)) then
   begin
-   p_node:=AllocMem(SizeOf(t_pointer_node));
-   p_node^.P:=ttd^.td_guards[i];
-   p_set.Insert(p_node);
+   p_data:=load_acq_rel(ttd^.td_guards[i]);
+   if (p_data<>nil) and
+      (p_data<>Pointer(1)) then
+   begin
+    p_node:=AllocMem(SizeOf(t_pointer_node));
+    p_node^.P:=p_data;
+    p_set.Insert(p_node);
+   end;
   end;
 
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
