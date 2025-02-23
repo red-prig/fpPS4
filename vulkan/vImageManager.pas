@@ -109,7 +109,9 @@ type
                            newImageLayout:TVkImageLayout;
                            dstStageMask:TVkPipelineStageFlags); override;
   function    Acquire(Sender:TObject):Boolean; override;
-  procedure   Release(Sender:TObject);         override;
+  function    Release(Sender:TObject):Boolean; override;
+  function    Hold   (Sender:TObject):Boolean; override;
+  function    Drop   (Sender:TObject):Boolean; override;
  end;
 
  TvImage2=class(TvCustomImage2)
@@ -137,8 +139,8 @@ type
   procedure   ForceBarrier(dstAccessMask:TVkAccessFlags;
                            newImageLayout:TVkImageLayout;
                            dstStageMask:TVkPipelineStageFlags); override;
-  function    Acquire(Sender:TObject):Boolean; override;
-  procedure   Release(Sender:TObject);         override;
+  function    Hold   (Sender:TObject):Boolean; override;
+  function    Drop   (Sender:TObject):Boolean; override;
  end;
 
  TvDepthStencilImage2=class(TvImage2)
@@ -387,9 +389,19 @@ begin
  Result:=Parent.Acquire(Sender);
 end;
 
-procedure TvChildImage2.Release(Sender:TObject);
+function TvChildImage2.Release(Sender:TObject):Boolean;
 begin
- Parent.Release(Sender);
+ Result:=Parent.Release(Sender);
+end;
+
+function TvChildImage2.Hold(Sender:TObject):Boolean;
+begin
+ Result:=Parent.Hold(Sender);
+end;
+
+function TvChildImage2.Drop(Sender:TObject):Boolean;
+begin
+ Result:=Parent.Drop(Sender);
 end;
 
 //
@@ -798,9 +810,9 @@ begin
  rw_wunlock(lock);
 end;
 
-function TvImage2.Acquire(Sender:TObject):Boolean;
+function TvImage2.Hold(Sender:TObject):Boolean;
 begin
- Result:=inherited Acquire(Sender);
+ Result:=inherited;
  if Result and (Sender<>nil) then
  begin
   if FDeps.Insert(Sender) then
@@ -813,7 +825,7 @@ begin
  end;
 end;
 
-procedure TvImage2.Release(Sender:TObject);
+function TvImage2.Drop(Sender:TObject):Boolean;
 begin
  if (Sender<>nil) then
  begin
@@ -823,7 +835,7 @@ begin
    FLastCmd:=nil;
   end;
  end;
- inherited Release(Sender);
+ Result:=inherited;
 end;
 
 //
@@ -1002,7 +1014,7 @@ begin
   FImage2Set.delete(@t.StencilOnly.key);
  end;
 
- t._Release(nil); //map ref
+ t.Release(nil); //map ref
 end;
 
 procedure _DeleteAlias(const F:TvImageKey);
@@ -1019,7 +1031,7 @@ function _InsertImage(t:TvCustomImage2):Boolean;
 begin
  if FImage2Set.Insert(@t.key) then
  begin
-  t._Acquire(nil); //map ref
+  t.Acquire(nil); //map ref
  end else
  begin
   Exit(False);

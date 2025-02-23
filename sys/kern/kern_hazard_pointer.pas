@@ -25,19 +25,26 @@ type
    function  Get:Pointer;
    function  Protect(Var P:Pointer;Func:TFuncGet=nil):Pointer;
    Procedure Retire (P:Pointer;FuncFree:TFuncFree); static;
+   Procedure WaitFor(P:Pointer); static;
    Procedure Flush; static;
+   Procedure FLazy; static;
  end;
-
-Procedure tlHpInit;
-Procedure tlHpFree;
 
 implementation
 
 uses
  atomic,
  mqueue,
+ LFQueue,
  g_node_splay,
- kern_thr;
+ kern_thr,
+ time,
+ md_sleep;
+
+var
+ rlist_bs:LIST_HEAD=(lh_first:nil);
+ rlist_lf:TIntrusiveMPSCQueue=(tail_:@rlist_lf.stub_;stub_:(next_:nil);head_:@rlist_lf.stub_);
+ rcount  :Integer=0;
 
 function AllocGuard:Pointer;
 var
@@ -91,14 +98,47 @@ begin
  Result:=Integer(n1^.P>n2^.P)-Integer(n1^.P<n2^.P);
 end;
 
-threadvar
- rlist :LIST_HEAD;
- rcount:Integer;
+procedure WaitForRetire(P:Pointer);
+label
+ _again;
+var
+ p_data:Pointer;
+ ttd   :p_kthread;
+ i     :Byte;
+begin
+ if (P=nil) or (P=Pointer(1)) then Exit;
+
+ _again:
+
+ threads_lock;
+
+ ttd:=TAILQ_FIRST(get_p_threads);
+ while (ttd<>nil) do
+ begin
+
+  For i:=0 to High(kthread.td_guards) do
+  begin
+   p_data:=load_acq_rel(ttd^.td_guards[i]);
+
+   if (p_data=P) then
+   begin
+    threads_unlock;
+    msleep_td(hz div 10000);
+    goto _again;
+   end;
+
+  end;
+
+  ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
+ end;
+
+ threads_unlock;
+end;
 
 type
- t_scan_mode=(smLazy,smLazyOne,smForce);
+ t_scan_mode=(smLazy,smForce);
 
-function Scan(mode:t_scan_mode):Pointer;
+Procedure Scan(mode:t_scan_mode);
 label
  _again;
 var
@@ -108,16 +148,15 @@ var
  r_node:p_r_node;
  r_next:p_r_node;
  ttd   :p_kthread;
+ f_list:LIST_HEAD;
  i     :Byte;
 begin
- Result:=nil;
 
  _again:
 
- r_node:=LIST_FIRST(@rlist);
- if (r_node=nil) then Exit;
-
- p_set:=Default(TPointerSet);
+ p_set :=Default(TPointerSet);
+ r_node:=nil;
+ f_list:=Default(LIST_HEAD);
 
  if (mode=smForce) then
  begin
@@ -125,6 +164,20 @@ begin
  end else
  begin
   if not threads_trylock then Exit;
+ end;
+
+ //flush to base list
+ while rlist_lf.Pop(r_node) do
+ begin
+  LIST_INSERT_HEAD(@rlist_bs,r_node,@r_node^.entry);
+ end;
+
+ r_node:=LIST_FIRST(@rlist_bs);
+ if (r_node=nil) then
+ begin
+  //zero list
+  threads_unlock;
+  Exit;
  end;
 
  ttd:=TAILQ_FIRST(get_p_threads);
@@ -146,8 +199,6 @@ begin
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
  end;
 
- threads_unlock;
-
  while (r_node<>nil) do
  begin
   r_next:=LIST_NEXT(r_node,@r_node^.entry);
@@ -158,28 +209,14 @@ begin
   begin
    //delete node
    LIST_REMOVE(r_node,@r_node^.entry);
-   //free element
-   if (r_node^.F<>nil) then
-   begin
-    r_node^.F(r_node^.P);
-   end;
-   //
-   if (mode=smLazyOne) then
-   begin
-    //set result and exit
-    Dec(rcount);
-    Result:=r_node;
-    Break;
-   end else
-   begin
-    //free node
-    Dec(rcount);
-    FreeMem(r_node);
-   end;
+   //add to free list
+   LIST_INSERT_HEAD(@f_list,r_node,@r_node^.entry);
   end;
   //
   r_node:=r_next;
  end;
+
+ threads_unlock;
 
  //free set
  p_node:=p_set.Min;
@@ -192,45 +229,47 @@ begin
   p_node:=p_set.Min;
  end;
 
- if (mode=smForce) and
-    (LIST_FIRST(@rlist)<>nil) then
+ //free elements
+ r_node:=LIST_FIRST(@f_list);
+ while (r_node<>nil) do
  begin
+  LIST_REMOVE(r_node,@r_node^.entry);
+  //free element
+  if (r_node^.F<>nil) then
+  begin
+   r_node^.F(r_node^.P);
+  end;
+  //free node
+  System.InterlockedDecrement(rcount);
+  FreeMem(r_node);
+  //
+  r_node:=LIST_FIRST(@f_list);
+ end;
+
+ if (mode=smForce) and
+    (LIST_FIRST(@rlist_bs)<>nil) then
+ begin
+  msleep_td(hz div 10000);
   goto _again;
  end;
+
 end;
 
 Procedure Retire(P:Pointer;FuncFree:TGuard.TFuncFree);
 var
  node:p_r_node;
 begin
- node:=Scan(smLazyOne);
- //
- if (node<>nil) then
- begin
-  node:=AllocMem(SizeOf(t_r_node));
- end;
+ node:=AllocMem(SizeOf(t_r_node));
  node^.P:=P;
  node^.F:=FuncFree;
  //
- LIST_INSERT_HEAD(@rlist,node,@node^.entry);
- //
- Inc(rcount);
+ rlist_lf.Push(node);
+ System.InterlockedIncrement(rcount);
  //
  if rcount>(4*256) then
  begin
   Scan(smLazy);
  end;
-end;
-
-Procedure tlHpInit; public;
-begin
- rlist :=Default(LIST_HEAD);
- rcount:=0;
-end;
-
-Procedure tlHpFree; public;
-begin
- Scan(smForce);
 end;
 
 ////////
@@ -310,9 +349,19 @@ begin
  end;
 end;
 
+Procedure TGuard.WaitFor(P:Pointer);
+begin
+ WaitForRetire(P);
+end;
+
 Procedure TGuard.Flush;
 begin
  Scan(smForce);
+end;
+
+Procedure TGuard.FLazy;
+begin
+ Scan(smLazy);
 end;
 
 /////////

@@ -10,7 +10,9 @@ uses
  vmparam,
  Vulkan,
  vDevice,
- vDependence;
+ vDependence,
+ atomic,
+ kern_hazard_pointer;
 
 type
  TvMemInfo=bitpacked record
@@ -46,7 +48,7 @@ type
  end;
 
  TvDeviceMemory=class(TvDependenciesObject)
-  entry:TAILQ_ENTRY;
+  entry   :TAILQ_ENTRY;
   //
   FHandle :TVkDeviceMemory;
   FSize   :TVkDeviceSize;
@@ -56,6 +58,8 @@ type
   Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
   Destructor  Destroy; override;
   Procedure   Flush;
+  function    Acquire(Sender:TObject):Boolean; override;
+  function    Release(Sender:TObject):Boolean; override;
  end;
 
  TvHostMemory=class(TvDeviceMemory)
@@ -66,8 +70,10 @@ type
  TvPointer=packed object
   FMemory:TvDeviceMemory;
   FOffset:TVkDeviceSize;
-  function  Acquire:Boolean;
-  function  Release:Boolean;
+  function Acquire:TvPointer;
+  function Release:Boolean;
+  function Hold:Boolean;
+  function Drop:Boolean;
  end;
 
 Const
@@ -169,6 +175,9 @@ function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkU
 
 function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
+
+function GetMemoryBudget(var budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT):Boolean;
+procedure PrintMemoryBudget;
 
 implementation
 
@@ -849,6 +858,8 @@ begin
  //
  gpu_map_remove_all(@FMap);
  //
+ TGuard.WaitFor(Self);
+ //
  if (FHandle<>VK_NULL_HANDLE) then
  begin
   vkFreeMemory(Device.FHandle,FHandle,nil);
@@ -876,32 +887,133 @@ end;
 
 //
 
-function TvPointer.Acquire:Boolean;
+function TvDeviceMemory.Acquire(Sender:TObject):Boolean;
+const
+ mark_delete:QWORD=QWORD(1) shl (SizeOf(QWORD)*8-1);
+var
+ i:ptruint;
 begin
  Result:=False;
- if (FMemory=nil) then Exit;
+ repeat
+  i:=load_acq_rel(FRefs);
+  if (i and mark_delete)<>0 then Exit;
+ until CAS(FRefs,i,i+1);
+ Result:=True;
+end;
 
- //
- rw_rlock(global_mem_lock);
- //
-
- if (FMemory<>nil) then
+function TvDeviceMemory.Release(Sender:TObject):Boolean;
+const
+ mark_delete:QWORD=QWORD(1) shl (SizeOf(QWORD)*8-1);
+var
+ i:ptruint;
+begin
+ Result:=False;
+ repeat
+  i:=load_acq_rel(FRefs);
+  if (i and mark_delete)<>0 then Exit;
+  if (i=1) then
+  begin
+   if CAS(FRefs,i,mark_delete) then Break;
+  end else
+  begin
+   if CAS(FRefs,i,i-1) then Break;
+  end;
+ until false;
+ if (i=1) then
  begin
-  Result:=FMemory.Acquire(nil);
+  Free;
+ end;
+ Result:=True;
+end;
+
+//
+
+function TvPointer.Acquire:TvPointer;
+var
+ F:TvDeviceMemory;
+ Guard:TGuard;
+begin
+ Result:=Default(TvPointer);
+
+ Guard:=TGuard.New;
+ F:=TvDeviceMemory(Guard.Protect(Pointer(FMemory)));
+
+ if (F=nil) then
+ begin
+  Guard.Free;
+  Exit;
  end;
 
- //
- rw_runlock(global_mem_lock);
+ if F.Acquire(nil) then
+ begin
+  Result.FMemory:=F;
+  Result.FOffset:=FOffset;
+ end;
+
+ Guard.Free;
 end;
 
 function TvPointer.Release:Boolean;
+var
+ F:TvDeviceMemory;
+ Guard:TGuard;
 begin
  Result:=False;
- if (FMemory=nil) then Exit;
 
- FMemory.Release(nil);
+ Guard:=TGuard.New;
+ F:=TvDeviceMemory(Guard.Protect(Pointer(FMemory)));
 
- Result:=True;
+ if (F=nil) then
+ begin
+  Guard.Free;
+  Exit;
+ end;
+
+ Result:=F.Release(nil);
+
+ Guard.Free;
+end;
+
+function TvPointer.Hold:Boolean;
+var
+ F:TvDeviceMemory;
+ Guard:TGuard;
+begin
+ Result:=False;
+
+ Guard:=TGuard.New;
+ F:=TvDeviceMemory(Guard.Protect(Pointer(FMemory)));
+
+ if (F=nil) then
+ begin
+  Guard.Free;
+  Exit;
+ end;
+
+ Result:=F.Hold(nil);
+
+ Guard.Free;
+end;
+
+function TvPointer.Drop:Boolean;
+var
+ F:TvDeviceMemory;
+ Guard:TGuard;
+begin
+ Result:=False;
+
+ Guard:=TGuard.New;
+ F:=TvDeviceMemory(Guard.Protect(Pointer(FMemory)));
+
+ if (F=nil) then
+ begin
+  Guard.Free;
+  Exit;
+ end;
+
+ Result:=F.Hold(nil);
+
+ Guard.Free;
 end;
 
 //
@@ -1047,6 +1159,7 @@ begin
  LoadMemoryHeaps;
 
  PrintMemoryHeaps;
+ PrintMemoryBudget;
 
  TAILQ_INIT(@FDevs );
  TAILQ_INIT(@FHosts);
@@ -1562,7 +1675,7 @@ begin
   prev:=TvDeviceMemory(TAILQ_PREV(node,@node.entry));
 
   if (node.FMemInfo.heap_index=heap_index) then
-  if (node.FRefs<=1) then
+  if (node.FHold=0) then //lock Hold?
   begin
    Result:=Result+node.FSize;
    //
@@ -1589,7 +1702,7 @@ begin
   prev:=TvHostMemory(TAILQ_PREV(node,@node.entry));
 
   if (node.FMemInfo.heap_index=heap_index) then
-  if (node.FRefs<=1) then
+  if (node.FHold=0) then //lock Hold?
   begin
    Result:=Result+node.FSize;
    //
@@ -1686,7 +1799,7 @@ begin
    begin
     goto _full;
    end else
-   if (node.FRefs<=1) then
+   if (node.FHold=0) then //lock Hold?
    begin
     //partial
     TAILQ_REMOVE(@FHosts,node,@node.entry);
@@ -1785,6 +1898,7 @@ begin
   _print_host;
   _print_devs;
   _print_dmem_fd;
+  PrintMemoryBudget;
  end;
 
  //
@@ -1932,7 +2046,7 @@ begin
  begin
   last_alloc_error:=r;
   Writeln(StdErr,'vkAllocateMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex);
-  print_backtrace(StdErr,Get_pc_addr,get_frame,0);
+  //print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  end;
 end;
 
@@ -2005,6 +2119,42 @@ begin
  begin
   last_alloc_error:=r;
   Writeln(StdErr,'vkAllocateMemory:',r);
+ end;
+end;
+
+function GetMemoryBudget(var budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT):Boolean;
+var
+ prop:TVkPhysicalDeviceMemoryProperties2;
+begin
+ if (vkGetPhysicalDeviceMemoryProperties2=nil) then Exit(False);
+ //
+ prop.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+ prop.pNext:=@budget;
+ //
+ budget.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+ budget.pNext:=nil;
+ //
+ vkGetPhysicalDeviceMemoryProperties2(VulkanApp.FPhysicalDevice,@prop);
+ //
+ Result:=True;
+end;
+
+procedure PrintMemoryBudget;
+var
+ budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT;
+ i:Integer;
+begin
+ budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
+ if GetMemoryBudget(budget) then
+ begin
+  Writeln('[MemoryBudget]');
+  For i:=0 to VK_MAX_MEMORY_HEAPS-1 do
+  if (budget.heapBudget[i]<>0) then
+  begin
+   Writeln(' [',i,']:0x',HexStr(budget.heapUsage[i],16),'/',HexStr(budget.heapBudget[i],16),':',
+           (budget.heapUsage[i]/budget.heapBudget[i]*100):0:2,'%'
+          );
+  end;
  end;
 end;
 

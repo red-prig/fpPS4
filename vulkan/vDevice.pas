@@ -300,6 +300,8 @@ var
 
   VK_AMD_device_coherent_memory          :Boolean;
 
+  VK_EXT_memory_budget                   :Boolean;
+
   DeviceFeature:TVkPhysicalDeviceFeatures;
 
   shaderFloat16:TVkBool32;
@@ -505,6 +507,8 @@ begin
     VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME               :limits.VK_EXT_depth_clip_enable               :=True;
 
     VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME          :limits.VK_AMD_device_coherent_memory          :=True;
+
+    VK_EXT_MEMORY_BUDGET_EXTENSION_NAME                   :limits.VK_EXT_memory_budget                   :=True;
    end;
   end;
   FreeMem(pProperties);
@@ -2006,6 +2010,11 @@ begin
   FCoherent.deviceCoherentMemory:=VK_TRUE;
 
   DeviceInfo.add_feature(@FCoherent);
+ end;
+
+ if limits.VK_EXT_memory_budget then
+ begin
+  DeviceInfo.add_ext(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
  end;
 
  if limits.VK_EXT_vertex_input_dynamic_state then

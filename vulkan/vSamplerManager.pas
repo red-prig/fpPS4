@@ -28,10 +28,6 @@ type
 
  TvSampler2=class(TvSampler)
   key:TSSharpResource4;
-  //
-  FRefs:ptruint;
-  Procedure Acquire;
-  procedure Release(Sender:TObject);
  end;
 
  _TvSampler2Set=specialize T23treeSet<PSSharpResource4,TvSampler2Compare>;
@@ -52,19 +48,6 @@ end;
 Procedure TvSampler2Set.Unlock_wr;
 begin
  rw_wunlock(lock);
-end;
-
-Procedure TvSampler2.Acquire;
-begin
- System.InterlockedIncrement(Pointer(FRefs));
-end;
-
-procedure TvSampler2.Release(Sender:TObject);
-begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- begin
-  Free;
- end;
 end;
 
 function TvSampler2Compare.c(a,b:PSSharpResource4):Integer;
@@ -105,7 +88,7 @@ begin
    FreeAndNil(t);
   end else
   begin
-   t.Acquire;
+   t.Acquire(nil);
    FSampler2Set.Insert(@t.key);
   end;
  end;
@@ -122,13 +105,7 @@ begin
 
  Result:=_FetchSampler(PS);
 
- if (cmd<>nil) and (Result<>nil) then
- begin
-  if cmd.AddDependence(@TvSampler2(Result).Release) then
-  begin
-   TvSampler2(Result).Acquire;
-  end;
- end;
+ cmd.RefTo(Result);
 
  FSampler2Set.Unlock_wr;
 end;

@@ -28,7 +28,7 @@ uses
 
 var
  timeout_thr:p_kthread=nil;
- timeout_new:TIntrusiveMPSCQueue;
+ timeout_new:TIntrusiveMPSCQueue=(tail_:@timeout_new.stub_;stub_:(next_:nil);head_:@timeout_new.stub_);
 
 procedure softclock(arg:Pointer); forward;
 
@@ -36,8 +36,6 @@ procedure md_start_softclock();
 var
  r:Integer;
 begin
- timeout_new.Create;
-
  r:=kthread_add(@softclock,nil,@timeout_thr,0,'softclock');
  Assert(r=0,'softclock');
 end;

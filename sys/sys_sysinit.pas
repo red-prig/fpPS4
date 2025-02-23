@@ -27,6 +27,7 @@ uses
  kern_synch,
  kern_umtx,
  kern_namedobj,
+ kern_hazard_pointer,
  vmount,
  vfiledesc,
  vm_map,
@@ -67,6 +68,7 @@ begin
  sched_prio(curkthread,1000);
  repeat
   vnlru_proc;
+  TGuard.FLazy;
   pause('sys_daemon',hz);
  until false;
 end;

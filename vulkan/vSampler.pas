@@ -6,10 +6,11 @@ interface
 
 uses
  Vulkan,
- vDevice;
+ vDevice,
+ vDependence;
 
 type
- TvSampler=class
+ TvSampler=class(TvRefsObject)
   FHandle:TVkSampler;
   function   Compile(pInfo:PVkSamplerCreateInfo):Boolean;
   Destructor Destroy; override;

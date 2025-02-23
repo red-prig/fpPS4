@@ -9,7 +9,7 @@ uses
  g23tree;
 
 type
- TvReleaseCb=procedure(Sender:TObject) of object;
+ TvReleaseCb=function(Sender:TObject):Boolean of object;
 
  {
  TvReleaseCompare=object
@@ -33,9 +33,12 @@ type
  TvRelease=specialize TNodeSplay<TvReleaseNode>;
 
  TvRefsObject=class
-  FRefs:ptruint;
+  FRefs:Integer;
+  FHold:Integer;
   function   Acquire(Sender:TObject):Boolean; virtual;
-  procedure  Release(Sender:TObject);         virtual;
+  function   Release(Sender:TObject):Boolean; virtual;
+  function   Hold   (Sender:TObject):Boolean; virtual;
+  function   Drop   (Sender:TObject):Boolean; virtual;
  end;
 
  TvDependenciesObject=class(TvRefsObject)
@@ -45,9 +48,10 @@ type
   function   OnAlloc(size:Ptruint):Pointer; virtual;
   Procedure  OnFree (P:Pointer   );         virtual;
   function   IsLinearAlloc:Boolean;         virtual;
-  Procedure  RefTo(obj:TvRefsObject);
+  function   RefTo(obj:TvRefsObject):Boolean;
   function   AddDependence(cb:TvReleaseCb):Boolean;
   function   DelDependence(cb:TvReleaseCb):Boolean;
+  function   HasDependence:Boolean;
   Procedure  ReleaseAllDependencies(Sender:TObject);
   Procedure  FreeAllDependencies;
   Destructor Destroy; override;
@@ -109,15 +113,37 @@ end;
 
 function TvRefsObject.Acquire(Sender:TObject):Boolean;
 begin
- System.InterlockedIncrement(Pointer(FRefs));
+ System.InterlockedIncrement(FRefs);
  Result:=True;
 end;
 
-procedure TvRefsObject.Release(Sender:TObject);
+function TvRefsObject.Release(Sender:TObject):Boolean;
 begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
+ if System.InterlockedDecrement(FRefs)=0 then
  begin
   Free;
+ end;
+ Result:=True;
+end;
+
+function TvRefsObject.Hold(Sender:TObject):Boolean;
+begin
+ if System.InterlockedIncrement(FHold)=1 then
+ begin
+  Result:=Acquire(Sender);
+  if not Result then
+  begin
+   System.InterlockedDecrement(FHold);
+  end;
+ end;
+end;
+
+function TvRefsObject.Drop(Sender:TObject):Boolean;
+begin
+ Result:=True;
+ if System.InterlockedDecrement(FHold)=0 then
+ begin
+  Result:=Release(Sender);
  end;
 end;
 
@@ -138,12 +164,20 @@ begin
  Result:=False;
 end;
 
-Procedure TvDependenciesObject.RefTo(obj:TvRefsObject);
+function TvDependenciesObject.RefTo(obj:TvRefsObject):Boolean;
 begin
+ Result:=False;
  if (Self=nil) or (obj=nil) then Exit;
- if AddDependence(@obj.Release) then
+ if AddDependence(@obj.Drop) then
  begin
-  obj.Acquire(Self);
+  Result:=obj.Hold(Self);
+  if not Result then
+  begin
+   DelDependence(@obj.Drop)
+  end;
+ end else
+ begin
+  Result:=True;
  end;
 end;
 
@@ -186,6 +220,11 @@ begin
  end;
 
  rw_wunlock(FDep_lock);
+end;
+
+function TvDependenciesObject.HasDependence:Boolean;
+begin
+ Result:=(FDependencies.pRoot<>nil);
 end;
 
 Procedure TvDependenciesObject.ReleaseAllDependencies(Sender:TObject);

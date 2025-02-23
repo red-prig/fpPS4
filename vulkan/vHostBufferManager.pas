@@ -127,7 +127,7 @@ begin
    _delete:
    //mem is deleted, free buf
    FHostBufferSet.erase(It);
-   buf._Release(nil); //map ref
+   buf.Release(nil); //map ref
    buf:=nil;
    goto _repeat;
   end;
@@ -263,7 +263,7 @@ begin
 
   if FHostBufferSet.Insert(key) then
   begin
-   key.FBuffer._Acquire(nil); //map ref
+   key.FBuffer.Acquire(nil); //map ref
   end else
   begin
    //collision?

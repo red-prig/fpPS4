@@ -26,8 +26,8 @@ type
 
  TvDescriptorGroupNode=class(TvDescriptorGroup)
   parent:TvSetsPoolUnbound;
-  pNext:Pointer;
-  procedure Release(Sender:TObject); override;
+  pNext :Pointer;
+  function Drop(Sender:TObject):Boolean; override;
  end;
 
  TvSetsPool2Compare=object
@@ -44,9 +44,9 @@ type
 
  TvSetsPoolUnbound=class
   FLayout:TvPipelineLayout;
-  FQueue:TIntrusiveMPSCQueue;
-  FPools:TvSetsPool2Set;
-  FLast:TvSetsPool2;
+  FQueue :TIntrusiveMPSCQueue;
+  FPools :TvSetsPool2Set;
+  FLast  :TvSetsPool2;
   Constructor Create(Layout:TvPipelineLayout);
   Procedure   NewPool;
   function    Alloc:TvDescriptorGroupNode;
@@ -119,6 +119,8 @@ begin
  //
  Result.FLayout:=FLayout;
  Result.FSets  :=FLast.Alloc;
+ //
+ Result.Acquire(nil);
 end;
 
 procedure TvSetsPoolUnbound.PushNode(N:TvDescriptorGroupNode);
@@ -138,12 +140,16 @@ begin
  end;
 end;
 
-Procedure TvDescriptorGroupNode.Release(Sender:TObject);
+function TvDescriptorGroupNode.Drop(Sender:TObject):Boolean;
 begin
- if System.InterlockedDecrement(Pointer(FRefs))=nil then
- if (parent<>nil) then
+ Result:=True;
+ if System.InterlockedDecrement(FHold)=0 then
  begin
-  parent.PushNode(Self);
+  if (parent<>nil) then
+  begin
+   parent.PushNode(Self);
+  end;
+  Result:=Release(Sender);
  end;
 end;
 

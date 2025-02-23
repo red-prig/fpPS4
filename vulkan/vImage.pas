@@ -79,13 +79,10 @@ type
   function    Compile(ext:Pointer):Boolean; virtual;
   function    BindMem(P:TvPointer):TVkResult;
   procedure   UnBindMem(do_free:Boolean);
-  procedure   OnReleaseMem(Sender:TObject); virtual;
+  function    Hold(Sender:TObject):Boolean; override;
+  function    Drop(Sender:TObject):Boolean; override;
+  function    OnReleaseMem(Sender:TObject):Boolean; virtual;
   procedure   SetObjectName(const name:RawByteString);
-  //
-  function    _Acquire(Sender:TObject):Boolean;
-  procedure   _Release(Sender:TObject);
-  function    Acquire(Sender:TObject):Boolean; override;
-  procedure   Release(Sender:TObject);         override;
  end;
 
 const
@@ -1571,11 +1568,13 @@ begin
 end;
 
 procedure TvCustomImage.FreeHandle;
+var
+ F:TVkImage;
 begin
- if (FHandle<>VK_NULL_HANDLE) then
+ F:=System.InterlockedExchange64(FHandle,VK_NULL_HANDLE);
+ if (F<>VK_NULL_HANDLE) then
  begin
-  vkDestroyImage(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
+  vkDestroyImage(Device.FHandle,F,nil);
  end;
 end;
 
@@ -1654,19 +1653,22 @@ begin
 end;
 
 function TvCustomImage.BindMem(P:TvPointer):TVkResult;
+var
+ B:TvPointer;
 begin
- if P.Acquire then //try Acquire
+ B:=P.Acquire;
+ if (B.FMemory<>nil) then //try Acquire
  begin
   //
-  Result:=vkBindImageMemory(Device.FHandle,FHandle,P.FMemory.FHandle,P.FOffset);
+  Result:=vkBindImageMemory(Device.FHandle,FHandle,B.FMemory.FHandle,B.FOffset);
   //
   if (Result=VK_SUCCESS) then
   begin
-   FBind:=P;
-   P.FMemory.AddDependence(@Self.OnReleaseMem);
+   B.FMemory.AddDependence(@Self.OnReleaseMem);
+   FBind:=B;
   end;
   //
-  P.Release; //release Acquire
+  B.Release; //release Acquire
  end else
  begin
   Result:=VK_ERROR_UNKNOWN;
@@ -1676,32 +1678,48 @@ end;
 procedure TvCustomImage.UnBindMem(do_free:Boolean);
 var
  B:TvPointer;
- R:ptruint;
 begin
- if (FBind.FMemory<>nil) then
+ B.FMemory:=TvDeviceMemory(System.InterlockedExchange(Pointer(FBind.FMemory),nil));
+ B.FOffset:=FBind.FOffset;
+ if (B.FMemory<>nil) then
  begin
-  B:=FBind;
-  FBind.FMemory:=nil;
-  //
-  R:=ptruint(System.InterlockedExchange(Pointer(FBRefs),nil));
-  while (R<>0) do
-  begin
-   B.Release;
-   Dec(R);
-  end;
-  //
   if do_free then
   begin
+   B.FMemory.DelDependence(@Self.OnReleaseMem);
    MemManager.FreeMemory(B);
   end;
  end;
 end;
 
-procedure TvCustomImage.OnReleaseMem(Sender:TObject);
+function TvCustomImage.Hold(Sender:TObject):Boolean;
+begin
+ Result:=FBind.Hold;
+ if Result then
+ begin
+  Result:=inherited;
+  if not Result then
+  begin
+   FBind.Drop;
+  end;
+ end;
+end;
+
+function TvCustomImage.Drop(Sender:TObject):Boolean;
+begin
+ Result:=FBind.Drop;
+ if Result then
+ begin
+  Result:=inherited;
+ end;
+end;
+
+function TvCustomImage.OnReleaseMem(Sender:TObject):Boolean;
 begin
  FreeHandle;
  //
  UnBindMem(False);
+ //
+ Result:=True;
 end;
 
 procedure TvCustomImage.SetObjectName(const name:RawByteString);
@@ -1710,57 +1728,7 @@ begin
  DebugReport.SetObjectName(VK_OBJECT_TYPE_IMAGE,FHandle,PChar(name));
 end;
 
-function TvCustomImage._Acquire(Sender:TObject):Boolean;
-begin
- Result:=inherited Acquire(Sender);
-end;
-
-procedure TvCustomImage._Release(Sender:TObject);
-begin
- inherited Release(Sender);
-end;
-
-function TvCustomImage.Acquire(Sender:TObject):Boolean;
-begin
- if (FBind.FMemory<>nil) then
- begin
-  Result:=FBind.Acquire;
-  if Result then
-  begin
-   System.InterlockedIncrement(Pointer(FBRefs));
-   inherited Acquire(Sender);
-  end;
- end else
- begin
-  Result:=False;
-  //Result:=inherited Acquire(Sender);
- end;
-end;
-
-procedure TvCustomImage.Release(Sender:TObject);
-var
- B:TvPointer;
- R:ptruint;
-begin
- while True do
- begin
-  B:=FBind;
-  if (B.FMemory<>nil) and (FBRefs<>0) then
-  begin
-   R:=FBRefs;
-   if (System.InterlockedCompareExchange(Pointer(FBRefs),Pointer(R-1),Pointer(R))=Pointer(R)) then
-   begin
-    B.Release;
-    inherited Release(Sender);
-    Break;
-   end;
-  end else
-  begin
-   inherited Release(Sender);
-   Break;
-  end;
- end;
-end;
+///
 
 procedure _test_and_set_to(var new:TVkFlags;
                            test:TVkFlags;

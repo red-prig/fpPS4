@@ -35,7 +35,7 @@ Const
 
 Type
  TIntrusiveMPSCQueue=object
-  protected
+  //protected
    type
     PQNode=^TQNode;
     TQNode=record

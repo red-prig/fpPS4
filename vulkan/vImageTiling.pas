@@ -208,13 +208,14 @@ end;
 
 type
  TvTempBuffer=class(TvBuffer)
-  procedure ReleaseTmp(Sender:TObject); virtual; register;
+  Function ReleaseTmp(Sender:TObject):Boolean; virtual; register;
  end;
 
-procedure TvTempBuffer.ReleaseTmp(Sender:TObject); register;
+ Function TvTempBuffer.ReleaseTmp(Sender:TObject):Boolean; register;
 begin
  //force free
  Free;
+ Result:=True;
 end;
 
 procedure load_clear(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
@@ -559,6 +560,7 @@ begin
    //x,y,z
 
    {
+   if ctype=BufferToImage then
    SaveToTGA('shader_dump\texture_a'+IntToStr(a)+
                                    '_mip'+IntToStr(m_level)+
                                    '_'+IntToStr(m_width)+
@@ -648,10 +650,10 @@ type
  TvTempBufferWriteback=class(TvTempBuffer)
   image:TvCustomImage2;
   m_full_linear_size:Ptruint;
-  procedure ReleaseTmp(Sender:TObject); override; register;
+  function ReleaseTmp(Sender:TObject):Boolean; override; register;
  end;
 
-procedure TvTempBufferWriteback.ReleaseTmp(Sender:TObject); register;
+function TvTempBufferWriteback.ReleaseTmp(Sender:TObject):Boolean; register;
 var
  m_base:Pointer;
 begin
@@ -671,7 +673,7 @@ begin
  vkUnmapMemory(Device.FHandle,FBind.FMemory.FHandle);
 
  image.Release(Self);
- inherited;
+ Result:=inherited;
 end;
 
 Procedure write_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
@@ -761,6 +763,17 @@ begin
  m_level :=image.key.params.mipLevels;
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
+
+ {
+ SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+
+                                 '_'+IntToStr(m_width)+
+                                 'x'+IntToStr(m_height)+
+                                     '.tga',
+           Pointer(image.key.addr),
+           m_width,
+           m_height,
+           32);
+ }
 
  while (m_level>0) do
  begin

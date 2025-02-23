@@ -78,8 +78,7 @@ uses
  kern_proc,
  kern_rangelock,
  sched_ule,
- sys_sleepqueue,
- kern_hazard_pointer;
+ sys_sleepqueue;
 
 //
 
@@ -203,7 +202,6 @@ begin
  rlqentry_free(td^.td_rlqe);
  umtx_thread_fini(td);
  cpu_thread_free(td);
- tlHpFree;
 end;
 
 procedure thread_inc_ref(td:p_kthread); public;
@@ -378,8 +376,6 @@ begin
 
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
 
- tlHpInit;
-
  Set8087CW(__INITIAL_FPUCW__);
  SetMXCSR (__INITIAL_MXCSR__);
 
@@ -401,8 +397,6 @@ begin
  td:=curkthread;
 
  InitThread(td^.td_ustack.stack-td^.td_ustack.sttop);
-
- tlHpInit;
 
  Set8087CW(__INITIAL_FPUCW__);
  SetMXCSR (__INITIAL_MXCSR__);
