@@ -1011,7 +1011,7 @@ begin
   Exit;
  end;
 
- Result:=F.Hold(nil);
+ Result:=F.Drop(nil);
 
  Guard.Free;
 end;

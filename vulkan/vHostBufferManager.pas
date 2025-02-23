@@ -109,7 +109,7 @@ begin
  begin
   buf:=It.Item^.FBuffer;
 
-  if buf.Acquire(nil) then
+  if buf.Hold(nil) then
   begin
 
    if ((buf.FAddr+buf.FSize)>=__end) then
@@ -117,7 +117,7 @@ begin
     Exit(buf);
    end else
    begin
-    buf.Release(nil);
+    buf.Drop(nil);
     //The search key matches but the size does not.
     goto _delete;
    end;
@@ -146,7 +146,7 @@ begin
  begin
   buf:=It.Item^.FBuffer;
 
-  if buf.Acquire(nil) then
+  if buf.Hold(nil) then
   begin
 
    if (buf.FAddr<=Addr) and
@@ -155,7 +155,7 @@ begin
     Exit(buf);
    end;
 
-   buf.Release(nil);
+   buf.Drop(nil);
   end else
   begin
    goto _delete;
@@ -275,7 +275,7 @@ begin
    goto _repeat;
   end;
 
-  key.FBuffer.Acquire(nil); //analog ref in [_FindHostBuffer]
+  key.FBuffer.Hold(nil); //analog ref in [_FindHostBuffer]
 
   //
   FHostBufferSet.Unlock_wr;
@@ -291,8 +291,8 @@ begin
 
  if (Result<>nil) then
  begin
-  Result.Release(nil); //release [_FindHostBuffer]
-  mem.Release;         //release [FetchHostMap]
+  Result.Drop(nil); //release [_FindHostBuffer]
+  mem.Release;      //release [FetchHostMap]
  end;
 
 end;

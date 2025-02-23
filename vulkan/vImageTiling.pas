@@ -214,8 +214,7 @@ type
  Function TvTempBuffer.ReleaseTmp(Sender:TObject):Boolean; register;
 begin
  //force free
- Free;
- Result:=True;
+ Result:=Drop(nil);
 end;
 
 procedure load_clear(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
@@ -331,6 +330,7 @@ var
  a,d,b:Ptruint;
 begin
 
+ buf.Hold(nil);
  cmd.AddDependence(@buf.ReleaseTmp);
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
@@ -672,7 +672,7 @@ begin
 
  vkUnmapMemory(Device.FHandle,FBind.FMemory.FHandle);
 
- image.Release(Self);
+ image.Drop(Self);
  Result:=inherited;
 end;
 
@@ -693,7 +693,7 @@ begin
  buf.image:=image;
  buf.m_full_linear_size:=m_full_linear_size;
 
- image.Acquire(buf);
+ image.Hold(buf);
 
  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
 
@@ -991,6 +991,9 @@ begin
 
  set_tiling_cbs(kTileModeThin_2dThin          ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
  set_tiling_cbs(kTileModeThin_2dThin          ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+
+ set_tiling_cbs(kTileModeThick_1dThick        ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
+ set_tiling_cbs(kTileModeThick_1dThick        ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
  //
  set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);

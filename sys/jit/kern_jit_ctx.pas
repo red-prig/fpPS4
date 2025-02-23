@@ -328,6 +328,7 @@ uses
  vm_pmap_prot,
  machdep,
  kern_thr,
+ md_systm,
  systm,
  kern_jit_asm;
 
@@ -4178,8 +4179,11 @@ end;
 //
 
 function get_instruction_info(addr:Pointer):t_instruction_info;
+type
+ t_data_16=array[0..15] of Byte;
 var
  ptr:Pointer;
+ data:t_data_16;
 
  dis:TX86Disassembler;
  din:TInstruction;
@@ -4189,7 +4193,10 @@ begin
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
- ptr:=addr;
+ data:=Default(t_data_16);
+ md_copyout(@data,addr,16,nil);
+
+ ptr:=@data;
 
  dis.Disassemble(dm64,ptr,din);
 
@@ -4230,7 +4237,7 @@ begin
   end;
  end;
 
- print_disassemble(addr,Result.code_size);
+ print_disassemble(@data,Result.code_size);
 
  Assert(false,'get_instruction_info');
 end;

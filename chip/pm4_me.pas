@@ -969,6 +969,11 @@ begin
     ri:=TvImage2(resource_instance^.resource^.rimage);
 
     if (ri<>nil) then
+    begin
+     ctx.Cmd.RefTo(ri);
+    end;
+
+    if (ri<>nil) then
     if (ri.is_invalid) then
     begin
      resource_instance^.resource^.rimage:=nil;
@@ -1030,6 +1035,11 @@ begin
     resource_instance^.prepared:=true;
 
     buf:=TvHostBuffer(resource_instance^.resource^.rimage);
+
+    if (buf<>nil) then
+    begin
+     ctx.Cmd.RefTo(buf);
+    end;
 
     if (buf<>nil) then
     if (buf.is_invalid) then
@@ -1663,6 +1673,11 @@ begin
    ri:=TvImage2(color_instance[i]^.resource^.rimage);
 
    if (ri<>nil) then
+   begin
+    ctx.Cmd.RefTo(ri);
+   end;
+
+   if (ri<>nil) then
    if (ri.is_invalid) then
    begin
     color_instance[i]^.resource^.rimage:=nil;
@@ -1727,6 +1742,11 @@ begin
   end;
 
   if (rd<>nil) then
+  begin
+   ctx.Cmd.RefTo(rd);
+  end;
+
+  if (rd<>nil) then
   if (rd.is_invalid) then
   begin
    d_instance^.resource^.rimage:=nil;
@@ -1736,6 +1756,11 @@ begin
   if (s_instance<>nil) then
   begin
    rs:=TvCustomImage2(s_instance^.resource^.rimage);
+  end;
+
+  if (rs<>nil) then
+  begin
+   ctx.Cmd.RefTo(rs);
   end;
 
   if (rs<>nil) then
@@ -2360,6 +2385,8 @@ begin
  ctx.Cmd.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
 
  /////////
+
+ pm4_Writeback_After(ctx);
 end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;

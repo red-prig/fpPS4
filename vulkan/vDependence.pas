@@ -128,6 +128,7 @@ end;
 
 function TvRefsObject.Hold(Sender:TObject):Boolean;
 begin
+ Result:=True;
  if System.InterlockedIncrement(FHold)=1 then
  begin
   Result:=Acquire(Sender);

@@ -152,7 +152,7 @@ type
  end;
 
 function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;
-function FindImage(cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
+function FindImage (cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
 
@@ -1139,7 +1139,7 @@ begin
 
  if (t<>nil) then
  begin
-  if t.Acquire(nil) then //result ref
+  if t.Hold(nil) then //result ref
   begin
    t.FUsage:=t.FUsage+usage;
   end else
@@ -1190,7 +1190,7 @@ begin
 
   if (t<>nil) then
   begin
-   t.Acquire(nil); //result ref
+   t.Hold(nil); //result ref
   end;
 
   mem.Release; //release [FetchMemory]
@@ -1225,7 +1225,7 @@ function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage
 begin
  FImage2Set.Lock_wr;
 
- Result:=_FetchImage(F,usage); // <- Acquire(nil)/FetchMemory
+ Result:=_FetchImage(F,usage); // <- Hold(nil)/FetchMemory
 
  //add dep
  cmd.RefTo(Result);
@@ -1234,7 +1234,7 @@ begin
 
  if (Result<>nil) then
  begin
-  Result.Release(nil);  //release [Acquire(nil)]
+  Result.Drop(nil);  //release [Drop(nil)]
  end;
 end;
 
