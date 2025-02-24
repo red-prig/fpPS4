@@ -966,7 +966,8 @@ begin
    begin
     resource_instance^.prepared:=true;
 
-    ri:=TvImage2(resource_instance^.resource^.rimage);
+    //ri:=TvImage2(resource_instance^.resource^.rimage);
+    ri:=nil;
 
     if (ri<>nil) then
     begin
@@ -1034,7 +1035,8 @@ begin
    begin
     resource_instance^.prepared:=true;
 
-    buf:=TvHostBuffer(resource_instance^.resource^.rimage);
+    //buf:=TvHostBuffer(resource_instance^.resource^.rimage);
+    buf:=nil;
 
     if (buf<>nil) then
     begin
@@ -1050,6 +1052,11 @@ begin
 
     if (buf=nil) then
     begin
+     if (QWORD(addr)=$CDE3F6666FD) then
+     begin
+      writeln;
+     end;
+
      buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size);
 
      Assert(buf<>nil);
@@ -1670,7 +1677,8 @@ begin
  For i:=0 to ctx.rt_info^.RT_COUNT-1 do
   begin
 
-   ri:=TvImage2(color_instance[i]^.resource^.rimage);
+   //ri:=TvImage2(color_instance[i]^.resource^.rimage);
+   ri:=nil;
 
    if (ri<>nil) then
    begin
@@ -1736,10 +1744,12 @@ begin
   rd:=nil;
   rs:=nil;
 
+  {
   if (d_instance<>nil) then
   begin
    rd:=TvCustomImage2(d_instance^.resource^.rimage);
   end;
+  }
 
   if (rd<>nil) then
   begin
@@ -1753,10 +1763,12 @@ begin
    rd:=nil;
   end;
 
+  {
   if (s_instance<>nil) then
   begin
    rs:=TvCustomImage2(s_instance^.resource^.rimage);
   end;
+  }
 
   if (rs<>nil) then
   begin

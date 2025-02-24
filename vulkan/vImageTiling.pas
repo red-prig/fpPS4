@@ -211,7 +211,7 @@ type
   Function ReleaseTmp(Sender:TObject):Boolean; virtual; register;
  end;
 
- Function TvTempBuffer.ReleaseTmp(Sender:TObject):Boolean; register;
+Function TvTempBuffer.ReleaseTmp(Sender:TObject):Boolean; register;
 begin
  //force free
  Result:=Drop(nil);
@@ -701,6 +701,8 @@ begin
  begin
   vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
  end;
+
+ Assert(vmem.FMemory<>nil);
 
  buf.BindMem(vmem);
 

@@ -1673,6 +1673,11 @@ begin
  begin
   Result:=VK_ERROR_UNKNOWN;
  end;
+
+ if (Result<>VK_SUCCESS) then
+ begin
+  Writeln(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
+ end;
 end;
 
 procedure TvCustomImage.UnBindMem(do_free:Boolean);

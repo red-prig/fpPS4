@@ -1849,6 +1849,7 @@ end;
 procedure op_uplift(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize;hint:t_lea_hint=[]);
 var
  rbits:TRegValue;
+ instr:t_jit_i_link;
 begin
  if not jit_memory_guard then Exit;
 
@@ -1873,12 +1874,32 @@ begin
    rbits:=r_tmp0;
   end;
 
+  xchgq(rcx,rbits);
+
+  //addres bits
+  movi(new_reg_size(rcx,os8),40);
+
+  shrx(rcx,dst,rcx);
+
+  instr:=jcxz(nil_link,as64,os8);
+
+  //error
+  xchgq(rcx,rbits);
+  ud2;
+
+  //next
+  instr.target:=get_curr_label.after;
+
+  xchgq(rcx,rbits);
+
+  {
   //zero bits
   movi(new_reg_size(rbits,os8),24); //mov  $24,%bpl
 
   //clear hi
   shlx(dst,dst,rbits); //shlx %rbp,%r14,%r14
   shrx(dst,dst,rbits); //shrx %rbp,%r14,%r14
+  }
 
   if (rbits.AIndex=r13.AIndex) then
   begin
@@ -4194,7 +4215,7 @@ begin
  din:=Default(TInstruction);
 
  data:=Default(t_data_16);
- md_copyout(@data,addr,16,nil);
+ md_copyin(addr,@data,16,nil);
 
  ptr:=@data;
 

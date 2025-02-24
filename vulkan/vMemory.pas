@@ -1655,6 +1655,8 @@ begin
  rw_wunlock(global_mem_lock);
 end;
 
+function get_str_mem_info(const m:TvMemInfo):RawByteString; forward;
+
 Function TvMemManager._shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
 var
  node,prev:TvDeviceMemory;
@@ -1677,6 +1679,8 @@ begin
   if (node.FMemInfo.heap_index=heap_index) then
   if (node.FHold=0) then //lock Hold?
   begin
+   Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+   //
    Result:=Result+node.FSize;
    //
    TAILQ_REMOVE(@FDevs,node,@node.entry);
@@ -1704,6 +1708,8 @@ begin
   if (node.FMemInfo.heap_index=heap_index) then
   if (node.FHold=0) then //lock Hold?
   begin
+   Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+   //
    Result:=Result+node.FSize;
    //
    TAILQ_REMOVE(@FHosts,node,@node.entry);
