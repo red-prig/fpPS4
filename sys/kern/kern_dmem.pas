@@ -540,7 +540,7 @@ begin
   'CUSA00606',
   'CUSA00605',
   'CUSA00476':
-    Result:=False;
+    Result:=True;
   else;
     Result:=False;
  end;
@@ -558,7 +558,7 @@ begin
   'CUSA01374',
   'CUSA01382',
   'CUSA01405':
-    Result:=False;
+    Result:=True;
   else;
     Result:=False;
  end;
