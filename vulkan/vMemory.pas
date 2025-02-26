@@ -176,7 +176,8 @@ function vkAllocDedicatedBuffer(device:TVkDevice;Size:TVkDeviceSize;mtindex:TVkU
 function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
 
-function GetMemoryBudget(var budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT):Boolean;
+function  GetMemoryBudget(var budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT):Boolean;
+function  MemoryBudgetCanBeAlloc(heap_id:Byte;size:TVkDeviceSize):Boolean;
 procedure PrintMemoryBudget;
 
 implementation
@@ -366,6 +367,8 @@ procedure gpu_map_entry_link(
            map        :p_gpu_map;
            after_where:p_gpu_map_entry;
            entry      :p_gpu_map_entry);
+var
+ i:TVkDeviceSize;
 begin
  Inc(map^.nentries);
  entry^.prev:=after_where;
@@ -391,11 +394,12 @@ begin
  end;
  if (entry^.next=@map^.header) then
  begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
+  i:=map^.max_offset;
  end else
  begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
+  i:=entry^.next^.start;
  end;
+ entry^.adj_free:=i-entry^.__end;
  gpu_map_entry_set_max_free(entry);
  map^.root:=entry;
 end;
@@ -405,6 +409,7 @@ procedure gpu_map_entry_unlink(
            entry:p_gpu_map_entry);
 var
  next,prev,root:p_gpu_map_entry;
+ i:TVkDeviceSize;
 begin
  if (entry<>map^.root) then
  begin
@@ -417,13 +422,14 @@ begin
  begin
   root:=gpu_map_entry_splay(entry^.start, entry^.left);
   root^.right:=entry^.right;
-  if (root^.next=@map^.header) then
+  if (entry^.next=@map^.header) then
   begin
-   root^.adj_free:=map^.max_offset-root^.__end;
+   i:=map^.max_offset;
   end else
   begin
-   root^.adj_free:=entry^.next^.start-root^.__end;
+   i:=entry^.next^.start;
   end;
+  root^.adj_free:=i-root^.__end;
   gpu_map_entry_set_max_free(root);
  end;
  map^.root:=root;
@@ -1381,6 +1387,7 @@ var
  FHandle:TVkDeviceMemory;
  node:TvDeviceMemory;
  tmp:TVkDeviceSize;
+ heap_id:Byte;
 begin
  Result:=nil;
 
@@ -1400,7 +1407,15 @@ begin
  begin
   _retry:
 
-  FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
+  heap_id:=FProperties.memoryTypes[mtindex].heapIndex;
+
+  if MemoryBudgetCanBeAlloc(heap_id,Size) then
+  begin
+   FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
+  end else
+  begin
+   FHandle:=VK_NULL_HANDLE;
+  end;
 
   if (FHandle=VK_NULL_HANDLE) then
   begin
@@ -1684,6 +1699,7 @@ begin
    Result:=Result+node.FSize;
    //
    TAILQ_REMOVE(@FDevs,node,@node.entry);
+   node.ReleaseAllDependencies(nil);
    ReleaseAndNil(node); //list
    //
    if (Result>=max) then Break;
@@ -1713,6 +1729,7 @@ begin
    Result:=Result+node.FSize;
    //
    TAILQ_REMOVE(@FHosts,node,@node.entry);
+   node.ReleaseAllDependencies(nil);
    ReleaseAndNil(node); //list
    //
    if (Result>=max) then Break;
@@ -1809,6 +1826,7 @@ begin
    begin
     //partial
     TAILQ_REMOVE(@FHosts,node,@node.entry);
+    node.ReleaseAllDependencies(nil);
     ReleaseAndNil(node); //list
    end;
 
@@ -1835,6 +1853,7 @@ var
  tmp:QWORD;
  node:TvHostMemory;
  FHandle:TVkDeviceMemory;
+ heap_id:Byte;
 begin
  Result:=Default(TvPointer);
  if (Addr=0) or (Size=0) then Exit;
@@ -1867,7 +1886,15 @@ begin
 
   tmp:=F__End_align-FStart_align;
 
-  FHandle:=vkAllocHostMemory(Device.FHandle,tmp,mtindex,Pointer(FStart_align));
+  heap_id:=FProperties.memoryTypes[mtindex].heapIndex;
+
+  if MemoryBudgetCanBeAlloc(heap_id,tmp) then
+  begin
+   FHandle:=vkAllocHostMemory(Device.FHandle,tmp,mtindex,Pointer(FStart_align));
+  end else
+  begin
+   FHandle:=VK_NULL_HANDLE;
+  end;
 
   if (FHandle=VK_NULL_HANDLE) then
   begin
@@ -2143,6 +2170,21 @@ begin
  vkGetPhysicalDeviceMemoryProperties2(VulkanApp.FPhysicalDevice,@prop);
  //
  Result:=True;
+end;
+
+function MemoryBudgetCanBeAlloc(heap_id:Byte;size:TVkDeviceSize):Boolean;
+var
+ budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT;
+ i:TVkDeviceSize;
+begin
+ Result:=True;
+ budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
+ if GetMemoryBudget(budget) then
+ begin
+  i:=budget.heapUsage[heap_id] + size;
+
+  Result:=(i<=budget.heapBudget[heap_id]);
+ end;
 end;
 
 procedure PrintMemoryBudget;

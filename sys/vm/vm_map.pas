@@ -867,6 +867,8 @@ procedure vm_map_entry_link(
            map        :vm_map_t;
            after_where:vm_map_entry_t;
            entry      :vm_map_entry_t);
+var
+ i:vm_offset_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -894,11 +896,12 @@ begin
  end;
  if (entry^.next=@map^.header) then
  begin
-  entry^.adj_free:=map^.max_offset-entry^.__end;
+  i:=map^.max_offset;
  end else
  begin
-  entry^.adj_free:=entry^.next^.start-entry^.__end;
+  i:=entry^.next^.start;
  end;
+ entry^.adj_free:=i-entry^.__end;
  vm_map_entry_set_max_free(entry);
  map^.root:=entry;
 end;
@@ -908,6 +911,7 @@ procedure vm_map_entry_unlink(
            entry      :vm_map_entry_t);
 var
  next,prev,root:vm_map_entry_t;
+ i:vm_offset_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -922,13 +926,14 @@ begin
  begin
   root:=vm_map_entry_splay(entry^.start, entry^.left);
   root^.right:=entry^.right;
-  if (root^.next=@map^.header) then
+  if (entry^.next=@map^.header) then
   begin
-   root^.adj_free:=map^.max_offset-root^.__end;
+   i:=map^.max_offset;
   end else
   begin
-   root^.adj_free:=entry^.next^.start-root^.__end;
+   i:=entry^.next^.start;
   end;
+  root^.adj_free:=i-root^.__end;
   vm_map_entry_set_max_free(root);
  end;
  map^.root:=root;

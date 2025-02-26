@@ -301,6 +301,8 @@ var
   VK_AMD_device_coherent_memory          :Boolean;
 
   VK_EXT_memory_budget                   :Boolean;
+  VK_EXT_memory_priority                 :Boolean;
+  VK_EXT_pageable_device_local_memory    :Boolean;
 
   DeviceFeature:TVkPhysicalDeviceFeatures;
 
@@ -509,6 +511,8 @@ begin
     VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME          :limits.VK_AMD_device_coherent_memory          :=True;
 
     VK_EXT_MEMORY_BUDGET_EXTENSION_NAME                   :limits.VK_EXT_memory_budget                   :=True;
+    VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME                 :limits.VK_EXT_memory_priority                 :=True;
+    VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME    :limits.VK_EXT_pageable_device_local_memory    :=True;
    end;
   end;
   FreeMem(pProperties);
@@ -1946,6 +1950,8 @@ var
  FDCC :TVkPhysicalDeviceDepthClipControlFeaturesEXT;
  FDCE :TVkPhysicalDeviceDepthClipEnableFeaturesEXT;
 
+ FPDLM:TVkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT;
+
  FScalar:TVkPhysicalDeviceScalarBlockLayoutFeatures;
  FWorkgroupLayout:TVkPhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR;
 
@@ -2015,6 +2021,22 @@ begin
  if limits.VK_EXT_memory_budget then
  begin
   DeviceInfo.add_ext(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+ end;
+
+ if limits.VK_EXT_memory_priority then
+ begin
+  DeviceInfo.add_ext(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+ end;
+
+ if limits.VK_EXT_pageable_device_local_memory then
+ begin
+  DeviceInfo.add_ext(VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME);
+
+  FPDLM:=Default(TVkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT);
+  FPDLM.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT;
+  FPDLM.pageableDeviceLocalMemory:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FPDLM);
  end;
 
  if limits.VK_EXT_vertex_input_dynamic_state then

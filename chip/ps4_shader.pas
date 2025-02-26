@@ -224,7 +224,8 @@ type
 
  PVSharpResource4=^TVSharpResource4;
  TVSharpResource4=bitpacked record
-           base:bit44;
+           base:bit40;
+         unused:bit4;
       mtype_L1s:bit2;
        mtype_L2:bit2;
          stride:bit14; //bytes: 0..16383
