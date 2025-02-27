@@ -160,6 +160,14 @@ const
  BUG210925_ENABLE_TLS_BUG_FIX                             =$31;
  NUM_WORKAROUND_ID                                        =$32;
 
+{
+[render_mode]
+ 0xff -> Changing is prohibited -> 1920x1080
+    0 -> Default                -> 1920x1080
+    1 -> High Resolution.       -> 3840x2160
+    2 -> Enhanced Full HD.      -> 1920x1080
+}
+
 type
  p_appinfo=^t_appinfo;
  t_appinfo=packed record
@@ -171,7 +179,7 @@ type
   debug_level     :Byte;          //1
   slv_flags       :Byte;          //1  eLoadOptions
   budget_flags    :Byte;
-  debug_out       :Byte;
+  render_mode     :Byte;
   f_1e            :Byte;
   requiredHdcpType:Byte;
   preloadPrxFlags :QWORD;
