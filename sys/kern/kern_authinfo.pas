@@ -161,7 +161,7 @@ const
  NUM_WORKAROUND_ID                                        =$32;
 
 {
-[render_mode]
+[render_mode] (sceKernelGetRenderingMode)
  0xff -> Changing is prohibited -> 1920x1080
     0 -> Default                -> 1920x1080
     1 -> High Resolution.       -> 3840x2160
@@ -178,9 +178,9 @@ type
   CUSANAME        :TCUSANAME;     //10 titleId
   debug_level     :Byte;          //1
   slv_flags       :Byte;          //1  eLoadOptions
-  budget_flags    :Byte;
+  miniAppDmemFlags:Byte;
   render_mode     :Byte;
-  f_1e            :Byte;
+  mdbg_out        :Byte;
   requiredHdcpType:Byte;
   preloadPrxFlags :QWORD;
   attribute       :Integer;
