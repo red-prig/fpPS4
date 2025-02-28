@@ -1458,12 +1458,22 @@ begin
   end else
   if (resource^.rtype=R_HTILE) then
   begin
+
+   //start on demaind
+
+   ctx.BeginCmdBuffer;
+
    ht:=FetchHtile(ctx.Cmd,resource^.rkey,resource^.rsize);
 
    resource^.rclear:=ht.rclear;
   end else
   if (resource^.rtype=R_CMASK) then
   begin
+
+   //start on demaind
+
+   ctx.BeginCmdBuffer;
+
    hc:=FetchCmask(ctx.Cmd,resource^.rkey,resource^.rsize);
 
    resource^.rclear:=hc.rclear;
