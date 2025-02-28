@@ -1362,28 +1362,6 @@ begin
 
 end;
 
-procedure onAcquireMem(pctx:p_pfp_ctx;Body:PPM4ACQUIREMEM);
-{var
- addr,size:QWORD;}
-begin
- //Assert(pctx^.stream_type=stGfxDcb);
-
- pctx^.UC_REG.CP_COHER_BASE_HI.COHER_BASE_HI_256B:=Body^.coherBaseHi;
- DWORD(pctx^.UC_REG.CP_COHER_CNTL)               :=Body^.coherCntl;
- pctx^.UC_REG.CP_COHER_SIZE                      :=Body^.coherSizeLo;
- pctx^.UC_REG.CP_COHER_BASE                      :=Body^.coherBaseLo;
- pctx^.UC_REG.CP_COHER_SIZE_HI.COHER_SIZE_HI_256B:=Body^.coherSizeHi;
-
- {
- addr:=(QWORD(Body^.coherBaseLo) shl 8) or (QWORD(Body^.coherBaseHi) shl 40);
- size:=(QWORD(Body^.coherSizeLo) shl 8) or (QWORD(Body^.coherSizeHi) shl 40);
-
- Writeln('onAcquireMem:');
- Writeln(' addr=0x',HexStr(addr,16));
- Writeln(' size=0x',HexStr(size,16));
- }
-end;
-
 function revbinstr(val:int64;cnt:byte):shortstring;
 var
  i:Integer;
@@ -1393,6 +1371,58 @@ begin
  begin
   Result[i]:=AnsiChar(48+val and 1);
   val:=val shr 1;
+ end;
+end;
+
+function coherCntl_str(CNTL:TCP_COHER_CNTL):shortstring;
+begin
+ Result:='';
+ if (CNTL.DEST_BASE_0_ENA         <>0) then Result:=Result+'DS_B0 ';
+ if (CNTL.DEST_BASE_1_ENA         <>0) then Result:=Result+'DS_B1 ';
+ if (CNTL.CB0_DEST_BASE_ENA       <>0) then Result:=Result+'CB0_D ';
+ if (CNTL.CB1_DEST_BASE_ENA       <>0) then Result:=Result+'CB1_D ';
+ if (CNTL.CB2_DEST_BASE_ENA       <>0) then Result:=Result+'CB2_D ';
+ if (CNTL.CB3_DEST_BASE_ENA       <>0) then Result:=Result+'CB3_D ';
+ if (CNTL.CB4_DEST_BASE_ENA       <>0) then Result:=Result+'CB4_D ';
+ if (CNTL.CB5_DEST_BASE_ENA       <>0) then Result:=Result+'CB5_D ';
+ if (CNTL.CB6_DEST_BASE_ENA       <>0) then Result:=Result+'CB6_D ';
+ if (CNTL.CB7_DEST_BASE_ENA       <>0) then Result:=Result+'CB7_D ';
+ if (CNTL.DB_DEST_BASE_ENA        <>0) then Result:=Result+'DB_DS ';
+ if (CNTL.TCL1_VOL_ACTION_ENA     <>0) then Result:=Result+'TCL1V ';
+ if (CNTL.TC_VOL_ACTION_ENA       <>0) then Result:=Result+'TC_VA ';
+ if (CNTL.TC_WB_ACTION_ENA        <>0) then Result:=Result+'TC_WB ';
+ if (CNTL.DEST_BASE_2_ENA         <>0) then Result:=Result+'DS_B2 ';
+ if (CNTL.DEST_BASE_3_ENA         <>0) then Result:=Result+'DS_B3 ';
+ if (CNTL.TCL1_ACTION_ENA         <>0) then Result:=Result+'TCL1A ';
+ if (CNTL.TC_ACTION_ENA           <>0) then Result:=Result+'TC_AC ';
+ if (CNTL.CB_ACTION_ENA           <>0) then Result:=Result+'CB_AC ';
+ if (CNTL.DB_ACTION_ENA           <>0) then Result:=Result+'DB_AC ';
+ if (CNTL.SH_KCACHE_ACTION_ENA    <>0) then Result:=Result+'SH_KA ';
+ if (CNTL.SH_KCACHE_VOL_ACTION_ENA<>0) then Result:=Result+'SH_KV ';
+ if (CNTL.SH_ICACHE_ACTION_ENA    <>0) then Result:=Result+'SH_IA ';
+end;
+
+procedure onAcquireMem(pctx:p_pfp_ctx;Body:PPM4ACQUIREMEM);
+var
+ addr,size:QWORD;
+begin
+ //Assert(pctx^.stream_type=stGfxDcb);
+
+ pctx^.UC_REG.CP_COHER_BASE_HI.COHER_BASE_HI_256B:=Body^.coherBaseHi;
+ DWORD(pctx^.UC_REG.CP_COHER_CNTL)               :=Body^.coherCntl;
+ pctx^.UC_REG.CP_COHER_SIZE                      :=Body^.coherSizeLo;
+ pctx^.UC_REG.CP_COHER_BASE                      :=Body^.coherBaseLo;
+ pctx^.UC_REG.CP_COHER_SIZE_HI.COHER_SIZE_HI_256B:=Body^.coherSizeHi;
+
+ if p_print_gpu_ops then
+ begin
+  addr:=(QWORD(Body^.coherBaseLo) shl 8) or (QWORD(Body^.coherBaseHi) shl 40);
+  size:=(QWORD(Body^.coherSizeLo) shl 8) or (QWORD(Body^.coherSizeHi) shl 40);
+
+  Writeln('onAcquireMem:');
+  Writeln(' Cntl=',coherCntl_str(pctx^.UC_REG.CP_COHER_CNTL));
+  Writeln(' addr=0x',HexStr(addr,10));
+  Writeln(' size=0x',HexStr(size,10));
  end;
 end;
 
@@ -1620,7 +1650,7 @@ begin
   Writeln(' indexBase=',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
  end;
 
- pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
+ pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo and (not 1);
  pctx^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
 end;
 
@@ -1654,7 +1684,7 @@ begin
  end;
 
  pctx^.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
- pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo;
+ pctx^.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo and (not 1);
  pctx^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR:=Body^.indexBaseHi;
  pctx^.CX_REG.VGT_DMA_SIZE             :=Body^.indexCount;
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
@@ -1676,6 +1706,7 @@ begin
  end;
 
  pctx^.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
+ pctx^.CX_REG.VGT_INDX_OFFSET          :=Body^.indexOffset;
  pctx^.CX_REG.VGT_DMA_SIZE             :=Body^.indexCount;
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;

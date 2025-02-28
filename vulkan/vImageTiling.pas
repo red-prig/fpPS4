@@ -8,6 +8,7 @@ uses
  SysUtils,
  sys_bootparam,
  ps4_tiling,
+ kern_dmem,
  Vulkan,
  vDevice,
  vMemory,
@@ -17,8 +18,8 @@ uses
  vHostBufferManager,
  vCmdBuffer;
 
-procedure pm4_load_from (cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte);
-procedure pm4_write_back(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+Function  pm4_load_from (cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte):Boolean;
+Function  pm4_write_back(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 Function  get_image_size(const key:TvImageKey):Ptruint;
 
 implementation
@@ -480,6 +481,14 @@ var
  i,x,y,z:QWORD;
  pSrc,pDst:Pointer;
 begin
+
+ pDst:=nil;
+ if get_dmem_ptr(dst,@pDst,nil) then
+ begin
+  dst:=pDst;
+ end;
+
+ //
  m_bytePerElement:=tiler.m_bytePerElement;
  m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
  //
@@ -600,7 +609,7 @@ begin
 
 end;
 
-Procedure load_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+function load_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 var
  buf:TvTempBuffer;
  vmem:TvPointer;
@@ -609,24 +618,30 @@ var
 
  m_base:Pointer;
 begin
+ Result:=True;
+
  Assert(image.key.params.samples<=1,'image.key.params.samples>1');
 
  m_full_linear_size:=GetLinearSize(image.key,False);
 
  buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
 
- vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL,buf);
 
  if (vmem.FMemory=nil) then
  begin
-  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
+  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE,buf);
  end;
 
- Assert(vmem.FMemory<>nil);
+ if (vmem.FMemory=nil) then
+ begin
+  FreeAndNil(buf);
+  Exit(False);
+ end;
 
  buf.BindMem(vmem);
 
- //Release ref in ReleaseTmp
+ vmem.Release; //FetchMemory
 
  m_base:=nil;
  vkMapMemory(Device.FHandle,
@@ -676,7 +691,7 @@ begin
  Result:=inherited;
 end;
 
-Procedure write_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+function write_1dThin(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 var
  buf:TvTempBufferWriteback;
  vmem:TvPointer;
@@ -684,6 +699,8 @@ var
  m_full_linear_size:Ptruint;
 
 begin
+ Result:=True;
+
  Assert(image.key.params.samples<=1,'image.key.params.samples>1');
 
  m_full_linear_size:=GetLinearSize(image.key,False);
@@ -695,21 +712,27 @@ begin
 
  image.Hold(buf);
 
- vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL);
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL,buf);
 
  if (vmem.FMemory=nil) then
  begin
-  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE);
+  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE,buf);
  end;
 
- Assert(vmem.FMemory<>nil);
+ if (vmem.FMemory=nil) then
+ begin
+  FreeAndNil(buf);
+  Exit(False);
+ end;
 
  buf.BindMem(vmem);
+
+ vmem.Release; //FetchMemory
 
  _Copy_Linear(ImageToBuffer,cmd,buf,image);
 end;
 
-Procedure Load_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+function Load_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 var
  buf:TvHostBuffer;
  BufferImageCopy:TVkBufferImageCopy;
@@ -725,6 +748,7 @@ var
 
  a,d,b:Ptruint;
 begin
+ Result:=True;
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
@@ -734,7 +758,10 @@ begin
                       QWORD(image.key.addr),
                       size);
 
- Assert(buf<>nil);
+ if (buf=nil) then
+ begin
+  Exit(False);
+ end;
 
  m_offset:=buf.FAddr-QWORD(image.key.addr);
 
@@ -833,7 +860,7 @@ begin
 
 end;
 
-Procedure Writeback_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+function Writeback_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 var
  buf:TvHostBuffer;
  BufferImageCopy:TVkBufferImageCopy;
@@ -849,6 +876,7 @@ var
 
  a,d,b:Ptruint;
 begin
+ Result:=True;
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
@@ -858,7 +886,10 @@ begin
                       QWORD(image.key.addr),
                       size);
 
- Assert(buf<>nil);
+ if (buf=nil) then
+ begin
+  Exit(False);
+ end;
 
  m_offset:=buf.FAddr-QWORD(image.key.addr);
 
@@ -947,7 +978,7 @@ begin
 end;
 
 type
- t_load_from_cb =procedure(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+ t_load_from_cb =function(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
  t_write_back_cb=t_load_from_cb;
  t_get_size_cb  =function(const key:TvImageKey):Ptruint;
 
@@ -1053,11 +1084,12 @@ begin
  end;
 end;
 
-procedure pm4_load_from(cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte);
+function pm4_load_from(cmd:TvCustomCmdBuffer;image:TvCustomImage2;IMAGE_USAGE:Byte):Boolean;
 var
  cb:t_load_from_cb;
  change_rate:t_change_rate;
 begin
+ Result:=True;
  if (cmd=nil) or (image=nil) then Exit;
 
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
@@ -1069,8 +1101,8 @@ begin
 
  if image.IsDepthAndStencil then
  begin
-  pm4_load_from(cmd,image.DepthOnly  ,IMAGE_USAGE);
-  pm4_load_from(cmd,image.StencilOnly,IMAGE_USAGE);
+  Result:=Result and pm4_load_from(cmd,image.DepthOnly  ,IMAGE_USAGE);
+  Result:=Result and pm4_load_from(cmd,image.StencilOnly,IMAGE_USAGE);
   Exit;
  end;
 
@@ -1098,9 +1130,11 @@ begin
 
  cmd.BeginLabel('loadfrom');
 
- cb(cmd,image);
+ Result:=cb(cmd,image);
 
  cmd.EndLabel();
+
+ if not Result then Exit;
 
  change_rate.mark_init;
 
@@ -1109,10 +1143,11 @@ begin
  image.assign_vm_track;
 end;
 
-procedure pm4_write_back(cmd:TvCustomCmdBuffer;image:TvCustomImage2);
+function pm4_write_back(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
 var
  cb:t_write_back_cb;
 begin
+ Result:=True;
  if (cmd=nil) or (image=nil) then Exit;
 
  if image.key.params.samples>1 then
@@ -1122,8 +1157,8 @@ begin
 
  if image.IsDepthAndStencil then
  begin
-  pm4_write_back(cmd,image.DepthOnly  );
-  pm4_write_back(cmd,image.StencilOnly);
+  Result:=Result and pm4_write_back(cmd,image.DepthOnly  );
+  Result:=Result and pm4_write_back(cmd,image.StencilOnly);
   Exit;
  end;
 
@@ -1145,9 +1180,11 @@ begin
 
  cmd.BeginLabel('writeback');
 
- cb(cmd,image);
+ Result:=cb(cmd,image);
 
  cmd.EndLabel();
+
+ if not Result then Exit;
 
  image.mark_init;
 

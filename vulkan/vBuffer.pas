@@ -16,7 +16,6 @@ type
   FSize  :TVkDeviceSize;
   FUsage :TVkFlags;
   FBind  :TvPointer;
-  FBRefs :ptruint;
   Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Constructor CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Destructor  Destroy; override;
@@ -210,14 +209,21 @@ end;
 procedure TvBuffer.UnBindMem(do_free:Boolean);
 var
  B:TvPointer;
+ H:Integer;
 begin
  B.FMemory:=TvDeviceMemory(System.InterlockedExchange(Pointer(FBind.FMemory),nil));
  B.FOffset:=FBind.FOffset;
+ H:=System.InterlockedExchangeAdd(FHold,0);
  if (B.FMemory<>nil) then
  begin
   if do_free then
   begin
    B.FMemory.DelDependence(@Self.OnReleaseMem);
+   while (H<>0) do
+   begin
+    B.Drop;
+    Dec(H);
+   end;
    MemManager.FreeMemory(B);
   end;
  end;

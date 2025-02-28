@@ -213,10 +213,7 @@ begin
  FHostBufferSet.Unlock_wr;
  //
 
- if (key.FBuffer<>nil) then
- begin
-  mem:=Default(TvPointer);
- end else
+ if (key.FBuffer=nil) then
  begin
   //create new
 
@@ -224,23 +221,17 @@ begin
 
   if (mem.FMemory=nil) then
   begin
-
    if device_local then
    begin
     mem:=MemManager.FetchHostMap(dmem_addr,Size,False);
-
-    if (mem.FMemory=nil) then
-    begin
-     //ENOMEM
-     Exit(nil);
-    end;
-
-   end else
-   begin
-    //ENOMEM
-    Exit(nil);
    end;
+  end;
 
+  if (mem.FMemory=nil) then
+  begin
+   //try shrink?
+   //ENOMEM
+   Exit(nil);
   end;
 
   key.FBuffer:=TvHostBuffer.Create(Size,ALL_BUFFER_USAGE,@buf_ext);
@@ -276,6 +267,7 @@ begin
   end;
 
   key.FBuffer.Hold(nil); //analog ref in [_FindHostBuffer]
+  mem.Release;           //release [FetchHostMap]
 
   //
   FHostBufferSet.Unlock_wr;
@@ -292,9 +284,7 @@ begin
  if (Result<>nil) then
  begin
   Result.Drop(nil); //release [_FindHostBuffer]
-  mem.Release;      //release [FetchHostMap]
  end;
-
 end;
 
 

@@ -376,6 +376,8 @@ begin
   Assert(false,'addr:0x'+HexStr(readPtrAddress)+' not in dmem!');
  end;
 
+ //TODO: ring bound check, virtual addres prio instead of dmem
+
  hqd^.base_guest_addr:=ringBaseAddress;
  hqd^.base_dmem_addr :=base_dmem_addr;
  hqd^.read_guest_addr:=readPtrAddress;

@@ -6,6 +6,7 @@ interface
 
 uses
  SysUtils,
+ mqueue,
  g23tree,
  Vulkan,
  vDevice,
@@ -65,6 +66,8 @@ type
  TvCustomImage2=class(TvCustomImage)
   //
   key :TvImageKey;
+  //
+  entry:TAILQ_ENTRY;
   //
   size:Ptruint;
   tobj:p_vm_track_object;
@@ -182,6 +185,7 @@ type
 
 var
  FImage2Set:TvImage2Set;
+ FImageList:TAILQ_HEAD;
 
 Procedure TvImage2Set.Lock_wr;
 begin
@@ -1001,17 +1005,20 @@ end;
 procedure _DeleteImage(t:TvCustomImage2);
 begin
  FImage2Set.delete(@t.key);
+ TAILQ_REMOVE(@FImageList,t,@t.entry);
 
  if (t.DepthOnly<>nil) and
     (t.DepthOnly<>t) then
  begin
   FImage2Set.delete(@t.DepthOnly.key);
+  TAILQ_REMOVE(@FImageList,t.DepthOnly,@t.DepthOnly.entry);
  end;
 
  if (t.StencilOnly<>nil) and
     (t.StencilOnly<>t) then
  begin
   FImage2Set.delete(@t.StencilOnly.key);
+  TAILQ_REMOVE(@FImageList,t.StencilOnly,@t.StencilOnly.entry);
  end;
 
  t.Release(nil); //map ref
@@ -1031,6 +1038,7 @@ function _InsertImage(t:TvCustomImage2):Boolean;
 begin
  if FImage2Set.Insert(@t.key) then
  begin
+  TAILQ_INSERT_HEAD(@FImageList,t,@t.entry);
   t.Acquire(nil); //map ref
  end else
  begin
@@ -1040,7 +1048,10 @@ begin
  if (t.DepthOnly<>nil) and
     (t.DepthOnly<>t) then
  begin
-  if not FImage2Set.Insert(@t.DepthOnly.key) then
+  if FImage2Set.Insert(@t.DepthOnly.key) then
+  begin
+   TAILQ_INSERT_HEAD(@FImageList,t.DepthOnly,@t.DepthOnly.entry);
+  end else
   begin
    //alias? -> delete
    _DeleteAlias(t.DepthOnly.key);
@@ -1057,7 +1068,10 @@ begin
  if (t.StencilOnly<>nil) and
     (t.StencilOnly<>t) then
  begin
-  if not FImage2Set.Insert(@t.StencilOnly.key) then
+  if FImage2Set.Insert(@t.StencilOnly.key) then
+  begin
+   TAILQ_INSERT_HEAD(@FImageList,t.StencilOnly,@t.StencilOnly.entry);
+  end else
   begin
    //alias? -> delete
    _DeleteAlias(t.StencilOnly.key);
@@ -1124,12 +1138,43 @@ begin
 
 end;
 
+Function _shrink_images(max:TVkDeviceSize):TVkDeviceSize;
+var
+ node:TvCustomImage2;
+ i:TVkDeviceSize;
+begin
+ Result:=0;
+
+ node:=TvCustomImage2(TAILQ_LAST(@FImageList));
+
+ while (node<>nil) do
+ begin
+
+  if (node.FHold=0) then //lock hold?
+  if (not node.is_invalid) then
+  begin
+   i:=node.GetRequirements.size;
+
+   node.FreeHandle;
+   node.UnBindMem(True);
+
+   Result:=Result+i;
+
+   if (Result>=max) then Break;
+  end;
+
+  node:=TvCustomImage2(TAILQ_PREV(node,@node.entry));
+ end;
+
+end;
+
 function _FetchImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
 label
  _repeat;
 var
  t:TvImage2;
  mem:TvPointer;
+ req:TVkMemoryRequirements;
 begin
  Result:=nil;
 
@@ -1161,10 +1206,31 @@ begin
 
    _SetName(t);
 
+   req:=t.GetRequirements;
+
    mem:=MemManager.FetchMemory(
-     t.GetRequirements,
-     V_PROP_DEVICE_LOCAL or V_PROP_BEST_FIT
+     req,
+     V_PROP_DEVICE_LOCAL or V_PROP_BEST_FIT,
+     t
    );
+
+   if (mem.FMemory=nil) then //NOMEM
+   begin
+    if _shrink_images(req.size)>=req.size then
+    begin
+     //repeat after free?
+     FreeAndNil(t);
+     //
+     goto _repeat;
+    end;
+    //
+    vMemory.MemManager._print_devs;
+    vMemory.MemManager._print_host;
+    //NOMEM error
+    FreeAndNil(t);
+    //
+    Exit(nil);
+   end;
 
    if (t.BindMem(mem)<>VK_SUCCESS) then
    begin
@@ -1226,6 +1292,13 @@ begin
  FImage2Set.Lock_wr;
 
  Result:=_FetchImage(F,usage); // <- Hold(nil)/FetchMemory
+
+ if (Result<>nil) then
+ if (Result<>TvImage2(TAILQ_FIRST(@FImageList))) then
+ begin
+  TAILQ_REMOVE     (@FImageList,Result,@Result.entry);
+  TAILQ_INSERT_HEAD(@FImageList,Result,@Result.entry);
+ end;
 
  //add dep
  cmd.RefTo(Result);

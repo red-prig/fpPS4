@@ -48,7 +48,7 @@ type
   function   OnAlloc(size:Ptruint):Pointer; virtual;
   Procedure  OnFree (P:Pointer   );         virtual;
   function   IsLinearAlloc:Boolean;         virtual;
-  function   RefTo(obj:TvRefsObject):Boolean;
+  function   RefTo(obj:TvRefsObject):Boolean; virtual;
   function   AddDependence(cb:TvReleaseCb):Boolean;
   function   DelDependence(cb:TvReleaseCb):Boolean;
   function   HasDependence:Boolean;

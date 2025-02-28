@@ -68,7 +68,7 @@ type
   FHandle:TVkImage;
   FFormat:TVkFormat; //real used format
   FBind  :TvPointer;
-  FBRefs :ptruint;
+  FSize  :TVkDeviceSize;
   FName  :RawByteString;
   function    is_invalid:Boolean;
   procedure   FreeHandle; virtual;
@@ -1649,6 +1649,9 @@ begin
   Writeln(StdErr,'vkCreateImage:',r);
   Exit;
  end;
+
+ FSize:=GetRequirements.size;
+
  Result:=True;
 end;
 
@@ -1677,20 +1680,29 @@ begin
  if (Result<>VK_SUCCESS) then
  begin
   Writeln(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
+  vMemory.MemManager._print_devs;
+  vMemory.MemManager._print_host;
  end;
 end;
 
 procedure TvCustomImage.UnBindMem(do_free:Boolean);
 var
  B:TvPointer;
+ H:Integer;
 begin
  B.FMemory:=TvDeviceMemory(System.InterlockedExchange(Pointer(FBind.FMemory),nil));
  B.FOffset:=FBind.FOffset;
+ H:=System.InterlockedExchangeAdd(FHold,0);
  if (B.FMemory<>nil) then
  begin
   if do_free then
   begin
    B.FMemory.DelDependence(@Self.OnReleaseMem);
+   while (H<>0) do
+   begin
+    B.Drop;
+    Dec(H);
+   end;
    MemManager.FreeMemory(B);
   end;
  end;

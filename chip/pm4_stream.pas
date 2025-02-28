@@ -673,6 +673,15 @@ begin
   Result^.resource:=r;
  end;
 
+ {
+ TODO: This is a hack for loading storage textures that
+ may not be fully filled, or may only attached only one texture layer.
+ }
+ if (iu_storage in img_usage) then
+ begin
+  mem_usage:=mem_usage or TM_READ;
+ end;
+
  curr.mem_usage:=mem_usage;
  curr.shd_usage:=0;
  curr.clr_usage:=0;

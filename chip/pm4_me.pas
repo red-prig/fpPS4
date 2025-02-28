@@ -22,6 +22,7 @@ uses
 
  Vulkan,
  vDevice,
+ vMemory,
  vBuffer,
  vHostBufferManager,
  vImage,
@@ -41,6 +42,7 @@ uses
  vMetaManager,
 
  vImageTiling,
+ vDependence,
 
  renderdoc,
 
@@ -154,6 +156,8 @@ type
   last :TvCustomCmdPool;
   Procedure Init(Q:TvQueue);
   function  fetch(i:QWORD):TvCustomCmdPool;
+  procedure trim;
+  procedure trim_all;
  end;
 
  TvStreamCmdBuffer=class(TvCmdBuffer)
@@ -180,6 +184,10 @@ type
   Cmd     :TvStreamCmdBuffer;
   stall   :array[t_pm4_stream_type] of TAILQ_HEAD; //TvStreamCmdBuffer
   //
+  dep:TvDependenciesObject;
+  images_size:QWORD;
+  buffer_size:QWORD;
+  //
   procedure Init;
   procedure BeginCmdBuffer;
   procedure FinishCmdBuffer;
@@ -194,6 +202,9 @@ type
   procedure switch_task;
   procedure complete_and_next_task;
   procedure on_idle;
+
+  Procedure RefToParent(obj:TvRefsObject); register;
+  procedure FlushParent; register;
  end;
 
 var
@@ -572,6 +583,24 @@ begin
  Result:=last;
 end;
 
+procedure t_pool_cache.trim;
+begin
+ if (last<>nil) then
+ begin
+  last.Trim;
+ end;
+end;
+
+procedure t_pool_cache.trim_all;
+var
+ i:Byte;
+begin
+ For i:=0 to High(t_pool_line) do
+ begin
+  line[i].Trim;
+ end;
+end;
+
 //
 
 function TvStreamCmdBuffer.OnAlloc(size:Ptruint):Pointer; register;
@@ -588,6 +617,34 @@ end;
 function TvStreamCmdBuffer.IsLinearAlloc:Boolean; register;
 begin
  Result:=True;
+end;
+
+procedure t_me_render_context.RefToParent(obj:TvRefsObject); register;
+begin
+ if (dep=nil) then
+ begin
+  dep:=TvDependenciesObject.Create;
+ end;
+ dep.RefTo(obj);
+ //
+ if obj.InheritsFrom(TvCustomImage) then
+ begin
+  images_size:=images_size+TvCustomImage(obj).FSize;
+ end;
+ if obj.InheritsFrom(TvBuffer) then
+ begin
+  buffer_size:=buffer_size+TvBuffer(obj).FSize;
+ end;
+end;
+
+procedure t_me_render_context.FlushParent; register;
+begin
+ if (dep<>nil) then
+ begin
+  dep.ReleaseAllDependencies(dep);
+ end;
+ images_size:=0;
+ buffer_size:=0;
 end;
 
 //
@@ -666,6 +723,7 @@ begin
  if (r<>VK_SUCCESS) then
  begin
   EndFrameCapture;
+  PrintMemoryBudget;
   Assert(false,'QueueSubmit');
  end;
 
@@ -735,16 +793,17 @@ end;
 
 function t_me_render_context.WaitConfirm:Boolean;
 begin
- Result:=(CmdStatus(stream^.buft)<>VK_NOT_READY);
+ gfx_pool.trim;
 
- if not Result then
- begin
-  switch_task;
- end;
+ FinishCmdBuffer;
+
+ Result:=(CmdStatus(stream^.buft)<>VK_NOT_READY);
 end;
 
 function t_me_render_context.WaitConfirmOrSwitch:Boolean;
 begin
+ gfx_pool.trim;
+
  FinishCmdBuffer;
 
  if (stream=nil) then Exit(True);
@@ -922,6 +981,7 @@ var
  diff:TVkDeviceSize;
 
  resource_instance:p_pm4_resource_instance;
+ b:Boolean;
 begin
  //Writeln('[Prepare_Uniforms]->');
 
@@ -983,19 +1043,38 @@ begin
 
     if (ri=nil) then
     begin
-     ri:=FetchImage(ctx.Cmd,
-                    FImage,
-                    resource_instance^.curr.img_usage
-                   );
+     repeat
+
+      ri:=FetchImage(ctx.Cmd,
+                     FImage,
+                     resource_instance^.curr.img_usage
+                    );
+      if (ri=nil) then
+      begin
+       repeat until ctx.WaitConfirm;
+       ctx.BeginCmdBuffer;
+      end;
+     until (ri<>nil);
 
      Assert(ri<>nil);
+
+     ctx.RefToParent(ri);
 
      resource_instance^.resource^.rimage:=ri;
     end;
 
     //Writeln(ri.key.cformat);
 
-    pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
+    repeat
+
+     b:=pm4_load_from(ctx.Cmd,ri,resource_instance^.curr.mem_usage);
+
+     if (not b) then
+     begin
+      repeat until ctx.WaitConfirm;
+      ctx.BeginCmdBuffer;
+     end;
+    until (b);
 
     ri.PushBarrier(ctx.Cmd,
                    GetAccessMaskImg(resource_instance^.curr),
@@ -1052,29 +1131,38 @@ begin
 
     if (buf=nil) then
     begin
-     if (QWORD(addr)=$CDE3F6666FD) then
-     begin
-      writeln;
-     end;
 
-     buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size);
+     repeat
+
+      buf:=FetchHostBuffer(ctx.Cmd,QWORD(addr),size);
+
+      if (buf=nil) then
+      begin
+       repeat until ctx.WaitConfirm;
+       ctx.BeginCmdBuffer;
+      end;
+     until (buf<>nil);
 
      Assert(buf<>nil);
 
+     ctx.RefToParent(buf);
+
      resource_instance^.resource^.rimage:=buf;
+
+     diff:=QWORD(addr)-buf.FAddr;
+     diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+
+     //TODO: Barrier state cache
+     ctx.Cmd.BufferMemoryBarrier(buf.FHandle,
+                                 VK_ACCESS_BUF_ANY,
+                                 GetAccessMaskBuf(resource_instance^.curr),
+                                 diff,size,
+                                 VK_STAGE_BUF_ANY,
+                                 GetStageMask(BindPoint)
+                                );
+
+
     end;
-
-    diff:=QWORD(addr)-buf.FAddr;
-    diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
-
-    //TODO: Barrier state cache
-    ctx.Cmd.BufferMemoryBarrier(buf.FHandle,
-                                VK_ACCESS_BUF_ANY,
-                                GetAccessMaskBuf(resource_instance^.curr),
-                                diff,size,
-                                VK_STAGE_BUF_ANY,
-                                GetStageMask(BindPoint)
-                               );
 
    end;
 
@@ -1365,7 +1453,7 @@ begin
 
     resource^.rimage:=ri;
 
-    pm4_load_from(ctx.Cmd,ri,i^.curr.mem_usage);
+    //pm4_load_from(ctx.Cmd,ri,i^.curr.mem_usage);
    end;
   end else
   if (resource^.rtype=R_HTILE) then
@@ -1389,7 +1477,7 @@ end;
 
 
 procedure pm4_ClearDepth(var rt_info:t_pm4_rt_info;
-                         CmdBuffer:TvCmdBuffer);
+                         var ctx:t_me_render_context);
 var
  ri:TvImage2;
  cclear:array[0..1] of Boolean;
@@ -1397,18 +1485,20 @@ var
 begin
  //ClearDepthTarget
 
- CmdBuffer.EndRenderPass;
+ ctx.Cmd.EndRenderPass;
 
- CmdBuffer.BeginLabel('ClearDepth');
+ ctx.Cmd.BeginLabel('ClearDepth');
 
- ri:=FetchImage(CmdBuffer,
+ ri:=FetchImage(ctx.Cmd,
                 rt_info.DB_INFO.FImageInfo,
                 [iu_depthstenc]
                 );
 
  Assert(ri<>nil);
 
- ri.PushBarrier(CmdBuffer,
+ ctx.RefToParent(ri);
+
+ ri.PushBarrier(ctx.Cmd,
                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
@@ -1424,12 +1514,14 @@ begin
  range.aspectMask:=(ord(VK_IMAGE_ASPECT_DEPTH_BIT  )*ord(cclear[0])) or
                    (ord(VK_IMAGE_ASPECT_STENCIL_BIT)*ord(cclear[1]));
 
- CmdBuffer.ClearDepthStencilImage(ri.FHandle,
-                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                  @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
-                                  range);
+ ctx.Cmd.ClearDepthStencilImage(ri.FHandle,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
+                            range);
 
- CmdBuffer.EndLabel();
+ ctx.Cmd.EndLabel();
+
+ ctx.FlushParent;
 end;
 
 procedure DumpShaderGroup(ShaderGroup:TvShaderGroup);
@@ -1694,12 +1786,23 @@ begin
 
    if (ri=nil) then
    begin
-    ri:=FetchImage(ctx.Cmd,
-                   ctx.rt_info^.RT_INFO[i].FImageInfo,
-                   {[iu_attachment]}  color_instance[i]^.curr.img_usage
-                   );
+    repeat
+
+     ri:=FetchImage(ctx.Cmd,
+                    ctx.rt_info^.RT_INFO[i].FImageInfo,
+                    {[iu_attachment]}  color_instance[i]^.curr.img_usage
+                    );
+
+     if (ri=nil) then
+     begin
+      repeat until ctx.WaitConfirm;
+      ctx.BeginCmdBuffer;
+     end;
+    until (ri<>nil);
 
     Assert(ri<>nil);
+
+    ctx.RefToParent(ri);
 
     color_instance[i]^.resource^.rimage:=ri;
    end;
@@ -1817,11 +1920,15 @@ begin
    if (d_instance<>nil) then
    begin
     d_instance^.resource^.rimage:=rd;
+
+    ctx.RefToParent(ri);
    end;
 
    if (s_instance<>nil) then
    begin
     s_instance^.resource^.rimage:=rs;
+
+    ctx.RefToParent(ri);
    end;
   end;
 
@@ -2120,7 +2227,7 @@ begin
    end;
   ntClearDepth:
    begin
-    pm4_ClearDepth(node^.rt_info,ctx.Cmd);
+    pm4_ClearDepth(node^.rt_info,ctx);
    end;
   else;
    Assert(false,'pm4_Draw');
@@ -2130,6 +2237,7 @@ begin
 
  pm4_Writeback_After(ctx);
 
+ ctx.FlushParent;
 end;
 
 procedure pm4_Resolve(var ctx:t_me_render_context;node:p_pm4_node_Resolve);
@@ -2155,12 +2263,16 @@ begin
 
  Assert(ri_src<>nil);
 
+ ctx.RefToParent(ri_src);
+
  ri_dst:=FetchImage(ctx.Cmd,
                     node^.RT[1].FImageInfo,
                     [iu_transfer]
                     );
 
  Assert(ri_dst<>nil);
+
+ ctx.RefToParent(ri_dst);
 
  ri_src.PushBarrier(ctx.Cmd,
                     ord(VK_ACCESS_TRANSFER_READ_BIT),
@@ -2188,6 +2300,7 @@ begin
                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                       1,@range);
 
+ ctx.FlushParent;
 end;
 
 procedure pm4_FastClear(var ctx:t_me_render_context;node:p_pm4_node_FastClear);
@@ -2399,6 +2512,8 @@ begin
  /////////
 
  pm4_Writeback_After(ctx);
+
+ ctx.FlushParent;
 end;
 
 function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
@@ -2424,6 +2539,10 @@ begin
  if not ctx.stream^.hint_repeat then
  begin
   ctx.InsertLabel(PChar('WriteEop:0x'+HexStr(QWORD(node^.addr),10)));
+  if p_print_gpu_ops then
+  begin
+   Writeln('WriteEop:0x'+HexStr(QWORD(node^.addr),10));
+  end;
   ctx.stream^.hint_repeat:=True;
  end;
 

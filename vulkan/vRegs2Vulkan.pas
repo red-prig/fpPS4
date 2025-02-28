@@ -1104,6 +1104,14 @@ begin
    Result.FImageView.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
   end;
 
+  if RENDER_TARGET.VIEW.SLICE_START>RENDER_TARGET.VIEW.SLICE_MAX then
+  begin
+   Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_MAX;
+  end else
+  begin
+   Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_START;
+  end;
+
   Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_START;
   Result.FImageView.last_array:=Result.FImageView.base_array;
  end;
@@ -1339,6 +1347,7 @@ var
  DB_DEPTH_VIEW   :TDB_DEPTH_VIEW;
  DB_STENCIL_INFO :TDB_STENCIL_INFO;
  DB_HTILE_SURFACE:TDB_HTILE_SURFACE;
+ SLICE_START:WORD;
 begin
  Result:=Default(TDB_INFO);
 
@@ -1459,7 +1468,15 @@ begin
 
  ////
 
- if (DB_DEPTH_VIEW.SLICE_START<>0) then
+ if DB_DEPTH_VIEW.SLICE_START>DB_DEPTH_VIEW.SLICE_MAX then
+ begin
+  SLICE_START:=DB_DEPTH_VIEW.SLICE_MAX;
+ end else
+ begin
+  SLICE_START:=DB_DEPTH_VIEW.SLICE_START;
+ end;
+
+ if (SLICE_START<>0) then
  begin
   Writeln(stderr,'TODO:DB_DEPTH_VIEW.SLICE_START=',DB_DEPTH_VIEW.SLICE_START);
   Assert (false ,'TODO:DB_DEPTH_VIEW.SLICE_START='+IntToStr(DB_DEPTH_VIEW.SLICE_START));

@@ -35,6 +35,7 @@ type
   __end   :TVkDeviceSize;   // end address
   adj_free:TVkDeviceSize;   // amount of adjacent free space
   max_free:TVkDeviceSize;   // max free space in subtree
+  desc    :Pointer;
  end;
 
  p_gpu_map=^gpu_map;
@@ -57,6 +58,8 @@ type
   //
   Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
   Destructor  Destroy; override;
+  Procedure   remove_all;
+  Procedure   Unmap;
   Procedure   Flush;
   function    Acquire(Sender:TObject):Boolean; override;
   function    Release(Sender:TObject):Boolean; override;
@@ -118,6 +121,8 @@ type
 
    FHosts:TAILQ_HEAD; //TvHostMemory
 
+   FHosts_count:Integer;
+
   public
 
    Constructor Create;
@@ -127,11 +132,14 @@ type
    procedure   PrintMemoryHeaps;
    procedure   PrintMemoryType(typeFilter:TVkUInt32);
 
-   Function    FetchMemory(const mr:TVkMemoryRequirements;prop:TVkMemoryPropertyFlags):TvPointer;
+   Function    FetchMemory(const mr:TVkMemoryRequirements;
+                           prop:TVkMemoryPropertyFlags;
+                           desc:Pointer):TvPointer;
 
    Function    FetchMemory(Size          :TVkDeviceSize;
                            Align         :TVkDeviceSize;
                            memoryTypeBits:TVkUInt32;
+                           desc          :Pointer;
                            best_fit      :Boolean):TvPointer;
 
    Function    FreeMemory(P:TvPointer):Boolean;
@@ -569,7 +577,8 @@ end;
 function gpu_map_insert(
            map  :p_gpu_map;
            start:TVkDeviceSize;
-           __end:TVkDeviceSize
+           __end:TVkDeviceSize;
+           desc :Pointer
           ):Integer;
 var
  new_entry :p_gpu_map_entry;
@@ -598,6 +607,7 @@ begin
  new_entry:=gpu_map_entry_create(map);
  new_entry^.start:=start;
  new_entry^.__end:=__end;
+ new_entry^.desc :=desc;
 
  gpu_map_entry_link(map, prev_entry, new_entry);
  map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
@@ -696,6 +706,7 @@ function gpu_map_find(map   :p_gpu_map;
                       size  :PVkDeviceSize;
                       length:TVkDeviceSize;
                       align :TVkDeviceSize;
+                      desc  :Pointer;
                       mode  :t_gpu_find_mode
                      ):Integer;
 var
@@ -761,7 +772,7 @@ begin
  end else
  if (fmInsert in mode) then
  begin
-  Result:=gpu_map_insert(map, start, start + length);
+  Result:=gpu_map_insert(map, start, start + length, desc);
  end else
  begin
   Result:=GPU_SUCCESS;
@@ -814,9 +825,9 @@ begin
  Result:=GPU_SUCCESS;
 end;
 
-function gpu_map_add(map:p_gpu_map;start,length:TVkDeviceSize):Integer;
+function gpu_map_add(map:p_gpu_map;start,length:TVkDeviceSize;desc:Pointer):Integer;
 begin
- Result:=gpu_map_insert(map, start, start + length);
+ Result:=gpu_map_insert(map, start, start + length, desc);
 end;
 
 function gpu_map_remove(map:p_gpu_map;start:TVkDeviceSize):Integer;
@@ -842,23 +853,29 @@ end;
 
 //
 
+function convert_meminfo(mem_type:Byte;mem_info:PVkMemoryType):TvMemInfo; inline;
+begin
+ Result.heap_index     :=mem_info^.heapIndex;
+ Result.mem_type       :=mem_type;
+ Result.device_local   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ))<>0;
+ Result.device_coherent:=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0;
+ Result.host_visible   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ))<>0;
+ Result.host_coherent  :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ))<>0;
+end;
 
 Constructor TvDeviceMemory.Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
 begin
  FHandle:=Handle;
  FSize  :=Size;
  //
- FMemInfo.heap_index     :=mem_info^.heapIndex;
- FMemInfo.mem_type       :=mem_type;
- FMemInfo.device_local   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ))<>0;
- FMemInfo.device_coherent:=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0;
- FMemInfo.host_visible   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ))<>0;
- FMemInfo.host_coherent  :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ))<>0;
+ FMemInfo:=convert_meminfo(mem_type,mem_info);
  //
  gpu_map_init(@FMap,0,Size);
 end;
 
 Destructor TvDeviceMemory.Destroy;
+var
+ F:TVkDeviceMemory;
 begin
  ReleaseAllDependencies(Self);
  //
@@ -866,13 +883,30 @@ begin
  //
  TGuard.WaitFor(Self);
  //
- if (FHandle<>VK_NULL_HANDLE) then
+ F:=System.InterlockedExchange64(FHandle,VK_NULL_HANDLE);
+ if (F<>VK_NULL_HANDLE) then
  begin
-  vkFreeMemory(Device.FHandle,FHandle,nil);
-  FHandle:=VK_NULL_HANDLE;
+  vkFreeMemory(Device.FHandle,F,nil);
+  //PrintMemoryBudget;
  end;
  //
  inherited;
+end;
+
+Procedure TvDeviceMemory.remove_all;
+begin
+ gpu_map_remove_all(@FMap);
+end;
+
+Procedure TvDeviceMemory.Unmap;
+var
+ F:TVkDeviceMemory;
+begin
+ F:=System.InterlockedExchangeAdd64(FHandle,0);
+ if (F<>VK_NULL_HANDLE) then
+ begin
+  vkUnmapMemory(Device.FHandle,F);
+ end;
 end;
 
 Procedure TvDeviceMemory.Flush;
@@ -895,7 +929,7 @@ end;
 
 function TvDeviceMemory.Acquire(Sender:TObject):Boolean;
 const
- mark_delete:QWORD=QWORD(1) shl (SizeOf(QWORD)*8-1);
+ mark_delete:QWORD=QWORD(1) shl (SizeOf(FRefs)*8-1);
 var
  i:ptruint;
 begin
@@ -909,7 +943,7 @@ end;
 
 function TvDeviceMemory.Release(Sender:TObject):Boolean;
 const
- mark_delete:QWORD=QWORD(1) shl (SizeOf(QWORD)*8-1);
+ mark_delete:QWORD=QWORD(1) shl (SizeOf(FRefs)*8-1);
 var
  i:ptruint;
 begin
@@ -1412,6 +1446,7 @@ begin
   if MemoryBudgetCanBeAlloc(heap_id,Size) then
   begin
    FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
+   //PrintMemoryBudget;
   end else
   begin
    FHandle:=VK_NULL_HANDLE;
@@ -1471,7 +1506,7 @@ end;
 
 //GRANULAR_DEV_BLOCK_SIZE
 
-Function TvMemManager.FetchMemory(const mr:TVkMemoryRequirements;prop:TVkMemoryPropertyFlags):TvPointer;
+Function TvMemManager.FetchMemory(const mr:TVkMemoryRequirements;prop:TVkMemoryPropertyFlags;desc:Pointer):TvPointer;
 var
  i:Byte;
  memoryTypeBits:TVkUInt32;
@@ -1496,12 +1531,13 @@ begin
   end;
  end;
 
- Result:=FetchMemory(mr.size,mr.alignment,memoryTypeBits,best_fit);
+ Result:=FetchMemory(mr.size,mr.alignment,memoryTypeBits,desc,best_fit);
 end;
 
 Function TvMemManager.FetchMemory(Size          :TVkDeviceSize;
                                   Align         :TVkDeviceSize;
                                   memoryTypeBits:TVkUInt32;
+                                  desc          :Pointer;
                                   best_fit      :Boolean):TvPointer;
 label
  _repeat;
@@ -1550,6 +1586,7 @@ begin
                     @_size,
                     Size,
                     Align,
+                    desc,
                     [fmBestfit]
                    )=GPU_SUCCESS then
     begin
@@ -1569,6 +1606,7 @@ begin
                     @_size,
                     Size,
                     Align,
+                    desc,
                     [fmInsert]
                    )=GPU_SUCCESS then
     begin
@@ -1605,7 +1643,7 @@ begin
 
   if (save_node<>nil) then
   begin
-   if gpu_map_add(@save_node.FMap,0,Size)=GPU_SUCCESS then
+   if gpu_map_add(@save_node.FMap,0,Size,desc)=GPU_SUCCESS then
    begin
     Result.FMemory:=save_node;
     Result.FOffset:=0;
@@ -1619,7 +1657,7 @@ begin
  end else
  if best_fit then
  begin
-  if gpu_map_add(@save_node.FMap,save_addr,save_size)=GPU_SUCCESS then
+  if gpu_map_add(@save_node.FMap,save_addr,size,desc)=GPU_SUCCESS then
   begin
    Result.FMemory:=save_node;
    Result.FOffset:=save_addr;
@@ -1680,8 +1718,11 @@ begin
 
  if (FBacked<>nil) then
  begin
-  Result:=Result+FBacked.FSize;
-  ReleaseAndNil(FBacked);
+  node:=FBacked;
+  FBacked:=nil;
+  Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+  Result:=Result+node.FSize;
+  ReleaseAndNil(node);
   if (Result>=max) then Exit;
  end;
 
@@ -1699,7 +1740,8 @@ begin
    Result:=Result+node.FSize;
    //
    TAILQ_REMOVE(@FDevs,node,@node.entry);
-   node.ReleaseAllDependencies(nil);
+   node.ReleaseAllDependencies(node);
+   node.remove_all;
    ReleaseAndNil(node); //list
    //
    if (Result>=max) then Break;
@@ -1713,6 +1755,7 @@ end;
 Function TvMemManager._shrink_host_map(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
 var
  node,prev:TvHostMemory;
+ i:Integer;
 begin
  Result:=0;
 
@@ -1728,8 +1771,9 @@ begin
    //
    Result:=Result+node.FSize;
    //
+   Dec(FHosts_count);
    TAILQ_REMOVE(@FHosts,node,@node.entry);
-   node.ReleaseAllDependencies(nil);
+   node.ReleaseAllDependencies(node);
    ReleaseAndNil(node); //list
    //
    if (Result>=max) then Break;
@@ -1815,6 +1859,7 @@ begin
    begin
     //full in
     _full:
+    Dec(FHosts_count);
     TAILQ_REMOVE(@FHosts,node,@node.entry);
     ReleaseAndNil(node); //list
    end else
@@ -1825,8 +1870,9 @@ begin
    if (node.FHold=0) then //lock Hold?
    begin
     //partial
+    Dec(FHosts_count);
     TAILQ_REMOVE(@FHosts,node,@node.entry);
-    node.ReleaseAllDependencies(nil);
+    node.ReleaseAllDependencies(node);
     ReleaseAndNil(node); //list
    end;
 
@@ -1891,6 +1937,7 @@ begin
   if MemoryBudgetCanBeAlloc(heap_id,tmp) then
   begin
    FHandle:=vkAllocHostMemory(Device.FHandle,tmp,mtindex,Pointer(FStart_align));
+   //PrintMemoryBudget;
   end else
   begin
    FHandle:=VK_NULL_HANDLE;
@@ -1920,6 +1967,7 @@ begin
 
   node.Acquire(nil); //map ref
   TAILQ_INSERT_HEAD(@FHosts,node,@node.entry);
+  Inc(FHosts_count);
  end;
 
  node.Acquire(nil);
@@ -2037,6 +2085,32 @@ begin
 
 end;
 
+function get_desc_str(desc:Pointer):RawByteString;
+begin
+ if (desc=nil) then
+ begin
+  Result:='(nil)';
+ end else
+ begin
+  Result:='(0x'+HexStr(desc)+')'+TObject(desc).ClassName;
+ end;
+end;
+
+procedure gpu_map_print_all(map:p_gpu_map);
+var
+ entry:p_gpu_map_entry;
+begin
+ entry:=map^.header.next;
+
+ while (entry<>@map^.header) do
+ begin
+
+  Writeln('    ',(entry^.start),'..',(entry^.__end),':',(entry^.__end-entry^.start),':',get_desc_str(entry^.desc));
+
+  entry:=entry^.next;
+ end;
+end;
+
 Procedure TvMemManager._print_devs;
 var
  node:TvDeviceMemory;
@@ -2052,6 +2126,8 @@ begin
   Writeln(' 0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
 
   Writeln('   ',(node.FMap.size),'/',(node.FSize),':',(node.FMap.size/node.FSize)*100:0:2,'%');
+
+  gpu_map_print_all(@node.FMap);
 
   node:=TvDeviceMemory(TAILQ_NEXT(node,@node.entry));
  end;
@@ -2181,7 +2257,7 @@ begin
  budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
  if GetMemoryBudget(budget) then
  begin
-  i:=budget.heapUsage[heap_id] + size;
+  i:=budget.heapUsage[heap_id] + size + 128*1024*1024;
 
   Result:=(i<=budget.heapBudget[heap_id]);
  end;
@@ -2191,6 +2267,8 @@ procedure PrintMemoryBudget;
 var
  budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT;
  i:Integer;
+ FMemInfo:TvMemInfo;
+ mem_type:Byte;
 begin
  budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
  if GetMemoryBudget(budget) then
@@ -2199,7 +2277,15 @@ begin
   For i:=0 to VK_MAX_MEMORY_HEAPS-1 do
   if (budget.heapBudget[i]<>0) then
   begin
-   Writeln(' [',i,']:0x',HexStr(budget.heapUsage[i],16),'/',HexStr(budget.heapBudget[i],16),':',
+
+   if MemManager<>nil then
+   begin
+    mem_type:=MemManager.FHeaps[i].def_mem_type;
+
+    FMemInfo:=convert_meminfo(mem_type,@MemManager.FProperties.memoryTypes[mem_type]);
+   end;
+
+   Writeln(' [',i,']:',get_str_mem_info(FMemInfo),':0x',HexStr(budget.heapUsage[i],16),'/',HexStr(budget.heapBudget[i],16),':',
            (budget.heapUsage[i]/budget.heapBudget[i]*100):0:2,'%'
           );
   end;
