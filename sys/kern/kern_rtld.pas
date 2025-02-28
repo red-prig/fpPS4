@@ -365,7 +365,7 @@ begin
       For i:=0 to count-1 do
        if ((self_segs[i].flags and (SELF_PROPS_ENCRYPTED or SELF_PROPS_COMPRESSED))<>0) then
        begin
-        Writeln(StdErr,'exec_load_self:',imgp^.execpath,'is encrypted!');
+        Writeln(StdErr,'exec_load_self:',imgp^.execpath,' is encrypted!');
         FreeMem(self_hdr);
         Exit(ENOEXEC);
        end;
@@ -697,7 +697,7 @@ begin
          ((vaddr and PAGE_MASK)<>0) or
          ((phdr[i].p_offset and PAGE_MASK)<>0) then
       begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,'segment #',i,' is not page aligned');
+       Writeln(StdErr,'scan_phdr:',imgp^.execpath,' segment #',i,' is not page aligned');
        Exit(ENOEXEC);
       end;
 
@@ -789,7 +789,7 @@ begin
 
       if (phdr[i].p_align > 32) then
       begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,'alignment of segment #',i,' it must be less than 32.');
+       Writeln(StdErr,'scan_phdr:',imgp^.execpath,' alignment of segment #',i,' it must be less than 32.');
        Exit(ENOEXEC);
       end;
      end;
