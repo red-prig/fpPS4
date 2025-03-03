@@ -528,6 +528,7 @@ begin
   watchdog_label:=0; //thread can wait
  end;
 
+ wait_me_idle;
 end;
 
 Function gc_map_compute_queue(data:p_map_compute_queue_args):Integer;
