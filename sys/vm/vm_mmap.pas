@@ -1036,7 +1036,7 @@ var
  size,pageoff:vm_size_t;
 begin
  size:=len;
- prot:=prot and VM_PROT_ALL;
+ prot:=((prot shr 1) and 1) or (prot and VM_PROT_ALL);
 
  pageoff:=(vm_size_t(addr) and PAGE_MASK);
  addr:=addr-pageoff;

@@ -1141,7 +1141,7 @@ begin
                        imgp^.obj,
                        offset,
                        vaddr_lo,vaddr_hi,
-                       VM_PROT_RW,prot or VM_PROT_RW,
+                       VM_PROT_RW, VM_PROT_ALL,
                        MAP_COW_NO_BUDGET,
                        nil,
                        false);

@@ -119,8 +119,8 @@ const
                       //0x40000
                       //0x80000
 
+ MAP_ENTRY_2MB_PAGE     =$100000;
  MAP_ENTRY_IN_BUDGET    =$200000;
-
  MAP_ENTRY_NO_COALESCE  =$400000;
 
  //vm_flags_t values
@@ -1909,7 +1909,8 @@ var
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
  old_prot:vm_prot_t;
- ext_flags:Byte;
+const
+ flags_2mb=2;
 begin
  if (start=__end) then
  begin
@@ -1954,9 +1955,9 @@ begin
    end;
   end;
 
-  ext_flags:=2; //current^.ext_flags
+  //flags_2mb:=current^.flags_2mb;
 
-  if ((ext_flags and 2)<>0) then
+  if ((flags_2mb and 2)<>0) then
   begin
    old_prot:=current^.max_protection;
   end else
@@ -1964,7 +1965,7 @@ begin
    old_prot:=current^.max_protection and VM_PROT_GPU_ALL;
   end;
 
-  if ((ext_flags and 1)<>0) then
+  if ((flags_2mb and 1)<>0) then
   begin
    old_prot:=0;
   end;
