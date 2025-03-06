@@ -153,6 +153,14 @@ begin
              end;
             end;
 
+  $C0288011: //sceKernelAllocateMainDirectMemory
+            begin
+             with PAllocateDirectMemory(data)^ do
+             begin
+              Result:=dmem_map_alloc(dmap^.dmem,0,kern_budget.DMEM_LIMIT,len,align,mtype,start);
+             end;
+            end;
+
   $80108002: //sceKernelReleaseDirectMemory
             begin
              with PReleaseDirectMemory(data)^ do
