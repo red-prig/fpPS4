@@ -40,6 +40,7 @@ var
   p_libkernel___end_addr:Pointer;
 
   p_ptc:Int64;
+  p_guest_ptc:PInt64;
 
   p_nsignals:Int64;
   p_nvcsw   :Int64;
@@ -137,6 +138,7 @@ begin
  p_proc.p_randomized_path:='system';
 
  p_proc.p_ptc:=rdtsc();
+ p_proc.p_guest_ptc:=nil;
 end;
 
 end.

@@ -461,6 +461,13 @@ end;
 function sysctl_kern_proc_ptc(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
 begin
  Result:=SYSCTL_OUT(req,@p_proc.p_ptc,SizeOf(Int64));
+ //
+ if (Result=0) then
+ begin
+  //save a ptr to guest memory (libkernel) to modify later
+  //when the process resume (support in debug/pause?)
+  p_proc.p_guest_ptc:=req^.oldptr;
+ end;
 end;
 
 function _copy_libkernel_addr(req:p_sysctl_req):Integer;
