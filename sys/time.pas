@@ -32,6 +32,7 @@ const
  CLOCK_EXT_DEBUG_NETWORK=17; // ORBIS only
  CLOCK_EXT_AD_NETWORK   =18; // ORBIS only
  CLOCK_EXT_RAW_NETWORK  =19; // ORBIS only
+ CLOCK_EXT_BOOT_TIME    =20; // ORBIS only
 
 type
  p_bintime=^bintime;

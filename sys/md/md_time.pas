@@ -369,13 +369,16 @@ begin
   CLOCK_MONOTONIC_FAST,
   CLOCK_UPTIME,
   CLOCK_UPTIME_PRECISE,
-  CLOCK_UPTIME_FAST,
+  CLOCK_UPTIME_FAST:
+   begin
+    //nanouptime + acpi_time_sleep
+    time^:=md_rdtsc_unit;
+   end;
+
   CLOCK_EXT_NETWORK,
-  CLOCK_EXT_DEBUG_NETWORK,
-  CLOCK_EXT_AD_NETWORK,
   CLOCK_EXT_RAW_NETWORK:
    begin
-    //nanouptime + time
+    //nanouptime + SCE_REGMGR_ENT_KEY_DATE_rtc_net/SCE_REGMGR_ENT_KEY_DATE_rtc_net_dbg
     time^:=md_rdtsc_unit;
    end;
 
@@ -396,7 +399,28 @@ begin
   CLOCK_THREAD_CPUTIME_ID:
    begin
     get_thread_cputime(time);
-   end
+   end;
+
+  CLOCK_EXT_DEBUG_NETWORK:
+   begin
+    //sceSblACMgrIsSystemUcred | is_SecureWebProcess
+    //nanouptime + SCE_REGMGR_ENT_KEY_DATE_rtc_net_dbg
+    Exit(EINVAL);
+   end;
+
+  CLOCK_EXT_AD_NETWORK:
+   begin
+    //(sceSblACMgrIsSystemUcred | is_SecureWebProcess) & sceSblRcMgrIsAllowAdClock
+    //nanouptime + SCE_REGMGR_ENT_KEY_DATE_rtc_net_dbg
+    Exit(EINVAL);
+   end;
+
+  CLOCK_EXT_BOOT_TIME:
+   begin
+    //sceSblACMgrIsSystemUcred
+    //get_emctimer_dev
+    Exit(EINVAL);
+   end;
 
   else
    Result:=EINVAL;
