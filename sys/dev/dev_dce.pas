@@ -112,15 +112,14 @@ begin
    begin
     trigger:=dce_handle.Vblank();
    end;
-   //trigger:=True;
+   trigger:=True;
 
    if trigger then
    begin
     vblank.ptime:=GetProcessTime;
     vblank.tsc  :=rdtsc();
 
-    i:=vblank.count;
-    vblank.count:=vblank.count+1;
+    i:=System.InterlockedIncrement64(vblank.count)-1;
    end;
 
   //mtx_unlock(dce_mtx);
