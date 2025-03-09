@@ -16,14 +16,15 @@ uses
 type
  p_attr=^t_attr;
  t_attr=packed record
-  init :QWORD;
+  init :DWORD;
+  index:DWORD;
   attr :t_register_buffer_attr;
  end;
 
  p_buffer=^t_buffer;
  t_buffer=packed record
-  init :QWORD;
-  attr :QWORD;
+  init :DWORD;
+  attr :DWORD;
   left :Pointer; //buffer ptr
   right:Pointer; //Stereo ptr
   left_dmem :Pointer; //buffer ptr
@@ -86,6 +87,8 @@ type
 
   Fflip_count:array[0..15] of Integer;
 
+  FPrevBufIndex:Integer;
+
   Fsubmit_count:array[0..15] of PRTLEvent;
 
   flip_rate:Integer;
@@ -94,7 +97,7 @@ type
   m_attr:array[0.. 3] of t_attr;
   m_bufs:array[0..15] of t_buffer;
 
-  m_sbat:array[0.. 3] of t_attr;
+  m_sbat:t_attr;
 
   dst_cache:Pointer;
 
@@ -108,7 +111,8 @@ type
   function   UnregisterBufferAttribute(attrid:Byte):Integer; override;
   function   RegisterBuffer           (buf:p_register_buffer):Integer; override;
   function   UnregisterBuffer         (index:Integer):Integer; override;
-  procedure  SubmitNode               (Node:PQNodeSubmit;is_eop:Boolean);
+  procedure  SubmitNode               (Node:PQNodeSubmit);
+  procedure  SetBuffer                (bufferIndex:Integer;is_eop:Boolean);
   procedure  ResetBuffer              (bufferIndex:Integer);
   procedure  HackPreWait              (submit:p_submit_flip);
   function   SubmitFlip               (submit:p_submit_flip):Integer; override;
@@ -199,6 +203,8 @@ var
 begin
  Result:=inherited;
 
+ FPrevBufIndex:=-1;
+
  Writeln('OpenMainWindows->');
 
  hWindow:=p_host_ipc.OpenMainWindows();
@@ -262,18 +268,21 @@ function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_
 begin
  if (m_attr[attrid].init<>0) then Exit(EINVAL);
 
- m_attr[attrid].init:=1;
- m_attr[attrid].attr:=attr^;
+ m_attr[attrid].init :=1;
+ m_attr[attrid].index:=attrid;
+ m_attr[attrid].attr :=attr^;
 
  Result:=0;
 end;
 
 function TDisplayHandleSoft.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
 begin
- if (m_sbat[attrid].init<>0) then Exit(EBUSY);
+ if (m_attr[attrid].init=0) then Exit(EINVAL);
+ if (m_sbat.init<>0)        then Exit(EBUSY);
 
- m_sbat[attrid].attr:=attr^;
- m_sbat[attrid].init:=1;
+ m_sbat.attr :=attr^;
+ m_sbat.index:=attrid;
+ System.InterlockedExchange(m_sbat.init,1);
 
  Result:=0;
 end;
@@ -281,6 +290,7 @@ end;
 function TDisplayHandleSoft.UnregisterBufferAttribute(attrid:Byte):Integer;
 begin
  if (m_attr[attrid].init=0) then Exit(EINVAL);
+ if (m_sbat.init<>0) and (m_sbat.index=attrid) then Exit(EBUSY);
 
  m_attr[attrid].init:=0;
 
@@ -345,7 +355,8 @@ end;
 
 function TDisplayHandleSoft.UnregisterBuffer(index:Integer):Integer;
 begin
- if (m_bufs[index].init=0) then Exit(EINVAL);
+ if (m_bufs[index].init=0)  then Exit(EINVAL);
+ if (Fflip_count[index]<>0) then Exit(EBUSY);
 
  m_bufs[index].init:=0;
 
@@ -924,32 +935,9 @@ begin
  ReleaseDC(hWindow, hdc);
 end;
 
-procedure TDisplayHandleSoft.SubmitNode(Node:PQNodeSubmit;is_eop:Boolean);
-var
- //prev:Integer;
- bufferIndex:Integer;
+procedure TDisplayHandleSoft.SubmitNode(Node:PQNodeSubmit);
 begin
- bufferIndex:=Node^.submit.bufferIndex;
-
  Node^.tsc:=rdtsc();
-
- //set label
- if (bufferIndex<>-1) then
- begin
-  //prev:=labels[bufferIndex];
-
-  labels[bufferIndex]:=1;
-
-  //Writeln('[SubmitNode] labels[',bufferIndex,']=',prev,'->',labels[bufferIndex],' *',Fflip_count[bufferIndex]);
-
-  //
-  System.InterlockedIncrement(Fflip_count[bufferIndex]);
-  //
-  if not is_eop then
-  begin
-   System.InterlockedIncrement(last_status.flipPendingNum0);
-  end;
- end;
 
  FSubmitQueue.Push(Node);
 
@@ -961,29 +949,47 @@ end;
 
 procedure gc_wakeup_internal_ptr(ptr:Pointer); register; external;
 
-procedure TDisplayHandleSoft.ResetBuffer(bufferIndex:Integer);
-//var
-// prev:Integer;
+procedure TDisplayHandleSoft.SetBuffer(bufferIndex:Integer;is_eop:Boolean);
 begin
-
- //reset label
+ //set buf label
  if (bufferIndex<>-1) then
  begin
-  System.InterlockedDecrement(last_status.flipPendingNum0);
+  labels[bufferIndex]:=1;
+  gc_wakeup_internal_ptr(@labels[bufferIndex]);
+  //
+  System.InterlockedIncrement(Fflip_count[bufferIndex]);
+ end;
 
-  //prev:=labels[bufferIndex];
+ //inc pending frame
+ System.InterlockedIncrement(last_status.flipPendingNum0);
 
-  if (System.InterlockedDecrement(Fflip_count[bufferIndex])=0) then
-  begin
-   labels[bufferIndex]:=0;
-   gc_wakeup_internal_ptr(@labels[bufferIndex]);
-  end;
+ //inc GPU pending frame
+ if is_eop then
+ begin
+  System.InterlockedIncrement(last_status.gcQueueNum);
+ end;
+end;
 
-  //Writeln('[ResetBuffer] labels[',bufferIndex,']=',prev,'->',labels[bufferIndex],' *',Fflip_count[bufferIndex]);
+procedure TDisplayHandleSoft.ResetBuffer(bufferIndex:Integer);
+begin
+ System.InterlockedDecrement(last_status.flipPendingNum0);
 
+ //dec flip counter
+ if (bufferIndex<>-1) then
+ begin
+  System.InterlockedDecrement(Fflip_count[bufferIndex]);
+ end;
+
+ //reset prev label
+ if (FPrevBufIndex<>-1) then
+ begin
+  labels[FPrevBufIndex]:=0;
+  gc_wakeup_internal_ptr(@labels[FPrevBufIndex]);
  end;
  labels[16]:=0; //bufferIndex = -1 ???
 
+ //save buffer index to next reset
+ FPrevBufIndex:=bufferIndex;
 end;
 
 {
@@ -1029,7 +1035,9 @@ begin
 
  HackPreWait(submit);
 
- SubmitNode(Node,False);
+ SetBuffer(submit^.bufferIndex,False);
+
+ SubmitNode(Node);
 
  Result:=0;
 end;
@@ -1072,12 +1080,7 @@ begin
  Flip^.submit   :=Node;
  Flip^.submit_id:=submit_id;
 
- System.InterlockedIncrement(last_status.gcQueueNum);
-
- if (submit^.bufferIndex<>-1) then
- begin
-  System.InterlockedIncrement(last_status.flipPendingNum0);
- end;
+ SetBuffer(submit^.bufferIndex,True);
 
  STAILQ_INSERT_TAIL(@FFlipQueue,Flip,@Flip^.entry);
 
@@ -1103,17 +1106,17 @@ begin
 
    Node:=Flip^.submit;
 
-   Flip^.submit   :=nil;
-   Flip^.submit_id:=0;
+   Flip^.submit:=nil;
    FFlipAlloc.Free(Flip);
 
+   //dec GPU pending mark
    System.InterlockedDecrement(last_status.gcQueueNum);
 
    mtx_unlock(dce_mtx^);
 
    if (Node<>nil) then
    begin
-    SubmitNode(Node,True);
+    SubmitNode(Node);
    end;
 
    Exit;
@@ -1154,17 +1157,15 @@ var
  attr:p_attr;
 begin
  //submit attr
- For i:=0 to High(m_sbat) do
- if (m_sbat[i].init<>0) then
+ if (m_sbat.init<>0) then
  begin
+  i:=m_sbat.index;
+  //
   mtx_lock(dce_mtx^);
-
-   m_attr[i].init:=1;
-   m_attr[i].attr:=m_sbat[i].attr;
-
-   m_sbat[i].init:=0;
-
+   m_attr[i].attr:=m_sbat.attr;
   mtx_unlock(dce_mtx^);
+  //
+  m_sbat.init:=0;
  end;
 
  submit:=@Node^.submit;
