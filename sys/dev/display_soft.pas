@@ -68,6 +68,13 @@ type
 
  TSubmitQueue=TIntrusiveMPSCQueue;
 
+ TBufStateChange=(
+  bSubmitFlip,
+  bSubmitFlipEop,
+  bTriggerFlipEop,
+  bFinishFlip
+ );
+
  TDisplayHandleSoft=class(TDisplayHandle)
 
   hWindow:THandle;
@@ -112,8 +119,7 @@ type
   function   RegisterBuffer           (buf:p_register_buffer):Integer; override;
   function   UnregisterBuffer         (index:Integer):Integer; override;
   procedure  SubmitNode               (Node:PQNodeSubmit);
-  procedure  SetBuffer                (bufferIndex:Integer;is_eop:Boolean);
-  procedure  ResetBuffer              (bufferIndex:Integer);
+  procedure  BufferChangeState        (state:TBufStateChange;bufferIndex:Integer);
   procedure  HackPreWait              (submit:p_submit_flip);
   function   SubmitFlip               (submit:p_submit_flip):Integer; override;
   function   SubmitFlipEop            (submit:p_submit_flip;submit_id:QWORD):Integer; override;
@@ -949,47 +955,71 @@ end;
 
 procedure gc_wakeup_internal_ptr(ptr:Pointer); register; external;
 
-procedure TDisplayHandleSoft.SetBuffer(bufferIndex:Integer;is_eop:Boolean);
+procedure TDisplayHandleSoft.BufferChangeState(state:TBufStateChange;bufferIndex:Integer);
 begin
- //set buf label
- if (bufferIndex<>-1) then
- begin
-  labels[bufferIndex]:=1;
-  gc_wakeup_internal_ptr(@labels[bufferIndex]);
-  //
-  System.InterlockedIncrement(Fflip_count[bufferIndex]);
+ case state of
+  bSubmitFlip:
+    begin
+     if (bufferIndex<>-1) then
+     begin
+      //set buf label
+      labels[bufferIndex]:=1;
+      gc_wakeup_internal_ptr(@labels[bufferIndex]);
+      //inc flip counter
+      System.InterlockedIncrement(Fflip_count[bufferIndex]);
+     end;
+
+     //inc pending frame
+     System.InterlockedIncrement(last_status.flipPendingNum0);
+    end;
+  bSubmitFlipEop:
+    begin
+     if (bufferIndex<>-1) then
+     begin
+      //inc flip counter
+      System.InterlockedIncrement(Fflip_count[bufferIndex]);
+     end;
+
+     //inc pending frame
+     System.InterlockedIncrement(last_status.flipPendingNum0);
+
+     //inc GPU pending frame
+     System.InterlockedIncrement(last_status.gcQueueNum);
+    end;
+  bTriggerFlipEop:
+    begin
+     //dec GPU pending mark
+     System.InterlockedDecrement(last_status.gcQueueNum);
+
+     if (bufferIndex<>-1) then
+     begin
+      //set buf label
+      labels[bufferIndex]:=1;
+      gc_wakeup_internal_ptr(@labels[bufferIndex]);
+     end;
+    end;
+  bFinishFlip:
+    begin
+     System.InterlockedDecrement(last_status.flipPendingNum0);
+
+     //dec flip counter
+     if (bufferIndex<>-1) then
+     begin
+      System.InterlockedDecrement(Fflip_count[bufferIndex]);
+     end;
+
+     //reset prev label
+     if (FPrevBufIndex<>-1) then
+     begin
+      labels[FPrevBufIndex]:=0;
+      gc_wakeup_internal_ptr(@labels[FPrevBufIndex]);
+     end;
+     labels[16]:=0; //bufferIndex = -1 ???
+
+     //save buffer index to next reset
+     FPrevBufIndex:=bufferIndex;
+    end;
  end;
-
- //inc pending frame
- System.InterlockedIncrement(last_status.flipPendingNum0);
-
- //inc GPU pending frame
- if is_eop then
- begin
-  System.InterlockedIncrement(last_status.gcQueueNum);
- end;
-end;
-
-procedure TDisplayHandleSoft.ResetBuffer(bufferIndex:Integer);
-begin
- System.InterlockedDecrement(last_status.flipPendingNum0);
-
- //dec flip counter
- if (bufferIndex<>-1) then
- begin
-  System.InterlockedDecrement(Fflip_count[bufferIndex]);
- end;
-
- //reset prev label
- if (FPrevBufIndex<>-1) then
- begin
-  labels[FPrevBufIndex]:=0;
-  gc_wakeup_internal_ptr(@labels[FPrevBufIndex]);
- end;
- labels[16]:=0; //bufferIndex = -1 ???
-
- //save buffer index to next reset
- FPrevBufIndex:=bufferIndex;
 end;
 
 {
@@ -1035,7 +1065,7 @@ begin
 
  HackPreWait(submit);
 
- SetBuffer(submit^.bufferIndex,False);
+ BufferChangeState(bSubmitFlip,submit^.bufferIndex);
 
  SubmitNode(Node);
 
@@ -1080,7 +1110,7 @@ begin
  Flip^.submit   :=Node;
  Flip^.submit_id:=submit_id;
 
- SetBuffer(submit^.bufferIndex,True);
+ BufferChangeState(bSubmitFlipEop,submit^.bufferIndex);
 
  STAILQ_INSERT_TAIL(@FFlipQueue,Flip,@Flip^.entry);
 
@@ -1109,8 +1139,7 @@ begin
    Flip^.submit:=nil;
    FFlipAlloc.Free(Flip);
 
-   //dec GPU pending mark
-   System.InterlockedDecrement(last_status.gcQueueNum);
+   BufferChangeState(bTriggerFlipEop,Node^.submit.bufferIndex);
 
    mtx_unlock(dce_mtx^);
 
@@ -1187,7 +1216,7 @@ begin
 
  mtx_lock(dce_mtx^);
 
-  ResetBuffer(submit^.bufferIndex);
+  BufferChangeState(bFinishFlip,submit^.bufferIndex);
 
   last_status.flipArg        :=submit^.flipArg;
   last_status.flipArg2       :=submit^.flipArg2;
