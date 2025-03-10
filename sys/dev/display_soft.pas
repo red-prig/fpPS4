@@ -980,9 +980,6 @@ begin
       System.InterlockedIncrement(Fflip_count[bufferIndex]);
      end;
 
-     //inc pending frame
-     System.InterlockedIncrement(last_status.flipPendingNum0);
-
      //inc GPU pending frame
      System.InterlockedIncrement(last_status.gcQueueNum);
     end;
@@ -990,6 +987,9 @@ begin
     begin
      //dec GPU pending mark
      System.InterlockedDecrement(last_status.gcQueueNum);
+
+     //inc pending frame
+     System.InterlockedIncrement(last_status.flipPendingNum0);
 
      if (bufferIndex<>-1) then
      begin
@@ -1000,6 +1000,7 @@ begin
     end;
   bFinishFlip:
     begin
+     //dec pending frame
      System.InterlockedDecrement(last_status.flipPendingNum0);
 
      //dec flip counter
