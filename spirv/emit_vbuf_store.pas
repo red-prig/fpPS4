@@ -126,8 +126,17 @@ begin
      begin
 
       Case lc.info.NFMT of
+       BUF_NUM_FORMAT_FLOAT:
+         begin
+          //float->float
+          For i:=0 to lc.elem_count-1 do
+          begin
+           lc.elm[i]:=OpFToF(lc.elm[i],lc.elem_orig);
+          end;
+         end;
        BUF_NUM_FORMAT_UNORM:
          begin
+          //float->byte
           For i:=0 to lc.elem_count-1 do
           begin
            lc.elm[i]:=OpFMulToS(lc.elm[i],lc.elem_orig.High);
