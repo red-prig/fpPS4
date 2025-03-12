@@ -1094,6 +1094,11 @@ begin
    Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
   end;
 
+  if (Result=0) then
+  begin
+   Result:=g_port_table[port_id].f_len;
+  end;
+
  mtx_unlock(g_port_lock);
 
  //Writeln('sceAudioOutOutput<-');
@@ -1219,6 +1224,8 @@ var
  port_id  :Integer;
  port_type:Integer;
  //
+ f_len    :DWORD;
+ //
  i,f:DWORD;
  //
  params:array[0..24] of TAudioOutParam;
@@ -1298,6 +1305,16 @@ begin
       end;
     end;
     //
+    if (i=0) then
+    begin
+     f_len:=g_port_table[port_id].f_len;
+    end else
+    if (f_len<>g_port_table[port_id].f_len) then
+    begin
+     Result:=SCE_AUDIO_OUT_ERROR_INVALID_SIZE;
+     goto _unlock;
+    end;
+    //
     params[i].handle:=g_port_table[port_id];
     params[i].ptr   :=param[i].ptr;
    end else
@@ -1317,6 +1334,10 @@ begin
 
  mtx_unlock(g_port_lock);
 
+ if (Result=0) then
+ begin
+  Result:=f_len;
+ end;
 end;
 
 function ps4_sceAudioOutGetSystemState(state:pSceAudioOutSystemState):Integer;
