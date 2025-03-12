@@ -18,22 +18,22 @@ const
 type
  PShaderBinaryInfo=^TShaderBinaryInfo;
  TShaderBinaryInfo=bitpacked record
-  signature:array[0..6] of AnsiChar;  // 'OrbShdr'
-  version:Byte;                       // ShaderBinaryInfoVersion
+  signature:array[0..6] of AnsiChar; // 'OrbShdr'
+  version  :Byte;                    // ShaderBinaryInfoVersion
 
-  pssl_or_cg   :bit1;                 // 1 = PSSL / Cg, 0 = IL / shtb
-  cached       :bit1;                 // 1 = when compile, debugging source was cached.  May only make sense for PSSL=1
-  m_type       :bit4;                 // See enum ShaderBinaryType
-  source_type  :bit2;                 // See enum ShaderSourceType
-  length       :bit24;                // Binary code length (does not include this structure or any of its preceding associated tables)
+  pssl_or_cg   :bit1;                // 1 = PSSL / Cg, 0 = IL / shtb
+  cached       :bit1;                // 1 = when compile, debugging source was cached.  May only make sense for PSSL=1
+  m_type       :bit4;                // See enum ShaderBinaryType
+  source_type  :bit2;                // See enum ShaderSourceType
+  length       :bit24;               // Binary code length (does not include this structure or any of its preceding associated tables)
 
   chunkUsageBaseOffsetInDW:Byte;     // in DW, which starts at ((uint32_t*)&ShaderBinaryInfo) - m_chunkUsageBaseOffsetInDW; max is currently 7 dwords (128 T# + 32 V# + 20 CB V# + 16 UAV T#/V#)
-  numInputUsageSlots:Byte;           // Up to 16 user data reg slots + 128 extended user data dwords supported by CUE; up to 16 user data reg slots + 240 extended user data dwords supported by Gnm::InputUsageSlot
-  isSrt              :bit1;          // 1 if this shader uses shader resource tables and has an SrtDef table embedded below the input usage table and any extended usage info
-  isSrtUsedInfoValid :bit1;          // 1 if SrtDef::m_isUsed=0 indicates an element is definitely unused; 0 if SrtDef::m_isUsed=0 indicates only that the element is not known to be used (m_isUsed=1 always indicates a resource is known to be used)
-  isExtendedUsageInfo:bit1;          // 1 if this shader has extended usage info for the InputUsage table embedded below the input usage table
-  reserved2:bit5; //1;
-  reserved3:Byte; //5
+  numInputUsageSlots      :Byte;     // Up to 16 user data reg slots + 128 extended user data dwords supported by CUE; up to 16 user data reg slots + 240 extended user data dwords supported by Gnm::InputUsageSlot
+  isSrt                   :bit1;     // if this shader uses shader resource tables and has an SrtDef table embedded below the input usage table and any extended usage info
+  isSrtUsedInfoValid      :bit1;     // if SrtDef::m_isUsed=0 indicates an element is definitely unused; 0 if SrtDef::m_isUsed=0 indicates only that the element is not known to be used (m_isUsed=1 always indicates a resource is known to be used)
+  isExtendedUsageInfo     :bit1;     // if this shader has extended usage info for the InputUsage table embedded below the input usage table
+  reserved2               :bit5;
+  reserved3               :Byte;
 
   shaderHash0:DWORD;                 // Association hash first 4 bytes
   shaderHash1:DWORD;                 // Association hash second 4 bytes

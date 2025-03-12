@@ -63,7 +63,7 @@ end;
 
 Function TAudioOutNull.Open(const device_id:RawByteString):Boolean;
 begin
- f_period   :=((QWORD(1000000) * QWORD(f_len)) + (48000 div 2)) div 48000;
+ f_period   :=((QWORD(1000000) * QWORD(f_len)) + (f_freq div 2)) div f_freq;
  f_last_time:=0;
  Result:=True;
 end;
