@@ -354,6 +354,7 @@ type
 
   indexBase   :QWORD;
   indexOffset :DWORD;
+  vertexOffset:DWORD;
   indexCount  :DWORD;
   numInstances:DWORD;
 
@@ -426,13 +427,15 @@ type
   procedure BuildDraw    (ntype:t_pm4_node_type;
                           var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
-                          var UC_REG:TUSERCONFIG_REG_SHORT);
+                          var UC_REG:TUSERCONFIG_REG_SHORT;
+                          indexOffset:DWORD);
   procedure DrawIndex2   (var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
   procedure DrawIndexOffset2(var SG_REG:TSH_REG_GFX_GROUP;
                              var CX_REG:TCONTEXT_REG_GROUP;
-                             var UC_REG:TUSERCONFIG_REG_SHORT);
+                             var UC_REG:TUSERCONFIG_REG_SHORT;
+                             indexOffset:DWORD);
   procedure DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
@@ -1667,7 +1670,8 @@ end;
 procedure t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
                                  var SG_REG:TSH_REG_GFX_GROUP;
                                  var CX_REG:TCONTEXT_REG_GROUP;
-                                 var UC_REG:TUSERCONFIG_REG_SHORT);
+                                 var UC_REG:TUSERCONFIG_REG_SHORT;
+                                 indexOffset:DWORD);
 var
  GPU_REGS:TGPU_REGS;
 
@@ -1687,7 +1691,8 @@ begin
  Build_rt_info(node,node^.rt_info,GPU_REGS);
 
  node^.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
- node^.indexOffset :=CX_REG.VGT_INDX_OFFSET;
+ node^.indexOffset :=indexOffset;
+ node^.vertexOffset:=CX_REG.VGT_INDX_OFFSET;
  node^.indexCount  :=UC_REG.VGT_NUM_INDICES;
  node^.numInstances:=UC_REG.VGT_NUM_INSTANCES;
 
@@ -1724,7 +1729,7 @@ procedure t_pm4_stream.DrawIndex2(var SG_REG:TSH_REG_GFX_GROUP;
 begin
  if ColorControl(CX_REG) then Exit;
 
- BuildDraw(ntDrawIndex2,SG_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndex2,SG_REG,CX_REG,UC_REG,0);
 end;
 
 procedure t_pm4_stream.DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
@@ -1733,16 +1738,17 @@ procedure t_pm4_stream.DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
 begin
  if ColorControl(CX_REG) then Exit;
 
- BuildDraw(ntDrawIndexAuto,SG_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndexAuto,SG_REG,CX_REG,UC_REG,0);
 end;
 
 procedure t_pm4_stream.DrawIndexOffset2(var SG_REG:TSH_REG_GFX_GROUP;
                                         var CX_REG:TCONTEXT_REG_GROUP;
-                                        var UC_REG:TUSERCONFIG_REG_SHORT);
+                                        var UC_REG:TUSERCONFIG_REG_SHORT;
+                                        indexOffset:DWORD);
 begin
  if ColorControl(CX_REG) then Exit;
 
- BuildDraw(ntDrawIndexOffset2,SG_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndexOffset2,SG_REG,CX_REG,UC_REG,indexOffset);
 end;
 
 procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);

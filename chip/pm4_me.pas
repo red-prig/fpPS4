@@ -2222,18 +2222,18 @@ begin
  case node^.ntype of
   ntDrawIndex2:
    begin
-    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.indexCount);
+    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
+    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
    end;
   ntDrawIndexOffset2:
    begin
-    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.indexCount);
+    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
+    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
    end;
   ntDrawIndexAuto:
    begin
-    Writeln('DrawIndexAuto(',node^.indexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexAuto(node^.indexOffset,node^.indexCount);
+    Writeln('DrawIndexAuto(',node^.vertexOffset,',',node^.indexCount,')');
+    ctx.Cmd.DrawIndexAuto(node^.vertexOffset,node^.indexCount);
    end;
   ntClearDepth:
    begin
@@ -3024,7 +3024,7 @@ begin
  end;
  }
 
- //Writeln('me_test_mem:',get_dce_label_id(addr_dmem),' ',node^.refValue);
+ //Writeln('me_test_mem:labels[',get_dce_label_id(dmem),']=',dmem^,' refValue=',node^.refValue,' compareFunc=',node^.compareFunc);
 
  val:=dmem^ and node^.mask;
  ref:=node^.refValue;

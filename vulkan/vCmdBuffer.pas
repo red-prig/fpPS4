@@ -203,8 +203,8 @@ type
   Procedure   WriteEos(eventType:Byte;dst:Pointer;value:DWORD;isBlocking:Boolean);
   Procedure   WriteEvent(eventType:Byte);
 
-  Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
-  Procedure   DrawIndexAuto   (indexOffset,indexCount:DWORD);
+  Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD);
+  Procedure   DrawIndexAuto   (vertexOffset,indexCount:DWORD);
  end;
 
 implementation
@@ -1513,14 +1513,14 @@ end;
 function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
 begin
  Case INDEX_TYPE of
-  VK_INDEX_TYPE_UINT16   :Result:=16;
-  VK_INDEX_TYPE_UINT32   :Result:=32;
-  VK_INDEX_TYPE_UINT8_EXT:Result:=8;
+  VK_INDEX_TYPE_UINT16   :Result:=2;
+  VK_INDEX_TYPE_UINT32   :Result:=4;
+  VK_INDEX_TYPE_UINT8_EXT:Result:=1;
   else                    Result:=0;
  end;
 end;
 
-Procedure TvCmdBuffer.DrawIndexOffset2(IndexBase:Pointer;indexOffset,indexCount:DWORD);
+Procedure TvCmdBuffer.DrawIndexOffset2(IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD);
 var
  rb:TvHostBuffer;
  Size:TVkDeviceSize;
@@ -1568,7 +1568,7 @@ begin
          indexCount,     //indexCount
          FinstanceCount, //instanceCount
          indexOffset,    //firstIndex
-         0,              //vertexOffset
+         vertexOffset,   //vertexOffset
          0);             //firstInstance
     end;
   DI_PT_QUADLIST:
@@ -1586,7 +1586,7 @@ begin
        4,               //indexCount
        1,               //instanceCount
        indexOffset+i*4, //firstIndex
-       0,               //vertexOffset
+       vertexOffset,    //vertexOffset
        0);              //firstInstance
      end;
     end;
@@ -1596,7 +1596,7 @@ begin
 
 end;
 
-Procedure TvCmdBuffer.DrawIndexAuto(indexOffset,indexCount:DWORD);
+Procedure TvCmdBuffer.DrawIndexAuto(vertexOffset,indexCount:DWORD);
 var
  i,h:DWORD;
 begin
@@ -1624,7 +1624,7 @@ begin
       FCmdbuf,
       indexCount,     //vertexCount
       FinstanceCount, //instanceCount
-      indexOffset,    //firstVertex
+      vertexOffset,   //firstVertex
       0);             //firstInstance
     end;
 
@@ -1652,10 +1652,10 @@ begin
        Inc(cmd_count);
        vkCmdDraw(
            FCmdbuf,
-           4,               //vertexCount
-           1,               //instanceCount
-           indexOffset+i*3, //firstVertex
-           0);              //firstInstance
+           4,                //vertexCount
+           1,                //instanceCount
+           vertexOffset+i*3, //firstVertex
+           0);               //firstInstance
       end;
 
      end else
@@ -1667,7 +1667,7 @@ begin
        FCmdbuf,
        indexCount,     //vertexCount
        FinstanceCount, //instanceCount
-       indexOffset,    //firstVertex
+       vertexOffset,   //firstVertex
        0);             //firstInstance
      end;
 
@@ -1686,10 +1686,10 @@ begin
       Inc(cmd_count);
       vkCmdDraw(
           FCmdbuf,
-          4,               //vertexCount
-          1,               //instanceCount
-          indexOffset+i*4, //firstVertex
-          0);              //firstInstance
+          4,                //vertexCount
+          1,                //instanceCount
+          vertexOffset+i*4, //firstVertex
+          0);               //firstInstance
      end;
     end;
   //DI_PT_QUADSTRIP:;

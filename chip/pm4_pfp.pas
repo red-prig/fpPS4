@@ -1118,7 +1118,7 @@ begin
   Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
  end;
 
- if (Body^.destTcL2<>0) then Exit; //write to L2
+ //if (Body^.destTcL2<>0) then Exit; //write to L2
 
  pctx^.stream[stGfxDcb].EventWriteEop(Pointer(Body^.address),Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
@@ -1137,6 +1137,7 @@ begin
   PS_DONE:;
   else
    Assert(False,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
+   //Writeln(stderr,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
  end;
 
  if p_print_gpu_ops then
@@ -1149,6 +1150,7 @@ begin
  if (Body^.eventIndex<>EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP) then
  begin
   Assert(False,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
+  //Writeln(stderr,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
  end;
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
@@ -1706,14 +1708,14 @@ begin
  end;
 
  pctx^.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
- pctx^.CX_REG.VGT_INDX_OFFSET          :=Body^.indexOffset;
  pctx^.CX_REG.VGT_DMA_SIZE             :=Body^.indexCount;
  pctx^.UC_REG.VGT_NUM_INDICES          :=Body^.indexCount;
  pctx^.CX_REG.VGT_DRAW_INITIATOR       :=Body^.drawInitiator;
 
  pctx^.stream[stGfxDcb].DrawIndexOffset2(pctx^.SG_REG,
                                          pctx^.CX_REG,
-                                         pctx^.UC_REG);
+                                         pctx^.UC_REG,
+                                         Body^.indexOffset);
 end;
 
 procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
@@ -1777,7 +1779,7 @@ begin
  Assert(pctx^.stream_type=stGfxDcb);
 
  //stallCommandBufferParser
- //wait idle me?
+ //PFP waits until the ME completes all preceding commands before allowing the next batch to proceed.
 
  pctx^.Flush_stream(stGfxDcb);
 end;
