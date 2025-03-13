@@ -153,7 +153,7 @@ type
   UC_REG                  :TUSERCONFIG_REG_SHORT;                       // 0xC000
  end;
 
-function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
+function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
 
 //
 
@@ -1822,22 +1822,14 @@ begin
   Assert(false,'swapMode:'+IntToStr(CX_REG^.VGT_DMA_INDEX_TYPE.SWAP_MODE));
  end;
 
- Case UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE of
-  VGT_INDEX_16:Result:=VK_INDEX_TYPE_UINT16;
-  VGT_INDEX_32:Result:=VK_INDEX_TYPE_UINT32;
-  VGT_INDEX_8 :Result:=VK_INDEX_TYPE_UINT8_EXT;
-  else         Result:=VK_INDEX_TYPE_NONE_KHR;
- end;
+ Result:=TVkIndexType(UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE and 1);
 end;
 
-function GET_INDEX_TYPE_SIZE(i:TVkIndexType):Byte;
+function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte; inline;
+const
+ _s:array[0..1] of Byte=(2,4);
 begin
- Case i of
-  VK_INDEX_TYPE_UINT16   :Result:=16;
-  VK_INDEX_TYPE_UINT32   :Result:=32;
-  VK_INDEX_TYPE_UINT8_EXT:Result:=8;
-  else                    Result:=0;
- end;
+ Result:=_s[ord(INDEX_TYPE) and 1];
 end;
 
 function TGPU_REGS.get_reg(i:word):DWORD;

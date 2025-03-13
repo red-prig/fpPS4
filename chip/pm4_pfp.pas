@@ -1636,9 +1636,8 @@ procedure onIndexType(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXTYPE);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE:=Body^.indexType;
- pctx^.CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE :=Body^.swapMode;
- pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE    :=Body^.indexType;
+ pctx^.CX_REG.VGT_DMA_INDEX_TYPE:=Body^.data;
+ pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE:=pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE;
 end;
 
 procedure onIndexBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBASE);

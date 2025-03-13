@@ -733,10 +733,8 @@ type
 
  PPM4CMDDRAWINDEXTYPE=^TPM4CMDDRAWINDEXTYPE;
  TPM4CMDDRAWINDEXTYPE=packed record
-  header   :PM4_TYPE_3_HEADER;
-  indexType:bit2;  // < select 16 Vs 32bit index
-  swapMode :bit2;  // < DMA swap mode
-  reserved :bit28;
+  header:PM4_TYPE_3_HEADER;
+  data  :TVGT_DMA_INDEX_TYPE; // < select 16 Vs 32bit index
  end;
 
  PPM4CMDDRAWINDEX2=^TPM4CMDDRAWINDEX2;

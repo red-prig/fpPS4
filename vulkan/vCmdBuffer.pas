@@ -1510,14 +1510,11 @@ begin
  DebugReport.CmdEndLabel(FCmdbuf);
 end;
 
-function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
+function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte; inline;
+const
+ _s:array[0..1] of Byte=(2,4);
 begin
- Case INDEX_TYPE of
-  VK_INDEX_TYPE_UINT16   :Result:=2;
-  VK_INDEX_TYPE_UINT32   :Result:=4;
-  VK_INDEX_TYPE_UINT8_EXT:Result:=1;
-  else                    Result:=0;
- end;
+ Result:=_s[ord(INDEX_TYPE) and 1];
 end;
 
 Procedure TvCmdBuffer.DrawIndexOffset2(IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD);
