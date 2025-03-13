@@ -882,7 +882,7 @@ begin
    vpshufb %ymm0, %ymm1, %ymm1
 
    vmovdqa %ymm1, (%rax)
-  end;
+  end ['rax'];
   //
   Inc(buf,32);
   Dec(count8dwords);
