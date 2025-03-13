@@ -744,7 +744,7 @@ begin
    'B':v:=6;
    'A':v:=7;
    else
-       v:=2; //error?
+       v:=0; //incorrect value is interpreted as 0
   end;
   case i of
    1:Result.x:=v;

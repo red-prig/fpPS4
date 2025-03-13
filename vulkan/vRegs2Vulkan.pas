@@ -2291,7 +2291,7 @@ begin
   6:Result:=VK_SWIZZLE_B;
   7:Result:=VK_SWIZZLE_A;
   else
-    Result:=VK_SWIZZLE_I; //what is the actual behavior when the value is incorrect?
+    Result:=VK_SWIZZLE_Z; //incorrect value is interpreted as 0
  end;
 end;
 
