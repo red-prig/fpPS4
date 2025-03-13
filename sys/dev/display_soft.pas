@@ -859,6 +859,36 @@ begin
 
 end;
 
+procedure BGRAFlip(buf:Pointer;count8dwords:QWORD);
+const
+ CSHIFT:array[0..3] of QWORD=(
+ //A R G B A R G B
+  $0704050603000102,
+  $0F0C0D0E0B08090A,
+  $1714151613101112,
+  $1F1C1D1E1B18191A
+ );
+begin
+ asm
+  vmovdqu CSHIFT(%rip), %ymm0
+ end;
+ while (count8dwords<>0) do
+ begin
+  asm
+   mov buf, %rax
+
+   vmovdqa (%rax), %ymm1
+
+   vpshufb %ymm0, %ymm1, %ymm1
+
+   vmovdqa %ymm1, (%rax)
+  end;
+  //
+  Inc(buf,32);
+  Dec(count8dwords);
+ end;
+end;
+
 procedure SoftFlip(hWindow:THandle;buf:p_buffer;attr:p_attr;p_dst:PPointer);
 var
  hdc:THandle;
@@ -909,6 +939,11 @@ begin
   bi.bmiHeader.biWidth:=(bi.bmiHeader.biWidth+63) and (not 63);
 
   dst:=buf^.left_dmem;
+ end;
+
+ if (attr^.attr.pixelFormat=SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB) then
+ begin
+  BGRAFlip(dst,bi.bmiHeader.biWidth*bi.bmiHeader.biHeight div 8);
  end;
 
  //flip
