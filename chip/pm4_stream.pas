@@ -568,6 +568,7 @@ var
  tmp:t_pm4_resource;
 begin
  if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit(nil);
+ if (rkey.params.invalid<>0) then Exit(nil);
 
  tmp:=Default(t_pm4_resource);
  tmp.rtype:=R_IMG;
@@ -717,6 +718,7 @@ var
  i:p_pm4_resource_instance;
 begin
  if (rkey.cformat=VK_FORMAT_UNDEFINED) then Exit(nil);
+ if (rkey.params.invalid<>0) then Exit(nil);
 
  r:=fetch_image_resource   (rkey,hint);
  i:=fetch_resource_instance(scope,r,mem_usage,img_usage);

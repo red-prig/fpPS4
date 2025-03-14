@@ -482,11 +482,13 @@ var
  pSrc,pDst:Pointer;
 begin
 
+ {
  pDst:=nil;
  if get_dmem_ptr(dst,@pDst,nil) then
  begin
   dst:=pDst;
  end;
+ }
 
  //
  m_bytePerElement:=tiler.m_bytePerElement;
@@ -1094,7 +1096,12 @@ begin
 
  if (IMAGE_USAGE and TM_READ)=0 then Exit;
 
- if image.key.params.samples>1 then
+ if (image.key.params.samples>1) then
+ begin
+  Exit;
+ end;
+
+ if (image.key.params.invalid<>0) then
  begin
   Exit;
  end;
@@ -1150,7 +1157,12 @@ begin
  Result:=True;
  if (cmd=nil) or (image=nil) then Exit;
 
- if image.key.params.samples>1 then
+ if (image.key.params.samples>1) then
+ begin
+  Exit;
+ end;
+
+ if (image.key.params.invalid<>0) then
  begin
   Exit;
  end;

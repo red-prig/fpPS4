@@ -991,6 +991,12 @@ begin
   With UniformBuilder.FImages[i] do
   begin
 
+   if (FImage.params.invalid<>0) then
+   begin
+    //skip
+    Continue;
+   end;
+
    resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
 
    if (resource_instance=nil) then
@@ -1185,26 +1191,39 @@ var
  aiv:array[0..15] of TVkImageView;
  MView:TvImageViewKey;
 begin
- p:=0;
- For i:=FView.base_level to FView.last_level do
+ if (ri=nil) then
  begin
-  MView:=FView;
-  MView.base_level:=i;
-  MView.last_level:=i;
-  //
-  iv:=ri.FetchView(ctx.Cmd,MView,iu_storage);
-  aiv[p]:=iv.FHandle;
-  //
-  Inc(p);
- end;
 
- //fill by 16?
+  For i:=0 to 15 do
+  begin
+   aiv[i]:=VK_NULL_HANDLE;
+  end;
 
- while (p<16) do
+ end else
  begin
-  aiv[p]:=iv.FHandle;
-  //
-  Inc(p);
+
+  p:=0;
+  For i:=FView.base_level to FView.last_level do
+  begin
+   MView:=FView;
+   MView.base_level:=i;
+   MView.last_level:=i;
+   //
+   iv:=ri.FetchView(ctx.Cmd,MView,iu_storage);
+   aiv[p]:=iv.FHandle;
+   //
+   Inc(p);
+  end;
+
+  //fill by 16?
+
+  while (p<16) do
+  begin
+   aiv[p]:=iv.FHandle;
+   //
+   Inc(p);
+  end;
+
  end;
 
  DescriptorGroup.BindStorages(fset,bind,
@@ -1234,6 +1253,8 @@ var
  range:TVkDeviceSize;
 
  resource_instance:p_pm4_resource_instance;
+
+ Layout:TVkImageLayout;
 begin
  DescriptorGroup:=ctx.Cmd.FetchDescriptorInterface(BindPoint);
 
@@ -1244,59 +1265,107 @@ begin
   With UniformBuilder.FImages[i] do
   begin
 
-   resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
+   if (FImage.params.invalid<>0) then
+   begin
 
-   Assert(resource_instance<>nil);
+    if (limits.nullDescriptor<>VK_TRUE) then
+    begin
+     Assert(false,'unsupported nullDescriptor');
+    end;
 
-   ri:=TvImage2(resource_instance^.resource^.rimage);
+    case btype of
+     vbSampled:
+      begin
+       DescriptorGroup.BindImage(fset,bind,
+                                 VK_NULL_HANDLE,
+                                 VK_IMAGE_LAYOUT_GENERAL);
+      end;
+     vbStorage:
+      begin
+       DescriptorGroup.BindStorage(fset,bind,
+                                   VK_NULL_HANDLE,
+                                   VK_IMAGE_LAYOUT_GENERAL);
+      end;
+     vbMipStorage:
+      begin
+       BindMipStorage(ctx,
+                      fset,bind,
+                      DescriptorGroup,
+                      nil,
+                      FView,
+                      VK_IMAGE_LAYOUT_GENERAL);
 
-   Assert(ri<>nil);
+      end;
+     else
+      Assert(false);
+    end;
 
-   case btype of
-    vbSampled:
-     begin
-      iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
+   end else
+   begin
+    resource_instance:=ctx.node^.scope.find_image_resource_instance(FImage);
 
-      Writeln('BindImage:->'#13#10,
-              ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
-              ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+    Assert(resource_instance<>nil);
 
-      DescriptorGroup.BindImage(fset,bind,
-                                iv.FHandle,
-                                GetImageLayout(resource_instance^.curr));
-     end;
-    vbStorage:
-     begin
-      //reset dst_sel
-      FView.dstSel:=Default(TvDstSel);
-      //
+    //ri:=TvImage2(resource_instance^.resource^.rimage);
 
-      iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
+    ri:=FetchImage(ctx.Cmd,
+                   FImage,
+                   resource_instance^.curr.img_usage
+                  );
 
-      Writeln('BindStorage:->'#13#10,
-              ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
-              ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+    Assert(ri<>nil);
 
-      DescriptorGroup.BindStorage(fset,bind,
-                                  iv.FHandle,
-                                  GetImageLayout(resource_instance^.curr));
-     end;
-    vbMipStorage:
-     begin
-      //reset dst_sel
-      FView.dstSel:=Default(TvDstSel);
-      //
+    Layout:=GetImageLayout(resource_instance^.curr);
 
-      BindMipStorage(ctx,
-                     fset,bind,
-                     DescriptorGroup,
-                     ri,
-                     FView,
-                     GetImageLayout(resource_instance^.curr));
+    case btype of
+     vbSampled:
+      begin
+       iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
+       Assert(iv<>nil);
 
-     end;
-    else
-     Assert(false);
+       Writeln('BindImage:->'#13#10,
+               ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
+               ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+
+       DescriptorGroup.BindImage(fset,bind,
+                                 iv.FHandle,
+                                 Layout);
+      end;
+     vbStorage:
+      begin
+       //reset dst_sel
+       FView.dstSel:=Default(TvDstSel);
+       //
+
+       iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
+       Assert(iv<>nil);
+
+       Writeln('BindStorage:->'#13#10,
+               ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
+               ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+
+       DescriptorGroup.BindStorage(fset,bind,
+                                   iv.FHandle,
+                                   Layout);
+      end;
+     vbMipStorage:
+      begin
+       //reset dst_sel
+       FView.dstSel:=Default(TvDstSel);
+       //
+
+       BindMipStorage(ctx,
+                      fset,bind,
+                      DescriptorGroup,
+                      ri,
+                      FView,
+                      Layout);
+
+      end;
+     else
+      Assert(false);
+    end;
+
    end;
 
   end;

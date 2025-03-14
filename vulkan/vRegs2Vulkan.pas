@@ -1910,9 +1910,17 @@ begin
  Result:=VK_FORMAT_UNDEFINED;
  if (PV=nil) then Exit;
 
- if (PV^.dfmt=BUF_DATA_FORMAT_INVALID) then
- begin
-  Exit(VK_FORMAT_UNDEFINED);
+ Case PV^.nfmt of
+  BUF_NUM_FORMAT_RESERVED_6:
+   Exit(VK_FORMAT_UNDEFINED);
+  else;
+ end;
+
+ case PV^.dfmt of
+  BUF_DATA_FORMAT_INVALID,
+  BUF_DATA_FORMAT_RESERVED_15:
+   Exit(VK_FORMAT_UNDEFINED);
+  else;
  end;
 
  Case PV^.nfmt of
@@ -2024,6 +2032,36 @@ function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
 begin
  Result:=VK_FORMAT_UNDEFINED;
  if (PT=nil) then Exit;
+
+ Case PT^.nfmt of
+  IMG_NUM_FORMAT_RESERVED_6 ,
+  IMG_NUM_FORMAT_RESERVED_8 ,
+  IMG_NUM_FORMAT_RESERVED_10,
+  IMG_NUM_FORMAT_RESERVED_11,
+  IMG_NUM_FORMAT_RESERVED_12,
+  IMG_NUM_FORMAT_RESERVED_13,
+  IMG_NUM_FORMAT_RESERVED_14,
+  IMG_NUM_FORMAT_RESERVED_15:
+   Exit(VK_FORMAT_UNDEFINED);
+  else;
+ end;
+
+ Case PT^.dfmt of
+  IMG_DATA_FORMAT_INVALID    ,
+  IMG_DATA_FORMAT_RESERVED_15,
+  IMG_DATA_FORMAT_RESERVED_23,
+  IMG_DATA_FORMAT_RESERVED_24,
+  IMG_DATA_FORMAT_RESERVED_25,
+  IMG_DATA_FORMAT_RESERVED_26,
+  IMG_DATA_FORMAT_RESERVED_27,
+  IMG_DATA_FORMAT_RESERVED_28,
+  IMG_DATA_FORMAT_RESERVED_29,
+  IMG_DATA_FORMAT_RESERVED_30,
+  IMG_DATA_FORMAT_RESERVED_31,
+  IMG_DATA_FORMAT_1_REVERSED :
+   Exit(VK_FORMAT_UNDEFINED);
+  else;
+ end;
 
  Case PT^.nfmt of
   IMG_NUM_FORMAT_UNORM  :
@@ -2195,6 +2233,11 @@ begin
 
  Result.Addr:=Pointer(PT^.base shl 8);
  Result.cformat:=_get_tsharp4_cformat(PT);
+
+ if (Result.cformat=VK_FORMAT_UNDEFINED) then
+ begin
+  Result.params.invalid:=1;
+ end;
 
  Case PT^._type of
   SQ_RSRC_IMG_1D,

@@ -492,7 +492,7 @@ end;
 /////////
 
 const
- dst_sel_char:array[0..7] of AnsiChar='01__RGBA';
+ dst_sel_char:array[0..7] of AnsiChar='0123RGBA';
 
 function _get_dst_sel_str(x,y,z,w:Byte):RawByteString;
 begin
