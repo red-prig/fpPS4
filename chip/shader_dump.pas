@@ -7,6 +7,7 @@ interface
 uses
  Classes,
  SysUtils,
+ md_systm,
  kern_authinfo,
  kern_proc,
  murmurhash,
@@ -107,13 +108,19 @@ begin
 end;
 
 Procedure DUMP_USER_DATA(F:THandle;base:Pointer;REG:WORD;USER_DATA:PDWORD);
+const
+ InputUsageSize=1024; //size is unknow
 var
  i:Integer;
  buf:Pointer;
+ InputUsagePtr:Pointer;
  size:DWORD;
  USEAGE_DATA:TUSER_DATA_USEAGE;
 begin
  USEAGE_DATA:=_calc_usage(_calc_shader_info(base),USER_DATA);
+ //
+ InputUsagePtr:=nil;
+ //
  For i:=0 to 15 do
  begin
   Case USEAGE_DATA[i] of
@@ -132,12 +139,22 @@ begin
      buf:=getBufferAddress(USER_DATA[i],USER_DATA[i+1]);
      if (buf<>nil) then
      begin
-      size:=256; //size is unknow
-      DUMP_BLOCK(F,REG+i,buf,size);
+      if (InputUsagePtr=nil) then
+      begin
+       InputUsagePtr:=GetMem(InputUsageSize);
+      end;
+      FillChar(InputUsagePtr^,InputUsageSize,0);
+      md_copyin(buf,InputUsagePtr,InputUsageSize,nil);
+      DUMP_BLOCK(F,REG+i,InputUsagePtr,InputUsageSize);
      end;
     end;
 
   end;
+ end;
+ //
+ if (InputUsagePtr<>nil) then
+ begin
+  FreeMem(InputUsagePtr);
  end;
 end;
 

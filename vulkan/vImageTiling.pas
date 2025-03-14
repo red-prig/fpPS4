@@ -765,7 +765,7 @@ begin
   Exit(False);
  end;
 
- m_offset:=buf.FAddr-QWORD(image.key.addr);
+ m_offset:=QWORD(image.key.addr)-buf.FAddr;
 
  image.PushBarrier(cmd,
                    ord(VK_ACCESS_TRANSFER_WRITE_BIT),
@@ -893,7 +893,7 @@ begin
   Exit(False);
  end;
 
- m_offset:=buf.FAddr-QWORD(image.key.addr);
+ m_offset:=QWORD(image.key.addr)-buf.FAddr;
 
  image.PushBarrier(cmd,
                    ord(VK_ACCESS_TRANSFER_READ_BIT),

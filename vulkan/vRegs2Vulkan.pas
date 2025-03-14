@@ -158,13 +158,13 @@ function GET_INDEX_TYPE_SIZE(INDEX_TYPE:TVkIndexType):Byte;
 //
 
 function _get_vsharp_cformat(PV:PVSharpResource4):TVkFormat;
-function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
+function _get_tsharp4_cformat(PT:PTSharpResource4;hint:s_image_usage):TVkFormat;
 
-function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
-function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
+function _get_tsharp4_image_info(PT:PTSharpResource4;hint:s_image_usage):TvImageKey;
+function _get_tsharp8_image_info(PT:PTSharpResource8;hint:s_image_usage):TvImageKey;
 
-function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
-function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
+function _get_tsharp4_image_view(PT:PTSharpResource4;hint:s_image_usage):TvImageViewKey;
+function _get_tsharp8_image_view(PT:PTSharpResource8;hint:s_image_usage):TvImageViewKey;
 
 function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
 
@@ -2028,7 +2028,7 @@ begin
  end;
 end;
 
-function _get_tsharp4_cformat(PT:PTSharpResource4):TVkFormat;
+function _get_tsharp4_cformat(PT:PTSharpResource4;hint:s_image_usage):TVkFormat;
 begin
  Result:=VK_FORMAT_UNDEFINED;
  if (PT=nil) then Exit;
@@ -2147,7 +2147,8 @@ begin
     IMG_DATA_FORMAT_16_16_16_16 :Result:=VK_FORMAT_R16G16B16A16_UINT;
 
     IMG_DATA_FORMAT_32          :
-     if IsTileModeDepth(PT^.tiling_idx) then
+     if (not (iu_storage in hint)) and
+        IsTileModeDepth(PT^.tiling_idx) then
      begin
       Result:=VK_FORMAT_D32_SFLOAT;
      end else
@@ -2192,7 +2193,8 @@ begin
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SINT;
 
     IMG_DATA_FORMAT_32         :
-     if IsTileModeDepth(PT^.tiling_idx) then
+     if (not (iu_storage in hint)) and
+        IsTileModeDepth(PT^.tiling_idx) then
      begin
       Result:=VK_FORMAT_D32_SFLOAT;
      end else
@@ -2234,7 +2236,8 @@ begin
     IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_SFLOAT;
 
     IMG_DATA_FORMAT_32         :
-     if IsTileModeDepth(PT^.tiling_idx) then
+     if (not (iu_storage in hint)) and
+        IsTileModeDepth(PT^.tiling_idx) then
      begin
       Result:=VK_FORMAT_D32_SFLOAT;
      end else
@@ -2258,13 +2261,13 @@ begin
  Assert(Result<>VK_FORMAT_UNDEFINED,'[_get_tsharp4_cformat] dfmt:'+_get_tex_dfmt_str(PT^.dfmt)+' nfmt:'+_get_tex_nfmt_str(PT^.nfmt));
 end;
 
-function _get_tsharp4_image_info(PT:PTSharpResource4):TvImageKey;
+function _get_tsharp4_image_info(PT:PTSharpResource4;hint:s_image_usage):TvImageKey;
 begin
  Result:=Default(TvImageKey);
  if (PT=nil) then Exit;
 
  Result.Addr:=Pointer(PT^.base shl 8);
- Result.cformat:=_get_tsharp4_cformat(PT);
+ Result.cformat:=_get_tsharp4_cformat(PT,hint);
 
  if (Result.cformat=VK_FORMAT_UNDEFINED) then
  begin
@@ -2317,9 +2320,9 @@ begin
  Result.params.pad_height:=Result.params.height;
 end;
 
-function _get_tsharp8_image_info(PT:PTSharpResource8):TvImageKey;
+function _get_tsharp8_image_info(PT:PTSharpResource8;hint:s_image_usage):TvImageKey;
 begin
- Result:=_get_tsharp4_image_info(PTSharpResource4(PT));
+ Result:=_get_tsharp4_image_info(PTSharpResource4(PT),hint);
  //
  Result.params.pitch:=PT^.pitch+1;
  //
@@ -2369,14 +2372,14 @@ end;
 
 function _get_lod(w:Word):TVkFloat; forward;
 
-function _get_tsharp4_image_view(PT:PTSharpResource4):TvImageViewKey;
+function _get_tsharp4_image_view(PT:PTSharpResource4;hint:s_image_usage):TvImageViewKey;
 var
  t:Byte;
 begin
  Result:=Default(TvImageViewKey);
  if (PT=nil) then Exit;
 
- Result.cformat:=_get_tsharp4_cformat(PT);
+ Result.cformat:=_get_tsharp4_cformat(PT,hint);
 
  Case PT^._type of
   SQ_RSRC_IMG_1D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D);
@@ -2423,9 +2426,9 @@ begin
  //Result.last_level:=0; /////
 end;
 
-function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
+function _get_tsharp8_image_view(PT:PTSharpResource8;hint:s_image_usage):TvImageViewKey;
 begin
- Result:=_get_tsharp4_image_view(PTSharpResource4(PT));
+ Result:=_get_tsharp4_image_view(PTSharpResource4(PT),hint);
  //
  Case PT^._type of
   SQ_RSRC_IMG_CUBE:

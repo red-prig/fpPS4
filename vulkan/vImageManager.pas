@@ -527,7 +527,7 @@ end;
 
 function TvImage2.FetchViewRaw(cmd:TvCustomCmdBuffer;const F:TvImageViewKey;usage:TVkFlags):TvImageView2;
 var
- key2:TvImageViewKey;
+ key_view:TvImageViewKey;
 
  i:TvImageView2Set.Iterator;
  t:TvImageView2;
@@ -543,18 +543,31 @@ begin
  if (Self=nil) then Exit;
  if (FHandle=VK_NULL_HANDLE) then Exit;
 
- if (usage=0) then
- begin
-  usage:=GET_VK_IMAGE_USAGE_DEFAULT(F.cformat);
+ key_view:=F;
+
+ case FFormat of
+  VK_FORMAT_R32_UINT,
+  VK_FORMAT_R32_SINT,
+  VK_FORMAT_R32_SFLOAT:
+    if (key_view.cformat=VK_FORMAT_D32_SFLOAT) then
+    begin
+     //downlift to image
+     key_view.cformat:=FFormat;
+    end;
+  else;
  end;
 
- key2:=F;
- key2.fusage:=usage;
+ if (usage=0) then
+ begin
+  usage:=GET_VK_IMAGE_USAGE_DEFAULT(key_view.cformat);
+ end;
+
+ key_view.fusage:=usage;
 
  rw_wlock(lock);
 
  t:=nil;
- i:=FViews.find(@key2);
+ i:=FViews.find(@key_view);
  if (i.Item<>nil) then
  begin
   t:=TvImageView2(ptruint(i.Item^)-ptruint(@TvImageView2(nil).key));
@@ -563,18 +576,18 @@ begin
   cinfo:=Default(TVkImageViewCreateInfo);
   cinfo.sType       :=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   cinfo.image       :=FHandle;
-  cinfo.viewType    :=TVkImageViewType(F.vtype);
-  cinfo.format      :=F.cformat;
-  cinfo.components.r:=TVkComponentSwizzle(F.dstSel.x);
-  cinfo.components.g:=TVkComponentSwizzle(F.dstSel.y);
-  cinfo.components.b:=TVkComponentSwizzle(F.dstSel.z);
-  cinfo.components.a:=TVkComponentSwizzle(F.dstSel.w);
+  cinfo.viewType    :=TVkImageViewType(key_view.vtype);
+  cinfo.format      :=key_view.cformat;
+  cinfo.components.r:=TVkComponentSwizzle(key_view.dstSel.x);
+  cinfo.components.g:=TVkComponentSwizzle(key_view.dstSel.y);
+  cinfo.components.b:=TVkComponentSwizzle(key_view.dstSel.z);
+  cinfo.components.a:=TVkComponentSwizzle(key_view.dstSel.w);
 
-  cinfo.subresourceRange.aspectMask    :=GetAspectMaskByFormat(F.cformat);
-  cinfo.subresourceRange.baseMipLevel  :=F.base_level;
-  cinfo.subresourceRange.levelCount    :=F.last_level-F.base_level+1;
-  cinfo.subresourceRange.baseArrayLayer:=F.baseArrayLayer;
-  cinfo.subresourceRange.layerCount    :=F.layerCount;
+  cinfo.subresourceRange.aspectMask    :=GetAspectMaskByFormat(key_view.cformat);
+  cinfo.subresourceRange.baseMipLevel  :=key_view.base_level;
+  cinfo.subresourceRange.levelCount    :=key_view.last_level-key_view.base_level+1;
+  cinfo.subresourceRange.baseArrayLayer:=key_view.baseArrayLayer;
+  cinfo.subresourceRange.layerCount    :=key_view.layerCount;
 
   if (cinfo.subresourceRange.baseArrayLayer +
       cinfo.subresourceRange.layerCount) > self.key.params.layerCount
@@ -629,13 +642,13 @@ begin
   uinfo.usage:=usage;
 
   if limits.VK_EXT_image_view_min_lod and
-     (F.minLod<>0) then
+     (key_view.minLod<>0) then
   begin
    uinfo.pNext:=@minfo;
    //
    minfo:=Default(TVkImageViewMinLodCreateInfoEXT);
    minfo.sType :=VK_STRUCTURE_TYPE_IMAGE_VIEW_MIN_LOD_CREATE_INFO_EXT;
-   minfo.minLod:=F.minLod;
+   minfo.minLod:=key_view.minLod;
   end;
 
   Writeln('vkCreateImageView:',cinfo.format);
@@ -652,7 +665,7 @@ begin
   t:=TvImageView2.Create;
   t.FHandle:=FView;
   t.Parent :=Self;
-  t.key    :=key2;
+  t.key    :=key_view;
 
   t.SetObjectName('V_'+_get_dst_sel_str(t.key.dstSel)+
                    '_L['+IntToStr(t.key.base_level)+'-'+IntToStr(t.key.last_level)+']'+

@@ -2029,6 +2029,10 @@ begin
 
   ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
 
+  Writeln('BindDepth:->'#13#10,
+          ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
+          ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+
   //
   if limits.VK_KHR_imageless_framebuffer then
   begin

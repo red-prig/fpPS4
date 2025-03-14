@@ -1482,6 +1482,7 @@ end;
 Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
+ hint:s_image_usage;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1494,8 +1495,16 @@ begin
  b.bind  :=bind;
  b.memuse:=_get_buf_mem_usage(flags);
 
- b.FImage:=_get_tsharp4_image_info(PT);
- b.FView :=_get_tsharp4_image_view(PT);
+ if (btype in [vbStorage,vbMipStorage]) then
+ begin
+  hint:=[iu_storage];
+ end else
+ begin
+  hint:=[];
+ end;
+
+ b.FImage:=_get_tsharp4_image_info(PT,hint);
+ b.FView :=_get_tsharp4_image_view(PT,hint);
 
  Insert(b,FImages,Length(FImages));
 end;
@@ -1503,6 +1512,7 @@ end;
 Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
 var
  b:TImageBindExt;
+ hint:s_image_usage;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1515,8 +1525,16 @@ begin
  b.bind  :=bind;
  b.memuse:=_get_buf_mem_usage(flags);
 
- b.FImage:=_get_tsharp8_image_info(PT);
- b.FView :=_get_tsharp8_image_view(PT);
+ if (btype in [vbStorage,vbMipStorage]) then
+ begin
+  hint:=[iu_storage];
+ end else
+ begin
+  hint:=[];
+ end;
+
+ b.FImage:=_get_tsharp8_image_info(PT,hint);
+ b.FView :=_get_tsharp8_image_view(PT,hint);
 
  Insert(b,FImages,Length(FImages));
 end;
