@@ -47,7 +47,7 @@ var
 begin
  if is_const_soffset(FSPI.MUBUF.SOFFSET) then
  begin
-  adr.soffset:=get_soffset_const_int(FSPI.MUBUF.SOFFSET);
+  adr.soffset:=get_soffset_const_int(FSPI.MUBUF.SOFFSET,FSPI.INLINE32);
  end else
  begin
   ofs:=get_ssrc8(FSPI.MUBUF.SOFFSET);

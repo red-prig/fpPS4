@@ -1385,6 +1385,7 @@ end;
 function is_consistents(const chains:TsrChains;count:Byte):Boolean;
 var
  parent:TsrDataLayout;
+ pIndex:TsrRegNode;
  offset,t:PtrUint;
  i:Byte;
 begin
@@ -1395,12 +1396,15 @@ begin
  if (chains[0]=nil) then Exit;
  parent:=chains[0].parent;
  offset:=chains[0].offset;
+ pIndex:=chains[0].pIndex;
  For i:=1 to count-1 do
  begin
-  t:=chains[i-1].size;
-  offset:=offset+t;
   if (chains[i]=nil) then Exit;
   if (chains[i].parent<>parent) then Exit;
+  if (chains[i].pIndex<>pIndex) then Exit;
+  //
+  t:=chains[i-1].size;
+  offset:=offset+t;
   t:=chains[i].offset;
   if (offset<>t) then Exit;
  end;

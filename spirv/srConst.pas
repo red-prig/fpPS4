@@ -103,7 +103,7 @@ type
   function  First:TsrConst; inline;
  end;
 
-function get_soffset_const_int(SSRC:Word):Integer;
+function get_soffset_const_int(SSRC:Word;d2:DWORD):DWORD;
 function is_const_soffset(SSRC:Byte):Boolean; inline;
 function is_const_ssrc8(SSRC:Byte):Boolean; inline;
 function is_const_ssrc9(SSRC:Word):Boolean; inline;
@@ -722,7 +722,7 @@ begin
  Result:=FList.pHead;
 end;
 
-function get_soffset_const_int(SSRC:Word):Integer;
+function get_soffset_const_int(SSRC:Word;d2:DWORD):DWORD;
 type
  TRec=packed record
   Case byte of
@@ -742,6 +742,7 @@ begin
        245:TRec(Result).s:=-2.0;
        246:TRec(Result).s:= 4.0;
        247:TRec(Result).s:=-4.0;
+       255:Result:=d2;
   else
            Result:=0;
  end;

@@ -8,6 +8,7 @@ uses
   sysutils,
   ps4_pssl,
   srType,
+  srConst,
   srReg,
   srLayout,
   emit_fetch;
@@ -33,16 +34,32 @@ var
 
  i:Byte;
 
+ is_const_offset:Boolean;
+ offset:PtrUint;
 begin
 
  if (FSPI.SMRD.IMM<>0) then
+ begin
+  offset:=FSPI.SMRD.OFFSET*4;
+  is_const_offset:=True;
+ end else
+ if is_const_ssrc9(FSPI.SMRD.OFFSET) then
+ begin
+  offset:=get_soffset_const_int(FSPI.SMRD.OFFSET,FSPI.INLINE32) and (not 3);
+  is_const_offset:=True;
+ end else
+ begin
+  is_const_offset:=False;
+ end;
+
+ if is_const_offset then
  begin
   For i:=0 to count-1 do
   begin
    dst:=get_sdst7(FSPI.SMRD.SDST+i);
    Assert(dst<>nil);
 
-   lvl_0.offset:=(FSPI.SMRD.OFFSET+i)*4;
+   lvl_0.offset:=offset+i*4;
    lvl_0.size  :=4;
 
    MakeChain(dst,grp,@lvl_0,nil);
