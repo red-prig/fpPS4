@@ -303,7 +303,11 @@ begin
   else;
  end;
 
- if info.IsExtFormat then Assert(false,'TODO');
+ if info.IsExtFormat then
+ begin
+  //TODO: ExtFormat
+  Assert(false,'TODO: ExtFormat='+IntToStr(info.DFMT));
+ end;
 
  lc:=Default(Tstore_cache);
  lc.info      :=info;

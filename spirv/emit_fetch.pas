@@ -290,6 +290,7 @@ begin
  end else
  begin
   src:=RegsStory.get_ssrc8(SOFFSET);
+  Assert(src^.Category<>cVectorArray,'TODO:fetch_ssrc8 cVectorArray');
   Result:=MakeRead(src,rtype);
  end;
  Assert(Result<>nil,'fetch_ssrc8');
@@ -307,6 +308,7 @@ begin
  end else
  begin
   src:=RegsStory.get_ssrc9(SSRC);
+  Assert(src^.Category<>cVectorArray,'TODO:fetch_ssrc9 cVectorArray');
   Result:=MakeRead(src,rtype);
  end;
  Assert(Result<>nil,'fetch_ssrc9');
@@ -350,6 +352,7 @@ var
  src:PsrRegSlot;
 begin
  src:=RegsStory.get_vsrc8(VSRC);
+ Assert(src^.Category<>cVectorArray,'TODO:fetch_vsrc8 cVectorArray');
  Result:=MakeRead(src,rtype);
  Assert(Result<>nil,'fetch_vsrc8');
 end;

@@ -112,8 +112,6 @@ type
   procedure build_slot_endif(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
   procedure build_slot_break(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
   procedure build_slot_conti(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
-  procedure build_test(pSlot:PsrRegSlot);
-  procedure build_volatile_test;
   procedure build_volatile_reset(orig:PsrRegsSnapshot);
   procedure build_volatile_ctrue(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
   procedure build_volatile_endif(var ctx:TsrVolatileContext;orig,prev,_next:PsrRegsSnapshot);
@@ -189,6 +187,12 @@ var
  pLine:TspirvOp;
 begin
  if (src=nil) then Exit;
+
+ if (src.IsType(TsrVectorArray)) then
+ begin
+  Assert(false,'AddStore:TsrVectorArray');
+ end;
+
  Assert(src.pLine<>nil);
  pLine:=src.pLine;
  Assert(pLine<>nil);
@@ -267,7 +271,7 @@ begin
   Result:='h'+IntToStr(FPrivId);
  end else
  begin
-  Result:='v'+Source^.rid+'_'+IntToStr(FPrivId);
+  Result:='v'+Source^.Name+'_'+IntToStr(FPrivId);
  end;
 end;
 
@@ -971,37 +975,6 @@ begin
   end;
  end;
 
-end;
-
-procedure TsrPrivateList.build_test(pSlot:PsrRegSlot);
-var
- cur:TsrRegNode;
- pLine:TspirvOp;
-begin
- cur:=pSlot^.current;
- if (cur=nil) then Exit;
- if (cur.pWriter=nil) then Exit;
- if (cur.pWriter.IsType(ntConst)) then Exit;
-
- pLine:=FEmit.curr_line;
-
- //if not IsDominUp(cur^.pLine,pLine) then
- //begin
- // Writeln(cur^.pWriter^.ntype.ClassName);
- // IsDominUp_print(cur^.pLine,FEmit.curr_line);
- //
- // Assert(IsDominUp(pLine,cur^.pLine)=false);
- //end;
-
-end;
-
-procedure TsrPrivateList.build_volatile_test;
-var
- pRegsStory:PsrRegsStory;
-begin
- //exit;
- pRegsStory:=FEmit.GetRegsStory;
- pRegsStory^.ForEachSlot(@build_test);
 end;
 
 procedure TsrPrivateList.build_volatile_reset(orig:PsrRegsSnapshot);

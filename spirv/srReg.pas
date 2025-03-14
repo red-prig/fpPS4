@@ -13,6 +13,10 @@ uses
  srType,
  srConst;
 
+const
+ RegCount =366;
+ LaneCount=64;
+
 type
  PPsrRegSlot=^PsrRegSlot;
  PsrRegSlot=^TsrRegSlot;
@@ -22,8 +26,6 @@ type
  PPsrRegNode=^TsrRegNode;
 
  TsrRegNode=class(TsrNode)
-  public
-   pPrev,pNext:TsrRegNode;
   private
    ID:TsrRefId;            //post id
    F:bitpacked record
@@ -47,13 +49,11 @@ type
    Procedure _SetWriter   (w,line:TsrNode);      override;
    Procedure _ResetWriter (w:TsrNode);           override;
    function  _Down        :TsrNode;              override;
-   function  _Next        :TsrNode;              override;
-   function  _Prev        :TsrNode;              override;
    Procedure _PrepType    (node:PPrepTypeNode);  override;
    function  _GetPrintName:RawByteString;        override;
    function  _GetRef      :Pointer;              override;
    //
-   property  pSlot  :PsrRegSlot  read FSlot;
+   property  pSlot  :PsrRegSlot  read FSlot     write FSlot;
    property  dtype  :TsrDataType read GetDtype  write SetDtype;
    property  dweak  :Boolean     read GetWeak   write SetWeak;
    property  pWriter:TsrNode     read GetWriter write SetWriter;
@@ -92,32 +92,47 @@ type
 
  ntRegPair=TsrRegPair;
 
- TRegStory=specialize TNodeListClass<TsrRegNode>;
+ TsrVectorArray=class(TsrRegNode)
+  FLanes:array[0..LaneCount-1] of TsrRegNode; //[0..63]
+ end;
 
- TString5=string[5];
+ TString7=string[7];
+
+ TSlotCategory=(cNone,cUnattach,cScalar,cScc,cVector,cVectorArray,cLane);
+
+ PsrBitKey=^TsrBitKey;
+ TsrBitKey=bitpacked record
+  id      :0..RegCount-1;
+  Category:TSlotCategory;
+  LaneId  :0..LaneCount-1;
+  align   :Byte;
+ end;
 
  TsrRegSlot=object
   private
-   FEmit:TCustomEmit;
-   pStory:TRegStory;
-   Frid:TString5;
+   FEmit   :TCustomEmit;
+   FCurrent:TsrRegNode;
+   pLanes  :PsrRegSlot; //[0..63]
+   FName   :TString7;
+   FBits   :TsrBitKey;
+   procedure set_current(c:TsrRegNode);
   public
-   current:TsrRegNode;
-   property  Emit:TCustomEmit read FEmit;
-   property  rid :TString5    read Frid;
-   Procedure Init(e:TCustomEmit;const n:TString5);
-   function  first:TsrRegNode;
-   function  last :TsrRegNode;
+   property  Emit    :TCustomEmit   read FEmit;
+   property  current :TsrRegNode    read FCurrent write set_current;
+   property  Name    :TString7      read FName;
+   property  Category:TSlotCategory read FBits.Category;
+   property  id      :SmallInt      read FBits.id;
+   property  LaneId  :ShortInt      read FBits.LaneId;
+   function  Lanes(i:Byte):PsrRegSlot;
+   Procedure Init(e:TCustomEmit;const n:TString7;c:TSlotCategory;i:Word=0;l:Byte=0);
+   function  ConvertToVectorArray  :Boolean;
+   function  ConvertToVectorGeneral:Boolean;
    function  isBoolOnly:Boolean;
+   function  isScalar:Boolean;
+   function  iUnattach:Boolean;
    function  New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
-   procedure Insert(r:TsrRegNode);
-   procedure Remove(r:TsrRegNode);
  end;
 
-const
- RegCount=366;
-
-type
  PsrRegsSnapshot=^TsrRegsSnapshot;
  TsrRegsSnapshot=record
   //366
@@ -268,16 +283,6 @@ begin
  Result:=FWriter;
 end;
 
-function TsrRegNode._Next:TsrNode;
-begin
- Result:=pNext;
-end;
-
-function TsrRegNode._Prev:TsrNode;
-begin
- Result:=pPrev;
-end;
-
 Procedure TsrRegNode._PrepType(node:PPrepTypeNode);
 var
  new:TsrDataType;
@@ -362,26 +367,33 @@ end;
 Procedure TsrRegsStory.Init(Emit:TCustomEmit);
 var
  i:Word;
- n:TString5;
+ n:TString7;
 begin
  FillChar(Self,SizeOf(TsrRegsStory),0);
  For i:=0 to 103 do
  begin
   Str(i,n);
-  SGRP[i].Init(Emit,'S'+n);
+  SGRP[i].Init(Emit,'S'+n,cScalar,i);
  end;
- VCC[0].Init(Emit,'VCCL');
- VCC[1].Init(Emit,'VCCH');
- M0.Init(Emit,'M0');
- EXEC[0].Init(Emit,'EXECL');
- EXEC[1].Init(Emit,'EXECH');
- SCC.Init(Emit,'SCC');
+ VCC[0].Init(Emit,'VCCL',cScalar);
+ VCC[1].Init(Emit,'VCCH',cScalar);
+ M0.Init(Emit,'M0',cScalar);
+ EXEC[0].Init(Emit,'EXECL',cScalar);
+ EXEC[1].Init(Emit,'EXECH',cScalar);
+ SCC.Init(Emit,'SCC',cScc);
  For i:=0 to 255 do
  begin
   Str(i,n);
-  VGRP[i].Init(Emit,'V'+n);
+  n:='V'+n;
+  VGRP[i].Init(Emit,n,cVector);
  end;
- FUnattach.Init(Emit,'UNATT');
+ FUnattach.Init(Emit,'UNATT',cUnattach);
+ //init order
+ For i:=0 to RegCount-1 do
+ begin
+  SLOT[i].FBits.id:=i;
+ end;
+ //init order
 end;
 
 Function TsrRegsStory.SLOT:PsrRegSlot; inline;
@@ -498,6 +510,9 @@ begin
    begin
     src[0]:=@VGRP[SSRC-256];
     src[1]:=@VGRP[SSRC-255];
+    //
+    Assert(src[0]^.Category<>cVectorArray,'TODO:fetch_ssrc9_pair cVectorArray');
+    Assert(src[1]^.Category<>cVectorArray,'TODO:fetch_ssrc9_pair cVectorArray');
    end;
   else
       Result:=False;
@@ -549,13 +564,33 @@ end;
 
 function TsrRegsStory.get_snapshot:TsrRegsSnapshot;
 var
- i:Word;
+ PTR :PsrRegSlot;
+ Emit:TCustomEmit;
+ node:TsrVectorArray;
+ i,p:Word;
 begin
- Result:=Default(TsrRegsSnapshot);
+ Emit:=SLOT[0].Emit;
  //
  For i:=0 to RegCount-1 do
  begin
-  Result.REGS[i]:=SLOT[i].current;
+  PTR:=@PsrRegSlot(SLOT)[i];
+
+  if (PTR^.pLanes<>nil) and
+     (PTR^.Category=cVectorArray) then
+  begin
+   node:=Emit.specialize New<TsrVectorArray>;
+   //fill lanes
+   For p:=0 to LaneCount-1 do
+   begin
+    node.FLanes[p]:=PTR^.pLanes[p].current;
+   end;
+   //
+   Result.REGS[i]:=node;
+  end else
+  begin
+   Result.REGS[i]:=PTR^.current;
+  end;
+
  end;
 end;
 
@@ -575,29 +610,159 @@ end;
 
 procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp1;orig:PsrRegsSnapshot);
 var
- i:Word;
+ i,p:Word;
  PTR:PsrRegSlot;
+ nodes:record
+  orig:TsrVectorArray;
+ end;
+ regs:record
+  orig:TsrRegNode;
+ end;
 begin
  if (cb=nil) then Exit;
  //
- PTR:=SLOT;
  For i:=0 to RegCount-1 do
  begin
-  cb(@PTR[i],orig^.REGS[i]);
+  PTR:=@PsrRegSlot(SLOT)[i];
+
+  if ((orig^.REGS[i]=nil) or (orig^.REGS[i].IsType(TsrVectorArray))) and
+     (PTR^.Category=cVectorArray) then
+  begin
+   nodes.orig:=orig^.REGS[i].specialize AsType<TsrVectorArray>;
+
+   For p:=0 to LaneCount-1 do
+   begin
+
+    if (nodes.orig<>nil) then
+    begin
+     regs.orig:=nodes.orig.FLanes[p];
+    end else
+    begin
+     regs.orig:=nil;
+    end;
+
+    cb(@PTR^.pLanes[p],regs.orig);
+
+    if (nodes.orig=nil) and (regs.orig<>nil) then
+    begin
+     nodes.orig:=SLOT[0].Emit.specialize New<TsrVectorArray>;
+     orig^.REGS[i]:=nodes.orig;
+    end;
+
+    if (nodes.orig<>nil) then
+    begin
+     nodes.orig.FLanes[p]:=regs.orig;
+    end;
+
+   end;
+
+  end else
+  begin
+   cb(PTR,orig^.REGS[i]);
+  end;
+
  end;
 end;
 
 procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:PsrRegsSnapshot);
 var
- i:Word;
+ i,p:Word;
  PTR:PsrRegSlot;
+ nodes:record
+  orig:TsrVectorArray;
+  prev:TsrVectorArray;
+  next:TsrVectorArray;
+ end;
+ regs:record
+  orig:TsrRegNode;
+  prev:TsrRegNode;
+  next:TsrRegNode;
+ end;
 begin
  if (cb=nil) then Exit;
  //
- PTR:=SLOT;
  For i:=0 to RegCount-1 do
  begin
-  cb(ctx,@PTR[i],orig^.REGS[i],prev^.REGS[i],next^.REGS[i]);
+  PTR:=@PsrRegSlot(SLOT)[i];
+
+  if ((orig^.REGS[i]=nil) or (orig^.REGS[i].IsType(TsrVectorArray))) and
+     ((prev^.REGS[i]=nil) or (prev^.REGS[i].IsType(TsrVectorArray))) and
+     ((next^.REGS[i]=nil) or (next^.REGS[i].IsType(TsrVectorArray))) and
+     (PTR^.Category=cVectorArray) then
+  begin
+   nodes.orig:=orig^.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.prev:=prev^.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.next:=next^.REGS[i].specialize AsType<TsrVectorArray>;
+
+   For p:=0 to LaneCount-1 do
+   begin
+
+    if (nodes.orig<>nil) then
+    begin
+     regs.orig:=nodes.orig.FLanes[p];
+    end else
+    begin
+     regs.orig:=nil;
+    end;
+
+    if (nodes.prev<>nil) then
+    begin
+     regs.prev:=nodes.prev.FLanes[p];
+    end else
+    begin
+     regs.prev:=nil;
+    end;
+
+    if (nodes.next<>nil) then
+    begin
+     regs.next:=nodes.next.FLanes[p];
+    end else
+    begin
+     regs.next:=nil;
+    end;
+
+    cb(ctx,@PTR^.pLanes[p],regs.orig,regs.prev,regs.next);
+
+    if (nodes.orig=nil) and (regs.orig<>nil) then
+    begin
+     nodes.orig:=SLOT[0].Emit.specialize New<TsrVectorArray>;
+     orig^.REGS[i]:=nodes.orig;
+    end;
+
+    if (nodes.prev=nil) and (regs.prev<>nil) then
+    begin
+     nodes.prev:=SLOT[0].Emit.specialize New<TsrVectorArray>;
+     prev^.REGS[i]:=nodes.prev;
+    end;
+
+    if (nodes.next=nil) and (regs.next<>nil) then
+    begin
+     nodes.next:=SLOT[0].Emit.specialize New<TsrVectorArray>;
+     next^.REGS[i]:=nodes.next;
+    end;
+
+    if (nodes.orig<>nil) then
+    begin
+     nodes.orig.FLanes[p]:=regs.orig;
+    end;
+
+    if (nodes.prev<>nil) then
+    begin
+     nodes.prev.FLanes[p]:=regs.prev;
+    end;
+
+    if (nodes.next<>nil) then
+    begin
+     nodes.next.FLanes[p]:=regs.next;
+    end;
+
+   end;
+
+  end else
+  begin
+   cb(ctx,PTR,orig^.REGS[i],prev^.REGS[i],next^.REGS[i]);
+  end;
+
  end;
 end;
 
@@ -606,7 +771,7 @@ end;
 function TsrRegNode.GetName:RawByteString;
 begin
  Result:='';
- if (FSlot<>nil) then Result:=FSlot^.rid;
+ if (FSlot<>nil) then Result:=FSlot^.Name;
 end;
 
 function TsrRegNode.GetDtype:TsrDataType;
@@ -742,25 +907,136 @@ end;
 
 //--
 
-Procedure TsrRegSlot.Init(e:TCustomEmit;const n:TString5);
+procedure TsrRegSlot.set_current(c:TsrRegNode);
+var
+ p:Word;
+ node:TsrVectorArray;
+begin
+ if c.IsType(TsrVectorArray) then
+ begin
+  ConvertToVectorArray;
+  //
+  node:=c.specialize AsType<TsrVectorArray>;
+  //
+  For p:=0 to LaneCount-1 do
+  begin
+   pLanes[p].FCurrent:=node.FLanes[p];
+  end;
+  //
+  Exit;
+ end else
+ if (FBits.Category=cVectorArray) then
+ begin
+  if (c=nil) then
+  begin
+   //
+   For p:=0 to LaneCount-1 do
+   begin
+    pLanes[p].FCurrent:=nil;
+   end;
+   //
+   Exit;
+  end;
+  ConvertToVectorGeneral;
+ end;
+ //
+ FCurrent:=c;
+end;
+
+function TsrRegSlot.Lanes(i:Byte):PsrRegSlot;
+begin
+ if (pLanes<>nil) and
+    (FBits.Category=cVectorArray) then
+ begin
+  Result:=@pLanes[i and (LaneCount-1)];
+ end else
+ begin
+  Result:=nil;
+ end;
+end;
+
+Procedure TsrRegSlot.Init(e:TCustomEmit;const n:TString7;c:TSlotCategory;i:Word=0;l:Byte=0);
 begin
  FEmit:=e;
- Frid :=n;
+ FName:=n;
+ FBits.Category:=c;
+ FBits.id      :=i;
+ FBits.LaneId  :=l;
 end;
 
-function TsrRegSlot.first:TsrRegNode;
+function TsrRegSlot.ConvertToVectorArray:Boolean;
+var
+ i:Byte;
+ n:TString7;
 begin
- Result:=pStory.pHead;
+ case FBits.Category of
+  cVector:
+   begin
+    FBits.Category:=cVectorArray;
+    //
+    if (pLanes=nil) then
+    begin
+     pLanes:=FEmit.Alloc(SizeOf(TsrRegSlot)*LaneCount);
+     //
+     For i:=0 to LaneCount-1 do
+     begin
+      Str(i,n);
+      n:=Self.Name+'.'+n;
+      pLanes[i].Init(Emit,n,cLane,Self.id,i);
+     end;
+    end;
+    //
+    For i:=0 to LaneCount-1 do
+    begin
+     pLanes[i].FCurrent:=current;
+    end;
+    //
+    FCurrent:=nil;
+    Exit(True);
+   end;
+  cVectorArray:
+   Exit(True);
+  else
+   Exit(False);
+ end;
 end;
 
-function TsrRegSlot.last:TsrRegNode;
+function TsrRegSlot.ConvertToVectorGeneral:Boolean;
+var
+ i:Byte;
 begin
- Result:=pStory.pTail;
+ case FBits.Category of
+  cVectorArray:
+   begin
+    FBits.Category:=cVector;
+    //
+    For i:=0 to LaneCount-1 do
+    begin
+     pLanes[i].FCurrent:=nil;
+    end;
+    //
+    Exit(True);
+   end;
+  cVector:
+   Exit(True);
+  else
+   Exit(False);
+ end;
 end;
 
 function TsrRegSlot.isBoolOnly:Boolean;
 begin
- Result:=(rid='SCC');
+ Result:=(FBits.Category=cScc);
+end;
+
+function TsrRegSlot.isScalar:Boolean;
+begin
+ Result:=(FBits.Category in [cScalar,cScc]);
+end;
+
+function TsrRegSlot.iUnattach:Boolean;
+begin
+ Result:=(FBits.Category=cUnattach);
 end;
 
 function TsrRegSlot.New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
@@ -775,30 +1051,9 @@ begin
  node.FSlot:=@Self;
  node.dtype:=rtype;
  node.CustomLine:=pLine;
- //
- pStory.Push_tail(node);
  Result:=node;
  //update
- current:=pStory.pTail;
-end;
-
-procedure TsrRegSlot.Insert(r:TsrRegNode);
-begin
- if (r=nil) then Exit;
- pStory.Push_tail(r);
- //update
- current:=pStory.pTail;
-end;
-
-procedure TsrRegSlot.Remove(r:TsrRegNode);
-begin
- if (r=nil) then Exit;
- pStory.Remove(r);
- //update
- if (r=current) then
- begin
-  current:=pStory.pTail;
- end;
+ current:=node;
 end;
 
 //

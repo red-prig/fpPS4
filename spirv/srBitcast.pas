@@ -56,7 +56,7 @@ end;
 
 procedure TsrBitcastList.Init(Emit:TCustomEmit); inline;
 begin
- rSlot.Init(Emit,'BCAST');
+ rSlot.Init(Emit,'BCAST',cNone);
 end;
 
 function TsrBitcastList._Find(dtype:TsrDataType;src:TsrRegNode):TsrBitcast;

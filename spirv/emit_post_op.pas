@@ -1535,6 +1535,7 @@ begin
  if (src[1].is_const) then
  begin
   Result:=0;
+  //TODO: Restrict optimizations
   //Result:=_OnShr_ext1(node,src[0].pWriter.specialize AsType<ntOp>,src[1].AsConst);
  end;
 end;

@@ -567,8 +567,18 @@ var
  node:TsrRegNode;
  pLine:TspirvOp;
 begin
- node:=dst^.New(src.dtype,line);
- node.pWriter:=src;
+ if (src.pSlot^.iUnattach) and
+    (src.CustomLine=nil) and
+    (src.Parent=line.Parent) then
+ begin
+  node:=src;
+  node.pSlot:=dst;    //change slot
+  dst^.current:=node; //bind current
+ end else
+ begin
+  node:=dst^.New(src.dtype,line);
+  node.pWriter:=src;
+ end;
 
  pLine:=PostLink(line,node); //post processing
 

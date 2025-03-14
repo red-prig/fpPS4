@@ -59,13 +59,22 @@ end;
 procedure TEmit_VOP1.emit_V_READFIRSTLANE_B32; //sdst, vsrc
 Var
  dst:PsrRegSlot;
- src:TsrRegNode;
+ src:PsrRegSlot;
+ reg:TsrRegNode;
 begin
  //TODO: V_READFIRSTLANE_B32
  //
- dst:=get_sdst8  (FSPI.VOP1.VDST); //NOTE: SDST
- src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
- MakeCopy(dst,src);
+ dst:=get_sdst8(FSPI.VOP1.VDST); //NOTE: SDST
+ src:=get_ssrc9(FSPI.VOP1.SRC0);
+
+ if (src^.Category=cVectorArray) then
+ begin
+  Assert(false,'TODO: arrayed V_READFIRSTLANE_B32');
+ end;
+
+ reg:=MakeRead(src,dtUnknow);
+
+ MakeCopy(dst,reg);
 end;
 
 procedure TEmit_VOP1.emit_V_MOVRELS_B32; //vdst = VGPR[vgpr_index_of(vsrc) + M0.u] OOB:VGPR0

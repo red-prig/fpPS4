@@ -10,6 +10,7 @@ uses
   spirv,
   srType,
   srReg,
+  srConst,
   emit_fetch;
 
 type
@@ -41,6 +42,8 @@ type
   procedure emit_V_ADDC_U32;
   procedure emit_V_MBCNT_LO_U32_B32;
   procedure emit_V_MBCNT_HI_U32_B32;
+  procedure emit_V_WRITELANE_B32;
+  procedure emit_V_READLANE_B32;
  end;
 
 implementation
@@ -543,6 +546,58 @@ begin
  MakeCopy(dst,src[1]);
 end;
 
+procedure TEmit_VOP2.emit_V_WRITELANE_B32;
+Var
+ dst  :PsrRegSlot;
+ src  :TsrRegNode;
+ slane:TsrRegNode;
+ slane_id:Byte;
+ lane :PsrRegSlot;
+begin
+ dst  :=get_vdst8  (FSPI.VOP2.VDST);
+ src  :=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUnknow);
+ slane:=fetch_ssrc8(FSPI.VOP2.VSRC1,dtUnknow);
+
+ Assert(slane.is_const,'TODO: indexed V_WRITELANE_B32');
+
+ slane_id:=(slane.AsConst.AsUint8 and 63);
+
+ if not dst^.ConvertToVectorArray then
+ begin
+  Assert(false,'ConvertToVectorArray');
+ end;
+
+ lane:=dst^.Lanes(slane_id);
+
+ MakeCopy(lane,src);
+end;
+
+procedure TEmit_VOP2.emit_V_READLANE_B32;
+Var
+ dst  :PsrRegSlot;
+ src  :PsrRegSlot;
+ slane:TsrRegNode;
+ slane_id:Byte;
+ lane :PsrRegSlot;
+ sdata:TsrRegNode;
+begin
+ dst  :=get_ssrc8  (FSPI.VOP2.VDST);
+ src  :=get_ssrc9  (FSPI.VOP2.SRC0);
+ slane:=fetch_ssrc8(FSPI.VOP2.VSRC1,dtUnknow);
+
+ Assert(src^.Category=cVectorArray,'TODO: subgroup V_READLANE_B32');
+
+ Assert(slane.is_const,'TODO: indexed V_READLANE_B32');
+
+ slane_id:=(slane.AsConst.AsUint8 and 63);
+
+ lane:=src^.Lanes(slane_id);
+
+ sdata:=MakeRead(lane,dtUnknow);
+
+ MakeCopy(dst,sdata);
+end;
+
 procedure TEmit_VOP2.emit_VOP2;
 begin
 
@@ -603,6 +658,9 @@ begin
 
   V_MBCNT_LO_U32_B32: emit_V_MBCNT_LO_U32_B32;
   V_MBCNT_HI_U32_B32: emit_V_MBCNT_HI_U32_B32;
+
+  V_WRITELANE_B32:emit_V_WRITELANE_B32;
+  V_READLANE_B32 :emit_V_READLANE_B32;
 
   else
    Assert(false,'VOP2?'+IntToStr(FSPI.VOP2.OP)+' '+get_str_spi(FSPI));
