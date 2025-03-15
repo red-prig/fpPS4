@@ -13,26 +13,6 @@ uses
  srVariable,
  srCFGLabel;
 
-const
- OpIAddExt=DWORD(-1);
- OpISubExt=DWORD(-2);
- OpAbsDiff=DWORD(-3);
- OpWQM32  =DWORD(-4);
-
- OpBFE_32 =DWORD(-5);
- OpBFIB32 =DWORD(-6);
-
- OpPackAnc=DWORD(-7);
- OpPackOfs=DWORD(-8);
- OpMakeExp=DWORD(-9);
- OpMakeVec=DWORD(-10);
- OpMakeCub=DWORD(-11);
-
- OpCUBEID =DWORD(-12);
- OpCUBESC =DWORD(-13);
- OpCUBETC =DWORD(-14);
- OpCUBEMA =DWORD(-15);
-
 function  InsSpirvOp(pLine,pNew:TSpirvOp):TSpirvOp;
 Function  get_inverse_left_cmp_op(OpId:DWORD):DWORD;
 Function  get_inverse_not_cmp_op(OpId:DWORD):DWORD;
@@ -61,55 +41,10 @@ function  flow_down_next_up(pLine:TSpirvOp):TSpirvOp;
 function  flow_down_prev_up(pLine:TSpirvOp):TSpirvOp;
 function  flow_prev_up(pLine:TSpirvOp):TSpirvOp;
 
-function  OpGetStr(pLine:TSpirvOp):RawByteString;
-
 implementation
 
 uses
  srPrivate;
-
-function  OpGetStr(pLine:TSpirvOp):RawByteString;
-var
- V:PtrUint;
-begin
- Result:='';
- if (pLine=nil) then Exit;
-
- case pLine.OpId of
-  OpIAddExt:Result:='OpIAddExt';
-  OpISubExt:Result:='OpISubExt';
-  OpAbsDiff:Result:='OpAbsDiff';
-  OpWQM32  :Result:='OpWQM32';
-
-  OpBFE_32 :Result:='OpBFE_32';
-  OpBFIB32 :Result:='OpBFIB32';
-
-  OpPackAnc:Result:='OpPackAnc';
-  OpPackOfs:Result:='OpPackOfs';
-  OpMakeExp:Result:='OpMakeExp';
-  OpMakeVec:Result:='OpMakeVec';
-  OpMakeCub:Result:='OpMakeCub';
-
-  OpCUBEID :Result:='OpCUBEID';
-  OpCUBESC :Result:='OpCUBESC';
-  OpCUBETC :Result:='OpCUBETC';
-  OpCUBEMA :Result:='OpCUBEMA';
-
-  Op.OpExtInst:
-    begin
-     V:=0;
-     if pLine.ParamNode(1).TryGetValue(V) then
-     begin
-      Result:=GlslOp.GetStr(V);
-     end;
-    end;
-
-  else
-   begin
-    Result:=Op.GetStr(pLine.OpId);
-   end;
- end;
-end;
 
 //--
 

@@ -13,6 +13,7 @@ uses
  srReg,
  srOp,
  srCFGLabel,
+ srOpInternal,
  srOpUtils,
  srCacheOp,
  srInterface;
@@ -681,7 +682,7 @@ Var
 begin
  Assert(rtype.Sign=0);
 
- node:=AddSpirvOp(srOpUtils.OpIAddExt); //need first
+ node:=AddSpirvOp(srOpInternal.OpIAddExt); //need first
  node.AddParam(src0);
  node.AddParam(src1);
 
@@ -700,7 +701,7 @@ Var
 begin
  Assert(dst.dtype.Sign=0);
 
- node:=AddSpirvOp(srOpUtils.OpIAddExt); //need first
+ node:=AddSpirvOp(srOpInternal.OpIAddExt); //need first
  node.AddParam(src0);
  node.AddParam(src1);
 
@@ -745,7 +746,7 @@ Var
 begin
  Assert(rtype.Sign=0);
 
- node:=AddSpirvOp(srOpUtils.OpISubExt); //need first
+ node:=AddSpirvOp(srOpInternal.OpISubExt); //need first
  node.AddParam(src0);
  node.AddParam(src1);
 
@@ -761,22 +762,22 @@ end;
 
 function TEmitOp.OpAbsDiff(pLine:TspirvOp;dst,src0,src1:TsrRegNode):TspirvOp;
 begin
- Result:=_Op2(pLine,srOpUtils.OpAbsDiff,dst,src0,src1);
+ Result:=_Op2(pLine,srOpInternal.OpAbsDiff,dst,src0,src1);
 end;
 
 procedure TEmitOp.OpWQM32(dst:PsrRegSlot;src:TsrRegNode);
 begin
- Op1(srOpUtils.OpWQM32,dtUnknow,dst,src);
+ Op1(srOpInternal.OpWQM32,dtUnknow,dst,src);
 end;
 
 procedure TEmitOp.OpBFE_32(dst:PsrRegSlot;base,src0,src1:TsrRegNode);
 begin
- Op3(srOpUtils.OpBFE_32,base.dtype,dst,base,src0,src1);
+ Op3(srOpInternal.OpBFE_32,base.dtype,dst,base,src0,src1);
 end;
 
 procedure TEmitOp.OpBFIB32(dst:PsrRegSlot;bitmsk,src0,src1:TsrRegNode);
 begin
- Op3(srOpUtils.OpBFIB32,dtUint32,dst,bitmsk,src0,src1);
+ Op3(srOpInternal.OpBFIB32,dtUint32,dst,bitmsk,src0,src1);
 end;
 
 function TEmitOp.OpBFITo(src0,src1,src2,src3:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -795,7 +796,7 @@ end;
 
 procedure TEmitOp.OpPackAnc(dst:PsrRegSlot;prim,smid,rtid:TsrRegNode);
 begin
- Op3(srOpUtils.OpPackAnc,dtUint32,dst,prim,smid,rtid);
+ Op3(srOpInternal.OpPackAnc,dtUint32,dst,prim,smid,rtid);
 end;
 
 //
@@ -898,11 +899,11 @@ begin
 
  pLine:=GetMaxPlace(pLine,1,@src);
 
- p:=CacheOpList.Fetch(pLine.Parent,srOpUtils.OpPackOfs,rtype,1,@src);
+ p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpPackOfs,rtype,1,@src);
 
  if (p.pDst=nil) then
  begin
-  node:=AddSpirvOp(pLine,srOpUtils.OpPackOfs); //need first
+  node:=AddSpirvOp(pLine,srOpInternal.OpPackOfs); //need first
 
   dst:=NewReg(rtype);
 
@@ -960,11 +961,11 @@ begin
 
  pLine:=GetMaxPlace(pLine,rtype.Count,src);
 
- p:=CacheOpList.Fetch(pLine.Parent,srOpUtils.OpMakeVec,rtype,rtype.Count,src);
+ p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpMakeVec,rtype,rtype.Count,src);
 
  if (p.pDst=nil) then
  begin
-  node:=AddSpirvOp(pLine,srOpUtils.OpMakeVec); //need first
+  node:=AddSpirvOp(pLine,srOpInternal.OpMakeVec); //need first
 
   dst:=NewReg(rtype);
 
@@ -995,11 +996,11 @@ begin
 
  pLine:=GetMaxPlace(pLine,rtype.Count,src);
 
- p:=CacheOpList.Fetch(pLine.Parent,srOpUtils.OpMakeCub,rtype,rtype.Count,src);
+ p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpMakeCub,rtype,rtype.Count,src);
 
  if (p.pDst=nil) then
  begin
-  node:=AddSpirvOp(pLine,srOpUtils.OpMakeCub); //need first
+  node:=AddSpirvOp(pLine,srOpInternal.OpMakeCub); //need first
 
   dst:=NewReg(rtype);
 

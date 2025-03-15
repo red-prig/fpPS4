@@ -18,6 +18,7 @@ uses
   srReg,
   srPrivate,
   srOp,
+  srOpInternal,
   srOpUtils,
   emit_fetch;
 
@@ -95,12 +96,12 @@ begin
   Op.OpShiftRightLogical,
   Op.OpShiftRightArithmetic:Result:=OnShr1(node);
 
-  srOpUtils.OpAbsDiff   :Result:=OnAbsDiff1(node);
-  srOpUtils.OpWQM32     :Result:=OnWQM32__1(node);
-  srOpUtils.OpPackOfs   :Result:=OnPackOfs1(node);
-  srOpUtils.OpBFE_32    :Result:=OnBFE_32_1(node);
-  srOpUtils.OpBFIB32    :Result:=OnBFIB32_1(node);
-  srOpUtils.OpMakeCub   :Result:=OnMakeCub1(node);
+  srOpInternal.OpAbsDiff   :Result:=OnAbsDiff1(node);
+  srOpInternal.OpWQM32     :Result:=OnWQM32__1(node);
+  srOpInternal.OpPackOfs   :Result:=OnPackOfs1(node);
+  srOpInternal.OpBFE_32    :Result:=OnBFE_32_1(node);
+  srOpInternal.OpBFIB32    :Result:=OnBFIB32_1(node);
+  srOpInternal.OpMakeCub   :Result:=OnMakeCub1(node);
 
   Op.OpSelect           :Result:=OnSelect1(node);
 
@@ -127,11 +128,10 @@ begin
 
  Case node.OpId of
 
-  srOpUtils.OpIAddExt:Result:=OnIAddExt2(node);
-  srOpUtils.OpISubExt:Result:=OnISubExt2(node);
-  srOpUtils.OpMakeVec:Result:=OnMakeVec2(node);
-
-  srOpUtils.OpPackAnc:Result:=OnPackAnc2(node);
+  srOpInternal.OpIAddExt:Result:=OnIAddExt2(node);
+  srOpInternal.OpISubExt:Result:=OnISubExt2(node);
+  srOpInternal.OpMakeVec:Result:=OnMakeVec2(node);
+  srOpInternal.OpPackAnc:Result:=OnPackAnc2(node);
 
   Op.OpReturn:Result:=OnReturn_2(node);
   OpMakeExp  :Result:=OnMakeExp2(node);
@@ -140,6 +140,8 @@ begin
   OpCUBESC:OnCUBESC2(node);
   OpCUBETC:OnCUBETC2(node);
   OpCUBEMA:OnCUBEMA2(node);
+
+  srOpInternal.OpMakeCub:Assert(false,'OpMakeCub');
  end;
 
 end;
@@ -2039,7 +2041,7 @@ begin
 
  pLine:=node.pWriter.specialize AsType<ntOp>;
  if (pLine=nil) then Exit;
- if (pLine.OpId<>srOpUtils.OpPackAnc) then Exit;
+ if (pLine.OpId<>srOpInternal.OpPackAnc) then Exit;
 
  src[0]:=pLine.ParamNode(0).AsReg;
  src[1]:=pLine.ParamNode(1).AsReg;
@@ -2294,6 +2296,33 @@ begin
  Result:=True;
 end;
 
+function _GetMadLegacyFma(node:TSpirvOp):TSpirvOp;
+var
+ reg:TsrRegNode;
+ fma:TSpirvOp;
+begin
+ Result:=node;
+ if (node=nil) then Exit;
+ if (node.OpId<>Op.OpSelect) then Exit;
+
+ reg:=RegDown(node.ParamNode(1).AsReg);
+ fma:=reg.pWriter.specialize AsType<ntOp>;
+
+ if _IsFma(fma) then
+ begin
+  Exit(fma);
+ end;
+
+ reg:=RegDown(node.ParamNode(2).AsReg);
+ fma:=reg.pWriter.specialize AsType<ntOp>;
+
+ if _IsFma(fma) then
+ begin
+  Exit(fma);
+ end;
+
+end;
+
 function _IsOp(node:TSpirvOp;OpId:DWORD):Boolean;
 begin
  Result:=False;
@@ -2479,6 +2508,9 @@ begin
  m_x:=RegDown(node.ParamNode(0).AsReg).pWriter.specialize AsType<ntOp>; //param1
  m_y:=RegDown(node.ParamNode(1).AsReg).pWriter.specialize AsType<ntOp>; //param2
  m_f:=RegDown(node.ParamNode(2).AsReg).pWriter.specialize AsType<ntOp>; //param3
+
+ m_x:=_GetMadLegacyFma(m_x);
+ m_y:=_GetMadLegacyFma(m_y);
 
  if not _IsFma(m_x) then Exit;
  if not _IsFma(m_y) then Exit;

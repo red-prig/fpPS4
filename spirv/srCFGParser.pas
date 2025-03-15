@@ -694,8 +694,6 @@ begin
 end;
 
 procedure TsrCFGParser.Print();
-const
- print_block_id=False;
 var
  prefix:RawByteString;
  node,next:TsrCFGBlock;

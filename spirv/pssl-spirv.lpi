@@ -25,7 +25,7 @@
     <RunParams>
       <FormatVersion Value="2"/>
     </RunParams>
-    <Units Count="63">
+    <Units Count="64">
       <Unit0>
         <Filename Value="pssl-spirv.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -294,6 +294,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="emit_DS"/>
       </Unit62>
+      <Unit63>
+        <Filename Value="srOpInternal.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit63>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

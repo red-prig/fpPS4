@@ -13,6 +13,7 @@ uses
   srConst,
   srVariable,
   srOp,
+  srOpInternal,
   srOpUtils,
   strutils,
   srCapability,
@@ -198,10 +199,10 @@ begin
  if Info.result then //dst
  begin
   Assert(node.pDst<>nil,'PrintOp$1');
-  Write(PadRight(GetNodeStr(node.pDst),PadAssign),' = ',Op.GetStr(node.OpId));
+  Write(PadRight(GetNodeStr(node.pDst),PadAssign),' = ',OpGetStrInternal(node.OpId));
  end else
  begin  //no dst
-  Write(Op.GetStr(node.OpId));
+  Write(OpGetStrInternal(node.OpId));
   if (node.pDst<>nil) then
   begin
    Write(' ',GetNodeStr(node.pDst));

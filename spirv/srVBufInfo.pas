@@ -25,10 +25,10 @@ type
   SLC  :Byte; //Volatile
   function GetResultType:TsrDataType;
   function GetElemType:TsrDataType;
-  function GetElemCount:Byte; inline;
-  function GetElemSize:Byte; inline;
-  function GetSizeFormat:Byte; inline;
-  function GetAlignSize:Byte; inline;
+  function GetElemCount:Byte;
+  function GetElemSize:Byte;
+  function GetSizeFormat:Byte;
+  function GetAlignSize:Byte;
   function IsComp:Boolean;
   function IsExtFormat:Boolean;
   function GetImageFormat:Byte;
@@ -191,17 +191,17 @@ begin
  Result:=DFMT_ELEM_COUNT[DFMT];
 end;
 
-function TBuf_info.GetElemCount:Byte; inline;
+function TBuf_info.GetElemCount:Byte;
 begin
  Result:=DFMT_ELEM_COUNT[DFMT];
 end;
 
-function TBuf_info.GetElemSize:Byte; inline;
+function TBuf_info.GetElemSize:Byte;
 begin
  Result:=DFMT_ELEM_SIZE[DFMT];
 end;
 
-function TBuf_info.GetSizeFormat:Byte; inline;
+function TBuf_info.GetSizeFormat:Byte;
 begin
  Result:=DFMT_SIZE[DFMT];
 end;
@@ -211,7 +211,7 @@ begin
  if (a<b) then Result:=a else Result:=b;
 end;
 
-function TBuf_info.GetAlignSize:Byte; inline;
+function TBuf_info.GetAlignSize:Byte;
 begin
  Result:=Min(4,GetSizeFormat);
 end;

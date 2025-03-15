@@ -1100,11 +1100,6 @@ begin
 end;
 
 Procedure TsrChain.SetRegType(rtype:TsrDataType);
-var
- pTypeList:PsrTypeList;
- FType:TsrType;
- node:TDependenceNode;
- pLine:TSpirvOp;
 begin
  if (Fdtype=rtype) then Exit;
 
@@ -1112,51 +1107,7 @@ begin
 
  Fdtype:=rtype;
 
- pTypeList:=Emit.GetTypeList;
- FType:=pTypeList^.Fetch(rtype);
-
  UpdateRegType;
-
- {
- node:=FList.pHead;
- While (node<>nil) do
- begin
-  pLine:=node.pNode;
-
-  Case pLine.OpId of
-
-   Op.OpLoad:
-    begin
-     pLine.pDst.PrepType(ord(rtype));
-     pLine.pType:=Ftype;
-    end;
-
-   Op.OpStore,
-   Op.OpAtomicStore,
-   Op.OpAtomicExchange,
-   Op.OpAtomicCompareExchange,
-   Op.OpAtomicCompareExchangeWeak,
-   Op.OpAtomicIIncrement,
-   Op.OpAtomicIDecrement,
-   Op.OpAtomicIAdd,
-   Op.OpAtomicISub,
-   Op.OpAtomicSMin,
-   Op.OpAtomicUMin,
-   Op.OpAtomicSMax,
-   Op.OpAtomicUMax,
-   Op.OpAtomicAnd,
-   Op.OpAtomicOr,
-   Op.OpAtomicXor:
-    begin
-     pLine.ParamNode(1).Value.PrepType(ord(rtype));
-    end;
-
-   else;
-  end;
-
-  node:=node.pNext;
- end;
- }
 end;
 
 Procedure TsrChain.SetIndex(t:TsrRegNode);

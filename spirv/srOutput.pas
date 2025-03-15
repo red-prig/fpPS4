@@ -7,7 +7,6 @@ interface
 uses
  typinfo,
  spirv,
- ginodes,
  srNode,
  srType,
  srOp,

@@ -11,7 +11,6 @@ uses
  srNode,
  srType,
  srTypes,
- srVariable,
  srLayout,
  srDecorate,
  srConfig;
@@ -836,6 +835,7 @@ function TsrBuffer.chain_read:DWORD;
 var
  node:TsrBuffer;
 begin
+ Result:=0;
  if Flags.Bitcast then
  begin
   node:=Self;
@@ -870,6 +870,7 @@ function TsrBuffer.chain_write:DWORD;
 var
  node:TsrBuffer;
 begin
+ Result:=0;
  if Flags.Bitcast then
  begin
   node:=Self;

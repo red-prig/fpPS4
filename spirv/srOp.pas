@@ -7,6 +7,7 @@ interface
 uses
  sysutils,
  spirv,
+ srOpInternal,
  ginodes,
  srNode,
  srCFGLabel,
@@ -227,6 +228,7 @@ type
  end;
 
 Function classif_rw_op(OpId:DWORD):Byte;
+function OpGetStrDebug(pLine:TSpirvOp):RawByteString;
 
 operator := (i:TsrNode):TspirvOp;   inline;
 operator := (i:TsrNode):TsrOpBlock; inline;
@@ -264,6 +266,28 @@ end;
 function TsrOpCustom._Parent:TsrNode;
 begin
  Result:=pParent;
+end;
+
+//
+
+function OpGetStrDebug(pLine:TSpirvOp):RawByteString;
+var
+ V:PtrUint;
+begin
+ Result:='';
+ if (pLine=nil) then Exit;
+
+ if (pLine.OpId=Op.OpExtInst) then
+ begin
+  V:=0;
+  if pLine.ParamNode(1).TryGetValue(V) then
+  begin
+   Result:=GlslOp.GetStr(V);
+  end;
+ end else
+ begin
+  Result:=OpGetStrInternal(pLine.OpId);
+ end;
 end;
 
 //
@@ -548,7 +572,7 @@ begin
  if not is_force then
  begin
   can_clear;
-  Assert(false,'Wrong read_count on:'+Op.GetStr(OpId));
+  Assert(false,'Wrong read_count on:'+OpGetStrDebug(Self));
  end;
 
  FType.mark_unread(Self);

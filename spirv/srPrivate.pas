@@ -298,8 +298,6 @@ end;
 Procedure TsrPrivate.SetRegType(rtype:TsrDataType);
 var
  pTypeList:PsrTypeList;
- node:TDependenceNode;
- pLine:TspirvOp;
 begin
  pTypeList:=Emit.GetTypeList;
  Ftype:=pTypeList^.Fetch(rtype);

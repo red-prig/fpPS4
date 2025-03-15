@@ -15,7 +15,7 @@ uses
   srReg,
   srOutput,
   srOp,
-  srOpUtils,
+  srOpInternal,
   emit_fetch;
 
 type
@@ -226,7 +226,7 @@ begin
   Inc(push_count);
 
   exc:=MakeRead(get_exec0,dtBool); //It means that lane_id=0
-  node:=AddSpirvOp(OpMakeExp);
+  node:=AddSpirvOp(srOpInternal.OpMakeExp);
   node.AddParam(exc); //<-fetch read
  end;
 

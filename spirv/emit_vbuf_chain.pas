@@ -14,7 +14,6 @@ uses
   srLayout,
   srConfig,
   emit_fetch,
-  srop,
   srVBufInfo;
 
 type

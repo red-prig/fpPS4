@@ -662,7 +662,7 @@ begin
   if (node.read_count<>0) then
   if not node.is_force then
   begin
-   Assert(false,'Wrong read_count on:'+Op.GetStr(node.OpId));
+   Assert(false,'Wrong read_count on:'+OpGetStrDebug(node));
   end;
   //
   node.Remove;
@@ -1146,8 +1146,6 @@ end;
 function TSprvEmit_post.LinkBitcast(pBuffer:TsrBuffer):TsrNode;
 var
  pLine:TspirvOp;
-
- use:Boolean;
 
  tbuf:TsrBuffer;
  tref:TsrNode;

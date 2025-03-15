@@ -15,6 +15,7 @@ uses
  srConst,
  srReg,
  srOp,
+ srOpInternal,
  srOpUtils,
  srLayout,
  srVertLayout,
@@ -157,8 +158,8 @@ begin
  if (pop_1[0]=nil) then Exit;
  if (pop_1[1]=nil) then Exit;
 
- if (pop_1[0].OpId<>srOpUtils.OpIAddExt) then Exit;
- if (pop_1[1].OpId<>srOpUtils.OpIAddExt) then Exit;
+ if (pop_1[0].OpId<>srOpInternal.OpIAddExt) then Exit;
+ if (pop_1[1].OpId<>srOpInternal.OpIAddExt) then Exit;
 
  //S_ADD_U32
  imms_p0[0]:=GetRegConst(pop_1[0].ParamNode(0).AsReg); //const

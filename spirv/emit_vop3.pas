@@ -10,7 +10,7 @@ uses
   spirv,
   srType,
   srReg,
-  srOpUtils,
+  srOpInternal,
   emit_fetch;
 
 type
@@ -1466,10 +1466,10 @@ begin
   V_MED3_U32: emit_V_MED3_U32;
   V_FMA_F32 : emit_V_FMA_F32;
 
-  V_CUBEID_F32:emit_V_CUBE(OpCUBEID);
-  V_CUBESC_F32:emit_V_CUBE(OpCUBESC);
-  V_CUBETC_F32:emit_V_CUBE(OpCUBETC);
-  V_CUBEMA_F32:emit_V_CUBE(OpCUBEMA);
+  V_CUBEID_F32:emit_V_CUBE(srOpInternal.OpCUBEID);
+  V_CUBESC_F32:emit_V_CUBE(srOpInternal.OpCUBESC);
+  V_CUBETC_F32:emit_V_CUBE(srOpInternal.OpCUBETC);
+  V_CUBEMA_F32:emit_V_CUBE(srOpInternal.OpCUBEMA);
 
   //VOP1 analog
 
