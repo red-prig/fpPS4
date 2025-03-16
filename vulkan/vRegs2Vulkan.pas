@@ -1859,10 +1859,10 @@ Function TGPU_REGS.get_code_addr(FStage:TvShaderStage):Pointer;
 begin
  Result:=nil;
  case FStage of
-  vShaderStageLs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_LS,SG_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
-  vShaderStageHs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_HS,SG_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
-  vShaderStageEs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_ES,SG_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
-  vShaderStageGs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_GS,SG_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
+  //vShaderStageLs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_LS,SG_REG^.SPI_SHADER_PGM_HI_LS.MEM_BASE);
+  //vShaderStageHs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_HS,SG_REG^.SPI_SHADER_PGM_HI_HS.MEM_BASE);
+  //vShaderStageEs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_ES,SG_REG^.SPI_SHADER_PGM_HI_ES.MEM_BASE);
+  //vShaderStageGs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_GS,SG_REG^.SPI_SHADER_PGM_HI_GS.MEM_BASE);
   vShaderStageVs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_VS,SG_REG^.SPI_SHADER_PGM_HI_VS.MEM_BASE);
   vShaderStagePs:Result:=getCodeAddress(SG_REG^.SPI_SHADER_PGM_LO_PS,SG_REG^.SPI_SHADER_PGM_HI_PS.MEM_BASE);
   vShaderStageCs:Result:=getCodeAddress(SC_REG^.COMPUTE_PGM_LO      ,SC_REG^.COMPUTE_PGM_HI.DATA);

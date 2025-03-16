@@ -12,6 +12,8 @@ uses
  pm4_ring,
  pm4defs,
  pm4_stream,
+ time,
+ md_sleep,
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
@@ -1327,6 +1329,24 @@ begin
 
 end;
 
+Function me_test_mem(pollAddr:Pointer;ref,mask:DWORD;compareFunc:Byte):Boolean;
+var
+ val:DWORD;
+begin
+ val:=PQWORD(pollAddr)^ and mask;
+ Case compareFunc of
+  WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
+  WAIT_REG_MEM_FUNC_LESS         :Result:=(val<ref);
+  WAIT_REG_MEM_FUNC_LESS_EQUAL   :Result:=(val<=ref);
+  WAIT_REG_MEM_FUNC_EQUAL        :Result:=(val=ref);
+  WAIT_REG_MEM_FUNC_NOT_EQUAL    :Result:=(val<>ref);
+  WAIT_REG_MEM_FUNC_GREATER_EQUAL:Result:=(val>ref);
+  WAIT_REG_MEM_FUNC_GREATER      :Result:=(val>=ref);
+  else
+   Assert(false,'me_test_mem');
+ end;
+end;
+
 procedure onWaitRegMem(pctx:p_pfp_ctx;Body:PPM4CMDWAITREGMEM);
 begin
 
@@ -1356,7 +1376,12 @@ begin
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin
-     Assert(false,'WaitRegMem: engine='+engine_str[Body^.engine]);
+
+     while not me_test_mem(Pointer(Body^.pollAddress),Body^.reference,Body^.mask,Body^.compareFunc) do
+     begin
+      msleep_td(hz div 10000);
+     end;
+
     end;
   else
     Assert(false,'WaitRegMem: engine='+engine_str[Body^.engine]);

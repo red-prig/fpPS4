@@ -1685,6 +1685,12 @@ begin
  GPU_REGS.CX_REG:=@CX_REG;
  GPU_REGS.UC_REG:=@UC_REG;
 
+ if DWORD(CX_REG.VGT_SHADER_STAGES_EN)<>0 then
+ begin
+  Writeln('Skip tessellation:0x',HexStr(DWORD(CX_REG.VGT_SHADER_STAGES_EN),8));
+  Exit;
+ end;
+
  node:=allocator.Alloc(SizeOf(t_pm4_node_draw));
 
  node^.ntype :=ntype;
