@@ -252,7 +252,8 @@ type
 
  PTSharpResource4=^TTSharpResource4;
  TTSharpResource4=bitpacked record
-        base:bit38;
+        base:bit32;
+      unused:bit6;
     mtype_L2:bit2;
      min_lod:bit12; //fixed point 4.8 minimum LOD (0.0..15.0)
         dfmt:bit6;  //texture data format; num components, num bits
@@ -930,7 +931,7 @@ end;
 procedure print_tsharp4(PT:PTSharpResource4);
 begin
  if (PT=nil) then Exit;
- Writeln('base=',HexStr(PT^.base shl 8,10));
+ Writeln('base=',HexStr(QWORD(PT^.base) shl 8,10));
  Writeln('min_lod=',_get_lod_str(PT^.min_lod));
 
  Writeln('dfmt=',_get_tex_dfmt_str(PT^.dfmt));

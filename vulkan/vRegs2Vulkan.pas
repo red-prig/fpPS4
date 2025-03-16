@@ -2266,7 +2266,7 @@ begin
  Result:=Default(TvImageKey);
  if (PT=nil) then Exit;
 
- Result.Addr:=Pointer(PT^.base shl 8);
+ Result.Addr:=Pointer(QWORD(PT^.base) shl 8);
  Result.cformat:=_get_tsharp4_cformat(PT,hint);
 
  if (Result.cformat=VK_FORMAT_UNDEFINED) then

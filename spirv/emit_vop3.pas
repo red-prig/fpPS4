@@ -38,7 +38,8 @@ type
   procedure emit_V2_F32(OpId:DWORD);
   procedure emit_V2_REV_F32(OpId:DWORD);
   procedure emit_V_CVT_PKRTZ_F16_F32;
-  procedure emit_V_MMX_F32(OpId:DWORD);
+  procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_MUL_LO(rtype:TsrDataType);
@@ -60,8 +61,6 @@ type
   procedure emit_V_MAD_U32_U24;
   procedure emit_V_MAD_U64_U32;
   procedure emit_V_SAD_U32;
-  procedure emit_V_MAX3_F32;
-  procedure emit_V_MIN3_F32;
   procedure emit_V_MED3_F32;
   procedure emit_V_MED3_I32;
   procedure emit_V_MED3_U32;
@@ -329,7 +328,7 @@ begin
  OpConvFloatToHalf2(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP3.emit_V_MMX_F32(OpId:DWORD);
+procedure TEmit_VOP3.emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
@@ -339,14 +338,52 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ if rtype.isFloat then
+ begin
+  emit_src_abs_bit(@src,2);
+  emit_src_neg_bit(@src,2);
+ end;
 
- OpGlsl2(OpId,dtFloat32,dst,src[0],src[1]);
+ OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ if rtype.isFloat then
+ begin
+  emit_dst_omod_f(dst);
+  emit_dst_clamp_f(dst);
+ end;
 end;
+
+procedure TEmit_VOP3.emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
+Var
+ dst:PsrRegSlot;
+ src:array[0..2] of TsrRegNode;
+ mid:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
+
+ if rtype.isFloat then
+ begin
+  emit_src_abs_bit(@src,3);
+  emit_src_neg_bit(@src,3);
+ end;
+
+ OpGlsl2(OpId,rtype,dst,src[0],src[1]);
+
+ mid:=MakeRead(dst,rtype);
+
+ OpGlsl2(OpId,rtype,dst,mid,src[2]);
+
+ if rtype.isFloat then
+ begin
+  emit_dst_omod_f(dst);
+  emit_dst_clamp_f(dst);
+ end;
+end;
+
 
 procedure TEmit_VOP3.emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
 Var
@@ -864,46 +901,6 @@ begin
  OpIAdd(dst,rdif,rvac);
 end;
 
-procedure TEmit_VOP3.emit_V_MAX3_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..2] of TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP3a.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
- src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
-
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
-
- OpGlsl2(GlslOp.FMax,dtFloat32,dst,OpFMaxTo(src[0],src[1]),src[2]);
-
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
-end;
-
-procedure TEmit_VOP3.emit_V_MIN3_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..2] of TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP3a.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
- src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
-
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
-
- OpGlsl2(GlslOp.FMin,dtFloat32,dst,OpFMinTo(src[0],src[1]),src[2]);
-
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
-end;
-
 procedure TEmit_VOP3.emit_V_MED3_F32;
 Var
  dst:PsrRegSlot;
@@ -1417,11 +1414,17 @@ begin
 
   256+V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
 
-  256+V_MIN_LEGACY_F32:emit_V_MMX_F32(GlslOp.NMin);
-  256+V_MAX_LEGACY_F32:emit_V_MMX_F32(GlslOp.NMax);
+  256+V_MIN_LEGACY_F32:emit_V_MMX(GlslOp.NMin,dtFloat32);
+  256+V_MAX_LEGACY_F32:emit_V_MMX(GlslOp.NMax,dtFloat32);
 
-  256+V_MIN_F32:emit_V_MMX_F32(GlslOp.FMin);
-  256+V_MAX_F32:emit_V_MMX_F32(GlslOp.FMax);
+  256+V_MIN_F32:emit_V_MMX(GlslOp.FMin,dtFloat32);
+  256+V_MAX_F32:emit_V_MMX(GlslOp.FMax,dtFloat32);
+
+  256+V_MIN_I32:emit_V_MMX(GlslOp.SMin,dtInt32);
+  256+V_MAX_I32:emit_V_MMX(GlslOp.SMax,dtInt32);
+
+  256+V_MIN_U32:emit_V_MMX(GlslOp.UMin,dtUint32);
+  256+V_MAX_U32:emit_V_MMX(GlslOp.UMax,dtUint32);
 
   256+V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
@@ -1459,8 +1462,16 @@ begin
   V_MAD_U64_U32: emit_V_MAD_U64_U32;
 
   V_SAD_U32 : emit_V_SAD_U32;
-  V_MAX3_F32: emit_V_MAX3_F32;
-  V_MIN3_F32: emit_V_MIN3_F32;
+
+  V_MIN3_F32: emit_V_MMX3(GlslOp.FMin,dtFloat32);
+  V_MAX3_F32: emit_V_MMX3(GlslOp.FMax,dtFloat32);
+
+  V_MIN3_I32: emit_V_MMX3(GlslOp.SMin,dtInt32);
+  V_MAX3_I32: emit_V_MMX3(GlslOp.SMax,dtInt32);
+
+  V_MIN3_U32: emit_V_MMX3(GlslOp.UMin,dtUint32);
+  V_MAX3_U32: emit_V_MMX3(GlslOp.UMax,dtUint32);
+
   V_MED3_F32: emit_V_MED3_F32;
   V_MED3_I32: emit_V_MED3_I32;
   V_MED3_U32: emit_V_MED3_U32;

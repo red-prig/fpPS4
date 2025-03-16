@@ -506,7 +506,7 @@ begin
    rtFunPtr2:Result:=pData;
    rtVSharp4:Result:={%H-}Pointer(PVSharpResource4(pData)^.base);
    rtTSharp4,
-   rtTSharp8:Result:={%H-}Pointer(PTSharpResource4(pData)^.base shl 8);
+   rtTSharp8:Result:={%H-}Pointer(QWORD(PTSharpResource4(pData)^.base) shl 8);
    rtImmData:Result:=TsrDataImm(pData).key.pData;
    else;
   end;

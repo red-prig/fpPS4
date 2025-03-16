@@ -1021,7 +1021,7 @@ begin
  Case FPushConst.addr[0].rtype of
   vtVSharp4:Result:=Pointer(PVSharpResource4(Result)^.base);
   vtTSharp4,
-  vtTSharp8:Result:=Pointer(PTSharpResource4(Result)^.base shl 8);
+  vtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(Result)^.base) shl 8);
   else;
  end;
 
@@ -1232,7 +1232,7 @@ begin
 
       if (i<>0) then
       begin
-       pData:=Pointer(PTSharpResource4(pDmem)^.base shl 8);
+       pData:=Pointer(QWORD(PTSharpResource4(pDmem)^.base) shl 8);
 
        pDmem:=nil;
        if not get_dmem_ptr(pData,@pDmem,nil) then
