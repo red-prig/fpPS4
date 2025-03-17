@@ -1340,8 +1340,8 @@ begin
   WAIT_REG_MEM_FUNC_LESS_EQUAL   :Result:=(val<=ref);
   WAIT_REG_MEM_FUNC_EQUAL        :Result:=(val=ref);
   WAIT_REG_MEM_FUNC_NOT_EQUAL    :Result:=(val<>ref);
-  WAIT_REG_MEM_FUNC_GREATER_EQUAL:Result:=(val>ref);
-  WAIT_REG_MEM_FUNC_GREATER      :Result:=(val>=ref);
+  WAIT_REG_MEM_FUNC_GREATER_EQUAL:Result:=(val>=ref);
+  WAIT_REG_MEM_FUNC_GREATER      :Result:=(val>ref);
   else
    Assert(false,'me_test_mem');
  end;
