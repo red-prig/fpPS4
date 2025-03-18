@@ -30,7 +30,6 @@ const
  PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_BLK_SHIFT;
 
 var
- //PRIV_FD:array[0..PMAPP_BLK_PRIV_BLOCKS-1] of vm_nt_file_obj;
  DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
 
  DEV_INFO:record
@@ -43,14 +42,16 @@ var
 type
  P_PRIV_FD=^T_PRIV_FD;
  T_PRIV_FD=record
-  entry:TAILQ_ENTRY;
+  elist:TAILQ_ENTRY;
+  efree:TAILQ_ENTRY;
   obj  :vm_nt_file_obj;
   size :DWORD;
   pos  :DWORD;
  end;
 
 var
- PRIV_FD:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD.tqh_first);
+ PRIV_FD_LIST:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD_LIST.tqh_first);
+ PRIV_FD_FREE:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD_FREE.tqh_first);
 
 function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
@@ -432,11 +433,24 @@ var
  node:P_PRIV_FD;
 begin
  Result:=0;
- node:=TAILQ_FIRST(@PRIV_FD);
+ node:=TAILQ_FIRST(@PRIV_FD_LIST);
  While (node<>nil) do
  begin
   Inc(Result);
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=TAILQ_NEXT(node,@node^.elist);
+ end;
+end;
+
+function get_priv_free_count:Integer;
+var
+ node:P_PRIV_FD;
+begin
+ Result:=0;
+ node:=TAILQ_FIRST(@PRIV_FD_FREE);
+ While (node<>nil) do
+ begin
+  Inc(Result);
+  node:=TAILQ_NEXT(node,@node^.efree);
  end;
 end;
 
@@ -446,7 +460,13 @@ var
 begin
  node:=POINTER(PTRUINT(obj)-PTRUINT(@P_PRIV_FD(nil)^.obj));
 
- TAILQ_REMOVE(@PRIV_FD,node,@node^.entry);
+ if (node^.efree.tqe_next<>nil) and
+    (node^.efree.tqe_prev<>nil) then
+ begin
+  TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
+ end;
+
+ TAILQ_REMOVE(@PRIV_FD_LIST,node,@node^.elist);
 
  FreeMem(node);
 end;
@@ -456,7 +476,7 @@ var
  node:P_PRIV_FD;
 begin
  Result:=nil;
- node:=TAILQ_FIRST(@PRIV_FD);
+ node:=TAILQ_FIRST(@PRIV_FD_FREE);
  While (node<>nil) do
  begin
   if ((node^.size-node^.pos)>=size) then
@@ -464,7 +484,7 @@ begin
    Exit(node);
   end;
   //
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=TAILQ_NEXT(node,@node^.efree);
  end;
 end;
 
@@ -494,6 +514,13 @@ begin
   //linear alloc
   offset:=node^.pos;
   node^.pos:=node^.pos+size;
+
+  if (node^.pos=node^.size) then
+  begin
+   //delete with free list
+   TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
+  end;
+
  end else
  begin
   //trunc size
@@ -508,15 +535,21 @@ begin
   node^.size:=MAX_PRIV_SIZE;
   node^.pos :=size; //prealloc
 
-  //insert to
-  TAILQ_INSERT_TAIL(@PRIV_FD,node,@node^.entry);
+  //insert to list
+  TAILQ_INSERT_TAIL(@PRIV_FD_LIST,node,@node^.elist);
+
+  if (node^.pos<>node^.size) then
+  begin
+   //insert with free list
+   TAILQ_INSERT_TAIL(@PRIV_FD_FREE,node,@node^.efree);
+  end;
 
   R:=md_memfd_create(node^.obj.hfile,MAX_PRIV_SIZE,VM_RW);
 
   if (R<>0) then
   begin
    Writeln('failed md_memfd_create(',HexStr(MAX_PRIV_SIZE,11),'):0x',HexStr(r,8));
-   Writeln(' priv_block_count=',get_priv_block_count);
+   Writeln(' priv_block_count=',get_priv_block_count,':',get_priv_free_count);
 
    print_backtrace_td(stderr);
 

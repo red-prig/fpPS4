@@ -12,7 +12,9 @@ type
  p_mtx=^mtx;
  mtx=packed record
   n:PChar;
-  c:TRTLCriticalSection;
+  h:THandle;
+  OwningThread:TThreadID;
+  //c:TRTLCriticalSection;
   {$IFDEF DEBUG_MTX}
   debug_own:array[0..2] of Pointer;
   {$ENDIF}
@@ -60,21 +62,36 @@ procedure mtx_assert (var m:mtx);
 
 implementation
 
+uses
+ ntapi;
+
 {$IFDEF DEBUG_MTX}
 uses
  md_systm,
  kern_thr;
 {$ENDIF}
 
-procedure mtx_init(var m:mtx;name:PChar); inline;
+procedure mtx_init(var m:mtx;name:PChar); //inline;
+var
+ R:DWORD;
 begin
  m.n:=name;
- InitCriticalSection(m.c);
+ m.h:=0;
+
+ R:=NtCreateMutant(@m.h,MUTANT_ALL_ACCESS,nil,False);
+ Assert(R=0,'NtCreateMutant');
+
+ //InitCriticalSection(m.c);
+ //EnterCriticalSection(m.c);
+ //LeaveCriticalSection(m.c);
 end;
 
-procedure mtx_destroy(var m:mtx); inline;
+procedure mtx_destroy(var m:mtx); //inline;
 begin
- DoneCriticalSection(m.c);
+ NtClose(m.h);
+ m.n:=nil;
+ m.h:=0;
+ //DoneCriticalSection(m.c);
 end;
 
 procedure mtx_lock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
@@ -82,13 +99,21 @@ procedure mtx_lock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
 var
  rbp:Pointer;
 {$ENDIF}
+var
+ R:DWORD;
 begin
  //Writeln('lock:',m.n,':',HexStr(@m));
  {$IFDEF DEBUG_MTX}
  if curkthread<>nil then
   curkthread^.td_debug_mtx:=@m;
  {$ENDIF}
- EnterCriticalSection(m.c);
+
+ R:=NtWaitForSingleObject(m.h,False,nil);
+ Assert(R=0,'mtx_lock');
+
+ m.OwningThread:=ThreadID;
+
+ //EnterCriticalSection(m.c);
  {$IFDEF DEBUG_MTX}
  if curkthread<>nil then
   curkthread^.td_debug_mtx:=nil;
@@ -107,8 +132,20 @@ function mtx_trylock(var m:mtx):Boolean; {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
 var
  rbp:Pointer;
 {$ENDIF}
+var
+ R:DWORD;
+ t:QWORD;
 begin
- Result:=TryEnterCriticalSection(m.c)<>0;
+ t:=0;
+ R:=NtWaitForSingleObject(m.h,False,@t);
+ if (R=STATUS_TIMEOUT) then Exit(False);
+ Assert(R=0,'mtx_trylock');
+
+ m.OwningThread:=ThreadID;
+
+ Result:=True;
+
+ //Result:=TryEnterCriticalSection(m.c)<>0;
  {$IFDEF DEBUG_MTX}
  if Result then
  begin
@@ -123,7 +160,13 @@ begin
  {$ENDIF}
 end;
 
-procedure mtx_unlock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
+procedure RtlWakeAddressSingle(addr:Pointer); stdcall; external 'ntdll';
+procedure RtlWakeAddressAll   (addr:Pointer); stdcall; external 'ntdll';
+
+procedure mtx_unlock(var m:mtx); //{$IFNDEF DEBUG_MTX} inline; {$ENDIF}
+var
+ R:DWORD;
+ INFO:MUTANT_BASIC_INFORMATION;
 begin
  //Writeln('ulck:',m.n,HexStr(@m));
  mtx_assert(m);
@@ -132,19 +175,32 @@ begin
  m.debug_own[1]:=nil;
  m.debug_own[2]:=nil;
  {$ENDIF}
- LeaveCriticalSection(m.c);
+
+ INFO:=Default(MUTANT_BASIC_INFORMATION);
+ R:=NtQueryMutant(m.h,0,@INFO,SizeOf(INFO),nil);
+ Assert(R=0,'NtQueryMutant');
+
+ if (INFO.CurrentCount=0) then
+ begin
+  m.OwningThread:=0;
+ end;
+
+ R:=NtReleaseMutant(m.h,nil);
+ Assert(R=0,'NtReleaseMutant');
+ //LeaveCriticalSection(m.c);
+ //RtlWakeAddressAll(@m.c.LockCount);
 end;
 
-function mtx_owned(var m:mtx):Boolean; inline;
+function mtx_owned(var m:mtx):Boolean;// inline;
 begin
- Result:=m.c.OwningThread=ThreadID;
+ Result:=m{.c}.OwningThread=ThreadID;
 end;
 
 procedure mtx_assert(var m:mtx); //inline;
 begin
  if not mtx_owned(m) then
  begin
-  Assert(false,'mtx_assert:'+IntToStr(m.c.OwningThread)+'<>'+IntToStr(ThreadID));
+  Assert(false,'mtx_assert:'+IntToStr(m{.c}.OwningThread)+'<>'+IntToStr(ThreadID));
  end;
 end;
 

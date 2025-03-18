@@ -237,6 +237,7 @@ begin
    namei_cleanup_cnp(cnp);
    Exit(error);
   end;
+
   vfslocked:=ord((ndp^.ni_cnd.cn_flags and GIANTHELD)<>0);
   ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not GIANTHELD);
   {
