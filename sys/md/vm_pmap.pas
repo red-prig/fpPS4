@@ -7,6 +7,7 @@ interface
 
 uses
  subr_backtrace,
+ mqueue,
  vm,
  vmparam,
  sys_vm_object,
@@ -29,7 +30,7 @@ const
  PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_BLK_SHIFT;
 
 var
- PRIV_FD:array[0..PMAPP_BLK_PRIV_BLOCKS-1] of vm_nt_file_obj;
+ //PRIV_FD:array[0..PMAPP_BLK_PRIV_BLOCKS-1] of vm_nt_file_obj;
  DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
 
  DEV_INFO:record
@@ -38,6 +39,18 @@ var
   DEV_POS :QWORD;
   DEV_PTR :Pointer;
  end;
+
+type
+ P_PRIV_FD=^T_PRIV_FD;
+ T_PRIV_FD=record
+  entry:TAILQ_ENTRY;
+  obj  :vm_nt_file_obj;
+  size :DWORD;
+  pos  :DWORD;
+ end;
+
+var
+ PRIV_FD:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD.tqh_first);
 
 function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
@@ -416,41 +429,93 @@ type
 
 function get_priv_block_count:Integer;
 var
- i:Integer;
+ node:P_PRIV_FD;
 begin
  Result:=0;
- For i:=0 to High(PRIV_FD) do
+ node:=TAILQ_FIRST(@PRIV_FD);
+ While (node<>nil) do
  begin
-  if (PRIV_FD[i].hfile<>0) then
+  Inc(Result);
+  node:=TAILQ_NEXT(node,@node^.entry);
+ end;
+end;
+
+procedure on_free_priv(obj:p_vm_nt_file_obj);
+var
+ node:P_PRIV_FD;
+begin
+ node:=POINTER(PTRUINT(obj)-PTRUINT(@P_PRIV_FD(nil)^.obj));
+
+ TAILQ_REMOVE(@PRIV_FD,node,@node^.entry);
+
+ FreeMem(node);
+end;
+
+function find_free_priv(size:DWORD):P_PRIV_FD;
+var
+ node:P_PRIV_FD;
+begin
+ Result:=nil;
+ node:=TAILQ_FIRST(@PRIV_FD);
+ While (node<>nil) do
+ begin
+  if ((node^.size-node^.pos)>=size) then
   begin
-   Inc(Result);
+   Exit(node);
   end;
+  //
+  node:=TAILQ_NEXT(node,@node^.entry);
  end;
 end;
 
 procedure get_priv_fd(var info:t_fd_info);
+const
+ MAX_PRIV_SIZE=256*1024*1024;
 var
- o:QWORD;
- e:QWORD;
- d:QWORD;
- i:DWORD;
- r:DWORD;
+ node  :P_PRIV_FD;
+ size  :QWORD;
+ offset:QWORD;
+ R     :DWORD;
 begin
- o:=info.start;
+ //Find empty space or create new one (do not reuse old ones) no more than 256MB
 
- //current block id
- i:=o shr PMAPP_BLK_SHIFT;
+ size:=(info.__end-info.start);
 
- if (PRIV_FD[i].hfile=0) then
+ if (size<MAX_PRIV_SIZE) then
  begin
-  R:=md_memfd_create(PRIV_FD[i].hfile,PMAPP_BLK_SIZE,VM_RW);
+  node:=find_free_priv(size);
+ end else
+ begin
+  node:=nil;
+ end;
 
-  PRIV_FD[i].flags:=NT_FILE_FREE;
-  PRIV_FD[i].maxp :=VM_RW;
+ if (node<>nil) then
+ begin
+  //linear alloc
+  offset:=node^.pos;
+  node^.pos:=node^.pos+size;
+ end else
+ begin
+  //trunc size
+  if (size>MAX_PRIV_SIZE) then size:=MAX_PRIV_SIZE;
+  offset:=0;
 
-  if (r<>0) then
+  //new block
+  node:=AllocMem(SizeOf(T_PRIV_FD));
+  node^.obj.free :=@on_free_priv;
+  node^.obj.flags:=NT_FILE_FREE;
+  node^.obj.maxp :=VM_RW;
+  node^.size:=MAX_PRIV_SIZE;
+  node^.pos :=size; //prealloc
+
+  //insert to
+  TAILQ_INSERT_TAIL(@PRIV_FD,node,@node^.entry);
+
+  R:=md_memfd_create(node^.obj.hfile,MAX_PRIV_SIZE,VM_RW);
+
+  if (R<>0) then
   begin
-   Writeln('failed md_memfd_create(',HexStr(PMAPP_BLK_SIZE,11),'):0x',HexStr(r,8));
+   Writeln('failed md_memfd_create(',HexStr(MAX_PRIV_SIZE,11),'):0x',HexStr(r,8));
    Writeln(' priv_block_count=',get_priv_block_count);
 
    print_backtrace_td(stderr);
@@ -459,28 +524,11 @@ begin
   end;
  end;
 
- info.obj:=@PRIV_FD[i];
+ info.obj   :=@node^.obj;
+ info.olocal:=offset;          //block local offset
+ info.__end :=info.start+size; //apply size
 
  vm_nt_file_obj_reference(info.obj);
-
- //current block offset
- o:=o and PMAPP_BLK_MASK;
- info.olocal:=o; //block local offset
-
- //mem size
- d:=info.__end-info.start;
-
- //max offset
- e:=o+d;
-
- // |start         end|
- // |offset  |max
- if (e>PMAPP_BLK_SIZE) then
- begin
-  e:=PMAPP_BLK_SIZE-o;
-  e:=e+info.start;
-  info.__end:=e;
- end;
 end;
 
 procedure _print_dmem_fd; public;

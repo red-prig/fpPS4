@@ -39,8 +39,12 @@ type
 
  pp_vm_nt_file_obj=^p_vm_nt_file_obj;
  p_vm_nt_file_obj=^vm_nt_file_obj;
+
+ t_nt_obj_free_cb=procedure(obj:p_vm_nt_file_obj);
+
  vm_nt_file_obj=packed record
   hfile:THandle;
+  free :t_nt_obj_free_cb;
   refs :QWORD;
   flags:Byte;
   maxp :Byte;
@@ -165,6 +169,7 @@ end;
 procedure vm_nt_file_obj_destroy(obj:p_vm_nt_file_obj);
 var
  r:Integer;
+ free :t_nt_obj_free_cb;
 begin
  if ((obj^.flags and NT_FILE_FREE)<>0) then
  if (obj^.hfile<>0) then
@@ -178,9 +183,16 @@ begin
   obj^.hfile:=0;
  end;
 
+ free:=obj^.free;
+
  if ((obj^.flags and NT_MOBJ_FREE)<>0) then
  begin
   FreeMem(obj);
+ end;
+
+ if (free<>nil) then
+ begin
+  free(obj);
  end;
 end;
 
