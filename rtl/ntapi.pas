@@ -1002,6 +1002,26 @@ function NtQueryMutant(
           ResultLength           :PULONG
          ):DWORD; stdcall; external 'ntdll';
 
+function NtCreateKeyedEvent(
+          Handle          :PHandle;
+          DesiredAccess   :ACCESS_MASK;
+          ObjectAttributes:POBJECT_ATTRIBUTES;
+          flags           :ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtWaitForKeyedEvent(
+          Handle   :THandle;
+          key      :Pointer;
+          Alertable:Boolean;
+          Timeout  :PLARGE_INTEGER
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtReleaseKeyedEvent(
+          Handle   :THandle;
+          key      :Pointer;
+          Alertable:Boolean;
+          Timeout  :PLARGE_INTEGER
+         ):DWORD; stdcall; external 'ntdll';
 
 function NtCreateSection(
           SectionHandle        :PHandle;

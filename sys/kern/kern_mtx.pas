@@ -6,15 +6,20 @@ unit kern_mtx;
 interface
 
 uses
- sysutils;
+ sysutils,
+ ntapi;
 
 type
+ t_fast_mutex=bitpacked record
+  recursion:WORD;
+  waiters  :WORD;
+  owned    :DWORD;
+ end;
+
  p_mtx=^mtx;
  mtx=packed record
   n:PChar;
-  h:THandle;
-  OwningThread:TThreadID;
-  //c:TRTLCriticalSection;
+  fast_mutex:t_fast_mutex;
   {$IFDEF DEBUG_MTX}
   debug_own:array[0..2] of Pointer;
   {$ENDIF}
@@ -62,45 +67,40 @@ procedure mtx_assert (var m:mtx);
 
 implementation
 
-uses
- ntapi;
-
 {$IFDEF DEBUG_MTX}
 uses
  md_systm,
  kern_thr;
 {$ENDIF}
 
-procedure mtx_init(var m:mtx;name:PChar); //inline;
 var
- R:DWORD;
+ qhandle:THandle=0;
+
+procedure mtx_init(var m:mtx;name:PChar); inline;
 begin
  m.n:=name;
- m.h:=0;
-
- R:=NtCreateMutant(@m.h,MUTANT_ALL_ACCESS,nil,False);
- Assert(R=0,'NtCreateMutant');
-
- //InitCriticalSection(m.c);
- //EnterCriticalSection(m.c);
- //LeaveCriticalSection(m.c);
+ QWORD(m.fast_mutex):=0;
 end;
 
-procedure mtx_destroy(var m:mtx); //inline;
+procedure mtx_destroy(var m:mtx); inline;
 begin
- NtClose(m.h);
- m.n:=nil;
- m.h:=0;
- //DoneCriticalSection(m.c);
+ //
 end;
 
-procedure mtx_lock(var m:mtx); {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
-{$IFDEF DEBUG_MTX}
+function GetKey(var m:mtx):Pointer; inline;
+begin
+ Result:=Pointer(PTRUINT(@m) and (not PTRUINT(1)));
+end;
+
+procedure mtx_lock(var m:mtx);
 var
+ i:Integer;
+ w:DWORD;
+ old:t_fast_mutex;
+ new:t_fast_mutex;
+{$IFDEF DEBUG_MTX}
  rbp:Pointer;
 {$ENDIF}
-var
- R:DWORD;
 begin
  //Writeln('lock:',m.n,':',HexStr(@m));
  {$IFDEF DEBUG_MTX}
@@ -108,12 +108,43 @@ begin
   curkthread^.td_debug_mtx:=@m;
  {$ENDIF}
 
- R:=NtWaitForSingleObject(m.h,False,nil);
- Assert(R=0,'mtx_lock');
+ i:=0;
 
- m.OwningThread:=ThreadID;
+ repeat
+  QWORD(old):=System.InterlockedExchangeAdd64(QWORD(m.fast_mutex),0);
 
- //EnterCriticalSection(m.c);
+  if (old.owned=0) or (old.owned=ThreadID) then
+  begin
+   new.recursion:=old.recursion+1;
+   new.waiters  :=old.waiters;
+   new.owned    :=ThreadID;
+
+   if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
+   begin
+    Break;
+   end;
+
+  end else
+  begin
+   Inc(i);
+
+   if (i>=100) then
+   begin
+
+    new:=old;
+    new.waiters:=new.waiters+1;
+
+    if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
+    begin
+     NtWaitForKeyedEvent(qhandle, GetKey(m), False, nil);
+    end;
+
+    i:=0;
+   end;
+  end;
+
+ until false;
+
  {$IFDEF DEBUG_MTX}
  if curkthread<>nil then
   curkthread^.td_debug_mtx:=nil;
@@ -127,25 +158,38 @@ begin
  {$ENDIF}
 end;
 
-function mtx_trylock(var m:mtx):Boolean; {$IFNDEF DEBUG_MTX} inline; {$ENDIF}
-{$IFDEF DEBUG_MTX}
+function mtx_trylock(var m:mtx):Boolean;
 var
+ old:t_fast_mutex;
+ new:t_fast_mutex;
+{$IFDEF DEBUG_MTX}
  rbp:Pointer;
 {$ENDIF}
-var
- R:DWORD;
- t:QWORD;
 begin
- t:=0;
- R:=NtWaitForSingleObject(m.h,False,@t);
- if (R=STATUS_TIMEOUT) then Exit(False);
- Assert(R=0,'mtx_trylock');
 
- m.OwningThread:=ThreadID;
+ repeat
+  QWORD(old):=System.InterlockedExchangeAdd64(QWORD(m.fast_mutex),0);
 
- Result:=True;
+  if (old.owned=0) or (old.owned=ThreadID) then
+  begin
+   new.recursion:=old.recursion+1;
+   new.waiters  :=old.waiters;
+   new.owned    :=ThreadID;
 
- //Result:=TryEnterCriticalSection(m.c)<>0;
+   if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
+   begin
+    Result:=True;
+    Break;
+   end;
+
+  end else
+  begin
+   Result:=False;
+   Break;
+  end;
+
+ until false;
+
  {$IFDEF DEBUG_MTX}
  if Result then
  begin
@@ -160,49 +204,77 @@ begin
  {$ENDIF}
 end;
 
-procedure RtlWakeAddressSingle(addr:Pointer); stdcall; external 'ntdll';
-procedure RtlWakeAddressAll   (addr:Pointer); stdcall; external 'ntdll';
-
-procedure mtx_unlock(var m:mtx); //{$IFNDEF DEBUG_MTX} inline; {$ENDIF}
+procedure mtx_unlock(var m:mtx);
 var
- R:DWORD;
- INFO:MUTANT_BASIC_INFORMATION;
+ old:t_fast_mutex;
+ new:t_fast_mutex;
 begin
- //Writeln('ulck:',m.n,HexStr(@m));
  mtx_assert(m);
- {$IFDEF DEBUG_MTX}
- m.debug_own[0]:=nil;
- m.debug_own[1]:=nil;
- m.debug_own[2]:=nil;
- {$ENDIF}
 
- INFO:=Default(MUTANT_BASIC_INFORMATION);
- R:=NtQueryMutant(m.h,0,@INFO,SizeOf(INFO),nil);
- Assert(R=0,'NtQueryMutant');
+ repeat
 
- if (INFO.CurrentCount=0) then
- begin
-  m.OwningThread:=0;
- end;
+  QWORD(old):=System.InterlockedExchangeAdd64(QWORD(m.fast_mutex),0);
 
- R:=NtReleaseMutant(m.h,nil);
- Assert(R=0,'NtReleaseMutant');
- //LeaveCriticalSection(m.c);
- //RtlWakeAddressAll(@m.c.LockCount);
+  if (old.owned=0) or (old.owned<>ThreadID) or (old.recursion=0) then
+  begin
+   //current thread not owned
+   Exit;
+  end;
+
+  new:=old;
+
+  if (old.recursion=1) then
+  begin
+   new.recursion:=0;
+   new.owned    :=0;
+  end else
+  begin
+   new.recursion:=old.recursion-1;
+  end;
+
+  if (new.waiters<>0) then
+  begin
+   new.waiters:=new.waiters-1;
+  end;
+
+  {$IFDEF DEBUG_MTX}
+  if (new.owned=0) then
+  begin
+   m.debug_own[0]:=nil;
+   m.debug_own[1]:=nil;
+   m.debug_own[2]:=nil;
+  end;
+  {$ENDIF}
+
+  if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
+  begin
+
+   if (old.waiters<>0) then
+   begin
+    NtReleaseKeyedEvent(qhandle, GetKey(m), False, nil);
+   end;
+
+   Break;
+  end;
+
+ until false;
 end;
 
-function mtx_owned(var m:mtx):Boolean;// inline;
+function mtx_owned(var m:mtx):Boolean; inline;
 begin
- Result:=m{.c}.OwningThread=ThreadID;
+ Result:=m.fast_mutex.owned=ThreadID;
 end;
 
-procedure mtx_assert(var m:mtx); //inline;
+procedure mtx_assert(var m:mtx); inline;
 begin
  if not mtx_owned(m) then
  begin
-  Assert(false,'mtx_assert:'+IntToStr(m{.c}.OwningThread)+'<>'+IntToStr(ThreadID));
+  Assert(false,'mtx_assert:'+IntToStr(m.fast_mutex.owned)+'<>'+IntToStr(ThreadID));
  end;
 end;
+
+initialization
+ NtCreateKeyedEvent(@qhandle, DWORD(-1), nil, 0);
 
 end.
 
