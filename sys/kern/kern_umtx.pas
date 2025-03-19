@@ -2147,6 +2147,11 @@ begin
 
   Result:=umtxq_check_susp(td);
   if (Result<>0) then Break;
+ end; //while
+
+ if (Result<>0) then
+ begin
+  casuword32(m^.m_owner, id or UMUTEX_CONTESTED, UMUTEX_CONTESTED);
  end;
 
  umtxq_lock   (@uq^.uq_key);
@@ -2212,6 +2217,14 @@ begin
  umtxq_busy(@key);
  count:=umtxq_count_pi(@key, @uq_first);
 
+ if (count<=1) then
+ begin
+  t:=UMUTEX_UNOWNED;
+ end else
+ begin
+  t:=UMUTEX_CONTESTED;
+ end;
+
  if (uq_first<>nil) then
  begin
   mtx_lock(umtx_lock);
@@ -2265,19 +2278,12 @@ begin
 
   mtx_unlock(umtx_lock);
 
-  if (count<=1) then
-  begin
-   t:=UMUTEX_UNOWNED;
-  end else
-  begin
-   t:=UMUTEX_CONTESTED;
-  end;
-
   if (uq_first=nil) then
   begin
    umtxq_unlock(@key);
   end else
   begin
+   //umtxq_signal_thread (extended)
 
    if ((flags and $80) = 0) then
    begin
@@ -2335,7 +2341,6 @@ begin
      t:=id or UMUTEX_CONTESTED;
     end;
 
-    owner:=id;
    end; //((flags and $80) <> 0)
 
   end; //(uq_first<>nil)
