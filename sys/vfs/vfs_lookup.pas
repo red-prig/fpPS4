@@ -121,7 +121,7 @@ begin
 
  if (ndp^.ni_segflg=UIO_SYSSPACE) then
  begin
-  error:=copystr(ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);
+  error:=copystr  (ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);
  end else
  begin
   error:=copyinstr(ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);

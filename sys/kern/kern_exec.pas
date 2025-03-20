@@ -34,6 +34,7 @@ implementation
 
 uses
  systm,
+ md_systm,
  errno,
  kern_proc,
  kern_mtx,
@@ -94,11 +95,11 @@ end;
  * Copy out argument and environment strings from the old process address
  * space into the temporary string buffer.
  }
-function exec_copyin_args(args:p_image_args;
-                          fname:pchar;
+function exec_copyin_args(args  :p_image_args;
+                          fname :pchar;
                           segflg:uio_seg;
-                          argv:ppchar;
-                          envv:ppchar):Integer;
+                          argv  :ppchar;
+                          envv  :ppchar):Integer;
 label
  err_exit;
 var
@@ -108,14 +109,26 @@ var
 
  function f_fuword_argv:Boolean; inline;
  begin
-  argp:=fuword(argv^);
+  if (segflg=UIO_SYSSPACE) then
+  begin
+   argp:=md_fuword(argv^);
+  end else
+  begin
+   argp:=fuword(argv^);
+  end;
   Inc(argv);
   Result:=(argp<>nil);
  end;
 
  function f_fuword_envv:Boolean; inline;
  begin
-  envp:=fuword(envv^);
+  if (segflg=UIO_SYSSPACE) then
+  begin
+   envp:=md_fuword(envv^);
+  end else
+  begin
+   envp:=fuword(envv^);
+  end;
   Inc(envv);
   Result:=(envp<>nil);
  end;
@@ -168,12 +181,20 @@ begin
   }
  while (f_fuword_argv) do
  begin
-  if (argp=Pointer(QWORD(-1))) then
+  if (argp=Pointer(-1)) then
   begin
    error:=EFAULT;
    goto err_exit;
   end;
-  error:=copyinstr(argp, args^.endp, args^.stringspace, @length);
+
+  if (segflg=UIO_SYSSPACE) then
+  begin
+   error:=copystr  (argp, args^.endp, args^.stringspace, @length);
+  end else
+  begin
+   error:=copyinstr(argp, args^.endp, args^.stringspace, @length);
+  end;
+
   if (error<>0) then
   begin
    if (error=ENAMETOOLONG) then
@@ -196,12 +217,20 @@ begin
  begin
   while (f_fuword_envv) do
   begin
-   if (envp=Pointer(QWORD(-1))) then
+   if (envp=Pointer(-1)) then
    begin
     error:=EFAULT;
     goto err_exit;
    end;
-   error:=copyinstr(envp, args^.endp, args^.stringspace, @length);
+
+   if (segflg=UIO_SYSSPACE) then
+   begin
+    error:=copystr  (envp, args^.endp, args^.stringspace, @length);
+   end else
+   begin
+    error:=copyinstr(envp, args^.endp, args^.stringspace, @length);
+   end;
+
    if (error<>0) then
    begin
     if (error=ENAMETOOLONG) then
@@ -523,7 +552,7 @@ begin
  {
   * Fill in "ps_strings" struct for ps, w, etc.
   }
- suword(arginfo^.ps_argvstr^, vectp);
+ suword(arginfo^.ps_argvstr, vectp);
  suword32(PDWORD(@arginfo^.ps_nargvstr)^, argc);
 
  {
@@ -549,7 +578,7 @@ begin
  suword(vectp^, nil);
  Inc(vectp);
 
- suword(arginfo^.ps_envstr^, vectp);
+ suword(arginfo^.ps_envstr, vectp);
  suword32(PDWORD(@arginfo^.ps_nenvstr)^, envc);
 
  {

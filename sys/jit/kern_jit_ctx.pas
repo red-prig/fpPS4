@@ -1162,6 +1162,8 @@ begin
 end;
 
 procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
+var
+ new_ofs:Int64;
 begin
  if not jit_relative_analize then Exit;
 
@@ -1175,13 +1177,13 @@ begin
   if ctx.is_map_addr(ofs) then
   if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
-   ofs:=0;
+   new_ofs:=0;
 
-   if (copyin(Pointer(ofs),@ofs,SizeOf(Pointer))=0) then
+   if (copyin(Pointer(ofs),@new_ofs,SizeOf(Pointer))=0) then
    begin
-    if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+    if ctx.is_text_addr(new_ofs) and (new_ofs<=ctx.max_reloc) then
     begin
-     ctx.add_forward_point(fpCall,Pointer(ofs));
+     ctx.add_forward_point(fpCall,Pointer(new_ofs));
     end;
    end;
 

@@ -27,11 +27,8 @@ type
   fork_pid:Integer; //out
  end;
 
-function  md_copyin (hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-function  md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-
-function  md_copyin (udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function  md_copyin (udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint;hProcess:THandle=NtCurrentProcess):Integer;
+function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint;hProcess:THandle=NtCurrentProcess):Integer;
 
 function  md_fuword(var base:Pointer):Pointer;
 
@@ -55,7 +52,7 @@ uses
 var
  ppid:DWORD=0;
 
-function md_copyin(hProcess:THandle;udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function md_copyin(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint;hProcess:THandle=NtCurrentProcess):Integer;
 var
  num:DWORD;
 begin
@@ -73,7 +70,7 @@ begin
  end;
 end;
 
-function md_copyout(hProcess:THandle;kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint;hProcess:THandle=NtCurrentProcess):Integer;
 var
  num:DWORD;
 begin
@@ -91,21 +88,11 @@ begin
  end;
 end;
 
-function md_copyin(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-begin
- Result:=md_copyin(NtCurrentProcess,udaddr,kaddr,len,lencopied);
-end;
-
-function md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
-begin
- Result:=md_copyout(NtCurrentProcess,kaddr,udaddr,len,lencopied);
-end;
-
 function md_fuword(var base:Pointer):Pointer;
 begin
  if (md_copyin(@base,@Result,SizeOf(base),nil)<>0) then
  begin
-  Result:=Pointer(QWORD(-1));
+  Result:=Pointer(-1);
  end;
 end;
 
@@ -293,7 +280,7 @@ begin
  if (err<>0) then Exit(err);
 
  kstack:=Default(t_td_stack);
- err:=md_copyin(hProcess,@teb^.stack,@kstack,SizeOf(t_td_stack),nil);
+ err:=md_copyin(@teb^.stack,@kstack,SizeOf(t_td_stack),nil,hProcess);
  if (err<>0) then Exit(err);
 
  delta:=QWORD(kstack.stack)-Context^.Rsp;
@@ -313,7 +300,7 @@ begin
  kstack.sttop:=addr;
  kstack.stack:=addr+size;
 
- err:=md_copyout(hProcess,@kstack,@teb^.stack,SizeOf(t_td_stack),nil);
+ err:=md_copyout(@kstack,@teb^.stack,SizeOf(t_td_stack),nil,hProcess);
  if (err<>0) then Exit(err);
 
  Context^.Rsp:=QWORD(kstack.stack)-delta;
@@ -532,12 +519,12 @@ begin
  shared_info.proc:=info.proc;
  shared_info.size:=info.size;
 
- Result:=md_copyout(hProcess,@shared_info,base,SizeOf(shared_info),nil);
+ Result:=md_copyout(@shared_info,base,SizeOf(shared_info),nil,hProcess);
  if (Result<>0) then Exit;
 
  if (info.data<>nil) and (info.size<>0) then
  begin
-  Result:=md_copyout(hProcess,info.data,@base^.data,info.size,nil);
+  Result:=md_copyout(info.data,@base^.data,info.size,nil,hProcess);
  end;
 end;
 

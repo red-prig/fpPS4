@@ -286,6 +286,13 @@ begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
 
+     //if not usermode
+     if (curkthread^.pcb_onfault<>nil) then
+     begin
+      p^.ContextRecord^.Rip:=QWORD(curkthread^.pcb_onfault);
+      Exit(EXCEPTION_CONTINUE_EXECUTION);
+     end;
+
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
@@ -298,7 +305,7 @@ begin
         begin
          if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
-          Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
+          //Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,

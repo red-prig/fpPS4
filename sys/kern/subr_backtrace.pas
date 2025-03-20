@@ -54,7 +54,7 @@ begin
  Result:=0;
 
  while (rbp<>nil) and
-       (rbp<>Pointer(QWORD(-1))) and
+       (rbp<>Pointer(-1)) and
        (count<>0) do
  begin
   adr:=fuptr(rbp[1]);

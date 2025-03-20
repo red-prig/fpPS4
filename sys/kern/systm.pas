@@ -17,12 +17,12 @@ function copyout_nofault(kaddr,udaddr:Pointer;len:ptruint):Integer;
 function fubyte(var base:Byte):Byte;
 function fuword32(var base:DWORD):DWORD;
 function fuword64(var base:QWORD):QWORD;
-function fuword(var base:Pointer):Pointer;
+function fuword(var base:Pointer):Pointer; external name 'fuword64';
 function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD;
 function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD;
 function suword32(var base:DWORD;word:DWORD):DWORD;
 function suword64(var base:QWORD;word:QWORD):QWORD;
-function suword(var base:Pointer;word:Pointer):Pointer;
+function suword(var base:Pointer;word:Pointer):Pointer; external name 'suword64';
 
 function fuptr(var base:Pointer):Pointer;
 function fuptr(var base:QWORD):QWORD;
@@ -51,594 +51,435 @@ uses
  errno,
  md_systm,
  vmparam,
- vm_pmap_prot,
- vm_pmap,
  kern_thr;
 
-function copystr(from,_to:pchar;maxlen:ptruint;lencopied:pptruint):Integer;
-var
- counter:ptruint;
-begin
- counter:=0;
- while (from[counter]<>#0) and (counter<maxlen) do
- begin
-  _to[counter]:=from[counter];
-  Inc(counter);
- end;
- if (counter<maxlen) then
- begin
-  _to[counter]:=#0;
-  Inc(counter);
- end;
- if (lencopied<>nil) then
- begin
-  lencopied^:=counter;
- end;
- Result:=0;
+{
+ * copystr(from, to, maxlen, int *lencopied) - MP SAFE
+ *         %rdi, %rsi, %rdx, %rcx
+}
+function copystr(from,_to:pchar;maxlen:ptruint;lencopied:pptruint):Integer; assembler; nostackframe;
+label
+ v1b,
+ v4f,
+ v6f,
+ v7f;
+asm
+        movq        %rdx,%r8                        { %r8 = maxlen }
+
+        xchgq       %rdi,%rsi
+        incq        %rdx
+        cld
+v1b:
+        decq        %rdx
+        jz          v4f
+        lodsb
+        stosb
+        orb         %al,%al
+        jnz         v1b
+
+        { Success -- 0 byte reached }
+        decq        %rdx
+        xorl        %eax,%eax
+        jmp         v6f
+v4f:
+        { rdx is zero -- return ENAMETOOLONG }
+        movq        $ENAMETOOLONG,%rax
+
+v6f:
+
+        testq       %rcx,%rcx
+        jz          v7f
+        { set *lencopied and return %rax }
+        subq        %rdx,%r8
+        movq        %r8,(%rcx)
+v7f:
+        //ret
 end;
 
-function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
+{
+ * copyin(from_user, to_kernel, len) - MP SAFE
+ *        %rdi,      %rsi,      %rdx
+}
+function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer; assembler; nostackframe;
 label
- _fault,
- _next,
- _exit;
-var
- src:Pointer;
- i,w:DWORD;
- guest:Boolean;
-begin
- Result:=0;
+ copyin_fault,
+ done_copyin;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         copyin_fault
 
- curthread_set_pcb_onfault(@_fault);
+        movqq       %gs:teb.thread,%rax
+        leaq        copyin_fault(%rip),%rcx
+        movqq       %rcx,kthread.pcb_onfault(%rax)
+        testq       %rdx,%rdx                        { anything to do? }
+        jz          done_copyin
 
- while (len<>0) do
- begin
-  i:=QWORD(udaddr) and PMAPP_MASK;
-  i:=PMAPP_SIZE-i;
-  if (i>len) then i:=len;
-  w:=i;
+        {
+         * make sure address is valid
+        }
+        movq        %rdi,%rax
+        addq        %rdx,%rax
+        jc          copyin_fault
+        movq        $VM_MAXUSER_ADDRESS,%rcx
+        cmpq        %rcx,%rax
+        ja          copyin_fault
 
-  guest:=is_guest_addr(QWORD(udaddr));
-  if guest then
-  begin
-   if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
+        xchgq       %rdi,%rsi
+        movq        %rdx,%rcx
+        movb        %cl,%al
+        shrq        $3,%rcx                               { copy longword-wise }
+        cld
+        rep
+        movsq
+        movb        %al,%cl
+        andb        $7,%cl                                { copy remaining bytes }
+        rep
+        movsb
 
-   src:=uplift(udaddr);
-  end else
-  begin
-   src:=udaddr;
-  end;
+done_copyin:
+        xorl        %eax,%eax
+        movq        %gs:teb.thread,%rdx
+        movq        %rax,kthread.pcb_onfault(%rdx)
+        ret
 
-  if (src=nil) then
-  begin
-   Result:=EFAULT;
-   goto _exit;
+        //ALIGN_TEXT
+        nop; nop; nop; nop;
+        nop; nop; nop; nop;
 
-   _fault:
-    w:=w-i;
-
-    if guest then
-    begin
-     if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
-     begin
-      goto _next;
-     end else
-     begin
-      Result:=EFAULT;
-      goto _exit;
-     end;
-    end else
-    begin
-     Result:=EFAULT;
-     goto _exit;
-    end;
-
-  end;
-
-  while (i<>0) do
-  begin
-   PByte(kaddr)^:=PByte(src)^;
-
-   Dec(i    );
-   Inc(src  );
-   Inc(kaddr);
-  end;
-
-  _next:
-
-  Dec(len   ,w);
-  Inc(udaddr,w);
- end;
-
- _exit:
-  curthread_set_pcb_onfault(nil);
+copyin_fault:
+        movq        %gs:teb.thread,%rdx
+        movq        $0,kthread.pcb_onfault(%rdx)
+        movq        $EFAULT,%rax
+        //ret
 end;
 
 function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint):Integer;
-label
- _exit;
-var
- src:Pointer;
- lencopied:ptruint;
- i:DWORD;
- guest:Boolean;
 begin
- Result:=0;
-
- while (len<>0) do
- begin
-  i:=QWORD(udaddr) and PMAPP_MASK;
-  i:=PMAPP_SIZE-i;
-  if (i>len) then i:=len;
-
-  guest:=is_guest_addr(QWORD(udaddr));
-  if guest then
-  begin
-   if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
-
-   src:=uplift(udaddr);
-  end else
-  begin
-   src:=udaddr;
-  end;
-
-  if (src=nil) then
-  begin
-   Result:=EFAULT;
-   goto _exit;
-  end;
-
-  lencopied:=0;
-  Result:=md_copyin(src,kaddr,i,@lencopied);
-
-  if (Result<>0) then
-  begin
-   if guest then
-   begin
-    if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
-    begin
-     Result:=0;
-    end else
-    begin
-     Result:=EFAULT;
-     goto _exit;
-    end;
-   end else
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
-  end;
-
-  Dec(len   ,lencopied);
-  Inc(udaddr,lencopied);
-  Inc(kaddr ,lencopied);
- end;
-
- _exit:
+ Result:=md_copyin(udaddr,kaddr,len,nil);
 end;
 
-function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
+{
+ * copyinstr(from, to, maxlen, int *lencopied) - MP SAFE
+ *           %rdi, %rsi, %rdx, %rcx
+ *
+ *        copy a string from from to to, stop when a 0 character is reached.
+ *        return ENAMETOOLONG if string is longer than maxlen, and
+ *        EFAULT on protection violations. If lencopied is non-zero,
+ *        return the actual length in *lencopied.
+}
+function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer; assembler; nostackframe;
 label
- _fault,
- _next,
- _exit;
-var
- src:Pointer;
- copied:ptruint;
- i,w:DWORD;
- guest:Boolean;
- b:Byte;
-begin
- Result:=0;
- copied:=0;
+ cpystrflt,
+ cpystrflt_x,
+ v1f,
+ v2b,
+ v3f,
+ v4f;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         cpystrflt
 
- curthread_set_pcb_onfault(@_fault);
+        movq        %rdx,%r8                        { %r8 = maxlen }
+        movq        %rcx,%r9                        { %r9 = *len }
+        xchgq       %rdi,%rsi                       { %rdi = from, %rsi = to }
+        movq        %gs:teb.thread,%rcx
+        leaq        cpystrflt(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
 
- while (len<>0) do
- begin
-  i:=QWORD(udaddr) and PMAPP_MASK;
-  i:=PMAPP_SIZE-i;
-  if (i>len) then i:=len;
-  w:=i;
+        movq        $VM_MAXUSER_ADDRESS,%rax
 
-  guest:=is_guest_addr(QWORD(udaddr));
-  if guest then
-  begin
-   if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)=0) then
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
+        { make sure 'from' is within bounds }
+        subq        %rsi,%rax
+        jbe         cpystrflt
 
-   src:=uplift(udaddr);
-  end else
-  begin
-   src:=udaddr;
-  end;
+        { restrict maxlen to <= VM_MAXUSER_ADDRESS-from }
+        cmpq        %rdx,%rax
+        jae         v1f
+        movq        %rax,%rdx
+        movq        %rax,%r8
+v1f:
+        incq        %rdx
+        cld
 
-  if (src=nil) then
-  begin
-   Result:=EFAULT;
-   goto _exit;
+v2b:
+        decq        %rdx
+        jz          v3f
 
-   _fault:
-    w:=w-i;
+        lodsb
+        stosb
+        orb         %al,%al
+        jnz         v2b
 
-    if guest then
-    begin
-     if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_READ)<>0) then
-     begin
-      goto _next;
-     end else
-     begin
-      Result:=EFAULT;
-      goto _exit;
-     end;
-    end else
-    begin
-     Result:=EFAULT;
-     goto _exit;
-    end;
-  end;
+        { Success -- 0 byte reached }
+        decq        %rdx
+        xorl        %eax,%eax
+        jmp         cpystrflt_x
+v3f:
+        { rdx is zero - return ENAMETOOLONG or EFAULT }
+        movq        $VM_MAXUSER_ADDRESS,%rax
+        cmpq        %rax,%rsi
+        jae         cpystrflt
 
-  w:=i;
-  while (i<>0) do
-  begin
-   b:=PByte(src)^;
-   PByte(kaddr)^:=b;
+        movq        $ENAMETOOLONG,%rax
+        jmp         cpystrflt_x
 
-   Inc(copied);
+cpystrflt:
+        movq        $EFAULT,%rax
 
-   if (b=0) then
-   begin
-    Result:=0;
-    goto _exit;
-   end;
+cpystrflt_x:
+        { set *lencopied and return %eax }
+        movq        %gs:teb.thread,%rcx
+        movq        $0,kthread.pcb_onfault(%rcx)
 
-   Dec(i    );
-   Inc(src  );
-   Inc(kaddr);
-  end;
-
-  _next:
-
-  Dec(len   ,w);
-  Inc(udaddr,w);
- end;
-
- _exit:
-  curthread_set_pcb_onfault(nil);
-  if (lencopied<>nil) then
-  begin
-   lencopied^:=copied;
-  end;
+        testq       %r9,%r9
+        jz          v4f
+        subq        %rdx,%r8
+        movq        %r8,(%r9)
+v4f:
+        //ret
 end;
 
-function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer;
+{
+ * copyout(from_kernel, to_user, len)  - MP SAFE
+ *         %rdi,        %rsi,    %rdx
+}
+function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer; assembler; nostackframe;
 label
- _fault,
- _next,
- _exit;
-var
- dst:Pointer;
- i,w:DWORD;
- guest:Boolean;
-begin
- Result:=0;
+ copyout_fault,
+ done_copyout;
+asm
+        cmpq        $0x4000,%rsi //rsi <= 0x4000
+        jle         copyout_fault
 
- curthread_set_pcb_onfault(@_fault);
+        movqq       %gs:teb.thread,%rax
+        leaq        copyout_fault(%rip),%rcx
+        movqq       %rcx,kthread.pcb_onfault(%rax)
+        testq       %rdx,%rdx                        { anything to do? }
+        jz          done_copyout
 
- while (len<>0) do
- begin
-  i:=QWORD(udaddr) and PMAPP_MASK;
-  i:=PMAPP_SIZE-i;
-  if (i>len) then i:=len;
-  w:=i;
+        {
+         * First, prevent address wrapping.
+        }
+        movq        %rsi,%rax
+        addq        %rdx,%rax
+        jc          copyout_fault
 
-  guest:=is_guest_addr(QWORD(udaddr));
-  if guest then
-  begin
-   if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
+        movq        $VM_MAXUSER_ADDRESS,%rcx
+        cmpq        %rcx,%rax
+        ja          copyout_fault
 
-   dst:=uplift(udaddr);
-  end else
-  begin
-   dst:=udaddr;
-  end;
+        xchgq        %rdi,%rsi
+        { bcopy(%rsi, %rdi, %rdx) }
+        movq        %rdx,%rcx
 
-  if (dst=nil) then
-  begin
-   Result:=EFAULT;
-   goto _exit;
+        shrq        $3,%rcx
+        cld
+        rep
+        movsq
+        movb        %dl,%cl
+        andb        $7,%cl
+        rep
+        movsb
 
-   _fault:
-    w:=w-i;
+done_copyout:
+        xorl        %eax,%eax
+        movq        %gs:teb.thread,%rdx
+        movq        %rax,kthread.pcb_onfault(%rdx)
+        ret
 
-    if guest then
-    begin
-     if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
-     begin
-      goto _next;
-     end else
-     begin
-      Result:=EFAULT;
-      goto _exit;
-     end;
-    end else
-    begin
-     Result:=EFAULT;
-     goto _exit;
-    end;
+        //ALIGN_TEXT
+        nop; nop; nop; nop;
+        nop; nop; nop; nop;
+        nop; nop;
 
-  end;
-
-  while (i<>0) do
-  begin
-   PByte(dst)^:=PByte(kaddr)^;
-
-   Dec(i    );
-   Inc(dst  );
-   Inc(kaddr);
-  end;
-
-  _next:
-
-  Dec(len   ,w);
-  Inc(udaddr,w);
- end;
-
- _exit:
-  curthread_set_pcb_onfault(nil);
+copyout_fault:
+        movqq       %gs:teb.thread,%rax
+        movq        $0,kthread.pcb_onfault(%rdx)
+        movq        $EFAULT,%rax
+        //ret
 end;
 
 function copyout_nofault(kaddr,udaddr:Pointer;len:ptruint):Integer;
-label
- _exit;
-var
- dst:Pointer;
- lencopied:ptruint;
- i:DWORD;
- guest:Boolean;
 begin
- Result:=0;
-
- while (len<>0) do
- begin
-  i:=QWORD(udaddr) and PMAPP_MASK;
-  i:=PMAPP_SIZE-i;
-  if (i>len) then i:=len;
-
-  guest:=is_guest_addr(QWORD(udaddr));
-  if guest then
-  begin
-   if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)=0) then
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
-
-   dst:=uplift(udaddr);
-  end else
-  begin
-   dst:=udaddr;
-  end;
-
-  if (dst=nil) then
-  begin
-   Result:=EFAULT;
-   goto _exit;
-  end;
-
-  lencopied:=0;
-  Result:=md_copyout(kaddr,dst,i,@lencopied);
-
-  if (Result<>0) then
-  begin
-   if guest then
-   begin
-    if ((ppmap_get_prot(QWORD(udaddr)) and PAGE_PROT_WRITE)<>0) then
-    begin
-     Result:=0;
-    end else
-    begin
-     Result:=EFAULT;
-     goto _exit;
-    end;
-   end else
-   begin
-    Result:=EFAULT;
-    goto _exit;
-   end;
-  end;
-
-  Dec(len   ,lencopied);
-  Inc(udaddr,lencopied);
-  Inc(kaddr ,lencopied);
- end;
-
- _exit:
+ Result:=md_copyout(kaddr,udaddr,len,nil);
 end;
 
-function fubyte(var base:Byte):Byte;
-begin
- if (copyin(@base,@Result,SizeOf(base))<>0) then
- begin
-  Result:=BYTE(-1);
- end;
+function fusufault:QWORD; assembler; nostackframe;
+asm
+        movq        %gs:teb.thread,%rcx
+        xorl        %eax,%eax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+        decq        %rax
+        //ret
 end;
 
-function fuword32(var base:DWORD):DWORD;
-begin
- if (copyin(@base,@Result,SizeOf(base))<>0) then
- begin
-  Result:=DWORD(-1);
- end;
+function fubyte(var base:Byte):Byte; assembler; nostackframe;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
+
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+
+        movq        $VM_MAXUSER_ADDRESS-1,%rax
+        cmpq        %rax,%rdi
+        ja          fusufault
+
+        movzbl      (%rdi),%eax
+        movq        $0,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function fuword64(var base:QWORD):QWORD;
-begin
- if (copyin(@base,@Result,SizeOf(base))<>0) then
- begin
-  Result:=QWORD(-1);
- end;
+function fuword32(var base:DWORD):DWORD; assembler; nostackframe;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
+
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+
+        movq        $VM_MAXUSER_ADDRESS-4,%rax
+        cmpq        %rax,%rdi                        { verify address is valid }
+        ja          fusufault
+
+        movl        (%rdi),%eax
+        movq        $0,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function fuword(var base:Pointer):Pointer;
-begin
- if (copyin(@base,@Result,SizeOf(base))<>0) then
- begin
-  Result:=Pointer(QWORD(-1));
- end;
+
+function fuword64(var base:QWORD):QWORD; assembler; nostackframe; public;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
+
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+
+        movq        $VM_MAXUSER_ADDRESS-8,%rax
+        cmpq        %rax,%rdi                        { verify address is valid }
+        ja          fusufault
+
+        movq        (%rdi),%rax
+        movq        $0,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD;
-label
- _begin,
- _fault,
- _exit;
-var
- src:PDWORD;
- guest:Boolean;
-begin
- curthread_set_pcb_onfault(@_fault);
+{
+ * casuword32.  Compare and set user integer.  Returns -1 or the current value.
+ *        dst = %rdi, old = %rsi, new = %rdx
+}
+function casuword32(var base:DWORD;oldval,newval:DWORD):DWORD; assembler; nostackframe;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
 
- _begin:
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
 
- guest:=is_guest_addr(QWORD(@base));
+        movq        $VM_MAXUSER_ADDRESS-4,%rax
+        cmpq        %rax,%rdi                        { verify address is valid }
+        ja          fusufault
 
- if guest then
- begin
-  src:=uplift(@base);
- end else
- begin
-  src:=@base;
- end;
+        movl        %esi,%eax                        { old }
+        lock
+        cmpxchgl    %edx,(%rdi)                      { new = %edx }
 
- if (src=nil) then
- begin
-  Result:=DWORD(-1);
-  goto _exit;
+        {
+         * The old value is in %eax.  If the store succeeded it will be the
+         * value we expected (old) from before the store, otherwise it will
+         * be the current value.
+        }
 
-  _fault:
-   if guest then
-   begin
-    if ((ppmap_get_prot(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
-    begin
-     goto _begin;
-    end else
-    begin
-     Result:=DWORD(-1);
-     goto _exit;
-    end;
-   end else
-   begin
-    Result:=DWORD(-1);
-    goto _exit;
-   end;
- end;
-
- Result:=System.InterlockedCompareExchange(src^,newval,oldval);
-
- _exit:
-  curthread_set_pcb_onfault(nil);
+        movq        %gs:teb.thread,%rcx
+        movq        $0,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD;
-label
- _begin,
- _fault,
- _exit;
-var
- src:PQWORD;
- guest:Boolean;
-begin
- curthread_set_pcb_onfault(@_fault);
+{
+ * casuword.  Compare and set user word.  Returns -1 or the current value.
+ *        dst = %rdi, old = %rsi, new = %rdx
+}
+function casuword64(var base:QWORD;oldval,newval:QWORD):QWORD; assembler; nostackframe;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
 
- _begin:
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
 
- guest:=is_guest_addr(QWORD(@base));
+        movq        $VM_MAXUSER_ADDRESS-4,%rax
+        cmpq        %rax,%rdi                        { verify address is valid }
+        ja          fusufault
 
- if guest then
- begin
-  src:=uplift(@base);
- end else
- begin
-  src:=@base;
- end;
+        movq        %rsi,%rax                        { old }
+        lock
+        cmpxchgq    %rdx,(%rdi)                      { new = %rdx }
 
- if (src=nil) then
- begin
-  Result:=QWORD(-1);
-  goto _exit;
+        {
+         * The old value is in %eax.  If the store succeeded it will be the
+         * value we expected (old) from before the store, otherwise it will
+         * be the current value.
+        }
 
-  _fault:
-   if guest then
-   begin
-    if ((ppmap_get_prot(QWORD(@base)) and PAGE_PROT_RW)=PAGE_PROT_RW) then
-    begin
-     goto _begin;
-    end else
-    begin
-     Result:=QWORD(-1);
-     goto _exit;
-    end;
-   end else
-   begin
-    Result:=QWORD(-1);
-    goto _exit;
-   end;
- end;
-
- Result:=System.InterlockedCompareExchange64(src^,newval,oldval);
-
- _exit:
-  curthread_set_pcb_onfault(nil);
+        movq        %gs:teb.thread,%rcx
+        movq        $0,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function suword32(var base:DWORD;word:DWORD):DWORD;
-begin
- if (copyout(@word,@base,SizeOf(base))=0) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=DWORD(-1);
- end;
+{
+ * Store a 32-bit word to
+ * user memory.  All these functions are MPSAFE.
+ * addr = %rdi, value = %rsi
+}
+function suword32(var base:DWORD;word:DWORD):DWORD; assembler; nostackframe;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
+
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+
+        movq        $VM_MAXUSER_ADDRESS-4,%rax
+        cmpq        %rax,%rdi                        { verify address validity }
+        ja          fusufault
+
+        movl        %esi,(%rdi)
+        xorl        %eax,%eax
+        movq        %gs:teb.thread,%rcx
+        movq        %rax,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
-function suword64(var base:QWORD;word:QWORD):QWORD;
-begin
- if (copyout(@word,@base,SizeOf(base))=0) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=QWORD(-1);
- end;
-end;
+{
+ * Store a 64-bit word to
+ * user memory.  All these functions are MPSAFE.
+ * addr = %rdi, value = %rsi
+}
+function suword64(var base:QWORD;word:QWORD):QWORD; assembler; nostackframe; public;
+asm
+        cmpq        $0x4000,%rdi //rdi <= 0x4000
+        jle         fusufault
 
-function suword(var base:Pointer;word:Pointer):Pointer;
-begin
- if (copyout(@word,@base,SizeOf(base))=0) then
- begin
-  Result:=nil;
- end else
- begin
-  Result:=Pointer(QWORD(-1));
- end;
+        movq        %gs:teb.thread,%rcx
+        leaq        fusufault(%rip),%rax
+        movq        %rax,kthread.pcb_onfault(%rcx)
+
+        movq        $VM_MAXUSER_ADDRESS-8,%rax
+        cmpq        %rax,%rdi                        { verify address validity }
+        ja          fusufault
+
+        movq        %rsi,(%rdi)
+        xorl        %eax,%eax
+        movq        %gs:teb.thread,%rcx
+        movq        %rax,kthread.pcb_onfault(%rcx)
+        //ret
 end;
 
 function fuptr(var base:Pointer):Pointer;
