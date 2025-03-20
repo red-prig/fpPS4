@@ -286,13 +286,6 @@ begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
 
-     //if not usermode
-     if (curkthread^.pcb_onfault<>nil) then
-     begin
-      p^.ContextRecord^.Rip:=QWORD(curkthread^.pcb_onfault);
-      Exit(EXCEPTION_CONTINUE_EXECUTION);
-     end;
-
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
@@ -318,6 +311,13 @@ begin
          end;
         end;
       else;
+     end;
+
+     //if not usermode
+     if (curkthread^.pcb_onfault<>nil) then
+     begin
+      p^.ContextRecord^.Rip:=QWORD(curkthread^.pcb_onfault);
+      Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
 
     end;
