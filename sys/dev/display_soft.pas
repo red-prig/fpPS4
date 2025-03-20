@@ -19,16 +19,21 @@ type
   init :DWORD;
   index:DWORD;
   attr :t_register_buffer_attr;
+  size :QWORD;
+ end;
+
+ t_ptr_pair=packed record
+  left :Pointer; //buffer ptr
+  right:Pointer; //Stereo ptr
  end;
 
  p_buffer=^t_buffer;
  t_buffer=packed record
   init :DWORD;
   attr :DWORD;
-  left :Pointer; //buffer ptr
-  right:Pointer; //Stereo ptr
-  left_dmem :Pointer; //buffer ptr
-  right_dmem:Pointer; //Stereo ptr
+  orig :t_ptr_pair;
+  mirr :t_ptr_pair;
+  size :QWORD;
  end;
 
  PQNode=^TQNode;
@@ -141,7 +146,7 @@ uses
  }
  md_time,
  sys_bootparam,
- kern_dmem;
+ vm_mmap;
 
 //
 
@@ -270,6 +275,13 @@ begin
  Result:=0;
 end;
 
+function get_buf_size(attr:p_register_buffer_attr):QWORD;
+begin
+ //TODO: neo mode, etc
+ Result:=((attr^.pitchPixel+127) and (not 127))*
+         ((attr^.height    +127) and (not 127))*4;
+end;
+
 function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
 begin
  if (m_attr[attrid].init<>0) then Exit(EINVAL);
@@ -277,6 +289,7 @@ begin
  m_attr[attrid].init :=1;
  m_attr[attrid].index:=attrid;
  m_attr[attrid].attr :=attr^;
+ m_attr[attrid].size :=get_buf_size(attr);
 
  Result:=0;
 end;
@@ -307,10 +320,10 @@ function TDisplayHandleSoft.RegisterBuffer(buf:p_register_buffer):Integer;
 var
  i,a:Integer;
 
- left :Pointer;
- right:Pointer;
- left_dmem :Pointer;
- right_dmem:Pointer;
+ orig:t_ptr_pair;
+ mirr:t_ptr_pair;
+
+ size:QWORD;
 begin
  i:=buf^.index;
  a:=buf^.attrid;
@@ -318,35 +331,24 @@ begin
  if (m_bufs[i].init<>0) then Exit(EINVAL);
  if (m_attr[a].init=0 ) then Exit(EINVAL);
 
- left :=buf^.left;
- right:=buf^.right;
+ orig.left :=buf^.left;
+ orig.right:=buf^.right;
 
- if (left=nil) then Exit(EINVAL);
+ if (orig.left=nil) then Exit(EINVAL);
 
- left_dmem :=nil;
- right_dmem:=nil;
+ size:=(m_attr[a].size+$FFF) and (not $FFF);
 
- //TODO: check size!
- if not get_dmem_ptr(left,@left_dmem,nil) then
- begin
-  Exit(EINVAL);
- end;
+ Assert((QWORD(orig.left)  and $FFF=0),'left');
+ Assert((QWORD(orig.right) and $FFF=0),'right');
 
- if (right<>nil) then
- begin
-  //TODO: check size!
-  if not get_dmem_ptr(right,@right_dmem,nil) then
-  begin
-   Exit(EINVAL);
-  end;
- end;
+ mirr.left :=mirror_map(orig.left ,size);
+ mirr.right:=mirror_map(orig.right,size);
 
- m_bufs[i].init :=1;
- m_bufs[i].attr :=a;
- m_bufs[i].left :=left;
- m_bufs[i].right:=right;
- m_bufs[i].left_dmem :=left_dmem;
- m_bufs[i].right_dmem:=right_dmem;
+ m_bufs[i].init:=1;
+ m_bufs[i].attr:=a;
+ m_bufs[i].orig:=orig;
+ m_bufs[i].mirr:=mirr;
+ m_bufs[i].size:=size;
 
  //
  labels       [buf^.index]:=0; //reset
@@ -360,11 +362,20 @@ begin
 end;
 
 function TDisplayHandleSoft.UnregisterBuffer(index:Integer):Integer;
+var
+ mirr:t_ptr_pair;
+ size:QWORD;
 begin
  if (m_bufs[index].init=0)  then Exit(EINVAL);
  if (Fflip_count[index]<>0) then Exit(EBUSY);
 
  m_bufs[index].init:=0;
+
+ mirr:=m_bufs[index].mirr;
+ size:=m_bufs[index].size;
+
+ mirror_unmap(mirr.left ,size);
+ mirror_unmap(mirr.right,size);
 
  Result:=0;
 end;
@@ -933,12 +944,12 @@ begin
   dst:=p_dst^;
 
   //detile32bppBuf_slow(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
-  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
+  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.mirr.left,dst);
  end else
  begin
   bi.bmiHeader.biWidth:=(bi.bmiHeader.biWidth+63) and (not 63);
 
-  dst:=buf^.left_dmem;
+  dst:=buf^.mirr.left;
  end;
 
  if (attr^.attr.pixelFormat=SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB) then
@@ -1228,6 +1239,7 @@ begin
   //
   mtx_lock(dce_mtx^);
    m_attr[i].attr:=m_sbat.attr;
+   m_attr[i].size:=get_buf_size(@m_sbat.attr);
   mtx_unlock(dce_mtx^);
   //
   m_sbat.init:=0;

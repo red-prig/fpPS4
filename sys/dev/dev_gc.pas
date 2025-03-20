@@ -763,7 +763,7 @@ end;
 
 Function gc_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
- vaddr:QWORD;
+ vaddr:Pointer;
 begin
  Result:=0;
 
@@ -814,7 +814,7 @@ begin
             begin
              if (gc_submits_allowed_vaddr=nil) then
              begin
-              vaddr:=0;
+              vaddr:=nil;
               Result:=mmap_addr($fe0100000,$4000,1,@vaddr);
 
               if (Result<>0) then

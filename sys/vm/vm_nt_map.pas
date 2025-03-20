@@ -1472,9 +1472,6 @@ begin
  if (not vm_nt_map_lookup_entry(map, start, @entry)) then
  begin
   entry:=entry^.next;
- end else
- begin
-  entry:=entry;
  end;
 
  prev:=0;
@@ -1492,8 +1489,8 @@ begin
 
    if (base<start) then
    begin
-    base:=start;
     offset:=offset+(start-base);
+    base:=start;
    end;
 
    if (b_end>__end) then
