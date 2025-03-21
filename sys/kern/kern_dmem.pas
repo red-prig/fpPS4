@@ -95,7 +95,6 @@ function  sys_virtual_query(addr:Pointer;
 
 function  rmem_map_test_lock(start,__end:QWORD):Boolean;
 
-function  get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
 function  get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
 
 implementation
@@ -142,7 +141,7 @@ var
  vmap:vm_map_t;
 begin
  dmem_map_init(@dmem,0,SCE_KERNEL_MAIN_DMEM_SIZE);
- rmem_map_init(@rmap,0,(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS));
+ rmem_map_init(@rmap,0,SCE_KERNEL_MAIN_DMEM_SIZE);
 
  vmap:=p_proc.p_vmspace;
 
@@ -1017,17 +1016,13 @@ begin
 end;
 
 function get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
-var
- offset:QWORD;
 begin
- offset:=0;
+ Result:=True;
+ p_ptr^:=addr+VM_MIN_GPU_ADDRESS;
 
- Result:=get_dmem_offset(QWORD(addr),@offset,p_size);
-
- if Result then
- if (p_ptr<>nil) then
+ if (p_size<>nil) then
  begin
-  p_ptr^:=Pointer(VM_MIN_GPU_ADDRESS+offset);
+  Assert(false,'TODO:get_dmem_ptr');
  end;
 end;
 

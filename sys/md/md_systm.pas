@@ -334,7 +334,7 @@ var
  info:TMemoryBasicInformation;
  len:ULONG_PTR;
 
- guest_pmap_mem:array[0..2] of t_addr_range;
+ guest_pmap_mem:array[0..4] of t_addr_range;
 begin
  Result:=0;
  guest_pmap_mem:=pmap_mem;
@@ -344,7 +344,8 @@ begin
   //fixup
   guest_pmap_mem[0].start:=_PROC_AREA_START_0;
   //
-  For i:=0 to High(guest_pmap_mem) do
+  i:=0;
+  while (i<=High(pmap_mem)) do
   begin
    base:=Pointer(guest_pmap_mem[i].start);
 
@@ -359,7 +360,8 @@ begin
      guest_pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
      guest_pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
      //
-     Break;
+     i:=i+2;
+     Continue;
     end;
    end;
 
@@ -372,18 +374,8 @@ begin
     Exit(r);
    end;
 
+   i:=i+1;
   end;
- end;
-
- //dmem mirror
- base:=Pointer(VM_MIN_GPU_ADDRESS);
- size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
-
- r:=nt_reserve_ex(hProcess,base,size);
- if (r<>0) then
- begin
-  Writeln(stderr,'nt_reserve_ex(0x',HexStr(base),',0x',HexStr(size,16),'):0x',HexStr(r,8));
-  Exit(r);
  end;
 
  //fill corners

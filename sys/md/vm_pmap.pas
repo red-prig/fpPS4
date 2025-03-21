@@ -26,8 +26,7 @@ const
  PMAPP_BLK_SIZE  =QWORD(QWORD(1) shl PMAPP_BLK_SHIFT);
  PMAPP_BLK_MASK  =PMAPP_BLK_SIZE-1;
 
- PMAPP_BLK_PRIV_BLOCKS=QWORD(VM_MAXUSER_ADDRESS                   ) shr PMAPP_BLK_SHIFT;
- PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS) shr PMAPP_BLK_SHIFT;
+ PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_DMEM_SIZE) shr PMAPP_BLK_SHIFT;
 
 var
  DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
@@ -63,6 +62,7 @@ type
   //rmlock:rangelock;
   //rm_mtx:mtx;
   nt_map:t_vm_nt_map;
+  gp_map:t_vm_nt_map;
   tr_map:t_vm_track_map;
  end;
 
@@ -101,18 +101,28 @@ function  pmap_rlock(pmap :pmap_t;
 
 procedure pmap_unlock(pmap:pmap_t;cookie:Pointer);
 
-procedure pmap_enter_object(pmap   :pmap_t;
-                            obj    :vm_object_t;
-                            offset :vm_ooffset_t;
-                            start  :vm_offset_t;
-                            __end  :vm_offset_t;
-                            prot   :vm_prot_t);
+procedure pmap_enter_object(pmap  :pmap_t;
+                            obj   :vm_object_t;
+                            offset:vm_ooffset_t;
+                            start :vm_offset_t;
+                            __end :vm_offset_t;
+                            prot  :vm_prot_t);
 
-procedure pmap_protect(pmap  :pmap_t;
-                       obj   :vm_object_t;
-                       start :vm_offset_t;
-                       __end :vm_offset_t;
-                       prot  :vm_prot_t);
+procedure pmap_gpu_enter_object(pmap :pmap_t;
+                                start:vm_offset_t;
+                                __end:vm_offset_t;
+                                prot :vm_prot_t);
+
+procedure pmap_protect(pmap :pmap_t;
+                       obj  :vm_object_t;
+                       start:vm_offset_t;
+                       __end:vm_offset_t;
+                       prot :vm_prot_t);
+
+procedure pmap_gpu_protect(pmap :pmap_t;
+                           start:vm_offset_t;
+                           __end:vm_offset_t;
+                           prot :vm_prot_t);
 
 procedure pmap_prot_track(pmap :pmap_t;
                           start:vm_offset_t;
@@ -129,10 +139,14 @@ procedure pmap_madvise(pmap  :pmap_t;
                        __end :vm_offset_t;
                        advise:Integer);
 
-procedure pmap_remove(pmap  :pmap_t;
-                      obj   :vm_object_t;
-                      start :vm_offset_t;
-                      __end :vm_offset_t);
+procedure pmap_remove(pmap :pmap_t;
+                      obj  :vm_object_t;
+                      start:vm_offset_t;
+                      __end:vm_offset_t);
+
+procedure pmap_gpu_remove(pmap :pmap_t;
+                          start:vm_offset_t;
+                          __end:vm_offset_t);
 
 function  pmap_mirror_map(pmap :pmap_t;
                           start:vm_offset_t;
@@ -178,8 +192,7 @@ const
 
 procedure dmem_init;
 var
- base:Pointer;
- i,r:Integer;
+ r:Integer;
 
  fname:RawByteString;
  fd:THandle;
@@ -188,8 +201,7 @@ var
 begin
  if external_dmem_swap_mode then
  begin
-  base:=Pointer(VM_MIN_GPU_ADDRESS);
-  size:=VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS;
+  size:=VM_DMEM_SIZE; // 6144MB
 
   fd:=0;
   fname:=sysutils.GetTempFileName(GetTempDir,'fpps4_dmem');
@@ -206,35 +218,9 @@ begin
 
   DMEM_FD[0].hfile:=md;
   DMEM_FD[0].maxp :=VM_RW;
-
-  r:=md_split(base,size);
-  if (r<>0) then
-  begin
-   Writeln('failed md_split(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
-   Assert(false,'dmem_init');
-  end;
-
-  r:=md_file_mmap_ex(md,base,0,size,VM_RW);
-  if (r<>0) then
-  begin
-   Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(r,8));
-   Assert(false,'dmem_init');
-  end;
-
  end else
  begin
-
-  for i:=0 to PMAPP_BLK_DMEM_BLOCKS-2 do
-  begin
-   base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
-   r:=md_split(base,PMAPP_BLK_SIZE);
-   if (r<>0) then
-   begin
-    Writeln('failed md_split(',HexStr(base),',',HexStr(base+PMAPP_BLK_SIZE),'):0x',HexStr(r,8));
-    Assert(false,'dmem_init');
-   end;
-  end;
-
+  //
  end;
 end;
 
@@ -259,18 +245,6 @@ begin
  begin
   Writeln('failed md_reserve(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert(false,'dev_mem_init');
- end;
-
- DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS); //force
-
- if not external_dmem_swap_mode then
- begin
-  r:=md_split(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
-  if (r<>0) then
-  begin
-   Writeln('failed md_split(',HexStr(DEV_INFO.DEV_PTR),',',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-   Assert(false,'dev_mem_init');
-  end;
  end;
 
  r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,VM_RW);
@@ -308,7 +282,8 @@ begin
 
  if Length(pmap_mem)<>0 then
  begin
-  For i:=0 to High(pmap_mem) do
+  i:=0;
+  while (i<=High(pmap_mem)) do
   begin
    base:=Pointer(pmap_mem[i].start);
 
@@ -324,7 +299,8 @@ begin
      pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
      pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
      //
-     Break;
+     i:=i+2;
+     Continue;
     end;
    end;
 
@@ -349,20 +325,8 @@ begin
     Writeln('md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
    end;
    }
+   i:=i+1;
   end;
- end;
-
- //dmem mirror
- base:=Pointer(VM_MIN_GPU_ADDRESS);
- size:=VM_MAX_GPU_ADDRESS-VM_MIN_GPU_ADDRESS;
-
- Result.error:=md_reserve_ex(base,size);
-
- if (Result.error<>0) then
- begin
-  Result.base:=base;
-  Result.size:=size;
-  Exit;
  end;
 end;
 
@@ -399,11 +363,13 @@ begin
  pmap^.vm_map:=vm_map;
 
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
+ vm_nt_map_init(@pmap^.gp_map,VM_MIN_GPU_ADDRESS,VM_MAX_GPU_ADDRESS);
 
   //exclude
  if Length(pmap_mem)>1 then
  begin
   For i:=0 to High(pmap_mem)-1 do
+  if pmap_mem[i].guest then
   begin
    vm_nt_map_insert(@pmap^.nt_map,
                     nil,0,
@@ -591,7 +557,6 @@ end;
 
 procedure get_dmem_fd(var info:t_fd_info);
 var
- base:Pointer;
  BLK_SIZE:QWORD;
  MEM_SIZE:QWORD;
  o:QWORD;
@@ -604,7 +569,9 @@ begin
  //get mem size
  MEM_SIZE:=(info.__end-info.start);
 
- if (o>=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS)) then
+ Writeln('get_dmem_fd:0x',HexStr(o,10));
+
+ if (o>=VM_MIN_DEV_ADDRESS) and (o<VM_MAX_DEV_ADDRESS) then
  begin
   //dev
   BLK_SIZE:=DEV_INFO.DEV_SIZE;
@@ -615,7 +582,7 @@ begin
   //dmem
   if external_dmem_swap_mode then
   begin
-   BLK_SIZE:=VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS;
+   BLK_SIZE:=VM_DMEM_SIZE; // 6144MB
 
    info.obj:=@DMEM_FD[0];
   end else
@@ -636,20 +603,11 @@ begin
      Writeln('failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
      Assert(false,'get_dmem_fd');
     end;
-
-    //dmem mirror
-    base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
-    r:=md_file_mmap_ex(DMEM_FD[i].hfile,base,0,BLK_SIZE,VM_RW);
-    if (r<>0) then
-    begin
-     Writeln('failed md_file_mmap_ex(',HexStr(base),',',HexStr(base+BLK_SIZE),'):0x',HexStr(r,8));
-     Assert(false,'get_dmem_fd');
-    end;
    end;
 
    info.obj:=@DMEM_FD[i];
   end;
-
+  //dmem
  end;
 
  vm_nt_file_obj_reference(info.obj);
@@ -845,6 +803,7 @@ end;
  * is mapped; only those for which a resident page exists with the
  * corresponding offset from m_start are mapped.
 }
+
 procedure pmap_enter_object(pmap  :pmap_t;
                             obj   :vm_object_t;
                             offset:vm_ooffset_t;
@@ -875,13 +834,13 @@ begin
   Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
- lock:=pmap_wlock(pmap,start,__end);
-
  //fixup writeonly
  if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
  begin
   prot:=prot or VM_PROT_READ;
  end;
+
+ lock:=pmap_wlock(pmap,start,__end);
 
  ppmap_mark_rwx(start,__end,prot);
 
@@ -905,6 +864,7 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
+       //map to guest
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.olocal, //block local offset
@@ -917,6 +877,24 @@ begin
        begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
+       end;
+
+       //map to GPU
+       if (prot and VM_PROT_GPU_ALL)<>0 then
+       begin
+        r:=vm_nt_map_insert(@pmap^.gp_map,
+                            info.obj,
+                            info.olocal, //block local offset
+                            info.start+VM_MIN_GPU_ADDRESS,
+                            info.__end+VM_MIN_GPU_ADDRESS,
+                            delta,
+                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+        if (r<>0) then
+        begin
+         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+         Assert(false,'pmap_enter_object');
+        end;
        end;
 
        //fill zero if needed
@@ -965,6 +943,7 @@ begin
         Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
        end;
 
+       //map to guest
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.olocal, //block local offset
@@ -977,6 +956,24 @@ begin
        begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
+       end;
+
+       //map to GPU
+       if (prot and VM_PROT_GPU_ALL)<>0 then
+       begin
+        r:=vm_nt_map_insert(@pmap^.gp_map,
+                            info.obj,
+                            info.olocal, //block local offset
+                            info.start+VM_MIN_GPU_ADDRESS,
+                            info.__end+VM_MIN_GPU_ADDRESS,
+                            delta,
+                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+        if (r<>0) then
+        begin
+         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+         Assert(false,'pmap_enter_object');
+        end;
        end;
 
        info.start :=info.start +delta;
@@ -1059,6 +1056,7 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
+       //map to guest
        r:=vm_nt_map_insert(@pmap^.nt_map,
                            info.obj,
                            info.olocal, //block local offset
@@ -1071,6 +1069,12 @@ begin
        begin
         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
         Assert(false,'pmap_enter_object');
+       end;
+
+       //map to GPU
+       if (prot and VM_PROT_GPU_ALL)<>0 then
+       begin
+        Assert(false,'map file to gpu???');
        end;
 
        //restore
@@ -1103,6 +1107,7 @@ begin
       info.start :=start;
       info.__end :=start+paddi;
 
+      //map to guest
       r:=vm_nt_map_insert(@pmap^.nt_map,
                           info.obj,
                           info.offset, //offset in file
@@ -1116,6 +1121,13 @@ begin
        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
        Assert(false,'pmap_enter_object');
       end;
+
+      //map to GPU
+      if (prot and VM_PROT_GPU_ALL)<>0 then
+      begin
+       Assert(false,'map file to gpu???');
+      end;
+
      end;
 
      ppmap_mark_rwx(info.start,info.__end,prot);
@@ -1142,11 +1154,64 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
-procedure pmap_protect(pmap  :pmap_t;
-                       obj   :vm_object_t;
-                       start :vm_offset_t;
-                       __end :vm_offset_t;
-                       prot  :vm_prot_t);
+procedure pmap_gpu_enter_object(pmap :pmap_t;
+                                start:vm_offset_t;
+                                __end:vm_offset_t;
+                                prot :vm_prot_t);
+var
+ lock:Pointer;
+
+ r:Integer;
+
+ p____end:vm_offset_t;
+ p_offset:vm_offset_t;
+ p____obj:p_vm_nt_file_obj;
+begin
+ if (p_print_pmap) then
+ begin
+  Writeln('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+ end;
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ while (start<>__end) do
+ begin
+  p____end:=vm_nt_map_fetch(@pmap^.nt_map,
+                            start,
+                            __end,
+                            p_offset,
+                            p____obj
+                           );
+
+  //map to GPU
+  if (p____obj<>nil) then
+  begin
+   r:=vm_nt_map_insert(@pmap^.gp_map,
+                       p____obj,
+                       p_offset, //block local offset
+                       start   +VM_MIN_GPU_ADDRESS,
+                       p____end+VM_MIN_GPU_ADDRESS,
+                       (p____end-start),
+                       ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+   if (r<>0) then
+   begin
+    Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert(false,'pmap_gpu_enter_object');
+   end;
+  end;
+
+  start:=p____end;
+ end;
+
+ pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_protect(pmap :pmap_t;
+                       obj  :vm_object_t;
+                       start:vm_offset_t;
+                       __end:vm_offset_t;
+                       prot :vm_prot_t);
 var
  lock:Pointer;
 label
@@ -1157,13 +1222,13 @@ begin
   Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
 
- lock:=pmap_rlock(pmap,start,__end);
-
  //fixup writeonly
  if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
  begin
   prot:=prot or VM_PROT_READ;
  end;
+
+ lock:=pmap_rlock(pmap,start,__end);
 
  ppmap_mark_rwx(start,__end,prot);
 
@@ -1174,6 +1239,7 @@ begin
     begin
      _default:
 
+     //map to guest
      vm_nt_map_protect(@pmap^.nt_map,
                        start,
                        __end,
@@ -1210,6 +1276,31 @@ begin
      Assert(False);
     end;
  end;
+
+ pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_gpu_protect(pmap :pmap_t;
+                           start:vm_offset_t;
+                           __end:vm_offset_t;
+                           prot :vm_prot_t);
+var
+ lock:Pointer;
+begin
+ //fixup writeonly
+ if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
+ begin
+  prot:=prot or VM_PROT_GPU_READ;
+ end;
+
+ lock:=pmap_rlock(pmap,start,__end);
+
+ //map to GPU
+ vm_nt_map_protect(@pmap^.gp_map,
+                   start+VM_MIN_GPU_ADDRESS,
+                   __end+VM_MIN_GPU_ADDRESS,
+                   ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
 
  pmap_unlock(pmap,lock);
 end;
@@ -1331,10 +1422,10 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
-procedure pmap_remove(pmap  :pmap_t;
-                      obj   :vm_object_t;
-                      start :vm_offset_t;
-                      __end :vm_offset_t);
+procedure pmap_remove(pmap :pmap_t;
+                      obj  :vm_object_t;
+                      start:vm_offset_t;
+                      __end:vm_offset_t);
 label
  _default;
 var
@@ -1360,6 +1451,7 @@ begin
   OBJT_DEFAULT:
     begin
 
+     //Disable page caching in swap file
      vm_nt_map_madvise(@pmap^.nt_map,
                        start,
                        __end,
@@ -1370,6 +1462,23 @@ begin
      r:=vm_nt_map_delete(@pmap^.nt_map,
                          start,
                          __end);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
+      Assert(false,'pmap_remove');
+     end;
+
+     r:=vm_nt_map_delete(@pmap^.gp_map,
+                         start+VM_MIN_GPU_ADDRESS,
+                         __end+VM_MIN_GPU_ADDRESS);
+
+     if (r<>0) then
+     begin
+      Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
+      Assert(false,'pmap_remove');
+     end;
+
     end;
   OBJT_DEVICE:
     begin
@@ -1402,10 +1511,32 @@ begin
     end;
  end;
 
+ pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_gpu_remove(pmap :pmap_t;
+                          start:vm_offset_t;
+                          __end:vm_offset_t);
+var
+ lock:Pointer;
+
+ r:Integer;
+begin
+ if (p_print_pmap) then
+ begin
+  Writeln('pmap_gpu_remove:',HexStr(start,11),':',HexStr(__end,11));
+ end;
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ r:=vm_nt_map_delete(@pmap^.gp_map,
+                     start+VM_MIN_GPU_ADDRESS,
+                     __end+VM_MIN_GPU_ADDRESS);
+
  if (r<>0) then
  begin
   Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
-  Assert(false,'pmap_remove');
+  Assert(false,'pmap_gpu_remove');
  end;
 
  pmap_unlock(pmap,lock);

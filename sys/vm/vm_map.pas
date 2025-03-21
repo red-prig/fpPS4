@@ -409,6 +409,7 @@ begin
   map:=@vm^.vm_map;
   vm_map_lock(map);
    For i:=0 to High(pmap_mem)-1 do
+   if pmap_mem[i].guest then
    begin
     vm_map_insert         (map, nil, 0, pmap_mem[i].__end, pmap_mem[i+1].start, 0, 0, -1, nil, false);
     vm_map_set_info_locked(map,         pmap_mem[i].__end, pmap_mem[i+1].start, '#hole', VM_INHERIT_HOLE);
@@ -1881,6 +1882,86 @@ begin
  end;
 end;
 
+function MASK(entry:vm_map_entry_t):vm_eflags_t; inline;
+begin
+ if ((entry^.eflags and MAP_ENTRY_COW)<>0) then
+  Result:=(not VM_PROT_WRITE)
+ else
+  Result:=VM_PROT_ALL;
+end;
+
+type
+ t_prot_action=(paNone,paEnter,paRemove,paProtect);
+
+procedure vm_map_protect_internal(map  :vm_map_t;
+                                  entry:vm_map_entry_t;
+                                  prev :vm_prot_t);
+var
+ prot:vm_prot_t;
+ nt_action:t_prot_action;
+ gp_action:t_prot_action;
+begin
+ prot:=entry^.protection and MASK(entry);
+
+ //magic time
+ nt_action:=t_prot_action(
+  ord(
+   (prot and VM_RW)<>(prev and VM_RW)
+  )*ord(paProtect)
+ );
+
+ gp_action:=t_prot_action(
+  ord(
+   (prot and VM_PROT_GPU_ALL)<>(prev and VM_PROT_GPU_ALL)
+  )*ord(paProtect)
+ );
+
+ gp_action:=t_prot_action(
+   ord(gp_action) and
+   (
+    ord((prot and VM_PROT_GPU_ALL)<>0)
+    or
+    (
+     ord((prev and VM_PROT_GPU_ALL)<>0) shl 1
+    )
+   )
+  );
+
+ if (nt_action=paProtect) then
+ begin
+  pmap_protect(map^.pmap,
+               entry^.vm_obj,
+               entry^.start,
+               entry^.__end,
+               prot);
+ end;
+
+ case gp_action of
+  paEnter:
+    begin
+     pmap_gpu_enter_object(map^.pmap,
+                           entry^.start,
+                           entry^.__end,
+                           prot);
+    end;
+  paRemove:
+    begin
+     pmap_gpu_remove(map^.pmap,
+                     entry^.start,
+                     entry^.__end);
+    end;
+  paProtect:
+    begin
+     pmap_gpu_protect(map^.pmap,
+                      entry^.start,
+                      entry^.__end,
+                      prot);
+    end;
+  else;
+ end;
+
+end;
+
 {
  * vm_map_protect:
  *
@@ -1894,15 +1975,6 @@ function vm_map_protect(map     :vm_map_t;
                         __end   :vm_offset_t;
                         new_prot:vm_prot_t;
                         set_max :Boolean):Integer;
-
- function MASK(entry:vm_map_entry_t):vm_eflags_t; inline;
- begin
-  if ((entry^.eflags and MAP_ENTRY_COW)<>0) then
-   Result:=(not VM_PROT_WRITE)
-  else
-   Result:=VM_PROT_ALL;
- end;
-
 label
  _continue;
 var
@@ -2047,14 +2119,8 @@ begin
    * When restricting access, update the physical map.  Worry
    * about copy-on-write here.
    }
-  if (old_prot<>current^.protection) then
-  begin
-   pmap_protect(map^.pmap,
-                current^.vm_obj,
-                current^.start,
-                current^.__end,
-                current^.protection and MASK(current));
-  end;
+  vm_map_protect_internal(map,current,old_prot);
+
   vm_map_simplify_entry(map, current);
   current:=current^.next;
  end;

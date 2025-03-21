@@ -6,9 +6,10 @@ unit vmparam;
 interface
 
 type
- t_addr_range=packed record
+ t_addr_range=record
   start:QWORD;
   __end:QWORD;
+  guest:Boolean;
  end;
 
 const
@@ -40,8 +41,8 @@ const
  _PROC_AREA_START_1   =QWORD($00010000000); //(original:0x400000-0x80000000)
  _PROC_AREA___END     =QWORD($00070000000);
 
- WIN_MAX_MOVED_STACK  =QWORD($20000000000);
- WIN_SHARED_ADDR      =QWORD($20000000000);
+ WIN_MAX_MOVED_STACK  =QWORD($40000000000);
+ WIN_SHARED_ADDR      =QWORD($40000000000);
 
  SCE_REPLAY_EXEC_START=QWORD($00fc0000000);
 
@@ -62,10 +63,12 @@ const
  VM_MAXUSER_ADDRESS   =QWORD($10000000000); //(original:$800000000000) MAP_AREA_END=0xfc00000000
 
  VM_MIN_GPU_ADDRESS   =QWORD($10000000000);
- VM_MAX_GPU_ADDRESS   =QWORD($10180010000); //6GB + 64KB
+ VM_MAX_GPU_ADDRESS   =QWORD($20000000000); //Virtual mirror
 
- VM_MIN_DEV_ADDRESS   =QWORD($10180000000);
- VM_MAX_DEV_ADDRESS   =VM_MAX_GPU_ADDRESS; //64KB
+ VM_MIN_DEV_ADDRESS   =QWORD($20000000000);
+ VM_MAX_DEV_ADDRESS   =QWORD($20000010000); //64KB
+
+ VM_DMEM_SIZE         =$180000000; // 6144MB
 
  VM_DEFAULT_MAP_BASE  =QWORD(0);
 
@@ -100,10 +103,12 @@ const
 }
 
 var
- pmap_mem:array[0..2] of t_addr_range=(
-  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ),
-  (start:DL_AREA_START     ;__end:DL_AREA___END     ),
-  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS)
+ pmap_mem:array[0..4] of t_addr_range=(
+  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ;guest:True ),
+  (start:DL_AREA_START     ;__end:DL_AREA___END     ;guest:True ),
+  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS;guest:False),
+  (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS;guest:False),
+  (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS;guest:False)
  );
 
 function pageablemem:QWORD;
@@ -136,7 +141,7 @@ begin
  Result:=False;
  For i:=0 to High(pmap_mem) do
  begin
-  if (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
+  if pmap_mem[i].guest and (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
   begin
    Exit(True);
   end;

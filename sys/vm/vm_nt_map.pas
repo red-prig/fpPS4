@@ -126,6 +126,13 @@ function  vm_nt_map_mirror(map  :p_vm_nt_map;
                            start:vm_offset_t;
                            __end:vm_offset_t):Pointer;
 
+function  vm_nt_map_fetch(map         :p_vm_nt_map;
+                          start       :vm_offset_t;
+                          __end       :vm_offset_t;
+                          var p_offset:vm_offset_t;
+                          var p____obj:p_vm_nt_file_obj
+                         ):vm_offset_t;
+
 implementation
 
 uses
@@ -248,9 +255,9 @@ begin
  end;
 end;
 
-procedure vm_map(map:p_vm_nt_map;
+procedure vm_map(map  :p_vm_nt_map;
                  entry:p_vm_nt_entry;
-                 prot:Integer);
+                 prot :Integer);
 var
  start:vm_offset_t;
  __end:vm_offset_t;
@@ -1536,6 +1543,57 @@ begin
 
  vm_nt_map_unlock(map);
 end;
+
+function vm_nt_map_fetch(map         :p_vm_nt_map;
+                         start       :vm_offset_t;
+                         __end       :vm_offset_t;
+                         var p_offset:vm_offset_t;
+                         var p____obj:p_vm_nt_file_obj
+                        ):vm_offset_t;
+var
+ entry:p_vm_nt_entry;
+ offset:vm_ooffset_t;
+ obj:p_vm_nt_file_obj;
+begin
+ Result:=__end;
+ if (start=__end) then Exit;
+
+ vm_nt_map_lock(map);
+
+ if (not vm_nt_map_lookup_entry(map, start, @entry)) then
+ begin
+  entry:=entry^.next;
+ end;
+
+ if (entry<>@map^.header) and (entry^.start<__end) then
+ begin
+  obj:=entry^.obj;
+
+  offset:=entry^.offset+(start-entry^.start);
+
+  Result:=entry^.__end;
+
+  if (Result>__end) then
+  begin
+   Result:=__end;
+  end;
+
+  p_offset:=offset;
+  p____obj:=nil;
+
+  if (obj<>nil) then
+  if (obj^.hfile<>0) then
+  begin
+   p____obj:=obj;
+  end;
+
+ end;
+
+ vm_nt_map_unlock(map);
+end;
+
+
+
 
 
 

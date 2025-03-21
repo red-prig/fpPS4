@@ -1925,6 +1925,7 @@ begin
 
  if (node=nil) then
  begin
+  //TODO: rewrite
   FStart_align:=Max(AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE),VM_MIN_GPU_ADDRESS);
   F__End_align:=Min(AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE),VM_MAX_GPU_ADDRESS);
 
