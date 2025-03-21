@@ -812,9 +812,9 @@ begin
 
      if ((fp^.f_flag and FREAD)<>0) then
      begin
-      maxprot:=maxprot or VM_PROT_READ;
+      maxprot:=maxprot or (VM_PROT_READ or VM_PROT_GPU_READ);
      end else
-     if ((prot and VM_PROT_READ)<>0) then
+     if ((prot and (VM_PROT_READ or VM_PROT_GPU_READ))<>0) then
      begin
       Result:=Pointer(EACCES);
       goto _done;
@@ -824,9 +824,9 @@ begin
      begin
       if ((fp^.f_flag and FWRITE)<>0) then
       begin
-       maxprot:=maxprot or VM_PROT_WRITE;
+       maxprot:=maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
       end else
-      if ((prot and VM_PROT_WRITE)<>0) then
+      if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
       begin
        Result:=Pointer(EACCES);
        goto _done;
@@ -834,8 +834,8 @@ begin
      end else
      if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
      begin
-      maxprot:=maxprot or VM_PROT_WRITE;
-      cap_maxprot:=cap_maxprot or VM_PROT_WRITE;
+      maxprot:=maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
+      cap_maxprot:=cap_maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
      end;
 
      handle:=vp;
@@ -851,11 +851,11 @@ begin
      // FREAD should always be set.
      if ((fp^.f_flag and FREAD)<>0) then
      begin
-      maxprot:=maxprot or (VM_PROT_EXECUTE or VM_PROT_READ);
+      maxprot:=maxprot or (VM_PROT_EXECUTE or VM_PROT_READ or VM_PROT_GPU_READ);
      end;
      if ((fp^.f_flag and FWRITE)<>0) then
      begin
-      maxprot:=maxprot or VM_PROT_WRITE;
+      maxprot:=maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
      end;
      goto _map;
     end;
