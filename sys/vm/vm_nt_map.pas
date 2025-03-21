@@ -129,9 +129,11 @@ function  vm_nt_map_mirror(map  :p_vm_nt_map;
 function  vm_nt_map_fetch(map         :p_vm_nt_map;
                           start       :vm_offset_t;
                           __end       :vm_offset_t;
+                          var p__start:vm_offset_t;
+                          var p____end:vm_offset_t;
                           var p_offset:vm_offset_t;
                           var p____obj:p_vm_nt_file_obj
-                         ):vm_offset_t;
+                         ):Boolean;
 
 implementation
 
@@ -1547,15 +1549,18 @@ end;
 function vm_nt_map_fetch(map         :p_vm_nt_map;
                          start       :vm_offset_t;
                          __end       :vm_offset_t;
+                         var p__start:vm_offset_t;
+                         var p____end:vm_offset_t;
                          var p_offset:vm_offset_t;
                          var p____obj:p_vm_nt_file_obj
-                        ):vm_offset_t;
+                        ):Boolean;
 var
  entry:p_vm_nt_entry;
- offset:vm_ooffset_t;
+ cut:vm_offset_t;
+ offset:vm_offset_t;
  obj:p_vm_nt_file_obj;
 begin
- Result:=__end;
+ Result:=False;
  if (start=__end) then Exit;
 
  vm_nt_map_lock(map);
@@ -1571,13 +1576,15 @@ begin
 
   offset:=entry^.offset+(start-entry^.start);
 
-  Result:=entry^.__end;
+  cut:=entry^.__end;
 
-  if (Result>__end) then
+  if (cut>__end) then
   begin
-   Result:=__end;
+   cut:=__end;
   end;
 
+  p__start:=entry^.start;
+  p____end:=cut;
   p_offset:=offset;
   p____obj:=nil;
 
@@ -1587,6 +1594,7 @@ begin
    p____obj:=obj;
   end;
 
+  Result:=True;
  end;
 
  vm_nt_map_unlock(map);

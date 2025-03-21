@@ -240,12 +240,6 @@ begin
  DEV_INFO.DEV_FD.maxp:=VM_RW;
 
  DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS);
- r:=md_reserve_ex(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE);
- if (r<>0) then
- begin
-  Writeln('failed md_reserve(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-  Assert(false,'dev_mem_init');
- end;
 
  r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
@@ -555,6 +549,32 @@ begin
  end;
 end;
 
+procedure get_dev_fd(var info:t_fd_info;map_base:Pointer);
+var
+ o:QWORD;
+begin
+ o:=info.offset;
+
+ if (map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
+    (map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
+ begin
+  //dev
+
+  o:=o+(QWORD(map_base)-VM_MIN_DEV_ADDRESS);
+
+  info.obj:=@DEV_INFO.DEV_FD;
+ end else
+ begin
+  //unknow
+  info.obj:=nil;
+  o:=0;
+ end;
+
+ vm_nt_file_obj_reference(info.obj);
+
+ info.olocal:=o; //block local offset
+end;
+
 procedure get_dmem_fd(var info:t_fd_info);
 var
  BLK_SIZE:QWORD;
@@ -569,46 +589,35 @@ begin
  //get mem size
  MEM_SIZE:=(info.__end-info.start);
 
- Writeln('get_dmem_fd:0x',HexStr(o,10));
-
- if (o>=VM_MIN_DEV_ADDRESS) and (o<VM_MAX_DEV_ADDRESS) then
+ //dmem
+ if external_dmem_swap_mode then
  begin
-  //dev
-  BLK_SIZE:=DEV_INFO.DEV_SIZE;
+  BLK_SIZE:=VM_DMEM_SIZE; // 6144MB
 
-  info.obj:=@DEV_INFO.DEV_FD;
+  info.obj:=@DMEM_FD[0];
  end else
  begin
-  //dmem
-  if external_dmem_swap_mode then
+  BLK_SIZE:=PMAPP_BLK_SIZE;
+
+  //current block id
+  i:=o shr PMAPP_BLK_SHIFT;
+
+  if (DMEM_FD[i].hfile=0) then
   begin
-   BLK_SIZE:=VM_DMEM_SIZE; // 6144MB
+   R:=md_memfd_create(DMEM_FD[i].hfile,BLK_SIZE,VM_RW);
 
-   info.obj:=@DMEM_FD[0];
-  end else
-  begin
-   BLK_SIZE:=PMAPP_BLK_SIZE;
+   DMEM_FD[i].maxp:=VM_RW;
 
-   //current block id
-   i:=o shr PMAPP_BLK_SHIFT;
-
-   if (DMEM_FD[i].hfile=0) then
+   if (r<>0) then
    begin
-    R:=md_memfd_create(DMEM_FD[i].hfile,BLK_SIZE,VM_RW);
-
-    DMEM_FD[i].maxp:=VM_RW;
-
-    if (r<>0) then
-    begin
-     Writeln('failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
-     Assert(false,'get_dmem_fd');
-    end;
+    Writeln('failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
+    Assert(false,'get_dmem_fd');
    end;
-
-   info.obj:=@DMEM_FD[i];
   end;
-  //dmem
+
+  info.obj:=@DMEM_FD[i];
  end;
+ //dmem
 
  vm_nt_file_obj_reference(info.obj);
 
@@ -919,16 +928,14 @@ begin
 
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      //transform by base addr
-      offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
 
       if (p_print_pmap) then
       begin
        Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
       end;
 
-      info.start:=start;
-      info.__end:=__end;
+      info.start :=start;
+      info.__end :=__end;
       info.offset:=offset;
 
       while (info.start<>info.__end) do
@@ -983,7 +990,58 @@ begin
 
      end else
      begin
-      Assert(false,'non dmem OBJT_DEVICE');
+
+      if (p_print_pmap) then
+      begin
+       Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
+      end;
+
+      info.start :=start;
+      info.__end :=__end;
+      info.offset:=offset;
+
+      get_dev_fd(info,obj^.un_pager.map_base);
+
+      delta:=(info.__end-info.start);
+
+      if (p_print_pmap) then
+      begin
+       Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+      end;
+
+      //map to guest
+      r:=vm_nt_map_insert(@pmap^.nt_map,
+                          info.obj,
+                          info.olocal, //block local offset
+                          info.start,
+                          info.__end,
+                          delta,
+                          (prot and VM_RW));
+
+      if (r<>0) then
+      begin
+       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+       Assert(false,'pmap_enter_object');
+      end;
+
+      //map to GPU
+      if (prot and VM_PROT_GPU_ALL)<>0 then
+      begin
+       r:=vm_nt_map_insert(@pmap^.gp_map,
+                           info.obj,
+                           info.olocal, //block local offset
+                           info.start+VM_MIN_GPU_ADDRESS,
+                           info.__end+VM_MIN_GPU_ADDRESS,
+                           delta,
+                           ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+       if (r<>0) then
+       begin
+        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert(false,'pmap_enter_object');
+       end;
+      end;
+
      end;
 
     end;
@@ -1074,7 +1132,19 @@ begin
        //map to GPU
        if (prot and VM_PROT_GPU_ALL)<>0 then
        begin
-        Assert(false,'map file to gpu???');
+        r:=vm_nt_map_insert(@pmap^.gp_map,
+                            info.obj,
+                            info.olocal, //block local offset
+                            info.start+VM_MIN_GPU_ADDRESS,
+                            info.__end+VM_MIN_GPU_ADDRESS,
+                            delta,
+                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+        if (r<>0) then
+        begin
+         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+         Assert(false,'pmap_enter_object');
+        end;
        end;
 
        //restore
@@ -1125,7 +1195,19 @@ begin
       //map to GPU
       if (prot and VM_PROT_GPU_ALL)<>0 then
       begin
-       Assert(false,'map file to gpu???');
+       r:=vm_nt_map_insert(@pmap^.gp_map,
+                           info.obj,
+                           info.offset, //offset in file
+                           info.start+VM_MIN_GPU_ADDRESS,
+                           info.__end+VM_MIN_GPU_ADDRESS,
+                           size,
+                           ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+
+       if (r<>0) then
+       begin
+        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert(false,'pmap_enter_object');
+       end;
       end;
 
      end;
@@ -1163,6 +1245,7 @@ var
 
  r:Integer;
 
+ p__start:vm_offset_t;
  p____end:vm_offset_t;
  p_offset:vm_offset_t;
  p____obj:p_vm_nt_file_obj;
@@ -1176,12 +1259,17 @@ begin
 
  while (start<>__end) do
  begin
-  p____end:=vm_nt_map_fetch(@pmap^.nt_map,
-                            start,
-                            __end,
-                            p_offset,
-                            p____obj
-                           );
+  if not vm_nt_map_fetch(@pmap^.nt_map,
+                         start,
+                         __end,
+                         p__start,
+                         p____end,
+                         p_offset,
+                         p____obj
+                        ) then
+  begin
+   Assert(false,'vm_nt_map_fetch');
+  end;
 
   //map to GPU
   if (p____obj<>nil) then

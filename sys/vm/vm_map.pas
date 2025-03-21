@@ -1055,8 +1055,12 @@ begin
  rmap:=map^.rmap;
  length:=__end-start;
 
- //transform by base addr
- offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+ if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
+    (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
+ begin
+  //dev
+  Assert(false);
+ end;
 
  rmem_map_lock(rmap);
 
@@ -1086,8 +1090,12 @@ begin
  rmap:=map^.rmap;
  length:=__end-start;
 
- //transform by base addr
- offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+ if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
+    (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
+ begin
+  //dev
+  Assert(false);
+ end;
 
  rmem_map_lock(rmap);
 
@@ -3637,8 +3645,12 @@ begin
 
      offset:=entry^.offset;
 
-     //transform by base addr
-     offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
+     if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
+        (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
+     begin
+      //dev
+      Assert(false);
+     end;
 
      offset:=offset+diff;
 

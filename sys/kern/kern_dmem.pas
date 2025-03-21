@@ -623,9 +623,6 @@ begin
   begin
    offset:=entry^.offset;
 
-   //transform by base addr
-   offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
-
    qinfo^.protection:=qinfo^.protection and (VM_PROT_GPU_ALL or VM_PROT_RW);
 
    start :=entry^.start;
@@ -636,13 +633,14 @@ begin
     addr:=start;
    end;
 
-   if (offset>=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS)) then
+   if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
+      (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
    begin
     //dev
-
-    d_start2:=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
-    d_end2  :=(VM_MAX_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
-    d_mtype :=SCE_KERNEL_WB_ONION;
+    Assert(false);
+    //d_start2:=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
+    //d_end2  :=(VM_MAX_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
+    //d_mtype :=SCE_KERNEL_WB_ONION;
    end else
    begin
     //dmem
@@ -966,9 +964,6 @@ begin
   if Result then
   begin
    offset:=entry^.offset;
-
-   //transform by base addr
-   offset:=offset + (QWORD(obj^.un_pager.map_base) - VM_MIN_GPU_ADDRESS);
 
    offset:=offset+(addr-entry^.start);
 
