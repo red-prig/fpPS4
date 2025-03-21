@@ -336,10 +336,10 @@ begin
 
  if (orig.left=nil) then Exit(EINVAL);
 
- size:=(m_attr[a].size+$FFF) and (not $FFF);
+ size:=(m_attr[a].size+$3FFF) and (not $3FFF);
 
- Assert((QWORD(orig.left)  and $FFF=0),'left');
- Assert((QWORD(orig.right) and $FFF=0),'right');
+ Assert((QWORD(orig.left)  and $3FFF=0),'left');
+ Assert((QWORD(orig.right) and $3FFF=0),'right');
 
  mirr.left :=mirror_map(orig.left ,size);
  mirr.right:=mirror_map(orig.right,size);
