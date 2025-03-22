@@ -482,13 +482,9 @@ var
  pSrc,pDst:Pointer;
 begin
 
- {
- pDst:=nil;
- if get_dmem_ptr(dst,@pDst,nil) then
- begin
-  dst:=pDst;
- end;
- }
+ //ImageToBuffer
+
+ dst:=get_dmem_ptr(dst);
 
  //
  m_bytePerElement:=tiler.m_bytePerElement;

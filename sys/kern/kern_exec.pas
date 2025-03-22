@@ -348,7 +348,7 @@ begin
  error:=vm_map_fixed(map,nil,0,
          QWORD(shared_page_base), shared_page_len,
          VM_PROT_RW,
-         VM_PROT_ALL,
+         VM_PROT_RW or VM_PROT_EXECUTE,
          MAP_INHERIT_SHARE or MAP_ACC_NO_CHARGE or MAP_COW_NO_BUDGET,
          0,
          nil);
@@ -365,13 +365,6 @@ begin
   begin
    copyout(sv_sigcode,shared_page_base,sv_szsigcode^);
   end;
-
- //set max prot
- vm_map_protect(map,
-                QWORD(shared_page_base),
-                QWORD(shared_page_base)+shared_page_len,
-                VM_PROT_READ or VM_PROT_EXECUTE,
-                True);
 
  //set prot
  vm_map_protect(map,

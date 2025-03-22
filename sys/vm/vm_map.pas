@@ -1899,7 +1899,7 @@ begin
  //magic time
  nt_action:=t_prot_action(
   ord(
-   (prot and VM_RW)<>(prev and VM_RW)
+   (prot and VM_RWX)<>(prev and VM_RWX)
   )*ord(paProtect)
  );
 

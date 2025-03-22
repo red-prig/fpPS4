@@ -866,7 +866,10 @@ begin
 
    if ((flags and SCE_KERNEL_VQ_FIND_NEXT)=0) then
    begin
-    if (QWORD(addr) < QWORD($fee6bc000)) then Exit(EACCES);
+    if (QWORD(addr) < QWORD($fee6bc000)) then
+    begin
+     Exit(EACCES);
+    end;
    end;
 
    qinfo.pstart    :=Pointer($fee6bc000);

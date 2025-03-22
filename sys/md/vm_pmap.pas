@@ -852,6 +852,12 @@ begin
   prot:=prot or VM_PROT_READ;
  end;
 
+ //fixup gpu writeonly
+ if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
+ begin
+  prot:=prot or VM_PROT_GPU_READ;
+ end;
+
  lock:=pmap_wlock(pmap,start,__end);
 
  ppmap_mark_rwx(start,__end,prot);
@@ -1258,6 +1264,12 @@ begin
   Writeln('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
+ //fixup gpu writeonly
+ if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
+ begin
+  prot:=prot or VM_PROT_GPU_READ;
+ end;
+
  lock:=pmap_wlock(pmap,start,__end);
 
  while (start<__end) do
@@ -1395,6 +1407,12 @@ begin
   prot:=prot or VM_PROT_READ;
  end;
 
+ //fixup gpu writeonly
+ if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
+ begin
+  prot:=prot or VM_PROT_GPU_READ;
+ end;
+
  lock:=pmap_rlock(pmap,start,__end);
 
  ppmap_mark_rwx(start,__end,prot);
@@ -1454,7 +1472,7 @@ procedure pmap_gpu_protect(pmap :pmap_t;
 var
  lock:Pointer;
 begin
- //fixup writeonly
+ //fixup gpu writeonly
  if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
  begin
   prot:=prot or VM_PROT_GPU_READ;

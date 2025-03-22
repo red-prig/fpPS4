@@ -2012,6 +2012,7 @@ begin
    begin
     writeln('not excec:0x',HexStr(ptr));
    end;
+   ctx.ptr_curr:=ptr;
    goto _invalid;
   end;
 
@@ -2021,6 +2022,7 @@ begin
    begin
     writeln('not excec:0x',HexStr(ptr));
    end;
+   ctx.ptr_curr:=ptr;
    goto _invalid;
   end;
 

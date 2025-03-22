@@ -1107,7 +1107,7 @@ begin
  begin
   if (use_mode_2mb) then
   begin
-   size:=QWORD($ffffffffffe00000);
+   size:=QWORD(not PAGE_2MB_MASK);
   end else
   begin
    size:=QWORD(not PAGE_MASK);
