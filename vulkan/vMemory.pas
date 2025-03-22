@@ -8,6 +8,7 @@ uses
  sysutils,
  mqueue,
  vmparam,
+ vm_mmap,
  Vulkan,
  vDevice,
  vDependence,
@@ -1907,6 +1908,9 @@ begin
  FStart:=QWORD(Addr);
  F__End:=FStart+Size;
  //
+ FStart:=Max(FStart,VM_MIN_GPU_ADDRESS);
+ F__End:=Min(F__End,VM_MAX_GPU_ADDRESS);
+ //
  rw_wlock(global_mem_lock);
  //
 
@@ -1925,9 +1929,19 @@ begin
 
  if (node=nil) then
  begin
-  //TODO: rewrite
-  FStart_align:=Max(AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE),VM_MIN_GPU_ADDRESS);
-  F__End_align:=Min(AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE),VM_MAX_GPU_ADDRESS);
+  FStart_align:=FStart;
+  F__End_align:=F__End;
+
+  gpu_get_bound(FStart_align,F__End_align);
+
+  if (FStart_align=0) then
+  begin
+   Writeln('Addres:0x',HexStr(FStart_align,11),'not gpu mapped!');
+   Assert(false,'FetchHostMap:gpu_get_bound');
+  end;
+
+  FStart_align:=Max(FStart_align,AlignDw(FStart,GRANULAR_MAP_BLOCK_SIZE));
+  F__End_align:=Min(F__End_align,AlignUp(F__End,GRANULAR_MAP_BLOCK_SIZE));
 
   _retry:
 

@@ -190,11 +190,7 @@ begin
  Result:=nil;
  Assert(Size<>0);
 
- dmem_addr:=0;
- if not get_dmem_ptr(Pointer(Addr),@dmem_addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(Pointer(Addr))+' not in dmem!');
- end;
+ dmem_addr:=QWORD(get_dmem_ptr(Pointer(Addr)));
 
  dmem_addr:=dmem_addr-_fix_buf_size(Addr,Size,ALL_BUFFER_USAGE);
 

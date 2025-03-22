@@ -95,7 +95,7 @@ function  sys_virtual_query(addr:Pointer;
 
 function  rmem_map_test_lock(start,__end:QWORD):Boolean;
 
-function  get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
+function  get_dmem_ptr(addr:Pointer):Pointer;
 
 implementation
 
@@ -408,12 +408,12 @@ begin
 
  addr:=vm_offset_t(vaddr);
 
- if ((addr and $3fff)<>0) then
+ if ((addr and PAGE_MASK)<>0) then
  begin
   Exit(Pointer(EINVAL));
  end;
 
- if ((phaddr and $3fff)<>0) then
+ if ((phaddr and PAGE_MASK)<>0) then
  begin
   Exit(Pointer(EINVAL));
  end;
@@ -423,12 +423,12 @@ begin
   Exit(Pointer(EINVAL));
  end;
 
- if (length <= $3fff) then
+ if (length <= PAGE_MASK) then
  begin
   Exit(Pointer(EINVAL));
  end;
 
- if ((length and $3fff)<>0) then
+ if ((length and PAGE_MASK)<>0) then
  begin
   Exit(Pointer(EINVAL));
  end;
@@ -923,88 +923,9 @@ begin
  Result:=copyout(@qinfo,info,size);
 end;
 
-function get_dmem_offset(addr:QWORD;p_offset,p_size:PQWORD):Boolean;
-var
- map:vm_map_t;
- entry:vm_map_entry_t;
- obj:vm_object_t;
- offset,size:QWORD;
-
- dmem:p_dmem_map;
- curr,next:p_dmem_map_entry;
+function get_dmem_ptr(addr:Pointer):Pointer;
 begin
- Result:=False;
- map:=p_proc.p_vmspace;
-
- vm_map_lock(map);
-
- if vm_map_lookup_entry(map,addr,@entry) then
- begin
-  obj:=entry^.vm_obj;
-
-  if (obj<>nil) then
-  begin
-   Result:=(obj^.flags and OBJ_DMEM_EXT)<>0;
-  end;
-
-  if Result then
-  begin
-   offset:=entry^.offset;
-
-   offset:=offset+(addr-entry^.start);
-
-   if (p_offset<>nil) then
-   begin
-    p_offset^:=offset;
-   end;
-
-   if (p_size<>nil) then
-   begin
-    size:=entry^.__end-addr;
-
-    dmem:=dmem_maps[default_pool_id].dmem;
-    dmem_map_lock(dmem);
-
-     if dmem_map_lookup_entry(dmem,OFF_TO_IDX(offset),@curr) then
-     begin
-      while True do
-      begin
-       next:=curr^.next;
-
-       if (next=@dmem^.header) then
-       begin
-        Break;
-       end;
-
-       if (curr^.__end<>next^.start) then
-       begin
-        Break;
-       end;
-
-       curr:=next;
-      end;
-
-      size:=IDX_TO_OFF(curr^.__end)-offset;
-     end;
-    dmem_map_unlock(dmem);
-
-    p_size^:=size;
-   end;
-  end;
- end;
-
- vm_map_unlock(map);
-end;
-
-function get_dmem_ptr(addr:Pointer;p_ptr:PPointer;p_size:PQWORD):Boolean;
-begin
- Result:=True;
- p_ptr^:=addr+VM_MIN_GPU_ADDRESS;
-
- if (p_size<>nil) then
- begin
-  Assert(false,'TODO:get_dmem_ptr');
- end;
+ Result:=addr+VM_MIN_GPU_ADDRESS;
 end;
 
 

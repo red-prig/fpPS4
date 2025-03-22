@@ -76,7 +76,7 @@ function mmap_addr(paddr,psize:QWORD;
 var
  map:vm_map_t;
 begin
- if ((psize and $3fff)=0) and ((prot and $33)=prot) then
+ if ((psize and PAGE_MASK)=0) and ((prot and $33)=prot) then
  begin
   map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
 

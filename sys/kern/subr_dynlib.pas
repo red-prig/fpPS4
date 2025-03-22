@@ -1996,7 +1996,7 @@ begin
    end;
 
    addr:=(p_vaddr and QWORD($ffffffffffffc000));
-   size:=((p_vaddr and $3fff) + $3fff + phdr^.p_memsz) and QWORD($ffffffffffffc000);
+   size:=((p_vaddr and PAGE_MASK) + PAGE_MASK + phdr^.p_memsz) and QWORD($ffffffffffffc000);
 
    if (p_type=PT_SCE_RELRO) then
    begin
@@ -2117,7 +2117,7 @@ begin
 
     p_memsz:=p_vaddr and QWORD($ffffffffffffc000);
 
-    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + $3fff) and QWORD($ffffffffffffc000);
+    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + PAGE_MASK) and QWORD($ffffffffffffc000);
 
     max_size1:=max_size1+p_vaddr;
 

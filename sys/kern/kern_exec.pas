@@ -884,7 +884,7 @@ begin
     end;
 
     addr:=(p_vaddr and QWORD($ffffffffffffc000));
-    size:=((p_vaddr and $3fff) + $3fff + p_memsz) and QWORD($ffffffffffffc000);
+    size:=((p_vaddr and PAGE_MASK) + PAGE_MASK + p_memsz) and QWORD($ffffffffffffc000);
 
     if (p_type=PT_SCE_RELRO) then
     begin
@@ -965,7 +965,7 @@ begin
  auxargs^.phent :=hdr^.e_phentsize;
  auxargs^.phnum :=hdr^.e_phnum;
  auxargs^.pagesz:=PAGE_SIZE;
- auxargs^.base  :=(QWORD(vms^.vm_daddr) + $3fff + lim_max(RLIMIT_DATA)) and QWORD($ffffffffffffc000);
+ auxargs^.base  :=(QWORD(vms^.vm_daddr) + PAGE_MASK + lim_max(RLIMIT_DATA)) and QWORD($ffffffffffffc000);
  auxargs^.flags :=0;
  auxargs^.entry :=QWORD(imgp^.entry_addr);
 
@@ -1020,7 +1020,7 @@ begin
  obj^.data_addr:=vms^.vm_daddr;
  obj^.data_size:=vms^.vm_dsize * PAGE_SIZE;
 
- obj^.map_size :=((QWORD(obj^.data_addr) + obj^.data_size + $3fff) and QWORD($ffffffffffffc000)) - QWORD(text_addr);
+ obj^.map_size :=((QWORD(obj^.data_addr) + obj^.data_size + PAGE_MASK) and QWORD($ffffffffffffc000)) - QWORD(text_addr);
 
  obj^.relro_addr:=imgp^.relro_addr;
  obj^.relro_size:=imgp^.relro_size;

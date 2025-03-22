@@ -193,10 +193,7 @@ begin
  if (base<>nil) then
  begin
 
-  if not get_dmem_ptr(base,@base,nil) then
-  begin
-   Assert(false,'DumpCS:get_dmem_ptr');
-  end;
+  base:=get_dmem_ptr(base);
 
   size:=_calc_shader_size(base);
 
@@ -245,10 +242,7 @@ begin
  if (base<>nil) then
  begin
 
-  if not get_dmem_ptr(base,@base,nil) then
-  begin
-   Assert(false,'DumpPS:get_dmem_ptr');
-  end;
+  base:=get_dmem_ptr(base);
 
   size:=_calc_shader_size(base);
 
@@ -306,10 +300,7 @@ begin
  if (base<>nil) then
  begin
 
-  if not get_dmem_ptr(base,@base,nil) then
-  begin
-   Assert(false,'DumpVS:get_dmem_ptr');
-  end;
+  base:=get_dmem_ptr(base);
 
   size:=_calc_shader_size(base);
 

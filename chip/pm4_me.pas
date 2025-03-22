@@ -2638,14 +2638,14 @@ begin
 
  if (node^.addr<>nil) then
  begin
+
+  addr_dmem:=nil;
   if (node^.dataSel<>EVENTWRITEEOP_DATA_SEL_DISCARD) then
   begin
-   if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
-   begin
-    Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
-   end;
+   addr_dmem:=get_dmem_ptr(node^.addr);
   end;
 
+  if (addr_dmem<>nil) then
   Case node^.dataSel of
    //
    EVENTWRITEEOP_DATA_SEL_DISCARD:
@@ -2753,12 +2753,11 @@ begin
 
  if (node^.addr<>nil) then
  begin
+
+  addr_dmem:=nil;
   if (node^.srcSel<>RELEASEMEM_DATA_SEL_DISCARD) then
   begin
-   if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
-   begin
-    Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
-   end;
+   addr_dmem:=get_dmem_ptr(node^.addr);
   end;
 
   Case node^.dstSel of
@@ -2768,6 +2767,7 @@ begin
     Assert(false,'pm4_ReleaseMem:dstSel');
   end;
 
+  if (addr_dmem<>nil) then
   Case node^.srcSel of
    //
    RELEASEMEM_DATA_SEL_DISCARD:
@@ -2898,11 +2898,7 @@ begin
     begin
      //soft
 
-     addr_dmem:=nil;
-     if not get_dmem_ptr(Pointer(node^.addr),@addr_dmem,nil) then
-     begin
-      Assert(false,'addr:0x'+HexStr(Pointer(node^.addr))+' not in dmem!');
-     end;
+     addr_dmem:=get_dmem_ptr(node^.addr);
 
      PDWORD(addr_dmem)^:=node^.data;
 
@@ -2942,15 +2938,9 @@ begin
      begin
       //soft
 
-      if not get_dmem_ptr(node^.src,@src_dmem,nil) then
-      begin
-       Assert(false,'addr:0x'+HexStr(node^.src)+' not in dmem!');
-      end;
+      src_dmem:=get_dmem_ptr(node^.src);
 
-      if not get_dmem_ptr(node^.dst,@dst_dmem,nil) then
-      begin
-       Assert(false,'addr:0x'+HexStr(node^.dst)+' not in dmem!');
-      end;
+      dst_dmem:=get_dmem_ptr(node^.dst);
 
       byteSize:=node^.num_dw*SizeOf(DWORD);
 
@@ -2989,8 +2979,8 @@ procedure pm4_DmaData(var ctx:t_me_render_context;node:p_pm4_node_DmaData);
 var
  adrSrc:QWORD;
  adrDst:QWORD;
- adrSrc_dmem:QWORD;
- adrDst_dmem:QWORD;
+ adrSrc_dmem:Pointer;
+ adrDst_dmem:Pointer;
  byteCount:DWORD;
  srcSel,dstSel:Byte;
 begin
@@ -3021,17 +3011,11 @@ begin
      begin
       //soft
 
-      if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
-      begin
-       Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
-      end;
+      adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
 
-      if not get_dmem_ptr(Pointer(adrSrc),@adrSrc_dmem,nil) then
-      begin
-       Assert(false,'addr:0x'+HexStr(Pointer(adrSrc))+' not in dmem!');
-      end;
+      adrSrc_dmem:=get_dmem_ptr(Pointer(adrSrc));
 
-      Move(Pointer(adrSrc_dmem)^,Pointer(adrDst_dmem)^,byteCount);
+      Move(adrSrc_dmem^,adrDst_dmem^,byteCount);
 
       vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
 
@@ -3054,12 +3038,9 @@ begin
      begin
       //soft
 
-      if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
-      begin
-       Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
-      end;
+      adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
 
-      FillDWORD(Pointer(adrDst_dmem)^,(byteCount div 4),DWORD(adrSrc));
+      FillDWORD(adrDst_dmem^,(byteCount div 4),DWORD(adrSrc));
 
       vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
 
@@ -3139,15 +3120,7 @@ begin
  del_reg(kq);
 
  Fcode_addr:=addr;
- Fdmem_addr:=nil;
-
- if (addr<>nil) then
- begin
-  if not get_dmem_ptr(addr,@Fdmem_addr,nil) then
-  begin
-   Assert(false,'addr:0x'+HexStr(addr)+' not in dmem!');
-  end;
- end;
+ Fdmem_addr:=get_dmem_ptr(addr);
 end;
 
 function SendWarnMsg(const s:RawByteString):Integer;
@@ -3237,10 +3210,7 @@ var
  __end:DWORD;
  size :DWORD;
 begin
- if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
- end;
+ addr_dmem:=get_dmem_ptr(node^.addr);
 
  start:=node^.offset;
  __end:=start+(node^.num_dw*SizeOf(DWORD));
@@ -3268,10 +3238,7 @@ var
  __end:DWORD;
  size :DWORD;
 begin
- if not get_dmem_ptr(node^.addr,@addr_dmem,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(node^.addr)+' not in dmem!');
- end;
+ addr_dmem:=get_dmem_ptr(node^.addr);
 
  start:=node^.offset;
  __end:=start+(node^.num_dw*SizeOf(DWORD));

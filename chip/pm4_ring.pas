@@ -7,6 +7,8 @@ interface
 
 uses
  errno,
+ vmparam,
+ vm_mmap,
  md_map,
  systm,
  si_ci_vi_merged_enum,
@@ -32,7 +34,7 @@ type
   base_guest_addr:Pointer;
   base_dmem_addr :Pointer;
   read_guest_addr:PDWORD;
-  read_dmem_addr :PDWORD;
+  read_mirr_addr :PDWORD;
   next_dmem_addr :PDWORD;
   enable         :DWORD;
   lenLog2        :DWORD;
@@ -350,7 +352,9 @@ Function gc_map_hqd(ringBaseAddress:Pointer;
                     hqd:p_gc_hqd):Integer;
 var
  base_dmem_addr:PDWORD;
- read_dmem_addr:PDWORD;
+ read_mirr_addr:PDWORD;
+ base:Pointer;
+ offset:Integer;
 begin
  Result:=0;
 
@@ -364,24 +368,21 @@ begin
   Exit(Integer($804c000d));
  end;
 
- base_dmem_addr:=nil;
- if not get_dmem_ptr(ringBaseAddress,@base_dmem_addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(ringBaseAddress)+' not in dmem!');
- end;
+ base_dmem_addr:=get_dmem_ptr(ringBaseAddress);
 
- read_dmem_addr:=nil;
- if not get_dmem_ptr(readPtrAddress,@read_dmem_addr,nil) then
- begin
-  Assert(false,'addr:0x'+HexStr(readPtrAddress)+' not in dmem!');
- end;
+ offset:=QWORD(readPtrAddress) and PAGE_MASK;
+ base  :=Pointer(QWORD(readPtrAddress) and (not PAGE_MASK));
 
- //TODO: ring bound check, virtual addres prio instead of dmem
+ read_mirr_addr:=mirror_map(base,PAGE_SIZE);
+
+ read_mirr_addr:=Pointer(QWORD(read_mirr_addr)+offset);
+
+ //TODO: ring bound check
 
  hqd^.base_guest_addr:=ringBaseAddress;
  hqd^.base_dmem_addr :=base_dmem_addr;
  hqd^.read_guest_addr:=readPtrAddress;
- hqd^.read_dmem_addr :=read_dmem_addr;
+ hqd^.read_mirr_addr :=read_mirr_addr;
  hqd^.next_dmem_addr :=nextPtrAddress;
  hqd^.lenLog2        :=lenLog2;
  hqd^.g_queueId      :=g_queueId;
@@ -393,8 +394,14 @@ begin
 end;
 
 Function gc_unmap_hqd(hqd:p_gc_hqd):Integer;
+var
+ base:Pointer;
 begin
  hqd^:=Default(t_gc_hqd);
+
+ base:=Pointer(QWORD(hqd^.read_mirr_addr) and (not PAGE_MASK));
+
+ mirror_unmap(base,PAGE_SIZE);
 
  Result:=0;
 end;
@@ -474,7 +481,7 @@ begin
  ReadOffsetDw:=(ReadOffsetDw + (size shr 2)) and (hqd^.ringSizeDw-1);
 
  hqd^.ReadOffsetDw   :=ReadOffsetDw;
- hqd^.read_dmem_addr^:=ReadOffsetDw;
+ hqd^.read_mirr_addr^:=ReadOffsetDw;
 
  Result:=True;
 end;

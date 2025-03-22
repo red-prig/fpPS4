@@ -1184,11 +1184,7 @@ begin
      begin
       pData:=Pointer(PPtrUint(pDmem)^ and (not 3));
 
-      pDmem:=nil;
-      if not get_dmem_ptr(pData,@pDmem,nil) then
-      begin
-       Assert(false,'vtBufPtr2:get_dmem_ptr($'+HexStr(pData)+')');
-      end;
+      pDmem:=get_dmem_ptr(pData);
 
       pSharp:=pData;
      end;
@@ -1196,11 +1192,7 @@ begin
      begin
       pData:=PPointer(pDmem)^;
 
-      pDmem:=nil;
-      if not get_dmem_ptr(pData,@pDmem,nil) then
-      begin
-       Assert(false,'vtFunPtr2:get_dmem_ptr($'+HexStr(pData)+')');
-      end;
+      pDmem:=get_dmem_ptr(pData);
 
       pSharp:=pData;
      end;
@@ -1212,11 +1204,7 @@ begin
       begin
        pData:=Pointer(PVSharpResource4(pDmem)^.base);
 
-       pDmem:=nil;
-       if not get_dmem_ptr(pData,@pDmem,nil) then
-       begin
-        Assert(false,'vtVSharp4:get_dmem_ptr($'+HexStr(pData)+')');
-       end;
+       pDmem:=get_dmem_ptr(pData);
       end;
 
      end;
@@ -1234,11 +1222,7 @@ begin
       begin
        pData:=Pointer(QWORD(PTSharpResource4(pDmem)^.base) shl 8);
 
-       pDmem:=nil;
-       if not get_dmem_ptr(pData,@pDmem,nil) then
-       begin
-        Assert(false,'vtTSharp:get_dmem_ptr($'+HexStr(pData)+')');
-       end;
+       pDmem:=get_dmem_ptr(pData);
       end;
 
      end;

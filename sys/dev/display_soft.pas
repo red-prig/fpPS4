@@ -146,6 +146,7 @@ uses
  }
  md_time,
  sys_bootparam,
+ vmparam,
  vm_mmap;
 
 //
@@ -336,10 +337,10 @@ begin
 
  if (orig.left=nil) then Exit(EINVAL);
 
- size:=(m_attr[a].size+$3FFF) and (not $3FFF);
+ size:=(m_attr[a].size+PAGE_MASK) and (not PAGE_MASK);
 
- Assert((QWORD(orig.left)  and $3FFF=0),'left');
- Assert((QWORD(orig.right) and $3FFF=0),'right');
+ Assert((QWORD(orig.left)  and PAGE_MASK=0),'left');
+ Assert((QWORD(orig.right) and PAGE_MASK=0),'right');
 
  mirr.left :=mirror_map(orig.left ,size);
  mirr.right:=mirror_map(orig.right,size);

@@ -6,6 +6,7 @@ unit ps4_libSceNpCommon;
 interface
 
 uses
+ vmparam,
  subr_dynlib,
  np_error,
  ps4_libSceUserService;
@@ -420,9 +421,9 @@ begin
 
  mem_out^.unknow:=0;
  pad_len:=0;
- if (len and $3fff)<>0 then
+ if (len and PAGE_MASK)<>0 then
  begin
-  pad_len:=$4000-(len and $3fff);
+  pad_len:=PAGE_SIZE-(len and PAGE_MASK);
  end;
  mem_out^.len:=pad_len+len;
 

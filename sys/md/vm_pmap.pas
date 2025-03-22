@@ -160,6 +160,10 @@ function  pmap_danger_zone(pmap:pmap_t;
                            addr:vm_offset_t;
                            size:vm_offset_t):Boolean;
 
+procedure pmap_gpu_get_bound(pmap:pmap_t;
+                             var start:vm_offset_t;
+                             var __end:vm_offset_t);
+
 implementation
 
 uses
@@ -1256,7 +1260,7 @@ begin
 
  lock:=pmap_wlock(pmap,start,__end);
 
- while (start<>__end) do
+ while (start<__end) do
  begin
   if not vm_nt_map_fetch(@pmap^.nt_map,
                          start,
@@ -1268,6 +1272,18 @@ begin
                         ) then
   begin
    Assert(false,'vm_nt_map_fetch');
+  end;
+
+  if (p__start>start) then
+  begin
+   start:=p__start;
+  end;
+
+  p_offset:=p_offset+(start-p__start);
+
+  if (p____end>__end) then
+  begin
+   p____end:=__end;
   end;
 
   //map to GPU
@@ -1292,6 +1308,70 @@ begin
  end;
 
  pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_gpu_get_bound(pmap:pmap_t;
+                             var start:vm_offset_t;
+                             var __end:vm_offset_t);
+var
+ lock:Pointer;
+
+ i_start:vm_offset_t;
+ i___end:vm_offset_t;
+
+ min_start:vm_offset_t;
+ max___end:vm_offset_t;
+
+ p__start:vm_offset_t;
+ p____end:vm_offset_t;
+ p_offset:vm_offset_t;
+ p____obj:p_vm_nt_file_obj;
+begin
+ i_start:=start;
+ i___end:=__end;
+
+ min_start:=0;
+ max___end:=0;
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ while (i_start<i___end) do
+ begin
+
+  if vm_nt_map_fetch(@pmap^.gp_map,
+                     i_start,
+                     i___end,
+                     p__start,
+                     p____end,
+                     p_offset,
+                     p____obj
+                    ) then
+  begin
+   //is hole space
+   if (p__start>i_start) then
+   begin
+    Break;
+   end;
+
+   if (min_start=0) then
+   begin
+    min_start:=p__start;
+   end;
+
+   max___end:=p____end;
+  end else
+  begin
+   //not found
+   Break;
+  end;
+
+  i_start:=p____end;
+ end;
+
+ pmap_unlock(pmap,lock);
+
+ start:=min_start;
+ __end:=max___end;
 end;
 
 procedure pmap_protect(pmap :pmap_t;

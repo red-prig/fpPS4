@@ -78,7 +78,7 @@ begin
 
  addr:=QWORD(data^.addr);
 
- if ((addr and $3fff) <> 0) then
+ if ((addr and PAGE_MASK) <> 0) then
  begin
   Exit(EINVAL);
  end;
@@ -105,7 +105,7 @@ begin
   Exit(EINVAL);
  end;
 
- if ((len and $3fff) <> 0) then
+ if ((len and PAGE_MASK) <> 0) then
  begin
   Exit(EINVAL);
  end;

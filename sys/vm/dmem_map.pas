@@ -833,7 +833,7 @@ begin
   Exit(EINVAL);
  end;
 
- if (( (align and QWORD($8000000000003fff)) or QWORD(len and QWORD($3fff)) )<>0) then
+ if (( (align and QWORD($8000000000003fff)) or QWORD(len and QWORD(PAGE_MASK)) )<>0) then
  begin
   Exit(EINVAL);
  end;

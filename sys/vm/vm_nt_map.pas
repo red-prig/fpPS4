@@ -1556,8 +1556,6 @@ function vm_nt_map_fetch(map         :p_vm_nt_map;
                         ):Boolean;
 var
  entry:p_vm_nt_entry;
- cut:vm_offset_t;
- offset:vm_offset_t;
  obj:p_vm_nt_file_obj;
 begin
  Result:=False;
@@ -1572,21 +1570,13 @@ begin
 
  if (entry<>@map^.header) and (entry^.start<__end) then
  begin
-  obj:=entry^.obj;
-
-  offset:=entry^.offset+(start-entry^.start);
-
-  cut:=entry^.__end;
-
-  if (cut>__end) then
-  begin
-   cut:=__end;
-  end;
 
   p__start:=entry^.start;
-  p____end:=cut;
-  p_offset:=offset;
+  p____end:=entry^.__end;
+  p_offset:=entry^.offset;
   p____obj:=nil;
+
+  obj:=entry^.obj;
 
   if (obj<>nil) then
   if (obj^.hfile<>0) then

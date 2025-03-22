@@ -52,6 +52,7 @@ function vm_mmap2(map        :vm_map_t;
 
 function  mirror_map  (paddr:Pointer;psize:QWORD):Pointer;
 procedure mirror_unmap(base:Pointer;size:QWORD);
+procedure gpu_get_bound(var start,__end:QWORD);
 
 implementation
 
@@ -1204,6 +1205,16 @@ begin
  map:=p_proc.p_vmspace;
 
  pmap_mirror_unmap(map^.pmap,base,size);
+end;
+
+
+procedure gpu_get_bound(var start,__end:QWORD);
+var
+ map:vm_map_t;
+begin
+ map:=p_proc.p_vmspace;
+
+ pmap_gpu_get_bound(map^.pmap,start,__end);
 end;
 
 end.

@@ -226,10 +226,7 @@ begin
  key:=Default(TShaderDataKey);
  key.FStage:=FStage;
 
- if not get_dmem_ptr(pData,@key.pData,nil) then
- begin
-  Assert(false,'_FetchShaderCodeCache');
- end;
+ key.pData:=get_dmem_ptr(pData);
 
  t:=_FindShaderCodeCache(key);
 
@@ -296,11 +293,7 @@ end;
 
 function _GetDmem(P:Pointer):Pointer; register;
 begin
- Result:=nil;
- if not get_dmem_ptr(P,@Result,nil) then
- begin
-  Assert(false,'_GetDmem');
- end;
+ Result:=get_dmem_ptr(P);
 end;
 
 function ParseShader(FStage:TvShaderStage;pData:PDWORD;var GPU_REGS:TGPU_REGS;pc:PPushConstAllocator):TMemoryStream;

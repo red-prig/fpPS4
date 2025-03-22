@@ -720,7 +720,7 @@ begin
 
       imgp^.min_addr:=MinInt64(imgp^.min_addr,vaddr);
 
-      vaddr:=(vaddr+memsz+$3fff) and QWORD($ffffffffffffc000);
+      vaddr:=(vaddr+memsz+PAGE_MASK) and QWORD($ffffffffffffc000);
 
       imgp^.max_addr:=MaxInt64(imgp^.max_addr,vaddr);
 
@@ -1097,7 +1097,7 @@ begin
   Exit(ENOEXEC);
  end;
 
- if ((vaddr and $3fff)<>0) then
+ if ((vaddr and PAGE_MASK)<>0) then
  begin
   Writeln(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
   Exit(ENOEXEC);
@@ -1115,7 +1115,7 @@ begin
   size:=size and filesz;
  end else
  begin
-  size:=(filesz + $3fff) and QWORD($ffffffffffffc000);
+  size:=(filesz + PAGE_MASK) and QWORD($ffffffffffffc000);
  end;
 
  if (size>memsz) then
@@ -1124,7 +1124,7 @@ begin
  end;
 
  vaddr_lo:=vaddr and QWORD($ffffffffffffc000);
- vaddr_hi:=(vaddr + memsz + $3fff) and QWORD($ffffffffffffc000);
+ vaddr_hi:=(vaddr + memsz + PAGE_MASK) and QWORD($ffffffffffffc000);
 
  base:=Pointer(imgp^.image_header)+offset;
 

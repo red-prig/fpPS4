@@ -137,7 +137,6 @@ var
  ib_base:QWORD;
  ib_size:QWORD;
  addr:Pointer;
- size:QWORD;
 begin
  Result:=False;
 
@@ -154,34 +153,20 @@ begin
  ib_base:=QWORD(buf^.ibBase);
  ib_size:=QWORD(buf^.ibSize)*sizeof(DWORD);
 
- addr:=nil;
- size:=0;
+ addr:=get_dmem_ptr(Pointer(ib_base));
 
- if get_dmem_ptr(Pointer(ib_base),@addr,@size) then
- begin
-  if (ib_size>size) then
-  begin
-   Assert(false,'addr:0x'+HexStr(ib_base+size,16)+' not in dmem!');
-  end else
-  begin
-   //Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
+ //Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
 
-   ibuf^.next:=Default(TAILQ_ENTRY);
-   ibuf^.base:=Pointer(ib_base); //adjust guest addr
-   ibuf^.buff:=addr;
-   ibuf^.size:=ib_size;
-   ibuf^.bpos:=0;
-   ibuf^.picb:=icb;
-   ibuf^.buft:=buft;
-   ibuf^.c_id:=0;
+ ibuf^.next:=Default(TAILQ_ENTRY);
+ ibuf^.base:=Pointer(ib_base); //adjust guest addr
+ ibuf^.buff:=addr;
+ ibuf^.size:=ib_size;
+ ibuf^.bpos:=0;
+ ibuf^.picb:=icb;
+ ibuf^.buft:=buft;
+ ibuf^.c_id:=0;
 
-   Result:=True;
-  end;
- end else
- begin
-  Assert(false,'addr:0x'+HexStr(ib_base,16)+' not in dmem!');
- end;
-
+ Result:=True;
 end;
 
 function pm4_ibuf_parse(pctx:p_pfp_ctx;ibuf:p_pm4_ibuffer):Integer;
@@ -1167,8 +1152,8 @@ procedure onDmaData(pctx:p_pfp_ctx;Body:PPM4DMADATA);
 var
  adrSrc:QWORD;
  adrDst:QWORD;
- adrSrc_dmem:QWORD;
- adrDst_dmem:QWORD;
+ adrSrc_dmem:Pointer;
+ adrDst_dmem:Pointer;
  byteCount:DWORD;
  srcSel,dstSel:Byte;
 begin
@@ -1211,10 +1196,7 @@ begin
    begin
     //Execute on the parser side
 
-    if not get_dmem_ptr(Pointer(adrDst),@adrDst_dmem,nil) then
-    begin
-     Assert(false,'addr:0x'+HexStr(Pointer(adrDst))+' not in dmem!');
-    end;
+    adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
 
     case (srcSel or (dstSel shl 4)) of
      (kDmaDataSrcMemory        or (kDmaDataDstMemory        shl 4)),
@@ -1222,19 +1204,16 @@ begin
      (kDmaDataSrcMemory        or (kDmaDataDstMemoryUsingL2 shl 4)),
      (kDmaDataSrcMemoryUsingL2 or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
-        if not get_dmem_ptr(Pointer(adrSrc),@adrSrc_dmem,nil) then
-        begin
-         Assert(false,'addr:0x'+HexStr(Pointer(adrSrc))+' not in dmem!');
-        end;
+        adrSrc_dmem:=get_dmem_ptr(Pointer(adrSrc));
 
-        Move(Pointer(adrSrc_dmem)^,Pointer(adrDst_dmem)^,byteCount);
+        Move(adrSrc_dmem^,adrDst_dmem^,byteCount);
 
         vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
      (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
-        FillDWORD(Pointer(adrDst_dmem)^,(byteCount div 4),DWORD(adrSrc));
+        FillDWORD(adrDst_dmem^,(byteCount div 4),DWORD(adrSrc));
 
         vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
@@ -1309,10 +1288,7 @@ begin
       WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
       WRITE_DATA_DST_SEL_MEMORY_ASYNC:
         begin
-         if not get_dmem_ptr(dst,@dst_dmem,nil) then
-         begin
-          Assert(false,'addr:0x'+HexStr(dst)+' not in dmem!');
-         end;
+         dst_dmem:=get_dmem_ptr(dst);
 
          Move(src_dmem^,dst_dmem^,count*SizeOf(DWORD));
 
