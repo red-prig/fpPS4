@@ -1446,13 +1446,6 @@ begin
   Exit(EINVAL);
  end;
 
- if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
-    (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
- begin
-  //dev
-  Assert(false);
- end;
-
  dmem_map_lock(map);
 
  if (dmem_map_lookup_entry(map, OFF_TO_IDX(offset), @entry)) then

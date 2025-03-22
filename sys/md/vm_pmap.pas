@@ -360,16 +360,15 @@ begin
  vm_nt_map_init(@pmap^.gp_map,VM_MIN_GPU_ADDRESS,VM_MAX_GPU_ADDRESS);
 
   //exclude
- if Length(pmap_mem)>1 then
+ if Length(pmap_mem_guest)>1 then
  begin
-  For i:=0 to High(pmap_mem)-1 do
-  if pmap_mem[i].guest then
+  For i:=0 to High(pmap_mem_guest)-1 do
   begin
    vm_nt_map_insert(@pmap^.nt_map,
                     nil,0,
-                    pmap_mem[  i].__end,
-                    pmap_mem[i+1].start,
-                    pmap_mem[i+1].start-pmap_mem[i].__end,
+                    pmap_mem_guest[  i].__end,
+                    pmap_mem_guest[i+1].start,
+                    pmap_mem_guest[i+1].start-pmap_mem_guest[i].__end,
                     0);
   end;
  end;
@@ -532,7 +531,7 @@ begin
  Writeln('[DMEM_FD]');
  if external_dmem_swap_mode then
  begin
-  Writeln(' 0x',HexStr(VM_MIN_GPU_ADDRESS,16),'..',HexStr(VM_MIN_DEV_ADDRESS,16));
+  Writeln(' 0x',HexStr(VM_MIN_GPU_ADDRESS,16),'..',HexStr(VM_MAX_GPU_ADDRESS,16));
  end else
  begin
 

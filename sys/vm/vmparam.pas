@@ -6,10 +6,9 @@ unit vmparam;
 interface
 
 type
- t_addr_range=record
+ t_addr_range=packed record
   start:QWORD;
   __end:QWORD;
-  guest:Boolean;
  end;
 
 const
@@ -104,12 +103,14 @@ const
 
 var
  pmap_mem:array[0..4] of t_addr_range=(
-  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ;guest:True ),
-  (start:DL_AREA_START     ;__end:DL_AREA___END     ;guest:True ),
-  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS;guest:False),
-  (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS;guest:False),
-  (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS;guest:False)
+  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ), //guest
+  (start:DL_AREA_START     ;__end:DL_AREA___END     ), //guest
+  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS), //guest
+  (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS),
+  (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS)
  );
+
+ pmap_mem_guest:array[0..2] of t_addr_range absolute pmap_mem;
 
 function pageablemem:QWORD;
 function VM_MINUSER_ADDRESS:QWORD;
@@ -139,9 +140,9 @@ var
  i:Integer;
 begin
  Result:=False;
- For i:=0 to High(pmap_mem) do
+ For i:=0 to High(pmap_mem_guest) do
  begin
-  if pmap_mem[i].guest and (addr>=pmap_mem[i].start) and (addr<pmap_mem[i].__end) then
+  if (addr>=pmap_mem_guest[i].start) and (addr<pmap_mem_guest[i].__end) then
   begin
    Exit(True);
   end;

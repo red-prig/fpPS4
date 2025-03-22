@@ -404,15 +404,14 @@ begin
  vm^.vm_daddr:=nil;
  vm^.vm_maxsaddr:=nil;
 
- if Length(pmap_mem)>1 then
+ if Length(pmap_mem_guest)>1 then
  begin
   map:=@vm^.vm_map;
   vm_map_lock(map);
-   For i:=0 to High(pmap_mem)-1 do
-   if pmap_mem[i].guest then
+   For i:=0 to High(pmap_mem_guest)-1 do
    begin
-    vm_map_insert         (map, nil, 0, pmap_mem[i].__end, pmap_mem[i+1].start, 0, 0, -1, nil, false);
-    vm_map_set_info_locked(map,         pmap_mem[i].__end, pmap_mem[i+1].start, '#hole', VM_INHERIT_HOLE);
+    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil, false);
+    vm_map_set_info_locked(map,         pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, '#hole', VM_INHERIT_HOLE);
    end;
   vm_map_unlock(map);
  end;
@@ -1055,13 +1054,6 @@ begin
  rmap:=map^.rmap;
  length:=__end-start;
 
- if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
-    (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
- begin
-  //dev
-  Assert(false);
- end;
-
  rmem_map_lock(rmap);
 
  if not alias then
@@ -1089,13 +1081,6 @@ var
 begin
  rmap:=map^.rmap;
  length:=__end-start;
-
- if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
-    (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
- begin
-  //dev
-  Assert(false);
- end;
 
  rmem_map_lock(rmap);
 
@@ -3644,13 +3629,6 @@ begin
      size:=e___end-e_start;
 
      offset:=entry^.offset;
-
-     if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
-        (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
-     begin
-      //dev
-      Assert(false);
-     end;
 
      offset:=offset+diff;
 

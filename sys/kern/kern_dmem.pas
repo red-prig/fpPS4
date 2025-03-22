@@ -633,28 +633,14 @@ begin
     addr:=start;
    end;
 
-   if (obj^.un_pager.map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
-      (obj^.un_pager.map_base< Pointer(VM_MAX_DEV_ADDRESS)) then
+   ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,
+                           obj,
+                           addr + (entry^.offset - start), //send not transformed offset
+                           @d_start2,@d_end2,
+                           @d_mtype);
+   if (ret<>0) then
    begin
-    //dev
-    Assert(false);
-    //d_start2:=(VM_MIN_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
-    //d_end2  :=(VM_MAX_DEV_ADDRESS-VM_MIN_GPU_ADDRESS);
-    //d_mtype :=SCE_KERNEL_WB_ONION;
-   end else
-   begin
-    //dmem
-
-    ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,
-                            obj,
-                            addr + (entry^.offset - start), //send not transformed offset
-                            @d_start2,@d_end2,
-                            @d_mtype);
-    if (ret<>0) then
-    begin
-     Assert(false,'dmem_vmo_get_type error %d');
-    end;
-
+    Assert(false,'dmem_vmo_get_type error %d');
    end;
 
    qinfo^.bits.isDirectMemory:=1;
