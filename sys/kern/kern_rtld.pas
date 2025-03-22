@@ -720,7 +720,7 @@ begin
 
       imgp^.min_addr:=MinInt64(imgp^.min_addr,vaddr);
 
-      vaddr:=(vaddr+memsz+PAGE_MASK) and QWORD($ffffffffffffc000);
+      vaddr:=(vaddr+memsz+PAGE_MASK) and QWORD(not PAGE_MASK);
 
       imgp^.max_addr:=MaxInt64(imgp^.max_addr,vaddr);
 
@@ -916,14 +916,14 @@ begin
    Exit(EINVAL);
   end;
 
-  if (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+$1fffff) and QWORD($ffffffffffe00000))<>vaddr) and
-     (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+$003fff) and QWORD($ffffffffffffc000))<>vaddr) then
+  if (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+PAGE_2MB_MASK) and QWORD(not PAGE_2MB_MASK))<>vaddr) and
+     (((phdr[text_id].p_vaddr+phdr[text_id].p_memsz+PAGE_MASK    ) and QWORD(not PAGE_MASK    ))<>vaddr) then
   begin
    Exit(EINVAL);
   end;
 
-  if (((vaddr+memsz+$1fffff) and QWORD($ffffffffffe00000))<>phdr[data_id].p_vaddr) and
-     (((vaddr+memsz+$003fff) and QWORD($ffffffffffffc000))<>phdr[data_id].p_vaddr) then
+  if (((vaddr+memsz+PAGE_2MB_MASK) and QWORD(not PAGE_2MB_MASK))<>phdr[data_id].p_vaddr) and
+     (((vaddr+memsz+PAGE_MASK    ) and QWORD(not PAGE_MASK    ))<>phdr[data_id].p_vaddr) then
   begin
    Exit(EINVAL);
   end;
@@ -1110,12 +1110,12 @@ begin
    size:=QWORD($ffffffffffe00000);
   end else
   begin
-   size:=QWORD($ffffffffffffc000);
+   size:=QWORD(not PAGE_MASK);
   end;
   size:=size and filesz;
  end else
  begin
-  size:=(filesz + PAGE_MASK) and QWORD($ffffffffffffc000);
+  size:=(filesz + PAGE_MASK) and QWORD(not PAGE_MASK);
  end;
 
  if (size>memsz) then
@@ -1123,8 +1123,8 @@ begin
   memsz:=size;
  end;
 
- vaddr_lo:=vaddr and QWORD($ffffffffffffc000);
- vaddr_hi:=(vaddr + memsz + PAGE_MASK) and QWORD($ffffffffffffc000);
+ vaddr_lo:=vaddr and QWORD(not PAGE_MASK);
+ vaddr_hi:=(vaddr + memsz + PAGE_MASK) and QWORD(not PAGE_MASK);
 
  base:=Pointer(imgp^.image_header)+offset;
 

@@ -131,6 +131,7 @@ uses
  kern_proc,
  kern_rwlock,
  systm,
+ vmparam,
  elf64,
  subr_dynlib,
  kern_authinfo;
@@ -339,7 +340,7 @@ begin
    //shrink
 
    if (is_2MB_align<>0) and
-      ((game_fmem_size and $1fffff)<>0) then
+      ((game_fmem_size and PAGE_2MB_MASK)<>0) then
    begin
     Writeln(stderr,'game_fmem_size is not multiple of 2MB: 0x',HexStr(game_fmem_size,8));
    end;
@@ -696,7 +697,7 @@ begin
 
        if (bigapp_max_fmem_size < FMEM_SIZE) or
           (FMEM_SIZE < bigapp_size) or
-          ((FMEM_SIZE and QWORD($ffffffffffffc000))<>FMEM_SIZE) then
+          ((FMEM_SIZE and QWORD(not PAGE_MASK))<>FMEM_SIZE) then
        begin
         Writeln(stderr,'[KERNEL] ERROR: invalid FMEM size (0x',HexStr(FlexibleMemorySize,16),') is specified.');
         Result:=EINVAL;
@@ -973,7 +974,7 @@ begin
 
  mode2:=M2MB_DISABLE;
 
- if (Int64(size) > $1fffff) then
+ if (Int64(size) > PAGE_2MB_MASK) then
  begin
   mode2:=mode;
  end;
@@ -1005,20 +1006,22 @@ begin
    Exit(EINVAL);
   end;
 
-  size2:=size + $1fffff;
-
   if (Int64(size) > -1) then
   begin
    size2:=size;
+  end else
+  begin
+   size2:=size + PAGE_2MB_MASK;
   end;
 
-  size2:=size2 and QWORD($ffffffffffe00000);
-
-  size:=game_fmem_size + size2;
+  size2:=size2 and QWORD(not PAGE_2MB_MASK);
 
   if (bigapp_max_fmem_size < (game_fmem_size + size2)) then
   begin
    size:=bigapp_max_fmem_size;
+  end else
+  begin
+   size:=game_fmem_size + size2;
   end;
 
   set_bigapp_limits(size,0);

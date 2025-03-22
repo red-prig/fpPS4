@@ -745,7 +745,7 @@ begin
 
  Writeln('sys_virtual_query:',HexStr(addr),' ',flags);
 
- QWORD(addr):=QWORD(addr) and QWORD($ffffffffffffc000);
+ QWORD(addr):=QWORD(addr) and QWORD(not PAGE_MASK);
 
  map:=p_proc.p_vmspace;
 

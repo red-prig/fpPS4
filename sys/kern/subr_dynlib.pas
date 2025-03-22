@@ -1995,8 +1995,8 @@ begin
     Exit;
    end;
 
-   addr:=(p_vaddr and QWORD($ffffffffffffc000));
-   size:=((p_vaddr and PAGE_MASK) + PAGE_MASK + phdr^.p_memsz) and QWORD($ffffffffffffc000);
+   addr:=(p_vaddr and QWORD(not PAGE_MASK));
+   size:=((p_vaddr and PAGE_MASK) + PAGE_MASK + phdr^.p_memsz) and QWORD(not PAGE_MASK);
 
    if (p_type=PT_SCE_RELRO) then
    begin
@@ -2115,9 +2115,9 @@ begin
      p_vaddr:=p_vaddr + QWORD(imgp^.reloc_base);
     end;
 
-    p_memsz:=p_vaddr and QWORD($ffffffffffffc000);
+    p_memsz:=p_vaddr and QWORD(not PAGE_MASK);
 
-    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + PAGE_MASK) and QWORD($ffffffffffffc000);
+    p_vaddr:=(phdr^.p_memsz + p_vaddr - p_memsz + PAGE_MASK) and QWORD(not PAGE_MASK);
 
     max_size1:=max_size1+p_vaddr;
 
@@ -2125,8 +2125,8 @@ begin
 
     if (used_mode_2m) then
     begin
-     size   :=(p_vaddr + p_memsz) and QWORD($ffffffffffe00000);
-     p_vaddr:=(p_memsz + $1fffff) and QWORD($ffffffffffe00000);
+     size   :=(p_vaddr + p_memsz      ) and QWORD(not PAGE_2MB_MASK);
+     p_vaddr:=(p_memsz + PAGE_2MB_MASK) and QWORD(not PAGE_2MB_MASK);
      base:=0;
      if (p_vaddr<=size) then
      begin
