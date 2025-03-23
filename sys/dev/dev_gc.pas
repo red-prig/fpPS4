@@ -62,7 +62,7 @@ var
  gc_knlock:mtx;
  gc_knlist:t_knlist;
 
-procedure unmap_dmem_gc(start,__end:DWORD); public;
+procedure unmap_dmem_gc(start,__end:QWORD); public;
 begin
  if (MemManager<>nil) then
  begin

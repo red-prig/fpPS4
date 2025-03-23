@@ -1837,8 +1837,6 @@ begin
 end;
 
 procedure TvMemManager.unmap_host(start,__end:QWORD);
-label
- _full;
 var
  node,next:TvHostMemory;
 begin
@@ -1855,28 +1853,9 @@ begin
 
   if (__end>node.FStart) and (start<node.F__End) then
   begin
-
-   if (start<=node.FStart) and (__end>=node.F__End) then
-   begin
-    //full in
-    _full:
-    Dec(FHosts_count);
-    TAILQ_REMOVE(@FHosts,node,@node.entry);
-    ReleaseAndNil(node); //list
-   end else
-   if rmem_map_test_lock(node.FStart,node.F__End) then
-   begin
-    goto _full;
-   end else
-   if (node.FHold=0) then //lock Hold?
-   begin
-    //partial
-    Dec(FHosts_count);
-    TAILQ_REMOVE(@FHosts,node,@node.entry);
-    node.ReleaseAllDependencies(node);
-    ReleaseAndNil(node); //list
-   end;
-
+   Dec(FHosts_count);
+   TAILQ_REMOVE(@FHosts,node,@node.entry);
+   ReleaseAndNil(node); //list
   end;
 
   node:=next;

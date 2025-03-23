@@ -1607,6 +1607,8 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
+procedure unmap_dmem_gc(start,__end:QWORD); external;
+
 procedure pmap_remove(pmap :pmap_t;
                       obj  :vm_object_t;
                       start:vm_offset_t;
@@ -1697,6 +1699,9 @@ begin
  end;
 
  pmap_unlock(pmap,lock);
+
+ unmap_dmem_gc(start+VM_MIN_GPU_ADDRESS,
+               __end+VM_MIN_GPU_ADDRESS);
 end;
 
 procedure pmap_gpu_remove(pmap :pmap_t;

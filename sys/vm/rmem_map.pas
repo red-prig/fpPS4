@@ -789,57 +789,6 @@ begin
  end;
 end;
 
-procedure unmap_dmem_gc(start,__end:DWORD); external;
-
-procedure rmem_map_unmap_check(map:p_rmem_map;
-                               start,__end:DWORD);
-var
- entry:p_rmem_map_entry;
- s,e:DWORD;
-begin
- RMEM_MAP_ASSERT_LOCKED(map);
-
- if not rmem_map_lookup_entry(map,start,@entry) then
- begin
-  Exit;
- end;
-
- repeat
-
-  if (entry^.start>start) then
-  begin
-   s:=start;
-
-   if (entry^.start>__end) then
-   begin
-    e:=__end;
-   end else
-   begin
-    e:=entry^.start;
-   end;
-
-   if (s<>e) then
-   begin
-    unmap_dmem_gc(IDX_TO_OFF(s),IDX_TO_OFF(e));
-   end;
-
-   start:=e;
-  end else
-  if (entry^.__end>start) then
-  begin
-   start:=entry^.__end;
-  end;
-
-  if (start>=__end) or (entry=@map^.header) or (entry^.start>=__end) then
-  begin
-   Break;
-  end;
-
-  entry:=entry^.next;
-
- until false;
-end;
-
 function rmem_map_delete(map:p_rmem_map;
                          vaddr:QWORD;
                          start,__end:DWORD):Integer;
@@ -891,18 +840,6 @@ begin
   end;
 
   entry:=next;
- end;
-
- if (vaddr=0) then
- begin
-  //all
-
-  unmap_dmem_gc(IDX_TO_OFF(start),IDX_TO_OFF(__end));
- end else
- begin
-  //one
-
-  rmem_map_unmap_check(map,start,__end);
  end;
 
  Result:=(KERN_SUCCESS);
