@@ -3388,6 +3388,9 @@ var
  symp:p_elf64_sym;
  addr:Pointer;
  ST_TYPE:Integer;
+
+ i,count:Integer;
+ pltrela_addr:p_elf64_rela;
 begin
  if (obj=nil) then Exit;
 
@@ -3415,6 +3418,7 @@ begin
   ctx.add_forward_point(fpCall,obj^.fini_proc_addr);
  end;
 
+ //load export links
  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
  while (lib_entry<>nil) do
  begin
@@ -3448,6 +3452,18 @@ begin
   end;
   lib_entry:=TAILQ_NEXT(lib_entry,@lib_entry^.link)
  end;
+
+ //load jumpslot links
+ count:=obj^.rel_data^.pltrela_size div SizeOf(elf64_rela);
+ pltrela_addr:=obj^.rel_data^.pltrela_addr;
+
+ if (pltrela_addr<>nil) and (count<>0) then
+ For i:=0 to count-1 do
+  begin
+   addr:=(obj^.relocbase + pltrela_addr[i].r_offset);
+
+   ctx.add_jumpslot(addr);
+  end;
 
  pick(ctx,nil);
 end;

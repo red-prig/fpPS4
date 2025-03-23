@@ -54,6 +54,17 @@ type
    end;
    t_switchtable_set=specialize TNodeSplay<t_switchtable_point>;
 
+   p_jumpslot=^t_jumpslot;
+   t_jumpslot=object
+    pLeft :p_jumpslot;
+    pRight:p_jumpslot;
+    //
+    addr:Pointer;
+    //
+    function c(n1,n2:p_jumpslot):Integer; static;
+   end;
+   t_jumpslot_set=specialize TNodeSplay<t_jumpslot>;
+
    p_label=^t_label;
    t_label=object
     pLeft    :p_label;
@@ -104,6 +115,8 @@ type
    switchtable_set:t_switchtable_set;
    min_switchtable:p_switchtable_point;
    //
+   jumpslot_set:t_jumpslot_set;
+   //
    label_set  :t_label_set;
    entry_list :p_entry_point;
    entry_set  :t_entry_point_set;
@@ -143,6 +156,8 @@ type
   function  add_forward_point(ptype:t_point_type;instruction:t_jit_i_link;dst:Pointer):p_forward_point;
   function  add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
   function  add_switchtable  (table:Pointer):p_switchtable_point;
+  procedure add_jumpslot     (addr:Pointer);
+  function  is_jumpslot      (addr:Pointer):Boolean;
   function  fetch_switchtable(var out_table:p_switchtable_point;var out_next:PInteger):Boolean;
   Function  new_chunk(ptype:t_point_type;start:Pointer):p_jit_code_chunk;
   procedure mark_chunk(ptype:t_point_type);
@@ -366,6 +381,11 @@ begin
  Result:=Integer(n1^.table>n2^.table)-Integer(n1^.table<n2^.table);
 end;
 
+function t_jit_context2.t_jumpslot.c(n1,n2:p_jumpslot):Integer;
+begin
+ Result:=Integer(n1^.addr>n2^.addr)-Integer(n1^.addr<n2^.addr);
+end;
+
 function t_jit_context2.t_label.c(n1,n2:p_label):Integer;
 begin
  Result:=Integer(n1^.curr>n2^.curr)-Integer(n1^.curr<n2^.curr);
@@ -496,6 +516,33 @@ begin
 end;
 
 //
+
+procedure t_jit_context2.add_jumpslot(addr:Pointer);
+var
+ _node:t_jumpslot;
+ pnode:p_jumpslot;
+begin
+ if (addr=nil) then Exit;
+
+ _node.addr:=addr;
+
+ if (jumpslot_set.Find(@_node)=nil) then
+ begin
+  pnode:=builder.Alloc(Sizeof(t_jumpslot));
+  pnode^.addr:=addr;
+
+  jumpslot_set.Insert(pnode);
+ end;
+end;
+
+function t_jit_context2.is_jumpslot(addr:Pointer):Boolean;
+var
+ node:t_jumpslot;
+begin
+ node.addr:=addr;
+
+ Result:=(jumpslot_set.Find(@node)<>nil);
+end;
 
 function t_jit_context2.add_switchtable(table:Pointer):p_switchtable_point;
 var
@@ -1175,6 +1222,7 @@ begin
   if not (cmDontScanRipRel in ctx.modes) then
 
   if ctx.is_map_addr(ofs) then
+  if not ctx.is_jumpslot(Pointer(ofs)) then
   if ((ppmap_get_prot(QWORD(ofs)) and PAGE_PROT_READ)<>0) then
   begin
    new_ofs:=0;
