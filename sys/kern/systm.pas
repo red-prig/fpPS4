@@ -293,7 +293,7 @@ done_copyout:
         nop; nop;
 
 copyout_fault:
-        movqq       %gs:teb.thread,%rax
+        movqq       %gs:teb.thread,%rdx
         movq        $0,kthread.pcb_onfault(%rdx)
         movq        $EFAULT,%rax
         //ret

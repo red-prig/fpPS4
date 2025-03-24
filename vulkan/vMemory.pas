@@ -1915,7 +1915,7 @@ begin
 
   if (FStart_align=0) then
   begin
-   Writeln('Addres:0x',HexStr(FStart_align,11),'not gpu mapped!');
+   Writeln('Addres:0x',HexStr(FStart,11),' not gpu mapped!');
    Assert(false,'FetchHostMap:gpu_get_bound');
   end;
 

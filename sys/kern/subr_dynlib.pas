@@ -2418,7 +2418,11 @@ end;
 
 function relocate_text_or_data_segment(obj:p_lib_info;src,dst:Pointer;size:QWORD):Integer;
 var
- map:vm_map_t;
+ offset :Integer;
+ p_size :Integer;
+ p_start:Pointer;
+ p___end:Pointer;
+ base   :Pointer;
 begin
  if (obj^.rtld_flags.textrel=0) or
     (obj^.map_base > dst) or
@@ -2428,18 +2432,19 @@ begin
  end else
  if (p_proc.p_sdk_version < $1700000) then
  begin
-  map:=p_proc.p_vmspace;
-  //
-  vm_map_lock(map);
-  //
-  Result:=change_relro_protection(obj,VM_PROT_RW);
-  if (Result<>0) then Exit;
+  p_start:=Pointer(QWORD(dst) and (not PAGE_MASK));
+  p___end:=Pointer((QWORD(dst)+size+PAGE_MASK) and (not PAGE_MASK));
 
-  Result:=copyout(src,dst,size);
+  offset:=QWORD(dst) and PAGE_MASK;
+  p_size:=QWORD(p___end)-QWORD(p_start);
 
-  change_relro_protection(obj,VM_PROT_READ);
-  //
-  vm_map_unlock(map);
+  base:=mirror_map(p_start,p_size);
+
+  dst:=base+offset;
+
+  Result:=copyout_nofault(src,dst,size);
+
+  mirror_unmap(base,p_size);
  end else
  begin
   Writeln(StdErr,'relocate_text_or_data_segment:','text relocation is prohibited.');
@@ -3291,7 +3296,7 @@ begin
       STT_FUN,
       STT_SCE:
          begin
-          ctx.add_export_point(Pointer(h_entry^.sym.st_value),h_entry^.native);
+          ctx.add_export_point(h_entry^.nid,Pointer(h_entry^.sym.st_value),h_entry^.native);
          end;
       else;
      end; //case
@@ -3305,7 +3310,7 @@ begin
       STT_FUN,
       STT_SCE:
          begin
-          ctx.add_export_point(h_entry^.native,@h_entry^.sym.st_value);
+          ctx.add_export_point(h_entry^.nid,h_entry^.native,@h_entry^.sym.st_value);
          end;
       else;
      end; //case

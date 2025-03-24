@@ -95,6 +95,7 @@ type
    p_export_point=^t_export_point;
    t_export_point=object
     next  :p_export_point;
+    nid   :QWORD;
     native:Pointer;
     dst   :PPointer;
    end;
@@ -149,7 +150,7 @@ type
 
   function  is_text_addr(addr:QWORD):Boolean;
   function  is_map_addr (addr:QWORD):Boolean;
-  procedure add_export_point (native:Pointer;dst:PPointer);
+  procedure add_export_point (nid:QWORD;native:Pointer;dst:PPointer);
   procedure add_import_point (guest,dst:PPointer);
   procedure add_forward_link (node:p_forward_point;instruction:t_jit_i_link);
   procedure Resolve_forwards (var links:t_forward_links;target:t_jit_i_link);
@@ -292,6 +293,7 @@ function  flags(const ctx:t_jit_context2):t_jit_lea;
 
 procedure op_jit_interrupt(var ctx:t_jit_context2);
 
+procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
 
@@ -406,12 +408,13 @@ begin
  Result:=(addr>=text_start) and (addr<map____end);
 end;
 
-procedure t_jit_context2.add_export_point(native:Pointer;dst:PPointer);
+procedure t_jit_context2.add_export_point(nid:QWORD;native:Pointer;dst:PPointer);
 var
  node:p_export_point;
 begin
  if (native=nil) or (dst=nil) then Exit;
  node:=builder.Alloc(Sizeof(t_export_point));
+ node^.nid   :=nid;
  node^.native:=native;
  node^.dst   :=dst;
  node^.next  :=export_list;
@@ -1772,18 +1775,38 @@ end;
 
 //
 
-procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
+procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 begin
  with ctx.builder do
-  if (classif_offset_u64(imm)=os64) then
+ begin
+  if (reg.ASize=os64) then
   begin
-   //64bit imm
-   movi64(r_tmp0,imm);
+   if (classif_offset_u64(imm)=os64) then
+   begin
+    if (imm and QWORD($FFFFFFFF80000000))=QWORD($FFFFFFFF80000000) then
+    begin
+     //32bit sign extend
+     movi(reg,imm);
+    end else
+    begin
+     //64bit imm
+     movi64(reg,imm);
+    end;
+   end else
+   begin
+    //32bit zero extend
+    movi(new_reg_size(reg,os32),imm);
+   end;
   end else
   begin
-   //32bit zero extend
-   movi(new_reg_size(r_tmp0,os32),imm);
+   movi(reg,imm);
   end;
+ end;
+end;
+
+procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
+begin
+ op_set_reg_imm(ctx,r_tmp0,imm);
 end;
 
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);

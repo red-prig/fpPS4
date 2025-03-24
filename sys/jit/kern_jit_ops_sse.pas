@@ -448,15 +448,7 @@ begin
    lahf;
    }
 
-   if (classif_offset_u64(mask)=os64) then
-   begin
-    //64bit mask
-    movi64(m,mask);
-   end else
-   begin
-    //32bit zero extend
-    movi(new_reg_size(m,os32),mask);
-   end;
+   op_set_reg_imm(ctx,m,mask);
 
    //b = xmm1[0:63]
    movq_r_xmm(ctx,b,xmm_b);
