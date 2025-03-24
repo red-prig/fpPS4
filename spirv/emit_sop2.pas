@@ -10,6 +10,7 @@ uses
   ps4_pssl,
   srType,
   srReg,
+  srConst,
   emit_fetch;
 
 
@@ -437,11 +438,12 @@ begin
 end;
 
 //offset = ssrc1[4:0].u   and 31
-//width = ssrc1[22:16].u  shr 16
+//width  = ssrc1[22:16].u shr 16
 procedure TEmit_SOP2.emit_S_BFE_U32; //sdst.u = bitFieldExtract(ssrc0); SCC = (sdst.u != 0)
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
+ pImm:TsrConst;
  offset,count:TsrRegNode;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
@@ -449,8 +451,18 @@ begin
  src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
 
- offset:=OpAndTo(src[1],31);
- count :=OpShrTo(src[1],16);
+ //early optimization
+ pImm:=src[1].pWriter.specialize AsType<ntConst>;
+
+ if (pImm<>nil) then
+ begin
+  offset:=NewImm_i(dtUInt32,pImm.AsUint32 and 31);
+  count :=NewImm_i(dtUInt32,pImm.AsUint32 shr 16);
+ end else
+ begin
+  offset:=OpAndTo(src[1],31);
+  count :=OpShrTo(src[1],16);
+ end;
 
  Op3(Op.OpBitFieldUExtract,dtUInt32,dst,src[0],offset,count);
 

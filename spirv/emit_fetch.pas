@@ -189,6 +189,105 @@ begin
  Result:=DataLayoutList.FetchImm(@vsharp,rtype);
 end;
 
+function TryDisableAnisoLod0(regs:PPsrRegNode;rtype:TsrResourceType):Boolean;
+var
+ reg:TsrRegNode;
+ pSelect:TSpirvOp;
+ cond:TsrRegNode;
+ pCmp:TSpirvOp;
+ pCmp_param0:TsrRegNode;
+ pCmp_param1:TsrRegNode;
+ pImm:TsrConst;
+ pBitField:TSpirvOp;
+ pBitwiseAnd:TSpirvOp;
+begin
+ Result:=False;
+ if (rtype<>rtSSharp4) then Exit;
+
+ reg:=RegDown(regs[0]);
+ pSelect:=reg.pWriter.specialize AsType<ntOp>;
+
+ if (pSelect=nil) then Exit;
+ if (pSelect.OpId<>Op.OpSelect) then Exit;
+
+ cond:=RegDown(pSelect.ParamNode(0).AsReg);
+ if (cond=nil) then Exit;
+
+ pCmp:=cond.pWriter.specialize AsType<ntOp>;
+ if (pCmp=nil) then Exit;
+ if (pCmp.OpId<>Op.OpIEqual) then Exit;
+
+ pCmp_param0:=RegDown(pCmp.ParamNode(0).AsReg);
+ pCmp_param1:=RegDown(pCmp.ParamNode(1).AsReg);
+
+ if (pCmp_param0=nil) then Exit;
+ if (pCmp_param1=nil) then Exit;
+
+ reg:=nil;
+ if pCmp_param0.pWriter.IsType(ntConst) then
+ begin
+  pImm:=pCmp_param0.pWriter.specialize AsType<ntConst>;
+  if (pImm.AsUint32=0) then
+  begin
+   reg:=pCmp_param1;
+  end;
+ end;
+
+ if (reg=nil) then
+ if pCmp_param1.pWriter.IsType(ntConst) then
+ begin
+  pImm:=pCmp_param1.pWriter.specialize AsType<ntConst>;
+  if (pImm.AsUint32=0) then
+  begin
+   reg:=pCmp_param0;
+  end;
+ end;
+
+ if (reg=nil) then Exit;
+
+ reg:=RegDown(reg);
+
+ pBitField:=reg.pWriter.specialize AsType<ntOp>;
+
+ if (pBitField.OpId<>Op.OpBitFieldUExtract) then Exit;
+
+ pImm:=RegDown(pBitField.ParamNode(1).AsReg).pWriter.specialize AsType<ntConst>;
+ if (pImm=nil) then Exit;
+ if (pImm.AsUint32<>12) then Exit;
+
+ pImm:=RegDown(pBitField.ParamNode(2).AsReg).pWriter.specialize AsType<ntConst>;
+ if (pImm=nil) then Exit;
+ if (pImm.AsUint32<>8) then Exit;
+
+ reg:=RegDown(pSelect.ParamNode(2).AsReg);
+ if (reg=nil) then Exit;
+
+ pBitwiseAnd:=reg.pWriter.specialize AsType<ntOp>;
+
+ if (pBitwiseAnd=nil) then Exit;
+ if (pBitwiseAnd.OpId<>Op.OpBitwiseAnd) then Exit;
+
+ pImm:=RegDown(pBitwiseAnd.ParamNode(0).AsReg).pWriter.specialize AsType<ntConst>;
+
+ if (pImm<>nil) then
+ begin
+  if (pImm.AsUint32<>$FFFFF1FF) then Exit;
+ end else
+ begin
+  pImm:=RegDown(pBitwiseAnd.ParamNode(1).AsReg).pWriter.specialize AsType<ntConst>;
+  if (pImm=nil) then Exit;
+  if (pImm.AsUint32<>$FFFFF1FF) then Exit;
+ end;
+
+ //final
+ reg:=RegDown(pSelect.ParamNode(1).AsReg);
+ if (reg=nil) then Exit;
+
+ regs[0]:=reg;
+
+ Result:=True;
+end;
+
 function TEmitFetch.GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
 type
  TsrRegs=array[0..7] of TsrRegNode;
@@ -209,6 +308,9 @@ begin
 
  Result:=GroupingVImm(@regs,rtype);
  if (Result<>nil) then Exit;
+
+ //TODO: mark "disable_aniso"
+ TryDisableAnisoLod0(@regs,rtype);
 
  For i:=0 to n-1 do
  begin
