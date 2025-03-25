@@ -129,7 +129,8 @@ type
   ntDrawIndex2,
   ntDrawIndexOffset2,
   ntDrawIndexAuto,
-  ntDispatchDirect
+  ntDispatchDirect,
+  ntPfpSyncMe
  );
 
 const
@@ -375,6 +376,11 @@ type
 
  end;
 
+ p_pm4_node_PfpSyncMe=^t_pm4_node_PfpSyncMe;
+ t_pm4_node_PfpSyncMe=object(t_pm4_node)
+  event:PRTLEvent;
+ end;
+
  p_pm4_stream=^t_pm4_stream;
  t_pm4_stream=object(t_pm4_resource_stream_scope)
   //
@@ -441,6 +447,7 @@ type
                           var UC_REG:TUSERCONFIG_REG_SHORT);
   procedure Build_cs_info (node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
   procedure DispatchDirect(var SC_REG:TSH_REG_COMPUTE_GROUP);
+  procedure PfpSyncMe(event:PRTLEvent);
  end;
 
 implementation
@@ -1807,6 +1814,20 @@ begin
  node^.scope:=Default(t_pm4_resource_curr_scope);
 
  Build_cs_info(node,GPU_REGS);
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.PfpSyncMe(event:PRTLEvent);
+var
+ node:p_pm4_node_PfpSyncMe;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_PfpSyncMe));
+
+ node^.ntype:=ntPfpSyncMe;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+
+ node^.event:=event;
 
  add_node(node);
 end;

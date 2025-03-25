@@ -56,6 +56,7 @@ type
   curr_ibuf :p_pm4_ibuffer;
   //
   LastSetReg:Word;
+  event:PRTLEvent;
   //
   function  stream_type:t_pm4_stream_type;
   procedure init;
@@ -1045,6 +1046,28 @@ begin
 
 end;
 
+procedure FlushAndWaitMe(pctx:p_pfp_ctx);
+var
+ event:PRTLEvent;
+begin
+ if (pctx^.stream_type=stGfxDcb) then
+ begin
+
+  if (pctx^.event=nil) then
+  begin
+   pctx^.event:=RTLEventCreate;
+  end;
+
+  event:=pctx^.event;
+
+  pctx^.stream[stGfxDcb].PfpSyncMe(event);
+
+  pctx^.Flush_stream(stGfxDcb);
+
+  RTLEventWaitFor(event);
+ end;
+end;
+
 procedure onEventWrite(pctx:p_pfp_ctx;Body:PTPM4CMDEVENTWRITE);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
@@ -1109,7 +1132,9 @@ begin
 
  pctx^.stream[stGfxDcb].EventWriteEop(Pointer(Body^.address),Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
- pctx^.Flush_stream(stGfxDcb);
+ //pctx^.Flush_stream(stGfxDcb);
+
+ FlushAndWaitMe(pctx);
 end;
 
 procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
@@ -1143,6 +1168,8 @@ begin
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
  pctx^.stream[stGfxDcb].EventWriteEos(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.command);
+
+ FlushAndWaitMe(pctx);
 end;
 
 const
@@ -1195,6 +1222,8 @@ begin
   CP_DMA_ENGINE_PFP:
    begin
     //Execute on the parser side
+
+    //FlushAndWaitMe(pctx);
 
     adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
 
@@ -1283,6 +1312,8 @@ begin
   WRITE_DATA_ENGINE_PFP:
     begin
 
+     //FlushAndWaitMe(pctx);
+
      case dstSel of
       WRITE_DATA_DST_SEL_MEMORY_SYNC,  //writeDataInline
       WRITE_DATA_DST_SEL_TCL2,         //writeDataInlineThroughL2
@@ -1352,6 +1383,8 @@ begin
     end;
   WAIT_REG_MEM_ENGINE_PFP:
     begin
+
+     pctx^.Flush_stream(pctx^.stream_type);
 
      while not me_test_mem(Pointer(Body^.pollAddress),Body^.reference,Body^.mask,Body^.compareFunc) do
      begin
@@ -1695,6 +1728,8 @@ begin
  pctx^.stream[stGfxDcb].DrawIndex2(pctx^.SG_REG,
                                    pctx^.CX_REG,
                                    pctx^.UC_REG);
+
+ //FlushAndWaitMe(pctx);
 end;
 
 procedure onDrawIndexOffset2(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXOFFSET2);
@@ -1716,6 +1751,8 @@ begin
                                          pctx^.CX_REG,
                                          pctx^.UC_REG,
                                          Body^.indexOffset);
+
+ //FlushAndWaitMe(pctx);
 end;
 
 procedure onDrawIndexAuto(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXAUTO);
@@ -1740,6 +1777,8 @@ begin
  pctx^.stream[stGfxDcb].DrawIndexAuto(pctx^.SG_REG,
                                       pctx^.CX_REG,
                                       pctx^.UC_REG);
+
+ FlushAndWaitMe(pctx);
 end;
 
 procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTMULTI);
@@ -1781,7 +1820,7 @@ begin
  //stallCommandBufferParser
  //PFP waits until the ME completes all preceding commands before allowing the next batch to proceed.
 
- pctx^.Flush_stream(stGfxDcb);
+ FlushAndWaitMe(pctx);
 end;
 
 procedure onPushMarker(pctx:p_pfp_ctx;Body:PChar;size:Integer);

@@ -3292,6 +3292,13 @@ begin
  end;
 end;
 
+procedure pm4_PfpSyncMe(var ctx:t_me_render_context;node:p_pm4_node_PfpSyncMe);
+begin
+ if not ctx.WaitConfirmOrSwitch then Exit;
+
+ RTLEventSetEvent(node^.event);
+end;
+
 //
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
@@ -3401,6 +3408,8 @@ begin
       ntIncrementDE        :pm4_IncrementDE        (ctx,Pointer(ctx.node));
       ntWaitOnCECounter    :pm4_WaitOnCECounter    (ctx,Pointer(ctx.node));
       ntWaitOnDECounterDiff:pm4_WaitOnDECounterDiff(ctx,Pointer(ctx.node));
+
+      ntPfpSyncMe          :pm4_PfpSyncMe          (ctx,Pointer(ctx.node));
 
       else
        begin
