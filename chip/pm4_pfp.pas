@@ -1098,7 +1098,7 @@ procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- FlushAndWaitMe(pctx);
+ //FlushAndWaitMe(pctx);
 
  Case Body^.eventType of
   CACHE_FLUSH_TS,               //FlushCbDbCaches
@@ -1461,7 +1461,7 @@ begin
   Writeln(' size=0x',HexStr(size,10));
  end;
 
- FlushAndWaitMe(pctx);
+ //FlushAndWaitMe(pctx);
 end;
 
 procedure onContextControl(pctx:p_pfp_ctx;Body:PPM4CMDCONTEXTCONTROL);

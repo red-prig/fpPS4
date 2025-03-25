@@ -482,10 +482,7 @@ end;
 procedure wait_me_idle;
 begin
  //first wait PFP
- if (GC_SRI_event<>nil) then
- begin
-  RTLEventWaitFor(GC_SRI_event);
- end;
+ gc_wait_GC_SRI;
  //
  me_idle_label:=0; //dont SetEvent
  //
@@ -510,7 +507,8 @@ begin
  if (GC_SRI_event=nil)       then Exit;
  if (pm4_me_gfx.started=nil) then Exit;
 
- gc_wait_GC_SRI;
+ //gc_wait_GC_SRI;
+ wait_me_idle;
 
  prev:=System.InterlockedExchange64(GC_SRI_label,1);
 
@@ -851,14 +849,16 @@ begin
             begin
              Writeln('gc_wait_idle');
 
-             gc_wait_GC_SRI;
+             //gc_wait_GC_SRI;
+             wait_me_idle;
             end;
 
   $C004811D: //????
             begin
              Writeln('gc_wait_free:',PInteger(data)^);
 
-             gc_wait_GC_SRI;
+             //gc_wait_GC_SRI;
+             wait_me_idle;
             end;
 
   $C0048114: //sceGnmFlushGarlic
@@ -933,7 +933,8 @@ begin
             begin
              start_gfx_ring;
 
-             gc_wait_GC_SRI;
+             //gc_wait_GC_SRI;
+             wait_me_idle;
 
              rw_wlock(ring_gfx_lock);
 
@@ -980,7 +981,8 @@ begin
 
   $C00C810E: //sceGnmUnmapComputeQueue
             begin
-             gc_wait_GC_SRI;
+             //gc_wait_GC_SRI;
+             wait_me_idle;
 
              rw_wlock(ring_gfx_lock);
 
@@ -993,7 +995,8 @@ begin
             begin
              start_gfx_ring;
 
-             gc_wait_GC_SRI;
+             //gc_wait_GC_SRI;
+             wait_me_idle;
 
              rw_wlock(ring_gfx_lock);
 
