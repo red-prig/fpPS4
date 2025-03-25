@@ -95,7 +95,6 @@ end;
 procedure mtx_lock(var m:mtx);
 var
  i:Integer;
- w:DWORD;
  old:t_fast_mutex;
  new:t_fast_mutex;
 {$IFDEF DEBUG_MTX}
@@ -227,14 +226,15 @@ begin
   begin
    new.recursion:=0;
    new.owned    :=0;
+
+   if (new.waiters<>0) then
+   begin
+    new.waiters:=new.waiters-1;
+   end;
+
   end else
   begin
    new.recursion:=old.recursion-1;
-  end;
-
-  if (new.waiters<>0) then
-  begin
-   new.waiters:=new.waiters-1;
   end;
 
   {$IFDEF DEBUG_MTX}
@@ -249,7 +249,7 @@ begin
   if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
   begin
 
-   if (old.waiters<>0) then
+   if (new.recursion=0) and (old.waiters<>0) then
    begin
     NtReleaseKeyedEvent(qhandle, GetKey(m), False, nil);
    end;
