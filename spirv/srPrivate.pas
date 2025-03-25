@@ -861,7 +861,7 @@ begin
  cur:=RegDownSlot(pSlot^.current);
  prv:=RegDownSlot(prev);
 
- Assert(CompareReg(RegDownSlot(orig),RegDownSlot(prev)));
+ //Assert(CompareReg(RegDownSlot(orig),RegDownSlot(prev)));
 
  if CompareReg(cur,prv) then
  begin

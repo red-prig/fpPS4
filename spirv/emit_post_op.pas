@@ -2005,18 +2005,45 @@ begin
   pLine:=src.pLine;
 
   vint6:=NewImm_i(dtInt32,6);
-  rvec[0]:=NewReg(dtInt32);
-  rvec[1]:=NewReg(dtInt32);
-  rvec[2]:=NewReg(dtInt32);
 
-  pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
-  pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[1],src,NewImm_i(dtInt32, 8),vint6);
-  pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[2],src,NewImm_i(dtInt32,16),vint6);
+  Case count of
+   1:
+     begin
+      rvec[0]:=NewReg(dtInt32);
 
-  src:=NewReg(dtVec3i);
-  pLine:=OpMakeCon(pLine,src,@rvec);
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
 
-  dst.dtype  :=dtVec3i;
+      src:=rvec[0];
+     end;
+   2:
+     begin
+      rvec[0]:=NewReg(dtInt32);
+      rvec[1]:=NewReg(dtInt32);
+
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[1],src,NewImm_i(dtInt32, 8),vint6);
+
+      src:=NewReg(dtVec2i);
+      pLine:=OpMakeCon(pLine,src,@rvec);
+     end;
+   3:
+     begin
+      rvec[0]:=NewReg(dtInt32);
+      rvec[1]:=NewReg(dtInt32);
+      rvec[2]:=NewReg(dtInt32);
+
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[1],src,NewImm_i(dtInt32, 8),vint6);
+      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[2],src,NewImm_i(dtInt32,16),vint6);
+
+      src:=NewReg(dtVec3i);
+      pLine:=OpMakeCon(pLine,src,@rvec);
+     end;
+   else
+    Assert(False);
+  end;
+
+  dst.dtype  :=src.dtype;
   dst.pWriter:=src;
 
   node.mark_not_used;

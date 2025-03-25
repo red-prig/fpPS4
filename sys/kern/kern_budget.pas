@@ -284,9 +284,10 @@ var
 begin
  ret:=is_sce_prog_attr_20_800000(@g_appinfo);
 
- size:=$a0000000; //2GB
-
- if (ret=False) then
+ if (ret) then
+ begin
+  size:=$a0000000; //2GB
+ end else
  begin
   ret:=is_sce_prog_attr_20_400000(@g_appinfo);
 
