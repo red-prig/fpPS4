@@ -1098,6 +1098,8 @@ procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
+ FlushAndWaitMe(pctx);
+
  Case Body^.eventType of
   CACHE_FLUSH_TS,               //FlushCbDbCaches
   CACHE_FLUSH_AND_INV_TS_EVENT, //FlushAndInvalidateCbDbCaches
@@ -1132,9 +1134,7 @@ begin
 
  pctx^.stream[stGfxDcb].EventWriteEop(Pointer(Body^.address),Body^.DATA,Body^.eventType,Body^.dataSel,Body^.intSel);
 
- //pctx^.Flush_stream(stGfxDcb);
-
- FlushAndWaitMe(pctx);
+ pctx^.Flush_stream(stGfxDcb);
 end;
 
 procedure onEventWriteEos(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOS);
@@ -1169,7 +1169,7 @@ begin
 
  pctx^.stream[stGfxDcb].EventWriteEos(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.command);
 
- FlushAndWaitMe(pctx);
+ //FlushAndWaitMe(pctx);
 end;
 
 const
@@ -1460,6 +1460,8 @@ begin
   Writeln(' addr=0x',HexStr(addr,10));
   Writeln(' size=0x',HexStr(size,10));
  end;
+
+ FlushAndWaitMe(pctx);
 end;
 
 procedure onContextControl(pctx:p_pfp_ctx;Body:PPM4CMDCONTEXTCONTROL);
@@ -1778,7 +1780,7 @@ begin
                                       pctx^.CX_REG,
                                       pctx^.UC_REG);
 
- FlushAndWaitMe(pctx);
+ //FlushAndWaitMe(pctx);
 end;
 
 procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTMULTI);
