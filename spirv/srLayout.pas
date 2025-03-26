@@ -942,6 +942,7 @@ begin
        Writer.StrOpt('RINF','1');
        Writer.IntOpt('DFMT',dfmt);
        Writer.IntOpt('NFMT',nfmt);
+       Writer.IntOpt('STRD',stride);
        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
       end;
      end;

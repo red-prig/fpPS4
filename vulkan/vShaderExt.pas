@@ -60,6 +60,7 @@ type
   nfmt   :0..15;    //4
   rtype  :0..15;    //4
   dstsel :TrDstSel; //16
+  stride :Word;
  end;
 
  TvDataLayout=packed record
@@ -772,6 +773,7 @@ begin
   'RINF':L^.rinfo.enable:=(StrToDWord2(V)<>0);
   'DFMT':L^.rinfo.dfmt   :=StrToDWord2(V);
   'NFMT':L^.rinfo.nfmt   :=StrToDWord2(V);
+  'STRD':L^.rinfo.stride :=StrToDWord2(V);
   'NUMT':L^.rinfo.nfmt   :=StrToDWord2(V);
   'TYPE':L^.rinfo.rtype  :=StrToDWord2(V);
   'DSEL':L^.rinfo.dstsel :=StrToDstSel(V);
@@ -1863,6 +1865,7 @@ begin
     if rinfo.enable then
     if (     dfmt<>rinfo.dfmt    ) or
        (     nfmt<>rinfo.nfmt    ) or
+       (   stride<>rinfo.stride  ) or
        (dst_sel_x<>rinfo.dstsel.x) or
        (dst_sel_y<>rinfo.dstsel.y) or
        (dst_sel_z<>rinfo.dstsel.z) or

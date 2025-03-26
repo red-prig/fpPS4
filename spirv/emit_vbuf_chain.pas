@@ -18,7 +18,10 @@ uses
 
 type
  TBuf_adr=packed record
-  stride,align,fsize,csize:PtrInt;
+  stride      :PtrInt;
+  aligned_size:PtrInt;
+  format_size :PtrInt;
+  csize       :PtrInt;
   soffset,ioffset,voffset:PtrInt;
   sof,ofs,idx:TsrRegNode;
  end;
@@ -70,7 +73,10 @@ begin
  ofs:=nil;
  if (FSPI.MUBUF.IDXEN=1) then
  begin
-  adr.idx:=fetch_vsrc8(FSPI.MUBUF.VADDR+0,dtInt32);
+  if (adr.stride<>0) then //ignore index when stride=0
+  begin
+   adr.idx:=fetch_vsrc8(FSPI.MUBUF.VADDR+0,dtInt32);
+  end;
   if (FSPI.MUBUF.OFFEN=1) then
   begin
    ofs:=get_vsrc8(FSPI.MUBUF.VADDR+1);
@@ -107,21 +113,21 @@ var
 begin
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
 
- if (foffset mod adr.align=0) and       //const offset is align
-    ((adr.idx=nil) or                   //no index or
-     (adr.stride mod adr.align=0)) then //stride is align
+ if (foffset mod adr.aligned_size=0) and       //const offset is align
+    ((adr.idx=nil) or                          //no index or
+     (adr.stride mod adr.aligned_size=0)) then //stride is align
  begin
 
   //(foffset is Align)
   //(stride  is Align)
   //result=(foffset/Align+ofs/Align+idx*(stride/Align)) in elem
 
-  ofs_d:=OpIDivTo(adr.ofs,adr.align); //ofs/Align
-  sum_d:=OpIAddTo(ofs_d,foffset div adr.align);  //foffset/Align+ofs/Align
+  ofs_d:=OpIDivTo(adr.ofs,adr.aligned_size);           //ofs/Align
+  sum_d:=OpIAddTo(ofs_d,foffset div adr.aligned_size); //foffset/Align+ofs/Align
 
   if (adr.idx<>nil) then
   begin
-   idx_m:=OpIMulTo(adr.idx,adr.stride div adr.align); //idx*(stride/Align)
+   idx_m:=OpIMulTo(adr.idx,adr.stride div adr.aligned_size); //idx*(stride/Align)
    sum_d:=OpIAddTo(sum_d,idx_m);
   end;
 
@@ -138,7 +144,7 @@ begin
    sum_d:=OpIAddTo(sum_d,idx_m);
   end;
 
-  sum_d:=OpIDivTo(sum_d,adr.align); // sum/Align
+  sum_d:=OpIDivTo(sum_d,adr.aligned_size); // sum/Align
  end;
 
  Result:=sum_d;
@@ -154,14 +160,14 @@ begin
  //result=(foffset/Align+idx*(stride/Align)) in elem
 
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
- foffset:=foffset div adr.align;
+ foffset:=foffset div adr.aligned_size;
 
  if (adr.idx=nil) then
  begin
   sum_d:=NewImm_q(dtUint32,foffset);
  end else
  begin
-  idx_m:=OpIMulTo(adr.idx,adr.stride div adr.align); //idx*(stride/Align)
+  idx_m:=OpIMulTo(adr.idx,adr.stride div adr.aligned_size); //idx*(stride/Align)
   sum_d:=OpIAddTo(idx_m,foffset);
  end;
 
@@ -178,14 +184,14 @@ begin
  //result=(foffset/size+idx*(stride/size)) in format
 
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
- foffset:=foffset div adr.fsize;
+ foffset:=foffset div adr.format_size;
 
  if (adr.idx=nil) then
  begin
   sum_d:=NewImm_q(dtUint32,foffset);
  end else
  begin
-  idx_m:=OpIMulTo(adr.idx,adr.stride div adr.fsize); //idx*(stride/size)
+  idx_m:=OpIMulTo(adr.idx,adr.stride div adr.format_size); //idx*(stride/size)
   sum_d:=OpIAddTo(idx_m,foffset);
  end;
 
@@ -225,16 +231,19 @@ begin
  Assert(PV^.addtid_en =0,'addtid_en');
 
  adr:=Default(TBuf_adr);
- adr.stride :=PV^.stride;
- adr.align  :=info.GetAlignSize;
- adr.fsize  :=info.GetSizeFormat;
- adr.csize  :=adr.fsize;
- //adr.csize  :=Min(info.GetElemSize*info.count,adr.fsize);
- adr.ioffset:=FSPI.MUBUF.OFFSET;
-
- //if (adr.stride=0) then adr.stride:=1;
+ adr.stride      :=PV^.stride;
+ adr.aligned_size:=info.GetAlignSize;
+ adr.format_size :=info.GetSizeFormat;
+ adr.csize       :=adr.format_size;
+ //adr.csize     :=Min(info.GetElemSize*info.count,adr.fsize);
+ adr.ioffset     :=FSPI.MUBUF.OFFSET;
 
  get_reg_adr(adr);
+
+ if (adr.stride=0) then
+ begin
+  adr.stride:=adr.aligned_size; //set to size
+ end;
 
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
  Assert(foffset>=0,'WTF');
@@ -259,7 +268,7 @@ begin
   //minTexelBufferOffsetAlignment
   if Config.UseTexelBuffer then
   if (info.IsComp) and
-     (adr.stride div adr.align=0) then
+     (adr.stride div adr.aligned_size=0) then
   begin
    //is uniform buffer per element
 
@@ -273,10 +282,10 @@ begin
   end;
 
   lvl_0.offset:=0;
-  lvl_0.size  :=adr.align;
+  lvl_0.size  :=adr.aligned_size;
 
   lvl_1.pIndex:=sum_d;
-  lvl_1.stride:=adr.align;
+  lvl_1.stride:=adr.aligned_size;
 
   Result.data[0]:=info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,info.GLC,info.SLC));
 
@@ -288,8 +297,8 @@ begin
   //minTexelBufferOffsetAlignment
   if Config.UseTexelBuffer then
   if (info.IsComp) and
-     (adr.stride mod adr.fsize=0) and
-     (foffset mod adr.fsize=0) then
+     (adr.stride mod adr.format_size=0) and
+     (foffset mod adr.format_size=0) then
   begin
    //is uniform buffer per format
 
@@ -307,7 +316,7 @@ begin
   //minTexelBufferOffsetAlignment
   if Config.UseTexelBuffer then
   if (info.IsComp) and
-     (adr.stride div adr.align=0) then
+     (adr.stride div adr.aligned_size=0) then
   begin
    //is uniform buffer per element
 

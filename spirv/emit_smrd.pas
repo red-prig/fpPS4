@@ -97,7 +97,7 @@ end;
 
 procedure TEmit_SMRD.emit_LOAD_DWORDX(count:Byte);
 var
- src:array[0..3] of PsrRegSlot;
+ src:array[0..1] of PsrRegSlot;
  grp:TsrDataLayout;
 begin
  if not get_sbase(FSPI.SMRD.SBASE,2,@src) then Assert(false);
