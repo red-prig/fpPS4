@@ -273,7 +273,7 @@ begin
  Result:=t_pm4_stream_type(ord(stCompute0) + (c_id div 8)); //pipe id
 end;
 
-procedure gc_idle; forward;
+procedure pfp_idle; forward;
 
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
@@ -406,7 +406,7 @@ begin
 
   end; //(bits<>0)
 
-  gc_idle;
+  pfp_idle;
 
   if (watchdog_label=0) then
   begin
@@ -443,17 +443,22 @@ begin
  end;
 end;
 
+procedure wait_me_idle; forward;
+
 procedure gc_wait_GC_SRI;
 begin
- if (GC_SRI_label=0) then Exit;
-
- if (GC_SRI_event<>nil) then
+ if (GC_SRI_label<>0) then
  begin
-  RTLEventWaitFor(GC_SRI_event);
+  if (GC_SRI_event<>nil) then
+  begin
+   RTLEventWaitFor(GC_SRI_event);
+  end;
  end;
+
+ wait_me_idle;
 end;
 
-procedure gc_idle;
+procedure pfp_idle;
 begin
  if (GC_SRI_event<>nil) then
  begin
@@ -481,8 +486,6 @@ end;
 
 procedure wait_me_idle;
 begin
- //first wait PFP
- gc_wait_GC_SRI;
  //
  me_idle_label:=0; //dont SetEvent
  //
@@ -507,8 +510,7 @@ begin
  if (GC_SRI_event=nil)       then Exit;
  if (pm4_me_gfx.started=nil) then Exit;
 
- //gc_wait_GC_SRI;
- wait_me_idle;
+ gc_wait_GC_SRI;
 
  prev:=System.InterlockedExchange64(GC_SRI_label,1);
 
@@ -526,7 +528,7 @@ begin
   watchdog_label:=0; //thread can wait
  end;
 
- wait_me_idle;
+ gc_wait_GC_SRI;
 end;
 
 Function gc_map_compute_queue(data:p_map_compute_queue_args):Integer;
@@ -842,23 +844,33 @@ begin
             begin
              Writeln('sceGnmSubmitDone');
 
+             rw_wlock(ring_gfx_lock);
+
              gc_imdone;
+
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C0048117: //wait idle
             begin
              Writeln('gc_wait_idle');
 
-             //gc_wait_GC_SRI;
-             wait_me_idle;
+             rw_wlock(ring_gfx_lock);
+
+             gc_wait_GC_SRI;
+
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C004811D: //????
             begin
              Writeln('gc_wait_free:',PInteger(data)^);
 
-             //gc_wait_GC_SRI;
-             wait_me_idle;
+             rw_wlock(ring_gfx_lock);
+
+             gc_wait_GC_SRI;
+
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C0048114: //sceGnmFlushGarlic
@@ -887,7 +899,11 @@ begin
               if sync_me_submit then
               begin
                //force wait GPU idle
-               wait_me_idle;
+               rw_wlock(ring_gfx_lock);
+
+               gc_wait_GC_SRI;
+
+               rw_wunlock(ring_gfx_lock);
               end;
               //msleep_td(hz);
              end;
@@ -933,10 +949,9 @@ begin
             begin
              start_gfx_ring;
 
-             //gc_wait_GC_SRI;
-             wait_me_idle;
-
              rw_wlock(ring_gfx_lock);
+
+              gc_wait_GC_SRI;
 
               Result:=gc_switch_buffer_internal(@ring_gfx);
 
@@ -981,10 +996,9 @@ begin
 
   $C00C810E: //sceGnmUnmapComputeQueue
             begin
-             //gc_wait_GC_SRI;
-             wait_me_idle;
-
              rw_wlock(ring_gfx_lock);
+
+              gc_wait_GC_SRI;
 
               Result:=gc_unmap_compute_queue(data);
 
@@ -995,10 +1009,9 @@ begin
             begin
              start_gfx_ring;
 
-             //gc_wait_GC_SRI;
-             wait_me_idle;
-
              rw_wlock(ring_gfx_lock);
+
+              gc_wait_GC_SRI;
 
               Result:=gc_ding_dong(data);
 
