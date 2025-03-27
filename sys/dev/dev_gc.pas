@@ -36,6 +36,7 @@ uses
  kern_rwlock,
  kern_proc,
  kern_thr,
+ kern_condvar,
  time,
  md_sleep,
  pm4defs,
@@ -170,14 +171,35 @@ var
  ring_gfx      :t_pm4_ring;
  ring_gfx_lock :Pointer=nil;
 
- ring_watchdog :PRTLEvent=nil;
- watchdog_label:QWORD=0;
+type
+ t_gc_priv=object
+  ring_watchdog:PRTLEvent;
+  GC_SRI_event :t_cv;      //suspend-resume-idle event
 
- GC_SRI_event:PRTLEvent=nil;
- GC_SRI_label:QWORD=0;
+  GC_IDLE_event:t_cv;
 
- me_idle_event:PRTLEvent=nil;
- me_idle_label:QWORD=0;
+  //pfp_event    :t_cv;
+
+  gc_suspend_lock:mtx;
+
+  watchdog_label:Integer;
+  GC_SRI_label  :Integer;
+  pfp_label     :Integer;
+  sync_to_imdone:Integer;
+ end;
+
+var
+ gc_priv:t_gc_priv=(
+  ring_watchdog:nil;
+  GC_SRI_event :(cv_description:nil;cv_waiters:0);
+  GC_IDLE_event:(cv_description:nil;cv_waiters:0);
+  //pfp_event    :(cv_description:nil;cv_waiters:0);
+
+  watchdog_label:0;
+  GC_SRI_label  :0;
+  pfp_label     :0;
+  sync_to_imdone:0;
+ );
 
  parse_gfx_started:Pointer=nil;
  parse_gfx_td:p_kthread;
@@ -205,6 +227,29 @@ begin
  end;
 
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
+end;
+
+procedure _FlushAndWaitMe(pctx:p_pfp_ctx);
+var
+ event:PRTLEvent;
+begin
+ if (pctx^.event=nil) then
+ begin
+  pctx^.event:=RTLEventCreate;
+ end;
+
+ event:=pctx^.event;
+
+ pctx^.stream[stGfxDcb].PfpSyncMe(event);
+
+ pctx^.Flush_stream(stGfxDcb);
+
+ RTLEventWaitFor(event);
+end;
+
+procedure onSwitchBuffer(pctx:p_pfp_ctx;Body:Pointer);
+begin
+ _FlushAndWaitMe(pctx);
 end;
 
 function pm4_parse_gfx_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
@@ -255,6 +300,7 @@ begin
     begin
      Writeln('[R]SWITCH_BUFFER');
     end;
+    onSwitchBuffer(pctx,buff);
    end;
   $C0044700: //IT_EVENT_WRITE_EOP
    begin
@@ -406,11 +452,12 @@ begin
 
   end; //(bits<>0)
 
+  //PFP idle
   pfp_idle;
 
-  if (watchdog_label=0) then
+  if (gc_priv.watchdog_label=0) then
   begin
-   RTLEventWaitFor(ring_watchdog);
+   RTLEventWaitFor(gc_priv.ring_watchdog);
   end else
   begin
    msleep_td(hz div 10000);
@@ -427,108 +474,239 @@ begin
   pfp_ctx.init;
   pfp_ctx.on_flush_stream:=@pm4_me_gfx.Push;
 
-  ring_watchdog:=RTLEventCreate;
-  GC_SRI_event :=RTLEventCreate;
+  gc_priv.ring_watchdog:=RTLEventCreate;
+  //gc_priv.GC_SRI_event :=RTLEventCreate;
+
+  cv_init (@gc_priv.GC_SRI_event ,'GC_SRI_event');
+  cv_init (@gc_priv.GC_IDLE_event,'GC_IDLE_event');
+  mtx_init(gc_priv.gc_suspend_lock,'gc_suspend_lock');
 
   kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,(8*1024*1024) div (16*1024),'[GFX_PFP]');
  end;
 end;
 
-procedure retrigger_watchdog;
+procedure gc_retrigger_watchdog;
 begin
- if (ring_watchdog<>nil) then
+ if (gc_priv.ring_watchdog<>nil) then
  begin
-  watchdog_label:=1; //thread can`t wait
-  RTLEventSetEvent(ring_watchdog);
+  gc_priv.watchdog_label:=1; //thread can`t wait
+  RTLEventSetEvent(gc_priv.ring_watchdog);
  end;
 end;
 
-procedure wait_me_idle; forward;
+procedure gc_retrigger_watchdog_imdone;
+begin
+ //if (gc_priv.sync_to_imdone=0) then
+ begin
+  gc_retrigger_watchdog;
+  gc_priv.sync_to_imdone:=1;
+ end;
+end;
 
 procedure gc_wait_GC_SRI;
 begin
- if (GC_SRI_label<>0) then
+ if (pm4_me_gfx.started=nil)   then Exit;
+
+ //if (gc_priv.GC_SRI_label=0) then Exit;
+
+ //if (gc_priv.GC_SRI_event<>nil) then
  begin
-  if (GC_SRI_event<>nil) then
+  //gc_priv.GC_SRI_label:=0;
+
+  //RTLEventResetEvent(gc_priv.GC_SRI_event);
+
+  //gc_priv.GC_SRI_label:=1;
+
+  //pm4_me_gfx.trigger; //update if wait
+
+  //RTLEventWaitFor(gc_priv.GC_SRI_event);
+
+  mtx_lock(gc_priv.gc_suspend_lock);
+
+  //if (gc_priv.pfp_label<>0) then
+  //begin
+  // gc_retrigger_watchdog;
+  //
+  // _cv_wait_sig(@gc_priv.pfp_event,@gc_priv.GC_SRI_lock);
+  //end;
+
+  if (gc_priv.GC_SRI_label<>0) then
   begin
-   RTLEventWaitFor(GC_SRI_event);
+   pm4_me_gfx.trigger; //update if wait
+
+   _cv_wait_sig(@gc_priv.GC_SRI_event,@gc_priv.gc_suspend_lock);
   end;
+
+  mtx_unlock(gc_priv.gc_suspend_lock);
  end;
 
- wait_me_idle;
+ //pm4_me_gfx.trigger; //update if wait
 end;
 
 procedure pfp_idle;
 begin
- if (GC_SRI_event<>nil) then
+
+ mtx_lock(gc_priv.gc_suspend_lock);
+
+ //if (gc_priv.pfp_label<>0) then
+ //begin
+ // cv_broadcastpri(@gc_priv.pfp_event,0);
+ //end;
+
+ gc_priv.pfp_label:=0;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
+
+ pm4_me_gfx.trigger;
+end;
+
+procedure gc_idle; register;
+begin
+ mtx_lock(gc_priv.gc_suspend_lock);
+
+ if (gc_priv.pfp_label=0) then
  begin
-  RTLEventSetEvent(GC_SRI_event);
+  cv_signal(@gc_priv.GC_IDLE_event);
  end;
- GC_SRI_label:=0;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
+end;
+
+procedure gc_imdone_tasklet;
+var
+ ret:Integer;
+begin
+ mtx_lock(gc_priv.gc_suspend_lock);
+
+ gc_priv.pfp_label:=1;
+
+ repeat
+
+  gc_retrigger_watchdog;
+  pm4_me_gfx.trigger; //update if wait
+
+  ret:=_cv_timedwait(@gc_priv.GC_IDLE_event,@gc_priv.gc_suspend_lock, hz div 2);
+
+  if (ret<>0) then
+  begin
+   Writeln(stderr,'GPU failed to become idle within 500 ms after submitDone.');
+  end;
+
+ until (ret=0);
+
+ if (gc_priv.GC_SRI_label<>0) then
+ begin
+  cv_broadcastpri(@gc_priv.GC_SRI_event,0);
+ end;
+
+ gc_priv.GC_SRI_label:=0;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
 
  if (gc_submits_allowed_vmirr<>nil) then
  begin
   gc_submits_allowed_vmirr^:=0; //true
  end;
+
+
 end;
 
-procedure me_idle; register;
+{
+procedure gc_idle; register;
 begin
- if (me_idle_label=0) then Exit;
- //
- if (me_idle_event<>nil) then
+
+ mtx_lock(gc_priv.gc_suspend_lock);
+
+ if (gc_priv.GC_SRI_label<>0) then
  begin
-  RTLEventSetEvent(me_idle_event);
+  cv_broadcastpri(@gc_priv.GC_SRI_event,0);
  end;
- //
- me_idle_label:=0;
-end;
 
-procedure wait_me_idle;
-begin
- //
- me_idle_label:=0; //dont SetEvent
- //
- if (me_idle_event=nil) then
+ gc_priv.GC_SRI_label:=0;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
+
+ if (gc_submits_allowed_vmirr<>nil) then
  begin
-  me_idle_event:=RTLEventCreate;
- end else
- begin
-  RTLEventResetEvent(me_idle_event);
+  gc_submits_allowed_vmirr^:=0; //true
  end;
- //
- me_idle_label:=1; //can SetEvent
- //
- pm4_me_gfx.trigger; //update if wait
- RTLEventWaitFor(me_idle_event);
-end;
 
-procedure gc_imdone;
-var
- prev:QWORD;
-begin
- if (GC_SRI_event=nil)       then Exit;
- if (pm4_me_gfx.started=nil) then Exit;
+ {
+ rw_wlock(ring_gfx_lock);
 
- gc_wait_GC_SRI;
-
- prev:=System.InterlockedExchange64(GC_SRI_label,1);
-
- if (prev=0) then
+ if (gc_priv.GC_SRI_label<>0) then
  begin
+  if (gc_priv.GC_SRI_event<>nil) then
+  begin
+   //cv_broadcastpri
+   RTLEventSetEvent(gc_priv.GC_SRI_event);
+  end;
+
+  //gc_priv.GC_SRI_label:=0;
+
+  gc_retrigger_watchdog;
 
   if (gc_submits_allowed_vmirr<>nil) then
   begin
-   gc_submits_allowed_vmirr^:=1; //false
+   gc_submits_allowed_vmirr^:=0; //true
   end;
-
-  retrigger_watchdog;
-  pm4_me_gfx.imdone;
-
-  watchdog_label:=0; //thread can wait
  end;
 
- gc_wait_GC_SRI;
+ rw_wunlock(ring_gfx_lock);
+ }
+end;
+}
+
+procedure gc_imdone;
+begin
+ //if (gc_priv.GC_SRI_event=nil) then Exit;
+ if (pm4_me_gfx.started=nil)   then Exit;
+
+ //gc_wait_GC_SRI;
+
+ mtx_lock(gc_priv.gc_suspend_lock);
+
+ gc_priv.sync_to_imdone:=0;
+
+ {
+ if (gc_priv.pfp_label<>0) then
+ begin
+  gc_retrigger_watchdog;
+
+  _cv_wait_sig(@gc_priv.pfp_event,@gc_priv.GC_SRI_lock);
+ end;
+ }
+
+ if (gc_priv.GC_SRI_label<>0) then
+ begin
+  pm4_me_gfx.trigger; //update if wait
+
+  _cv_wait_sig(@gc_priv.GC_SRI_event,@gc_priv.gc_suspend_lock);
+ end;
+
+ //gc_priv.pfp_label   :=1;
+ gc_priv.GC_SRI_label:=1;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
+
+ //gc_priv.GC_SRI_label:=1;
+
+ if (gc_submits_allowed_vmirr<>nil) then
+ begin
+  gc_submits_allowed_vmirr^:=1; //false
+ end;
+
+ gc_priv.watchdog_label:=0; //thread can wait
+
+ //-> gc_imdone_tasklet
+
+ pm4_me_gfx.trigger; //update if wait
+
+ gc_imdone_tasklet;
+
+ pm4_me_gfx.imdone;
+
+ //gc_wait_GC_SRI;
 end;
 
 Function gc_map_compute_queue(data:p_map_compute_queue_args):Integer;
@@ -844,33 +1022,33 @@ begin
             begin
              Writeln('sceGnmSubmitDone');
 
-             rw_wlock(ring_gfx_lock);
+             //rw_wlock(ring_gfx_lock);
 
-             gc_imdone;
+              gc_imdone;
 
-             rw_wunlock(ring_gfx_lock);
+             //rw_wunlock(ring_gfx_lock);
             end;
 
   $C0048117: //wait idle
             begin
              Writeln('gc_wait_idle');
 
-             rw_wlock(ring_gfx_lock);
+             //rw_wlock(ring_gfx_lock);
 
-             gc_wait_GC_SRI;
+              gc_wait_GC_SRI;
 
-             rw_wunlock(ring_gfx_lock);
+             //rw_wunlock(ring_gfx_lock);
             end;
 
   $C004811D: //????
             begin
              Writeln('gc_wait_free:',PInteger(data)^);
 
-             rw_wlock(ring_gfx_lock);
+             //rw_wlock(ring_gfx_lock);
 
-             gc_wait_GC_SRI;
+              gc_wait_GC_SRI;
 
-             rw_wunlock(ring_gfx_lock);
+             //rw_wunlock(ring_gfx_lock);
             end;
 
   $C0048114: //sceGnmFlushGarlic
@@ -886,27 +1064,25 @@ begin
 
              rw_wlock(ring_gfx_lock);
 
+              //gc_retrigger_watchdog;
+
               Result:=gc_submit_internal(@ring_gfx,
                                          p_submit_args(data)^.count,
                                          p_submit_args(data)^.cmds);
 
-             rw_wunlock(ring_gfx_lock);
-
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-
-              if sync_me_submit then
+              if (Result=0) then
               begin
-               //force wait GPU idle
-               rw_wlock(ring_gfx_lock);
+               gc_retrigger_watchdog;
 
-               gc_wait_GC_SRI;
-
-               rw_wunlock(ring_gfx_lock);
+               if sync_me_submit then
+               begin
+                //force wait GPU idle
+                gc_wait_GC_SRI;
+               end;
+               //msleep_td(hz);
               end;
-              //msleep_td(hz);
-             end;
+
+             rw_wunlock(ring_gfx_lock);
 
             end;
 
@@ -937,30 +1113,27 @@ begin
                                               );
               end;
 
-             rw_wunlock(ring_gfx_lock);
+              if (Result=0) then
+              begin
+               gc_retrigger_watchdog;
+              end;
 
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-             end;
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C0088101: //switch_buffer
             begin
              start_gfx_ring;
 
-             rw_wlock(ring_gfx_lock);
+              gc_retrigger_watchdog_imdone;
 
               gc_wait_GC_SRI;
+
+             rw_wlock(ring_gfx_lock);
 
               Result:=gc_switch_buffer_internal(@ring_gfx);
 
              rw_wunlock(ring_gfx_lock);
-
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-             end;
             end;
 
   $C030810D: //sceGnmMapComputeQueue
@@ -972,12 +1145,12 @@ begin
 
               Result:=gc_map_compute_queue(data);
 
-             rw_wunlock(ring_gfx_lock);
+              if (Result=0) then
+              begin
+               gc_retrigger_watchdog;
+              end;
 
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-             end;
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C030811A: //sceGnmMapComputeQueueWithPriority
@@ -986,19 +1159,19 @@ begin
 
               Result:=gc_map_compute_queue(data);
 
-             rw_wunlock(ring_gfx_lock);
+              if (Result=0) then
+              begin
+               gc_retrigger_watchdog;
+              end;
 
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-             end;
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C00C810E: //sceGnmUnmapComputeQueue
             begin
-             rw_wlock(ring_gfx_lock);
+             gc_wait_GC_SRI;
 
-              gc_wait_GC_SRI;
+             rw_wlock(ring_gfx_lock);
 
               Result:=gc_unmap_compute_queue(data);
 
@@ -1009,18 +1182,20 @@ begin
             begin
              start_gfx_ring;
 
-             rw_wlock(ring_gfx_lock);
+             gc_retrigger_watchdog_imdone;
 
-              gc_wait_GC_SRI;
+             gc_wait_GC_SRI;
+
+             rw_wlock(ring_gfx_lock);
 
               Result:=gc_ding_dong(data);
 
-             rw_wunlock(ring_gfx_lock);
+              if (Result=0) then
+              begin
+               gc_retrigger_watchdog;
+              end;
 
-             if (Result=0) then
-             begin
-              retrigger_watchdog;
-             end;
+             rw_wunlock(ring_gfx_lock);
             end;
 
   $C030811E: //sceGnmSetWaveLimitMultipliers
@@ -1335,7 +1510,7 @@ begin
  gc_ring_create(@ring_gfx,GC_RING_SIZE);
 
  pm4_me_gfx.Init(@gc_knlist);
- pm4_me_gfx.on_idle:=@me_idle;
+ pm4_me_gfx.on_idle:=@gc_idle;
  pm4_me_gfx.on_submit_flip_eop:=@dev_dce.TriggerFlipEop;
 end;
 
