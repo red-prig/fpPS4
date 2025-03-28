@@ -554,6 +554,12 @@ begin
      //downlift to image
      key_view.cformat:=FFormat;
     end;
+  VK_FORMAT_R16_UNORM:
+    if (key_view.cformat=VK_FORMAT_D16_UNORM) then
+    begin
+     //downlift to image
+     key_view.cformat:=FFormat;
+    end;
   else;
  end;
 

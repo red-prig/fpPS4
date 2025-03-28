@@ -2069,7 +2069,17 @@ begin
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
      IMG_DATA_FORMAT_8_8_8_8    :Result:=VK_FORMAT_R8G8B8A8_UNORM;
-     IMG_DATA_FORMAT_16         :Result:=VK_FORMAT_R16_UNORM;
+
+     IMG_DATA_FORMAT_16         :
+      if (not (iu_storage in hint)) and
+         IsTileModeDepth(PT^.tiling_idx) then
+      begin
+       Result:=VK_FORMAT_D16_UNORM;
+      end else
+      begin
+       Result:=VK_FORMAT_R16_UNORM;
+      end;
+
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
      IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
