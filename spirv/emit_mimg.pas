@@ -32,7 +32,7 @@ type
  TEmit_MIMG=class(TEmitFetch)
   procedure emit_MIMG;
   procedure DistribDmask            (DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo);
-  function  GatherDmask             (info:PsrImageInfo):TsrRegNode;
+  function  GatherDmask             (info:PsrImageInfo;relax:Boolean):TsrRegNode;
   Function  GatherCoord_f           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_u           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  Gather_value            (var offset:DWORD;rtype:TsrDataType):TsrRegNode;
@@ -607,7 +607,7 @@ begin
   end;
 end;
 
-function TEmit_MIMG.GatherDmask(info:PsrImageInfo):TsrRegNode;
+function TEmit_MIMG.GatherDmask(info:PsrImageInfo;relax:Boolean):TsrRegNode;
 var
  src:array[0..3] of TsrRegNode;
  i,d,m:Byte;
@@ -621,6 +621,10 @@ begin
   if Byte(FSPI.MIMG.DMASK).TestBit(i) then
   begin
    src[i]:=fetch_vsrc8(FSPI.MIMG.VDATA+d,info^.dtype);
+   if not relax then
+   begin
+    PrepTypeNode(src[i],info^.dtype,False);
+   end;
    Inc(d);
   end else
   begin
@@ -1074,7 +1078,7 @@ var
 
  node:TSpirvOp;
 begin
- dst:=GatherDmask(info);
+ dst:=GatherDmask(info,False);
 
  roffset:=0;
 

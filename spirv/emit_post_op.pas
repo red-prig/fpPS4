@@ -210,7 +210,7 @@ var
   end;
   //
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -221,7 +221,7 @@ var
  procedure _SetType(dtype:TsrDataType);
  begin
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -496,7 +496,7 @@ var
   end;
   //
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -507,7 +507,7 @@ var
  procedure _SetType(dtype:TsrDataType);
  begin
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -716,7 +716,7 @@ var
   end;
   //
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -727,7 +727,7 @@ var
  procedure _SetType(dtype:TsrDataType);
  begin
   dst:=node.pDst.specialize AsType<ntReg>;
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
   //
   dtype:=dst.dtype;
@@ -1354,7 +1354,7 @@ begin
 
  if (dtype<>dtUnknow) and (dst.dtype<>dtype) then
  begin
-  Result:=Result+PrepTypeDst(dst,dtype);
+  Result:=Result+PrepTypeDst(dst,dtype,False);
   node.pDst:=dst;
  end;
 

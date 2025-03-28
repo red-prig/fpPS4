@@ -356,7 +356,7 @@ begin
 
     if (Slots[i].m_usageType=kShaderInputUsageImmShaderResourceTable) then
     begin
-     Writeln(' srtSizeInDWordMinusOne=',HexStr(Slots[i].m_srtSizeInDWordMinusOne,2));
+     Writeln(' srtSizeInDWordMinusOne=',Slots[i].m_srtSizeInDWordMinusOne);
     end else
     begin
      Writeln(' registerCount=',Slots[i].b.m_registerCount);

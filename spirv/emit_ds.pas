@@ -23,11 +23,11 @@ type
  TEmit_DS=class(TEmitFetch)
   procedure emit_DS;
   procedure emit_DS_SWIZZLE_B32;
-  function  fetch_ds_chain   (vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset:Word):TsrChain;
+  function  fetch_ds_chain   (vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset,extra_stride:Word):TsrChain;
   procedure emit_DS_WRITE    (rtype:TsrDataType);
-  procedure emit_DS_WRITE2   (rtype:TsrDataType);
+  procedure emit_DS_WRITE2   (rtype:TsrDataType;extra_stride:Word);
   procedure emit_DS_READ     (rtype:TsrDataType);
-  procedure emit_DS_READ2    (rtype:TsrDataType);
+  procedure emit_DS_READ2    (rtype:TsrDataType;extra_stride:Word);
   procedure emit_DS_ATOMIC_OP(rtype:TsrDataType;OpId:DWORD;rtn:Boolean);
  end;
 
@@ -174,18 +174,23 @@ dst.low.id = m_module.opSelect(typeId,
 emitRegisterStore(ins.dst[0], dst);
 }
 
-function TEmit_DS.fetch_ds_chain(vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset:Word):TsrChain;
+function TEmit_DS.fetch_ds_chain(vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset,extra_stride:Word):TsrChain;
 var
  pLayout:TsrDataLayout;
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
+ stride:PtrUint;
 begin
  case FSPI.DS.GDS of
   0:pLayout:=DataLayoutList.FetchLDS(); //base:LDS_BASE  size:min(M0[16:0], LDS_SIZE)
   1:pLayout:=DataLayoutList.FetchGDS(); //base:M0[31:16] size:M0[15:0]
  end;
 
- lvl_0.size  :=rtype.BitSize div 8;
+ //region_addr0 = (OFFSET0 * OpDataSize + vbindex)
+ //region_addr0 = (OFFSET0 * OpDataSize * 64 + vbindex)
+ stride:=(rtype.BitSize div 8)*extra_stride;
+
+ lvl_0.size  :=(rtype.BitSize div 8);
  lvl_0.offset:=offset;
 
  //region_addr = (OFFSET + vbindex) & alignment
@@ -193,27 +198,25 @@ begin
  begin
   lvl_0.offset:=lvl_0.offset + vbindex.AsConst.GetData;
 
-  lvl_0.offset:=lvl_0.offset and (not (lvl_0.size-1));
+  lvl_0.offset:=lvl_0.offset and (not (stride-1));
 
   Result:=pLayout.Fetch(@lvl_0,nil,cflags(atomic));
  end else
- if ((lvl_0.offset mod lvl_0.size)=0) then
+ if ((lvl_0.offset mod stride)=0) then
  begin
-  //i = OFFSET + (vbindex / size)
+  //i = OFFSET + (vbindex / stride)
 
-  lvl_1.pIndex:=OpIDivTo(vbindex,lvl_0.size);
-  lvl_1.stride:=lvl_0.size;
-
-  //lvl_0.offset:=lvl_0.offset div lvl_0.size;
+  lvl_1.pIndex:=OpIDivTo(vbindex,stride);
+  lvl_1.stride:=stride;
 
   Result:=pLayout.Fetch(@lvl_0,@lvl_1,cflags(atomic));
  end else
  begin
-  //i = (vbindex + OFFSET) / size
+  //i = (vbindex + OFFSET) / stride
 
   lvl_1.pIndex:=OpIAddTo(vbindex,lvl_0.offset);
-  lvl_1.pIndex:=OpIDivTo(lvl_1.pIndex,lvl_0.size);
-  lvl_1.stride:=lvl_0.size;
+  lvl_1.pIndex:=OpIDivTo(lvl_1.pIndex,stride);
+  lvl_1.stride:=stride;
 
   lvl_0.offset:=0;
 
@@ -249,13 +252,13 @@ begin
   else;
  end;
 
- pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET));
+ pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET),1);
 
  FetchStore(pChain,vsrc);
 end;
 
 //vbindex, vsrc0[], vsrc1[] [OFFSET0:<0..255>] [OFFSET1:<0..255>] [GDS:< 0|1>]
-procedure TEmit_DS.emit_DS_WRITE2(rtype:TsrDataType);
+procedure TEmit_DS.emit_DS_WRITE2(rtype:TsrDataType;extra_stride:Word);
 var
  pChain:array[0..1] of TsrChain;
 
@@ -274,8 +277,8 @@ begin
   vsrc[1]:=fetch_vdst8(FSPI.DS.DATA1,rtype);
  end;
 
- pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8));
- pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8));
+ pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8),extra_stride);
+ pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8),extra_stride);
 
  FetchStore(pChain[0],vsrc[0]);
  FetchStore(pChain[1],vsrc[1]);
@@ -293,7 +296,7 @@ var
 begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
- pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET));
+ pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET),1);
 
  vdst:=FetchLoad(pChain,rtype);
 
@@ -321,7 +324,7 @@ begin
 
 end;
 
-procedure TEmit_DS.emit_DS_READ2(rtype:TsrDataType);
+procedure TEmit_DS.emit_DS_READ2(rtype:TsrDataType;extra_stride:Word);
 var
  pChain:array[0..1] of TsrChain;
 
@@ -332,8 +335,8 @@ var
 begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
- pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8));
- pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8));
+ pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8),extra_stride);
+ pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8),extra_stride);
 
  vdst[0]:=FetchLoad(pChain[0],rtype);
  vdst[1]:=FetchLoad(pChain[1],rtype);
@@ -388,7 +391,7 @@ begin
   else
  end;
 
- pChain:=fetch_ds_chain(vbindex,rtype,rtype,WORD(FSPI.DS.OFFSET));
+ pChain:=fetch_ds_chain(vbindex,rtype,rtype,WORD(FSPI.DS.OFFSET),1);
 
  vdst:=FetchAtomic(pChain,OpId,rtype,vsrc);
 
@@ -436,8 +439,11 @@ begin
   DS_WRITE_B32  :emit_DS_WRITE(dtUint32);
   DS_WRITE_B64  :emit_DS_WRITE(dtUint64);
 
-  DS_WRITE2_B32 :emit_DS_WRITE2(dtUint32);
-  DS_WRITE2_B64 :emit_DS_WRITE2(dtUint64);
+  DS_WRITE2_B32 :emit_DS_WRITE2(dtUint32,1);
+  DS_WRITE2_B64 :emit_DS_WRITE2(dtUint64,1);
+
+  DS_WRITE2ST64_B32:emit_DS_WRITE2(dtUint32,64);
+  DS_WRITE2ST64_B64:emit_DS_WRITE2(dtUint64,64);
 
   DS_READ_I8    :emit_DS_READ(dtInt8);
   DS_READ_U8    :emit_DS_READ(dtUint8);
@@ -446,8 +452,11 @@ begin
   DS_READ_B32   :emit_DS_READ(dtUint32);
   DS_READ_B64   :emit_DS_READ(dtUint64);
 
-  DS_READ2_B32  :emit_DS_READ2(dtUint32);
-  DS_READ2_B64  :emit_DS_READ2(dtUint64);
+  DS_READ2_B32  :emit_DS_READ2(dtUint32,1);
+  DS_READ2_B64  :emit_DS_READ2(dtUint64,1);
+
+  DS_READ2ST64_B32:emit_DS_READ2(dtUint32,64);
+  DS_READ2ST64_B64:emit_DS_READ2(dtUint64,64);
 
   DS_ADD_U32    :emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicIAdd,False);
   DS_SUB_U32    :emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicISub,False);
