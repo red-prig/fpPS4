@@ -64,7 +64,7 @@ function _calc_usage(info:PShaderBinaryInfo;USER_DATA:PDWORD):TUSER_DATA_USEAGE;
 var
  i:Integer;
  Slots:PInputUsageSlot;
- r:Byte;
+ r,c,w:Byte;
 begin
  Result:=Default(TUSER_DATA_USEAGE);
  if (info<>nil) then
@@ -77,7 +77,7 @@ begin
       begin
        r:=Slots[i].m_startRegister;
        Assert(r<15);
-       Result[r]:=2;   //getFetchAddress
+       Result[r+0]:=2; //getFetchAddress
        Result[r+1]:=1; //skip
       end;
      kShaderInputUsagePtrResourceTable,
@@ -95,8 +95,21 @@ begin
       begin
        r:=Slots[i].m_startRegister;
        Assert(r<15);
-       Result[r]:=3;   //getBufferAddress
+       Result[r+0]:=3; //getBufferAddress
        Result[r+1]:=1; //skip
+      end;
+     kShaderInputUsageImmShaderResourceTable:
+      begin
+       r:=Slots[i].m_startRegister;
+       Assert(r<15);
+       c:=Slots[i].m_srtSizeInDWordMinusOne+1;
+       Assert(c<=8);
+       c:=c div 2;
+       For w:=0 to c-1 do
+       begin
+        Result[r+w*2+0]:=3; //getBufferAddress
+        Result[r+w*2+1]:=1; //skip
+       end;
       end;
     end;
  end;
@@ -125,6 +138,7 @@ begin
  begin
   Case USEAGE_DATA[i] of
    0:DUMP_BLOCK(F,REG+i,@USER_DATA[i],SizeOf(DWORD));
+   1:; //skip
    2:
     begin
      buf:=getFetchAddress(USER_DATA[i],USER_DATA[i+1]);

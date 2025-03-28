@@ -2190,8 +2190,6 @@ var
 begin
  Result:=0;
 
- Result:=0;
-
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
      if p_print_gpu_ops then Writeln('[ASC]PM4_TYPE_0 len:',PM4_LENGTH(token));

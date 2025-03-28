@@ -22,6 +22,7 @@ type
   procedure emit_S_SUB_I32;
   procedure emit_S_SUB_U32;
   procedure emit_S_ADDC_U32;
+  procedure emit_S_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:TsrRegNode);
   procedure OpISccNotZero2(src0,src1:TsrRegNode);
@@ -156,6 +157,19 @@ begin
  src[0]:=MakeRead(car,dtUInt32);
 
  OpBitwiseOr(car,src[1],src[0]);   //SCC1 or SCC2
+end;
+
+procedure TEmit_SOP2.emit_S_MMX(OpId:DWORD;rtype:TsrDataType);
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP2.SDST);
+
+ src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,rtype);
+
+ OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 end;
 
 procedure TEmit_SOP2.emit_S_MUL_I32;
@@ -506,6 +520,12 @@ begin
   S_SUB_I32: emit_S_SUB_I32;
 
   S_ADDC_U32: emit_S_ADDC_U32;
+
+  S_MIN_I32: emit_S_MMX(GlslOp.SMin,dtInt32);
+  S_MAX_I32: emit_S_MMX(GlslOp.SMax,dtInt32);
+
+  S_MIN_U32: emit_S_MMX(GlslOp.UMin,dtUint32);
+  S_MAX_U32: emit_S_MMX(GlslOp.UMax,dtUint32);
 
   S_MUL_I32: emit_S_MUL_I32;
 

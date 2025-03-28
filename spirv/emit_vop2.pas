@@ -21,14 +21,13 @@ type
   procedure emit_V_AND_B32;
   procedure emit_V_OR_B32;
   procedure emit_V_XOR_B32;
-  procedure emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
-  procedure emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
+  procedure emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
   procedure emit_V_ADD_I32;
-  procedure emit_V_SUB_I32;
-  procedure emit_V_SUBREV_I32;
-  procedure emit_V2_F32(OpId:DWORD);
+  procedure emit_V_SUB_I32(rev:Boolean);
+  procedure emit_V_ADDC_U32;
+  procedure emit_V_SUBB_U32(rev:Boolean);
+  procedure emit_V2_F32(OpId:DWORD;rev:Boolean);
   procedure emit_V_MUL_LEGACY_F32;
-  procedure emit_V_SUBREV_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
@@ -39,7 +38,6 @@ type
   procedure emit_V_BCNT_U32_B32;
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_LDEXP_F32;
-  procedure emit_V_ADDC_U32;
   procedure emit_V_MBCNT_LO_U32_B32;
   procedure emit_V_MBCNT_HI_U32_B32;
   procedure emit_V_WRITELANE_B32;
@@ -122,36 +120,30 @@ begin
  OpBitwiseXor(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_SH_NRM(OpId:DWORD;rtype:TsrDataType);
+procedure TEmit_VOP2.emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,rtype);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUInt32);
+ case rev of
+  False:
+   begin
+    src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,rtype);
+    src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUInt32);
+   end;
+  True:
+   begin
+    src[1]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUInt32);
+    src[0]:=fetch_vsrc8(FSPI.VOP2.VSRC1,rtype);
+   end;
+ end;
 
  src[1]:=OpAndTo(src[1],31);
  src[1].PrepType(ord(dtUInt32));
 
  Op2(OpId,src[0].dtype,dst,src[0],src[1]);
-end;
-
-procedure TEmit_VOP2.emit_V_SH_REV(OpId:DWORD;rtype:TsrDataType);
-Var
- dst:PsrRegSlot;
- src:array[0..1] of TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP2.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUInt32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,rtype);
-
- src[0]:=OpAndTo(src[0],31);
- src[0].PrepType(ord(dtUInt32));
-
- Op2(OpId,src[1].dtype,dst,src[1],src[0]);
 end;
 
 procedure TEmit_VOP2.emit_V_ADD_I32; //vdst = vsrc0.s + vsrc1.s; sdst[thread_id:] = carry_out & EXEC
@@ -183,7 +175,7 @@ begin
  //OpBitwiseAnd(car,car^.current,exc); //carry_out & EXEC
 end;
 
-procedure TEmit_VOP2.emit_V_SUB_I32; //vdst = vsrc0.u - vsub.u; sdst[thread_id:] = borrow_out & EXEC
+procedure TEmit_VOP2.emit_V_SUB_I32(rev:Boolean); //vdst = vsrc0.u - vsub.u; sdst[thread_id:] = borrow_out & EXEC
 Var
  dst,bor:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
@@ -192,8 +184,18 @@ begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
  bor:=get_vcc0;
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+ case rev of
+  False:
+   begin
+    src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+    src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+   end;
+  True:
+   begin
+    src[1]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+    src[0]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+   end;
+ end;
 
  OpISubExt(dst,bor,src[0],src[1],dtUint32);
 
@@ -212,25 +214,40 @@ begin
  //OpBitwiseAnd(bor,bor^.current,exc); //borrow_out & EXEC
 end;
 
-procedure TEmit_VOP2.emit_V_SUBREV_I32; //vdst = vsrc1.u - vsub.u; sdst[thread_id:] = borrow_out & EXEC
+procedure TEmit_VOP2.emit_V_ADDC_U32;
 Var
- dst,bor:PsrRegSlot;
- src:array[0..1] of TsrRegNode;
+ dst,car:PsrRegSlot;
+ src:array[0..2] of TsrRegNode;
  //exc:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
- bor:=get_vcc0;
+ car:=get_vcc0;
 
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+ src[2]:=MakeRead(get_vcc0,dtUInt32);
 
- OpISubExt(dst,bor,src[1],src[0],dtUint32);
+ src[2]:=OpAndTo(src[2],1);
+ src[2].PrepType(ord(dtUInt32));
+
+ OpIAddExt(dst,car,src[0],src[1],dtUint32); //src0+src1
+
+ src[0]:=MakeRead(dst,dtUInt32);
+ src[1]:=MakeRead(car,dtUInt32);   //save car1
+
+ OpIAddExt(dst,car,src[0],src[2],dtUint32); //(src0+src1)+src2
+
+ src[0]:=MakeRead(car,dtUInt32);
+
+ OpBitwiseOr(car,src[1],src[0]);   //car1 or car2
+
+ src[0]:=MakeRead(car,dtUInt32);
 
  {
   TODO:
   if (EXEC[i]) {
-    V_SUBREV_I32
-    VCC[i] = bor;
+    V_ADDC_U32
+    VCC[i] = car;
   }
   else {
     VCC[i] = 0;
@@ -238,18 +255,87 @@ begin
  }
 
  //exc:=MakeRead(get_exec0,dtUnknow);
- //OpBitwiseAnd(bor,bor^.current,exc); //borrow_out & EXEC
+ //OpBitwiseAnd(car,src[0],exc);     //carry_out & EXEC
 end;
 
-procedure TEmit_VOP2.emit_V2_F32(OpId:DWORD);
+//v_subbrev_u32
+//vdst = vsrc1.u - vsub.u - sborrow[thread_id:]; sdst[thread_id:] = borrow_out & EXEC
+
+procedure TEmit_VOP2.emit_V_SUBB_U32(rev:Boolean); //vdst = vsrc0.u - vsub.u - sborrow[thread_id:]; sdst[thread_id:] = borrow_out & EXEC
+Var
+ dst,bor:PsrRegSlot;
+ src:array[0..2] of TsrRegNode;
+ //exc:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+ bor:=get_vcc0;
+
+ case rev of
+  False:
+   begin
+    src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+    src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+   end;
+  True:
+   begin
+    src[1]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+    src[0]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+   end;
+ end;
+
+ src[2]:=MakeRead(get_vcc0,dtUInt32);
+
+ src[2]:=OpAndTo(src[2],1);
+ src[2].PrepType(ord(dtUInt32));
+
+ OpISubExt(dst,bor,src[0],src[1],dtUInt32); //src0-src1
+
+ src[0]:=MakeRead(dst,dtUInt32);
+ src[1]:=MakeRead(bor,dtUInt32);   //save car1
+
+ OpISubExt(dst,bor,src[0],src[2],dtUInt32); //(src0-src1)-src2
+
+ src[0]:=MakeRead(bor,dtUInt32);
+
+ //Or??? And???
+ OpBitwiseOr(bor,src[1],src[0]);   //car1 or car2
+
+ {
+  TODO:
+  if (EXEC[i]) {
+    V_SUBB_U32
+    SDST[i] = bor;
+  }
+  else {
+    SDST[i] = 0;
+  }
+ }
+
+ //src[0]:=MakeRead(bor,dtUInt32);
+
+ //exc:=MakeRead(get_exec0,dtUnknow);
+ //OpBitwiseAnd(bor,src[0],exc);     //borrow_out & EXEC
+end;
+
+procedure TEmit_VOP2.emit_V2_F32(OpId:DWORD;rev:Boolean);
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+ case rev of
+  False:
+   begin
+    src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+    src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+   end;
+  True:
+   begin
+    src[1]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+    src[0]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+   end;
+ end;
 
  Op2(OpId,dtFloat32,dst,src[0],src[1]);
 end;
@@ -275,19 +361,6 @@ begin
  _Op2(line,Op.OpFMul,mul,src[0],src[1]);
 
  OpSelect(dst,mul,zero,cmp); //false,true,cond
-end;
-
-procedure TEmit_VOP2.emit_V_SUBREV_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP2.VDST);
-
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
-
- Op2(Op.OpFSub,dtFloat32,dst,src[1],src[0]);
 end;
 
 procedure TEmit_VOP2.emit_V_CVT_PKRTZ_F16_F32;
@@ -462,50 +535,6 @@ begin
  Op2(Op.OpFMul,dtFloat32,dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_ADDC_U32;
-Var
- dst,car:PsrRegSlot;
- src:array[0..2] of TsrRegNode;
- //exc:TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP2.VDST);
- car:=get_vcc0;
-
- src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
- src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
- src[2]:=MakeRead(get_vcc0,dtUInt32);
-
- src[2]:=OpAndTo(src[2],1);
- src[2].PrepType(ord(dtUInt32));
-
- OpIAddExt(dst,car,src[0],src[1],dtUint32); //src0+src1
-
- src[0]:=MakeRead(dst,dtUInt32);
- src[1]:=MakeRead(car,dtUInt32);   //save car1
-
- OpIAddExt(dst,car,src[0],src[2],dtUint32); //(src0+src1)+src2
-
- src[0]:=MakeRead(car,dtUInt32);
-
- OpBitwiseOr(car,src[1],src[0]);   //car1 or car2
-
- src[0]:=MakeRead(car,dtUInt32);
-
- {
-  TODO:
-  if (EXEC[i]) {
-    V_ADDC_U32
-    VCC[i] = car;
-  }
-  else {
-    VCC[i] = 0;
-  }
- }
-
- //exc:=MakeRead(get_exec0,dtUnknow);
- //OpBitwiseAnd(car,src[0],exc);     //carry_out & EXEC
-end;
-
 //V_MBCNT_LO_U32_B32 v1, -1, v1
 
 procedure TEmit_VOP2.emit_V_MBCNT_LO_U32_B32;
@@ -609,22 +638,27 @@ begin
   V_OR_B32     : emit_V_OR_B32;
   V_XOR_B32    : emit_V_XOR_B32;
 
-  V_LSHL_B32   : emit_V_SH_NRM(Op.OpShiftLeftLogical    ,dtUint32);
-  V_LSHLREV_B32: emit_V_SH_REV(Op.OpShiftLeftLogical    ,dtUint32);
-  V_LSHR_B32   : emit_V_SH_NRM(Op.OpShiftRightLogical   ,dtUint32);
-  V_LSHRREV_B32: emit_V_SH_REV(Op.OpShiftRightLogical   ,dtUint32);
-  V_ASHR_I32   : emit_V_SH_NRM(Op.OpShiftRightArithmetic,dtInt32);
-  V_ASHRREV_I32: emit_V_SH_REV(Op.OpShiftRightArithmetic,dtInt32);
+  V_LSHL_B32   : emit_V_SH(Op.OpShiftLeftLogical    ,dtUint32,False);
+  V_LSHLREV_B32: emit_V_SH(Op.OpShiftLeftLogical    ,dtUint32,True);
+  V_LSHR_B32   : emit_V_SH(Op.OpShiftRightLogical   ,dtUint32,False);
+  V_LSHRREV_B32: emit_V_SH(Op.OpShiftRightLogical   ,dtUint32,True);
+  V_ASHR_I32   : emit_V_SH(Op.OpShiftRightArithmetic,dtInt32 ,False);
+  V_ASHRREV_I32: emit_V_SH(Op.OpShiftRightArithmetic,dtInt32 ,True);
 
   V_ADD_I32    : emit_V_ADD_I32;
-  V_SUB_I32    : emit_V_SUB_I32;
-  V_SUBREV_I32 : emit_V_SUBREV_I32;
+  V_SUB_I32    : emit_V_SUB_I32(False);
+  V_SUBREV_I32 : emit_V_SUB_I32(True );
 
-  V_ADD_F32    : emit_V2_F32(Op.OpFAdd);
-  V_SUB_F32    : emit_V2_F32(Op.OpFSub);
-  V_SUBREV_F32 : emit_V_SUBREV_F32;
+  V_ADD_F32    : emit_V2_F32(Op.OpFAdd,False);
+  V_SUB_F32    : emit_V2_F32(Op.OpFSub,False);
+  V_SUBREV_F32 : emit_V2_F32(Op.OpFSub,True );
 
-  V_MUL_F32    : emit_V2_F32(Op.OpFMul);
+  V_ADDC_U32: emit_V_ADDC_U32;
+
+  V_SUBB_U32   :emit_V_SUBB_U32(False);
+  V_SUBBREV_U32:emit_V_SUBB_U32(True);
+
+  V_MUL_F32    : emit_V2_F32(Op.OpFMul,False);
   V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
   V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
@@ -653,8 +687,6 @@ begin
   V_MAX_U32: emit_V_MMX(GlslOp.UMax,dtUint32);
 
   V_LDEXP_F32: emit_V_LDEXP_F32;
-
-  V_ADDC_U32: emit_V_ADDC_U32;
 
   V_MBCNT_LO_U32_B32: emit_V_MBCNT_LO_U32_B32;
   V_MBCNT_HI_U32_B32: emit_V_MBCNT_HI_U32_B32;

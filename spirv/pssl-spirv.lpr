@@ -354,7 +354,16 @@ begin
     Writeln(' apiSlot=',Slots[i].m_apiSlot);
     Writeln(' startRegister=',Slots[i].m_startRegister);
 
-    Writeln(' param=',HexStr(Slots[i].m_srtSizeInDWordMinusOne,2));
+    if (Slots[i].m_usageType=kShaderInputUsageImmShaderResourceTable) then
+    begin
+     Writeln(' srtSizeInDWordMinusOne=',HexStr(Slots[i].m_srtSizeInDWordMinusOne,2));
+    end else
+    begin
+     Writeln(' registerCount=',Slots[i].b.m_registerCount);
+     Writeln(' resourceType=',Slots[i].b.m_resourceType);
+     Writeln(' chunkMask=',Slots[i].b.m_chunkMask);
+    end;
+
    end;
    Writeln;
   end;
