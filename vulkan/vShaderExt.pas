@@ -1901,7 +1901,8 @@ begin
      end;
     end else
     begin
-     if (GetNumType(nfmt)<>GetNumType(rinfo.nfmt)) then
+     //rinfo.nfmt -> NUMT
+     if (GetNumType(nfmt)<>rinfo.nfmt) then
      begin
       FResult:=False;
       Exit;
