@@ -1594,6 +1594,11 @@
         <Filename Value="sys\kern\kern_hazard_pointer.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscedialogs.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceDialogs"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
