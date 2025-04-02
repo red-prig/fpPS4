@@ -30,11 +30,12 @@ type
   private
    pParent:TspirvOp;
    pValue:TsrNode;
+   function  GetValue:TsrNode;
    procedure SetValue(v:TsrNode);
   public
    property Next:TOpParamNode read pNext;
    property Parent:TspirvOp   read pParent;
-   property Value:TsrNode     read pValue write SetValue;
+   property Value:TsrNode     read GetValue write SetValue;
    function AsReg:TsrRegNode;
    function TryGetValue(var V:PtrUint):Boolean;
  end;
@@ -382,10 +383,17 @@ end;
 
 //
 
+function TOpParamNode.GetValue:TsrNode;
+begin
+ if (Self=nil) then Exit(nil);
+ Result:=pValue;
+end;
+
 procedure TOpParamNode.SetValue(v:TsrNode);
 var
  b:Byte;
 begin
+ if (Self=nil) then Exit;
  if (pValue=v) then Exit;
  //
  Assert(pParent<>nil);

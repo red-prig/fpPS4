@@ -19,7 +19,7 @@ uses
   emit_fetch;
 
 type
- TsrImageMods=Set Of (imMinLod,imGrad,imLod,imBiasLod,imZeroLod,imDref,imOffset);
+ TsrImageMods=Set Of (imMinLod,imGrad,imLod,imBiasLod,imZeroLod,imDref,imOffset,imGather);
 
  TImgSampleParam=object
   roffset:DWORD;
@@ -29,9 +29,18 @@ type
   coord,pcf,bias,lod,min_lod,offset:TsrRegNode;
  end;
 
+ TExtDistrib=record
+  dst  :TsrRegNode;
+  dtype:TsrDataType;
+  id   :Integer;
+ end;
+
+ AExtDistrib=array[0..3] of TExtDistrib;
+
  TEmit_MIMG=class(TEmitFetch)
   procedure emit_MIMG;
   procedure DistribDmask            (DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo);
+  procedure DistribDmaskExt         (DMASK:Byte;const ext:AExtDistrib;info:PsrImageInfo);
   function  GatherDmask             (info:PsrImageInfo;relax:Boolean):TsrRegNode;
   Function  GatherCoord_f           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_u           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
@@ -503,29 +512,29 @@ begin
   IMAGE_SAMPLE_C_B_CL_O :Result:=[imDref,imBiasLod,imMinLod,imOffset];
   IMAGE_SAMPLE_C_LZ_O   :Result:=[imDref,imZeroLod,imOffset];
   //
-  IMAGE_GATHER4_CL      :Result:=[imMinLod];
-  IMAGE_GATHER4_L       :Result:=[imLod];
-  IMAGE_GATHER4_B       :Result:=[imBiasLod];
-  IMAGE_GATHER4_B_CL    :Result:=[imBiasLod,imMinLod];
-  IMAGE_GATHER4_LZ      :Result:=[imZeroLod];
-  IMAGE_GATHER4_C       :Result:=[imDref];
-  IMAGE_GATHER4_C_CL    :Result:=[imDref,imMinLod];
-  IMAGE_GATHER4_C_L     :Result:=[imDref,imLod];
-  IMAGE_GATHER4_C_B     :Result:=[imDref,imBiasLod];
-  IMAGE_GATHER4_C_B_CL  :Result:=[imDref,imBiasLod,imMinLod];
-  IMAGE_GATHER4_C_LZ    :Result:=[imDref,imMinLod];
-  IMAGE_GATHER4_O       :Result:=[imOffset];
-  IMAGE_GATHER4_CL_O    :Result:=[imMinLod,imOffset];
-  IMAGE_GATHER4_L_O     :Result:=[imLod,imOffset];
-  IMAGE_GATHER4_B_O     :Result:=[imBiasLod,imOffset];
-  IMAGE_GATHER4_B_CL_O  :Result:=[imBiasLod,imMinLod,imOffset];
-  IMAGE_GATHER4_LZ_O    :Result:=[imZeroLod,imOffset];
-  IMAGE_GATHER4_C_O     :Result:=[imDref,imOffset];
-  IMAGE_GATHER4_C_CL_O  :Result:=[imDref,imMinLod,imOffset];
-  IMAGE_GATHER4_C_L_O   :Result:=[imDref,imLod,imOffset];
-  IMAGE_GATHER4_C_B_O   :Result:=[imDref,imBiasLod,imOffset];
-  IMAGE_GATHER4_C_B_CL_O:Result:=[imDref,imBiasLod,imMinLod,imOffset];
-  IMAGE_GATHER4_C_LZ_O  :Result:=[imDref,imZeroLod,imOffset];
+  IMAGE_GATHER4_CL      :Result:=[imGather,imMinLod];
+  IMAGE_GATHER4_L       :Result:=[imGather,imLod];
+  IMAGE_GATHER4_B       :Result:=[imGather,imBiasLod];
+  IMAGE_GATHER4_B_CL    :Result:=[imGather,imBiasLod,imMinLod];
+  IMAGE_GATHER4_LZ      :Result:=[imGather,imZeroLod];
+  IMAGE_GATHER4_C       :Result:=[imGather,imDref];
+  IMAGE_GATHER4_C_CL    :Result:=[imGather,imDref,imMinLod];
+  IMAGE_GATHER4_C_L     :Result:=[imGather,imDref,imLod];
+  IMAGE_GATHER4_C_B     :Result:=[imGather,imDref,imBiasLod];
+  IMAGE_GATHER4_C_B_CL  :Result:=[imGather,imDref,imBiasLod,imMinLod];
+  IMAGE_GATHER4_C_LZ    :Result:=[imGather,imDref,imMinLod];
+  IMAGE_GATHER4_O       :Result:=[imGather,imOffset];
+  IMAGE_GATHER4_CL_O    :Result:=[imGather,imMinLod,imOffset];
+  IMAGE_GATHER4_L_O     :Result:=[imGather,imLod,imOffset];
+  IMAGE_GATHER4_B_O     :Result:=[imGather,imBiasLod,imOffset];
+  IMAGE_GATHER4_B_CL_O  :Result:=[imGather,imBiasLod,imMinLod,imOffset];
+  IMAGE_GATHER4_LZ_O    :Result:=[imGather,imZeroLod,imOffset];
+  IMAGE_GATHER4_C_O     :Result:=[imGather,imDref,imOffset];
+  IMAGE_GATHER4_C_CL_O  :Result:=[imGather,imDref,imMinLod,imOffset];
+  IMAGE_GATHER4_C_L_O   :Result:=[imGather,imDref,imLod,imOffset];
+  IMAGE_GATHER4_C_B_O   :Result:=[imGather,imDref,imBiasLod,imOffset];
+  IMAGE_GATHER4_C_B_CL_O:Result:=[imGather,imDref,imBiasLod,imMinLod,imOffset];
+  IMAGE_GATHER4_C_LZ_O  :Result:=[imGather,imDref,imZeroLod,imOffset];
   //
   IMAGE_SAMPLE_CD       :Result:=[imGrad];
   IMAGE_SAMPLE_CD_CL    :Result:=[imGrad,imMinLod];
@@ -569,42 +578,69 @@ end;
 
 procedure TEmit_MIMG.DistribDmask(DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo); //result
 var
+ i:Integer;
+ ext:AExtDistrib;
+begin
+ ext:=Default(AExtDistrib);
+ For i:=0 to 3 do
+ begin
+  ext[i].dst  :=dst;
+  ext[i].dtype:=dst.dtype.Child;
+  ext[i].id   :=i;
+ end;
+
+ DistribDmaskExt(DMASK,ext,info);
+end;
+
+procedure TEmit_MIMG.DistribDmaskExt(DMASK:Byte;const ext:AExtDistrib;info:PsrImageInfo); //result
+var
  pSlot:PsrRegSlot;
- dtype:TsrDataType;
  i,d,max:Byte;
 begin
- dtype:=dst.dtype.Child;
- max  :=dst.dtype.Count;
 
  d:=0;
  For i:=0 to 3 do
+ begin
   if DMASK.TestBit(i) then
   begin
    pSlot:=get_vdst8(FSPI.MIMG.VDATA+d);
    Inc(d);
    Assert(pSlot<>nil);
 
-   if (dst.dtype.isScalar) then
+   if (ext[i].dst=nil) then
    begin
+
+    SetConst_i(pSlot,ext[i].dtype,0);
+
+   end else
+   if (ext[i].dst.dtype.isScalar) then
+   begin
+
     if (i=0) then
     begin
-     MakeCopy(pSlot,dst);
+     MakeCopy(pSlot,ext[i].dst);
     end else
     begin
-     SetConst_i(pSlot,dtype,0);
+     SetConst_i(pSlot,ext[i].dtype,0);
     end;
+
    end else
    begin
+    max:=ext[i].dst.dtype.Count;
+
     if (i<max) then
     begin
-     OpExtract(line,pSlot^.New(dtype),dst,i);
+     OpExtract(line,pSlot^.New(ext[i].dtype),ext[i].dst,ext[i].id);
     end else
     begin
-     SetConst_i(pSlot,dtype,0);
+     SetConst_i(pSlot,ext[i].dtype,0);
     end;
+
    end;
 
   end;
+ end;
+
 end;
 
 function TEmit_MIMG.GatherDmask(info:PsrImageInfo;relax:Boolean):TsrRegNode;
@@ -817,8 +853,16 @@ begin
  if (imOffset in p.mods) then
  begin
   p.offset:=Gather_packed_offset(p.roffset,GetDimCount(info^.tinfo.Dim));
-  p.img_op:=p.img_op or ImageOperands.{Const}Offset;
-  AddCapability(Capability.ImageGatherExtended); //-> ImageOperands.Offset
+
+  if (imGather in p.mods) then
+  begin
+   p.img_op:=p.img_op or ImageOperands.Offset;
+   AddCapability(Capability.ImageGatherExtended); //-> ImageOperands.Offset
+  end else
+  begin
+   p.img_op:=p.img_op or ImageOperands.ConstOffset;
+  end;
+
  end;
 
  if (imBiasLod in p.mods) then
@@ -1126,27 +1170,58 @@ var
  dst,lod:TsrRegNode;
 
  dvec:TsrDataType;
- count:Byte;
+ i,count_dim,count_query:Byte;
+
+ ext:AExtDistrib;
 begin
  offset:=0;
  lod:=Gather_value(offset,dtUint32);
 
- count:=1;
- Case info^.tinfo.Dim of
-  Dim.Dim2D:count:=2;
-  Dim.Cube :count:=2;
-  Dim.Dim3D:count:=3;
-  else;
- end;
- if (info^.tinfo.Arrayed<>0) then Inc(count);
+ //{width, height, depth, num_mip_levels}
 
- dvec:=TsrDataType(dtUint32).AsVector(count);
+ if (FSPI.MIMG.DMASK and 8)<>0 then
+ begin
+  Assert(false,'TODO: IMAGE_GET_RESINFO->OpImageQueryLevels');
+ end;
+
+ Case info^.tinfo.Dim of
+  Dim.Dim2D:count_dim:=2;
+  Dim.Cube :count_dim:=2;
+  Dim.Dim3D:count_dim:=3;
+  else
+            count_dim:=1;
+ end;
+
+ count_query:=count_dim;
+ if (info^.tinfo.Arrayed<>0) then
+ begin
+  Inc(count_query);
+ end;
+
+ //
+
+ dvec:=TsrDataType(dtUint32).AsVector(count_query);
 
  dst:=NewReg(dvec);
 
- _Op2(line,Op.OpImageQuerySizeLod,dst,Tgrp,lod);
+ //(width [, height] [, depth] [, elements])
+ OpImageQuerySizeLod(line,Tgrp,dst,lod);
 
- DistribDmask(FSPI.MIMG.DMASK,dst,info);
+ //fill
+ ext:=Default(AExtDistrib);
+ For i:=0 to 3 do
+ begin
+  ext[i].dtype:=dtUint32;
+ end;
+
+ //fill except arrayed elements
+ For i:=0 to count_dim-1 do
+ begin
+  ext[i].dst:=dst;
+  ext[i].id :=i;
+ end;
+
+ DistribDmaskExt(FSPI.MIMG.DMASK,ext,info);
 end;
 
 procedure TEmit_MIMG.emit_image_get_lod(Tgrp:TsrNode;info:PsrImageInfo);
@@ -1176,7 +1251,8 @@ begin
 
  dst:=NewReg(dtVec2f);
 
- _Op2(line,Op.OpImageQueryLod,dst,cmb,param.coord);
+ //{mipmap_level, lod}
+ OpImageQueryLod(line,cmb,dst,param.coord);
 
  DistribDmask(FSPI.MIMG.DMASK,dst,info);
 
@@ -1208,7 +1284,7 @@ begin
     end;
  end;
 
- info:=GetImageInfo(pLayout.pData);
+ info:=GetImageInfo(pLayout.GetSharp);
 
  info.GLC:=(FSPI.MIMG.GLC<>0);
 

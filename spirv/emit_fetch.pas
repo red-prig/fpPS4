@@ -29,8 +29,9 @@ uses
 type
  TEmitFetch=class(TEmitFlow)
   //
-  function  GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
-  function  GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
+  function  GroupingVImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  TryShortVSharp(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  GroupingSharp (src :PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
   //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
   function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
@@ -288,6 +289,43 @@ begin
  Result:=True;
 end;
 
+function TEmitFetch.TryShortVSharp(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+var
+ chain:TsrChains;
+ reg:TsrRegNode;
+ pImm:TsrConst;
+ V2,V3:DWORD;
+begin
+ Result:=nil;
+ if (rtype<>rtVSharp4) then Exit;
+
+ reg:=RegDown(regs[2]);
+
+ pImm:=reg.AsConst;
+ if (pImm=nil) then Exit;
+
+ V2:=pImm.AsUint32;
+
+ reg:=RegDown(regs[3]);
+
+ pImm:=reg.AsConst;
+ if (pImm=nil) then Exit;
+
+ V3:=pImm.AsUint32;
+
+ chain:=Default(TsrChains);
+ chain[0]:=GetChainRegNode(regs[0]);
+ chain[1]:=GetChainRegNode(regs[1]);
+
+ Result:=DataLayoutList.Grouping(chain,rtVSharp2);
+
+ if (Result<>nil) then
+ begin
+  Result.FData[2]:=V2;
+  Result.FData[3]:=V3;
+ end;
+end;
+
 function TEmitFetch.GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
 type
  TsrRegs=array[0..7] of TsrRegNode;
@@ -307,6 +345,9 @@ begin
  end;
 
  Result:=GroupingVImm(@regs,rtype);
+ if (Result<>nil) then Exit;
+
+ Result:=TryShortVSharp(@regs,rtype);
  if (Result<>nil) then Exit;
 
  //TODO: mark "disable_aniso"

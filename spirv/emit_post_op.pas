@@ -17,6 +17,7 @@ uses
   srConst,
   srReg,
   srPrivate,
+  srLiteral,
   srOp,
   srOpInternal,
   srOpUtils,
@@ -72,6 +73,8 @@ type
   function  OnCUBESC2(node:TSpirvOp):Integer;
   function  OnCUBETC2(node:TSpirvOp):Integer;
   function  OnCUBEMA2(node:TSpirvOp):Integer;
+  //
+  function  OnImageSample2(node:TSpirvOp):Integer;
  end;
 
 implementation
@@ -142,6 +145,12 @@ begin
   OpCUBEMA:OnCUBEMA2(node);
 
   srOpInternal.OpMakeCub:Assert(false,'OpMakeCub');
+
+  Op.OpImageSampleImplicitLod,
+  Op.OpImageSampleExplicitLod,
+  Op.OpImageSampleDrefImplicitLod,
+  Op.OpImageSampleDrefExplicitLod:Result:=OnImageSample2(node);
+
  end;
 
 end;
@@ -2051,6 +2060,157 @@ begin
 
   Inc(Result);
  end;
+end;
+
+function TEmitPostOp.OnImageSample2(node:TSpirvOp):Integer;
+var
+ i,param,count_ofs,count_dim,count_query:Integer;
+ L:TsrLiteral;
+
+ pLine:TSpirvOp;
+ roffset:TsrRegNode;
+ coffset:TsrConst;
+
+ cvec:array[0..2] of TsrConst;
+
+ img:TsrRegSampledImage;
+ coord:TsrRegNode;
+ sizes:TsrRegNode;
+
+ dvec:TsrDataType;
+begin
+ Result:=0;
+
+ param:=0;
+ Case node.OpId of
+  Op.OpImageSampleImplicitLod    :param:=2;
+  Op.OpImageSampleExplicitLod    :param:=2;
+  Op.OpImageSampleDrefImplicitLod:param:=3;
+  Op.OpImageSampleDrefExplicitLod:param:=3;
+ end;
+
+ L:=node.ParamNode(param).Value.specialize AsType<TsrLiteral>;
+ if (L=nil) then Exit;
+
+ i:=L.AsInt32;
+
+ //ConstOffset is used?
+ if (i and ImageOperands.ConstOffset)=0 then Exit;
+
+ //get position
+ if (i and ImageOperands.Bias)<>0 then
+ begin
+  Inc(param);
+ end;
+ //
+ if (i and ImageOperands.Lod)<>0 then
+ begin
+  Inc(param);
+ end;
+ //
+ if (i and ImageOperands.Grad)<>0 then
+ begin
+  Inc(param);
+ end;
+ //
+ Inc(param);
+ //get position
+
+ roffset:=RegDown(node.ParamNode(param).AsReg);
+ if (roffset=nil) then Exit;
+
+ coffset:=roffset.pWriter.specialize AsType<ntConst>;
+
+ if (coffset<>nil) then Exit; //valid const offset
+
+ pLine:=roffset.pWriter.specialize AsType<ntOp>;
+
+ if (pLine<>nil) then
+ begin
+  if (pLine.OpId=srOpInternal.OpPackOfs) then Exit; //skip
+ end;
+
+ //
+
+ count_ofs:=roffset.dtype.Count;
+
+ //get zero offset
+ coffset:=nil;
+ Case count_ofs of
+  1:
+    begin
+     coffset:=ConstList.Fetch_i(dtInt32,0);
+    end;
+  2:
+    begin
+     cvec[0]:=ConstList.Fetch_i(dtInt32,0);
+     cvec[1]:=ConstList.Fetch_i(dtInt32,0);
+
+     coffset:=ConstList.FetchVector(dtVec2i,@cvec,true);
+    end;
+  3:
+    begin
+     cvec[0]:=ConstList.Fetch_i(dtInt32,0);
+     cvec[1]:=ConstList.Fetch_i(dtInt32,0);
+     cvec[2]:=ConstList.Fetch_i(dtInt32,0);
+
+     coffset:=ConstList.FetchVector(dtVec3i,@cvec,true);
+    end;
+  else
+   Assert(False);
+ end;
+
+ //set zero to ConstOffset
+ node.ParamNode(param).Value:=coffset;
+
+ //get image/coord
+ img  :=node.ParamNode(0).Value.specialize AsType<TsrRegSampledImage>;
+ coord:=node.ParamNode(1).AsReg;
+
+ Assert(img<>nil);
+ Assert(coord<>nil);
+
+ pLine:=node.pPrev;
+ Assert(pLine<>nil);
+
+ Case img.info.Dim of
+  Dim.Dim2D:count_dim:=2;
+  Dim.Cube :count_dim:=2;
+  Dim.Dim3D:count_dim:=3;
+  else
+            count_dim:=1;
+ end;
+
+ count_query:=count_dim;
+ if (img.info.Arrayed<>0) then
+ begin
+  Inc(count_query);
+ end;
+
+ dvec:=TsrDataType(dtUint32).AsVector(count_query);
+
+ sizes:=NewReg(dvec);
+
+ pLine:=OpImageQuerySizeLod(pLine,img.Tgrp,sizes,NewImm_s(dtUint32,0)); //first lod????
+
+ if (count_ofs<>count_query) then
+ begin
+  Assert(false,'TODO:count_ofs<>count_query');
+ end;
+
+ dvec:=TsrDataType(dtFloat32).AsVector(count_ofs);
+
+ sizes  :=OpUToF(sizes  ,dvec,@pLine);
+ roffset:=OpSToF(roffset,dvec,@pLine);
+
+ roffset:=OpFDivTo(roffset,sizes,@pLine); //(offset.x/WIDTH,offset.y/HEIGHT)
+
+ coord  :=OpFAddTo(coord,roffset,@pLine); //coord + (offset.x/WIDTH,offset.y/HEIGHT)
+
+ //replace
+ node.ParamNode(1).Value:=coord;
+
+ Result:=1;
 end;
 
 ////////

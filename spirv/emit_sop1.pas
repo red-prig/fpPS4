@@ -67,7 +67,7 @@ begin
   chain[1]:=GetChainRegNode(src[1]);
 
   pLayout:=DataLayoutList.Grouping(chain,rtFunPtr2);
-  Result:=pLayout.pData;
+  Result:=pLayout.GetData;
  end;
 
  Assert(Result<>nil);

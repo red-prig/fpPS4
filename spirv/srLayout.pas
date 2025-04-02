@@ -29,6 +29,7 @@ type
   rtImmData,
   rtBufPtr2,
   rtFunPtr2,
+  rtVSharp2,
   rtVSharp4,
   rtSSharp4,
   rtTSharp4,
@@ -150,12 +151,13 @@ type
    TDescList =specialize TNodeListClass<TsrDescriptor>;
    TChainList=specialize TNodeListClass<TsrChain>;
    TChainTree=specialize TNodeTreeClass<TsrChain>;
+   TInplaceData  =array[0..7] of DWORD;
   var
    pPrev,pNext :TsrDataLayout;
    pLeft,pRight:TsrDataLayout;
    //----
    key       :TsrDataLayoutKey;
-   pData     :Pointer;
+   FData     :TInplaceData;
    FID       :Integer;
    FOrder    :Integer;
    FSetid    :Integer;
@@ -177,6 +179,7 @@ type
   Function  Last :TsrChain;
   function  EnumChain(cb:TChainCb):Integer;
   function  GetData:Pointer;
+  function  GetSharp:Pointer;
   function  IsUserData:Boolean; inline;
   function  IsLocalDataShare:Boolean; inline;
   function  IsGlobalDataShare:Boolean; inline;
@@ -499,29 +502,45 @@ end;
 function TsrDataLayout.GetData:Pointer;
 begin
  Result:=nil;
- if (pData<>nil) then
-  Case key.rtype of
-   rtRoot,
-   rtBufPtr2,
-   rtFunPtr2:Result:=pData;
-   rtVSharp4:Result:={%H-}Pointer(PVSharpResource4(pData)^.base);
-   rtTSharp4,
-   rtTSharp8:Result:={%H-}Pointer(QWORD(PTSharpResource4(pData)^.base) shl 8);
-   rtImmData:Result:=TsrDataImm(pData).key.pData;
-   else;
-  end;
+ Case key.rtype of
+  rtRoot,
+  rtBufPtr2,
+  rtFunPtr2:Result:=PPointer(@FData)^;
+  rtVSharp2,
+  rtVSharp4:Result:=Pointer(PVSharpResource4(@FData)^.base); //and (not 3)?
+  rtTSharp4,
+  rtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(@FData)^.base) shl 8);
+  rtImmData:Result:=TsrDataImm(PPointer(@FData)^).key.pData;
+  else;
+ end;
+end;
+
+function TsrDataLayout.GetSharp:Pointer;
+begin
+ Result:=nil;
+ Case key.rtype of
+  rtRoot,
+  rtBufPtr2,
+  rtFunPtr2:Result:=PPointer(@FData)^;
+  rtVSharp2,
+  rtVSharp4,
+  rtTSharp4,
+  rtTSharp8:Result:=@FData;
+  rtImmData:Result:=TsrDataImm(PPointer(@FData)^);
+  else;
+ end;
 end;
 
 function TsrDataLayout.GetStride:PtrUint;
 begin
  Result:=0;
- if (pData<>nil) then
-  Case key.rtype of
-   rtRoot,
-   rtBufPtr2:Result:=4;
-   rtVSharp4:Result:=PVSharpResource4(pData)^.stride;
-   else;
-  end;
+ Case key.rtype of
+  rtRoot,
+  rtBufPtr2:Result:=4;
+  rtVSharp2,
+  rtVSharp4:Result:=PVSharpResource4(@FData)^.stride;
+  else;
+ end;
 end;
 
 function TsrDataLayout.IsUserData:Boolean; inline;
@@ -569,6 +588,7 @@ begin
   rtImmData:Result:='D';
   rtBufPtr2:Result:='B';
   rtFunPtr2:Result:='F';
+  rtVSharp2:Result:='v';
   rtVSharp4:Result:='V';
   rtSSharp4:Result:='S';
   rtTSharp4:Result:='t';
@@ -601,7 +621,7 @@ end;
 
 procedure TsrDataLayoutList.SetUserData(pData:Pointer);
 begin
- FTop.pData:=pData;
+ PPointer(@FTop.FData)^:=pData;
 end;
 
 function TsrDataLayoutList.pRoot:TsrDataLayout;
@@ -634,16 +654,22 @@ begin
   FDataList.Push_tail(Result);
 
   if (pData<>nil) then
+  begin
+   Result.FData:=Default(TsrDataLayout.TInplaceData);
+
    case t of
-    rtRoot   :Result.pData:=pData;
-    rtFunPtr2:Result.pData:={%H-}Pointer(PPtrUint(pData+o)^);
-    rtBufPtr2:Result.pData:={%H-}Pointer(PPtrUint(pData+o)^ and (not 3));
+    rtRoot   :PPointer(@Result.FData)^:=pData;
+    rtFunPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^);
+    rtBufPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^ and (not 3));
+    rtImmData:PPointer(@Result.FData)^:=pData;
+    rtVSharp2,
     rtVSharp4,
     rtSSharp4,
     rtTSharp4,
-    rtTSharp8:Result.pData:=pData+o;
-    rtImmData:Result.pData:=pData;
+    rtTSharp8:Move(Pointer(pData+o)^,Result.FData,GetResourceSizeDw(t)*SizeOf(DWORD));
    end;
+
+  end;
 
  end;
 end;
@@ -665,6 +691,7 @@ begin
   rtRoot   :Result:=2;
   rtBufPtr2:Result:=2;
   rtFunPtr2:Result:=2;
+  rtVSharp2:Result:=2;
   rtVSharp4:Result:=4;
   rtSSharp4:Result:=4;
   rtTSharp4:Result:=4;
@@ -901,6 +928,8 @@ var
  desc  :TsrDescriptor;
  block :TsrCodeBlock;
  imm   :TsrDataImm;
+ PV    :PVSharpResource4;
+ PS    :PTSharpResource4;
 begin
  pHeap:=FTop.FEmit.GetCodeHeap;
 
@@ -916,6 +945,7 @@ begin
   case Writer.node.key.rtype of
    rtFunPtr2,
    rtBufPtr2,
+   rtVSharp2,
    rtVSharp4,
    rtSSharp4,
    rtTSharp4,
@@ -931,11 +961,14 @@ begin
   end;
 
   case Writer.node.key.rtype of
+   rtVSharp2,
    rtVSharp4:
     begin
      //Resource data precompiled
 
-     with PVSharpResource4(Writer.node.pData)^ do
+     PV:=Writer.node.GetSharp;
+
+     with PV^ do
      begin
       if (Writer.node.RINF) then
       begin
@@ -953,7 +986,9 @@ begin
     begin
      //Resource data precompiled
 
-     with PTSharpResource4(Writer.node.pData)^ do
+     PS:=Writer.node.GetSharp;
+
+     with PS^ do
      begin
       Writer.IntOpt('TYPE',_type);
       if (Writer.node.RINF) then
@@ -976,7 +1011,7 @@ begin
    rtImmData:
     begin
      //imm data
-     imm:=TsrDataImm(Writer.node.pData);
+     imm:=TsrDataImm(Writer.node.GetSharp);
      Assert(imm<>nil);
      //
      Writer.HexOpt('LEN',imm.key.FImmSize);
@@ -985,7 +1020,7 @@ begin
    rtFunPtr2:
     begin
      //func
-     block:=pHeap^.FindByPtr(Writer.node.pData);
+     block:=pHeap^.FindByPtr(Writer.node.GetData);
      Assert(block<>nil);
      //
      Writer.HexOpt('LEN',block.Size);

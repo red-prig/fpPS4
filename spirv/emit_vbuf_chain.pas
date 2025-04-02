@@ -226,7 +226,7 @@ begin
   Exit;
  end;
 
- PV:=info.grp.pData;
+ PV:=info.grp.GetSharp;
  Assert(PV^.swizzle_en=0,'swizzle_en');
  Assert(PV^.addtid_en =0,'addtid_en');
 

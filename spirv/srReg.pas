@@ -92,6 +92,13 @@ type
 
  ntRegPair=TsrRegPair;
 
+ TsrRegSampledImage=class(TsrRegNode)
+  Tgrp :TsrNode;
+  Sgrp :TsrNode;
+  etype:TsrDataType;
+  info :TsrTypeImageInfo;
+ end;
+
  TsrVectorArray=class(TsrRegNode)
   FLanes:array[0..LaneCount-1] of TsrRegNode; //[0..63]
  end;

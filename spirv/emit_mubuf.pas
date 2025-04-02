@@ -91,7 +91,7 @@ begin
  begin
 
   grp:=GroupingSharp(src,rtVSharp4);
-  PV:=grp.pData;
+  PV:=grp.GetSharp;
 
   //
   grp.RINF:=True;
@@ -180,7 +180,7 @@ begin
  end;
 
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp.pData;
+ PV:=grp.GetSharp;
 
  //
  grp.RINF:=True;
@@ -218,7 +218,7 @@ begin
  end;
 
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp.pData;
+ PV:=grp.GetSharp;
 
  //
  grp.RINF:=True;
@@ -256,7 +256,7 @@ begin
  end;
 
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp.pData;
+ PV:=grp.GetSharp;
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
@@ -288,7 +288,7 @@ begin
  end;
 
  grp:=GroupingSharp(@src,rtVSharp4);
- PV:=grp.pData;
+ PV:=grp.GetSharp;
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,

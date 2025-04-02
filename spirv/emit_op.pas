@@ -111,7 +111,7 @@ type
   function  OpMakeCon(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
   function  OpMakeVec(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
   function  OpMakeCub(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
-  function  OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegNode;
+  function  OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
   //
   procedure OpIAdd(dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpISub(dst:PsrRegSlot;src0,src1:TsrRegNode);
@@ -181,6 +181,8 @@ type
   function  OpImageFetch(pLine:TspirvOp;Tgrp:TsrNode;dst,coord:TsrRegNode):TspirvOp;
   function  OpImageRead(pLine:TspirvOp;Tgrp:TsrNode;dst,idx:TsrRegNode):TspirvOp;
   function  OpImageWrite(pLine:TspirvOp;Tgrp:TsrNode;idx,src:TsrRegNode):TspirvOp;
+  function  OpImageQuerySizeLod(pLine:TspirvOp;img:TsrNode;dst,lod:TsrRegNode):TspirvOp;
+  function  OpImageQueryLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
  end;
 
 function isPowerOfTwo(x:QWORD):Boolean; inline;
@@ -1036,12 +1038,12 @@ begin
  end;
 end;
 
-function TEmitOp.OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegNode;
+function TEmitOp.OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
 Var
  src:array[0..1] of TsrNode;
  pType:TsrType;
  p:TsrCacheOp;
- dst:TsrRegNode;
+ dst:TsrRegSampledImage;
  node:TspirvOp;
 begin
  src[0]:=Tgrp;
@@ -1067,14 +1069,20 @@ begin
  begin
   node:=AddSpirvOp(pLine,Op.OpSampledImage); //need first
 
-  dst:=NewReg(dtTypeSampledImage);
+  dst:=specialize New<TsrRegSampledImage>;
+  dst.pSlot:=@RegsStory.FUnattach;
+  dst.dtype:=dtTypeSampledImage;
+  dst.Tgrp :=Tgrp;
+  dst.Sgrp :=Sgrp;
+  dst.etype:=dtype;
+  dst.info :=info;
 
   pType:=TypeList.Fetch(dtype);
   pType:=TypeList.FetchImage(pType,info);
   pType:=TypeList.FetchSampledImage(pType);
 
   node.pType:=pType;
-  node.pDst:=dst;
+  node.pDst :=dst;
 
   node.AddParam(Tgrp);
   node.AddParam(Sgrp);
@@ -1083,7 +1091,7 @@ begin
   Result:=dst;
  end else
  begin
-  Result:=p.pDst;
+  Result:=TsrRegSampledImage(p.pDst);
  end;
 end;
 
@@ -1298,7 +1306,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpConvertUToF,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpConvertUToF,Result,src));
 end;
 
 function TEmitOp.OpFToU(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1306,7 +1314,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpConvertFToU,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpConvertFToU,Result,src));
 end;
 
 function TEmitOp.OpSToF(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1314,7 +1322,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpConvertSToF,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpConvertSToF,Result,src));
 end;
 
 function TEmitOp.OpUToU(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1322,7 +1330,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpUConvert,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpUConvert,Result,src));
 end;
 
 function TEmitOp.OpSToS(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1330,7 +1338,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpSConvert,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpSConvert,Result,src));
 end;
 
 function TEmitOp.OpFToF(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1338,7 +1346,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(rtype);
- _Op1(_get_line(ppLine),Op.OpFConvert,Result,src);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpFConvert,Result,src));
 end;
 
 //
@@ -1348,7 +1356,7 @@ begin
  if (src=nil) then Exit(src);
 
  Result:=NewReg(src.dtype);
- _OpGlsl1(_get_line(ppLine),GlslOp.Floor,Result,src)
+ _set_line(ppLine,_OpGlsl1(_get_line(ppLine),GlslOp.Floor,Result,src));
 end;
 
 function TEmitOp.OpPowTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1653,6 +1661,15 @@ begin
  Result:=node;
 end;
 
+function TEmitOp.OpImageQuerySizeLod(pLine:TspirvOp;img:TsrNode;dst,lod:TsrRegNode):TspirvOp;
+begin
+ Result:=_Op2(pLine,Op.OpImageQuerySizeLod,dst,img,lod);
+end;
+
+function TEmitOp.OpImageQueryLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
+begin
+ Result:=_Op2(pLine,Op.OpImageQueryLod,dst,img,coord);
+end;
 
 end.
 
