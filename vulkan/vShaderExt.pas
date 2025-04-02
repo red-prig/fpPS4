@@ -8,6 +8,7 @@ uses
   Classes,
   SysUtils,
   ps4_shader,
+  vm_mmap,
   vRegs2Vulkan,
   Vulkan,
   vDevice,
@@ -27,6 +28,7 @@ type
   vtImmData,
   vtBufPtr2,
   vtFunPtr2,
+  vtVSharp2,
   vtVSharp4,
   vtSSharp4,
   vtTSharp4,
@@ -245,8 +247,9 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
-  Procedure AddVSharp(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
-  Procedure AddBufPtr(P:Pointer          ;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddBufPtr (P:Pointer          ;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 
   Procedure AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
   Procedure AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
@@ -642,6 +645,7 @@ begin
   'D':L.rtype:=vtImmData;
   'B':L.rtype:=vtBufPtr2;
   'F':L.rtype:=vtFunPtr2;
+  'v':L.rtype:=vtVSharp2;
   'V':L.rtype:=vtVSharp4;
   'S':L.rtype:=vtSSharp4;
   't':L.rtype:=vtTSharp4;
@@ -1021,6 +1025,7 @@ begin
  if (Result=nil) then Exit;
 
  Case FPushConst.addr[0].rtype of
+  vtVSharp2,
   vtVSharp4:Result:=Pointer(PVSharpResource4(Result)^.base);
   vtTSharp4,
   vtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(Result)^.base) shl 8);
@@ -1198,6 +1203,7 @@ begin
 
       pSharp:=pData;
      end;
+   vtVSharp2,
    vtVSharp4:
      begin
       pSharp:=pData;
@@ -1415,7 +1421,57 @@ begin
          (ord(vMemoryWrite in flags)*TM_WRITE);
 end;
 
-Procedure TvUniformBuilder.AddVSharp(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+Procedure TvUniformBuilder.AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+var
+ b:TBufBindExt;
+ stride:Integer;
+
+ base,start,__end,_size:QWORD;
+begin
+ Assert(PV<>nil);
+ if (PV=nil) then Exit;
+
+ //print_vsharp(PV);
+
+ b:=Default(TBufBindExt);
+ b.fset  :=fset;
+ b.bind  :=bind;
+ b.offset:=offset;
+ b.memuse:=_get_buf_mem_usage(flags);
+
+ b.addr:=Pointer(PV^.base);
+
+ stride:=PV^.stride;
+ if (stride=0) then stride:=1;
+
+ //size is unknow, try 4KB
+ base :=QWORD(get_dmem_ptr(b.addr));
+ start:=base;
+ __end:=base+4*1024;
+
+ gpu_get_bound(start,__end);
+
+ if (start=0) then
+ begin
+  Assert(false,'vtVSharp2');
+ end;
+
+ _size:=(__end-base);
+
+ _size:=_size+offset; //take into account the offset inside the shader
+
+ if (_size>4*1024) then
+ begin
+  _size:=4*1024;
+ end;
+
+ //
+ b.size:=_size;
+
+ Insert(b,FBuffers,Length(FBuffers));
+end;
+
+Procedure TvUniformBuilder.AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  stride,num_records:Integer;
@@ -1572,8 +1628,9 @@ begin
   dtSTR_BUF:
     Case b.addr[0].rtype of
      vtRoot,
-     vtBufPtr2:AddBufPtr(P,Fset,b.bind,b.size,b.offset,b.flags);
-     vtVSharp4:AddVSharp(P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtBufPtr2:AddBufPtr (P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtVSharp2:AddVSharp2(P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtVSharp4:AddVSharp4(P,Fset,b.bind,b.size,b.offset,b.flags);
      else
       Assert(false,'AddAttr');
     end;
@@ -1839,6 +1896,7 @@ begin
          Exit;
         end;
        end;
+     vtVSharp2,
      vtVSharp4:
        begin
         a:=AlignShift(Pointer(PVSharpResource4(P)^.base),limits.minStorageBufferOffsetAlignment);
@@ -1858,6 +1916,18 @@ begin
  rinfo:=b.addr[0].rinfo;
  //
  Case b.addr[0].rtype of
+  vtVSharp2:
+   with PVSharpResource2(P)^ do
+   begin
+
+    if rinfo.enable then
+    if (stride<>rinfo.stride) then
+    begin
+     FResult:=False;
+     Exit;
+    end;
+
+   end;
   vtVSharp4:
    with PVSharpResource4(P)^ do
    begin

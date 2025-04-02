@@ -222,6 +222,17 @@ type
 // |BUFFER_STORE_FORMAT_* |resource   |resource   |resource|
 // |BUFFER_ATOMIC_*       |derived    |derived    |identity|
 
+ PVSharpResource2=^TVSharpResource2;
+ TVSharpResource2=bitpacked record
+           base:bit40;
+         unused:bit4;
+      mtype_L1s:bit2;
+       mtype_L2:bit2;
+         stride:bit14; //bytes: 0..16383
+  cache_swizzle:bit1;
+     swizzle_en:bit1;  //swizzle AOS according to stride, index_stride, and element_size, else linear (stride * index + offset)
+ end;
+
  PVSharpResource4=^TVSharpResource4;
  TVSharpResource4=bitpacked record
            base:bit40;
