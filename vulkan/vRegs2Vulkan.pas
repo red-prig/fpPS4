@@ -248,20 +248,28 @@ begin
  Result.width   :=V.XSCALE*2;
  Result.height  :=V.YSCALE*2;
 
- //emulate: [-1,1] to [0,1]
- //position.z = (position.z + position.w) * 0.5;
-
- if  limits.VK_EXT_depth_clip_control and //or emulate in shader?
-     (CX_REG^.PA_CL_CLIP_CNTL.DX_CLIP_SPACE_DEF=0) then
+ if (CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0) then
  begin
-  //[-1..1]
-  Result.minDepth:=V.ZOFFSET-V.ZSCALE;
+  //force clear all
+  Result.minDepth:=PSingle(@CX_REG^.DB_DEPTH_CLEAR)^;
+  Result.maxDepth:=Result.minDepth;
  end else
  begin
-  //[0..1]
-  Result.minDepth:=V.ZOFFSET;
+  //emulate: [-1,1] to [0,1]
+  //position.z = (position.z + position.w) * 0.5;
+
+  if  limits.VK_EXT_depth_clip_control and //or emulate in shader?
+      (CX_REG^.PA_CL_CLIP_CNTL.DX_CLIP_SPACE_DEF=0) then
+  begin
+   //[-1..1]
+   Result.minDepth:=V.ZOFFSET-V.ZSCALE;
+  end else
+  begin
+   //[0..1]
+   Result.minDepth:=V.ZOFFSET;
+  end;
+  Result.maxDepth:=V.ZOFFSET+V.ZSCALE;
  end;
- Result.maxDepth:=V.ZOFFSET+V.ZSCALE;
 
  {
  with CX_REG^.PA_CL_CLIP_CNTL do
@@ -1425,9 +1433,7 @@ begin
   //force clear all
   Result.ds_state.depthCompareOp:=VK_COMPARE_OP_ALWAYS;
   //
-  Result.ds_state.depthBoundsTestEnable:=VK_TRUE;
-  Result.ds_state.minDepthBounds:=Result.CLEAR_VALUE.depthStencil.depth;
-  Result.ds_state.maxDepthBounds:=Result.CLEAR_VALUE.depthStencil.depth;
+  Result.ds_state.depthBoundsTestEnable:=VK_FALSE;
  end;
 
  Assert(DEPTH_CONTROL.ENABLE_COLOR_WRITES_ON_DEPTH_FAIL =0,'ENABLE_COLOR_WRITES_ON_DEPTH_FAIL' );
@@ -1683,9 +1689,19 @@ begin
 
  if (UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE=DI_PT_RECTLIST) then
  begin
+  //force disable clip/clamp
   Result.DepthClip:=VK_FALSE;
 
   depthClampDisable:=ord(True);
+
+  Result.State.cullMode:=ord(VK_CULL_MODE_NONE);
+ end else
+ if (CX_REG^.DB_RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0) then
+ begin
+  //force clear all
+  Result.DepthClip:=VK_FALSE;
+
+  depthClampDisable:=ord(False);
 
   Result.State.cullMode:=ord(VK_CULL_MODE_NONE);
  end else
