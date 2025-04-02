@@ -803,6 +803,19 @@ begin
  end;
 end;
 
+function convert_to_gpu_prot(prot:vm_prot_t):vm_prot_t;
+const
+ strict_prot=False;
+begin
+ if strict_prot then
+ begin
+  Result:=((prot shr VM_PROT_GPU_SHIFT) and VM_RW);
+ end else
+ begin
+  Result:=VM_RW;
+ end;
+end;
+
 {
  * Maps a sequence of resident pages belonging to the same object.
  * The sequence begins with the given page m_start.  This page is
@@ -906,7 +919,7 @@ begin
                             info.start+VM_MIN_GPU_ADDRESS,
                             info.__end+VM_MIN_GPU_ADDRESS,
                             delta,
-                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                            convert_to_gpu_prot(prot));
 
         if (r<>0) then
         begin
@@ -983,7 +996,7 @@ begin
                             info.start+VM_MIN_GPU_ADDRESS,
                             info.__end+VM_MIN_GPU_ADDRESS,
                             delta,
-                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                            convert_to_gpu_prot(prot));
 
         if (r<>0) then
         begin
@@ -1042,7 +1055,7 @@ begin
                            info.start+VM_MIN_GPU_ADDRESS,
                            info.__end+VM_MIN_GPU_ADDRESS,
                            delta,
-                           ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                           convert_to_gpu_prot(prot));
 
        if (r<>0) then
        begin
@@ -1147,7 +1160,7 @@ begin
                             info.start+VM_MIN_GPU_ADDRESS,
                             info.__end+VM_MIN_GPU_ADDRESS,
                             delta,
-                            ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                            convert_to_gpu_prot(prot));
 
         if (r<>0) then
         begin
@@ -1210,7 +1223,7 @@ begin
                            info.start+VM_MIN_GPU_ADDRESS,
                            info.__end+VM_MIN_GPU_ADDRESS,
                            size,
-                           ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                           convert_to_gpu_prot(prot));
 
        if (r<>0) then
        begin
@@ -1307,7 +1320,7 @@ begin
                        start   +VM_MIN_GPU_ADDRESS,
                        p____end+VM_MIN_GPU_ADDRESS,
                        (p____end-start),
-                       ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                       convert_to_gpu_prot(prot));
 
    if (r<>0) then
    begin
@@ -1484,7 +1497,7 @@ begin
  vm_nt_map_protect(@pmap^.gp_map,
                    start+VM_MIN_GPU_ADDRESS,
                    __end+VM_MIN_GPU_ADDRESS,
-                   ((prot shr VM_PROT_GPU_SHIFT) and VM_RW));
+                   convert_to_gpu_prot(prot));
 
 
  pmap_unlock(pmap,lock);
