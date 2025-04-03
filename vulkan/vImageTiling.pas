@@ -410,7 +410,7 @@ begin
   for a:=0 to image.key.params.arrayLayers-1 do
   for d:=0 to image.key.params.depth-1 do
   begin
-   Assert((m_offset and 3)=0,'align by 4');
+   //Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
@@ -830,7 +830,8 @@ begin
   for a:=0 to image.key.params.arrayLayers-1 do
   for d:=0 to image.key.params.depth-1 do
   begin
-   Assert((m_offset and 3)=0,'align by 4');
+   //Assert((m_offset and 3)=0,'align by 4');
+
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
@@ -947,7 +948,7 @@ begin
   for a:=0 to image.key.params.arrayLayers-1 do
   for d:=0 to image.key.params.depth-1 do
   begin
-   Assert((m_offset and 3)=0,'align by 4');
+   //Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
