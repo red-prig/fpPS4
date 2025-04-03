@@ -599,6 +599,9 @@ begin
       cinfo.subresourceRange.layerCount) > self.key.params.layerCount
    then
   begin
+   Writeln(stderr,'cinfo.subresourceRange.baseArrayLayer=',cinfo.subresourceRange.baseArrayLayer);
+   Writeln(stderr,'cinfo.subresourceRange.layerCount    =',cinfo.subresourceRange.layerCount);
+   Writeln(stderr,'self.key.params.layerCount           =',self.key.params.layerCount);
    Assert(false);
   end;
 

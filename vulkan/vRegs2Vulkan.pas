@@ -70,6 +70,7 @@ type
   STENCIL_USAGE:Byte;
 
   FImageInfo:TvImageKey;
+  FImageView:TvImageViewKey;
 
   zorder_stage:TVkPipelineStageFlags;
 
@@ -1107,12 +1108,7 @@ begin
  begin
   Result.FImageInfo.params.arrayLayers:=RENDER_TARGET.VIEW.SLICE_MAX+1;
 
-  if (Result.FImageInfo.params.arrayLayers>1) then
-  begin
-   Result.FImageView.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
-  end;
-
-  if RENDER_TARGET.VIEW.SLICE_START>RENDER_TARGET.VIEW.SLICE_MAX then
+  if (RENDER_TARGET.VIEW.SLICE_START>RENDER_TARGET.VIEW.SLICE_MAX) then
   begin
    Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_MAX;
   end else
@@ -1120,7 +1116,6 @@ begin
    Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_START;
   end;
 
-  Result.FImageView.base_array:=RENDER_TARGET.VIEW.SLICE_START;
   Result.FImageView.last_array:=Result.FImageView.base_array;
  end;
 
@@ -1355,7 +1350,6 @@ var
  DB_DEPTH_VIEW   :TDB_DEPTH_VIEW;
  DB_STENCIL_INFO :TDB_STENCIL_INFO;
  DB_HTILE_SURFACE:TDB_HTILE_SURFACE;
- SLICE_START:WORD;
 begin
  Result:=Default(TDB_INFO);
 
@@ -1474,20 +1468,6 @@ begin
 
  ////
 
- if DB_DEPTH_VIEW.SLICE_START>DB_DEPTH_VIEW.SLICE_MAX then
- begin
-  SLICE_START:=DB_DEPTH_VIEW.SLICE_MAX;
- end else
- begin
-  SLICE_START:=DB_DEPTH_VIEW.SLICE_START;
- end;
-
- if (SLICE_START<>0) then
- begin
-  Writeln(stderr,'TODO:DB_DEPTH_VIEW.SLICE_START=',DB_DEPTH_VIEW.SLICE_START);
-  Assert (false ,'TODO:DB_DEPTH_VIEW.SLICE_START='+IntToStr(DB_DEPTH_VIEW.SLICE_START));
- end;
-
  Result.Z_READ_ADDR :=Pointer(QWORD(CX_REG^.DB_Z_READ_BASE ) shl 8);
  Result.Z_WRITE_ADDR:=Pointer(QWORD(CX_REG^.DB_Z_WRITE_BASE) shl 8);
 
@@ -1562,10 +1542,27 @@ begin
  Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
  Result.FImageInfo.params.samples    :=1 shl (DB_Z_INFO.NUM_SAMPLES and 3);
  Result.FImageInfo.params.mipLevels  :=1;
- Result.FImageInfo.params.arrayLayers:=1;
+ Result.FImageInfo.params.arrayLayers:=DB_DEPTH_VIEW.SLICE_MAX+1;
 
  Result.FImageInfo.params.pad_width :=(CX_REG^.DB_DEPTH_SIZE.PITCH_TILE_MAX +1)*8;
  Result.FImageInfo.params.pad_height:=(CX_REG^.DB_DEPTH_SIZE.HEIGHT_TILE_MAX+1)*8;
+
+ //
+
+ Result.FImageView.cformat   :=Result.FImageInfo.cformat;
+ Result.FImageView.vtype     :=ord(VK_IMAGE_VIEW_TYPE_2D);
+
+ if (DB_DEPTH_VIEW.SLICE_START>DB_DEPTH_VIEW.SLICE_MAX) then
+ begin
+  Result.FImageView.base_array:=DB_DEPTH_VIEW.SLICE_MAX;
+ end else
+ begin
+  Result.FImageView.base_array:=DB_DEPTH_VIEW.SLICE_START;
+ end;
+
+ Result.FImageView.last_array:=Result.FImageView.base_array;
+
+ ////
 
  if (DB_Z_INFO.TILE_SURFACE_ENABLE<>0) and
     (CX_REG^.DB_HTILE_DATA_BASE<>0) then

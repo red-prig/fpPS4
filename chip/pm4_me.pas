@@ -1559,6 +1559,7 @@ procedure pm4_ClearDepth(var rt_info:t_pm4_rt_info;
                          var ctx:t_me_render_context);
 var
  ri:TvImage2;
+ iv:TvImageView2;
  cclear:array[0..1] of Boolean;
  range :TVkImageSubresourceRange;
 begin
@@ -1575,6 +1576,8 @@ begin
 
  Assert(ri<>nil);
 
+ iv:=ri.FetchView(ctx.Cmd,rt_info.DB_INFO.FImageView,iu_depthstenc);
+
  ctx.RefToParent(ri);
 
  ri.PushBarrier(ctx.Cmd,
@@ -1588,15 +1591,15 @@ begin
  cclear[1]:=((rt_info.DB_INFO.STENCIL_USAGE and TM_CLEAR)<>0) and
             (GetStencilOnlyFormat(ri.key.cformat)<>VK_FORMAT_UNDEFINED);
 
- range:=ri.GetSubresRange;
+ range:=iv.GetSubresRange;
 
  range.aspectMask:=(ord(VK_IMAGE_ASPECT_DEPTH_BIT  )*ord(cclear[0])) or
                    (ord(VK_IMAGE_ASPECT_STENCIL_BIT)*ord(cclear[1]));
 
  ctx.Cmd.ClearDepthStencilImage(ri.FHandle,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
-                            range);
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                @rt_info.DB_INFO.CLEAR_VALUE.depthStencil,
+                                range);
 
  ctx.Cmd.EndLabel();
 
@@ -2016,7 +2019,7 @@ begin
   pm4_load_from(ctx.Cmd,rd,ctx.rt_info^.DB_INFO.DEPTH_USAGE);
   pm4_load_from(ctx.Cmd,rs,ctx.rt_info^.DB_INFO.STENCIL_USAGE);
 
-  iv:=ri.FetchView(ctx.Cmd,iu_depthstenc);
+  iv:=ri.FetchView(ctx.Cmd,ctx.rt_info^.DB_INFO.FImageView,iu_depthstenc);
 
   ri.PushBarrier(ctx.Cmd,
                  GetDepthStencilAccessAttachMask(ctx.rt_info^.DB_INFO.DEPTH_USAGE,ctx.rt_info^.DB_INFO.STENCIL_USAGE),
