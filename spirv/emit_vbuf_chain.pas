@@ -23,7 +23,7 @@ type
   format_size :PtrInt;
   csize       :PtrInt;
   soffset,ioffset,voffset:PtrInt;
-  sof,ofs,idx:TsrRegNode;
+  ofs,idx:TsrRegNode;
  end;
 
  TvcType=(vcInvalid,vcChainVector,vcChainElement,vcUniformVector,vcUniformElement);
@@ -45,32 +45,37 @@ implementation
 
 procedure TEmit_vbuf_chain.get_reg_adr(var adr:TBuf_adr);
 var
- ofs:PsrRegSlot;
+ pSlot:PsrRegSlot;
+ sof:TsrRegNode;
+ ofs:TsrRegNode;
 begin
+ sof:=nil;
+ ofs:=nil;
+
  if is_const_soffset(FSPI.MUBUF.SOFFSET) then
  begin
   adr.soffset:=get_soffset_const_int(FSPI.MUBUF.SOFFSET,FSPI.INLINE32);
  end else
  begin
-  ofs:=get_ssrc8(FSPI.MUBUF.SOFFSET);
-  if (ofs<>nil) then
+  pSlot:=get_ssrc8(FSPI.MUBUF.SOFFSET);
+  if (pSlot<>nil) then
   begin
-   adr.sof:=ofs^.current;
-   if (adr.sof<>nil) then
+   sof:=pSlot^.current;
+   if (sof<>nil) then
    begin
-    if (adr.sof.is_const) then
+    if (sof.is_const) then
     begin
-     adr.soffset:=adr.sof.AsConst.AsInt32;
-     adr.sof:=nil;
+     adr.soffset:=sof.AsConst.AsInt32;
+     sof:=nil;
     end else
     begin
-     Assert(false,'FSPI.MUBUF.SOFFSET');
+     sof:=MakeRead(pSlot,dtInt32);
     end;
    end;
   end;
  end;
 
- ofs:=nil;
+ pSlot:=nil;
  if (FSPI.MUBUF.IDXEN=1) then
  begin
   if (adr.stride<>0) then //ignore index when stride=0
@@ -79,29 +84,42 @@ begin
   end;
   if (FSPI.MUBUF.OFFEN=1) then
   begin
-   ofs:=get_vsrc8(FSPI.MUBUF.VADDR+1);
+   pSlot:=get_vsrc8(FSPI.MUBUF.VADDR+1);
   end;
  end else
  if (FSPI.MUBUF.OFFEN=1) then
  begin
-  ofs:=get_vsrc8(FSPI.MUBUF.VADDR+0);
+  pSlot:=get_vsrc8(FSPI.MUBUF.VADDR+0);
  end;
 
- if (ofs<>nil) then
+ if (pSlot<>nil) then
  begin
-  adr.ofs:=ofs^.current;
-  if (adr.ofs<>nil) then
+  ofs:=pSlot^.current;
+  if (ofs<>nil) then
   begin
-   if (adr.ofs.is_const) then
+   if (ofs.is_const) then
    begin
-    adr.voffset:=adr.ofs.AsConst.AsInt32;
-    adr.ofs:=nil;
+    adr.voffset:=ofs.AsConst.AsInt32;
+    ofs:=nil;
    end else
    begin
-    adr.ofs:=MakeRead(ofs,dtInt32);
+    ofs:=MakeRead(pSlot,dtInt32);
    end;
   end;
  end;
+
+ if (sof<>nil) and (ofs<>nil) then
+ begin
+  adr.ofs:=OpIAddTo(sof,ofs);
+ end else
+ if (sof<>nil) then
+ begin
+  adr.ofs:=sof;
+ end else
+ begin
+  adr.ofs:=ofs;
+ end;
+
 end;
 
 function TEmit_vbuf_chain.get_sum_ofs(var adr:TBuf_adr):TsrRegNode;
