@@ -73,8 +73,8 @@ type
   procedure OpFmaI32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpFmaU32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   //
-  procedure OpSelect(dst:PsrRegSlot;src0,src1,cond:TsrRegNode);
-  function  OpSelectTo(src0,src1,cond:TsrRegNode):TsrRegNode;
+  procedure OpSelect(dst:PsrRegSlot;src_false,src_true,cond:TsrRegNode);
+  function  OpSelectTo(src_false,src_true,cond:TsrRegNode):TsrRegNode;
   //
   procedure OpIAddCar(pLine:TspirvOp;dst,car,src0,src1:TsrRegNode);
   procedure OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
@@ -171,6 +171,7 @@ type
   function  OpNotEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpBitCountTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpCmpTo(OpId:DWORD;src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpImageSampleImplicitLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
   function  OpImageSampleExplicitLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
@@ -639,16 +640,16 @@ end;
 
 //
 
-procedure TEmitOp.OpSelect(dst:PsrRegSlot;src0,src1,cond:TsrRegNode);
+procedure TEmitOp.OpSelect(dst:PsrRegSlot;src_false,src_true,cond:TsrRegNode);
 begin
- Op3(Op.OpSelect,LazyType2(src0.dtype,src1.dtype),dst,cond,src1,src0);
+ Op3(Op.OpSelect,LazyType2(src_false.dtype,src_true.dtype),dst,cond,src_true,src_false);
 end;
 
-function TEmitOp.OpSelectTo(src0,src1,cond:TsrRegNode):TsrRegNode;
+function TEmitOp.OpSelectTo(src_false,src_true,cond:TsrRegNode):TsrRegNode;
 begin
- Result:=NewReg(LazyType2(src0.dtype,src1.dtype));
+ Result:=NewReg(LazyType2(src_false.dtype,src_true.dtype));
  //
- _Op3(line,Op.OpSelect,Result,cond,src1,src0);
+ _Op3(line,Op.OpSelect,Result,cond,src_true,src_false);
 end;
 
 procedure TEmitOp.OpIAddCar(pLine:TspirvOp;dst,car,src0,src1:TsrRegNode);
@@ -1477,6 +1478,12 @@ function TEmitOp.OpBitCountTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(src.dtype);
  _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpBitCount,Result,src));
+end;
+
+function TEmitOp.OpCmpTo(OpId:DWORD;src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op2(_get_line(ppLine),OpId,Result,src0,src1));
 end;
 
 //
