@@ -522,7 +522,7 @@ begin
   IMAGE_GATHER4_C_L     :Result:=[imGather,imDref,imLod];
   IMAGE_GATHER4_C_B     :Result:=[imGather,imDref,imBiasLod];
   IMAGE_GATHER4_C_B_CL  :Result:=[imGather,imDref,imBiasLod,imMinLod];
-  IMAGE_GATHER4_C_LZ    :Result:=[imGather,imDref,imMinLod];
+  IMAGE_GATHER4_C_LZ    :Result:=[imGather,imDref,imZeroLod];
   IMAGE_GATHER4_O       :Result:=[imGather,imOffset];
   IMAGE_GATHER4_CL_O    :Result:=[imGather,imMinLod,imOffset];
   IMAGE_GATHER4_L_O     :Result:=[imGather,imLod,imOffset];
@@ -1052,11 +1052,12 @@ begin
  end;
  //OpImage
 
+ //TODO: emulate bias/lod/minlod
  //OpExtension "SPV_AMD_texture_gather_bias_lod"
  //Capability.ImageGatherBiasLodAMD
  //VK_AMD_texture_gather_bias_lod
  begin
-  param.img_op:=param.img_op and (not (ImageOperands.Bias or ImageOperands.Lod))
+  param.img_op:=param.img_op and (not (ImageOperands.Bias or ImageOperands.Lod or ImageOperands.MinLod))
  end;
 
  //ImageOperands
