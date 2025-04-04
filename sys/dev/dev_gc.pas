@@ -229,27 +229,9 @@ begin
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
 end;
 
-procedure _FlushAndWaitMe(pctx:p_pfp_ctx);
-var
- event:PRTLEvent;
-begin
- if (pctx^.event=nil) then
- begin
-  pctx^.event:=RTLEventCreate;
- end;
-
- event:=pctx^.event;
-
- pctx^.stream[stGfxDcb].PfpSyncMe(event);
-
- pctx^.Flush_stream(stGfxDcb);
-
- RTLEventWaitFor(event);
-end;
-
 procedure onSwitchBuffer(pctx:p_pfp_ctx;Body:Pointer);
 begin
- _FlushAndWaitMe(pctx);
+ //
 end;
 
 function pm4_parse_gfx_ring(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
@@ -699,8 +681,6 @@ begin
  gc_priv.watchdog_label:=0; //thread can wait
 
  //-> gc_imdone_tasklet
-
- pm4_me_gfx.trigger; //update if wait
 
  gc_imdone_tasklet;
 
@@ -1430,16 +1410,19 @@ end;
 
 function filterops_internal_event(kn:p_knote;hint:QWORD):Integer;
 begin
+ Result:=0;
  if (hint=0) then
  begin
-  Result:=ord(kn^.kn_kevent.data<>0);
- end else
- begin
-  Result:=0;
   if (kn^.kn_kevent.ident=hint) then
   begin
-   Result:=1;
+   Result:=Integer(kn^.kn_kevent.data);
+  end;
+ end else
+ begin
+  if (kn^.kn_kevent.ident=hint) then
+  begin
    kn^.kn_kevent.data:=1;
+   Result:=1;
   end;
  end;
 end;

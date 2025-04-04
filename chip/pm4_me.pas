@@ -302,7 +302,11 @@ end;
 
 procedure t_pm4_me.trigger;
 begin
- gc_wakeup_internal_ptr(@queue);
+ if (gc_kqueue<>nil) then
+ begin
+  gc_wakeup_internal_ptr(@queue);
+ end;
+
  {
  if (event<>nil) then
  begin
@@ -325,7 +329,11 @@ begin
  t.tv_nsec:=1000000000 div 1000;
 
  r:=0;
- kern_kevent2(gc_kqueue,nil,0,@kev,Length(kev),@t,@r);
+
+ if (gc_kqueue<>nil) then
+ begin
+  kern_kevent2(gc_kqueue,nil,0,@kev,Length(kev),@t,@r);
+ end;
 
  wmin_addr:=nil;
 
@@ -1323,7 +1331,7 @@ begin
        iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
        Assert(iv<>nil);
 
-       Writeln('BindImage:->'#13#10,
+       Writeln('BindImage:->[',i,']'#13#10,
                ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
                ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
 
@@ -1340,7 +1348,7 @@ begin
        iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
        Assert(iv<>nil);
 
-       Writeln('BindStorage:->'#13#10,
+       Writeln('BindStorage:->[',i,']'#13#10,
                ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
                ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
 
@@ -1903,7 +1911,7 @@ begin
 
    ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
 
-   Writeln('BindFrame:->'#13#10,
+   Writeln('BindFrame:->[',i,']'#13#10,
            ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
            ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
 
@@ -2061,7 +2069,7 @@ begin
  Prepare_Uniforms(ctx,BP_GRAPHICS,FUniformBuilder);
  ////////
 
- //DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+ DumpShaderGroup(ctx.rt_info^.ShaderGroup);
 
  if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
  begin

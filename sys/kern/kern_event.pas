@@ -36,11 +36,6 @@ function  kqueue_acquire   (fp:p_file;kqp:pp_kqueue):Integer;
 procedure kqueue_release   (kq:p_kqueue;locked:Integer);
 function  kqueue_expand    (kq:p_kqueue;fops:p_filterops;ident:ptruint):Integer;
 procedure kqueue_task      (arg:Pointer;pending:Integer);
-function  kqueue_scan      (kq:p_kqueue;
-                            maxevents:Integer;
-                            k_ops:p_kevent_copyops;
-                            tsp:p_timespec;
-                            keva:p_kevent):Integer;
 procedure kqueue_wakeup    (kq:p_kqueue);
 function  kqueue_fo_find   (filt:Integer):p_filterops;
 procedure kqueue_fo_release(filt:Integer);
@@ -1012,6 +1007,13 @@ begin
  Result:=0;
 end;
 
+function kqueue_scan(td:p_kthread;
+                     kq:p_kqueue;
+                     maxevents:Integer;
+                     k_ops:p_kevent_copyops;
+                     tsp:p_timespec;
+                     keva:p_kevent):Integer; forward;
+
 function _kern_kevent(td:p_kthread;
                       kq:p_kqueue;
                       nchanges:Integer;
@@ -1073,7 +1075,7 @@ begin
   Exit(0); //goto done;
  end;
 
- Result:=kqueue_scan(kq, nevents, k_ops, timeout, keva);
+ Result:=kqueue_scan(td, kq, nevents, k_ops, timeout, keva);
 end;
 
 function kern_kevent(fd:Integer;
@@ -1801,18 +1803,18 @@ end;
  * Scan, update kn_data (if not ONESHOT), and copyout triggered events.
  * We treat KN_MARKER knotes as if they are INFLUX.
  }
-function kqueue_scan(kq:p_kqueue;
+function kqueue_scan(td:p_kthread;
+                     kq:p_kqueue;
                      maxevents:Integer;
                      k_ops:p_kevent_copyops;
                      tsp:p_timespec;
-                     keva:p_kevent):Integer;
+                     keva:p_kevent):Integer; inline;
 label
  done,
  done_nl,
  retry,
  start;
 var
- td:p_kthread;
  kevp:p_kevent;
  atv,rtv,ttv:Int64;
  timeout:Int64;
@@ -1820,12 +1822,9 @@ var
  count,nkev,error,influx:Integer;
  haskqglobal,touch:Integer;
 begin
- td:=curkthread;
- if (td=nil) then Exit(-1);
-
- count:=maxevents;
- nkev:=0;
- error:=0;
+ count      :=maxevents;
+ nkev       :=0;
+ error      :=0;
  haskqglobal:=0;
 
  if (maxevents=0) then goto done_nl;
@@ -1849,12 +1848,14 @@ begin
   atv:=0;
   timeout:=0;
  end;
+
  marker:=knote_alloc();
  if (marker=nil) then
  begin
   error:=ENOMEM;
   goto done_nl;
  end;
+
  marker^.kn_status:=KN_MARKER;
  KQ_LOCK(kq);
  goto start;
@@ -1899,6 +1900,7 @@ start:
 
  TAILQ_INSERT_TAIL(@kq^.kq_head,marker,@marker^.kn_tqe);
  influx:=0;
+
  while (count<>0) do
  begin
   KQ_OWNED(kq);
@@ -2039,19 +2041,25 @@ start:
    KQ_LOCK(kq);
    if (error<>0) then break;
   end;
- end;
+
+ end; //while (count<>0) do
+
  TAILQ_REMOVE(@kq^.kq_head,marker,@marker^.kn_tqe);
+
 done:
  KQ_OWNED(kq);
  KQ_UNLOCK_FLUX(kq);
  knote_free(marker);
+
 done_nl:
  KQ_NOTOWNED(kq);
  if (nkev<>0) then
  begin
   error:=k_ops^.k_copyout(k_ops^.arg, keva, nkev);
  end;
+
  td^.td_retval[0]:=maxevents - count;
+
  Exit(error);
 end;
 
