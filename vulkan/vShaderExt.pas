@@ -1026,7 +1026,7 @@ begin
 
  Case FPushConst.addr[0].rtype of
   vtVSharp2,
-  vtVSharp4:Result:=Pointer(PVSharpResource4(Result)^.base);
+  vtVSharp4:Result:=Pointer(PVSharpResource4(Result)^.base and (not 3));
   vtTSharp4,
   vtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(Result)^.base) shl 8);
   else;
@@ -1210,7 +1210,7 @@ begin
 
       if (i<>0) then
       begin
-       pData:=Pointer(PVSharpResource4(pDmem)^.base);
+       pData:=Pointer(PVSharpResource4(pDmem)^.base and (not 3));
 
        pDmem:=get_dmem_ptr(pData);
       end;
@@ -1317,7 +1317,7 @@ var
 begin
  if (PV=nil) then Exit;
 
- pv_base  :=Pointer(PV^.base);
+ pv_base  :=Pointer(PV^.base and (not 3));
  pv_stride:=PV^.stride;
  pv_count :=PV^.num_records;
 
@@ -1439,7 +1439,7 @@ begin
  b.offset:=offset;
  b.memuse:=_get_buf_mem_usage(flags);
 
- b.addr:=Pointer(PV^.base);
+ b.addr:=Pointer(PV^.base and (not 3));
 
  stride:=PV^.stride;
  if (stride=0) then stride:=1;
@@ -1487,7 +1487,7 @@ begin
  b.offset:=offset;
  b.memuse:=_get_buf_mem_usage(flags);
 
- b.addr:=Pointer(PV^.base);
+ b.addr:=Pointer(PV^.base and (not 3));
 
  stride     :=PV^.stride;
  num_records:=PV^.num_records;
@@ -1899,7 +1899,7 @@ begin
      vtVSharp2,
      vtVSharp4:
        begin
-        a:=AlignShift(Pointer(PVSharpResource4(P)^.base),limits.minStorageBufferOffsetAlignment);
+        a:=AlignShift(Pointer(PVSharpResource4(P)^.base and (not 3)),limits.minStorageBufferOffsetAlignment);
         if (a<>b.offset) then
         begin
          FResult:=False;

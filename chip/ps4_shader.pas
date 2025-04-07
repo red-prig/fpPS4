@@ -291,7 +291,8 @@ type
 
  PTSharpResource8=^TTSharpResource8;
  TTSharpResource8=bitpacked record
-        base:bit38;
+        base:bit32;
+      unused:bit6;
     mtype_L2:bit2;
      min_lod:bit12; //fixed point 4.8 minimum LOD (0.0..15.0)
         dfmt:bit6;  //texture data format; num components, num bits
@@ -915,7 +916,7 @@ end;
 procedure print_vsharp(PV:PVSharpResource4);
 begin
  if (PV=nil) then Exit;
- Writeln('base=',HexStr(PV^.base,10));
+ Writeln('base=',HexStr(PV^.base and (not 3),10));
  Writeln('stride=',PV^.stride);
  Writeln('cache_swizzle=',PV^.cache_swizzle);
  Writeln('swizzle_en=',PV^.swizzle_en);

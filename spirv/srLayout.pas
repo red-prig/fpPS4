@@ -507,7 +507,7 @@ begin
   rtBufPtr2,
   rtFunPtr2:Result:=PPointer(@FData)^;
   rtVSharp2,
-  rtVSharp4:Result:=Pointer(PVSharpResource4(@FData)^.base); //and (not 3)?
+  rtVSharp4:Result:=Pointer(PVSharpResource4(@FData)^.base and (not 3));
   rtTSharp4,
   rtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(@FData)^.base) shl 8);
   rtImmData:Result:=TsrDataImm(PPointer(@FData)^).key.pData;
