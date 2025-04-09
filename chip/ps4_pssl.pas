@@ -2758,6 +2758,16 @@ var
   end;
  end;
 
+ function get_dword_count_4:Byte; inline;
+ begin
+  Case VOP3.OP of
+   256+V_CNDMASK_B32:
+    Result:=2;
+   else
+    Result:=get_dword_count;
+  end;
+ end;
+
 begin
  Case VOP3.OP of
 
@@ -2982,6 +2992,7 @@ begin
  end;
 
  Case VOP3.OP of
+  256+V_CNDMASK_B32,
   V_MAD_LEGACY_F32..V_DIV_FIXUP_F64,
   V_DIV_FMAS_F32..V_MAD_I64_I32:
     begin
@@ -2989,7 +3000,7 @@ begin
      str:=str+', ';
      if Byte(VOP3.NEG).TestBit(2) then str:=str+'-';
      if Byte(VOP3.ABS).TestBit(2) then str:=str+'abs(';
-     str:=str+_get_ssrc9_cnt(VOP3.SRC2,get_dword_count);
+     str:=str+_get_ssrc9_cnt(VOP3.SRC2,get_dword_count_4);
      if Byte(VOP3.ABS).TestBit(2) then str:=str+')';
     end;
   else;
@@ -4071,6 +4082,13 @@ begin
  end;
 
  str:=str+' dmask:0x'+HexStr(SPI.MIMG.DMASK,1);
+
+ if (SPI.MIMG.UNRM<>0) then str:=str+' UNRM';
+ if (SPI.MIMG.GLC <>0) then str:=str+' GLC';
+ if (SPI.MIMG.DA  <>0) then str:=str+' DA';
+ if (SPI.MIMG.TFE <>0) then str:=str+' TFE';
+ if (SPI.MIMG.LWE <>0) then str:=str+' LWE';
+ if (SPI.MIMG.SLC <>0) then str:=str+' SLC';
 
  Result:=str;
 end;

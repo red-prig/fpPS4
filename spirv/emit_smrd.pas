@@ -40,12 +40,18 @@ begin
 
  if (FSPI.SMRD.IMM<>0) then
  begin
-  offset:=FSPI.SMRD.OFFSET*4;
+  offset:=FSPI.SMRD.OFFSET;
+  //offset is represented as a DWORD value
+  offset:=offset*4;
   is_const_offset:=True;
  end else
  if is_const_ssrc9(FSPI.SMRD.OFFSET) then
  begin
-  offset:=get_soffset_const_int(FSPI.SMRD.OFFSET,FSPI.INLINE32) and (not 3);
+  offset:=get_soffset_const_int(FSPI.SMRD.OFFSET,FSPI.INLINE32);
+  //offset is represented as a DWORD value,
+  // even for the case when it is not an IMM,
+  // but a declaration of a constant value
+  offset:=offset*4;
   is_const_offset:=True;
  end else
  begin
