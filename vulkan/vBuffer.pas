@@ -16,6 +16,7 @@ type
   FSize  :TVkDeviceSize;
   FUsage :TVkFlags;
   FBind  :TvPointer;
+  FName  :RawByteString;
   Constructor Create(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Constructor CreateSparce(size:TVkDeviceSize;usage:TVkFlags;ext:Pointer=nil);
   Destructor  Destroy; override;
@@ -278,6 +279,7 @@ end;
 
 procedure TvBuffer.SetObjectName(const name:RawByteString);
 begin
+ FName:=name;
  DebugReport.SetObjectName(VK_OBJECT_TYPE_BUFFER,FHandle,PChar(name));
 end;
 

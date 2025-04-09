@@ -986,7 +986,8 @@ var
  ri:TvImage2;
 
  buf:TvHostBuffer;
- diff:TVkDeviceSize;
+ diff_u:TVkDeviceSize;
+ diff_a:TVkDeviceSize;
 
  resource_instance:p_pm4_resource_instance;
  b:Boolean;
@@ -1163,14 +1164,14 @@ begin
 
      resource_instance^.resource^.rimage:=buf;
 
-     diff:=QWORD(addr)-buf.FAddr;
-     diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+     diff_u:=QWORD(addr)-buf.FAddr;
+     diff_a:=AlignDw(diff_u,limits.minStorageBufferOffsetAlignment);
 
      //TODO: Barrier state cache
      ctx.Cmd.BufferMemoryBarrier(buf.FHandle,
                                  VK_ACCESS_BUF_ANY,
                                  GetAccessMaskBuf(resource_instance^.curr),
-                                 diff,size,
+                                 diff_a,size,
                                  VK_STAGE_BUF_ANY,
                                  GetStageMask(BindPoint)
                                 );
@@ -1256,9 +1257,10 @@ var
 
  buf:TvHostBuffer;
 
- diff :TVkDeviceSize;
- align:TVkDeviceSize;
- range:TVkDeviceSize;
+ diff_u:TVkDeviceSize;
+ diff_a:TVkDeviceSize;
+ align :TVkDeviceSize;
+ range :TVkDeviceSize;
 
  resource_instance:p_pm4_resource_instance;
 
@@ -1419,22 +1421,24 @@ begin
 
    Assert(buf<>nil);
 
-   diff:=QWORD(addr)-buf.FAddr;
+   diff_u:=QWORD(addr)-buf.FAddr;
+   diff_a:=AlignDw(diff_u,limits.minStorageBufferOffsetAlignment);
 
-   align:=diff-AlignDw(diff,limits.minStorageBufferOffsetAlignment);
+   align:=diff_u-diff_a;
 
    if (align<>offset) then
    begin
     Assert(false,'wrong buffer align '+IntToStr(align)+'<>'+IntToStr(offset));
    end;
 
-   diff:=AlignDw(diff,limits.minStorageBufferOffsetAlignment);
-
    range:=size;
+
+   Writeln('BindBuffer:->[',i,']'#13#10,
+           ' 0x',HexStr(buf.FHandle,16),':',buf.FName,'->[',diff_a,'..',range,']');
 
    DescriptorGroup.BindBuffer(fset,bind,
                               buf.FHandle,
-                              diff,
+                              diff_a,
                               range {VK_WHOLE_SIZE});
 
    if ((memuse and TM_WRITE)<>0) then
