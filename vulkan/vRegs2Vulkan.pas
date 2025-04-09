@@ -1239,83 +1239,147 @@ begin
          );
 end;
 
-Function GetStencilOp(b:Byte):TVkStencilOp;
+const
+ STENCIL_OP_STR:array[STENCIL_KEEP..STENCIL_XNOR] of Pchar=(
+  'KEEP',
+  'ZERO',
+  'ONES',
+  'REPLACE_TEST',
+  'REPLACE_OP',
+  'ADD_CLAMP',
+  'SUB_CLAMP',
+  'INVERT',
+  'ADD_WRAP',
+  'SUB_WRAP',
+  'AND',
+  'OR',
+  'XOR',
+  'NAND',
+  'NOR',
+  'XNOR'
+ );
+
+Function GetStencilOpAndCheck(op  :Byte;
+                              hint:pchar;
+                              DEPTH_CONTROL :TDB_DEPTH_CONTROL;
+                              STENCILREFMASK:TDB_STENCILREFMASK
+                             ):TVkStencilOp;
 begin
- case b of
-  STENCIL_KEEP        :Result:=VK_STENCIL_OP_KEEP;
-  STENCIL_ZERO        :Result:=VK_STENCIL_OP_ZERO;
-  STENCIL_ONES        :Result:=VK_STENCIL_OP_REPLACE;             //reference=1
-  STENCIL_REPLACE_TEST:Result:=VK_STENCIL_OP_REPLACE;             //reference=STENCILREFMASK__.STENCILTESTVAL
-  STENCIL_REPLACE_OP  :Result:=VK_STENCIL_OP_REPLACE;             //reference=STENCILREFMASK__.STENCILOPVAL
-  STENCIL_ADD_CLAMP   :Result:=VK_STENCIL_OP_INCREMENT_AND_CLAMP; //+1? STENCILOPVAL
-  STENCIL_SUB_CLAMP   :Result:=VK_STENCIL_OP_DECREMENT_AND_CLAMP; //-1? STENCILOPVAL
-  STENCIL_INVERT      :Result:=VK_STENCIL_OP_INVERT;
-  STENCIL_ADD_WRAP    :Result:=VK_STENCIL_OP_INCREMENT_AND_WRAP;  //+1? STENCILOPVAL
-  STENCIL_SUB_WRAP    :Result:=VK_STENCIL_OP_DECREMENT_AND_WRAP;  //-1? STENCILOPVAL
+ //test
+ case op of
+  STENCIL_ONES      :begin //reference=$FF
+                      if (DEPTH_CONTROL.STENCILFUNC=REF_NEVER) or
+                         (DEPTH_CONTROL.STENCILFUNC=REF_ALWAYS) or
+                         (STENCILREFMASK.STENCILTESTVAL=$FF) then
+                      begin
+                       //
+                      end else
+                      begin
+                       Assert(false,'Unsupport stencil op['+hint+']:'+STENCIL_OP_STR[op]);
+                      end;
+                     end;
+  STENCIL_REPLACE_OP:begin //reference=STENCILOPVAL
+                      if (DEPTH_CONTROL.STENCILFUNC=REF_NEVER) or
+                         (DEPTH_CONTROL.STENCILFUNC=REF_ALWAYS) or
+                         (STENCILREFMASK.STENCILTESTVAL=STENCILREFMASK.STENCILOPVAL) then
+                      begin
+                       //
+                      end else
+                      begin
+                       Assert(false,'Unsupport stencil op['+hint+']:'+STENCIL_OP_STR[op]);
+                      end;
+                     end;
+  STENCIL_ADD_CLAMP ,
+  STENCIL_SUB_CLAMP ,
+  STENCIL_INVERT    ,
+  STENCIL_ADD_WRAP  ,
+  STENCIL_SUB_WRAP  :Assert(STENCILREFMASK.STENCILOPVAL=1,
+                            'Error stencil op['+hint+']:'+STENCIL_OP_STR[op]+
+                            ' STENCILOPVAL[0x'+HexStr(STENCILREFMASK.STENCILOPVAL,2)+'] must be = 1');
   STENCIL_AND         ,                                           //    STENCILOPVAL
   STENCIL_OR          ,                                           //    STENCILOPVAL
   STENCIL_XOR         ,                                           //    STENCILOPVAL
   STENCIL_NAND        ,                                           //    STENCILOPVAL
   STENCIL_NOR         ,                                           //    STENCILOPVAL
-  STENCIL_XNOR        :Assert(false,'Unknow stencil op:STENCIL_XNOR'); //    STENCILOPVAL
-  else
-                       Assert(false,'Unknow stencil op:0x'+HexStr(b,1));
- end;
-end;
-
-Function _GetStencilRef(b:Byte;RF:TDB_STENCILREFMASK):Integer;
-begin
- Result:=-1; //no change
- case b of
-  STENCIL_ONES        :Result:=1;
-  STENCIL_REPLACE_TEST:Result:=RF.STENCILTESTVAL;
-  STENCIL_REPLACE_OP  :Result:=RF.STENCILOPVAL;
-  STENCIL_ADD_CLAMP   :Result:=RF.STENCILOPVAL;
-  STENCIL_SUB_CLAMP   :Result:=RF.STENCILOPVAL;
-  STENCIL_ADD_WRAP    :Result:=RF.STENCILOPVAL;
-  STENCIL_SUB_WRAP    :Result:=RF.STENCILOPVAL;
+  STENCIL_XNOR        :                                           //    STENCILOPVAL
+                       Assert(false,'Unsupport stencil op:['+hint+']:'+STENCIL_OP_STR[op]);
   else;
  end;
+
+ case op of
+  STENCIL_KEEP        :Result:=VK_STENCIL_OP_KEEP;
+  STENCIL_ZERO        :Result:=VK_STENCIL_OP_ZERO;
+  STENCIL_ONES        :Result:=VK_STENCIL_OP_REPLACE;             //reference=$FF
+  STENCIL_REPLACE_TEST:Result:=VK_STENCIL_OP_REPLACE;             //reference=STENCILTESTVAL
+  STENCIL_REPLACE_OP  :Result:=VK_STENCIL_OP_REPLACE;             //reference=STENCILOPVAL
+  STENCIL_ADD_CLAMP   :Result:=VK_STENCIL_OP_INCREMENT_AND_CLAMP; //+1? STENCILOPVAL
+  STENCIL_SUB_CLAMP   :Result:=VK_STENCIL_OP_DECREMENT_AND_CLAMP; //-1? STENCILOPVAL
+  STENCIL_INVERT      :Result:=VK_STENCIL_OP_INVERT;
+  STENCIL_ADD_WRAP    :Result:=VK_STENCIL_OP_INCREMENT_AND_WRAP;  //+1? STENCILOPVAL
+  STENCIL_SUB_WRAP    :Result:=VK_STENCIL_OP_DECREMENT_AND_WRAP;  //-1? STENCILOPVAL
+  else;
+ end;
+
 end;
 
-procedure _set_st_ref(var cur:Integer;i:Integer);
+Function _GetStencilRef(op:Byte;STENCILREFMASK:TDB_STENCILREFMASK):Integer; inline;
+begin
+ case op of
+  STENCIL_ONES        :Result:=$FF;
+  STENCIL_REPLACE_TEST:Result:=STENCILREFMASK.STENCILTESTVAL;
+  STENCIL_REPLACE_OP  :Result:=STENCILREFMASK.STENCILOPVAL;
+  else
+                       Result:=-1; //no change
+ end;
+end;
+
+
+procedure _set_st_ref(var cur:Integer;i:Integer); inline;
 begin
  if (i<>-1) then
  begin
-  Assert((cur=-1) or (cur=i),'multi param');
+  Assert((cur=-1) or (cur=i),'stencil param conflict');
   cur:=i;
  end;
 end;
 
-Function GetStencilRef_FF(SC:TDB_STENCIL_CONTROL;RF:TDB_STENCILREFMASK):Byte;
+Function GetStencilRef(STENCIL_CONTROL:TDB_STENCIL_CONTROL;
+                       DEPTH_CONTROL  :TDB_DEPTH_CONTROL;
+                       STENCILREFMASK :TDB_STENCILREFMASK):Byte;
 var
  cur:Integer;
 begin
  Result:=0;
- cur:=-1;
- _set_st_ref(cur,_GetStencilRef(SC.STENCILFAIL ,RF));
- _set_st_ref(cur,_GetStencilRef(SC.STENCILZPASS,RF));
- _set_st_ref(cur,_GetStencilRef(SC.STENCILZFAIL,RF));
+ //
+ if (DEPTH_CONTROL.STENCILFUNC=REF_NEVER) or
+    (DEPTH_CONTROL.STENCILFUNC=REF_ALWAYS) then
+ begin
+  cur:=-1;
+ end else
+ begin
+  cur:=STENCILREFMASK.STENCILTESTVAL;
+ end;
+ //
+ _set_st_ref(cur,_GetStencilRef(STENCIL_CONTROL.STENCILZPASS,STENCILREFMASK));
+ _set_st_ref(cur,_GetStencilRef(STENCIL_CONTROL.STENCILFAIL ,STENCILREFMASK));
+ _set_st_ref(cur,_GetStencilRef(STENCIL_CONTROL.STENCILZFAIL,STENCILREFMASK));
+ //
  if (cur<>-1) then
  begin
   Result:=cur;
  end;
 end;
 
-Function GetStencilRef_BF(SC:TDB_STENCIL_CONTROL;RF:TDB_STENCILREFMASK):Byte;
-var
- cur:Integer;
+Function GetStencilRef_BF(STENCIL_CONTROL:TDB_STENCIL_CONTROL;
+                          DEPTH_CONTROL  :TDB_DEPTH_CONTROL;
+                          STENCILREFMASK :TDB_STENCILREFMASK_BF):Byte; inline;
+
 begin
- Result:=0;
- cur:=-1;
- _set_st_ref(cur,_GetStencilRef(SC.STENCILFAIL_BF ,RF));
- _set_st_ref(cur,_GetStencilRef(SC.STENCILZPASS_BF,RF));
- _set_st_ref(cur,_GetStencilRef(SC.STENCILZFAIL_BF,RF));
- if (cur<>-1) then
- begin
-  Result:=cur;
- end;
+ Result:=GetStencilRef(TDB_STENCIL_CONTROL(DWORD(STENCIL_CONTROL) shr (4*3)), //FF->BF
+                       DEPTH_CONTROL,
+                       TDB_STENCILREFMASK(STENCILREFMASK));
 end;
+
 
 const
  DB_Z_FORMATS:array[0..3,0..1] of TVkFormat=
@@ -1342,25 +1406,29 @@ const
 Function TGPU_REGS.GET_DB_INFO:TDB_INFO;
 var
  scr:TVkExtent2D;
- RENDER_CONTROL  :TDB_RENDER_CONTROL;
- DEPTH_CONTROL   :TDB_DEPTH_CONTROL;
- STENCIL_CONTROL :TDB_STENCIL_CONTROL;
- SHADER_CONTROL  :TDB_SHADER_CONTROL;
- DB_Z_INFO       :TDB_Z_INFO;
- DB_DEPTH_VIEW   :TDB_DEPTH_VIEW;
- DB_STENCIL_INFO :TDB_STENCIL_INFO;
- DB_HTILE_SURFACE:TDB_HTILE_SURFACE;
+ RENDER_CONTROL   :TDB_RENDER_CONTROL;
+ DEPTH_CONTROL    :TDB_DEPTH_CONTROL;
+ STENCIL_CONTROL  :TDB_STENCIL_CONTROL;
+ STENCILREFMASK   :TDB_STENCILREFMASK;
+ STENCILREFMASK_BF:TDB_STENCILREFMASK_BF;
+ SHADER_CONTROL   :TDB_SHADER_CONTROL;
+ DB_Z_INFO        :TDB_Z_INFO;
+ DB_DEPTH_VIEW    :TDB_DEPTH_VIEW;
+ DB_STENCIL_INFO  :TDB_STENCIL_INFO;
+ DB_HTILE_SURFACE :TDB_HTILE_SURFACE;
 begin
  Result:=Default(TDB_INFO);
 
- RENDER_CONTROL  :=CX_REG^.DB_RENDER_CONTROL;
- DEPTH_CONTROL   :=CX_REG^.DB_DEPTH_CONTROL;
- STENCIL_CONTROL :=CX_REG^.DB_STENCIL_CONTROL;
- SHADER_CONTROL  :=CX_REG^.DB_SHADER_CONTROL;
- DB_Z_INFO       :=CX_REG^.DB_Z_INFO;
- DB_DEPTH_VIEW   :=CX_REG^.DB_DEPTH_VIEW;
- DB_STENCIL_INFO :=CX_REG^.DB_STENCIL_INFO;
- DB_HTILE_SURFACE:=CX_REG^.DB_HTILE_SURFACE;
+ RENDER_CONTROL   :=CX_REG^.DB_RENDER_CONTROL;
+ DEPTH_CONTROL    :=CX_REG^.DB_DEPTH_CONTROL;
+ STENCIL_CONTROL  :=CX_REG^.DB_STENCIL_CONTROL;
+ STENCILREFMASK   :=CX_REG^.DB_STENCILREFMASK;
+ STENCILREFMASK_BF:=CX_REG^.DB_STENCILREFMASK_BF;
+ SHADER_CONTROL   :=CX_REG^.DB_SHADER_CONTROL;
+ DB_Z_INFO        :=CX_REG^.DB_Z_INFO;
+ DB_DEPTH_VIEW    :=CX_REG^.DB_DEPTH_VIEW;
+ DB_STENCIL_INFO  :=CX_REG^.DB_STENCIL_INFO;
+ DB_HTILE_SURFACE :=CX_REG^.DB_HTILE_SURFACE;
 
  //
 
@@ -1442,26 +1510,28 @@ begin
  end else
  begin
 
-  Result.ds_state.front.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL);
-  Result.ds_state.front.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS);
-  Result.ds_state.front.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL);
+  Result.ds_state.front.failOp     :=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILFAIL ,'STENCILFAIL ',DEPTH_CONTROL,STENCILREFMASK);
+  Result.ds_state.front.passOp     :=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILZPASS,'STENCILZPASS',DEPTH_CONTROL,STENCILREFMASK);
+  Result.ds_state.front.depthFailOp:=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILZFAIL,'STENCILZFAIL',DEPTH_CONTROL,STENCILREFMASK);
   Result.ds_state.front.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC);   //1:1
-  Result.ds_state.front.compareMask:=CX_REG^.DB_STENCILREFMASK.STENCILMASK;
-  Result.ds_state.front.writeMask  :=CX_REG^.DB_STENCILREFMASK.STENCILWRITEMASK;
-  Result.ds_state.front.reference  :=GetStencilRef_FF(STENCIL_CONTROL,CX_REG^.DB_STENCILREFMASK);
+  Result.ds_state.front.compareMask:=STENCILREFMASK.STENCILMASK;
+  Result.ds_state.front.writeMask  :=STENCILREFMASK.STENCILWRITEMASK;
+  Result.ds_state.front.reference  :=GetStencilRef(STENCIL_CONTROL,DEPTH_CONTROL,STENCILREFMASK);
 
-  if (DEPTH_CONTROL.BACKFACE_ENABLE<>0) then
+  if (DEPTH_CONTROL.BACKFACE_ENABLE=0) then
   begin
+   //BACKFACE DISABLE
    Result.ds_state.back:=Result.ds_state.front;
   end else
   begin
-   Result.ds_state.back.failOp     :=GetStencilOp(STENCIL_CONTROL.STENCILFAIL_BF);
-   Result.ds_state.back.passOp     :=GetStencilOp(STENCIL_CONTROL.STENCILZPASS_BF);
-   Result.ds_state.back.depthFailOp:=GetStencilOp(STENCIL_CONTROL.STENCILZFAIL_BF);
+   //BACKFACE ENABLE
+   Result.ds_state.back.failOp     :=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILFAIL_BF ,'STENCILFAIL_BF ',DEPTH_CONTROL,STENCILREFMASK);
+   Result.ds_state.back.passOp     :=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILZPASS_BF,'STENCILZPASS_BF',DEPTH_CONTROL,STENCILREFMASK);
+   Result.ds_state.back.depthFailOp:=GetStencilOpAndCheck(STENCIL_CONTROL.STENCILZFAIL_BF,'STENCILZFAIL_BF',DEPTH_CONTROL,STENCILREFMASK);
    Result.ds_state.back.compareOp  :=TVkCompareOp(DEPTH_CONTROL.STENCILFUNC_BF);   //1:1
-   Result.ds_state.back.compareMask:=CX_REG^.DB_STENCILREFMASK_BF.STENCILMASK_BF;
-   Result.ds_state.back.writeMask  :=CX_REG^.DB_STENCILREFMASK_BF.STENCILWRITEMASK_BF;
-   Result.ds_state.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,TDB_STENCILREFMASK(CX_REG^.DB_STENCILREFMASK_BF));
+   Result.ds_state.back.compareMask:=STENCILREFMASK_BF.STENCILMASK_BF;
+   Result.ds_state.back.writeMask  :=STENCILREFMASK_BF.STENCILWRITEMASK_BF;
+   Result.ds_state.back.reference  :=GetStencilRef_BF(STENCIL_CONTROL,DEPTH_CONTROL,STENCILREFMASK_BF);
   end;
 
  end;
