@@ -2165,8 +2165,8 @@ begin
 
      IMG_DATA_FORMAT_16_16      :Result:=VK_FORMAT_R16G16_UNORM;
      IMG_DATA_FORMAT_16_16_16_16:Result:=VK_FORMAT_R16G16B16A16_UNORM;
-     IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;
-     IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_R4G4B4A4_UNORM_PACK16;
+     IMG_DATA_FORMAT_5_6_5      :Result:=VK_FORMAT_R5G6B5_UNORM_PACK16;   //real -> B5G6R5
+     IMG_DATA_FORMAT_4_4_4_4    :Result:=VK_FORMAT_B4G4R4A4_UNORM_PACK16; //real -> A4B4G4R4
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC2        :Result:=VK_FORMAT_BC2_UNORM_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_UNORM_BLOCK;
@@ -2465,9 +2465,23 @@ end;
 
 function _get_lod(w:Word):TVkFloat; forward;
 
+function RGBA_TO_BGRA(i:WORD):WORD; inline;
+begin
+ //000F -> 0F00
+ //0F00 -> 000F
+ //MASK -> F0F0
+ //1234 -> 3412
+ Result:=
+  (RorWord(i,8) and $0F0F) or
+  (i and $F0F0);
+end;
+
+function BGRA_TO_ABGR(i:WORD):WORD; inline;
+begin
+ Result:=RorWord(i,4);
+end;
+
 function _get_tsharp4_image_view(PT:PTSharpResource4;hint:s_image_usage):TvImageViewKey;
-var
- t:Byte;
 begin
  Result:=Default(TvImageViewKey);
  if (PT=nil) then Exit;
@@ -2499,10 +2513,14 @@ begin
  Case Result.cformat of
   VK_FORMAT_R5G6B5_UNORM_PACK16:
    begin
-    t:=Result.dstSel.x;
-    Result.dstSel.x:=Result.dstSel.z;
-    Result.dstSel.z:=t;
+    //real -> B5G6R5
+    WORD(Result.dstSel):=RGBA_TO_BGRA(WORD(Result.dstSel));
    end;
+  VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+   begin
+    //real -> A4B4G4R4
+    WORD(Result.dstSel):=BGRA_TO_ABGR(WORD(Result.dstSel));
+   end
   else;
  end;
 
