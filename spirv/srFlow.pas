@@ -472,7 +472,7 @@ begin
            Result.pNode:=TsrNode(node.pCache);
           end else
           begin
-           Result.pNode:=PrivateList.NewVolatile(nil);
+           Result.pNode:=PrivateList.NewVolatile(@RegsStory.FUnattach);
            node.pCache:=Result.pNode;
           end;
          end;
@@ -568,11 +568,13 @@ begin
    end;
   sLoad:
    begin
-    V:=ConvertStatment(node.pSrc,line).pNode.specialize AsType<TsrVolatile>;
+    C:=ConvertStatment(node.pSrc,line);
+    V:=C.pNode.specialize AsType<TsrVolatile>;
     Assert(V<>nil);
 
     R:=NewReg(dtBool);
     R.pWriter:=V;
+    R.CustomLine:=C.pLine;
 
     node.pCache:=R;
    end;

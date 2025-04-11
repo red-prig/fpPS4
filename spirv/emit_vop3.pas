@@ -21,11 +21,10 @@ type
   procedure emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
   procedure emit_V_CMP_C (r,x:Boolean);
 
-  procedure emit_src_neg_bit(src:PPsrRegNode;count:Byte);
-  procedure emit_src_abs(src:PPsrRegNode);
-  procedure emit_src_abs_bit(src:PPsrRegNode;count:Byte);
-  procedure emit_dst_omod_f(dst:PsrRegSlot);
-  procedure emit_dst_clamp_f(dst:PsrRegSlot);
+  procedure emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
+  procedure emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
+  procedure emit_dst_omod__f(dst:PsrRegSlot;rtype:TsrDataType);
+  procedure emit_dst_clamp_f(dst:PsrRegSlot;rtype:TsrDataType);
   function  get_legacy_cmp(src0,src1,zero:TsrRegNode):TsrRegNode;
 
   procedure emit_V_ADDC_U32;
@@ -65,6 +64,7 @@ type
   procedure emit_V_MED3_I32;
   procedure emit_V_MED3_U32;
   procedure emit_V_FMA_F32;
+  procedure emit_V_MMX64(OpId:DWORD);
   procedure emit_V_CUBE(OpId:DWORD);
   procedure emit_V_MOV_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
@@ -88,8 +88,8 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ emit_src_abs_bit(@src,2,rtype);
+ emit_src_neg_bit(@src,2,rtype);
 
  OpCmpV(OpId,dst[0],src[0],src[1]);
 
@@ -123,82 +123,81 @@ begin
  end;
 end;
 
-procedure TEmit_VOP3.emit_src_neg_bit(src:PPsrRegNode;count:Byte);
+procedure TEmit_VOP3.emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
 var
  i:Byte;
  dst:TsrRegNode;
 begin
  if (FSPI.VOP3a.NEG=0) then Exit;
+ if not rtype.isFloat then Exit;
 
  For i:=0 to count-1 do
   if Byte(FSPI.VOP3a.NEG).TestBit(i) then
   begin
-   dst:=NewReg(dtFloat32);
+   dst:=NewReg(rtype);
    _Op1(line,Op.OpFNegate,dst,src[i]);
    src[i]:=dst;
   end;
 end;
 
-procedure TEmit_VOP3.emit_src_abs(src:PPsrRegNode);
-var
- dst:TsrRegNode;
-begin
- dst:=NewReg(dtFloat32);
- _OpGlsl1(line,GlslOp.FAbs,dst,src^);
- src^:=dst;
-end;
-
-procedure TEmit_VOP3.emit_src_abs_bit(src:PPsrRegNode;count:Byte);
+procedure TEmit_VOP3.emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
 var
  i:Byte;
+ dst:TsrRegNode;
 begin
  if (FSPI.VOP3a.ABS=0) then Exit;
+ if not rtype.isFloat then Exit;
 
  For i:=0 to count-1 do
   if Byte(FSPI.VOP3a.ABS).TestBit(i) then
   begin
-   emit_src_abs(@src[i]);
+   dst:=NewReg(rtype);
+   _OpGlsl1(line,GlslOp.FAbs,dst,src[i]);
+   src[i]:=dst;
   end;
 end;
 
-procedure TEmit_VOP3.emit_dst_omod_f(dst:PsrRegSlot);
+procedure TEmit_VOP3.emit_dst_omod__f(dst:PsrRegSlot;rtype:TsrDataType);
 var
  src,tmp:TsrRegNode;
 begin
+ if not rtype.isFloat then Exit;
+
  src:=dst^.current;
 
  Case FSPI.VOP3a.OMOD of
   0:;
   1: // *2
     begin
-     tmp:=NewImm_s(dtFloat32,2);
-     Op2(Op.OpFMul,dtFloat32,dst,src,tmp);
+     tmp:=NewImm_s(rtype,2);
+     Op2(Op.OpFMul,rtype,dst,src,tmp);
     end;
   2: // *4
     begin
-     tmp:=NewImm_s(dtFloat32,4);
-     Op2(Op.OpFMul,dtFloat32,dst,src,tmp);
+     tmp:=NewImm_s(rtype,4);
+     Op2(Op.OpFMul,rtype,dst,src,tmp);
     end;
   3: // /2
     begin
-     tmp:=NewImm_s(dtFloat32,2);
-     Op2(Op.OpFDiv,dtFloat32,dst,src,tmp);
+     tmp:=NewImm_s(rtype,2);
+     Op2(Op.OpFDiv,rtype,dst,src,tmp);
     end;
  end;
 
 end;
 
-procedure TEmit_VOP3.emit_dst_clamp_f(dst:PsrRegSlot);
+procedure TEmit_VOP3.emit_dst_clamp_f(dst:PsrRegSlot;rtype:TsrDataType);
 var
  src,min,max:TsrRegNode;
 begin
  if (FSPI.VOP3a.CLAMP=0) then Exit;
+ if not rtype.isFloat then Exit;
 
  src:=dst^.current;
- min:=NewImm_s(dtFloat32,0);
- max:=NewImm_s(dtFloat32,1);
+ min:=NewImm_s(rtype,0);
+ max:=NewImm_s(rtype,1);
 
- OpGlsl3(GlslOp.FClamp,dtFloat32,dst,src,min,max);
+ OpGlsl3(GlslOp.FClamp,rtype,dst,src,min,max);
 end;
 
 function TEmit_VOP3.get_legacy_cmp(src0,src1,zero:TsrRegNode):TsrRegNode;
@@ -226,18 +225,30 @@ procedure TEmit_VOP3.emit_V_CNDMASK_B32;
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
+ rtype:TsrDataType;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
 
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUnknow);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUnknow);
+ if (Byte(FSPI.VOP3a.ABS).TestBit(0)) or
+    (Byte(FSPI.VOP3a.NEG).TestBit(0)) or
+    (Byte(FSPI.VOP3a.ABS).TestBit(1)) or
+    (Byte(FSPI.VOP3a.NEG).TestBit(1)) then
+ begin
+  rtype:=dtFloat32;
+ end else
+ begin
+  rtype:=dtUnknow;
+ end;
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtBool);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ emit_src_abs_bit(@src,2,rtype);
+ emit_src_neg_bit(@src,2,rtype);
 
  OpSelect(dst,src[0],src[1],src[2]);
 end;
@@ -255,8 +266,8 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ emit_src_abs_bit(@src,2,dtFloat32);
+ emit_src_neg_bit(@src,2,dtFloat32);
 
  zero:=NewImm_s(dtFloat32,0);
  cmp:=get_legacy_cmp(src[0],src[1],zero);
@@ -267,8 +278,8 @@ begin
 
  OpSelect(dst,mul,zero,cmp); //false,true,cond
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V2_F32(OpId:DWORD;rev:Boolean);
@@ -281,16 +292,16 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ emit_src_abs_bit(@src,2,dtFloat32);
+ emit_src_neg_bit(@src,2,dtFloat32);
 
  case rev of
   False:Op2(OpId,dtFloat32,dst,src[0],src[1]);
   True :Op2(OpId,dtFloat32,dst,src[1],src[0]);
  end;
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_CVT_PKRTZ_F16_F32;
@@ -306,8 +317,8 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2);
- emit_src_neg_bit(@src,2);
+ emit_src_abs_bit(@src,2,dtFloat32);
+ emit_src_neg_bit(@src,2,dtFloat32);
 
  OpConvFloatToHalf2(dst,src[0],src[1]);
 end;
@@ -322,19 +333,13 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
 
- if rtype.isFloat then
- begin
-  emit_src_abs_bit(@src,2);
-  emit_src_neg_bit(@src,2);
- end;
+ emit_src_abs_bit(@src,2,rtype);
+ emit_src_neg_bit(@src,2,rtype);
 
  OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 
- if rtype.isFloat then
- begin
-  emit_dst_omod_f(dst);
-  emit_dst_clamp_f(dst);
- end;
+ emit_dst_omod__f(dst,rtype);
+ emit_dst_clamp_f(dst,rtype);
 end;
 
 procedure TEmit_VOP3.emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
@@ -349,11 +354,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,rtype);
 
- if rtype.isFloat then
- begin
-  emit_src_abs_bit(@src,3);
-  emit_src_neg_bit(@src,3);
- end;
+ emit_src_abs_bit(@src,3,rtype);
+ emit_src_neg_bit(@src,3,rtype);
 
  OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 
@@ -361,11 +363,8 @@ begin
 
  OpGlsl2(OpId,rtype,dst,mid,src[2]);
 
- if rtype.isFloat then
- begin
-  emit_dst_omod_f(dst);
-  emit_dst_clamp_f(dst);
- end;
+ emit_dst_omod__f(dst,rtype);
+ emit_dst_clamp_f(dst,rtype);
 end;
 
 procedure TEmit_VOP3.emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
@@ -517,13 +516,13 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=MakeRead(dst,dtFloat32);
 
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_LDEXP_F32; //vdst.f = vsrc0.f * pow(2.0, vsrc1.s)
@@ -537,8 +536,8 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
 
- emit_src_abs_bit(@src,1);
- emit_src_neg_bit(@src,1);
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
 
  two:=NewImm_s(dtFloat32,2);
  src[1]:=OpSToF(src[1],dtFloat32);
@@ -547,8 +546,8 @@ begin
 
  Op2(Op.OpFMul,dtFloat32,dst,src[0],src[1]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_BCNT_U32_B32; //vdst = bit_count(vsrc0) + vsrc1.u
@@ -719,13 +718,13 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_MAD_LEGACY_F32;
@@ -746,13 +745,13 @@ begin
  cmp:=get_legacy_cmp(src[0],src[1],zero);
 
  //
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
  //
 
 
@@ -904,13 +903,13 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  OpMED3F(dst,src[0],src[1],src[2]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_MED3_I32;
@@ -962,13 +961,38 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3);
- emit_src_neg_bit(@src,3);
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
+end;
+
+procedure TEmit_VOP3.emit_V_MMX64(OpId:DWORD);
+Var
+ dst:array[0..1] of PsrRegSlot;
+ mmx:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst[0]:=get_vdst8(FSPI.VOP3a.VDST+0);
+ dst[1]:=get_vdst8(FSPI.VOP3a.VDST+1);
+
+ mmx:=@RegsStory.FUnattach;
+
+ src[0]:=fetch_ssrc9_64(FSPI.VOP3a.SRC0,dtFloat64);
+ src[1]:=fetch_ssrc9_64(FSPI.VOP3a.SRC1,dtFloat64);
+
+ emit_src_abs_bit(@src,2,dtFloat64);
+ emit_src_neg_bit(@src,2,dtFloat64);
+
+ OpGlsl2(OpId,dtFloat64,mmx,src[0],src[1]);
+
+ emit_dst_omod__f(mmx,dtFloat64);
+ emit_dst_clamp_f(mmx,dtFloat64);
+
+ MakeCopy64(dst[0],dst[1],mmx^.current);
 end;
 
 procedure TEmit_VOP3.emit_V_CUBE(OpId:DWORD);
@@ -994,6 +1018,7 @@ procedure TEmit_VOP3.emit_V_MOV_B32;
 Var
  dst:PsrRegSlot;
  src:TsrRegNode;
+ rtype:TsrDataType;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -1003,19 +1028,18 @@ begin
  if (Byte(FSPI.VOP3a.ABS).TestBit(0)) or
     (Byte(FSPI.VOP3a.NEG).TestBit(0)) then
  begin
-  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
-
-  emit_src_abs_bit(@src,1);
-  emit_src_neg_bit(@src,1);
-
-  MakeCopy(dst,src);
+  rtype:=dtFloat32;
  end else
  begin
-  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUnknow);
-
-  MakeCopy(dst,src);
+  rtype:=dtUnknow;
  end;
 
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
+
+ emit_src_abs_bit(@src,1,rtype);
+ emit_src_neg_bit(@src,1,rtype);
+
+ MakeCopy(dst,src);
 end;
 
 procedure TEmit_VOP3.emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
@@ -1032,8 +1056,8 @@ begin
   Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
  end;
 
- emit_src_abs_bit(@src,1);
- emit_src_neg_bit(@src,1);
+ emit_src_abs_bit(@src,1,src_type);
+ emit_src_neg_bit(@src,1,src_type);
 
  Op1(OpId,dst_type,dst,src);
 
@@ -1043,8 +1067,8 @@ begin
   Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
  end;
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dst_type);
+ emit_dst_clamp_f(dst,dst_type);
 end;
 
 procedure TEmit_VOP3.emit_V_EXT_F32(OpId:DWORD);
@@ -1055,13 +1079,13 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
- emit_src_abs_bit(@src,1);
- emit_src_neg_bit(@src,1);
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
 
  OpGlsl1(OpId,dtFloat32,dst,src);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_SIN_COS(OpId:DWORD);
@@ -1076,13 +1100,13 @@ begin
 
  src:=OpFMulToS(src,PI2);
 
- emit_src_abs_bit(@src,1);
- emit_src_neg_bit(@src,1);
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
 
  OpGlsl1(OpId,dtFloat32,dst,src);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_V_RCP_F32;
@@ -1094,15 +1118,15 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
- emit_src_abs_bit(@src,1);
- emit_src_neg_bit(@src,1);
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
 
  one:=NewImm_s(dtFloat32,1);
 
  Op2(Op.OpFDiv,dtFloat32,dst,one,src);
 
- emit_dst_omod_f(dst);
- emit_dst_clamp_f(dst);
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 end;
 
 procedure TEmit_VOP3.emit_VOP3c;
@@ -1503,6 +1527,9 @@ begin
   V_MED3_I32: emit_V_MED3_I32;
   V_MED3_U32: emit_V_MED3_U32;
   V_FMA_F32 : emit_V_FMA_F32;
+
+  V_MIN_F64:emit_V_MMX64(GlslOp.FMin);
+  V_MAX_F64:emit_V_MMX64(GlslOp.FMax);
 
   V_CUBEID_F32:emit_V_CUBE(srOpInternal.OpCUBEID);
   V_CUBESC_F32:emit_V_CUBE(srOpInternal.OpCUBESC);
