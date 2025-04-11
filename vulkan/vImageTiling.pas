@@ -118,16 +118,9 @@ begin
  Result:=GetLinearSize(key,true);
 end;
 
-Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
-var
- align_m:Ptruint;
-begin
- align_m:=(32 div bpp)-1;
- Result:=(width+align_m) and (not align_m);
- Result:=(Result+7) and (not 7);
-end;
-
 Function Get1dThinSize(const key:TvImageKey):Ptruint;
+const
+ m_tileThickness=1;
 var
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
@@ -135,7 +128,8 @@ var
  m_padheight  :Ptruint;
  m_depth      :Ptruint;
  m_arrayLayers:Ptruint;
- m_slice:Ptruint;
+ m_slice      :Ptruint;
+ log_sz       :Ptruint;
 begin
  Assert(key.params.samples<=1,'key.params.samples>1');
 
@@ -169,8 +163,20 @@ begin
    m_padheight:=(m_padheight+3) shr 2;
   end;
 
-  m_padwidth :=Get1dThinAlignWidth(m_bytePerElement,m_padwidth);
+  //microtile align
+  m_padwidth :=(m_padwidth +7) and (not 7);
   m_padheight:=(m_padheight+7) and (not 7);
+
+  //for 1d textures
+  m_padheight:=max(m_padheight,8);
+
+  //align pitch to pipe_interleave_size
+  log_sz:=(m_padwidth*m_padheight*m_bytePerElement*m_tileThickness);
+  while (log_sz and 255)<>0 do //(log_sz mod 256)<>0
+  begin
+   m_padwidth:=m_padwidth+8;
+   log_sz:=(m_padwidth*m_padheight*m_bytePerElement*m_tileThickness);
+  end;
 
   if (m_level<>1) then
   begin

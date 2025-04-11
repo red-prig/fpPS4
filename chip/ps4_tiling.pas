@@ -3003,16 +3003,9 @@ begin
  m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
 end;
 
-Function Get1dThinAlignWidth(bpp,width:Ptruint):Ptruint; inline;
-var
- align_m:Ptruint;
-begin
- align_m:=(32 div bpp)-1;
- Result:=(width+align_m) and (not align_m);
- Result:=(Result+7) and (not 7);
-end;
-
 procedure Tiler1d.init_size_2d(width,height:DWORD);
+var
+ log_sz:QWORD;
 begin
  m_paddedDepth :=1;
 
@@ -3026,8 +3019,33 @@ begin
   m_linearHeight:=(m_linearHeight+3) shr 2;
  end;
 
- m_paddedWidth :=Get1dThinAlignWidth(m_bytePerElement,m_linearWidth);
+ //microtile align
+ m_paddedWidth :=(m_linearWidth +7) and (not 7);
  m_paddedHeight:=(m_linearHeight+7) and (not 7);
+
+ //for 1d textures
+ m_paddedHeight:=max(m_paddedHeight,8);
+
+ //align pitch to pipe_interleave_size
+ log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);
+ while (log_sz and 255)<>0 do //(log_sz mod 256)<>0
+ begin
+  m_paddedWidth:=m_paddedWidth+8;
+  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);
+ end;
+
+ {
+ //PipeInterleaveBytes/MicroTileWidth=32
+ pipe_align:=((m_paddedHeight*m_bytePerElement*m_tileThickness) and 31);
+ if (pipe_align<>0) then
+ begin
+  //how many microtiles are needed for alignment
+  pipe_align:=32 div pipe_align;
+  //microtiles to pixel align
+  pipe_align:=(8*pipe_align)-1;
+  m_paddedWidth:=(m_paddedWidth +pipe_align) and (not pipe_align);
+ end;
+ }
 
  m_linearSizeBytes:=m_linearWidth*m_linearHeight*m_linearDepth*m_bytePerElement;
  m_tiledSizeBytes :=m_paddedWidth*m_paddedHeight*m_paddedDepth*m_bytePerElement;
