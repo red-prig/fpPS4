@@ -479,7 +479,7 @@ begin
  nFile:=DebugInfoList.FileName;
  node:=AddSpirvOp(pLine,Op.OpLine);
  node.AddParam(nFile);
- node.AddLiteral(iLine);
+ node.AddLiteral(iLine,'0x');
  node.AddLiteral(iColumn);
  Result:=node;
 end;

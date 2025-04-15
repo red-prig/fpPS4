@@ -216,6 +216,10 @@ begin
  begin
   Result:=IntToStr(key.Value);
  end else
+ if (key.name='0x') then
+ begin
+  Result:='0x'+HexStr(key.Value,8);
+ end else
  begin
   Result:=key.name;
  end;

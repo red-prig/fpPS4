@@ -23,7 +23,7 @@ type
  TEmit_DS=class(TEmitFetch)
   procedure emit_DS;
   procedure emit_DS_SWIZZLE_B32;
-  function  fetch_ds_chain   (vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset,extra_stride:Word):TsrChain;
+  function  fetch_ds_chain   (vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset:Word):TsrChain;
   procedure emit_DS_WRITE    (rtype:TsrDataType);
   procedure emit_DS_WRITE2   (rtype:TsrDataType;extra_stride:Word);
   procedure emit_DS_READ     (rtype:TsrDataType);
@@ -174,7 +174,7 @@ dst.low.id = m_module.opSelect(typeId,
 emitRegisterStore(ins.dst[0], dst);
 }
 
-function TEmit_DS.fetch_ds_chain(vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset,extra_stride:Word):TsrChain;
+function TEmit_DS.fetch_ds_chain(vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset:Word):TsrChain;
 var
  pLayout:TsrDataLayout;
  lvl_0:TsrChainLvl_0;
@@ -188,9 +188,9 @@ begin
 
  //region_addr0 = (OFFSET0 * OpDataSize + vbindex)
  //region_addr0 = (OFFSET0 * OpDataSize * 64 + vbindex)
- stride:=(rtype.BitSize div 8)*extra_stride;
+ stride:=(rtype.BitSize div 8);
 
- lvl_0.size  :=(rtype.BitSize div 8);
+ lvl_0.size  :=stride;
  lvl_0.offset:=offset;
 
  //region_addr = (OFFSET + vbindex) & alignment
@@ -252,7 +252,7 @@ begin
   else;
  end;
 
- pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET),1);
+ pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET));
 
  FetchStore(pChain,vsrc);
 end;
@@ -264,24 +264,36 @@ var
 
  vbindex:TsrRegNode;
  vsrc:array[0..1] of TsrRegNode;
+
+ i,hi:Byte;
 begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
+ hi:=ord(FSPI.DS.OFFSET[0]<>FSPI.DS.OFFSET[1]);
+
  if (rtype.BitSize=64) then
  begin
-  vsrc[0]:=fetch_vdst8_64(FSPI.DS.DATA0,dtUint64);
-  vsrc[1]:=fetch_vdst8_64(FSPI.DS.DATA1,dtUint64);
+  for i:=0 to hi do
+  begin
+   vsrc[i]:=fetch_vdst8_64(PBYTE(@FSPI.DS.DATA0)[i],dtUint64);
+  end;
  end else
  begin
-  vsrc[0]:=fetch_vdst8(FSPI.DS.DATA0,rtype);
-  vsrc[1]:=fetch_vdst8(FSPI.DS.DATA1,rtype);
+  for i:=0 to hi do
+  begin
+   vsrc[i]:=fetch_vdst8(PBYTE(@FSPI.DS.DATA0)[i],rtype);
+  end;
  end;
 
- pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8),extra_stride);
- pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8),extra_stride);
+ for i:=0 to hi do
+ begin
+  pChain[i]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[i]*(rtype.BitSize div 8)*extra_stride);
+ end;
 
- FetchStore(pChain[0],vsrc[0]);
- FetchStore(pChain[1],vsrc[1]);
+ for i:=0 to hi do
+ begin
+  FetchStore(pChain[i],vsrc[i]);
+ end;
 end;
 
 //vdst[], vbindex [OFFSET:<0..65535>] [GDS:< 0|1>]
@@ -296,7 +308,7 @@ var
 begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
- pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET),1);
+ pChain:=fetch_ds_chain(vbindex,rtype,dtUnknow,WORD(FSPI.DS.OFFSET));
 
  vdst:=FetchLoad(pChain,rtype);
 
@@ -332,31 +344,42 @@ var
  vdst:array[0..1] of TsrRegNode;
 
  dst:array[0..3] of PsrRegSlot;
+
+ i,hi:Byte;
 begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
- pChain[0]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[0]*(rtype.BitSize div 8),extra_stride);
- pChain[1]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[1]*(rtype.BitSize div 8),extra_stride);
+ hi:=ord(FSPI.DS.OFFSET[0]<>FSPI.DS.OFFSET[1]);
 
- vdst[0]:=FetchLoad(pChain[0],rtype);
- vdst[1]:=FetchLoad(pChain[1],rtype);
+ for i:=0 to hi do
+ begin
+  pChain[i]:=fetch_ds_chain(vbindex,rtype,dtUnknow,FSPI.DS.OFFSET[i]*(rtype.BitSize div 8)*extra_stride);
+ end;
+
+ for i:=0 to hi do
+ begin
+  vdst[i]:=FetchLoad(pChain[i],rtype);
+ end;
 
  if (rtype.BitSize=64) then
  begin
-  dst[0]:=get_vdst8(FSPI.DS.VDST+0);
-  dst[1]:=get_vdst8(FSPI.DS.VDST+1);
-  dst[2]:=get_vdst8(FSPI.DS.VDST+2);
-  dst[3]:=get_vdst8(FSPI.DS.VDST+3);
 
-  MakeCopy64(dst[0],dst[1],vdst[0]);
-  MakeCopy64(dst[2],dst[3],vdst[1]);
+  for i:=0 to hi do
+  begin
+   dst[i*2+0]:=get_vdst8(FSPI.DS.VDST+i*2+0);
+   dst[i*2+1]:=get_vdst8(FSPI.DS.VDST+i*2+1);
+   MakeCopy64(dst[i*2+0],dst[i*2+1],vdst[i]);
+  end;
+
  end else
  begin
-  dst[0]:=get_vdst8(FSPI.DS.VDST+0);
-  dst[1]:=get_vdst8(FSPI.DS.VDST+1);
 
-  MakeCopy(dst[0],vdst[0]);
-  MakeCopy(dst[1],vdst[1]);
+  for i:=0 to hi do
+  begin
+   dst[i]:=get_vdst8(FSPI.DS.VDST+i);
+   MakeCopy(dst[i],vdst[i]);
+  end;
+
  end;
 end;
 
@@ -391,7 +414,7 @@ begin
   else
  end;
 
- pChain:=fetch_ds_chain(vbindex,rtype,rtype,WORD(FSPI.DS.OFFSET),1);
+ pChain:=fetch_ds_chain(vbindex,rtype,rtype,WORD(FSPI.DS.OFFSET));
 
  vdst:=FetchAtomic(pChain,OpId,rtype,vsrc);
 
