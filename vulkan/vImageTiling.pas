@@ -28,17 +28,32 @@ const
  VK_ACCESS_BUF_ANY=ord(VK_ACCESS_MEMORY_READ_BIT) or ord(VK_ACCESS_MEMORY_WRITE_BIT);
  VK_STAGE_BUF_ANY =ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-Function GetLinearAlignWidth(bpp,width:Ptruint):Ptruint; inline;
-var
- align_m:Ptruint;
-begin
- align_m:=(64 div bpp)-1;
- Result:=(width+align_m) and (not align_m);
-end;
-
 function Max(a,b:Ptruint):Ptruint; inline;
 begin
  if (a>b) then Result:=a else Result:=b;
+end;
+
+Function GetLinearAlignWidth(bpp,width,height:Ptruint):Ptruint; inline;
+var
+ pitch_align:Ptruint;
+ slice_align:Ptruint;
+ log_sz:Ptruint;
+begin
+
+ pitch_align:=max(8,64 div bpp);
+
+ width:=(width + pitch_align - 1) and (not (pitch_align - 1));
+
+ slice_align:=max(64,256 div bpp);
+
+ log_sz:=width * height{ * num_samples};
+ while ((log_sz mod slice_align)<>0) do
+ begin
+  width:=width+pitch_align;
+  log_sz:=width * height{ * num_samples};
+ end;
+
+ Result:=width;
 end;
 
 function nextPowerOfTwo(x:Ptruint):Ptruint; inline;
@@ -87,7 +102,7 @@ begin
 
   if align then
   begin
-   m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth);
+   m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
   end;
 
   if IsTexelFormat(key.cformat) then
@@ -815,9 +830,9 @@ begin
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
 
-  if (image.key.params.tiling.idx=8) then
+  if (image.key.params.tiling.idx=kTileModeDisplay_LinearAligned) then
   begin
-   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
+   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width,m_height);
   end;
 
   if IsTexelFormat(image.key.cformat) then
@@ -933,9 +948,9 @@ begin
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
 
-  if (image.key.params.tiling.idx=8) then
+  if (image.key.params.tiling.idx=kTileModeDisplay_LinearAligned) then
   begin
-   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width);
+   BufferImageCopy.bufferRowLength:=GetLinearAlignWidth(m_bytePerElement,m_width,m_height);
   end;
 
   if IsTexelFormat(image.key.cformat) then
