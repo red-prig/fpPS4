@@ -51,7 +51,7 @@ uses
  md_time,
  time;
 
-function kern_nanosleep(rqt,rmt:p_timespec):Integer; external;
+function kern_nanosleep(rqt,rmt:p_timespec):Integer; SysV_ABI_CDecl; external;
 
 procedure usleep(usec:QWORD); //microseconds
 var
