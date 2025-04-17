@@ -276,9 +276,8 @@ begin
                              SizeOf(KERNEL_USER_TIMES),
                              nil);
  Assert(R=0,'calcru_thread');
- unittime(@k.ExitTime.QuadPart);
- user^:=k.ExitTime.QuadPart-k.UserTime.QuadPart;
- syst^:=k.ExitTime.QuadPart-k.KernelTime.QuadPart;
+ user^:=k.UserTime.QuadPart;
+ syst^:=k.KernelTime.QuadPart;
 end;
 
 procedure get_thread_cputime(time:PInt64);

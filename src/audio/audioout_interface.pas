@@ -49,16 +49,19 @@ implementation
 
 uses
  md_time,
- time,
- syscalls;
+ time;
+
+function kern_nanosleep(rqt,rmt:p_timespec):Integer; external;
 
 procedure usleep(usec:QWORD); //microseconds
 var
- time:timespec;
+ rqt:timespec;
+ rmt:timespec;
 begin
- time.tv_sec :=usec div 1000000;
- time.tv_nsec:=((usec mod 1000000) * 1000);
- _nanosleep(@time,nil);
+ rqt.tv_sec :=usec div 1000000;
+ rqt.tv_nsec:=((usec mod 1000000) * 1000);
+ rmt:=Default(timespec);
+ kern_nanosleep(@rqt,@rmt);
 end;
 
 Function TAudioOutNull.Open(const device_id:RawByteString):Boolean;

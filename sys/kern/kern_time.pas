@@ -117,7 +117,7 @@ end;
 var
  nanowait:Integer=0;
 
-function kern_nanosleep(rqt,rmt:p_timespec):Integer;
+function kern_nanosleep(rqt,rmt:p_timespec):Integer; public;
 var
  ts,ts2,tv:Int64;
  error:Integer;
