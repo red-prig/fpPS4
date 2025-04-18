@@ -603,8 +603,12 @@ var
  entry:p_dmem_map_entry;
 
  r_addr,r_size:QWORD;
- t_addr,t_size:QWORD;
- t__end,t_free:QWORD;
+
+ t_aligned:QWORD;
+ t_sizeof :QWORD;
+ t_startof:QWORD;
+ t_endof  :QWORD;
+ t_freeof :QWORD;
 begin
  Result:=0;
 
@@ -651,21 +655,38 @@ begin
   begin
    if (entry^.adj_free<>0) then
    begin
-    t__end:=IDX_TO_OFF(entry^.__end);
-    t_free:=IDX_TO_OFF(entry^.adj_free);
-    t_addr:=AlignUp(t__end,align);
-    if (__end<t_addr) then Break;
-    t_size:=(t_addr-t__end);
-    if (t_size<t_free) then
+    t_startof:=IDX_TO_OFF(entry^.__end);    //start of free space
+
+    if (t_startof<start) then               //clamp
     begin
-     t_size:=t_free-t_size;
-     if (t_size>r_size) then
-     begin
-      r_addr:=t_addr;
-      r_size:=t_size;
-     end;
-     Result:=0;
+     t_aligned:=start;
+    end else
+    begin
+     t_aligned:=AlignUp(t_startof,align);   //align strict
     end;
+
+    if (__end<t_aligned) then Break;
+
+    t_freeof:=IDX_TO_OFF(entry^.adj_free);  //size of free space
+    t_endof:=t_startof+t_freeof;            //end of free space
+
+    if (t_endof>__end) then                 //clamp
+    begin
+     t_endof:=__end;
+    end;
+
+    if (t_endof>t_aligned) then
+    begin
+     t_sizeof:=t_endof-t_aligned;           //size of aligned free space
+     if (t_sizeof>r_size) then
+     begin
+      //save the larger space
+      r_addr:=t_aligned;
+      r_size:=t_sizeof;
+     end;
+     Result:=0;  //mark something found
+    end;
+
    end;
    entry:=entry^.next;
   end;
