@@ -270,6 +270,13 @@ begin
    Result.minDepth:=V.ZOFFSET;
   end;
   Result.maxDepth:=V.ZOFFSET+V.ZSCALE;
+
+  if (CX_REG^.DB_RENDER_OVERRIDE.DISABLE_VIEWPORT_CLAMP=0) then
+  begin
+   Result.minDepth:=max(Result.minDepth,CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMIN);
+   Result.maxDepth:=min(Result.maxDepth,CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMAX);
+  end;
+
  end;
 
  {
