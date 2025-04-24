@@ -913,6 +913,9 @@ begin
        //map to GPU
        if (prot and VM_PROT_GPU_ALL)<>0 then
        begin
+        //extra obj link
+        vm_nt_file_obj_reference(info.obj);
+        //
         r:=vm_nt_map_insert(@pmap^.gp_map,
                             info.obj,
                             info.olocal, //block local offset
@@ -990,6 +993,9 @@ begin
        //map to GPU
        if (prot and VM_PROT_GPU_ALL)<>0 then
        begin
+        //extra obj link
+        vm_nt_file_obj_reference(info.obj);
+        //
         r:=vm_nt_map_insert(@pmap^.gp_map,
                             info.obj,
                             info.olocal, //block local offset
@@ -1049,6 +1055,9 @@ begin
       //map to GPU
       if (prot and VM_PROT_GPU_ALL)<>0 then
       begin
+       //extra obj link
+       vm_nt_file_obj_reference(info.obj);
+       //
        r:=vm_nt_map_insert(@pmap^.gp_map,
                            info.obj,
                            info.olocal, //block local offset
@@ -1154,6 +1163,9 @@ begin
        //map to GPU
        if (prot and VM_PROT_GPU_ALL)<>0 then
        begin
+        //extra obj link
+        vm_nt_file_obj_reference(info.obj);
+        //
         r:=vm_nt_map_insert(@pmap^.gp_map,
                             info.obj,
                             info.olocal, //block local offset
@@ -1217,6 +1229,9 @@ begin
       //map to GPU
       if (prot and VM_PROT_GPU_ALL)<>0 then
       begin
+       //extra obj link
+       vm_nt_file_obj_reference(info.obj);
+       //
        r:=vm_nt_map_insert(@pmap^.gp_map,
                            info.obj,
                            info.offset, //offset in file
@@ -1314,6 +1329,9 @@ begin
   //map to GPU
   if (p____obj<>nil) then
   begin
+   //extra obj link
+   vm_nt_file_obj_reference(p____obj);
+   //
    r:=vm_nt_map_insert(@pmap^.gp_map,
                        p____obj,
                        p_offset, //block local offset

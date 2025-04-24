@@ -1164,7 +1164,7 @@ out_last:
 
  if (error<>0) then
  begin
-  Assert(false,'vn_io_fault');
+  Assert(false,'vn_io_fault:'+IntToStr(error));
  end;
 
  if (rl_cookie<>nil) then
