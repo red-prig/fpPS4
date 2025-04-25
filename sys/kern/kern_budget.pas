@@ -183,7 +183,7 @@ function vm_budget_reserve(ptype,field:Integer;len:QWORD):Integer;
 var
  rsv,limit:QWORD;
 begin
- if (ptype<PTYPE_BIG_APP) then
+ if (ptype<PTYPE_BIG_APP) or (len=0) then
  begin
   Result:=0;
  end else
@@ -220,7 +220,7 @@ procedure vm_budget_release(ptype,field:Integer;len:QWORD);
 var
  rsv,size:QWORD;
 begin
- if (ptype > -1) then
+ if (ptype > -1) and (len<>0) then
  begin
   rw_wlock(budget_lock);
 
@@ -772,18 +772,17 @@ end;
 
 function get_mlock_avail():QWORD;
 var
- m:QWORD;
+ used :QWORD;
  limit:QWORD;
 begin
  Result:=0;
 
- //HACK: Features vm_map_wire need to be added
- m    :=vm_budget_used (p_proc.p_budget_ptype,field_mlock);
+ used :=vm_budget_used (p_proc.p_budget_ptype,field_mlock);
  limit:=vm_budget_limit(p_proc.p_budget_ptype,field_mlock);
 
- if (limit>m) then
+ if (limit>used) then
  begin
-  Result:=limit-m;
+  Result:=limit-used;
  end;
 end;
 

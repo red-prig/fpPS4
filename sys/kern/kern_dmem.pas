@@ -568,6 +568,25 @@ begin
  Result:=obj^.un_pager.physhm.mtype;
 end;
 
+function is_valid_entry(entry:vm_map_entry_t):Boolean; inline;
+begin
+ case entry^.inheritance of
+  VM_INHERIT_PATCH:Result:=False;
+  VM_INHERIT_HOLE :Result:=False;
+  else
+                   Result:=True;
+ end;
+end;
+
+function next_valid_entry(map:vm_map_t;entry:vm_map_entry_t):vm_map_entry_t;
+begin
+ while (entry<>@map^.header) and (not is_valid_entry(entry)) do
+ begin
+  entry:=entry^.next;
+ end;
+ Result:=entry;
+end;
+
 procedure dmem_vmo_get_type(map:vm_map_t;
                             entry:vm_map_entry_t;
                             addr:QWORD;
@@ -589,13 +608,9 @@ var
 begin
  qinfo^:=Default(SceKernelVirtualQueryInfo);
 
- case entry^.inheritance of
-  VM_INHERIT_PATCH:;
-  VM_INHERIT_HOLE :;
-  else
-    begin
-     qinfo^.name:=entry^.name;
-    end;
+ if is_valid_entry(entry) then
+ begin
+  qinfo^.name:=entry^.name;
  end;
 
  obj:=entry^.vm_obj;
@@ -693,7 +708,7 @@ begin
  begin
   qinfo^.bits.isFlexibleMemory:=1;
 
-  //if wired_count>0 then
+  if (entry^.wired_count>0) then
   begin
    qinfo^.bits.isCommitted:=1;
   end;
@@ -736,6 +751,7 @@ var
  rip:Pointer;
  sdk_version_big_4ffffff:Boolean;
  is_libsys_call:Boolean;
+ is_found:Boolean;
  qinfo:SceKernelVirtualQueryInfo;
  size:QWORD;
  start:QWORD;
@@ -779,10 +795,11 @@ begin
   if (p_proc.p_libkernel_start_addr >  rip) or
      (p_proc.p_libkernel___end_addr <= rip) then
   begin
-   if ((Int64(rip) - Int64($7f0000000)) < Int64($800000000)) then //ET_DYN_LOAD_ADDR_SYS
+   //if ((Int64(rip) - Int64($7f0000000)) < Int64($800000000)) then //ET_DYN_LOAD_ADDR_SYS
+   if (QWORD(rip)>=ET_DYN_LOAD_ADDR_SYS) and (QWORD(rip)<USRSTACK) then
    begin
-     sdk_version_big_4ffffff:=true;
-     is_libsys_call         :=true;
+    sdk_version_big_4ffffff:=true;
+    is_libsys_call         :=true;
    end else
    begin
     sdk_version_big_4ffffff:=(p_proc.p_sdk_version > $4ffffff);
@@ -796,14 +813,18 @@ begin
 
  vm_map_lock(map);
 
- if vm_map_lookup_entry(map,QWORD(addr),@entry) then
+ vm_map_lookup_entry(map,QWORD(addr),@entry);
+
+ entry:=next_valid_entry(map,entry);
+
+ is_found:=(QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
+
+ if not is_found then
  begin
-  //Writeln('found:',HexStr(addr),'->',HexStr(entry^.start,16));
- end else
- begin
+
   if ((flags and SCE_KERNEL_VQ_FIND_NEXT)<>0) then
   begin
-   next:=entry^.next;
+   next:=next_valid_entry(map,entry^.next);
    if (next<>@map^.header) then
    begin
     addr :=Pointer(next^.start);
@@ -813,8 +834,8 @@ begin
   end;
 
   //not found
-  vm_map_unlock(map);
-  Exit(EACCES);
+   vm_map_unlock(map);
+   Exit(EACCES);
  end;
 
  _next:
@@ -895,7 +916,7 @@ begin
    start:=entry^.start;
    while (start > QWORD($7efffffff)) and (entry^.__end < QWORD($ff0000001)) do
    begin
-    next:=entry^.next;
+    next:=next_valid_entry(map,entry^.next);
     if (next<>@map^.header) then
     begin
      vm_map_unlock(map);

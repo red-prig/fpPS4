@@ -1158,8 +1158,6 @@ begin
 
  vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
- //wire
-
  memsz:=vaddr_hi-vaddr_lo;
  cache:=ReAllocMem(cache,memsz);
 
@@ -1199,6 +1197,21 @@ begin
  end;
 
  vm_map_unlock(map);
+
+ if (wire<>0) then
+ begin
+  Result:=vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or 8);
+
+  if (Result<>0) then
+  begin
+   vm_object_deallocate(imgp^.obj);
+   //
+   Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
+   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_wire failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
+   Exit(vm_mmap_to_errno(Result));
+  end;
+ end;
+
 end;
 
 function is_system_path(path:pchar):Boolean;

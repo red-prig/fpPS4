@@ -99,8 +99,7 @@ begin
 
  map:=p_proc.p_vmspace;
 
- error:=0;
- //error:=vm_map_wire(map, start, _end, VM_MAP_WIRE_USER or VM_MAP_WIRE_NOHOLES);
+ error:=vm_map_wire(map, start, _end, VM_MAP_WIRE_USER or VM_MAP_WIRE_NOHOLES);
 
  if (error=KERN_SUCCESS) then
  begin
@@ -581,7 +580,32 @@ begin
 
  if (rv=KERN_SUCCESS) then
  begin
-  //vm_map_wire
+
+  if ((flags and MAP_SHARED)<>0) then
+  begin
+   Result:=vm_map_inherit(map,addr^,addr^ + size,VM_INHERIT_SHARE);
+   if (Result<>0) then
+   begin
+    vm_map_remove(map,addr^,addr^ + size);
+    Exit;
+   end;
+  end;
+
+  if ((map^.flags and MAP_WIREFUTURE)=0) or
+     ((flags and (MAP_SANITIZER or MAP_VOID))<>0) then
+  begin
+   Exit;
+  end;
+
+  Result:=vm_map_wire(map,addr^,addr^ + size,
+                      (ord((map^.flags and 4)<>0)*8) or VM_MAP_WIRE_USER or VM_MAP_WIRE_HOLESOK);
+
+  if (Result<>0) then
+  begin
+   vm_map_remove(map,addr^,addr^ + size);
+   Exit;
+  end;
+
  end else
  begin
   if (writecounted) then

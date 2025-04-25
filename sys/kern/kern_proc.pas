@@ -61,6 +61,7 @@ var
 
   p_budget_ptype :Integer;
   p_dmem_aliasing:Integer;
+  p_vm_container :Integer;
  end;
 
 function  pargs_alloc(len:Integer):p_pargs;

@@ -227,6 +227,7 @@ begin
 
  //budget init
  p_proc.p_budget_ptype:=PTYPE_BIG_APP;
+ p_proc.p_vm_container:=1;
 
  kern_app_state_change(as_start);
  kern_app_state_change(as_begin_game_app_mount);

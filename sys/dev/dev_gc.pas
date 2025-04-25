@@ -94,6 +94,11 @@ begin
 
   if (Result=0) then
   begin
+   Result:=vm_map_wire(map,paddr,paddr + psize,0);
+  end;
+
+  if (Result=0) then
+  begin
    vm_map_set_name(map,paddr,paddr+psize,'SceAppCommArea');
 
    pout_addr^:=paddr;

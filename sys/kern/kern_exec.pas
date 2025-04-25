@@ -409,10 +409,11 @@ begin
   Exit(error);
  end;
 
- //if (params->proc->vm_container == 1) {
- //  ret1 = vm_map_wire(vmspace,stack_addr,QWORD(vmspace^.sv_usrstack),9);
- //  if (ret1 != 0) goto __exit;
- //}
+ if (p_proc.p_vm_container=1) then
+ begin
+  error:=vm_map_wire(map,stack_addr,QWORD(vmspace^.sv_usrstack),VM_MAP_WIRE_USER or 8);
+  if (error<>0) then Exit;
+ end;
 
  vm_map_set_name(map,stack_addr,QWORD(vmspace^.sv_usrstack),'main stack');
 
@@ -1377,6 +1378,14 @@ begin
   Writeln(StdErr,'exec_self_imgact:','sdk version is not found in ',imgp^.execpath);
   Exit;
  end;
+
+ if (p_proc.p_vm_container=1) then
+ begin
+  vm_map_lock    (p_proc.p_vmspace);
+  vm_map_modflags(p_proc.p_vmspace,MAP_WIREFUTURE or 4,0);
+  vm_map_unlock  (p_proc.p_vmspace);
+ end;
+
 end;
 
 procedure AUXARGS_ENTRY(var pos:PPointer;id,val:QWORD); inline;
