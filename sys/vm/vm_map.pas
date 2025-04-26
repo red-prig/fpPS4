@@ -1309,7 +1309,7 @@ charged:
 
   budget_id:=p_proc.p_budget_ptype;
 
-  if (vm_budget_reserve(p_proc.p_budget_ptype,field_malloc,__end-start)<>0) then
+  if (vm_budget_reserve(budget_id,field_malloc,__end-start)<>0) then
   begin
    Exit(KERN_RESOURCE_SHORTAGE);
   end;

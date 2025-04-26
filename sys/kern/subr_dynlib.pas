@@ -2260,15 +2260,42 @@ begin
  begin
   budget:=p_proc.p_budget_ptype;
  end else
- if is_system_path(path) then
  begin
-  if is_libc_or_fios(path) then
+  if ((PByte(@imgp^.authinfo.app_type)[7] and $f) = 1) then
   begin
-   budget:=p_proc.p_budget_ptype;
+
+   if is_system_path(path) then
+   begin
+    budget:=PTYPE_SYSTEM;
+
+    if is_libc_or_fios_sprx(path) then
+    begin
+     budget:=p_proc.p_budget_ptype;
+    end;
+
+   end else
+   begin
+    budget:=p_proc.p_budget_ptype;
+   end;
+
   end else
   begin
    budget:=PTYPE_SYSTEM;
+
+   if is_system_path(path) then
+   begin
+    budget:=PTYPE_SYSTEM;
+
+    if is_libc_or_fios_sprx(path) then
+    begin
+     budget:=p_proc.p_budget_ptype;
+    end;
+
+   end;
+
   end;
+
+
  end;
 
  imgp^.hdr_e_type:=hdr^.e_type;

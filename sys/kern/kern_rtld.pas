@@ -188,7 +188,7 @@ function  self_load_section(imgp:p_image_params;
                             var cache:Pointer):Integer;
 
 function  is_system_path(path:pchar):Boolean;
-function  is_libc_or_fios(path:pchar):Boolean;
+function  is_libc_or_fios_sprx(path:pchar):Boolean;
 function  dynlib_basename(path:pchar):pchar;
 
 implementation
@@ -1240,10 +1240,10 @@ begin
  end;
 end;
 
-function is_libc_or_fios(path:pchar):Boolean;
+function is_libc_or_fios_sprx(path:pchar):Boolean;
 const
- c_libc='libc.';
- c_libSceFios2='libSceFios2.';
+ c_libc='libc.sprx';
+ c_libSceFios2='libSceFios2.sprx';
 var
  f:pchar;
 begin

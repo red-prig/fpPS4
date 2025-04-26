@@ -664,7 +664,7 @@ begin
  rbp:=Pointer(td^.td_frame.tf_rbp);
  stack_addr:=nil;
 
- while (QWORD(rbp) < QWORD($800000000000)) do
+ while (QWORD(rbp) < QWORD($800000000000)) do //sv_maxuser
  begin
   rip:=md_fuword(rbp[1]);
   rbp:=md_fuword(rbp[0]);
@@ -924,7 +924,7 @@ _map:
  td^.td_fpop:=fp;
  maxprot:=maxprot and cap_maxprot;
 
- if (((flags and MAP_SANITIZER) <> 0) and (addr < QWORD($800000000000))) then
+ if (((flags and MAP_SANITIZER) <> 0) and (addr < QWORD($800000000000))) then //sv_maxuser
  begin
   if (QWORD($fc00000000) < (addr + size)) then
   begin

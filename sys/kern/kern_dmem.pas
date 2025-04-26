@@ -443,7 +443,7 @@ begin
  rbp:=Pointer(td^.td_frame.tf_rbp);
  stack_addr:=nil;
 
- while (QWORD(rbp) < QWORD($800000000000)) do
+ while (QWORD(rbp) < QWORD($800000000000)) do //sv_maxuser
  begin
   rip:=md_fuword(rbp[1]);
   rbp:=md_fuword(rbp[0]);
@@ -470,7 +470,7 @@ begin
  begin
   if (addr=0) then
   begin
-   if ( (QWORD(stack_addr) - QWORD($7f0000000)) < QWORD($800000000)) then
+   if ( (QWORD(stack_addr) - QWORD($7f0000000)) < QWORD($800000000)) then //ET_DYN_LOAD_ADDR_SYS
    begin
     addr:=SCE_SYS_HEAP_START;
    end else
@@ -570,12 +570,7 @@ end;
 
 function is_valid_entry(entry:vm_map_entry_t):Boolean; inline;
 begin
- case entry^.inheritance of
-  VM_INHERIT_PATCH:Result:=False;
-  VM_INHERIT_HOLE :Result:=False;
-  else
-                   Result:=True;
- end;
+ Result:=not (entry^.inheritance in [VM_INHERIT_PATCH,VM_INHERIT_HOLE]);
 end;
 
 function next_valid_entry(map:vm_map_t;entry:vm_map_entry_t):vm_map_entry_t;
@@ -795,8 +790,7 @@ begin
   if (p_proc.p_libkernel_start_addr >  rip) or
      (p_proc.p_libkernel___end_addr <= rip) then
   begin
-   //if ((Int64(rip) - Int64($7f0000000)) < Int64($800000000)) then //ET_DYN_LOAD_ADDR_SYS
-   if (QWORD(rip)>=ET_DYN_LOAD_ADDR_SYS) and (QWORD(rip)<USRSTACK) then
+   if ((QWORD(rip) - QWORD($7f0000000)) < QWORD($800000000)) then //ET_DYN_LOAD_ADDR_SYS
    begin
     sdk_version_big_4ffffff:=true;
     is_libsys_call         :=true;
