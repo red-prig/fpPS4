@@ -1142,7 +1142,7 @@ begin
                        offset,
                        vaddr_lo,vaddr_hi,
                        VM_PROT_RW, VM_PROT_ALL,
-                       MAP_COW_NO_BUDGET,
+                       0,
                        nil,
                        false);
  if (Result<>0) then

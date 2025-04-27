@@ -517,6 +517,16 @@ begin
   docow:=docow or MAP_DISABLE_COREDUMP;
  end;
 
+ if ((flags and MAP_SYSTEM)<>0) then
+ begin
+  docow:=docow or MAP_COW_SYSTEM;
+ end;
+
+ if ((flags and MAP_SANITIZER)<>0) then
+ begin
+  docow:=docow or MAP_COW_SYSTEM or MAP_COW_NO_BUDGET;
+ end;
+
  // Shared memory is also shared with children.
  if ((flags and MAP_SHARED)<>0) then
  begin

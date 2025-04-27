@@ -120,7 +120,7 @@ const
 
  MAP_ENTRY_VN_WRITECNT     =$10000; // writeable vnode mapping
 
- MAP_ENTRY_IN_TRANSITION2  =$20000; // vm_map_type_protect
+ MAP_ENTRY_IN_TRANSITION2  =$20000; // vm_map_type_protect,kern_mmap_dmem
 
                       //0x40000
                       //0x80000
@@ -1200,6 +1200,8 @@ function vm_map_insert(
 label
  _budget,
  charged;
+const
+ is_system_map=0;
 var
  new_entry  :vm_map_entry_t;
  prev_entry :vm_map_entry_t;
@@ -1292,22 +1294,56 @@ begin
 
 charged:
 
- budget_id:=-1;
+ if (obj=nil) then
+ begin
+  //vm_container:=0;
+  if ((cow and MAP_COW_SYSTEM)<>0) or (is_system_map<>0) then
+  begin
+   budget_id:=-1;
+   if (is_system_map=0) then
+   begin
+    budget_id:=PTYPE_SYSTEM;
+    if ((cow and MAP_COW_SYSTEM)=0) then
+    begin
+     budget_id:=p_proc.p_budget_ptype;
+    end;
+   end;
+  end else
+  begin
+   //vm_container:=p_proc.p_vm_container;
+   budget_id:=PTYPE_SYSTEM;
+   if ((cow and MAP_COW_SYSTEM)=0) then
+   begin
+    budget_id:=p_proc.p_budget_ptype;
+   end;
+  end;
+ end else
+ begin
+  //vm_container:=obj^.vm_container;
+  budget_id:=-1;
+  if (is_system_map=0) then
+  begin
+   budget_id:=obj^.budget_id;
+  end;
+ end;
 
  //budget
  if (max=0) or
     ((cow and MAP_COW_NO_BUDGET)<>0) or
-    (p_proc.p_budget_ptype=-1) then
+    (budget_id=-1) then
  begin
-  //
+  budget_id:=-1;
+ end else
+ if (budget_id=PTYPE_SYSTEM) then
+ begin
+  //ignore system
+  budget_id:=-1;
  end else
  if (obj=nil) then
  begin
   _budget:
 
   protoeflags:=protoeflags or MAP_ENTRY_IN_BUDGET;
-
-  budget_id:=p_proc.p_budget_ptype;
 
   if (vm_budget_reserve(budget_id,field_malloc,__end-start)<>0) then
   begin

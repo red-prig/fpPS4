@@ -349,8 +349,9 @@ begin
          QWORD(shared_page_base), shared_page_len,
          VM_PROT_RW,
          VM_PROT_RW or VM_PROT_EXECUTE,
-         MAP_INHERIT_SHARE or MAP_ACC_NO_CHARGE or MAP_COW_NO_BUDGET,
-         0,
+         MAP_INHERIT_SHARE or
+         MAP_ACC_NO_CHARGE,
+         MAP_COW_NO_BUDGET,
          nil);
 
  if (error<>0) then
@@ -1351,6 +1352,8 @@ begin
                               imgp^.max_addr-imgp^.min_addr,
                               1,
                               0);
+
+ vm_object_set_budget(imgp^.obj,p_proc.p_budget_ptype);
 
  Result:=scan_load_sections(imgp,phdr,hdr^.e_phnum);
  if (Result<>0) then

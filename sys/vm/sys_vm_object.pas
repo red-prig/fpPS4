@@ -41,6 +41,7 @@ type
   pg_color  :Word;
   flags     :Word;                    // see below
   pip       :Integer;
+  budget_id :Integer;
   handle    :Pointer;
   un_pager  :record
    map_base:Pointer;
@@ -86,6 +87,8 @@ procedure VM_OBJECT_LOCK_ASSERT(obj:vm_object_t);
 
 procedure vm_object_set_flag(obj:vm_object_t;bits:Word);
 procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
+
+procedure vm_object_set_budget(obj:vm_object_t;budget_id:Integer);
 
 function  vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
 procedure vm_object_destroy(obj:vm_object_t);
@@ -169,6 +172,11 @@ begin
  obj^.flags:=obj^.flags and (not bits);
 end;
 
+procedure vm_object_set_budget(obj:vm_object_t;budget_id:Integer);
+begin
+ obj^.budget_id:=budget_id;
+end;
+
 function vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
 begin
  Result:=AllocMem(SizeOf(t_vm_object));
@@ -181,6 +189,9 @@ begin
  Result^.size      :=size;
  Result^.generation:=1;
  Result^.ref_count :=1;
+
+ Result^.budget_id :=-1;
+ //Result^.vm_container:=0;
 
  case t of
   OBJT_DEFAULT:

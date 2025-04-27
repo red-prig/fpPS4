@@ -37,6 +37,10 @@ const
  MAP_PREFAULT_READ=$40000;   // prefault mapping for reading
  MAP_SELF         =$80000;   // map decryped SELF file
 
+ MAP_SANITIZER         =$200000;  // devkit only
+ MAP_NO_COALESCE       =$400000;  // do not merge nearby areas
+ MAP_WRITABLE_WB_GARLIC=$800000;  // allow write to WB_GARLIC
+
  MAP_ALIGNMENT_BIT  =24;
  MAP_ALIGNMENT_SHIFT=24;
  MAP_ALIGNMENT_MASK =$ff shl MAP_ALIGNMENT_SHIFT;

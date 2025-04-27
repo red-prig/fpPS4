@@ -2149,7 +2149,7 @@ label
 var
  nd:t_nameidata;
  error:Integer;
- budget:Integer;
+ budget_id:Integer;
 
  image_params:t_image_params;
  imgp:p_image_params;
@@ -2254,11 +2254,11 @@ begin
 
  rtld_load_auth(imgp);
 
- budget:=PTYPE_BIG_APP;
+ budget_id:=PTYPE_BIG_APP;
 
  if ((PByte(@imgp^.authinfo.app_type)[7] and $f) - 4 < 4) then
  begin
-  budget:=p_proc.p_budget_ptype;
+  budget_id:=p_proc.p_budget_ptype;
  end else
  begin
   if ((PByte(@imgp^.authinfo.app_type)[7] and $f) = 1) then
@@ -2266,35 +2266,34 @@ begin
 
    if is_system_path(path) then
    begin
-    budget:=PTYPE_SYSTEM;
+    budget_id:=PTYPE_SYSTEM;
 
     if is_libc_or_fios_sprx(path) then
     begin
-     budget:=p_proc.p_budget_ptype;
+     budget_id:=p_proc.p_budget_ptype;
     end;
 
    end else
    begin
-    budget:=p_proc.p_budget_ptype;
+    budget_id:=p_proc.p_budget_ptype;
    end;
 
   end else
   begin
-   budget:=PTYPE_SYSTEM;
+   budget_id:=PTYPE_SYSTEM;
 
    if is_system_path(path) then
    begin
-    budget:=PTYPE_SYSTEM;
+    budget_id:=PTYPE_SYSTEM;
 
     if is_libc_or_fios_sprx(path) then
     begin
-     budget:=p_proc.p_budget_ptype;
+     budget_id:=p_proc.p_budget_ptype;
     end;
 
    end;
 
   end;
-
 
  end;
 
@@ -2330,7 +2329,7 @@ begin
  end;
 
  addr:=ET_DYN_LOAD_ADDR_USR;
- if (budget=PTYPE_SYSTEM) then
+ if (budget_id=PTYPE_SYSTEM) then
  begin
   addr:=ET_DYN_LOAD_ADDR_SYS;
  end;
@@ -2377,13 +2376,15 @@ begin
                               1,
                               0);
 
+ vm_object_set_budget(imgp^.obj,budget_id);
+
  error:=dynlib_load_sections(imgp,new,phdr,hdr^.e_phnum,delta,wire);
  if (error<>0) then
  begin
   goto _fail_dealloc;
  end;
 
- if (budget=PTYPE_SYSTEM) then
+ if (budget_id=PTYPE_SYSTEM) then
  begin
   new^.rtld_flags.is_system:=1;
  end;
@@ -3076,7 +3077,11 @@ begin
 
   vm_map_delete(map,vaddr_lo,vaddr_hi,True);
 
-  error:=vm_map_insert(map,nil,0,vaddr_lo,vaddr_hi,VM_PROT_RW,VM_PROT_RWX,MAP_COW_NO_BUDGET,nil,false);
+  error:=vm_map_insert(map,nil,0,
+                       vaddr_lo,vaddr_hi,
+                       VM_PROT_RW,VM_PROT_RWX,
+                       0,
+                       nil,false);
   if (error<>0) then
   begin
    vm_map_unlock(map);
@@ -3090,6 +3095,8 @@ begin
   vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
  vm_map_unlock(map);
+
+ vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or 8);
 
  //copy module_param
  pSceModuleParam(data)^:=obj^.module_param^;
