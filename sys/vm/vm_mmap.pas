@@ -32,6 +32,7 @@ type
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
 function sys_msync(addr:Pointer;len:QWORD;flags:Integer):Integer;
 function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
+function sys_mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
@@ -1071,7 +1072,6 @@ var
  size,pageoff:vm_size_t;
 begin
  size:=len;
- prot:=((prot shr 1) and 1) or (prot and VM_PROT_ALL);
 
  pageoff:=(vm_size_t(addr) and PAGE_MASK);
  addr:=addr-pageoff;
@@ -1083,6 +1083,8 @@ begin
   Exit(EINVAL);
  end;
 
+ prot:=((Byte(prot) shr 1) and 1) or (Byte(prot) and $37);
+
  Result:=vm_map_protect(p_proc.p_vmspace, QWORD(addr), QWORD(addr) + size, prot, FALSE);
 
  case Result of
@@ -1092,6 +1094,45 @@ begin
   else
                           Exit(EINVAL);
  end;
+end;
+
+function sys_mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
+var
+ size,pageoff:vm_size_t;
+begin
+ size:=len;
+
+ pageoff:=(vm_size_t(addr) and PAGE_MASK);
+ addr:=addr-pageoff;
+ size:=size+pageoff;
+ size:=round_page(size);
+
+ if (addr + size < addr) or
+    (DWORD(mtype) >= 11) or
+    ((prot and $c8) <> 0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ prot:=((Byte(prot) shr 1) and 1) or Byte(prot);
+
+ Result:=vm_map_type_protect(p_proc.p_vmspace, QWORD(addr), QWORD(addr) + size, mtype, prot);
+
+ case Result of
+  KERN_SUCCESS           :Result:=0;
+  KERN_INVALID_ADDRESS   :Result:=EINVAL;
+  KERN_PROTECTION_FAILURE:Result:=EACCES;
+  KERN_NO_SPACE          :Result:=EINVAL;
+  KERN_INVALID_ARGUMENT  :Result:=EINVAL;
+  KERN_FAILURE           :Result:=EOPNOTSUPP;
+  KERN_RESOURCE_SHORTAGE :Result:=ENOMEM;
+  KERN_NOT_RECEIVER      :Result:=EINVAL;
+  KERN_NO_ACCESS         :Result:=EINVAL;
+  KERN_BUSY              :Result:=EBUSY;
+  else
+                          Result:=EINVAL;
+ end;
+
 end;
 
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;

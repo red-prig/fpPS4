@@ -6,6 +6,7 @@ unit kern_dmem;
 interface
 
 uses
+ sys_conf,
  sys_vm_object,
  dmem_map,
  rmem_map;
@@ -93,7 +94,9 @@ function  sys_virtual_query(addr:Pointer;
                             info:Pointer;
                             infoSize:QWORD):Integer;
 
-function  rmem_map_test_lock(start,__end:QWORD):Boolean;
+function  rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
+
+function  obj2dmem(obj:vm_object_t):p_dmem_map;
 
 function  get_dmem_ptr(addr:Pointer):Pointer;
 
@@ -200,10 +203,10 @@ begin
  end;
 end;
 
-function rmem_map_test_lock(start,__end:QWORD):Boolean;
+function rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
 begin
  rmem_map_lock(@rmap);
-  Result:=rmem_map_test(@rmap,OFF_TO_IDX(start),OFF_TO_IDX(__end));
+  Result:=rmem_map_test(@rmap,OFF_TO_IDX(start),OFF_TO_IDX(__end),mode);
  rmem_map_unlock(@rmap);
 end;
 
@@ -265,7 +268,7 @@ begin
        (v_end < QWORD($fc00000001)) or
        (sdk_version_big_20()=false) ) then
   begin
-   found:=rmem_map_test_lock(phaddr,phaddr+length);
+   found:=rmem_map_test_lock(phaddr,phaddr+length,0);
 
    //
    if (not found) or //not found
@@ -939,6 +942,26 @@ begin
 
 
  Result:=copyout(@qinfo,info,size);
+end;
+
+function obj2dmem(obj:vm_object_t):p_dmem_map; public;
+var
+ dev:p_cdev;
+ dmem_obj:p_dmem_obj;
+begin
+ Result:=nil;
+
+ if (obj=nil) then Exit;
+
+ dev:=obj^.handle;
+
+ if (dev=nil) then Exit;
+
+ dmem_obj:=dev^.si_drv1;
+
+ if (dmem_obj=nil) then Exit;
+
+ Result:=dmem_obj^.dmem;
 end;
 
 function get_dmem_ptr(addr:Pointer):Pointer;

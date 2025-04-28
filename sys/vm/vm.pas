@@ -67,6 +67,7 @@ const
  KERN_RESOURCE_SHORTAGE =6;
  KERN_NOT_RECEIVER      =7;
  KERN_NO_ACCESS         =8;
+ KERN_BUSY              =9;
 
  MAP_SHARED            =$00001;   // share changes
  MAP_PRIVATE           =$00002;   // changes are private

@@ -50,8 +50,14 @@ function  rmem_map_locked(map:p_rmem_map):Boolean; inline;
 
 procedure rmem_map_init(map:p_rmem_map;min,max:QWORD);
 
+function  rmem_map_lookup_entry(
+            map    :p_rmem_map;
+            address:DWORD;
+            entry  :pp_rmem_map_entry):Boolean;
+
 function  rmem_map_test(map:p_rmem_map;
-                        start,__end:DWORD):Boolean;
+                        start,__end:DWORD;
+                        mode:Integer):Boolean;
 
 function  rmem_map_insert(map:p_rmem_map;
                           vaddr:QWORD;
@@ -571,21 +577,35 @@ begin
 end;
 
 function rmem_map_test(map:p_rmem_map;
-                       start,__end:DWORD):Boolean;
+                       start,__end:DWORD;
+                       mode:Integer):Boolean;
 var
  entry:p_rmem_map_entry;
+ prev:DWORD;
 begin
  if not rmem_map_lookup_entry(map,start,@entry) then
  begin
   Exit(False);
  end;
 
+ prev:=entry^.start;
+
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
 
-  if (__end>entry^.start) and (start<entry^.__end) then
+  if (mode=0) then
   begin
-   Exit(False);
+   if (__end>entry^.start) and (start<entry^.__end) then
+   begin
+    Exit(False);
+   end;
+  end else
+  begin
+   if (prev<>entry^.start) then
+   begin
+    Exit(False);
+   end;
+   prev:=entry^.__end;
   end;
 
   entry:=entry^.next;

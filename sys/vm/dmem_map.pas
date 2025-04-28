@@ -1347,7 +1347,7 @@ function dmem_map_set_mtype(map  :p_dmem_map;
                             __end:DWORD;
                             mtype:Integer;
                             prot :Integer;
-                            flags:Integer):Integer;
+                            flags:Integer):Integer; public;
 var
  current,next,entry:p_dmem_map_entry;
  old:DWORD;

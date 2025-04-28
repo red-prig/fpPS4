@@ -1954,7 +1954,7 @@ var
   ),
   (//[379]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_mtypeprotect;
      sy_name:'sys_mtypeprotect'
   ),
   (//[380]

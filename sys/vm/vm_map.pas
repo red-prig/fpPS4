@@ -236,6 +236,12 @@ function  vm_map_protect(map     :vm_map_t;
                          new_prot:vm_prot_t;
                          set_max :Boolean):Integer;
 
+function vm_map_type_protect(map      :vm_map_t;
+                             start    :vm_offset_t;
+                             __end    :vm_offset_t;
+                             new_mtype:Integer;
+                             new_prot :vm_prot_t):Integer;
+
 function  vm_map_madvise(map  :vm_map_t;
                          start:vm_offset_t;
                          __end:vm_offset_t;
@@ -1084,7 +1090,7 @@ begin
 
  if not alias then
  begin
-  if rmem_map_test(rmap,OFF_TO_IDX(offset),OFF_TO_IDX(offset+length)) then
+  if rmem_map_test(rmap,OFF_TO_IDX(offset),OFF_TO_IDX(offset+length),0) then
   begin
    rmem_map_unlock(rmap);
    Exit(KERN_NO_SPACE);
@@ -2044,7 +2050,7 @@ var
  obj:vm_object_t;
  old_prot:vm_prot_t;
 const
- flags_2mb=2;
+ flags_2mb=0;
 begin
  if (start=__end) then
  begin
@@ -2091,15 +2097,14 @@ begin
 
   //flags_2mb:=current^.flags_2mb;
 
-  if ((flags_2mb and 2)<>0) then
+  old_prot:=current^.max_protection and VM_PROT_GPU_ALL;
+
+  if ((flags_2mb and 2) = 0) then
   begin
    old_prot:=current^.max_protection;
-  end else
-  begin
-   old_prot:=current^.max_protection and VM_PROT_GPU_ALL;
   end;
 
-  if ((flags_2mb and 1)<>0) then
+  if ((flags_2mb and 1) <> 0) then
   begin
    old_prot:=0;
   end;
@@ -2190,6 +2195,166 @@ begin
  vm_map_unlock(map);
  Result:=(KERN_SUCCESS);
 end;
+
+////
+
+const
+ SCE_KERNEL_WB_GARLIC =10;
+
+function obj2dmem(obj:vm_object_t):Pointer; external;
+
+function dmem_map_set_mtype(map  :Pointer;
+                            start:DWORD;
+                            __end:DWORD;
+                            mtype:Integer;
+                            prot :Integer;
+                            flags:Integer):Integer; external;
+
+//
+
+function vm_map_type_protect(map      :vm_map_t;
+                             start    :vm_offset_t;
+                             __end    :vm_offset_t;
+                             new_mtype:Integer;
+                             new_prot :vm_prot_t):Integer;
+var
+ rmap:p_rmem_map;
+ dmem:Pointer;
+
+ current,entry:vm_map_entry_t;
+ obj:vm_object_t;
+ old_prot:vm_prot_t;
+ length:vm_offset_t;
+const
+ flags_2mb=0;
+begin
+
+ if (new_mtype=SCE_KERNEL_WB_GARLIC) and ((new_prot and $ee)<>0) then
+ begin
+  Exit(KERN_PROTECTION_FAILURE);
+ end;
+
+ if (start=__end) then
+ begin
+  Exit(KERN_SUCCESS);
+ end;
+
+ vm_map_lock(map);
+
+ VM_MAP_RANGE_CHECK(map, start, __end);
+
+ if (vm_map_lookup_entry(map, start, @entry)) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ obj:=entry^.vm_obj;
+
+ if (obj<>nil) then
+ if (obj^.otype=OBJT_BLOCKPOOL) then
+ begin
+  Assert(false,'TODO:vm_map_type_protect_blockpool');
+  Exit;
+ end;
+
+ //mark:MAP_ENTRY_IN_TRANSITION2
+
+ {
+  * Make a first pass to check for protection violations.
+  }
+ current:=entry;
+ while ((current<>@map^.header) and (current^.start<__end)) do
+ begin
+
+  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
+     (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
+  //flags_2mb:=current^.flags_2mb;
+
+  if ((flags_2mb and 3)<>0) or
+     ((current^.max_protection and new_prot)<>new_prot) then
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_PROTECTION_FAILURE);
+  end;
+
+  obj:=current^.vm_obj;
+
+  if (obj=nil) then
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_FAILURE);
+  end;
+
+  if ((obj^.flags and OBJ_DMEM_EXT)=0) then //only DMEM
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_FAILURE);
+  end;
+
+  rmap:=map^.rmap;
+
+  length:=current^.__end-current^.start;
+
+  rmem_map_lock(rmap);
+
+  if not rmem_map_test(rmap,OFF_TO_IDX(current^.offset),OFF_TO_IDX(current^.offset+length),1) then
+  begin
+   rmem_map_unlock(rmap);
+   vm_map_unlock(map);
+   Exit(KERN_BUSY);
+  end;
+
+  rmem_map_unlock(rmap);
+
+  current:=current^.next;
+ end;
+
+ /////////
+
+ vm_map_clip_start(map, entry, start);
+
+ current:=entry;
+ while ((current<>@map^.header) and (current^.start<__end)) do
+ begin
+  vm_map_clip_end(map, current, __end);
+
+  old_prot:=current^.protection;
+  current^.protection:=new_prot;
+
+  //unmark:MAP_ENTRY_IN_TRANSITION2
+
+  length:=current^.__end-current^.start;
+
+  obj:=current^.vm_obj;
+
+  dmem:=obj2dmem(obj);
+
+  //ignore error?
+  dmem_map_set_mtype(dmem,
+                     OFF_TO_IDX(current^.offset),
+                     OFF_TO_IDX(current^.offset+length),
+                     new_mtype,
+                     new_prot,
+                     0);
+
+  vm_map_protect_internal(map,current,old_prot);
+
+  vm_map_simplify_entry(map, current);
+  current:=current^.next;
+ end;
+
+ vm_map_unlock(map);
+ Result:=(KERN_SUCCESS);
+end;
+
 
 {
  * vm_map_madvise:

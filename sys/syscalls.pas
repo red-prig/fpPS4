@@ -142,6 +142,7 @@ function  getresgid(rgid,egid,sgid:PInteger):Integer;
 function  kqueue():Integer;
 function  kevent(fd:Integer;changelist:Pointer;nchanges:Integer;eventlist:Pointer;nevents:Integer;timeout:Pointer):Integer;
 function  nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer;
+function  mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
 function  lchflags(path:PChar;flags:Integer):Integer;
 function  uuidgen(store:Pointer;count:Integer):Integer;
 function  getfsstat(buf:Pointer;bufsize:QWORD;flags:Integer):Integer;
@@ -1211,6 +1212,13 @@ end;
 function nmount(iovp:Pointer;iovcnt:DWORD;flags:QWORD):Integer; assembler; nostackframe;
 asm
  movq  $378,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer; assembler; nostackframe;
+asm
+ movq  $379,%rax
  call  fast_syscall
  jmp   cerror
 end;
