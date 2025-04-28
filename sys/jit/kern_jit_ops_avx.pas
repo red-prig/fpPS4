@@ -1155,6 +1155,9 @@ begin
  jit_cbs[OPPv,OPucomi,OPSx_ss]:=@op_avx2_reg_mem_ro;
  jit_cbs[OPPv,OPucomi,OPSx_sd]:=@op_avx2_reg_mem_ro;
 
+ jit_cbs[OPPnone,OPvtest,OPSx_ps]:=@op_avx2_reg_mem_ro;
+ jit_cbs[OPPnone,OPvtest,OPSx_pd]:=@op_avx2_reg_mem_ro;
+
  jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
 
  jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_avx3_gen;
