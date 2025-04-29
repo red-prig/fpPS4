@@ -34,6 +34,12 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudioInOpenEx(userID,busType,index,unknow,len,freq,param:Integer):Integer;
+begin
+ //Result:=SCE_AUDIO_IN_ERROR_PORT_FULL;
+ Result:=0;
+end;
+
 function ps4_sceAudioInInput(handle:Integer;dest:Pointer):Integer;
 begin
  Result:=0;
@@ -44,6 +50,26 @@ begin
  Result:=SCE_AUDIO_IN_SILENT_STATE_DEVICE_NONE;
 end;
 
+type
+ p_audioin_status=^t_audioin_status;
+ t_audioin_status=packed record
+  field0_0x0 :Integer;
+  field1_0x4 :Integer;
+  field2_0x8 :qword;
+  field3_0x10:Integer;
+  field4_0x14:Integer;
+  field5_0x18:Integer;
+ end;
+
+function ps4_sceAudioInGetHandleStatusInfo(handle:Integer;p_status:p_audioin_status):Integer;
+begin
+ if (p_status<>nil) then
+ begin
+  p_status^:=Default(t_audioin_status);
+ end;
+ Result:=0;
+end;
+
 function Load_libSceAudioIn(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -52,8 +78,10 @@ begin
 
  lib:=Result^.add_lib('libSceAudioIn');
  lib.set_proc($E4D13C4A373B542F,@ps4_sceAudioInOpen);
+ lib.set_proc($F83634ECDC096F4B,@ps4_sceAudioInOpenEx);
  lib.set_proc($2E8CC4394F3E6A73,@ps4_sceAudioInInput);
  lib.set_proc($068844010EC39541,@ps4_sceAudioInGetSilentState);
+ lib.set_proc($3496A6D7F17B94D6,@ps4_sceAudioInGetHandleStatusInfo);
 end;
 
 var

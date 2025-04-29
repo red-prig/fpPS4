@@ -527,6 +527,12 @@ begin
  }
 end;
 
+function ps4_sceAudioOutOpenEx(userId,_type,index,unknow:Integer;
+                               len,freq,param:DWORD):Integer;
+begin
+ Result:=ps4_sceAudioOutOpen(userId,_type,index,len,freq,param);
+end;
+
 function _out_close(port_id:Integer):Integer;
 begin
  if (g_port_table[port_id]=nil) then
@@ -1366,6 +1372,7 @@ begin
  lib:=Result^.add_lib('libSceAudioOut');
  lib.set_proc($25F10F5D5C6116A0,@ps4_sceAudioOutInit);
  lib.set_proc($7A436FB13DB6AEC6,@ps4_sceAudioOutOpen);
+ lib.set_proc($A8BA522BBE655C8E,@ps4_sceAudioOutOpenEx);
  lib.set_proc($B35FFFB84F66045C,@ps4_sceAudioOutClose);
  lib.set_proc($1AB43DB3822B35A4,@ps4_sceAudioOutGetPortState);
  lib.set_proc($6FEB8057CF489711,@ps4_sceAudioOutSetVolume);
