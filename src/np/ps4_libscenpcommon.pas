@@ -552,6 +552,7 @@ var
  ps4_sceLibcMspaceCreate     :function(name:PChar;base:Pointer;capacity:size_t;flag:Integer):pSceLibcMspace;
  ps4_sceLibcMspaceDestroy    :function(msp:pSceLibcMspace):Integer;
  ps4_sceLibcMspaceMalloc     :function(msp:pSceLibcMspace;size:size_t):Pointer;
+ ps4_sceLibcMspaceFree       :function(msp:pSceLibcMspace;ptr:Pointer):Integer;
  ps4_sceLibcMspaceMallocStats:function(msp:pSceLibcMspace;mmsize:pSceLibcMallocManagedSize):Integer;
 
 function ps4_sceNpHeapInit(heap:pSceNpHeap;base:Pointer;capacity:size_t;name:PChar):Integer;
@@ -576,6 +577,14 @@ begin
  if (heap^.mspace<>nil) then
  begin
   Result:=ps4_sceLibcMspaceMalloc(heap^.mspace,size);
+ end;
+end;
+
+procedure ps4__sceNpHeapFree(heap:pSceNpHeap;ptr:Pointer);
+begin
+ if (ptr<>nil) and (heap^.mspace<>nil) then
+ begin
+  ps4_sceLibcMspaceFree(heap^.mspace,ptr);
  end;
 end;
 
@@ -778,6 +787,26 @@ begin
  end;
 end;
 
+//sce::np::Mutex::Lock(Mutex *this)
+procedure ps4__ZN3sce2np5Mutex4LockEv(this:p_Mutex);
+var
+ err:Integer;
+begin
+ Assert(this^.init<>0,'IsInit()');
+ err:=ps4_sceNpMutexLock(@this^.mutex);
+ Assert(err=0,'Mutex lock failed.');
+end;
+
+//sce::np::Mutex::Unlock(Mutex *this)
+procedure ps4__ZN3sce2np5Mutex6UnlockEv(this:p_Mutex);
+var
+ err:Integer;
+begin
+ Assert(this^.init<>0,'IsInit()');
+ err:=ps4_sceNpMutexUnlock(@this^.mutex);
+ Assert(err=0,'Mutex unlock failed.');
+end;
+
 function Load_libSceNpCommon(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -804,6 +833,7 @@ begin
  //
  lib.set_proc($07EC86217D7E0532,@ps4_sceNpHeapInit);
  lib.set_proc($9305B9A9D75FF8BA,@ps4__sceNpHeapMalloc);
+ lib.set_proc($A75BEFA4A1915DEE,@ps4__sceNpHeapFree);
  lib.set_proc($DA3747A0FA52F96D,@ps4_sceNpHeapGetStat);
  lib.set_proc($C15767EFC1CA737D,@ps4_sceNpHeapDestroy);
  //
@@ -818,6 +848,8 @@ begin
  //
  lib.set_proc($3B502F950537DE92,@ps4__ZN3sce2np5MutexC1Ev);
  lib.set_proc($69334E97D101E15E,@ps4__ZN3sce2np5Mutex4InitEPKcj);
+ lib.set_proc($54CF825D35B817FB,@ps4__ZN3sce2np5Mutex4LockEv);
+ lib.set_proc($798807216C741DCA,@ps4__ZN3sce2np5Mutex6UnlockEv);
  //
  lib.add_data(@global_evf_cbs    ,SizeOf(t_obj_cbs));
  lib.add_func(@init_evf_cbs.clear,@ps4__ZN3sce2np9EventFlagD2Ev);
@@ -855,6 +887,7 @@ begin
  lib.set_proc($FE19F5B5C547AB94,@ps4_sceLibcMspaceCreate);
  lib.set_proc($5BA4A25528820ED2,@ps4_sceLibcMspaceDestroy);
  lib.set_proc($3898E6FD03881E52,@ps4_sceLibcMspaceMalloc);
+ lib.set_proc($5656BF67E797971A,@ps4_sceLibcMspaceFree);
  lib.set_proc($99F1DD25322F86EA,@ps4_sceLibcMspaceMallocStats);
 end;
 

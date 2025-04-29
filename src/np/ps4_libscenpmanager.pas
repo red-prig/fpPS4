@@ -553,6 +553,179 @@ begin
  Result:=0;
 end;
 
+//
+
+function ps4_sceNpManagerIntCreateRequest():Integer;
+begin
+ Result:=33;
+end;
+
+function ps4_sceNpManagerIntDeleteRequest(req:Integer):Integer;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpManagerIntSetTimeout(req           :Integer;
+                                       resolveRetry  :DWORD;
+                                       resolveTimeout:DWORD;
+                                       connTimeout   :DWORD;
+                                       sendTimeout   :DWORD;
+                                       recvTimeout   :DWORD
+                                      ):Integer;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpManagerIntCheckNpAvailability(req    :Integer;
+                                                userId :Integer;
+                                                is_sync:Boolean):Integer;
+begin
+ //PS: sceNpCheckNpReachability
+ Result:=SCE_NP_ERROR_SIGNED_OUT;
+end;
+
+//+JmXFo3Jh6g
+function ps4_JmXFo3Jh6g(SdkVersion,error:DWORD):DWORD;
+const
+ error_table:array[0..20] of DWORD=(
+  $80552A05,
+  $80552A08,
+  $80552A0A,
+  $80552A10,
+  $80552A11,
+  $80552A12,
+  $80552A13,
+  $80552A14,
+  $80552A15,
+  $80552A16,
+  $80552A17,
+  $80552A18,
+  $80552A19,
+  $80552A1A,
+  $80552A1B,
+  $80552A1C,
+  $80552A1D,
+  $80552A80,
+  $80552A81,
+  $80552A82,
+  $80552A83
+);
+var
+ id:Integer;
+begin
+  if (SdkVersion < $1500000) then
+  begin
+    if (Integer(error) < -$7d1fefff) then
+    begin
+      case (error) of
+       $82e00001:
+        id := 10;
+       $82e00002,
+       $82e00003,
+       $82e00004,
+       $82e00005,
+       $82e00006,
+       $82e00007,
+       $82e00008,
+       $82e00009,
+       $82e0000a,
+       $82e0000b,
+       $82e0000c,
+       $82e0000d,
+       $82e0000e,
+       $82e0000f,
+       $82e00010,
+       $82e00011,
+       $82e00013,
+       $82e00015,
+       $82e00016,
+       $82e00017,
+       $82e00018,
+       $82e00019,
+       $82e0001a:
+        Exit(error);
+       $82e00012:
+        id := 16;
+       $82e00014:
+        id := 3;
+       $82e0001b:
+        id := 11;
+       $82e0001c:
+        id := 4;
+       $82e0001d:
+        id := 5;
+      else
+        if (error = $82e00064) then
+        begin
+          id := 12;
+        end else
+        begin
+          if (error <> $82e00067) then
+          begin
+            Exit(error);
+          end;
+          id := 13;
+        end;
+      end;
+    end else
+    if (Integer(error) < -$7d1efe6f) then
+    begin
+      case (error) of
+       $82e01001:
+        id := 6;
+       $82e01002:
+        id := 7;
+       $82e01003:
+        id := 8;
+       $82e01004:
+        id := 9;
+       $82e01038:
+        id := 2;
+       $82e01039:
+        id := 0;
+       $82e01042:
+        id := 14;
+       $82e01045:
+        id := 15;
+       $82e0104d:
+        id := 1;
+       else
+        Exit(error);
+      end;
+    end else
+    if (Integer(error) < -$7d1efe0c) then
+    begin
+      if (error = $82e10191) then
+      begin
+        id := 19;
+      end else
+      begin
+        if (error <> $82e1019a) then
+        begin
+          Exit(error);
+        end;
+        id := 17;
+      end;
+    end else
+    if (error = $82e101f4) then
+    begin
+      id := 20;
+    end else
+    begin
+      if (error <> $82e101f7) then
+      begin
+        Exit(error);
+      end;
+      id := 18;
+    end;
+    error:=error_table[id];
+  end;
+
+  Exit(error);
+end;
+
+//
+
 function Load_libSceNpManager(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -607,6 +780,12 @@ begin
  lib.set_proc($F9A9EE4B1D9ABC74,@ps4_sceNpInGameMessageDeleteHandle);
  lib.set_proc($2242FAD85329229A,@ps4_sceNpInGameMessagePrepareA);
  lib.set_proc($3D00C5C5C9EAC6DC,@ps4_sceNpInGameMessageSendDataA);
+
+ lib.set_proc($C5993E41C8AFAC51,@ps4_sceNpManagerIntCreateRequest);
+ lib.set_proc($1E7782F92A5E2F07,@ps4_sceNpManagerIntDeleteRequest);
+ lib.set_proc($3D9873FAF8E9D823,@ps4_sceNpManagerIntSetTimeout);
+ lib.set_proc($9B826253C9363F22,@ps4_sceNpManagerIntCheckNpAvailability);
+ lib.set_proc($F89997168DC987A8,@ps4_JmXFo3Jh6g);
 
  lib:=Result^.add_lib('libSceNpManagerForToolkit');
  lib.set_proc($D1CEC76D744A52DE,@ps4_sceNpRegisterStateCallbackForToolkit);
