@@ -417,24 +417,39 @@ begin
  end;
 end;
 
+procedure insert_to_free_list(node:P_PRIV_FD); inline;
+begin
+ if (node^.efree.tqe_next=nil) and
+    (node^.efree.tqe_prev=nil) then
+ begin
+  TAILQ_INSERT_TAIL(@PRIV_FD_FREE,node,@node^.efree);
+ end;
+end;
+
+procedure delete_from_free_list(node:P_PRIV_FD); inline;
+begin
+ if (node^.efree.tqe_next<>nil) or
+    (node^.efree.tqe_prev<>nil) then
+ begin
+  TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
+  node^.efree:=Default(TAILQ_ENTRY);
+ end;
+end;
+
 procedure on_free_priv(obj:p_vm_nt_file_obj);
 var
  node:P_PRIV_FD;
 begin
  node:=POINTER(PTRUINT(obj)-PTRUINT(@P_PRIV_FD(nil)^.obj));
 
- if (node^.efree.tqe_next<>nil) and
-    (node^.efree.tqe_prev<>nil) then
- begin
-  TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
- end;
+ delete_from_free_list(node);
 
  TAILQ_REMOVE(@PRIV_FD_LIST,node,@node^.elist);
 
  FreeMem(node);
 end;
 
-function find_free_priv(size:DWORD):P_PRIV_FD;
+function find_from_free_priv(size:DWORD):P_PRIV_FD;
 var
  node:P_PRIV_FD;
 begin
@@ -466,7 +481,7 @@ begin
 
  if (size<MAX_PRIV_SIZE) then
  begin
-  node:=find_free_priv(size);
+  node:=find_from_free_priv(size);
  end else
  begin
   node:=nil;
@@ -480,8 +495,8 @@ begin
 
   if (node^.pos=node^.size) then
   begin
-   //delete with free list
-   TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
+   //delete from free list
+   delete_from_free_list(node);
   end;
 
  end else
@@ -495,8 +510,8 @@ begin
   node^.obj.free :=@on_free_priv;
   node^.obj.flags:=NT_FILE_FREE;
   node^.obj.maxp :=VM_RW;
-  node^.size:=MAX_PRIV_SIZE;
-  node^.pos :=size; //prealloc
+  node^.size     :=MAX_PRIV_SIZE;
+  node^.pos      :=size; //prealloc
 
   //insert to list
   TAILQ_INSERT_TAIL(@PRIV_FD_LIST,node,@node^.elist);
@@ -504,7 +519,7 @@ begin
   if (node^.pos<>node^.size) then
   begin
    //insert with free list
-   TAILQ_INSERT_TAIL(@PRIV_FD_FREE,node,@node^.efree);
+   insert_to_free_list(node);
   end;
 
   R:=md_memfd_create(node^.obj.hfile,MAX_PRIV_SIZE,VM_RW);
