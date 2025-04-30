@@ -1122,7 +1122,7 @@ begin
 
  if (cnp^.cn_namelen=1) and (pname^='.') then
  begin
-  if ((flags and ISLASTCN) and nameiop<>LOOKUP) then
+  if ((flags and ISLASTCN)<>0) and (nameiop<>LOOKUP) then
   begin
    Exit(EINVAL);
   end;

@@ -9,6 +9,9 @@ uses
  mqueue,
  vmount;
 
+const
+ MNT_RDONLY=vmount.MNT_RDONLY;
+
 procedure vfs_mountroot();
 function  vfs_mount_path   (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 function  vfs_mount_mkdir  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;

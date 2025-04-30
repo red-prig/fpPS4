@@ -461,6 +461,14 @@ begin
   Exit(ENOTDIR);
  end;
 
+ //If read-only and op is not LOOKUP, will return EROFS.
+ if ((flags and ISLASTCN)<>0) and
+    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    (nameiop <> LOOKUP) then
+ begin
+  Exit(EROFS);
+ end;
+
  if (((flags and ISDOTDOT)<>0) and ((dvp^.v_vflag and VV_ROOT)<>0)) then
  begin
   Exit(EIO);
@@ -474,7 +482,7 @@ begin
 
  if (cnp^.cn_namelen=1) and (pname^='.') then
  begin
-  if ((flags and ISLASTCN) and nameiop<>LOOKUP) then
+  if ((flags and ISLASTCN)<>0) and (nameiop<>LOOKUP) then
   begin
    Exit(EINVAL);
   end;
@@ -571,13 +579,28 @@ function ufs_access(ap:p_vop_access_args):Integer;
 var
  vp:p_vnode;
  de:p_ufs_dirent;
+ accmode:accmode_t;
  error:Integer;
 begin
  vp:=ap^.a_vp;
 
  de:=vp^.v_data;
 
- error:=vaccess(vp^.v_type, de^.ufs_mode, de^.ufs_uid, de^.ufs_gid, ap^.a_accmode, nil);
+ accmode:=ap^.a_accmode;
+
+ if ((accmode and VWRITE)<>0) and
+    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+ begin
+  case vp^.v_type of
+   VREG,
+   VDIR,
+   VLNK:
+   Exit(EROFS);
+  else;
+  end;
+ end;
+
+ error:=vaccess(vp^.v_type, de^.ufs_mode, de^.ufs_uid, de^.ufs_gid, accmode, nil);
 
  if (error=0) then
  begin
@@ -658,6 +681,19 @@ var
 begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
+
+ if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    (
+     (vap^.va_flags       <>VNOVAL) or
+     (vap^.va_uid         <>VNOVAL) or
+     (vap^.va_gid         <>VNOVAL) or
+     (vap^.va_atime.tv_sec<>VNOVAL) or
+     (vap^.va_mtime.tv_sec<>VNOVAL) or
+     (vap^.va_mode        <>VNOVAL)
+    ) then
+ begin
+  Exit(EROFS);
+ end;
 
  if (vap^.va_type     <>VNON) or
     (vap^.va_nlink    <>VNOVAL) or

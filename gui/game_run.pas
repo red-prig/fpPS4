@@ -248,13 +248,13 @@ begin
  err:=vfs_mount_mkdir('ufs','/savedata0'  ,'savedata',nil,0);
 
                        //fs  guest     host
- err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,0);
+ err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,MNT_RDONLY);
  if (err<>0) then
  begin
   print_error_td('error mount "'+Item.FMountList.app0+'" to "/app0" code='+IntToStr(err));
  end;
 
- err:=vfs_mount_mkdir('ufs','/system',pchar(Item.FMountList.system),nil,0);
+ err:=vfs_mount_mkdir('ufs','/system',pchar(Item.FMountList.system),nil,MNT_RDONLY);
  if (err<>0) then
  begin
   print_error_td('error mount "'+Item.FMountList.system+'" to "/system" code='+IntToStr(err));

@@ -345,14 +345,15 @@ begin
  vp:=ap^.a_vp;
  vap:=ap^.a_vap;
 
- if ((vap^.va_flags       <>VNOVAL) or
+ if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    (
+     (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or
      (vap^.va_gid         <>VNOVAL) or
      (vap^.va_atime.tv_sec<>VNOVAL) or
      (vap^.va_mtime.tv_sec<>VNOVAL) or
      (vap^.va_mode        <>VNOVAL)
-    ) and
-    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+    ) then
  begin
   Exit(EROFS);
  end;
@@ -370,7 +371,9 @@ begin
    VFIFO:
     begin
      if (vap^.va_flags<>VNOVAL) then
+     begin
       Exit(EOPNOTSUPP);
+     end;
      Exit(0);
     end;
    else
@@ -380,7 +383,9 @@ begin
       * mounted read-only.
       }
      if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     begin
       Exit(EROFS);
+     end;
     end;
   end;
  end;
@@ -434,7 +439,9 @@ begin
    VREG:
     begin
      if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     begin
       Exit(EROFS);
+     end;
     end;
    else;
   end;
