@@ -297,11 +297,13 @@ var
   VK_EXT_image_view_min_lod              :Boolean;
   VK_EXT_depth_clip_control              :Boolean;
   VK_EXT_depth_clip_enable               :Boolean;
+  VK_EXT_primitive_topology_list_restart :Boolean;
 
   VK_AMD_device_coherent_memory          :Boolean;
 
   VK_EXT_memory_budget                   :Boolean;
   VK_EXT_memory_priority                 :Boolean;
+  VK_EXT_device_fault                    :Boolean;
   VK_EXT_pageable_device_local_memory    :Boolean;
 
   DeviceFeature:TVkPhysicalDeviceFeatures;
@@ -317,6 +319,9 @@ var
   uniformAndStorageBuffer16BitAccess:TVkBool32;
   storagePushConstant16             :TVkBool32;
   storageInputOutput16              :TVkBool32;
+
+  primitiveTopologyListRestart      :TVkBool32;
+  primitiveTopologyPatchListRestart :TVkBool32;
 
   workgroupMemoryExplicitLayout8BitAccess :TVkBool32;
   workgroupMemoryExplicitLayout16BitAccess:TVkBool32;
@@ -507,11 +512,13 @@ begin
     VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME              :limits.VK_EXT_image_view_min_lod              :=True;
     VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME              :limits.VK_EXT_depth_clip_control              :=True;
     VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME               :limits.VK_EXT_depth_clip_enable               :=True;
+    VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME :limits.VK_EXT_primitive_topology_list_restart :=True;
 
     VK_AMD_DEVICE_COHERENT_MEMORY_EXTENSION_NAME          :limits.VK_AMD_device_coherent_memory          :=True;
 
     VK_EXT_MEMORY_BUDGET_EXTENSION_NAME                   :limits.VK_EXT_memory_budget                   :=True;
     VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME                 :limits.VK_EXT_memory_priority                 :=True;
+    VK_EXT_DEVICE_FAULT_EXTENSION_NAME                    :limits.VK_EXT_device_fault                    :=True;
     VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME    :limits.VK_EXT_pageable_device_local_memory    :=True;
    end;
   end;
@@ -1010,6 +1017,7 @@ var
  F16_8     :TVkPhysicalDeviceShaderFloat16Int8Features;
  FSF_8     :TVkPhysicalDevice8BitStorageFeatures;
  FSF16     :TVkPhysicalDevice16BitStorageFeatures;
+ FPTL      :TVkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT;
  FWMEL     :TVkPhysicalDeviceWorkgroupMemoryExplicitLayoutFeaturesKHR;
  FRF       :TVkPhysicalDeviceRobustness2FeaturesEXT;
  FDI       :TVkPhysicalDeviceDescriptorIndexingFeatures;
@@ -1097,7 +1105,10 @@ begin
   FSF_8.pNext:=@FSF16;
 
   FSF16.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
-  FSF16.pNext:=@FWMEL;
+  FSF16.pNext:=@FPTL;
+
+  FPTL.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT;
+  FPTL.pNext:=@FWMEL;
 
   FWMEL.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_FEATURES_KHR;
   FWMEL.pNext:=@FRF;
@@ -1127,6 +1138,9 @@ begin
  limits.uniformAndStorageBuffer16BitAccess      :=FSF16.uniformAndStorageBuffer16BitAccess;
  limits.storagePushConstant16                   :=FSF16.storagePushConstant16;
  limits.storageInputOutput16                    :=FSF16.storageInputOutput16;
+
+ limits.primitiveTopologyListRestart            :=FPTL.primitiveTopologyListRestart;
+ limits.primitiveTopologyPatchListRestart       :=FPTL.primitiveTopologyPatchListRestart;
 
  limits.workgroupMemoryExplicitLayout8BitAccess :=FWMEL.workgroupMemoryExplicitLayout8BitAccess;
  limits.workgroupMemoryExplicitLayout16BitAccess:=FWMEL.workgroupMemoryExplicitLayout16BitAccess;
@@ -1457,7 +1471,7 @@ begin
  System.InitCriticalSection(FLock);
 
  DeviceFeature:=limits.DeviceFeature;
- DeviceFeature.robustBufferAccess:=VK_FALSE;
+ //DeviceFeature.robustBufferAccess:=VK_FALSE;
 
  DeviceInfo:=Default(TVkDeviceCreateInfo);
  DeviceInfo.sType:=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1949,6 +1963,7 @@ var
  FIVML:TVkPhysicalDeviceImageViewMinLodFeaturesEXT;
  FDCC :TVkPhysicalDeviceDepthClipControlFeaturesEXT;
  FDCE :TVkPhysicalDeviceDepthClipEnableFeaturesEXT;
+ FPTL :TVkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT;
 
  FPDLM:TVkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT;
 
@@ -2026,6 +2041,11 @@ begin
  if limits.VK_EXT_memory_priority then
  begin
   DeviceInfo.add_ext(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+ end;
+
+ if limits.VK_EXT_device_fault then
+ begin
+  DeviceInfo.add_ext(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
  end;
 
  if limits.VK_EXT_pageable_device_local_memory then
@@ -2180,8 +2200,9 @@ begin
   DeviceInfo.add_ext(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
 
   FRF:=Default(TVkPhysicalDeviceRobustness2FeaturesEXT);
-  FRF.sType         :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-  FRF.nullDescriptor:=limits.nullDescriptor;
+  FRF.sType              :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+  FRF.robustBufferAccess2:=limits.robustBufferAccess2;
+  FRF.nullDescriptor     :=limits.nullDescriptor;
 
   DeviceInfo.add_feature(@FRF);
  end;
@@ -2202,7 +2223,7 @@ begin
   DeviceInfo.add_ext(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
 
   FDCC:=Default(TVkPhysicalDeviceDepthClipControlFeaturesEXT);
-  FDCC.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT;
+  FDCC.sType           :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_CONTROL_FEATURES_EXT;
   FDCC.depthClipControl:=VK_TRUE;
 
   DeviceInfo.add_feature(@FDCC);
@@ -2213,10 +2234,22 @@ begin
   DeviceInfo.add_ext(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
 
   FDCE:=Default(TVkPhysicalDeviceDepthClipEnableFeaturesEXT);
-  FDCE.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
+  FDCE.sType          :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT;
   FDCE.depthClipEnable:=VK_TRUE;
 
   DeviceInfo.add_feature(@FDCE);
+ end;
+
+ if limits.VK_EXT_primitive_topology_list_restart then
+ begin
+  DeviceInfo.add_ext(VK_EXT_PRIMITIVE_TOPOLOGY_LIST_RESTART_EXTENSION_NAME);
+
+  FPTL:=Default(TVkPhysicalDevicePrimitiveTopologyListRestartFeaturesEXT);
+  FPTL.sType                            :=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVE_TOPOLOGY_LIST_RESTART_FEATURES_EXT;
+  FPTL.primitiveTopologyListRestart     :=limits.primitiveTopologyListRestart;
+  FPTL.primitiveTopologyPatchListRestart:=limits.primitiveTopologyPatchListRestart;
+
+  DeviceInfo.add_feature(@FPTL);
  end;
 
  Device:=TvDevice.Create(DeviceInfo);
