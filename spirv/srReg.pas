@@ -124,6 +124,7 @@ type
    FBits   :TsrBitKey;
    procedure set_current(c:TsrRegNode);
   public
+   FPrivate:TsrNode;
    property  Emit    :TCustomEmit   read FEmit;
    property  current :TsrRegNode    read FCurrent write set_current;
    property  Name    :TString7      read FName;
@@ -137,6 +138,7 @@ type
    function  isBoolOnly:Boolean;
    function  isScalar:Boolean;
    function  iUnattach:Boolean;
+   function  _New(rtype:TsrDataType;pLine:TsrRegNode):TsrRegNode;
    function  New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
  end;
 
@@ -1046,7 +1048,7 @@ begin
  Result:=(FBits.Category=cUnattach);
 end;
 
-function TsrRegSlot.New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
+function TsrRegSlot._New(rtype:TsrDataType;pLine:TsrRegNode):TsrRegNode;
 var
  node:TsrRegNode;
 begin
@@ -1059,8 +1061,13 @@ begin
  node.dtype:=rtype;
  node.CustomLine:=pLine;
  Result:=node;
+end;
+
+function TsrRegSlot.New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
+begin
+ Result:=_New(rtype,pLine);
  //update
- current:=node;
+ current:=Result;
 end;
 
 //

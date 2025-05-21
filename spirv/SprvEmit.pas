@@ -59,6 +59,8 @@ type
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
                      RSRC2:TCOMPUTE_PGM_RSRC2);
 
+  Procedure   cs_set_initial_exec;
+
   Procedure   SET_NUM_THREADS(NTX:TCOMPUTE_NUM_THREAD_X;
                               NTY:TCOMPUTE_NUM_THREAD_Y;
                               NTZ:TCOMPUTE_NUM_THREAD_Z);
@@ -706,6 +708,53 @@ begin
  AddCapability(Capability.Shader);
 end;
 
+Procedure TSprvEmit.cs_set_initial_exec;
+var
+ total:PtrUint;
+ val:PtrUint;
+
+ vec:TsrRegNode;
+ src:array[0..2] of TsrRegNode;
+begin
+ if not Config.UseExtendedEXECMask then Exit;
+
+ total:=FLocalSize.x*FLocalSize.y*FLocalSize.z;
+ val:=not PtrUint(0);
+
+ if (total<64) then
+ begin
+  val:=(PtrUint(1) shl total)-1;
+ end else
+ if ((total mod 64)=0) then
+ begin
+  val:=not PtrUint(0);
+ end else
+ if (total>64) then
+ begin
+  Assert(false,'TODO: big unaligned total LocalSize');
+ end;
+
+ SetConst_q(get_exec0,dtUnknow,val and (not DWORD(0)));
+ SetConst_q(get_exec1,dtUnknow,val shr 32);
+
+ vec:=AddInput(@RegsStory.FUnattach,dtVec3u,itThreadId,0);
+
+ src[0]:=RegsStory.FUnattach.New(dtUint32);
+ src[1]:=RegsStory.FUnattach.New(dtUint32);
+ src[2]:=RegsStory.FUnattach.New(dtUint32);
+
+ OpExtract(init_line,src[0],vec,0);
+ OpExtract(init_line,src[1],vec,1);
+ OpExtract(init_line,src[2],vec,2);
+
+ FThread_id:=OpIMulTo(OpIMulTo(src[0],src[1]),src[2]);
+
+ if (total>64) then
+ begin
+  FThread_id:=OpAndTo(FThread_id,63);
+ end;
+end;
+
 Procedure TSprvEmit.SET_NUM_THREADS(NTX:TCOMPUTE_NUM_THREAD_X;
                                     NTY:TCOMPUTE_NUM_THREAD_Y;
                                     NTZ:TCOMPUTE_NUM_THREAD_Z);
@@ -721,6 +770,8 @@ begin
  if (FLocalSize.x=0) then FLocalSize.x:=1;
  if (FLocalSize.y=0) then FLocalSize.y:=1;
  if (FLocalSize.z=0) then FLocalSize.z:=1;
+ //
+ cs_set_initial_exec;
 end;
 
 Procedure TSprvEmit.InitCustomGs();

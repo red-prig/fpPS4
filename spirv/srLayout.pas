@@ -926,7 +926,7 @@ var
  Writer:TseWriter;
  pHeap :PsrCodeHeap;
  desc  :TsrDescriptor;
- block :TsrCodeBlock;
+ pCode :TsrCodeRegion;
  imm   :TsrDataImm;
  PV    :PVSharpResource4;
  PS    :PTSharpResource4;
@@ -1020,11 +1020,11 @@ begin
    rtFunPtr2:
     begin
      //func
-     block:=pHeap^.FindByPtr(Writer.node.GetData);
-     Assert(block<>nil);
+     pCode:=pHeap^.FindByPtr(Writer.node.GetData);
+     Assert(pCode<>nil);
      //
-     Writer.HexOpt('LEN',block.Size);
-     Writer.ImmOpt('IMM',block.DMem,block.Size);
+     Writer.HexOpt('LEN',pCode.Size);
+     Writer.ImmOpt('IMM',pCode.DMem,pCode.Size);
     end;
    else;
   end;
@@ -1215,7 +1215,7 @@ begin
      if (dst<>nil) then
      begin
       old:=dst.dtype;
-      if (old<>dtUnknow) and (not CompareType(rtype,old)) then
+      if (old<>dtUnknow) and (rtype<>old) then
       begin
        //OpLoad -> new -> dst
        dst:=pBitcastList^.FetchDstr(rtype,dst);

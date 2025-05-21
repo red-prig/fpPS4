@@ -193,25 +193,19 @@ begin
  lvl_0.size  :=stride;
  lvl_0.offset:=offset;
 
- //region_addr = (OFFSET + vbindex) & alignment
  if vbindex.is_const then
  begin
+  //#static
+  //i = #(OFFSET + vbindex) & alignment
+
   lvl_0.offset:=lvl_0.offset + vbindex.AsConst.GetData;
 
-  lvl_0.offset:=lvl_0.offset and (not (stride-1));
+  lvl_0.offset:=lvl_0.offset and (not (stride-1)); //4,8
 
   Result:=pLayout.Fetch(@lvl_0,nil,cflags(atomic));
  end else
- if ((lvl_0.offset mod stride)=0) then
  begin
-  //i = OFFSET + (vbindex / stride)
-
-  lvl_1.pIndex:=OpIDivTo(vbindex,stride);
-  lvl_1.stride:=stride;
-
-  Result:=pLayout.Fetch(@lvl_0,@lvl_1,cflags(atomic));
- end else
- begin
+  //#dynamic
   //i = (vbindex + OFFSET) / stride
 
   lvl_1.pIndex:=OpIAddTo(vbindex,lvl_0.offset);
@@ -236,14 +230,14 @@ begin
 
  if (rtype.BitSize=64) then
  begin
-  vsrc:=fetch_vdst8_64(FSPI.DS.DATA0,dtUint64);
+  vsrc:=fetch_vdst8_64(FSPI.DS.DATA[0],dtUint64);
  end else
  if (rtype.BitSize=32) then
  begin
-  vsrc:=fetch_vdst8(FSPI.DS.DATA0,rtype);
+  vsrc:=fetch_vdst8(FSPI.DS.DATA[0],rtype);
  end else
  begin
-  vsrc:=fetch_vdst8(FSPI.DS.DATA0,dtUnknow);
+  vsrc:=fetch_vdst8(FSPI.DS.DATA[0],dtUnknow);
  end;
 
  case rtype of
@@ -260,10 +254,10 @@ end;
 //vbindex, vsrc0[], vsrc1[] [OFFSET0:<0..255>] [OFFSET1:<0..255>] [GDS:< 0|1>]
 procedure TEmit_DS.emit_DS_WRITE2(rtype:TsrDataType;extra_stride:Word);
 var
- pChain:array[0..1] of TsrChain;
+ pChain:array[0..3] of TsrChain;
 
  vbindex:TsrRegNode;
- vsrc:array[0..1] of TsrRegNode;
+ vsrc:array[0..3] of TsrRegNode;
 
  i,hi:Byte;
 begin
@@ -273,15 +267,41 @@ begin
 
  if (rtype.BitSize=64) then
  begin
+
   for i:=0 to hi do
   begin
-   vsrc[i]:=fetch_vdst8_64(PBYTE(@FSPI.DS.DATA0)[i],dtUint64);
+   vsrc[i*2+0]:=fetch_vdst8(FSPI.DS.DATA[i]+0,dtUint32);
+   vsrc[i*2+1]:=fetch_vdst8(FSPI.DS.DATA[i]+1,dtUint32);
   end;
+
+  for i:=0 to hi do
+  begin
+   pChain[i*2+0]:=fetch_ds_chain(vbindex,dtUint32,dtUnknow,FSPI.DS.OFFSET[i]*(8)*extra_stride+0);
+   pChain[i*2+1]:=fetch_ds_chain(vbindex,dtUint32,dtUnknow,FSPI.DS.OFFSET[i]*(8)*extra_stride+4);
+  end;
+
+  for i:=0 to hi do
+  begin
+   FetchStore(pChain[i*2+0],vsrc[i*2+0]);
+   FetchStore(pChain[i*2+1],vsrc[i*2+1]);
+  end;
+
+  exit;
+
+  {
+  Assert(false,'DS_WRITE2 64');
+
+  for i:=0 to hi do
+  begin
+   vsrc[i]:=fetch_vdst8_64(FSPI.DS.DATA[i],dtUint64);
+  end;
+  }
+
  end else
  begin
   for i:=0 to hi do
   begin
-   vsrc[i]:=fetch_vdst8(PBYTE(@FSPI.DS.DATA0)[i],rtype);
+   vsrc[i]:=fetch_vdst8(FSPI.DS.DATA[i],rtype);
   end;
  end;
 
@@ -338,10 +358,10 @@ end;
 
 procedure TEmit_DS.emit_DS_READ2(rtype:TsrDataType;extra_stride:Word);
 var
- pChain:array[0..1] of TsrChain;
+ pChain:array[0..3] of TsrChain;
 
  vbindex:TsrRegNode;
- vdst:array[0..1] of TsrRegNode;
+ vdst:array[0..3] of TsrRegNode;
 
  dst:array[0..3] of PsrRegSlot;
 
@@ -350,6 +370,33 @@ begin
  vbindex:=fetch_vdst8(FSPI.DS.ADDR,dtUint32);
 
  hi:=ord(FSPI.DS.OFFSET[0]<>FSPI.DS.OFFSET[1]);
+
+ if (rtype.BitSize=64) then
+ begin
+
+  for i:=0 to hi do
+  begin
+   pChain[i*2+0]:=fetch_ds_chain(vbindex,dtUint32,dtUnknow,FSPI.DS.OFFSET[i]*(8)*extra_stride+0);
+   pChain[i*2+1]:=fetch_ds_chain(vbindex,dtUint32,dtUnknow,FSPI.DS.OFFSET[i]*(8)*extra_stride+4);
+  end;
+
+  for i:=0 to hi do
+  begin
+   vdst[i*2+0]:=FetchLoad(pChain[i*2+0],dtUint32);
+   vdst[i*2+1]:=FetchLoad(pChain[i*2+1],dtUint32);
+  end;
+
+  for i:=0 to hi do
+  begin
+   dst[i*2+0]:=get_vdst8(FSPI.DS.VDST+i*2+0);
+   dst[i*2+1]:=get_vdst8(FSPI.DS.VDST+i*2+1);
+
+   MakeCopy(dst[i*2+0],vdst[i*2+0]);
+   MakeCopy(dst[i*2+1],vdst[i*2+1]);
+  end;
+
+  exit;
+ end;
 
  for i:=0 to hi do
  begin
@@ -398,14 +445,14 @@ begin
 
  if (rtype.BitSize=64) then
  begin
-  vsrc:=fetch_vdst8_64(FSPI.DS.DATA0,dtUint64);
+  vsrc:=fetch_vdst8_64(FSPI.DS.DATA[0],dtUint64);
  end else
  if (rtype.BitSize=32) then
  begin
-  vsrc:=fetch_vdst8(FSPI.DS.DATA0,rtype);
+  vsrc:=fetch_vdst8(FSPI.DS.DATA[0],rtype);
  end else
  begin
-  vsrc:=fetch_vdst8(FSPI.DS.DATA0,dtUnknow);
+  vsrc:=fetch_vdst8(FSPI.DS.DATA[0],dtUnknow);
  end;
 
  case rtype of

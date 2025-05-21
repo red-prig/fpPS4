@@ -18,7 +18,7 @@ uses
  srVariable,
  srConst,
  srBitcast,
- srCFGLabel;
+ srCFGParser;
 
 type
  TsrPrivate=class;
@@ -27,7 +27,7 @@ type
   pPrev,pNext:TStoreNode;
   //
   src :TsrRegNode;
-  line:TspirvOp;
+  //line:TspirvOp;
   //
  end;
  TStoreNodeList=specialize TNodeListClass<TStoreNode>;
@@ -40,11 +40,13 @@ type
    FList    :TStoreNodeList;
    FBase    :TsrRegNode;
    FZeroRead:Boolean;
+   ForceBool:Boolean;
   //
   Procedure _zero_read;                    override;
   Procedure _zero_unread;                  override;
   Procedure _PrepType(node:PPrepTypeNode); override;
   //
+  function  ListCount:Integer;
   Procedure AddStore(src:TsrRegNode);
   Procedure PushStore(node:TStoreNode);
   Function  PopStore:TStoreNode;
@@ -176,7 +178,25 @@ begin
  node:=FList.pHead;
  While (node<>nil) do
  begin
+
+  if node.src.pWriter.IsType(TsrVolatile) then Break;
+
   node.src.PrepType(ord(new));
+  node:=node.pNext;
+ end;
+end;
+
+function TsrVolatile.ListCount:Integer;
+var
+ node:TStoreNode;
+begin
+ Result:=0;
+ //
+ node:=FList.pHead;
+ While (node<>nil) do
+ begin
+  Inc(Result);
+  //
   node:=node.pNext;
  end;
 end;
@@ -198,7 +218,7 @@ begin
  Assert(pLine<>nil);
  node:=Emit.specialize New<TStoreNode>; //cache in free list?
  node.src :=src;
- node.line:=pLine;
+ //node.line:=pLine;
  if FZeroRead then
  begin
   src.mark_read(Self);
@@ -209,8 +229,8 @@ end;
 Procedure TsrVolatile.PushStore(node:TStoreNode);
 begin
  if (node=nil) then Exit;
- Assert(node.src.pLine<>nil);
- Assert(node.line<>nil);
+ //Assert(node.src.pLine<>nil);
+ //Assert(node.line<>nil);
  if FZeroRead then
  begin
   node.src.mark_read(Self);
@@ -343,7 +363,7 @@ begin
      if (dst<>nil) then
      begin
       old:=dst.dtype;
-      if (old<>dtUnknow) and (not CompareType(rtype,old)) then
+      if (old<>dtUnknow) and (rtype<>old) then
       begin
        //OpLoad -> new -> dst
        dst:=pBitcastList^.FetchDstr(rtype,dst);
@@ -406,6 +426,8 @@ begin
  end;
 end;
 
+
+{
 procedure _update_store_line(pLine:TspirvOp);
 var
  pReg:TsrRegNode;
@@ -422,13 +444,22 @@ begin
   pCur.InsertAfter(pLine);
  end;
 end;
+}
 
 Procedure TsrPrivate.SortLines;
 var
  dnode,dnext:TDependenceNode;
- pLine:array[0..1] of TspirvOp;
+ //pLine:array[0..1] of TspirvOp;
  nswp:Boolean;
 begin
+ //indexing
+ dnode:=FLineList.pHead;
+ While (dnode<>nil) do
+ begin
+  dnode.fread_count:=GetGlobalIndex(dnode.pNode);
+  dnode:=dnode.pNext;
+ end;
+ //bubble sort
  repeat
   nswp:=True;
   dnode:=FLineList.pHead;
@@ -437,13 +468,14 @@ begin
    dnext:=dnode.pNext;
    if (dnext=nil) then Break;
 
-   pLine[0]:=dnode.pNode;
-   pLine[1]:=dnext.pNode;
+   //pLine[0]:=dnode.pNode;
+   //pLine[1]:=dnext.pNode;
 
-   _update_store_line(pLine[0]);
-   _update_store_line(pLine[1]);
+   //_update_store_line(pLine[0]);
+   //_update_store_line(pLine[1]);
 
-   if (MaxLine(pLine[0],pLine[1])=pLine[0]) then //dnode>dnext
+   //if (MaxLine(pLine[0],pLine[1])=pLine[0]) then //dnode>dnext
+   if (dnode.fread_count>dnext.fread_count) then
    begin
     //swap
     nswp:=False;
@@ -466,7 +498,7 @@ begin
   if (node=prev) then Exit(True);
   //
   if node.IsType(ntOpBlock) then
-  if IsReal(TsrOpBlock(node).Block.bType) then
+  if IsReal(TsrOpBlock(node).bType) then
   begin
    Exit(False);
   end;
@@ -501,7 +533,7 @@ begin
    begin
     //Remove dprev
     FLineList.Remove(dprev);
-    pLine[1].mark_not_used;
+    pLine[1].mark([soNotUsed]);
     Continue;
    end else
    if (pLine[0].OpId=Op.OpStore) and (pLine[1].OpId=Op.OpLoad) then
@@ -516,7 +548,7 @@ begin
     begin
      //Remove dnode
      FLineList.Remove(dnode);
-     pLine[0].mark_not_used;
+     pLine[0].mark([soNotUsed]);
 
      dnode:=dprev;
      if (dnode.pNext<>nil) then
@@ -745,7 +777,7 @@ begin
  pLine:=ctx.after;
 
  //replace next
- _next:=pSlot^.New(rtype,pLine);
+ _next:=pSlot^._New(rtype,pLine); //<-The slot value will not be updated
  _next.pWriter:=pVolatile;
 
  ctx.AddVolatile(pVolatile,_next);
@@ -827,7 +859,7 @@ begin
   pLine:=ctx.after;
 
   //replace next
-  _next:=pSlot^.New(rtype,pLine);
+  _next:=pSlot^._New(rtype,pLine); //<-The slot value will not be updated
   _next.pWriter:=pVolatile;
 
   ctx.AddVolatile(pVolatile,_next);
@@ -916,6 +948,24 @@ begin
 
  rtype:=dtUnknow;
 
+
+ if (prv<>nil) then
+ begin
+  if new_vol then
+  begin
+
+   Assert(prv.pWriter=orig,'123');
+
+   //need to use orig to create a loopback dependency
+   prv:=orig;
+
+   //save if new created
+   pVolatile.AddStore(prv);
+  end;
+  rtype:=LazyType2(rtype,prv.dtype);
+ end;
+
+ {
  if new_vol then
  begin
   //use orig
@@ -933,6 +983,7 @@ begin
    rtype:=LazyType2(rtype,prv.dtype);
   end;
  end;
+ }
  //
  if (cur<>nil) then
  begin
@@ -949,7 +1000,7 @@ begin
   if (prev=nil) then
   begin
    //The input register is not defined, should it be initialized to make_copy_slot?
-   prev:=pSlot^.New(rtype,pLine);
+   prev:=pSlot^._New(rtype,pLine); //<-The slot value will not be updated
   end;
 
   //set backedge dependence
@@ -1075,6 +1126,56 @@ begin
  end;
 end;
 
+function calc_most_used_type(V:TsrVolatile):TsrDataType;
+type
+ t_table=array[TsrDataType] of Integer;
+var
+ node :TStoreNode;
+ Table:t_table;
+ Count:Integer;
+ i,max:TsrDataType;
+begin
+ if V.ForceBool then
+ begin
+  Exit(dtBool);
+ end;
+ //
+ Table:=Default(t_table);
+ Count:=0;
+ //
+ node:=V.FList.pHead;
+ While (node<>nil) do
+ begin
+  Inc(Table[RegDown(node.src).dtype]);
+  Inc(Count);
+  //
+  node:=node.pNext;
+ end;
+ //
+ if (Count=0) then
+ begin
+  Result:=dtUnknow;
+ end else
+ if (Count=Table[dtBool]) then
+ begin
+  //Result:=dtBool;
+  Result:=dtUint32;
+ end else
+ begin
+  max:=dtUnknow;
+  For i:=Low(TsrDataType) to High(TsrDataType) do
+   if (i<>dtBool) then
+   begin
+    if ((max=dtUnknow) and (Table[i]<>0)) or
+       (Table[i]>Table[max]) then
+    begin
+     max:=i;
+    end;
+   end;
+  Result:=max;
+ end;
+end;
+
 function TsrPrivateList.PrepVolatile(dst:TspirvOp;src:TsrRegNode):TsrRegNode; //use forward only
 var
  tmp:TsrRegNode;
@@ -1084,6 +1185,7 @@ var
  pLine:TspirvOp;
  //pTmp:TspirvOp;
  //vtmp:TsrVolatile;
+ dtype:TsrDataType;
 begin
  Result:=src;
  if (src=nil) then Exit;
@@ -1098,18 +1200,42 @@ begin
 
  pVolatile:=src.pWriter.specialize AsType<ntVolatile>;
 
- pPrivate:=pVolatile.FPrivate;
+ if pVolatile.FSlot^.iUnattach then
+ begin
+  pPrivate:=pVolatile.FPrivate;
+ end else
+ begin
+  pPrivate:=TsrPrivate(pVolatile.FSlot^.FPrivate);
+ end;
 
  if (pPrivate=nil) then
  begin
   pPrivate:=Fetch(pVolatile.FSlot);
-  pVolatile.FPrivate:=pPrivate;
+
+  if pVolatile.FSlot^.iUnattach then
+  begin
+   pVolatile.FPrivate:=pPrivate;
+  end else
+  begin
+   pVolatile.FSlot^.FPrivate:=pPrivate;
+  end;
+
+ end;
+
+ dtype:=calc_most_used_type(pVolatile);
+ dtype:=lazyType2(dtype,StoreType(src.dtype));
+ dtype:=lazyType2(dtype,dtFloat32);
+
+ if (dtype=dtBool) and (pVolatile.FSlot^.Name='S0') then
+ begin
+  calc_most_used_type(pVolatile);
  end;
 
  pPrivate.InitVar();
 
- pPrivate .PrepType(src.dtype);
- pVolatile.PrepType(pPrivate.GetRegType);
+ pPrivate .PrepType(dtype);
+
+ pVolatile.PrepType(dtype);
 
  if (pPrivate.GetRegType=dtUnknow) then
  begin
@@ -1126,7 +1252,8 @@ begin
   begin
 
    //pLine:=TsrRegNode(node.pNode).pLine;
-   pLine:=node.line;
+   //pLine:=node.line;
+   pLine:=node.src.pLine;
    Assert(pLine<>nil);
 
    up_merge_line(pLine);
@@ -1156,7 +1283,7 @@ begin
  //ntVolatile -> src -> next
  //Opload     -> new
 
- Result:=src.pSlot^.New(src.dtype,dst);
+ Result:=src.pSlot^._New(src.dtype,dst); //<-The slot value will not be updated
 
  pPrivate.FetchLoad(dst,Result); //before reg
 end;

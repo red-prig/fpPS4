@@ -54,9 +54,7 @@ type
   function  fetch_vdst8(VDST:Word;rtype:TsrDataType):TsrRegNode;
   function  fetch_vdst8_64(VDST:Word;rtype:TsrDataType):TsrRegNode;
   //
-  procedure MakeCopy64(dst0,dst1:PsrRegSlot;src:TsrRegNode);
-  //
-  procedure OpCmpV(OpId:DWORD;dst:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpCmpV(OpId:DWORD;dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpCmpS(OpId:DWORD;dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpConvFloatToHalf2(dst:PsrRegSlot;src0,src1:TsrRegNode);
   //
@@ -260,7 +258,7 @@ begin
  if (pImm=nil) then Exit;
  if (pImm.AsUint32<>8) then Exit;
 
- reg:=RegDown(pSelect.ParamNode(2).AsReg);
+ reg:=RegDown(pSelect.ParamNode(1).AsReg);
  if (reg=nil) then Exit;
 
  pBitwiseAnd:=reg.pWriter.specialize AsType<ntOp>;
@@ -281,7 +279,7 @@ begin
  end;
 
  //final
- reg:=RegDown(pSelect.ParamNode(1).AsReg);
+ reg:=RegDown(pSelect.ParamNode(2).AsReg);
  if (reg=nil) then Exit;
 
  regs[0]:=reg;
@@ -513,7 +511,6 @@ end;
 function TEmitFetch.fetch_vdst8_64(VDST:Word;rtype:TsrDataType):TsrRegNode;
 var
  src:array[0..1] of TsrRegNode;
- dst:TsrRegNode;
 begin
  src[0]:=fetch_vdst8(VDST+0,dtUint32);
  src[1]:=fetch_vdst8(VDST+1,dtUint32);
@@ -523,31 +520,12 @@ begin
   Assert(False);
  end;
 
- dst:=NewReg(dtVec2u);
- OpMakeCon(line,dst,@src);
-
- Result:=BitcastList.FetchRead(rtype,dst);
+ Result:=fetch64(@src,rtype);
 end;
 
 //
 
-procedure TEmitFetch.MakeCopy64(dst0,dst1:PsrRegSlot;src:TsrRegNode);
-var
- dst:TsrRegNode;
- node:array[0..1] of TsrRegNode;
-begin
- dst:=BitcastList.FetchRead(dtVec2u,src);
-
- node[0]:=dst0^.New(dtUint32,line);
- node[1]:=dst1^.New(dtUint32,line);
-
- OpExtract(line,node[0],dst,0);
- OpExtract(line,node[1],dst,1);
-end;
-
-//
-
-procedure TEmitFetch.OpCmpV(OpId:DWORD;dst:PsrRegSlot;src0,src1:TsrRegNode);
+procedure TEmitFetch.OpCmpV(OpId:DWORD;dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
 Var
  tmp:TsrRegNode;
  exc:TsrRegNode;
@@ -565,8 +543,11 @@ begin
 
  _Op2(line,OpId,tmp,src0,src1);
 
- exc:=MakeRead(get_exec0,dtBool);
- OpLogicalAnd(dst,tmp,exc);
+ exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
+
+ exc:=OpLogicalAndTo(tmp,exc);
+
+ SetThreadBit(dst0,dst1,exc);
 end;
 
 procedure TEmitFetch.OpCmpS(OpId:DWORD;dst:PsrRegSlot;src0,src1:TsrRegNode);

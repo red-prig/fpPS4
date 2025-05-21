@@ -73,7 +73,7 @@ begin
  a:=OpEqualTo(x,y);
  b:=OpNotEqualTo(d,x);
 
- OpBitwiseAnd(car,a,b);
+ OpLogicalAnd(car,a,b);
 end;
 
 procedure TEmit_SOP2.emit_S_ADD_U32;
@@ -118,7 +118,7 @@ begin
  a:=OpNotEqualTo(x,y);
  b:=OpNotEqualTo(d,x);
 
- OpBitwiseAnd(bor,a,b);
+ OpLogicalAnd(bor,a,b);
 end;
 
 procedure TEmit_SOP2.emit_S_SUB_U32;
@@ -207,6 +207,10 @@ begin
   SetConst_b(get_scc,src0.AsConst.AsBool or src1.AsConst.AsBool);
  end else
  begin
+  //force type
+  src0:=BitcastList.FetchRead(dtBool,src0);
+  src1:=BitcastList.FetchRead(dtBool,src1);
+
   OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
  end;
 end;
@@ -431,7 +435,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUnknow);
  scc:=MakeRead(get_scc,dtBool);
 
- OpSelect(dst,src[0],src[1],scc);
+ //dst,cond,src_true,src_false
+ OpSelect(dst,scc,src[0],src[1]);
 end;
 
 procedure TEmit_SOP2.emit_S_CSELECT_B64; //sdst[2] = SCC ? ssrc0[2] : ssrc1[2]
@@ -447,8 +452,9 @@ begin
 
  scc:=MakeRead(get_scc,dtBool);
 
- OpSelect(dst[0],src0[0],src1[0],scc);
- OpSelect(dst[1],src0[1],src1[1],scc);
+ //dst,cond,src_true,src_false
+ OpSelect(dst[0],scc,src0[0],src1[0]);
+ OpSelect(dst[1],scc,src0[1],src1[1]);
 end;
 
 //offset = ssrc1[4:0].u   and 31

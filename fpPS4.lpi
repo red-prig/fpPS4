@@ -1253,10 +1253,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="spirv\srCFGLabel.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="spirv\srConfig.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>

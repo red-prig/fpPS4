@@ -85,6 +85,8 @@ type
   FSGPRS             :WORD;
   FGeometryInfo      :TGeometryInfo;
   //
+  FThread_id         :TsrRegNode;
+  //
   Config:TsrConfig;
   //
   FSPI:TSPI;
@@ -208,10 +210,6 @@ type
   function  get_exec0:PsrRegSlot;
   function  get_exec1:PsrRegSlot;
   function  get_scc  :PsrRegSlot;
-  //
-  function  fetch_vccz :TsrRegNode;
-  function  fetch_execz:TsrRegNode;
-  function  fetch_scc  :TsrRegNode;
  end;
 
 implementation
@@ -503,7 +501,7 @@ function TEmitInterface.NewSpirvOp(OpId:DWORD):TSpirvOp;
 begin
  Result:=specialize New<TSpirvOp>;
  Result.Init(OpId);
- Result.adr:=Cursor.Adr;
+ //Result.adr:=Cursor.Adr;
 end;
 
 function TEmitInterface.NewLabelOp(sdep:Boolean):TSpirvOp;
@@ -558,7 +556,7 @@ begin
 
  node:=AddSpirvOp(node,Op.OpNop);
  node.AddParam(dst);
- node.mark_not_used;
+ node.mark([soNotUsed,soPost]);
  Exit(node);
 end;
 
@@ -799,26 +797,6 @@ end;
 function TEmitInterface.get_scc:PsrRegSlot;
 begin
  Result:=@RegsStory.SCC;
-end;
-
-//
-
-
-function TEmitInterface.fetch_vccz:TsrRegNode;
-begin
- //It means that lane_id=0
- Result:=MakeRead(get_vcc0,dtBool); //implict cast (int != 0)
-end;
-
-function TEmitInterface.fetch_execz:TsrRegNode;
-begin
- //It means that lane_id=0
- Result:=MakeRead(get_exec0,dtBool); //implict cast (int != 0)
-end;
-
-function TEmitInterface.fetch_scc:TsrRegNode;
-begin
- Result:=MakeRead(get_scc,dtBool);
 end;
 
 //

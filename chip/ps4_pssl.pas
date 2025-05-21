@@ -1244,8 +1244,7 @@ type
   ENCODING:bit6;
 
   ADDR:Byte;  //(vbindex)
-  DATA0:Byte; //(vsrc0)
-  DATA1:Byte; //(vsrc1)
+  DATA:array[0..1] of Byte; //(vsrc0),(vsrc1)
   VDST:Byte;
  end;
 
@@ -3869,7 +3868,7 @@ begin
   TBUFFER_LOAD_FORMAT_X    :str:='TBUFFER_LOAD_FORMAT_X';
   TBUFFER_LOAD_FORMAT_XY   :str:='TBUFFER_LOAD_FORMAT_XY';
   TBUFFER_LOAD_FORMAT_XYZ  :str:='TBUFFER_LOAD_FORMAT_XYZ';
-  TBUFFER_LOAD_FORMAT_XYZW :str:='TBUFFER_LOAD_FORMAT_XYZ';
+  TBUFFER_LOAD_FORMAT_XYZW :str:='TBUFFER_LOAD_FORMAT_XYZW';
 
   TBUFFER_STORE_FORMAT_X   :str:='TBUFFER_STORE_FORMAT_X';
   TBUFFER_STORE_FORMAT_XY  :str:='TBUFFER_STORE_FORMAT_XY';
@@ -4056,22 +4055,22 @@ begin
   2,3,4:
     begin
      str:=str+'v['+IntToStr(SPI.MIMG.VDATA)+':'+IntToStr(SPI.MIMG.VDATA+t-1)+']';
-     str:=str+', ';
-     str:=str+'v['+IntToStr(SPI.MIMG.VADDR)+':'+IntToStr(SPI.MIMG.VADDR+t-1)+']';
     end;
   else
     begin
      str:=str+_get_vdst8(SPI.MIMG.VDATA);
-     str:=str+', ';
-     str:=str+_get_vdst8(SPI.MIMG.VADDR);
     end;
  end;
  str:=str+', ';
 
  //operand #2
- str:=str+'s['+IntToStr(SPI.MIMG.SRSRC*4)+':'+IntToStr(SPI.MIMG.SRSRC*4+7)+']';
+ str:=str+'v['+IntToStr(SPI.MIMG.VADDR)+':'+IntToStr(SPI.MIMG.VADDR+2)+']';
+ str:=str+', ';
 
  //operand #3
+ str:=str+'s['+IntToStr(SPI.MIMG.SRSRC*4)+':'+IntToStr(SPI.MIMG.SRSRC*4+7)+']';
+
+ //operand #4
  Case SPI.MIMG.OP of
   IMAGE_SAMPLE..IMAGE_SAMPLE_C_CD_CL_O:
    begin
@@ -4376,19 +4375,50 @@ begin
 
  //VDST vbindex vsrc0 vsrc1 OFFSET0 OFFSET1 GDS
 
- str:=str+_get_vdst8(SPI.DS.VDST);
- str:=str+', ';
+ //vdst
+ Case SPI.DS.OP of
+  DS_ADD_RTN_U32..DS_WRXCHG_RTN_B32,
+  DS_CMPST_RTN_B32..DS_READ_B32,
+  DS_READ_I8..DS_ORDERED_COUNT:
+   begin
+    str:=str+_get_vdst8(SPI.DS.VDST);
+    str:=str+', ';
+   end;
+
+  DS_WRXCHG2_RTN_B32    ,
+  DS_WRXCHG2ST64_RTN_B32,
+  DS_READ2_B32          ,
+  DS_READ2ST64_B32      ,
+  DS_ADD_RTN_U64..DS_WRXCHG_RTN_B64,
+  DS_CMPST_RTN_B64..DS_READ_B64,
+  DS_CONDXCHG32_RTN_B64:
+   begin
+    str:=str+_get_vdst8_cnt(SPI.DS.VDST,2);
+    str:=str+', ';
+   end;
+
+  DS_WRXCHG2_RTN_B64    ,
+  DS_WRXCHG2ST64_RTN_B64,
+  DS_READ2_B64          ,
+  DS_READ2ST64_B64      :
+   begin
+    str:=str+_get_vdst8_cnt(SPI.DS.VDST,4);
+    str:=str+', ';
+   end;
+
+  else;
+ end;
 
  //vbindex
  str:=str+_get_vdst8(SPI.DS.ADDR);
  str:=str+', ';
 
  //vsrc0
- str:=str+_get_vdst8(SPI.DS.DATA0);
+ str:=str+_get_vdst8(SPI.DS.DATA[0]);
  str:=str+', ';
 
  //vsrc1
- str:=str+_get_vdst8(SPI.DS.DATA1);
+ str:=str+_get_vdst8(SPI.DS.DATA[1]);
 
  str:=str+' OFFSET:0x'+HexStr(WORD(SPI.DS.OFFSET),4);
 

@@ -247,6 +247,32 @@ begin
  until false;
 end;
 
+function CompareTypeOp(OpId:DWORD;rtype1,rtype2:TsrDataType):Boolean;
+var
+ relax:Boolean;
+begin
+ Case OpId of
+  Op.OpLoad              ,
+  Op.OpImageRead         ,
+  Op.OpImageWrite        ,
+  Op.OpBitFieldSExtract  ,
+  Op.OpBitFieldUExtract  ,
+  Op.OpSelect            ,
+  Op.OpIAddCarry         ,
+  Op.OpISubBorrow        ,
+  Op.OpUMulExtended      ,
+  Op.OpSMulExtended      ,
+  Op.OpCompositeConstruct:relax:=False;
+  else
+                          relax:=True;
+ end;
+
+ Case relax of
+  True :Result:=CompareType(rtype1,rtype2);
+  False:Result:=(rtype1=rtype2);
+ end;
+end;
+
 function TSprvEmit_post.RegCollapse(pLine:TspirvOp;var node:TsrRegNode):Integer;
 var
  rold,rnew:TsrRegNode;
@@ -260,7 +286,7 @@ begin
 
  if (rold<>rnew) then //is change?
  begin
-  if (rnew.dtype=dtUnknow) or CompareType(rnew.dtype,rold.dtype) then
+  if (rnew.dtype=dtUnknow) or CompareTypeOp(pLine.OpId,rnew.dtype,rold.dtype) then
   begin
    rnew.PrepType(ord(rold.dtype));
    if (rnew.dtype<>dtUnknow) then
@@ -290,6 +316,8 @@ var
 begin
  Result:=0;
  if (node=nil) then Exit;
+
+ //if not (node.IsUsed) then Exit;
 
  old:=node;
 
@@ -608,6 +636,15 @@ end;
 function TSprvEmit_post.OnOpStep4(node:TspirvOp):Integer; //forward
 begin
  Result:=0;
+
+ {
+ //prior
+ if node.is_post then
+ begin
+  Result:=Result+EnumLineRegs(@RegVResolve,node);
+  Exit;
+ end;
+ }
 
  if node.is_cleared then Exit;
 
@@ -972,6 +1009,11 @@ begin
     rtGDS:max:=64*1024;
    end;
 
+   if (max=0) then
+   begin
+    Assert(false,'Access to LDS/GDS and the maximum is 0?');
+   end;
+
    if (Align(_offset,pChain.stride)>max) then
    begin
     Assert(false,'LDS/GDS big addresing?');
@@ -1006,7 +1048,10 @@ begin
      //patch dtype
      dtype:=F.pField.Fdtype.Child;
     end;
-   frValueInArray :ShiftIndex(pChain,F,_offset);
+   frValueInArray :
+   begin
+    ShiftIndex(pChain,F,_offset);
+   end;
   end;
 
  until false;

@@ -7,7 +7,7 @@ interface
 uses
  ginodes,
  srNode,
- srCFGLabel,
+ srCFGParser,
  srType,
  srReg,
  srOp;
@@ -51,7 +51,7 @@ function _up_to_real(t:TsrOpBlock):TsrOpBlock;
 begin
  repeat
   if not t.IsType(ntOpBlock) then Break;
-  if IsReal(t.Block.bType) then Break;
+  if IsReal(t.bType) then Break;
   t:=t.Parent;
  until false;
  Result:=t;

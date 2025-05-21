@@ -12,7 +12,7 @@ uses
  srConst,
  srReg,
  srOp,
- srCFGLabel,
+ srCFGParser,
  srOpInternal,
  srOpUtils,
  srCacheOp,
@@ -20,6 +20,15 @@ uses
 
 type
  TEmitOp=class(TEmitInterface)
+  //
+  procedure MakeCopy64(dst0,dst1:PsrRegSlot;src:TsrRegNode);
+  function  GetThreadBit(exe0,exe1:PsrRegSlot;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+  procedure SetThreadBit(exe0,exe1:PsrRegSlot;val:TsrRegNode);
+  //
+  function  fetch_vccnz (ppLine:PPspirvOp):TsrRegNode;
+  function  fetch_execnz(ppLine:PPspirvOp):TsrRegNode;
+  function  fetch_execnz_tid(ppLine:PPspirvOp):TsrRegNode;
+  function  fetch_scc  :TsrRegNode;
   //
   function  _Op1(pLine:TspirvOp;OpId:DWORD;dst,src:TsrRegNode):TspirvOp;
   function  _Op2(pLine:TspirvOp;OpId:DWORD;dst,src0,src1:TsrRegNode):TspirvOp;
@@ -73,8 +82,8 @@ type
   procedure OpFmaI32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpFmaU32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   //
-  procedure OpSelect(dst:PsrRegSlot;src_false,src_true,cond:TsrRegNode);
-  function  OpSelectTo(src_false,src_true,cond:TsrRegNode):TsrRegNode;
+  procedure OpSelect(dst:PsrRegSlot;cond,src_true,src_false:TsrRegNode);
+  function  OpSelectTo(cond,src_true,src_false:TsrRegNode):TsrRegNode;
   //
   procedure OpIAddCar(pLine:TspirvOp;dst,car,src0,src1:TsrRegNode);
   procedure OpIAddExt(dst,car:PsrRegSlot;src0,src1:TsrRegNode;rtype:TsrDataType);
@@ -91,6 +100,7 @@ type
   //
   function  OpBFITo (src0,src1,src2,src3:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpBFUETo(src0,src1,src2:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpBFSETo(src0,src1,src2:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   procedure OpPackAnc(dst:PsrRegSlot;prim,smid,rtid:TsrRegNode);
   //
@@ -111,6 +121,8 @@ type
   function  OpMakeCon(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
   function  OpMakeVec(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
   function  OpMakeCub(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
+  function  fetch64  (src:PPsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  fetch64  (src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
   //
   procedure OpIAdd(dst:PsrRegSlot;src0,src1:TsrRegNode);
@@ -163,6 +175,8 @@ type
   function  OpOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0:TsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpLogicalOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpLogicalAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpIEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -205,6 +219,123 @@ procedure _set_line(ppLine:PPspirvOp;pLine:TspirvOp);
 begin
  if (ppLine=nil) then Exit;
  ppLine^:=pLine;
+end;
+
+//
+
+procedure TEmitOp.MakeCopy64(dst0,dst1:PsrRegSlot;src:TsrRegNode);
+var
+ dst:TsrRegNode;
+ node:array[0..1] of TsrRegNode;
+begin
+ dst:=BitcastList.FetchRead(dtVec2u,src);
+
+ node[0]:=dst0^.New(dtUint32,line);
+ node[1]:=dst1^.New(dtUint32,line);
+
+ OpExtract(line,node[0],dst,0);
+ OpExtract(line,node[1],dst,1);
+end;
+
+function TEmitOp.GetThreadBit(exe0,exe1:PsrRegSlot;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+var
+ mask:TsrRegNode;
+begin
+ if Config.UseExtendedEXECMask and (FExecutionModel=ExecutionModel.GLCompute) then
+ begin
+  mask:=fetch64(MakeRead(exe0,dtUint32),MakeRead(exe1,dtUint32),dtUint64,ppLine);
+
+  Result:=OpShrTo(mask,FThread_id,ppLine);
+  Result:=OpUToU (Result,dtUint32,ppLine);
+  Result:=OpAndTo(Result,1,ppLine);
+  Result.PrepType(ord(dtUint32));
+  Result:=BitcastList.FetchRead(rtype,Result);
+
+  //Result:=OpBFUETo(mask,FThread_id,NewImm_i(dtUint32,1));
+  //Result:=OpUToU(Result,dtUint32);
+  //Result:=BitcastList.FetchRead(rtype,Result);
+ end else
+ begin
+  //It means that lane_id=0
+  Result:=MakeRead(exe0,rtype);
+ end;
+end;
+
+procedure TEmitOp.SetThreadBit(exe0,exe1:PsrRegSlot;val:TsrRegNode);
+var
+ mask,mask2:TsrRegNode;
+begin
+ if Config.UseExtendedEXECMask and (FExecutionModel=ExecutionModel.GLCompute) then
+ begin
+
+  val:=BitcastList.FetchRead(dtUint32,val);
+  val:=OpUToU (val,dtUint64);
+  val:=OpShlTo(val,FThread_id);
+
+  mask:=fetch64(MakeRead(exe0,dtUint32),MakeRead(exe1,dtUint32),dtUint64);
+
+  mask2:=OpShlTo(NewImm_i(dtUint64,1),FThread_id);
+  mask2:=OpNotTo(mask2);
+  mask2.PrepType(ord(dtUint64));
+
+  mask:=OpAndTo(mask,mask2);
+  mask.PrepType(ord(dtUint64));
+
+  mask:=OpOrTo(mask,val);
+  mask.PrepType(ord(dtUint64));
+
+  MakeCopy64(exe0,exe1,mask);
+
+  //val:=BitcastList.FetchRead(dtUint32,val);
+  //val:=OpUToU(val,dtUint64);
+  //mask:=fetch64(exe0^.current,exe1^.current,dtUint64);
+  //mask:=OpBFITo(mask,val,FThread_id,NewImm_i(dtUint32,1));
+  //MakeCopy64(exe0,exe1,mask);
+  //
+ end else
+ begin
+  //It means that lane_id=0
+  MakeCopy  (exe0,val);
+  SetConst_q(exe1,dtUnknow,0); //set zero
+ end;
+end;
+
+//
+
+function TEmitOp.fetch_vccnz(ppLine:PPspirvOp):TsrRegNode;
+var
+ src:array[0..1] of TsrRegNode;
+begin
+ //It means that (vcc0  != 0) || (vcc1  != 0)
+
+ src[0]:=MakeRead(get_vcc0,dtBool); //implict cast (int != 0)
+ src[1]:=MakeRead(get_vcc1,dtBool); //implict cast (int != 0)
+
+ Result:=OpLogicalOrTo(src[0],src[1],ppLine);
+end;
+
+function TEmitOp.fetch_execnz(ppLine:PPspirvOp):TsrRegNode;
+var
+ src:array[0..1] of TsrRegNode;
+begin
+ //It means that (exec0 != 0) || (exec1 != 0)
+
+ src[0]:=MakeRead(get_exec0,dtBool); //implict cast (int != 0)
+ src[1]:=MakeRead(get_exec1,dtBool); //implict cast (int != 0)
+
+ Result:=OpLogicalOrTo(src[0],src[1],ppLine);
+end;
+
+function TEmitOp.fetch_execnz_tid(ppLine:PPspirvOp):TsrRegNode;
+begin
+ //It means that (exec[thread_id:] == 0)
+
+ Result:=GetThreadBit(get_exec0,get_exec1,dtBool,ppLine);
+end;
+
+function TEmitOp.fetch_scc:TsrRegNode;
+begin
+ Result:=MakeRead(get_scc,dtBool);
 end;
 
 //
@@ -640,14 +771,14 @@ end;
 
 //
 
-procedure TEmitOp.OpSelect(dst:PsrRegSlot;src_false,src_true,cond:TsrRegNode);
+procedure TEmitOp.OpSelect(dst:PsrRegSlot;cond,src_true,src_false:TsrRegNode);
 begin
- Op3(Op.OpSelect,LazyType2(src_false.dtype,src_true.dtype),dst,cond,src_true,src_false);
+ Op3(Op.OpSelect,LazyType2(src_true.dtype,src_false.dtype),dst,cond,src_true,src_false);
 end;
 
-function TEmitOp.OpSelectTo(src_false,src_true,cond:TsrRegNode):TsrRegNode;
+function TEmitOp.OpSelectTo(cond,src_true,src_false:TsrRegNode):TsrRegNode;
 begin
- Result:=NewReg(LazyType2(src_false.dtype,src_true.dtype));
+ Result:=NewReg(LazyType2(src_true.dtype,src_false.dtype));
  //
  _Op3(line,Op.OpSelect,Result,cond,src_true,src_false);
 end;
@@ -793,6 +924,12 @@ function TEmitOp.OpBFUETo(src0,src1,src2:TsrRegNode;ppLine:PPspirvOp=nil):TsrReg
 begin
  Result:=NewReg(src0.dtype);
  _set_line(ppLine,_Op3(_get_line(ppLine),Op.OpBitFieldUExtract,Result,src0,src1,src2));
+end;
+
+function TEmitOp.OpBFSETo(src0,src1,src2:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(src0.dtype);
+ _set_line(ppLine,_Op3(_get_line(ppLine),Op.OpBitFieldSExtract,Result,src0,src1,src2));
 end;
 
 //
@@ -1022,6 +1159,65 @@ begin
  end;
 end;
 
+type
+ t_bridge_info=record
+  val:TsrRegNode;
+  pos:PtrUint;
+ end;
+
+function get_bridge(src:TsrRegNode):t_bridge_info;
+var
+ pLine:TSpirvOp;
+begin
+ Result:=Default(t_bridge_info);
+
+ pLine:=src.pWriter.specialize AsType<ntOp>;
+ if (pLine=nil) then Exit;
+ if (pLine.OpId<>Op.OpCompositeExtract) then Exit;
+
+ if not pLine.ParamNode(1).TryGetValue(Result.pos) then Exit;
+
+ Result.val:=pLine.ParamNode(0).AsReg;
+end;
+
+function TEmitOp.fetch64(src:PPsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+var
+ bri:array[0..1] of t_bridge_info;
+ dst:TsrRegNode;
+begin
+ bri[0]:=get_bridge(src[0]);
+ bri[1]:=get_bridge(src[1]);
+
+ dst:=nil;
+
+ if (bri[0].val<>nil) and
+    (bri[0].val=bri[1].val) and
+    (bri[0].pos=0) and
+    (bri[1].pos=1) then
+ if (bri[0].val.dtype.Count=2) then
+ begin
+  dst:=bri[0].val;
+ end;
+
+ if (dst=nil) then
+ begin
+  dst:=NewReg(dtVec2u);
+  _set_line(ppLine,OpMakeCon(_get_line(ppLine),dst,src));
+ end;
+
+ Result:=BitcastList.FetchRead(rtype,dst);
+end;
+
+function TEmitOp.fetch64(src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+var
+ src:array[0..1] of TsrRegNode;
+begin
+ src[0]:=src0;
+ src[1]:=src1;
+
+ Result:=fetch64(@src,rtype,ppLine);
+end;
+
 Function FindByHalfSpace(node:TspirvOp;pDst:TsrNode):Boolean;
 begin
  Result:=False;
@@ -1030,7 +1226,7 @@ begin
   if (node.pDst=pDst) then Exit(True);
   //
   if node.IsType(ntOpBlock) then
-  if IsReal(TsrOpBlock(node).Block.bType) then
+  if IsReal(TsrOpBlock(node).bType) then
   begin
    Exit(False);
   end;
@@ -1435,6 +1631,20 @@ function TEmitOp.OpAndTo(src0:TsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):TsrReg
 begin
  if (src0=nil) then Exit(src0);
  Result:=OpAndTo(src0,NewImm_q(src0.dtype,src1,_get_line(ppLine)),ppLine);
+end;
+
+//
+
+function TEmitOp.OpLogicalOrTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpLogicalOr,Result,src0,src1)); //post type
+end;
+
+function TEmitOp.OpLogicalAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpLogicalAnd,Result,src0,src1)); //post type
 end;
 
 //

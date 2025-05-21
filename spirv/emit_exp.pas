@@ -8,7 +8,8 @@ uses
   sysutils,
   ps4_pssl,
   si_ci_vi_merged_enum,
-  srCFGLabel,
+  srCFGCursor,
+  srCFGParser,
   srConfig,
   srFlow,
   srType,
@@ -220,12 +221,12 @@ begin
  if (FSPI.EXP.VM<>0) and (FSPI.EXP.DONE<>0) then
  begin
   parent:=AllocBlockOp;
-  parent.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+  parent.SetInfo(btOther);
 
-  PushBlockOp(line,parent);
+  PushBlockOp(line,parent,Default(TsrCursor));
   Inc(push_count);
 
-  exc:=MakeRead(get_exec0,dtBool); //It means that lane_id=0
+  exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
   node:=AddSpirvOp(srOpInternal.OpMakeExp);
   node.AddParam(exc); //<-fetch read
  end;
@@ -246,9 +247,9 @@ begin
  end;
 
  pOpBlock:=AllocBlockOp; //down
- pOpBlock.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
+ pOpBlock.SetInfo(btOther);
 
- PushBlockOp(line,pOpBlock);
+ PushBlockOp(line,pOpBlock,Default(TsrCursor));
  Inc(push_count);
 
  if (parent<>nil) then

@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ math,
  spirv,
  ginodes,
  srNode,
@@ -818,6 +819,7 @@ end;
 
 Function TryTruncInt64(c:Single;var i:int64):Boolean;
 begin
+ if IsNan(c) or IsInfinite(c) then Exit(False);
  Result:=(c>=Low(int64)) and (c<=High(int64));
  if Result then
  begin

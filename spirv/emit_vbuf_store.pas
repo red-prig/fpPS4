@@ -168,11 +168,13 @@ begin
 
  cond:=OpCmpTo(Op.OpSLessThan,t3,NewImm_q(dtUint32,$38800000)); //(t3 < 0x38800000)
 
- t1:=OpSelectTo(t1,NewImm_q(dtUint32,0),cond); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
+ //cond,src_true,src_false
+ t1:=OpSelectTo(cond,NewImm_q(dtUint32,0),t1); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
 
  cond:=OpCmpTo(Op.OpSGreaterThan,t3,NewImm_q(dtUint32,$47000000)); //(t3 > 0x47000000)
 
- t1:=OpSelectTo(t1,NewImm_q(dtUint32,$3FF),cond); //if (t3 > 0x47000000) t1 = 0x3FF; // Clamp-to-max
+ //cond,src_true,src_false
+ t1:=OpSelectTo(cond,NewImm_q(dtUint32,$3FF),t1); //if (t3 > 0x47000000) t1 = 0x3FF; // Clamp-to-max
 
  Result:=t1;
 end;
@@ -195,11 +197,13 @@ begin
 
  cond:=OpCmpTo(Op.OpSLessThan,t3,NewImm_q(dtUint32,$38800000)); //(t3 < 0x38800000)
 
- t1:=OpSelectTo(t1,NewImm_q(dtUint32,0),cond); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
+ //cond,src_true,src_false
+ t1:=OpSelectTo(cond,NewImm_q(dtUint32,0),t1); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
 
  cond:=OpCmpTo(Op.OpSGreaterThan,t3,NewImm_q(dtUint32,$87000000)); //(t3 > 0x87000000)
 
- t1:=OpSelectTo(t1,NewImm_q(dtUint32,$7FF),cond); //if (t3 > 0x47000000) t1 = 0x7FF; // Clamp-to-max
+ //cond,src_true,src_false
+ t1:=OpSelectTo(cond,NewImm_q(dtUint32,$7FF),t1); //if (t3 > 0x47000000) t1 = 0x7FF; // Clamp-to-max
 
  Result:=t1;
 end;

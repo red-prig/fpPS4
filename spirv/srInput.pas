@@ -205,7 +205,7 @@ var
   l:TSpirvOp;
  begin
   l:=node.pReg.pWriter.specialize AsType<ntOp>;
-  l.mark_not_used;
+  l.mark([soNotUsed]);
 
   c:=PsrConstList(FEmit.GetConstList)^.Fetch(node.pReg.dtype,0);
   node.pReg.pWriter:=c;

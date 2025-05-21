@@ -8,7 +8,7 @@ uses
   sysutils,
   ps4_pssl,
   spirv,
-  srCFGLabel,
+  srCFGParser,
   srFlow,
   srType,
   srConst,
@@ -119,6 +119,10 @@ begin
   SetConst_b(get_scc,src0.AsConst.AsBool or src1.AsConst.AsBool);
  end else
  begin
+  //force type
+  src0:=BitcastList.FetchRead(dtBool,src0);
+  src1:=BitcastList.FetchRead(dtBool,src1);
+
   OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
  end;
 end;
@@ -176,16 +180,12 @@ Var
 
  newptr:Pointer;
 begin
- While (CheckBlockEnd) do;
-
  //ret
  if not fetch_ssrc9_pair(FSPI.SOP1.SSRC,@src,dtUnknow) then Assert(false);
 
  newptr:=GetFuncPtr(@src);
 
  set_code_ptr(newptr,btMain);
-
- While (CheckBlockBeg) do;
 end;
 
 procedure TEmit_SOP1.emit_S_SWAPPC_B64;

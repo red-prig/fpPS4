@@ -435,8 +435,13 @@ var
 begin
  Result:=Default(TFieldFetchValue);
 
+ Assert(_stride<>0);
+ Assert(_size  <>0);
+
  _count:=_size div _stride;
  _size :=_count*_stride; //align
+
+ Assert(_count<>0);
 
  //find intersec
  node:=FindIntersect(_offset,_size);

@@ -10,7 +10,6 @@ uses
  srOpInternal,
  ginodes,
  srNode,
- srCFGLabel,
  srCFGParser,
  srCFGCursor,
  srLiteral,
@@ -58,7 +57,7 @@ type
 
  TsrOpList=specialize TNodeListClass<TsrOpCustom>;
 
- TsoFlags=(soClear,soNotUsed,soForce);
+ TsoFlags=(soClear,soNotUsed,soForce,soPost);
  TsoSetFlags=Set of TsoFlags;
 
  TspirvOp=class(TsrOpCustom)
@@ -71,7 +70,7 @@ type
    Procedure SetDst(r:TsrNode);
    Procedure UnClear;
   public
-   Adr :TSrcAdr;
+   //Adr :TSrcAdr;
    OpId:DWORD;
    //
    Procedure _zero_read;                    override;
@@ -95,19 +94,15 @@ type
    procedure AddString(const name:RawByteString);
    function  is_cleared:Boolean;
    function  is_force:Boolean;
+   function  is_post:Boolean;
    function  Clear:Boolean;
-   procedure mark_not_used(Force:Boolean=False);
+   procedure mark(f:TsoSetFlags);
    function  can_clear:Boolean;
  end;
 
  ntOp=TspirvOp;
 
  TsrVolMark=(vmNone,vmEndpg,vmBreak,vmConti,vmMixed);
-
- TsrBlockInfo=packed record
-  b_adr,e_adr:TSrcAdr;
-  bType:TsrBlockType;
- end;
 
  TsrOpBlockCustom=class(TsrOpCustom)
   private
@@ -138,7 +133,7 @@ type
  TsrOpBlock=packed class(TsrOpBlockCustom)
   public
 
-   Block:TsrBlockInfo;
+   bType:TsrBlockType;
 
    Labels:record
     pBegOp:TspirvOp;
@@ -153,7 +148,6 @@ type
 
    vctx  :TsrVolatileContext;
 
-   FLBlock:TsrCFGBlock;
    FCursor:TsrCursor;
 
    Regs:record
@@ -166,6 +160,7 @@ type
     pReg        :TsrRegNode;
     FNormalOrder:Boolean;
     FUseCont    :Boolean;
+    FExcMerg    :Boolean;
    end;
 
    FVolMark:TsrVolMark;
@@ -173,12 +168,9 @@ type
    dummy:TspirvOp;
 
    procedure Init;
-   procedure SetCFGBlock(pLBlock:TsrCFGBlock);
-   procedure SetInfo(const b:TsrBlockInfo);
-   procedure SetInfo(bType:TsrBlockType;b_adr,e_adr:TSrcAdr);
+   procedure SetInfo(_bType:TsrBlockType);
    procedure SetLabels(pBegOp,pEndOp,pMrgOp:TspirvOp);
    procedure SetCond(pReg:TsrRegNode;FNormalOrder:Boolean);
-   function  IsEndOf(Adr:TSrcAdr):Boolean;
    function  FindUpLoop:TsrOpBlock;
    function  FindUpCond:TsrOpBlock;
    function  FindUpCondByReg(pReg:TsrRegNode;rDown:Boolean;var Invert:Boolean):TsrOpBlock;
@@ -568,12 +560,18 @@ begin
  Result:=(soForce in flags);
 end;
 
+function TspirvOp.is_post:Boolean;
+begin
+ Result:=(soPost in flags);
+end;
+
 function TspirvOp.Clear:Boolean;
 var
  node:POpParamNode;
  b:Byte;
 begin
  Result:=False;
+
  if not can_clear then Exit;
 
  if (read_count<>0) then
@@ -650,13 +648,9 @@ begin
  flags:=flags-[soClear];
 end;
 
-procedure TspirvOp.mark_not_used(Force:Boolean=False);
+procedure TspirvOp.mark(f:TsoSetFlags);
 begin
- flags:=flags+[soNotUsed];
- if Force then
- begin
-  flags:=flags+[soForce];
- end;
+ flags:=flags+f;
 end;
 
 function TspirvOp.can_clear:Boolean;
@@ -680,28 +674,9 @@ begin
  vctx.block:=Self;
 end;
 
-procedure TsrOpBlock.SetCFGBlock(pLBlock:TsrCFGBlock);
+procedure TsrOpBlock.SetInfo(_bType:TsrBlockType);
 begin
- dummy.Adr  :=pLBlock.pBLabel.Adr;
- Block.b_adr:=pLBlock.pBLabel.Adr;
- Block.e_adr:=pLBlock.pELabel.Adr;
- Block.bType:=pLBlock.bType;
-end;
-
-procedure TsrOpBlock.SetInfo(const b:TsrBlockInfo);
-begin
- dummy.Adr  :=b.b_adr;
- Block.b_adr:=b.b_adr;
- Block.e_adr:=b.e_adr;
- Block.bType:=b.bType;
-end;
-
-procedure TsrOpBlock.SetInfo(bType:TsrBlockType;b_adr,e_adr:TSrcAdr);
-begin
- dummy.Adr  :=b_adr;
- Block.b_adr:=b_adr;
- Block.e_adr:=e_adr;
- Block.bType:=bType;
+ bType:=_bType;
 end;
 
 procedure TsrOpBlock.SetLabels(pBegOp,pEndOp,pMrgOp:TspirvOp);
@@ -717,11 +692,6 @@ begin
  Cond.FNormalOrder:=FNormalOrder;
 end;
 
-function TsrOpBlock.IsEndOf(Adr:TSrcAdr):Boolean;
-begin
- Result:=(Block.e_adr.get_code_ptr<=Adr.get_code_ptr);
-end;
-
 function TsrOpBlock.FindUpLoop:TsrOpBlock;
 var
  node:TsrOpBlock;
@@ -730,7 +700,7 @@ begin
  node:=Self;
  While (node<>nil) do
  begin
-  if (node.Block.bType=btLoop) then Exit(node);
+  if (node.bType=btLoop) then Exit(node);
   node:=node.pParent;
  end;
 end;
@@ -743,7 +713,7 @@ begin
  node:=Self;
  While (node<>nil) do
  begin
-  if (node.Block.bType=btCond) then Exit(node);
+  if (node.bType=btCond) then Exit(node);
   node:=node.pParent;
  end;
 end;
@@ -763,7 +733,7 @@ begin
  node:=Self;
  While (node<>nil) do
  begin
-  if (node.Block.bType=btCond) then
+  if (node.bType=btCond) then
   begin
    //
    pCond:=node.Cond.pReg;
@@ -777,7 +747,7 @@ begin
     Exit(node);
    end;
   end else
-  if (node.Block.bType=btElse) then
+  if (node.bType=btElse) then
   begin
    Assert(node.pIf<>nil);
    node:=node.pIf;

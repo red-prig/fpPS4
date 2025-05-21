@@ -11,7 +11,7 @@ uses
  srReg,
  srLayout,
  srVariable,
- srCFGLabel;
+ srCFGParser;
 
 function  InsSpirvOp(pLine,pNew:TSpirvOp):TSpirvOp;
 Function  get_inverse_left_cmp_op(OpId:DWORD):DWORD;
@@ -79,7 +79,7 @@ function flow_prev_up(pLine:TSpirvOp):TSpirvOp;
   Result:=nil;
   if (p<>nil) then
   if p.IsType(ntOpBlock) then
-  if not IsReal(TsrOpBlock(p).Block.bType) then
+  if not IsReal(TsrOpBlock(p).bType) then
   begin
    Result:=p.Last;
   end;
@@ -114,7 +114,7 @@ begin
    tmp:=flow_down_prev_up(tmp);
    Assert(tmp<>nil);
   end;
-  pNew.Adr:=tmp.Adr;
+  //pNew.Adr:=tmp.Adr;
  end;
 
  pLine.InsertAfter(pNew);
@@ -529,31 +529,101 @@ begin
  end;
 end;
 
-function GetChainRegNode(node:TsrRegNode):TsrChain;
+type
+ a_volatile_node=array of TsrRegNode;
+
+procedure add_node(var A:a_volatile_node;node:TsrRegNode);
+var
+ i:Integer;
+begin
+ //check exist
+ if Length(A)<>0 then
+ For i:=0 to High(A) do
+ begin
+  if (A[i]=node) then Exit;
+ end;
+ //
+ Insert([node],A,High(A));
+end;
+
+procedure add_volatile(var A:a_volatile_node;V:TsrVolatile);
+var
+ node:TStoreNode;
+begin
+ node:=V.FList.pHead;
+ while (node<>nil) do
+ begin
+  add_node(A,RegDown(node.src));
+  //
+  node:=node.pNext;
+ end;
+end;
+
+function next_volatile(var A:a_volatile_node;var i:Integer):TsrRegNode;
+begin
+ if (i<Length(A)) then
+ begin
+  Result:=A[i];
+  Inc(i);
+ end else
+ begin
+  Result:=nil;
+ end;
+end;
+
+type
+ AsrChain=array of TsrChain;
+
+function GetChainRegNode2(node:TsrRegNode):AsrChain;
 var
  pOp:TSpirvOp;
  V:TsrVolatile;
+ C:TsrChain;
+ A:a_volatile_node;
+ i:Integer;
 begin
- Result:=nil;
+ Result:=[];
+ A:=[];
+ i:=0;
 
- repeat
+ while (node<>nil) do
+ begin
   node:=RegDown(node);
 
   if node.pWriter.IsType(TsrVolatile) then
   begin
    V:=node.pWriter.specialize AsType<TsrVolatile>;
-   node:=V.FList.pTail.src;
-  end else
-  begin
-   Break;
+   add_volatile(A,V);
+   node:=next_volatile(A,i);
   end;
- until false;
 
- pOp:=node.pWriter.specialize AsType<ntOp>;
- if (pOp=nil) then Exit;
+  pOp:=node.pWriter.specialize AsType<ntOp>;
+  if (pOp<>nil) then
+  if (pOp.OpId=Op.OpLoad) then
+  begin
+   C:=pOp.ParamNode(0).Value.specialize AsType<ntChain>;
 
- if (pOp.OpId<>Op.OpLoad) then Exit;
- Result:=pOp.ParamNode(0).Value.specialize AsType<ntChain>;
+   if (C<>nil) then
+   begin
+    Insert([C],Result,High(Result));
+   end;
+  end;
+
+  node:=next_volatile(A,i);
+ end;
+end;
+
+function GetChainRegNode(node:TsrRegNode):TsrChain;
+Var
+ A:AsrChain;
+begin
+ A:=GetChainRegNode2(node);
+ if (Length(A)=0) then Exit(nil);
+ if (Length(A)>1) then
+ begin
+  Assert(false,'Multiple reachable chains are not supported!');
+ end;
+ Result:=A[0];
 end;
 
 function GetSourceRegNode(node:TsrRegNode):TsrNode;

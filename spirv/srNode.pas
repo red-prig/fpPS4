@@ -15,6 +15,7 @@ type
   pLeft,pRight:TDependenceNode;
   //
   key:TsrNode;
+  //
   fread_count :DWORD;
   fwrite_count:DWORD;
   //

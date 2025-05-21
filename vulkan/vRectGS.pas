@@ -166,16 +166,17 @@ begin
   yxEqual:=SprvEmit.OpAndTo(CoordEqualY[i], CoordEqualX[(i + 2) mod 3]);
   //
   EdgeVertex[i]:=SprvEmit.OpOrTo(xyEqual,yxEqual);
-  //
-  barycentric[i]:=SprvEmit.OpSelectTo(pOneId,pMinusOne,EdgeVertex[i]);
+  //cond,src_true,src_false
+  barycentric[i]:=SprvEmit.OpSelectTo(EdgeVertex[i],pMinusOne,pOneId);
  end;
 
  //calc last pos
  Positions[3]:=interpolate(SprvEmit,dtVec4f,@barycentric,@Positions);
 
  //select first index
- pIndex:=SprvEmit.OpSelectTo(UintId[0], UintId[1], EdgeVertex[1]);
- pIndex:=SprvEmit.OpSelectTo(pIndex   , UintId[2], EdgeVertex[2]);
+ //cond,src_true,src_false
+ pIndex:=SprvEmit.OpSelectTo(EdgeVertex[1], UintId[1], UintId[0]);
+ pIndex:=SprvEmit.OpSelectTo(EdgeVertex[2], UintId[2], pIndex   );
 
  //Send vertex by index
  For i:=0 to 2 do

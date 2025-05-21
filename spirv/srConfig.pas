@@ -9,19 +9,20 @@ type
 
  PsrConfig=^TsrConfig;
  TsrConfig=packed object
-  PrintAsm:Boolean;
-  PrintCfg:Boolean;
-  UseVertexInput:Boolean; //True
-  UseTexelBuffer:Boolean;
-  UseOutput16:Boolean;
+  PrintAsm                :Boolean;
+  PrintCfg                :Boolean;
+  UseVertexInput          :Boolean; //True
+  UseTexelBuffer          :Boolean;
+  UseOutput16             :Boolean;
   UseOnlyUserdataPushConst:Boolean;
+  UseExtendedEXECMask     :Boolean;
   //
   DescriptorSet:DWORD; //0
   //
-  SpvVersion:PtrUint;                      // $10100
-  maxUniformBufferRange:PtrUint;           // $FFFF
-  PushConstantsOffset:PtrUint;             // 0
-  maxPushConstantsSize:PtrUint;            // 128
+  SpvVersion                     :PtrUint; // $10100
+  maxUniformBufferRange          :PtrUint; // $FFFF
+  PushConstantsOffset            :PtrUint; // 0
+  maxPushConstantsSize           :PtrUint; // 128
   minStorageBufferOffsetAlignment:PtrUint; // $10
   minUniformBufferOffsetAlignment:PtrUint; // $100
   //

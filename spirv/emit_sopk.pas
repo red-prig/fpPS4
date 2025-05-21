@@ -73,7 +73,7 @@ begin
   a:=OpLogicalNotTo(a);
  end;
 
- OpBitwiseAnd(car,a,b);
+ OpLogicalAnd(car,a,b);
 end;
 
 procedure TEmit_SOPK.emit_S_MULK_I32; //sdst.s = (sdst.s * signExtend(imm16.s)) & 0xFFFFFFFF

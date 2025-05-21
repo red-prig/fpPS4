@@ -32,14 +32,12 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOPC.SRC0 ,rtype);
  src[1]:=fetch_vsrc8(FSPI.VOPC.VSRC1,rtype);
 
- OpCmpV(OpId,dst[0],src[0],src[1]);
-
- SetConst_q(dst[1],dtUnknow,0); //set zero
+ OpCmpV(OpId,dst[0],dst[1],src[0],src[1]);
 
  if x then
  begin
-  MakeCopy  (get_exec0,dst[0]^.current);
-  SetConst_q(get_exec1,dtUnknow,0);     //set zero
+  MakeCopy(get_exec0,dst[0]^.current);
+  MakeCopy(get_exec1,dst[1]^.current);
  end;
 end;
 

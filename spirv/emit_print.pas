@@ -29,7 +29,7 @@ type
   procedure PrintConst;
   procedure PrintVariable;
   procedure PrintFunc;
-  procedure PrintOp(node:TSpirvOp;print_offset:Boolean);
+  procedure PrintOp(node:TSpirvOp);
  end;
 
 implementation
@@ -91,7 +91,7 @@ begin
   begin
    pBlock:=node.Parent;
    Write(Space(pBlock.Level));
-   PrintOp(node,false);
+   PrintOp(node);
   end;
   node:=flow_down_next_up(node);
  end;
@@ -187,7 +187,7 @@ begin
  end;
 end;
 
-procedure TSprvEmit_print.PrintOp(node:TSpirvOp;print_offset:Boolean);
+procedure TSprvEmit_print.PrintOp(node:TSpirvOp);
 var
  Param:POpParamNode;
  Info:Op.TOpInfo;
@@ -225,15 +225,7 @@ begin
   Param:=Param.Next;
  end;
 
- if (node.OpId=Op.OpLabel) then
- begin
-  print_offset:=true;
- end;
-
- Case print_offset of
-  True :Writeln(' ;0x',HexStr(Node.Adr.Offdw*4,4){,' (',node.Order,')'});
-  False:Writeln;
- end;
+ Writeln;
 end;
 
 

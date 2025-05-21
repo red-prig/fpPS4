@@ -25,7 +25,7 @@
     <RunParams>
       <FormatVersion Value="2"/>
     </RunParams>
-    <Units Count="64">
+    <Units Count="63">
       <Unit0>
         <Filename Value="pssl-spirv.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -250,54 +250,50 @@
         <IsPartOfProject Value="True"/>
       </Unit51>
       <Unit52>
-        <Filename Value="srCFGLabel.pas"/>
+        <Filename Value="srCFGParser.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit52>
       <Unit53>
-        <Filename Value="srCFGParser.pas"/>
+        <Filename Value="srFlow.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit53>
       <Unit54>
-        <Filename Value="srFlow.pas"/>
+        <Filename Value="srLiteral.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit54>
       <Unit55>
-        <Filename Value="srLiteral.pas"/>
+        <Filename Value="srNode.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit55>
       <Unit56>
-        <Filename Value="srNode.pas"/>
+        <Filename Value="srPrivate.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit56>
       <Unit57>
-        <Filename Value="srPrivate.pas"/>
+        <Filename Value="srType.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit57>
       <Unit58>
-        <Filename Value="srType.pas"/>
+        <Filename Value="srUniform.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit58>
       <Unit59>
-        <Filename Value="srUniform.pas"/>
+        <Filename Value="srVBufInfo.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit59>
       <Unit60>
-        <Filename Value="srVBufInfo.pas"/>
+        <Filename Value="..\chip\ps4_pssl.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit60>
       <Unit61>
-        <Filename Value="..\chip\ps4_pssl.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit61>
-      <Unit62>
         <Filename Value="emit_ds.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="emit_DS"/>
-      </Unit62>
-      <Unit63>
+      </Unit61>
+      <Unit62>
         <Filename Value="srOpInternal.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit63>
+      </Unit62>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

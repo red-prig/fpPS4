@@ -363,6 +363,9 @@ Var
  pos:TsrRegNode;
  cnd:TsrRegNode;
 begin
+ // Gcn wants the MSB position counting from the left, but SPIR-V counts from the rightmost (LSB)
+ // position
+
  dst:=get_vdst8(FSPI.VOP1.VDST);
  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUint32);
 
@@ -371,10 +374,11 @@ begin
 
  pos:=OpISubTo(NewImm_i(dtUint32,31),msb);
 
- cnd:=OpIEqualTo(src,NewImm_i(dtUint32,0));
+ // Select 0xFFFFFFFF if src was 0
+ cnd:=OpINotEqualTo(src,NewImm_i(dtUint32,0));
 
- //           True,                          False
- OpSelect(dst,NewImm_q(dtUint32,High(DWORD)),pos,cnd);
+ //dst,cond,src_true,src_false
+ OpSelect(dst,cnd,pos,NewImm_q(dtUint32,High(DWORD)));
 end;
 
 procedure TEmit_VOP1.emit_V_FFBL_B32;

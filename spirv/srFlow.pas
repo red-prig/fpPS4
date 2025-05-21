@@ -9,7 +9,6 @@ uses
  ps4_pssl,
  spirv,
  srNode,
- srCFGLabel,
  srCFGParser,
  srCFGCursor,
  srPrivate,
@@ -31,29 +30,27 @@ type
   //
   Procedure InitFlow;
   procedure mark_end_of(mark:TsrVolMark);
-  Procedure PushBlockOp(pLine:TspirvOp;pChild:TsrOpBlock;pLBlock:TsrCFGBlock=nil);
+  Procedure PushBlockOp(pLine:TspirvOp;pChild:TsrOpBlock;iCursor:TsrCursor);
   function  PopBlockOp:Boolean;
   function  ConvertCond(cond:TsrCondition;pLine:TspirvOp):TConvertResult;
   function  ConvertStatment(node:TsrStatement;pLine:TspirvOp):TConvertResult;
-  procedure emit_break(b_adr:TSrcAdr;pCurr:TsrOpBlock);
+  function  LoadStatment(C:TConvertResult):TConvertResult;
+  procedure emit_break(pCurr:TsrOpBlock);
   procedure EmitStatment(node:TsrStatement);
-  procedure EmitStatmentList(List:TsrStatementList);
-  function  NewMerge(pLBlock:TsrCFGBlock):TsrOpBlock;
-  function  NewIf   (pOpMerge:TsrOpBlock;pLBlock:TsrCFGBlock;src:TsrRegNode):TsrOpBlock;
-  function  NewElse (pOpMerge:TsrOpBlock;pLBlock:TsrCFGBlock):TsrOpBlock;
-  function  NewLoop (pLBlock:TsrCFGBlock):TsrOpBlock;
-  function  CheckBlockBeg:Boolean;
-  function  CheckBlockEnd:Boolean;
+  function  NewMerge(iCursor:TsrCursor):TsrOpBlock;
+  function  NewIf   (pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode):TsrOpBlock;
+  function  NewElse (pOpMerge:TsrOpBlock;iCursor:TsrCursor):TsrOpBlock;
+  function  NewLoop (iCursor:TsrCursor):TsrOpBlock;
+  function  BlockBeg:Boolean;
+  function  BlockEnd:Boolean;
   //
   function  get_code_ptr:Pointer;
   procedure set_code_ptr(base:Pointer;bType:TsrBlockType);
   function  fetch_cursor_ptr(base:Pointer;bType:TsrBlockType):TsrCursor;
-  function  IsFinalize:Boolean;
-  function  FindLabel(Adr:TSrcAdr):TsrLabel;
+  //function  IsFinalize:Boolean;
   //
   procedure Finalize;
   //
-  function  NextParse:Byte;
   function  ParseStage(base:Pointer):Integer;
  end;  
 
@@ -64,8 +61,8 @@ begin
  CodeHeap.Init(Self);
  //
  InitBlock:=AllocBlockOp;
- InitBlock.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
- PushBlockOp(line,InitBlock);
+ InitBlock.SetInfo(btOther);
+ PushBlockOp(line,InitBlock,Default(TsrCursor));
  Main.PopBlock;
 end;
 
@@ -86,25 +83,27 @@ begin
   node.FVolMark:=mark;
 
   //exit if real block
-  if IsReal(node.Block.bType) then Exit;
+  if IsReal(node.bType) then Exit;
 
   node:=node.Parent;
  end;
 end;
 
-Procedure TEmitFlow.PushBlockOp(pLine:TspirvOp;pChild:TsrOpBlock;pLBlock:TsrCFGBlock=nil);
+Procedure TEmitFlow.PushBlockOp(pLine:TspirvOp;pChild:TsrOpBlock;iCursor:TsrCursor);
 begin
- pChild.FCursor:=Cursor; //prev
- pChild.FLBlock:=pLBlock;
+ pChild.FCursor:=iCursor; //prev
+ //pChild.FLBlock:=pLBlock;
 
  InsSpirvOp(pLine,pChild);
 
  Main.PushBlock(pChild);
 
+ {
  if (pLBlock<>nil) then
  begin
   Cursor.pBlock:=pLBlock; //push
  end;
+ }
 end;
 
 function TEmitFlow.PopBlockOp:Boolean;
@@ -113,7 +112,7 @@ var
  pOpChild:TsrOpBlock;
  pBegOp,pEndOp,pMrgOp:TspirvOp;
 
- procedure pop_merge;
+ procedure pop_merge(pOpBlock:TsrOpBlock);
  begin
   Assert(pMrgOp<>nil);
 
@@ -125,17 +124,17 @@ var
   AddSpirvOp(line,pMrgOp); //end
  end;
 
- procedure pop_merge_after;
+ procedure pop_merge_after(pOpBlock:TsrOpBlock);
  begin
   //
  end;
 
- procedure pop_cond;
+ procedure pop_cond(pOpBlock:TsrOpBlock);
  begin
   //
  end;
 
- procedure pop_cond_after;
+ procedure pop_cond_after(pOpBlock:TsrOpBlock);
  begin
   if (pOpBlock.pElse<>nil) then //have else
   begin
@@ -162,12 +161,12 @@ var
   end;
  end;
 
- procedure pop_else;
+ procedure pop_else(pOpBlock:TsrOpBlock);
  begin
   //
  end;
 
- procedure pop_else_after;
+ procedure pop_else_after(pOpBlock:TsrOpBlock);
  var
   pIf:TsrOpBlock;
  begin
@@ -194,10 +193,10 @@ var
   end;
  end;
 
- procedure pop_loop;
+ procedure pop_loop(pOpBlock:TsrOpBlock);
  var
   pLine:TspirvOp;
-  pLBlock:TsrCFGBlock;
+  parent:TsrSourceBlock;
   src:TsrRegNode;
  begin
   //add OpLoopMerge continue
@@ -206,92 +205,75 @@ var
   Assert(pEndOp<>nil);
   Assert(pMrgOp<>nil);
 
-  pLBlock:=pOpBlock.FLBlock;
-  Assert(pLBlock<>nil);
+  parent:=pOpBlock.FCursor.AsBlock;
+  Assert(parent<>nil);
 
   pLine:=line; //before close
 
   //if pOpBlock.Cond.FUseCont then //use continue
 
-   if (pLBlock.pCond<>nil) then
-   begin
-    //have post conditions
-    if not is_term_op(line) then
-    begin
-     OpBranch(line,pMrgOp); //LoopMerge
-    end;
-   end else
-   begin
-    //not post conditions
-    if not is_term_op(line) then
-    begin
-     OpBranch(line,pEndOp); //break
-    end;
-   end;
-
-   AddSpirvOp(line,pMrgOp); //OpLoopMerge end
-
-     pOpChild:=AllocBlockOp;
-     pOpChild.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
-     PushBlockOp(line,pOpChild);
-
-     if (pLBlock.pCond<>nil) then
-     begin
-      //have post conditions
-      src:=ConvertStatment(pLBlock.pCond,pLine).pNode;
-      Assert(src<>nil);
-      //
-      OpBranchCond(line,pBegOp,pEndOp,src); //True|False
-     end else
-     begin
-      //not post conditions
-      OpBranch(line,pBegOp); //continue
-     end;
-
-   Main.PopBlock;
-
-   AddSpirvOp(line,pEndOp); //end
-
-  {
-  end else //dont used continue
+  if (parent.pCond<>nil) then
   begin
-
-   {
+   //have post conditions
    if not is_term_op(line) then
    begin
-    AddSpirvOp(line,NewLabelOp(True)); //devide
+    OpBranch(line,pMrgOp); //LoopMerge
    end;
-   }
+  end else
+  begin
+   //not post conditions
+   if not is_term_op(line) then
+   begin
+    OpBranch(line,pEndOp); //break
+   end;
+  end;
 
-   AddSpirvOp(line,pMrgOp); //OpLoopMerge end
+  AddSpirvOp(line,pMrgOp); //OpLoopMerge end
 
-     pOpChild:=AllocBlockOp;
-     pOpChild.SetInfo(btOther,Cursor.Adr,Cursor.Adr);
-     PushBlockOp(line,pOpChild);
-     OpBranch(line,pEndOp); //break
-   Main.PopBlock;
+    pOpChild:=AllocBlockOp;
+    pOpChild.SetInfo(btOther);
+    PushBlockOp(line,pOpChild,Default(TsrCursor));
 
-   AddSpirvOp(line,pEndOp); //end
-  }
+    if (parent.pCond<>nil) then
+    begin
+     //have post conditions
+     src:=LoadStatment(ConvertStatment(parent.pCond,pLine)).pNode;
+     Assert(src<>nil);
+     //
+     OpBranchCond(line,pBegOp,pEndOp,src); //True|False
+    end else
+    begin
+     //not post conditions
+     OpBranch(line,pBegOp); //continue
+    end;
 
+  Main.PopBlock;
+
+  AddSpirvOp(line,pEndOp); //end
 
  end;
 
- procedure pop_loop_after;
-  var
-  pLBlock:TsrCFGBlock;
+ Function IsUnreachable(cond:TsrStatement):Boolean; inline;
+ begin
+  Result:=(cond.sType=sCond) and (cond.u.cond=cFalse)
+ end;
+
+ procedure pop_loop_after(pOpBlock:TsrOpBlock);
+ var
+  parent:TsrSourceBlock;
  begin
   if (pOpBlock.FVolMark<>vmNone) then
   begin
-   //restore original if inside endpgm/break/continue
-   PrivateList.build_volatile_reset(pOpBlock.Regs.orig);
+   //set next volatile state
+   PrivateList.build_volatile_reset(pOpBlock.Regs.next);
   end else
   begin
    //calc break volatile state
    PrivateList.build_volatile_break(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
 
-   pLBlock:=pOpBlock.FLBlock;
-   if (pLBlock.pCond<>nil) then
+   parent:=pOpBlock.FCursor.AsBlock;
+   if (parent.pCond<>nil) then
+   if not IsUnreachable(parent.pCond) then
    begin
     //have post conditions
     PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
@@ -302,7 +284,7 @@ var
   end;
  end;
 
- procedure pop_other;
+ procedure pop_other(pOpBlock:TsrOpBlock);
  begin
   //pMrgOp???
   if (pEndOp<>nil) then
@@ -322,89 +304,78 @@ begin
  pOpBlock:=Main.pBlock;
  if (pOpBlock=nil) then Exit;
 
- if (pOpBlock.FLBlock<>nil) then
- begin
-  EmitStatmentList(pOpBlock.FLBlock.FEnded);
- end;
-
  pBegOp:=pOpBlock.Labels.pBegOp;
  pEndOp:=pOpBlock.Labels.pEndOp;
  pMrgOp:=pOpBlock.Labels.pMrgOp;
 
- Case pOpBlock.Block.bType of
+ Case pOpBlock.bType of
   btMerg:
    begin
-    pop_merge;
+    pop_merge(pOpBlock);
    end;
   btCond:
    begin
-    pop_cond;
+    pop_cond(pOpBlock);
    end;
   btElse:
    begin
-    pop_else;
+    pop_else(pOpBlock);
    end;
   btLoop:
    begin
-    pop_loop;
+    pop_loop(pOpBlock);
    end;
   else
-    pop_other;
+    pop_other(pOpBlock);
  end;
 
  //restore
 
- Case pOpBlock.Block.bType of
+ Case pOpBlock.bType of
   btInline:
    begin
-    Assert(pOpBlock.FCursor.pBlock<>nil);
+    Assert(pOpBlock.FCursor.pCode<>nil);
+    Assert(pOpBlock.FCursor.pNode<>nil);
     Cursor:=pOpBlock.FCursor;
    end;
   btOther:
    begin
-    if (pOpBlock.FLBlock<>nil) then
+    if (pOpBlock.FCursor.pCode<>nil) then
+    if (pOpBlock.FCursor.pNode<>nil) then
     begin
-     Cursor.PopBlock;
+     Cursor:=pOpBlock.FCursor;
     end;
    end;
   else
    begin
-    Assert(pOpBlock.FCursor.pBlock<>nil);
-    //Cursor.pCode:=pOpBlock.FCursor.pCode;
+    Assert(pOpBlock.FCursor.pCode<>nil);
+    Assert(pOpBlock.FCursor.pNode<>nil);
     Cursor.PopBlock;
    end;
  end;
 
  Result:=Main.PopBlock;
 
- Case pOpBlock.Block.bType of
+ Case pOpBlock.bType of
   btMerg:
    begin
-    pop_merge_after;
+    pop_merge_after(pOpBlock);
    end;
   btCond:
    begin
-    pop_cond_after;
-    //PrivateList.build_volatile_test;
+    pop_cond_after(pOpBlock);
    end;
   btElse:
    begin
-    pop_else_after;
+    pop_else_after(pOpBlock);
    end;
   btLoop:
    begin
-    pop_loop_after;
-    //PrivateList.build_volatile_test;
+    pop_loop_after(pOpBlock);
    end;
   else
    begin
-    //PrivateList.build_volatile_test;
    end;
- end;
-
- if (pOpBlock.FLBlock<>nil) then
- begin
-  EmitStatmentList(pOpBlock.FLBlock.FAfter);
  end;
 
 end;
@@ -420,17 +391,20 @@ begin
  end;
 end;
 
+
 function TEmitFlow.ConvertCond(cond:TsrCondition;pLine:TspirvOp):TConvertResult;
 begin
  case cond of
   cFalse :Result.pNode:=NewImm_b(False,pLine);
   cTrue  :Result.pNode:=NewImm_b(True ,pLine);
-  cScc0  :Result.pNode:=fetch_scc;
-  cScc1  :Result.pNode:=fetch_scc;
-  cVccz  :Result.pNode:=fetch_vccz ; //It means that lane_id=0
-  cVccnz :Result.pNode:=fetch_vccz ; //It means that lane_id=0
-  cExecz :Result.pNode:=fetch_execz; //It means that lane_id=0
-  cExecnz:Result.pNode:=fetch_execz; //It means that lane_id=0
+  cScc0  :Result.pNode:=fetch_scc;                 //It means that (scc == 0)
+  cScc1  :Result.pNode:=fetch_scc;                 //It means that (scc == 1)
+  cVccz  :Result.pNode:=fetch_vccnz     (@pLine);  //It means that (vcc0  == 0) && (vcc1  == 0)
+  cVccnz :Result.pNode:=fetch_vccnz     (@pLine);  //It means that (vcc0  != 0) || (vcc1  != 0)
+  cExecz :Result.pNode:=fetch_execnz    (@pLine);  //It means that (exec0 == 0) && (exec1 == 0)
+  cExecnz:Result.pNode:=fetch_execnz    (@pLine);  //It means that (exec0 != 0) || (exec1 != 0)
+  cTidz  :Result.pNode:=fetch_execnz_tid(@pLine);  //It means that (exec[thread_id:] == 0)
+  cTidnz :Result.pNode:=fetch_execnz_tid(@pLine);  //It means that (exec[thread_id:] != 0)
   else
    Assert(false,'ConvertCond');
  end;
@@ -438,13 +412,14 @@ begin
  case cond of
   cScc0,
   cVccz,
-  cExecz:
+  cExecz,
+  cTidz:
    begin
     //invert
     if TsrRegNode(Result.pNode).is_const then
     begin
      //early optimization
-     Result.pNode:=NewImm_b(TsrRegNode(Result.pNode).AsConst.AsBool,pLine);
+     Result.pNode:=NewImm_b(not TsrRegNode(Result.pNode).AsConst.AsBool,pLine);
     end else
     begin
      Result.pNode:=OpLogicalNotTo(Result.pNode,@pLine);
@@ -458,6 +433,8 @@ begin
 end;
 
 function TEmitFlow.ConvertStatment(node:TsrStatement;pLine:TspirvOp):TConvertResult;
+var
+ V:TsrVolatile;
 begin
  Result.pNode:=nil;
  Result.pLine:=pLine;
@@ -466,19 +443,24 @@ begin
   sCond :begin
           Result:=ConvertCond(node.u.cond,pLine);
          end;
+  sCopy :begin
+          Result.pNode:=TsrNode(node.pCache);
+          Assert(Result.pNode<>nil);
+         end;
   sVar  :begin
           if (node.pCache<>nil) then
           begin
            Result.pNode:=TsrNode(node.pCache);
           end else
           begin
-           Result.pNode:=PrivateList.NewVolatile(@RegsStory.FUnattach);
+           V:=PrivateList.NewVolatile(@RegsStory.FUnattach);
+           V.ForceBool:=True;
+           //
+           Result.pNode:=V;
            node.pCache:=Result.pNode;
           end;
-         end;
-  sLoad :begin
-          Result.pNode:=TsrNode(node.pCache);
-          Assert(Result.pNode<>nil);
+          //load
+
          end;
   sNot  :begin
           Result.pNode:=TsrNode(node.pCache);
@@ -493,13 +475,36 @@ begin
           Assert(Result.pNode<>nil);
          end;
   else
-   Assert(false);
+   Assert(false,'ConvertStatment');
  end;
 end;
 
-procedure TEmitFlow.emit_break(b_adr:TSrcAdr;pCurr:TsrOpBlock);
+function TEmitFlow.LoadStatment(C:TConvertResult):TConvertResult;
+var
+ V:TsrVolatile;
+ R:TsrRegNode;
+begin
+ Result:=C;
+
+ if C.pNode.IsType(ntVolatile) then
+ begin
+  V:=C.pNode.specialize AsType<TsrVolatile>;
+  Assert(V<>nil);
+
+  R:=NewReg(dtBool);
+  R.pWriter:=V;
+  R.CustomLine:=C.pLine;
+
+  Result.pNode:=R;
+ end;
+
+end;
+
+procedure TEmitFlow.emit_break(pCurr:TsrOpBlock);
 var
  pOpLabel:TspirvOp;
+
+ parent:TsrSourceBlock;
 
  pLoop:TsrOpBlock;
 
@@ -510,25 +515,32 @@ begin
 
  pOpLabel:=nil;
 
- if (pLoop.Block.e_adr.get_code_ptr=b_adr.get_code_ptr) then //is break?
+ {
+ parent:=pLoop.FCursor.AsBlock;
+ Assert(parent<>nil);
+
+ if (parent.Last=Cursor.pNode) then //is break?
  begin
   pOpLabel:=pLoop.Labels.pEndOp;
  end else
  begin
   Assert(false,'break');
  end;
+ }
 
+ pOpLabel:=pLoop.Labels.pEndOp;
  Assert(pOpLabel<>nil);
 
+ Assert(pLoop.FCursor.pNode<>nil);
+ parent:=pLoop.FCursor.AsBlock;
+ Assert(parent<>nil);
+
  bnew:=true;
- if pCurr.IsEndOf(Cursor.Adr) then //is last
+ //if pCurr.IsEndOf(Cursor.Adr) then //is last
  begin
-  Case pCurr.Block.bType of
-   btSetpc:;
-   else
-     begin
-      bnew:=false;
-     end;
+  if IsReal(pCurr.bType) then
+  begin
+   bnew:=false;
   end;
  end;
 
@@ -554,6 +566,15 @@ Var
 begin
  case node.sType of
   sCond:; //skip
+  sCopy:
+   begin
+    C:=ConvertStatment(node.pSrc,line);
+    C:=LoadStatment(C);
+    R:=C.pNode.specialize AsType<TsrRegNode>;
+    Assert(R<>nil);
+
+    node.pCache:=R;
+   end;
   sStore:
    begin
     C:=ConvertStatment(node.pDst,line);
@@ -561,32 +582,23 @@ begin
     Assert(V<>nil);
 
     C:=ConvertStatment(node.pSrc,C.pLine);
-    R:=C.pNode.specialize AsType<TsrRegNode>;
-    Assert(R<>nil);
+    C:=LoadStatment(C);
+    D:=C.pNode.specialize AsType<TsrRegNode>;
+    Assert(D<>nil);
 
-    V.AddStore(R);
-   end;
-  sLoad:
-   begin
-    C:=ConvertStatment(node.pSrc,line);
-    V:=C.pNode.specialize AsType<TsrVolatile>;
-    Assert(V<>nil);
+    //Writeln('sStore to:',node.pDst.u.id,' from ',node.pSrc.u.id);
 
-    R:=NewReg(dtBool);
-    R.pWriter:=V;
-    R.CustomLine:=C.pLine;
-
-    node.pCache:=R;
+    V.AddStore(D);
    end;
   sBreak:
    begin
-    Assert(node.sLabel<>nil);
-
-    emit_break(node.sLabel.Adr,Main.pBlock);
+    emit_break(Main.pBlock);
    end;
   sNot:
    begin
-    R:=ConvertStatment(node.pSrc,line).pNode.specialize AsType<TsrRegNode>;
+    C:=ConvertStatment(node.pSrc,line);
+    C:=LoadStatment(C);
+    R:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(R<>nil);
 
     R:=OpLogicalNotTo(R);
@@ -595,10 +607,14 @@ begin
    end;
   sOr:
    begin
-    R:=ConvertStatment(node.pSrc,line).pNode.specialize AsType<TsrRegNode>;
+    C:=ConvertStatment(node.pSrc,line);
+    C:=LoadStatment(C);
+    R:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(R<>nil);
 
-    D:=ConvertStatment(node.pDst,line).pNode.specialize AsType<TsrRegNode>;
+    C:=ConvertStatment(node.pDst,line);
+    C:=LoadStatment(C);
+    D:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(D<>nil);
 
     R:=OpOrTo(R,D);
@@ -607,10 +623,14 @@ begin
    end;
   sAnd:
    begin
-    R:=ConvertStatment(node.pSrc,line).pNode.specialize AsType<TsrRegNode>;
+    C:=ConvertStatment(node.pSrc,line);
+    C:=LoadStatment(C);
+    R:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(R<>nil);
 
-    D:=ConvertStatment(node.pDst,line).pNode.specialize AsType<TsrRegNode>;
+    C:=ConvertStatment(node.pDst,line);
+    C:=LoadStatment(C);
+    D:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(D<>nil);
 
     R:=OpAndTo(R,D);
@@ -618,76 +638,53 @@ begin
     node.pCache:=R;
    end;
   else
-   Assert(false);
+   Assert(false,'EmitStatment');
  end;
 end;
 
-procedure TEmitFlow.EmitStatmentList(List:TsrStatementList);
+function TEmitFlow.NewMerge(iCursor:TsrCursor):TsrOpBlock;
 var
- node:TsrStatement;
-begin
- node:=List.pHead;
- while (node<>nil) do
- begin
-  EmitStatment(node);
-  //
-  node:=node.pNext;
- end;
-end;
-
-function TEmitFlow.NewMerge(pLBlock:TsrCFGBlock):TsrOpBlock;
-var
- Info:TsrBlockInfo;
  pMrgOp:TspirvOp;
  pLine:TspirvOp;
  pNop :TspirvOp;
 begin
- Info:=Default(TsrBlockInfo);
- Info.bType:=btMerg;
-
- if (pLBlock<>nil) then
- begin
-  Info.b_adr:=pLBlock.pBLabel.Adr;
-  Info.e_adr:=pLBlock.pELabel.Adr;
- end else
- begin
-  Info.b_adr:=Cursor.prev_adr;
-  Info.e_adr:=Cursor.Adr;
- end;
-
  pMrgOp:=NewLabelOp(False); //merge
- pMrgOp.Adr:=Info.e_adr;
 
  //save push point
  pLine:=line;
 
+ pNop:=nil;
  if pLine.IsType(ntOp) then
  if (pLine.OpId=Op.OpNop) then
  begin
   pNop:=pLine;
- end else
+  pNop.mark([soNotUsed,soPost]);
+ end;
+
+ if (pNop=nil) then
  begin
   pNop:=AddSpirvOp(pLine,Op.OpNop);
-  pNop.mark_not_used;
+  pNop.mark([soNotUsed,soPost]);
   //
   pLine:=pNop;
  end;
 
  Result:=AllocBlockOp;
- Result.SetInfo(Info);
+ Result.SetInfo(btMerg);
  Result.SetLabels(nil,nil,pMrgOp);
+ //Result.Cond.FExcMerg:=pLBlock.ExcMerg;
 
  //save nop before
  Result.vctx.Befor:=pNop;
 
  //add nop aka PostLink
  pNop:=AddSpirvOp(pLine,Op.OpNop);
- pNop.mark_not_used;
+ pNop.mark([soNotUsed,soPost]);
 
  Result.vctx.After:=pNop;
 
  //add by push point
- PushBlockOp(pLine,Result,pLBlock);
+ PushBlockOp(pLine,Result,iCursor);
 
  //Deferred instruction
  //OpCondMerge(line,pMrgOp);
@@ -704,14 +701,14 @@ begin
  Result:=pConst.AsBool;
 end;
 
-function TEmitFlow.NewIf(pOpMerge:TsrOpBlock;pLBlock:TsrCFGBlock;src:TsrRegNode):TsrOpBlock;
+function TEmitFlow.NewIf(pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode):TsrOpBlock;
 var
  orig:TsrRegsSnapshot;
- pLElse:TsrCFGBlock;
+ pLBlock:TsrSourceBlock;
+ pLElse:TsrSourceBlock;
  pBegOp,pEndOp,pMrgOp,pAfter,pBefor:TspirvOp;
  pOpElse:TsrOpBlock;
  pOpBody:TsrOpBlock;
- Info:TsrBlockInfo;
 
  function _IsNestedTrue(src:TsrRegNode):Boolean;
  var
@@ -728,30 +725,25 @@ begin
  pAfter:=pOpMerge.vctx.After;
  pBefor:=pOpMerge.vctx.Befor;
 
- src:=nil;
+ pLBlock:=iCursor.AsBlock;
 
  if (pLBlock<>nil) then
  if (pLBlock.pElse=nil) then  //no else
  if (pLBlock.pCond<>nil) then //have cond
  begin
-  src:=ConvertStatment(pLBlock.pCond,pBefor).pNode;
+  src:=LoadStatment(ConvertStatment(pLBlock.pCond,pBefor)).pNode;
   //
   if _IsConstTrue(src) or
      _IsNestedTrue(src) then
   begin
    //early optimization
 
-   pOpMerge.Block.bType:=btOther;
+   pOpMerge.bType:=btOther;
 
    //down body group
-   Info:=Default(TsrBlockInfo);
-   Info.bType:=btOther;
-   Info.b_adr:=pLBlock.pBLabel.Adr;
-   Info.e_adr:=pLBlock.pELabel.Adr;
-
    pOpBody:=AllocBlockOp;
-   pOpBody.SetInfo(Info);
-   PushBlockOp(line,pOpBody,pLBlock);
+   pOpBody.SetInfo(btOther);
+   PushBlockOp(line,pOpBody,Default(TsrCursor));
 
    Exit(pOpBody);
   end;
@@ -770,19 +762,6 @@ begin
 
  orig:=RegsStory.get_snapshot;
 
- Info:=Default(TsrBlockInfo);
- Info.bType:=btCond;
-
- if (pLBlock<>nil) then
- begin
-  Info.b_adr:=pLBlock.pBLabel.Adr;
-  Info.e_adr:=pLBlock.pELabel.Adr;
- end else
- begin
-  Info.b_adr:=Cursor.prev_adr;
-  Info.e_adr:=Cursor.Adr;
- end;
-
  pBegOp:=NewLabelOp(False); //begin
 
  if (pLElse<>nil) then //have else
@@ -793,17 +772,14 @@ begin
   pEndOp:=pMrgOp; //endif
  end;
 
- pBegOp.Adr:=Info.b_adr;
- pEndOp.Adr:=Info.e_adr;
-
  Result:=NewBlockOp(orig);
  Result.SetLabels(pBegOp,pEndOp,pMrgOp);
- Result.SetInfo(Info);
+ Result.SetInfo(btCond);
 
  Result.vctx.Befor:=pBefor;
  Result.vctx.After:=pAfter; //move nop link
 
- PushBlockOp(line,Result,pLBlock);
+ PushBlockOp(line,Result,iCursor);
 
  pOpMerge.pBody:=Result; //Merge->if
 
@@ -813,7 +789,7 @@ begin
   begin
    if (src=nil) then
    begin
-    src:=ConvertStatment(pLBlock.pCond,pBefor).pNode;
+    src:=LoadStatment(ConvertStatment(pLBlock.pCond,pBefor)).pNode;
    end;
    Assert(src<>nil);
    //
@@ -847,14 +823,11 @@ begin
 
  if (pLElse<>nil) then //have else
  begin
-  Info.bType:=btElse;
-  Info.b_adr:=pLElse.pBLabel.Adr;
-  Info.e_adr:=pLElse.pELabel.Adr;
 
   //create else block
   pOpElse:=AllocBlockOp;
   pOpElse.SetLabels(pEndOp,pMrgOp,pMrgOp);
-  pOpElse.SetInfo(Info);
+  pOpElse.SetInfo(btElse);
   pOpElse.vctx.After:=pAfter; //move nop link
 
   //save snap links
@@ -871,35 +844,22 @@ begin
  pOpMerge.pIf:=Result;
 
  //down body group
- Info.bType:=btOther;
-
- if (pLBlock<>nil) then
- begin
-  Info.b_adr:=pLBlock.pBLabel.Adr;
-  Info.e_adr:=pLBlock.pELabel.Adr;
- end else
- begin
-  Info.b_adr:=Cursor.prev_adr;
-  Info.e_adr:=Cursor.Adr;
- end;
-
  pOpBody:=AllocBlockOp;
- pOpBody.SetInfo(Info);
+ pOpBody.SetInfo(btOther);
  Result.pBody:=pOpBody; //save body link
- PushBlockOp(line,pOpBody);
+ PushBlockOp(line,pOpBody,Default(TsrCursor));
 end;
 
-function TEmitFlow.NewElse(pOpMerge:TsrOpBlock;pLBlock:TsrCFGBlock):TsrOpBlock;
+function TEmitFlow.NewElse(pOpMerge:TsrOpBlock;iCursor:TsrCursor):TsrOpBlock;
 var
  pBegOp,pMrgOp:TspirvOp;
  pOpBody:TsrOpBlock;
- Info:TsrBlockInfo;
 begin
  Result:=pOpMerge.pElse;
  Assert(Result<>nil);
 
  //down else block
- PushBlockOp(line,Result,pLBlock);
+ PushBlockOp(line,Result,iCursor);
 
  pBegOp:=Result.Labels.pBegOp;
  pMrgOp:=Result.Labels.pMrgOp;
@@ -911,24 +871,19 @@ begin
  AddSpirvOp(line,pBegOp); //start else
 
  //down body group
- Info.bType:=btOther;
- Info.b_adr:=pLBlock.pBLabel.Adr;
- Info.e_adr:=pLBlock.pELabel.Adr;
-
  pOpBody:=AllocBlockOp;
- pOpBody.SetInfo(Info);
+ pOpBody.SetInfo(btOther);
  Result.pBody:=pOpBody; //save body link
- PushBlockOp(line,pOpBody);
+ PushBlockOp(line,pOpBody,Default(TsrCursor));
 end;
 
-function TEmitFlow.NewLoop(pLBlock:TsrCFGBlock):TsrOpBlock;
+function TEmitFlow.NewLoop(iCursor:TsrCursor):TsrOpBlock;
 var
  orig:TsrRegsSnapshot;
  pLine:TspirvOp;
  pBegOp,pEndOp,pMrgOp,pRepOp:TspirvOp;
  pNop:TspirvOp;
  pOpBody:TsrOpBlock;
- Info:TsrBlockInfo;
 begin
  orig:=RegsStory.get_snapshot;
  PrivateList.make_copy_all;
@@ -936,14 +891,18 @@ begin
  //get before
  pLine:=line;
 
+ pNop:=nil;
  if pLine.IsType(ntOp) then
  if (pLine.OpId=Op.OpNop) then
  begin
   pNop:=pLine;
- end else
+  pNop.mark([soNotUsed,soPost]);
+ end;
+
+ if (pNop=nil) then
  begin
   pNop:=AddSpirvOp(pLine,Op.OpNop);
-  pNop.mark_not_used;
+  pNop.mark([soNotUsed,soPost]);
   //
   pLine:=pNop;
  end;
@@ -951,24 +910,14 @@ begin
  Assert(pLine.IsType(ntOp) ,'WTF');
  Assert(pLine.OpId=Op.OpNop,'WTF');
 
- Info:=Default(TsrBlockInfo);
- Info.b_adr:=pLBlock.pBLabel.Adr;
- Info.e_adr:=pLBlock.pELabel.Adr;
- Info.bType:=btLoop;
-
  pBegOp:=NewLabelOp(False); //continue
  pEndOp:=NewLabelOp(False); //end
  pMrgOp:=NewLabelOp(False); //cond
  pRepOp:=NewLabelOp(False); //start
 
- pBegOp.Adr:=Info.b_adr;
- pEndOp.Adr:=Info.e_adr;
- pMrgOp.Adr:=Info.e_adr;
- pRepOp.Adr:=Info.b_adr;
-
  Result:=NewBlockOp(RegsStory.get_snapshot,orig);
  Result.SetLabels(pBegOp,pEndOp,pMrgOp);
- Result.SetInfo(Info);
+ Result.SetInfo(btLoop);
 
  //save nop before
  Result.vctx.Befor:=pNop;
@@ -978,11 +927,11 @@ begin
 
  //add nop aka PostLink
  pNop:=AddSpirvOp(pLine,Op.OpNop);
- pNop.mark_not_used;
+ pNop.mark([soNotUsed,soPost]);
  //
  Result.vctx.After:=pNop;
 
- PushBlockOp(pLine,Result,pLBlock);
+ PushBlockOp(pLine,Result,iCursor);
 
  OpBranch  (line,pBegOp);
  AddSpirvOp(line,pBegOp);    //continue loop
@@ -992,92 +941,77 @@ begin
  AddSpirvOp (line,pRepOp);
 
  //down group
- Info.bType:=btOther;
  pOpBody:=AllocBlockOp;
- pOpBody.SetInfo(Info);
+ pOpBody.SetInfo(btOther);
  Result.pBody:=pOpBody; //save body link
 
- PushBlockOp(line,pOpBody);
+ PushBlockOp(line,pOpBody,Default(TsrCursor));
 end;
 
-function TEmitFlow.CheckBlockBeg:Boolean;
+function TEmitFlow.BlockBeg:Boolean;
 var
- pLBlock:TsrCFGBlock;
+ parent:TsrSourceBlock;
  pOpMerge:TsrOpBlock;
- adr:TSrcAdr;
 begin
  Result:=False;
 
  //is marked of end
- if IsFinalize then Exit;
+ //if IsFinalize then Exit;
 
- adr:=Cursor.Adr;
+ parent:=Cursor.AsBlock;
 
- if (FindLabel(adr)=nil) then Exit;
+ Case parent.bType of
+  btMerg:
+   begin
+    pOpMerge:=NewMerge(Cursor);
 
- pLBlock:=Cursor.pBlock.FindBlock(adr);
+    Result:=True;
+   end;
+  btCond:
+   begin
+    pOpMerge:=line.Parent;
+    Assert(pOpMerge<>nil);
+    Assert(pOpMerge.bType=btMerg);
 
- if (pLBlock<>nil) then
- begin
-  EmitStatmentList(pLBlock.FBefore);
+    NewIf(pOpMerge,Cursor,nil);
 
-  Case pLBlock.bType of
-   btMerg:
-    begin
-     pOpMerge:=NewMerge(pLBlock);
+    Result:=True;
+   end;
+  btElse:
+   begin
+    pOpMerge:=line.Parent;
+    Assert(pOpMerge<>nil);
+    Assert(pOpMerge.bType=btMerg);
 
-     Result:=True;
-    end;
-   btCond:
-    begin
-     pOpMerge:=line.Parent;
-     Assert(pOpMerge<>nil);
-     Assert(pOpMerge.Block.bType=btMerg);
+    NewElse(pOpMerge,Cursor);
 
-     NewIf(pOpMerge,pLBlock,nil);
+    Result:=True;
+   end;
+  btLoop:
+   begin
+    NewLoop(Cursor);
 
-     Result:=True;
-    end;
-   btElse:
-    begin
-     pOpMerge:=line.Parent;
-     Assert(pOpMerge<>nil);
-     Assert(pOpMerge.Block.bType=btMerg);
-
-     NewElse(pOpMerge,pLBlock);
-
-     Result:=True;
-    end;
-   btLoop:
-    begin
-     NewLoop(pLBlock);
-
-     Result:=True;
-    end;
-   btInline: //skip
-    begin
-     adr:=pLBlock.pELabel.Adr;
-     Cursor.Adr:=adr;
-    end;
-   else
-    begin
-     Assert(false);
-    end;
-  end;
-
-  EmitStatmentList(pLBlock.FStart);
+    Result:=True;
+   end;
+  btInline: //skip
+   begin
+    //
+   end;
+  else
+   begin
+    Assert(false);
+   end;
  end;
 
 end;
 
-function TEmitFlow.CheckBlockEnd:Boolean;
+function TEmitFlow.BlockEnd:Boolean;
 begin
  Result:=False;
  if (Main=nil) then Exit;
  if (Main.pBlock=nil) then Exit;
 
  if (Main.pBlock.Parent<>nil) then
- if Main.pBlock.IsEndOf(Cursor.Adr) then
  begin
   Result:=PopBlockOp;
  end;
@@ -1087,12 +1021,12 @@ end;
 
 function TEmitFlow.get_code_ptr:Pointer;
 begin
- Result:=Cursor.Adr.get_code_ptr;
+ Result:=Cursor.e_adr.get_code_ptr;
 end;
 
 procedure TEmitFlow.set_code_ptr(base:Pointer;bType:TsrBlockType);
 begin
- if (Cursor.Adr.get_code_ptr=base) then Exit;
+ if (Cursor.b_adr.get_code_ptr=base) then Exit;
  Cursor:=CodeHeap.FetchByPtr(base,bType);
 end;
 
@@ -1101,6 +1035,7 @@ begin
  Result:=CodeHeap.FetchByPtr(base,bType);
 end;
 
+{
 function TEmitFlow.IsFinalize:Boolean;
 begin
  Result:=False;
@@ -1111,13 +1046,7 @@ begin
   Result:=True;
  end;
 end;
-
-function TEmitFlow.FindLabel(Adr:TSrcAdr):TsrLabel;
-begin
- Result:=nil;
- if (Cursor.pCode=nil) then Exit;
- Result:=Cursor.pCode.FindLabel(Adr);
-end;
+}
 
 procedure TEmitFlow.Finalize;
 begin
@@ -1134,68 +1063,108 @@ end;
 
 //
 
-function TEmitFlow.NextParse:Byte;
-var
- FLevel:DWORD;
-begin
- if (Cursor.pCode=nil)  then Exit(2);
- if (Cursor.pBlock=nil) then Exit(3);
- if (Main=nil)          then Exit(4);
- if (Main.pBlock=nil)   then Exit(5);
-
- if Config.PrintAsm then
- begin
-  Write(HexStr(Cursor.OFFSET_DW*4,4));
-
-  //Write('(',GetGlobalIndex(line),')');
-
-  FLevel:=0;
-  if (Main<>nil) then
-  if (Main.pBlock<>nil) then
-  begin
-   FLevel:=Main.pBlock.Level;
-  end;
-  Write(Space(FLevel+1));
- end;
-
- Result:=Cursor.Next(FSPI);
- if (Result>1) then Exit;
-
- if Config.PrintAsm then
- begin
-  print_spi(FSPI);
- end;
-
- emit_spi;
-
- While (CheckBlockBeg) do;
- While (CheckBlockEnd) do;
- While (CheckBlockBeg) do;
-
- Result:=0;
- if IsFinalize then
- begin
-  Finalize;
-  Result:=1;
- end;
-
-end;
-
 function TEmitFlow.ParseStage(base:Pointer):Integer;
+label
+ _skip,
+ _up;
+var
+ next:TsrSourceNode;
+ FLevel:DWORD;
 begin
  Result:=0;
  set_code_ptr(base,btMain);
- Main.pTop.SetCFGBlock(Cursor.pBlock);
- While (CheckBlockBeg) do;
- repeat
-  Result:=NextParse;
-  Case Result of
-   0:;
-   1:Break;
-   else
-     Break;
+
+ while (Cursor.pNode<>nil) do
+ begin
+
+  if Cursor.fnext then
+  begin
+   //skip intruction
+   Cursor.fnext:=False;
+   goto _skip;
   end;
- until false;
+
+  //down
+  while (Cursor.pNode.ntype=TsrSourceBlock) do
+  begin
+   BlockBeg;
+   next:=Cursor.pNode.First;
+   if (next=nil) then
+   begin
+    //up
+    goto _up;
+   end;
+   Cursor.pNode:=next;
+   Cursor.UpdateAdr;
+  end;
+
+  if (Cursor.pNode.ntype=TsrSourceNode) then
+  begin
+   //skip
+  end else
+  if (Cursor.pNode.ntype=TsrSourceLabel) then
+  begin
+   //skip
+  end else
+  if (Cursor.pNode.ntype=TsrSourceInstruction) then
+  begin
+   //
+   FSPI:=TsrSourceInstruction(Cursor.pNode).FSPI;
+   //
+   if Config.PrintAsm then
+   begin
+
+    FLevel:=0;
+    if (Main<>nil) then
+    if (Main.pBlock<>nil) then
+    begin
+     FLevel:=Main.pBlock.Level;
+    end;
+
+    Writeln(HexStr(Cursor.b_adr.Offset,4),Space(FLevel+1),get_str_spi(FSPI));
+   end;
+   //
+   next:=Cursor.pNode;
+
+   emit_spi;
+
+   if (Cursor.pNode<>next) then
+   begin
+    //node is change
+    Continue;
+   end;
+   //
+  end else
+  if (Cursor.pNode.ntype=TsrStatement) then
+  begin
+   //
+   EmitStatment(TsrStatement(Cursor.pNode));
+   //
+  end else
+  begin
+   Assert(false,'Unhandled node:'+Cursor.pNode.ntype.ClassName);
+  end;
+
+  _skip:
+
+  next:=Cursor.pNode.pNext;
+  while (next=nil) and
+        (Cursor.pNode.pParent<>nil) and
+        (Cursor.pNode.pParent<>Cursor.pCode.FTop) do
+  begin
+   _up:
+   //up
+   BlockEnd; //"Cursor.pNode:=Cursor.pNode.pParent" in "PopBlockOp"
+   //
+   next:=Cursor.pNode.pNext;
+  end;
+  //
+  Cursor.pNode:=next;
+  Cursor.UpdateAdr;
+
+ end; //while
+
+ Finalize;
 end;
 
 end.

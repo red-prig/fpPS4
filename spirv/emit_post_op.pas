@@ -9,7 +9,7 @@ uses
   bittype,
   Half16,
   spirv,
-  srCFGLabel,
+  srCFGParser,
   srNode,
   srType,
   srTypes,
@@ -181,6 +181,8 @@ begin
   dtBool  :Result:=dtBool;
   dtInt32,
   dtUint32:Result:=dtUint32;
+  dtInt64,
+  dtUint64:Result:=dtUint64;
   else
            Result:=dtUnknow;
  end;
@@ -196,7 +198,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -204,7 +206,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -346,7 +348,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -354,7 +356,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -482,7 +484,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -490,7 +492,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -646,7 +648,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -654,7 +656,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -710,7 +712,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -800,7 +802,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -850,7 +852,7 @@ begin
     Op.OpLabel,
     Op.OpSelectionMerge,
     Op.OpBranch,
-    Op.OpBranchConditional:node.mark_not_used(True);
+    Op.OpBranchConditional:node.mark([soNotUsed,soForce]);
     else;
    end;
    //
@@ -904,6 +906,9 @@ var
  cst  :TsrConst;
 begin
  Result:=0;
+
+ //exit;
+
  src:=RegDown(node.ParamNode(0).AsReg);
 
  if (src=nil) then Exit;
@@ -927,10 +932,10 @@ begin
 
     //Get merge block
     pMerg:=pCond.Parent;
-    Assert(pMerg.Block.bType=btMerg);
+    Assert(pMerg.bType=btMerg);
 
     //set type
-    pMerg.Block.bType:=btOther;
+    pMerg.bType:=btOther;
 
     _restore(pCond.vctx);
 
@@ -938,7 +943,7 @@ begin
     //PrivateList.build_volatile_ctrue(pCond.pAfter,pCond.Regs.orig,pCond.Regs.prev,pCond.Regs.next);
 
     //set type
-    pCond.Block.bType:=btOther;
+    pCond.bType:=btOther;
 
     //clear instructions
     mark_not_used_branch_op(pMerg);
@@ -991,7 +996,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1038,7 +1043,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1075,7 +1080,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1084,7 +1089,7 @@ var
  begin
   Assert(dtype=dtFloat32);
   dst.pWriter:=NewImm_s(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1092,7 +1097,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1240,7 +1245,7 @@ begin
 
  dst.pWriter:=pc;
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
  Inc(Result);
 end;
@@ -1294,7 +1299,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1302,7 +1307,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1381,7 +1386,7 @@ var
  begin
   Assert(dtype=dtFloat32);
   dst.pWriter:=NewImm_s(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1422,7 +1427,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1430,7 +1435,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1476,7 +1481,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1510,7 +1515,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1600,7 +1605,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1735,7 +1740,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1800,7 +1805,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1808,7 +1813,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1856,7 +1861,7 @@ begin
 
  //else
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 
  rmax:=OpUMaxTo(src[0],src[1],@node); //update line
@@ -1889,7 +1894,7 @@ var
  procedure _SetConst(dtype:TsrDataType;value:QWORD);
  begin
   dst.pWriter:=NewImm_q(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -1897,7 +1902,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -2005,12 +2010,14 @@ begin
 
   dst.pWriter:=cret;
 
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
 
   Inc(Result);
  end else
  begin
+  src:=node.ParamNode(1).AsReg;
+
   pLine:=src.pLine;
 
   vint6:=NewImm_i(dtInt32,6);
@@ -2018,32 +2025,21 @@ begin
   Case count of
    1:
      begin
-      rvec[0]:=NewReg(dtInt32);
-
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
-
-      src:=rvec[0];
+      src:=OpBFSETo(src,NewImm_i(dtInt32,0),vint6,@pLine);
      end;
    2:
      begin
-      rvec[0]:=NewReg(dtInt32);
-      rvec[1]:=NewReg(dtInt32);
-
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[1],src,NewImm_i(dtInt32, 8),vint6);
+      rvec[0]:=OpBFSETo(src,NewImm_i(dtInt32,0),vint6,@pLine);
+      rvec[1]:=OpBFSETo(src,NewImm_i(dtInt32,8),vint6,@pLine);
 
       src:=NewReg(dtVec2i);
       pLine:=OpMakeCon(pLine,src,@rvec);
      end;
    3:
      begin
-      rvec[0]:=NewReg(dtInt32);
-      rvec[1]:=NewReg(dtInt32);
-      rvec[2]:=NewReg(dtInt32);
-
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[0],src,NewImm_i(dtInt32, 0),vint6);
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[1],src,NewImm_i(dtInt32, 8),vint6);
-      pLine:=_Op3(pLine,Op.OpBitFieldSExtract,rvec[2],src,NewImm_i(dtInt32,16),vint6);
+      rvec[0]:=OpBFSETo(src,NewImm_i(dtInt32, 0),vint6,@pLine);
+      rvec[1]:=OpBFSETo(src,NewImm_i(dtInt32, 8),vint6,@pLine);
+      rvec[2]:=OpBFSETo(src,NewImm_i(dtInt32,16),vint6,@pLine);
 
       src:=NewReg(dtVec3i);
       pLine:=OpMakeCon(pLine,src,@rvec);
@@ -2055,7 +2051,7 @@ begin
   dst.dtype  :=src.dtype;
   dst.pWriter:=src;
 
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
 
   Inc(Result);
@@ -2331,7 +2327,7 @@ begin
 
    dst.pWriter:=rsl;
 
-   node.mark_not_used;
+   node.mark([soNotUsed]);
    node.pDst:=nil;
 
    Exit;
@@ -2402,7 +2398,7 @@ begin
    Assert(False);
  end;
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 end;
 
@@ -2445,7 +2441,7 @@ begin
 
    _Op4(pLine,Op.OpBitFieldInsert,dst,src[1],src[0],rIndex,rCount);
 
-   node.mark_not_used;
+   node.mark([soNotUsed]);
    node.pDst:=nil;
 
    Exit;
@@ -2466,7 +2462,7 @@ begin
 
  _Op2(pLine,Op.OpBitwiseOr,dst,src[0],src[1]);
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 end;
 
@@ -2761,7 +2757,7 @@ begin
 
  MakeVecComp(node,dtVec3f,dst,@src);
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
  Result:=1;
 end;
@@ -2774,7 +2770,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -2797,7 +2793,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -2820,7 +2816,7 @@ var
  procedure _SetReg(src:TsrRegNode);
  begin
   dst.pWriter:=src;
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -2843,7 +2839,7 @@ var
  begin
   Assert(dtype=dtFloat32);
   dst.pWriter:=NewImm_s(dtype,value,node);
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   node.pDst:=nil;
   Inc(Result);
  end;
@@ -2940,7 +2936,7 @@ begin
 
  MakeVecComp(node,rtype,dst,@src);
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 end;
 
@@ -2950,7 +2946,7 @@ begin
 
  if is_term_op(flow_down_prev_up(node)) then
  begin
-  node.mark_not_used;
+  node.mark([soNotUsed]);
   Inc(Result);
  end;
 
@@ -2963,7 +2959,6 @@ var
  pChild:TsrOpBlock;
  pBegOp,pEndOp,pMrgOp:TspirvOp;
  exc:TsrRegNode;
- b_adr:TSrcAdr;
 begin
  Result:=1;
 
@@ -2974,7 +2969,7 @@ begin
 
  if exc.is_const then
  begin
-  node.mark_not_used;
+  node.mark([soNotUsed]);
 
   Case exc.AsConst.AsBool of
    True :  //is always store
@@ -3011,7 +3006,7 @@ begin
          Op.OpNop:;
          Op.OpKill:;
          else
-          node.mark_not_used(True);
+          node.mark([soNotUsed,soForce]);
         end;
        end;
        node:=node.Next;
@@ -3024,9 +3019,7 @@ begin
   //reread
   exc:=node.ParamNode(0).AsReg;
 
-  node.mark_not_used;
-
-  b_adr:=pOpBlock.Block.b_adr;
+  node.mark([soNotUsed]);
 
   pLine:=node.Next;
   if (pLine=nil) then //kill or nop
@@ -3036,11 +3029,8 @@ begin
    pEndOp:=NewLabelOp(False); //end
    pMrgOp:=pEndOp;            //merge
 
-   pBegOp.Adr:=b_adr;
-   pEndOp.Adr:=b_adr;
-
    pOpBlock.SetLabels(pBegOp,pEndOp,pMrgOp);
-   pOpBlock.Block.bType:=btCond;
+   pOpBlock.bType:=btCond;
    pOpBlock.SetCond(exc,false); //reverse
 
    pLine:=node;
@@ -3049,7 +3039,7 @@ begin
    pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
-     pChild.SetInfo(btOther,b_adr,b_adr);
+     pChild.SetInfo(btOther);
      pChild.dummy.OpId:=Op.OpKill; //set kill to dummy
 
    pOpBlock.pBody:=pChild;
@@ -3067,15 +3057,11 @@ begin
    pEndOp:=NewLabelOp(False); //end
    pMrgOp:=NewLabelOp(False); //merge
 
-   pBegOp.Adr:=b_adr;
-   pEndOp.Adr:=b_adr;
-   pMrgOp.Adr:=b_adr;
-
    pOpBlock.SetLabels(pBegOp,pEndOp,pMrgOp);
-   pOpBlock.Block.bType:=btCond;
+   pOpBlock.bType:=btCond;
    pOpBlock.SetCond(exc,false); //reverse
 
-   pOpBlock.pElse.Block.bType:=btElse;
+   pOpBlock.pElse.bType:=btElse;
 
    pLine:=node;
    pLine:=OpCondMerge (pLine,pMrgOp);
@@ -3083,7 +3069,7 @@ begin
    pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
-     pChild.SetInfo(btOther,b_adr,b_adr);
+     pChild.SetInfo(btOther);
      pChild.dummy.OpId:=Op.OpKill; //set kill to dummy
 
    pOpBlock.pBody:=pChild;
@@ -3124,7 +3110,7 @@ begin
 
  if (src[0]=nil) or (src[1]=nil) then Exit;
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 
  if (car.IsUsed) then //carry is use
@@ -3155,7 +3141,7 @@ begin
 
  if (src[0]=nil) or (src[1]=nil) then Exit;
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 
  if (bor.IsUsed) then //borrow is use
@@ -3186,7 +3172,7 @@ begin
 
  if (src[0]=nil) or (src[0]=nil) or (src[1]=nil) then Exit;
 
- node.mark_not_used;
+ node.mark([soNotUsed]);
  node.pDst:=nil;
 
  num4 :=NewImm_q(dtUint32, 4,node);
