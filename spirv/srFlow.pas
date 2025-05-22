@@ -253,6 +253,11 @@ var
 
  end;
 
+ Function IsUnconditional(cond:TsrStatement):Boolean; inline;
+ begin
+  Result:=(cond.sType=sCond) and (cond.u.cond=cTrue)
+ end;
+
  Function IsUnreachable(cond:TsrStatement):Boolean; inline;
  begin
   Result:=(cond.sType=sCond) and (cond.u.cond=cFalse)
@@ -268,14 +273,27 @@ var
    PrivateList.build_volatile_reset(pOpBlock.Regs.next);
   end else
   begin
-   //calc break volatile state
-   PrivateList.build_volatile_break(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
-
    parent:=pOpBlock.FCursor.AsBlock;
-   if (parent.pCond<>nil) then
-   if not IsUnreachable(parent.pCond) then
+
+   if (parent.pCond=nil) then
    begin
-    //have post conditions
+    //continue
+    PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
+   end else
+   if IsUnconditional(parent.pCond) then
+   begin
+    //continue
+    PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
+   end else
+   if IsUnreachable(parent.pCond) then
+   begin
+    //break
+    PrivateList.build_volatile_break(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
+   end else
+   begin
+    //break
+    PrivateList.build_volatile_break(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
+    //continue
     PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
    end;
 
@@ -1065,8 +1083,7 @@ end;
 
 function TEmitFlow.ParseStage(base:Pointer):Integer;
 label
- _skip,
- _up;
+ _skip;
 var
  next:TsrSourceNode;
  FLevel:DWORD;
@@ -1087,13 +1104,15 @@ begin
   //down
   while (Cursor.pNode.ntype=TsrSourceBlock) do
   begin
-   BlockBeg;
    next:=Cursor.pNode.First;
    if (next=nil) then
    begin
     //up
-    goto _up;
+    goto _skip;
    end;
+   //
+   BlockBeg;
+   //
    Cursor.pNode:=next;
    Cursor.UpdateAdr;
   end;
@@ -1152,7 +1171,6 @@ begin
         (Cursor.pNode.pParent<>nil) and
         (Cursor.pNode.pParent<>Cursor.pCode.FTop) do
   begin
-   _up:
    //up
    BlockEnd; //"Cursor.pNode:=Cursor.pNode.pParent" in "PopBlockOp"
    //

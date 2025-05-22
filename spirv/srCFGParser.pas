@@ -124,6 +124,7 @@ type
 
  TsrSourceGoto=class(TsrSourceNode)
   FGoto:record
+   pParent:Pointer;
    pPrev,pNext:TsrSourceGoto;
   end;
   //
@@ -144,7 +145,7 @@ type
 
  //
 
- TsrBlockType=(btMain,btSetpc,btCond,btElse,btLoop,btMerg,btExec,btInline,btOther);
+ TsrBlockType=(btMain,btSetpc,btCond,btElse,btLoop,btMerg,btInline,btOther);
 
  TsrSourceBlock=class(TsrSourceNode)
   FList:TsrSourceNodeList;
@@ -196,6 +197,8 @@ type
   pCurr:TsrSourceNode;
   order:PtrUint;
   VarId:Ptruint;
+  mode :Integer;
+  hits :Integer;
   //
   FLabelTree:TsrSourceLabelTree;
   FInstructionTree:TsrSourceInstructionTree;
@@ -207,6 +210,7 @@ type
   Function  NewGoto       (Cond:TsrCondition;Adr:TSrcAdr):TsrSourceGoto;
   Function  NewGoto       (pCond:TsrStatement;pLabel:TsrSourceLabel):TsrSourceGoto;
   procedure FreeGoto      (node:TsrSourceGoto);
+  procedure RestoreGoto   (node:TsrSourceGoto);
   Function  NewBlock      (bType:TsrBlockType):TsrSourceBlock;
   //
   Function  NewCond (cond:TsrCondition):TsrStatement;
@@ -223,12 +227,13 @@ type
   procedure EmitLabels;
   procedure GotoPass;
   procedure InitMovePass;
-  procedure RemoveGoto(goto_stmt:TsrSourceGoto;simple_pass:Boolean);
+  procedure RemoveGoto(goto_stmt:TsrSourceGoto);
   procedure EliminateAsConditional(goto_stmt:TsrSourceGoto);
   procedure EliminateAsLoop       (goto_stmt:TsrSourceGoto);
   function  MoveOutward           (goto_stmt:TsrSourceGoto):TsrSourceGoto;
   function  MoveOutwardIf         (goto_stmt:TsrSourceGoto):TsrSourceGoto;
   function  MoveOutwardElse       (goto_stmt:TsrSourceGoto):TsrSourceGoto;
+  function  MoveOutwardElseElse   (goto_stmt:TsrSourceGoto):TsrSourceGoto;
   function  MoveOutwardLoop       (goto_stmt:TsrSourceGoto):TsrSourceGoto;
   function  MoveOutwardSwitch     (goto_stmt:TsrSourceGoto):TsrSourceGoto;
   function  MoveInward            (goto_stmt:TsrSourceGoto):TsrSourceGoto;
@@ -301,6 +306,8 @@ end;
 
 procedure TsrGotoList.Push_head(Node:TsrSourceGoto);
 begin
+ Assert(Node.FGoto.pParent=nil);
+ //
  if (pHead=nil) then
  begin
   pTail:=node;
@@ -312,10 +319,14 @@ begin
  end;
  node.FGoto.pPrev:=nil;
  pHead:=node;
+ //
+ Node.FGoto.pParent:=@Self;
 end;
 
 procedure TsrGotoList.Push_tail(Node:TsrSourceGoto);
 begin
+ Assert(Node.FGoto.pParent=nil);
+ //
  if (pTail=nil) then
  begin
   pHead:=node;
@@ -327,10 +338,14 @@ begin
  end;
  node.FGoto.pNext:=nil;
  pTail:=node;
+ //
+ Node.FGoto.pParent:=@Self;
 end;
 
 procedure TsrGotoList.InsertAfter(node,new:TsrSourceGoto);
 begin
+ Assert(new.FGoto.pParent=nil);
+ //
  new.FGoto.pPrev:=node;
  if (node.FGoto.pNext=nil) then
  begin
@@ -343,10 +358,14 @@ begin
   node.FGoto.pNext.FGoto.pPrev:=new;
  end;
  node.FGoto.pNext:=new;
+ //
+ new.FGoto.pParent:=@Self;
 end;
 
 procedure TsrGotoList.InsertBefore(node,new:TsrSourceGoto);
 begin
+ Assert(new.FGoto.pParent=nil);
+ //
  new.FGoto.pNext:=node;
  if (node.FGoto.pPrev=nil) then
  begin
@@ -359,6 +378,8 @@ begin
   node.FGoto.pPrev.FGoto.pNext:=new;
  end;
  node.FGoto.pPrev:=new;
+ //
+ new.FGoto.pParent:=@Self;
 end;
 
 function TsrGotoList.Pop_tail:TsrSourceGoto;
@@ -379,11 +400,15 @@ begin
   end;
   Result.FGoto.pPrev:=nil;
   Result.FGoto.pNext:=nil;
+  //
+  Result.FGoto.pParent:=nil;
  end;
 end;
 
 procedure TsrGotoList.Remove(node:TsrSourceGoto);
 begin
+ Assert(node.FGoto.pParent=@Self);
+ //
  if (node.FGoto.pPrev=nil) then
  begin
   if (pHead=node) then
@@ -408,6 +433,8 @@ begin
  end;
  node.FGoto.pPrev:=nil;
  node.FGoto.pNext:=nil;
+ //
+ node.FGoto.pParent:=nil;
 end;
 
 ///
@@ -578,12 +605,23 @@ end;
 
 procedure TsrCFGParser2.FreeGoto(node:TsrSourceGoto);
 begin
- FGotoList.Remove(node);
+ if (node.FGoto.pParent<>nil) then
+ begin
+  FGotoList.Remove(node);
+ end;
  if (node.pParent<>nil) then
  begin
   node.pParent.Remove(node);
  end;
  FGotoFree.Push_tail(node);
+end;
+
+procedure TsrCFGParser2.RestoreGoto(node:TsrSourceGoto);
+begin
+ if (node.FGoto.pParent=nil) then
+ begin
+  FGotoList.Push_tail(node);
+ end;
 end;
 
 Function TsrCFGParser2.NewBlock(bType:TsrBlockType):TsrSourceBlock;
@@ -865,24 +903,6 @@ begin
  end;
 end;
 
-function flow_next_up(node:TsrSourceNode):TsrSourceNode;
-begin
- repeat //up
-  Result:=node.pNext;
-  node:=node.pParent;
- until (node=nil) or (Result<>nil);
-end;
-
-function flow_down_next(node:TsrSourceNode):TsrSourceNode;
-begin
- Result:=node.First; //down
- if (Result=nil) then
- begin
-  //next
-  Result:=node.pNext;
- end;
-end;
-
 procedure TsrCFGParser2.EmitLabels;
 var
  node:TsrSourceGoto;
@@ -1018,16 +1038,8 @@ procedure TsrCFGParser2.GotoPass;
 var
  node,next:TsrSourceGoto;
 begin
- node:=FGotoList.pHead;
- //
- while (node<>nil) do
- begin
-  next:=node.FGoto.pNext;
-  //
-  RemoveGoto(node,True);
-  //
-  node:=next;
- end;
+ mode:=0;
+ hits:=0;
  //
  node:=FGotoList.pHead;
  //
@@ -1035,14 +1047,43 @@ begin
  begin
   next:=node.FGoto.pNext;
   //
-  RemoveGoto(node,False);
+  RemoveGoto(node);
   //
   node:=next;
  end;
  //
+ repeat
+  mode:=1;
+  hits:=0;
+  //
+  node:=FGotoList.pHead;
+  //
+  while (node<>nil) do
+  begin
+   next:=node.FGoto.pNext;
+   //
+   RemoveGoto(node);
+   //
+   node:=next;
+  end;
+  //
+ until (hits=0);
+ //
+ mode:=2;
+ //
+ node:=FGotoList.pHead;
+ //
+ while (node<>nil) do
+ begin
+  next:=node.FGoto.pNext;
+  //
+  RemoveGoto(node);
+  //
+  node:=next;
+ end;
 end;
 
-procedure MoveListBefore(List:TsrSourceNodeList;before:TsrSourceNode);
+procedure MoveListBefore(var List:TsrSourceNodeList;before:TsrSourceNode);
 var
  node:TsrSourceNode;
 begin
@@ -1090,6 +1131,24 @@ begin
 end;
 
 Function NextUsedFlowUp(node:TsrSourceNode):TsrSourceNode;
+
+ function flow_next_up(node:TsrSourceNode):TsrSourceNode;
+ begin
+  repeat //up
+   Result:=node.pNext;
+   node:=node.pParent;
+   //exclude "else"
+   if (Result<>nil) then
+   if (node<>nil) then
+   if (node.ntype=TsrSourceBlock) then
+   if (TsrSourceBlock(node).bType=btMerg) then
+   begin
+    Result:=nil;
+   end;
+   //
+  until (node=nil) or (Result<>nil);
+ end;
+
 begin
  Result:=flow_next_up(node);
  while (Result<>nil) do
@@ -1107,6 +1166,17 @@ begin
 end;
 
 Function NextUsedFlowDown(node:TsrSourceNode):TsrSourceNode;
+
+ function flow_down_next(node:TsrSourceNode):TsrSourceNode;
+ begin
+  Result:=node.First; //down
+  if (Result=nil) then
+  begin
+   //next
+   Result:=node.pNext;
+  end;
+ end;
+
 begin
  Result:=flow_down_next(node);
  while (Result<>nil) do
@@ -1123,7 +1193,7 @@ begin
  end;
 end;
 
-procedure TsrCFGParser2.RemoveGoto(goto_stmt:TsrSourceGoto;simple_pass:Boolean);
+procedure TsrCFGParser2.RemoveGoto(goto_stmt:TsrSourceGoto);
 var
  label_stmt:TsrSourceLabel;
  label_level,goto_level:DWORD;
@@ -1132,7 +1202,7 @@ begin
  label_stmt:=goto_stmt.pLabel;
  if (IsIndirectlyRelated(goto_stmt, label_stmt)) then
  begin
-  if simple_pass then Exit;
+  if (mode=0) then Exit;
   // Move goto_stmt out using outward-movement transformation until it becomes
   // directly related to label_stmt
   while (not IsDirectlyRelated(goto_stmt, label_stmt)) do
@@ -1147,18 +1217,20 @@ begin
   goto_level :=Level(goto_stmt);
   if (goto_level > label_level) then
   begin
-   if simple_pass then Exit;
+   if (mode=0) then Exit;
    // Move goto_stmt out of its level using outward-movement transformations
    while (goto_level > label_level) do
    begin
     goto_stmt:=MoveOutward(goto_stmt);
+    //deffered
+    if (goto_stmt=nil) then Exit;
     //Dec(goto_level);
     goto_level:=Level(goto_stmt);
    end;
   end else
   if (goto_level < label_level) then
   begin
-   if simple_pass then Exit;
+   if (mode<2) then Exit;
    //
    if (NeedsLift(goto_stmt, label_stmt)) then
    begin
@@ -1247,8 +1319,48 @@ begin
 
  if_stmt.pCond:=neg_cond;
 
+ Inc(hits);
+
  //
  FreeGoto(goto_stmt);
+end;
+
+function SanitizeNoBreaks(node_first,node_last:TsrSourceNode):Boolean;
+var
+ node,next:TsrSourceNode;
+begin
+ Result:=True;
+ node:=node_first;
+
+ while (node<>nil) and (node<>node_last) do
+ begin
+
+  if (node.ntype=TsrStatement) then
+  begin
+   if (TsrStatement(node).sType=sBreak) then
+   begin
+    Exit(False);
+   end;
+  end;
+
+  next:=node.First; //down
+
+  if (next<>nil) then
+  if (TsrSourceBlock(node).bType=btLoop) then
+  begin
+   next:=nil;
+  end;
+
+  if (next=nil) then
+  begin
+   repeat //up
+    next:=node.pNext;
+    node:=node.pParent;
+   until (node=nil) or (next<>nil) or (node=node_last);
+  end;
+
+  node:=next;
+ end;
 end;
 
 procedure TsrCFGParser2.EliminateAsLoop(goto_stmt:TsrSourceGoto);
@@ -1259,6 +1371,11 @@ var
 begin
  label_stmt:=goto_stmt.pLabel;
 
+ if not SanitizeNoBreaks(label_stmt, goto_stmt) then
+ begin
+  Assert(false,'SanitizeNoBreaks:EliminateAsLoop');
+ end;
+
  loop_stmt:=NewBlock(btLoop);
  loop_stmt.splice(label_stmt,goto_stmt);
 
@@ -1267,6 +1384,8 @@ begin
  cond:=goto_stmt.pCond;
 
  loop_stmt.pCond:=cond;
+
+ Inc(hits);
 
  //
  FreeGoto(goto_stmt);
@@ -1321,18 +1440,19 @@ var
  parent:TsrSourceBlock;
 begin
  Result:=False;
+
+ parent:=goto_stmt.pParent;
+ if (parent=nil) then Exit;
+
+ if (parent.bType=btCond) then
  if IsUnconditional(goto_stmt.pCond) then
  if (NextUsed(goto_stmt)=nil) then
- if (goto_stmt.pParent<>nil) then
- if (goto_stmt.pParent.bType=btCond) then
  begin
-  parent:=goto_stmt.pParent;
   parent:=parent.pParent;
   if (parent<>nil) then
   if (parent.bType=btMerg) then
-  if (NextUsed(parent)<>goto_stmt.pLabel) then
   begin
-   Result:=AreOrdered(parent,goto_stmt.pLabel);
+   Result:=True;
   end;
  end;
 end;
@@ -1365,7 +1485,25 @@ begin
    end else
    if AreSiblings(parent,label_stmt) then
    begin
-    Exit(True);
+
+    if (parent.pParent<>nil) then
+    if (parent.pParent.bType=btMerg) then
+    begin
+     parent:=parent.pParent;
+    end;
+
+    if (NextUsedFlowUp(parent)=label_stmt) then
+    begin
+     Exit(False);
+    end else
+    if SanitizeNoBreaks(parent,label_stmt) then
+    begin
+     Exit(True);
+    end else
+    begin
+     Exit(False);
+    end;
+
    end;
 
    parent:=parent.pParent;
@@ -1388,10 +1526,12 @@ begin
   Exit(MoveOutwardElse(goto_stmt));
  end;
 
+ if (mode=2) then
  if IsBreakSwitch(goto_stmt) then
  begin
   Exit(MoveOutwardSwitch(goto_stmt));
  end;
+
 
  if IsBreakLoop(goto_stmt) then
  begin
@@ -1427,7 +1567,7 @@ end;
  L1:
  stmt_n;
 }
-//-->
+//--> normal
 {
  ....
  goto_L1 = false;
@@ -1448,7 +1588,7 @@ end;
  L1:
  stmt_n;
 }
-//-->
+//--> no body
 {
  ....
  goto_L1 = false;
@@ -1459,6 +1599,20 @@ end;
   goto_L1 = cond;
  }
  if (goto_L1) goto L1;
+ ....
+ L1:
+ stmt_n;
+}
+//--> no body, no cond, "if" body -> "else"
+{
+ ....
+ if (expr)
+ {
+  stmt_1;
+  ....
+  ----
+ }
+ if (expr) goto L1;
  ....
  L1:
  stmt_n;
@@ -1488,9 +1642,36 @@ begin
 
  if (NextUsedFlowUp(pmerge)<>label_stmt) then
  begin
+
+  if (mode<>2) then
+  begin
+   RestoreGoto(goto_stmt);
+   Exit(nil);
+  end;
+
+  //backup action
+  if (parent.bType=btCond) and
+     (IsUnconditional(goto_stmt.pCond)) and
+     (NextUsed(goto_stmt)=nil) then
+  begin
+   //else is detect
+   Exit(MoveOutwardElse(goto_stmt));
+  end;
+
+  //else goto up
+  if (parent.bType=btElse) and
+     (IsUnconditional(goto_stmt.pCond)) and
+     (NextUsed(goto_stmt)=nil) then
+  begin
+   //else in else
+   Exit(MoveOutwardElseElse(goto_stmt));
+  end;
+
   new_var:=NewVar;
  end else
  begin
+  Inc(hits);
+
   //simplification
   new_var:=nil;
  end;
@@ -1582,11 +1763,11 @@ end;
  {
   stmt_1;
   ....
+  ----
  } else {
   stmt_2;
-  goto L1;
  }
-
+ if (expr) goto L1;
  {
   ....
   L1:
@@ -1607,6 +1788,8 @@ begin
  label_stmt:=goto_stmt.pLabel;
 
  if_stmt:=goto_stmt.pParent;
+ Assert(if_stmt<>nil);
+
  pmerge:=if_stmt.pParent;
  Assert(pmerge<>nil);
  Assert(pmerge.bType=btMerg);
@@ -1614,28 +1797,142 @@ begin
  cond:=goto_stmt.pCond;
  Assert(IsUnconditional(cond));
 
- if_else:=NewBlock(btElse);
- if_else.pIf  :=if_stmt;
- if_stmt.pElse:=if_else;
- pmerge.InsertAfter(if_stmt,if_else);
+ if (mode<>2) then
+ begin
+  if not AreOrdered(pmerge,label_stmt) then
+  begin
+   if (NextUsedFlowUp(pmerge.pParent.Last)<>label_stmt) then
+   begin
+    RestoreGoto(goto_stmt);
+    Exit(nil);
+   end;
+  end;
+  Inc(hits);
+ end;
 
- if_else.splice(pmerge.pNext,label_stmt);
+ if (NextUsed(pmerge)=nil) or
+    (NextUsedFlowUp(pmerge)=label_stmt) then
+ begin
+  //no else body
+ end else
+ begin
+
+  if_else:=NewBlock(btElse);
+  if_else.pIf  :=if_stmt;
+  if_stmt.pElse:=if_else;
+  pmerge.InsertAfter(if_stmt,if_else);
+
+  if AreOrdered(pmerge,label_stmt) then
+  begin
+   if_else.splice(pmerge.pNext,label_stmt);
+  end else
+  begin
+   if_else.splice(pmerge.pNext,nil);
+  end;
+
+ end;
 
  //
  FreeGoto(goto_stmt);
  //
 
- goto_stmt:=TsrSourceGoto(if_else.Last);
+ //if (expr)
+ cond:=if_stmt.pCond;
 
- if (goto_stmt<>nil) then
- if (goto_stmt.ntype=TsrSourceGoto) then
- if IsUnconditional(goto_stmt.pCond) then
+ if (NextUsedFlowUp(pmerge)<>label_stmt) then
  begin
-  Exit(goto_stmt);
+  cond:=NewCopy(cond);
+  pmerge.FInit.Push_tail(cond);
+ end else
+ begin
+  //simplification
+  Exit(nil);
  end;
 
  new_goto:=NewGoto(cond,label_stmt);
- if_else.Push_tail(new_goto);
+ InsertAfter(pmerge,new_goto);
+
+ Result:=new_goto;
+end;
+
+
+//--> no body, no cond, "else" body
+{
+ ....
+ goto_L1 = false;
+ if (expr)
+ {
+  stmt_1;
+  ....
+ } else {
+  ....
+  ----
+ }
+ if (!expr) goto L1;
+ ....
+ L1:
+ stmt_n;
+}
+
+function TsrCFGParser2.MoveOutwardElseElse(goto_stmt:TsrSourceGoto):TsrSourceGoto;
+var
+ label_stmt:TsrSourceLabel;
+ pmerge    :TsrSourceBlock;
+ cond      :TsrStatement;
+ new_goto  :TsrSourceGoto;
+ if_else   :TsrSourceBlock;
+ if_stmt   :TsrSourceBlock;
+begin
+ label_stmt:=goto_stmt.pLabel;
+
+ if_else:=goto_stmt.pParent;
+ Assert(if_else<>nil);
+
+ pmerge:=if_else.pParent;
+ Assert(pmerge<>nil);
+ Assert(pmerge.bType=btMerg);
+
+ if_stmt:=if_else.pIf;
+ Assert(if_stmt<>nil);
+
+ cond:=goto_stmt.pCond;
+ Assert(IsUnconditional(cond));
+
+ if (mode<>2) then
+ begin
+  if (NextUsedFlowUp(pmerge)<>label_stmt) then
+  begin
+   RestoreGoto(goto_stmt);
+   Exit(nil);
+  end;
+  Inc(hits);
+ end;
+
+ //
+ FreeGoto(goto_stmt);
+ //
+
+ //if (expr) else {}
+ cond:=if_stmt.pCond;
+
+ Assert(cond<>nil);
+
+ if (NextUsedFlowUp(pmerge)<>label_stmt) then
+ begin
+  //(!expr)
+  cond:=NewNot(cond);
+  pmerge.FInit.Push_tail(cond);
+
+  cond:=NewCopy(cond);
+  pmerge.FInit.Push_tail(cond);
+ end else
+ begin
+  //simplification
+  Exit(nil);
+ end;
+
+ new_goto:=NewGoto(cond,label_stmt);
+ InsertAfter(pmerge,new_goto);
 
  Result:=new_goto;
 end;
@@ -1696,6 +1993,13 @@ begin
 
  if (NextUsedFlowUp(loop_parent)<>label_stmt) then
  begin
+
+  if (mode<>2) then
+  begin
+   RestoreGoto(goto_stmt);
+   Exit(nil);
+  end;
+
   new_var:=NewVar;
 
   //goto_L1 = false;
@@ -1703,6 +2007,8 @@ begin
   loop_parent.FInit.Push_tail(set_var);
  end else
  begin
+  Inc(hits);
+
   //simplification
   new_var:=nil;
  end;
@@ -1759,44 +2065,6 @@ begin
  InsertAfter(loop_parent,new_goto);
 
  Result:=new_goto;
-end;
-
-function SanitizeNoBreaks(node_first,node_last:TsrSourceNode):Boolean;
-var
- node,next:TsrSourceNode;
-begin
- Result:=True;
- node:=node_first;
-
- while (node<>nil) and (node<>node_last) do
- begin
-
-  if (node.ntype=TsrStatement) then
-  begin
-   if (TsrStatement(node).sType=sBreak) then
-   begin
-    Exit(False);
-   end;
-  end;
-
-  next:=node.First; //down
-
-  if (next<>nil) then
-  if (TsrSourceBlock(node).bType=btLoop) then
-  begin
-   next:=nil;
-  end;
-
-  if (next=nil) then
-  begin
-   repeat //up
-    next:=node.pNext;
-    node:=node.pParent;
-   until (node=nil) or (next<>nil) or (node=node_last);
-  end;
-
-  node:=next;
- end;
 end;
 
 {
@@ -2369,10 +2637,10 @@ begin
  Result:='';
  case node.sType of
   //sCond :'
-  sCopy :Result:=GetCondStr(node.pDst)+' = '+GetCondStr(node.pSrc)+';';
+  sCopy :Result:=GetCondStr(node.pDst)+' = '+GetCondStr(node.pSrc)+'; //#'+IntToStr(node.order);
   //sVar  :'
-  sStore:Result:=GetCondStr(node.pDst)+' = '+GetCondStr(node.pSrc)+';';
-  sBreak:Result:='break;';
+  sStore:Result:=GetCondStr(node.pDst)+' = '+GetCondStr(node.pSrc)+'; //#'+IntToStr(node.order);
+  sBreak:Result:='break; //#'+IntToStr(node.order);
   //sNot  :;
   //sOr   :;
   //sAnd  :;
@@ -2418,6 +2686,7 @@ begin
  case node.bType of
   btCond:Result:='if ('+GetCondStr(node.pCond)+') { //#'+IntToStr(node.order);
   btLoop:Result:='do { //#'+IntToStr(node.order);
+  //btMerg:Result:='merge { //#'+IntToStr(node.order);
   else;
  end;
 end;
@@ -2432,13 +2701,12 @@ begin
            Result:='}; //if #'+IntToStr(node.order);;
           end else
           begin
-           Result:='} else { //#'+IntToStr(node.order);
+           Result:='} else { //#'+IntToStr(node.order)+'-#'+IntToStr(node.pElse.order);
           end;
          end;
   btElse:Result:='}; //else #'+IntToStr(node.order);
-  btLoop:begin
-          Result:='} while ('+GetCondStr(node.pCond)+'); //#'+IntToStr(node.order);
-         end;
+  btLoop:Result:='} while ('+GetCondStr(node.pCond)+'); //#'+IntToStr(node.order);
+  //btMerg:Result:='} //merge #'+IntToStr(node.order);
   else;
  end;
 end;
