@@ -6,10 +6,13 @@ unit kern_regmgr;
 interface
 
 const
+ SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size       = $02C30100;
+ SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count  = $02C30200;
  SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode = $0A170000;
  SCE_REGMGR_ENT_KEY_NP_env                             = $19800000;
  SCE_REGMGR_ENT_KEY_NP_debug                           = $19810000;
  SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification         = $3CC80700;
+ SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture          = $58800C00;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify             = $78026400;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload        = $78028A00;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib        = $78028300;
@@ -17,7 +20,6 @@ const
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg         = $7802C000;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off        = $78020500;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_020B00                 = $78020B00;
- SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture          = $58800C00;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace        = $7802B700;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k        = $7802B900;
 
@@ -159,6 +161,10 @@ begin
         SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace       :data.val2:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
         SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k       :data.val2:=0; //sceVideoOutOpen  debug video modes?
         SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode:data.val2:=0; //sceVideoOutOpen
+        SCE_REGMGR_ENT_KEY_NP_debug                          :data.val2:=0; //libSceSysUtil
+
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :Assert(false,'TODO:LIBC_intmem_peak_size');
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :Assert(false,'TODO:LIBC_intmem_shortage_count');
 
         else
          begin
