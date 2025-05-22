@@ -269,7 +269,7 @@ begin
 
  if (FPUCW<>__INITIAL_FPUCW__) then
  begin
-  writeln('changed FPUCW(0x',HexStr(FPUCW,4),') on ',td^.td_name);
+  //writeln('changed FPUCW(0x',HexStr(FPUCW,4),') on ',td^.td_name);
  end;
 
  if ((MXCSR and __INITIAL_MXCSR__)<>__INITIAL_MXCSR__) then

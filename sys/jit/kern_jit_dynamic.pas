@@ -721,7 +721,17 @@ begin
 
    Result:=cache^.dst;
 
-   Exit;
+   if (jctx^.block=nil) or (InterlockedExchangeAdd64(QWORD(cache^.blk),0)=0) then
+   begin
+    //reset all
+    cache:=nil;
+    Result:=nil;
+    jctx^.local_cache[hash_addr(addr)]:=nil;
+   end else
+   begin
+    Exit;
+   end;
+
   end else
   begin
    cache:=nil;
