@@ -604,40 +604,62 @@ end;
 
 //cpuid(0x00000000,0x0):eax=0x0000000d ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
 //cpuid(0x00000001,0x0):eax=0x00710f31 ebx=0x07080800 ecx=0x3ed8220b edx=0x178bfbff
-//0x6
+//cpuid(0x00000002,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000003,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000004,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000005,0x0):eax=0x00000040 ebx=0x00000040 ecx=0x00000003 edx=0x00000000
+//cpuid(0x00000006,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000001 edx=0x00000000
 //cpuid(0x00000007,0x0):eax=0x00000000 ebx=0x00000008 ecx=0x00000000 edx=0x00000000
-//cpuid(0x00000007,0x1):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
-//cpuid(0x00000007,0x2):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
-
-//0xb
-
-//0x40000000
-//0x40000010
-
+//cpuid(0x00000007,0x1):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000007,0x2):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x0000000b,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x0000000d,0x0):eax=0x00000007 ebx=0x00000340 ecx=0x00000340 edx=0x00000000
+//cpuid(0x00000012,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000014,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000014,0x1):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000015,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000016,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000017,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x00000019,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x0000001d,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x40000000,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x40000010,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
 //cpuid(0x80000000,0x0):eax=0x8000001e ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
 //cpuid(0x80000001,0x0):eax=0x00710f31 ebx=0x00000000 ecx=0x154837ff edx=0x2fd3fbff
 //cpuid(0x80000002,0x0):eax=0x31314744 ebx=0x4b533130 ecx=0x48343846 edx=0x20202056
 //cpuid(0x80000003,0x0):eax=0x20202020 ebx=0x20202020 ecx=0x20202020 edx=0x20202020
 //cpuid(0x80000004,0x0):eax=0x20202020 ebx=0x20202020 ecx=0x20202020 edx=0x00202020
-
-//0x80000005
-//0x80000006
-
+//cpuid(0x80000005,0x0):eax=0xff08ff08 ebx=0xff28ff20 ecx=0x20080140 edx=0x20020140
+//cpuid(0x80000006,0x0):eax=0x21000000 ebx=0x42004200 ecx=0x08008140 edx=0x00000000
+//cpuid(0x80000007,0x0):eax=0x0d6b0101 ebx=0x00000001 ecx=0x00000000 edx=0x000009d9
 //cpuid(0x80000008,0x0):eax=0x00003028 ebx=0x00000000 ecx=0x00003007 edx=0x00000000
-
-//0xc0000000
-//0xc0000001
+//cpuid(0x8000000a,0x0):eax=0x00000001 ebx=0x00000008 ecx=0x00000000 edx=0x00001cdf
+//cpuid(0x8000001d,0x0):eax=0x00000121 ebx=0x01c0003f ecx=0x0000003f edx=0x00000000
+//cpuid(0x8000001f,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x80000021,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0x8fffffff,0x0):eax=0x4c4c4548 ebx=0x494b204f ecx=0x21595454 edx=0x5e2d5e20
+//cpuid(0xc0000000,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
+//cpuid(0xc0000001,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
 
 procedure jit_cpuid; assembler; nostackframe;
 label
+ _zero,
  _cpuid_0,
  _cpuid_1,
+ _cpuid_5,
+ _cpuid_6,
  _cpuid_7,
  _cpuid_80000000,
  _cpuid_80000001,
  _cpuid_80000002,
  _cpuid_80000003,
+ _cpuid_80000005,
+ _cpuid_80000006,
+ _cpuid_80000007,
  _cpuid_80000008,
+ _cpuid_8000000a,
+ _cpuid_8000001d,
+ _cpuid_8fffffff,
  _exit;
 asm
  movq %rax, %r14
@@ -650,6 +672,12 @@ asm
 
  cmp $1,%eax
  je _cpuid_1
+
+ cmp $5,%eax
+ je _cpuid_5
+
+ cmp $6,%eax
+ je _cpuid_6
 
  cmp $7,%eax
  je _cpuid_7
@@ -669,9 +697,29 @@ asm
  cmp $0x80000004,%eax
  je _cpuid_80000003
 
+ cmp $0x80000005,%eax
+ je _cpuid_80000005
+
+ cmp $0x80000006,%eax
+ je _cpuid_80000006
+
+ cmp $0x80000007,%eax
+ je _cpuid_80000007
+
  cmp $0x80000008,%eax
  je _cpuid_80000008
 
+ cmp $0x8000000a,%eax
+ je _cpuid_8000000a
+
+ cmp $0x8000001d,%eax
+ je _cpuid_8000001d
+
+ cmp $0x8fffffff,%eax
+ je _cpuid_8fffffff
+
+ //unknow to zero ->
+ {
  //unknow id
 
  xchg %r14, %rax
@@ -685,6 +733,18 @@ asm
  jmp  _jit_cpuid
 
  //not reach
+ }
+
+ _zero:
+
+ mov $0x0,%eax
+ mov $0x0,%ebx
+ mov $0x0,%edx
+ mov $0x0,%ecx
+
+ jmp _exit
+
+ //
 
  _cpuid_0:
 
@@ -697,6 +757,8 @@ asm
  mov $0x444D4163,%ecx
 
  jmp _exit
+
+ //
 
  _cpuid_1:
 
@@ -725,6 +787,26 @@ asm
 
  jmp _exit
 
+ //
+
+ _cpuid_5:
+
+ mov $0x00000040,%eax
+ mov $0x00000040,%ebx
+ mov $0x00000000,%edx
+ mov $0x00000003,%ecx
+
+ jmp _exit
+
+ _cpuid_6:
+
+ mov $0x00000000,%eax
+ mov $0x00000000,%ebx
+ mov $0x00000000,%edx
+ mov $0x00000001,%ecx
+
+ jmp _exit
+
  _cpuid_7:
 
  test %ecx,%ecx //set bits if ecx=0
@@ -739,6 +821,8 @@ asm
 
  jmp _exit
 
+ //
+
  _cpuid_80000000:
 
  //cpu_exthigh
@@ -751,6 +835,8 @@ asm
 
  jmp _exit
 
+ //
+
  _cpuid_80000001:
 
  mov $0x00710f31,%eax
@@ -759,6 +845,8 @@ asm
  mov $0x154837ff,%ecx //amd_feature2
 
  jmp _exit
+
+ //
 
  _cpuid_80000002:
 
@@ -769,6 +857,8 @@ asm
 
  jmp _exit
 
+ //
+
  _cpuid_80000003:
 
  mov $0x20202020,%eax
@@ -778,12 +868,76 @@ asm
 
  jmp _exit
 
+ //
+
+ _cpuid_80000005:
+
+ mov $0xff08ff08,%eax
+ mov $0xff28ff20,%ebx
+ mov $0x20020140,%edx
+ mov $0x20080140,%ecx
+
+ jmp _exit
+
+ //
+
+ _cpuid_80000006:
+
+ mov $0x21000000,%eax
+ mov $0x42004200,%ebx
+ mov $0x00000000,%edx
+ mov $0x08008140,%ecx
+
+ jmp _exit
+
+ //
+
+ _cpuid_80000007:
+
+ mov $0x0d6b0101,%eax
+ mov $0x00000001,%ebx
+ mov $0x000009d9,%edx
+ mov $0x00000000,%ecx
+
+ jmp _exit
+
+ //
+
  _cpuid_80000008:
 
  mov $0x00003028,%eax
  mov $0x00000000,%ebx
  mov $0x00000000,%edx
  mov $0x00003007,%ecx //cpu_procinfo2
+
+ jmp _exit
+
+ //
+
+ _cpuid_8000000a:
+
+ mov $0x00000001,%eax
+ mov $0x00000008,%ebx
+ mov $0x00001cdf,%edx
+ mov $0x00000000,%ecx
+
+ jmp _exit
+
+ _cpuid_8000001d:
+
+ mov $0x00000121,%eax
+ mov $0x01c0003f,%ebx
+ mov $0x00000000,%edx
+ mov $0x0000003f,%ecx
+
+ jmp _exit
+
+ _cpuid_8fffffff:
+
+ mov $0x4c4c4548,%eax
+ mov $0x494b204f,%ebx
+ mov $0x5e2d5e20,%edx
+ mov $0x21595454,%ecx
 
  _exit:
 
