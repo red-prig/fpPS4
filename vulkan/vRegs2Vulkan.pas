@@ -1845,18 +1845,23 @@ begin
 end;
 
 function TGPU_REGS.GET_PRIM_RESET:TVkBool32;
+var
+ val,mask:DWORD;
 begin
  Result:=CX_REG^.VGT_MULTI_PRIM_IB_RESET_EN.RESET_EN;
 
  if (Result<>0) then
  begin
-  Case UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE of
-   VGT_INDEX_16:Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$0000FFFF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
-   VGT_INDEX_32:Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$FFFFFFFF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
-   VGT_INDEX_8 :Assert(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX=$000000FF,'unsupport reset index:0x'+HexStr(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX,8));
-   else;
+
+  mask:=0;
+  case (UC_REG^.VGT_INDEX_TYPE.INDEX_TYPE and 1) of
+   VGT_INDEX_16:mask:=$0000FFFF;
+   VGT_INDEX_32:mask:=$FFFFFFFF;
   end;
 
+  val:=(CX_REG^.VGT_MULTI_PRIM_IB_RESET_INDX and mask);
+
+  Assert(val=mask,'unsupport reset index:0x'+HexStr(val,8));
  end;
 end;
 
