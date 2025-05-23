@@ -735,6 +735,12 @@ begin
     begin
      AddCapability(Capability.ImageQuery);
     end;
+  Op.OpGroupNonUniformShuffle:
+    begin
+     //upgrade version to 1.3
+     Config.UpgradeVersion($10300);
+     AddCapability(Capability.GroupNonUniformShuffle);
+    end;
   Op.OpGroupNonUniformQuadBroadcast:
     begin
      r:=node.ParamNode(2).Value;
@@ -743,17 +749,11 @@ begin
      if r.is_const then
      begin
       //upgrade version to 1.3
-      if (Config.SpvVersion<$10300) then
-      begin
-       Config.SpvVersion:=$10300;
-      end;
+      Config.UpgradeVersion($10300);
      end else
      begin
       //upgrade version to 1.5
-      if (Config.SpvVersion<$10500) then
-      begin
-       Config.SpvVersion:=$10500;
-      end;
+      Config.UpgradeVersion($10500);
      end;
      //
      AddCapability(Capability.GroupNonUniformQuad);

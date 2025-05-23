@@ -36,6 +36,7 @@ type
   Procedure Init;
   Function  CanUseStorageBufferClass:Boolean;
   Function  IsSpv14:Boolean;
+  procedure UpgradeVersion(NewVersion:PtrUint);
  end;
 
 implementation
@@ -59,6 +60,14 @@ end;
 Function TsrConfig.IsSpv14:Boolean;
 begin
  Result:=(SpvVersion>=$10400);
+end;
+
+procedure TsrConfig.UpgradeVersion(NewVersion:PtrUint);
+begin
+ if (SpvVersion<NewVersion) then
+ begin
+  SpvVersion:=NewVersion;
+ end;
 end;
 
 end.

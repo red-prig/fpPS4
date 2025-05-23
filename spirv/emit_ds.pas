@@ -10,13 +10,10 @@ uses
   ps4_pssl,
   bittype,
   srType,
-  srTypes,
   srConst,
   srInput,
   srReg,
-  srOp,
   srLayout,
-  srVariable,
   emit_fetch;
 
 type
@@ -70,6 +67,13 @@ Var
  base       :TsrRegNode;
  index      :TsrRegNode;
 
+ maskAnd    :TsrRegNode;
+ maskOr     :TsrRegNode;
+ maskXor    :TsrRegNode;
+
+ valAnd     :TsrRegNode;
+ valOr      :TsrRegNode;
+
  pat:tds_pattern;
 begin
 
@@ -116,63 +120,44 @@ begin
    end;
   BitMode:
    begin
-    Assert(false,'TODO: DS_SWIZZLE_B32: BitMode');
+
+    lane_id:=AddInput(@RegsStory.FUnattach,dtUint32,itSubgroupLocalInvocationId);
+
+    if ((pat.bit.mask_and or $20)<>63) then
+    begin
+     maskAnd:=NewImm_i(dtUint32,pat.bit.mask_and or $20);
+     valAnd :=NewReg(dtUint32);
+     _Op2(line,Op.OpBitwiseAnd,valAnd,lane_id,maskAnd);
+    end else
+    begin
+     valAnd:=lane_id;
+    end;
+
+    if (pat.bit.mask_or<>0) then
+    begin
+     maskOr:=NewImm_i(dtUint32,pat.bit.mask_or );
+     valOr :=NewReg(dtUint32);
+     _Op2(line,Op.OpBitwiseOr,valOr,valAnd,maskOr);
+    end else
+    begin
+     valOr:=valAnd;
+    end;
+
+    begin
+     maskXor:=NewImm_i(dtUint32,pat.bit.mask_xor);
+     index  :=NewReg(dtUint32);
+     _Op2(line,Op.OpBitwiseXor,index,valOr,maskXor);
+    end;
+
+    //this is needed?
+    //vdst.lane[i] = EXEC[j] ? vsrc_tmp.lane[j] : 0
+
+    Op3(Op.OpGroupNonUniformShuffle,src.dtype,dst,NewImm_i(dtUint32,Scope.Subgroup),src,index);
    end;
+
  end;
 
 end;
-
-{
-const uint32_t typeId = getScalarTypeId(GcnScalarType::Uint32);
-
-//SubgroupLocalInvocationId
-
-auto invocationId = emitCommonSystemValueLoad(
-	GcnSystemValue::SubgroupInvocationID, GcnRegMask::select(0));
-
-uint16_t   offset    = util::concat<uint16_t>(ins.control.ds.offset1, ins.control.ds.offset0);
-DsPattern* pat       = reinterpret_cast<DsPattern*>(&offset);
-uint32_t   laneIndex = 0;
-
-if (pat->m.mode == QdMode)
-{
-
-}
-else
-{
-	uint32_t maskAnd = m_module.constu32(pat->bit.mask_and);
-	uint32_t maskOr  = m_module.constu32(pat->bit.mask_or);
-	uint32_t maskXor = m_module.constu32(pat->bit.mask_xor);
-
-	// or 0x20 to protect high 32 lanes if subgroup size is greater than 32
-	maskAnd = m_module.opBitwiseOr(typeId, m_module.constu32(0x20), maskAnd);
-
-	uint32_t valAnd = m_module.opBitwiseAnd(typeId, invocationId.id, maskAnd);
-	uint32_t valOr  = m_module.opBitwiseOr(typeId, valAnd, maskOr);
-	laneIndex       = m_module.opBitwiseXor(typeId, valOr, maskXor);
-}
-
-uint32_t laneValue = m_module.opGroupNonUniformShuffle(typeId,
-							,m_module.constu32(spv::ScopeSubgroup),
-							,src.low.id,
-							,laneIndex);
-
-// Detect if src lane is active,
-// if it's inactive, we need to return 0 for dst.
-uint32_t laneMask = m_module.opShiftLeftLogical(typeId, m_module.constu32(1), laneIndex);
-auto     exec     = m_state.exec.emitLoad(GcnRegMask::select(0));
-
-uint32_t laneActive = m_module.opINotEqual(m_module.defBoolType(),
-										   m_module.opBitwiseAnd(typeId, exec.low.id, laneMask),
-										   m_module.constu32(0));
-
-dst.low.id = m_module.opSelect(typeId,
-							   laneActive,
-							   laneValue,
-							   m_module.constu32(0));
-
-emitRegisterStore(ins.dst[0], dst);
-}
 
 function TEmit_DS.fetch_ds_chain(vbindex:TsrRegNode;rtype,atomic:TsrDataType;offset:Word):TsrChain;
 var

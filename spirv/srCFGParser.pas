@@ -1208,6 +1208,8 @@ begin
   while (not IsDirectlyRelated(goto_stmt, label_stmt)) do
   begin
    goto_stmt:=MoveOutward(goto_stmt);
+   //deffered
+   if (goto_stmt=nil) then Exit;
   end
  end;
  // Force goto_stmt and label_stmt to be siblings

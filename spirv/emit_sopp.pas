@@ -28,10 +28,7 @@ Var
  execution,memory,memory_semantics:TsrConst;
 begin
  //upgrade version to 1.3
- if (Config.SpvVersion<$10300) then
- begin
-  Config.SpvVersion:=$10300;
- end;
+ Config.UpgradeVersion($10300);
 
  node:=AddSpirvOp(line,Op.OpControlBarrier); //need first
 
