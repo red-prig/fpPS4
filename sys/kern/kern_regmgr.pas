@@ -135,6 +135,8 @@ begin
 
  case op of
 
+  $18: Assert(false,'Unhandled regmgr op:sceRegMgrNonSysSetInt');
+
   $19: //sceRegMgrNonSysGetInt
       begin
        Result:=copyin(pvalue,@data,16);
@@ -163,8 +165,8 @@ begin
         SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode:data.val2:=0; //sceVideoOutOpen
         SCE_REGMGR_ENT_KEY_NP_debug                          :data.val2:=0; //libSceSysUtil
 
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :Assert(false,'TODO:LIBC_intmem_peak_size');
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :Assert(false,'TODO:LIBC_intmem_shortage_count');
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :data.val2:=0; //libSceLibcInternal
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :data.val2:=0; //libSceLibcInternal
 
         else
          begin
