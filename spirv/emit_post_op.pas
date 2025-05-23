@@ -2306,7 +2306,7 @@ begin
    if (rBase.is_const) then
    begin
     data[0]:=rBase.AsConst.GetData;
-    data[1]:=(1 shl count)-1;
+    data[1]:=(QWORD(1) shl count)-1;
     data[0]:=data[0] and data[1];
     //
     if (data[0]<>rBase.AsConst.GetData) then
@@ -2315,7 +2315,7 @@ begin
     end;
    end else
    begin
-    data[1]:=(1 shl count)-1;
+    data[1]:=(QWORD(1) shl count)-1;
     num_31:=NewImm_q(dtUInt32,data[1],pLine);
     //
 
@@ -2432,7 +2432,7 @@ begin
   index:=BsfQWord(data[0]);
   count:=PopCnt  (data[0]);
 
-  data[1]:=((1 shl count)-1) shl index;
+  data[1]:=((QWORD(1) shl count)-1) shl index;
 
   if (data[0]=data[1]) then
   begin

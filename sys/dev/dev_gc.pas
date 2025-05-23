@@ -407,7 +407,7 @@ begin
      gc_map_hdq_drain(@map_queue_hqd[c_id],size);
 
      //set sended bits
-     send:=send or (1 shl (c_id div 8)); //by pipe id
+     send:=send or (QWORD(1) shl (c_id div 8)); //by pipe id //It is necessary to force QWORD!
 
      Dec(p_id);
     end; //while
@@ -416,7 +416,7 @@ begin
     //end
 
     //clear
-    bits:=bits and (not (1 shl c_id));
+    bits:=bits and (not (QWORD(1) shl c_id)); //It is necessary to force QWORD!
    end; //while
 
    if (send<>0) then
@@ -430,7 +430,7 @@ begin
      pfp_ctx.Flush_stream( t_pm4_stream_type(ord(stCompute0) + c_id) );
 
      //clear
-     send:=send and (not (1 shl c_id));
+     send:=send and (not (QWORD(1) shl c_id)); //It is necessary to force QWORD!
     end;
     //
 
@@ -765,7 +765,7 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- if ((map_queue_valid and (1 shl id))<>0) then
+ if ((map_queue_valid and (QWORD(1) shl id))<>0) then //It is necessary to force QWORD!
  begin
   Exit(Integer($804c0012));
  end;
@@ -780,13 +780,7 @@ begin
 
  if (Result=0) then
  begin
-  map_queue_valid:=map_queue_valid or (1 shl id);
-
-  {
-  id:=(pipeHi - 1) * 4 + (pipeLo - 8);
-
-  map_pipe_valid:=map_pipe_valid or (1 shl id);
-  }
+  map_queue_valid:=map_queue_valid or (QWORD(1) shl id); //It is necessary to force QWORD!
  end;
 
 end;
@@ -854,12 +848,12 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- if ((map_queue_valid and (1 shl id))<>0) then
+ if ((map_queue_valid and (QWORD(1) shl id))<>0) then //It is necessary to force QWORD!
  begin
 
   gc_unmap_hqd(@map_queue_hqd[id]);
 
-  map_queue_valid:=map_queue_valid and (not (1 shl id));
+  map_queue_valid:=map_queue_valid and (not (QWORD(1) shl id)); //It is necessary to force QWORD!
 
  end;
 end;
@@ -914,7 +908,7 @@ begin
 
  id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
 
- if ((map_queue_valid and (1 shl id))=0) then
+ if ((map_queue_valid and (QWORD(1) shl id))=0) then //It is necessary to force QWORD!
  begin
   Exit(Integer($804c0001));
  end;
@@ -1005,6 +999,8 @@ begin
 
   $C0048116: //sceGnmSubmitDone
             begin
+             start_gfx_ring;
+
              Writeln('sceGnmSubmitDone');
 
              //rw_wlock(ring_gfx_lock);
@@ -1166,6 +1162,8 @@ begin
   $C010811C: //sceGnmDingDong
             begin
              start_gfx_ring;
+
+             Writeln('sceGnmDingDong');
 
              gc_retrigger_watchdog_imdone;
 

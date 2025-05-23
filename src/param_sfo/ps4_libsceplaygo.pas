@@ -105,7 +105,7 @@ function scePlayGoConvertLanguage(systemLang:Integer):ScePlayGoLanguageMask; inl
 begin
  if (systemLang>=0) and (systemLang<48) then
  begin
-  Result:=(1 shl (64-systemLang-1));
+  Result:=(QWORD(1) shl (64-systemLang-1));
  end else
  begin
   Result:=0;

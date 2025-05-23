@@ -83,7 +83,7 @@ begin
  Result:=0;
  if (ring=nil) then Exit(-1);
 
- size:=1 shl BsfQWORD(size);
+ size:=QWORD(1) shl BsfQWORD(size);
  if (size<GC_RING_PADD) then size:=GC_RING_PADD;
 
  ring^.buff:=nil;

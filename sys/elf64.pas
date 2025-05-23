@@ -674,7 +674,7 @@ end;
 function SELF_BLOCK_SIZE(i:Int64):Int64; inline;
 begin
  Result:=(i shr SELF_PROPS_BLOCK_SIZE_OFFSET) and SELF_PROPS_BLOCK_SIZE_MASK;
- Result:=1 shl (Result+12)
+ Result:=QWORD(1) shl (Result+12)
 end;
 
 function SELF_SEGMENT_INDEX(i:Int64):Integer; inline;
