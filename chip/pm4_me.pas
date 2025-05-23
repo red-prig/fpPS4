@@ -1242,6 +1242,17 @@ begin
 
 end;
 
+Function get_bind_str(FBind:TvPointer):RawByteString;
+begin
+ if (FBind.FMemory=nil) then
+ begin
+  Result:='(nil)';
+ end else
+ begin
+  Result:='0x'+HexStr(FBind.FMemory.FHandle,16);
+ end;
+end;
+
 procedure Bind_Uniforms(var ctx:t_me_render_context;
                         BindPoint:TVkPipelineBindPoint;
                         var UniformBuilder:TvUniformBuilder);
@@ -1433,8 +1444,8 @@ begin
 
    range:=size;
 
-   Writeln('BindBuffer:->[',i,']'#13#10,
-           ' 0x',HexStr(buf.FHandle,16),':',buf.FName,'->[',diff_a,'..',range,']');
+   Writeln('BindBuffer:->[',i,':',bind,']',' 0x',HexStr(QWORD(addr),10),' ',get_bind_str(buf.FBind),#13#10,
+           ' 0x',HexStr(buf.FHandle,16),':',buf.FName,'->[',diff_a,'..',diff_a+range,']');
 
    DescriptorGroup.BindBuffer(fset,bind,
                               buf.FHandle,
@@ -2348,6 +2359,8 @@ begin
  pm4_InitStream(ctx);
  //
 
+ //if not ctx.WaitConfirmOrSwitch then Exit;
+
  StartFrameCapture;
 
  ctx.BeginCmdBuffer;
@@ -2838,11 +2851,12 @@ end;
 procedure pm4_EventWrite(var ctx:t_me_render_context;node:p_pm4_node_EventWrite);
 begin
  Case node^.eventType of
+  CS_PARTIAL_FLUSH,            //CS
   CACHE_FLUSH_AND_INV_EVENT,   //CB,DB
-  FLUSH_AND_INV_CB_PIXEL_DATA, //CB
-  //FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
-  FLUSH_AND_INV_DB_META, //HTILE
-  FLUSH_AND_INV_CB_META: //CMASK
+  DB_CACHE_FLUSH_AND_INV,      //DB
+  FLUSH_AND_INV_DB_META,       //HTILE
+  FLUSH_AND_INV_CB_META,       //CMASK
+  FLUSH_AND_INV_CB_PIXEL_DATA: //CB
    begin
     if (ctx.Cmd<>nil) and ctx.Cmd.IsAllocated then
     begin

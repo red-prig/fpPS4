@@ -1426,6 +1426,32 @@ begin
  if (not BeginCmdBuffer) then Exit;
 
  Case eventType of
+  CS_PARTIAL_FLUSH:
+    begin
+     Inc(cmd_count);
+
+     DebugReport.CmdInsertLabel(FCmdbuf,'CS_PARTIAL_FLUSH');
+
+     vkMemoryBarrier(FCmdbuf,
+                     VK_ACCESS_CS,                              //srcAccessMask
+                     VK_ACCESS_ANY,                             //dstAccessMask
+     	             ord(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT), //srcStageMask
+     	             ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT));  //dstStageMask
+    end;
+  DB_CACHE_FLUSH_AND_INV: //DB
+   begin
+    Inc(cmd_count);
+
+    DebugReport.CmdInsertLabel(FCmdbuf,'DB_CACHE_FLUSH_AND_INV');
+
+    vkMemoryBarrier(FCmdbuf,
+                    VK_ACCESS_DB,                             //srcAccessMask
+                    VK_ACCESS_ANY,                            //dstAccessMask
+                    VK_STAGE_DB,                              //srcStageMask
+                    ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)); //dstStageMask
+
+   end;
+
   FLUSH_AND_INV_DB_META: //HTILE
    begin
     Inc(cmd_count);

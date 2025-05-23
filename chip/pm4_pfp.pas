@@ -1076,13 +1076,18 @@ begin
 
  if p_print_gpu_ops then
  Case Body^.eventType of
+  CS_PARTIAL_FLUSH           :Writeln(' eventType=CS_PARTIAL_FLUSH');
   CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
-  FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
+  DB_CACHE_FLUSH_AND_INV     :Writeln(' eventType=DB_CACHE_FLUSH_AND_INV');
   FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
   FLUSH_AND_INV_DB_META      :Writeln(' eventType=FLUSH_AND_INV_DB_META');
   FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
   FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
+  FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
   THREAD_TRACE_MARKER        :Writeln(' eventType=THREAD_TRACE_MARKER');
+  PIXEL_PIPE_STAT_CONTROL    :Writeln(' eventType=PIXEL_PIPE_STAT_CONTROL');
+  PIXEL_PIPE_STAT_DUMP       :Writeln(' eventType=PIXEL_PIPE_STAT_DUMP');
+  PIXEL_PIPE_STAT_RESET      :Writeln(' eventType=PIXEL_PIPE_STAT_RESET');
   PIPELINESTAT_STOP          :Writeln(' eventType=PIPELINESTAT_STOP');
   PERFCOUNTER_START          :Writeln(' eventType=PERFCOUNTER_START');
   PERFCOUNTER_STOP           :Writeln(' eventType=PERFCOUNTER_STOP');
