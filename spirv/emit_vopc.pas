@@ -17,6 +17,7 @@ type
   procedure emit_VOPC;
   procedure emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
   procedure emit_V_CMP_C (r,x:Boolean);
+  procedure emit_V_CMP_CLASS_32(x:Boolean);
  end;
 
 implementation
@@ -48,13 +49,32 @@ begin
  dst[0]:=get_vcc0;
  dst[1]:=get_vcc1;
 
- SetConst_b(dst[0],r);
- SetConst_q(dst[1],dtUnknow,0); //set zero
+ SetThreadBit(dst[0],dst[1],NewImm_b(r));
 
  if x then
  begin
-  MakeCopy  (get_exec0,dst[0]^.current);
-  SetConst_q(get_exec1,dtUnknow,0);     //set zero
+  MakeCopy(get_exec0,dst[0]^.current);
+  MakeCopy(get_exec1,dst[1]^.current);
+ end;
+end;
+
+procedure TEmit_VOPC.emit_V_CMP_CLASS_32(x:Boolean);
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst[0]:=get_vcc0;
+ dst[1]:=get_vcc1;
+
+ src[0]:=fetch_ssrc9(FSPI.VOPC.SRC0 ,dtFloat32);
+ src[1]:=fetch_vsrc8(FSPI.VOPC.VSRC1,dtUInt32);
+
+ OpCmpClass(dst[0],dst[1],src[0],src[1]);
+
+ if x then
+ begin
+  MakeCopy(get_exec0,dst[0]^.current);
+  MakeCopy(get_exec1,dst[1]^.current);
  end;
 end;
 
@@ -192,6 +212,9 @@ begin
    V_CMPX_GT_U32   :emit_V_CMP_32(Op.OpUGreaterThan          ,dtUint32,true);
    V_CMPX_LG_U32   :emit_V_CMP_32(Op.OpINotEqual             ,dtUint32,true);
    V_CMPX_GE_U32   :emit_V_CMP_32(Op.OpUGreaterThanEqual     ,dtUint32,true);
+
+   V_CMP_CLASS_F32 :emit_V_CMP_CLASS_32(false);
+   V_CMPX_CLASS_F32:emit_V_CMP_CLASS_32(true );
 
   else
    Assert(false,'VOPC?'+IntToStr(FSPI.VOPC.OP)+' '+get_str_spi(FSPI));

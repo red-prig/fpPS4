@@ -55,6 +55,7 @@ type
   function  fetch_vdst8_64(VDST:Word;rtype:TsrDataType):TsrRegNode;
   //
   procedure OpCmpV(OpId:DWORD;dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
+  procedure OpCmpClass(dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpCmpS(OpId:DWORD;dst:PsrRegSlot;src0,src1:TsrRegNode);
   procedure OpConvFloatToHalf2(dst:PsrRegSlot;src0,src1:TsrRegNode);
   //
@@ -546,6 +547,135 @@ begin
  exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
 
  exc:=OpLogicalAndTo(tmp,exc);
+
+ SetThreadBit(dst0,dst1,exc);
+end;
+
+const
+ fcSignalingNan     = 1 shl 0;
+ fcQuietNan         = 1 shl 1;
+ fcNegativeInfinity = 1 shl 2;
+ fcNegativeNormal   = 1 shl 3;
+ fcNegativeDenorm   = 1 shl 4;
+ fcNegativeZero     = 1 shl 5;
+ fcPositiveZero     = 1 shl 6;
+ fcPositiveDenorm   = 1 shl 7;
+ fcPositiveNormal   = 1 shl 8;
+ fcPositiveInfinity = 1 shl 9;
+ fcAny              = (1 shl 10)-1;
+
+ fcNaN      = fcSignalingNan     or fcQuietNan;
+ fcInfinity = fcPositiveInfinity or fcNegativeInfinity;
+ fcNegative = fcNegativeInfinity or fcNegativeNormal or fcNegativeDenorm or fcNegativeZero;
+ fcPositive = fcPositiveZero     or fcPositiveDenorm or fcPositiveNormal or fcPositiveInfinity;
+
+procedure TEmitFetch.OpCmpClass(dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
+var
+ rsl:TsrRegNode;
+ ror:TsrRegNode;
+ exc:TsrRegNode;
+
+ msk:TsrConst;
+ val:DWORD;
+
+ function _test_group(val,mask:DWORD):Boolean; inline;
+ var
+  i:DWORD;
+ begin
+  i:=(val and mask);
+  Result:=(i=0) or (i=mask);
+ end;
+
+begin
+
+ msk:=src1.AsConst;
+
+ if (msk<>nil) then
+ begin
+
+  val:=msk.AsUint32;
+
+  if (val and fcAny)=fcAny then
+  begin
+   ror:=NewImm_b(True);
+  end else
+  if _test_group(val,fcNaN     ) or
+     _test_group(val,fcInfinity) or
+     _test_group(val,fcNegative) or
+     _test_group(val,fcPositive) then
+  begin
+   ror:=nil;
+
+   if (val and fcNaN)=fcNaN then
+   begin
+    rsl:=NewReg(dtBool);
+    _Op1(line,Op.OpIsNan,rsl,src0);
+    ror:=rsl;
+   end;
+
+   if (val and fcInfinity)=fcInfinity then
+   begin
+    rsl:=NewReg(dtBool);
+    _Op1(line,Op.OpIsInf,rsl,src0);
+    //
+    if (ror=nil) then
+    begin
+     ror:=rsl;
+    end else
+    begin
+     ror:=OpLogicalOrTo(ror,rsl);
+    end;
+    //
+   end;
+
+   if (val and fcNegative)=fcNegative then
+   begin
+    rsl:=NewReg(dtBool);
+    _Op2(line,Op.OpFOrdLessThanEqual,rsl,src0,NewImm_s(dtFloat32,-0.0));
+    //
+    if (ror=nil) then
+    begin
+     ror:=rsl;
+    end else
+    begin
+     ror:=OpLogicalOrTo(ror,rsl);
+    end;
+    //
+   end;
+
+   if (val and fcPositive)=fcPositive then
+   begin
+    rsl:=NewReg(dtBool);
+    _Op2(line,Op.OpFOrdGreaterThanEqual,rsl,src0,NewImm_s(dtFloat32,+0.0));
+    //
+    if (ror=nil) then
+    begin
+     ror:=rsl;
+    end else
+    begin
+     ror:=OpLogicalOrTo(ror,rsl);
+    end;
+    //
+   end;
+
+   if (ror=nil) then
+   begin
+    ror:=NewImm_b(False);
+   end;
+
+  end else
+  begin
+   Assert(false,'TODO: Unhandled mask V_CMP_CLASS_32:0x'+HexStr(val,2));
+  end;
+
+ end else
+ begin
+  Assert(false,'TODO: Non const V_CMP_CLASS_32');
+ end;
+
+ exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
+
+ exc:=OpLogicalAndTo(ror,exc);
 
  SetThreadBit(dst0,dst1,exc);
 end;

@@ -20,6 +20,7 @@ type
   procedure emit_VOP3a;
   procedure emit_V_CMP_32(OpId:DWORD;rtype:TsrDataType;x:Boolean);
   procedure emit_V_CMP_C (r,x:Boolean);
+  procedure emit_V_CMP_CLASS_32(x:Boolean);
 
   procedure emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
   procedure emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
@@ -111,13 +112,37 @@ begin
  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
- SetConst_b(dst[0],r);
- SetConst_q(dst[1],dtUnknow,0); //set zero
+ SetThreadBit(dst[0],dst[1],NewImm_b(r));
 
  if x then
  begin
-  MakeCopy  (get_exec0,dst[0]^.current);
-  SetConst_q(get_exec1,dtUnknow,0);     //set zero
+  MakeCopy(get_exec0,dst[0]^.current);
+  MakeCopy(get_exec1,dst[1]^.current);
+ end;
+end;
+
+procedure TEmit_VOP3.emit_V_CMP_CLASS_32(x:Boolean);
+Var
+ dst:array[0..1] of PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ if not get_sdst7_pair(FSPI.VOP3a.VDST,@dst) then Exit;
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
+
+ OpCmpClass(dst[0],dst[1],src[0],src[1]);
+
+ if x then
+ begin
+  MakeCopy(get_exec0,dst[0]^.current);
+  MakeCopy(get_exec1,dst[1]^.current);
  end;
 end;
 
@@ -1252,6 +1277,9 @@ begin
   V_CMPX_GT_U32   :emit_V_CMP_32(Op.OpUGreaterThan          ,dtUint32,true);
   V_CMPX_LG_U32   :emit_V_CMP_32(Op.OpINotEqual             ,dtUint32,true);
   V_CMPX_GE_U32   :emit_V_CMP_32(Op.OpUGreaterThanEqual     ,dtUint32,true);
+
+  V_CMP_CLASS_F32 :emit_V_CMP_CLASS_32(false);
+  V_CMPX_CLASS_F32:emit_V_CMP_CLASS_32(true );
 
   else
    Assert(false,'VOP3c?'+IntToStr(FSPI.VOP3a.OP)+' '+get_str_spi(FSPI));
