@@ -38,7 +38,6 @@ uses
  kern_thr,
  kern_condvar,
  time,
- md_sleep,
  pm4defs,
  pm4_ring,
  pm4_stream,
@@ -178,7 +177,8 @@ var
 
 type
  t_gc_priv=object
-  ring_watchdog:PRTLEvent;
+  ring_watchdog:t_cv;
+
   GC_SRI_event :t_cv;      //suspend-resume-idle event
 
   GC_IDLE_event:t_cv;
@@ -195,7 +195,7 @@ type
 
 var
  gc_priv:t_gc_priv=(
-  ring_watchdog:nil;
+  ring_watchdog:(cv_description:nil;cv_waiters:0);
   GC_SRI_event :(cv_description:nil;cv_waiters:0);
   GC_IDLE_event:(cv_description:nil;cv_waiters:0);
   //pfp_event    :(cv_description:nil;cv_waiters:0);
@@ -444,11 +444,20 @@ begin
 
   if (gc_priv.watchdog_label=0) then
   begin
-   RTLEventWaitFor(gc_priv.ring_watchdog);
+   mtx_lock(gc_priv.gc_suspend_lock);
+
+   _cv_wait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock);
+
+   mtx_unlock(gc_priv.gc_suspend_lock);
   end else
   begin
-   msleep_td(hz div 10000);
+   mtx_lock(gc_priv.gc_suspend_lock);
+
+   _cv_timedwait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock, hz div 10000);
+
+   mtx_unlock(gc_priv.gc_suspend_lock);
   end;
+
  until false;
 
 
@@ -461,11 +470,9 @@ begin
   pfp_ctx.init;
   pfp_ctx.on_flush_stream:=@pm4_me_gfx.Push;
 
-  gc_priv.ring_watchdog:=RTLEventCreate;
-  //gc_priv.GC_SRI_event :=RTLEventCreate;
-
-  cv_init (@gc_priv.GC_SRI_event ,'GC_SRI_event');
-  cv_init (@gc_priv.GC_IDLE_event,'GC_IDLE_event');
+  cv_init (@gc_priv.ring_watchdog ,'ring_watchdog');
+  cv_init (@gc_priv.GC_SRI_event  ,'GC_SRI_event');
+  cv_init (@gc_priv.GC_IDLE_event ,'GC_IDLE_event');
   mtx_init(gc_priv.gc_suspend_lock,'gc_suspend_lock');
 
   kthread_add(@parse_gfx_ring,nil,@parse_gfx_td,(8*1024*1024) div (16*1024),'[GFX_PFP]');
@@ -474,10 +481,10 @@ end;
 
 procedure gc_retrigger_watchdog;
 begin
- if (gc_priv.ring_watchdog<>nil) then
+ if (gc_priv.ring_watchdog.cv_description<>nil) then
  begin
   gc_priv.watchdog_label:=1; //thread can`t wait
-  RTLEventSetEvent(gc_priv.ring_watchdog);
+  cv_signal(@gc_priv.ring_watchdog);
  end;
 end;
 
@@ -492,47 +499,24 @@ end;
 
 procedure gc_wait_GC_SRI;
 begin
- if (pm4_me_gfx.started=nil)   then Exit;
+ if (pm4_me_gfx.started=nil) then Exit;
 
- //if (gc_priv.GC_SRI_label=0) then Exit;
+ mtx_lock(gc_priv.gc_suspend_lock);
 
- //if (gc_priv.GC_SRI_event<>nil) then
+ if (gc_priv.GC_SRI_label<>0) then
  begin
-  //gc_priv.GC_SRI_label:=0;
+  pm4_me_gfx.trigger; //update if wait
 
-  //RTLEventResetEvent(gc_priv.GC_SRI_event);
-
-  //gc_priv.GC_SRI_label:=1;
-
-  //pm4_me_gfx.trigger; //update if wait
-
-  //RTLEventWaitFor(gc_priv.GC_SRI_event);
-
-  mtx_lock(gc_priv.gc_suspend_lock);
-
-  //if (gc_priv.pfp_label<>0) then
-  //begin
-  // gc_retrigger_watchdog;
-  //
-  // _cv_wait_sig(@gc_priv.pfp_event,@gc_priv.GC_SRI_lock);
-  //end;
-
-  if (gc_priv.GC_SRI_label<>0) then
-  begin
-   pm4_me_gfx.trigger; //update if wait
-
-   _cv_wait_sig(@gc_priv.GC_SRI_event,@gc_priv.gc_suspend_lock);
-  end;
-
-  mtx_unlock(gc_priv.gc_suspend_lock);
+  _cv_wait_sig(@gc_priv.GC_SRI_event,@gc_priv.gc_suspend_lock);
  end;
+
+ mtx_unlock(gc_priv.gc_suspend_lock);
 
  //pm4_me_gfx.trigger; //update if wait
 end;
 
 procedure pfp_idle;
 begin
-
  mtx_lock(gc_priv.gc_suspend_lock);
 
  //if (gc_priv.pfp_label<>0) then
@@ -572,7 +556,7 @@ begin
   gc_retrigger_watchdog;
   pm4_me_gfx.trigger; //update if wait
 
-  ret:=_cv_timedwait(@gc_priv.GC_IDLE_event,@gc_priv.gc_suspend_lock, hz div 2);
+  ret:=_cv_timedwait_sig(@gc_priv.GC_IDLE_event,@gc_priv.gc_suspend_lock, hz div 2);
 
   if (ret<>0) then
   begin
@@ -595,54 +579,7 @@ begin
   gc_submits_allowed_vmirr^:=0; //true
  end;
 
-
 end;
-
-{
-procedure gc_idle; register;
-begin
-
- mtx_lock(gc_priv.gc_suspend_lock);
-
- if (gc_priv.GC_SRI_label<>0) then
- begin
-  cv_broadcastpri(@gc_priv.GC_SRI_event,0);
- end;
-
- gc_priv.GC_SRI_label:=0;
-
- mtx_unlock(gc_priv.gc_suspend_lock);
-
- if (gc_submits_allowed_vmirr<>nil) then
- begin
-  gc_submits_allowed_vmirr^:=0; //true
- end;
-
- {
- rw_wlock(ring_gfx_lock);
-
- if (gc_priv.GC_SRI_label<>0) then
- begin
-  if (gc_priv.GC_SRI_event<>nil) then
-  begin
-   //cv_broadcastpri
-   RTLEventSetEvent(gc_priv.GC_SRI_event);
-  end;
-
-  //gc_priv.GC_SRI_label:=0;
-
-  gc_retrigger_watchdog;
-
-  if (gc_submits_allowed_vmirr<>nil) then
-  begin
-   gc_submits_allowed_vmirr^:=0; //true
-  end;
- end;
-
- rw_wunlock(ring_gfx_lock);
- }
-end;
-}
 
 procedure gc_imdone;
 begin
