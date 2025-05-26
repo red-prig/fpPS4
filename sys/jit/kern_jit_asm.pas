@@ -56,6 +56,8 @@ procedure jit_syscall;       assembler;
 procedure jit_jmp_plt_cache; assembler;
 procedure jit_jmp_dispatch;  assembler;
 
+procedure jit_hle_trace; assembler;
+
 procedure jit_jmp_internal;  assembler;
 
 function  IS_JIT_FUNC(rip:qword):Boolean;
@@ -499,6 +501,34 @@ asm
  call jmp_dispatcher
 
  mov  %rax,%r14
+
+ call jit_load_ctx // -> popf
+
+ //epilog
+ movq %rbp,%rsp
+ pop  %rbp
+
+ //interrupt
+ jmp %gs:teb.jit_trp
+ //marker
+ .quad 0xDEADC0DEDEADC0DE
+end;
+
+//in:r14(nid) r15(caller)
+procedure jit_hle_trace; assembler; nostackframe;
+asm
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ call jit_save_ctx // -> pushf
+
+ andq  $-16,%rsp //align stack
+
+ //rdi
+ mov %r14,%rdi
+
+ call %r15
 
  call jit_load_ctx // -> popf
 

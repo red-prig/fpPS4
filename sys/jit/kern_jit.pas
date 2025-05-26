@@ -6,6 +6,7 @@ unit kern_jit;
 interface
 
 uses
+ ps4libdoc,
  mqueue,
  systm,
  x86_fpdbgdisas,
@@ -1688,6 +1689,39 @@ begin
  //debug
 end;
 
+const
+ trace_hle_call=False;
+
+procedure print_beg_hle(nid:QWORD); SysV_ABI_CDecl;
+var
+ str:shortstring;
+begin
+ str:=ps4libdoc.GetFunctName(nid);
+ if (str='Unknow') then
+ begin
+  str:='0x'+HexStr(nid,16);
+ end;
+
+ if Pos('sceAudioOut',str)<>0 then Exit;
+
+ Writeln(str,'->');
+end;
+
+procedure print_end_hle(nid:QWORD); SysV_ABI_CDecl;
+var
+ str:shortstring;
+begin
+ str:=ps4libdoc.GetFunctName(nid);
+ if (str='Unknow') then
+ begin
+  str:='0x'+HexStr(nid,16);
+ end;
+
+ if Pos('sceAudioOut',str)<>0 then Exit;
+
+ Writeln(str,'<-');
+end;
+
 function pick_locked_internal(var ctx:t_jit_context2):p_jit_dynamic_blob;
 var
  node_export:t_jit_context2.p_export_point;
@@ -1727,6 +1761,15 @@ begin
   link_curr:=ctx.builder.get_curr_label.after;
   //
 
+  //beg
+  if trace_hle_call then
+  with ctx.builder do
+  begin
+   movi64(r14,node_export^.nid);
+   movi64(r15,QWORD(@print_beg_hle));
+   call_far(@jit_hle_trace);
+  end;
+
   op_jit2native(ctx,mExport);
   //[JIT->HLE]
 
@@ -1737,13 +1780,24 @@ begin
   //[HLE->JIT]
   op_native2jit(ctx,mExport); //TODO: [HLE->JIT] combine with [ret]
 
+  //end
+  if trace_hle_call then
+  with ctx.builder do
+  begin
+   movi64(r14,node_export^.nid);
+   movi64(r15,QWORD(@print_end_hle));
+   call_far(@jit_hle_trace);
+  end;
+
   //save last call
+  {
   if debug_info then
   with ctx.builder do
   begin
    ctx.builder.movi64(r14,QWORD(node_export^.native));
    ctx.builder.movq  ([GS+$100],r14);
   end;
+  }
 
   //
   op_pop_rip_part0(ctx,0); //out:r14
