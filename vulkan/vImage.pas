@@ -87,10 +87,11 @@ type
 
 const
  //usage image
- TM_READ =1;
- TM_WRITE=2;
- TM_CLEAR=4;
- TM_MIXED=8;
+ TM_READ  =1;
+ TM_WRITE =2;
+ TM_CLEAR =4; //Render target is cleared
+ TM_MIXED =8; //Mixed image usage
+ TM_INVAL=16; //invalid buffer/image
 
 type
  t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_transfer,iu_buffer,iu_htile,iu_cmask);

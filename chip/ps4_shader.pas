@@ -916,6 +916,9 @@ end;
 procedure print_vsharp(PV:PVSharpResource4);
 begin
  if (PV=nil) then Exit;
+
+ Writeln('[V#]:0x',HexStr(PV));
+
  Writeln('base=',HexStr(PV^.base and (not 3),10));
  Writeln('stride=',PV^.stride);
  Writeln('cache_swizzle=',PV^.cache_swizzle);
@@ -943,6 +946,9 @@ end;
 procedure print_tsharp4(PT:PTSharpResource4);
 begin
  if (PT=nil) then Exit;
+
+ Writeln('[T#]:0x',HexStr(PT));
+
  Writeln('base=',HexStr(QWORD(PT^.base) shl 8,10));
  Writeln('min_lod=',_get_lod_str(PT^.min_lod));
 

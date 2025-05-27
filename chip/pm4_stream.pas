@@ -1448,6 +1448,7 @@ begin
  begin
   For i:=0 to High(UniformBuilder.FBuffers) do
   With UniformBuilder.FBuffers[i] do
+  if (memuse and TM_INVAL)=0 then
   begin
 
    insert_buffer_resource(@node^.scope,

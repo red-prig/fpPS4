@@ -778,7 +778,6 @@ begin
   'DFMT':L^.rinfo.dfmt   :=StrToDWord2(V);
   'NFMT':L^.rinfo.nfmt   :=StrToDWord2(V);
   'STRD':L^.rinfo.stride :=StrToDWord2(V);
-  'NUMT':L^.rinfo.nfmt   :=StrToDWord2(V);
   'TYPE':L^.rinfo.rtype  :=StrToDWord2(V);
   'DSEL':L^.rinfo.dstsel :=StrToDstSel(V);
 
@@ -1317,6 +1316,8 @@ var
 begin
  if (PV=nil) then Exit;
 
+ Assert(PV^.dfmt<>0,'AddVSharp:invalid dfmt!');
+
  pv_base  :=Pointer(PV^.base and (not 3));
  pv_stride:=PV^.stride;
  pv_count :=PV^.num_records;
@@ -1431,7 +1432,7 @@ begin
  Assert(PV<>nil);
  if (PV=nil) then Exit;
 
- //print_vsharp(PV);
+ //print_vsharp(PVSharpResource4(PV));
 
  b:=Default(TBufBindExt);
  b.fset  :=fset;
@@ -1475,17 +1476,21 @@ Procedure TvUniformBuilder.AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:
 var
  b:TBufBindExt;
  stride,num_records:Integer;
+
+ invalid:Integer;
 begin
  Assert(PV<>nil);
  if (PV=nil) then Exit;
 
  //print_vsharp(PV);
 
+ invalid:=ord(PV^.dfmt=0)*TM_INVAL;
+
  b:=Default(TBufBindExt);
  b.fset  :=fset;
  b.bind  :=bind;
  b.offset:=offset;
- b.memuse:=_get_buf_mem_usage(flags);
+ b.memuse:=_get_buf_mem_usage(flags) or invalid;
 
  b.addr:=Pointer(PV^.base and (not 3));
 
@@ -1548,6 +1553,8 @@ begin
  b.FImage:=_get_tsharp4_image_info(PT,hint);
  b.FView :=_get_tsharp4_image_view(PT,hint);
 
+ b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
+
  Insert(b,FImages,Length(FImages));
 end;
 
@@ -1577,6 +1584,8 @@ begin
 
  b.FImage:=_get_tsharp8_image_info(PT,hint);
  b.FView :=_get_tsharp8_image_view(PT,hint);
+
+ b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
 
  Insert(b,FImages,Length(FImages));
 end;
@@ -1871,6 +1880,11 @@ begin
  end;
 end;
 
+function IsInvalid(dfmt:Byte):Boolean; inline;
+begin
+ Result:=(dfmt=0);
+end;
+
 procedure TvUnifChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
@@ -1933,16 +1947,25 @@ begin
    begin
 
     if rinfo.enable then
-    if (     dfmt<>rinfo.dfmt    ) or
-       (     nfmt<>rinfo.nfmt    ) or
-       (   stride<>rinfo.stride  ) or
-       (dst_sel_x<>rinfo.dstsel.x) or
-       (dst_sel_y<>rinfo.dstsel.y) or
-       (dst_sel_z<>rinfo.dstsel.z) or
-       (dst_sel_w<>rinfo.dstsel.w) then
     begin
-     FResult:=False;
-     Exit;
+     if (     dfmt<>rinfo.dfmt    ) or
+        (     nfmt<>rinfo.nfmt    ) or
+        (   stride<>rinfo.stride  ) or
+        (dst_sel_x<>rinfo.dstsel.x) or
+        (dst_sel_y<>rinfo.dstsel.y) or
+        (dst_sel_z<>rinfo.dstsel.z) or
+        (dst_sel_w<>rinfo.dstsel.w) then
+     begin
+      FResult:=False;
+      Exit;
+     end;
+    end else
+    begin
+     if (IsInvalid(dfmt)<>IsInvalid(rinfo.dfmt)) then
+     begin
+      FResult:=False;
+      Exit;
+     end;
     end;
 
    end;
@@ -1971,8 +1994,8 @@ begin
      end;
     end else
     begin
-     //rinfo.nfmt -> NUMT
-     if (GetNumType(nfmt)<>rinfo.nfmt) then
+     if ( IsInvalid(dfmt)<>IsInvalid(rinfo.dfmt) ) or
+        (GetNumType(nfmt)<>GetNumType(rinfo.nfmt)) then
      begin
       FResult:=False;
       Exit;

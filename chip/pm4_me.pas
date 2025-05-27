@@ -1108,6 +1108,7 @@ begin
  begin
   For i:=0 to High(UniformBuilder.FBuffers) do
   With UniformBuilder.FBuffers[i] do
+  if (memuse and TM_INVAL)=0 then
   begin
 
    resource_instance:=ctx.node^.scope.find_buffer_resource_instance(R_BUF,addr,size);
@@ -1412,6 +1413,7 @@ begin
  begin
   For i:=0 to High(UniformBuilder.FBuffers) do
   With UniformBuilder.FBuffers[i] do
+  if (memuse and TM_INVAL)=0 then
   begin
 
    resource_instance:=ctx.node^.scope.find_buffer_resource_instance(R_BUF,addr,size);
@@ -2321,17 +2323,17 @@ begin
  case node^.ntype of
   ntDrawIndex2:
    begin
-    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
+    Writeln(node^.id,':DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
     ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
    end;
   ntDrawIndexOffset2:
    begin
-    Writeln('DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
+    Writeln(node^.id,':DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
     ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
    end;
   ntDrawIndexAuto:
    begin
-    Writeln('DrawIndexAuto(',node^.vertexOffset,',',node^.indexCount,')');
+    Writeln(node^.id,':DrawIndexAuto(',node^.vertexOffset,',',node^.indexCount,')');
     ctx.Cmd.DrawIndexAuto(node^.vertexOffset,node^.indexCount);
    end;
   ntClearDepth:

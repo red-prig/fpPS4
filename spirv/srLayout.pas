@@ -977,6 +977,9 @@ begin
        Writer.IntOpt('NFMT',nfmt);
        Writer.IntOpt('STRD',stride);
        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
+      end else
+      begin
+       Writer.IntOpt('DFMT',dfmt); //0->invalid
       end;
      end;
 
@@ -999,7 +1002,8 @@ begin
        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
       end else
       begin
-       Writer.IntOpt('NUMT',GetNumType(nfmt));
+       Writer.IntOpt('DFMT',dfmt); //0->invalid
+       Writer.IntOpt('NFMT',nfmt);
       end;
      end;
 
