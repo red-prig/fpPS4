@@ -925,20 +925,30 @@ begin
                                      Body^.offset and (not 31));
 end;
 
+function PM4_BODY_LENGTH_DW(header:PM4_TYPE_3_HEADER;sizeof:WORD):WORD; inline;
+begin
+ Result:=header.count + 2;
+ sizeof:=sizeof div 4;
+ if (Result>sizeof) then
+ begin
+  Result:=Result-sizeof;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
 procedure onWriteConstRam(pctx:p_pfp_ctx;Body:PPM4CMDCONSTRAMWRITE);
 var
  count:Word;
 
  src:PDWORD;
  src_dmem:PDWORD;
-
 begin
  Assert(pctx^.stream_type=stGfxCcb);
 
- count:=Body^.header.count;
- if (count<2) then Exit;
-
- count:=count-1;
+ count:=PM4_BODY_LENGTH_DW(Body^.header,SizeOf(PM4CMDCONSTRAMWRITE));
+ if (count=0) then Exit;
 
  src_dmem:=@Body^.data;
 
@@ -1222,6 +1232,12 @@ begin
  Case Body^.Flags1.engine of
   CP_DMA_ENGINE_ME:
    begin
+
+    if p_print_gpu_ops then
+    begin
+     Writeln('[1]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
+    end;
+
     pctx^.stream[stGfxDcb].DmaData(dstSel,adrDst,srcSel,adrSrc,byteCount,Body^.Flags1.cpSync);
    end;
   CP_DMA_ENGINE_PFP:
@@ -1229,6 +1245,11 @@ begin
     //Execute on the parser side
 
     //FlushAndWaitMe(pctx);
+
+    if p_print_gpu_ops then
+    begin
+     Writeln('[2]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
+    end;
 
     adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
 
@@ -1277,24 +1298,23 @@ begin
   Assert(Body^.CONTROL.wrOneAddr=0,'WriteData: send to fifo reg');
  end;
 
+ count:=PM4_BODY_LENGTH_DW(Body^.header,SizeOf(PM4CMDWRITEDATA));
+
  if p_print_gpu_ops then
  begin
   Writeln(' engine     =',engine_str[Body^.CONTROL.engineSel]);
   Writeln(' dstSel     =',Body^.CONTROL.dstSel,' ',Body^.CONTROL.wrConfirm);
   Writeln(' dstAddr    =0x',HexStr(Body^.dstAddr,10));
-  Writeln(' length     =',(Body^.header.count-2)*4);
+  Writeln(' length     =',count*4);
 
-  case Body^.header.count of
-   3:Writeln(' data       =0x',HexStr(PDWORD(@Body^.DATA)^,8));
-   4:Writeln(' data       =0x',HexStr(PQWORD(@Body^.DATA)^,16));
+  case count of
+   1:Writeln(' data       =0x',HexStr(PDWORD(@Body^.DATA)^,8 ));
+   2:Writeln(' data       =0x',HexStr(PQWORD(@Body^.DATA)^,16));
    else;
   end;
  end;
 
- count:=Body^.header.count;
- if (count<3) then Exit;
-
- count:=count-2;
+ if (count=0) then Exit;
 
  dst:=Pointer(Body^.dstAddr);
  src_dmem:=@Body^.DATA;
