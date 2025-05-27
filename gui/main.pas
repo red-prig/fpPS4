@@ -844,6 +844,19 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
+
+  ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
+
+  with ListGrid.Columns[1] do
+  begin
+   MaxSize:=ListGrid.Canvas.GetTextWidth('MCUSA00000M');;
+  end;
+
+  with ListGrid.Columns[2] do
+  begin
+   MaxSize:=ListGrid.Canvas.GetTextWidth('M00.00M');
+  end;
+
  IpcHandler:=THostIpcHandler.Create;
 
  IpcHandler.AddCallback('KEV_EVENT'     ,@OnKevent      );
