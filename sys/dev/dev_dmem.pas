@@ -144,10 +144,10 @@ begin
              begin
               Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,start);
               {
-              Writeln('dmem_map_alloc(0x',HexStr(start,10),
-                                    ',0x',HexStr(__end,10),
-                                    ',0x',HexStr(len,10),
-                                    ',0x',HexStr(align,10),
+              Writeln('dmem_map_alloc(0x',HexStr(start,11),
+                                    ',0x',HexStr(__end,11),
+                                    ',0x',HexStr(len,11),
+                                    ',0x',HexStr(align,11),
                                     ',',mtype,'):',Result);
               }
              end;

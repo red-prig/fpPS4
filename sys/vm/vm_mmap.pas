@@ -961,18 +961,18 @@ _map:
  if (stack_addr<>nil) then
  begin
   //Do you really need it?
-  vm_map_set_name_str(map,addr,size + addr,'anon:'+HexStr(QWORD(stack_addr),10));
+  vm_map_set_name_str(map,addr,size + addr,'anon:'+HexStr(QWORD(stack_addr),11));
  end;
 
- Writeln('0x',HexStr(QWORD(stack_addr),10),'->',
-         'sys_mmap(','0x',HexStr(QWORD(vaddr),10),
-                    ',0x',HexStr(vlen,10),
+ Writeln('0x',HexStr(QWORD(stack_addr),11),'->',
+         'sys_mmap(','0x',HexStr(QWORD(vaddr),11),
+                    ',0x',HexStr(vlen,11),
                     ',0x',HexStr(prot,1),
                     ',0x',HexStr(flags,6),
                       ',',fd,
-                    ',0x',HexStr(pos,10),
+                    ',0x',HexStr(pos,11),
                      '):',Integer(Result),
-                    ':0x',HexStr(td^.td_retval[0],10),'..0x',HexStr(td^.td_retval[0]+size,10));
+                    ':0x',HexStr(td^.td_retval[0],11),'..0x',HexStr(td^.td_retval[0]+size,11));
 
 
 _done:
@@ -1015,8 +1015,8 @@ begin
 
  Result:=vm_map_remove(map, qword(addr), qword(addr) + size);
 
- Writeln('sys_munmap(','0x',HexStr(QWORD(addr),10),
-                      ',0x',HexStr(len,10),
+ Writeln('sys_munmap(','0x',HexStr(QWORD(addr),11),
+                      ',0x',HexStr(len,11),
                        '):',Integer(Result)
                      );
 
@@ -1216,8 +1216,8 @@ begin
 
  vm_map_set_name(map,start,__end,@_name);
 
- Writeln('sys_mname(','0x',HexStr(QWORD(addr),10),
-                     ',0x',HexStr(len,10),
+ Writeln('sys_mname(','0x',HexStr(QWORD(addr),11),
+                     ',0x',HexStr(len,11),
                        ',','"',name,'"',
                        ')'
                      );

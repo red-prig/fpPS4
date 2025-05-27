@@ -346,11 +346,11 @@ begin
 
  if (PAGE_PROT=nil) then
  begin
-  r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT,VM_RW);
+  r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT_SZ1,VM_RW);
 
   if (r<>0) then
   begin
-   Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT,11),'):0x',HexStr(r,8));
+   Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT_SZ1,11),'):0x',HexStr(r,8));
    Assert(false,'pmap_pinit');
   end;
  end;
@@ -733,7 +733,7 @@ function pmap_wlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer; inline;
 begin
- //Writeln('pmap_wlock:',HexStr(start,10),'..',HexStr(__end,10));
+ //Writeln('pmap_wlock:',HexStr(start,11),'..',HexStr(__end,11));
 
  Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_WRITE);
 end;
@@ -742,14 +742,14 @@ function pmap_rlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer; inline;
 begin
- //Writeln('pmap_rlock:',HexStr(start,10),'..',HexStr(__end,10));
+ //Writeln('pmap_rlock:',HexStr(start,11),'..',HexStr(__end,11));
 
  Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_READ);
 end;
 
 procedure pmap_unlock(pmap:pmap_t;cookie:Pointer); inline;
 begin
- //Writeln('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,10),'..',HexStr(p_rl_q_entry(cookie)^.rl_q_end,10));
+ //Writeln('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,11),'..',HexStr(p_rl_q_entry(cookie)^.rl_q_end,11));
 
  vm_map_unlock_range(pmap^.vm_map,cookie);
 end;
@@ -1673,7 +1673,7 @@ begin
 
  lock:=pmap_wlock(pmap,start,__end);
 
- ppmap_unmark(start,__end);
+ ppmap_unmark(start,__end,VM_PROT_ALL);
 
  vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
 

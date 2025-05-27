@@ -1935,7 +1935,7 @@ begin
  //
  if print_asm then
  begin
-  Writeln('switchtable:0x',HexStr(QWORD(sw_table^.table),10),'..0x',HexStr(QWORD(sw_next),10));
+  Writeln('switchtable:0x',HexStr(QWORD(sw_table^.table),11),'..0x',HexStr(QWORD(sw_next),11));
  end;
  //
  if ctx.is_text_addr(QWORD(sw_data)) and
@@ -1959,7 +1959,7 @@ begin
    begin
     if print_asm then
     begin
-     Writeln(' [0x',HexStr(QWORD(sw_data),10),']->0x',HexStr(ofs,10));
+     Writeln(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
     end;
     //
     ctx.add_forward_point(fpCall,Pointer(ofs));

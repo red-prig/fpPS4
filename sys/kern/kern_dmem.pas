@@ -521,15 +521,15 @@ begin
 
  td^.td_retval[0]:=addr;
 
- Writeln('0x',HexStr(QWORD(stack_addr),10),'->',
-         'sys_mmap_dmem(','0x',HexStr(QWORD(vaddr),10),
-                         ',0x',HexStr(length,10),
+ Writeln('0x',HexStr(QWORD(stack_addr),11),'->',
+         'sys_mmap_dmem(','0x',HexStr(QWORD(vaddr),11),
+                         ',0x',HexStr(length,11),
                          ',0x',HexStr(mtype,1),
                          ',0x',HexStr(prot,1),
                          ',0x',HexStr(flags,6),
                          ',0x',HexStr(phaddr,10),
                           '):',Integer(Result),
-                         ':0x',HexStr(addr,10),'..0x',HexStr(addr+length,10));
+                         ':0x',HexStr(addr,11),'..0x',HexStr(addr+length,11));
 end;
 
 function IN_CUSALIST_1:Boolean;

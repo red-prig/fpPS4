@@ -2815,7 +2815,7 @@ begin
 
   entry^.eflags:=entry^.eflags or MAP_ENTRY_IN_TRANSITION;
 
-  //Writeln('+MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,10),'..',HexStr(entry^.__end,10));
+  //Writeln('+MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,11),'..',HexStr(entry^.__end,11));
 
   //entry^.wiring_thread:=curthread;
 
@@ -2916,7 +2916,7 @@ _done:
   entry^.eflags:=entry^.eflags and (not MAP_ENTRY_IN_TRANSITION);
   //entry^.wiring_thread:=nil;
 
-  //Writeln('-MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,10),'..',HexStr(entry^.__end,10));
+  //Writeln('-MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,11),'..',HexStr(entry^.__end,11));
 
   if (entry^.eflags and MAP_ENTRY_NEEDS_WAKEUP)<>0 then
   begin
@@ -3084,7 +3084,7 @@ begin
   entry^.eflags:=entry^.eflags or MAP_ENTRY_IN_TRANSITION;
   //entry^.wiring_thread:=curthread;
 
-  //Writeln('+MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,10),'..',HexStr(entry^.__end,10));
+  //Writeln('+MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,11),'..',HexStr(entry^.__end,11));
 
   if ((entry^.protection and VM_PROT_ALL)=0)
       or ((entry^.protection and prot)<>prot) then
@@ -3331,7 +3331,7 @@ _next_entry_done:
   entry^.eflags:=entry^.eflags and (not (MAP_ENTRY_IN_TRANSITION or MAP_ENTRY_WIRE_SKIPPED));
   //entry^.wiring_thread:=nil;
 
-  //Writeln('-MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,10),'..',HexStr(entry^.__end,10));
+  //Writeln('-MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,11),'..',HexStr(entry^.__end,11));
 
   if ((entry^.eflags and MAP_ENTRY_NEEDS_WAKEUP)<>0) then
   begin

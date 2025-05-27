@@ -397,7 +397,7 @@ begin
 
  stack_addr:=QWORD(vmspace^.sv_usrstack) - ssiz;
 
- Writeln('vm_map_stack:0x',HexStr(stack_addr,10),'..0x',HexStr(stack_addr+ssiz,10));
+ Writeln('vm_map_stack:0x',HexStr(stack_addr,11),'..0x',HexStr(stack_addr+ssiz,11));
 
  error:=vm_map_stack(map,
                      stack_addr,ssiz,

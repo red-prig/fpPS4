@@ -171,12 +171,12 @@ begin
      {
      Writeln('ranges_overlap:',
               HexStr(entry),',',
-              HexStr(entry^.rl_q_start,10),',',
-              HexStr(entry^.rl_q_end,10),
+              HexStr(entry^.rl_q_start,11),',',
+              HexStr(entry^.rl_q_end,11),
               ' to ',
               HexStr(entry1),',',
-              HexStr(entry1^.rl_q_start,10),',',
-              HexStr(entry1^.rl_q_end,10));
+              HexStr(entry1^.rl_q_start,11),',',
+              HexStr(entry1^.rl_q_end,11));
      }
      goto _out;
     end;

@@ -298,7 +298,7 @@ begin
         begin
          if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
-          //Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),10));
+          //Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,

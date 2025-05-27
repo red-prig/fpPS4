@@ -1916,8 +1916,9 @@ begin
  end;
 end;
 
-// $10000000000 = 1 shl 40
-// 64-40 = 24
+// VM_MAXUSER_ADDRESS
+// $80000000000 = 1 shl 43
+// 64-43 = 21
 
 procedure op_uplift(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize;hint:t_lea_hint=[]);
 var
@@ -1950,7 +1951,7 @@ begin
   xchgq(rcx,rbits);
 
   //addres bits
-  movi(new_reg_size(rcx,os8),40);
+  movi(new_reg_size(rcx,os8),43);
 
   shrx(rcx,dst,rcx);
 
@@ -1967,7 +1968,7 @@ begin
 
   {
   //zero bits
-  movi(new_reg_size(rbits,os8),24); //mov  $24,%bpl
+  movi(new_reg_size(rbits,os8),21); //mov  $21,%bpl
 
   //clear hi
   shlx(dst,dst,rbits); //shlx %rbp,%r14,%r14

@@ -133,7 +133,7 @@ begin
 
  td^.td_retval[0]:=key;
 
- Writeln('namedobj_create("',_name,'",0x',HexStr(QWORD(objp),10),',0x',HexStr(objt,4),'):',key);
+ Writeln('namedobj_create("',_name,'",0x',HexStr(QWORD(objp),11),',0x',HexStr(objt,4),'):',key);
 
  Result:=0;
 end;

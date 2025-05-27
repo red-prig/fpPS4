@@ -93,7 +93,7 @@ end;
 
 function sys_netgetiflist(param1:Pointer;param2,param3:Integer):Integer;
 begin
- Writeln('TODO:sys_netgetiflist(0x',HexStr(QWORD(param1),10),',',param2,',',param3,')');
+ Writeln('TODO:sys_netgetiflist(0x',HexStr(QWORD(param1),11),',',param2,',',param3,')');
  Result:=0;
 end;
 
