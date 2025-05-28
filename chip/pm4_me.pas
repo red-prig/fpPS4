@@ -2964,10 +2964,20 @@ begin
       //GPU
       byteSize:=node^.num_dw*SizeOf(DWORD);
 
+      if p_print_gpu_ops then
+      begin
+       Writeln('[1]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
+      end;
+
       ctx.Cmd.dmaData1(node^.src,node^.dst,byteSize,node^.wrConfirm);
      end else
      begin
       //soft
+
+      if p_print_gpu_ops then
+      begin
+       Writeln('[2]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
+      end;
 
       src_dmem:=get_dmem_ptr(node^.src);
 
@@ -3241,6 +3251,8 @@ var
  __end:DWORD;
  size :DWORD;
 begin
+ //if not ctx.WaitConfirmOrSwitch then Exit;
+
  addr_dmem:=get_dmem_ptr(node^.addr);
 
  start:=node^.offset;
@@ -3257,6 +3269,11 @@ begin
  end;
 
  size:=(__end-start);
+
+ if p_print_gpu_ops then
+ begin
+  Writeln('LoadConstRam:0x',HexStr(QWORD(addr_dmem),10),'->[0x',HexStr(start,4),']:size=0x',HexStr(size,6));
+ end;
 
  Move(addr_dmem^,ctx.me^.CONST_RAM[start],size);
 end;
@@ -3269,6 +3286,8 @@ var
  __end:DWORD;
  size :DWORD;
 begin
+ //if not ctx.WaitConfirmOrSwitch then Exit;
+
  addr_dmem:=get_dmem_ptr(node^.addr);
 
  start:=node^.offset;
@@ -3285,6 +3304,11 @@ begin
  end;
 
  size:=(__end-start);
+
+ if p_print_gpu_ops then
+ begin
+  Writeln('DumpConstRam:[0x',HexStr(start,4),']->0x',HexStr(QWORD(addr_dmem),10),':size=0x',HexStr(size,6));
+ end;
 
  Move(ctx.me^.CONST_RAM[start],addr_dmem^,size);
 
@@ -3308,7 +3332,17 @@ procedure pm4_WaitOnCECounter(var ctx:t_me_render_context;node:p_pm4_node);
 begin
  if (ctx.me^.CE_COUNT <= ctx.me^.DE_COUNT) then
  begin
+  if p_print_gpu_ops then
+  begin
+   Writeln('WaitOnCECounter:(',ctx.me^.CE_COUNT,' <= ',ctx.me^.DE_COUNT,')');
+  end;
   ctx.switch_task;
+ end else
+ begin
+  if p_print_gpu_ops then
+  begin
+   Writeln('WaitOnCECounter:(',ctx.me^.CE_COUNT,' > ',ctx.me^.DE_COUNT,')');
+  end;
  end;
 end;
 
@@ -3317,9 +3351,20 @@ var
  diff:DWORD;
 begin
  diff:=node^.diff;
- if ((ctx.me^.DE_COUNT - ctx.me^.CE_COUNT) >= diff) then
+ //force unsigned compare
+ if (DWORD(ctx.me^.DE_COUNT - ctx.me^.CE_COUNT) >= diff) then
  begin
+  if p_print_gpu_ops then
+  begin
+   Writeln('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') >= ',diff);
+  end;
   ctx.switch_task;
+ end else
+ begin
+  if p_print_gpu_ops then
+  begin
+   Writeln('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') < ',diff);
+  end;
  end;
 end;
 
