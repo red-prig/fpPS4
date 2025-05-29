@@ -8,8 +8,6 @@ interface
 uses
  sysutils,
  mqueue,
- bittype,
- pm4_ring,
  pm4defs,
  pm4_stream,
  time,
@@ -1518,18 +1516,17 @@ begin
 end;
 
 procedure onSetPredication(pctx:p_pfp_ctx;Body:PPM4CMDSETPREDICATION);
-var
- addr:QWORD;
+const
+ c_pred_b:array[0..1] of PChar=('DrawIfNotVisible','DrawIfVisible');
+ c_hint_v:array[0..1] of PChar=('Wait','Draw');
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- addr:=QWORD(Body^.startAddress);
- if (addr<>0) then
- if p_print_gpu_ops then
+ if (Body^.predOp<>0) then
  begin
-  Writeln(' startAddress=0x',HexStr(addr,16));
-  Writeln(' pred        =',Body^.predicationBoolean);
-  Writeln(' hint        =',Body^.hint);
+  Writeln(' startAddress=0x',HexStr(Body^.startAddress,10));
+  Writeln(' pred        =',c_pred_b[Body^.predicationBoolean]);
+  Writeln(' hint        =',c_hint_v[Body^.hint]);
   Writeln(' predOp      =',Body^.predOp);
   Writeln(' continueBit =',Body^.continueBit);
  end;

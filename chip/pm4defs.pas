@@ -373,12 +373,15 @@ type
  TPM4CMDSETPREDICATION=bitpacked record
   header            :PM4_TYPE_3_HEADER;
   startAddress      :bit40; // < start address
-  predicationBoolean:bit1;  // < predication boolean
+  //8
+  predicationBoolean:bit1;  // < predication boolean (DrawIfNotVisible=0,DrawIfVisible=1)
   reserved1         :bit3;
-  hint              :bit1;  // < hint
+  //12
+  hint              :bit1;  // < hint (Wait = 0,Draw = 1)
                             // < (only valid for Zpass/Occlusion Predicate)
   reserved2         :bit3;
-  predOp            :bit3;  // < predicate operation
+  //16
+  predOp            :bit3;  // < predicate operation (SET_PRED_ZPASS)
   reserved3         :bit12;
   continueBit       :bit1;  // < continue set predication
  end;
@@ -526,27 +529,35 @@ const
  EVENT_WRITE_INDEX_CACHE_FLUSH_EVENT     = 7;
 
 type
- PTPM4CMDEVENTWRITE=^TPM4CMDEVENTWRITE;
- TPM4CMDEVENTWRITE=bitpacked record
+ PTPM4CMDEVENTWRITE=^PM4CMDEVENTWRITE;
+ PM4CMDEVENTWRITE=bitpacked record
   header           :PM4_TYPE_3_HEADER;
-  eventType        :bit6;    ///< event type written to VGT_EVENT_INITIATOR
-  reserved1        :bit2;    ///< reserved
-  eventIndex       :bit4;    ///< event index
-                             ///<      0000: Any non-Time Stamp/non-Fence/non-Trap EVENT_TYPE not listed.
-                             ///<      0001: ZPASS_DONE
-                             ///<      0010: SAMPLE_PIPELINESTATS
-                             ///<      0011: SAMPLE_STREAMOUTSTAT[S|S1|S2|S3]
-                             ///<      0100: [CS|VS|PS]_PARTIAL_FLUSH
-                             ///<      0101: Reserved for EVENT_WRITE_EOP time stamp/fence event types
-                             ///<      0110: Reserved for EVENT_WRITE_EOS packet
-                             ///<      0111: CACHE_FLUSH, CACHE_FLUSH_AND_INV_EVENT
-                             ///<      1000 - 1111: Reserved for future use.
-  reserved2        :bit8;    ///< reserved
-  invalidateL2     :bit1;    ///< Send WBINVL2 op to the TC L2 cache when eventIndex = 0111.
-  reserved3        :bit3;
-  ATC              :bit1;    ///< needed by Sample_PipelineStats (compute engine)
-  reserved4        :bit6;    ///< reserved
-  offload_enable   :bit1;    ///< Offload queue until EOP queue goes empty, only works for MEC.                                                ///< Setting this bit on graphics/ME will do nothing/be masked out.
+  eventType        :bit6;    // event type written to VGT_EVENT_INITIATOR
+  reserved1        :bit2;    // reserved
+  eventIndex       :bit4;    // event index
+                             //      0000: Any non-Time Stamp/non-Fence/non-Trap EVENT_TYPE not listed.
+                             //      0001: ZPASS_DONE
+                             //      0010: SAMPLE_PIPELINESTATS
+                             //      0011: SAMPLE_STREAMOUTSTAT[S|S1|S2|S3]
+                             //      0100: [CS|VS|PS]_PARTIAL_FLUSH
+                             //      0101: Reserved for EVENT_WRITE_EOP time stamp/fence event types
+                             //      0110: Reserved for EVENT_WRITE_EOS packet
+                             //      0111: CACHE_FLUSH, CACHE_FLUSH_AND_INV_EVENT
+                             //      1000 - 1111: Reserved for future use.
+  reserved2        :bit20;   // reserved
+  u:bitpacked record
+   case Byte of
+    //PIXEL_PIPE_STAT_DUMP
+    0:(address:QWORD);       // 8 byte aligned (40bit)
+    //PIXEL_PIPE_STAT_CONTROL
+    1:(
+       reserved2      :bit3;
+       counter_id     :bit6;
+       stride         :bit2;
+       instance_enable:bit16;
+       reserved3      :bit5;
+      );
+  end;
  end;
 
 const
