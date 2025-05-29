@@ -120,7 +120,6 @@ type
   function  OpPackOfs(pLine:TspirvOp;rtype:TsrDataType;count:Byte;src:TsrRegNode):TsrRegNode;
   function  OpMakeCon(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
   function  OpMakeVec(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
-  function  OpMakeCub(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
   function  fetch64  (src:PPsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   function  fetch64  (src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
@@ -159,8 +158,10 @@ type
   function  OpSToS(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpFToF(src:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   //
-  function  OpFloorTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
-  function  OpPowTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpFloorTo  (src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpPowTo    (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpFAbsTo   (src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpFNegateTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   procedure OpNot       (dst:PsrRegSlot;src:TsrRegNode);
   procedure OpLogicalNot(dst:PsrRegSlot;src:TsrRegNode);
@@ -1124,41 +1125,6 @@ begin
  end;
 end;
 
-//x,y,face,slice
-function TEmitOp.OpMakeCub(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
-Var
- p:TsrCacheOp;
- dst:TsrRegNode;
- node:TspirvOp;
- i:Byte;
-begin
- Assert(src<>nil);
-
- pLine:=GetMaxPlace(pLine,rtype.Count,src);
-
- p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpMakeCub,rtype,rtype.Count,src);
-
- if (p.pDst=nil) then
- begin
-  node:=AddSpirvOp(pLine,srOpInternal.OpMakeCub); //need first
-
-  dst:=NewReg(rtype);
-
-  node.pDst:=dst;
-
-  For i:=0 to rtype.Count-1 do
-  begin
-   node.AddParam(src[i]);
-  end;
-
-  p.pDst:=dst; //save
-  Result:=dst;
- end else
- begin
-  Result:=p.pDst;
- end;
-end;
-
 type
  t_bridge_info=record
   val:TsrRegNode;
@@ -1563,6 +1529,19 @@ begin
  Result:=NewReg(src0.dtype);
  _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.Pow,Result,src0,src1));
 end;
+
+function TEmitOp.OpFAbsTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(src.dtype);
+ _set_line(ppLine,_OpGlsl1(_get_line(ppLine),GlslOp.FAbs,Result,src));
+end;
+
+function TEmitOp.OpFNegateTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(src.dtype);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpFNegate,Result,src));
+end;
+
 
 //
 

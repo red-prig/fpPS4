@@ -496,22 +496,11 @@ begin
  Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 
- if (key.params.cube<>0) then
- begin
-  Result.flags:=Result.flags or ord(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
- end;
-
  if (Result.imageType=VK_IMAGE_TYPE_3D) then
  begin
   Result.flags:=Result.flags or ord(VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT);
  end;
 
- //
-
- if (key.params.cube<>0) then
- begin
-  Assert((Result.arrayLayers mod 6)=0,'CUBE: layerCount must be a multiple of 6');
- end;
 end;
 
 const
@@ -745,16 +734,6 @@ begin
    end;
   VK_IMAGE_TYPE_2D:
    begin
-    if (key.params.cube<>0) then
-    begin
-     if (key.params.arrayLayers>6) then
-     begin
-      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
-     end else
-     begin
-      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
-     end;
-    end else
     if (key.params.arrayLayers>1) then
     begin
      fkey.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
@@ -1137,10 +1116,6 @@ begin
    end;
   else
    begin
-    if (t.key.params.cube<>0) then
-    begin
-     Ch:='C';
-    end else
     if (t.key.params.arrayLayers>1) then
     begin
      Ch:='A';

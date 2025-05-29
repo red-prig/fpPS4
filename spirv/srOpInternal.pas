@@ -20,12 +20,6 @@ const
  OpPackOfs=DWORD(-8);
  OpMakeExp=DWORD(-9);
  OpMakeVec=DWORD(-10);
- OpMakeCub=DWORD(-11);
-
- OpCUBEID =DWORD(-12);
- OpCUBESC =DWORD(-13);
- OpCUBETC =DWORD(-14);
- OpCUBEMA =DWORD(-15);
 
 function OpGetStrInternal(OpId:DWORD):RawByteString;
 
@@ -47,12 +41,6 @@ begin
   OpPackOfs:Result:='[OpPackOfs]';
   OpMakeExp:Result:='[OpMakeExp]';
   OpMakeVec:Result:='[OpMakeVec]';
-  OpMakeCub:Result:='[OpMakeCub]';
-
-  OpCUBEID :Result:='[OpCUBEID]';
-  OpCUBESC :Result:='[OpCUBESC]';
-  OpCUBETC :Result:='[OpCUBETC]';
-  OpCUBEMA :Result:='[OpCUBEMA]';
 
   else
    Result:=Op.GetStr(OpId);

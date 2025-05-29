@@ -563,7 +563,7 @@ begin
  begin
 
   //dump gcn (before parse)
-  if (Length(t.FShaderAliases)=0) then
+  //if (Length(t.FShaderAliases)=0) then
   begin
    str:='';
    case FStage of

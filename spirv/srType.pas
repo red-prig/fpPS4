@@ -129,8 +129,9 @@ type
   dtype:TsrDataType;
   tinfo:TsrTypeImageInfo;
   count:Byte;
-  GLC:Boolean;
-  SLC:Boolean;
+  Cube :Boolean;
+  GLC  :Boolean;
+  SLC  :Boolean;
  end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;

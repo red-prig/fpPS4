@@ -74,7 +74,7 @@ type
   function  AddPositionsInput(count:Byte):TsrVariable;
   function  AddParametersInput(id,count:Byte):TsrVariable;
   function  FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC:Boolean):TsrNode;
-  function  FetchImage(src:TsrDataLayout;info:TsrImageInfo;cube2array:Boolean):TsrNode;
+  function  FetchImage(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
   function  FetchImageArray(src:TsrDataLayout;info:TsrImageInfo;array_count:DWORD):TsrNode;
   function  FetchImageRuntimeArray(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
   function  FetchSampler(src:TsrDataLayout):TsrNode;
@@ -961,16 +961,10 @@ begin
  Result:=r;
 end;
 
-function TEmitFetch.FetchImage(src:TsrDataLayout;info:TsrImageInfo;cube2array:Boolean):TsrNode;
+function TEmitFetch.FetchImage(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
 var
  pType:TsrType;
 begin
- if cube2array and (info.tinfo.Dim=Dim.Cube) then
- begin
-  info.tinfo.Dim:=Dim.Dim2D;
-  info.tinfo.Arrayed:=1;
- end;
-
  pType:=TypeList.Fetch(info.dtype);
  pType:=TypeList.FetchImage(pType,info.tinfo);
  Result:=FetchUniformSimple(src,pType,info.GLC,info.SLC);

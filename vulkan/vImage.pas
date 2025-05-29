@@ -119,11 +119,10 @@ type
  end;
 
  TvImageKeyParams=bitpacked object
-  itype      :0..3; //2 TVkImageType 0..2
-  cube       :0..1; //1 VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
-  pow2pad    :0..1; //1
-  invalid    :0..1; //1
-  reserved   :0..7; //3
+  itype      :0..3;  //2 TVkImageType 0..2
+  pow2pad    :0..1;  //1
+  invalid    :0..1;  //1
+  reserved   :0..15; //4
   tiling     :TvTiling;
   samples    :Byte; //TVkSampleCountFlagBits 1..4 (3)
   mipLevels  :Byte; //(0..15) (4)
@@ -301,10 +300,6 @@ begin
  if (TVkImageType(itype)=VK_IMAGE_TYPE_3D) then
  begin
   Result:=1; //3D texture array does not exist?
- end else
- if (cube<>0) then
- begin
-  Result:=((arrayLayers+5) div 6)*6; //align up
  end else
  begin
   Result:=arrayLayers;

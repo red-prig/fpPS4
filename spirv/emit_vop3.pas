@@ -10,7 +10,6 @@ uses
   spirv,
   srType,
   srReg,
-  srOpInternal,
   emit_fetch;
 
 type
@@ -66,7 +65,8 @@ type
   procedure emit_V_MED3_U32;
   procedure emit_V_FMA_F32;
   procedure emit_V_MMX64(OpId:DWORD);
-  procedure emit_V_CUBE(OpId:DWORD);
+  function  SelectCubeResult(x,y,z,x_res,y_res,z_res:TsrRegNode):TsrRegNode;
+  procedure emit_V_CUBE(OpId:Word);
   procedure emit_V_MOV_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure emit_V_EXT_F32(OpId:DWORD);
@@ -149,7 +149,6 @@ end;
 procedure TEmit_VOP3.emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
 var
  i:Byte;
- dst:TsrRegNode;
 begin
  if (FSPI.VOP3a.NEG=0) then Exit;
  if not rtype.isFloat then Exit;
@@ -157,16 +156,14 @@ begin
  For i:=0 to count-1 do
   if Byte(FSPI.VOP3a.NEG).TestBit(i) then
   begin
-   dst:=NewReg(rtype);
-   _Op1(line,Op.OpFNegate,dst,src[i]);
-   src[i]:=dst;
+   Assert(src[i].dtype=rtype);
+   src[i]:=OpFNegateTo(src[i]);
   end;
 end;
 
 procedure TEmit_VOP3.emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
 var
  i:Byte;
- dst:TsrRegNode;
 begin
  if (FSPI.VOP3a.ABS=0) then Exit;
  if not rtype.isFloat then Exit;
@@ -174,9 +171,8 @@ begin
  For i:=0 to count-1 do
   if Byte(FSPI.VOP3a.ABS).TestBit(i) then
   begin
-   dst:=NewReg(rtype);
-   _OpGlsl1(line,GlslOp.FAbs,dst,src[i]);
-   src[i]:=dst;
+   Assert(src[i].dtype=rtype);
+   src[i]:=OpFAbsTo(src[i]);
   end;
 end;
 
@@ -1010,10 +1006,69 @@ begin
  MakeCopy64(dst[0],dst[1],mmx^.current);
 end;
 
-procedure TEmit_VOP3.emit_V_CUBE(OpId:DWORD);
+{
+float3 __GetCubemapUv(float3 uv)
+{
+ float  faceId = __v_cubeid_f32(uv.x, uv.y, uv.z);
+ float  sc     = __v_cubesc_f32(uv.x, uv.y, uv.z);
+ float  tc     = __v_cubetc_f32(uv.x, uv.y, uv.z);
+ float  ima    = 1.f / abs( __v_cubema_f32(uv.x, uv.y, uv.z) );
+ return float3(sc * ima + 1.5f, tc * ima + 1.5f, faceId);
+}                            x                y       z
+
+float4 __GetCubemapArrayUv(float4 uv)
+{
+ float3 cuv = __GetCubemapUv(uv.xyz);
+ cuv.z      = cuv.z + (uv.w * 8.f); //face_id + slice*8
+ return float4(cuv, uv.w);
+}
+}
+
+function TEmit_VOP3.SelectCubeResult(x,y,z,x_res,y_res,z_res:TsrRegNode):TsrRegNode;
+var
+ abs_x:TsrRegNode;
+ abs_y:TsrRegNode;
+ abs_z:TsrRegNode;
+
+ cmp_zx:TsrRegNode;
+ cmp_zy:TsrRegNode;
+
+ z_face_cond:TsrRegNode;
+ y_face_cond:TsrRegNode;
+begin
+ abs_x:=OpFAbsTo(x);
+ abs_y:=OpFAbsTo(y);
+ abs_z:=OpFAbsTo(z);
+
+ cmp_zx:=NewReg(dtBool);
+ _Op2(line,Op.OpFOrdGreaterThanEqual,cmp_zx,abs_z,abs_x);
+
+ cmp_zy:=NewReg(dtBool);
+ _Op2(line,Op.OpFOrdGreaterThanEqual,cmp_zy,abs_z,abs_y);
+
+ z_face_cond:=OpLogicalAndTo(cmp_zx,cmp_zy);
+
+ y_face_cond:=NewReg(dtBool);
+ _Op2(line,Op.OpFOrdGreaterThanEqual,y_face_cond,abs_y,abs_x);
+
+ Result:=OpSelectTo(z_face_cond,z_res,OpSelectTo(y_face_cond,y_res,x_res));
+end;
+
+procedure TEmit_VOP3.emit_V_CUBE(OpId:Word);
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
+
+ zero:TsrRegNode;
+ two :TsrRegNode;
+
+ x_neg_cond:TsrRegNode;
+ y_neg_cond:TsrRegNode;
+ z_neg_cond:TsrRegNode;
+
+ x_face:TsrRegNode;
+ y_face:TsrRegNode;
+ z_face:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -1026,7 +1081,69 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- Op3(OpId,dtFloat32,dst,src[0],src[1],src[2]);
+ case OpId of
+  V_CUBEID_F32:
+    begin
+     zero:=NewImm_s(dtFloat32,0.0);
+
+     x_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,x_neg_cond,src[0],zero);
+
+     y_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,y_neg_cond,src[1],zero);
+
+     z_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,z_neg_cond,src[2],zero);
+
+     x_face:=OpSelectTo(x_neg_cond,NewImm_s(dtFloat32,1.0),NewImm_s(dtFloat32,0.0));
+     y_face:=OpSelectTo(y_neg_cond,NewImm_s(dtFloat32,3.0),NewImm_s(dtFloat32,2.0));
+     z_face:=OpSelectTo(z_neg_cond,NewImm_s(dtFloat32,5.0),NewImm_s(dtFloat32,4.0));
+
+     MakeCopy(dst,SelectCubeResult(src[0],src[1],src[2],x_face,y_face,z_face));
+    end;
+  V_CUBESC_F32:
+    begin
+     zero:=NewImm_s(dtFloat32,0.0);
+
+     x_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,x_neg_cond,src[0],zero);
+
+     z_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,z_neg_cond,src[2],zero);
+
+     x_face:=OpSelectTo(x_neg_cond,src[2],OpFNegateTo(src[2]));
+     y_face:=src[0];
+     z_face:=OpSelectTo(z_neg_cond,OpFNegateTo(src[0]),src[0]);
+
+     MakeCopy(dst,SelectCubeResult(src[0],src[1],src[2],x_face,y_face,z_face));
+    end;
+  V_CUBETC_F32:
+    begin
+     zero:=NewImm_s(dtFloat32,0.0);
+
+     y_neg_cond:=NewReg(dtBool);
+     _Op2(line,Op.OpFOrdLessThan,y_neg_cond,src[1],zero);
+
+     x_face:=OpFNegateTo(src[1]);
+     y_face:=OpSelectTo(y_neg_cond,OpFNegateTo(src[2]),src[2]);
+     z_face:=x_face;
+
+     MakeCopy(dst,SelectCubeResult(src[0],src[1],src[2],x_face,y_face,z_face));
+    end;
+  V_CUBEMA_F32:
+    begin
+     two:=NewImm_s(dtFloat32,2.0);
+
+     x_face:=OpFMulTo(src[0],two);
+     y_face:=OpFMulTo(src[1],two);
+     z_face:=OpFMulTo(src[2],two);
+
+     MakeCopy(dst,SelectCubeResult(src[0],src[1],src[2],x_face,y_face,z_face));
+    end;
+  else
+   Assert(false);
+ end;
+
 end;
 
 procedure TEmit_VOP3.emit_V_MOV_B32;
@@ -1549,10 +1666,10 @@ begin
   V_MIN_F64:emit_V_MMX64(GlslOp.FMin);
   V_MAX_F64:emit_V_MMX64(GlslOp.FMax);
 
-  V_CUBEID_F32:emit_V_CUBE(srOpInternal.OpCUBEID);
-  V_CUBESC_F32:emit_V_CUBE(srOpInternal.OpCUBESC);
-  V_CUBETC_F32:emit_V_CUBE(srOpInternal.OpCUBETC);
-  V_CUBEMA_F32:emit_V_CUBE(srOpInternal.OpCUBEMA);
+  V_CUBEID_F32:emit_V_CUBE(V_CUBEID_F32);
+  V_CUBESC_F32:emit_V_CUBE(V_CUBESC_F32);
+  V_CUBETC_F32:emit_V_CUBE(V_CUBETC_F32);
+  V_CUBEMA_F32:emit_V_CUBE(V_CUBEMA_F32);
 
   //VOP1 analog
 

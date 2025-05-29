@@ -2392,8 +2392,8 @@ begin
   SQ_RSRC_IMG_3D           :Result.params.itype:=ord(VK_IMAGE_TYPE_3D);
   SQ_RSRC_IMG_CUBE         :
    begin
+    //convert Cube to array of 2D slices
     Result.params.itype:=ord(VK_IMAGE_TYPE_2D);
-    Result.params.cube :=1;
    end;
   else;
    begin
@@ -2507,7 +2507,7 @@ begin
   SQ_RSRC_IMG_1D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D);
   SQ_RSRC_IMG_2D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
   SQ_RSRC_IMG_3D           :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_3D);
-  SQ_RSRC_IMG_CUBE         :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE);
+  SQ_RSRC_IMG_CUBE         :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY); //convert Cube to array of 2D slices
   SQ_RSRC_IMG_1D_ARRAY     :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_1D_ARRAY);
   SQ_RSRC_IMG_2D_ARRAY     :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
   SQ_RSRC_IMG_2D_MSAA      :Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D);
@@ -2557,16 +2557,7 @@ begin
  Result:=_get_tsharp4_image_view(PTSharpResource4(PT),hint);
  //
  Case PT^._type of
-  SQ_RSRC_IMG_CUBE:
-   begin
-    Result.base_array:=PT^.base_array;
-    Result.last_array:=PT^.last_array;
-    //
-    if (Result.last_array-Result.base_array)>5 then
-    begin
-     Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_CUBE_ARRAY);
-    end;
-   end;
+  SQ_RSRC_IMG_CUBE         , //convert Cube to array of 2D slices
   SQ_RSRC_IMG_1D_ARRAY     ,
   SQ_RSRC_IMG_2D_ARRAY     ,
   SQ_RSRC_IMG_2D_MSAA_ARRAY:

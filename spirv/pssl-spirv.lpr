@@ -273,10 +273,18 @@ begin
  until false;
 end;
 
+const
+ c_registerCount:array[0..1] of PChar=('4DW','8DW');
+ c_resourceType :array[0..1] of PChar=('V#' ,'T#' );
+
+ MaxUserDataCount = 16;
+
 procedure load_pssl(base:Pointer;ShaderType:Byte);
 var
  info:PShaderBinaryInfo;
  Slots:PInputUsageSlot;
+ startRegister:Integer;
+ extUdRegister:Integer;
 
  SprvEmit:TSprvEmit;
 
@@ -297,7 +305,7 @@ begin
   Writeln('m_type                  =',info^.m_type                  );
   Writeln('source_type             =',info^.source_type             );
   Writeln('length                  =',info^.length                  );
-  Writeln('chunkUsageBaseOffsetInDW=',info^.chunkUsageBaseOffsetInDW);
+  Writeln('chunkUsageBaseOffsetInDW=',info^.chunkUsageBaseOffsetInDW,' (0x',HexStr(info^.chunkUsageBaseOffsetInDW*4,3),')');
   Writeln('numInputUsageSlots      =',info^.numInputUsageSlots      );
   Writeln('isSrt                   =',info^.isSrt                   );
   Writeln('isSrtUsedInfoValid      =',info^.isSrtUsedInfoValid      );
@@ -351,17 +359,44 @@ begin
       Writeln(' m_usageType=',Slots[i].m_usageType);
     end;
 
-    Writeln(' apiSlot=',Slots[i].m_apiSlot);
-    Writeln(' startRegister=',Slots[i].m_startRegister);
+    Writeln(' apiSlot      =',Slots[i].m_apiSlot);
+
+    startRegister:=Slots[i].m_startRegister;
+
+    case Slots[i].m_usageType of
+     kShaderInputUsageImmResource,
+     kShaderInputUsageImmRwResource,
+     kShaderInputUsageImmSampler,
+     kShaderInputUsageImmConstBuffer,
+     kShaderInputUsageImmVertexBuffer:
+       begin
+        if (startRegister>=MaxUserDataCount) then
+        begin
+         extUdRegister:=(startRegister-MaxUserDataCount);
+         Writeln(' extUdRegister=',extUdRegister,' (0x',HexStr(extUdRegister*4,3),')');
+        end else
+        begin
+         Writeln(' startRegister=',startRegister,' (0x',HexStr(startRegister*4,3),')');
+        end;
+       end;
+     else
+      Writeln(' startRegister=',startRegister,' (0x',HexStr(startRegister*4,3),')');
+    end;
 
     if (Slots[i].m_usageType=kShaderInputUsageImmShaderResourceTable) then
     begin
      Writeln(' srtSizeInDWordMinusOne=',Slots[i].m_srtSizeInDWordMinusOne);
     end else
+    if (Slots[i].m_usageType=kShaderInputUsageImmResource) then
+    begin
+     Writeln(' registerCount=',c_registerCount[Slots[i].b.m_registerCount]);
+     Writeln(' resourceType =',c_resourceType [Slots[i].b.m_resourceType]);
+     Writeln(' chunkMask    =',Slots[i].b.m_chunkMask);
+    end else
     begin
      Writeln(' registerCount=',Slots[i].b.m_registerCount);
-     Writeln(' resourceType=',Slots[i].b.m_resourceType);
-     Writeln(' chunkMask=',Slots[i].b.m_chunkMask);
+     Writeln(' resourceType =',Slots[i].b.m_resourceType);
+     Writeln(' chunkMask    =',Slots[i].b.m_chunkMask);
     end;
 
    end;

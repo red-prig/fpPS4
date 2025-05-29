@@ -43,7 +43,6 @@ type
   function  _Fetch_PackAnc(node:TsrRegNode;index,count:Byte):TsrRegNode;
   function  OnBFE_32_1(node:TSpirvOp):Integer;
   function  OnBFIB32_1(node:TSpirvOp):Integer;
-  function  OnMakeCub1(node:TSpirvOp):Integer;
   //
   function  OnBitwiseAnd1(node:TSpirvOp):Integer;
   function  OnLogicalAnd1(node:TSpirvOp):Integer;
@@ -68,11 +67,6 @@ type
   function  OnIAddExt2(node:TSpirvOp):Integer;
   function  OnISubExt2(node:TSpirvOp):Integer;
   function  OnPackAnc2(node:TSpirvOp):Integer;
-  //
-  function  OnCUBEID2(node:TSpirvOp):Integer;
-  function  OnCUBESC2(node:TSpirvOp):Integer;
-  function  OnCUBETC2(node:TSpirvOp):Integer;
-  function  OnCUBEMA2(node:TSpirvOp):Integer;
   //
   function  OnImageSample2(node:TSpirvOp):Integer;
  end;
@@ -104,7 +98,6 @@ begin
   srOpInternal.OpPackOfs   :Result:=OnPackOfs1(node);
   srOpInternal.OpBFE_32    :Result:=OnBFE_32_1(node);
   srOpInternal.OpBFIB32    :Result:=OnBFIB32_1(node);
-  srOpInternal.OpMakeCub   :Result:=OnMakeCub1(node);
 
   Op.OpSelect           :Result:=OnSelect1(node);
 
@@ -138,13 +131,6 @@ begin
 
   Op.OpReturn:Result:=OnReturn_2(node);
   OpMakeExp  :Result:=OnMakeExp2(node);
-
-  OpCUBEID:OnCUBEID2(node);
-  OpCUBESC:OnCUBESC2(node);
-  OpCUBETC:OnCUBETC2(node);
-  OpCUBEMA:OnCUBEMA2(node);
-
-  srOpInternal.OpMakeCub:Assert(false,'OpMakeCub');
 
   Op.OpImageSampleImplicitLod,
   Op.OpImageSampleExplicitLod,
@@ -2553,23 +2539,6 @@ begin
  Result:=pReg.pWriter.specialize AsType<ntOp>;
 end;
 
-function _cmp_src_cube_op3(node0,node1:TSpirvOp):Boolean;
-var
- src0:TsrRegNode;
- src1:TsrRegNode;
- i:Byte;
-begin
- Result:=False;
- if (node0=nil) or (node1=nil) then Exit;
- For i:=0 to 2 do
- begin
-  src0:=RegDown(node0.ParamNode(i).AsReg);
-  src1:=RegDown(node1.ParamNode(i).AsReg);
-  if (src0<>src1) then Exit(False);
- end;
- Result:=True;
-end;
-
 function is_all_const(src:PPsrRegNode;count:byte):Boolean;
 var
  i:Byte;
@@ -2639,220 +2608,6 @@ begin
  src:=pReg;
  Result:=1;
 end;
-
-{
-float3 __GetCubemapUv(float3 uv)
-{
- float  faceId = __v_cubeid_f32(uv.x, uv.y, uv.z);
- float  sc     = __v_cubesc_f32(uv.x, uv.y, uv.z);
- float  tc     = __v_cubetc_f32(uv.x, uv.y, uv.z);
- float  ima    = 1.f / abs( __v_cubema_f32(uv.x, uv.y, uv.z) );
- return float3(sc * ima + 1.5f, tc * ima + 1.5f, faceId);
-}
-
-float4 __GetCubemapArrayUv(float4 uv)
-{
- float3 cuv = __GetCubemapUv(uv.xyz);
- cuv.z      = cuv.z + (uv.w * 8.f);
- return float4(cuv, uv.w);
-}
-}
-
-function TEmitPostOp.OnMakeCub1(node:TSpirvOp):Integer;
-var
- dst:TsrRegNode;
- src:array[0..2] of TsrRegNode;
-
- m_CUBE_SC:TSpirvOp;
- m_CUBE_TC:TSpirvOp;
- m_CUBE_ID:TSpirvOp;
-
- m_x_CUBE_MA:TSpirvOp;
- m_y_CUBE_MA:TSpirvOp;
-
- m_x,m_y,m_f:TSpirvOp;
-
- pReg:TsrRegNode;
- pOp:TSpirvOp;
-
- rtype:TsrDataType;
- i:Byte;
-
-begin
- Result:=0;
- dst:=node.pDst.specialize AsType<ntReg>;
- if (dst=nil) then Exit;
-
- rtype:=dst.dtype;
-
- if (rtype.Child<>dtFloat32) then Assert(false,'TODO');
- if (rtype.Count=4) then Assert(false,'TODO');
-
- m_x:=RegDown(node.ParamNode(0).AsReg).pWriter.specialize AsType<ntOp>; //param1
- m_y:=RegDown(node.ParamNode(1).AsReg).pWriter.specialize AsType<ntOp>; //param2
- m_f:=RegDown(node.ParamNode(2).AsReg).pWriter.specialize AsType<ntOp>; //param3
-
- m_x:=_GetMadLegacyFma(m_x);
- m_y:=_GetMadLegacyFma(m_y);
-
- if not _IsFma(m_x) then Exit;
- if not _IsFma(m_y) then Exit;
- if not _IsOp(m_f,OpCUBEID) then Exit;
-
- m_CUBE_ID:=m_f;
-
- //m_x
- pReg:=RegDown(m_x.ParamNode(2).AsReg); //param1
- pOp:=pReg.pWriter.specialize AsType<ntOp>;
- if not _IsOp(pOp,OpCUBESC) then Exit;
- m_CUBE_SC:=pOp;
-
- pReg:=RegDown(m_x.ParamNode(3).AsReg); //param2
- pOp:=pReg.pWriter.specialize AsType<ntOp>;
- if not _IsOp(pOp,Op.OpFDiv) then Exit;
-
-   pReg:=RegDown(pOp.ParamNode(0).AsReg);  //div
-   if not _IsConstFloat_1_0(pReg) then Exit; //1.0
-
-   pReg:=RegDown(pOp.ParamNode(1).AsReg);
-   pOp:=_Fetch_FAbs_Value(pReg.pWriter.specialize AsType<ntOp>);
-   if not _IsOp(pOp,OpCUBEMA) then Exit;
-   m_x_CUBE_MA:=pOp;
-
- pReg:=RegDown(m_x.ParamNode(4).AsReg);  //param3
- if not _IsConstFloat_1_5(pReg) then Exit; //1.5
-
- //m_y
- pReg:=RegDown(m_y.ParamNode(2).AsReg); //param1
- pOp:=pReg.pWriter.specialize AsType<ntOp>;
- if not _IsOp(pOp,OpCUBETC) then Exit;
- m_CUBE_TC:=pOp;
-
- pReg:=RegDown(m_x.ParamNode(3).AsReg); //param2
- pOp:=pReg.pWriter.specialize AsType<ntOp>;
- if not _IsOp(pOp,Op.OpFDiv) then Exit;
-
-   pReg:=RegDown(pOp.ParamNode(0).AsReg);  //div
-   if not _IsConstFloat_1_0(pReg) then Exit; //1.0
-
-   pReg:=RegDown(pOp.ParamNode(1).AsReg);
-   pOp:=_Fetch_FAbs_Value(pReg.pWriter.specialize AsType<ntOp>);
-   if not _IsOp(pOp,OpCUBEMA) then Exit;
-   m_y_CUBE_MA:=pOp;
-
- pReg:=RegDown(m_y.ParamNode(4).AsReg);  //param3
- if not _IsConstFloat_1_5(pReg) then Exit; //1.5
-
- //
-
- if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_TC  ) then Exit;
- if not _cmp_src_cube_op3(m_CUBE_SC,m_CUBE_ID  ) then Exit;
- if not _cmp_src_cube_op3(m_CUBE_SC,m_x_CUBE_MA) then Exit;
- if not _cmp_src_cube_op3(m_CUBE_SC,m_y_CUBE_MA) then Exit;
-
- For i:=0 to 2 do
- begin
-  src[i]:=RegDown(m_CUBE_SC.ParamNode(i).AsReg);
- end;
-
- MakeVecComp(node,dtVec3f,dst,@src);
-
- node.mark([soNotUsed]);
- node.pDst:=nil;
- Result:=1;
-end;
-
-function TEmitPostOp.OnCUBEID2(node:TSpirvOp):Integer;
-var
- dst:TsrRegNode;
- src:TsrRegNode;
-
- procedure _SetReg(src:TsrRegNode);
- begin
-  dst.pWriter:=src;
-  node.mark([soNotUsed]);
-  node.pDst:=nil;
-  Inc(Result);
- end;
-
-begin
- Result:=0;
- dst:=node.pDst.specialize AsType<ntReg>;
- src:=node.ParamNode(2).AsReg;
-
- if (dst=nil) or (src=nil) then Exit;
-
- _SetReg(src); //fake out
-end;
-
-function TEmitPostOp.OnCUBESC2(node:TSpirvOp):Integer;
-var
- dst:TsrRegNode;
- src:TsrRegNode;
-
- procedure _SetReg(src:TsrRegNode);
- begin
-  dst.pWriter:=src;
-  node.mark([soNotUsed]);
-  node.pDst:=nil;
-  Inc(Result);
- end;
-
-begin
- Result:=0;
- dst:=node.pDst.specialize AsType<ntReg>;
- src:=node.ParamNode(0).AsReg;
-
- if (dst=nil) or (src=nil) then Exit;
-
- _SetReg(src); //fake out
-end;
-
-function TEmitPostOp.OnCUBETC2(node:TSpirvOp):Integer;
-var
- dst:TsrRegNode;
- src:TsrRegNode;
-
- procedure _SetReg(src:TsrRegNode);
- begin
-  dst.pWriter:=src;
-  node.mark([soNotUsed]);
-  node.pDst:=nil;
-  Inc(Result);
- end;
-
-begin
- Result:=0;
- dst:=node.pDst.specialize AsType<ntReg>;
- src:=node.ParamNode(1).AsReg;
-
- if (dst=nil) or (src=nil) then Exit;
-
- _SetReg(src); //fake out
-end;
-
-function TEmitPostOp.OnCUBEMA2(node:TSpirvOp):Integer;
-var
- dst:TsrRegNode;
-
- procedure _SetConst_s(dtype:TsrDataType;value:Single);
- begin
-  Assert(dtype=dtFloat32);
-  dst.pWriter:=NewImm_s(dtype,value,node);
-  node.mark([soNotUsed]);
-  node.pDst:=nil;
-  Inc(Result);
- end;
-
-begin
- Result:=0;
- dst:=node.pDst.specialize AsType<ntReg>;
-
- if (dst=nil) then Exit;
-
- _SetConst_s(dtFloat32,1); //fake out
-end;
-
 
 procedure TEmitPostOp.MakeVecConst(rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode);
 var
