@@ -1873,10 +1873,19 @@ end;
 function GetNumType(nfmt:Byte):Byte; inline;
 begin
  Case nfmt of
-  IMG_NUM_FORMAT_UINT:Result:=1;
-  IMG_NUM_FORMAT_SINT:Result:=2;
+  IMG_NUM_FORMAT_UNORM  :Result:=IMG_NUM_FORMAT_UNORM;
+  IMG_NUM_FORMAT_SRGB   :Result:=IMG_NUM_FORMAT_UNORM;
+
+  IMG_NUM_FORMAT_SNORM  :Result:=IMG_NUM_FORMAT_SNORM;
+
+  IMG_NUM_FORMAT_UINT   :Result:=IMG_NUM_FORMAT_UINT;
+  IMG_NUM_FORMAT_SINT   :Result:=IMG_NUM_FORMAT_SINT;
+
+  IMG_NUM_FORMAT_USCALED:Result:=IMG_NUM_FORMAT_FLOAT;
+  IMG_NUM_FORMAT_SSCALED:Result:=IMG_NUM_FORMAT_FLOAT;
+  IMG_NUM_FORMAT_FLOAT  :Result:=IMG_NUM_FORMAT_FLOAT;
   else
-                      Result:=0;
+                         Result:=IMG_NUM_FORMAT_RESERVED_15;
  end;
 end;
 
@@ -1994,7 +2003,7 @@ begin
      end;
     end else
     begin
-     if ( IsInvalid(dfmt)<>IsInvalid(rinfo.dfmt) ) or
+     if (            dfmt<>rinfo.dfmt ) or
         (GetNumType(nfmt)<>GetNumType(rinfo.nfmt)) then
      begin
       FResult:=False;
