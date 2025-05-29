@@ -244,11 +244,20 @@ begin
   end;
 
   if act_renderdoc_capture then
-  if (renderdoc.IsFrameCapturing()=0) then
   begin
-   SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources,1);
-   renderdoc.StartFrameCapture(0,0);
+   if (renderdoc.IsFrameCapturing()=0) then
+   begin
+    SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources,1);
+    renderdoc.StartFrameCapture(0,0);
+   end;
+  end else
+  begin
+   if (renderdoc.IsFrameCapturing()<>0) then
+   begin
+    renderdoc.EndFrameCapture(0,0);
+   end;
   end;
+
  end;
 end;
 
