@@ -481,8 +481,15 @@ var
  ch:TvUnifChecker;
 begin
  if (FShader.FDescSetId<>FDescSetId) then Exit(False);
- ch.FResult:=True;
+
+ ch.FResult:=True; //init state
+
  FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData,FShader.GetImmData);
+
+ if (not ch.FResult) then Exit(False); //early exit
+
+ FShader.EnumVertLayout(@ch.AddAttr,FDescSetId,pUserData,FShader.GetImmData);
+
  Result:=ch.FResult;
 end;
 
