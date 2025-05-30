@@ -51,6 +51,8 @@ type
   //
   ASC_COMPUTE:array[0..63] of TSH_REG_COMPUTE_GROUP;
   //
+  PixelPipeStatControl:TPixelPipeStatControl;
+  //
   curr_ibuf :p_pm4_ibuffer;
   //
   LastSetReg:Word;
@@ -1110,8 +1112,8 @@ begin
  Case Body^.eventType of
   PIXEL_PIPE_STAT_CONTROL:
    begin
-    Writeln('  counter_id=',Body^.u.counter_id);
-    Writeln('  stride    =',c_p_stride[Body^.u.stride]);
+    Writeln('  counter_id=',Body^.u.Control.counter_id);
+    Writeln('  stride    =',c_p_stride[Body^.u.Control.stride]);
    end;
   PIXEL_PIPE_STAT_DUMP:
    begin
@@ -1120,9 +1122,13 @@ begin
  end;
 
  Case Body^.eventType of
+  PIXEL_PIPE_STAT_CONTROL:
+   begin
+    pctx^.PixelPipeStatControl:=Body^.u.Control;
+   end;
   PIXEL_PIPE_STAT_DUMP:
    begin
-    pctx^.stream[stGfxDcb].PipeStatDump(Body^.u.address and QWORD($FFFFFFFFF8));
+    pctx^.stream[stGfxDcb].PipeStatDump(Body^.u.address and QWORD($FFFFFFFFF8),pctx^.PixelPipeStatControl);
    end;
   else
    begin

@@ -2896,14 +2896,6 @@ begin
    begin
     ctx.InsertLabel('PERFCOUNTER_SAMPLE');
    end;
-  PIXEL_PIPE_STAT_CONTROL: //[OcclusionQuery] to set up the pixel pipe to perform the dump.
-   begin
-    Writeln(stderr,'TODO:PIXEL_PIPE_STAT_CONTROL');
-   end;
-  PIXEL_PIPE_STAT_DUMP: //[OcclusionQuery] to trigger the actual dump of pixel pipe data.
-   begin
-    Writeln(stderr,'TODO:PIXEL_PIPE_STAT_DUMP');
-   end;
   PIXEL_PIPE_STAT_RESET: //[OcclusionQuery] Reset this query
    begin
     Writeln(stderr,'TODO:PIXEL_PIPE_STAT_RESET');
@@ -2923,25 +2915,46 @@ var
 
 procedure pm4_PipeStatDump(var ctx:t_me_render_context;node:p_pm4_node_PipeStatDump);
 const
- stride=16; //128_BIT  <-TODO:PIPE_STAT_CONTROL
  c_db_counts:array[0..1] of Byte=(8,16);
- c_ready_mask=QWORD(1) shl 63;
+ c_db_stride:array[0..3] of Byte=(4,8,16,32);
+ c_ready_mask_64=QWORD(1) shl 63;
+ c_ready_mask_32=QWORD(1) shl 31;
 var
- i,count:Byte;
+ i,count,stride:Byte;
+ instance_mask :Word;
  addr_dmem:Pointer;
 begin
  if not ctx.WaitConfirmOrSwitch then Exit;
 
- count:=c_db_counts[p_neomode and 1];
+ count :=c_db_counts[p_neomode and 1];
+ stride:=c_db_stride[node^.Control.stride];
+ instance_mask:=node^.Control.instance_enable;
 
  addr_dmem:=get_dmem_ptr(Pointer(node^.address));
 
  fake_zpass_counter:=fake_zpass_counter+1;
 
- For i:=0 to count-1 do
+ if (stride=4) then
  begin
-  PQWORD(addr_dmem)^:=c_ready_mask or fake_zpass_counter;
-  addr_dmem:=addr_dmem+stride;
+
+  For i:=0 to count-1 do
+   if (instance_mask and (1 shl i))<>0 then
+   begin
+    PDWORD(addr_dmem)[i]:=c_ready_mask_32 or fake_zpass_counter;
+   end;
+
+ end else
+ begin
+
+  For i:=0 to count-1 do
+  begin
+   if (instance_mask and (1 shl i))<>0 then
+   begin
+    PQWORD(addr_dmem)^:=c_ready_mask_64 or fake_zpass_counter;
+   end;
+   addr_dmem:=addr_dmem+stride;
+  end;
+
  end;
 
 end;

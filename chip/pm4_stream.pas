@@ -281,7 +281,8 @@ type
 
  p_pm4_node_PipeStatDump=^t_pm4_node_PipeStatDump;
  t_pm4_node_PipeStatDump=packed object(t_pm4_node)
-  address:QWORD;
+  Address:QWORD;
+  Control:TPixelPipeStatControl;
  end;
 
  p_pm4_node_EventWriteEop=^t_pm4_node_EventWriteEop;
@@ -419,7 +420,7 @@ type
   procedure WaitOnCECounter();
   procedure WaitOnDECounterDiff(diff:DWORD);
   procedure EventWrite   (eventType:Byte);
-  procedure PipeStatDump (address:QWORD);
+  procedure PipeStatDump (Address:QWORD;Control:TPixelPipeStatControl);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
@@ -1031,7 +1032,7 @@ begin
  add_node(node);
 end;
 
-procedure t_pm4_stream.PipeStatDump(address:QWORD);
+procedure t_pm4_stream.PipeStatDump(Address:QWORD;Control:TPixelPipeStatControl);
 var
  node:p_pm4_node_PipeStatDump;
 begin
@@ -1039,7 +1040,8 @@ begin
 
  node^.ntype  :=ntPipeStatDump;
  node^.scope  :=Default(t_pm4_resource_curr_scope);
- node^.address:=address;
+ node^.Address:=Address;
+ node^.Control:=Control;
 
  add_node(node);
 end;

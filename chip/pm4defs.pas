@@ -529,6 +529,14 @@ const
  EVENT_WRITE_INDEX_CACHE_FLUSH_EVENT     = 7;
 
 type
+ TPixelPipeStatControl=bitpacked record //[0x7 fc 00] or [0x7 ff fc 00]
+  reserved1      :bit3;
+  counter_id     :bit6;  //00 -> PIXEL_PIPE_OCCLUSION_COUNT_0 // Enum of which counts to dump
+  stride         :bit2;  //02 -> PIXEL_PIPE_STRIDE_128_BITS   // PixelPipeStride enum
+  instance_enable:bit16; //[FF] or [FFFF]                     // Mask of which of the RBs must dump the data.
+  reserved2      :bit5;
+ end;
+
  PTPM4CMDEVENTWRITE=^PM4CMDEVENTWRITE;
  PM4CMDEVENTWRITE=bitpacked record
   header           :PM4_TYPE_3_HEADER;
@@ -548,15 +556,9 @@ type
   u:bitpacked record
    case Byte of
     //PIXEL_PIPE_STAT_DUMP
-    0:(address:QWORD);       // 8 byte aligned (40bit) (0xff fffffff8)
+    0:(Address:QWORD);       // 8 byte aligned (40bit) (0xff fffffff8)
     //PIXEL_PIPE_STAT_CONTROL
-    1:(                      //[0x7 fc 00] or [0x7 ff fc 00]
-       reserved2      :bit3;
-       counter_id     :bit6;  //00 -> PIXEL_PIPE_OCCLUSION_COUNT_0
-       stride         :bit2;  //02 -> PIXEL_PIPE_STRIDE_128_BITS
-       instance_enable:bit16; //[FF] or [FFFF]
-       reserved3      :bit5;
-      );
+    1:(Control:TPixelPipeStatControl);
   end;
  end;
 
