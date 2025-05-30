@@ -175,6 +175,8 @@ begin
            nil);
  if (Result<>0) then Exit;
 
+ if (P_TBI^.TebBaseAddress=nil) then Exit(-1);
+
  td^.td_teb   :=P_TBI^.TebBaseAddress;
  td^.td_cpuset:=P_TBI^.AffinityMask;
 
