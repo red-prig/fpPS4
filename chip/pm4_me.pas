@@ -2918,6 +2918,34 @@ begin
 
 end;
 
+var
+ fake_zpass_counter:QWORD=0;
+
+procedure pm4_PipeStatDump(var ctx:t_me_render_context;node:p_pm4_node_PipeStatDump);
+const
+ stride=16; //128_BIT  <-TODO:PIPE_STAT_CONTROL
+ c_db_counts:array[0..1] of Byte=(8,16);
+ c_ready_mask=QWORD(1) shl 63;
+var
+ i,count:Byte;
+ addr_dmem:Pointer;
+begin
+ if not ctx.WaitConfirmOrSwitch then Exit;
+
+ count:=c_db_counts[p_neomode and 1];
+
+ addr_dmem:=get_dmem_ptr(Pointer(node^.address));
+
+ fake_zpass_counter:=fake_zpass_counter+1;
+
+ For i:=0 to count-1 do
+ begin
+  PQWORD(addr_dmem)^:=c_ready_mask or fake_zpass_counter;
+  addr_dmem:=addr_dmem+stride;
+ end;
+
+end;
+
 procedure pm4_EventWriteEos(var ctx:t_me_render_context;node:p_pm4_node_EventWriteEos);
 var
  addr_dmem:Pointer;
@@ -3478,6 +3506,7 @@ begin
       ntFastClear          :pm4_FastClear          (ctx,Pointer(ctx.node));
       ntDispatchDirect     :pm4_DispatchDirect     (ctx,Pointer(ctx.node));
       ntEventWrite         :pm4_EventWrite         (ctx,Pointer(ctx.node));
+      ntPipeStatDump       :pm4_PipeStatDump       (ctx,Pointer(ctx.node));
       ntEventWriteEop      :pm4_EventWriteEop      (ctx,Pointer(ctx.node));
       ntSubmitFlipEop      :pm4_SubmitFlipEop      (ctx,Pointer(ctx.node));
       ntReleaseMem         :pm4_ReleaseMem         (ctx,Pointer(ctx.node));

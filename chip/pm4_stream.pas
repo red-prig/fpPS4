@@ -116,6 +116,7 @@ type
   ntWaitOnCECounter,
   ntWaitOnDECounterDiff,
   ntEventWrite,
+  ntPipeStatDump,
   ntEventWriteEop,
   ntEventWriteEos,
   ntSubmitFlipEop,
@@ -278,6 +279,11 @@ type
   eventType:Byte;
  end;
 
+ p_pm4_node_PipeStatDump=^t_pm4_node_PipeStatDump;
+ t_pm4_node_PipeStatDump=packed object(t_pm4_node)
+  address:QWORD;
+ end;
+
  p_pm4_node_EventWriteEop=^t_pm4_node_EventWriteEop;
  t_pm4_node_EventWriteEop=packed object(t_pm4_node)
   addr     :Pointer;
@@ -413,6 +419,7 @@ type
   procedure WaitOnCECounter();
   procedure WaitOnDECounterDiff(diff:DWORD);
   procedure EventWrite   (eventType:Byte);
+  procedure PipeStatDump (address:QWORD);
   procedure EventWriteEop(addr:Pointer;data:QWORD;eventType,dataSel,intSel:Byte);
   procedure EventWriteEos(addr:Pointer;data:DWORD;eventType,command:Byte);
   procedure SubmitFlipEop(eop_value:QWORD;intSel:Byte);
@@ -1020,6 +1027,19 @@ begin
  node^.ntype    :=ntEventWrite;
  node^.scope    :=Default(t_pm4_resource_curr_scope);
  node^.eventType:=eventType;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.PipeStatDump(address:QWORD);
+var
+ node:p_pm4_node_PipeStatDump;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_PipeStatDump));
+
+ node^.ntype  :=ntPipeStatDump;
+ node^.scope  :=Default(t_pm4_resource_curr_scope);
+ node^.address:=address;
 
  add_node(node);
 end;

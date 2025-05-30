@@ -548,13 +548,13 @@ type
   u:bitpacked record
    case Byte of
     //PIXEL_PIPE_STAT_DUMP
-    0:(address:QWORD);       // 8 byte aligned (40bit)
+    0:(address:QWORD);       // 8 byte aligned (40bit) (0xff fffffff8)
     //PIXEL_PIPE_STAT_CONTROL
-    1:(
+    1:(                      //[0x7 fc 00] or [0x7 ff fc 00]
        reserved2      :bit3;
-       counter_id     :bit6;
-       stride         :bit2;
-       instance_enable:bit16;
+       counter_id     :bit6;  //00 -> PIXEL_PIPE_OCCLUSION_COUNT_0
+       stride         :bit2;  //02 -> PIXEL_PIPE_STRIDE_128_BITS
+       instance_enable:bit16; //[FF] or [FFFF]
        reserved3      :bit5;
       );
   end;

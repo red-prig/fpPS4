@@ -1077,6 +1077,8 @@ begin
 end;
 
 procedure onEventWrite(pctx:p_pfp_ctx;Body:PTPM4CMDEVENTWRITE);
+const
+ c_p_stride:array[0..3] of PChar=('32_BITS','64_BITS','128_BITS','256_BITS');
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
@@ -1104,7 +1106,30 @@ begin
                               Writeln(' eventType=0x',HexStr(Body^.eventType,2));
  end;
 
- pctx^.stream[stGfxDcb].EventWrite(Body^.eventType);
+ if p_print_gpu_ops then
+ Case Body^.eventType of
+  PIXEL_PIPE_STAT_CONTROL:
+   begin
+    Writeln('  counter_id=',Body^.u.counter_id);
+    Writeln('  stride    =',c_p_stride[Body^.u.stride]);
+   end;
+  PIXEL_PIPE_STAT_DUMP:
+   begin
+    Writeln('  address=0x',HexStr(Body^.u.address and QWORD($FFFFFFFFF8),10));
+   end;
+ end;
+
+ Case Body^.eventType of
+  PIXEL_PIPE_STAT_DUMP:
+   begin
+    pctx^.stream[stGfxDcb].PipeStatDump(Body^.u.address and QWORD($FFFFFFFFF8));
+   end;
+  else
+   begin
+    pctx^.stream[stGfxDcb].EventWrite(Body^.eventType);
+   end;
+ end;
+
 end;
 
 procedure onEventWriteEop(pctx:p_pfp_ctx;Body:PPM4CMDEVENTWRITEEOP);
@@ -1519,15 +1544,17 @@ procedure onSetPredication(pctx:p_pfp_ctx;Body:PPM4CMDSETPREDICATION);
 const
  c_pred_b:array[0..1] of PChar=('DrawIfNotVisible','DrawIfVisible');
  c_hint_v:array[0..1] of PChar=('Wait','Draw');
+ c_pred_o:array[0..3] of PChar=('CLEAR','ZPASS','PRIMCOUNT','MEM');
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- if (Body^.predOp<>0) then
+ if p_print_gpu_ops then
+ if (Body^.predOp<>SET_PRED_CLEAR) or (Body^.startAddress<>0) then
  begin
   Writeln(' startAddress=0x',HexStr(Body^.startAddress,10));
   Writeln(' pred        =',c_pred_b[Body^.predicationBoolean]);
   Writeln(' hint        =',c_hint_v[Body^.hint]);
-  Writeln(' predOp      =',Body^.predOp);
+  Writeln(' predOp      =',c_pred_o[Body^.predOp and 3]);
   Writeln(' continueBit =',Body^.continueBit);
  end;
 end;
