@@ -271,7 +271,7 @@ begin
 
  while (node<>nil) do
  begin
-  node^.vaddr:=node^.vaddr+offset;
+  node^.vaddr:=node^.vaddr + IDX_TO_OFF(offset);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
@@ -289,7 +289,7 @@ begin
 
  while (node<>nil) do
  begin
-  _rmem_entry_add_vaddr(dst,node^.vaddr+offset);
+  _rmem_entry_add_vaddr(dst,node^.vaddr + IDX_TO_OFF(offset));
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
