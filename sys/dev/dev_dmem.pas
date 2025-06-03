@@ -217,7 +217,7 @@ begin
 
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;

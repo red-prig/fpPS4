@@ -42,12 +42,12 @@ procedure vm_object_pip_wait(obj:vm_object_t;waitid:pchar); external;
 
 //
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PAGE_SHIFT;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;

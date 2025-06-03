@@ -57,17 +57,17 @@ implementation
 
 //PAGE_MAP
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PMAPP_SHIFT;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PMAPP_SHIFT;
 end;
 
-function MAX_IDX(x:DWORD):DWORD; inline;
+function MAX_IDX(x:QWORD):QWORD; inline;
 begin
  if (x>PAGE_MAP_MASK_ALL) then
   Result:=PAGE_MAP_MASK_ALL
@@ -75,17 +75,17 @@ begin
   Result:=x;
 end;
 
-function LV1_IDX(x:DWORD):DWORD; inline;
+function LV1_IDX(x:QWORD):DWORD; inline;
 begin
  Result:=x shr 16;
 end;
 
-function LV2_IDX(x:DWORD):DWORD; inline;
+function LV2_IDX(x:QWORD):DWORD; inline;
 begin
  Result:=x and (PAGE_MAP_COUNT_LV2-1);
 end;
 
-procedure prealloc(i:DWORD);
+procedure prealloc(i:QWORD);
 var
  ptr:Pointer;
  r:Integer;
@@ -198,7 +198,7 @@ begin
 end;
 }
 
-function _get_prot(addr:DWORD):Byte; inline;
+function _get_prot(addr:QWORD):Byte; inline;
 begin
  if (addr>PAGE_MAP_MASK_ALL) then
  begin

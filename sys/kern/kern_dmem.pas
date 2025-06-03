@@ -115,12 +115,12 @@ uses
 
 //////////
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PAGE_SHIFT;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
@@ -206,7 +206,7 @@ end;
 function rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
 begin
  rmem_map_lock(@rmap);
-  Result:=rmem_map_test(@rmap,OFF_TO_IDX(start),OFF_TO_IDX(__end),mode);
+  Result:=rmem_map_test(@rmap,start,__end,mode);
  rmem_map_unlock(@rmap);
 end;
 
@@ -248,7 +248,7 @@ begin
 
  //entry->eflags = flags & 0x400000 | 0x20000 | 0x80000
  //0x400000 -> MAP_ENTRY_NO_COALESCE -> MAP_NO_COALESCE
- //0x20000  -> not simplify ???
+ //0x20000  -> MAP_ENTRY_IN_TRANSITION2
  //0x80000  -> ???
 
  cow:=(flags and MAP_NO_COALESCE);

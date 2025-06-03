@@ -131,12 +131,12 @@ uses
  rmem_map,
  kern_budget;
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PAGE_SHIFT;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
@@ -974,7 +974,7 @@ var
  node:p_rmem_vaddr_instance;
  vaddr,size:QWORD;
 begin
- size:=IDX_TO_OFF(entry^.__end-entry^.start);
+ size:=(entry^.__end-entry^.start);
 
  node:=TAILQ_FIRST(@entry^.vlist);
 
@@ -1041,7 +1041,7 @@ begin
 
   rmem_map_lock(rmap);
 
-   Result:=rmem_map_delete(rmap,0,OFF_TO_IDX(start),OFF_TO_IDX(start+len));
+   Result:=rmem_map_delete(rmap,0,start,start+len);
 
   //dont call this rmem_map_process_deferred
   rmem_map_unlock(rmap,False);

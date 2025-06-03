@@ -350,7 +350,7 @@ begin
  Exit(error);
 end;
 
-function IDX_TO_OFF(x:DWORD):QWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PAGE_SHIFT;
 end;

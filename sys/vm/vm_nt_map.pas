@@ -21,9 +21,12 @@ const
  MAX_UNION_SIZE=256*1024*1024;
 
 type
- t_danger_range=packed record
-  start:DWORD;
-  __end:DWORD;
+ bit29=0..536870911;
+ bit35=0..34359738367;
+
+ t_danger_range=bitpacked record
+  start:bit35; //47-12=35
+  _size:bit29; //64-35=29
  end;
 
  t_danger_zone=object
@@ -317,12 +320,12 @@ end;
 
 //
 
-function MD_IDX_TO_OFF(x:DWORD):QWORD; inline;
+function MD_IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl MD_PAGE_SHIFT;
 end;
 
-function MD_OFF_TO_IDX(x:QWORD):DWORD; inline;
+function MD_OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr MD_PAGE_SHIFT;
 end;
@@ -345,7 +348,7 @@ var
 begin
  QWORD(range):=System.InterlockedExchangeAdd64(QWORD(Frange),0);
 
- Result:=(addr<MD_IDX_TO_OFF(range.__end)) and ((addr+size)>MD_IDX_TO_OFF(range.start));
+ Result:=(addr<MD_IDX_TO_OFF(range.start+range._size)) and ((addr+size)>MD_IDX_TO_OFF(range.start));
 end;
 
 procedure t_danger_zone.d_wait(addr,size:vm_offset_t);
@@ -365,7 +368,7 @@ var
  range:t_danger_range;
 begin
  range.start:=MD_OFF_TO_IDX(start);
- range.__end:=MD_OFF_TO_IDX(__end);
+ range._size:=MD_OFF_TO_IDX(__end-start);
 
  System.InterlockedExchange64(QWORD(Frange),QWORD(range));
 
