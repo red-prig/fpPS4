@@ -22,17 +22,19 @@ type
   size :QWORD;
  end;
 
- t_ptr_pair=packed record
-  left :Pointer; //buffer ptr
-  right:Pointer; //Stereo ptr
+ t_map_ptr=packed record
+  orig:Pointer; //original ptr
+  mirr:Pointer; //mirror   ptr
+  base:Pointer; //base mmap
+  size:QWORD;   //size mmap
  end;
 
  p_buffer=^t_buffer;
  t_buffer=packed record
   init :DWORD;
   attr :DWORD;
-  orig :t_ptr_pair;
-  mirr :t_ptr_pair;
+  left :t_map_ptr; //buffer ptr
+  right:t_map_ptr; //Stereo ptr
   size :QWORD;
  end;
 
@@ -317,12 +319,33 @@ begin
  Result:=0;
 end;
 
+function mirror_map(orig:Pointer;size:QWORD):t_map_ptr;
+var
+ mask:QWORD;
+ base:Pointer;
+begin
+ mask:=QWORD(orig) and PAGE_MASK;
+ size:=(size+mask+PAGE_MASK) and (not PAGE_MASK);
+
+ base:=vm_mmap.mirror_map(Pointer(QWORD(orig) and (not PAGE_MASK)),size);
+
+ Result.orig:=orig;
+ Result.mirr:=base+mask;
+ Result.base:=base;
+ Result.size:=size;
+end;
+
+procedure mirror_unmap(var m:t_map_ptr);
+begin
+ vm_mmap.mirror_unmap(m.base,m.size);
+end;
+
 function TDisplayHandleSoft.RegisterBuffer(buf:p_register_buffer):Integer;
 var
  i,a:Integer;
 
- orig:t_ptr_pair;
- mirr:t_ptr_pair;
+ left :t_map_ptr; //buffer ptr
+ right:t_map_ptr; //Stereo ptr
 
  size:QWORD;
 begin
@@ -332,24 +355,18 @@ begin
  if (m_bufs[i].init<>0) then Exit(EINVAL);
  if (m_attr[a].init=0 ) then Exit(EINVAL);
 
- orig.left :=buf^.left;
- orig.right:=buf^.right;
+ if (buf^.left=nil) then Exit(EINVAL);
 
- if (orig.left=nil) then Exit(EINVAL);
+ size:=m_attr[a].size;
 
- size:=(m_attr[a].size+PAGE_MASK) and (not PAGE_MASK);
+ left :=mirror_map(buf^.left ,size);
+ right:=mirror_map(buf^.right,size);
 
- Assert((QWORD(orig.left)  and PAGE_MASK=0),'left');
- Assert((QWORD(orig.right) and PAGE_MASK=0),'right');
-
- mirr.left :=mirror_map(orig.left ,size);
- mirr.right:=mirror_map(orig.right,size);
-
- m_bufs[i].init:=1;
- m_bufs[i].attr:=a;
- m_bufs[i].orig:=orig;
- m_bufs[i].mirr:=mirr;
- m_bufs[i].size:=size;
+ m_bufs[i].init :=1;
+ m_bufs[i].attr :=a;
+ m_bufs[i].left :=left;
+ m_bufs[i].right:=right;
+ m_bufs[i].size :=size;
 
  //
  labels       [buf^.index]:=0; //reset
@@ -363,20 +380,14 @@ begin
 end;
 
 function TDisplayHandleSoft.UnregisterBuffer(index:Integer):Integer;
-var
- mirr:t_ptr_pair;
- size:QWORD;
 begin
  if (m_bufs[index].init=0)  then Exit(EINVAL);
  if (Fflip_count[index]<>0) then Exit(EBUSY);
 
  m_bufs[index].init:=0;
 
- mirr:=m_bufs[index].mirr;
- size:=m_bufs[index].size;
-
- mirror_unmap(mirr.left ,size);
- mirror_unmap(mirr.right,size);
+ mirror_unmap(m_bufs[index].left );
+ mirror_unmap(m_bufs[index].right);
 
  Result:=0;
 end;
@@ -945,12 +956,12 @@ begin
   dst:=p_dst^;
 
   //detile32bppBuf_slow(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
-  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.mirr.left,dst);
+  detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.left.mirr,dst);
  end else
  begin
   bi.bmiHeader.biWidth:=(bi.bmiHeader.biWidth+63) and (not 63);
 
-  dst:=buf^.mirr.left;
+  dst:=buf^.left.mirr;
  end;
 
  if (attr^.attr.pixelFormat=SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB) then
