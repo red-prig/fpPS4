@@ -1544,9 +1544,14 @@ var
  r:p_pm4_resource;
  resource_instance:p_pm4_resource_instance;
 begin
- for i:=0 to 31 do
+
+ if (p_neomode<>0) then
  begin
-  Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
+  //FP16_INTERP_MODE support only Neo mode
+  for i:=0 to 31 do
+  begin
+   Assert(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE=0,'SPI_PS_INPUT_CNTL['+IntToStr(i)+'].FP16_INTERP_MODE='+IntToStr(GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL[i].FP16_INTERP_MODE));
+  end;
  end;
 
  GPU_REGS.export_user_data_rt(@rt_info.USERDATA);
