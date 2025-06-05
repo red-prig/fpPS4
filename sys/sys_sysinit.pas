@@ -50,6 +50,7 @@ uses
  sys_conf,
  sched_ule,
  dev_null,
+ dev_sce_zlib,
  dev_tty,
  dev_dmem,
  dev_dipsw,
@@ -91,6 +92,7 @@ begin
  fildesc_drvinit;
  //
  null_modevent(0,MOD_LOAD);
+ zlib_modevent(0,MOD_LOAD);
  ttyconsdev_init();
  dmemdev_init();
  dipsw_init();
