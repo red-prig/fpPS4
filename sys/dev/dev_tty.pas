@@ -247,20 +247,14 @@ end;
 const
  tty_kqops_read:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@tty_kqops_read_detach;
   f_event :@tty_kqops_read_event;
-  f_touch :nil;
  );
 
  tty_kqops_write:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@tty_kqops_write_detach;
   f_event :@tty_kqops_write_event;
-  f_touch :nil;
  );
 
 Function ttydev_kqfilter(dev:p_cdev;kn:p_knote):Integer;

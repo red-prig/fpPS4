@@ -1371,7 +1371,6 @@ end;
 const
  filterops_display:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_display_attach;
   f_detach:@filt_display_detach;
   f_event :@filt_display_event;

@@ -277,14 +277,11 @@ procedure filt_usertouch  (kn:p_knote;kev:p_kevent;_type:QWORD); forward;
 const
  file_filtops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
   f_attach:@filt_fileattach;
  );
 
  kqread_filtops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_kqdetach;
   f_event :@filt_kqueue;
  );
@@ -292,7 +289,6 @@ const
  //XXX - move to kern_proc.c?
  proc_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_procattach;
   f_detach:@filt_procdetach;
   f_event :@filt_proc;
@@ -300,7 +296,6 @@ const
 
  timer_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_timerattach;
   f_detach:@filt_timerdetach;
   f_event :@filt_timer;
@@ -308,7 +303,6 @@ const
 
  ht_timer_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_hr_timerattach;
   f_detach:@filt_hr_timerdetach;
   f_event :@filt_hr_timer;
@@ -316,7 +310,6 @@ const
 
  user_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_userattach;
   f_detach:@filt_userdetach;
   f_event :@filt_user;
@@ -332,7 +325,6 @@ end;
 const
  null_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_nullattach;
  );
 

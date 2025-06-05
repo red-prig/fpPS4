@@ -271,7 +271,8 @@ procedure kqueue_deregister(filter:SmallInt;pid,ident:PtrUint); external;
 procedure KNOTE_LOCKED  (list:p_knlist;hint:QWORD);
 procedure KNOTE_UNLOCKED(list:p_knlist;hint:QWORD);
 
-procedure knlist_clear(knl:p_knlist;islocked:Integer);
+procedure knlist_clear (knl:p_knlist;islocked:Integer); inline;
+procedure knlist_delete(knl:p_knlist;islocked:Integer); inline;
 
 function  M_KNLIST_EMPTY(list:p_knlist):Boolean;
 
@@ -292,9 +293,14 @@ begin
  knote(list, hint, 0);
 end;
 
-procedure knlist_clear(knl:p_knlist;islocked:Integer);
+procedure knlist_clear(knl:p_knlist;islocked:Integer); inline;
 begin
  knlist_cleardel(knl, islocked, 0)
+end;
+
+procedure knlist_delete(knl:p_knlist;islocked:Integer); inline;
+begin
+ knlist_cleardel(knl, islocked, 1)
 end;
 
 function M_KNLIST_EMPTY(list:p_knlist):Boolean;

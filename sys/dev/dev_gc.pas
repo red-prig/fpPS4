@@ -1321,7 +1321,6 @@ end;
 const
  filterops_graphics_core:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filterops_graphics_core_attach;
   f_detach:@filterops_graphics_core_detach;
   f_event :@filterops_graphics_core_event;
@@ -1370,11 +1369,9 @@ end;
 const
  filterops_internal:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filterops_internal_attach;
   f_detach:@filterops_internal_detach;
   f_event :@filterops_internal_event;
-  f_touch :nil
  );
 
 procedure gc_init_internal();

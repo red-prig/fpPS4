@@ -109,7 +109,6 @@ function  filt_signal(kn:p_knote;hint:QWORD):Integer;
 const
  sig_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_sigattach;
   f_detach:@filt_sigdetach;
   f_event :@filt_signal;

@@ -131,7 +131,6 @@ function  filt_fsevent(kn:p_knote;hint:QWORD):Integer;
 const
  fs_filtops:t_filterops=(
   f_isfd  :0;
-  _align  :0;
   f_attach:@filt_fsattach;
   f_detach:@filt_fsdetach;
   f_event :@filt_fsevent;
@@ -3418,24 +3417,18 @@ function  filt_vfsvnode (kn:p_knote;hint:QWORD):Integer; forward;
 const
  vfsread_filtops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_vfsdetach;
   f_event :@filt_vfsread;
  );
 
  vfswrite_filtops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_vfsdetach;
   f_event :@filt_vfswrite;
  );
 
  vfsvnode_filtops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_vfsdetach;
   f_event :@filt_vfsvnode;
  );

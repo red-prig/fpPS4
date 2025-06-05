@@ -187,20 +187,14 @@ function  filt_pipewrite (kn:p_knote;hint:QWORD):Integer;
 const
  pipe_rfiltops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_pipedetach;
   f_event :@filt_piperead;
-  f_touch :nil;
  );
 
  pipe_wfiltops:t_filterops=(
   f_isfd  :1;
-  _align  :0;
-  f_attach:nil;
   f_detach:@filt_pipedetach;
   f_event :@filt_pipewrite;
-  f_touch :nil;
  );
 
 {
@@ -619,7 +613,7 @@ end;
 {
  * unlock a pipe I/O lock
  }
-procedure pipeunlock(cpipe:p_pipe); inline;
+procedure pipeunlock(cpipe:p_pipe);
 begin
  PIPE_LOCK_ASSERT(cpipe);
  Assert((cpipe^.pipe_state and PIPE_LOCKFL)<>0,'Unlocked pipe passed to pipeunlock');
