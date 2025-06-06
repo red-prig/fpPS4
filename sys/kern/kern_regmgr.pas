@@ -13,6 +13,7 @@ const
  SCE_REGMGR_ENT_KEY_NP_debug                           = $19810000;
  SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification         = $3CC80700;
  SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture          = $58800C00;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_gpi00                  = $78020400;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify             = $78026400;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload        = $78028A00;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib        = $78028300;
@@ -57,7 +58,7 @@ type
   checksum:Word;
  end;
 
-function regMgrCnvRegId(enc:QWORD):Integer;
+function regMgrCnvRegId(enc:QWORD;enc2:DWORD):Integer;
 var
  a,b,c,d,e,f,x:Byte;
  g:DWORD;
@@ -117,11 +118,11 @@ var
  skey:Integer;
 
  data:packed record
-  enc :QWORD;
-  val1:DWORD;
-  val2:DWORD;
-  slen:DWORD;
-  dstr:array[0..2055] of AnsiChar;
+     enc1:QWORD;
+     enc2:DWORD;
+  int_val:DWORD;
+     size:QWORD;
+     data:array[0..2047] of AnsiChar;
  end;
 
 begin
@@ -146,7 +147,7 @@ begin
         goto _err;
        end;
 
-       skey:=regMgrCnvRegId(data.enc);
+       skey:=regMgrCnvRegId(data.enc1,data.enc2);
 
        if (skey<0) then
        begin
@@ -155,22 +156,22 @@ begin
        end;
 
        case skey of
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg       :data.val2:=0; //_malloc_init_lv2
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg        :data.val2:=0; //libSceSysmodule  (bit 1,2 -> load debug lib)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off       :data.val2:=0; //libSceSysmodule  (print errors?)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_020B00                :data.val2:=0; //libSceSysmodule  (preload module?)
-        SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture         :data.val2:=0; //libkernel
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace       :data.val2:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k       :data.val2:=0; //sceVideoOutOpen  debug video modes?
-        SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode:data.val2:=0; //sceVideoOutOpen
-        SCE_REGMGR_ENT_KEY_NP_debug                          :data.val2:=0; //libSceSysUtil
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg       :data.int_val:=0; //_malloc_init_lv2
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg        :data.int_val:=0; //libSceSysmodule  (bit 1,2 -> load debug lib)
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off       :data.int_val:=0; //libSceSysmodule  (print errors?)
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_020B00                :data.int_val:=0; //libSceSysmodule  (preload module?)
+        SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture         :data.int_val:=0; //libkernel
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace       :data.int_val:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k       :data.int_val:=0; //sceVideoOutOpen  debug video modes?
+        SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode:data.int_val:=0; //sceVideoOutOpen
+        SCE_REGMGR_ENT_KEY_NP_debug                          :data.int_val:=0; //libSceSysUtil
 
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :data.val2:=0; //libSceLibcInternal
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :data.val2:=0; //libSceLibcInternal
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :data.int_val:=0; //libSceLibcInternal
+        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :data.int_val:=0; //libSceLibcInternal
 
         else
          begin
-          print_error_td(' enc:0x'+HexStr(data.enc,16)+'->key:0x'+HexStr(skey,8));
+          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
@@ -193,7 +194,7 @@ begin
         goto _err;
        end;
 
-       skey:=regMgrCnvRegId(data.enc);
+       skey:=regMgrCnvRegId(data.enc1,data.enc2);
 
        if (skey<0) then
        begin
@@ -204,19 +205,49 @@ begin
        case skey of
         SCE_REGMGR_ENT_KEY_NP_env: //sceNpUtilGetEnv
           begin
-           data.dstr:='np';
+           data.data:='np';
           end;
         else
          begin
-          print_error_td(' enc:0x'+HexStr(data.enc,16)+'->key:0x'+HexStr(skey,8));
+          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
 
        vlen:=$818;
        goto _copyout_value;
-      end
+      end;
 
+    $1D: //sceRegMgrNonSysGetBin
+      begin
+       Result:=copyin(pvalue,@data,$818);
+       if (Result<>0) then
+       begin
+        kret:=$800d020f;
+        goto _err;
+       end;
+
+       skey:=regMgrCnvRegId(data.enc1,data.enc2);
+
+       if (skey<0) then
+       begin
+        kret:=skey;
+        goto _err;
+       end;
+
+       case skey of
+        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_gpi00:PQWORD(@data.data)^:=0; //sceKernelGetGPI
+
+        else
+         begin
+          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+          Assert(False);
+         end;
+       end;
+
+       vlen:=$818;
+       goto _copyout_value;
+      end;
 
   else
       begin
