@@ -22,12 +22,24 @@ type
  off_t=Int64;
 
  p_rl_q_entry=^rl_q_entry;
+
+ TAILQ_HEAD=packed record
+  tqh_first:p_rl_q_entry;
+  tqh_last :^p_rl_q_entry;
+ end;
+
+ TAILQ_ENTRY=packed record
+  tqe_next:p_rl_q_entry;
+  tqe_prev:^p_rl_q_entry;
+ end;
+
  rl_q_entry=record
   rl_q_link :TAILQ_ENTRY; //rl_q_entry
   rl_q_start:off_t;
   rl_q___end:off_t;
   rl_q_flags:Integer;
   rl_q_count:Integer;
+  rl_q_td   :p_kthread;
  end;
 
  p_rangelock=^rangelock;
@@ -295,9 +307,11 @@ begin
  entry:=rlqentry_new();
  //
  Assert(entry<>nil);
+
  entry^.rl_q_flags:=mode;
  entry^.rl_q_start:=start;
  entry^.rl_q___end:=__end;
+ entry^.rl_q_td   :=curkthread;
 
  mtx_lock(ilk^);
 
@@ -370,6 +384,8 @@ begin
  Assert((lock<>nil) and (ilk<>nil) and (cookie<>nil));
 
  entry:=cookie;
+
+ Assert(entry^.rl_q_td=curkthread);
 
  mtx_lock(ilk^);
 
