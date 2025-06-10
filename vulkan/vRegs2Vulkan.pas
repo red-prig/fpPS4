@@ -780,6 +780,8 @@ Function TGPU_REGS.GET_BLEND_INFO:TBLEND_INFO;
 begin
  Result.logicOp:=get_logic_op(CX_REG^.CB_COLOR_CONTROL.ROP3);
 
+ Assert(CX_REG^.CB_COLOR_CONTROL.DEGAMMA_ENABLE=0,'DEGAMMA_ENABLE');
+
  Result.blendConstants[0]:=CX_REG^.CB_BLEND_RGBA[0];
  Result.blendConstants[1]:=CX_REG^.CB_BLEND_RGBA[1];
  Result.blendConstants[2]:=CX_REG^.CB_BLEND_RGBA[2];
@@ -2125,6 +2127,9 @@ begin
 end;
 
 function _get_tsharp4_cformat(PT:PTSharpResource4;hint:s_image_usage):TVkFormat;
+label
+ _unorm,
+ _srgb;
 begin
  Result:=VK_FORMAT_UNDEFINED;
  if (PT=nil) then Exit;
@@ -2161,6 +2166,15 @@ begin
 
  Case PT^.nfmt of
   IMG_NUM_FORMAT_UNORM  :
+  begin
+
+   if (iu_degamma in hint) then
+   begin
+    goto _srgb;
+   end;
+
+   _unorm:
+
     case PT^.dfmt of
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_UNORM;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_UNORM;
@@ -2191,8 +2205,12 @@ begin
      IMG_DATA_FORMAT_2_10_10_10 :Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
      else;
     end;
+  end;
 
   IMG_NUM_FORMAT_SRGB  :
+  begin
+    _srgb:
+
     case PT^.dfmt of
      IMG_DATA_FORMAT_8          :Result:=VK_FORMAT_R8_SRGB;
      IMG_DATA_FORMAT_8_8        :Result:=VK_FORMAT_R8G8_SRGB;
@@ -2200,14 +2218,13 @@ begin
      IMG_DATA_FORMAT_BC1        :Result:=VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
      IMG_DATA_FORMAT_BC2        :Result:=VK_FORMAT_BC2_SRGB_BLOCK;
      IMG_DATA_FORMAT_BC3        :Result:=VK_FORMAT_BC3_SRGB_BLOCK;
-     IMG_DATA_FORMAT_BC4        :Result:=VK_FORMAT_BC4_UNORM_BLOCK;
-     IMG_DATA_FORMAT_BC5        :Result:=VK_FORMAT_BC5_UNORM_BLOCK;
-     IMG_DATA_FORMAT_BC6        :Result:=VK_FORMAT_BC6H_UFLOAT_BLOCK;
      IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_SRGB_BLOCK;
-
-     IMG_DATA_FORMAT_2_10_10_10 :Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-     else;
+     else
+      begin
+       goto _unorm;
+      end;
     end;
+  end;
 
   IMG_NUM_FORMAT_SNORM  :
     case PT^.dfmt of
@@ -2659,21 +2676,21 @@ end;
 
 
 //aniso_threshold:bit3;   //Threshold before sampling anisotropically (enum)
-//mc_coord_trunc:bit1;
-//force_degamma:bit1;   //Force de-gamma after filtering regardless of format
-//aniso_bias:bit6;   //Anisotropy bias factor; unsigned fixed point 1.5
+//mc_coord_trunc:bit1;    //enables bilinear blend fraction truncation to 1 bit for motioncompensation
+//force_degamma:bit1;     //Force de-gamma after filtering regardless of format
+//aniso_bias:bit6;        //Anisotropy bias factor; unsigned fixed point 1.5
 //trunc_coord:bit1;
-//disable_cube_wrap:bit1;   //Disable sampling/filtering across face boundaries
-//filter_mode:bit2;   //LERP, min, or max filter; default: LERP
+//disable_cube_wrap:bit1; //Disable sampling/filtering across face boundaries
+//filter_mode:bit2;       //LERP, min, or max filter; default: LERP
 
-//perf_mip:bit4;   //Bri-linear factor
+//perf_mip:bit4;          //Bri-linear factor
 //perf_z:bit4;
 
-//z_filter:bit2;   //Filter in Z coordinate direction for volume textures
+//z_filter:bit2;          //Filter in Z coordinate direction for volume textures
 
-//border_color_ptr:bit12;  //Offset into global border color buffer
+//border_color_ptr:bit12; //Offset into global border color buffer
 
-//border_color_type:bit2;   //Opaque-black, transparent-black, white, or color ptr
+//border_color_type:bit2; //Opaque-black, transparent-black, white, or color ptr
 
 //VkSamplerCustomBorderColorCreateInfoEXT
 function _get_border_color(color_type:Byte):TVkBorderColor;

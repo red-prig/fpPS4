@@ -345,10 +345,10 @@ type
   depth_compare_func:bit3;   //Depth compare function
   force_unorm_coords:bit1;   //Force unnormalized (texel) address coordinates
      aniso_threshold:bit3;   //Threshold before sampling anisotropically (enum)
-      mc_coord_trunc:bit1;
+      mc_coord_trunc:bit1;   //enables bilinear blend fraction truncation to 1 bit for motioncompensation
        force_degamma:bit1;   //Force de-gamma after filtering regardless of format
           aniso_bias:bit6;   //Anisotropy bias factor; unsigned fixed point 1.5
-         trunc_coord:bit1;
+         trunc_coord:bit1;   //selects texel coordinate rounding or truncation
    disable_cube_wrap:bit1;   //Disable sampling/filtering across face boundaries
          filter_mode:bit2;   //LERP, min, or max filter; default: LERP
             reserved:bit1;

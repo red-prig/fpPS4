@@ -94,7 +94,7 @@ const
  TM_INVAL=16; //invalid buffer/image
 
 type
- t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_transfer,iu_buffer,iu_htile,iu_cmask);
+ t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_transfer,iu_buffer,iu_htile,iu_cmask,iu_degamma);
  s_image_usage=set of t_image_usage;
 
 type

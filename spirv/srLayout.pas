@@ -524,6 +524,7 @@ begin
   rtFunPtr2:Result:=PPointer(@FData)^;
   rtVSharp2,
   rtVSharp4,
+  rtSSharp4,
   rtTSharp4,
   rtTSharp8:Result:=@FData;
   rtImmData:Result:=TsrDataImm(PPointer(@FData)^);
@@ -924,7 +925,8 @@ var
  pCode :TsrCodeRegion;
  imm   :TsrDataImm;
  PV    :PVSharpResource4;
- PS    :PTSharpResource4;
+ PS    :PSSharpResource4 absolute PV;
+ PT    :PTSharpResource4 absolute PV;
 begin
  pHeap:=FTop.FEmit.GetCodeHeap;
 
@@ -986,14 +988,31 @@ begin
      end;
 
     end;
-   rtTSharp4,
-   rtTSharp8:
+
+   rtSSharp4:
     begin
      //Resource data precompiled
 
      PS:=Writer.node.GetSharp;
 
      with PS^ do
+     begin
+      if (force_degamma<>0) then
+      begin
+       Writer.IntOpt('FDGM',force_degamma);
+      end;
+     end;
+
+    end;
+
+   rtTSharp4,
+   rtTSharp8:
+    begin
+     //Resource data precompiled
+
+     PT:=Writer.node.GetSharp;
+
+     with PT^ do
      begin
       Writer.IntOpt('TYPE',_type);
       if (Writer.node.RINF) then

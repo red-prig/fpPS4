@@ -62,8 +62,12 @@ type
   nfmt   :0..15;    //4
   rtype  :0..15;    //4
   dstsel :TrDstSel; //16
-  stride :Word;
+  degam  :Boolean;  //1
+  _align :0..32767; //15
+  stride :Word;     //16
  end;
+
+ {$IF sizeof(TvResInfo)<>8}{$STOP sizeof(TvResInfo)<>8}{$ENDIF}
 
  TvDataLayout=packed record
   rtype :TvResourceType;
@@ -75,7 +79,7 @@ type
 
  TvFuncCb=procedure(addr:ADataLayout) of object;
 
- TvLayoutFlags=Set of (vMemoryRead,vMemoryWrite,vMipArray);
+ TvLayoutFlags=Set of (vMemoryRead,vMemoryWrite,vMipArray,vForceDegamma);
 
  PvCustomLayout=^TvCustomLayout;
  TvCustomLayout=packed object
@@ -728,6 +732,7 @@ begin
    'R':Result:=Result+[vMemoryRead];
    'W':Result:=Result+[vMemoryWrite];
    'M':Result:=Result+[vMipArray];
+   'D':Result:=Result+[vForceDegamma];
    else;
   end;
  end;
@@ -781,6 +786,7 @@ begin
   'STRD':L^.rinfo.stride :=StrToDWord2(V);
   'TYPE':L^.rinfo.rtype  :=StrToDWord2(V);
   'DSEL':L^.rinfo.dstsel :=StrToDstSel(V);
+  'FDGM':L^.rinfo.degam  :=(StrToDWord2(V)<>0);
 
   'IMM':Insert(StrToDWord2(V),L^.imm,Length(L^.imm));
 
@@ -1419,8 +1425,8 @@ end;
 
 function _get_buf_mem_usage(flags:TvLayoutFlags):Byte; inline;
 begin
- Result:=(ord(vMemoryRead  in flags)*TM_READ) or
-         (ord(vMemoryWrite in flags)*TM_WRITE);
+ Result:=(ord(vMemoryRead   in flags)*TM_READ) or
+         (ord(vMemoryWrite  in flags)*TM_WRITE);
 end;
 
 Procedure TvUniformBuilder.AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
@@ -1550,12 +1556,16 @@ begin
  b.bind  :=bind;
  b.memuse:=_get_buf_mem_usage(flags);
 
+ hint:=[];
+
+ if (vForceDegamma in flags) then
+ begin
+  hint:=hint+[iu_degamma];
+ end;
+
  if (btype in [vbStorage,vbMipStorage]) then
  begin
-  hint:=[iu_storage];
- end else
- begin
-  hint:=[];
+  hint:=hint+[iu_storage];
  end;
 
  b.FImage:=_get_tsharp4_image_info(PT,hint);
@@ -1598,12 +1608,16 @@ begin
  b.bind  :=bind;
  b.memuse:=_get_buf_mem_usage(flags);
 
+ hint:=[];
+
+ if (vForceDegamma in flags) then
+ begin
+  hint:=hint+[iu_degamma];
+ end;
+
  if (btype in [vbStorage,vbMipStorage]) then
  begin
-  hint:=[iu_storage];
- end else
- begin
-  hint:=[];
+  hint:=hint+[iu_storage];
  end;
 
  b.FImage:=_get_tsharp8_image_info(PT,hint);
@@ -1930,6 +1944,9 @@ end;
 procedure TvUnifChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
+ PV:PVSharpResource4 absolute P;
+ PT:PTSharpResource4 absolute P;
+ PS:PSSharpResource4 absolute P;
  a:QWORD;
  rinfo:TvResInfo;
 begin
@@ -1955,7 +1972,7 @@ begin
      vtVSharp2,
      vtVSharp4:
        begin
-        a:=AlignShift(Pointer(PVSharpResource4(P)^.base and (not 3)),limits.minStorageBufferOffsetAlignment);
+        a:=AlignShift(Pointer(PV^.base and (not 3)),limits.minStorageBufferOffsetAlignment);
         if (a<>b.offset) then
         begin
          FResult:=False;
@@ -1985,7 +2002,7 @@ begin
 
    end;
   vtVSharp4:
-   with PVSharpResource4(P)^ do
+   with PV^ do
    begin
 
     if rinfo.enable then
@@ -2012,9 +2029,22 @@ begin
     end;
 
    end;
+
+  vtSSharp4:
+   begin
+    with PS^ do
+    begin
+     if (force_degamma<>ord(rinfo.degam)) then
+     begin
+      FResult:=False;
+      Exit;
+     end;
+    end;
+   end;
+
   vtTSharp4,
   vtTSharp8:
-   with PTSharpResource4(P)^ do
+   with PT^ do
    begin
 
     if rinfo.rtype<>_type then

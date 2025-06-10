@@ -132,6 +132,7 @@ type
   Cube :Boolean;
   GLC  :Boolean;
   SLC  :Boolean;
+  degam:Boolean; //[S#] force_degamma
  end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;

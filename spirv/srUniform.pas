@@ -19,7 +19,7 @@ uses
  srConfig;
 
 type
- String3=String[3];
+ String4=String[4];
 
  TsrRegUniform=class(TsrNode)
   private
@@ -55,6 +55,7 @@ type
  TsrUniformKey=record
   pLayout:TsrDataLayout;
   FType  :TsrType;
+  Fdegam :Boolean; //[S#] force_degamma
  end;
 
  TsrUniform=class(TsrDescriptor)
@@ -77,7 +78,8 @@ type
    function  chain_read:DWORD;
    function  chain_write:DWORD;
    function  GetStorageName:RawByteString;
-   function  GetFlagsStr:String3;
+   function  ForceDegamma:Boolean;
+   function  GetFlagsStr:String4;
    function  GetTypeStr:RawByteString;
    //
    procedure AllocSourceExtension2(var Writer:TseWriter); override;
@@ -93,7 +95,7 @@ type
    FEmit:TCustomEmit;
    FTree:TNodeTree;
   procedure Init(Emit:TCustomEmit);
-  function  Fetch(s:TsrDataLayout;t:TsrType):TsrUniform;
+  function  Fetch(s:TsrDataLayout;t:TsrType;degam:Boolean):TsrUniform;
   Function  First:TsrUniform;
   Function  Next(node:TsrUniform):TsrUniform;
   procedure AllocBinding(Var FBinding:Integer);
@@ -179,6 +181,9 @@ begin
  if (Result<>0) then Exit;
  //second pType (order sort)
  Result:=ord(n1^.FType.Order>n2^.FType.Order)-ord(n1^.FType.Order<n2^.FType.Order);
+ if (Result<>0) then Exit;
+ //third Fdegam
+ Result:=ord(n1^.Fdegam)-ord(n2^.Fdegam);
 end;
 
 Procedure TsrUniform.Init(); inline;
@@ -306,15 +311,22 @@ begin
  end;
 end;
 
-function TsrUniform.GetFlagsStr:String3;
+function TsrUniform.ForceDegamma:Boolean;
+begin
+ Result:=key.Fdegam;
+end;
+
+function TsrUniform.GetFlagsStr:String4;
 const
  _R:array[0..1] of AnsiChar='_R';
  _W:array[0..1] of AnsiChar='_W';
  _M:array[0..1] of AnsiChar='_M';
+ _D:array[0..1] of AnsiChar='_D';
 begin
  Result:=_R[ord(chain_read <>0)]+
          _W[ord(chain_write<>0)]+
-         _M[ord(FMipArray     )];
+         _M[ord(FMipArray     )]+
+         _D[ord(ForceDegamma  )];
 end;
 
 //VTX_ATR -> VERTEX ATTRIBUTE
@@ -407,6 +419,7 @@ begin
   //
   Writer.IntOpt('BND',FBinding);
   Writer.StrOpt('FLG',GetFlagsStr);
+  //
  end;
 end;
 
@@ -415,13 +428,14 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrUniformList.Fetch(s:TsrDataLayout;t:TsrType):TsrUniform;
+function TsrUniformList.Fetch(s:TsrDataLayout;t:TsrType;degam:Boolean):TsrUniform;
 var
  key:TsrUniformKey;
 begin
  key:=Default(TsrUniformKey);
  key.pLayout:=s;
  key.FType  :=t;
+ key.Fdegam :=degam;
  //
  Result:=FTree.Find(@key);
  if (Result=nil) then

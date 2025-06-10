@@ -73,7 +73,7 @@ type
   Procedure AddVecInput(dst:PsrRegSlot;vtype,rtype:TsrDataType;itype:TpsslInputType;id:Byte);
   function  AddPositionsInput(count:Byte):TsrVariable;
   function  AddParametersInput(id,count:Byte):TsrVariable;
-  function  FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC:Boolean):TsrNode;
+  function  FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC,degam:Boolean):TsrNode;
   function  FetchImage(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
   function  FetchImageArray(src:TsrDataLayout;info:TsrImageInfo;array_count:DWORD):TsrNode;
   function  FetchImageRuntimeArray(src:TsrDataLayout;info:TsrImageInfo):TsrNode;
@@ -934,13 +934,13 @@ end;
 
 ////
 
-function TEmitFetch.FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC:Boolean):TsrNode;
+function TEmitFetch.FetchUniformSimple(src:TsrDataLayout;pType:TsrType;GLC,SLC,degam:Boolean):TsrNode;
 var
  u:TsrUniform;
  v:TsrVariable;
  r:TsrRegUniform;
 begin
- u:=UniformList.Fetch(src,pType);
+ u:=UniformList.Fetch(src,pType,degam);
  //
  if (GLC) then
  begin
@@ -967,7 +967,7 @@ var
 begin
  pType:=TypeList.Fetch(info.dtype);
  pType:=TypeList.FetchImage(pType,info.tinfo);
- Result:=FetchUniformSimple(src,pType,info.GLC,info.SLC);
+ Result:=FetchUniformSimple(src,pType,info.GLC,info.SLC,info.degam);
 end;
 
 function TEmitFetch.FetchImageArray(src:TsrDataLayout;info:TsrImageInfo;array_count:DWORD):TsrNode;
@@ -977,7 +977,7 @@ begin
  pType:=TypeList.Fetch(info.dtype);
  pType:=TypeList.FetchImage(pType,info.tinfo);
  pType:=TypeList.FetchArray(pType,array_count);
- Result:=UniformList.Fetch(src,pType);
+ Result:=UniformList.Fetch(src,pType,info.degam);
  //
  if (info.GLC) then
  begin
@@ -997,7 +997,7 @@ begin
  pType:=TypeList.Fetch(info.dtype);
  pType:=TypeList.FetchImage(pType,info.tinfo);
  pType:=TypeList.FetchRuntimeArray(pType);
- Result:=UniformList.Fetch(src,pType);
+ Result:=UniformList.Fetch(src,pType,info.degam);
  //
  if (info.GLC) then
  begin
@@ -1015,7 +1015,7 @@ var
  pType:TsrType;
 begin
  pType:=TypeList.Fetch(dtTypeSampler);
- Result:=FetchUniformSimple(src,pType,False,False);
+ Result:=FetchUniformSimple(src,pType,False,False,False);
 end;
 
 function TEmitFetch.FetchOutput(etype:TpsslExportType;rtype:TsrDataType):TsrOutput;
