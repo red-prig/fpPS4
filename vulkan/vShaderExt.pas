@@ -56,8 +56,8 @@ type
  end;
 
  TvResInfo=bitpacked record
-  enable:Boolean;   //1 -> dfmt,nfmt,dstsel
-  align :Boolean;   //1
+  enable :Boolean;  //1 -> dfmt,nfmt,dstsel
+  invalid:Boolean;  //1
   dfmt   :0..63;    //6
   nfmt   :0..15;    //4
   rtype  :0..15;    //4
@@ -774,7 +774,8 @@ begin
 
   'FLG':L^.flags:=StrToFlags(V);
 
-  'RINF':L^.rinfo.enable:=(StrToDWord2(V)<>0);
+  'RINF':L^.rinfo.enable :=(StrToDWord2(V)<>0);
+  'INVL':L^.rinfo.invalid:=(StrToDWord2(V)<>0);
   'DFMT':L^.rinfo.dfmt   :=StrToDWord2(V);
   'NFMT':L^.rinfo.nfmt   :=StrToDWord2(V);
   'STRD':L^.rinfo.stride :=StrToDWord2(V);
@@ -1472,6 +1473,11 @@ begin
  Insert(b,FBuffers,Length(FBuffers));
 end;
 
+function IsInvalidVSharp(dfmt,num_records:DWORD):Boolean; inline;
+begin
+ Result:=(dfmt=0) or (num_records=0);
+end;
+
 Procedure TvUniformBuilder.AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
@@ -1484,7 +1490,7 @@ begin
 
  //print_vsharp(PV);
 
- invalid:=ord(PV^.dfmt=0)*TM_INVAL;
+ invalid:=ord(IsInvalidVSharp(PV^.dfmt,PV^.num_records))*TM_INVAL;
 
  b:=Default(TBufBindExt);
  b.fset  :=fset;
@@ -1530,6 +1536,8 @@ Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;
 var
  b:TImageBindExt;
  hint:s_image_usage;
+
+ //start,__end:QWORD;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1553,6 +1561,20 @@ begin
  b.FImage:=_get_tsharp4_image_info(PT,hint);
  b.FView :=_get_tsharp4_image_view(PT,hint);
 
+ {
+ //Marking textures that contain incorrect
+ // virtual memory as invalid,
+ // I don't know how correct this approach is
+ start:=QWORD(get_dmem_ptr(b.FImage.Addr));
+ __end:=start+1;
+ gpu_get_bound(start,__end);
+ if (start=0) then
+ begin
+  Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
+  b.FImage.params.invalid:=1;
+ end;
+ }
+
  b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
 
  Insert(b,FImages,Length(FImages));
@@ -1562,6 +1584,8 @@ Procedure TvUniformBuilder.AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;
 var
  b:TImageBindExt;
  hint:s_image_usage;
+
+ //start,__end:QWORD;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1584,6 +1608,20 @@ begin
 
  b.FImage:=_get_tsharp8_image_info(PT,hint);
  b.FView :=_get_tsharp8_image_view(PT,hint);
+
+ {
+ //Marking textures that contain incorrect
+ // virtual memory as invalid,
+ // I don't know how correct this approach is
+ start:=QWORD(get_dmem_ptr(b.FImage.Addr));
+ __end:=start+1;
+ gpu_get_bound(start,__end);
+ if (start=0) then
+ begin
+  Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
+  b.FImage.params.invalid:=1;
+ end;
+ }
 
  b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
 
@@ -1889,11 +1927,6 @@ begin
  end;
 end;
 
-function IsInvalid(dfmt:Byte):Boolean; inline;
-begin
- Result:=(dfmt=0);
-end;
-
 procedure TvUnifChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
@@ -1957,7 +1990,8 @@ begin
 
     if rinfo.enable then
     begin
-     if (     dfmt<>rinfo.dfmt    ) or
+     if (IsInvalidVSharp(dfmt,num_records)<>rinfo.invalid) or
+        (     dfmt<>rinfo.dfmt    ) or
         (     nfmt<>rinfo.nfmt    ) or
         (   stride<>rinfo.stride  ) or
         (dst_sel_x<>rinfo.dstsel.x) or
@@ -1970,7 +2004,7 @@ begin
      end;
     end else
     begin
-     if (IsInvalid(dfmt)<>IsInvalid(rinfo.dfmt)) then
+     if (IsInvalidVSharp(dfmt,num_records)<>rinfo.invalid) then
      begin
       FResult:=False;
       Exit;

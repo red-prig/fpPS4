@@ -7,6 +7,7 @@ interface
 uses
   sysutils,
   ps4_pssl,
+  ps4_shader,
   srReg,
   srLayout,
   emit_fetch,
@@ -28,11 +29,13 @@ var
  src:array[0..3] of PsrRegSlot;
 
  grp:TsrDataLayout;
+ PV:PVSharpResource4;
 
 begin
  if not get_srsrc(FSPI.MTBUF.SRSRC,4,@src) then Assert(false);
 
  grp:=GroupingSharp(@src,rtVSharp4);
+ PV:=grp.GetSharp;
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
@@ -41,7 +44,8 @@ begin
            FSPI.MTBUF.NFMT,
            count,
            FSPI.MTBUF.GLC,
-           FSPI.MTBUF.SLC)
+           FSPI.MTBUF.SLC,
+           PV^.num_records)
  );
 
 end;
@@ -51,11 +55,13 @@ var
  src:array[0..3] of PsrRegSlot;
 
  grp:TsrDataLayout;
+ PV:PVSharpResource4;
 
 begin
  if not get_srsrc(FSPI.MTBUF.SRSRC,4,@src) then Assert(false);
 
  grp:=GroupingSharp(@src,rtVSharp4);
+ PV:=grp.GetSharp;
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
@@ -64,7 +70,8 @@ begin
            FSPI.MTBUF.NFMT,
            count,
            FSPI.MTBUF.GLC,
-           FSPI.MTBUF.SLC)
+           FSPI.MTBUF.SLC,
+           PV^.num_records)
  );
 
 end;

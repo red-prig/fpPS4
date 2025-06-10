@@ -292,7 +292,7 @@ begin
   lc.dst:=get_vdst8(FSPI.MUBUF.VDATA+i);
   if (lc.dst=nil) then Assert(false);
 
-  //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+  //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
   Case info.dsel[i] of
    0:begin //0
       make_load_zero(lc);

@@ -106,21 +106,22 @@ begin
                  PV^.nfmt,
                  count,
                  FSPI.MUBUF.GLC,
-                 FSPI.MUBUF.SLC);
+                 FSPI.MUBUF.SLC,
+                 PV^.num_records);
 
   elem_res:=info.GetResultType;
   elem_vec:=elem_res.AsVector(info.GetElemCount);
 
   rsl:=AddVertLayout(grp,elem_vec);
 
-  elem_count:=GetElemCount(PV^.dfmt);
+  elem_count:=info.GetElemCount;
 
   For i:=0 to count-1 do
   begin
    dst:=get_vdst8(FSPI.MUBUF.VDATA+i);
    if (dst=nil) then Assert(false);
 
-   //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+   //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
    Case info.dsel[i] of
     0:begin //0
        make_load_zero(dst,elem_res);
@@ -196,7 +197,8 @@ begin
            PV^.nfmt,
            count,
            FSPI.MUBUF.GLC,
-           FSPI.MUBUF.SLC)
+           FSPI.MUBUF.SLC,
+           PV^.num_records)
  );
 
 end;
@@ -234,7 +236,8 @@ begin
            PV^.nfmt,
            count,
            FSPI.MUBUF.GLC,
-           FSPI.MUBUF.SLC)
+           FSPI.MUBUF.SLC,
+           PV^.num_records)
  );
 
 end;
@@ -266,7 +269,8 @@ begin
            BUF_NUM_FORMAT_FLOAT,
            count,
            FSPI.MUBUF.GLC,
-           FSPI.MUBUF.SLC)
+           FSPI.MUBUF.SLC,
+           PV^.num_records)
  );
 
 end;
@@ -298,7 +302,8 @@ begin
            BUF_NUM_FORMAT_FLOAT,
            count,
            FSPI.MUBUF.GLC,
-           FSPI.MUBUF.SLC)
+           FSPI.MUBUF.SLC,
+           PV^.num_records)
  );
 
 end;

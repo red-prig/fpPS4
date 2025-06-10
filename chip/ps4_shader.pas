@@ -246,7 +246,7 @@ type
     num_records:bit32; //n units of 'stride'
            //32
       dst_sel_x:bit3;  //Destination channel select:
-      dst_sel_y:bit3;  //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+      dst_sel_y:bit3;  //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
       dst_sel_z:bit3;
       dst_sel_w:bit3;
            nfmt:bit3;  //numeric data type (float, int, ...)
@@ -277,7 +277,7 @@ type
   interlaced:bit1;  //texture is interlaced
         //32
    dst_sel_x:bit3;  //Destination channel select:
-   dst_sel_y:bit3;  //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+   dst_sel_y:bit3;  //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
    dst_sel_z:bit3;
    dst_sel_w:bit3;
   base_level:bit4;  //first mip level (0..15)
@@ -305,7 +305,7 @@ type
   interlaced:bit1;  //texture is interlaced
         //32
    dst_sel_x:bit3;  //Destination channel select:
-   dst_sel_y:bit3;  //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+   dst_sel_y:bit3;  //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
    dst_sel_z:bit3;
    dst_sel_w:bit3;
   base_level:bit4;  //first mip level (0..15)

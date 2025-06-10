@@ -911,6 +911,11 @@ begin
  //pList.OpSource(Space(deep+1)+name+':'+HexLen(P,len));
 end;
 
+function IsInvalidVSharp(dfmt,num_records:DWORD):Boolean; inline;
+begin
+ Result:=(dfmt=0) or (num_records=0);
+end;
+
 procedure TsrDataLayoutList.AllocSourceExtension2;
 var
  Writer:TseWriter;
@@ -962,14 +967,21 @@ begin
      begin
       if (Writer.node.RINF) then
       begin
-       Writer.StrOpt('RINF','1');
+       Writer.IntOpt('RINF',1);
+       if IsInvalidVSharp(dfmt,num_records) then
+       begin
+        Writer.IntOpt('INVL',1);
+       end;
        Writer.IntOpt('DFMT',dfmt);
        Writer.IntOpt('NFMT',nfmt);
        Writer.IntOpt('STRD',stride);
        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
       end else
       begin
-       Writer.IntOpt('DFMT',dfmt); //0->invalid
+       if IsInvalidVSharp(dfmt,num_records) then
+       begin
+        Writer.IntOpt('INVL',1);
+       end;
       end;
      end;
 

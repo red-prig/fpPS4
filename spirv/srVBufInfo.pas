@@ -12,7 +12,7 @@ uses
 
 type
  //Destination channel select:
- //0=0, 1=1, 4=R, 5=G, 6=B, 7=A
+ //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
  Tdst_sel=array[0..3] of Byte;
 
  TBuf_info=packed object
@@ -40,10 +40,9 @@ type
 const
  dst_sel_identity:Tdst_sel=(4,5,6,7);
 
-function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte):TBuf_info; inline;
+function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte;num_records:DWORD):TBuf_info; inline;
 function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
 function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
-function GetElemCount(DFMT:Byte):Byte; inline;
 
 implementation
 
@@ -102,7 +101,7 @@ const
   16, //BUF_DATA_FORMAT_32_32_32_32  //shr 4
   0); //BUF_DATA_FORMAT_RESERVED
 
-function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte):TBuf_info; inline;
+function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte;num_records:DWORD):TBuf_info; inline;
 begin
  Result.grp  :=grp;
  Result.dsel :=dsel;
@@ -111,6 +110,12 @@ begin
  Result.count:=count;
  Result.GLC  :=GLC;
  Result.SLC  :=SLC;
+ //
+ if (num_records=0) then
+ begin
+  //force to invalid
+  Result.DFMT:=0;
+ end;
 end;
 
 function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
@@ -184,11 +189,6 @@ begin
     end;
   else;
  end;
-end;
-
-function GetElemCount(DFMT:Byte):Byte; inline;
-begin
- Result:=DFMT_ELEM_COUNT[DFMT];
 end;
 
 function TBuf_info.GetElemCount:Byte;
