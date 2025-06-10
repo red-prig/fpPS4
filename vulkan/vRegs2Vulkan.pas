@@ -1044,6 +1044,7 @@ begin
 
   Result.FImageInfo.cformat           :=VK_FORMAT_R8G8B8A8_UNORM;
   Result.FImageInfo.params.itype      :=ord(VK_IMAGE_TYPE_2D);
+  Result.FImageInfo.params.invalid    :=1;
   Result.FImageInfo.params.width      :=1;
   Result.FImageInfo.params.height     :=1;
   Result.FImageInfo.params.depth      :=1;
@@ -1449,7 +1450,7 @@ begin
   if (RENDER_CONTROL.DEPTH_CLEAR_ENABLE<>0) then
   begin
     //clear
-   Result.DEPTH_USAGE:=TM_WRITE or TM_CLEAR;
+   Result.DEPTH_USAGE:=TM_WRITE or TM_CLEAR or TM_READ;
   end else
   begin
    //read before
@@ -1467,7 +1468,7 @@ begin
   if (RENDER_CONTROL.STENCIL_CLEAR_ENABLE<>0) then
   begin
     //clear
-   Result.STENCIL_USAGE:=TM_WRITE or TM_CLEAR;
+   Result.STENCIL_USAGE:=TM_WRITE or TM_CLEAR or TM_READ;
   end else
   begin
    //read before

@@ -1680,6 +1680,9 @@ var
 
  color_instance:array[0..7] of p_pm4_resource_instance;
 
+ flag:Integer;
+ img_usage:s_image_usage;
+
  meta_instance:p_pm4_resource_instance;
  d_instance:p_pm4_resource_instance;
  s_instance:p_pm4_resource_instance;
@@ -1739,16 +1742,31 @@ begin
 
    end;
 
-   color_instance[i]:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
+   if (ctx.rt_info^.RT_INFO[i].FImageInfo.params.invalid<>0) then
+   begin
+    //skip
+    color_instance[i]:=nil;
+   end else
+   begin
+    color_instance[i]:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
 
-   Assert(color_instance[i]<>nil);
+    Assert(color_instance[i]<>nil);
+   end;
+
+   //TODO: fixup cformat
+
+   flag:=0;
+   if (color_instance[i]<>nil) then
+   begin
+    flag:=GetMixedFlag(color_instance[i]^.curr);
+   end;
 
    //TODO: fixup cformat
 
    RP_KEY.AddColorAt(ctx.rt_info^.RT_INFO[i].attachment,
                      ctx.rt_info^.RT_INFO[i].FImageInfo.cformat,
                      ctx.rt_info^.RT_INFO[i].IMAGE_USAGE or
-                     GetMixedFlag(color_instance[i]^.curr),
+                     flag,
                      ctx.rt_info^.RT_INFO[i].FImageInfo.params.samples);
 
   end;
@@ -1904,9 +1922,16 @@ begin
    begin
     repeat
 
+     img_usage:=[];
+     if (color_instance[i]<>nil) then
+     begin
+      {[iu_attachment]}
+      img_usage:=color_instance[i]^.curr.img_usage ;
+     end;
+
      ri:=FetchImage(ctx.Cmd,
                     ctx.rt_info^.RT_INFO[i].FImageInfo,
-                    {[iu_attachment]}  color_instance[i]^.curr.img_usage
+                    img_usage
                     );
 
      if (ri=nil) then
@@ -1920,18 +1945,24 @@ begin
 
     ctx.RefToParent(ri);
 
-    color_instance[i]^.resource^.rimage:=ri;
+    if (color_instance[i]<>nil) then
+    begin
+     color_instance[i]^.resource^.rimage:=ri;
+    end;
    end;
 
    pm4_load_from(ctx.Cmd,ri,ctx.rt_info^.RT_INFO[i].IMAGE_USAGE);
 
    iv:=ri.FetchView(ctx.Cmd,ctx.rt_info^.RT_INFO[i].FImageView,iu_attachment);
 
-   ri.PushBarrier(ctx.Cmd,
-                  GetAccessMaskImg(color_instance[i]^.curr),
-                  GetImageLayout(color_instance[i]^.curr),
-                  ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
-                  ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+   if (color_instance[i]<>nil) then
+   begin
+    ri.PushBarrier(ctx.Cmd,
+                   GetAccessMaskImg(color_instance[i]^.curr),
+                   GetImageLayout(color_instance[i]^.curr),
+                   ord(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) or
+                   ord(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) );
+   end;
 
    //
 
@@ -2545,7 +2576,7 @@ begin
 
 end;
 
-procedure pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
+function pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect):Boolean;
 var
  dst:PGPU_USERDATA;
 
@@ -2559,6 +2590,7 @@ var
  pa:TPushConstAllocator;
  pp:PPushConstAllocator;
 begin
+ Result:=False;
  ////////
 
  //hack
@@ -2608,6 +2640,7 @@ begin
 
  Bind_Pushs(ctx,CP_KEY.FShaderGroup,dst);
 
+ Result:=True;
 end;
 
 procedure pm4_DispatchDirect(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect);
@@ -2625,7 +2658,7 @@ begin
  //
  ctx.Cmd.EndRenderPass;
 
- pm4_DispatchPrepare(ctx,node);
+ if not pm4_DispatchPrepare(ctx,node) then Exit;
 
  Writeln('DispatchDirect(',node^.DIM_X,',',node^.DIM_Y,',',node^.DIM_Z,')');
 
