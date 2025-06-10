@@ -21,6 +21,7 @@ type
   procedure emit_V_MOV_B32;
   procedure emit_V_READFIRSTLANE_B32;
   procedure emit_V_MOVRELS_B32;
+  procedure emit_V_MOVRELD_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure emit_V_CVT_F16_F32;
   procedure emit_V_CVT_F32_F16;
@@ -98,8 +99,9 @@ begin
   i:=idx.AsConst.AsInt32;
 
   dst:=get_vdst8  (FSPI.VOP1.VDST);
-  src:=fetch_ssrc9(FSPI.VOP1.SRC0+i,dtUnknow);
+  src:=fetch_ssrc9(FSPI.VOP1.SRC0+i,dtUnknow); //vgpr_index_of(vsrc) + M0.u
   MakeCopy(dst,src);
+
  end else
  begin
 
@@ -111,9 +113,10 @@ begin
 
   iType:=TypeList.Fetch(dtFloat32);
 
+  //load
   for i:=vmin to vmax-1 do
   begin
-   idx:=self.NewImm_i(dtInt32,(i-vmin));
+   idx:=NewImm_i(dtInt32,(i-vmin));
 
    pChain:=OpAccessChainTo(iType,priv.pVar,idx);
 
@@ -121,6 +124,7 @@ begin
 
    OpStore(line,pChain,src);
   end;
+  //load
 
   idx:=MakeRead(get_m0,dtInt32);
 
@@ -131,6 +135,82 @@ begin
   dst:=get_vdst8(FSPI.VOP1.VDST);
 
   MakeCopy(dst,src);
+
+ end;
+
+end;
+
+procedure TEmit_VOP1.emit_V_MOVRELD_B32; //VGPR[vgpr_index_of(vdst0) + M0.u] = vsrc OOB:discard
+Var
+ i,vmin,vmax:WORD;
+
+ priv:TsrPrivate;
+ iType:TsrType;
+ idx:TsrRegNode;
+ pChain:TsrNode;
+
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+
+ pCache:array[0..255] of TsrNode;
+begin
+ idx:=MakeRead(get_m0,dtUnknow);
+
+ idx:=RegDown(idx);
+
+ if idx.is_const then
+ begin
+  i:=idx.AsConst.AsInt32;
+
+  dst:=get_vdst8  (FSPI.VOP1.VDST+i); //vgpr_index_of(vdst0) + M0.u
+  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtUnknow);
+  MakeCopy(dst,src);
+
+ end else
+ begin
+
+  vmin:=FSPI.VOP1.VDST;
+  vmax:=FVGPRS;
+  Assert(vmin<vmax);
+
+  priv :=PrivateList.FetchArray(dtFloat32,vmax-vmin);
+
+  iType:=TypeList.Fetch(dtFloat32);
+
+  //load
+  for i:=vmin to vmax-1 do
+  begin
+   idx:=NewImm_i(dtInt32,(i-vmin));
+
+   pChain:=OpAccessChainTo(iType,priv.pVar,idx);
+
+   pCache[i]:=pChain;
+
+   src:=fetch_vsrc8(i,dtFloat32);
+
+   OpStore(line,pChain,src);
+  end;
+  //load
+
+  idx:=MakeRead(get_m0,dtInt32);
+
+  pChain:=OpAccessChainTo(iType,priv.pVar,idx);
+
+  src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+  OpStore(line,pChain,src);
+
+  //save
+  for i:=vmin to vmax-1 do
+  begin
+   pChain:=pCache[i];
+
+   src:=OpLoadTo(iType,pChain);
+
+   dst:=get_vdst8(i);
+
+   MakeCopy(dst,src);
+  end;
+  //save
 
  end;
 
@@ -461,6 +541,7 @@ begin
   V_BFREV_B32: emit_V_BFREV_B32;
 
   V_MOVRELS_B32: emit_V_MOVRELS_B32;
+  V_MOVRELD_B32: emit_V_MOVRELD_B32;
 
   else
    Assert(false,'VOP1?'+IntToStr(FSPI.VOP1.OP)+' '+get_str_spi(FSPI));
