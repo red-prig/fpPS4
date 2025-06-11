@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ LFQueue,
  mqueue,
  vmparam,
  vm_mmap,
@@ -107,6 +108,17 @@ const
  V_PROP_BEST_FIT       =$80000000;
 
 type
+ PQNode=^TQNode;
+ TQNode=object
+  next_:PQNode;
+ end;
+
+ PQUnmapNode=^TQUnmapNode;
+ TQUnmapNode=object(TQNode)
+  start:QWORD;
+  __end:QWORD;
+ end;
+
  TvMemManager=class
   public
    FProperties:TVkPhysicalDeviceMemoryProperties;
@@ -124,6 +136,7 @@ type
 
    FHosts_count:Integer;
 
+   FUnmapQueue:TIntrusiveMPSCQueue;
   public
 
    Constructor Create;
@@ -153,6 +166,9 @@ type
    Function    _shrink_dev_block(max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
    Function    _shrink_host_map (max:TVkDeviceSize;heap_index:Byte):TVkDeviceSize;
    Function    _shrink(max:TVkDeviceSize;mtindex:Byte;mode:Byte):TVkDeviceSize;
+
+   procedure   _unmap_host_queue;
+   procedure   _unmap_host(start,__end:QWORD);
 
   public
 
@@ -1204,6 +1220,7 @@ begin
 
  TAILQ_INIT(@FDevs );
  TAILQ_INIT(@FHosts);
+ FUnmapQueue.Create;
 end;
 
 function TvMemManager.findMemoryType(Filter:TVkUInt32;prop:TVkMemoryPropertyFlags;start:Integer):Integer;
@@ -1567,6 +1584,7 @@ begin
  save_node:=nil;
  //
  rw_wlock(global_mem_lock);
+ _unmap_host_queue;
  //
 
  _repeat:
@@ -1695,6 +1713,7 @@ begin
  if (P.FMemory.ClassType<>TvDeviceMemory) then Exit;
  //
  rw_wlock(global_mem_lock);
+ _unmap_host_queue;
  //
  if (gpu_map_remove(@P.FMemory.FMap,P.FOffset)=GPU_SUCCESS) then
  begin
@@ -1838,13 +1857,39 @@ end;
 
 procedure TvMemManager.unmap_host(start,__end:QWORD);
 var
- node,next:TvHostMemory;
+ node:PQUnmapNode;
 begin
  if (start=__end) then Exit;
 
- //
- rw_wlock(global_mem_lock);
- //
+ node:=AllocMem(SizeOf(TQUnmapNode));
+ node^.start:=start;
+ node^.__end:=__end;
+
+ FUnmapQueue.Push(node);
+end;
+
+procedure TvMemManager._unmap_host_queue;
+var
+ node:PQUnmapNode;
+ start,__end:QWORD;
+begin
+
+ node:=nil;
+ while FUnmapQueue.Pop(node) do
+ begin
+  start:=node^.start;
+  __end:=node^.__end;
+  FreeMem(node);
+
+  _unmap_host(start,__end);
+ end;
+
+end;
+
+procedure TvMemManager._unmap_host(start,__end:QWORD);
+var
+ node,next:TvHostMemory;
+begin
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
  while (node<>nil) do
@@ -1861,8 +1906,6 @@ begin
   node:=next;
  end;
 
- //
- rw_wunlock(global_mem_lock);
 end;
 
 procedure _print_dmem_fd; external;
@@ -1891,6 +1934,7 @@ begin
  F__End:=Min(F__End,VM_MAX_GPU_ADDRESS);
  //
  rw_wlock(global_mem_lock);
+ _unmap_host_queue;
  //
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
@@ -2017,6 +2061,7 @@ begin
  if (Self=nil) then Exit;
 
  rw_wlock(global_mem_lock);
+ _unmap_host_queue;
  //
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
