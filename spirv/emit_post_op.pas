@@ -6,6 +6,7 @@ interface
 
 uses
   sysutils,
+  math,
   bittype,
   Half16,
   spirv,
@@ -1368,6 +1369,8 @@ var
  src:array[0..1] of TsrRegNode;
  pCon:array[0..1] of TsrConst;
 
+ s:Single;
+
  procedure _SetConst_s(dtype:TsrDataType;value:Single);
  begin
   Assert(dtype=dtFloat32);
@@ -1396,7 +1399,9 @@ begin
   Case src[0].dtype of
    dtFloat32:
      begin
-      _SetConst_s(dst.dtype,pCon[0].AsFloat32/pCon[1].AsFloat32);
+      s:=pCon[1].AsFloat32;
+      if IsZero(s) or IsNan(s) or IsInfinite(s) then Exit(0);
+      _SetConst_s(dst.dtype,pCon[0].AsFloat32/s);
      end;
    else;
   end;

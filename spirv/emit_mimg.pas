@@ -1251,9 +1251,13 @@ begin
  pLayout_Sgrp:=nil;
  pLayout_Tgrp:=nil;
 
+ Sgrp:=nil;
+ Tgrp:=nil;
+
  Case FSPI.MIMG.OP of
   IMAGE_SAMPLE ..IMAGE_SAMPLE_C_LZ_O,  //sampled
-  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O: //sampled gather
+  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O, //sampled gather
+  IMAGE_GET_LOD:
     begin
      if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
 

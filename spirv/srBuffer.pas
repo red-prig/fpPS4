@@ -169,6 +169,9 @@ type
   procedure AllocName;
  end;
 
+Const
+ MAX_BUF_SIZE=QWORD(High(DWORD)+1);
+
 operator := (i:TObject):TsrField; inline;
 
 implementation
@@ -278,7 +281,7 @@ begin
   //update only struct
   if (node.Fdtype<>dtTypeStruct) then Exit;
   //dont clear max size
-  if (node.FFSize=High(PtrUint)) then Exit;
+  if (node.FFSize=MAX_BUF_SIZE) then Exit;
   //
   node.FFSize:=0;
   //
@@ -519,13 +522,13 @@ begin
  end;
 
  //find intersec
- node:=FindIntersect(_offset,High(PtrUint)-offset);
+ node:=FindIntersect(_offset,MAX_BUF_SIZE-offset);
 
  if (node=nil) then
  begin
   //new
   node:=Fetch(_offset);
-  node.FFSize:=High(PtrUint); //fixed size
+  node.FFSize:=MAX_BUF_SIZE; //fixed size
   node.stride:=_stride;
   node.count :=node.FFSize div _stride;
   node.Fdtype :=dtTypeRuntimeArray;
@@ -617,7 +620,7 @@ begin
  if (Fdtype=dtTypeRuntimeArray) then
  begin
   //runtame array
-  FFSize:=High(Ptruint);
+  FFSize:=MAX_BUF_SIZE;
  end else
  begin
   //struct
@@ -626,7 +629,7 @@ begin
   begin
    FFSize:=node.size;
    //check max
-   if (FFSize=High(PtrUint)) then Exit;
+   if (FFSize=MAX_BUF_SIZE) then Exit;
    FFSize:=node.offset+FFSize;
   end;
  end;
@@ -1178,7 +1181,7 @@ begin
   Writer.Header(GetTypeStr);
   //
   Writer.IntOpt('BND',FBinding);
-  if (GetSize<>High(PtrUint)) then
+  if (GetSize<>MAX_BUF_SIZE) then
   begin
    Writer.HexOpt('LEN',GetSize);
   end;

@@ -81,8 +81,8 @@ type
   function  FetchPointer(child:TsrType;storage_class:DWORD):TsrType;
   function  FetchFunction(ret:TsrType):TsrType;
   function  FetchFunction(copy:Boolean;count:Byte;pData:PPsrType):TsrType;
-  function  FetchStruct (count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
-  function  InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
+  function  FetchStruct (count:Word;pData:PPsrType;copy:Boolean;_size:QWORD):TsrType;
+  function  InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:QWORD):TsrType;
   function  FetchArray(child:TsrType;array_count:DWORD):TsrType;
   function  FetchRuntimeArray(child:TsrType):TsrType;
   function  FetchImage(child:TsrType;image_info:TsrTypeImageInfo):TsrType;
@@ -666,7 +666,7 @@ begin
  Result:=_Fetch(@key,copy);
 end;
 
-function TsrTypeList.FetchStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
+function TsrTypeList.FetchStruct(count:Word;pData:PPsrType;copy:Boolean;_size:QWORD):TsrType;
 var
  key:TsrTypeKey;
 begin
@@ -684,7 +684,7 @@ begin
  Result:=_Fetch(@key,copy);
 end;
 
-function TsrTypeList.InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:DWORD):TsrType;
+function TsrTypeList.InsertStruct(count:Word;pData:PPsrType;copy:Boolean;_size:QWORD):TsrType;
 var
  key:TsrTypeKey;
 begin
