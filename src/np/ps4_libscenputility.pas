@@ -44,6 +44,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpWordFilterCreateTitleCtx(selfNpId:PSceNpId):Integer;
+begin
+ Result:=2;
+end;
+
 function Load_libSceNpUtility(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -56,6 +61,7 @@ begin
  lib.set_proc($8E4B70C37C895E77,@ps4_sceNpBandwidthTestInitStart);
  lib.set_proc($05821918A9BA6CEE,@ps4_sceNpBandwidthTestGetStatus);
  ///lib.set_proc($E7262311D778B7C6,@ps4_sceNpSignalingCreateContext);
+ lib.set_proc($AFD0602343DF2598,@ps4_sceNpWordFilterCreateTitleCtx);
 end;
 
 var
