@@ -47,21 +47,33 @@ var
 begin
  tmp:=desc;
 
- tmp.mem_reg.opt   :=tmp.mem_reg.opt+[verif_vex_len,verif_rexw];
- tmp.mem_reg.vx_len:=ctx.dis.Vex.Length;
- tmp.mem_reg.rexw  :=rexW in ctx.dis.Flags;
+ if not (not_impl in tmp.mem_reg.opt) then
+ begin
+  tmp.mem_reg.opt   :=tmp.mem_reg.opt+[verif_vex_len,verif_rexw];
+  tmp.mem_reg.vx_len:=ctx.dis.Vex.Length;
+  tmp.mem_reg.rexw  :=rexW in ctx.dis.Flags;
+ end;
 
- tmp.reg_mem.opt   :=tmp.reg_mem.opt+[verif_vex_len,verif_rexw];
- tmp.reg_mem.vx_len:=ctx.dis.Vex.Length;
- tmp.reg_mem.rexw  :=rexW in ctx.dis.Flags;
+ if not (not_impl in tmp.reg_mem.opt) then
+ begin
+  tmp.reg_mem.opt   :=tmp.reg_mem.opt+[verif_vex_len,verif_rexw];
+  tmp.reg_mem.vx_len:=ctx.dis.Vex.Length;
+  tmp.reg_mem.rexw  :=rexW in ctx.dis.Flags;
+ end;
 
- tmp.reg_imm.opt   :=tmp.reg_imm.opt+[verif_vex_len,verif_rexw];
- tmp.reg_imm.vx_len:=ctx.dis.Vex.Length;
- tmp.reg_imm.rexw  :=rexW in ctx.dis.Flags;
+ if not (not_impl in tmp.reg_imm.opt) then
+ begin
+  tmp.reg_imm.opt   :=tmp.reg_imm.opt+[verif_vex_len,verif_rexw];
+  tmp.reg_imm.vx_len:=ctx.dis.Vex.Length;
+  tmp.reg_imm.rexw  :=rexW in ctx.dis.Flags;
+ end;
 
- tmp.reg_im8.opt   :=tmp.reg_im8.opt+[verif_vex_len,verif_rexw];
- tmp.reg_im8.vx_len:=ctx.dis.Vex.Length;
- tmp.reg_im8.rexw  :=rexW in ctx.dis.Flags;
+ if not (not_impl in tmp.reg_im8.opt) then
+ begin
+  tmp.reg_im8.opt   :=tmp.reg_im8.opt+[verif_vex_len,verif_rexw];
+  tmp.reg_im8.vx_len:=ctx.dis.Vex.Length;
+  tmp.reg_im8.rexw  :=rexW in ctx.dis.Flags;
+ end;
 
  kern_jit_ctx.op_emit_avx2(ctx,tmp);
 end;
@@ -264,6 +276,7 @@ begin
  tmp.mem_reg.simdop :=SCODES[ctx.dis.SimdOpcode];
  tmp.mem_reg.mm     :=ctx.dis.mm;
  tmp.mem_reg.vw_mode:=get_vw_mode(ctx);
+ tmp.mem_reg.vl_mode:=get_vl_mode(ctx);
  tmp.hint:=hint;
  //
  op_emit_avx2(ctx,tmp);
@@ -286,6 +299,7 @@ begin
  tmp.reg_mem.simdop :=SCODES[ctx.dis.SimdOpcode];
  tmp.reg_mem.mm     :=ctx.dis.mm;
  tmp.reg_mem.vw_mode:=get_vw_mode(ctx);
+ tmp.reg_mem.vl_mode:=get_vl_mode(ctx);
  tmp.hint:=hint;
  //
  op_emit_avx2(ctx,tmp);
@@ -348,6 +362,7 @@ begin
   tmp.simdop :=SCODES[ctx.dis.SimdOpcode];
   tmp.mm     :=ctx.dis.mm;
   tmp.vw_mode:=get_vw_mode(ctx);
+  tmp.vl_mode:=get_vl_mode(ctx);
   //
   op_emit_avx2_rr(ctx,tmp);
  end else
