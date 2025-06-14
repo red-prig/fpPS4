@@ -1,11 +1,12 @@
 unit ps4_libSceNpParty;
 
-{$mode ObjFPC}{$H+}
+{$mode objfpc}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
- ps4_program,
+ subr_dynlib,
  ps4_libSceNpCommon;
 
 const
@@ -65,16 +66,16 @@ type
  SceNpPartyBinaryMessageEventHandler=procedure(
                                         event:Word;
                                         const data:Pointer;
-                                        userdata:Pointer); SysV_ABI_CDecl;
+                                        userdata:Pointer);
 
  SceNpPartyRoomEventHandler=procedure(
                                eventType:Word;
                                const data:Pointer;
-                               userdata:Pointer); SysV_ABI_CDecl;
+                               userdata:Pointer);
 
  SceNpPartyVoiceEventHandler=procedure(
                                const memberVoiceInfo:SceNpPartyMemberVoiceInfo;
-                               userdata:Pointer); SysV_ABI_CDecl;
+                               userdata:Pointer);
 
  pSceNpPartyEventHandlers=^SceNpPartyEventHandlers;
  SceNpPartyEventHandlers=packed record
@@ -88,62 +89,63 @@ type
 
 implementation
 
-function ps4_sceNpPartyInitialize(const param:pSceNpPartyInitializeParam):Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyInitialize(const param:pSceNpPartyInitializeParam):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpPartyRegisterHandler(const handlers:pSceNpPartyEventHandlers;userdata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyRegisterHandler(const handlers:pSceNpPartyEventHandlers;userdata:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpPartyRegisterHandlerA(const handlers:pSceNpPartyEventHandlers;userdata:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyRegisterHandlerA(const handlers:pSceNpPartyEventHandlers;userdata:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpPartyGetState(const state:pSceNpPartyState):Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyGetState(const state:pSceNpPartyState):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpPartyGetMembers(const memberList:pSceNpPartyMemberList):Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyGetMembers(const memberList:pSceNpPartyMemberList):Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceNpPartyGetMemberInfo(const memberId:SceNpPartyRoomMemberId;
-                                     const memberInfo:pSceNpPartyMemberInfo):Integer; SysV_ABI_CDecl;
+                                     const memberInfo:pSceNpPartyMemberInfo):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpPartyCheckCallback():Integer; SysV_ABI_CDecl;
+function ps4_sceNpPartyCheckCallback():Integer;
 begin
  Result:=0;
 end;
 
-function Load_libSceNpParty(Const name:RawByteString):TElf_node;
+function Load_libSceNpParty(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceNpParty');
 
- lib:=Result._add_lib('libSceNpParty');
- lib^.set_proc($9616024D098191DB,@ps4_sceNpPartyInitialize);
- lib^.set_proc($900F3C81BBFBD5AA,@ps4_sceNpPartyRegisterHandler);
- lib^.set_proc($FAFE1F5473301567,@ps4_sceNpPartyRegisterHandlerA);
- lib^.set_proc($684CCA749CC04D9D,@ps4_sceNpPartyGetState);
- lib^.set_proc($4F650E29FD3464DD,@ps4_sceNpPartyGetMembers);
- lib^.set_proc($1753FEFF0A71428C,@ps4_sceNpPartyGetMemberInfo);
- lib^.set_proc($DDEE24DA6CCB9267,@ps4_sceNpPartyCheckCallback);
-
+ lib:=Result^.add_lib('libSceNpParty');
+ lib.set_proc($9616024D098191DB,@ps4_sceNpPartyInitialize);
+ lib.set_proc($900F3C81BBFBD5AA,@ps4_sceNpPartyRegisterHandler);
+ lib.set_proc($FAFE1F5473301567,@ps4_sceNpPartyRegisterHandlerA);
+ lib.set_proc($684CCA749CC04D9D,@ps4_sceNpPartyGetState);
+ lib.set_proc($4F650E29FD3464DD,@ps4_sceNpPartyGetMembers);
+ lib.set_proc($1753FEFF0A71428C,@ps4_sceNpPartyGetMemberInfo);
+ lib.set_proc($DDEE24DA6CCB9267,@ps4_sceNpPartyCheckCallback);
 end;
+
+var
+ stub:t_int_file;
 
 initialization
- ps4_app.RegistredPreLoad('libSceNpParty.prx',@Load_libSceNpParty);
+ RegisteredInternalFile(stub,'libSceNpParty.prx',@Load_libSceNpParty);
 
 end.
 

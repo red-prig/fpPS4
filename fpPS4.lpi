@@ -1599,6 +1599,11 @@
         <Filename Value="sys\dev\dev_sce_zlib.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\np\ps4_libscenpparty.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceNpParty"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
