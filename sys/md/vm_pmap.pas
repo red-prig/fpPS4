@@ -1594,17 +1594,27 @@ procedure pmap_madvise(pmap  :pmap_t;
                        start :vm_offset_t;
                        __end :vm_offset_t;
                        advise:Integer);
+{
 label
  _default;
 var
  lock:Pointer;
 
  r:Integer;
+}
 begin
  if (p_print_pmap) then
  begin
   Writeln('pmap_madv_free:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
  end;
+
+ {
+ In freebsd the MADV_FREE status is reset when data is written to the page,
+  so in Windows it is easier to do nothing than to protect the page from being
+  written and then restore its normal status
+ }
+
+{
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1651,6 +1661,8 @@ begin
  end;
 
  pmap_unlock(pmap,lock);
+}
+
 end;
 
 procedure unmap_dmem_gc(start,__end:QWORD); external;

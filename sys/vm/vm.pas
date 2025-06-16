@@ -115,7 +115,7 @@ const
  MADV_SEQUENTIAL=_MADV_SEQUENTIAL;
  MADV_WILLNEED  =_MADV_WILLNEED;
  MADV_DONTNEED  =_MADV_DONTNEED;
- MADV_FREE      = 5; // dont need these pages, and junk contents
+ MADV_FREE      = 5; // dont need these pages, and junk contents (until the page is modified again)
  MADV_NOSYNC    = 6; // try to avoid flushes to physical media
  MADV_AUTOSYNC  = 7; // revert to default flushing strategy
  MADV_NOCORE    = 8; // do not include these pages in a core file
