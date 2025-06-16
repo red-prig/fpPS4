@@ -103,6 +103,9 @@ const
  SF_NOUNLINK =$00100000; // file may not be removed or renamed
  SF_SNAPSHOT =$00200000; // snapshot inode
 
+           //  $8000000  //PFS???
+           // $10000000  //PFS???
+
 //Shorthand abbreviations of above.
  OPAQUE   =(UF_OPAQUE);
  APPEND   =(UF_APPEND or SF_APPEND);

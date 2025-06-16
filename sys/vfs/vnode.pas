@@ -269,21 +269,21 @@ type
   va_nlink    :SmallInt; // number of references to file
   va_uid      :Integer;  // owner user id
   va_gid      :Integer;  // owner group id
-  va_fsid     :Int64;    // filesystem id
+  va_fsid     :Integer;  // filesystem id
   va_fileid   :Int64;    // file id
   va_size     :Int64;    // file size in bytes
-  va_blocksize:Integer;  // blocksize preferred for i/o
+  va_blocksize:Int64;    // blocksize preferred for i/o
   va_atime    :timespec; // time of last access
   va_mtime    :timespec; // time of last modification
   va_ctime    :timespec; // time file changed
   va_birthtime:timespec; // time file created
-  va_gen      :Integer;  // generation number of file
-  va_flags    :Integer;  // flags defined for file
+  va_gen      :Int64;    // generation number of file
+  va_flags    :Int64;    // flags defined for file
   va_rdev     :Integer;  // device the special file represents
   va_bytes    :Int64;    // bytes of disk space held by file
   va_filerev  :Int64;    // file modification number
   va_vaflags  :Integer;  // operations flags, see below
-  va_spare    :Integer;  // remain quad aligned
+  va_spare    :Int64;    // remain quad aligned
  end;
 
 const
