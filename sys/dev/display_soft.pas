@@ -325,9 +325,9 @@ var
  base:Pointer;
 begin
  mask:=QWORD(orig) and PAGE_MASK;
- size:=(size+mask+PAGE_MASK) and (not PAGE_MASK);
+ size:=(size+mask+PAGE_MASK) and QWORD(not PAGE_MASK);
 
- base:=vm_mmap.mirror_map(Pointer(QWORD(orig) and (not PAGE_MASK)),size);
+ base:=vm_mmap.mirror_map(Pointer(QWORD(orig) and QWORD(not PAGE_MASK)),size);
 
  Result.orig:=orig;
  Result.mirr:=base+mask;

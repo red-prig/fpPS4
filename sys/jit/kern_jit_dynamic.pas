@@ -206,7 +206,7 @@ procedure pick(var ctx:t_jit_context2;preload:Pointer); external name 'kern_jit_
 
 function scan_up_exc(addr:QWORD):QWORD;
 begin
- addr:=(addr+PAGE_MASK) and (not PAGE_MASK);
+ addr:=(addr+PAGE_MASK) and QWORD(not PAGE_MASK);
 
  while is_guest_addr(addr) do
  begin
@@ -224,7 +224,7 @@ end;
 
 function scan_dw_exc(addr:QWORD):QWORD;
 begin
- addr:=addr and (not PAGE_MASK);
+ addr:=addr and QWORD(not PAGE_MASK);
 
  while is_guest_addr(addr) do
  begin

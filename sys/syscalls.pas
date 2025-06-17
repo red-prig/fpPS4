@@ -205,6 +205,7 @@ function  evf_set(key:Integer;bitPattern:QWORD):Integer;
 function  evf_clear(key:Integer;bitPattern:QWORD):Integer;
 function  evf_cancel(key:Integer;setPattern:QWORD;pNumWait:PInteger):Integer;
 function  query_memory_protection(addr:Pointer;info:Pointer):Integer;
+function  batch_map(fd:Integer;flags:DWORD;entries:Pointer;numberOfEntries:Integer;numberOfEntriesOut:PInteger):Integer;
 function  osem_create(name:PChar;attr:DWORD;initCount,maxCount:Integer):Integer;
 function  osem_delete(key:Integer):Integer;
 function  __sys_osem_open(name:PChar):Integer;
@@ -1653,6 +1654,13 @@ end;
 function query_memory_protection(addr:Pointer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $547,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function batch_map(fd:Integer;flags:DWORD;entries:Pointer;numberOfEntries:Integer;numberOfEntriesOut:PInteger):Integer; assembler; nostackframe;
+asm
+ movq  $548,%rax
  call  fast_syscall
  jmp   cerror
 end;

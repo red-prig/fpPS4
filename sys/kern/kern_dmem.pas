@@ -44,26 +44,6 @@ type
   align:array[0..6] of Byte;
  end;
 
-const
- //SceKernelMapEntryOperation
- SCE_KERNEL_MAP_OP_MAP_DIRECT  =0;
- SCE_KERNEL_MAP_OP_UNMAP       =1;
- SCE_KERNEL_MAP_OP_PROTECT     =2;
- SCE_KERNEL_MAP_OP_MAP_FLEXIBLE=3;
- SCE_KERNEL_MAP_OP_TYPE_PROTECT=4;
-
-type
- pSceKernelBatchMapEntry=^SceKernelBatchMapEntry;
- SceKernelBatchMapEntry=packed record
-  start:Pointer;
-  offset:QWORD;
-  length:QWORD;
-  protection:Byte;
-  mtype:Byte;
-  pad1:Word;
-  operation:Integer;
- end;
-
 type
  p_dmem_obj=^t_dmem_obj;
  t_dmem_obj=record
@@ -156,9 +136,6 @@ begin
  rmap.tmap:=@vmap^.pmap^.tr_map;
 end;
 
-const
- default_pool_id=1;
-
 function sys_dmem_container(d_pool_id:Integer):Integer;
 var
  td:p_kthread;
@@ -166,7 +143,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- td^.td_retval[0]:=default_pool_id;
+ td^.td_retval[0]:=p_proc.p_pool_id;
  Result:=0;
 
  if (d_pool_id<>-1) then
@@ -244,7 +221,7 @@ begin
   Exit(EACCES);
  end;
 
- dmap:=dmem_maps[default_pool_id];
+ dmap:=dmem_maps[p_proc.p_pool_id];
 
  //entry->eflags = flags & 0x400000 | 0x20000 | 0x80000
  //0x400000 -> MAP_ENTRY_NO_COALESCE -> MAP_NO_COALESCE
@@ -404,7 +381,7 @@ begin
   Exit(Pointer(EPERM));
  end;
 
- if (default_pool_id<>1) then
+ if (p_proc.p_pool_id<>1) then
  begin
   Exit(Pointer(EOPNOTSUPP));
  end;
@@ -646,7 +623,7 @@ begin
     addr:=start;
    end;
 
-   ret:=dmem_map_get_mtype(dmem_maps[default_pool_id].dmem,
+   ret:=dmem_map_get_mtype(dmem_maps[p_proc.p_pool_id].dmem,
                            obj,
                            addr + (entry^.offset - start), //send not transformed offset
                            @d_start2,@d_end2,

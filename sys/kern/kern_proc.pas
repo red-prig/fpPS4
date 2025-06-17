@@ -23,46 +23,54 @@ type
   ar_args  :AnsiChar; // Arguments.
  end;
 
-var
- p_proc:record
-  p_mtx:mtx;
+type
+ t_proc=object
+  var
+   p_mtx:mtx;
 
-  p_pid:Integer;
+   p_pid:Integer;
 
-  p_flag :Integer;
-  p_osrel:Integer;
+   p_flag :Integer;
+   p_osrel:Integer;
 
-  p_sdk_version:Integer;
+   p_sdk_version:Integer;
 
-  p_sysent:p_sysentvec;
+   p_sysent:p_sysentvec;
 
-  p_libkernel_start_addr:Pointer;
-  p_libkernel___end_addr:Pointer;
+   p_libkernel_start_addr:Pointer;
+   p_libkernel___end_addr:Pointer;
 
-  p_ptc:Int64;
-  p_guest_ptc:PInt64;
+   p_ptc      :Int64;
+   p_guest_ptc:PInt64;
 
-  p_nsignals:Int64;
-  p_nvcsw   :Int64;
-  p_nivcsw  :Int64;
+   p_nsignals:Int64;
+   p_nvcsw   :Int64;
+   p_nivcsw  :Int64;
 
-  p_comm           :array[0..MAXCOMLEN] of AnsiChar;
-  p_prog_name      :array[0..1023] of AnsiChar;
-  p_randomized_path:array[0..7] of AnsiChar;
+   p_comm           :array[0..MAXCOMLEN] of AnsiChar;
+   p_prog_name      :array[0..1023] of AnsiChar;
+   p_randomized_path:array[0..7] of AnsiChar;
 
-  p_sigqueue       :sigqueue_t; //Sigs not delivered to a td.
-  p_pendingcnt     :Integer;    //how many signals are pending
+   p_sigqueue       :sigqueue_t; //Sigs not delivered to a td.
+   p_pendingcnt     :Integer;    //how many signals are pending
 
-  p_klist:t_knlist;
+   p_klist:t_knlist;
 
-  p_args:p_pargs;
+   p_args:p_pargs;
 
-  p_vmspace:Pointer;
+   p_vmspace:Pointer;
 
-  p_budget_ptype :Integer;
-  p_dmem_aliasing:Integer;
-  p_vm_container :Integer;
+   p_budget_ptype :Integer;
+   p_dmem_aliasing:Integer;
+   p_vm_container :Integer;
+
+  const
+   p_pool_id=1;
+
  end;
+
+var
+ p_proc:t_proc;
 
 function  pargs_alloc(len:Integer):p_pargs;
 procedure pargs_free(pa:p_pargs);
@@ -138,7 +146,7 @@ begin
 
  p_proc.p_randomized_path:='system';
 
- p_proc.p_ptc:=rdtsc();
+ p_proc.p_ptc      :=rdtsc();
  p_proc.p_guest_ptc:=nil;
 end;
 

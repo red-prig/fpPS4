@@ -2460,8 +2460,8 @@ begin
  end else
  if (p_proc.p_sdk_version < $1700000) then
  begin
-  p_start:=Pointer(QWORD(dst) and (not PAGE_MASK));
-  p___end:=Pointer((QWORD(dst)+size+PAGE_MASK) and (not PAGE_MASK));
+  p_start:=Pointer(QWORD(dst) and QWORD(not PAGE_MASK));
+  p___end:=Pointer((QWORD(dst)+size+PAGE_MASK) and QWORD(not PAGE_MASK));
 
   offset:=QWORD(dst) and PAGE_MASK;
   p_size:=QWORD(p___end)-QWORD(p_start);

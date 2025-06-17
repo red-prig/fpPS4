@@ -2799,7 +2799,7 @@ var
   ),
   (//[548]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_batch_map;
      sy_name:'sys_batch_map'
   ),
   (//[549]

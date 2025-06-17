@@ -139,12 +139,12 @@ end;
 
 function round_page(x:QWORD):QWORD; inline;
 begin
- Result:=(x+PAGE_MASK) and (not PAGE_MASK);
+ Result:=(x+PAGE_MASK) and QWORD(not PAGE_MASK);
 end;
 
 function trunc_page(x:QWORD):QWORD; inline;
 begin
- Result:=x and (not PAGE_MASK);
+ Result:=x and QWORD(not PAGE_MASK);
 end;
 
 function roundup(addr:QWORD;alignment:QWORD):QWORD; inline;

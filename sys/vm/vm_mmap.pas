@@ -36,6 +36,13 @@ function sys_mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
 function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
+
+function sys_batch_map(fd                :Integer;
+                       flags             :DWORD;
+                       entries           :Pointer;
+                       numberOfEntries   :Integer;
+                       numberOfEntriesOut:PInteger):Integer;
+
 function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
@@ -66,6 +73,7 @@ uses
  kern_proc,
  vmparam,
  vm_pmap,
+ kern_dmem,
  sys_resource,
  kern_resource,
  kern_mtx,
@@ -1098,17 +1106,16 @@ end;
 
 function sys_mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
 var
- size,pageoff:vm_size_t;
+ __end_u:QWORD;
+ __end_a:QWORD;
 begin
- size:=len;
 
- pageoff:=(vm_size_t(addr) and PAGE_MASK);
- addr:=addr-pageoff;
- size:=size+pageoff;
- size:=round_page(size);
+ __end_u:=QWORD(addr) + len;
+ __end_a:=(__end_u + PAGE_MASK) and QWORD(not PAGE_MASK);
 
- if (addr + size < addr) or
-    (DWORD(mtype) >= 11) or
+ if (__end_u < QWORD(addr)) or
+    (__end_a < __end_u) or
+    (DWORD(mtype) > 10) or
     ((prot and $c8) <> 0) then
  begin
   Exit(EINVAL);
@@ -1116,7 +1123,7 @@ begin
 
  prot:=((Byte(prot) shr 1) and 1) or Byte(prot);
 
- Result:=vm_map_type_protect(p_proc.p_vmspace, QWORD(addr), QWORD(addr) + size, mtype, prot);
+ Result:=vm_map_type_protect(p_proc.p_vmspace, QWORD(addr) and QWORD(not PAGE_MASK), __end_a, mtype, prot);
 
  case Result of
   KERN_SUCCESS           :Result:=0;
@@ -1253,6 +1260,205 @@ begin
    Result:=copyout(@data,info,SizeOf(t_query_memory_prot));
   end;
  end;
+end;
+
+const
+ SCE_KERNEL_MAP_OP_MAP_DIRECT  =0;
+ SCE_KERNEL_MAP_OP_UNMAP       =1;
+ SCE_KERNEL_MAP_OP_PROTECT     =2;
+ SCE_KERNEL_MAP_OP_MAP_FLEXIBLE=3;
+ SCE_KERNEL_MAP_OP_TYPE_PROTECT=4;
+
+type
+ PSceKernelBatchMapEntry=^SceKernelBatchMapEntry;
+ SceKernelBatchMapEntry=packed record
+  start     :Pointer;
+  offset    :QWORD;
+  length    :QWORD;
+  protection:Byte;
+  mtype     :Byte;
+  pad       :WORD;
+  operation :Integer;
+ end;
+ {$IF sizeof(SceKernelBatchMapEntry)<>32}{$STOP sizeof(SceKernelBatchMapEntry)<>32}{$ENDIF}
+
+function sys_batch_map(fd                :Integer;
+                       flags             :DWORD;
+                       entries           :Pointer;
+                       numberOfEntries   :Integer;
+                       numberOfEntriesOut:PInteger):Integer;
+var
+ i,num_out:Integer;
+
+ node:SceKernelBatchMapEntry;
+
+ __end:QWORD;
+begin
+ Result:=0;
+
+ if (numberOfEntries <= -1) then
+ begin
+  if (numberOfEntriesOut<>nil) then
+  begin
+   suword32(PDWORD(numberOfEntriesOut)^,0);
+  end;
+  Exit(EINVAL);
+ end;
+
+ if ((flags and $e0bffb6f) <> 0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (numberOfEntries < 1) then
+ begin
+  Result :=0;
+  num_out:=0;
+ end else
+ begin
+  num_out:=0;
+
+  node:=Default(SceKernelBatchMapEntry);
+
+  For i:=0 to numberOfEntries-1 do
+  begin
+
+   Result:=copyin(@PSceKernelBatchMapEntry(entries)[i],@node,SizeOf(node));
+   if (Result<>0) then Break;
+
+   case node.operation of
+
+    SCE_KERNEL_MAP_OP_MAP_DIRECT:
+      begin
+
+       if (p_proc.p_pool_id <> 1) or
+          ((g_appinfo.mmap_flags and 2) <> 0) or
+          ((flags and MAP_STACK) <> 0) or
+          (p_proc.p_sdk_version < $2500000) then
+       begin
+
+        if ((QWORD(node.start) and PAGE_MASK) = 0) and
+           ((node.length       and PAGE_MASK) = 0) and
+           ((node.offset       and QWORD($8000000000003fff)) = 0) and
+           ((node.protection   and       $C8) = 0) then
+        begin
+
+         Result:=Integer(sys_mmap(node.start,
+                                  node.length,
+                                  node.protection,
+                                  flags or MAP_SHARED,
+                                  fd,
+                                  node.offset));
+
+        end else
+        begin
+         Result:=EINVAL;
+         Break;
+        end;
+
+       end else
+       begin
+
+        Result:=Integer(sys_mmap_dmem(node.start,
+                                      node.length,
+                                      DWORD(-1),
+                                      node.protection,
+                                      flags,
+                                      node.offset));
+
+       end;
+
+      end; //SCE_KERNEL_MAP_OP_MAP_DIRECT
+
+    SCE_KERNEL_MAP_OP_UNMAP:
+      begin
+
+       if ((QWORD(node.start) and PAGE_MASK) <> 0) or
+          ((node.length       and PAGE_MASK) <> 0) then
+       begin
+        Result:=EINVAL;
+        Break;
+       end;
+
+       Result:=sys_munmap(node.start,node.length);
+
+      end; //SCE_KERNEL_MAP_OP_UNMAP
+
+    SCE_KERNEL_MAP_OP_PROTECT:
+      begin
+
+       __end:=QWORD(node.start) + ((node.length + PAGE_MASK) and QWORD(not PAGE_MASK));
+
+       if ((QWORD(node.start) and PAGE_MASK) <> 0) or
+          ((node.length       and PAGE_MASK) <> 0) or
+          ((node.protection   and       $c8) <> 0) or
+          (__end < QWORD(node.start)) then
+       begin
+        Result:=EINVAL;
+        Break;
+       end;
+
+       Result:=sys_mprotect(node.start,node.length,node.protection);
+
+      end; //SCE_KERNEL_MAP_OP_PROTECT
+
+    SCE_KERNEL_MAP_OP_MAP_FLEXIBLE:
+      begin
+
+       if ((QWORD(node.start) and PAGE_MASK) <> 0) or
+          ((node.length       and PAGE_MASK) <> 0) or
+          ((node.protection   and       $c8) <> 0) then
+       begin
+        Result:=EINVAL;
+        Break;
+       end;
+
+       Result:=Integer(sys_mmap(node.start,
+                                node.length,
+                                node.protection,
+                                flags or MAP_ANON,
+                                -1,
+                                0));
+
+      end; //SCE_KERNEL_MAP_OP_MAP_FLEXIBLE
+
+    SCE_KERNEL_MAP_OP_TYPE_PROTECT:
+      begin
+
+       __end:=QWORD(node.start) + node.length;
+
+       if (__end < QWORD(node.start)) or
+          (((__end + PAGE_MASK) and QWORD(not PAGE_MASK)) < __end) or
+          (DWORD(node.mtype) > 10) or
+          ((node.protection and $c8) <> 0) then
+       begin
+        Result:=EINVAL;
+        Break;
+       end;
+
+       Result:=sys_mtypeprotect(node.start,node.length,node.mtype,node.protection);
+
+      end; //SCE_KERNEL_MAP_OP_TYPE_PROTECT
+
+    else
+      begin
+       Result:=EINVAL;
+       Break;
+      end;
+   end; //case
+
+   if (Result<>0) then Break;
+
+  end; //For
+
+
+ end;
+
+ if (numberOfEntriesOut<>nil) then
+ begin
+  suword32(PDWORD(numberOfEntriesOut)^,num_out);
+ end;
+
 end;
 
 function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;

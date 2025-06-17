@@ -371,7 +371,7 @@ begin
  base_dmem_addr:=get_dmem_ptr(ringBaseAddress);
 
  offset:=QWORD(readPtrAddress) and PAGE_MASK;
- base  :=Pointer(QWORD(readPtrAddress) and (not PAGE_MASK));
+ base  :=Pointer(QWORD(readPtrAddress) and QWORD(not PAGE_MASK));
 
  read_mirr_addr:=mirror_map(base,PAGE_SIZE);
 
@@ -399,7 +399,7 @@ var
 begin
  hqd^:=Default(t_gc_hqd);
 
- base:=Pointer(QWORD(hqd^.read_mirr_addr) and (not PAGE_MASK));
+ base:=Pointer(QWORD(hqd^.read_mirr_addr) and QWORD(not PAGE_MASK));
 
  mirror_unmap(base,PAGE_SIZE);
 

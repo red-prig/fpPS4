@@ -6,6 +6,7 @@ unit dev_sce_zlib;
 interface
 
 uses
+ vmparam,
  sys_conf,
  sys_event;
 
@@ -170,8 +171,8 @@ begin
  if (data^.length=0) or
     (data^.buffer=nil) then Exit(EINVAL);
 
- buffer_lo:=QWORD(data^.buffer) and QWORD($ffffffffffffc000);
- buffer_hi:=(QWORD(data^.buffer) + data^.length + $3fff) and QWORD($ffffffffffffc000);
+ buffer_lo:=QWORD(data^.buffer) and QWORD(not PAGE_MASK);
+ buffer_hi:=(QWORD(data^.buffer) + data^.length + PAGE_MASK) and QWORD(not PAGE_MASK);
 
  map:=p_proc.p_vmspace;
 
