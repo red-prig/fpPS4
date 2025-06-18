@@ -193,7 +193,6 @@ end;
 
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
- td:p_kthread;
  err:Integer;
  len:Integer;
  exec:array[0..PATH_MAX] of Char;
@@ -279,11 +278,7 @@ begin
  argv[1]:=nil;
  ///argv
 
- //unset sys mark
- td:=curkthread;
- td^.td_pflags:=td^.td_pflags and (not TDP_KTHREAD);
-
- Writeln('main_thread:',HexStr(td));
+ Writeln('main_thread:',HexStr(curkthread));
 
  //
  FreeAndNil(GameStartupInfo);

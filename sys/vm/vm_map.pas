@@ -507,7 +507,7 @@ begin
    if (rl_q_start<>0) or (rl_q___end<>High(off_t)) or
       (NormalizeMode(rl_q_flags)=RL_LOCK_READ) then
    begin
-    Result:=rangelock_update(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE,@map^.vm_mtx,td_map_cookie);
+    Result:=rangelock_update(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE or RL_LOCK_TRYLOCK,@map^.vm_mtx,td_map_cookie);
    end else
    begin
     Result:=True;
@@ -1209,6 +1209,7 @@ label
 const
  is_system_map=0;
 var
+ td:p_kthread;
  new_entry  :vm_map_entry_t;
  prev_entry :vm_map_entry_t;
  temp_entry :vm_map_entry_t;
@@ -1469,6 +1470,18 @@ charged:
  Inc(map^.entry_id);
 
  new_entry^.anon_addr:=anon;
+
+ td:=curkthread;
+ if (td<>nil) then
+ begin
+  if ((td^.td_pflags and TDP_KTHREAD)<>0) then
+  begin
+   //set vsh name?
+  end else
+  begin
+   new_entry^.name:='(NoName)'+td^.td_name;
+  end;
+ end;
 
  {
   * Insert the new entry into the list

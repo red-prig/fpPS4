@@ -1850,6 +1850,7 @@ function main_execve(fname:pchar;argv,envv:ppchar):Integer;
 var
  error:Integer;
  args:t_image_args;
+ td:p_kthread;
 begin
  error:=exec_copyin_args(@args, fname, UIO_SYSSPACE, argv, envv);
 
@@ -1862,7 +1863,16 @@ begin
 
  if (Result=0) then
  begin
-  set_pcb_flags(curkthread,PCB_IS_JIT); //force JIT mode
+
+  //unset sys mark
+  td:=curkthread;
+  td^.td_pflags:=td^.td_pflags and (not TDP_KTHREAD);
+  //unset sys mark
+
+   //force JIT mode
+  set_pcb_flags(curkthread,PCB_IS_JIT);
+  //force JIT mode
+
   ipi_sigreturn;
   Writeln(stderr,'I''m a teapot!');
  end;
