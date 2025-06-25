@@ -285,7 +285,7 @@ begin
 
  ofs:=offset^;
 
- if (ofs > -1) and (size <= $5000000000 - ofs) then
+ if (ofs > -1) and (size <= max_valid_dmem - ofs) then
  begin
   //
  end else

@@ -30,7 +30,7 @@ Const
  SCE_KERNEL_UC_GARLIC_VOLATILE    = 8;
  SCE_KERNEL_UC_GARLIC_NONVOLATILE = 9;
 
- max_valid=QWORD($5000000000);
+ max_valid_dmem=QWORD($5000000000);
 
 type
  pp_dmem_map_entry=^p_dmem_map_entry;
@@ -620,10 +620,10 @@ begin
  if (align<PAGE_SIZE) then align:=PAGE_SIZE;
 
  start:=(not (start shr 63)) and start;
- if (start>max_valid) then start:=max_valid;
+ if (start>max_valid_dmem) then start:=max_valid_dmem;
 
  __end:=(not (__end shr 63)) and __end;
- if (__end>max_valid) then __end:=max_valid;
+ if (__end>max_valid_dmem) then __end:=max_valid_dmem;
 
  start:=AlignUp(start,align);
 
@@ -863,7 +863,7 @@ begin
 
  start:=(not (start shr 63)) and start;
 
- if (__end>max_valid) then __end:=max_valid;
+ if (__end>max_valid_dmem) then __end:=max_valid_dmem;
 
  if (__end <= start) then
  begin
@@ -1001,12 +1001,12 @@ begin
   Exit(EINVAL);
  end;
 
- if (Int64(start) > Int64($4fffffffff)) then
+ if (Int64(start) >= max_valid_dmem) then
  begin
   Exit(0);
  end;
 
- offset:=QWORD($5000000000) - start;
+ offset:=max_valid_dmem - start;
 
  if (Int64(len) < Int64(offset)) then
  begin

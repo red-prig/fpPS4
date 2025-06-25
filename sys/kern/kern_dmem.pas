@@ -216,7 +216,7 @@ begin
  Result:=0;
  addr^:=0;
 
- if (((phaddr shr 36) > 4) or ((max_valid - phaddr) < length)) then
+ if (((phaddr shr 36) > 4) or ((max_valid_dmem - phaddr) < length)) then
  begin
   Exit(EACCES);
  end;
