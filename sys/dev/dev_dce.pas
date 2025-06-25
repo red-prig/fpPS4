@@ -913,6 +913,21 @@ type
   reserved2  :DWORD;
  end;
 
+ t_pixelFormat=bitpacked record
+  unknow_1           :bit8; //[0..7]   (always zero)
+  GRPH_BLUE_CROSSBAR :bit2; //[8..9]   [BARG]
+  GRPH_GREEN_CROSSBAR:bit2; //[10..11] [GBAR]
+  GRPH_RED_CROSSBAR  :bit2; //[12..13] [RGBA]
+  GRPH_ALPHA_CROSSBAR:bit2; //[14..15] [ARGB]
+  COLORSPACE         :bit3; //[16..18] [SRGB=0,2,HDR=4,5,NORM=6]
+  unknow_3           :bit1; //[19..19] (always zero)
+  unknow_4           :bit4; //[20..23] [0,2,3,4,5,7,8]
+  IS_FLOAT           :bit1; //[24..24] [0,1]
+  unknow_5           :bit2; //[25..26] (always zero)
+  GRPH_FORMAT        :bit3; //[27..29] [0,1,4,6,7]
+  GRPH_DEPTH         :bit2; //[30..31] [16BPP=1,32BPP=2,3]
+ end;
+
 Function dce_register_buffer_attr(dev:p_cdev;data:p_register_buffer_attr_args):Integer;
 begin
  Result:=0;
