@@ -1767,7 +1767,7 @@ begin
  with ctx.builder do
  begin
   //[65 FF 14 25] [00 07 00 00] call gs:[$00000700]
-  //call([GS+Integer(teb_jit_trp)]);
+  //call([GS+teb_jit_trp]);
 
   //ctx.label_flags:=ctx.label_flags or LF_JMP_INTERRUPT;
  end;
@@ -1810,15 +1810,12 @@ begin
 end;
 
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
-var
- i:Integer;
 begin
  op_set_r14_imm(ctx,imm);
  //
  with ctx.builder do
  begin
-  i:=Integer(@p_jit_frame(nil)^.tf_rip);
-  movq([r_thrd+i],r_tmp0);
+  movq([r_thrd+(@p_jit_frame(nil)^.tf_rip)],r_tmp0);
  end;
 end;
 
@@ -1978,8 +1975,8 @@ begin
   if (rbits.AIndex=r13.AIndex) then
   begin
    //restore jit_frame
-   movq(r13,[GS +Integer(teb_thread)]);
-   leaq(r13,[r13+jit_frame_offset   ]);
+   movq(r13,[GS +teb_thread]);
+   leaq(r13,[r13+jit_frame_offset]);
   end;
  end;
 end;
@@ -4258,8 +4255,8 @@ begin
   if (tmp_count=3) then
   begin
    //restore jit_frame
-   movq(r13,[GS +Integer(teb_thread)]);
-   leaq(r13,[r13+jit_frame_offset   ]);
+   movq(r13,[GS +teb_thread]);
+   leaq(r13,[r13+jit_frame_offset]);
   end;
 
   //store result

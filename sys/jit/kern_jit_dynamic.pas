@@ -29,14 +29,6 @@ uses
                  +----------+    +---------+
 }
 
-var
- plt_stub:t_jplt_cache_asm=(
-  plt:nil;
-  src:nil;
-  dst:nil;
-  blk:nil;
- );
-
 type
  p_jit_dynamic_blob=^t_jit_dynamic_blob;
 
@@ -89,10 +81,15 @@ type
 
  p_jplt_cache=^t_jplt_cache;
  t_jplt_cache=object(t_jplt_cache_asm)
+  //
   pLeft :p_jplt_cache; //jpltc_curr
   pRight:p_jplt_cache; //jpltc_curr
   //
   entry:TAILQ_ENTRY;   //jpltc_attc
+  //
+  self_block:Pointer;
+  dest_block:Pointer;
+  //
   function c(n1,n2:p_jplt_cache):Integer; static;
  end;
 
@@ -114,6 +111,8 @@ type
    plta:p_jit_plt;
    pltc:ptruint;
 
+   plt_stub:t_jplt_cache;
+
    lock:Pointer;
    refs:Integer;
 
@@ -133,7 +132,7 @@ type
   procedure detach_plt_cache(uplock:p_jit_dynamic_blob;node:p_jplt_cache);
   procedure detach_all_attc;
   procedure detach_all_curr;
-  function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dst_blk:p_jit_dynamic_blob):p_jplt_cache;
+  function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dest_block:p_jit_dynamic_blob):p_jplt_cache;
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
   procedure free_base;
@@ -273,7 +272,7 @@ end;
 
 procedure jit_ctx_free(td:p_kthread); public;
 begin
- td^.td_jctx.block:=nil;
+ //td^.td_jctx.block:=nil;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -354,7 +353,7 @@ begin
 
  frame:=@td^.td_frame.tf_r13;
 
- jctx^.block:=node^.blob;
+ //jctx^.block:=node^.blob;
 
  if (jctx^.rsp=nil) then
  begin
@@ -717,11 +716,11 @@ begin
  begin
   if (cache^.src=addr) then
   begin
-   jctx^.block:=cache^.blk;
+   //jctx^.block:=cache^.blk;
 
    Result:=cache^.dst;
 
-   if (jctx^.block=nil) or (InterlockedExchangeAdd64(QWORD(cache^.blk),0)=0) then
+   if (InterlockedExchangeAdd64(QWORD(cache^.dest_block),0)=0) then
    begin
     //reset all
     cache:=nil;
@@ -748,20 +747,30 @@ begin
 
  //jctx:=@td^.td_jctx;
 
- curr:=jctx^.block;
+ //curr:=jctx^.block;
+ //curr:=fetch_blob_by_host(plt);
 
- //curr:=node^.blob;
+ //curr:=plt^.block;
+
+ if (plt<>nil) then
+ begin
+  cache:=plt^.cache;
+  curr:=cache^.self_block;
+ end else
+ begin
+  curr:=nil;
+ end;
 
  if (curr=nil) or (plt=nil) then
  begin
-  jctx^.block:=node^.blob;
+  //jctx^.block:=node^.blob;
  end else
  begin
   cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
 
   jctx^.local_cache[hash_addr(addr)]:=cache;
 
-  jctx^.block:=node^.blob;
+  //jctx^.block:=node^.blob;
 
   Assert(cache<>nil);
   Assert(cache^.src<>nil);
@@ -1236,9 +1245,16 @@ var
  i:Integer;
 begin
  if (pltc<>0) then
- For i:=0 to pltc-1 do
  begin
-  plta[i].cache:=@plt_stub;
+  plt_stub.self_block:=@Self;
+  plt_stub.dest_block:=@Self;
+
+  For i:=0 to pltc-1 do
+  begin
+   plta[i].cache:=@plt_stub;
+   //plta[i].block:=@Self;
+  end;
+
  end;
 end;
 
@@ -1252,11 +1268,6 @@ begin
  end;
 
  TAILQ_INSERT_TAIL(@jpltc_attc,node,@node^.entry);
-
- if (node^.entry.tqe_prev=nil) then
- begin
-  Assert(false);
- end;
 
  if (uplock<>@Self) then
  begin
@@ -1286,15 +1297,17 @@ begin
  end;
 end;
 
-procedure _reset_plt(node:p_jplt_cache);
+procedure reset_plt(node:p_jplt_cache);
 var
+ blk:p_jit_dynamic_blob;
  plt:p_jit_plt;
 begin
+ blk:=node^.self_block;
  plt:=node^.plt;
- if (plt<>nil) then
+ if (plt<>nil) and (blk<>nil) then
  begin
   //one element plt reset
-  System.InterlockedCompareExchange(plt^.cache,@plt_stub,node);
+  System.InterlockedCompareExchange(plt^.cache,@blk^.plt_stub,node);
  end;
 end;
 
@@ -1308,19 +1321,14 @@ begin
  begin
   next:=TAILQ_NEXT(node,@node^.entry);
 
-  if (node^.entry.tqe_prev=nil) then
-  begin
-   Assert(false);
-  end;
-
   TAILQ_REMOVE(@jpltc_attc,node,@node^.entry);
 
   node^.entry:=Default(TAILQ_ENTRY);
 
-  _reset_plt(node);
+  reset_plt(node);
 
   //force deref
-  if (System.InterlockedCompareExchange(node^.blk,nil,@Self)=@Self) then
+  if (System.InterlockedCompareExchange(node^.dest_block,nil,@Self)=@Self) then
   begin
    Self.dec_ref('add_plt_cache');
   end;
@@ -1346,9 +1354,9 @@ begin
  begin
   jpltc_curr.Delete(node);
 
-  _reset_plt(node);
+  reset_plt(node);
 
-  blk:=System.InterlockedExchange(node^.blk,nil);
+  blk:=System.InterlockedExchange(node^.dest_block,nil);
 
   if (blk<>nil) then
   begin
@@ -1362,17 +1370,18 @@ begin
  end;
 end;
 
-function t_jit_dynamic_blob.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dst_blk:p_jit_dynamic_blob):p_jplt_cache;
+function t_jit_dynamic_blob.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dest_block:p_jit_dynamic_blob):p_jplt_cache;
 var
  node:t_jplt_cache;
  old_blk:p_jit_dynamic_blob;
  _insert:Boolean;
 begin
  Assert(plt<>nil);
- Assert(dst_blk<>nil);
+ Assert(dest_block<>nil);
 
  node.plt:=plt; //key
  node.src:=src; //key
+ node.neg:=Pointer(-QWORD(src));
 
  repeat
 
@@ -1386,18 +1395,18 @@ begin
     //update
     Result^.dst:=dst;
     //
-    old_blk:=System.InterlockedExchange(Result^.blk,dst_blk);
-    if (old_blk<>dst_blk) then
+    old_blk:=System.InterlockedExchange(Result^.dest_block,dest_block);
+    if (old_blk<>dest_block) then
     begin
      if (old_blk<>nil) and (old_blk=@Self) then
      begin
       //detach immediately
       old_blk^.detach_plt_cache(@Self,Result);
      end;
-     if (dst_blk=@Self) then
+     if (dest_block=@Self) then
      begin
       //attach immediately
-      dst_blk^.attach_plt_cache(@Self,Result);
+      dest_block^.attach_plt_cache(@Self,Result);
      end;
     end;
    end;
@@ -1405,7 +1414,7 @@ begin
 
   if (Result<>nil) then
   begin
-   if (old_blk<>dst_blk) then
+   if (old_blk<>dest_block) then
    begin
     if (old_blk<>nil) and (old_blk<>@Self) then
     begin
@@ -1413,10 +1422,10 @@ begin
      old_blk^.detach_plt_cache(@Self,Result);
     end;
     //
-    if (dst_blk<>@Self) then
+    if (dest_block<>@Self) then
     begin
      //attach deferred
-     dst_blk^.attach_plt_cache(@Self,Result);
+     dest_block^.attach_plt_cache(@Self,Result);
     end;
    end;
    //
@@ -1426,24 +1435,26 @@ begin
    Result:=AllocMem(Sizeof(t_jplt_cache));
    Result^.plt:=plt; //key
    Result^.src:=src; //key
+   Result^.neg:=Pointer(-QWORD(src));
    Result^.dst:=dst;
-   Result^.blk:=dst_blk;
+   Result^.self_block:=@Self;
+   Result^.dest_block:=dest_block;
    //
    rw_wlock(lock);
     _insert:=jpltc_curr.Insert(Result);
-    if _insert and (dst_blk=@Self) then
+    if _insert and (dest_block=@Self) then
     begin
      //attach immediately
-     dst_blk^.attach_plt_cache(@Self,Result);
+     dest_block^.attach_plt_cache(@Self,Result);
     end;
    rw_wunlock(lock);
    //
    if _insert then
    begin
     //attach deferred
-    if (dst_blk<>@Self) then
+    if (dest_block<>@Self) then
     begin
-     dst_blk^.attach_plt_cache(@Self,Result);
+     dest_block^.attach_plt_cache(@Self,Result);
     end;
     //
     Break;

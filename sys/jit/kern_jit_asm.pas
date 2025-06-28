@@ -48,8 +48,8 @@ type
  t_jplt_cache_asm=object
   plt:Pointer;
   src:Pointer;
+  neg:Pointer; //(-src)
   dst:Pointer;
-  blk:Pointer;
  end;
 
 procedure jit_syscall;       assembler;
@@ -448,10 +448,10 @@ asm
  jne  _exit
 
  //get blk
- movq t_jplt_cache_asm.blk(%rbp),%r14
+ //movq t_jplt_cache_asm.blk(%rbp),%r14
 
  //save current block
- movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.block(%r13)
+ //movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.block(%r13)
 
  //get dst
  movq t_jplt_cache_asm.dst(%rbp),%r14
@@ -488,6 +488,9 @@ asm
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
+
+ movq %gs:teb.thread,%r13                //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
 
  call jit_save_ctx // -> pushf
 

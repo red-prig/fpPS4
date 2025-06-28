@@ -189,7 +189,7 @@ type
 
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
-  block:Pointer;
+  //block:Pointer;
   rsp:Pointer;
   rbp:Pointer;
   local_cache:array[0..255] of Pointer;

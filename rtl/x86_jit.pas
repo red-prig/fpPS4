@@ -134,6 +134,7 @@ type
  p_jit_plt=^t_jit_plt;
  t_jit_plt=packed record
   cache:Pointer;
+  //block:Pointer;
  end;
 
  p_jit_code_chunk=^t_jit_code_chunk;
@@ -496,18 +497,22 @@ type
 operator :=(const A:TRegValue):t_jit_lea;
 operator + (const A,B:t_jit_lea):t_jit_lea;
 operator + (const A:t_jit_lea;const B:TRegValue):t_jit_lea;
-operator + (const A:t_jit_lea;B:Integer):t_jit_lea;
-operator - (const A:t_jit_lea;B:Integer):t_jit_lea;
-operator + (const A:t_jit_lea;B:Int64):t_jit_lea;
-operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
-operator + (const A:t_jit_lea;B:QWORD):t_jit_lea;
-operator - (const A:t_jit_lea;B:QWORD):t_jit_lea;
-operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea;
-operator :=(const A:TOperandSize):t_jit_lea;
+operator + (const A:t_jit_lea;B:Integer):t_jit_lea; inline;
+operator - (const A:t_jit_lea;B:Integer):t_jit_lea; inline;
+operator + (const A:t_jit_lea;B:Int64):t_jit_lea; inline;
+operator - (const A:t_jit_lea;B:Int64):t_jit_lea; inline;
+operator + (const A:t_jit_lea;B:QWORD):t_jit_lea; inline;
+operator - (const A:t_jit_lea;B:QWORD):t_jit_lea; inline;
+operator + (const A:t_jit_lea;B:Pointer):t_jit_lea; inline;
+operator - (const A:t_jit_lea;B:Pointer):t_jit_lea; inline;
+operator - (const B:Pointer):Pointer;  inline;
+operator + (const A,B:Pointer):Pointer; inline;
+operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea; inline;
+operator :=(const A:TOperandSize):t_jit_lea; inline;
 operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
 
 function Sums(mem:t_jit_leas):t_jit_lea;
-function mem_size(mem:t_jit_leas):TOperandSize;
+function mem_size(mem:t_jit_leas):TOperandSize; inline;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):TOperandSize;
@@ -723,56 +728,80 @@ begin
  end;
 end;
 
-operator + (const A:t_jit_lea;B:Integer):t_jit_lea;
+operator + (const A:t_jit_lea;B:Integer):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator - (const A:t_jit_lea;B:Integer):t_jit_lea;
+operator - (const A:t_jit_lea;B:Integer):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset-B;
 end;
 
-operator + (const A:t_jit_lea;B:Int64):t_jit_lea;
+operator + (const A:t_jit_lea;B:Int64):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator - (const A:t_jit_lea;B:Int64):t_jit_lea;
+operator - (const A:t_jit_lea;B:Int64):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset-B;
 end;
 
-operator + (const A:t_jit_lea;B:QWORD):t_jit_lea;
+operator + (const A:t_jit_lea;B:QWORD):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset+B;
 end;
 
-operator - (const A:t_jit_lea;B:QWORD):t_jit_lea;
+operator - (const A:t_jit_lea;B:QWORD):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AOffset:=Result.AOffset-B;
 end;
 
-operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea;
+operator + (const A:t_jit_lea;B:Pointer):t_jit_lea; inline;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset+QWORD(B);
+end;
+
+operator - (const A:t_jit_lea;B:Pointer):t_jit_lea; inline;
+begin
+ Result:=A;
+
+ Result.AOffset:=Result.AOffset-QWORD(B);
+end;
+
+operator - (const B:Pointer):Pointer; inline;
+begin
+ Result:=Pointer(-PTRINT(B));
+end;
+
+operator + (const A,B:Pointer):Pointer; inline;
+begin
+ Result:=Pointer(PTRINT(A)+PTRINT(B));
+end;
+
+operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea; inline;
 begin
  Result:=A;
 
  Result.AMemSize:=B;
 end;
 
-operator :=(const A:TOperandSize):t_jit_lea;
+operator := (const A:TOperandSize):t_jit_lea; inline;
 begin
  Result:=Default(t_jit_lea);
  Result.AMemSize:=A;
@@ -814,7 +843,7 @@ begin
  end;
 end;
 
-function mem_size(mem:t_jit_leas):TOperandSize;
+function mem_size(mem:t_jit_leas):TOperandSize; inline;
 begin
  Result:=Sums(mem).AMemSize;
 end;

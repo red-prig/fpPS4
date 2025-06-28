@@ -545,8 +545,8 @@ begin
   }
 
   //restore jit_frame
-  movq(r13,[GS +Integer(teb_thread)]);
-  leaq(r13,[r13+jit_frame_offset   ]);
+  movq(r13,[GS +teb_thread]);
+  leaq(r13,[r13+jit_frame_offset]);
  end;
 
 end;
