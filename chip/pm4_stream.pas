@@ -1884,7 +1884,8 @@ begin
   XCHG(xlock,nil);
  end;
  //
- md_mmap(Result,mem_size,VM_RW);
+ Result:=kmem_alloc(mem_size,VM_RW);
+ Assert(Result<>nil);
 end;
 
 Procedure t_cache_block_allocator.Free(node:Pointer);
@@ -1903,7 +1904,7 @@ begin
   end;
  end;
  //
- md_unmap(node,mem_size);
+ kmem_free(node,mem_size);
 end;
 
 //
@@ -1921,8 +1922,8 @@ begin
   begin
    mem_size:=Align(Size+SizeOf(TAllocNode),64*1024);
    //
-   node:=nil;
-   md_mmap(node,mem_size,VM_RW);
+   node:=kmem_alloc(mem_size,VM_RW);
+   Assert(node<>nil);
   end else
   begin
    mem_size:=cache_block_allocator.mem_size;
@@ -1964,7 +1965,7 @@ begin
    cache_block_allocator.Free(node);
   end else
   begin
-   md_unmap(node,node^.size);
+   kmem_free(node,node^.size);
   end;
 
   node:=SLIST_FIRST(@pHead);

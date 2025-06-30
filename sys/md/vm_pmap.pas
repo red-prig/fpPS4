@@ -331,13 +331,13 @@ end;
 
 procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
 var
- i,r:Integer;
+ i:Integer;
  m:t_pmap_reserve_result;
 begin
  m:=pmap_reserve;
  if (m.error<>0) then
  begin
-  Writeln('failed md_reserve_ex(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));
+  Writeln('failed pmap_reserve(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));
   Assert(false,'pmap_pinit');
   Exit;
  end;
@@ -347,13 +347,8 @@ begin
 
  if (PAGE_PROT=nil) then
  begin
-  r:=md_mmap(PAGE_PROT,PAGE_MAP_COUNT_SZ1,VM_RW);
-
-  if (r<>0) then
-  begin
-   Writeln('failed md_mmap(',HexStr(PAGE_MAP_COUNT_SZ1,11),'):0x',HexStr(r,8));
-   Assert(false,'pmap_pinit');
-  end;
+  PAGE_PROT:=kmem_alloc(PAGE_MAP_COUNT_SZ1,VM_RW);
+  Assert(PAGE_PROT<>nil,'pmap_pinit');
  end;
 
  //rangelock_init(@pmap^.rmlock);
@@ -776,12 +771,12 @@ begin
  __end  :=src_ofs+size; //up
  src_ofs:=src_ofs and (MD_ALLOC_GRANULARITY-1);
 
- src:=nil;
- r:=md_file_mmap(src_obj^.hfile,src,start,__end-start,VM_PROT_READ);
+ src:=Pointer(KERNEL_LOWER); //lower
+ r:=md_mmap(src,__end-start,VM_PROT_READ,src_obj^.hfile,start);
 
  if (r<>0) then
  begin
-  Writeln('failed md_file_mmap:0x',HexStr(r,8));
+  Writeln('failed md_mmap:0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 
@@ -789,12 +784,12 @@ begin
  __end  :=dst_ofs+size; //up
  dst_ofs:=dst_ofs and (MD_ALLOC_GRANULARITY-1);
 
- dst:=nil;
- r:=md_file_mmap(dst_obj^.hfile,dst,start,__end-start,VM_RW);
+ dst:=Pointer(KERNEL_LOWER); //lower
+ r:=md_mmap(dst,__end-start,VM_RW,dst_obj^.hfile,start);
 
  if (r<>0) then
  begin
-  Writeln('failed md_file_mmap:0x',HexStr(r,8));
+  Writeln('failed md_mmap:0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 
@@ -802,19 +797,19 @@ begin
 
  md_cacheflush(dst,size,DCACHE);
 
- r:=md_file_unmap(dst,0);
+ r:=md_unmap(dst,__end-start);
 
  if (r<>0) then
  begin
-  Writeln('failed md_file_unmap:0x',HexStr(r,8));
+  Writeln('failed md_unmap:0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 
- r:=md_file_unmap(src,0);
+ r:=md_unmap(src,__end-start);
 
  if (r<>0) then
  begin
-  Writeln('failed md_file_unmap:0x',HexStr(r,8));
+  Writeln('failed md_unmap:0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 end;

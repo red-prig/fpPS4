@@ -95,16 +95,15 @@ begin
   if (PAGE_PROT[LV1_IDX(i)]=nil) then
   begin
 
-   ptr:=nil;
-   r:=md_mmap(ptr,PAGE_MAP_COUNT_SZ2,VM_RW);
-   Assert((r=0),'prealloc');
+   ptr:=kmem_alloc(PAGE_MAP_COUNT_SZ2,VM_RW);
+   Assert((ptr<>nil),'prealloc');
 
    if (System.InterlockedCompareExchange(PAGE_PROT[LV1_IDX(i)],ptr,nil)=nil) then
    begin
     Exit;
    end;
 
-   md_unmap(ptr,PAGE_MAP_COUNT_SZ2);
+   kmem_free(ptr,PAGE_MAP_COUNT_SZ2);
 
   end else
   begin

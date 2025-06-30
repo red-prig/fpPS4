@@ -289,12 +289,12 @@ begin
  size:=0;
  NtGetVirtualInfo(hProcess,addr,size);
 
- err:=md_unmap(hProcess,addr,size);
+ err:=md_unmap(addr,size,hProcess);
  if (err<>0) then Exit(err);
 
  addr:=Pointer(WIN_MAX_MOVED_STACK-size);
 
- err:=md_mmap(hProcess,addr,size,VM_RW);
+ err:=md_mmap(addr,size,VM_RW or MD_MAP_FIXED,0,0,hProcess);
  if (err<>0) then Exit(err);
 
  kstack.sttop:=addr;
@@ -484,7 +484,7 @@ begin
  full:=SizeOf(shared_info)+info.size;
  full:=(info.size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
- Result:=md_mmap(hProcess,base,full,VM_RW);
+ Result:=md_mmap(base,full,VM_RW or MD_MAP_FIXED,0,0,hProcess);
  if (Result<>0) then Exit;
 
  shared_info:=Default(t_shared_info);

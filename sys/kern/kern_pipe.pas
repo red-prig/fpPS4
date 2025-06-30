@@ -495,7 +495,7 @@ label
  retry;
 var
  buffer:PBYTE;
- error,cnt,firstseg:Integer;
+ cnt,firstseg:Integer;
  curfail:Integer;
  lastfail:timeval;
 begin
@@ -513,13 +513,12 @@ retry:
 
  size  :=round_page(size);
 
- buffer:=nil;
- error:=md_mmap(buffer,size,VM_RW);
+ buffer:=kmem_alloc(size,VM_RW);
 
  //buffer:=vm_map_min(pipe_map);
  //error:=vm_map_find(pipe_map, nil, 0, @buffer, size, 1, VM_PROT_ALL, VM_PROT_ALL, 0);
 
- if (error<>KERN_SUCCESS) then
+ if (buffer=nil) then
  begin
   if (cpipe^.pipe_buffer.buffer=nil) and
      (size > SMALL_PIPE_SIZE) then
@@ -1673,7 +1672,7 @@ begin
  begin
   System.InterlockedExchangeAdd64(amountpipekva, -cpipe^.pipe_buffer.size);
 
-  md_unmap(cpipe^.pipe_buffer.buffer, cpipe^.pipe_buffer.size);
+  kmem_free(cpipe^.pipe_buffer.buffer, cpipe^.pipe_buffer.size);
 
   //vm_map_remove(pipe_map,
   //              cpipe^.pipe_buffer.buffer,

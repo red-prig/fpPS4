@@ -138,6 +138,11 @@ begin
  begin
   size:=AlignUp(size+SizeOf(stub_chunk),MD_PAGE_SIZE);
 
+  if (start=0) then
+  begin
+   start:=KERNEL_LOWER;
+  end;
+
   err:=md_mmap(Pointer(start),size,VM_RWX);
 
   if (err<>0) then Exit;
