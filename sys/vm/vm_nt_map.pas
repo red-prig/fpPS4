@@ -280,10 +280,10 @@ begin
   if (entry^.start<>start) or
      (entry^.__end<>__end) then
   begin
-   r:=md_split(Pointer(entry^.start),size);
+   r:=md_placeholder_split(Pointer(entry^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_split(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    Writeln('failed md_placeholder_split(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
@@ -292,14 +292,14 @@ begin
 
   if (entry^.obj^.hfile<>0) then
   begin
-   r:=md_file_mmap_ex(entry^.obj^.hfile,
-                      Pointer(entry^.start),
-                      entry^.offset,
-                      entry^.usize, //unaligned size
-                      (max and VM_RW));
+   r:=md_placeholder_commit(Pointer(entry^.start),
+                            entry^.usize, //unaligned size
+                            (max and VM_RW),
+                            entry^.obj^.hfile,
+                            entry^.offset);
    if (r<>0) then
    begin
-    Writeln('failed md_file_mmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    Writeln('failed md_placeholder_commit(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
@@ -400,6 +400,7 @@ var
 
  start:vm_offset_t;
  __end:vm_offset_t;
+ union_size:vm_size_t;
  size:vm_size_t;
 
  max:Integer;
@@ -456,7 +457,7 @@ begin
  end;
 
  //union size
- size:=__end-start;
+ union_size:=__end-start;
 
  //danger zone
  map^.danger_zone.lock(start,__end);
@@ -472,10 +473,12 @@ begin
    //
    if (stat.obj^.hfile<>0) then
    begin
-    r:=md_file_unmap_ex(Pointer(p^.start));
+    size:=p^.__end-p^.start;
+
+    r:=md_placeholder_decommit(Pointer(p^.start),size);
     if (r<>0) then
     begin
-     Writeln('failed md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
+     Writeln('failed md_placeholder_decommit(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
    end;
@@ -489,10 +492,10 @@ begin
  //union parts
  if (r_count>1) then
  begin
-  r:=md_union(Pointer(start),size);
+  r:=md_placeholder_union(Pointer(start),union_size);
   if (r<>0) then
   begin
-   Writeln('failed md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
+   Writeln('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
    Assert(false,'vm_remap');
   end;
   //Writeln('md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
@@ -506,10 +509,10 @@ begin
   begin
    size:=ets[i]^.__end-ets[i]^.start;
 
-   r:=md_split(Pointer(ets[i]^.start),size);
+   r:=md_placeholder_split(Pointer(ets[i]^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+    Writeln('failed md_placeholder_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
 
     Writeln('(',HexStr(start,11),',',HexStr(__end,11),')');
 
@@ -533,14 +536,14 @@ begin
    if (ets[i]^.obj<>nil) then
    if (stat.obj^.hfile<>0) then
    begin
-    r:=md_file_mmap_ex(stat.obj^.hfile,
-                       Pointer(ets[i]^.start),
-                       ets[i]^.offset,
-                       ets[i]^.usize, //unaligned size
-                       (max and VM_RW));
+    r:=md_placeholder_commit(Pointer(ets[i]^.start),
+                             ets[i]^.usize, //unaligned size
+                             (max and VM_RW),
+                             stat.obj^.hfile,
+                             ets[i]^.offset);
     if (r<>0) then
     begin
-     Writeln('failed md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+     Writeln('failed md_placeholder_commit(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
 
@@ -582,13 +585,13 @@ begin
  if (entry^.obj<>nil) then
  if (entry^.obj^.hfile<>0) then
  begin
-  r:=md_file_unmap_ex(Pointer(entry^.start));
+  r:=md_placeholder_decommit(Pointer(entry^.start),(entry^.__end-entry^.start));
   if (r<>0) then
   begin
-   Writeln('failed md_file_unmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+   Writeln('failed md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
    Assert(false,'vm_unmap');
   end;
-  //Writeln('md_file_unmap_ex(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+  //Writeln('md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
  end;
 
  vm_get_space(map,entry,start,__end);
@@ -597,10 +600,10 @@ begin
  if (entry^.start<>start) or
     (entry^.__end<>__end) then
  begin
-  r:=md_union(Pointer(start),__end-start);
+  r:=md_placeholder_union(Pointer(start),__end-start);
   if (r<>0) then
   begin
-   Writeln('failed md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
+   Writeln('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
 
    Writeln('(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
 
@@ -1439,8 +1442,8 @@ begin
      mirror:=vm_nt_map_mirror(map,base,base+size);
      if (mirror<>nil) then
      begin
-      ZeroPages  (mirror,size);
-      md_unmap_ex(mirror,size);
+      ZeroPages           (mirror,size);
+      md_placeholder_unmap(mirror,size);
      end;
 
     end;
@@ -1471,10 +1474,10 @@ begin
  Result:=nil;
  if (start=__end) then Exit;
 
- r:=md_reserve_ex(Result,__end-start);
+ r:=md_placeholder_mmap(Result,__end-start);
  if (r<>0) then
  begin
-  Writeln('failed md_reserve_ex(',HexStr(__end-start,11),'):0x',HexStr(r,8));
+  Writeln('failed md_placeholder_mmap(',HexStr(__end-start,11),'):0x',HexStr(r,8));
   Assert(false,'vm_map');
   Exit;
  end;
@@ -1518,10 +1521,10 @@ begin
    if ((base<>start) and (base<>prev)) or
       (b_end<>__end) then
    begin
-    r:=md_split(curr,size);
+    r:=md_placeholder_split(curr,size);
     if (r<>0) then
     begin
-     Writeln('failed md_split(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+     Writeln('failed md_placeholder_split(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
      Assert(false,'vm_map');
     end;
    end;
@@ -1530,14 +1533,14 @@ begin
 
    max:=obj^.maxp;
 
-   r:=md_file_mmap_ex(obj^.hfile,
-                      curr,
-                      offset,
-                      size,
-                      (max and VM_RW));
+   r:=md_placeholder_commit(curr,
+                            size,
+                            (max and VM_RW),
+                            obj^.hfile,
+                            offset);
    if (r<>0) then
    begin
-    Writeln('failed md_file_mmap_ex(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+    Writeln('failed md_placeholder_commit(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
 

@@ -130,8 +130,6 @@ const
 
  FileFsFullSizeInformation=7;
 
- MemoryBasicInformation=0;
-
  //EVENT_TYPE
  NotificationEvent   =0;
  SynchronizationEvent=1;
@@ -264,6 +262,14 @@ const
  //UserApcOption
  QUEUE_USER_APC_FLAGS_NONE            =0;
  QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC=1;
+
+ //MemoryInformationClass
+ MemoryBasicInformation   =0;
+ MemoryRegionInformation  =3;
+ MemoryRegionInformationEx=7;
+
+ //MEM_EXTENDED_PARAMETER_TYPE
+ MemExtendedParameterAddressRequirements=1;
 
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
@@ -548,6 +554,47 @@ type
   NumberOfMessages :DWORD;
   MessageLength    :DWORD;
   data             :record end;
+ end;
+
+ //MemoryInformationClass
+ MEMORY_REGION_INFORMATION=packed record
+  AllocationBase   :Pointer;
+  AllocationProtect:ULONG;
+  RegionType:bitpacked record
+   _Private               :0..1;
+   MappedDataFile         :0..1;
+   MappedImage            :0..1;
+   MappedPageFile         :0..1;
+   MappedPhysical         :0..1;
+   DirectMapped           :0..1;
+   SoftwareEnclave        :0..1;
+   PageSize64K            :0..1;
+   PlaceholderReservation :0..1;
+   MappedAwe              :0..1;
+   MappedWriteWatch       :0..1;
+   PageSizeLarge          :0..1;
+   PageSizeHuge           :0..1;
+   Reserved               :0..524287;
+  end;
+  RegionSize    :SIZE_T;
+  CommitSize    :SIZE_T;
+  PartitionId   :ULONG_PTR;
+  NodePreference:ULONG_PTR;
+ end;
+
+ //NtAllocateVirtualMemoryEx/NtMapViewOfSectionEx
+ MEM_EXTENDED_PARAMETER=packed record
+  pType:QWORD;
+  case byte of
+   0:(ULong64:QWORD);
+   1:(Pointer:Pointer);
+   2:(Handle :THandle);
+ end;
+
+ MEM_ADDRESS_REQUIREMENTS=packed record
+  LowestStartingAddress:Pointer;
+  HighestEndingAddress :Pointer;
+  Alignment            :UINTPTR;
  end;
 
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';

@@ -310,20 +310,6 @@ begin
  Exit(err);
 end;
 
-function nt_reserve_ex(hProcess:THandle;base:Pointer;size:QWORD):Integer;
-begin
- Result:=NtAllocateVirtualMemoryEx(
-          hProcess,
-          @base,
-          @size,
-          MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
-          PAGE_NOACCESS,
-          nil,
-          0
-         );
-
-end;
-
 function NtReserve(hProcess:THandle):Integer;
 var
  base:Pointer;
@@ -354,7 +340,7 @@ begin
    begin
     size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
 
-    r:=nt_reserve_ex(hProcess,base,size);
+    r:=md_placeholder_mmap(base,size,MD_MAP_FIXED,hProcess);
     if (r=0) then
     begin
      guest_pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
@@ -365,12 +351,13 @@ begin
     end;
    end;
 
+   base:=Pointer(guest_pmap_mem[i].start);
    size:=guest_pmap_mem[i].__end-guest_pmap_mem[i].start;
 
-   r:=nt_reserve_ex(hProcess,base,size);
+   r:=md_placeholder_mmap(base,size,MD_MAP_FIXED,hProcess);
    if (r<>0) then
    begin
-    Writeln(stderr,'nt_reserve_ex(0x',HexStr(base),',0x',HexStr(size,16),'):0x',HexStr(r,8));
+    Writeln(stderr,'md_placeholder_mmap(0x',HexStr(base),',0x',HexStr(size,16),'):0x',HexStr(r,8));
     Exit(r);
    end;
 
@@ -396,7 +383,7 @@ begin
 
   if (info.State=MEM_FREE) then
   begin
-   r:=nt_reserve_ex(hProcess,info.BaseAddress,info.RegionSize);
+   r:=md_placeholder_mmap(info.BaseAddress,info.RegionSize,MD_MAP_FIXED,hProcess);
   end;
 
   prev:=addr;

@@ -92,24 +92,24 @@ begin
  ring^.wptr:=0;
  ring^.aptr:=0;
 
- Result:=md_reserve_ex(ring^.buff,size shl 1);
+ Result:=md_placeholder_mmap(ring^.buff,size shl 1);
  if (Result<>0) then Exit;
 
- Result:=md_split(ring^.buff,size);
+ Result:=md_placeholder_split(ring^.buff,size);
  if (Result<>0) then Exit;
 
  hMem:=0;
  Result:=md_memfd_create(hMem,size,VM_RW);
  if (Result<>0) then Exit;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff,0,size,VM_RW);
+ Result:=md_placeholder_commit(ring^.buff,size,VM_RW,hMem,0);
  if (Result<>0) then
  begin
   md_memfd_close(hMem);
   Exit;
  end;
 
- Result:=md_file_mmap_ex(hMem,ring^.buff+size,0,size,VM_RW);
+ Result:=md_placeholder_commit(ring^.buff+size,size,VM_RW,hMem,0);
 
  md_memfd_close(hMem);
 end;
@@ -121,7 +121,7 @@ begin
  if (ring^.buff=nil) then Exit;
  if (ring^.size=0) then Exit;
 
- Result:=md_unmap_ex(ring^.buff,ring^.size shl 1);
+ Result:=md_placeholder_unmap(ring^.buff,ring^.size shl 1);
 end;
 
 function block_id(val,size:DWORD):DWORD; inline;

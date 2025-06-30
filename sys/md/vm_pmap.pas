@@ -245,10 +245,10 @@ begin
 
  DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS);
 
- r:=md_file_mmap_ex(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_PTR,0,DEV_INFO.DEV_SIZE,VM_RW);
+ r:=md_placeholder_commit(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE,VM_RW,DEV_INFO.DEV_FD.hfile,0);
  if (r<>0) then
  begin
-  Writeln('failed md_file_mmap_ex(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Writeln('failed md_placeholder_commit(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert(false,'dev_mem_init');
  end;
 end;
@@ -290,7 +290,7 @@ begin
    begin
     size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
 
-    Result.error:=md_reserve_ex(base,size);
+    Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED);
     if (Result.error=0) then
     begin
      //union range
@@ -302,9 +302,10 @@ begin
     end;
    end;
 
+   base:=Pointer(pmap_mem[i].start);
    size:=pmap_mem[i].__end-pmap_mem[i].start;
 
-   Result.error:=md_reserve_ex(base,size);
+   Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED);
 
    if (Result.error<>0) then
    begin
@@ -1811,7 +1812,7 @@ procedure pmap_mirror_unmap(pmap:pmap_t;
 var
  r:Integer;
 begin
- r:=md_unmap_ex(base,size);
+ r:=md_placeholder_unmap(base,size);
  if (r<>0) then
  begin
   Writeln('failed md_unmap_ex:0x',HexStr(r,8));

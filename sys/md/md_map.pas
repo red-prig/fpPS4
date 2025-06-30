@@ -17,27 +17,34 @@ const
  MD_PAGE_MASK        = MD_PAGE_SIZE-1;
  MD_ALLOC_GRANULARITY= 64*1024;
 
+ MD_MAP_FIXED      =$100;
+ MD_MAP_RESERVED   =$200;
+
+ MD_MAP_ALIGN_SHIFT=24;
+
+function MD_MAP_ALIGN(align:QWORD):DWORD; inline;
+
 const
  VM_RW =VM_PROT_READ or VM_PROT_WRITE;
  VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
 
-function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
-function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
-
-function md_unmap_ex(base:Pointer;size:QWORD):Integer;
-
-function md_split  (base:Pointer;size:QWORD):Integer;
-function md_union  (base:Pointer;size:QWORD):Integer;
+function md_placeholder_mmap    (var base:Pointer;size:QWORD;flags:DWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
+function md_placeholder_unmap   (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_placeholder_split   (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
+function md_placeholder_union   (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
+function md_placeholder_commit  (base:Pointer;size:QWORD;prot:DWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_placeholder_commit  (base:Pointer;size:QWORD;prot:DWORD;fd:THandle;offset:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_placeholder_decommit(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
 
 function md_memfd_create(var hMem:THandle;size:QWORD;maxprot:Byte):Integer;
 function md_memfd_open  (var hMem:THandle;hFile:THandle;maxprot:Byte):Integer;
-function md_memfd_close (hMem:THandle):Integer;
+function md_memfd_close (hMem:THandle):Integer; inline;
 
 function md_protect(hProcess:THandle;base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_protect(base:Pointer;size:QWORD;prot:Integer):Integer;
 
-function md_dontneed(base:Pointer;size:QWORD):Integer;
-function md_activate(base:Pointer;size:QWORD):Integer;
+function md_dontneed(base:Pointer;size:QWORD):Integer; inline;
+function md_activate(base:Pointer;size:QWORD):Integer; inline;
 
 function md_mmap   (hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Integer;
 function md_unmap  (hProcess:THandle;base:Pointer;size:QWORD):Integer;
@@ -47,9 +54,6 @@ function md_unmap  (base:Pointer;size:QWORD):Integer;
 
 function md_file_mmap (handle:THandle;var base:Pointer;offset,size:QWORD;prot:Integer):Integer;
 function md_file_unmap(base:Pointer;size:QWORD):Integer;
-
-function md_file_mmap_ex (handle:THandle;base:Pointer;offset,size:QWORD;prot:Integer):Integer;
-function md_file_unmap_ex(base:Pointer):Integer;
 
 const
  ICACHE=1; //Flush the instruction cache.
@@ -61,6 +65,11 @@ procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 Function  md_create_swap_file(const FNAME:RawByteString;SIZE:QWORD;Var FD:THandle):DWORD;
 
 implementation
+
+function MD_MAP_ALIGN(align:QWORD):DWORD; inline;
+begin
+ Result:=BsfQWORD(align) shl MD_MAP_ALIGN_SHIFT;
+end;
 
 const
  MD_PROT_NONE=PAGE_NOACCESS;
@@ -94,7 +103,7 @@ const
   SECTION_QUERY or SECTION_MAP_EXECUTE or SECTION_MAP_WRITE or SECTION_MAP_READ //XWR
  );
 
-function md_alloc_page(x:Pointer):Pointer; inline;
+function md_dw_gran(x:Pointer):Pointer; inline;
 begin
  Result:=Pointer(QWORD(x) and (not (MD_ALLOC_GRANULARITY-1)));
 end;
@@ -109,70 +118,83 @@ begin
  Result:=(x+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 end;
 
-function md_reserve_ex(hProcess:THandle;var base:Pointer;size:QWORD):Integer;
+function md_placeholder_mmap(var base:Pointer;size:QWORD;flags:DWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
 var
+ ADDR:Pointer;
+ len :ULONG_PTR;
  info:TMemoryBasicInformation;
- len:ULONG_PTR;
+ EXT :MEM_EXTENDED_PARAMETER;
+ REQ :MEM_ADDRESS_REQUIREMENTS;
 begin
- base:=md_alloc_page(base);
  size:=md_up_page(size);
 
- if (base<>nil) then
+ if ((flags and MD_MAP_FIXED)<>0) then
  begin
+  ADDR:=md_dw_gran(base);
+
   len:=0;
   Result:=NtQueryVirtualMemory(
            hProcess,
-           base,
-           0,
+           ADDR,
+           MemoryBasicInformation,
            @info,
-           sizeof(info),
+           sizeof(TMemoryBasicInformation),
            @len);
 
-  //Writeln('NtQueryVirtualMemory:','0x',HexStr(Result,8));
-
-  if (Result=0) then
+  if (Result=0) and (info.State=MEM_RESERVE) then
   begin
-   {
-   Writeln('Query:','0x',HexStr(info.AllocationBase),'..',
-                    '0x',HexStr(info.BaseAddress),'..',
-                    '0x',HexStr(info.BaseAddress+info.RegionSize),':',
-                    '0x',HexStr(info.RegionSize,11),' ',
-                    info.State,' ',
-                    info.Protect,' ',
-                    info._Type
-                    );
-   }
-   if (info.State=MEM_RESERVE) then
+   if (ADDR>=info.BaseAddress) and
+      ((ADDR+size)<=(info.BaseAddress+info.RegionSize)) then
    begin
-    if (base>=info.BaseAddress) and
-       ((base+size)<=(info.BaseAddress+info.RegionSize)) then
-    begin
-     base:=info.AllocationBase;
-     Exit(0);
-    end;
+    base:=info.AllocationBase;
+    Exit(0);
    end;
+  end;
 
+  REQ.LowestStartingAddress:=nil;
+  REQ.Alignment            :=0;
+ end else
+ begin
+  ADDR:=nil;
+  REQ.LowestStartingAddress:=base;
+
+  REQ.Alignment:=(flags shr MD_MAP_ALIGN_SHIFT) and $1F;
+
+  if (REQ.Alignment<=16) then
+  begin
+   REQ.Alignment:=0;
+  end else
+  begin
+   REQ.Alignment:=QWORD(1) shl REQ.Alignment;
   end;
  end;
 
+ EXT.pType  :=MemExtendedParameterAddressRequirements;
+ EXT.Pointer:=@REQ;
+
+ REQ.HighestEndingAddress:=nil;
+
  Result:=NtAllocateVirtualMemoryEx(
           hProcess,
-          @base,
+          @ADDR,
           @size,
           MEM_RESERVE or MEM_RESERVE_PLACEHOLDER,
           PAGE_NOACCESS,
-          nil,
-          0
+          @EXT,
+          1
          );
 
+ if (Result=0) then
+ begin
+  base:=ADDR;
+ end else
+ begin
+  base:=nil;
+ end;
+
 end;
 
-function md_reserve_ex(var base:Pointer;size:QWORD):Integer;
-begin
- Result:=md_reserve_ex(NtCurrentProcess,base,size);
-end;
-
-function md_unmap_ex(base:Pointer;size:QWORD):Integer;
+function md_placeholder_unmap(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
 var
  pend:Pointer;
 
@@ -187,18 +209,39 @@ begin
 
   len:=0;
   NtQueryVirtualMemory(
-   NtCurrentProcess,
+   hProcess,
    addr,
    0,
    @info,
-   sizeof(info),
+   sizeof(TMemoryBasicInformation),
    @len);
   if (len=0) then Break;
 
   if (info.State<>MEM_FREE) then
   begin
-   //unmap
-   Result:=NtUnmapViewOfSectionEx(NtCurrentProcess,addr,MEM_PRESERVE_PLACEHOLDER);
+   addr:=info.BaseAddress;
+
+   case info._Type of
+    MEM_MAPPED:
+     begin
+      //unmap
+      Result:=NtUnmapViewOfSectionEx(hProcess,addr,MEM_PRESERVE_PLACEHOLDER);
+     end;
+    MEM_PRIVATE:
+     begin
+      //unmap
+      len:=Info.RegionSize;
+      Result:=NtFreeVirtualMemory(
+               hProcess,
+               @addr,
+               @len,
+               MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
+              );
+     end;
+    else
+     Result:=-1;
+   end;
+
    if (Result<>0) then Exit;
   end;
 
@@ -209,7 +252,7 @@ begin
 
  until (prev>=addr);
 
- //union
+ //union all
  Result:=NtFreeVirtualMemory(
           NtCurrentProcess,
           @base,
@@ -228,24 +271,71 @@ begin
          );
 end;
 
-function md_split(base:Pointer;size:QWORD):Integer;
+function md_placeholder_split(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 begin
  Result:=NtFreeVirtualMemory(
-          NtCurrentProcess,
+          hProcess,
           @base,
           @size,
           MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
          );
 end;
 
-function md_union(base:Pointer;size:QWORD):Integer;
+function md_placeholder_union(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 begin
  Result:=NtFreeVirtualMemory(
-          NtCurrentProcess,
+          hProcess,
           @base,
           @size,
           MEM_RELEASE or MEM_COALESCE_PLACEHOLDERS
          );
+end;
+
+function md_placeholder_commit(base:Pointer;size:QWORD;prot:DWORD;hProcess:THandle=NtCurrentProcess):Integer;
+begin
+ prot:=wprots[prot and VM_RWX];
+
+ Result:=NtAllocateVirtualMemoryEx(
+          hProcess,
+          @base,
+          @size,
+          MEM_COMMIT or MEM_RESERVE or MEM_REPLACE_PLACEHOLDER,
+          prot,
+          nil,
+          0
+         );
+end;
+
+function md_placeholder_commit(base:Pointer;size:QWORD;prot:DWORD;fd:THandle;offset:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+begin
+ prot:=wprots[prot and VM_RWX];
+
+ Result:=NtMapViewOfSectionEx(
+          fd,
+          hProcess,
+          @base,
+          @offset,
+          @size,
+          MEM_REPLACE_PLACEHOLDER,
+          prot,
+          nil,
+          0
+         );
+end;
+
+function md_placeholder_decommit(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+begin
+ Result:=NtUnmapViewOfSectionEx(hProcess,base,MEM_PRESERVE_PLACEHOLDER);
+
+ if (DWORD(Result)=$C0000019) then //STATUS_NOT_MAPPED_VIEW
+ begin
+  Result:=NtFreeVirtualMemory(
+           hProcess,
+           @base,
+           @size,
+           MEM_RELEASE or MEM_PRESERVE_PLACEHOLDER
+          );
+ end;
 end;
 
 function md_memfd_create(var hMem:THandle;size:QWORD;maxprot:Byte):Integer;
@@ -294,7 +384,7 @@ begin
          );
 end;
 
-function md_memfd_close(hMem:THandle):Integer;
+function md_memfd_close(hMem:THandle):Integer; inline;
 begin
  Result:=NtClose(hMem);
 end;
@@ -320,7 +410,7 @@ begin
  Result:=md_protect(NtCurrentProcess,base,size,prot);
 end;
 
-function md_dontneed(base:Pointer;size:QWORD):Integer;
+function md_dontneed(base:Pointer;size:QWORD):Integer; inline;
 begin
  Result:=NtAllocateVirtualMemory(
           NtCurrentProcess,
@@ -332,7 +422,7 @@ begin
          );
 end;
 
-function md_activate(base:Pointer;size:QWORD):Integer;
+function md_activate(base:Pointer;size:QWORD):Integer; inline;
 begin
  Result:=NtAllocateVirtualMemory(
           NtCurrentProcess,
@@ -348,7 +438,7 @@ function md_mmap(hProcess:THandle;var base:Pointer;size:QWORD;prot:Integer):Inte
 begin
  prot:=wprots[prot and VM_RWX];
 
- base:=md_alloc_page(base);
+ base:=md_dw_gran(base);
  size:=md_up_page(size);
 
  Result:=NtAllocateVirtualMemory(
@@ -363,7 +453,7 @@ end;
 
 function md_unmap(hProcess:THandle;base:Pointer;size:QWORD):Integer;
 begin
- base:=md_alloc_page(base);
+ base:=md_dw_gran(base);
  size:=0;
 
  Result:=NtFreeVirtualMemory(
@@ -391,7 +481,7 @@ var
 begin
  prot:=wprots[prot and VM_RWX];
 
- base:=md_alloc_page(base);
+ base:=md_dw_gran(base);
 
  CommitSize:=size;
  SectionOffset:=offset and (not (MD_ALLOC_GRANULARITY-1));
@@ -411,33 +501,9 @@ end;
 
 function md_file_unmap(base:Pointer;size:QWORD):Integer;
 begin
- base:=md_alloc_page(base);
+ base:=md_dw_gran(base);
 
  Result:=NtUnmapViewOfSection(NtCurrentProcess,base);
-end;
-
-//
-
-function md_file_mmap_ex(handle:THandle;base:Pointer;offset,size:QWORD;prot:Integer):Integer;
-begin
- prot:=wprots[prot and VM_RWX];
-
- Result:=NtMapViewOfSectionEx(
-          handle,
-          NtCurrentProcess,
-          @base,
-          @offset,
-          @size,
-          MEM_REPLACE_PLACEHOLDER,
-          prot,
-          nil,
-          0
-         );
-end;
-
-function md_file_unmap_ex(base:Pointer):Integer;
-begin
- Result:=NtUnmapViewOfSectionEx(NtCurrentProcess,base,MEM_PRESERVE_PLACEHOLDER);
 end;
 
 //
