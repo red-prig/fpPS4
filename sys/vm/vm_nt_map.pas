@@ -394,13 +394,13 @@ function vm_remap(map:p_vm_nt_map;
 var
  ets:array[0..2] of p_vm_nt_entry;
  first:p_vm_nt_entry;
+ curr :p_vm_nt_entry;
 
  e_count:Integer;
  r_count:Integer;
 
  start:vm_offset_t;
  __end:vm_offset_t;
- union_size:vm_size_t;
  size:vm_size_t;
 
  max:Integer;
@@ -420,9 +420,11 @@ begin
  first:=nil;
  For i:=Low(ets) to High(ets) do
  begin
-  if (ets[i]<>nil) then
+  curr:=ets[i];
+
+  if (curr<>nil) then
   begin
-   first:=ets[i];
+   first:=curr;
    Break;
   end;
  end;
@@ -440,24 +442,23 @@ begin
  //get range
  For i:=Low(ets) to High(ets) do
  begin
-  if (ets[i]<>nil) then
+  curr:=ets[i];
+
+  if (curr<>nil) then
   begin
-   if (start=0) or (start>ets[i]^.start) then
+   if (start=0) or (start>curr^.start) then
    begin
-    start:=ets[i]^.start;
+    start:=curr^.start;
    end;
 
-   if (__end=0) or (__end<ets[i]^.__end) then
+   if (__end=0) or (__end<curr^.__end) then
    begin
-    __end:=ets[i]^.__end;
+    __end:=curr^.__end;
    end;
 
    Inc(e_count);
   end;
  end;
-
- //union size
- union_size:=__end-start;
 
  //danger zone
  map^.danger_zone.lock(start,__end);
@@ -492,7 +493,9 @@ begin
  //union parts
  if (r_count>1) then
  begin
-  r:=md_placeholder_union(Pointer(start),union_size);
+  size:=__end-start;
+
+  r:=md_placeholder_union(Pointer(start),size);
   if (r<>0) then
   begin
    Writeln('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
@@ -505,14 +508,16 @@ begin
  if (e_count>1) then
  For i:=Low(ets) to High(ets) do
  begin
-  if (ets[i]<>nil) and (ets[i]<>first) then
-  begin
-   size:=ets[i]^.__end-ets[i]^.start;
+  curr:=ets[i];
 
-   r:=md_placeholder_split(Pointer(ets[i]^.start),size);
+  if (curr<>nil) and (curr<>first) then
+  begin
+   size:=curr^.__end-curr^.start;
+
+   r:=md_placeholder_split(Pointer(curr^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+    Writeln('failed md_placeholder_split(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
 
     Writeln('(',HexStr(start,11),',',HexStr(__end,11),')');
 
@@ -530,20 +535,22 @@ begin
  //map new parts
  For i:=Low(ets) to High(ets) do
  begin
-  if (ets[i]<>nil) then
+  curr:=ets[i];
+
+  if (curr<>nil) then
   begin
    //map new
-   if (ets[i]^.obj<>nil) then
+   if (curr^.obj<>nil) then
    if (stat.obj^.hfile<>0) then
    begin
-    r:=md_placeholder_commit(Pointer(ets[i]^.start),
-                             ets[i]^.usize, //unaligned size
+    r:=md_placeholder_commit(Pointer(curr^.start),
+                             curr^.usize, //unaligned size
                              (max and VM_RW),
                              stat.obj^.hfile,
-                             ets[i]^.offset);
+                             curr^.offset);
     if (r<>0) then
     begin
-     Writeln('failed md_placeholder_commit(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+     Writeln('failed md_placeholder_commit(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
 
@@ -556,14 +563,16 @@ begin
 
  For i:=Low(ets) to High(ets) do
  begin
-  if (ets[i]<>nil) then
+  curr:=ets[i];
+
+  if (curr<>nil) then
   begin
-   if (ets[i]^.obj<>nil) then
+   if (curr^.obj<>nil) then
    if (stat.obj^.hfile<>0) then
    begin
-    vm_nt_sub_map_prot_fixup(@ets[i]^.sub,
-                             ets[i]^.start,
-                             ets[i]^.__end,
+    vm_nt_sub_map_prot_fixup(@curr^.sub,
+                             curr^.start,
+                             curr^.__end,
                              TRACK_PROT or REMAP_PROT //untrack trigger or restore track?
                             );
    end;
