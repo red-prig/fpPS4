@@ -24,9 +24,27 @@ const
  SCE_AJM_CODEC_CELP_DEC =12;
  SCE_AJM_CODEC_CELP_ENC =13;
 
- SCE_AJM_FLAG_SIDEBAND_STREAM        =(QWORD(1) shl 47);
- SCE_AJM_FLAG_SIDEBAND_FORMAT        =(QWORD(1) shl 46);
- SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE=(QWORD(1) shl 45);
+ //_SCE_AJM_FLAG_SIZE_REVISION            =3;
+ //_SCE_AJM_INSTANCE_FLAG_OFFSET_STD_FLAGS=3+7;
+ //_SCE_AJM_FLAG_SIZE_CODEC               =8;
+
+ SCE_AJM_INSTANCE_FLAG_PRIORITY_VIOLATION=(QWORD(1) shl 11);
+ SCE_AJM_INSTANCE_FLAG_RESAMPLE          =(QWORD(1) shl 12);
+
+ SCE_AJM_FLAG_SIDEBAND_STREAM        =(QWORD(1) shl 47); //SceAjmSidebandStream
+ SCE_AJM_FLAG_SIDEBAND_FORMAT        =(QWORD(1) shl 46); //SceAjmSidebandFormat
+ SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE=(QWORD(1) shl 45); //SceAjmSidebandGaplessDecode
+
+ SCE_AJM_FLAG_CONTROL_RESAMPLE       =(QWORD(1) shl 15); //SceAjmSidebandResampleParameters
+ SCE_AJM_FLAG_CONTROL_INITIALIZE     =(QWORD(1) shl 14); //SceAjmDecAt9InitializeParameters,SceAjmDecM4aacInitializeParameters
+ SCE_AJM_FLAG_CONTROL_RESET          =(QWORD(1) shl 13);
+ SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES    =(QWORD(1) shl 12); //SceAjmSidebandMFrame
+ SCE_AJM_FLAG_RUN_GET_CODEC_INFO     =(QWORD(1) shl 11); //SceAjmSidebandDecAt9CodecInfo,SceAjmSidebandDecM4aacCodecInfo,SceAjmSidebandDecMp3CodecInfo
+
+ //SCE_AJM_FLAG_SIDEBAND_CODEC(N) (1 << (3 + (N)))
+
+ SCE_AJM_FLAG_DEC_CELP8_LOST_FRAME   =(QWORD(1) shl 3);
+ SCE_AJM_FLAG_DEC_CELP_LOST_FRAME    =(QWORD(1) shl 3);
 
 var
  FAjmMap:t_id_desc_table;
@@ -46,12 +64,51 @@ type
   iInternalResult:SceAjmResult;
  end;
 
+ //SCE_AJM_FLAG_SIDEBAND_STREAM
  SceAjmSidebandStream=packed record
-  iSizeConsumed:Integer;
-  iSizeProduced:Integer;
+  iSizeConsumed        :Integer;
+  iSizeProduced        :Integer;
   uiTotalDecodedSamples:QWORD;
  end;
 
+ //SCE_AJM_FLAG_SIDEBAND_FORMAT
+ SceAjmSidebandFormat=packed record
+  eChannelNumber     :Integer;
+  uiChannelMask      :DWORD;
+  uiSamplingFrequency:DWORD;
+  eSampleEncoding    :Integer;
+  uiBitrate          :DWORD;
+  _reserved          :DWORD;
+ end;
+
+ //SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE
+ SceAjmSidebandGaplessDecode=packed record
+  uiTotalSamples  :DWORD;
+  uiSkipSamples   :WORD;
+  uiSkippedSamples:WORD;
+ end;
+
+ //SCE_AJM_FLAG_CONTROL_RESAMPLE
+ SceAjmSidebandResampleParameters=packed record
+  fRatio :Single;
+  uiFlags:DWORD;
+ end;
+
+ //SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES
+ SceAjmSidebandMFrame=packed record
+  uiNumFrames:DWORD;
+  _reserved  :DWORD;
+ end;
+
+//////////////
+
+ //SCE_AJM_FLAG_CONTROL_INITIALIZE
+ SceAjmDecAt9InitializeParameters=packed record
+  uiConfigData:DWORD;
+  _reserved   :DWORD;
+ end;
+
+ //SCE_AJM_FLAG_RUN_GET_CODEC_INFO
  SceAjmSidebandDecAt9CodecInfo=packed record
   uiSuperFrameSize    :DWORD;
   uiFramesInSuperFrame:DWORD;
@@ -64,6 +121,36 @@ type
   sResult   :SceAjmSidebandResult;
   sCodecInfo:SceAjmSidebandDecAt9CodecInfo;
  end;
+
+//////////////
+
+ //SCE_AJM_FLAG_CONTROL_INITIALIZE
+ SceAjmDecM4aacInitializeParameters=packed record
+  uiConfigNumber     :DWORD;
+  uiSamplingFreqIndex:DWORD;
+ end;
+
+ //SCE_AJM_FLAG_RUN_GET_CODEC_INFO
+ SceAjmSidebandDecM4aacCodecInfo=packed record
+  uiHeaac   :DWORD;
+  uiReserved:DWORD;
+ end;
+
+//////////////
+
+ //SCE_AJM_FLAG_RUN_GET_CODEC_INFO
+ SceAjmSidebandDecMp3CodecInfo=packed record
+  uiHeader       :DWORD;
+  ucCrc          :Byte;
+  ucMode         :Byte;
+  ucModeExtension:Byte;
+  ucCopyright    :Byte;
+  ucOriginal     :Byte;
+  ucEmphasis     :Byte;
+  _reserved      :array[0..2] of Word;
+ end;
+
+//////////////
 
  pSceAjmBuffer=^SceAjmBuffer;
  SceAjmBuffer=packed record
@@ -321,9 +408,9 @@ begin
  if not id_del(@FAjmMap,uiContext,nil) then Result:=SCE_AJM_ERROR_INVALID_CONTEXT;
 end;
 
-function ps4_sceAjmInstanceCodecType(uiCodec:SceAjmCodecType):Integer;
+function ps4_sceAjmInstanceCodecType(uiInstance:SceAjmInstanceId):SceAjmCodecType;
 begin
- Result:=uiCodec shr $E;
+ Result:=uiInstance shr 14;
 end; 
 
 function ps4_sceAjmInstanceCreate(uiContext:SceAjmContextId;
@@ -348,7 +435,7 @@ begin
   SCE_AJM_CODEC_CELP_ENC :
    begin
     //fake instance
-    pInstance^:=1;
+    pInstance^:=1 or (uiCodec shl 14); //sceAjmInstanceCodecType
    end;
   else
     begin
@@ -383,13 +470,167 @@ type
   sStream:SceAjmSidebandStream;
  end;
 
-procedure FixSideband(uiFlags:qword;pSidebandOutput:Pointer;szSidebandOutputSize:qword);
-begin
- if ((uiFlags and SCE_AJM_FLAG_SIDEBAND_STREAM)<>0) then
+procedure FixSideband(uiInstance:SceAjmInstanceId;uiFlags:qword;pSidebandOutput:Pointer;szSidebandOutputSize:qword);
+
+ procedure commit(data:Pointer;size:QWORD);
  begin
-  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.iSizeConsumed:=1;
-  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.iSizeProduced:=1;
-  pSceAjmSidebandStreamResult(pSidebandOutput)^.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
+  if (size>szSidebandOutputSize) then
+  begin
+   size:=szSidebandOutputSize;
+  end;
+
+  Move(data^,pSidebandOutput^,size);
+
+  Inc(pSidebandOutput     ,size);
+  Dec(szSidebandOutputSize,size);
+ end;
+
+var
+ i:Byte;
+ c:qword;
+
+ u:record
+  case Byte of
+   0:(sResult        :SceAjmSidebandResult);
+   1:(sStream        :SceAjmSidebandStream);
+   2:(sFormat        :SceAjmSidebandFormat);
+   3:(sGapless       :SceAjmSidebandGaplessDecode);
+   4:(sResample      :SceAjmSidebandResampleParameters);
+   5:(sInit          :SceAjmDecAt9InitializeParameters);
+   6:(sMFrame        :SceAjmSidebandMFrame);
+   7:(sAt9CodecInfo  :SceAjmSidebandDecAt9CodecInfo);
+   8:(sM4aacCodecInfo:SceAjmSidebandDecM4aacCodecInfo);
+   9:(sMp3CodecInfo  :SceAjmSidebandDecMp3CodecInfo);
+ end;
+
+begin
+ //
+ u.sResult.iResult        :=0;
+ u.sResult.iInternalResult:=0;
+ commit(@u.sResult,SizeOf(u.sResult));
+ //
+
+ For i:=63 downto 0 do
+ begin
+
+  if (szSidebandOutputSize=0) then Break;
+
+  c:=QWORD(1) shl i;
+
+  if ((uiFlags and c)<>0) then
+  begin
+
+   case c of
+
+    SCE_AJM_FLAG_SIDEBAND_STREAM:
+     begin
+      //Writeln('SCE_AJM_FLAG_SIDEBAND_STREAM');
+      u.sStream.iSizeConsumed:=1;
+      u.sStream.iSizeProduced:=1;
+      u.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
+      commit(@u.sStream,SizeOf(u.sStream));
+     end;
+
+    SCE_AJM_FLAG_SIDEBAND_FORMAT:
+     begin
+      //Writeln('SCE_AJM_FLAG_SIDEBAND_FORMAT');
+      u.sFormat.eChannelNumber     :=1;
+      u.sFormat.uiChannelMask      :=1;
+      u.sFormat.uiSamplingFrequency:=48000;
+      u.sFormat.eSampleEncoding    :=0;
+      u.sFormat.uiBitrate          :=1;
+      u.sFormat._reserved          :=0;
+      commit(@u.sFormat,SizeOf(u.sFormat));
+     end;
+
+    SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE:
+     begin
+      //Writeln('SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE');
+      u.sGapless.uiTotalSamples  :=1;
+      u.sGapless.uiSkipSamples   :=0;
+      u.sGapless.uiSkippedSamples:=0;
+      commit(@u.sGapless,SizeOf(u.sGapless));
+     end;
+
+    SCE_AJM_FLAG_CONTROL_RESAMPLE:
+     begin
+      //Writeln('SCE_AJM_FLAG_CONTROL_RESAMPLE');
+      u.sResample.fRatio :=1;
+      u.sResample.uiFlags:=0;
+      commit(@u.sResample,SizeOf(u.sResample));
+     end;
+
+     SCE_AJM_FLAG_CONTROL_INITIALIZE:
+      begin
+       //Writeln('SCE_AJM_FLAG_CONTROL_INITIALIZE');
+       u.sInit.uiConfigData:=0;
+       u.sInit._reserved   :=0;
+       commit(@u.sInit,SizeOf(u.sInit));
+      end;
+
+     SCE_AJM_FLAG_CONTROL_RESET:
+      begin
+       //Writeln('SCE_AJM_FLAG_CONTROL_RESET');
+      end;
+
+     SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES:
+      begin
+       //Writeln('SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES');
+       u.sMFrame.uiNumFrames:=1;
+       u.sMFrame._reserved  :=0;
+       commit(@u.sMFrame,SizeOf(u.sMFrame));
+      end;
+
+     SCE_AJM_FLAG_RUN_GET_CODEC_INFO:
+      begin
+       case ps4_sceAjmInstanceCodecType(uiInstance) of
+        SCE_AJM_CODEC_MP3_DEC:
+         begin
+          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_MP3_DEC');
+          u.sMp3CodecInfo.uiHeader       :=$00474154;
+          u.sMp3CodecInfo.ucCrc          :=1;
+          u.sMp3CodecInfo.ucMode         :=0;
+          u.sMp3CodecInfo.ucModeExtension:=0;
+          u.sMp3CodecInfo.ucCopyright    :=0;
+          u.sMp3CodecInfo.ucOriginal     :=0;
+          u.sMp3CodecInfo.ucEmphasis     :=0;
+          u.sMp3CodecInfo._reserved[0]   :=0;
+          u.sMp3CodecInfo._reserved[1]   :=0;
+          u.sMp3CodecInfo._reserved[2]   :=0;
+          commit(@u.sMp3CodecInfo,SizeOf(u.sMp3CodecInfo));
+         end;
+        SCE_AJM_CODEC_AT9_DEC:
+         begin
+          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_AT9_DEC');
+          u.sAt9CodecInfo.uiSuperFrameSize    :=1;
+          u.sAt9CodecInfo.uiFramesInSuperFrame:=1;
+          u.sAt9CodecInfo.uiNextFrameSize     :=1;
+          u.sAt9CodecInfo.uiFrameSamples      :=1;
+          commit(@u.sAt9CodecInfo,SizeOf(u.sAt9CodecInfo));
+         end;
+        SCE_AJM_CODEC_M4AAC_DEC:
+         begin
+          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_M4AAC_DEC');
+          u.sM4aacCodecInfo.uiHeaac   :=0;
+          u.sM4aacCodecInfo.uiReserved:=0;
+          commit(@u.sM4aacCodecInfo,SizeOf(u.sM4aacCodecInfo));
+         end;
+        else
+          begin
+           Writeln(stderr,'SCE_AJM_FLAG_RUN_GET_CODEC_INFO:',ps4_sceAjmInstanceCodecType(uiInstance));
+           Break;
+          end;
+       end;
+      end;
+
+    else
+      begin
+       Writeln(stderr,'Unknow Sideband Flag:1 << ',i);
+       Break;
+      end;
+   end;
+
+  end;
  end;
 end;
 
@@ -407,7 +648,7 @@ begin
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
-  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
+  FixSideband(uiInstance,uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
 end;
@@ -442,7 +683,7 @@ begin
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
-  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
+  FixSideband(uiInstance,uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
  FillChar(pDataOutput^,szDataOutputSize,0);
@@ -466,7 +707,7 @@ begin
  if (pSidebandOutput<>nil) then
  begin
   FillChar(pSidebandOutput^,szSidebandOutputSize,0);
-  FixSideband(uiFlags,pSidebandOutput,szSidebandOutputSize);
+  FixSideband(uiInstance,uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
  if (pDataOutputBuffers<>nil) and (szNumDataOutputBuffers<>0) then
