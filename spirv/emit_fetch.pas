@@ -531,18 +531,45 @@ Var
  tmp:TsrRegNode;
  exc:TsrRegNode;
 begin
- tmp:=NewReg(dtBool);
 
  case OpId of
-  Op.OpOrdered  :Assert(false,'TODO:OpOrdered');
-  Op.OpUnordered:Assert(false,'TODO:OpUnordered');
-  else;
+  Op.OpOrdered:
+    begin
+     //Op.OpOrdered   -> (!isNan(S0) && !isNan(S1)) -> !(isNan(S0) || isNan(S1))
+
+     if (src0=src1) then
+     begin
+      tmp:=OpIsNanTo(src0);
+     end else
+     begin
+      src0:=OpIsNanTo(src0);
+      src1:=OpIsNanTo(src1);
+      tmp:=OpOrTo(src0,src1);
+     end;
+
+     tmp:=OpNotTo(tmp);
+    end;
+  Op.OpUnordered:
+    begin
+     //Op.OpUnordered -> (isNan(S0) || isNan(S1))
+
+     if (src0=src1) then
+     begin
+      tmp:=OpIsNanTo(src0);
+     end else
+     begin
+      src0:=OpIsNanTo(src0);
+      src1:=OpIsNanTo(src1);
+      tmp:=OpOrTo(src0,src1);
+     end;
+
+    end;
+  else
+    begin
+     tmp:=NewReg(dtBool);
+     _Op2(line,OpId,tmp,src0,src1);
+    end;
  end;
-
- //Op.OpOrdered   -> (!isNan(S0) && !isNan(S1)) -> !(isNan(S0) || isNan(S1))
- //Op.OpUnordered -> (isNan(S0) || isNan(S1))
-
- _Op2(line,OpId,tmp,src0,src1);
 
  exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
 

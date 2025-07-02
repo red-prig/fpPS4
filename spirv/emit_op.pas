@@ -179,6 +179,7 @@ type
   function  OpLogicalOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpLogicalAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
+  function  OpIsNanTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpIEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpINotEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1542,7 +1543,6 @@ begin
  _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpFNegate,Result,src));
 end;
 
-
 //
 
 procedure TEmitOp.OpNot(dst:PsrRegSlot;src:TsrRegNode);
@@ -1627,6 +1627,12 @@ begin
 end;
 
 //
+
+function TEmitOp.OpIsNanTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpIsNan,Result,src));
+end;
 
 function TEmitOp.OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 var

@@ -1072,14 +1072,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
-
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
+
+ emit_src_abs_bit(@src,3,dtFloat32);
+ emit_src_neg_bit(@src,3,dtFloat32);
 
  case OpId of
   V_CUBEID_F32:
@@ -1143,6 +1141,9 @@ begin
   else
    Assert(false);
  end;
+
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
 
 end;
 
