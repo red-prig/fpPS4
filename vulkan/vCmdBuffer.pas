@@ -166,6 +166,13 @@ type
                                 regionCount:TVkUInt32;
                                 const pRegions:PVkBufferImageCopy);
 
+  procedure   CopyImage(srcImage:TVkImage;
+                        srcImageLayout:TVkImageLayout;
+                        dstImage:TVkImage;
+                        dstImageLayout:TVkImageLayout;
+                        regionCount:TVkUInt32;
+                        const pRegions:PVkImageCopy);
+
   procedure   BufferMemoryBarrier(buffer:TVkBuffer;
                                   srcAccessMask:TVkAccessFlags;
                                   dstAccessMask:TVkAccessFlags;
@@ -1140,6 +1147,35 @@ begin
   srcImage,
   srcImageLayout,
   dstBuffer,
+  regionCount,
+  pRegions);
+end;
+
+procedure TvCustomCmdBuffer.CopyImage(srcImage:TVkImage;
+                                      srcImageLayout:TVkImageLayout;
+                                      dstImage:TVkImage;
+                                      dstImageLayout:TVkImageLayout;
+                                      regionCount:TVkUInt32;
+                                      const pRegions:PVkImageCopy);
+begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ EndRenderPass;
+ if (not BeginCmdBuffer) then Exit;
+
+ Inc(cmd_count);
+
+ vkCmdCopyImage(
+  FCmdbuf,
+  srcImage,
+  srcImageLayout,
+  dstImage,
+  dstImageLayout,
   regionCount,
   pRegions);
 end;

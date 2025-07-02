@@ -154,8 +154,9 @@ type
   Destructor  Destroy; override;
  end;
 
-function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;
-function FindImage (cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
+function FetchImage  (cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;
+function ExtractImage(img:TvImage2):Boolean;
+function FindImage   (cmd:TvCustomCmdBuffer;Addr:Pointer;cformat:TVkFormat):TvImage2;
 
 Function get_image_size(const key:TvImageKey):Ptruint; external name 'tiling_get_image_size';
 
@@ -534,7 +535,9 @@ begin
 
  key_view:=F;
 
+ //TODO: more general type compatibility checking
  case FFormat of
+  //
   VK_FORMAT_R32_UINT,
   VK_FORMAT_R32_SINT,
   VK_FORMAT_R32_SFLOAT:
@@ -543,12 +546,24 @@ begin
      //downlift to image
      key_view.cformat:=FFormat;
     end;
-  VK_FORMAT_R16_UNORM:
+  //
+  VK_FORMAT_R16_UNORM,
+  VK_FORMAT_R16_SNORM,
+  VK_FORMAT_R16_UINT,
+  VK_FORMAT_R16_SINT,
+  VK_FORMAT_R16_SFLOAT:
     if (key_view.cformat=VK_FORMAT_D16_UNORM) then
     begin
      //downlift to image
      key_view.cformat:=FFormat;
     end;
+  //
+  VK_FORMAT_D32_SFLOAT,
+  VK_FORMAT_D16_UNORM:
+   begin
+    key_view.cformat:=FFormat;
+   end
+  //
   else;
  end;
 
@@ -1025,14 +1040,16 @@ begin
  t.Release(nil); //map ref
 end;
 
-procedure _DeleteAlias(const F:TvImageKey);
+function _DeleteAlias(const F:TvImageKey):Boolean;
 var
  t:TvCustomImage2;
 begin
  t:=_Find(F);
- if (t=nil) then Exit;
+ if (t=nil) then Exit(False);
 
  _DeleteImage(t);
+
+ Result:=True;
 end;
 
 function _InsertImage(t:TvCustomImage2):Boolean;
@@ -1282,6 +1299,26 @@ begin
  end;
 
  Result:=t;
+end;
+
+function ExtractImage(img:TvImage2):Boolean;
+var
+ t:TvCustomImage2;
+begin
+ if (img=nil) then Exit(False);
+
+ FImage2Set.Lock_wr;
+
+ t:=_Find(img.key);
+
+ Result:=(t=img);
+
+ if Result then
+ begin
+  _DeleteImage(t);
+ end;
+
+ FImage2Set.Unlock_wr;
 end;
 
 function FetchImage(cmd:TvCustomCmdBuffer;const F:TvImageKey;usage:s_image_usage):TvImage2;

@@ -986,6 +986,149 @@ const
  VK_ACCESS_BUF_ANY=ord(VK_ACCESS_MEMORY_READ_BIT) or ord(VK_ACCESS_MEMORY_WRITE_BIT);
  VK_STAGE_BUF_ANY =ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
+function _FetchImageForce(var ctx:t_me_render_context;const F:TvImageKey;usage:s_image_usage):TvImage2;
+begin
+ repeat
+
+  Result:=FetchImage(ctx.Cmd,F,usage);
+
+  if (Result=nil) then
+  begin
+   repeat
+    msleep_td(hz div 10000);
+   until ctx.WaitConfirm;
+   ctx.BeginCmdBuffer;
+  end;
+
+ until (Result<>nil);
+end;
+
+function ConvertImage(var ctx:t_me_render_context;usage:s_image_usage;src:TvImage2;ToFormat:TVkFormat):TvImage2;
+var
+ F:TvImageKey;
+ dst:TvImage2;
+ range:TVkImageCopy;
+ range_all:array[0..15] of TVkImageCopy;
+ i,m:Integer;
+begin
+ Assert(src<>nil);
+
+ F:=src.key;
+ F.cformat:=ToFormat;
+
+ if not ExtractImage(src) then
+ begin
+  Assert(false,'ExtractImage');
+ end;
+
+ dst:=_FetchImageForce(ctx,F,usage);
+
+ src.PushBarrier(ctx.cmd,
+                 ord(VK_ACCESS_TRANSFER_READ_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ dst.PushBarrier(ctx.cmd,
+                 ord(VK_ACCESS_TRANSFER_WRITE_BIT),
+                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
+
+ //
+ range.srcSubresource.aspectMask    :=GetAspectMaskByFormat(src.key.cformat);
+ range.srcSubresource.mipLevel      :=0;
+ range.srcSubresource.baseArrayLayer:=0;
+ range.srcSubresource.layerCount    :=src.key.params.layerCount;
+
+ range.srcOffset.x:=0;
+ range.srcOffset.y:=0;
+ range.srcOffset.z:=0;
+
+ range.dstSubresource.aspectMask    :=GetAspectMaskByFormat(dst.key.cformat);
+ range.dstSubresource.mipLevel      :=0;
+ range.dstSubresource.baseArrayLayer:=0;
+ range.dstSubresource.layerCount    :=dst.key.params.layerCount;
+
+ range.dstOffset.x:=0;
+ range.dstOffset.y:=0;
+ range.dstOffset.z:=0;
+
+ range.extent.width :=src.key.params.width;
+ range.extent.height:=src.key.params.height;
+ range.extent.depth :=src.key.params.depth;
+ //
+
+ m:=src.key.params.mipLevels;
+ For i:=0 to m-1 do
+ begin
+  range_all[i]:=range;
+  range_all[i].srcSubresource.mipLevel:=i;
+  range_all[i].dstSubresource.mipLevel:=i;
+ end;
+
+ ctx.Cmd.CopyImage(
+  src.FHandle,
+  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  dst.FHandle,
+  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  m,
+  @range_all[0]
+ );
+
+ Result:=dst;
+end;
+
+function FetchImageForce(var ctx:t_me_render_context;const F:TvImageKey;usage:s_image_usage):TvImage2;
+begin
+
+ Result:=_FetchImageForce(ctx,F,usage);
+
+ //function ExtractImage(img:TvImage2):Boolean;
+
+ Assert(Result<>nil);
+
+ //TODO: more general type compatibility checking
+ case Result.FFormat of
+  //
+  VK_FORMAT_R32_UINT,
+  VK_FORMAT_R32_SINT,
+  VK_FORMAT_R32_SFLOAT:
+    if (iu_depthstenc in usage) then
+    begin
+     //R32 -> D32
+     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D32_SFLOAT);
+    end;
+  //
+  VK_FORMAT_R16_UNORM,
+  VK_FORMAT_R16_SNORM,
+  VK_FORMAT_R16_UINT,
+  VK_FORMAT_R16_SINT,
+  VK_FORMAT_R16_SFLOAT:
+    if (iu_depthstenc in usage) then
+    begin
+     //R16 -> D16
+     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D16_UNORM);
+    end;
+  //
+  VK_FORMAT_D32_SFLOAT:
+   if (iu_storage in usage) then
+   begin
+    //D32 -> R32
+    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R32_SFLOAT);
+   end;
+  VK_FORMAT_D16_UNORM:
+   if (iu_storage in usage) then
+   begin
+    //D16 -> R16
+    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R16_UNORM);
+   end
+  //
+  else;
+ end;
+
+ ctx.RefToParent(Result);
+
+end;
+
 procedure Prepare_Uniforms(var ctx:t_me_render_context;
                            BindPoint:TVkPipelineBindPoint;
                            var UniformBuilder:TvUniformBuilder);
@@ -1067,22 +1210,9 @@ begin
 
     if (ri=nil) then
     begin
-     repeat
-
-      ri:=FetchImage(ctx.Cmd,
-                     FImage,
-                     resource_instance^.curr.img_usage
-                    );
-      if (ri=nil) then
-      begin
-       repeat until ctx.WaitConfirm;
-       ctx.BeginCmdBuffer;
-      end;
-     until (ri<>nil);
-
-     Assert(ri<>nil);
-
-     ctx.RefToParent(ri);
+     ri:=FetchImageForce(ctx,
+                         FImage,
+                         resource_instance^.curr.img_usage);
 
      resource_instance^.resource^.rimage:=ri;
     end;
@@ -1603,10 +1733,9 @@ begin
 
  ctx.Cmd.BeginLabel('ClearDepth');
 
- ri:=FetchImage(ctx.Cmd,
-                rt_info.DB_INFO.FImageInfo,
-                [iu_depthstenc]
-                );
+ ri:=FetchImageForce(ctx,
+                     rt_info.DB_INFO.FImageInfo,
+                     [iu_depthstenc]);
 
  Assert(ri<>nil);
 
@@ -1920,30 +2049,17 @@ begin
 
    if (ri=nil) then
    begin
-    repeat
 
-     img_usage:=[];
-     if (color_instance[i]<>nil) then
-     begin
-      {[iu_attachment]}
-      img_usage:=color_instance[i]^.curr.img_usage ;
-     end;
+    img_usage:=[];
+    if (color_instance[i]<>nil) then
+    begin
+     {[iu_attachment]}
+     img_usage:=color_instance[i]^.curr.img_usage;
+    end;
 
-     ri:=FetchImage(ctx.Cmd,
-                    ctx.rt_info^.RT_INFO[i].FImageInfo,
-                    img_usage
-                    );
-
-     if (ri=nil) then
-     begin
-      repeat until ctx.WaitConfirm;
-      ctx.BeginCmdBuffer;
-     end;
-    until (ri<>nil);
-
-    Assert(ri<>nil);
-
-    ctx.RefToParent(ri);
+    ri:=FetchImageForce(ctx,
+                        ctx.rt_info^.RT_INFO[i].FImageInfo,
+                        img_usage);
 
     if (color_instance[i]<>nil) then
     begin
@@ -2054,10 +2170,9 @@ begin
 
   if (ri=nil) then
   begin
-   ri:=FetchImage(ctx.Cmd,
-                  ctx.rt_info^.DB_INFO.FImageInfo,
-                  [iu_depthstenc]
-                  );
+   ri:=FetchImageForce(ctx,
+                       ctx.rt_info^.DB_INFO.FImageInfo,
+                       [iu_depthstenc]);
 
    Assert(ri<>nil);
 
@@ -2409,23 +2524,19 @@ begin
 
  ctx.Cmd.EndRenderPass;
 
- ri_src:=FetchImage(ctx.Cmd,
-                    node^.RT[0].FImageInfo,
-                    [iu_transfer]
-                    );
+ ri_src:=FetchImageForce(ctx,
+                         node^.RT[0].FImageInfo,
+                         [iu_transfer]
+                        );
 
  Assert(ri_src<>nil);
 
- ctx.RefToParent(ri_src);
-
- ri_dst:=FetchImage(ctx.Cmd,
-                    node^.RT[1].FImageInfo,
-                    [iu_transfer]
-                    );
+ ri_dst:=FetchImageForce(ctx,
+                         node^.RT[1].FImageInfo,
+                         [iu_transfer]
+                        );
 
  Assert(ri_dst<>nil);
-
- ctx.RefToParent(ri_dst);
 
  ri_src.PushBarrier(ctx.Cmd,
                     ord(VK_ACCESS_TRANSFER_READ_BIT),
