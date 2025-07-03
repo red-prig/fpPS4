@@ -135,26 +135,30 @@ const
 type
  p_teb=^teb;
  teb=packed record
-  SEH    :Pointer;
-  stack  :Pointer;
-  sttop  :Pointer;
-  _align1:array[0..28] of QWORD;
-  WOW64  :Pointer;                 //0x100
-  _align2:array[0..18] of QWORD;
-  _resrv1:array[0..3] of QWORD;
-  thread :Pointer;                 //0x1C0
-  fsbase :Pointer;                 //0x1C8
-  gsbase :Pointer;                 //0x1D0
-  jitcall:Pointer;                 //0x1D8
-  jit_trp:Pointer;                 //0x1E0
-  jit____:Pointer;                 //0x1E8
-  iflag  :QWORD;                   //0x1F0
-  _resrv2:array[0..17] of QWORD;
-  _align3:array[0..7] of QWORD;
-  actctx :Pointer;                 //0x2C8
-  _align4:array[0..180] of QWORD;
-  _align5:array[0..383] of QWORD;
-  DeallocationStack:Pointer;       //0x1478
+  SEH              :Pointer;
+  stack            :Pointer;
+  sttop            :Pointer;
+  SubSystemTib     :Pointer;
+  FiberData        :Pointer;
+  Arbitrary        :Pointer;
+  TIB              :Pointer;
+  _align1          :array[0..24] of QWORD;
+  WOW64            :Pointer;                 //0x100
+  _align2          :array[0..18] of QWORD;
+  _resrv1          :array[0..3] of QWORD;
+  thread           :Pointer;                 //0x1C0
+  fsbase           :Pointer;                 //0x1C8
+  gsbase           :Pointer;                 //0x1D0
+  jitcall          :Pointer;                 //0x1D8
+  jit_trp          :Pointer;                 //0x1E0
+  jit____          :Pointer;                 //0x1E8
+  iflag            :QWORD;                   //0x1F0
+  _resrv2          :array[0..17] of QWORD;
+  _align3          :array[0..7] of QWORD;
+  actctx           :Pointer;                 //0x2C8
+  _align4          :array[0..180] of QWORD;
+  _align5          :array[0..383] of QWORD;
+  DeallocationStack:Pointer;                 //0x1478
  end;
 
 const
@@ -193,6 +197,7 @@ type
   rsp:Pointer;
   rbp:Pointer;
   local_cache:array[0..255] of Pointer;
+  call_ret_cache:Pointer;
  end;
 
  pp_kthread=^p_kthread;

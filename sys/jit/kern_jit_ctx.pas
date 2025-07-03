@@ -293,6 +293,7 @@ function  flags(const ctx:t_jit_context2):t_jit_lea;
 
 procedure op_jit_interrupt(var ctx:t_jit_context2);
 
+procedure op_set_mem_imm(var ctx:t_jit_context2;mem:t_jit_leas;imm:Int64;hint:t_lea_hint=[]);
 procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
@@ -1774,6 +1775,61 @@ begin
 end;
 
 //
+
+procedure op_set_mem_imm(var ctx:t_jit_context2;mem:t_jit_leas;imm:Int64;hint:t_lea_hint=[]);
+var
+ mreg:t_jit_lea;
+ reg:TRegValue;
+begin
+ with ctx.builder do
+ begin
+  mreg:=Sums(mem);
+  if (mreg.AMemSize=os64) then
+  begin
+   //64
+   if (classif_offset_se64(imm)=os64) then
+   begin
+    //64 imm
+    if (not_use_r_tmp0 in hint) and
+       (not_use_r_tmp1 in hint) then
+    begin
+     //32bit zero extend (+0) (+4)
+     movi([mreg+0,os32],Lo(imm));
+     movi([mreg+4,os32],Hi(imm));
+     Exit;
+    end else
+    if (not_use_r_tmp0 in hint) then
+    begin
+     reg:=r_tmp1;
+    end else
+    begin
+     reg:=r_tmp0;
+    end;
+    //
+    if (classif_offset_u64(imm)=os64) then
+    begin
+     //64bit imm
+     movi64(reg,imm);
+     movq([mreg,os64],reg);
+    end else
+    begin
+     //32bit zero extend
+     movi(new_reg_size(reg,os32),imm);
+     movq([mreg,os64],reg);
+    end;
+    //64 imm
+   end else
+   begin
+    //32bit sign extend
+    movi([mreg,os64],imm);
+   end;
+   //64
+  end else
+  begin
+   movi(mem,imm);
+  end;
+ end;
+end;
 
 procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 begin

@@ -418,6 +418,9 @@ type
   procedure movi64  (reg:TRegValue  ;imm:Int64);
   procedure movq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure movq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure movbe   (reg:TRegValue  ;mem:t_jit_leas);
+  procedure movbe   (mem:t_jit_leas ;reg:TRegValue);
+  procedure bswap   (reg:TRegValue);
   procedure leaq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure addq    (mem:t_jit_leas ;reg:TRegValue);
   procedure addq    (reg:TRegValue  ;mem:t_jit_leas);
@@ -484,6 +487,8 @@ type
   procedure vmovdqa (reg0:TRegValue;reg1:TRegValue);
   procedure sahf;
   procedure lahf;
+  procedure saxf;
+  procedure laxf;
   procedure cli;
   procedure sti;
   procedure seto(reg:TRegValue);
@@ -614,7 +619,13 @@ begin
            1..127:Result:=os8;
   128..2147483647:Result:=os32;
   else
-                  Result:=os64;
+   if ((AOffset and QWORD($FFFFFFFF80000000))=QWORD($FFFFFFFF80000000)) then
+   begin
+    Result:=os32;
+   end else
+   begin
+    Result:=os64;
+   end;
  end;
 end;
 
@@ -4006,6 +4017,27 @@ begin
  _RM(desc,reg,mem); //MOV r/m64, r64
 end;
 
+procedure t_jit_builder.movbe(reg:TRegValue;mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$0F38F0;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
+procedure t_jit_builder.movbe(mem:t_jit_leas;reg:TRegValue);
+const
+ desc:t_op_type=(op:$0F38F1;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
+procedure t_jit_builder.bswap(reg:TRegValue);
+const
+ desc:t_op_type=(op:$0FC8;opt:[not_os8,not_prefix]);
+begin
+ _O(desc,reg);
+end;
+
 //
 
 procedure t_jit_builder.leaq(reg:TRegValue;mem:t_jit_leas);
@@ -5349,6 +5381,20 @@ end;
 procedure t_jit_builder.lahf;
 begin
  _O($9F);
+end;
+
+procedure t_jit_builder.saxf;
+begin
+ //store flags from al,ah
+ addi(al,127);
+ sahf;
+end;
+
+procedure t_jit_builder.laxf;
+begin
+ //load flags to al,ah
+ seto(al);
+ lahf;
 end;
 
 procedure t_jit_builder.cli;

@@ -1595,11 +1595,6 @@ end;
 
 //
 
-const
- bswap_desc:t_op_type=(
-  op:$0FC8;index:0
- );
-
 procedure op_bswap(var ctx:t_jit_context2);
 var
  new:TRegValue;
@@ -1612,7 +1607,7 @@ begin
 
    op_load(ctx,new,1);
 
-   _O(bswap_desc,new);
+   bswap(new);
 
    op_save(ctx,1,fix_size(new));
   end;

@@ -444,8 +444,7 @@ begin
    //swap
    xchgq(rbp,rax);
    //load flags to al,ah
-   seto(al);
-   lahf;
+   laxf;
    }
 
    op_set_reg_imm(ctx,m,mask);
@@ -467,8 +466,7 @@ begin
    //swap
    xchgq(rbp,rax);
    //load flags to al,ah
-   seto(al);
-   lahf;
+   saxf;
    }
 
    //PEXTRQ r/m64, xmm2, imm8

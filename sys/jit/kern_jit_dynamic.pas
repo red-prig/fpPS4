@@ -132,6 +132,7 @@ type
   procedure detach_plt_cache(uplock:p_jit_dynamic_blob;node:p_jplt_cache);
   procedure detach_all_attc;
   procedure detach_all_curr;
+  procedure detach_threads;
   function  add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dest_block:p_jit_dynamic_blob):p_jplt_cache;
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
@@ -273,6 +274,8 @@ end;
 procedure jit_ctx_free(td:p_kthread); public;
 begin
  //td^.td_jctx.block:=nil;
+ kmem_free(td^.td_jctx.call_ret_cache,64*1024);
+ td^.td_jctx.call_ret_cache:=nil;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -363,6 +366,11 @@ begin
  if (jctx^.rbp=nil) then
  begin
   jctx^.rbp:=td^.td_kstack.stack;
+ end;
+
+ if (jctx^.call_ret_cache=nil) then
+ begin
+  jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
  end;
 
  //tf_r14 not need to move
@@ -1370,6 +1378,57 @@ begin
  end;
 end;
 
+procedure t_jit_dynamic_blob.detach_threads;
+var
+ ttd:p_kthread;
+ call_ret_cache:PQWORD;
+ bend:QWORD;
+ src:QWORD;
+ i:Integer;
+begin
+ bend:=QWORD(base)+size;
+
+ threads_lock;
+
+   ttd:=TAILQ_FIRST(get_p_threads);
+   while (ttd<>nil) do
+   begin
+
+    //
+    call_ret_cache:=ttd^.td_jctx.call_ret_cache;
+
+    if (call_ret_cache<>nil) then
+    For i:=0 to (64*1024 div 16)-1 do
+    begin
+     src:=-call_ret_cache[i*2]; //-(-src)
+
+     if (src>=QWORD(base)) and (src<bend) then
+     begin
+      System.InterlockedCompareExchange64(call_ret_cache[i*2],0,-src);
+     end;
+
+    end;
+    //
+
+    //
+    for i:=0 to High(ttd^.td_jctx.local_cache) do
+    begin
+     src:=QWORD(ttd^.td_jctx.local_cache[i]);
+
+     if (src>=QWORD(base)) and (src<bend) then
+     begin
+      System.InterlockedCompareExchange64(QWORD(ttd^.td_jctx.local_cache[i]),0,src);
+     end;
+
+    end;
+    //
+
+    ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
+   end;
+
+ threads_unlock;
+end;
+
 function t_jit_dynamic_blob.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dest_block:p_jit_dynamic_blob):p_jplt_cache;
 var
  node:t_jplt_cache;
@@ -1756,6 +1815,7 @@ begin
  detach_all_entry;
  detach_all_attc;
  detach_all_curr;
+ detach_threads;
  detach_all_chunk;
 
  rw_wunlock(lock);

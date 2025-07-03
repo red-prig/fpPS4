@@ -222,6 +222,21 @@ begin
  end;
 end;
 
+function op_add_local_cache(var ctx:t_jit_context2):t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+  movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.call_ret_cache)]);
+
+  movi(r15w,Word(QWORD(ctx.ptr_next)*16));
+
+  Result:=leaj(r14,[rip+$7FFFFFFF],nil_link); //set deferred
+  movq([r15+8,os64],r14); //dst
+
+  op_set_mem_imm(ctx,[r15+0,os64],-Int64(ctx.ptr_next),[not_use_r_tmp1]); //-src
+ end;
+end;
+
 procedure op_call_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
 begin
  with ctx.builder do
@@ -231,6 +246,69 @@ begin
   //call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
 
   op_jmp_plt(ctx);
+
+  if (cb<>nil) then
+  begin
+   cb(ctx);
+  end;
+
+  jmp(r14);
+ end;
+end;
+
+//r14
+procedure op_ret_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
+var
+ link_jcxz:t_jit_i_link;
+ link_jmp :t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+  movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.call_ret_cache)]);
+
+  movq(r13,rcx); //save rcx
+
+  xorq(ecx,ecx);
+  leaq(rcx,[r14*8+rcx]);
+  leaq(r15w,[rcx+rcx]); //Word(r14*16)
+
+  movq(rcx,[r15]); //-src
+
+  leaq(rcx,[r14+rcx]); //r14+(-src)
+
+  link_jcxz:=jcxz(nil_link,as64,os8); //r14+(-src)=0
+
+  //plt cache fail
+
+  movq(rcx,r13); //restore rcx
+
+  //restore jit_frame in jit_jmp_dispatch
+
+  //stub plt link
+  xorq(r15d,r15d);
+  call_far(@jit_jmp_dispatch); //input:r14,r15 out:r14
+
+  //exit:
+  link_jmp:=jmp(nil_link,os8); //jmp _exit
+
+  //plt cache succes
+  link_jcxz.target:=ctx.builder.get_curr_label.after;
+
+  movq(rcx,r13); //restore rcx
+
+  //restore jit_frame
+  movq(r13,[GS +teb_thread]);
+  leaq(r13,[r13+jit_frame_offset]);
+
+  movq(r14,[r15+8]); //dst
+
+  //exit
+  link_jmp.target:=ctx.builder.get_curr_label.after;
+
+  //leap(r15);
+  //call_far(@jit_jmp_plt_cache); //input:r14,r15 out:r14
+
+  //op_jmp_plt(ctx);
 
   if (cb<>nil) then
   begin
@@ -372,8 +450,11 @@ var
  dst:Pointer;
  new1,new2:TRegValue;
  link:t_jit_i_link;
+ ret_dst:t_jit_i_link;
 begin
  ctx.label_flags:=ctx.label_flags or LF_JMP;
+
+ ret_dst:=op_add_local_cache(ctx);
 
  op_push_rip_part0(ctx);
 
@@ -446,6 +527,11 @@ begin
   op_call_dispatcher(ctx,@op_push_rip_part1);
  end;
 
+ if (ret_dst<>nil_link) then
+ begin
+  ret_dst.target:=ctx.builder.get_curr_label.after;
+ end;
+
  //
  ctx.add_forward_point(fpCall,ctx.ptr_next);
 end;
@@ -459,11 +545,13 @@ begin
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
- op_pop_rip_part0(ctx,imm); //out:r14
- //
  ctx.imm:=imm;
 
- op_jmp_dispatcher(ctx,@op_pop_rip_part1);
+ //
+ op_pop_rip_part0(ctx,imm); //out:r14
+ //
+
+ op_ret_dispatcher(ctx,@op_pop_rip_part1);
  //
  trim_flow(ctx);
 end;
@@ -1073,8 +1161,7 @@ begin
   _O($0FA2);    //cpuid
 
   //load flags to al,ah
-  seto(al);
-  lahf;
+  laxf;
 
   shri8  (ebx,6); //cpu_id
   andi8se(ebx,7); //0..7
@@ -1083,8 +1170,7 @@ begin
   subq   (ecx,ebx); //7-cpu_id
 
   //store flags from al,ah
-  addi(al,127);
-  sahf;
+  saxf;
 
   movq(rbx,r_tmp0); //restore rbx
 
@@ -1752,6 +1838,15 @@ begin
 
  if Pos('sceAudioOut',str)<>0 then Exit;
 
+ case str of
+  'sceNpCheckCallback'                :Exit;
+  'sceNetCtlCheckCallback'            :Exit;
+  'sceUserServiceGetEvent'            :Exit;
+  'sceNpCheckCallbackForLib'          :Exit;
+  'sceNetCtlCheckCallbackForNpToolkit':Exit;
+  'sceSystemServiceGetStatus'         :Exit;
+ end;
+
  Writeln(str,'->');
 end;
 
@@ -1766,6 +1861,15 @@ begin
  end;
 
  if Pos('sceAudioOut',str)<>0 then Exit;
+
+ case str of
+  'sceNpCheckCallback'                :Exit;
+  'sceNetCtlCheckCallback'            :Exit;
+  'sceUserServiceGetEvent'            :Exit;
+  'sceNpCheckCallbackForLib'          :Exit;
+  'sceNetCtlCheckCallbackForNpToolkit':Exit;
+  'sceSystemServiceGetStatus'         :Exit;
+ end;
 
  Writeln(str,'<-');
 end;
