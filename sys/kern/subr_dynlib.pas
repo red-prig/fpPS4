@@ -3588,12 +3588,12 @@ begin
   fname:=find_by_ext('/'+p_proc.p_randomized_path+'/priv/lib'+inc_unix_sep(path));
   if (fname<>'') then goto _do_load;
 
-  //try /system/*
-  fname:=find_by_ext('/'+p_proc.p_randomized_path+inc_unix_sep(basename));
-  if (fname<>'') then goto _do_load;
-
   //try path
   fname:=find_by_ext(path);
+  if (fname<>'') then goto _do_load;
+
+  //try /system/*
+  fname:=find_by_ext('/'+p_proc.p_randomized_path+inc_unix_sep(basename));
   if (fname<>'') then goto _do_load;
  end else
  begin
