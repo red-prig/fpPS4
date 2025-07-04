@@ -497,6 +497,9 @@ type
   procedure bti8 (mem:t_jit_leas;imm:Byte);
   procedure shlx (reg0,reg1,reg2:TRegValue);
   procedure shrx (reg0,reg1,reg2:TRegValue);
+  procedure movqx (reg0,reg1:TRegValue);
+  procedure pinsrq(reg0,reg1:TRegValue;imm8:Byte);
+  procedure pextrq(reg0,reg1:TRegValue;imm8:Byte);
  end;
 
 operator :=(const A:TRegValue):t_jit_lea;
@@ -5449,6 +5452,27 @@ const
  );
 begin
  _VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+end;
+
+procedure t_jit_builder.movqx(reg0,reg1:TRegValue);
+const
+ desc:t_op_type=(op:$660F7E;index:0);
+begin
+ _RR(desc,reg0,reg1,reg0.ASize); //66 REX.W 0F 7E /r MOVQ r/m64, xmm
+end;
+
+procedure t_jit_builder.pinsrq(reg0,reg1:TRegValue;imm8:Byte);
+const
+ desc:t_op_type=(op:$660F3A22;index:0);
+begin
+ _RRI8(desc,reg1,reg0,imm8,reg1.ASize);
+end;
+
+procedure t_jit_builder.pextrq(reg0,reg1:TRegValue;imm8:Byte);
+const
+ desc:t_op_type=(op:$660F3A16;index:0);
+begin
+ _RRI8(desc,reg0,reg1,imm8,reg0.ASize);
 end;
 
 end.

@@ -363,27 +363,6 @@ end;
  xmm0[0:63] = a;
 }
 
-procedure movq_r_xmm(var ctx:t_jit_context2;reg0,reg1:TRegValue);
-const
- desc:t_op_type=(op:$660F7E;index:0);
-begin
- ctx.builder._RR(desc,reg0,reg1,reg0.ASize); //66 REX.W 0F 7E /r MOVQ r/m64, xmm
-end;
-
-procedure pinsrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
-const
- desc:t_op_type=(op:$660F3A22;index:0);
-begin
- ctx.builder._RRI8(desc,reg1,reg0,imm8,reg1.ASize);
-end;
-
-procedure pextrq(var ctx:t_jit_context2;reg0,reg1:TRegValue;imm8:Byte);
-const
- desc:t_op_type=(op:$660F3A16;index:0);
-begin
- ctx.builder._RRI8(desc,reg0,reg1,imm8,reg0.ASize);
-end;
-
 procedure op_insertq(var ctx:t_jit_context2);
 var
  len,idx:Int64;
@@ -431,10 +410,10 @@ begin
     //special case
 
     //b = xmm1[0:63]
-    movq_r_xmm(ctx,b,xmm_b);
+    movqx(b,xmm_b);
 
     //xmm0[0:63] = b;
-    pinsrq(ctx,xmm_a,b,0);
+    pinsrq(xmm_a,b,0);
 
     Exit;
    end;
@@ -450,7 +429,7 @@ begin
    op_set_reg_imm(ctx,m,mask);
 
    //b = xmm1[0:63]
-   movq_r_xmm(ctx,b,xmm_b);
+   movqx(b,xmm_b);
 
    if (idx<>0) then
    begin
@@ -470,7 +449,7 @@ begin
    }
 
    //PEXTRQ r/m64, xmm2, imm8
-   pextrq (ctx,m,xmm_b,1);
+   pextrq (m,xmm_b,1);
 
    movq   (b,m);
    andi8se(b,$3F);   // b = len = m[0]
@@ -513,13 +492,13 @@ begin
    b:=t;
 
    //b = xmm1[0:63]
-   movq_r_xmm(ctx,b,xmm_b);
+   movqx(b,xmm_b);
 
    shlx (b,b,a); // b = b shl idx:[0x3F]
   end;
 
   //a = xmm0[0:63]
-  movq_r_xmm(ctx,a,xmm_a);
+  movqx(a,xmm_a);
 
   andq(b,m);
   notq(m);
@@ -528,7 +507,7 @@ begin
 
   //xmm0[0:63] = a;
   //PINSRQ xmm1, r/m64, imm8
-  pinsrq(ctx,xmm_a,a,0);
+  pinsrq(xmm_a,a,0);
 
   popfq(os64);
   {
