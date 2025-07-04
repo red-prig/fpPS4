@@ -520,7 +520,7 @@ operator :=(const A:TOperandSize):t_jit_lea; inline;
 operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
 
 function Sums(mem:t_jit_leas):t_jit_lea;
-function mem_size(mem:t_jit_leas):TOperandSize; inline;
+function get_mem_size(mem:t_jit_leas):TOperandSize; inline;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):TOperandSize;
@@ -857,7 +857,7 @@ begin
  end;
 end;
 
-function mem_size(mem:t_jit_leas):TOperandSize; inline;
+function get_mem_size(mem:t_jit_leas):TOperandSize; inline;
 begin
  Result:=Sums(mem).AMemSize;
 end;

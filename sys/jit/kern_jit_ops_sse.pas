@@ -68,15 +68,16 @@ const
   mem_reg:(op:0;opt:[not_os8,not_prefix]);
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[];
+  reg_im8:(op:0;opt:[not_os8,not_prefix]);
+  hint:[his_mri8,his_unbs]; //TODO: check balanced
  );
 var
  tmp:t_op_desc;
 begin
  tmp:=desc;
  tmp.mem_reg.op:=ctx.dis.opcode;
- tmp.hint:=hint;
+ tmp.reg_im8.op:=ctx.dis.opcode;
+ tmp.hint:=tmp.hint+hint;
 
  op_emit2_simd(ctx,tmp);
 end;
@@ -86,18 +87,17 @@ const
  desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
   reg_mem:(op:0;opt:[not_os8,not_prefix]);
-  reg_imm:(op:0;opt:[not_os8,not_prefix]);
+  reg_imm:(opt:[not_impl]);
   reg_im8:(op:0;opt:[not_os8,not_prefix]);
-  hint:[];
+  hint:[his_unbs]; //TODO: check balanced
  );
 var
  tmp:t_op_desc;
 begin
  tmp:=desc;
  tmp.reg_mem.op:=ctx.dis.opcode;
- tmp.reg_imm.op:=ctx.dis.opcode;
  tmp.reg_im8.op:=ctx.dis.opcode;
- tmp.hint:=hint;
+ tmp.hint:=tmp.hint+hint;
 
  op_emit2_simd(ctx,tmp);
 end;
@@ -120,6 +120,17 @@ begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
   op_emit2_simd_reg_mem(ctx,[his_wo]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+procedure op_mem_reg_wo(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  op_emit2_simd_mem_reg(ctx,[his_wo]);
  end else
  begin
   add_orig(ctx);
@@ -169,7 +180,7 @@ const
   reg_mem:(op:$F20F10;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
+  hint:[his_mov,his_wo,his_unbs];
  );
 
 procedure op_movsd(var ctx:t_jit_context2);
@@ -189,7 +200,7 @@ const
   reg_mem:(op:$F30F10;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
+  hint:[his_mov,his_wo,his_unbs];
  );
 
 procedure op_movss(var ctx:t_jit_context2);
@@ -536,7 +547,7 @@ const
   reg_mem:(op:$0F12;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
+  hint:[his_mov,his_wo,his_unbs];
  );
 
 procedure op_movl_ps_pd(var ctx:t_jit_context2);
@@ -558,7 +569,7 @@ const
   reg_mem:(op:$0F16;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[his_mov,his_wo];
+  hint:[his_mov,his_wo,his_unbs];
  );
 
 procedure op_movh_ps_pd(var ctx:t_jit_context2);
@@ -614,6 +625,26 @@ const
 procedure op_stmxcsr(var ctx:t_jit_context2);
 begin
  op_emit1(ctx,stmxcsr_desc,[his_wo]);
+end;
+
+procedure op_pextrw(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  if (ctx.dis.opcode=$0F3A15) then
+  begin
+   //PEXTRW reg/m16, xmm, imm8
+   op_emit2_simd_mem_reg(ctx,[his_wo]);
+  end else
+  begin
+   //PEXTRW reg,  mm, imm8
+   //PEXTRW reg, xmm, imm8
+   op_emit2_simd_reg_mem(ctx,[his_wo]);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
 end;
 
 //REX.W
@@ -837,6 +868,11 @@ begin
 
  jit_cbs[OPPnone,OPcvtpi2 ,OPSx_pd]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPcvtpi2 ,OPSx_ps]:=@op_reg_mem_wo;
+
+ jit_cbs[OPPnone,OPpextr,OPSx_b]:=@op_mem_reg_wo;
+ jit_cbs[OPPnone,OPpextr,OPSx_d]:=@op_mem_reg_wo;
+ jit_cbs[OPPnone,OPpextr,OPSx_q]:=@op_mem_reg_wo;
+ jit_cbs[OPPnone,OPpextr,OPSx_w]:=@op_pextrw;
 
  jit_cbs[OPPnone,OPsqrt,OPSx_ps]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPsqrt,OPSx_pd]:=@op_reg_mem_wo;

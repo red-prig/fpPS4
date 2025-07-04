@@ -266,7 +266,7 @@ const
   reg_mem:(opt:[not_impl]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
-  hint:[];
+  hint:[his_mri8];
  );
 var
  tmp:t_op_desc;
@@ -277,7 +277,7 @@ begin
  tmp.mem_reg.mm     :=ctx.dis.mm;
  tmp.mem_reg.vw_mode:=get_vw_mode(ctx);
  tmp.mem_reg.vl_mode:=get_vl_mode(ctx);
- tmp.hint:=hint;
+ tmp.hint:=tmp.hint+hint;
  //
  op_emit_avx2(ctx,tmp);
 end;
