@@ -6,26 +6,8 @@ unit ps4_libSceNetCtl;
 interface
 
 uses
- subr_dynlib;
-
-const
- SCE_NET_INET_ADDRSTRLEN=16;
-
- SCE_NET_ETHER_ADDR_LEN  =6;
- SCE_NET_ETHER_ADDRSTRLEN=18;
-
-type
- SceNetInAddr_t=DWORD;
-
- pSceNetInAddr=^SceNetInAddr;
- SceNetInAddr=packed record
-  s_addr:SceNetInAddr_t;
- end;
-
- pSceNetEtherAddr=^SceNetEtherAddr;
- SceNetEtherAddr=packed record
-  data:array[0..SCE_NET_ETHER_ADDR_LEN-1] of Byte;
- end;
+ subr_dynlib,
+ ps4_libnet;
 
 implementation
 

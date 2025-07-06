@@ -100,6 +100,7 @@ uses
  ps4_libSceSharePlay,
  ps4_libScePlayGo,
  ps4_libSceAjm,
+ ps4_libSceCompanionUtil,
  //internal libs
 
  kern_rtld,

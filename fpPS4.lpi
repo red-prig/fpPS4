@@ -49,6 +49,9 @@
             </Options>
           </Linking>
           <Other>
+            <OtherDefines Count="1">
+              <Define0 Value="DEBUG_MTX"/>
+            </OtherDefines>
             <ExecuteAfter>
               <Command Value="$(ProjPath)\tools\fp_rebase\fp_rebase$(ExeExt) &quot;$(OutputFile)&quot; -rebase 0xB0000000000 -dwarf"/>
               <ShowAllMessages Value="True"/>
@@ -1603,6 +1606,15 @@
         <Filename Value="src\np\ps4_libscenpparty.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceNpParty"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscecompanionutil.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceCompanionUtil"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libnet.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
   </ProjectOptions>

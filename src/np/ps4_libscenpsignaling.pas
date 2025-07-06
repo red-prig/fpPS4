@@ -11,7 +11,7 @@ uses
 implementation
 
 uses
- ps4_libSceNetCtl,
+ ps4_libnet,
  ps4_libSceNpCommon;
 
 const

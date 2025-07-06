@@ -1,14 +1,13 @@
 unit ps4_libSceCompanionUtil;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
 uses
- ps4_program,
- ps4_libSceNet,
- Classes,
- SysUtils;
+ subr_dynlib,
+ ps4_libnet;
 
 const
  SCE_COMPANION_UTIL_ERROR_NO_EVENT=-2136145912; //0x80AD0008
@@ -41,36 +40,38 @@ type
 
 implementation
 
-function ps4_sceCompanionUtilOptParamInitialize(pOptParam:SceCompanionUtilOptParam):Integer; SysV_ABI_CDecl;
+function ps4_sceCompanionUtilOptParamInitialize(pOptParam:SceCompanionUtilOptParam):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceCompanionUtilInitialize(const option:pSceCompanionUtilOptParam):Integer; SysV_ABI_CDecl;
+function ps4_sceCompanionUtilInitialize(const option:pSceCompanionUtilOptParam):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceCompanionUtilGetEvent(pEvent:pSceCompanionUtilEvent):Integer; SysV_ABI_CDecl;
+function ps4_sceCompanionUtilGetEvent(pEvent:pSceCompanionUtilEvent):Integer;
 begin
  Result:=SCE_COMPANION_UTIL_ERROR_NO_EVENT;
 end;
 
-function Load_libSceCompanionUtil(Const name:RawByteString):TElf_node;
+function Load_libSceCompanionUtil(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
+ Result:=obj_new_int('libSceCompanionUtil');
 
- lib:=Result._add_lib('libSceCompanionUtil');
- lib^.set_proc($20F37F1514AB69F9,@ps4_sceCompanionUtilOptParamInitialize);
- lib^.set_proc($C5BD7194885FD106,@ps4_sceCompanionUtilInitialize);
- lib^.set_proc($704E4CB32D755A15,@ps4_sceCompanionUtilGetEvent);
+ lib:=Result^.add_lib('libSceCompanionUtil');
+ lib.set_proc($20F37F1514AB69F9,@ps4_sceCompanionUtilOptParamInitialize);
+ lib.set_proc($C5BD7194885FD106,@ps4_sceCompanionUtilInitialize);
+ lib.set_proc($704E4CB32D755A15,@ps4_sceCompanionUtilGetEvent);
 end;
 
+var
+ stub:t_int_file;
+
 initialization
- ps4_app.RegistredPreLoad('libSceCompanionUtil.prx',@Load_libSceCompanionUtil);
+ RegisteredInternalFile(stub,'libSceCompanionUtil.prx',@Load_libSceCompanionUtil);
 
 end.
 
