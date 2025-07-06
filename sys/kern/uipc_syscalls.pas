@@ -25,14 +25,14 @@ uses
  kern_thr,
  kern_descrip,
  sys_conf,
+ kern_socket,
  vsocket,
  sockopt,
  vsocketvar,
  vuio,
  vfile,
  vfcntl,
- vcapability,
- subr_backtrace;
+ vcapability;
 
 {
  Convert a user file descriptor to a kernel file entry and check that, if
@@ -68,41 +68,6 @@ begin
  fpp^:=fp;
  Exit(0);
 end;
-
-function soo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
-begin
- Result:=0;
-
- Writeln('soo_ioctl(0x',HexStr(com,8),')');
-
- case com of
-  $802450C9: //-bnet_is_system_process()
-            begin
-             PInteger(data)^:=0; //-is_system
-            end;
-  else
-   begin
-    print_error_td('soo_ioctl(0x'+HexStr(com,8)+')');
-    Assert(False);
-   end;
- end;
-
-end;
-
-const
- socketops:fileops=(
-  fo_read    :fo_rdwr_t    (@_nullop  );
-  fo_write   :fo_rdwr_t    (@_nullop  );
-  fo_truncate:fo_truncate_t(@_nullop  );
-  fo_ioctl   :fo_ioctl_t   (@soo_ioctl);
-  fo_poll    :fo_poll_t    (@_nullop  );
-  fo_kqfilter:fo_kqfilter_t(@_nullop  );
-  fo_stat    :fo_stat_t    (@_nullop  );
-  fo_close   :fo_close_t   (@_nullop  );
-  fo_chmod   :fo_chmod_t   (@_einval  );
-  fo_chown   :fo_chown_t   (@_einval  );
-  fo_flags   :0;
- );
 
 function sys_socket(domain,stype,protocol:Integer):Integer;
 var

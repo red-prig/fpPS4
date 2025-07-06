@@ -1228,8 +1228,9 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="spirv\Half16.pas"/>
+        <Filename Value="spirv\half16.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="Half16"/>
       </Unit>
       <Unit>
         <Filename Value="spirv\spirv.pas"/>
@@ -1614,6 +1615,10 @@
       </Unit>
       <Unit>
         <Filename Value="src\ps4_libnet.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="sys\kern\kern_socket.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
