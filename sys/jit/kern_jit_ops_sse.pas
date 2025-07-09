@@ -216,18 +216,52 @@ end;
 
 const
  mov_dq_desc:t_op_desc=(
-  mem_reg:(op:$0F7E;opt:[not_os8,not_prefix]);
-  reg_mem:(op:$0F6E;opt:[not_os8,not_prefix]);
+  mem_reg:(op:$0F7F;opt:[not_os8,not_prefix]);
+  reg_mem:(op:$0F6F;opt:[not_os8,not_prefix]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
  );
 
+ //NP 0F 6E         /r MOVD mm, r/m32
+ //NP REX.W + 0F 6E /r MOVQ mm, r/m64
+ //NP 0F 7E         /r MOVD r/m32, mm
+ //NP REX.W + 0F 7E /r MOVQ r/m64, mm
+ //66 0F 6E         /r MOVD xmm, r/m32
+ //66 REX.W 0F 6E   /r MOVQ xmm, r/m64
+ //66 0F 7E         /r MOVD r/m32, xmm
+ //66 REX.W 0F 7E   /r MOVQ r/m64, xmm
+
+ //NP 0F 6F /r MOVQ mm, mm/m64
+ //NP 0F 7F /r MOVQ mm/m64, mm
+
+ //F3 0F 7E /r MOVQ xmm1, xmm2/m64
+ //66 0F D6 /r MOVQ xmm2/m64, xmm1
+
 procedure op_movd_dq(var ctx:t_jit_context2);
 begin
  if is_preserved(ctx.din) or is_memory(ctx.din) then
  begin
-  op_emit2_simd(ctx,mov_dq_desc);
+
+  case ctx.dis.opcode of
+   $0F6E:op_emit2_simd_reg_mem(ctx,[his_mov,his_wo]);
+   $0F7F:op_emit2_simd(ctx,mov_dq_desc); //mem_reg
+   $0F6F:op_emit2_simd(ctx,mov_dq_desc); //reg_mem;
+   $0FD6:op_emit2_simd_mem_reg(ctx,[his_mov,his_wo]);
+
+   $0F7E:
+    if (ctx.dis.SimdOpcode=soF3) then
+    begin
+     op_emit2_simd_reg_mem(ctx,[his_mov,his_wo]);
+    end else
+    begin
+     op_emit2_simd_mem_reg(ctx,[his_mov,his_wo]);
+    end;
+
+   else
+    Assert(false);
+  end;
+
  end else
  begin
   add_orig(ctx);
@@ -356,12 +390,14 @@ begin
 end;
 
 {
+ note: xmm0[64:127] -> will be cleared so that temp values can be saved
+
  a = xmm0[0:63]
  b = xmm1[0:63]
 
  mask = 0xFFFFFFFFFFFFFFFF;
 
- m = mask shl (64 - (idx + len));
+ m = mask shl (64 - len);
  m = m    shr (64 - len);
  m = m    shl idx;
 
@@ -371,15 +407,51 @@ end;
  a = (not m) and a;
  a = a or b;
 
- xmm0[0:63] = a;
+ xmm0[0  :63] = a;
+ xmm0[64:127] = 0;
 }
 
 procedure op_insertq(var ctx:t_jit_context2);
 var
- len,idx:Int64;
+ imm:Int64;
+ len,idx:Byte;
  mask:QWORD;
  xmm_a,xmm_b:TRegValue;
- a,b,m,t:TRegValue;
+ a,b,m,s,ta,tb:TRegValue;
+
+ procedure clear_hi; inline;
+ begin
+  with ctx.builder do
+  begin
+   //clear hi 64bit
+   ta:=new_reg_size(a,os32);
+   xorq(ta,ta);
+   pinsrq(xmm_a,a,1);
+  end;
+ end;
+
+ procedure save_flags; inline;
+ begin
+  with ctx.builder do
+  begin
+   movq  (a,rax);       // save rax
+   laxf;                // ax = flags
+   pinsrq(xmm_a,rax,1); // xmm_a[64:127] = rax
+   movq  (rax,a);       // restore rax
+  end;
+ end;
+
+ procedure restore_flags; inline;
+ begin
+  with ctx.builder do
+  begin
+   movq  (a,rax);         // save rax
+   pextrq(rax,xmm_a,1);   // rax = xmm_a[64:127]
+   sahf;                  // flags = ax
+   movq  (rax,a);         // restore rax
+  end;
+ end;
+
 begin
 
  xmm_a:=new_reg(ctx.din.Operand[1]);
@@ -396,22 +468,26 @@ begin
   begin
    //insertq xmm0,xmm1,$10,$30
 
-   len:=0;
-   GetTargetOfs(ctx.din,ctx.code,3,len);
+   imm:=0;
+   GetTargetOfs(ctx.din,ctx.code,3,imm);
+   len:=imm;
 
-   idx:=0;
-   GetTargetOfs(ctx.din,ctx.code,4,idx);
-
-   len:=len and $3F;
-   idx:=idx and $3F;
+   imm:=0;
+   GetTargetOfs(ctx.din,ctx.code,4,imm);
+   idx:=imm;
 
    mask:=QWORD($FFFFFFFFFFFFFFFF);
-   mask:=mask shl (64 - (idx + len));
-   mask:=mask shr (64 - len);
-   mask:=mask shl idx;
+   //shift automatically masks at [0:5]
+   mask:=mask shl (64 - len); //clear hi
+   mask:=mask shr (64 - len); //restore
+   mask:=mask shl idx;        //shift
 
    if (mask=0) then
    begin
+    //special case
+
+    clear_hi;
+
     //nop
     Exit;
    end;
@@ -426,16 +502,12 @@ begin
     //xmm0[0:63] = b;
     pinsrq(xmm_a,b,0);
 
+    clear_hi;
+
     Exit;
    end;
 
-   pushfq(os64);
-   {
-   //swap
-   xchgq(rbp,rax);
-   //load flags to al,ah
-   laxf;
-   }
+   save_flags;
 
    op_set_reg_imm(ctx,m,mask);
 
@@ -451,62 +523,45 @@ begin
   begin
    //insertq xmm0,xmm1
 
-   pushfq(os64);
-   {
-   //swap
-   xchgq(rbp,rax);
-   //load flags to al,ah
-   saxf;
-   }
+   save_flags;
+
+   //save rcx
+   s:=a;
+   a:=rcx;
+   movq   (s,a);
 
    //PEXTRQ r/m64, xmm2, imm8
-   pextrq (m,xmm_b,1);
+   pextrq (a,xmm_b,1); // a:=xmm_b[64:127]; -> len:[0:5] pos:[8:13]
 
-   movq   (b,m);
-   andi8se(b,$3F);   // b = len = m[0]
+   ta:=new_reg_size(a,os8);
+   tb:=new_reg_size(b,os8);
 
-   t:=new_reg_size(a,os32);
-   movi   (t,64);    // a = 64 (zero extended)
-   subq   (a,b);     // a = (64 - len)
+   movq   (tb,ta);     // b[0:7] = a[0:7]
+   movi   (ta,64);     // a[0:7] = 64
+   subq   (ta,tb);     // a[0:7] = (64 - len)
 
-   shri8  (m,8);     // m[0] = 0
-   shli8  (m,8);
+   movi   (m,-1);      // m = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
 
-   movq   (b,a);
-   andi8se(b,$3F);
-   orq    (m,b);     // m[0] = (64 - len)
+   shl_cl (m);         // m = m shl a:(64 - len):[0:5]
+   shr_cl (m);         // m = m shr a:(64 - len):[0:5]
 
-   movq   (b,m);
-   shri8  (b,8);
-   andi8se(b,$3F);   // b = idx = m[1]
+   shri8  (a,8);       // len:[0:5] pos:[8:13] -> pos:[0:5]
 
-   subq   (a,b);     // a = (64 - len - idx)
-
-   movi   (b,-1);    // b = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
-
-   shlx   (b,b,a);   // b = b shl (64 - idx - len)
-
-   shrx   (b,b,m);   // b = b shr (64 - len):[0x3F]
-
-   shri8  (m,8);     // m[0] = m[1]
-
-   shlx   (b,b,m);   // b = b shl idx:[0x3F]
-
-   //reassign
-   //m -> a (idx)
-   //b -> m (mask)
-   //a -> b
-
-   t:=a;
-   a:=m;
-   m:=b;
-   b:=t;
+   shl_cl (m);         // m = m shl pos:[0:5]
 
    //b = xmm1[0:63]
-   movqx(b,xmm_b);
+   movqx  (b,xmm_b);
 
-   shlx (b,b,a); // b = b shl idx:[0x3F]
+   shl_cl (b);         // b = b shl idx:[0:5]
+
+   //restore rcx
+   movq   (a,s);
+   a:=s;
+
   end;
+
+  //input: b->shifted value xmm1
+  //input: m->shifted mask
 
   //a = xmm0[0:63]
   movqx(a,xmm_a);
@@ -520,17 +575,9 @@ begin
   //PINSRQ xmm1, r/m64, imm8
   pinsrq(xmm_a,a,0);
 
-  popfq(os64);
-  {
-  //store flags from al,ah
-  addi(al,127);
-  sahf;
-  //swap
-  xchgq(rbp,rax);
+  restore_flags;
 
-  //restore rbp
-  movq(rbp,rsp);
-  }
+  clear_hi;
 
   //restore jit_frame
   movq(r13,[GS +teb_thread]);

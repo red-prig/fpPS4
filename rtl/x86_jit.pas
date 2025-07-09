@@ -434,6 +434,8 @@ type
   procedure subi    (reg:TRegValue  ;imm:Int64);
   procedure subi8se (reg:TRegValue  ;imm:ShortInt);
   procedure subi8se (mem:t_jit_leas ;imm:ShortInt);
+  procedure shl_cl  (reg:TRegValue);
+  procedure shr_cl  (reg:TRegValue);
   procedure shli8   (reg:TRegValue  ;imm:Byte);
   procedure shri8   (reg:TRegValue  ;imm:Byte);
   procedure andi    (reg:TRegValue  ;imm:Int64);
@@ -4141,6 +4143,20 @@ begin
 end;
 
 ///
+
+procedure t_jit_builder.shl_cl(reg:TRegValue);
+const
+ desc:t_op_type=(op:$D3;index:4);
+begin
+ _R(desc,reg);
+end;
+
+procedure t_jit_builder.shr_cl(reg:TRegValue);
+const
+ desc:t_op_type=(op:$D3;index:5);
+begin
+ _R(desc,reg);
+end;
 
 procedure t_jit_builder.shli8(reg:TRegValue;imm:Byte);
 const
