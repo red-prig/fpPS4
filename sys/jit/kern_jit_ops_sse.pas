@@ -586,6 +586,189 @@ begin
 
 end;
 
+{
+ note: xmm0[64:127] -> will be cleared so that temp values can be saved
+
+ a = xmm0[0:63]
+
+ mask = 0xFFFFFFFFFFFFFFFF;
+
+ m = mask shl (64 - len);
+ m = m    shr (64 - len);
+ m = m    shl idx;
+
+ a = a and m;
+ a = a shr idx;
+
+ xmm0[0  :63] = a;
+ xmm0[64:127] = 0;
+}
+
+procedure op_extrq(var ctx:t_jit_context2);
+var
+ imm:Int64;
+ len,idx:Byte;
+ mask:QWORD;
+ xmm_a,xmm_b:TRegValue;
+ a,b,m,s,ta,tb:TRegValue;
+
+ procedure clear_hi; inline;
+ begin
+  with ctx.builder do
+  begin
+   //clear hi 64bit
+   ta:=new_reg_size(a,os32);
+   xorq(ta,ta);
+   pinsrq(xmm_a,a,1);
+  end;
+ end;
+
+ procedure save_flags; inline;
+ begin
+  with ctx.builder do
+  begin
+   movq  (a,rax);       // save rax
+   laxf;                // ax = flags
+   pinsrq(xmm_a,rax,1); // xmm_a[64:127] = rax
+   movq  (rax,a);       // restore rax
+  end;
+ end;
+
+ procedure restore_flags; inline;
+ begin
+  with ctx.builder do
+  begin
+   movq  (a,rax);         // save rax
+   pextrq(rax,xmm_a,1);   // rax = xmm_a[64:127]
+   sahf;                  // flags = ax
+   movq  (rax,a);         // restore rax
+  end;
+ end;
+
+begin
+
+ with ctx.builder do
+ begin
+
+  if (ctx.din.OperCnt=3) then
+  begin
+   //extrq xmm0,$10,$30
+
+   xmm_a:=new_reg(ctx.din.Operand[1]);
+
+   a:=r_tmp0;
+   m:=r_tmp1;
+
+   imm:=0;
+   GetTargetOfs(ctx.din,ctx.code,2,imm);
+   len:=imm;
+
+   imm:=0;
+   GetTargetOfs(ctx.din,ctx.code,3,imm);
+   idx:=imm;
+
+   mask:=QWORD($FFFFFFFFFFFFFFFF);
+   //shift automatically masks at [0:5]
+   mask:=mask shl (64 - len); //clear hi
+   mask:=mask shr (64 - len); //restore
+   mask:=mask shl idx;        //shift
+
+   if (mask=QWORD($FFFFFFFFFFFFFFFF)) then
+   begin
+    //special case
+
+    clear_hi;
+
+    //nop
+    Exit;
+   end;
+
+   save_flags;
+
+   op_set_reg_imm(ctx,m,mask);
+
+   //a = xmm1[0:63]
+   movqx(a,xmm_a);
+
+   andq (a,m);    //a = a and m;
+
+   if (idx<>0) then
+   begin
+    shri8(a,idx); // a = a shr idx;
+   end;
+
+   //xmm0[0:63] = a;
+   pinsrq(xmm_a,a,0);
+
+   restore_flags;
+
+   clear_hi;
+
+  end else
+  begin
+   //extrq xmm0,xmm1
+
+   xmm_a:=new_reg(ctx.din.Operand[1]);
+   xmm_b:=new_reg(ctx.din.Operand[2]);
+
+   a:=r_tmp0;
+   b:=r_tmp1;
+   m:=r_thrd;
+
+   save_flags;
+
+   //save rcx
+   s:=a;
+   a:=rcx;
+   movq   (s,a);
+
+   //PEXTRQ r/m64, xmm2, imm8
+   pextrq (a,xmm_b,0); // a:=xmm_b[0:63]; -> len:[0:5] pos:[8:13]
+
+   ta:=new_reg_size(a,os8);
+   tb:=new_reg_size(b,os8);
+
+   movq   (tb,ta);     // b[0:7] = a[0:7]
+   movi   (ta,64);     // a[0:7] = 64
+   subq   (ta,tb);     // a[0:7] = (64 - len)
+
+   movi   (m,-1);      // m = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
+
+   shl_cl (m);         // m = m shl a:(64 - len):[0:5]
+   shr_cl (m);         // m = m shr a:(64 - len):[0:5]
+
+   shri8  (a,8);       // len:[0:5] pos:[8:13] -> pos:[0:5]
+
+   shl_cl (m);         // m = m shl pos:[0:5]
+
+   //b = xmm0[0:63]
+   movqx  (b,xmm_a);
+
+   andq   (b,m);       // b = b and m;
+
+   shr_cl (b);         // b = b shr idx;
+
+   //restore rcx
+   movq   (a,s);
+   a:=s;
+
+   //xmm0[0:63] = b;
+   pinsrq(xmm_a,b,0);
+
+   restore_flags;
+
+   clear_hi;
+
+   //restore jit_frame
+   movq(r13,[GS +teb_thread]);
+   leaq(r13,[r13+jit_frame_offset]);
+
+  end;
+
+ end;
+
+end;
+
 //SSE4a
 
 const
@@ -1027,16 +1210,17 @@ begin
 
  if _SSE4aSupport then
  begin
-  jit_cbs[OPPnone,OPmovnt,OPSx_sd]:=@op_movnt_sd_ss;
-  jit_cbs[OPPnone,OPmovnt,OPSx_ss]:=@op_movnt_sd_ss;
-  jit_cbs[OPPnone,OPinsert,OPSx_q]:=@add_orig;
+  jit_cbs[OPPnone,OPmovnt ,OPSx_sd]:=@op_movnt_sd_ss;
+  jit_cbs[OPPnone,OPmovnt ,OPSx_ss]:=@op_movnt_sd_ss;
+  jit_cbs[OPPnone,OPinsert,OPSx_q ]:=@add_orig;
+  jit_cbs[OPPnone,OPextrq ,OPSnone]:=@add_orig;
  end else
  begin
-  jit_cbs[OPPnone,OPmovnt,OPSx_sd]:=@op_movsd;
-  jit_cbs[OPPnone,OPmovnt,OPSx_ss]:=@op_movss;
-  jit_cbs[OPPnone,OPinsert,OPSx_q]:=@op_insertq;
+  jit_cbs[OPPnone,OPmovnt ,OPSx_sd]:=@op_movsd;
+  jit_cbs[OPPnone,OPmovnt ,OPSx_ss]:=@op_movss;
+  jit_cbs[OPPnone,OPinsert,OPSx_q ]:=@op_insertq;
+  jit_cbs[OPPnone,OPextrq ,OPSnone]:=@op_extrq;
  end;
-
 
  jit_cbs[OPPnone,OPaeskeygenassist,OPSnone]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPaesimc         ,OPSnone]:=@op_reg_mem_wo;
