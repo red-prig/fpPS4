@@ -290,9 +290,12 @@ function GET_VK_IMAGE_CREATE_DEFAULT  (cformat:TVkFormat):TVkFlags;
 Function GetNormalizedParams(const key:TvImageKey):TvImageKeyParams;
 Function CompareNormalized(const a,b:TvImageKey):Integer;
 
+Function GetVkFormatStr(cformat:TVkFormat):RawByteString;
+
 implementation
 
 uses
+ TypInfo,
  subr_backtrace;
 
 function TvImageKeyParams.layerCount:Word;
@@ -1230,6 +1233,17 @@ begin
  if (Result<>0) then Exit;
  //3 params
  Result:=CompareByte(GetNormalizedParams(a),GetNormalizedParams(b),SizeOf(TvImageKeyParams));
+end;
+
+Function GetVkFormatStr(cformat:TVkFormat):RawByteString;
+begin
+ if (cformat=VK_FORMAT_R10G11B11_UFLOAT_FAKE32) then
+ begin
+  Result:='VK_FORMAT_R10G11B11_UFLOAT_FAKE32';
+ end else
+ begin
+  Result:=GetEnumName(TypeInfo(TVkFormat),ord(cformat));
+ end;
 end;
 
 //

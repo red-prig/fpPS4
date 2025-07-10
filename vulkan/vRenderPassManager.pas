@@ -146,6 +146,11 @@ Procedure TvRenderPassKey.AddColorAt(id:TVkUInt32;aformat:TVkFormat;IMAGE_USAGE,
 begin
  if (AtdCount>8) then Exit;
 
+ if (aformat=VK_FORMAT_R10G11B11_UFLOAT_FAKE32) then
+ begin
+  aformat:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+ end;
+
  ColorAtd[AtdCount]:=Default(TVkAttachmentDescription);
 
  With ColorAtd[AtdCount] do

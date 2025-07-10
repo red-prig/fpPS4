@@ -1217,7 +1217,7 @@ begin
      resource_instance^.resource^.rimage:=ri;
     end;
 
-    //Writeln(ri.key.cformat);
+    //Writeln(GetVkFormatStr(ri.key.cformat));
 
     repeat
 
@@ -1485,8 +1485,8 @@ begin
        Assert(iv<>nil);
 
        Writeln('BindImage:->[',i,']'#13#10,
-               ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
-               ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+               ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
+               ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
        DescriptorGroup.BindImage(fset,bind,
                                  iv.FHandle,
@@ -2085,8 +2085,8 @@ begin
    ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
 
    Writeln('BindFrame:->[',i,']'#13#10,
-           ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
-           ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+           ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
+           ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
    //
    if limits.VK_KHR_imageless_framebuffer then
@@ -2213,8 +2213,8 @@ begin
   ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
 
   Writeln('BindDepth:->'#13#10,
-          ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
-          ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
+          ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
+          ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
   //
   if limits.VK_KHR_imageless_framebuffer then

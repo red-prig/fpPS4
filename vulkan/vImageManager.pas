@@ -497,6 +497,11 @@ begin
  Result.usage        :=GET_VK_IMAGE_USAGE_DEFAULT(key.cformat);
  Result.initialLayout:=VK_IMAGE_LAYOUT_UNDEFINED;
 
+ if (Result.format=VK_FORMAT_R10G11B11_UFLOAT_FAKE32) then
+ begin
+  Result.format:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+ end;
+
  if (Result.imageType=VK_IMAGE_TYPE_3D) then
  begin
   Result.flags:=Result.flags or ord(VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT);
@@ -535,9 +540,13 @@ begin
 
  key_view:=F;
 
+ if (key_view.cformat=VK_FORMAT_R10G11B11_UFLOAT_FAKE32) then
+ begin
+  key_view.cformat:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+ end;
+
  //TODO: more general type compatibility checking
  case FFormat of
-  //
   VK_FORMAT_R32_UINT,
   VK_FORMAT_R32_SINT,
   VK_FORMAT_R32_SFLOAT:
