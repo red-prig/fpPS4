@@ -12,8 +12,7 @@ uses
  pthread,
  pthread_md,
  thr_umtx,
- thr_private,
- thr;
+ thr_private;
 
 var
  _usrstack             :Pointer=Pointer($FFFFFFEFFF); //USRSTACK kern.usrstack
@@ -172,6 +171,8 @@ begin
  TAILQ_INIT(@thread^.pp_mutexq);
 
  thread^.state:=PS_RUNNING;
+
+ param:=Default(sched_param);
 
  //_thr_getscheduler(thread^.tid,@thread^.attr.sched_policy,@param);
 
