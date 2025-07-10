@@ -3,6 +3,7 @@ program fpPS4;
 {$mode objfpc}{$H+}
 
 uses
+  FastMM4,
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
