@@ -295,7 +295,6 @@ Function GetVkFormatStr(cformat:TVkFormat):RawByteString;
 implementation
 
 uses
- TypInfo,
  subr_backtrace;
 
 function TvImageKeyParams.layerCount:Word;
@@ -1237,12 +1236,11 @@ end;
 
 Function GetVkFormatStr(cformat:TVkFormat):RawByteString;
 begin
- if (cformat=VK_FORMAT_R10G11B11_UFLOAT_FAKE32) then
- begin
-  Result:='VK_FORMAT_R10G11B11_UFLOAT_FAKE32';
- end else
- begin
-  Result:=GetEnumName(TypeInfo(TVkFormat),ord(cformat));
+ case cformat of
+  VK_FORMAT_R10G11B11_UFLOAT_FAKE32:Result:='R10G11B11_UFLOAT_FAKE32';
+  {$I VK_FORMAT_STR.inc}
+ else
+                                    Result:='0x'+HexStr(ord(cformat),8);
  end;
 end;
 
