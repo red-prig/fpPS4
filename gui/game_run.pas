@@ -431,7 +431,6 @@ begin
  //
 
  Writeln('main_execve->');
-
  For i:=0 to argc-1 do
  begin
   Writeln(' argv[',i,']:',argv[i]);
@@ -441,8 +440,14 @@ begin
 
  err:=main_execve(argv[0],argv,nil);
 
+ //free data
  free_params(argv);
 
+ if (err=0) then
+ begin
+  //jump to code
+  main_switch_context;
+ end else
  if (err<>0) then
  begin
   print_error_td('error execve "'+exec+'" code='+IntToStr(err));

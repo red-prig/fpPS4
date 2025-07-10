@@ -28,6 +28,7 @@ function  exec_copyin_args(args:p_image_args;
 
 function  kern_execve(td:p_kthread;args:p_image_args):Integer;
 function  main_execve(fname:pchar;argv,envv:ppchar):Integer;
+procedure main_switch_context;
 function  sys_execve(fname:pchar;argv,envv:ppchar):Integer;
 
 implementation
@@ -1863,7 +1864,6 @@ begin
 
  if (Result=0) then
  begin
-
   //unset sys mark
   td:=curkthread;
   td^.td_pflags:=td^.td_pflags and (not TDP_KTHREAD);
@@ -1873,9 +1873,14 @@ begin
   set_pcb_flags(curkthread,PCB_IS_JIT);
   //force JIT mode
 
-  ipi_sigreturn;
-  Writeln(stderr,'I''m a teapot!');
+  //---> main_switch_context;
  end;
+end;
+
+procedure main_switch_context;
+begin
+ ipi_sigreturn;
+ Writeln(stderr,'I''m a teapot!');
 end;
 
 function sys_execve(fname:pchar;argv,envv:ppchar):Integer;
