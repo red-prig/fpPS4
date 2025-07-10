@@ -192,12 +192,154 @@ begin
  ps4_libSceSystemService.FButtonAssign:=ConfInfo.PS4SystemService.ButtonAssign;
 end;
 
+procedure free_params(argv:PPChar);
+var
+ curr:PPChar;
+begin
+ if (argv=nil) then Exit;
+ curr:=argv+1; //skip exec
+ while (curr^<>nil) do
+ begin
+  FreeMem(curr^);
+  Inc(curr);
+ end;
+ FreeMem(argv);
+end;
+
+function parse_params(const params:RawByteString;var argv:PPChar):Integer;
+var
+ curr:PChar;
+ last:PChar;
+
+ barg:PChar;
+ blen:Integer;
+
+ argc:Integer;
+
+ state:char;
+
+ procedure concat_arg(delta:Integer);
+ var
+  i:Integer;
+ begin
+  if (curr<>last) then
+  begin
+   i:=(curr-last);
+   ReAllocMem(barg,blen+i+1); //zero truncate
+   Move(last^,barg[blen],i);
+   blen:=blen+i;
+   barg[blen]:=#0;
+  end;
+  last:=curr+delta;
+ end;
+
+ procedure next_arg;
+ begin
+  if (barg<>nil) then
+  begin
+   ReAllocMem(argv,SizeOf(Pointer)*(argc+1+1)); //zero truncate
+   argv[argc]:=barg;
+   Inc(argc);
+   argv[argc]:=nil; //truncate
+   barg:=nil;       //reset
+   blen:=0;         //reset
+  end;
+ end;
+
+begin
+ Result:=1;
+
+ //init
+ argc:=1;
+ argv:=AllocMem(SizeOf(Pointer)*2);
+ argv[0]:=nil; //exec place
+ argv[1]:=nil; //truncate
+
+ curr:=@params[1];
+ last:=curr;
+
+ barg:=nil;
+ blen:=0;
+
+ state:=#0;
+
+ if (curr<>nil) then
+ while (curr^<>#0) do
+ begin
+
+  case state of
+   ' ':
+     if (curr^<>' ') then
+     begin
+      last:=curr; //update pos
+      state:=#0;
+     end;
+   '\':
+     begin
+      last:=curr; //update pos
+      state:=#0;
+      //skip
+      Inc(curr);
+      Continue;
+     end;
+   else;
+  end;
+
+  case curr^ of
+
+   ' ':
+     begin
+      if (state=#0) then
+      begin
+       concat_arg(1);
+       next_arg;
+       state:=' ';
+      end;
+     end;
+
+   '''',
+    '"':
+     begin
+      if (state=#0) then
+      begin
+       concat_arg(1);
+       state:=curr^;
+      end else
+      if (state=curr^) then
+      begin
+       concat_arg(1);
+       state:=#0;
+      end;
+     end;
+
+    '\':
+     begin
+      concat_arg(1);
+      state:='\';
+     end;
+
+   else;
+  end;
+
+  Inc(curr);
+ end;
+
+ if (state<>' ') then
+ begin
+  concat_arg(0);
+  next_arg;
+ end;
+
+ Result:=argc;
+end;
+
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
  err:Integer;
  len:Integer;
  exec:array[0..PATH_MAX] of Char;
- argv:array[0..1] of PChar;
+ argv:PPChar;
+ i,argc:Integer;
  Item:TGameItem;
 begin
  //re_init_tty;
@@ -236,14 +378,15 @@ begin
  kern_reserve_2mb_page(0,M2MB_DEFAULT);
  ///
 
- Writeln(Item.FGameInfo.Name   );
- Writeln(Item.FGameInfo.TitleId);
- Writeln(Item.FGameInfo.Version);
- Writeln(Item.FGameInfo.Exec   );
+ Writeln('Name   :',Item.FGameInfo.Name   );
+ Writeln('TitleId:',Item.FGameInfo.TitleId);
+ Writeln('Version:',Item.FGameInfo.Version);
+ Writeln('Exec   :',Item.FGameInfo.Exec   );
+ Writeln('Param  :',Item.FGameInfo.Param  );
 
- Writeln(Item.FMountList.app0);
- Writeln(Item.FMountList.system);
- Writeln(Item.FMountList.data);
+ Writeln('app0   :',Item.FMountList.app0  );
+ Writeln('system :',Item.FMountList.system);
+ Writeln('data   :',Item.FMountList.data  );
 
  //temp hack
  err:=vfs_mount_mkdir('ufs','/savedata0'  ,'savedata',nil,0);
@@ -268,6 +411,10 @@ begin
  end;
 
  ///argv
+
+ argv:=nil;
+ argc:=parse_params(Item.FGameInfo.Param,argv);
+
  FillChar(exec,SizeOf(exec),0);
 
  len:=Length(Item.FGameInfo.Exec);
@@ -276,8 +423,6 @@ begin
  Move(pchar(Item.FGameInfo.Exec)^,exec,len);
 
  argv[0]:=@exec;
- argv[1]:=nil;
- ///argv
 
  Writeln('main_thread:',HexStr(curkthread));
 
@@ -285,7 +430,19 @@ begin
  FreeAndNil(GameStartupInfo);
  //
 
- err:=main_execve(argv[0],@argv[0],nil);
+ Writeln('main_execve->');
+
+ For i:=0 to argc-1 do
+ begin
+  Writeln(' argv[',i,']:',argv[i]);
+ end;
+
+ Flush(stdout);
+
+ err:=main_execve(argv[0],argv,nil);
+
+ free_params(argv);
+
  if (err<>0) then
  begin
   print_error_td('error execve "'+exec+'" code='+IntToStr(err));
