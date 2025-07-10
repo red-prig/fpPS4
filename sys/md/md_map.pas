@@ -6,7 +6,6 @@ unit md_map;
 interface
 
 uses
- sysutils,
  ntapi,
  vm,
  vmparam,
@@ -631,6 +630,8 @@ begin
            FileAllocationInformation);
  end;
 end;
+
+function StrLen(p: pwidechar): sizeint; external name 'FPC_PWIDECHAR_LENGTH'; overload;
 
 Function md_create_swap_file(const FNAME:RawByteString;SIZE:QWORD;Var FD:THandle):DWORD;
 var
