@@ -10,6 +10,8 @@ uses
   windows,
   atomic,
   subr_dynlib,
+  sys_bootparam,
+  game_info,
   ps4_libSceUserService,
   ps4_libSceNpCommon;
 
@@ -506,11 +508,66 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSystemServiceLoadExec(const path:PChar;const argv:PChar):Integer;
+function ps4_sceLncUtilLoadExec(const path:PChar;const argv:PPChar):Integer;
+var
+ curr:PPChar;
+ argc:Integer;
+ lenc:Integer;
+ i   :Integer;
+ data:TPS4LoadExec;
 begin
- Writeln(StdErr,'TODO:sceSystemServiceLoadExec:',path);
- Assert(false);
  Result:=0;
+
+ if (path=nil) then
+ begin
+  Exit(Integer($80940005));
+ end;
+
+ argc:=0;
+ lenc:=0;
+ if (argv<>nil) then
+ begin
+  curr:=argv;
+  while (curr^<>nil) do
+  begin
+   Inc(argc);
+   lenc:=lenc + strlen(curr^) + 1;
+
+   if (lenc>4096) then
+   begin
+    Exit(Integer($80940005));
+   end;
+
+   Inc(curr);
+  end;
+ end;
+
+ data:=TPS4LoadExec.Create;
+
+ data.Path:=path;
+
+ if (argc<>0) then
+ begin
+  For i:=0 to argc-1 do
+  begin
+   data.argv.AddValue(argv[i]);
+  end;
+ end;
+
+ Result:=p_host_ipc.SendSync('LOAD_EXEC',data);
+
+ data.Free;
+end;
+
+function ps4_sceSystemServiceLoadExec(const path:PChar;const argv:PPChar):Integer;
+begin
+ Result:=ps4_sceLncUtilLoadExec(path,argv);
+
+ case DWORD(Result) of
+  $8094000f:Result:=Integer($80a10005);
+  $80a10003:Result:=Integer($80a10003);
+  else;
+ end;
 end;
 
 function ps4_sceSystemServiceGetRenderingMode():Integer;
@@ -564,6 +621,9 @@ begin
  lib:=Result^.add_lib('libSceSystemServiceSuspend');
  lib.set_proc($6B92A38EAE8781C5,@ps4_sceSystemServiceEnableSuspendNotification);
  lib.set_proc($322D2AC026FEAEFA,@ps4_sceSystemServiceDisableSuspendNotification);
+
+ lib:=Result^.add_lib('libSceLncUtil');
+ lib.set_proc($C30A513605BCD42B,@ps4_sceLncUtilLoadExec);
 end;
 
 var

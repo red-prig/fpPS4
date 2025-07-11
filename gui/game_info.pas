@@ -183,6 +183,28 @@ type
   Constructor Create; override;
  end;
 
+ TStringArray=class(TAbstractArray)
+  values:array of RawByteString;
+  //
+  Destructor Destroy; override;
+  //
+  Function   GetArrayCount:SizeInt;          override;
+  Function   GetArrayItem(i:SizeInt):TValue; override;
+  Function   AddObject:TAbstractObject;      override;
+  Function   AddArray :TAbstractArray;       override;
+  procedure  AddValue(Value:TValue);         override;
+ end;
+
+ TPS4LoadExec=class(TAbstractObject)
+ private
+  FPath:RawByteString;
+  Fargv:TStringArray;
+ published
+  property Path:RawByteString read FPath write FPath;
+  property argv:TStringArray  read Fargv write Fargv;
+ public
+ end;
+
  TConfigInfo=class(TAbstractObject)
   private
    FMainInfo        :TMainInfo;
@@ -1084,6 +1106,45 @@ begin
  FTimeFormat  :=-1;
  FButtonAssign:=1;
 end;
+
+Destructor TStringArray.Destroy;
+begin
+ SetLength(values,0);
+ inherited;
+end;
+
+Function TStringArray.GetArrayCount:SizeInt;
+begin
+ Result:=Length(values);
+end;
+
+Function TStringArray.GetArrayItem(i:SizeInt):TValue;
+begin
+ if (i>=Length(values)) then
+ begin
+  Result:=TValue.Empty;
+ end else
+ begin
+  Result:=values[i];
+ end;
+end;
+
+Function TStringArray.AddObject:TAbstractObject;
+begin
+ Result:=nil;
+end;
+
+Function TStringArray.AddArray:TAbstractArray;
+begin
+ Result:=nil;
+end;
+
+procedure TStringArray.AddValue(Value:TValue);
+begin
+ Insert(Value.AsString,values,Length(values));
+end;
+
+//
 
 Constructor TGameInfo.Create;
 begin

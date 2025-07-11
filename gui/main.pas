@@ -156,6 +156,7 @@ type
     function  OnWarning     (mlen:DWORD;buf:Pointer):Ptruint; //WARNING
     function  OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
     function  OnPlaygoInit  (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
+    function  OnLoadExec    (obj:TObject)           :Ptruint; //LOAD_EXEC
 
     function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
@@ -408,6 +409,9 @@ begin
  }
 end;
 
+var
+ IpcHandler:THostIpcHandler;
+
 function TfrmMain.OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
 begin
  Result:=OpenMainWindows();
@@ -567,10 +571,117 @@ begin
  Result:=0;
 end;
 
-//ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
-
+function encode_shell(const src:RawByteString):RawByteString;
 var
- IpcHandler:THostIpcHandler;
+ i:Integer;
+begin
+ if (Pos(' ',src)=0) then
+ begin
+  Result:=src;
+ end else
+ if (Pos('"',src)=0) then
+ begin
+  Result:='"'+src+'"';
+ end else
+ if (Pos('''',src)=0) then
+ begin
+  Result:=''''+src+'''';
+ end else
+ begin
+  Result:='"';
+  For i:=1 to Length(src) do
+  begin
+   if (src[i]='"') then
+   begin
+    Result:=Result+'"'+'\"'+'"';
+   end else
+   begin
+    Result:=Result+src[i];
+   end;
+  end;
+  Result:=Result+'"';
+ end;
+end;
+
+function encode_shell(argv:TStringArray):RawByteString;
+var
+ i:Integer;
+begin
+ Result:='';
+ if Length(argv.values)<>0 then
+ begin
+  For i:=0 to High(argv.values) do
+  begin
+   if (Result<>'') then Result:=Result+' ';
+   Result:=Result+encode_shell(argv.values[i]);
+  end;
+ end;
+end;
+
+function TfrmMain.OnLoadExec(obj:TObject):Ptruint; //LOAD_EXEC
+var
+ data:TPS4LoadExec;
+ cfg:TGameRunConfig;
+ Item:TGameItem;
+begin
+ Result:=Ptruint(-1);
+
+ if (FGameItem=nil) then Exit;
+ if (obj=nil) then Exit;
+
+ data:=TPS4LoadExec(obj);
+
+ if GameProcessForked then //only forked
+ begin
+
+  //terminate
+  FGameProcess.stop;
+  FreeAndNil(FGameProcess);
+  //
+  CloseMainWindows;
+  //
+
+  //re-run
+
+  Item:=TGameItem.Create;
+  FGameItem.CopyTo(Item);
+
+  Item.GameInfo.Exec :=data.Path;
+  Item.GameInfo.Param:=encode_shell(data.argv);
+
+  cfg.hOutput:=FAddHandle;
+  cfg.hError :=FAddHandle;
+
+  cfg.FConfInfo:=FConfigInfo;
+  cfg.FGameItem:=Item;
+
+  FGameProcess:=run_item(cfg);
+
+  FreeAndNil(Item);
+
+  if (FGameProcess=nil) then
+  begin
+   //stop on error
+   TBStopClick(Self);
+  end;
+
+  if (FGameProcess.g_ipc<>nil) then
+  begin
+   FGameProcess.g_ipc.FHandler:=IpcHandler;
+  end;
+
+ end else
+ begin
+  MessageDlgEx('LoadExec is not supported for the current process','Error',[mbOK],Self);
+ end;
+
+ FreeAndNil(obj);
+end;
+
+
+
+
+//ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
 
 //
 
@@ -866,6 +977,7 @@ begin
  IpcHandler.AddCallback('WARNING',       @OnWarning     );
  IpcHandler.AddCallback('PARAM_SFO_INIT',@OnParamSfoInit);
  IpcHandler.AddCallback('PLAYGO_INIT'   ,@OnPlaygoInit  );
+ IpcHandler.AddCallback('LOAD_EXEC'     ,@OnLoadExec    ,TPS4LoadExec);
 
  ReadConfigFile;
 
