@@ -1014,6 +1014,25 @@ begin
  end;
 end;
 
+procedure op_emit1_wo_np(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_os8,not_prefix];
+
+  op_emit1(ctx,tmp,[his_wo]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
 const
  bt_desc:t_op_desc=(
   mem_reg:(op:$0FA3;index:0);
@@ -1967,6 +1986,8 @@ begin
  jit_cbs[OPPnone,OPprefetch,OPSp_t0 ]:=@op_emit1_rw_np;
  jit_cbs[OPPnone,OPprefetch,OPSp_t1 ]:=@op_emit1_rw_np;
  jit_cbs[OPPnone,OPprefetch,OPSp_t2 ]:=@op_emit1_rw_np;
+
+ jit_cbs[OPPnone,OPfbstp,OPSnone    ]:=@op_emit1_wo_np;
 
 end;
 
