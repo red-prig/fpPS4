@@ -365,8 +365,10 @@ begin
 
  g_appinfo.mmap_flags:=1; //is_big_app ???
  g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
- //g_appinfo.hasParamSfo
+ //g_appinfo.hasParamSfo:=1; TODO: check
  //g_appinfo.debug_level:=1;
+
+ g_appinfo.titleWorkaround.version:=69;
 
  //budget init
  p_proc.p_budget_ptype:=PTYPE_BIG_APP;
