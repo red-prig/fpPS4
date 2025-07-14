@@ -125,6 +125,7 @@ type
   Procedure   BindSet(BindPoint:TVkPipelineBindPoint;fset:TVkUInt32;FHandle:TVkDescriptorSet);
   Procedure   PushConstant(BindPoint:TVkPipelineBindPoint;stageFlags:TVkShaderStageFlags;offset,size:TVkUInt32;const pValues:PVkVoid);
   Procedure   DispatchDirect(X,Y,Z:TVkUInt32);
+  Procedure   DispatchIndirect(BASE:Pointer;Offset:DWORD);
 
   Procedure   BindVertexBuffers(const FAttrBuilder:TvAttrBuilder);
   Procedure   SetVertexInput(const FAttrBuilder:TvAttrBuilder);
@@ -908,6 +909,34 @@ begin
  Inc(cmd_count);
 
  vkCmdDispatch(FCmdbuf,X,Y,Z);
+end;
+
+Procedure TvCustomCmdBuffer.DispatchIndirect(BASE:Pointer;Offset:DWORD);
+var
+ rb:TvHostBuffer;
+ BufOffset:TVkDeviceSize;
+begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (FCurrPipeline[BP_COMPUTE]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ ApplyDescriptorCache(BP_COMPUTE);
+
+ rb:=FetchHostBuffer(Self,QWORD(BASE+Offset),3*4);
+ Assert(rb<>nil);
+
+ Inc(cmd_count);
+
+ BufOffset:=QWORD(BASE+Offset)-rb.FAddr;
+
+ vkCmdDispatchIndirect(FCmdbuf,rb.FHandle,BufOffset);
 end;
 
 Procedure TvCustomCmdBuffer.BindVertexBuffers(const FAttrBuilder:TvAttrBuilder);

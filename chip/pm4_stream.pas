@@ -131,6 +131,7 @@ type
   ntDrawIndexOffset2,
   ntDrawIndexAuto,
   ntDispatchDirect,
+  ntDispatchIndirect,
   ntPfpSyncMe
  );
 
@@ -370,16 +371,29 @@ type
   SWAP_MODE :Byte;
  end;
 
- p_pm4_node_DispatchDirect=^t_pm4_node_DispatchDirect;
- t_pm4_node_DispatchDirect=object(t_pm4_node)
+ p_pm4_node_Dispatch=^t_pm4_node_Dispatch;
+ t_pm4_node_Dispatch=object(t_pm4_node)
 
   COMPUTE_GROUP:TSH_REG_COMPUTE_GROUP;
 
   ShaderGroup:TvShaderGroup;
 
+ end;
+
+ p_pm4_node_DispatchDirect=^t_pm4_node_DispatchDirect;
+ t_pm4_node_DispatchDirect=object(t_pm4_node_Dispatch)
+
   DIM_X:DWORD;
   DIM_Y:DWORD;
   DIM_Z:DWORD;
+
+ end;
+
+ p_pm4_node_DispatchIndirect=^t_pm4_node_DispatchIndirect;
+ t_pm4_node_DispatchIndirect=object(t_pm4_node_Dispatch)
+
+  BASE  :QWORD;
+  Offset:DWORD;
 
  end;
 
@@ -453,8 +467,11 @@ type
   procedure DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
                           var CX_REG:TCONTEXT_REG_GROUP;
                           var UC_REG:TUSERCONFIG_REG_SHORT);
-  procedure Build_cs_info (node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
+  procedure Build_cs_info (node:p_pm4_node_Dispatch;var GPU_REGS:TGPU_REGS);
   procedure DispatchDirect(var SC_REG:TSH_REG_COMPUTE_GROUP);
+  procedure DispatchIndirect(var SC_REG:TSH_REG_COMPUTE_GROUP;
+                             BASE  :QWORD;
+                             Offset:DWORD);
   procedure PfpSyncMe(event:PRTLEvent);
  end;
 
@@ -1794,7 +1811,7 @@ begin
  BuildDraw(ntDrawIndexOffset2,SG_REG,CX_REG,UC_REG,indexOffset);
 end;
 
-procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_DispatchDirect;var GPU_REGS:TGPU_REGS);
+procedure t_pm4_stream.Build_cs_info(node:p_pm4_node_Dispatch;var GPU_REGS:TGPU_REGS);
 var
  dst:PGPU_USERDATA;
  FUniformBuilder:TvUniformBuilder;
@@ -1814,10 +1831,6 @@ begin
 
  node^.ShaderGroup:=FetchShaderGroupCS(GPU_REGS,pp);
  Assert(node^.ShaderGroup<>nil);
-
- node^.DIM_X:=GPU_REGS.SC_REG^.COMPUTE_DIM_X;
- node^.DIM_Y:=GPU_REGS.SC_REG^.COMPUTE_DIM_Y;
- node^.DIM_Z:=GPU_REGS.SC_REG^.COMPUTE_DIM_Z;
 
  //
 
@@ -1842,6 +1855,44 @@ begin
  node^.scope:=Default(t_pm4_resource_curr_scope);
 
  Build_cs_info(node,GPU_REGS);
+
+ node^.DIM_X:=GPU_REGS.SC_REG^.COMPUTE_DIM_X;
+ node^.DIM_Y:=GPU_REGS.SC_REG^.COMPUTE_DIM_Y;
+ node^.DIM_Z:=GPU_REGS.SC_REG^.COMPUTE_DIM_Z;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.DispatchIndirect(var SC_REG:TSH_REG_COMPUTE_GROUP;
+                                        BASE  :QWORD;
+                                        Offset:DWORD);
+var
+ GPU_REGS:TGPU_REGS;
+
+ node:p_pm4_node_DispatchIndirect;
+begin
+ GPU_REGS:=Default(TGPU_REGS);
+ GPU_REGS.SC_REG:=@SC_REG;
+
+ node:=allocator.Alloc(SizeOf(t_pm4_node_DispatchIndirect));
+
+ node^.ntype:=ntDispatchIndirect;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+
+ Build_cs_info(node,GPU_REGS);
+
+ node^.BASE  :=BASE;
+ node^.Offset:=Offset;
+
+ if (BASE<>0) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         R_BUF,
+                         Pointer(BASE+Offset),
+                         3*4,
+                         TM_READ,
+                         'DispatchIndirect');
+ end;
 
  add_node(node);
 end;

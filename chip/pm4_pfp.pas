@@ -51,12 +51,19 @@ type
   //
   ASC_COMPUTE:array[0..63] of TSH_REG_COMPUTE_GROUP;
   //
+  BASE_ADDR_DISPLAY_LIST     :QWORD;
+  BASE_ADDR_DRAW_INDIRECT    :QWORD;
+  BASE_ADDR_LOAD_REG         :QWORD;
+  BASE_ADDR_INDIRECT_DATA    :QWORD;
+  //
   PixelPipeStatControl:TPixelPipeStatControl;
   //
   curr_ibuf :p_pm4_ibuffer;
   //
   LastSetReg:Word;
   event:PRTLEvent;
+  //
+  property  BASE_ADDR_DISPATCH_INDIRECT:QWORD read BASE_ADDR_DRAW_INDIRECT;
   //
   function  stream_type:t_pm4_stream_type;
   procedure init;
@@ -1531,6 +1538,18 @@ begin
  end;
 end;
 
+function GetBaseIndexStr(i:Byte):RawByteString;
+begin
+ case i of
+  BASE_INDEX_DISPLAY_LIST     :Result:='DISPLAY_LIST';
+  BASE_INDEX_DRAW_INDIRECT    :Result:='DRAW/DISPATCH_INDIRECT';
+  BASE_INDEX_LOAD_REG         :Result:='LOAD_REG';
+  BASE_INDEX_INDIRECT_DATA    :Result:='INDIRECT_DATA';
+  else
+                               Result:='0x'+HexStr(i,1);
+ end;
+end;
+
 procedure onSetBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
@@ -1541,9 +1560,18 @@ begin
  if (addr<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(' baseIndex=0x',HexStr(Body^.baseIndex,4));
-  Writeln(' address  =0x',HexStr(addr,16));
+  Writeln(' baseIndex=0x',GetBaseIndexStr(Body^.baseIndex));
+  Writeln(' address  =0x',HexStr(addr,11));
  end;
+
+ case Body^.baseIndex of
+  BASE_INDEX_DISPLAY_LIST     :pctx^.BASE_ADDR_DISPLAY_LIST :=addr;
+  BASE_INDEX_DRAW_INDIRECT    :pctx^.BASE_ADDR_DRAW_INDIRECT:=addr;
+  BASE_INDEX_LOAD_REG         :pctx^.BASE_ADDR_LOAD_REG     :=addr;
+  BASE_INDEX_INDIRECT_DATA    :pctx^.BASE_ADDR_INDIRECT_DATA:=addr;
+  else;
+ end;
+
 end;
 
 procedure onSetPredication(pctx:p_pfp_ctx;Body:PPM4CMDSETPREDICATION);
@@ -1870,6 +1898,30 @@ begin
  pctx^.stream[stGfxDcb].DispatchDirect(pctx^.SC_REG);
 end;
 
+procedure onDispatchIndirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHINDIRECT);
+begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
+ Assert(Body^.header.shaderType=1,'shaderType<>CS');
+
+ if (DWORD(Body^.dispatchInitiator)<>1) then
+ if p_print_gpu_ops then
+ begin
+  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' dataOffset=',Body^.dataOffset);
+ end;
+
+ pctx^.SC_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
+
+ pctx^.stream[stGfxDcb].DispatchIndirect(pctx^.SC_REG,
+                                         pctx^.BASE_ADDR_DISPATCH_INDIRECT,
+                                         Body^.dataOffset and (not 3));
+end;
+
 procedure onPfpSyncMe(pctx:p_pfp_ctx;Body:Pointer);
 begin
  Assert(pctx^.stream_type=stGfxDcb);
@@ -2085,6 +2137,7 @@ begin
       IT_DRAW_INDEX_AUTO                :onDrawIndexAuto              (pctx,buff);
       IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:onDrawIndexIndirectCountMulti(pctx,buff);
       IT_DISPATCH_DIRECT                :onDispatchDirect             (pctx,buff);
+      IT_DISPATCH_INDIRECT              :onDispatchIndirect           (pctx,buff);
       IT_PFP_SYNC_ME                    :onPfpSyncMe                  (pctx,buff);
 
       IT_SET_BASE                       :onSetBase                    (pctx,buff);

@@ -2687,7 +2687,7 @@ begin
 
 end;
 
-function pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_DispatchDirect):Boolean;
+function pm4_DispatchPrepare(var ctx:t_me_render_context;node:p_pm4_node_Dispatch):Boolean;
 var
  dst:PGPU_USERDATA;
 
@@ -2774,6 +2774,34 @@ begin
  Writeln('DispatchDirect(',node^.DIM_X,',',node^.DIM_Y,',',node^.DIM_Z,')');
 
  ctx.Cmd.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
+
+ /////////
+
+ pm4_Writeback_After(ctx);
+
+ ctx.FlushParent;
+end;
+
+procedure pm4_DispatchIndirect(var ctx:t_me_render_context;node:p_pm4_node_DispatchIndirect);
+begin
+ //
+ pm4_InitStream(ctx);
+ //
+
+ //if not ctx.WaitConfirmOrSwitch then Exit;
+
+ StartFrameCapture;
+
+ ctx.BeginCmdBuffer;
+
+ //
+ ctx.Cmd.EndRenderPass;
+
+ if not pm4_DispatchPrepare(ctx,node) then Exit;
+
+ Writeln('DispatchIndirect(0x',HexStr(node^.BASE,11),',0x',HexStr(node^.Offset,8),')');
+
+ ctx.Cmd.DispatchIndirect(Pointer(node^.BASE),node^.Offset);
 
  /////////
 
@@ -3662,6 +3690,7 @@ begin
       ntResolve            :pm4_Resolve            (ctx,Pointer(ctx.node));
       ntFastClear          :pm4_FastClear          (ctx,Pointer(ctx.node));
       ntDispatchDirect     :pm4_DispatchDirect     (ctx,Pointer(ctx.node));
+      ntDispatchIndirect   :pm4_DispatchIndirect   (ctx,Pointer(ctx.node));
       ntEventWrite         :pm4_EventWrite         (ctx,Pointer(ctx.node));
       ntPipeStatDump       :pm4_PipeStatDump       (ctx,Pointer(ctx.node));
       ntEventWriteEop      :pm4_EventWriteEop      (ctx,Pointer(ctx.node));
