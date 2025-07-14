@@ -1019,6 +1019,26 @@ end;
 
 //
 
+procedure op_vpextrw(var ctx:t_jit_context2);
+begin
+ if is_preserved(ctx.din) or is_memory(ctx.din) then
+ begin
+  //VEX.128.66.0F.W0   C5 /r ib VPEXTRW reg    , xmm1, imm8
+  //VEX.128.66.0F3A.W0 15 /r ib VPEXTRW reg/m16, xmm2, imm8
+  case ctx.dis.opcode of
+   $C5:op_avx3_rmi(ctx);
+   $15:op_avx3_mri(ctx);
+   else;
+    Assert(false);
+  end;
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+//
+
 const
  vbroadcastss_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
@@ -1354,7 +1374,7 @@ begin
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_q]:=@op_avx3_mri;
- jit_cbs[OPPv,OPpextr,OPSx_w]:=@op_avx3_mri;
+ jit_cbs[OPPv,OPpextr,OPSx_w]:=@op_vpextrw;
 
  jit_cbs[OPPv,OPextract,OPSx_ps  ]:=@op_avx3_mri;
  jit_cbs[OPPv,OPextract,OPSx_f128]:=@op_avx3_mri;

@@ -4021,7 +4021,13 @@ begin
 
      //mri
 
-     _VVI8(desc.mri,new2,new1,imm,mem_size);
+     if (not (not_impl in desc.mri.opt)) then
+     begin
+      _VVI8(desc.mri,new2,new1,imm,mem_size); //swapped
+     end else
+     begin
+      _VVI8(desc.rmi,new1,new2,imm,mem_size);
+     end;
 
      op_save(ctx,1,fix_size(new1));
     end;
