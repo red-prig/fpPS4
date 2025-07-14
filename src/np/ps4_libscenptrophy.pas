@@ -8,6 +8,7 @@ interface
 uses
   subr_dynlib,
   ps4_libSceNpCommon,
+  ps4_libSceUserService,
   np_error;
 
 const
@@ -132,7 +133,7 @@ type
 implementation
 
 function ps4_sceNpTrophyCreateContext(context     :PInteger;
-                                      userId      :Integer;
+                                      userId      :SceUserServiceUserId;
                                       serviceLabel:SceNpServiceLabel;
                                       options     :QWORD):Integer;
 begin

@@ -747,7 +747,7 @@ var
  g_handler:SceImeEventHandler=nil;
  g_cb_arg:Pointer=nil;
 
-Procedure push_keyboard_open(userId:Integer);
+Procedure push_keyboard_open(userId:SceUserServiceUserId);
 var
  event,tmp:SceImeEvent;
 begin
@@ -1172,7 +1172,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceImeKeyboardClose(userId:Integer):Integer;
+function ps4_sceImeKeyboardClose(userId:SceUserServiceUserId):Integer;
 begin
  Writeln('sceImeKeyboardClose:',userId);
 

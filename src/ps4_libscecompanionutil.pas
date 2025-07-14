@@ -7,6 +7,7 @@ interface
 
 uses
  subr_dynlib,
+ ps4_libSceUserService,
  ps4_libnet;
 
 const
@@ -22,7 +23,7 @@ type
 
  pSceCompanionUtilDeviceInfo=^SceCompanionUtilDeviceInfo;
  SceCompanionUtilDeviceInfo=packed record
-  userId  :Integer;
+  userId  :SceUserServiceUserId;
   addr    :SceNetSockaddrIn;
   reserved:array[0..235] of char;
  end;
@@ -33,7 +34,7 @@ type
   union:packed record
    case Byte of
     0:(deviceInfo:SceCompanionUtilDeviceInfo);
-    1:(userId    :Integer);
+    1:(userId    :SceUserServiceUserId);
     2:(reserved  :array[0..255] of char);
   end;
  end;

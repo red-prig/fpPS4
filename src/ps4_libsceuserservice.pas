@@ -12,6 +12,7 @@ uses
   SysUtils;
 
 type
+ pSceUserServiceUserId=^SceUserServiceUserId;
  SceUserServiceUserId=Integer;
 
 const
@@ -58,10 +59,10 @@ const
  SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
  SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT=-2137653238; //0x8096000A
 
-implementation
-
 const
  base_user_id=$167a1a93;
+
+implementation
 
 function ps4_sceUserServiceInitialize(params:PUserServiceInitializeParams):Integer;
 begin
@@ -134,7 +135,7 @@ begin
  end;
 end;
 
-function ps4_sceUserServiceGetUserColor(userId:Integer;
+function ps4_sceUserServiceGetUserColor(userId:SceUserServiceUserId;
                                         color:pInteger  //SceUserServiceUserColor
                                        ):Integer;
 begin

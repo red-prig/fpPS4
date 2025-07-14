@@ -7,7 +7,8 @@ interface
 
 uses
  subr_dynlib,
- ps4_libSceNpCommon;
+ ps4_libSceNpCommon,
+ ps4_libSceUserService;
 
 implementation
 
@@ -42,8 +43,8 @@ type
   mode           :Integer; //SceSharePlayControllerMode
   hostOnlineId   :SceNpOnlineId;
   visitorOnlineId:SceNpOnlineId;
-  hostUserId     :Integer; //SceUserServiceUserId
-  visitorUserId  :Integer; //SceUserServiceUserId
+  hostUserId     :SceUserServiceUserId;
+  visitorUserId  :SceUserServiceUserId;
  end;
 
  pSceSharePlayConnectionInfoA=^SceSharePlayConnectionInfoA;
@@ -54,8 +55,8 @@ type
   visitorOnlineId :SceNpOnlineId;
   hostAccountId   :SceNpAccountId;
   visitorAccountId:SceNpAccountId;
-  hostUserId      :Integer; //SceUserServiceUserId
-  visitorUserId   :Integer; //SceUserServiceUserId
+  hostUserId      :SceUserServiceUserId;
+  visitorUserId   :SceUserServiceUserId;
  end;
 
 function ps4_sceSharePlayInitialize(pHeap:Pointer;heapSize:qword):Integer;

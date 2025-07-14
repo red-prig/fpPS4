@@ -78,6 +78,20 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpGetUserIdByAccountId(AccountId:QWORD;userId:pSceUserServiceUserId):Integer;
+begin
+ if (userId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ if (AccountId=1111) then
+ begin
+  userId^:=base_user_id;
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_NP_ERROR_USER_NOT_FOUND;
+ end;
+end;
+
 {
 ja Japanese
 en English
@@ -107,7 +121,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpGetAccountLanguageA(reqId,userId:Integer;pLangCode:pSceNpLanguageCode):Integer;
+function ps4_sceNpGetAccountLanguageA(reqId:Integer;userId:SceUserServiceUserId;pLangCode:pSceNpLanguageCode):Integer;
 begin
  if (pLangCode=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  pLangCode^.code:='en';
@@ -438,12 +452,12 @@ begin
  Result:=0;
 end;
 
-function ps4_sceNpCheckNpAvailabilityA(reqId,userId:Integer):Integer;
+function ps4_sceNpCheckNpAvailabilityA(reqId:Integer;userId:SceUserServiceUserId):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceNpCheckNpReachability(reqId,userId:Integer):Integer;
+function ps4_sceNpCheckNpReachability(reqId:Integer;userId:SceUserServiceUserId):Integer;
 begin
  Result:=0;
 end;
@@ -736,6 +750,7 @@ begin
  lib.set_proc($036090DE4812A294,@ps4_sceNpSetContentRestriction);
  lib.set_proc($6BC47DFFBE6EE223,@ps4_sceNpGetAccountId);
  lib.set_proc($ADB9276948E9A96A,@ps4_sceNpGetAccountIdA);
+ lib.set_proc($56061CCCF181E6CB,@ps4_sceNpGetUserIdByAccountId);
  lib.set_proc($1A1CFD8960D4B42E,@ps4_sceNpGetAccountCountry);
  lib.set_proc($253FADD346B74F10,@ps4_sceNpGetAccountCountryA);
  lib.set_proc($A7FA3BE029E83736,@ps4_sceNpGetNpId);
