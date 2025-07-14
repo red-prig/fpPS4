@@ -1121,6 +1121,11 @@ begin
  op_emit_avx1(ctx,vstmxcsr_desc,[his_wo]);
 end;
 
+procedure op_invalid(var ctx:t_jit_context2);
+begin
+ ctx.builder.ud2;
+end;
+
 ///
 
 procedure init_cbs_avx;
@@ -1370,6 +1375,11 @@ begin
  jit_cbs[OPPnone,OPblsmsk,OPSnone]:=@op_bmi_gen;
  jit_cbs[OPPnone,OPblsi  ,OPSnone]:=@op_bmi_gen;
  //BMI1
+
+ //BMI2
+ jit_cbs[OPPnone,OPshl,OPSx_x]:=@op_invalid;
+ jit_cbs[OPPnone,OPshr,OPSx_x]:=@op_invalid;
+ //BMI2
 
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_avx3_mri;

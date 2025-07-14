@@ -103,7 +103,7 @@ begin
        r:=Slots[i].m_startRegister;
        Assert(r<15);
        c:=Slots[i].m_srtSizeInDWordMinusOne+1;
-       Assert(c<=8);
+       if (c>8) then c:=8;
        c:=c div 2;
        For w:=0 to c-1 do
        begin
