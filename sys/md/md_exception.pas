@@ -132,8 +132,8 @@ begin
  Result:=p^.ExceptionRecord^.ExceptionCode;
 end;
 
-procedure jit_save_to_sys_save(td:p_kthread); external;
-procedure sys_save_to_jit_save(td:p_kthread); external;
+procedure jit_save_to_sys_save(td:p_kthread); SysV_ABI_CDecl; external;
+procedure sys_save_to_jit_save(td:p_kthread); SysV_ABI_CDecl; external;
 
 function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
