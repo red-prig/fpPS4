@@ -1377,8 +1377,10 @@ begin
  //BMI1
 
  //BMI2
- jit_cbs[OPPnone,OPshl,OPSx_x]:=@op_invalid;
- jit_cbs[OPPnone,OPshr,OPSx_x]:=@op_invalid;
+ jit_cbs[OPPnone,OPshl ,OPSx_x ]:=@op_invalid;
+ jit_cbs[OPPnone,OPshr ,OPSx_x ]:=@op_invalid;
+ jit_cbs[OPPnone,OProrx,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPbzhi,OPSnone]:=@op_invalid;
  //BMI2
 
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
