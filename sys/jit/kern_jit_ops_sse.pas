@@ -417,7 +417,7 @@ var
  len,idx:Byte;
  mask:QWORD;
  xmm_a,xmm_b:TRegValue;
- a,b,m,s,ta,tb:TRegValue;
+ a,b,m,s,ta:TRegValue;
 
  procedure clear_hi; inline;
  begin
@@ -534,11 +534,9 @@ begin
    pextrq (a,xmm_b,1); // a:=xmm_b[64:127]; -> len:[0:5] pos:[8:13]
 
    ta:=new_reg_size(a,os8);
-   tb:=new_reg_size(b,os8);
 
-   movq   (tb,ta);     // b[0:7] = a[0:7]
-   movi   (ta,64);     // a[0:7] = 64
-   subq   (ta,tb);     // a[0:7] = (64 - len)
+   notq     (ta);        // a[0:7] = -len-1
+   addi     (ta,65);     // a[0:7] = ((-len-1) + 1 + 64)
 
    movi   (m,-1);      // m = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
 
@@ -610,7 +608,7 @@ var
  len,idx:Byte;
  mask:QWORD;
  xmm_a,xmm_b:TRegValue;
- a,b,m,s,ta,tb:TRegValue;
+ a,b,m,s,ta:TRegValue;
 
  procedure clear_hi; inline;
  begin
@@ -726,11 +724,9 @@ begin
    pextrq (a,xmm_b,0); // a:=xmm_b[0:63]; -> len:[0:5] pos:[8:13]
 
    ta:=new_reg_size(a,os8);
-   tb:=new_reg_size(b,os8);
 
-   movq   (tb,ta);     // b[0:7] = a[0:7]
-   movi   (ta,64);     // a[0:7] = 64
-   subq   (ta,tb);     // a[0:7] = (64 - len)
+   notq   (ta);        // a[0:7] = -len-1
+   addi   (ta,65);     // a[0:7] = ((-len-1) + 1 + 64)
 
    movi   (m,-1);      // m = 0xFFFFFFFFFFFFFFFF  (sign extended to 64-bit)
 

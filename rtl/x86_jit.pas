@@ -450,6 +450,7 @@ type
   procedure ori8se  (mem:t_jit_leas ;imm:ShortInt);
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
   procedure notq    (reg:TRegValue);
+  procedure negq    (reg:TRegValue);
   procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
   procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
@@ -4254,6 +4255,13 @@ end;
 procedure t_jit_builder.notq(reg:TRegValue);
 const
  desc:t_op_type=(op:$F7;index:2);
+begin
+ _R(desc,reg);
+end;
+
+procedure t_jit_builder.negq(reg:TRegValue);
+const
+ desc:t_op_type=(op:$F7;index:3);
 begin
  _R(desc,reg);
 end;
