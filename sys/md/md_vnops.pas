@@ -1016,25 +1016,25 @@ begin
  Result:=md_new_cache(dd,name,namelen,@FBI,nd);
 end;
 
-procedure md_unlink_cache(de:p_ufs_dirent;curr_locked,parent_locked:Boolean);
+procedure md_unlink_cache(de:p_ufs_dirent;curr_locked_ownership,parent_locked:Boolean);
 label
- _start,
- _exit;
+ _start;
 var
- dd,exclude:p_ufs_dirent;
- //notlocked:Boolean;
- fparent:Boolean;
+ dd,exclude_parent:p_ufs_dirent;
+ curr_hold_ownership:Boolean;
 begin
  if (de=nil) then Exit;
 
- exclude:=nil;
+ exclude_parent:=nil;
+ curr_hold_ownership:=False;
 
  _start:
 
- Assert(sx_xlocked(@de^.ufs_md_lock)=curr_locked);
+ Assert(sx_xlocked(@de^.ufs_md_lock)=curr_locked_ownership);
 
- if not curr_locked then
+ if not curr_locked_ownership then
  begin
+  curr_locked_ownership:=True;
   sx_xlock(@de^.ufs_md_lock);
  end;
 
@@ -1051,48 +1051,76 @@ begin
 
  if (dd<>nil) then
  begin
-  ufs_de_hold(dd);
-
-  if (exclude=nil) then
-  begin
-   exclude:=dd;
-  end;
-
-  //notlocked:=not sx_xlocked(@dd^.ufs_md_lock);
+  ufs_de_hold(dd); //hold parent
 
   Assert(sx_xlocked(@dd^.ufs_md_lock)=parent_locked);
 
-  if not parent_locked then
+  if parent_locked then
   begin
+   if (exclude_parent=nil) then
+   begin
+    //exclude parent lock ownership
+    exclude_parent:=dd;
+   end;
+  end else
+  begin
+   parent_locked:=True;
+   //relock
    sx_unlock(@de^.ufs_md_lock);
    sx_xlock (@dd^.ufs_md_lock);
    sx_xlock (@de^.ufs_md_lock);
   end;
 
   TAILQ_REMOVE(@dd^.ufs_dlist,de,@de^.ufs_list);
-  fparent:=TAILQ_EMPTY(@dd^.ufs_dlist) and (dd^.ufs_dir<>nil);
 
-  if (not parent_locked) then
+  if curr_locked_ownership then
+  begin
+   curr_locked_ownership:=False;
+   if (exclude_parent<>de) then
+   begin
+    sx_unlock(@de^.ufs_md_lock);
+   end;
+  end;
+
+  if curr_hold_ownership then
+  begin
+   curr_hold_ownership:=False;
+   ufs_de_drop(de); //drop prev hold
+  end;
+
+  ufs_de_drop(dd); //drop list hold
+
+  if (TAILQ_EMPTY(@dd^.ufs_dlist) and (dd^.ufs_dir<>nil)) then
+  begin
+   //need to go down further
+
+   curr_hold_ownership  :=True;  //hold parent -> hold curr
+   curr_locked_ownership:=True;  //lock parent -> lock curr
+   parent_locked        :=False;
+
+   de:=dd;
+
+   goto _start;
+  end;
+
+  //end
+
+  if parent_locked and (exclude_parent<>dd) then
   begin
    sx_unlock(@dd^.ufs_md_lock);
   end;
 
-  ufs_de_drop(dd); //prev hold
-  ufs_de_drop(dd); //list hold
-
-  if fparent then
-  begin
-   curr_locked  :=True;
-   parent_locked:=False;
-   de:=dd;
-   goto _start;
-  end;
+  ufs_de_drop(dd); //drop parent
  end;
 
- _exit:
- if (exclude<>de) then
+ if curr_locked_ownership and (exclude_parent<>de) then
  begin
   sx_unlock(@de^.ufs_md_lock);
+ end;
+
+ if curr_hold_ownership then
+ begin
+  ufs_de_drop(de); //drop prev hold
  end;
 end;
 
