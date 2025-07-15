@@ -1621,6 +1621,11 @@
         <Filename Value="sys\kern\kern_socket.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libsceshareutility.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceShareUtility"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
