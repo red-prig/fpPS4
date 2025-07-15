@@ -1218,6 +1218,9 @@ begin
   jit_cbs[OPPnone,OPextrq ,OPSnone]:=@op_extrq;
  end;
 
+ jit_cbs[OPPnone,OPpavg,OPSx_b]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPpavg,OPSx_w]:=@op_reg_mem_wo;
+
  jit_cbs[OPPnone,OPaeskeygenassist,OPSnone]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPaesimc         ,OPSnone]:=@op_reg_mem_wo;
 
