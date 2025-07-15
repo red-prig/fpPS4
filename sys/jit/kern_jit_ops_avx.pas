@@ -1383,6 +1383,10 @@ begin
  jit_cbs[OPPnone,OPbzhi,OPSnone]:=@op_invalid;
  //BMI2
 
+ //3DNow
+ jit_cbs[OPPnone,OPpavgusb,OPSnone]:=@op_invalid;
+ //3DNow
+
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_q]:=@op_avx3_mri;
