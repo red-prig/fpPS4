@@ -177,7 +177,8 @@ end;
 
 function get_vw_mode(var ctx:t_jit_context2):t_vw_mode;
 begin
- Result:=vwZero;
+ Result:=vwZero; //default
+
  case ctx.din.OpCode.Opcode of
 
   OPcvtsi2:Result:=vwM64;
@@ -222,7 +223,8 @@ end;
 
 function get_vl_mode(var ctx:t_jit_context2):t_vl_mode;
 begin
- Result:=vlM256;
+ Result:=vlM256; //default
+
  case ctx.din.OpCode.Opcode of
 
   OPcvtdq2:
@@ -251,6 +253,14 @@ begin
 
   OPextract:
     case ctx.din.OpCode.Suffix of
+     OPSx_f128:Result:=vlOne;
+     else;
+    end;
+
+  OPvbroadcast:
+    case ctx.din.OpCode.Suffix of
+     OPSx_ss  :Result:=vlR256;
+     OPSx_sd  :Result:=vlOne;
      OPSx_f128:Result:=vlOne;
      else;
     end;
@@ -826,26 +836,6 @@ end;
 
 //
 
-const
- vptest_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$17;simdop:1;mm:2;vl_mode:vlZero);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_ro];
- );
-
-procedure op_vptest(var ctx:t_jit_context2);
-begin
- if is_preserved(ctx.din) or is_memory(ctx.din) then
- begin
-  op_emit_avx2(ctx,vptest_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
 procedure op_bmi_gen(var ctx:t_jit_context2);
 const
  desc:t_op_type=(
@@ -1040,68 +1030,6 @@ end;
 //
 
 const
- vbroadcastss_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$18;simdop:1;mm:2;vw_mode:vwZero;vl_mode:vlR256);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_vbroadcastss(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit_avx2(ctx,vbroadcastss_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- vbroadcastsd_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$19;simdop:1;mm:2;vw_mode:vwZero;vl_mode:vlOne);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[];
- );
-
-procedure op_vbroadcastsd(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit_avx2(ctx,vbroadcastsd_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-const
- vbroadcastf128_desc:t_op_desc=(
-  mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$1A;simdop:1;mm:2;vw_mode:vwZero;vl_mode:vlOne);
-  reg_imm:(opt:[not_impl]);
-  reg_im8:(opt:[not_impl]);
-  hint:[his_wo];
- );
-
-procedure op_vbroadcastf128(var ctx:t_jit_context2);
-begin
- if is_memory(ctx.din) then
- begin
-  op_emit_avx2(ctx,vbroadcastf128_desc);
- end else
- begin
-  add_orig(ctx);
- end;
-end;
-
-//
-
-const
  vldmxcsr_desc:t_op_type=(
   op:$AE;index:2;simdop:0;mm:1;
  );
@@ -1198,7 +1126,7 @@ begin
  jit_cbs[OPPnone,OPvtest,OPSx_ps]:=@op_avx2_reg_mem_ro;
  jit_cbs[OPPnone,OPvtest,OPSx_pd]:=@op_avx2_reg_mem_ro;
 
- jit_cbs[OPPv,OPptest,OPSnone]:=@op_vptest;
+ jit_cbs[OPPv,OPptest,OPSnone]:=@op_avx2_reg_mem_ro;
 
  jit_cbs[OPPv,OPpcmpeq,OPSx_b ]:=@op_avx3_gen;
  jit_cbs[OPPv,OPpcmpeq,OPSx_w ]:=@op_avx3_gen;
@@ -1414,9 +1342,9 @@ begin
  jit_cbs[OPPv,OPrcp  ,OPSx_ps]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPv,OPrcp  ,OPSx_ss]:=@op_avx3_gen;
 
- jit_cbs[OPPnone,OPvbroadcast,OPSx_ss  ]:=@op_vbroadcastss;
- jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_vbroadcastsd;
- jit_cbs[OPPnone,OPvbroadcast,OPSx_f128]:=@op_vbroadcastf128;
+ jit_cbs[OPPnone,OPvbroadcast,OPSx_ss  ]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_avx2_reg_mem_wo;
+ jit_cbs[OPPnone,OPvbroadcast,OPSx_f128]:=@op_avx2_reg_mem_wo;
 
  jit_cbs[OPPv,OPpclmulqdq,OPSnone]:=@op_avx3_gen;
 

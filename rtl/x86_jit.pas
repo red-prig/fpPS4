@@ -25,7 +25,18 @@ type
   function ALock:Boolean; inline;
  end;
 
+ //vex rexw modes:
+ // vwZero -> always 0
+ // vwOne  -> always 1
+ // vwR64  -> 64bit regster sets 1
+ // vwM64  -> 64bit memory  sets 1
  t_vw_mode=(vwZero,vwOne,vwR64,vwM64);
+
+ //vex len modes:
+ // vlM256 -> 256bit memory  sets 1
+ // vlR256 -> 256bit regster sets 1
+ // vlZero -> always 0
+ // vlOne  -> always 1
  t_vl_mode=(vlM256,vlR256,vlZero,vlOne);
 
  t_op_opt=Set of (not_impl,not_os8,reg_size_pri,not_prefix,verif_vex_len,verif_rexw);
