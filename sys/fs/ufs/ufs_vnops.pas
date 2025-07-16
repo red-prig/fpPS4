@@ -461,10 +461,11 @@ begin
   Exit(ENOTDIR);
  end;
 
- //If read-only and op is not LOOKUP, will return EROFS.
+ //If read-only and op is not CREATE|LOOKUP, will return EROFS.
  if ((flags and ISLASTCN)<>0) and
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
-    (nameiop <> LOOKUP) then
+     ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+     (nameiop <> CREATE) and
+     (nameiop <> LOOKUP) then
  begin
   Exit(EROFS);
  end;
@@ -519,19 +520,31 @@ begin
 
  if (de=nil) then
  begin
+  //not found
+
   Case nameiop of
    CREATE,
    RENAME:
     begin
+
+     //If read-only and op is CREATE|RENAME, will return EROFS.
+     if ((flags and ISLASTCN)<>0) and
+         ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     begin
+      Exit(EROFS);
+     end;
+
      if ((flags and (LOCKPARENT or WANTPARENT))<>0) and
         ((flags and ISLASTCN)<>0) then
      begin
       cnp^.cn_flags:=cnp^.cn_flags or SAVENAME;
       Exit(EJUSTRETURN);
      end;
+
     end;
    else;
   end;
+
   Exit(ENOENT);
  end;
 
