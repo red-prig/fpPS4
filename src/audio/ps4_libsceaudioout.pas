@@ -1363,6 +1363,29 @@ begin
  state^.loudness:=1;
 end;
 
+function ps4_sceAudioOutMasteringInit(flags:Integer):Integer;
+begin
+ if (flags<>0) then Exit(Integer($80260201));
+
+ Result:=0;
+end;
+
+function ps4_sceAudioOutMasteringTerm():Integer;
+begin
+ Result:=0;
+end;
+
+type
+ pSceAudioOutMasteringParamsHeader=Pointer;
+
+function ps4_sceAudioOutMasteringSetParam(param:pSceAudioOutMasteringParamsHeader;flags:DWORD):Integer;
+begin
+ if (param=nil)      then Exit(Integer($80260201));
+ if (DWORD(flags)>1) then Exit(Integer($80260205));
+
+ Result:=0;
+end;
+
 function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -1381,6 +1404,10 @@ begin
  lib.set_proc($40E42D6DE0EAB13E,@ps4_sceAudioOutOutput);
  lib.set_proc($C373DD6924D2C061,@ps4_sceAudioOutOutputs);
  lib.set_proc($47985E9A828A203F,@ps4_sceAudioOutGetSystemState);
+
+ lib.set_proc($C57E112DE81AADB8,@ps4_sceAudioOutMasteringInit);
+ lib.set_proc($4555AD520A227F9A,@ps4_sceAudioOutMasteringTerm);
+ lib.set_proc($E34E79C9A520DC46,@ps4_sceAudioOutMasteringSetParam);
 end;
 
 var
