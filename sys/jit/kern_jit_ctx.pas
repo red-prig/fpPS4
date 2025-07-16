@@ -181,7 +181,7 @@ const
  OPERAND_BYTES:array[TOperandSize] of Word=(0,1,2,4,8,6,10,16,32,64,512);
 
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
- MCODES:array[0..3] of PChar=('','0F','0F38','0F3A');
+ MCODES:array[0..3] of PChar=('_','0x0F','0x0F38','0x0F3A');
 
 function GetFrameOffset(const RegValue:TRegValue):Integer;
 function GetFrameOffset(const r:TOperand):Integer;

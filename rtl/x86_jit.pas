@@ -345,9 +345,13 @@ type
    APltCount       :Integer;
    //
    Allocator:t_jit_builder_allocator;
+   //
+   on_error:procedure(const Msg:RawByteString;userdata:Pointer); register;
+   on_udata:Pointer;
   //
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
+  procedure Assert(value:Boolean;const Msg:RawByteString=''); inline;
   Function  _new_chunk(start:QWORD):p_jit_code_chunk;
   procedure _end_chunk(__end:QWORD);
   procedure _add(const ji:t_jit_instruction;min_isize:Byte=0);
@@ -1430,6 +1434,18 @@ begin
  Allocator.Free;
 end;
 
+procedure t_jit_builder.Assert(value:Boolean;const Msg:RawByteString=''); inline;
+begin
+ if (not value) then
+ begin
+  if (on_error<>nil) then
+  begin
+   on_error(Msg,on_udata);
+  end;
+  System.Assert(value,Msg);
+ end;
+end;
+
 //
 
 Function t_jit_builder._new_chunk(start:QWORD):p_jit_code_chunk;
@@ -1470,7 +1486,7 @@ begin
  if (ACodeChunkCurr=nil) then
  begin
   _new_chunk(0);
-  Assert(ACodeChunkCurr<>nil)
+  Assert(ACodeChunkCurr<>nil);
  end;
 
  i_size:=ji.AInstructionSize;

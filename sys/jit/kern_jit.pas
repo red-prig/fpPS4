@@ -2134,6 +2134,34 @@ begin
  end;
 end;
 
+procedure on_builder_error(const Msg:RawByteString;userdata:Pointer); register;
+var
+ ctx:p_jit_context2;
+begin
+ ctx:=userdata;
+
+ with ctx^ do
+ begin
+  Writeln('original------------------------':32,' ','0x',HexStr(ptr_curr));
+  print_disassemble(code,dis.CodeIdx);
+  Writeln('original------------------------':32,' ','0x',HexStr(ptr_next));
+
+  Writeln('builder error:',
+          din.OpCode.Prefix,',',
+          din.OpCode.Opcode,',',
+          din.OpCode.Suffix,' ',
+          din.Operand[1].Size,' ',
+          din.Operand[2].Size);
+
+  Writeln('opcode=$',HexStr(dis.opcode,8),' ',
+          'MIndex=',dis.ModRM.Index,' ',
+          'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
+          'mm=',MCODES[dis.mm and 3],':',dis.mm);
+
+ end;
+
+end;
+
 var
  _print_stat:Integer=0;
 
@@ -2167,6 +2195,13 @@ var
  i:Integer;
 begin
  Result:=nil;
+
+ //init error cbs
+ with ctx.builder do
+ begin
+  on_error:=@on_builder_error;
+  on_udata:=@ctx;
+ end;
 
  if (cmDontScanRipRel in ctx.modes) then
  begin
@@ -2374,20 +2409,24 @@ begin
   begin
    print_error_td('Unhandled jit opcode!');
 
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
-   print_disassemble(ctx.code,dis.CodeIdx);
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+   with ctx do
+   begin
+    Writeln('original------------------------':32,' ','0x',HexStr(ptr_curr));
+    print_disassemble(code,dis.CodeIdx);
+    Writeln('original------------------------':32,' ','0x',HexStr(ptr_next));
 
-   Writeln('Unhandled jit:',
-           ctx.din.OpCode.Prefix,',',
-           ctx.din.OpCode.Opcode,',',
-           ctx.din.OpCode.Suffix,' ',
-           ctx.din.Operand[1].Size,' ',
-           ctx.din.Operand[2].Size);
-   Writeln('opcode=$',HexStr(ctx.dis.opcode,8),' ',
-           'MIndex=',ctx.dis.ModRM.Index,' ',
-           'SimdOp=',ctx.dis.SimdOpcode,':',SCODES[ctx.dis.SimdOpcode],' ',
-           'mm=',ctx.dis.mm,':',MCODES[ctx.dis.mm and 3]);
+    Writeln('Unhandled jit:',
+            din.OpCode.Prefix,',',
+            din.OpCode.Opcode,',',
+            din.OpCode.Suffix,' ',
+            din.Operand[1].Size,' ',
+            din.Operand[2].Size);
+
+    Writeln('opcode=$',HexStr(dis.opcode,8),' ',
+            'MIndex=',dis.ModRM.Index,' ',
+            'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
+            'mm=',MCODES[dis.mm and 3],':',dis.mm);
+   end;
 
    Assert(false);
   end;
