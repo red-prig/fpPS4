@@ -119,6 +119,13 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpTusSetThreadParam(threadPriority:Integer;
+                                    cpuAffinityMask:QWORD //SceKernelCpumask
+                                   ):Integer;
+begin
+ Result:=0;
+end;
+
 function Load_libSceNpTus(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -135,6 +142,7 @@ begin
  lib.set_proc($5CECECCCEE0E3565,@ps4_sceNpTusGetData);
  lib.set_proc($C96107505918D6A2,@ps4_sceNpTusGetDataA);
  lib.set_proc($573C4DDED3A8BA3F,@ps4_sceNpTusSetDataA);
+ lib.set_proc($E86283751085C7C7,@ps4_sceNpTusSetThreadParam);
 end;
 
 var
