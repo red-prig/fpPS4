@@ -102,6 +102,7 @@ uses
  ps4_libScePlayGo,
  ps4_libSceAjm,
  ps4_libSceCompanionUtil,
+ ps4_libSceAutoMounterClient,
  //internal libs
 
  kern_rtld,
