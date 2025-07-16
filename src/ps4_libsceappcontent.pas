@@ -108,6 +108,33 @@ begin
  end;
 end;
 
+{
+[Regions]
+0  BAS
+1  J1  JP
+2  UC2 US
+3  AU3 AU
+4  CEK UK
+5  CEL EU
+6  KR2 KR
+7  E12 SA
+8  TW1 TW
+9  RU3 RU
+10 MX2 MX
+11 TOL TOOL
+12 BR2 MX
+13 CN9 CN
+14 KRT
+}
+function ps4_sceAppContentGetRegion(p_regiion:PInteger):Integer;
+begin
+ if (p_regiion=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ p_regiion^:=0; //US
+
+ Result:=0;
+end;
+
 function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
                                              list:pSceAppContentAddcontInfo;
                                              listNum:DWORD;
@@ -236,6 +263,7 @@ begin
  lib:=Result^.add_lib('libSceAppContent');
  lib.set_proc($47D940F363AB68DB,@ps4_sceAppContentInitialize);
  lib.set_proc($F7D6FCD88297A47E,@ps4_sceAppContentAppParamGetInt);
+ lib.set_proc($EF8FF5C7797264AF,@ps4_sceAppContentGetRegion);
  lib.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
  lib.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
  lib.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
