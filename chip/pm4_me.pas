@@ -2657,6 +2657,8 @@ begin
  end;
  //buffers
 
+ //TODO: get clear value!
+
  Assert(buffer<>nil);
 
  //set flag by buffer in current stream

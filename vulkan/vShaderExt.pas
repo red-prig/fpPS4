@@ -1129,7 +1129,13 @@ function TvShaderExt.IsCSClearShader:Boolean;
 begin
  if (self=nil) then Exit(False);
 
- Result:=(FHash_gcn=QWORD($7DCE68F83F66B337));
+ case FHash_gcn of
+  QWORD($7DCE68F83F66B337):Result:=True;
+  QWORD($B3628C7542451F40):Result:=True;
+  QWORD($1248CAD0608E843B):Result:=True;
+  else
+   Result:=False;
+ end;
 end;
 
 function TvShaderExt.IsVSRectListShader:Boolean;
