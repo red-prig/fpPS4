@@ -117,20 +117,26 @@ end;
 procedure set_rootvnode();
 begin
  if (VFS_ROOT(TAILQ_FIRST(@mountlist), LK_EXCLUSIVE, @rootvnode)<>0) then
+ begin
   Assert(False,'Cannot find root vnode');
+ end;
 
  VOP_UNLOCK(rootvnode, 0);
 
  FILEDESC_XLOCK(@fd_table);
 
  if (fd_table.fd_cdir<>nil) then
+ begin
   vrele(fd_table.fd_cdir);
+ end;
 
  fd_table.fd_cdir:=rootvnode;
  VREF(rootvnode);
 
  if (fd_table.fd_rdir<>nil) then
+ begin
   vrele(fd_table.fd_rdir);
+ end;
 
  fd_table.fd_rdir:=rootvnode;
  VREF(rootvnode);

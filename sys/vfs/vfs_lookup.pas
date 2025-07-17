@@ -661,20 +661,23 @@ dirloop:
        ((cnp^.cn_flags and NOCROSSMOUNT)<>0)) then
    begin
     ndp^.ni_dvp:=dp;
-    ndp^.ni_vp:=dp;
+    ndp^.ni_vp :=dp;
     vfslocked:=VFS_LOCK_GIANT(dp^.v_mount);
     VREF(dp);
     goto nextname;
    end;
+
    if ((dp^.v_vflag and VV_ROOT)=0) then
    begin
     break;
    end;
+
    if ((dp^.v_iflag and VI_DOOMED)<>0) then { forced unmount }
    begin
     error:=ENOENT;
     goto bad;
    end;
+
    tdp:=dp;
    dp:=p_mount(dp^.v_mount)^.mnt_vnodecovered;
    tvfslocked:=dvfslocked;

@@ -754,6 +754,7 @@ var
 begin
  VFS_ASSERT_GIANT(vp^.v_mount);
  FILEDESC_XLOCK(@fd_table);
+
  if (chroot_allow_open_directories=0) or
     ((chroot_allow_open_directories=1) and (fd_table.fd_rdir<>rootvnode)) then
  begin
@@ -764,14 +765,17 @@ begin
    Exit(error);
   end;
  end;
+
  oldvp:=fd_table.fd_rdir;
  fd_table.fd_rdir:=vp;
  VREF(fd_table.fd_rdir);
+
  if (fd_table.fd_jdir=nil) then
  begin
   fd_table.fd_jdir:=vp;
   VREF(fd_table.fd_jdir);
  end;
+
  FILEDESC_XUNLOCK(@fd_table);
  vfslocked:=VFS_LOCK_GIANT(oldvp^.v_mount);
  vrele(oldvp);
@@ -808,13 +812,19 @@ begin
  end;
 
  if ((flags and O_CREAT)<>0) then
+ begin
   rights:=rights or CAP_CREATE;
+ end;
 
  if ((flags and O_TRUNC)<>0) then
+ begin
   rights:=rights or CAP_FTRUNCATE;
+ end;
 
  if ((flags and O_EXLOCK)<>0) or ((flags and O_SHLOCK)<>0) then
+ begin
   rights:=rights or CAP_FLOCK;
+ end;
 
  Exit(rights);
 end;
