@@ -592,6 +592,15 @@ begin
  Result:=0;
 end;
 
+function ps4_sceSystemServiceGetPlatformPrivacySetting(p_out:PInteger):Integer;
+begin
+ if (p_out=nil) then Exit(Integer($80e30003));
+
+ p_out^:=0; //idk
+
+ Result:=0;
+end;
+
 //
 
 function Load_libSceSystemService(name:pchar):p_lib_info;
@@ -624,6 +633,9 @@ begin
 
  lib:=Result^.add_lib('libSceLncUtil');
  lib.set_proc($C30A513605BCD42B,@ps4_sceLncUtilLoadExec);
+
+ lib:=Result^.add_lib('libSceSystemServicePlatformPrivacy');
+ lib.set_proc($86FA0B62173872AD,@ps4_sceSystemServiceGetPlatformPrivacySetting);
 end;
 
 var
