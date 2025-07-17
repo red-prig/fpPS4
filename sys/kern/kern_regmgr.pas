@@ -6,23 +6,23 @@ unit kern_regmgr;
 interface
 
 const
- SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size       = $02C30100;
- SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count  = $02C30200;
- SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode = $0A170000;
- SCE_REGMGR_ENT_KEY_NP_env                             = $19800000;
- SCE_REGMGR_ENT_KEY_NP_debug                           = $19810000;
- SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification         = $3CC80700;
- SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture          = $58800C00;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_gpi00                  = $78020400;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify             = $78026400;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload        = $78028A00;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib        = $78028300;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg        = $7802BF00;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg         = $7802C000;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off        = $78020500;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_020B00                 = $78020B00;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace        = $7802B700;
- SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k        = $7802B900;
+ SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size           = $02C30100;
+ SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count      = $02C30200;
+ SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode     = $0A170000;
+ SCE_REGMGR_ENT_KEY_NP_env                                 = $19800000;
+ SCE_REGMGR_ENT_KEY_NP_debug                               = $19810000;
+ SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification             = $3CC80700;
+ SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture              = $58800C00;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_gpi00                      = $78020400;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify                 = $78026400;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload            = $78028A00;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib            = $78028300;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg            = $7802BF00;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg             = $7802C000;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off            = $78020500;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_disable_sce_module_ver_chk = $78020B00;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace            = $7802B700;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k            = $7802B900;
 
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 function sys_workaround8849(key:DWORD):Integer;
@@ -109,6 +109,35 @@ begin
          (data[3] shl 24)
 end;
 
+function sceRegMgrGetInt(key:DWORD;p_out:PInteger):Integer;
+begin
+ Result:=0;
+
+ case key of
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg           :p_out^:=0; //_malloc_init_lv2
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg            :p_out^:=0; //libSceSysmodule  (bit 1,2 -> load debug lib)
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off           :p_out^:=0; //libSceSysmodule  (print errors?)
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_disable_sce_module_ver_chk:p_out^:=0; //libSceSysmodule  (preload module?)
+  SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture             :p_out^:=0; //libkernel
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace           :p_out^:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k           :p_out^:=0; //sceVideoOutOpen  debug video modes?
+  SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode    :p_out^:=0; //sceVideoOutOpen
+
+  SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size          :p_out^:=0; //libSceLibcInternal
+  SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count     :p_out^:=0; //libSceLibcInternal
+
+  SCE_REGMGR_ENT_KEY_NP_debug                              :p_out^:=0; //sys_workaround8849, libSceSysUtil
+  SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification            :p_out^:=0; //sys_workaround8849
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify                :p_out^:=0; //sys_workaround8849
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload           :p_out^:=0; //sys_workaround8849
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib           :p_out^:=0; //sys_workaround8849
+
+  else
+   Exit(-1);
+ end;
+
+end;
+
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 label
  _copyout_value,
@@ -155,25 +184,11 @@ begin
         goto _err;
        end;
 
-       case skey of
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_intmem_dbg       :data.int_val:=0; //_malloc_init_lv2
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sce_module_dbg        :data.int_val:=0; //libSceSysmodule  (bit 1,2 -> load debug lib)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_preload_chk_off       :data.int_val:=0; //libSceSysmodule  (print errors?)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_020B00                :data.int_val:=0; //libSceSysmodule  (preload module?)
-        SCE_REGMGR_ENT_KEY_MORPHEUS_DEBUG_vr_capture         :data.int_val:=0; //libkernel
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace       :data.int_val:=0; //libSceLibcInternal (sceLibcHeapGetTraceInfo -> get_segment_info)
-        SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k       :data.int_val:=0; //sceVideoOutOpen  debug video modes?
-        SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode:data.int_val:=0; //sceVideoOutOpen
-        SCE_REGMGR_ENT_KEY_NP_debug                          :data.int_val:=0; //libSceSysUtil
-
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size      :data.int_val:=0; //libSceLibcInternal
-        SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count :data.int_val:=0; //libSceLibcInternal
-
-        else
-         begin
-          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
-          Assert(False);
-         end;
+       Result:=sceRegMgrGetInt(skey,@data.int_val);
+       if (Result<>0) then
+       begin
+        print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+        Assert(False);
        end;
 
        _copyout_value:
@@ -269,20 +284,26 @@ end;
 function sys_workaround8849(key:DWORD):Integer;
 var
  td:p_kthread;
+ int_val:Integer;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
  Result:=0;
  case key of
-  SCE_REGMGR_ENT_KEY_NP_debug                   :td^.td_retval[0]:=0; //nop
-  SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification :td^.td_retval[0]:=0; //nop
-  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify     :td^.td_retval[0]:=0; //nop
-  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload:td^.td_retval[0]:=0; //nop
-  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib:td^.td_retval[0]:=0; //nop
+  SCE_REGMGR_ENT_KEY_NP_debug                   ,
+  SCE_REGMGR_ENT_KEY_BROWSER_DEBUG_notification ,
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify     ,
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload,
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib:
+    begin
+     Result:=sceRegMgrGetInt(key,@int_val);
+     td^.td_retval[0]:=int_val;
+    end;
   else
    Result:=EINVAL;
  end;
+
 end;
 
 
