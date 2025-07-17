@@ -19,8 +19,6 @@ type
  * This structure is used for the management of descriptors.  It may be
  * shared by multiple processes.
  }
- P_NDSLOTTYPE=^NDSLOTTYPE;
- NDSLOTTYPE=QWORD;
 
  p_filedesc=^t_filedesc;
  t_filedesc=packed object
@@ -30,8 +28,6 @@ type
   fd_jdir             :p_vnode        ; { jail root directory }
   fd_sx               :t_sx           ; { protects members of this }
   fd_kqlist           :t_kqlist       ; { list of kqueues on this filedesc }
-  fd_holdleaderscount :Integer        ; { block fdfree() for shared close() }
-  fd_holdleaderswakeup:Integer        ; { fdfree() needs wakeup }
   fd_cmask            :Word           ; { mask for file creation }
   //
   property fd_nfiles  :Integer read fd_ofiles.FCount;
@@ -109,10 +105,13 @@ begin
 end;
 
 procedure fd_table_init;
+const
+ CMASK=&022; // default file mask: S_IWGRP|S_IWOTH
 begin
  id_table_init(@fd_table.fd_ofiles,0,maxfilesperproc);
  FILEDESC_LOCK_INIT(@fd_table);
  TAILQ_INIT(@fd_table.fd_kqlist);
+ fd_table.fd_cmask:=CMASK;
 end;
 
 finalization
