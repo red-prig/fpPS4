@@ -50,6 +50,15 @@ begin
  Result:=0;
 end;
 
+const
+ SCE_REMOTEPLAY_STREAMING_PROHIBITION_OFF=0;
+ SCE_REMOTEPLAY_STREAMING_PROHIBITION_ON =1;
+
+function ps4_sceRemoteplayProhibitStreaming(mode:Integer):Integer;
+begin
+ Result:=0;
+end;
+
 function Load_libSceRemoteplay(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -62,6 +71,7 @@ begin
  lib.set_proc($8373CD8D8296AA74,@ps4_sceRemoteplayGetConnectionStatus);
  lib.set_proc($45FD1731547BC4FC,@ps4_sceRemoteplaySetProhibition);
  lib.set_proc($9AB361EFCB41A668,@ps4_sceRemoteplayProhibit);
+ lib.set_proc($ED02EB8B1C151DC5,@ps4_sceRemoteplayProhibitStreaming);
 end;
 
 var
