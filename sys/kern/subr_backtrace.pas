@@ -13,7 +13,7 @@ procedure print_frame(var f:text;frame:Pointer);
 
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
-procedure print_error_td(const str:shortstring);
+procedure print_error_td(const str:shortstring;resumable:Boolean=False);
 
 implementation
 
@@ -315,14 +315,19 @@ begin
  print_backtrace(stderr,Pointer(td^.td_frame.tf_rip),Pointer(td^.td_frame.tf_rbp),0);
 end;
 
-procedure print_error_td(const str:shortstring);
+procedure print_error_td(const str:shortstring;resumable:Boolean=False);
 begin
  thread_suspend_all(p_host_ipc_td);
 
  Writeln(StdErr,str);
+ print_backtrace_td(StdErr);
+
  p_host_ipc.error(str);
 
- print_backtrace_td(StdErr);
+ if resumable then
+ begin
+  thread_resume_all(p_host_ipc_td);
+ end;
 end;
 
 end.

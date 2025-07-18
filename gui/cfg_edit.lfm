@@ -1,28 +1,36 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 448
-  Height = 319
-  Top = 198
-  Width = 400
+  Left = 629
+  Height = 339
+  Top = 127
+  Width = 459
   Caption = 'Config Editor'
-  ClientHeight = 319
-  ClientWidth = 400
+  ClientHeight = 339
+  ClientWidth = 459
   Position = poMainFormCenter
-  LCLVersion = '3.6.0.0'
+  LCLVersion = '3.8.0.0'
   object EditPages: TPageControl
-    Left = 0
-    Height = 270
-    Top = 0
-    Width = 397
-    ActivePage = Tab_PS4System
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    AnchorSideBottom.Control = BtnOk
+    Left = 5
+    Height = 289
+    Top = 5
+    Width = 449
+    ActivePage = Tab_MainInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
+    BorderSpacing.Left = 5
+    BorderSpacing.Top = 5
+    BorderSpacing.Right = 5
     BorderSpacing.Bottom = 10
-    TabIndex = 5
+    TabIndex = 0
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object Label1: TLabel
         AnchorSideLeft.Control = Tab_MainInfo
         AnchorSideTop.Control = Tab_MainInfo
@@ -31,7 +39,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 10
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -42,34 +50,15 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideLeft.Control = Tab_MainInfo
         AnchorSideTop.Control = Label1
         AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
+        AnchorSideRight.Control = BtnExpLog
         Left = 10
         Height = 23
         Top = 35
-        Width = 369
+        Width = 396
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
         TabOrder = 0
-      end
-      object Edt_MainInfo_fork_proc: TCheckBox
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Edt_MainInfo_data
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 19
-        Top = 184
-        Width = 369
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        Caption = 'Run in a separate process'
-        TabOrder = 4
       end
       object Label2: TLabel
         AnchorSideLeft.Control = Tab_MainInfo
@@ -80,60 +69,12 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 68
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'Default System Firmware folder:'
-      end
-      object Edt_MainInfo_system: TEdit
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Label2
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 23
-        Top = 93
-        Width = 369
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        TabOrder = 2
-      end
-      object Label3: TLabel
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Edt_MainInfo_system
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 15
-        Top = 126
-        Width = 369
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        Caption = 'Default System data folder:'
-      end
-      object Edt_MainInfo_data: TEdit
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Label3
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 23
-        Top = 151
-        Width = 369
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        TabOrder = 3
+        Caption = 'Default Firmware folder:'
       end
       object BtnLogOpen: TButton
         AnchorSideTop.Control = Edt_MainInfo_LogFile
@@ -141,7 +82,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Control = Edt_MainInfo_LogFile
         AnchorSideBottom.Side = asrBottom
-        Left = 343
+        Left = 370
         Height = 21
         Top = 36
         Width = 35
@@ -154,49 +95,140 @@ object frmCfgEditor: TfrmCfgEditor
         TabOrder = 1
         OnClick = BtnLogOpenClick
       end
-      object BtnSysOpen: TButton
-        AnchorSideTop.Control = Edt_MainInfo_system
-        AnchorSideRight.Control = Edt_MainInfo_system
+      object BtnExpLog: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
-        AnchorSideBottom.Control = Edt_MainInfo_system
-        AnchorSideBottom.Side = asrBottom
-        Left = 343
-        Height = 21
-        Top = 94
-        Width = 35
-        Anchors = [akTop, akRight, akBottom]
+        AnchorSideBottom.Control = Edt_MainInfo_LogFile
+        AnchorSideBottom.Side = asrCenter
+        Left = 411
+        Height = 20
+        Top = 36
+        Width = 20
+        Anchors = [akTop, akRight]
         AutoSize = True
-        BorderSpacing.Top = 1
-        BorderSpacing.Right = 1
-        BorderSpacing.Bottom = 1
-        Caption = '...'
-        TabOrder = 5
-        OnClick = BtnSysOpenClick
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpLogClick
       end
-      object BtnDataOpen: TButton
-        AnchorSideTop.Control = Edt_MainInfo_data
-        AnchorSideRight.Control = Edt_MainInfo_data
+      object Edt_MainInfo_FirmwareList: TListBox
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = BtnAddFw
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
-        AnchorSideBottom.Control = Edt_MainInfo_data
+        AnchorSideBottom.Control = Tab_MainInfo
         AnchorSideBottom.Side = asrBottom
-        Left = 343
-        Height = 21
-        Top = 152
-        Width = 35
-        Anchors = [akTop, akRight, akBottom]
+        Left = 10
+        Height = 102
+        Top = 149
+        Width = 421
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 3
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        ItemHeight = 0
+        TabOrder = 3
+      end
+      object BtnAddFw: TSpeedButton
+        AnchorSideLeft.Control = Edt_MainInfo_FirmwareList
+        AnchorSideTop.Control = Edt_MainInfo_DefaultFirmware
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_FirmwareList
+        Left = 10
+        Height = 20
+        Top = 126
+        Width = 20
         AutoSize = True
-        BorderSpacing.Top = 1
-        BorderSpacing.Right = 1
-        BorderSpacing.Bottom = 1
-        Caption = '...'
-        TabOrder = 6
-        OnClick = BtnDataOpenClick
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 1
+        OnClick = BtnAddFwClick
+      end
+      object BtnRemFw: TSpeedButton
+        AnchorSideLeft.Control = BtnAddFw
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddFw
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_FirmwareList
+        Left = 35
+        Height = 20
+        Top = 126
+        Width = 20
+        AutoSize = True
+        Images = frmMain.SmallImageList
+        ImageIndex = 2
+        OnClick = BtnRemFwClick
+      end
+      object Label3: TLabel
+        AnchorSideLeft.Control = BtnRemFw
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_FirmwareList
+        Left = 65
+        Height = 15
+        Top = 124
+        Width = 366
+        Anchors = [akLeft, akRight, akBottom]
+        BorderSpacing.Left = 10
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        Caption = 'Firmware folder list:'
+      end
+      object Edt_MainInfo_DefaultFirmware: TComboBox
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Label2
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = BtnExpSys
+        Left = 10
+        Height = 23
+        Top = 93
+        Width = 396
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        ItemHeight = 15
+        TabOrder = 2
+        OnGetItems = Edt_MainInfo_DefaultFirmwareGetItems
+      end
+      object BtnExpSys: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MainInfo_DefaultFirmware
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_LogFile
+        AnchorSideBottom.Side = asrCenter
+        Left = 411
+        Height = 20
+        Top = 94
+        Width = 20
+        Anchors = [akTop, akRight]
+        AutoSize = True
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpSysClick
       end
     end
     object Tab_BootparamInfo: TTabSheet
       Caption = 'Bootparam'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object Edt_BootparamInfo_neo: TCheckBox
         AnchorSideLeft.Control = Tab_BootparamInfo
         AnchorSideTop.Control = Tab_BootparamInfo
@@ -205,7 +237,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 10
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -222,7 +254,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 39
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -239,7 +271,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 68
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -256,7 +288,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 97
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -273,7 +305,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 126
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -290,7 +322,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 155
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -307,7 +339,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 184
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -318,8 +350,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_JIT: TTabSheet
       Caption = 'JIT'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object Edt_JITInfo_print_asm: TCheckBox
         AnchorSideLeft.Control = Tab_JIT
         AnchorSideTop.Control = Tab_JIT
@@ -328,7 +360,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 10
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -345,7 +377,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 39
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -362,7 +394,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 68
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -379,7 +411,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 19
         Top = 97
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -390,23 +422,24 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_Misc: TTabSheet
       Caption = 'Misc'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object Edt_MiscInfo_strict_ps4_freq: TCheckBox
         AnchorSideLeft.Control = Tab_Misc
-        AnchorSideTop.Control = Tab_Misc
+        AnchorSideTop.Control = Edt_MiscInfo_fork_proc
+        AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_Misc
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
-        Top = 10
-        Width = 369
+        Top = 39
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Strict rdtsc timer frequency'
-        TabOrder = 0
+        TabOrder = 1
       end
       object Edt_MiscInfo_renderdoc_capture: TCheckBox
         AnchorSideLeft.Control = Tab_Misc
@@ -416,20 +449,39 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
-        Top = 39
-        Width = 369
+        Top = 68
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Use renderdoc capture'
-        TabOrder = 1
+        TabOrder = 2
+      end
+      object Edt_MiscInfo_fork_proc: TCheckBox
+        AnchorSideLeft.Control = Tab_Misc
+        AnchorSideTop.Control = Tab_Misc
+        AnchorSideRight.Control = Tab_Misc
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Tab_MainInfo
+        AnchorSideBottom.Side = asrBottom
+        Left = 10
+        Height = 19
+        Top = 10
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        Caption = 'Run in a separate process'
+        TabOrder = 0
       end
     end
     object Tab_Vulkan: TTabSheet
       Caption = 'Vulkan'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object Edt_VulkanInfo_device_cmb: TComboBox
         AnchorSideLeft.Control = Tab_Vulkan
         AnchorSideTop.Control = Label4
@@ -439,7 +491,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 23
         Top = 35
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -456,7 +508,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 10
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -472,7 +524,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 165
         Top = 68
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         AutoFill = True
         AutoSize = True
@@ -489,7 +541,7 @@ object frmCfgEditor: TfrmCfgEditor
         ChildSizing.Layout = cclTopToBottomThenLeftToRight
         ChildSizing.ControlsPerLine = 7
         ClientHeight = 145
-        ClientWidth = 365
+        ClientWidth = 417
         ColumnLayout = clVerticalThenHorizontal
         Columns = 2
         Items.Strings = (
@@ -516,21 +568,35 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_PS4System: TTabSheet
       Caption = 'PS4 System'
-      ClientHeight = 242
-      ClientWidth = 389
+      ClientHeight = 261
+      ClientWidth = 441
       object PanelHalf: TPanel
         AnchorSideLeft.Control = Tab_PS4System
         AnchorSideLeft.Side = asrCenter
-        AnchorSideRight.Control = Tab_PS4System
         AnchorSideRight.Side = asrCenter
-        Left = 188
-        Height = 49
-        Top = 64
+        Left = 214
+        Height = 26
+        Top = 151
         Width = 12
-        Anchors = [akTop, akLeft, akRight]
         BevelOuter = bvNone
         Enabled = False
         TabOrder = 0
+      end
+      object Label5: TLabel
+        AnchorSideLeft.Control = Tab_PS4System
+        AnchorSideTop.Control = Edt_PS4SystemService_SystemName
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_PS4System
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 68
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Language:'
       end
       object Edt_PS4SystemService_Language: TComboBox
         AnchorSideLeft.Control = Tab_PS4System
@@ -541,7 +607,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 23
         Top = 93
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -591,7 +657,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 23
         Top = 151
-        Width = 168
+        Width = 194
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -613,7 +679,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 126
-        Width = 168
+        Width = 194
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -627,10 +693,10 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_PS4System
         AnchorSideRight.Side = asrBottom
-        Left = 210
+        Left = 236
         Height = 23
         Top = 151
-        Width = 169
+        Width = 195
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -650,10 +716,10 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_PS4System
         AnchorSideRight.Side = asrBottom
-        Left = 210
+        Left = 236
         Height = 15
         Top = 126
-        Width = 169
+        Width = 195
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -668,7 +734,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 184
-        Width = 168
+        Width = 194
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -683,7 +749,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 23
         Top = 209
-        Width = 168
+        Width = 194
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -704,28 +770,12 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 15
         Top = 10
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'System Name:'
-      end
-      object Label5: TLabel
-        AnchorSideLeft.Control = Tab_PS4System
-        AnchorSideTop.Control = Edt_PS4SystemService_SystemName
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_PS4System
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 15
-        Top = 68
-        Width = 369
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        Caption = 'Language:'
       end
       object Edt_PS4SystemService_SystemName: TEdit
         AnchorSideLeft.Control = Tab_PS4System
@@ -736,7 +786,7 @@ object frmCfgEditor: TfrmCfgEditor
         Left = 10
         Height = 23
         Top = 35
-        Width = 369
+        Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -752,9 +802,9 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideRight.Side = asrBottom
     AnchorSideBottom.Control = Owner
     AnchorSideBottom.Side = asrBottom
-    Left = 315
+    Left = 374
     Height = 25
-    Top = 284
+    Top = 304
     Width = 75
     Anchors = [akRight, akBottom]
     AutoSize = True
@@ -772,7 +822,7 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideBottom.Side = asrBottom
     Left = 10
     Height = 25
-    Top = 284
+    Top = 304
     Width = 75
     Anchors = [akLeft, akBottom]
     AutoSize = True

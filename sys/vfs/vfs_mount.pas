@@ -92,10 +92,10 @@ function  vfs_donmount(fsflags:QWORD;fsoptions:p_uio):Integer;
 
 function  dounmount(mp:p_mount;flags:Integer):Integer;
 
-function  mount_argb(ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
-function  mount_argf(ma:p_mntarg;name,fmt:PChar;const Args:Array of const):p_mntarg; register;
+function  mount_argb (ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
+function  mount_argf (ma:p_mntarg;name,fmt:PChar;const Args:Array of const):p_mntarg; register;
 function  mount_argsu(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
-function  mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
+function  mount_arg  (ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 procedure free_mntarg(ma:p_mntarg);
 
 function  kernel_nmount(ma:p_mntarg;flags:QWORD):Integer;
@@ -1028,6 +1028,7 @@ begin
   vput(vp);
   Exit(EINVAL);
  end;
+
  mp:=vp^.v_mount;
  {
   * We only allow the filesystem to be reloaded if it
@@ -1050,11 +1051,13 @@ begin
   vput(vp);
   Exit(error);
  end;
+
  if (vfs_busy(mp, MBF_NOWAIT)<>0) then
  begin
   vput(vp);
   Exit(EBUSY);
  end;
+
  VI_LOCK(vp);
  if ((vp^.v_iflag and VI_MOUNT)<>0) or (vp^.v_mountedhere<>nil) then
  begin
@@ -1063,19 +1066,27 @@ begin
   vput(vp);
   Exit(EBUSY);
  end;
+
  vp^.v_iflag:=vp^.v_iflag or VI_MOUNT;
  VI_UNLOCK(vp);
  VOP_UNLOCK(vp, 0);
 
  MNT_ILOCK(mp);
  mp^.mnt_flag:=mp^.mnt_flag and (not MNT_UPDATEMASK);
- mp^.mnt_flag:=(mp^.mnt_flag or fsflags) and (MNT_RELOAD or MNT_FORCE or MNT_UPDATE or
-     MNT_SNAPSHOT or MNT_ROOTFS or MNT_UPDATEMASK or MNT_RDONLY);
+ mp^.mnt_flag:=(mp^.mnt_flag or fsflags) and
+               (MNT_RELOAD or
+                MNT_FORCE or
+                MNT_UPDATE or
+                MNT_SNAPSHOT or
+                MNT_ROOTFS or
+                MNT_UPDATEMASK or
+                MNT_RDONLY);
 
  if ((mp^.mnt_flag and MNT_ASYNC)=0) then
  begin
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag and (not MNTK_ASYNC);
  end;
+
  MNT_IUNLOCK(mp);
  mp^.mnt_optnew:=optlist^;
  vfs_mergeopts(mp^.mnt_optnew, mp^.mnt_opt);
@@ -1143,6 +1154,7 @@ begin
  begin
   vfs_freeopts(mp^.mnt_opt);
  end;
+
  mp^.mnt_opt:=mp^.mnt_optnew;
  optlist^:=nil;
  VFS_STATFS(mp, @mp^.mnt_stat);
@@ -1224,6 +1236,7 @@ begin
 
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vp:=nd.ni_vp;
+
  if ((fsflags and MNT_UPDATE)=0) then
  begin
   pathbuf:=Default(t_mname);

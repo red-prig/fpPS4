@@ -6,12 +6,15 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls,
-  ExtCtrls,
+  ExtCtrls, Buttons,
+
+  lclintf,
 
   Vulkan,
   vDevice,
 
-  game_info;
+  game_info,
+  form_filler;
 
 type
   TVulkanDevGuid=class(TComponent)
@@ -31,11 +34,14 @@ type
   { TfrmCfgEditor }
 
   TfrmCfgEditor = class(TForm)
+    BtnExpSys: TSpeedButton;
+    BtnRemFw: TSpeedButton;
     BtnCancel: TButton;
-    BtnSysOpen: TButton;
+    BtnAddFw: TSpeedButton;
     BtnOk: TButton;
     BtnLogOpen: TButton;
-    BtnDataOpen: TButton;
+    Edt_MainInfo_DefaultFirmware: TComboBox;
+    Edt_MiscInfo_fork_proc: TCheckBox;
     Edt_PS4SystemService_SystemName: TEdit;
     Edt_PS4SystemService_ButtonAssign: TComboBox;
     Edt_PS4SystemService_TimeFormat: TComboBox;
@@ -54,12 +60,9 @@ type
     Edt_BootparamInfo_print_pmap: TCheckBox;
     Edt_BootparamInfo_print_jit_preload: TCheckBox;
     Edt_JITInfo_memory_guard: TCheckBox;
-    Edt_MainInfo_fork_proc: TCheckBox;
     Edt_MainInfo_LogFile: TEdit;
     Edt_BootparamInfo_neo: TCheckBox;
     EditPages: TPageControl;
-    Edt_MainInfo_system: TEdit;
-    Edt_MainInfo_data: TEdit;
     Edt_MiscInfo_renderdoc_capture: TCheckBox;
     Label1: TLabel;
     Label2: TLabel;
@@ -70,20 +73,23 @@ type
     Label7: TLabel;
     Label8: TLabel;
     Label9: TLabel;
+    Edt_MainInfo_FirmwareList: TListBox;
     PanelHalf: TPanel;
+    BtnExpLog: TSpeedButton;
     Tab_PS4System: TTabSheet;
     Tab_Vulkan: TTabSheet;
     Tab_Misc: TTabSheet;
     Tab_JIT: TTabSheet;
     Tab_MainInfo: TTabSheet;
     Tab_BootparamInfo: TTabSheet;
+    procedure BtnAddFwClick(Sender: TObject);
     procedure BtnCancelClick(Sender: TObject);
-    procedure BtnDataOpenClick(Sender: TObject);
+    procedure BtnExpLogClick(Sender: TObject);
+    procedure BtnExpSysClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
     procedure BtnLogOpenClick(Sender: TObject);
-    procedure BtnSysOpenClick(Sender: TObject);
-    procedure PageInit(const TabName:RawByteString;obj:TAbstractObject);
-    procedure PageSave(const TabName:RawByteString;obj:TAbstractObject);
+    procedure BtnRemFwClick(Sender: TObject);
+    procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
     procedure VulkanInit;
     procedure FormInit;
     procedure FormSave;
@@ -108,6 +114,7 @@ uses
  TypInfo,
  Rtti,
 
+ ms_shell_hack,
  ps4_libSceSystemService;
 
 var
@@ -142,71 +149,120 @@ begin
  Close;
 end;
 
-procedure DoOpenFile(Edit:TEdit);
+function DoOpenFile(const Input,InitialDir:RawByteString):RawByteString;
 var
  d:TOpenDialog;
+ Cookie:Pointer;
 begin
+ Cookie:=RegisterDllHack;
+
+ Result:=Input;
  d:=nil;
  try
   d:=TOpenDialog.Create(nil);
-  d.InitialDir:=Edit.Text;
+  d.InitialDir:=InitialDir;
   d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
   if d.Execute then
   begin
-   Edit.Text:=d.FileName;
+   Result:=d.FileName;
   end;
  except
   //
  end;
  FreeAndNil(d);
+
+ UnregisterDllHack(Cookie);
 end;
 
-procedure DoOpenDir(Edit:TEdit);
+function DoOpenDir(const Input,InitialDir:RawByteString):RawByteString;
 var
  d:TSelectDirectoryDialog;
+ Cookie:Pointer;
 begin
+ Cookie:=RegisterDllHack;
+
+ Result:=Input;
  d:=nil;
  try
   d:=TSelectDirectoryDialog.Create(nil);
-  d.InitialDir:=Edit.Text;
+  d.InitialDir:=InitialDir;
   d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
   if d.Execute then
   begin
-   Edit.Text:=d.FileName;
+   Result:=d.FileName;
   end;
  except
   //
  end;
  FreeAndNil(d);
+
+ UnregisterDllHack(Cookie);
 end;
 
 procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
 begin
- DoOpenFile(Edt_MainInfo_LogFile);
+ Edt_MainInfo_LogFile.Text:=DoOpenFile(Edt_MainInfo_LogFile.Text,Edt_MainInfo_LogFile.Text);
 end;
 
-procedure TfrmCfgEditor.BtnSysOpenClick(Sender: TObject);
+procedure TfrmCfgEditor.BtnAddFwClick(Sender:TObject);
+var
+ new:RawByteString;
 begin
- DoOpenDir(Edt_MainInfo_system);
+ new:=DoOpenDir('','');
+ if (new='') then Exit;
+
+ Edt_MainInfo_FirmwareList   .Items.Add(new);
+ Edt_MainInfo_DefaultFirmware.Items.Add(new);
 end;
 
-procedure TfrmCfgEditor.BtnDataOpenClick(Sender: TObject);
+procedure TfrmCfgEditor.BtnRemFwClick(Sender: TObject);
+var
+ i:Integer;
 begin
- DoOpenDir(Edt_MainInfo_data);
+ i:=Edt_MainInfo_FirmwareList.ItemIndex;
+ if (i>=0) and (i<Edt_MainInfo_FirmwareList.Count) then
+ begin
+  Edt_MainInfo_FirmwareList   .Items.Delete(i);
+  Edt_MainInfo_DefaultFirmware.Items.Delete(i);
+ end;
 end;
 
-type
- TMyControl=class(TControl)
-  public
-   property Text;
+procedure TfrmCfgEditor.Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
+var
+ i:Integer;
+ S:RawByteString;
+begin
+ if (Edt_MainInfo_DefaultFirmware.Items.Count=0) and
+    (Edt_MainInfo_FirmwareList   .Items.Count<>0) then
+ begin
+  //preload
+  For i:=0 to Edt_MainInfo_FirmwareList.Items.Count-1 do
+  begin
+   S:=Edt_MainInfo_FirmwareList.Items.Strings[i];
+   Edt_MainInfo_DefaultFirmware.Items.Add(S);
+  end;
  end;
+end;
 
- TMyButtonControl=class(TButtonControl)
-  public
-   property Checked;
+function OpenFolderOfFile(APath:RawByteString): Boolean;
+begin
+ APath:=ExtractFilePath(APath);
+ if (Trim(APath)='') then
+ begin
+  APath:=GetCurrentDir;
  end;
+ Result:=OpenDocument(APath);
+end;
 
-//src: TComboBox;
+procedure TfrmCfgEditor.BtnExpLogClick(Sender: TObject);
+begin
+ OpenFolderOfFile(Edt_MainInfo_LogFile.Text);
+end;
+
+procedure TfrmCfgEditor.BtnExpSysClick(Sender: TObject);
+begin
+ OpenDocument(Edt_MainInfo_DefaultFirmware.Text);
+end;
 
 Function TVulkanDevGuid.GetText:RawByteString;
 var
@@ -279,8 +335,19 @@ begin
 end;
 
 //
+type
+ TCfgFormData=class(TFormDataProvider)
+  procedure SetText   (control:TComponent;const Text:RawByteString); override;
+  function  GetText   (control:TComponent):RawByteString;            override;
+  procedure SetInteger(control:TComponent;i:Integer);                override;
+  function  GetInteger(control:TComponent):Integer;                  override;
+  procedure SetBool   (control:TComponent;B:Boolean);                override;
+  function  GetBool   (control:TComponent):Boolean;                  override;
+  procedure SetClass  (control:TComponent;Obj:TObject);              override;
+  procedure GetClass  (control:TComponent;Obj:TObject);              override;
+ end;
 
-procedure SetText(control:TComponent;const Text:RawByteString);
+procedure TCfgFormData.SetText(control:TComponent;const Text:RawByteString);
 begin
  if (control is TVulkanDevGuid) then
  begin
@@ -292,7 +359,7 @@ begin
  end;
 end;
 
-function GetText(control:TComponent):RawByteString;
+function TCfgFormData.GetText(control:TComponent):RawByteString;
 begin
  Result:='';
  if (control is TVulkanDevGuid) then
@@ -307,7 +374,7 @@ end;
 
 //
 
-procedure SetInteger(control:TComponent;i:Integer);
+procedure TCfgFormData.SetInteger(control:TComponent;i:Integer);
 begin
  if (control is TVulkanAppFlags) then
  begin
@@ -337,7 +404,7 @@ begin
  end;
 end;
 
-function GetInteger(control:TComponent):Integer;
+function TCfgFormData.GetInteger(control:TComponent):Integer;
 begin
  Result:=0;
  if (control is TVulkanAppFlags) then
@@ -352,7 +419,7 @@ end;
 
 //
 
-procedure SetBool(control:TComponent;B:Boolean);
+procedure TCfgFormData.SetBool(control:TComponent;B:Boolean);
 begin
  if control.InheritsFrom(TButtonControl) then
  begin
@@ -360,7 +427,7 @@ begin
  end;
 end;
 
-function GetBool(control:TComponent):Boolean;
+function TCfgFormData.GetBool(control:TComponent):Boolean;
 begin
  Result:=False;
  if control.InheritsFrom(TButtonControl) then
@@ -369,113 +436,47 @@ begin
  end;
 end;
 
+procedure TCfgFormData.SetClass(control:TComponent;Obj:TObject);
+var
+ A:TStringArray;
+ i:Integer;
+begin
+ if control.InheritsFrom(TListBox) then
+ begin
+  A:=TStringArray(Obj);
+
+  if (Length(A.values)>0) then
+  For i:=0 to High(A.values) do
+  begin
+   TListBox(control).Items.Add(A.values[i]);
+  end;
+
+ end;
+end;
+
+procedure TCfgFormData.GetClass(control:TComponent;Obj:TObject);
+var
+ A:TStringArray;
+ i,c:Integer;
+begin
+ if control.InheritsFrom(TListBox) then
+ begin
+  A:=TStringArray(Obj);
+
+  c:=TListBox(control).Items.Count;
+
+  SetLength(A.values,c);
+
+  if (c>0) then
+  For i:=0 to c-1 do
+  begin
+   A.values[i]:=TListBox(control).Items.Strings[i];
+  end;
+
+ end;
+end;
+
 //
-
-procedure TfrmCfgEditor.PageInit(const TabName:RawByteString;obj:TAbstractObject);
-var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
- TypeKind:TTypeKind;
-
- cname:RawByteString;
- control:TComponent;
-begin
-
- i:=obj.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
-
-   p:=i.GetProperty;
-
-   cname:='Edt_'+TabName+'_'+p.Name;
-   control:=FindComponent(cname);
-   Assert(control<>nil,cname);
-   if (control=nil) then Exit;
-
-   TypeKind:=p.PropertyType.TypeKind;
-   case TypeKind of
-
-    tkSString,
-    tkLString,
-    tkAString:
-     begin
-      SetText(control,p.GetValue(obj).AsString);
-     end;
-
-    tkInteger:
-     begin
-      SetInteger(control,p.GetValue(obj).AsInteger);
-     end;
-
-    tkBool:
-     begin
-      SetBool(control,p.GetValue(obj).AsBoolean);
-     end;
-
-    else
-     Assert(false);
-   end;
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
-end;
-
-procedure TfrmCfgEditor.PageSave(const TabName:RawByteString;obj:TAbstractObject);
-var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
- TypeKind:TTypeKind;
-
- cname:RawByteString;
- control:TComponent;
-begin
-
- i:=obj.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
-
-   p:=i.GetProperty;
-
-   cname:='Edt_'+TabName+'_'+p.Name;
-   control:=FindComponent(cname);
-   Assert(control<>nil,cname);
-   if (control=nil) then Exit;
-
-   TypeKind:=p.PropertyType.TypeKind;
-   case TypeKind of
-
-    tkSString,
-    tkLString,
-    tkAString:
-     begin
-      p.SetValue(obj,GetText(control));
-     end;
-
-    tkInteger:
-     begin
-      p.SetValue(obj,GetInteger(control));
-     end;
-
-    tkBool:
-     begin
-      p.SetValue(obj,GetBool(control));
-     end;
-
-    else
-     Assert(false);
-   end;
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
-end;
 
 Function GetApiVersionStr(apiVersion:TVkUInt32):RawByteString;
 begin
@@ -561,80 +562,30 @@ end;
 
 procedure TfrmCfgEditor.FormInit;
 var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
- obj:TObject;
+ Provider:TCfgFormData;
 begin
  VulkanInit;
 
  EditPages.ActivePageIndex:=0;
 
- i:=FConfigInfo.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
+ Provider:=TCfgFormData.Create;
 
-   p:=i.GetProperty;
+ FormLoad(Self,Provider,FConfigInfo);
 
-   case p.PropertyType.TypeKind of
-
-    tkClass:
-     begin
-      obj:=p.GetValue(FConfigInfo).AsObject;
-
-      if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractObject) then
-      begin
-       PageInit(p.Name,TAbstractObject(obj));
-      end;
-     end;
-
-    else;
-   end;
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
+ Provider.Free;
 
  Show;
 end;
 
 procedure TfrmCfgEditor.FormSave;
 var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
- obj:TObject;
+ Provider:TCfgFormData;
 begin
- i:=FConfigInfo.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
+ Provider:=TCfgFormData.Create;
 
-   p:=i.GetProperty;
+ form_filler.FormSave(Self,Provider,FConfigInfo);
 
-   case p.PropertyType.TypeKind of
-
-    tkClass:
-     begin
-      obj:=p.GetValue(FConfigInfo).AsObject;
-
-      if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractObject) then
-      begin
-       PageSave(p.Name,TAbstractObject(obj));
-      end;
-     end;
-
-    else;
-   end;
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
+ Provider.Free;
 end;
 
 end.

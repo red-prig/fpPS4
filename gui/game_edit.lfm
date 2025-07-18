@@ -1,85 +1,342 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 501
-  Height = 319
-  Top = 124
-  Width = 397
+  Left = 318
+  Height = 311
+  Top = 113
+  Width = 467
   Caption = 'Game editor'
-  ClientHeight = 319
-  ClientWidth = 397
+  ClientHeight = 311
+  ClientWidth = 467
   OnClose = FormClose
   Position = poMainFormCenter
-  LCLVersion = '3.6.0.0'
+  LCLVersion = '3.8.0.0'
   object EditPages: TPageControl
     AnchorSideBottom.Control = BtnOk
     Left = 0
-    Height = 274
+    Height = 266
     Top = 0
-    Width = 397
-    ActivePage = TabMain
+    Width = 467
+    ActivePage = TabFolders
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
-      ClientHeight = 246
-      ClientWidth = 389
-      object GridMain: TStringGrid
-        Left = 0
-        Height = 246
-        Top = 0
-        Width = 389
-        Align = alClient
-        AutoFillColumns = True
-        ColCount = 2
-        FixedRows = 0
-        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
-        RowCount = 1
+      ClientHeight = 238
+      ClientWidth = 459
+      object Label1: TLabel
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = TabMain
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Name:'
+      end
+      object Edt_GameInfo_Name: TEdit
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Label1
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 35
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        MaxLength = 65
         TabOrder = 0
-        TitleStyle = tsNative
-        OnEditingDone = GridEditingDone
-        OnSelectEditor = GridSelectEditor
-        ColWidths = (
-          64
-          321
-        )
+      end
+      object Label2: TLabel
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Edt_GameInfo_Name
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 68
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'TitleId:'
+      end
+      object Edt_GameInfo_TitleId: TEdit
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Label2
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 93
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        MaxLength = 65
+        ReadOnly = True
+        TabOrder = 1
+      end
+      object Label3: TLabel
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Edt_GameInfo_TitleId
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = PanelHalf
+        Left = 10
+        Height = 15
+        Top = 126
+        Width = 203
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Master version:'
+      end
+      object Edt_GameInfo_Version: TEdit
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Label3
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = PanelHalf
+        Left = 10
+        Height = 23
+        Top = 151
+        Width = 203
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        MaxLength = 65
+        ReadOnly = True
+        TabOrder = 2
+      end
+      object Label4: TLabel
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Edt_GameInfo_Version
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 184
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Exec command:'
+      end
+      object Edt_GameInfo_Exec: TEdit
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Label4
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 209
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        MaxLength = 65
+        TabOrder = 5
+      end
+      object PanelHalf: TPanel
+        AnchorSideLeft.Control = TabMain
+        AnchorSideLeft.Side = asrCenter
+        AnchorSideRight.Side = asrCenter
+        Left = 223
+        Height = 23
+        Top = 151
+        Width = 12
+        BevelOuter = bvNone
+        Enabled = False
+        TabOrder = 4
+        TabStop = True
+      end
+      object Label7: TLabel
+        AnchorSideLeft.Control = PanelHalf
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_GameInfo_TitleId
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 245
+        Height = 15
+        Top = 126
+        Width = 204
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Application version:'
+      end
+      object Edt_GameInfo_AppVer: TEdit
+        AnchorSideLeft.Control = PanelHalf
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Label3
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 245
+        Height = 23
+        Top = 151
+        Width = 204
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        MaxLength = 65
+        ReadOnly = True
+        TabOrder = 3
       end
     end
-    object TabMounts: TTabSheet
-      Caption = 'Mounts'
-      ClientHeight = 246
-      ClientWidth = 389
-      object GridMounts: TStringGrid
-        Left = 0
-        Height = 246
-        Top = 0
-        Width = 389
-        Align = alClient
-        AutoFillColumns = True
-        ColCount = 2
-        FixedRows = 0
-        Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goEditing, goThumbTracking, goSmoothScroll]
-        RowCount = 1
+    object TabFolders: TTabSheet
+      Caption = 'Folders'
+      ClientHeight = 238
+      ClientWidth = 459
+      object Label5: TLabel
+        AnchorSideLeft.Control = TabFolders
+        AnchorSideTop.Control = TabFolders
+        AnchorSideRight.Control = TabFolders
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Game:'
+      end
+      object Edt_MountList_game: TEdit
+        AnchorSideLeft.Control = TabFolders
+        AnchorSideTop.Control = Label5
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = BtnExpGame
+        Left = 10
+        Height = 23
+        Top = 35
+        Width = 414
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
         TabOrder = 0
-        TitleStyle = tsNative
-        OnEditingDone = GridEditingDone
-        OnSelectEditor = GridSelectEditor
-        ColWidths = (
-          64
-          304
-        )
+        OnExit = Edt_MountList_gameExit
+      end
+      object BtnGameOpen: TButton
+        AnchorSideTop.Control = Edt_MountList_game
+        AnchorSideRight.Control = Edt_MountList_game
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MountList_game
+        AnchorSideBottom.Side = asrBottom
+        Left = 388
+        Height = 21
+        Top = 36
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
+        TabOrder = 1
+        OnClick = BtnGameOpenClick
+      end
+      object BtnExpGame: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MountList_game
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = TabFolders
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Side = asrCenter
+        Left = 429
+        Height = 20
+        Top = 36
+        Width = 20
+        Anchors = [akTop, akRight]
+        AutoSize = True
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpGameClick
+      end
+      object Label6: TLabel
+        AnchorSideTop.Control = Edt_MountList_game
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 8
+        Height = 15
+        Top = 68
+        Width = 451
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Firmware:'
+      end
+      object Edt_MountList_firmware: TComboBox
+        AnchorSideLeft.Control = TabFolders
+        AnchorSideTop.Control = Label6
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = BtnExpFw
+        Left = 10
+        Height = 23
+        Top = 93
+        Width = 414
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        ItemHeight = 15
+        TabOrder = 2
+        OnGetItems = Edt_MountList_firmwareGetItems
+      end
+      object BtnExpFw: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MountList_firmware
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = TabFolders
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Side = asrCenter
+        Left = 429
+        Height = 20
+        Top = 94
+        Width = 20
+        Anchors = [akTop, akRight]
+        AutoSize = True
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpFwClick
       end
     end
     object TabParamSfo: TTabSheet
       Caption = 'param.sfo'
-      ClientHeight = 246
-      ClientWidth = 389
+      ClientHeight = 238
+      ClientWidth = 459
       object GridParamSfo: TStringGrid
         Left = 0
-        Height = 246
+        Height = 238
         Top = 0
-        Width = 389
+        Width = 459
         Align = alClient
         AutoFillColumns = True
         ColCount = 2
@@ -88,11 +345,9 @@ object frmGameEditor: TfrmGameEditor
         RowCount = 1
         TabOrder = 0
         TitleStyle = tsNative
-        OnEditingDone = GridEditingDone
-        OnSelectEditor = GridSelectEditor
         ColWidths = (
           64
-          304
+          374
         )
       end
     end
@@ -103,7 +358,7 @@ object frmGameEditor: TfrmGameEditor
     AnchorSideBottom.Side = asrBottom
     Left = 10
     Height = 25
-    Top = 284
+    Top = 276
     Width = 75
     Anchors = [akLeft, akBottom]
     AutoSize = True
@@ -121,9 +376,9 @@ object frmGameEditor: TfrmGameEditor
     AnchorSideRight.Side = asrBottom
     AnchorSideBottom.Control = Owner
     AnchorSideBottom.Side = asrBottom
-    Left = 312
+    Left = 382
     Height = 25
-    Top = 284
+    Top = 276
     Width = 75
     Anchors = [akRight, akBottom]
     AutoSize = True

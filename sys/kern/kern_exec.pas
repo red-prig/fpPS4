@@ -26,7 +26,7 @@ function  exec_copyin_args(args:p_image_args;
                            argv:ppchar;
                            envv:ppchar):Integer;
 
-function  kern_execve(td:p_kthread;args:p_image_args):Integer;
+function  kern_execve(td:p_kthread;args:p_image_args;mode:Integer=0):Integer;
 function  main_execve(fname:pchar;argv,envv:ppchar):Integer;
 procedure main_switch_context;
 function  sys_execve(fname:pchar;argv,envv:ppchar):Integer;
@@ -1478,7 +1478,7 @@ end;
 const
  fexecv_proc_title='(fexecv)';
 
-function do_execve(td:p_kthread;args:p_image_args):Integer;
+function do_execve(td:p_kthread;args:p_image_args;mode:Integer):Integer;
 label
  _fullpath,
  exec_fail,
@@ -1813,9 +1813,9 @@ done2:
 
  VFS_UNLOCK_GIANT(vfslocked);
 
- if (error<>0) then
+ if (error<>0) and (mode=0) then
  begin
-  print_error_td('error execve "'+args^.fname+'" code='+IntToStr(error));
+  print_error_td('error execve "'+args^.fname+'" code='+IntToStr(error),True);
 
   exec_free_args(args);
 
@@ -1829,7 +1829,7 @@ done2:
  Exit(error);
 end;
 
-function kern_execve(td:p_kthread;args:p_image_args):Integer;
+function kern_execve(td:p_kthread;args:p_image_args;mode:Integer=0):Integer;
 var
  error:Integer;
 begin
@@ -1837,7 +1837,7 @@ begin
 
  Assert((td^.td_pflags and TDP_EXECVMSPC)=0,'nested execve');
 
- error:=do_execve(td, args);
+ error:=do_execve(td, args, mode);
 
  if ((td^.td_pflags and TDP_EXECVMSPC)<>0) then
  begin
@@ -1857,7 +1857,7 @@ begin
 
  if (error=0) then
  begin
-  error:=kern_execve(curkthread, @args);
+  error:=kern_execve(curkthread, @args, 1);
  end;
 
  Result:=(error);

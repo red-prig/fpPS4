@@ -30,6 +30,9 @@ uses
   cfg_edit,
   game_run,
 
+  param_sfo_gui,
+  playgo_chunk_gui,
+
   host_ipc_interface;
 
 type
@@ -77,6 +80,7 @@ type
 
   TfrmMain = class(TForm)
     MainImageList: TImageList;
+    SmallImageList: TImageList;
     MIFind: TMenuItem;
     MIShowExplorer: TMenuItem;
     MIDevide3: TMenuItem;
@@ -132,6 +136,7 @@ type
     FGameList   :TGameList;
     FGameProcess:TGameProcess;
     FGameItem   :TGameItem;
+    FParamSfo   :TParamSfoFile;
 
     FConfigInfo:TConfigInfo;
 
@@ -183,8 +188,6 @@ var
 implementation
 
 uses
- param_sfo_gui,
- playgo_chunk_gui,
 
  game_find,
 
@@ -491,6 +494,15 @@ begin
  end;
 end;
 
+function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
+begin
+ Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(game)+
+                          DirectorySeparator+
+                          'sce_sys'+
+                          DirectorySeparator+
+                          'param.sfo');
+end;
+
 function TfrmMain.OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
 var
  ParamSfo:TParamSfoFile;
@@ -500,13 +512,14 @@ begin
 
  if (FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.app0;
-
- ParamSfo:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(V)+
-                            DirectorySeparator+
-                            'sce_sys'+
-                            DirectorySeparator+
-                            'param.sfo');
+ if (FParamSfo=nil) then
+ begin
+  ParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
+  FParamSfo:=ParamSfo;
+ end else
+ begin
+  ParamSfo:=FParamSfo;
+ end;
 
  if (ParamSfo=nil) then
  begin
@@ -540,7 +553,7 @@ begin
 
  if (FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.app0;
+ V:=FGameItem.MountList.game;
 
  playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
                              DirectorySeparator+
@@ -646,8 +659,7 @@ begin
   Item:=TGameItem.Create;
   FGameItem.CopyTo(Item);
 
-  Item.GameInfo.Exec :=data.Path;
-  Item.GameInfo.Param:=encode_shell(data.argv);
+  Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
 
   cfg.hOutput:=FAddHandle;
   cfg.hError :=FAddHandle;
@@ -717,7 +729,7 @@ begin
  //
  FGrid.Cells[0,i]:=Item.FGameInfo.Name;
  FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ FGrid.Cells[2,i]:=Item.FGameInfo.AppVer;
  //
  FGrid.Objects[0,i]:=Item;
 end;
@@ -734,7 +746,7 @@ begin
  //
  FGrid.Cells[0,i]:=Item.FGameInfo.Name;
  FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ FGrid.Cells[2,i]:=Item.FGameInfo.AppVer;
  //
  FGrid.Objects[0,i]:=Item;
  //
@@ -752,7 +764,7 @@ begin
  //
  FGrid.Cells[0,i]:=Item.FGameInfo.Name;
  FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ FGrid.Cells[2,i]:=Item.FGameInfo.AppVer;
 end;
 
 procedure TGameList.UpdateItem(Item:TGameItem);
@@ -764,7 +776,7 @@ begin
  //
  FGrid.Cells[0,i]:=Item.FGameInfo.Name;
  FGrid.Cells[1,i]:=Item.FGameInfo.TitleId;
- FGrid.Cells[2,i]:=Item.FGameInfo.Version;
+ FGrid.Cells[2,i]:=Item.FGameInfo.AppVer;
 end;
 
 procedure TGameList.DelItem(Item:TGameItem);
@@ -1163,7 +1175,7 @@ begin
 
  TITLE   :=FGameItem.FGameInfo.Name;
  TITLE_ID:=FGameItem.FGameInfo.TitleId;
- APP_VER :=FGameItem.FGameInfo.Version;
+ APP_VER :=FGameItem.FGameInfo.AppVer;
 
  if (TITLE='') then
  begin
@@ -1241,10 +1253,10 @@ var
 begin
  form:=TfrmGameEditor.Create(Self);
 
- form.Item:=TGameItem.Create;
+ form.FConfigInfo:=FConfigInfo;
+ form.FItem      :=TGameItem.Create;
 
- form.Item.FMountList.system:=FConfigInfo.MainInfo.system;
- form.Item.FMountList.data  :=FConfigInfo.MainInfo.data;
+ form.FItem.FMountList.firmware:=FConfigInfo.MainInfo.DefaultFirmware;
 
  form.OnSave:=@Self.DoAdd;
 
@@ -1270,12 +1282,12 @@ begin
  begin
   form:=TfrmGameEditor.Create(Self);
 
-  form.Item:=TGameItem.Create;
+  form.FConfigInfo:=FConfigInfo;
+  form.FItem      :=TGameItem.Create;
 
-  form.Item.FMountList.system:=FConfigInfo.MainInfo.system;
-  form.Item.FMountList.data  :=FConfigInfo.MainInfo.data;
+  form.FItem.FMountList.firmware:=FConfigInfo.MainInfo.DefaultFirmware;
 
-  form.Item.FMountList.app0:=d.FileName;
+  form.FItem.FMountList.game:=d.FileName;
 
   form.OnSave:=@Self.DoAdd;
 
@@ -1304,13 +1316,14 @@ begin
 
  form:=TfrmGameEditor.Create(Self);
 
- form.Item:=Item;
+ form.FConfigInfo:=FConfigInfo;
+ form.FItem:=Item;
 
  Item.FLock:=True;
 
  form.OnSave:=@Self.DoEdit;
 
- form.FormInit(False);
+ form.FormInit(True);
 end;
 
 procedure TfrmMain.TBConfigClick(Sender: TObject);
@@ -1376,10 +1389,10 @@ begin
 
  if Length(S)<Length(Item.GameInfo.Exec) then
  begin
-  S:=IncludeTrailingPathDelimiter(Item.MountList.app0)+ExtractFilePath(S);
+  S:=IncludeTrailingPathDelimiter(Item.MountList.game)+ExtractFilePath(S);
  end else
  begin
-  S:=Item.MountList.app0;
+  S:=Item.MountList.game;
  end;
 
  OpenDocument(S);
@@ -1388,6 +1401,7 @@ end;
 procedure TfrmMain.MIRunClick(Sender: TObject);
 var
  Item:TGameItem;
+ ParamSfo:TParamSfoFile;
  aRow:Integer;
  cfg:TGameRunConfig;
 begin
@@ -1400,6 +1414,8 @@ begin
 
  Item:=FGameList.GetItemRow(aRow);
 
+ ParamSfo:=LoadParamSfoFile2(Item.MountList.game);
+
  LogEnd;
  ClearLog;
 
@@ -1410,6 +1426,7 @@ begin
 
  cfg.FConfInfo:=FConfigInfo;
  cfg.FGameItem:=Item;
+ cfg.FhasParamSfo:=ord(ParamSfo<>nil);
 
  if Item.FLock then Exit;
 
@@ -1419,6 +1436,8 @@ begin
  begin
   Item.FLock:=True;
   FGameItem:=Item;
+  FParamSfo:=ParamSfo;
+  ParamSfo:=nil;
 
   SetButtonsState(mdsStarted);
 
@@ -1427,6 +1446,8 @@ begin
    FGameProcess.g_ipc.FHandler:=IpcHandler;
   end;
  end;
+
+ FreeAndNil(ParamSfo);
 end;
 
 procedure TfrmMain.TBPlayClick(Sender: TObject);
@@ -1487,6 +1508,7 @@ begin
    FGameItem.FLock:=False;
    FGameItem:=nil;
   end;
+  FreeAndNil(FParamSfo);
   //
   CloseMainWindows;
   //
@@ -1577,9 +1599,9 @@ var
 begin
  form:=TfrmGameEditor(Sender);
 
- Item:=form.Item;
+ Item:=form.FItem;
 
- form.Item:=nil;
+ form.FItem:=nil;
 
  FGameList.InsertItem(Item);
  //
@@ -1593,11 +1615,11 @@ var
 begin
  form:=TfrmGameEditor(Sender);
 
- Item:=form.Item;
+ Item:=form.FItem;
 
  Item.FLock:=False;
 
- form.Item:=nil;
+ form.FItem:=nil;
 
  FGameList.UpdateItem(Item);
  //

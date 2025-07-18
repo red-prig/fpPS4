@@ -6,11 +6,14 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, ExtCtrls,
-  StdCtrls, Grids,
+  StdCtrls, Grids, Buttons,
+
+  LCLIntf,
 
   ms_shell_hack,
 
   game_info,
+  form_filler,
   param_sfo_gui;
 
 type
@@ -18,34 +21,49 @@ type
   { TfrmGameEditor }
 
   TfrmGameEditor = class(TForm)
+    BtnExpGame: TSpeedButton;
+    BtnExpFw: TSpeedButton;
+    BtnGameOpen: TButton;
     BtnOk: TButton;
     BtnCancel: TButton;
     EditPages: TPageControl;
-    GridMain: TStringGrid;
-    GridMounts: TStringGrid;
+    Edt_GameInfo_Name: TEdit;
+    Edt_GameInfo_Exec: TEdit;
+    Edt_GameInfo_TitleId: TEdit;
+    Edt_GameInfo_Version: TEdit;
+    Edt_GameInfo_AppVer: TEdit;
+    Edt_MountList_game: TEdit;
+    Edt_MountList_firmware: TComboBox;
     GridParamSfo: TStringGrid;
+    Label1: TLabel;
+    Label2: TLabel;
+    Label3: TLabel;
+    Label4: TLabel;
+    Label5: TLabel;
+    Label6: TLabel;
+    Label7: TLabel;
+    PanelHalf: TPanel;
     TabMain: TTabSheet;
-    TabMounts: TTabSheet;
+    TabFolders: TTabSheet;
     TabParamSfo: TTabSheet;
+    procedure BtnExpFwClick(Sender: TObject);
+    procedure BtnExpGameClick(Sender: TObject);
+    procedure BtnGameOpenClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
     procedure BtnCancelClick(Sender: TObject);
+    procedure Edt_MountList_firmwareGetItems(Sender: TObject);
+    procedure Edt_MountList_gameExit(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormInit(UpdateTitle:Boolean);
     procedure FormSave;
     procedure LoadParamSfo(UpdateTitle:Boolean);
-    procedure GridSelectEditor(Sender:TObject;aCol,aRow:Integer;var Editor:TWinControl);
-    procedure GridEditingDone(Sender: TObject);
   private
-    Fapp0_row   :Integer;
-    FName_row   :Integer;
-    FTitleId_row:Integer;
-    FVersion_row:Integer;
-
-    Fapp0p:RawByteString;
+    Fgame:RawByteString;
   public
-    OnSave  :TNotifyEvent;
-    Item    :TGameItem;
-    ParamSfo:TParamSfoFile;
+    OnSave     :TNotifyEvent;
+    FConfigInfo:TConfigInfo;
+    FItem      :TGameItem;
+    FParamSfo  :TParamSfoFile;
   end;
 
 var
@@ -61,147 +79,32 @@ uses
 
 { TfrmGameEditor }
 
-type
- TFieldInfo=class(TComponent)
-  procedure SelectEditor(Grid:TStringGrid;aCol,aRow:Integer;var Editor:TWinControl); virtual; abstract;
- end;
-
- TFieldInfoPath=class(TFieldInfo)
-  procedure SelectEditor(Grid:TStringGrid;aCol,aRow:Integer;var Editor:TWinControl); override;
- end;
-
- TButtonPath=class(TButton)
-  public
-   aRow:Integer;
-   Form  :TWinControl;
-   Editor:TWinControl;
-   procedure EditorExit(Sender:TObject);
-   procedure OpenDir(Sender:TObject);
- end;
-
-procedure TButtonPath.EditorExit(Sender:TObject);
-begin
- Editor.OnEnter:=nil;
- Editor.OnExit :=nil;
- if not Focused then
- begin
-  Hide;
- end;
-end;
-
-type
- TMyStringGrid=class(TStringGrid)
-  function  NewBtn:TButtonPath;
-  procedure EditorDirEnter(Sender:TObject);
- end;
-
-procedure TButtonPath.OpenDir(Sender:TObject);
+function DoOpenDir(const Input,InitialDir:RawByteString):RawByteString;
 var
  d:TSelectDirectoryDialog;
  Cookie:Pointer;
 begin
  Cookie:=RegisterDllHack;
 
+ Result:=Input;
  d:=nil;
-
  try
   d:=TSelectDirectoryDialog.Create(nil);
-
-  with TMyStringGrid(Editor.Parent) do
-  begin
-   d.InitialDir:=Cells[1,aRow];
-  end;
-
+  d.InitialDir:=InitialDir;
   d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-
   if d.Execute then
-  with TMyStringGrid(Editor.Parent) do
   begin
-   Cells[1,aRow]:=d.FileName;
+   Result:=d.FileName;
   end;
-
  except
   //
  end;
  FreeAndNil(d);
 
  UnregisterDllHack(Cookie);
-
- TfrmGameEditor(Self.Form).LoadParamSfo(True);
-
- Hide;
 end;
 
-function TMyStringGrid.NewBtn:TButtonPath;
-var
- i:Integer;
- btn:TButtonPath;
-begin
- btn:=nil;
-
- if (ComponentCount<>0) then
- for i:=0 to ComponentCount-1 do
- begin
-  if Components[i] is TButtonPath then
-  begin
-   btn:=TButtonPath(Components[i]);
-   Break;
-  end;
- end;
-
- if (btn=nil) then
- begin
-  btn:=TButtonPath.Create(Self);
-
-  btn.Form:=TWinControl(Self.Tag);
-
-  btn.AutoSize:=True;
-  btn.Caption:='...';
-
-  btn.Parent:=Self;
-
-  btn.BorderSpacing.Top   :=-3;
-  btn.BorderSpacing.Right :=-3;
-  btn.BorderSpacing.Bottom:=-3;
- end;
-
- btn.aRow:=Self.Row;
-
- btn.AnchorSide[akTop].Side:=asrTop;
- btn.AnchorSide[akTop].Control:=Editor;
-
- btn.AnchorSide[akRight].Side:=asrBottom;
- btn.AnchorSide[akRight].Control:=Editor;
-
- btn.AnchorSide[akBottom].Side:=asrBottom;
- btn.AnchorSide[akBottom].Control:=Editor;
-
- btn.Anchors:=[akTop,akRight,akBottom];
-
- btn.Editor:=Editor;
-
- Result:=btn;
-end;
-
-procedure TMyStringGrid.EditorDirEnter(Sender:TObject);
-var
- btn:TButtonPath;
-begin
- btn:=NewBtn;
-
- btn.OnClick:=@btn.OpenDir;
-
- Editor.OnExit:=@btn.EditorExit;
-
- btn.Show;
-end;
-
-procedure TFieldInfoPath.SelectEditor(Grid:TStringGrid;aCol,aRow:Integer;var Editor:TWinControl);
-begin
- Editor.OnEnter:=@TMyStringGrid(Grid).EditorDirEnter;
-end;
-
-procedure AddRow(Grid:TStringGrid;const name,value:RawByteString;info:TFieldInfo);
+procedure AddRow(Grid:TStringGrid;const name,value:RawByteString;obj:TObject);
 var
  i:Integer;
 begin
@@ -209,69 +112,45 @@ begin
  Grid.RowCount:=i+1;
  Grid.Cells[0,i]:=name;
  Grid.Cells[1,i]:=value;
- Grid.Objects[0,i]:=info;
+ Grid.Objects[0,i]:=obj;
+end;
+
+type
+ TGameFormData=class(TFormDataProvider)
+  procedure SetText(control:TComponent;const Text:RawByteString); override;
+  function  GetText(control:TComponent):RawByteString;            override;
+ end;
+
+procedure TGameFormData.SetText(control:TComponent;const Text:RawByteString);
+begin
+ if control.InheritsFrom(TControl) then
+ begin
+  TMyControl(control).Text:=Text;
+ end;
+end;
+
+function TGameFormData.GetText(control:TComponent):RawByteString;
+begin
+ Result:='';
+ if control.InheritsFrom(TControl) then
+ begin
+  Result:=TMyControl(control).Text;
+ end;
 end;
 
 procedure TfrmGameEditor.FormInit(UpdateTitle:Boolean);
 var
- fip:TFieldInfoPath;
-
- i:TRttiPropertyIterator;
- p:TRttiProperty;
+ Provider:TGameFormData;
 begin
  EditPages.ActivePageIndex:=0;
 
- GridMain.Clear;
- GridMounts.Clear;
+ Provider:=TGameFormData.Create;
 
- //TypInfo.SetRawByteStrProp();
+ FormLoad(Self,Provider,FItem);
 
- //AddRow(GridMain,'Name:',nil);
+ Provider.Free;
 
- //
- fip:=TFieldInfoPath.Create(Self);
- //
-
- i:=Item.FGameInfo.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
-
-   p:=i.GetProperty;
-   case p.Name of
-    'Name'   :FName_row   :=GridMain.RowCount;
-    'TitleId':FTitleId_row:=GridMain.RowCount;
-    'Version':FVersion_row:=GridMain.RowCount;
-    else;
-   end;
-
-   AddRow(GridMain,p.Name+':',p.GetValue(Item.FGameInfo).AsString,nil);
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
-
- i:=Item.FMountList.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
-
-   p:=i.GetProperty;
-
-   case p.Name of
-    'app0':Fapp0_row:=GridMounts.RowCount;
-    else;
-   end;
-
-   AddRow(GridMounts,'/'+p.Name,p.GetValue(Item.FMountList).AsString,fip);
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
+ //////
 
  LoadParamSfo(UpdateTitle);
 
@@ -280,52 +159,13 @@ end;
 
 procedure TfrmGameEditor.FormSave;
 var
- i:TRttiPropertyIterator;
- p:TRttiProperty;
+ Provider:TGameFormData;
 begin
- i:=Item.FGameInfo.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
+ Provider:=TGameFormData.Create;
 
-   p:=i.GetProperty;
-   p.SetValue(Item.FGameInfo,GridMain.Cells[1,i.i]);
+ form_filler.FormSave(Self,Provider,FItem);
 
-   i.Next;
-  end;
- finally
-  i.free;
- end;
-
- i:=Item.FMountList.GetPropertyIterator;
- try
-  while (i.GetProperty<>nil) do
-  begin
-
-   p:=i.GetProperty;
-   p.SetValue(Item.FMountList,GridMounts.Cells[1,i.i]);
-
-   i.Next;
-  end;
- finally
-  i.free;
- end;
-
-end;
-
-function GetGridVal(Grid:TStringGrid;ARow:Integer):RawByteString;
-begin
- Result:='';
- if (ARow<0) and (ARow>=Grid.RowCount) then Exit;
- //
- Result:=Grid.Cells[1,ARow];
-end;
-
-procedure SetGridVal(Grid:TStringGrid;ARow:Integer;const value:RawByteString);
-begin
- if (ARow<0) and (ARow>=Grid.RowCount) then Exit;
- //
- Grid.Cells[1,ARow]:=value;
+ Provider.Free;
 end;
 
 procedure TfrmGameEditor.LoadParamSfo(UpdateTitle:Boolean);
@@ -333,40 +173,39 @@ var
  i:Integer;
  V:RawByteString;
 begin
- V:=GetGridVal(GridMounts,Fapp0_row);
+ V:=Edt_MountList_game.Text;
+ if (Fgame=V) then Exit;
 
- if (Fapp0p=V) then Exit;
+ FreeAndNil(FParamSfo);
 
- FreeAndNil(ParamSfo);
+ FParamSfo:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(V)+
+                             DirectorySeparator+
+                             'sce_sys'+
+                             DirectorySeparator+
+                             'param.sfo');
 
- ParamSfo:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(V)+
-                            DirectorySeparator+
-                            'sce_sys'+
-                            DirectorySeparator+
-                            'param.sfo');
-
- Fapp0p:=V;
+ Fgame:=V;
 
  GridParamSfo.Clear;
 
- if (ParamSfo=nil) then
+ if (FParamSfo=nil) then
  begin
-  SetGridVal(GridMain,FTitleId_row,'???');
-  SetGridVal(GridMain,FVersion_row,'???');
+  Edt_GameInfo_TitleId.Text:='???';
+  Edt_GameInfo_Version.Text:='???';
   Exit;
  end;
 
- if (Length(ParamSfo.params)=0) then Exit;
- For i:=0 to High(ParamSfo.params) do
+ if (Length(FParamSfo.params)=0) then Exit;
+ For i:=0 to High(FParamSfo.params) do
  begin
-  if (ParamSfo.params[i].format=SFO_FORMAT_UINT32) then
+  if (FParamSfo.params[i].format=SFO_FORMAT_UINT32) then
   begin
-   V:='0x'+HexStr(ParamSfo.params[i].GetUInt,8);
+   V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
   end else
   begin
-   V:=Trim(ParamSfo.params[i].GetString);
+   V:=Trim(FParamSfo.params[i].GetString);
   end;
-  AddRow(GridParamSfo,ParamSfo.params[i].name,V,nil);
+  AddRow(GridParamSfo,FParamSfo.params[i].name,V,nil);
  end;
 
  GridParamSfo.AutoSizeColumn(0);
@@ -374,32 +213,43 @@ begin
  //
  if not UpdateTitle then Exit;
 
- V:=ParamSfo.GetString('TITLE');
- SetGridVal(GridMain,FName_row,V);
+ V:=FParamSfo.GetString('TITLE');
+ Edt_GameInfo_Name.Text:=V;
 
- V:=ParamSfo.GetString('TITLE_ID');
- SetGridVal(GridMain,FTitleId_row,V);
+ V:=FParamSfo.GetString('TITLE_ID');
+ Edt_GameInfo_TitleId.Text:=V;
 
- V:=ParamSfo.GetString('APP_VER');
- SetGridVal(GridMain,FVersion_row,V);
+ V:=FParamSfo.GetString('VERSION');
+ Edt_GameInfo_Version.Text:=V;
+
+ V:=FParamSfo.GetString('APP_VER');
+ Edt_GameInfo_AppVer.Text:=V;
 end;
 
-procedure TfrmGameEditor.GridSelectEditor(Sender:TObject;aCol,aRow:Integer;var Editor:TWinControl);
-var
- obj:TObject;
-begin
- obj:=TStringGrid(Sender).Objects[0,aRow];
- if (obj=nil) then Exit;
- if not obj.InheritsFrom(TFieldInfo) then Exit;
- //
- TStringGrid(Sender).Tag:=PtrInt(Self);
- //
- TFieldInfo(obj).SelectEditor(TStringGrid(Sender),aCol,aRow,Editor);
-end;
-
-procedure TfrmGameEditor.GridEditingDone(Sender: TObject);
+procedure TfrmGameEditor.Edt_MountList_gameExit(Sender: TObject);
 begin
  LoadParamSfo(True);
+end;
+
+procedure TfrmGameEditor.BtnGameOpenClick(Sender: TObject);
+var
+ new:RawByteString;
+begin
+ new:=DoOpenDir('',Edt_MountList_game.Text);
+ if (new='') then Exit;
+
+ Edt_MountList_game.Text:=new;
+ LoadParamSfo(True);
+end;
+
+procedure TfrmGameEditor.BtnExpGameClick(Sender: TObject);
+begin
+ OpenDocument(Edt_MountList_game.Text);
+end;
+
+procedure TfrmGameEditor.BtnExpFwClick(Sender: TObject);
+begin
+ OpenDocument(Edt_MountList_firmware.Text);
 end;
 
 procedure TfrmGameEditor.BtnOkClick(Sender: TObject);
@@ -418,20 +268,41 @@ begin
  Close;
 end;
 
+procedure TfrmGameEditor.Edt_MountList_firmwareGetItems(Sender: TObject);
+var
+ i,c:Integer;
+ S:RawByteString;
+begin
+ if (FConfigInfo<>nil) then
+ begin
+  c:=FConfigInfo.MainInfo.FirmwareList.GetArrayCount;
+  if (c<>0) and (Edt_MountList_firmware.Items.Count<>c) then
+  begin
+   Edt_MountList_firmware.Items.Clear;
+   //preload
+   For i:=0 to c-1 do
+   begin
+    S:=FConfigInfo.MainInfo.FirmwareList.values[i];
+    Edt_MountList_firmware.Items.Add(S);
+   end;
+  end;
+ end;
+end;
+
 procedure TfrmGameEditor.FormClose(Sender:TObject;var CloseAction:TCloseAction);
 begin
- if (Item<>nil) then
+ if (FItem<>nil) then
  begin
-  if Item.FLock then
+  if FItem.FLock then
   begin
-   Item.FLock:=False;
+   FItem.FLock:=False;
   end else
   begin
-   FreeAndNil(Item);
+   FreeAndNil(FItem);
   end;
  end;
  //
- FreeAndNil(ParamSfo);
+ FreeAndNil(FParamSfo);
  //
  CloseAction:=caFree;
 end;

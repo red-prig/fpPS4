@@ -16,7 +16,8 @@ uses
  host_ipc,
  host_ipc_interface,
  md_host_ipc,
- game_info;
+ game_info,
+ game_mount;
 
 type
  TGameRunConfig=record
@@ -25,6 +26,7 @@ type
 
   FConfInfo:TConfigInfo;
   FGameItem:TGameItem;
+  FhasParamSfo:Integer;
  end;
 
  TGameProcessSimple=class(TGameProcess)
@@ -39,10 +41,9 @@ function run_item(const cfg:TGameRunConfig):TGameProcess;
 implementation
 
 uses
+ errno,
  sys_sysinit,
- kern_param,
  kern_exec,
- vfs_mountroot,
  sys_crt, //<- init writeln redirect
  sys_tty,
  md_exception, //<- install custom
@@ -200,7 +201,7 @@ var
  curr:PPChar;
 begin
  if (argv=nil) then Exit;
- curr:=argv+1; //skip exec
+ curr:=argv;
  while (curr^<>nil) do
  begin
   FreeMem(curr^);
@@ -253,10 +254,9 @@ begin
  Result:=1;
 
  //init
- argc:=1;
+ argc:=0;
  argv:=AllocMem(SizeOf(Pointer)*2);
- argv[0]:=nil; //exec place
- argv[1]:=nil; //truncate
+ argv[0]:=nil; //truncate
 
  curr:=@params[1];
  last:=curr;
@@ -336,11 +336,22 @@ begin
  Result:=argc;
 end;
 
+function get_errno_str(err:Integer):RawByteString;
+begin
+ case err of
+  EPERM  :Result:='Operation not permitted';
+  ENOENT :Result:='No such file or directory';
+  EACCES :Result:='Permission denied';
+  EEXIST :Result:='Directory exists';
+  ENOTDIR:Result:='Not a directory';
+  else
+          Result:=IntToStr(err);
+ end;
+end;
+
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
  err:Integer;
- len:Integer;
- exec:array[0..PATH_MAX] of Char;
  argv:PPChar;
  i,argc:Integer;
  Item:TGameItem;
@@ -367,8 +378,8 @@ begin
  Item:=GameStartupInfo.FGameItem;
 
  g_appinfo.mmap_flags:=1; //is_big_app ???
- g_appinfo.CUSANAME:=Item.FGameInfo.TitleId;
- //g_appinfo.hasParamSfo:=1; TODO: check
+ g_appinfo.CUSANAME   :=Item.FGameInfo.TitleId;
+ g_appinfo.hasParamSfo:=GameStartupInfo.hasParamSfo;
  //g_appinfo.debug_level:=1;
 
  g_appinfo.titleWorkaround.version:=69;
@@ -383,51 +394,23 @@ begin
  kern_reserve_2mb_page(0,M2MB_DEFAULT);
  ///
 
- Writeln('Name   :',Item.FGameInfo.Name   );
- Writeln('TitleId:',Item.FGameInfo.TitleId);
- Writeln('Version:',Item.FGameInfo.Version);
- Writeln('Exec   :',Item.FGameInfo.Exec   );
- Writeln('Param  :',Item.FGameInfo.Param  );
+ Writeln('Name    :',Item.FGameInfo.Name      );
+ Writeln('TitleId :',Item.FGameInfo.TitleId   );
+ Writeln('Version :',Item.FGameInfo.Version   );
+ Writeln('AppVer  :',Item.FGameInfo.AppVer    );
+ Writeln('Exec    :',Item.FGameInfo.Exec      );
 
- Writeln('app0   :',Item.FMountList.app0  );
- Writeln('system :',Item.FMountList.system);
- Writeln('data   :',Item.FMountList.data  );
+ Writeln('game    :',Item.FMountList.game     );
+ Writeln('firmware:',Item.FMountList.firmware );
 
- //temp hack
- err:=vfs_mount_mkdir('ufs','/savedata0'  ,'savedata',nil,0);
+ Writeln('LocalDir:',GameStartupInfo.LocalDir );
 
-                       //fs  guest     host
- err:=vfs_mount_mkdir('ufs','/app0'  ,pchar(Item.FMountList.app0  ),nil,MNT_RDONLY);
- if (err<>0) then
- begin
-  print_error_td('error mount "'+Item.FMountList.app0+'" to "/app0" code='+IntToStr(err));
- end;
-
- err:=vfs_mount_mkdir('ufs','/system',pchar(Item.FMountList.system),nil,MNT_RDONLY);
- if (err<>0) then
- begin
-  print_error_td('error mount "'+Item.FMountList.system+'" to "/system" code='+IntToStr(err));
- end;
-
- err:=vfs_mount_mkdir('ufs','/data'  ,pchar(Item.FMountList.data  ),nil,0);
- if (err<>0) then
- begin
-  print_error_td('error mount "'+Item.FMountList.data+'" to "/data" code='+IntToStr(err));
- end;
+ InitMount(GameStartupInfo);
 
  ///argv
 
  argv:=nil;
- argc:=parse_params(Item.FGameInfo.Param,argv);
-
- FillChar(exec,SizeOf(exec),0);
-
- len:=Length(Item.FGameInfo.Exec);
- if (len>PATH_MAX) then len:=PATH_MAX;
-
- Move(pchar(Item.FGameInfo.Exec)^,exec,len);
-
- argv[0]:=@exec;
+ argc:=parse_params(Item.FGameInfo.Exec,argv);
 
  Writeln('main_thread:',HexStr(curkthread));
 
@@ -443,19 +426,28 @@ begin
 
  Flush(stdout);
 
- err:=main_execve(argv[0],argv,nil);
-
- //free data
- free_params(argv);
+ if (argv[0]=nil) then
+ begin
+  err:=ENOENT;
+ end else
+ begin
+  err:=main_execve(argv[0],argv,nil);
+ end;
 
  if (err=0) then
  begin
+  //free data
+  free_params(argv);
+
   //jump to code
   main_switch_context;
  end else
  if (err<>0) then
  begin
-  print_error_td('error execve "'+exec+'" code='+IntToStr(err));
+  print_error_td('[execve error]'+#13#10+
+                 ' cmd:"'+argv[0]+'"'#13#10+
+                 ' err:'+get_errno_str(err)
+                ,False);
  end;
  //
 
@@ -529,7 +521,7 @@ begin
 
  parent:=md_pidfd_open(md_getppid);
 
- pipefd:=GameStartupInfo.FPipe;
+ pipefd:=GameStartupInfo.Pipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
  kipc:=THostIpcPipeKERN.Create;
@@ -575,12 +567,15 @@ begin
  GameStartupInfo.FConfInfo:=cfg.FConfInfo;
  GameStartupInfo.FGameItem:=cfg.FGameItem;
 
+ GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
+ GameStartupInfo.hasParamSfo:=cfg.FhasParamSfo;
+
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
 
  fork_info:=Default(t_fork_proc);
 
- if cfg.FConfInfo.MainInfo.fork_proc then
+ if cfg.FConfInfo.MiscInfo.fork_proc then
  begin
   Result:=TGameProcessPipe.Create;
   Result.g_fork:=True;

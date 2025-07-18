@@ -99,6 +99,18 @@ type
    Destructor Destroy();   override;
  end;
 
+ TStringArray=class(TAbstractArray)
+  values:array of RawByteString;
+  //
+  Destructor Destroy; override;
+  //
+  Function   GetArrayCount:SizeInt;          override;
+  Function   GetArrayItem(i:SizeInt):TValue; override;
+  Function   AddObject:TAbstractObject;      override;
+  Function   AddArray :TAbstractArray;       override;
+  procedure  AddValue(Value:TValue);         override;
+ end;
+
  TBootParamInfo=class(TAbstractObject)
  private
   FNeo                :Boolean;
@@ -135,26 +147,28 @@ type
 
  TMainInfo=class(TAbstractObject)
  private
-  FLogFile  :RawByteString;
-  Fsystem   :RawByteString;
-  Fdata     :RawByteString;
-  Ffork_proc:Boolean;
+  FLogFile        :RawByteString;
+  FDefaultFirmware:RawByteString;
+  FFirmwareList   :TStringArray;
  published
-  property LogFile  :RawByteString read FLogFile   write FLogFile;
-  property system   :RawByteString read Fsystem    write Fsystem;
-  property data     :RawByteString read Fdata      write Fdata;
-  property fork_proc:Boolean       read Ffork_proc write Ffork_proc;
+  property LogFile        :RawByteString read FLogFile         write FLogFile;
+  property DefaultFirmware:RawByteString read FDefaultFirmware write FDefaultFirmware;
+  property FirmwareList   :TStringArray  read FFirmwareList    write FFirmwareList;
  public
   Constructor Create; override;
  end;
 
  TMiscInfo=class(TAbstractObject)
  private
+  Ffork_proc        :Boolean;
   Fstrict_ps4_freq  :Boolean;
   Frenderdoc_capture:Boolean;
  published
+  property fork_proc        :Boolean read Ffork_proc         write Ffork_proc;
   property strict_ps4_freq  :Boolean read Fstrict_ps4_freq   write Fstrict_ps4_freq;
   property renderdoc_capture:Boolean read Frenderdoc_capture write Frenderdoc_capture;
+ public
+  Constructor Create; override;
  end;
 
  TVulkanInfo=class(TAbstractObject)
@@ -181,18 +195,6 @@ type
   property ButtonAssign:Byte          read FButtonAssign write FButtonAssign;
  public
   Constructor Create; override;
- end;
-
- TStringArray=class(TAbstractArray)
-  values:array of RawByteString;
-  //
-  Destructor Destroy; override;
-  //
-  Function   GetArrayCount:SizeInt;          override;
-  Function   GetArrayItem(i:SizeInt):TValue; override;
-  Function   AddObject:TAbstractObject;      override;
-  Function   AddArray :TAbstractArray;       override;
-  procedure  AddValue(Value:TValue);         override;
  end;
 
  TPS4LoadExec=class(TAbstractObject)
@@ -227,27 +229,25 @@ type
   FName   :RawByteString;
   FTitleId:RawByteString;
   FVersion:RawByteString;
+  FAppVer :RawByteString;
   FExec   :RawByteString;
-  FParam  :RawByteString;
  published
   property Name   :RawByteString read FName    write FName;
   property TitleId:RawByteString read FTitleId write FTitleId;
   property Version:RawByteString read FVersion write FVersion;
+  property AppVer :RawByteString read FAppVer  write FAppVer;
   property Exec   :RawByteString read FExec    write FExec;
-  property Param  :RawByteString read FParam   write FParam;
  public
   Constructor Create; override;
  end;
 
  TMountList=class(TAbstractObject)
   private
-   Fapp0  :RawByteString;
-   Fsystem:RawByteString;
-   Fdata  :RawByteString;
+   Fgame    :RawByteString;
+   Ffirmware:RawByteString;
   published
-   property app0  :RawByteString read Fapp0   write Fapp0  ;
-   property system:RawByteString read Fsystem write Fsystem;
-   property data  :RawByteString read Fdata   write Fdata  ;
+   property game    :RawByteString read Fgame     write Fgame    ;
+   property firmware:RawByteString read Ffirmware write Ffirmware;
   public
    Constructor Create; override;
  end;
@@ -264,10 +264,16 @@ type
 
  TGameStartupInfo=class(TAbstractObject)
   public
-   FReader  :Boolean;
-   FPipe    :THandle;
-   FConfInfo:TConfigInfo;
-   FGameItem:TGameItem;
+   FReader     :Boolean;
+   FPipe       :THandle;
+   FConfInfo   :TConfigInfo;
+   FGameItem   :TGameItem;
+   FLocalDir   :RawByteString;
+   FhasParamSfo:Integer;
+  published
+   property    Pipe    :THandle       read FPipe        write FPipe;
+   property    LocalDir:RawByteString read FLocalDir    write FLocalDir;
+   property    hasParamSfo:Integer    read FhasParamSfo write FhasParamSfo;
   public
    Constructor Create(Reader:Boolean); reintroduce;
    Destructor  Destroy; override;
@@ -1091,9 +1097,13 @@ end;
 Constructor TMainInfo.Create;
 begin
  inherited;
- FLogFile:='log.txt';
- Fsystem :=DirectorySeparator+'system';
- Fdata   :=DirectorySeparator+'data';
+ FLogFile        :='log.txt';
+ FDefaultFirmware:=DirectorySeparator+'firmware';
+end;
+
+Constructor TMiscInfo.Create;
+begin
+ inherited;
  Ffork_proc:=True;
 end;
 
@@ -1152,14 +1162,14 @@ begin
  FExec:='/app0/eboot.bin';
  FTitleId:='???';
  FVersion:='???';
+ FAppVer :='???';
 end;
 
 Constructor TMountList.Create;
 begin
  inherited;
- Fapp0  :=DirectorySeparator;
- Fsystem:=DirectorySeparator+'system';
- Fdata  :=DirectorySeparator+'data';
+ Fgame    :=DirectorySeparator;
+ Ffirmware:=DirectorySeparator+'firmware';
 end;
 
 //
@@ -1187,15 +1197,14 @@ end;
 
 Procedure TGameStartupInfo.Serialize(Stream:TStream);
 begin
- Stream.Write(FPipe,SizeOf(THandle));
+ inherited Serialize(Stream);
  FConfInfo.Serialize(Stream);
  FGameItem.Serialize(Stream);
 end;
 
 Procedure TGameStartupInfo.Deserialize(Stream:TStream);
 begin
- FPipe:=0;
- Stream.Read(FPipe,SizeOf(THandle));
+ inherited Deserialize(Stream);
  FConfInfo.Deserialize(Stream);
  FGameItem.Deserialize(Stream);
 end;

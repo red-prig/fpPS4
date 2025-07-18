@@ -11,11 +11,14 @@ uses
 
 const
  MNT_RDONLY=vmount.MNT_RDONLY;
+ MNT_UPDATE=vmount.MNT_UPDATE;
 
 procedure vfs_mountroot();
-function  vfs_mount_path   (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
-function  vfs_mount_mkdir  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
-function  vfs_unmount_rmdir(path:PChar;flags:Integer):Integer;
+function  vfs_mount_path      (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function  mount_mkdir         (path:PChar):Integer;
+function  mount_rmdir         (path:PChar):Integer;
+function  mount_into_sandbox  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function  unmount_from_sandbox(path:PChar;flags:Integer):Integer;
 
 implementation
 
@@ -357,16 +360,26 @@ begin
  Result:=kernel_nmount(ma,flags);
 end;
 
-function vfs_mount_mkdir(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
+function mount_mkdir(path:PChar):Integer;
+begin
+ Result:=kern_mkdir(path,UIO_SYSSPACE,&777);
+end;
+
+function mount_rmdir(path:PChar):Integer;
+begin
+Result:=kern_rmdir(path,UIO_SYSSPACE);
+end;
+
+function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 begin
  Result:=kern_mkdir(fspath,UIO_SYSSPACE,&777);
- if (Result=0) then
+ if (Result=0) or (Result=EEXIST) then
  begin
   Result:=vfs_mount_path(fstype,fspath,from,opts,flags);
  end;
 end;
 
-function vfs_unmount_rmdir(path:PChar;flags:Integer):Integer;
+function unmount_from_sandbox(path:PChar;flags:Integer):Integer;
 begin
  Result:=kern_unmount(path,flags);
  if (Result=0) then
