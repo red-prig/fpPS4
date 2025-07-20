@@ -1915,12 +1915,29 @@ begin
    hook(nd.ni_vp, @sb);
   end;
  end;
+
  NDFREE(@nd, NDF_ONLY_PNBUF);
  vput(nd.ni_vp);
  VFS_UNLOCK_GIANT(vfslocked);
+
  if (error<>0) then
  begin
   Exit(error);
+ end;
+
+ //error:=priv_check(td,683);
+ error:=EPERM;
+ if (error<>0) then
+ begin
+  sb.st_dev   :=0;
+  sb.st_ino   :=0;
+  sb.st_nlink :=0;
+  sb.st_uid   :=0;
+  sb.st_gid   :=0;
+  sb.st_rdev  :=0;
+  sb.st_flags :=0;
+  sb.st_gen   :=0;
+  sb.st_lspare:=0;
  end;
 
  sbp^:=sb;
@@ -1928,12 +1945,12 @@ begin
 end;
 
 function kern_statat(flag,fd:Integer;path:PChar;
-                     pathseg:uio_seg;sbp:p_stat):Integer;
+                     pathseg:uio_seg;sbp:p_stat):Integer; inline;
 begin
  Exit(kern_statat_vnhook(flag, fd, path, pathseg, sbp, nil));
 end;
 
-function kern_stat(path:PChar;pathseg:uio_seg;sbp:p_stat):Integer;
+function kern_stat(path:PChar;pathseg:uio_seg;sbp:p_stat):Integer; inline;
 begin
  Exit(kern_statat(0, AT_FDCWD, path, pathseg, sbp));
 end;
