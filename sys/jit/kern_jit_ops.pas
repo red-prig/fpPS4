@@ -1710,10 +1710,10 @@ begin
  end else
  begin
   jit_rep_cbs[repOPmovs]:=@add_orig;
-  jit_rep_cbs[repOPlods]:=nil;
+  jit_rep_cbs[repOPlods]:=@add_orig;
   jit_rep_cbs[repOPstos]:=@add_orig;
   jit_rep_cbs[repOPcmps]:=@add_orig;
-  jit_rep_cbs[repOPscas]:=nil;
+  jit_rep_cbs[repOPscas]:=@add_orig;
 
   jit_cbs[OPPnone,OPcmps,OPSx_b]:=@add_orig;
   jit_cbs[OPPnone,OPcmps,OPSx_w]:=@add_orig;
