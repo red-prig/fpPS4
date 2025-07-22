@@ -271,6 +271,24 @@ const
  //MEM_EXTENDED_PARAMETER_TYPE
  MemExtendedParameterAddressRequirements=1;
 
+ //CreateFlags
+ THREAD_CREATE_FLAGS_CREATE_SUSPENDED      = $00000001;
+ THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH    = $00000002;
+ THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER    = $00000004;
+ THREAD_CREATE_FLAGS_LOADER_WORKER         = $00000010;
+ THREAD_CREATE_FLAGS_SKIP_LOADER_INIT      = $00000020;
+ THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE = $00000040;
+
+ PS_ATTRIBUTE_NUMBER_MASK=$0000ffff;
+ PS_ATTRIBUTE_THREAD     =$00010000; // can be used with threads
+ PS_ATTRIBUTE_INPUT      =$00020000; // input only
+ PS_ATTRIBUTE_ADDITIVE   =$00040000; // Is an additional option (see ProcThreadAttributeValue in WinBase.h)
+
+ //PS_ATTRIBUTE_NUM
+ PsAttributeClientId     =3;
+ PsAttributeTebAddress   =4;
+ PsAttributeMemoryReserve=7;
+
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
  IO_STATUS_BLOCK=packed record
@@ -597,6 +615,26 @@ type
   Alignment            :UINTPTR;
  end;
 
+ PPS_ATTRIBUTE=^PS_ATTRIBUTE;
+ PS_ATTRIBUTE=packed record
+  Attribute   :ULONG_PTR;
+  Size        :ULONG_PTR;
+  Value       :ULONG_PTR;
+  ReturnLength:PULONG_PTR;
+ end;
+
+ PPS_ATTRIBUTE_LIST=^PS_ATTRIBUTE_LIST;
+ PS_ATTRIBUTE_LIST=packed record
+  TotalLength:ULONG_PTR;
+  Attributes :array[0..0] of PS_ATTRIBUTE;
+ end;
+
+ PPS_MEMORY_RESERVE=^PS_MEMORY_RESERVE;
+ PS_MEMORY_RESERVE=packed record
+  ReserveAddress:Pointer;
+  ReserveSize   :ULONG_PTR;
+ end;
+
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
 
 function NtDuplicateObject(
@@ -618,6 +656,20 @@ function NtCreateThread(
           ThreadContext     :PCONTEXT;
           InitialTeb        :PINITIAL_TEB;
           CreateSuspended   :Boolean
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtCreateThreadEx(
+          hThread           :PHandle;
+          DesiredAccess     :ACCESS_MASK;
+          ObjectAttributes  :POBJECT_ATTRIBUTES;
+          ProcessHandle     :THandle;
+          StartRoutine      :Pointer;
+          Argument          :Pointer;
+          CreateFlags       :ULONG;   // THREAD_CREATE_FLAGS_*
+          ZeroBits          :ULONG_PTR;
+          StackSize         :ULONG_PTR;
+          MaximumStackSize  :ULONG_PTR;
+          AttributeList     :PPS_ATTRIBUTE_LIST
          ):DWORD; stdcall; external 'ntdll';
 
 function NtOpenThread(
