@@ -51,6 +51,7 @@ uses
 
  kern_proc,
  md_systm,
+ md_systm_fork,
 
  md_game_process,
 

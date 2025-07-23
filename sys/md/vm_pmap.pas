@@ -13,7 +13,6 @@ uses
  sys_vm_object,
  vnode,
  vuio,
- kern_thr,
  kern_mtx,
  kern_rangelock,
  md_map,
@@ -68,12 +67,6 @@ type
 
  pmap_t=p_pmap;
 
- t_pmap_reserve_result=record
-  error:DWORD;
-  base :Pointer;
-  size :QWORD;
- end;
-
 function  atop(x:QWORD):DWORD; inline;
 function  ptoa(x:DWORD):QWORD; inline;
 
@@ -81,8 +74,6 @@ function  ctob(x:QWORD):QWORD; inline;
 function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
-
-function  pmap_reserve:t_pmap_reserve_result;
 
 procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
 
@@ -169,6 +160,7 @@ implementation
 uses
  sysutils,
  ntapi,
+ md_systm_reserve,
  sys_bootparam;
 
 function atop(x:QWORD):DWORD; inline;
@@ -238,7 +230,7 @@ begin
  if (r<>0) then
  begin
   Writeln('failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-  Assert(false,'dev_mem_init');
+  Assert(false,'dev_mem_init'+HexStr(r,8));
  end;
 
  DEV_INFO.DEV_FD.maxp:=VM_RW;
@@ -249,7 +241,7 @@ begin
  if (r<>0) then
  begin
   Writeln('failed md_placeholder_commit(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-  Assert(false,'dev_mem_init');
+  Assert(false,'dev_mem_init:'+HexStr(r,8));
  end;
 end;
 
@@ -270,71 +262,12 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-function pmap_reserve:t_pmap_reserve_result;
-var
- base:Pointer;
- size:QWORD;
- i:Integer;
-begin
- Result:=Default(t_pmap_reserve_result);
-
- if Length(pmap_mem)<>0 then
- begin
-  i:=0;
-  while (i<=High(pmap_mem)) do
-  begin
-   base:=Pointer(pmap_mem[i].start);
-
-   //try union range
-   if (base=Pointer(DL_AREA_START)) then
-   begin
-    size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
-
-    Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED);
-    if (Result.error=0) then
-    begin
-     //union range
-     pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
-     pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
-     //
-     i:=i+2;
-     Continue;
-    end;
-   end;
-
-   base:=Pointer(pmap_mem[i].start);
-   size:=pmap_mem[i].__end-pmap_mem[i].start;
-
-   Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED);
-
-   if (Result.error<>0) then
-   begin
-    Result.base:=base;
-    Result.size:=size;
-    //STATUS_COMMITMENT_LIMIT = $C000012D
-    Exit;
-   end;
-
-   //update start region
-   pmap_mem[i].start:=QWORD(base);
-
-   {
-   if wr then
-   begin
-    Writeln('md_reserve_ex(',HexStr(base),',',HexStr(base+size),'):0x',HexStr(Result,8));
-   end;
-   }
-   i:=i+1;
-  end;
- end;
-end;
-
 procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
 var
  i:Integer;
- m:t_pmap_reserve_result;
+ m:t_md_map_reserve_result;
 begin
- m:=pmap_reserve;
+ m:=md_map_reserve();
  if (m.error<>0) then
  begin
   Writeln('failed pmap_reserve(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));

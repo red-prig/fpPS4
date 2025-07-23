@@ -13,14 +13,14 @@ uses
   cfg_edit,
   game_find,
   sys_crt_gui,
-  md_systm,
-  vm_pmap;
+  md_systm_fork,
+  md_systm_reserve;
 
 {$R *.res}
 
 begin
-  md_systm.md_run_forked;
-  Application.Tag:=vm_pmap.pmap_reserve.error;
+  md_systm_fork.md_run_forked;
+  Application.Tag:=md_systm_reserve.md_map_reserve().error;
   //
   RequireDerivedFormResource:=True;
   Application.Scaled:=True;

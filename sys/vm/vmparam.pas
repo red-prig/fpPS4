@@ -5,12 +5,6 @@ unit vmparam;
 
 interface
 
-type
- t_addr_range=packed record
-  start:QWORD;
-  __end:QWORD;
- end;
-
 const
  PAGE_SHIFT=14;
  PAGE_SIZE =1 shl PAGE_SHIFT; //16384
@@ -71,7 +65,7 @@ const
 
  WIN_MAX_MOVED_STACK  =QWORD($C0000000000);
  WIN_SHARED_ADDR      =QWORD($C0000000000);
- KERNEL_LOWER         =QWORD($C0000000000);
+ KERNEL_LOWER         =QWORD($C0000010000);
 
  VM_DMEM_SIZE         =$180000000; // 6144MB
 
@@ -107,14 +101,25 @@ const
  SCE_KERNEl_GNM_TESS_AREA    = 0xF`F0000000 - 0xF`F0040000
 }
 
-var
- pmap_mem:array[0..4] of t_addr_range=(
+type
+ t_addr_range=packed record
+  start:QWORD;
+  __end:QWORD;
+ end;
+
+ t_addr_range_array=array[0..4] of t_addr_range;
+
+const
+ initial_pmap_mem:t_addr_range_array=(
   (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ), //guest
   (start:DL_AREA_START     ;__end:DL_AREA___END     ), //guest
   (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS), //guest
   (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS),
   (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS)
  );
+
+var
+ pmap_mem:t_addr_range_array;
 
  pmap_mem_guest:array[0..2] of t_addr_range absolute pmap_mem;
 

@@ -601,7 +601,8 @@ type
  end;
 
  //NtAllocateVirtualMemoryEx/NtMapViewOfSectionEx
- MEM_EXTENDED_PARAMETER=packed record
+ PMEM_EXTENDED_PARAMETER=^TMEM_EXTENDED_PARAMETER;
+ TMEM_EXTENDED_PARAMETER=packed record
   pType:QWORD;
   case byte of
    0:(ULong64:QWORD);
@@ -609,7 +610,8 @@ type
    2:(Handle :THandle);
  end;
 
- MEM_ADDRESS_REQUIREMENTS=packed record
+ PMEM_ADDRESS_REQUIREMENTS=^TMEM_ADDRESS_REQUIREMENTS;
+ TMEM_ADDRESS_REQUIREMENTS=packed record
   LowestStartingAddress:Pointer;
   HighestEndingAddress :Pointer;
   Alignment            :UINTPTR;

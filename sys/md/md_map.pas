@@ -26,6 +26,7 @@ function MD_MAP_ALIGN(align:QWORD):DWORD; inline;
 
 const
  VM_RW =VM_PROT_READ or VM_PROT_WRITE;
+ VM_RX =VM_PROT_READ or VM_PROT_EXECUTE;
  VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
 
 function md_placeholder_mmap    (var base:Pointer;size:QWORD;flags:DWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
@@ -118,8 +119,8 @@ var
  ADDR:Pointer;
  len :ULONG_PTR;
  info:TMemoryBasicInformation;
- EXT :MEM_EXTENDED_PARAMETER;
- REQ :MEM_ADDRESS_REQUIREMENTS;
+ EXT :TMEM_EXTENDED_PARAMETER;
+ REQ :TMEM_ADDRESS_REQUIREMENTS;
 begin
  size:=md_up_page(size);
 
@@ -438,8 +439,8 @@ function md_mmap(var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWOR
 var
  atype:DWORD;
  ADDR :Pointer;
- EXT  :MEM_EXTENDED_PARAMETER;
- REQ  :MEM_ADDRESS_REQUIREMENTS;
+ EXT  :TMEM_EXTENDED_PARAMETER;
+ REQ  :TMEM_ADDRESS_REQUIREMENTS;
 begin
  EXT.pType  :=MemExtendedParameterAddressRequirements;
  EXT.Pointer:=@REQ;
