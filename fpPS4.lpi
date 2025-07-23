@@ -1631,6 +1631,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAutoMounterClient"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\md\md_hook.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
