@@ -377,13 +377,12 @@ begin
    if (ECounts=Length(data)) then Exit;
 
    i:=ECounts;
+   ECounts:=ECounts+1;
 
    data[i]:=C_EXT;
-
-   EParams:=@data;
-   ECounts:=i+1;
   end;
 
+  EParams:=@data;
  end;
 
 end;
