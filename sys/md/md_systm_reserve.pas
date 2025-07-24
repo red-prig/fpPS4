@@ -353,11 +353,16 @@ begin
         REQ.LowestStartingAddress:=R.LowestStartingAddress;
        end;
 
-       //Ignore HighestEndingAddress
-
        if (R.Alignment>REQ.Alignment) then
        begin
         REQ.Alignment:=R.Alignment;
+       end;
+
+       if (R.HighestEndingAddress<>nil) then
+       if (REQ.LowestStartingAddress>=R.HighestEndingAddress) then
+       begin
+        //oof
+        Exit;
        end;
 
        P.Pointer:=@REQ;
@@ -374,7 +379,11 @@ begin
 
   if (not used) then
   begin
-   if (ECounts=Length(data)) then Exit;
+   if (ECounts=Length(data)) then
+   begin
+    //oof
+    Exit;
+   end;
 
    i:=ECounts;
    ECounts:=ECounts+1;
