@@ -16,10 +16,10 @@ uses
 var
  devfs_unr:p_id_desc_table;
 
-function  devfs_mount(mp:p_mount):Integer;
+function  devfs_mount  (mp:p_mount):Integer;
 function  devfs_unmount(mp:p_mount;mntflags:Integer):Integer;
-function  devfs_root(mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
-function  devfs_statfs(mp:p_mount;sbp:p_statfs):Integer;
+function  devfs_root   (mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
+function  devfs_statfs (mp:p_mount;sbp:p_statfs):Integer;
 procedure devfs_unmount_final(fmp:p_devfs_mount);
 
 const

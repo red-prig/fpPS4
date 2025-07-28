@@ -902,19 +902,30 @@ begin
  mtx_assert(VFS_Giant);
  Assert((fsflags and MNT_UPDATE)=0,'MNT_UPDATE shouldnt be here');
 
- error:=0;
- //error:=vinvalbuf(vp, V_SAVE, 0, 0);
- //if (error=0) and (vp^.v_type<>VDIR) then
- // error:=ENOTDIR;
+ error:=vinvalbuf(vp, V_SAVE, 0, 0);
+ if (error=0) and (vp^.v_type<>VDIR) then
+ begin
+  error:=ENOTDIR;
+ end;
 
  if (error=0) then
  begin
   VI_LOCK(vp);
 
-  if ((vp^.v_iflag and VI_MOUNT)=0) and (vp^.v_mountedhere=nil) then
-   vp^.v_iflag:=vp^.v_iflag or VI_MOUNT
-  else
+  if ((fsflags and MNT_ROOTFS)=0) and
+     ((vp^.v_vflag and VV_ROOT)<>0) and
+     (vp^.v_mount<>nil) then
+  begin
    error:=EBUSY;
+  end else
+  if ((vp^.v_iflag and VI_MOUNT)=0) and
+     (vp^.v_mountedhere=nil) then
+  begin
+   vp^.v_iflag:=vp^.v_iflag or VI_MOUNT;
+  end else
+  begin
+   error:=EBUSY;
+  end;
 
   VI_UNLOCK(vp);
  end;

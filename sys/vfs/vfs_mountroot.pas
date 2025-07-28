@@ -298,8 +298,10 @@ begin
   else
    error:=ENOTDIR;
 
-  //if (error=0) then
-  // error:=vinvalbuf(vp, V_SAVE, 0, 0);
+  if (error=0) then
+  begin
+   error:=vinvalbuf(vp, V_SAVE, 0, 0);
+  end;
 
   if (error=0) then
   begin
@@ -314,10 +316,15 @@ begin
    vp^.v_mountedhere:=mpdevfs;
    VOP_UNLOCK(vp, 0);
   end else
+  begin
    vput(vp);
+  end;
  end;
+
  if (error<>0) then
+ begin
   Writeln('mountroot: unable to remount devfs under /dev ', error);
+ end;
 
  NDFREE(@nd, NDF_ONLY_PNBUF);
 

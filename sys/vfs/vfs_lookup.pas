@@ -183,6 +183,7 @@ begin
    Exit(error);
   end;
  end;
+
  if (dp=nil) then
  begin
   dp:=fd_table.fd_cdir;
@@ -491,7 +492,8 @@ begin
 
  docache:=(cnp^.cn_flags and NOCACHE) xor NOCACHE;
  if (cnp^.cn_nameiop=DELETE) or
-    ((_wantparent and cnp^.cn_nameiop<>CREATE) and
+    ((_wantparent<>0) and
+     (cnp^.cn_nameiop<>CREATE) and
      (cnp^.cn_nameiop<>LOOKUP)) then
  begin
   docache:=0;
@@ -983,6 +985,7 @@ success:
    goto bad2;
   end;
  end;
+
  if (vfslocked<>0) and (dvfslocked<>0) then
  begin
   VFS_UNLOCK_GIANT(dvfslocked); { Only need one }

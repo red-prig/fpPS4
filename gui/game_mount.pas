@@ -9,16 +9,29 @@ uses
 
 var
  g_LocalDir:RawByteString='';
+ g_TitleId :String[10]    ='?????????'#0;
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
+
+//
+
+function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
+function TemporaryDataUnmount(mountPoint:pchar):Integer;
+function TemporaryDataFormat (mountPoint:pchar):Integer;
 
 implementation
 
 uses
  sysutils,
+ fileutil,
+ strings,
  errno,
+ kern_mtx,
  vfs_mountroot,
  subr_backtrace;
+
+var
+ mount_mtx:mtx;
 
 function get_errno_str(err:Integer):RawByteString;
 begin
@@ -26,6 +39,7 @@ begin
   EPERM  :Result:='Operation not permitted';
   ENOENT :Result:='No such file or directory';
   EACCES :Result:='Permission denied';
+  EBUSY  :Result:='Directory is busy';
   EEXIST :Result:='Directory exists';
   ENOTDIR:Result:='Not a directory';
   else
@@ -208,7 +222,17 @@ begin
  fs_source[MM_FIRMWARE]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.firmware);
  fs_source[MM_LOCAL   ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.LocalDir);
 
+ //save to global
  g_LocalDir:=GameStartupInfo.LocalDir;
+
+ with GameStartupInfo.FGameItem.GameInfo do
+ begin
+  if (TitleId<>'') then
+  begin
+   g_TitleId:=TitleId;
+  end;
+ end;
+ //save to global
 
  //--sandbox--
  fs_iterator.init(@SANDBOX_DIRS);
@@ -242,6 +266,161 @@ begin
  //UPDATE: sandbox root IS NOT read-only
  //err:=vfs_mount_path('ufs','/','/',nil,MNT_RDONLY or MNT_UPDATE);
 
+ mtx_init(mount_mtx,'mount_mtx');
+end;
+
+const
+ DIRNAME_MAXSIZE=32;
+ MOUNT_MAXSIZE  =16;
+
+ TEMP0:pchar='/temp0';
+
+ TEMP_FILE='/system_data/game/tempdata.dat';
+ APP_TEMP ='/app_tmp/';
+
+var
+ TemporaryMount:Boolean=False;
+
+Function ReadTemporaryTitleId:RawByteString;
+var
+ fs_src:RawByteString;
+ F:THandle;
+ s:Integer;
+begin
+ fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(TEMP_FILE);
+
+ F:=FileOpen(fs_src,fmOpenRead);
+ if (F=THandle(-1)) then Exit('');
+
+ s:=FileSeek(F,0,fsFromEnd);
+ if (s>9) then s:=9;
+
+ if (s>0) then
+ begin
+  SetLength(Result,s);
+  FillChar(pchar(Result)^,s,#0);
+  FileSeek(F,0,fsFromBeginning);
+  FileRead(F,pchar(Result)^,s);
+  s:=strlen(pchar(Result));
+  SetLength(Result,s);
+ end;
+
+ FileClose(F);
+end;
+
+procedure SaveTemporaryTitleId(const TitleId:RawByteString);
+var
+ fs_src:RawByteString;
+ fs_dir:RawByteString;
+ F:THandle;
+begin
+ fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(TEMP_FILE);
+ fs_dir:=ExtractFilePath(fs_src);
+ ForceDirectories(fs_dir);
+
+ F:=FileCreate(fs_src);
+ if (F=THandle(-1)) then Exit;
+
+ FileWrite(F,pchar(TitleId)^,Length(TitleId)+1);
+
+ FileClose(F);
+end;
+
+function FormatMount(const fs_src:RawByteString):Integer;
+begin
+ //Delete all content in directory
+ if DeleteDirectory(fs_src,True) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=EPERM;
+ end;
+end;
+
+function TemporaryDataMount(mountPoint:pchar;format:Boolean):Integer;
+var
+ fs_src:RawByteString;
+ ValidTitleId:Boolean;
+begin
+ mtx_lock(mount_mtx);
+
+ if TemporaryMount then
+ begin
+  Result:=EBUSY;
+ end else
+ begin
+  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+  ForceDirectories(fs_src);
+
+  Result:=vfs_mountroot.mount_into_sandbox('ufs',TEMP0,pchar(fs_src),nil,0);
+
+  if (Result=0) then
+  begin
+   strlcopy(mountPoint,TEMP0,MOUNT_MAXSIZE);
+   TemporaryMount:=True;
+
+   ValidTitleId:=(ReadTemporaryTitleId=g_TitleId);
+
+   if format or (not ValidTitleId) then
+   begin
+    FormatMount(fs_src);
+   end;
+
+   if (not ValidTitleId) then
+   begin
+    SaveTemporaryTitleId(g_TitleId);
+   end;
+
+  end;
+
+ end;
+
+ mtx_unlock(mount_mtx);
+end;
+
+function TemporaryDataUnmount(mountPoint:pchar):Integer;
+begin
+ if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
+
+ mtx_lock(mount_mtx);
+
+ if TemporaryMount then
+ begin
+  Result:=vfs_mountroot.unmount_from_sandbox(TEMP0,0);
+
+  if (Result=0) then
+  begin
+   TemporaryMount:=False;
+  end;
+
+ end else
+ begin
+  Result:=ENOTDIR;
+ end;
+
+ mtx_unlock(mount_mtx);
+end;
+
+function TemporaryDataFormat(mountPoint:pchar):Integer;
+var
+ fs_src:RawByteString;
+begin
+ if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
+
+ mtx_lock(mount_mtx);
+
+ if TemporaryMount then
+ begin
+  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+
+  Result:=FormatMount(fs_src);
+ end else
+ begin
+  Result:=ENOTDIR;
+ end;
+
+ mtx_unlock(mount_mtx);
 end;
 
 end.

@@ -1018,9 +1018,11 @@ end;
 
 procedure md_unlink_cache(de:p_ufs_dirent;curr_locked_ownership,parent_locked:Boolean);
 label
- _start;
+ _start,
+ _skip;
 var
  dd,exclude_parent:p_ufs_dirent;
+ vp:p_vnode;
  curr_hold_ownership:Boolean;
 begin
  if (de=nil) then Exit;
@@ -1090,6 +1092,14 @@ begin
 
   ufs_de_drop(dd); //drop list hold
 
+  vp:=dd^.ufs_vnode;
+
+  if (vp<>nil) then
+  if (vp^.v_mountedhere<>nil) then
+  begin
+   goto _skip;
+  end;
+
   if (TAILQ_EMPTY(@dd^.ufs_dlist) and (dd^.ufs_dir<>nil)) then
   begin
    //need to go down further
@@ -1102,6 +1112,8 @@ begin
 
    goto _start;
   end;
+
+  _skip:
 
   //end
 
@@ -1151,6 +1163,11 @@ var
  de:p_ufs_dirent;
 begin
  vp:=ap^.a_vp;
+
+ if (vp^.v_mountedhere<>nil) then
+ begin
+  Exit(0);
+ end;
 
  de:=ufs_relv(vp);
  if (de<>nil) then
@@ -1810,7 +1827,15 @@ begin
  dd:=dvp^.v_data;
  de:=vp^.v_data;
 
- if (de^.ufs_dirent^.d_type<>DT_DIR) then Exit(ENOTDIR);
+ if (de^.ufs_dirent^.d_type<>DT_DIR) then
+ begin
+  Exit(ENOTDIR);
+ end;
+
+ if (vp^.v_mountedhere<>nil) then
+ begin
+  Exit(EINVAL);
+ end;
 
  sx_xlock(@dd^.ufs_md_lock);
  sx_xlock(@de^.ufs_md_lock);
@@ -1850,6 +1875,8 @@ function md_rename(ap:p_vop_rename_args):Integer;
 label
  _exit;
 var
+ fvp:p_vnode;
+ tvp:p_vnode;
  dd_f,dd_t:p_ufs_dirent;
  de_f,de_t:p_ufs_dirent;
  cnp_t:p_componentname;
@@ -1864,15 +1891,31 @@ begin
  Result:=md_mount_is_valid(ap^.a_tdvp);
  if (Result<>0) then Exit;
 
- dd_f:=ap^.a_fdvp^.v_data;
- dd_t:=ap^.a_tdvp^.v_data;
- de_f:=ap^.a_fvp^.v_data;
+ fvp:=ap^.a_fvp;
+ tvp:=ap^.a_tvp;
+
+ if (fvp^.v_type=VDIR) and
+    (fvp^.v_mountedhere<>nil) then
+ begin
+  Exit(EXDEV);
+ end;
+
+ if (tvp<>nil) then
+ if (tvp^.v_type=VDIR) and
+    (tvp^.v_mountedhere<>nil) then
+ begin
+  Exit(EXDEV);
+ end;
+
+ dd_f :=ap^.a_fdvp^.v_data;
+ dd_t :=ap^.a_tdvp^.v_data;
+ de_f :=fvp^.v_data;
  cnp_t:=ap^.a_tcnp;
 
  de_t:=nil;
- if (ap^.a_tvp<>nil) then
+ if (tvp<>nil) then
  begin
-  de_t:=ap^.a_tvp^.v_data;
+  de_t:=tvp^.v_data;
  end;
 
  sx_xlock(@dd_f^.ufs_md_lock);

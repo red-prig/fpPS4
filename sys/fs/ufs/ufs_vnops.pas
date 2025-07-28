@@ -994,6 +994,12 @@ var
 begin
  dvp:=ap^.a_dvp;
  vp:=ap^.a_vp;
+
+ if (vp^.v_mountedhere<>nil) then
+ begin
+  Exit(EINVAL);
+ end;
+
  dmp:=VFSTOUFS(vp^.v_mount);
 
  ASSERT_VOP_ELOCKED(dvp, 'ufs_remove');
