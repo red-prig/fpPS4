@@ -18,12 +18,14 @@ procedure InitMount(GameStartupInfo:TGameStartupInfo);
 function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
 function TemporaryDataFormat (mountPoint:pchar):Integer;
+function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 
 implementation
 
 uses
  sysutils,
  fileutil,
+ LazFileUtils,
  strings,
  errno,
  kern_mtx,
@@ -326,6 +328,219 @@ begin
  FileClose(F);
 end;
 
+function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
+type
+ PNode=^TNode;
+ TNode=record
+  N:PNode;
+  S:RawByteString;
+  B:Boolean;
+ end;
+
+var
+ stack:PNode;
+
+ procedure Push(const S:RawByteString;B:Boolean); inline;
+ var
+  new:PNode;
+ begin
+  new:=GetMem(SizeOf(TNode));
+  new^.N:=stack;
+  new^.S:=S;
+  new^.B:=B;
+  stack:=new;
+ end;
+
+ Function Pop(var S:RawByteString;var B:Boolean):Boolean; inline;
+ var
+  old:PNode;
+ begin
+  if (stack<>nil) then
+  begin
+   old:=stack;
+   stack:=old^.N;
+   S:=old^.S;
+   B:=old^.B;
+   Finalize(old);
+   FreeMem(old);
+   Result:=True;
+  end else
+  begin
+   Result:=False;
+  end;
+ end;
+
+const
+  //Don't follow symlinks on *nix, just delete them
+  DeleteMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
+var
+  FileInfo: TSearchRec;
+  CurSrcDir: RawByteString;
+  CurFilename: RawByteString;
+label
+  _next;
+begin
+  Result:=false;
+  CurSrcDir:=CleanAndExpandDirectory(DirectoryName);
+  stack:=nil;
+_next:
+  if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,DeleteMask,FileInfo)=0 then
+  begin
+   repeat
+     // check if special file
+     if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
+     begin
+       continue;
+     end;
+     CurFilename:=CurSrcDir+FileInfo.Name;
+     if ((FileInfo.Attr and faDirectory)>0)
+        {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
+     begin
+       Push(CurSrcDir,OnlyChildren);
+       CurSrcDir:=CleanAndExpandDirectory(CurFilename);
+       OnlyChildren:=False;
+       SysUtils.FindClose(FileInfo);
+       goto _next;
+     end else
+     begin
+       if not SysUtils.DeleteFile(CurFilename) then exit;
+     end;
+   until SysUtils.FindNext(FileInfo)<>0;
+   SysUtils.FindClose(FileInfo);
+  end;
+
+  if (not OnlyChildren) then
+  begin
+   if (not SysUtils.RemoveDir(CurSrcDir)) then exit;
+  end;
+
+  if Pop(CurSrcDir,OnlyChildren) then
+  begin
+   goto _next;
+  end;
+
+  Result:=true;
+end;
+
+function GetDirectorySizeLikePFS(const DirectoryName:RawByteString):Int64;
+type
+ PNode=^TNode;
+ TNode=record
+  N:PNode;
+  S:RawByteString;
+  F:TSearchRec;
+ end;
+
+var
+ stack:PNode;
+
+ procedure Push(const S:RawByteString;const F:TSearchRec); inline;
+ var
+  new:PNode;
+ begin
+  new:=GetMem(SizeOf(TNode));
+  new^.N:=stack;
+  new^.S:=S;
+  new^.F:=F;
+  stack:=new;
+ end;
+
+ Function Pop(var S:RawByteString;var F:TSearchRec):Boolean; inline;
+ var
+  old:PNode;
+ begin
+  if (stack<>nil) then
+  begin
+   old:=stack;
+   stack:=old^.N;
+   S:=old^.S;
+   F:=old^.F;
+   Finalize(old);
+   FreeMem(old);
+   Result:=True;
+  end else
+  begin
+   Result:=False;
+  end;
+ end;
+
+ function AlignUp(addr:Int64;alignment:Int64):Int64; inline;
+ var
+  tmp:Int64;
+ begin
+  if (alignment=0) then Exit(addr);
+  tmp:=addr+Int64(alignment-1);
+  Result:=tmp-(tmp mod alignment);
+ end;
+
+const
+  //Don't follow symlinks on *nix, just delete them
+  FindMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
+var
+  files_size :Int64;
+  inode_count:Int64;
+  dirent_size:Int64;
+  //
+  FileInfo: TSearchRec;
+  CurSrcDir: RawByteString;
+  CurFilename: RawByteString;
+const
+  c_block_size =4*1024; //????
+  c_dirent_size=16;
+  c_inode_size =168;
+  c_inodes_per_block=c_block_size div c_inode_size;
+label
+  _down,
+  _next;
+begin
+  Result:=0;
+  files_size :=0;
+  inode_count:=0;
+  dirent_size:=0;
+  CurSrcDir:=CleanAndExpandDirectory(DirectoryName);
+  stack:=nil;
+ _down:
+  if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,FindMask,FileInfo)=0 then
+  begin
+   repeat
+     // check if special file
+     if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
+     begin
+       continue;
+     end;
+     //
+     CurFilename:=CurSrcDir+FileInfo.Name;
+     //
+     inode_count:=inode_count+1;
+     dirent_size:=dirent_size+AlignUp(c_dirent_size+Length(FileInfo.Name)+1,8);
+     //
+     if ((FileInfo.Attr and faDirectory)>0)
+        {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
+     begin
+       Push(CurSrcDir,FileInfo);
+       CurSrcDir:=CleanAndExpandDirectory(CurFilename);
+       goto _down;
+     end else
+     begin
+       files_size:=files_size+AlignUp(FileInfo.Size,c_block_size);
+     end;
+     //
+     _next:
+   until SysUtils.FindNext(FileInfo)<>0;
+   SysUtils.FindClose(FileInfo);
+  end;
+
+  if Pop(CurSrcDir,FileInfo) then
+  begin
+   goto _next;
+  end;
+
+  //Very approximate size
+  Result:=files_size+
+          AlignUp(dirent_size,c_block_size)+
+          AlignUp(inode_count,c_inodes_per_block)*c_block_size;
+end;
+
 function FormatMount(const fs_src:RawByteString):Integer;
 begin
  //Delete all content in directory
@@ -422,6 +637,45 @@ begin
 
  mtx_unlock(mount_mtx);
 end;
+
+function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
+const
+ MAX_SIZE_KB=1*1024*1024;
+var
+ size:QWORD;
+ fs_src:RawByteString;
+begin
+ if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
+
+ mtx_lock(mount_mtx);
+
+ if TemporaryMount then
+ begin
+  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+
+  size:=GetDirectorySizeLikePFS(fs_src);
+  size:=size div 1024; //to KB
+
+  if (size>MAX_SIZE_KB) then
+  begin
+   size:=0;
+  end else
+  begin
+   size:=MAX_SIZE_KB-size;
+  end;
+
+  availableSpaceKb^:=size;
+
+  Result:=0;
+ end else
+ begin
+  Result:=ENOTDIR;
+ end;
+
+ mtx_unlock(mount_mtx);
+end;
+
+
 
 end.
 
