@@ -401,18 +401,19 @@ type
 var
  stack:PNode;
 
- procedure Push(const S:RawByteString;B:Boolean); inline;
+ procedure Push(const S:RawByteString;B:Boolean);
  var
   new:PNode;
  begin
   new:=GetMem(SizeOf(TNode));
+  Initialize(new^);
   new^.N:=stack;
   new^.S:=S;
   new^.B:=B;
   stack:=new;
  end;
 
- Function Pop(var S:RawByteString;var B:Boolean):Boolean; inline;
+ Function Pop(var S:RawByteString;var B:Boolean):Boolean;
  var
   old:PNode;
  begin
@@ -422,7 +423,7 @@ var
    stack:=old^.N;
    S:=old^.S;
    B:=old^.B;
-   Finalize(old);
+   Finalize(old^);
    FreeMem(old);
    Result:=True;
   end else
@@ -495,18 +496,19 @@ type
 var
  stack:PNode;
 
- procedure Push(const S:RawByteString;const F:TSearchRec); inline;
+ procedure Push(const S:RawByteString;const F:TSearchRec);
  var
   new:PNode;
  begin
   new:=GetMem(SizeOf(TNode));
+  Initialize(new^);
   new^.N:=stack;
   new^.S:=S;
   new^.F:=F;
   stack:=new;
  end;
 
- Function Pop(var S:RawByteString;var F:TSearchRec):Boolean; inline;
+ Function Pop(var S:RawByteString;var F:TSearchRec):Boolean;
  var
   old:PNode;
  begin
@@ -516,7 +518,7 @@ var
    stack:=old^.N;
    S:=old^.S;
    F:=old^.F;
-   Finalize(old);
+   Finalize(old^);
    FreeMem(old);
    Result:=True;
   end else
