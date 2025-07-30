@@ -16,6 +16,7 @@ uses
  host_ipc,
  host_ipc_interface,
  md_host_ipc,
+ param_sfo_gui,
  game_info,
  game_mount;
 
@@ -26,7 +27,7 @@ type
 
   FConfInfo:TConfigInfo;
   FGameItem:TGameItem;
-  FhasParamSfo:Integer;
+  FParamSfo:TParamSfoFile;
  end;
 
  TGameProcessSimple=class(TGameProcess)
@@ -568,7 +569,15 @@ begin
  GameStartupInfo.FGameItem:=cfg.FGameItem;
 
  GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
- GameStartupInfo.hasParamSfo:=cfg.FhasParamSfo;
+ GameStartupInfo.hasParamSfo:=ord(cfg.FParamSfo<>nil);
+
+ if (cfg.FParamSfo<>nil) then
+ begin
+  GameStartupInfo.DownloadMb_0:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE');
+  GameStartupInfo.DownloadMb_1:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE_1');
+ end;
+
+ ////
 
  SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
  SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );

@@ -666,6 +666,7 @@ begin
 
   cfg.FConfInfo:=FConfigInfo;
   cfg.FGameItem:=Item;
+  cfg.FParamSfo:=FParamSfo;
 
   FGameProcess:=run_item(cfg);
 
@@ -1426,7 +1427,7 @@ begin
 
  cfg.FConfInfo:=FConfigInfo;
  cfg.FGameItem:=Item;
- cfg.FhasParamSfo:=ord(ParamSfo<>nil);
+ cfg.FParamSfo:=ParamSfo;
 
  if Item.FLock then Exit;
 

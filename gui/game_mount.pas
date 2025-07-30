@@ -5,11 +5,28 @@ unit game_mount;
 interface
 
 uses
- game_info;
+ game_info,
+ kern_mtx;
+
+type
+ TGameMountConfig=class
+  LocalDir:RawByteString;
+  TitleId :String[10];
+  //
+  mount_mtx:mtx;
+  //
+  TemporaryMount:Boolean;
+  //
+  DownloadKb:array[0..1] of QWORD;
+  //
+  Constructor Create;
+  function GetTemporaryTitleIdFile:RawByteString;
+  function GetAppTemporaryFolder:RawByteString;
+  function GetAppDownloadFolder(i:Byte):RawByteString;
+ end;
 
 var
- g_LocalDir:RawByteString='';
- g_TitleId :String[10]    ='?????????'#0;
+ GameMountConfig:TGameMountConfig;
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 
@@ -19,6 +36,7 @@ function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
 function TemporaryDataFormat (mountPoint:pchar):Integer;
 function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
+function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 
 implementation
 
@@ -28,12 +46,56 @@ uses
  LazFileUtils,
  strings,
  errno,
- kern_mtx,
  vfs_mountroot,
  subr_backtrace;
 
+function unix_to_host(const name:RawByteString):RawByteString;
 var
- mount_mtx:mtx;
+ i:Integer;
+begin
+ Result:=name;
+ if (DirectorySeparator<>'/') then
+ For i:=1 to Length(Result) do
+ begin
+  if (Result[i]='/') then
+  begin
+   Result[i]:=DirectorySeparator;
+  end;
+ end;
+end;
+
+Constructor TGameMountConfig.Create;
+begin
+ LocalDir:='';
+ TitleId :='?????????'#0;
+ //
+ mtx_init(mount_mtx,'mount_mtx');
+end;
+
+function TGameMountConfig.GetTemporaryTitleIdFile:RawByteString;
+const
+ TEMP_FILE='/system_data/game/tempdata.dat';
+begin
+ Result:=ExcludeTrailingPathDelimiter(LocalDir)+unix_to_host(TEMP_FILE);
+end;
+
+function TGameMountConfig.GetAppTemporaryFolder:RawByteString;
+const
+ APP_TEMP ='/app_tmp/';
+begin
+ Result:=ExcludeTrailingPathDelimiter(LocalDir)+unix_to_host(APP_TEMP);
+end;
+
+function TGameMountConfig.GetAppDownloadFolder(i:Byte):RawByteString;
+const
+ APP_DOWNLOAD='%s/user/download/%s/download%d.dat'; // On PS4 these are files, on the emulator, folders
+begin
+ Result:=Format(unix_to_host(APP_DOWNLOAD),[
+  ExcludeTrailingPathDelimiter(LocalDir),
+  TitleId,
+  i
+ ]);
+end;
 
 function get_errno_str(err:Integer):RawByteString;
 begin
@@ -71,21 +133,6 @@ begin
                  '   to:"'+fspath+'"'#13#10+
                  '  err:'+get_errno_str(Result)
                 ,True);
- end;
-end;
-
-function unix_to_host(const name:RawByteString):RawByteString;
-var
- i:Integer;
-begin
- Result:=name;
- if (DirectorySeparator<>'/') then
- For i:=1 to Length(Result) do
- begin
-  if (Result[i]='/') then
-  begin
-   Result[i]:=DirectorySeparator;
-  end;
  end;
 end;
 
@@ -206,9 +253,14 @@ const
   (term:True)
  );
 
+ DOWNLOAD_DIRS:array[0..1] of pchar=(
+  '/download0',
+  '/download1'
+ );
+
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 var
- err:Integer;
+ i,err:Integer;
 
  fs_iterator:t_mount_dir_iterator;
 
@@ -217,24 +269,29 @@ var
  fs_src:RawByteString;
 begin
 
+ with GameStartupInfo.FGameItem.GameInfo do
+ begin
+  if (TitleId='') then
+  begin
+   TitleId:='?????????';
+  end;
+ end;
+
+ //save to global
+ GameMountConfig:=TGameMountConfig.Create;
+ GameMountConfig.LocalDir:=GameStartupInfo.LocalDir;
+ GameMountConfig.TitleId :=GameStartupInfo.FGameItem.GameInfo.TitleId;
+
+ GameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
+ GameMountConfig.DownloadKb[1]:=GameStartupInfo.DownloadMb_1*1024;
+ //save to global
+
  //temp hack
  err:=mount_into_sandbox('ufs','/savedata0','savedata',nil,0,True);
 
  fs_source[MM_GAME    ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.game    );
  fs_source[MM_FIRMWARE]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.firmware);
  fs_source[MM_LOCAL   ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.LocalDir);
-
- //save to global
- g_LocalDir:=GameStartupInfo.LocalDir;
-
- with GameStartupInfo.FGameItem.GameInfo do
- begin
-  if (TitleId<>'') then
-  begin
-   g_TitleId:=TitleId;
-  end;
- end;
- //save to global
 
  //--sandbox--
  fs_iterator.init(@SANDBOX_DIRS);
@@ -265,10 +322,20 @@ begin
  until (not fs_iterator.next(err));
  //--sandbox--
 
+ //download
+ For i:=0 to High(GameMountConfig.DownloadKb) do
+ if (GameMountConfig.DownloadKb[i]<>0) then
+ begin
+  fs_src:=GameMountConfig.GetAppDownloadFolder(i);
+  ForceDirectories(fs_src);
+
+  err:=mount_into_sandbox('ufs',DOWNLOAD_DIRS[i],pchar(fs_src),nil,0,False);
+ end;
+ //download
+
  //UPDATE: sandbox root IS NOT read-only
  //err:=vfs_mount_path('ufs','/','/',nil,MNT_RDONLY or MNT_UPDATE);
 
- mtx_init(mount_mtx,'mount_mtx');
 end;
 
 const
@@ -277,19 +344,13 @@ const
 
  TEMP0:pchar='/temp0';
 
- TEMP_FILE='/system_data/game/tempdata.dat';
- APP_TEMP ='/app_tmp/';
-
-var
- TemporaryMount:Boolean=False;
-
 Function ReadTemporaryTitleId:RawByteString;
 var
  fs_src:RawByteString;
  F:THandle;
  s:Integer;
 begin
- fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(TEMP_FILE);
+ fs_src:=GameMountConfig.GetTemporaryTitleIdFile;
 
  F:=FileOpen(fs_src,fmOpenRead);
  if (F=THandle(-1)) then Exit('');
@@ -316,7 +377,7 @@ var
  fs_dir:RawByteString;
  F:THandle;
 begin
- fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(TEMP_FILE);
+ fs_src:=GameMountConfig.GetTemporaryTitleIdFile;
  fs_dir:=ExtractFilePath(fs_src);
  ForceDirectories(fs_dir);
 
@@ -536,7 +597,8 @@ begin
   end;
 
   //Very approximate size
-  Result:=files_size+
+  Result:=c_block_size+
+          files_size+
           AlignUp(dirent_size,c_block_size)+
           AlignUp(inode_count,c_inodes_per_block)*c_block_size;
 end;
@@ -558,14 +620,14 @@ var
  fs_src:RawByteString;
  ValidTitleId:Boolean;
 begin
- mtx_lock(mount_mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
 
- if TemporaryMount then
+ if GameMountConfig.TemporaryMount then
  begin
   Result:=EBUSY;
  end else
  begin
-  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+  fs_src:=GameMountConfig.GetAppTemporaryFolder;
   ForceDirectories(fs_src);
 
   Result:=vfs_mountroot.mount_into_sandbox('ufs',TEMP0,pchar(fs_src),nil,0);
@@ -573,9 +635,9 @@ begin
   if (Result=0) then
   begin
    strlcopy(mountPoint,TEMP0,MOUNT_MAXSIZE);
-   TemporaryMount:=True;
+   GameMountConfig.TemporaryMount:=True;
 
-   ValidTitleId:=(ReadTemporaryTitleId=g_TitleId);
+   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.TitleId);
 
    if format or (not ValidTitleId) then
    begin
@@ -584,29 +646,29 @@ begin
 
    if (not ValidTitleId) then
    begin
-    SaveTemporaryTitleId(g_TitleId);
+    SaveTemporaryTitleId(GameMountConfig.TitleId);
    end;
 
   end;
 
  end;
 
- mtx_unlock(mount_mtx);
+ mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(mount_mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
 
- if TemporaryMount then
+ if GameMountConfig.TemporaryMount then
  begin
   Result:=vfs_mountroot.unmount_from_sandbox(TEMP0,0);
 
   if (Result=0) then
   begin
-   TemporaryMount:=False;
+   GameMountConfig.TemporaryMount:=False;
   end;
 
  end else
@@ -614,7 +676,7 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(mount_mtx);
+ mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataFormat(mountPoint:pchar):Integer;
@@ -623,11 +685,11 @@ var
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(mount_mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
 
- if TemporaryMount then
+ if GameMountConfig.TemporaryMount then
  begin
-  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+  fs_src:=GameMountConfig.GetAppTemporaryFolder;
 
   Result:=FormatMount(fs_src);
  end else
@@ -635,7 +697,7 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(mount_mtx);
+ mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
@@ -647,11 +709,11 @@ var
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(mount_mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
 
- if TemporaryMount then
+ if GameMountConfig.TemporaryMount then
  begin
-  fs_src:=ExcludeTrailingPathDelimiter(g_LocalDir)+unix_to_host(APP_TEMP);
+  fs_src:=GameMountConfig.GetAppTemporaryFolder;
 
   size:=GetDirectorySizeLikePFS(fs_src);
   size:=size div 1024; //to KB
@@ -672,9 +734,53 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(mount_mtx);
+ mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
+function DownloadDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
+var
+ i:Byte;
+ size:QWORD;
+ fs_src:RawByteString;
+begin
+ if (strlcomp(mountPoint,DOWNLOAD_DIRS[0],MOUNT_MAXSIZE)=0) then
+ begin
+  i:=0;
+ end else
+ if (strlcomp(mountPoint,DOWNLOAD_DIRS[1],MOUNT_MAXSIZE)=0) then
+ begin
+  i:=1;
+ end else
+ begin
+  Exit(ENOTDIR);
+ end;
+
+ if (GameMountConfig.DownloadKb[i]=0) then
+ begin
+  Exit(ENOTDIR);
+ end;
+
+ mtx_lock(GameMountConfig.mount_mtx);
+
+  fs_src:=GameMountConfig.GetAppDownloadFolder(i);
+
+  size:=GetDirectorySizeLikePFS(fs_src);
+  size:=size div 1024; //to KB
+
+  if (size>GameMountConfig.DownloadKb[i]) then
+  begin
+   size:=0;
+  end else
+  begin
+   size:=GameMountConfig.DownloadKb[i]-size;
+  end;
+
+  availableSpaceKb^:=size;
+
+ mtx_unlock(GameMountConfig.mount_mtx);
+
+ Result:=0;
+end;
 
 
 end.

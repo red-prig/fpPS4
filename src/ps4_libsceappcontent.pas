@@ -254,12 +254,7 @@ begin
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) or (availableSpaceKb=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- {
- _sig_lock;
- Result:=GetDownloadAvailableSpaceKb(PChar(mountPoint),availableSpaceKb);
- _sig_unlock;
- }
- Result:=-1;
+ Result:=px2ce(DownloadDataGetAvailableSpaceKb(pchar(mountPoint),availableSpaceKb));
 end;
 
 function ps4_sceAppContentGetEntitlementKey(serviceLabel:SceNpServiceLabel;

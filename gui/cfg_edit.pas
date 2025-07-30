@@ -445,6 +445,8 @@ begin
  begin
   A:=TStringArray(Obj);
 
+  TListBox(control).Items.Clear;
+
   if (Length(A.values)>0) then
   For i:=0 to High(A.values) do
   begin

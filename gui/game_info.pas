@@ -264,16 +264,20 @@ type
 
  TGameStartupInfo=class(TAbstractObject)
   public
-   FReader     :Boolean;
-   FPipe       :THandle;
-   FConfInfo   :TConfigInfo;
-   FGameItem   :TGameItem;
-   FLocalDir   :RawByteString;
-   FhasParamSfo:Integer;
+   FReader      :Boolean;
+   FPipe        :THandle;
+   FConfInfo    :TConfigInfo;
+   FGameItem    :TGameItem;
+   FLocalDir    :RawByteString;
+   FhasParamSfo :Integer;
+   FDownloadMb_0:DWORD;
+   FDownloadMb_1:DWORD;
   published
-   property    Pipe    :THandle       read FPipe        write FPipe;
-   property    LocalDir:RawByteString read FLocalDir    write FLocalDir;
-   property    hasParamSfo:Integer    read FhasParamSfo write FhasParamSfo;
+   property    Pipe        :THandle       read FPipe          write FPipe;
+   property    LocalDir    :RawByteString read FLocalDir      write FLocalDir;
+   property    hasParamSfo :Integer       read FhasParamSfo   write FhasParamSfo;
+   property    DownloadMb_0:DWORD         read FDownloadMb_0  write FDownloadMb_0;
+   property    DownloadMb_1:DWORD         read FDownloadMb_1  write FDownloadMb_1;
   public
    Constructor Create(Reader:Boolean); reintroduce;
    Destructor  Destroy; override;
