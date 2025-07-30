@@ -144,7 +144,7 @@ const
  MM_LAST    =2;
 
 type
- t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir);
+ t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS);
 
 type
  pp_mount_dir=^p_mount_dir;
@@ -243,7 +243,7 @@ const
  );
 
  SANDBOX_DIRS:array[0..7] of t_mount_dir=(
-  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly]),
+  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS]),
   (dst:'/av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'/data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'/host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
@@ -314,7 +314,13 @@ begin
      ForceDirectories(fs_src);
     end;
 
-    err:=mount_into_sandbox('ufs',pchar(fs_dst),pchar(fs_src),nil,ord(mfReadOnly in flags)*MNT_RDONLY,mfIgnoreErr in flags);
+    err:=mount_into_sandbox('ufs',
+                            pchar(fs_dst),
+                            pchar(fs_src),
+                            nil,
+                            ord(mfReadOnly in flags)*MNT_RDONLY or
+                            ord(mfPFS      in flags)*MNT_EMU_PFS,
+                            mfIgnoreErr in flags);
    end;
 
   end;
@@ -329,7 +335,12 @@ begin
   fs_src:=GameMountConfig.GetAppDownloadFolder(i);
   ForceDirectories(fs_src);
 
-  err:=mount_into_sandbox('ufs',DOWNLOAD_DIRS[i],pchar(fs_src),nil,0,False);
+  err:=mount_into_sandbox('ufs',
+                          DOWNLOAD_DIRS[i],
+                          pchar(fs_src),
+                          nil,
+                          MNT_EMU_PFS,
+                          False);
  end;
  //download
 
@@ -632,7 +643,11 @@ begin
   fs_src:=GameMountConfig.GetAppTemporaryFolder;
   ForceDirectories(fs_src);
 
-  Result:=vfs_mountroot.mount_into_sandbox('ufs',TEMP0,pchar(fs_src),nil,0);
+  Result:=vfs_mountroot.mount_into_sandbox('ufs',
+                                           TEMP0,
+                                           pchar(fs_src),
+                                           nil,
+                                           MNT_EMU_PFS);
 
   if (Result=0) then
   begin

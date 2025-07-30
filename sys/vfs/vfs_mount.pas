@@ -942,7 +942,7 @@ begin
  { XXXMAC: pass to vfs_mount_alloc? }
  mp^.mnt_optnew:=optlist^;
  { Set the mount level flags. }
- mp^.mnt_flag:=(fsflags and (MNT_UPDATEMASK or MNT_ROOTFS or MNT_RDONLY));
+ mp^.mnt_flag:=(fsflags and (MNT_UPDATEMASK or MNT_ROOTFS or MNT_RDONLY or MNT_EMU_PFS));
 
  {
   * Mount the filesystem.

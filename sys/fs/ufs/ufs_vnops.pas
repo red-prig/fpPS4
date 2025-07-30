@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- kern_param,
  time,
  vfile,
  vmount,
@@ -635,15 +634,45 @@ end;
 
 function ufs_getattr(ap:p_vop_getattr_args):Integer;
 var
+ mp:p_mount;
  vp:p_vnode;
  vap:p_vattr;
  de:p_ufs_dirent;
 
+ d_fsid   :DWORD;
+ d_size   :Integer;
+ d_bytes  :Integer;
+ d_blksize:Integer;
 begin
  vp:=ap^.a_vp;
  vap:=ap^.a_vap;
  de:=vp^.v_data;
 
+ mp:=vp^.v_mount;
+
+ //masquerade
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  d_fsid   :=$8700ff03;
+  d_size   :=320;   //dirent sizes?
+  d_bytes  :=16384;
+  d_blksize:=16384;
+ end else
+ if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ begin
+  d_fsid   :=$2905ff1e;
+  d_size   :=65536; //dirent sizes?
+  d_bytes  :=65536;
+  d_blksize:=65536;
+ end else
+ begin
+  d_fsid   :=$2905ff22;
+  d_size   :=1024; //dirent sizes?
+  d_bytes  :=4096;
+  d_blksize:=32768;
+ end;
+
+ vap^.va_fsid:=d_fsid;
  vap^.va_uid :=de^.ufs_uid;
  vap^.va_gid :=de^.ufs_gid;
  vap^.va_mode:=de^.ufs_mode;
@@ -656,8 +685,8 @@ begin
    end;
   VDIR:
    begin
-    vap^.va_size :=DEV_BSIZE;
-    vap^.va_bytes:=DEV_BSIZE;
+    vap^.va_size :=d_size;
+    vap^.va_bytes:=d_bytes;
    end;
   else
    begin
@@ -666,8 +695,8 @@ begin
    end;
  end;
 
- vap^.va_blocksize:=DEV_BSIZE;
- vap^.va_type:=vp^.v_type;
+ vap^.va_blocksize:=d_blksize;
+ vap^.va_type     :=vp^.v_type;
 
  vap^.va_atime    :=de^.ufs_atime;
  vap^.va_mtime    :=de^.ufs_mtime;

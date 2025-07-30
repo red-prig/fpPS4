@@ -397,10 +397,24 @@ var
  FFF:FILE_FS_FULL_SIZE_INFORMATION;
  BLK:IO_STATUS_BLOCK;
  Sector:Int64;
+ d_blksize:Integer;
  R:DWORD;
 begin
  dmp:=VFSTOUFS(mp);
  if (dmp^.ufs_md_fp=nil) then Exit(0);
+
+ //masquerade
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  d_blksize:=16384;
+ end else
+ if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ begin
+  d_blksize:=65536;
+ end else
+ begin
+  d_blksize:=32768;
+ end;
 
  FFF:=Default(FILE_FS_FULL_SIZE_INFORMATION);
  BLK:=Default(IO_STATUS_BLOCK);
@@ -418,9 +432,12 @@ begin
 
  Sector:=(FFF.SectorsPerAllocationUnit*FFF.BytesPerSector);
 
- sbp^.f_bavail:=mul_div_u64(Sector,DEV_BSIZE,QWORD(FFF.CallerAvailableAllocationUnits));
- sbp^.f_blocks:=mul_div_u64(Sector,DEV_BSIZE,QWORD(FFF.TotalAllocationUnits          ));
- sbp^.f_bfree :=mul_div_u64(Sector,DEV_BSIZE,QWORD(FFF.ActualAvailableAllocationUnits));
+ sbp^.f_bsize :=d_blksize;
+ sbp^.f_iosize:=d_blksize;
+
+ sbp^.f_bavail:=mul_div_u64(Sector,d_blksize,QWORD(FFF.CallerAvailableAllocationUnits));
+ sbp^.f_blocks:=mul_div_u64(Sector,d_blksize,QWORD(FFF.TotalAllocationUnits          ));
+ sbp^.f_bfree :=mul_div_u64(Sector,d_blksize,QWORD(FFF.ActualAvailableAllocationUnits));
 end;
 
 function md_free_dirent(de:p_ufs_dirent):Integer;
@@ -926,7 +943,7 @@ begin
  Exit(de);
 end;
 
-function md_new_cache(dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION;var nd:p_ufs_dirent):Integer;
+function md_new_cache(mp:p_mount;dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION;var nd:p_ufs_dirent):Integer;
 var
  de:p_dirent;
 begin
@@ -936,9 +953,13 @@ begin
 
  nd:=md_newdirent(name, namelen);
 
- nd^.ufs_mode :=UFS_DEFAULT_MODE;
- nd^.ufs_dir  :=dd;
+ nd^.ufs_mode:=UFS_DEFAULT_MODE;
+ nd^.ufs_dir :=dd;
 
+ if ((mp^.mnt_flag and MNT_RDONLY)<>0) then
+ begin
+  nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
+ end else
  if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)<>0) then
  begin
   nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
@@ -990,7 +1011,7 @@ begin
  ufs_de_hold(dd);
 end;
 
-function md_lookup_dirent(dd:p_ufs_dirent;name:PChar;namelen:Integer;var nd:p_ufs_dirent):Integer;
+function md_lookup_dirent(mp:p_mount;dd:p_ufs_dirent;name:PChar;namelen:Integer;var nd:p_ufs_dirent):Integer;
 var
  w:WideString;
 
@@ -1013,7 +1034,7 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then Exit;
 
- Result:=md_new_cache(dd,name,namelen,@FBI,nd);
+ Result:=md_new_cache(mp,dd,name,namelen,@FBI,nd);
 end;
 
 procedure md_unlink_cache(de:p_ufs_dirent;curr_locked_ownership,parent_locked:Boolean);
@@ -1247,7 +1268,7 @@ begin
 
  if (de=nil) then
  begin
-  Result:=md_lookup_dirent(dd,cnp^.cn_nameptr,cnp^.cn_namelen,de);
+  Result:=md_lookup_dirent(dvp^.v_mount,dd,cnp^.cn_nameptr,cnp^.cn_namelen,de);
  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
@@ -1455,6 +1476,8 @@ label
  _err;
 var
  len,error:Integer;
+
+ dvp:p_vnode;
  dd:p_ufs_dirent;
  de:p_ufs_dirent;
  dmp:p_ufs_mount;
@@ -1487,7 +1510,8 @@ begin
 
  if (R<>0) then Exit(EPERM);
 
- dd:=ap^.a_dvp^.v_data;
+ dvp:=ap^.a_dvp;
+ dd:=dvp^.v_data;
 
  sx_xlock(@dd^.ufs_md_lock);
 
@@ -1589,17 +1613,17 @@ begin
  md_unlink_cache(de,False,True);
 
  //new dirent
- Result:=md_new_cache(dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI,de);
+ Result:=md_new_cache(dvp^.v_mount,dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI,de);
 
  sx_xunlock(@dd^.ufs_md_lock);
  RtlReleasePrivilege(PrivState);
 
  if (de=nil) then Exit; //if new fail
 
- dmp:=VFSTOUFS(ap^.a_dvp^.v_mount);
+ dmp:=VFSTOUFS(dvp^.v_mount);
  sx_xlock(@dmp^.ufs_lock);
 
- Exit(ufs_allocv(de, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
+ Exit(ufs_allocv(de, dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
 end;
 
 function md_link(ap:p_vop_link_args):Integer;

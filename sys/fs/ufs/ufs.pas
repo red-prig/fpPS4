@@ -6,6 +6,7 @@ unit ufs;
 interface
 
 uses
+ sysutils,
  mqueue,
  kern_param,
  vnode,
@@ -122,7 +123,7 @@ const
  UFS_DOOMED  =$08;
  UFS_CREATE  =$10;
 
- UFS_DEFAULT_MODE=&0755;
+ UFS_DEFAULT_MODE=&0777;
 
 implementation
 
@@ -422,6 +423,16 @@ begin
   // Exit(EINVAL);
  end;
 
+ //masquerade
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  strlcopy(@mp^.mnt_stat.f_fstypename, 'tmpfs', MFSNAMELEN);
+ end else
+ if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ begin
+  strlcopy(@mp^.mnt_stat.f_fstypename, 'pfs', MFSNAMELEN);
+ end;
+
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
   path:=nil;
@@ -548,8 +559,8 @@ end;
 function ufs_statfs(mp:p_mount;sbp:p_statfs):Integer;
 begin
  sbp^.f_flags :=0;
- sbp^.f_bsize :=DEV_BSIZE;
- sbp^.f_iosize:=DEV_BSIZE;
+ sbp^.f_bsize :=16384;
+ sbp^.f_iosize:=16384;
  sbp^.f_blocks:=2;
  sbp^.f_bfree :=0;
  sbp^.f_bavail:=0;

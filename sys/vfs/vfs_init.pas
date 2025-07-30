@@ -7,7 +7,7 @@ interface
 
 uses
  sysutils,
- murmurhash,
+ fnv_hash,
  mqueue,
  vmount;
 
@@ -136,7 +136,22 @@ begin
    * that is what ZFS uses from vfc_typenum and is also the
    * preferred range for vfs_getnewfsid().
    }
-  hashval:=MurmurHash64A(@vfc^.vfc_name,strlen(vfc^.vfc_name),0);
+
+  //extatfs 0x7A
+  //pfs     0xA4
+  //mlfs    0xF1
+  //unionfs 0x41
+  //nullfs  0x29
+  //tmpfs   0x87
+  //fusefs  0xED
+  //udf2    0x00
+  //devfs   0x71
+  //cd9660  0xBD
+  //procfs  0x02
+  //ufs     0x35
+  //procfs  0x02
+
+  hashval:=fnv_32_str(@vfc^.vfc_name, FNV1_32_INIT);
   hashval:=hashval and $ff;
   secondpass:=0;
   repeat

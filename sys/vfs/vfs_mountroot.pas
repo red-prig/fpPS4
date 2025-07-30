@@ -10,8 +10,9 @@ uses
  vmount;
 
 const
- MNT_RDONLY=vmount.MNT_RDONLY;
- MNT_UPDATE=vmount.MNT_UPDATE;
+ MNT_RDONLY =vmount.MNT_RDONLY;
+ MNT_UPDATE =vmount.MNT_UPDATE;
+ MNT_EMU_PFS=vmount.MNT_EMU_PFS;
 
 procedure vfs_mountroot();
 function  vfs_mount_path      (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
