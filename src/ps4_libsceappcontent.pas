@@ -15,13 +15,6 @@ uses
  param_sfo_ipc,
  game_mount;
 
-{
-uses
- sys_path,
- sys_signal,
- param_sfo;
-}
-
 Const
  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            =0;
  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1=1;

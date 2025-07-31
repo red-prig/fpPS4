@@ -9,8 +9,6 @@ uses
   mpmc_queue,
   subr_dynlib,
   ps4_libSceUserService;
-  {Classes,
-  SysUtils;}
 
 Const
  SCE_SAVE_DATA_ERROR_PARAMETER                           =-2137063424; // 0x809F0000
@@ -167,6 +165,7 @@ type
   fingerprint:pSceSaveDataFingerprint;
   blocks     :QWORD; //SceSaveDataBlocks
   mountMode  :DWORD; //SceSaveDataMountMode
+  align2     :Integer;
   reserved   :array[0..31] of Byte;
  end;
 
