@@ -505,7 +505,6 @@ end;
 
 function TfrmMain.OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
 var
- ParamSfo:TParamSfoFile;
  V:RawByteString;
 begin
  Result:=Ptruint(-1);
@@ -514,14 +513,10 @@ begin
 
  if (FParamSfo=nil) then
  begin
-  ParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
-  FParamSfo:=ParamSfo;
- end else
- begin
-  ParamSfo:=FParamSfo;
+  FParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
  end;
 
- if (ParamSfo=nil) then
+ if (FParamSfo=nil) then
  begin
   V:='"{$GAME}/sce_sys/param.sfo" not found, continue?';
 
@@ -537,10 +532,9 @@ begin
  if (FGameProcess<>nil) then
  if (FGameProcess.g_ipc<>nil) then
  begin
-  FGameProcess.g_ipc.SendSync('PARAM_SFO_LOAD',ParamSfo);
+  FGameProcess.g_ipc.SendSync('PARAM_SFO_LOAD',FParamSfo);
  end;
 
- FreeAndNil(ParamSfo);
  Result:=0;
 end;
 
@@ -643,6 +637,12 @@ begin
  if (obj=nil) then Exit;
 
  data:=TPS4LoadExec(obj);
+
+ if (FGameProcess=nil) then
+ begin
+  FreeAndNil(obj);
+  Exit;
+ end;
 
  if GameProcessForked then //only forked
  begin
@@ -1490,6 +1490,8 @@ var
  exit_code:DWORD;
  r:RawByteString;
 begin
+ if (FGameProcess=nil) then Exit;
+
  if GameProcessForked then //only forked
  begin
   exit_code:=0;

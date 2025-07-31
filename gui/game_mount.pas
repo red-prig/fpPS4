@@ -46,6 +46,7 @@ uses
  LazFileUtils,
  strings,
  errno,
+ kern_proc,
  vfs_mountroot,
  subr_backtrace;
 
@@ -300,7 +301,7 @@ begin
   with fs_iterator.curr^ do
   begin
 
-   fs_dst:=Format(dst,['system']);
+   fs_dst:=Format(dst,[p_proc.p_randomized_path]);
 
    if (mode=MM_CREATE) then
    begin
