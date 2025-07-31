@@ -1779,7 +1779,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit;
 
- Writeln('ast');
+ //Writeln('ast');
 
  //teb stack
  if ((td^.pcb_flags and PCB_IS_JIT)=0) then

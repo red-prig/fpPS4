@@ -938,7 +938,7 @@ begin
             begin
              start_gfx_ring;
 
-             Writeln('sceGnmSubmitDone');
+             //Writeln('sceGnmSubmitDone');
 
              //rw_wlock(ring_gfx_lock);
 
