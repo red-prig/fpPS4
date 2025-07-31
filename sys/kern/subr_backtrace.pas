@@ -14,6 +14,7 @@ procedure print_frame(var f:text;frame:Pointer);
 procedure print_backtrace(var f:text;rip,rbp:Pointer;skipframes:sizeint);
 procedure print_backtrace_td(var f:text);
 procedure print_error_td(const str:shortstring;resumable:Boolean=False);
+procedure print_disassemble(addr:Pointer;vsize:Integer;max:Integer=High(Integer));
 
 implementation
 
@@ -24,7 +25,8 @@ uses
  kern_named_id,
  subr_dynlib,
  elf_nid_utils,
- ps4libdoc;
+ ps4libdoc,
+ x86_fpdbgdisas;
 
 function IS_TRAP_FUNC(rip:qword):Boolean; external;
 function IS_JIT_FUNC (rip:qword):Boolean; external;
@@ -328,6 +330,50 @@ begin
  begin
   thread_resume_all(p_host_ipc_td);
  end;
+end;
+
+type
+ TDbgProcessSafe=class(TDbgProcess)
+  function ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData):Boolean; register override;
+  function ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData;out APartSize:Cardinal):Boolean; register override;
+ end;
+
+function TDbgProcessSafe.ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData):Boolean; register;
+begin
+ Result:=copyin_nofault(AAdress,@AData,ASize,nil)=0;
+end;
+
+function TDbgProcessSafe.ReadData(AAdress:TDbgPtr;ASize:Cardinal;out AData;out APartSize:Cardinal):Boolean; register;
+var
+ lencopied:ptruint;
+begin
+ lencopied:=0;
+ Result:=copyin_nofault(AAdress,@AData,ASize,@lencopied)=0;
+ APartSize:=lencopied;
+end;
+
+procedure print_disassemble(addr:Pointer;vsize:Integer;max:Integer=High(Integer));
+var
+ proc:TDbgProcessSafe;
+ adec:TX86AsmDecoder;
+ ptr,fin:Pointer;
+ ACodeBytes,ACode:RawByteString;
+begin
+ ptr:=addr;
+ fin:=addr+vsize;
+
+ proc:=TDbgProcessSafe.Create(dm64);
+ adec:=TX86AsmDecoder.Create(proc);
+
+ while (ptr<fin) and (max>0) do
+ begin
+  adec.Disassemble(ptr,ACodeBytes,ACode);
+  Writeln(ACodeBytes:32,' ',ACode);
+  Dec(max);
+ end;
+
+ adec.Free;
+ proc.Free;
 end;
 
 end.

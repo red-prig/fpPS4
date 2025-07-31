@@ -328,8 +328,6 @@ procedure op_emit_avx_F3(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 
-procedure print_disassemble(addr:Pointer;vsize:Integer);
-
 type
  t_instruction_info=record
   code_size:Byte;
@@ -350,31 +348,8 @@ uses
  kern_thr,
  md_systm,
  systm,
- kern_jit_asm;
-
-procedure print_disassemble(addr:Pointer;vsize:Integer);
-var
- proc:TDbgProcess;
- adec:TX86AsmDecoder;
- ptr,fin:Pointer;
- ACodeBytes,ACode:RawByteString;
-begin
- ptr:=addr;
- fin:=addr+vsize;
-
- proc:=TDbgProcess.Create(dm64);
- adec:=TX86AsmDecoder.Create(proc);
-
- while (ptr<fin) do
- begin
-  adec.Disassemble(ptr,ACodeBytes,ACode);
-  Writeln(ACodeBytes:32,' ',ACode);
- end;
-
- adec.Free;
- proc.Free;
-end;
-
+ kern_jit_asm,
+ subr_backtrace;
 
 function t_jit_context2.t_forward_point.c(n1,n2:p_forward_point):Integer;
 begin

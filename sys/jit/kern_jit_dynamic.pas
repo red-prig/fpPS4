@@ -196,7 +196,8 @@ uses
  md_map,
  vm_tracking_map,
  subr_dynlib,
- kern_dlsym;
+ kern_dlsym,
+ subr_backtrace;
 
 //
 

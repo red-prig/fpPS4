@@ -146,6 +146,8 @@ begin
 
  thread_suspend_all(td);
 
+ print_disassemble(Pointer(p^.ContextRecord^.Rip),16,1);
+
  tf_addr:=0;
  is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@tf_addr);
 
@@ -154,9 +156,9 @@ begin
  Writeln('cr_rbp:0x',HexStr(p^.ContextRecord^.Rbp,16));
 
  Writeln('jitcall:0x',HexStr(td^.td_teb^.jitcall));
- print_frame(stderr,td^.td_teb^.jitcall);
+ //print_frame(stderr,td^.td_teb^.jitcall);
 
- Writeln('tf_rip:0x',HexStr(tf_addr,16));
+ //Writeln('tf_rip:0x',HexStr(tf_addr,16));
 
  _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil,is_jit);
 
@@ -166,8 +168,24 @@ begin
   td^.td_frame.tf_rip:=tf_addr;
  end;
 
+ Writeln('tf_rip:0x',HexStr(td^.td_frame.tf_rip,16));
  Writeln('tf_rsp:0x',HexStr(td^.td_frame.tf_rsp,16));
  Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+ Writeln('tf_rdi:0x',HexStr(td^.td_frame.tf_rdi,16));
+ Writeln('tf_rsi:0x',HexStr(td^.td_frame.tf_rsi,16));
+ Writeln('tf_rdx:0x',HexStr(td^.td_frame.tf_rdx,16));
+ Writeln('tf_rcx:0x',HexStr(td^.td_frame.tf_rcx,16));
+ Writeln('tf_r8 :0x',HexStr(td^.td_frame.tf_r8 ,16));
+ Writeln('tf_r9 :0x',HexStr(td^.td_frame.tf_r9 ,16));
+ Writeln('tf_rax:0x',HexStr(td^.td_frame.tf_rax,16));
+ Writeln('tf_rbx:0x',HexStr(td^.td_frame.tf_rbx,16));
+ Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+ Writeln('tf_r10:0x',HexStr(td^.td_frame.tf_r10,16));
+ Writeln('tf_r11:0x',HexStr(td^.td_frame.tf_r11,16));
+ Writeln('tf_r12:0x',HexStr(td^.td_frame.tf_r12,16));
+ Writeln('tf_r13:0x',HexStr(td^.td_frame.tf_r13,16));
+ Writeln('tf_r14:0x',HexStr(td^.td_frame.tf_r14,16));
+ Writeln('tf_r15:0x',HexStr(td^.td_frame.tf_r15,16));
 
  print_backtrace_td(stderr);
 

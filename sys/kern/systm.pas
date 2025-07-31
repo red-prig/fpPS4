@@ -10,7 +10,7 @@ uses
 
 function copystr(from,_to:pchar;maxlen:ptruint;lencopied:pptruint):Integer;
 function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
-function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint):Integer;
+function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint=nil):Integer;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer;
 function copyout_nofault(kaddr,udaddr:Pointer;len:ptruint):Integer;
@@ -153,9 +153,9 @@ copyin_fault:
         //ret
 end;
 
-function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint):Integer;
+function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint=nil):Integer;
 begin
- Result:=md_copyin(udaddr,kaddr,len,nil);
+ Result:=md_copyin(udaddr,kaddr,len,lencopied);
 end;
 
 {
