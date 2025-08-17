@@ -835,6 +835,14 @@ function kern_close(fd:Integer):Integer; public;
 var
  fp,fp_object:p_file;
 begin
+
+ if (DWORD(fd) < 3) then
+ begin
+  //if ((td->td_proc->p_flag & 4) == 0) &&
+  //   (sceSblACMgrIsSyscoreProcess(td->td_ucred) == 0) {
+  Exit(EPERM);
+ end;
+
  fp:=nil;
  if not id_del(@fd_table.fd_ofiles,fd,@fp) then
  begin
