@@ -740,6 +740,16 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAjmMemoryRegister(
+          uiContext:SceAjmContextId;
+          pRegion:Pointer;
+          szNumPages:QWORD):Integer;
+begin
+ Writeln('sceAjmMemoryRegister(0x',HexStr(pRegion),',0x',HexStr(szNumPages,16),')');
+ Result:=0;
+end;
+
+
 function Load_libSceAjm(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -760,6 +770,7 @@ begin
  lib.set_proc($EE37405CAFB67CCA,@ps4_sceAjmBatchJobRunSplitBufferRa);
  lib.set_proc($7C5164934C5F196B,@ps4_sceAjmBatchStartBuffer);
  lib.set_proc($FEA2EC7C3032C086,@ps4_sceAjmBatchWait);
+ lib.set_proc($6E44471181BA9443,@ps4_sceAjmMemoryRegister);
 end;
 
 var
