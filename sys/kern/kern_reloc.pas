@@ -578,7 +578,7 @@ end;
 
 function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer; public;
 begin
- Writeln(' relocate:',dynlib_basename(obj^.lib_path));
+ //Writeln(' relocate:',dynlib_basename(obj^.lib_path));
 
  Result:=reloc_non_plt(obj,ord(export_only)*$200);
  if (Result<>0) then
