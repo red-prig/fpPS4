@@ -6,13 +6,15 @@ unit kern_bnet;
 interface
 
 function sys_netcontrol  (fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
-function sys_netgetiflist(param1:Pointer;param2,param3:Integer):Integer;
+function sys_netgetiflist(buf:Pointer;max,unused:Integer):Integer;
 
 implementation
 
 uses
  errno,
  systm,
+ kern_thr,
+ subr_backtrace,
  md_arc4random;
 
 function bnet_get_secure_seed():Integer;
@@ -91,9 +93,20 @@ begin
  end;
 end;
 
-function sys_netgetiflist(param1:Pointer;param2,param3:Integer):Integer;
+function sys_netgetiflist(buf:Pointer;max,unused:Integer):Integer;
+var
+ info:array[0..$1e0-1] of Byte;
+ td:p_kthread;
 begin
- Writeln('TODO:sys_netgetiflist(0x',HexStr(QWORD(param1),11),',',param2,',',param3,')');
+ Writeln('TODO:sys_netgetiflist(0x',HexStr(QWORD(buf),11),',',max,')');
+ print_backtrace_td(StdErr);
+
+ FillChar(info,sizeof(info),0);
+ copyout(@info,buf,sizeof(info));
+
+ td:=curkthread;
+ td^.td_retval[0]:=1;
+
  Result:=0;
 end;
 
