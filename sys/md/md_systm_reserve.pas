@@ -253,6 +253,24 @@ begin
   begin
    base:=Pointer(temp_pmap_mem[i].start);
 
+   //try low range
+   if (base=Pointer(_PROC_AREA_START_1)) then
+   begin
+    base:=Pointer(_PROC_AREA_START_0);
+    size:=temp_pmap_mem[i].__end-_PROC_AREA_START_0;
+
+    Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED,hProcess);
+
+    if (Result.error=0) then
+    begin
+     //lower range
+     temp_pmap_mem[i].start:=_PROC_AREA_START_0;
+     //
+     i:=i+1;
+     Continue;
+    end;
+   end;
+
    //try union range
    if (base=Pointer(DL_AREA_START)) then
    begin
