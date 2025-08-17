@@ -185,13 +185,7 @@ end;
 
 function GET_SHARE(flags:Integer):Integer; inline;
 begin
- if ((flags and USYNC_PROCESS_SHARED)=0) then
- begin
-  Result:=THREAD_SHARE;
- end else
- begin
-  Result:=PROCESS_SHARE;
- end;
+ Result:=(flags and USYNC_PROCESS_SHARED); //THREAD_SHARE:0/PROCESS_SHARE:1
 end;
 
 function GET_PRIV_SHARE(priv:Integer):Integer; inline;
@@ -573,7 +567,7 @@ begin
     Break;
    end;
    //
-   uq:=TAILQ_FIRST(@uh^.head);
+   uq:=TAILQ_NEXT(uq,@uq^.uq_link);
   end;
  end;
 end;
@@ -2947,8 +2941,7 @@ begin
  if ((wflags and CVWAIT_CLOCKID)<>0) then
  begin
   clockid:=fuword32(cv^.c_clockid);
-  if (clockid<CLOCK_REALTIME) or
-     (clockid>CLOCK_SECOND) then
+  if (DWORD(clockid)>CLOCK_SECOND) then
   begin
    umtx_key_release(@uq^.uq_key);
    Exit(EINVAL);
