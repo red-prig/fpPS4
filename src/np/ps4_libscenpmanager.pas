@@ -295,9 +295,11 @@ function ps4_sceNpGetNpId(userId:SceUserServiceUserId;npId:PSceNpId):Integer;
 begin
  if (npId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
- npId^:=Default(SceNpId);
- npId^.handle.data:='user';
- Result:=0;
+ //npId^:=Default(SceNpId);
+ //npId^.handle.data:='user';
+ //Result:=0;
+
+ Result:=SCE_NP_ERROR_SIGNED_OUT;
 end;
 
 function ps4_sceNpGetOnlineId(userId:SceUserServiceUserId;onlineId:pSceNpOnlineId):Integer;
