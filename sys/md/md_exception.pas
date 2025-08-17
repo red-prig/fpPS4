@@ -168,6 +168,19 @@ begin
   td^.td_frame.tf_rip:=tf_addr;
  end;
 
+ Writeln('registers:');
+ Writeln('rax: ',HexStr(td^.td_frame.tf_rax,16),'  rbx: ',HexStr(td^.td_frame.tf_rbx,16));
+ Writeln('rcx: ',HexStr(td^.td_frame.tf_rcx,16),'  rdx: ',HexStr(td^.td_frame.tf_rdx,16));
+ Writeln('rsi: ',HexStr(td^.td_frame.tf_rsi,16),'  rdi: ',HexStr(td^.td_frame.tf_rdi,16));
+ Writeln('rbp: ',HexStr(td^.td_frame.tf_rbp,16),'  rsp: ',HexStr(td^.td_frame.tf_rsp,16));
+ Writeln('r8 : ',HexStr(td^.td_frame.tf_r8 ,16),'  r9 : ',HexStr(td^.td_frame.tf_r9 ,16));
+ Writeln('r10: ',HexStr(td^.td_frame.tf_r10,16),'  r11: ',HexStr(td^.td_frame.tf_r11,16));
+ Writeln('r12: ',HexStr(td^.td_frame.tf_r12,16),'  r13: ',HexStr(td^.td_frame.tf_r13,16));
+ Writeln('r14: ',HexStr(td^.td_frame.tf_r14,16),'  r15: ',HexStr(td^.td_frame.tf_r15,16));
+ Writeln('rip: ',HexStr(td^.td_frame.tf_rip,16),'  eflags: ',HexStr(td^.td_frame.tf_rflags,8));
+ Writeln('BrF: ',HexStr(td^.td_frame.tf_BrF,16),'  BrT: ',HexStr(td^.td_frame.tf_BrT,16));
+
+ {
  Writeln('tf_rip:0x',HexStr(td^.td_frame.tf_rip,16));
  Writeln('tf_rsp:0x',HexStr(td^.td_frame.tf_rsp,16));
  Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
@@ -186,6 +199,7 @@ begin
  Writeln('tf_r13:0x',HexStr(td^.td_frame.tf_r13,16));
  Writeln('tf_r14:0x',HexStr(td^.td_frame.tf_r14,16));
  Writeln('tf_r15:0x',HexStr(td^.td_frame.tf_r15,16));
+ }
 
  print_backtrace_td(stderr);
 
