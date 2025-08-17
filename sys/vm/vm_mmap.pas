@@ -976,7 +976,7 @@ _map:
          'sys_mmap(','0x',HexStr(QWORD(vaddr),11),
                     ',0x',HexStr(vlen,11),
                     ',0x',HexStr(prot,1),
-                    ',0x',HexStr(flags,6),
+                    ',0x',HexStr(flags,8),
                       ',',fd,
                     ',0x',HexStr(pos,11),
                      '):',Integer(Result),

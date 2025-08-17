@@ -503,7 +503,7 @@ begin
                          ',0x',HexStr(length,11),
                          ',0x',HexStr(mtype,1),
                          ',0x',HexStr(prot,1),
-                         ',0x',HexStr(flags,6),
+                         ',0x',HexStr(flags,8),
                          ',0x',HexStr(phaddr,10),
                           '):',Integer(Result),
                          ':0x',HexStr(addr,11),'..0x',HexStr(addr+length,11));
