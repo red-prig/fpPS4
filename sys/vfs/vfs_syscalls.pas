@@ -1963,16 +1963,14 @@ var
  sb:t_stat;
  error:Integer;
 begin
-
- begin
-  Writeln('sys_stat("',path,'")');
- end;
-
  error:=kern_stat(path, UIO_USERSPACE, @sb);
  if (error=0) then
  begin
   error:=copyout(@sb, ub, sizeof(sb));
  end;
+
+ Writeln('sys_stat("',path,'"):',error);
+
  Exit(error);
 end;
 
