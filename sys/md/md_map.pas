@@ -632,8 +632,6 @@ begin
  end;
 end;
 
-function StrLen(p: pwidechar): sizeint; external name 'FPC_PWIDECHAR_LENGTH'; overload;
-
 Function md_create_swap_file(const FNAME:RawByteString;SIZE:QWORD;Var FD:THandle):DWORD;
 var
  W:WideString;
@@ -651,7 +649,7 @@ begin
  OBJ.ObjectName:=@UPATH;
 
  UPATH:=Default(UNICODE_STRING);
- UPATH.Length       :=strlen(PWideChar(w))*SizeOf(WideChar);
+ UPATH.Length       :=Length(w)*SizeOf(WideChar);
  UPATH.MaximumLength:=UPATH.Length+SizeOf(WideChar);
  UPATH.Buffer       :=PWideChar(w);
 
