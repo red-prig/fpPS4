@@ -88,14 +88,14 @@ procedure cpu_set_fsbase(td:p_kthread;base:Pointer);
 begin
  td^.pcb_fsbase:=base;
  td^.td_teb^.fsbase:=base;
- set_pcb_flags(td,PCB_FULL_IRET);
+ //set_pcb_flags(td,PCB_FULL_IRET);
 end;
 
 procedure cpu_set_gsbase(td:p_kthread;base:Pointer);
 begin
  td^.pcb_gsbase:=base;
  td^.td_teb^.gsbase:=base;
- set_pcb_flags(td,PCB_FULL_IRET);
+ //set_pcb_flags(td,PCB_FULL_IRET);
 end;
 
 procedure cpu_init_jit(td:p_kthread);
