@@ -120,6 +120,17 @@ end;
 
 //
 
+//output:
+//rax: (ret)  rbx: (rbx)
+//rcx: (rip)  rdx: (rdx/ret)
+//rsi: (rsi)  rdi: (rdi)
+//rbp: (rbp)  rsp: (rsp)
+//r8 : (0)    r9 : (0)
+//r10: (0)    r11: word(eflags)
+//r12: (r12)  r13: (r13)
+//r14: (r14)  r15: (r15)
+//rip: (rip)  eflags: (eflags)
+
 //in:tf_rip
 procedure jit_syscall; assembler; nostackframe;
 label
@@ -149,7 +160,6 @@ asm
  movqq %rdi,kthread.td_frame.tf_rdi(%r15)
  movqq %rsi,kthread.td_frame.tf_rsi(%r15)
  movqq %rdx,kthread.td_frame.tf_rdx(%r15)
- movqq   $0,kthread.td_frame.tf_rcx(%r15)
  movqq %r8 ,kthread.td_frame.tf_r8 (%r15)
  movqq %r9 ,kthread.td_frame.tf_r9 (%r15)
  movqq %rax,kthread.td_frame.tf_rax(%r15)
@@ -157,6 +167,10 @@ asm
  movqq %r10,kthread.td_frame.tf_r10(%r15)
  movqq   $0,kthread.td_frame.tf_r11(%r15)
  movqq %r12,kthread.td_frame.tf_r12(%r15)
+
+ //tf_rcx <- tf_rip
+ movqq      kthread.td_frame.tf_rip(%r15),%r14
+ movqq %r14,kthread.td_frame.tf_rcx(%r15)
 
  //tf_r14=tf_r14
  //tf_r15=tf_r15
@@ -199,10 +213,13 @@ asm
  push %r14
  popf
 
+ movzwq %r14w,%r11 //r11 <- tf_rflags
+
  movqq kthread.td_frame.tf_rdi(%r15),%rdi
  movqq kthread.td_frame.tf_rsi(%r15),%rsi
  movqq kthread.td_frame.tf_rdx(%r15),%rdx
  movqq kthread.td_frame.tf_rax(%r15),%rax
+ movqq kthread.td_frame.tf_rcx(%r15),%rcx
 
  //tf_r14=tf_r14
  //tf_r15=tf_r15
@@ -219,8 +236,9 @@ asm
  movqq kthread.td_frame.tf_rbp(%r15),%r14
  movqq   %r14,jit_frame.tf_rbp(%r13)
 
- movqq $0,%rcx
- movqq $0,%r11
+ movqq $0,%r8
+ movqq $0,%r9
+ movqq $0,%r10
 
  //epilog (debugger)
  movq  %rbp,%rsp
@@ -234,10 +252,14 @@ asm
  push  %r14
  popf
 
+ movzwq %r14w,%r11 //r11 <- tf_rflags
+
  movqq $14,%rax //EFAULT
- movqq  $0,%rdx
- movqq  $0,%rcx
- movqq  $0,%r11
+ movqq  $0,%rcx //rip is unknow
+
+ movqq $0,%r8
+ movqq $0,%r9
+ movqq $0,%r10
 
  //epilog (debugger)
  movq  %rbp,%rsp
