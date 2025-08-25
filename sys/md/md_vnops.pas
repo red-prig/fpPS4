@@ -1063,15 +1063,6 @@ begin
 
  dd:=System.InterlockedExchange(de^.ufs_dir,nil); //parent
 
- if ((de^.ufs_flags and UFS_CREATE)<>0) then
- begin
-  //unlink soft
-  de^.ufs_dir:=nil;
-  sx_unlock(@de^.ufs_md_lock);
-  ufs_de_drop(dd);
-  Exit;
- end;
-
  if (dd<>nil) then
  begin
   ufs_de_hold(dd); //hold parent
@@ -1785,6 +1776,7 @@ begin
 
  if (de=nil) then
  begin
+  sx_xunlock(@dd^.ufs_md_lock);
   Exit(ENOMEM);
  end;
 
@@ -2074,6 +2066,8 @@ begin
 end;
 
 function md_create(ap:p_vop_create_args):Integer;
+label
+ _error_close;
 var
  dvp:p_vnode;
  cnp:p_componentname;
@@ -2082,44 +2076,12 @@ var
 
  dd:p_ufs_dirent;
  nd:p_ufs_dirent;
-begin
- dvp:=ap^.a_dvp;
- cnp:=ap^.a_cnp;
- vap:=ap^.a_vap;
+ dc:p_ufs_dirent;
 
- dd:=dvp^.v_data;
- if (dd=nil) then Exit(EPERM);
-
- nd:=md_newdirent(cnp^.cn_nameptr,cnp^.cn_namelen);
- if (nd=nil) then Exit(ENOMEM);
-
- nd^.ufs_flags:=UFS_CREATE;
- nd^.ufs_mode :=vap^.va_mode;
- nd^.ufs_dir  :=dd;
-
- nd^.ufs_dirent^.d_type:=DT_REG;
-
- //link soft
- ufs_de_hold(dd);
-
- dmp:=VFSTOUFS(dvp^.v_mount);
- sx_xlock(@dmp^.ufs_lock);
-
- Exit(ufs_allocv(nd, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp)); //sx_xunlock
-end;
-
-function md_open(ap:p_vop_open_args):Integer;
-var
  vp:p_vnode;
  flags:Integer;
 
  DA,FA,CD,CO:DWORD;
-
- dd:p_ufs_dirent;
- de:p_ufs_dirent;
- dc:p_ufs_dirent;
-
- ufs_size:Int64;
 
  w:WideString;
  OBJ:TOBJ_ATTR;
@@ -2127,39 +2089,37 @@ var
 
  FD:THandle;
  R:DWORD;
+
 begin
- vp:=ap^.a_vp;
- flags:=ap^.a_mode;
+ dvp:=ap^.a_dvp;
+ cnp:=ap^.a_cnp;
+ vap:=ap^.a_vap;
 
- if (vp=nil) then Exit(EPERM);
+ flags:=ap^.a_vap^.va_spare; //emu ext
 
- vp^.v_un:=nil;
-
- case vp^.v_type of
-  VREG:;
-  VLNK:Exit(0);
-  VDIR:Exit(0);
-  else
-   Exit(EOPNOTSUPP);
- end;
-
- de:=vp^.v_data;
- if (de=nil) then Exit(EPERM);
-
- dd:=de^.ufs_dir;
+ dd:=dvp^.v_data;
  if (dd=nil) then Exit(EPERM);
 
- sx_xlock(@dd^.ufs_md_lock);
- sx_xlock(@de^.ufs_md_lock);
+ nd:=md_newdirent(cnp^.cn_nameptr,cnp^.cn_namelen);
+ if (nd=nil) then Exit(ENOMEM);
 
- w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ nd^.ufs_flags:=0;
+ nd^.ufs_mode :=vap^.va_mode;
+ nd^.ufs_dir  :=dd;
+
+ nd^.ufs_dirent^.d_type:=DT_REG;
+
+ sx_xlock(@dd^.ufs_md_lock);
+ sx_xlock(@nd^.ufs_md_lock);
+
+ w:=_UTF8Decode(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  DA:=GetDesiredAccess(flags);
- FA:=GetFileAttrtibute(flags,de^.ufs_mode);
+ FA:=GetFileAttrtibute(flags,nd^.ufs_mode);
  CD:=GetCreationDisposition(flags);
  CO:=GetCreateOptions(flags);
 
@@ -2178,9 +2138,134 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then
  begin
-  md_unlink_cache(de,True,True);
+  sx_xunlock(@nd^.ufs_md_lock);
   sx_xunlock(@dd^.ufs_md_lock);
+  ufs_de_drop(nd);
   Exit;
+ end;
+
+ Result:=md_update_dirent(FD,nd,nil);
+ if (Result<>0) then
+ begin
+  _error_close:
+   sx_xunlock(@nd^.ufs_md_lock);
+   sx_xunlock(@dd^.ufs_md_lock);
+   ufs_de_drop(nd);
+   NtClose(FD);
+   Exit;
+ end;
+
+ dmp:=VFSTOUFS(dvp^.v_mount);
+ sx_xlock(@dmp^.ufs_lock);
+
+ Result:=ufs_allocv(nd, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp); //sx_xunlock
+ if (Result<>0) then
+ begin
+  goto _error_close;
+ end;
+
+ vp:=ap^.a_vpp^;
+
+ //save to vnode
+ vp^.v_un:=Pointer(FD);
+
+ if ((flags and O_EXCL)<>0) then
+ begin
+  //clear cache
+  dc:=md_find_cache(dd,@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen,0);
+  md_unlink_cache(dc,False,True);
+ end;
+
+ //link cache
+ TAILQ_INSERT_TAIL(@dd^.ufs_dlist,nd,@nd^.ufs_list);
+ Inc(dd^.ufs_links);
+ ufs_de_hold(dd);
+
+ sx_unlock (@nd^.ufs_md_lock);
+ sx_xunlock(@dd^.ufs_md_lock);
+end;
+
+function md_open(ap:p_vop_open_args):Integer;
+var
+ vp:p_vnode;
+ flags:Integer;
+
+ DA,FA,CD,CO:DWORD;
+
+ dd:p_ufs_dirent;
+ de:p_ufs_dirent;
+
+ ufs_size:Int64;
+
+ w:WideString;
+ OBJ:TOBJ_ATTR;
+ BLK:IO_STATUS_BLOCK;
+
+ FD:THandle;
+ R:DWORD;
+begin
+ vp:=ap^.a_vp;
+ flags:=ap^.a_mode;
+
+ if (vp=nil) then Exit(EPERM);
+
+ case vp^.v_type of
+  VREG:;
+  VLNK:Exit(0);
+  VDIR:Exit(0);
+  else
+   Exit(EOPNOTSUPP);
+ end;
+
+ //vp^.v_un:=nil;
+
+ de:=vp^.v_data;
+ if (de=nil) then Exit(EPERM);
+
+ dd:=de^.ufs_dir;
+ if (dd=nil) then Exit(EPERM);
+
+ sx_xlock(@dd^.ufs_md_lock);
+ sx_xlock(@de^.ufs_md_lock);
+
+ if (vp^.v_un<>nil) then
+ begin
+  FD:=THandle(vp^.v_un);
+ end else
+ begin
+  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+
+  OBJ:=Default(TOBJ_ATTR);
+  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+  BLK:=Default(IO_STATUS_BLOCK);
+
+  DA:=GetDesiredAccess(flags);
+  FA:=GetFileAttrtibute(flags,de^.ufs_mode);
+  CD:=GetCreationDisposition(flags);
+  CO:=GetCreateOptions(flags);
+
+  R:=NtCreateFile(@FD,
+                  DA,
+                  @OBJ,
+                  @BLK,
+                  nil,
+                  FA,
+                  FILE_SHARE_ALL,
+                  CD,
+                  CO,
+                  nil,
+                  0);
+
+  Result:=ntf2px(R);
+  if (Result<>0) then
+  begin
+   md_unlink_cache(de,True,True);
+   sx_xunlock(@dd^.ufs_md_lock);
+   Exit;
+  end;
+
+  //save to vnode
+  vp^.v_un:=Pointer(FD);
  end;
 
  Result:=md_update_dirent(FD,de,nil);
@@ -2192,24 +2277,7 @@ begin
   Exit;
  end;
 
- vp^.v_un:=Pointer(FD);
-
  ufs_size:=de^.ufs_size;
-
- if ((de^.ufs_flags and UFS_CREATE)<>0) then
- begin
-  if ((flags and O_EXCL)<>0) then
-  begin
-   //clear cache
-   dc:=md_find_cache(dd,@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen,0);
-   md_unlink_cache(dc,False,True);
-  end;
-  //
-  de^.ufs_flags:=de^.ufs_flags and (not UFS_CREATE);
-  //link cache
-  TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);
-  Inc(dd^.ufs_links);
- end;
 
  sx_unlock (@de^.ufs_md_lock);
  sx_xunlock(@dd^.ufs_md_lock);

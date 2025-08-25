@@ -185,8 +185,10 @@ restart:
   if (ndp^.ni_vp=nil) then
   begin
    vattr_null(vap);
-   vap^.va_type:=VREG;
-   vap^.va_mode:=cmode;
+
+   vap^.va_type :=VREG;
+   vap^.va_mode :=cmode;
+   vap^.va_spare:=ofmode; //emu ext
 
    if ((fmode and O_EXCL)<>0) then
    begin
@@ -238,6 +240,7 @@ restart:
 
    fmode:=fmode and (not O_CREAT);
   end;
+
  end else
  begin
   ndp^.ni_cnd.cn_nameiop:=LOOKUP;
@@ -287,23 +290,29 @@ restart:
     error:=EOPNOTSUPP;
     goto bad;
    end;
-  VDIR:
-   if ((fmode and (FWRITE or O_TRUNC))<>0) then
+  VFIFO:
    begin
-    error:=EISDIR;
+    //is_libkernel_web(cred);
+    error:=EPERM;
     goto bad;
    end;
-  else
-   if ((fmode and O_DIRECTORY)<>0) then
-   begin
-    error:=ENOTDIR;
-    goto bad;
-   end;
+  else;
+ end;
+
+ if (vp^.v_type<>VDIR) and ((fmode and O_DIRECTORY)<>0) then
+ begin
+  error:=ENOTDIR;
+  goto bad;
  end;
 
  accmode:=0;
  if ((fmode and (FWRITE or O_TRUNC))<>0) then
  begin
+  if (vp^.v_type=VDIR) then
+  begin
+   error:=EISDIR;
+   goto bad;
+  end;
   accmode:=accmode or VWRITE;
  end;
 
@@ -823,8 +832,8 @@ begin
 
  //error:=mac_vnode_check_read(active_cred, fp^.f_cred, vp);
  //if (error=0) then
-
   error:=VOP_READ(vp, uio, ioflag);
+
  fp^.f_nextoff:=uio^.uio_offset;
  VOP_UNLOCK(vp, 0);
  if (error=0) and
@@ -882,6 +891,7 @@ begin
  Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+
  //if (vp^.v_type=VREG) then
  // bwillwrite();
 
@@ -899,7 +909,7 @@ begin
  begin
   ioflag:=ioflag or IO_DIRECT;
  end;
- if ((fp^.f_flag and O_FSYNC)<>0) then
+ if ((fp^.f_flag and (O_FSYNC or O_DSYNC))<>0) then
  begin
   ioflag:=ioflag or IO_SYNC;
  end;
@@ -909,12 +919,15 @@ begin
  begin
   ioflag:=ioflag or IO_SYNC;
  end;
+
  mp:=nil;
  if (vp^.v_type<>VCHR) then
  begin
   error:=vn_start_write(vp, @mp, V_WAIT or PCATCH);
   if (error<>0) then
+  begin
    goto unlock;
+  end;
  end;
 
  advice:=get_advice(fp, uio);
@@ -942,13 +955,15 @@ begin
 
  //error:=mac_vnode_check_write(active_cred, fp^.f_cred, vp);
  //if (error=0) then
-
   error:=VOP_WRITE(vp, uio, ioflag);
+
  fp^.f_nextoff:=uio^.uio_offset;
  VOP_UNLOCK(vp, 0);
 
  if (vp^.v_type<>VCHR) then
+ begin
   vn_finished_write(mp);
+ end;
 
  if (error=0) and
     (advice=POSIX_FADV_NOREUSE) and

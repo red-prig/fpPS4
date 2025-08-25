@@ -121,7 +121,6 @@ const
  UFS_DOT     =$02;
  UFS_DOTDOT  =$04;
  UFS_DOOMED  =$08;
- UFS_CREATE  =$10;
 
  UFS_DEFAULT_MODE=&0777;
 

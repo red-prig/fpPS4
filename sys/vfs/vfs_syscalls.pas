@@ -971,9 +971,12 @@ begin
   lf.l_len:=0;
 
   if ((flags and O_EXLOCK)<>0) then
+  begin
    lf.l_type:=F_WRLCK
-  else
+  end else
+  begin
    lf.l_type:=F_RDLCK;
+  end;
 
   l_type:=F_FLOCK;
 
