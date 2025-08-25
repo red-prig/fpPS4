@@ -656,7 +656,7 @@ begin
   * Call filesystem specific open routine (which does nothing in the
   * general case).
   }
- error:=VOP_OPEN(vp, FREAD, nil);
+ error:=VOP_OPEN(vp, FREAD, nil, nil);
  if (error=0) then imgp^.opened:=1;
 
  Exit(error);

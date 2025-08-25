@@ -258,7 +258,7 @@ begin
  de:=System.InterlockedExchange(vp^.v_data,nil);
  if (de<>nil) then
  begin
-  de^.ufs_vnode:=nil;
+  System.InterlockedCompareExchange(de^.ufs_vnode,nil,vp);
   vp^.v_data:=nil;
   if (System.InterlockedDecrement(de^.ufs_vref)=0) then
   begin

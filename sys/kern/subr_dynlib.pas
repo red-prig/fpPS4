@@ -2227,7 +2227,7 @@ begin
   Exit(ETXTBSY);
  end;
 
- error:=VOP_OPEN(vp, FREAD, nil);
+ error:=VOP_OPEN(vp, FREAD, nil, nil);
  if (error<>0) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);

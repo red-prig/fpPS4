@@ -177,6 +177,7 @@ begin
  end;
 
  mtx_lock(ufs_interlock);
+
  vp:=de^.ufs_vnode;
  if (vp<>nil) then
  begin

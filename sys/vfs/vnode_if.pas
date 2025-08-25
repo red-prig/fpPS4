@@ -43,11 +43,12 @@ type
 
  p_vop_create_args=^vop_create_args;
  vop_create_args=record
-  a_gen:p_vnodeop_desc;
-  a_dvp:p_vnode;
-  a_vpp:pp_vnode;
-  a_cnp:p_componentname;
-  a_vap:p_vattr;
+  a_gen  :p_vnodeop_desc;
+  a_dvp  :p_vnode;
+  a_vpp  :pp_vnode;
+  a_cnp  :p_componentname;
+  a_vap  :p_vattr;
+  a_flagp:PInteger;
  end;
 
  p_vop_whiteout_args=^vop_whiteout_args;
@@ -69,10 +70,11 @@ type
 
  p_vop_open_args=^vop_open_args;
  vop_open_args=record
-  a_gen :p_vnodeop_desc;
-  a_vp  :p_vnode;
-  a_mode:Integer;
-  a_fp  :p_file;
+  a_gen  :p_vnodeop_desc;
+  a_vp   :p_vnode;
+  a_mode :Integer;
+  a_fp   :p_file;
+  a_flagp:PInteger;
  end;
 
  p_vop_close_args=^vop_close_args;
@@ -458,10 +460,10 @@ type
 
 function VOP_ISLOCKED     (vp:p_vnode):Integer;
 function VOP_LOOKUP       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
-function VOP_CREATE       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
+function VOP_CREATE       (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;flagp:PInteger):Integer;
 function VOP_WHITEOUT     (dvp:p_vnode;cnp:p_componentname;flags:Integer):Integer;
 function VOP_MKNOD        (dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
-function VOP_OPEN         (vp:p_vnode;mode:Integer;fp:p_file):Integer;
+function VOP_OPEN         (vp:p_vnode;mode:Integer;fp:p_file;flagp:PInteger):Integer;
 function VOP_CLOSE        (vp:p_vnode;fflag:Integer):Integer;
 function VOP_ACCESS       (vp:p_vnode;accmode:accmode_t):Integer;
 function VOP_ACCESSX      (vp:p_vnode;accmode:accmode_t):Integer;
@@ -1007,7 +1009,7 @@ end;
 
 procedure vop_create_post(ap:p_vop_create_args;rc:Integer); external;
 
-function VOP_CREATE(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr):Integer;
+function VOP_CREATE(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname;vap:p_vattr;flagp:PInteger):Integer;
 var
  c:Pointer;
  a:vop_create_args;
@@ -1015,11 +1017,12 @@ var
 begin
  c:=get_vp_cb(dvp,vop_create_desc.vdesc_call);
  Assert(c<>nil,'VOP_CREATE');
- a.a_gen:=@vop_create_desc;
- a.a_dvp:=dvp;
- a.a_vpp:=vpp;
- a.a_cnp:=cnp;
- a.a_vap:=vap;
+ a.a_gen  :=@vop_create_desc;
+ a.a_dvp  :=dvp;
+ a.a_vpp  :=vpp;
+ a.a_cnp  :=cnp;
+ a.a_vap  :=vap;
+ a.a_flagp:=flagp;
  s:=VFS_PROLOGUE(dvp^.v_mount);
  Result:=vop_create_t(c)(@a);
  VFS_EPILOGUE(s);
@@ -1064,7 +1067,7 @@ begin
  vop_mknod_post(@a,Result);
 end;
 
-function VOP_OPEN(vp:p_vnode;mode:Integer;fp:p_file):Integer;
+function VOP_OPEN(vp:p_vnode;mode:Integer;fp:p_file;flagp:PInteger):Integer;
 var
  c:Pointer;
  a:vop_open_args;
@@ -1072,10 +1075,11 @@ var
 begin
  c:=get_vp_cb(vp,vop_open_desc.vdesc_call);
  Assert(c<>nil,'VOP_OPEN');
- a.a_gen :=@vop_open_desc;
- a.a_vp  :=vp;
- a.a_mode:=mode;
- a.a_fp  :=fp;
+ a.a_gen  :=@vop_open_desc;
+ a.a_vp   :=vp;
+ a.a_mode :=mode;
+ a.a_fp   :=fp;
+ a.a_flagp:=flagp;
  s:=VFS_PROLOGUE(vp^.v_mount);
  Result:=vop_open_t(c)(@a);
  VFS_EPILOGUE(s);

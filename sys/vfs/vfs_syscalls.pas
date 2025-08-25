@@ -993,6 +993,7 @@ begin
 
   atomic_set_int(@fp^.f_flag, FHASLOCK);
  end;
+
  if ((flags and O_TRUNC)<>0) then
  begin
   error:=fo_truncate(fp, 0);
@@ -1001,6 +1002,7 @@ begin
    goto bad;
   end;
  end;
+
  VFS_UNLOCK_GIANT(vfslocked);
 success:
  {

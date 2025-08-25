@@ -157,7 +157,7 @@ restart:
  if ((fmode and O_CREAT)<>0) then
  begin
   ndp^.ni_cnd.cn_nameiop:=CREATE;
-  ndp^.ni_cnd.cn_flags:=ISOPEN or LOCKPARENT or LOCKLEAF or MPSAFE;
+  ndp^.ni_cnd.cn_flags  :=ISOPEN or LOCKPARENT or LOCKLEAF or MPSAFE;
 
   if ((fmode and O_EXCL)=0) and ((fmode and O_NOFOLLOW)=0) then
   begin
@@ -186,9 +186,8 @@ restart:
   begin
    vattr_null(vap);
 
-   vap^.va_type :=VREG;
-   vap^.va_mode :=cmode;
-   vap^.va_spare:=ofmode; //emu ext
+   vap^.va_type:=VREG;
+   vap^.va_mode:=cmode;
 
    if ((fmode and O_EXCL)<>0) then
    begin
@@ -208,7 +207,7 @@ restart:
 
    //error:=mac_vnode_check_create(cred, ndp^.ni_dvp, &ndp^.ni_cnd, vap);
    //if (error=0) then
-    error:=VOP_CREATE(ndp^.ni_dvp, @ndp^.ni_vp, @ndp^.ni_cnd, vap);
+    error:=VOP_CREATE(ndp^.ni_dvp, @ndp^.ni_vp, @ndp^.ni_cnd, vap, @fmode);
 
    vput(ndp^.ni_dvp);
    vn_finished_write(mp);
@@ -225,9 +224,12 @@ restart:
   end else
   begin
    if (ndp^.ni_dvp=ndp^.ni_vp) then
+   begin
     vrele(ndp^.ni_dvp)
-   else
+   end else
+   begin
     vput(ndp^.ni_dvp);
+   end;
 
    ndp^.ni_dvp:=nil;
    vp:=ndp^.ni_vp;
@@ -244,7 +246,7 @@ restart:
  end else
  begin
   ndp^.ni_cnd.cn_nameiop:=LOOKUP;
-  ndp^.ni_cnd.cn_flags:=ISOPEN or LOCKLEAF or MPSAFE;
+  ndp^.ni_cnd.cn_flags  :=ISOPEN or LOCKLEAF or MPSAFE;
 
   if ((fmode and O_NOFOLLOW)<>0) then
   begin
@@ -354,7 +356,7 @@ restart:
   vn_lock(vp, LK_UPGRADE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
  end;
 
- error:=VOP_OPEN(vp, ofmode, fp);
+ error:=VOP_OPEN(vp, ofmode, fp, @fmode);
  if (error<>0) then goto bad;
 
  if ((fmode and FWRITE)<>0) then

@@ -10,7 +10,6 @@ uses
  ntapi,
  mqueue,
  vm_pmap,
- kern_param,
  time,
  vfile,
  vmount,
@@ -2095,7 +2094,13 @@ begin
  cnp:=ap^.a_cnp;
  vap:=ap^.a_vap;
 
- flags:=ap^.a_vap^.va_spare; //emu ext
+ //emu ext
+ flags:=0;
+ with ap^ do
+  if (a_flagp<>nil) then
+  begin
+   flags:=a_flagp^;
+  end;
 
  dd:=dvp^.v_data;
  if (dd=nil) then Exit(EPERM);
@@ -2158,16 +2163,23 @@ begin
  dmp:=VFSTOUFS(dvp^.v_mount);
  sx_xlock(@dmp^.ufs_lock);
 
- Result:=ufs_allocv(nd, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, ap^.a_vpp); //sx_xunlock
+ Result:=ufs_allocv(nd, ap^.a_dvp^.v_mount, LK_EXCLUSIVE, @vp); //sx_xunlock
  if (Result<>0) then
  begin
   goto _error_close;
  end;
-
- vp:=ap^.a_vpp^;
+ ap^.a_vpp^:=vp;
 
  //save to vnode
  vp^.v_un:=Pointer(FD);
+
+ //emu ext
+ with ap^ do
+  if (a_flagp<>nil) then
+  begin
+   //clear trunc flag
+   a_flagp^:=flags and (not O_TRUNC);
+  end;
 
  if ((flags and O_EXCL)<>0) then
  begin
@@ -2216,8 +2228,6 @@ begin
   else
    Exit(EOPNOTSUPP);
  end;
-
- //vp^.v_un:=nil;
 
  de:=vp^.v_data;
  if (de=nil) then Exit(EPERM);
@@ -2283,6 +2293,15 @@ begin
  sx_xunlock(@dd^.ufs_md_lock);
 
  vnode_create_vobject(vp, ufs_size);
+
+ //emu ext
+ with ap^ do
+  if (a_flagp<>nil) then
+  begin
+   //clear trunc flag
+   a_flagp^:=a_flagp^ and (not O_TRUNC);
+  end;
+
 end;
 
 function md_close(ap:p_vop_close_args):Integer;
