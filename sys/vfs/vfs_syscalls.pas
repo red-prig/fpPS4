@@ -1065,7 +1065,7 @@ begin
  if (curkthread<>nil) then
  if is_guest_addr(curkthread^.td_frame.tf_rip) then
  begin
-  Writeln('sys_open("',path,'",0x',HexStr(flags,4),',0',OctStr(mode,3),'):',Result);
+  Writeln('sys_open("',path,'",0x',HexStr(flags,6),',0',OctStr(mode,3),'):',Result);
  end;
 end;
 

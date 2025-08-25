@@ -59,6 +59,7 @@ const
 procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 
 Function  md_create_swap_file(const FNAME:RawByteString;SIZE:QWORD;Var FD:THandle):DWORD;
+Function  md_delete_file     (const FNAME:RawByteString):DWORD;
 
 implementation
 
@@ -610,13 +611,11 @@ begin
  end;
 end;
 
-Function NtTruncate(FD:THandle;SIZE:QWORD):DWORD; inline;
-var
- BLK:IO_STATUS_BLOCK;
+Function NtTruncate(FileHandle:THandle;IoStatusBlock:PIO_STATUS_BLOCK;SIZE:QWORD):DWORD; inline;
 begin
  Result:=NtSetInformationFile(
-          FD,
-          @BLK,
+          FileHandle,
+          IoStatusBlock,
           @SIZE,
           SizeOf(Int64),
           FileEndOfFileInformation);
@@ -624,12 +623,28 @@ begin
  if (Result<>0) then
  begin
   Result:=NtSetInformationFile(
-           FD,
-           @BLK,
+           FileHandle,
+           IoStatusBlock,
            @SIZE,
            SizeOf(Int64),
            FileAllocationInformation);
  end;
+end;
+
+Function NtMarkDelete(FileHandle:THandle;IoStatusBlock:PIO_STATUS_BLOCK):DWORD; inline;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ del_on_close:Boolean absolute FBI;
+begin
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ FBI.FileAttributes:=FILE_ATTRIBUTE_NORMAL;
+
+ // reset read-only
+ NtSetInformationFile(FileHandle,IoStatusBlock,@FBI,SizeOf(FBI),FileBasicInformation);
+
+ //mark delete
+ del_on_close:=True;
+ Result:=NtSetInformationFile(FileHandle,IoStatusBlock,@del_on_close,1,FileDispositionInformation);
 end;
 
 Function md_create_swap_file(const FNAME:RawByteString;SIZE:QWORD;Var FD:THandle):DWORD;
@@ -679,13 +694,64 @@ begin
 
  if (Result<>0) then Exit;
 
- Result:=NtTruncate(FD,SIZE);
+ Result:=NtTruncate(FD,@BLK,SIZE);
 
  if (Result<>0) then
  begin
   NtClose(FD);
   FD:=0;
  end;
+end;
+
+Function md_delete_file(const FNAME:RawByteString):DWORD;
+const
+ FILE_SHARE_ALL=FILE_SHARE_READ or
+                FILE_SHARE_WRITE or
+                FILE_SHARE_DELETE;
+var
+ FD:THandle;
+
+ W:WideString;
+
+ OBJ  :OBJECT_ATTRIBUTES;
+ UPATH:UNICODE_STRING;
+ BLK  :IO_STATUS_BLOCK;
+begin
+
+ W:=UTF8Decode(FNAME);
+ W:='\??\'+W;
+
+ OBJ:=Default(OBJECT_ATTRIBUTES);
+ OBJ.Length    :=SizeOf(OBJECT_ATTRIBUTES);
+ OBJ.ObjectName:=@UPATH;
+
+ UPATH:=Default(UNICODE_STRING);
+ UPATH.Length       :=Length(w)*SizeOf(WideChar);
+ UPATH.MaximumLength:=UPATH.Length+SizeOf(WideChar);
+ UPATH.Buffer       :=PWideChar(w);
+
+ BLK:=Default(IO_STATUS_BLOCK);
+ FD:=0;
+
+ Result:=NtOpenFile(@FD,
+               SYNCHRONIZE or
+               FILE_CAN_DELETE or
+               FILE_READ_DATA or
+               FILE_READ_ATTRIBUTES or
+               FILE_WRITE_ATTRIBUTES,
+               @OBJ,
+               @BLK,
+               FILE_SHARE_ALL,
+               FILE_OPEN_FOR_BACKUP_INTENT or
+               FILE_SYNCHRONOUS_IO_NONALERT or
+               FILE_OPEN_REPARSE_POINT
+ );
+
+ if (Result<>0) then Exit;
+
+ Result:=NtMarkDelete(FD,@BLK);
+
+ NtClose(FD); //<-actual delete
 end;
 
 end.

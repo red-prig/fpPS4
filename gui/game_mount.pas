@@ -41,6 +41,7 @@ function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWO
 implementation
 
 uses
+ md_map,
  sysutils,
  fileutil,
  LazFileUtils,
@@ -477,7 +478,7 @@ _next:
        goto _next;
      end else
      begin
-       if not SysUtils.DeleteFile(CurFilename) then exit;
+      md_delete_file(CurFilename);
      end;
    until SysUtils.FindNext(FileInfo)<>0;
    SysUtils.FindClose(FileInfo);
@@ -560,7 +561,7 @@ var
   CurSrcDir: RawByteString;
   CurFilename: RawByteString;
 const
-  c_block_size =4*1024; //????
+  c_block_size =16*1024; //????
   c_dirent_size=16;
   c_inode_size =168;
   c_inodes_per_block=c_block_size div c_inode_size;

@@ -174,14 +174,14 @@ begin
  Result:=mp^.mnt_data;
 end;
 
-function INIT_UNICODE(FileName:PWideChar):UNICODE_STRING;
+function INIT_UNICODE(const FileName:WideString):UNICODE_STRING;
 begin
- Result.Length       :=strlen(FileName)*SizeOf(WideChar);
+ Result.Length       :=Length(FileName)*SizeOf(WideChar);
  Result.MaximumLength:=Result.Length+SizeOf(WideChar);
- Result.Buffer       :=FileName;
+ Result.Buffer       :=PWideChar(FileName);
 end;
 
-procedure INIT_OBJ(var OBJ:TOBJ_ATTR;fd:THandle;attr:ULONG;FileName:PWideChar);
+procedure INIT_OBJ(var OBJ:TOBJ_ATTR;fd:THandle;attr:ULONG;const FileName:WideString);
 begin
  OBJ.OATTR.Length:=SizeOf(OBJECT_ATTRIBUTES);
 
@@ -353,7 +353,7 @@ begin
  w:='\??\'+w;
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,0,OBJ_CASE_INSENSITIVE,PWideChar(w));
+ INIT_OBJ(OBJ,0,OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
@@ -475,7 +475,7 @@ begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
@@ -510,7 +510,7 @@ begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  opt:=FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT;
@@ -1027,7 +1027,7 @@ begin
  w:=_UTF8Decode(name,namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
 
  R:=NtQueryAttributesFile(@OBJ,@FBI);
 
@@ -1468,6 +1468,22 @@ begin
  sx_xunlock(@de^.ufs_md_lock);
 end;
 
+Function NtMarkDelete(FileHandle:THandle;IoStatusBlock:PIO_STATUS_BLOCK):DWORD; inline;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ del_on_close:Boolean absolute FBI;
+begin
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ FBI.FileAttributes:=FILE_ATTRIBUTE_NORMAL;
+
+ // reset read-only
+ NtSetInformationFile(FileHandle,IoStatusBlock,@FBI,SizeOf(FBI),FileBasicInformation);
+
+ //mark delete
+ del_on_close:=True;
+ Result:=NtSetInformationFile(FileHandle,IoStatusBlock,@del_on_close,1,FileDispositionInformation);
+end;
+
 function md_symlink(ap:p_vop_symlink_args):Integer;
 const
  REPARSE_DATA_OFFSET=ptrint(@REPARSE_DATA_BUFFER(nil^).GenericReparseBuffer);
@@ -1494,7 +1510,6 @@ var
 
  FD:THandle;
  R:DWORD;
- del_on_close:Boolean;
 begin
  error:=0;
  //error:=priv_check(curkthread, PRIV_DEVFS_SYMLINK);
@@ -1518,7 +1533,7 @@ begin
  w:=_UTF8Decode(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtCreateFile(@FD,
@@ -1583,8 +1598,7 @@ begin
  begin
   //mark delete on close handle
   _del:
-  del_on_close:=true;
-  NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+  NtMarkDelete(FD,@BLK);
   NtClose(FD);
   _err:
   sx_xunlock(@dd^.ufs_md_lock);
@@ -1732,7 +1746,7 @@ begin
  w:=_UTF8Decode(cnp^.cn_nameptr,cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtCreateFile(@FD,
@@ -1791,8 +1805,6 @@ var
  FD:THandle;
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
-
- del_on_close:Boolean;
 begin
  dvp:=ap^.a_dvp;
  vp:=ap^.a_vp;
@@ -1814,9 +1826,7 @@ begin
  end;
 
  BLK:=Default(IO_STATUS_BLOCK);
- del_on_close:=true;
-
- R:=NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+ R:=NtMarkDelete(FD,@BLK);
 
  Result:=ntf2px(R);
  if (Result<>0) then
@@ -1842,8 +1852,6 @@ var
  FD:THandle;
  BLK:IO_STATUS_BLOCK;
  R:DWORD;
-
- del_on_close:Boolean;
 begin
  dvp:=ap^.a_dvp;
  vp:=ap^.a_vp;
@@ -1875,9 +1883,7 @@ begin
  end;
 
  BLK:=Default(IO_STATUS_BLOCK);
- del_on_close:=true;
-
- R:=NtSetInformationFile(FD,@BLK,@del_on_close,1,FileDispositionInformation);
+ R:=NtMarkDelete(FD,@BLK);
 
  Result:=ntf2px(R);
  if (Result<>0) then
@@ -2051,7 +2057,7 @@ Function GetFileAttrtibute(flags,mode:Integer):DWORD; inline;
 begin
  Result:=FILE_ATTRIBUTE_NORMAL;
  if ((flags and O_CREAT)<>0) and
-    ((mode and S_IWUSR)=0) then
+    ((mode and (S_IWUSR or S_IWGRP or S_IWOTH))=0) then
  begin
   Result:=Result or FILE_ATTRIBUTE_READONLY;
  end;
@@ -2149,7 +2155,7 @@ begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,PWideChar(w));
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  DA:=GetDesiredAccess(flags);
