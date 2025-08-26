@@ -30,6 +30,19 @@ type
    d_name  :array[0..MAXNAMLEN] of AnsiChar; //name must be no longer than this
  end;
 
+ //Dirents are 8-byte aligned.
+ p_pfs_dirent=^t_pfs_dirent;
+ t_pfs_dirent=packed object
+  Const
+   MAXNAMLEN=255;
+  Var
+   d_ino    :Integer; //Inode index
+   d_type   :Integer; //Type of entry. 2=file, 3=directory, 4= . (link to current dir) , 5= .. (link to parent)
+   d_namelen:Integer; //Length of filename (add 1 for 0-terminator)
+   d_entsize:Integer; //Size of this whole struct, in bytes
+   d_name   :array[0..MAXNAMLEN] of AnsiChar; //Filename and 0-terminator
+ end;
+
 function IFTODT(mode:DWORD):DWORD; inline;
 function DTTOIF(dirtype:DWORD):DWORD; inline;
 function GENERIC_DIRSIZ(dp:p_dirent):Integer; inline;

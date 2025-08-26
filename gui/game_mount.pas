@@ -341,7 +341,7 @@ begin
                           DOWNLOAD_DIRS[i],
                           pchar(fs_src),
                           nil,
-                          MNT_EMU_PFS,
+                          0,
                           False);
  end;
  //download
@@ -649,7 +649,7 @@ begin
                                            TEMP0,
                                            pchar(fs_src),
                                            nil,
-                                           MNT_EMU_PFS);
+                                           0);
 
   if (Result=0) then
   begin

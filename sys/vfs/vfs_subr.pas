@@ -80,6 +80,7 @@ procedure vfs_event_signal(fsid:p_fsid;event:DWORD;data:ptrint);
 function  vfs_kqfilter(ap:p_vop_kqfilter_args):Integer;
 
 function  vfs_read_dirent(ap:p_vop_readdir_args;dp:p_dirent;off:QWORD):Integer;
+function  vfs_read_pfs_dirent(ap:p_vop_readdir_args;dp:p_pfs_dirent;off:QWORD):Integer;
 procedure vfs_mark_atime(vp:p_vnode);
 function  vfs_unixify_accmode(accmode:p_accmode_t):Integer;
 
@@ -3589,6 +3590,41 @@ begin
  end;
 
  error:=uiomove(dp, dp^.d_reclen, ap^.a_uio);
+ if (error<>0) then
+ begin
+  if (ap^.a_ncookies<>nil) then
+  begin
+   if (ap^.a_cookies<>nil) then
+   begin
+    FreeMem(ap^.a_cookies);
+   end;
+   ap^.a_cookies:=nil;
+   ap^.a_ncookies^:=0;
+  end;
+  Exit(error);
+ end;
+
+ if (ap^.a_ncookies=nil) then Exit(0);
+
+ Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
+
+ ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
+ ap^.a_cookies^[ap^.a_ncookies^]:=off;
+
+ Inc(ap^.a_ncookies^);
+ Exit(0);
+end;
+
+function vfs_read_pfs_dirent(ap:p_vop_readdir_args;dp:p_pfs_dirent;off:QWORD):Integer;
+var
+ error:Integer;
+begin
+ if (dp^.d_entsize > ap^.a_uio^.uio_resid) then
+ begin
+  Exit(ENAMETOOLONG);
+ end;
+
+ error:=uiomove(dp, dp^.d_entsize, ap^.a_uio);
  if (error<>0) then
  begin
   if (ap^.a_ncookies<>nil) then

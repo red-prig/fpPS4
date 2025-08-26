@@ -261,6 +261,44 @@ begin
  end;
 end;
 
+function NT_FA_TO_PFS_DT(a,e:ULONG;name:pchar):Byte;
+const
+ PFS_DT_FIFO= 0; //unknow
+ PFS_DT_CHR = 1; //unknow
+ PFS_DT_REG = 2;
+ PFS_DT_DIR = 3;
+ PFS_DT_DOT = 4;
+ PFS_DT_DDT = 5;
+ PFS_DT_LNK =10; //unknow
+begin
+ if ((a and FILE_ATTRIBUTE_REPARSE_POINT)<>0) and
+    (e=IO_REPARSE_TAG_SYMLINK) then
+ begin
+  Result:=PFS_DT_LNK;
+ end else
+ if ((a and FILE_ATTRIBUTE_DEVICE)<>0) then
+ begin
+  Result:=PFS_DT_CHR; //PFS_DT_FIFO ???
+ end else
+ if ((a and FILE_ATTRIBUTE_DIRECTORY)<>0) then
+ begin
+  if (name='.') then
+  begin
+   Result:=PFS_DT_DOT;
+  end else
+  if (name='..') then
+  begin
+   Result:=PFS_DT_DDT;
+  end else
+  begin
+   Result:=PFS_DT_DIR;
+  end;
+ end else
+ begin
+  Result:=PFS_DT_REG;
+ end;
+end;
+
 function get_inode(i:LARGE_INTEGER):Integer; inline;
 begin
  Result:=(i.LowPart+i.HighPart); //simple hash
@@ -1320,9 +1358,113 @@ end;
 
 function md_readdir(ap:p_vop_readdir_args):Integer;
 var
+ mp:p_mount;
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_dirent;
+ off:Int64;
+ i:Integer;
+
+ NT_DIRENT:TNT_DIRENT;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+ restart:Boolean;
+ emu_pfs:Boolean;
+begin
+ if (ap^.a_vp^.v_type<>VDIR) then
+ begin
+  Exit(ENOTDIR);
+ end;
+
+ uio:=ap^.a_uio;
+ if (uio^.uio_offset < 0) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ dd:=ap^.a_vp^.v_data;
+ off:=0;
+ restart:=True;
+
+ mp:=ap^.a_vp^.v_mount;
+ emu_pfs:=((mp^.mnt_flag and MNT_EMU_PFS)<>0);
+
+ sx_xlock(@dd^.ufs_md_lock);
+
+ repeat
+  NT_DIRENT:=Default(TNT_DIRENT);
+  BLK:=Default(IO_STATUS_BLOCK);
+
+  R:=NtQueryDirectoryFile(
+            THandle(dd^.ufs_md_fp),
+            0,
+            nil,
+            nil,
+            @BLK,
+            @NT_DIRENT,
+            SizeOf(NT_DIRENT),
+            FileIdFullDirectoryInformation,
+            True,
+            nil,
+            restart
+           );
+  restart:=false;
+
+  if (R=STATUS_NO_MORE_FILES) then Break;
+
+  Result:=ntf2px(R);
+  if (Result<>0) then Break;
+
+  dt:=Default(t_dirent);
+
+  i:=UnicodeToUtf8(@dt.d_name,
+                   t_dirent.MAXNAMLEN+1,
+                   @NT_DIRENT.Name,
+                   NT_DIRENT.Info.FileNameLength div 2);
+  //i->zero include
+
+  if (i<=0) then
+  begin
+   //skip error
+   Continue;
+  end;
+
+  if emu_pfs then
+  begin
+   //sizeof(body)+8+AlignUp(namelen,8)
+   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+  end else
+  begin
+   //sizeof(body)+AlignUp(namelen,4)
+   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 3) and (not 3)); //zero include
+  end;
+
+  if (dt.d_reclen > uio^.uio_resid) then break;
+
+  if (off >= uio^.uio_offset) then
+  begin
+   dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
+   dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
+   dt.d_namlen:=i-1; //zero exclude
+
+   Result:=vfs_read_dirent(ap, @dt, off);
+   if (Result<>0) then break;
+  end;
+
+  Inc(off,dt.d_reclen);
+ until false;
+
+ sx_xunlock(@dd^.ufs_md_lock);
+ uio^.uio_offset:=off;
+
+ Exit(0);
+end;
+
+function md_pfs_readdir(ap:p_vop_readdir_args):Integer;
+var
+ uio:p_uio;
+ dd:p_ufs_dirent;
+ dt:t_pfs_dirent;
  off:Int64;
  i:Integer;
 
@@ -1372,12 +1514,13 @@ begin
   Result:=ntf2px(R);
   if (Result<>0) then Break;
 
-  dt:=Default(t_dirent);
+  dt:=Default(t_pfs_dirent);
 
   i:=UnicodeToUtf8(@dt.d_name,
                    t_dirent.MAXNAMLEN+1,
                    @NT_DIRENT.Name,
                    NT_DIRENT.Info.FileNameLength div 2);
+  //i->zero include
 
   if (i<=0) then
   begin
@@ -1385,21 +1528,22 @@ begin
    Continue;
   end;
 
-  dt.d_reclen:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+((i + 3) and (not 3)); //zero include
+  //sizeof(body)+8+AlignUp(namelen,8)
+  dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
 
-  if (dt.d_reclen > uio^.uio_resid) then break;
+  if (dt.d_entsize > uio^.uio_resid) then break;
 
   if (off >= uio^.uio_offset) then
   begin
-   dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
-   dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
-   dt.d_namlen:=i-1; //zero exclude
+   dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
+   dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
+   dt.d_namelen:=i-1; //zero exclude
 
-   Result:=vfs_read_dirent(ap, @dt, off);
+   Result:=vfs_read_pfs_dirent(ap, @dt, off);
    if (Result<>0) then break;
   end;
 
-  Inc(off,dt.d_reclen);
+  Inc(off,dt.d_entsize);
  until false;
 
  sx_xunlock(@dd^.ufs_md_lock);
@@ -2749,11 +2893,38 @@ begin
  end;
 end;
 
-function md_read(ap:p_vop_read_args):Integer;
+function _VOP_READDIR(c:Pointer;vp:p_vnode;uio:p_uio):Integer; inline;
+var
+ a:vop_readdir_args;
 begin
- case ap^.a_vp^.v_type of
-  VDIR:Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
-  VREG:Exit(md_io(ap^.a_vp,ap^.a_uio,ap^.a_ioflag));
+ a.a_gen     :=@vop_readdir_desc;
+ a.a_vp      :=vp;
+ a.a_uio     :=uio;
+ a.a_eofflag :=nil;
+ a.a_ncookies:=nil;
+ a.a_cookies :=nil;
+ Result:=vop_readdir_t(c)(@a);
+end;
+
+function md_read(ap:p_vop_read_args):Integer;
+var
+ vp:p_vnode;
+ mp:p_mount;
+begin
+ vp:=ap^.a_vp;
+ case vp^.v_type of
+  VDIR:
+   begin
+    mp:=vp^.v_mount;
+    if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+    begin
+     Result:=_VOP_READDIR(@md_pfs_readdir, vp, ap^.a_uio);
+    end else
+    begin
+     Result:=_VOP_READDIR(@md_readdir, vp, ap^.a_uio);
+    end;
+   end;
+  VREG:Exit(md_io(vp,ap^.a_uio,ap^.a_ioflag));
   else
        Exit(EBADF);
  end;
