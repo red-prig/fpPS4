@@ -42,12 +42,24 @@ uses
  md_systm_reserve,
  md_map;
 
-var
- ppid:DWORD=0;
-
 function md_getppid:DWORD;
+var
+ data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
+ p_info:PPROCESS_BASIC_INFORMATION;
+ R:DWORD;
 begin
- Result:=ppid;
+ Result:=0;
+ p_info:=Align(@data,8);
+
+ R:=NtQueryInformationProcess(NtCurrentProcess,
+                              ProcessBasicInformation,
+                              p_info,
+                              SizeOf(PROCESS_BASIC_INFORMATION),
+                              nil);
+ if (R=0) then
+ begin
+  Result:=p_info^.InheritedFromUPI;
+ end;
 end;
 
 const
@@ -265,7 +277,6 @@ end;
 type
  p_shared_info=^t_shared_info;
  t_shared_info=record
-  ppid      :QWORD;
   hStdInput :THandle;
   hStdOutput:THandle;
   hStdError :THandle;
@@ -295,8 +306,6 @@ begin
  if (len=0) then Exit;
 
  if (info.State=MEM_FREE) then Exit;
-
- ppid:=base^.ppid;
 
  SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
  SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
@@ -356,8 +365,6 @@ begin
  if (Result<>0) then Exit;
 
  shared_info:=Default(t_shared_info);
-
- shared_info.ppid      :=GetCurrentProcessId;
 
  shared_info.hStdInput :=md_dup_to_pidfd(hProcess,info.hInput );
  shared_info.hStdOutput:=md_dup_to_pidfd(hProcess,info.hOutput);
