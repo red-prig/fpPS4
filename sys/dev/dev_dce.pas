@@ -929,6 +929,18 @@ type
  end;
 
 Function dce_register_buffer_attr(dev:p_cdev;data:p_register_buffer_attr_args):Integer;
+var
+ pixelFormat:DWORD;
+ tilingMode:DWORD;
+ options:WORD;
+ GRPH_DEPT:Byte;
+ big_buf:Boolean;
+
+ align_size  :DWORD;
+ align_height:DWORD;
+ align_pitch :DWORD;
+ kmem_size   :DWORD;
+
 begin
  Result:=0;
 
@@ -945,7 +957,31 @@ begin
     (data^.width>$2000) or
     (data^.height>$2000) then Exit(EINVAL);
 
- case data^.pixelFormat of
+ //
+ options:=data^.options;
+
+ if ((options and 7)<>7) then
+ begin
+  options:=options;
+ end else
+ begin
+  options:=options and $fff8;
+ end;
+
+ if ((options and 8)=0) then
+ begin
+  options:=options;
+ end else
+ begin
+  options:=options and $ffe7;
+ end;
+
+ if ((options and $ffef)<>0) then Exit(EINVAL);
+ //
+
+ pixelFormat:=data^.pixelFormat;
+
+ case pixelFormat of
   $80000000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB
   $80002200:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB
   $80060000:;
@@ -976,6 +1012,56 @@ begin
    Exit(EINVAL);
  end;
 
+ GRPH_DEPT:=pixelFormat shr 30;
+
+ big_buf:=(1080 < data^.height) or (1920 < data^.width);
+
+ if (GRPH_DEPT=3) and (big_buf) then Exit(EINVAL);
+
+ tilingMode:=data^.tilingMode;
+
+ if (1 < tilingMode) then
+ begin
+   if (tilingMode<>2) or
+      {(ReadFlagsInfo()=0) or}
+      (GRPH_DEPT=3) then Exit(EINVAL);
+ end;
+
+ if (p_proc.p_sdk_version < $6500000) then
+ begin
+  align_size:=1;
+  kmem_size:=(ord(GRPH_DEPT=3)*4+4)*data^.pitchPixel*data^.height;
+ end else
+ begin
+  if (tilingMode=0) then
+  begin
+   align_height:=1;
+   align_pitch :=$40;
+   align_size  :=$100;
+  end else
+  if (tilingMode=1) then
+  begin
+   align_height:=$40;
+   align_pitch :=$80;
+   align_size  :=ord(GRPH_DEPT=3)*$8000+$8000;
+  end else
+  begin
+   if ((tilingMode<>2) or (GRPH_DEPT=3)) then Exit(EINVAL);
+   align_pitch :=$80;
+   align_size  :=$10000;
+   align_height:=$80;
+  end;
+
+  kmem_size:=
+        (ord(GRPH_DEPT=3)*4+4)*
+        Align(data^.height    ,align_height)*
+        Align(data^.pitchPixel,align_pitch);
+
+  kmem_size:=Align(kmem_size,align_size);
+ end;
+
+ Writeln('kmem_size=0x',HexStr(kmem_size,8));
+
  mtx_lock(dce_mtx);
 
   if (dce_handle=nil) then
@@ -985,10 +1071,10 @@ begin
   begin
    if (data^.submit=0) then
    begin
-    Result:=dce_handle.RegisterBufferAttribute(data^.attrid,@data^.pixelFormat);
+    Result:=dce_handle.RegisterBufferAttribute(data^.attrid,@data^.pixelFormat,kmem_size);
    end else
    begin
-    Result:=dce_handle.SubmitBufferAttribute  (data^.attrid,@data^.pixelFormat);
+    Result:=dce_handle.SubmitBufferAttribute  (data^.attrid,@data^.pixelFormat,kmem_size);
    end;
   end;
 

@@ -24,6 +24,7 @@ type
 
  t_map_ptr=packed record
   orig:Pointer; //original ptr
+  oblk:Pointer; //original ptr (aligned)
   mirr:Pointer; //mirror   ptr
   base:Pointer; //base mmap
   size:QWORD;   //size mmap
@@ -120,8 +121,8 @@ type
   //function  GetFlipStatus          (status:p_flip_status):Integer; virtual;
   //function  GetResolutionStatus    (status:p_resolution_status):Integer; virtual;
   function   SetFlipRate              (rate:Integer):Integer; override;
-  function   RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; override;
-  function   SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr):Integer; override;
+  function   RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer; override;
+  function   SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer; override;
   function   UnregisterBufferAttribute(attrid:Byte):Integer; override;
   function   RegisterBuffer           (buf:p_register_buffer):Integer; override;
   function   UnregisterBuffer         (index:Integer):Integer; override;
@@ -148,8 +149,10 @@ uses
  }
  md_time,
  sys_bootparam,
+ kern_proc,
  vmparam,
- vm_mmap;
+ vm_mmap,
+ vm_map;
 
 //
 
@@ -278,32 +281,27 @@ begin
  Result:=0;
 end;
 
-function get_buf_size(attr:p_register_buffer_attr):QWORD;
-begin
- //TODO: neo mode, etc
- Result:=((attr^.pitchPixel+127) and (not 127))*
-         ((attr^.height    +127) and (not 127))*4;
-end;
-
-function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
+function TDisplayHandleSoft.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer;
 begin
  if (m_attr[attrid].init<>0) then Exit(EINVAL);
 
  m_attr[attrid].init :=1;
  m_attr[attrid].index:=attrid;
  m_attr[attrid].attr :=attr^;
- m_attr[attrid].size :=get_buf_size(attr);
+ m_attr[attrid].size :=kmem_size;
 
  Result:=0;
 end;
 
-function TDisplayHandleSoft.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
+function TDisplayHandleSoft.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer;
 begin
  if (m_attr[attrid].init=0) then Exit(EINVAL);
  if (m_sbat.init<>0)        then Exit(EBUSY);
 
  m_sbat.attr :=attr^;
  m_sbat.index:=attrid;
+ m_sbat.size :=kmem_size;
+
  System.InterlockedExchange(m_sbat.init,1);
 
  Result:=0;
@@ -322,14 +320,20 @@ end;
 function mirror_map(orig:Pointer;size:QWORD):t_map_ptr;
 var
  mask:QWORD;
+ oblk:QWORD;
  base:Pointer;
 begin
  mask:=QWORD(orig) and PAGE_MASK;
+ oblk:=QWORD(orig) and QWORD(not PAGE_MASK);
+
  size:=(size+mask+PAGE_MASK) and QWORD(not PAGE_MASK);
 
- base:=vm_mmap.mirror_map(Pointer(QWORD(orig) and QWORD(not PAGE_MASK)),size);
+ base:=vm_mmap.mirror_map(Pointer(oblk),size);
+
+ vm_map_wire(p_proc.p_vmspace,oblk,oblk+size,0);
 
  Result.orig:=orig;
+ Result.oblk:=Pointer(oblk);
  Result.mirr:=base+mask;
  Result.base:=base;
  Result.size:=size;
@@ -337,6 +341,8 @@ end;
 
 procedure mirror_unmap(var m:t_map_ptr);
 begin
+ vm_map_unwire(p_proc.p_vmspace,QWORD(m.oblk),QWORD(m.oblk)+m.size,0);
+
  vm_mmap.mirror_unmap(m.base,m.size);
 end;
 
@@ -361,6 +367,13 @@ begin
 
  left :=mirror_map(buf^.left ,size);
  right:=mirror_map(buf^.right,size);
+
+ Writeln('RegisterBuffer:L:',HexStr(left.oblk),'..',HexStr(left.oblk+left.size));
+
+ if (right.base<>nil) then
+ begin
+  Writeln('RegisterBuffer:R:',HexStr(right.oblk),'..',HexStr(right.oblk+right.size));
+ end;
 
  m_bufs[i].init :=1;
  m_bufs[i].attr :=a;
@@ -1251,7 +1264,7 @@ begin
   //
   mtx_lock(dce_mtx^);
    m_attr[i].attr:=m_sbat.attr;
-   m_attr[i].size:=get_buf_size(@m_sbat.attr);
+   m_attr[i].size:=m_sbat.size;
   mtx_unlock(dce_mtx^);
   //
   m_sbat.init:=0;

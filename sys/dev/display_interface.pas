@@ -111,8 +111,8 @@ type
   function  GetFlipStatus            (status:p_flip_status):Integer; virtual;
   function  GetResolutionStatus      (status:p_resolution_status):Integer; virtual;
   function  SetFlipRate              (rate:Integer):Integer; virtual;
-  function  RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
-  function  SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr):Integer; virtual;
+  function  RegisterBufferAttribute  (attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer; virtual;
+  function  SubmitBufferAttribute    (attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer; virtual;
   function  UnregisterBufferAttribute(attrid:Byte):Integer; virtual;
   function  RegisterBuffer           (buf:p_register_buffer):Integer; virtual;
   function  UnregisterBuffer         (index:Integer):Integer; virtual;
@@ -165,12 +165,12 @@ begin
  Result:=0;
 end;
 
-function TDisplayHandle.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
+function TDisplayHandle.RegisterBufferAttribute(attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer;
 begin
  Result:=0;
 end;
 
-function TDisplayHandle.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr):Integer;
+function TDisplayHandle.SubmitBufferAttribute(attrid:Byte;attr:p_register_buffer_attr;kmem_size:DWORD):Integer;
 begin
  Result:=0;
 end;
