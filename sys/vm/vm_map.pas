@@ -202,7 +202,8 @@ function  vm_map_insert(
            max   :vm_prot_t;
            cow   :Integer;
            anon  :Pointer;
-           alias :Boolean):Integer;
+           alias :Boolean;
+           naming:Boolean):Integer;
 
 function  vm_map_findspace(map   :vm_map_t;
                            start :vm_offset_t;
@@ -442,7 +443,7 @@ begin
   vm_map_lock(map);
    For i:=0 to High(pmap_mem_guest)-1 do
    begin
-    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil, false);
+    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil, false, false);
     vm_map_set_info_locked(map,         pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, '#hole', VM_INHERIT_HOLE);
    end;
   vm_map_unlock(map);
@@ -1202,7 +1203,8 @@ function vm_map_insert(
            max   :vm_prot_t;
            cow   :Integer;
            anon  :Pointer;
-           alias :Boolean):Integer;
+           alias :Boolean;
+           naming:Boolean):Integer;
 label
  _budget,
  charged;
@@ -1471,15 +1473,18 @@ charged:
 
  new_entry^.anon_addr:=anon;
 
- td:=curkthread;
- if (td<>nil) then
+ if naming then
  begin
-  if ((td^.td_pflags and TDP_KTHREAD)<>0) then
+  td:=curkthread;
+  if (td<>nil) then
   begin
-   //set vsh name?
-  end else
-  begin
-   new_entry^.name:='(NoName)'+td^.td_name;
+   if ((td^.td_pflags and TDP_KTHREAD)<>0) then
+   begin
+    //set vsh name?
+   end else
+   begin
+    new_entry^.name:='(NoName)'+td^.td_name;
+   end;
   end;
  end;
 
@@ -1656,7 +1661,7 @@ begin
   begin
    vm_map_delete(map, start, __end, True);
   end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow, anon, false);
+  Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow, anon, false, true);
  vm_map_unlock(map);
 end;
 
@@ -1735,7 +1740,7 @@ again:
 
    start:=addr^;
   end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow, anon, false);
+  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow, anon, false, true);
  until not ((Result=KERN_NO_SPACE) and
             (find_space<>VMFS_NO_SPACE) and
             (find_space<>VMFS_ANY_SPACE));
@@ -3913,7 +3918,7 @@ begin
  end;
 
  top:=bot + init_ssize;
- rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow, anon, false);
+ rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow, anon, false, true);
 
  { Now set the avail_ssize amount. }
  if (rv=KERN_SUCCESS) then
@@ -4138,7 +4143,7 @@ begin
   end;
 
   rv:=vm_map_insert(map, nil, 0, addr, stack_entry^.start,
-      next_entry^.protection, next_entry^.max_protection, 0, next_entry^.anon_addr, false);
+      next_entry^.protection, next_entry^.max_protection, 0, next_entry^.anon_addr, false, true);
 
   { Adjust the available stack space by the amount we grew. }
   if (rv=KERN_SUCCESS) then

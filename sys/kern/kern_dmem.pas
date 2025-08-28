@@ -6,6 +6,7 @@ unit kern_dmem;
 interface
 
 uses
+ sysutils,
  sys_conf,
  sys_vm_object,
  dmem_map,
@@ -278,7 +279,8 @@ begin
                         prot, VM_PROT_ALL,
                         cow,
                         anon,
-                        ((p_proc.p_dmem_aliasing and 3)<>0)
+                        ((p_proc.p_dmem_aliasing and 3)<>0),
+                        False
                        );
 
      if (err=0) then
@@ -585,7 +587,13 @@ begin
 
  if is_valid_entry(entry) then
  begin
-  qinfo^.name:=entry^.name;
+  if (entry^.name[0]<>#0) then
+  begin
+   qinfo^.name:=entry^.name;
+  end else
+  begin
+   qinfo^.name:='anon:'+LowerCase(HexStr(QWORD(entry^.anon_addr),12));
+  end;
  end;
 
  obj:=entry^.vm_obj;

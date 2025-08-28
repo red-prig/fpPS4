@@ -6,6 +6,7 @@ unit vm_mmap;
 interface
 
 uses
+ sysutils,
  vm,
  vm_map,
  sys_vm_object;
@@ -969,7 +970,7 @@ _map:
  if (stack_addr<>nil) then
  begin
   //Do you really need it?
-  vm_map_set_name_str(map,addr,size + addr,'anon:'+HexStr(QWORD(stack_addr),11));
+  vm_map_set_name_str(map,addr,size + addr,'anon:'+LowerCase(HexStr(QWORD(stack_addr),12)));
  end;
 
  Writeln('0x',HexStr(QWORD(stack_addr),11),'->',

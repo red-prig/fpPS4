@@ -3081,7 +3081,7 @@ begin
                        vaddr_lo,vaddr_hi,
                        VM_PROT_RW,VM_PROT_RWX,
                        0,
-                       nil,false);
+                       nil,false,false);
   if (error<>0) then
   begin
    vm_map_unlock(map);
