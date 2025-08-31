@@ -397,11 +397,11 @@ Function gc_unmap_hqd(hqd:p_gc_hqd):Integer;
 var
  base:Pointer;
 begin
- hqd^:=Default(t_gc_hqd);
-
  base:=Pointer(QWORD(hqd^.read_mirr_addr) and QWORD(not PAGE_MASK));
 
  mirror_unmap(base,PAGE_SIZE);
+
+ hqd^:=Default(t_gc_hqd);
 
  Result:=0;
 end;
