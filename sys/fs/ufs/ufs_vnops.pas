@@ -896,7 +896,9 @@ begin
   * place.
   }
  if (tmp_ncookies<>nil) then
+ begin
   ap^.a_ncookies:=tmp_ncookies;
+ end;
 
  Exit(error);
 end;
