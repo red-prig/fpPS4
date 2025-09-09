@@ -505,7 +505,7 @@ type
   ClientId      :TCLIENT_ID;
   AffinityMask  :ULONG_PTR;
   Priority      :DWORD;
-  BasePriority  :DWORD;
+  BasePriority  :Integer;
  end;
 
  PPROCESS_BASIC_INFORMATION=^PROCESS_BASIC_INFORMATION;
