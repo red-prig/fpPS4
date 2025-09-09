@@ -291,7 +291,7 @@ function  vm_map_fixed(map    :vm_map_t;
                        prot   :vm_prot_t;
                        max    :vm_prot_t;
                        cow    :Integer;
-                       overwr :Integer;
+                       overwr :Boolean;
                        anon   :Pointer):Integer;
 
 function  vm_map_stack(map      :vm_map_t;
@@ -1649,7 +1649,7 @@ function vm_map_fixed(map    :vm_map_t;
                       prot   :vm_prot_t;
                       max    :vm_prot_t;
                       cow    :Integer;
-                      overwr :Integer;
+                      overwr :Boolean;
                       anon   :Pointer):Integer;
 var
  __end:vm_offset_t;
@@ -1657,7 +1657,7 @@ begin
  __end:=start + length;
  vm_map_lock(map);
   VM_MAP_RANGE_CHECK(map, start, __end);
-  if (overwr<>0) then
+  if (overwr) then
   begin
    vm_map_delete(map, start, __end, True);
   end;

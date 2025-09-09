@@ -338,7 +338,7 @@ begin
  //
 
  //calc shared page addres
- vmspace^.sv_usrstack:=Pointer(USRSTACK {- (aslr_offset and $ffc000)});
+ vmspace^.sv_usrstack:=Pointer(USRSTACK {+ (rng & 0xffc000)});
 
  { Map a shared page }
 
@@ -351,8 +351,9 @@ begin
          VM_PROT_RW,
          VM_PROT_RW or VM_PROT_EXECUTE,
          MAP_INHERIT_SHARE or
-         MAP_ACC_NO_CHARGE,
+         MAP_ACC_NO_CHARGE or
          MAP_COW_NO_BUDGET,
+         False,
          nil);
 
  if (error<>0) then

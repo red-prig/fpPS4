@@ -592,7 +592,7 @@ begin
    rv:=vm_map_fixed(map, obj, foff, addr^, size,
         prot, maxprot,
         docow,
-        ord((flags and MAP_NO_OVERWRITE)=0),
+        ((flags and MAP_NO_OVERWRITE)=0),
         anon);
   end;
 
