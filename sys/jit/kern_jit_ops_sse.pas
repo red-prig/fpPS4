@@ -413,6 +413,7 @@ end;
 
 procedure op_insertq(var ctx:t_jit_context2);
 var
+ saved:Boolean;
  imm:Int64;
  len,idx:Byte;
  mask:QWORD;
@@ -425,7 +426,13 @@ var
   begin
    //clear hi 64bit
    ta:=new_reg_size(a,os32);
-   xorq(ta,ta);
+   if saved then
+   begin
+    xorq(ta,ta);
+   end else
+   begin
+    movi(ta,0);
+   end;
    pinsrq(xmm_a,a,1);
   end;
  end;
@@ -439,6 +446,7 @@ var
    pinsrq(xmm_a,rax,1); // xmm_a[64:127] = rax
    movq  (rax,a);       // restore rax
   end;
+  saved:=True;
  end;
 
  procedure restore_flags; inline;
@@ -450,9 +458,11 @@ var
    sahf;                  // flags = ax
    movq  (rax,a);         // restore rax
   end;
+  saved:=False;
  end;
 
 begin
+ saved:=False;
 
  xmm_a:=new_reg(ctx.din.Operand[1]);
  xmm_b:=new_reg(ctx.din.Operand[2]);
@@ -604,6 +614,7 @@ end;
 
 procedure op_extrq(var ctx:t_jit_context2);
 var
+ saved:Boolean;
  imm:Int64;
  len,idx:Byte;
  mask:QWORD;
@@ -616,7 +627,13 @@ var
   begin
    //clear hi 64bit
    ta:=new_reg_size(a,os32);
-   xorq(ta,ta);
+   if saved then
+   begin
+    xorq(ta,ta);
+   end else
+   begin
+    movi(ta,0);
+   end;
    pinsrq(xmm_a,a,1);
   end;
  end;
@@ -630,6 +647,7 @@ var
    pinsrq(xmm_a,rax,1); // xmm_a[64:127] = rax
    movq  (rax,a);       // restore rax
   end;
+  saved:=True;
  end;
 
  procedure restore_flags; inline;
@@ -641,9 +659,11 @@ var
    sahf;                  // flags = ax
    movq  (rax,a);         // restore rax
   end;
+  saved:=False;
  end;
 
 begin
+ saved:=False;
 
  with ctx.builder do
  begin

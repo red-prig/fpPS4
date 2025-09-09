@@ -268,7 +268,7 @@ begin
 
   movq(r13,rcx); //save rcx
 
-  xorq(ecx,ecx);
+  movi(ecx,0);
   leaq(rcx,[r14*8+rcx]);
   leaq(r15w,[rcx+rcx]); //Word(r14*16)
 
@@ -285,7 +285,7 @@ begin
   //restore jit_frame in jit_jmp_dispatch
 
   //stub plt link
-  xorq(r15d,r15d);
+  movi(r15d,0);
   call_far(@jit_jmp_dispatch); //input:r14,r15 out:r14
 
   //exit:
