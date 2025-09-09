@@ -383,7 +383,14 @@ begin
  g_appinfo.hasParamSfo:=GameStartupInfo.hasParamSfo;
  //g_appinfo.debug_level:=1;
 
+ g_appinfo.attribute:=$00400002;
+
  g_appinfo.titleWorkaround.version:=69;
+
+ if PDWORD(@g_appinfo.CUSANAME)^=DWORD($41535543) then //'CUSA'
+ begin
+  g_appinfo.titleWorkaround.ids[0]:=$200000; //BUG184831_NEO_VDDNB_VID_STEP_UP_ALL_TITLE=$15;
+ end;
 
  //budget init
  p_proc.p_budget_ptype:=PTYPE_BIG_APP;
