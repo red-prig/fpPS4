@@ -306,16 +306,20 @@ function ps4_sceNpGetOnlineId(userId:SceUserServiceUserId;onlineId:pSceNpOnlineI
 begin
  if (onlineId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
- onlineId^:=Default(SceNpOnlineId);
- onlineId^.data:='user';
- Result:=0;
+ //onlineId^:=Default(SceNpOnlineId);
+ //onlineId^.data:='user';
+ //Result:=0;
+
+ Result:=SCE_NP_ERROR_SIGNED_OUT;
 end;
 
 function ps4_sceNpGetState(userId:SceUserServiceUserId;state:PInteger):Integer;
 begin
  if (state=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
- state^:=SCE_NP_STATE_SIGNED_IN;
+ //state^:=SCE_NP_STATE_SIGNED_IN;
+ state^:=SCE_NP_ERROR_SIGNED_OUT;
+
  Result:=0;
 end;
 
