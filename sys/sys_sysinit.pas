@@ -58,7 +58,8 @@ uses
  dev_random,
  dev_gc,
  dev_dce,
- dev_hid;
+ dev_hid,
+ dev_camera;
 
 var
  daemon_thr:p_kthread;
@@ -101,6 +102,7 @@ begin
  gc_initialize();
  dce_initialize();
  hid_init();
+ camera_init();
 end;
 
 //Manual order of lazy initialization
