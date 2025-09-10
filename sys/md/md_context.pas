@@ -80,9 +80,9 @@ const
  _ufssel  =(2 shl 3) or 3;
  _ugssel  =(3 shl 3) or 3;
 
- __INITIAL_FPUCW__     =$037F;
- __INITIAL_MXCSR__     =$1F80;
- __INITIAL_MXCSR_MASK__=$FFBF;
+ __INITIAL_FPUCW__     =$037F; //verified
+ __INITIAL_MXCSR__     =$9FC0; //verified
+ __INITIAL_MXCSR_MASK__=$FFBF; //verified
 
 procedure teb_set_kernel(td:p_kthread);
 procedure teb_set_user  (td:p_kthread);
