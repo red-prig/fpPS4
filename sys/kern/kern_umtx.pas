@@ -199,6 +199,11 @@ begin
  end;
 end;
 
+function URWLOCK_READER_COUNT(c:DWORD):DWORD; inline;
+begin
+ Result:=(c and URWLOCK_MAX_READERS);
+end;
+
 //
 
 procedure umtxq_insert_queue(uq:p_umtx_q;q:Integer); forward;
@@ -531,6 +536,7 @@ begin
   while (uq<>nil) do
   begin
    umtxq_remove_queue(uq, q);
+   //Writeln('umtxq_wakeup:',uq^.uq_thread^.td_name);
    wakeup(uq);
    Inc(ret);
    if (ret >= n_wake) then
@@ -1268,6 +1274,11 @@ begin
  if (flags=DWORD(-1)) then
  begin
   Exit(EFAULT);
+ end;
+
+ if (flags and $80)<>0 then
+ begin
+  writeln('TODO');
  end;
 
  Result:=umtx_key_get(m, TYPE_NORMAL_UMUTEX, GET_SHARE(flags), @key);
@@ -3129,10 +3140,12 @@ label
 var
  uq:p_umtx_q;
  flags,wrflags:DWORD;
- state,oldstate:Integer;
+ state,oldstate:DWORD;
  blocked_readers:Integer;
 begin
  Result:=0;
+
+ //Writeln('do_rw_rdlock(',HexStr(rwlock),',',fflag,')');
 
  uq:=td^.td_umtxq;
 
@@ -3166,7 +3179,7 @@ begin
 
    oldstate:=casuword32(rwlock^.rw_state,state,state+1);
 
-   if (oldstate=-1) then
+   if (oldstate=DWORD(-1)) then
    begin
     umtx_key_release(@uq^.uq_key);
     Exit(EFAULT);
@@ -3193,7 +3206,7 @@ begin
   begin
    oldstate:=casuword32(rwlock^.rw_state,state,state or URWLOCK_READ_WAITERS);
 
-   if (oldstate=-1) then
+   if (oldstate=DWORD(-1)) then
    begin
     Result:=EFAULT;
     Break;
@@ -3229,13 +3242,12 @@ begin
   blocked_readers:=fuword32(rwlock^.rw_blocked_readers);
   suword32(rwlock^.rw_blocked_readers,blocked_readers+1);
 
-  While ((state and wrflags)<>0) do
-  begin
+  repeat
    umtxq_lock  (@uq^.uq_key);
    umtxq_insert(uq);
    umtxq_unbusy(@uq^.uq_key);
 
-   Result:= umtxq_sleep(uq, 'urdlck', timo);
+   Result:=umtxq_sleep(uq, 'urdlck', timo);
 
    umtxq_busy  (@uq^.uq_key);
    umtxq_remove(uq);
@@ -3244,7 +3256,7 @@ begin
    if (Result<>0) then Break;
 
    state:=fuword32(rwlock^.rw_state);
-  end;
+  until ((state and wrflags)=0);
 
   blocked_readers:=fuword32(rwlock^.rw_blocked_readers);
   suword32(rwlock^.rw_blocked_readers,blocked_readers-1);
@@ -3255,7 +3267,7 @@ begin
    repeat
     oldstate:=casuword32(rwlock^.rw_state,state,state and (not URWLOCK_READ_WAITERS));
 
-    if (oldstate=-1) then
+    if (oldstate=DWORD(-1)) then
     begin
      Result:=EFAULT;
      Break;
@@ -3285,6 +3297,8 @@ var
 begin
  Result:=0;
 
+ //Writeln('do_rw_rdlock2(',HexStr(rwlock),',',fflag,')');
+
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
  tv:=ts;
@@ -3311,17 +3325,19 @@ begin
  end;
 end;
 
-function do_rw_wrlock(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timo:Int64):Integer;
+function do_rw_wrlock(td:p_kthread;rwlock:p_urwlock;timo:Int64):Integer;
 label
  _sleep;
 var
  uq:p_umtx_q;
  flags:Integer;
- state,oldstate:Integer;
+ state,oldstate:DWORD;
  blocked_writers:Integer;
  blocked_readers:Integer;
 begin
  Result:=0;
+
+ //Writeln('do_rw_wrlock(',HexStr(rwlock),')');
 
  uq:=td^.td_umtxq;
 
@@ -3340,11 +3356,11 @@ begin
  repeat
   state:=fuword32(rwlock^.rw_state);
 
-  while ((state and URWLOCK_WRITE_OWNER)=0) and (URWLOCK_READER_COUNT(state)=0) do
+  while ((state and (URWLOCK_WRITE_OWNER or URWLOCK_MAX_READERS))=0) do
   begin
    oldstate:=casuword32(rwlock^.rw_state,state,state or URWLOCK_WRITE_OWNER);
 
-   if (oldstate=-1) then
+   if (oldstate=DWORD(-1)) then
    begin
     umtx_key_release(@uq^.uq_key);
     Exit(EFAULT);
@@ -3379,12 +3395,12 @@ begin
 
   state:=fuword32(rwlock^.rw_state);
 
-  while (((state and URWLOCK_WRITE_OWNER)<>0) or (URWLOCK_READER_COUNT(state)<>0)) and
+  while ((state and (URWLOCK_WRITE_OWNER or URWLOCK_MAX_READERS))<>0) and
         ((state and URWLOCK_WRITE_WAITERS)=0) do
   begin
    oldstate:=casuword32(rwlock^.rw_state,state,state or URWLOCK_WRITE_WAITERS);
 
-   if (oldstate=-1) then
+   if (oldstate=DWORD(-1)) then
    begin
     Result:=EFAULT;
     Break;
@@ -3406,7 +3422,7 @@ begin
    Break;
   end;
 
-  if ((state and URWLOCK_WRITE_OWNER)=0) and (URWLOCK_READER_COUNT(state)=0) then
+  if ((state and (URWLOCK_WRITE_OWNER or URWLOCK_MAX_READERS))=0) then
   begin
    umtxq_lock  (@uq^.uq_key);
    umtxq_unbusy(@uq^.uq_key);
@@ -3420,7 +3436,7 @@ begin
   blocked_writers:=fuword32(rwlock^.rw_blocked_writers);
   suword32(rwlock^.rw_blocked_writers,blocked_writers+1);
 
-  While ((state and URWLOCK_WRITE_OWNER) or URWLOCK_READER_COUNT(state)<>0) do
+  while ((state and (URWLOCK_WRITE_OWNER or URWLOCK_MAX_READERS))<>0) do
   begin
    umtxq_lock(@uq^.uq_key);
    umtxq_insert_queue(uq, UMTX_EXCLUSIVE_QUEUE);
@@ -3440,6 +3456,8 @@ begin
   blocked_writers:=fuword32(rwlock^.rw_blocked_writers);
   suword32(rwlock^.rw_blocked_writers,blocked_writers-1);
 
+  blocked_readers:=0;
+
   if (blocked_writers=1) then
   begin
    state:=fuword32(rwlock^.rw_state);
@@ -3447,7 +3465,7 @@ begin
    repeat
     oldstate:=casuword32(rwlock^.rw_state,state,state and (not URWLOCK_WRITE_WAITERS));
 
-    if (oldstate=-1) then
+    if (oldstate=DWORD(-1)) then
     begin
      Result:=EFAULT;
      Break;
@@ -3462,9 +3480,6 @@ begin
    until (Result<>0);
 
    blocked_readers:=fuword32(rwlock^.rw_blocked_readers);
-  end else
-  begin
-   blocked_readers:=0;
   end;
 
   umtxq_lock  (@uq^.uq_key);
@@ -3476,18 +3491,20 @@ begin
  umtx_key_release(@uq^.uq_key);
 end;
 
-function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;fflag:QWORD;timeout:p_timespec):Integer;
+function do_rw_wrlock2(td:p_kthread;rwlock:p_urwlock;timeout:p_timespec):Integer;
 var
  ts,ts2,tv:Int64;
 begin
  Result:=0;
+
+ //Writeln('do_rw_wrlock2(',HexStr(rwlock),')');
 
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
  tv:=ts;
 
  repeat
-  Result:=do_rw_wrlock(td,rwlock,fflag,tvtohz(tv));
+  Result:=do_rw_wrlock(td,rwlock,tvtohz(tv));
 
   if (Result<>ETIMEDOUT) then Break;
 
@@ -3518,6 +3535,8 @@ var
  q,count:Integer;
 begin
  Result:=0;
+
+ //Writeln('do_rw_unlock(',HexStr(rwlock),')');
 
  uq:=td^.td_umtxq;
 
@@ -3808,7 +3827,7 @@ begin
  end;
 end;
 
-function __umtx_op_lock_umtx(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_lock_umtx(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3828,7 +3847,7 @@ begin
  Result:=do_unlock_umtx(td,obj,val);
 end;
 
-function __umtx_op_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3843,7 +3862,7 @@ begin
  Result:=do_wait(td,obj,val,ts,0,0);
 end;
 
-function __umtx_op_wait_uint(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_wait_uint(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3858,7 +3877,7 @@ begin
  Result:=do_wait(td,obj,val,ts,1,0);
 end;
 
-function __umtx_op_wait_uint_private(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_wait_uint_private(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3920,7 +3939,7 @@ begin
  Result:=kern_umtx_wake(td,obj,val,1);
 end;
 
-function __umtx_op_lock_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_lock_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3940,7 +3959,7 @@ begin
  Result:=do_lock_umutex(td,obj,nil,_UMUTEX_TRY);
 end;
 
-function __umtx_op_wait_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_wait_umutex(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3970,7 +3989,7 @@ begin
  Result:=do_set_ceiling(td,obj,val,uaddr1);
 end;
 
-function __umtx_op_cv_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_cv_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -3995,11 +4014,10 @@ begin
  Result:=do_cv_broadcast(td,obj);
 end;
 
-function __umtx_op_rw_rdlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_rw_rdlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  timeout:timespec;
 begin
-
  if (uaddr2=nil) then
  begin
   Result:=do_rw_rdlock(td,obj,val,0);
@@ -4011,19 +4029,18 @@ begin
  end;
 end;
 
-function __umtx_op_rw_wrlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_rw_wrlock(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  timeout:timespec;
 begin
-
  if (uaddr2=nil) then
  begin
-  Result:=do_rw_wrlock(td,obj,val,0);
+  Result:=do_rw_wrlock(td,obj,0);
  end else
  begin
   Result:=umtx_copyin_timeout(uaddr2,@timeout);
   if (Result<>0) then Exit;
-  Result:=do_rw_wrlock2(td,obj,val,@timeout);
+  Result:=do_rw_wrlock2(td,obj,@timeout);
  end;
 end;
 
@@ -4052,7 +4069,7 @@ begin
  Result:=do_unlock_umtx(td,mtx,td^.td_tid);
 end;
 
-function __umtx_op_sem_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer;
+function __umtx_op_sem_wait(td:p_kthread;obj:Pointer;val:QWORD;uaddr1,uaddr2:Pointer):Integer; inline;
 var
  ts:p_timespec;
  timeout:timespec;
@@ -4120,7 +4137,7 @@ begin
    Exit(EINVAL);
  end;
 
- //Writeln('umtx_op(',HexStr(obj),',',op,',',val,',',HexStr(uaddr1),',',HexStr(uaddr2),')');
+ //Writeln('umtx_op(',HexStr(obj),',',op,',',val,',',HexStr(uaddr1),',',HexStr(uaddr2),'):',Result);
 end;
 
 procedure _umutex_init(mtx:p_umutex); inline;
