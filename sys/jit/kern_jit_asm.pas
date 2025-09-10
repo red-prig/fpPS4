@@ -144,8 +144,6 @@ asm
  pushq %rbp
  movqq %rsp,%rbp
 
- andq  $-16,%rsp //align stack
-
  pushf
  pop %r14
 
@@ -154,6 +152,8 @@ asm
  jz    _fail
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%r15) //clear PCB_FULL_IRET
+
+ andq  $-16,%rsp //align stack
 
  movqq %r14,kthread.td_frame.tf_rflags(%r15) //save flags
 
