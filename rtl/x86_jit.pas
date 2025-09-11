@@ -80,8 +80,8 @@ type
   ABitInfo:bitpacked record
    InstructionSize:0..31; //5 [0..16]
    Uncompressed   :0.. 1; //1 [False,True]
+   TargetRequired :0.. 1; //1
    TargetSize     :0.. 1; //1 [t_jit_target_size]
-   reserved       :0.. 1; //1
    TargetType     :0.. 7; //3 [t_jit_link_type]
    TargetOffset   :0..31; //5 [0..16]
   end;
@@ -90,6 +90,8 @@ type
   function  AGetInstructionSize:Integer;    inline;
   procedure ASetInstructionSize(i:Integer); inline;
   function  AInstructionEnd :Integer; inline;
+  function  AGetTargetRequired  :Boolean;  inline;
+  procedure ASetTargetRequired(s:Boolean); inline;
   function  AGetTargetSize  :t_jit_target_size;  inline;
   procedure ASetTargetSize(s:t_jit_target_size); inline;
   function  AGetTargetType:t_jit_link_type;    inline;
@@ -98,6 +100,7 @@ type
   procedure ASetTargetOffset(i:Integer); inline;
   //
   property  AInstructionSize:Integer           read AGetInstructionSize write ASetInstructionSize;
+  property  ATargetRequired :Boolean           read AGetTargetRequired  write ASetTargetRequired;
   property  ATargetSize     :t_jit_target_size read AGetTargetSize      write ASetTargetSize;
   property  ATargetType     :t_jit_link_type   read AGetTargetType      write ASetTargetType;
   property  ATargetOffset   :Integer           read AGetTargetOffset    write ASetTargetOffset;
@@ -1102,6 +1105,16 @@ begin
  Result:=AInstructionOffset+AInstructionSize;
 end;
 
+function t_jit_instruction.AGetTargetRequired:Boolean;  inline;
+begin
+ Result:=Boolean(ABitInfo.TargetRequired);
+end;
+
+procedure t_jit_instruction.ASetTargetRequired(s:Boolean); inline;
+begin
+ ABitInfo.TargetRequired:=ord(s);
+end;
+
 function t_jit_instruction.AGetTargetSize:t_jit_target_size;  inline;
 begin
  Result:=t_jit_target_size(ABitInfo.TargetSize);
@@ -1591,10 +1604,11 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($15);
 
- ji.ATargetType  :=lnkData;
- ji.ATargetSize  :=tz4;
- ji.ATargetOffset:=ji.AInstructionSize;
- ji.ATargetAddr  :=_add_data(P);
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=_add_data(P);
 
  ji.EmitInt32(0);
 
@@ -1614,10 +1628,11 @@ begin
  ji.EmitByte($FF);
  ji.EmitByte($25);
 
- ji.ATargetType  :=lnkData;
- ji.ATargetSize  :=tz4;
- ji.ATargetOffset:=ji.AInstructionSize;
- ji.ATargetAddr  :=_add_data(P);
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=_add_data(P);
 
  ji.EmitInt32(0);
 
@@ -1636,10 +1651,11 @@ begin
 
  ji.EmitByte($E8);
 
- ji.ATargetType  :=target.AType;
- ji.ATargetSize  :=tz4;
- ji.ATargetOffset:=ji.AInstructionSize;
- ji.ATargetAddr  :=target.ALink;
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=target.ALink;
 
  ji.EmitInt32(0);
 
@@ -1664,8 +1680,9 @@ begin
   ji.m_jmp_32();
  end;
 
- ji.ATargetType:=target.AType;
- ji.ATargetAddr:=target.ALink;
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
 
  _add(ji);
 
@@ -1700,8 +1717,9 @@ begin
   ji.m_jcc_32(COND_OP[op]);
  end;
 
- ji.ATargetType:=target.AType;
- ji.ATargetAddr:=target.ALink;
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
 
  _add(ji,6);
 
@@ -1734,8 +1752,9 @@ begin
   ji.m_jcx_32(mop);
  end;
 
- ji.ATargetType:=target.AType;
- ji.ATargetAddr:=target.ALink;
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
 
  _add(ji,10);
 
@@ -1762,8 +1781,9 @@ begin
   ji.m_jcx_32(mop);
  end;
 
- ji.ATargetType:=target.AType;
- ji.ATargetAddr:=target.ALink;
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
 
  _add(ji,10);
 
@@ -1781,8 +1801,9 @@ begin
 
  jt:=last_instruction;
 
- jt^.ATargetType:=target.AType;
- jt^.ATargetAddr:=target.ALink;
+ jt^.ATargetRequired:=True;
+ jt^.ATargetType    :=target.AType;
+ jt^.ATargetAddr    :=target.ALink;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1798,8 +1819,9 @@ begin
 
  jt:=last_instruction;
 
- jt^.ATargetType:=lnkData;
- jt^.ATargetAddr:=_add_data(P);
+ jt^.ATargetRequired:=True;
+ jt^.ATargetType    :=lnkData;
+ jt^.ATargetAddr    :=_add_data(P);
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1815,8 +1837,9 @@ begin
 
  jt:=last_instruction;
 
- jt^.ATargetType:=target.AType;
- jt^.ATargetAddr:=target.ALink;
+ jt^.ATargetRequired:=True;
+ jt^.ATargetType    :=target.AType;
+ jt^.ATargetAddr    :=target.ALink;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1832,8 +1855,9 @@ begin
 
  jt:=last_instruction;
 
- jt^.ATargetType:=lnkPlt;
- jt^.ATargetAddr:=Pointer(_add_plt);
+ jt^.ATargetRequired:=True;
+ jt^.ATargetType    :=lnkPlt;
+ jt^.ATargetAddr    :=Pointer(_add_plt);
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -1855,8 +1879,9 @@ begin
 
  jt:=last_instruction;
 
- jt^.ATargetType:=lnkPlt;
- jt^.ATargetAddr:=plt;
+ jt^.ATargetRequired:=True;
+ jt^.ATargetType    :=lnkPlt;
+ jt^.ATargetAddr    :=plt;
 
  Result.ALink:=jt;
  Result.AType:=lnkLabelBefore;
@@ -2095,6 +2120,30 @@ begin
  end;
 end;
 
+function _test_link(ATargetType:t_jit_link_type;ATargetAddr:Pointer):Boolean;
+begin
+ Result:=False;
+ case ATargetType of
+  lnkData:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  lnkPlt:
+   begin
+    Result:=True;
+   end;
+  lnkLabelBefore:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  lnkLabelAfter:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  else;
+ end;
+end;
+
 Procedure t_jit_builder.LinkData;
 label
  _start;
@@ -2120,6 +2169,16 @@ begin
   //
   while (node<>nil) do
   begin
+
+   With node^ do
+    if ATargetRequired then
+    begin
+     if not _test_link(ATargetType,ATargetAddr) then
+     begin
+      Assert(False);
+     end;
+    end;
+
    With node^ do
     case ATargetType of
      lnkData,
@@ -2147,6 +2206,7 @@ begin
         begin
          //clear instr
 
+         ATargetRequired :=False;
          ATargetType     :=lnkNone;
          AInstructionSize:=0;
 
