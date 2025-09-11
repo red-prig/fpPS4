@@ -2089,6 +2089,32 @@ begin
  end;
 end;
 
+procedure onIndirectBufferDcb(pctx:p_pfp_ctx;Body:PPM4CMDINDIRECTBUFFER);
+var
+ curr_ibuf:p_pm4_ibuffer;
+ ibuf:t_pm4_ibuffer;
+ i:Integer;
+begin
+ if p_print_gpu_ops then
+ begin
+  Writeln('[DCB]INDIRECT_BUFFER 0x',HexStr(Body^.ibBase,10));
+ end;
+
+ if pm4_ibuf_init(@ibuf,Body,@pm4_parse_dcb,pctx^.stream_type) then
+ begin
+  curr_ibuf:=pctx^.curr_ibuf;
+
+  i:=pm4_ibuf_parse(pctx,@ibuf);
+
+  if (i<>0) then
+  begin
+   pctx^.add_stall(@ibuf);
+  end;
+
+  pctx^.curr_ibuf:=curr_ibuf;
+ end;
+end;
+
 function pm4_parse_dcb(pctx:p_pfp_ctx;token:DWORD;buff:Pointer):Integer;
 begin
  Result:=0;
@@ -2145,6 +2171,8 @@ begin
 
       IT_INCREMENT_DE_COUNTER           :onIncrementDECounter         (pctx,buff);
       IT_WAIT_ON_CE_COUNTER             :onWaitOnCECounter            (pctx,buff);
+
+      IT_INDIRECT_BUFFER                :onIndirectBufferDcb          (pctx,buff);
 
       else
        begin
