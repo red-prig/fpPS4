@@ -126,10 +126,10 @@ end;
 //rsi: (rsi)  rdi: (rdi)
 //rbp: (rbp)  rsp: (rsp)
 //r8 : (0)    r9 : (0)
-//r10: (0)    r11: word(eflags)
+//r10: (0)    r11: word(eflags) CF->error
 //r12: (r12)  r13: (r13)
 //r14: (r14)  r15: (r15)
-//rip: (rip)  eflags: (eflags)
+//rip: (rip)  eflags: (eflags)  CF->error
 
 //in:tf_rip
 procedure jit_syscall; assembler; nostackframe;
