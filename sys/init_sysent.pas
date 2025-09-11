@@ -649,7 +649,7 @@ var
   ),
   (//[118]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_getsockopt;
      sy_name:'sys_getsockopt'
   ),
   (//[119]

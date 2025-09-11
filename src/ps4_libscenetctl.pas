@@ -212,17 +212,17 @@ begin
  Result:=SCE_NET_CTL_ERROR_NOT_CONNECTED;
 
  case code of
-  SCE_NET_CTL_INFO_DEVICE           :FillChar(info^,SizeOf(SceNetCtlInfo.device           ),0);
+  SCE_NET_CTL_INFO_DEVICE           :info^.device:=0; //WIRED
   SCE_NET_CTL_INFO_ETHER_ADDR       :FillChar(info^,SizeOf(SceNetCtlInfo.ether_addr       ),0);
-  SCE_NET_CTL_INFO_MTU              :FillChar(info^,SizeOf(SceNetCtlInfo.mtu              ),0);
-  SCE_NET_CTL_INFO_LINK             :FillChar(info^,SizeOf(SceNetCtlInfo.link             ),0);
+  SCE_NET_CTL_INFO_MTU              :info^.mtu:=1500;
+  SCE_NET_CTL_INFO_LINK             :info^.link:=0; //DISCONNECTED
   SCE_NET_CTL_INFO_BSSID            :FillChar(info^,SizeOf(SceNetCtlInfo.bssid            ),0);
   SCE_NET_CTL_INFO_SSID             :FillChar(info^,SizeOf(SceNetCtlInfo.ssid             ),0);
-  SCE_NET_CTL_INFO_WIFI_SECURITY    :FillChar(info^,SizeOf(SceNetCtlInfo.wifi_security    ),0);
-  SCE_NET_CTL_INFO_RSSI_DBM         :FillChar(info^,SizeOf(SceNetCtlInfo.rssi_dbm         ),0);
-  SCE_NET_CTL_INFO_RSSI_PERCENTAGE  :FillChar(info^,SizeOf(SceNetCtlInfo.rssi_percentage  ),0);
-  SCE_NET_CTL_INFO_CHANNEL          :FillChar(info^,SizeOf(SceNetCtlInfo.channel          ),0);
-  SCE_NET_CTL_INFO_IP_CONFIG        :FillChar(info^,SizeOf(SceNetCtlInfo.ip_config        ),0);
+  SCE_NET_CTL_INFO_WIFI_SECURITY    :info^.wifi_security:=0; //NOAUTH
+  SCE_NET_CTL_INFO_RSSI_DBM         :info^.rssi_dbm:=1;
+  SCE_NET_CTL_INFO_RSSI_PERCENTAGE  :info^.rssi_percentage:=100;
+  SCE_NET_CTL_INFO_CHANNEL          :info^.channel:=0;
+  SCE_NET_CTL_INFO_IP_CONFIG        :info^.ip_config:=0; //DHCP
   SCE_NET_CTL_INFO_DHCP_HOSTNAME    :FillChar(info^,SizeOf(SceNetCtlInfo.dhcp_hostname    ),0);
   SCE_NET_CTL_INFO_PPPOE_AUTH_NAME  :FillChar(info^,SizeOf(SceNetCtlInfo.pppoe_auth_name  ),0);
   SCE_NET_CTL_INFO_IP_ADDRESS       :FillChar(info^,SizeOf(SceNetCtlInfo.ip_address       ),0);
@@ -230,9 +230,9 @@ begin
   SCE_NET_CTL_INFO_DEFAULT_ROUTE    :FillChar(info^,SizeOf(SceNetCtlInfo.default_route    ),0);
   SCE_NET_CTL_INFO_PRIMARY_DNS      :FillChar(info^,SizeOf(SceNetCtlInfo.primary_dns      ),0);
   SCE_NET_CTL_INFO_SECONDARY_DNS    :FillChar(info^,SizeOf(SceNetCtlInfo.secondary_dns    ),0);
-  SCE_NET_CTL_INFO_HTTP_PROXY_CONFIG:FillChar(info^,SizeOf(SceNetCtlInfo.http_proxy_config),0);
+  SCE_NET_CTL_INFO_HTTP_PROXY_CONFIG:info^.http_proxy_config:=0;
   SCE_NET_CTL_INFO_HTTP_PROXY_SERVER:FillChar(info^,SizeOf(SceNetCtlInfo.http_proxy_server),0);
-  SCE_NET_CTL_INFO_HTTP_PROXY_PORT  :FillChar(info^,SizeOf(SceNetCtlInfo.http_proxy_port  ),0);
+  SCE_NET_CTL_INFO_HTTP_PROXY_PORT  :info^.http_proxy_port:=0;
   else
    Exit(SCE_NET_CTL_ERROR_INVALID_CODE);
  end;

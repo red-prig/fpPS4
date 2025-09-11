@@ -73,12 +73,13 @@ function  __sys_socketex(name:pchar;domain,stype,protocol:Integer):Integer;
 function  __sys_socketclose(fd:Integer):Integer;
 function  gettimeofday(tp,tzp:Pointer):Integer;
 function  getrusage(who:Integer;rusage:Pointer):Integer;
+function  _getsockopt(s,level,name:Integer;val:Pointer;avalsize:PDWORD):Integer;
 function  _readv(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
 function  _writev(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer;
 function  settimeofday(tv,tzp:Pointer):Integer;
 function  fchown(fd,uid,gid:Integer):Integer;
 function  fchmod(fd,mode:Integer):Integer;
-function  __sys_netgetiflist(param1:Pointer;param2,param3:Integer):Integer;
+function  __sys_netgetiflist(buf:Pointer;max,unused:Integer):Integer;
 function  setreuid(ruid,euid:Integer):Integer;
 function  setregid(rgid,egid:Integer):Integer;
 function  rename(from,_to:PChar):Integer;
@@ -734,6 +735,13 @@ asm
  jmp   cerror
 end;
 
+function _getsockopt(s,level,name:Integer;val:Pointer;avalsize:PDWORD):Integer; assembler; nostackframe;
+asm
+ movq  $118,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function _readv(fd:Integer;iovp:Pointer;iovcnt:DWORD):Integer; assembler; nostackframe;
 asm
  movq  $120,%rax
@@ -769,7 +777,7 @@ asm
  jmp   cerror
 end;
 
-function __sys_netgetiflist(param1:Pointer;param2,param3:Integer):Integer; assembler; nostackframe;
+function __sys_netgetiflist(buf:Pointer;max,unused:Integer):Integer; assembler; nostackframe;
 asm
  movq  $125,%rax
  call  fast_syscall

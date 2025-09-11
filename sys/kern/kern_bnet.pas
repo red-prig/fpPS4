@@ -25,10 +25,25 @@ end;
 
 type
  p_bnet_stat_info=^t_bnet_stat_info;
- t_bnet_stat_info=packed record
+ t_bnet_stat_info=packed record //16
   kernel_mem_free_min :Integer;
   kernel_mem_free_size:Integer;
   reserved:QWORD;
+ end;
+
+ p_bnet_dns_info=^t_bnet_dns_info;
+ t_bnet_dns_info=packed record //40
+  dns0 :DWORD;
+  dns1 :DWORD;
+  flags:DWORD;
+  unknow:array[0..6] of DWORD;
+ end;
+
+ p_bnet_descriptor_info=^t_bnet_descriptor_info;
+ t_bnet_descriptor_info=packed record //12
+  fd0:DWORD;
+  fd1:DWORD;
+  time_msec:Integer;
  end;
 
 function sys_netcontrol(fd,op:Integer;buf:Pointer;nbuf:DWORD):Integer;
@@ -48,6 +63,7 @@ begin
    Exit(EINVAL);
   end else
   begin
+   FillChar(_kbuf,sizeof(_kbuf),0);
    kaddr:=@_kbuf;
   end;
 
@@ -69,6 +85,17 @@ begin
        p_bnet_stat_info(kaddr)^:=Default(t_bnet_stat_info);
       end;
 
+   2: //get dns ipv4
+      begin
+       if (kaddr=nil) or (nbuf<40) then
+       begin
+        Exit(EINVAL);
+       end;
+
+       p_bnet_dns_info(kaddr)^.dns0 :=$08080808;
+       p_bnet_dns_info(kaddr)^.flags:=1;
+      end;
+
   $14: //bnet_get_secure_seed
       begin
        if (kaddr=nil) or (nbuf<4) then
@@ -77,11 +104,22 @@ begin
        end;
        //
        PInteger(kaddr)^:=bnet_get_secure_seed();
-      end
+      end;
+
+   $20000024: //bnet_netdescriptor (sceNetResolverStartNtoa)
+      begin
+       if (kaddr=nil) or (nbuf<12) then
+       begin
+        Exit(EINVAL);
+       end;
+       //
+       //p_bnet_descriptor_info(kaddr)
+      end;
 
   else
    begin
     Writeln(StdErr,'Unhandled netcontrol:',op);
+    print_backtrace_td(StdErr);
     Assert(False);
     Result:=EINVAL;
    end;

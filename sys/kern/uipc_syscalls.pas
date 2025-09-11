@@ -14,6 +14,7 @@ function sys_accept     (s:Integer;aname,anamelen:Pointer):Integer;
 function sys_connect    (fd:Integer;name:Pointer;namelen:Integer):Integer;
 function sys_setsockopt (s,level,name:Integer;val:Pointer;valsize:Integer):Integer;
 function sys_netabort   (fd,flags:Integer):Integer;
+function sys_getsockopt (s,level,name:Integer;val:Pointer;avalsize:PDWORD):Integer;
 
 implementation
 
@@ -598,6 +599,32 @@ begin
   flags:=flags and $feffffff;
   error:=0;
   //error:=kern_epollabort(td,fd,flags);
+ end;
+
+ Exit(error);
+end;
+
+function sys_getsockopt(s,level,name:Integer;val:Pointer;avalsize:PDWORD):Integer;
+var
+ valsize:DWORD;
+ error  :Integer;
+begin
+ if (val<>nil) then
+ begin
+  error:=copyin(avalsize, @valsize, sizeof(valsize));
+  if (error<>0) then Exit(error);
+ end;
+
+ Writeln('sys_getsockopt(',s,',',level,',',name,',0x',HexStr(QWORD(val),11),',',HexStr(QWORD(avalsize),11),')');
+ Assert(False);
+
+ //error:=kern_getsockopt(s, level, name, val, UIO_USERSPACE, @valsize);
+ error:=0;
+ valsize:=4;
+
+ if (error=0) then
+ begin
+  error:=copyout(@valsize, avalsize, sizeof(valsize));
  end;
 
  Exit(error);
