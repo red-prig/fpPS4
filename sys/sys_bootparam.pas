@@ -18,6 +18,7 @@ var
  p_neomode            :DWORD=0; //[0..1]
  p_cpumode            :DWORD=5; //NORMAL
 
+ p_is_fork            :Boolean=False;
  p_halt_on_exit       :Boolean=False;
  p_print_guest_syscall:Boolean=False;
  p_print_pmap         :Boolean=False;

@@ -1821,7 +1821,7 @@ done2:
   exec_free_args(args);
 
   // sorry, no more process anymore. exit gracefully
-  exit1(W_EXITCODE(0, SIGABRT));
+  exit1(W_EXITCODE(error, SIGABRT));
   // NOT REACHED
  end;
 

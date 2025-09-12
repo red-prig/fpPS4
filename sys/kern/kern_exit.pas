@@ -65,6 +65,7 @@ implementation
 uses
  errno,
  systm,
+ signal,
  sys_bootparam,
  kern_proc,
  sys_event,
@@ -83,7 +84,7 @@ end;
 
 function WSTOPSIG(x:Integer):Integer; inline;
 begin
- Result:=(_W_INT(x) shr 8) ;
+ Result:=(_W_INT(x) shr 8);
 end;
 
 function WIFSIGNALED(x:Integer):Boolean; inline;
@@ -133,7 +134,7 @@ begin
  //Notify interested parties of our demise.
  KNOTE_UNLOCKED(@p_proc.p_klist, NOTE_EXIT);
  //
- if (p_halt_on_exit) then
+ if (p_halt_on_exit) or (p_is_fork and (WTERMSIG(rv)=SIGABRT)) then
  begin
   md_halt(rv);
  end else

@@ -43,8 +43,10 @@ implementation
 
 uses
  errno,
+ signal,
  sys_sysinit,
  kern_exec,
+ kern_exit,
  sys_crt, //<- init writeln redirect
  sys_tty,
  md_exception, //<- install custom
@@ -456,6 +458,8 @@ begin
                  ' cmd:"'+argv[0]+'"'#13#10+
                  ' err:'+get_errno_str(err)
                 ,False);
+  //
+  exit1(W_EXITCODE(err, SIGABRT));
  end;
  //
 
@@ -540,6 +544,8 @@ begin
  p_host_ipc    .FHandler:=p_host_handler;
 
  //CreateNtTerminateTrap;
+
+ p_is_fork:=True;
 
  td:=nil;
  r:=kthread_add(@prepare,GameStartupInfo,@td,0,'[main]');
