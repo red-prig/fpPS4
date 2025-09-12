@@ -29,6 +29,7 @@ type
   procedure emit_V2_F32(OpId:DWORD;rev:Boolean);
   procedure emit_V_MUL_LEGACY_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
+  procedure emit_V_CVT_PKNORM_U16_F32;
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
   procedure emit_V_MAC_F32;
@@ -378,6 +379,22 @@ begin
  OpConvFloatToHalf2(dst,src[0],src[1]);
 end;
 
+procedure TEmit_VOP2.emit_V_CVT_PKNORM_U16_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ vec:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
+
+ vec:=OpMakeVec(line,dtVec2f,@src);
+
+ OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
+end;
+
 procedure TEmit_VOP2.emit_V_MUL_I32_I24; //vdst = (vsrc0[23:0].s * vsrc1[23:0].s)
 Var
  dst:PsrRegSlot;
@@ -658,7 +675,8 @@ begin
   V_MUL_F32    : emit_V2_F32(Op.OpFMul,False);
   V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
-  V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
+  V_CVT_PKRTZ_F16_F32 : emit_V_CVT_PKRTZ_F16_F32;
+  V_CVT_PKNORM_U16_F32: emit_V_CVT_PKNORM_U16_F32;
 
   V_MUL_I32_I24: emit_V_MUL_I32_I24;
   V_MUL_U32_U24: emit_V_MUL_U32_U24;
