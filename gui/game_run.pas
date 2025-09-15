@@ -352,9 +352,20 @@ begin
  end;
 end;
 
+function GetEnlargeFmem256mb(hasParamSfo:Integer;attribute2:DWORD):Boolean; inline;
+begin
+ Result:=(hasParamSfo<>0) and ((attribute2 and $4000)<>0);
+end;
+
+function Get2mbPageMode(attribute2:DWORD):DWORD; inline;
+begin
+ Result:=(attribute2 shr 15) and 3;
+end;
+
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
  err:Integer;
+ mode:DWORD;
  argv:PPChar;
  i,argc:Integer;
  Item:TGameItem;
@@ -380,12 +391,15 @@ begin
 
  Item:=GameStartupInfo.FGameItem;
 
- g_appinfo.mmap_flags:=1; //is_big_app ???
- g_appinfo.CUSANAME   :=Item.FGameInfo.TitleId;
- g_appinfo.hasParamSfo:=GameStartupInfo.hasParamSfo;
- //g_appinfo.debug_level:=1;
+ g_appinfo.mmap_flags      :=1; //is_big_app ???
+ g_appinfo.attributeExe    :=GameStartupInfo.ATTRIBUTE_EXE;
+ g_appinfo.attribute2      :=GameStartupInfo.ATTRIBUTE2;
+ g_appinfo.CUSANAME        :=GameStartupInfo.TITLE;
+ g_appinfo.requiredHdcpType:=GameStartupInfo.RequiredHdcpType;
+ g_appinfo.attribute       :=GameStartupInfo.ATTRIBUTE;
+ g_appinfo.hasParamSfo     :=GameStartupInfo.hasParamSfo;
 
- g_appinfo.attribute:=$00400002;
+ //g_appinfo.debug_level:=1;
 
  g_appinfo.titleWorkaround.version:=69;
 
@@ -401,8 +415,18 @@ begin
  kern_app_state_change(as_start);
  kern_app_state_change(as_begin_game_app_mount);
 
+ if GetEnlargeFmem256mb(g_appinfo.hasParamSfo,g_appinfo.attribute2) then
+ begin
+  kern_app_state_change(as__enable_ext_game_fmem);
+ end;
+
  kern_reserve_2mb_page(0,M2MB_DEFAULT);
- ///
+
+ mode:=Get2mbPageMode(g_appinfo.attribute2);
+ if ((GameStartupInfo.SELF_2MIB_PAGE_AMOUNT=0) or (mode>M2MB_DISABLE)) then
+ begin
+  kern_reserve_2mb_page(GameStartupInfo.SELF_2MIB_PAGE_AMOUNT,mode);
+ end;
 
  Writeln('Name    :',Item.FGameInfo.Name      );
  Writeln('TitleId :',Item.FGameInfo.TitleId   );
@@ -554,6 +578,63 @@ begin
  msleep_td(0);
 end;
 
+function GetRequiredHdcpType(attribute,disp_location_1,disp_location_2:DWORD):Byte; inline;
+begin
+ Result:=0;
+ if (((disp_location_1+1) and 2)=0) and (((disp_location_2+1) and 2)=0) then
+ begin
+  if ((attribute and $200)=0) then Exit;
+ end else
+ begin
+  if ((attribute and $400)<>0) then Exit;
+ end;
+ Result:=1;
+end;
+
+{
+ isInitUserAlwaysLogin
+ (m_attribute & 1) == 0     || param_sfo_not_found
+
+ isBgSuspend
+ (m_attribute & 0x10) != 0  || param_sfo_not_found
+
+ isBgSuspendIfSpecial
+ (m_attribute & 0x100) != 0 || param_sfo_not_found
+}
+
+{
+
+ int GetFormatTypeFromATTRIBUTE2(uint ATTRIBUTE2,int *p_FormatType)
+ {
+   *p_FormatTyp = 2 - (uint)((ATTRIBUTE2 & 0x400) == 0);
+   return 0;
+ }
+
+ if (FormatType == 1) {
+   "FormatUfs";   sceFsUfsMkfs
+ }
+ else {
+   "FormatUfsFC"; sceFsUfsMkfsWithFixedCylinderGroupSize
+ }
+
+}
+
+{
+
+//Best effort threads use 2 CPU cores. [0xC0] [m_type=MINI_APP]
+byte GetBesteffort(t_app_m_info *param_1)
+{
+  if (param_1->NewProcess != 0) {
+    return 1;
+  }
+  if (param_1->m_is_param_sfo_not_found != 0) {
+    return 0;
+  }
+  return (*(byte *)((long)&param_1->m_attribute + 2) & 0x20) >> 5;
+}
+
+}
+
 function run_item(const cfg:TGameRunConfig):TGameProcess;
 label
  _error;
@@ -582,12 +663,42 @@ begin
  GameStartupInfo.FGameItem:=cfg.FGameItem;
 
  GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
+ GameStartupInfo.Category   :='gd'; //m_type = SCE_LNC_APP_TYPE_BIG_APP;
+ GameStartupInfo.APP_VER    :='01.00';
  GameStartupInfo.hasParamSfo:=ord(cfg.FParamSfo<>nil);
 
  if (cfg.FParamSfo<>nil) then
  begin
-  GameStartupInfo.DownloadMb_0:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE');
-  GameStartupInfo.DownloadMb_1:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE_1');
+
+  GameStartupInfo.CATEGORY             :=cfg.FParamSfo.GetString('CATEGORY');
+  GameStartupInfo.TITLE                :=cfg.FParamSfo.GetString('TITLE');
+  GameStartupInfo.CONTENT_ID           :=cfg.FParamSfo.GetString('CONTENT_ID');
+  GameStartupInfo.INSTALL_DIR_SAVEDATA :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
+  GameStartupInfo.APP_VER              :=cfg.FParamSfo.GetString('APP_VER');
+
+  GameStartupInfo.SYSTEM_VER           :=cfg.FParamSfo.GetUInt('SYSTEM_VER');
+  GameStartupInfo.ATTRIBUTE            :=cfg.FParamSfo.GetUInt('ATTRIBUTE');
+  GameStartupInfo.ATTRIBUTE2           :=cfg.FParamSfo.GetUInt('ATTRIBUTE2');
+  GameStartupInfo.ATTRIBUTE_EXE        :=cfg.FParamSfo.GetUInt('ATTRIBUTE_EXE');
+  GameStartupInfo.SELF_2MIB_PAGE_AMOUNT:=cfg.FParamSfo.GetUInt('SELF_2MIB_PAGE_AMOUNT');
+
+  GameStartupInfo.RequiredHdcpType     :=GetRequiredHdcpType(
+                                          GameStartupInfo.ATTRIBUTE,
+                                          cfg.FParamSfo.GetUInt('DISP_LOCATION_1'),
+                                          cfg.FParamSfo.GetUInt('DISP_LOCATION_2')
+                                         );
+
+  if ((GameStartupInfo.ATTRIBUTE2 and $40)=0) then
+  begin
+   GameStartupInfo.DownloadMb_0:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE');
+  end;
+
+
+  if ((GameStartupInfo.ATTRIBUTE2 and $2000)=0) then
+  begin
+   GameStartupInfo.DownloadMb_1:=cfg.FParamSfo.GetUInt('DOWNLOAD_DATA_SIZE_1');
+  end;
+
  end;
 
  ////

@@ -271,18 +271,18 @@ var
  fs_src:RawByteString;
 begin
 
- with GameStartupInfo.FGameItem.GameInfo do
- begin
-  if (TitleId='') then
-  begin
-   TitleId:='?????????';
-  end;
- end;
-
  //save to global
  GameMountConfig:=TGameMountConfig.Create;
  GameMountConfig.LocalDir:=GameStartupInfo.LocalDir;
- GameMountConfig.TitleId :=GameStartupInfo.FGameItem.GameInfo.TitleId;
+
+ if (GameStartupInfo.TITLE<>'') then
+ begin
+  GameMountConfig.TitleId:=GameStartupInfo.TITLE;
+ end else
+ if (GameStartupInfo.FGameItem.GameInfo.TitleId<>'') then
+ begin
+  GameMountConfig.TitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
+ end;
 
  GameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
  GameMountConfig.DownloadKb[1]:=GameStartupInfo.DownloadMb_1*1024;

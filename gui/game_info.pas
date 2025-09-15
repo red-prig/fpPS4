@@ -264,20 +264,42 @@ type
 
  TGameStartupInfo=class(TAbstractObject)
   public
-   FReader      :Boolean;
-   FPipe        :THandle;
-   FConfInfo    :TConfigInfo;
-   FGameItem    :TGameItem;
-   FLocalDir    :RawByteString;
-   FhasParamSfo :Integer;
-   FDownloadMb_0:DWORD;
-   FDownloadMb_1:DWORD;
+   FReader               :Boolean;
+   FhasParamSfo          :Byte;
+   FRequiredHdcpType     :Byte;
+   FPipe                 :THandle;
+   FConfInfo             :TConfigInfo;
+   FGameItem             :TGameItem;
+   FLocalDir             :RawByteString;
+   FCATEGORY             :RawByteString;
+   FTITLE                :RawByteString;
+   FCONTENT_ID           :RawByteString;
+   FINSTALL_DIR_SAVEDATA :RawByteString;
+   FAPP_VER              :RawByteString;
+   FSYSTEM_VER           :DWORD;
+   FATTRIBUTE            :DWORD;
+   FATTRIBUTE2           :DWORD;
+   FATTRIBUTE_EXE        :DWORD;
+   FSELF_2MIB_PAGE_AMOUNT:DWORD;
+   FDownloadMb_0         :DWORD;
+   FDownloadMb_1         :DWORD;
   published
-   property    Pipe        :THandle       read FPipe          write FPipe;
-   property    LocalDir    :RawByteString read FLocalDir      write FLocalDir;
-   property    hasParamSfo :Integer       read FhasParamSfo   write FhasParamSfo;
-   property    DownloadMb_0:DWORD         read FDownloadMb_0  write FDownloadMb_0;
-   property    DownloadMb_1:DWORD         read FDownloadMb_1  write FDownloadMb_1;
+   property    Pipe                 :THandle       read FPipe                  write FPipe;
+   property    LocalDir             :RawByteString read FLocalDir              write FLocalDir;
+   property    CATEGORY             :RawByteString read FCATEGORY              write FCATEGORY;
+   property    TITLE                :RawByteString read FTITLE                 write FTITLE;
+   property    CONTENT_ID           :RawByteString read FCONTENT_ID            write FCONTENT_ID;
+   property    INSTALL_DIR_SAVEDATA :RawByteString read FINSTALL_DIR_SAVEDATA  write FINSTALL_DIR_SAVEDATA;
+   property    APP_VER              :RawByteString read FAPP_VER               write FAPP_VER;
+   property    SYSTEM_VER           :DWORD         read FSYSTEM_VER            write FSYSTEM_VER;
+   property    ATTRIBUTE            :DWORD         read FATTRIBUTE             write FATTRIBUTE;
+   property    ATTRIBUTE2           :DWORD         read FATTRIBUTE2            write FATTRIBUTE2;
+   property    ATTRIBUTE_EXE        :DWORD         read FATTRIBUTE_EXE         write FATTRIBUTE_EXE;
+   property    SELF_2MIB_PAGE_AMOUNT:DWORD         read FSELF_2MIB_PAGE_AMOUNT write FSELF_2MIB_PAGE_AMOUNT;
+   property    DownloadMb_0         :DWORD         read FDownloadMb_0          write FDownloadMb_0;
+   property    DownloadMb_1         :DWORD         read FDownloadMb_1          write FDownloadMb_1;
+   property    hasParamSfo          :Byte          read FhasParamSfo           write FhasParamSfo;
+   property    RequiredHdcpType     :Byte          read FRequiredHdcpType      write FRequiredHdcpType;
   public
    Constructor Create(Reader:Boolean); reintroduce;
    Destructor  Destroy; override;
