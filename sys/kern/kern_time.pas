@@ -41,15 +41,16 @@ begin
  //
  if strict_ps4_freq then
  begin
-  tsc_freq:=PS4_TSC_FREQ;
-  rdtsc   :=@md_rdtsc_freq;
+  guest_tsc_freq:=PS4_TSC_FREQ;
+  guest_rdtsc   :=@md_rdtsc_guest;
  end else
  begin
-  tsc_freq:=md_tsc_freq;
-  rdtsc   :=@md_rdtsc;
+  guest_tsc_freq:=md_tsc_freq;
+  guest_rdtsc   :=@md_rdtsc;
  end;
  //
- getmicrouptime(@boottime);
+ resume_time_unit:=md_rdtsc_unit();
+ UNIT_TO_TIMEVAL(@boottime,resume_time_unit);
 end;
 
 procedure getmicrouptime(tvp:p_timeval);

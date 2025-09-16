@@ -1014,7 +1014,7 @@ end;
 
 procedure TDisplayHandleSoft.SubmitNode(Node:PQNodeSubmit);
 begin
- Node^.tsc:=rdtsc();
+ Node^.tsc:=guest_rdtsc();
 
  FSubmitQueue.Push(Node);
 
@@ -1298,7 +1298,7 @@ begin
   last_status.currentBuffer  :=submit^.bufferIndex;
 
   last_status.processTime    :=GetProcessTime;
-  last_status.tsc            :=rdtsc();
+  last_status.tsc            :=guest_rdtsc();
 
  mtx_unlock(dce_mtx^);
 

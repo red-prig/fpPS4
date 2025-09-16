@@ -117,7 +117,7 @@ begin
    if trigger then
    begin
     vblank.ptime:=GetProcessTime;
-    vblank.tsc  :=rdtsc();
+    vblank.tsc  :=guest_rdtsc();
 
     i:=System.InterlockedIncrement64(vblank.count)-1;
    end;
@@ -135,16 +135,16 @@ begin
 
   if (vblank.fps_tsc=0) then
   begin
-   vblank.fps_tsc:=rdtsc();
+   vblank.fps_tsc:=guest_rdtsc();
    vblank.fps_cnt:=0;
   end else
   begin
    //Inc(fps_cnt);
-   if ((rdtsc()-vblank.fps_tsc) div tsc_freq)>=1 then
+   if ((guest_rdtsc()-vblank.fps_tsc) div guest_tsc_freq)>=1 then
    begin
     p_host_ipc.SetCaptionFPS(vblank.fps_cnt);
     vblank.fps_cnt:=0;
-    vblank.fps_tsc:=rdtsc();
+    vblank.fps_tsc:=guest_rdtsc();
    end;
   end;
 
@@ -1452,7 +1452,7 @@ begin
      (event_id<>$fe) and
      ((t_dce_hint(hint).video_id xor video_id)=0) then
   begin
-   time:=rdtsc();
+   time:=guest_rdtsc();
    counter:=t_dce_data(kn^.kn_kevent.data).counter;
    if (counter<>$f) then
    begin

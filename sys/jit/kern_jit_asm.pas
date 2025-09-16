@@ -1016,13 +1016,11 @@ asm
  shl  $32, %rdx
  or  %rdx, %rax
  //
- mulq    tsc_freq(%rip)
- divq md_tsc_freq(%rip)
+ //replacing div with mul, the result in %rdx
+ mulq md_rev_guest(%rip)
  //
- mov %rax, %rdx
- shr  $32, %rdx
- shl  $32, %rax
- shr  $32, %rax
+ mov %edx, %eax //get lo
+ shr  $32, %rdx //get hi
  //
  xchg %r14, %rax
  addb $127, %al
@@ -1057,13 +1055,11 @@ asm
  shl  $32, %rdx
  or  %rdx, %rax
  //
- mulq    tsc_freq(%rip)
- divq md_tsc_freq(%rip)
+ //replacing div with mul, the result in %rdx
+ mulq md_rev_guest(%rip)
  //
- mov %rax, %rdx
- shr  $32, %rdx
- shl  $32, %rax
- shr  $32, %rax
+ mov %edx, %eax //get lo
+ shr  $32, %rdx //get hi
  //
  xchg %r15, %rax
  addb $127, %al

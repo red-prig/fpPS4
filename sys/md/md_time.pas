@@ -12,17 +12,18 @@ uses
 
 var
  md_tsc_freq :QWORD=0;
- md_unit_freq:QWORD=UNIT_PER_SEC;
+ md_rev_unit :QWORD=0;
+ md_rev_guest:QWORD=0;
 
 Procedure md_timeinit;
 
-function  md_rdtsc:QWORD;      assembler;
-function  md_rdtsc_unit:QWORD; assembler;
-function  md_rdtsc_freq:QWORD; assembler;
+function  md_rdtsc         :QWORD; assembler;
+function  md_rdtsc_unit    :QWORD; assembler;
+function  md_rdtsc_guest   :QWORD; assembler;
 function  md_get_rdtsc_freq:QWORD;
 
 function  get_proc_time:Int64;
-function  get_proc_time_freq:Int64;
+function  get_proc_freq:Int64;
 
 function  get_unit_uptime:Int64;
 procedure unittime(time:PInt64);
@@ -43,6 +44,20 @@ implementation
 uses
  errno;
 
+function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ movq v,%rax
+ mulq m
+ divq d
+end;
+
+function flip_value_u64(d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
+asm
+ xor  %eax,%eax
+ movq v,%rdx
+ divq d
+end;
+
 Procedure md_timeinit;
 var
  min,max,cur:ULONG;
@@ -50,7 +65,9 @@ begin
  NtQueryTimerResolution(@min,@max,@cur);
  NtSetTimerResolution(max,True,@cur);
  //
- md_tsc_freq:=md_get_rdtsc_freq;
+ md_tsc_freq :=md_get_rdtsc_freq;
+ md_rev_unit :=flip_value_u64(md_tsc_freq,UNIT_PER_SEC);
+ md_rev_guest:=flip_value_u64(md_tsc_freq,PS4_TSC_FREQ);
 end;
 
 function md_rdtsc:QWORD; assembler; nostackframe;
@@ -72,11 +89,12 @@ asm
  shl  $32,%rdx
  or  %rdx,%rax
  //
- mulq md_unit_freq(%rip)
- divq md_tsc_freq (%rip)
+ //replacing div with mul, the result in %rdx
+ mulq md_rev_unit(%rip)
+ mov  %rdx,%rax
 end;
 
-function md_rdtsc_freq:QWORD; assembler; nostackframe;
+function md_rdtsc_guest:QWORD; assembler; nostackframe;
 asm
  lfence
  rdtsc
@@ -85,8 +103,9 @@ asm
  shl  $32,%rdx
  or  %rdx,%rax
  //
- mulq    tsc_freq(%rip)
- divq md_tsc_freq(%rip)
+ //replacing div with mul, the result in %rdx
+ mulq md_rev_guest(%rip)
+ mov  %rdx,%rax
 end;
 
 function _get_rdtsc_freq:QWORD;
@@ -103,8 +122,9 @@ begin
                              @shared_page,SizeOf(Pointer),@size);
  if (R<>0) then Exit;
  if (size<>SizeOf(Pointer)) then Exit;
+ if (shared_page=nil) then Exit;
 
- Result:=(UNIT_PER_SEC shl 32) div (shared_page[1] shr 32);
+ Result:=flip_value_u64(shared_page[1],UNIT_PER_SEC);
 end;
 
 function tsc_calibrate:QWORD;
@@ -124,7 +144,7 @@ begin
 
  For i:=0 to samples-1 do
  begin
-  qpc_freq :=get_proc_time_freq;
+  qpc_freq :=get_proc_freq;
   qpc_begin:=get_proc_time;
   tsc_begin:=md_rdtsc;
 
@@ -166,7 +186,7 @@ begin
  Result:=pc;
 end;
 
-function get_proc_time_freq:Int64;
+function get_proc_freq:Int64;
 var
  pc:QWORD;
  pf:QWORD;
@@ -178,29 +198,9 @@ begin
  Result:=pf;
 end;
 
-function mul_div_u64(m,d,v:QWORD):QWORD; sysv_abi_default; assembler; nostackframe;
-asm
- movq v,%rax
- mulq m
- divq d
-end;
-
 function get_unit_uptime:Int64;
-var
- pc:QWORD;
- pf:QWORD;
 begin
- pc:=0;
- pf:=1;
- NtQueryPerformanceCounter(@pc,@pf);
-
- if (pf=UNIT_PER_SEC) then
- begin
-  Result:=pc;
- end else
- begin
-  Result:=mul_div_u64(UNIT_PER_SEC,pf,pc);
- end;
+ Result:=md_rdtsc_unit;
 end;
 
 type
@@ -242,19 +242,8 @@ begin
 end;
 
 procedure get_process_cputime(time:PInt64);
-var
- k:KERNEL_USER_TIMES;
- R:DWORD;
 begin
- k:=Default(KERNEL_USER_TIMES);
- R:=NtQueryInformationProcess(NtCurrentProcess,
-                              ProcessTimes,
-                              @k,
-                              SizeOf(KERNEL_USER_TIMES),
-                              nil);
- Assert(R=0,'get_process_cputime');
- unittime(@k.ExitTime.QuadPart);
- time^:=k.ExitTime.QuadPart-k.CreateTime.QuadPart;
+ time^:=md_rdtsc_unit-resume_time_unit;
 end;
 
 function GetProcessTime:QWORD; //microsecond

@@ -877,13 +877,13 @@ function sysctl_machdep_tsc_freq(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:
 var
  freq:QWORD;
 begin
- freq:=System.InterlockedExchangeAdd64(tsc_freq,0);
+ freq:=System.InterlockedExchangeAdd64(guest_tsc_freq,0);
  if (freq=0) then Exit(EOPNOTSUPP);
 
  Result:=sysctl_handle_64(oidp, @freq, 0, req);
  if (Result=0) and (req^.newptr<>nil) then
  begin
-  System.InterlockedExchange64(tsc_freq,freq);
+  System.InterlockedExchange64(guest_tsc_freq,freq);
  end;
 end;
 

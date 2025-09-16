@@ -131,9 +131,10 @@ procedure TIMESPEC_SUB(dst,src,val:p_timespec);
 function  itimerfix(tv:p_timeval):Integer;
 
 var
- boottime:timeval;
- tsc_freq:QWORD=0;
- rdtsc   :function:QWORD; SysV_ABI_CDecl;
+ boottime        :timeval;
+ resume_time_unit:QWORD=0;
+ guest_tsc_freq  :QWORD=0;
+ guest_rdtsc     :function:QWORD; SysV_ABI_CDecl;
 
  strict_ps4_freq:Boolean=False;
 
