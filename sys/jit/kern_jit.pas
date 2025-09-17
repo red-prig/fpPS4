@@ -6,6 +6,7 @@ unit kern_jit;
 interface
 
 uses
+ md_systm,
  ps4libdoc,
  mqueue,
  systm,
@@ -319,9 +320,82 @@ begin
  end;
 end;
 
+var
+ jit_nop_sequence:Boolean=False;
+
+function is_nop_sequence(addr:Pointer):Boolean;
+type
+ t_data_16=array[0..15] of Byte;
+var
+ beg:Pointer;
+ ptr:Pointer;
+ data:t_data_16;
+
+ dis:TX86Disassembler;
+ din:TInstruction;
+begin
+ Result:=False;
+
+ if not jit_nop_sequence then Exit;
+
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ repeat
+
+  data:=Default(t_data_16);
+  md_copyin(addr,@data,16,nil);
+
+  ptr:=@data;
+  beg:=ptr;
+
+  if (PWORD(beg)^=0) then //00 00
+  begin
+   //is end of code
+   Exit(False);
+  end;
+
+  if (PDWORD(beg)^=$e5894855) then //55 48 89 e5
+  begin
+   //is func prolog
+   Exit(True);
+  end;
+
+  dis.Disassemble(dm64,ptr,din);
+
+  addr:=addr+(ptr-beg);
+
+  case din.OpCode.Opcode of
+   OPnop:
+    begin
+     //mark is nop
+     Result:=True;
+    end;
+   OPX_Invalid..OPX_GroupP:
+    begin
+     //invalid code
+     Exit(False);
+    end;
+   else
+    begin
+     //end of sequence
+     Exit;
+    end;
+  end;
+
+ until false;
+
+end;
+
 procedure trim_flow(var ctx:t_jit_context2);
 begin
- ctx.trim:=True;
+ if is_nop_sequence(ctx.ptr_next) then
+ begin
+  //
+ end else
+ begin
+  ctx.trim:=True;
+ end;
 end;
 
 procedure op_push_rip_part0(var ctx:t_jit_context2);
@@ -1188,6 +1262,7 @@ end;
 procedure op_invalid(var ctx:t_jit_context2);
 begin
  op_ud2(ctx);
+ ctx.trim:=True; //force
 end;
 
 {
@@ -1663,6 +1738,10 @@ begin
  jit_cbs[OPPnone,OPxend  ,OPSnone]:=@op_invalid;
 
  jit_cbs[OPPnone,OPwbinvd,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPstr,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPbndldx,OPSnone]:=@op_invalid;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
