@@ -39,6 +39,7 @@ uses
  kern_jit_dynamic,
  kern_jit_test,
  kern_jit_asm,
+ kern_lazy_jit,
  kern_thr,
  subr_backtrace;
 
@@ -1553,97 +1554,6 @@ asm
  movq jit_frame.tf_r14(%r13),%r14
  movq jit_frame.tf_r15(%r13),%r15
  movq jit_frame.tf_r13(%r13),%r13
-end;
-
-function is_push_op(Opcode:TOpcode):Boolean; inline;
-begin
- case Opcode of
-  OPpush,
-  OPpop,
-  OPpushf,
-  OPpopf:
-   Result:=True;
-  else
-   Result:=False;
- end;
-end;
-
-const
- use_lazy_jit=False;
-
-function op_lazy_jit(var ctx:t_jit_context2):Boolean;
-begin
- Result:=False;
-
- if not use_lazy_jit then
- begin
-  Exit;
- end;
-
- if (jit_cbs[ctx.din.OpCode.Prefix,ctx.din.OpCode.Opcode,ctx.din.OpCode.Suffix]=@op_invalid) then
- begin
-  Exit;
- end;
-
- case ctx.din.OpCode.Opcode of
-  OPcall,
-  OPjmp,
-  OPret,
-  OPretf,
-  OPj__,
-  OPloop,
-  OPjcxz,
-  OPjecxz,
-  OPjrcxz,
-  //OPpush,
-  //OPpop,
-  //OPpushf,
-  //OPpopf,
-  OPenter,
-  OPleave,
-  OPsyscall,
-  OPint,
-  OPint1,
-  OPint3,
-  OPud1,
-  OPud2,
-  OPiret,
-  OPhlt,
-  OPcpuid,
-  OPrdtsc,
-  OPnop  :Exit;
-  else;
- end;
-
- if is_rep_prefix(ctx.din) then
- begin
-  Exit;
- end;
-
- if is_segment(ctx.din) then
- begin
-  Exit;
- end;
-
- if is_push_op(ctx.din.OpCode.Opcode) or is_preserved(ctx.din) then
- begin
-  if is_rip(ctx.din) then
-  begin
-   Exit;
-  end;
- end else
- begin
-  add_orig(ctx);
-  Exit(True);
- end;
-
- op_jit2native(ctx,mInstruction);
-
- add_orig(ctx);
-
- op_native2jit(ctx,mInstruction);
-
- Result:=True;
 end;
 
 procedure init_cbs;
