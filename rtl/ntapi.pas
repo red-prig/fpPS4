@@ -80,6 +80,9 @@ const
  ThreadSetTlsArrayAddress        = 15;
  ThreadIsIoPending               = 16;
  ThreadHideFromDebugger          = 17;
+ ThreadIoPriority                = 22; //[0..2]
+ ThreadMemoryPriority            = 24; //[1..5]
+ ThreadActualBasePriority        = 25; //[1..15]
  ThreadNameInformation           = 38;
  ThreadSystemThreadInformation   = 40;
 

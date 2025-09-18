@@ -56,7 +56,6 @@ end;
 procedure sched_prio(td:p_kthread;prio:Integer);
 begin
  td^.td_base_pri:=prio;
- cpu_set_base_priority(td,prio);
 
  if ((td^.td_flags and TDF_BORROWING)<>0) and
     (td^.td_priority < prio) then Exit;

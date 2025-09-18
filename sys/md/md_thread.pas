@@ -41,8 +41,7 @@ procedure cpu_sched_throw;
 function  cpu_thread_finished(td:p_kthread):Boolean;
 
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
-function  cpu_set_base_priority(td:p_kthread;prio:Integer):Integer;
-function  cpu_set_priority(td:p_kthread;prio:Integer):Integer;
+function  cpu_set_priority  (td:p_kthread;prio:Integer):Integer;
 
 function  cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
 
@@ -443,54 +442,43 @@ begin
  Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,p_mask,SizeOf(Ptruint));
 end;
 
-function cpu_set_base_priority(td:p_kthread;prio:Integer):Integer;
-begin
- if (td=nil) then Exit;
- if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
-
- Case prio of
-    0..255:prio:= 16;
-
-  256..323:prio:=  2;
-  324..389:prio:=  1;
-  390..459:prio:=  0;
-  460..529:prio:= -1;
-  530..599:prio:= -2;
-
-  600..767:prio:=-16;
-  else
-           prio:=-16;
- end;
-
- Result:=NtSetInformationThread(td^.td_handle,ThreadBasePriority,@prio,SizeOf(Integer));
-end;
-
 function cpu_set_priority(td:p_kthread;prio:Integer):Integer;
+var
+ mmpr,base:Integer;
 begin
  if (td=nil) then Exit;
  if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
 
  Case prio of
-    0..263:prio:=15;
-  264..299:prio:=14;
-  300..335:prio:=13;
-  336..371:prio:=12;
-  372..407:prio:=11;
-  408..443:prio:=10;
-  444..479:prio:= 9;
-  480..515:prio:= 8;
-  516..551:prio:= 7;
-  552..587:prio:= 6;
-  588..623:prio:= 5;
-  624..659:prio:= 4;
-  660..695:prio:= 3;
-  696..731:prio:= 2;
-  732..767:prio:= 1;
+    0..255:mmpr:=5;
+  256..767:mmpr:=4;
+  768..960:mmpr:=3;
   else
-           prio:= 1;
+           mmpr:=2;
  end;
 
- Result:=NtSetInformationThread(td^.td_handle,ThreadPriority,@prio,SizeOf(Integer));
+ Case prio of
+    0..255:base:=15;
+  256..305:base:=14;
+  306..355:base:=13;
+  356..405:base:=12;
+  406..455:base:=11;
+  456..505:base:=10;
+  506..555:base:= 9;
+  556..605:base:= 8;
+  606..655:base:= 7;
+  656..705:base:= 6;
+  706..756:base:= 5;
+  757..807:base:= 4;
+  808..858:base:= 3;
+  859..909:base:= 2;
+  910..960:base:= 1;
+  else
+           base:= 1;
+ end;
+
+ Result:=NtSetInformationThread(td^.td_handle,ThreadMemoryPriority    ,@mmpr,SizeOf(Integer));
+ Result:=NtSetInformationThread(td^.td_handle,ThreadActualBasePriority,@base,SizeOf(Integer));
 end;
 
 function cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
