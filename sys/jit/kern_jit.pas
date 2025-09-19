@@ -227,9 +227,10 @@ function op_add_local_cache(var ctx:t_jit_context2):t_jit_i_link;
 begin
  with ctx.builder do
  begin
-  movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.call_ret_cache)]);
+  //jit_frame->call_ret_cache
+  leaq(r15,[r13-jit_frame_offset-64*1024]);
 
-  movi(r15w,Word(QWORD(ctx.ptr_next)*16));
+  movi(r15w,Word(QWORD(ctx.ptr_next)*16)); //r15 = r15 && (!0xFFFF) || IMM
 
   Result:=leaj(r14,[rip+$7FFFFFFF],nil_link); //set deferred
   movq([r15+8,os64],r14); //dst
@@ -265,15 +266,15 @@ var
 begin
  with ctx.builder do
  begin
-  movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.call_ret_cache)]);
+  //convert jit_frame->call_ret_cache
+  leaq(r13,[r13-jit_frame_offset-64*1024]);
 
-  movq(r13,rcx); //save rcx
+  movq(r15,rcx); //save rcx
 
-  movi(ecx,0);
-  leaq(rcx,[r14*8+rcx]);
-  leaq(r15w,[rcx+rcx]); //Word(r14*16)
+  leaq(rcx ,[r14*8]);
+  leaq(r13w,[rcx+rcx]); //r13 = r13 && (!0xFFFF) || Word(r14*16)
 
-  movq(rcx,[r15]); //-src
+  movq(rcx,[r13]); //-src
 
   leaq(rcx,[r14+rcx]); //r14+(-src)
 
@@ -281,12 +282,12 @@ begin
 
   //plt cache fail
 
-  movq(rcx,r13); //restore rcx
+  movq(rcx,r15); //restore rcx
 
   //restore jit_frame in jit_jmp_dispatch
 
   //stub plt link
-  movi(r15d,0);
+  movi(r15,0);
   call_far(@jit_jmp_dispatch); //input:r14,r15 out:r14
 
   //exit:
@@ -295,13 +296,14 @@ begin
   //plt cache succes
   link_jcxz.target:=ctx.builder.get_curr_label.after;
 
-  movq(rcx,r13); //restore rcx
+  movq(r14,[r13+8]); //dst
 
-  //restore jit_frame
-  movq(r13,[GS +teb_thread]);
-  leaq(r13,[r13+jit_frame_offset]);
+  movq(rcx,r15); //restore rcx
 
-  movq(r14,[r15+8]); //dst
+  //r13 = r13 && (!0xFFFF) || 0
+  movi(r13w,0);
+  //convert call_ret_cache->jit_frame
+  leaq(r13,[r13+jit_frame_offset+64*1024]);
 
   //exit
   link_jmp.target:=ctx.builder.get_curr_label.after;

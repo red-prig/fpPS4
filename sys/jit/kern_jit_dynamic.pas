@@ -248,7 +248,7 @@ var
 begin
  if (p_print_jit_preload) then
  begin
-  Writeln('unk addr:0x',HexStr(addr));
+  Writeln('preload addr:0x',HexStr(addr));
  end;
 
  node:=preload_entry(addr);
@@ -275,8 +275,8 @@ end;
 procedure jit_ctx_free(td:p_kthread); public;
 begin
  //td^.td_jctx.block:=nil;
- kmem_free(td^.td_jctx.call_ret_cache,64*1024);
- td^.td_jctx.call_ret_cache:=nil;
+ //kmem_free(td^.td_jctx.call_ret_cache,64*1024);
+ //td^.td_jctx.call_ret_cache:=nil;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -371,8 +371,11 @@ begin
 
  if (jctx^.call_ret_cache=nil) then
  begin
-  jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
+  jctx^.call_ret_cache:=Pointer(td)-64*1024;
+  md_commit(jctx^.call_ret_cache,64*1024,VM_RW);
+  //jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
  end;
+ Assert(jctx^.call_ret_cache<>nil,'call_ret_cache aalocation fail');
 
  //tf_r14 not need to move
  //tf_r15 not need to move
@@ -1383,6 +1386,7 @@ procedure t_jit_dynamic_blob.detach_threads;
 var
  ttd:p_kthread;
  call_ret_cache:PQWORD;
+ cache:p_jplt_cache;
  bend:QWORD;
  src:QWORD;
  i:Integer;
@@ -1414,11 +1418,16 @@ begin
     //
     for i:=0 to High(ttd^.td_jctx.local_cache) do
     begin
-     src:=QWORD(ttd^.td_jctx.local_cache[i]);
+     cache:=ttd^.td_jctx.local_cache[i];
 
-     if (src>=QWORD(base)) and (src<bend) then
+     if (cache<>nil) then
      begin
-      System.InterlockedCompareExchange64(QWORD(ttd^.td_jctx.local_cache[i]),0,src);
+      src:=QWORD(cache^.src);
+
+      if (src>=QWORD(base)) and (src<bend) then
+      begin
+       System.InterlockedCompareExchange64(QWORD(ttd^.td_jctx.local_cache[i]),0,QWORD(cache));
+      end;
      end;
 
     end;

@@ -45,8 +45,9 @@ function md_protect (base:Pointer;size:QWORD;prot:Integer;hProcess:THandle=NtCur
 function md_dontneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 function md_activate(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 
-function md_mmap (var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
-function md_unmap(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_mmap  (var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
+function md_unmap (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_commit(var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
 
 function  kmem_alloc(size:QWORD;prot:DWORD):Pointer;
 procedure kmem_free (base:Pointer;size:QWORD); inline;
@@ -578,6 +579,49 @@ begin
   if (addr>=pend) then Break;
 
  until (prev>=addr);
+end;
+
+function md_commit(var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
+var
+ ADDR:Pointer;
+begin
+ ADDR:=md_dw_gran(base);
+ prot:=wprots[prot and VM_RWX];
+
+ if (fd=THandle(0)) or (fd=THandle(-1)) then
+ begin
+  Result:=NtAllocateVirtualMemoryEx(
+           hProcess,
+           @ADDR,
+           @size,
+           MEM_COMMIT,
+           prot,
+           nil,
+           0
+          );
+ end else
+ begin
+  Result:=NtMapViewOfSectionEx(
+           fd,
+           hProcess,
+           @ADDR,
+           @offset,
+           @size,
+           0,
+           prot,
+           nil,
+           0
+          );
+ end;
+
+ if (Result=0) then
+ begin
+  base:=ADDR;
+ end else
+ begin
+  base:=nil;
+ end;
+
 end;
 
 function kmem_alloc(size:QWORD;prot:DWORD):Pointer;

@@ -24,6 +24,7 @@ Const
  SYS_STACK_RSRV=64*1024;
  SYS_STACK_SIZE=16*1024;
  SYS_GUARD_SIZE= 4*1024;
+ SYS_CACHE_SIZE=64*1024;
 
 function  cpu_thread_alloc(pages:Word):p_kthread;
 function  cpu_thread_free(td:p_kthread):Integer;
@@ -66,13 +67,13 @@ var
 
 function cpu_thread_alloc(pages:Word):p_kthread;
 var
- td:p_kthread;
+ td        :p_kthread;
  stack_size:ULONG_PTR;
  headr_size:ULONG_PTR;
  padding   :ULONG_PTR;
- data:Pointer;
- size:ULONG_PTR;
- R:DWORD;
+ data      :Pointer;
+ size      :ULONG_PTR;
+ R         :DWORD;
 begin
  Result:=nil;
 
@@ -87,7 +88,7 @@ begin
  padding   :=size-headr_size;
  headr_size:=size;
 
- size:=headr_size+SYS_GUARD_SIZE+stack_size;
+ size:=SYS_CACHE_SIZE+headr_size+SYS_GUARD_SIZE+stack_size;
  size:=System.Align(size,64*1024);
 
  data:=nil;
@@ -102,6 +103,10 @@ begin
      PAGE_READWRITE
     );
  if (R<>0) then Exit;
+
+ //cache
+ data:=data+SYS_CACHE_SIZE;
+ size:=size-SYS_CACHE_SIZE;
 
  //header
  R:=NtAllocateVirtualMemory(
@@ -147,7 +152,8 @@ var
 begin
  if (td=nil) then Exit(0);
 
- data:=td;
+ //cache
+ data:=Pointer(td)-SYS_CACHE_SIZE;
  size:=0;
 
  Result:=NtFreeVirtualMemory(
