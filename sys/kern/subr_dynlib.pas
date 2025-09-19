@@ -3445,6 +3445,7 @@ begin
 
  ctx:=Default(t_jit_context2);
  ctx.obj:=obj;
+ ctx.name:=dynlib_basename(obj^.lib_path);
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
@@ -3481,7 +3482,14 @@ begin
         begin
          addr:=obj^.relocbase + symp^.st_value;
 
-         ctx.add_forward_point(fpCall,addr);
+         with ctx.add_forward_point(fpCall,addr)^ do
+         begin
+          if jit_trace_hle_call then
+          begin
+           nid:=h_entry^.nid;
+          end;
+         end;
+
         end;
      else;
     end; //case

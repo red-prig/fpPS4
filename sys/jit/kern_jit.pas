@@ -23,7 +23,6 @@ procedure pick(var ctx:t_jit_context2;preload:Pointer);
 implementation
 
 uses
- sysutils,
  time,
  vm,
  vmparam,
@@ -1812,9 +1811,6 @@ begin
  //debug
 end;
 
-const
- trace_hle_call=False;
-
 procedure print_beg_hle(nid:QWORD); SysV_ABI_CDecl;
 var
  str:shortstring;
@@ -1903,7 +1899,7 @@ begin
   //
 
   //beg
-  if trace_hle_call then
+  if jit_trace_hle_call then
   with ctx.builder do
   begin
    movi64(r14,node_export^.nid);
@@ -1922,7 +1918,7 @@ begin
   op_native2jit(ctx,mExport); //TODO: [HLE->JIT] combine with [ret]
 
   //end
-  if trace_hle_call then
+  if jit_trace_hle_call then
   with ctx.builder do
   begin
    movi64(r14,node_export^.nid);
@@ -2163,6 +2159,7 @@ label
 var
  addr:Pointer;
  ptr :Pointer;
+ nid :QWORD;
 
  sw_table:t_jit_context2.p_switchtable_point;
  sw_next :PInteger;
@@ -2184,6 +2181,8 @@ var
  i:Integer;
 begin
  Result:=nil;
+
+ nid:=0;
 
  //init error cbs
  with ctx.builder do
@@ -2217,7 +2216,7 @@ begin
  links:=Default(t_jit_context2.t_forward_links);
  addr:=nil;
 
- if not ctx.fetch_forward_point(links,addr) then
+ if not ctx.fetch_forward_point(links,addr,nid) then
  begin
   //No entry points? early exit
   ctx.Free;
@@ -2423,6 +2422,24 @@ begin
   link_curr:=ctx.builder.get_curr_label.after;
   node_curr:=link_curr._node;
 
+  if jit_trace_hle_call and (nid=0) then
+  begin
+   nid:=ctx.fetch_forward_nid(ctx.ptr_curr);
+  end;
+
+  if jit_trace_hle_call and (nid<>0) then
+  begin
+
+   with ctx.builder do
+   begin
+    movi64(r14,nid);
+    movi64(r15,QWORD(@print_beg_hle));
+    call_far(@jit_hle_trace);
+   end;
+
+   nid:=0;
+  end;
+
   {
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
   with ctx.builder do
@@ -2598,7 +2615,7 @@ begin
 
    repeat
 
-    if not ctx.fetch_forward_point(links,addr) then
+    if not ctx.fetch_forward_point(links,addr,nid) then
     begin
      goto _switchtables;
     end;

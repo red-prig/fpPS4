@@ -38,6 +38,7 @@ type
     pRight:p_forward_point;
     dst   :Pointer;
     links :t_forward_links;
+    nid   :QWORD;
     function c(n1,n2:p_forward_point):Integer; static;
    end;
    t_forward_set=specialize TNodeSplay<t_forward_point>;
@@ -126,6 +127,7 @@ type
    import_list:p_import_point;
 
    obj:Pointer;
+   name:pchar;
 
    text_start:QWORD;
    text___end:QWORD;
@@ -165,7 +167,8 @@ type
   function  get_chunk_ptype():t_point_type;
   procedure end_chunk(__end:Pointer);
   function  max_forward_point():Pointer;
-  function  fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
+  function  fetch_forward_nid(addr:Pointer):QWORD;
+  function  fetch_forward_point(var links:t_forward_links;var dst:Pointer;var nid:QWORD):Boolean;
   function  add_label(curr,next:Pointer;link_curr,link_next:t_jit_i_link;flags:Integer):p_label;
   function  get_label(src:Pointer):p_label;
   function  get_link (src:Pointer):t_jit_i_link;
@@ -339,6 +342,10 @@ function get_instruction_info(addr:Pointer):t_instruction_info;
 var
  jit_relative_analize:Boolean=True;
  jit_memory_guard    :Boolean=False;
+
+const
+ //print calls of exported library functions
+ jit_trace_hle_call=False;
 
 implementation
 
@@ -661,7 +668,21 @@ begin
  Result:=entry^.dst;
 end;
 
-function t_jit_context2.fetch_forward_point(var links:t_forward_links;var dst:Pointer):Boolean;
+function t_jit_context2.fetch_forward_nid(addr:Pointer):QWORD;
+var
+ f:t_forward_point;
+ min:p_forward_point;
+begin
+ Result:=0;
+ f.dst:=addr;
+ min:=forward_set.Find(@f);
+ if (min<>nil) then
+ begin
+  Result:=min^.nid;
+ end;
+end;
+
+function t_jit_context2.fetch_forward_point(var links:t_forward_links;var dst:Pointer;var nid:QWORD):Boolean;
 var
  min:p_forward_point;
 begin
@@ -677,6 +698,7 @@ begin
  //set
  dst  :=min^.dst;
  links:=min^.links;
+ nid  :=min^.nid;
  //cache
  min^:=Default(t_forward_point);
  min^.pLeft:=forward_point_cache;
@@ -1761,6 +1783,7 @@ begin
  with ctx.builder do
  begin
   mreg:=Sums(mem);
+  Assert(mreg.AMemSize<>os0);
   if (mreg.AMemSize=os64) then
   begin
    //64
@@ -2014,16 +2037,20 @@ begin
  end;
 end;
 
-procedure op_copyin(var ctx:t_jit_context2;mem_size:TOperandSize); inline;
+procedure op_copyin(var ctx:t_jit_context2;const dst:TRegValue;mem_size:TOperandSize); inline;
 begin
+ op_uplift(ctx,dst,mem_size); //in/out:r14
+
  with ctx.builder do
  begin
   //call_far(copyin_mov_size[mem_size]); //in:r14(addr), out:r14
  end;
 end;
 
-procedure op_copyout_before(var ctx:t_jit_context2;var link_next:t_jit_i_link;mem_size:TOperandSize); inline;
+procedure op_copyout_before(var ctx:t_jit_context2;const dst:TRegValue;var link_next:t_jit_i_link;mem_size:TOperandSize); inline;
 begin
+ op_uplift(ctx,dst,mem_size); //in/out:r14
+
  with ctx.builder do
  begin
   ////call_far(copyout_mov_size[mem_size]); //in:r14(addr)
@@ -2099,7 +2126,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -2122,7 +2149,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -2786,7 +2813,7 @@ begin
         mem_in;
        end else
        begin
-        op_copyin(ctx,mem_size);
+        op_copyin(ctx,r_tmp0,mem_size);
 
         mem_in;
        end;
@@ -2800,7 +2827,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -2819,7 +2846,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -3092,7 +3119,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -3273,7 +3300,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -3470,7 +3497,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -3492,7 +3519,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -3654,7 +3681,7 @@ begin
        mem_out;
       end else
       begin
-       op_copyout_before(ctx,link_next,mem_size);
+       op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
        mem_out;
 
@@ -3672,7 +3699,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -3821,7 +3848,7 @@ begin
     mem_in;
    end else
    begin
-    op_copyin(ctx,mem_size);
+    op_copyin(ctx,r_tmp0,mem_size);
 
     mem_in;
    end;
@@ -3874,7 +3901,7 @@ begin
     mem_out;
    end else
    begin
-    op_copyout_before(ctx,link_next,mem_size);
+    op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
     mem_out;
 
@@ -3955,7 +3982,7 @@ begin
       mem_out;
      end else
      begin
-      op_copyout_before(ctx,link_next,mem_size);
+      op_copyout_before(ctx,r_tmp0,link_next,mem_size);
 
       mem_out;
 
@@ -3976,7 +4003,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -4094,7 +4121,7 @@ begin
        mem_in;
       end else
       begin
-       op_copyin(ctx,mem_size);
+       op_copyin(ctx,r_tmp0,mem_size);
 
        mem_in;
       end;
@@ -4188,7 +4215,7 @@ begin
     mem_in;
    end else
    begin
-    op_copyin(ctx,mem_size);
+    op_copyin(ctx,r_tmp0,mem_size);
 
     mem_in;
    end;
@@ -4243,7 +4270,7 @@ begin
 
    build_lea(ctx,3,new3);
 
-   op_copyin(ctx,mem_size);
+   op_copyin(ctx,new3,mem_size);
   end;
 
   if pr_res then
