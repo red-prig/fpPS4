@@ -1585,7 +1585,7 @@ begin
 
    range:=size;
 
-   Writeln('BindBuffer:->[',i,':',bind,']',' 0x',HexStr(QWORD(addr),10),' ',get_bind_str(buf.FBind),#13#10,
+   Writeln('BindBuffer:->[',i,':',bind,']:',GetVkFormatStr(cformat),' 0x',HexStr(QWORD(addr),10),' ',get_bind_str(buf.FBind),#13#10,
            ' 0x',HexStr(buf.FHandle,16),':',buf.FName,'->[',diff_a,'..',diff_a+range,']');
 
    DescriptorGroup.BindBuffer(fset,bind,

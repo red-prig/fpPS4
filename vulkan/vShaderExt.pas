@@ -225,6 +225,8 @@ type
 
   addr  :Pointer;
   size  :TVkUInt32;
+
+  cformat:TVkFormat;
  end;
 
  TvBindImageType=(vbSampled,vbStorage,vbMipStorage);
@@ -1482,6 +1484,8 @@ begin
  //
  b.size:=_size;
 
+ b.cformat:=VK_FORMAT_UNDEFINED;
+
  Insert(b,FBuffers,Length(FBuffers));
 end;
 
@@ -1522,6 +1526,8 @@ begin
  //
  if (b.size>size) then b.size:=size;  //input size already taking into account offset
 
+ b.cformat:=_get_vsharp_cformat(PV);
+
  Insert(b,FBuffers,Length(FBuffers));
 end;
 
@@ -1540,6 +1546,8 @@ begin
 
  b.addr:=P;
  b.size:=size; //input size already taking into account offset
+
+ b.cformat:=VK_FORMAT_UNDEFINED;
 
  Insert(b,FBuffers,Length(FBuffers));
 end;
