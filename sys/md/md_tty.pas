@@ -6,6 +6,7 @@ unit md_tty;
 interface
 
 uses
+ md_systm,
  windows,
  ntapi,
  vuio,
@@ -114,14 +115,94 @@ begin
    Result:=Result+tp^.t_nlen;
   end;
   //
-  if (uio^.uio_td<>nil) and
-     ((tp^.t_flags and TF_THD_NAME_PREFIX)<>0) then
+  if (uio^.uio_td<>nil) then
+  if ((tp^.t_flags and TF_THD_NAME_PREFIX)<>0) then
   begin
    Result:=Result+strlen(@p_kthread(uio^.uio_td)^.td_name)+3;
+   if ((tp^.t_flags and TF_FIB_ADDR_PREFIX)<>0) then
+   begin
+    Result:=Result+4+10;
+   end;
   end;
  end;
  //
  Result:=Result+uio^.uio_resid;
+end;
+
+type
+ p_tcb=^t_tcb;
+ t_tcb=record
+  tcb_self  :Pointer;
+  tcb_dtv   :Pointer;
+  tcb_thread:Pointer;
+  tcb_spare :array[0..2] of Pointer;
+  tcb_fbdata:Pointer;
+ end;
+
+function get_fiber_self(td:p_kthread):Pointer;
+var
+ tcb_fbdata:Pointer;
+begin
+ Result:=nil;
+ if (td=nil) then Exit;
+ if (td^.pcb_fsbase=nil) then Exit;
+
+ tcb_fbdata:=md_fuword(p_tcb(td^.pcb_fsbase)^.tcb_fbdata);
+
+ if (tcb_fbdata=Pointer(-1)) then tcb_fbdata:=nil;
+
+ if (tcb_fbdata<>nil) then
+ begin
+  Result:=md_fuword(PPointer(tcb_fbdata+$48)^);
+
+  if (Result=Pointer(-1)) then Result:=nil;
+ end;
+end;
+
+const
+ CODES:array[0..31] of Byte=(
+  $5A, $5A, $66, $66,
+  $99, $99, $66, $96,
+  $99, $66, $99, $96,
+  $33, $33, $CC, $CC,
+  $33, $C3, $CC, $33,
+  $CC, $C3, $55, $55,
+  $AA, $AA, $55, $A5,
+  $AA, $55, $AA, $A5
+);
+
+function fiber_decode_name(src,dst:pchar):Integer;
+var
+ i:DWORD;
+ val:Byte;
+begin
+ i:=0;
+ while True do
+ begin
+  val:=CODES[i] xor Byte(src[i]);
+  dst[i]:=char(val);
+  if (val<>0) and (i=30) then Break;
+  i:=i+1;
+  if (val=0) then
+  begin
+   Exit(i);
+  end;
+ end;
+ Exit(i);
+end;
+
+function get_fiber_name(fiber:Pointer;dst:pchar):Integer;
+var
+ name:t_td_name;
+begin
+ Result:=0;
+ if (fiber=nil) or (dst=nil) then Exit;
+
+ name:=Default(t_td_name);
+
+ md_copyin((fiber+$28),@name,SizeOf(t_td_name),nil);
+
+ Result:=fiber_decode_name(@name,dst);
 end;
 
 //  if (td^.td_name='SceVideoOutServiceThread') then exit;
@@ -132,6 +213,8 @@ var
  BLK   :IO_STATUS_BLOCK;
  OFFSET:Int64;
  LEN   :QWORD;
+
+ fiber:Pointer;
 
  procedure WRITE(ch:AnsiChar); inline;
  begin
@@ -145,6 +228,11 @@ var
   Move(N^,CURR^,L);
   Inc(CURR,L);
   Inc(LEN ,L);
+ end;
+
+ procedure WRITE(const S:RawByteString); inline;
+ begin
+  WRITE(pchar(s),Length(s));
  end;
 
 begin
@@ -163,11 +251,21 @@ begin
    WRITE(tp^.t_name,tp^.t_nlen);
   end;
   //thread name
-  if (uio^.uio_td<>nil) and
-     ((tp^.t_flags and TF_THD_NAME_PREFIX)<>0) then
+  if (uio^.uio_td<>nil) then
+  if ((tp^.t_flags and TF_THD_NAME_PREFIX)<>0) then
   begin
    WRITE('(');
    WRITE(@p_kthread(uio^.uio_td)^.td_name,strlen(@p_kthread(uio^.uio_td)^.td_name));
+
+   if ((tp^.t_flags and TF_FIB_ADDR_PREFIX)<>0) then
+   begin
+    fiber:=get_fiber_self(uio^.uio_td);
+    if (fiber<>nil) then
+    begin
+     WRITE(':F0x'+HexStr(QWORD(fiber),10));
+    end;
+   end;
+
    WRITE(pchar('):'),2);
   end;
  end;

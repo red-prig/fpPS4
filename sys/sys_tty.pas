@@ -14,6 +14,7 @@ uses
 const
  TF_TTY_NAME_PREFIX=$00001;
  TF_THD_NAME_PREFIX=$00002;
+ TF_FIB_ADDR_PREFIX=$00004;
 
 type
  p_tty=^t_tty;
