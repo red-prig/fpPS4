@@ -138,6 +138,7 @@ procedure sys_save_to_jit_save(td:p_kthread); SysV_ABI_CDecl; external;
 function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
  tf_addr:QWORD;
+ info:t_jit_addr_info;
  rv:Integer;
  is_jit:Boolean;
 begin
@@ -148,8 +149,7 @@ begin
 
  print_disassemble(Pointer(p^.ContextRecord^.Rip),16,1);
 
- tf_addr:=0;
- is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@tf_addr);
+ is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@info);
 
  Writeln('cr_rip:0x',HexStr(p^.ContextRecord^.Rip,16));
  Writeln('cr_rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
@@ -165,7 +165,7 @@ begin
  if (is_jit) then
  begin
   jit_save_to_sys_save(td);
-  td^.td_frame.tf_rip:=tf_addr;
+  td^.td_frame.tf_rip:=info.original;
  end;
 
  Writeln('registers:');

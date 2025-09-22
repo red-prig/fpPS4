@@ -52,6 +52,13 @@ type
   recompil:0..511; //9
  end;
 
+ p_jit_addr_info=^t_jit_addr_info;
+ t_jit_addr_info=packed record
+  original:QWORD;
+  recompil:QWORD;
+  jflags  :t_jinstr_len;
+ end;
+
  p_jcode_chunk=^t_jcode_chunk;
  t_jcode_chunk=object
   entry:TAILQ_ENTRY;    //entry_chunk_list
@@ -73,7 +80,7 @@ type
   procedure dec_ref(name:pchar);
   function  is_mark_del:Boolean;
   function  find_host_by_guest(addr:QWORD):QWORD;
-  function  find_guest_by_host(addr:QWORD):QWORD;
+  function  find_guest_by_host(addr:QWORD;info:p_jit_addr_info):Boolean;
   function  cross_guest(c_start,c___end:QWORD):Boolean;
   function  cross_host (c_start,c___end:QWORD):Boolean;
  end;
@@ -123,7 +130,7 @@ type
   procedure dec_ref(name:pchar);
   procedure inc_attach_count;
   function  dec_attach_count:Boolean;
-  function  find_guest_by_host(addr:QWORD):QWORD;
+  function  find_guest_by_host(addr:QWORD;info:p_jit_addr_info):Boolean;
   function  cross_host(c_start,c___end:QWORD):Boolean;
   procedure Free;
   function  add_entry_point(src,dst:Pointer):p_jit_entry_point;
@@ -167,7 +174,7 @@ function  exist_entry(src:Pointer):Boolean;
 
 function  fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
 function  fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
-function  exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean;
+function  exist_jit_host(src:Pointer;info:p_jit_addr_info):Boolean;
 
 function  next_chunk(node:p_jcode_chunk;src:Pointer):p_jcode_chunk;
 //procedure unmap_jit_cache(start,__end:QWORD);
@@ -556,17 +563,17 @@ begin
  rw_runlock(entry_chunk_lock);
 end;
 
-function exist_jit_host(src:Pointer;tf_tip:PQWORD):Boolean; public;
+function exist_jit_host(src:Pointer;info:p_jit_addr_info):Boolean;
 var
  blob:p_jit_dynamic_blob;
 begin
  blob:=fetch_blob_by_host(src);
  if (blob<>nil) then
  begin
-  if (tf_tip<>nil) then
+  if (info<>nil) then
   begin
    rw_rlock(blob^.lock);
-   tf_tip^:=blob^.find_guest_by_host(QWORD(src));
+   blob^.find_guest_by_host(QWORD(src),info);
    rw_runlock(blob^.lock);
   end;
   blob^.dec_ref('fetch_blob_by_host');
@@ -684,6 +691,7 @@ var
  jctx :p_td_jctx;
  curr :p_jit_dynamic_blob;
  cache:p_jplt_cache;
+ info:t_jit_addr_info;
 begin
  td:=curkthread;
  if (td=nil) then Exit(nil);
@@ -700,8 +708,9 @@ begin
   end else
   if ((QWORD(addr) and UNRESOLVE_MAGIC_MASK)=UNRESOLVE_MAGIC_ADDR) then
   begin
-   if exist_jit_host(from,@td^.td_frame.tf_rip) then
+   if exist_jit_host(from,@info) then
    begin
+    td^.td_frame.tf_rip:=info.original;
     test_unresolve_symbol(td,addr);
    end;
   end;
@@ -1194,18 +1203,20 @@ begin
  Result:=(System.InterlockedDecrement(attach_count)=0);
 end;
 
-function t_jit_dynamic_blob.find_guest_by_host(addr:QWORD):QWORD;
+function t_jit_dynamic_blob.find_guest_by_host(addr:QWORD;info:p_jit_addr_info):Boolean;
 var
  node:p_jcode_chunk;
 begin
  //Writeln('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
 
- Result:=0;
+ Result:=False;
  node:=chunk_list;
  while (node<>nil) do
  begin
-  Result:=node^.find_guest_by_host(addr);
-  if (Result<>0) then Exit;
+  if node^.find_guest_by_host(addr,info) then
+  begin
+   Exit(True);
+  end;
 
   node:=node^.next;
  end;
@@ -1602,12 +1613,12 @@ begin
  end;
 end;
 
-function t_jcode_chunk.find_guest_by_host(addr:QWORD):QWORD;
+function t_jcode_chunk.find_guest_by_host(addr:QWORD;info:p_jit_addr_info):Boolean;
 var
  i,src,dst:QWORD;
  _table:p_jinstr_len;
 begin
- Result:=0;
+ Result:=False;
  //Writeln('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
  if (addr>=dest) and (addr<=d_end) then
  if (count<>0) then
@@ -1618,13 +1629,19 @@ begin
   For i:=0 to count-1 do
   begin
 
-   if (addr>=dst) then
-   begin
-    Result:=src;
-   end else
    if (dst>addr) then
    begin
     Exit;
+   end else
+   if {(addr>=dst) and} (addr<(dst+_table[i].recompil)) then
+   begin
+    if (info<>nil) then
+    begin
+     info^.original:=src;
+     info^.recompil:=dst;
+     info^.jflags  :=_table[i];
+    end;
+    Exit(True);
    end;
 
    src:=src+_table[i].original;
