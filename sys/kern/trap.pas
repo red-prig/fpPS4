@@ -88,12 +88,6 @@ const
   'DTrace pid return trap'         // 32 T_DTRACE_RET
  );
 
-procedure _sig_lock;
-procedure _sig_unlock;
-
-procedure sig_lock;
-procedure sig_unlock;
-
 procedure fast_syscall;
 procedure amd64_syscall;
 
@@ -121,76 +115,6 @@ uses
  subr_backtrace;
 
 //
-
-procedure _sig_lock; assembler; nostackframe;
-asm
- pushf
- lock incl %gs:teb.iflag   //lock interrupt
- popf
-end;
-
-procedure _sig_unlock; assembler; nostackframe;
-asm
- pushf
- lock decl %gs:teb.iflag   //unlock interrupt
- popf
-end;
-
-procedure sig_lock; assembler; nostackframe;
-label
- _exit;
-asm
- //prolog (debugger)
- pushq %rbp
- movq  %rsp,%rbp
- pushq %rax
- pushf
-
- movq $1,%rax
- lock xadd %rax,%gs:teb.iflag //lock interrupt
- test %rax,%rax
- jnz _exit
-
- movqq %gs:teb.thread,%rax     //curkthread
- testl TDF_AST,kthread.td_flags(%rax)
- je _exit
-
- mov  $0,%rax
- call fast_syscall
-
- _exit:
- //epilog (debugger)
- popf
- popq  %rax
- popq  %rbp
-end;
-
-procedure sig_unlock; assembler; nostackframe;
-label
- _exit;
-asm
- //prolog (debugger)
- pushq %rbp
- movq  %rsp,%rbp
- pushq %rax
- pushf
-
- lock decl %gs:teb.iflag   //unlock interrupt
- jnz _exit
-
- movqq %gs:teb.thread,%rax  //curkthread
- testl TDF_AST,kthread.td_flags(%rax)
- je _exit
-
- mov  $0,%rax
- call fast_syscall
-
- _exit:
- //epilog (debugger)
- popf
- popq  %rax
- popq  %rbp
-end;
 
 type
  tsyscall=function(rdi,rsi,rdx,rcx,r8,r9:QWORD):Integer;
@@ -454,7 +378,8 @@ asm
 
  //epilog (debugger)
  popq  %rbp
- ret
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
 
  //fail (curkthread=nil)
  _fail:
@@ -469,7 +394,8 @@ asm
  movqq  $0,%r11
 
  popq  %rbp
- ret
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
 
  //ast
  _ast:
@@ -485,7 +411,14 @@ asm
 
   //%rcx=curkthread
   testl TDF_AST,kthread.td_flags(%rcx)
+
+  //interrupt guard set
+  movq $1,%gs:teb.iflag
+
   je _doreti_exit
+
+  //interrupt guard clear
+  movq $0,%gs:teb.iflag
 
   call ast
   jmp _doreti
@@ -496,7 +429,7 @@ asm
   call  ipi_sigreturn
   hlt
  //marker
- .quad 0xDEADC0DEDEADC0DE
+ .globl .endof_fast_syscall
 end;
 
 procedure host_sigcode; assembler; nostackframe; public;
@@ -532,9 +465,16 @@ asm
  //ast
  _ast:
 
-  movqq %gs:teb.thread,%rax           //curkthread
-  testl TDF_AST,kthread.td_flags(%rax)
+  movqq %gs:teb.thread,%rcx           //curkthread
+  testl TDF_AST,kthread.td_flags(%rcx)
+
+  //interrupt guard set
+  movq $1,%gs:teb.iflag
+
   je _ast_exit
+
+  //interrupt guard clear
+  movq $0,%gs:teb.iflag
 
   call ast
   jmp _ast
@@ -546,32 +486,13 @@ end;
 
 ////
 
-function IndexMarker(pbuf:Pointer):Pointer;
-begin
- Result:=nil;
- while True do
- begin
-
-  if (PQWORD(pbuf)^=QWORD($DEADC0DEDEADC0DE)) then
-  begin
-   Break;
-  end;
-
-  Inc(pbuf);
- end;
- Result:=pbuf;
-end;
-
-var
- fast_syscall_end:Pointer=nil;
+procedure endof_fast_syscall; external name '.endof_fast_syscall';
 
 function IS_TRAP_FUNC(rip:qword):Boolean; public;
 begin
- if (fast_syscall_end=nil) then fast_syscall_end:=IndexMarker(@fast_syscall);
-
  Result:=(
           (rip>=QWORD(@fast_syscall)) and
-          (rip<=QWORD(fast_syscall_end)) //fast_syscall func size
+          (rip<=QWORD(@endof_fast_syscall))
          );
 end;
 

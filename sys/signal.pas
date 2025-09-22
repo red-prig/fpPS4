@@ -101,6 +101,8 @@ const
  TF_HASSEGS    =$1;
  TF_HASBASES   =$2;
  TF_HASFPXSTATE=$4;
+ TF_JIT_CTX    =$8;
+ TF_JIT_AST    =TF_HASFPXSTATE or TF_JIT_CTX;
 
 type
  p_sigset_t=^sigset_t;

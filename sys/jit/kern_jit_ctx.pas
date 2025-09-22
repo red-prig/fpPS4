@@ -12,7 +12,7 @@ uses
  x86_jit;
 
 const
- LF_JMP=1;
+ CAN_RESTART=1;
 
 type
  t_point_type=(fpCall,fpData,fpInvalid);
@@ -203,6 +203,7 @@ function is_xmm(const r:TInstruction):Boolean;
 function is_high(const r:TOperand):Boolean;
 function is_rsp(const r:TRegValue):Boolean;
 function is_rsp(const r:TRegValues):Boolean;
+function is_imm(const r:TInstruction):Boolean;
 function is_invalid(const r:TRegValue):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
 
@@ -948,6 +949,11 @@ end;
 function is_rsp(const r:TRegValues):Boolean; inline;
 begin
  Result:=is_rsp(r[0]) or is_rsp(r[1]);
+end;
+
+function is_imm(const r:TInstruction):Boolean;
+begin
+ Result:=(r.Operand[1].RegValue[0].AType=regNone);
 end;
 
 function is_cl(const r:TRegValue):Boolean; inline;

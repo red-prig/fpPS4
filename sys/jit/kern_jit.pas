@@ -47,7 +47,7 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- jit_save_to_sys_save(td);
+ set_jit_ctx_state(@td^.td_frame,False);
  td^.td_frame.tf_rip:=tf_rip;
  print_error_td('Assert in guest code!');
  Assert(false);
@@ -65,7 +65,7 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- jit_save_to_sys_save(td);
+ set_jit_ctx_state(@td^.td_frame,False);
  td^.td_frame.tf_rip:=tf_rip;
  print_error_td('System error in guest code!');
  Assert(false);
@@ -88,7 +88,7 @@ var
  td:p_kthread;
 begin
  td:=curkthread;
- jit_save_to_sys_save(td);
+ set_jit_ctx_state(@td^.td_frame,False);
  td^.td_frame.tf_rip:=tf_rip;
  print_error_td('TODO:jit_exit_proc');
  Assert(False);
@@ -209,6 +209,8 @@ type
 
 procedure op_jmp_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb_param;param:PtrUint);
 begin
+ ctx.label_flags:=ctx.label_flags and (not CAN_RESTART);
+
  with ctx.builder do
  begin
 
@@ -244,6 +246,8 @@ end;
 
 procedure op_call_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb_param;param:PtrUint);
 begin
+ ctx.label_flags:=ctx.label_flags and (not CAN_RESTART);
+
  with ctx.builder do
  begin
 
@@ -531,13 +535,11 @@ var
  link:t_jit_i_link;
  ret_dst:t_jit_i_link;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
-
  ret_dst:=op_add_local_cache(ctx);
 
  op_push_rip_part0(ctx);
 
- if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
+ if is_imm(ctx.din) then
  begin
   //imm offset
 
@@ -619,8 +621,6 @@ procedure op_ret(var ctx:t_jit_context2);
 var
  imm:Int64;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
-
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
@@ -642,9 +642,9 @@ var
  new1,new2:TRegValue;
  link:t_jit_i_link;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
+ ctx.label_flags:=ctx.label_flags or CAN_RESTART;
 
- if (ctx.din.Operand[1].RegValue[0].AType=regNone) then
+ if is_imm(ctx.din) then
  begin
   //imm offset
 
@@ -745,7 +745,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
+ ctx.label_flags:=ctx.label_flags or CAN_RESTART;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -771,6 +771,7 @@ begin
  end else
  begin
   //far
+  ctx.label_flags:=ctx.label_flags and (not CAN_RESTART);
 
   //invert cond jump
   id1:=ctx.builder.jcc(invert_cond(ctx.din.OpCode.Suffix),nil_link,os8);
@@ -797,7 +798,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
+ ctx.label_flags:=ctx.label_flags or CAN_RESTART;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -824,6 +825,7 @@ begin
  end else
  begin
   //far
+  ctx.label_flags:=ctx.label_flags and (not CAN_RESTART);
 
   id1:=ctx.builder.loop(ctx.din.OpCode.Suffix,nil_link,ctx.dis.AddressSize,os8);
 
@@ -843,7 +845,7 @@ var
  dst:Pointer;
  link:t_jit_i_link;
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
+ ctx.label_flags:=ctx.label_flags or CAN_RESTART;
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,1,ofs);
@@ -870,6 +872,7 @@ begin
  end else
  begin
   //far
+  ctx.label_flags:=ctx.label_flags and (not CAN_RESTART);
 
   id1:=ctx.builder.jcxz(nil_link,ctx.dis.AddressSize,os8);
 
@@ -1128,8 +1131,6 @@ end;
 
 procedure op_syscall(var ctx:t_jit_context2);
 begin
- ctx.label_flags:=ctx.label_flags or LF_JMP;
-
  ctx.add_forward_point(fpCall,ctx.ptr_curr);
  ctx.add_forward_point(fpCall,ctx.ptr_next);
  //
@@ -1959,7 +1960,7 @@ begin
                 ctx.ptr_next,
                 link_curr,
                 link_next,
-                LF_JMP);
+                0);
   //
   ctx.add_entry_point(ctx.ptr_curr,link_curr);
   //
@@ -2006,7 +2007,7 @@ begin
                 ctx.ptr_next,
                 link_curr,
                 link_next,
-                LF_JMP);
+                0);
 
   //
   ctx.add_entry_point(ctx.ptr_curr,link_curr);
@@ -2044,7 +2045,7 @@ begin
                 ctx.ptr_next,
                 link_curr,
                 link_next,
-                LF_JMP);
+                0);
   //
   ctx.add_entry_point(ctx.ptr_curr,link_curr);
   //

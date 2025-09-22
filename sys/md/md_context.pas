@@ -6,6 +6,7 @@ unit md_context;
 interface
 
 uses
+ kern_jit_interrupt,
  Windows,
  ntapi,
  ucontext,
@@ -26,7 +27,8 @@ const
 
 const
  CONTEXT_XSTATE =(CONTEXT_AMD64 or $0040);
- CONTEXT_ALLX   =(CONTEXT_ALL or CONTEXT_XSTATE);
+ CONTEXT_FX     =(CONTEXT_FLOATING_POINT or CONTEXT_XSTATE);
+ CONTEXT_ICFX   =(CONTEXT_INTEGER or CONTEXT_CONTROL or CONTEXT_FLOATING_POINT or CONTEXT_XSTATE);
 
 type
  PYMMCONTEXT=^TYMMCONTEXT;
@@ -90,18 +92,18 @@ procedure teb_set_user  (td:p_kthread);
 Function  GetContextSize(ContextFlags:DWORD):QWORD;
 function  InitializeContextExtended(data:Pointer;ContextFlags:DWORD):Pointer;
 
-function  _get_ctx_flags(src:p_ucontext_t):DWORD;
+function  md_get_ctx_flags(src:p_ucontext_t):DWORD;
 
-procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
-procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
+procedure md_get_fpcontext(src:PCONTEXT;xstate:Pointer);
+procedure md_set_fpcontext(dst:PCONTEXT;xstate:Pointer);
 
 procedure fpuinit(td:p_kthread);
 
-procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
-procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
+procedure md_get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
+procedure md_set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
 
-procedure _get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
-procedure _set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
+procedure md_get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
+procedure md_set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
 
 function  md_get_fpcontext(td:p_kthread;mcp:p_mcontext_t;xstate:Pointer):Integer;
 
@@ -113,9 +115,7 @@ implementation
 uses
  errno,
  systm,
- kern_psl,
- signal,
- md_sleep;
+ signal;
 
 //
 
@@ -162,6 +162,12 @@ function SetXStateFeaturesMask(
           FeatureMask:QWORD
          ):BOOL; stdcall external 'kernel32';
 
+function LocateXStateFeature(
+          Context:PCONTEXT;
+          FeatureId:DWORD;
+          Length:PDWORD
+          ):Pointer; stdcall external 'kernel32';
+
 Function GetContextSize(ContextFlags:DWORD):QWORD;
 begin
  Result:=0;
@@ -176,7 +182,6 @@ var
  ContextSize:DWORD;
  FeatureMask:QWORD;
  XstateMaskf:QWORD;
- XstateMaskr:QWORD;
 begin
  Result:=nil;
 
@@ -198,15 +203,9 @@ begin
  begin
   FeatureMask:=GetEnabledXStateFeatures;
 
-  XstateMaskf:=FeatureMask  and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
-  XstateMaskr:=ContextFlags and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
+  XstateMaskf:=FeatureMask and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
 
-  if (XstateMaskf<>XstateMaskr) then
-  begin
-   Exit(nil);
-  end;
-
-  if not SetXStateFeaturesMask(Result,XstateMaskr) then
+  if not SetXStateFeaturesMask(Result,XstateMaskf) then
   begin
    Exit(nil);
   end;
@@ -215,7 +214,7 @@ begin
 
 end;
 
-function _get_ctx_flags(src:p_ucontext_t):DWORD;
+function md_get_ctx_flags(src:p_ucontext_t):DWORD;
 begin
  Result:=0;
  if ((src^.uc_flags and _UC_CPU)<>0) then
@@ -233,7 +232,7 @@ begin
  Result:=Result and (not CONTEXT_AMD64);
 end;
 
-function _get_ctx_flags(src:p_trapframe):DWORD;
+function md_get_ctx_flags(src:p_trapframe):DWORD;
 begin
  Result:=CONTEXT_INTEGER or CONTEXT_CONTROL;
  if ((src^.tf_flags and _MC_HASSEGS)<>0) then
@@ -247,13 +246,15 @@ begin
  Result:=Result and (not CONTEXT_AMD64);
 end;
 
-procedure _get_fpcontext(src:PCONTEXT;xstate:Pointer);
+procedure md_get_fpcontext(src:PCONTEXT;xstate:Pointer);
 var
  context_ex:PCONTEXT_EX;
  xs:PXSTATE;
 
  uc_xsave :PXmmSaveArea;
  uc_xstate:PXSTATE;
+
+ mask:QWORD;
 begin
  if (src=nil) or (xstate=nil) then Exit;
 
@@ -265,15 +266,24 @@ begin
 
   uc_xsave^:=src^.FltSave;
  uc_xstate^:=xs^;
+
+ //need a filter because it's in extended mode, it comes separately
+ mask:=xs^.Mask and XSTATE_MASK_AVX;
+ mask:=mask or ord((src^.ContextFlags and CONTEXT_FLOATING_POINT)<>0)*XSTATE_MASK_LEGACY;
+
+ uc_xstate^.Mask          :=mask;
+ uc_xstate^.CompactionMask:=mask or QWORD(1 shl 63);
 end;
 
-procedure _set_fpcontext(dst:PCONTEXT;xstate:Pointer);
+procedure md_set_fpcontext(dst:PCONTEXT;xstate:Pointer);
 var
  context_ex:PCONTEXT_EX;
  xs:PXSTATE;
 
  uc_xsave :PXmmSaveArea;
  uc_xstate:PXSTATE;
+
+ mask:QWORD;
 begin
  if (dst=nil) or (xstate=nil) then Exit;
 
@@ -287,6 +297,12 @@ begin
 
  dst^.FltSave:=uc_xsave^;
           xs^:=uc_xstate^;
+
+ //need a filter because it's in extended mode, it comes separately
+ mask:=uc_xstate^.Mask and XSTATE_MASK_AVX;
+
+ xs^.Mask          :=mask;
+ xs^.CompactionMask:=mask or QWORD(1 shl 63);
 end;
 
 procedure fpuinit(td:p_kthread);
@@ -296,29 +312,34 @@ var
 begin
  if (td=nil) then Exit;
 
+ td^.td_fpstate:=Default(t_fpstate);
+
  uc_xsave :=PXmmSaveArea(@td^.td_fpstate);
  uc_xstate:=PXSTATE(uc_xsave+1);
 
- //uc_xstate^.Mask:=
- uc_xstate^.CompactionMask:=GetEnabledXStateFeatures;
- uc_xstate^.CompactionMask:=uc_xstate^.CompactionMask and (XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
- uc_xstate^.CompactionMask:=uc_xstate^.CompactionMask or QWORD(1 shl 63);
+ uc_xstate^.Mask          :=(XSTATE_MASK_LEGACY or XSTATE_MASK_AVX);
+ uc_xstate^.CompactionMask:=(XSTATE_MASK_LEGACY or XSTATE_MASK_AVX) or QWORD(1 shl 63);
 
  uc_xsave^.ControlWord:=__INITIAL_FPUCW__;
- //uc_xsave^.StatusWord: WORD;
  uc_xsave^.MxCsr      :=__INITIAL_MXCSR__;
  uc_xsave^.MxCsr_Mask :=__INITIAL_MXCSR_MASK__;
 
  td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_HASFPXSTATE;
 end;
 
-procedure _get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer;is_jit:Boolean);
+function  get_jit_ctx_state(td_frame:p_trapframe):Boolean;       external;
+procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean); external;
+
+procedure md_get_frame(src:PCONTEXT;dst:p_trapframe;xstate:Pointer);
 var
  flags:DWORD;
+ is_jit:Boolean;
 begin
  if (src=nil) or (dst=nil) then Exit;
 
  flags:=src^.ContextFlags and (not CONTEXT_AMD64);
+
+ is_jit:=get_jit_ctx_state(dst);
 
  if ((flags and CONTEXT_INTEGER)<>0) then
  begin
@@ -352,24 +373,31 @@ begin
   dst^.tf_rflags:=src^.EFlags;
  end;
 
- if ((flags and CONTEXT_XSTATE)<>0) then
+ if ((flags and CONTEXT_FX)<>0) then
  begin
-  _get_fpcontext(src,xstate);
+  md_get_fpcontext(src,xstate);
 
   dst^.tf_flags:=dst^.tf_flags or _MC_HASFPXSTATE;
+ end else
+ begin
+  dst^.tf_flags:=dst^.tf_flags and (not _MC_HASFPXSTATE);
  end;
+
 end;
 
-procedure _set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer;is_jit:Boolean);
+procedure md_set_frame(dst:PCONTEXT;src:p_trapframe;xstate:Pointer);
 var
  flags:DWORD;
+ is_jit:Boolean;
 begin
  if (src=nil) or (dst=nil) then Exit;
 
- flags:=_get_ctx_flags(src);
+ flags:=md_get_ctx_flags(src);
 
  flags:=flags and dst^.ContextFlags; //filter
  dst^.ContextFlags:=flags or CONTEXT_AMD64; //update
+
+ is_jit:=get_jit_ctx_state(src);
 
  if ((flags and CONTEXT_INTEGER)<>0) then
  begin
@@ -383,9 +411,9 @@ begin
   dst^.R9 :=src^.tf_r9;
   dst^.R10:=src^.tf_r10;
   dst^.R11:=src^.tf_r11;
+  dst^.R12:=src^.tf_r12;
   if not is_jit then
   begin
-   dst^.R12:=src^.tf_r12;
    dst^.R13:=src^.tf_r13;
    dst^.R14:=src^.tf_r14;
    dst^.R15:=src^.tf_r15;
@@ -403,16 +431,16 @@ begin
   dst^.EFlags:=src^.tf_rflags;
  end;
 
- if ((flags and CONTEXT_FLOATING_POINT)<>0) or
-    ((flags and CONTEXT_XSTATE)<>0) then
+ if ((flags and CONTEXT_FX)<>0) then
  begin
-  _set_fpcontext(dst,xstate);
+  md_set_fpcontext(dst,xstate);
  end;
+
 end;
 
 //
 
-procedure _get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
+procedure md_get_ucontext(src:PCONTEXT;dst:p_ucontext_t);
 var
  flags:DWORD;
 begin
@@ -462,9 +490,9 @@ begin
   dst^.uc_mcontext.mc_gs:=_ugssel;
  end;
 
- if ((flags and CONTEXT_XSTATE)<>0) then
+ if ((flags and CONTEXT_FX)<>0) then
  begin
-  _get_fpcontext(src,@dst^.uc_mcontext.mc_fpstate);
+  md_get_fpcontext(src,@dst^.uc_mcontext.mc_fpstate);
 
   dst^.uc_mcontext.mc_fpformat:=_MC_FPFMT_XMM;
   dst^.uc_mcontext.mc_ownedfp :=_MC_FPOWNED_FPU;
@@ -475,13 +503,13 @@ begin
  dst^.uc_mcontext.mc_len:=SizeOf(mcontext_t);
 end;
 
-procedure _set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
+procedure md_set_ucontext(dst:PCONTEXT;src:p_ucontext_t);
 var
  flags:DWORD;
 begin
  if (src=nil) or (dst=nil) then Exit;
 
- flags:=_get_ctx_flags(src);
+ flags:=md_get_ctx_flags(src);
 
  flags:=flags and dst^.ContextFlags; //filter
  dst^.ContextFlags:=flags or CONTEXT_AMD64; //update
@@ -523,21 +551,14 @@ begin
   dst^.SegGs:=KGDT64_R3_DATA  or RPL_MASK;
  end;
 
- if ((flags and CONTEXT_FLOATING_POINT)<>0) or
-    ((flags and CONTEXT_XSTATE)<>0) then
+ if ((flags and CONTEXT_FX)<>0) then
  begin
-  _set_fpcontext(dst,@src^.uc_mcontext.mc_fpstate);
+  md_set_fpcontext(dst,@src^.uc_mcontext.mc_fpstate);
  end;
 
 end;
 
-function cpu_get_iflag(td:p_kthread):PInteger; inline;
-begin
- Result:=@td^.td_teb^.iflag;
-end;
-
-function IS_TRAP_FUNC(rip:qword):Boolean; external;
-function IS_JIT_FUNC (rip:qword):Boolean; external;
+function  IS_TRAP_FUNC(rip:qword):Boolean; external;
 
 function IS_SYSTEM_STACK(td:p_kthread;rsp:qword):Boolean; inline;
 begin
@@ -583,9 +604,9 @@ begin
  Result   :=0;
  td_handle:=td^.td_handle;
 
- Context:=get_top_mem_td(td,GetContextSize(CONTEXT_XSTATE),16);
+ Context:=get_top_mem_td(td,GetContextSize(CONTEXT_FX),16);
  Assert(Context<>nil);
- Context:=InitializeContextExtended(Context,CONTEXT_XSTATE);
+ Context:=InitializeContextExtended(Context,CONTEXT_FX);
 
  if (NtGetContextThread(td_handle,Context)<>STATUS_SUCCESS) then
  begin
@@ -593,7 +614,7 @@ begin
  end;
 
  //xmm,ymm
- _get_fpcontext(Context,xstate);
+ md_get_fpcontext(Context,xstate);
 
  mcp^.mc_flags   :=mcp^.mc_flags or _MC_HASFPXSTATE;
  mcp^.mc_fpformat:=_MC_FPFMT_XMM;
@@ -602,6 +623,38 @@ begin
 end;
 
 procedure switch_to_jit(td:p_kthread); external;
+
+procedure xsave(xstate:Pointer); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+ mov   $7,%eax
+ xor %edx,%edx
+
+ //xsave64 (%rdi) //480FAE27
+ .byte 0x48, 0x0F, 0xAE, 0x27
+ //
+end;
+
+procedure xrstor(xstate:Pointer); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+ mov   $7,%eax
+ xor %edx,%edx
+
+//xrstor (%rdi) //0FAE2F
+ .byte 0x0F, 0xAE, 0x2F
+ //
+end;
+
+procedure ipi_interrupt_nop; assembler; nostackframe; public;
+asm
+ //clear interrupt
+ movq $0,%gs:teb.iflag
+
+ //go next
+ jmp %gs:teb.ipi_rip
+
+ //marker
+ .globl .endof_ipi_interrupt_nop
+end;
 
 procedure ipi_sigreturn;
 var
@@ -617,6 +670,8 @@ begin
   Exit;
  end;
 
+ //Writeln('ipi_sigreturn');
+
  //teb stack
  teb_set_kernel(td);
  //teb stack
@@ -628,9 +683,9 @@ begin
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
   //xmm,ymm
-  Context:=get_top_mem_td(td,GetContextSize(CONTEXT_ALLX),16);
+  Context:=get_top_mem_td(td,GetContextSize(CONTEXT_ICFX),16);
   Assert(Context<>nil);
-  Context:=InitializeContextExtended(Context,CONTEXT_ALLX);
+  Context:=InitializeContextExtended(Context,CONTEXT_ICFX);
  end else
  begin
   //simple
@@ -672,9 +727,7 @@ begin
  //xmm,ymm
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
-  _set_fpcontext(Context,@td^.td_fpstate);
-
-  regs^.tf_flags:=regs^.tf_flags and (not TF_HASFPXSTATE);
+  md_set_fpcontext(Context,@td^.td_fpstate);
  end;
  //xmm,ymm
 
@@ -684,28 +737,67 @@ begin
 
  //Writeln('ipi_sigreturn');
 
+ //interrupt guard
+ if (td^.td_teb^.iflag<>0) then
+ begin
+  td^.td_teb^.ipi_rip:=Pointer(Context^.Rip);
+  Context^.Rip:=QWORD(@ipi_interrupt_nop);
+ end;
+
  R:=NtContinue(Context,False);
+
+ //This place should be unreachable!
+
+ td^.td_teb^.iflag:=0;
 
  Writeln(stderr,'NtContinue:0x',HexStr(R,8));
 end;
 
 procedure host_sigipi; external;
 
+type
+ p_fpstate=^t_fpstate;
+
 procedure on_ipi(td           :p_kthread;
                  ApcArgument2 :Pointer;
                  ApcArgument3 :Pointer;
                  ContextRecord:PCONTEXT); stdcall;
+
+var
+ data:array[0..sizeof(t_fpstate)-1+63] of Byte;
+ fpstate:p_fpstate;
 begin
 
- if IS_SYSTEM_STACK(td,ContextRecord^.Rsp) or //system?
-    IS_TRAP_FUNC(ContextRecord^.Rip) or       //syscall func?
-    IS_JIT_FUNC (ContextRecord^.Rip) then     //syscall func?
+ fpstate:=Pointer((QWORD(@data) + 63) and (not QWORD(63)));
+ fpstate^:=Default(t_fpstate);
+
+ xsave(fpstate);
+
+ //Writeln('on_ipi:',td^.td_name);
+
+ //Writeln('ContextFlags=',HexStr(ContextRecord^.ContextFlags,8),' ',((ContextRecord^.ContextFlags and $40)<>0));
+
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
+  if IS_SYSTEM_STACK(td,ContextRecord^.Rsp) or //system?
+     IS_TRAP_FUNC(ContextRecord^.Rip) then     //syscall func?
+  begin
+   Exit;
+  end;
+  //native trap?
+ end else
+ begin
+
+  with ContextRecord^ do
+  begin
+   JIT_AST_HANDLER(td,Rip,EFlags,Dr3);
+  end;
+
+  xrstor(fpstate);
   Exit;
  end;
 
- Writeln('TODO:on_ipi');
- //Assert(false,'on_ipi');
+ Assert(false,'on_ipi');
 end;
 
 function ipi_send_cpu(td:p_kthread):Integer;

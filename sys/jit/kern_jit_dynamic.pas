@@ -45,11 +45,11 @@ type
 
  p_jinstr_len=^t_jinstr_len;
  t_jinstr_len=packed record
-  original:0..15;  //4
-  LF_JMP  :0..1;
-  bit5    :0..1;
-  bit6    :0..1;
-  recompil:0..511; //9
+  original   :0..15;  //4
+  CAN_RESTART:0..1;
+  bit5       :0..1;
+  bit6       :0..1;
+  recompil   :0..511; //9
  end;
 
  p_jit_addr_info=^t_jit_addr_info;
@@ -195,6 +195,7 @@ implementation
 uses
  sysutils,
  vmparam,
+ signal,
  sys_bootparam,
  kern_proc,
  vm,
@@ -285,6 +286,12 @@ begin
  //td^.td_jctx.block:=nil;
  //kmem_free(td^.td_jctx.call_ret_cache,64*1024);
  //td^.td_jctx.call_ret_cache:=nil;
+
+ if (td^.td_jctx.lacuna.chnk<>nil) then
+ begin
+  p_free(td^.td_jctx.lacuna.chnk);
+  td^.td_jctx.lacuna:=Default(t_lacuna);
+ end;
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -385,12 +392,7 @@ begin
  end;
  Assert(jctx^.call_ret_cache<>nil,'call_ret_cache aalocation fail');
 
- //tf_r14 not need to move
- //tf_r15 not need to move
-
- frame^.tf_r13:=td^.td_frame.tf_r13;
- frame^.tf_rsp:=td^.td_frame.tf_rsp;
- frame^.tf_rbp:=td^.td_frame.tf_rbp;
+ set_jit_ctx_state(@td^.td_frame,True);
 
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
  td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
@@ -903,7 +905,7 @@ begin
   table[i].original:=Byte(original);
   table[i].recompil:=Byte(recompil);
 
-  table[i].LF_JMP  :=ord((clabel^.flags and LF_JMP)<>0);
+  table[i].CAN_RESTART:=ord((clabel^.flags and CAN_RESTART)<>0);
 
   {
   writeln('|0x',HexStr(curr),'..',HexStr(next),

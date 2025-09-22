@@ -6,6 +6,7 @@ unit machdep;
 interface
 
 uses
+ subr_backtrace,
  signal,
  signalvar,
  ucontext,
@@ -54,7 +55,8 @@ uses
  systm,
  kern_psl,
  vm_map,
- md_context;
+ md_context,
+ kern_jit_asm;
 
 //clearing memory without AVX optimizations
 procedure bzero(ptr:Pointer;size:ptrint);
@@ -413,6 +415,8 @@ begin
  regs:=@td^.td_frame;
  oonstack:=sigonstack(regs^.tf_rsp);
 
+ set_jit_ctx_state(regs,False);
+
  // Save user context.
  sf:=Default(sigframe);
 
@@ -421,13 +425,7 @@ begin
 
  if ((td^.td_pflags and TDP_ALTSTACK)<>0) then
  begin
-  if (oonstack<>0) then
-  begin
-   sf.sf_uc.uc_stack.ss_flags:=SS_ONSTACK;
-  end else
-  begin
-   sf.sf_uc.uc_stack.ss_flags:=0;
-  end;
+  sf.sf_uc.uc_stack.ss_flags:=SS_ONSTACK*ord(oonstack<>0);
  end else
  begin
   sf.sf_uc.uc_stack.ss_flags:=SS_DISABLE;
@@ -445,6 +443,9 @@ begin
  regs^.tf_flags:=regs^.tf_flags or TF_HASSEGS;
  //set segs
 
+ Assert(tf_copy_1=$90);
+ Assert(tf_copy_2=$30);
+
  bmove(@regs^.tf_rdi,@sf.sf_uc.uc_mcontext.mc_rdi,tf_copy_1);
  bmove(@regs^.tf_err,@sf.sf_uc.uc_mcontext.mc_err,tf_copy_2);
 
@@ -457,9 +458,7 @@ begin
  if ((regs^.tf_flags and TF_HASFPXSTATE)<>0) then
  begin
   get_fpcontext(td,@sf.sf_uc.uc_mcontext,@sf.sf_uc.uc_mcontext.mc_fpstate);
-
-  //reset fpcontext usage
-  regs^.tf_flags:=regs^.tf_flags and (not TF_HASFPXSTATE);
+  fpuinit(td);
  end;
  //xmm,ymm
 
@@ -484,24 +483,27 @@ begin
 
  sp:=sp-sizeof(sigframe);
 
- sfp:=p_sigframe(sp and (not $1F));
+ sfp:=p_sigframe(sp and (not $F));
 
- regs^.tf_rdi:=sig;
- regs^.tf_rdx:=QWORD(@sfp^.sf_uc);
+ regs^.tf_rdi:=sig;                 // arg 1 in %rdi
+ regs^.tf_rdx:=QWORD(@sfp^.sf_uc);  // arg 3 in %rdx
 
  if (SIGISMEMBER(@p_sigacts.ps_siginfo,sig)) then
  begin
-  regs^.tf_rsi:=QWORD(@sfp^.sf_si);
+  // Signal handler installed with SA_SIGINFO.
+  regs^.tf_rsi:=QWORD(@sfp^.sf_si); // arg 2 in %rsi
   sf.sf_ahu:=Pointer(catcher);
 
+  // Fill in POSIX parts
   sf.sf_si:=ksi^.ksi_info;
   sf.sf_si.si_signo:=sig;
 
-  regs^.tf_rcx:=QWORD(ksi^.ksi_info.si_addr);
+  regs^.tf_rcx:=QWORD(ksi^.ksi_info.si_addr); // arg 4 in %rcx
  end else
  begin
-  regs^.tf_rsi:=ksi^.ksi_info.si_code;
-  regs^.tf_rcx:=QWORD(ksi^.ksi_info.si_addr);
+  // Old FreeBSD-style arguments.
+  regs^.tf_rsi:=ksi^.ksi_info.si_code;        // arg 2 in %rsi
+  regs^.tf_rcx:=QWORD(ksi^.ksi_info.si_addr); // arg 4 in %rcx
   sf.sf_ahu:=Pointer(catcher);
  end;
 
@@ -542,6 +544,7 @@ begin
  td:=curkthread;
 
  Writeln('sys_sigreturn');
+ //print_backtrace_td(stderr);
 
  Result:=copyin(sigcntxp,@uc,sizeof(ucontext_t));
  if (Result<>0) then Exit;

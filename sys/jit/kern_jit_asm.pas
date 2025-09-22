@@ -60,13 +60,13 @@ procedure jit_hle_trace; assembler;
 
 procedure jit_jmp_internal;  assembler;
 
-function  IS_JIT_FUNC(rip:qword):Boolean;
+function  GET_JIT_FUNC(rip:qword):Byte;
 
 procedure jit_save_ctx;
 procedure jit_load_ctx;
 
-procedure jit_save_to_sys_save(td:p_kthread);
-procedure sys_save_to_jit_save(td:p_kthread);
+function  get_jit_ctx_state(td_frame:p_trapframe):Boolean;
+procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean);
 
 procedure jit_cpuid; assembler;
 
@@ -89,34 +89,6 @@ uses
 //
 
 function jmp_dispatcher(addr,plt,from:Pointer):Pointer; external;
-
-//
-
-procedure jit_simple_save_ctx; assembler; nostackframe;
-asm
- movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13)
- movqq %rsi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r13)
- movqq %rdx, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdx(%r13)
- movqq %rcx, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rcx(%r13)
- movqq %r8 , - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r8 (%r13)
- movqq %r9 , - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r9 (%r13)
- movqq %rax, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13)
- movqq %r10, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r10(%r13)
- movqq %r11, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13)
-end;
-
-procedure jit_simple_load_ctx; assembler; nostackframe;
-asm
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13), %rdi
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r13), %rsi
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdx(%r13), %rdx
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rcx(%r13), %rcx
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r8 (%r13), %r8
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r9 (%r13), %r9
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rax(%r13), %rax
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r10(%r13), %r10
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13), %r11
-end;
 
 //
 
@@ -243,7 +215,8 @@ asm
  //epilog (debugger)
  movq  %rbp,%rsp
  popq  %rbp
- ret
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
 
  //fail (curkthread=nil)
  _fail:
@@ -264,7 +237,8 @@ asm
  //epilog (debugger)
  movq  %rbp,%rsp
  popq  %rbp
- ret
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
 
  //ast
  _ast:
@@ -277,7 +251,14 @@ asm
 
   //%r15=curkthread
   testl TDF_AST,kthread.td_flags(%r15)
+
+  //interrupt guard set
+  movq $1,%gs:teb.iflag
+
   je _doreti_exit
+
+  //interrupt guard clear
+  movq $0,%gs:teb.iflag
 
   call ast
   jmp _doreti
@@ -287,40 +268,74 @@ asm
   //Restore full.
   call  ipi_sigreturn
   hlt
+
  //marker
- .quad 0xDEADC0DEDEADC0DE
+ .globl .endof_jit_syscall
 end;
 
-procedure jit_save_to_sys_save(td:p_kthread); public;
+procedure jit_ctx_to_sys_ctx(td_frame:p_trapframe); inline;
 var
  frame:p_jit_frame;
 begin
- frame:=@td^.td_frame.tf_r13;
+ if ((td_frame^.tf_flags and TF_JIT_CTX)<>0) then
+ begin
+  frame:=@td_frame^.tf_r13;
 
- //tf_rip ?????
+  //tf_rip ?????
 
- td^.td_frame.tf_r13:=frame^.tf_r13;
- td^.td_frame.tf_rsp:=frame^.tf_rsp;
- td^.td_frame.tf_rbp:=frame^.tf_rbp;
+  //tf_r14 not need to move
+  //tf_r15 not need to move
 
- td^.td_frame.tf_trapno:=0;
- td^.td_frame.tf_BrF   :=0;
- td^.td_frame.tf_BrT   :=0;
+  td_frame^.tf_r13:=frame^.tf_r13;
+  td_frame^.tf_rsp:=frame^.tf_rsp;
+  td_frame^.tf_rbp:=frame^.tf_rbp;
+
+  td_frame^.tf_trapno:=0;
+  td_frame^.tf_BrF   :=0;
+  td_frame^.tf_BrT   :=0;
+
+  td_frame^.tf_flags:=td_frame^.tf_flags and (not TF_JIT_CTX);
+ end;
 end;
 
-procedure sys_save_to_jit_save(td:p_kthread); public;
+procedure sys_ctx_to_jit_ctx(td_frame:p_trapframe); inline;
 var
  frame:p_jit_frame;
 begin
- frame:=@td^.td_frame.tf_r13;
+ if ((td_frame^.tf_flags and TF_JIT_CTX)=0) then
+ begin
+  frame:=@td_frame^.tf_r13;
 
- frame^.tf_r13:=td^.td_frame.tf_r13;
- frame^.tf_rsp:=td^.td_frame.tf_rsp;
- frame^.tf_rbp:=td^.td_frame.tf_rbp;
+  //tf_rip ?????
+
+  //tf_r14 not need to move
+  //tf_r15 not need to move
+
+  frame^.tf_r13:=td_frame^.tf_r13;
+  frame^.tf_rsp:=td_frame^.tf_rsp;
+  frame^.tf_rbp:=td_frame^.tf_rbp;
+
+  td_frame^.tf_flags:=td_frame^.tf_flags or TF_JIT_CTX;
+ end;
+end;
+
+function get_jit_ctx_state(td_frame:p_trapframe):Boolean; public;
+begin
+ Result:=((td_frame^.tf_flags and TF_JIT_CTX)<>0);
+end;
+
+procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean); public;
+begin
+ case state of
+  False:jit_ctx_to_sys_ctx(td_frame);
+  True :sys_ctx_to_jit_ctx(td_frame);
+ end;
 end;
 
 procedure jit_save_ctx; assembler; nostackframe;
 asm
+ movqq TF_JIT_AST, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_flags(%r13)
+
  movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdi(%r13)
  movqq %rsi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsi(%r13)
  movqq %rdx, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rdx(%r13)
@@ -485,10 +500,8 @@ asm
  //movq %rsp,%rbp
  //leaq 8(%rbp),%rbp
 
- //interrupt
+ //interrupt/ret
  jmp %gs:teb.jit_trp
-
- //ret
 
  _exit:
 
@@ -501,7 +514,7 @@ asm
 
  jmp jit_jmp_dispatch
  //marker
- .quad 0xDEADC0DEDEADC0DE
+ .globl .endof_jit_jmp_plt_cache
 end;
 
 //in:r14(addr) r15(plt) out:r14(addr)
@@ -533,10 +546,10 @@ asm
  movq %rbp,%rsp
  pop  %rbp
 
- //interrupt
+ //interrupt/ret
  jmp %gs:teb.jit_trp
  //marker
- .quad 0xDEADC0DEDEADC0DE
+ .globl .endof_jit_jmp_dispatch
 end;
 
 //in:r14(nid) r15(caller)
@@ -561,12 +574,13 @@ asm
  movq %rbp,%rsp
  pop  %rbp
 
- //interrupt
+ //interrupt/ret
  jmp %gs:teb.jit_trp
  //marker
- .quad 0xDEADC0DEDEADC0DE
+ .globl .endof_jit_hle_trace
 end;
 
+//unused
 procedure stack_set_user; assembler; nostackframe;
 asm
  //switch stack
@@ -586,6 +600,7 @@ asm
  //teb
 end;
 
+//unused
 procedure stack_set_jit; assembler; nostackframe;
 asm
  //switch stack
@@ -604,6 +619,7 @@ asm
  //uplift %rsp/%rbp ???
 end;
 
+//unused
 procedure jit_jmp_internal; assembler; nostackframe;
 asm
  //prolog (debugger)
@@ -646,12 +662,13 @@ asm
  jmp  jit_jmp_dispatch
 end;
 
+//unused
 procedure _jit_cpuid(tf_rip,rax:qword);
 var
  td:p_kthread;
 begin
  td:=curkthread;
- jit_save_to_sys_save(td);
+ jit_ctx_to_sys_ctx(@td^.td_frame);
  td^.td_frame.tf_rip:=tf_rip;
  print_error_td('TODO:jit_cpuid:0x'+HexStr(rax,8));
  Assert(False);
@@ -1001,8 +1018,10 @@ asm
  sahf
  movq %r14, %rax
 
- //interrupt
+ //interrupt/ret
  jmp %gs:teb.jit_trp
+ //marker
+ .globl .endof_jit_cpuid
 end;
 
 procedure strict_ps4_rdtsc_jit; assembler; nostackframe;
@@ -1071,45 +1090,136 @@ procedure jit_interrupt_nop; assembler; nostackframe;
 asm
 end;
 
-function IndexMarker(pbuf:Pointer):Pointer;
-begin
- Result:=nil;
- while True do
- begin
+function rev_dispatcher(addr:Pointer):Pointer; external;
 
-  if (PQWORD(pbuf)^=QWORD($DEADC0DEDEADC0DE)) then
-  begin
-   Break;
-  end;
+procedure jit_interrupt_ast; assembler; nostackframe; public;
+label
+ _doreti,
+ _doreti_exit;
+asm
+ //clear handler
+ leaq jit_interrupt_nop(%rip),%r14
+ movq %r14,%gs:teb.jit_trp
 
-  Inc(pbuf);
- end;
- Result:=pbuf;
+ movq %gs:teb.thread,%r13                //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ call jit_save_ctx // -> pushf
+
+ //tf_r13
+ movqq jit_frame.tf_r13(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13)
+
+ //tf_rsp
+ movqq jit_frame.tf_rsp(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13)
+
+ //tf_rbp
+ movqq jit_frame.tf_rbp(%r13),%rdi
+ movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
+
+
+
+ movq $0,%r13
+
+ pop   %rdi //ret
+ push  %rdi
+
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ andq  $-16,%rsp //align stack
+
+ call  rev_dispatcher
+
+ movq  %gs:teb.thread,%r15                 //curkthread
+ movqq %rax, kthread.td_frame.tf_rip(%r15) //save rev_dispatcher result
+
+ _doreti:
+
+  movq  %gs:teb.thread,%r15                 //curkthread
+
+  //%r15=curkthread
+  testl TDF_AST,kthread.td_flags(%r15)
+
+  //interrupt guard set
+  movq $1,%gs:teb.iflag
+
+  je _doreti_exit
+
+  //interrupt guard clear
+  movq $0,%gs:teb.iflag
+
+  movq $0,%r15
+
+  call ast
+  jmp _doreti
+
+  _doreti_exit:
+
+  movq $0,%r15
+
+  //Restore full.
+  call  ipi_sigreturn
+  hlt
+
+ //marker
+ .globl .endof_jit_interrupt_ast
 end;
 
-var
- jit_syscall_end      :Pointer=nil;
- jit_jmp_dispatch_end :Pointer=nil;
- jit_jmp_plt_cache_end:Pointer=nil;
+procedure endof_jit_syscall      ; external name '.endof_jit_syscall';
+procedure endof_jit_jmp_plt_cache; external name '.endof_jit_jmp_plt_cache';
+procedure endof_jit_jmp_dispatch ; external name '.endof_jit_jmp_dispatch';
+procedure endof_jit_hle_trace    ; external name '.endof_jit_hle_trace';
+procedure endof_jit_cpuid        ; external name '.endof_jit_cpuid';
+procedure endof_jit_interrupt_ast; external name '.endof_jit_interrupt_ast';
 
-function IS_JIT_FUNC(rip:qword):Boolean; public;
+procedure ipi_interrupt_nop;       external name 'ipi_interrupt_nop';
+procedure endof_ipi_interrupt_nop; external name '.endof_ipi_interrupt_nop';
+
+function GET_JIT_FUNC(rip:qword):Byte; public;
 begin
- if (jit_syscall_end      =nil) then jit_syscall_end      :=IndexMarker(@jit_syscall);
- if (jit_jmp_dispatch_end =nil) then jit_jmp_dispatch_end :=IndexMarker(@jit_jmp_dispatch);
- if (jit_jmp_plt_cache_end=nil) then jit_jmp_plt_cache_end:=IndexMarker(@jit_jmp_plt_cache);
-
- Result:=(
-          (rip>=QWORD(@jit_syscall)) and
-          (rip<=(QWORD(jit_syscall_end))) //jit_syscall func size
-         ) or
-         (
-          (rip>=QWORD(@jit_jmp_dispatch)) and
-          (rip<=(QWORD(jit_jmp_dispatch_end))) //jit_jmp_dispatch func size
-         ) or
-         (
-          (rip>=QWORD(@jit_jmp_plt_cache)) and
-          (rip<=(QWORD(jit_jmp_plt_cache_end))) //jit_jmp_plt_cache func size
-         );
+ if
+    (
+     (rip>=QWORD(@jit_syscall)) and
+     (rip<=(QWORD(@endof_jit_syscall)))
+    ) or
+    (
+     (rip>=QWORD(@jit_jmp_plt_cache)) and
+     (rip<=(QWORD(@endof_jit_jmp_plt_cache)))
+    ) or
+    (
+     (rip>=QWORD(@jit_jmp_dispatch)) and
+     (rip<=(QWORD(@endof_jit_jmp_dispatch)))
+    ) or
+    (
+     (rip>=QWORD(@jit_hle_trace)) and
+     (rip<=(QWORD(@endof_jit_hle_trace)))
+    ) or
+    (
+     (rip>=QWORD(@jit_cpuid)) and
+     (rip<=(QWORD(@endof_jit_cpuid)))
+    ) or
+    (
+     (rip>=QWORD(@jit_interrupt_ast)) and
+     (rip<=(QWORD(@endof_jit_interrupt_ast)))
+    ) then
+ begin
+  Exit(1);
+ end else
+ if (rip>=QWORD(@ipi_interrupt_nop)) and
+    (rip<=(QWORD(@endof_ipi_interrupt_nop))) then
+ begin
+  Exit(3);
+ end else
+ if (rip=QWORD(@jit_interrupt_nop)) then
+ begin
+  Exit(2);
+ end else
+ begin
+  Exit(0);
+ end;
 end;
 
 end.

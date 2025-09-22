@@ -27,7 +27,8 @@ uses
   vm_tracking_map,
   kern_proc,
   kern_jit_ctx,
-  kern_jit_dynamic;
+  kern_jit_dynamic,
+  kern_jit_interrupt;
 
 const
  EXCEPTION_SET_THREADNAME  = $406D1388;
@@ -132,8 +133,7 @@ begin
  Result:=p^.ExceptionRecord^.ExceptionCode;
 end;
 
-procedure jit_save_to_sys_save(td:p_kthread); SysV_ABI_CDecl; external;
-procedure sys_save_to_jit_save(td:p_kthread); SysV_ABI_CDecl; external;
+procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean); SysV_ABI_CDecl; external;
 
 function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
@@ -160,11 +160,12 @@ begin
 
  //Writeln('tf_rip:0x',HexStr(tf_addr,16));
 
- _get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil,is_jit);
+ md_get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
 
  if (is_jit) then
  begin
-  jit_save_to_sys_save(td);
+  td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_JIT_CTX;
+  set_jit_ctx_state(@td^.td_frame,False);
   td^.td_frame.tf_rip:=info.original;
  end;
 
@@ -231,7 +232,7 @@ begin
 
  if (is_jit) then
  begin
-  sys_save_to_jit_save(td);
+  set_jit_ctx_state(@td^.td_frame,True);
  end;
 
  if (rv=0) then
@@ -301,10 +302,21 @@ begin
   FPC_EXCEPTION_CODE       :Exit;
   FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT     :Exit;
-  EXCEPTION_SINGLE_STEP    :Exit;
+  //EXCEPTION_SINGLE_STEP    :Exit;
   EXCEPTION_SET_THREADNAME :Exit;
   DBG_PRINTEXCEPTION_C     :Exit(EXCEPTION_CONTINUE_EXECUTION);
   DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
+
+  EXCEPTION_SINGLE_STEP:
+    with p^.ContextRecord^ do
+    if (Dr7<>0) then
+    begin
+     Dr7:=0;
+     EFlags:=EFlags or $10000; //RF
+     JIT_AST_HANDLER(curkthread,Rip,EFlags,Dr3);
+     //Writeln('SINGLE_STEP:',HexStr(Rip,16));
+     Exit(EXCEPTION_CONTINUE_EXECUTION);
+    end;
 
   STATUS_ACCESS_VIOLATION:
     begin

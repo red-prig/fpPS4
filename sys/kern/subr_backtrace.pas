@@ -29,7 +29,7 @@ uses
  x86_fpdbgdisas;
 
 function IS_TRAP_FUNC(rip:qword):Boolean; external;
-function IS_JIT_FUNC (rip:qword):Boolean; external;
+function GET_JIT_FUNC(rip:qword):Byte; external;
 
 function CaptureBacktrace(td:p_kthread;rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
 label
@@ -73,7 +73,7 @@ begin
   end;
 
   if (td<>nil) and
-     (IS_TRAP_FUNC(QWORD(adr)) or IS_JIT_FUNC(QWORD(adr))) then
+     (IS_TRAP_FUNC(QWORD(adr)) or (GET_JIT_FUNC(QWORD(adr))<>0)) then
   begin
    adr:=Pointer(td^.td_frame.tf_rip);
    rbp:=Pointer(td^.td_frame.tf_rbp);

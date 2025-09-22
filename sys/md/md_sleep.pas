@@ -56,9 +56,7 @@ begin
  begin
   timo:=-timo;
  end;
- sig_sta;
  Result:=ntd2px(NtDelayExecution(True,@timo));
- sig_cla;
 end;
 
 procedure _apc_null(dwParam:PTRUINT); stdcall;
@@ -80,9 +78,7 @@ var
  timo:Int64;
 begin
  timo:=-100*10;
- sig_sta;
  NtDelayExecution(True,@timo);
- sig_cla;
 
  //NtYieldExecution;
 end;
