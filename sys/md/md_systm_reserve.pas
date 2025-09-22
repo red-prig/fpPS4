@@ -525,8 +525,10 @@ var
  a,count:Integer;
 begin
 
- if (ZeroBits<>0) then
+ if (ProcessHandle<>NtCurrentProcess) or
+    (ZeroBits<>0) then
  begin
+  //fallback
   Result:=real_NtCreateThreadEx(
           hThread         ,
           DesiredAccess   ,
@@ -649,15 +651,16 @@ function Inj_NtMapViewOfSection(
           Protect           :ULONG
          ):DWORD; stdcall;
 begin
- AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
- if (ZeroBits=0) and
+ if (ProcessHandle=NtCurrentProcess) and
+    (ZeroBits=0) and
     (ViewSize<>nil) and
     (BaseAddress<>nil) then
  begin
   if (CommitSize=ViewSize^) and
      (BaseAddress^=nil) then
   begin
+   AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
    Result:=real_NtMapViewOfSectionEx(
              SectionHandle ,
@@ -676,6 +679,7 @@ begin
   end;
  end;
 
+ //fallback
  Result:=real_NtMapViewOfSection(
           SectionHandle     ,
           ProcessHandle     ,
@@ -707,12 +711,16 @@ function Inj_NtMapViewOfSectionEx(
 var
  EXT:TEXT_PATCHER;
 begin
- AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
- if (BaseAddress<>nil) then
- if (BaseAddress^=nil) then
+ if (ProcessHandle=NtCurrentProcess) then
  begin
-  EXT.Patch(ExtendedParameters,ExtendedParameterCount);
+  AllocationType:=AllocationType and (not MEM_TOP_DOWN);
+
+  if (BaseAddress<>nil) then
+  if (BaseAddress^=nil) then
+  begin
+   EXT.Patch(ExtendedParameters,ExtendedParameterCount);
+  end;
  end;
 
  Result:=real_NtMapViewOfSectionEx(
@@ -740,13 +748,14 @@ function Inj_NtAllocateVirtualMemory(
           Protect       :ULONG
          ):DWORD; stdcall;
 begin
- AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
- if (ZeroBits=0) and
+ if (ProcessHandle=NtCurrentProcess) and
+    (ZeroBits=0) and
     (BaseAddress<>nil) then
  begin
   if (BaseAddress^=nil) then
   begin
+   AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
    Result:=real_NtAllocateVirtualMemoryEx(
             ProcessHandle ,
@@ -762,6 +771,7 @@ begin
   end;
  end;
 
+ //fallback
  Result:=real_NtAllocateVirtualMemory(
           ProcessHandle ,
           BaseAddress   ,
@@ -788,12 +798,16 @@ function Inj_NtAllocateVirtualMemoryEx(
 var
  EXT:TEXT_PATCHER;
 begin
- AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
- if (BaseAddress<>nil) then
- if (BaseAddress^=nil) then
+ if (ProcessHandle=NtCurrentProcess) then
  begin
-  EXT.Patch(ExtendedParameters,ExtendedParameterCount);
+  AllocationType:=AllocationType and (not MEM_TOP_DOWN);
+
+  if (BaseAddress<>nil) then
+  if (BaseAddress^=nil) then
+  begin
+   EXT.Patch(ExtendedParameters,ExtendedParameterCount);
+  end;
  end;
 
  Result:=real_NtAllocateVirtualMemoryEx(
