@@ -4805,8 +4805,6 @@ begin
 
   Instruction := @AnInstruction;
 
-  SetOpcode(OPX_Invalid);
-
   opcode := 0;
   Flags := [];
   CodeIdx := 0;
@@ -4818,6 +4816,8 @@ begin
   Sib.Scale:=0;
   Sib.Index:=0;
   Sib.Base :=0;
+
+  SetOpcode(OPX_Invalid);
 
   DoDisassemble;
 
