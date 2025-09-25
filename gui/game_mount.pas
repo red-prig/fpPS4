@@ -275,9 +275,9 @@ begin
  GameMountConfig:=TGameMountConfig.Create;
  GameMountConfig.LocalDir:=GameStartupInfo.LocalDir;
 
- if (GameStartupInfo.TITLE<>'') then
+ if (GameStartupInfo.TITLE_ID<>'') then
  begin
-  GameMountConfig.TitleId:=GameStartupInfo.TITLE;
+  GameMountConfig.TitleId:=GameStartupInfo.TITLE_ID;
  end else
  if (GameStartupInfo.FGameItem.GameInfo.TitleId<>'') then
  begin

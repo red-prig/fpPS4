@@ -273,6 +273,7 @@ type
    FLocalDir             :RawByteString;
    FCATEGORY             :RawByteString;
    FTITLE                :RawByteString;
+   FTITLE_ID             :RawByteString;
    FCONTENT_ID           :RawByteString;
    FINSTALL_DIR_SAVEDATA :RawByteString;
    FAPP_VER              :RawByteString;
@@ -288,6 +289,7 @@ type
    property    LocalDir             :RawByteString read FLocalDir              write FLocalDir;
    property    CATEGORY             :RawByteString read FCATEGORY              write FCATEGORY;
    property    TITLE                :RawByteString read FTITLE                 write FTITLE;
+   property    TITLE_ID             :RawByteString read FTITLE_ID              write FTITLE_ID;
    property    CONTENT_ID           :RawByteString read FCONTENT_ID            write FCONTENT_ID;
    property    INSTALL_DIR_SAVEDATA :RawByteString read FINSTALL_DIR_SAVEDATA  write FINSTALL_DIR_SAVEDATA;
    property    APP_VER              :RawByteString read FAPP_VER               write FAPP_VER;

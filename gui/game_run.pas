@@ -394,7 +394,7 @@ begin
  g_appinfo.mmap_flags      :=1; //is_big_app ???
  g_appinfo.attributeExe    :=GameStartupInfo.ATTRIBUTE_EXE;
  g_appinfo.attribute2      :=GameStartupInfo.ATTRIBUTE2;
- g_appinfo.CUSANAME        :=GameStartupInfo.TITLE;
+ g_appinfo.CUSANAME        :=GameStartupInfo.TITLE_ID;
  g_appinfo.requiredHdcpType:=GameStartupInfo.RequiredHdcpType;
  g_appinfo.attribute       :=GameStartupInfo.ATTRIBUTE;
  g_appinfo.hasParamSfo     :=GameStartupInfo.hasParamSfo;
@@ -672,6 +672,7 @@ begin
 
   GameStartupInfo.CATEGORY             :=cfg.FParamSfo.GetString('CATEGORY');
   GameStartupInfo.TITLE                :=cfg.FParamSfo.GetString('TITLE');
+  GameStartupInfo.TITLE_ID             :=cfg.FParamSfo.GetString('TITLE_ID');
   GameStartupInfo.CONTENT_ID           :=cfg.FParamSfo.GetString('CONTENT_ID');
   GameStartupInfo.INSTALL_DIR_SAVEDATA :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
   GameStartupInfo.APP_VER              :=cfg.FParamSfo.GetString('APP_VER');
