@@ -37,7 +37,8 @@ type
   XMM_SAVE_AREA:XMM_SAVE_AREA;
   XSTATE_BV    :QWORD;
   XCOMP_BV     :QWORD;
-  XSTATE       :array[0..37] of QWORD;
+  Reserved     :array[0..5] of QWORD;
+  YmmContext   :array[0..15] of M128;
  end;
  {$IF sizeof(t_fpstate)<>832}{$STOP sizeof(t_fpstate)<>832}{$ENDIF}
 
