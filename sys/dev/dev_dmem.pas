@@ -307,11 +307,13 @@ begin
 
  if (Result<>0) then Exit;
 
- maxprotp^:=maxprotp^ or VM_PROT_GPU_ALL;
+ maxprotp^:=(maxprotp^ or VM_PROT_GPU_ALL);
 
  obj^:=dmap^.vobj;
 
- if ((maxprotp^ and nprot)=nprot) then
+ // dmem doesn't allow you to create executable pages,
+ // but it does allow you to modify them later, so I don't touch maxprotp
+ if ((maxprotp^ and (not VM_PROT_EXECUTE) and nprot)=nprot) then
  begin
   Assert(obj^<>nil);
   vm_object_reference(obj^);

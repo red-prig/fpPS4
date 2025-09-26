@@ -75,10 +75,6 @@ const
  MADV_CORE      = 9; // revert to including pages in a core file
  MADV_PROTECT   =10; // protect process from pageout kill
 
-type
- p_query_memory_prot=vm_mmap.p_query_memory_prot;
- t_query_memory_prot=vm_mmap.t_query_memory_prot;
-
 //sce
 
 function sceKernelSetVirtualRangeName(addr:Pointer;len:QWORD;name:PChar):Integer;

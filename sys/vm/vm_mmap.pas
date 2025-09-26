@@ -11,24 +11,14 @@ uses
  vm_map,
  sys_vm_object;
 
-type
- p_query_memory_prot=^t_query_memory_prot;
- t_query_memory_prot=packed record
-  start:Pointer;
-  __end:Pointer;
-  prot  :Integer;
-  eflags:Integer;
- end;
- {$IF sizeof(t_query_memory_prot)<>24}{$STOP sizeof(t_query_memory_prot)<>24}{$ENDIF}
+function sys_mlock(addr:Pointer;len:QWORD):Integer;
 
- function sys_mlock(addr:Pointer;len:QWORD):Integer;
-
- function sys_mmap(vaddr:Pointer;
-                   vlen :QWORD;
-                   prot :Integer;
-                   flags:Integer;
-                   fd   :Integer;
-                   pos  :QWORD):Pointer;
+function sys_mmap(vaddr:Pointer;
+                  vlen :QWORD;
+                  prot :Integer;
+                  flags:Integer;
+                  fd   :Integer;
+                  pos  :QWORD):Pointer;
 
 function sys_munmap(addr:Pointer;len:QWORD):Integer;
 function sys_msync(addr:Pointer;len:QWORD;flags:Integer):Integer;
@@ -36,7 +26,6 @@ function sys_mprotect(addr:Pointer;len:QWORD;prot:Integer):Integer;
 function sys_mtypeprotect(addr:Pointer;len:QWORD;mtype,prot:Integer):Integer;
 function sys_madvise(addr:Pointer;len:QWORD;behav:Integer):Integer;
 function sys_mname(addr:Pointer;len:QWORD;name:PChar):Integer;
-function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
 function sys_batch_map(fd                :Integer;
                        flags             :DWORD;
@@ -150,8 +139,8 @@ begin
  {
   * cdevs do not provide private mappings of any kind.
   }
- if ((maxprotp^ and VM_PROT_WRITE)=0) and
-    ((prot and VM_PROT_WRITE)<>0) then
+ if ((maxprotp^ and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) and
+    ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
  begin
   dev_relthread(cdev, ref);
   Exit(EACCES);
@@ -218,18 +207,20 @@ var
 begin
  mp:=vp^.v_mount;
 
- if ((maxprotp^ and VM_PROT_WRITE)<>0) and ((flagsp^ and MAP_SHARED)<>0) then
+ if ((maxprotp^ and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) and ((flagsp^ and MAP_SHARED)<>0) then
   locktype:=LK_EXCLUSIVE
  else
   locktype:=LK_SHARED;
 
  vfslocked:=VFS_LOCK_GIANT(mp);
+
  error:=vget(vp, locktype);
  if (error<>0) then
  begin
   VFS_UNLOCK_GIANT(vfslocked);
   Exit(error);
  end;
+
  foff :=foffp^;
  flags:=flagsp^;
 
@@ -291,12 +282,12 @@ begin
  begin
   if ((va.va_flags and (SF_SNAPSHOT or IMMUTABLE or APPEND))<>0) then
   begin
-   if ((prot and VM_PROT_WRITE)<>0) then
+   if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
    begin
     error:=EPERM;
     goto done;
    end;
-   maxprotp^:=maxprotp^ and (not VM_PROT_WRITE);
+   maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
   end;
  end;
  {
@@ -347,8 +338,8 @@ var
  error:Integer;
 begin
  if ((flagsp^ and MAP_SHARED)<>0) and
-    ((maxprotp^ and VM_PROT_WRITE)=0) and
-    ((prot and VM_PROT_WRITE)<>0) then
+    ((maxprotp^ and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) and
+    ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
  begin
   Exit(EACCES);
  end;
@@ -478,7 +469,7 @@ begin
    begin
     error:=EACCES;
     if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) or
-       ((maxprot and VM_PROT_WRITE)<>0) then
+       ((maxprot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
     begin
      error:=vm_mmap_dmem(handle,size,foff,@obj);
     end;
@@ -562,6 +553,7 @@ begin
     ((addr^ shr 34) < 63) or
     ((addr^ + size) < QWORD($fc00000001)) then
  begin
+  prot:=maxprot and prot;
 
   if ((flags and MAP_STACK)<>0) then
   begin
@@ -948,11 +940,11 @@ _map:
  begin
   if (QWORD($fc00000000) < (addr + size)) then
   begin
-   prot:=prot and $cf;
+   maxprot:=maxprot and $cf;
   end;
   if ((addr shr 34) > 62) then
   begin
-   prot:=prot and $cf;
+   maxprot:=maxprot and $cf;
   end;
  end;
 
@@ -1230,37 +1222,6 @@ begin
                        ')'
                      );
 
-end;
-
-function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
-var
- map:vm_map_t;
- _addr:vm_offset_t;
- __end:vm_offset_t;
- entry:vm_map_entry_t;
- data:t_query_memory_prot;
-begin
- Result:=EINVAL;
- _addr:=trunc_page(vm_offset_t(addr));
- map:=p_proc.p_vmspace;
- __end:=vm_map_max(map);
- if (_addr<__end) or (_addr=__end) then
- begin
-  vm_map_lock(map);
-  if not vm_map_lookup_entry(map,_addr,@entry) then
-  begin
-   vm_map_unlock(map);
-   Result:=EACCES;
-  end else
-  begin
-   data.start:=Pointer(entry^.start);
-   data.__end:=Pointer(entry^.__end);
-   data.prot:=(entry^.max_protection and entry^.protection);
-   data.eflags:=entry^.eflags;
-   vm_map_unlock(map);
-   Result:=copyout(@data,info,SizeOf(t_query_memory_prot));
-  end;
- end;
 end;
 
 const

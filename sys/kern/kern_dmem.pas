@@ -45,6 +45,15 @@ type
   align:array[0..6] of Byte;
  end;
 
+ p_query_memory_prot=^t_query_memory_prot;
+ t_query_memory_prot=packed record
+  start:Pointer;
+  __end:Pointer;
+  prot  :Integer;
+  eflags:Integer;
+ end;
+ {$IF sizeof(t_query_memory_prot)<>24}{$STOP sizeof(t_query_memory_prot)<>24}{$ENDIF}
+
 type
  p_dmem_obj=^t_dmem_obj;
  t_dmem_obj=record
@@ -74,6 +83,8 @@ function  sys_virtual_query(addr:Pointer;
                             flags:DWORD;
                             info:Pointer;
                             infoSize:QWORD):Integer;
+
+function  sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
 function  rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
 
@@ -621,6 +632,7 @@ begin
   begin
    offset:=entry^.offset;
 
+   //exclude VM_PROT_EXECUTE
    qinfo^.protection:=qinfo^.protection and (VM_PROT_GPU_ALL or VM_PROT_RW);
 
    start :=entry^.start;
@@ -927,6 +939,78 @@ begin
 
 
  Result:=copyout(@qinfo,info,size);
+end;
+
+function sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
+label
+ _simple;
+var
+ map:vm_map_t;
+ _addr:vm_offset_t;
+ __end:vm_offset_t;
+ entry:vm_map_entry_t;
+ data:t_query_memory_prot;
+ qinfo:SceKernelVirtualQueryInfo;
+ is_found:Boolean;
+begin
+ Result:=EINVAL;
+ _addr:=trunc_page(vm_offset_t(addr));
+ map:=p_proc.p_vmspace;
+ __end:=vm_map_max(map);
+
+ if (_addr<__end) or (_addr=__end) then
+ begin
+  vm_map_lock(map);
+
+  vm_map_lookup_entry(map,QWORD(addr),@entry);
+
+  entry:=next_valid_entry(map,entry);
+
+  is_found:=(QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
+
+  if not is_found then
+  begin
+   vm_map_unlock(map);
+   Result:=EACCES;
+  end else
+  begin
+
+   if (entry^.vm_obj=nil) or
+      (p_proc.p_sdk_version < $10000000) then
+   begin
+    //private
+    _simple:
+
+    data.start:=Pointer(entry^.start);
+    data.__end:=Pointer(entry^.__end);
+    data.prot:=(entry^.max_protection and entry^.protection);
+    data.eflags:=entry^.eflags;
+
+    if (entry^.vm_obj<>nil) then
+    if ((entry^.vm_obj^.flags and OBJ_DMEM_EXT)<>0) then
+    begin
+     //exclude VM_PROT_EXECUTE
+     data.prot:=data.prot and (VM_PROT_GPU_ALL or VM_PROT_RW);
+    end;
+
+   end else
+   if (entry^.vm_obj^.otype<>OBJT_BLOCKPOOL) then
+   begin
+    //object
+    goto _simple;
+   end else
+   begin
+    dmem_vmo_get_type(map,entry,QWORD(addr),@qinfo,True);
+    data.start:=qinfo.pstart;
+    data.__end:=qinfo.p__end;
+    data.prot :=qinfo.protection;
+    data.eflags:=entry^.eflags;
+   end;
+
+   vm_map_unlock(map);
+   Result:=copyout(@data,info,SizeOf(t_query_memory_prot));
+  end;
+ end;
 end;
 
 function obj2dmem(obj:vm_object_t):p_dmem_map; public;
