@@ -235,12 +235,7 @@ begin
 
  dmap:=dmem_maps[p_proc.p_pool_id];
 
- //entry->eflags = flags & 0x400000 | 0x20000 | 0x80000
- //0x400000 -> MAP_ENTRY_NO_COALESCE -> MAP_NO_COALESCE
- //0x20000  -> MAP_ENTRY_IN_TRANSITION2
- //0x80000  -> ???
-
- cow:=(flags and MAP_NO_COALESCE);
+ cow:=(flags and MAP_NO_COALESCE) or MAP_COW_MMAP_DMEM;
 
  vm_map_lock(map);
 
@@ -289,9 +284,7 @@ begin
                         vaddr, v_end,
                         prot, VM_PROT_ALL,
                         cow,
-                        anon,
-                        ((p_proc.p_dmem_aliasing and 3)<>0),
-                        False
+                        anon
                        );
 
      if (err=0) then

@@ -122,12 +122,12 @@ const
 
  MAP_ENTRY_IN_TRANSITION2  =$20000; // vm_map_type_protect,kern_mmap_dmem
 
-                      //0x40000
-                      //0x80000
+ MAP_ENTRY_KERNEL          =$40000; // MAP_COW_KERNEL
+ MAP_ENTRY_MMAP_DMEM       =$80000; // sys_mmap_dmem
 
- MAP_ENTRY_WIRE_BUDGET     =$100000;
- MAP_ENTRY_IN_BUDGET       =$200000;
- MAP_ENTRY_NO_COALESCE     =$400000;
+ MAP_ENTRY_WIRE_BUDGET     =$100000; // entry in wire budget
+ MAP_ENTRY_IN_BUDGET       =$200000; // entry in budget
+ MAP_ENTRY_NO_COALESCE     =$400000; // do not merge nearby areas
 
  //vm_flags_t values
  MAP_WIREFUTURE =$01; // wire all future pages
@@ -136,23 +136,26 @@ const
                 //04
 
  //Copy-on-write flags for vm_map operations
- MAP_INHERIT_SHARE   =$0001;
- MAP_COPY_ON_WRITE   =$0002;
- MAP_NOFAULT         =$0004;
- MAP_PREFAULT        =$0008;
- MAP_PREFAULT_PARTIAL=$0010;
- MAP_DISABLE_SYNCER  =$0020;
- MAP_DISABLE_COREDUMP=$0100;
- MAP_PREFAULT_MADVISE=$0200; // from (user) madvise request
- MAP_VN_WRITECOUNT   =$0400;
- MAP_STACK_GROWS_DOWN=$1000;
- MAP_STACK_GROWS_UP  =$2000;
- MAP_ACC_CHARGED     =$4000;
- MAP_ACC_NO_CHARGE   =$8000;
+ MAP_INHERIT_SHARE   =$000001;
+ MAP_COPY_ON_WRITE   =$000002;
+ MAP_NOFAULT         =$000004;
+ MAP_PREFAULT        =$000008;
+ MAP_PREFAULT_PARTIAL=$000010;
+ MAP_DISABLE_SYNCER  =$000020;
+ MAP_DISABLE_COREDUMP=$000100;
+ MAP_PREFAULT_MADVISE=$000200; // from (user) madvise request
+ MAP_VN_WRITECOUNT   =$000400;
+ MAP_STACK_GROWS_DOWN=$001000;
+ MAP_STACK_GROWS_UP  =$002000;
+ MAP_ACC_CHARGED     =$004000;
+ MAP_ACC_NO_CHARGE   =$008000;
 
- MAP_COW_SYSTEM      =$10000;
- MAP_COW_NO_BUDGET   =$20000;
- MAP_COW_KERNEL      =$40000;
+ MAP_COW_SYSTEM      =$010000;
+ MAP_COW_NO_BUDGET   =$020000;
+ MAP_COW_KERNEL      =$040000;
+
+ MAP_COW_MMAP_DMEM   =$080000; // emu ext -> sys_mmap_dmem
+ MAP_COW_AUTO_NAMING =$100000; // emu ext
 
  MAP_COW_NO_COALESCE =$400000;
 
@@ -201,9 +204,7 @@ function  vm_map_insert(
            prot  :vm_prot_t;
            max   :vm_prot_t;
            cow   :Integer;
-           anon  :Pointer;
-           alias :Boolean;
-           naming:Boolean):Integer;
+           anon  :Pointer):Integer;
 
 function  vm_map_findspace(map   :vm_map_t;
                            start :vm_offset_t;
@@ -443,7 +444,7 @@ begin
   vm_map_lock(map);
    For i:=0 to High(pmap_mem_guest)-1 do
    begin
-    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil, false, false);
+    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil);
     vm_map_set_info_locked(map,         pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, '#hole', VM_INHERIT_HOLE);
    end;
   vm_map_unlock(map);
@@ -1132,8 +1133,7 @@ function vm_map_insert_internal(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer;
-           alias :Boolean):Integer;
+           cow   :Integer):Integer;
 begin
  Result:=KERN_SUCCESS;
 
@@ -1144,7 +1144,11 @@ begin
   if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
      (obj^.otype=OBJT_PHYSHM) then
   begin
-   Result:=vm_object_rmap_insert(map,obj,start,__end,offset,alias);
+   Result:=vm_object_rmap_insert(map,obj,
+                                 start,__end,offset,
+                                 ((cow and MAP_COW_MMAP_DMEM)=0) or
+                                 ((p_proc.p_dmem_aliasing and 3)<>0)
+                                );
   end;
  end;
 
@@ -1202,9 +1206,7 @@ function vm_map_insert(
            prot  :vm_prot_t;
            max   :vm_prot_t;
            cow   :Integer;
-           anon  :Pointer;
-           alias :Boolean;
-           naming:Boolean):Integer;
+           anon  :Pointer):Integer;
 label
  _budget,
  charged;
@@ -1253,7 +1255,7 @@ begin
  protoeflags:=0;
  charge_prev_obj:=FALSE;
 
- protoeflags:=protoeflags or (cow and MAP_COW_NO_COALESCE);
+ protoeflags:=protoeflags or (cow and (MAP_COW_NO_COALESCE or MAP_COW_MMAP_DMEM));
 
  if ((cow and MAP_COPY_ON_WRITE)<>0) then
  begin
@@ -1415,8 +1417,8 @@ charged:
               __end ,
               prot  ,
               max   ,
-              cow   ,
-              alias);
+              cow
+           );
 
    if (Result=KERN_SUCCESS) then
    begin
@@ -1473,7 +1475,7 @@ charged:
 
  new_entry^.anon_addr:=anon;
 
- if naming then
+ if ((cow and MAP_COW_AUTO_NAMING)<>0) then
  begin
   td:=curkthread;
   if (td<>nil) then
@@ -1512,8 +1514,8 @@ charged:
             __end ,
             prot  ,
             max   ,
-            cow   ,
-            alias);
+            cow
+         );
 
  if (Result<>KERN_SUCCESS) then
  begin
@@ -1661,7 +1663,7 @@ begin
   begin
    vm_map_delete(map, start, __end, True);
   end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow, anon, false, true);
+  Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
  vm_map_unlock(map);
 end;
 
@@ -1740,7 +1742,7 @@ again:
 
    start:=addr^;
   end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow, anon, false, true);
+  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
  until not ((Result=KERN_NO_SPACE) and
             (find_space<>VMFS_NO_SPACE) and
             (find_space<>VMFS_ANY_SPACE));
@@ -3918,7 +3920,7 @@ begin
  end;
 
  top:=bot + init_ssize;
- rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow, anon, false, true);
+ rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
 
  { Now set the avail_ssize amount. }
  if (rv=KERN_SUCCESS) then
@@ -4142,8 +4144,10 @@ begin
    end;
   end;
 
-  rv:=vm_map_insert(map, nil, 0, addr, stack_entry^.start,
-      next_entry^.protection, next_entry^.max_protection, 0, next_entry^.anon_addr, false, true);
+  rv:=vm_map_insert(map, nil,
+                    0, addr, stack_entry^.start,
+                    next_entry^.protection, next_entry^.max_protection,
+                    MAP_COW_AUTO_NAMING, next_entry^.anon_addr);
 
   { Adjust the available stack space by the amount we grew. }
   if (rv=KERN_SUCCESS) then

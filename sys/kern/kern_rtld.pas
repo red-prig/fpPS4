@@ -1142,8 +1142,7 @@ begin
                        offset,
                        vaddr_lo,vaddr_hi,
                        VM_PROT_RW, VM_PROT_ALL,
-                       0,
-                       nil,false,false);
+                       0,nil);
  if (Result<>0) then
  begin
   vm_map_unlock(map);
