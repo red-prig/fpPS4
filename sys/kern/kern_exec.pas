@@ -414,7 +414,7 @@ begin
 
  if (p_proc.p_vm_container=1) then
  begin
-  error:=vm_map_wire(map,stack_addr,QWORD(vmspace^.sv_usrstack),VM_MAP_WIRE_USER or 8);
+  error:=vm_map_wire(map,stack_addr,QWORD(vmspace^.sv_usrstack),VM_MAP_WIRE_USER or VM_MAP_WIRE_LOCK);
   if (error<>0) then Exit;
  end;
 

@@ -3096,7 +3096,7 @@ begin
 
  vm_map_unlock(map);
 
- vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or 8);
+ vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or VM_MAP_WIRE_LOCK);
 
  //copy module_param
  pSceModuleParam(data)^:=obj^.module_param^;

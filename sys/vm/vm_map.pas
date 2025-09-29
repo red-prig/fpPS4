@@ -109,7 +109,7 @@ const
  MAP_ENTRY_NEEDS_WAKEUP    =$0200; // waiters in transition
  MAP_ENTRY_NOCOREDUMP      =$0400; // don't include in a core
 
-                          //0x800
+ MAP_ENTRY_WIRE_LOCK       =$0800; // lock to user unwire
 
  MAP_ENTRY_GROWS_DOWN      =$1000; // Top-down stacks
  MAP_ENTRY_GROWS_UP        =$2000; // Bottom-up stacks
@@ -175,7 +175,7 @@ const
 
  VM_MAP_WIRE_WRITE  =4; // Validate writable.
 
-                   //8
+ VM_MAP_WIRE_LOCK   =8; // lock to user unwire
 
  VM_FAULT_READ_AHEAD_MIN = 7;
  VM_FAULT_READ_AHEAD_INIT=15;
@@ -2856,7 +2856,7 @@ begin
    If system unwiring, require that the entry is system wired.
   }
   if ((not user_unwire) and (vm_map_entry_system_wired_count(entry)=0)) or
-     ((entry^.eflags and $800)<>0) then
+     ((entry^.eflags and MAP_ENTRY_WIRE_LOCK)<>0) then
   begin
    __end:=entry^.__end;
    rv:=KERN_INVALID_ARGUMENT;
@@ -3155,7 +3155,7 @@ begin
    end else
    if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
    begin
-    //dmem
+    //vm_map_wire_dmem
    end else
    if ((obj^.flags and OBJ_WIRE_BUDGET)<>0) then
    begin
@@ -3310,7 +3310,7 @@ _done:
   begin
    if (user_wire) then
    begin
-    entry^.eflags:=entry^.eflags or (ord((flags and 8)<>0)*$800) or MAP_ENTRY_USER_WIRED;
+    entry^.eflags:=entry^.eflags or (ord((flags and VM_MAP_WIRE_LOCK)<>0)*MAP_ENTRY_WIRE_LOCK) or MAP_ENTRY_USER_WIRED;
    end;
   end else
   if (entry^.wired_count=-1) then

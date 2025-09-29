@@ -1199,7 +1199,7 @@ begin
 
  if (wire<>0) then
  begin
-  Result:=vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or 8);
+  Result:=vm_map_wire(map,vaddr_lo,vaddr_hi,VM_MAP_WIRE_USER or VM_MAP_WIRE_LOCK);
 
   if (Result<>0) then
   begin
