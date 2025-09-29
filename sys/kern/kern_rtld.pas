@@ -1133,7 +1133,7 @@ begin
  vm_map_lock(map);
 
  //remove prev if exist
- vm_map_delete(map,vaddr_lo,vaddr_hi,True);
+ vm_map_delete(map,vaddr_lo,vaddr_hi);
 
  vm_object_reference(imgp^.obj);
 

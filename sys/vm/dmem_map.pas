@@ -982,7 +982,7 @@ begin
  begin
   vaddr:=node^.vaddr;
 
-  vm_map_delete(vmap, vaddr, vaddr + size, False);
+  vm_map_delete(vmap, vaddr, vaddr + size, MAP_COW_NO_RMAP_FREE);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;

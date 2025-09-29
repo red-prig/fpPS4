@@ -142,6 +142,7 @@ const
  MAP_PREFAULT        =$000008;
  MAP_PREFAULT_PARTIAL=$000010;
  MAP_DISABLE_SYNCER  =$000020;
+ MAP_COW_NO_OVERWRITE=$000080; // emu ext -> vm_map_fixed
  MAP_DISABLE_COREDUMP=$000100;
  MAP_PREFAULT_MADVISE=$000200; // from (user) madvise request
  MAP_VN_WRITECOUNT   =$000400;
@@ -155,9 +156,13 @@ const
  MAP_COW_KERNEL      =$040000;
 
  MAP_COW_MMAP_DMEM   =$080000; // emu ext -> sys_mmap_dmem
- MAP_COW_AUTO_NAMING =$100000; // emu ext
 
  MAP_COW_NO_COALESCE =$400000;
+
+ MAP_COW_NO_RMAP_FREE=$10000000; // emu ext
+ MAP_COW_AUTO_NAMING =$20000000; // emu ext
+ MAP_COW_PATCH       =$40000000; // emu ext
+ MAP_COW_HOLE        =$80000000; // emu ext
 
  //vm_fault option flags
  VM_FAULT_NORMAL       =0; // Nothing special
@@ -203,7 +208,7 @@ function  vm_map_insert(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer;
+           cow   :DWORD;
            anon  :Pointer):Integer;
 
 function  vm_map_findspace(map   :vm_map_t;
@@ -279,7 +284,7 @@ function  vm_map_find(map       :vm_map_t;
                       find_space:Integer;
                       prot      :vm_prot_t;
                       max       :vm_prot_t;
-                      cow       :Integer;
+                      cow       :DWORD;
                       anon      :Pointer):Integer;
 
 procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t);
@@ -291,8 +296,7 @@ function  vm_map_fixed(map    :vm_map_t;
                        length :vm_size_t;
                        prot   :vm_prot_t;
                        max    :vm_prot_t;
-                       cow    :Integer;
-                       overwr :Boolean;
+                       cow    :DWORD;
                        anon   :Pointer):Integer;
 
 function  vm_map_stack(map      :vm_map_t;
@@ -300,7 +304,7 @@ function  vm_map_stack(map      :vm_map_t;
                        max_ssize:vm_size_t;
                        prot     :vm_prot_t;
                        max      :vm_prot_t;
-                       cow      :Integer;
+                       cow      :DWORD;
                        anon     :Pointer):Integer;
 
 function  vm_map_growstack(map:vm_map_t;addr:vm_offset_t):Integer;
@@ -313,12 +317,11 @@ procedure vm_map_unlock (map:vm_map_t;def:Boolean=True);
 function  vm_map_lock_range  (map:vm_map_t;start,__end:off_t;mode:Integer):Pointer;
 procedure vm_map_unlock_range(map:vm_map_t;cookie:Pointer);
 
-function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;rmap_free:Boolean):Integer;
-function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
+function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
-procedure vm_map_set_info_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar;i:vm_inherit_t);
 
 procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
 procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
@@ -444,8 +447,7 @@ begin
   vm_map_lock(map);
    For i:=0 to High(pmap_mem_guest)-1 do
    begin
-    vm_map_insert         (map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, -1, nil);
-    vm_map_set_info_locked(map,         pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, '#hole', VM_INHERIT_HOLE);
+    vm_map_insert(map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, MAP_COW_NO_BUDGET or MAP_COW_HOLE, nil);
    end;
   vm_map_unlock(map);
  end;
@@ -1133,11 +1135,14 @@ function vm_map_insert_internal(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer):Integer;
+           cow   :DWORD):Integer;
 begin
  Result:=KERN_SUCCESS;
 
- if (cow=-1) then Exit;
+ if ((cow and MAP_COW_HOLE)<>0) then
+ begin
+  Exit; //skip
+ end;
 
  if (obj<>nil) then
  begin
@@ -1205,7 +1210,7 @@ function vm_map_insert(
            __end :vm_offset_t;
            prot  :vm_prot_t;
            max   :vm_prot_t;
-           cow   :Integer;
+           cow   :DWORD;
            anon  :Pointer):Integer;
 label
  _budget,
@@ -1284,10 +1289,21 @@ begin
   protoeflags:=protoeflags or MAP_ENTRY_VN_WRITECNT;
  end;
 
+ if ((cow and MAP_COW_HOLE)<>0) then
+ begin
+  inheritance:=VM_INHERIT_HOLE;
+ end else
+ if ((cow and MAP_COW_PATCH)<>0) then
+ begin
+  inheritance:=VM_INHERIT_PATCH;
+ end else
  if ((cow and MAP_INHERIT_SHARE)<>0) then
+ begin
   inheritance:=VM_INHERIT_SHARE
- else
+ end else
+ begin
   inheritance:=VM_INHERIT_DEFAULT;
+ end;
 
  if ((cow and (MAP_ACC_NO_CHARGE or MAP_NOFAULT))<>0) then
  begin
@@ -1475,6 +1491,14 @@ charged:
 
  new_entry^.anon_addr:=anon;
 
+ if ((cow and MAP_COW_HOLE)<>0) then
+ begin
+  new_entry^.name:='#hole';
+ end else
+ if ((cow and MAP_COW_PATCH)<>0) then
+ begin
+  new_entry^.name:='#patch';
+ end else
  if ((cow and MAP_COW_AUTO_NAMING)<>0) then
  begin
   td:=curkthread;
@@ -1650,8 +1674,7 @@ function vm_map_fixed(map    :vm_map_t;
                       length :vm_size_t;
                       prot   :vm_prot_t;
                       max    :vm_prot_t;
-                      cow    :Integer;
-                      overwr :Boolean;
+                      cow    :DWORD;
                       anon   :Pointer):Integer;
 var
  __end:vm_offset_t;
@@ -1659,9 +1682,9 @@ begin
  __end:=start + length;
  vm_map_lock(map);
   VM_MAP_RANGE_CHECK(map, start, __end);
-  if (overwr) then
+  if ((cow and MAP_COW_NO_OVERWRITE)=0) then
   begin
-   vm_map_delete(map, start, __end, True);
+   vm_map_delete(map, start, __end, cow);
   end;
   Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
  vm_map_unlock(map);
@@ -1684,7 +1707,7 @@ function vm_map_find(map       :vm_map_t;
                      find_space:Integer;
                      prot      :vm_prot_t;
                      max       :vm_prot_t;
-                     cow       :Integer;
+                     cow       :DWORD;
                      anon      :Pointer):Integer;
 label
  again;
@@ -3630,7 +3653,7 @@ end;
  * Deallocates the given address range from the target
  * map.
  }
-function vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;rmap_free:Boolean):Integer;
+function vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 var
  entry      :vm_map_entry_t;
  first_entry:vm_map_entry_t;
@@ -3688,10 +3711,20 @@ begin
    Exit(KERN_INVALID_ARGUMENT);
   end;
 
-  if (next^.inheritance=VM_INHERIT_HOLE) then
-  begin
-   next:=next^.next;
-   continue;
+  case next^.inheritance of
+   VM_INHERIT_PATCH:
+    if ((cow and MAP_COW_PATCH)=0) then
+    begin
+     next:=next^.next;
+     continue;
+    end;
+   VM_INHERIT_HOLE:
+    if ((cow and MAP_COW_HOLE)=0) then
+    begin
+     next:=next^.next;
+     continue;
+    end;
+   else;
   end;
 
   next:=next^.next;
@@ -3703,17 +3736,27 @@ begin
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
 
-  if (entry^.inheritance=VM_INHERIT_HOLE) then
-  begin
-   entry:=entry^.next;
-   continue;
+  case entry^.inheritance of
+   VM_INHERIT_PATCH:
+    if ((cow and MAP_COW_PATCH)=0) then
+    begin
+     entry:=entry^.next;
+     continue;
+    end;
+   VM_INHERIT_HOLE:
+    if ((cow and MAP_COW_HOLE)=0) then
+    begin
+     entry:=entry^.next;
+     continue;
+    end;
+   else;
   end;
 
   vm_map_clip_end(map, entry, __end);
 
   next:=entry^.next;
 
-  if rmap_free and (obj<>nil) then
+  if ((cow and MAP_COW_NO_RMAP_FREE)=0) and (obj<>nil) then
   begin
    if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
       (obj^.otype=OBJT_PHYSHM) then
@@ -3757,11 +3800,11 @@ end;
  * Remove the given address range from the target map.
  * This is the exported form of vm_map_delete.
  }
-function vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+function vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 begin
  vm_map_lock(map);
  VM_MAP_RANGE_CHECK(map, start, __end);
-  Result:=vm_map_delete(map, start, __end, True);
+  Result:=vm_map_delete(map, start, __end, cow);
  vm_map_unlock(map);
 end;
 
@@ -3826,7 +3869,7 @@ function vm_map_stack(map      :vm_map_t;
                       max_ssize:vm_size_t;
                       prot     :vm_prot_t;
                       max      :vm_prot_t;
-                      cow      :Integer;
+                      cow      :DWORD;
                       anon     :Pointer):Integer;
 var
  new_entry, prev_entry:vm_map_entry_t;

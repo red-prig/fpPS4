@@ -220,7 +220,7 @@ var
 
  entry,next:vm_map_entry_t;
 
- cow:Integer;
+ cow:DWORD;
  err:Integer;
 
  found:Boolean;
@@ -273,7 +273,7 @@ begin
 
      if (align=0) and ((flags and MAP_NO_OVERWRITE)=0) then
      begin
-      vm_map_delete(map, vaddr, v_end, True);
+      vm_map_delete(map, vaddr, v_end);
      end;
 
      vm_object_reference(dmap.vobj);

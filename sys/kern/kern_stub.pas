@@ -118,22 +118,15 @@ begin
    start:=SCE_REPLAY_EXEC_START;
   end;
 
-  err:=vm_mmap2(map,
-                @start,
-                size,
-                VM_PROT_RWX,
-                VM_PROT_RWX,
-                MAP_ANON or MAP_PRIVATE,
-                OBJT_DEFAULT,
-                nil,
-                0,
-                nil);
+  err:=vm_map_find(map, nil,
+                   0, @start, size,
+                   VMFS_OPTIMAL_SPACE,
+                   VM_PROT_RWX, VM_PROT_RWX,
+                   MAP_COW_NO_BUDGET or MAP_COW_PATCH,
+                   nil);
 
   if (err<>0) then Exit;
 
-  vm_map_lock(map);
-  vm_map_set_info_locked(map,start,start+size,'#patch',VM_INHERIT_PATCH);
-  vm_map_unlock(map);
  end else
  begin
   size:=AlignUp(size+SizeOf(stub_chunk),MD_PAGE_SIZE);
@@ -167,7 +160,7 @@ begin
  begin
   map:=p_proc.p_vmspace;
 
-  vm_map_remove(map, qword(chunk), qword(chunk) + chunk^.curr_size);
+  vm_map_remove(map, qword(chunk), qword(chunk) + chunk^.curr_size, MAP_COW_PATCH);
  end else
  begin
   md_unmap(chunk,chunk^.curr_size);

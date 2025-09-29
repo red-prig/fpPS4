@@ -3075,7 +3075,7 @@ begin
  //map RW
  vm_map_lock(map);
 
-  vm_map_delete(map,vaddr_lo,vaddr_hi,True);
+  vm_map_delete(map,vaddr_lo,vaddr_hi);
 
   error:=vm_map_insert(map,nil,0,
                        vaddr_lo,vaddr_hi,

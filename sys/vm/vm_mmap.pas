@@ -417,7 +417,8 @@ function vm_mmap2(map        :vm_map_t;
                   anon       :Pointer):Integer;
 var
  obj:vm_object_t;
- docow,error,findspace,rv:Integer;
+ docow:DWORD;
+ error,findspace,rv:Integer;
  fitit:Boolean;
  writecounted:Boolean;
 begin
@@ -499,9 +500,12 @@ begin
   if (handle=nil) then foff:=0;
  end else
  if ((flags and MAP_PREFAULT_READ)<>0) then
+ begin
   docow:=MAP_PREFAULT
- else
+ end else
+ begin
   docow:=MAP_PREFAULT_PARTIAL;
+ end;
 
  if ((flags and (MAP_ANON or MAP_SHARED))=0) then
  begin
@@ -583,8 +587,7 @@ begin
   begin
    rv:=vm_map_fixed(map, obj, foff, addr^, size,
         prot, maxprot,
-        docow,
-        ((flags and MAP_NO_OVERWRITE)=0),
+        docow or (flags and MAP_NO_OVERWRITE),
         anon);
   end;
 
@@ -610,7 +613,7 @@ begin
   end;
 
   Result:=vm_map_wire(map,addr^,addr^ + size,
-                      (ord((map^.flags and 4)<>0)*8) or VM_MAP_WIRE_USER or VM_MAP_WIRE_HOLESOK);
+                      (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or VM_MAP_WIRE_USER or VM_MAP_WIRE_HOLESOK);
 
   if (Result<>0) then
   begin

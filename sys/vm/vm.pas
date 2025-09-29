@@ -35,8 +35,8 @@ const
  VM_INHERIT_SHARE  =vm_inherit_t(0);
  VM_INHERIT_COPY   =vm_inherit_t(1);
  VM_INHERIT_NONE   =vm_inherit_t(2);
- VM_INHERIT_PATCH  =vm_inherit_t(3);
- VM_INHERIT_HOLE   =vm_inherit_t(4);
+ VM_INHERIT_PATCH  =vm_inherit_t(3); // emu ext
+ VM_INHERIT_HOLE   =vm_inherit_t(4); // emu ext
  VM_INHERIT_DEFAULT=VM_INHERIT_COPY;
 
  VM_PROT_NONE      =vm_prot_t($00);
