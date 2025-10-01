@@ -204,7 +204,10 @@ begin
  end;
 end;
 
-procedure op_jmp_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
+type
+ t_jit_cb_param=procedure(var ctx:t_jit_context2;param:PtrUint);
+
+procedure op_jmp_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb_param;param:PtrUint);
 begin
  with ctx.builder do
  begin
@@ -216,7 +219,7 @@ begin
 
   if (cb<>nil) then
   begin
-   cb(ctx);
+   cb(ctx,param);
   end;
 
   jmp(r14);
@@ -239,7 +242,7 @@ begin
  end;
 end;
 
-procedure op_call_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
+procedure op_call_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb_param;param:PtrUint);
 begin
  with ctx.builder do
  begin
@@ -251,7 +254,7 @@ begin
 
   if (cb<>nil) then
   begin
-   cb(ctx);
+   cb(ctx,param);
   end;
 
   jmp(r14);
@@ -259,7 +262,7 @@ begin
 end;
 
 //r14
-procedure op_ret_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb);
+procedure op_ret_dispatcher(var ctx:t_jit_context2;cb:t_jit_cb_param;param:PtrUint);
 var
  link_jcxz:t_jit_i_link;
  link_jmp :t_jit_i_link;
@@ -315,7 +318,7 @@ begin
 
   if (cb<>nil) then
   begin
-   cb(ctx);
+   cb(ctx,param);
   end;
 
   jmp(r14);
@@ -448,7 +451,7 @@ begin
  end;
 end;
 
-procedure op_push_rip_part1(var ctx:t_jit_context2);
+procedure op_push_rip_part1(var ctx:t_jit_context2;param:PtrUint);
 var
  stack:TRegValue;
 begin
@@ -498,7 +501,7 @@ begin
  end;
 end;
 
-procedure op_pop_rip_part1(var ctx:t_jit_context2);
+procedure op_pop_rip_part1(var ctx:t_jit_context2;imm:PtrUint);
 var
  stack:TRegValue;
 begin
@@ -513,7 +516,7 @@ begin
   //first we move the memory,
   //then we update the register
   op_load_rsp(ctx,stack);
-  leaq(stack,[stack+8+ctx.imm]);
+  leaq(stack,[stack+8+imm]);
   op_save_rsp(ctx,stack);
 
  end;
@@ -548,7 +551,7 @@ begin
   begin
    //near
 
-   op_push_rip_part1(ctx);
+   op_push_rip_part1(ctx,0);
 
    link:=ctx.get_link(dst);
 
@@ -565,7 +568,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(dst));
    //
-   op_call_dispatcher(ctx,@op_push_rip_part1);
+   op_call_dispatcher(ctx,@op_push_rip_part1,0);
   end;
 
  end else
@@ -579,7 +582,7 @@ begin
   //
   ctx.builder.movq(new1,[new1]);
   //
-  op_call_dispatcher(ctx,@op_push_rip_part1);
+  op_call_dispatcher(ctx,@op_push_rip_part1,0);
  end else
  if is_preserved(ctx.din) then
  begin
@@ -592,7 +595,7 @@ begin
    ctx.builder.leaq(new1,[new1+8]);
   end;
   //
-  op_call_dispatcher(ctx,@op_push_rip_part1);
+  op_call_dispatcher(ctx,@op_push_rip_part1,0);
  end else
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
@@ -600,7 +603,7 @@ begin
   //
   ctx.builder.movq(new1,new2);
   //
-  op_call_dispatcher(ctx,@op_push_rip_part1);
+  op_call_dispatcher(ctx,@op_push_rip_part1,0);
  end;
 
  if (ret_dst<>nil_link) then
@@ -621,13 +624,12 @@ begin
  imm:=0;
  GetTargetOfs(ctx.din,ctx.code,1,imm);
  //
- ctx.imm:=imm;
 
  //
  op_pop_rip_part0(ctx,imm); //out:r14
  //
 
- op_ret_dispatcher(ctx,@op_pop_rip_part1);
+ op_ret_dispatcher(ctx,@op_pop_rip_part1,imm);
  //
  trim_flow(ctx);
 end;
@@ -671,7 +673,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(dst));
    //
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
   end;
 
  end else
@@ -685,7 +687,7 @@ begin
   //
   ctx.builder.movq(new1,[new1]);
   //
-  op_jmp_dispatcher(ctx,nil);
+  op_jmp_dispatcher(ctx,nil,0);
  end else
  if is_preserved(ctx.din) then
  begin
@@ -693,7 +695,7 @@ begin
   //
   op_load(ctx,new1,1);
   //
-  op_jmp_dispatcher(ctx,nil);
+  op_jmp_dispatcher(ctx,nil,0);
  end else
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
@@ -701,7 +703,7 @@ begin
   //
   ctx.builder.movq(new1,new2);
   //
-  op_jmp_dispatcher(ctx,nil);
+  op_jmp_dispatcher(ctx,nil,0);
  end;
  //
  trim_flow(ctx);
@@ -773,7 +775,7 @@ begin
   //invert cond jump
   id1:=ctx.builder.jcc(invert_cond(ctx.din.OpCode.Suffix),nil_link,os8);
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
   id1.target:=ctx.builder.get_curr_label.after;
 
   {
@@ -828,7 +830,7 @@ begin
   id2:=ctx.builder.jmp(nil_link,os8);
    id1.target:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
   id2.target:=ctx.builder.get_curr_label.after;
 
  end;
@@ -874,7 +876,7 @@ begin
   id2:=ctx.builder.jmp(nil_link,os8);
    id1.target:=ctx.builder.get_curr_label.after;
    op_set_r14_imm(ctx,Int64(dst));
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
   id2.target:=ctx.builder.get_curr_label.after;
 
  end;
@@ -1940,8 +1942,7 @@ begin
 
   //
   op_pop_rip_part0(ctx,0); //out:r14
-  ctx.imm:=0;
-  op_jmp_dispatcher(ctx,@op_pop_rip_part1);
+  op_jmp_dispatcher(ctx,@op_pop_rip_part1,0);
   //
 
   //
@@ -1993,7 +1994,7 @@ begin
    op_set_r14_imm(ctx,Int64(node_import^.guest));
    movq(r14,[r14]);
 
-   op_call_dispatcher(ctx,@op_push_rip_part1);
+   op_call_dispatcher(ctx,@op_push_rip_part1,0);
   end;
 
   //---RETURN ENTRY POINT----
@@ -2276,7 +2277,7 @@ begin
 
    op_set_r14_imm(ctx,Int64(ptr));
    //
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
 
    link_next:=ctx.builder.get_curr_label.after;
    node_next:=link_next._node;
@@ -2586,7 +2587,7 @@ begin
   begin
    op_set_r14_imm(ctx,Int64(ctx.ptr_next));
    //
-   op_jmp_dispatcher(ctx,nil);
+   op_jmp_dispatcher(ctx,nil,0);
    //
    ctx.trim:=True;
   end;

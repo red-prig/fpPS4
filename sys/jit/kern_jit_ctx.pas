@@ -143,7 +143,6 @@ type
    ptr_next:Pointer;
 
    label_flags:Integer;
-   imm:Word;
    trim:Boolean;
 
    dis:TX86Disassembler;
