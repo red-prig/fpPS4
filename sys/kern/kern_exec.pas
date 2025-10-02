@@ -360,6 +360,11 @@ begin
   Exit(error);
  end;
 
+ vm_map_set_name(map,
+                 QWORD(shared_page_base),
+                 QWORD(shared_page_base)+shared_page_len,
+                 '(NoName)SceSysCore.elf');
+
  //copy sigcode
  with p_proc.p_sysent^ do
   if (sv_sigcode<>nil) and
@@ -1508,6 +1513,8 @@ begin
  vfslocked:=0;
  imgp:=@image_params;
  image_params:=Default(t_image_params);
+
+ init_system_limits;
 
  if (p_proc.p_budget_ptype=PTYPE_BIG_APP) then
  if ((g_appinfo.mmap_flags and 1)<>0) then

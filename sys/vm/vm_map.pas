@@ -1361,11 +1361,6 @@ charged:
  begin
   budget_id:=-1;
  end else
- if (budget_id=PTYPE_SYSTEM) then
- begin
-  //ignore system
-  budget_id:=-1;
- end else
  if (obj=nil) then
  begin
   _budget:

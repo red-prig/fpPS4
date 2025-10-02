@@ -23,6 +23,7 @@ const
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_disable_sce_module_ver_chk = $78020B00;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_game_heap_trace            = $7802B700;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k            = $7802B900;
+ SCE_REGMGR_ENT_KEY_DEVENV_TOOL_COMMONDIALOG_watch_dog     = $7802CD01;
 
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 function sys_workaround8849(key:DWORD):Integer;
@@ -131,6 +132,8 @@ begin
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_trc_notify                :p_out^:=0; //sys_workaround8849
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_sys_prx_preload           :p_out^:=0; //sys_workaround8849
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib           :p_out^:=0; //sys_workaround8849
+
+  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_COMMONDIALOG_watch_dog    :p_out^:=0; //sceCommonDialog
 
   else
    Exit(-1);

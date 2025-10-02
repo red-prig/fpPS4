@@ -842,7 +842,7 @@ begin
   size:=$48;
   if (infoSize < $48) then
   begin
-   size:=infoSize and $ffffffff;
+   size:=DWORD(infoSize);
   end;
  end else
  begin
@@ -862,7 +862,7 @@ begin
    qinfo.memoryType:=0;
    qinfo.bits.isFlexibleMemory:=1;
 
-   size:=infoSize and $ffffffff;
+   size:=DWORD(infoSize);
    if (infoSize > $47) then
    begin
     size:=$48;
@@ -886,7 +886,7 @@ begin
    qinfo.memoryType:=0;
    qinfo.bits.isFlexibleMemory:=1;
 
-   size:=infoSize and $ffffffff;
+   size:=DWORD(infoSize);
    if (infoSize > $47) then
    begin
     size:=$48;
