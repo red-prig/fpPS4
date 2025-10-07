@@ -155,7 +155,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- td^.td_retval[0]:=p_proc.p_pool_id;
+ td^.td_retval[0]:=p_proc.p_dmem_pool_id;
  Result:=0;
 
  if (d_pool_id<>-1) then
@@ -233,7 +233,7 @@ begin
   Exit(EACCES);
  end;
 
- dmap:=dmem_maps[p_proc.p_pool_id];
+ dmap:=dmem_maps[p_proc.p_dmem_pool_id];
 
  cow:=(flags and MAP_NO_COALESCE) or MAP_COW_MMAP_DMEM;
 
@@ -387,7 +387,7 @@ begin
   Exit(Pointer(EPERM));
  end;
 
- if (p_proc.p_pool_id<>1) then
+ if (p_proc.p_dmem_pool_id<>1) then
  begin
   Exit(Pointer(EOPNOTSUPP));
  end;
@@ -636,7 +636,7 @@ begin
     addr:=start;
    end;
 
-   ret:=dmem_map_get_mtype(dmem_maps[p_proc.p_pool_id].dmem,
+   ret:=dmem_map_get_mtype(dmem_maps[p_proc.p_dmem_pool_id].dmem,
                            obj,
                            addr + (entry^.offset - start), //send not transformed offset
                            @d_start2,@d_end2,

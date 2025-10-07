@@ -65,7 +65,7 @@ type
    p_vm_container :Integer;
 
   const
-   p_pool_id=1;
+   p_dmem_pool_id=1;
 
  end;
 

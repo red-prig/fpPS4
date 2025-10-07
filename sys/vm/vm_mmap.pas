@@ -1296,7 +1296,7 @@ begin
     SCE_KERNEL_MAP_OP_MAP_DIRECT:
       begin
 
-       if (p_proc.p_pool_id <> 1) or
+       if (p_proc.p_dmem_pool_id <> 1) or
           ((g_appinfo.mmap_flags and 2) <> 0) or
           ((flags and MAP_STACK) <> 0) or
           (p_proc.p_sdk_version < $2500000) then

@@ -95,6 +95,9 @@ function  vm_budget_used   (ptype,field:Integer):QWORD;
 function  vm_budget_reserve(ptype,field:Integer;len:QWORD):Integer;
 procedure vm_budget_release(ptype,field:Integer;len:QWORD);
 
+function  bp_budget_reserve(ptype:Integer):Integer;
+procedure bp_budget_release(ptype:Integer);
+
 procedure init_system_limits;
 procedure init_bigapp_limits;
 procedure set_bigapp_cred_limits;
@@ -138,10 +141,15 @@ uses
  kern_authinfo;
 
 var
- budget_limit  :array[0..3] of t_budget_info;
- budget_reserve:array[0..3] of t_budget_info;
+ budget_vm_limit  :array[0..3] of t_budget_info;
+ budget_vm_reserve:array[0..3] of t_budget_info;
 
- budget_lock   :Pointer;
+ budget_vm_lock:Pointer;
+
+ budget_bp_limit:array[0..3] of DWORD;
+ budget_bp_used :array[0..3] of DWORD;
+
+ budget_bp_lock:Pointer;
 
 const
  ptype_str:array[0..3] of pchar=(
@@ -164,33 +172,33 @@ begin
 
  Writeln('vm_set_budget_limit(',ptype_str[ptype],',',field_str[field],',0x',HexStr(value,16),')');
 
- rw_wlock(budget_lock);
+ rw_wlock(budget_vm_lock);
 
-  PQWORD(@budget_limit[ptype])[field]:=value;
+  PQWORD(@budget_vm_limit[ptype])[field]:=value;
 
- rw_wunlock(budget_lock);
+ rw_wunlock(budget_vm_lock);
 end;
 
 function vm_budget_limit(ptype,field:Integer):QWORD;
 begin
  if (DWORD(ptype)>3) or (DWORD(field-1)>2) then Exit(0);
 
- rw_wlock(budget_lock);
+ rw_wlock(budget_vm_lock);
 
-  Result:=PQWORD(@budget_limit[ptype])[field];
+  Result:=PQWORD(@budget_vm_limit[ptype])[field];
 
- rw_wunlock(budget_lock);
+ rw_wunlock(budget_vm_lock);
 end;
 
 function vm_budget_used(ptype,field:Integer):QWORD;
 begin
  if (DWORD(ptype)>3) or (DWORD(field-1)>2) then Exit(0);
 
- rw_wlock(budget_lock);
+ rw_wlock(budget_vm_lock);
 
-  Result:=PQWORD(@budget_reserve[ptype])[field];
+  Result:=PQWORD(@budget_vm_reserve[ptype])[field];
 
- rw_wunlock(budget_lock);
+ rw_wunlock(budget_vm_lock);
 end;
 
 function vm_budget_reserve(ptype,field:Integer;len:QWORD):Integer;
@@ -199,22 +207,22 @@ var
 begin
  if (DWORD(ptype)>3) or (DWORD(field-1)>2) then Exit(0);
 
- rw_wlock(budget_lock);
+ rw_wlock(budget_vm_lock);
 
-  rsv  :=PQWORD(@budget_reserve[ptype])[field];
-  limit:=PQWORD(@budget_limit  [ptype])[field];
+  rsv  :=PQWORD(@budget_vm_reserve[ptype])[field];
+  limit:=PQWORD(@budget_vm_limit  [ptype])[field];
 
   if (rsv <= limit) and
      (len <= (limit - rsv)) then
   begin
-   PQWORD(@budget_reserve[ptype])[field]:=rsv + len;
+   PQWORD(@budget_vm_reserve[ptype])[field]:=rsv + len;
    Result:=0;
   end else
   begin
    Result:=ENOMEM;
   end;
 
- rw_wunlock(budget_lock);
+ rw_wunlock(budget_vm_lock);
 end;
 
 procedure vm_budget_release(ptype,field:Integer;len:QWORD);
@@ -223,9 +231,9 @@ var
 begin
  if (DWORD(ptype)>3) or (DWORD(field-1)>2) or (len=0) then Exit;
 
- rw_wlock(budget_lock);
+ rw_wlock(budget_vm_lock);
 
-  rsv:=PQWORD(@budget_reserve[ptype])[field];
+  rsv:=PQWORD(@budget_vm_reserve[ptype])[field];
 
   size:=0;
   if (len <= rsv) then
@@ -233,15 +241,81 @@ begin
    size:=rsv - len;
   end;
 
-  PQWORD(@budget_reserve[ptype])[field]:=size;
+  PQWORD(@budget_vm_reserve[ptype])[field]:=size;
 
- rw_wunlock(budget_lock);
+ rw_wunlock(budget_vm_lock);
 end;
+
+//
+
+procedure bp_set_budget_limit(ptype:Integer;value:DWORD);
+begin
+ if (DWORD(ptype)>3) then Exit;
+
+ Writeln('bp_set_budget_limit(',ptype_str[ptype],',0x',HexStr(value,8),')');
+
+ rw_wlock(budget_bp_lock);
+
+  budget_bp_limit[ptype]:=value;
+
+ rw_wunlock(budget_bp_lock);
+end;
+
+function bp_budget_reserve(ptype:Integer):Integer;
+var
+ rsv,limit:DWORD;
+begin
+ if (DWORD(ptype)>3) then Exit(0);
+
+ rw_wlock(budget_bp_lock);
+
+  rsv  :=budget_bp_used [ptype];
+  limit:=budget_bp_limit[ptype];
+
+  if (rsv <= limit) and
+     ((limit - rsv) >= 1) then
+  begin
+   budget_bp_used[ptype]:=rsv + 1;
+   Result:=0;
+  end else
+  begin
+   Result:=ENOMEM;
+  end;
+
+ rw_wunlock(budget_bp_lock);
+end;
+
+procedure bp_budget_release(ptype:Integer);
+var
+ rsv,size:DWORD;
+begin
+ if (DWORD(ptype)>3) then Exit;
+
+ rw_wlock(budget_bp_lock);
+
+  rsv:=budget_bp_used[ptype];
+
+  size:=0;
+  if (rsv >= 1) then
+  begin
+   size:=rsv - 1;
+  end;
+
+  budget_bp_used[ptype]:=size;
+
+ rw_wunlock(budget_bp_lock);
+end;
+
+//
 
 procedure init_system_limits;
 begin
  vm_set_budget_limit(PTYPE_SYSTEM,field_mlock ,$2F068000);
  vm_set_budget_limit(PTYPE_SYSTEM,field_malloc,$2F068000);
+ //
+ bp_set_budget_limit(PTYPE_BIG_APP ,4);
+ bp_set_budget_limit(PTYPE_MINI_APP,4);
+ bp_set_budget_limit(PTYPE_SYSTEM  ,128);
 end;
 
 procedure init_bigapp_limits;
