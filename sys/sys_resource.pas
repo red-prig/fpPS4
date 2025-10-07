@@ -27,7 +27,9 @@ const
 
  RLIM_INFINITY =(QWORD(1) shl 63)-1;
 
- maxprocperuid =4*1024;
+ maxusers      = 99;
+ maxproc       = (20 + 16 * maxusers);
+ maxprocperuid = 4*1024;
 
 type
  p_rlimit=^t_rlimit;

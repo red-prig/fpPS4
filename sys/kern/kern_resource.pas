@@ -38,9 +38,9 @@ begin
  Case which of
   RLIMIT_DATA   :Result:=MAXDSIZ;
   RLIMIT_STACK  :Result:=MAXSSIZ;
+  RLIMIT_RSS    :Result:=pageablemem;
   RLIMIT_MEMLOCK:Result:=pageablemem;
-  RLIMIT_VMEM   :Result:=pageablemem;
-  RLIMIT_NPROC  :Result:=maxprocperuid;
+  RLIMIT_NPROC  :Result:=maxproc;
   RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;
@@ -52,9 +52,9 @@ begin
  Case which of
   RLIMIT_DATA   :Result:=MAXDSIZ;
   RLIMIT_STACK  :Result:=MAXSSIZ;
+  RLIMIT_RSS    :Result:=pageablemem;
   RLIMIT_MEMLOCK:Result:=pageablemem;
-  RLIMIT_VMEM   :Result:=pageablemem;
-  RLIMIT_NPROC  :Result:=maxprocperuid;
+  RLIMIT_NPROC  :Result:=maxproc;
   RLIMIT_NOFILE :Result:=maxfilesperproc;
   else;
  end;

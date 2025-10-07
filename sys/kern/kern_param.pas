@@ -58,7 +58,7 @@ const
  PDROP  =$2000; //OR'd with pri to stop re-entry of interlock mutex
  PBDRY  =$4000; //for PCATCH stop is done on the user boundary
 
- maxfilesperproc = 44236;
+ maxfilesperproc = 13952;
 
  IOSIZE_MAX      =High(Integer);
  DEVFS_IOSIZE_MAX=High(Integer);

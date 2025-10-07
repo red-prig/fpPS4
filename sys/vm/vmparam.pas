@@ -21,6 +21,8 @@ const
  MAXPAGESIZES=3; // maximum number of supported page sizes
  IOPAGES     =2; // pages of i/o permission bitmap
 
+ pageablemem=$4C7A0000;
+
  pagesizes:array[0..2] of QWORD=(PAGE_SIZE,0,0);
 
  //Virtual memory related constants, all in bytes
@@ -123,18 +125,12 @@ var
 
  pmap_mem_guest:array[0..2] of t_addr_range absolute pmap_mem;
 
-function pageablemem:QWORD;
 function VM_MINUSER_ADDRESS:QWORD;
 function PROC_IMAGE_AREA_START:QWORD;
 
 function is_guest_addr(addr:QWORD):Boolean;
 
 implementation
-
-function pageablemem:QWORD;
-begin
- Result:=VM_MAXUSER_ADDRESS-pmap_mem[0].start;
-end;
 
 function VM_MINUSER_ADDRESS:QWORD;
 begin
