@@ -277,7 +277,7 @@ function  vm_map_sync(map       :vm_map_t;
                       invalidate:Boolean):Integer;
 
 function  vm_map_find(map       :vm_map_t;
-                      vm_obj    :vm_object_t;
+                      obj       :vm_object_t;
                       offset    :vm_ooffset_t;
                       addr      :p_vm_offset_t;
                       length    :vm_size_t;
@@ -285,6 +285,7 @@ function  vm_map_find(map       :vm_map_t;
                       prot      :vm_prot_t;
                       max       :vm_prot_t;
                       cow       :DWORD;
+                      flags     :DWORD;
                       anon      :Pointer):Integer;
 
 procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t;cow:DWORD=0);
@@ -1600,7 +1601,7 @@ begin
   * must be a gap from start to the root.
   }
  map^.root:=vm_map_entry_splay(start, map^.root);
- if (start + length<=map^.root^.start) then
+ if ((start + length)<=map^.root^.start) then
  begin
   addr^:=start;
   Exit(0);
@@ -1636,7 +1637,37 @@ begin
 
  if (length>entry^.max_free) then
  begin
-  Exit(1);
+
+  if (entry^.inheritance=VM_INHERIT_HOLE) and
+     (entry^.start>=VM_MAXGUEST_ADDRESS) then
+  begin
+
+   if (entry^.start>start) then
+   begin
+    start:=entry^.start;
+   end;
+
+   if (start + length)<=(entry^.__end) then
+   begin
+    addr^:=start;
+    Exit(0);
+   end;
+
+   st:=(entry^.__end - start);
+
+   start :=start +st;
+   length:=length-st;
+
+   if (length>entry^.max_free) then
+   begin
+    Exit(1);
+   end;
+
+  end else
+  begin
+   Exit(1);
+  end;
+
  end;
 
  {
@@ -1696,6 +1727,21 @@ begin
  vm_map_unlock(map);
 end;
 
+function vm_get_findspace_range(addr:vm_offset_t):p_addr_range; inline;
+var
+ i:Byte;
+begin
+ Result:=nil;
+ For i:=0 to High(vm_findspace_ranges) do
+ begin
+  if (vm_findspace_ranges[i].start<=addr) and
+     (vm_findspace_ranges[i].__end> addr) then
+  begin
+   Exit(@vm_findspace_ranges[i]);
+  end;
+ end;
+end;
+
 {
  * vm_map_find finds an unallocated region in the target address
  * map with the given length.  The search is defined to be
@@ -1706,7 +1752,7 @@ end;
  * prior to making call to account for the new entry.
  }
 function vm_map_find(map       :vm_map_t;
-                     vm_obj    :vm_object_t;
+                     obj       :vm_object_t;
                      offset    :vm_ooffset_t;
                      addr      :p_vm_offset_t;
                      length    :vm_size_t;
@@ -1714,67 +1760,169 @@ function vm_map_find(map       :vm_map_t;
                      prot      :vm_prot_t;
                      max       :vm_prot_t;
                      cow       :DWORD;
+                     flags     :DWORD;
                      anon      :Pointer):Integer;
 label
- again;
+ _ending,
+ _insert;
 var
- alignment,initial_addr,start:vm_offset_t;
+ i           :Byte;
+ align_2mb   :Boolean;
+ r           :Integer;
+ alignment   :vm_offset_t;
+ initial_addr:vm_offset_t;
+ start       :vm_offset_t;
+ tmp         :vm_offset_t;
+ range       :p_addr_range;
 begin
- if (find_space=VMFS_OPTIMAL_SPACE) then
+ align_2mb:=(flags and $10000)<>0;
+
+ if (not align_2mb) or (find_space<>VMFS_ANY_SPACE) then
  begin
-  if (vm_obj=nil) then
-  begin
-   find_space:=VMFS_ANY_SPACE;
-  end else
-  if ((vm_obj^.flags and OBJ_COLORED)=0) then
-  begin
-   find_space:=VMFS_ANY_SPACE;
-  end;
- end;
- if ((find_space shr 8)<>0) then
- begin
-  Assert((find_space and $ff)=0,'bad VMFS flags');
-  alignment:=vm_offset_t(1) shl (find_space shr 8);
+  initial_addr:=addr^;
  end else
  begin
-  alignment:=0;
+  initial_addr:=(addr^ + $1fffff) and QWORD($ffffffffffe00000);
  end;
- initial_addr:=addr^;
-again:
- start:=initial_addr;
+
+ alignment:=QWORD(-1) shl (find_space and $3f);
+
  vm_map_lock(map);
+
  repeat
+  start:=initial_addr;
+
   if (find_space<>VMFS_NO_SPACE) then
   begin
-   if (vm_map_findspace(map, start, length, addr)<>0) then
-   begin
-    vm_map_unlock(map);
-    if (find_space=VMFS_OPTIMAL_SPACE) then
-    begin
-     find_space:=VMFS_ANY_SPACE;
-     goto again;
-    end;
-    Exit(KERN_NO_SPACE);
-   end;
 
-   case find_space of
-    VMFS_SUPER_SPACE,
-    VMFS_OPTIMAL_SPACE: pmap_align_superpage(vm_obj, offset, addr, length);
-    VMFS_ANY_SPACE:;
-   else
-    if ((addr^ and (alignment - 1))<>0) then
-    begin
-     addr^:=addr^ and (not (alignment - 1));
-     addr^:=addr^ + alignment;
-    end;
-   end;
+   repeat
 
-   start:=addr^;
-  end;
-  Result:=vm_map_insert(map, vm_obj, offset, start, start + length, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
- until not ((Result=KERN_NO_SPACE) and
-            (find_space<>VMFS_NO_SPACE) and
-            (find_space<>VMFS_ANY_SPACE));
+    if (vm_map_findspace(map, start, length, addr)<>0) then
+    begin
+     vm_map_unlock(map);
+     Exit(KERN_NO_SPACE);
+    end;
+
+    if (not align_2mb) or (find_space<>VMFS_ANY_SPACE) then
+    begin
+     start:=initial_addr;
+
+     if ((find_space or 1)=5) then //[VMFS_OPTIMAL_SPACE, 5]
+     begin
+
+      if (initial_addr < $400000) then
+      begin
+       vm_map_unlock(map);
+       Exit(22);
+      end;
+
+      tmp:=addr^;
+
+      range:=vm_get_findspace_range(initial_addr);
+      if (range=nil) then
+      begin
+       vm_map_unlock(map);
+       Exit(22);
+      end;
+
+      For i:=0 to 9 do
+      begin
+       //TODO:ASLR
+
+       r:=vm_map_findspace(map, range^.start, range^.__end, addr);
+
+       //align_2mb
+
+       if (r=0) and
+          ((not align_2mb) or
+           ((PDWORD(addr)^ and $1fffff)=0)) then
+       begin
+        goto _ending;
+       end;
+
+      end; //for
+
+      if (r<>0) then
+      begin
+       addr^:=tmp;
+      end;
+
+     end; // ((find_space or 1)=5)
+
+     _ending:
+
+      if (start - QWORD($200000000) < QWORD($500000001)) then
+      begin
+       if (SCE_USR_HEAP_END <= addr^) then
+       begin
+        vm_map_unlock(map);
+        Exit(KERN_NO_SPACE);
+       end;
+      end else
+      if ((start shr 47)<>0) or
+         ( ((flags and MAP_SANITIZER)<>0) or
+           ( (DWORD(start shr 34) < 63) and ((start + length) < QWORD($fc00000001)) )
+         ) or
+         (p_proc.p_sdk_version < $3000000) then
+      begin
+       //
+      end else
+      begin
+       vm_map_unlock(map);
+       Exit(KERN_NO_SPACE);
+      end;
+
+      //
+
+      if (find_space=5) or (find_space=VMFS_SUPER_SPACE) then
+      begin
+       pmap_align_superpage(obj, offset, addr, length);
+      end else
+      if (Integer(find_space) > 13) then
+      begin
+       addr^:=(addr^ + (not alignment)) and alignment;
+      end;
+      initial_addr:=addr^;
+
+      goto _insert;
+
+    end else // (not align_2mb) or (find_space<>VMFS_ANY_SPACE)
+    begin
+     tmp:=addr^;
+     if (tmp < QWORD($80000000)) or (QWORD($1ffffffff) < (length + tmp)) then
+     begin
+      vm_map_unlock(map);
+      Exit(KERN_NO_SPACE);
+     end;
+
+     if ((tmp and QWORD($1fffff))=0) then
+     begin
+      goto _ending;
+     end;
+
+     start:=(tmp + QWORD($1fffff)) and QWORD($ffffffffffe00000);
+    end;
+   until false;
+
+  end; // (find_space<>VMFS_NO_SPACE)
+
+  _insert:
+
+   //try to expand addres space
+   vm_map_expand(map, initial_addr, initial_addr + length);
+
+   Result:=vm_map_insert(map, obj,
+                         offset,
+                         initial_addr,
+                         initial_addr + length,
+                         prot, max,
+                         cow or MAP_COW_AUTO_NAMING,
+                         anon);
+
+ until ((Integer(find_space) < 15) and (find_space <> VMFS_SUPER_SPACE)) or
+       (Result <> KERN_NO_SPACE);
+
+
  vm_map_unlock(map);
 end;
 

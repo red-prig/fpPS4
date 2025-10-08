@@ -50,6 +50,7 @@ const
  USRSTACK             =QWORD($007EEFFC000);  //(rng & 0xffc000) + 0x7EEFFC000
 
  SCE_USR_HEAP_START   =QWORD($00200000000);  //(rng & 0xffc000) | 0x200000000 ... (rng & 0xffc000) | 0x6ff000000
+ SCE_USR_HEAP_END     =QWORD($006FFFFC000);
  SCE_SYS_HEAP_START   =QWORD($00880000000);  //(rng & 0xffc000) | 0x880000000 ..  (rng & 0xffc000) | 0x8ff000000
 
  SCE_KERNEL_GNMDRIVER =QWORD($00FE0000000);
@@ -115,11 +116,29 @@ const
 }
 
 type
+ p_addr_range=^t_addr_range;
  t_addr_range=packed record
   start:QWORD;
   __end:QWORD;
  end;
 
+const
+ vm_findspace_ranges:array[0..11] of t_addr_range=(
+  (start:$000400000;__end:$080000000), //SCE_KERNEL_PROC_IMAGE_AREA
+  (start:$080000000;__end:$200000000), //SCE_KERNEL_DL_AREA
+  (start:$200000000;__end:$700000000), //SCE_KERNEL_HEAP_AREA
+  (start:$7E0000000;__end:$7F0000000), //SCE_KERNEL_STACK_AREA
+  (start:$7FFFFC000;__end:$800000000), //SCE_KERNEL_GBASE_AREA
+  (start:$800000000;__end:$840000000), //SCE_KERNEL_SYSTEM_DL_AREA
+  (start:$880000000;__end:$900000000), //SCE_KERNEL_SYSTEM_HEAP_AREA
+  (start:$900000000;__end:$A00000000), //SCE_KERNEL_JIT_SHM_AREA
+  (start:$A00000000;__end:$B00000000), //SCE_KERMEL_JIT_SHM_AREA2
+  (start:$F00000000;__end:$EC0000000), //SCE_KERNEL_RAZOR_GPU_AREA
+  (start:$FE0000000;__end:$FF0000000), //SCE_KERNEL_GNMDRIVER_AREA
+  (start:$FF0000000;__end:$FF0040000)  //SCE_KERNEl_GNM_TESS_AREA
+ );
+
+type
  t_addr_range_array=array[0..4] of t_addr_range;
 
 const

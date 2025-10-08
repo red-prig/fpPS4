@@ -123,6 +123,7 @@ begin
                    VMFS_OPTIMAL_SPACE,
                    VM_PROT_RWX, VM_PROT_RWX,
                    MAP_COW_NO_BUDGET or MAP_COW_PATCH,
+                   0,
                    nil);
 
   if (err<>0) then Exit;

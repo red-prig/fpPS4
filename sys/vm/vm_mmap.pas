@@ -568,20 +568,28 @@ begin
   end else
   if (fitit) then
   begin
-   if ((flags and MAP_ALIGNMENT_MASK)=MAP_ALIGNED_SUPER) then
+
+   findspace:=(flags shr MAP_ALIGNMENT_SHIFT) and $1f;
+   if (findspace < 14) then
    begin
-    findspace:=VMFS_SUPER_SPACE;
-   end else
-   if ((flags and MAP_ALIGNMENT_MASK)<>0) then
-   begin
-    findspace:=VMFS_ALIGNED_SPACE(flags shr MAP_ALIGNMENT_SHIFT);
-   end else
-   begin
-    findspace:=VMFS_OPTIMAL_SPACE;
+    //1 >> 20 = 0x100000
+    if (obj=nil) then
+    begin
+     findspace:=((flags shr 20) and 1) * 3 + VMFS_ANY_SPACE;   //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
+    end else
+    if (obj^.otype<>OBJT_DEVICE) then
+    begin
+     findspace:=((flags shr 20) and 1) * 3 + VMFS_ANY_SPACE;   //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
+    end else
+    begin
+     findspace:=((flags shr 20) and 1) * 3 + VMFS_SUPER_SPACE; //[VMFS_SUPER_SPACE, 5]
+    end;
    end;
+
    rv:=vm_map_find(map, obj, foff, addr, size, findspace,
                    prot, maxprot,
                    docow,
+                   flags,
                    anon);
   end else
   begin
