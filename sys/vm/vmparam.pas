@@ -54,8 +54,19 @@ const
 
  SCE_KERNEL_GNMDRIVER =QWORD($00FE0000000);
 
- _VM_MINUSER_ADDRESS  =QWORD($00010000000); //(original:$000000000000)
- VM_MAXUSER_ADDRESS   =QWORD($80000000000); //(original:$800000000000) [0..47] MAP_AREA_END=0xfc00000000
+ //This is the minimum address without running in a separate process.
+ VM_MINGUEST_ADDRESS  =QWORD($00010000000);      //(original:$000000000000)
+
+ //This is the maximum address of the main guest
+ //memory block, which is a compromise
+ //in memory performance in Windows.
+ VM_MAXGUEST_ADDRESS  =QWORD(1) shl 40;          //(original:$800000000000)
+
+ //The total memory size is 48 bits,
+ //which is equivalent to the Windows limitation,
+ //but at the end there are DLLs, so only 47 bits
+ VM_MAX_BITS          =47;
+ VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..47] MAP_AREA_END=0xfc00000000
 
  VM_MIN_GPU_ADDRESS   =QWORD($90000000000);
  VM_MAX_GPU_ADDRESS   =QWORD($A0000000000); //Virtual mirror
@@ -113,11 +124,11 @@ type
 
 const
  initial_pmap_mem:t_addr_range_array=(
-  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END  ), //guest
-  (start:DL_AREA_START     ;__end:DL_AREA___END     ), //guest
-  (start:SCE_USR_HEAP_START;__end:VM_MAXUSER_ADDRESS), //guest
-  (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS),
-  (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS)
+  (start:_PROC_AREA_START_1;__end:_PROC_AREA___END   ), //guest
+  (start:DL_AREA_START     ;__end:DL_AREA___END      ), //guest
+  (start:SCE_USR_HEAP_START;__end:VM_MAXGUEST_ADDRESS), //guest
+  (start:VM_MIN_GPU_ADDRESS;__end:VM_MAX_GPU_ADDRESS ),
+  (start:VM_MIN_DEV_ADDRESS;__end:VM_MAX_DEV_ADDRESS )
  );
 
 var

@@ -274,14 +274,14 @@ begin
    //try union range
    if (base=Pointer(DL_AREA_START)) then
    begin
-    size:=VM_MAXUSER_ADDRESS-DL_AREA_START;
+    size:=temp_pmap_mem[i+1].__end-temp_pmap_mem[i].start;
 
     Result.error:=md_placeholder_mmap(base,size,MD_MAP_FIXED,hProcess);
     if (Result.error=0) then
     begin
      //union range
-     temp_pmap_mem[i+0].__end:=VM_MAXUSER_ADDRESS;
-     temp_pmap_mem[i+1].start:=VM_MAXUSER_ADDRESS;
+     temp_pmap_mem[i+0].__end:=temp_pmap_mem[i+1].__end;
+     temp_pmap_mem[i+1].start:=temp_pmap_mem[i+1].__end;
      //
      i:=i+2;
      Continue;

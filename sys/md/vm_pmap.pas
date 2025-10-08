@@ -151,6 +151,10 @@ function  pmap_danger_zone(pmap:pmap_t;
                            addr:vm_offset_t;
                            size:vm_offset_t):Boolean;
 
+function  pmap_expand(pmap :pmap_t;
+                      start:vm_offset_t;
+                      __end:vm_offset_t):Boolean;
+
 procedure pmap_gpu_get_bound(pmap:pmap_t;
                              var start:vm_offset_t;
                              var __end:vm_offset_t);
@@ -292,17 +296,23 @@ begin
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
  vm_nt_map_init(@pmap^.gp_map,VM_MIN_GPU_ADDRESS,VM_MAX_GPU_ADDRESS);
 
-  //exclude
+ //exclude
  if Length(pmap_mem_guest)>1 then
  begin
-  For i:=0 to High(pmap_mem_guest)-1 do
+  //mark all space as hole
+  vm_nt_map_insert(@pmap^.nt_map,
+                   nil,0,
+                   VM_MINUSER_ADDRESS,
+                   VM_MAXUSER_ADDRESS,
+                   VM_MAXUSER_ADDRESS-VM_MINUSER_ADDRESS,
+                   0);
+  //
+  For i:=0 to High(pmap_mem_guest) do
   begin
-   vm_nt_map_insert(@pmap^.nt_map,
-                    nil,0,
-                    pmap_mem_guest[  i].__end,
-                    pmap_mem_guest[i+1].start,
-                    pmap_mem_guest[i+1].start-pmap_mem_guest[i].__end,
-                    0);
+   //mark used regions as free
+   vm_nt_map_delete(@pmap^.nt_map,
+                    pmap_mem_guest[i].start,
+                    pmap_mem_guest[i].__end);
   end;
  end;
 
@@ -1760,6 +1770,42 @@ begin
  end;
 end;
 
+function pmap_expand(pmap :pmap_t;
+                     start:vm_offset_t;
+                     __end:vm_offset_t):Boolean;
+var
+ base:Pointer;
+ lock:Pointer;
+ r:Integer;
+begin
+ Result:=True;
+
+ if (p_print_pmap) then
+ begin
+  Writeln('pmap_expand:',HexStr(start,11),':',HexStr(__end,11));
+ end;
+
+ base:=Pointer(start);
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+  r:=md_placeholder_mmap(base,__end-start,MD_MAP_FIXED);
+
+  if (r<>0) then
+  begin
+   Writeln('failed md_placeholder_mmap:0x',HexStr(r,8));
+   Assert(false,'pmap_expand');
+   Result:=False;
+  end;
+
+  if Result then
+  begin
+   //mark used regions as free
+   vm_nt_map_delete(@pmap^.nt_map,start,__end);
+  end;
+
+ pmap_unlock(pmap,lock);
+end;
 
 end.
 

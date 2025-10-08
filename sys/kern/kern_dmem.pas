@@ -271,6 +271,12 @@ begin
     if (err=0) then
     begin
 
+     if (align=0) then //only FIXED
+     begin
+      //try to expand addres space
+      vm_map_expand(map, vaddr, v_end);
+     end;
+
      if (align=0) and ((flags and MAP_NO_OVERWRITE)=0) then
      begin
       vm_map_delete(map, vaddr, v_end);

@@ -613,7 +613,9 @@ begin
   end;
 
   Result:=vm_map_wire(map,addr^,addr^ + size,
-                      (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or VM_MAP_WIRE_USER or VM_MAP_WIRE_HOLESOK);
+                      (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or
+                      VM_MAP_WIRE_USER or
+                      VM_MAP_WIRE_HOLESOK);
 
   if (Result<>0) then
   begin

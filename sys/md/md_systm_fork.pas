@@ -269,7 +269,7 @@ begin
   prev:=addr;
   addr:=addr+Info.RegionSize;
 
-  if (addr>=Pointer(VM_MAXUSER_ADDRESS)) then Break;
+  if (addr>=Pointer(VM_MAXGUEST_ADDRESS)) then Break;
 
  until (prev>=addr);
 end;

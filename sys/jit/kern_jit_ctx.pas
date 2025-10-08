@@ -6,6 +6,7 @@ unit kern_jit_ctx;
 interface
 
 uses
+ vmparam,
  g_node_splay,
  x86_fpdbgdisas,
  x86_jit;
@@ -2004,7 +2005,7 @@ begin
   xchgq(rcx,rbits);
 
   //addres bits
-  movi(new_reg_size(rcx,os8),43);
+  movi(new_reg_size(rcx,os8),VM_MAX_BITS);
 
   shrx(rcx,dst,rcx);
 
@@ -2021,7 +2022,7 @@ begin
 
   {
   //zero bits
-  movi(new_reg_size(rbits,os8),21); //mov  $21,%bpl
+  movi(new_reg_size(rbits,os8),64-VM_MAX_BITS); //mov  $21,%bpl
 
   //clear hi
   shlx(dst,dst,rbits); //shlx %rbp,%r14,%r14

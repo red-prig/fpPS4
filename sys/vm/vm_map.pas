@@ -287,7 +287,7 @@ function  vm_map_find(map       :vm_map_t;
                       cow       :DWORD;
                       anon      :Pointer):Integer;
 
-procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t);
+procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t;cow:DWORD=0);
 
 function  vm_map_fixed(map    :vm_map_t;
                        vm_obj :vm_object_t;
@@ -319,6 +319,8 @@ procedure vm_map_unlock_range(map:vm_map_t;cookie:Pointer);
 
 function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
+
+function  vm_map_expand(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
@@ -445,9 +447,13 @@ begin
  begin
   map:=@vm^.vm_map;
   vm_map_lock(map);
-   For i:=0 to High(pmap_mem_guest)-1 do
+   //mark all space as hole
+   vm_map_insert(map, nil, 0, VM_MINUSER_ADDRESS, VM_MAXUSER_ADDRESS, 0, 0, MAP_COW_NO_BUDGET or MAP_COW_HOLE, nil);
+   //
+   For i:=0 to High(pmap_mem_guest) do
    begin
-    vm_map_insert(map, nil, 0, pmap_mem_guest[i].__end, pmap_mem_guest[i+1].start, 0, 0, MAP_COW_NO_BUDGET or MAP_COW_HOLE, nil);
+    //mark used regions as free
+    vm_map_delete(map ,pmap_mem_guest[i].start, pmap_mem_guest[i].__end, MAP_COW_HOLE);
    end;
   vm_map_unlock(map);
  end;
@@ -1677,10 +1683,15 @@ begin
  __end:=start + length;
  vm_map_lock(map);
   VM_MAP_RANGE_CHECK(map, start, __end);
+
+  //try to expand addres space
+  vm_map_expand(map, start, __end);
+
   if ((cow and MAP_COW_NO_OVERWRITE)=0) then
   begin
    vm_map_delete(map, start, __end, cow);
   end;
+
   Result:=vm_map_insert(map, vm_obj, offset, start, __end, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
  vm_map_unlock(map);
 end;
@@ -1779,15 +1790,20 @@ end;
  * possibly extended).  When merging, this routine may delete one or
  * both neighbors.
  }
-procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t);
+procedure vm_map_simplify_entry(map:vm_map_t;entry:vm_map_entry_t;cow:DWORD=0);
 var
  next,prev:vm_map_entry_t;
  prevsize,esize:vm_size_t;
  obj:vm_map_object;
  sdk_5:Boolean;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or MAP_ENTRY_IN_TRANSITION or MAP_ENTRY_IN_TRANSITION2))<>0) or
-    (entry^.inheritance=VM_INHERIT_HOLE) then
+ if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or
+                        MAP_ENTRY_IN_TRANSITION or
+                        MAP_ENTRY_IN_TRANSITION2))<>0) or
+     (
+      (entry^.inheritance=VM_INHERIT_HOLE) and
+      ((cow and MAP_COW_HOLE )<>0)
+     ) then
  begin
   Exit;
  end;
@@ -3642,6 +3658,16 @@ end;
 
 //
 
+function vm_can_delete(entry:vm_map_entry_t;cow:DWORD):Boolean; inline;
+begin
+ case entry^.inheritance of
+  VM_INHERIT_PATCH:Result:=((cow and MAP_COW_PATCH)<>0);
+  VM_INHERIT_HOLE :Result:=((cow and MAP_COW_HOLE )<>0);
+  else
+                   Result:=True;
+ end;
+end;
+
 {
  * vm_map_delete: [ internal use only ]
  *
@@ -3685,7 +3711,10 @@ begin
    Exit(KERN_INVALID_ARGUMENT);
   end;
 
-  vm_map_clip_start(map, entry, start);
+  if vm_can_delete(entry, cow) then
+  begin
+   vm_map_clip_start(map, entry, start);
+  end;
  end;
 
  //check
@@ -3706,20 +3735,11 @@ begin
    Exit(KERN_INVALID_ARGUMENT);
   end;
 
-  case next^.inheritance of
-   VM_INHERIT_PATCH:
-    if ((cow and MAP_COW_PATCH)=0) then
-    begin
-     next:=next^.next;
-     continue;
-    end;
-   VM_INHERIT_HOLE:
-    if ((cow and MAP_COW_HOLE)=0) then
-    begin
-     next:=next^.next;
-     continue;
-    end;
-   else;
+  if not vm_can_delete(next, cow) then
+  begin
+   //skip?
+   next:=next^.next;
+   continue;
   end;
 
   next:=next^.next;
@@ -3731,20 +3751,11 @@ begin
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
 
-  case entry^.inheritance of
-   VM_INHERIT_PATCH:
-    if ((cow and MAP_COW_PATCH)=0) then
-    begin
-     entry:=entry^.next;
-     continue;
-    end;
-   VM_INHERIT_HOLE:
-    if ((cow and MAP_COW_HOLE)=0) then
-    begin
-     entry:=entry^.next;
-     continue;
-    end;
-   else;
+  if not vm_can_delete(entry, cow) then
+  begin
+   //skip?
+   entry:=entry^.next;
+   continue;
   end;
 
   vm_map_clip_end(map, entry, __end);
@@ -3764,16 +3775,19 @@ begin
    end;
   end;
 
-  pmap_remove(map^.pmap,
-              entry^.vm_obj,
-              entry^.start,
-              entry^.__end);
-
-  //unmap_jit_cache(entry^.start,entry^.__end);
-
-  if (entry^.wired_count<>0) then
+  if (entry^.inheritance<>VM_INHERIT_HOLE) then
   begin
-   vm_map_entry_unwire(map,entry);
+   pmap_remove(map^.pmap,
+               entry^.vm_obj,
+               entry^.start,
+               entry^.__end);
+
+   //unmap_jit_cache(entry^.start,entry^.__end);
+
+   if (entry^.wired_count<>0) then
+   begin
+    vm_map_entry_unwire(map,entry);
+   end;
   end;
 
   {
@@ -3802,6 +3816,55 @@ begin
   Result:=vm_map_delete(map, start, __end, cow);
  vm_map_unlock(map);
 end;
+
+//expand addres space
+function vm_map_expand(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Integer;
+var
+ entry      :vm_map_entry_t;
+ first_entry:vm_map_entry_t;
+ next       :vm_map_entry_t;
+begin
+ VM_MAP_ASSERT_LOCKED(map);
+
+ if (start=__end) then
+ begin
+  Exit(KERN_SUCCESS);
+ end;
+
+ if (not vm_map_lookup_entry(map, start, @first_entry)) then
+ begin
+  entry:=first_entry^.next;
+ end else
+ begin
+  entry:=first_entry;
+ end;
+
+ while (entry<>@map^.header) and (entry^.start<__end) do
+ begin
+  next:=entry^.next;
+
+  if (entry^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   vm_map_clip_start(map, entry, start);
+   vm_map_clip_end  (map, entry, __end);
+
+   next:=entry^.next;
+
+   if not pmap_expand(map^.pmap,entry^.start,entry^.__end) then
+   begin
+    vm_map_simplify_entry(map,entry,MAP_COW_HOLE);
+    Exit(KERN_NO_SPACE);
+   end;
+
+   vm_map_entry_delete(map, entry);
+  end;
+
+  entry:=next;
+ end;
+ Result:=(KERN_SUCCESS);
+end;
+
+//
 
 {
  * vm_map_check_protection:
