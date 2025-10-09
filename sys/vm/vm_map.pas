@@ -1144,6 +1144,8 @@ function vm_map_insert_internal(
            prot  :vm_prot_t;
            max   :vm_prot_t;
            cow   :DWORD):Integer;
+var
+ BLOCKPOOL:Boolean;
 begin
  Result:=KERN_SUCCESS;
 
@@ -1152,6 +1154,7 @@ begin
   Exit; //skip
  end;
 
+ BLOCKPOOL:=False;
  if (obj<>nil) then
  begin
   if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
@@ -1163,17 +1166,19 @@ begin
                                  ((p_proc.p_dmem_aliasing and 3)<>0)
                                 );
   end;
+  BLOCKPOOL:=(obj^.otype=OBJT_BLOCKPOOL);
  end;
 
  if (Result=KERN_SUCCESS) then
  begin
 
-  if (obj=nil) and (max=0) and (prot=0) then
+  if ((obj=nil) and (max=0) and (prot=0)) or
+     BLOCKPOOL then
   begin
-   //reserved only
+   //reserved or blockpool
 
    pmap_remove(map^.pmap,
-               obj,
+               nil,
                start,
                __end);
   end else
@@ -4771,7 +4776,7 @@ begin
   if (current^.vm_obj<>nil) then
   if (current^.vm_obj^.otype=OBJT_BLOCKPOOL) then
   begin
-   Assert(false,'TODO');
+   Assert(false,'TODO:BLOCKPOOL');
    current:=current^.next;
    Continue;
   end;

@@ -194,10 +194,21 @@ begin
  //Result^.vm_container:=0;
 
  case t of
-  OBJT_DEFAULT:
+  OBJT_DEFAULT,
+  OBJT_SWAP:
     begin
-     Result^.flags:=OBJ_ONEMAPPING;
+     Result^.flags:=OBJ_ONEMAPPING or OBJ_DISCONNECTWNT or $20000;
     end;
+  OBJT_DEVICE:
+    begin
+     Result^.flags:=1 or 2;
+    end;
+  OBJT_PHYS,
+  OBJT_SG,
+  OBJT_BLOCKPOOL:
+    begin
+     Result^.flags:=2;
+    end
   else;
  end;
 

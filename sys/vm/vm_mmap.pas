@@ -400,11 +400,6 @@ begin
  end;
 end;
 
-function VMFS_ALIGNED_SPACE(x:QWORD):QWORD; inline; // find a range with fixed alignment
-begin
- Result:=x shl 8;
-end;
-
 function vm_mmap2(map        :vm_map_t;
                   addr       :p_vm_offset_t;
                   size       :vm_size_t;
@@ -416,6 +411,7 @@ function vm_mmap2(map        :vm_map_t;
                   foff       :vm_ooffset_t;
                   anon       :Pointer):Integer;
 var
+ _size:QWORD;
  obj:vm_object_t;
  docow:DWORD;
  error,findspace,rv:Integer;
@@ -427,7 +423,9 @@ begin
 
  obj:=nil;
 
- size:=round_page(size);
+ //round_page
+ _size:=size+PAGE_MASK;
+ size :=_size and QWORD(not PAGE_MASK);
 
  if (map^.size + size) > lim_cur(RLIMIT_VMEM) then
  begin
@@ -473,6 +471,48 @@ begin
        ((maxprot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
     begin
      error:=vm_mmap_dmem(handle,size,foff,@obj);
+    end;
+   end;
+
+  OBJT_BLOCKPOOL:
+   begin
+    error:=EINVAL;
+    rv:=(flags and $1F000000);
+    if (foff=0) and
+       ((rv = 0) or
+        (rv >= $15000000)) and
+       (((flags and (MAP_SHARED or MAP_PRIVATE)) = MAP_SHARED) or
+        ((maxprot and prot and $33) = $33)) then
+    begin
+     //
+     if (rv = 0) then
+     begin
+      flags:=(flags and (not $1F000000)) or $15000000
+     end;
+     //
+     if ( ((flags and MAP_FIXED)<>0) and
+          (
+           ((addr^ and PAGE_2MB_MASK)<>0) or
+           ( (addr^ < QWORD($ff0000000)) and
+             (QWORD($7efffffff) < (addr^ + size))
+           )
+
+          )
+        ) or
+        ((_size and QWORD(not PAGE_2MB_MASK)) <> size) then
+     begin
+      Exit(EINVAL);
+     end;
+     //
+     writecounted:=False;
+     obj:=vm_pager_allocate(OBJT_BLOCKPOOL,handle,size,$33,0);
+     //
+     if (obj=nil) then
+     begin
+      Exit(ENOMEM);
+     end;
+     //
+     error:=0;
     end;
    end;
 
@@ -810,22 +850,22 @@ begin
  if ((flags and MAP_VOID)<>0) then
  begin
   //MAP_VOID
-  handle:=nil;
+  handle     :=nil;
   handle_type:=OBJT_DEFAULT;
-  maxprot:=0;
+  maxprot    :=0;
   cap_maxprot:=0;
-  flags:=flags or MAP_ANON;
-  rights:=0;
-  prot:=0;
+  flags      :=flags or MAP_ANON;
+  rights     :=0;
+  prot       :=0;
   goto _map;
  end;
 
  if ((flags and MAP_ANON)<>0) then
  begin
   //Mapping blank space is trivial.
-  handle:=nil;
+  handle     :=nil;
   handle_type:=OBJT_DEFAULT;
-  maxprot:=VM_PROT_ALL;
+  maxprot    :=VM_PROT_ALL;
   cap_maxprot:=VM_PROT_ALL;
   goto _map;
  end;
@@ -888,19 +928,19 @@ begin
      end else
      if (vp^.v_type<>VCHR) or ((fp^.f_flag and FWRITE)<>0) then
      begin
-      maxprot:=maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
+      maxprot    :=maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
       cap_maxprot:=cap_maxprot or (VM_PROT_WRITE or VM_PROT_GPU_WRITE);
      end;
 
-     handle:=vp;
+     handle     :=vp;
      handle_type:=OBJT_VNODE;
     end;
 
   DTYPE_SHM:
     begin
-     handle:=fp^.f_data;
+     handle     :=fp^.f_data;
      handle_type:=OBJT_SWAP;
-     maxprot:=VM_PROT_NONE;
+     maxprot    :=VM_PROT_NONE;
 
      // FREAD should always be set.
      if ((fp^.f_flag and FREAD)<>0) then
@@ -916,7 +956,7 @@ begin
 
   DTYPE_PHYSHM:
     begin
-     handle:=fp^.f_data;
+     handle     :=fp^.f_data;
      handle_type:=OBJT_PHYSHM;
 
      prot:=VM_PROT_READ or VM_PROT_GPU_READ;
@@ -936,9 +976,9 @@ begin
 
   DTYPE_BLOCKPOOL:
     begin
-     handle:=fp^.f_data;
+     handle     :=fp^.f_data;
      handle_type:=OBJT_BLOCKPOOL;
-     maxprot:=VM_PROT_ALL;
+     maxprot    :=VM_PROT_ALL;
     end;
 
   else

@@ -5,23 +5,13 @@ unit kern_blockpool;
 
 interface
 
-function sys_blockpool_open(flags:Integer):Integer;
-
-implementation
-
 uses
- errno,
- dmem_map,
- kern_dmem,
- kern_proc,
- kern_thr,
- kern_descrip,
- kern_budget,
+ vmparam,
+ sys_vm_object,
  kern_mtx,
- vfile,
- vfcntl,
- sys_conf,
- vstat;
+ kern_dmem;
+
+function sys_blockpool_open(flags:Integer):Integer;
 
 type
  p_blockpool=^t_blockpool;
@@ -31,13 +21,94 @@ type
   __end_dmem            :QWORD;
   dmap                  :p_dmem_obj;
   budget_id             :Integer;
+  refs                  :DWORD;
   //
   availableCachedBlocks :DWORD;
   availableFlushedBlocks:DWORD;
   allocatedCachedBlocks :DWORD;
   allocatedFlushedBlocks:DWORD;
+  //
+  dmem_bits:array[0..(VM_DMEM_SIZE div (64*1024*8))-1] of Byte;
  end;
 
+function  blockpool_acqure (bp:p_blockpool):p_blockpool;
+procedure blockpool_release(bp:p_blockpool);
+
+function  blockpool_pager_alloc  (handle:Pointer;size:QWORD):vm_object_t;
+procedure blockpool_pager_dealloc(obj:vm_object_t);
+
+implementation
+
+uses
+ errno,
+ dmem_map,
+ kern_proc,
+ kern_thr,
+ kern_descrip,
+ kern_budget,
+ vfile,
+ vfcntl,
+ sys_conf,
+ vstat;
+
+procedure blockpool_free(bp:p_blockpool); forward;
+
+function blockpool_acqure(bp:p_blockpool):p_blockpool;
+begin
+ System.InterlockedIncrement(bp^.refs);
+ Result:=bp;
+end;
+
+procedure blockpool_release(bp:p_blockpool);
+begin
+ if (System.InterlockedDecrement(bp^.refs)=0) then
+ begin
+  blockpool_free(bp);
+ end;
+end;
+
+function OFF_TO_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=QWORD(x) shr PAGE_SHIFT;
+end;
+
+function blockpool_pager_alloc(handle:Pointer;size:QWORD):vm_object_t;
+begin
+
+ if (p_proc.p_sdk_version > $4ffffff) then
+ begin
+  if (size > QWORD($7fffffffffff)) then
+  begin
+   Exit(nil);
+  end;
+ end else
+ if ((size shr 16) > $3ffff) then
+ begin
+  Exit(nil);
+ end;
+
+ Result:=vm_object_allocate(OBJT_BLOCKPOOL,OFF_TO_IDX(size));
+ if (Result=nil) then Exit;
+
+ /////////////
+
+ Result^.handle:=blockpool_acqure(handle);
+end;
+
+procedure blockpool_pager_dealloc(obj:vm_object_t);
+begin
+ /////////////
+
+ //bp->allocatedCachedBlocks = bp->allocatedCachedBlocks + -1;
+ //bp->availableCachedBlocks = bp->availableCachedBlocks + 1;
+
+ blockpool_release(obj^.handle);
+
+ obj^.handle:=nil;
+ obj^.otype :=OBJT_DEAD;
+end;
+
+type
  p_blockpool_expand=^t_blockpool_expand;
  t_blockpool_expand=packed record
   len  :QWORD;
@@ -48,6 +119,10 @@ type
  end;
 
 function blockpool_expand(bp:p_blockpool;data:p_blockpool_expand):Integer;
+type
+ t_byte=packed record
+  val:Byte;
+ end;
 var
  len  :QWORD;
  flags:DWORD;
@@ -62,7 +137,7 @@ begin
 
  if (WORD(len)<>0) or
     ((flags and $1f000000)<>flags) or
-    (flags < $10000000) then
+    ((flags<>0) and (flags < $10000000)) then
  begin
   Exit(EINVAL);
  end;
@@ -121,6 +196,22 @@ begin
 
   //
 
+  start:=addr       div (64*1024);
+  __end:=(addr+len) div (64*1024);
+
+  while (start<__end) do
+  begin
+
+   with t_byte(bp^.dmem_bits[start div 8]) do
+   begin
+    val:=val or (1 shl (start mod 8));
+   end;
+
+   start:=start+1;
+  end;
+
+  //
+
  mtx_unlock(bp^.lock);
  //////
 
@@ -131,7 +222,11 @@ function blockpool_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 begin
 
  case com of
-  $4010a802:Writeln('sceKernelMemoryPoolGetBlockStats');
+  $4010a802:
+    begin
+     Writeln('sceKernelMemoryPoolGetBlockStats');
+     Assert(False);
+    end;
   $c020a801:
     begin
      //Writeln('sceKernelMemoryPoolExpand');
@@ -141,7 +236,6 @@ begin
     Exit(ENOTTY);
  end;
 
- Assert(False);
  Result:=0;
 end;
 
@@ -158,12 +252,9 @@ begin
  Result:=0;
 end;
 
-procedure blockpool_free(bp:p_blockpool); forward;
-
 function blockpool_close(fp:p_file):Integer;
 begin
- //dec ref?
- blockpool_free(fp^.f_data);
+ blockpool_release(fp^.f_data);
  Result:=0;
 end;
 
@@ -228,7 +319,7 @@ begin
   Exit();
  end;
 
- finit(fp, flags, DTYPE_BLOCKPOOL, bp, @blockpool_ops);
+ finit(fp, flags, DTYPE_BLOCKPOOL, blockpool_acqure(bp), @blockpool_ops);
 
  fdrop(fp);
 

@@ -9,11 +9,11 @@ uses
  vm,
  sys_vm_object;
 
-function  vm_pager_allocate(otype:objtype_t;
+function  vm_pager_allocate(otype :objtype_t;
                             handle:Pointer;
-                            size:vm_ooffset_t;
-                            prot:vm_prot_t;
-                            off:vm_ooffset_t):vm_object_t;
+                            size  :vm_ooffset_t;
+                            prot  :vm_prot_t;
+                            off   :vm_ooffset_t):vm_object_t;
 
 procedure vm_pager_deallocate(obj:vm_object_t);
 
@@ -22,24 +22,25 @@ implementation
 uses
  vmparam,
  device_pager,
- vnode_pager;
+ vnode_pager,
+ kern_blockpool;
 
 function OFF_TO_IDX(x:QWORD):DWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-function vm_pager_allocate(otype:objtype_t;
+function vm_pager_allocate(otype :objtype_t;
                            handle:Pointer;
-                           size:vm_ooffset_t;
-                           prot:vm_prot_t;
-                           off:vm_ooffset_t):vm_object_t;
+                           size  :vm_ooffset_t;
+                           prot  :vm_prot_t;
+                           off   :vm_ooffset_t):vm_object_t;
 begin
  case otype of
   OBJT_DEFAULT  :Result:=vm_object_allocate(otype,OFF_TO_IDX(size));
   //OBJT_SWAP     :;
   OBJT_VNODE    :Result:=vnode_pager_alloc(handle,size,prot,off);
-  OBJT_DEVICE   :Result:=dev_pager_alloc(handle,size,prot,off);
+  OBJT_DEVICE   :Result:=dev_pager_alloc  (handle,size,prot,off);
   //OBJT_PHYS     :;
   //OBJT_DEAD     :;
   //OBJT_SG       :;
@@ -47,7 +48,7 @@ begin
   OBJT_SELF     :Result:=vm_object_allocate(otype,OFF_TO_IDX(size));
   //OBJT_TRCMEM   :;
   //OBJT_PHYSHM   :;
-  //OBJT_BLOCKPOOL:;
+  OBJT_BLOCKPOOL:Result:=blockpool_pager_alloc(handle,size);
   else
        Assert(False);
  end;
@@ -75,7 +76,7 @@ begin
   OBJT_SELF     :default_dealloc(obj);
   OBJT_TRCMEM   :;
   OBJT_PHYSHM   :;
-  OBJT_BLOCKPOOL:;
+  OBJT_BLOCKPOOL:blockpool_pager_dealloc(obj);
  end;
 end;
 
