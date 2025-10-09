@@ -25,7 +25,7 @@ const
  PMAPP_BLK_SIZE  =QWORD(QWORD(1) shl PMAPP_BLK_SHIFT);
  PMAPP_BLK_MASK  =PMAPP_BLK_SIZE-1;
 
- PMAPP_BLK_DMEM_BLOCKS=QWORD(VM_DMEM_SIZE) shr PMAPP_BLK_SHIFT;
+ PMAPP_BLK_DMEM_BLOCKS=(QWORD(VM_DMEM_SIZE)+PMAPP_BLK_MASK) shr PMAPP_BLK_SHIFT;
 
 var
  DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
@@ -558,6 +558,8 @@ begin
 
   //current block id
   i:=o shr PMAPP_BLK_SHIFT;
+
+  Assert(i<Length(DMEM_FD));
 
   if (DMEM_FD[i].hfile=0) then
   begin

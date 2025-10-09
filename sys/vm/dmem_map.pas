@@ -936,16 +936,11 @@ begin
   //
  end else
  begin
-  entry:=entry^.next;
+  Exit(False);
  end;
 
  //EACCES/ENOENT
  //one entry? multi entry?
-
- if (entry^.start>start) then
- begin
-  Exit(False);
- end;
 
  curr:=entry;
  while (curr<>@map^.header) and (curr^.start<__end) do
@@ -1374,11 +1369,6 @@ begin
  begin
   //
  end else
- begin
-  entry:=entry^.next;
- end;
-
- if (entry^.start>start) then
  begin
   dmem_map_unlock(map);
   Exit(EACCES);
