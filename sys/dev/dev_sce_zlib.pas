@@ -343,8 +343,8 @@ begin
  if (buffer=nil) or
     (length=0) then Exit(EINVAL);
 
- buffer_lo:=QWORD(buffer) and QWORD($ffffffffffffc000);
- buffer_hi:=(QWORD(buffer) + length + $3fff) and QWORD($ffffffffffffc000);
+ buffer_lo:=QWORD(buffer) and QWORD(not PAGE_MASK);
+ buffer_hi:=(QWORD(buffer) + length + PAGE_MASK) and QWORD(not PAGE_MASK);
 
  map:=p_proc.p_vmspace;
 
@@ -386,8 +386,8 @@ begin
    goto _EACCES;
   end;
 
-  addr_next  :=addr + $4000;
-  offset     :=offset - $4000;
+  addr_next  :=addr + PAGE_SIZE;
+  offset     :=offset - PAGE_SIZE;
   offset_next:=addr - entry^.start + entry^.offset;
   addr       :=addr_next;
 

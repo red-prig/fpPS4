@@ -555,7 +555,7 @@ begin
 
  if ((maxprot and prot)=prot) or
     ((addr^ shr 34) < 63) or
-    ((addr^ + size) < QWORD($fc00000001)) then
+    ((addr^ + size) <= MAP_AREA_END) then
  begin
   prot:=maxprot and prot;
 
@@ -572,17 +572,21 @@ begin
    findspace:=(flags shr MAP_ALIGNMENT_SHIFT) and $1f;
    if (findspace < 14) then
    begin
-    //1 >> 20 = 0x100000
+    findspace:=ord((flags and MAP_OPTIMAL_SPACE)<>0);
+    //
     if (obj=nil) then
     begin
-     findspace:=((flags shr 20) and 1) * 3 + VMFS_ANY_SPACE;   //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
+     //ANON
+     findspace:=VMFS_ANY_SPACE   + findspace * 3; //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
     end else
     if (obj^.otype<>OBJT_DEVICE) then
     begin
-     findspace:=((flags shr 20) and 1) * 3 + VMFS_ANY_SPACE;   //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
+     //ANY OBJ
+     findspace:=VMFS_ANY_SPACE   + findspace * 3; //[VMFS_ANY_SPACE, VMFS_OPTIMAL_SPACE]
     end else
     begin
-     findspace:=((flags shr 20) and 1) * 3 + VMFS_SUPER_SPACE; //[VMFS_SUPER_SPACE, 5]
+     //OBJT_DEVICE
+     findspace:=VMFS_SUPER_SPACE + findspace * 3; //[VMFS_SUPER_SPACE, VMFS_OPTIMAL_SUPER]
     end;
    end;
 
@@ -793,7 +797,7 @@ begin
     addr:=SCE_USR_HEAP_START;
    end;
   end else
-  if ((addr and QWORD($fffffffdffffffff))=0) then
+  if ((addr and QWORD(not $200000000))=0) then
   begin
    addr:=SCE_USR_HEAP_START;
   end else
@@ -951,7 +955,7 @@ _map:
 
  if (((flags and MAP_SANITIZER) <> 0) and (addr < QWORD($800000000000))) then //sv_maxuser
  begin
-  if (QWORD($fc00000000) < (addr + size)) then
+  if (MAP_AREA_END < (addr + size)) then
   begin
    maxprot:=maxprot and $cf;
   end;

@@ -55,6 +55,8 @@ const
 
  SCE_KERNEL_GNMDRIVER =QWORD($00FE0000000);
 
+ MAP_AREA_END         =QWORD($0FC00000000);
+
  //This is the minimum address without running in a separate process.
  VM_MINGUEST_ADDRESS  =QWORD($00010000000);      //(original:$000000000000)
 
@@ -67,7 +69,7 @@ const
  //which is equivalent to the Windows limitation,
  //but at the end there are DLLs, so only 47 bits
  VM_MAX_BITS          =47;
- VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..47] MAP_AREA_END=0xfc00000000
+ VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..47]
 
  VM_MIN_GPU_ADDRESS   =QWORD($90000000000);
  VM_MAX_GPU_ADDRESS   =QWORD($A0000000000); //Virtual mirror

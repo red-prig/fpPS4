@@ -1306,7 +1306,7 @@ begin
  end;
 
  off:=offset^;
- if ((off and QWORD($fffffffffc003fff))<>0) then //0..3FFC000
+ if ((off and QWORD(not $3FFC000))<>0) then //0..3FFC000
  begin
   Exit(EINVAL);
  end;

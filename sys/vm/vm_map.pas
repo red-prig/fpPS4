@@ -173,6 +173,7 @@ const
  VMFS_ANY_SPACE    =1; // find a range with any alignment
  VMFS_SUPER_SPACE  =2; // find a superpage-aligned range
  VMFS_OPTIMAL_SPACE=4; // find a range with optimal alignment
+ VMFS_OPTIMAL_SUPER=5;
 
  //vm_map_wire and vm_map_unwire option flags
  VM_MAP_WIRE_SYSTEM =0; // wiring in a kernel map
@@ -1775,14 +1776,14 @@ var
  tmp         :vm_offset_t;
  range       :p_addr_range;
 begin
- align_2mb:=(flags and $10000)<>0;
+ align_2mb:=(flags and MAP_2MB_ALIGN)<>0;
 
  if (not align_2mb) or (find_space<>VMFS_ANY_SPACE) then
  begin
   initial_addr:=addr^;
  end else
  begin
-  initial_addr:=(addr^ + $1fffff) and QWORD($ffffffffffe00000);
+  initial_addr:=(addr^ + PAGE_2MB_MASK) and QWORD(not PAGE_2MB_MASK);
  end;
 
  alignment:=QWORD(-1) shl (find_space and $3f);
@@ -1807,10 +1808,10 @@ begin
     begin
      start:=initial_addr;
 
-     if ((find_space or 1)=5) then //[VMFS_OPTIMAL_SPACE, 5]
+     if (find_space=VMFS_OPTIMAL_SPACE) or (find_space=VMFS_OPTIMAL_SUPER) then
      begin
 
-      if (initial_addr < $400000) then
+      if (initial_addr < $400000) then //SCE_KERNEL_PROC_IMAGE_AREA
       begin
        vm_map_unlock(map);
        Exit(22);
@@ -1835,7 +1836,7 @@ begin
 
        if (r=0) and
           ((not align_2mb) or
-           ((PDWORD(addr)^ and $1fffff)=0)) then
+           ((addr^ and PAGE_2MB_MASK)=0)) then
        begin
         goto _ending;
        end;
@@ -1847,11 +1848,11 @@ begin
        addr^:=tmp;
       end;
 
-     end; // ((find_space or 1)=5)
+     end; //[VMFS_OPTIMAL_SPACE, VMFS_OPTIMAL_SUPER]
 
      _ending:
 
-      if (start - QWORD($200000000) < QWORD($500000001)) then
+      if (start - QWORD($200000000) <= QWORD($500000000)) then //SCE_KERNEL_HEAP_AREA
       begin
        if (SCE_USR_HEAP_END <= addr^) then
        begin
@@ -1861,7 +1862,7 @@ begin
       end else
       if ((start shr 47)<>0) or
          ( ((flags and MAP_SANITIZER)<>0) or
-           ( (DWORD(start shr 34) < 63) and ((start + length) < QWORD($fc00000001)) )
+           ( (DWORD(start shr 34) < 63) and ((start + length) <= MAP_AREA_END) )
          ) or
          (p_proc.p_sdk_version < $3000000) then
       begin
@@ -1874,7 +1875,7 @@ begin
 
       //
 
-      if (find_space=5) or (find_space=VMFS_SUPER_SPACE) then
+      if (find_space=VMFS_OPTIMAL_SUPER) or (find_space=VMFS_SUPER_SPACE) then
       begin
        pmap_align_superpage(obj, offset, addr, length);
       end else
@@ -1888,19 +1889,22 @@ begin
 
     end else // (not align_2mb) or (find_space<>VMFS_ANY_SPACE)
     begin
+     //Any 2MB block
+
      tmp:=addr^;
-     if (tmp < QWORD($80000000)) or (QWORD($1ffffffff) < (length + tmp)) then
+     if (tmp < QWORD($80000000)) or               //SCE_KERNEL_PROC_IMAGE_AREA
+        (QWORD($1ffffffff) < (length + tmp)) then
      begin
       vm_map_unlock(map);
       Exit(KERN_NO_SPACE);
      end;
 
-     if ((tmp and QWORD($1fffff))=0) then
+     if ((tmp and PAGE_2MB_MASK)=0) then
      begin
       goto _ending;
      end;
 
-     start:=(tmp + QWORD($1fffff)) and QWORD($ffffffffffe00000);
+     start:=(tmp + PAGE_2MB_MASK) and QWORD(not PAGE_2MB_MASK);
     end;
    until false;
 
@@ -1919,7 +1923,7 @@ begin
                          cow or MAP_COW_AUTO_NAMING,
                          anon);
 
- until ((Integer(find_space) < 15) and (find_space <> VMFS_SUPER_SPACE)) or
+ until ((Integer(find_space) <= 14) and (find_space <> VMFS_SUPER_SPACE)) or
        (Result <> KERN_NO_SPACE);
 
 

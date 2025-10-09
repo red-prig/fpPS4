@@ -249,7 +249,7 @@ begin
   if (v_end <=map^.max_offset) and
      ( ((flags and MAP_SANITIZER)<>0) or
        ((vaddr shr 47) <> 0) or
-       (v_end < QWORD($fc00000001)) or
+       (v_end <= MAP_AREA_END) or
        (sdk_version_big_20()=false) ) then
   begin
    found:=rmem_map_test_lock(phaddr,phaddr+length,0);
@@ -468,10 +468,10 @@ begin
    end;
   end else
   if ( (QWORD(stack_addr) - QWORD($7f0000000)) > QWORD($7ffffffff)) and
-     (addr < QWORD($ff0000001)) and
+     (addr <= QWORD($ff0000000)) and
      ( (length + addr) > QWORD($7efffffff)) then
   begin
-   addr:=$ff0000000;
+   addr:=$ff0000000; //SCE_KERNEl_GNM_TESS_AREA
   end;
 
   align:=(flags shr MAP_ALIGNMENT_SHIFT) and $1f;
@@ -834,7 +834,7 @@ begin
 
  if is_libsys_call or
     ((entry^.start shr 28) < 127) or
-    (entry^.__end > QWORD($ff0000000)) then
+    (entry^.__end > QWORD($ff0000000)) then  //SCE_KERNEl_GNM_TESS_AREA
  begin
   _dmem_vmo_get_type:
 
@@ -904,7 +904,7 @@ begin
    end;
 
    start:=entry^.start;
-   while (start > QWORD($7efffffff)) and (entry^.__end < QWORD($ff0000001)) do
+   while (start > QWORD($7efffffff)) and (entry^.__end <= QWORD($ff0000000)) do
    begin
     next:=next_valid_entry(map,entry^.next);
     if (next<>@map^.header) then

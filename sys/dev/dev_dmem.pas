@@ -85,7 +85,7 @@ begin
 
  len:=data^.len;
 
- if ((QWORD($fc00000000) - addr) < len) then
+ if ((MAP_AREA_END - addr) < len) then
  begin
   Exit(EINVAL);
  end;

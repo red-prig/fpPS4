@@ -260,7 +260,7 @@ var
 begin
 
  //if (priv_check(td,683) <> 0) then
- if (cmd > 13) or (($3818 shr (cmd and $1f) and 1)=0) then
+ if (cmd > 13) or (($3818 shr (cmd and $1f) and 1)=0) then //[F_GETFL,F_SETFL,F_GETLK,F_SETLK,F_SETLKW]
  begin
   Exit(EINVAL);
  end;

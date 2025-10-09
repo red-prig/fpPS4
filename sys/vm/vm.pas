@@ -82,10 +82,12 @@ const
  MAP_ANONYMOUS         =MAP_ANON; // For compatibility.
  MAP_SYSTEM            =$02000;
  MAP_ALLAVAILABLE      =$04000;
+ MAP_2MB_ALIGN         =$10000;
  MAP_NOCORE            =$20000;   // dont include these pages in a coredump
  MAP_PREFAULT_READ     =$40000;   // prefault mapping for reading
  MAP_SELF              =$80000;   // map decryped SELF file
 
+ MAP_OPTIMAL_SPACE     =$100000;  // VMFS_OPTIMAL_SPACE
  MAP_SANITIZER         =$200000;  // devkit only
  MAP_NO_COALESCE       =$400000;  // do not merge nearby areas
  MAP_WRITABLE_WB_GARLIC=$800000;  // allow write to WB_GARLIC
