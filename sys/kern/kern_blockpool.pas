@@ -14,8 +14,34 @@ uses
 function sys_blockpool_open(flags:Integer):Integer;
 
 type
+ t_dmem_bits=object
+  const
+   M_QWORD_COUNT=(VM_DMEM_SIZE+(64*1024*64)-1) div (64*1024*64);
+   M_BACKT_BITS =(M_QWORD_COUNT+63) div 64;
+   M_QWORD_ALIGN=M_BACKT_BITS*64;
+   M_BACKT_COUNT=(M_QWORD_ALIGN+63) div 64;
+  type
+   //t_byte=packed record
+   // val:Byte;
+   //end;
+   t_qword=packed record
+    val:qword;
+   end;
+  var
+   availableBlocks:DWORD;
+   //
+   bits:array[0..M_QWORD_ALIGN-1] of t_qword;
+   cany:array[0..M_BACKT_COUNT-1] of t_qword;
+   full:array[0..M_BACKT_COUNT-1] of t_qword;
+   //
+   Procedure Fill(start,__end:DWORD);
+   function  FindFirst:Integer;
+   procedure Commit(s:DWORD);
+   procedure Decommit(s:DWORD);
+ end;
+
  p_blockpool=^t_blockpool;
- t_blockpool=record
+ t_blockpool=object
   lock                  :mtx;
   start_dmem            :QWORD;
   __end_dmem            :QWORD;
@@ -23,12 +49,14 @@ type
   budget_id             :Integer;
   refs                  :DWORD;
   //
-  availableCachedBlocks :DWORD;
-  availableFlushedBlocks:DWORD;
   allocatedCachedBlocks :DWORD;
   allocatedFlushedBlocks:DWORD;
   //
-  dmem_bits:array[0..(VM_DMEM_SIZE div (64*1024*8))-1] of Byte;
+  Cached                :t_dmem_bits;
+  Flushed               :t_dmem_bits;
+  //
+  procedure flush();
+  function  commit(count,onion,writeback:DWORD;buf:PDWORD):Integer;
  end;
 
 function  blockpool_acqure (bp:p_blockpool):p_blockpool;
@@ -51,6 +79,310 @@ uses
  sys_conf,
  vstat;
 
+//
+
+Procedure t_dmem_bits.Fill(start,__end:DWORD);
+var
+ i:DWORD;
+begin
+
+ availableBlocks:=availableBlocks + (__end-start);
+
+ //
+
+ while (start<__end) do
+ begin
+
+  i:=start div 64;
+
+  with bits[i] do
+  begin
+
+   if (val=0) then
+   with cany[i div 64] do
+   begin
+    val:=val or (QWORD(1) shl (i mod 64));
+   end;
+
+   val:=val or (QWORD(1) shl (start mod 64));
+
+   if (val=QWORD(-1)) then
+   with full[i div 64] do
+   begin
+    val:=val or (QWORD(1) shl (i mod 64));
+   end;
+
+  end;
+
+  start:=start+1;
+ end;
+
+end;
+
+function t_dmem_bits.FindFirst:Integer;
+var
+ i,f,p:DWORD;
+begin
+
+ for i:=0 to High(cany) do
+ begin
+  f:=System.BsfQWord(cany[i].val);
+
+  if (f<>255) then
+  begin
+   f:=i*64+f;
+
+   p:=System.BsfQWord(bits[f].val);
+
+   Assert(p<>255);
+
+   p:=p+f*64;
+
+   Exit(p);
+  end;
+
+ end;
+
+ Exit(-1);
+end;
+
+procedure t_dmem_bits.Commit(s:DWORD);
+var
+ i:DWORD;
+begin
+ availableBlocks:=availableBlocks-1;
+
+ i:=s div 64;
+
+ with bits[i] do
+ begin
+
+  if (val=QWORD(-1)) then
+  with full[i div 64] do
+  begin
+   val:=val and (not (QWORD(1) shl (i mod 64)));
+  end;
+
+  val:=val and (not (QWORD(1) shl (s mod 64)));
+
+  if (val=0) then
+  with cany[i div 64] do
+  begin
+   val:=val and (not (QWORD(1) shl (i mod 64)));
+  end;
+
+ end;
+
+end;
+
+procedure t_dmem_bits.Decommit(s:DWORD);
+var
+ i:DWORD;
+begin
+ availableBlocks:=availableBlocks+1;
+
+ i:=s div 64;
+
+ with bits[i] do
+ begin
+
+  if (val=0) then
+  with cany[i div 64] do
+  begin
+   val:=val or (QWORD(1) shl (i mod 64));
+  end;
+
+  val:=val or (QWORD(1) shl (s mod 64));
+
+  if (val=QWORD(-1)) then
+  with full[i div 64] do
+  begin
+   val:=val or (QWORD(1) shl (i mod 64));
+  end;
+
+ end;
+
+end;
+
+//
+
+procedure t_blockpool.flush();
+var
+ s:Integer;
+begin
+ // cached -> flushed
+ repeat
+  s:=Cached.FindFirst;
+  if (s=-1) then Break;
+
+  Cached.Commit(s);
+  Flushed.Decommit(s);
+
+ until false;
+end;
+
+function t_blockpool.commit(count,onion,writeback:DWORD;buf:PDWORD):Integer;
+label
+ _repeat;
+var
+ saved_count:DWORD;
+ s:Integer;
+begin
+ Result:=0;
+
+ if (count > (Flushed.availableBlocks + Cached.availableBlocks)) then
+ begin
+  Exit(12);
+ end;
+
+ saved_count:=count;
+
+ _repeat:
+ while (count<>0) do
+ begin
+
+  if (count <= Cached.availableBlocks) and (onion<>0) then
+  begin
+
+   // cached
+   while (count<>0) do
+   begin
+    s:=Cached.FindFirst;
+    if (s=-1) then goto _repeat;
+
+    Cached.Commit(s);
+
+    buf[0]:=s;
+    Inc(buf);
+    Dec(Count);
+   end;
+
+   goto _repeat;
+  end;
+
+  if (onion<>0) then
+  begin
+   //count > Cached.availableBlocks
+
+   if (Cached.availableBlocks<>0) then
+   begin
+
+    // cached
+    while (count<>0) do
+    begin
+     s:=Cached.FindFirst;
+     if (s=-1) then goto _repeat;
+
+     Cached.Commit(s);
+
+     buf[0]:=s;
+     Inc(buf);
+     Dec(Count);
+    end;
+
+   end;
+
+   // flushed
+   while (count<>0) do
+   begin
+    s:=Flushed.FindFirst;
+    if (s=-1) then goto _repeat;
+
+    Flushed.Commit(s);
+
+    buf[0]:=s;
+    Inc(buf);
+    Dec(Count);
+   end;
+
+   goto _repeat;
+  end;
+
+  if (count <= Flushed.availableBlocks) then
+  begin
+
+   // flushed
+   while (count<>0) do
+   begin
+    s:=Flushed.FindFirst;
+    if (s=-1) then goto _repeat;
+
+    Flushed.Commit(s);
+
+    buf[0]:=s;
+    Inc(buf);
+    Dec(Count);
+   end;
+
+   goto _repeat;
+  end;
+
+  if (Flushed.availableBlocks < 32) then
+  begin
+
+   if ((count - Flushed.availableBlocks)=0) then
+   begin
+
+    // cached
+    while (count<>0) do
+    begin
+     s:=Cached.FindFirst;
+     if (s=-1) then goto _repeat;
+
+     Cached.Commit(s);
+
+     buf[0]:=s;
+     Inc(buf);
+     Dec(Count);
+    end;
+
+    goto _repeat;
+   end;
+
+   // flushed
+   while (count<>0) do
+   begin
+    s:=Flushed.FindFirst;
+    if (s=-1) then goto _repeat;
+
+    Flushed.Commit(s);
+
+    buf[0]:=s;
+    Inc(buf);
+    Dec(Count);
+   end;
+
+   // cached
+   while (count<>0) do
+   begin
+    s:=Cached.FindFirst;
+    if (s=-1) then goto _repeat;
+
+    Cached.Commit(s);
+
+    buf[0]:=s;
+    Inc(buf);
+    Dec(Count);
+   end;
+
+   goto _repeat;
+  end;
+
+  flush();
+ end;
+
+ if (writeback=0) then
+ begin
+  allocatedFlushedBlocks:=allocatedFlushedBlocks + saved_count;
+ end else
+ begin
+  allocatedCachedBlocks :=allocatedCachedBlocks  + saved_count;
+ end;
+
+end;
+
+//
+
 procedure blockpool_free(bp:p_blockpool); forward;
 
 function blockpool_acqure(bp:p_blockpool):p_blockpool;
@@ -67,12 +399,24 @@ begin
  end;
 end;
 
-function OFF_TO_IDX(x:QWORD):DWORD; inline;
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
+begin
+ Result:=QWORD(x) shl PAGE_SHIFT;
+end;
+
+function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
+const
+ M_1GB=(1024*1024*1024);
+
 function blockpool_pager_alloc(handle:Pointer;size:QWORD):vm_object_t;
+var
+ bp:p_blockpool;
+ tlb_cnt:DWORD;
+ tlb_1gb:PDWORD;
 begin
 
  if (p_proc.p_sdk_version > $4ffffff) then
@@ -87,23 +431,58 @@ begin
   Exit(nil);
  end;
 
+ bp:=handle;
+
+ tlb_cnt:=(size+M_1GB-1) div M_1GB;
+ tlb_1gb:=AllocMem(tlb_cnt);
+
+ if (tlb_1gb=nil) then
+ begin
+  Exit(nil);
+ end;
+
+ if bp^.commit(tlb_cnt,1,1,tlb_1gb)<>0 then
+ begin
+  FreeMem(tlb_1gb);
+  Exit(nil);
+ end;
+
  Result:=vm_object_allocate(OBJT_BLOCKPOOL,OFF_TO_IDX(size));
- if (Result=nil) then Exit;
+ if (Result=nil) then
+ begin
+  FreeMem(tlb_1gb);
+  Exit(nil);
+ end;
 
- /////////////
-
- Result^.handle:=blockpool_acqure(handle);
+ Result^.un_pager.bpl.tlb_1gb:=tlb_1gb;
+ Result^.handle:=blockpool_acqure(bp);
 end;
 
 procedure blockpool_pager_dealloc(obj:vm_object_t);
+var
+ bp:p_blockpool;
+ i,size:QWORD;
+ tlb_cnt:DWORD;
+ tlb_1gb:PDWORD;
 begin
- /////////////
+ bp:=obj^.handle;
 
- //bp->allocatedCachedBlocks = bp->allocatedCachedBlocks + -1;
- //bp->availableCachedBlocks = bp->availableCachedBlocks + 1;
+ size:=IDX_TO_OFF(obj^.size);
 
- blockpool_release(obj^.handle);
+ tlb_cnt:=(size+M_1GB-1) div M_1GB;
+ tlb_1gb:=obj^.un_pager.bpl.tlb_1gb;
 
+ for i:=0 to tlb_cnt-1 do
+ begin
+  bp^.Cached.Commit(tlb_1gb[i]);
+ end;
+ bp^.allocatedCachedBlocks:=bp^.allocatedCachedBlocks-tlb_cnt;
+
+ FreeMem(tlb_1gb);
+
+ blockpool_release(bp);
+
+ obj^.un_pager.bpl.tlb_1gb:=nil;
  obj^.handle:=nil;
  obj^.otype :=OBJT_DEAD;
 end;
@@ -118,11 +497,15 @@ type
   align:Integer;
  end;
 
-function blockpool_expand(bp:p_blockpool;data:p_blockpool_expand):Integer;
-type
- t_byte=packed record
-  val:Byte;
+ p_blockpool_stats=^t_blockpool_stats;
+ t_blockpool_stats=packed record
+  availableFlushedBlocks:DWORD;
+  availableCachedBlocks :DWORD;
+  allocatedFlushedBlocks:DWORD;
+  allocatedCachedBlocks :DWORD;
  end;
+
+function blockpool_expand(bp:p_blockpool;data:p_blockpool_expand):Integer;
 var
  len  :QWORD;
  flags:DWORD;
@@ -130,7 +513,6 @@ var
  __end:QWORD;
  align:QWORD;
  addr :QWORD;
- blocks:DWORD;
 begin
  len  :=data^.len;
  flags:=data^.flags;
@@ -158,7 +540,7 @@ begin
  begin
   align:=(flags shr 24);
  end;
- align:=1 shl (align and $3f);
+ align:=QWORD(1) shl (align and $3f);
 
  if (Int64(data^.start) <= Int64(bp^.start_dmem)) then
  begin
@@ -189,33 +571,27 @@ begin
  end;
 
  //////
- blocks:=(len shr 16);
  mtx_lock(bp^.lock);
 
-  bp^.availableFlushedBlocks:=bp^.availableFlushedBlocks + blocks;
-
-  //
-
-  start:=addr       div (64*1024);
-  __end:=(addr+len) div (64*1024);
-
-  while (start<__end) do
-  begin
-
-   with t_byte(bp^.dmem_bits[start div 8]) do
-   begin
-    val:=val or (1 shl (start mod 8));
-   end;
-
-   start:=start+1;
-  end;
-
-  //
+  bp^.Flushed.Fill(
+                   (addr)     div (64*1024),
+                   (addr+len) div (64*1024)
+                  );
 
  mtx_unlock(bp^.lock);
  //////
 
  data^.start:=addr;
+end;
+
+function blockpool_stats(bp:p_blockpool;data:p_blockpool_stats):Integer;
+begin
+ data^.availableFlushedBlocks:=bp^.Flushed.availableBlocks;
+ data^.availableCachedBlocks :=bp^.Cached.availableBlocks;
+ data^.allocatedFlushedBlocks:=bp^.allocatedFlushedBlocks;
+ data^.allocatedCachedBlocks :=bp^.allocatedCachedBlocks ;
+
+ Result:=0;
 end;
 
 function blockpool_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
@@ -224,8 +600,8 @@ begin
  case com of
   $4010a802:
     begin
-     Writeln('sceKernelMemoryPoolGetBlockStats');
-     Assert(False);
+     //Writeln('sceKernelMemoryPoolGetBlockStats');
+     Result:=blockpool_stats(fp^.f_data,data);
     end;
   $c020a801:
     begin
@@ -248,7 +624,7 @@ begin
  sb^:=Default(t_stat);
  sb^.st_blksize:=$10000;
  sb^.st_mode   :=$b000;
- sb^.st_blocks :=(bp^.availableCachedBlocks * 2);
+ sb^.st_blocks :=(bp^.Cached.availableBlocks * 2);
  Result:=0;
 end;
 

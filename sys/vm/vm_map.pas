@@ -4747,11 +4747,18 @@ begin
  vm_map_unlock(map);
 end;
 
+procedure vm_blockpool_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
+begin
+ Writeln('TODO:vm_blockpool_set_name');
+end;
+
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 var
  current:vm_map_entry_t;
  entry:vm_map_entry_t;
  simpl:vm_map_entry_t;
+ e_start:vm_offset_t;
+ e__end :vm_offset_t;
 begin
  if (start=__end) then
  begin
@@ -4776,7 +4783,21 @@ begin
   if (current^.vm_obj<>nil) then
   if (current^.vm_obj^.otype=OBJT_BLOCKPOOL) then
   begin
-   Assert(false,'TODO:BLOCKPOOL');
+
+   e_start:=current^.start;
+   if (e_start <= start) then
+   begin
+    e_start:=start;
+   end;
+
+   e__end:=current^.__end;
+   if (__end <= e__end) then
+   begin
+    e__end:=__end;
+   end;
+
+   vm_blockpool_set_name(map,e_start,e__end,name);
+
    current:=current^.next;
    Continue;
   end;

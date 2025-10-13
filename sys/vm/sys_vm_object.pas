@@ -52,6 +52,9 @@ type
    physhm:record
     mtype   :Byte;
    end;
+   bpl:record
+    tlb_1gb:PDWORD;
+   end;
   end;
  end;
 

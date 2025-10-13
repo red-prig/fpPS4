@@ -476,7 +476,7 @@ begin
 
   align:=(flags shr MAP_ALIGNMENT_SHIFT) and $1f;
   if (align<PAGE_SHIFT) then align:=1;
-  align:=1 shl align;
+  align:=QWORD(1) shl align;
  end else
  begin
   //Address range must be all in user VM space.
@@ -608,6 +608,9 @@ begin
  if (obj<>nil) and (obj^.otype=OBJT_BLOCKPOOL) then
  begin
   qinfo^.bits.isPooledMemory:=1;
+
+  qinfo^.pstart    :=Pointer(entry^.start);
+  qinfo^.p__end    :=Pointer(entry^.__end);
 
   Assert(false,'dmem_vmo_get_type:OBJT_BLOCKPOOL');
 
@@ -750,7 +753,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- Writeln('sys_virtual_query:',HexStr(addr),' ',flags);
+ //Writeln('sys_virtual_query:',HexStr(addr),' ',flags);
 
  QWORD(addr):=QWORD(addr) and QWORD(not PAGE_MASK);
 
