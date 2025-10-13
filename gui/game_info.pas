@@ -267,6 +267,7 @@ type
    FReader               :Boolean;
    FhasParamSfo          :Byte;
    FRequiredHdcpType     :Byte;
+   FLoadExec             :Boolean;
    FPipe                 :THandle;
    FConfInfo             :TConfigInfo;
    FGameItem             :TGameItem;
@@ -302,6 +303,7 @@ type
    property    DownloadMb_1         :DWORD         read FDownloadMb_1          write FDownloadMb_1;
    property    hasParamSfo          :Byte          read FhasParamSfo           write FhasParamSfo;
    property    RequiredHdcpType     :Byte          read FRequiredHdcpType      write FRequiredHdcpType;
+   property    LoadExec             :Boolean       read FLoadExec              write FLoadExec;
   public
    Constructor Create(Reader:Boolean); reintroduce;
    Destructor  Destroy; override;

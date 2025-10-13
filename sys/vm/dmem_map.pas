@@ -947,19 +947,22 @@ begin
  begin
   next:=curr^.next;
 
-  if (next<>@map^.header) then
-  if (curr^.__end<__end) and
-     (curr^.__end<>next^.start) then
+  if (next=@map^.header) then
   begin
-   Exit(False);
+   if (curr^.__end<__end) then
+   begin
+    Exit(False);
+   end;
+  end else
+  begin
+   if (curr^.__end<__end) and
+      (curr^.__end<>next^.start) then
+   begin
+    Exit(False);
+   end;
   end;
 
   curr:=next;
- end;
-
- if (curr^.__end<__end) then
- begin
-  Exit(False);
  end;
 
 end;
@@ -1343,6 +1346,8 @@ function dmem_map_set_mtype(map  :p_dmem_map;
                             mtype:Integer;
                             prot :Integer;
                             flags:Integer):Integer; public;
+label
+ _EACCES;
 var
  current,next,entry:p_dmem_map_entry;
  old:DWORD;
@@ -1370,8 +1375,9 @@ begin
   //
  end else
  begin
-  dmem_map_unlock(map);
-  Exit(EACCES);
+  _EACCES:
+   dmem_map_unlock(map);
+   Exit(EACCES);
  end;
 
  current:=entry;
@@ -1379,21 +1385,22 @@ begin
  begin
   next:=current^.next;
 
-  if (next<>@map^.header) then
-  if (current^.__end<__end) and
-     (current^.__end<>next^.start) then
+  if (next=@map^.header) then
   begin
-   dmem_map_unlock(map);
-   Exit(EACCES);
+   if (current^.__end<__end) then
+   begin
+    goto _EACCES;
+   end;
+  end else
+  begin
+   if (current^.__end<__end) and
+      (current^.__end<>next^.start) then
+   begin
+    goto _EACCES;
+   end;
   end;
 
   current:=next;
- end;
-
- if (current^.__end<__end) then
- begin
-  dmem_map_unlock(map);
-  Exit(EACCES);
  end;
 
  if (mtype=-1) then

@@ -28,6 +28,8 @@ type
   FConfInfo:TConfigInfo;
   FGameItem:TGameItem;
   FParamSfo:TParamSfoFile;
+
+  FLoadExec:Boolean;
  end;
 
  TGameProcessSimple=class(TGameProcess)
@@ -369,6 +371,7 @@ var
  argv:PPChar;
  i,argc:Integer;
  Item:TGameItem;
+ LoadExec:Boolean;
 begin
  //re_init_tty;
  //init_tty:=@re_init_tty;
@@ -428,6 +431,8 @@ begin
   kern_reserve_2mb_page(GameStartupInfo.SELF_2MIB_PAGE_AMOUNT,mode);
  end;
 
+ LoadExec:=GameStartupInfo.LoadExec;
+
  Writeln('Name    :',Item.FGameInfo.Name      );
  Writeln('TitleId :',Item.FGameInfo.TitleId   );
  Writeln('Version :',Item.FGameInfo.Version   );
@@ -478,12 +483,20 @@ begin
  end else
  if (err<>0) then
  begin
-  print_error_td('[execve error]'+#13#10+
-                 ' cmd:"'+argv[0]+'"'#13#10+
-                 ' err:'+get_errno_str(err)
-                ,False);
+  if not LoadExec then
+  begin
+   print_error_td('[execve error]'+#13#10+
+                  ' cmd:"'+argv[0]+'"'#13#10+
+                  ' err:'+get_errno_str(err)
+                 ,False);
+
+   exit1(W_EXITCODE(err, SIGABRT));
+  end else
+  begin
+   exit1(0);
+  end;
   //
-  exit1(W_EXITCODE(err, SIGABRT));
+
  end;
  //
 
@@ -661,6 +674,7 @@ begin
  GameStartupInfo:=TGameStartupInfo.Create(False);
  GameStartupInfo.FConfInfo:=cfg.FConfInfo;
  GameStartupInfo.FGameItem:=cfg.FGameItem;
+ GameStartupInfo.LoadExec :=cfg.FLoadExec;
 
  GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
  GameStartupInfo.Category   :='gd'; //m_type = SCE_LNC_APP_TYPE_BIG_APP;

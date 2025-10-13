@@ -638,8 +638,16 @@ begin
 
  data:=TPS4LoadExec(obj);
 
+ if (UpperCase(data.Path)='EXIT') then
+ begin
+  FreeAndNil(data);
+  TBStopClick(nil);
+  Exit;
+ end;
+
  if (FGameProcess=nil) then
  begin
+  FreeAndNil(data);
   FreeAndNil(obj);
   Exit;
  end;
@@ -661,12 +669,15 @@ begin
 
   Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
 
+  cfg:=Default(TGameRunConfig);
+
   cfg.hOutput:=FAddHandle;
   cfg.hError :=FAddHandle;
 
   cfg.FConfInfo:=FConfigInfo;
   cfg.FGameItem:=Item;
   cfg.FParamSfo:=FParamSfo;
+  cfg.FLoadExec:=True;
 
   FGameProcess:=run_item(cfg);
 
@@ -688,6 +699,7 @@ begin
   MessageDlgEx('LoadExec is not supported for the current process','Error',[mbOK],Self);
  end;
 
+ FreeAndNil(data);
  FreeAndNil(obj);
 end;
 
@@ -1421,6 +1433,8 @@ begin
  ClearLog;
 
  Pages.ActivePage:=TabLog;
+
+ cfg:=Default(TGameRunConfig);
 
  cfg.hOutput:=FAddHandle;
  cfg.hError :=FAddHandle;
