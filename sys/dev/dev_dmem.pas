@@ -142,7 +142,7 @@ begin
             begin
              with PAllocateDirectMemory(data)^ do
              begin
-              Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,start);
+              Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,d_app,start);
               {
               Writeln('dmem_map_alloc(0x',HexStr(start,11),
                                     ',0x',HexStr(__end,11),
@@ -157,7 +157,7 @@ begin
             begin
              with PAllocateDirectMemory(data)^ do
              begin
-              Result:=dmem_map_alloc(dmap^.dmem,0,kern_budget.DMEM_LIMIT,len,align,mtype,start);
+              Result:=dmem_map_alloc(dmap^.dmem,0,kern_budget.DMEM_LIMIT,len,align,mtype,d_app,start);
              end;
             end;
 
@@ -165,7 +165,7 @@ begin
             begin
              with PReleaseDirectMemory(data)^ do
              begin
-              Result:=dmem_map_release(dmap^.dmem,start,len,False);
+              Result:=dmem_map_release(dmap^.dmem,start,len,d_app,False);
              end;
             end;
 
@@ -173,7 +173,7 @@ begin
             begin
              with PReleaseDirectMemory(data)^ do
              begin
-              Result:=dmem_map_release(dmap^.dmem,start,len,True);
+              Result:=dmem_map_release(dmap^.dmem,start,len,d_app,True);
              end;
             end;
 

@@ -854,7 +854,7 @@ begin
  end;
 
  addr:=0;
- Result:=dmem_map_alloc(bp^.dmap^.dmem,start,__end,len,align,SCE_KERNEL_WC_GARLIC,addr);
+ Result:=dmem_map_alloc(bp^.dmap^.dmem,start,__end,len,align,SCE_KERNEL_WC_GARLIC,d_blockpool,addr);
 
  if (Result<>0) then
  begin
