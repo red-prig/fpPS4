@@ -764,7 +764,7 @@ begin
  end;
 end;
 
-function convert_to_gpu_prot(prot:vm_prot_t):vm_prot_t;
+function convert_to_gpu_prot(prot:vm_prot_t):vm_prot_t; inline;
 const
  strict_prot=False;
 begin
@@ -775,6 +775,12 @@ begin
  begin
   Result:=VM_RW;
  end;
+end;
+
+function fixup_prot(prot:vm_prot_t):vm_prot_t; inline;
+begin
+ //fixup writeonly cpu/gpu
+ Result:=prot or ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE)) shr 1);
 end;
 
 {
@@ -820,17 +826,7 @@ begin
   Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
- //fixup writeonly
- if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
- begin
-  prot:=prot or VM_PROT_READ;
- end;
-
- //fixup gpu writeonly
- if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
- begin
-  prot:=prot or VM_PROT_GPU_READ;
- end;
+ prot:=fixup_prot(prot);
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1253,11 +1249,7 @@ begin
   Writeln('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
- //fixup gpu writeonly
- if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
- begin
-  prot:=prot or VM_PROT_GPU_READ;
- end;
+ prot:=fixup_prot(prot);
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1336,17 +1328,7 @@ begin
   Writeln('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
  end;
 
- //fixup writeonly
- if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
- begin
-  prot:=prot or VM_PROT_READ;
- end;
-
- //fixup gpu writeonly
- if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
- begin
-  prot:=prot or VM_PROT_GPU_READ;
- end;
+ prot:=fixup_prot(prot);
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1493,17 +1475,7 @@ begin
   Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
 
- //fixup writeonly
- if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
- begin
-  prot:=prot or VM_PROT_READ;
- end;
-
- //fixup gpu writeonly
- if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
- begin
-  prot:=prot or VM_PROT_GPU_READ;
- end;
+ prot:=fixup_prot(prot);
 
  lock:=pmap_rlock(pmap,start,__end);
 
@@ -1564,11 +1536,7 @@ procedure pmap_gpu_protect(pmap :pmap_t;
 var
  lock:Pointer;
 begin
- //fixup gpu writeonly
- if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
- begin
-  prot:=prot or VM_PROT_GPU_READ;
- end;
+ prot:=fixup_prot(prot);
 
  lock:=pmap_rlock(pmap,start,__end);
 
