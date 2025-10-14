@@ -571,11 +571,17 @@ begin
  Result:=entry;
 end;
 
-procedure dmem_vmo_get_type(map:vm_map_t;
+function blockpool_obj_get_info(map  :vm_map_t;
+                                obj  :vm_map_object;
+                                addr :QWORD;
+                                qinfo:pSceKernelVirtualQueryInfo;
+                                has_sdk_version_5:Boolean):Integer; external;
+
+procedure dmem_vmo_get_info(map  :vm_map_t;
                             entry:vm_map_entry_t;
-                            addr:QWORD;
+                            addr :QWORD;
                             qinfo:pSceKernelVirtualQueryInfo;
-                            sdk_version_big_4ffffff:Boolean);
+                            has_sdk_version_5:Boolean);
 var
  obj:vm_map_object;
  start:QWORD;
@@ -605,16 +611,17 @@ begin
 
  obj:=entry^.vm_obj;
 
- if (obj<>nil) and (obj^.otype=OBJT_BLOCKPOOL) then
+ if (obj<>nil) then
+ if (obj^.otype=OBJT_BLOCKPOOL) then
  begin
   qinfo^.bits.isPooledMemory:=1;
 
   qinfo^.pstart    :=Pointer(entry^.start);
   qinfo^.p__end    :=Pointer(entry^.__end);
 
-  Assert(false,'dmem_vmo_get_type:OBJT_BLOCKPOOL');
+  ret:=blockpool_obj_get_info(map,obj,addr,qinfo,has_sdk_version_5);
 
-  //qinfo^.bits:=qinfo->bits and $ef or ((ret1 and 1) shl 4);
+  qinfo^.bits.isCommitted:=ret;
   qinfo^.offset:=QWORD(qinfo^.pstart) - entry^.start;
   Exit;
  end;
@@ -743,7 +750,7 @@ var
  entry,next:vm_map_entry_t;
  rbp:PPointer;
  rip:Pointer;
- sdk_version_big_4ffffff:Boolean;
+ has_sdk_version_5:Boolean;
  is_libsys_call:Boolean;
  is_found:Boolean;
  qinfo:SceKernelVirtualQueryInfo;
@@ -770,8 +777,8 @@ begin
  repeat
   if ((QWORD(rbp) shr 47)<>0) then
   begin
-   sdk_version_big_4ffffff:=(p_proc.p_sdk_version > $4ffffff);
-   is_libsys_call        :=false;
+   has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+   is_libsys_call   :=false;
    Break;
   end;
 
@@ -781,8 +788,8 @@ begin
   if (QWORD(rip)=QWORD(-1)) or
      (QWORD(rbp)=QWORD(-1)) then
   begin
-   sdk_version_big_4ffffff:=(p_proc.p_sdk_version > $4ffffff);
-   is_libsys_call         :=false;
+   has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+   is_libsys_call   :=false;
    Break;
   end;
 
@@ -791,12 +798,12 @@ begin
   begin
    if ((QWORD(rip) - QWORD($7f0000000)) < QWORD($800000000)) then //ET_DYN_LOAD_ADDR_SYS
    begin
-    sdk_version_big_4ffffff:=true;
-    is_libsys_call         :=true;
+    has_sdk_version_5:=true;
+    is_libsys_call   :=true;
    end else
    begin
-    sdk_version_big_4ffffff:=(p_proc.p_sdk_version > $4ffffff);
-    is_libsys_call         :=false;
+    has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+    is_libsys_call   :=false;
    end;
    Break;
   end;
@@ -841,7 +848,7 @@ begin
  begin
   _dmem_vmo_get_type:
 
-  dmem_vmo_get_type(map,entry,QWORD(addr),@qinfo,sdk_version_big_4ffffff);
+  dmem_vmo_get_info(map,entry,QWORD(addr),@qinfo,has_sdk_version_5);
 
   vm_map_unlock(map);
 
@@ -999,7 +1006,7 @@ begin
     goto _simple;
    end else
    begin
-    dmem_vmo_get_type(map,entry,QWORD(addr),@qinfo,True);
+    dmem_vmo_get_info(map,entry,QWORD(addr),@qinfo,True);
     data.start:=qinfo.pstart;
     data.__end:=qinfo.p__end;
     data.prot :=qinfo.protection;

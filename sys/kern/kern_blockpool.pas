@@ -27,6 +27,23 @@ type
  end;
  {$IF sizeof(t_dmem_block)<>4}{$STOP t_dmem_block<>4}{$ENDIF}
 
+const
+ MT_WRITEBACK:t_dmem_block=(
+  offset   :0;
+  valid    :0;
+  prot     :0;
+  onion    :0;
+  writeback:1;
+ );
+ MT_ONION_MT_WRITEBACK:t_dmem_block=(
+  offset   :0;
+  valid    :0;
+  prot     :0;
+  onion    :1;
+  writeback:1;
+ );
+
+type
  t_dmem_bits=object
   const
    M_QWORD_COUNT=(VM_DMEM_SIZE+(64*1024*64)-1) div (64*1024*64);
@@ -512,28 +529,103 @@ begin
  obj^.otype :=OBJT_DEAD;
 end;
 
+function blockpool_obj_get_info(map  :vm_map_t;
+                                obj  :vm_map_object;
+                                addr :QWORD;
+                                qinfo:pSceKernelVirtualQueryInfo;
+                                has_sdk_version_5:Boolean):Integer; public;
+var
+ vm_start   :QWORD;
+ start      :QWORD;
+ __end      :QWORD;
+ i          :DWORD;
+ block_start:DWORD;
+ block___end:DWORD;
+ tlb_64k    :p_dmem_block;
+ mflags     :t_dmem_block;
+ mval       :DWORD;
+ mtype      :DWORD;
+begin
+ vm_start:=QWORD(qinfo^.pstart);
 
-const
- MT_WRITEBACK:t_dmem_block=(
-  offset   :0;
-  valid    :0;
-  prot     :0;
-  onion    :0;
-  writeback:1;
- );
- MT_ONION_MT_WRITEBACK:t_dmem_block=(
-  offset   :0;
-  valid    :0;
-  prot     :0;
-  onion    :1;
-  writeback:1;
- );
+ start:=addr;
+ __end:=QWORD(qinfo^.p__end);
+ //vm_blockpool_get_name(map,addr,&start,&__end,name);
+
+ block_start:=0;
+ if (vm_start <= start) then
+ begin
+  block_start:=(start - vm_start) div M_64K;
+ end;
+
+ block___end:=IDX_TO_OFF(obj^.size) div M_64K;
+ if (((__end - vm_start) div M_64K) <= block___end) then
+ begin
+  block___end:=(__end - vm_start) div M_64K;
+ end;
+
+ tlb_64k:=obj^.un_pager.bpl.tlb_64k;
+
+ //scan changes
+ i:=block_start;
+
+ mflags:=tlb_64k[i];
+ mval  :=DWORD(mflags) shr 23;
+
+ while (i<block___end) do
+ begin
+
+  if ((DWORD(tlb_64k[i]) shr 23)<>mval) then
+  begin
+   Break;
+  end;
+
+  Inc(i);
+ end;
+
+ block___end:=i;
+
+ //fixup
+ if has_sdk_version_5 then
+ begin
+  start:=QWORD(block_start)*M_64K;
+  __end:=QWORD(block___end)*M_64K;
+ end else
+ begin
+  start:=QWORD(DWORD(block_start)*M_64K);
+  __end:=QWORD(DWORD(block___end)*M_64K);
+ end;
+
+ qinfo^.pstart:=Pointer(start + vm_start);
+ qinfo^.p__end:=Pointer(__end + vm_start);
+
+ qinfo^.protection:=mflags.prot;
+
+ if (mflags.valid<>0) then
+ begin
+  mtype:=SCE_KERNEL_WB_GARLIC;
+
+  if ((DWORD(mflags) and DWORD(MT_ONION_MT_WRITEBACK)) <> DWORD(MT_WRITEBACK)) then
+  begin
+   mtype:=SCE_KERNEL_WB_ONION;
+  end;
+
+  if ((DWORD(mflags) and DWORD(MT_ONION_MT_WRITEBACK))=0) then
+  begin
+   mtype:=SCE_KERNEL_WC_GARLIC;
+  end;
+
+  qinfo^.memoryType:=mtype;
+ end;
+
+ Result:=mflags.valid;
+end;
 
 function kern_blockpool_map(map        :vm_map_t;
                             obj        :vm_map_object;
                             vm_start   :QWORD;
                             block_start:DWORD;
-                            block_end  :DWORD;
+                            block___end:DWORD;
                             prot       :DWORD;
                             mtype      :DWORD):Integer;
 var
@@ -570,7 +662,7 @@ begin
 
   //check
   i:=block_start;
-  while (i<block_end) do
+  while (i<block___end) do
   begin
    if (tlb_64k[i].valid<>0) then
    begin
@@ -581,7 +673,7 @@ begin
   end;
 
   //commit
-  Result:=bp^.commit(block_end-block_start,mflags.onion,mflags.writeback,@tlb_64k[block_start]);
+  Result:=bp^.commit(block___end-block_start,mflags.onion,mflags.writeback,@tlb_64k[block_start]);
   if (Result<>0) then
   begin
    mtx_unlock(bp^.lock);
@@ -590,7 +682,7 @@ begin
 
   //fill flags and pmap
   i:=block_start;
-  while (i<block_end) do
+  while (i<block___end) do
   begin
 
    pmap_enter_dmem_block(pmap,
