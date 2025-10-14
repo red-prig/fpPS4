@@ -104,6 +104,11 @@ procedure pmap_gpu_enter_object(pmap :pmap_t;
                                 __end:vm_offset_t;
                                 prot :vm_prot_t);
 
+procedure pmap_enter_dmem_block(pmap  :pmap_t;
+                                offset:vm_ooffset_t;
+                                start :vm_offset_t;
+                                prot  :vm_prot_t);
+
 procedure pmap_protect(pmap :pmap_t;
                        obj  :vm_object_t;
                        start:vm_offset_t;
@@ -1304,6 +1309,106 @@ begin
   end;
 
   start:=p____end;
+ end;
+
+ pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_enter_dmem_block(pmap  :pmap_t;
+                                offset:vm_ooffset_t;
+                                start :vm_offset_t;
+                                prot  :vm_prot_t);
+var
+ __end:vm_offset_t;
+
+ delta:QWORD;
+
+ info:t_fd_info;
+
+ lock:Pointer;
+
+ r:Integer;
+begin
+ __end:=start+(64*1024);
+
+ if (p_print_pmap) then
+ begin
+  Writeln('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
+ end;
+
+ //fixup writeonly
+ if ((prot and VM_PROT_RWX)=VM_PROT_WRITE) then
+ begin
+  prot:=prot or VM_PROT_READ;
+ end;
+
+ //fixup gpu writeonly
+ if ((prot and VM_PROT_GPU_ALL)=VM_PROT_GPU_WRITE) then
+ begin
+  prot:=prot or VM_PROT_GPU_READ;
+ end;
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ ppmap_mark_rwx(start,__end,prot);
+
+ r:=0;
+
+ info.start :=start;
+ info.__end :=__end;
+ info.offset:=offset;
+
+ while (info.start<>info.__end) do
+ begin
+  get_dmem_fd(info);
+
+  delta:=(info.__end-info.start);
+  if (delta=0) then Break;
+
+  if (p_print_pmap) then
+  begin
+   Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+  end;
+
+  //map to guest
+  r:=vm_nt_map_insert(@pmap^.nt_map,
+                      info.obj,
+                      info.olocal, //block local offset
+                      info.start,
+                      info.__end,
+                      delta,
+                      (prot and VM_RW));
+
+  if (r<>0) then
+  begin
+   Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+   Assert(false,'pmap_enter_object');
+  end;
+
+  //map to GPU
+  if (prot and VM_PROT_GPU_ALL)<>0 then
+  begin
+   //extra obj link
+   vm_nt_file_obj_reference(info.obj);
+   //
+   r:=vm_nt_map_insert(@pmap^.gp_map,
+                       info.obj,
+                       info.olocal, //block local offset
+                       info.start+VM_MIN_GPU_ADDRESS,
+                       info.__end+VM_MIN_GPU_ADDRESS,
+                       delta,
+                       convert_to_gpu_prot(prot));
+
+   if (r<>0) then
+   begin
+    Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert(false,'pmap_enter_object');
+   end;
+  end;
+
+  info.start :=info.start +delta;
+  info.__end :=__end;
+  info.offset:=info.offset+delta;
  end;
 
  pmap_unlock(pmap,lock);

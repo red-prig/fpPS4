@@ -3329,7 +3329,7 @@ var
   ),
   (//[654]
      sy_narg:5;
-     sy_call:nil;
+     sy_call:@sys_blockpool_map;
      sy_name:'sys_blockpool_map'
   ),
   (//[655]

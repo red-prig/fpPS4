@@ -54,6 +54,7 @@ type
    end;
    bpl:record
     tlb_1gb:PDWORD;
+    tlb_64k:Pointer;
    end;
   end;
  end;

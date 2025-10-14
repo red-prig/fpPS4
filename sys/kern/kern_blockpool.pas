@@ -8,12 +8,25 @@ interface
 uses
  vmparam,
  sys_vm_object,
+ vm_map,
+ vm_pmap,
  kern_mtx,
  kern_dmem;
 
 function sys_blockpool_open(flags:Integer):Integer;
+function sys_blockpool_map (addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
 
 type
+ p_dmem_block=^t_dmem_block;
+ t_dmem_block=bitpacked record
+  offset   :0..8388607;  //23
+  valid    :0..1;        //1
+  prot     :0..63;       //6
+  onion    :0..1;        //1
+  writeback:0..1;        //1
+ end;
+ {$IF sizeof(t_dmem_block)<>4}{$STOP t_dmem_block<>4}{$ENDIF}
+
  t_dmem_bits=object
   const
    M_QWORD_COUNT=(VM_DMEM_SIZE+(64*1024*64)-1) div (64*1024*64);
@@ -21,9 +34,6 @@ type
    M_QWORD_ALIGN=M_BACKT_BITS*64;
    M_BACKT_COUNT=(M_QWORD_ALIGN+63) div 64;
   type
-   //t_byte=packed record
-   // val:Byte;
-   //end;
    t_qword=packed record
     val:qword;
    end;
@@ -232,7 +242,7 @@ begin
 
  if (count > (Flushed.availableBlocks + Cached.availableBlocks)) then
  begin
-  Exit(12);
+  Exit(ENOMEM);
  end;
 
  saved_count:=count;
@@ -411,12 +421,15 @@ end;
 
 const
  M_1GB=(1024*1024*1024);
+ M_64K=(64*1024);
 
 function blockpool_pager_alloc(handle:Pointer;size:QWORD):vm_object_t;
 var
  bp:p_blockpool;
- tlb_cnt:DWORD;
- tlb_1gb:PDWORD;
+ tlb_1gb_cnt:DWORD;
+ tlb_64k_cnt:DWORD;
+ tlb_1gb    :PDWORD;
+ tlb_64k    :p_dmem_block;
 begin
 
  if (p_proc.p_sdk_version > $4ffffff) then
@@ -433,19 +446,17 @@ begin
 
  bp:=handle;
 
- tlb_cnt:=(size+M_1GB-1) div M_1GB;
- tlb_1gb:=AllocMem(tlb_cnt);
+ tlb_1gb_cnt:=(size+M_1GB-1) div M_1GB;
+ tlb_64k_cnt:=(size+M_64K-1) div M_64K;
+
+ tlb_1gb:=AllocMem((tlb_1gb_cnt+tlb_64k_cnt)*SizeOf(DWORD));
 
  if (tlb_1gb=nil) then
  begin
   Exit(nil);
  end;
 
- if bp^.commit(tlb_cnt,1,1,tlb_1gb)<>0 then
- begin
-  FreeMem(tlb_1gb);
-  Exit(nil);
- end;
+ tlb_64k:=@tlb_1gb[tlb_1gb_cnt];
 
  Result:=vm_object_allocate(OBJT_BLOCKPOOL,OFF_TO_IDX(size));
  if (Result=nil) then
@@ -454,8 +465,21 @@ begin
   Exit(nil);
  end;
 
- Result^.un_pager.bpl.tlb_1gb:=tlb_1gb;
- Result^.handle:=blockpool_acqure(bp);
+ mtx_lock(bp^.lock);
+
+  if bp^.commit(tlb_1gb_cnt,1,1,tlb_1gb)<>0 then
+  begin
+   mtx_unlock(bp^.lock);
+   vm_object_destroy(Result);
+   FreeMem(tlb_1gb);
+   Exit(nil);
+  end;
+
+  Result^.un_pager.bpl.tlb_1gb:=tlb_1gb;
+  Result^.un_pager.bpl.tlb_64k:=tlb_64k;
+  Result^.handle:=blockpool_acqure(bp);
+
+ mtx_unlock(bp^.lock);
 end;
 
 procedure blockpool_pager_dealloc(obj:vm_object_t);
@@ -483,8 +507,187 @@ begin
  blockpool_release(bp);
 
  obj^.un_pager.bpl.tlb_1gb:=nil;
+ obj^.un_pager.bpl.tlb_64k:=nil;
  obj^.handle:=nil;
  obj^.otype :=OBJT_DEAD;
+end;
+
+
+const
+ MT_WRITEBACK:t_dmem_block=(
+  offset   :0;
+  valid    :0;
+  prot     :0;
+  onion    :0;
+  writeback:1;
+ );
+ MT_ONION_MT_WRITEBACK:t_dmem_block=(
+  offset   :0;
+  valid    :0;
+  prot     :0;
+  onion    :1;
+  writeback:1;
+ );
+
+function kern_blockpool_map(map        :vm_map_t;
+                            obj        :vm_map_object;
+                            vm_start   :QWORD;
+                            block_start:DWORD;
+                            block_end  :DWORD;
+                            prot       :DWORD;
+                            mtype      :DWORD):Integer;
+var
+ pmap:pmap_t;
+ bp:p_blockpool;
+ tlb_64k:p_dmem_block;
+ mflags:t_dmem_block;
+ i:DWORD;
+begin
+ pmap:=map^.pmap;
+
+ bp:=obj^.handle;
+ tlb_64k:=obj^.un_pager.bpl.tlb_64k;
+
+ //flags
+ if (mtype<>SCE_KERNEL_WB_GARLIC) then
+ begin
+  if (mtype=SCE_KERNEL_WC_GARLIC) then
+  begin
+   mflags:=Default(t_dmem_block);
+  end else
+  begin
+   mflags:=MT_ONION_MT_WRITEBACK;
+  end;
+ end else
+ begin
+  mflags:=MT_WRITEBACK;
+ end;
+
+ mflags.prot :=prot;
+ mflags.valid:=1;
+
+ mtx_lock(bp^.lock);
+
+  //check
+  i:=block_start;
+  while (i<block_end) do
+  begin
+   if (tlb_64k[i].valid<>0) then
+   begin
+    mtx_unlock(bp^.lock);
+    Exit(EBUSY);
+   end;
+   Inc(i);
+  end;
+
+  //commit
+  Result:=bp^.commit(block_end-block_start,mflags.onion,mflags.writeback,@tlb_64k[block_start]);
+  if (Result<>0) then
+  begin
+   mtx_unlock(bp^.lock);
+   Exit();
+  end;
+
+  //fill flags and pmap
+  i:=block_start;
+  while (i<block_end) do
+  begin
+
+   pmap_enter_dmem_block(pmap,
+                         DWORD(tlb_64k[i])*M_64K,
+                         vm_start+       i*M_64K,
+                         prot);
+
+   DWORD(tlb_64k[i]):=DWORD(tlb_64k[i]) or DWORD(mflags);
+
+   Inc(i);
+  end;
+
+ mtx_unlock(bp^.lock);
+
+ Result:=0;
+end;
+
+function sys_blockpool_map(addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
+var
+ map  :vm_map_t;
+ entry:vm_map_entry_t;
+ obj  :vm_map_object;
+ start:QWORD;
+ block:DWORD;
+begin
+ Result:=EINVAL;
+
+ map:=p_proc.p_vmspace;
+
+ if (map^.header.start <= QWORD(addr)) and
+    (WORD(len)=0) and
+    (WORD(addr)=0) and
+    (QWORD(addr) < map^.header.__end) and
+    (len <= (map^.header.__end - QWORD(addr))) and
+    (mtype < 11) and
+    (($409 shr (mtype and $1f) and 1)<>0) and
+    ((prot and $ffffffcc)=0) and
+    (flags=0) then
+ begin
+  //
+ end else
+ begin
+  Exit(EINVAL);
+ end;
+
+ if (mtype=SCE_KERNEL_WB_GARLIC) then
+ begin
+  if ((prot and $22)<>0) then
+  begin
+   Exit(EACCES);
+  end;
+ end;
+
+ Result:=EINVAL;
+
+ vm_map_lock(map);
+
+  if vm_map_lookup_entry(map,QWORD(addr),@entry) then
+  begin
+
+   if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+   begin
+    obj:=entry^.vm_obj;
+
+    if (obj<>nil) then
+    if (obj^.otype=OBJT_BLOCKPOOL) then
+    if (len <= (entry^.__end - QWORD(addr))) then
+    begin
+
+     if (len=0) then
+     begin
+      Result:=0;
+     end else
+     begin
+      start:=entry^.start;
+      block:=(QWORD(addr) - start) div M_64K;
+
+      Result:=kern_blockpool_map(map,obj,
+                                 start,
+                                 block,
+                                 (len div M_64K) + block,
+                                 prot,
+                                 mtype);
+     end;
+
+    end;
+
+   end;
+
+
+
+
+
+  end;
+
+ vm_map_unlock(map);
+
 end;
 
 type
@@ -574,8 +777,8 @@ begin
  mtx_lock(bp^.lock);
 
   bp^.Flushed.Fill(
-                   (addr)     div (64*1024),
-                   (addr+len) div (64*1024)
+                   (addr)     div M_64K,
+                   (addr+len) div M_64K
                   );
 
  mtx_unlock(bp^.lock);
