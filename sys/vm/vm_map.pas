@@ -3741,7 +3741,7 @@ begin
  //budget
  budget_id:=entry^.budget_id;
  if (budget_id<>-1) and
-    ((entry^.eflags and (MAP_ENTRY_IN_BUDGET or $40000))=MAP_ENTRY_IN_BUDGET) then
+    ((entry^.eflags and (MAP_ENTRY_IN_BUDGET or MAP_ENTRY_KERNEL))=MAP_ENTRY_IN_BUDGET) then
  begin
   entry^.eflags:=entry^.eflags and (not MAP_ENTRY_IN_BUDGET);
   vm_budget_release(budget_id,field_malloc,size);
@@ -3855,23 +3855,25 @@ begin
  begin
   entry:=first_entry;
 
-  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+  if (entry^.start < start) then
   begin
-   Exit(KERN_INVALID_ARGUMENT);
+   if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+   begin
+    obj:=entry^.vm_obj;
+
+    if (obj<>nil) then
+    if (obj^.otype=OBJT_BLOCKPOOL) then
+    begin
+     Exit(KERN_INVALID_ARGUMENT);
+    end;
+   end;
+
+   if vm_can_delete(entry, cow) then
+   begin
+    vm_map_clip_start(map, entry, start);
+   end;
   end;
 
-  obj:=entry^.vm_obj;
-
-  if (obj<>nil) then
-  if (obj^.otype=OBJT_BLOCKPOOL) then
-  begin
-   Exit(KERN_INVALID_ARGUMENT);
-  end;
-
-  if vm_can_delete(entry, cow) then
-  begin
-   vm_map_clip_start(map, entry, start);
-  end;
  end;
 
  //check
@@ -3879,17 +3881,16 @@ begin
  while (next<>@map^.header) and (next^.start<__end) do
  begin
 
-  if ((next^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
+  if (next^.__end>__end) then
+  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
   begin
-   Exit(KERN_INVALID_ARGUMENT);
-  end;
+   obj:=next^.vm_obj;
 
-  obj:=next^.vm_obj;
-
-  if (obj<>nil) then
-  if (obj^.otype=OBJT_BLOCKPOOL) then
-  begin
-   Exit(KERN_INVALID_ARGUMENT);
+   if (obj<>nil) then
+   if (obj^.otype=OBJT_BLOCKPOOL) then
+   begin
+    Exit(KERN_INVALID_ARGUMENT);
+   end;
   end;
 
   if not vm_can_delete(next, cow) then
@@ -3915,9 +3916,27 @@ begin
    continue;
   end;
 
+  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+  begin
+   obj:=entry^.vm_obj;
+
+   if (obj<>nil) then
+   if (obj^.otype=OBJT_BLOCKPOOL) then
+   begin
+    //vm_blockpool_name_split
+
+    Assert(False,'TODO:vm_blockpool_unmap');
+
+    entry:=entry^.next;
+    continue;
+   end;
+  end;
+
   vm_map_clip_end(map, entry, __end);
 
   next:=entry^.next;
+
+  obj:=entry^.vm_obj;
 
   if ((cow and MAP_COW_NO_RMAP_FREE)=0) and (obj<>nil) then
   begin
