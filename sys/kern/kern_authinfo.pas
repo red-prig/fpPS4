@@ -158,7 +158,16 @@ const
  BUG198642_LB_SYNC_RESET_TO_FIX_CURSOR_8000               =$2F;
  BUG198642_LB_SYNC_RESET_NOT_TO_FIX_CURSOR                =$30;
  BUG210925_ENABLE_TLS_BUG_FIX                             =$31;
- NUM_WORKAROUND_ID                                        =$32;
+ BUG211235_ENABLE_PRIORITIZE_DLC                          =$32;
+ BUG212056_IGNORE_PRELOAD_PATCH_VERSION                   =$33;
+ PPRBUG57571_PUSH_CONTEXT_CALLBACK_PTOA_SPEC              =$34;
+ PPRBUG58630_LIBHTTP_USERAGENT_VERSION                    =$35;
+ BUG212932_NOT_TO_FIX_POSIX_SEM                           =$36;
+ WAL936_DISABLE_KEYBOARD_EVENT_KEY_AND_CODE               =$37;
+ PPRREQ81061_ENABLE_GB_18030_2022_FONTSET                 =$38;
+ PPRREQ103800_AGE_RESTRICTION_CHECK                       =$39;
+ NUM_WORKAROUND_ID                                        =$3A;
+
 
 {
 [render_mode] (sceKernelGetRenderingMode)
