@@ -259,6 +259,7 @@ function  dynlib_get_obj_member(handle:Integer;num:Byte;pout:PPointer):Integer;
 function  budget_get_ptype_of_budget(key:Integer):Integer;
 function  blockpool_open(flags:Integer):Integer;
 function  blockpool_map(addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
+function  blockpool_unmap(addr:Pointer;len:QWORD;flags:DWORD):Integer;
 function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
 function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
@@ -2034,6 +2035,13 @@ end;
 function blockpool_map(addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer; assembler; nostackframe;
 asm
  movq  $654,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function blockpool_unmap(addr:Pointer;len:QWORD;flags:DWORD):Integer; assembler; nostackframe;
+asm
+ movq  $655,%rax
  call  fast_syscall
  jmp   cerror
 end;

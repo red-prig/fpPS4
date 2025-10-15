@@ -3334,7 +3334,7 @@ var
   ),
   (//[655]
      sy_narg:3;
-     sy_call:nil;
+     sy_call:@sys_blockpool_unmap;
      sy_name:'sys_blockpool_unmap'
   ),
   (//[656]

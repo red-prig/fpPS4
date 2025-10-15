@@ -13,8 +13,9 @@ uses
  kern_mtx,
  kern_dmem;
 
-function sys_blockpool_open(flags:Integer):Integer;
-function sys_blockpool_map (addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
+function sys_blockpool_open (flags:Integer):Integer;
+function sys_blockpool_map  (addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
+function sys_blockpool_unmap(addr:Pointer;len:QWORD;flags:DWORD):Integer;
 
 type
  p_dmem_block=^t_dmem_block;
@@ -82,8 +83,9 @@ type
   Cached                :t_dmem_bits;
   Flushed               :t_dmem_bits;
   //
-  procedure flush();
-  function  commit(count,onion,writeback:DWORD;buf:PDWORD):Integer;
+  procedure flush   ();
+  function  commit  (count,onion,writeback:DWORD;buf:PDWORD):Integer;
+  procedure decommit(buf:PDWORD;count:DWORD);
  end;
 
 function  blockpool_acqure (bp:p_blockpool):p_blockpool;
@@ -408,6 +410,35 @@ begin
 
 end;
 
+procedure t_blockpool.decommit(buf:PDWORD;count:DWORD);
+var
+ i:DWORD;
+ mflags:t_dmem_block;
+begin
+ if (count=0) then Exit;
+
+ for i:=0 to count-1 do
+ begin
+  mflags:=t_dmem_block(buf[i]);
+  if (mflags.valid<>0) then
+  begin
+
+   if (mflags.writeback=0) then
+   begin
+    allocatedFlushedBlocks:=allocatedFlushedBlocks-1;
+    Flushed.Decommit(mflags.offset);
+   end else
+   begin
+    allocatedCachedBlocks :=allocatedCachedBlocks -1;
+    Cached.Decommit(mflags.offset);
+   end;
+
+   buf[i]:=0;
+  end;
+ end;
+
+end;
+
 //
 
 procedure blockpool_free(bp:p_blockpool); forward;
@@ -700,6 +731,35 @@ begin
  Result:=0;
 end;
 
+procedure kern_blockpool_unmap(map        :vm_map_t;
+                               obj        :vm_map_object;
+                               vm_start   :QWORD;
+                               block_start:DWORD;
+                               block___end:DWORD);
+var
+ pmap:pmap_t;
+ bp:p_blockpool;
+ tlb_64k:p_dmem_block;
+begin
+ pmap:=map^.pmap;
+
+ bp:=obj^.handle;
+ tlb_64k:=obj^.un_pager.bpl.tlb_64k;
+
+ //free region
+ pmap_remove(pmap,nil,
+             vm_start+block_start*M_64K,
+             vm_start+block___end*M_64K
+            );
+
+ mtx_lock(bp^.lock);
+
+  //clear
+  bp^.decommit(@tlb_64k[block_start],(block___end-block_start));
+
+ mtx_unlock(bp^.lock);
+end;
+
 function sys_blockpool_map(addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Integer;
 var
  map  :vm_map_t;
@@ -768,15 +828,77 @@ begin
                                  mtype);
      end;
 
-    end;
+    end; //obj
 
-   end;
+   end; //MAP_ENTRY_IS_SUB_MAP
+
+  end; //vm_map_lookup_entry
+
+ vm_map_unlock(map);
+
+end;
+
+function sys_blockpool_unmap(addr:Pointer;len:QWORD;flags:DWORD):Integer;
+var
+ map  :vm_map_t;
+ entry:vm_map_entry_t;
+ obj  :vm_map_object;
+ start:QWORD;
+ block:DWORD;
+begin
+ Result:=EINVAL;
+
+ map:=p_proc.p_vmspace;
 
 
+ if (map^.header.start <= QWORD(addr)) and
+    (WORD(len)=0) and
+    (WORD(addr)=0) and
+    (QWORD(addr) < map^.header.__end) and
+    (flags=0) and
+    (len <= (map^.header.__end - QWORD(addr))) then
+ begin
+  //
+ end else
+ begin
+  Exit(EINVAL);
+ end;
 
+ Result:=EINVAL;
 
+ vm_map_lock(map);
 
-  end;
+  if vm_map_lookup_entry(map,QWORD(addr),@entry) then
+  begin
+
+   if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+   begin
+    obj:=entry^.vm_obj;
+
+    if (obj<>nil) then
+    if (obj^.otype=OBJT_BLOCKPOOL) then
+    if (len <= (entry^.__end - QWORD(addr))) then
+    begin
+
+     Result:=0;
+
+     if (len<>0) then
+     begin
+      start:=entry^.start;
+      block:=(QWORD(addr) - start) div M_64K;
+
+      kern_blockpool_unmap(map,obj,
+                           start,
+                           block,
+                           (len div M_64K) + block
+                          );
+     end;
+
+    end; //obj
+
+   end; //MAP_ENTRY_IS_SUB_MAP
+
+  end; //vm_map_lookup_entry
 
  vm_map_unlock(map);
 
