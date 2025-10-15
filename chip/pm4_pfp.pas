@@ -1089,7 +1089,7 @@ procedure onEventWrite(pctx:p_pfp_ctx;Body:PTPM4CMDEVENTWRITE);
 const
  c_p_stride:array[0..3] of PChar=('32_BITS','64_BITS','128_BITS','256_BITS');
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  DWORD(pctx^.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
 
@@ -1554,7 +1554,7 @@ procedure onSetBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWSETBASE);
 var
  addr:QWORD;
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  addr:=QWORD(Body^.address);
  if (addr<>0) then
@@ -1617,7 +1617,7 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  c:=Body^.header.count;
  if (c<>0) then
@@ -1647,7 +1647,7 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  c:=Body^.header.count;
  if (c<>0) then
@@ -1707,7 +1707,7 @@ var
  i,c,r:WORD;
  v:DWORD;
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  c:=Body^.header.count;
  if (c<>0) then
@@ -1746,14 +1746,14 @@ end;
 
 procedure onIndexBufferSize(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBUFFERSIZE);
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  pctx^.UC_REG.VGT_NUM_INDICES:=Body^.numIndices;
 end;
 
 procedure onIndexType(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXTYPE);
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  pctx^.CX_REG.VGT_DMA_INDEX_TYPE:=Body^.data;
  pctx^.UC_REG.VGT_INDEX_TYPE.INDEX_TYPE:=pctx^.CX_REG.VGT_DMA_INDEX_TYPE.INDEX_TYPE;
@@ -1761,7 +1761,7 @@ end;
 
 procedure onIndexBase(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXBASE);
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  Assert(Body^.baseSelect=0);
 
@@ -1776,7 +1776,7 @@ end;
 
 procedure onNumInstances(pctx:p_pfp_ctx;Body:PPM4CMDDRAWNUMINSTANCES);
 begin
- Assert(pctx^.stream_type=stGfxDcb);
+ //Assert(pctx^.stream_type=stGfxDcb);
 
  if p_print_gpu_ops then
  begin
@@ -2355,6 +2355,14 @@ begin
       IT_WAIT_REG_MEM                   :onWaitRegMem           (pctx,buff);
       IT_ACQUIRE_MEM                    :onAcquireMem           (pctx,buff);
       IT_INDIRECT_BUFFER                :onIndirectBufferCompute(pctx,buff);
+      IT_EVENT_WRITE                    :onEventWrite           (pctx,buff);
+
+      IT_INDEX_TYPE                     :onIndexType            (pctx,buff);
+      IT_NUM_INSTANCES                  :onNumInstances         (pctx,buff);
+      IT_SET_CONFIG_REG                 :onSetConfigReg         (pctx,buff);
+      IT_SET_CONTEXT_REG                :onSetContextReg        (pctx,buff);
+      IT_SET_UCONFIG_REG                :onSetUConfigReg        (pctx,buff);
+
       else
        begin
         Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
