@@ -16,6 +16,7 @@ uses
   spirv,
   emit_fetch,
   srVBufInfo,
+  emit_vbuf_chain,
   emit_vbuf_load,
   emit_vbuf_store;
 
@@ -30,6 +31,8 @@ type
   procedure emit_BUFFER_STORE_FORMAT(count:Byte);
   procedure emit_BUFFER_LOAD_DWORDX (count,dfmt:Byte);
   procedure emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
+  procedure buf_atomic(info:TBuf_info;OpId:DWORD);
+  procedure emit_BUFFER_ATOMIC(count,dfmt,nfmt:Byte;OpId:DWORD);
  end;
 
 implementation
@@ -308,6 +311,110 @@ begin
 
 end;
 
+procedure TEmit_MUBUF.buf_atomic(info:TBuf_info;OpId:DWORD);
+var
+ v:TvarChain;
+ rtype:TsrDataType;
+ vsrc:TsrRegNode;
+ pChain:TsrChain;
+ vdst:TsrRegNode;
+
+ dst:array[0..1] of PsrRegSlot;
+begin
+
+ if (info.count=2) then
+ begin
+
+  case info.NFMT of
+   BUF_NUM_FORMAT_UINT :rtype:=dtUint64;
+   BUF_NUM_FORMAT_SINT :rtype:=dtInt64;
+   BUF_NUM_FORMAT_FLOAT:rtype:=dtFloat64;
+   else
+    Assert(False);
+  end;
+
+ end else
+ begin
+
+  case info.NFMT of
+   BUF_NUM_FORMAT_UINT :rtype:=dtUint32;
+   BUF_NUM_FORMAT_SINT :rtype:=dtInt32;
+   BUF_NUM_FORMAT_FLOAT:rtype:=dtFloat32;
+   else
+    Assert(False);
+  end;
+
+ end;
+
+ v:=TEmit_vbuf_chain(TObject(Self)).get_chain(info,rtype);
+ pChain:=TsrChain(v.data[0]);
+
+ if (info.count=2) then
+ begin
+  vsrc:=fetch_vdst8_64(FSPI.MUBUF.VDATA,dtUint64);
+ end else
+ begin
+  vsrc:=fetch_vdst8(FSPI.MUBUF.VDATA,rtype);
+ end;
+
+ vdst:=FetchAtomic(pChain,OpId,rtype,vsrc);
+
+ if (info.GLC<>0) then
+ begin
+  //save result
+  if (info.count=2) then
+  begin
+   dst[0]:=get_vdst8(FSPI.MUBUF.VDATA+0);
+   dst[1]:=get_vdst8(FSPI.MUBUF.VDATA+1);
+
+   MakeCopy64(dst[0],dst[1],vdst);
+  end else
+  begin
+   dst[0]:=get_vdst8(FSPI.MUBUF.VDATA);
+
+   MakeCopy(dst[0],vdst);
+  end;
+ end else
+ begin
+  //no result
+  vdst.mark_read(nil); //self link
+ end;
+
+end;
+
+procedure TEmit_MUBUF.emit_BUFFER_ATOMIC(count,dfmt,nfmt:Byte;OpId:DWORD);
+var
+ src:array[0..3] of PsrRegSlot;
+
+ grp:TsrDataLayout;
+ PV:PVSharpResource4;
+
+begin
+ if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
+
+ if (FSPI.MUBUF.LDS<>0) then
+ begin
+  //TODO: FSPI.MUBUF.LDS
+  Assert(false,'TODO: FSPI.MUBUF.LDS');
+ end;
+
+ grp:=GroupingSharp(@src,rtVSharp4);
+ PV:=grp.GetSharp;
+
+ buf_atomic(
+  Buf_info(grp,
+           dst_sel_identity,
+           dfmt,
+           nfmt,
+           count,
+           FSPI.MUBUF.GLC,
+           FSPI.MUBUF.SLC,
+           PV^.num_records),
+           OpId
+ );
+
+end;
+
 procedure TEmit_MUBUF.emit_MUBUF;
 begin
  case FSPI.MUBUF.OP of
@@ -330,6 +437,9 @@ begin
   BUFFER_STORE_DWORDX2    : emit_BUFFER_STORE_DWORDX(2,BUF_DATA_FORMAT_32_32);
   BUFFER_STORE_DWORDX3    : emit_BUFFER_STORE_DWORDX(3,BUF_DATA_FORMAT_32_32_32);
   BUFFER_STORE_DWORDX4    : emit_BUFFER_STORE_DWORDX(4,BUF_DATA_FORMAT_32_32_32_32);
+
+  BUFFER_ATOMIC_ADD       : emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicIAdd);
+  BUFFER_ATOMIC_SWAP      : emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicExchange);
 
   else
       Assert(false,'MUBUF?'+IntToStr(FSPI.MUBUF.OP)+' '+get_str_spi(FSPI));

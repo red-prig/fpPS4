@@ -47,7 +47,7 @@ procedure TEmit_vbuf_store.buf_store(info:TBuf_info);
 var
  v:TvarChain;
 begin
- v:=TEmit_vbuf_chain(TObject(Self)).get_chain(info);
+ v:=TEmit_vbuf_chain(TObject(Self)).get_chain(info,dtUnknow);
 
  if (v.vType=vcUniformVector) then
  begin
