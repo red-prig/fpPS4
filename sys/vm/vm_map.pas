@@ -244,32 +244,32 @@ function  vm_map_protect(map     :vm_map_t;
                          new_prot:vm_prot_t;
                          set_max :Boolean):Integer;
 
-function vm_map_type_protect(map      :vm_map_t;
-                             start    :vm_offset_t;
-                             __end    :vm_offset_t;
-                             new_mtype:Integer;
-                             new_prot :vm_prot_t):Integer;
+function  vm_map_type_protect(map      :vm_map_t;
+                              start    :vm_offset_t;
+                              __end    :vm_offset_t;
+                              new_mtype:Integer;
+                              new_prot :vm_prot_t):Integer;
 
 function  vm_map_madvise(map  :vm_map_t;
                          start:vm_offset_t;
                          __end:vm_offset_t;
                          behav:Integer):Integer;
 
-function vm_map_inherit(map            :vm_map_t;
-                        start          :vm_offset_t;
-                        __end          :vm_offset_t;
-                        new_inheritance:vm_inherit_t
-                        ):Integer;
+function  vm_map_inherit(map            :vm_map_t;
+                         start          :vm_offset_t;
+                         __end          :vm_offset_t;
+                         new_inheritance:vm_inherit_t
+                         ):Integer;
 
-function vm_map_unwire(map  :vm_map_t;
-                       start:vm_offset_t;
-                       __end:vm_offset_t;
-                       flags:Integer):Integer;
+function  vm_map_unwire(map  :vm_map_t;
+                        start:vm_offset_t;
+                        __end:vm_offset_t;
+                        flags:Integer):Integer;
 
-function vm_map_wire(map  :vm_map_t;
-                     start:vm_offset_t;
-                     __end:vm_offset_t;
-                     flags:Integer):Integer;
+function  vm_map_wire(map  :vm_map_t;
+                      start:vm_offset_t;
+                      __end:vm_offset_t;
+                      flags:Integer):Integer;
 
 function  vm_map_sync(map       :vm_map_t;
                       start     :vm_offset_t;
@@ -2375,6 +2375,18 @@ begin
  current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
+  obj:=current^.vm_obj;
+
+  if (obj<>nil) then
+  if (obj^.otype=OBJT_BLOCKPOOL) then
+  begin
+
+   Assert(false,'TODO:vm_map_protect_blockpool');
+
+   current:=current^.next;
+   Continue;
+  end;
+
   old_prot:=current^.protection;
 
   if set_max then
@@ -2393,10 +2405,6 @@ begin
    //vm_fault_copy_entry(map, map, current, current, nil);
   end;
 
-  {
-   * When restricting access, update the physical map.  Worry
-   * about copy-on-write here.
-   }
   vm_map_protect_internal(map,current,old_prot);
 
   vm_map_simplify_entry(map, current);
