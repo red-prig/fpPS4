@@ -314,10 +314,40 @@ begin
          end;
 
         end;
-      dtUint32,
-      dtInt32  : //isInt
+      dtUint32:
         begin
-         Assert(false,'TODO CONVERT:Int32->'+IntToStr(lc.info.NFMT));
+
+         Case lc.info.NFMT of
+          BUF_NUM_FORMAT_UINT:
+            begin
+             //uint->uint
+             For i:=0 to lc.elem_count-1 do
+             begin
+              lc.elm[i]:=OpUToU(lc.elm[i],lc.elem_orig);
+             end;
+            end;
+          else
+           Assert(false,'TODO CONVERT:Uint32->'+IntToStr(lc.info.NFMT));
+         end;
+
+        end;
+
+      dtInt32:
+        begin
+
+         Case lc.info.NFMT of
+          BUF_NUM_FORMAT_SINT:
+            begin
+             //int->int
+             For i:=0 to lc.elem_count-1 do
+             begin
+              lc.elm[i]:=OpSToS(lc.elm[i],lc.elem_orig);
+             end;
+            end;
+          else
+           Assert(false,'TODO CONVERT:Int32->'+IntToStr(lc.info.NFMT));
+         end;
+
         end;
       else
        Assert(False);
