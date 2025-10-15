@@ -1782,6 +1782,7 @@ end;
 function _get_vdst8_cnt(SDST,count:Byte):RawByteString; inline;
 begin
  case count of
+  0:Result:=_get_vdst8(SDST);
   1:Result:=_get_vdst8(SDST);
   else
     Result:='v['+IntToStr(SDST)+':'+IntToStr(SDST+count-1)+']';
