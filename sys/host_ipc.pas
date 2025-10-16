@@ -10,6 +10,7 @@ uses
  time,
  mqueue,
  LFQueue,
+ game_info,
  host_ipc_interface,
  kern_thr,
  sys_event,
@@ -100,16 +101,85 @@ type
   g_ipc  :THostIpcConnect;
   g_proc :THandle;
   g_p_pid:Integer;
+  g_refs :Integer;
   g_fork :Boolean;
-  function   is_terminated:Boolean; virtual;
-  function   exit_code:DWORD;       virtual;
-  procedure  suspend; virtual;
-  procedure  resume;  virtual;
-  procedure  stop;    virtual;
-  Destructor Destroy; override;
+  g_stop :Boolean;
+  function    Acquire      :Boolean; virtual;
+  function    Release      :Boolean; virtual;
+  function    is_terminated:Boolean; virtual;
+  function    is_stoped    :Boolean; virtual;
+  function    exit_code    :DWORD;   virtual;
+  procedure   suspend; virtual;
+  procedure   resume;  virtual;
+  procedure   stop;    virtual;
+  Constructor Create;
+  Destructor  Destroy; override;
  end;
 
+procedure ReleaseAndNil(var obj:TGameProcess);
+procedure StopAndNil   (var obj:TGameProcess);
+procedure Stop         (obj:TGameProcess);
+procedure BindHandler  (Process:TGameProcess;Handler:THostIpcHandler);
+function  SendSync     (Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject):Ptruint;
+procedure SendAsyn     (Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject);
+
 implementation
+
+procedure ReleaseAndNil(var obj:TGameProcess);
+begin
+ if (obj<>nil) then
+ begin
+  obj.Release;
+  obj:=nil;
+ end;
+end;
+
+procedure StopAndNil(var obj:TGameProcess);
+begin
+ if (obj<>nil) then
+ begin
+  obj.stop;
+  obj.Release;
+  obj:=nil;
+ end;
+end;
+
+procedure Stop(obj:TGameProcess);
+begin
+ if (obj<>nil) then
+ begin
+  obj.stop;
+ end;
+end;
+
+procedure BindHandler(Process:TGameProcess;Handler:THostIpcHandler);
+begin
+ if (Process.g_ipc<>nil) then
+ begin
+  Process.g_ipc.FHandler:=Handler;
+ end;
+end;
+
+function SendSync(Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject):Ptruint;
+begin
+ Result:=Ptruint(-1);
+ if (Process<>nil) then
+ if (Process.g_ipc<>nil) then
+ begin
+  Result:=Process.g_ipc.SendSync(msg,obj);
+ end;
+end;
+
+procedure SendAsyn(Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject);
+begin
+ if (Process<>nil) then
+ if (Process.g_ipc<>nil) then
+ begin
+  Process.g_ipc.SendAsyn(msg,obj);
+ end;
+end;
+
+//
 
 Constructor THostIpcConnect.Create;
 begin
@@ -529,9 +599,29 @@ end;
 
 //
 
+function TGameProcess.Acquire:Boolean;
+begin
+ System.InterlockedIncrement(g_refs);
+ Result:=True;
+end;
+
+function TGameProcess.Release:Boolean;
+begin
+ if System.InterlockedDecrement(g_refs)=0 then
+ begin
+  Free;
+ end;
+ Result:=True;
+end;
+
 function TGameProcess.is_terminated:Boolean;
 begin
  Result:=False;
+end;
+
+function TGameProcess.is_stoped:Boolean;
+begin
+ Result:=g_stop;
 end;
 
 function TGameProcess.exit_code:DWORD;
@@ -551,7 +641,16 @@ end;
 
 procedure TGameProcess.stop;
 begin
- //
+ g_stop:=True;
+ if (g_ipc<>nil) then
+ begin
+  g_ipc.FStop:=True;
+ end;
+end;
+
+Constructor TGameProcess.Create;
+begin
+ g_refs:=1;
 end;
 
 Destructor TGameProcess.Destroy;

@@ -62,6 +62,7 @@ end;
 
 procedure TGameProcessPipe.stop;
 begin
+ inherited;
  NtTerminateProcess(g_proc,0);
 end;
 

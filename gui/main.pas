@@ -448,6 +448,7 @@ begin
       begin
        //ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
        ShowMessage('The process reported exit!');
+       Stop(FGameProcess);
       end;
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin
@@ -469,11 +470,7 @@ begin
  Result:=0;
  if (MessageDlgEx(PChar(buf),'Error',[mbOK,mbAbort],Self)=mrAbort) then
  begin
-  if (FGameProcess<>nil) then
-  if (FGameProcess.g_ipc<>nil) then
-  begin
-   FGameProcess.g_ipc.FStop:=True;
-  end;
+  Stop(FGameProcess);
  end;
 end;
 
@@ -482,11 +479,7 @@ begin
  Result:=MessageDlgEx(PChar(buf),'Warning',[mbYes,mbNo,mbAbort],Self);
  if (Result=mrAbort) then
  begin
-  if (FGameProcess<>nil) then
-  if (FGameProcess.g_ipc<>nil) then
-  begin
-   FGameProcess.g_ipc.FStop:=True;
-  end;
+  Stop(FGameProcess);
  end;
  if (Result=mrYes) then
  begin
@@ -529,11 +522,7 @@ begin
   end;
  end;
 
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.SendSync('PARAM_SFO_LOAD',FParamSfo);
- end;
+ SendSync(FGameProcess,'PARAM_SFO_LOAD',FParamSfo);
 
  Result:=0;
 end;
@@ -568,11 +557,7 @@ begin
   end;
  end;
 
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.SendSync('PLAYGO_LOAD',playgo_file);
- end;
+ SendSync(FGameProcess,'PLAYGO_LOAD',playgo_file);
 
  FreeAndNil(playgo_file);
  Result:=0;
@@ -638,13 +623,6 @@ begin
 
  data:=TPS4LoadExec(obj);
 
- if (UpperCase(data.Path)='EXIT') then
- begin
-  FreeAndNil(data);
-  TBStopClick(nil);
-  Exit;
- end;
-
  if (FGameProcess=nil) then
  begin
   FreeAndNil(data);
@@ -652,12 +630,18 @@ begin
   Exit;
  end;
 
+ if (UpperCase(data.Path)='EXIT') then
+ begin
+  FreeAndNil(data);
+  Stop(FGameProcess);
+  Exit;
+ end;
+
  if GameProcessForked then //only forked
  begin
 
   //terminate
-  FGameProcess.stop;
-  FreeAndNil(FGameProcess);
+  StopAndNil(FGameProcess);
   //
   CloseMainWindows;
   //
@@ -681,17 +665,14 @@ begin
 
   FGameProcess:=run_item(cfg);
 
+  BindHandler(FGameProcess,IpcHandler);
+
   FreeAndNil(Item);
 
   if (FGameProcess=nil) then
   begin
    //stop on error
    TBStopClick(Self);
-  end;
-
-  if (FGameProcess.g_ipc<>nil) then
-  begin
-   FGameProcess.g_ipc.FHandler:=IpcHandler;
   end;
 
  end else
@@ -1146,6 +1127,8 @@ begin
 end;
 
 procedure TfrmMain.OnIdleUpdate(Sender:TObject;var Done:Boolean);
+var
+ FProcess:TGameProcess;
 begin
  Done:=True;
 
@@ -1160,20 +1143,27 @@ begin
 
  if (FGameProcess<>nil) then
  begin
+  FProcess:=FGameProcess;
+  FProcess.Acquire;
 
-  if (FGameProcess.g_ipc<>nil) then
+  if (FProcess.g_ipc<>nil) then
   begin
-   FGameProcess.g_ipc.Update();
+   FProcess.g_ipc.Update();
   end;
 
-  if (FGameProcess<>nil) then       //recheck, must be free in Update()
-  if (FGameProcess.g_ipc<>nil) then //recheck, must be free in Update()
-  if (FGameProcess.is_terminated) or
-     (FGameProcess.g_ipc.FStop) then
+  if (FProcess.is_terminated) or
+     (FProcess.is_stoped) then
   begin
-   TBStopClick(Sender);
+   if (FGameProcess=FProcess) then
+   begin
+    TBStopClick(Sender);
+   end else
+   begin
+    FProcess.Release;
+   end;
   end;
 
+  FProcess.Release;
  end;
 
 end;
@@ -1447,6 +1437,8 @@ begin
 
  FGameProcess:=run_item(cfg);
 
+ BindHandler(FGameProcess,IpcHandler);
+
  if (FGameProcess<>nil) then
  begin
   Item.FLock:=True;
@@ -1455,11 +1447,6 @@ begin
   ParamSfo:=nil;
 
   SetButtonsState(mdsStarted);
-
-  if (FGameProcess.g_ipc<>nil) then
-  begin
-   FGameProcess.g_ipc.FHandler:=IpcHandler;
-  end;
  end;
 
  FreeAndNil(ParamSfo);
@@ -1469,10 +1456,17 @@ procedure TfrmMain.TBPlayClick(Sender: TObject);
 begin
  if (FGameProcess<>nil) then
  begin
-  //resume
-  ShowMainWindows();
-  FGameProcess.resume;
-  SetButtonsState(mdsRunned);
+  if (not FGameProcess.g_fork) and
+     (FGameProcess.is_stoped) then
+  begin
+   ShowMessage('Restart the emulator manually!');
+  end else
+  begin
+   //resume
+   ShowMainWindows();
+   FGameProcess.resume;
+   SetButtonsState(mdsRunned);
+  end;
  end else
  begin
   //run
@@ -1516,9 +1510,8 @@ begin
   end;
 
   //terminate
-  FGameProcess.stop;
+  StopAndNil(FGameProcess);
   SetButtonsState(mbsStopped);
-  FreeAndNil(FGameProcess);
   //
   if (FGameItem<>nil) then
   begin
