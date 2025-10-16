@@ -871,7 +871,7 @@ begin
   Exit(EINVAL);
  end;
 
- if (mtype>10) then
+ if (DWORD(mtype)>10) then
  begin
   Exit(EINVAL);
  end;
