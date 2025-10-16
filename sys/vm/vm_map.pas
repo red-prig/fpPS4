@@ -239,6 +239,13 @@ function  vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
                                wired      :PBoolean           { OUT }
                               ):Integer;
 
+procedure vm_map_protect_internal(map  :vm_map_t;
+                                  obj  :vm_object_t;
+                                  start:vm_offset_t;
+                                  __end:vm_offset_t;
+                                  prev :vm_prot_t;
+                                  prot :vm_prot_t);
+
 function  vm_map_protect(map     :vm_map_t;
                          start   :vm_offset_t;
                          __end   :vm_offset_t;
@@ -2179,14 +2186,15 @@ type
  t_prot_action=(paNone,paEnter,paRemove,paProtect);
 
 procedure vm_map_protect_internal(map  :vm_map_t;
-                                  entry:vm_map_entry_t;
-                                  prev :vm_prot_t);
+                                  obj  :vm_object_t;
+                                  start:vm_offset_t;
+                                  __end:vm_offset_t;
+                                  prev :vm_prot_t;
+                                  prot :vm_prot_t);
 var
- prot:vm_prot_t;
  nt_action:t_prot_action;
  gp_action:t_prot_action;
 begin
- prot:=entry^.protection and MASK(entry);
 
  //magic time
  nt_action:=t_prot_action(
@@ -2215,9 +2223,9 @@ begin
  if (nt_action=paProtect) then
  begin
   pmap_protect(map^.pmap,
-               entry^.vm_obj,
-               entry^.start,
-               entry^.__end,
+               obj,
+               start,
+               __end,
                prot);
  end;
 
@@ -2225,26 +2233,42 @@ begin
   paEnter:
     begin
      pmap_gpu_enter_object(map^.pmap,
-                           entry^.start,
-                           entry^.__end,
+                           start,
+                           __end,
                            prot);
     end;
   paRemove:
     begin
      pmap_gpu_remove(map^.pmap,
-                     entry^.start,
-                     entry^.__end);
+                     start,
+                     __end);
     end;
   paProtect:
     begin
      pmap_gpu_protect(map^.pmap,
-                      entry^.start,
-                      entry^.__end,
+                      start,
+                      __end,
                       prot);
     end;
   else;
  end;
 
+end;
+
+procedure vm_map_protect_internal(map  :vm_map_t;
+                                  entry:vm_map_entry_t;
+                                  prev :vm_prot_t); inline;
+var
+ prot:vm_prot_t;
+begin
+ prot:=entry^.protection and MASK(entry);
+
+ vm_map_protect_internal(map,
+                         entry^.vm_obj,
+                         entry^.start,
+                         entry^.__end,
+                         prev ,
+                         prot);
 end;
 
 {
@@ -2266,6 +2290,9 @@ var
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
  old_prot:vm_prot_t;
+ b_start :vm_offset_t;
+ b___end :vm_offset_t;
+ vm_start:vm_offset_t;
 const
  flags_2mb=0;
 begin
@@ -2387,7 +2414,34 @@ begin
   if (obj^.otype=OBJT_BLOCKPOOL) then
   begin
 
-   Assert(false,'TODO:vm_map_protect_blockpool');
+   if (start < current^.start) then
+   begin
+    b_start:=current^.start;
+   end else
+   begin
+    b_start:=start;
+   end;
+   b_start:=(b_start + M_64K - 1) and (not (M_64K - 1));
+
+   if (__end <= current^.__end) then
+   begin
+    b___end:=__end;
+   end else
+   begin
+    b___end:=current^.__end;
+   end;
+   b___end:=b___end and (not (M_64K - 1));
+
+   if (b_start < b___end) then
+   begin
+    vm_start:=current^.start - current^.offset;
+
+    blockpool_type_protect(map,obj,vm_start,
+                          (b_start - vm_start) div M_64K,
+                          (b___end - vm_start) div M_64K,
+                          DWORD(-1),new_prot);
+
+   end;
 
    current:=current^.next;
    Continue;
@@ -2422,9 +2476,6 @@ begin
 end;
 
 ////
-
-const
- SCE_KERNEL_WB_GARLIC =10;
 
 function obj2dmem(obj:vm_object_t):Pointer; external;
 
@@ -2488,12 +2539,12 @@ begin
    begin
     length:=entry^.start - entry^.offset;
 
-    kern_blockpool_type_protect
-               (map,obj,length,
-               (start - length) div M_64K,
-               (__end - length) div M_64K,
-               new_mtype,new_prot);
+    blockpool_type_protect(map,obj,length,
+                          (start - length) div M_64K,
+                          (__end - length) div M_64K,
+                          new_mtype,new_prot);
 
+    vm_map_unlock(map);
     Exit(KERN_SUCCESS);
    end;
   end else

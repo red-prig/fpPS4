@@ -646,18 +646,19 @@ begin
  end;
 end;
 
-procedure kern_blockpool_type_protect(map        :vm_map_t;
-                                      obj        :vm_map_object;
-                                      vm_start   :QWORD;
-                                      block_start:DWORD;
-                                      block___end:DWORD;
-                                      mtype      :DWORD;
-                                      prot       :DWORD); public;
+procedure blockpool_type_protect(map        :vm_map_t;
+                                 obj        :vm_map_object;
+                                 vm_start   :QWORD;
+                                 block_start:DWORD;
+                                 block___end:DWORD;
+                                 mtype      :DWORD;
+                                 prot       :DWORD); public;
 var
  pmap:pmap_t;
  bp:p_blockpool;
  tlb_64k:p_dmem_block;
  mflags:t_dmem_block;
+ mprev :t_dmem_block;
  i:DWORD;
 begin
  pmap:=map^.pmap;
@@ -665,14 +666,68 @@ begin
  bp:=obj^.handle;
  tlb_64k:=obj^.un_pager.bpl.tlb_64k;
 
- //flags
- mflags:=get_mflags(mtype);
+ if mtype<>DWORD(-1) then
+ begin
+  //flags
+  mflags:=get_mflags(mtype);
 
- //valid&prot
- mflags.prot :=prot;
- mflags.valid:=1;
+  //valid&prot
+  mflags.prot :=prot;
+  mflags.valid:=1;
+ end;
 
- Assert(False,'kern_blockpool_type_protect');
+ mtx_lock(bp^.lock);
+
+  i:=block_start;
+  while (i<block___end) do
+  begin
+   mprev:=tlb_64k[i];
+
+   if (mprev.valid<>0) then
+   begin
+
+    if (mprev.prot<>prot) then
+    begin
+     vm_map_protect_internal(map,
+                             nil,
+                             vm_start+i*M_64K,
+                             vm_start+i*M_64K+M_64K,
+                             mprev.prot,
+                             prot);
+    end;
+
+    if mtype=DWORD(-1) then
+    begin
+     //mprotect
+     mprev.prot:=prot;
+     tlb_64k[i]:=mprev;
+    end else
+    begin
+     //mtypeprotect
+
+     with bp^ do
+     if (mprev.writeback<>mflags.writeback) then
+     begin
+      if (mflags.writeback=0) then
+      begin
+       allocatedFlushedBlocks:=allocatedFlushedBlocks + 1;
+       allocatedCachedBlocks :=allocatedCachedBlocks  - 1;
+      end else
+      begin
+       allocatedCachedBlocks :=allocatedCachedBlocks  + 1;
+       allocatedFlushedBlocks:=allocatedFlushedBlocks - 1;
+      end;
+     end;
+
+     DWORD(tlb_64k[i]):=mprev.offset or DWORD(mflags);
+    end;
+
+   end; //(mprev.valid<>0)
+
+   Inc(i);
+  end;
+
+ mtx_unlock(bp^.lock);
 end;
 
 function kern_blockpool_map(map        :vm_map_t;

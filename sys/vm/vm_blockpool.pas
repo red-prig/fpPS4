@@ -45,13 +45,13 @@ function  blockpool_obj_get_info(map  :Pointer;
                                  qinfo:pSceKernelVirtualQueryInfo;
                                  has_sdk_version_5:Boolean):Integer; external;
 
-procedure kern_blockpool_type_protect(map        :Pointer;
-                                      obj        :Pointer;
-                                      vm_start   :QWORD;
-                                      block_start:DWORD;
-                                      block___end:DWORD;
-                                      mtype      :DWORD;
-                                      prot       :DWORD); external;
+procedure blockpool_type_protect(map        :Pointer;
+                                 obj        :Pointer;
+                                 vm_start   :QWORD;
+                                 block_start:DWORD;
+                                 block___end:DWORD;
+                                 mtype      :DWORD;
+                                 prot       :DWORD); external;
 
 procedure blockpool_obj_unmap(map        :Pointer;
                               obj        :Pointer;
