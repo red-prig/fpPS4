@@ -9,6 +9,7 @@ uses
  sysutils,
  vm,
  vmparam,
+ vm_blockpool,
  vm_pmap,
  sys_vm_object,
  vm_object,
@@ -351,6 +352,11 @@ uses
 var
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
+
+function IDX_TO_OFF(x:QWORD):QWORD; inline;
+begin
+ Result:=QWORD(x) shl PAGE_SHIFT;
+end;
 
 function OFF_TO_IDX(x:QWORD):QWORD; inline;
 begin
@@ -2475,8 +2481,27 @@ begin
  if (obj<>nil) then
  if (obj^.otype=OBJT_BLOCKPOOL) then
  begin
-  Assert(false,'TODO:vm_map_type_protect_blockpool');
-  Exit;
+
+  if (WORD(start)=0) and (WORD(__end)=0) and (__end <= entry^.__end) then
+  begin
+   if (start < __end) then
+   begin
+    length:=entry^.start - entry^.offset;
+
+    kern_blockpool_type_protect
+               (map,obj,length,
+               (start - length) div M_64K,
+               (__end - length) div M_64K,
+               new_mtype,new_prot);
+
+    Exit(KERN_SUCCESS);
+   end;
+  end else
+  begin
+   vm_map_unlock(map);
+   Exit(KERN_INVALID_ARGUMENT);
+  end;
+
  end;
 
  //mark:MAP_ENTRY_IN_TRANSITION2
@@ -3756,37 +3781,46 @@ begin
  end;
  //
 
- if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) and
-    (obj<>nil) then
- if (obj^.otype<>OBJT_BLOCKPOOL) then
+ if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
  begin
-  count:=OFF_TO_IDX(size);
-  offidxstart:=OFF_TO_IDX(entry^.offset);
-  offidx_end:=offidxstart + count;
-  VM_OBJECT_LOCK(obj);
-  if (obj^.ref_count<>1) and
-      (((obj^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
+
+  if (obj<>nil) then
+  if (obj^.otype<>OBJT_BLOCKPOOL) then
   begin
-   vm_object_collapse(obj);
-
-   {
-    * The option OBJPR_NOTMAPPED can be passed here
-    * because vm_map_delete() already performed
-    * pmap_remove() on the only mapping to this range
-    * of pages.
-    }
-   vm_object_page_remove(obj, offidxstart, offidx_end, OBJPR_NOTMAPPED);
-
-   if (offidx_end>=obj^.size) and
-      (offidxstart<obj^.size) then
+   count:=OFF_TO_IDX(size);
+   offidxstart:=OFF_TO_IDX(entry^.offset);
+   offidx_end:=offidxstart + count;
+   VM_OBJECT_LOCK(obj);
+   if (obj^.ref_count<>1) and
+       (((obj^.flags and (OBJ_NOSPLIT or OBJ_ONEMAPPING))=OBJ_ONEMAPPING)) then
    begin
-    obj^.size:=offidxstart;
+    vm_object_collapse(obj);
+
+    {
+     * The option OBJPR_NOTMAPPED can be passed here
+     * because vm_map_delete() already performed
+     * pmap_remove() on the only mapping to this range
+     * of pages.
+     }
+    vm_object_page_remove(obj, offidxstart, offidx_end, OBJPR_NOTMAPPED);
+
+    if (offidx_end>=obj^.size) and
+       (offidxstart<obj^.size) then
+    begin
+     obj^.size:=offidxstart;
+    end;
    end;
+   VM_OBJECT_UNLOCK(obj);
   end;
-  VM_OBJECT_UNLOCK(obj);
+
  end else
  begin
   entry^.vm_obj:=nil;
+ end;
+
+ if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+ begin
+  vm_object_deallocate(entry^.vm_obj);
  end;
 
  begin
@@ -3933,9 +3967,13 @@ begin
    begin
     //vm_blockpool_name_split
 
-    Assert(False,'TODO:vm_blockpool_unmap');
+    blockpool_obj_unmap(map,obj,entry^.start,0,IDX_TO_OFF(obj^.size) div M_64K);
 
-    entry:=entry^.next;
+    next:=entry^.next;
+
+    vm_map_entry_delete(map, entry);
+
+    entry:=next;
     continue;
    end;
   end;

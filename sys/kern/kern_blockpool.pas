@@ -6,7 +6,9 @@ unit kern_blockpool;
 interface
 
 uses
+ vm,
  vmparam,
+ vm_blockpool,
  sys_vm_object,
  vm_map,
  vm_pmap,
@@ -18,36 +20,9 @@ function sys_blockpool_map  (addr:Pointer;len:QWORD;mtype,prot,flags:DWORD):Inte
 function sys_blockpool_unmap(addr:Pointer;len:QWORD;flags:DWORD):Integer;
 
 type
- p_dmem_block=^t_dmem_block;
- t_dmem_block=bitpacked record
-  offset   :0..8388607;  //23
-  valid    :0..1;        //1
-  prot     :0..63;       //6
-  onion    :0..1;        //1
-  writeback:0..1;        //1
- end;
- {$IF sizeof(t_dmem_block)<>4}{$STOP t_dmem_block<>4}{$ENDIF}
-
-const
- MT_WRITEBACK:t_dmem_block=(
-  offset   :0;
-  valid    :0;
-  prot     :0;
-  onion    :0;
-  writeback:1;
- );
- MT_ONION_MT_WRITEBACK:t_dmem_block=(
-  offset   :0;
-  valid    :0;
-  prot     :0;
-  onion    :1;
-  writeback:1;
- );
-
-type
  t_dmem_bits=object
   const
-   M_QWORD_COUNT=(VM_DMEM_SIZE+(64*1024*64)-1) div (64*1024*64);
+   M_QWORD_COUNT=(VM_DMEM_SIZE+(M_64K*64)-1) div (M_64K*64);
    M_BACKT_BITS =(M_QWORD_COUNT+63) div 64;
    M_QWORD_ALIGN=M_BACKT_BITS*64;
    M_BACKT_COUNT=(M_QWORD_ALIGN+63) div 64;
@@ -277,7 +252,7 @@ begin
    while (count<>0) do
    begin
     s:=Cached.FindFirst;
-    if (s=-1) then goto _repeat;
+    if (s=-1) then Break;
 
     Cached.Commit(s);
 
@@ -300,7 +275,7 @@ begin
     while (count<>0) do
     begin
      s:=Cached.FindFirst;
-     if (s=-1) then goto _repeat;
+     if (s=-1) then Break;
 
      Cached.Commit(s);
 
@@ -315,7 +290,7 @@ begin
    while (count<>0) do
    begin
     s:=Flushed.FindFirst;
-    if (s=-1) then goto _repeat;
+    if (s=-1) then Break;
 
     Flushed.Commit(s);
 
@@ -334,7 +309,7 @@ begin
    while (count<>0) do
    begin
     s:=Flushed.FindFirst;
-    if (s=-1) then goto _repeat;
+    if (s=-1) then Break;
 
     Flushed.Commit(s);
 
@@ -356,7 +331,7 @@ begin
     while (count<>0) do
     begin
      s:=Cached.FindFirst;
-     if (s=-1) then goto _repeat;
+     if (s=-1) then Break;
 
      Cached.Commit(s);
 
@@ -368,24 +343,30 @@ begin
     goto _repeat;
    end;
 
-   // flushed
-   while (count<>0) do
+   if (Flushed.availableBlocks<>0) then
    begin
-    s:=Flushed.FindFirst;
-    if (s=-1) then goto _repeat;
 
-    Flushed.Commit(s);
+    // flushed
+    while (count<>0) do
+    begin
+     s:=Flushed.FindFirst;
+     if (s=-1) then Break;
 
-    buf[0]:=s;
-    Inc(buf);
-    Dec(Count);
+     Flushed.Commit(s);
+
+     buf[0]:=s;
+     Inc(buf);
+     Dec(Count);
+    end;
+
    end;
+
 
    // cached
    while (count<>0) do
    begin
     s:=Cached.FindFirst;
-    if (s=-1) then goto _repeat;
+    if (s=-1) then Break;
 
     Cached.Commit(s);
 
@@ -467,10 +448,6 @@ begin
  Result:=QWORD(x) shr PAGE_SHIFT;
 end;
 
-const
- M_1GB=(1024*1024*1024);
- M_64K=(64*1024);
-
 function blockpool_pager_alloc(handle:Pointer;size:QWORD):vm_object_t;
 var
  bp:p_blockpool;
@@ -546,7 +523,7 @@ begin
 
  for i:=0 to tlb_cnt-1 do
  begin
-  bp^.Cached.Commit(tlb_1gb[i]);
+  bp^.Cached.Decommit(tlb_1gb[i]);
  end;
  bp^.allocatedCachedBlocks:=bp^.allocatedCachedBlocks-tlb_cnt;
 
@@ -652,6 +629,52 @@ begin
  Result:=mflags.valid;
 end;
 
+function get_mflags(mtype:DWORD):t_dmem_block; inline;
+begin
+ if (mtype<>SCE_KERNEL_WB_GARLIC) then
+ begin
+  if (mtype=SCE_KERNEL_WC_GARLIC) then
+  begin
+   Result:=Default(t_dmem_block);
+  end else
+  begin
+   Result:=MT_ONION_MT_WRITEBACK;
+  end;
+ end else
+ begin
+  Result:=MT_WRITEBACK;
+ end;
+end;
+
+procedure kern_blockpool_type_protect(map        :vm_map_t;
+                                      obj        :vm_map_object;
+                                      vm_start   :QWORD;
+                                      block_start:DWORD;
+                                      block___end:DWORD;
+                                      mtype      :DWORD;
+                                      prot       :DWORD); public;
+var
+ pmap:pmap_t;
+ bp:p_blockpool;
+ tlb_64k:p_dmem_block;
+ mflags:t_dmem_block;
+ i:DWORD;
+begin
+ pmap:=map^.pmap;
+
+ bp:=obj^.handle;
+ tlb_64k:=obj^.un_pager.bpl.tlb_64k;
+
+ //flags
+ mflags:=get_mflags(mtype);
+
+ //valid&prot
+ mflags.prot :=prot;
+ mflags.valid:=1;
+
+ Assert(False,'kern_blockpool_type_protect');
+end;
+
 function kern_blockpool_map(map        :vm_map_t;
                             obj        :vm_map_object;
                             vm_start   :QWORD;
@@ -672,20 +695,9 @@ begin
  tlb_64k:=obj^.un_pager.bpl.tlb_64k;
 
  //flags
- if (mtype<>SCE_KERNEL_WB_GARLIC) then
- begin
-  if (mtype=SCE_KERNEL_WC_GARLIC) then
-  begin
-   mflags:=Default(t_dmem_block);
-  end else
-  begin
-   mflags:=MT_ONION_MT_WRITEBACK;
-  end;
- end else
- begin
-  mflags:=MT_WRITEBACK;
- end;
+ mflags:=get_mflags(mtype);
 
+ //valid&prot
  mflags.prot :=prot;
  mflags.valid:=1;
 
@@ -731,11 +743,11 @@ begin
  Result:=0;
 end;
 
-procedure kern_blockpool_unmap(map        :vm_map_t;
-                               obj        :vm_map_object;
-                               vm_start   :QWORD;
-                               block_start:DWORD;
-                               block___end:DWORD);
+procedure blockpool_obj_unmap(map        :vm_map_t;
+                              obj        :vm_map_object;
+                              vm_start   :QWORD;
+                              block_start:DWORD;
+                              block___end:DWORD); public;
 var
  pmap:pmap_t;
  bp:p_blockpool;
@@ -887,11 +899,11 @@ begin
       start:=entry^.start;
       block:=(QWORD(addr) - start) div M_64K;
 
-      kern_blockpool_unmap(map,obj,
-                           start,
-                           block,
-                           (len div M_64K) + block
-                          );
+      blockpool_obj_unmap(map,obj,
+                          start,
+                          block,
+                          (len div M_64K) + block
+                         );
      end;
 
     end; //obj

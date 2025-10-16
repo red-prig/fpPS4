@@ -124,6 +124,31 @@ const
  MADV_CORE      = 9; // revert to including pages in a core file
  MADV_PROTECT   =10; // protect process from pageout kill
 
+const
+ SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE=32;
+ SCE_KERNEL_DMQ_FIND_NEXT=1;
+ SCE_KERNEL_VQ_FIND_NEXT =1;
+
+type
+ pSceKernelVirtualQueryInfo=^SceKernelVirtualQueryInfo;
+ SceKernelVirtualQueryInfo=packed record
+  pstart:Pointer;
+  p__end:Pointer;
+  offset:QWORD;
+  protection:Integer;
+  memoryType:Integer;
+  bits:bitpacked record
+   isFlexibleMemory:0..1; //1
+   isDirectMemory  :0..1; //2
+   isStack         :0..1; //4
+   isPooledMemory  :0..1; //8
+   isCommitted     :0..1; //16
+  end;
+  name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
+  align:array[0..6] of Byte;
+ end;
+ {$IF sizeof(SceKernelVirtualQueryInfo)<>72}{$STOP sizeof(SceKernelVirtualQueryInfo)<>72}{$ENDIF}
+
 function is_gpu(prot:vm_prot_t):Boolean; inline;
 function round_page(x:QWORD):QWORD; inline;
 function trunc_page(x:QWORD):QWORD; inline;

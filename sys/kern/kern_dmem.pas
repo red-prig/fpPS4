@@ -9,42 +9,12 @@ uses
  sysutils,
  sys_conf,
  sys_vm_object,
+ vm,
+ vm_blockpool,
  dmem_map,
  rmem_map;
 
 type
- pSceKernelDirectMemoryQueryInfo=^SceKernelDirectMemoryQueryInfo;
- SceKernelDirectMemoryQueryInfo=packed record
-  start:QWORD;
-  __end:QWORD;
-  mType:Integer;
-  align:Integer;
- end;
-
-const
- SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE=32;
- SCE_KERNEL_DMQ_FIND_NEXT=1;
- SCE_KERNEL_VQ_FIND_NEXT =1;
-
-type
- pSceKernelVirtualQueryInfo=^SceKernelVirtualQueryInfo;
- SceKernelVirtualQueryInfo=packed record
-  pstart:Pointer;
-  p__end:Pointer;
-  offset:QWORD;
-  protection:Integer;
-  memoryType:Integer;
-  bits:bitpacked record
-   isFlexibleMemory:0..1; //1
-   isDirectMemory  :0..1; //2
-   isStack         :0..1; //4
-   isPooledMemory  :0..1; //8
-   isCommitted     :0..1; //16
-  end;
-  name:array[0..SCE_KERNEL_VIRTUAL_RANGE_NAME_SIZE-1] of AnsiChar;
-  align:array[0..6] of Byte;
- end;
-
  p_query_memory_prot=^t_query_memory_prot;
  t_query_memory_prot=packed record
   start:Pointer;
@@ -98,7 +68,6 @@ uses
  errno,
  md_systm,
  systm,
- vm,
  vmparam,
  vm_map,
  kern_authinfo,
@@ -571,12 +540,6 @@ begin
  Result:=entry;
 end;
 
-function blockpool_obj_get_info(map  :vm_map_t;
-                                obj  :vm_map_object;
-                                addr :QWORD;
-                                qinfo:pSceKernelVirtualQueryInfo;
-                                has_sdk_version_5:Boolean):Integer; external;
-
 procedure dmem_vmo_get_info(map  :vm_map_t;
                             entry:vm_map_entry_t;
                             addr :QWORD;
@@ -686,7 +649,11 @@ begin
   if (OBJT_PHYSHM < otype) then Exit;
 
   case otype of
-   OBJT_DEFAULT,
+   OBJT_DEFAULT:
+     begin
+      //fake shared
+      Exit;
+     end;
    OBJT_SWAP   ,
    OBJT_VNODE  ,
    OBJT_JITSHM ,

@@ -703,17 +703,18 @@ begin
 end;
 
 type
- pSceKernelDirectMemoryQueryInfo=^TSceKernelDirectMemoryQueryInfo;
- TSceKernelDirectMemoryQueryInfo=packed record
+ p_dmem_query_info=^t_dmem_query_info;
+ t_dmem_query_info=packed record
   start:QWORD;
   __end:QWORD;
   mtype:Integer;
   align:Integer;
  end;
+ {$IF sizeof(t_dmem_query_info)<>24}{$STOP sizeof(t_dmem_query_info)<>24}{$ENDIF}
 
 Function dmem_map_query(map:p_dmem_map;offset:QWORD;flags,id:Integer;info:Pointer;size:QWORD):Integer;
 var
- data:TSceKernelDirectMemoryQueryInfo;
+ data :t_dmem_query_info;
  entry:p_dmem_map_entry;
  index:DWORD;
 begin
@@ -726,7 +727,7 @@ begin
 
  Assert(id=0,'dmem_map_query (id<>0)');
 
- data:=Default(TSceKernelDirectMemoryQueryInfo);
+ data:=Default(t_dmem_query_info);
 
  Result:=EACCES;
 
@@ -791,9 +792,9 @@ begin
 
  if (Result<>0) then Exit;
 
- if (size>sizeof(TSceKernelDirectMemoryQueryInfo)) then
+ if (size>sizeof(t_dmem_query_info)) then
  begin
-  size:=sizeof(TSceKernelDirectMemoryQueryInfo);
+  size:=sizeof(t_dmem_query_info);
  end;
 
  Result:=copyout(@data,info,size);

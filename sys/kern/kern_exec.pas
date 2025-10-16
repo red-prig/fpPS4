@@ -264,7 +264,7 @@ var
  error:Integer;
  vmspace:p_vmspace;
  map:vm_map_t;
- //obj:vm_object_t;
+ obj:vm_object_t;
  shared_page_base:Pointer;
  shared_page_len :QWORD;
  sv_minuser:QWORD;
@@ -345,8 +345,11 @@ begin
  shared_page_base:=vmspace^.sv_usrstack;
  shared_page_len :=p_proc.p_sysent^.sv_shared_page_len;
 
+ //create fake shared
+ obj:=vm_pager_allocate(OBJT_DEFAULT,nil,shared_page_len,0,0);
+
  //mapping shared page (sv_usrstack_len=0x4000)
- error:=vm_map_fixed(map,nil,0,
+ error:=vm_map_fixed(map,obj,0,
          QWORD(shared_page_base), shared_page_len,
          VM_PROT_RW,
          VM_PROT_RW or VM_PROT_EXECUTE,
