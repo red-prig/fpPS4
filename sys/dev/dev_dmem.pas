@@ -20,7 +20,7 @@ uses
  vmparam,
  dmem_map,
  kern_dmem,
- sys_vm_object,
+ vm_object,
  vm_pager,
  kern_authinfo,
  kern_budget,

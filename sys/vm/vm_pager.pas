@@ -7,7 +7,7 @@ interface
 
 uses
  vm,
- sys_vm_object;
+ vm_object;
 
 function  vm_pager_allocate(otype :objtype_t;
                             handle:Pointer;

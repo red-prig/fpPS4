@@ -146,8 +146,8 @@ uses
  vnode_if,
  sys_capability,
  vmparam,
- sys_vm_object,
- vm_object;
+ vm_object,
+ kern_vm_object;
 
 {
  * Sync each mounted filesystem.

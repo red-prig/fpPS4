@@ -60,7 +60,7 @@ uses
  md_time,
  vm_pmap,
  subr_backtrace,
- sys_vm_object,
+ vm_object,
  vm_pager,
  kern_proc,
  kern_timeout;

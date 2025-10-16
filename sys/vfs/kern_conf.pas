@@ -15,7 +15,7 @@ uses
  vnode,
  time,
  vm,
- sys_vm_object,
+ vm_object,
  kern_mtx;
 
 implementation

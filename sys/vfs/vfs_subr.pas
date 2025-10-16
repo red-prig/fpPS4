@@ -190,7 +190,7 @@ uses
  errno,
  vfs_vnops,
  subr_uio,
- sys_vm_object,
+ vm_object,
  vsys_generic,
  kern_rangelock,
  rtprio,

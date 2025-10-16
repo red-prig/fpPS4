@@ -9,7 +9,7 @@ uses
  sysutils,
  vm,
  vm_map,
- sys_vm_object;
+ vm_object;
 
 function sys_mlock(addr:Pointer;len:QWORD):Integer;
 

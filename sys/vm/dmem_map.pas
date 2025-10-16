@@ -9,7 +9,7 @@ uses
  mqueue,
  vm,
  vmparam,
- sys_vm_object,
+ vm_object,
  kern_mtx;
 
 Const

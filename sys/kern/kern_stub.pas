@@ -50,7 +50,7 @@ uses
  vm_map,
  vm_mmap,
  md_map,
- sys_vm_object,
+ vm_object,
  kern_proc;
 
 var

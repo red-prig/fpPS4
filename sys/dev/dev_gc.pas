@@ -29,7 +29,7 @@ uses
  vm,
  vmparam,
  vm_pmap,
- sys_vm_object,
+ vm_object,
  vm_pager,
  vm_map,
  vm_mmap,

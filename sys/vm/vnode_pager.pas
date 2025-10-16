@@ -9,7 +9,7 @@ uses
  vnode,
  vm,
  vmparam,
- sys_vm_object;
+ vm_object;
 
 function  vnode_pager_alloc(handle:Pointer;
                             size:vm_ooffset_t;
@@ -33,14 +33,6 @@ uses
  systm,
  kern_param,
  kern_mtx;
-
-//
-
-procedure vm_object_terminate(obj:vm_object_t); external;
-procedure vm_pager_deallocate(obj:vm_object_t); external;
-procedure vm_object_pip_wait(obj:vm_object_t;waitid:pchar); external;
-
-//
 
 function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin

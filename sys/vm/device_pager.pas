@@ -7,7 +7,7 @@ interface
 
 uses
  vm,
- sys_vm_object;
+ vm_object;
 
 function dev_pager_alloc(
           handle:Pointer;

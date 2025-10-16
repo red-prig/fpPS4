@@ -410,7 +410,7 @@ uses
  vmparam,
  vm_map,
  vm_mmap,
- sys_vm_object,
+ vm_object,
  vm_pager,
  vuio,
  vstat,

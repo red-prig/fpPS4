@@ -15,7 +15,7 @@ uses
  vnode,
  sys_event,
  vm,
- sys_vm_object,
+ vm_object,
  kern_mtx;
 
 const

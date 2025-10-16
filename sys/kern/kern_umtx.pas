@@ -162,7 +162,7 @@ uses
  sched_ule,
  vm,
  vm_map,
- sys_vm_object;
+ vm_object;
 
 procedure UMTXQ_LOCKED_ASSERT(uc:p_umtxq_chain); inline;
 begin

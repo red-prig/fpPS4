@@ -8,7 +8,7 @@ interface
 uses
  sysutils,
  sys_conf,
- sys_vm_object,
+ vm_object,
  vm,
  vm_blockpool,
  dmem_map,

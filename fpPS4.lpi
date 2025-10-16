@@ -710,10 +710,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="sys\vm\sys_vm_object.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="sys\vm\vm_fault.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
@@ -1661,6 +1657,10 @@
       </Unit>
       <Unit>
         <Filename Value="sys\vm\vm_blockpool.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="sys\vm\kern_vm_object.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>

@@ -21,7 +21,7 @@ uses
  kern_mtx,
  kern_condvar,
  vm_map,
- sys_vm_object,
+ vm_object,
  kern_proc,
  kern_thr,
  subr_backtrace;

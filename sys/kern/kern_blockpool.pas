@@ -9,7 +9,7 @@ uses
  vm,
  vmparam,
  vm_blockpool,
- sys_vm_object,
+ vm_object,
  vm_map,
  vm_pmap,
  kern_mtx,
@@ -654,15 +654,12 @@ procedure blockpool_type_protect(map        :vm_map_t;
                                  mtype      :DWORD;
                                  prot       :DWORD); public;
 var
- pmap:pmap_t;
  bp:p_blockpool;
  tlb_64k:p_dmem_block;
  mflags:t_dmem_block;
  mprev :t_dmem_block;
  i:DWORD;
 begin
- pmap:=map^.pmap;
-
  bp:=obj^.handle;
  tlb_64k:=obj^.un_pager.bpl.tlb_64k;
 
