@@ -2218,6 +2218,7 @@ begin
         begin
          if ((mop and MT_32BIT)<>0) then
          begin
+          //32 -> 8
           case (mop and MOP_ANY) of
            MOP_JMP:
             begin
@@ -2239,13 +2240,35 @@ begin
             end;
            else;
           end;
+          //32 -> 8
          end;
         end else
         begin
          if ((mop and MT_32BIT)=0) then
          begin
-          //8 -> 32???
-          Assert(False,'TODO: Link data [8 -> 32]');
+          //8 -> 32
+          case (mop and MOP_ANY) of
+           MOP_JMP:
+            begin
+             //jmp_8->jmp_32
+             m_jmp_32();
+             is_change:=True;
+            end;
+           MOP_JCC:
+            begin
+             //jcc_8->jcc_32
+             m_jcc_32(mop);
+             is_change:=True;
+            end;
+           MOP_JCX:
+            begin
+             //jcx_8->jcx_32
+             m_jcx_32(mop);
+             is_change:=True;
+            end;
+           else;
+          end;
+          //8 -> 32
          end;
         end;
 
