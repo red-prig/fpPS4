@@ -116,17 +116,20 @@ begin
  while (ttd<>nil) do
  begin
 
-  For i:=0 to High(kthread.td_guards) do
+  if (ttd<>curkthread) then
   begin
-   p_data:=load_acq_rel(ttd^.td_guards[i]);
-
-   if (p_data=P) then
+   For i:=0 to High(kthread.td_guards) do
    begin
-    threads_unlock;
-    msleep_td(hz div 10000);
-    goto _again;
-   end;
+    p_data:=load_acq_rel(ttd^.td_guards[i]);
 
+    if (p_data=P) then
+    begin
+     threads_unlock;
+     msleep_td(hz div 10000);
+     goto _again;
+    end;
+
+   end;
   end;
 
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)

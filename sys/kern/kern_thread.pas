@@ -323,17 +323,17 @@ end;
 
 procedure threads_lock; public;
 begin
- rw_wlock(tidhash_lock);
+ rw_rlock(tidhash_lock);
 end;
 
 function threads_trylock:Boolean; public;
 begin
- Result:=rw_try_wlock(tidhash_lock);
+ Result:=rw_try_rlock(tidhash_lock);
 end;
 
 procedure threads_unlock; public;
 begin
- rw_wunlock(tidhash_lock);
+ rw_runlock(tidhash_lock);
 end;
 
 
