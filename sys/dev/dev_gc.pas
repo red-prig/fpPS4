@@ -136,28 +136,28 @@ type
 
  p_map_compute_queue_args=^t_map_compute_queue_args;
  t_map_compute_queue_args=packed record
-  pipeHi         :DWORD;
-  pipeLo         :DWORD;
+  meId           :DWORD;
+  pipeId         :DWORD;
   queueId        :DWORD;
-  g_queueId      :DWORD;
+  vqueueId       :DWORD;
   ringBaseAddress:Pointer;
   readPtrAddress :Pointer;
   dingDongPtr    :Pointer;
-  lenLog2        :DWORD;
+  lenDWLog2      :DWORD;
   pipePriority   :DWORD;
  end;
 
  p_unmap_compute_queue_args=^t_unmap_compute_queue_args;
  t_unmap_compute_queue_args=packed record
-  pipeHi :DWORD;
-  pipeLo :DWORD;
+  meId   :DWORD;
+  pipeId :DWORD;
   queueId:DWORD;
  end;
 
  p_ding_dong_args=^t_ding_dong_args;
  t_ding_dong_args=packed record
-  pipeHi             :DWORD;
-  pipeLo             :DWORD;
+  meId               :DWORD;
+  pipeId             :DWORD;
   queueId            :DWORD;
   nextStartOffsetInDw:DWORD;
  end;
@@ -633,44 +633,44 @@ end;
 
 Function gc_map_compute_queue(data:p_map_compute_queue_args):Integer;
 var
- g_queueId   :DWORD;
- pipeHi      :DWORD;
- pipeLo      :DWORD;
+ vqueueId    :DWORD;
+ meId        :DWORD;
+ pipeId      :DWORD;
  queueId     :DWORD;
  pipePriority:DWORD;
  id          :DWORD;
 begin
  Result:=0;
 
- g_queueId   :=data^.g_queueId;
- pipeHi      :=data^.pipeHi;
- pipeLo      :=data^.pipeLo;
+ vqueueId    :=data^.vqueueId;
+ meId        :=data^.meId;
+ pipeId      :=data^.pipeId;
  queueId     :=data^.queueId;
  pipePriority:=data^.pipePriority;
 
  //if (not IsDevKit) or
 
- if (pipeHi  <> $0769c766) or (pipeLo    <> $72e8e3c1) or
-    (queueId <> $db72af28) or (g_queueId <> $d245ed58) then
+ if (meId    <> $0769c766) or (pipeId   <> $72e8e3c1) or
+    (queueId <> $db72af28) or (vqueueId <> $d245ed58) then
  begin
   //if (not IsDevKit) or (not IsDiag)
 
-  if (pipeHi  <> $e13ec1f1) or (pipeLo    <> $76c0801c) or
-     (queueId <> $75c36152) or (g_queueId <> $4be587dd) then
+  if (meId    <> $e13ec1f1) or (pipeId   <> $76c0801c) or
+     (queueId <> $75c36152) or (vqueueId <> $4be587dd) then
   begin
 
-   if (pipeHi = 2) and
-      (pipeLo = 3) then
+   if (meId   = 2) and
+      (pipeId = 3) then
    begin
     Exit(Integer($804c000a));
    end;
 
-   if (1 < (pipeHi - 1)) then
+   if (1 < (meId - 1)) then
    begin
     Exit(Integer($804c000b));
    end;
 
-   if (3 < pipeLo) then
+   if (3 < pipeId) then
    begin
     Exit(Integer($804c000b));
    end;
@@ -682,17 +682,17 @@ begin
 
   end else
   begin
-   pipeHi   :=2;
-   g_queueId:=19;
-   pipeLo   :=3;
-   queueId  :=3;
+   meId    :=2;
+   vqueueId:=19;
+   pipeId  :=3;
+   queueId :=3;
   end;
  end else
  begin
-  pipeHi   :=2;
-  g_queueId:=20;
-  queueId  :=4;
-  pipeLo   :=3;
+  meId    :=2;
+  vqueueId:=20;
+  queueId :=4;
+  pipeId  :=3;
  end;
 
  if (pipePriority >= 2) then
@@ -700,7 +700,7 @@ begin
   Exit(EINVAL);
  end;
 
- id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
+ id:=(meId - 1) * 32 + pipeId * 8 + queueId;
 
  if ((map_queue_valid and (QWORD(1) shl id))<>0) then //It is necessary to force QWORD!
  begin
@@ -710,8 +710,8 @@ begin
  Result:=gc_map_hqd(data^.ringBaseAddress,
                     data^.readPtrAddress,
                     @gc_page[id],
-                    data^.lenLog2,
-                    g_queueId,
+                    data^.lenDWLog2,
+                    vqueueId,
                     pipePriority,
                     @map_queue_hqd[id]);
 
@@ -724,43 +724,43 @@ end;
 
 Function gc_unmap_compute_queue(data:p_unmap_compute_queue_args):Integer;
 var
- pipeHi      :DWORD;
- pipeLo      :DWORD;
- queueId     :DWORD;
- id          :DWORD;
+ meId   :DWORD;
+ pipeId :DWORD;
+ queueId:DWORD;
+ id     :DWORD;
 begin
  Result:=0;
 
- pipeHi :=data^.pipeHi;
- pipeLo :=data^.pipeLo;
+ meId   :=data^.meId;
+ pipeId :=data^.pipeId;
  queueId:=data^.queueId;
 
  //if (not IsDevKit) or (not IsDiag)
 
- if (pipeHi  <> $0769c766) or
-    (pipeLo  <> $72e8e3c1) or
+ if (meId    <> $0769c766) or
+    (pipeId  <> $72e8e3c1) or
     (queueId <> $db72af28) then
  begin
 
   //if (not IsDevKit) or (not IsDiag)
 
-  if (pipeHi  <> $e13ec1f1) or
-     (pipeLo  <> $76c0801c) or
+  if (meId    <> $e13ec1f1) or
+     (pipeId  <> $76c0801c) or
      (queueId <> $75c36152) then
   begin
 
-   if (pipeHi = 2) and
-      (pipeLo = 3) then
+   if (meId   = 2) and
+      (pipeId = 3) then
    begin
     Exit(Integer($804c000a));
    end;
 
-   if (1 < (pipeHi - 1)) then
+   if (1 < (meId - 1)) then
    begin
     Exit(Integer($804c000b));
    end;
 
-   if (3 < pipeLo) then
+   if (3 < pipeId) then
    begin
     Exit(Integer($804c000b));
    end;
@@ -772,18 +772,18 @@ begin
 
   end else
   begin
-   pipeLo :=3;
-   pipeHi :=2;
+   pipeId :=3;
+   meId   :=2;
    queueId:=3;
   end;
  end else
  begin
   queueId:=4;
-  pipeLo :=3;
-  pipeHi :=2;
+  pipeId :=3;
+  meId   :=2;
  end;
 
- id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
+ id:=(meId - 1) * 32 + pipeId * 8 + queueId;
 
  if ((map_queue_valid and (QWORD(1) shl id))<>0) then //It is necessary to force QWORD!
  begin
@@ -797,36 +797,36 @@ end;
 
 Function gc_ding_dong(data:p_ding_dong_args):Integer;
 var
- pipeHi :DWORD;
- pipeLo :DWORD;
+ meId   :DWORD;
+ pipeId :DWORD;
  queueId:DWORD;
  id     :DWORD;
 begin
  Result:=0;
 
- pipeHi :=data^.pipeHi;
- pipeLo :=data^.pipeLo;
+ meId   :=data^.meId;
+ pipeId :=data^.pipeId;
  queueId:=data^.queueId;
 
  //if (not IsDevKit) or (not IsDiag)
 
- if (pipeHi  <> $0769c766) or
-    (pipeLo  <> $72e8e3c1) or
+ if (meId    <> $0769c766) or
+    (pipeId  <> $72e8e3c1) or
     (queueId <> $db72af28) then
  begin
 
-  if (pipeHi = 2) and
-     (pipeLo = 3) then
+  if (meId   = 2) and
+     (pipeId = 3) then
   begin
    Exit(Integer($804c000a));
   end;
 
-  if (1 < (pipeHi - 1)) then
+  if (1 < (meId - 1)) then
   begin
    Exit(Integer($804c000b));
   end;
 
-  if (3 < pipeLo) then
+  if (3 < pipeId) then
   begin
    Exit(Integer($804c000b));
   end;
@@ -839,11 +839,11 @@ begin
  end else
  begin
   queueId:=4;
-  pipeLo :=3;
-  pipeHi :=2;
+  pipeId :=3;
+  meId   :=2;
  end;
 
- id:=(pipeHi - 1) * 32 + pipeLo * 8 + queueId;
+ id:=(meId - 1) * 32 + pipeId * 8 + queueId;
 
  if ((map_queue_valid and (QWORD(1) shl id))=0) then //It is necessary to force QWORD!
  begin
@@ -980,6 +980,8 @@ begin
             begin
              start_gfx_ring;
 
+             //Writeln('gc_submit');
+
              rw_wlock(ring_gfx_lock);
 
               //gc_retrigger_watchdog;
@@ -1007,6 +1009,8 @@ begin
   $C020810C: //submit eop
             begin
              start_gfx_ring;
+
+             //Writeln('gc_submit_eop');
 
              rw_wlock(ring_gfx_lock);
 
@@ -1058,6 +1062,8 @@ begin
             begin
              rw_wlock(ring_gfx_lock);
 
+              //Writeln('sceGnmMapComputeQueue');
+
               //reset prio
               p_map_compute_queue_args(data)^.pipePriority:=0;
 
@@ -1074,6 +1080,8 @@ begin
   $C030811A: //sceGnmMapComputeQueueWithPriority
             begin
              rw_wlock(ring_gfx_lock);
+
+              //Writeln('sceGnmMapComputeQueueWithPriority');
 
               Result:=gc_map_compute_queue(data);
 

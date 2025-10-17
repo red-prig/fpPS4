@@ -37,7 +37,7 @@ type
   read_mirr_addr :PDWORD;
   next_dmem_addr :PDWORD;
   enable         :DWORD;
-  lenLog2        :DWORD;
+  lenDWLog2      :DWORD;
   g_queueId      :DWORD;
   pipePriority   :DWORD;
   ringSizeDw     :DWORD;
@@ -61,7 +61,7 @@ function  gc_pm4_event_write_eop   (ring:p_pm4_ring;addr:Pointer;data:QWORD;intS
 Function  gc_map_hqd(ringBaseAddress:Pointer;
                      readPtrAddress :Pointer;
                      nextPtrAddress :Pointer;
-                     lenLog2        :DWORD;
+                     lenDWLog2      :DWORD;
                      g_queueId      :DWORD;
                      pipePriority   :DWORD;
                      hqd:p_gc_hqd):Integer;
@@ -346,7 +346,7 @@ end;
 Function gc_map_hqd(ringBaseAddress:Pointer;
                     readPtrAddress :Pointer;
                     nextPtrAddress :Pointer;
-                    lenLog2        :DWORD;
+                    lenDWLog2      :DWORD;
                     g_queueId      :DWORD;
                     pipePriority   :DWORD;
                     hqd:p_gc_hqd):Integer;
@@ -358,7 +358,7 @@ var
 begin
  Result:=0;
 
- if ((lenLog2 - 8) >= 23) then
+ if ((lenDWLog2 - 8) >= 23) then
  begin
   Exit(Integer($804c000c));
  end;
@@ -384,10 +384,10 @@ begin
  hqd^.read_guest_addr:=readPtrAddress;
  hqd^.read_mirr_addr :=read_mirr_addr;
  hqd^.next_dmem_addr :=nextPtrAddress;
- hqd^.lenLog2        :=lenLog2;
+ hqd^.lenDWLog2      :=lenDWLog2;
  hqd^.g_queueId      :=g_queueId;
  hqd^.pipePriority   :=pipePriority;
- hqd^.ringSizeDw     :=1 shl (lenLog2-2);
+ hqd^.ringSizeDw     :=1 shl lenDWLog2;
  hqd^.ReadOffsetDw   :=0;
 
  hqd^.enable         :=1;
