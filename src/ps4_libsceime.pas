@@ -1152,7 +1152,7 @@ begin
 
   if (g_hook=0) then
   begin
-   g_hook:=SetWindowsHookExW(WH_KEYBOARD,@KeyboardHookCallback,GetModuleHandle(nil),MainThreadID);
+   //g_hook:=SetWindowsHookExW(WH_KEYBOARD,@KeyboardHookCallback,GetModuleHandle(nil),MainThreadID);
   end;
 
  //_sig_unlock;
