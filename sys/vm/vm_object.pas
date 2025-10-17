@@ -82,25 +82,25 @@ const
  OBJPR_NOTMAPPED=$2; // Don't unmap pages.
  OBJPR_NOTWIRED =$4; // Don't remove wired pages.
 
-function  VM_OBJECT_MTX(obj:vm_object_t):p_mtx;
-procedure VM_OBJECT_LOCK(obj:vm_object_t);
-function  VM_OBJECT_TRYLOCK(obj:vm_object_t):Boolean;
-procedure VM_OBJECT_UNLOCK(obj:vm_object_t);
-function  VM_OBJECT_LOCKED(obj:vm_object_t):Boolean;
+function  VM_OBJECT_MTX        (obj:vm_object_t):p_mtx;
+procedure VM_OBJECT_LOCK       (obj:vm_object_t);
+function  VM_OBJECT_TRYLOCK    (obj:vm_object_t):Boolean;
+procedure VM_OBJECT_UNLOCK     (obj:vm_object_t);
+function  VM_OBJECT_LOCKED     (obj:vm_object_t):Boolean;
 procedure VM_OBJECT_LOCK_ASSERT(obj:vm_object_t);
 
-procedure vm_object_set_flag(obj:vm_object_t;bits:Word);
+procedure vm_object_set_flag  (obj:vm_object_t;bits:Word);
 procedure vm_object_clear_flag(obj:vm_object_t;bits:Word);
 
 procedure vm_object_set_budget(obj:vm_object_t;budget_id:Integer);
 
-function  vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
-procedure vm_object_destroy(obj:vm_object_t);
+function  vm_object_allocate (t:objtype_t;size:vm_pindex_t):vm_object_t;
+procedure vm_object_destroy  (obj:vm_object_t);
 procedure vm_object_reference(obj:vm_object_t);
 
-procedure vm_object_pip_add(obj:vm_object_t;i:word);
+procedure vm_object_pip_add     (obj:vm_object_t;i:word);
 procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
-function  vm_object_type(obj:vm_object_t):obj_type;
+function  vm_object_type        (obj:vm_object_t):obj_type;
 
 procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); external;
 

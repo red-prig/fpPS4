@@ -31,6 +31,7 @@ link.res
 log.txt
 lib/
 backup/
+system/
 shader_dump/*
 avplayer_dump/*
 savedata/*

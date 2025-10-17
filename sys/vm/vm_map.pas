@@ -3869,11 +3869,9 @@ begin
   entry^.vm_obj:=nil;
  end;
 
- if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
- begin
-  vm_object_deallocate(entry^.vm_obj);
- end;
+ //vm_obj free in vm_map_entry_deallocate
 
+ //free in vm_map_process_deferred
  begin
   entry^.next:=curkthread^.td_map_def_user;
   curkthread^.td_map_def_user:=entry;
