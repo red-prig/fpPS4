@@ -187,7 +187,7 @@ begin
  Exit(0);
 end;
 
-function vm_mmap_vnode(objsize     :vm_size_t;
+function vm_mmap_vnode(size        :vm_size_t;
                        prot        :vm_prot_t;
                        maxprotp    :p_vm_prot_t;
                        flagsp      :PInteger;
@@ -199,13 +199,16 @@ label
  mark_atime,
  done;
 var
- va:t_vattr;
- obj:vm_object_t;
- foff:vm_offset_t;
- mp:p_mount;
+ va     :t_vattr;
+ obj    :vm_object_t;
+ foff   :vm_offset_t;
+ objsize:vm_size_t;
+ mp     :p_mount;
  error,flags,locktype,vfslocked:Integer;
 begin
  mp:=vp^.v_mount;
+
+ objsize:=size;
 
  if ((maxprotp^ and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) and ((flagsp^ and MAP_SHARED)<>0) then
   locktype:=LK_EXCLUSIVE
@@ -290,6 +293,7 @@ begin
    maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
   end;
  end;
+
  {
   * If it is a regular file without any references
   * we do not need to sync it.
@@ -297,7 +301,7 @@ begin
   }
  objsize:=round_page(va.va_size);
 
- if (foff>=objsize) then
+ if ((foff+size)>objsize) then
  begin
   error:=EACCES;
   goto done;
