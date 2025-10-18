@@ -841,7 +841,7 @@ begin
     (WORD(addr)=0) and
     (QWORD(addr) < map^.header.__end) and
     (len <= (map^.header.__end - QWORD(addr))) and
-    (mtype < 11) and
+    (DWORD(mtype) < 11) and
     (($409 shr (mtype and $1f) and 1)<>0) and
     ((prot and $ffffffcc)=0) and
     (flags=0) then

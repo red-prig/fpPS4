@@ -381,6 +381,11 @@ begin
   Exit(Pointer(EINVAL));
  end;
 
+ if (DWORD(mtype + 1) > 11) then
+ begin
+  Exit(Pointer(EINVAL));
+ end;
+
  if (length <= PAGE_MASK) then
  begin
   Exit(Pointer(EINVAL));
