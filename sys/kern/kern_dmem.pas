@@ -56,7 +56,7 @@ function  sys_virtual_query(addr:Pointer;
 
 function  sys_query_memory_protection(addr:Pointer;info:Pointer):Integer;
 
-function  rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
+function  rmem_map_test_lock(start,__end:QWORD;mode:t_rmem_test_mode):Boolean;
 
 function  obj2dmem(obj:vm_object_t):p_dmem_map;
 
@@ -161,7 +161,7 @@ begin
  end;
 end;
 
-function rmem_map_test_lock(start,__end:QWORD;mode:Integer):Boolean;
+function rmem_map_test_lock(start,__end:QWORD;mode:t_rmem_test_mode):Boolean;
 begin
  rmem_map_lock(@rmap);
   Result:=rmem_map_test(@rmap,start,__end,mode);
@@ -221,7 +221,7 @@ begin
        (v_end <= MAP_AREA_END) or
        (sdk_version_big_20()=false) ) then
   begin
-   found:=rmem_map_test_lock(phaddr,phaddr+length,0);
+   found:=rmem_map_test_lock(phaddr,phaddr+length,rt_intersection);
 
    //
    if (not found) or //not found
@@ -281,7 +281,7 @@ begin
    end else
    begin
     Writeln('[KERNEL] multiple VA mappings are detected. va:[0x',HexStr(vaddr,16),',0x',HexStr(v_end,16),')');
-    Result:=EINVAL;
+    Result:=EBUSY;
    end;
 
   end else

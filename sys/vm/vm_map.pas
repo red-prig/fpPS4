@@ -1115,7 +1115,7 @@ begin
 
  if not alias then
  begin
-  if rmem_map_test(rmap,offset,offset+length,0) then
+  if rmem_map_test(rmap,offset,offset+length,rt_intersection) then
   begin
    rmem_map_unlock(rmap);
    Exit(KERN_NO_SPACE);
@@ -2600,7 +2600,7 @@ begin
 
   rmem_map_lock(rmap);
 
-  if not rmem_map_test(rmap,current^.offset,current^.offset+length,1) then
+  if not rmem_map_test(rmap,current^.offset,current^.offset+length,rt_continuity) then
   begin
    rmem_map_unlock(rmap);
    vm_map_unlock(map);

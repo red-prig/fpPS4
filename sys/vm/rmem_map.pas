@@ -44,7 +44,7 @@ type
 
 procedure rmem_map_process_deferred;
 
-procedure rmem_map_lock(map:p_rmem_map);
+procedure rmem_map_lock  (map:p_rmem_map);
 procedure rmem_map_unlock(map:p_rmem_map;def:Boolean=True);
 function  rmem_map_locked(map:p_rmem_map):Boolean; inline;
 
@@ -55,9 +55,12 @@ function  rmem_map_lookup_entry(
             address:QWORD;
             entry  :pp_rmem_map_entry):Boolean;
 
+type
+ t_rmem_test_mode=(rt_intersection,rt_continuity);
+
 function  rmem_map_test(map:p_rmem_map;
                         start,__end:QWORD;
-                        mode:Integer):Boolean;
+                        mode:t_rmem_test_mode):Boolean;
 
 function  rmem_map_insert(map:p_rmem_map;
                           vaddr:QWORD;
@@ -568,14 +571,26 @@ end;
 
 function rmem_map_test(map:p_rmem_map;
                        start,__end:QWORD;
-                       mode:Integer):Boolean;
+                       mode:t_rmem_test_mode):Boolean;
 var
  entry:p_rmem_map_entry;
  prev:QWORD;
 begin
- if not rmem_map_lookup_entry(map,start,@entry) then
+ if rmem_map_lookup_entry(map,start,@entry) then
  begin
-  Exit(False);
+  //
+ end else
+ begin
+
+  case mode of
+   rt_continuity:
+     begin
+      Exit(False); //not continuity
+     end;
+   else;
+  end;
+
+  entry:=entry^.next;
  end;
 
  prev:=entry^.start;
@@ -583,25 +598,40 @@ begin
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
 
-  if (mode=0) then
-  begin
-   if (__end>entry^.start) and (start<entry^.__end) then
-   begin
-    Exit(False);
-   end;
-  end else
-  begin
-   if (prev<>entry^.start) then
-   begin
-    Exit(False);
-   end;
-   prev:=entry^.__end;
+  case mode of
+   rt_intersection:
+     begin
+      if (__end>entry^.start) and (start<entry^.__end) then
+      begin
+       Exit(True); //found intersection
+      end;
+     end;
+   rt_continuity:
+     begin
+      if (prev<>entry^.start) then
+      begin
+       Exit(False); //not continuity
+      end;
+      prev:=entry^.__end;
+     end;
+   else;
   end;
 
   entry:=entry^.next;
  end;
 
- Result:=True;
+ case mode of
+  rt_intersection:
+    begin
+     Result:=False; //not intersection
+    end;
+  rt_continuity:
+    begin
+     Result:=True;  //continuity
+    end;
+  else;
+ end;
+
 end;
 
 function rmem_map_insert_internal(
