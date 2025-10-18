@@ -12,8 +12,8 @@ uses
  vm_object;
 
 function  vnode_pager_alloc(handle:Pointer;
-                            size:vm_ooffset_t;
-                            prot:vm_prot_t;
+                            size  :vm_ooffset_t;
+                            prot  :vm_prot_t;
                             offset:vm_ooffset_t):vm_object_t;
 
 function  vnode_create_vobject(vp:p_vnode;isize:vm_ooffset_t):Integer;
@@ -52,8 +52,8 @@ end;
  }
 
 function vnode_pager_alloc(handle:Pointer;
-                           size:vm_ooffset_t;
-                           prot:vm_prot_t;
+                           size  :vm_ooffset_t;
+                           prot  :vm_prot_t;
                            offset:vm_ooffset_t):vm_object_t;
 label
  retry;
@@ -95,7 +95,7 @@ retry:
    }
   obj:=vm_object_allocate(OBJT_VNODE, OFF_TO_IDX(round_page(size)));
 
-  obj^.un_pager.vnp.vnp_size:=size;
+  obj^.un_pager.vnp.vnp_size     :=size;
   obj^.un_pager.vnp.writemappings:=0;
 
   obj^.handle:=handle;

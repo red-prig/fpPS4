@@ -672,6 +672,30 @@ begin
  end;
 end;
 
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+function fit_to_vnode_size(obj:vm_object_t;offset,size:QWORD):QWORD; inline;
+begin
+ //max unaligned size
+ size:=size+offset;
+
+ size:=Min(size,obj^.un_pager.vnp.vnp_size);
+
+ //dec offset
+ if (size>offset) then
+ begin
+  size:=size-offset;
+ end else
+ begin
+  size:=0;
+ end;
+
+ Result:=size;
+end;
+
 function  vm_map_lock_range  (map:Pointer;start,__end:off_t;mode:Integer):Pointer; external;
 procedure vm_map_unlock_range(map:Pointer;cookie:Pointer); external;
 
@@ -707,61 +731,70 @@ procedure pmap_copy(src_obj :p_vm_nt_file_obj;
                     size    :vm_ooffset_t;
                     max_size:vm_ooffset_t);
 var
- start :vm_ooffset_t;
- __end :vm_ooffset_t;
  src,dst:Pointer;
  r:Integer;
 begin
- if (size>max_size) then
- begin
-  size:=max_size;
- end;
+ if (max_size=0) then Exit;
 
- start  :=src_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
- __end  :=src_ofs+size; //up
- src_ofs:=src_ofs and (MD_ALLOC_GRANULARITY-1);
-
+ //alloc placeholder for src + dst
  src:=Pointer(KERNEL_LOWER); //lower
- r:=md_mmap(src,__end-start,VM_PROT_READ,src_obj^.hfile,start);
-
+ r:=md_placeholder_mmap(src,size*2);
  if (r<>0) then
  begin
-  Writeln('failed md_mmap:0x',HexStr(r,8));
+  Writeln('failed md_placeholder_mmap(',HexStr(size*2,11),'):0x',HexStr(r,8));
+  Assert(false,'pmap_copy');
+  Exit;
+ end;
+
+ dst:=src+size;
+
+ //split to src/dst
+ r:=md_placeholder_split(src,size);
+ if (r<>0) then
+ begin
+  Writeln('failed md_placeholder_split(',HexStr(src),',',size,'):0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 
- start  :=dst_ofs and (not (MD_ALLOC_GRANULARITY-1)); //dw
- __end  :=dst_ofs+size; //up
- dst_ofs:=dst_ofs and (MD_ALLOC_GRANULARITY-1);
-
- dst:=Pointer(KERNEL_LOWER); //lower
- r:=md_mmap(dst,__end-start,VM_RW,dst_obj^.hfile,start);
-
+ //commit src
+ r:=md_placeholder_commit(src,Min(size,max_size),VM_PROT_READ,src_obj^.hfile,src_ofs);
  if (r<>0) then
  begin
-  Writeln('failed md_mmap:0x',HexStr(r,8));
+  Writeln('failed md_placeholder_commit(',HexStr(src),',',
+                                          Min(size,max_size),',',
+                                          'VM_R',',',
+                                          HexStr(src_obj^.hfile,16),',',
+                                          HexStr(src_ofs,8),'):0x',
+                                          HexStr(r,8));
   Assert(false,'pmap_copy');
+  Exit;
  end;
 
- Move((src+src_ofs)^,(dst+dst_ofs)^,size);
+ //commit dst
+ r:=md_placeholder_commit(dst,size,VM_RW,dst_obj^.hfile,dst_ofs);
+ if (r<>0) then
+ begin
+  Writeln('failed md_placeholder_commit(',HexStr(dst),',',
+                                          Min(size,max_size),',',
+                                          'VM_RW',',',
+                                          HexStr(dst_obj^.hfile,16),',',
+                                          HexStr(dst_ofs,8),'):0x',
+                                          HexStr(r,8));
+  Assert(false,'pmap_copy');
+  Exit;
+ end;
+
+ Move(src^,dst^,Min(size,max_size));
 
  md_cacheflush(dst,size,DCACHE);
 
- r:=md_unmap(dst,__end-start);
-
+ r:=md_placeholder_unmap(src,size*2);
  if (r<>0) then
  begin
-  Writeln('failed md_unmap:0x',HexStr(r,8));
+  Writeln('failed md_placeholder_unmap(',HexStr(src),',',size*2,'):0x',HexStr(r,8));
   Assert(false,'pmap_copy');
  end;
 
- r:=md_unmap(src,__end-start);
-
- if (r<>0) then
- begin
-  Writeln('failed md_unmap:0x',HexStr(r,8));
-  Assert(false,'pmap_copy');
- end;
 end;
 
 function convert_to_gpu_prot(prot:vm_prot_t):vm_prot_t; inline;
@@ -1045,15 +1078,7 @@ begin
 
        if (fd<>0) then
        begin
-        delta:=(__end-start);
-
-        //max unaligned size
-        size:=offset+delta;
-        if (size>obj^.un_pager.vnp.vnp_size) then
-        begin
-         size:=obj^.un_pager.vnp.vnp_size;
-        end;
-        size:=size-offset;
+        size:=fit_to_vnode_size(obj,offset,(__end-start));
 
         max:=VM_PROT_RW;
         r:=md_memfd_open(md,fd,max);
@@ -1089,6 +1114,7 @@ begin
        Writeln('pmap_enter_cowobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
       end;
 
+      //create object for copy
       cow:=vm_nt_file_obj_allocate(md,VM_PROT_READ);
 
       info.offset:=offset;
@@ -1156,9 +1182,18 @@ begin
        info.__end :=start+paddi;
        info.offset:=info.offset+delta;
 
-       size:=size-delta; //unaligned size
+        //unaligned size
+       if (size>delta) then
+       begin
+        size:=size-delta;
+       end else
+       begin
+        size:=0;
+       end;
+
       end;
 
+      //free copy object
       vm_nt_file_obj_destroy(cow);
 
      end else
@@ -1828,7 +1863,7 @@ begin
  r:=md_placeholder_unmap(base,size);
  if (r<>0) then
  begin
-  Writeln('failed md_unmap_ex:0x',HexStr(r,8));
+  Writeln('failed md_placeholder_unmap:0x',HexStr(r,8));
   Assert(false,'pmap_mirror_unmap');
  end;
 end;

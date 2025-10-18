@@ -296,6 +296,13 @@ begin
   * Adjust object size to be the size of actual file.
   }
  objsize:=round_page(va.va_size);
+
+ if (foff>=objsize) then
+ begin
+  error:=EACCES;
+  goto done;
+ end;
+
  if (va.va_nlink=0) then
  begin
   flags:=flags or MAP_NOSYNC;
