@@ -85,12 +85,100 @@ function  GetInputRegNode(node:TsrRegNode):TsrInput;
 
 implementation
 
-function GetInputRegNode(node:TsrRegNode):TsrInput;
+uses
+ srPrivate;
+
+type
+ a_volatile_node=array of TsrRegNode;
+
+procedure add_node(var A:a_volatile_node;node:TsrRegNode);
 var
- pSource:TsrNode;
+ i:Integer;
 begin
- pSource:=GetSourceRegNode(node);
- Result:=pSource.specialize AsType<ntInput>;
+ //check exist
+ if Length(A)<>0 then
+ For i:=0 to High(A) do
+ begin
+  if (A[i]=node) then Exit;
+ end;
+ //
+ Insert([node],A,High(A));
+end;
+
+procedure add_volatile(var A:a_volatile_node;V:TsrVolatile);
+var
+ node:TStoreNode;
+begin
+ node:=V.FList.pHead;
+ while (node<>nil) do
+ begin
+  add_node(A,RegDown(node.src));
+  //
+  node:=node.pNext;
+ end;
+end;
+
+function next_volatile(var A:a_volatile_node;var i:Integer):TsrRegNode;
+begin
+ if (i<Length(A)) then
+ begin
+  Result:=A[i];
+  Inc(i);
+ end else
+ begin
+  Result:=nil;
+ end;
+end;
+
+type
+ AsrInput=array of TsrInput;
+
+function GetInputRegNode2(node:TsrRegNode):AsrInput;
+var
+ V:TsrVolatile;
+ C:TsrInput;
+ pSource:TsrNode;
+ A:a_volatile_node;
+ i:Integer;
+begin
+ Result:=[];
+ A:=[];
+ i:=0;
+
+ while (node<>nil) do
+ begin
+  node:=RegDown(node);
+
+  while node.pWriter.IsType(TsrVolatile) do
+  begin
+   V:=node.pWriter.specialize AsType<TsrVolatile>;
+   add_volatile(A,V);
+   node:=next_volatile(A,i);
+  end;
+
+  pSource:=GetSourceRegNode(node);
+
+  if pSource.IsType(ntInput) then
+  begin
+   C:=pSource.specialize AsType<ntInput>;
+   Insert([C],Result,High(Result));
+  end;
+
+  node:=next_volatile(A,i);
+ end;
+end;
+
+function GetInputRegNode(node:TsrRegNode):TsrInput;
+Var
+ A:AsrInput;
+begin
+ A:=GetInputRegNode2(node);
+ if (Length(A)=0) then Exit(nil);
+ if (Length(A)>1) then
+ begin
+  Assert(false,'Multiple reachable inputs are not supported!');
+ end;
+ Result:=A[0];
 end;
 
 //

@@ -590,7 +590,7 @@ begin
  begin
   node:=RegDown(node);
 
-  if node.pWriter.IsType(TsrVolatile) then
+  while node.pWriter.IsType(TsrVolatile) do
   begin
    V:=node.pWriter.specialize AsType<TsrVolatile>;
    add_volatile(A,V);
