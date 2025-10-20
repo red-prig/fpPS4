@@ -146,7 +146,7 @@ const
  MM_LAST    =2;
 
 type
- t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS);
+ t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS,mfBudget);
 
 type
  pp_mount_dir=^p_mount_dir;
@@ -245,7 +245,7 @@ const
  );
 
  SANDBOX_DIRS:array[0..7] of t_mount_dir=(
-  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS]),
+  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
   (dst:'/av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'/data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'/host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
@@ -289,7 +289,7 @@ begin
  //save to global
 
  //temp hack
- err:=mount_into_sandbox('ufs','/savedata0','savedata',nil,0,True);
+ err:=mount_into_sandbox('ufs','/savedata0','savedata',nil,MNT_BIG_APP,True);
 
  fs_source[MM_GAME    ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.game    );
  fs_source[MM_FIRMWARE]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.firmware);
@@ -320,8 +320,9 @@ begin
                             pchar(fs_dst),
                             pchar(fs_src),
                             nil,
-                            ord(mfReadOnly in flags)*MNT_RDONLY or
-                            ord(mfPFS      in flags)*MNT_EMU_PFS,
+                            ord(mfReadOnly in flags)*MNT_RDONLY  or
+                            ord(mfPFS      in flags)*MNT_EMU_PFS or
+                            ord(mfBudget   in flags)*MNT_BIG_APP,
                             mfIgnoreErr in flags);
    end;
 
@@ -341,7 +342,7 @@ begin
                           DOWNLOAD_DIRS[i],
                           pchar(fs_src),
                           nil,
-                          0,
+                          MNT_BIG_APP,
                           False);
  end;
  //download

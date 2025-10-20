@@ -2344,6 +2344,7 @@ end;
 function md_open(ap:p_vop_open_args):Integer;
 var
  vp:p_vnode;
+ mp:p_mount;
  flags:Integer;
 
  DA,FA,CD,CO:DWORD;
@@ -2364,6 +2365,9 @@ begin
  flags:=ap^.a_mode;
 
  if (vp=nil) then Exit(EPERM);
+
+ mp:=vp^.v_mount;
+ if (mp=nil) then Exit(EPERM);
 
  case vp^.v_type of
   VREG:;
@@ -2436,7 +2440,7 @@ begin
  sx_unlock (@de^.ufs_md_lock);
  sx_xunlock(@dd^.ufs_md_lock);
 
- vnode_create_vobject(vp, ufs_size);
+ vnode_create_vobject(vp, ufs_size, mp^.mnt_budget_id);
 
  //emu ext
  with ap^ do

@@ -13,6 +13,7 @@ const
  MNT_RDONLY =vmount.MNT_RDONLY;
  MNT_UPDATE =vmount.MNT_UPDATE;
  MNT_EMU_PFS=vmount.MNT_EMU_PFS;
+ MNT_BIG_APP=vmount.MNT_BIG_APP;
 
 procedure vfs_mountroot();
 function  vfs_mount_path      (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;

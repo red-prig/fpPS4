@@ -16,7 +16,7 @@ function  vnode_pager_alloc(handle:Pointer;
                             prot  :vm_prot_t;
                             offset:vm_ooffset_t):vm_object_t;
 
-function  vnode_create_vobject(vp:p_vnode;isize:vm_ooffset_t):Integer;
+function  vnode_create_vobject(vp:p_vnode;isize:vm_ooffset_t;budget_id:Integer):Integer;
 
 procedure vnode_destroy_vobject(vp:p_vnode);
 
@@ -128,7 +128,7 @@ retry:
 end;
 
 { Create the VM system backing object for this vnode }
-function vnode_create_vobject(vp:p_vnode;isize:vm_ooffset_t):Integer;
+function vnode_create_vobject(vp:p_vnode;isize:vm_ooffset_t;budget_id:Integer):Integer;
 var
  obj:vm_object_t;
  size:QWORD;
@@ -174,6 +174,11 @@ begin
  end;
 
  obj:=vnode_pager_alloc(vp, size, 0, 0);
+
+ if (budget_id<>-1) then
+ begin
+  vm_object_set_budget(obj,budget_id);
+ end;
 
  {
   * Dereference the reference we just created.  This assumes
