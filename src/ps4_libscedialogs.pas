@@ -581,6 +581,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceImeDialogTerm():Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceImeDialogGetStatus:Integer;
 begin
  Result:=status_ime_dialog;
@@ -784,6 +789,7 @@ begin
 
  lib:=Result^.add_lib('libSceImeDialog');
  lib.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit);
+ lib.set_proc($8324F2567F9B5CCC,@ps4_sceImeDialogTerm);
  lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
 end;
 
