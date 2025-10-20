@@ -661,11 +661,11 @@ begin
 
   if ((flags and MAP_SHARED)<>0) then
   begin
-   Result:=vm_map_inherit(map,addr^,addr^ + size,VM_INHERIT_SHARE);
-   if (Result<>0) then
+   rv:=vm_map_inherit(map,addr^,addr^ + size,VM_INHERIT_SHARE);
+   if (rv<>0) then
    begin
     vm_map_remove(map,addr^,addr^ + size);
-    Exit;
+    Exit(vm_mmap_to_errno(rv));
    end;
   end;
 
@@ -675,15 +675,15 @@ begin
    Exit;
   end;
 
-  Result:=vm_map_wire(map,addr^,addr^ + size,
-                      (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or
-                      VM_MAP_WIRE_USER or
-                      VM_MAP_WIRE_HOLESOK);
+  rv:=vm_map_wire(map,addr^,addr^ + size,
+                  (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or
+                  VM_MAP_WIRE_USER or
+                  VM_MAP_WIRE_HOLESOK);
 
-  if (Result<>0) then
+  if (rv<>0) then
   begin
    vm_map_remove(map,addr^,addr^ + size);
-   Exit;
+   Exit(vm_mmap_to_errno(rv));
   end;
 
  end else
