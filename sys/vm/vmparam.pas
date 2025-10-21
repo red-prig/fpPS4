@@ -65,11 +65,11 @@ const
  //in memory performance in Windows.
  VM_MAXGUEST_ADDRESS  =QWORD(1) shl 41;          //(original:$800000000000)
 
- //The total memory size is 48 bits,
+ //The total memory size is 47 bits,
  //which is equivalent to the Windows limitation,
- //but at the end there are DLLs, so only 47 bits
- VM_MAX_BITS          =47;
- VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..47]
+ //but at the end there are DLLs, so only 46 bits
+ VM_MAX_BITS          =46;
+ VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..45]
 
  VM_MIN_GPU_ADDRESS   =QWORD($90000000000);
  VM_MAX_GPU_ADDRESS   =QWORD($A0000000000); //Virtual mirror
