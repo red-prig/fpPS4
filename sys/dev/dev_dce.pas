@@ -1313,7 +1313,8 @@ begin
 
  if (off<>0) then
  begin
-  Assert(false);
+  //only one page
+  Exit(EACCES);
  end;
 
  if (nprot<>$33) then

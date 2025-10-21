@@ -133,7 +133,8 @@ begin
  begin
   dev_relthread(cdev, ref);
   maxprotp^:=$33;
-  flagsp^:=flagsp^ or MAP_ANON;
+  flags    :=flags or MAP_ANON;
+  flagsp^  :=flags;
   Exit(0);
  end;
  {
@@ -172,6 +173,9 @@ begin
 
  if (error<>ENODEV) then
  begin
+  //PS4 and FreeBSD do not update the flag here
+  //Is this a bug? Who knows?
+  flagsp^:=flags;
   Exit(error);
  end;
 
@@ -182,7 +186,7 @@ begin
   Exit(EINVAL);
  end;
 
- objp^:=obj;
+ objp^  :=obj;
  flagsp^:=flags;
  Exit(0);
 end;
