@@ -110,6 +110,8 @@ const
  MACHDEP_TSC_FREQ        =$1EC; //(OID_AUTO) Time Stamp Counter frequency
  MACHDEP_BOOTPARAMS      =$14D; //(OID_AUTO) orbis bootparams
  MACHDEP_CPUMODE_PLATFORM=$600; //(OID_AUTO) CPU mode platform (PS4/PS5)
+ MACHDEP_OPENPSID_FOR_SYS=$601; //(OID_AUTO) OpenPSID for system
+ MACHDEP_OPENPSID        =$602; //(OID_AUTO) OpenPSID
 
 //BOOTPARAMS subtypes
  BOOTPARAMS_IS_MAIN_ON_STANDBY=$100; //(OID_AUTO) Is main on standby mode
@@ -651,6 +653,18 @@ begin
      oid[1]:=MACHDEP_CPUMODE_PLATFORM;
      len^  :=2;
     end;
+  'machdep.openpsid_for_sys':
+    begin
+     oid[0]:=CTL_MACHDEP;
+     oid[1]:=MACHDEP_OPENPSID_FOR_SYS;
+     len^  :=2;
+    end;
+  'machdep.openpsid':
+    begin
+     oid[0]:=CTL_MACHDEP;
+     oid[1]:=MACHDEP_OPENPSID;
+     len^  :=2;
+    end;
   'vm.ps4dev.trcmem_total':
     begin
      oid[0]:=CTL_VM;
@@ -887,6 +901,11 @@ begin
  end;
 end;
 
+function sysctl_machdep_openpsid(oidp:p_sysctl_oid;arg1:Pointer;arg2:ptrint;req:p_sysctl_req):Integer;
+begin
+ Result:=SYSCTL_OUT(req,@p_openpsid,SizeOf(p_openpsid));
+end;
+
 function sysctl_bootparams(name:PInteger;namelen:DWORD;noid:p_sysctl_oid;req:p_sysctl_req):Integer;
 begin
  if (namelen=0) then Exit(ENOTDIR);
@@ -911,6 +930,8 @@ begin
   MACHDEP_TSC_FREQ        :Result:=SYSCTL_HANDLE(noid,name,$C0000009,@sysctl_machdep_tsc_freq);
   MACHDEP_BOOTPARAMS      :Result:=sysctl_bootparams(name+1,namelen-1,noid,req);
   MACHDEP_CPUMODE_PLATFORM:Result:=SYSCTL_HANDLE(noid,name,$80000002,0,@sysctl_handle_int);
+  MACHDEP_OPENPSID_FOR_SYS:Result:=SYSCTL_HANDLE(noid,name,$80000005,@sysctl_machdep_openpsid);
+  MACHDEP_OPENPSID        :Result:=SYSCTL_HANDLE(noid,name,$80000005,@sysctl_machdep_openpsid);
 
   else
    begin
