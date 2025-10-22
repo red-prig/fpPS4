@@ -504,13 +504,12 @@ type
  TNode=record
   N:PNode;
   S:RawByteString;
-  F:TSearchRec;
  end;
 
 var
  stack:PNode;
 
- procedure Push(const S:RawByteString;const F:TSearchRec);
+ procedure Push(const S:RawByteString);
  var
   new:PNode;
  begin
@@ -518,11 +517,10 @@ var
   Initialize(new^);
   new^.N:=stack;
   new^.S:=S;
-  new^.F:=F;
   stack:=new;
  end;
 
- Function Pop(var S:RawByteString;var F:TSearchRec):Boolean;
+ Function Pop(var S:RawByteString):Boolean;
  var
   old:PNode;
  begin
@@ -531,7 +529,6 @@ var
    old:=stack;
    stack:=old^.N;
    S:=old^.S;
-   F:=old^.F;
    Finalize(old^);
    FreeMem(old);
    Result:=True;
@@ -567,7 +564,6 @@ const
   c_inode_size =168;
   c_inodes_per_block=c_block_size div c_inode_size;
 label
-  _down,
   _next;
 begin
   Result:=0;
@@ -576,7 +572,7 @@ begin
   dirent_size:=0;
   CurSrcDir:=CleanAndExpandDirectory(DirectoryName);
   stack:=nil;
- _down:
+ _next:
   if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,FindMask,FileInfo)=0 then
   begin
    repeat
@@ -586,28 +582,24 @@ begin
        continue;
      end;
      //
-     CurFilename:=CurSrcDir+FileInfo.Name;
-     //
      inode_count:=inode_count+1;
      dirent_size:=dirent_size+AlignUp(c_dirent_size+Length(FileInfo.Name)+1,8);
      //
      if ((FileInfo.Attr and faDirectory)>0)
         {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
      begin
-       Push(CurSrcDir,FileInfo);
-       CurSrcDir:=CleanAndExpandDirectory(CurFilename);
-       goto _down;
+       CurFilename:=CurSrcDir+FileInfo.Name;
+       CurFilename:=CleanAndExpandDirectory(CurFilename);
+       Push(CurFilename);
      end else
      begin
        files_size:=files_size+AlignUp(FileInfo.Size,c_block_size);
      end;
-     //
-     _next:
    until SysUtils.FindNext(FileInfo)<>0;
    SysUtils.FindClose(FileInfo);
   end;
 
-  if Pop(CurSrcDir,FileInfo) then
+  if Pop(CurSrcDir) then
   begin
    goto _next;
   end;
