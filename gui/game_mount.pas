@@ -43,8 +43,6 @@ implementation
 uses
  md_map,
  sysutils,
- fileutil,
- LazFileUtils,
  strings,
  errno,
  kern_proc,
@@ -69,7 +67,7 @@ end;
 Constructor TGameMountConfig.Create;
 begin
  LocalDir:='';
- TitleId :='?????????'#0;
+ TitleId :='?????????';
  //
  mtx_init(mount_mtx,'mount_mtx');
 end;
@@ -403,6 +401,16 @@ begin
  FileClose(F);
 end;
 
+const
+  //Don't follow symlinks on *nix, just delete them
+  FindMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
+
+  {$IFDEF WINDOWS}
+  GetAllFilesMask='*.*';
+  {$ELSE}
+  GetAllFilesMask='*';
+  {$ENDIF}
+
 function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
 type
  PNode=^TNode;
@@ -446,9 +454,6 @@ var
   end;
  end;
 
-const
-  //Don't follow symlinks on *nix, just delete them
-  DeleteMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
 var
   FileInfo: TSearchRec;
   CurSrcDir: RawByteString;
@@ -457,10 +462,10 @@ label
   _next;
 begin
   Result:=false;
-  CurSrcDir:=CleanAndExpandDirectory(DirectoryName);
+  CurSrcDir:=IncludeTrailingPathDelimiter(DirectoryName);
   stack:=nil;
 _next:
-  if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,DeleteMask,FileInfo)=0 then
+  if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,FindMask,FileInfo)=0 then
   begin
    repeat
      // check if special file
@@ -473,7 +478,7 @@ _next:
         {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
      begin
        Push(CurSrcDir,OnlyChildren);
-       CurSrcDir:=CleanAndExpandDirectory(CurFilename);
+       CurSrcDir:=IncludeTrailingPathDelimiter(CurFilename);
        OnlyChildren:=False;
        SysUtils.FindClose(FileInfo);
        goto _next;
@@ -547,9 +552,6 @@ var
   Result:=tmp-(tmp mod alignment);
  end;
 
-const
-  //Don't follow symlinks on *nix, just delete them
-  FindMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
 var
   files_size :Int64;
   inode_count:Int64;
@@ -570,7 +572,7 @@ begin
   files_size :=0;
   inode_count:=0;
   dirent_size:=0;
-  CurSrcDir:=CleanAndExpandDirectory(DirectoryName);
+  CurSrcDir:=IncludeTrailingPathDelimiter(DirectoryName);
   stack:=nil;
  _next:
   if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,FindMask,FileInfo)=0 then
@@ -589,7 +591,7 @@ begin
         {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
      begin
        CurFilename:=CurSrcDir+FileInfo.Name;
-       CurFilename:=CleanAndExpandDirectory(CurFilename);
+       CurFilename:=IncludeTrailingPathDelimiter(CurFilename);
        Push(CurFilename);
      end else
      begin

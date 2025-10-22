@@ -84,6 +84,8 @@ Var
  key_table_size  :DWORD;
  value_table_size:DWORD;
 
+ format:WORD;
+
  hdr:t_sfo_header;
 
  entry_table:p_sfo_table_entry;
@@ -170,15 +172,28 @@ begin
 
   For i:=0 to hdr.entry_count-1 do
   begin
+   format:=entry_table[i].format;
+
    name :=PChar(key_table+entry_table[i].key_offset);
 
    value:='';
    size:=entry_table[i].max_size;
    SetLength(value,size);
+
    Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,size);
 
+   case format of
+    SFO_FORMAT_STRING_SPECIAL,
+    SFO_FORMAT_STRING:
+      begin
+       //fixup len
+       SetLength(value,strlen(PChar(value)));
+      end;
+    else;
+   end;
+
    Result.params[i]:=TParamSfoValue.Create;
-   Result.params[i].format:=entry_table[i].format;
+   Result.params[i].format:=format;
    Result.params[i].name  :=name;
    Result.params[i].value :=value;
   end;
