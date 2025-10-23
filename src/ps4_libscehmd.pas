@@ -9,7 +9,9 @@ uses
   subr_dynlib;
 
 const
- SCE_HMD_ERROR_PARAMETER_NULL=Integer($81110008);
+ SCE_HMD_ERROR_DEVICE_DISCONNECTED       =Integer($81110004);
+ SCE_HMD_ERROR_PARAMETER_NULL            =Integer($81110008);
+ SCE_HMD_ERROR_REPROJECTION_HMD_NOT_READY=Integer($8111000E);
 
 type
  pSceHmdReprojectionResourceInfo=^SceHmdReprojectionResourceInfo;
@@ -160,6 +162,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceHmdReprojectionStart(param:Pointer;trackerState:Pointer;flipArg:Int64;option:Pointer):Integer;
+begin
+ Result:=SCE_HMD_ERROR_REPROJECTION_HMD_NOT_READY;
+end;
+
 procedure ps4_sceHmdReprojectionFinalize();
 begin
  //
@@ -177,7 +184,7 @@ end;
 
 function ps4_sceHmdOpen(userId,_type,index:Integer;pParam:pSceHmdOpenParam):Integer;
 begin
- Result:=0;
+ Result:=SCE_HMD_ERROR_DEVICE_DISCONNECTED;
 end;
 
 function ps4_sceHmdGetFieldOfView(handle:Integer;fieldOfView:pSceHmdFieldOfView):Integer;
@@ -236,6 +243,7 @@ begin
  lib.set_proc($D69C507E27F5AE41,@ps4_sceHmdGetDeviceInformationByHandle);
  lib.set_proc($BF33049300507223,@ps4_sceHmdReprojectionStop);
  lib.set_proc($88634DA430E3730A,@ps4_sceHmdReprojectionUnsetDisplayBuffers);
+ lib.set_proc($767B594C9EE67885,@ps4_sceHmdReprojectionStart);
  lib.set_proc($66B579608A83D3D2,@ps4_sceHmdReprojectionFinalize);
  lib.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
  lib.set_proc($2E374B472B0753A6,@ps4_sceHmdReprojectionSetOutputMinColor);
