@@ -1663,6 +1663,11 @@
         <Filename Value="sys\vm\kern_vm_object.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscehmd.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceHmd"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
