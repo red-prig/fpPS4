@@ -31,6 +31,9 @@ const
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 function sys_workaround8849(key:DWORD):Integer;
 
+var
+ intmem_peak_size:Integer=0;
+
 implementation
 
 uses
@@ -127,7 +130,7 @@ begin
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k           :p_out^:=0; //sceVideoOutOpen  debug video modes?
   SCE_REGMGR_ENT_KEY_VIDEOOUT_enable_supersampling_mode    :p_out^:=0; //sceVideoOutOpen
 
-  SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size          :p_out^:=0; //libSceLibcInternal
+  SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size          :p_out^:=intmem_peak_size; //libSceLibcInternal
   SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_shortage_count     :p_out^:=0; //libSceLibcInternal
 
   SCE_REGMGR_ENT_KEY_NP_debug                              :p_out^:=0; //sys_workaround8849, libSceSysUtil
@@ -137,6 +140,20 @@ begin
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_use_default_lib           :p_out^:=0; //sys_workaround8849
 
   SCE_REGMGR_ENT_KEY_DEVENV_TOOL_COMMONDIALOG_watch_dog    :p_out^:=0; //sceCommonDialog
+
+  else
+   Exit(-1);
+ end;
+
+end;
+
+function sceRegMgrSetInt(key:DWORD;val:Integer):Integer;
+begin
+ Result:=0;
+
+ case key of
+
+  SCE_REGMGR_ENT_KEY_SYSTEM_LIBC_intmem_peak_size: intmem_peak_size:=val;
 
   else
    Exit(-1);
@@ -188,8 +205,13 @@ begin
         goto _err;
        end;
 
-       print_error_td('[sceRegMgrNonSysSetInt] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
-       Assert(False);
+       Result:=sceRegMgrSetInt(skey,data.int_val);
+       if (Result<>0) then
+       begin
+        print_error_td('[sceRegMgrNonSysSetInt] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+        Assert(False);
+       end;
+
       end;
 
   $19: //sceRegMgrNonSysGetInt
