@@ -168,7 +168,26 @@ begin
 
  case op of
 
-  $18: Assert(false,'Unhandled regmgr op:sceRegMgrNonSysSetInt');
+  $18: //sceRegMgrNonSysSetInt
+      begin
+       Result:=copyin(pvalue,@data,16);
+       if (Result<>0) then
+       begin
+        kret:=$800d020f;
+        goto _err;
+       end;
+
+       skey:=regMgrCnvRegId(data.enc1,data.enc2);
+
+       if (skey<0) then
+       begin
+        kret:=skey;
+        goto _err;
+       end;
+
+       print_error_td('[sceRegMgrNonSysSetInt] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+       Assert(False);
+      end;
 
   $19: //sceRegMgrNonSysGetInt
       begin
@@ -190,7 +209,7 @@ begin
        Result:=sceRegMgrGetInt(skey,@data.int_val);
        if (Result<>0) then
        begin
-        print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+        print_error_td('[sceRegMgrNonSysGetInt] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
         Assert(False);
        end;
 
@@ -227,7 +246,7 @@ begin
           end;
         else
          begin
-          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+          print_error_td('[sceRegMgrNonSysGetStr] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
@@ -258,7 +277,7 @@ begin
 
         else
          begin
-          print_error_td(' enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
+          print_error_td('[sceRegMgrNonSysGetBin] enc:0x'+HexStr(data.enc1,16)+'->key:0x'+HexStr(skey,8));
           Assert(False);
          end;
        end;
