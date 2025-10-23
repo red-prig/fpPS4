@@ -25,6 +25,9 @@ const
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_expose_under_2k            = $7802B900;
  SCE_REGMGR_ENT_KEY_DEVENV_TOOL_COMMONDIALOG_watch_dog     = $7802CD01;
 
+ //[libSceVrTracker]
+ // UNKNOW: sceRegMgrNonSysGetBin 0x34F16C7A440358DA->key:0x20034001
+
 function sys_regmgr_call(op,key:DWORD;presult,pvalue:Pointer;vlen:QWORD):Integer;
 function sys_workaround8849(key:DWORD):Integer;
 
