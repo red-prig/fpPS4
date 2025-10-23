@@ -633,6 +633,7 @@ var
 
  ps4_sceKernelCloseEventFlag :function(ef:SceKernelEventFlag):Integer;
  ps4_sceKernelDeleteEventFlag:function(ef:SceKernelEventFlag):Integer;
+ ps4_sceKernelSetEventFlag   :function(ef:SceKernelEventFlag;bitPattern:QWORD):Integer;
 
 function ps4_sceNpCreateEventFlag(ef:pSceKernelEventFlag;
                                   pName:PChar;
@@ -653,6 +654,12 @@ end;
 function ps4_sceNpDeleteEventFlag(ef:SceKernelEventFlag):Integer;
 begin
  Result:=ps4_sceKernelDeleteEventFlag(ef);
+ Result:=(Result shr $1F) and Result;
+end;
+
+function ps4_sceNpSetEventFlag(ef:SceKernelEventFlag;bitPattern:QWORD):Integer;
+begin
+ Result:=ps4_sceKernelSetEventFlag(ef,bitPattern);
  Result:=(Result shr $1F) and Result;
 end;
 
@@ -841,6 +848,17 @@ begin
  end;
 end;
 
+//sce::np::EventFlag::Set(unsigned long)
+function ps4__ZN3sce2np9EventFlag3SetEm(this:p_EventFlag;param_1:QWORD):Integer;
+begin
+ if (this^.evtype=0) then
+ begin
+  Assert(False,'IsInit()');
+ end;
+
+ Result:=ps4_sceNpSetEventFlag(this^.evf,param_1);
+end;
+
 //
 
 //sce::np::Mutex::Mutex(Mutex *this)
@@ -921,6 +939,7 @@ begin
  lib.set_proc($EA3156A407EA01C7,@ps4_sceNpCreateEventFlag);
  lib.set_proc($FA79A7F99D27583A,@ps4_sceNpCloseEventFlag);
  lib.set_proc($B239C87850AE4C3D,@ps4_sceNpDeleteEventFlag);
+ lib.set_proc($DBD7ED38622B502A,@ps4_sceNpSetEventFlag);
  //
  lib.set_proc($7E1279B8ACDC9F4C,@ps4_sceNpCreateThread);
  //
@@ -928,6 +947,7 @@ begin
  //
  lib.set_proc($70C3A0904D8CD9EF,@ps4__ZN3sce2np9EventFlagC1Ev);
  lib.set_proc($6A6162FC0BF5F615,@ps4__ZN3sce2np9EventFlag6CreateEPKcj);
+ lib.set_proc($F22FEF395455B79C,@ps4__ZN3sce2np9EventFlag3SetEm);
  //
  lib.set_proc($3B502F950537DE92,@ps4__ZN3sce2np5MutexC1Ev);
  lib.set_proc($69334E97D101E15E,@ps4__ZN3sce2np5Mutex4InitEPKcj);
@@ -951,6 +971,7 @@ begin
  lib.set_proc($0691686E8509A195,@ps4_sceKernelCreateEventFlag);
  lib.set_proc($B3DFD16B1BA4BB34,@ps4_sceKernelCloseEventFlag);
  lib.set_proc($F26AA5F4E7109DDE,@ps4_sceKernelDeleteEventFlag);
+ lib.set_proc($20E9D2BC7CEABBA0,@ps4_sceKernelSetEventFlag);
 
  lib.set_proc($98BF0D0C7F3A8902,@ps4_sceKernelMapNamedFlexibleMemory);
 
