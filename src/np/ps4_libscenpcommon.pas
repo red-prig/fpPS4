@@ -8,6 +8,7 @@ interface
 uses
  vmparam,
  subr_dynlib,
+ kern_proc,
  np_error,
  ps4_libSceUserService;
 
@@ -657,6 +658,86 @@ end;
 
 //
 
+type
+ p_pthread_attr_t=^pthread_attr_t;
+ pthread_attr_t  =Pointer;
+
+ p_pthread_t=^pthread_t;
+ pthread_t  =Pointer;
+
+var
+ ps4_scePthreadAttrInit           :function(pAttr:p_pthread_attr_t):Integer;
+ ps4_scePthreadAttrDestroy        :function(pAttr:p_pthread_attr_t):Integer;
+ ps4_scePthreadAttrSetstacksize   :function(pAttr:p_pthread_attr_t;size:QWORD):Integer;
+ ps4_scePthreadAttrSetaffinity    :function(pAttr:p_pthread_attr_t;mask:QWORD):Integer;
+ ps4_scePthreadAttrSetinheritsched:function(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer;
+ ps4_scePthreadAttrSetschedpolicy :function(pAttr:p_pthread_attr_t;policy:Integer):Integer;
+ ps4_scePthreadAttrSetschedparam  :function(pAttr:p_pthread_attr_t;param:PInteger):Integer;
+ ps4_scePthreadCreate             :function(pthread:p_pthread_t;
+                                            pAttr  :p_pthread_attr_t;
+                                            entry  :Pointer;
+                                            arg    :Pointer;
+                                            name   :Pchar):Integer;
+
+function ps4_sceNpCreateThread(pthread  :p_pthread_t;
+                               entry    :Pointer;
+                               arg      :Pointer;
+                               spolicy  :Integer;
+                               stackSize:QWORD;
+                               mask     :QWORD;
+                               name     :Pchar):Integer;
+label
+ _exit,
+ _free;
+var
+ ga:TGUEST_STACK;
+ p_attr  :p_pthread_attr_t;
+ p_policy:PInteger;
+begin
+ ga:=prolog;
+
+ p_attr:=ga.alloca(SizeOf(Pointer));
+ p_attr^:=nil;
+
+ p_policy:=ga.alloca(SizeOf(Integer));
+
+ Result:=ps4_scePthreadAttrInit(p_attr);
+ if (Result < 0) then goto _exit;
+
+ Result:=ps4_scePthreadAttrSetstacksize(p_attr,stackSize);
+ if (Result < 0) then goto _free;
+
+ if (spolicy <> 0) then
+ begin
+  if (p_proc.p_sdk_version >= $2500000) then
+  begin
+   Result:=ps4_scePthreadAttrSetinheritsched(p_attr,0);
+   if (Result < 0) then goto _free;
+   Result:=ps4_scePthreadAttrSetschedpolicy (p_attr,1);
+   if (Result < 0) then goto _free;
+
+   p_policy^:=spolicy;
+   Result:=ps4_scePthreadAttrSetschedparam(p_attr,p_policy);
+   if (Result < 0) then goto _free;
+  end;
+ end;
+
+ if (mask <> 0) then
+ begin
+  Result:=ps4_scePthreadAttrSetaffinity(p_attr,mask);
+  if (Result < 0) then goto _free;
+ end;
+
+ Result:=ps4_scePthreadCreate(pthread,p_attr,entry,arg,name);
+
+ _free:
+  ps4_scePthreadAttrDestroy(p_attr);
+ _exit:
+  ga.epilog;
+end;
+
+//
+
 function ExecuteGuest_mallocFunc(addr:Pointer;size:size_t;userdata:Pointer):Pointer; external name 'ExecuteGuest';
 
 //void * sce::np::Object::operator_new(size_t size,SceNpAllocator *mem)
@@ -841,6 +922,8 @@ begin
  lib.set_proc($FA79A7F99D27583A,@ps4_sceNpCloseEventFlag);
  lib.set_proc($B239C87850AE4C3D,@ps4_sceNpDeleteEventFlag);
  //
+ lib.set_proc($7E1279B8ACDC9F4C,@ps4_sceNpCreateThread);
+ //
  lib.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
  //
  lib.set_proc($70C3A0904D8CD9EF,@ps4__ZN3sce2np9EventFlagC1Ev);
@@ -880,6 +963,15 @@ begin
  lib.set_proc($F542B5BCB6507EDE,@ps4_scePthreadMutexLock);
  lib.set_proc($B67DD5943D211BAD,@ps4_scePthreadMutexUnlock);
  lib.set_proc($BA9A15AF330715E1,@ps4_scePthreadMutexTrylock);
+
+ lib.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit           );
+ lib.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy        );
+ lib.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize   );
+ lib.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity    );
+ lib.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
+ lib.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy );
+ lib.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam  );
+ lib.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate             );
 
  module:=Result^.add_mod('libSceLibcInternal',1);
  lib:=module.add_lib('libSceLibcInternal');
