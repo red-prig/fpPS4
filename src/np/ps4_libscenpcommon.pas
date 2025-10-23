@@ -685,6 +685,8 @@ var
                                             entry  :Pointer;
                                             arg    :Pointer;
                                             name   :Pchar):Integer;
+ ps4_scePthreadJoin               :function(pthread:pthread_t;value_ptr:PPointer):Integer;
+
 
 function ps4_sceNpCreateThread(pthread  :p_pthread_t;
                                entry    :Pointer;
@@ -741,6 +743,12 @@ begin
   ps4_scePthreadAttrDestroy(p_attr);
  _exit:
   ga.epilog;
+end;
+
+function ps4_sceNpJoinThread(pthread:pthread_t;value_ptr:PPointer):Integer;
+begin
+ Result:=ps4_scePthreadJoin(pthread,value_ptr);
+ Result:=(Result shr $1F) and Result;
 end;
 
 //
@@ -942,6 +950,7 @@ begin
  lib.set_proc($DBD7ED38622B502A,@ps4_sceNpSetEventFlag);
  //
  lib.set_proc($7E1279B8ACDC9F4C,@ps4_sceNpCreateThread);
+ lib.set_proc($12332C7CEDC60880,@ps4_sceNpJoinThread);
  //
  lib.set_proc($D2CC8D921240355C,@ps4__ZN3sce2np6ObjectnwEmR14SceNpAllocator);
  //
@@ -993,6 +1002,7 @@ begin
  lib.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy );
  lib.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam  );
  lib.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate             );
+ lib.set_proc($A27358F41CA7FD6F,@ps4_scePthreadJoin               );
 
  module:=Result^.add_mod('libSceLibcInternal',1);
  lib:=module.add_lib('libSceLibcInternal');
