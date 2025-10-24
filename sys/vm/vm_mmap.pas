@@ -796,6 +796,8 @@ begin
   pos:=0;
  end;
 
+ flags:=flags and (not (MAP_2MB_ALIGN or MAP_OPTIMAL_SPACE));
+
  if ((flags and MAP_STACK)<>0) then
  begin
   if (fd<>-1) or
