@@ -12,7 +12,7 @@ const
  ZERO_REGION_SIZE=(2 * 1024 * 1024); // 2MB
 
 var
- zero_region:Pointer;
+ zero_region:Pointer=nil;
 
 procedure init_zero_region;
 procedure free_zero_region;
@@ -22,6 +22,9 @@ Function null_modevent(_mod,_type:Integer):Integer; //DEV_MODULE(nil, null_modev
 implementation
 
 uses
+ vm,
+ vmparam,
+ md_map,
  errno,
  vuio,
  vdisk,
@@ -125,13 +128,21 @@ end;
 procedure init_zero_region;
 var
  buf:Pointer;
+ err:Integer;
 begin
  if (zero_region=nil) then
  begin
-  buf:=AllocMem(ZERO_REGION_SIZE);
+  //create read-only zero pages
+  buf:=Pointer(KERNEL_LOWER);
+  err:=md_mmap(buf,ZERO_REGION_SIZE,VM_PROT_READ);
+  Assert(err=0,'init_zero_region');
+
+  //do not cache these pages
+  md_dontneed(buf,ZERO_REGION_SIZE);
+
   if (System.InterlockedCompareExchange(zero_region,buf,nil)<>nil) then
   begin
-   FreeMem(buf);
+   md_unmap(buf,ZERO_REGION_SIZE);
   end;
  end;
 end;
@@ -141,7 +152,7 @@ var
  buf:Pointer;
 begin
  buf:=System.InterlockedExchange(zero_region,nil);
- FreeMem(buf);
+ md_unmap(buf,ZERO_REGION_SIZE);
 end;
 
 { ARGSUSED }
