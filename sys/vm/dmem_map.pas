@@ -18,7 +18,14 @@ Const
  max_valid_dmem=QWORD($5000000000);
 
 type
- t_dest_type=(d_system,d_app,d_blockpool);
+ t_dest_acl=(acl_system,acl_app,acl_blockpool);
+
+ t_dmem_entry_info=packed record
+   m_type :Shortint;         // memory type
+   m_acl  :Byte;             // who controls memory
+   c_count:Byte;             // lock counter
+   _align :Byte;
+  end;
 
  pp_dmem_map_entry=^p_dmem_map_entry;
  p_dmem_map_entry=^t_dmem_map_entry;
@@ -31,11 +38,7 @@ type
   __end   :DWORD;            // end address
   adj_free:DWORD;            // amount of adjacent free space
   max_free:DWORD;            // max free space in subtree
-  info    :packed record
-   m_type :Shortint;         // memory type
-   d_type :Byte;             // who controls memory
-   _align :Word;
-  end;
+  info    :t_dmem_entry_info;
  end;
 
  p_dmem_map=^t_dmem_map;
@@ -74,13 +77,13 @@ function  dmem_map_insert(
             start :DWORD;
             __end :DWORD;
             m_type:DWORD;
-            d_type:t_dest_type):Integer;
+            m_acl :t_dest_acl):Integer;
 
 Function  dmem_map_query_available(map:p_dmem_map;start,__end,align:QWORD;var p_addr,p_size:QWORD):Integer;
 Function  dmem_map_query          (map:p_dmem_map;offset:QWORD;flags,id:Integer;info:Pointer;size:QWORD):Integer;
 Function  dmem_map_get_memory_type(map:p_dmem_map;info:Pointer):Integer;
-Function  dmem_map_alloc          (map:p_dmem_map;start,__end,len,align:QWORD;mtype:Integer;dtype:t_dest_type;var p_addr:QWORD):Integer;
-Function  dmem_map_release        (map:p_dmem_map;start,len:QWORD;dtype:t_dest_type;check:Boolean):Integer;
+Function  dmem_map_alloc          (map:p_dmem_map;start,__end,len,align:QWORD;mtype:Integer;m_acl:t_dest_acl;var p_addr:QWORD):Integer;
+Function  dmem_map_release        (map:p_dmem_map;start,len:QWORD;m_acl:t_dest_acl;check:Boolean):Integer;
 
 function  dmem_map_findspace(map   :p_dmem_map;
                              start :DWORD;
@@ -91,13 +94,13 @@ procedure dmem_map_simplify_entry(map:p_dmem_map;entry:p_dmem_map_entry);
 
 procedure dmem_map_entry_delete(map:p_dmem_map;entry:p_dmem_map_entry);
 
-function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;dtype:t_dest_type):Integer;
+function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;m_acl:t_dest_acl):Integer;
 
 function  dmem_map_set_mtype(map  :p_dmem_map;
                              start:DWORD;
                              __end:DWORD;
                              mtype:Integer;
-                             prot :Integer;
+                             protw:Integer;
                              flags:Integer):Integer;
 
 function  dmem_map_get_mtype(map  :p_dmem_map;
@@ -508,11 +511,12 @@ function dmem_map_insert(
            start :DWORD;
            __end :DWORD;
            m_type:DWORD;
-           d_type:t_dest_type):Integer;
+           m_acl :t_dest_acl):Integer;
 var
  new_entry :p_dmem_map_entry;
  prev_entry:p_dmem_map_entry;
  temp_entry:p_dmem_map_entry;
+ info      :t_dmem_entry_info;
 begin
  DMEM_MAP_ASSERT_LOCKED(map);
 
@@ -544,6 +548,10 @@ begin
   Exit(EAGAIN);
  end;
 
+ info:=Default(t_dmem_entry_info);
+ info.m_type:=m_type;
+ info.m_acl :=ord(m_acl);
+
  if (prev_entry<>@map^.header) and
     (prev_entry^.__end=start) then
  begin
@@ -552,15 +560,13 @@ begin
    * can extend the previous map entry to include the
    * new range as well.
    }
-  if (prev_entry^.info.m_type=m_type) and
-     (prev_entry^.info.d_type=ord(d_type)) then
+  if (DWORD(prev_entry^.info)=DWORD(info)) then
   begin
    map^.size:=map^.size+(__end - prev_entry^.__end);
    prev_entry^.__end:=__end;
    //change size
 
    dmem_map_entry_resize_free(map, prev_entry);
-   dmem_map_simplify_entry(map, prev_entry);
    Exit(0);
   end;
 
@@ -572,9 +578,7 @@ begin
  new_entry:=dmem_map_entry_create(map);
  new_entry^.start:=start;
  new_entry^.__end:=__end;
-
- new_entry^.info.m_type:=m_type;
- new_entry^.info.d_type:=ord(d_type);
+ new_entry^.info :=info;
 
  {
   * Insert the new entry into the list
@@ -730,7 +734,7 @@ begin
   begin
    //EACCES
   end else
-  if (entry^.info.d_type<>ord(d_app)) then
+  if (entry^.info.m_acl<>ord(acl_app)) then
   begin
    //EACCES
   end else
@@ -747,7 +751,7 @@ begin
    begin
     while (entry<>@map^.header) do
     begin
-     if (entry^.info.d_type<>ord(d_app)) then
+     if (entry^.info.m_acl<>ord(acl_app)) then
      begin
       //EACCES
       Break;
@@ -819,7 +823,7 @@ begin
   begin
    //ENOENT
   end else
-  if (entry^.info.d_type<>ord(d_app)) then
+  if (entry^.info.m_acl<>ord(acl_app)) then
   begin
    //ENOENT
   end else
@@ -841,7 +845,7 @@ begin
  dmem_map_unlock(map);
 end;
 
-Function dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:Integer;dtype:t_dest_type;var p_addr:QWORD):Integer;
+Function dmem_map_alloc(map:p_dmem_map;start,__end,len,align:QWORD;mtype:Integer;m_acl:t_dest_acl;var p_addr:QWORD):Integer;
 var
  adr_dw:DWORD;
 begin
@@ -925,7 +929,7 @@ begin
    Exit(EAGAIN);
   end;
 
-  Result:=dmem_map_insert(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),mtype,dtype);
+  Result:=dmem_map_insert(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),mtype,m_acl);
  until (Result<>EAGAIN);
 
  dmem_map_unlock(map);
@@ -939,7 +943,8 @@ end;
 function _dmem_map_test(map  :p_dmem_map;
                         start:DWORD;
                         __end:DWORD;
-                        dtype:t_dest_type):Boolean;
+                        protw:Integer;
+                        m_acl:t_dest_acl):Boolean;
 var
  curr,next,entry:p_dmem_map_entry;
 begin
@@ -957,7 +962,12 @@ begin
  while (curr<>@map^.header) and (curr^.start<__end) do
  begin
 
-  if (curr^.info.d_type<>ord(dtype)) then
+  if (curr^.info.m_acl<>ord(m_acl)) then
+  begin
+   Exit(False);
+  end;
+
+  if (protw<>0) and (curr^.info.m_type=SCE_KERNEL_WB_GARLIC) then
   begin
    Exit(False);
   end;
@@ -971,7 +981,7 @@ begin
     Exit(False);
    end;
   end else
-  if (next^.info.d_type<>ord(dtype)) then
+  if (next^.info.m_acl<>ord(m_acl)) then
   begin
    Exit(False);
   end else
@@ -1005,7 +1015,7 @@ begin
  end;
 end;
 
-Function dmem_map_release(map:p_dmem_map;start,len:QWORD;dtype:t_dest_type;check:Boolean):Integer;
+Function dmem_map_release(map:p_dmem_map;start,len:QWORD;m_acl:t_dest_acl;check:Boolean):Integer;
 var
  offset:QWORD;
  rmap:p_rmem_map;
@@ -1039,14 +1049,15 @@ begin
 
  if check then
  begin
-  if not _dmem_map_test(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),dtype) then
+  //test c_count?
+  if not _dmem_map_test(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),0,m_acl) then
   begin
    dmem_map_unlock(map);
    Exit(ENOENT);
   end;
  end;
 
- Result:=dmem_map_delete(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),dtype);
+ Result:=dmem_map_delete(map,OFF_TO_IDX(start),OFF_TO_IDX(start+len),m_acl);
 
  dmem_map_unlock(map);
 
@@ -1298,7 +1309,7 @@ begin
  dmem_map_entry_deallocate(entry);
 end;
 
-function dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;dtype:t_dest_type):Integer;
+function dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;m_acl:t_dest_acl):Integer;
 var
  entry      :p_dmem_map_entry;
  first_entry:p_dmem_map_entry;
@@ -1320,7 +1331,8 @@ begin
  end else
  begin
   entry:=first_entry;
-  if (entry^.info.d_type=ord(dtype)) then
+  if (entry^.info.m_acl  =ord(m_acl)) and
+     (entry^.info.c_count=0) then
   begin
    dmem_map_clip_start(map, entry, start);
   end;
@@ -1333,7 +1345,8 @@ begin
  begin
   next:=entry^.next;
 
-  if (entry^.info.d_type=ord(dtype)) then
+  if (entry^.info.m_acl  =ord(m_acl)) and
+     (entry^.info.c_count=0) then
   begin
    dmem_map_clip_end(map, entry, __end);
 
@@ -1349,45 +1362,42 @@ function dmem_map_set_mtype(map  :p_dmem_map;
                             start:DWORD;
                             __end:DWORD;
                             mtype:Integer;
-                            prot :Integer;
+                            protw:Integer;
                             flags:Integer):Integer; public;
 label
  _EACCES;
 var
- current,next,entry:p_dmem_map_entry;
- old:DWORD;
+ current,next:p_dmem_map_entry;
 begin
  if (start=__end) then
  begin
   Exit(0);
  end;
 
- if (mtype=SCE_KERNEL_WB_GARLIC) and
-    ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
+ if ((flags and MAP_WRITABLE_WB_GARLIC)<>0) then
  begin
-  if ((flags and MAP_WRITABLE_WB_GARLIC)=0) then
-  begin
-   Exit(EACCES);
-  end;
+  //allow write
+  protw:=0;
+ end else
+ begin
+  //dont allow write
+  protw:=(protw and (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
+ end;
+
+ if (mtype=SCE_KERNEL_WB_GARLIC) and (protw<>0) then
+ begin
+  Exit(EACCES);
  end;
 
  dmem_map_lock(map);
 
  DMEM_MAP_RANGE_CHECK(map, start, __end);
 
- if not _dmem_map_test(map,start,__end,d_app) then
+ if not _dmem_map_test(map,start,__end,protw,acl_app) then
  begin
   _EACCES:
    dmem_map_unlock(map);
    Exit(EACCES);
- end;
-
- if (dmem_map_lookup_entry(map, start, @entry)) then
- begin
-  //
- end else
- begin
-  goto _EACCES;
  end;
 
  if (mtype=-1) then
@@ -1396,30 +1406,40 @@ begin
   Exit(0);
  end;
 
- dmem_map_clip_start(map, entry, start);
-
- current:=entry;
- while (current<>@map^.header) and (current^.start<__end) do
+ if (dmem_map_lookup_entry(map, start, @current)) then
  begin
-  dmem_map_clip_end(map, current, __end);
-
-  current:=current^.next;
+  //
+  if (current^.info.m_type<>mtype) and
+     (current^.info.c_count=0) then
+  begin
+   dmem_map_clip_start(map, current, start);
+  end;
+  //
+ end else
+ begin
+  goto _EACCES;
  end;
 
- current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
-  old:=current^.info.m_type;
-  current^.info.m_type:=mtype;
+  next:=current^.next;
 
-  if (old<>current^.info.m_type) then
+  if (current^.info.m_type<>mtype) and
+     (current^.info.c_count=0) then
   begin
+   //
+   dmem_map_clip_end(map, current, __end);
+
+   current^.info.m_type:=mtype;
+
+   if ((flags and MAP_NO_COALESCE)=0) then
+   begin
+    dmem_map_simplify_entry(map, current);
+   end;
    //
   end;
 
-  dmem_map_simplify_entry(map, current);
-
-  current:=current^.next;
+  current:=next;
  end;
 
  dmem_map_unlock(map);
@@ -1453,7 +1473,7 @@ begin
 
   if (dmem_map_lookup_entry(map, OFF_TO_IDX(offset), @entry)) then
   begin
-   if (entry^.info.d_type=ord(d_app)) then
+   if (entry^.info.m_acl=ord(acl_app)) then
    begin
     pstart^:=IDX_TO_OFF(entry^.start);
     p__end^:=IDX_TO_OFF(entry^.__end);

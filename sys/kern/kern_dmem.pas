@@ -235,7 +235,8 @@ begin
                             OFF_TO_IDX(phaddr+length),
                             mtype,
                             prot,
-                            flags);
+                            (flags and MAP_WRITABLE_WB_GARLIC) or MAP_NO_COALESCE
+                           );
 
     if (err=0) then
     begin
@@ -268,6 +269,9 @@ begin
       //
       Result:=vm_mmap_to_errno(err);
      end;
+    end else
+    begin
+     Result:=err;
     end;
 
    end else
