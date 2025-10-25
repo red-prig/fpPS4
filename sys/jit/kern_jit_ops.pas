@@ -1976,6 +1976,8 @@ begin
  jit_cbs[OPPnone,OPfidiv  ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfidivr ,OPSnone]:=@op_emit1_ro_np;
 
+ jit_cbs[OPPnone,OPfbld   ,OPSnone]:=@op_emit1_ro_np;
+
  jit_cbs[OPPnone,OPclflush,OPSnone]:=@op_emit1_rw_np;
 
  jit_cbs[OPPnone,OPfnsave ,OPSnone]:=@op_emit1_gn_np;
