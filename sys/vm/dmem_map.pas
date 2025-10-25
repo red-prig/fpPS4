@@ -1376,17 +1376,23 @@ begin
 
  if ((flags and MAP_WRITABLE_WB_GARLIC)<>0) then
  begin
-  //allow write
-  protw:=0;
+  //allow GPU write
+  protw:=(protw and VM_PROT_WRITE);
  end else
  begin
-  //dont allow write
+  //don allow GPU write
   protw:=(protw and (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
  end;
 
  if (mtype=SCE_KERNEL_WB_GARLIC) and (protw<>0) then
  begin
   Exit(EACCES);
+ end;
+
+ if (mtype<>-1) then
+ begin
+  //do not check if changed
+  protw:=0;
  end;
 
  dmem_map_lock(map);
