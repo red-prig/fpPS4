@@ -305,6 +305,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceVrTrackerUnregisterDevice(const handle:Integer):Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceVrTrackerGpuSubmit(const param:pSceVrTrackerGpuSubmitParam):Integer;
 begin
  Result:=0;
@@ -345,6 +350,7 @@ begin
  lib.set_proc($424465EE90114FD3,@ps4_sceVrTrackerInit);
  lib.set_proc($201BF83F7AB5A50D,@ps4_sceVrTrackerTerm);
  lib.set_proc($B0887C1B071EBDA4,@ps4_sceVrTrackerRegisterDevice);
+ lib.set_proc($43CB2442A1309F97,@ps4_sceVrTrackerUnregisterDevice);
  lib.set_proc($4D57A00CC2DA041F,@ps4_sceVrTrackerGpuSubmit);
  lib.set_proc($5E8796CD796B9CCC,@ps4_sceVrTrackerGetTime);
  lib.set_proc($011860A57BF0A11D,@ps4_sceVrTrackerGpuWaitAndCpuProcess);
