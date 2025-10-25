@@ -187,6 +187,11 @@ begin
  Result:=SCE_HMD_ERROR_DEVICE_DISCONNECTED;
 end;
 
+function ps4_sceHmdClose(handle:Integer):Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceHmdGetFieldOfView(handle:Integer;fieldOfView:pSceHmdFieldOfView):Integer;
 begin
  if (fieldOfView=nil) then Exit(SCE_HMD_ERROR_PARAMETER_NULL);
@@ -248,6 +253,7 @@ begin
  lib.set_proc($13E74F7E37902C72,@ps4_sceHmdReprojectionSetDisplayBuffers);
  lib.set_proc($2E374B472B0753A6,@ps4_sceHmdReprojectionSetOutputMinColor);
  lib.set_proc($776839223EC4533A,@ps4_sceHmdOpen);
+ lib.set_proc($E9B8B0D571D34AA4,@ps4_sceHmdClose);
  lib.set_proc($34F430605AA2D1BB,@ps4_sceHmdGetFieldOfView);
  lib.set_proc($05663FA8A3398711,@ps4_sceHmdGet2DEyeOffset);
  lib.set_proc($CFF44C20BA8FEAD1,@ps4_sceHmdTerminate);
