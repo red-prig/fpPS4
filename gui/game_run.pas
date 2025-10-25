@@ -112,6 +112,7 @@ uses
  ps4_libSceAutoMounterClient,
  ps4_libSceHmd,
  ps4_libSceVrTracker,
+ ps4_libSceAudio3d,
  //internal libs
 
  kern_rtld,

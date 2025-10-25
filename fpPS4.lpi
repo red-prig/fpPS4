@@ -1669,9 +1669,18 @@
         <UnitName Value="ps4_libSceHmd"/>
       </Unit>
       <Unit>
+        <Filename Value="sys\dev\dev_camera.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
         <Filename Value="src\ps4_libscevrtracker.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceVrTracker"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\audio\ps4_libsceaudio3d.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceAudio3d"/>
       </Unit>
     </Units>
   </ProjectOptions>
