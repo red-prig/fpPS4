@@ -1,16 +1,33 @@
 unit ps4_libSceVrTracker;
 
 {$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
 
 interface
 
-
 uses
-  ps4_program,
-  ps4_libSceCamera,
-  ps4_time,
-  Classes,
-  SysUtils;
+  subr_dynlib;
+
+//libSceCamera
+
+const
+ SCE_CAMERA_MAX_DEVICE_NUM      =2;
+ SCE_CAMERA_MAX_FORMAT_LEVEL_NUM=4;
+
+type
+ pSceFVector3=^SceFVector3;
+ SceFVector3=packed record
+  x,y,z:Single;
+ end;
+
+ pSceCameraFrameData=^SceCameraFrameData;
+ SceCameraFrameData=packed record
+  sizeThis               :DWORD;
+  readMode               :DWORD;
+  ///////
+ end;
+
+//libSceCamera
 
 const
   SCE_VR_TRACKER_MAX_LED_NUM=2;
@@ -267,75 +284,79 @@ type
 
 implementation
 
-function ps4_sceVrTrackerQueryMemory(param,pResult:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerQueryMemory(param,pResult:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerInit(param:Pointer):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerInit(param:Pointer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerTerm():Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerTerm():Integer;
 begin
  Result:=0;
 end;
 
 function ps4_sceVrTrackerRegisterDevice(const deviceType:SceVrTrackerDeviceType;
-                                        const handle:Integer):Integer; SysV_ABI_CDecl;
+                                        const handle:Integer):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerGpuSubmit(const param:pSceVrTrackerGpuSubmitParam):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerGpuSubmit(const param:pSceVrTrackerGpuSubmitParam):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerGetTime(time:pQWORD):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerGetTime(time:pQWORD):Integer;
 begin
  if (time=nil) then Exit(SCE_VR_TRACKER_ERROR_ARGUMENT_INVALID);
- time^:=ps4_sceKernelGetProcessTime;
+
+ time^:=0;
 
  Result:=0;
 end;
 
-function ps4_sceVrTrackerGpuWaitAndCpuProcess():Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerGpuWaitAndCpuProcess():Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerGetResult(const param:pSceVrTrackerGetResultParam;_result:pSceVrTrackerResultData):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerGetResult(const param:pSceVrTrackerGetResultParam;_result:pSceVrTrackerResultData):Integer;
 begin
  Result:=0;
 end;
 
-function ps4_sceVrTrackerUpdateMotionSensorData(const param:pSceVrTrackerUpdateMotionSensorDataParam):Integer; SysV_ABI_CDecl;
+function ps4_sceVrTrackerUpdateMotionSensorData(const param:pSceVrTrackerUpdateMotionSensorDataParam):Integer;
 begin
  Result:=0;
 end;
 
-function Load_libSceVrTracker(Const name:RawByteString):TElf_node;
+function Load_libSceVrTracker(name:pchar):p_lib_info;
 var
- lib:PLIBRARY;
+ lib:TLIBRARY;
 begin
- Result:=TElf_node.Create;
- Result.pFileName:=name;
- lib:=Result._add_lib('libSceVrTracker');
- lib^.set_proc($2BBCA162BB0804F7,@ps4_sceVrTrackerQueryMemory);
- lib^.set_proc($424465EE90114FD3,@ps4_sceVrTrackerInit);
- lib^.set_proc($201BF83F7AB5A50D,@ps4_sceVrTrackerTerm);
- lib^.set_proc($B0887C1B071EBDA4,@ps4_sceVrTrackerRegisterDevice);
- lib^.set_proc($4D57A00CC2DA041F,@ps4_sceVrTrackerGpuSubmit);
- lib^.set_proc($5E8796CD796B9CCC,@ps4_sceVrTrackerGetTime);
- lib^.set_proc($011860A57BF0A11D,@ps4_sceVrTrackerGpuWaitAndCpuProcess);
- lib^.set_proc($EFA381BEBAD05D47,@ps4_sceVrTrackerGetResult);
- lib^.set_proc($F5FBC73146ECA26E,@ps4_sceVrTrackerUpdateMotionSensorData); 
+ Result:=obj_new_int('libSceVrTracker');
+
+ lib:=Result^.add_lib('libSceVrTracker');
+ lib.set_proc($2BBCA162BB0804F7,@ps4_sceVrTrackerQueryMemory);
+ lib.set_proc($424465EE90114FD3,@ps4_sceVrTrackerInit);
+ lib.set_proc($201BF83F7AB5A50D,@ps4_sceVrTrackerTerm);
+ lib.set_proc($B0887C1B071EBDA4,@ps4_sceVrTrackerRegisterDevice);
+ lib.set_proc($4D57A00CC2DA041F,@ps4_sceVrTrackerGpuSubmit);
+ lib.set_proc($5E8796CD796B9CCC,@ps4_sceVrTrackerGetTime);
+ lib.set_proc($011860A57BF0A11D,@ps4_sceVrTrackerGpuWaitAndCpuProcess);
+ lib.set_proc($EFA381BEBAD05D47,@ps4_sceVrTrackerGetResult);
+ lib.set_proc($F5FBC73146ECA26E,@ps4_sceVrTrackerUpdateMotionSensorData);
 end;
+
+var
+ stub:t_int_file;
 
 initialization
- ps4_app.RegistredPreLoad('libSceVrTracker.prx',@Load_libSceVrTracker);
+ RegisteredInternalFile(stub,'libSceVrTracker.prx',@Load_libSceVrTracker);
 
 end.
 

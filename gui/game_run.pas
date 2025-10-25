@@ -111,6 +111,7 @@ uses
  ps4_libSceCompanionUtil,
  ps4_libSceAutoMounterClient,
  ps4_libSceHmd,
+ ps4_libSceVrTracker,
  //internal libs
 
  kern_rtld,

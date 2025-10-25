@@ -1668,6 +1668,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceHmd"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\ps4_libscevrtracker.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceVrTracker"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
