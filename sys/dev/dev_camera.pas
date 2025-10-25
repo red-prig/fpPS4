@@ -24,6 +24,14 @@ begin
 
  case cmd of
 
+  $C0148E1E: //sceCameraIsAttached
+    begin
+
+     PDWORD(data)[0]:=0; //state
+     PDWORD(data)[3]:=0; //???
+
+    end;
+
   $40408E22: //mmap config?
     begin
      PDWORD(data)[0]:=0;
