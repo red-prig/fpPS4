@@ -12,6 +12,20 @@ uses
   subr_dynlib,
   audioout_interface;
 
+type
+ pSceAudioOutOutputParam=^SceAudioOutOutputParam;
+ SceAudioOutOutputParam=packed record
+  handle:Integer;
+  align :Integer;
+  ptr   :Pointer;
+ end;
+
+function ps4_sceAudioOutOpen(userId,_type,index:Integer;
+                             len,freq,param:DWORD):Integer;
+
+function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;
+function ps4_sceAudioOutOutputs(param:pSceAudioOutOutputParam;num:DWORD):Integer;
+
 implementation
 
 uses
@@ -132,13 +146,6 @@ type
   rerouteCounter:Word;
   flag          :QWord;
   reserved64    :array[0..1] of QWORD;
- end;
-
- PSceAudioOutOutputParam=^SceAudioOutOutputParam;
- SceAudioOutOutputParam=packed record
-  handle:Integer;
-  align :Integer;
-  ptr   :Pointer;
  end;
 
  pSceAudioOutSystemState=^SceAudioOutSystemState;
@@ -1222,7 +1229,7 @@ begin
 
 end;
 
-function ps4_sceAudioOutOutputs(param:PSceAudioOutOutputParam;num:DWORD):Integer;
+function ps4_sceAudioOutOutputs(param:pSceAudioOutOutputParam;num:DWORD):Integer;
 label
  _unlock;
 var

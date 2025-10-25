@@ -69,6 +69,9 @@ type
 
 implementation
 
+uses
+ ps4_libSceAudioOut;
+
 function ps4_sceAudio3dInitialize(iReserved:Int64):Integer;
 begin
  Result:=0;
@@ -136,7 +139,12 @@ function ps4_sceAudio3dAudioOutOpen(uiPortId:SceAudio3dPortId;
                                     userId,_type,index:Integer;
                                     len,freq,param:DWORD):Integer;
 begin
- Result:=0;
+ Result:=ps4_sceAudioOutOpen(userId,_type,index,len,freq,param);
+end;
+
+function ps4_sceAudio3dAudioOutOutput(handle:Integer;ptr:Pointer):Integer;
+begin
+ Result:=ps4_sceAudioOutOutput(handle,ptr);
 end;
 
 function ps4_sceAudio3dPortGetQueueLevel(uiPortId:SceAudio3dPortId;
@@ -176,6 +184,7 @@ begin
  lib.set_proc($970D2AADD4A366DF,@ps4_sceAudio3dPortAdvance);
  lib.set_proc($54456167DA9DE196,@ps4_sceAudio3dPortPush);
  lib.set_proc($B9C12C8BADACA13A,@ps4_sceAudio3dAudioOutOpen);
+ lib.set_proc($ECD604CC9F5225B3,@ps4_sceAudio3dAudioOutOutput);
  lib.set_proc($61A6836C3C0AA453,@ps4_sceAudio3dPortGetQueueLevel);
  lib.set_proc($F6D130134195D2AA,@ps4_sceAudio3dBedWrite);
  lib.set_proc($596D534B68B3E727,@ps4_sceAudio3dTerminate);
