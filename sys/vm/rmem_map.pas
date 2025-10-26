@@ -8,7 +8,6 @@ interface
 uses
  mqueue,
  vm,
- vmparam,
  kern_mtx;
 
 type
@@ -77,7 +76,6 @@ procedure rmem_map_track(map:p_rmem_map;
 implementation
 
 uses
- errno,
  kern_thr,
  vm_tracking_map;
 
@@ -694,8 +692,14 @@ begin
 
    //Move prev->entry
    rmem_entry_del_vaddr_all(entry);
+
+   //move
    entry^.vlist:=prev^.vlist;
+   entry^.count:=prev^.count;
+
+   //zero
    TAILQ_INIT(@prev^.vlist);
+   prev^.count:=0;
 
    rmem_entry_deallocate(prev);
   end;
@@ -719,21 +723,27 @@ end;
 procedure _rmem_map_clip_start(map:p_rmem_map;entry:p_rmem_map_entry;start:QWORD);
 var
  new_entry:p_rmem_map_entry;
+ offset:QWORD;
 begin
  RMEM_MAP_ASSERT_LOCKED(map);
 
  rmem_map_simplify_entry(map, entry);
+
+ offset:=(start - entry^.start);
+
+ //new_entry -> old_start..start
+ //entry     -> start    ..old_end
 
  new_entry:=rmem_entry_create(map);
  new_entry^:=entry^;
 
  new_entry^.__end:=start;
 
+ entry^.start:=start;
+
  copy_vaddr_list(entry,new_entry,0);
 
- inc_vaddr_list(entry,(start - entry^.start));
-
- entry^.start:=start;
+ inc_vaddr_list(entry,offset);
 
  rmem_entry_link(map, entry^.prev, new_entry);
 end;
@@ -749,8 +759,14 @@ end;
 procedure _rmem_map_clip_end(map:p_rmem_map;entry:p_rmem_map_entry;__end:QWORD);
 var
  new_entry:p_rmem_map_entry;
+ offset:QWORD;
 begin
  RMEM_MAP_ASSERT_LOCKED(map);
+
+ offset:=(__end - entry^.start);
+
+ //entry     -> old_start..end
+ //new_entry -> end      ..old_end
 
  new_entry:=rmem_entry_create(map);
  new_entry^:=entry^;
@@ -759,7 +775,7 @@ begin
 
  entry^.__end:=__end;
 
- copy_vaddr_list(entry,new_entry,(__end - entry^.start));
+ copy_vaddr_list(entry,new_entry,offset);
 
  rmem_entry_link(map, entry, new_entry);
 end;
@@ -836,6 +852,7 @@ var
  entry      :p_rmem_map_entry;
  first_entry:p_rmem_map_entry;
  next       :p_rmem_map_entry;
+ offset     :QWORD;
 begin
  RMEM_MAP_ASSERT_LOCKED(map);
 
@@ -856,17 +873,18 @@ begin
 
  while (entry<>@map^.header) and (entry^.start<__end) do
  begin
-
   rmem_map_clip_end(map, entry, __end);
 
   next:=entry^.next;
+
+  offset:=entry^.start - start;
 
   if (vaddr=0) then
   begin
    //all
    rmem_entry_delete(map, entry);
   end else
-  if rmem_entry_del_vaddr(entry,vaddr) then
+  if rmem_entry_del_vaddr(entry,vaddr + offset) then
   begin
    //zero
    rmem_entry_delete(map, entry);
