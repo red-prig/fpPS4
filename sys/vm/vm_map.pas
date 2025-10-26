@@ -4218,7 +4218,17 @@ begin
 
  if (addrbos<vm_map_min(map)) or
     (addrbos>vm_map_max(map)) or
-    (addrbos + max_ssize<addrbos) then
+    ((addrbos + max_ssize)<addrbos) then
+ begin
+  Exit(KERN_NO_SPACE);
+ end;
+
+ if ((addrbos shr 47) = 0) and
+    (
+     (addrbos > MAP_AREA_END) or
+     ((addrbos - max_ssize) > MAP_AREA_END)
+    ) and
+    (p_proc.p_sdk_version >= $3000000) then
  begin
   Exit(KERN_NO_SPACE);
  end;
@@ -4292,7 +4302,7 @@ begin
  end;
 
  top:=bot + init_ssize;
- rv:=vm_map_insert(map, nil, 0, bot, top, prot, max, cow or MAP_COW_AUTO_NAMING, anon);
+ rv:=vm_map_insert(map, nil, 0, bot, top, VM_PROT_RW, VM_PROT_RW, cow or MAP_COW_AUTO_NAMING, anon);
 
  { Now set the avail_ssize amount. }
  if (rv=KERN_SUCCESS) then
