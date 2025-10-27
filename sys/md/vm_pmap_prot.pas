@@ -98,6 +98,9 @@ begin
    ptr:=kmem_alloc(PAGE_MAP_COUNT_SZ2,VM_RW);
    Assert((ptr<>nil),'prealloc');
 
+   //Set cache to be enabled on demand
+   md_dontneed(ptr,PAGE_MAP_COUNT_SZ2);
+
    if (System.InterlockedCompareExchange(PAGE_PROT[LV1_IDX(i)],ptr,nil)=nil) then
    begin
     Exit;
