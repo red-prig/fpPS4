@@ -143,7 +143,6 @@ const
  MAP_PREFAULT        =$000008;
  MAP_PREFAULT_PARTIAL=$000010;
  MAP_DISABLE_SYNCER  =$000020;
- MAP_COW_NO_OVERWRITE=$000080; // emu ext -> vm_map_fixed
  MAP_DISABLE_COREDUMP=$000100;
  MAP_PREFAULT_MADVISE=$000200; // from (user) madvise request
  MAP_VN_WRITECOUNT   =$000400;
@@ -306,6 +305,7 @@ function  vm_map_fixed(map    :vm_map_t;
                        length :vm_size_t;
                        prot   :vm_prot_t;
                        max    :vm_prot_t;
+                       flags  :DWORD;
                        cow    :DWORD;
                        anon   :Pointer):Integer;
 
@@ -1725,19 +1725,38 @@ function vm_map_fixed(map    :vm_map_t;
                       length :vm_size_t;
                       prot   :vm_prot_t;
                       max    :vm_prot_t;
+                      flags  :DWORD;
                       cow    :DWORD;
                       anon   :Pointer):Integer;
 var
  __end:vm_offset_t;
 begin
  __end:=start + length;
+
+ if (start<vm_map_min(map)) or
+    (start>__end) or
+    (__end>vm_map_max(map)) then
+ begin
+  Exit(KERN_INVALID_ARGUMENT);
+ end;
+
+ if ((start shr 47)=0) and
+    ((flags and MAP_SANITIZER)=0) and
+    (
+     (DWORD(start shr 34) > 62) or
+     (__end > MAP_AREA_END)
+    ) and
+    (p_proc.p_sdk_version >= $3000000) then
+ begin
+  Exit(KERN_INVALID_ARGUMENT);
+ end;
+
  vm_map_lock(map);
-  VM_MAP_RANGE_CHECK(map, start, __end);
 
   //try to expand addres space
   vm_map_expand(map, start, __end);
 
-  if ((cow and MAP_COW_NO_OVERWRITE)=0) then
+  if ((flags and MAP_NO_OVERWRITE)=0) then
   begin
    vm_map_delete(map, start, __end, cow);
   end;
@@ -1878,14 +1897,13 @@ begin
         Exit(KERN_NO_SPACE);
        end;
       end else
-      if ((start shr 47)<>0) or
-         ( ((flags and MAP_SANITIZER)<>0) or
-           ( (DWORD(start shr 34) < 63) and ((start + length) <= MAP_AREA_END) )
-         ) or
-         (p_proc.p_sdk_version < $3000000) then
-      begin
-       //
-      end else
+      if ((start shr 47)=0) and
+         ((flags and MAP_SANITIZER)=0) and
+         (
+          (DWORD(start shr 34) > 62) or
+          ((start + length) > MAP_AREA_END)
+         ) and
+         (p_proc.p_sdk_version >= $3000000) then
       begin
        vm_map_unlock(map);
        Exit(KERN_NO_SPACE);
@@ -1965,14 +1983,14 @@ var
  next,prev:vm_map_entry_t;
  prevsize,esize:vm_size_t;
  obj:vm_map_object;
- sdk_5:Boolean;
+ sdk_55:Boolean;
 begin
  if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or
-                        MAP_ENTRY_IN_TRANSITION or
-                        MAP_ENTRY_IN_TRANSITION2))<>0) or
+                         MAP_ENTRY_IN_TRANSITION or
+                         MAP_ENTRY_IN_TRANSITION2))<>0) or
      (
       (entry^.inheritance=VM_INHERIT_HOLE) and
-      ((cow and MAP_COW_HOLE )<>0)
+      ((cow and MAP_COW_HOLE)<>0)
      ) then
  begin
   Exit;
@@ -1982,7 +2000,7 @@ begin
 
  if (obj<>nil) then
  begin
-  if (p_proc.p_sdk_version<=$1ffffff) and
+  if (p_proc.p_sdk_version < $2000000) and
      ((obj^.flags and OBJ_DMEM_EXT)<>0) then
   begin
    Exit;
@@ -1993,7 +2011,7 @@ begin
   end;
  end;
 
- sdk_5:=(p_proc.p_sdk_version>$54fffff);
+ sdk_55:=(p_proc.p_sdk_version >= $5500000);
 
  prev:=entry^.prev;
  if (prev<>@map^.header) then
@@ -2008,7 +2026,7 @@ begin
      (prev^.inheritance=entry^.inheritance) and
      (prev^.wired_count=entry^.wired_count) and
      (prev^.budget_id=entry^.budget_id) and
-     (sdk_5 or (prev^.anon_addr=entry^.anon_addr)) and
+     (sdk_55 or (prev^.anon_addr=entry^.anon_addr)) and
      (((prev^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
      then
   begin
@@ -2056,7 +2074,7 @@ begin
      (next^.inheritance=entry^.inheritance) and
      (next^.wired_count=entry^.wired_count) and
      (next^.budget_id=entry^.budget_id) and
-     (sdk_5 or (next^.anon_addr=entry^.anon_addr)) and
+     (sdk_55 or (next^.anon_addr=entry^.anon_addr)) and
      (((entry^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
      then
   begin
@@ -4879,15 +4897,18 @@ end;
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 var
  current:vm_map_entry_t;
- entry:vm_map_entry_t;
- simpl:vm_map_entry_t;
+ entry  :vm_map_entry_t;
+ simpl  :vm_map_entry_t;
  e_start:vm_offset_t;
  e__end :vm_offset_t;
+ sdk_7  :Boolean;
 begin
  if (start=__end) then
  begin
   Exit();
  end;
+
+ sdk_7:=(p_proc.p_sdk_version >= $7000000);
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
@@ -4931,7 +4952,7 @@ begin
   current^.name:=Default(t_entry_name);
   MoveChar0(name^,current^.name,32);
 
-  if (p_proc.p_sdk_version > $6ffffff) then
+  if sdk_7 then
   begin
    simpl:=current;
   end else

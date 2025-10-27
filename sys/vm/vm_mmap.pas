@@ -654,7 +654,8 @@ begin
   begin
    rv:=vm_map_fixed(map, obj, foff, addr^, size,
         prot, maxprot,
-        docow or (flags and MAP_NO_OVERWRITE),
+        flags,
+        docow,
         anon);
   end;
 

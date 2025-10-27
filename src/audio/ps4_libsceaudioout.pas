@@ -1304,7 +1304,7 @@ begin
     //test dublicate
     if (i<>0) and
        (num<>1) and
-       (p_proc.p_sdk_version > $44fffff) then
+       (p_proc.p_sdk_version >= $4500000) then
     begin
      for f:=0 to num-1 do
       if (f<>i) then

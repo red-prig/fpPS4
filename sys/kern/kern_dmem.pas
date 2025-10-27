@@ -144,9 +144,9 @@ begin
  Result:=0;
 end;
 
-function sdk_version_big_20():Boolean; inline;
+function has_sdk_version_30():Boolean; inline;
 begin
- Result:=p_proc.p_sdk_version > $2ffffff;
+ Result:=p_proc.p_sdk_version >= $3000000;
 end;
 
 function vm_mmap_to_errno(rv:Integer):Integer; inline;
@@ -219,7 +219,7 @@ begin
      ( ((flags and MAP_SANITIZER)<>0) or
        ((vaddr shr 47) <> 0) or
        (v_end <= MAP_AREA_END) or
-       (sdk_version_big_20()=false) ) then
+       (has_sdk_version_30()=false) ) then
   begin
    found:=rmem_map_test_lock(phaddr,phaddr+length,rt_intersection);
 
@@ -318,7 +318,7 @@ begin
      next:=entry^.next;
      if (next=@map^.header) then
      begin
-      if (length <= (map^.header.__end - vaddr)) then goto _fixed;
+      if (length <= (vm_map_max(map) - vaddr)) then goto _fixed;
       Break;
      end;
      if (length <= (next^.start - vaddr)) then goto _fixed;
@@ -753,7 +753,7 @@ begin
  repeat
   if ((QWORD(rbp) shr 47)<>0) then
   begin
-   has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+   has_sdk_version_5:=(p_proc.p_sdk_version >= $5000000);
    is_libsys_call   :=false;
    Break;
   end;
@@ -764,7 +764,7 @@ begin
   if (QWORD(rip)=QWORD(-1)) or
      (QWORD(rbp)=QWORD(-1)) then
   begin
-   has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+   has_sdk_version_5:=(p_proc.p_sdk_version >= $5000000);
    is_libsys_call   :=false;
    Break;
   end;
@@ -778,7 +778,7 @@ begin
     is_libsys_call   :=true;
    end else
    begin
-    has_sdk_version_5:=(p_proc.p_sdk_version > $4ffffff);
+    has_sdk_version_5:=(p_proc.p_sdk_version >= $5000000);
     is_libsys_call   :=false;
    end;
    Break;

@@ -353,6 +353,7 @@ begin
          QWORD(shared_page_base), shared_page_len,
          VM_PROT_RW,
          VM_PROT_RW or VM_PROT_EXECUTE,
+         0,
          MAP_INHERIT_SHARE or
          MAP_ACC_NO_CHARGE or
          MAP_COW_NO_BUDGET,

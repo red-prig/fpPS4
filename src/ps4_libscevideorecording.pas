@@ -110,7 +110,7 @@ begin
 
    SCE_VIDEO_RECORDING_INFO_USER_META:
      begin
-      if (p_proc.p_sdk_version > $24fffff) and
+      if (p_proc.p_sdk_version >= $2500000) and
          ((infoLen < 176) or
           (PSceVideoRecordingInfoUserMeta(pInfo)^.size < 176) or
           ((PSceVideoRecordingInfoUserMeta(pInfo)^.flags or $ffff7ffc)<>0)

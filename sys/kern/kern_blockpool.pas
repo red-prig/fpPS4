@@ -457,7 +457,7 @@ var
  tlb_64k    :p_dmem_block;
 begin
 
- if (p_proc.p_sdk_version > $4ffffff) then
+ if (p_proc.p_sdk_version >= $5000000) then
  begin
   if (size > QWORD($7fffffffffff)) then
   begin
@@ -836,11 +836,11 @@ begin
 
  map:=p_proc.p_vmspace;
 
- if (map^.header.start <= QWORD(addr)) and
+ if (vm_map_min(map) <= QWORD(addr)) and
     (WORD(len)=0) and
     (WORD(addr)=0) and
-    (QWORD(addr) < map^.header.__end) and
-    (len <= (map^.header.__end - QWORD(addr))) and
+    (QWORD(addr) < vm_map_max(map)) and
+    (len <= (vm_map_max(map) - QWORD(addr))) and
     (DWORD(mtype) < 11) and
     (($409 shr (mtype and $1f) and 1)<>0) and
     ((prot and $ffffffcc)=0) and
@@ -915,12 +915,12 @@ begin
  map:=p_proc.p_vmspace;
 
 
- if (map^.header.start <= QWORD(addr)) and
+ if (vm_map_min(map) <= QWORD(addr)) and
     (WORD(len)=0) and
     (WORD(addr)=0) and
-    (QWORD(addr) < map^.header.__end) and
+    (QWORD(addr) < vm_map_max(map)) and
     (flags=0) and
-    (len <= (map^.header.__end - QWORD(addr))) then
+    (len <= (vm_map_max(map) - QWORD(addr))) then
  begin
   //
  end else

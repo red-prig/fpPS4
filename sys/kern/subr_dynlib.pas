@@ -3606,7 +3606,7 @@ begin
  begin
   //path is relative?
 
-  if (p_proc.p_sdk_version > $3ffffff) then
+  if (p_proc.p_sdk_version >= $4000000) then
   begin
    if (Pos('web_core.elf',p_proc.p_prog_name)<>0) then
    begin
