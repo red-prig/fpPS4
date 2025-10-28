@@ -1371,13 +1371,13 @@ begin
  case ptr[0] of
   $0F:
       case ptr[1] of
-       $80..$8F:Result:=Result or MOP_JCC or (ptr[1] and $F); //jcc_32
+       $80..$8F:Result:=Result or MOP_JCC or (ptr[1] and Byte($F)); //jcc_32
        else;
       end;
-  $70..$7F:Result:=Result or MOP_JCC or (ptr[0] and $F);      //jcc_8
-  $E0..$E3:Result:=Result or MOP_JCX or (ptr[0] and $3);      //jcx_8/32
-       $EB:Result:=Result or MOP_JMP;                         //jmp_8
-       $E9:Result:=Result or MOP_JMP;                         //jmp_32
+  $70..$7F:Result:=Result or MOP_JCC or (ptr[0] and Byte($F));      //jcc_8
+  $E0..$E3:Result:=Result or MOP_JCX or (ptr[0] and Byte($3));      //jcx_8/32
+       $EB:Result:=Result or MOP_JMP;                               //jmp_8
+       $E9:Result:=Result or MOP_JMP;                               //jmp_32
   else;
  end;
 end;

@@ -2256,12 +2256,12 @@ begin
 
  budget_id:=PTYPE_BIG_APP;
 
- if ((PByte(@imgp^.authinfo.app_type)[7] and $f) - 4 < 4) then
+ if ((PByte(@imgp^.authinfo.app_type)[7] and Byte($f)) - 4 < 4) then
  begin
   budget_id:=p_proc.p_budget_ptype;
  end else
  begin
-  if ((PByte(@imgp^.authinfo.app_type)[7] and $f) = 1) then
+  if ((PByte(@imgp^.authinfo.app_type)[7] and Byte($f)) = 1) then
   begin
 
    if is_system_path(path) then

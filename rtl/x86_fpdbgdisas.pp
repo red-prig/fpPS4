@@ -914,7 +914,7 @@ begin
   Include(Flags, flagModRM);
   ModRM.Mode := (Code[ModRMIdx] shr 6) and 3;
   ModRM.Index:= (Code[ModRMIdx] shr 3) and 7;
-  ModRM.RM   := (Code[ModRMIdx]      ) and 7;
+  ModRM.RM   := (Code[ModRMIdx]      ) and Byte(7);
 end;
 
 procedure TX86Disassembler.ClearSIMDPrefix;
@@ -1329,7 +1329,7 @@ begin
     Include(Flags, flagSib);
     sib.Scale := Code[ModRMIdx+1] shr 6;
     sib.Index := (Code[ModRMIdx+1] shr 3) and $7;
-    sib.Base  := Code[ModRMIdx+1] and $7;
+    sib.Base  := Code[ModRMIdx+1] and Byte($7);
 
     // base
     if (ModRM.Mode = 0) and (sib.Base = 5) then
@@ -2119,7 +2119,7 @@ procedure TX86Disassembler.DoX87;
       $C0..$CF: begin SetOpcode(OPC[ModRM.Index]); AddReg0; AddRegN; end;
       $D0:      begin SetOpcode(OPnop); end;
       $D8..$DF: begin SetOpcode(OPX_ReservedX87); end;
-      $E0..$FF: begin SetOpcode(OPCx[Code[ModRMIdx] and $1F]); end;
+      $E0..$FF: begin SetOpcode(OPCx[Code[ModRMIdx] and Byte($1F)]); end;
     else
       SetOpcode(OPX_InvalidX87);
     end;
@@ -3306,10 +3306,10 @@ begin
       if SimdOpcode in ValidSimd
       then begin
         case SimdOpcode of
-          soNone: begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_ps, True); AddVps; AddWps; end;
-          so66:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_pd, True); AddVpd; AddWpd; end;
-          soF2:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_sd, True); AddVsd; AddHsd; AddWsd; end;
-          soF3:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_ss, True); AddVss; AddHss; AddWss; end;
+          soNone: begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_ps, True); AddVps; AddWps; end;
+          so66:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_pd, True); AddVpd; AddWpd; end;
+          soF2:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_sd, True); AddVsd; AddHsd; AddWsd; end;
+          soF3:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_ss, True); AddVss; AddHss; AddWss; end;
         end;
       end;
     end;
@@ -3327,10 +3327,10 @@ begin
       if SimdOpcode in ValidSimd
       then begin
         case SimdOpcode of
-          soNone: begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_ps, True); AddVps; AddHps; AddWps; end;
-          so66:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_pd, True); AddVpd; AddHpd; AddWpd; end;
-          soF2:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_sd, True); AddVsd; AddHsd; AddWsd; end;
-          soF3:   begin SetOpcode(OPC_5x[Code[CodeIdx] and $F], OPSx_ss, True); AddVss; AddHss; AddWss; end;
+          soNone: begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_ps, True); AddVps; AddHps; AddWps; end;
+          so66:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_pd, True); AddVpd; AddHpd; AddWpd; end;
+          soF2:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_sd, True); AddVsd; AddHsd; AddWsd; end;
+          soF3:   begin SetOpcode(OPC_5x[Code[CodeIdx] and Byte($F)], OPSx_ss, True); AddVss; AddHss; AddWss; end;
         end;
       end;
     end;
@@ -3354,7 +3354,7 @@ begin
     // $5C..$5F: see $54
     //---
     $60..$6B: begin
-      idx := Code[CodeIdx] and $F;
+      idx := Code[CodeIdx] and Byte($F);
       DecodeSIMD([soNone, so66]);
       case SimdOpcode of
         soNone: begin SetOpcode(OPC_6x[idx], OPS_6x[idx]      ); AddPq;  AddQd; end;
@@ -3362,7 +3362,7 @@ begin
       end;
     end;
     $6C..$6D: begin
-      idx := Code[CodeIdx] and $F;
+      idx := Code[CodeIdx] and Byte($F);
       DecodeSIMD([so66]);
       if SimdOpcode = so66
       then begin SetOpcode(OPC_6x[idx], OPS_6x[idx], True); AddVx; AddHx; AddWx; end;
@@ -3694,7 +3694,7 @@ begin
     end;
     $C8..$CF: begin
       SetOpcode(OPbswap);
-      AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+      AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
     end;
     //---
     $D0: begin
@@ -3705,7 +3705,7 @@ begin
       end;
     end;
     $D1..$D5, $D8..$DF: begin
-      idx := Code[CodeIdx] and $F;
+      idx := Code[CodeIdx] and Byte($F);
       DecodeSIMD([soNone, so66]);
       case SimdOpcode of
         soNone: begin SetOpcode(OPC_Dx[idx], OPS_Dx[idx]      ); AddPq;        AddQq; end;
@@ -3730,7 +3730,7 @@ begin
     // $D8..$DF: see $D1
     //---
     $E0..$E5, $E8..$EF: begin
-      idx := Code[CodeIdx] and $F;
+      idx := Code[CodeIdx] and Byte($F);
       DecodeSIMD([soNone, so66]);
       case SimdOpcode of
         soNone: begin SetOpcode(OPC_Ex[idx], OPS_Ex[idx]      ); AddPq;        AddQq; end;
@@ -3759,7 +3759,7 @@ begin
       then begin SetOpcode(OPlddqu, OPSnone, True); AddVx; AddMx; end;
     end;
     $F1..$F6, $F8..$FE: begin
-      idx := Code[CodeIdx] and $F;
+      idx := Code[CodeIdx] and Byte($F);
       DecodeSIMD([soNone, so66]);
       case SimdOpcode of
         soNone: begin SetOpcode(OPC_Fx[idx], OPS_Fx[idx]      ); AddPq;        AddQq; end;
@@ -4046,53 +4046,53 @@ begin
     2: begin
       // VEX 2
       // Rvvv vLpp
-      if Code[idx] and $80 = 0 then Include(Flags, rexR);
+      if Code[idx] and Byte($80) = 0 then Include(Flags, rexR);
       Vex.Index := ((Code[idx] shr 3) and $0F) xor $0F;
       Vex.Length       :=        (Code[idx] shr 2) and $01;
       Vex.VectorLength := LENMAP[(Code[idx] shr 2) and $01];
-      SimdOpcode := SIMDMAP[Code[idx] and $03];
+      SimdOpcode := SIMDMAP[Code[idx] and Byte($03)];
       mm := 1;
     end;
     3: begin
       // VEX 3
       // RXBm mmmm | Wvvv vLpp
-      if Code[idx] and $80 = 0 then Include(Flags, rexR);
-      if Code[idx] and $40 = 0 then Include(Flags, rexX);
-      if Code[idx] and $20 = 0 then Include(Flags, rexB);
-      mm := Code[idx] and $1F;
+      if Code[idx] and Byte($80) = 0 then Include(Flags, rexR);
+      if Code[idx] and Byte($40) = 0 then Include(Flags, rexX);
+      if Code[idx] and Byte($20) = 0 then Include(Flags, rexB);
+      mm := Code[idx] and Byte($1F);
 
       Inc(idx);
-      if Code[idx] and $80 <> 0 then Include(Flags, rexW);
+      if Code[idx] and Byte($80) <> 0 then Include(Flags, rexW);
       Vex.Index := ((Code[idx] shr 3) and $0F) xor $0F;
       Vex.Length       :=        (Code[idx] shr 2) and $01;
       Vex.VectorLength := LENMAP[(Code[idx] shr 2) and $01];
-      SimdOpcode := SIMDMAP[Code[idx] and $03];
+      SimdOpcode := SIMDMAP[Code[idx] and Byte($03)];
     end;
     4: begin
       // EVEX
       // RXBR' 00mm | Wvvv v1pp | zL'Lb V'aaa
      //  the RXB fields are mapped to the rex RXB flags
-      if Code[idx] and $80 = 0 then Include(Flags, rexR);
+      if Code[idx] and Byte($80) = 0 then Include(Flags, rexR);
       // Intel(r) 64 and IA-32 Architectures Software Developer’s Manual Volume 2:
       // Table 2-30. EVEX Prefix Bit Field Functional Grouping seems to indicate
       // that rexX is inverted and evexX not, but they appear to be the same
-      if Code[idx] and $40 = 0 then Flags := Flags + [rexX, evexX];
-      if Code[idx] and $20 = 0 then Include(Flags, rexB);
-      if Code[idx] and $10 = 0 then Include(Flags, evexR);
-      mm := Code[idx] and $03;
+      if Code[idx] and Byte($40) = 0 then Flags := Flags + [rexX, evexX];
+      if Code[idx] and Byte($20) = 0 then Include(Flags, rexB);
+      if Code[idx] and Byte($10) = 0 then Include(Flags, evexR);
+      mm := Code[idx] and Byte($03);
 
       Inc(idx);
-      if Code[idx] and $80 <> 0 then Include(Flags, rexW);
+      if Code[idx] and Byte($80) <> 0 then Include(Flags, rexW);
       Vex.Index := ((Code[idx] shr 3) and $0F) xor $0F;
-      SimdOpcode := SIMDMAP[Code[idx] and $03];
+      SimdOpcode := SIMDMAP[Code[idx] and Byte($03)];
 
       Inc(idx);
-      if Code[idx] and $80 <> 0 then Include(Flags, evexZ);
+      if Code[idx] and Byte($80) <> 0 then Include(Flags, evexZ);
       Vex.Length       :=        (Code[idx] shr 5) and $03;
       Vex.VectorLength := LENMAP[(Code[idx] shr 5) and $03];
-      if Code[idx] and $10 <> 0 then Include(Flags, evexB);
-      if Code[idx] and $08 = 0 then Include(Flags, evexV);
-      Vex.MaskIndex := Code[idx] and $07;
+      if Code[idx] and Byte($10) <> 0 then Include(Flags, evexB);
+      if Code[idx] and Byte($08) = 0 then Include(Flags, evexV);
+      Vex.MaskIndex := Code[idx] and Byte($07);
 
       Include(Flags, flagEvex);
     end;
@@ -4226,17 +4226,17 @@ begin
       $40..$4F: begin
         if (ProcessMode = dm64)
         then begin
-          if (Code[CodeIdx] and 1) <> 0 then Include(Flags, rexB);
-          if (Code[CodeIdx] and 2) <> 0 then Include(Flags, rexX);
-          if (Code[CodeIdx] and 4) <> 0 then Include(Flags, rexR);
-          if (Code[CodeIdx] and 8) <> 0 then Include(Flags, rexW);
+          if (Code[CodeIdx] and Byte(1)) <> 0 then Include(Flags, rexB);
+          if (Code[CodeIdx] and Byte(2)) <> 0 then Include(Flags, rexX);
+          if (Code[CodeIdx] and Byte(4)) <> 0 then Include(Flags, rexR);
+          if (Code[CodeIdx] and Byte(8)) <> 0 then Include(Flags, rexW);
           Include(Flags, flagRex);
         end
         else begin
           if Code[CodeIdx] <= $47
           then SetOpcode(OPinc)
           else SetOpcode(OPdec);
-          AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+          AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
           CheckLock;
         end;
       end;
@@ -4244,12 +4244,12 @@ begin
       $50..$57: begin
         Default64;
         SetOpcode(OPpush);
-        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
       end;
       $58..$5F: begin
         Default64;
         SetOpcode(OPpop);
-        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
       end;
       //---
       $60: begin
@@ -4398,7 +4398,7 @@ begin
       end;
       $91..$97: begin
         SetOpcode(OPxchg);
-        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
         AddReg(regGeneral, OperandSize, REG_A);
       end;
       $98: begin
@@ -4544,12 +4544,12 @@ begin
       //---
       $B0..$B7: begin
         SetOpcode(OPmov);
-        AddOpcReg(regGeneral, os8, Code[CodeIdx] and $07);
+        AddOpcReg(regGeneral, os8, Code[CodeIdx] and Byte($07));
         AddIb;
       end;
       $B8..$BF: begin
         SetOpcode(OPmov);
-        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and $07);
+        AddOpcReg(regGeneral, OperandSize, Code[CodeIdx] and Byte($07));
         AddIv;
       end;
       //---
