@@ -62,6 +62,9 @@ procedure thread_suspend_all(exclude:p_kthread);
 procedure thread_resume_all (exclude:p_kthread);
 
 var
+ thread_suspend_source:p_kthread=nil;
+
+var
  init_tty_cb:Tprocedure;
 
 implementation
@@ -885,6 +888,7 @@ var
  td,ttd:p_kthread;
 begin
  td:=curkthread;
+ thread_suspend_source:=td;
 
  threads_lock;
 
@@ -908,6 +912,7 @@ var
  td,ttd:p_kthread;
 begin
  td:=curkthread;
+ thread_suspend_source:=nil;
 
  threads_lock;
 

@@ -426,6 +426,7 @@ uses
  kern_authinfo,
  kern_namedobj,
  elf_nid_utils,
+ kern_thread,
  kern_jit_ctx,
  kern_jit_asm,
  kern_jit_dynamic;
@@ -439,7 +440,7 @@ function dynlib_unlink_imported_symbols_each(root,obj:p_lib_info):Integer; exter
 
 function dynlibs_locked:Boolean;
 begin
- Result:=sx_xlocked(@dynlibs_info.lock);
+ Result:=(curkthread=thread_suspend_source) or sx_xlocked(@dynlibs_info.lock);
 end;
 
 procedure dynlibs_lock;
