@@ -894,12 +894,12 @@ begin
 end;
 
 //REX.W
-//CVTSD2SI
-//CVTSI2SD
-//CVTSI2SS
-//CVTSS2SI
-//CVTTSD2SI
-//CVTTSS2SI
+//CVTSD2SI   [r32] r64, xmm1/m64
+//CVTSI2SD        xmm1, r/m64  [r/m32]
+//CVTSI2SS        xmm1, r/m64  [r/m32]
+//CVTSS2SI   [r32] r64, xmm1/m32
+//CVTTSD2SI  [r32] r64, xmm1/m64
+//CVTTSS2SI  [r32] r64, xmm1/m32
 
 //
 

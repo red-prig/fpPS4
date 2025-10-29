@@ -2897,7 +2897,7 @@ begin
 
       override_mem_in_beg(ctx,ovr,desc.hint,new1);
 
-      mem_size:=ctx.din.Operand[1].RegValue[0].ASize;
+      mem_size:=ctx.din.Operand[2].RegValue[0].ASize;
       Assert(mem_size<>os0);
 
       if ((his_ro in desc.hint) or (mem_size<>os32)) and

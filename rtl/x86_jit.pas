@@ -3076,8 +3076,13 @@ begin
 
  if (size=os0) then
  begin
-  Assert(reg0.ASize=reg1.ASize);
-  size:=reg0.ASize;
+  if (reg_size_pri in desc.opt) then
+  begin
+   size:=reg1.ASize;
+  end else
+  begin
+   size:=reg0.ASize;
+  end;
  end;
 
  ji:=default_jit_instruction;
@@ -3146,8 +3151,13 @@ begin
 
  if (size=os0) then
  begin
-  Assert(reg0.ASize=reg1.ASize);
-  size:=reg0.ASize;
+  if (reg_size_pri in desc.opt) then
+  begin
+   size:=reg1.ASize;
+  end else
+  begin
+   size:=reg0.ASize;
+  end;
  end;
 
  ji:=default_jit_instruction;
@@ -3222,8 +3232,13 @@ begin
 
  if (size=os0) then
  begin
-  Assert(reg0.ASize=reg1.ASize);
-  size:=reg0.ASize;
+  if (reg_size_pri in desc.opt) then
+  begin
+   size:=reg1.ASize;
+  end else
+  begin
+   size:=reg0.ASize;
+  end;
  end;
 
  ji:=default_jit_instruction;
