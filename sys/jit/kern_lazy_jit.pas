@@ -208,6 +208,7 @@ begin
   $66,
   $67,
   $F0,
+  $F2,
   $F3:Result:=True;
   else
       Result:=False;
