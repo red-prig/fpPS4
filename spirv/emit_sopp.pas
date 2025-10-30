@@ -48,6 +48,7 @@ begin
   S_WAITCNT:;
 
   S_TTRACEDATA:; //write_thread_trace_data(M0[31:0])
+  S_SETPRIO   :; //USER_PRIO[1:0] = imm16[1:0].u
 
   S_ENDPGM:
    begin
