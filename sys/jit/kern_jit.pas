@@ -931,13 +931,13 @@ begin
   case new.ASize of
     os8:
      begin
-      ctx.builder._RR(movsx8_desc,new,new,os64);
       new:=new_reg_size(new,os64);
+      ctx.builder._RR(movsx8_desc,new,new,False);
      end;
    os32:
      begin
-      ctx.builder._RR(movsxd_desc,new,new,os64);
       new:=new_reg_size(new,os64);
+      ctx.builder._RR(movsxd_desc,new,new,False);
      end
    else;
   end;

@@ -2343,10 +2343,12 @@ begin
  with ctx.builder do
   if (not_impl in desc.mem_reg.opt) then
   begin
-   _RR(desc.reg_mem,reg2,reg1,mem_size); //swapped
+   //reg mem
+   _RR(desc.reg_mem,reg1,reg2,True); //swapped
   end else
   begin
-   _RR(desc.mem_reg,reg1,reg2,mem_size);
+   //mem reg
+   _RR(desc.mem_reg,reg1,reg2,False);
   end;
 end;
 
@@ -3388,7 +3390,7 @@ begin
       Assert(not is_high(new1));
       Assert(not is_high(new2));
 
-      _RR(desc.mem__cl,new1,new2,mem_size);
+      _RR(desc.mem__cl,new1,new2,False);
 
       op_save(ctx,1,fix_size(new1));
      end;
@@ -3432,7 +3434,7 @@ begin
       Assert(not is_high(new1));
       Assert(not is_high(new2));
 
-      _RR(desc.mem__cl,new1,new2,mem_size);
+      _RR(desc.mem__cl,new1,new2,False);
      end
 
    else
