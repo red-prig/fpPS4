@@ -4053,7 +4053,7 @@ begin
 
   if ((cow and MAP_COW_NO_RMAP_FREE)=0) and (obj<>nil) then
   begin
-   if ((obj^.flags and OBJ_DMEM_EXT)<>0) or
+   if ((obj^.flags and (OBJ_DMEM_EXT or OBJ_JITSHM_EXT))<>0) or
       (obj^.otype=OBJT_PHYSHM) then
    begin
     Result:=vm_object_rmap_release(map,
