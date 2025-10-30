@@ -44,6 +44,38 @@ begin
  _ins_op(desc.reg_im8.op,i);
 end;
 
+function get_reg_prio(OpCode:TFullOpcode):t_op_opt; inline;
+begin
+ Result:=[];
+ if (OpCode.Prefix=OPPnone) then
+  case OpCode.Opcode of
+   OPcvtsd2 ,
+   OPcvtss2 ,
+   OPcvttsd2,
+   OPcvttss2:
+    case OpCode.Suffix of
+     OPSx_si:Result:=[reg_size_pri];
+     else;
+    end;
+   OPcvtsi2 :
+    case OpCode.Suffix of
+     OPSx_ss,
+     OPSx_sd:Result:=[reg_size_pri];
+     else;
+    end;
+   else;
+  end;
+end;
+
+procedure _set_reg_prio(var desc:t_op_desc;OpCode:TFullOpcode); inline;
+var
+ i:t_op_opt;
+begin
+ i:=get_reg_prio(OpCode);
+ desc.mem_reg.opt:=desc.mem_reg.opt+i;
+ desc.reg_mem.opt:=desc.reg_mem.opt+i;
+end;
+
 procedure op_emit2_simd(var ctx:t_jit_context2;const desc:t_op_desc);
 var
  tmp:t_op_desc;
@@ -58,6 +90,8 @@ begin
   else
     Assert(False);
  end;
+
+ _set_reg_prio(tmp,ctx.din.OpCode);
 
  op_emit2(ctx,tmp);
 end;
@@ -894,12 +928,21 @@ begin
 end;
 
 //REX.W
-//CVTSD2SI   [r32] r64, xmm1/m64
-//CVTSI2SD        xmm1, r/m64  [r/m32]
-//CVTSI2SS        xmm1, r/m64  [r/m32]
-//CVTSS2SI   [r32] r64, xmm1/m32
-//CVTTSD2SI  [r32] r64, xmm1/m64
-//CVTTSS2SI  [r32] r64, xmm1/m32
+
+//LZCNT      [r16] [r32] [r64], r/m64
+
+//MOVSX      [r16] [r32] [r64], r/m8
+//MOVSX      [r32] [r64], r/m16
+//MOVSXD     [r16] [r32] [r64], r/m32
+//MOVZX      [r16] [r32] [r64], r/m8
+//MOVZX      [r32] [r64], r/m16
+
+//CVTSD2SI   [r32] [r64], xmm1/m64
+//CVTSI2SD          xmm1, [r/m64]  [r/m32]
+//CVTSI2SS          xmm1, [r/m64]  [r/m32]
+//CVTSS2SI   [r32] [r64], xmm1/m32
+//CVTTSD2SI  [r32] [r64], xmm1/m64
+//CVTTSS2SI  [r32] [r64], xmm1/m32
 
 //
 

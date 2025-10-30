@@ -1469,7 +1469,7 @@ end;
 const
  lzcnt_desc:t_op_desc=(
   mem_reg:(opt:[not_impl]);
-  reg_mem:(op:$F30FBD;index:0);
+  reg_mem:(op:$F30FBD;index:0;opt:[reg_size_pri]);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_wo];
