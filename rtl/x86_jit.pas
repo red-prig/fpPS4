@@ -3075,10 +3075,10 @@ begin
  Assert(reg0.AScale<=1);
  Assert(reg1.AScale<=1);
 
- //RM -> reg0  1 xor 1 = 0
- //MR -> reg1  1 xor 0 = 1
- //RM -> reg1  0 xor 1 = 1
- //MR -> reg0  0 xor 0 = 0
+ //RM + R -> reg0 | 1 xor 1 = 0
+ //MR + R -> reg1 | 1 xor 0 = 1
+ //RM + M -> reg1 | 0 xor 1 = 1
+ //MR + M -> reg0 | 0 xor 0 = 0
 
  if (reg_size_pri in desc.opt) xor RM then
  begin

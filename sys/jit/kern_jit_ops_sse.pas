@@ -57,12 +57,6 @@ begin
      OPSx_si:Result:=[reg_size_pri];
      else;
     end;
-   OPcvtsi2 :
-    case OpCode.Suffix of
-     OPSx_ss,
-     OPSx_sd:Result:=[reg_size_pri];
-     else;
-    end;
    else;
   end;
 end;
@@ -937,12 +931,12 @@ end;
 //MOVZX      [r16] [r32] [r64], r/m8
 //MOVZX      [r32] [r64], r/m16
 
-//CVTSD2SI   [r32] [r64], xmm1/m64
-//CVTSI2SD          xmm1, [r/m64]  [r/m32]
-//CVTSI2SS          xmm1, [r/m64]  [r/m32]
-//CVTSS2SI   [r32] [r64], xmm1/m32
-//CVTTSD2SI  [r32] [r64], xmm1/m64
-//CVTTSS2SI  [r32] [r64], xmm1/m32
+//CVTSD2SI   [r32] [r64], xmm1/m64         R
+//CVTSI2SD          xmm1, [r/m64]  [r/m32] M
+//CVTSI2SS          xmm1, [r/m64]  [r/m32] M
+//CVTSS2SI   [r32] [r64], xmm1/m32         R
+//CVTTSD2SI  [r32] [r64], xmm1/m64         R
+//CVTTSS2SI  [r32] [r64], xmm1/m32         R
 
 //
 
