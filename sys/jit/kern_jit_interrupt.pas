@@ -13,15 +13,17 @@ uses
  x86_fpdbgdisas,
  x86_jit;
 
-procedure JIT_AST_HANDLER(td:p_kthread;var Rip:QWORD;var EFlags:DWORD;var Dr3:QWORD);
+function  GET_JIT_FUNC(rip:qword):Byte; external;
+procedure jit_interrupt_ud2; external;
+procedure jit_interrupt_ast; external;
+
+procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
 
 implementation
 
 uses
+ subr_backtrace,
  g_node_splay;
-
-function  GET_JIT_FUNC(rip:qword):Byte; external;
-procedure jit_interrupt_ast; external;
 
 type
  t_next_addr_type=(naCurr,naNext,naRipUnknow);
@@ -118,42 +120,65 @@ end;
 
 ////
 
-function FixupEnd(addr,__end:Pointer):Pointer;
+function FixupEnd(addr:Pointer;rstart,rend:QWORD):Pointer;
 var
+ beg:Pointer;
  ptr:Pointer;
  ofs:Int64;
 
  dis:TX86Disassembler;
  din:TInstruction;
 begin
- if (addr=__end) then Exit(addr);
+ if (QWORD(addr)=rend) then Exit(addr);
 
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
  ptr:=addr;
- dis.Disassemble(dm64,ptr,din);
 
- case din.OpCode.Opcode of
-  OPjmp:
-   begin
-    if (din.Operand[1].RegValue[0].AType=regNone) then
+ repeat
+
+  beg:=ptr;
+  dis.Disassemble(dm64,ptr,din);
+
+  case din.OpCode.Opcode of
+   OPjmp:
     begin
-     //imm offset
-     ofs:=0;
-     GetTargetOfs(din,addr,1,ofs);
-     ofs:=QWORD(ptr)+ofs;
-
-     if ofs=QWORD(__end) then
+     if (din.Operand[1].RegValue[0].AType=regNone) then
      begin
-      Exit(__end);
+      //imm offset
+      ofs:=0;
+      GetTargetOfs(din,beg,1,ofs);
+      ofs:=QWORD(ptr)+ofs;
+
+      if (ofs=rend) then
+      begin
+       Exit(Pointer(rend));
+      end else
+      if (ofs>=rstart) and
+         (ofs< rend) then
+      begin
+       //next
+       ptr:=Pointer(ofs);
+      end else
+      begin
+       //oob jmp
+       Break;
+      end;
+
+     end else
+     begin
+      //other jmp
+      Break;
      end;
-
     end;
-   end;
 
-  else;
- end;
+   else
+    //any instr
+    Break;
+  end;
+
+ until false;
 
  //not
  Exit(addr);
@@ -161,7 +186,9 @@ end;
 
 //
 
-function rev_dispatcher(addr:Pointer):Pointer; public;
+procedure ipi_sigreturn; external;
+
+procedure rev_dispatcher(addr:Pointer); public;
 var
  info:t_jit_addr_info;
  fin:Pointer;
@@ -171,32 +198,42 @@ begin
 
   if (info.recompil = QWORD(addr)) then
   begin
-   Result:=Pointer(info.original);
-   //Writeln('rev_dispatcher:0:',HexStr(addr),'->',HexStr(Result));
+   with curkthread^.td_frame do
+   begin
+    tf_rip:=(info.original); //need by AST
+    Writeln('rev_dispatcher:0:',HexStr(addr),'->',HexStr(info.original,16));
+   end;
    Exit;
   end;
 
   fin :=Pointer(info.recompil + info.jflags.recompil);
-  addr:=FixupEnd(addr,fin);
+  addr:=FixupEnd(addr,QWORD(info.recompil),QWORD(fin));
 
   if (addr=fin) then
   begin
-   Result:=Pointer(info.original + info.jflags.original);
 
-   //recheck
-   exist_jit_host(addr,@info);
+   with curkthread^.td_frame do
+   begin
+    tf_rip:=(info.original + info.jflags.original); //need by AST
 
-   Assert(Result=Pointer(info.original),'rev_dispatcher:1');
+    //recheck
+    exist_jit_host(addr,@info);
 
-   //Writeln('rev_dispatcher:2:',HexStr(addr),'->',HexStr(Result));
+    Assert((info.original = tf_rip),'rev_dispatcher:1');
+
+    Writeln('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
+   end;
+
    Exit;
   end else
   begin
+   Writeln('rev_dispatcher:3:',HexStr(addr));
    Assert(False,'rev_dispatcher:3');
   end;
 
  end else
  begin
+  Writeln('rev_dispatcher:4:',HexStr(addr));
   Assert(False,'rev_dispatcher:4');
  end;
 end;
@@ -344,7 +381,7 @@ begin
   GetTargetOfs(ctx.din,ctx.code,1,ofs);
   dst:=ctx.ptr_next+ofs;
 
-  dst:=FixupEnd(dst,Pointer(ctx.__end));
+  dst:=FixupEnd(dst,ctx.start,ctx.__end);
 
   if (dst=Pointer(ctx.__end)) then
   begin
@@ -442,7 +479,7 @@ begin
   Exit;
  end;
 
- if FixupEnd(addr,Pointer(ctx.__end))=Pointer(ctx.__end) then
+ if FixupEnd(addr,ctx.start,ctx.__end)=Pointer(ctx.__end) then
  begin
   call_interrupt(ctx,Pointer(ctx.__end));
 
@@ -549,13 +586,13 @@ begin
  ctx.builder.SaveTo(td^.td_jctx.lacuna.addr,mem_size);
 end;
 
-procedure JIT_AST_HANDLER(td:p_kthread;var Rip:QWORD;var EFlags:DWORD;var Dr3:QWORD); public;
+procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
 label
  _start;
 var
  f:Byte;
  info:t_jit_addr_info;
- ctx:t_jit_interrupt_ctx;
+ ctx :t_jit_interrupt_ctx;
 
 begin
 _start:
@@ -565,7 +602,7 @@ _start:
  if (f<>3) and (td^.td_teb^.iflag<>0) then
  begin
   Writeln('TODO:rare ipi case!');
-  td^.td_teb^.jit_trp:=@jit_interrupt_ast;
+  td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
   Exit;
  end;
 
@@ -573,18 +610,24 @@ _start:
   1:
    begin
     //jit handler
-    //Writeln('jit handler');
-    td^.td_teb^.jit_trp:=@jit_interrupt_ast;
+    Writeln('jit handler');
+    td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
+    Exit;
    end;
   2:
    begin
     //jit nop handler
-    //Writeln('jit nop handler');
-    Rip:=QWORD(@jit_interrupt_ast);
+    Writeln('jit nop handler');
+
+    //pop %rip
+    Rip:=PQWORD(Rsp)[0];
+    Rsp:=Rsp+8;
+    goto _start;
    end;
   3:
    begin
     //ipi nop
+    Writeln('ipi nop');
     td^.td_teb^.iflag:=0;
     Rip:=QWORD(td^.td_teb^.ipi_rip);
     goto _start;
@@ -594,10 +637,24 @@ _start:
     if (Rip>=QWORD(td^.td_jctx.lacuna.addr)) and
        (Rip<=(QWORD(td^.td_jctx.lacuna.addr + td^.td_jctx.lacuna.size))) then
     begin
+     //jit lacuna
+     Writeln('jit lacuna');
      //skip
+     Exit;
     end else
     if exist_jit_host(Pointer(Rip),@info) then
     begin
+
+     if (info.recompil = Rip) then
+     begin
+      //push %rip
+      Rsp:=Rsp-8;
+      PQWORD(Rsp)[0]:=Rip;
+      //
+      Rip:=QWORD(@jit_interrupt_ast);
+      //
+      Exit;
+     end;
 
      jit_analize(Pointer(Rip),@info,ctx);
 
@@ -608,7 +665,7 @@ _start:
        begin
         ctx.builder.Free;
         Writeln('TODO:naRipUnknow');
-        td^.td_teb^.jit_trp:=@jit_interrupt_ast;
+        td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
         Exit;
        end;
       else;
@@ -616,16 +673,25 @@ _start:
 
      jit_build(td,ctx);
 
-     //print_disassemble(td^.td_jctx.lacuna.addr,ctx.builder.GetInstructionsSize);
+     Writeln('-----------------------------');
+     Writeln(HexStr(td^.td_jctx.lacuna.addr));
 
-     Rip:=QWORD(td^.td_jctx.lacuna.addr);
+     print_disassemble(td^.td_jctx.lacuna.addr,ctx.builder.GetInstructionsSize);
+
+     Writeln(HexStr(td^.td_jctx.lacuna.addr+ctx.builder.GetInstructionsSize));
+     Writeln('-----------------------------');
 
      ctx.builder.Free;
+
+     Rip:=QWORD(td^.td_jctx.lacuna.addr);
+     //
+     Exit;
     end else
     begin
      //internal? hle?
      Writeln('internal handler');
-     td^.td_teb^.jit_trp:=@jit_interrupt_ast;
+     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
+     Exit;
     end;
    end;
  end;

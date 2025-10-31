@@ -29,7 +29,7 @@ uses
  x86_fpdbgdisas;
 
 function IS_TRAP_FUNC(rip:qword):Boolean; external;
-function GET_JIT_FUNC(rip:qword):Byte; external;
+function GET_JIT_FUNC(rip:qword):Byte;    external;
 
 function CaptureBacktrace(td:p_kthread;rbp:PPointer;skipframes,count:sizeint;frames:PCodePointer):sizeint;
 label

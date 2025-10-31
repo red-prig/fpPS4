@@ -790,7 +790,7 @@ begin
 
   with ContextRecord^ do
   begin
-   JIT_AST_HANDLER(td,Rip,EFlags,Dr3);
+   JIT_AST_HANDLER(td,Rip,Rsp,EFlags,@Dr0);
   end;
 
   xrstor(fpstate);

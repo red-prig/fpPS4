@@ -302,7 +302,6 @@ begin
   FPC_EXCEPTION_CODE       :Exit;
   FPC_SET_EH_HANDLER       :Exit(EXCEPTION_CONTINUE_EXECUTION);
   EXCEPTION_BREAKPOINT     :Exit;
-  //EXCEPTION_SINGLE_STEP    :Exit;
   EXCEPTION_SET_THREADNAME :Exit;
   DBG_PRINTEXCEPTION_C     :Exit(EXCEPTION_CONTINUE_EXECUTION);
   DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
@@ -313,8 +312,17 @@ begin
     begin
      Dr7:=0;
      EFlags:=EFlags or $10000; //RF
-     JIT_AST_HANDLER(curkthread,Rip,EFlags,Dr3);
      //Writeln('SINGLE_STEP:',HexStr(Rip,16));
+     JIT_AST_HANDLER(curkthread,Rip,Rsp,EFlags,@Dr0);
+     Exit(EXCEPTION_CONTINUE_EXECUTION);
+    end;
+
+  EXCEPTION_ILLEGAL_INSTRUCTION:
+    with p^.ContextRecord^ do
+    if (Rip=QWORD(@jit_interrupt_ud2)) then
+    begin
+     //Writeln('ILLEGAL_INSTRUCTION:',HexStr(Rip,16));
+     JIT_AST_HANDLER(curkthread,Rip,Rsp,EFlags,@Dr0);
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
 

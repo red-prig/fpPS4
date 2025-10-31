@@ -1090,13 +1090,20 @@ procedure jit_interrupt_nop; assembler; nostackframe;
 asm
 end;
 
-function rev_dispatcher(addr:Pointer):Pointer; external;
+procedure rev_dispatcher(addr:Pointer); external;
+
+procedure jit_interrupt_ud2; assembler; nostackframe; public;
+asm
+ ud2
+end;
 
 procedure jit_interrupt_ast; assembler; nostackframe; public;
 label
  _doreti,
  _doreti_exit;
 asm
+ //called when the end of the instruction is confirmed!
+
  //clear handler
  leaq jit_interrupt_nop(%rip),%r14
  movq %r14,%gs:teb.jit_trp
@@ -1105,22 +1112,6 @@ asm
  leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
 
  call jit_save_ctx // -> pushf
-
- //tf_r13
- movqq jit_frame.tf_r13(%r13),%rdi
- movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r13(%r13)
-
- //tf_rsp
- movqq jit_frame.tf_rsp(%r13),%rdi
- movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13)
-
- //tf_rbp
- movqq jit_frame.tf_rbp(%r13),%rdi
- movqq %rdi, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
-
-
-
- movq $0,%r13
 
  pop   %rdi //ret
  push  %rdi
@@ -1132,9 +1123,6 @@ asm
  andq  $-16,%rsp //align stack
 
  call  rev_dispatcher
-
- movq  %gs:teb.thread,%r15                 //curkthread
- movqq %rax, kthread.td_frame.tf_rip(%r15) //save rev_dispatcher result
 
  _doreti:
 
@@ -1151,14 +1139,10 @@ asm
   //interrupt guard clear
   movq $0,%gs:teb.iflag
 
-  movq $0,%r15
-
   call ast
   jmp _doreti
 
   _doreti_exit:
-
-  movq $0,%r15
 
   //Restore full.
   call  ipi_sigreturn
@@ -1213,7 +1197,8 @@ begin
  begin
   Exit(3);
  end else
- if (rip=QWORD(@jit_interrupt_nop)) then
+ if (rip=QWORD(@jit_interrupt_nop)) or
+    (rip=QWORD(@jit_interrupt_ud2)) then
  begin
   Exit(2);
  end else

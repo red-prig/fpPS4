@@ -297,7 +297,8 @@ end;
 procedure switch_to_jit(td:p_kthread); public;
 label
  _host,
- _start;
+ _start,
+ _no_preload;
 var
  node:p_jit_entry_point;
  jctx:p_td_jctx;
@@ -315,6 +316,15 @@ begin
  begin
   //jit mode
 
+  if (td^.td_frame.tf_flags and TF_JIT_RIP)<>0 then
+  begin
+   //rip in jit addr
+   //
+   td^.td_frame.tf_flags:=td^.td_frame.tf_flags and (not TF_JIT_RIP);
+   //
+   node:=nil;
+   goto _no_preload;
+  end else
   if is_guest_addr(td^.td_frame.tf_rip) then
   begin
    //jit->jit
@@ -368,11 +378,11 @@ begin
   goto _start;
  end;
 
+ _no_preload:
+
  jctx:=@td^.td_jctx;
 
  frame:=@td^.td_frame.tf_r13;
-
- //jctx^.block:=node^.blob;
 
  if (jctx^.rsp=nil) then
  begin
@@ -397,8 +407,12 @@ begin
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
  td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
 
- td^.td_frame.tf_rip:=QWORD(node^.dst);
  td^.td_frame.tf_r13:=QWORD(frame);
+
+ if (node<>nil) then //have fetch_entry/preload?
+ begin
+  td^.td_frame.tf_rip:=QWORD(node^.dst);
+ end;
 
  set_pcb_flags(td,PCB_FULL_IRET or PCB_IS_JIT);
 
@@ -413,7 +427,10 @@ begin
  //teb stack
 
  //
- node^.dec_ref('fetch_entry')
+ if (node<>nil) then
+ begin
+  node^.dec_ref('fetch_entry')
+ end;
 end;
 
 function fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
@@ -712,7 +729,8 @@ begin
   begin
    if exist_jit_host(from,@info) then
    begin
-    td^.td_frame.tf_rip:=info.original;
+    td^.td_frame.tf_rip  :=info.original;
+    td^.td_frame.tf_flags:=td^.td_frame.tf_flags and (not TF_JIT_RIP);
     test_unresolve_symbol(td,addr);
    end;
   end;
