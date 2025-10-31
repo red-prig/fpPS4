@@ -186,8 +186,6 @@ end;
 
 //
 
-procedure ipi_sigreturn; external;
-
 procedure rev_dispatcher(addr:Pointer); public;
 var
  info:t_jit_addr_info;
@@ -201,7 +199,7 @@ begin
    with curkthread^.td_frame do
    begin
     tf_rip:=(info.original); //need by AST
-    Writeln('rev_dispatcher:0:',HexStr(addr),'->',HexStr(info.original,16));
+    //Writeln('rev_dispatcher:0:',HexStr(addr),'->',HexStr(info.original,16));
    end;
    Exit;
   end;
@@ -221,7 +219,7 @@ begin
 
     Assert((info.original = tf_rip),'rev_dispatcher:1');
 
-    Writeln('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
+    //Writeln('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
    end;
 
    Exit;
@@ -610,14 +608,14 @@ _start:
   1:
    begin
     //jit handler
-    Writeln('jit handler');
+    //Writeln('jit handler');
     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
     Exit;
    end;
   2:
    begin
     //jit nop handler
-    Writeln('jit nop handler');
+    //Writeln('jit nop handler');
 
     //pop %rip
     Rip:=PQWORD(Rsp)[0];
@@ -627,7 +625,7 @@ _start:
   3:
    begin
     //ipi nop
-    Writeln('ipi nop');
+    //Writeln('ipi nop');
     td^.td_teb^.iflag:=0;
     Rip:=QWORD(td^.td_teb^.ipi_rip);
     goto _start;
@@ -638,7 +636,7 @@ _start:
        (Rip<=(QWORD(td^.td_jctx.lacuna.addr + td^.td_jctx.lacuna.size))) then
     begin
      //jit lacuna
-     Writeln('jit lacuna');
+     //Writeln('jit lacuna');
      //skip
      Exit;
     end else
@@ -673,6 +671,7 @@ _start:
 
      jit_build(td,ctx);
 
+     {
      Writeln('-----------------------------');
      Writeln(HexStr(td^.td_jctx.lacuna.addr));
 
@@ -680,6 +679,7 @@ _start:
 
      Writeln(HexStr(td^.td_jctx.lacuna.addr+ctx.builder.GetInstructionsSize));
      Writeln('-----------------------------');
+     }
 
      ctx.builder.Free;
 
@@ -689,7 +689,7 @@ _start:
     end else
     begin
      //internal? hle?
-     Writeln('internal handler');
+     //Writeln('internal handler');
      td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
      Exit;
     end;
