@@ -24,6 +24,7 @@ implementation
 
 uses
  time,
+ md_time,
  vm,
  vmparam,
  vm_pmap_prot,
@@ -1214,7 +1215,28 @@ procedure op_rdtsc(var ctx:t_jit_context2);
 begin
  if time.strict_ps4_freq then
  begin
-  ctx.builder.call_far(@strict_ps4_rdtsc_jit);
+  with ctx.builder do
+  begin
+   laxf;
+   movq(r14,rax);
+   //
+   rdtsc;
+   //
+   shli8(rdx, 32);
+   orq  (rax,rdx);
+   //
+   //inline md_rev_guest
+   movi64(r15,md_rev_guest);
+   //replacing div with mul, the result in %rdx
+   mulq  (r15);
+   //
+   movq (eax,edx); //get lo
+   shri8(rdx, 32); //get hi
+   //
+   xchgq(rax,r14);
+   saxf;
+   movq (rax,r14);
+  end;
  end else
  begin
   add_orig(ctx);
@@ -1225,7 +1247,43 @@ procedure op_rdtscp(var ctx:t_jit_context2);
 begin
  if time.strict_ps4_freq then
  begin
-  ctx.builder.call_far(@strict_ps4_rdtscp_jit);
+  with ctx.builder do
+  begin
+   laxf;
+   movq(r15,rax);
+   //
+   movq(r14,rbx); //save rbx
+   //
+   movi(eax,1);
+   cpuid;
+   //
+   shri8  (ebx,6); //cpu_id
+   andi8se(ebx,7); //0..7
+   //
+   movi(ecx,7);
+   subq(ecx,ebx);  //7-cpu_id
+   //
+   movq(rbx,r14);  //restore rbx
+   //
+   lfence;
+   rdtsc ;
+   lfence;
+   //
+   shli8(rdx, 32);
+   orq  (rax,rdx);
+   //
+   //inline md_rev_guest
+   movi64(r15,md_rev_guest);
+   //replacing div with mul, the result in %rdx
+   mulq  (r15);
+   //
+   movq (eax,edx); //get lo
+   shri8(rdx, 32); //get hi
+   //
+   xchgq(rax,r15);
+   saxf;
+   movq (rax,r15);
+  end;
  end else
  with ctx.builder do
  begin
@@ -1234,28 +1292,26 @@ begin
   //rcx //result3
   //rbx //backup -> CPUID_LOCAL_APIC_ID 0xff000000 0..7
 
-  movq(r_tmp0,rbx); //save rbx
-
+  movq(r14,rbx); //save rbx
+  //
   movi(eax,1);
-  _O($0FA2);    //cpuid
-
-  //load flags to al,ah
+  cpuid;
+  //
   laxf;
-
+  //
   shri8  (ebx,6); //cpu_id
   andi8se(ebx,7); //0..7
-
+  //
   movi   (ecx,7);
   subq   (ecx,ebx); //7-cpu_id
-
-  //store flags from al,ah
+  //
   saxf;
-
-  movq(rbx,r_tmp0); //restore rbx
-
-  _O($0FAEE8); //lfence
-  _O($0F31);   //rdtsc
-  _O($0FAEE8); //lfence
+  //
+  movq   (rbx,r14); //restore rbx
+  //
+  lfence;
+  rdtsc ;
+  lfence;
  end;
 end;
 

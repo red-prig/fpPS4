@@ -68,18 +68,12 @@ procedure jit_load_ctx;
 function  get_jit_ctx_state(td_frame:p_trapframe):Boolean;
 procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean);
 
-procedure jit_cpuid; assembler;
-
-procedure strict_ps4_rdtsc_jit;  assembler;
-procedure strict_ps4_rdtscp_jit; assembler;
-
+procedure jit_cpuid;         assembler;
 procedure jit_interrupt_nop; assembler;
 
 implementation
 
 uses
- time,
- md_time,
  trap,
  md_context,
  signal,
@@ -1028,68 +1022,6 @@ asm
  jmp %gs:teb.jit_trp
  //marker
  .globl .endof_jit_cpuid
-end;
-
-procedure strict_ps4_rdtsc_jit; assembler; nostackframe;
-asm
- seto %al
- lahf
- movq %rax, %r14
- //
- rdtsc
- //
- shl  $32, %rdx
- or  %rdx, %rax
- //
- //replacing div with mul, the result in %rdx
- mulq md_rev_guest(%rip)
- //
- mov %edx, %eax //get lo
- shr  $32, %rdx //get hi
- //
- xchg %r14, %rax
- addb $127, %al
- sahf
- movq %r14, %rax
-end;
-
-procedure strict_ps4_rdtscp_jit; assembler; nostackframe;
-asm
- //
- seto %al
- lahf
- movq %rax, %r15
- //
- movq %rbx, %r14
- //
- mov  $1, %eax
- cpuid
- //
- shr $6, %ebx
- and $7, %ebx
- //
- mov $7  , %ecx
- sub %ebx, %ecx
- //
- mov %r14, %rbx
- //
- lfence
- rdtsc
- lfence
- //
- shl  $32, %rdx
- or  %rdx, %rax
- //
- //replacing div with mul, the result in %rdx
- mulq md_rev_guest(%rip)
- //
- mov %edx, %eax //get lo
- shr  $32, %rdx //get hi
- //
- xchg %r15, %rax
- addb $127, %al
- sahf
- movq %r15, %rax
 end;
 
 procedure jit_interrupt_nop; assembler; nostackframe;

@@ -452,6 +452,8 @@ type
   procedure subi    (reg:TRegValue  ;imm:Int64);
   procedure subi8se (reg:TRegValue  ;imm:ShortInt);
   procedure subi8se (mem:t_jit_leas ;imm:ShortInt);
+  procedure mulq    (reg:TRegValue);
+  procedure mulq    (mem:t_jit_leas);
   procedure shl_cl  (reg:TRegValue);
   procedure shr_cl  (reg:TRegValue);
   procedure shli8   (reg:TRegValue  ;imm:Byte);
@@ -510,6 +512,9 @@ type
   procedure lahf;
   procedure saxf;
   procedure laxf;
+  procedure cpuid;
+  procedure rdtsc;
+  procedure lfence;
   procedure cli;
   procedure sti;
   procedure seto(reg:TRegValue);
@@ -4277,6 +4282,20 @@ begin
  _MI8(desc,mem,imm);
 end;
 
+procedure t_jit_builder.mulq(reg:TRegValue);
+const
+ desc:t_op_type=(op:$F7;index:4);
+begin
+ _R(desc,reg);
+end;
+
+procedure t_jit_builder.mulq(mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$F7;index:4);
+begin
+ _M(desc,mem);
+end;
+
 ///
 
 procedure t_jit_builder.shl_cl(reg:TRegValue);
@@ -5556,6 +5575,21 @@ begin
  //load flags to al,ah
  seto(al);
  lahf;
+end;
+
+procedure t_jit_builder.cpuid;
+begin
+ _O($0FA2);
+end;
+
+procedure t_jit_builder.rdtsc;
+begin
+ _O($0F31);
+end;
+
+procedure t_jit_builder.lfence;
+begin
+ _O($0FAEE8);
 end;
 
 procedure t_jit_builder.cli;
