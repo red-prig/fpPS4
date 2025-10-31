@@ -400,6 +400,9 @@ asm
   vmovdqa %ymm14,0x1C0(%rdi)
   vmovdqa %ymm15,0x1E0(%rdi)
  {$ENDIF}
+
+ //marker
+ .globl .endof_jit_save_ctx
 end;
 
 procedure jit_load_ctx; assembler; nostackframe;
@@ -467,6 +470,9 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13), %r12
  //tf_r14=tf_r14
  //tf_r15=tf_r15
+
+ //marker
+ .globl .endof_jit_load_ctx
 end;
 
 //in:r14(addr) r15(plt) out:r14(addr)
@@ -1153,6 +1159,8 @@ asm
 end;
 
 procedure endof_jit_syscall      ; external name '.endof_jit_syscall';
+procedure endof_jit_save_ctx     ; external name '.endof_jit_save_ctx';
+procedure endof_jit_load_ctx     ; external name '.endof_jit_load_ctx';
 procedure endof_jit_jmp_plt_cache; external name '.endof_jit_jmp_plt_cache';
 procedure endof_jit_jmp_dispatch ; external name '.endof_jit_jmp_dispatch';
 procedure endof_jit_hle_trace    ; external name '.endof_jit_hle_trace';
@@ -1168,6 +1176,14 @@ begin
     (
      (rip>=QWORD(@jit_syscall)) and
      (rip<=(QWORD(@endof_jit_syscall)))
+    ) or
+    (
+     (rip>=QWORD(@jit_save_ctx)) and
+     (rip<=(QWORD(@endof_jit_save_ctx)))
+    ) or
+    (
+     (rip>=QWORD(@jit_load_ctx)) and
+     (rip<=(QWORD(@endof_jit_load_ctx)))
     ) or
     (
      (rip>=QWORD(@jit_jmp_plt_cache)) and
