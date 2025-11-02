@@ -1273,9 +1273,9 @@ begin
    orq  (rax,rdx);
    //
    //inline md_rev_guest
-   movi64(r15,md_rev_guest);
+   movi64(r14,md_rev_guest);
    //replacing div with mul, the result in %rdx
-   mulq  (r15);
+   mulq  (r14);
    //
    movq (eax,edx); //get lo
    shri8(rdx, 32); //get hi
