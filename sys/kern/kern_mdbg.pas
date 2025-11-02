@@ -13,6 +13,9 @@ uses
  sysutils,
  errno,
  systm,
+ vuio,
+ md_tty,
+ sys_tty,
  kern_mtx,
  kern_condvar,
  kern_thr,
@@ -160,6 +163,33 @@ begin
 
 end;
 
+procedure mdbg_out(p:PChar);
+var
+ buf:PChar;
+ len:ptruint;
+ uio:t_uio;
+ aio:iovec;
+begin
+ buf:=AllocMem($1000);
+ len:=0;
+ if copyinstr(p,buf,$1000,@len)=0 then
+ begin
+  uio:=Default(t_uio);
+  aio:=Default(iovec);
+  //
+  aio.iov_base  :=buf;
+  aio.iov_len   :=len;
+  //
+  uio.uio_iov   :=@aio;
+  uio.uio_iovcnt:=1;
+  uio.uio_segflg:=UIO_SYSSPACE;
+  uio.uio_resid :=len;
+  //
+  ttydisc_write(@debug_tty,@uio,0);
+ end;
+ FreeMem(buf);
+end;
+
 function sys_mdbg_service(op:Integer;arg1,arg2:Pointer):Integer;
 var
  props:p_mdbg_pevt;
@@ -188,6 +218,11 @@ begin
      Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
      print_backtrace_td(stderr);
      Result:=0;
+    end;
+
+  7: //sceKernelDebugOutText
+    begin
+     mdbg_out(arg1);
     end;
 
   8:

@@ -305,6 +305,7 @@ end;
 function ttydisc_write(tp:p_tty;uio:p_uio;ioflag:Integer):Integer;
 var
  size:QWORD;
+ buf:Pointer;
 begin
  uio^.uio_td:=curkthread;
  size:=tty_get_full_size(tp,uio);
@@ -315,10 +316,9 @@ begin
    Result:=_ttydisc_write0(tp,uio);
   end else
   begin
-   uio^.uio_td:=GetMem(size);
-   Result:=_ttydisc_write(tp,uio,uio^.uio_td);
-   FreeMem(uio^.uio_td);
-   uio^.uio_td:=nil;
+   buf:=GetMem(size);
+   Result:=_ttydisc_write(tp,uio,buf);
+   FreeMem(buf);
   end;
  end else
  begin
