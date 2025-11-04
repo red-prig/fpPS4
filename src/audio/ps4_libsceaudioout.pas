@@ -10,7 +10,8 @@ interface
 uses
   //libportaudio,
   subr_dynlib,
-  audioout_interface;
+  audioout_interface,
+  SDL3_audio_interface;
 
 type
  pSceAudioOutOutputParam=^SceAudioOutOutputParam;
@@ -112,7 +113,7 @@ const
  SCE_AUDIO_OUT_PARAM_ATTR_SHIFT =16;
 
  SCE_AUDIO_VOLUME_SHIFT       =15;
- SCE_AUDIO_VOLUME_0DB         =(1<<SCE_AUDIO_VOLUME_SHIFT);
+ SCE_AUDIO_VOLUME_0DB         =(1 shl SCE_AUDIO_VOLUME_SHIFT);
  SCE_AUDIO_VOLUME_FLAG_L_CH   =(1 shl 0);
  SCE_AUDIO_VOLUME_FLAG_R_CH   =(1 shl 1);
  SCE_AUDIO_VOLUME_FLAG_C_CH   =(1 shl 2);
@@ -164,7 +165,7 @@ begin
  if XCHG(_lazy_init,1)=0 then
  begin
 
-  g_audioout_interface:=TAudioOutNull;
+  g_audioout_interface:=Init_SDL3_interface();
 
   mtx_init(g_port_lock,'AudioOut');
 
@@ -213,7 +214,7 @@ function _out_open(userId,_type:Integer;
                    len,param:DWORD):Integer;
 var
  port_id:Integer;
- f_channels:DWORD;
+ aparams:TAudioParams;
  handle:TAudioOutHandle;
 begin
  //case   0: port_id[0..7]
@@ -257,40 +258,54 @@ begin
   Exit(SCE_AUDIO_OUT_ERROR_PORT_FULL);
  end;
 
- f_channels:=0;
+ aparams:=Default(TAudioParams);
 
  case (param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO:
    begin
-    f_channels:=1;
+    //S16
+    aparams.channels:=1;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO:
    begin
-    f_channels:=2;
+    //S16
+    aparams.channels:=2;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
    begin
-    f_channels:=8;
+    //S16
+    aparams.channels:=8;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
    begin
-    f_channels:=1;
+    //float
+    aparams.is_float:=True;
+    aparams.channels:=1;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
    begin
-    f_channels:=2;
+    //float
+    aparams.is_float:=True;
+    aparams.channels:=2;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
    begin
-    f_channels:=8;
+    //float
+    aparams.is_float:=True;
+    aparams.channels:=8;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD:
    begin
-    f_channels:=8;
+    //S16
+    aparams.is_std  :=True;
+    aparams.channels:=8;
    end;
   SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
    begin
-    f_channels:=8;
+    //float
+    aparams.is_float:=True;
+    aparams.is_std  :=True;
+    aparams.channels:=8;
    end;
   10..14:
    begin
@@ -303,6 +318,9 @@ begin
    end;
  end;
 
+ aparams.is_restricted :=(param and SCE_AUDIO_OUT_PARAM_ATTR_RESTRICTED )<>0;
+ aparams.is_mix_to_main:=(param and SCE_AUDIO_OUT_PARAM_ATTR_MIX_TO_MAIN)<>0;
+
  handle:=g_audioout_interface.Create;
 
  if (handle=nil) then
@@ -314,8 +332,7 @@ begin
  handle.f_userId   :=userId;
  handle.f_type     :=_type;
  handle.f_len      :=len;
- handle.f_param    :=param;
- handle.f_channels :=f_channels;
+ handle.f_param    :=aparams;
 
  if not handle.Open('') then
  begin
@@ -676,7 +693,7 @@ begin
      end;
    end;
 
-   state^.channel:=Byte(g_port_table[port_id].f_channels);
+   state^.channel:=Byte(g_port_table[port_id].f_param.channels);
 
    if (g_port_table[port_id].f_type=SCE_AUDIO_OUT_PORT_TYPE_PADSPK) then
    begin

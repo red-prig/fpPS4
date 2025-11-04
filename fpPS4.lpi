@@ -1699,6 +1699,18 @@
         <Filename Value="sys\vfs\vfs_aio2.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="rtl\SDL3_main.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\audio\SDL3_audio_interface.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\SDL3.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -1734,9 +1746,6 @@
       </Options>
     </Linking>
     <Other>
-      <OtherDefines Count="1">
-        <Define0 Value="DEBUG_MTX"/>
-      </OtherDefines>
       <ExecuteAfter>
         <Command Value="$(ProjPath)\tools\fp_rebase\fp_rebase$(ExeExt) &quot;$(OutputFile)&quot; -rebase 0x7FF000000000 -dwarf"/>
         <ShowAllMessages Value="True"/>
