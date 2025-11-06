@@ -120,6 +120,24 @@ begin
  teb:=P_TBI^.TebBaseAddress;
 end;
 
+function NtQueryPeb(hProcess:THandle;var peb:PPEB):Integer;
+var
+ data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
+ p_info:PPROCESS_BASIC_INFORMATION;
+begin
+ p_info:=Align(@data,8);
+
+ Result:=NtQueryInformationProcess(hProcess,
+                                   ProcessBasicInformation,
+                                   p_info,
+                                   SizeOf(PROCESS_BASIC_INFORMATION),
+                                   nil);
+ if (Result=0) then
+ begin
+  peb:=p_info^.PebBaseAddress;
+ end;
+end;
+
 procedure NtGetVirtualInfo(hProcess:THandle;var base:Pointer;var size:QWORD);
 var
  addr:Pointer;
@@ -167,6 +185,17 @@ begin
  until (prev>=addr);
 end;
 
+function fast_aslr():DWORD; inline;
+var
+ x:QWORD;
+begin
+ x:=GetTickCount64;
+ x:=x xor (x shl 13);
+ x:=x xor (x shr  7);
+ x:=x xor (x shl 17);
+ Result:=DWORD(x shl 16);
+end;
+
 function NtMoveStack(hProcess,hThread:THandle;var rip:QWORD):Integer;
 var
  _Context:array[0..SizeOf(TCONTEXT)+15] of Byte;
@@ -185,6 +214,7 @@ begin
  Context^:=Default(TCONTEXT);
  Context^.ContextFlags:=CONTEXT_ALL;
 
+ //get main thread context
  err:=NtGetContextThread(hThread,Context);
  if (err<>0) then Exit(err);
 
@@ -194,38 +224,146 @@ begin
  //RCX -> entry             (_WinMainCRTStartup)
  //RDX -> lpThreadParameter
 
+ //get teb
  err:=NtQueryTeb(hThread,teb);
  if (err<>0) then Exit(err);
 
+ //get stack bound
  kstack:=Default(t_td_stack);
  err:=md_copyin(@teb^.stack,@kstack,SizeOf(t_td_stack),nil,hProcess);
  if (err<>0) then Exit(err);
 
  delta:=QWORD(kstack.stack)-Context^.Rsp;
 
+ //get full bound of stack
  addr:=kstack.sttop;
  size:=0;
  NtGetVirtualInfo(hProcess,addr,size);
 
+ //unmap old
  err:=md_unmap(addr,size,hProcess);
  if (err<>0) then Exit(err);
 
- addr:=Pointer(WIN_MAX_MOVED_STACK-size);
-
- err:=md_mmap(addr,size,VM_RW or MD_MAP_FIXED,0,0,hProcess);
+ //map new
+ addr:=Pointer(KERNEL_LOWER + fast_aslr());
+ err:=md_mmap(addr,size,VM_RW,0,0,hProcess);
  if (err<>0) then Exit(err);
 
  kstack.sttop:=addr;
  kstack.stack:=addr+size;
 
+ //save new
  err:=md_copyout(@kstack,@teb^.stack,SizeOf(t_td_stack),nil,hProcess);
  if (err<>0) then Exit(err);
 
  Context^.Rsp:=QWORD(kstack.stack)-delta;
 
+ //save context
  err:=NtSetContextThread(hThread,Context);
 
  Exit(err);
+end;
+
+type
+ TForkUserParams=record
+  temp:PRTL_USER_PROCESS_PARAMETERS;
+  usrc:Pointer;
+  udst:Pointer;
+  size:QWORD;
+ end;
+
+Procedure PATCH_UNICODE_STRING(var UserParams:TForkUserParams;var str:UNICODE_STRING);
+var
+ ofs:Integer;
+begin
+ if (str.Buffer=nil) then Exit;
+ ofs:=str.Buffer-Pointer(UserParams.usrc);
+ Assert((ofs>0) and (ofs<UserParams.size));
+ str.Buffer:=UserParams.udst+ofs;
+end;
+
+Procedure PATCH_POINTER(var UserParams:TForkUserParams;var ptr:Pointer);
+var
+ ofs:Integer;
+begin
+ if (ptr=nil) then Exit;
+ ofs:=ptr-Pointer(UserParams.usrc);
+ Assert((ofs>0) and (ofs<UserParams.size));
+ ptr:=UserParams.udst+ofs;
+end;
+
+Procedure PATCH_USER_PROCESS_PARAMETERS(var UserParams:TForkUserParams);
+begin
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.CurrentDirectory.DosPath);
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.DllPath                 );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.ImagePathName           );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.CommandLine             );
+ PATCH_POINTER       (UserParams,UserParams.temp^.Environment             );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.WindowTitle             );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.DesktopInfo             );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.ShellInfo               );
+ PATCH_UNICODE_STRING(UserParams,UserParams.temp^.RuntimeData             );
+end;
+
+function NtMoveProcessParameters(hProcess:THandle):Integer;
+var
+ err       :DWORD;
+ maxlen    :ULONG;
+ u_peb     :PPEB;
+ u_upp     :PRTL_USER_PROCESS_PARAMETERS;
+ UserParams:TForkUserParams;
+begin
+ Result:=0;
+
+ //get peb ptr
+ u_peb:=nil;
+ err:=NtQueryPeb(hProcess,u_peb);
+ if (err<>0) then Exit(err);
+
+ //get params ptr
+ u_upp:=nil;
+ err:=md_copyin(@u_peb^.ProcessParameters,@u_upp,SizeOf(Pointer),nil,hProcess);
+ if (err<>0) then Exit(err);
+
+ //get params len
+ maxlen:=0;
+ err:=md_copyin(@u_upp^.MaximumLength,@maxlen,SizeOf(ULONG),nil,hProcess);
+ if (err<>0) then Exit(err);
+
+ //get full bound of stack
+ UserParams.usrc:=u_upp;
+ UserParams.size:=0;
+ NtGetVirtualInfo(hProcess,UserParams.usrc,UserParams.size);
+
+ //alloc temp
+ UserParams.temp:=kmem_alloc(UserParams.size,VM_RW);
+ if (UserParams.temp=nil) then Exit(-1);
+
+ //get params
+ err:=md_copyin(u_upp,UserParams.temp,maxlen,nil,hProcess);
+ if (err<>0) then Exit(err);
+
+ //map new
+ UserParams.udst:=Pointer(KERNEL_LOWER + fast_aslr());
+ err:=md_mmap(UserParams.udst,UserParams.size,VM_RW,0,0,hProcess);
+ if (err<>0) then Exit(err);
+
+ PATCH_USER_PROCESS_PARAMETERS(UserParams);
+
+ //save new
+ err:=md_copyout(UserParams.temp,UserParams.udst,UserParams.size,nil,hProcess);
+ if (err<>0) then Exit(err);
+
+ //set params ptr
+ err:=md_copyout(@UserParams.udst,@u_peb^.ProcessParameters,SizeOf(Pointer),nil,hProcess);
+ if (err<>0) then Exit(err);
+
+ //unmap old
+ err:=md_unmap(u_upp,UserParams.size,hProcess);
+ if (err<>0) then Exit(err);
+
+ //free temp
+ kmem_free(UserParams.temp,UserParams.size);
 end;
 
 function NtReserve(hProcess:THandle;rip:QWORD):Integer;
@@ -428,6 +566,13 @@ begin
  if (Result<>0) then
  begin
   Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
+  Exit;
+ end;
+
+ Result:=NtMoveProcessParameters(pi.hProcess);
+ if (Result<>0) then
+ begin
+  Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
   Exit;
  end;
 

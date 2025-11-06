@@ -511,11 +511,99 @@ type
   BasePriority  :Integer;
  end;
 
+type
+ PLDR_LIST_ENTRY=^TLDR_LIST_ENTRY;
+ TLDR_LIST_ENTRY=packed record
+  Flink:Pointer;
+  Blink:Pointer;
+ end;
+
+ PPEB_LDR_DATA=^TPEB_LDR_DATA;
+ TPEB_LDR_DATA=packed record
+  Length                         :ULONG;
+  Initialized                    :ULONG;
+  SsHandle                       :Pointer;
+  InLoadOrderModuleList          :TLDR_LIST_ENTRY;
+  InMemoryOrderModuleList        :TLDR_LIST_ENTRY;
+  InInitializationOrderModuleList:TLDR_LIST_ENTRY;
+  //....
+ end;
+
+ PLDR_DATA_TABLE_ENTRY=^TLDR_DATA_TABLE_ENTRY;
+ TLDR_DATA_TABLE_ENTRY=packed record
+  InLoadOrderLinks          :TLDR_LIST_ENTRY;
+  InMemoryOrderLinks        :TLDR_LIST_ENTRY;
+  InInitializationOrderLinks:TLDR_LIST_ENTRY;
+  DllBase                   :Pointer;
+  EntryPoint                :Pointer;
+  SizeOfImage               :ULONG;
+  _align                    :ULONG;
+  FullDllName               :UNICODE_STRING;
+  BaseDllName               :UNICODE_STRING;
+  //....
+ end;
+
+ CURDIR=packed record
+  DosPath:UNICODE_STRING;
+  Handle :HANDLE;
+ end;
+
+ PRTL_USER_PROCESS_PARAMETERS=^RTL_USER_PROCESS_PARAMETERS;
+ RTL_USER_PROCESS_PARAMETERS=packed record
+  MaximumLength   :ULONG;
+  Length          :ULONG;
+  Flags           :ULONG;
+  DebugFlags      :ULONG;
+
+  ConsoleHandle   :HANDLE;
+  ConsoleFlags    :ULONG ;
+  Align1          :ULONG ;
+  StandardInput   :HANDLE;
+  StandardOutput  :HANDLE;
+  StandardError   :HANDLE;
+
+  CurrentDirectory:CURDIR;
+  DllPath         :UNICODE_STRING;
+  ImagePathName   :UNICODE_STRING;
+  CommandLine     :UNICODE_STRING;
+  Environment     :PVOID;
+
+  StartingX       :ULONG;
+  StartingY       :ULONG;
+  CountX          :ULONG;
+  CountY          :ULONG;
+  CountCharsX     :ULONG;
+  CountCharsY     :ULONG;
+  FillAttribute   :ULONG;
+
+  WindowFlags     :ULONG;
+  ShowWindowFlags :ULONG;
+  Align2          :ULONG;
+  WindowTitle     :UNICODE_STRING;
+  DesktopInfo     :UNICODE_STRING;
+  ShellInfo       :UNICODE_STRING;
+  RuntimeData     :UNICODE_STRING;
+
+  //.....
+ end;
+
+ PPEB=^TPEB;
+ TPEB=packed record
+  Flags            :QWORD;
+  Mutant           :Thandle;
+  ImageBaseAddress :Pointer;
+  LdrData          :PLDR_DATA_TABLE_ENTRY;
+  ProcessParameters:PRTL_USER_PROCESS_PARAMETERS;
+  SubSystemData    :Pointer;
+  ProcessHeap      :Thandle;
+  //.....
+ end;
+
  PPROCESS_BASIC_INFORMATION=^PROCESS_BASIC_INFORMATION;
  PROCESS_BASIC_INFORMATION=packed record
   ExitStatus      :DWORD;
   _align          :DWORD;
-  PebBaseAddress  :QWORD;
+  PebBaseAddress  :PPEB;
   AffinityMask    :QWORD;
   BasePriority    :QWORD;
   UniqueProcessId :QWORD;

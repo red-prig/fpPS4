@@ -79,7 +79,6 @@ const
 
  WIN_REBASE_ADDR      =QWORD($7FF000000000); //fp_rebase
 
- WIN_MAX_MOVED_STACK  =QWORD($7FEFFFE00000);
  WIN_SHARED_ADDR      =QWORD($7FEFFFE00000);
  KERNEL_LOWER         =QWORD($700000000000); //should be aligned to the huge page (1GB)
 

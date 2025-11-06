@@ -40,39 +40,7 @@ function WriteHook  (var page:t_hook_page;const h:t_hook_plan):Boolean;
 
 implementation
 
-type
- PLIST_ENTRY=^TLIST_ENTRY;
- TLIST_ENTRY=packed record
-  Flink:Pointer;
-  Blink:Pointer;
- end;
-
- PPEB_LDR_DATA=^TPEB_LDR_DATA;
- TPEB_LDR_DATA=packed record
-  Length                         :ULONG;
-  Initialized                    :ULONG;
-  SsHandle                       :Pointer;
-  InLoadOrderModuleList          :TLIST_ENTRY;
-  InMemoryOrderModuleList        :TLIST_ENTRY;
-  InInitializationOrderModuleList:TLIST_ENTRY;
-  //....
- end;
-
- PLDR_DATA_TABLE_ENTRY=^TLDR_DATA_TABLE_ENTRY;
- TLDR_DATA_TABLE_ENTRY=packed record
-  InLoadOrderLinks          :TLIST_ENTRY;
-  InMemoryOrderLinks        :TLIST_ENTRY;
-  InInitializationOrderLinks:TLIST_ENTRY;
-  DllBase                   :Pointer;
-  EntryPoint                :Pointer;
-  SizeOfImage               :ULONG;
-  _align                    :ULONG;
-  FullDllName               :UNICODE_STRING;
-  BaseDllName               :UNICODE_STRING;
-  //....
- end;
-
-function NtQueryPeb(hProcess:THandle;var peb:Pointer):Integer;
+function NtQueryPeb(hProcess:THandle;var peb:PPEB):Integer;
 var
  data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
  p_info:PPROCESS_BASIC_INFORMATION;
@@ -86,36 +54,35 @@ begin
                                    nil);
  if (Result=0) then
  begin
-  peb:=Pointer(p_info^.PebBaseAddress);
+  peb:=p_info^.PebBaseAddress;
  end;
 end;
 
 function NtQueryPebLdr(hProcess:THandle;var Ldr:PPEB_LDR_DATA):Integer;
 var
- peb:Pointer;
- ImageBaseAddress:Pointer;
+ peb:PPEB;
 begin
  Result:=NtQueryPeb(hProcess,peb);
  if (Result=0) then
  begin
-  Result:=md_copyin(peb+$018,@Ldr,SizeOf(Pointer),nil,hProcess);
+  Result:=md_copyin(@peb^.LdrData,@Ldr,SizeOf(Pointer),nil,hProcess);
  end;
 end;
 
-function NtQueryModuleList(hProcess:THandle;var List:TLIST_ENTRY):Integer;
+function NtQueryModuleList(hProcess:THandle;var List:TLDR_LIST_ENTRY):Integer;
 var
  Ldr:PPEB_LDR_DATA;
 begin
  Result:=NtQueryPebLdr(hProcess,Ldr);
  if (Result=0) then
  begin
-  Result:=md_copyin(@Ldr^.InLoadOrderModuleList,@List,SizeOf(TLIST_ENTRY),nil,hProcess);
+  Result:=md_copyin(@Ldr^.InLoadOrderModuleList,@List,SizeOf(TLDR_LIST_ENTRY),nil,hProcess);
  end;
 end;
 
 function NtQueryModuleByName(hProcess:THandle;DllName:PWideChar):t_dll_base_pair;
 var
- List:TLIST_ENTRY;
+ List:TLDR_LIST_ENTRY;
  node:PLDR_DATA_TABLE_ENTRY;
  data:TLDR_DATA_TABLE_ENTRY;
 
