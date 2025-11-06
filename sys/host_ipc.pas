@@ -154,6 +154,7 @@ end;
 
 procedure BindHandler(Process:TGameProcess;Handler:THostIpcHandler);
 begin
+ if (Process=nil) or (Handler=nil) then Exit;
  if (Process.g_ipc<>nil) then
  begin
   Process.g_ipc.FHandler:=Handler;
