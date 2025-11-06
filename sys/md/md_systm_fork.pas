@@ -30,7 +30,6 @@ type
 function  md_getppid:DWORD;
 
 procedure md_run_forked;
-procedure md_fork_unshare;
 function  md_fork_process(var info:t_fork_proc):Integer;
 
 implementation
@@ -308,7 +307,6 @@ end;
 function NtMoveProcessParameters(hProcess:THandle):Integer;
 var
  err       :DWORD;
- maxlen    :ULONG;
  u_peb     :PPEB;
  u_upp     :PRTL_USER_PROCESS_PARAMETERS;
  UserParams:TForkUserParams;
@@ -325,11 +323,6 @@ begin
  err:=md_copyin(@u_peb^.ProcessParameters,@u_upp,SizeOf(Pointer),nil,hProcess);
  if (err<>0) then Exit(err);
 
- //get params len
- maxlen:=0;
- err:=md_copyin(@u_upp^.MaximumLength,@maxlen,SizeOf(ULONG),nil,hProcess);
- if (err<>0) then Exit(err);
-
  //get full bound of stack
  UserParams.usrc:=u_upp;
  UserParams.size:=0;
@@ -340,7 +333,7 @@ begin
  if (UserParams.temp=nil) then Exit(-1);
 
  //get params
- err:=md_copyin(u_upp,UserParams.temp,maxlen,nil,hProcess);
+ err:=md_copyin(u_upp,UserParams.temp,UserParams.size,nil,hProcess);
  if (err<>0) then Exit(err);
 
  //map new
@@ -423,27 +416,20 @@ type
   data      :record end;
  end;
 
+function get_cur_peb:PPEB; assembler; nostackframe;
+asm
+ movqq %gs:teb.PEB,Result
+end;
+
 procedure md_run_forked;
 var
- base:p_shared_info;
- info:TMemoryBasicInformation;
- len:ULONG_PTR;
-
- proc:Pointer;
+ base :p_shared_info;
+ size :QWORD;
+ data :Pointer;
+ proc :Pointer;
 begin
- base:=Pointer(WIN_SHARED_ADDR);
-
- len:=0;
- NtQueryVirtualMemory(
-  NtCurrentProcess,
-  base,
-  0,
-  @info,
-  sizeof(info),
-  @len);
- if (len=0) then Exit;
-
- if (info.State=MEM_FREE) then Exit;
+ base:=System.InterlockedExchange(get_cur_peb^.SubSystemData,nil);
+ if (base=nil) then Exit;
 
  SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
  SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
@@ -451,19 +437,23 @@ begin
 
  proc:=base^.proc;
 
- if (proc=nil) then Exit;
+ if (proc=nil) then
+ begin
+  md_unmap(base,0);
+  Exit;
+ end;
 
- t_fork_cb(proc)(@base^.data,base^.size);
+ //clone data
+ size:=base^.size;
+ data:=AllocMem(size);
+ Move(base^.data,data^,size);
+
+ //free page
+ md_unmap(base,0);
+
+ t_fork_cb(proc)(data,size);
 
  NtTerminateProcess(NtCurrentProcess, 0);
-end;
-
-procedure md_fork_unshare;
-var
- base:Pointer;
-begin
- base:=Pointer(WIN_SHARED_ADDR);
- md_unmap(base,0);
 end;
 
 var
@@ -490,17 +480,31 @@ end;
 
 function NtCreateShared(hProcess:THandle;var info:t_fork_proc):Integer;
 var
- base:p_shared_info;
- full:QWORD;
+ err        :DWORD;
+ u_peb      :PPEB;
+ base       :p_shared_info;
+ full       :QWORD;
  shared_info:t_shared_info;
 begin
- base:=Pointer(WIN_SHARED_ADDR);
+ Result:=0;
 
+ //get peb ptr
+ u_peb:=nil;
+ err:=NtQueryPeb(hProcess,u_peb);
+ if (err<>0) then Exit(err);
+
+ //calc full size
  full:=SizeOf(shared_info)+info.size;
  full:=(info.size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
- Result:=md_mmap(base,full,VM_RW or MD_MAP_FIXED,0,0,hProcess);
- if (Result<>0) then Exit;
+ //alloc page
+ base:=Pointer(KERNEL_LOWER + fast_aslr());
+ err:=md_mmap(base,full,VM_RW,0,0,hProcess);
+ if (err<>0) then Exit(err);
+
+ //save base to peb
+ err:=md_copyout(@base,@u_peb^.SubSystemData,SizeOf(Pointer),nil,hProcess);
+ if (err<>0) then Exit(err);
 
  shared_info:=Default(t_shared_info);
 
@@ -511,8 +515,8 @@ begin
  shared_info.proc:=info.proc;
  shared_info.size:=info.size;
 
- Result:=md_copyout(@shared_info,base,SizeOf(shared_info),nil,hProcess);
- if (Result<>0) then Exit;
+ err:=md_copyout(@shared_info,base,SizeOf(shared_info),nil,hProcess);
+ if (err<>0) then Exit(err);
 
  if (info.data<>nil) and (info.size<>0) then
  begin

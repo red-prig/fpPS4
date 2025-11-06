@@ -569,7 +569,7 @@ begin
  mem.Free;
 
  //free shared
- md_fork_unshare;
+ FreeMem(data);
 
  parent:=md_pidfd_open(md_getppid);
 
