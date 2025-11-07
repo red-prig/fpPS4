@@ -272,6 +272,7 @@ function  __sys_dynlib_get_info_for_libdbg(handle:Integer;info:Pointer):Integer;
 function  fdatasync(fd:Integer):Integer;
 function  __sys_dynlib_get_list2(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer;
+function  aio_init(param:Pointer;size:DWORD;unknow1:QWORD;unknow2:DWORD):Integer;
 function  get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
 function  __sys_dynlib_get_list_for_libdbg(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;
 function  reserve_2mb_page(size:QWORD;mode:Integer):Integer;
@@ -2134,6 +2135,13 @@ end;
 function __sys_dynlib_get_info2(handle:Integer;info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $660,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_init(param:Pointer;size:DWORD;unknow1:QWORD;unknow2:DWORD):Integer; assembler; nostackframe;
+asm
+ movq  $670,%rax
  call  fast_syscall
  jmp   cerror
 end;

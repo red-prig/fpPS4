@@ -1690,6 +1690,10 @@
         <Filename Value="sys\vfs\vfs_aio.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\vfs\vfs_aio2.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

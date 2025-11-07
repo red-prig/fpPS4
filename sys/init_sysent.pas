@@ -15,6 +15,7 @@ uses
  kern_evf,
  kern_gpo,
  kern_sig,
+ vfs_aio2,
  kern_bnet,
  kern_dmem,
  kern_exec,
@@ -3410,7 +3411,7 @@ var
   ),
   (//[670]
      sy_narg:4;
-     sy_call:nil;
+     sy_call:@sys_aio_init;
      sy_name:'sys_aio_init'
   ),
   (//[671]
