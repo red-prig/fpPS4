@@ -1686,6 +1686,10 @@
         <Filename Value="sys\jit\kern_jit_interrupt.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\vfs\vfs_aio.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

@@ -115,6 +115,8 @@ function  clock_getres(clock_id:Integer;tp:Pointer):Integer;
 function  _nanosleep(rqtp,rmtp:Pointer):Integer;
 function  issetugid():Integer;
 function  lchown(path:PChar;uid,gid:Integer):Integer;
+function  aio_read(aiocbp:Pointer):Integer;
+function  aio_write(aiocbp:Pointer):Integer;
 function  getdents(fd:Integer;buf:Pointer;count:DWORD):Integer;
 function  lchmod(path:PChar;mode:Integer):Integer;
 function  lutimes(path:PChar;tptr:Pointer):Integer;
@@ -123,6 +125,10 @@ function  pwritev(fd:Integer;iovp:Pointer;iovcnt:DWORD;offset:Int64):Integer;
 function  getsid(pid:Integer):Integer;
 function  setresuid(ruid,euid,suid:Integer):Integer;
 function  setresgid(rgid,egid,sgid:Integer):Integer;
+function  aio_return(aiocbp:Pointer):Integer;
+function  aio_suspend(aiocbp:Pointer;nent:Integer;timeout:Pointer):Integer;
+function  aio_cancel(fd:Integer;aiocbp:Pointer):Integer;
+function  aio_error(aiocbp:Pointer):Integer;
 function  yield():Integer;
 function  __getcwd(buf:PChar;buflen:DWORD):Integer;
 function  sched_setparam(pid:Integer;param:Pointer):Integer;
@@ -138,6 +144,7 @@ Function  _sigsuspend(sigmask:Pointer):Integer;
 Function  sigpending(oset:Pointer):Integer;
 Function  sigtimedwait(oset,info,timeout:Pointer):Integer;
 Function  sigwaitinfo(oset,info:Pointer):Integer;
+function  aio_waitcomplete(aiocbp:Pointer;timeout:Pointer):Integer;
 function  getresuid(ruid,euid,suid:PInteger):Integer;
 function  getresgid(rgid,egid,sgid:PInteger):Integer;
 function  kqueue():Integer;
@@ -167,6 +174,7 @@ function  _umtx_op(obj:Pointer;op:Integer;val:QWORD;uaddr1,uaddr2:Pointer):Integ
 function  thr_new(_param:Pointer;_size:Integer):Integer;
 function  sigqueue(pid,signum:Integer;value:Pointer):Integer;
 function  thr_set_name(id:DWORD;pname:PChar):Integer;
+function  aio_fsync(op:Integer;aiocbp:Pointer):Integer;
 function  rtprio_thread(func,tid:Integer;rtp:Pointer):Integer;
 function  pread(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
 function  pwrite(fd:Integer;buf:Pointer;nbyte:QWORD;offset:Int64):Integer;
@@ -1031,6 +1039,20 @@ asm
  jmp   cerror
 end;
 
+function aio_read(aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $255,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_write(aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $256,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
 function getdents(fd:Integer;buf:Pointer;count:DWORD):Integer; assembler; nostackframe;
 asm
  movq  $272,%rax
@@ -1083,6 +1105,34 @@ end;
 function setresgid(rgid,egid,sgid:Integer):Integer; assembler; nostackframe;
 asm
  movq  $312,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_return(aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $314,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_suspend(aiocbp:Pointer;nent:Integer;timeout:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $315,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_cancel(fd:Integer;aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $316,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_error(aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $317,%rax
  call  fast_syscall
  jmp   cerror
 end;
@@ -1188,6 +1238,13 @@ end;
 Function sigwaitinfo(oset,info:Pointer):Integer; assembler; nostackframe;
 asm
  movq  $346,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_waitcomplete(aiocbp:Pointer;timeout:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $359,%rax
  call  fast_syscall
  jmp   cerror
 end;
@@ -1391,6 +1448,13 @@ end;
 function thr_set_name(id:DWORD;pname:PChar):Integer; assembler; nostackframe;
 asm
  movq  $464,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function aio_fsync(op:Integer;aiocbp:Pointer):Integer; assembler; nostackframe;
+asm
+ movq  $465,%rax
  call  fast_syscall
  jmp   cerror
 end;
