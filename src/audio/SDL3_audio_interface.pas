@@ -44,7 +44,9 @@ implementation
 uses
  md_time,
  time,
- md_sleep;
+ md_sleep,
+ kern_thr,
+ md_thread;
 
 var
  SDL3Audio:TSDL3Audio=nil;
@@ -63,7 +65,8 @@ end;
 
 procedure usleep(usec:QWORD); inline; //microseconds
 begin
- msleep_td(USEC_TO_UNIT(usec));
+ if (usec<>0)then
+  msleep_td(USEC_TO_UNIT(usec));
 end;
 
 const
@@ -303,15 +306,15 @@ var
 begin
  Result:=0;
 
+ //increase priority
+ cpu_set_priority(curkthread,64);
+
  time:=GetProcessTime;
 
  if (ptr<>nil) then
  begin
   //mix
   convert(ptr,f_ibuf_ptr,f_len,@fvolume);
-
-  //copy f_ibuf_ptr to SDL3
-  SDL3Audio.SDL_PutAudioStreamData(Stream, f_ibuf_ptr, f_ibuf_size);
  end;
 
  if (f_next_time=0) then
@@ -345,7 +348,14 @@ begin
   until false;
  end;
 
- f_last_time:=GetProcessTime;
+ if (ptr<>nil) then
+ begin
+  //copy f_ibuf_ptr to SDL3
+  SDL3Audio.SDL_PutAudioStreamData(Stream, f_ibuf_ptr, f_ibuf_size);
+ end;
+
+ //restore priority
+ cpu_set_priority(curkthread,curkthread^.td_priority);
 end;
 
 //

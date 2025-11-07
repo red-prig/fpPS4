@@ -62,7 +62,8 @@ uses
 
 procedure usleep(usec:QWORD); inline; //microseconds
 begin
- msleep_td(USEC_TO_UNIT(usec));
+ if (usec<>0)then
+  msleep_td(USEC_TO_UNIT(usec));
 end;
 
 Function TAudioOutNull.Open(const device_id:RawByteString):Boolean;
