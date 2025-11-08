@@ -837,6 +837,22 @@ begin
      Exit(EINVAL);
     end;
 
+  25: //sceVideoOutGetPortStatusInfo_
+    begin
+     if ((data^.arg4 or $10) = $30) then
+     begin
+      //arg2 -> canary
+      //arg3 -> ptr
+      //arg4 -> size
+
+      if (data^.arg2<>$a5a5) then Exit(EINVAL);
+
+      Exit(0);
+     end;
+
+     Exit(EINVAL);
+    end;
+
   31: //sys
     begin
      //arg2 -> canary
