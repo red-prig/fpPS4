@@ -264,6 +264,45 @@ begin
 
 end;
 
+type
+ pSceNetCtlInfoV6=^SceNetCtlInfoV6;
+ SceNetCtlInfoV6=packed record
+  data:array[0..255] of Byte;
+ end;
+
+function ps4_sceNetCtlGetInfoV6(code:Integer;info:pSceNetCtlInfo):Integer;
+begin
+ if (info=nil) then Exit(SCE_NET_CTL_ERROR_INVALID_ADDR);
+
+ Result:=SCE_NET_CTL_ERROR_NOT_CONNECTED;
+
+ case code of
+  SCE_NET_CTL_INFO_DEVICE           :Writeln('V6:SCE_NET_CTL_INFO_DEVICE           ');
+  SCE_NET_CTL_INFO_ETHER_ADDR       :Writeln('V6:SCE_NET_CTL_INFO_ETHER_ADDR       ');
+  SCE_NET_CTL_INFO_MTU              :Writeln('V6:SCE_NET_CTL_INFO_MTU              ');
+  SCE_NET_CTL_INFO_LINK             :Writeln('V6:SCE_NET_CTL_INFO_LINK             ');
+  SCE_NET_CTL_INFO_BSSID            :Writeln('V6:SCE_NET_CTL_INFO_BSSID            ');
+  SCE_NET_CTL_INFO_SSID             :Writeln('V6:SCE_NET_CTL_INFO_SSID             ');
+  SCE_NET_CTL_INFO_WIFI_SECURITY    :Writeln('V6:SCE_NET_CTL_INFO_WIFI_SECURITY    ');
+  SCE_NET_CTL_INFO_RSSI_DBM         :Writeln('V6:SCE_NET_CTL_INFO_RSSI_DBM         ');
+  SCE_NET_CTL_INFO_RSSI_PERCENTAGE  :Writeln('V6:SCE_NET_CTL_INFO_RSSI_PERCENTAGE  ');
+  SCE_NET_CTL_INFO_CHANNEL          :Writeln('V6:SCE_NET_CTL_INFO_CHANNEL          ');
+  SCE_NET_CTL_INFO_IP_CONFIG        :Writeln('V6:SCE_NET_CTL_INFO_IP_CONFIG        ');
+  SCE_NET_CTL_INFO_DHCP_HOSTNAME    :Writeln('V6:SCE_NET_CTL_INFO_DHCP_HOSTNAME    ');
+  SCE_NET_CTL_INFO_PPPOE_AUTH_NAME  :Writeln('V6:SCE_NET_CTL_INFO_PPPOE_AUTH_NAME  ');
+  SCE_NET_CTL_INFO_IP_ADDRESS       :Writeln('V6:SCE_NET_CTL_INFO_IP_ADDRESS       ');
+  SCE_NET_CTL_INFO_NETMASK          :Writeln('V6:SCE_NET_CTL_INFO_NETMASK          ');
+  SCE_NET_CTL_INFO_DEFAULT_ROUTE    :Writeln('V6:SCE_NET_CTL_INFO_DEFAULT_ROUTE    ');
+  SCE_NET_CTL_INFO_PRIMARY_DNS      :Writeln('V6:SCE_NET_CTL_INFO_PRIMARY_DNS      ');
+  SCE_NET_CTL_INFO_SECONDARY_DNS    :Writeln('V6:SCE_NET_CTL_INFO_SECONDARY_DNS    ');
+  SCE_NET_CTL_INFO_HTTP_PROXY_CONFIG:Writeln('V6:SCE_NET_CTL_INFO_HTTP_PROXY_CONFIG');
+  SCE_NET_CTL_INFO_HTTP_PROXY_SERVER:Writeln('V6:SCE_NET_CTL_INFO_HTTP_PROXY_SERVER');
+  SCE_NET_CTL_INFO_HTTP_PROXY_PORT  :Writeln('V6:SCE_NET_CTL_INFO_HTTP_PROXY_PORT  ');
+  else;
+ end;
+
+end;
+
 function ps4_sceNetCtlRegisterCallbackForNpToolkit(func:SceNetCtlCallback;arg:Pointer;cid:PInteger):Integer;
 begin
  NetCtlCb.func:=func;
@@ -298,6 +337,9 @@ begin
  lib.set_proc($24EE32B93B8CA0A2,@ps4_sceNetCtlGetNatInfo);
  lib.set_proc($A1BBB17538B0905F,@ps4_sceNetCtlGetInfo);
  lib.set_proc($B5EB8AE109C94C68,@ps4_sceNetCtlGetIfStat);
+
+ lib:=Result^.add_lib('libSceNetCtlV6');
+ lib.set_proc($272D443B919D95C3,@ps4_sceNetCtlGetInfoV6);
 
  lib:=Result^.add_lib('libSceNetCtlForNpToolkit');
  lib.set_proc($C08B0ACBE4DF78BB,@ps4_sceNetCtlRegisterCallbackForNpToolkit);
