@@ -13,28 +13,55 @@ procedure dipsw_init();
 implementation
 
 uses
- errno;
+ errno,
+ sys_bootparam,
+ kern_authinfo;
 
 Function dipsw_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- Writeln('dipsw_ioctl(0x',HexStr(cmd,8),')');
+ case cmd of
+  $20008800:Writeln('dipsw_ioctl("InitializeDipsw")');
+  $40048806:Writeln('dipsw_ioctl("isDevelopmentMode")');
+  $40048807:Writeln('dipsw_ioctl("isTestKit")');
+  $40088808:Writeln('dipsw_ioctl("IsDisableRazor")');
+  $40088809:Writeln('dipsw_ioctl("IsDisableBinaryVersionCheck")');
+  $80028801:Writeln('dipsw_ioctl("SetDipsw")');
+  $80028802:Writeln('dipsw_ioctl("UnsetDipsw")');
+  $c0088803:Writeln('dipsw_ioctl("CheckDipsw")');
+  $80108804:Writeln('dipsw_ioctl("ReadDipswData")');
+  $80108805:Writeln('dipsw_ioctl("WriteDipswData")');
+  $8010880a:Writeln('dipsw_ioctl("GetAllDipswData")');
+  else
+   begin
+    Writeln('dipsw_ioctl(0x',HexStr(cmd,8),')');
+    Exit(EINVAL);
+   end;
+ end;
+
+ if not sceSblACMgrIsSystemUcred(@g_authinfo) then
+ begin
+  //allow in sandbox:
+  case cmd of
+   $40048806:; //isDevelopmentMode
+   $40048807:; //isTestKit
+   $40088808:; //IsDisableRazor
+   $40088809:; //IsDisableBinaryVersionCheck
+   else
+    begin
+     Writeln('dipsw_ioctl(0x',HexStr(cmd,8),')');
+     Exit(EINVAL);
+    end;
+  end;
+ end;
 
  case cmd of
-  $20008800:;
-  $40048806:;
-  $40048807:;
-  $40088808:;
-  $40088809:;
-  $80028801:;
-  $80028802:;
-  $c0088803:;
-  $80108804:;
-  $80108805:;
-  $8010880a:;
-  else
-   Result:=EINVAL;
+  $40048806:PInteger(data)[0]:=p_isDevelopmentMode;
+  $40048807:PInteger(data)[0]:=p_isTestKit;
+  $40088808:PInteger(data)[1]:=p_IsDisableRazor;
+  $40088809:PInteger(data)[1]:=p_IsDisableBinaryVersionCheck;
+  else;
  end;
 
 end;
