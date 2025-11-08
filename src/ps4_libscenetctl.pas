@@ -338,6 +338,8 @@ begin
  lib.set_proc($A1BBB17538B0905F,@ps4_sceNetCtlGetInfo);
  lib.set_proc($B5EB8AE109C94C68,@ps4_sceNetCtlGetIfStat);
 
+ lib.set_proc($272D443B919D95C3,@ps4_sceNetCtlGetInfoV6);
+
  lib:=Result^.add_lib('libSceNetCtlV6');
  lib.set_proc($272D443B919D95C3,@ps4_sceNetCtlGetInfoV6);
 
