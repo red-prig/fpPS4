@@ -659,7 +659,7 @@ begin
   ExtendedMemory2:=true;
   if (p_proc.p_sdk_version < $5000000) then
   begin
-   if (mem_param.sceKernelExtendedMemory2<>nil) then
+   if (mem_param.sceKernelExtendedMemory2=nil) then
    begin
     ExtendedMemory2:=False;
    end else
