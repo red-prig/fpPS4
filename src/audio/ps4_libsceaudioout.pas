@@ -1396,9 +1396,9 @@ end;
 type
  pSceAudioOutSystemInfoEx=^SceAudioOutSystemInfoEx;
  SceAudioOutSystemInfoEx=packed record
-  unknown1 :Byte;
+  MAX      :Byte;
   unknown2 :Byte;
-  unknown3 :Byte;
+  CONF_TYPE:Byte;
   unknown4 :Byte;
   unknown5 :Byte;
   unknown6 :Byte;
@@ -1430,6 +1430,204 @@ begin
  Result:=0;
 end;
 
+type
+ pAudioOutExMode=^AudioOutExMode;
+ AudioOutExMode=packed record
+  unknown1:Byte;
+  unknown2:Byte;
+  unknown3:Byte;
+  unknown4:Byte;
+  NUM     :Byte;
+  unknown5:Byte;
+  FORMAT  :Byte;
+  unknown7:Byte;
+ end;
+
+function ps4_sceAudioOutExSystemInfoIsSupportedAudioOutExMode(info    :pSceAudioOutSystemInfoEx;
+                                                              ExMode  :pAudioOutExMode;
+                                                              infoSize:Integer):Integer;
+const
+ NUM_BYTES:array[0..6] of Byte=(
+  $02, //2->0->0x02
+  $FF, //3->1->0xFF
+  $FF, //4->2->0xFF
+  $FF, //5->3->0xFF
+  $06, //6->4->0x06
+  $FF, //7->5->0xFF
+  $08  //8->6->0x08
+ );
+var
+ NUM:Byte; //uVar2
+begin
+ if (info=nil)     then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ if (infoSize<>24) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_SIZE);
+ if (ExMode=nil)   then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+
+ NUM:=ExMode^.NUM - 2;
+ if (NUM < 7) then
+ begin
+  NUM:=NUM_BYTES[NUM];
+ end else
+ begin
+  NUM:=$FF;
+ end;
+
+ if (info^.CONF_TYPE <> 2) then
+ begin
+
+  if (info^.CONF_TYPE <> 1) then
+  begin
+   //info^.CONF_TYPE -> 0
+
+   if (info^.CONF_TYPE <> 0) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_CONF_TYPE);
+   if (ExMode^.FORMAT  <> 0) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+
+   if (NUM > info^.MAX) then
+   begin
+    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+   end;
+
+   Exit(0);
+  end;
+
+  //info^.CONF_TYPE -> 1
+
+  case ExMode^.FORMAT of
+   0:
+     begin
+      //
+      if (NUM > info^.MAX) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(3);
+     end;
+   1:
+     begin
+      //
+      if ((info^.flags and 2) = 0) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(0);
+     end;
+   2:
+     begin
+      //
+      if ((info^.flags and 4) = 0) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(2);
+     end;
+   3:
+     begin
+      //
+      if ((info^.flags and 8) = 0) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(1);
+     end;
+   4:
+     begin
+      //
+      if ((info^.flags and $10) = 0) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(0);
+     end;
+   5:
+     begin
+      //
+      if ((info^.flags and $20) = 0) then
+      begin
+       Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+      end;
+
+      Exit(1);
+     end;
+   else
+     Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+  end;
+
+ end;
+
+ //info^.CONF_TYPE -> 2
+
+ case ExMode^.FORMAT of
+  0:
+    begin
+     //
+     if (NUM > info^.MAX) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(3);
+    end;
+  1:
+    begin
+     //
+     if ((info^.flags and 2) = 0) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(1);
+    end;
+  2:
+    begin
+     //
+     if ((info^.flags and 4) = 0) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(2);
+    end;
+  3:
+    begin
+     //
+     if ((info^.flags and 8) = 0) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(0);
+    end;
+  4:
+    begin
+     //
+     if ((info^.flags and $10) = 0) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(1);
+    end;
+  5:
+    begin
+     //
+     if ((info^.flags and $20) = 0) then
+     begin
+      Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+     end;
+
+     Exit(0);
+    end;
+  else
+    Exit(SCE_AUDIO_OUT_ERROR_INVALID_FORMAT);
+ end;
+
+end;
+
 function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -1454,6 +1652,7 @@ begin
  lib.set_proc($E34E79C9A520DC46,@ps4_sceAudioOutMasteringSetParam);
 
  lib.set_proc($C196A4450B161A8B,@ps4_sceAudioOutExGetSystemInfo);
+ lib.set_proc($5DC8FC553B67670D,@ps4_sceAudioOutExSystemInfoIsSupportedAudioOutExMode);
 end;
 
 var
