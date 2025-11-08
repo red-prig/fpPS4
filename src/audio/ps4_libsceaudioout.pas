@@ -1393,6 +1393,43 @@ begin
  Result:=0;
 end;
 
+type
+ pSceAudioOutSystemInfoEx=^SceAudioOutSystemInfoEx;
+ SceAudioOutSystemInfoEx=packed record
+  unknown1 :Byte;
+  unknown2 :Byte;
+  unknown3 :Byte;
+  unknown4 :Byte;
+  unknown5 :Byte;
+  unknown6 :Byte;
+  unknown7 :Byte;
+  unknown8 :Byte;
+  flags    :QWORD;
+  unknown10:Byte;
+  unknown11:Byte;
+  unknown12:Byte;
+  unknown13:Byte;
+  unknown14:Byte;
+  unknown15:Byte;
+  unknown16:Byte;
+  unknown17:Byte;
+ end;
+ {$IF sizeof(SceAudioOutSystemInfoEx)<>24}{$STOP sizeof(SceAudioOutSystemInfoEx)<>24}{$ENDIF}
+
+function ps4_sceAudioOutExGetSystemInfo(port    :Integer;
+                                        unused  :Pointer;
+                                        info    :pSceAudioOutSystemInfoEx;
+                                        infoSize:Integer):Integer;
+begin
+ if (port<>0)  then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
+ if (info=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_POINTER);
+ if (infoSize<>24) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_SIZE);
+
+ info^:=Default(SceAudioOutSystemInfoEx);
+
+ Result:=0;
+end;
+
 function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -1415,6 +1452,8 @@ begin
  lib.set_proc($C57E112DE81AADB8,@ps4_sceAudioOutMasteringInit);
  lib.set_proc($4555AD520A227F9A,@ps4_sceAudioOutMasteringTerm);
  lib.set_proc($E34E79C9A520DC46,@ps4_sceAudioOutMasteringSetParam);
+
+ lib.set_proc($C196A4450B161A8B,@ps4_sceAudioOutExGetSystemInfo);
 end;
 
 var
