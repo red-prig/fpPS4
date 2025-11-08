@@ -72,8 +72,8 @@ type
 
 
 function ps4_sceAvSettingGetDeviceInfo(
-          param_1:QWORD; //0x700
-          pInfo  :pAvDeviceInfo
+          op   :QWORD; //0x700
+          pInfo:pAvDeviceInfo
          ):Integer;
 begin
  if (pInfo=nil) then
@@ -81,7 +81,7 @@ begin
   Exit(Integer($809a0002));
  end;
 
- if (param_1<>$7000) then
+ if (op<>$7000) then
  begin
   Exit(Integer($809a0003));
  end;
@@ -91,6 +91,71 @@ begin
  pInfo^.unknow_0x04:=1;
 
  Result:=0;
+end;
+
+type
+ pHdmiMonitorInfo=^THdmiMonitorInfo;
+ THdmiMonitorInfo=packed record
+  data:array[0..323] of Byte;
+ end;
+
+function ps4_sceAvSettingGetHdmiMonitorInfo(op   :QWORD;
+                                            pInfo:pHdmiMonitorInfo):Integer;
+begin
+ if (pInfo=nil) then
+ begin
+  Exit(Integer($809a0001));
+ end;
+
+ case op of
+  $7000:;
+  $7102:;
+  else
+   Exit(Integer($809a0003));
+ end;
+
+ pInfo^:=Default(THdmiMonitorInfo);
+
+ Result:=0;
+end;
+
+type
+ PVideoOutModeHdmi=^TVideoOutModeHdmi;
+ TVideoOutModeHdmi=packed record
+  size    :DWORD;
+  unknow2 :Byte;
+  unknow3 :Byte;
+  unknow4 :Byte;
+  unknow5 :Byte;
+  unknow6 :QWORD;
+  unknow7 :QWORD;
+  unknow8 :Byte;
+  unknow9 :Byte;
+  unknow10:Byte;
+  unknow11:Byte;
+  unknow12:DWORD;
+ end;
+ {$IF sizeof(TVideoOutModeHdmi)<>32}{$STOP sizeof(TVideoOutModeHdmi)<>32}{$ENDIF}
+
+function ps4_sceAvSettingIsSupportedVideoOutModeByHdmiMonitorInfo(pInfo:pHdmiMonitorInfo;
+                                                                  pMode:PVideoOutModeHdmi):Integer;
+begin
+ if (pInfo=nil) or
+    (pMode=nil) then
+ begin
+  Exit(Integer($809a0001));
+ end;
+
+ if (pMode^.size<>32) or
+    (pMode^.unknow9<>$ff) or
+    (pMode^.unknow10<>$ff) or
+    (pMode^.unknow11<>$ff) or
+    (pMode^.unknow12<>$ffffffff) then
+ begin
+  Exit(Integer($809a0002));
+ end;
+
+ Exit(0);
 end;
 
 //
@@ -105,6 +170,8 @@ begin
  lib.set_proc($10865D5934FB65DC,@ps4_sceAvSettingInit);
  lib.set_proc($65F3078150D8CF36,@ps4_sceAvSettingChangeOutputMode3);
  lib.set_proc($BE1DDA43E254A525,@ps4_sceAvSettingGetDeviceInfo);
+ lib.set_proc($FCCBA2EBB4D9778B,@ps4_sceAvSettingGetHdmiMonitorInfo);
+ lib.set_proc($123F5888498E5951,@ps4_sceAvSettingIsSupportedVideoOutModeByHdmiMonitorInfo);
 end;
 
 var
