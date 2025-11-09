@@ -554,7 +554,6 @@ var
  mmap_flags:Integer;
 
  ExtendedCpuPageTable:QWORD;
- ExtendedPageTable   :QWORD;
  ExtendedGpuPageTable:QWORD;
  FlexibleMemorySize  :QWORD;
 
@@ -701,20 +700,22 @@ begin
    ExtendedCpuPageTable:=fuword64(mem_param.sceKernelExtendedCpuPageTable^);
   end;
 
-  if (mem_param.sceKernelExtendedPageTable=nil) then
+  if (Int64(ExtendedCpuPageTable) < 0) then
   begin
-   ExtendedPageTable:=QWORD(Int64(-1));
-  end else
-  begin
-   ExtendedPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+   if (mem_param.sceKernelExtendedPageTable=nil) then
+   begin
+    ExtendedCpuPageTable:=QWORD(Int64(-1));
+   end else
+   begin
+    ExtendedCpuPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+   end;
+
+   if (Int64(ExtendedCpuPageTable) < 1) then
+   begin
+    ExtendedCpuPageTable:=0;
+   end;
   end;
 
-
-  if (int64(ExtendedCpuPageTable) < 0) and
-     (int64(ExtendedPageTable) < 1) then
-  begin
-   ExtendedCpuPageTable:=0;
-  end else
   if (ExtendedCpuPageTable > $1000000000) then
   begin
    ExtendedCpuPageTable:=0;
@@ -804,18 +805,18 @@ begin
  begin
   if (mem_param.sceKernelExtendedPageTable=nil) then
   begin
-   ExtendedPageTable:=QWORD(Int64(-1));
+   ExtendedCpuPageTable:=QWORD(Int64(-1));
   end else
   begin
-   ExtendedPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
+   ExtendedCpuPageTable:=fuword64(mem_param.sceKernelExtendedPageTable^);
   end;
 
-  if (Int64(ExtendedPageTable) < 1) or
-     (ExtendedPageTable=$100000000) then
+  if (Int64(ExtendedCpuPageTable) < 1) or
+     (ExtendedCpuPageTable=$100000000) then
   begin
-   if (Int64(ExtendedPageTable) > 0) then
+   if (Int64(ExtendedCpuPageTable) > 0) then
    begin
-    allocate_extended_page_table_pool(ExtendedPageTable,0,0);
+    allocate_extended_page_table_pool(ExtendedCpuPageTable,0,0);
    end;
   end else
   begin
