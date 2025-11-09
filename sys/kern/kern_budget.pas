@@ -540,9 +540,6 @@ begin
 end;
 
 function dmem_process_relocated():Integer;
-label
- _no_mem_param,
- _next;
 var
  proc_param:TSceProcParam;
 
@@ -575,43 +572,32 @@ begin
  end;
 
  proc_param:=Default(TSceProcParam);
+ mem_param :=Default(TSceKernelMemParam);
+
  Result:=copy_proc_param(@proc_param);
 
- if (Result=ENOENT) then
+ if (Result=0) and (proc_param._sceKernelMemParam<>nil) then
  begin
-  _no_mem_param:
-  mem_param:=Default(TSceKernelMemParam);
-  Result:=0;
- end else
- begin
-  if (Result=0) then
+  mem_param_size:=fuword64(proc_param._sceKernelMemParam^.Size);
+
+  if (mem_param_size=QWORD(-1)) then
   begin
-   if (proc_param._sceKernelMemParam=nil) then goto _no_mem_param;
-
-   mem_param_size:=fuword64(proc_param._sceKernelMemParam^.Size);
-
-   if (mem_param_size=QWORD($ffffffffffffffff)) then
+   Result:=EACCES;
+  end else
+  begin
+   if (mem_param_size>sizeof(TSceKernelMemParam)) then
    begin
-    Result:=EACCES;
-   end else
-   begin
-    if (mem_param_size>sizeof(TSceKernelMemParam)) then
-    begin
-     mem_param_size:=sizeof(TSceKernelMemParam);
-    end;
-
-    mem_param:=Default(TSceKernelMemParam);
-    Result:=copyin(proc_param._sceKernelMemParam,@mem_param,mem_param_size);
-
-    if (Result=0) then goto _next;
+    mem_param_size:=sizeof(TSceKernelMemParam);
    end;
 
+   Result:=copyin(proc_param._sceKernelMemParam,@mem_param,mem_param_size);
   end;
-  //
-  Writeln('[KERNEL] ERROR: failed to load memory parameter: ',Result);
  end;
 
- _next:
+ if (Result<>0) then
+ begin
+  Writeln('[KERNEL] ERROR: failed to load memory parameter: ',Result);
+ end;
 
  if (Byte((mmap_flags xor 1) or ord(g_self_loading=0))=0) then
  begin
@@ -770,7 +756,7 @@ begin
       Result:=0;
       FMEM_SIZE:=bigapp_max_fmem_size;
 
-      if (FlexibleMemorySize<>QWORD($ffffffffffffffff)) then
+      if (FlexibleMemorySize<>QWORD(-1)) then
       begin
        FMEM_SIZE:=FMEM_BASE + FlexibleMemorySize;
 
