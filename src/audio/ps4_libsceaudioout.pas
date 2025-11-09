@@ -3,12 +3,9 @@ unit ps4_libSceAudioOut;
 {$mode objfpc}{$H+}
 {$CALLING SysV_ABI_CDecl}
 
-{/$define silent}
-
 interface
 
 uses
-  //libportaudio,
   subr_dynlib,
   audioout_interface,
   SDL3_audio_interface;
@@ -29,18 +26,23 @@ function ps4_sceAudioOutOutputs(param:pSceAudioOutOutputParam;num:DWORD):Integer
 
 implementation
 
+//MAIN------->/===\
+//            |Mix|-->|Mastering|-->/===\
+//BGM-------->\===/                 |Mix|-->[Main Device]
+//                                  \===/
+//                                    ^
+//VOICE-------------------------------+----/==========\
+//                                    |    |Headphones|
+//PERSONAL----------------------------+----\==========/
+//PADSPK------------------------------+---->[Controller]
+//AUX------> Default/Special
+
 uses
  sysutils,
  atomic,
  kern_mtx,
  kern_proc,
  ps4_libSceMbus;
-
-{
-uses
- ps4_time,
- sys_signal;
-}
 
 var
  g_audioout_interface:TAbstractAudioOut=nil;
@@ -176,39 +178,6 @@ begin
  end;
 
 end;
-
-{
-type
- TAudioOutHandle=class(TClassHandle)
-  userId,_type,index:Integer;
-  len,freq,param:DWORD;
-  volume:array[0..7] of Integer;
-
-  pstream:PaStream;
-  pnumOutputChannels:Integer;
-  psampleFormat:PaSampleFormat;
-
-  bufsize:Integer;
-  buf:Pointer;
-
-  last_time:QWORD;
-
-  //d:QWORD;
-
-  Destructor Destroy; override;
- end;
-
-Destructor TAudioOutHandle.Destroy;
-begin
- if (pstream<>nil) then
- begin
-  Pa_StopStream(pstream);
-  Pa_CloseStream(pstream);
- end;
- FreeMem(buf);
- inherited;
-end;
-}
 
 function _out_open(userId,_type:Integer;
                    len,param:DWORD):Integer;
@@ -366,16 +335,6 @@ end;
 //int32_t SceUserServiceUserId;
 function ps4_sceAudioOutOpen(userId,_type,index:Integer;
                              len,freq,param:DWORD):Integer;
-{
-Var
- H:TAudioOutHandle;
- i:Byte;
-
- err:Integer;
- pstream:PaStream;
- pnumOutputChannels:Integer;
- psampleFormat:PaSampleFormat;
- }
 begin
  Result:=0;
 
@@ -466,89 +425,6 @@ begin
  Result:=(DWORD(_type) shl 16) or DWORD(Result) or $20000000;
 
  ps4_sceMbusAddHandleByUserId(1,Result,userId,_type,index,0);
-
-{
- pstream:=nil;
- err:=0;
- if (_type=SCE_AUDIO_OUT_PORT_TYPE_MAIN) or (_type=SCE_AUDIO_OUT_PORT_TYPE_BGM) then //so far only MAIN/BGM
- begin
-  _sig_lock;
-  err:=Pa_OpenDefaultStream(@pstream,
-                            0,
-                            pnumOutputChannels,
-                            psampleFormat,
-                            freq,
-                            paFramesPerBufferUnspecified,nil,nil);
-  _sig_unlock;
-
-  if (err<>0) and (pnumOutputChannels>2) then
-  begin
-   pnumOutputChannels:=2;
-   _sig_lock;
-   err:=Pa_OpenDefaultStream(@pstream,
-                             0,
-                             pnumOutputChannels,
-                             psampleFormat,
-                             freq,
-                             paFramesPerBufferUnspecified,nil,nil);
-   _sig_unlock;
-  end;
-
-  if (err<>0) then
-  begin
-   Writeln(StdErr,'Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
-   //Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-  end;
- end;
-
- err:=0;
- if (pstream<>nil) then
- begin
-  _sig_lock;
-  err:=Pa_StartStream(pstream);
-  _sig_unlock;
- end;
-
- if (err<>0) then
- begin
-  Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
- end;
-
- _sig_lock;
- H:=TAudioOutHandle.Create;
- _sig_unlock;
-
- H.userId:=userId;
- H._type :=_type ;
- H.index :=index ;
- H.len   :=len   ;
- H.freq  :=freq  ;
- H.param :=param ;
-
- For i:=0 to 7 do
-  H.volume[i]:=SCE_AUDIO_VOLUME_0DB;
-
- H.pstream           :=pstream;
- H.pnumOutputChannels:=pnumOutputChannels;
- H.psampleFormat     :=psampleFormat;
-
- _sig_lock;
- if not HAudioOuts.New(H,Result) then Result:=SCE_AUDIO_OUT_ERROR_PORT_FULL;
- _sig_unlock;
-
- Case QWORD(psampleFormat) of
-  QWORD(paInt16  ):H.bufsize:=2*pnumOutputChannels*len;
-  QWORD(paFloat32):H.bufsize:=4*pnumOutputChannels*len;
- end;
-
- _sig_lock;
- H.buf:=GetMem(H.bufsize);
- _sig_unlock;
-
- H.Release;
-
- Writeln('AudioOutOpen:',userId,':',_type,':',index,':',len,':',freq,':',param);
- }
 end;
 
 function ps4_sceAudioOutOpenEx(userId,_type,index,unknow:Integer;
@@ -760,8 +636,6 @@ begin
     end;
  end;
 
- {$ifdef silent}if (volume>800) then volume:=800;{$endif}
-
  mtx_lock(g_port_lock);
 
   ahandle:=g_port_table[port_id];
@@ -875,210 +749,6 @@ begin
  mtx_unlock(g_port_lock);
 end;
 
-procedure _VecMulI16M(Src,Dst:Pointer;count:Integer;volume:Integer);// inline;
-begin
- if volume=SCE_AUDIO_VOLUME_0DB then
- begin
-  Move(Src^,Dst^,count*2);
- end else
- While (count>0) do
- begin
-  PSmallInt(Dst)^:=(PSmallInt(Src)^*volume) div SCE_AUDIO_VOLUME_0DB;
-  Inc(Src,2);
-  Inc(Dst,2);
-  Dec(count);
- end;
-end;
-
-procedure _VecMulI16S(Src,Dst:Pointer;count:Integer;volume:PInteger); inline;
-begin
- if (volume[0]=SCE_AUDIO_VOLUME_0DB) and (volume[1]=SCE_AUDIO_VOLUME_0DB) then
- begin
-  Move(Src^,Dst^,count*2*2);
- end else
- While (count>0) do
- begin
-  PSmallInt(Dst)^:=(PSmallInt(Src)^*volume[0]) div SCE_AUDIO_VOLUME_0DB;
-  Inc(Src,2);
-  Inc(Dst,2);
-  PSmallInt(Dst)^:=(PSmallInt(Src)^*volume[1]) div SCE_AUDIO_VOLUME_0DB;
-  Inc(Src,2);
-  Inc(Dst,2);
-  Dec(count);
- end;
-end;
-
-procedure _VecMulF32M(Src,Dst:Pointer;count:Integer;volume:Integer); inline;
-var
- fvolume:Single;
-begin
- if volume=SCE_AUDIO_VOLUME_0DB then
- begin
-  Move(Src^,Dst^,count*4);
- end else
- begin
-  fvolume:=volume/SCE_AUDIO_VOLUME_0DB;
-  While (count>0) do
-  begin
-   PSingle(Dst)^:=PSingle(Src)^*fvolume;
-   Inc(Src,4);
-   Inc(Dst,4);
-   Dec(count);
-  end;
- end;
-end;
-
-procedure _VecMulF32S(Src,Dst:Pointer;count:Integer;volume:PInteger); inline;
-var
- fvolume:array[0..1] of Single;
-begin
- if (volume[0]=SCE_AUDIO_VOLUME_0DB) and (volume[1]=SCE_AUDIO_VOLUME_0DB) then
- begin
-  Move(Src^,Dst^,count*4*2);
- end else
- begin
-  fvolume[0]:=volume[0]/SCE_AUDIO_VOLUME_0DB;
-  fvolume[1]:=volume[1]/SCE_AUDIO_VOLUME_0DB;
-  While (count>0) do
-  begin
-   PSingle(Dst)^:=PSingle(Src)^*fvolume[0];
-   Inc(Src,4);
-   Inc(Dst,4);
-   PSingle(Dst)^:=PSingle(Src)^*fvolume[1];
-   Inc(Src,4);
-   Inc(Dst,4);
-   Dec(count);
-  end;
- end;
-end;
-
-//  1+3/√2
-//L=FL+0.707*C+0.707*SL+0.707*BL
-//R=FR+0.707*C+0.707*SR+0.707*BR
-//1/√2
-
-const
- _FL=0;
- _FR=1;
- _FC=2;
- _LF=3;
- _SL=4;
- _SR=5;
- _BL=6;
- _BR=7;
-
- STD_SL=6;
- STD_SR=7;
- STD_BL=4;
- STD_BR=5;
-
-procedure __VecMulF32CH8ToS(Src,Dst:Pointer;count:Integer;fvolume:PSingle);
-var
- fL,fR:Single;
-begin
- While (count>0) do
- begin
-
-  fL:=(PSingle(Src)[_FL]*fvolume[_FL])+
-      (PSingle(Src)[_FC]*fvolume[_FC])+
-      (PSingle(Src)[_SL]*fvolume[_SL])+
-      (PSingle(Src)[_BL]*fvolume[_BL]);
-
-  fR:=(PSingle(Src)[_FR]*fvolume[_FR])+
-      (PSingle(Src)[_FC]*fvolume[_FC])+
-      (PSingle(Src)[_SR]*fvolume[_SR])+
-      (PSingle(Src)[_BR]*fvolume[_BR]);
-
-  PSingle(Dst)^:=fL;
-  Inc(Dst,4);
-  PSingle(Dst)^:=fR;
-  Inc(Dst,4);
-
-  Inc(Src,4*8);
-
-  Dec(count);
- end;
-end;
-
-procedure _VecMulF32CH8ToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
-const
- fdiv1:Single=1+(3/Sqrt(2));
- fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
-var
- fvolume:array[0..7] of Single;
-begin
- fvolume[_FL]:=(volume[_FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FR]:=(volume[_FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FC]:=(volume[_FC]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SL]:=(volume[_SL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SR]:=(volume[_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BL]:=(volume[_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BR]:=(volume[_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
-end;
-
-procedure __VecMulS16CH8ToS(Src,Dst:Pointer;count:Integer;fvolume:PSingle);
-var
- fL,fR:Single;
-begin
- While (count>0) do
- begin
-
-  fL:=(PSmallInt(Src)[_FL]*fvolume[_FL])+
-      (PSmallInt(Src)[_FC]*fvolume[_FC])+
-      (PSmallInt(Src)[_SL]*fvolume[_SL])+
-      (PSmallInt(Src)[_BL]*fvolume[_BL]);
-
-  fR:=(PSmallInt(Src)[_FR]*fvolume[_FR])+
-      (PSmallInt(Src)[_FC]*fvolume[_FC])+
-      (PSmallInt(Src)[_SR]*fvolume[_SR])+
-      (PSmallInt(Src)[_BR]*fvolume[_BR]);
-
-  PSmallInt(Dst)^:=Trunc(fL);
-  Inc(Dst,2);
-  PSmallInt(Dst)^:=Trunc(fR);
-  Inc(Dst,2);
-
-  Inc(Src,2*8);
-
-  Dec(count);
- end;
-end;
-
-procedure _VecMulS32CH8ToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
-const
- fdiv1:Single=1+(3/Sqrt(2));
- fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
-var
- fvolume:array[0..7] of Single;
-begin
- fvolume[_FL]:=(volume[_FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FR]:=(volume[_FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FC]:=(volume[_FC]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SL]:=(volume[_SL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SR]:=(volume[_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BL]:=(volume[_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BR]:=(volume[_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- __VecMulS16CH8ToS(Src,Dst,count,@fvolume);
-end;
-
-procedure _VecMulF32CH8STDToS(Src,Dst:Pointer;count:Integer;volume:PInteger);
-const
- fdiv1:Single=1+(3/Sqrt(2));
- fdiv2:Single=(1/Sqrt(2))*(1+(3/Sqrt(2)));
-var
- fvolume:array[0..7] of Single;
-begin
- fvolume[_FL]:=(volume[   _FL]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FR]:=(volume[   _FR]/SCE_AUDIO_VOLUME_0DB)*fdiv1;
- fvolume[_FC]:=(volume[   _FC]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SL]:=(volume[STD_SL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_SR]:=(volume[STD_SR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BL]:=(volume[STD_BL]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- fvolume[_BR]:=(volume[STD_BR]/SCE_AUDIO_VOLUME_0DB)*fdiv2;
- __VecMulF32CH8ToS(Src,Dst,count,@fvolume);
-end;
-
 function ps4_sceAudioOutOutput(handle:Integer;ptr:Pointer):Integer;
 var
  port_id  :Integer;
@@ -1130,120 +800,6 @@ begin
   end;
 
  mtx_unlock(g_port_lock);
-
- //Writeln('sceAudioOutOutput<-');
-
- {
- if (HAudioOuts=nil) then Exit(SCE_AUDIO_OUT_ERROR_NOT_INIT);
-
- if (ptr=nil) then Exit(0);
-
- err:=0;
- _sig_lock;
- H:=TAudioOutHandle(HAudioOuts.Acqure(handle));
- _sig_unlock;
-
- if (H=nil) then Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
-
- count:=H.len;
-
- if (H.pstream<>nil) then
- case (H.param and SCE_AUDIO_OUT_PARAM_FORMAT_MASK) of
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_MONO:
-   begin
-    _VecMulI16M(ptr,H.buf,count,H.volume[0]);
-    _sig_lock;
-    err:=Pa_WriteStream(H.pstream,H.buf,count);
-    _sig_unlock;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_STEREO:
-   begin
-    _VecMulI16S(ptr,H.buf,count,@H.volume);
-    _sig_lock;
-    err:=Pa_WriteStream(H.pstream,H.buf,count);
-    _sig_unlock;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH:
-   begin
-
-    if (H.pnumOutputChannels=2) then
-    begin
-     _VecMulS32CH8ToS(ptr,H.buf,count,@H.volume);
-     _sig_lock;
-     err:=Pa_WriteStream(H.pstream,H.buf,count);
-     _sig_unlock;
-    end else
-    begin
-     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH');
-    end;
-
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_MONO:
-   begin
-    _VecMulF32M(ptr,H.buf,count,H.volume[0]);
-    _sig_lock;
-    err:=Pa_WriteStream(H.pstream,H.buf,count);
-    _sig_unlock;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_STEREO:
-   begin
-    _VecMulF32S(ptr,H.buf,count,@H.volume);
-    _sig_lock;
-    err:=Pa_WriteStream(H.pstream,H.buf,count);
-    _sig_unlock;
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH:
-   begin
-
-    if (H.pnumOutputChannels=2) then
-    begin
-     _VecMulF32CH8ToS(ptr,H.buf,count,@H.volume);
-     _sig_lock;
-     err:=Pa_WriteStream(H.pstream,H.buf,count);
-     _sig_unlock;
-    end else
-    begin
-     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH');
-    end;
-
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD:
-   begin
-    Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_S16_8CH_STD');
-   end;
-  SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD:
-   begin
-
-    if (H.pnumOutputChannels=2) then
-    begin
-     _VecMulF32CH8STDToS(ptr,H.buf,count,@H.volume);
-     _sig_lock;
-     err:=Pa_WriteStream(H.pstream,H.buf,count);
-     _sig_unlock;
-    end else
-    begin
-     Assert(false,'SCE_AUDIO_OUT_PARAM_FORMAT_FLOAT_8CH_STD');
-    end;
-
-   end;
- end;
-
- Case err of
-  0:;
-  Integer(paOutputUnderflowed):;
-  else
-   Writeln(StdErr,'Pa_GetErrorText:',PaErrorCode(err),':',Pa_GetErrorText(err));
- end;
-
- //Writeln('sceAudioOutOutput:',handle,':',HexStr(ptr));
-
- H.last_time:=ps4_sceKernelGetProcessTime;
-
- _sig_lock;
- H.Release;
- _sig_unlock;
- }
-
 end;
 
 function ps4_sceAudioOutOutputs(param:pSceAudioOutOutputParam;num:DWORD):Integer;
