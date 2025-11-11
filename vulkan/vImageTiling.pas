@@ -495,20 +495,216 @@ begin
     end;
 end;
 
+type
+ t_move_func=Procedure(const source;var dest;count:SizeInt); register;
+
+Procedure _copy1(const source;var dest;count:SizeInt);
+begin
+ Byte(dest):=Byte(source);
+end;
+
+Procedure _copy2(const source;var dest;count:SizeInt);
+begin
+ WORD(dest):=WORD(source);
+end;
+
+Procedure _copy4(const source;var dest;count:SizeInt);
+begin
+ DWORD(dest):=DWORD(source);
+end;
+
+Procedure _copy8(const source;var dest;count:SizeInt);
+begin
+ QWORD(dest):=QWORD(source);
+end;
+
+//rdi, rsi, rdx
+procedure tile_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   (%rsi), %xmm0
+          vmovups 16(%rsi), %xmm1
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm2
+          vmovups 16(%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm2, %ymm2
+  vinsertf128 $1, 16(%rsi), %ymm3, %ymm3
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm4
+          vmovups 16(%rsi), %xmm5
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
+  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm6
+          vmovups 16(%rsi), %xmm7
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm6, %ymm6
+  vinsertf128 $1, 16(%rsi), %ymm7, %ymm7
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+          vmovups  %ymm4, 128(%rdi)
+          vmovups  %ymm5, 160(%rdi)
+          vmovups  %ymm6, 192(%rdi)
+          vmovups  %ymm7, 224(%rdi)
+end;
+
+//rdi, rsi, rdx
+procedure tile_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   (%rsi), %xmm0
+          vmovups 16(%rsi), %xmm1
+          vmovups 32(%rsi), %xmm2
+          vmovups 48(%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
+  vinsertf128 $1, 32(%rsi), %ymm2, %ymm2
+  vinsertf128 $1, 48(%rsi), %ymm3, %ymm3
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm4
+          vmovups 16(%rsi), %xmm5
+          vmovups 32(%rsi), %xmm6
+          vmovups 48(%rsi), %xmm7
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
+  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
+  vinsertf128 $1, 32(%rsi), %ymm6, %ymm6
+  vinsertf128 $1, 48(%rsi), %ymm7, %ymm7
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm8
+          vmovups 16(%rsi), %xmm9
+          vmovups 32(%rsi), %xmm10
+          vmovups 48(%rsi), %xmm11
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm8, %ymm8
+  vinsertf128 $1, 16(%rsi), %ymm9, %ymm9
+  vinsertf128 $1, 32(%rsi), %ymm10, %ymm10
+  vinsertf128 $1, 48(%rsi), %ymm11, %ymm11
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm12
+          vmovups 16(%rsi), %xmm13
+          vmovups 32(%rsi), %xmm14
+          vmovups 48(%rsi), %xmm15
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm12, %ymm12
+  vinsertf128 $1, 16(%rsi), %ymm13, %ymm13
+  vinsertf128 $1, 32(%rsi), %ymm14, %ymm14
+  vinsertf128 $1, 48(%rsi), %ymm15, %ymm15
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+          vmovups  %ymm4, 128(%rdi)
+          vmovups  %ymm5, 160(%rdi)
+          vmovups  %ymm6, 192(%rdi)
+          vmovups  %ymm7, 224(%rdi)
+          vmovups  %ymm8, 256(%rdi)
+          vmovups  %ymm9, 288(%rdi)
+          vmovups %ymm10, 320(%rdi)
+          vmovups %ymm11, 352(%rdi)
+          vmovups %ymm12, 384(%rdi)
+          vmovups %ymm13, 416(%rdi)
+          vmovups %ymm14, 448(%rdi)
+          vmovups %ymm15, 480(%rdi)
+end;
+
+Procedure copy_linear_to_1dThin_AVX_32(var tiler:Tiler1d;src,dst:Pointer);
+var
+ m_slice_size_bytes:Ptruint;
+ m_pitch_bytes:QWORD;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+begin
+ dst:=get_dmem_ptr(dst);
+
+ m_slice_size_bytes:=(tiler.m_linearWidth*tiler.m_linearHeight)*4;
+ m_pitch_bytes     :=(tiler.m_linearWidth)*4;
+
+ For z:=0 to tiler.m_linearDepth-1 do
+  For i:=0 to tiler.m_tilesPerSlice-1 do
+  begin
+   x:=i mod tiler.m_tilesPerRow;
+   y:=i div tiler.m_tilesPerRow;
+
+   x:=(x shl 3)*4;
+   y:=y shl 3;
+
+   pSrc:=@PByte(src)[z*m_slice_size_bytes+y*m_pitch_bytes+x];
+   pDst:=@PByte(dst)[i*tiler.m_tileBytes];
+
+   tile_1dThin_32(pDst,pSrc,m_pitch_bytes);
+  end;
+
+end;
+
+Procedure copy_linear_to_1dThin_AVX_64(var tiler:Tiler1d;src,dst:Pointer);
+var
+ m_slice_size_bytes:Ptruint;
+ m_pitch_bytes:QWORD;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+begin
+ dst:=get_dmem_ptr(dst);
+
+ m_slice_size_bytes:=(tiler.m_linearWidth*tiler.m_linearHeight)*8;
+ m_pitch_bytes     :=(tiler.m_linearWidth)*8;
+
+ For z:=0 to tiler.m_linearDepth-1 do
+  For i:=0 to tiler.m_tilesPerSlice-1 do
+  begin
+   x:=i mod tiler.m_tilesPerRow;
+   y:=i div tiler.m_tilesPerRow;
+
+   x:=(x shl 3)*8;
+   y:=y shl 3;
+
+   pSrc:=@PByte(src)[z*m_slice_size_bytes+y*m_pitch_bytes+x];
+   pDst:=@PByte(dst)[i*tiler.m_tileBytes];
+
+   tile_1dThin_64(pDst,pSrc,m_pitch_bytes);
+  end;
+
+end;
+
 Procedure copy_linear_to_1dThin(var tiler:Tiler1d;src,dst:Pointer);
 var
  m_bytePerElement:Ptruint;
  m_slice_size:Ptruint;
  i,x,y,z:QWORD;
  pSrc,pDst:Pointer;
+
+ _move:t_move_func;
 begin
+ m_bytePerElement:=tiler.m_bytePerElement;
+
+ Writeln('copy_linear_to_1dThin:',m_bytePerElement);
+
+ case m_bytePerElement of
+  4:begin copy_linear_to_1dThin_AVX_32(tiler,src,dst); Exit; end;
+  8:begin copy_linear_to_1dThin_AVX_64(tiler,src,dst); Exit; end;
+ end;
 
  //ImageToBuffer
 
  dst:=get_dmem_ptr(dst);
-
  //
- m_bytePerElement:=tiler.m_bytePerElement;
+
+
+ case m_bytePerElement of
+  1:_move:=@_copy1;
+  2:_move:=@_copy2;
+  4:_move:=@_copy4;
+  8:_move:=@_copy8;
+  else
+    _move:=@Move;
+ end;
+
  m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
  //
  For z:=0 to tiler.m_linearDepth-1 do
@@ -521,7 +717,7 @@ begin
      tiler.getTiledElementByteOffset(i,x,y,z);
      pDst:=@PByte(dst)[i];
      //
-     Move(pSrc^,pDst^,m_bytePerElement);
+     _move(pSrc^,pDst^,m_bytePerElement);
     end;
 end;
 

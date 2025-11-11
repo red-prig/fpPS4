@@ -1,0 +1,340 @@
+M:[Display] B:[8] A:[] Tilings:5,9,13,27
+i=[x:0][x:1][x:2][y:1][y:0][y:2]
+x:=(((i shr 0) and 1) shl 0) or (((i shr 1) and 1) shl 1) or (((i shr 2) and 1) shl 2);
+y:=(((i shr 3) and 1) shl 1) or (((i shr 4) and 1) shl 0) or (((i shr 5) and 1) shl 2);
+z:=;
+---
+M:[Display] B:[16] A:[] Tilings:5,9,13,27
+i=[x:0][x:1][x:2][y:0][y:1][y:2]
+x:=(((i shr 0) and 1) shl 0) or (((i shr 1) and 1) shl 1) or (((i shr 2) and 1) shl 2);
+y:=(((i shr 3) and 1) shl 0) or (((i shr 4) and 1) shl 1) or (((i shr 5) and 1) shl 2);
+z:=;
+---
+M:[Display] B:[32] A:[] Tilings:5,9,13,27
+i=[x:0][x:1][y:0][x:2][y:1][y:2]
+x:=(((i shr 0) and 1) shl 0) or (((i shr 1) and 1) shl 1) or (((i shr 3) and 1) shl 2);
+y:=(((i shr 2) and 1) shl 0) or (((i shr 4) and 1) shl 1) or (((i shr 5) and 1) shl 2);
+z:=;
+---
+M:[Display] B:[64] A:[] Tilings:5,9,13,27
+i=[x:0][y:0][x:1][x:2][y:1][y:2]
+x:=(((i shr 0) and 1) shl 0) or (((i shr 2) and 1) shl 1) or (((i shr 3) and 1) shl 2);
+y:=(((i shr 1) and 1) shl 0) or (((i shr 4) and 1) shl 1) or (((i shr 5) and 1) shl 2);
+z:=;
+---
+[8]:all=64bytes
+0..7:0:64bit 
+0..7:2:64bit 
+0..7:1:64bit 
+0..7:3:64bit 
+0..7:4:64bit 
+0..7:6:64bit 
+0..7:5:64bit 
+0..7:7:64bit 
+[16]:all=128bytes
+0..7:0:128bit 
+0..7:1:128bit 
+0..7:2:128bit 
+0..7:3:128bit 
+0..7:4:128bit 
+0..7:5:128bit 
+0..7:6:128bit 
+0..7:7:128bit 
+[32]:all=256bytes
+0..3:0:128bit 0..3:1:128bit 
+4..7:0:128bit 4..7:1:128bit 
+0..3:2:128bit 0..3:3:128bit 
+4..7:2:128bit 4..7:3:128bit 
+0..3:4:128bit 0..3:5:128bit 
+4..7:4:128bit 4..7:5:128bit 
+0..3:6:128bit 0..3:7:128bit 
+4..7:6:128bit 4..7:7:128bit 
+[64]:all=512bytes
+0..1:0:128bit 0..1:1:128bit 2..3:0:128bit 2..3:1:128bit 
+4..5:0:128bit 4..5:1:128bit 6..7:0:128bit 6..7:1:128bit 
+0..1:2:128bit 0..1:3:128bit 2..3:2:128bit 2..3:3:128bit 
+4..5:2:128bit 4..5:3:128bit 6..7:2:128bit 6..7:3:128bit 
+0..1:4:128bit 0..1:5:128bit 2..3:4:128bit 2..3:5:128bit 
+4..5:4:128bit 4..5:5:128bit 6..7:4:128bit 6..7:5:128bit 
+0..1:6:128bit 0..1:7:128bit 2..3:6:128bit 2..3:7:128bit 
+4..5:6:128bit 4..5:7:128bit 6..7:6:128bit 6..7:7:128bit 
+//[8]:all=64bytes
+procedure detile_1dThin_8(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+            vmovq  %xmm0,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm0, %xmm2
+            vmovq  %xmm2,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+      vpextrq $1,  %xmm0,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+      vpextrq $1,  %xmm2,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+            vmovq  %xmm1,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm1, %xmm3
+            vmovq  %xmm3,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+      vpextrq $1,  %xmm1,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+      vpextrq $1,  %xmm3,   (%rdi)
+end;
+procedure tile_1dThin_8(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+            vmovq   (%rsi), %xmm0
+              lea (%rsi,%rdx), %rsi
+            vmovq   (%rsi), %xmm2
+              lea (%rsi,%rdx), %rsi
+      vpinsrq $1,   (%rsi), %xmm0, %xmm0
+              lea (%rsi,%rdx), %rsi
+      vpinsrq $1,   (%rsi), %xmm2, %xmm2
+              lea (%rsi,%rdx), %rsi
+            vmovq   (%rsi), %xmm1
+              lea (%rsi,%rdx), %rsi
+            vmovq   (%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+      vpinsrq $1,   (%rsi), %xmm1, %xmm1
+              lea (%rsi,%rdx), %rsi
+      vpinsrq $1,   (%rsi), %xmm3, %xmm3
+  vinsertf128 $1, %xmm2, %ymm0, %ymm0
+  vinsertf128 $1, %xmm3, %ymm1, %ymm1
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+end;
+
+//[16]:all=128bytes
+procedure detile_1dThin_16(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+          vmovups  %xmm0,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm0,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm1,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm1,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm2,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm2,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm3,   (%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm3,   (%rdi)
+end;
+procedure tile_1dThin_16(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   (%rsi), %xmm0
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm1
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm1, %ymm1
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm2
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm2, %ymm2
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm3, %ymm3
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+end;
+
+//[32]:all=256bytes
+procedure detile_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+          vmovups 128(%rsi), %ymm4
+          vmovups 160(%rsi), %ymm5
+          vmovups 192(%rsi), %ymm6
+          vmovups 224(%rsi), %ymm7
+          vmovups  %xmm0,   (%rdi)
+          vmovups  %xmm1, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm0,   (%rdi)
+ vextractf128 $1,  %ymm1, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm2,   (%rdi)
+          vmovups  %xmm3, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm2,   (%rdi)
+ vextractf128 $1,  %ymm3, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm4,   (%rdi)
+          vmovups  %xmm5, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm4,   (%rdi)
+ vextractf128 $1,  %ymm5, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm6,   (%rdi)
+          vmovups  %xmm7, 16(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm6,   (%rdi)
+ vextractf128 $1,  %ymm7, 16(%rdi)
+end;
+procedure tile_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   (%rsi), %xmm0
+          vmovups 16(%rsi), %xmm1
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm2
+          vmovups 16(%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm2, %ymm2
+  vinsertf128 $1, 16(%rsi), %ymm3, %ymm3
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm4
+          vmovups 16(%rsi), %xmm5
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
+  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm6
+          vmovups 16(%rsi), %xmm7
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm6, %ymm6
+  vinsertf128 $1, 16(%rsi), %ymm7, %ymm7
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+          vmovups  %ymm4, 128(%rdi)
+          vmovups  %ymm5, 160(%rdi)
+          vmovups  %ymm6, 192(%rdi)
+          vmovups  %ymm7, 224(%rdi)
+end;
+
+//[64]:all=512bytes
+procedure detile_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+          vmovups 128(%rsi), %ymm4
+          vmovups 160(%rsi), %ymm5
+          vmovups 192(%rsi), %ymm6
+          vmovups 224(%rsi), %ymm7
+          vmovups 256(%rsi), %ymm8
+          vmovups 288(%rsi), %ymm9
+          vmovups 320(%rsi), %ymm10
+          vmovups 352(%rsi), %ymm11
+          vmovups 384(%rsi), %ymm12
+          vmovups 416(%rsi), %ymm13
+          vmovups 448(%rsi), %ymm14
+          vmovups 480(%rsi), %ymm15
+          vmovups  %xmm0,   (%rdi)
+          vmovups  %xmm1, 16(%rdi)
+          vmovups  %xmm2, 32(%rdi)
+          vmovups  %xmm3, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm0,   (%rdi)
+ vextractf128 $1,  %ymm1, 16(%rdi)
+ vextractf128 $1,  %ymm2, 32(%rdi)
+ vextractf128 $1,  %ymm3, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm4,   (%rdi)
+          vmovups  %xmm5, 16(%rdi)
+          vmovups  %xmm6, 32(%rdi)
+          vmovups  %xmm7, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm4,   (%rdi)
+ vextractf128 $1,  %ymm5, 16(%rdi)
+ vextractf128 $1,  %ymm6, 32(%rdi)
+ vextractf128 $1,  %ymm7, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups  %xmm8,   (%rdi)
+          vmovups  %xmm9, 16(%rdi)
+          vmovups %xmm10, 32(%rdi)
+          vmovups %xmm11, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1,  %ymm8,   (%rdi)
+ vextractf128 $1,  %ymm9, 16(%rdi)
+ vextractf128 $1, %ymm10, 32(%rdi)
+ vextractf128 $1, %ymm11, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+          vmovups %xmm12,   (%rdi)
+          vmovups %xmm13, 16(%rdi)
+          vmovups %xmm14, 32(%rdi)
+          vmovups %xmm15, 48(%rdi)
+              lea (%rdi,%rdx), %rdi
+ vextractf128 $1, %ymm12,   (%rdi)
+ vextractf128 $1, %ymm13, 16(%rdi)
+ vextractf128 $1, %ymm14, 32(%rdi)
+ vextractf128 $1, %ymm15, 48(%rdi)
+end;
+procedure tile_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+          vmovups   (%rsi), %xmm0
+          vmovups 16(%rsi), %xmm1
+          vmovups 32(%rsi), %xmm2
+          vmovups 48(%rsi), %xmm3
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
+  vinsertf128 $1, 32(%rsi), %ymm2, %ymm2
+  vinsertf128 $1, 48(%rsi), %ymm3, %ymm3
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm4
+          vmovups 16(%rsi), %xmm5
+          vmovups 32(%rsi), %xmm6
+          vmovups 48(%rsi), %xmm7
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
+  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
+  vinsertf128 $1, 32(%rsi), %ymm6, %ymm6
+  vinsertf128 $1, 48(%rsi), %ymm7, %ymm7
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm8
+          vmovups 16(%rsi), %xmm9
+          vmovups 32(%rsi), %xmm10
+          vmovups 48(%rsi), %xmm11
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm8, %ymm8
+  vinsertf128 $1, 16(%rsi), %ymm9, %ymm9
+  vinsertf128 $1, 32(%rsi), %ymm10, %ymm10
+  vinsertf128 $1, 48(%rsi), %ymm11, %ymm11
+              lea (%rsi,%rdx), %rsi
+          vmovups   (%rsi), %xmm12
+          vmovups 16(%rsi), %xmm13
+          vmovups 32(%rsi), %xmm14
+          vmovups 48(%rsi), %xmm15
+              lea (%rsi,%rdx), %rsi
+  vinsertf128 $1,   (%rsi), %ymm12, %ymm12
+  vinsertf128 $1, 16(%rsi), %ymm13, %ymm13
+  vinsertf128 $1, 32(%rsi), %ymm14, %ymm14
+  vinsertf128 $1, 48(%rsi), %ymm15, %ymm15
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+          vmovups  %ymm4, 128(%rdi)
+          vmovups  %ymm5, 160(%rdi)
+          vmovups  %ymm6, 192(%rdi)
+          vmovups  %ymm7, 224(%rdi)
+          vmovups  %ymm8, 256(%rdi)
+          vmovups  %ymm9, 288(%rdi)
+          vmovups %ymm10, 320(%rdi)
+          vmovups %ymm11, 352(%rdi)
+          vmovups %ymm12, 384(%rdi)
+          vmovups %ymm13, 416(%rdi)
+          vmovups %ymm14, 448(%rdi)
+          vmovups %ymm15, 480(%rdi)
+end;
+
