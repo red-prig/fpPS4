@@ -683,6 +683,289 @@ end;
 
 //rdi(dst),rsi(src),rdx(pitch)
 
+type
+ t_lea_used_y=object
+  flags:Byte;
+  a_lea:array[0..3] of RawByteString;
+  a_ofs:array[0..7] of RawByteString;
+  procedure _set(y:Byte);
+  procedure _build_str(const reg_dst:RawByteString);
+ end;
+
+procedure t_lea_used_y._set(y:Byte);
+begin
+ Assert(y<8);
+ flags:=flags or (1 shl y)
+end;
+
+procedure t_lea_used_y._build_str(const reg_dst:RawByteString);
+const
+ r_pitch='%rdx';
+ rtmp:array[0..2] of pchar=(
+  '%r8 ',
+  '%r9 ',
+  '%r10'
+ );
+begin
+ //
+ if ((flags and (1 shl 2))<>0) or ((flags and (1 shl 3))<>0) then
+ begin
+  a_lea[0]:='('+reg_dst+','+r_pitch+',2), '+rtmp[0]+' //+2'; //+2 +3
+ end;
+ if ((flags and (1 shl 4))<>0) or ((flags and (1 shl 5))<>0) then
+ begin
+  a_lea[1]:='('+reg_dst+','+r_pitch+',4), '+rtmp[1]+' //+4'; //+4 +5
+ end;
+ if ((flags and (1 shl 6))<>0) or ((flags and (1 shl 7))<>0) then
+ begin
+  a_lea[2]:='('+r_pitch+','+r_pitch+',2), '+rtmp[2]+' //+3'; //+3
+  a_lea[3]:='('+reg_dst+','+rtmp[2]+',2), '+rtmp[2]+' //+6'; //+6 +7
+ end;
+ //
+ a_ofs[0]:='('+reg_dst+')'            ;  //     +0
+ a_ofs[1]:='('+reg_dst+','+r_pitch+')';  //     +1
+ a_ofs[2]:='('+rtmp[0]+')'            ;  //     +2
+ a_ofs[3]:='('+rtmp[0]+','+r_pitch+')';  //+2+1 +3
+ a_ofs[4]:='('+rtmp[1]+')'            ;  //     +4
+ a_ofs[5]:='('+rtmp[1]+','+r_pitch+')';  //+4+1 +5
+ a_ofs[6]:='('+rtmp[2]+')'            ;  //     +6
+ a_ofs[7]:='('+rtmp[2]+','+r_pitch+')';  //+6+1 +7
+end;
+
+procedure on_gen_1dThin_detile(const interval:tbit_interval;
+                               bytes    :Byte;
+                               reg_count:Byte;
+                               var flags:QWORD;
+                               var lea_used_y:t_lea_used_y;
+                               mode:Byte
+                              );
+
+var
+ bytes_pos:Word;
+ reg_num:Byte;
+ reg_mod:Byte;
+ reg_ext:Byte;
+ dlt_x:Integer;
+ dlt_x_str:RawByteString;
+ dlt_y_str:RawByteString;
+begin
+ Assert((interval.pos_i mod 8)=0);
+
+ bytes_pos:=interval.pos_i div 8;
+
+ reg_num:=bytes_pos div 32;
+ reg_mod:=bytes_pos mod 32;
+
+ dlt_x:=(interval.srt_x)*bytes;
+
+ dlt_x_str:='';
+ if (dlt_x<>0) then
+ begin
+  dlt_x_str:=IntToStr(dlt_x);
+ end;
+
+ dlt_y_str:=lea_used_y.a_ofs[interval.y];
+
+ case interval.bitcn of
+   64:
+    begin
+
+     case reg_mod of
+       0:
+        begin
+         if mode=1 then
+          Writeln('vmovq ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+       8:
+        begin
+         if mode=2 then
+          Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+      16:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if (flags and (1 shl reg_ext))=0 then
+         begin
+          Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
+          flags:=flags or (1 shl reg_ext);
+         end;
+
+         if mode=1 then
+          Writeln('vmovq ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+      24:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if (flags and (1 shl reg_ext))=0 then
+         begin
+          Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
+          flags:=flags or (1 shl reg_ext);
+         end;
+
+         if mode=2 then
+          Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+      else
+        Assert(False);
+     end;
+
+    end;
+  128:
+    begin
+
+     case reg_mod of
+      0:
+       begin
+        if mode=1 then
+         Writeln('vmovups ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+       end;
+     16:
+       begin
+        if mode=2 then
+         Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+       end;
+     else
+       Assert(False);
+     end;
+
+    end;
+  else
+    Assert(False);
+ end;
+
+
+end;
+
+procedure on_gen_1dThin_tiling(const interval:tbit_interval;
+                               bytes    :Byte;
+                               reg_count:Byte;
+                               var flags:QWORD;
+                               var lea_used_y:t_lea_used_y;
+                               mode:Byte
+                              );
+
+var
+ bytes_pos:Word;
+ reg_num:Byte;
+ reg_mod:Byte;
+ reg_ext:Byte;
+ dlt_x:Integer;
+ dlt_x_str:RawByteString;
+ dlt_y_str:RawByteString;
+begin
+ Assert((interval.pos_i mod 8)=0);
+
+ bytes_pos:=interval.pos_i div 8;
+
+ reg_num:=bytes_pos div 32;
+ reg_mod:=bytes_pos mod 32;
+
+ dlt_x:=(interval.srt_x)*bytes;
+
+ dlt_x_str:='';
+ if (dlt_x<>0) then
+ begin
+  dlt_x_str:=IntToStr(dlt_x);
+ end;
+
+ dlt_y_str:=lea_used_y.a_ofs[interval.y];
+
+ case interval.bitcn of
+   64:
+    begin
+
+     case reg_mod of
+       0:
+        begin
+
+         if (flags and (1 shl reg_num))=0 then
+         begin
+          //only if first
+          Writeln('vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
+         end else
+         begin
+          //ignore
+          //Writeln('vpinsrq $0, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num); //
+         end;
+
+         flags:=flags or (1 shl reg_num);
+        end;
+       8:
+        begin
+         if mode=1 then
+          Writeln('vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num); //
+
+         flags:=flags or (1 shl reg_num);
+        end;
+      16:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if (flags and (1 shl reg_ext))=0 then
+         begin
+          //only if first
+          Writeln('vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext); //
+         end else
+         begin
+          //ignore
+          //Writeln('vpinsrq $0, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
+         end;
+
+         flags:=flags or (1 shl reg_ext);
+        end;
+      24:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if mode=1 then
+          Writeln('vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
+
+         flags:=flags or (1 shl reg_ext);
+        end;
+      else
+        Assert(False);
+     end;
+
+    end;
+  128:
+    begin
+
+     case reg_mod of
+      0:
+       begin
+
+        if (flags and (1 shl reg_num))=0 then
+        begin
+         //only if first
+         Writeln('vmovups ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
+        end else
+        begin
+         //ignore
+         //Writeln('vinsertf128 $0, ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num,', ','%ymm',reg_num); //
+        end;
+
+        flags:=flags or (1 shl reg_num);
+       end;
+     16:
+       begin
+        if mode=1 then
+         Writeln('vinsertf128 $1, ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num,', ','%ymm',reg_num); //
+
+        flags:=flags or (1 shl reg_num);
+       end;
+     else
+       Assert(False);
+     end;
+
+    end;
+  else
+    Assert(False);
+ end;
+
+end;
+
 Procedure generate_1dThin_asm;
 const
  reg_dst  ='%rdi';
@@ -702,7 +985,18 @@ var
  dlt_y  :Integer;
  flags  :QWORD;
  dlt_x_str:RawByteString;
+
+ lea_used_y:t_lea_used_y;
 begin
+ //sort all
+ For b:=ord(b8) to ord(b64) do
+ begin
+  with g_axis_intervals[t_bits_per_element(b)] do
+  begin
+   Sort_xy;
+  end;
+ end;
+ //sort all
 
  For b:=ord(b8) to ord(b64) do
  begin
@@ -716,6 +1010,24 @@ begin
   Writeln('procedure detile_1dThin_',bits,'(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;');
   Writeln('asm');
 
+  //build lea
+  lea_used_y:=Default(t_lea_used_y);
+  with g_axis_intervals[t_bits_per_element(b)] do
+   For i:=0 to num_i-1 do
+   begin
+    lea_used_y._set(intervals[i].y);
+   end;
+  //build lea
+  lea_used_y._build_str(reg_dst);
+
+  //print lea
+  For i:=0 to High(lea_used_y.a_lea) do
+  if (lea_used_y.a_lea[i]<>'') then
+  begin
+   Writeln('lea ':18,lea_used_y.a_lea[i]);
+  end;
+  //print lea
+
   //load to regs
   reg_count:=all div 32;
   for r:=0 to reg_count-1 do
@@ -726,127 +1038,48 @@ begin
 
   with g_axis_intervals[t_bits_per_element(b)] do
   begin
-   Sort_xy;
 
    flags:=0;
 
    For i:=0 to num_i-1 do
    begin
-    Assert((intervals[i].pos_i mod 8)=0);
-
-    bytes_pos:=intervals[i].pos_i div 8;
-
-    reg_num:=bytes_pos div 32;
-    reg_mod:=bytes_pos mod 32;
-
-    begin
-     if (i=0) then
-     begin
-      dlt_y:=0;
-     end else
-     begin
-      dlt_y:=intervals[i].y-intervals[i-1].y;
-     end;
-     Assert(dlt_y>=0);
-
-     dlt_x:=(intervals[i].srt_x)*bytes;
-
-     if (dlt_x=0) then
-     begin
-      dlt_x_str:='';
-     end else
-     begin
-      dlt_x_str:=IntToStr(dlt_x);
-     end;
-
-     case dlt_y of
-      0:
-       begin
-        //
-       end;
-      1:
-       begin
-        Writeln('lea ':18,'(',reg_dst,',',reg_pitch,'), ',reg_dst);
-       end;
-      2,4,8:
-       begin
-        Writeln('lea ':18,'(',reg_dst,',',reg_pitch,',',dlt_y,'), ',reg_dst);
-       end;
-      else
-        Assert(False);
-     end;
-
-    end;
-
-    case intervals[i].bitcn of
-      64:
-       begin
-
-        case reg_mod of
-          0:
-           begin
-            Writeln('vmovq ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-           end;
-          8:
-           begin
-            Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-           end;
-         16:
-           begin
-            reg_ext:=reg_count+reg_num;
-
-            if (flags and (1 shl reg_ext))=0 then
-            begin
-             Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
-             flags:=flags or (1 shl reg_ext);
-            end;
-
-            Writeln('vmovq ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-           end;
-         24:
-           begin
-            reg_ext:=reg_count+reg_num;
-
-            if (flags and (1 shl reg_ext))=0 then
-            begin
-             Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
-             flags:=flags or (1 shl reg_ext);
-            end;
-
-            Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-           end;
-         else
-           Assert(False);
-        end;
-
-       end;
-     128:
-       begin
-
-        case reg_mod of
-         0:
-          begin
-           Writeln('vmovups ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-          end;
-        16:
-          begin
-           Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,'(',reg_dst,')');
-          end;
-        else
-          Assert(False);
-        end;
-
-       end;
-     else
-       Assert(False);
-    end;
+    on_gen_1dThin_detile(intervals[i],
+                         bytes,
+                         reg_count,
+                         flags,
+                         lea_used_y,
+                         0
+                        );
 
     //Writeln(intervals[i].pos_i div 8,'->',intervals[i].srt_x,'..',intervals[i].end_x,':',intervals[i].y,':',intervals[i].bitcn,'bit ');
 
-   end; //For i:=0 to num_i-1 do
+   end;
+
+   For i:=0 to num_i-1 do
+   begin
+    on_gen_1dThin_detile(intervals[i],
+                         bytes,
+                         reg_count,
+                         flags,
+                         lea_used_y,
+                         1
+                        );
+   end;
+
+   For i:=0 to num_i-1 do
+   begin
+    on_gen_1dThin_detile(intervals[i],
+                         bytes,
+                         reg_count,
+                         flags,
+                         lea_used_y,
+                         2
+                        );
+   end;
+
 
    //
-  end;
+  end; //with
 
   Writeln('end;');
   //<-detiling
@@ -858,6 +1091,24 @@ begin
   Writeln('procedure tile_1dThin_',bits,'(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;');
   Writeln('asm');
 
+  //build lea
+  lea_used_y:=Default(t_lea_used_y);
+  with g_axis_intervals[t_bits_per_element(b)] do
+   For i:=0 to num_i-1 do
+   begin
+    lea_used_y._set(intervals[i].y);
+   end;
+  //build lea
+  lea_used_y._build_str(reg_src);
+
+  //print lea
+  For i:=0 to High(lea_used_y.a_lea) do
+  if (lea_used_y.a_lea[i]<>'') then
+  begin
+   Writeln('lea ':18,lea_used_y.a_lea[i]);
+  end;
+  //print lea
+
   with g_axis_intervals[t_bits_per_element(b)] do
   begin
 
@@ -865,152 +1116,36 @@ begin
 
    For i:=0 to num_i-1 do
    begin
-    Assert((intervals[i].pos_i mod 8)=0);
+    on_gen_1dThin_tiling(intervals[i],
+                         bytes,
+                         reg_count,
+                         flags,
+                         lea_used_y,
+                         0
+                        );
+   end;
 
-    bytes_pos:=intervals[i].pos_i div 8;
+   For i:=0 to num_i-1 do
+   begin
+    on_gen_1dThin_tiling(intervals[i],
+                         bytes,
+                         reg_count,
+                         flags,
+                         lea_used_y,
+                         1
+                        );
+   end;
 
-    reg_num:=bytes_pos div 32;
-    reg_mod:=bytes_pos mod 32;
-
-    begin
-     if (i=0) then
-     begin
-      dlt_y:=0;
-     end else
-     begin
-      dlt_y:=intervals[i].y-intervals[i-1].y;
-     end;
-     Assert(dlt_y>=0);
-
-     dlt_x:=(intervals[i].srt_x)*bytes;
-
-     if (dlt_x=0) then
-     begin
-      dlt_x_str:='';
-     end else
-     begin
-      dlt_x_str:=IntToStr(dlt_x);
-     end;
-
-     case dlt_y of
-      0:
-       begin
-        //
-       end;
-      1:
-       begin
-        Writeln('lea ':18,'(',reg_src,',',reg_pitch,'), ',reg_src);
-       end;
-      2,4,8:
-       begin
-        Writeln('lea ':18,'(',reg_src,',',reg_pitch,',',dlt_y,'), ',reg_src);
-       end;
-      else
-        Assert(False);
-     end;
-
-    end;
-
-    case intervals[i].bitcn of
-      64:
-       begin
-
-        case reg_mod of
-          0:
-           begin
-
-            if (flags and (1 shl reg_num))=0 then
-            begin
-             //only if first
-             Writeln('vmovq ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_num); //
-            end else
-            begin
-             Writeln('vpinsrq $0, ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_num,', ','%xmm',reg_num); //
-            end;
-
-            flags:=flags or (1 shl reg_num);
-           end;
-          8:
-           begin
-            Writeln('vpinsrq $1, ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_num,', ','%xmm',reg_num); //
-
-            flags:=flags or (1 shl reg_num);
-           end;
-         16:
-           begin
-            reg_ext:=reg_count+reg_num;
-
-            if (flags and (1 shl reg_ext))=0 then
-            begin
-             //only if first
-             Writeln('vmovq ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_ext); //
-            end else
-            begin
-             Writeln('vpinsrq $0, ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
-            end;
-
-            flags:=flags or (1 shl reg_ext);
-           end;
-         24:
-           begin
-            reg_ext:=reg_count+reg_num;
-
-            Writeln('vpinsrq $1, ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
-
-            flags:=flags or (1 shl reg_ext);
-           end;
-         else
-           Assert(False);
-        end;
-
-       end;
-     128:
-       begin
-
-        case reg_mod of
-         0:
-          begin
-
-           if (flags and (1 shl reg_num))=0 then
-           begin
-            //only if first
-            Writeln('vmovups ':18,dlt_x_str:2,'(',reg_src,')',', ','%xmm',reg_num); //
-           end else
-           begin
-            Writeln('vinsertf128 $0, ':18,dlt_x_str:2,'(',reg_src,')',', ','%ymm',reg_num,', ','%ymm',reg_num); //
-           end;
-
-           flags:=flags or (1 shl reg_num);
-          end;
-        16:
-          begin
-           Writeln('vinsertf128 $1, ':18,dlt_x_str:2,'(',reg_src,')',', ','%ymm',reg_num,', ','%ymm',reg_num); //
-
-           flags:=flags or (1 shl reg_num);
-          end;
-        else
-          Assert(False);
-        end;
-
-       end;
-     else
-       Assert(False);
-    end;
-
-    //Writeln(intervals[i].pos_i div 8,'->',intervals[i].srt_x,'..',intervals[i].end_x,':',intervals[i].y,':',intervals[i].bitcn,'bit ');
-
-   end; //For i:=0 to num_i-1 do
-
+   //combine
    if (flags<>0) then
    for r:=reg_count to (reg_count*2)-1 do
     if (flags and (1 shl r))<>0 then
     begin
-
      Writeln('vinsertf128 $1, ':18,'%xmm',r,', ','%ymm',r-reg_count,', ','%ymm',r-reg_count); //
-
     end;
+   //combine
 
-  end;
+  end; //with
 
   //write to mem
   reg_count:=all div 32;

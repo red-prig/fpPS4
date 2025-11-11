@@ -471,30 +471,6 @@ begin
 
 end;
 
-Procedure copy_1dThin_to_linear(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_bytePerElement:Ptruint;
- m_slice_size:Ptruint;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-begin
- m_bytePerElement:=tiler.m_bytePerElement;
- m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
- //
- For z:=0 to tiler.m_linearDepth-1 do
-  For y:=0 to tiler.m_linearHeight-1 do
-   For x:=0 to tiler.m_linearWidth-1 do
-    begin
-     i:=0;
-     tiler.getTiledElementByteOffset(i,x,y,z);
-     pSrc:=@PByte(src)[i];
-     //
-     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
-     //
-     Move(pSrc^,pDst^,m_bytePerElement);
-    end;
-end;
-
 type
  t_move_func=Procedure(const source;var dest;count:SizeInt); register;
 
@@ -518,32 +494,65 @@ begin
  QWORD(dest):=QWORD(source);
 end;
 
+Procedure copy_1dThin_to_linear(var tiler:Tiler1d;src,dst:Pointer);
+var
+ m_bytePerElement:Ptruint;
+ m_slice_size:Ptruint;
+ i,x,y,z:QWORD;
+ pSrc,pDst:Pointer;
+
+ _move:t_move_func;
+begin
+ m_bytePerElement:=tiler.m_bytePerElement;
+ m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
+
+ case m_bytePerElement of
+  1:_move:=@_copy1;
+  2:_move:=@_copy2;
+  4:_move:=@_copy4;
+  8:_move:=@_copy8;
+  else
+    _move:=@Move;
+ end;
+
+ //
+ For z:=0 to tiler.m_linearDepth-1 do
+  For y:=0 to tiler.m_linearHeight-1 do
+   For x:=0 to tiler.m_linearWidth-1 do
+    begin
+     i:=0;
+     tiler.getTiledElementByteOffset(i,x,y,z);
+     pSrc:=@PByte(src)[i];
+     //
+     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
+     //
+     _move(pSrc^,pDst^,m_bytePerElement);
+    end;
+end;
+
 //rdi, rsi, rdx
 procedure tile_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
 asm
+              lea (%rsi,%rdx,2), %r8  //+2
+              lea (%rsi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rsi,%r10,2), %r10 //+6
           vmovups   (%rsi), %xmm0
           vmovups 16(%rsi), %xmm1
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
-  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm2
-          vmovups 16(%rsi), %xmm3
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm2, %ymm2
-  vinsertf128 $1, 16(%rsi), %ymm3, %ymm3
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm4
-          vmovups 16(%rsi), %xmm5
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
-  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm6
-          vmovups 16(%rsi), %xmm7
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm6, %ymm6
-  vinsertf128 $1, 16(%rsi), %ymm7, %ymm7
+          vmovups   (%r8 ), %xmm2
+          vmovups 16(%r8 ), %xmm3
+          vmovups   (%r9 ), %xmm4
+          vmovups 16(%r9 ), %xmm5
+          vmovups   (%r10), %xmm6
+          vmovups 16(%r10), %xmm7
+  vinsertf128 $1,   (%rsi,%rdx), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi,%rdx), %ymm1, %ymm1
+  vinsertf128 $1,   (%r8 ,%rdx), %ymm2, %ymm2
+  vinsertf128 $1, 16(%r8 ,%rdx), %ymm3, %ymm3
+  vinsertf128 $1,   (%r9 ,%rdx), %ymm4, %ymm4
+  vinsertf128 $1, 16(%r9 ,%rdx), %ymm5, %ymm5
+  vinsertf128 $1,   (%r10,%rdx), %ymm6, %ymm6
+  vinsertf128 $1, 16(%r10,%rdx), %ymm7, %ymm7
           vmovups  %ymm0,   0(%rdi)
           vmovups  %ymm1,  32(%rdi)
           vmovups  %ymm2,  64(%rdi)
@@ -557,45 +566,42 @@ end;
 //rdi, rsi, rdx
 procedure tile_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
 asm
+              lea (%rsi,%rdx,2), %r8  //+2
+              lea (%rsi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rsi,%r10,2), %r10 //+6
           vmovups   (%rsi), %xmm0
           vmovups 16(%rsi), %xmm1
           vmovups 32(%rsi), %xmm2
           vmovups 48(%rsi), %xmm3
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm0, %ymm0
-  vinsertf128 $1, 16(%rsi), %ymm1, %ymm1
-  vinsertf128 $1, 32(%rsi), %ymm2, %ymm2
-  vinsertf128 $1, 48(%rsi), %ymm3, %ymm3
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm4
-          vmovups 16(%rsi), %xmm5
-          vmovups 32(%rsi), %xmm6
-          vmovups 48(%rsi), %xmm7
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm4, %ymm4
-  vinsertf128 $1, 16(%rsi), %ymm5, %ymm5
-  vinsertf128 $1, 32(%rsi), %ymm6, %ymm6
-  vinsertf128 $1, 48(%rsi), %ymm7, %ymm7
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm8
-          vmovups 16(%rsi), %xmm9
-          vmovups 32(%rsi), %xmm10
-          vmovups 48(%rsi), %xmm11
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm8, %ymm8
-  vinsertf128 $1, 16(%rsi), %ymm9, %ymm9
-  vinsertf128 $1, 32(%rsi), %ymm10, %ymm10
-  vinsertf128 $1, 48(%rsi), %ymm11, %ymm11
-              lea (%rsi,%rdx), %rsi
-          vmovups   (%rsi), %xmm12
-          vmovups 16(%rsi), %xmm13
-          vmovups 32(%rsi), %xmm14
-          vmovups 48(%rsi), %xmm15
-              lea (%rsi,%rdx), %rsi
-  vinsertf128 $1,   (%rsi), %ymm12, %ymm12
-  vinsertf128 $1, 16(%rsi), %ymm13, %ymm13
-  vinsertf128 $1, 32(%rsi), %ymm14, %ymm14
-  vinsertf128 $1, 48(%rsi), %ymm15, %ymm15
+          vmovups   (%r8 ), %xmm4
+          vmovups 16(%r8 ), %xmm5
+          vmovups 32(%r8 ), %xmm6
+          vmovups 48(%r8 ), %xmm7
+          vmovups   (%r9 ), %xmm8
+          vmovups 16(%r9 ), %xmm9
+          vmovups 32(%r9 ), %xmm10
+          vmovups 48(%r9 ), %xmm11
+          vmovups   (%r10), %xmm12
+          vmovups 16(%r10), %xmm13
+          vmovups 32(%r10), %xmm14
+          vmovups 48(%r10), %xmm15
+  vinsertf128 $1,   (%rsi,%rdx), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi,%rdx), %ymm1, %ymm1
+  vinsertf128 $1, 32(%rsi,%rdx), %ymm2, %ymm2
+  vinsertf128 $1, 48(%rsi,%rdx), %ymm3, %ymm3
+  vinsertf128 $1,   (%r8 ,%rdx), %ymm4, %ymm4
+  vinsertf128 $1, 16(%r8 ,%rdx), %ymm5, %ymm5
+  vinsertf128 $1, 32(%r8 ,%rdx), %ymm6, %ymm6
+  vinsertf128 $1, 48(%r8 ,%rdx), %ymm7, %ymm7
+  vinsertf128 $1,   (%r9 ,%rdx), %ymm8, %ymm8
+  vinsertf128 $1, 16(%r9 ,%rdx), %ymm9, %ymm9
+  vinsertf128 $1, 32(%r9 ,%rdx), %ymm10, %ymm10
+  vinsertf128 $1, 48(%r9 ,%rdx), %ymm11, %ymm11
+  vinsertf128 $1,   (%r10,%rdx), %ymm12, %ymm12
+  vinsertf128 $1, 16(%r10,%rdx), %ymm13, %ymm13
+  vinsertf128 $1, 32(%r10,%rdx), %ymm14, %ymm14
+  vinsertf128 $1, 48(%r10,%rdx), %ymm15, %ymm15
           vmovups  %ymm0,   0(%rdi)
           vmovups  %ymm1,  32(%rdi)
           vmovups  %ymm2,  64(%rdi)
