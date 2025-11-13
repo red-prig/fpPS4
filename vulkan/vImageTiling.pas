@@ -68,7 +68,10 @@ begin
  Result:=(x+1);
 end;
 
-Function GetLinearSize(const key:TvImageKey;align:Boolean):Ptruint;
+type
+ TLinearMode=(mPack,mAlign64,mAlign8x8);
+
+Function GetLinearSize(const key:TvImageKey;mode:TLinearMode):Ptruint;
 var
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
@@ -100,15 +103,20 @@ begin
   m_padwidth :=m_width;
   m_padheight:=m_height;
 
-  if align then
-  begin
-   m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
-  end;
-
   if IsTexelFormat(key.cformat) then
   begin
    m_padwidth :=(m_padwidth +3) shr 2;
    m_padheight:=(m_padheight+3) shr 2;
+  end;
+
+  case mode of
+   mAlign64:m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
+   mAlign8x8:
+    begin
+     m_padwidth :=max((m_padwidth +7) and (not 7),8);
+     m_padheight:=max((m_padheight+7) and (not 7),8);
+    end;
+   else;
   end;
 
   m_slice:=m_padwidth*
@@ -130,7 +138,7 @@ end;
 
 Function GetLinearAlignSize(const key:TvImageKey):Ptruint;
 begin
- Result:=GetLinearSize(key,true);
+ Result:=GetLinearSize(key,mAlign64);
 end;
 
 Function Get1dThinSize(const key:TvImageKey):Ptruint;
@@ -336,7 +344,7 @@ end;
 type
  t_copy_type=(BufferToImage,ImageToBuffer);
 
-Procedure _Copy_Linear(ctype:t_copy_type;cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvCustomImage2);
+Procedure _Copy_Linear(ctype:t_copy_type;mode:TLinearMode;cmd:TvCustomCmdBuffer;buf:TvTempBuffer;image:TvCustomImage2);
 var
  BufferImageCopy:TVkBufferImageCopy;
  size:Ptruint;
@@ -357,7 +365,7 @@ begin
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
- size:=GetLinearSize(image.key,false);
+ size:=GetLinearSize(image.key,mode);
 
  case ctype of
   BufferToImage:
@@ -415,14 +423,32 @@ begin
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
 
+  m_padwidth :=m_width ;
+  m_padheight:=m_height;
+
   if IsTexelFormat(image.key.cformat) then
   begin
    m_padwidth :=(m_width +3) shr 2;
    m_padheight:=(m_height+3) shr 2;
-  end else
+  end;
+
+  case mode of
+   mAlign64:m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
+   mAlign8x8:
+    begin
+     m_padwidth :=max((m_padwidth +7) and (not 7),8);
+     m_padheight:=max((m_padheight+7) and (not 7),8);
+    end;
+   else;
+  end;
+
+  BufferImageCopy.bufferRowLength  :=m_padwidth;
+  BufferImageCopy.bufferImageHeight:=m_padheight;
+
+  if IsTexelFormat(image.key.cformat) then
   begin
-   m_padwidth :=m_width ;
-   m_padheight:=m_height;
+   BufferImageCopy.bufferRowLength  :=BufferImageCopy.bufferRowLength   shl 2;
+   BufferImageCopy.bufferImageHeight:=BufferImageCopy.bufferImageHeight shl 2;
   end;
 
   m_slice:=m_padwidth*m_padheight*m_bytePerElement;
@@ -471,260 +497,44 @@ begin
 
 end;
 
-type
- t_move_func=Procedure(const source;var dest;count:SizeInt); register;
+{
+            linear  MicroTile
+            Width   align  log_sz
+                   (1..7)  align
+           +------+------+-------+
+  linear   |      |      |       |
+  Height   |      |      |       |
+           |      |      |       |  padding
+           +------+      |       |  Height
+MicroTile  |             |       |
+align(1..7)|             |       |
+           |             |       |
+           +---------------------+
+                  padding
+                  Width
 
-Procedure _copy1(const source;var dest;count:SizeInt);
-begin
- Byte(dest):=Byte(source);
-end;
-
-Procedure _copy2(const source;var dest;count:SizeInt);
-begin
- WORD(dest):=WORD(source);
-end;
-
-Procedure _copy4(const source;var dest;count:SizeInt);
-begin
- DWORD(dest):=DWORD(source);
-end;
-
-Procedure _copy8(const source;var dest;count:SizeInt);
-begin
- QWORD(dest):=QWORD(source);
-end;
+}
 
 Procedure copy_1dThin_to_linear(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_bytePerElement:Ptruint;
- m_slice_size:Ptruint;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-
- _move:t_move_func;
 begin
- m_bytePerElement:=tiler.m_bytePerElement;
- m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
-
- case m_bytePerElement of
-  1:_move:=@_copy1;
-  2:_move:=@_copy2;
-  4:_move:=@_copy4;
-  8:_move:=@_copy8;
-  else
-    _move:=@Move;
- end;
-
- //
- For z:=0 to tiler.m_linearDepth-1 do
-  For y:=0 to tiler.m_linearHeight-1 do
-   For x:=0 to tiler.m_linearWidth-1 do
-    begin
-     i:=0;
-     tiler.getTiledElementByteOffset(i,x,y,z);
-     pSrc:=@PByte(src)[i];
-     //
-     pDst:=@PByte(dst)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
-     //
-     _move(pSrc^,pDst^,m_bytePerElement);
-    end;
-end;
-
-//rdi, rsi, rdx
-procedure tile_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
-asm
-              lea (%rsi,%rdx,2), %r8  //+2
-              lea (%rsi,%rdx,4), %r9  //+4
-              lea (%rdx,%rdx,2), %r10 //+3
-              lea (%rsi,%r10,2), %r10 //+6
-          vmovups   (%rsi), %xmm0
-          vmovups 16(%rsi), %xmm1
-          vmovups   (%r8 ), %xmm2
-          vmovups 16(%r8 ), %xmm3
-          vmovups   (%r9 ), %xmm4
-          vmovups 16(%r9 ), %xmm5
-          vmovups   (%r10), %xmm6
-          vmovups 16(%r10), %xmm7
-  vinsertf128 $1,   (%rsi,%rdx), %ymm0, %ymm0
-  vinsertf128 $1, 16(%rsi,%rdx), %ymm1, %ymm1
-  vinsertf128 $1,   (%r8 ,%rdx), %ymm2, %ymm2
-  vinsertf128 $1, 16(%r8 ,%rdx), %ymm3, %ymm3
-  vinsertf128 $1,   (%r9 ,%rdx), %ymm4, %ymm4
-  vinsertf128 $1, 16(%r9 ,%rdx), %ymm5, %ymm5
-  vinsertf128 $1,   (%r10,%rdx), %ymm6, %ymm6
-  vinsertf128 $1, 16(%r10,%rdx), %ymm7, %ymm7
-          vmovups  %ymm0,   0(%rdi)
-          vmovups  %ymm1,  32(%rdi)
-          vmovups  %ymm2,  64(%rdi)
-          vmovups  %ymm3,  96(%rdi)
-          vmovups  %ymm4, 128(%rdi)
-          vmovups  %ymm5, 160(%rdi)
-          vmovups  %ymm6, 192(%rdi)
-          vmovups  %ymm7, 224(%rdi)
-end;
-
-//rdi, rsi, rdx
-procedure tile_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
-asm
-              lea (%rsi,%rdx,2), %r8  //+2
-              lea (%rsi,%rdx,4), %r9  //+4
-              lea (%rdx,%rdx,2), %r10 //+3
-              lea (%rsi,%r10,2), %r10 //+6
-          vmovups   (%rsi), %xmm0
-          vmovups 16(%rsi), %xmm1
-          vmovups 32(%rsi), %xmm2
-          vmovups 48(%rsi), %xmm3
-          vmovups   (%r8 ), %xmm4
-          vmovups 16(%r8 ), %xmm5
-          vmovups 32(%r8 ), %xmm6
-          vmovups 48(%r8 ), %xmm7
-          vmovups   (%r9 ), %xmm8
-          vmovups 16(%r9 ), %xmm9
-          vmovups 32(%r9 ), %xmm10
-          vmovups 48(%r9 ), %xmm11
-          vmovups   (%r10), %xmm12
-          vmovups 16(%r10), %xmm13
-          vmovups 32(%r10), %xmm14
-          vmovups 48(%r10), %xmm15
-  vinsertf128 $1,   (%rsi,%rdx), %ymm0, %ymm0
-  vinsertf128 $1, 16(%rsi,%rdx), %ymm1, %ymm1
-  vinsertf128 $1, 32(%rsi,%rdx), %ymm2, %ymm2
-  vinsertf128 $1, 48(%rsi,%rdx), %ymm3, %ymm3
-  vinsertf128 $1,   (%r8 ,%rdx), %ymm4, %ymm4
-  vinsertf128 $1, 16(%r8 ,%rdx), %ymm5, %ymm5
-  vinsertf128 $1, 32(%r8 ,%rdx), %ymm6, %ymm6
-  vinsertf128 $1, 48(%r8 ,%rdx), %ymm7, %ymm7
-  vinsertf128 $1,   (%r9 ,%rdx), %ymm8, %ymm8
-  vinsertf128 $1, 16(%r9 ,%rdx), %ymm9, %ymm9
-  vinsertf128 $1, 32(%r9 ,%rdx), %ymm10, %ymm10
-  vinsertf128 $1, 48(%r9 ,%rdx), %ymm11, %ymm11
-  vinsertf128 $1,   (%r10,%rdx), %ymm12, %ymm12
-  vinsertf128 $1, 16(%r10,%rdx), %ymm13, %ymm13
-  vinsertf128 $1, 32(%r10,%rdx), %ymm14, %ymm14
-  vinsertf128 $1, 48(%r10,%rdx), %ymm15, %ymm15
-          vmovups  %ymm0,   0(%rdi)
-          vmovups  %ymm1,  32(%rdi)
-          vmovups  %ymm2,  64(%rdi)
-          vmovups  %ymm3,  96(%rdi)
-          vmovups  %ymm4, 128(%rdi)
-          vmovups  %ymm5, 160(%rdi)
-          vmovups  %ymm6, 192(%rdi)
-          vmovups  %ymm7, 224(%rdi)
-          vmovups  %ymm8, 256(%rdi)
-          vmovups  %ymm9, 288(%rdi)
-          vmovups %ymm10, 320(%rdi)
-          vmovups %ymm11, 352(%rdi)
-          vmovups %ymm12, 384(%rdi)
-          vmovups %ymm13, 416(%rdi)
-          vmovups %ymm14, 448(%rdi)
-          vmovups %ymm15, 480(%rdi)
-end;
-
-Procedure copy_linear_to_1dThin_AVX_32(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_slice_size_bytes:Ptruint;
- m_pitch_bytes:QWORD;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-begin
- dst:=get_dmem_ptr(dst);
-
- m_slice_size_bytes:=(tiler.m_linearWidth*tiler.m_linearHeight)*4;
- m_pitch_bytes     :=(tiler.m_linearWidth)*4;
-
- For z:=0 to tiler.m_linearDepth-1 do
-  For i:=0 to tiler.m_tilesPerSlice-1 do
-  begin
-   x:=i mod tiler.m_tilesPerRow;
-   y:=i div tiler.m_tilesPerRow;
-
-   x:=(x shl 3)*4;
-   y:=y shl 3;
-
-   pSrc:=@PByte(src)[z*m_slice_size_bytes+y*m_pitch_bytes+x];
-   pDst:=@PByte(dst)[i*tiler.m_tileBytes];
-
-   tile_1dThin_32(pDst,pSrc,m_pitch_bytes);
-  end;
-
-end;
-
-Procedure copy_linear_to_1dThin_AVX_64(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_slice_size_bytes:Ptruint;
- m_pitch_bytes:QWORD;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-begin
- dst:=get_dmem_ptr(dst);
-
- m_slice_size_bytes:=(tiler.m_linearWidth*tiler.m_linearHeight)*8;
- m_pitch_bytes     :=(tiler.m_linearWidth)*8;
-
- For z:=0 to tiler.m_linearDepth-1 do
-  For i:=0 to tiler.m_tilesPerSlice-1 do
-  begin
-   x:=i mod tiler.m_tilesPerRow;
-   y:=i div tiler.m_tilesPerRow;
-
-   x:=(x shl 3)*8;
-   y:=y shl 3;
-
-   pSrc:=@PByte(src)[z*m_slice_size_bytes+y*m_pitch_bytes+x];
-   pDst:=@PByte(dst)[i*tiler.m_tileBytes];
-
-   tile_1dThin_64(pDst,pSrc,m_pitch_bytes);
-  end;
-
+ tiler.m_copy_tile2linear(dst,get_dmem_ptr(src),
+  tiler.m_linearWidth,
+  tiler.m_linearHeight,
+  tiler.m_linearDepth,
+  tiler.m_paddedWidth,
+  tiler.m_paddedHeight
+ );
 end;
 
 Procedure copy_linear_to_1dThin(var tiler:Tiler1d;src,dst:Pointer);
-var
- m_bytePerElement:Ptruint;
- m_slice_size:Ptruint;
- i,x,y,z:QWORD;
- pSrc,pDst:Pointer;
-
- _move:t_move_func;
 begin
- m_bytePerElement:=tiler.m_bytePerElement;
-
- Writeln('copy_linear_to_1dThin:',m_bytePerElement);
-
- case m_bytePerElement of
-  4:begin copy_linear_to_1dThin_AVX_32(tiler,src,dst); Exit; end;
-  8:begin copy_linear_to_1dThin_AVX_64(tiler,src,dst); Exit; end;
- end;
-
- //ImageToBuffer
-
- dst:=get_dmem_ptr(dst);
- //
-
-
- case m_bytePerElement of
-  1:_move:=@_copy1;
-  2:_move:=@_copy2;
-  4:_move:=@_copy4;
-  8:_move:=@_copy8;
-  else
-    _move:=@Move;
- end;
-
- m_slice_size:=(tiler.m_linearWidth*tiler.m_linearHeight);
- //
- For z:=0 to tiler.m_linearDepth-1 do
-  For y:=0 to tiler.m_linearHeight-1 do
-   For x:=0 to tiler.m_linearWidth-1 do
-    begin
-     pSrc:=@PByte(src)[(z*m_slice_size+y*tiler.m_linearWidth+x)*m_bytePerElement];
-     //
-     i:=0;
-     tiler.getTiledElementByteOffset(i,x,y,z);
-     pDst:=@PByte(dst)[i];
-     //
-     _move(pSrc^,pDst^,m_bytePerElement);
-    end;
+ tiler.m_copy_linear2tile(get_dmem_ptr(dst),src,
+  tiler.m_linearWidth,
+  tiler.m_linearHeight,
+  tiler.m_linearDepth,
+  tiler.m_paddedWidth,
+  tiler.m_paddedHeight
+ );
 end;
 
 Procedure load_write_1dThin(ctype:t_copy_type;
@@ -843,7 +653,7 @@ begin
 
  Assert(image.key.params.samples<=1,'image.key.params.samples>1');
 
- m_full_linear_size:=GetLinearSize(image.key,False);
+ m_full_linear_size:=GetLinearSize(image.key,mAlign8x8);
 
  buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
 
@@ -879,7 +689,7 @@ begin
 
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
 
- _Copy_Linear(BufferToImage,cmd,buf,image);
+ _Copy_Linear(BufferToImage,mAlign8x8,cmd,buf,image);
 end;
 
 type
@@ -924,7 +734,7 @@ begin
 
  Assert(image.key.params.samples<=1,'image.key.params.samples>1');
 
- m_full_linear_size:=GetLinearSize(image.key,False);
+ m_full_linear_size:=GetLinearSize(image.key,mAlign8x8);
 
  buf:=TvTempBufferWriteback.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT),nil);
 
@@ -950,7 +760,7 @@ begin
 
  vmem.Release; //FetchMemory
 
- _Copy_Linear(ImageToBuffer,cmd,buf,image);
+ _Copy_Linear(ImageToBuffer,mAlign8x8,cmd,buf,image);
 end;
 
 function Load_Linear(cmd:TvCustomCmdBuffer;image:TvCustomImage2):Boolean;
@@ -973,7 +783,13 @@ begin
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
- size:=GetLinearSize(image.key,(image.key.params.tiling.idx<>kTileModeDisplay_LinearGeneral));
+ if (image.key.params.tiling.idx=kTileModeDisplay_LinearGeneral) then
+ begin
+  size:=GetLinearSize(image.key,mPack);
+ end else
+ begin
+  size:=GetLinearSize(image.key,mAlign64);
+ end;
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(image.key.addr),
@@ -1102,7 +918,13 @@ begin
 
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
- size:=GetLinearSize(image.key,(image.key.params.tiling.idx<>kTileModeDisplay_LinearGeneral));
+ if (image.key.params.tiling.idx=kTileModeDisplay_LinearGeneral) then
+ begin
+  size:=GetLinearSize(image.key,mPack);
+ end else
+ begin
+  size:=GetLinearSize(image.key,mAlign64);
+ end;
 
  buf:=FetchHostBuffer(cmd,
                       QWORD(image.key.addr),

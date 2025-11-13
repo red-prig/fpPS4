@@ -3,6 +3,9 @@ uses
  bittype,
  sysutils;
 
+Var
+ Fout:text;
+
 const
  // Depth modes (for depth buffers)
  kTileModeDepth_2dThin_64                   = $00000000; ///< Recommended for depth targets with one fragment per pixel.
@@ -349,6 +352,26 @@ const
  bits_str:array[t_bits_per_element] of String=('8','16','32','64','128');
  mtm_str :array[0..4] of String=('Display','Thin','Depth','Rotated','Thick');
 
+ am_str  :array[0..$F] of String=(
+  'LinearGeneral',
+  'LinearAligned',
+  '1dTiledThin',
+  '1dTiledThick',
+  '2dTiledThin',
+  'TiledThinPrt',
+  '2dTiledThinPrt',
+  '2dTiledThick',
+  '2dTiledXThick',
+  'TiledThickPrt',
+  '2dTiledThickPrt',
+  '3dTiledThinPrt',
+  '3dTiledThin',
+  '3dTiledThick',
+  '3dTiledXThick',
+  '3dTiledThickPrt'
+ );
+
+
 type
  t_biti=record
   xyz:t_axis;
@@ -411,7 +434,7 @@ begin
 
   if (ra=0) and (rm=0) then
   if (g_arrayMode=[])     or (ArrayMode     in g_arrayMode    ) then
-  //if (g_microTileMode=[]) or (MicroTileMode in g_microTileMode) then
+  if (g_microTileMode=[]) or (MicroTileMode in g_microTileMode) then
   begin
    Result:=Result+[i];
   end;
@@ -461,7 +484,7 @@ begin
  if i in g_arrayMode then
  begin
   if A<>'' then A:=A+',';
-  A:=A+IntToStr(i);
+  A:=A+am_str[i];
  end;
 
  TS:=filter_1d_Thin(get_tilings());
@@ -476,7 +499,7 @@ begin
   T:=T+IntToStr(i);
  end;
 
- Writeln('M:[',M,'] B:[',B,'] A:[',A,'] Tilings:',T);
+ Writeln('M:[',M,'] B:[',B,'] A:[',A,'] Tilings:[',T,']');
 
  Write('i=');
  For i:=0 to g_bits.num do
@@ -519,7 +542,9 @@ begin
  //
 end;
 
-procedure _getAxis_1d_thin(i,bitsPerElement:Byte;var x,y:Byte);
+procedure _getAxis_display_1dThin(i,bitsPerElement:Byte;var x,y:Byte);
+var
+ t:Byte;
 begin
  case bitsPerElement of
   8:
@@ -548,6 +573,23 @@ begin
 
   else;
  end;
+
+ t:=_getElementIndex(x,y,0,bitsPerElement,kMicroTileModeDisplay,kArrayMode1dTiledThin);
+
+ Assert(t=i);
+
+end;
+
+procedure _getAxis_Thin_1dThin(i,bitsPerElement:Byte;var x,y:Byte);
+var
+ t:Byte;
+begin
+ x:=(((i shr 0) and 1) shl 0) or (((i shr 2) and 1) shl 1) or (((i shr 4) and 1) shl 2);
+ y:=(((i shr 1) and 1) shl 0) or (((i shr 3) and 1) shl 1) or (((i shr 5) and 1) shl 2);
+
+ t:=_getElementIndex(x,y,0,bitsPerElement,kMicroTileModeThin,kArrayMode1dTiledThin);
+
+ Assert(t=i);
 end;
 
 function fastIntLog2(i:DWORD):DWORD; inline;
@@ -561,19 +603,24 @@ type
   srt_x:Byte;
   end_x:Byte;
       y:Byte;
-  bitcn:Byte;
+  bitcn:Word;
  end;
 
  tbit_interval_array=object
   num_i:Byte;
   pos_i:Word;
   intervals:array[0..63] of tbit_interval;
-  Procedure Add(srt_x,end_x,y,bitcn:Byte);
+  Procedure Add(srt_x,end_x,y:Byte;bitcn:Word);
+  Procedure Add(const v:tbit_interval);
   procedure Sort_xy;
+  procedure Sort_yx;
+  procedure Sort_pos;
  end;
 
-Procedure tbit_interval_array.Add(srt_x,end_x,y,bitcn:Byte);
+Procedure tbit_interval_array.Add(srt_x,end_x,y:Byte;bitcn:Word);
 begin
+ Assert(bitcn<>0);
+
  intervals[num_i].pos_i:=pos_i;
  intervals[num_i].srt_x:=srt_x;
  intervals[num_i].end_x:=end_x;
@@ -581,6 +628,13 @@ begin
  intervals[num_i].bitcn:=bitcn;
  //
  pos_i:=pos_i+bitcn;
+ num_i:=num_i+1;
+end;
+
+Procedure tbit_interval_array.Add(const v:tbit_interval);
+begin
+ intervals[num_i]:=v;
+ //
  num_i:=num_i+1;
 end;
 
@@ -609,10 +663,60 @@ begin
  end;
 end;
 
+procedure tbit_interval_array.Sort_yx;
 var
- g_axis_intervals:array[b8..b64] of tbit_interval_array;
+ i,k:Byte;
+ val1,val2:Word;
+ tmp:tbit_interval;
+begin
+ For k:=0 to num_i-1 do
+ For i:=0 to num_i-2 do
+ begin
+  with intervals[i+0] do
+   val1:=srt_x*64+y;
 
-Procedure Iterate_Axiss;
+  with intervals[i+1] do
+   val2:=srt_x*64+y;
+
+  if (val1>val2) then
+  begin
+   tmp:=intervals[i+1];
+   intervals[i+1]:=intervals[i+0];
+   intervals[i+0]:=tmp;
+  end;
+
+ end;
+end;
+
+Procedure tbit_interval_array.Sort_pos;
+var
+ i,k:Byte;
+ val1,val2:Word;
+ tmp:tbit_interval;
+begin
+ For k:=0 to num_i-1 do
+ For i:=0 to num_i-2 do
+ begin
+  with intervals[i+0] do
+   val1:=pos_i;
+
+  with intervals[i+1] do
+   val2:=pos_i;
+
+  if (val1>val2) then
+  begin
+   tmp:=intervals[i+1];
+   intervals[i+1]:=intervals[i+0];
+   intervals[i+0]:=tmp;
+  end;
+
+ end;
+end;
+
+var
+ g_axis_intervals:array[t_bits_per_element] of tbit_interval_array;
+
+Procedure Iterate_Axiss_1dThin(is_display_mode:Boolean;end_bits:t_bits_per_element);
 var
  x,y:Byte;
  b:Byte;
@@ -623,8 +727,10 @@ var
  str_x:Byte;
 begin
 
- For b:=ord(b8) to ord(b64) do
+ For b:=ord(b8) to ord(end_bits) do
  begin
+  g_axis_intervals[t_bits_per_element(b)]:=Default(tbit_interval_array);
+
   bit:=(1 shl b) shl 3;
   Writeln('[',bit,']:all=',(bit div 8)*64,'bytes');
   //For i:=0 to (1 shl 6)-1 do
@@ -633,7 +739,14 @@ begin
    For x:=0 to 7 do
    begin
     i:=x+y*8;
-    _getAxis_1d_thin(i,bit,out_x,out_y);
+
+    if is_display_mode then
+    begin
+     _getAxis_display_1dThin(i,bit,out_x,out_y);
+    end else
+    begin
+     _getAxis_Thin_1dThin(i,bit,out_x,out_y);
+    end;
 
     //Write(out_x,',',out_y,' ');
 
@@ -674,12 +787,7 @@ begin
   end;
  end;
 
-
 end;
-
-//leal           2(%rdx,%rdx,2), %eax
-//vmovups %xmm3, (%rcx)
-//vextractf128 $1, %ymm2, 16(%rcx,%r9)
 
 //rdi(dst),rsi(src),rdx(pitch)
 
@@ -767,45 +875,102 @@ begin
  dlt_y_str:=lea_used_y.a_ofs[interval.y];
 
  case interval.bitcn of
+   16:
+    begin
+
+     if (reg_mod>=16) then
+     begin
+      reg_ext:=reg_count+reg_num;
+
+      if (flags and (1 shl reg_ext))=0 then
+      begin
+       Writeln(Fout,'vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
+       flags:=flags or (1 shl reg_ext);
+      end;
+     end;
+
+     case reg_mod of
+       0,2,4,6,8,10,12,14:
+        begin
+         if mode=2 then
+          Writeln(Fout,'vpextrw ':13,('$'+IntToStr(reg_mod div 2)):3,', ',('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+       16,18,20,22,24,26,28,30:
+        begin
+         if mode=2 then
+          Writeln(Fout,'vpextrw ':13,('$'+IntToStr((reg_mod-16) div 2)):3,', ',('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+       else
+         Assert(False);
+     end;
+
+    end;
+
+   32:
+    begin
+
+     if (reg_mod>=16) then
+     begin
+      reg_ext:=reg_count+reg_num;
+
+      if (flags and (1 shl reg_ext))=0 then
+      begin
+       Writeln(Fout,'vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
+       flags:=flags or (1 shl reg_ext);
+      end;
+     end;
+
+     case reg_mod of
+       0,4,8,12:
+        begin
+         if mode=2 then
+          Writeln(Fout,'vpextrd ':13,('$'+IntToStr(reg_mod div 4)):3,', ',('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+       16,20,24,28:
+        begin
+         if mode=2 then
+          Writeln(Fout,'vpextrd ':13,('$'+IntToStr((reg_mod-16) div 4)):3,', ',('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+        end;
+       else
+         Assert(False);
+     end;
+
+    end;
+
    64:
     begin
+
+     if (reg_mod>=16) then
+     begin
+      reg_ext:=reg_count+reg_num;
+
+      if (flags and (1 shl reg_ext))=0 then
+      begin
+       Writeln(Fout,'vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
+       flags:=flags or (1 shl reg_ext);
+      end;
+     end;
 
      case reg_mod of
        0:
         begin
          if mode=1 then
-          Writeln('vmovq ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+          Writeln(Fout,'vmovq ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
         end;
        8:
         begin
          if mode=2 then
-          Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+          Writeln(Fout,'vpextrq $1, ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
         end;
       16:
         begin
-         reg_ext:=reg_count+reg_num;
-
-         if (flags and (1 shl reg_ext))=0 then
-         begin
-          Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
-          flags:=flags or (1 shl reg_ext);
-         end;
-
          if mode=1 then
-          Writeln('vmovq ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+          Writeln(Fout,'vmovq ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
         end;
       24:
         begin
-         reg_ext:=reg_count+reg_num;
-
-         if (flags and (1 shl reg_ext))=0 then
-         begin
-          Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', %xmm',reg_ext);
-          flags:=flags or (1 shl reg_ext);
-         end;
-
          if mode=2 then
-          Writeln('vpextrq $1, ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+          Writeln(Fout,'vpextrq $1, ':18,('%xmm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
         end;
       else
         Assert(False);
@@ -819,18 +984,37 @@ begin
       0:
        begin
         if mode=1 then
-         Writeln('vmovups ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+         Writeln(Fout,'vmovups ':18,('%xmm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
        end;
      16:
        begin
         if mode=2 then
-         Writeln('vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+         Writeln(Fout,'vextractf128 $1, ':18,('%ymm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
        end;
      else
        Assert(False);
      end;
 
     end;
+
+  256:
+    begin
+     Assert(reg_mod=0);
+
+     if (reg_num<16) then
+     begin
+      if mode=1 then
+       Writeln(Fout,'vmovups ':18,('%ymm'+IntToStr(reg_num)):6,', ',dlt_x_str:2,dlt_y_str);
+     end else
+     begin
+      reg_ext:=reg_num-16;
+
+      if mode=3 then
+       Writeln(Fout,'vmovups ':18,('%ymm'+IntToStr(reg_ext)):6,', ',dlt_x_str:2,dlt_y_str);
+     end;
+
+    end;
+
   else
     Assert(False);
  end;
@@ -873,6 +1057,54 @@ begin
  dlt_y_str:=lea_used_y.a_ofs[interval.y];
 
  case interval.bitcn of
+   16:
+    begin
+
+     case reg_mod of
+       0,2,4,6,8,10,12,14:
+        begin
+         if mode=1 then
+          Writeln(Fout,'vpinsrw ':13,('$'+IntToStr(reg_mod div 2)):3,', ',dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num);
+        end;
+       16,18,20,22,24,26,28,30:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if mode=1 then
+          Writeln(Fout,'vpinsrw ':13,('$'+IntToStr((reg_mod-16) div 2)):3,', ',dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext);
+
+         flags:=flags or (1 shl reg_ext);
+        end;
+       else
+         Assert(False);
+     end;
+
+    end;
+
+   32:
+    begin
+
+     case reg_mod of
+       0,4,8,12:
+        begin
+         if mode=1 then
+          Writeln(Fout,'vpinsrd ':13,('$'+IntToStr(reg_mod div 4)):3,', ',dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num);
+        end;
+       16,20,24,28:
+        begin
+         reg_ext:=reg_count+reg_num;
+
+         if mode=1 then
+          Writeln(Fout,'vpinsrd ':13,('$'+IntToStr((reg_mod-16) div 4)):3,', ',dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext);
+
+         flags:=flags or (1 shl reg_ext);
+        end;
+       else
+         Assert(False);
+     end;
+
+    end;
+
    64:
     begin
 
@@ -883,11 +1115,10 @@ begin
          if (flags and (1 shl reg_num))=0 then
          begin
           //only if first
-          Writeln('vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
+          Writeln(Fout,'vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
          end else
          begin
           //ignore
-          //Writeln('vpinsrq $0, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num); //
          end;
 
          flags:=flags or (1 shl reg_num);
@@ -895,7 +1126,7 @@ begin
        8:
         begin
          if mode=1 then
-          Writeln('vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num); //
+          Writeln(Fout,'vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num,', ','%xmm',reg_num); //
 
          flags:=flags or (1 shl reg_num);
         end;
@@ -906,11 +1137,10 @@ begin
          if (flags and (1 shl reg_ext))=0 then
          begin
           //only if first
-          Writeln('vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext); //
+          Writeln(Fout,'vmovq ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext); //
          end else
          begin
           //ignore
-          //Writeln('vpinsrq $0, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
          end;
 
          flags:=flags or (1 shl reg_ext);
@@ -920,7 +1150,7 @@ begin
          reg_ext:=reg_count+reg_num;
 
          if mode=1 then
-          Writeln('vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
+          Writeln(Fout,'vpinsrq $1, ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_ext,', ','%xmm',reg_ext); //
 
          flags:=flags or (1 shl reg_ext);
         end;
@@ -939,11 +1169,10 @@ begin
         if (flags and (1 shl reg_num))=0 then
         begin
          //only if first
-         Writeln('vmovups ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
+         Writeln(Fout,'vmovups ':18,dlt_x_str:2,dlt_y_str,', ','%xmm',reg_num); //
         end else
         begin
          //ignore
-         //Writeln('vinsertf128 $0, ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num,', ','%ymm',reg_num); //
         end;
 
         flags:=flags or (1 shl reg_num);
@@ -951,7 +1180,7 @@ begin
      16:
        begin
         if mode=1 then
-         Writeln('vinsertf128 $1, ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num,', ','%ymm',reg_num); //
+         Writeln(Fout,'vinsertf128 $1, ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num,', ','%ymm',reg_num); //
 
         flags:=flags or (1 shl reg_num);
        end;
@@ -960,13 +1189,497 @@ begin
      end;
 
     end;
+
+  256:
+    begin
+     Assert(reg_mod=0);
+
+     if (reg_num<16) then
+     begin
+      if mode=1 then
+       Writeln(Fout,'vmovups ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_num); //
+     end else
+     begin
+      reg_ext:=reg_num-16;
+
+      if mode=3 then
+       Writeln(Fout,'vmovups ':18,dlt_x_str:2,dlt_y_str,', ','%ymm',reg_ext); //
+     end;
+
+    end;
+
   else
     Assert(False);
  end;
 
 end;
 
-Procedure generate_1dThin_asm;
+procedure detile_Thin_1dThin_8(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rdi,%rdx,2), %r8  //+2
+              lea (%rdi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rdi,%r10,2), %r10 //+6
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+ vextractf128 $1,  %ymm0, %xmm2
+ vextractf128 $1,  %ymm1, %xmm3
+     vpextrw  $0,  %xmm0,   (%rdi)
+     vpextrw  $2,  %xmm0,  2(%rdi)
+     vpextrw  $0,  %xmm2,  4(%rdi)
+     vpextrw  $2,  %xmm2,  6(%rdi)
+     vpextrw  $1,  %xmm0,   (%rdi,%rdx)
+     vpextrw  $3,  %xmm0,  2(%rdi,%rdx)
+     vpextrw  $1,  %xmm2,  4(%rdi,%rdx)
+     vpextrw  $3,  %xmm2,  6(%rdi,%rdx)
+     vpextrw  $4,  %xmm0,   (%r8 )
+     vpextrw  $6,  %xmm0,  2(%r8 )
+     vpextrw  $4,  %xmm2,  4(%r8 )
+     vpextrw  $6,  %xmm2,  6(%r8 )
+     vpextrw  $5,  %xmm0,   (%r8 ,%rdx)
+     vpextrw  $7,  %xmm0,  2(%r8 ,%rdx)
+     vpextrw  $5,  %xmm2,  4(%r8 ,%rdx)
+     vpextrw  $7,  %xmm2,  6(%r8 ,%rdx)
+     vpextrw  $0,  %xmm1,   (%r9 )
+     vpextrw  $2,  %xmm1,  2(%r9 )
+     vpextrw  $0,  %xmm3,  4(%r9 )
+     vpextrw  $2,  %xmm3,  6(%r9 )
+     vpextrw  $1,  %xmm1,   (%r9 ,%rdx)
+     vpextrw  $3,  %xmm1,  2(%r9 ,%rdx)
+     vpextrw  $1,  %xmm3,  4(%r9 ,%rdx)
+     vpextrw  $3,  %xmm3,  6(%r9 ,%rdx)
+     vpextrw  $4,  %xmm1,   (%r10)
+     vpextrw  $6,  %xmm1,  2(%r10)
+     vpextrw  $4,  %xmm3,  4(%r10)
+     vpextrw  $6,  %xmm3,  6(%r10)
+     vpextrw  $5,  %xmm1,   (%r10,%rdx)
+     vpextrw  $7,  %xmm1,  2(%r10,%rdx)
+     vpextrw  $5,  %xmm3,  4(%r10,%rdx)
+     vpextrw  $7,  %xmm3,  6(%r10,%rdx)
+end;
+
+procedure tile_Thin_1dThin_8(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rsi,%rdx,2), %r8  //+2
+              lea (%rsi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rsi,%r10,2), %r10 //+6
+     vpinsrw  $0,   (%rsi), %xmm0, %xmm0
+     vpinsrw  $2,  2(%rsi), %xmm0, %xmm0
+     vpinsrw  $0,  4(%rsi), %xmm2, %xmm2
+     vpinsrw  $2,  6(%rsi), %xmm2, %xmm2
+     vpinsrw  $1,   (%rsi,%rdx), %xmm0, %xmm0
+     vpinsrw  $3,  2(%rsi,%rdx), %xmm0, %xmm0
+     vpinsrw  $1,  4(%rsi,%rdx), %xmm2, %xmm2
+     vpinsrw  $3,  6(%rsi,%rdx), %xmm2, %xmm2
+     vpinsrw  $4,   (%r8 ), %xmm0, %xmm0
+     vpinsrw  $6,  2(%r8 ), %xmm0, %xmm0
+     vpinsrw  $4,  4(%r8 ), %xmm2, %xmm2
+     vpinsrw  $6,  6(%r8 ), %xmm2, %xmm2
+     vpinsrw  $5,   (%r8 ,%rdx), %xmm0, %xmm0
+     vpinsrw  $7,  2(%r8 ,%rdx), %xmm0, %xmm0
+     vpinsrw  $5,  4(%r8 ,%rdx), %xmm2, %xmm2
+     vpinsrw  $7,  6(%r8 ,%rdx), %xmm2, %xmm2
+     vpinsrw  $0,   (%r9 ), %xmm1, %xmm1
+     vpinsrw  $2,  2(%r9 ), %xmm1, %xmm1
+     vpinsrw  $0,  4(%r9 ), %xmm3, %xmm3
+     vpinsrw  $2,  6(%r9 ), %xmm3, %xmm3
+     vpinsrw  $1,   (%r9 ,%rdx), %xmm1, %xmm1
+     vpinsrw  $3,  2(%r9 ,%rdx), %xmm1, %xmm1
+     vpinsrw  $1,  4(%r9 ,%rdx), %xmm3, %xmm3
+     vpinsrw  $3,  6(%r9 ,%rdx), %xmm3, %xmm3
+     vpinsrw  $4,   (%r10), %xmm1, %xmm1
+     vpinsrw  $6,  2(%r10), %xmm1, %xmm1
+     vpinsrw  $4,  4(%r10), %xmm3, %xmm3
+     vpinsrw  $6,  6(%r10), %xmm3, %xmm3
+     vpinsrw  $5,   (%r10,%rdx), %xmm1, %xmm1
+     vpinsrw  $7,  2(%r10,%rdx), %xmm1, %xmm1
+     vpinsrw  $5,  4(%r10,%rdx), %xmm3, %xmm3
+     vpinsrw  $7,  6(%r10,%rdx), %xmm3, %xmm3
+  vinsertf128 $1, %xmm2, %ymm0, %ymm0
+  vinsertf128 $1, %xmm3, %ymm1, %ymm1
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+end;
+
+procedure detile_Thin_1dThin_16(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rdi,%rdx,2), %r8  //+2
+              lea (%rdi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rdi,%r10,2), %r10 //+6
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+ vextractf128 $1,  %ymm0, %xmm4
+ vextractf128 $1,  %ymm1, %xmm5
+ vextractf128 $1,  %ymm2, %xmm6
+ vextractf128 $1,  %ymm3, %xmm7
+     vpextrd  $0,  %xmm0,   (%rdi)
+     vpextrd  $2,  %xmm0,  4(%rdi)
+     vpextrd  $0,  %xmm1,  8(%rdi)
+     vpextrd  $2,  %xmm1, 12(%rdi)
+     vpextrd  $1,  %xmm0,   (%rdi,%rdx)
+     vpextrd  $3,  %xmm0,  4(%rdi,%rdx)
+     vpextrd  $1,  %xmm1,  8(%rdi,%rdx)
+     vpextrd  $3,  %xmm1, 12(%rdi,%rdx)
+     vpextrd  $0,  %xmm4,   (%r8 )
+     vpextrd  $2,  %xmm4,  4(%r8 )
+     vpextrd  $0,  %xmm5,  8(%r8 )
+     vpextrd  $2,  %xmm5, 12(%r8 )
+     vpextrd  $1,  %xmm4,   (%r8 ,%rdx)
+     vpextrd  $3,  %xmm4,  4(%r8 ,%rdx)
+     vpextrd  $1,  %xmm5,  8(%r8 ,%rdx)
+     vpextrd  $3,  %xmm5, 12(%r8 ,%rdx)
+     vpextrd  $0,  %xmm2,   (%r9 )
+     vpextrd  $2,  %xmm2,  4(%r9 )
+     vpextrd  $0,  %xmm3,  8(%r9 )
+     vpextrd  $2,  %xmm3, 12(%r9 )
+     vpextrd  $1,  %xmm2,   (%r9 ,%rdx)
+     vpextrd  $3,  %xmm2,  4(%r9 ,%rdx)
+     vpextrd  $1,  %xmm3,  8(%r9 ,%rdx)
+     vpextrd  $3,  %xmm3, 12(%r9 ,%rdx)
+     vpextrd  $0,  %xmm6,   (%r10)
+     vpextrd  $2,  %xmm6,  4(%r10)
+     vpextrd  $0,  %xmm7,  8(%r10)
+     vpextrd  $2,  %xmm7, 12(%r10)
+     vpextrd  $1,  %xmm6,   (%r10,%rdx)
+     vpextrd  $3,  %xmm6,  4(%r10,%rdx)
+     vpextrd  $1,  %xmm7,  8(%r10,%rdx)
+     vpextrd  $3,  %xmm7, 12(%r10,%rdx)
+end;
+
+procedure detile_Thin_1dThin_32(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rdi,%rdx,2), %r8  //+2
+              lea (%rdi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rdi,%r10,2), %r10 //+6
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+          vmovups 128(%rsi), %ymm4
+          vmovups 160(%rsi), %ymm5
+          vmovups 192(%rsi), %ymm6
+          vmovups 224(%rsi), %ymm7
+ vextractf128 $1,  %ymm0, %xmm8
+ vextractf128 $1,  %ymm2, %xmm10
+ vextractf128 $1,  %ymm1, %xmm9
+ vextractf128 $1,  %ymm3, %xmm11
+ vextractf128 $1,  %ymm4, %xmm12
+ vextractf128 $1,  %ymm6, %xmm14
+ vextractf128 $1,  %ymm5, %xmm13
+ vextractf128 $1,  %ymm7, %xmm15
+            vmovq  %xmm0,   (%rdi)
+            vmovq  %xmm8,  8(%rdi)
+            vmovq  %xmm2, 16(%rdi)
+            vmovq %xmm10, 24(%rdi)
+            vmovq  %xmm1,   (%r8 )
+            vmovq  %xmm9,  8(%r8 )
+            vmovq  %xmm3, 16(%r8 )
+            vmovq %xmm11, 24(%r8 )
+            vmovq  %xmm4,   (%r9 )
+            vmovq %xmm12,  8(%r9 )
+            vmovq  %xmm6, 16(%r9 )
+            vmovq %xmm14, 24(%r9 )
+            vmovq  %xmm5,   (%r10)
+            vmovq %xmm13,  8(%r10)
+            vmovq  %xmm7, 16(%r10)
+            vmovq %xmm15, 24(%r10)
+      vpextrq $1,  %xmm0,   (%rdi,%rdx)
+      vpextrq $1,  %xmm8,  8(%rdi,%rdx)
+      vpextrq $1,  %xmm2, 16(%rdi,%rdx)
+      vpextrq $1, %xmm10, 24(%rdi,%rdx)
+      vpextrq $1,  %xmm1,   (%r8 ,%rdx)
+      vpextrq $1,  %xmm9,  8(%r8 ,%rdx)
+      vpextrq $1,  %xmm3, 16(%r8 ,%rdx)
+      vpextrq $1, %xmm11, 24(%r8 ,%rdx)
+      vpextrq $1,  %xmm4,   (%r9 ,%rdx)
+      vpextrq $1, %xmm12,  8(%r9 ,%rdx)
+      vpextrq $1,  %xmm6, 16(%r9 ,%rdx)
+      vpextrq $1, %xmm14, 24(%r9 ,%rdx)
+      vpextrq $1,  %xmm5,   (%r10,%rdx)
+      vpextrq $1, %xmm13,  8(%r10,%rdx)
+      vpextrq $1,  %xmm7, 16(%r10,%rdx)
+      vpextrq $1, %xmm15, 24(%r10,%rdx)
+end;
+
+procedure detile_Thin_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rdi,%rdx,2), %r8  //+2
+              lea (%rdi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rdi,%r10,2), %r10 //+6
+          vmovups   0(%rsi), %ymm0
+          vmovups  32(%rsi), %ymm1
+          vmovups  64(%rsi), %ymm2
+          vmovups  96(%rsi), %ymm3
+          vmovups 128(%rsi), %ymm4
+          vmovups 160(%rsi), %ymm5
+          vmovups 192(%rsi), %ymm6
+          vmovups 224(%rsi), %ymm7
+          vmovups 256(%rsi), %ymm8
+          vmovups 288(%rsi), %ymm9
+          vmovups 320(%rsi), %ymm10
+          vmovups 352(%rsi), %ymm11
+          vmovups 384(%rsi), %ymm12
+          vmovups 416(%rsi), %ymm13
+          vmovups 448(%rsi), %ymm14
+          vmovups 480(%rsi), %ymm15
+          vmovups  %xmm0,   (%rdi)
+          vmovups  %xmm1, 16(%rdi)
+          vmovups  %xmm4, 32(%rdi)
+          vmovups  %xmm5, 48(%rdi)
+          vmovups  %xmm2,   (%r8 )
+          vmovups  %xmm3, 16(%r8 )
+          vmovups  %xmm6, 32(%r8 )
+          vmovups  %xmm7, 48(%r8 )
+          vmovups  %xmm8,   (%r9 )
+          vmovups  %xmm9, 16(%r9 )
+          vmovups %xmm12, 32(%r9 )
+          vmovups %xmm13, 48(%r9 )
+          vmovups %xmm10,   (%r10)
+          vmovups %xmm11, 16(%r10)
+          vmovups %xmm14, 32(%r10)
+          vmovups %xmm15, 48(%r10)
+ vextractf128 $1,  %ymm0,   (%rdi,%rdx)
+ vextractf128 $1,  %ymm1, 16(%rdi,%rdx)
+ vextractf128 $1,  %ymm4, 32(%rdi,%rdx)
+ vextractf128 $1,  %ymm5, 48(%rdi,%rdx)
+ vextractf128 $1,  %ymm2,   (%r8 ,%rdx)
+ vextractf128 $1,  %ymm3, 16(%r8 ,%rdx)
+ vextractf128 $1,  %ymm6, 32(%r8 ,%rdx)
+ vextractf128 $1,  %ymm7, 48(%r8 ,%rdx)
+ vextractf128 $1,  %ymm8,   (%r9 ,%rdx)
+ vextractf128 $1,  %ymm9, 16(%r9 ,%rdx)
+ vextractf128 $1, %ymm12, 32(%r9 ,%rdx)
+ vextractf128 $1, %ymm13, 48(%r9 ,%rdx)
+ vextractf128 $1, %ymm10,   (%r10,%rdx)
+ vextractf128 $1, %ymm11, 16(%r10,%rdx)
+ vextractf128 $1, %ymm14, 32(%r10,%rdx)
+ vextractf128 $1, %ymm15, 48(%r10,%rdx)
+end;
+
+procedure tile_Thin_1dThin_64(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;
+asm
+              lea (%rsi,%rdx,2), %r8  //+2
+              lea (%rsi,%rdx,4), %r9  //+4
+              lea (%rdx,%rdx,2), %r10 //+3
+              lea (%rsi,%r10,2), %r10 //+6
+          vmovups   (%rsi), %xmm0
+          vmovups 16(%rsi), %xmm1
+          vmovups 32(%rsi), %xmm4
+          vmovups 48(%rsi), %xmm5
+          vmovups   (%r8 ), %xmm2
+          vmovups 16(%r8 ), %xmm3
+          vmovups 32(%r8 ), %xmm6
+          vmovups 48(%r8 ), %xmm7
+          vmovups   (%r9 ), %xmm8
+          vmovups 16(%r9 ), %xmm9
+          vmovups 32(%r9 ), %xmm12
+          vmovups 48(%r9 ), %xmm13
+          vmovups   (%r10), %xmm10
+          vmovups 16(%r10), %xmm11
+          vmovups 32(%r10), %xmm14
+          vmovups 48(%r10), %xmm15
+  vinsertf128 $1,   (%rsi,%rdx), %ymm0, %ymm0
+  vinsertf128 $1, 16(%rsi,%rdx), %ymm1, %ymm1
+  vinsertf128 $1, 32(%rsi,%rdx), %ymm4, %ymm4
+  vinsertf128 $1, 48(%rsi,%rdx), %ymm5, %ymm5
+  vinsertf128 $1,   (%r8 ,%rdx), %ymm2, %ymm2
+  vinsertf128 $1, 16(%r8 ,%rdx), %ymm3, %ymm3
+  vinsertf128 $1, 32(%r8 ,%rdx), %ymm6, %ymm6
+  vinsertf128 $1, 48(%r8 ,%rdx), %ymm7, %ymm7
+  vinsertf128 $1,   (%r9 ,%rdx), %ymm8, %ymm8
+  vinsertf128 $1, 16(%r9 ,%rdx), %ymm9, %ymm9
+  vinsertf128 $1, 32(%r9 ,%rdx), %ymm12, %ymm12
+  vinsertf128 $1, 48(%r9 ,%rdx), %ymm13, %ymm13
+  vinsertf128 $1,   (%r10,%rdx), %ymm10, %ymm10
+  vinsertf128 $1, 16(%r10,%rdx), %ymm11, %ymm11
+  vinsertf128 $1, 32(%r10,%rdx), %ymm14, %ymm14
+  vinsertf128 $1, 48(%r10,%rdx), %ymm15, %ymm15
+          vmovups  %ymm0,   0(%rdi)
+          vmovups  %ymm1,  32(%rdi)
+          vmovups  %ymm2,  64(%rdi)
+          vmovups  %ymm3,  96(%rdi)
+          vmovups  %ymm4, 128(%rdi)
+          vmovups  %ymm5, 160(%rdi)
+          vmovups  %ymm6, 192(%rdi)
+          vmovups  %ymm7, 224(%rdi)
+          vmovups  %ymm8, 256(%rdi)
+          vmovups  %ymm9, 288(%rdi)
+          vmovups %ymm10, 320(%rdi)
+          vmovups %ymm11, 352(%rdi)
+          vmovups %ymm12, 384(%rdi)
+          vmovups %ymm13, 416(%rdi)
+          vmovups %ymm14, 448(%rdi)
+          vmovups %ymm15, 480(%rdi)
+end;
+
+const
+ kMicroTileWidth =8;
+ kMicroTileHeight=8;
+
+{
+type
+ Tiler1d=object
+  m_linearWidth :DWORD;
+  m_linearHeight:DWORD;
+  m_linearDepth :DWORD;
+  m_paddedWidth :DWORD;
+  m_paddedHeight:DWORD;
+ end;
+ }
+
+{$OPTIMIZATION REGVAR,PEEPHOLE,CSE,NODEADSTORE}
+
+generic Procedure copy_linear_to_1dThin_AVX<T>(dst,src:Pointer;
+                                               m_linearWidth,
+                                               m_linearHeight,
+                                               m_linearDepth,
+                                               m_paddedWidth,
+                                               m_paddedHeight:DWORD); SysV_ABI_CDecl;
+var
+ m_pitch_bytes:QWORD;
+ x,y,z        :DWORD;
+begin
+
+ m_pitch_bytes :=(m_linearWidth)*T.m_bytePerElement;
+
+ m_paddedWidth :=((m_paddedWidth  - m_linearWidth ) div kMicroTileWidth) * (kMicroTileWidth * kMicroTileHeight * T.m_bytePerElement); //m_tileBytes
+ m_paddedHeight:=(m_paddedHeight - m_linearHeight)*m_pitch_bytes;
+
+ m_linearWidth :=(m_linearWidth  div kMicroTileWidth );
+ m_linearHeight:=(m_linearHeight div kMicroTileHeight);
+
+ z:=m_linearDepth;
+ repeat
+
+  y:=m_linearHeight;
+  repeat
+
+   x:=m_linearWidth;
+   repeat
+    T.m_cbs(dst,src,m_pitch_bytes);
+
+    src:=src+(kMicroTileWidth * T.m_bytePerElement); //m_tileRowBytes
+    dst:=dst+(kMicroTileWidth * kMicroTileHeight * T.m_bytePerElement); //m_tileBytes
+
+    Dec(x);
+   until (x=0);
+
+   src:=src+m_pitch_bytes*7;
+   dst:=dst+m_paddedWidth;
+
+   Dec(y);
+  until (y=0);
+
+  dst:=dst+m_paddedHeight;
+
+  Dec(z);
+ until (z=0);
+end;
+
+type
+ t_tile_avx_cb=procedure(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl;
+
+ t_tile_Thin_1dThin_64=object
+  const
+   m_bytePerElement=8;
+   m_cbs:t_tile_avx_cb=@tile_Thin_1dThin_64;
+ end;
+
+procedure test_data;
+var
+ i,x,y,t:Byte;
+ data_src_8:array[0..63] of Byte;
+ data_dst_8:array[0..63] of Byte;
+
+ data_src_16:array[0..63] of WORD;
+ data_dst_16:array[0..63] of WORD;
+
+ data_src_32:array[0..63] of DWORD;
+ data_dst_32:array[0..63] of DWORD;
+
+ data_src_64:array[0..63] of QWORD;
+ data_dst_64:array[0..63] of QWORD;
+
+ ftime:QWORD;
+
+ src,dst:Pointer;
+begin
+ i:=0;
+ for y:=0 to 7 do
+ for x:=0 to 7 do
+ begin
+  t:=_getElementIndex(x,y,0,8,kMicroTileModeThin,kArrayMode1dTiledThin);
+  data_src_8[t]:=i;
+
+  t:=_getElementIndex(x,y,0,16,kMicroTileModeThin,kArrayMode1dTiledThin);
+  data_src_16[t]:=i;
+
+  t:=_getElementIndex(x,y,0,32,kMicroTileModeThin,kArrayMode1dTiledThin);
+  data_src_32[t]:=i;
+
+  t:=_getElementIndex(x,y,0,64,kMicroTileModeThin,kArrayMode1dTiledThin);
+  data_src_64[t]:=i;
+
+  i:=i+1;
+ end;
+
+ FillChar(data_dst_16,sizeof(data_dst_16),0);
+
+ detile_Thin_1dThin_16(@data_dst_16,@data_src_16,8*2);
+
+ FillChar(data_dst_32,sizeof(data_dst_32),0);
+
+ detile_Thin_1dThin_32(@data_dst_32,@data_src_32,8*4);
+
+
+ FillChar(data_dst_64,sizeof(data_dst_32),0);
+
+ detile_Thin_1dThin_64(@data_dst_64,@data_src_64,8*8);
+
+ {
+ FillChar(data_dst_8,64,0);
+
+ detile_Thin_1dThin_8(@data_dst_8,@data_src_8,8);
+
+ FillChar(data_src_8,64,0);
+
+ tile_Thin_1dThin_8(@data_src_8,@data_dst_8,8);
+
+ FillChar(data_dst_8,64,0);
+
+ detile_Thin_1dThin_8(@data_dst_8,@data_src_8,8);
+ }
+
+ src:=GetMem(1920*1080*8);
+ dst:=GetMem(1920*1080*8);
+
+ ftime:=GetTickCount64;
+
+ specialize copy_linear_to_1dThin_AVX<t_tile_Thin_1dThin_64>(dst,src,1920,1080,1,1920,1080);
+
+ writeln(GetTickCount64-ftime);
+
+ writeln;
+end;
+
+const
+ Display_Thin:array[Boolean] of Pchar=('Thin','Display');
+ linear2tile_tile2linear:array[Boolean] of Pchar=('linear2tile','tile2linear');
+
+function get_asm_name(is_display_mode,is_tile2linear:Boolean;bits:Byte):RawByteString;
+begin
+ Result:=linear2tile_tile2linear[is_tile2linear]+
+         '_'+Display_Thin[is_display_mode]+
+         '_1dThin_'+IntToStr(bits);
+end;
+
+Procedure generate_1dThin_asm(is_display_mode:Boolean;end_bits:t_bits_per_element);
 const
  reg_dst  ='%rdi';
  reg_src  ='%rsi';
@@ -976,29 +1689,23 @@ var
  b,bits:Byte;
  bytes:Byte;
  all:Word;
- i,r,reg_count:Byte;
- bytes_pos:Word;
- reg_num:Byte;
- reg_mod:Byte;
- reg_ext:Byte;
- dlt_x  :Integer;
- dlt_y  :Integer;
- flags  :QWORD;
- dlt_x_str:RawByteString;
+ i,r,reg_count1,reg_count2:Byte;
+ flags:QWORD;
 
  lea_used_y:t_lea_used_y;
 begin
+
  //sort all
- For b:=ord(b8) to ord(b64) do
- begin
-  with g_axis_intervals[t_bits_per_element(b)] do
+  For b:=ord(b8) to ord(end_bits) do
   begin
-   Sort_xy;
+   with g_axis_intervals[t_bits_per_element(b)] do
+   begin
+    Sort_xy;
+   end;
   end;
- end;
  //sort all
 
- For b:=ord(b8) to ord(b64) do
+ For b:=ord(b8) to ord(end_bits) do
  begin
   bytes:=(1 shl b);
   bits:=bytes shl 3;
@@ -1007,8 +1714,10 @@ begin
 
   //rdi(dst),rsi(src),rdx(dst_pitch)
 
-  Writeln('procedure detile_1dThin_',bits,'(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;');
-  Writeln('asm');
+  Writeln(Fout);
+  Writeln(Fout,'procedure ',get_asm_name(is_display_mode,True,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
+
+  Writeln(Fout,'asm');
 
   //build lea
   lea_used_y:=Default(t_lea_used_y);
@@ -1024,15 +1733,23 @@ begin
   For i:=0 to High(lea_used_y.a_lea) do
   if (lea_used_y.a_lea[i]<>'') then
   begin
-   Writeln('lea ':18,lea_used_y.a_lea[i]);
+   Writeln(Fout,'lea ':18,lea_used_y.a_lea[i]);
   end;
   //print lea
 
   //load to regs
-  reg_count:=all div 32;
-  for r:=0 to reg_count-1 do
+  reg_count1:=all div 32;
+  reg_count2:=0;
+
+  if (reg_count1>16) then
   begin
-   Writeln('vmovups ':18,r*32:3,'(',reg_src,')',', ',('%ymm'+IntToStr(r)):0);
+   reg_count2:=reg_count1;
+   reg_count1:=16;
+  end;
+
+  for r:=0 to reg_count1-1 do
+  begin
+   Writeln(Fout,'vmovups ':18,r*32:3,'(',reg_src,')',', ',('%ymm'+IntToStr(r)):0);
   end;
   //load to regs
 
@@ -1045,7 +1762,7 @@ begin
    begin
     on_gen_1dThin_detile(intervals[i],
                          bytes,
-                         reg_count,
+                         reg_count1,
                          flags,
                          lea_used_y,
                          0
@@ -1059,7 +1776,7 @@ begin
    begin
     on_gen_1dThin_detile(intervals[i],
                          bytes,
-                         reg_count,
+                         reg_count1,
                          flags,
                          lea_used_y,
                          1
@@ -1070,26 +1787,56 @@ begin
    begin
     on_gen_1dThin_detile(intervals[i],
                          bytes,
-                         reg_count,
+                         reg_count1,
                          flags,
                          lea_used_y,
                          2
                         );
    end;
 
+   //part2
+   if (reg_count2<>0) then
+   begin
+    //load to regs
+    for r:=reg_count1 to reg_count2-1 do
+    begin
+     Writeln(Fout,'vmovups ':18,r*32:3,'(',reg_src,')',', ',('%ymm'+IntToStr(r-reg_count1)):0);
+    end;
+    //load to regs
+
+    flags:=0;
+
+    For i:=reg_count1 to reg_count2-1 do
+    begin
+     on_gen_1dThin_detile(intervals[i],
+                          bytes,
+                          reg_count1,
+                          flags,
+                          lea_used_y,
+                          3
+                         );
+
+    end;
+
+   end;
+   //part2
+
 
    //
   end; //with
 
-  Writeln('end;');
+
+  Writeln(Fout,'end;');
   //<-detiling
 
   //tiling->
 
   //rdi(src),rsi(dst),rdx(dst_pitch)
 
-  Writeln('procedure tile_1dThin_',bits,'(dst,src:Pointer;pitch:QWORD); assembler; nostackframe; SysV_ABI_CDecl;');
-  Writeln('asm');
+  Writeln(Fout);
+  Writeln(Fout,'procedure ',get_asm_name(is_display_mode,False,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
+
+  Writeln(Fout,'asm');
 
   //build lea
   lea_used_y:=Default(t_lea_used_y);
@@ -1105,7 +1852,7 @@ begin
   For i:=0 to High(lea_used_y.a_lea) do
   if (lea_used_y.a_lea[i]<>'') then
   begin
-   Writeln('lea ':18,lea_used_y.a_lea[i]);
+   Writeln(Fout,'lea ':18,lea_used_y.a_lea[i]);
   end;
   //print lea
 
@@ -1118,7 +1865,7 @@ begin
    begin
     on_gen_1dThin_tiling(intervals[i],
                          bytes,
-                         reg_count,
+                         reg_count1,
                          flags,
                          lea_used_y,
                          0
@@ -1129,7 +1876,7 @@ begin
    begin
     on_gen_1dThin_tiling(intervals[i],
                          bytes,
-                         reg_count,
+                         reg_count1,
                          flags,
                          lea_used_y,
                          1
@@ -1138,29 +1885,218 @@ begin
 
    //combine
    if (flags<>0) then
-   for r:=reg_count to (reg_count*2)-1 do
+   for r:=reg_count1 to (reg_count1*2)-1 do
     if (flags and (1 shl r))<>0 then
     begin
-     Writeln('vinsertf128 $1, ':18,'%xmm',r,', ','%ymm',r-reg_count,', ','%ymm',r-reg_count); //
+     Writeln(Fout,'vinsertf128 $1, ':18,'%xmm',r,', ','%ymm',r-reg_count1,', ','%ymm',r-reg_count1); //
     end;
    //combine
 
   end; //with
 
   //write to mem
-  reg_count:=all div 32;
-  for r:=0 to reg_count-1 do
+  reg_count1:=all div 32;
+  reg_count2:=0;
+
+  if (reg_count1>16) then
   begin
-   Writeln('vmovups ':18,('%ymm'+IntToStr(r)):6,', ',r*32:3,'(',reg_dst,')');
+   reg_count2:=reg_count1;
+   reg_count1:=16;
+  end;
+
+  for r:=0 to reg_count1-1 do
+  begin
+   Writeln(Fout,'vmovups ':18,('%ymm'+IntToStr(r)):6,', ',r*32:3,'(',reg_dst,')');
   end;
   //write to mem
 
+  //part2
+  if (reg_count2<>0) then
+  begin
 
-  Writeln('end;');
+   with g_axis_intervals[t_bits_per_element(b)] do
+   begin
+
+    flags:=0;
+
+    For i:=reg_count1 to reg_count2-1 do
+    begin
+     on_gen_1dThin_tiling(intervals[i],
+                          bytes,
+                          reg_count1,
+                          flags,
+                          lea_used_y,
+                          3
+                         );
+    end;
+
+   end;
+
+   //write to mem
+   for r:=reg_count1 to reg_count2-1 do
+   begin
+    Writeln(Fout,'vmovups ':18,('%ymm'+IntToStr(r-reg_count1)):6,', ',r*32:3,'(',reg_dst,')');
+   end;
+   //write to mem
+  end;
+  //part2
+
+  Writeln(Fout,'end;');
   //<-tiling
 
-  Writeln;
+
  end; //For b
+
+end;
+
+function get_copy_name(is_display_mode,is_tile2linear:Boolean;bits:Byte):RawByteString;
+begin
+ Result:='copy_'+linear2tile_tile2linear[is_tile2linear]+
+         '_'+Display_Thin[is_display_mode]+
+         '_1dThin_'+IntToStr(bits);
+end;
+
+function get_copy_array_name(is_display_mode,is_tile2linear:Boolean):RawByteString;
+begin
+ Result:='copy_array_'+linear2tile_tile2linear[is_tile2linear]+
+         '_'+Display_Thin[is_display_mode]+
+         '_1dThin';
+end;
+
+Procedure generate_copy_array_1dThin(is_display_mode,is_tile2linear:Boolean;end_bits:t_bits_per_element);
+var
+ b,bits:Byte;
+ bytes:Byte;
+
+begin
+ Writeln(Fout,'');
+ Writeln(Fout,'const');
+
+ Writeln(Fout,' ',get_copy_array_name(is_display_mode,is_tile2linear),':array[0..',IntToStr(ord(b128)-ord(b8)),'] of t_copy_cbs=(');
+
+ For b:=ord(b8) to ord(b128) do
+ begin
+  bytes:=(1 shl b);
+  bits :=bytes shl 3;
+
+  Write(Fout,'  ');
+
+  if b>ord(end_bits) then
+  begin
+   Write(Fout,'nil');
+  end else
+  begin
+   Write(Fout,'@',get_copy_name(is_display_mode,is_tile2linear,bits));
+  end;
+
+  if (b<>ord(b128)) then
+  begin
+   Write(Fout,',');
+  end;
+  Writeln(Fout,'');
+
+ end;
+
+ Writeln(Fout,' ',');');
+end;
+
+Procedure generate_copy_1dThin(is_display_mode,is_tile2linear:Boolean;end_bits:t_bits_per_element;is_header:Boolean);
+var
+ b,bits:Byte;
+ bytes:Byte;
+
+begin
+ For b:=ord(b8) to ord(end_bits) do
+ begin
+  bytes:=(1 shl b);
+  bits :=bytes shl 3;
+
+  Writeln(Fout);
+  Writeln(Fout,'procedure ',get_copy_name(is_display_mode,is_tile2linear,bits),
+               '('               +#13#10+space(2)+
+               'dst,src:Pointer;'+#13#10+space(2)+
+               'm_linearWidth,'  +#13#10+space(2)+
+               'm_linearHeight,' +#13#10+space(2)+
+               'm_linearDepth,'  +#13#10+space(2)+
+               'm_paddedWidth,'  +#13#10+space(2)+
+               'm_paddedHeight'+
+               ':DWORD'+
+               '); SysV_ABI_CDecl;');
+
+  if is_header then Continue;
+
+  Writeln(Fout,'const');
+  Writeln(Fout,' kMicroTileWidth =8;');
+  Writeln(Fout,' kMicroTileHeight=8;');
+  Writeln(Fout,' m_bytePerElement=',bytes,';');
+  Writeln(Fout,'var');
+  Writeln(Fout,' m_pitch_bytes:QWORD;');
+  Writeln(Fout,' x,y,z        :DWORD;');
+  Writeln(Fout,'begin');
+  Writeln(Fout,'');
+  Writeln(Fout,' m_pitch_bytes :=(m_linearWidth)*m_bytePerElement;');
+  Writeln(Fout,'');
+  Writeln(Fout,' m_paddedWidth :=(m_paddedWidth  - m_linearWidth )*(kMicroTileHeight * m_bytePerElement);');
+  Writeln(Fout,' m_paddedHeight:=(m_paddedHeight - m_linearHeight)*m_pitch_bytes;');
+  Writeln(Fout,'');
+  Writeln(Fout,' m_linearWidth :=(m_linearWidth  div kMicroTileWidth );');
+  Writeln(Fout,' m_linearHeight:=(m_linearHeight div kMicroTileHeight);');
+  Writeln(Fout,'');
+  Writeln(Fout,' z:=m_linearDepth;');
+  Writeln(Fout,' repeat');
+  Writeln(Fout,'');
+  Writeln(Fout,'  y:=m_linearHeight;');
+  Writeln(Fout,'  repeat');
+  Writeln(Fout,'');
+  Writeln(Fout,'   x:=m_linearWidth;');
+  Writeln(Fout,'   repeat');
+  Writeln(Fout,'    ',get_asm_name(is_display_mode,is_tile2linear,bits),'(dst,src,m_pitch_bytes);');
+  Writeln(Fout,'');
+
+  if is_tile2linear then
+  begin
+   Writeln(Fout,'    src:=src+(kMicroTileWidth * kMicroTileHeight * m_bytePerElement);');
+   Writeln(Fout,'    dst:=dst+(kMicroTileWidth * m_bytePerElement);');
+  end else
+  begin
+   Writeln(Fout,'    src:=src+(kMicroTileWidth * m_bytePerElement);');
+   Writeln(Fout,'    dst:=dst+(kMicroTileWidth * kMicroTileHeight * m_bytePerElement);');
+  end;
+
+  Writeln(Fout,'');
+  Writeln(Fout,'    Dec(x);');
+  Writeln(Fout,'   until (x=0);');
+  Writeln(Fout,'');
+
+  if is_tile2linear then
+  begin
+   Writeln(Fout,'   src:=src+m_paddedWidth;');
+   Writeln(Fout,'   dst:=dst+m_pitch_bytes*7;');
+  end else
+  begin
+   Writeln(Fout,'   src:=src+m_pitch_bytes*7;');
+   Writeln(Fout,'   dst:=dst+m_paddedWidth;');
+  end;
+
+  Writeln(Fout,'');
+  Writeln(Fout,'   Dec(y);');
+  Writeln(Fout,'  until (y=0);');
+  Writeln(Fout,'');
+
+  if is_tile2linear then
+  begin
+   Writeln(Fout,'  src:=src+m_paddedHeight;');
+  end else
+  begin
+   Writeln(Fout,'  dst:=dst+m_paddedHeight;');
+  end;
+
+  Writeln(Fout,'');
+  Writeln(Fout,'  Dec(z);');
+  Writeln(Fout,' until (z=0);');
+  Writeln(Fout,'end;');
+
+ end;
 
 end;
 
@@ -1255,6 +2191,8 @@ begin
       set_elm(m_x,2,$1,4);
       set_elm(m_y,2,$1,5);
       //
+      mark_end;
+
       set_arm([kArrayMode2dTiledXThick,kArrayMode3dTiledXThick]);
       begin
        push_bits;
@@ -1368,8 +2306,68 @@ begin
 
   end;
 
-  Iterate_Axiss;
-  generate_1dThin_asm;
+  Assign (Fout,'tiling_avx.pas');
+  rewrite(Fout);
+
+  Writeln(Fout,'unit tiling_avx;');
+  Writeln(Fout,'');
+  Writeln(Fout,'{$mode objfpc}{$H+}');
+  Writeln(Fout,'{$OPTIMIZATION REGVAR,PEEPHOLE,CSE,NODEADSTORE}');
+  Writeln(Fout,'');
+  Writeln(Fout,'interface');
+
+  Writeln(Fout,'');
+  Writeln(Fout,'//linear dimensions must be aligned 8x8 pixels');
+
+  Writeln(Fout,'');
+  Writeln(Fout,'type');
+
+  Writeln(Fout,' t_copy_cbs=procedure'+
+               '('               +#13#10+space(2)+
+               'dst,src:Pointer;'+#13#10+space(2)+
+               'm_linearWidth,'  +#13#10+space(2)+
+               'm_linearHeight,' +#13#10+space(2)+
+               'm_linearDepth,'  +#13#10+space(2)+
+               'm_paddedWidth,'  +#13#10+space(2)+
+               'm_paddedHeight'+
+               ':DWORD'+
+               '); SysV_ABI_CDecl;');
+
+  generate_copy_1dThin(True ,True ,b64 ,True);
+  generate_copy_1dThin(True ,False,b64 ,True);
+
+  generate_copy_1dThin(False,True ,b128,True);
+  generate_copy_1dThin(False,False,b128,True);
+
+  generate_copy_array_1dThin(True ,True ,b64);
+  generate_copy_array_1dThin(True ,False,b64);
+
+  generate_copy_array_1dThin(False,True ,b128);
+  generate_copy_array_1dThin(False,False,b128);
+
+  Writeln(Fout,'');
+  Writeln(Fout,'implementation');
+  Writeln(Fout,'');
+
+  Iterate_Axiss_1dThin(True,b64);
+  generate_1dThin_asm (True,b64);
+
+  Iterate_Axiss_1dThin(False,b128);
+  generate_1dThin_asm (False,b128);
+
+  generate_copy_1dThin(True ,True ,b64 ,False);
+  generate_copy_1dThin(True ,False,b64 ,False);
+
+  generate_copy_1dThin(False,True ,b128,False);
+  generate_copy_1dThin(False,False,b128,False);
+
+  Writeln(Fout,'');
+  Writeln(Fout,'end.');
+  Writeln(Fout,'');
+
+  Close(Fout);
+
+  test_data;
 
  readln;
 end.

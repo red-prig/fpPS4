@@ -11,6 +11,8 @@ uses
 
   bittype,
 
+  tiling_avx,
+
   si_ci_vi_merged_offset,
   si_ci_vi_merged_enum,
   si_ci_vi_merged_registers
@@ -360,6 +362,9 @@ type
   m_isBlockCompressed:DWORD;
 
   m_element_table  :p_element_table_xyz;
+
+  m_copy_tile2linear:t_copy_cbs;
+  m_copy_linear2tile:t_copy_cbs;
 
   procedure init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
   procedure init_size_2d(width,height:DWORD);
@@ -3001,6 +3006,17 @@ begin
  m_isBlockCompressed := isBlockCompressed;
 
  m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
+
+ if (tile_idx=kTileModeDisplay_1dThin) then
+ begin
+  m_copy_tile2linear:=copy_array_tile2linear_Display_1dThin[fastIntLog2(bytePerElement)];
+  m_copy_linear2tile:=copy_array_linear2tile_Display_1dThin[fastIntLog2(bytePerElement)];
+ end else
+ begin
+  m_copy_tile2linear:=copy_array_tile2linear_Thin_1dThin[fastIntLog2(bytePerElement)];
+  m_copy_linear2tile:=copy_array_linear2tile_Thin_1dThin[fastIntLog2(bytePerElement)];
+ end;
+
 end;
 
 procedure Tiler1d.init_size_2d(width,height:DWORD);
@@ -3025,6 +3041,10 @@ begin
 
  //for 1d textures
  m_paddedHeight:=max(m_paddedHeight,8);
+
+ //update to detiling pad
+ m_linearWidth :=m_paddedWidth;
+ m_linearHeight:=m_paddedHeight;
 
  //align pitch to pipe_interleave_size
  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*1);
@@ -3054,7 +3074,6 @@ begin
 
  m_tilesPerRow    :=m_paddedWidth div kMicroTileWidth;
  m_tilesPerSlice  :=m_tilesPerRow * (m_paddedHeight div kMicroTileHeight);
-
 end;
 
 function Tiler1d.getTiledElementBitOffset(var outTiledBitOffset:QWORD;x,y,z:DWORD):integer;
