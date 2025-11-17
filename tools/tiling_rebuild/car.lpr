@@ -41,6 +41,50 @@ const
  // Hugely inefficient linear display mode -- do not use!
  kTileModeDisplay_LinearGeneral             = $0000001F; ///< Unsupported; do not use!
 
+function isMicroTiled(tileMode:Byte):Boolean;
+begin
+ case tileMode of
+  kTileModeDepth_1dThin,
+  kTileModeDisplay_1dThin,
+  kTileModeThin_1dThin,
+  kTileModeThick_1dThick:
+    Result:=True;
+   else
+    Result:=False;
+ end;
+end;
+
+function isMacroTiled(tileMode:Byte):Boolean;
+begin
+ case tileMode of
+  kTileModeDepth_2dThin_64,
+  kTileModeDepth_2dThin_128,
+  kTileModeDepth_2dThin_256,
+  kTileModeDepth_2dThin_512,
+  kTileModeDepth_2dThin_1K,
+  kTileModeDepth_2dThinPrt_256,
+  kTileModeDepth_2dThinPrt_1K,
+  kTileModeDisplay_2dThin,
+  kTileModeDisplay_ThinPrt,
+  kTileModeDisplay_2dThinPrt,
+  kTileModeThin_2dThin,
+  kTileModeThin_3dThin,
+  kTileModeThin_ThinPrt,
+  kTileModeThin_2dThinPrt,
+  kTileModeThin_3dThinPrt,
+  kTileModeThick_2dThick,
+  kTileModeThick_3dThick,
+  kTileModeThick_ThickPrt,
+  kTileModeThick_2dThickPrt,
+  kTileModeThick_3dThickPrt,
+  kTileModeThick_2dXThick,
+  kTileModeThick_3dXThick:
+    Result:=True;
+   else
+    Result:=False;
+ end;
+end;
+
 type
  TTILE_MODE_REG=bitpacked record
   RESERVED0          :bit2;
@@ -455,6 +499,18 @@ begin
  end;
 end;
 
+function filter_MicroTiled(TS:t_tilings):t_tilings;
+var
+ i:Byte;
+begin
+ Result:=TS;
+ For i:=0 to High(t_tilings) do
+ if not isMicroTiled(i) then
+ begin
+  Result:=Result-[i];
+ end;
+end;
+
 procedure mark_end;
 var
  i,g:Byte;
@@ -487,7 +543,7 @@ begin
   A:=A+am_str[i];
  end;
 
- TS:=filter_1d_Thin(get_tilings());
+ TS:=filter_MicroTiled(get_tilings());
 
  if (TS=[]) then Exit;
 
@@ -588,6 +644,39 @@ begin
  y:=(((i shr 1) and 1) shl 0) or (((i shr 3) and 1) shl 1) or (((i shr 5) and 1) shl 2);
 
  t:=_getElementIndex(x,y,0,bitsPerElement,kMicroTileModeThin,kArrayMode1dTiledThin);
+
+ Assert(t=i);
+end;
+
+procedure _getAxis_Thick_1dThick(i,bitsPerElement:Byte;var x,y,z:Byte);
+var
+ t:Byte;
+begin
+ //x -> 3bit,y -> 3bits,z -> 2bits = 8bits
+
+ case bitsPerElement of
+  8,16:
+   begin
+    x:=(((i shr 0) and 1) shl 0) or (((i shr 2) and 1) shl 1) or (((i shr 6) and 1) shl 2);
+    y:=(((i shr 1) and 1) shl 0) or (((i shr 3) and 1) shl 1) or (((i shr 7) and 1) shl 2);
+    z:=(((i shr 4) and 1) shl 0) or (((i shr 5) and 1) shl 1);
+   end;
+  32:
+   begin
+    x:=(((i shr 0) and 1) shl 0) or (((i shr 2) and 1) shl 1) or (((i shr 6) and 1) shl 2);
+    y:=(((i shr 1) and 1) shl 0) or (((i shr 4) and 1) shl 1) or (((i shr 7) and 1) shl 2);
+    z:=(((i shr 3) and 1) shl 0) or (((i shr 5) and 1) shl 1);
+   end;
+  64,128:
+   begin
+    x:=(((i shr 0) and 1) shl 0) or (((i shr 3) and 1) shl 1) or (((i shr 6) and 1) shl 2);
+    y:=(((i shr 1) and 1) shl 0) or (((i shr 4) and 1) shl 1) or (((i shr 7) and 1) shl 2);
+    z:=(((i shr 2) and 1) shl 0) or (((i shr 5) and 1) shl 1);
+   end;
+  else;
+ end;
+
+ t:=_getElementIndex(x,y,0,bitsPerElement,kMicroTileModeThick,kArrayMode1dTiledThick);
 
  Assert(t=i);
 end;
