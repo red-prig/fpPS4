@@ -676,7 +676,7 @@ begin
   else;
  end;
 
- t:=_getElementIndex(x,y,0,bitsPerElement,kMicroTileModeThick,kArrayMode1dTiledThick);
+ t:=_getElementIndex(x,y,z,bitsPerElement,kMicroTileModeThick,kArrayMode1dTiledThick);
 
  Assert(t=i);
 end;
@@ -687,11 +687,14 @@ begin
 end;
 
 type
+ t_1d_mode=(mThin,mDisplay,mThick);
+
  tbit_interval=record
   pos_i:Word;
   srt_x:Byte;
   end_x:Byte;
       y:Byte;
+      z:Byte;
   bitcn:Word;
  end;
 
@@ -699,14 +702,14 @@ type
   num_i:Byte;
   pos_i:Word;
   intervals:array[0..63] of tbit_interval;
-  Procedure Add(srt_x,end_x,y:Byte;bitcn:Word);
+  Procedure Add(srt_x,end_x,y,z:Byte;bitcn:Word);
   Procedure Add(const v:tbit_interval);
   procedure Sort_xy;
   procedure Sort_yx;
   procedure Sort_pos;
  end;
 
-Procedure tbit_interval_array.Add(srt_x,end_x,y:Byte;bitcn:Word);
+Procedure tbit_interval_array.Add(srt_x,end_x,y,z:Byte;bitcn:Word);
 begin
  Assert(bitcn<>0);
 
@@ -714,6 +717,7 @@ begin
  intervals[num_i].srt_x:=srt_x;
  intervals[num_i].end_x:=end_x;
  intervals[num_i].    y:=    y;
+ intervals[num_i].    z:=    z;
  intervals[num_i].bitcn:=bitcn;
  //
  pos_i:=pos_i+bitcn;
@@ -805,16 +809,21 @@ end;
 var
  g_axis_intervals:array[t_bits_per_element] of tbit_interval_array;
 
-Procedure Iterate_Axiss_1dThin(is_display_mode:Boolean;end_bits:t_bits_per_element);
+const
+ Thin_Display_Thick:array[t_1d_mode] of Pchar=('Thin','Display','Thick');
+
+Procedure Iterate_Axiss_1dThin(mode:t_1d_mode;end_bits:t_bits_per_element);
 var
- x,y:Byte;
+ Thick:Byte;
+ x,y,z:Byte;
  b:Byte;
  bit:Byte;
  i:Byte;
- out_x,out_y:Byte;
- prv_x,prv_y:Byte;
+ out_x,out_y,out_z:Byte;
+ prv_x,prv_y,prv_z:Byte;
  str_x:Byte;
 begin
+ Writeln('[',Thin_Display_Thick[mode],']');
 
  For b:=ord(b8) to ord(end_bits) do
  begin
@@ -822,19 +831,30 @@ begin
 
   bit:=(1 shl b) shl 3;
   Writeln('[',bit,']:all=',(bit div 8)*64,'bytes');
-  //For i:=0 to (1 shl 6)-1 do
+
+  if (mode=mThick) then
+  begin
+   Thick:=4;
+  end else
+  begin
+   Thick:=1;
+  end;
+
+  For z:=0 to Thick-1 do
   For y:=0 to 7 do
   begin
    For x:=0 to 7 do
    begin
-    i:=x+y*8;
+    i:=x+(y*8)+(z*8*4);
 
-    if is_display_mode then
-    begin
-     _getAxis_display_1dThin(i,bit,out_x,out_y);
-    end else
-    begin
-     _getAxis_Thin_1dThin(i,bit,out_x,out_y);
+    out_x:=0;
+    out_y:=0;
+    out_z:=0;
+
+    case mode of
+     mThin   :_getAxis_Thin_1dThin   (i,bit,out_x,out_y);
+     mDisplay:_getAxis_display_1dThin(i,bit,out_x,out_y);
+     mThick  :_getAxis_Thick_1dThick (i,bit,out_x,out_y,out_z);
     end;
 
     //Write(out_x,',',out_y,' ');
@@ -845,18 +865,20 @@ begin
      str_x:=out_x;
      prv_x:=out_x;
      prv_y:=out_y;
+     prv_z:=out_z;
     end else
     begin
 
      if (prv_x+1=out_x) and
-        (prv_y  =out_y) then
+        (prv_y  =out_y) and
+        (prv_z  =out_z) then
      begin
       //
      end else
      begin
-      g_axis_intervals[t_bits_per_element(b)].Add(str_x,prv_x,prv_y,(bit)*(prv_x-str_x+1));
+      g_axis_intervals[t_bits_per_element(b)].Add(str_x,prv_x,prv_y,prv_z,(bit)*(prv_x-str_x+1));
 
-      Write(str_x,'..',prv_x,':',prv_y,':',(bit)*(prv_x-str_x+1),'bit ');
+      Write(str_x,'..',prv_x,':',prv_y,':',prv_z,':',(bit)*(prv_x-str_x+1),'bit ');
 
       //reset
       str_x:=out_x;
@@ -864,13 +886,14 @@ begin
 
      prv_x:=out_x;
      prv_y:=out_y;
+     prv_z:=out_z;
     end;
 
    end;
 
-   g_axis_intervals[t_bits_per_element(b)].Add(str_x,prv_x,prv_y,(bit)*(prv_x-str_x+1));
+   g_axis_intervals[t_bits_per_element(b)].Add(str_x,prv_x,prv_y,prv_z,(bit)*(prv_x-str_x+1));
 
-   Write(str_x,'..',prv_x,':',prv_y,':',(bit)*(prv_x-str_x+1),'bit ');
+   Write(str_x,'..',prv_x,':',prv_y,':',prv_z,':',(bit)*(prv_x-str_x+1),'bit ');
 
    Writeln;
   end;
@@ -1758,17 +1781,16 @@ begin
 end;
 
 const
- Display_Thin:array[Boolean] of Pchar=('Thin','Display');
  linear2tile_tile2linear:array[Boolean] of Pchar=('linear2tile','tile2linear');
 
-function get_asm_name(is_display_mode,is_tile2linear:Boolean;bits:Byte):RawByteString;
+function get_asm_name(mode:t_1d_mode;is_tile2linear:Boolean;bits:Byte):RawByteString;
 begin
  Result:=linear2tile_tile2linear[is_tile2linear]+
-         '_'+Display_Thin[is_display_mode]+
+         '_'+Thin_Display_Thick[mode]+
          '_1dThin_'+IntToStr(bits);
 end;
 
-Procedure generate_1dThin_asm(is_display_mode:Boolean;end_bits:t_bits_per_element);
+Procedure generate_1dThin_asm(mode:t_1d_mode;end_bits:t_bits_per_element);
 const
  reg_dst  ='%rdi';
  reg_src  ='%rsi';
@@ -1804,7 +1826,7 @@ begin
   //rdi(dst),rsi(src),rdx(dst_pitch)
 
   Writeln(Fout);
-  Writeln(Fout,'procedure ',get_asm_name(is_display_mode,True,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
+  Writeln(Fout,'procedure ',get_asm_name(mode,True,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
 
   Writeln(Fout,'asm');
 
@@ -1923,7 +1945,7 @@ begin
   //rdi(src),rsi(dst),rdx(dst_pitch)
 
   Writeln(Fout);
-  Writeln(Fout,'procedure ',get_asm_name(is_display_mode,False,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
+  Writeln(Fout,'procedure ',get_asm_name(mode,False,bits),'(dst,src:Pointer;pitch:QWORD); SysV_ABI_CDecl; assembler; nostackframe;');
 
   Writeln(Fout,'asm');
 
@@ -2038,21 +2060,21 @@ begin
 
 end;
 
-function get_copy_name(is_display_mode,is_tile2linear:Boolean;bits:Byte):RawByteString;
+function get_copy_name(mode:t_1d_mode;is_tile2linear:Boolean;bits:Byte):RawByteString;
 begin
  Result:='copy_'+linear2tile_tile2linear[is_tile2linear]+
-         '_'+Display_Thin[is_display_mode]+
+         '_'+Thin_Display_Thick[mode]+
          '_1dThin_'+IntToStr(bits);
 end;
 
-function get_copy_array_name(is_display_mode,is_tile2linear:Boolean):RawByteString;
+function get_copy_array_name(mode:t_1d_mode;is_tile2linear:Boolean):RawByteString;
 begin
  Result:='copy_array_'+linear2tile_tile2linear[is_tile2linear]+
-         '_'+Display_Thin[is_display_mode]+
+         '_'+Thin_Display_Thick[mode]+
          '_1dThin';
 end;
 
-Procedure generate_copy_array_1dThin(is_display_mode,is_tile2linear:Boolean;end_bits:t_bits_per_element);
+Procedure generate_copy_array_1dThin(mode:t_1d_mode;is_tile2linear:Boolean;end_bits:t_bits_per_element);
 var
  b,bits:Byte;
  bytes:Byte;
@@ -2061,7 +2083,7 @@ begin
  Writeln(Fout,'');
  Writeln(Fout,'const');
 
- Writeln(Fout,' ',get_copy_array_name(is_display_mode,is_tile2linear),':array[0..',IntToStr(ord(b128)-ord(b8)),'] of t_copy_cbs=(');
+ Writeln(Fout,' ',get_copy_array_name(mode,is_tile2linear),':array[0..',IntToStr(ord(b128)-ord(b8)),'] of t_copy_cbs=(');
 
  For b:=ord(b8) to ord(b128) do
  begin
@@ -2075,7 +2097,7 @@ begin
    Write(Fout,'nil');
   end else
   begin
-   Write(Fout,'@',get_copy_name(is_display_mode,is_tile2linear,bits));
+   Write(Fout,'@',get_copy_name(mode,is_tile2linear,bits));
   end;
 
   if (b<>ord(b128)) then
@@ -2089,7 +2111,7 @@ begin
  Writeln(Fout,' ',');');
 end;
 
-Procedure generate_copy_1dThin(is_display_mode,is_tile2linear:Boolean;end_bits:t_bits_per_element;is_header:Boolean);
+Procedure generate_copy_1dThin(mode:t_1d_mode;is_tile2linear:Boolean;end_bits:t_bits_per_element;is_header:Boolean);
 var
  b,bits:Byte;
  bytes:Byte;
@@ -2101,7 +2123,7 @@ begin
   bits :=bytes shl 3;
 
   Writeln(Fout);
-  Writeln(Fout,'procedure ',get_copy_name(is_display_mode,is_tile2linear,bits),
+  Writeln(Fout,'procedure ',get_copy_name(mode,is_tile2linear,bits),
                '('               +#13#10+space(2)+
                'dst,src:Pointer;'+#13#10+space(2)+
                'm_linearWidth,'  +#13#10+space(2)+
@@ -2139,7 +2161,7 @@ begin
   Writeln(Fout,'');
   Writeln(Fout,'   x:=m_linearWidth;');
   Writeln(Fout,'   repeat');
-  Writeln(Fout,'    ',get_asm_name(is_display_mode,is_tile2linear,bits),'(dst,src,m_pitch_bytes);');
+  Writeln(Fout,'    ',get_asm_name(mode,is_tile2linear,bits),'(dst,src,m_pitch_bytes);');
   Writeln(Fout,'');
 
   if is_tile2linear then
@@ -2422,33 +2444,35 @@ begin
                ':DWORD'+
                '); SysV_ABI_CDecl;');
 
-  generate_copy_1dThin(True ,True ,b64 ,True);
-  generate_copy_1dThin(True ,False,b64 ,True);
+  generate_copy_1dThin(mDisplay,True ,b64 ,True);
+  generate_copy_1dThin(mDisplay,False,b64 ,True);
 
-  generate_copy_1dThin(False,True ,b128,True);
-  generate_copy_1dThin(False,False,b128,True);
+  generate_copy_1dThin(mThin,True ,b128,True);
+  generate_copy_1dThin(mThin,False,b128,True);
 
-  generate_copy_array_1dThin(True ,True ,b64);
-  generate_copy_array_1dThin(True ,False,b64);
+  generate_copy_array_1dThin(mDisplay ,True ,b64);
+  generate_copy_array_1dThin(mDisplay ,False,b64);
 
-  generate_copy_array_1dThin(False,True ,b128);
-  generate_copy_array_1dThin(False,False,b128);
+  generate_copy_array_1dThin(mThin,True ,b128);
+  generate_copy_array_1dThin(mThin,False,b128);
 
   Writeln(Fout,'');
   Writeln(Fout,'implementation');
   Writeln(Fout,'');
 
-  Iterate_Axiss_1dThin(True,b64);
-  generate_1dThin_asm (True,b64);
+  Iterate_Axiss_1dThin(mThick,b128);
 
-  Iterate_Axiss_1dThin(False,b128);
-  generate_1dThin_asm (False,b128);
+  Iterate_Axiss_1dThin(mDisplay,b64);
+  generate_1dThin_asm (mDisplay,b64);
 
-  generate_copy_1dThin(True ,True ,b64 ,False);
-  generate_copy_1dThin(True ,False,b64 ,False);
+  Iterate_Axiss_1dThin(mThin,b128);
+  generate_1dThin_asm (mThin,b128);
 
-  generate_copy_1dThin(False,True ,b128,False);
-  generate_copy_1dThin(False,False,b128,False);
+  generate_copy_1dThin(mDisplay,True ,b64 ,False);
+  generate_copy_1dThin(mDisplay,False,b64 ,False);
+
+  generate_copy_1dThin(mThin,True ,b128,False);
+  generate_copy_1dThin(mThin,False,b128,False);
 
   Writeln(Fout,'');
   Writeln(Fout,'end.');
