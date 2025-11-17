@@ -657,12 +657,7 @@ begin
 
  buf:=TvTempBuffer.Create(m_full_linear_size,ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),nil);
 
- vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL,buf);
-
- if (vmem.FMemory=nil) then
- begin
-  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE,buf);
- end;
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_HOST_CACHED,buf);
 
  if (vmem.FMemory=nil) then
  begin
@@ -687,6 +682,8 @@ begin
                    m_full_linear_size,
                    m_base);
 
+ vmem.Flush(m_full_linear_size);
+
  vkUnmapMemory(Device.FHandle,buf.FBind.FMemory.FHandle);
 
  _Copy_Linear(BufferToImage,mAlign8x8,cmd,buf,image);
@@ -710,6 +707,8 @@ begin
              m_full_linear_size,
              0,
              @m_base);
+
+ FBind.Flush(m_full_linear_size);
 
  load_write_1dThin(ImageToBuffer,
                    image,
@@ -743,12 +742,7 @@ begin
 
  image.Hold(buf);
 
- vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_DEVICE_LOCAL,buf);
-
- if (vmem.FMemory=nil) then
- begin
-  vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE,buf);
- end;
+ vmem:=MemManager.FetchMemory(buf.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_HOST_CACHED,buf);
 
  if (vmem.FMemory=nil) then
  begin

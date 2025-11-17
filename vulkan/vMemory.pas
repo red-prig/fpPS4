@@ -63,6 +63,7 @@ type
   Procedure   remove_all;
   Procedure   Unmap;
   Procedure   Flush;
+  Procedure   Flush(offset,size:TVkDeviceSize);
   function    Acquire(Sender:TObject):Boolean; override;
   function    Release(Sender:TObject):Boolean; override;
  end;
@@ -75,10 +76,11 @@ type
  TvPointer=packed object
   FMemory:TvDeviceMemory;
   FOffset:TVkDeviceSize;
-  function Acquire:TvPointer;
-  function Release:Boolean;
-  function Hold:Boolean;
-  function Drop:Boolean;
+  Procedure Flush(size:TVkDeviceSize);
+  function  Acquire:TvPointer;
+  function  Release:Boolean;
+  function  Hold:Boolean;
+  function  Drop:Boolean;
  end;
 
 Const
@@ -202,7 +204,7 @@ function GetHostMappedRequirements:TVkMemoryRequirements;
 function GetSparceMemoryTypes:TVkUInt32;
 
 function  GetMemoryBudget(var budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT):Boolean;
-function  MemoryBudgetCanBeAlloc(heap_id:Byte;size:TVkDeviceSize):Boolean;
+function  MemoryBudgetCanBeAlloc(const Heap:TvHeap;size:TVkDeviceSize):Boolean;
 procedure PrintMemoryBudget;
 
 implementation
@@ -930,13 +932,29 @@ Procedure TvDeviceMemory.Flush;
 var
  range:TVkMappedMemoryRange;
 begin
- if (not FMemInfo.host_coherent) then
+ if not (FMemInfo.host_coherent or FMemInfo.device_local) then
  begin
   range:=Default(TVkMappedMemoryRange);
   range.sType :=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
   range.memory:=FHandle;
   range.offset:=0;
   range.size  :=FSize;
+  //
+  vkFlushMappedMemoryRanges(Device.FHandle,1,@range);
+ end;
+end;
+
+Procedure TvDeviceMemory.Flush(offset,size:TVkDeviceSize);
+var
+ range:TVkMappedMemoryRange;
+begin
+ if not (FMemInfo.host_coherent or FMemInfo.device_local) then
+ begin
+  range:=Default(TVkMappedMemoryRange);
+  range.sType :=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+  range.memory:=FHandle;
+  range.offset:=offset;
+  range.size  :=size;
   //
   vkFlushMappedMemoryRanges(Device.FHandle,1,@range);
  end;
@@ -984,6 +1002,11 @@ begin
 end;
 
 //
+
+Procedure TvPointer.Flush(size:TVkDeviceSize);
+begin
+ FMemory.Flush(FOffset,size);
+end;
 
 function TvPointer.Acquire:TvPointer;
 var
@@ -1461,7 +1484,7 @@ begin
 
   heap_id:=FProperties.memoryTypes[mtindex].heapIndex;
 
-  if MemoryBudgetCanBeAlloc(heap_id,Size) then
+  if MemoryBudgetCanBeAlloc(FHeaps[heap_id],Size) then
   begin
    FHandle:=vkAllocMemory(Device.FHandle,Size,mtindex);
    //PrintMemoryBudget;
@@ -1972,7 +1995,7 @@ begin
 
   heap_id:=FProperties.memoryTypes[mtindex].heapIndex;
 
-  if MemoryBudgetCanBeAlloc(heap_id,tmp) then
+  if MemoryBudgetCanBeAlloc(FHeaps[heap_id],tmp) then
   begin
    FHandle:=vkAllocHostMemory(Device.FHandle,tmp,mtindex,Pointer(FStart_align));
    //PrintMemoryBudget;
@@ -2287,7 +2310,7 @@ begin
  Result:=True;
 end;
 
-function MemoryBudgetCanBeAlloc(heap_id:Byte;size:TVkDeviceSize):Boolean;
+function MemoryBudgetCanBeAlloc(const Heap:TvHeap;size:TVkDeviceSize):Boolean;
 var
  budget:TVkPhysicalDeviceMemoryBudgetPropertiesEXT;
  i:TVkDeviceSize;
@@ -2296,9 +2319,20 @@ begin
  budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
  if GetMemoryBudget(budget) then
  begin
-  i:=budget.heapUsage[heap_id] + size + 128*1024*1024;
+  i:=budget.heapUsage[Heap.heap_index] + size;
 
-  Result:=(i<=budget.heapBudget[heap_id]);
+  if Heap.device_local and
+     Heap.host_visible and
+     (Heap.heap_size=$10000000) then
+  begin
+   //
+  end else
+  begin
+   //offcut for internal Vulkan data
+   i:=i + 128*1024*1024;
+  end;
+
+  Result:=(i<=budget.heapBudget[Heap.heap_index]);
  end;
 end;
 
