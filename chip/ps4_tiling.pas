@@ -2999,9 +2999,9 @@ begin
  m_microTileMode :=0;
  getMicroTileMode(@m_microTileMode,m_tileMode);
 
- m_tileThickness :=1;
+ m_tileThickness :=getMicroTileThickness(m_arrayMode);
 
- m_tileBytes     := kMicroTileWidth * kMicroTileHeight * m_bytePerElement;
+ m_tileBytes     := kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bytePerElement;
 
  m_isBlockCompressed := isBlockCompressed;
 
@@ -3047,11 +3047,11 @@ begin
  m_linearHeight:=m_paddedHeight;
 
  //align pitch to pipe_interleave_size
- log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*1);
+ log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);
  while (log_sz and 255)<>0 do //(log_sz mod 256)<>0
  begin
   m_paddedWidth:=m_paddedWidth+8;
-  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*1);
+  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);
  end;
 
  {
@@ -3088,7 +3088,7 @@ var
 begin
  element_index := m_element_table^[z and 7,y and 7,x and 7];
 
- slice_offset := (z div 1) * m_tilesPerSlice * m_tileBytes;
+ slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
 
  tile_row_index    := y shr 3;// div kMicroTileHeight;
  tile_column_index := x shr 3;// div kMicroTileWidth;
@@ -3115,7 +3115,7 @@ var
 begin
  element_index := m_element_table^[z and 7,y and 7,x and 7];
 
- slice_offset := (z div 1) * m_tilesPerSlice * m_tileBytes;
+ slice_offset := (z div m_tileThickness) * m_tilesPerSlice * m_tileBytes;
 
  tile_row_index    := y shr 3;// div kMicroTileHeight;
  tile_column_index := x shr 3;// div kMicroTileWidth;
