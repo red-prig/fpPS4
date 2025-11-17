@@ -516,7 +516,6 @@ var
  new_entry :p_dmem_map_entry;
  prev_entry:p_dmem_map_entry;
  temp_entry:p_dmem_map_entry;
- info      :t_dmem_entry_info;
 begin
  DMEM_MAP_ASSERT_LOCKED(map);
 
@@ -548,37 +547,16 @@ begin
   Exit(EAGAIN);
  end;
 
- info:=Default(t_dmem_entry_info);
- info.m_type:=m_type;
- info.m_acl :=ord(m_acl);
-
- if (prev_entry<>@map^.header) and
-    (prev_entry^.__end=start) then
- begin
-  {
-   * We were able to extend the object.  Determine if we
-   * can extend the previous map entry to include the
-   * new range as well.
-   }
-  if (DWORD(prev_entry^.info)=DWORD(info)) then
-  begin
-   map^.size:=map^.size+(__end - prev_entry^.__end);
-   prev_entry^.__end:=__end;
-   //change size
-
-   dmem_map_entry_resize_free(map, prev_entry);
-   Exit(0);
-  end;
-
- end;
-
  {
   * Create a new entry
   }
  new_entry:=dmem_map_entry_create(map);
  new_entry^.start:=start;
  new_entry^.__end:=__end;
- new_entry^.info :=info;
+ //
+ new_entry^.info.m_type:=m_type;
+ new_entry^.info.m_acl :=ord(m_acl);
+ //
 
  {
   * Insert the new entry into the list
