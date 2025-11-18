@@ -445,9 +445,9 @@ begin
     addr:=SCE_USR_HEAP_START;
    end;
   end else
-  if ( (QWORD(stack_addr) - QWORD($7f0000000)) > QWORD($7ffffffff)) and
+  if ( (QWORD(stack_addr) - QWORD($7f0000000)) >= QWORD($800000000)) and
      (addr <= QWORD($ff0000000)) and
-     ( (length + addr) > QWORD($7efffffff)) then
+     ( (length + addr) >= QWORD($7f0000000)) then
   begin
    addr:=$ff0000000; //SCE_KERNEl_GNM_TESS_AREA
   end;
@@ -789,11 +789,11 @@ begin
 
  vm_map_lock(map);
 
- vm_map_lookup_entry(map,QWORD(addr),@entry);
+ is_found:=vm_map_lookup_entry(map,QWORD(addr),@entry);
 
  entry:=next_valid_entry(map,entry);
 
- is_found:=(QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
+ is_found:=(entry<>@map^.header) and (QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
 
  if not is_found then
  begin
@@ -890,10 +890,10 @@ begin
    end;
 
    start:=entry^.start;
-   while (start > QWORD($7efffffff)) and (entry^.__end <= QWORD($ff0000000)) do
+   while (start >= QWORD($7f0000000)) and (entry^.__end <= QWORD($ff0000000)) do
    begin
     next:=next_valid_entry(map,entry^.next);
-    if (next<>@map^.header) then
+    if (next=@map^.header) then
     begin
      vm_map_unlock(map);
      Exit(EACCES);
@@ -944,11 +944,11 @@ begin
  begin
   vm_map_lock(map);
 
-  vm_map_lookup_entry(map,QWORD(addr),@entry);
+  is_found:=vm_map_lookup_entry(map,QWORD(addr),@entry);
 
   entry:=next_valid_entry(map,entry);
 
-  is_found:=(QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
+  is_found:=(entry<>@map^.header) and (QWORD(addr)>=entry^.start) and (QWORD(addr)<entry^.__end);
 
   if not is_found then
   begin

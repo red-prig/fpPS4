@@ -509,7 +509,7 @@ begin
           (
            ((addr^ and PAGE_2MB_MASK)<>0) or
            ( (addr^ < QWORD($ff0000000)) and
-             (QWORD($7efffffff) < (addr^ + size))
+             (QWORD($7f0000000) <= (addr^ + size))
            )
 
           )
