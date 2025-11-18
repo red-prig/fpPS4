@@ -661,6 +661,10 @@ begin
 
  end;
 
+ if (handle_type=OBJT_BLOCKPOOL) and (rv=KERN_SUCCESS) then
+ begin
+  //
+ end else
  if (rv=KERN_SUCCESS) then
  begin
 

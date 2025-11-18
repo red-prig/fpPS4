@@ -1427,7 +1427,7 @@ charged:
    ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP or MAP_COW_NO_COALESCE))=0) and
    (prev_entry^.__end=start) and
    (prev_entry^.wired_count=0) and
-   (prev_entry^.budget_id=p_proc.p_budget_ptype) and
+   (prev_entry^.budget_id=budget_id) and
      vm_object_coalesce(prev_entry^.vm_obj,
          prev_entry^.offset,
          vm_size_t(prev_entry^.__end - prev_entry^.start),
@@ -1438,13 +1438,11 @@ charged:
    * can extend the previous map entry to include the
    * new range as well.
    }
-  if ((prev_entry^.inheritance=inheritance) and
-      (prev_entry^.protection=prot) and
-      (prev_entry^.max_protection=max)) then
+  if ((cow and MAP_COW_NO_COALESCE)=0) and
+     (prev_entry^.inheritance=inheritance) and
+     (prev_entry^.protection=prot) and
+     (prev_entry^.max_protection=max) then
   begin
-   map^.size:=map^.size+(__end - prev_entry^.__end);
-   prev_entry^.__end:=__end;
-   //change size
 
    Result:=vm_map_insert_internal(
               map   ,
@@ -1459,6 +1457,10 @@ charged:
 
    if (Result=KERN_SUCCESS) then
    begin
+    map^.size:=map^.size+(__end - prev_entry^.__end);
+    prev_entry^.__end:=__end;
+    //change size
+
     vm_map_entry_resize_free(map, prev_entry);
     vm_map_simplify_entry(map, prev_entry);
    end;
@@ -2879,9 +2881,7 @@ begin
  case new_inheritance of
   VM_INHERIT_SHARE,
   VM_INHERIT_COPY ,
-  VM_INHERIT_NONE ,
-  VM_INHERIT_PATCH,
-  VM_INHERIT_HOLE :;
+  VM_INHERIT_NONE :;
  else
   Exit(KERN_INVALID_ARGUMENT);
  end;
@@ -2897,7 +2897,10 @@ begin
  if (vm_map_lookup_entry(map, start, @temp_entry)) then
  begin
   entry:=temp_entry;
-  vm_map_clip_start(map, entry, start);
+  if (entry^.inheritance<>new_inheritance) then
+  begin
+   vm_map_clip_start(map, entry, start);
+  end;
  end else
  begin
   entry:=temp_entry^.next;
@@ -2905,9 +2908,12 @@ begin
 
  while ((entry<>@map^.header) and (entry^.start<__end)) do
  begin
-  vm_map_clip_end(map, entry, __end);
-  entry^.inheritance:=new_inheritance;
-  vm_map_simplify_entry(map, entry);
+  if (entry^.inheritance<>new_inheritance) then
+  begin
+   vm_map_clip_end(map, entry, __end);
+   entry^.inheritance:=new_inheritance;
+   vm_map_simplify_entry(map, entry);
+  end;
   entry:=entry^.next;
  end;
 
