@@ -678,21 +678,19 @@ begin
    end;
   end;
 
-  if ((map^.flags and MAP_WIREFUTURE)=0) or
-     ((flags and (MAP_SANITIZER or MAP_VOID))<>0) then
+  if ((map^.flags and MAP_WIREFUTURE)<>0) and
+     ((flags and (MAP_SANITIZER or MAP_VOID))=0) then
   begin
-   Exit;
-  end;
+   rv:=vm_map_wire(map,addr^,addr^ + size,
+                   (ord((map^.flags and MAP_LOCK_WIRE)<>0)*VM_MAP_WIRE_LOCK) or
+                   VM_MAP_WIRE_USER or
+                   VM_MAP_WIRE_HOLESOK);
 
-  rv:=vm_map_wire(map,addr^,addr^ + size,
-                  (ord((map^.flags and 4)<>0)*VM_MAP_WIRE_LOCK) or
-                  VM_MAP_WIRE_USER or
-                  VM_MAP_WIRE_HOLESOK);
-
-  if (rv<>0) then
-  begin
-   vm_map_remove(map,addr^,addr^ + size);
-   Exit(vm_mmap_to_errno(rv));
+   if (rv<>0) then
+   begin
+    vm_map_remove(map,addr^,addr^ + size);
+    Exit(vm_mmap_to_errno(rv));
+   end;
   end;
 
  end else
@@ -1047,7 +1045,7 @@ _map:
  Writeln('0x',HexStr(QWORD(stack_addr),11),'->',
          'sys_mmap(','0x',HexStr(QWORD(vaddr),11),
                     ',0x',HexStr(vlen,11),
-                    ',0x',HexStr(prot,1),
+                    ',0x',HexStr(prot,2),
                     ',0x',HexStr(flags,8),
                       ',',fd,
                     ',0x',HexStr(pos,11),

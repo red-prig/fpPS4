@@ -133,8 +133,7 @@ const
  //vm_flags_t values
  MAP_WIREFUTURE =$01; // wire all future pages
  MAP_BUSY_WAKEUP=$02;
-
-                //04
+ MAP_LOCK_WIRE  =$04;
 
  //Copy-on-write flags for vm_map operations
  MAP_INHERIT_SHARE   =$000001;
@@ -1216,6 +1215,67 @@ begin
 
 end;
 
+function vm_gpu_map_create(map:vm_map_t;entry:vm_map_entry_t):Integer;
+label
+ _budget;
+var
+ obj:vm_object_t;
+
+ function _inc(var count:Integer):Integer; inline;
+ begin
+  Result:=count;
+  Inc(count);
+ end;
+
+begin
+ Result:=0;
+
+ obj:=entry^.vm_obj;
+
+ if (
+     (obj<>nil) and
+     ((entry^.start shr 47)=0) and
+     ((obj^.flags and OBJ_DMEM_EXT)<>0)
+    ) or
+    (_inc(entry^.wired_count)<>0) then
+ begin
+  //vm_gvmsw_map
+  Exit(0);
+ end;
+
+ if (obj<>nil) and ((obj^.flags and OBJ_WIRE_BUDGET)<>0) then
+ begin
+  //vm_budget_wire_action_jit
+  Exit(0);
+ end else
+ if (entry^.budget_id=-1) then
+ begin
+  //
+ end else
+ if (obj=nil) then
+ begin
+  _budget:
+
+  if (entry^.max_protection<>0) then
+  begin
+
+   if (vm_budget_reserve(entry^.budget_id,field_mlock,(entry^.__end - entry^.start))=0) then
+   begin
+    entry^.eflags:=entry^.eflags or MAP_ENTRY_WIRE_BUDGET;
+   end;
+
+  end;
+
+  Exit(0);
+ end else
+ if obj^.otype in [OBJT_DEFAULT,OBJT_SWAP,OBJT_VNODE,OBJT_JITSHM,OBJT_SELF] then
+ begin
+  goto _budget;
+ end;
+
+ //vm_map_wire_dmem
+end;
+
 {
  * vm_map_insert:
  *
@@ -1325,7 +1385,7 @@ begin
  end else
  if ((cow and MAP_INHERIT_SHARE)<>0) then
  begin
-  inheritance:=VM_INHERIT_SHARE
+  inheritance:=VM_INHERIT_SHARE;
  end else
  begin
   inheritance:=VM_INHERIT_DEFAULT;
@@ -1424,7 +1484,7 @@ charged:
  end else
  if ((prev_entry<>@map^.header) and
    (prev_entry^.eflags=protoeflags) and
-   ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP or MAP_COW_NO_COALESCE))=0) and
+   ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP))=0) and
    (prev_entry^.__end=start) and
    (prev_entry^.wired_count=0) and
    (prev_entry^.budget_id=budget_id) and
@@ -1463,6 +1523,15 @@ charged:
 
     vm_map_entry_resize_free(map, prev_entry);
     vm_map_simplify_entry(map, prev_entry);
+   end else
+   begin
+    //free budget
+    if (budget_id<>-1) and
+       ((protoeflags and MAP_ENTRY_IN_BUDGET)<>0) then
+    begin
+     vm_budget_release(budget_id,field_malloc,__end-start);
+    end;
+    //free budget
    end;
 
    Exit;
@@ -1542,6 +1611,12 @@ charged:
   }
  vm_map_entry_link(map, prev_entry, new_entry);
  map^.size:=map^.size+(new_entry^.__end - new_entry^.start);
+
+ if ((prot and VM_PROT_GPU_ALL)<>0) and
+    ((obj=nil) or ((obj^.otype<>OBJT_BLOCKPOOL))) then //(not BLOCKPOOL)
+ begin
+  vm_gpu_map_create(map,new_entry);
+ end;
 
  {
   * It may be possible to merge the new entry with the next and/or
@@ -1985,11 +2060,14 @@ var
  next,prev:vm_map_entry_t;
  prevsize,esize:vm_size_t;
  obj:vm_map_object;
+ eflags:vm_eflags_t;
  sdk_55:Boolean;
 begin
- if ((entry^.eflags and (MAP_ENTRY_IS_SUB_MAP or
-                         MAP_ENTRY_IN_TRANSITION or
-                         MAP_ENTRY_IN_TRANSITION2))<>0) or
+ eflags:=entry^.eflags;
+
+ if ((eflags and (MAP_ENTRY_IS_SUB_MAP or
+                  MAP_ENTRY_IN_TRANSITION or
+                  MAP_ENTRY_IN_TRANSITION2))<>0) or
      (
       (entry^.inheritance=VM_INHERIT_HOLE) and
       ((cow and MAP_COW_HOLE)<>0)
@@ -2011,6 +2089,11 @@ begin
   begin
    Exit;
   end;
+ end else
+ if (entry^.inheritance=VM_INHERIT_DEFAULT) then
+ begin
+  //never merge anonymous memory?
+  Exit;
  end;
 
  sdk_55:=(p_proc.p_sdk_version >= $5500000);
@@ -2021,15 +2104,15 @@ begin
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
      (prev^.vm_obj=obj) and
-     ((prev^.vm_obj=nil) or (prev^.offset + prevsize=entry^.offset)) and
-     (prev^.eflags=entry^.eflags) and
+     ((obj=nil) or (prev^.offset + prevsize=entry^.offset)) and
+     (prev^.eflags=eflags) and
      (prev^.protection=entry^.protection) and
      (prev^.max_protection=entry^.max_protection) and
      (prev^.inheritance=entry^.inheritance) and
      (prev^.wired_count=entry^.wired_count) and
      (prev^.budget_id=entry^.budget_id) and
      (sdk_55 or (prev^.anon_addr=entry^.anon_addr)) and
-     (((prev^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
+     (((eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
      then
   begin
    if (strlcomp(pchar(@prev^.name),pchar(@entry^.name),32)=0) then
@@ -2066,18 +2149,19 @@ begin
  next:=entry^.next;
  if (next<>@map^.header) then
  begin
+  eflags:=next^.eflags;
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
      (next^.vm_obj=obj) and
      ((obj=nil) or (entry^.offset + esize=next^.offset)) and
-     (next^.eflags=entry^.eflags) and
+     (eflags=entry^.eflags) and
      (next^.protection=entry^.protection) and
      (next^.max_protection=entry^.max_protection) and
      (next^.inheritance=entry^.inheritance) and
      (next^.wired_count=entry^.wired_count) and
      (next^.budget_id=entry^.budget_id) and
      (sdk_55 or (next^.anon_addr=entry^.anon_addr)) and
-     (((entry^.eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
+     (((eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
      then
   begin
    if (strlcomp(pchar(@next^.name),pchar(@entry^.name),32)=0) then
@@ -3405,8 +3489,8 @@ begin
 
   //Writeln('+MAP_ENTRY_IN_TRANSITION:0x',HexStr(entry^.start,11),'..',HexStr(entry^.__end,11));
 
-  if ((entry^.protection and VM_PROT_ALL)=0)
-      or ((entry^.protection and prot)<>prot) then
+  if ((entry^.protection and VM_PROT_ALL)=0) or
+     ((entry^.protection and prot)<>prot) then
   begin
    entry^.eflags:=entry^.eflags or MAP_ENTRY_WIRE_SKIPPED;
 
@@ -3541,7 +3625,7 @@ begin
    end;
 
   end else
-  if (not user_wire) or ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
+  if (user_wire) and ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
   begin
    _inc_wired_count:
    Inc(entry^.wired_count);
@@ -3624,7 +3708,7 @@ _done:
   end else
   begin
 
-   if (not user_wire) or
+   if (user_wire) and
       ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
    begin
 
@@ -4904,6 +4988,7 @@ procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar
 var
  current:vm_map_entry_t;
  entry  :vm_map_entry_t;
+ origin :vm_map_entry_t;
  simpl  :vm_map_entry_t;
  e_start:vm_offset_t;
  e__end :vm_offset_t;
@@ -4918,15 +5003,18 @@ begin
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
- if (vm_map_lookup_entry(map, start,@entry)) then
+ if (vm_map_lookup_entry(map, start, @entry)) then
  begin
+  current:=entry;
+  origin :=entry;
   vm_map_clip_start(map, entry, start);
  end else
  begin
-  entry:=entry^.next;
+  entry  :=entry^.next;
+  current:=entry;
+  origin :=entry;
  end;
 
- current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
 
@@ -4963,7 +5051,7 @@ begin
    simpl:=current;
   end else
   begin
-   simpl:=entry;
+   simpl:=origin;
   end;
 
   vm_map_simplify_entry(map, simpl);

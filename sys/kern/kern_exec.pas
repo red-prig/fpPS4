@@ -1395,7 +1395,7 @@ begin
  if (p_proc.p_vm_container=1) then
  begin
   vm_map_lock    (p_proc.p_vmspace);
-  vm_map_modflags(p_proc.p_vmspace,MAP_WIREFUTURE or 4,0);
+  vm_map_modflags(p_proc.p_vmspace,MAP_WIREFUTURE or MAP_LOCK_WIRE,0);
   vm_map_unlock  (p_proc.p_vmspace);
  end;
 
