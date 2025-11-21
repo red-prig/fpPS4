@@ -43,20 +43,24 @@ type
   pip       :Integer;
   budget_id :Integer;
   handle    :Pointer;
+  cred      :Boolean;                 // ucred imitate
+  fakeshared:Boolean;                 // shared imitate
   un_pager  :record
-   map_base:Pointer;
-   vnp:record
-    vnp_size:QWORD;
-    writemappings:vm_ooffset_t;
-   end;
-   physhm:record
-    mtype   :Byte;
-   end;
-   bpl:record
-    tlb_1gb:PDWORD;
-    tlb_64k:Pointer;
-   end;
+   case Byte of
+    0:(map_base :Pointer);
+    1:(vnp:record
+        vnp_size:QWORD;
+        writemappings:vm_ooffset_t;
+       end);
+    2:(physhm:record
+        mtype   :Byte;
+       end);
+    4:(bpl:record
+        tlb_1gb :PDWORD;
+        tlb_64k :Pointer;
+       end);
   end;
+  charge    :vm_ooffset_t;
  end;
 
 const

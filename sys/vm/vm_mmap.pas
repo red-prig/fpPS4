@@ -1033,13 +1033,15 @@ _map:
  Result:=Pointer(vm_mmap2(map,@addr,size,prot,maxprot,flags,handle_type,handle,pos,stack_addr));
  td^.td_fpop:=nil;
 
- td^.td_retval[0]:=(addr+pageoff);
-
  if (Result=nil) then
- if (stack_addr<>nil) then
  begin
-  //Do you really need it?
-  vm_map_set_name_str(map,addr,size + addr,'anon:'+LowerCase(HexStr(QWORD(stack_addr),12)));
+  td^.td_retval[0]:=(addr+pageoff);
+
+  if (stack_addr<>nil) then
+  begin
+   vm_map_set_name_str(map,addr,size + addr,'anon:'+LowerCase(HexStr(QWORD(stack_addr),12)));
+  end;
+
  end;
 
  Writeln('0x',HexStr(QWORD(stack_addr),11),'->',

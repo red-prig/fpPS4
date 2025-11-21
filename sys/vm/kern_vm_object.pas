@@ -379,7 +379,7 @@ begin
  if (prev_object=nil) then Exit(TRUE);
 
  VM_OBJECT_LOCK(prev_object);
- if (prev_object^.otype<>OBJT_DEFAULT) then
+ if (prev_object^.otype<>OBJT_DEFAULT) and (prev_object^.otype<>OBJT_SWAP) then
  begin
   VM_OBJECT_UNLOCK(prev_object);
   Exit(FALSE);
@@ -400,6 +400,8 @@ begin
   VM_OBJECT_UNLOCK(prev_object);
   Exit(FALSE);
  end;
+
+ prev_object^.charge:=prev_object^.charge + ptoa(next_size);
 
  {
   * Extend the object if necessary.

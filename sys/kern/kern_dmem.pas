@@ -661,7 +661,7 @@ begin
    OBJT_DEFAULT:
      begin
       //fake shared
-      Exit;
+      if obj^.fakeshared then Exit;
      end;
    OBJT_SWAP   ,
    OBJT_VNODE  ,

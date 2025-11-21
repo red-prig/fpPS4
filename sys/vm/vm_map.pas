@@ -49,6 +49,7 @@ type
   inheritance   :vm_inherit_t;         // inheritance
   budget_id     :shortint;             // budget/ptype id
   name          :t_entry_name;         // entry name
+  cred          :Boolean;              // ucred imitate
   anon_addr     :Pointer;              // source code address
   entry_id      :QWORD;                // order id
  end;
@@ -70,6 +71,8 @@ type
   entry_id :QWORD;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
+  const
+   system_map=0;
  end;
 
  p_vmspace=^vmspace;
@@ -418,7 +421,13 @@ end;
 
 function ENTRY_CHARGED(e:vm_map_entry_t):Boolean; inline;
 begin
- Result:=(e^.vm_obj<>nil) and ((e^.eflags and MAP_ENTRY_NEEDS_COPY)=0);
+ if (e^.vm_obj<>nil) and ((e^.eflags and MAP_ENTRY_NEEDS_COPY)=0) then
+ begin
+  Result:=(e^.vm_obj^.cred);
+ end else
+ begin
+  Result:=False;
+ end;
 end;
 
 function vmspace_pmap(vm:p_vmspace):pmap_t; inline;
@@ -971,6 +980,8 @@ var
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
+ Assert(entry<>@map^.header);
+
  if (entry<>map^.root) then
  begin
   vm_map_entry_splay(entry^.start, map^.root);
@@ -1232,22 +1243,28 @@ begin
 
  obj:=entry^.vm_obj;
 
- if (
-     (obj<>nil) and
-     ((entry^.start shr 47)=0) and
-     ((obj^.flags and OBJ_DMEM_EXT)<>0)
-    ) or
-    (_inc(entry^.wired_count)<>0) then
+ if (obj<>nil) then
  begin
-  //vm_gvmsw_map
+  if ((entry^.start shr 47)=0) and
+     ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+  begin
+   //vm_gvmsw_map
+   Exit(0);
+  end;
+ end else
+ if (_inc(entry^.wired_count)<>0) then
+ begin
+   //vm_gvmsw_map
   Exit(0);
  end;
 
- if (obj<>nil) and ((obj^.flags and OBJ_WIRE_BUDGET)<>0) then
+ if (obj<>nil) then
+ if ((obj^.flags and OBJ_WIRE_BUDGET)<>0) then
  begin
   //vm_budget_wire_action_jit
   Exit(0);
- end else
+ end;
+
  if (entry^.budget_id=-1) then
  begin
   //
@@ -1301,8 +1318,6 @@ function vm_map_insert(
 label
  _budget,
  charged;
-const
- is_system_map=0;
 var
  td:p_kthread;
  new_entry  :vm_map_entry_t;
@@ -1312,6 +1327,7 @@ var
  inheritance:vm_inherit_t;
  charge_prev_obj:Boolean;
  budget_id  :shortint;
+ cred       :Boolean;
 begin
  VM_MAP_ASSERT_LOCKED(map);
 
@@ -1344,7 +1360,8 @@ begin
  end;
 
  protoeflags:=0;
- charge_prev_obj:=FALSE;
+ charge_prev_obj:=False;
+ cred:=False;
 
  protoeflags:=protoeflags or (cow and (MAP_COW_NO_COALESCE or MAP_COW_MMAP_DMEM));
 
@@ -1377,17 +1394,16 @@ begin
 
  if ((cow and MAP_COW_HOLE)<>0) then
  begin
+  //emu ext
   inheritance:=VM_INHERIT_HOLE;
  end else
  if ((cow and MAP_COW_PATCH)<>0) then
  begin
+  //emu ext
   inheritance:=VM_INHERIT_PATCH;
  end else
- if ((cow and MAP_INHERIT_SHARE)<>0) then
  begin
-  inheritance:=VM_INHERIT_SHARE;
- end else
- begin
+  //The original fw will only initialize as 1
   inheritance:=VM_INHERIT_DEFAULT;
  end;
 
@@ -1396,13 +1412,14 @@ begin
   goto charged;
  end;
 
- if ((cow and MAP_ACC_CHARGED)<>0) or (((prot and VM_PROT_WRITE)<>0) and
-     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (obj=nil))) then
+ if ((cow and MAP_ACC_CHARGED)<>0) or
+    (
+     ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) and
+     (((protoeflags and MAP_ENTRY_NEEDS_COPY)<>0) or (obj=nil))
+    ) then
  begin
-  if (obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0) then
-  begin
-   charge_prev_obj:=TRUE;
-  end;
+  cred:=True;
+  charge_prev_obj:=(obj=nil) and ((protoeflags and MAP_ENTRY_NEEDS_COPY)=0);
  end;
 
 charged:
@@ -1410,10 +1427,10 @@ charged:
  if (obj=nil) then
  begin
   //vm_container:=0;
-  if ((cow and MAP_COW_SYSTEM)<>0) or (is_system_map<>0) then
+  if ((cow and MAP_COW_SYSTEM)<>0) or (map^.system_map<>0) then
   begin
    budget_id:=-1;
-   if (is_system_map=0) then
+   if (map^.system_map=0) then
    begin
     budget_id:=PTYPE_SYSTEM;
     if ((cow and MAP_COW_SYSTEM)=0) then
@@ -1434,7 +1451,7 @@ charged:
  begin
   //vm_container:=obj^.vm_container;
   budget_id:=-1;
-  if (is_system_map=0) then
+  if (map^.system_map=0) then
   begin
    budget_id:=obj^.budget_id;
   end;
@@ -1483,11 +1500,12 @@ charged:
   VM_OBJECT_UNLOCK(obj);
  end else
  if ((prev_entry<>@map^.header) and
-   (prev_entry^.eflags=protoeflags) and
+   (prev_entry^.eflags     =protoeflags) and
    ((cow and (MAP_ENTRY_GROWS_DOWN or MAP_ENTRY_GROWS_UP))=0) and
-   (prev_entry^.__end=start) and
+   (prev_entry^.__end      =start) and
    (prev_entry^.wired_count=0) and
-   (prev_entry^.budget_id=budget_id) and
+   (prev_entry^.budget_id  =budget_id) and
+   (prev_entry^.cred       =cred) and
      vm_object_coalesce(prev_entry^.vm_obj,
          prev_entry^.offset,
          vm_size_t(prev_entry^.__end - prev_entry^.start),
@@ -1499,8 +1517,8 @@ charged:
    * new range as well.
    }
   if ((cow and MAP_COW_NO_COALESCE)=0) and
-     (prev_entry^.inheritance=inheritance) and
-     (prev_entry^.protection=prot) and
+     (prev_entry^.inheritance   =inheritance) and
+     (prev_entry^.protection    =prot) and
      (prev_entry^.max_protection=max) then
   begin
 
@@ -1546,10 +1564,13 @@ charged:
   obj:=prev_entry^.vm_obj;
   offset:=prev_entry^.offset + (prev_entry^.__end - prev_entry^.start);
   vm_object_reference(obj);
-  if (obj<>nil) and
-     ((prev_entry^.eflags and MAP_ENTRY_NEEDS_COPY)=0) then
+
+  if ((prev_entry^.eflags and MAP_ENTRY_NEEDS_COPY)=0) then
+  if (cred) and (obj<>nil) then
+  if (obj^.cred) then
   begin
    { Object already accounts for this uid. }
+   cred:=False;
   end;
  end;
 
@@ -1582,6 +1603,7 @@ charged:
  Inc(map^.entry_id);
 
  new_entry^.anon_addr:=anon;
+ new_entry^.cred     :=cred;
 
  if ((cow and MAP_COW_HOLE)<>0) then
  begin
@@ -2062,6 +2084,7 @@ var
  obj:vm_map_object;
  eflags:vm_eflags_t;
  sdk_55:Boolean;
+ coal  :Boolean;
 begin
  eflags:=entry^.eflags;
 
@@ -2076,6 +2099,9 @@ begin
   Exit;
  end;
 
+ //hack for flex memory
+ if entry^.cred then Exit;
+
  obj:=entry^.vm_obj;
 
  if (obj<>nil) then
@@ -2089,11 +2115,6 @@ begin
   begin
    Exit;
   end;
- end else
- if (entry^.inheritance=VM_INHERIT_DEFAULT) then
- begin
-  //never merge anonymous memory?
-  Exit;
  end;
 
  sdk_55:=(p_proc.p_sdk_version >= $5500000);
@@ -2101,24 +2122,27 @@ begin
  prev:=entry^.prev;
  if (prev<>@map^.header) then
  begin
+  coal:=((eflags and MAP_ENTRY_NO_COALESCE)=0);
+
   prevsize:=prev^.__end - prev^.start;
   if (prev^.__end=entry^.start) and
      (prev^.vm_obj=obj) and
      ((obj=nil) or (prev^.offset + prevsize=entry^.offset)) and
      (prev^.eflags=eflags) and
-     (prev^.protection=entry^.protection) and
+     (prev^.protection    =entry^.protection) and
      (prev^.max_protection=entry^.max_protection) and
-     (prev^.inheritance=entry^.inheritance) and
-     (prev^.wired_count=entry^.wired_count) and
-     (prev^.budget_id=entry^.budget_id) and
+     (prev^.inheritance   =entry^.inheritance) and
+     (prev^.wired_count   =entry^.wired_count) and
+     (prev^.cred          =entry^.cred) and
+     (prev^.budget_id     =entry^.budget_id) and
      (sdk_55 or (prev^.anon_addr=entry^.anon_addr)) and
-     (((eflags and MAP_ENTRY_NO_COALESCE)=0) or (prev^.entry_id=entry^.entry_id))
+     (coal or (prev^.entry_id=entry^.entry_id))
      then
   begin
    if (strlcomp(pchar(@prev^.name),pchar(@entry^.name),32)=0) then
    begin
     vm_map_entry_unlink(map, prev);
-    entry^.start:=prev^.start;
+    entry^.start :=prev^.start;
     entry^.offset:=prev^.offset;
     //change
     if (entry^.prev<>@map^.header) then
@@ -2150,18 +2174,21 @@ begin
  if (next<>@map^.header) then
  begin
   eflags:=next^.eflags;
+  coal:=((eflags and MAP_ENTRY_NO_COALESCE)=0);
+
   esize:=entry^.__end - entry^.start;
   if (entry^.__end=next^.start) and
      (next^.vm_obj=obj) and
      ((obj=nil) or (entry^.offset + esize=next^.offset)) and
      (eflags=entry^.eflags) and
-     (next^.protection=entry^.protection) and
+     (next^.protection    =entry^.protection) and
      (next^.max_protection=entry^.max_protection) and
-     (next^.inheritance=entry^.inheritance) and
-     (next^.wired_count=entry^.wired_count) and
-     (next^.budget_id=entry^.budget_id) and
+     (next^.inheritance   =entry^.inheritance) and
+     (next^.wired_count   =entry^.wired_count) and
+     (next^.cred          =entry^.cred) and
+     (next^.budget_id     =entry^.budget_id) and
      (sdk_55 or (next^.anon_addr=entry^.anon_addr)) and
-     (((eflags and MAP_ENTRY_NO_COALESCE)=0) or (next^.entry_id=entry^.entry_id))
+     (coal or (next^.entry_id=entry^.entry_id))
      then
   begin
    if (strlcomp(pchar(@next^.name),pchar(@entry^.name),32)=0) then
@@ -2195,12 +2222,48 @@ begin
   }
  vm_map_simplify_entry(map, entry);
 
+ {
+  * If there is no object backing this entry, we might as well create
+  * one now.  If we defer it, an object can get created after the map
+  * is clipped, and individual objects will be created for the split-up
+  * map.  This is a bit of a hack, but is also about the best place to
+  * put this improvement.
+ }
+ if not (entry^.inheritance in [VM_INHERIT_PATCH,VM_INHERIT_HOLE]) then
+ begin
+  if (entry^.vm_obj=nil) then
+  begin
+   if (map^.system_map=0) then
+   begin
+    entry^.vm_obj:=vm_object_allocate(OBJT_DEFAULT,atop(entry^.__end - entry^.start));
+    entry^.offset:=0;
+    if (entry^.cred) then
+    begin
+     entry^.vm_obj^.cred  :=entry^.cred;
+     entry^.vm_obj^.charge:=(entry^.__end - entry^.start);
+     entry^.cred:=False;
+    end;
+   end;
+  end else
+  begin
+   if ((entry^.eflags and MAP_ENTRY_NEEDS_COPY) = 0) and
+      (entry^.cred) then
+   begin
+    VM_OBJECT_LOCK(entry^.vm_obj);
+     entry^.vm_obj^.cred  :=entry^.cred;
+     entry^.vm_obj^.charge:=(entry^.__end - entry^.start);
+    VM_OBJECT_UNLOCK(entry^.vm_obj);
+    entry^.cred:=False;
+   end;
+  end;
+ end;
+
  new_entry:=vm_map_entry_create(map);
  new_entry^:=entry^;
 
  new_entry^.__end:=start;
  entry^.offset:=entry^.offset + (start - entry^.start);
- entry^.start:=start;
+ entry^.start :=start;
 
  vm_map_entry_link(map, entry^.prev, new_entry);
 
@@ -2243,6 +2306,43 @@ var
  new_entry:vm_map_entry_t;
 begin
  VM_MAP_ASSERT_LOCKED(map);
+
+ {
+  * If there is no object backing this entry, we might as well create
+  * one now.  If we defer it, an object can get created after the map
+  * is clipped, and individual objects will be created for the split-up
+  * map.  This is a bit of a hack, but is also about the best place to
+  * put this improvement.
+ }
+ if not (entry^.inheritance in [VM_INHERIT_PATCH,VM_INHERIT_HOLE]) then
+ begin
+  if (entry^.vm_obj=nil) then
+  begin
+   if (map^.system_map=0) then
+   begin
+    entry^.vm_obj:=vm_object_allocate(OBJT_DEFAULT,atop(entry^.__end - entry^.start));
+    entry^.offset:=0;
+    if (entry^.cred) then
+    begin
+     entry^.vm_obj^.cred  :=entry^.cred;
+     entry^.vm_obj^.charge:=(entry^.__end - entry^.start);
+     entry^.cred:=False;
+    end;
+   end;
+  end else
+  begin
+   if ((entry^.eflags and MAP_ENTRY_NEEDS_COPY) = 0) and
+      (entry^.cred) then
+   begin
+    VM_OBJECT_LOCK(entry^.vm_obj);
+     entry^.vm_obj^.cred  :=entry^.cred;
+     entry^.vm_obj^.charge:=(entry^.__end - entry^.start);
+    VM_OBJECT_UNLOCK(entry^.vm_obj);
+    entry^.cred:=False;
+   end;
+  end;
+ end;
+
 
  {
   * Create a new entry and insert it AFTER the specified entry
@@ -2478,7 +2578,7 @@ begin
   vm_map_clip_end(map, current, __end);
 
   if set_max or
-     (((new_prot and (not current^.protection)) and VM_PROT_WRITE)=0) or
+     (((new_prot and (not current^.protection)) and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) or
      ENTRY_CHARGED(current) then
   begin
    goto _continue;
@@ -2489,15 +2589,19 @@ begin
   if (obj=nil) or ((current^.eflags and MAP_ENTRY_NEEDS_COPY)<>0) then
   begin
    //swap_reserve
+   current^.cred:=True;
    goto _continue;
   end;
 
   VM_OBJECT_LOCK(obj);
-  if (obj^.otype<>OBJT_DEFAULT) then
+  if (obj^.otype<>OBJT_DEFAULT) and (obj^.otype<>OBJT_SWAP) then
   begin
    VM_OBJECT_UNLOCK(obj);
    goto _continue;
   end;
+
+  obj^.cred  :=True;
+  obj^.charge:=ptoa(obj^.size);
 
   VM_OBJECT_UNLOCK(obj);
 
@@ -2563,8 +2667,8 @@ begin
   end;
 
   if ((current^.eflags and (MAP_ENTRY_COW or MAP_ENTRY_USER_WIRED))=(MAP_ENTRY_COW or MAP_ENTRY_USER_WIRED)) and
-     ((current^.protection and VM_PROT_WRITE)<>0) and
-     ((old_prot and VM_PROT_WRITE)=0) then
+     ((current^.protection and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) and
+     ((old_prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) then
   begin
    //vm_fault_copy_entry(map, map, current, current, nil);
   end;
@@ -2962,6 +3066,8 @@ var
  entry     :vm_map_entry_t;
  temp_entry:vm_map_entry_t;
 begin
+ //Writeln('vm_map_inherit:0x',HexStr(start,12),'..',HexStr(__end,12),':',new_inheritance);
+
  case new_inheritance of
   VM_INHERIT_SHARE,
   VM_INHERIT_COPY ,
@@ -2981,10 +3087,7 @@ begin
  if (vm_map_lookup_entry(map, start, @temp_entry)) then
  begin
   entry:=temp_entry;
-  if (entry^.inheritance<>new_inheritance) then
-  begin
-   vm_map_clip_start(map, entry, start);
-  end;
+  vm_map_clip_start(map, entry, start);
  end else
  begin
   entry:=temp_entry^.next;
@@ -2992,12 +3095,9 @@ begin
 
  while ((entry<>@map^.header) and (entry^.start<__end)) do
  begin
-  if (entry^.inheritance<>new_inheritance) then
-  begin
-   vm_map_clip_end(map, entry, __end);
-   entry^.inheritance:=new_inheritance;
-   vm_map_simplify_entry(map, entry);
-  end;
+  vm_map_clip_end(map, entry, __end);
+  entry^.inheritance:=new_inheritance;
+  vm_map_simplify_entry(map, entry);
   entry:=entry^.next;
  end;
 
@@ -3625,7 +3725,7 @@ begin
    end;
 
   end else
-  if (user_wire) and ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
+  if (not user_wire) or ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
   begin
    _inc_wired_count:
    Inc(entry^.wired_count);
@@ -3708,7 +3808,7 @@ _done:
   end else
   begin
 
-   if (user_wire) and
+   if (not user_wire) or
       ((entry^.eflags and MAP_ENTRY_USER_WIRED)=0) then
    begin
 
@@ -3966,7 +4066,15 @@ begin
     if (offidx_end>=obj^.size) and
        (offidxstart<obj^.size) then
     begin
+     size:=obj^.size;
      obj^.size:=offidxstart;
+
+     if (obj^.cred) then
+     begin
+      size:=size - offidxstart;
+      obj^.charge:=obj^.charge - ptoa(size);
+     end;
+
     end;
    end;
    VM_OBJECT_UNLOCK(obj);
@@ -4987,8 +5095,8 @@ end;
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 var
  current:vm_map_entry_t;
- entry  :vm_map_entry_t;
  origin :vm_map_entry_t;
+ next   :vm_map_entry_t;
  simpl  :vm_map_entry_t;
  e_start:vm_offset_t;
  e__end :vm_offset_t;
@@ -5003,18 +5111,15 @@ begin
 
  VM_MAP_RANGE_CHECK(map, start, __end);
 
- if (vm_map_lookup_entry(map, start, @entry)) then
+ if (vm_map_lookup_entry(map, start, @origin)) then
  begin
-  current:=entry;
-  origin :=entry;
-  vm_map_clip_start(map, entry, start);
+  vm_map_clip_start(map, origin, start);
  end else
  begin
-  entry  :=entry^.next;
-  current:=entry;
-  origin :=entry;
+  origin :=origin^.next;
  end;
 
+ current:=origin;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
 
@@ -5054,9 +5159,11 @@ begin
    simpl:=origin;
   end;
 
+  next:=current^.next;
+
   vm_map_simplify_entry(map, simpl);
 
-  current:=current^.next;
+  current:=next;
  end;
 end;
 

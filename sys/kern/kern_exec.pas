@@ -347,6 +347,7 @@ begin
 
  //create fake shared
  obj:=vm_pager_allocate(OBJT_DEFAULT,nil,shared_page_len,0,0);
+ obj^.fakeshared:=True;
 
  //mapping shared page (sv_usrstack_len=0x4000)
  error:=vm_map_fixed(map,obj,0,
