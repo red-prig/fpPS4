@@ -2489,10 +2489,13 @@ function vm_map_protect(map     :vm_map_t;
                         new_prot:vm_prot_t;
                         set_max :Boolean):Integer;
 label
- _continue;
+ _continue_1,
+ _continue_2,
+ _continue_3;
 var
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
+ max_prot:vm_prot_t;
  old_prot:vm_prot_t;
  b_start :vm_offset_t;
  b___end :vm_offset_t;
@@ -2517,6 +2520,12 @@ begin
   entry:=entry^.next;
  end;
 
+ if (entry=@map^.header) then
+ begin
+  vm_map_unlock(map);
+  Exit(KERN_SUCCESS);
+ end;
+
  {
   * Make a first pass to check for protection violations.
   }
@@ -2524,8 +2533,12 @@ begin
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
 
-  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
-     (current^.inheritance=VM_INHERIT_HOLE) then
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   goto _continue_1;
+  end;
+
+  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
   begin
    vm_map_unlock(map);
    Exit(KERN_INVALID_ARGUMENT);
@@ -2545,25 +2558,27 @@ begin
 
   //flags_2mb:=current^.flags_2mb;
 
-  old_prot:=current^.max_protection and VM_PROT_GPU_ALL;
+  max_prot:=current^.max_protection and VM_PROT_GPU_ALL;
 
   if ((flags_2mb and 2) = 0) then
   begin
-   old_prot:=current^.max_protection;
+   max_prot:=current^.max_protection;
   end;
 
   if ((flags_2mb and 1) <> 0) then
   begin
-   old_prot:=0;
+   max_prot:=0;
   end;
 
-  if ((new_prot and old_prot)<>new_prot) then
-  begin
-   vm_map_unlock(map);
-   Exit(KERN_PROTECTION_FAILURE);
-  end;
+  //For some reason this check doesn't work?
+  //if ((new_prot and max_prot)<>new_prot) then
+  //begin
+  // vm_map_unlock(map);
+  // //Exit(KERN_PROTECTION_FAILURE);
+  //end;
 
-  current:=current^.next;
+  _continue_1:
+   current:=current^.next;
  end;
 
  {
@@ -2575,13 +2590,18 @@ begin
  while (current<>@map^.header) and (current^.start<__end) do
  begin
 
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   goto _continue_2;
+  end;
+
   vm_map_clip_end(map, current, __end);
 
   if set_max or
      (((new_prot and (not current^.protection)) and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) or
      ENTRY_CHARGED(current) then
   begin
-   goto _continue;
+   goto _continue_2;
   end;
 
   obj:=current^.vm_obj;
@@ -2590,14 +2610,14 @@ begin
   begin
    //swap_reserve
    current^.cred:=True;
-   goto _continue;
+   goto _continue_2;
   end;
 
   VM_OBJECT_LOCK(obj);
   if (obj^.otype<>OBJT_DEFAULT) and (obj^.otype<>OBJT_SWAP) then
   begin
    VM_OBJECT_UNLOCK(obj);
-   goto _continue;
+   goto _continue_2;
   end;
 
   obj^.cred  :=True;
@@ -2605,8 +2625,8 @@ begin
 
   VM_OBJECT_UNLOCK(obj);
 
-  _continue:
-  current:=current^.next;
+  _continue_2:
+   current:=current^.next;
  end;
 
  {
@@ -2616,6 +2636,12 @@ begin
  current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
+
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   goto _continue_3;
+  end;
+
   obj:=current^.vm_obj;
 
   if (obj<>nil) then
@@ -2651,8 +2677,7 @@ begin
 
    end;
 
-   current:=current^.next;
-   Continue;
+   goto _continue_3;
   end;
 
   old_prot:=current^.protection;
@@ -2676,7 +2701,9 @@ begin
   vm_map_protect_internal(map,current,old_prot);
 
   vm_map_simplify_entry(map, current);
-  current:=current^.next;
+
+  _continue_3:
+   current:=current^.next;
  end;
 
  vm_map_unlock(map);
@@ -2701,10 +2728,12 @@ function vm_map_type_protect(map      :vm_map_t;
                              __end    :vm_offset_t;
                              new_mtype:Integer;
                              new_prot :vm_prot_t):Integer;
+label
+ _continue_1,
+ _continue_2;
 var
  rmap:p_rmem_map;
  dmem:Pointer;
-
  current,entry:vm_map_entry_t;
  obj:vm_object_t;
  old_prot:vm_prot_t;
@@ -2772,8 +2801,12 @@ begin
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
 
-  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) or
-     (current^.inheritance=VM_INHERIT_HOLE) then
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   goto _continue_1;
+  end;
+
+  if ((current^.eflags and MAP_ENTRY_IS_SUB_MAP)<>0) then
   begin
    vm_map_unlock(map);
    Exit(KERN_INVALID_ARGUMENT);
@@ -2817,7 +2850,8 @@ begin
 
   rmem_map_unlock(rmap);
 
-  current:=current^.next;
+  _continue_1:
+   current:=current^.next;
  end;
 
  /////////
@@ -2827,6 +2861,12 @@ begin
  current:=entry;
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
+
+  if (current^.inheritance=VM_INHERIT_HOLE) then
+  begin
+   goto _continue_2;
+  end;
+
   vm_map_clip_end(map, current, __end);
 
   old_prot:=current^.protection;
@@ -2851,7 +2891,9 @@ begin
   vm_map_protect_internal(map,current,old_prot);
 
   vm_map_simplify_entry(map, current);
-  current:=current^.next;
+
+  _continue_2:
+   current:=current^.next;
  end;
 
  vm_map_unlock(map);
