@@ -920,17 +920,60 @@ end;
 
 //rax, r8, r9, r10, r11
 
+const
+ reg_dst  ='%rdi';
+ reg_src  ='%rsi';
+ reg_pitch='%rdx';
+ reg_slice='%rcx';
+
+ reg_savez='%rax';
+
+ reg_tmp:array[0..2] of pchar=(
+  '%r8 ',
+  '%r9 ',
+  '%r10'
+ );
+
 type
  t_lea_used_y=object
-  flags:Byte;
-  iused:Boolean;
+  flags  :Byte;
+  is_used:Boolean;
+  need_z :Boolean;
+  init_z :Boolean;
+  last_z :Integer;
   a_lea:array[0..3] of RawByteString;
   a_ofs:array[0..7] of RawByteString;
   a_reg_dst:RawByteString;
+  procedure _init(const A:tbit_interval_array);
   procedure _set(y:Byte);
   procedure _build_str(const reg_dst:RawByteString);
   procedure _print;
+  procedure _print_prepare_z(diff_z:Integer);
  end;
+
+procedure t_lea_used_y._init(const A:tbit_interval_array);
+var
+ i:Integer;
+ prev_z,diff_z:Integer;
+begin
+ Self:=Default(t_lea_used_y);
+
+ with A do
+ begin
+  //
+  prev_z:=intervals[0].z;
+  //
+  For i:=0 to num_i-1 do
+  begin
+   _set(intervals[i].y);
+   //
+   diff_z:=intervals[i].z-prev_z;
+   prev_z:=intervals[i].z;
+   //
+   need_z:=need_z or (diff_z=-3);
+  end;
+ end;
+end;
 
 procedure t_lea_used_y._set(y:Byte);
 begin
@@ -939,45 +982,40 @@ begin
 end;
 
 procedure t_lea_used_y._build_str(const reg_dst:RawByteString);
-const
- r_pitch='%rdx';
- rtmp:array[0..2] of pchar=(
-  '%r8 ',
-  '%r9 ',
-  '%r10'
- );
 begin
  a_reg_dst:=reg_dst;
  //
  if ((flags and (1 shl 2))<>0) or ((flags and (1 shl 3))<>0) then
  begin
-  a_lea[0]:='('+reg_dst+','+r_pitch+',2), '+rtmp[0]+' //+2'; //+2 +3
+  a_lea[0]:='('+reg_dst+','+reg_pitch+',2), '+reg_tmp[0]+' //+2'; //+2 +3
  end;
  if ((flags and (1 shl 4))<>0) or ((flags and (1 shl 5))<>0) then
  begin
-  a_lea[1]:='('+reg_dst+','+r_pitch+',4), '+rtmp[1]+' //+4'; //+4 +5
+  a_lea[1]:='('+reg_dst+','+reg_pitch+',4), '+reg_tmp[1]+' //+4'; //+4 +5
  end;
  if ((flags and (1 shl 6))<>0) or ((flags and (1 shl 7))<>0) then
  begin
-  a_lea[2]:='('+r_pitch+','+r_pitch+',2), '+rtmp[2]+' //+3'; //+3
-  a_lea[3]:='('+reg_dst+','+rtmp[2]+',2), '+rtmp[2]+' //+6'; //+6 +7
+  a_lea[2]:='('+reg_pitch+','+reg_pitch +',2), '+reg_tmp[2]+' //+3'; //+3
+  a_lea[3]:='('+reg_dst  +','+reg_tmp[2]+',2), '+reg_tmp[2]+' //+6'; //+6 +7
  end;
  //
- a_ofs[0]:='('+reg_dst+')'            ;  //     +0
- a_ofs[1]:='('+reg_dst+','+r_pitch+')';  //     +1
- a_ofs[2]:='('+rtmp[0]+')'            ;  //     +2
- a_ofs[3]:='('+rtmp[0]+','+r_pitch+')';  //+2+1 +3
- a_ofs[4]:='('+rtmp[1]+')'            ;  //     +4
- a_ofs[5]:='('+rtmp[1]+','+r_pitch+')';  //+4+1 +5
- a_ofs[6]:='('+rtmp[2]+')'            ;  //     +6
- a_ofs[7]:='('+rtmp[2]+','+r_pitch+')';  //+6+1 +7
+ a_ofs[0]:='('+reg_dst+')'            ;      //     +0
+ a_ofs[1]:='('+reg_dst+','+reg_pitch+')';    //     +1
+ a_ofs[2]:='('+reg_tmp[0]+')'            ;   //     +2
+ a_ofs[3]:='('+reg_tmp[0]+','+reg_pitch+')'; //+2+1 +3
+ a_ofs[4]:='('+reg_tmp[1]+')'            ;   //     +4
+ a_ofs[5]:='('+reg_tmp[1]+','+reg_pitch+')'; //+4+1 +5
+ a_ofs[6]:='('+reg_tmp[2]+')'            ;   //     +6
+ a_ofs[7]:='('+reg_tmp[2]+','+reg_pitch+')'; //+6+1 +7
+ //
+ init_z:=False;
 end;
 
 procedure t_lea_used_y._print;
 var
  i:Byte;
 begin
- if iused then Exit;
+ if is_used then Exit;
  //
  For i:=0 to High(a_lea) do
  if (a_lea[i]<>'') then
@@ -985,16 +1023,61 @@ begin
   Writeln(Fout,'lea ':18,a_lea[i]);
  end;
  //
- iused:=True;
+ is_used:=True;
+end;
+
+procedure t_lea_used_y._print_prepare_z(diff_z:Integer);
+begin
+ if is_used then
+ begin
+
+  if need_z and (not init_z) and (diff_z<>0) then
+  begin
+   last_z:=0;
+   init_z:=True;
+   //save
+   Writeln(Fout,'mov ':18,a_reg_dst,', ',reg_savez,' //save z');
+  end;
+
+  if init_z then
+  begin
+   last_z:=last_z+diff_z;
+  end;
+
+  case diff_z of
+   0:;
+   1:
+    begin
+     Writeln(Fout,'lea ':18,'(',a_reg_dst,',',reg_slice,')',', ',a_reg_dst,' //z+1');
+     is_used:=False;
+    end;
+   -1:
+    begin
+     Writeln(Fout,'sub ':18,reg_slice,', ',a_reg_dst,' //z-1');
+     is_used:=False;
+    end;
+   -3:
+    begin
+     if init_z and (last_z=0) then
+     begin
+      //restore
+      Writeln(Fout,'mov ':18,reg_savez,', ',a_reg_dst,' //restore z');
+     end else
+     begin
+      Writeln(Fout,'sub ':18,reg_slice,', ',a_reg_dst,' //z-1');
+      Writeln(Fout,'sub ':18,reg_slice,', ',a_reg_dst,' //z-1');
+      Writeln(Fout,'sub ':18,reg_slice,', ',a_reg_dst,' //z-1');
+     end;
+     is_used:=False;
+    end;
+   else
+    Assert(False);
+  end;
+ end;
 end;
 
 type
  t_context=object
-  const
-   reg_dst  ='%rdi';
-   reg_src  ='%rsi';
-   reg_pitch='%rdx';
-   reg_slice='%rcx';
   var
    bytes    :Word;
    reg_count:Word;
@@ -1194,7 +1277,7 @@ end;
 
 procedure t_context.flush_write;
 var
- i,r,g:Integer;
+ r:Integer;
 begin
  //combine ext
  if (reg_ext<>0) then
@@ -1231,32 +1314,7 @@ var
 begin
 
  //print lea
- if lea_used_y.iused then
- begin
-  case c.diff_z of
-   0:;
-   1:
-    begin
-     Writeln(Fout,'lea ':18,'(',lea_used_y.a_reg_dst,',',c.reg_slice,')',', ',lea_used_y.a_reg_dst,' //z+1');
-     lea_used_y.iused:=False;
-    end;
-   -1:
-    begin
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     lea_used_y.iused:=False;
-    end;
-   -3:
-    begin
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     lea_used_y.iused:=False;
-    end;
-   else
-    Assert(False);
-  end;
- end;
-
+ lea_used_y._print_prepare_z(c.diff_z);
  lea_used_y._print;
  //print lea
 
@@ -1400,32 +1458,7 @@ var
 begin
 
  //print lea
- if lea_used_y.iused then
- begin
-  case c.diff_z of
-   0:;
-   1:
-    begin
-     Writeln(Fout,'lea ':18,'(',lea_used_y.a_reg_dst,',',c.reg_slice,')',', ',lea_used_y.a_reg_dst,' //z+1');
-     lea_used_y.iused:=False;
-    end;
-   -1:
-    begin
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     lea_used_y.iused:=False;
-    end;
-   -3:
-    begin
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     Writeln(Fout,'sub ':18,c.reg_slice,', ',lea_used_y.a_reg_dst,' //z-1');
-     lea_used_y.iused:=False;
-    end;
-   else
-    Assert(False);
-  end;
- end;
-
+ lea_used_y._print_prepare_z(c.diff_z);
  lea_used_y._print;
  //print lea
 
@@ -2095,14 +2128,9 @@ begin
   Writeln(Fout,'asm');
 
   //build lea
-  lea_used_y:=Default(t_lea_used_y);
-  with g_axis_intervals[t_bits_per_element(b)] do
-   For i:=0 to num_i-1 do
-   begin
-    lea_used_y._set(intervals[i].y);
-   end;
+  lea_used_y._init(g_axis_intervals[t_bits_per_element(b)]);
+  lea_used_y._build_str(reg_dst);
   //build lea
-  lea_used_y._build_str(c.reg_dst);
 
   //load to regs
   reg_count:=all div 32;
@@ -2147,14 +2175,9 @@ begin
   c.reset;
 
   //build lea
-  lea_used_y:=Default(t_lea_used_y);
-  with g_axis_intervals[t_bits_per_element(b)] do
-   For i:=0 to num_i-1 do
-   begin
-    lea_used_y._set(intervals[i].y);
-   end;
+  lea_used_y._init(g_axis_intervals[t_bits_per_element(b)]);
+  lea_used_y._build_str(reg_src);
   //build lea
-  lea_used_y._build_str(c.reg_src);
 
   with g_axis_intervals[t_bits_per_element(b)] do
   begin
