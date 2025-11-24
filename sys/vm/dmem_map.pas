@@ -96,6 +96,10 @@ procedure dmem_map_entry_delete(map:p_dmem_map;entry:p_dmem_map_entry);
 
 function  dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;m_acl:t_dest_acl):Integer;
 
+function  dmem_includes_wbgarlic(map  :p_dmem_map;
+                                 start:DWORD;
+                                 __end:DWORD):Boolean;
+
 function  dmem_map_set_mtype(map  :p_dmem_map;
                              start:DWORD;
                              __end:DWORD;
@@ -1327,6 +1331,7 @@ begin
      (entry^.info.c_count=0) then
   begin
    dmem_map_clip_end(map, entry, __end);
+   next:=entry^.next; //update
 
    dmem_map_entry_delete(map, entry);
   end;
@@ -1334,6 +1339,42 @@ begin
   entry:=next;
  end;
  Result:=(0);
+end;
+
+function dmem_includes_wbgarlic(map  :p_dmem_map;
+                                start:DWORD;
+                                __end:DWORD):Boolean; public;
+var
+ entry,curr:p_dmem_map_entry;
+begin
+ Result:=False;
+
+ dmem_map_lock(map);
+
+ DMEM_MAP_RANGE_CHECK(map, start, __end);
+
+ if dmem_map_lookup_entry(map,start,@entry) then
+ begin
+  //
+ end else
+ begin
+  entry:=entry^.next;
+ end;
+
+ curr:=entry;
+ while (curr<>@map^.header) and (curr^.start<__end) do
+ begin
+
+  if (curr^.info.m_type=SCE_KERNEL_WB_GARLIC) then
+  begin
+   Result:=True;
+   Break;
+  end;
+
+  curr:=curr^.next;
+ end;
+
+ dmem_map_unlock(map);
 end;
 
 function dmem_map_set_mtype(map  :p_dmem_map;
@@ -1345,7 +1386,7 @@ function dmem_map_set_mtype(map  :p_dmem_map;
 label
  _EACCES;
 var
- current,next:p_dmem_map_entry;
+ current:p_dmem_map_entry;
 begin
  if (start=__end) then
  begin
@@ -1406,7 +1447,6 @@ begin
 
  while ((current<>@map^.header) and (current^.start<__end)) do
  begin
-  next:=current^.next;
 
   if (current^.info.m_type<>mtype) and
      (current^.info.c_count=0) then
@@ -1423,7 +1463,7 @@ begin
    //
   end;
 
-  current:=next;
+  current:=current^.next;
  end;
 
  dmem_map_unlock(map);

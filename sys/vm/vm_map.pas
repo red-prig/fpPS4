@@ -358,6 +358,23 @@ uses
  rmem_map,
  kern_budget;
 
+////
+
+function obj2dmem(obj:vm_object_t):Pointer; external;
+
+function dmem_map_set_mtype(map  :Pointer;
+                            start:DWORD;
+                            __end:DWORD;
+                            mtype:Integer;
+                            prot :Integer;
+                            flags:Integer):Integer; external;
+
+function dmem_includes_wbgarlic(map  :Pointer;
+                                start:DWORD;
+                                __end:DWORD):Boolean; external;
+
+////
+
 var
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
@@ -1228,6 +1245,7 @@ end;
 
 function vm_gpu_map_create(map:vm_map_t;entry:vm_map_entry_t):Integer;
 label
+ _gvmsw_map,
  _budget;
 var
  obj:vm_object_t;
@@ -1248,14 +1266,14 @@ begin
   if ((entry^.start shr 47)=0) and
      ((obj^.flags and OBJ_DMEM_EXT)<>0) then
   begin
+   _gvmsw_map:
    //vm_gvmsw_map
    Exit(0);
   end;
  end else
  if (_inc(entry^.wired_count)<>0) then
  begin
-   //vm_gvmsw_map
-  Exit(0);
+  goto _gvmsw_map;
  end;
 
  if (obj<>nil) then
@@ -2500,6 +2518,8 @@ var
  b_start :vm_offset_t;
  b___end :vm_offset_t;
  vm_start:vm_offset_t;
+ length  :vm_offset_t;
+ dmem:Pointer;
 const
  flags_2mb=0;
 begin
@@ -2574,8 +2594,54 @@ begin
   //if ((new_prot and max_prot)<>new_prot) then
   //begin
   // vm_map_unlock(map);
-  // //Exit(KERN_PROTECTION_FAILURE);
+  // Exit(KERN_PROTECTION_FAILURE);
   //end;
+
+  obj:=current^.vm_obj;
+
+  if (obj<>nil) then
+  if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+  begin
+   if ((new_prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE)) <> 0) then
+   begin
+    //
+    if (start < current^.start) then
+    begin
+     b_start:=current^.start;
+    end else
+    begin
+     b_start:=start;
+    end;
+    //
+    if (__end <= current^.__end) then
+    begin
+     b___end:=__end;
+    end else
+    begin
+     b___end:=current^.__end;
+    end;
+    //
+    if (b_start < b___end) then
+    begin
+     //convert to offset
+     length:=b___end-b_start;
+     b_start:=current^.offset+(b_start-current^.start);
+     b___end:=b_start+length;
+
+     dmem:=obj2dmem(obj);
+
+     if dmem_includes_wbgarlic(dmem,
+                               OFF_TO_IDX(b_start),
+                               OFF_TO_IDX(b___end)) then
+     begin
+      vm_map_unlock(map);
+      Exit(KERN_PROTECTION_FAILURE);
+     end;
+
+    end;
+   end;
+   //
+  end;
 
   _continue_1:
    current:=current^.next;
@@ -2709,19 +2775,6 @@ begin
  vm_map_unlock(map);
  Result:=(KERN_SUCCESS);
 end;
-
-////
-
-function obj2dmem(obj:vm_object_t):Pointer; external;
-
-function dmem_map_set_mtype(map  :Pointer;
-                            start:DWORD;
-                            __end:DWORD;
-                            mtype:Integer;
-                            prot :Integer;
-                            flags:Integer):Integer; external;
-
-//
 
 function vm_map_type_protect(map      :vm_map_t;
                              start    :vm_offset_t;

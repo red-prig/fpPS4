@@ -916,13 +916,8 @@ begin
     begin
      vp:=fp^.f_vnode;
 
-     maxprot:=VM_PROT_EXECUTE;
-
-     if (vp^.v_mount<>nil) then
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) then
-     begin
-      maxprot:=VM_PROT_NONE;
-     end;
+     //no VM_PROT_EXECUTE at all!
+     maxprot:=VM_PROT_NONE;
 
      if ((fp^.f_flag and FREAD)<>0) then
      begin
