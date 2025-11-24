@@ -1,7 +1,7 @@
 
 # fpPS4 [![CI](https://github.com/red-prig/fpPS4/actions/workflows/main.yml/badge.svg)](https://github.com/red-prig/fpPS4/actions) [<img src="https://img.shields.io/discord/1047920770225012769?color=5865F2&label=fpPS4&logo=discord&logoColor=white"/>](https://discord.gg/up9qatpX7M)
 
-This emulator is still in the early stages of development and big games like the tripple A game still don't work, see the compatibility list for more details: https://github.com/red-prig/fpps4-game-compatibility/issues
+This emulator is still in the early stages of development and big games like the triple A game still don't work, see the compatibility list for more details: https://github.com/red-prig/fpps4-game-compatibility/issues
 
 If your game doesn't work don't create a new issue, check the compatibility list first.
 
