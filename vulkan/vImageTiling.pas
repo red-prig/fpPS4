@@ -75,7 +75,7 @@ Function GetLinearSize(const key:TvImageKey;mode:TLinearMode):Ptruint;
 var
  m_bytePerElement:Ptruint;
  m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
+ m_padwidth,m_padheight,m_paddepth:Ptruint;
  m_slice:Ptruint;
 begin
  if key.params.samples>1 then
@@ -96,6 +96,13 @@ begin
   m_height:=nextPowerOfTwo(m_height);
  end;
 
+ m_paddepth:=key.params.depth;
+
+ if (key.params.tiling.idx=kTileModeThick_1dThick) then
+ begin
+  m_paddepth:=max((m_paddepth+3) and (not 3),4);
+ end;
+
  Result:=0;
 
  while (m_level>0) do
@@ -110,7 +117,10 @@ begin
   end;
 
   case mode of
-   mAlign64:m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
+   mAlign64:
+    begin
+     m_padwidth:=GetLinearAlignWidth(m_bytePerElement,m_padwidth,m_padheight);
+    end;
    mAlign8x8:
     begin
      m_padwidth :=max((m_padwidth +7) and (not 7),8);
@@ -121,7 +131,7 @@ begin
 
   m_slice:=m_padwidth*
            m_padheight*
-           key.params.depth*
+           m_paddepth*
            key.params.arrayLayers*
            m_bytePerElement;
 
