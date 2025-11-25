@@ -342,12 +342,15 @@ type
   m_minGpuMode     :DWORD;
   m_tileMode       :DWORD;
   m_arrayMode      :DWORD;
+  //
   m_linearWidth    :DWORD;
   m_linearHeight   :DWORD;
   m_linearDepth    :DWORD;
+  //
   m_paddedWidth    :DWORD;
   m_paddedHeight   :DWORD;
   m_paddedDepth    :DWORD;
+  //
   m_bitsPerElement :DWORD;
   m_bytePerElement :DWORD;
   m_linearSizeBytes:DWORD;
@@ -367,7 +370,7 @@ type
   m_copy_linear2tile:t_copy_cbs;
 
   procedure init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
-  procedure init_size_2d(width,height:DWORD);
+  procedure init_size(width,height,depth:DWORD);
   function  getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
   function  getTiledElementBitOffset (var outTiledBitOffset :QWORD;x,y,z:DWORD):integer;
  end;
@@ -3007,27 +3010,33 @@ begin
 
  m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
 
- if (tile_idx=kTileModeDisplay_1dThin) then
- begin
-  m_copy_tile2linear:=copy_array_tile2linear_Display_1dThin[fastIntLog2(bytePerElement)];
-  m_copy_linear2tile:=copy_array_linear2tile_Display_1dThin[fastIntLog2(bytePerElement)];
- end else
- begin
-  m_copy_tile2linear:=copy_array_tile2linear_Thin_1dThin[fastIntLog2(bytePerElement)];
-  m_copy_linear2tile:=copy_array_linear2tile_Thin_1dThin[fastIntLog2(bytePerElement)];
+ case tile_idx of
+  kTileModeDisplay_1dThin:
+   begin
+    m_copy_tile2linear:=copy_array_tile2linear_Display1d[fastIntLog2(bytePerElement)];
+    m_copy_linear2tile:=copy_array_linear2tile_Display1d[fastIntLog2(bytePerElement)];
+   end;
+  kTileModeThick_1dThick:
+   begin
+    m_copy_tile2linear:=copy_array_tile2linear_Thick1d[fastIntLog2(bytePerElement)];
+    m_copy_linear2tile:=copy_array_linear2tile_Thick1d[fastIntLog2(bytePerElement)];
+   end;
+  else
+   begin
+    m_copy_tile2linear:=copy_array_tile2linear_Thin1d[fastIntLog2(bytePerElement)];
+    m_copy_linear2tile:=copy_array_linear2tile_Thin1d[fastIntLog2(bytePerElement)];
+   end;
  end;
 
 end;
 
-procedure Tiler1d.init_size_2d(width,height:DWORD);
+procedure Tiler1d.init_size(width,height,depth:DWORD);
 var
  log_sz:QWORD;
 begin
- m_paddedDepth :=1;
-
  m_linearWidth :=width;
  m_linearHeight:=height;
- m_linearDepth :=1;
+ m_linearDepth :=depth;
 
  if (m_isBlockCompressed<>0) then
  begin
@@ -3036,15 +3045,14 @@ begin
  end;
 
  //microtile align
- m_paddedWidth :=(m_linearWidth +7) and (not 7);
- m_paddedHeight:=(m_linearHeight+7) and (not 7);
+ m_paddedWidth :=max((m_linearWidth +7) and (not 7),8);
+ m_paddedHeight:=max((m_linearHeight+7) and (not 7),8);
+ m_paddedDepth :=max(Align(depth,m_tileThickness),m_tileThickness);
 
- //for 1d textures
- m_paddedHeight:=max(m_paddedHeight,8);
-
- //update to detiling pad
+ //update to detiling pad (AVX)
  m_linearWidth :=m_paddedWidth;
  m_linearHeight:=m_paddedHeight;
+ m_linearDepth :=m_paddedDepth;
 
  //align pitch to pipe_interleave_size
  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);

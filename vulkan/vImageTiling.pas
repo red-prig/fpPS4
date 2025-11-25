@@ -142,17 +142,16 @@ begin
 end;
 
 Function Get1dThinSize(const key:TvImageKey):Ptruint;
-const
- m_tileThickness=1;
 var
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
- m_padwidth   :Ptruint;
- m_padheight  :Ptruint;
+ m_level      :Ptruint;
+ m_width      :Ptruint;
+ m_height     :Ptruint;
  m_depth      :Ptruint;
  m_arrayLayers:Ptruint;
  m_slice      :Ptruint;
- log_sz       :Ptruint;
+
+ tiler:Tiler1d;
 begin
  Assert(key.params.samples<=1,'key.params.samples>1');
 
@@ -173,39 +172,23 @@ begin
   m_arrayLayers:=nextPowerOfTwo(m_arrayLayers);
  end;
 
+ tiler.init_surface(m_bytePerElement,
+                    ord(IsTexelFormat(key.cformat)),
+                    key.params.tiling.idx,
+                    key.params.tiling.alt);
+
  Result:=0;
 
  while (m_level>0) do
  begin
-  m_padwidth :=m_width;
-  m_padheight:=m_height;
 
-  if IsTexelFormat(key.cformat) then
-  begin
-   m_padwidth :=(m_padwidth +3) shr 2;
-   m_padheight:=(m_padheight+3) shr 2;
-  end;
-
-  //microtile align
-  m_padwidth :=(m_padwidth +7) and (not 7);
-  m_padheight:=(m_padheight+7) and (not 7);
-
-  //for 1d textures
-  m_padheight:=max(m_padheight,8);
-
-  //align pitch to pipe_interleave_size
-  log_sz:=(m_padwidth*m_padheight*m_bytePerElement*m_tileThickness);
-  while (log_sz and 255)<>0 do //(log_sz mod 256)<>0
-  begin
-   m_padwidth:=m_padwidth+8;
-   log_sz:=(m_padwidth*m_padheight*m_bytePerElement*m_tileThickness);
-  end;
+  tiler.init_size(m_width,m_height,m_depth);
 
   if (m_level<>1) then
   begin
-   m_slice:=m_padwidth*
-            m_padheight*
-            m_depth*
+   m_slice:=tiler.m_paddedWidth*
+            tiler.m_paddedHeight*
+            tiler.m_paddedDepth*
             m_arrayLayers*
             m_bytePerElement;
 
@@ -214,8 +197,8 @@ begin
   begin
    //Trim the last layer
 
-   m_slice:=m_padwidth*
-            m_padheight*
+   m_slice:=tiler.m_paddedWidth*
+            tiler.m_paddedHeight*
             key.params.depth*
             key.params.arrayLayers*
             m_bytePerElement;
@@ -580,7 +563,7 @@ begin
 
  while (m_level>0) do
  begin
-  tiler.init_size_2d(m_width,m_height);
+  tiler.init_size(m_width,m_height,image.key.params.depth);
 
   //array
   for a:=0 to image.key.params.arrayLayers-1 do
@@ -1063,9 +1046,6 @@ begin
  set_tiling_cbs(kTileModeThin_2dThin          ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
  set_tiling_cbs(kTileModeThin_2dThin          ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
 
- set_tiling_cbs(kTileModeThick_1dThick        ,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
- set_tiling_cbs(kTileModeThick_1dThick        ,1,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize); //@load_clear;
-
  //
  set_tiling_cbs(kTileModeDepth_1dThin         ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
  set_tiling_cbs(kTileModeDepth_1dThin         ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
@@ -1075,6 +1055,9 @@ begin
 
  set_tiling_cbs(kTileModeThin_1dThin          ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
  set_tiling_cbs(kTileModeThin_1dThin          ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
+
+ set_tiling_cbs(kTileModeThick_1dThick        ,0,@load_1dThin,@write_1dThin,@Get1dThinSize);
+ set_tiling_cbs(kTileModeThick_1dThick        ,1,@load_1dThin,@write_1dThin,@Get1dThinSize);
  //
 
  set_tiling_cbs(kTileModeDisplay_LinearAligned,0,@Load_Linear,@Writeback_Linear,@GetLinearAlignSize);
