@@ -38,3 +38,4 @@ savedata/*
 tools/vop_generator/vnode_if.*
 tools/syscalls_gen/init_sysent.pas
 tools/syscalls_gen/syscalls.pas
+tools/tiling_rebuild/tiling_avx.pas
