@@ -1678,7 +1678,7 @@ begin
   if (mem_type=-1) then
   begin
    //find first bit
-   mem_type:=BsfByte(memoryTypeBits);
+   mem_type:=BsfDWord(memoryTypeBits);
   end;
 
   save_node:=_AllocDevBlock(AlignUp(Size,GRANULAR_DEV_BLOCK_SIZE),mem_type);
