@@ -13,6 +13,9 @@ uses
   Vulkan,
   vDevice,
 
+  SDL3,
+  SDL3_audio,
+
   game_info,
   form_filler;
 
@@ -31,6 +34,13 @@ type
    procedure SetInteger(v:Integer);
   end;
 
+  TAudioDevice=class(TComponent)
+   src: TComboBox;
+   //
+   Function  GetText:RawByteString;
+   procedure SetText(const s:RawByteString);
+  end;
+
   { TfrmCfgEditor }
 
   TfrmCfgEditor = class(TForm)
@@ -42,6 +52,10 @@ type
     BtnLogOpen: TButton;
     Edt_MainInfo_DefaultFirmware: TComboBox;
     Edt_MiscInfo_fork_proc: TCheckBox;
+    Edt_PS4Audio_SpecialDevice_cmb: TComboBox;
+    Edt_PS4Audio_HeadphoneDevice_cmb: TComboBox;
+    Edt_PS4Audio_ControllerDevice_cmb: TComboBox;
+    Edt_PS4Audio_MainDevice_cmb: TComboBox;
     Edt_PS4SystemService_SystemName: TEdit;
     Edt_PS4SystemService_ButtonAssign: TComboBox;
     Edt_PS4SystemService_TimeFormat: TComboBox;
@@ -65,6 +79,10 @@ type
     EditPages: TPageControl;
     Edt_MiscInfo_renderdoc_capture: TCheckBox;
     Label1: TLabel;
+    Label10: TLabel;
+    Label11: TLabel;
+    Label12: TLabel;
+    Label13: TLabel;
     Label2: TLabel;
     Label3: TLabel;
     Label4: TLabel;
@@ -76,6 +94,7 @@ type
     Edt_MainInfo_FirmwareList: TListBox;
     PanelHalf: TPanel;
     BtnExpLog: TSpeedButton;
+    Tab_PS4Audio: TTabSheet;
     Tab_PS4System: TTabSheet;
     Tab_Vulkan: TTabSheet;
     Tab_Misc: TTabSheet;
@@ -91,6 +110,7 @@ type
     procedure BtnRemFwClick(Sender: TObject);
     procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
     procedure VulkanInit;
+    procedure AudioInit;
     procedure FormInit;
     procedure FormSave;
   private
@@ -98,6 +118,11 @@ type
   public
    VulkanInfo_device   :TVulkanDevGuid;
    VulkanInfo_app_flags:TVulkanAppFlags;
+   //
+   PS4Audio_MainDevice      :TAudioDevice;
+   PS4Audio_HeadphoneDevice :TAudioDevice;
+   PS4Audio_ControllerDevice:TAudioDevice;
+   PS4Audio_SpecialDevice   :TAudioDevice;
    //
    OnSave     :TNotifyEvent;
    FConfigInfo:TConfigInfo;
@@ -335,6 +360,71 @@ begin
 end;
 
 //
+
+const
+ CNULL   :pchar='[NULL]';
+ CDEFAULT:pchar='[DEFAULT]';
+
+Function TAudioDevice.GetText:RawByteString;
+var
+ i:Integer;
+ ptr:pchar;
+begin
+ Result:='';
+ if (src=nil) then Exit;
+
+ i:=src.ItemIndex;
+ if (i=-1) then Exit;
+
+ ptr:=pchar(src.Items.Objects[i]);
+
+ if (ptr<>nil) then
+ begin
+  Result:=ptr;
+ end else
+ begin
+  Result:=src.Items.Strings[i];
+ end;
+end;
+
+procedure TAudioDevice.SetText(const s:RawByteString);
+var
+ i:Integer;
+
+ procedure _set_index(i:Integer); inline;
+ begin
+  if (i<src.Items.Count) then
+  begin
+   src.ItemIndex:=i;
+  end;
+ end;
+
+begin
+ if (src=nil) then Exit;
+
+ if (s=CNULL) then
+ begin
+  _set_index(0);
+  Exit;
+ end else
+ if (s=CDEFAULT) then
+ begin
+  _set_index(1);
+  Exit;
+ end;
+
+ For i:=0 to src.Items.Count-1 do
+ begin
+  if (src.Items.Strings[i]=s) then
+  begin
+   _set_index(i);
+   Exit;
+  end;
+ end;
+
+end;
+
+//
 type
  TCfgFormData=class(TFormDataProvider)
   procedure SetText   (control:TComponent;const Text:RawByteString); override;
@@ -353,6 +443,10 @@ begin
  begin
   TVulkanDevGuid(control).SetText(Text);
  end else
+ if (control is TAudioDevice) then
+ begin
+  TAudioDevice(control).SetText(Text);
+ end else
  if control.InheritsFrom(TControl) then
  begin
   TMyControl(control).Text:=Text;
@@ -365,6 +459,10 @@ begin
  if (control is TVulkanDevGuid) then
  begin
   Result:=TVulkanDevGuid(control).GetText;
+ end else
+ if (control is TAudioDevice) then
+ begin
+  Result:=TAudioDevice(control).GetText;
  end else
  if control.InheritsFrom(TControl) then
  begin
@@ -536,7 +634,6 @@ begin
   VulkanInfo_app_flags:=TVulkanAppFlags.Create(Self);
   VulkanInfo_app_flags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
   VulkanInfo_app_flags.src :=GrAppFlags;
-  //////
  end;
 
  Edt_VulkanInfo_device_cmb.Clear;
@@ -562,11 +659,88 @@ begin
 
 end;
 
+procedure TfrmCfgEditor.AudioInit;
+var
+ SDL3Audio:TSDL3Audio;
+ list:PSDL_AudioDeviceID;
+ i,count:Integer;
+ a_name:pchar;
+
+ procedure _init_proxy(var A:TAudioDevice;src:TComboBox;const Name:RawByteString); inline;
+ begin
+  if (A=nil) then
+  begin
+   A:=TAudioDevice.Create(Self);
+   A.Name:=Name; //FindComponent
+   A.src :=src;
+  end;
+ end;
+
+ procedure _add(const Item:RawByteString;AnObject:Pointer); inline;
+ begin
+  Edt_PS4Audio_MainDevice_cmb      .AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_HeadphoneDevice_cmb .AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_ControllerDevice_cmb.AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_SpecialDevice_cmb   .AddItem(Item,TObject(AnObject));
+ end;
+
+ procedure _set_index(i:Integer); inline;
+ begin
+  Edt_PS4Audio_MainDevice_cmb      .ItemIndex:=i;
+  Edt_PS4Audio_HeadphoneDevice_cmb .ItemIndex:=i;
+  Edt_PS4Audio_ControllerDevice_cmb.ItemIndex:=i;
+  Edt_PS4Audio_SpecialDevice_cmb   .ItemIndex:=i;
+ end;
+
+begin
+ _init_proxy(PS4Audio_MainDevice      ,Edt_PS4Audio_MainDevice_cmb      ,'Edt_PS4Audio_MainDevice');
+ _init_proxy(PS4Audio_HeadphoneDevice ,Edt_PS4Audio_HeadphoneDevice_cmb ,'Edt_PS4Audio_HeadphoneDevice');
+ _init_proxy(PS4Audio_ControllerDevice,Edt_PS4Audio_ControllerDevice_cmb,'Edt_PS4Audio_ControllerDevice');
+ _init_proxy(PS4Audio_SpecialDevice   ,Edt_PS4Audio_SpecialDevice_cmb   ,'Edt_PS4Audio_SpecialDevice');
+
+ Edt_PS4Audio_MainDevice_cmb      .Clear;
+ Edt_PS4Audio_HeadphoneDevice_cmb .Clear;
+ Edt_PS4Audio_ControllerDevice_cmb.Clear;
+ Edt_PS4Audio_SpecialDevice_cmb   .Clear;
+
+ SDL3Audio:=SDL_InitAudio();
+
+ if (SDL3Audio<>nil) then
+ begin
+  _add('[Disable]',CNULL);
+  _add('[Default]',CDEFAULT);
+  _set_index(1);
+
+  count:=0;
+  list :=SDL3Audio.SDL_GetAudioPlaybackDevices(@count);
+
+  if (list<>nil) and (count<>0) then
+  begin
+
+   For i:=0 to count-1 do
+   begin
+    a_name:=SDL3Audio.SDL_GetAudioDeviceName(list[i]);
+    _add(a_name,nil);
+   end;
+  end;
+
+  SDL_free(list);
+  //
+  FreeAndNil(SDL3Audio);
+ end else
+ begin
+  _add('[No audio]',CNULL);
+  _set_index(0);
+ end;
+
+end;
+
 procedure TfrmCfgEditor.FormInit;
 var
  Provider:TCfgFormData;
 begin
  VulkanInit;
+ AudioInit;
 
  EditPages.ActivePageIndex:=0;
 
