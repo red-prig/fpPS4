@@ -9,13 +9,14 @@ uses
  LFQueue,
  SDL3;
 
-function SDL_InitAudio():TSDL3Audio;
+type
+ TFunc=Function(Data:Pointer):Pointer; register;
+
+Function SDL3_SendSync(Func:TFunc;Data:Pointer):Pointer;
 
 implementation
 
 type
- TFunc=Function(Data:Pointer):Pointer; register;
-
  PQNode=^TQNode;
  TQNode=record
   next_:PQNode;
@@ -45,6 +46,8 @@ Function SDL3_SendSync(Func:TFunc;Data:Pointer):Pointer;
 var
  node:PQNode;
 begin
+ SDL3_Init_thread;
+
  node:=AllocMem(SizeOf(TQNode));
  if (node=nil) then Exit(nil);
 
@@ -63,18 +66,6 @@ begin
 
  RTLEventDestroy(node^.event);
  FreeMem(node);
-end;
-
-Function __SDL_InitAudio(Data:Pointer):Pointer; register;
-begin
- Result:=_SDL_InitAudio();
-end;
-
-function SDL_InitAudio():TSDL3Audio;
-begin
- SDL3_Init_thread;
- //
- Result:=TSDL3Audio(SDL3_SendSync(@__SDL_InitAudio,nil));
 end;
 
 function SDL3_thread(parameter:pointer):ptrint; register;

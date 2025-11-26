@@ -5,8 +5,7 @@ unit SDL3_audio_interface;
 interface
 
 uses
- SDL3,
- SDL3_main,
+ SDL3_audio,
  audioout_interface;
 
 type
