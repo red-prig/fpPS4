@@ -5,6 +5,7 @@ unit SDL3_audio_interface;
 interface
 
 uses
+ SDL3,
  SDL3_audio,
  audioout_interface;
 
@@ -218,6 +219,38 @@ begin
  inherited;
 end;
 
+function FindOutDevice(const device_id:RawByteString):TSDL_AudioDeviceID;
+var
+ list:PSDL_AudioDeviceID;
+ i,count:Integer;
+ a_name:pchar;
+begin
+ case device_id of
+  '','[DEFAULT]':Exit(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK);
+  else;
+ end;
+
+ count:=0;
+ list :=SDL3Audio.SDL_GetAudioPlaybackDevices(@count);
+
+ if (list<>nil) and (count<>0) then
+ begin
+
+  Result:=SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+  For i:=0 to count-1 do
+  begin
+   a_name:=SDL3Audio.SDL_GetAudioDeviceName(list[i]);
+   if (a_name=device_id) then
+   begin
+    Result:=list[i];
+    Break;
+   end;
+  end;
+ end;
+
+ SDL_free(list);
+end;
+
 Function TAudioOutSDL3.Open(const device_id:RawByteString):Boolean;
 var
  Spec:TSDL_AudioSpec;
@@ -260,7 +293,7 @@ begin
  if f_param.is_restricted  then Writeln('TODO: is_restricted ');
  if f_param.is_mix_to_main then Writeln('TODO: is_mix_to_main');
 
- Device:=SDL3Audio.SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,@Spec);
+ Device:=SDL3Audio.SDL_OpenAudioDevice(FindOutDevice(device_id),@Spec);
  if (Device=0) then
  begin
   Exit(False);

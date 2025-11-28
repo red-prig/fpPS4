@@ -10,6 +10,12 @@ uses
   audioout_interface,
   SDL3_audio_interface;
 
+var
+ FMainDevice      :RawByteString='';
+ FHeadphoneDevice :RawByteString='';
+ FControllerDevice:RawByteString='';
+ FSpecialDevice   :RawByteString='';
+
 type
  pSceAudioOutOutputParam=^SceAudioOutOutputParam;
  SceAudioOutOutputParam=packed record
@@ -184,6 +190,7 @@ function _out_open(userId,_type:Integer;
 var
  port_id:Integer;
  aparams:TAudioParams;
+ device_id:RawByteString;
  handle:TAudioOutHandle;
 begin
  //case   0: port_id[0..7]
@@ -290,7 +297,23 @@ begin
  aparams.is_restricted :=(param and SCE_AUDIO_OUT_PARAM_ATTR_RESTRICTED )<>0;
  aparams.is_mix_to_main:=(param and SCE_AUDIO_OUT_PARAM_ATTR_MIX_TO_MAIN)<>0;
 
- handle:=g_audioout_interface.Create;
+ case _type of
+  SCE_AUDIO_OUT_PORT_TYPE_MAIN    :device_id:=FMainDevice;
+  SCE_AUDIO_OUT_PORT_TYPE_BGM     :device_id:=FMainDevice;
+  SCE_AUDIO_OUT_PORT_TYPE_VOICE   :device_id:=FHeadphoneDevice;
+  SCE_AUDIO_OUT_PORT_TYPE_PERSONAL:device_id:=FHeadphoneDevice;
+  SCE_AUDIO_OUT_PORT_TYPE_PADSPK  :device_id:=FControllerDevice;
+  else
+                                   device_id:=FSpecialDevice;
+ end;
+
+ if (device_id='[NULL]') then
+ begin
+  handle:=TAudioOutNull.Create;
+ end else
+ begin
+  handle:=g_audioout_interface.Create;
+ end;
 
  if (handle=nil) then
  begin
@@ -303,7 +326,7 @@ begin
  handle.f_len      :=len;
  handle.f_param    :=aparams;
 
- if not handle.Open('') then
+ if not handle.Open(device_id) then
  begin
   FreeAndNil(handle);
   Assert(false,'audioout_interface open failed');

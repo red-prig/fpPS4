@@ -43,7 +43,6 @@ type
   TVulkanAppFlags=class(TProxyComponent)
    public
     src: TCheckGroup;
-    val: Integer;
     //
     Function  GetInteger:Integer;    override;
     procedure SetInteger(v:Integer); override;
@@ -343,6 +342,8 @@ begin
 
  if not VulkanInitIsFinished then Exit;
 
+ Result:='';
+
  i:=src.ItemIndex;
  if (i=-1) then Exit;
 
@@ -378,6 +379,11 @@ begin
   end;
  end;
 
+ if (src.Items.Count>0) then
+ begin
+  src.ItemIndex:=0;
+ end;
+
 end;
 
 //
@@ -386,29 +392,21 @@ Function TVulkanAppFlags.GetInteger:Integer;
 var
  i:Integer;
 begin
- Result:=val;
+ Result:=0;
  if (src=nil) then Exit;
 
- if not VulkanInitIsFinished then Exit;
-
- val:=0;
  For i:=0 to src.Items.Count-1 do
  if src.Checked[i] then
  begin
-  val:=val or (1 shl i);
+  Result:=Result or (1 shl i);
  end;
-
- Result:=val;
 end;
 
 procedure TVulkanAppFlags.SetInteger(v:Integer);
 var
  i:Integer;
 begin
- val:=i;
  if (src=nil) then Exit;
-
- if not VulkanInitIsFinished then Exit;
 
  For i:=0 to src.Items.Count-1 do
  begin
@@ -715,8 +713,7 @@ begin
  end;
 
  //update
- VulkanInfo_device.SetText   (VulkanInfo_device.val);
- VulkanInfo_aflags.SetInteger(VulkanInfo_aflags.val);
+ VulkanInfo_device.SetText(VulkanInfo_device.val);
  //update
 end;
 

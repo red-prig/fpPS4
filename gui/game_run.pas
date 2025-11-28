@@ -202,6 +202,11 @@ begin
  ps4_libSceSystemService.FDateFormat  :=ConfInfo.PS4SystemService.DateFormat;
  ps4_libSceSystemService.FTimeFormat  :=ConfInfo.PS4SystemService.TimeFormat;
  ps4_libSceSystemService.FButtonAssign:=ConfInfo.PS4SystemService.ButtonAssign;
+
+ ps4_libSceAudioOut.FMainDevice      :=ConfInfo.PS4Audio.MainDevice;
+ ps4_libSceAudioOut.FHeadphoneDevice :=ConfInfo.PS4Audio.HeadphoneDevice;
+ ps4_libSceAudioOut.FControllerDevice:=ConfInfo.PS4Audio.ControllerDevice;
+ ps4_libSceAudioOut.FSpecialDevice   :=ConfInfo.PS4Audio.SpecialDevice;
 end;
 
 procedure free_params(argv:PPChar);
