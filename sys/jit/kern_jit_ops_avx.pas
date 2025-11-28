@@ -1336,11 +1336,11 @@ begin
  jit_cbs[OPPv,OPsqrt ,OPSx_sd]:=@op_avx3_gen;
  jit_cbs[OPPv,OPsqrt ,OPSx_ss]:=@op_avx3_gen;
 
- jit_cbs[OPPv,OPrsqrt,OPSx_ps]:=@op_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPrsqrt,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPrsqrt,OPSx_ps]:=@op_avx2_reg_mem_wo; //TODO: approximation problem for Intel/AMD
+ jit_cbs[OPPv,OPrsqrt,OPSx_ss]:=@op_avx3_gen;        //TODO: approximation problem for Intel/AMD
 
- jit_cbs[OPPv,OPrcp  ,OPSx_ps]:=@op_avx2_reg_mem_wo;
- jit_cbs[OPPv,OPrcp  ,OPSx_ss]:=@op_avx3_gen;
+ jit_cbs[OPPv,OPrcp  ,OPSx_ps]:=@op_avx2_reg_mem_wo; //TODO: approximation problem for Intel/AMD
+ jit_cbs[OPPv,OPrcp  ,OPSx_ss]:=@op_avx3_gen;        //TODO: approximation problem for Intel/AMD
 
  jit_cbs[OPPnone,OPvbroadcast,OPSx_ss  ]:=@op_avx2_reg_mem_wo;
  jit_cbs[OPPnone,OPvbroadcast,OPSx_sd  ]:=@op_avx2_reg_mem_wo;

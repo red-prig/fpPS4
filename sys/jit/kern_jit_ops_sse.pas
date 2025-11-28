@@ -1162,11 +1162,11 @@ begin
  jit_cbs[OPPnone,OPsqrt,OPSx_sd]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPsqrt,OPSx_ss]:=@op_reg_mem_wo;
 
- jit_cbs[OPPnone,OPrsqrt,OPSx_ps]:=@op_reg_mem_wo;
- jit_cbs[OPPnone,OPrsqrt,OPSx_ss]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPrsqrt,OPSx_ps]:=@op_reg_mem_wo; //TODO: approximation problem for Intel/AMD
+ jit_cbs[OPPnone,OPrsqrt,OPSx_ss]:=@op_reg_mem_wo; //TODO: approximation problem for Intel/AMD
 
- jit_cbs[OPPnone,OPrcp ,OPSx_ps]:=@op_reg_mem_wo;
- jit_cbs[OPPnone,OPrcp ,OPSx_ss]:=@op_reg_mem_wo;
+ jit_cbs[OPPnone,OPrcp ,OPSx_ps]:=@op_reg_mem_wo;  //TODO: approximation problem for Intel/AMD
+ jit_cbs[OPPnone,OPrcp ,OPSx_ss]:=@op_reg_mem_wo;  //TODO: approximation problem for Intel/AMD
 
  jit_cbs[OPPnone,OPpshuf,OPSx_b ]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpshuf,OPSx_d ]:=@op_reg_mem_rw;
