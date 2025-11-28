@@ -951,8 +951,8 @@ begin
                          0,
                          0);
 
- SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
- SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
+ //SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
+ //SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
 
  FileSeek(FAddHandle,0,fsFromEnd);
 end;

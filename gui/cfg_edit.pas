@@ -10,6 +10,8 @@ uses
 
   lclintf,
 
+  sys_crt_gui,
+
   Vulkan,
   vDevice,
 
@@ -20,25 +22,39 @@ uses
   form_filler;
 
 type
-  TVulkanDevGuid=class(TComponent)
-   src: TComboBox;
-   //
-   Function  GetText:RawByteString;
-   procedure SetText(const s:RawByteString);
+  TProxyComponent=class(TComponent)
+   public
+    Function  GetText:RawByteString;          virtual; abstract;
+    procedure SetText(const s:RawByteString); virtual; abstract;
+    //
+    Function  GetInteger:Integer;             virtual; abstract;
+    procedure SetInteger(v:Integer);          virtual; abstract;
   end;
 
-  TVulkanAppFlags=class(TComponent)
-   src: TCheckGroup;
-   //
-   Function  GetInteger:Integer;
-   procedure SetInteger(v:Integer);
+  TVulkanDevGuid=class(TProxyComponent)
+   public
+    src: TComboBox;
+    val: RawByteString;
+    //
+    Function  GetText:RawByteString;          override;
+    procedure SetText(const s:RawByteString); override;
   end;
 
-  TAudioDevice=class(TComponent)
-   src: TComboBox;
-   //
-   Function  GetText:RawByteString;
-   procedure SetText(const s:RawByteString);
+  TVulkanAppFlags=class(TProxyComponent)
+   public
+    src: TCheckGroup;
+    val: Integer;
+    //
+    Function  GetInteger:Integer;    override;
+    procedure SetInteger(v:Integer); override;
+  end;
+
+  TAudioDevice=class(TProxyComponent)
+   public
+    src: TComboBox;
+    //
+    Function  GetText:RawByteString;          override;
+    procedure SetText(const s:RawByteString); override;
   end;
 
   { TfrmCfgEditor }
@@ -110,14 +126,19 @@ type
     procedure BtnRemFwClick(Sender: TObject);
     procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
     procedure VulkanInit;
+    procedure VulkanPostInit;
     procedure AudioInit;
     procedure FormInit;
     procedure FormSave;
+    procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
+    constructor Create(AOwner: TComponent); override;
   private
 
   public
-   VulkanInfo_device   :TVulkanDevGuid;
-   VulkanInfo_app_flags:TVulkanAppFlags;
+   destructor  Destroy; override;
+  public
+   VulkanInfo_device:TVulkanDevGuid;
+   VulkanInfo_aflags:TVulkanAppFlags;
    //
    PS4Audio_MainDevice      :TAudioDevice;
    PS4Audio_HeadphoneDevice :TAudioDevice;
@@ -143,19 +164,42 @@ uses
  ps4_libSceSystemService;
 
 var
- FVulkanDeviceInit:Boolean=False;
+ FVulkanDeviceInit:Integer=0;
  FVulkanDeviceList:APhysicalDeviceProperties=nil;
 
-Procedure InitVulkanDeviceList;
+function VulkanInitIsFinished:Boolean; inline;
 begin
- if FVulkanDeviceInit then Exit;
+ Result:=(FVulkanDeviceInit>=2);
+end;
 
+function VulkanInitCatchFinish:Boolean; inline;
+begin
+ Result:=(System.InterlockedCompareExchange(FVulkanDeviceInit,3,2)=2)
+end;
+
+function GetPhysicalDeviceList_thread(parameter:pointer):ptrint; register;
+begin
+ Result:=0;
+ sys_crt_gui.sys_crt_init;
+ //
  if vDevice.LoadVulkan then
  begin
   FVulkanDeviceList:=GetPhysicalDeviceList();
  end;
+ //
+ FVulkanDeviceInit:=2;
+ //
+ if Assigned(Classes.WakeMainThread) then
+ begin
+  Classes.WakeMainThread(nil);
+ end;
+end;
 
- FVulkanDeviceInit:=True;
+Procedure InitVulkanDeviceList;
+begin
+ if (System.InterlockedCompareExchange(FVulkanDeviceInit,1,0) <> 0) then Exit;
+
+ BeginThread(@GetPhysicalDeviceList_thread);
 end;
 
 procedure TfrmCfgEditor.BtnCancelClick(Sender: TObject);
@@ -294,17 +338,19 @@ var
  i:Integer;
  ptr:PVkPhysicalDeviceProperties;
 begin
- Result:='';
+ Result:=val;
  if (src=nil) then Exit;
+
+ if not VulkanInitIsFinished then Exit;
 
  i:=src.ItemIndex;
  if (i=-1) then Exit;
 
  ptr:=PVkPhysicalDeviceProperties(src.Items.Objects[i]);
-
  if (ptr=nil) then Exit;
 
- Result:=GUIDToString(TGUID(ptr^.pipelineCacheUUID));
+ val:=GUIDToString(TGUID(ptr^.pipelineCacheUUID));
+ Result:=val;
 end;
 
 procedure TVulkanDevGuid.SetText(const s:RawByteString);
@@ -313,7 +359,10 @@ var
  Guid:TGUID;
  ptr:PVkPhysicalDeviceProperties;
 begin
+ val:=s;
  if (src=nil) then Exit;
+
+ if not VulkanInitIsFinished then Exit;
 
  Guid:=Default(TGUID);
  TryStringToGUID(s,Guid);
@@ -337,21 +386,29 @@ Function TVulkanAppFlags.GetInteger:Integer;
 var
  i:Integer;
 begin
- Result:=0;
+ Result:=val;
  if (src=nil) then Exit;
 
+ if not VulkanInitIsFinished then Exit;
+
+ val:=0;
  For i:=0 to src.Items.Count-1 do
  if src.Checked[i] then
  begin
-  Result:=Result or (1 shl i);
+  val:=val or (1 shl i);
  end;
+
+ Result:=val;
 end;
 
 procedure TVulkanAppFlags.SetInteger(v:Integer);
 var
  i:Integer;
 begin
+ val:=i;
  if (src=nil) then Exit;
+
+ if not VulkanInitIsFinished then Exit;
 
  For i:=0 to src.Items.Count-1 do
  begin
@@ -362,6 +419,7 @@ end;
 //
 
 const
+ CZERO   :pchar='';
  CNULL   :pchar='[NULL]';
  CDEFAULT:pchar='[DEFAULT]';
 
@@ -439,13 +497,9 @@ type
 
 procedure TCfgFormData.SetText(control:TComponent;const Text:RawByteString);
 begin
- if (control is TVulkanDevGuid) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  TVulkanDevGuid(control).SetText(Text);
- end else
- if (control is TAudioDevice) then
- begin
-  TAudioDevice(control).SetText(Text);
+  TProxyComponent(control).SetText(Text);
  end else
  if control.InheritsFrom(TControl) then
  begin
@@ -456,13 +510,9 @@ end;
 function TCfgFormData.GetText(control:TComponent):RawByteString;
 begin
  Result:='';
- if (control is TVulkanDevGuid) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  Result:=TVulkanDevGuid(control).GetText;
- end else
- if (control is TAudioDevice) then
- begin
-  Result:=TAudioDevice(control).GetText;
+  Result:=TProxyComponent(control).GetText;
  end else
  if control.InheritsFrom(TControl) then
  begin
@@ -474,9 +524,9 @@ end;
 
 procedure TCfgFormData.SetInteger(control:TComponent;i:Integer);
 begin
- if (control is TVulkanAppFlags) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  TVulkanAppFlags(control).SetInteger(i);
+  TProxyComponent(control).SetInteger(i);
  end else
  if control.InheritsFrom(TCustomComboBox) then
  begin
@@ -505,9 +555,9 @@ end;
 function TCfgFormData.GetInteger(control:TComponent):Integer;
 begin
  Result:=0;
- if (control is TVulkanAppFlags) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  Result:=TVulkanAppFlags(control).GetInteger;
+  Result:=TProxyComponent(control).GetInteger;
  end else
  if control.InheritsFrom(TCustomComboBox) then
  begin
@@ -616,12 +666,7 @@ begin
 end;
 
 procedure TfrmCfgEditor.VulkanInit;
-var
- i:Integer;
- deviceName:RawByteString;
 begin
- InitVulkanDeviceList;
-
  if (VulkanInfo_device=nil) then
  begin
   VulkanInfo_device:=TVulkanDevGuid.Create(Self);
@@ -629,18 +674,30 @@ begin
   VulkanInfo_device.src :=Edt_VulkanInfo_device_cmb;
  end;
 
- if (VulkanInfo_app_flags=nil) then
+ if (VulkanInfo_aflags=nil) then
  begin
-  VulkanInfo_app_flags:=TVulkanAppFlags.Create(Self);
-  VulkanInfo_app_flags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
-  VulkanInfo_app_flags.src :=GrAppFlags;
+  VulkanInfo_aflags:=TVulkanAppFlags.Create(Self);
+  VulkanInfo_aflags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
+  VulkanInfo_aflags.src :=GrAppFlags;
  end;
 
  Edt_VulkanInfo_device_cmb.Clear;
  Edt_VulkanInfo_device_cmb.ItemIndex:=-1;
 
+ InitVulkanDeviceList;
+ VulkanPostInit;
+end;
+
+procedure TfrmCfgEditor.VulkanPostInit;
+var
+ i:Integer;
+ deviceName:RawByteString;
+begin
+ if not VulkanInitIsFinished then Exit;
+
  if Length(FVulkanDeviceList)=0 then Exit;
 
+ Edt_VulkanInfo_device_cmb.Clear;
  Edt_VulkanInfo_device_cmb.AddItem('Auto',nil);
  Edt_VulkanInfo_device_cmb.ItemIndex:=0;
 
@@ -657,6 +714,10 @@ begin
   Edt_VulkanInfo_device_cmb.AddItem(deviceName,TObject(@FVulkanDeviceList[i]));
  end;
 
+ //update
+ VulkanInfo_device.SetText   (VulkanInfo_device.val);
+ VulkanInfo_aflags.SetInteger(VulkanInfo_aflags.val);
+ //update
 end;
 
 procedure TfrmCfgEditor.AudioInit;
@@ -729,10 +790,31 @@ begin
   FreeAndNil(SDL3Audio);
  end else
  begin
-  _add('[No audio]',CNULL);
+  _add('[No audio]',CZERO);
   _set_index(0);
  end;
 
+end;
+
+procedure TfrmCfgEditor.OnIdleUpdate(Sender:TObject;var Done:Boolean);
+begin
+ if VulkanInitCatchFinish then
+ begin
+  //init list
+  VulkanPostInit;
+ end;
+end;
+
+constructor TfrmCfgEditor.Create(AOwner: TComponent);
+begin
+ inherited;
+ Application.AddOnIdleHandler(@OnIdleUpdate,False);
+end;
+
+destructor TfrmCfgEditor.Destroy;
+begin
+ Application.RemoveOnIdleHandler(@OnIdleUpdate);
+ inherited;
 end;
 
 procedure TfrmCfgEditor.FormInit;
