@@ -279,8 +279,8 @@ begin
 
   movq(r15,rcx); //save rcx
 
-  leaq(rcx ,[r14*8]);
-  leaq(r13w,[rcx+rcx]); //r13 = r13 && (!0xFFFF) || Word(r14*16)
+  leaq(ecx ,[r14d+r14d]);
+  leaq(r13w,[ecx*8]); //r13 = r13 && (!0xFFFF) || Word(r14*16)
 
   movq(rcx,[r13]); //-src
 
