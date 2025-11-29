@@ -10,25 +10,50 @@ uses
 
   lclintf,
 
+  sys_crt_gui,
+
   Vulkan,
   vDevice,
+
+  SDL3,
+  SDL3_audio,
 
   game_info,
   form_filler;
 
 type
-  TVulkanDevGuid=class(TComponent)
-   src: TComboBox;
-   //
-   Function  GetText:RawByteString;
-   procedure SetText(const s:RawByteString);
+  TProxyComponent=class(TComponent)
+   public
+    Function  GetText:RawByteString;          virtual; abstract;
+    procedure SetText(const s:RawByteString); virtual; abstract;
+    //
+    Function  GetInteger:Integer;             virtual; abstract;
+    procedure SetInteger(v:Integer);          virtual; abstract;
   end;
 
-  TVulkanAppFlags=class(TComponent)
-   src: TCheckGroup;
-   //
-   Function  GetInteger:Integer;
-   procedure SetInteger(v:Integer);
+  TVulkanDevGuid=class(TProxyComponent)
+   public
+    src: TComboBox;
+    val: RawByteString;
+    //
+    Function  GetText:RawByteString;          override;
+    procedure SetText(const s:RawByteString); override;
+  end;
+
+  TVulkanAppFlags=class(TProxyComponent)
+   public
+    src: TCheckGroup;
+    //
+    Function  GetInteger:Integer;    override;
+    procedure SetInteger(v:Integer); override;
+  end;
+
+  TAudioDevice=class(TProxyComponent)
+   public
+    src: TComboBox;
+    //
+    Function  GetText:RawByteString;          override;
+    procedure SetText(const s:RawByteString); override;
   end;
 
   { TfrmCfgEditor }
@@ -42,6 +67,10 @@ type
     BtnLogOpen: TButton;
     Edt_MainInfo_DefaultFirmware: TComboBox;
     Edt_MiscInfo_fork_proc: TCheckBox;
+    Edt_PS4Audio_SpecialDevice_cmb: TComboBox;
+    Edt_PS4Audio_HeadphoneDevice_cmb: TComboBox;
+    Edt_PS4Audio_ControllerDevice_cmb: TComboBox;
+    Edt_PS4Audio_MainDevice_cmb: TComboBox;
     Edt_PS4SystemService_SystemName: TEdit;
     Edt_PS4SystemService_ButtonAssign: TComboBox;
     Edt_PS4SystemService_TimeFormat: TComboBox;
@@ -65,6 +94,10 @@ type
     EditPages: TPageControl;
     Edt_MiscInfo_renderdoc_capture: TCheckBox;
     Label1: TLabel;
+    Label10: TLabel;
+    Label11: TLabel;
+    Label12: TLabel;
+    Label13: TLabel;
     Label2: TLabel;
     Label3: TLabel;
     Label4: TLabel;
@@ -76,6 +109,7 @@ type
     Edt_MainInfo_FirmwareList: TListBox;
     PanelHalf: TPanel;
     BtnExpLog: TSpeedButton;
+    Tab_PS4Audio: TTabSheet;
     Tab_PS4System: TTabSheet;
     Tab_Vulkan: TTabSheet;
     Tab_Misc: TTabSheet;
@@ -91,13 +125,24 @@ type
     procedure BtnRemFwClick(Sender: TObject);
     procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
     procedure VulkanInit;
+    procedure VulkanPostInit;
+    procedure AudioInit;
     procedure FormInit;
     procedure FormSave;
+    procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
+    constructor Create(AOwner: TComponent); override;
   private
 
   public
-   VulkanInfo_device   :TVulkanDevGuid;
-   VulkanInfo_app_flags:TVulkanAppFlags;
+   destructor  Destroy; override;
+  public
+   VulkanInfo_device:TVulkanDevGuid;
+   VulkanInfo_aflags:TVulkanAppFlags;
+   //
+   PS4Audio_MainDevice      :TAudioDevice;
+   PS4Audio_HeadphoneDevice :TAudioDevice;
+   PS4Audio_ControllerDevice:TAudioDevice;
+   PS4Audio_SpecialDevice   :TAudioDevice;
    //
    OnSave     :TNotifyEvent;
    FConfigInfo:TConfigInfo;
@@ -118,19 +163,42 @@ uses
  ps4_libSceSystemService;
 
 var
- FVulkanDeviceInit:Boolean=False;
+ FVulkanDeviceInit:Integer=0;
  FVulkanDeviceList:APhysicalDeviceProperties=nil;
 
-Procedure InitVulkanDeviceList;
+function VulkanInitIsFinished:Boolean; inline;
 begin
- if FVulkanDeviceInit then Exit;
+ Result:=(FVulkanDeviceInit>=2);
+end;
 
+function VulkanInitCatchFinish:Boolean; inline;
+begin
+ Result:=(System.InterlockedCompareExchange(FVulkanDeviceInit,3,2)=2)
+end;
+
+function GetPhysicalDeviceList_thread(parameter:pointer):ptrint; register;
+begin
+ Result:=0;
+ sys_crt_gui.sys_crt_init;
+ //
  if vDevice.LoadVulkan then
  begin
   FVulkanDeviceList:=GetPhysicalDeviceList();
  end;
+ //
+ FVulkanDeviceInit:=2;
+ //
+ if Assigned(Classes.WakeMainThread) then
+ begin
+  Classes.WakeMainThread(nil);
+ end;
+end;
 
- FVulkanDeviceInit:=True;
+Procedure InitVulkanDeviceList;
+begin
+ if (System.InterlockedCompareExchange(FVulkanDeviceInit,1,0) <> 0) then Exit;
+
+ BeginThread(@GetPhysicalDeviceList_thread);
 end;
 
 procedure TfrmCfgEditor.BtnCancelClick(Sender: TObject);
@@ -269,17 +337,21 @@ var
  i:Integer;
  ptr:PVkPhysicalDeviceProperties;
 begin
- Result:='';
+ Result:=val;
  if (src=nil) then Exit;
+
+ if not VulkanInitIsFinished then Exit;
+
+ Result:='';
 
  i:=src.ItemIndex;
  if (i=-1) then Exit;
 
  ptr:=PVkPhysicalDeviceProperties(src.Items.Objects[i]);
-
  if (ptr=nil) then Exit;
 
- Result:=GUIDToString(TGUID(ptr^.pipelineCacheUUID));
+ val:=GUIDToString(TGUID(ptr^.pipelineCacheUUID));
+ Result:=val;
 end;
 
 procedure TVulkanDevGuid.SetText(const s:RawByteString);
@@ -288,7 +360,10 @@ var
  Guid:TGUID;
  ptr:PVkPhysicalDeviceProperties;
 begin
+ val:=s;
  if (src=nil) then Exit;
+
+ if not VulkanInitIsFinished then Exit;
 
  Guid:=Default(TGUID);
  TryStringToGUID(s,Guid);
@@ -302,6 +377,11 @@ begin
    src.ItemIndex:=i;
    Exit;
   end;
+ end;
+
+ if (src.Items.Count>0) then
+ begin
+  src.ItemIndex:=0;
  end;
 
 end;
@@ -335,6 +415,72 @@ begin
 end;
 
 //
+
+const
+ CZERO   :pchar='';
+ CNULL   :pchar='[NULL]';
+ CDEFAULT:pchar='[DEFAULT]';
+
+Function TAudioDevice.GetText:RawByteString;
+var
+ i:Integer;
+ ptr:pchar;
+begin
+ Result:='';
+ if (src=nil) then Exit;
+
+ i:=src.ItemIndex;
+ if (i=-1) then Exit;
+
+ ptr:=pchar(src.Items.Objects[i]);
+
+ if (ptr<>nil) then
+ begin
+  Result:=ptr;
+ end else
+ begin
+  Result:=src.Items.Strings[i];
+ end;
+end;
+
+procedure TAudioDevice.SetText(const s:RawByteString);
+var
+ i:Integer;
+
+ procedure _set_index(i:Integer); inline;
+ begin
+  if (i<src.Items.Count) then
+  begin
+   src.ItemIndex:=i;
+  end;
+ end;
+
+begin
+ if (src=nil) then Exit;
+
+ if (s=CNULL) then
+ begin
+  _set_index(0);
+  Exit;
+ end else
+ if (s=CDEFAULT) then
+ begin
+  _set_index(1);
+  Exit;
+ end;
+
+ For i:=0 to src.Items.Count-1 do
+ begin
+  if (src.Items.Strings[i]=s) then
+  begin
+   _set_index(i);
+   Exit;
+  end;
+ end;
+
+end;
+
+//
 type
  TCfgFormData=class(TFormDataProvider)
   procedure SetText   (control:TComponent;const Text:RawByteString); override;
@@ -349,9 +495,9 @@ type
 
 procedure TCfgFormData.SetText(control:TComponent;const Text:RawByteString);
 begin
- if (control is TVulkanDevGuid) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  TVulkanDevGuid(control).SetText(Text);
+  TProxyComponent(control).SetText(Text);
  end else
  if control.InheritsFrom(TControl) then
  begin
@@ -362,9 +508,9 @@ end;
 function TCfgFormData.GetText(control:TComponent):RawByteString;
 begin
  Result:='';
- if (control is TVulkanDevGuid) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  Result:=TVulkanDevGuid(control).GetText;
+  Result:=TProxyComponent(control).GetText;
  end else
  if control.InheritsFrom(TControl) then
  begin
@@ -376,9 +522,9 @@ end;
 
 procedure TCfgFormData.SetInteger(control:TComponent;i:Integer);
 begin
- if (control is TVulkanAppFlags) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  TVulkanAppFlags(control).SetInteger(i);
+  TProxyComponent(control).SetInteger(i);
  end else
  if control.InheritsFrom(TCustomComboBox) then
  begin
@@ -407,9 +553,9 @@ end;
 function TCfgFormData.GetInteger(control:TComponent):Integer;
 begin
  Result:=0;
- if (control is TVulkanAppFlags) then
+ if control.InheritsFrom(TProxyComponent) then
  begin
-  Result:=TVulkanAppFlags(control).GetInteger;
+  Result:=TProxyComponent(control).GetInteger;
  end else
  if control.InheritsFrom(TCustomComboBox) then
  begin
@@ -518,12 +664,7 @@ begin
 end;
 
 procedure TfrmCfgEditor.VulkanInit;
-var
- i:Integer;
- deviceName:RawByteString;
 begin
- InitVulkanDeviceList;
-
  if (VulkanInfo_device=nil) then
  begin
   VulkanInfo_device:=TVulkanDevGuid.Create(Self);
@@ -531,19 +672,30 @@ begin
   VulkanInfo_device.src :=Edt_VulkanInfo_device_cmb;
  end;
 
- if (VulkanInfo_app_flags=nil) then
+ if (VulkanInfo_aflags=nil) then
  begin
-  VulkanInfo_app_flags:=TVulkanAppFlags.Create(Self);
-  VulkanInfo_app_flags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
-  VulkanInfo_app_flags.src :=GrAppFlags;
-  //////
+  VulkanInfo_aflags:=TVulkanAppFlags.Create(Self);
+  VulkanInfo_aflags.Name:='Edt_VulkanInfo_app_flags'; //FindComponent
+  VulkanInfo_aflags.src :=GrAppFlags;
  end;
 
  Edt_VulkanInfo_device_cmb.Clear;
  Edt_VulkanInfo_device_cmb.ItemIndex:=-1;
 
+ InitVulkanDeviceList;
+ VulkanPostInit;
+end;
+
+procedure TfrmCfgEditor.VulkanPostInit;
+var
+ i:Integer;
+ deviceName:RawByteString;
+begin
+ if not VulkanInitIsFinished then Exit;
+
  if Length(FVulkanDeviceList)=0 then Exit;
 
+ Edt_VulkanInfo_device_cmb.Clear;
  Edt_VulkanInfo_device_cmb.AddItem('Auto',nil);
  Edt_VulkanInfo_device_cmb.ItemIndex:=0;
 
@@ -560,6 +712,106 @@ begin
   Edt_VulkanInfo_device_cmb.AddItem(deviceName,TObject(@FVulkanDeviceList[i]));
  end;
 
+ //update
+ VulkanInfo_device.SetText(VulkanInfo_device.val);
+ //update
+end;
+
+procedure TfrmCfgEditor.AudioInit;
+var
+ SDL3Audio:TSDL3Audio;
+ list:PSDL_AudioDeviceID;
+ i,count:Integer;
+ a_name:pchar;
+
+ procedure _init_proxy(var A:TAudioDevice;src:TComboBox;const Name:RawByteString); inline;
+ begin
+  if (A=nil) then
+  begin
+   A:=TAudioDevice.Create(Self);
+   A.Name:=Name; //FindComponent
+   A.src :=src;
+  end;
+ end;
+
+ procedure _add(const Item:RawByteString;AnObject:Pointer); inline;
+ begin
+  Edt_PS4Audio_MainDevice_cmb      .AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_HeadphoneDevice_cmb .AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_ControllerDevice_cmb.AddItem(Item,TObject(AnObject));
+  Edt_PS4Audio_SpecialDevice_cmb   .AddItem(Item,TObject(AnObject));
+ end;
+
+ procedure _set_index(i:Integer); inline;
+ begin
+  Edt_PS4Audio_MainDevice_cmb      .ItemIndex:=i;
+  Edt_PS4Audio_HeadphoneDevice_cmb .ItemIndex:=i;
+  Edt_PS4Audio_ControllerDevice_cmb.ItemIndex:=i;
+  Edt_PS4Audio_SpecialDevice_cmb   .ItemIndex:=i;
+ end;
+
+begin
+ _init_proxy(PS4Audio_MainDevice      ,Edt_PS4Audio_MainDevice_cmb      ,'Edt_PS4Audio_MainDevice');
+ _init_proxy(PS4Audio_HeadphoneDevice ,Edt_PS4Audio_HeadphoneDevice_cmb ,'Edt_PS4Audio_HeadphoneDevice');
+ _init_proxy(PS4Audio_ControllerDevice,Edt_PS4Audio_ControllerDevice_cmb,'Edt_PS4Audio_ControllerDevice');
+ _init_proxy(PS4Audio_SpecialDevice   ,Edt_PS4Audio_SpecialDevice_cmb   ,'Edt_PS4Audio_SpecialDevice');
+
+ Edt_PS4Audio_MainDevice_cmb      .Clear;
+ Edt_PS4Audio_HeadphoneDevice_cmb .Clear;
+ Edt_PS4Audio_ControllerDevice_cmb.Clear;
+ Edt_PS4Audio_SpecialDevice_cmb   .Clear;
+
+ SDL3Audio:=SDL_InitAudio();
+
+ if (SDL3Audio<>nil) then
+ begin
+  _add('[Disable]',CNULL);
+  _add('[Default]',CDEFAULT);
+  _set_index(1);
+
+  count:=0;
+  list :=SDL3Audio.SDL_GetAudioPlaybackDevices(@count);
+
+  if (list<>nil) and (count<>0) then
+  begin
+
+   For i:=0 to count-1 do
+   begin
+    a_name:=SDL3Audio.SDL_GetAudioDeviceName(list[i]);
+    _add(a_name,nil);
+   end;
+  end;
+
+  SDL_free(list);
+  //
+  FreeAndNil(SDL3Audio);
+ end else
+ begin
+  _add('[No audio]',CZERO);
+  _set_index(0);
+ end;
+
+end;
+
+procedure TfrmCfgEditor.OnIdleUpdate(Sender:TObject;var Done:Boolean);
+begin
+ if VulkanInitCatchFinish then
+ begin
+  //init list
+  VulkanPostInit;
+ end;
+end;
+
+constructor TfrmCfgEditor.Create(AOwner: TComponent);
+begin
+ inherited;
+ Application.AddOnIdleHandler(@OnIdleUpdate,False);
+end;
+
+destructor TfrmCfgEditor.Destroy;
+begin
+ Application.RemoveOnIdleHandler(@OnIdleUpdate);
+ inherited;
 end;
 
 procedure TfrmCfgEditor.FormInit;
@@ -567,6 +819,7 @@ var
  Provider:TCfgFormData;
 begin
  VulkanInit;
+ AudioInit;
 
  EditPages.ActivePageIndex:=0;
 

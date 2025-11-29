@@ -7,6 +7,14 @@ interface
 type
  pAudioOutParam=^TAudioOutParam;
 
+ TAudioParams=bitpacked record
+  channels      :0..8;
+  is_float      :Boolean;
+  is_std        :Boolean;
+  is_restricted :Boolean;
+  is_mix_to_main:Boolean;
+ end;
+
  TAudioOutHandle=class
   const
    f_freq=48000;
@@ -14,8 +22,7 @@ type
    f_userId   :DWORD;
    f_type     :DWORD;
    f_len      :DWORD;
-   f_param    :DWORD;
-   f_channels :DWORD;
+   f_param    :TAudioParams;
   Function  Open(const device_id:RawByteString):Boolean; virtual; abstract;
   procedure SetVolume(channel,vol:Integer);              virtual; abstract;
   procedure SetMixLevelPadSpk(mixLevel:Integer);         virtual; abstract;
@@ -35,6 +42,7 @@ type
  TAudioOutNull=class(TAudioOutHandle)
   f_period   :QWORD; //microseconds
   f_last_time:QWORD; //microseconds
+  f_next_time:QWORD; //microseconds
   //
   Function  Open(const device_id:RawByteString):Boolean; override;
   procedure SetVolume(channel,vol:Integer);              override;
@@ -49,25 +57,20 @@ implementation
 
 uses
  md_time,
- time;
+ time,
+ md_sleep;
 
-function kern_nanosleep(rqt,rmt:p_timespec):Integer; SysV_ABI_CDecl; external;
-
-procedure usleep(usec:QWORD); //microseconds
-var
- rqt:timespec;
- rmt:timespec;
+procedure usleep(usec:QWORD); inline; //microseconds
 begin
- rqt.tv_sec :=usec div 1000000;
- rqt.tv_nsec:=((usec mod 1000000) * 1000);
- rmt:=Default(timespec);
- kern_nanosleep(@rqt,@rmt);
+ if (usec<>0)then
+  msleep_td(USEC_TO_UNIT(usec));
 end;
 
 Function TAudioOutNull.Open(const device_id:RawByteString):Boolean;
 begin
  f_period   :=((QWORD(1000000) * QWORD(f_len)) + (f_freq div 2)) div f_freq;
  f_last_time:=0;
+ f_next_time:=0;
  Result:=True;
 end;
 
@@ -87,83 +90,46 @@ begin
 end;
 
 function TAudioOutNull.Output(ptr:Pointer):Integer;
-label
- _repeat;
 var
  time,d:QWORD;
+ f_need_wait:QWORD;
 begin
  Result:=0;
- if (ptr<>nil) then
+
+ time:=GetProcessTime;
+
+ if (f_next_time=0) then
  begin
-  //async send
-
-  _repeat:
-
-  time:=GetProcessTime;
-
-  if (f_last_time=0) then
-  begin
-   f_last_time:=time;
-   Exit;
-  end;
-
-  d:=time-f_last_time;
-
-  if (d>=f_period) then
-  begin
-   f_last_time:=time;
-  end else
-  begin
-   d:=f_period-d;
-   //
-   if d>10 then d:=d-10;
-   //
-   usleep(d);
-
-   goto _repeat;
-
-   //Result:=-1; //BUSY
-  end;
-
-  {
-  if (f_last_time=0) or
-     ((time-f_last_time)>=f_period) then
-  begin
-   f_last_time:=time;
-  end else
-  begin
-   Result:=-1; //BUSY
-  end;
-  }
-
+  //first send
+  f_next_time:=(time+f_period);
+  f_need_wait:=0;
+ end else
+ if (time>f_next_time) then
+ begin
+  //underflow
+  f_next_time:=(time+f_period);
+  f_need_wait:=0;
  end else
  begin
-  //sync wait
+  //wait prev
+  f_need_wait:=f_next_time;
+  f_next_time:=(f_next_time+f_period);
+ end;
 
-  if (f_last_time=0) then
-  begin
-   Exit;
-  end;
-
-  time:=GetProcessTime;
-
-  if (f_last_time>time) then
-  begin
-   Exit;
-  end;
-
-  d:=(time-f_last_time);
-
-  if (d<f_period) then
-  begin
-   d:=f_period-d;
+ if (f_need_wait<>0) then
+ begin
+  repeat
+   time:=GetProcessTime;
+   if (time>=f_need_wait) then Break;
    //
+   d:=f_need_wait-time;
    if d>10 then d:=d-10;
    //
    usleep(d);
-  end;
-
+  until false;
  end;
+
+ f_last_time:=GetProcessTime;
 end;
 
 //

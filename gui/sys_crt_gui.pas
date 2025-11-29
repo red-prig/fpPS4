@@ -4,28 +4,25 @@ unit sys_crt_gui;
 
 interface
 
-Procedure sys_crt_init;
+Procedure sys_crt_init(Attach:Boolean=False);
 
 implementation
 
 uses
- windows,
- ntapi;
+ sysutils,
+ windows;
 
 Procedure CrtOutWrite(var t:TextRec);
 var
- i:DWORD;
+ i:Integer;
  h:THandle;
- BLK:IO_STATUS_BLOCK;
- OFFSET:Int64;
 Begin
  if (t.BufPos=0) then Exit;
 
  i:=PDWORD(@t.UserData)^;
  h:=GetStdHandle(i);
 
- OFFSET:=Int64(FILE_WRITE_TO_END_OF_FILE_L);
- NtWriteFile(h,0,nil,nil,@BLK,t.Bufptr,t.BufPos,@OFFSET,nil);
+ FileWrite(h,t.Bufptr^,t.BufPos);
 
  t.BufPos:=0;
 end;
@@ -51,8 +48,13 @@ begin
  PDWORD(@TextRec(F).UserData)^:=i;
 end;
 
-Procedure sys_crt_init;
+Procedure sys_crt_init(Attach:Boolean=False);
 begin
+ if Attach then
+ begin
+  AttachConsole(ATTACH_PARENT_PROCESS);
+ end;
+ //
  AssignTTY(Output   ,STD_OUTPUT_HANDLE);
  AssignTTY(StdOut   ,STD_OUTPUT_HANDLE);
  AssignTTY(ErrOutput,STD_ERROR_HANDLE);
@@ -65,7 +67,7 @@ begin
 end;
 
 initialization
- sys_crt_init;
+ sys_crt_init(True);
 
 end.
 

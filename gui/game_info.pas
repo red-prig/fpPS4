@@ -197,6 +197,20 @@ type
   Constructor Create; override;
  end;
 
+ TPS4Audio=class(TAbstractObject)
+ private
+  FMainDevice      :RawByteString;
+  FHeadphoneDevice :RawByteString;
+  FControllerDevice:RawByteString;
+  FSpecialDevice   :RawByteString;
+ published
+  property MainDevice      :RawByteString read FMainDevice       write FMainDevice      ;
+  property HeadphoneDevice :RawByteString read FHeadphoneDevice  write FHeadphoneDevice ;
+  property ControllerDevice:RawByteString read FControllerDevice write FControllerDevice;
+  property SpecialDevice   :RawByteString read FSpecialDevice    write FSpecialDevice   ;
+ public
+ end;
+
  TPS4LoadExec=class(TAbstractObject)
  private
   FPath:RawByteString;
@@ -215,6 +229,7 @@ type
    FMiscInfo        :TMiscInfo;
    FVulkanInfo      :TVulkanInfo;
    FPS4SystemService:TPS4SystemService;
+   FPS4Audio        :TPS4Audio;
   published
    property MainInfo        :TMainInfo         read FMainInfo         write FMainInfo;
    property BootParamInfo   :TBootParamInfo    read FBootParamInfo    write FBootParamInfo;
@@ -222,6 +237,7 @@ type
    property MiscInfo        :TMiscInfo         read FMiscInfo         write FMiscInfo;
    property VulkanInfo      :TVulkanInfo       read FVulkanInfo       write FVulkanInfo;
    property PS4SystemService:TPS4SystemService read FPS4SystemService write FPS4SystemService;
+   property PS4Audio        :TPS4Audio         read FPS4Audio         write FPS4Audio;
  end;
 
  TGameInfo=class(TAbstractObject)
