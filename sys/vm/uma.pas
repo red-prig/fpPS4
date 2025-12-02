@@ -11,6 +11,13 @@ uses
  md_map;
 
 const
+ M_NOWAIT=$0001; // do not block
+ M_WAITOK=$0002; // ok to block
+ M_ZERO  =$0100; // bzero the allocation
+ M_NOVM  =$0200; // don't ask VM for pages
+ M_NODUMP=$0800; // don't dump pages in this allocation
+
+const
  UMA_SMALLEST_UNIT=(MD_PAGE_SIZE div 256); // Smallest item allocated
 
 const

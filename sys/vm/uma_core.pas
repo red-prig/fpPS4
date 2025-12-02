@@ -246,14 +246,16 @@ procedure critical_enter();
 var
  curcpu:Integer;
 begin
- curcpu:=(curkthread^.pcb_curcpu and 7)-1;
- if (curcpu=-1) then
+ with curkthread^ do
  begin
-  curcpu:=System.InterlockedIncrement(cpu_counter) mod mp_maxid;
-  curkthread^.pcb_curcpu:=(curcpu+1)+8;
- end else
- begin
-  Inc(curkthread^.pcb_curcpu,8);
+  curcpu:=(pcb_curcpu-1);
+  if (curcpu=-1) then
+  begin
+   curcpu:=System.InterlockedIncrement(cpu_counter) mod mp_maxid;
+   pcb_curcpu:=(curcpu+1);
+   pcb_cpuref:=0;
+  end;
+  Inc(pcb_cpuref);
  end;
  mtx_lock(cpu_mtx[curcpu]);
 end;
@@ -262,14 +264,14 @@ procedure critical_exit();
 var
  curcpu:Integer;
 begin
- curcpu:=(curkthread^.pcb_curcpu and 7)-1;
- if (curcpu<>-1) then
+ with curkthread^ do
  begin
-  mtx_unlock(cpu_mtx[curcpu]);
-  with curkthread^ do
+  curcpu:=(pcb_curcpu-1);
+  if (curcpu<>-1) then
   begin
-   Dec(pcb_curcpu,8);
-   if (pcb_curcpu shr 3)=0 then
+   mtx_unlock(cpu_mtx[curcpu]);
+   Dec(pcb_cpuref);
+   if (pcb_cpuref=0) then
    begin
     pcb_curcpu:=0;
    end;
@@ -279,15 +281,8 @@ end;
 
 function curcpu():Integer;
 begin
- Result:=(curkthread^.pcb_curcpu and 7)-1;
+ Result:=(curkthread^.pcb_curcpu-1);
 end;
-
-const
- M_NOWAIT=$0001; // do not block
- M_WAITOK=$0002; // ok to block
- M_ZERO  =$0100; // bzero the allocation
- M_NOVM  =$0200; // don't ask VM for pages
- M_NODUMP=$0800; // don't dump pages in this allocation
 
  function uma_zcreate(name  :pchar;
                       size  :QWORD;

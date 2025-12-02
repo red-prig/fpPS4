@@ -280,6 +280,8 @@ type
   td_rmap_def_user:Pointer;
   td_sel          :Pointer;
   td_vp_reserv    :Int64;
+  pcb_curcpu      :Integer;
+  pcb_cpuref      :Integer;
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   pcb_onfault     :Pointer;
