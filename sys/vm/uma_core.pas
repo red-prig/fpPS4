@@ -12,7 +12,7 @@ uses
  systm,
  kern_param,
  time,
- kern_timeout,
+ md_time,
  kern_mtx,
  md_map;
 
@@ -91,7 +91,7 @@ var
  * This is the handle used to schedule events that need to happen
  * outside of the allocation fast path.
  }
- uma_callout:t_callout;
+ uma_callout:Int64=0;
 
 const
  UMA_TIMEOUT_CONST=20; { Seconds for callout interval. }
@@ -165,6 +165,9 @@ const
 
 { Prototypes.. }
 
+type
+ t_zfunc=procedure(z:uma_zone_t);
+
 //static void *obj_alloc(uma_zone_t, int, u_int8_t *, int);
 function  page_alloc(zone:uma_zone_t;bytes:Integer;pflag:pbyte;wait:Integer):Pointer;
 function  startup_alloc(zone:uma_zone_t;bytes:Integer;pflag:pbyte;wait:Integer):Pointer;
@@ -180,17 +183,12 @@ procedure zone_dtor(arg:Pointer;size:Integer;udata:Pointer);
 function  zero_init(mem:Pointer;size,flags:Integer):Integer;
 procedure keg_small_init(keg:uma_keg_t);
 procedure keg_large_init(keg:uma_keg_t);
-
-type
- t_zfunc=procedure(z:uma_zone_t);
-
 procedure zone_foreach(zfunc:t_zfunc);
 procedure zone_timeout(zone:uma_zone_t);
 function  hash_alloc(hash:p_uma_hash):Integer;
 function  hash_expand(oldhash,newhash:p_uma_hash):Integer;
 procedure hash_free(hash:p_uma_hash);
-procedure uma_timeout(unused:Pointer);
-procedure uma_startup3();
+procedure uma_startup4();
 function  zone_alloc_item(zone:uma_zone_t;udata:Pointer;flags:Integer):Pointer;
 procedure zone_free_item(zone:uma_zone_t;item,udata:Pointer;skip:zfreeskip;flags:Integer);
 procedure bucket_enable();
@@ -223,7 +221,8 @@ SYSCTL_PROC(_vm, OID_AUTO, zone_stats, CTLFLAG_RD|CTLTYPE_STRUCT, 0, 0, sysctl_v
 implementation
 
 uses
- kern_thr;
+ kern_thr,
+ kern_daemon;
 
 //fake round robin per CPU
 
@@ -284,15 +283,25 @@ begin
  Result:=(curkthread^.pcb_curcpu-1);
 end;
 
- function uma_zcreate(name  :pchar;
-                      size  :QWORD;
-                      ctor  :uma_ctor;
-                      dtor  :uma_dtor;
-                      uminit:uma_init;
-                      fini  :uma_fini;
-                      align :Integer;
-                      flags :DWORD
-                     ):uma_zone_t; forward;
+procedure curcpu_startup;
+var
+ i:Integer;
+begin
+ For i:=0 to mp_maxid-1 do
+ begin
+  mtx_init(cpu_mtx[i],'PCPU');
+ end;
+end;
+
+function uma_zcreate(name  :pchar;
+                     size  :QWORD;
+                     ctor  :uma_ctor;
+                     dtor  :uma_dtor;
+                     uminit:uma_init;
+                     fini  :uma_fini;
+                     align :Integer;
+                     flags :DWORD
+                    ):uma_zone_t; forward;
 
 {
  * This routine checks to see whether or not it's safe to enable buckets.
@@ -443,13 +452,20 @@ end;
  * Returns:
  * Nothing
  }
-procedure uma_timeout(unused:Pointer);
+procedure uma_timeout();
 begin
- bucket_enable();
- zone_foreach(@zone_timeout);
+ if (uma_callout=0) then
+ begin
+  uma_callout:=get_unit_uptime;
+ end;
 
- { Reschedule this event }
- callout_reset(@uma_callout, UMA_TIMEOUT_CONST * hz, @uma_timeout, nil);
+ if (get_unit_uptime - uma_callout) >= (UMA_TIMEOUT_CONST * hz) then
+ begin
+  bucket_enable();
+  zone_foreach(@zone_timeout);
+  //
+  uma_callout:=get_unit_uptime;
+ end;
 end;
 
 {
@@ -1765,7 +1781,7 @@ end;
 
 { Public functions }
 { See uma.h }
-procedure uma_startup(bootmem:Pointer;boot_pages:Integer); public;
+procedure uma_startup(bootmem:Pointer;boot_pages:Integer);
 var
  args:uma_zctor_args;
  slab:uma_slab_t;
@@ -1912,11 +1928,10 @@ begin
  bucket_init();
 
  booted:=UMA_STARTUP1_CONST;
-
 end;
 
 { see uma.h }
-procedure uma_startup2(); public;
+procedure uma_startup2();
 begin
  booted:=UMA_STARTUP2_CONST;
  bucket_enable();
@@ -1926,10 +1941,21 @@ end;
  * Initialize our callout handle
  *
  }
+
+var
+ stub:t_daemon_node;
+
 procedure uma_startup3();
 begin
- callout_init (@uma_callout, CALLOUT_MPSAFE);
- callout_reset(@uma_callout, UMA_TIMEOUT_CONST * hz, @uma_timeout, nil);
+ sys_daemon_add_cbs(@stub,@uma_timeout);
+end;
+
+procedure uma_startup4();
+begin
+ curcpu_startup;
+ uma_startup (kmem_alloc(UMA_BOOT_PAGES_CONST*MD_PAGE_SIZE, VM_RW),UMA_BOOT_PAGES_CONST);
+ uma_startup2();
+ uma_startup3();
 end;
 
 function uma_kcreate(zone:uma_zone_t;size:QWORD;uminit:uma_init;fini:uma_fini;align:Integer;flags:DWORD):uma_keg_t;
@@ -2314,7 +2340,7 @@ begin
   if (flags and M_NOVM)<>0 then
    break;
 
-  if (keg^.uk_maxpages and keg^.uk_pages >= keg^.uk_maxpages) then
+  if (keg^.uk_maxpages<>0) and (keg^.uk_pages >= keg^.uk_maxpages) then
   begin
    keg^.uk_flags:=keg^.uk_flags or UMA_ZFLAG_FULL;
    {

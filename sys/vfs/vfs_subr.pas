@@ -194,7 +194,8 @@ uses
  vsys_generic,
  kern_rangelock,
  rtprio,
- sys_conf;
+ sys_conf,
+ kern_daemon;
 
 //
 
@@ -238,6 +239,9 @@ const
  MAXVNODES_MAX=(512 * (1024 * 1024 * 1024 div (16*1024) div 16));
  v_page_count=524288;
 
+var
+ stub:t_daemon_node;
+
 procedure vntblinit;
 var
  i:DWORD;
@@ -267,6 +271,9 @@ begin
   i:=i shl 1;
  end;
  Dec(vnsz2log);
+
+ //
+ sys_daemon_add_cbs(@stub,@vnlru_proc);
 end;
 
 function vfs_busy(mp:p_mount;flags:Integer):Integer;
@@ -3910,7 +3917,6 @@ begin
  mtx_unlock(vnode_free_list_mtx);
  mnt_vnode_markerfree_active(mvp, mp);
 end;
-
 
 end.
 

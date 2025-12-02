@@ -31,6 +31,7 @@ uses
  vmount,
  vfiledesc,
  vm_map,
+ uma_core,
  kern_dmem,
  kern_mtxpool,
  vsys_generic,
@@ -59,29 +60,8 @@ uses
  dev_gc,
  dev_dce,
  dev_hid,
- dev_camera;
-
-var
- daemon_thr:p_kthread;
-
-//Daemon for a separate thread
-procedure sys_daemon(arg:Pointer);
-begin
- sched_prio(curkthread,1000);
- repeat
-  vnlru_proc;
-  TGuard.FLazy;
-  pause('sys_daemon',hz);
- until false;
-end;
-
-procedure sys_daemon_init;
-var
- n:Integer;
-begin
- n:=kthread_add(@sys_daemon,nil,@daemon_thr,0,'sys_daemon');
- Assert(n=0,'sys_daemon');
-end;
+ dev_camera,
+ kern_daemon;
 
 procedure module_init;
 begin
@@ -120,6 +100,7 @@ begin
  vmountinit;
  fd_table_init;
  vminit;
+ uma_startup4();
  init_dmem_map;
  mtx_pool_setup_dynamic;
  selectinit;
@@ -131,6 +112,7 @@ begin
  devfs_devs_init;
  pipeinit;
  module_init;
+ hazard_init;
  sys_daemon_init;
 end;
 

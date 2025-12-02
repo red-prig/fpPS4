@@ -30,6 +30,8 @@ type
    Procedure FLazy; static;
  end;
 
+procedure hazard_init;
+
 implementation
 
 uses
@@ -39,7 +41,8 @@ uses
  g_node_splay,
  kern_thr,
  time,
- md_sleep;
+ md_sleep,
+ kern_daemon;
 
 var
  rlist_bs:LIST_HEAD=(lh_first:nil);
@@ -367,7 +370,20 @@ begin
  Scan(smLazy);
 end;
 
+Procedure Guard_Lazy; SysV_ABI_CDecl;
+begin
+ Scan(smLazy);
+end;
+
 /////////
+
+var
+ stub:t_daemon_node;
+
+procedure hazard_init;
+begin
+ sys_daemon_add_cbs(@stub,@Guard_Lazy);
+end;
 
 end.
 

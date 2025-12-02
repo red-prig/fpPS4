@@ -135,7 +135,7 @@ const
  UMA_SLAB_MASK =(MD_PAGE_SIZE - 1); // Mask to get back to the page
  UMA_SLAB_SHIFT=MD_PAGE_SHIFT;      // Number of bits PAGE_MASK
 
- UMA_BOOT_PAGES=64; // Pages allocated for startup
+ UMA_BOOT_PAGES_CONST=64; // Pages allocated for startup
 
  UMA_MAX_WASTE=(UMA_SLAB_SIZE div 10); // Max waste before going to off page slab management
 
@@ -369,8 +369,6 @@ function  uma_zalloc    (zone:uma_zone_t;flags:Integer):Pointer; inline;
 procedure uma_zfree_arg (zone:uma_zone_t;item,udata:Pointer); external;
 procedure uma_zfree     (zone:uma_zone_t;item:Pointer); inline;
 
-procedure uma_startup(bootmem:Pointer;boot_pages:Integer); external;
-procedure uma_startup2(); external;
 procedure uma_reclaim(); external;
 procedure uma_set_align(align:Integer); external;
 
