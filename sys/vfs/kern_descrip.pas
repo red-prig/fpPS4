@@ -131,6 +131,7 @@ uses
  atomic,
  errno,
  systm,
+ uma,
  vfiledesc,
  vfs_vnops,
  vnode_if,
@@ -138,6 +139,9 @@ uses
  kern_resource,
  kern_mtx,
  sys_conf;
+
+var
+ file_zone:uma_zone_t;
 
 //
 
@@ -1226,7 +1230,7 @@ begin
 
  System.InterlockedIncrement(openfiles);
 
- fp:=AllocMem(SizeOf(t_file));
+ fp:=uma_zalloc(file_zone, M_WAITOK or M_ZERO);
  if (fp=nil) then Exit(ENOMEM);
 
  fp^.desc.refs:=1;
@@ -1302,7 +1306,7 @@ begin
  System.InterlockedDecrement(openfiles);
 
  FreeMem(fp^.f_advice);
- FreeMem(fp);
+ uma_zfree(file_zone, fp);
 end;
 
 procedure fhold(fp:p_file);
@@ -1671,6 +1675,8 @@ procedure fildesc_drvinit();
 var
  dev:p_cdev;
 begin
+ file_zone:=uma_zcreate('Files', sizeof(t_file), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ //
  dev:=make_dev_credf(MAKEDEV_ETERNAL, @fildesc_cdevsw, 0, UID_ROOT, GID_WHEEL, &0666, 'fd/0',[]);
  make_dev_alias(dev, 'stdin',[]);
  dev:=make_dev_credf(MAKEDEV_ETERNAL, @fildesc_cdevsw, 1, UID_ROOT, GID_WHEEL, &0666, 'fd/1',[]);

@@ -29,6 +29,7 @@ type
   sq_wchan     :Pointer;
   sq_lock      :Pointer;    //lock_object
   sq_type      :Integer;
+  sq_mem       :Integer;
  end;
 
  p_sleepqueue_chain=^sleepqueue_chain;
@@ -62,6 +63,7 @@ implementation
 
 uses
  errno,
+ uma,
  signal,
  signalvar,
  kern_proc,
@@ -74,12 +76,30 @@ function  mi_switch(flags:Integer):Integer; external;
 //
 
 var
+ sleepq_zone:uma_zone_t=nil;
  sleepq_chains:array[0..SC_MASK] of sleepqueue_chain;
+
+function sleepq_init(mem:Pointer;size,flags:Integer):Integer;
+var
+ sq:p_sleepqueue;
+ i:Integer;
+begin
+ sq:=mem;
+ sq^:=Default(sleepqueue);
+ For i:=0 to NR_SLEEPQS-1 do
+ begin
+  TAILQ_INIT(@sq^.sq_blocked[i]);
+ end;
+ LIST_INIT(@sq^.sq_free);
+ Result:=0;
+end;
 
 procedure init_sleepqueues;
 var
  i:Integer;
 begin
+ sleepq_zone:=uma_zcreate('SLEEPQUEUE', sizeof(sleepqueue), nil, nil, @sleepq_init, nil, UMA_ALIGN_CACHE, 0);
+
  For i:=0 to SC_MASK do
  begin
   LIST_INIT(@sleepq_chains[i].sc_queues);
@@ -92,20 +112,30 @@ function  sleepq_resume_thread(sq:p_sleepqueue;td:p_kthread;pri:Integer):Integer
 procedure sleepq_timeout(arg:Pointer); forward;
 
 function sleepq_alloc:p_sleepqueue; public;
-var
- i:Integer;
 begin
- Result:=AllocMem(SizeOf(sleepqueue));
- For i:=0 to NR_SLEEPQS-1 do
+ if (sleepq_zone=nil) then
  begin
-  TAILQ_INIT(@Result^.sq_blocked[i]);
+  Result:=GetMem(SizeOf(sleepqueue));
+  sleepq_init(Result,SizeOf(sleepqueue),M_WAITOK);
+  Result^.sq_mem:=1;
+ end else
+ begin
+  Result:=uma_zalloc(sleepq_zone, M_WAITOK);
  end;
- LIST_INIT(@Result^.sq_free);
 end;
 
 procedure sleepq_free(sq:p_sleepqueue); public;
 begin
- FreeMem(sq);
+ if (sq<>nil) then
+ begin
+  if (sq^.sq_mem<>0) then
+  begin
+   FreeMem(sq);
+  end else
+  begin
+   uma_zfree(sleepq_zone, sq);
+  end;
+ end;
 end;
 
 function SC_HASH(wc:Pointer):DWORD; inline;

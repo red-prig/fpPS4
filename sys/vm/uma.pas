@@ -47,13 +47,13 @@ const
                                require many virtually contiguous
                                backend pages and can fail early.
                               }
- //UMA_ZONE_VTOSLAB    =$2000; { Zone uses vtoslab for lookup. }
+ UMA_ZONE_VTOSLAB    =$2000; { Zone uses vtoslab for lookup. }
  UMA_ZONE_NODUMP     =$4000; {
                                Zone's pages will not be included in
                                mini-dumps.
                               }
 
- UMA_ZONE_INHERIT=(UMA_ZONE_OFFPAGE or UMA_ZONE_MALLOC or  UMA_ZONE_HASH or UMA_ZONE_REFCNT{ or UMA_ZONE_VTOSLAB});
+ UMA_ZONE_INHERIT=(UMA_ZONE_OFFPAGE or UMA_ZONE_MALLOC or  UMA_ZONE_HASH or UMA_ZONE_REFCNT or UMA_ZONE_VTOSLAB);
 
  UMA_ALIGN_PTR  =(sizeof(Pointer) - 1);
  UMA_ALIGN_LONG =(sizeof(DWORD) - 1);

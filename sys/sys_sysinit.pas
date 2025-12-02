@@ -27,10 +27,14 @@ uses
  kern_synch,
  kern_umtx,
  kern_namedobj,
+ kern_rangelock,
  kern_hazard_pointer,
+ kern_evf,
+ kern_osem,
  vmount,
  vfiledesc,
  vm_map,
+ vm_object,
  uma_core,
  kern_dmem,
  kern_mtxpool,
@@ -47,9 +51,11 @@ uses
  null_vfsops,
  ufs,
  kern_descrip,
+ vfs_mount,
  vfs_mountroot,
  sys_conf,
  sched_ule,
+ subr_dynlib,
  dev_null,
  dev_sce_zlib,
  dev_tty,
@@ -69,6 +75,7 @@ begin
  vfs_register(@fdescfs_vfsconf);
  vfs_register(@nullfs_vfsconf);
  vfs_register(@ufs_vfsconf);
+ vfs_mount_init();
  vfs_mountroot.vfs_mountroot();
  fildesc_drvinit;
  //
@@ -88,6 +95,7 @@ end;
 //Manual order of lazy initialization
 procedure sys_init;
 begin
+ uma_startup4();
  timeinit;
  init_sleepqueues;
  sysctl_register_all;
@@ -99,8 +107,9 @@ begin
  named_table_init;
  vmountinit;
  fd_table_init;
+ rangelock_sys_init;
  vminit;
- uma_startup4();
+ vm_object_init;
  init_dmem_map;
  mtx_pool_setup_dynamic;
  selectinit;
@@ -113,6 +122,9 @@ begin
  pipeinit;
  module_init;
  hazard_init;
+ sys_init_evf;
+ sys_init_osem;
+ subr_dynlib_init;
  sys_daemon_init;
 end;
 

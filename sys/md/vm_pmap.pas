@@ -300,6 +300,8 @@ begin
 
  pmap^.vm_map:=vm_map;
 
+ sys_init_vm_nt;
+
  vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
  vm_nt_map_init(@pmap^.gp_map,VM_MIN_GPU_ADDRESS,VM_MAX_GPU_ADDRESS);
 

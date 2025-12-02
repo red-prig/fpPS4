@@ -102,6 +102,8 @@ function  vm_object_allocate (t:objtype_t;size:vm_pindex_t):vm_object_t;
 procedure vm_object_destroy  (obj:vm_object_t);
 procedure vm_object_reference(obj:vm_object_t);
 
+procedure vm_object_init();
+
 procedure vm_object_pip_add     (obj:vm_object_t;i:word);
 procedure vm_object_pip_subtract(obj:vm_object_t;i:word);
 function  vm_object_type        (obj:vm_object_t):obj_type;
@@ -135,7 +137,11 @@ procedure vm_pager_deallocate(obj:vm_object_t); external;
 implementation
 
 uses
+ uma,
  vnode;
+
+var
+ obj_zone:uma_zone_t;
 
 //
 
@@ -192,7 +198,7 @@ end;
 
 function vm_object_allocate(t:objtype_t;size:vm_pindex_t):vm_object_t;
 begin
- Result:=AllocMem(SizeOf(t_vm_object));
+ Result:=uma_zalloc(obj_zone, M_ZERO or M_WAITOK);
 
  mtx_init(Result^.mtx,'vm_object');
 
@@ -231,7 +237,12 @@ procedure vm_object_destroy(obj:vm_object_t);
 begin
  mtx_destroy(obj^.mtx);
 
- FreeMem(obj);
+ uma_zfree(obj_zone, obj);
+end;
+
+procedure vm_object_init();
+begin
+ obj_zone:=uma_zcreate('VM OBJECT', sizeof(t_vm_object), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_VM or UMA_ZONE_NOFREE);
 end;
 
 procedure vm_object_reference(obj:vm_object_t);

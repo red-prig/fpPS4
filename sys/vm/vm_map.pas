@@ -353,6 +353,7 @@ procedure vminit; //SYSINIT
 implementation
 
 uses
+ uma,
  md_map,
  kern_proc,
  rmem_map,
@@ -376,6 +377,8 @@ function dmem_includes_wbgarlic(map  :Pointer;
 ////
 
 var
+ mapentzone:uma_zone_t;
+
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
 
@@ -772,7 +775,7 @@ end;
  }
 procedure vm_map_entry_dispose(map:vm_map_t;entry:vm_map_entry_t); inline;
 begin
- FreeMem(entry);
+ uma_zfree(mapentzone, entry);
 end;
 
 {
@@ -785,7 +788,7 @@ function vm_map_entry_create(map:vm_map_t):vm_map_entry_t;
 var
  new_entry:vm_map_entry_t;
 begin
- new_entry:=AllocMem(SizeOf(vm_map_entry));
+ new_entry:=uma_zalloc(mapentzone, M_WAITOK);
  Assert((new_entry<>nil),'vm_map_entry_create: kernel resources exhausted');
  Result:=new_entry;
 end;
@@ -4104,7 +4107,7 @@ begin
  begin
   vm_object_deallocate(entry^.vm_obj);
  end;
- Freemem(entry);
+ uma_zfree(mapentzone, entry);
 end;
 
 {
@@ -5434,6 +5437,8 @@ end;
 
 procedure vminit;
 begin
+ mapentzone:=uma_zcreate('MAP ENTRY', sizeof(vm_map_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
  p_proc.p_vmspace:=vmspace_alloc();
 end;
 

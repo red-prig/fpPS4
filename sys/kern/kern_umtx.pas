@@ -8,6 +8,7 @@ interface
 uses
  atomic,
  mqueue,
+ uma,
  kern_mtx,
  time,
  kern_thr,
@@ -146,6 +147,7 @@ type
  end;
 
 var
+ umtx_pi_zone:uma_zone_t;
  umtxq_chains:array[0..1,0..UMTX_CHAINS-1] of umtxq_chain;
  umtx_pi_allocated:Integer=0;
 
@@ -236,6 +238,8 @@ procedure umtxq_sysinit;
 var
  i,j:Integer;
 begin
+ umtx_pi_zone:=uma_zcreate('umtx pi', sizeof(umtx_pi), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
  For i:=0 to 1 do
  begin
   For j:=0 to UMTX_CHAINS-1 do
@@ -1622,7 +1626,7 @@ function umtx_pi_alloc():p_umtx_pi; inline;
 var
  pi:p_umtx_pi;
 begin
- pi:=AllocMem(sizeof(umtx_pi));
+ pi:=uma_zalloc(umtx_pi_zone, M_ZERO or M_WAITOK);
  TAILQ_INIT(@pi^.pi_blocked);
  fetch_add(umtx_pi_allocated, 1);
  Exit(pi);
@@ -1630,7 +1634,7 @@ end;
 
 procedure umtx_pi_free(pi:p_umtx_pi); inline;
 begin
- FreeMem(pi);
+ uma_zfree(umtx_pi_zone, pi);
  fetch_add(umtx_pi_allocated, -1);
 end;
 

@@ -74,8 +74,7 @@ procedure vfs_mountedfrom(mp:p_mount;from:PChar);
 procedure vfs_ref(mp:p_mount); inline;
 procedure vfs_rel(mp:p_mount); inline;
 
-procedure mount_init(mp:p_mount);
-procedure mount_fini(mp:p_mount);
+procedure vfs_mount_init();
 
 function  vfs_mount_alloc(vp    :p_vnode;
                           vfsp  :p_vfsconf;
@@ -111,6 +110,7 @@ implementation
 uses
  murmurhash,
  errno,
+ uma,
  systm,
  subr_uio,
  vfs_vnops,
@@ -783,16 +783,28 @@ begin
  MNT_REL(mp);
 end;
 
-procedure mount_init(mp:p_mount);
+function mount_init(mem:Pointer;size,flags:Integer):Integer;
+var
+ mp:p_mount;
 begin
+ mp:=mem;
  mtx_init(mp^.mnt_mtx    ,'struct mount mtx');
  mtx_init(mp^.mnt_explock,'explock');
+ Result:=0;
 end;
 
-procedure mount_fini(mp:p_mount);
+procedure mount_fini(mem:Pointer;size:Integer);
+var
+ mp:p_mount;
 begin
+ mp:=mem;
  mtx_destroy(mp^.mnt_explock);
  mtx_destroy(mp^.mnt_mtx);
+end;
+
+procedure vfs_mount_init();
+begin
+ mount_zone:=uma_zcreate('Mountpoints', sizeof(t_mount), nil, nil, @mount_init, @mount_fini, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 end;
 
 var
@@ -813,8 +825,7 @@ function vfs_mount_alloc(vp    :p_vnode;
 var
  mp:p_mount;
 begin
- mp:=AllocMem(SizeOf(t_mount));
- mount_init(mp);
+ mp:=uma_zalloc(mount_zone, M_WAITOK);
 
  TAILQ_INIT(@mp^.mnt_nvnodelist);
  mp^.mnt_nvnodelistsize:=0;
@@ -883,8 +894,7 @@ begin
   vfs_freeopts(mp^.mnt_opt);
  end;
 
- mount_fini(mp);
- FreeMem(mp);
+ uma_zfree(mount_zone, mp);
 end;
 
 function GetStr(p:Pointer;L:SizeUint):RawByteString; inline;

@@ -138,6 +138,7 @@ implementation
 uses
  atomic,
  mqueue,
+ uma,
  systm,
  errno,
  kern_mtx,
@@ -1466,7 +1467,7 @@ begin
   syspath:=path1;
  end else
  begin
-  syspath:=AllocMem(MAXPATHLEN);
+  syspath:=uma_zalloc(namei_zone, M_WAITOK);
   error:=copyinstr(path1, syspath, MAXPATHLEN, nil);
   if (error<>0) then goto _out;
  end;
@@ -1523,7 +1524,7 @@ out2:
 _out:
  if (segflg<>UIO_SYSSPACE) then
  begin
-  FreeMem(syspath);
+  uma_zfree(namei_zone, syspath);
  end;
 
  Exit(error);

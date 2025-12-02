@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  kern_param,
  time,
  sys_event,
@@ -389,8 +390,9 @@ const
  VFS_VERSION=$19660120;
 
 var
+ mount_zone   :uma_zone_t;
  mountlist_mtx:mtx;
- mountlist:TAILQ_HEAD=(tqh_first:nil;tqh_last:@mountlist.tqh_first);
+ mountlist    :TAILQ_HEAD=(tqh_first:nil;tqh_last:@mountlist.tqh_first);
 
  VFS_Giant:mtx;
 

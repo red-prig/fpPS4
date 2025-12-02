@@ -110,6 +110,7 @@ uses
  atomic,
  systm,
  errno,
+ uma,
  kern_descrip,
  subr_uio,
  kern_proc,
@@ -117,6 +118,7 @@ uses
  sys_capability;
 
 var
+ selfd_zone:uma_zone_t;
  mtxpool_select:p_mtx_pool;
 
 function kern_readv(fd:Integer;auio:p_uio):Integer;
@@ -1460,13 +1462,13 @@ begin
  stp:=td^.td_sel;
  if (stp^.st_free1=nil) then
  begin
-  stp^.st_free1:=AllocMem(SizeOf(t_selfd));
+  stp^.st_free1:=uma_zalloc(selfd_zone, M_WAITOK or M_ZERO);
  end;
  stp^.st_free1^.sf_td:=stp;
  stp^.st_free1^.sf_cookie:=cookie;
  if (stp^.st_free2=nil) then
  begin
-  stp^.st_free2:=AllocMem(SizeOf(t_selfd));
+  stp^.st_free2:=uma_zalloc(selfd_zone, M_WAITOK or M_ZERO);
  end;
  stp^.st_free2^.sf_td:=stp;
  stp^.st_free2^.sf_cookie:=cookie;
@@ -1481,7 +1483,7 @@ begin
   TAILQ_REMOVE(@sfp^.sf_si^.si_tdlist,sfp,@sfp^.sf_threads);
  end;
  mtx_unlock(sfp^.sf_mtx^);
- FreeMem(sfp);
+ uma_zfree(selfd_zone, sfp);
 end;
 
 { Drain the waiters tied to all the selfd belonging the specified selinfo. }
@@ -1675,11 +1677,11 @@ begin
  end;
  if (stp^.st_free1<>nil) then
  begin
-  FreeMem(stp^.st_free1);
+  uma_zfree(selfd_zone, stp^.st_free1);
  end;
  if (stp^.st_free2<>nil) then
  begin
-  FreeMem(stp^.st_free2);
+  uma_zfree(selfd_zone, stp^.st_free2);
  end;
  td^.td_sel:=nil;
  FreeMem(stp);
@@ -1710,6 +1712,8 @@ end;
 
 procedure selectinit();
 begin
+ selfd_zone:=uma_zcreate('selfd', sizeof(t_selfd), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
  mtxpool_select:=mtx_pool_create('select mtxpool', 128);
 end;
 

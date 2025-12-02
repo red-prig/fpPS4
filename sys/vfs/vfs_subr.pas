@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  vmount,
  kern_param,
  sys_event,
@@ -148,6 +149,9 @@ var
  mntid_mtx:mtx;
  vnode_free_list_mtx:mtx;
 
+ vnode_zone    :uma_zone_t;
+ vnodepoll_zone:uma_zone_t;
+
  syncer_delayno:Integer;
  syncer_mask:QWORD;
 
@@ -255,6 +259,10 @@ begin
 
  mtx_init(mntid_mtx,'mntid');
  mtx_init(vnode_free_list_mtx,'vnode_free_list');
+
+ vnode_zone    :=uma_zcreate('VNODE'    , sizeof (t_vnode)  , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ vnodepoll_zone:=uma_zcreate('VNODEPOLL', sizeof (vpollinfo), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
  {
   * Initialize the filesystem syncer.
   }
@@ -786,7 +794,7 @@ begin
  mtx_unlock(vnode_free_list_mtx);
  alloc:
  //atomic_add_long(@vnodes_created, 1);
- vp:=AllocMem(SizeOf(t_vnode));
+ vp:=uma_zalloc(vnode_zone, M_WAITOK or M_ZERO);
  {
   * Setup locks.
   }
@@ -2298,7 +2306,7 @@ begin
 
  //mtx_destroy(BO_MTX(bo));
 
- FreeMem(vp);
+ uma_zfree(vnode_zone, vp);
 end;
 
 {
@@ -2705,7 +2713,7 @@ procedure destroy_vpollinfo_free(vi:p_vpollinfo);
 begin
  knlist_destroy(@vi^.vpi_selinfo.si_note);
  mtx_destroy(vi^.vpi_lock);
- FreeMem(vi);
+ uma_zfree(vnodepoll_zone, vi);
 end;
 
 procedure destroy_vpollinfo(vi:p_vpollinfo);
@@ -2731,7 +2739,7 @@ begin
  begin
   Exit;
  end;
- vi:=AllocMem(SizeOf(vpollinfo));
+ vi:=uma_zalloc(vnodepoll_zone, M_WAITOK);
  mtx_init(vi^.vpi_lock,'vnode pollinfo');
  knlist_init(@vi^.vpi_selinfo.si_note, vp, @vfs_knllock, @vfs_knlunlock, @vfs_knl_assert_locked, @vfs_knl_assert_unlocked);
  VI_LOCK(vp);

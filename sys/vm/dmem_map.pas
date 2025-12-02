@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  vm,
  vmparam,
  vm_object,
@@ -43,19 +44,20 @@ type
 
  p_dmem_map=^t_dmem_map;
  t_dmem_map=object
-  header  :t_dmem_map_entry; // List of entries
-  lock    :mtx;              // Lock for map data
-  nentries:DWORD;            // Number of entries
-  size    :DWORD;            // size
-  root    :p_dmem_map_entry; // Root of a binary search tree
-  vmap    :Pointer;
-  rmap    :Pointer;
+  header    :t_dmem_map_entry; // List of entries
+  lock      :mtx;              // Lock for map data
+  nentries  :DWORD;            // Number of entries
+  size      :DWORD;            // size
+  root      :p_dmem_map_entry; // Root of a binary search tree
+  vmap      :Pointer;
+  rmap      :Pointer;
+  entry_zone:uma_zone_t;
   function  get_max_offset:DWORD;
   property  min_offset:DWORD read header.start   write header.start;
   property  max_offset:DWORD read get_max_offset write header.__end;
  end;
 
-procedure dmem_map_entry_deallocate(entry:p_dmem_map_entry);
+procedure dmem_map_entry_deallocate(map:p_dmem_map;entry:p_dmem_map_entry);
 
 procedure dmem_map_lock   (map:p_dmem_map);
 function  dmem_map_trylock(map:p_dmem_map):Boolean;
@@ -169,9 +171,9 @@ begin
  end;
 end;
 
-procedure dmem_map_entry_deallocate(entry:p_dmem_map_entry);
+procedure dmem_map_entry_deallocate(map:p_dmem_map;entry:p_dmem_map_entry);
 begin
- Freemem(entry);
+ uma_zfree(map^.entry_zone, entry);
 end;
 
 procedure DMEM_MAP_RANGE_CHECK(map:p_dmem_map;var start,__end:DWORD);
@@ -232,18 +234,20 @@ procedure dmem_map_init(map:p_dmem_map;min,max:QWORD);
 begin
  _dmem_map_init(map, OFF_TO_IDX(min), OFF_TO_IDX(max));
  mtx_init(map^.lock,'dmem');
+ //
+ map^.entry_zone:=uma_zcreate('dmem_map_entry', sizeof(t_dmem_map_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 end;
 
 procedure dmem_map_entry_dispose(map:p_dmem_map;entry:p_dmem_map_entry); inline;
 begin
- FreeMem(entry);
+ uma_zfree(map^.entry_zone, entry);
 end;
 
 function dmem_map_entry_create(map:p_dmem_map):p_dmem_map_entry;
 var
  new_entry:p_dmem_map_entry;
 begin
- new_entry:=AllocMem(SizeOf(t_dmem_map_entry));
+ new_entry:=uma_zalloc(map^.entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'dmem_map_entry_create: kernel resources exhausted');
  Result:=new_entry;
 end;
@@ -1047,7 +1051,7 @@ begin
  begin
   rmap:=map^.rmap;
 
-  rmem_map_process_deferred; //flush
+  rmem_map_process_deferred(rmap); //flush
 
   rmem_map_lock(rmap);
 
@@ -1080,7 +1084,7 @@ begin
     vm_map_unlock(vmap);
 
     //free all
-    rmem_map_process_deferred;
+    rmem_map_process_deferred(rmap);
    end;
   end;
  end;
@@ -1288,7 +1292,7 @@ begin
  size:=entry^.__end - entry^.start;
  map^.size:=map^.size-size;
 
- dmem_map_entry_deallocate(entry);
+ dmem_map_entry_deallocate(map,entry);
 end;
 
 function dmem_map_delete(map:p_dmem_map;start:DWORD;__end:DWORD;m_acl:t_dest_acl):Integer;

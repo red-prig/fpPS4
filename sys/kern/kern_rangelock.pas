@@ -48,6 +48,8 @@ type
   rl_currdep:p_rl_q_entry;
  end;
 
+procedure rangelock_sys_init();
+
 procedure rangelock_init        (lock:p_rangelock);
 procedure rangelock_destroy     (lock:p_rangelock);
 
@@ -67,28 +69,25 @@ procedure rlqentry_free         (rleq:p_rl_q_entry);
 
 implementation
 
+uses
+ uma;
+
 var
- global_rlqe:Pointer=nil;
+ rl_entry_zone:uma_zone_t;
+
+procedure rangelock_sys_init();
+begin
+ rl_entry_zone:=uma_zcreate('rl_entry', sizeof(rl_q_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+end;
 
 function rlqentry_alloc():p_rl_q_entry; inline;
 begin
- Result:=System.InterlockedExchange(global_rlqe,nil);
- if (Result=nil) then
- begin
-  Result:=AllocMem(SizeOf(rl_q_entry));
- end;
+ Result:=uma_zalloc(rl_entry_zone, M_WAITOK);
 end;
 
 procedure rlqentry_free(rleq:p_rl_q_entry); inline;
 begin
- if (rleq<>nil) then
- begin
-  rleq:=System.InterlockedExchange(global_rlqe,rleq);
-  if (rleq<>nil) then
-  begin
-   FreeMem(rleq);
-  end;
- end;
+ uma_zfree(rl_entry_zone, rleq);
 end;
 
 procedure rlqentry_rel(entry:p_rl_q_entry); inline;

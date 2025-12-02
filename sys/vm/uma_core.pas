@@ -54,7 +54,7 @@ var
  hashzone:uma_zone_t;
 
 { The boot-time adjusted value for cache line alignment. }
- uma_align_cache:Integer=64 - 1;
+ uma_align_cache_var:Integer=64 - 1;
 
  //static MALLOC_DEFINE(M_UMAHASH, 'UMAHash', 'UMA Hash Buckets');
 
@@ -250,7 +250,7 @@ begin
   curcpu:=(pcb_curcpu-1);
   if (curcpu=-1) then
   begin
-   curcpu:=System.InterlockedIncrement(cpu_counter) mod mp_maxid;
+   curcpu:=System.InterlockedExchangeAdd(cpu_counter,1) mod mp_maxid;
    pcb_curcpu:=(curcpu+1);
    pcb_cpuref:=0;
   end;
@@ -309,6 +309,7 @@ function uma_zcreate(name  :pchar;
 
 procedure bucket_enable();
 begin
+ bucketdisable:=0;
  //bucketdisable:=vm_page_count_min();
 end;
 
@@ -391,7 +392,7 @@ begin
  if (bucket<>nil) then
  begin
   FillChar(bucket^.ub_bucket, sizeof(Pointer) * ubz^.ubz_entries, 0);
-  bucket^.ub_cnt:=0;
+  bucket^.ub_cnt    :=0;
   bucket^.ub_entries:=ubz^.ubz_entries;
  end;
 
@@ -650,9 +651,12 @@ begin
 
  while (bucket^.ub_cnt > 0) do
  begin
-  Dec(bucket^.ub_cnt);
-  item:=bucket^.ub_bucket[bucket^.ub_cnt];
-  bucket^.ub_bucket[bucket^.ub_cnt]:=nil;
+  with bucket^ do
+  begin
+   Dec(ub_cnt);
+   item:=ub_bucket[ub_cnt];
+   ub_bucket[ub_cnt]:=nil;
+  end;
   Assert(item<>nil, 'bucket_drain: botched ptr, item is nil');
   zone_free_item(zone, item, nil, SKIP_DTOR, 0);
  end;
@@ -692,14 +696,23 @@ begin
  while CPU_FOREACH(cpu) do
  begin
   cache:=@zone^.uz_cpu[cpu];
-  bucket_drain(zone, cache^.uc_allocbucket);
-  bucket_drain(zone, cache^.uc_freebucket);
-  if (cache^.uc_allocbucket<>nil) then
-   bucket_free(cache^.uc_allocbucket);
-  if (cache^.uc_freebucket<>nil) then
-   bucket_free(cache^.uc_freebucket);
-  cache^.uc_allocbucket:=nil;
-  cache^.uc_freebucket :=nil;
+
+  with cache^ do
+  begin
+   bucket_drain(zone, uc_allocbucket);
+   bucket_drain(zone, uc_freebucket);
+   if (uc_allocbucket<>nil) then
+   begin
+    bucket_free(uc_allocbucket);
+   end;
+   if (uc_freebucket<>nil) then
+   begin
+    bucket_free(uc_freebucket);
+   end;
+   uc_allocbucket:=nil;
+   uc_freebucket :=nil;
+  end;
+
  end;
  ZONE_LOCK(zone);
  bucket_cache_drain(zone);
@@ -805,16 +818,14 @@ finished:
   if (keg^.uk_fini<>nil) then
    if (keg^.uk_ipers<>0) then
    For i:=0 to keg^.uk_ipers-1 do
-    keg^.uk_fini(
-        slab^.us_data + (keg^.uk_rsize * i),
-        keg^.uk_size);
+    keg^.uk_fini(slab^.us_data + (keg^.uk_rsize * i), keg^.uk_size);
 
   flags:=slab^.us_flags;
-  mem:=slab^.us_data;
+  mem  :=slab^.us_data;
 
-  {
   if (keg^.uk_flags and UMA_ZONE_VTOSLAB)<>0 then
   begin
+   {
    if (flags and UMA_SLAB_KMEM)<>0 then
    begin
     obj:=kmem_object;
@@ -828,8 +839,8 @@ finished:
    if (keg^.uk_ppera<>0) then
    For i:=0 to keg^.uk_ppera-1 do
     vsetobj(mem + (i * MD_PAGE_SIZE), obj);
+   }
   end;
-  }
 
   if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
    zone_free_item(keg^.uk_slabzone, slab, nil, SKIP_NONE, ZFREE_STATFREE);
@@ -944,14 +955,19 @@ begin
 
  { Point the slab into the allocated memory }
  if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)=0) then
+ begin
+  Assert(keg^.uk_pgoff<>0);
   slab:=uma_slab_t(mem + keg^.uk_pgoff);
+ end;
 
- {
  if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)<>0) then
+ begin
+  {
   if (keg^.uk_ppera<>0) then
   For i:=0 to keg^.uk_ppera-1 do
    vsetslab(mem + (i * PAGE_SIZE), slab);
- }
+  }
+ end;
 
  slab^.us_keg      :=keg;
  slab^.us_data     :=mem;
@@ -994,17 +1010,15 @@ begin
     Dec(i);
     while (i > -1) do
     begin
-     keg^.uk_fini(slab^.us_data +
-         (keg^.uk_rsize * i),
-         keg^.uk_size);
+     keg^.uk_fini(slab^.us_data + (keg^.uk_rsize * i), keg^.uk_size);
      //
      Dec(i);
     end;
    end;
 
-   {
    if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)<>0) then
    begin
+    {
     if (flags and UMA_SLAB_KMEM) then
      obj:=kmem_object;
     else if (flags and UMA_SLAB_KERNEL) then
@@ -1014,8 +1028,8 @@ begin
 
     for (i:=0; i < keg^.uk_ppera; i++)
      vsetobj(mem +(i * PAGE_SIZE), obj);
+    }
    end;
-   }
 
    if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
     zone_free_item(keg^.uk_slabzone, slab, nil, SKIP_NONE, ZFREE_STATFREE);
@@ -1244,6 +1258,8 @@ begin
  if ((rsize and keg^.uk_align)<>0) then
   rsize:=(rsize and (not keg^.uk_align)) + (keg^.uk_align + 1);
 
+ Assert(rsize<>0);
+
  keg^.uk_rsize:=rsize;
  keg^.uk_ppera:=1;
 
@@ -1262,7 +1278,7 @@ begin
  end;
 
  keg^.uk_ipers:=(UMA_SLAB_SIZE - shsize) div rsize;
- Assert(keg^.uk_ipers<>0, ('keg_small_init: ipers is 0'));
+ Assert(keg^.uk_ipers<>0, 'keg_small_init: ipers is 0');
  memused:=keg^.uk_ipers * rsize + shsize;
  wastedspace:=UMA_SLAB_SIZE - memused;
 
@@ -1283,10 +1299,9 @@ begin
   keg^.uk_ipers:=UMA_SLAB_SIZE div keg^.uk_rsize;
   Assert(keg^.uk_ipers <= 255, 'keg_small_init: keg^.uk_ipers too high!');
   keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE;
-  {
+
   if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)=0) then
    keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_HASH;
-  }
  end;
 end;
 
@@ -1323,10 +1338,9 @@ begin
   Exit;
 
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE;
- {
+
  if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)=0) then
   keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_HASH;
- }
 end;
 
 function Min(a,b:PtrUInt):PtrUInt; inline;
@@ -1339,7 +1353,6 @@ begin
  if (a>b) then Result:=a else Result:=b;
 end;
 
-{
 procedure keg_cachespread_init(keg:uma_keg_t);
 var
  alignsize:Integer;
@@ -1369,9 +1382,8 @@ begin
  keg^.uk_ipers:=((pages * MD_PAGE_SIZE) + trailer) div rsize;
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE or UMA_ZONE_VTOSLAB;
 
- Assert(keg^.uk_ipers <= uma_max_ipers, '%s: keg^.uk_ipers too high(%d) increase max_ipers', __func__, keg^.uk_ipers);
+ Assert(keg^.uk_ipers <= uma_max_ipers, '%s: keg^.uk_ipers too high(%d) increase max_ipers');
 end;
-}
 
 {
  * Keg header ctor.  This initializes all fields, locks, etc.  And inserts
@@ -1418,7 +1430,7 @@ begin
  if ((arg^.flags and UMA_ZONE_REFCNT)<>0) or
     ((arg^.flags and UMA_ZONE_MALLOC)<>0) then
  begin
-  //keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_VTOSLAB;
+  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_VTOSLAB;
  end;
 
  {
@@ -1431,7 +1443,7 @@ begin
  begin
   if ((keg^.uk_flags and UMA_ZONE_CACHESPREAD)<>0) then
   begin
-   //keg_cachespread_init(keg);
+   keg_cachespread_init(keg);
   end else
   if (keg^.uk_size+UMA_FRITMREF_SZ) >
      (UMA_SLAB_SIZE - sizeof(uma_slab_refcnt)) then
@@ -1445,7 +1457,7 @@ begin
  begin
   if ((keg^.uk_flags and UMA_ZONE_CACHESPREAD)<>0) then
   begin
-   //keg_cachespread_init(keg);
+   keg_cachespread_init(keg);
   end else
   if (keg^.uk_size+UMA_FRITM_SZ) >
      (UMA_SLAB_SIZE - sizeof(uma_slab)) then
@@ -1517,6 +1529,8 @@ begin
   end;
 
   keg^.uk_pgoff:=(UMA_SLAB_SIZE * keg^.uk_ppera) - totsize;
+
+  Assert(keg^.uk_pgoff<>0);
 
   if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
   begin
@@ -1968,7 +1982,7 @@ begin
 
  if (align=UMA_ALIGN_CACHE) then
  begin
-  args.align:=uma_align_cache;
+  args.align:=uma_align_cache_var;
  end else
  begin
   args.align:=align;
@@ -1983,7 +1997,7 @@ end;
 procedure uma_set_align(align:Integer); public;
 begin
  if (align<>UMA_ALIGN_CACHE) then
-  uma_align_cache:=align;
+  uma_align_cache_var:=align;
 end;
 
 { See uma.h }
@@ -2076,7 +2090,7 @@ begin
   * zone must use vtoslab() to resolve objects and must already be
   * a secondary.
   }
- if (zone^.uz_flags and ({UMA_ZONE_VTOSLAB or} UMA_ZONE_SECONDARY)) <> ({UMA_ZONE_VTOSLAB or} UMA_ZONE_SECONDARY) then
+ if (zone^.uz_flags and (UMA_ZONE_VTOSLAB or UMA_ZONE_SECONDARY)) <> (UMA_ZONE_VTOSLAB or UMA_ZONE_SECONDARY) then
  begin
   error:=EINVAL;
   goto _out;
@@ -2085,13 +2099,11 @@ begin
   * The new master must also use vtoslab().
   }
 
- {
  if ((zone^.uz_flags and UMA_ZONE_VTOSLAB)<>UMA_ZONE_VTOSLAB) then
  begin
   error:=EINVAL;
   goto _out;
  end;
- }
 
  {
   * Both must either be refcnt, or not be refcnt.
@@ -2179,10 +2191,13 @@ zalloc_start:
  begin
   if (bucket^.ub_cnt > 0) then
   begin
-   Dec(bucket^.ub_cnt);
-   item:=bucket^.ub_bucket[bucket^.ub_cnt];
 
-   bucket^.ub_bucket[bucket^.ub_cnt]:=nil;
+   with bucket^ do
+   begin
+    Dec(ub_cnt);
+    item:=ub_bucket[ub_cnt];
+    ub_bucket[ub_cnt]:=nil;
+   end;
 
    Assert(item<>nil, 'uma_zalloc: Bucket pointer mangled.');
    Inc(cache^.uc_allocs);
@@ -2212,12 +2227,13 @@ zalloc_start:
     * We have run out of items in our allocbucket.
     * See if we can switch with our free bucket.
     }
-   if (cache^.uc_freebucket^.ub_cnt > 0) then
+   with cache^ do
+   if (uc_freebucket^.ub_cnt > 0) then
    begin
 
-    bucket:=cache^.uc_freebucket;
-    cache^.uc_freebucket:=cache^.uc_allocbucket;
-    cache^.uc_allocbucket:=bucket;
+    bucket:=uc_freebucket;
+    uc_freebucket :=uc_allocbucket;
+    uc_allocbucket:=bucket;
 
     goto zalloc_start;
    end;
@@ -2254,17 +2270,22 @@ zalloc_start:
  end;
 
  { Since we have locked the zone we may as well send back our stats }
- zone^.uz_allocs:=zone^.uz_allocs + cache^.uc_allocs;
- cache^.uc_allocs:=0;
- zone^.uz_frees:=zone^.uz_frees + cache^.uc_frees;
- cache^.uc_frees:=0;
+ with zone^ do
+ with cache^ do
+ begin
+  uz_allocs:=uz_allocs + uc_allocs;
+  uz_frees :=uz_frees  + uc_frees;
+  uc_allocs:=0;
+  uc_frees:=0;
+ end;
 
  { Our old one is now a free bucket }
- if (cache^.uc_allocbucket<>nil) then
+ with cache^ do
+ if (uc_allocbucket<>nil) then
  begin
-  Assert(cache^.uc_allocbucket^.ub_cnt=0, 'uma_zalloc_arg: Freeing a non free bucket.');
-  LIST_INSERT_HEAD(@zone^.uz_free_bucket, cache^.uc_allocbucket, @cache^.uc_allocbucket^.ub_link);
-  cache^.uc_allocbucket:=nil;
+  Assert(uc_allocbucket^.ub_cnt=0, 'uma_zalloc_arg: Freeing a non free bucket.');
+  LIST_INSERT_HEAD(@zone^.uz_free_bucket, uc_allocbucket, @uc_allocbucket^.ub_link);
+  uc_allocbucket:=nil;
  end;
 
  { Check the free list for a new alloc bucket }
@@ -2612,8 +2633,11 @@ begin
   keg:=slab^.us_keg;
   while (slab^.us_freecount<>0) and (bucket^.ub_cnt < max) do
   begin
-   Inc(bucket^.ub_cnt);
-   bucket^.ub_bucket[bucket^.ub_cnt]:=slab_alloc_item(zone, slab);
+   with bucket^ do
+   begin
+    ub_bucket[ub_cnt]:=slab_alloc_item(zone, slab);
+    Inc(ub_cnt);
+   end;
   end;
 
   { Don't block on the next fill }
@@ -2651,8 +2675,11 @@ begin
    j:=i;
    while (j < bucket^.ub_cnt) do
    begin
-    zone_free_item(zone, bucket^.ub_bucket[j], nil, SKIP_FINI, 0);
-    bucket^.ub_bucket[j]:=nil;
+    with bucket^ do
+    begin
+     zone_free_item(zone, ub_bucket[j], nil, SKIP_FINI, 0);
+     ub_bucket[j]:=nil;
+    end;
     //
     Inc(j);
    end;
@@ -2802,9 +2829,12 @@ zfree_start:
 
   if (bucket^.ub_cnt < bucket^.ub_entries) then
   begin
-   Assert(bucket^.ub_bucket[bucket^.ub_cnt]=nil,'uma_zfree: Freeing to non free bucket index.');
-   bucket^.ub_bucket[bucket^.ub_cnt]:=item;
-   Inc(bucket^.ub_cnt);
+   with bucket^ do
+   begin
+    Assert(ub_bucket[ub_cnt]=nil,'uma_zfree: Freeing to non free bucket index.');
+    ub_bucket[ub_cnt]:=item;
+    Inc(ub_cnt);
+   end;
    Inc(cache^.uc_frees);
    critical_exit();
    Exit;
@@ -2816,12 +2846,12 @@ zfree_start:
     * We have run out of space in our freebucket.
     * See if we can switch with our alloc bucket.
     }
-   if (cache^.uc_allocbucket^.ub_cnt <
-       cache^.uc_freebucket^.ub_cnt) then
+   with cache^ do
+   if (uc_allocbucket^.ub_cnt < uc_freebucket^.ub_cnt) then
    begin
-    bucket:=cache^.uc_freebucket;
-    cache^.uc_freebucket:=cache^.uc_allocbucket;
-    cache^.uc_allocbucket:=bucket;
+    bucket:=uc_freebucket;
+    uc_freebucket :=uc_allocbucket;
+    uc_allocbucket:=bucket;
     goto zfree_start;
    end;
   end;
@@ -2844,15 +2874,17 @@ zfree_start:
  critical_enter();
  cpu:=curcpu;
  cache:=@zone^.uz_cpu[cpu];
- if (cache^.uc_freebucket<>nil) then
+
+ with cache^ do
+ if (uc_freebucket<>nil) then
  begin
-  if (cache^.uc_freebucket^.ub_cnt < cache^.uc_freebucket^.ub_entries) then
+  if (uc_freebucket^.ub_cnt < uc_freebucket^.ub_entries) then
   begin
    ZONE_UNLOCK(zone);
    goto zfree_start;
   end;
-  if (cache^.uc_allocbucket<>nil) and
-     (cache^.uc_allocbucket^.ub_cnt < cache^.uc_freebucket^.ub_cnt) then
+  if (uc_allocbucket<>nil) and
+     (uc_allocbucket^.ub_cnt < uc_freebucket^.ub_cnt) then
   begin
    ZONE_UNLOCK(zone);
    goto zfree_start;
@@ -2860,13 +2892,20 @@ zfree_start:
  end;
 
  { Since we have locked the zone we may as well send back our stats }
- zone^.uz_allocs:=zone^.uz_allocs + cache^.uc_allocs;
- cache^.uc_allocs:=0;
- zone^.uz_frees:=zone^.uz_frees + cache^.uc_frees;
- cache^.uc_frees:=0;
+ with zone^ do
+ with cache^ do
+ begin
+  uz_allocs:=uz_allocs + uc_allocs;
+  uz_frees :=uz_frees  + uc_frees;
+  uc_allocs:=0;
+  uc_frees :=0;
+ end;
 
- bucket:=cache^.uc_freebucket;
- cache^.uc_freebucket:=nil;
+ with cache^ do
+ begin
+  bucket:=uc_freebucket;
+  uc_freebucket:=nil;
+ end;
 
  { Can we throw this on the zone full list? }
  if (bucket<>nil) then
@@ -2943,7 +2982,7 @@ begin
  if ((flags and ZFREE_STATFREE)<>0) then
   Inc(zone^.uz_frees);
 
- if {((zone^.uz_flags and UMA_ZONE_VTOSLAB)=0)} True then
+ if ((zone^.uz_flags and UMA_ZONE_VTOSLAB)=0) then
  begin
   mem:=Pointer(QWORD(item) and (not UMA_SLAB_MASK));
   keg:=zone_first_keg(zone); { Must only be one. }

@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  vm,
  kern_mtx;
 
@@ -32,16 +33,18 @@ type
 
  p_rmem_map=^t_rmem_map;
  t_rmem_map=object
-  header  :t_rmem_map_entry; // List of entries
-  lock    :mtx;              // Lock for map data
-  root    :p_rmem_map_entry; // Root of a binary search tree
-  nentries:QWORD;            // Number of entries
-  tmap    :Pointer;          // p_vm_track_map
+  header       :t_rmem_map_entry; // List of entries
+  lock         :mtx;              // Lock for map data
+  root         :p_rmem_map_entry; // Root of a binary search tree
+  nentries     :QWORD;            // Number of entries
+  tmap         :Pointer;          // p_vm_track_map
+  instance_zone:uma_zone_t;
+  entry_zone   :uma_zone_t;
   property min_offset:QWORD read header.start write header.start;
   property max_offset:QWORD read header.__end write header.__end;
  end;
 
-procedure rmem_map_process_deferred;
+procedure rmem_map_process_deferred(map:p_rmem_map);
 
 procedure rmem_map_lock  (map:p_rmem_map);
 procedure rmem_map_unlock(map:p_rmem_map;def:Boolean=True);
@@ -95,11 +98,11 @@ end;
 
 //
 
-procedure _rmem_entry_add_vaddr(entry:p_rmem_map_entry;vaddr:QWORD);
+procedure _rmem_entry_add_vaddr(map:p_rmem_map;entry:p_rmem_map_entry;vaddr:QWORD);
 var
  node:p_rmem_vaddr_instance;
 begin
- node:=AllocMem(SizeOf(t_rmem_vaddr_instance));
+ node:=uma_zalloc(map^.instance_zone, M_WAITOK or M_ZERO);
 
  node^.vaddr:=vaddr;
 
@@ -107,7 +110,7 @@ begin
  Inc(entry^.count);
 end;
 
-function rmem_entry_add_vaddr(entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
+function rmem_entry_add_vaddr(map:p_rmem_map;entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
 var
  node:p_rmem_vaddr_instance;
 begin
@@ -127,7 +130,7 @@ begin
  //if not one vaddr
  Result:=(TAILQ_FIRST(@entry^.vlist)<>nil);
 
- _rmem_entry_add_vaddr(entry,vaddr);
+ _rmem_entry_add_vaddr(map,entry,vaddr);
 end;
 
 procedure rmem_entry_add_track(tmap:Pointer;entry:p_rmem_map_entry;dst:QWORD);
@@ -159,17 +162,17 @@ begin
  vm_track_map_unlock(tmap);
 end;
 
-function _rmem_entry_del_node(entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
+function _rmem_entry_del_node(map:p_rmem_map;entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
 begin
  Dec(entry^.count);
  TAILQ_REMOVE(@entry^.vlist,node,@node^.entry);
 
- FreeMem(node);
+ uma_zfree(map^.instance_zone, node);
 
  Result:=(TAILQ_FIRST(@entry^.vlist)=nil);
 end;
 
-function rmem_entry_del_vaddr(entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
+function rmem_entry_del_vaddr(map:p_rmem_map;entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
 var
  node:p_rmem_vaddr_instance;
 begin
@@ -180,7 +183,7 @@ begin
 
   if (node^.vaddr=vaddr) then
   begin
-   Result:=_rmem_entry_del_node(entry,node);
+   Result:=_rmem_entry_del_node(map,entry,node);
 
    Exit;
   end;
@@ -191,7 +194,7 @@ begin
  Result:=False;
 end;
 
-procedure rmem_entry_del_vaddr_all(entry:p_rmem_map_entry);
+procedure rmem_entry_del_vaddr_all(map:p_rmem_map;entry:p_rmem_map_entry);
 var
  node,next:p_rmem_vaddr_instance;
 begin
@@ -201,7 +204,7 @@ begin
  begin
   next:=TAILQ_NEXT(node,@node^.entry);
 
-  _rmem_entry_del_node(entry,node);
+  _rmem_entry_del_node(map,entry,node);
 
   node:=next;
  end;
@@ -268,7 +271,7 @@ begin
  end;
 end;
 
-procedure copy_vaddr_list(src,dst:p_rmem_map_entry;offset:QWORD);
+procedure copy_vaddr_list(map:p_rmem_map;src,dst:p_rmem_map_entry;offset:QWORD);
 var
  node:p_rmem_vaddr_instance;
 begin
@@ -280,7 +283,7 @@ begin
 
  while (node<>nil) do
  begin
-  _rmem_entry_add_vaddr(dst,node^.vaddr + offset);
+  _rmem_entry_add_vaddr(map,dst,node^.vaddr + offset);
 
   node:=TAILQ_NEXT(node,@node^.entry);
  end;
@@ -288,11 +291,11 @@ end;
 
 //
 
-procedure rmem_entry_deallocate(entry:p_rmem_map_entry);
+procedure rmem_entry_deallocate(map:p_rmem_map;entry:p_rmem_map_entry);
 begin
- rmem_entry_del_vaddr_all(entry);
+ rmem_entry_del_vaddr_all(map,entry);
  //
- Freemem(entry);
+ uma_zfree(map^.entry_zone, entry);
 end;
 
 procedure rmem_map_RANGE_CHECK(map:p_rmem_map;var start,__end:QWORD);
@@ -316,7 +319,7 @@ begin
  mtx_lock(map^.lock);
 end;
 
-procedure rmem_map_process_deferred;
+procedure rmem_map_process_deferred(map:p_rmem_map);
 var
  td:p_kthread;
  entry,next:p_rmem_map_entry;
@@ -328,7 +331,7 @@ begin
  while (entry<>nil) do
  begin
   next:=entry^.next;
-  rmem_entry_deallocate(entry);
+  rmem_entry_deallocate(map,entry);
   entry:=next;
  end;
 end;
@@ -338,7 +341,7 @@ begin
  mtx_unlock(map^.lock);
  if def then
  begin
-  rmem_map_process_deferred;
+  rmem_map_process_deferred(map);
  end;
 end;
 
@@ -366,13 +369,16 @@ procedure rmem_map_init(map:p_rmem_map;min,max:QWORD);
 begin
  _rmem_map_init(map, min, max);
  mtx_init(map^.lock,'rmap');
+ //
+ map^.instance_zone:=uma_zcreate('rmem_vaddr_instance', sizeof(t_rmem_vaddr_instance), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ map^.entry_zone   :=uma_zcreate('rmem_map_entry'     , sizeof(t_rmem_map_entry)     , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 end;
 
 function rmem_entry_create(map:p_rmem_map):p_rmem_map_entry;
 var
  new_entry:p_rmem_map_entry;
 begin
- new_entry:=AllocMem(SizeOf(t_rmem_map_entry));
+ new_entry:=uma_zalloc(map^.entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'rmem_map_entry_create: kernel resources exhausted');
 
  TAILQ_INIT(@new_entry^.vlist);
@@ -691,7 +697,7 @@ begin
    entry^.start:=prev^.start;
 
    //Move prev->entry
-   rmem_entry_del_vaddr_all(entry);
+   rmem_entry_del_vaddr_all(map,entry);
 
    //move
    entry^.vlist:=prev^.vlist;
@@ -701,7 +707,7 @@ begin
    TAILQ_INIT(@prev^.vlist);
    prev^.count:=0;
 
-   rmem_entry_deallocate(prev);
+   rmem_entry_deallocate(map,prev);
   end;
  end;
 
@@ -715,7 +721,7 @@ begin
    rmem_entry_unlink(map, next);
    entry^.__end:=next^.__end;
 
-   rmem_entry_deallocate(next);
+   rmem_entry_deallocate(map,next);
   end;
  end;
 end;
@@ -741,7 +747,7 @@ begin
 
  entry^.start:=start;
 
- copy_vaddr_list(entry,new_entry,0);
+ copy_vaddr_list(map,entry,new_entry,0);
 
  inc_vaddr_list(entry,offset);
 
@@ -775,7 +781,7 @@ begin
 
  entry^.__end:=__end;
 
- copy_vaddr_list(entry,new_entry,offset);
+ copy_vaddr_list(map,entry,new_entry,offset);
 
  rmem_entry_link(map, entry, new_entry);
 end;
@@ -822,7 +828,7 @@ begin
 
   entry:=rmem_map_insert_internal(map,entry,entry^.__end,__end);
 
-  if rmem_entry_add_vaddr(entry,vaddr) then
+  if rmem_entry_add_vaddr(map,entry,vaddr) then
   begin
    rmem_entry_add_track(map^.tmap,entry,vaddr);
   end;
@@ -884,7 +890,7 @@ begin
    //all
    rmem_entry_delete(map, entry);
   end else
-  if rmem_entry_del_vaddr(entry,vaddr + offset) then
+  if rmem_entry_del_vaddr(map,entry,vaddr + offset) then
   begin
    //zero
    rmem_entry_delete(map, entry);

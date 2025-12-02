@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ uma,
  vm,
  vm_pmap_prot;
 
@@ -66,6 +67,9 @@ procedure vm_nt_sub_map_prot_fixup(map  :p_vm_nt_sub_map;
                                    __end:vm_offset_t;
                                    mode :Integer);
 
+var
+ vm_nt_sub_entry_zone:uma_zone_t=nil;
+
 implementation
 
 uses
@@ -84,14 +88,14 @@ function vm_nt_sub_entry_create(map:p_vm_nt_sub_map):p_vm_nt_sub_entry;
 var
  new_entry:p_vm_nt_sub_entry;
 begin
- new_entry:=AllocMem(SizeOf(vm_nt_sub_entry));
+ new_entry:=uma_zalloc(vm_nt_sub_entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'vm_nt_sub_entry_create: kernel resources exhausted');
  Result:=new_entry;
 end;
 
 procedure vm_nt_sub_entry_dispose(map:p_vm_nt_sub_map;entry:p_vm_nt_sub_entry); inline;
 begin
- FreeMem(entry);
+ uma_zfree(vm_nt_sub_entry_zone, entry);
 end;
 
 function vm_nt_sub_entry_splay(addr:vm_offset_t;root:p_vm_nt_sub_entry):p_vm_nt_sub_entry;

@@ -27,12 +27,15 @@ function  sys_evf_wait(key:Integer;bitPattern:QWORD;waitMode:DWORD;pRes:PQWORD;p
 function  sys_evf_open(name:PChar):Integer;
 function  sys_evf_close(key:Integer):Integer;
 
+procedure sys_init_evf;
+
 implementation
 
 uses
  mqueue,
  errno,
  systm,
+ uma,
  time,
  md_time,
  kern_mtx,
@@ -70,15 +73,23 @@ type
   waitMode:DWORD;
  end;
 
+var
+ evf_zone:uma_zone_t;
+
+procedure sys_init_evf;
+begin
+ evf_zone:=uma_zcreate('evf', sizeof(t_evf), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+end;
+
 function evf_alloc:p_evf; inline;
 begin
- Result:=AllocMem(SizeOf(t_evf));
+ Result:=uma_zalloc(evf_zone, M_WAITOK or M_ZERO);
 end;
 
 procedure evf_free(data:pointer);
 begin
  mtx_destroy(p_evf(data)^.mtx);
- FreeMem(data);
+ uma_zfree(evf_zone, data);
 end;
 
 function evf_init(evf:p_evf;attr:DWORD;initPattern:QWORD):Integer;

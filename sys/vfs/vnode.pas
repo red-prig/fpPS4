@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  kern_mtx,
  vselinfo,
  kern_rangelock,
@@ -318,6 +319,7 @@ function  vn_canvmio(vp:p_vnode):Boolean;
 
 var
  rootvnode:p_vnode=nil;
+ namei_zone:uma_zone_t=nil;
 
 implementation
 

@@ -400,10 +400,13 @@ var
 
 Procedure RegisteredInternalFile(var stub:t_int_file;name:pchar;icbs:t_int_load;flag:ptruint=IF_PRELOAD);
 
+procedure subr_dynlib_init;
+
 implementation
 
 uses
  errno,
+ uma,
  systm,
  subr_backtrace,
  vm,
@@ -430,6 +433,20 @@ uses
  kern_jit_ctx,
  kern_jit_asm,
  kern_jit_dynamic;
+
+var
+ lib_info_zone      :uma_zone_t;
+ Objlist_Entry_zone :uma_zone_t;
+ Lib_Entry_zone     :uma_zone_t;
+ sym_hash_entry_zone:uma_zone_t;
+
+procedure subr_dynlib_init;
+begin
+ lib_info_zone      :=uma_zcreate('lib_info'      , sizeof(t_lib_info)      , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ Objlist_Entry_zone :=uma_zcreate('Objlist_Entry' , sizeof(Objlist_Entry)   , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ Lib_Entry_zone     :=uma_zcreate('Lib_Entry'     , sizeof(Lib_Entry)       , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ sym_hash_entry_zone:=uma_zcreate('sym_hash_entry', sizeof(t_sym_hash_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+end;
 
 //
 
@@ -565,7 +582,7 @@ var
 begin
  lib_entry:=libptr;
  //
- h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+ h_entry:=uma_zalloc(sym_hash_entry_zone, M_WAITOK or M_ZERO);
  //
  h_entry^.nid   :=nid;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
@@ -590,7 +607,7 @@ begin
  if (data^<>h_entry) then
  begin
    //is another exists
-  FreeMem(h_entry);
+  uma_zfree(sym_hash_entry_zone, h_entry);
   Result:=False;
  end else
  begin
@@ -624,7 +641,7 @@ var
 begin
  lib_entry:=libptr;
  //
- h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+ h_entry:=uma_zalloc(sym_hash_entry_zone, M_WAITOK or M_ZERO);
  //
  h_entry^.nid   :=0;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
@@ -649,7 +666,7 @@ var
 begin
  lib_entry:=libptr;
  //
- h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+ h_entry:=uma_zalloc(sym_hash_entry_zone, M_WAITOK or M_ZERO);
  //
  h_entry^.nid   :=0;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
@@ -706,12 +723,12 @@ end;
 
 procedure _free_obj(data:pointer);
 begin
- FreeMem(data);
+ uma_zfree(lib_info_zone, data);
 end;
 
 function obj_new():p_lib_info;
 begin
- Result:=AllocMem(SizeOf(t_lib_info));
+ Result:=uma_zalloc(lib_info_zone, M_WAITOK or M_ZERO);
  Result^.desc.free:=@_free_obj;
  id_acqure(Result);
 
@@ -1191,7 +1208,7 @@ begin
  while (dag<>nil) do
  begin
   TAILQ_REMOVE(@obj^.dldags,dag,@dag^.link);
-  FreeMem(dag);
+  uma_zfree(Objlist_Entry_zone, dag);
   dag:=TAILQ_FIRST(@obj^.dldags);
  end;
 
@@ -1199,7 +1216,7 @@ begin
  while (dag<>nil) do
  begin
   TAILQ_REMOVE(@obj^.dagmembers,dag,@dag^.link);
-  FreeMem(dag);
+  uma_zfree(Objlist_Entry_zone, dag);
   dag:=TAILQ_FIRST(@obj^.dagmembers);
  end;
 
@@ -1250,7 +1267,7 @@ procedure objlist_push_tail(var list:TAILQ_HEAD;obj:p_lib_info);
 var
  entry:p_Objlist_Entry;
 begin
- entry:=AllocMem(SizeOf(Objlist_Entry));
+ entry:=uma_zalloc(Objlist_Entry_zone, M_WAITOK or M_ZERO);
  entry^.obj:=obj;
  //
  TAILQ_INSERT_TAIL(@list,entry,@entry^.link);
@@ -1278,7 +1295,7 @@ begin
  if (elm<>nil) then
  begin
   TAILQ_REMOVE(@list,elm,@elm^.link);
-  FreeMem(elm);
+  uma_zfree(Objlist_Entry_zone, elm);
  end;
 end;
 
@@ -1342,14 +1359,14 @@ end;
 
 function Lib_Entry_new(d_val:QWORD;import:Word):p_Lib_Entry;
 begin
- Result:=AllocMem(SizeOf(Lib_Entry));
+ Result:=uma_zalloc(Lib_Entry_zone, M_WAITOK or M_ZERO);
  QWORD(Result^.dval):=d_val;
  Result^.import:=import;
 end;
 
 procedure free_sym_hash_entry(data,userdata:Pointer); register;
 begin
- FreeMem(data);
+ uma_zfree(sym_hash_entry_zone, data);
 end;
 
 procedure Lib_Entry_free(lib:p_Lib_Entry);
@@ -1360,7 +1377,7 @@ begin
   HAMT_destroy64(lib^.hamt,@free_sym_hash_entry,nil);
  end;
  //
- FreeMem(lib);
+ uma_zfree(Lib_Entry_zone, lib);
 end;
 
 function get_mod_name_by_id(obj:p_lib_info;id:Word):pchar;
@@ -2770,7 +2787,7 @@ begin
    if (Lib_Entry<>nil) then
    if (Lib_Entry^.import=0) then //export
    begin
-    h_entry:=AllocMem(SizeOf(t_sym_hash_entry));
+    h_entry:=uma_zalloc(sym_hash_entry_zone, M_WAITOK or M_ZERO);
     //
     h_entry^.nid   :=nid;
     h_entry^.mod_id:=mod_id;
@@ -2788,8 +2805,8 @@ begin
     //
     if (data^<>h_entry) then
     begin
-      //is another exists
-     FreeMem(h_entry);
+     //is another exists
+     uma_zfree(sym_hash_entry_zone, h_entry);
     end else
     begin
      //new

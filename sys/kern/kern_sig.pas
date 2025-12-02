@@ -119,6 +119,7 @@ implementation
 uses
  errno,
  systm,
+ uma,
  kern_mtx,
  md_time,
  kern_exit,
@@ -135,17 +136,30 @@ const
  kern_forcesigexit=1;
 
 var
+ preallocate_siginfo:Integer=1024;
  signal_overflow  :Integer=0;
  signal_alloc_fail:Integer=0;
 
+ ksiginfo_zone:uma_zone_t=nil;
+
+procedure sigqueue_start();
+begin
+ ksiginfo_zone:=uma_zcreate('ksiginfo', sizeof(ksiginfo_t), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ uma_prealloc(ksiginfo_zone, preallocate_siginfo);
+end;
+
 function ksiginfo_alloc():p_ksiginfo;
 begin
- Result:=AllocMem(SizeOf(ksiginfo_t));
+ Result:=nil;
+ if (ksiginfo_zone<>nil) then
+ begin
+  Result:=uma_zalloc(ksiginfo_zone, M_WAITOK or M_ZERO);
+ end;
 end;
 
 procedure ksiginfo_free(ksi:p_ksiginfo);
 begin
- FreeMem(ksi);
+ uma_zfree(ksiginfo_zone, ksi);
 end;
 
 Function ksiginfo_tryfree(ksi:p_ksiginfo):Boolean;
@@ -153,7 +167,7 @@ begin
  Result:=False;
  if ((ksi^.ksi_flags and KSI_EXT)=0) then
  begin
-  FreeMem(ksi);
+  uma_zfree(ksiginfo_zone, ksi);
   Result:=True;
  end;
 end;
@@ -272,6 +286,12 @@ begin
   else
    TAILQ_INSERT_TAIL(@sq^.sq_list,si,@si^.ksi_link);
   si^.ksi_sigq:=sq;
+  goto out_set_bit;
+ end;
+
+ if (ksiginfo_zone=nil) then
+ begin
+  SIGADDSET(@sq^.sq_kill, signo);
   goto out_set_bit;
  end;
 
@@ -675,6 +695,8 @@ procedure siginit;
 var
  i:Integer;
 begin
+ sigqueue_start();
+
  mtx_init(p_sigacts.ps_mtx,'sigacts');
 
  For i:=1 to NSIG do

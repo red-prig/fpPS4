@@ -106,6 +106,7 @@ implementation
 
 uses
  errno,
+ uma,
  md_time,
  kern_sig,
  kern_sx,
@@ -127,6 +128,7 @@ var
  filterops_lock:mtx; //MTX_SYSINIT(kqueue_filterops, @filterops_lock, 'protect sysfilt_ops', MTX_DEF);
  knlist_lock   :mtx; //MTX_SYSINIT(knlist_lock, @knlist_lock, 'knlist lock for lockless objects', MTX_DEF);
 
+ knote_zone   :uma_zone_t;
  kq_ncallouts :Integer=0;
  kq_calloutmax:Integer=(4 * 1024);
 
@@ -2807,6 +2809,8 @@ end;
 
 procedure knote_init(); //SYSINIT(knote, SI_SUB_PSEUDO, SI_ORDER_ANY, knote_init, nil);
 begin
+ knote_zone:=uma_zcreate('KNOTE', sizeof(t_knote), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ //
  mtx_init(kq_global     ,'kqueue order');
  mtx_init(filterops_lock,'protect sysfilt_ops');
  mtx_init(knlist_lock   ,'knlist lock for lockless objects');
@@ -2816,14 +2820,14 @@ end;
 
 function knote_alloc():p_knote; public;
 begin
- Result:=AllocMem(SizeOf(t_knote));
+ Result:=uma_zalloc(knote_zone,M_WAITOK or M_ZERO);
 end;
 
 procedure knote_free(kn:p_knote);  public;
 begin
  if (kn<>nil) then
  begin
-  FreeMem(kn);
+  uma_zfree(knote_zone, kn);
  end;
 end;
 

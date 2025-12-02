@@ -22,6 +22,7 @@ uses
  sysutils,
  systm,
  errno,
+ uma,
  vuio,
  vmount,
  vnamei,
@@ -50,7 +51,7 @@ begin
   Exit(EINVAL);
  end;
 
- buf:=AllocMem(MAXPATHLEN);
+ buf:=uma_zalloc(namei_zone, M_WAITOK);
 
  FILEDESC_SLOCK(@fd_table);
  rdir:=fd_table.fd_rdir;
@@ -65,7 +66,7 @@ begin
  if (error=0) then
   freebuf^:=buf
  else
-  FreeMem(buf);
+  uma_zfree(namei_zone, buf);
 
  Exit(error);
 end;
@@ -88,14 +89,14 @@ begin
   Exit(EINVAL);
  end;
 
- buf:=AllocMem(MAXPATHLEN);
+ buf:=uma_zalloc(namei_zone, M_WAITOK);
 
  error:=vn_fullpath1(vn, rootvnode, buf, retbuf, MAXPATHLEN);
 
  if (error=0) then
   freebuf^:=buf
  else
-  FreeMem(buf);
+  uma_zfree(namei_zone, buf);
 
  Exit(error);
 end;
@@ -176,7 +177,7 @@ begin
  VFS_UNLOCK_GIANT(vfslocked);
 
 _out:
- FreeMem(fbuf);
+ uma_zfree(namei_zone, fbuf);
  Exit(error);
 end;
 
@@ -336,7 +337,7 @@ begin
   buflen:=MAXPATHLEN;
  end;
 
- tmpbuf:=AllocMem(buflen);
+ tmpbuf:=uma_zalloc(namei_zone, M_WAITOK);
 
  FILEDESC_SLOCK(@fd_table);
  cdir:=fd_table.fd_cdir;
@@ -361,7 +362,7 @@ begin
    error:=copyout(bp, buf, strlen(bp) + 1);
  end;
 
- FreeMem(tmpbuf);
+ uma_zfree(namei_zone, tmpbuf);
 
  Exit(error);
 end;

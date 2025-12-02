@@ -8,6 +8,7 @@ interface
 uses
  sysutils,
  vm,
+ uma,
  kern_mtx,
  systm,
  vm_pmap_prot,
@@ -79,6 +80,8 @@ type
   property min_offset:vm_offset_t read header.sub.header.start write header.sub.header.start;
   property max_offset:vm_offset_t read header.sub.header.__end write header.sub.header.__end;
  end;
+
+procedure sys_init_vm_nt;
 
 function  vm_nt_file_obj_allocate  (hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
 procedure vm_nt_file_obj_destroy   (obj:p_vm_nt_file_obj);
@@ -166,11 +169,22 @@ type
      );
  end;
 
+var
+ vm_nt_obj_zone  :uma_zone_t=nil;
+ vm_nt_entry_zone:uma_zone_t=nil;
+
+procedure sys_init_vm_nt;
+begin
+ vm_nt_obj_zone      :=uma_zcreate('vm_nt_file_obj' , sizeof(vm_nt_file_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+end;
+
 function vm_nt_file_obj_allocate(hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
 begin
  Assert(maxp<>0);
 
- Result:=AllocMem(SizeOf(vm_nt_file_obj));
+ Result:=uma_zalloc(vm_nt_obj_zone, M_WAITOK or M_ZERO);
 
  Result^.hfile:=hfile;
  Result^.refs :=1;
@@ -199,7 +213,7 @@ begin
 
  if ((obj^.flags and NT_MOBJ_FREE)<>0) then
  begin
-  FreeMem(obj);
+  uma_zfree(vm_nt_obj_zone, obj);
  end;
 
  if (free<>nil) then
@@ -672,7 +686,7 @@ end;
 
 procedure vm_nt_entry_dispose(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
 begin
- FreeMem(entry);
+ uma_zfree(vm_nt_entry_zone, entry);
 end;
 
 procedure vm_nt_entry_deallocate(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
@@ -686,7 +700,7 @@ function vm_nt_entry_create(map:p_vm_nt_map):p_vm_nt_entry;
 var
  new_entry:p_vm_nt_entry;
 begin
- new_entry:=AllocMem(SizeOf(vm_nt_entry));
+ new_entry:=uma_zalloc(vm_nt_entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'vm_nt_entry_create: kernel resources exhausted');
  Result:=new_entry;
 end;

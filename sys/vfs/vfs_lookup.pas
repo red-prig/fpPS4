@@ -31,6 +31,7 @@ implementation
 
 uses
  errno,
+ uma,
  vfs_subr,
  vfs_vnops;
 
@@ -47,6 +48,8 @@ var
 
 procedure nameiinit;
 begin
+ namei_zone:=uma_zcreate('NAMEI', MAXPATHLEN, nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
  getnewvnode('crossmp', nil, @dead_vnodeops, @vp_crossmp);
  //vn_lock(vp_crossmp, LK_EXCLUSIVE);
  //VN_LOCK_ASHARE(vp_crossmp);
@@ -75,12 +78,12 @@ end;
  }
 procedure namei_cleanup_cnp(cnp:p_componentname); inline;
 begin
- FreeMem(cnp^.cn_pnbuf);
+ uma_zfree(namei_zone, cnp^.cn_pnbuf);
 end;
 
 function zalloc_namei:Pointer; inline;
 begin
- Result:=AllocMem(kern_param.MAXPATHLEN);
+ Result:=uma_zalloc(namei_zone, M_WAITOK);
 end;
 
 function nd_namei(ndp:p_nameidata):Integer; public;
@@ -300,7 +303,7 @@ begin
   begin
    if (ndp^.ni_pathlen > 1) then
    begin
-    FreeMem(cp);
+    uma_zfree(namei_zone, cp);
    end;
    break;
   end;
@@ -310,7 +313,7 @@ begin
   begin
    if (ndp^.ni_pathlen>1) then
    begin
-    FreeMem(cp);
+    uma_zfree(namei_zone, cp);
    end;
    error:=ENOENT;
    break;
@@ -320,7 +323,7 @@ begin
   begin
    if (ndp^.ni_pathlen > 1) then
    begin
-    FreeMem(cp);
+    uma_zfree(namei_zone, cp);
    end;
    error:=ENAMETOOLONG;
    break;
@@ -329,7 +332,7 @@ begin
   if (ndp^.ni_pathlen > 1) then
   begin
    Move(ndp^.ni_next^,(cp + linklen)^,ndp^.ni_pathlen);
-   FreeMem(cnp^.cn_pnbuf);
+   uma_zfree(namei_zone, cnp^.cn_pnbuf);
    cnp^.cn_pnbuf:=cp;
   end else
   begin
@@ -1164,7 +1167,7 @@ begin
  if ((flags and NDF_NO_FREE_PNBUF)=0) and
     ((ndp^.ni_cnd.cn_flags and HASBUF<>0)) then
  begin
-  FreeMem(ndp^.ni_cnd.cn_pnbuf);
+  uma_zfree(namei_zone, ndp^.ni_cnd.cn_pnbuf);
   ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not HASBUF);
  end;
 

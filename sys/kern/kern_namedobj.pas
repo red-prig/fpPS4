@@ -7,6 +7,7 @@ interface
 
 uses
  mqueue,
+ uma,
  kern_named_id;
 
 type
@@ -41,10 +42,12 @@ uses
 var
  namedobj_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@namedobj_list.tqh_first);
  namedobj_lock:Pointer;
+ namedobj_zone:uma_zone_t;
 
 procedure named_table_init;
 begin
  id_table_init(@named_table,1);
+ namedobj_zone:=uma_zcreate('namedobj', sizeof(t_namedobj), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 end;
 
 procedure namedobj_add(data:p_namedobj);
@@ -64,7 +67,7 @@ end;
 procedure namedobj_free(data:pointer);
 begin
  namedobj_rem(data);
- FreeMem(data);
+ uma_zfree(namedobj_zone, data);
 end;
 
 function get_obj_name(objp:Pointer;objt:Integer;name:PChar):Boolean;
@@ -112,7 +115,7 @@ begin
  Result:=copyinstr(name,@_name,SizeOf(t_id_name),nil);
  if (Result<>0) then Exit;
 
- obj:=AllocMem(SizeOf(t_namedobj));
+ obj:=uma_zalloc(namedobj_zone, M_WAITOK or M_ZERO);
  if (obj=nil) then Exit(ENOMEM);
 
  obj^.desc.free:=@namedobj_free;

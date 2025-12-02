@@ -19,11 +19,14 @@ function  sys_osem_wait(key,needCount:Integer;pTimeout:PDWORD):Integer;
 function  sys_osem_open(name:PChar):Integer;
 function  sys_osem_close(key:Integer):Integer;
 
+procedure sys_init_osem;
+
 implementation
 
 uses
  mqueue,
  errno,
+ uma,
  systm,
  time,
  md_time,
@@ -60,15 +63,23 @@ type
   retval:Integer;
  end;
 
+var
+ osem_zone:uma_zone_t;
+
+procedure sys_init_osem;
+begin
+ osem_zone:=uma_zcreate('osem', sizeof(t_osem), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+end;
+
 function osem_alloc:p_osem; inline;
 begin
- Result:=AllocMem(SizeOf(t_osem));
+ Result:=uma_zalloc(osem_zone, M_WAITOK or M_ZERO);
 end;
 
 procedure osem_free(data:pointer);
 begin
  mtx_destroy(p_osem(data)^.mtx);
- FreeMem(data);
+ uma_zfree(osem_zone, data);
 end;
 
 function osem_init(sem:p_osem;attr:DWORD;initCount,max_count:Integer):Integer;
