@@ -67,6 +67,7 @@ procedure LIST_INIT        (head:Pointer); inline;
 function  LIST_EMPTY       (head:Pointer):Boolean; inline;
 function  LIST_FIRST       (head:Pointer):Pointer; inline;
 function  LIST_NEXT        (elm,field:Pointer):Pointer; inline;
+procedure LIST_INSERT_AFTER(listelm,elm,field:Pointer); inline;
 procedure LIST_INSERT_HEAD (head,elm,field:Pointer); inline;
 procedure LIST_REMOVE      (elm,field:Pointer); inline;
 
@@ -224,6 +225,20 @@ end;
 function LIST_NEXT(elm,field:Pointer):Pointer; inline;
 begin
  Result:=P_LIST_ENTRY(field)^.le_next;
+end;
+
+procedure LIST_INSERT_AFTER(listelm,elm,field:Pointer); inline;
+var
+ offset:ptruint;
+begin
+ offset:=ptruint(field-elm);
+ P_LIST_ENTRY(elm)^.le_next:=P_LIST_ENTRY(listelm)^.le_next;
+ if (P_LIST_ENTRY(elm)^.le_next<>nil) then
+ begin
+  P_LIST_ENTRY(P_LIST_ENTRY(listelm)^.le_next+offset)^.le_prev:=@P_LIST_ENTRY(elm)^.le_next;
+ end;
+ P_LIST_ENTRY(listelm)^.le_next:=elm;
+ P_LIST_ENTRY(elm+offset)^.le_prev:=@P_LIST_ENTRY(listelm)^.le_next;
 end;
 
 procedure LIST_INSERT_HEAD(head,elm,field:Pointer); inline;
