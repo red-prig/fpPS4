@@ -1063,7 +1063,7 @@ var
  pages, check_pages:Integer;
 begin
  keg:=zone_first_keg(zone);
- pages:=howmany(bytes, MD_PAGE_SIZE);
+ pages:=howmany(bytes, UMA_SLAB_SIZE);
  check_pages:=pages - 1;
  Assert(pages > 0, 'startup_alloc can`t reserve 0 pages');
 
@@ -1297,7 +1297,7 @@ begin
     (keg^.uk_ipers < (UMA_SLAB_SIZE div keg^.uk_rsize)) then
  begin
   keg^.uk_ipers:=UMA_SLAB_SIZE div keg^.uk_rsize;
-  Assert(keg^.uk_ipers <= 255, 'keg_small_init: keg^.uk_ipers too high!');
+  Assert(keg^.uk_ipers <= us_word_size-1, 'keg_small_init: keg^.uk_ipers too high!');
   keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE;
 
   if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)=0) then
@@ -1375,11 +1375,11 @@ begin
   rsize:=rsize + alignsize;
 
  trailer:=rsize - keg^.uk_size;
- pages:=(rsize * (MD_PAGE_SIZE div alignsize)) div MD_PAGE_SIZE;
- pages:=MIN(pages, (128 * 1024) div MD_PAGE_SIZE);
+ pages:=(rsize * (UMA_SLAB_SIZE div alignsize)) div UMA_SLAB_SIZE;
+ pages:=MIN(pages, (128 * 1024) div UMA_SLAB_SIZE);
  keg^.uk_rsize:=rsize;
  keg^.uk_ppera:=pages;
- keg^.uk_ipers:=((pages * MD_PAGE_SIZE) + trailer) div rsize;
+ keg^.uk_ipers:=((pages * UMA_SLAB_SIZE) + trailer) div rsize;
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE or UMA_ZONE_VTOSLAB;
 
  Assert(keg^.uk_ipers <= uma_max_ipers, '%s: keg^.uk_ipers too high(%d) increase max_ipers');
@@ -1445,8 +1445,7 @@ begin
   begin
    keg_cachespread_init(keg);
   end else
-  if (keg^.uk_size+UMA_FRITMREF_SZ) >
-     (UMA_SLAB_SIZE - sizeof(uma_slab_refcnt)) then
+  if (keg^.uk_size+UMA_FRITMREF_SZ) > (UMA_SLAB_SIZE - sizeof(uma_slab_refcnt)) then
   begin
    keg_large_init(keg);
   end else
@@ -1459,8 +1458,7 @@ begin
   begin
    keg_cachespread_init(keg);
   end else
-  if (keg^.uk_size+UMA_FRITM_SZ) >
-     (UMA_SLAB_SIZE - sizeof(uma_slab)) then
+  if (keg^.uk_size+UMA_FRITM_SZ) > (UMA_SLAB_SIZE - sizeof(uma_slab)) then
   begin
    keg_large_init(keg);
   end else
@@ -1871,7 +1869,7 @@ begin
 
  uma_max_ipers_ref:=MAX(UMA_SLAB_SIZE div objsize, 64);
 
- Assert((uma_max_ipers_ref <= 255) and (uma_max_ipers <= 255), 'uma_startup: calculated uma_max_ipers values too large!');
+ Assert((uma_max_ipers_ref <= us_word_size-1) and (uma_max_ipers <= us_word_size-1), 'uma_startup: calculated uma_max_ipers values too large!');
 
  { 'manually' create the initial zone }
  args.name  :='UMA Kegs';
@@ -1967,7 +1965,7 @@ end;
 procedure uma_startup4();
 begin
  curcpu_startup;
- uma_startup (kmem_alloc(UMA_BOOT_PAGES_CONST*MD_PAGE_SIZE, VM_RW),UMA_BOOT_PAGES_CONST);
+ uma_startup (kmem_alloc(UMA_BOOT_PAGES_CONST*UMA_SLAB_SIZE, VM_RW),UMA_BOOT_PAGES_CONST);
  uma_startup2();
  uma_startup3();
 end;
@@ -2542,7 +2540,7 @@ var
  keg:uma_keg_t;
  slabref:uma_slabrefcnt_t;
  item:Pointer;
- freei:Byte;
+ freei:us_word;
 begin
  keg:=slab^.us_keg;
  mtx_assert(keg^.uk_lock);
@@ -2966,7 +2964,7 @@ var
  slabref:uma_slabrefcnt_t;
  keg:uma_keg_t;
  mem:PByte;
- freei:Byte;
+ freei:us_word;
  clearfull:Integer;
 begin
  if (skip < SKIP_DTOR) and (zone^.uz_dtor<>nil) then

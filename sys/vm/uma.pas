@@ -131,11 +131,11 @@ type
 //uma_int
 
 const
- UMA_SLAB_SIZE =MD_PAGE_SIZE;       // How big are our slabs?
- UMA_SLAB_MASK =(MD_PAGE_SIZE - 1); // Mask to get back to the page
- UMA_SLAB_SHIFT=MD_PAGE_SHIFT;      // Number of bits PAGE_MASK
+ UMA_SLAB_SIZE =MD_ALLOC_GRANULARITY;           // How big are our slabs?
+ UMA_SLAB_MASK =(MD_ALLOC_GRANULARITY - 1);     // Mask to get back to the page
+ UMA_SLAB_SHIFT=BsfQWORD(MD_ALLOC_GRANULARITY); // Number of bits PAGE_MASK
 
- UMA_BOOT_PAGES_CONST=64; // Pages allocated for startup
+ UMA_BOOT_PAGES_CONST=64 div (MD_ALLOC_GRANULARITY div MD_PAGE_SIZE); // Pages allocated for startup
 
  UMA_MAX_WASTE=(UMA_SLAB_SIZE div 10); // Max waste before going to off page slab management
 
@@ -214,10 +214,16 @@ type
  end;
  uma_keg_t=^uma_keg;
 
+const
+ us_word_size=MD_ALLOC_GRANULARITY div UMA_SMALLEST_UNIT;
+
+type
+ us_word=0..us_word_size-1;
+
  // Page management structure
 
  // Sorry for the union, but space efficiency is important
- uma_slab_head=record
+ uma_slab_head=bitpacked record
   us_keg:uma_keg_t;   // Keg we live in
   us_type:record
    Case Byte of
@@ -227,16 +233,16 @@ type
   us_hlink:SLIST_ENTRY; // (uma_slab) Link for hash table
   us_data     :pbyte;   // First item
   us_flags    :Byte;    // Page flags see uma.h
-  us_freecount:Byte;    // How many are free?
-  us_firstfree:Byte;    // First free item index
+  us_freecount:us_word; // How many are free?
+  us_firstfree:us_word; // First free item index
  end;
 
- t_us_freelist_uma_slab=record
-  us_item:Byte;
+ t_us_freelist_uma_slab=packed record
+  us_item:us_word;
  end;
 
  // The standard slab structure
- uma_slab=object
+ uma_slab=packed object
   us_head    :uma_slab_head; // slab header data
   us_freelist:array[0..0] of t_us_freelist_uma_slab; //actual number bigger
   //
@@ -246,8 +252,8 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
-  property us_freecount:Byte        read us_head.us_freecount      write us_head.us_freecount    ;
-  property us_firstfree:Byte        read us_head.us_firstfree      write us_head.us_firstfree    ;
+  property us_freecount:us_word     read us_head.us_freecount      write us_head.us_freecount    ;
+  property us_firstfree:us_word     read us_head.us_firstfree      write us_head.us_firstfree    ;
  end;
 
  {
@@ -255,14 +261,14 @@ type
    maintain reference counters in the slab for.
  }
 
- t_us_freelist_uma_slab_refcnt=record
-  us_item  :Byte;
-  us_refcnt:DWORD;
+ t_us_freelist_uma_slab_refcnt=bitpacked record
+  us_item  :us_word;
+  us_refcnt:0..(1 shl (32-us_word_size))-1;
  end;
 
- uma_slab_refcnt=object
+ uma_slab_refcnt=packed object
   us_head    :uma_slab_head; // slab header data
-  us_freelist:array[0..0] of t_us_freelist_uma_slab_refcnt;//actual number bigger
+  us_freelist:array[0..0] of t_us_freelist_uma_slab_refcnt; //actual number bigger
   //
   property us_keg      :uma_keg_t   read us_head.us_keg            write us_head.us_keg          ;
   property us_link     :LIST_ENTRY  read us_head.us_type._us_link  write us_head.us_type._us_link;
@@ -270,11 +276,11 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
-  property us_freecount:Byte        read us_head.us_freecount      write us_head.us_freecount    ;
-  property us_firstfree:Byte        read us_head.us_firstfree      write us_head.us_firstfree    ;
+  property us_freecount:us_word     read us_head.us_freecount      write us_head.us_freecount    ;
+  property us_firstfree:us_word     read us_head.us_firstfree      write us_head.us_firstfree    ;
  end;
 
- uma_slab_t=^uma_slab;
+ uma_slab_t      =^uma_slab;
  uma_slabrefcnt_t=^uma_slab_refcnt;
 
 const
