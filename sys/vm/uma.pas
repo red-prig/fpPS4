@@ -215,7 +215,7 @@ type
  uma_keg_t=^uma_keg;
 
 const
- us_word_size=MD_ALLOC_GRANULARITY div UMA_SMALLEST_UNIT;
+ us_word_size=UMA_SLAB_SIZE div UMA_SMALLEST_UNIT;
 
 type
  us_word=0..us_word_size-1;
@@ -299,7 +299,7 @@ type
  uma_slaballoc=function(z:uma_zone_t;k:uma_keg_t;i:Integer):uma_slab_t;
 
  // Zone management structure
- uma_zone=record
+ uma_zone=packed record
   uz_name:pchar; // Text name of the zone
   uz_lock:p_mtx; // Lock for the zone (keg's lock)
 
@@ -332,6 +332,9 @@ type
   }
   uz_cpu:array[0..0] of uma_cache; // Per cpu caches
  end;
+
+const
+ SIZEOF_UMA_ZONE=sizeof(uma_zone) - sizeof(uma_cache);
 
 const
  UMA_ZFLAG_BUCKET   =$02000000; // Bucket zone.

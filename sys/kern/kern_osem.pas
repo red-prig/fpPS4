@@ -68,7 +68,7 @@ var
 
 procedure sys_init_osem;
 begin
- osem_zone:=uma_zcreate('osem', sizeof(t_osem), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ osem_zone:=uma_zcreate('osem', sizeof(t_osem), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 function osem_alloc:p_osem; inline;

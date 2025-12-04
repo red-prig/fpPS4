@@ -227,17 +227,17 @@ uses
 //fake round robin per CPU
 
 const
- mp_maxid=8;
+ mp_maxid=7;
  mp_ncpus=8;
 
 var
  cpu_counter:DWORD=0;
 
- cpu_mtx:array[0..mp_maxid-1] of mtx;
+ cpu_mtx:array[0..mp_maxid] of mtx;
 
 function CPU_FOREACH(var i:Integer):Boolean; inline;
 begin
- Result:=(i<mp_maxid);
+ Result:=(i<=mp_maxid);
  Inc(i);
 end;
 
@@ -250,7 +250,7 @@ begin
   curcpu:=(pcb_curcpu-1);
   if (curcpu=-1) then
   begin
-   curcpu:=System.InterlockedExchangeAdd(cpu_counter,1) mod mp_maxid;
+   curcpu:=System.InterlockedExchangeAdd(cpu_counter,1) mod mp_ncpus;
    pcb_curcpu:=(curcpu+1);
    pcb_cpuref:=0;
   end;
@@ -287,7 +287,7 @@ procedure curcpu_startup;
 var
  i:Integer;
 begin
- For i:=0 to mp_maxid-1 do
+ For i:=0 to mp_maxid do
  begin
   mtx_init(cpu_mtx[i],'PCPU');
  end;
@@ -464,6 +464,8 @@ begin
  begin
   bucket_enable();
   zone_foreach(@zone_timeout);
+  //
+  uma_reclaim();
   //
   uma_callout:=get_unit_uptime;
  end;
@@ -1882,7 +1884,7 @@ begin
  args.align :=32 - 1;
  args.flags :=UMA_ZFLAG_INTERNAL;
  { The initial zone has no Per cpu queues so it's smaller }
- zone_ctor(kegs, sizeof(uma_zone), @args, M_WAITOK);
+ zone_ctor(kegs, SIZEOF_UMA_ZONE, @args, M_WAITOK);
 
  if (boot_pages<>0) then
  For i:=0 to boot_pages-1 do
@@ -1896,7 +1898,7 @@ begin
  mtx_init(uma_boot_pages_mtx, 'UMA boot pages');
 
  args.name  :='UMA Zones';
- args.size  :=sizeof(uma_zone) + (sizeof(uma_cache) * (mp_maxid + 1));
+ args.size  :=SIZEOF_UMA_ZONE + (sizeof(uma_cache) * (mp_maxid + 1));
  args.ctor  :=@zone_ctor;
  args.dtor  :=@zone_dtor;
  args.uminit:=@zero_init;
@@ -1905,7 +1907,7 @@ begin
  args.align :=32 - 1;
  args.flags :=UMA_ZFLAG_INTERNAL;
  { The initial zone has no Per cpu queues so it's smaller }
- zone_ctor(zones, sizeof(uma_zone), @args, M_WAITOK);
+ zone_ctor(zones, SIZEOF_UMA_ZONE, @args, M_WAITOK);
 
  {
   * This is the max number of free list items we'll have with

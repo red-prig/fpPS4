@@ -47,7 +47,7 @@ var
 procedure named_table_init;
 begin
  id_table_init(@named_table,1);
- namedobj_zone:=uma_zcreate('namedobj', sizeof(t_namedobj), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ namedobj_zone:=uma_zcreate('namedobj', sizeof(t_namedobj), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 procedure namedobj_add(data:p_namedobj);

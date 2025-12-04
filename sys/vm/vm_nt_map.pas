@@ -175,9 +175,9 @@ var
 
 procedure sys_init_vm_nt;
 begin
- vm_nt_obj_zone      :=uma_zcreate('vm_nt_file_obj' , sizeof(vm_nt_file_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ vm_nt_obj_zone      :=uma_zcreate('vm_nt_file_obj' , sizeof(vm_nt_file_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 function vm_nt_file_obj_allocate(hfile:THandle;maxp:Byte):p_vm_nt_file_obj;

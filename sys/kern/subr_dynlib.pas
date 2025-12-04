@@ -442,10 +442,10 @@ var
 
 procedure subr_dynlib_init;
 begin
- lib_info_zone      :=uma_zcreate('lib_info'      , sizeof(t_lib_info)      , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- Objlist_Entry_zone :=uma_zcreate('Objlist_Entry' , sizeof(Objlist_Entry)   , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- Lib_Entry_zone     :=uma_zcreate('Lib_Entry'     , sizeof(Lib_Entry)       , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- sym_hash_entry_zone:=uma_zcreate('sym_hash_entry', sizeof(t_sym_hash_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ lib_info_zone      :=uma_zcreate('lib_info'      , sizeof(t_lib_info)      , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ Objlist_Entry_zone :=uma_zcreate('Objlist_Entry' , sizeof(Objlist_Entry)   , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ Lib_Entry_zone     :=uma_zcreate('Lib_Entry'     , sizeof(Lib_Entry)       , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ sym_hash_entry_zone:=uma_zcreate('sym_hash_entry', sizeof(t_sym_hash_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 //

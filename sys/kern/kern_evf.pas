@@ -78,7 +78,7 @@ var
 
 procedure sys_init_evf;
 begin
- evf_zone:=uma_zcreate('evf', sizeof(t_evf), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ evf_zone:=uma_zcreate('evf', sizeof(t_evf), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 function evf_alloc:p_evf; inline;

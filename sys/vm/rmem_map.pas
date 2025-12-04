@@ -370,8 +370,8 @@ begin
  _rmem_map_init(map, min, max);
  mtx_init(map^.lock,'rmap');
  //
- map^.instance_zone:=uma_zcreate('rmem_vaddr_instance', sizeof(t_rmem_vaddr_instance), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
- map^.entry_zone   :=uma_zcreate('rmem_map_entry'     , sizeof(t_rmem_map_entry)     , nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ map^.instance_zone:=uma_zcreate('rmem_vaddr_instance', sizeof(t_rmem_vaddr_instance), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ map^.entry_zone   :=uma_zcreate('rmem_map_entry'     , sizeof(t_rmem_map_entry)     , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 function rmem_entry_create(map:p_rmem_map):p_rmem_map_entry;

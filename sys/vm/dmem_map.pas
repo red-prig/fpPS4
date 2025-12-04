@@ -235,7 +235,7 @@ begin
  _dmem_map_init(map, OFF_TO_IDX(min), OFF_TO_IDX(max));
  mtx_init(map^.lock,'dmem');
  //
- map^.entry_zone:=uma_zcreate('dmem_map_entry', sizeof(t_dmem_map_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
+ map^.entry_zone:=uma_zcreate('dmem_map_entry', sizeof(t_dmem_map_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 procedure dmem_map_entry_dispose(map:p_dmem_map;entry:p_dmem_map_entry); inline;
