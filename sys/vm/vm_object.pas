@@ -242,7 +242,7 @@ end;
 
 procedure vm_object_init();
 begin
- obj_zone:=uma_zcreate('VM OBJECT', sizeof(t_vm_object), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_VM or 0);
+ obj_zone:=uma_zcreate('VM OBJECT', sizeof(t_vm_object), nil, nil, nil, nil, UMA_ALIGN_PTR, UMA_ZONE_VM or UMA_ZONE_NOFREE);
 end;
 
 procedure vm_object_reference(obj:vm_object_t);
