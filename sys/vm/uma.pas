@@ -135,7 +135,9 @@ const
  UMA_SLAB_MASK =(MD_ALLOC_GRANULARITY - 1);     // Mask to get back to the page
  UMA_SLAB_SHIFT=BsfQWORD(MD_ALLOC_GRANULARITY); // Number of bits PAGE_MASK
 
- UMA_BOOT_PAGES_CONST=64 div (MD_ALLOC_GRANULARITY div MD_PAGE_SIZE); // Pages allocated for startup
+ UMA_SUB_PAGES=(MD_ALLOC_GRANULARITY div MD_PAGE_SIZE);
+
+ UMA_BOOT_PAGES_CONST=64 div UMA_SUB_PAGES; // Pages allocated for startup
 
  UMA_MAX_WASTE=(UMA_SLAB_SIZE div 10); // Max waste before going to off page slab management
 
@@ -210,15 +212,26 @@ type
   uk_pgoff:WORD;  // Offset to uma_slab struct
   uk_ppera:WORD;  // pages per allocation from backend
   uk_ipers:WORD;  // Items per slab
+  {$IF UMA_SUB_PAGES>1}
+  uk_ssizl:Byte;  // sub pages size (in log2)
+  uk_ssubc:Byte;  // sub pages count
+  uk_isubs:Byte;  // Items per sub page
+  uk_isubl:Byte;  // Items in last sub page
+  {$ENDIF}
   uk_flags:DWORD; // Internal flags
  end;
  uma_keg_t=^uma_keg;
 
 const
- us_word_size=UMA_SLAB_SIZE div UMA_SMALLEST_UNIT;
+ us_word_bitsize=8;
 
 type
- us_word=0..us_word_size-1;
+ us_word=Byte;
+
+ us_free_info=packed record
+  ui_count:us_word; // How many are free?
+  ui_first:us_word; // First free item index
+ end;
 
  // Page management structure
 
@@ -233,8 +246,7 @@ type
   us_hlink:SLIST_ENTRY; // (uma_slab) Link for hash table
   us_data     :pbyte;   // First item
   us_flags    :Byte;    // Page flags see uma.h
-  us_freecount:us_word; // How many are free?
-  us_firstfree:us_word; // First free item index
+  us_free     :array[0..UMA_SUB_PAGES-1] of us_free_info;
  end;
 
  t_us_freelist_uma_slab=packed record
@@ -252,8 +264,6 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
-  property us_freecount:us_word     read us_head.us_freecount      write us_head.us_freecount    ;
-  property us_firstfree:us_word     read us_head.us_firstfree      write us_head.us_firstfree    ;
  end;
 
  {
@@ -263,7 +273,7 @@ type
 
  t_us_freelist_uma_slab_refcnt=bitpacked record
   us_item  :us_word;
-  us_refcnt:0..(1 shl (32-us_word_size))-1;
+  us_refcnt:0..(1 shl (32-us_word_bitsize))-1;
  end;
 
  uma_slab_refcnt=packed object
@@ -276,8 +286,6 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
-  property us_freecount:us_word     read us_head.us_freecount      write us_head.us_freecount    ;
-  property us_firstfree:us_word     read us_head.us_firstfree      write us_head.us_firstfree    ;
  end;
 
  uma_slab_t      =^uma_slab;

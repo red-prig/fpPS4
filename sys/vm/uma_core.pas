@@ -385,7 +385,9 @@ begin
   * low memory situations.
   }
  if (bucketdisable<>0) then
+ begin
   Exit(nil);
+ end;
 
  ubz:=bucket_zone_lookup(entries);
  bucket:=zone_alloc_item(ubz^.ubz_zone, nil, bflags);
@@ -588,10 +590,14 @@ var
  hval,i:Integer;
 begin
  if (newhash^.uh_slab_hash=nil) then
+ begin
   Exit(0);
+ end;
 
  if (oldhash^.uh_hashsize >= newhash^.uh_hashsize) then
+ begin
   Exit(0);
+ end;
 
  {
   * I need to investigate hash algorithms for resizing without a
@@ -624,13 +630,17 @@ end;
 procedure hash_free(hash:p_uma_hash);
 begin
  if (hash^.uh_slab_hash=nil) then
+ begin
   Exit;
+ end;
 
  if (hash^.uh_hashsize=UMA_HASH_SIZE_INIT) then
  begin
   zone_free_item(hashzone, hash^.uh_slab_hash, nil, SKIP_NONE, ZFREE_STATFREE);
  end else
+ begin
   FreeMem(hash^.uh_slab_hash);
+ end;
 end;
 
 {
@@ -649,7 +659,9 @@ var
  item:Pointer;
 begin
  if (bucket=nil) then
+ begin
   Exit;
+ end;
 
  while (bucket^.ub_cnt > 0) do
  begin
@@ -755,6 +767,24 @@ begin
  end;
 end;
 
+function get_item_addr(keg:uma_keg_t;slab:uma_slab_t;g,i:Integer):Pointer; inline;
+begin
+ {$IF UMA_SUB_PAGES>1}
+  Result:=slab^.us_data + (1 shl keg^.uk_ssizl) * g + keg^.uk_rsize * i;
+ {$ELSE}
+  Result:=slab^.us_data + (keg^.uk_rsize * i);
+ {$ENDIF}
+end;
+
+function get_item_addr(keg:uma_keg_t;slab:uma_slab_t;i:Integer):Pointer; inline;
+begin
+ {$IF UMA_SUB_PAGES>1}
+  Result:=get_item_addr(keg,slab,(i div keg^.uk_isubs),(i mod keg^.uk_isubs));
+ {$ELSE}
+  Result:=get_item_addr(keg,slab,0,i);
+ {$ENDIF}
+end;
+
 {
  * Frees pages from a keg back to the system.  This is done on demand from
  * the pageout daemon.
@@ -780,11 +810,15 @@ begin
   * time
   }
  if ((keg^.uk_flags and UMA_ZONE_NOFREE)<>0) or (keg^.uk_freef=nil) then
+ begin
   Exit;
+ end;
 
  KEG_LOCK(keg);
  if (keg^.uk_free=0) then
+ begin
   goto finished;
+ end;
 
  slab:=LIST_FIRST(@keg^.uk_free_slab);
  while (slab<>nil) do
@@ -803,7 +837,9 @@ begin
   keg^.uk_free :=keg^.uk_free  - keg^.uk_ipers;
 
   if ((keg^.uk_flags and UMA_ZONE_HASH)<>0) then
+  begin
    UMA_HASH_REMOVE(@keg^.uk_hash, slab, slab^.us_data);
+  end;
 
   SLIST_INSERT_HEAD(@freeslabs, slab, @slab^.us_hlink);
 
@@ -817,10 +853,13 @@ finished:
  while (slab<>nil) do
  begin
   SLIST_REMOVE(@freeslabs, slab, @slab^.us_hlink);
+
   if (keg^.uk_fini<>nil) then
    if (keg^.uk_ipers<>0) then
    For i:=0 to keg^.uk_ipers-1 do
-    keg^.uk_fini(slab^.us_data + (keg^.uk_rsize * i), keg^.uk_size);
+   begin
+    keg^.uk_fini(get_item_addr(keg,slab,i), keg^.uk_size);
+   end;
 
   flags:=slab^.us_flags;
   mem  :=slab^.us_data;
@@ -845,7 +884,9 @@ finished:
   end;
 
   if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
+  begin
    zone_free_item(keg^.uk_slabzone, slab, nil, SKIP_NONE, ZFREE_STATFREE);
+  end;
 
   keg^.uk_freef(mem, UMA_SLAB_SIZE * keg^.uk_ppera, flags);
   //
@@ -868,7 +909,9 @@ begin
  while ((zone^.uz_flags and UMA_ZFLAG_DRAINING)<>0) do
  begin
   if (waitok=M_NOWAIT) then
+  begin
    goto _out;
+  end;
   msleep(zone, zone^.uz_lock, PVM, 'zonedrain', 1);
  end;
 
@@ -940,17 +983,23 @@ begin
  begin
   wait:=wait or M_ZERO;
  end else
+ begin
   wait:=wait and (not M_ZERO);
+ end;
 
  if ((keg^.uk_flags and UMA_ZONE_NODUMP)<>0) then
+ begin
   wait:=wait or M_NODUMP;
+ end;
 
  { zone is passed for legacy reasons. }
  mem:=allocf(zone, keg^.uk_ppera * UMA_SLAB_SIZE, @flags, wait);
  if (mem=nil) then
  begin
   if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
+  begin
    zone_free_item(keg^.uk_slabzone, slab, nil, SKIP_NONE, ZFREE_STATFREE);
+  end;
   KEG_LOCK(keg);
   Exit(nil);
  end;
@@ -971,11 +1020,35 @@ begin
   }
  end;
 
- slab^.us_keg      :=keg;
- slab^.us_data     :=mem;
- slab^.us_freecount:=keg^.uk_ipers;
- slab^.us_firstfree:=0;
- slab^.us_flags    :=flags;
+ slab^.us_keg  :=keg;
+ slab^.us_data :=mem;
+ slab^.us_flags:=flags;
+
+ {$IF UMA_SUB_PAGES>1}
+  //fill sub pages
+  if (keg^.uk_ssubc>1) then
+  For i:=0 to keg^.uk_ssubc-2 do
+  with slab^.us_head.us_free[i] do
+  begin
+   ui_count:=keg^.uk_isubs;
+   ui_first:=0;
+  end;
+
+  //last sub page
+  if (keg^.uk_ssubc<>0) then
+  with slab^.us_head.us_free[keg^.uk_ssubc-1] do
+  begin
+   ui_count:=keg^.uk_isubl;
+   ui_first:=0;
+  end;
+ {$ELSE}
+  //simple case
+  with slab^.us_head.us_free[0] do
+  begin
+   ui_count:=keg^.uk_ipers;
+   ui_first:=0;
+  end;
+ {$ENDIF}
 
  if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
  begin
@@ -985,13 +1058,26 @@ begin
   For i:=0 to keg^.uk_ipers-1 do
   begin
    slabref^.us_freelist[i].us_refcnt:=0;
-   slabref^.us_freelist[i].us_item  :=i+1;
+   {$IF UMA_SUB_PAGES>1}
+    slabref^.us_freelist[i].us_item:=(i mod keg^.uk_isubs)+1;
+   {$ELSE}
+    slabref^.us_freelist[i].us_item:=i+1;
+   {$ENDIF}
   end;
+
  end else
  begin
+
   if (keg^.uk_ipers<>0) then
   For i:=0 to keg^.uk_ipers-1 do
-   slab^.us_freelist[i].us_item:=i+1;
+  begin
+   {$IF UMA_SUB_PAGES>1}
+    slab^.us_freelist[i].us_item:=(i mod keg^.uk_isubs)+1;
+   {$ELSE}
+    slab^.us_freelist[i].us_item:=i+1;
+   {$ENDIF}
+  end;
+
  end;
 
  if (keg^.uk_init<>nil) then
@@ -999,8 +1085,10 @@ begin
   i:=0;
   while (i < keg^.uk_ipers) do
   begin
-   if (keg^.uk_init(slab^.us_data + (keg^.uk_rsize * i), keg^.uk_size, wait)<>0) then
+   if (keg^.uk_init(get_item_addr(keg,slab,i), keg^.uk_size, wait)<>0) then
+   begin
     break;
+   end;
    //
    Inc(i);
   end;
@@ -1012,7 +1100,7 @@ begin
     Dec(i);
     while (i > -1) do
     begin
-     keg^.uk_fini(slab^.us_data + (keg^.uk_rsize * i), keg^.uk_size);
+     keg^.uk_fini(get_item_addr(keg,slab,i), keg^.uk_size);
      //
      Dec(i);
     end;
@@ -1034,7 +1122,9 @@ begin
    end;
 
    if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
+   begin
     zone_free_item(keg^.uk_slabzone, slab, nil, SKIP_NONE, ZFREE_STATFREE);
+   end;
 
    keg^.uk_freef(mem, UMA_SLAB_SIZE * keg^.uk_ppera, flags);
    KEG_LOCK(keg);
@@ -1045,7 +1135,9 @@ begin
  KEG_LOCK(keg);
 
  if ((keg^.uk_flags and UMA_ZONE_HASH)<>0) then
+ begin
   UMA_HASH_INSERT(@keg^.uk_hash, slab, mem);
+ end;
 
  keg^.uk_pages:=keg^.uk_pages + keg^.uk_ppera;
  keg^.uk_free :=keg^.uk_free  + keg^.uk_ipers;
@@ -1103,8 +1195,12 @@ begin
   Exit(tmps^.us_data);
  end;
  mtx_unlock(uma_boot_pages_mtx);
+
  if (booted < UMA_STARTUP2_CONST) then
+ begin
   Assert(False,'UMA: Increase vm.boot_pages');
+ end;
+
  {
   * Now that we've booted reset these users to their real allocator.
   }
@@ -1134,6 +1230,11 @@ var
 begin
  pflag^:=UMA_SLAB_KMEM;
  p:=kmem_alloc(bytes, VM_RW);
+
+ //Set cache to be enabled on demand
+ {$IF UMA_SUB_PAGES>1}
+  md_dontneed(p,bytes);
+ {$ENDIF}
 
  Exit(p);
 end;
@@ -1235,6 +1336,24 @@ begin
  Exit(0);
 end;
 
+function check_wasted(keg:uma_keg_t;rsize,shsize:DWORD):Boolean; inline;
+var
+ memused    :DWORD;
+ wastedspace:DWORD;
+begin
+ {$IF UMA_SUB_PAGES>1}
+  memused    :=keg^.uk_isubl * rsize + shsize;
+  wastedspace:=(1 shl keg^.uk_ssizl) - memused;
+
+  Result:=(wastedspace >= (UMA_MAX_WASTE div keg^.uk_ssubc)) and (keg^.uk_isubl < (keg^.uk_ssubc div keg^.uk_rsize));
+ {$ELSE}
+  memused    :=keg^.uk_ipers * rsize + shsize;
+  wastedspace:=UMA_SLAB_SIZE - memused;
+
+  Result:=(wastedspace >= UMA_MAX_WASTE) and (keg^.uk_ipers < (UMA_SLAB_SIZE div keg^.uk_rsize));
+ {$ENDIF}
+end;
+
 {
  * Finish creating a small uma keg.  This calculates ipers, and the keg size.
  *
@@ -1245,20 +1364,28 @@ end;
  * Nothing
  }
 procedure keg_small_init(keg:uma_keg_t);
+label
+ _start;
 var
- rsize      :DWORD;
- memused    :DWORD;
- wastedspace:DWORD;
- shsize     :DWORD;
+ rsize :DWORD;
+ linksz:DWORD;
+ shsize:DWORD;
+ ssize :DWORD;
 begin
+ _start:
+
  Assert(keg<>nil, 'Keg is nil in keg_small_init');
  rsize:=keg^.uk_size;
 
  if (rsize < UMA_SMALLEST_UNIT) then
+ begin
   rsize:=UMA_SMALLEST_UNIT;
+ end;
 
  if ((rsize and keg^.uk_align)<>0) then
+ begin
   rsize:=(rsize and (not keg^.uk_align)) + (keg^.uk_align + 1);
+ end;
 
  Assert(rsize<>0);
 
@@ -1267,22 +1394,36 @@ begin
 
  if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
  begin
+  linksz:=0;
   shsize:=0;
  end else
  if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
  begin
-  rsize :=rsize + UMA_FRITMREF_SZ; { linkage & refcnt }
+  linksz:=UMA_FRITMREF_SZ; { linkage & refcnt }
   shsize:=sizeof(uma_slab_refcnt);
  end else
  begin
-  rsize :=rsize + UMA_FRITM_SZ; { Account for linkage }
+  linksz:=UMA_FRITM_SZ; { Account for linkage }
   shsize:=sizeof(uma_slab);
  end;
 
- keg^.uk_ipers:=(UMA_SLAB_SIZE - shsize) div rsize;
+ rsize :=rsize + linksz;
+
+ {$IF UMA_SUB_PAGES>1}
+  ssize:=(keg^.uk_rsize + MD_PAGE_SIZE - 1) and (not (MD_PAGE_SIZE - 1));
+
+  keg^.uk_ssizl:=bsfDWORD(ssize);
+  keg^.uk_ssubc:=UMA_SLAB_SIZE div ssize;
+
+  keg^.uk_isubs:=ssize div keg^.uk_rsize;
+  keg^.uk_isubl:=(ssize - linksz*(keg^.uk_ssubc-1)*keg^.uk_isubs - shsize) div rsize;
+
+  keg^.uk_ipers:=keg^.uk_isubs*(keg^.uk_ssubc-1) + keg^.uk_isubl;
+ {$ELSE}
+  keg^.uk_ipers:=(UMA_SLAB_SIZE - shsize) div rsize;
+ {$ENDIF}
+
  Assert(keg^.uk_ipers<>0, 'keg_small_init: ipers is 0');
- memused:=keg^.uk_ipers * rsize + shsize;
- wastedspace:=UMA_SLAB_SIZE - memused;
 
  {
   * We can't do OFFPAGE if we're internal or if we've been
@@ -1293,17 +1434,25 @@ begin
   }
  if ((keg^.uk_flags and UMA_ZFLAG_INTERNAL )<>0) or
     ((keg^.uk_flags and UMA_ZFLAG_CACHEONLY)<>0) then
-  Exit;
-
- if (wastedspace >= UMA_MAX_WASTE) and
-    (keg^.uk_ipers < (UMA_SLAB_SIZE div keg^.uk_rsize)) then
  begin
-  keg^.uk_ipers:=UMA_SLAB_SIZE div keg^.uk_rsize;
-  Assert(keg^.uk_ipers <= us_word_size-1, 'keg_small_init: keg^.uk_ipers too high!');
+  Exit;
+ end;
+
+ if ((keg^.uk_flags and UMA_ZONE_OFFPAGE)=0) then
+ if check_wasted(keg,rsize,shsize) then
+ begin
+
+  //keg^.uk_ipers:=UMA_SLAB_SIZE div keg^.uk_rsize;
+  //Assert(keg^.uk_ipers <= High(us_word), 'keg_small_init: keg^.uk_ipers too high!');
+
   keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE;
 
   if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)=0) then
+  begin
    keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_HASH;
+  end;
+
+  goto _start;
  end;
 end;
 
@@ -1329,20 +1478,34 @@ begin
 
  { Account for remainder }
  if ((pages * UMA_SLAB_SIZE) < keg^.uk_size) then
+ begin
   Inc(pages);
+ end;
 
  keg^.uk_ppera:=pages;
  keg^.uk_ipers:=1;
+
+ {$IF UMA_SUB_PAGES>1}
+  keg^.uk_ssizl:=bsfDWORD(UMA_SLAB_SIZE);
+  keg^.uk_ssubc:=1;
+  keg^.uk_isubs:=1;
+  keg^.uk_isubl:=1;
+ {$ENDIF}
+
  keg^.uk_rsize:=keg^.uk_size;
 
  { We can't do OFFPAGE if we're internal, bail out here. }
  if ((keg^.uk_flags and UMA_ZFLAG_INTERNAL)<>0) then
+ begin
   Exit;
+ end;
 
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE;
 
  if ((keg^.uk_flags and UMA_ZONE_VTOSLAB)=0) then
+ begin
   keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_HASH;
+ end;
 end;
 
 function Min(a,b:PtrUInt):PtrUInt; inline;
@@ -1371,17 +1534,30 @@ begin
   * would fall on the same boundary every time.
   }
  if ((rsize and keg^.uk_align)<>0) then
+ begin
   rsize:=(rsize and (not keg^.uk_align)) + alignsize;
+ end;
 
  if ((rsize and alignsize)=0) then
+ begin
   rsize:=rsize + alignsize;
+ end;
 
  trailer:=rsize - keg^.uk_size;
  pages:=(rsize * (UMA_SLAB_SIZE div alignsize)) div UMA_SLAB_SIZE;
  pages:=MIN(pages, (128 * 1024) div UMA_SLAB_SIZE);
+
  keg^.uk_rsize:=rsize;
  keg^.uk_ppera:=pages;
  keg^.uk_ipers:=((pages * UMA_SLAB_SIZE) + trailer) div rsize;
+
+ {$IF UMA_SUB_PAGES>1}
+  keg^.uk_ssizl:=bsfDWORD(UMA_SLAB_SIZE);
+  keg^.uk_ssubc:=1;
+  keg^.uk_isubs:=keg^.uk_ipers;
+  keg^.uk_isubl:=keg^.uk_ipers;
+ {$ENDIF}
+
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE or UMA_ZONE_VTOSLAB;
 
  Assert(keg^.uk_ipers <= uma_max_ipers, '%s: keg^.uk_ipers too high(%d) increase max_ipers');
@@ -1424,10 +1600,14 @@ begin
  keg^.uk_name:=zone^.uz_name;
 
  if ((arg^.flags and UMA_ZONE_VM)<>0) then
+ begin
   keg^.uk_flags:=keg^.uk_flags or UMA_ZFLAG_CACHEONLY;
+ end;
 
  if ((arg^.flags and UMA_ZONE_ZINIT)<>0) then
+ begin
   keg^.uk_init:=@zero_init;
+ end;
 
  if ((arg^.flags and UMA_ZONE_REFCNT)<>0) or
     ((arg^.flags and UMA_ZONE_MALLOC)<>0) then
@@ -1491,12 +1671,15 @@ begin
    keg^.uk_allocf:=@startup_alloc;
 {$ELSE}
   if (booted < UMA_STARTUP2_CONST) then
+  begin
    keg^.uk_allocf:=uma_alloc(@startup_alloc);
+  end;
 {$ENDIF}
  end else
- if (booted < UMA_STARTUP2_CONST) and
-    ((keg^.uk_flags and UMA_ZFLAG_INTERNAL)<>0) then
+ if (booted < UMA_STARTUP2_CONST) and ((keg^.uk_flags and UMA_ZFLAG_INTERNAL)<>0) then
+ begin
   keg^.uk_allocf:=uma_alloc(@startup_alloc);
+ end;
 
  {
   * Initialize keg's lock (shared among zones).
@@ -1555,7 +1738,9 @@ begin
  end;
 
  if ((keg^.uk_flags and UMA_ZONE_HASH)<>0) then
+ begin
   hash_alloc(@keg^.uk_hash);
+ end;
 
  LIST_INSERT_HEAD(@keg^.uk_zones, zone, @zone^.uz_link);
 
@@ -1630,7 +1815,9 @@ begin
   keg:=uma_kcreate(zone, arg^.size, arg^.uminit, arg^.fini, arg^.align, arg^.flags);
 
   if (keg=nil) then
+  begin
    Exit(ENOMEM);
+  end;
  end else
  begin
   { We should only be here from uma_startup() }
@@ -1642,7 +1829,9 @@ begin
   karg.zone  :=zone;
   error:=keg_ctor(arg^.keg, sizeof(uma_keg), @karg, flags);
   if (error<>0) then
+  begin
    Exit(error);
+  end;
  end;
  {
   * Link in the first keg.
@@ -1721,7 +1910,9 @@ begin
  keg:=zone_first_keg(zone);
 
  if ((zone^.uz_flags and UMA_ZFLAG_INTERNAL)=0) then
+ begin
   cache_drain(zone);
+ end;
 
  mtx_lock(uma_mtx);
  LIST_REMOVE(zone, @zone^.uz_link);
@@ -1742,7 +1933,9 @@ begin
   klink^.kl_keg:=nil;
   LIST_REMOVE(klink, @klink^.kl_link);
   if (klink=@zone^.uz_klink) then
+  begin
    continue;
+  end;
   FreeMem(klink);
   //
   klink:=LIST_FIRST(@zone^.uz_kegs);
@@ -1852,7 +2045,9 @@ begin
  end;
 
  if (objsize > UMA_SMALLEST_UNIT) then
+ begin
   Dec(objsize);
+ end;
 
  uma_max_ipers:=MAX(UMA_SLAB_SIZE div objsize, 64);
 
@@ -1867,11 +2062,13 @@ begin
  end;
 
  if (objsize > UMA_SMALLEST_UNIT) then
+ begin
   Dec(objsize);
+ end;
 
  uma_max_ipers_ref:=MAX(UMA_SLAB_SIZE div objsize, 64);
 
- Assert((uma_max_ipers_ref <= us_word_size-1) and (uma_max_ipers <= us_word_size-1), 'uma_startup: calculated uma_max_ipers values too large!');
+ Assert((uma_max_ipers_ref <= High(us_word)) and (uma_max_ipers <= High(us_word)), 'uma_startup: calculated uma_max_ipers values too large!');
 
  { 'manually' create the initial zone }
  args.name  :='UMA Kegs';
@@ -1997,7 +2194,9 @@ end;
 procedure uma_set_align(align:Integer); public;
 begin
  if (align<>UMA_ALIGN_CACHE) then
+ begin
   uma_align_cache_var:=align;
+ end;
 end;
 
 { See uma.h }
@@ -2217,7 +2416,9 @@ zalloc_start:
    end;
 
    if ((flags and M_ZERO)<>0) then
+   begin
     FillChar(item^, zone^.uz_size, 0);
+   end;
 
    Exit(item);
   end else
@@ -2276,7 +2477,7 @@ zalloc_start:
   uz_allocs:=uz_allocs + uc_allocs;
   uz_frees :=uz_frees  + uc_frees;
   uc_allocs:=0;
-  uc_frees:=0;
+  uc_frees :=0;
  end;
 
  { Our old one is now a free bucket }
@@ -2537,32 +2738,83 @@ begin
  Exit(nil);
 end;
 
+function get_free_id(keg:uma_keg_t;slab:uma_slab_t):Integer; inline;
+var
+ i:Integer;
+begin
+ {$IF UMA_SUB_PAGES>1}
+  Result:=-1;
+  For i:=0 to keg^.uk_ssubc-1 do
+  if (slab^.us_head.us_free[i].ui_count<>0) then
+  begin
+   Result:=i;
+   Break;
+  end;
+ {$ELSE}
+  Result:=0;
+ {$ENDIF}
+end;
+
+function get_freecount(keg:uma_keg_t;slab:uma_slab_t):Integer; inline;
+var
+ i:Integer;
+begin
+ Result:=0;
+ {$IF UMA_SUB_PAGES>1}
+  For i:=0 to keg^.uk_ssubc-1 do
+  begin
+   Result:=Result + slab^.us_head.us_free[i].ui_count;
+  end;
+ {$ELSE}
+  Result:=slab^.us_head.us_free[0].ui_count;
+ {$ENDIF}
+end;
+
+function get_free_id(keg:uma_keg_t;g,i:Integer):Integer; inline;
+begin
+ {$IF UMA_SUB_PAGES>1}
+  Result:=g*keg^.uk_isubs + i;
+ {$ELSE}
+  Result:=i;
+ {$ENDIF}
+end;
+
 function slab_alloc_item(zone:uma_zone_t;slab:uma_slab_t):Pointer;
 var
  keg:uma_keg_t;
  slabref:uma_slabrefcnt_t;
  item:Pointer;
- freei:us_word;
+ grp  :Integer;
+ freei:Integer;
 begin
  keg:=slab^.us_keg;
  mtx_assert(keg^.uk_lock);
 
- freei:=slab^.us_firstfree;
- if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
- begin
-  slabref:=uma_slabrefcnt_t(slab);
-  slab^.us_firstfree:=slabref^.us_freelist[freei].us_item;
- end else
- begin
-  slab^.us_firstfree:=slab^.us_freelist[freei].us_item;
- end;
- item:=slab^.us_data + (keg^.uk_rsize * freei);
+ grp:=get_free_id(keg,slab);
+ Assert(grp<>-1);
 
- slab^.us_freecount:=slab^.us_freecount-1;
+ with slab^.us_head.us_free[grp] do
+ begin
+  freei:=ui_first;
+  if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
+  begin
+   slabref:=uma_slabrefcnt_t(slab);
+   ui_first:=slabref^.us_freelist[get_free_id(keg,grp,freei)].us_item;
+  end else
+  begin
+   ui_first:=slab^.us_freelist[get_free_id(keg,grp,freei)].us_item;
+  end;
+ end;
+
+ item:=get_item_addr(keg,slab,grp,freei);
+
+ Dec(slab^.us_head.us_free[grp].ui_count);
  Dec(keg^.uk_free);
+
  //uma_dbg_alloc(zone, slab, item);
+
  { Move this slab to the full list }
- if (slab^.us_freecount=0) then
+ if (get_freecount(keg,slab)=0) then
  begin
   LIST_REMOVE(slab, @slab^.us_link);
   LIST_INSERT_HEAD(@keg^.uk_full_slab, slab, @slab^.us_link);
@@ -2598,7 +2850,9 @@ begin
  begin
   bflags:=(flags and (not M_ZERO));
   if ((zone^.uz_flags and UMA_ZFLAG_CACHEONLY)<>0) then
+  begin
    bflags:=bflags or M_NOVM;
+  end;
 
   ZONE_UNLOCK(zone);
   bucket:=bucket_alloc(zone^.uz_count, bflags);
@@ -2631,7 +2885,7 @@ begin
   if (slab=nil) then Break;
 
   keg:=slab^.us_keg;
-  while (slab^.us_freecount<>0) and (bucket^.ub_cnt < max) do
+  while (get_freecount(keg,slab)<>0) and (bucket^.ub_cnt < max) do
   begin
    with bucket^ do
    begin
@@ -2645,7 +2899,9 @@ begin
  end;
 
  if (slab<>nil) then
+ begin
   zone_relock(zone, keg);
+ end;
 
  {
   * We unlock here because we need to call the zone's init.
@@ -2662,7 +2918,9 @@ begin
   while (i < bucket^.ub_cnt) do
   begin
    if (zone^.uz_init(bucket^.ub_bucket[i], zone^.uz_size, origflags)<>0) then
+   begin
     break;
+   end;
    //
    Inc(i);
   end;
@@ -2761,7 +3019,9 @@ begin
  end;
 
  if ((flags and M_ZERO)<>0) then
+ begin
   FillChar(item^, zone^.uz_size, 0);
+ end;
 
  Exit(item);
 end;
@@ -2966,21 +3226,33 @@ var
  slabref:uma_slabrefcnt_t;
  keg:uma_keg_t;
  mem:PByte;
- freei:us_word;
+ diff:QWORD;
+ ssize:DWORD;
+ grp  :Integer;
+ freei:Integer;
  clearfull:Integer;
+ freecount:Integer;
 begin
  if (skip < SKIP_DTOR) and (zone^.uz_dtor<>nil) then
+ begin
   zone^.uz_dtor(item, zone^.uz_size, udata);
+ end;
 
  if (skip < SKIP_FINI) and (zone^.uz_fini<>nil) then
+ begin
   zone^.uz_fini(item, zone^.uz_size);
+ end;
 
  ZONE_LOCK(zone);
 
  if ((flags and ZFREE_STATFAIL)<>0) then
+ begin
   Inc(zone^.uz_fails);
+ end;
  if ((flags and ZFREE_STATFREE)<>0) then
+ begin
   Inc(zone^.uz_frees);
+ end;
 
  if ((zone^.uz_flags and UMA_ZONE_VTOSLAB)=0) then
  begin
@@ -3009,36 +3281,61 @@ begin
  end;
  Assert(keg=slab^.us_keg);
 
+ freecount:=get_freecount(keg,slab);
+
  { Do we need to remove from any lists? }
- if (slab^.us_freecount+1=keg^.uk_ipers) then
+ if (freecount+1=keg^.uk_ipers) then
  begin
   LIST_REMOVE(slab, @slab^.us_link);
   LIST_INSERT_HEAD(@keg^.uk_free_slab, slab, @slab^.us_link);
  end else
- if (slab^.us_freecount=0) then
+ if (freecount=0) then
  begin
   LIST_REMOVE(slab, @slab^.us_link);
   LIST_INSERT_HEAD(@keg^.uk_part_slab, slab, @slab^.us_link);
  end;
 
  { Slab management stuff }
- freei:=(QWORD(item) - QWORD(slab^.us_data)) div keg^.uk_rsize;
+
+ {$IF UMA_SUB_PAGES>1}
+  diff:=QWORD(item) - QWORD(slab^.us_data);
+
+  ssize:=(1 shl keg^.uk_ssizl);
+
+  grp  :=(diff div ssize);
+  freei:=(diff mod ssize) div keg^.uk_rsize;
+ {$ELSE}
+  grp  :=0;
+  freei:=(QWORD(item) - QWORD(slab^.us_data)) div keg^.uk_rsize;
+ {$ENDIF}
 
  {
  if (skip=SKIP_NONE) then
   uma_dbg_free(zone, slab, item);
  }
 
- if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
+ with slab^.us_head.us_free[grp] do
  begin
-  slabref:=uma_slabrefcnt_t(slab);
-  slabref^.us_freelist[freei].us_item:=slab^.us_firstfree;
- end else
- begin
-  slab^.us_freelist[freei].us_item:=slab^.us_firstfree;
+  if ((keg^.uk_flags and UMA_ZONE_REFCNT)<>0) then
+  begin
+   slabref:=uma_slabrefcnt_t(slab);
+   slabref^.us_freelist[get_free_id(keg,grp,freei)].us_item:=ui_first;
+  end else
+  begin
+   slab^.us_freelist[get_free_id(keg,grp,freei)].us_item:=ui_first;
+  end;
+  ui_first:=freei;
+  Inc(ui_count);
  end;
- slab^.us_firstfree:=freei;
- slab^.us_freecount:=slab^.us_freecount+1;
+
+ {$IF UMA_SUB_PAGES>1}
+ if (grp+1<>keg^.uk_ssubc) or ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
+ if (slab^.us_head.us_free[grp].ui_count=0) then
+ begin
+  //madvise
+  md_dontneed(slab^.us_data + grp*ssize,ssize);
+ end;
+ {$ENDIF}
 
  { Zone statistics }
  Inc(keg^.uk_free);
@@ -3079,7 +3376,9 @@ begin
  keg:=zone_first_keg(zone);
  keg^.uk_maxpages:=(nitems div keg^.uk_ipers) * keg^.uk_ppera;
  if (keg^.uk_maxpages * keg^.uk_ipers < nitems) then
+ begin
   keg^.uk_maxpages:=keg^.uk_maxpages + keg^.uk_ppera;
+ end;
  nitems:=keg^.uk_maxpages * keg^.uk_ipers;
  ZONE_UNLOCK(zone);
 
@@ -3237,12 +3536,16 @@ begin
  ZONE_LOCK(zone);
  slabs:=items div keg^.uk_ipers;
  if ((slabs * keg^.uk_ipers) < items) then
+ begin
   Inc(slabs);
+ end;
  while (slabs > 0) do
  begin
   slab:=keg_alloc_slab(keg, zone, M_WAITOK);
   if (slab=nil) then
+  begin
    break;
+  end;
   Assert(slab^.us_keg=keg);
   LIST_INSERT_HEAD(@keg^.uk_free_slab, slab, @slab^.us_link);
   Dec(slabs);
@@ -3307,7 +3610,9 @@ var
 begin
  slab:=zone_alloc_item(slabzone, nil, wait);
  if (slab=nil) then
+ begin
   Exit(nil);
+ end;
 
  mem:=page_alloc(nil, size, @flags, wait);
  if (mem<>nil) then
@@ -3338,7 +3643,7 @@ end;
 
 procedure slab_print(slab:uma_slab_t);
 begin
- Writeln('slab: keg ',HexStr(slab^.us_keg),', data ',HexStr(slab^.us_data),', freecount ',slab^.us_freecount,', firstfree ',slab^.us_firstfree);
+ Writeln('slab: keg ',HexStr(slab^.us_keg),', data ',HexStr(slab^.us_data),', freecount ',get_freecount(slab^.us_keg,slab));
 end;
 
 procedure cache_print(cache:uma_cache_t);
@@ -3377,8 +3682,6 @@ begin
 end;
 
 procedure uma_print_keg(keg:uma_keg_t);
-var
- slab:uma_slab_t;
 begin
  Writeln('keg: ',keg^.uk_name,'(',HexStr(keg),') size ',keg^.uk_size,'(',keg^.uk_rsize,') flags ',HexStr(keg^.uk_flags,4),
          ' ipers ',keg^.uk_ipers,
