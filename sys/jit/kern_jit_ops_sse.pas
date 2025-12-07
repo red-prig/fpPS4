@@ -16,7 +16,7 @@ uses
  kern_jit_ctx;
 
 var
- _SSE4aSupport:Boolean=False;
+ _SSE4aSupport:Boolean=False; public;
 
 procedure _ins_op(var op:DWORD;i:Byte); inline;
 begin

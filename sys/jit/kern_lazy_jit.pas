@@ -401,6 +401,9 @@ begin
  end;
 end;
 
+var
+ _SSE4aSupport:Boolean; external;
+
 function op_lazy_jit(var ctx:t_jit_context2):Boolean;
 var
  p_regs:t_preserved_regs;
@@ -442,6 +445,11 @@ begin
   OPcpuid,
   OPrdtsc,
   OPnop  :Exit;
+  OPinsert:
+    if (ctx.din.OpCode.Suffix=OPSx_q) and
+       (not _SSE4aSupport) then Exit;
+  OPextrq:
+    if (not _SSE4aSupport) then Exit;
   else;
  end;
 
