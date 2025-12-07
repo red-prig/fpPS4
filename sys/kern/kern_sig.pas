@@ -1450,7 +1450,13 @@ var
 begin
  Result:=0;
 
- Writeln('tdsendsignal(',td^.td_tid,':',td^.td_name,',',sig,')');
+ if (td=nil) then
+ begin
+  Writeln('tdsendsignal(','nil',':','nil',',',sig,')');
+ end else
+ begin
+  Writeln('tdsendsignal(',td^.td_tid,':',td^.td_name,',',sig,')');
+ end;
 
  KNOTE_LOCKED(@p_proc.p_klist, NOTE_SIGNAL or sig);
  prop:=sigprop(sig);
