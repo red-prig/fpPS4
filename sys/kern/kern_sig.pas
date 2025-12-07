@@ -444,7 +444,10 @@ begin
   while (td0<>nil) do
   begin
 
-   sigqueue_move_set(@td0^.td_sigqueue,@worklist,_set);
+   if ((td0^.td_pflags and TDP_KTHREAD)=0) then //not system
+   begin
+    sigqueue_move_set(@td0^.td_sigqueue,@worklist,_set);
+   end;
 
    td0:=TAILQ_NEXT(td0,@td0^.td_plist)
   end;
@@ -1398,17 +1401,21 @@ begin
    while (td<>nil) do
    begin
 
-    if (first_td=nil) then
+    if ((td^.td_pflags and TDP_KTHREAD)=0) then //not system
     begin
-     first_td:=td;
+     if (first_td=nil) then
+     begin
+      first_td:=td;
+     end;
+
+     if (not SIGISMEMBER(@td^.td_sigmask,sig)) then
+     begin
+      signal_td:=td;
+      Break;
+     end;
     end;
 
-    if (not SIGISMEMBER(@td^.td_sigmask,sig)) then
-    begin
-     signal_td:=td;
-     Break;
-    end;
-
+    //
     td:=TAILQ_NEXT(td,@td^.td_plist)
    end;
 

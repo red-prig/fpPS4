@@ -961,6 +961,7 @@ begin
      while (ttd<>nil) do
      begin
 
+      if ((ttd^.td_pflags and TDP_KTHREAD)=0) then //not system
       if (ttd<>td) then
       begin
        Result:=0;
@@ -968,7 +969,7 @@ begin
        tdksignal(ttd,sig,@ksi);
       end;
 
-
+      //
       ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
      end;
 

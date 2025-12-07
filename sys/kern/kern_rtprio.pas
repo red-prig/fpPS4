@@ -177,15 +177,19 @@ begin
        while (tdp<>nil) do
        begin
 
-        pri_to_rtp(tdp,@rtp2);
-
-        if (rtp2._type<rtp1._type) or
-           ((rtp2._type=rtp1._type) and
-            (rtp2._prio<rtp1._prio)) then
+        if ((tdp^.td_pflags and TDP_KTHREAD)=0) then //not system
         begin
-         rtp1:=rtp2;
+         pri_to_rtp(tdp,@rtp2);
+
+         if (rtp2._type<rtp1._type) or
+            ((rtp2._type=rtp1._type) and
+             (rtp2._prio<rtp1._prio)) then
+         begin
+          rtp1:=rtp2;
+         end;
         end;
 
+        //
         tdp:=TAILQ_NEXT(tdp,@tdp^.td_plist)
        end;
 
@@ -213,9 +217,13 @@ begin
        while (tdp<>nil) do
        begin
 
-        Result:=rtp_to_pri(@rtp1,tdp);
-        if (Result<>0) then Break;
+        if ((tdp^.td_pflags and TDP_KTHREAD)=0) then //not system
+        begin
+         Result:=rtp_to_pri(@rtp1,tdp);
+         if (Result<>0) then Break;
+        end;
 
+        //
         tdp:=TAILQ_NEXT(tdp,@tdp^.td_plist)
        end;
 
