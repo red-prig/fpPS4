@@ -116,7 +116,8 @@ end;
 
 function PM4_LENGTH(token:DWORD):DWORD; inline;
 begin
- Result:=((token shr 14) and $FFFC) + 8;
+ //body size must overflow to zero
+ Result:=(((token shr 14) + 4) and $FFFC) + 4;
 end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
