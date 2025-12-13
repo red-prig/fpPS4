@@ -3947,7 +3947,7 @@ end;
 function _get_str_MIMG(Var SPI:TSPI):RawByteString;
 var
  str:RawByteString;
- t:Byte;
+ t:DWORD;
 begin
  Case SPI.MIMG.OP of
 

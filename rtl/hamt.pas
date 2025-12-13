@@ -27,6 +27,8 @@ unit hamt;
 
 {$mode objfpc}{$H+}
 
+{$OPTIMIZATION USELOADMODIFYSTORE,AUTOINLINE,DEADVALUES}
+
 interface
 
 type
@@ -146,6 +148,28 @@ function HAMT_get_value64(i:PHAMT_Iterator64;v:PPointer):Boolean;
 
 implementation
 
+procedure Move64f(src,dst:Pointer;count:QWORD); inline;
+begin
+ while (count<>0) do
+ begin
+  PHAMTNode64(dst)^:=PHAMTNode64(src)^;
+  //
+  Inc(PHAMTNode64(dst));
+  Inc(PHAMTNode64(src));
+  Dec(count);
+ end;
+end;
+
+procedure Move64b(src,dst:Pointer;count:QWORD); inline;
+begin
+ while (count<>0) do
+ begin
+  Dec(count);
+  //
+  PHAMTNode64(dst)[count]:=PHAMTNode64(src)[count];
+ end;
+end;
+
 function IsSubTrie32(n:PHAMTNode32):Boolean; inline;
 begin
  Result:=(PtrUint(n^.BaseValue) and 1)<>0;
@@ -182,12 +206,12 @@ end;
 
 function GetSubTrie32(n:PHAMTNode32):PHAMTNode32; inline;
 begin
- PtrUint(Result):=(PtrUint(n^.BaseValue) or 1) xor 1;
+ PtrUint(Result):=PtrUint(n^.BaseValue) xor 1;
 end;
 
 function GetSubTrie64(n:PHAMTNode64):PHAMTNode64; inline;
 begin
- PtrUint(Result):=(PtrUint(n^.BaseValue) or 1) xor 1;
+ PtrUint(Result):=PtrUint(n^.BaseValue) xor 1;
 end;
 
 function GetValue32(n:PHAMTNode32):Pointer; inline;
@@ -256,7 +280,7 @@ function GetMapPos32(BitKey,keypart:DWORD):DWORD; inline;
 var
  k:DWORD;
 begin
- k:=BitKey and (not DWORD(HAMT32.const_max shl keypart));
+ k:=BitKey and (DWORD(HAMT32.const_one shl keypart)-1);
  if (k=0) then Exit(0);
  Result:=PopCnt(k);
 end;
@@ -265,7 +289,7 @@ function GetMapPos64(BitKey,keypart:QWORD):QWORD; inline;
 var
  k:QWORD;
 begin
- k:=BitKey and (not QWORD(HAMT64.const_max shl keypart));
+ k:=BitKey and (QWORD(HAMT64.const_one shl keypart)-1);
  if (k=0) then Exit(0);
  Result:=PopCnt(k);
 end;
@@ -607,7 +631,9 @@ begin
   keypart:=GetNodeKeyMask32(key,keypartbits);
 
   if BitIsNotSet32(node^.BitMapKey,keypart) then
+  begin
    Exit(nil); // bit is 0 in bitmap -> no match
+  end;
 
   Map:=GetMapPos32(node^.BitMapKey,keypart);
 
@@ -623,6 +649,7 @@ var
  node:PHAMTNode64;
  keypart,Map:QWORD;
  keypartbits:QWORD;
+ key2:QWORD;
 begin
  if (hamt=nil) then Exit(nil);
 
@@ -648,12 +675,19 @@ begin
 
   keypart:=GetNodeKeyMask64(key,keypartbits);
 
-  if BitIsNotSet64(node^.BitMapKey,keypart) then
+
+  key2:=node^.BitMapKey;
+
+
+  if BitIsNotSet64(key2,keypart) then
+  begin
    Exit(nil); // bit is 0 in bitmap -> no match
+  end;
+
 
   Map:=GetMapPos64(node^.BitMapKey,keypart);
 
-  // Go down a level */
+  // Go down a level
   node:=@GetSubTrie64(node)[Map];
 
   keypartbits:=keypartbits+HAMT64.node_bits;
@@ -703,7 +737,7 @@ begin
 
      if (keypart=keypart2) then
      begin
-      newnodes:=AllocMem(SizeOf(THAMTNode32));
+      newnodes:=GetMem(SizeOf(THAMTNode32));
       Assert((PtrUint(newnodes) and 1)=0);
       newnodes[0].BitMapKey:=key2;
       newnodes[0].BaseValue:=node^.BaseValue;
@@ -712,7 +746,7 @@ begin
       node:=@newnodes[0];
      end else
      begin
-      newnodes:=AllocMem(2*SizeOf(THAMTNode32));
+      newnodes:=GetMem(2*SizeOf(THAMTNode32));
       Assert((PtrUint(newnodes) and 1)=0);
 
       if (keypart2<keypart) then
@@ -763,7 +797,7 @@ begin
     Move(oldnodes[Map],newnodes[Map+1],(Size-Map-1)*SizeOf(THAMTNode32));
    end else
    begin
-    newnodes:=AllocMem(Size*SizeOf(THAMTNode32));
+    newnodes:=GetMem(Size*SizeOf(THAMTNode32));
     Assert((PtrUint(newnodes) and 1)=0);
     Move(oldnodes[0]  ,newnodes[0]    ,         Map*SizeOf(THAMTNode32));
     Move(oldnodes[Map],newnodes[Map+1],(Size-Map-1)*SizeOf(THAMTNode32));
@@ -828,7 +862,7 @@ begin
 
      if (keypart=keypart2) then
      begin
-      newnodes:=AllocMem(SizeOf(THAMTNode64));
+      newnodes:=GetMem(SizeOf(THAMTNode64));
       Assert((PtrUint(newnodes) and 1)=0);
       newnodes[0].BitMapKey:=key2;
       newnodes[0].BaseValue:=node^.BaseValue;
@@ -837,7 +871,7 @@ begin
       node:=@newnodes[0];
      end else
      begin
-      newnodes:=AllocMem(2*SizeOf(THAMTNode64));
+      newnodes:=GetMem(2*SizeOf(THAMTNode64));
       Assert((PtrUint(newnodes) and 1)=0);
 
       if (keypart2<keypart) then
@@ -885,13 +919,13 @@ begin
    if (MemSize(oldnodes)>=(Size*SizeOf(THAMTNode64))) then
    begin
     newnodes:=oldnodes;
-    Move(oldnodes[Map],newnodes[Map+1],(Size-Map-1)*SizeOf(THAMTNode64));
+    Move64b(@oldnodes[Map],@newnodes[Map+1],(Size-Map-1));
    end else
    begin
-    newnodes:=AllocMem(Size*SizeOf(THAMTNode64));
+    newnodes:=GetMem(Size*SizeOf(THAMTNode64));
     Assert((PtrUint(newnodes) and 1)=0);
-    Move(oldnodes[0]  ,newnodes[0]    ,         Map*SizeOf(THAMTNode64));
-    Move(oldnodes[Map],newnodes[Map+1],(Size-Map-1)*SizeOf(THAMTNode64));
+    Move64f(@oldnodes[0]  ,@newnodes[0]    ,         Map);
+    Move64f(@oldnodes[Map],@newnodes[Map+1],(Size-Map-1));
     FreeMem(oldnodes);
     SetSubTrie64(node,newnodes);
    end;
@@ -913,34 +947,12 @@ end;
 
 function HAMT_delete32(hamt:THAMT;key:DWORD;old:PPointer):Boolean;
 var
- node,oldnodes:PHAMTNode32;
+ node,oldnodes,tmp:PHAMTNode32;
  keypart,Map,Size:DWORD;
  keypartbits:DWORD;
 
  curr:^PHAMTNode32;
  data:array[0..HAMT32.stack_max] of PHAMTNode32;
-
- function copyup:Boolean;
- var
-  tmp:PHAMTNode32;
- begin
-  if (Map=0) then
-  begin
-   tmp:=@oldnodes[1];
-  end else
-  begin
-   tmp:=@oldnodes[0];
-  end;
-
-  Result:=not IsSubTrie32(tmp);
-
-  if Result then
-  begin
-   //copy up
-   node^:=tmp^;
-   FreeMem(oldnodes);
-  end;
- end;
 
  procedure shrink;
  var
@@ -948,7 +960,7 @@ var
  begin
   if ((2*Size*SizeOf(THAMTNode32))<=MemSize(oldnodes)) then //shrink mem?
   begin
-   newnodes:=AllocMem(Size*SizeOf(THAMTNode32));
+   newnodes:=GetMem(Size*SizeOf(THAMTNode32));
    Assert((PtrUint(newnodes) and 1)=0);
    Move(oldnodes[0]    ,newnodes[0]  ,Map*SizeOf(THAMTNode32));
    Move(oldnodes[Map+1],newnodes[Map],(Size-Map)*SizeOf(THAMTNode32));
@@ -1035,7 +1047,15 @@ begin
     end else
     if (Size=1) then
     begin
-     if not copyup then
+     tmp:=@oldnodes[(Map+1) and 1];
+
+     if not IsSubTrie32(tmp) then
+     begin
+      //copy up
+      node^:=tmp^;
+      FreeMem(oldnodes);
+      Exit;
+     end else
      begin
       shrink;
      end;
@@ -1058,7 +1078,9 @@ begin
   keypart:=GetNodeKeyMask32(key,keypartbits);
 
   if BitIsNotSet32(node^.BitMapKey,keypart) then
+  begin
    Exit; // bit is 0 in bitmap -> no match
+  end;
 
   Map:=GetMapPos32(node^.BitMapKey,keypart);
 
@@ -1074,34 +1096,12 @@ end;
 
 function HAMT_delete64(hamt:THAMT;key:QWORD;old:PPointer):Boolean;
 var
- node,oldnodes:PHAMTNode64;
+ node,oldnodes,tmp:PHAMTNode64;
  keypart,Map,Size:QWORD;
  keypartbits:QWORD;
 
  curr:^PHAMTNode64;
  data:array[0..HAMT64.stack_max] of PHAMTNode64;
-
- function copyup:Boolean;
- var
-  tmp:PHAMTNode64;
- begin
-  if (Map=0) then
-  begin
-   tmp:=@oldnodes[1];
-  end else
-  begin
-   tmp:=@oldnodes[0];
-  end;
-
-  Result:=not IsSubTrie64(tmp);
-
-  if Result then
-  begin
-   //copy up
-   node^:=tmp^;
-   FreeMem(oldnodes);
-  end;
- end;
 
  procedure shrink;
  var
@@ -1109,16 +1109,16 @@ var
  begin
   if ((2*Size*SizeOf(THAMTNode64))<=MemSize(oldnodes)) then //shrink mem?
   begin
-   newnodes:=AllocMem(Size*SizeOf(THAMTNode64));
+   newnodes:=GetMem(Size*SizeOf(THAMTNode64));
    Assert((PtrUint(newnodes) and 1)=0);
-   Move(oldnodes[0]    ,newnodes[0]  ,Map*SizeOf(THAMTNode64));
-   Move(oldnodes[Map+1],newnodes[Map],(Size-Map)*SizeOf(THAMTNode64));
+   Move64f(@oldnodes[0]    ,@newnodes[0]  ,Map);
+   Move64f(@oldnodes[Map+1],@newnodes[Map],(Size-Map));
    FreeMem(oldnodes);
    SetSubTrie64(node,newnodes);
    oldnodes:=newnodes;
   end else
   begin
-   Move(oldnodes[Map+1],oldnodes[Map],(Size-Map)*SizeOf(THAMTNode64));
+   Move64f(@oldnodes[Map+1],@oldnodes[Map],(Size-Map));
   end;
  end;
 
@@ -1196,7 +1196,15 @@ begin
     end else
     if (Size=1) then
     begin
-     if not copyup then
+     tmp:=@oldnodes[(Map+1) and 1];
+
+     if not IsSubTrie64(tmp) then
+     begin
+      //copy up
+      node^:=tmp^;
+      FreeMem(oldnodes);
+      Exit;
+     end else
      begin
       shrink;
      end;
@@ -1219,7 +1227,9 @@ begin
   keypart:=GetNodeKeyMask64(key,keypartbits);
 
   if BitIsNotSet64(node^.BitMapKey,keypart) then
+  begin
    Exit; // bit is 0 in bitmap -> no match
+  end;
 
   Map:=GetMapPos64(node^.BitMapKey,keypart);
 
