@@ -8,7 +8,7 @@ uses
  Classes,
  CharStream,
  murmurhash,
- HAMT,
+ kern_hamt,
  sys_event,
  game_info;
 

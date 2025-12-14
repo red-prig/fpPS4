@@ -6,7 +6,7 @@ unit kern_id;
 interface
 
 uses
- hamt,
+ kern_hamt,
  kern_rwlock;
 
 Const

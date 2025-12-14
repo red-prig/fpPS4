@@ -15,7 +15,7 @@ uses
  signalvar,
  time,
  rtprio,
- hamt;
+ kern_hamt;
 
 procedure thread_reap();
 

@@ -1013,6 +1013,7 @@ begin
 
     keypartbits:=keypartbits-HAMT32.node_bits;
 
+    keypart:=GetNodeKeyMask32(key,keypartbits);
     node^.BitMapKey:=UnSetBitInSet32(node^.BitMapKey,keypart);
 
     Size:=GetBitMapSize32(node^.BitMapKey);
@@ -1162,6 +1163,7 @@ begin
 
     keypartbits:=keypartbits-HAMT64.node_bits;
 
+    keypart:=GetNodeKeyMask64(key,keypartbits);
     node^.BitMapKey:=UnSetBitInSet64(node^.BitMapKey,keypart);
 
     Size:=GetBitMapSize64(node^.BitMapKey);

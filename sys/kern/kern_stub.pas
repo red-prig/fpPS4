@@ -42,7 +42,7 @@ implementation
 uses
  g_node_splay,
  {$IFDEF chunk_alloc}
- hamt,
+ kern_hamt,
  {$ENDIF}
  kern_rwlock,
  vm,

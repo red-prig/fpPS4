@@ -31,7 +31,7 @@ procedure null_hashrem(xp:p_null_node);
 implementation
 
 uses
- hamt,
+ kern_hamt,
  mqueue,
  errno,
  vfs_subr,

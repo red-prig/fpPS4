@@ -48,7 +48,7 @@ function find_symdef(symnum:QWORD;
 implementation
 
 uses
- hamt,
+ kern_hamt,
  errno,
  systm,
  kern_rtld,

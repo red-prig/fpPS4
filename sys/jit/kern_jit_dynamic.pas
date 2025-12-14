@@ -7,7 +7,7 @@ interface
 
 uses
  mqueue,
- hamt,
+ kern_hamt,
  //g23tree,
  g_node_splay,
  murmurhash,

@@ -8,7 +8,7 @@ interface
 uses
  sysutils,
  mqueue,
- hamt,
+ kern_hamt,
  elf64,
  kern_thr,
  kern_rtld,
