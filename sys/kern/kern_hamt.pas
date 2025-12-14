@@ -27,6 +27,8 @@ unit kern_hamt;
 
 {$mode objfpc}{$H+}
 
+{$OPTIMIZATION USELOADMODIFYSTORE,AUTOINLINE,DEADVALUES}
+
 interface
 
 type
@@ -112,33 +114,6 @@ procedure HAMT_traverse_trie64(node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointe
 function  _HAMT_search64      (node:PHAMTNode64;key,keypartbits:QWORD):PPointer; sysv_abi_cdecl;
 function  _HAMT_insert64      (node:PHAMTNode64;key,keypartbits:QWORD;data:Pointer):PPointer;
 function  _HAMT_delete64      (node:PHAMTNode64;key,keypartbits:QWORD;old:PPointer):Boolean;
-
-{
- Tinfo8=object
-  const
-   root_bits=8;
- end;
- Tinfo10=object
-  const
-   root_bits=10;
- end;
- Tinfo18=object
-  const
-   root_bits=18;
- end;
-
- //[8] + [6]*4 =32
- PHAMT32=^THAMT32;
- THAMT32=specialize THAMT<Tinfo8>;
-
- //[10] + [6]*9 =64
- PHAMT64=^THAMT64;
- THAMT64=specialize THAMT<Tinfo10>;
-
- //[18] + [6]*5 =48
- PHAMT48=^THAMT48;
- THAMT48=specialize THAMT<Tinfo18>;
-}
 
 implementation
 

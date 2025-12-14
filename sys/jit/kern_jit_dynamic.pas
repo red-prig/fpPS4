@@ -159,9 +159,28 @@ type
 
 function new_blob(_size:ptruint):p_jit_dynamic_blob;
 
+type
+ //[18] + [6]*5 =48
+ HAMT48=object
+  type
+   TBitKey=QWORD;
+  const
+   root_bits=18;
+   root_size=TBitKey(1) shl TBitKey(root_bits);
+   root_mask=TBitKey(root_size)-TBitKey(1);
+ end;
+
+ TNestedNode48=record
+  case Byte of
+   0:(node:THAMTNode64;
+      lock:Pointer);
+   1:(line:array[0..63] of Byte);
+ end;
+
+ TSTUB_HAMT48=array[0..HAMT48.root_mask] of TNestedNode48;
+
 var
- entry_hamt_lock:Pointer=nil;
- entry_hamt:TSTUB_HAMT64;
+ entry_hamt:TSTUB_HAMT48;
 
  entry_chunk_lock:Pointer=nil;
 
@@ -1120,11 +1139,15 @@ end;
 function fetch_entry(src:Pointer):p_jit_entry_point;
 var
  data:PPointer;
+ map:DWORD;
 begin
  Result:=nil;
- rw_rlock(entry_hamt_lock);
 
- data:=HAMT_search64(@entry_hamt,QWORD(src));
+ map:=QWORD(src) and HAMT48.root_mask;
+
+ rw_rlock(entry_hamt[map].lock);
+
+ data:=_HAMT_search64(@entry_hamt[map].node,QWORD(src),HAMT48.root_bits);
  if (data<>nil) then
  begin
   Result:=data^;
@@ -1135,7 +1158,7 @@ begin
   Result^.inc_ref('fetch_entry');
  end;
 
- rw_runlock(entry_hamt_lock);
+ rw_runlock(entry_hamt[map].lock);
 end;
 
 function exist_entry(src:Pointer):Boolean;
@@ -1686,22 +1709,27 @@ procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point);
 var
  data:PPointer;
  old:p_jit_entry_point;
+ map:DWORD;
 begin
  node^.inc_ref('attach_entry');
  self.inc_attach_count;
 
  old:=nil;
 
- rw_wlock(entry_hamt_lock);
-  data:=HAMT_insert64(@entry_hamt,QWORD(node^.src),node);
+ map:=QWORD(node^.src) and HAMT48.root_mask;
+
+ rw_wlock(entry_hamt[map].lock);
+  data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node);
   Assert(data<>nil);
   if (data^<>node) then
   begin
    old:=data^;
    data^:=node;
+   old^.entry_public:=0;
+   self.dec_attach_count;
   end;
   node^.entry_public:=1;
- rw_wunlock(entry_hamt_lock);
+ rw_wunlock(entry_hamt[map].lock);
 end;
 
 procedure t_jit_dynamic_blob.attach_all_entry;
@@ -1751,14 +1779,17 @@ end;
 function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
 var
  old:p_jit_entry_point;
+ map:DWORD;
 begin
  if (node^.entry_public=0) then Exit;
 
  old:=nil;
 
- rw_wlock(entry_hamt_lock);
-  HAMT_delete64(@entry_hamt,QWORD(node^.src),@old);
- rw_wunlock(entry_hamt_lock);
+ map:=QWORD(node^.src) and HAMT48.root_mask;
+
+ rw_wlock(entry_hamt[map].lock);
+  _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old);
+ rw_wunlock(entry_hamt[map].lock);
 
  if (old=node) then
  begin

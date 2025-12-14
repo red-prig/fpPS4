@@ -155,7 +155,7 @@ type
  end;
 
 const
- UMA_ALIGN=(1 shl 7);
+ UMA_ALIGN=64;
 
 type
  //Structures for per cpu queues.
