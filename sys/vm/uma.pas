@@ -135,9 +135,13 @@ const
  UMA_SLAB_MASK =(MD_ALLOC_GRANULARITY - 1);     // Mask to get back to the page
  UMA_SLAB_SHIFT=BsfQWORD(MD_ALLOC_GRANULARITY); // Number of bits PAGE_MASK
 
- UMA_SUB_PAGES=(MD_ALLOC_GRANULARITY div MD_PAGE_SIZE);
+ {$IF UMA_SLAB_SIZE>MD_PAGE_SIZE}
+  UMA_SUB_PAGES=((UMA_SLAB_SIZE div UMA_SMALLEST_UNIT)+254) div 255;
+ {$ELSE}
+  UMA_SUB_PAGES=1;
+ {$ENDIF}
 
- UMA_BOOT_PAGES_CONST=64 div UMA_SUB_PAGES; // Pages allocated for startup
+ UMA_BOOT_PAGES_CONST=64 div (UMA_SLAB_SIZE div MD_PAGE_SIZE); // Pages allocated for startup
 
  UMA_MAX_WASTE=(UMA_SLAB_SIZE div 10); // Max waste before going to off page slab management
 
@@ -213,9 +217,7 @@ type
   uk_ppera:WORD;  // pages per allocation from backend
   uk_ipers:WORD;  // Items per slab
   {$IF UMA_SUB_PAGES>1}
-  uk_ssizl:Byte;  // sub pages size (in log2)
   uk_ssubc:Byte;  // sub pages count
-  uk_isubs:Byte;  // Items per sub page
   uk_isubl:Byte;  // Items in last sub page
   {$ENDIF}
   uk_flags:DWORD; // Internal flags
@@ -264,6 +266,7 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
+  //
  end;
 
  {

@@ -767,22 +767,9 @@ begin
  end;
 end;
 
-function get_item_addr(keg:uma_keg_t;slab:uma_slab_t;g,i:Integer):Pointer; inline;
-begin
- {$IF UMA_SUB_PAGES>1}
-  Result:=slab^.us_data + (1 shl keg^.uk_ssizl) * g + keg^.uk_rsize * i;
- {$ELSE}
-  Result:=slab^.us_data + (keg^.uk_rsize * i);
- {$ENDIF}
-end;
-
 function get_item_addr(keg:uma_keg_t;slab:uma_slab_t;i:Integer):Pointer; inline;
 begin
- {$IF UMA_SUB_PAGES>1}
-  Result:=get_item_addr(keg,slab,(i div keg^.uk_isubs),(i mod keg^.uk_isubs));
- {$ELSE}
-  Result:=get_item_addr(keg,slab,0,i);
- {$ENDIF}
+ Result:=slab^.us_data + (keg^.uk_rsize * i);
 end;
 
 {
@@ -1030,7 +1017,7 @@ begin
   For i:=0 to keg^.uk_ssubc-2 do
   with slab^.us_head.us_free[i] do
   begin
-   ui_count:=keg^.uk_isubs;
+   ui_count:=255;
    ui_first:=0;
   end;
 
@@ -1059,7 +1046,7 @@ begin
   begin
    slabref^.us_freelist[i].us_refcnt:=0;
    {$IF UMA_SUB_PAGES>1}
-    slabref^.us_freelist[i].us_item:=(i mod keg^.uk_isubs)+1;
+    slabref^.us_freelist[i].us_item:=(Word(i) mod 255)+1;
    {$ELSE}
     slabref^.us_freelist[i].us_item:=i+1;
    {$ENDIF}
@@ -1072,7 +1059,7 @@ begin
   For i:=0 to keg^.uk_ipers-1 do
   begin
    {$IF UMA_SUB_PAGES>1}
-    slab^.us_freelist[i].us_item:=(i mod keg^.uk_isubs)+1;
+    slab^.us_freelist[i].us_item:=(Word(i) mod 255)+1;
    {$ELSE}
     slab^.us_freelist[i].us_item:=i+1;
    {$ENDIF}
@@ -1341,17 +1328,10 @@ var
  memused    :DWORD;
  wastedspace:DWORD;
 begin
- {$IF UMA_SUB_PAGES>1}
-  memused    :=keg^.uk_isubl * rsize + shsize;
-  wastedspace:=(1 shl keg^.uk_ssizl) - memused;
+ memused    :=keg^.uk_ipers * rsize + shsize;
+ wastedspace:=UMA_SLAB_SIZE - memused;
 
-  Result:=(wastedspace >= (UMA_MAX_WASTE div keg^.uk_ssubc)) and (keg^.uk_isubl < (keg^.uk_ssubc div keg^.uk_rsize));
- {$ELSE}
-  memused    :=keg^.uk_ipers * rsize + shsize;
-  wastedspace:=UMA_SLAB_SIZE - memused;
-
-  Result:=(wastedspace >= UMA_MAX_WASTE) and (keg^.uk_ipers < (UMA_SLAB_SIZE div keg^.uk_rsize));
- {$ENDIF}
+ Result:=(wastedspace >= UMA_MAX_WASTE) and (keg^.uk_ipers < (UMA_SLAB_SIZE div keg^.uk_rsize));
 end;
 
 {
@@ -1370,7 +1350,6 @@ var
  rsize :DWORD;
  linksz:DWORD;
  shsize:DWORD;
- ssize :DWORD;
 begin
  _start:
 
@@ -1409,18 +1388,11 @@ begin
 
  rsize :=rsize + linksz;
 
- {$IF UMA_SUB_PAGES>1}
-  ssize:=(keg^.uk_rsize + MD_PAGE_SIZE - 1) and (not (MD_PAGE_SIZE - 1));
-
-  keg^.uk_ssizl:=bsfDWORD(ssize);
-  keg^.uk_ssubc:=UMA_SLAB_SIZE div ssize;
-
-  keg^.uk_isubs:=ssize div keg^.uk_rsize;
-  keg^.uk_isubl:=(ssize - linksz*(keg^.uk_ssubc-1)*keg^.uk_isubs - shsize) div rsize;
-
-  keg^.uk_ipers:=keg^.uk_isubs*(keg^.uk_ssubc-1) + keg^.uk_isubl;
- {$ELSE}
   keg^.uk_ipers:=(UMA_SLAB_SIZE - shsize) div rsize;
+
+ {$IF UMA_SUB_PAGES>1}
+  keg^.uk_ssubc:=Word(keg^.uk_ipers+254) div 255;
+  keg^.uk_isubl:=Word(keg^.uk_ipers) mod 255;
  {$ENDIF}
 
  Assert(keg^.uk_ipers<>0, 'keg_small_init: ipers is 0');
@@ -1486,9 +1458,7 @@ begin
  keg^.uk_ipers:=1;
 
  {$IF UMA_SUB_PAGES>1}
-  keg^.uk_ssizl:=bsfDWORD(UMA_SLAB_SIZE);
   keg^.uk_ssubc:=1;
-  keg^.uk_isubs:=1;
   keg^.uk_isubl:=1;
  {$ENDIF}
 
@@ -1552,10 +1522,8 @@ begin
  keg^.uk_ipers:=((pages * UMA_SLAB_SIZE) + trailer) div rsize;
 
  {$IF UMA_SUB_PAGES>1}
-  keg^.uk_ssizl:=bsfDWORD(UMA_SLAB_SIZE);
-  keg^.uk_ssubc:=1;
-  keg^.uk_isubs:=keg^.uk_ipers;
-  keg^.uk_isubl:=keg^.uk_ipers;
+ keg^.uk_ssubc:=Word(keg^.uk_ipers+254) div 255;
+ keg^.uk_isubl:=Word(keg^.uk_ipers) mod 255;
  {$ENDIF}
 
  keg^.uk_flags:=keg^.uk_flags or UMA_ZONE_OFFPAGE or UMA_ZONE_VTOSLAB;
@@ -2212,6 +2180,14 @@ function uma_zcreate(name  :pchar;
 var
  args:uma_zctor_args;
 begin
+
+ if ((flags and UMA_ZONE_OFFPAGE)<>0) then
+ if not (((flags and UMA_ZONE_VTOSLAB)<>0) xor
+         ((flags and UMA_ZONE_HASH   )<>0)) then
+ begin
+  Assert(false,'UMA_ZONE_OFFPAGE: requires UMA_ZONE_VTOSLAB or UMA_ZONE_HASH');
+ end;
+
  { This stuff is essential for the zone ctor }
  args.name  :=name;
  args.size  :=size;
@@ -2773,7 +2749,7 @@ end;
 function get_free_id(keg:uma_keg_t;g,i:Integer):Integer; inline;
 begin
  {$IF UMA_SUB_PAGES>1}
-  Result:=g*keg^.uk_isubs + i;
+  Result:=g*255 + i;
  {$ELSE}
   Result:=i;
  {$ENDIF}
@@ -2806,7 +2782,7 @@ begin
   end;
  end;
 
- item:=get_item_addr(keg,slab,grp,freei);
+ item:=get_item_addr(keg,slab,grp*255+freei);
 
  Dec(slab^.us_head.us_free[grp].ui_count);
  Dec(keg^.uk_free);
@@ -3226,10 +3202,8 @@ var
  slabref:uma_slabrefcnt_t;
  keg:uma_keg_t;
  mem:PByte;
- diff:QWORD;
- ssize:DWORD;
- grp  :Integer;
- freei:Integer;
+ grp  :Word;
+ freei:Word;
  clearfull:Integer;
  freecount:Integer;
 begin
@@ -3297,16 +3271,12 @@ begin
 
  { Slab management stuff }
 
- {$IF UMA_SUB_PAGES>1}
-  diff:=QWORD(item) - QWORD(slab^.us_data);
-
-  ssize:=(1 shl keg^.uk_ssizl);
-
-  grp  :=(diff div ssize);
-  freei:=(diff mod ssize) div keg^.uk_rsize;
- {$ELSE}
   grp  :=0;
   freei:=(QWORD(item) - QWORD(slab^.us_data)) div keg^.uk_rsize;
+
+ {$IF UMA_SUB_PAGES>1}
+  grp  :=Word(freei) div 255;
+  freei:=Word(freei) mod 255;
  {$ENDIF}
 
  {
@@ -3327,15 +3297,6 @@ begin
   ui_first:=freei;
   Inc(ui_count);
  end;
-
- {$IF UMA_SUB_PAGES>1}
- if (grp+1<>keg^.uk_ssubc) or ((keg^.uk_flags and UMA_ZONE_OFFPAGE)<>0) then
- if (slab^.us_head.us_free[grp].ui_count=0) then
- begin
-  //madvise
-  md_dontneed(slab^.us_data + grp*ssize,ssize);
- end;
- {$ENDIF}
 
  { Zone statistics }
  Inc(keg^.uk_free);
