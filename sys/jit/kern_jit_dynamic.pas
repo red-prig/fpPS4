@@ -217,6 +217,7 @@ uses
  signal,
  sys_bootparam,
  kern_proc,
+ uma,
  vm,
  vm_map,
  vm_pmap_prot,
@@ -1290,10 +1291,31 @@ begin
  FreeMem(@Self);
 end;
 
+var
+ jit_entry_point_zone:uma_zone_t=nil;
+
+function alloc_entry_point:p_jit_entry_point;
+var
+ zone:uma_zone_t;
+begin
+ if (jit_entry_point_zone=nil) then
+ begin
+  zone:=uma_zcreate('jit_entry_point',sizeof(t_jit_entry_point), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
+  if System.InterlockedCompareExchange(Pointer(jit_entry_point_zone),Pointer(zone),nil)<>nil then
+  begin
+   uma_zdestroy(zone);
+  end;
+ end;
+
+ Result:=uma_zalloc(jit_entry_point_zone, M_WAITOK or M_ZERO);
+end;
+
 function t_jit_dynamic_blob.add_entry_point(src,dst:Pointer):p_jit_entry_point;
 begin
  if (src=nil) or (dst=nil) then Exit;
- Result:=AllocMem(Sizeof(t_jit_entry_point));
+
+ Result:=alloc_entry_point;
  Result^.next:=entry_list;
  Result^.blob:=@Self;
  Result^.src :=src;
@@ -1304,7 +1326,7 @@ end;
 
 procedure t_jit_dynamic_blob.free_entry_point(node:p_jit_entry_point);
 begin
- FreeMem(node);
+ uma_zfree(jit_entry_point_zone, node);
 end;
 
 procedure t_jit_dynamic_blob.init_plt;
@@ -1410,6 +1432,8 @@ begin
 
 end;
 
+procedure free_plt_cache(node:p_jplt_cache); forward;
+
 procedure t_jit_dynamic_blob.detach_all_curr;
 var
  node:p_jplt_cache;
@@ -1431,7 +1455,7 @@ begin
   end;
 
   //TODO: GC FREE
-  FreeMem(node);
+  free_plt_cache(node);
 
   node:=jpltc_curr.Min;
  end;
@@ -1492,6 +1516,31 @@ begin
    end;
 
  threads_unlock;
+end;
+
+var
+ jplt_cache_zone:uma_zone_t=nil;
+
+function alloc_plt_cache:p_jplt_cache;
+var
+ zone:uma_zone_t;
+begin
+ if (jplt_cache_zone=nil) then
+ begin
+  zone:=uma_zcreate('jplt_cache',sizeof(t_jplt_cache), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+
+  if System.InterlockedCompareExchange(Pointer(jplt_cache_zone),Pointer(zone),nil)<>nil then
+  begin
+   uma_zdestroy(zone);
+  end;
+ end;
+
+ Result:=uma_zalloc(jplt_cache_zone, M_WAITOK or M_ZERO);
+end;
+
+procedure free_plt_cache(node:p_jplt_cache);
+begin
+ uma_zfree(jplt_cache_zone, node);
 end;
 
 function t_jit_dynamic_blob.add_plt_cache(plt:p_jit_plt;src,dst:Pointer;dest_block:p_jit_dynamic_blob):p_jplt_cache;
@@ -1556,7 +1605,7 @@ begin
    Break;
   end else
   begin
-   Result:=AllocMem(Sizeof(t_jplt_cache));
+   Result:=alloc_plt_cache;
    Result^.plt:=plt; //key
    Result^.src:=src; //key
    Result^.neg:=Pointer(-QWORD(src));
@@ -1584,7 +1633,7 @@ begin
     Break;
    end else
    begin
-    FreeMem(Result);
+    free_plt_cache(Result);
     Result:=nil;
    end;
   end;
