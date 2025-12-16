@@ -71,7 +71,6 @@ type
  end;
 
 function  EnumLineRegs(cb:TRegsCb;pLine:TspirvOp):Integer;
-function  EnumFirstReg(cb:TRegsCb;pLine:TspirvOp):Integer;
 function  EnumBlockOpForward(cb:TPostCb;pBlock:TsrOpBlock):Integer;
 function  EnumBlockOpBackward(cb:TPostCb;pBlock:TsrOpBlock):Integer;
 
@@ -110,7 +109,7 @@ begin
  end;
 end;
 
-function EnumFirstReg(cb:TRegsCb;pLine:TspirvOp):Integer;
+function Enum1Reg(cb:TRegsCb;pLine:TspirvOp):Integer;
 var
  node:POpParamNode;
  pReg:TsrRegNode;
@@ -125,6 +124,29 @@ begin
    pReg:=node.AsReg;
    Result:=Result+cb(pLine,pReg);
    node.Value:=pReg;
+  end;
+ end;
+end;
+
+function Enum2Reg(cb:TRegsCb;pLine:TspirvOp):Integer;
+var
+ i:Integer;
+ node:POpParamNode;
+ pReg:TsrRegNode;
+begin
+ Result:=0;
+ if (cb=nil) or (pLine=nil) then Exit;
+ For i:=0 to 1 do
+ begin
+  node:=pLine.ParamNode(i);
+  if (node<>nil) then
+  begin
+   if node.Value.IsType(ntReg) then
+   begin
+    pReg:=node.AsReg;
+    Result:=Result+cb(pLine,pReg);
+    node.Value:=pReg;
+   end;
   end;
  end;
 end;
@@ -571,8 +593,9 @@ begin
  if not node.pDst.IsType(ntReg) then Exit; //is reg
 
  Case node.OpId of
+  Op.OpBitFieldInsert    :Result:=Enum2Reg(@RegSTStrict,node);
   Op.OpBitFieldSExtract  ,
-  Op.OpBitFieldUExtract  :Result:=EnumFirstReg(@RegSTStrict,node);
+  Op.OpBitFieldUExtract  :Result:=Enum1Reg(@RegSTStrict,node);
   Op.OpSelect            :Result:=EnumLineRegs(@RegSTStrict,node);
   Op.OpIAddCarry         ,
   Op.OpISubBorrow        ,
@@ -757,6 +780,23 @@ begin
      end;
      //
      AddCapability(Capability.GroupNonUniformQuad);
+    end;
+  Op.OpGroupNonUniformBroadcast:
+    begin
+     r:=node.ParamNode(2).Value;
+     r:=RegDown(r);
+     //
+     if r.is_const then
+     begin
+      //upgrade version to 1.3
+      Config.UpgradeVersion($10300);
+     end else
+     begin
+      //upgrade version to 1.5
+      Config.UpgradeVersion($10500);
+     end;
+     //
+     AddCapability(Capability.GroupNonUniformBallot);
     end;
   else;
  end;
