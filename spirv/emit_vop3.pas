@@ -69,6 +69,7 @@ type
   procedure emit_V_CUBE(OpId:Word);
   procedure emit_V_MOV_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
+  procedure emit_V_CVT_F16_F32;
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
@@ -1204,6 +1205,33 @@ begin
  emit_dst_clamp_f(dst,dst_type);
 end;
 
+procedure TEmit_VOP3.emit_V_CVT_F16_F32; //vdst[15:0].hf = ConvertFloatToHalfFloat(vsrc.f)
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ dstv:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+
+ emit_src_abs_bit(@src[0],1,dtFloat32);
+ emit_src_neg_bit(@src[0],1,dtFloat32);
+
+ MakeCopy(dst,src[0]);
+
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
+
+ src[0]:=MakeRead(dst,dtFloat32);
+
+ src[0]:=OpFToF(src[0],dtHalf16);
+ src[1]:=NewImm_s(dtHalf16,0);
+
+ dstv:=OpMakeVec(line,dtVec2h,@src);
+
+ dst^.New(dtVec2h).pWriter:=dstv;
+end;
+
 procedure TEmit_VOP3.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
@@ -1541,8 +1569,9 @@ begin
  dst:=get_vdst8(FSPI.VOP3b.VDST);
  bor:=get_sdst7(FSPI.VOP3b.SDST);
 
- Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
- Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+ //ignored
+ //Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
+ //Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
 
  src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
@@ -1680,6 +1709,8 @@ begin
   384+V_CVT_F32_U32: emit_V_CVT(Op.OpConvertUToF,dtFloat32,dtUInt32);
   384+V_CVT_U32_F32: emit_V_CVT(Op.OpConvertFToU,dtUInt32 ,dtFloat32);
   384+V_CVT_I32_F32: emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
+
+  384+V_CVT_F16_F32: emit_V_CVT_F16_F32;
 
   384+V_MOV_B32  : emit_V_MOV_B32;
 
