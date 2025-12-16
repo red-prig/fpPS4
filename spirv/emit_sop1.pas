@@ -30,7 +30,7 @@ type
   procedure emit_S_GETPC_B64;
   procedure emit_S_SETPC_B64;
   procedure emit_S_SWAPPC_B64;
-  procedure emit_S_AND_SAVEEXEC_B64;
+  procedure emit_S_OP_SAVEEXEC_B64(OP:DWORD);
   procedure _OpWQM32(dst:PsrRegSlot;src:TsrRegNode);
   procedure emit_S_WQM_B32;
   procedure emit_S_WQM_B64;
@@ -210,7 +210,20 @@ begin
  set_code_ptr(newptr,btSetpc);
 end;
 
-procedure TEmit_SOP1.emit_S_AND_SAVEEXEC_B64; //sdst.du = EXEC;| NEW_EXEC = (ssrc.du & EXEC);| SCC = (NEW_EXEC != 0)
+//sdst.du = EXEC;
+
+//S_AND_SAVEEXEC_B64    NEW_EXEC =  (ssrc.du &  EXEC)
+//S_OR_SAVEEXEC_B64     NEW_EXEC =  (ssrc.du |  EXEC)
+//S_XOR_SAVEEXEC_B64    NEW_EXEC =  (ssrc.du ^  EXEC)
+//S_ANDN2_SAVEEXEC_B64  NEW_EXEC =  (ssrc.du & ~EXEC)
+//S_ORN2_SAVEEXEC_B64   NEW_EXEC =  (ssrc.du | ~EXEC)
+//S_NAND_SAVEEXEC_B64   NEW_EXEC = ~(ssrc.du &  EXEC)
+//S_NOR_SAVEEXEC_B64    NEW_EXEC = ~(ssrc.du |  EXEC)
+//S_XNOR_SAVEEXEC_B64   NEW_EXEC = ~(ssrc.du ^  EXEC)
+
+//SCC = (NEW_EXEC != 0)
+
+procedure TEmit_SOP1.emit_S_OP_SAVEEXEC_B64(OP:DWORD);
 Var
  dst:array[0..1] of PsrRegSlot;
  src:array[0..1] of TsrRegNode;
@@ -226,8 +239,68 @@ begin
  MakeCopy(dst[0],exc[0]);
  MakeCopy(dst[1],exc[1]);
 
- OpBitwiseAnd(get_exec0,src[0],exc[0]);
- OpBitwiseAnd(get_exec1,src[1],exc[1]);
+ case OP of
+  S_AND_SAVEEXEC_B64:   //NEW_EXEC =  (ssrc.du &  EXEC)
+    begin
+     OpBitwiseAnd(get_exec0,src[0],exc[0]);
+     OpBitwiseAnd(get_exec1,src[1],exc[1]);
+    end;
+  S_OR_SAVEEXEC_B64:    //NEW_EXEC =  (ssrc.du |  EXEC)
+    begin
+     OpBitwiseOr(get_exec0,src[0],exc[0]);
+     OpBitwiseOr(get_exec1,src[1],exc[1]);
+    end;
+  S_XOR_SAVEEXEC_B64:   //NEW_EXEC =  (ssrc.du ^  EXEC)
+    begin
+     OpBitwiseXor(get_exec0,src[0],exc[0]);
+     OpBitwiseXor(get_exec1,src[1],exc[1]);
+    end;
+  S_ANDN2_SAVEEXEC_B64: //NEW_EXEC =  (ssrc.du & ~EXEC)
+    begin
+     OpBitwiseAnd(get_exec0,src[0],OpNotTo(exc[0]));
+     OpBitwiseAnd(get_exec1,src[1],OpNotTo(exc[1]));
+    end;
+  S_ORN2_SAVEEXEC_B64:  //NEW_EXEC =  (ssrc.du | ~EXEC)
+    begin
+     OpBitwiseOr(get_exec0,src[0],OpNotTo(exc[0]));
+     OpBitwiseOr(get_exec1,src[1],OpNotTo(exc[1]));
+    end;
+  S_NAND_SAVEEXEC_B64:  //NEW_EXEC = ~(ssrc.du &  EXEC)
+    begin
+     OpBitwiseAnd(get_exec0,src[0],exc[0]);
+     OpBitwiseAnd(get_exec1,src[1],exc[1]);
+
+     exc[0]:=MakeRead(get_exec0,dtUnknow);
+     exc[1]:=MakeRead(get_exec1,dtUnknow);
+
+     OpNot(get_exec0,exc[0]);
+     OpNot(get_exec1,exc[1]);
+    end;
+  S_NOR_SAVEEXEC_B64:   //NEW_EXEC = ~(ssrc.du |  EXEC)
+    begin
+     OpBitwiseOr(get_exec0,src[0],exc[0]);
+     OpBitwiseOr(get_exec1,src[1],exc[1]);
+
+     exc[0]:=MakeRead(get_exec0,dtUnknow);
+     exc[1]:=MakeRead(get_exec1,dtUnknow);
+
+     OpNot(get_exec0,exc[0]);
+     OpNot(get_exec1,exc[1]);
+    end;
+  S_XNOR_SAVEEXEC_B64:  //NEW_EXEC = ~(ssrc.du ^  EXEC)
+    begin
+     OpBitwiseXor(get_exec0,src[0],exc[0]);
+     OpBitwiseXor(get_exec1,src[1],exc[1]);
+
+     exc[0]:=MakeRead(get_exec0,dtUnknow);
+     exc[1]:=MakeRead(get_exec1,dtUnknow);
+
+     OpNot(get_exec0,exc[0]);
+     OpNot(get_exec1,exc[1]);
+    end;
+  else
+   Assert(False);
+ end;
 
  //set if the new value of EXEC is non-zero
  exc[0]:=MakeRead(get_exec0,dtUnknow);
@@ -350,7 +423,16 @@ begin
   S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
   S_SWAPPC_B64      : emit_S_SWAPPC_B64;
-  S_AND_SAVEEXEC_B64: emit_S_AND_SAVEEXEC_B64;
+
+  S_AND_SAVEEXEC_B64  :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_OR_SAVEEXEC_B64   :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_XOR_SAVEEXEC_B64  :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_ANDN2_SAVEEXEC_B64:emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_ORN2_SAVEEXEC_B64 :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_NAND_SAVEEXEC_B64 :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_NOR_SAVEEXEC_B64  :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+  S_XNOR_SAVEEXEC_B64 :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+
   else
    Assert(false,'SOP1?'+IntToStr(FSPI.SOP1.OP)+' '+get_str_spi(FSPI));
  end;
