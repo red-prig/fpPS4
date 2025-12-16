@@ -723,6 +723,7 @@ const
  fcInfinity = fcPositiveInfinity or fcNegativeInfinity;
  fcNegative = fcNegativeInfinity or fcNegativeNormal or fcNegativeDenorm or fcNegativeZero;
  fcPositive = fcPositiveZero     or fcPositiveDenorm or fcPositiveNormal or fcPositiveInfinity;
+ fcFinite   = (fcNegative or fcPositive) and (not fcInfinity);
 
 procedure TEmitFetch.OpCmpClass(dst0,dst1:PsrRegSlot;src0,src1:TsrRegNode);
 var
@@ -733,12 +734,23 @@ var
  msk:TsrConst;
  val:DWORD;
 
- function _test_group(val,mask:DWORD):Boolean; inline;
+ function test_group(val,mask:DWORD):Boolean; inline;
  var
   i:DWORD;
  begin
   i:=(val and mask);
   Result:=(i=0) or (i=mask);
+ end;
+
+ procedure sum2(var ror,rsl:TsrRegNode); inline;
+ begin
+  if (ror=nil) then
+  begin
+   ror:=rsl;
+  end else
+  begin
+   ror:=OpLogicalOrTo(ror,rsl);
+  end;
  end;
 
 begin
@@ -754,33 +766,29 @@ begin
   begin
    ror:=NewImm_b(True);
   end else
-  if _test_group(val,fcNaN     ) or
-     _test_group(val,fcInfinity) or
-     _test_group(val,fcNegative) or
-     _test_group(val,fcPositive) then
+  if test_group(val,fcNaN     ) and
+     test_group(val,fcInfinity) and
+     (
+      (test_group(val,fcNegative) and
+       test_group(val,fcPositive)
+      ) or
+      test_group(val,fcFinite)
+     ) then
   begin
    ror:=nil;
 
    if (val and fcNaN)=fcNaN then
    begin
-    rsl:=NewReg(dtBool);
-    _Op1(line,Op.OpIsNan,rsl,src0);
-    ror:=rsl;
+    rsl:=OpIsNanTo(src0);
+    //
+    sum2(ror,rsl);
    end;
 
    if (val and fcInfinity)=fcInfinity then
    begin
-    rsl:=NewReg(dtBool);
-    _Op1(line,Op.OpIsInf,rsl,src0);
+    rsl:=OpIsInfTo(src0);
     //
-    if (ror=nil) then
-    begin
-     ror:=rsl;
-    end else
-    begin
-     ror:=OpLogicalOrTo(ror,rsl);
-    end;
-    //
+    sum2(ror,rsl);
    end;
 
    if (val and fcNegative)=fcNegative then
@@ -788,14 +796,7 @@ begin
     rsl:=NewReg(dtBool);
     _Op2(line,Op.OpFOrdLessThanEqual,rsl,src0,NewImm_s(dtFloat32,-0.0));
     //
-    if (ror=nil) then
-    begin
-     ror:=rsl;
-    end else
-    begin
-     ror:=OpLogicalOrTo(ror,rsl);
-    end;
-    //
+    sum2(ror,rsl);
    end;
 
    if (val and fcPositive)=fcPositive then
@@ -803,14 +804,15 @@ begin
     rsl:=NewReg(dtBool);
     _Op2(line,Op.OpFOrdGreaterThanEqual,rsl,src0,NewImm_s(dtFloat32,+0.0));
     //
-    if (ror=nil) then
-    begin
-     ror:=rsl;
-    end else
-    begin
-     ror:=OpLogicalOrTo(ror,rsl);
-    end;
+    sum2(ror,rsl);
+   end;
+
+   if (val and fcFinite)=fcFinite then
+   begin
+    //(!isNan(src) && !isInf(src)) -> !(isNan(src) || isInf(src))
+    rsl:=OpNotTo(OpLogicalOrTo(OpIsNanTo(src0),OpIsInfTo(src0)));
     //
+    sum2(ror,rsl);
    end;
 
    if (ror=nil) then

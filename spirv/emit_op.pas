@@ -180,6 +180,7 @@ type
   function  OpLogicalAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
   function  OpIsNanTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpIsInfTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpIEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpINotEqualTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1632,6 +1633,12 @@ function TEmitOp.OpIsNanTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(dtBool);
  _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpIsNan,Result,src));
+end;
+
+function TEmitOp.OpIsInfTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtBool);
+ _set_line(ppLine,_Op1(_get_line(ppLine),Op.OpIsInf,Result,src));
 end;
 
 function TEmitOp.OpIsSSignTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
