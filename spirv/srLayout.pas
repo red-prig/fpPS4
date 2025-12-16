@@ -414,10 +414,22 @@ begin
  end;
 end;
 
+function _up_to_real(t:TsrOpBlock):TsrOpBlock;
+begin
+ repeat
+  if not t.IsType(ntOpBlock) then Break;
+  if IsReal(t.bType) then Break;
+  t:=t.Parent;
+ until false;
+ Result:=t;
+end;
+
 function TsrDataLayout.Fetch(parent:TSpirvOp;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
 var
  _key:TsrChainKey;
 begin
+ parent:=_up_to_real(parent);
+ //
  _key:=Default(TsrChainKey);
  _key.parent:=parent;
  //
