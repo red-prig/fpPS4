@@ -67,6 +67,7 @@ type
   lvl_1:TsrChainLvl_1;
   lvl_0:TsrChainLvl_0;
   Flags:TsrChainFlags;
+  parent:TSpirvOp;
  end;
 
  TsrChain=class(TsrNode)
@@ -173,7 +174,7 @@ type
    //
   class function c(n1,n2:PsrDataLayoutKey):Integer; static;
   function  Order:Integer;
-  function  Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
+  function  Fetch(parent:TSpirvOp;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
   Procedure UpdateCache;
   Function  First:TsrChain;
   Function  Last :TsrChain;
@@ -413,11 +414,12 @@ begin
  end;
 end;
 
-function TsrDataLayout.Fetch(lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
+function TsrDataLayout.Fetch(parent:TSpirvOp;lvl_0:PsrChainLvl_0;lvl_1:PsrChainLvl_1;cflags:Byte=0):TsrChain;
 var
  _key:TsrChainKey;
 begin
  _key:=Default(TsrChainKey);
+ _key.parent:=parent;
  //
  if (lvl_0<>nil) then
  begin
@@ -433,10 +435,21 @@ begin
  begin
   Assert((_key.lvl_1.stride<>0),'stride=0');
  end;
+
  //
  _key.Flags:=TsrChainFlags(cflags);
  //
+
  Result:=FChainTree.Find(@_key);
+
+ //search for dominance
+ while (Result=nil) and (_key.parent<>nil) do
+ begin
+  _key.parent:=_key.parent.Parent;
+  Result:=FChainTree.Find(@_key);
+ end;
+ _key.parent:=parent; //restore
+
  if (Result=nil) then
  begin
   Result:=FEmit.specialize New<TsrChain>;
@@ -1107,6 +1120,9 @@ end;
 
 class function TsrChain.c(n1,n2:PsrChainKey):Integer;
 begin
+ //0 parent
+ Result:=ord(n1^.parent.Order>n2^.parent.Order)-ord(n1^.parent.Order<n2^.parent.Order);
+ if (Result<>0) then Exit;
 
  //1 lvl_0
  Result:=TsrChainLvl_0.c(@n1^.lvl_0,@n2^.lvl_0);

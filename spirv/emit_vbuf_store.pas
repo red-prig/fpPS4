@@ -8,6 +8,7 @@ uses
   sysutils,
   spirv,
   ps4_pssl,
+  srOp,
   srNode,
   srType,
   srReg,
@@ -379,13 +380,13 @@ begin
    lvl_1.pIndex:=idx;
    lvl_1.stride:=orig.stride;
 
-   mnew:=lc.info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
+   mnew:=lc.info.grp.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
   end else
   begin
    lvl_0.offset:=orig.offset;
    lvl_0.size  :=csize;
 
-   mnew:=lc.info.grp.Fetch(@lvl_0,nil,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
+   mnew:=lc.info.grp.Fetch(line.Parent,@lvl_0,nil,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
   end;
   orig:=mnew;
  end;
@@ -421,7 +422,7 @@ begin
     lvl_1.pIndex:=sum_d;
     lvl_1.stride:=orig.stride;
 
-    elm:=lc.info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
+    elm:=lc.info.grp.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(dtUnknow,lc.info.GLC,lc.info.SLC));
    end;
 
    Assert(lc.elem_resl=lc.elem_orig,'TODO CONVERT:make_store_ce');

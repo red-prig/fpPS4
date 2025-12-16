@@ -8,6 +8,7 @@ uses
   sysutils,
   ps4_shader,
   ps4_pssl,
+  srOp,
   srType,
   srConst,
   srReg,
@@ -271,7 +272,7 @@ begin
 
   lvl_0.offset:=foffset;
   lvl_0.size  :=adr.csize;
-  Result.data[0]:=info.grp.Fetch(@lvl_0,nil,cflags(dtype,info.GLC,info.SLC));
+  Result.data[0]:=info.grp.Fetch(line.Parent,@lvl_0,nil,cflags(dtype,info.GLC,info.SLC));
 
   Result.vType  :=vcChainVector;
   Exit;
@@ -305,7 +306,7 @@ begin
   lvl_1.pIndex:=sum_d;
   lvl_1.stride:=adr.aligned_size;
 
-  Result.data[0]:=info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtype,info.GLC,info.SLC));
+  Result.data[0]:=info.grp.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(dtype,info.GLC,info.SLC));
 
   Result.vType  :=vcChainElement;
   Exit;
@@ -355,7 +356,7 @@ begin
   lvl_1.pIndex:=adr.idx;
   lvl_1.stride:=adr.stride;
 
-  Result.data[0]:=info.grp.Fetch(@lvl_0,@lvl_1,cflags(dtype,info.GLC,info.SLC));
+  Result.data[0]:=info.grp.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(dtype,info.GLC,info.SLC));
 
   Result.vType  :=vcChainVector;
   Exit;

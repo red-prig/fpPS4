@@ -9,6 +9,7 @@ uses
   spirv,
   ps4_pssl,
   bittype,
+  srOp,
   srType,
   srConst,
   srInput,
@@ -187,7 +188,7 @@ begin
 
   lvl_0.offset:=lvl_0.offset and (not (stride-1)); //4,8
 
-  Result:=pLayout.Fetch(@lvl_0,nil,cflags(atomic));
+  Result:=pLayout.Fetch(line.Parent,@lvl_0,nil,cflags(atomic));
  end else
  begin
   //#dynamic
@@ -199,7 +200,7 @@ begin
 
   lvl_0.offset:=0;
 
-  Result:=pLayout.Fetch(@lvl_0,@lvl_1,cflags(atomic));
+  Result:=pLayout.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(atomic));
  end;
 end;
 

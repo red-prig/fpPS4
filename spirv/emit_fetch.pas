@@ -991,7 +991,7 @@ begin
  pLayout:=DataLayoutList.pRoot;
  lvl_0.offset:=offset_dw*4;
  lvl_0.size  :=4;
- pChain:=pLayout.Fetch(@lvl_0,nil);
+ pChain:=pLayout.Fetch(line.Parent,@lvl_0,nil);
  pReg:=FetchLoad(pChain,dtUnknow);
  MakeCopy(dst,pReg);
 end;
@@ -1000,7 +1000,7 @@ function TEmitFetch.FetchChain(grp:TsrDataLayout;lvl_0:PsrChainLvl_0;lvl_1:PsrCh
 var
  pChain:TsrChain;
 begin
- pChain:=grp.Fetch(lvl_0,lvl_1,cflags);
+ pChain:=grp.Fetch(line.Parent,lvl_0,lvl_1,cflags);
  Result:=FetchLoad(pChain,dtUnknow);
 end;
 
@@ -1009,7 +1009,7 @@ var
  pChain:TsrChain;
  pReg:TsrRegNode;
 begin
- pChain:=grp.Fetch(lvl_0,lvl_1,cflags);
+ pChain:=grp.Fetch(line.Parent,lvl_0,lvl_1,cflags);
  pReg:=FetchLoad(pChain,dtUnknow);
  MakeCopy(pSlot,pReg);
  Result:=pSlot^.current;
