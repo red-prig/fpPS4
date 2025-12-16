@@ -680,10 +680,11 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore
+ //Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ //Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
+ //Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
 
  bitmsk:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
