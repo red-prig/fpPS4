@@ -42,6 +42,7 @@ type
   procedure emit_V_MBCNT_LO_U32_B32;
   procedure emit_V_MBCNT_HI_U32_B32;
   procedure emit_V_WRITELANE_B32;
+  procedure emit_V_READLANE_SUBGROUP;
   procedure emit_V_READLANE_B32;
  end;
 
@@ -615,6 +616,32 @@ begin
  MakeCopy(lane,src);
 end;
 
+procedure TEmit_VOP2.emit_V_READLANE_SUBGROUP;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ slane:TsrRegNode;
+begin
+ dst  :=get_ssrc8  (FSPI.VOP2.VDST);
+ src  :=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUnknow);
+ slane:=fetch_ssrc8(FSPI.VOP2.VSRC1,dtUint32);
+
+ Assert(slane.is_const,'TODO: indexed V_READLANE_B32');
+
+ case src.dtype of
+  dtFloat32:; //allow
+  dtInt32  :; //allow
+  dtUint32 :; //allow
+  else
+   begin
+    //retype
+    src:=fetch_ssrc9(FSPI.VOP2.SRC0,dtUint32);
+   end;
+ end;
+
+ Op3(Op.OpGroupNonUniformBroadcast,src.dtype,dst,NewImm_i(dtUint32,Scope.Subgroup),src,slane);
+end;
+
 procedure TEmit_VOP2.emit_V_READLANE_B32;
 Var
  dst  :PsrRegSlot;
@@ -627,6 +654,12 @@ begin
  dst  :=get_ssrc8  (FSPI.VOP2.VDST);
  src  :=get_ssrc9  (FSPI.VOP2.SRC0);
  slane:=fetch_ssrc8(FSPI.VOP2.VSRC1,dtUnknow);
+
+ if (src^.Category=cVector) then
+ begin
+  emit_V_READLANE_SUBGROUP;
+  Exit;
+ end;
 
  Assert(src^.Category=cVectorArray,'TODO: subgroup V_READLANE_B32');
 
