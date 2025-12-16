@@ -319,6 +319,7 @@ begin
 
     itSubgroupLocalInvocationId:
       begin
+       TestFlat;
        pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.SubgroupLocalInvocationId);
       end;
 
@@ -335,6 +336,7 @@ begin
     else
      Assert(false,'AllocBinding:'+GetEnumName(TypeInfo(TpsslInputType),ord(node.key.itype)));
    end;
+
   end;
   node:=Next(node);
  end;
