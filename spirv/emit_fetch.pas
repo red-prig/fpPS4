@@ -30,7 +30,7 @@ type
  TEmitFetch=class(TEmitFlow)
   //
   function  GroupingVImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
-  function  TryShortVSharp(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  TryShortVSharp(inps:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingSharp (src :PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
   //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
@@ -376,15 +376,54 @@ begin
  Result:=True;
 end;
 
-function TEmitFetch.TryShortVSharp(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+function TEmitFetch.TryShortVSharp(inps:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
 var
+ regs:array[0..3] of TsrRegNode;
+
  chain:TsrChains;
- reg:TsrRegNode;
+ reg,tmp:TsrRegNode;
  pImm:TsrConst;
- V2,V3:DWORD;
+ pLine:TspirvOp;
+ V1,V2,V3:DWORD;
 begin
  Result:=nil;
  if (rtype<>rtVSharp4) then Exit;
+
+ regs[0]:=inps[0];
+ regs[1]:=inps[1];
+ regs[2]:=inps[2];
+ regs[3]:=inps[3];
+
+ V1:=0;
+
+ reg:=RegDown(regs[1]);
+ pLine:=reg.pWriter.specialize AsType<ntOp>;
+ if (pLine<>nil) then
+ if (pLine.OpId=Op.OpBitwiseOr) then
+ begin
+  tmp:=RegDown(pLine.ParamNode(0).AsReg);
+  pImm:=tmp.AsConst;
+
+  if (pImm<>nil) then
+  begin
+   regs[1]:=RegDown(pLine.ParamNode(1).AsReg);
+
+   V1:=pImm.AsUint32;
+  end else
+  begin
+   tmp:=RegDown(pLine.ParamNode(1).AsReg);
+   pImm:=tmp.AsConst;
+
+   if (pImm<>nil) then
+   begin
+    regs[1]:=RegDown(pLine.ParamNode(0).AsReg);
+
+    V1:=pImm.AsUint32;
+   end;
+
+  end;
+
+ end;
 
  reg:=RegDown(regs[2]);
 
@@ -404,10 +443,11 @@ begin
  chain[0]:=GetChainRegNode(regs[0]);
  chain[1]:=GetChainRegNode(regs[1]);
 
- Result:=DataLayoutList.Grouping(chain,rtVSharp2);
+ Result:=DataLayoutList.Grouping(chain,rtVSharp2,V1);
 
  if (Result<>nil) then
  begin
+  Result.FData[1]:=Result.FData[1] or V1;
   Result.FData[2]:=V2;
   Result.FData[3]:=V3;
  end;

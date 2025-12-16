@@ -87,6 +87,7 @@ type
   bind  :DWORD;
   size  :DWORD;
   offset:DWORD;
+  mask  :DWORD; //vtVSharp2
   flags :TvLayoutFlags;
   addr  :ADataLayout;
   function GetVulkanDescType:TVkDescriptorType;
@@ -110,6 +111,7 @@ type
     bind  :DWORD;           //Desc Layout
     size  :DWORD;           //Desc/Data Layout
     offset:DWORD;           //Desc/Data Layout
+    mask  :DWORD;           //vtVSharp2
     flags :TvLayoutFlags;   //Desc Layout
     rinfo :TvResInfo;       //Data Layout
     imm   :array of DWORD;  //Data Layout
@@ -197,7 +199,7 @@ type
   Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
   Procedure  AddBuffLayout2(dtype:TvDescriptorType;
                             addr:ADataLayout;
-                            bind,size,offset:DWORD;
+                            bind,size,offset,mask:DWORD;
                             flags:TvLayoutFlags);
   Procedure  SetPushConst2(addr:ADataLayout;size:DWORD);
   Function   GetPushConstData(pUserData:Pointer):Pointer;
@@ -253,7 +255,7 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
-  Procedure AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+  Procedure AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset,mask:DWord;flags:TvLayoutFlags);
   Procedure AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
   Procedure AddBufPtr (P:Pointer          ;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 
@@ -780,6 +782,7 @@ begin
   'OFS':L^.offset:=StrToDWord2(V);
 
   'FLG':L^.flags:=StrToFlags(V);
+  'MSK':L^.mask :=StrToDWord2(V);
 
   'RINF':L^.rinfo.enable :=(StrToDWord2(V)<>0);
   'INVL':L^.rinfo.invalid:=(StrToDWord2(V)<>0);
@@ -952,8 +955,8 @@ begin
    dtUTX_BUF:Assert(False,'TODO:UTX_BUF');
    dtSTX_BUF:Assert(False,'TODO:STX_BUF');
    dtRTX_BUF:Assert(False,'TODO:RTX_BUF');
-   dtUNF_BUF:AddBuffLayout2(L^.dtype,Self.GetLayoutAddr,L^.bind,L^.size,L^.offset,L^.flags);
-   dtSTR_BUF:AddBuffLayout2(L^.dtype,Self.GetLayoutAddr,L^.bind,L^.size,L^.offset,L^.flags);
+   dtUNF_BUF:AddBuffLayout2(L^.dtype,Self.GetLayoutAddr,L^.bind,L^.size,L^.offset,L^.mask,L^.flags);
+   dtSTR_BUF:AddBuffLayout2(L^.dtype,Self.GetLayoutAddr,L^.bind,L^.size,L^.offset,L^.mask,L^.flags);
    dtPSH_CST:SetPushConst2(Self.GetLayoutAddr,L^.size);
    else;
   end;
@@ -997,7 +1000,7 @@ end;
 
 Procedure TvShaderExt.AddBuffLayout2(dtype:TvDescriptorType;
                                      addr:ADataLayout;
-                                     bind,size,offset:DWORD;
+                                     bind,size,offset,mask:DWORD;
                                      flags:TvLayoutFlags);
 
 var
@@ -1008,6 +1011,7 @@ begin
  v.bind  :=bind;
  v.size  :=size;
  v.offset:=offset;
+ v.mask  :=mask;
  v.flags :=flags;
  v.addr  :=addr;
 
@@ -1437,12 +1441,14 @@ begin
          (ord(vMemoryWrite  in flags)*TM_WRITE);
 end;
 
-Procedure TvUniformBuilder.AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
+Procedure TvUniformBuilder.AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset,mask:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
  stride:Integer;
 
  base,start,__end,_size:QWORD;
+
+ V:TVSharpResource2;
 begin
  Assert(PV<>nil);
  if (PV=nil) then Exit;
@@ -1455,9 +1461,12 @@ begin
  b.offset:=offset;
  b.memuse:=_get_buf_mem_usage(flags);
 
- b.addr:=Pointer(PV^.base and (not 3));
+ V:=PV^;
+ PDWORD(@V)[1]:=PDWORD(@V)[1] or mask;
 
- stride:=PV^.stride;
+ b.addr:=Pointer(V.base and (not 3));
+
+ stride:=V.stride;
  if (stride=0) then stride:=1;
 
  //size is unknow, try 4KB
@@ -1704,7 +1713,7 @@ begin
     Case b.addr[0].rtype of
      vtRoot,
      vtBufPtr2:AddBufPtr (P,Fset,b.bind,b.size,b.offset,b.flags);
-     vtVSharp2:AddVSharp2(P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtVSharp2:AddVSharp2(P,Fset,b.bind,b.size,b.offset,b.mask,b.flags);
      vtVSharp4:AddVSharp4(P,Fset,b.bind,b.size,b.offset,b.flags);
      else
       Assert(false,'AddAttr');

@@ -141,6 +141,7 @@ type
  PsrDataLayoutKey=^TsrDataLayoutKey;
  TsrDataLayoutKey=packed record
   offset:PtrUint;
+  mask  :PtrUint;
   rtype :TsrResourceType;
  end;
 
@@ -219,10 +220,10 @@ type
   procedure Init(Emit:TCustomEmit);
   procedure SetUserData(pData:Pointer);
   function  pRoot:TsrDataLayout;
-  function  Fetch(p:TsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
+  function  Fetch(p:TsrDataLayout;o,m:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
   Function  First:TsrDataLayout;
   Function  Next(node:TsrDataLayout):TsrDataLayout;
-  function  Grouping(const chain:TsrChains;rtype:TsrResourceType):TsrDataLayout;
+  function  Grouping(const chain:TsrChains;rtype:TsrResourceType;mask:PtrUint=0):TsrDataLayout;
   function  FetchImmData(size:Integer;pData:Pointer):TsrDataImm;
   function  FetchImm(pData:PDWORD;rtype:TsrResourceType):TsrDataLayout;
   function  FetchLDS():TsrDataLayout;
@@ -398,10 +399,13 @@ end;
 
 class function TsrDataLayout.c(n1,n2:PsrDataLayoutKey):Integer;
 begin
- //first offset
+ //1 offset
  Result:=ord(n1^.offset>n2^.offset)-ord(n1^.offset<n2^.offset);
  if (Result<>0) then Exit;
- //second rtype
+ //2 mask
+ Result:=ord(n1^.mask>n2^.mask)-ord(n1^.mask<n2^.mask);
+ if (Result<>0) then Exit;
+ //3 rtype
  Result:=ord(n1^.rtype>n2^.rtype)-ord(n1^.rtype<n2^.rtype);
 end;
 
@@ -655,13 +659,14 @@ begin
  Result:=FTop;
 end;
 
-function TsrDataLayoutList.Fetch(p:TsrDataLayout;o:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
+function TsrDataLayoutList.Fetch(p:TsrDataLayout;o,m:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
 var
  key:TsrDataLayoutKey;
 begin
  Assert(p<>nil);
  key:=Default(TsrDataLayoutKey);
  key.offset:=o;
+ key.mask  :=m;
  key.rtype :=t;
  //
  Result:=p.FDataTree.Find(@key);
@@ -725,7 +730,7 @@ begin
  end;
 end;
 
-function TsrDataLayoutList.Grouping(const chain:TsrChains;rtype:TsrResourceType):TsrDataLayout;
+function TsrDataLayoutList.Grouping(const chain:TsrChains;rtype:TsrResourceType;mask:PtrUint=0):TsrDataLayout;
 var
  parent:TsrDataLayout;
 begin
@@ -743,7 +748,7 @@ begin
 
  parent:=chain[0].Parent;
 
- Result:=Fetch(parent,chain[0].offset,rtype,parent.GetData);
+ Result:=Fetch(parent,chain[0].offset,mask,rtype,parent.GetData);
 end;
 
 function TsrDataLayoutList.FetchImmData(size:Integer;pData:Pointer):TsrDataImm;
@@ -785,19 +790,19 @@ begin
 
  dst:=FetchImmData(size,pData);
 
- parent:=Fetch(pRoot,dst.FImmOffset,rtImmData,dst);
+ parent:=Fetch(pRoot,dst.FImmOffset,0,rtImmData,dst);
 
- Result:=Fetch(parent,0,rtype,parent.GetData);
+ Result:=Fetch(parent,0,0,rtype,parent.GetData);
 end;
 
 function TsrDataLayoutList.FetchLDS():TsrDataLayout;
 begin
- Result:=Fetch(pRoot,0,rtLDS,nil);
+ Result:=Fetch(pRoot,0,0,rtLDS,nil);
 end;
 
 function TsrDataLayoutList.FetchGDS():TsrDataLayout;
 begin
- Result:=Fetch(pRoot,0,rtGDS,nil);
+ Result:=Fetch(pRoot,0,0,rtGDS,nil);
 end;
 
 function TsrDataLayoutList.EnumChain(cb:TChainCb):Integer;
@@ -973,11 +978,18 @@ begin
    rtTSharp4,
    rtTSharp8:
     begin
+
      //offset
      if (Writer.node.key.offset<>0) then
      begin
       Writer.HexOpt('OFS',Writer.node.key.offset);
      end;
+     //mask
+     if (Writer.node.key.mask<>0) then
+     begin
+      Writer.HexOpt('MSK',Writer.node.key.mask);
+     end;
+
     end;
    else;
   end;
