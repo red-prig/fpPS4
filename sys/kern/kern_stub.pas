@@ -137,7 +137,7 @@ begin
 
  end else
  begin
-  size:=AlignUp(size+SizeOf(stub_chunk),MD_PAGE_SIZE);
+  size:=AlignUp(size+SizeOf(stub_chunk),MD_ALLOC_GRANULARITY);
 
   if (start=0) then
   begin
@@ -366,7 +366,7 @@ begin
     chunk:=alloc_segment(AlignUp(QWORD(vaddr)-High(Integer),PAGE_SIZE),size,guest);
    end else
    begin
-    chunk:=alloc_segment(AlignUp(QWORD(vaddr)-High(Integer),MD_PAGE_SIZE),size,guest);
+    chunk:=alloc_segment(AlignUp(QWORD(vaddr)-High(Integer),MD_ALLOC_GRANULARITY),size,guest);
    end;
 
    Assert(chunk<>nil,'p_alloc NOMEM');
