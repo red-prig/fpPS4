@@ -2431,7 +2431,7 @@ begin
 
  if _img_is_msaa(PT^._type) then
  begin
-  Result.params.samples  :=PT^.last_level+1;
+  Result.params.samples  :=1 shl PT^.last_level;
   Result.params.mipLevels:=1;
  end else
  begin
