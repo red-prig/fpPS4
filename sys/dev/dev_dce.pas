@@ -944,6 +944,20 @@ type
   GRPH_DEPTH         :bit2; //[30..31] [16BPP=1,32BPP=2,3]
  end;
 
+function getPixelFormatStr(pixelFormat:DWORD):RawBytestring;
+begin
+ case pixelFormat of
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB        :Result:='A8R8G8B8_SRGB';
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A16R16G16B16_FLOAT   :Result:='A16R16G16B16_FLOAT';
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB        :Result:='A8B8G8R8_SRGB';
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10          :Result:='A2R10G10B10';
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB     :Result:='A2R10G10B10_SRGB';
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ:Result:='A2R10G10B10_BT2020';
+  else
+   Result:=HexStr(pixelFormat,8);
+ end;
+end;
+
 Function dce_register_buffer_attr(dev:p_cdev;data:p_register_buffer_attr_args):Integer;
 var
  pixelFormat:DWORD;
@@ -996,6 +1010,8 @@ begin
  //
 
  pixelFormat:=data^.pixelFormat;
+
+ Writeln('pixelFormat=',getPixelFormatStr(pixelFormat));
 
  case pixelFormat of
   $80000000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB
