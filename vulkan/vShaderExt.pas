@@ -255,6 +255,8 @@ type
   FImages  :array of TImageBindExt;
   FSamplers:array of TSamplerBindExt;
 
+  Procedure InsertBuffer(var b:TBufBindExt);
+
   Procedure AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset,mask:DWord;flags:TvLayoutFlags);
   Procedure AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
   Procedure AddBufPtr (P:Pointer          ;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
@@ -1441,6 +1443,11 @@ begin
          (ord(vMemoryWrite  in flags)*TM_WRITE);
 end;
 
+Procedure TvUniformBuilder.InsertBuffer(var b:TBufBindExt);
+begin
+ Insert(b,FBuffers,Length(FBuffers));
+end;
+
 Procedure TvUniformBuilder.AddVSharp2(PV:PVSharpResource2;fset,bind,size,offset,mask:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
@@ -1495,7 +1502,7 @@ begin
 
  b.cformat:=VK_FORMAT_UNDEFINED;
 
- Insert(b,FBuffers,Length(FBuffers));
+ InsertBuffer(b);
 end;
 
 function IsInvalidVSharp(dfmt,num_records:DWORD):Boolean; inline;
@@ -1537,12 +1544,14 @@ begin
 
  b.cformat:=_get_vsharp_cformat(PV);
 
- Insert(b,FBuffers,Length(FBuffers));
+ InsertBuffer(b);
 end;
 
 Procedure TvUniformBuilder.AddBufPtr(P:Pointer;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
 var
  b:TBufBindExt;
+
+ base,start,__end,_size:QWORD;
 begin
  Assert(P<>nil);
  if (P=nil) or (size=0) then Exit;
@@ -1556,9 +1565,28 @@ begin
  b.addr:=P;
  b.size:=size; //input size already taking into account offset
 
+ if (size=$FFFFFFFF) then
+ begin
+  //size is unknow, try 4KB
+  base :=QWORD(get_dmem_ptr(b.addr));
+  start:=base;
+  __end:=base+4*1024;
+
+  gpu_get_bound(start,__end);
+
+  _size:=(__end-base);
+
+  if (_size>4*1024) then
+  begin
+   _size:=4*1024;
+  end;
+
+  b.size:=_size;
+ end;
+
  b.cformat:=VK_FORMAT_UNDEFINED;
 
- Insert(b,FBuffers,Length(FBuffers));
+ InsertBuffer(b);
 end;
 
 Procedure TvUniformBuilder.AddTSharp4(PT:PTSharpResource4;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
