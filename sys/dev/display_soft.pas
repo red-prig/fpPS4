@@ -919,9 +919,9 @@ asm
 
   vmovups (%rdi), %ymm1
 
-  vpshufb %ymm0, %ymm1, %ymm1
+  vpshufb %ymm0, %ymm1, %ymm2
 
-  vmovups %ymm1, (%rdi)
+  vmovups %ymm2, (%rdi)
 
  lea 32(%rdi), %rdi //Inc(buf,32);
  sub $1, %rsi       //Dec(count8dwords);
@@ -933,9 +933,8 @@ procedure A2R10G10B10_Flip(src:Pointer;count8dwords:QWORD); assembler; nostackfr
 label
  _next;
 const
- shift=20;
- mul  =((255*(1 shl shift)) div 1023);
- add  =(1 shl 10);
+ shift=16;
+ mul  =((255*(1 shl shift)+1022) div 1023);
 asm
  mov          $0x3FF, %eax
  vmovd        %eax  , %xmm15
@@ -944,10 +943,6 @@ asm
  mov          mul   , %eax
  vmovd        %eax  , %xmm14
  vpbroadcastd %xmm14, %ymm14 //mul
-
- mov          add   , %eax
- vmovd        %eax  , %xmm13
- vpbroadcastd %xmm13, %ymm13 //add
 
  test %rsi, %rsi //while (count8dwords<>0) do
  jnz _next
@@ -969,13 +964,9 @@ asm
   vpmulld      %ymm14, %ymm4, %ymm7 //* mul
   vpmulld      %ymm14, %ymm5, %ymm8 //* mul
 
-  vpaddd       %ymm13, %ymm6, %ymm9  //+ add
-  vpaddd       %ymm13, %ymm7, %ymm10 //+ add
-  vpaddd       %ymm13, %ymm8, %ymm11 //+ add
-
-  vpsrld        shift, %ymm9 , %ymm0 //>> shift
-  vpsrld        shift, %ymm10, %ymm1 //>> shift
-  vpsrld        shift, %ymm11, %ymm2 //>> shift
+  vpsrld        shift, %ymm6, %ymm0 //>> shift
+  vpsrld        shift, %ymm7, %ymm1 //>> shift
+  vpsrld        shift, %ymm8, %ymm2 //>> shift
 
   vpslld           $8, %ymm1, %ymm3 //<< 8
   vpslld          $16, %ymm0, %ymm4 //<< 16
