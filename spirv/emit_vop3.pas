@@ -36,7 +36,11 @@ type
   procedure emit_V_CNDMASK_B32;
   procedure emit_V_MUL_LEGACY_F32;
   procedure emit_V2_F32(OpId:DWORD;rev:Boolean);
+
+  procedure emit_V_CVT_PKNORM_I16_F32;
+  procedure emit_V_CVT_PKNORM_U16_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
+
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
@@ -331,6 +335,50 @@ begin
 
  emit_dst_omod__f(dst,dtFloat32);
  emit_dst_clamp_f(dst,dtFloat32);
+end;
+
+procedure TEmit_VOP3.emit_V_CVT_PKNORM_I16_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ vec:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_bit(@src,2,dtFloat32);
+ emit_src_neg_bit(@src,2,dtFloat32);
+
+ vec:=OpMakeVec(line,dtVec2f,@src);
+
+ OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,vec);
+end;
+
+procedure TEmit_VOP3.emit_V_CVT_PKNORM_U16_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ vec:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_bit(@src,2,dtFloat32);
+ emit_src_neg_bit(@src,2,dtFloat32);
+
+ vec:=OpMakeVec(line,dtVec2f,@src);
+
+ OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
 end;
 
 procedure TEmit_VOP3.emit_V_CVT_PKRTZ_F16_F32;
@@ -1732,6 +1780,8 @@ begin
   256+V_ASHR_I32   : emit_V_SH(Op.OpShiftRightArithmetic,dtInt32 ,False);
   256+V_ASHRREV_I32: emit_V_SH(Op.OpShiftRightArithmetic,dtInt32 ,True );
 
+  256+V_CVT_PKNORM_I16_F32:emit_V_CVT_PKNORM_I16_F32;
+  256+V_CVT_PKNORM_U16_F32:emit_V_CVT_PKNORM_U16_F32;
   256+V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
 
   256+V_MIN_LEGACY_F32:emit_V_MMX(GlslOp.NMin,dtFloat32);
