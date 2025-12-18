@@ -895,7 +895,10 @@ begin
 
 end;
 
-procedure BGRAFlip(buf:Pointer;count8dwords:QWORD);
+//rdi, rsi
+procedure BGRA_Flip(src:Pointer;count8dwords:QWORD); assembler; nostackframe; sysv_abi_cdecl;
+label
+ _next;
 const
  CSHIFT:array[0..3] of QWORD=(
  //A R G B A R G B
@@ -904,25 +907,87 @@ const
   $1714151613101112,
   $1F1C1D1E1B18191A
  );
-begin
- asm
-  vmovdqu CSHIFT(%rip), %ymm0
- end;
- while (count8dwords<>0) do
- begin
-  asm
-   mov buf, %rax
+asm
+ vmovdqu CSHIFT(%rip), %ymm0
 
-   vmovdqa (%rax), %ymm1
+ test %rsi, %rsi //while (count8dwords<>0) do
+ jnz _next
 
-   vpshufb %ymm0, %ymm1, %ymm1
+  ret
 
-   vmovdqa %ymm1, (%rax)
-  end ['rax'];
-  //
-  Inc(buf,32);
-  Dec(count8dwords);
- end;
+ _next:
+
+  vmovups (%rdi), %ymm1
+
+  vpshufb %ymm0, %ymm1, %ymm1
+
+  vmovups %ymm1, (%rdi)
+
+ lea 32(%rdi), %rdi //Inc(buf,32);
+ sub $1, %rsi       //Dec(count8dwords);
+ jnz _next          //while (count8dwords<>0) do
+end;
+
+//rdi, rsi
+procedure A2R10G10B10_Flip(src:Pointer;count8dwords:QWORD); assembler; nostackframe; sysv_abi_cdecl;
+label
+ _next;
+const
+ shift=20;
+ mul  =((255*(1 shl shift)) div 1023);
+ add  =(1 shl 10);
+asm
+ mov          $0x3FF, %eax
+ vmovd        %eax  , %xmm15
+ vpbroadcastd %xmm15, %ymm15 //0x000003FF
+
+ mov          mul   , %eax
+ vmovd        %eax  , %xmm14
+ vpbroadcastd %xmm14, %ymm14 //mul
+
+ mov          add   , %eax
+ vmovd        %eax  , %xmm13
+ vpbroadcastd %xmm13, %ymm13 //add
+
+ test %rsi, %rsi //while (count8dwords<>0) do
+ jnz _next
+
+  ret
+
+ _next:
+
+  vmovups      (%rdi), %ymm0 //load
+
+  vpsrld          $10, %ymm0, %ymm1 //>> 10
+  vpsrld          $20, %ymm0, %ymm2 //>> 20
+
+  vpand        %ymm0, %ymm15, %ymm3 //& 0x000003FF
+  vpand        %ymm1, %ymm15, %ymm4 //& 0x000003FF
+  vpand        %ymm2, %ymm15, %ymm5 //& 0x000003FF
+
+  vpmulld      %ymm14, %ymm3, %ymm6 //* mul
+  vpmulld      %ymm14, %ymm4, %ymm7 //* mul
+  vpmulld      %ymm14, %ymm5, %ymm8 //* mul
+
+  vpaddd       %ymm13, %ymm6, %ymm9  //+ add
+  vpaddd       %ymm13, %ymm7, %ymm10 //+ add
+  vpaddd       %ymm13, %ymm8, %ymm11 //+ add
+
+  vpsrld        shift, %ymm9 , %ymm0 //>> shift
+  vpsrld        shift, %ymm10, %ymm1 //>> shift
+  vpsrld        shift, %ymm11, %ymm2 //>> shift
+
+  vpslld           $8, %ymm1, %ymm3 //<< 8
+  vpslld          $16, %ymm0, %ymm4 //<< 16
+
+  vpor          %ymm2, %ymm3, %ymm5 //v2 | v1
+  vpor          %ymm4, %ymm5, %ymm6 //(v2 | v1) | v3
+
+  vmovups       %ymm6, (%rdi) //save
+
+ lea 32(%rdi), %rdi //Inc(buf,32);
+ sub $1, %rsi       //Dec(count8dwords);
+ jnz _next          //while (count8dwords<>0) do
 end;
 
 procedure SoftFlip(hWindow:THandle;buf:p_buffer;attr:p_attr;p_dst:PPointer);
@@ -932,8 +997,26 @@ var
  yofs:Integer;
  rect:TRect;
 
- len:Ptrint;
  dst:Pointer;
+
+ procedure PreAlloc;
+ var
+  len:Ptrint;
+ begin
+  len:=bi.bmiHeader.biWidth*bi.bmiHeader.biHeight*4;
+
+  if (p_dst^=nil) then
+  begin
+   p_dst^:=AllocMem(len);
+  end else
+  if (MemSize(p_dst^)<len) then
+  begin
+   p_dst^:=ReAllocMem(p_dst^,len);
+  end;
+
+  dst:=p_dst^;
+ end;
+
 begin
  hdc:=GetDC(hWindow);
 
@@ -955,18 +1038,7 @@ begin
   bi.bmiHeader.biWidth :=(attr^.attr.pitchPixel+127) and (not 127);
   bi.bmiHeader.biHeight:=(attr^.attr.height    +127) and (not 127);
 
-  len:=bi.bmiHeader.biWidth*bi.bmiHeader.biHeight*4;
-
-  if (p_dst^=nil) then
-  begin
-   p_dst^:=AllocMem(len);
-  end else
-  if (MemSize(p_dst^)<len) then
-  begin
-   p_dst^:=ReAllocMem(p_dst^,len);
-  end;
-
-  dst:=p_dst^;
+  PreAlloc;
 
   //detile32bppBuf_slow(attr,bi.bmiHeader.biWidth,buf^.left_dmem,dst);
   detile32bppBuf_AVX(attr,bi.bmiHeader.biWidth,buf^.left.mirr,dst);
@@ -974,12 +1046,22 @@ begin
  begin
   bi.bmiHeader.biWidth:=(bi.bmiHeader.biWidth+63) and (not 63);
 
-  dst:=buf^.left.mirr;
+  PreAlloc;
+
+  Move(buf^.left.mirr^,dst^,bi.bmiHeader.biWidth*bi.bmiHeader.biHeight*4);
  end;
 
- if (attr^.attr.pixelFormat=SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB) then
- begin
-  BGRAFlip(dst,bi.bmiHeader.biWidth*bi.bmiHeader.biHeight div 8);
+ case attr^.attr.pixelFormat of
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A8B8G8R8_SRGB:
+    begin
+     BGRA_Flip(dst,bi.bmiHeader.biWidth*bi.bmiHeader.biHeight div 8);
+    end;
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10,
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_SRGB,
+  SCE_VIDEO_OUT_PIXEL_FORMAT_A2R10G10B10_BT2020_PQ:
+    begin
+     A2R10G10B10_Flip(dst,bi.bmiHeader.biWidth*bi.bmiHeader.biHeight div 8);
+    end;
  end;
 
  //flip
