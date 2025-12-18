@@ -51,6 +51,7 @@ type
   function  fetch_ssrc9_pair(SSRC:Word;src:PPsrRegNode;rtype:TsrDataType):Boolean;
   function  fetch_ssrc9_64(SSRC:Word;rtype:TsrDataType):TsrRegNode;
   function  fetch_vsrc8(VSRC:Word;rtype:TsrDataType):TsrRegNode;
+  function  fetch_vsrc8_64(VSRC:Word;rtype:TsrDataType):TsrRegNode;
   function  fetch_vdst8(VDST:Word;rtype:TsrDataType):TsrRegNode;
   function  fetch_vdst8_64(VDST:Word;rtype:TsrDataType):TsrRegNode;
   //
@@ -626,6 +627,21 @@ begin
  Assert(src^.Category<>cVectorArray,'TODO:fetch_vsrc8 cVectorArray');
  Result:=MakeRead(src,rtype);
  Assert(Result<>nil,'fetch_vsrc8');
+end;
+
+function TEmitFetch.fetch_vsrc8_64(VSRC:Word;rtype:TsrDataType):TsrRegNode;
+var
+ src:array[0..1] of TsrRegNode;
+begin
+ src[0]:=fetch_vsrc8(VSRC+0,dtUint32);
+ src[1]:=fetch_vsrc8(VSRC+1,dtUint32);
+
+ if (src[0]=nil) or (src[1]=nil) then
+ begin
+  Assert(False);
+ end;
+
+ Result:=fetch64(@src,rtype);
 end;
 
 function TEmitFetch.fetch_vdst8(VDST:Word;rtype:TsrDataType):TsrRegNode;
