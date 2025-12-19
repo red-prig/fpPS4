@@ -1867,11 +1867,51 @@ begin
  //FlushAndWaitMe(pctx);
 end;
 
-procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTMULTI);
+procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTCOUNTMULTI);
+var
+ dataOffset:DWORD;
+ countAddr :QWORD;
 begin
  Assert(pctx^.stream_type=stGfxDcb);
 
- Assert(false,'IT_DRAW_INDEX_INDIRECT_COUNT_MULTI')
+ if (DWORD(Body^.drawInitiator)<>0) then
+ if p_print_gpu_ops then
+ begin
+  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.BASE_ADDR_DRAW_INDIRECT,16));
+  Writeln(' dataOffset             =',Body^.dataOffset             );
+  Writeln(' stride                 =',Body^.stride                 );
+  Writeln(' count                  =',Body^.count                  );
+  Writeln(' countIndirectEnable    =',Body^.countIndirectEnable    );
+  Writeln(' countAddr              =0x',HexStr(Body^.countAddr,16) );
+ end;
+
+ pctx^.CX_REG.VGT_DMA_SIZE      :=Body^.count;
+ pctx^.UC_REG.VGT_NUM_INDICES   :=Body^.count;
+ pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
+
+ dataOffset:=Body^.dataOffset and (not 3);
+
+ countAddr:=0;
+ if (Body^.countIndirectEnable<>0) then
+ begin
+  countAddr:=Body^.countAddr and (not QWORD(3));
+ end;
+
+ pctx^.stream[stGfxDcb].DrawIndexIndirectCountMulti(
+  pctx^.SG_REG,
+  pctx^.CX_REG,
+  pctx^.UC_REG,
+  pctx^.BASE_ADDR_DRAW_INDIRECT,
+  dataOffset,
+  Body^.stride,
+  Body^.count,
+  countAddr);
+
 end;
 
 procedure onDispatchDirect(pctx:p_pfp_ctx;Body:PPM4CMDDISPATCHDIRECT);
