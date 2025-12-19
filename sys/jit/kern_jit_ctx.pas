@@ -4349,6 +4349,8 @@ var
 
  i:Byte;
 begin
+ if (Int64(addr)<$4000) then Exit(Default(t_instruction_info));
+
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 

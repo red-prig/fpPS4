@@ -2472,28 +2472,62 @@ begin
   pm4_DrawPrepare(ctx);
  end;
 
- ctx.Cmd.FinstanceCount:=node^.numInstances;
- ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.INDEX_TYPE);
+ ctx.Cmd.FinstanceCount:=node^.u.numInstances;
+ ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.u.INDEX_TYPE);
 
  case node^.ntype of
   ntDrawIndex2:
    begin
-    Writeln(node^.id,':DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
+    Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.u.indexBase)),',',
+                                          node^.u.indexOffset ,',',
+                                          node^.u.vertexOffset,',',
+                                          node^.u.indexCount  ,')');
+
+    ctx.Cmd.DrawIndexOffset2(Pointer(node^.u.indexBase),
+                             node^.u.indexOffset,
+                             node^.u.vertexOffset,
+                             node^.u.indexCount);
    end;
   ntDrawIndexOffset2:
    begin
-    Writeln(node^.id,':DrawIndexOffset2(',node^.indexOffset,',',node^.vertexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),node^.indexOffset,node^.vertexOffset,node^.indexCount);
+    Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.u.indexBase)),',',
+                                          node^.u.indexOffset ,',',
+                                          node^.u.vertexOffset,',',
+                                          node^.u.indexCount  ,')');
+
+    ctx.Cmd.DrawIndexOffset2(Pointer(node^.u.indexBase),
+                             node^.u.indexOffset,
+                             node^.u.vertexOffset,
+                             node^.u.indexCount);
    end;
   ntDrawIndexAuto:
    begin
-    Writeln(node^.id,':DrawIndexAuto(',node^.vertexOffset,',',node^.indexCount,')');
-    ctx.Cmd.DrawIndexAuto(node^.vertexOffset,node^.indexCount);
+    Writeln(node^.id,':DrawIndexAuto(',node^.u.vertexOffset,',',
+                                       node^.u.indexCount  ,')');
+
+    ctx.Cmd.DrawIndexAuto(node^.u.vertexOffset,
+                          node^.u.indexCount);
    end;
   ntClearDepth:
    begin
     pm4_ClearDepth(node^.rt_info,ctx);
+   end;
+  ntDrawIndexIndirectCountMulti:
+   begin
+    Writeln(node^.id,':ntDrawIndexIndirectCountMulti(',HexStr(Pointer(node^.u.indirectBase)),',',
+                                                       HexStr(Pointer(node^.u.countAddr   )),',',
+                                                       node^.u.dataOffset,',',
+                                                       node^.u.stride    ,',',
+                                                       node^.u.count     ,')');
+
+    ctx.Cmd.DrawIndexIndirectCountMulti(
+     Pointer(node^.u.indirectBase),
+     Pointer(node^.u.countAddr),
+     node^.u.dataOffset,
+     node^.u.stride,
+     node^.u.count
+    );
+
    end;
   else;
    Assert(false,'pm4_Draw');
@@ -3687,6 +3721,7 @@ begin
       ntHint               :pm4_Hint               (ctx,Pointer(ctx.node));
       ntDrawIndex2         :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexOffset2   :pm4_Draw               (ctx,Pointer(ctx.node));
+      ntDrawIndexIndirectCountMulti:pm4_Draw       (ctx,Pointer(ctx.node));
       ntDrawIndexAuto      :pm4_Draw               (ctx,Pointer(ctx.node));
       ntClearDepth         :pm4_Draw               (ctx,Pointer(ctx.node));
       ntResolve            :pm4_Resolve            (ctx,Pointer(ctx.node));

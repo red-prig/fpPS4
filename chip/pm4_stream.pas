@@ -362,20 +362,24 @@ type
  t_pm4_node_draw=object(t_pm4_node)
   rt_info:t_pm4_rt_info;
 
-  indexBase   :QWORD;
-  indexOffset :DWORD;
-  vertexOffset:DWORD;
-  indexCount  :DWORD;
-  numInstances:DWORD;
+  u:record
+   case Byte of
+    0:(indexBase   :QWORD;
+       indexOffset :DWORD;
+       vertexOffset:DWORD;
+       indexCount  :DWORD;
+       numInstances:DWORD;
+       INDEX_TYPE:Byte;
+       SWAP_MODE :Byte);
+    1:(
+       indirectBase:QWORD;
+       countAddr   :QWORD;
+       dataOffset  :DWORD;
+       stride      :DWORD;
+       count       :DWORD;
+      );
+  end;
 
-  indirectBase:QWORD;
-  countAddr   :QWORD;
-  dataOffset  :DWORD;
-  stride      :DWORD;
-  count       :DWORD;
-
-  INDEX_TYPE:Byte;
-  SWAP_MODE :Byte;
  end;
 
  p_pm4_node_Dispatch=^t_pm4_node_Dispatch;
@@ -1760,22 +1764,31 @@ begin
 
  node:=allocator.Alloc(SizeOf(t_pm4_node_draw));
 
+ node^:=Default(t_pm4_node_draw); //init all to zero
+
  node^.ntype :=ntype;
- node^.scope :=Default(t_pm4_resource_curr_scope);
+ //node^.scope :=Default(t_pm4_resource_curr_scope);
 
  Build_rt_info(node,node^.rt_info,GPU_REGS);
 
- node^.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
- node^.vertexOffset:=CX_REG.VGT_INDX_OFFSET;
- node^.indexCount  :=UC_REG.VGT_NUM_INDICES;
- node^.numInstances:=UC_REG.VGT_NUM_INSTANCES;
-
- node^.INDEX_TYPE:=ord(GPU_REGS.GET_INDEX_TYPE);
- node^.SWAP_MODE :=CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
+ case ntype of
+  ntDrawIndex2,
+  ntDrawIndexOffset2,
+  ntDrawIndexAuto:
+   begin
+    node^.u.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
+    node^.u.vertexOffset:=CX_REG.VGT_INDX_OFFSET;
+    node^.u.indexCount  :=UC_REG.VGT_NUM_INDICES;
+    node^.u.numInstances:=UC_REG.VGT_NUM_INSTANCES;
+    node^.u.INDEX_TYPE:=ord(GPU_REGS.GET_INDEX_TYPE);
+    node^.u.SWAP_MODE :=CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
+   end;
+  else;
+ end;
 
  //heuristic
  if (ntype=ntDrawIndexAuto) and
-    (node^.numInstances<=1) and
+    (node^.u.numInstances<=1) and
     (node^.rt_info.RT_COUNT=0) and
     (node^.rt_info.DB_ENABLE) and
     (
@@ -1829,7 +1842,7 @@ begin
 
  if (node<>nil) then
  begin
-  node^.indexOffset:=indexOffset;
+  node^.u.indexOffset:=indexOffset;
  end;
 
 end;
@@ -1851,11 +1864,11 @@ begin
 
  if (node<>nil) then
  begin
-  node^.indirectBase:=indirectBase;
-  node^.dataOffset  :=dataOffset;
-  node^.stride      :=stride;
-  node^.count       :=count;
-  node^.countAddr   :=countAddr;
+  node^.u.indirectBase:=indirectBase;
+  node^.u.dataOffset  :=dataOffset;
+  node^.u.stride      :=stride;
+  node^.u.count       :=count;
+  node^.u.countAddr   :=countAddr;
  end;
 
 end;

@@ -213,6 +213,8 @@ type
 
   Procedure   DrawIndexOffset2(IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD);
   Procedure   DrawIndexAuto   (vertexOffset,indexCount:DWORD);
+  Procedure   DrawIndexIndirectCountMulti(indirectBase,countAddr:Pointer;
+                                          dataOffset,stride,count:DWORD);
  end;
 
 implementation
@@ -1787,6 +1789,71 @@ begin
      Assert(false,'TODO');
     end;
  end;
+
+end;
+
+Procedure TvCmdBuffer.DrawIndexIndirectCountMulti(indirectBase,countAddr:Pointer;
+                                                  dataOffset,stride,count:DWORD);
+var
+ buffer:TvHostBuffer;
+ buffer_offset:TVkDeviceSize;
+ count_buffer:TvHostBuffer;
+ count_buffer_offset:TVkDeviceSize;
+begin
+
+ if (Self=nil) then
+ begin
+  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ if (FRenderPass=VK_NULL_HANDLE) then Exit;
+ if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ Assert(Femulate_primtype=0);
+
+ ApplyDescriptorCache(BP_GRAPHICS);
+
+ if (FinstanceCount=0) then FinstanceCount:=1;
+
+ buffer:=FetchHostBuffer(Self,QWORD(indirectBase) + dataOffset,stride * count);
+ Assert(buffer<>nil);
+
+ buffer_offset:=(QWORD(indirectBase) + dataOffset)-buffer.FAddr;
+
+ if (countAddr<>nil) then
+ begin
+  count_buffer:=FetchHostBuffer(Self,QWORD(countAddr),4);
+  Assert(count_buffer<>nil);
+
+  count_buffer_offset:=QWORD(countAddr)-count_buffer.FAddr;
+ end;
+
+ ASSERT(sizeof(TVkDrawIndexedIndirectCommand) = stride);
+
+ if (countAddr<>nil) then
+ begin
+  vkCmdDrawIndexedIndirectCount(
+    Fcmdbuf,
+    buffer.FHandle,
+    buffer_offset,
+    count_buffer.FHandle,
+    count_buffer_offset,
+    count,
+    stride);
+ end else
+ begin
+  vkCmdDrawIndexedIndirect(
+    Fcmdbuf,
+    buffer.FHandle,
+    buffer_offset,
+    count,
+    stride);
+ end;
+
+ Inc(cmd_count);
 
 end;
 
