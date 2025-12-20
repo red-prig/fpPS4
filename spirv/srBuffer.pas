@@ -1362,6 +1362,7 @@ begin
  begin
   pDecorateList.OpDecorate(pField.sType,SD,0);
  end;
+
  node:=pField.First;
  While (node<>nil) do
  begin
@@ -1402,10 +1403,9 @@ begin
    //
    if (node.bType=btWorkgroup) then
    begin
-    if Config^.IsSpv14 then
-    begin
-     pHeaderList.SPV_KHR_workgroup_memory_explicit_layout;
-    end;
+    //force version and extension for aliases
+    Config^.UpgradeVersion14;
+    pHeaderList.SPV_KHR_workgroup_memory_explicit_layout;
    end;
   end; //is_export_used
   //

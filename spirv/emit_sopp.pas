@@ -28,7 +28,7 @@ Var
  execution,memory,memory_semantics:TsrConst;
 begin
  //upgrade version to 1.3
- Config.UpgradeVersion($10300);
+ Config.UpgradeVersion13;
 
  node:=AddSpirvOp(line,Op.OpControlBarrier); //need first
 

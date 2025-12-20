@@ -761,7 +761,7 @@ begin
   Op.OpGroupNonUniformShuffle:
     begin
      //upgrade version to 1.3
-     Config.UpgradeVersion($10300);
+     Config.UpgradeVersion13;
      AddCapability(Capability.GroupNonUniformShuffle);
     end;
   Op.OpGroupNonUniformQuadBroadcast:
@@ -772,11 +772,11 @@ begin
      if r.is_const then
      begin
       //upgrade version to 1.3
-      Config.UpgradeVersion($10300);
+      Config.UpgradeVersion13;
      end else
      begin
       //upgrade version to 1.5
-      Config.UpgradeVersion($10500);
+      Config.UpgradeVersion15;
      end;
      //
      AddCapability(Capability.GroupNonUniformQuad);
@@ -789,11 +789,11 @@ begin
      if r.is_const then
      begin
       //upgrade version to 1.3
-      Config.UpgradeVersion($10300);
+      Config.UpgradeVersion13;
      end else
      begin
       //upgrade version to 1.5
-      Config.UpgradeVersion($10500);
+      Config.UpgradeVersion15;
      end;
      //
      AddCapability(Capability.GroupNonUniformBallot);
