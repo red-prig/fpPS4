@@ -305,6 +305,7 @@ begin
       begin
        TestFlat;
        pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.SampleId);
+       pCapabilityList^.Add(Capability.SampleRateShading);
       end;
 
     itPerspSample,
