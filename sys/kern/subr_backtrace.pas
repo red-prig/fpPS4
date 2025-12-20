@@ -359,6 +359,8 @@ var
  ptr,fin:Pointer;
  ACodeBytes,ACode:RawByteString;
 begin
+ if (Int64(addr)<$4000) then Exit;
+
  ptr:=addr;
  fin:=addr+vsize;
 

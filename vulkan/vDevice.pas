@@ -284,6 +284,7 @@ var
   VK_EXT_provoking_vertex                :Boolean;
   VK_KHR_image_format_list               :Boolean;
   VK_EXT_descriptor_indexing             :Boolean;
+  VK_KHR_draw_indirect_count             :Boolean;
 
   VK_KHR_shader_float16_int8             :Boolean;
   VK_KHR_16bit_storage                   :Boolean;
@@ -499,6 +500,7 @@ begin
     VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME                :limits.VK_EXT_provoking_vertex                :=True;
     VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME               :limits.VK_KHR_image_format_list               :=True;
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME             :limits.VK_EXT_descriptor_indexing             :=True;
+    VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME             :limits.VK_KHR_draw_indirect_count             :=True;
 
     VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME             :limits.VK_KHR_shader_float16_int8             :=True;
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME                   :limits.VK_KHR_16bit_storage                   :=True;
@@ -2105,6 +2107,11 @@ begin
   FDI.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
 
   DeviceInfo.add_feature(@FDI);
+ end;
+
+ if limits.VK_KHR_draw_indirect_count then
+ begin
+  DeviceInfo.add_ext(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
  end;
 
  //if limits.VK_KHR_push_descriptor then

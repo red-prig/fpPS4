@@ -1807,6 +1807,8 @@ begin
   Exit;
  end;
 
+ ASSERT(sizeof(TVkDrawIndexedIndirectCommand) = stride);
+
  if (FRenderPass=VK_NULL_HANDLE) then Exit;
  if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
 
@@ -1831,11 +1833,15 @@ begin
   count_buffer_offset:=QWORD(countAddr)-count_buffer.FAddr;
  end;
 
- ASSERT(sizeof(TVkDrawIndexedIndirectCommand) = stride);
-
  if (countAddr<>nil) then
  begin
-  vkCmdDrawIndexedIndirectCount(
+
+  if (vkCmdDrawIndexedIndirectCountKHR=nil) then
+  begin
+   Pointer(vkCmdDrawIndexedIndirectCountKHR):=vkGetInstanceProcAddr(VulkanApp.FInstance,'vkCmdDrawIndexedIndirectCountKHR');
+  end;
+
+  vkCmdDrawIndexedIndirectCountKHR(
     Fcmdbuf,
     buffer.FHandle,
     buffer_offset,
