@@ -570,10 +570,35 @@ end;
 
 //V_MBCNT_LO_U32_B32 v1, -1, v1
 
+function _IsConstBitMask(pReg:TsrRegNode):Boolean;
+var
+ pConst:TsrConst;
+begin
+ Result:=False;
+ pReg:=RegDown(pReg);
+ if (pReg=nil) then Exit;
+ pConst:=pReg.AsConst;
+ if (pConst=nil) then Exit;
+ Result:=(pConst.AsInt32=-1);
+end;
+
+function _IsInitialWave(pReg:TsrRegNode):Boolean;
+var
+ pConst:TsrConst;
+begin
+ Result:=False;
+ pReg:=RegDown(pReg);
+ if (pReg=nil) then Exit;
+ pConst:=pReg.AsConst;
+ if (pConst=nil) then Exit;
+ Result:=is_dwave(pReg) and (pConst.AsInt32=1);
+end;
+
 procedure TEmit_VOP2.emit_V_MBCNT_LO_U32_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of TsrRegNode;
+ src:array[0..3] of TsrRegNode;
+ dwave:Boolean;
 begin
  //V_MBCNT_LO_U32_B32 vdst, vsrc, vaccum
  //mask_lo_threads_before= (thread_id>32) ? 0xffffffff : (1<<thread_id)-1
@@ -583,9 +608,32 @@ begin
 
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+ src[2]:=MakeRead(get_exec0,dtUnknow);
 
- src[0]:=OpAndTo(src[0],1); //mean mask_lo_threads_before=1
- src[0]:=OpBitCountTo(src[0]);
+ dwave:=is_dwave(src[0]) or is_dwave(src[2]);
+
+ if is_dwave(src[0]) then
+ begin
+  src[0]:=FetchSubgroup(src[0]);
+ end;
+
+ if is_dwave(src[2]) then
+ begin
+  src[2]:=FetchSubgroup(src[2]);
+ end;
+
+ src[0]:=OpLogicalAndTo(src[0],src[2]);
+
+ if dwave then
+ begin
+  src[0].dsbgr:=True;
+
+  src[0]:=OpSubgroupBallotTo(src[0]);
+  src[0]:=OpSubgroupBallotBitCountTo(src[0]);
+ end else
+ begin
+  src[0]:=OpBitCountTo(src[0]);
+ end;
 
  OpIAdd(dst,src[0],src[1]);
 end;
@@ -593,11 +641,13 @@ end;
 procedure TEmit_VOP2.emit_V_MBCNT_HI_U32_B32;
 Var
  dst:PsrRegSlot;
- src:array[0..2] of TsrRegNode;
+ src:array[0..3] of TsrRegNode;
 begin
  //V_MBCNT_HI_U32_B3 vdst, vsrc, vaccum
  //mask_hi_threads_before= (thread_id>32) ? (1<<(thread_id-32))-1 : 0
  //vdst = vaccum.u + bit_count(vsrc & mask_hi_threads_before)
+
+ //TODO: check ThreadBit
 
  dst:=get_vdst8(FSPI.VOP2.VDST);
 

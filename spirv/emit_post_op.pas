@@ -56,6 +56,8 @@ type
   function  OpBitCount1(node:TSpirvOp):Integer;
   function  OpBitReverse1(node:TSpirvOp):Integer;
   //
+  function  OpGroupNonUniformBallotBitCount1(node:TSpirvOp):Integer;
+  //
   function  OnSelect1(node:TSpirvOp):Integer;
   //
   procedure MakeVecConst(rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode);
@@ -114,6 +116,8 @@ begin
 
   Op.OpBitCount         :Result:=OpBitCount1(node);
   Op.OpBitReverse       :Result:=OpBitReverse1(node);
+
+  Op.OpGroupNonUniformBallotBitCount:Result:=OpGroupNonUniformBallotBitCount1(node);
 
   else;
  end;
@@ -1048,6 +1052,54 @@ begin
   data:=src.AsConst.GetData;
 
   data:=ReverseBits(data,src.dtype.BitSize);
+
+  _SetConst(dst.dtype,data);
+  Exit;
+ end;
+
+end;
+
+Function GetSubgroupBallotSrc(src:TsrRegNode):TsrRegNode;
+var
+ node:TSpirvOp;
+begin
+ Result:=nil;
+
+ node:=src.pWriter.specialize AsType<ntOp>;
+ if (node=nil) then Exit;
+
+ if (node.OpId<>Op.OpGroupNonUniformBallot) then Exit;
+
+ Result:=RegDown(node.ParamNode(1).AsReg);
+end;
+
+function TEmitPostOp.OpGroupNonUniformBallotBitCount1(node:TSpirvOp):Integer;
+var
+ dst,src:TsrRegNode;
+ data:QWORD;
+
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst.pWriter:=NewImm_q(dtype,value,node);
+  node.mark([soNotUsed]);
+  node.pDst:=nil;
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node.pDst.specialize AsType<ntReg>;
+ src:=RegDown(node.ParamNode(2).AsReg);
+
+ src:=GetSubgroupBallotSrc(src);
+
+ if (dst=nil) or (src=nil) then Exit;
+
+ if src.is_const then
+ begin
+  //need a const calc
+  data:=src.AsConst.GetData;
+  data:=PopCnt(data); //BitCount
 
   _SetConst(dst.dtype,data);
   Exit;

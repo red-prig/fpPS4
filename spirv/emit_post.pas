@@ -200,6 +200,13 @@ begin
  Result:=0;
  if (node=nil) then Exit;
 
+ if (node.dsbgr) then Exit;
+
+ if (pLine.OpId=Op.OpGroupNonUniformBallot) then
+ begin
+  Exit;
+ end;
+
  old:=node;
  src:=RegDown(node);
  Invert:=false;
@@ -796,6 +803,13 @@ begin
       Config.UpgradeVersion15;
      end;
      //
+     AddCapability(Capability.GroupNonUniformBallot);
+    end;
+  Op.OpGroupNonUniformBallot,
+  Op.OpGroupNonUniformBallotBitCount:
+    begin
+     //upgrade version to 1.3
+     Config.UpgradeVersion13;
      AddCapability(Capability.GroupNonUniformBallot);
     end;
   else;

@@ -31,6 +31,8 @@ type
    F:bitpacked record
     dtype:TsrDataType;
     dweak:Boolean;
+    dwave:Boolean;
+    dsbgr:Boolean;
    end;
    FSlot:PsrRegSlot;
    FWriter:TsrNode;        //ntReg,ntConst,ntOp,ntVolatile
@@ -39,6 +41,10 @@ type
    Procedure SetDtype(t:TsrDataType);
    function  GetWeak:Boolean;
    Procedure SetWeak(t:Boolean);
+   function  GetWave:Boolean;
+   Procedure SetWave(t:Boolean);
+   function  GetSubgr:Boolean;
+   Procedure SetSubgr(t:Boolean);
    Procedure SetWriter(t:TsrNode);
    Function  GetWriter:TsrNode;
   public
@@ -56,6 +62,8 @@ type
    property  pSlot  :PsrRegSlot  read FSlot     write FSlot;
    property  dtype  :TsrDataType read GetDtype  write SetDtype;
    property  dweak  :Boolean     read GetWeak   write SetWeak;
+   property  dwave  :Boolean     read GetWave   write SetWave;
+   property  dsbgr  :Boolean     read GetSubgr  write SetSubgr;
    property  pWriter:TsrNode     read GetWriter write SetWriter;
    function  GetName:RawByteString;
    function  AsConst:TsrConst;
@@ -215,6 +223,7 @@ type
 function RegDown(node:TsrRegNode):TsrRegNode;
 function RegDownSlot(node:TsrRegNode):TsrRegNode;
 function CompareReg(r1,r2:TsrRegNode):Boolean;
+function is_dwave(node:TsrRegNode):Boolean;
 
 operator := (i:TsrNode):TsrRegNode; inline;
 
@@ -803,6 +812,26 @@ begin
  F.dweak:=t;
 end;
 
+function TsrRegNode.GetWave:Boolean;
+begin
+ Result:=F.dwave;
+end;
+
+Procedure TsrRegNode.SetWave(t:Boolean);
+begin
+ F.dwave:=t;
+end;
+
+function TsrRegNode.GetSubgr:Boolean;
+begin
+ Result:=F.dsbgr;
+end;
+
+Procedure TsrRegNode.SetSubgr(t:Boolean);
+begin
+ F.dsbgr:=t;
+end;
+
 Procedure TsrRegNode.SetWriter(t:TsrNode);
 begin
  if (Self=nil) then Exit;
@@ -1113,6 +1142,26 @@ begin
  if not Result then
  begin
   Result:=CompareConst(r1.AsConst,r2.AsConst);
+ end;
+end;
+
+function is_dwave(node:TsrRegNode):Boolean;
+var
+ tmp:TsrRegNode;
+begin
+ Result:=False;
+ //backtrace
+ While (node<>nil) do
+ begin
+  if node.dwave then
+  begin
+   Exit(True);
+  end;
+  //
+  tmp:=node.AsReg; //next
+  if (tmp=nil) then Break;
+  Assert(tmp<>node);
+  node:=tmp;
  end;
 end;
 

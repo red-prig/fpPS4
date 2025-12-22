@@ -150,6 +150,9 @@ begin
  SetConst_b(get_exec0,true ); //1
  SetConst_b(get_exec1,false); //0
 
+ MarkWave(get_exec0);
+ MarkWave(get_exec1);
+
  InitFlow;
 end;
 

@@ -184,6 +184,8 @@ type
   //
   Function  PostLink(pLine,dst:TsrNode):TsrNode; override;
   procedure MakeCopy(dst:PsrRegSlot;src:TsrRegNode);
+  procedure MarkWave(dst:PsrRegSlot);
+  function  FetchSubgroup(src:TsrRegNode):TsrRegNode;
   //
   Procedure SetConst(pSlot:PsrRegSlot;pConst:TsrConst);
   Procedure SetConst_q(pSlot:PsrRegSlot;dtype:TsrDataType;value:QWORD);
@@ -582,6 +584,34 @@ begin
 
  //fixed line
  node.CustomLine:=pLine;
+end;
+
+procedure TEmitInterface.MarkWave(dst:PsrRegSlot);
+var
+ node:TsrRegNode;
+begin
+ node:=dst^.current;
+ if (node<>nil) then
+ begin
+  node.dwave:=True;
+ end;
+end;
+
+function TEmitInterface.FetchSubgroup(src:TsrRegNode):TsrRegNode;
+var
+ node:TsrRegNode;
+ pLine:TspirvOp;
+begin
+ node:=NewReg(src.dtype);
+ node.pWriter:=src;
+ node.dsbgr  :=True;
+
+ pLine:=PostLink(line,node); //post processing
+
+ //fixed line
+ node.CustomLine:=pLine;
+
+ Result:=node;
 end;
 
 Procedure TEmitInterface.SetConst(pSlot:PsrRegSlot;pConst:TsrConst);

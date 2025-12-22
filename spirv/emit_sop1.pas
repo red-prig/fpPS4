@@ -36,6 +36,7 @@ type
   procedure emit_S_WQM_B64;
   procedure emit_S_BREV_B32;
   procedure emit_S_BREV_B64;
+  procedure emit_S_BCNT1_I32_B32;
  end;
 
 implementation
@@ -404,6 +405,32 @@ begin
  Op1(Op.OpBitReverse,dtUInt32,dst[1],src[0]); //1 -> 0
 end;
 
+procedure TEmit_SOP1.emit_S_BCNT1_I32_B32; //sdst.s = countOneBits(ssrc.u); SCC = (sdst != 0)
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUInt32);
+
+ if is_dwave(src) then
+ begin
+  src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtBool);
+
+  src:=FetchSubgroup(src);
+
+  src:=OpSubgroupBallotTo(src);
+  src:=OpSubgroupBallotBitCountTo(src);
+ end else
+ begin
+  src:=OpBitCountTo(src);
+ end;
+
+ MakeCopy(dst,src);
+
+ OpISccNotZero(src);
+end;
+
 procedure TEmit_SOP1.emit_SOP1;
 begin
 
@@ -420,6 +447,8 @@ begin
   S_BREV_B32        : emit_S_BREV_B32;
   S_BREV_B64        : emit_S_BREV_B64;
 
+  S_BCNT1_I32_B32   : emit_S_BCNT1_I32_B32;
+
   S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
   S_SWAPPC_B64      : emit_S_SWAPPC_B64;
@@ -432,6 +461,7 @@ begin
   S_NAND_SAVEEXEC_B64 :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
   S_NOR_SAVEEXEC_B64  :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
   S_XNOR_SAVEEXEC_B64 :emit_S_OP_SAVEEXEC_B64(FSPI.SOP1.OP);
+
 
   else
    Assert(false,'SOP1?'+IntToStr(FSPI.SOP1.OP)+' '+get_str_spi(FSPI));
