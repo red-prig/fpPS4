@@ -1049,16 +1049,16 @@ begin
 
       else
        begin
-        Writeln(stderr,'PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
-        Assert(False);
+        Writeln(stderr,'[CCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        Assert (False ,'[CCB]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
 
     end;
   else
    begin
-    Writeln(stderr,'PM4_TYPE_',PM4_TYPE(token));
-    Assert(False);
+    Writeln(stderr,'[CCB]PM4_TYPE_',PM4_TYPE(token));
+    Assert (False ,'[CCB]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;
 
@@ -2217,8 +2217,8 @@ begin
 
       else
        begin
-        Writeln(stderr,'PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
-        Assert(False);
+        Writeln(stderr,'[DCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        Assert (False ,'[DCB]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
 
@@ -2235,8 +2235,8 @@ begin
     end;
   else
    begin
-    Writeln(stderr,'PM4_TYPE_',PM4_TYPE(token));
-    Assert(False);
+    Writeln(stderr,'[DCB]PM4_TYPE_',PM4_TYPE(token));
+    Assert (False ,'[DCB]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;
 
