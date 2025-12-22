@@ -26,7 +26,14 @@ type
   mods   :TsrImageMods;
   img_op :Integer;
 
-  coord,pcf,bias,lod,min_lod,offset:TsrRegNode;
+  coord  :TsrRegNode;
+  pcf    :TsrRegNode;
+  dx     :TsrRegNode;
+  dy     :TsrRegNode;
+  bias   :TsrRegNode;
+  lod    :TsrRegNode;
+  min_lod:TsrRegNode;
+  offset :TsrRegNode;
  end;
 
  TExtDistrib=record
@@ -42,6 +49,7 @@ type
   procedure DistribDmask            (DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo);
   procedure DistribDmaskExt         (DMASK:Byte;const ext:AExtDistrib;info:PsrImageInfo);
   function  GatherDmask             (info:PsrImageInfo;relax:Boolean):TsrRegNode;
+  Function  GatherGrad_f            (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_f           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_u           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  Gather_value            (var offset:DWORD;rtype:TsrDataType):TsrRegNode;
@@ -462,6 +470,17 @@ begin
  end;
 end;
 
+function GetDimCountGrad(b:Byte):Byte;
+begin
+ Result:=1;
+ Case b of
+  Dim.Dim2D:Result:=2;
+  Dim.Dim3D:Result:=3;
+  Dim.Cube :Result:=2;
+  else;
+ end;
+end;
+
 function GetImageInfo(PT:PTSharpResource4):TsrImageInfo;
 begin
  //print_tsharp8(Pointer(PT));
@@ -686,6 +705,30 @@ begin
  end;
 end;
 
+Function TEmit_MIMG.GatherGrad_f(var offset:DWORD;info:PsrImageInfo):TsrRegNode;
+var
+ src:array[0..2] of TsrRegNode;
+
+ i,count:Byte;
+begin
+ count:=GetDimCountGrad(info^.tinfo.Dim);
+
+ For i:=0 to count-1 do
+ begin
+  src[i]:=fetch_vsrc8(FSPI.MIMG.VADDR+offset+i,dtFloat32);
+ end;
+
+ if (count=1) then
+ begin
+  Result:=src[0];
+ end else
+ begin
+  Result:=OpMakeVec(line,TsrDataType(dtFloat32).AsVector(count),@src);
+ end;
+
+ offset:=offset+count;
+end;
+
 Function TEmit_MIMG.GatherCoord_f(var offset:DWORD;info:PsrImageInfo):TsrRegNode; //src
 var
  src:array[0..3] of TsrRegNode;
@@ -879,8 +922,10 @@ begin
 
  if (imGrad in p.mods) then
  begin
-  //TODO: imGrad
-  Assert(false,'TODO: imGrad');
+  p.dx:=GatherGrad_f(p.roffset,info);
+  p.dy:=GatherGrad_f(p.roffset,info);
+
+  p.img_op:=p.img_op or ImageOperands.Grad;
  end;
 
  p.coord:=GatherCoord_f(p.roffset,info);
@@ -923,8 +968,8 @@ begin
 
   if ((p.img_op and ImageOperands.Grad)<>0) then
   begin
-   //TODO: imGrad
-   Assert(false,'TODO: imGrad');
+   node.AddParam(p.dx);
+   node.AddParam(p.dy);
   end;
 
   if ((p.img_op and ImageOperands.ConstOffset)<>0) or
@@ -983,7 +1028,8 @@ begin
  end else
  begin
   if (FExecutionModel=ExecutionModel.Fragment) and
-     ((param.img_op and ImageOperands.Lod)=0) then
+     ((param.img_op and ImageOperands.Lod )=0) and
+     ((param.img_op and ImageOperands.Grad)=0) then
   begin
    //vector
    node:=OpImageSampleImplicitLod(line,cmb,dst,param.coord);
@@ -1255,8 +1301,9 @@ begin
  Tgrp:=nil;
 
  Case FSPI.MIMG.OP of
-  IMAGE_SAMPLE ..IMAGE_SAMPLE_C_LZ_O,  //sampled
-  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O, //sampled gather
+  IMAGE_SAMPLE   ..IMAGE_SAMPLE_C_LZ_O,    //sampled
+  IMAGE_GATHER4  ..IMAGE_GATHER4_C_LZ_O,   //sampled, gather
+  IMAGE_SAMPLE_CD..IMAGE_SAMPLE_C_CD_CL_O, //sampled, coarse derivatives
   IMAGE_GET_LOD:
     begin
      if not get_srsrc(FSPI.MIMG.SSAMP,4,@src) then Assert(false);
@@ -1296,7 +1343,8 @@ begin
  end;
 
  Case FSPI.MIMG.OP of
-  IMAGE_SAMPLE..IMAGE_SAMPLE_C_LZ_O:  //sampled
+  IMAGE_SAMPLE   ..IMAGE_SAMPLE_C_LZ_O,    //sampled
+  IMAGE_SAMPLE_CD..IMAGE_SAMPLE_C_CD_CL_O: //sampled, coarse derivatives
     begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
@@ -1306,7 +1354,7 @@ begin
      emit_image_sample(Tgrp,Sgrp,@info);
     end;
 
-  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O: //sampled gather
+  IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O: //sampled, gather
     begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
