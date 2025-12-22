@@ -217,7 +217,7 @@ Const
  STT_FILE          = 4;
  STT_COMMON        = 5;
  STT_TLS           = 6;
- STT_LOOS          =10;
+ STT_LOOS          =10; //STT_GNU_IFUNC
  STT_SCE           =11; //module_start/module_stop
 
  //ST_LOCAL_NONE      = 0x00
