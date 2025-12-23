@@ -791,6 +791,25 @@ type
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
+ PPM4CMDDRAWINDEXINDIRECT=^TPM4CMDDRAWINDEXINDIRECT;
+ TPM4CMDDRAWINDEXINDIRECT=bitpacked record
+  header             :PM4_TYPE_3_HEADER;
+  dataOffset         :DWORD; // < [31:2] DWORD aligned offset
+  baseVtxLoc         :WORD;  // < base vertex location
+  reserved1          :WORD;
+  startInstLoc       :WORD;  // < start instance location
+  reserved2          :WORD;
+  drawInitiator      :TVGT_DRAW_INITIATOR;
+ end;
+
+ TDrawIndexedIndirectArgs=packed record
+  indexCount   :DWORD; // < Number of vertices to draw.
+  instanceCount:DWORD; // < Number of instances to draw.
+  firstIndex   :DWORD; // < Starting index buffer slot for the draw.
+  vertexOffset :DWORD; // < Offset added to the index fetched from the index buffer before it is passed to the vertex shader.
+  firstInstance:DWORD; // < Starting instance for the draw.  Instace IDs passed to the vertex shader will range from firstInstance to firstInstance + instanceCount - 1.
+ end;
+
  PPM4CMDDRAWINDEXINDIRECTMULTI=^TPM4CMDDRAWINDEXINDIRECTMULTI;
  TPM4CMDDRAWINDEXINDIRECTMULTI=bitpacked record
   header             :PM4_TYPE_3_HEADER;

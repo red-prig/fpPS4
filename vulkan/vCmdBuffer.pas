@@ -1818,8 +1818,6 @@ begin
 
  ApplyDescriptorCache(BP_GRAPHICS);
 
- if (FinstanceCount=0) then FinstanceCount:=1;
-
  buffer:=FetchHostBuffer(Self,QWORD(indirectBase) + dataOffset,stride * count);
  Assert(buffer<>nil);
 

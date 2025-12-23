@@ -2472,12 +2472,12 @@ begin
   pm4_DrawPrepare(ctx);
  end;
 
- ctx.Cmd.FinstanceCount:=node^.u.numInstances;
- ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.u.INDEX_TYPE);
-
  case node^.ntype of
   ntDrawIndex2:
    begin
+    ctx.Cmd.FinstanceCount:=node^.u.numInstances;
+    ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.u.INDEX_TYPE);
+
     Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.u.indexBase)),',',
                                           node^.u.indexOffset ,',',
                                           node^.u.vertexOffset,',',
@@ -2490,6 +2490,9 @@ begin
    end;
   ntDrawIndexOffset2:
    begin
+    ctx.Cmd.FinstanceCount:=node^.u.numInstances;
+    ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.u.INDEX_TYPE);
+
     Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.u.indexBase)),',',
                                           node^.u.indexOffset ,',',
                                           node^.u.vertexOffset,',',
@@ -2502,6 +2505,9 @@ begin
    end;
   ntDrawIndexAuto:
    begin
+    ctx.Cmd.FinstanceCount:=node^.u.numInstances;
+    ctx.Cmd.FINDEX_TYPE   :=TVkIndexType(node^.u.INDEX_TYPE);
+
     Writeln(node^.id,':DrawIndexAuto(',node^.u.vertexOffset,',',
                                        node^.u.indexCount  ,')');
 
@@ -2512,13 +2518,28 @@ begin
    begin
     pm4_ClearDepth(node^.rt_info,ctx);
    end;
+
+  ntDrawIndexIndirect:
+   begin
+    Writeln(node^.id,':DrawIndexIndirect(',HexStr(Pointer(node^.u.indirectBase)),',',
+                                           node^.u.dataOffset,')');
+
+    ctx.Cmd.DrawIndexIndirectCountMulti(
+     Pointer(node^.u.indirectBase),
+     nil,
+     node^.u.dataOffset,
+     sizeof(TVkDrawIndexedIndirectCommand),
+     1
+    );
+   end;
+
   ntDrawIndexIndirectCountMulti:
    begin
-    Writeln(node^.id,':ntDrawIndexIndirectCountMulti(',HexStr(Pointer(node^.u.indirectBase)),',',
-                                                       HexStr(Pointer(node^.u.countAddr   )),',',
-                                                       node^.u.dataOffset,',',
-                                                       node^.u.stride    ,',',
-                                                       node^.u.count     ,')');
+    Writeln(node^.id,':DrawIndexIndirectCountMulti(',HexStr(Pointer(node^.u.indirectBase)),',',
+                                                     HexStr(Pointer(node^.u.countAddr   )),',',
+                                                     node^.u.dataOffset,',',
+                                                     node^.u.stride    ,',',
+                                                     node^.u.count     ,')');
 
     ctx.Cmd.DrawIndexIndirectCountMulti(
      Pointer(node^.u.indirectBase),
@@ -2527,7 +2548,6 @@ begin
      node^.u.stride,
      node^.u.count
     );
-
    end;
   else;
    Assert(false,'pm4_Draw');

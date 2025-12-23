@@ -1867,6 +1867,39 @@ begin
  //FlushAndWaitMe(pctx);
 end;
 
+procedure onDrawIndexIndirect(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECT);
+var
+ dataOffset:DWORD;
+begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
+ if (DWORD(Body^.drawInitiator)<>0) then
+ if p_print_gpu_ops then
+ begin
+  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  Writeln(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.BASE_ADDR_DRAW_INDIRECT,16));
+  Writeln(' dataOffset             =',Body^.dataOffset);
+  Writeln(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
+  Writeln(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
+ end;
+
+ pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
+
+ dataOffset:=Body^.dataOffset and (not 3);
+
+ pctx^.stream[stGfxDcb].DrawIndexIndirect(
+  pctx^.SG_REG,
+  pctx^.CX_REG,
+  pctx^.UC_REG,
+  pctx^.BASE_ADDR_DRAW_INDIRECT,
+  dataOffset);
+
+end;
+
 procedure onDrawIndexIndirectCountMulti(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECTCOUNTMULTI);
 var
  dataOffset:DWORD;
@@ -1883,15 +1916,17 @@ begin
  if p_print_gpu_ops then
  begin
   Writeln(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.BASE_ADDR_DRAW_INDIRECT,16));
-  Writeln(' dataOffset             =',Body^.dataOffset             );
-  Writeln(' stride                 =',Body^.stride                 );
-  Writeln(' count                  =',Body^.count                  );
-  Writeln(' countIndirectEnable    =',Body^.countIndirectEnable    );
-  Writeln(' countAddr              =0x',HexStr(Body^.countAddr,16) );
+  Writeln(' dataOffset             =',Body^.dataOffset            );
+  Writeln(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
+  Writeln(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
+  Writeln(' drawIndexLoc           =',getRegName(SH_REG_BASE+Body^.drawIndexLoc));
+  Writeln(' countIndirectEnable    =',Body^.countIndirectEnable   );
+  Writeln(' drawIndexEnable        =',Body^.drawIndexEnable       );
+  Writeln(' count                  =',Body^.count                 );
+  Writeln(' countAddr              =0x',HexStr(Body^.countAddr,16));
+  Writeln(' stride                 =',Body^.stride                );
  end;
 
- pctx^.CX_REG.VGT_DMA_SIZE      :=Body^.count;
- pctx^.UC_REG.VGT_NUM_INDICES   :=Body^.count;
  pctx^.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
 
  dataOffset:=Body^.dataOffset and (not 3);
@@ -2202,6 +2237,7 @@ begin
       IT_DRAW_INDEX_2                   :onDrawIndex2                 (pctx,buff);
       IT_DRAW_INDEX_OFFSET_2            :onDrawIndexOffset2           (pctx,buff);
       IT_DRAW_INDEX_AUTO                :onDrawIndexAuto              (pctx,buff);
+      IT_DRAW_INDEX_INDIRECT            :onDrawIndexIndirect          (pctx,buff);
       IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:onDrawIndexIndirectCountMulti(pctx,buff);
       IT_DISPATCH_DIRECT                :onDispatchDirect             (pctx,buff);
       IT_DISPATCH_INDIRECT              :onDispatchIndirect           (pctx,buff);

@@ -129,6 +129,7 @@ type
   ntClearDepth,
   ntDrawIndex2,
   ntDrawIndexOffset2,
+  ntDrawIndexIndirect,
   ntDrawIndexIndirectCountMulti,
   ntDrawIndexAuto,
   ntDispatchDirect,
@@ -475,6 +476,11 @@ type
                              var CX_REG:TCONTEXT_REG_GROUP;
                              var UC_REG:TUSERCONFIG_REG_SHORT;
                              indexOffset:DWORD);
+  procedure DrawIndexIndirect(var SG_REG:TSH_REG_GFX_GROUP;
+                              var CX_REG:TCONTEXT_REG_GROUP;
+                              var UC_REG:TUSERCONFIG_REG_SHORT;
+                              indirectBase:QWORD;
+                              dataOffset  :DWORD);
   procedure DrawIndexIndirectCountMulti(var SG_REG:TSH_REG_GFX_GROUP;
                                         var CX_REG:TCONTEXT_REG_GROUP;
                                         var UC_REG:TUSERCONFIG_REG_SHORT;
@@ -1843,6 +1849,29 @@ begin
  if (node<>nil) then
  begin
   node^.u.indexOffset:=indexOffset;
+ end;
+
+end;
+
+procedure t_pm4_stream.DrawIndexIndirect(var SG_REG:TSH_REG_GFX_GROUP;
+                                         var CX_REG:TCONTEXT_REG_GROUP;
+                                         var UC_REG:TUSERCONFIG_REG_SHORT;
+                                         indirectBase:QWORD;
+                                         dataOffset  :DWORD);
+var
+ node:p_pm4_node_draw;
+begin
+ if ColorControl(CX_REG) then Exit;
+
+ node:=BuildDraw(ntDrawIndexIndirect,SG_REG,CX_REG,UC_REG);
+
+ if (node<>nil) then
+ begin
+  node^.u.indirectBase:=indirectBase;
+  node^.u.dataOffset  :=dataOffset;
+  node^.u.stride      :=sizeof(TDrawIndexedIndirectArgs);
+  node^.u.count       :=1;
+  node^.u.countAddr   :=0;
  end;
 
 end;
