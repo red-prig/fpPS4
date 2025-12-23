@@ -285,6 +285,7 @@ var
   VK_KHR_image_format_list               :Boolean;
   VK_EXT_descriptor_indexing             :Boolean;
   VK_KHR_draw_indirect_count             :Boolean;
+  VK_KHR_shader_draw_parameters          :Boolean;
 
   VK_KHR_shader_float16_int8             :Boolean;
   VK_KHR_16bit_storage                   :Boolean;
@@ -501,6 +502,7 @@ begin
     VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME               :limits.VK_KHR_image_format_list               :=True;
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME             :limits.VK_EXT_descriptor_indexing             :=True;
     VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME             :limits.VK_KHR_draw_indirect_count             :=True;
+    VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME          :limits.VK_KHR_shader_draw_parameters          :=True;
 
     VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME             :limits.VK_KHR_shader_float16_int8             :=True;
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME                   :limits.VK_KHR_16bit_storage                   :=True;
@@ -1962,6 +1964,7 @@ var
  FSF16:TVkPhysicalDevice16BitStorageFeatures;
  FRF  :TVkPhysicalDeviceRobustness2FeaturesEXT;
  FDI  :TVkPhysicalDeviceDescriptorIndexingFeatures;
+ FSDP :TVkPhysicalDeviceShaderDrawParametersFeatures;
  FIVML:TVkPhysicalDeviceImageViewMinLodFeaturesEXT;
  FDCC :TVkPhysicalDeviceDepthClipControlFeaturesEXT;
  FDCE :TVkPhysicalDeviceDepthClipEnableFeaturesEXT;
@@ -2112,6 +2115,17 @@ begin
  if limits.VK_KHR_draw_indirect_count then
  begin
   DeviceInfo.add_ext(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+ end;
+
+ if limits.VK_KHR_shader_draw_parameters then
+ begin
+  DeviceInfo.add_ext(VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME);
+
+  FSDP:=Default(TVkPhysicalDeviceShaderDrawParametersFeatures);
+  FSDP.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
+  FSDP.shaderDrawParameters:=VK_TRUE;
+
+  DeviceInfo.add_feature(@FSDP);
  end;
 
  //if limits.VK_KHR_push_descriptor then
