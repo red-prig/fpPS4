@@ -3742,6 +3742,7 @@ begin
       ntHint               :pm4_Hint               (ctx,Pointer(ctx.node));
       ntDrawIndex2         :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexOffset2   :pm4_Draw               (ctx,Pointer(ctx.node));
+      ntDrawIndexIndirect  :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexIndirectCountMulti:pm4_Draw       (ctx,Pointer(ctx.node));
       ntDrawIndexAuto      :pm4_Draw               (ctx,Pointer(ctx.node));
       ntClearDepth         :pm4_Draw               (ctx,Pointer(ctx.node));
