@@ -16,6 +16,7 @@ uses
  vShader,
  ps4_shader,
  pm4defs,
+ pm4_context,
  si_ci_vi_merged_offset,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
@@ -95,12 +96,15 @@ type
 
  PGPU_USERDATA=^TGPU_USERDATA;
 
+ //interface
  PGPU_REGS=^TGPU_REGS;
  TGPU_REGS=packed object
   SG_REG:PSH_REG_GFX_GROUP;     // 0x2C00
   SC_REG:PSH_REG_COMPUTE_GROUP; // 0x2E00
   CX_REG:PCONTEXT_REG_GROUP;    // 0xA000
   UC_REG:PUSERCONFIG_REG_SHORT; // 0xC000
+
+  SDP:p_shader_draw_params;
 
   Function  _SHADER_MASK(i:Byte):Byte; inline;  //0..7
   Function  _TARGET_MASK(i:Byte):Byte; inline;  //0..7

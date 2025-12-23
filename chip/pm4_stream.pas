@@ -12,6 +12,7 @@ uses
  md_map,
  bittype,
  pm4defs,
+ pm4_context,
  si_ci_vi_merged_enum,
  si_ci_vi_merged_registers,
  si_ci_vi_merged_groups,
@@ -66,7 +67,7 @@ type
  end;
 
  p_pm4_rt_info=^t_pm4_rt_info;
- t_pm4_rt_info=object
+ t_pm4_rt_info=packed object
   USERDATA  :TGPU_USERDATA;
   SHADERDATA:TGPU_SHADERDATA_RT;
 
@@ -92,6 +93,8 @@ type
   PRIM_RESET:Byte;
   VP_COUNT  :Byte;
   PROVOKING :Byte;
+
+  ShaderDrawParams:t_shader_draw_params;
  end;
 
  t_pm4_stream_type=(
@@ -463,37 +466,22 @@ type
                           var GPU_REGS:TGPU_REGS);
   procedure Build_rt_info(node:p_pm4_node;
                           var rt_info:t_pm4_rt_info;
-                          var GPU_REGS:TGPU_REGS);
-  function  BuildDraw    (ntype:t_pm4_node_type;
-                          var SG_REG:TSH_REG_GFX_GROUP;
-                          var CX_REG:TCONTEXT_REG_GROUP;
-                          var UC_REG:TUSERCONFIG_REG_SHORT
-                         ):p_pm4_node_draw;
-  procedure DrawIndex2   (var SG_REG:TSH_REG_GFX_GROUP;
-                          var CX_REG:TCONTEXT_REG_GROUP;
-                          var UC_REG:TUSERCONFIG_REG_SHORT);
-  procedure DrawIndexOffset2(var SG_REG:TSH_REG_GFX_GROUP;
-                             var CX_REG:TCONTEXT_REG_GROUP;
-                             var UC_REG:TUSERCONFIG_REG_SHORT;
-                             indexOffset:DWORD);
-  procedure DrawIndexIndirect(var SG_REG:TSH_REG_GFX_GROUP;
-                              var CX_REG:TCONTEXT_REG_GROUP;
-                              var UC_REG:TUSERCONFIG_REG_SHORT;
-                              indirectBase:QWORD;
-                              dataOffset  :DWORD);
-  procedure DrawIndexIndirectCountMulti(var SG_REG:TSH_REG_GFX_GROUP;
-                                        var CX_REG:TCONTEXT_REG_GROUP;
-                                        var UC_REG:TUSERCONFIG_REG_SHORT;
-                                        indirectBase:QWORD;
-                                        dataOffset  :DWORD;
-                                        stride      :DWORD;
-                                        count       :DWORD;
-                                        countAddr   :QWORD);
-  procedure DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
-                          var CX_REG:TCONTEXT_REG_GROUP;
-                          var UC_REG:TUSERCONFIG_REG_SHORT);
-  procedure Build_cs_info (node:p_pm4_node_Dispatch;var GPU_REGS:TGPU_REGS);
-  procedure DispatchDirect(var SC_REG:TSH_REG_COMPUTE_GROUP);
+                          var GPU_REGS:TGPU_REGS;
+                          ShaderDrawParams:t_shader_draw_params);
+  function  BuildDraw        (ntype:t_pm4_node_type;context:p_amd_context):p_pm4_node_draw;
+  procedure DrawIndex2       (context:p_amd_context);
+  procedure DrawIndexOffset2 (context:p_amd_context;
+                              indexOffset:DWORD);
+  procedure DrawIndexIndirect(context   :p_amd_context;
+                              dataOffset:DWORD);
+  procedure DrawIndexIndirectCountMulti(context   :p_amd_context;
+                                        dataOffset:DWORD;
+                                        stride    :DWORD;
+                                        count     :DWORD;
+                                        countAddr :QWORD);
+  procedure DrawIndexAuto   (context:p_amd_context);
+  procedure Build_cs_info   (node:p_pm4_node_Dispatch;var GPU_REGS:TGPU_REGS);
+  procedure DispatchDirect  (var SC_REG:TSH_REG_COMPUTE_GROUP);
   procedure DispatchIndirect(var SC_REG:TSH_REG_COMPUTE_GROUP;
                              BASE  :QWORD;
                              Offset:DWORD);
@@ -1574,7 +1562,8 @@ end;
 
 procedure t_pm4_stream.Build_rt_info(node:p_pm4_node;
                                      var rt_info:t_pm4_rt_info;
-                                     var GPU_REGS:TGPU_REGS);
+                                     var GPU_REGS:TGPU_REGS;
+                                     ShaderDrawParams:t_shader_draw_params);
 var
  i:Integer;
  RT:TRT_INFO;
@@ -1728,6 +1717,8 @@ begin
  rt_info.SCREEN_RECT:=GPU_REGS.GET_SCREEN;
  rt_info.SCREEN_SIZE:=GPU_REGS.GET_SCREEN_SIZE;
 
+ rt_info.ShaderDrawParams:=ShaderDrawParams;
+
  //
 
  pa.Init;
@@ -1746,11 +1737,7 @@ begin
  Init_Uniforms(node,FUniformBuilder);
 end;
 
-function t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;
-                                 var SG_REG:TSH_REG_GFX_GROUP;
-                                 var CX_REG:TCONTEXT_REG_GROUP;
-                                 var UC_REG:TUSERCONFIG_REG_SHORT
-                                ):p_pm4_node_draw;
+function t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;context:p_amd_context):p_pm4_node_draw;
 var
  GPU_REGS:TGPU_REGS;
 
@@ -1758,13 +1745,14 @@ var
 
 begin
  GPU_REGS:=Default(TGPU_REGS);
- GPU_REGS.SG_REG:=@SG_REG;
- GPU_REGS.CX_REG:=@CX_REG;
- GPU_REGS.UC_REG:=@UC_REG;
+ GPU_REGS.SG_REG:=@context^.SG_REG;
+ GPU_REGS.CX_REG:=@context^.CX_REG;
+ GPU_REGS.UC_REG:=@context^.UC_REG;
+ GPU_REGS.SDP   :=@context^.ShaderDrawParams;
 
- if DWORD(CX_REG.VGT_SHADER_STAGES_EN)<>0 then
+ if DWORD(context^.CX_REG.VGT_SHADER_STAGES_EN)<>0 then
  begin
-  Writeln('Skip tessellation:0x',HexStr(DWORD(CX_REG.VGT_SHADER_STAGES_EN),8));
+  Writeln('Skip tessellation:0x',HexStr(DWORD(context^.CX_REG.VGT_SHADER_STAGES_EN),8));
   Exit(nil);
  end;
 
@@ -1775,19 +1763,19 @@ begin
  node^.ntype :=ntype;
  //node^.scope :=Default(t_pm4_resource_curr_scope);
 
- Build_rt_info(node,node^.rt_info,GPU_REGS);
+ Build_rt_info(node,node^.rt_info,GPU_REGS,context^.ShaderDrawParams);
 
  case ntype of
   ntDrawIndex2,
   ntDrawIndexOffset2,
   ntDrawIndexAuto:
    begin
-    node^.u.indexBase   :=CX_REG.VGT_DMA_BASE or (QWORD(CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
-    node^.u.vertexOffset:=CX_REG.VGT_INDX_OFFSET;
-    node^.u.indexCount  :=UC_REG.VGT_NUM_INDICES;
-    node^.u.numInstances:=UC_REG.VGT_NUM_INSTANCES;
-    node^.u.INDEX_TYPE:=ord(GPU_REGS.GET_INDEX_TYPE);
-    node^.u.SWAP_MODE :=CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
+    node^.u.indexBase   :=context^.CX_REG.VGT_DMA_BASE or (QWORD(context^.CX_REG.VGT_DMA_BASE_HI.BASE_ADDR) shl 32);
+    node^.u.vertexOffset:=context^.CX_REG.VGT_INDX_OFFSET;
+    node^.u.indexCount  :=context^.UC_REG.VGT_NUM_INDICES;
+    node^.u.numInstances:=context^.UC_REG.VGT_NUM_INSTANCES;
+    node^.u.INDEX_TYPE  :=ord(GPU_REGS.GET_INDEX_TYPE);
+    node^.u.SWAP_MODE   :=context^.CX_REG.VGT_DMA_INDEX_TYPE.SWAP_MODE;
    end;
   else;
  end;
@@ -1817,34 +1805,28 @@ begin
  Result:=node;
 end;
 
-procedure t_pm4_stream.DrawIndex2(var SG_REG:TSH_REG_GFX_GROUP;
-                                  var CX_REG:TCONTEXT_REG_GROUP;
-                                  var UC_REG:TUSERCONFIG_REG_SHORT);
+procedure t_pm4_stream.DrawIndex2(context:p_amd_context);
 begin
- if ColorControl(CX_REG) then Exit;
+ if ColorControl(context^.CX_REG) then Exit;
 
- BuildDraw(ntDrawIndex2,SG_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndex2,context);
 end;
 
-procedure t_pm4_stream.DrawIndexAuto(var SG_REG:TSH_REG_GFX_GROUP;
-                                     var CX_REG:TCONTEXT_REG_GROUP;
-                                     var UC_REG:TUSERCONFIG_REG_SHORT);
+procedure t_pm4_stream.DrawIndexAuto(context:p_amd_context);
 begin
- if ColorControl(CX_REG) then Exit;
+ if ColorControl(context^.CX_REG) then Exit;
 
- BuildDraw(ntDrawIndexAuto,SG_REG,CX_REG,UC_REG);
+ BuildDraw(ntDrawIndexAuto,context);
 end;
 
-procedure t_pm4_stream.DrawIndexOffset2(var SG_REG:TSH_REG_GFX_GROUP;
-                                        var CX_REG:TCONTEXT_REG_GROUP;
-                                        var UC_REG:TUSERCONFIG_REG_SHORT;
+procedure t_pm4_stream.DrawIndexOffset2(context:p_amd_context;
                                         indexOffset:DWORD);
 var
  node:p_pm4_node_draw;
 begin
- if ColorControl(CX_REG) then Exit;
+ if ColorControl(context^.CX_REG) then Exit;
 
- node:=BuildDraw(ntDrawIndexOffset2,SG_REG,CX_REG,UC_REG);
+ node:=BuildDraw(ntDrawIndexOffset2,context);
 
  if (node<>nil) then
  begin
@@ -1853,21 +1835,18 @@ begin
 
 end;
 
-procedure t_pm4_stream.DrawIndexIndirect(var SG_REG:TSH_REG_GFX_GROUP;
-                                         var CX_REG:TCONTEXT_REG_GROUP;
-                                         var UC_REG:TUSERCONFIG_REG_SHORT;
-                                         indirectBase:QWORD;
-                                         dataOffset  :DWORD);
+procedure t_pm4_stream.DrawIndexIndirect(context   :p_amd_context;
+                                         dataOffset:DWORD);
 var
  node:p_pm4_node_draw;
 begin
- if ColorControl(CX_REG) then Exit;
+ if ColorControl(context^.CX_REG) then Exit;
 
- node:=BuildDraw(ntDrawIndexIndirect,SG_REG,CX_REG,UC_REG);
+ node:=BuildDraw(ntDrawIndexIndirect,context);
 
  if (node<>nil) then
  begin
-  node^.u.indirectBase:=indirectBase;
+  node^.u.indirectBase:=context^.BASE_ADDR_DRAW_INDIRECT;
   node^.u.dataOffset  :=dataOffset;
   node^.u.stride      :=sizeof(TDrawIndexedIndirectArgs);
   node^.u.count       :=1;
@@ -1876,24 +1855,21 @@ begin
 
 end;
 
-procedure t_pm4_stream.DrawIndexIndirectCountMulti(var SG_REG:TSH_REG_GFX_GROUP;
-                                                   var CX_REG:TCONTEXT_REG_GROUP;
-                                                   var UC_REG:TUSERCONFIG_REG_SHORT;
-                                                   indirectBase:QWORD;
-                                                   dataOffset  :DWORD;
-                                                   stride      :DWORD;
-                                                   count       :DWORD;
-                                                   countAddr   :QWORD);
+procedure t_pm4_stream.DrawIndexIndirectCountMulti(context   :p_amd_context;
+                                                   dataOffset:DWORD;
+                                                   stride    :DWORD;
+                                                   count     :DWORD;
+                                                   countAddr :QWORD);
 var
  node:p_pm4_node_draw;
 begin
- if ColorControl(CX_REG) then Exit;
+ if ColorControl(context^.CX_REG) then Exit;
 
- node:=BuildDraw(ntDrawIndexIndirectCountMulti,SG_REG,CX_REG,UC_REG);
+ node:=BuildDraw(ntDrawIndexIndirectCountMulti,context);
 
  if (node<>nil) then
  begin
-  node^.u.indirectBase:=indirectBase;
+  node^.u.indirectBase:=context^.BASE_ADDR_DRAW_INDIRECT;
   node^.u.dataOffset  :=dataOffset;
   node^.u.stride      :=stride;
   node^.u.count       :=count;

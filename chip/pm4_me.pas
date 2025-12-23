@@ -1827,6 +1827,7 @@ begin
  GPU_REGS.SG_REG:=@ctx.rt_info^.SHADERDATA.SG_REG;
  GPU_REGS.CX_REG:=@CX_REG;
  GPU_REGS.UC_REG:=@ctx.rt_info^.SHADERDATA.UC_REG;
+ GPU_REGS.SDP   :=@ctx.rt_info^.ShaderDrawParams;
 
  CX_REG:=Default(TCONTEXT_REG_GROUP);
 

@@ -346,6 +346,13 @@ begin
 
   DUMP_REG(F,mmVGT_NUM_INSTANCES,GPU_REGS);
 
+  if (GPU_REGS.SDP<>nil) then
+  if (GPU_REGS.SDP^.op<>0) then
+  begin
+   //0 -> fake reg
+   DUMP_BLOCK(F,0,GPU_REGS.SDP,SizeOf(GPU_REGS.SDP^));
+  end;
+
   FileClose(F);
 
  end;
