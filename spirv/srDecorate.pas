@@ -16,6 +16,7 @@ type
   //
   FSPV_EXT_descriptor_indexing:Boolean;
   FSPV_KHR_workgroup_memory_explicit_layout:Boolean;
+  FSPV_KHR_shader_draw_parameters:Boolean;
   //
   function  OpExtension(const n:RawByteString):TSpirvOp;
   function  OpExtInstImport(const n:RawByteString):TSpirvOp;
@@ -26,6 +27,7 @@ type
   //
   procedure SPV_EXT_descriptor_indexing;
   procedure SPV_KHR_workgroup_memory_explicit_layout;
+  procedure SPV_KHR_shader_draw_parameters;
  end;
 
  PsrDecorateKey=^TsrDecorateKey;
@@ -147,6 +149,15 @@ begin
  begin
   OpExtension('SPV_KHR_workgroup_memory_explicit_layout');
   FSPV_KHR_workgroup_memory_explicit_layout:=True;
+ end;
+end;
+
+procedure TsrHeaderList.SPV_KHR_shader_draw_parameters;
+begin
+ if not FSPV_KHR_shader_draw_parameters then
+ begin
+  OpExtension('SPV_KHR_shader_draw_parameters');
+  FSPV_KHR_shader_draw_parameters:=True;
  end;
 end;
 

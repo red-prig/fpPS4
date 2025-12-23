@@ -326,6 +326,15 @@ begin
                    GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
+
+   if (GPU_REGS.SDP<>nil) then
+   begin
+    SprvEmit.SET_DRAW_PARAM(GPU_REGS.SDP^.op,
+                            GPU_REGS.SDP^.baseVtxReg,
+                            GPU_REGS.SDP^.startInstReg,
+                            GPU_REGS.SDP^.drawIndexReg);
+   end;
+
   end;
   vShaderStageCs:
   begin

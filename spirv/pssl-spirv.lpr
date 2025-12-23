@@ -43,6 +43,14 @@ end;
 type
  TSPI_USER_DATA=array[0..15] of DWORD;
 
+ p_shader_draw_params=^t_shader_draw_params;
+ t_shader_draw_params=packed record
+  op          :WORD; //IT_DRAW_*
+  baseVtxReg  :WORD; //BuiltIn.BaseVertex
+  startInstReg:WORD; //BuiltIn.BaseInstance
+  drawIndexReg:WORD; //BuiltIn.DrawIndex
+ end;
+
 var
  GPU_REGS:packed record
 
@@ -101,6 +109,8 @@ var
   end;
 
   VGT_NUM_INSTANCES:TVGT_NUM_INSTANCES;
+
+  SDP:p_shader_draw_params;
  end;
 
  Blocks:TFPList;
@@ -266,6 +276,12 @@ begin
        i:=W.REG-mmSPI_SHADER_USER_DATA_VS_0;
        GPU_REGS.VS.USER_DATA[i+0]:=DWORD({%H-}QWORD(addr));
        GPU_REGS.VS.USER_DATA[i+1]:=DWORD({%H-}QWORD(addr) shr 32);
+      end;
+
+    //fake reg
+    0:
+      begin
+       GPU_REGS.SDP:=addr;
       end;
 
    end;
@@ -437,6 +453,15 @@ begin
    SprvEmit.InitVs(GPU_REGS.VS.RSRC1,GPU_REGS.VS.RSRC2,1,1);
 
    SprvEmit.SetUserData(@GPU_REGS.VS.USER_DATA);
+
+   if (GPU_REGS.SDP<>nil) then
+   begin
+    SprvEmit.SET_DRAW_PARAM(GPU_REGS.SDP^.op,
+                            GPU_REGS.SDP^.baseVtxReg,
+                            GPU_REGS.SDP^.startInstReg,
+                            GPU_REGS.SDP^.drawIndexReg);
+   end;
+
   end;
   kShaderTypeCs:
   begin

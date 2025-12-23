@@ -52,6 +52,8 @@ type
                      ENA  :TSPI_PS_INPUT_ENA;
                      ADDR :TSPI_PS_INPUT_ADDR);
 
+  Procedure   AddSdpParam(Reg:WORD;itype:TpsslInputType);
+  Procedure   SET_DRAW_PARAM    (op,baseVtxReg,startInstReg,drawIndexReg:WORD);
   Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
   Procedure   SET_INPUT_CNTL    (INPUT_CNTL:PSPI_PS_INPUT_CNTL_0;NUM_INTERP:Byte);
   Procedure   SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
@@ -577,6 +579,30 @@ begin
          ConvertCountSGPRS(RSRC1.SGPRS));
 
  AddCapability(Capability.Shader);
+end;
+
+const
+ mmSPI_SHADER_USER_DATA_VS_0=$2C4C;
+
+Procedure TSprvEmit.AddSdpParam(Reg:WORD;itype:TpsslInputType);
+var
+ i:Integer;
+begin
+ i:=Reg-mmSPI_SHADER_USER_DATA_VS_0;
+
+ if (i>=0) and (i<16) then //TODO: check user sgpr
+ begin
+  AddInput(@RegsStory.SGRP[i],dtUint32,itype);
+ end;
+end;
+
+Procedure TSprvEmit.SET_DRAW_PARAM(op,baseVtxReg,startInstReg,drawIndexReg:WORD);
+begin
+ if (op=0) then Exit;
+
+ AddSdpParam(baseVtxReg  ,itBaseVertex);
+ AddSdpParam(startInstReg,itBaseInstance);
+ AddSdpParam(drawIndexReg,itDrawIndex);
 end;
 
 //ps_z_export_en           -> mrtz.R
