@@ -124,6 +124,7 @@ type
   function  PrepVolatile(dst:TspirvOp;src:TsrRegNode):TsrRegNode;
   Procedure RemoveAllStore;
   Procedure Post;
+  procedure AllocEntryPoint(EntryPoint:TSpirvOp);
  end;
 
 implementation
@@ -1312,6 +1313,24 @@ begin
    node.SortLines;
    node.Optimize;
    node.UpdateRegType;
+  end;
+  node:=node.pNext;
+ end;
+end;
+
+procedure TsrPrivateList.AllocEntryPoint(EntryPoint:TSpirvOp);
+var
+ node:TsrPrivate;
+ pVar:TsrVariable;
+begin
+ node:=FPrivList.pHead;
+ While (node<>nil) do
+ begin
+  pVar:=node.pVar;
+  if (pVar<>nil) then
+  if node.IsUsed then
+  begin
+   EntryPoint.AddParam(pVar);
   end;
   node:=node.pNext;
  end;

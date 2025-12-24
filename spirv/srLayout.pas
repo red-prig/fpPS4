@@ -1254,6 +1254,26 @@ var
  Value:TsrNode;
  dst:TsrRegNode;
  old,rtype:TsrDataType;
+
+ procedure UpdateStoreParam(Param:POpParamNode);
+ begin
+  Value:=Param.Value;
+  Value.PrepType(ord(rtype));
+
+  dst:=Value.specialize AsType<ntReg>;
+  if (dst<>nil) then
+  begin
+   old:=dst.dtype;
+   if (old<>dtUnknow) and (rtype<>old) then
+   begin
+    //OpStore <- new <- dst
+    dst:=pBitcastList^.FetchRead(rtype,dst);
+    Param.Value:=dst;
+   end;
+  end;
+ end;
+
+
 begin
  rtype:=Fdtype;
 
@@ -1289,39 +1309,29 @@ begin
      end;
     end;
 
-   Op.OpStore,
-   Op.OpAtomicStore,
-   Op.OpAtomicExchange,
-   Op.OpAtomicCompareExchange,
-   Op.OpAtomicCompareExchangeWeak,
-   Op.OpAtomicIIncrement,
-   Op.OpAtomicIDecrement,
-   Op.OpAtomicIAdd,
-   Op.OpAtomicISub,
-   Op.OpAtomicSMin,
-   Op.OpAtomicUMin,
-   Op.OpAtomicSMax,
-   Op.OpAtomicUMax,
-   Op.OpAtomicAnd,
-   Op.OpAtomicOr,
-   Op.OpAtomicXor,
-   Op.OpAtomicFMinEXT,
-   Op.OpAtomicFMaxEXT:
-    begin
-     Value:=pLine.ParamNode(1).Value;
-     Value.PrepType(ord(rtype));
+   Op.OpStore:
+    UpdateStoreParam(pLine.ParamNode(1));
 
-     dst:=Value.specialize AsType<ntReg>;
-     if (dst<>nil) then
-     begin
-      old:=dst.dtype;
-      if (old<>dtUnknow) and (rtype<>old) then
-      begin
-       //OpStore <- new <- dst
-       dst:=pBitcastList^.FetchRead(rtype,dst);
-       pLine.ParamNode(1).Value:=dst;
-      end;
-     end;
+   Op.OpAtomicStore   ,
+   Op.OpAtomicExchange,
+   Op.OpAtomicIAdd    ,
+   Op.OpAtomicISub    ,
+   Op.OpAtomicSMin    ,
+   Op.OpAtomicUMin    ,
+   Op.OpAtomicSMax    ,
+   Op.OpAtomicUMax    ,
+   Op.OpAtomicAnd     ,
+   Op.OpAtomicOr      ,
+   Op.OpAtomicXor     ,
+   Op.OpAtomicFMinEXT ,
+   Op.OpAtomicFMaxEXT :
+    UpdateStoreParam(pLine.ParamNode(3));
+
+   Op.OpAtomicCompareExchange    ,
+   Op.OpAtomicCompareExchangeWeak:
+    begin
+     UpdateStoreParam(pLine.ParamNode(4));
+     UpdateStoreParam(pLine.ParamNode(5));
     end;
 
    else;

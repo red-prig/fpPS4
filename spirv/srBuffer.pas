@@ -9,10 +9,13 @@ uses
  spirv,
  ginodes,
  srNode,
+ srOp,
+ srVariable,
  srType,
  srTypes,
  srLayout,
  srDecorate,
+ srCapability,
  srConfig;
 
 type
@@ -167,6 +170,7 @@ type
   procedure OnAllocTypeBinding(pField:TsrField);
   procedure AllocTypeBinding;
   procedure AllocName;
+  procedure AllocEntryPoint(EntryPoint:TSpirvOp);
  end;
 
 Const
@@ -1373,16 +1377,18 @@ end;
 
 procedure TsrBufferList.AllocTypeBinding;
 var
- pDecorateList:TsrDecorateList;
- pHeaderList  :TsrHeaderList;
- Config       :PsrConfig;
+ pDecorateList  :TsrDecorateList;
+ pHeaderList    :TsrHeaderList;
+ pCapabilityList:PsrCapabilityList;
+ Config         :PsrConfig;
  node:TsrBuffer;
 begin
  EnumAllField(@OnAllocTypeBinding);
  //
- pDecorateList:=FEmit.GetDecorateList;
- pHeaderList  :=FEmit.GetHeaderList;
- Config       :=FEmit.GetConfig;
+ pDecorateList  :=FEmit.GetDecorateList;
+ pHeaderList    :=FEmit.GetHeaderList;
+ pCapabilityList:=FEmit.GetCapabilityList;
+ Config         :=FEmit.GetConfig;
  //
  node:=First;
  While (node<>nil) do
@@ -1405,6 +1411,7 @@ begin
    begin
     //force version and extension for aliases
     Config^.UpgradeVersion14;
+    pCapabilityList^.Add(Capability.WorkgroupMemoryExplicitLayoutKHR);
     pHeaderList.SPV_KHR_workgroup_memory_explicit_layout;
    end;
   end; //is_export_used
@@ -1429,6 +1436,26 @@ begin
   node:=Next(node);
  end;
 end;
+
+procedure TsrBufferList.AllocEntryPoint(EntryPoint:TSpirvOp);
+var
+ node:TsrBuffer;
+ pVar:TsrVariable;
+begin
+ if (EntryPoint=nil) then Exit;
+ node:=First;
+ While (node<>nil) do
+ begin
+  pVar:=node.pVar;
+  if (pVar<>nil) then
+  if node.IsUsed then
+  begin
+   EntryPoint.AddParam(pVar);
+  end;
+  node:=Next(node);
+ end;
+end;
+
 
 end.
 

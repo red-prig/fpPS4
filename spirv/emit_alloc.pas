@@ -236,6 +236,14 @@ begin
  VertLayoutList.AllocEntryPoint(node);
  FragLayoutList.AllocEntryPoint(node);
  OutputList    .AllocEntryPoint(node);
+
+ if Config.IsSpv14 then
+ begin
+  BufferList .AllocEntryPoint(node);
+  UniformList.AllocEntryPoint(node);
+  PrivateList.AllocEntryPoint(node);
+ end;
+
 end;
 
 function TSprvEmit_alloc.AddExecutionMode(mode:PtrUint):TSpirvOp;

@@ -57,8 +57,17 @@ begin
 end;
 
 Function TsrConfig.CanUseStorageBufferClass:Boolean;
+const
+ target_vulkan13=False;
 begin
- Result:=(SpvVersion>=$10300);
+ if target_vulkan13 then
+ begin
+  UpgradeVersion13;
+  Result:=True;
+ end else
+ begin
+  Result:=(SpvVersion>=$10300);
+ end;
 end;
 
 Function TsrConfig.IsSpv14:Boolean;

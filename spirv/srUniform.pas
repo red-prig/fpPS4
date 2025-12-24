@@ -10,6 +10,7 @@ uses
  ginodes,
  srNode,
  srRefId,
+ srOp,
  srType,
  srTypes,
  srLayout,
@@ -99,6 +100,7 @@ type
   Function  First:TsrUniform;
   Function  Next(node:TsrUniform):TsrUniform;
   procedure AllocBinding(Var FBinding:Integer);
+  procedure AllocEntryPoint(EntryPoint:TSpirvOp);
  end;
 
 implementation
@@ -602,6 +604,25 @@ begin
   end;
   node:=Next(node);
  end;
+end;
+
+procedure TsrUniformList.AllocEntryPoint(EntryPoint:TSpirvOp);
+var
+ node:TsrUniform;
+ pVar:TsrVariable;
+begin
+ if (EntryPoint=nil) then Exit;
+ node:=First;
+ While (node<>nil) do
+ begin
+  pVar:=node.pVar;
+  if (pVar<>nil) and node.IsUsed then
+  begin
+   EntryPoint.AddParam(pVar);
+  end;
+  node:=Next(node);
+ end;
+
 end;
 
 end.
