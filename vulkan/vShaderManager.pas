@@ -506,8 +506,11 @@ function test_push_const(FShader:TvShaderExt;pc_offset,pc_size:DWORD):Boolean;
 begin
  with FShader.FPushConst do
  begin
-  Result:=(offset       >=pc_offset) and  //Checking offsets push constant
-          ((offset+size)<=pc_size);       //Is the remaining size sufficient?
+  Result:=(size=0) or                      //there is no push constant
+          (
+           (offset       >=pc_offset) and  //Checking offsets push constant
+           ((offset+size)<=pc_size)        //Is the remaining size sufficient?
+          );
  end;
 end;
 
