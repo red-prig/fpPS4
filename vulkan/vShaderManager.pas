@@ -352,11 +352,12 @@ begin
     Assert(false,'TODO PARSE:'+STAGE_NAME[FStage]);
  end;
 
- SprvEmit.Config.PrintAsm      :=False;
- SprvEmit.Config.UseVertexInput:=True;
- SprvEmit.Config.UseTexelBuffer:=False;
- SprvEmit.Config.UseOutput16   :=storageInputOutput16;
+ SprvEmit.Config.PrintAsm                :=False;
+ SprvEmit.Config.UseVertexInput          :=True;
+ SprvEmit.Config.UseTexelBuffer          :=False;
+ SprvEmit.Config.UseOutput16             :=storageInputOutput16;
  SprvEmit.Config.UseOnlyUserdataPushConst:=True;
+ SprvEmit.Config.UseAtomicFloatMinMax    :=limits.VK_EXT_shader_atomic_float2;
 
  SprvEmit.Config.maxUniformBufferRange          :=0; // $FFFF
  SprvEmit.Config.PushConstantsOffset            :=0; // 0
