@@ -812,6 +812,18 @@ begin
      Config.UpgradeVersion13;
      AddCapability(Capability.GroupNonUniformBallot);
     end;
+  Op.OpAtomicFMinEXT,
+  Op.OpAtomicFMaxEXT:
+    begin
+     case node.pType.dtype.BitSize of
+      16:AddCapability(Capability.AtomicFloat16MinMaxEXT);
+      32:AddCapability(Capability.AtomicFloat32MinMaxEXT);
+      64:AddCapability(Capability.AtomicFloat64MinMaxEXT);
+      else;
+     end;
+     //
+     HeaderList.SPV_EXT_shader_atomic_float_min_max;
+    end;
   else;
  end;
 

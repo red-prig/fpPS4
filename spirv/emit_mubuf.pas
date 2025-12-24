@@ -8,8 +8,10 @@ uses
   sysutils,
   ps4_shader,
   ps4_pssl,
+  srCFGCursor,
   srConfig,
   srType,
+  srOp,
   srReg,
   srLayout,
   srInput,
@@ -33,6 +35,7 @@ type
   procedure emit_BUFFER_STORE_DWORDX(count,dfmt:Byte);
   procedure buf_atomic(info:TBuf_info;OpId:DWORD);
   procedure emit_BUFFER_ATOMIC(count,dfmt,nfmt:Byte;OpId:DWORD);
+  procedure emit_BUFFER_ATOMIC_FMINMAX(count:Byte;OpId:DWORD);
  end;
 
 implementation
@@ -347,6 +350,8 @@ begin
  end;
 
  v:=TEmit_vbuf_chain(TObject(Self)).get_chain(info,rtype);
+ Assert(v.vType in [vcChainVector,vcChainElement]);
+
  pChain:=TsrChain(v.data[0]);
 
  if (info.count=2) then
@@ -415,6 +420,63 @@ begin
 
 end;
 
+procedure TEmit_MUBUF.emit_BUFFER_ATOMIC_FMINMAX(count:Byte;OpId:DWORD);
+Var
+ vsrc:TsrRegNode;
+
+ pOpMerge:TsrOpBlock;
+begin
+ if Config.UseAtomicFloatMinMax then
+ begin
+  emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_FLOAT,OpId);
+  Exit;
+ end;
+
+ if (count=2) then
+ begin
+  vsrc:=fetch_vdst8_64(FSPI.MUBUF.VDATA,dtInt64);
+ end else
+ begin
+  vsrc:=fetch_vdst8(FSPI.MUBUF.VDATA,dtInt32);
+ end;
+
+ vsrc:=OpIsSSignTo(vsrc);
+
+ pOpMerge:=NewMerge(Default(TsrCursor)); //open merge
+
+ NewIf(pOpMerge,Default(TsrCursor),vsrc,True); //open if
+
+  case OpId of
+   Op.OpAtomicFMinEXT:
+     begin
+      emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicUMax);
+     end;
+   Op.OpAtomicFMaxEXT:
+     begin
+      emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicUMin);
+     end;
+  end;
+
+ PopBlockOp; //close other
+ PopBlockOp; //close if
+ NewElse(pOpMerge,Default(TsrCursor)); //open else
+
+  case OpId of
+   Op.OpAtomicFMinEXT:
+     begin
+      emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_SINT,Op.OpAtomicSMin);
+     end;
+   Op.OpAtomicFMaxEXT:
+     begin
+      emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_SINT,Op.OpAtomicSMax);
+     end;
+  end;
+
+ PopBlockOp; //close other
+ PopBlockOp; //close else
+ PopBlockOp; //close merge
+end;
+
 procedure TEmit_MUBUF.emit_MUBUF;
 begin
  case FSPI.MUBUF.OP of
@@ -440,6 +502,9 @@ begin
 
   BUFFER_ATOMIC_ADD       : emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicIAdd);
   BUFFER_ATOMIC_SWAP      : emit_BUFFER_ATOMIC(1,BUF_DATA_FORMAT_32,BUF_NUM_FORMAT_UINT,Op.OpAtomicExchange);
+
+  BUFFER_ATOMIC_FMIN      : emit_BUFFER_ATOMIC_FMINMAX(1,Op.OpAtomicFMinEXT);
+  BUFFER_ATOMIC_FMAX      : emit_BUFFER_ATOMIC_FMINMAX(1,Op.OpAtomicFMaxEXT);
 
   else
       Assert(false,'MUBUF?'+IntToStr(FSPI.MUBUF.OP)+' '+get_str_spi(FSPI));

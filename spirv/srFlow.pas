@@ -38,7 +38,7 @@ type
   procedure emit_break(pCurr:TsrOpBlock);
   procedure EmitStatment(node:TsrStatement);
   function  NewMerge(iCursor:TsrCursor):TsrOpBlock;
-  function  NewIf   (pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode):TsrOpBlock;
+  function  NewIf   (pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode;ForceElse:Boolean):TsrOpBlock;
   function  NewElse (pOpMerge:TsrOpBlock;iCursor:TsrCursor):TsrOpBlock;
   function  NewLoop (iCursor:TsrCursor):TsrOpBlock;
   function  BlockBeg:Boolean;
@@ -366,9 +366,11 @@ begin
    end;
   else
    begin
-    Assert(pOpBlock.FCursor.pCode<>nil);
-    Assert(pOpBlock.FCursor.pNode<>nil);
-    Cursor.PopBlock;
+    if (pOpBlock.FCursor.pCode<>nil) then
+    if (pOpBlock.FCursor.pNode<>nil) then
+    begin
+     Cursor.PopBlock;
+    end;
    end;
  end;
 
@@ -719,7 +721,7 @@ begin
  Result:=pConst.AsBool;
 end;
 
-function TEmitFlow.NewIf(pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode):TsrOpBlock;
+function TEmitFlow.NewIf(pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode;ForceElse:Boolean):TsrOpBlock;
 var
  orig:TsrRegsSnapshot;
  pLBlock:TsrSourceBlock;
@@ -745,6 +747,7 @@ begin
 
  pLBlock:=iCursor.AsBlock;
 
+ if (src=nil) then
  if (pLBlock<>nil) then
  if (pLBlock.pElse=nil) then  //no else
  if (pLBlock.pCond<>nil) then //have cond
@@ -782,7 +785,7 @@ begin
 
  pBegOp:=NewLabelOp(False); //begin
 
- if (pLElse<>nil) then //have else
+ if (pLElse<>nil) or ForceElse then //have else
  begin
   pEndOp:=NewLabelOp(False); //endif/begelse
  end else
@@ -839,7 +842,7 @@ begin
 
  AddSpirvOp(line,pBegOp);
 
- if (pLElse<>nil) then //have else
+ if (pLElse<>nil) or ForceElse then //have else
  begin
 
   //create else block
@@ -991,7 +994,7 @@ begin
     Assert(pOpMerge<>nil);
     Assert(pOpMerge.bType=btMerg);
 
-    NewIf(pOpMerge,Cursor,nil);
+    NewIf(pOpMerge,Cursor,nil,False);
 
     Result:=True;
    end;

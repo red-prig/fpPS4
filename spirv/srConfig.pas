@@ -14,6 +14,7 @@ type
   UseVertexInput          :Boolean; //True
   UseTexelBuffer          :Boolean;
   UseOutput16             :Boolean;
+  UseAtomicFloatMinMax    :Boolean;
   UseOnlyUserdataPushConst:Boolean;
   UseExtendedEXECMask     :Boolean;
   //

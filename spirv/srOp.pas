@@ -984,7 +984,9 @@ begin
   Op.OpAtomicUMax,
   Op.OpAtomicAnd,
   Op.OpAtomicOr,
-  Op.OpAtomicXor:
+  Op.OpAtomicXor,
+  Op.OpAtomicFMinEXT,
+  Op.OpAtomicFMaxEXT:
    Result:=3; //rw
   else
    Result:=1;

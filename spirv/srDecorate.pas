@@ -17,6 +17,7 @@ type
   FSPV_EXT_descriptor_indexing:Boolean;
   FSPV_KHR_workgroup_memory_explicit_layout:Boolean;
   FSPV_KHR_shader_draw_parameters:Boolean;
+  FSPV_EXT_shader_atomic_float_min_max:Boolean;
   //
   function  OpExtension(const n:RawByteString):TSpirvOp;
   function  OpExtInstImport(const n:RawByteString):TSpirvOp;
@@ -28,6 +29,7 @@ type
   procedure SPV_EXT_descriptor_indexing;
   procedure SPV_KHR_workgroup_memory_explicit_layout;
   procedure SPV_KHR_shader_draw_parameters;
+  procedure SPV_EXT_shader_atomic_float_min_max;
  end;
 
  PsrDecorateKey=^TsrDecorateKey;
@@ -158,6 +160,15 @@ begin
  begin
   OpExtension('SPV_KHR_shader_draw_parameters');
   FSPV_KHR_shader_draw_parameters:=True;
+ end;
+end;
+
+procedure TsrHeaderList.SPV_EXT_shader_atomic_float_min_max;
+begin
+ if not FSPV_EXT_shader_atomic_float_min_max then
+ begin
+  OpExtension('SPV_EXT_shader_atomic_float_min_max');
+  FSPV_EXT_shader_atomic_float_min_max:=True;
  end;
 end;
 

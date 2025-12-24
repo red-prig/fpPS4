@@ -1304,7 +1304,9 @@ begin
    Op.OpAtomicUMax,
    Op.OpAtomicAnd,
    Op.OpAtomicOr,
-   Op.OpAtomicXor:
+   Op.OpAtomicXor,
+   Op.OpAtomicFMinEXT,
+   Op.OpAtomicFMaxEXT:
     begin
      Value:=pLine.ParamNode(1).Value;
      Value.PrepType(ord(rtype));
