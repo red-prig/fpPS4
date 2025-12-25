@@ -291,6 +291,90 @@ begin
  Result:=(Windows.GetKeyState(vKey) and $8000)<>0;
 end;
 
+type
+ t_mouse_touch_state=(mtOutEnd,mtInBegin,mtInEnd,mtOutBegin);
+
+var
+ mouse_touch_state:t_mouse_touch_state=mtOutEnd;
+
+function Min(a, b: Integer): Integer;inline;
+begin
+  if a < b then
+    Result := a
+  else
+    Result := b;
+end;
+
+function Max(a, b: Integer): Integer;inline;
+begin
+  if a > b then
+    Result := a
+  else
+    Result := b;
+end;
+
+function get_touch_group:t_touch_group;
+var
+ pos:TPoint;
+begin
+ Result:=Default(t_touch_group);
+
+ case mouse_touch_state of
+  mtOutEnd:
+    begin
+     if GetAsyncKeyState(VK_RBUTTON) then
+     begin
+      mouse_touch_state:=mtInBegin;
+     end else
+     begin
+      //
+     end;
+    end;
+  mtInBegin:
+    begin
+     if GetAsyncKeyState(VK_RBUTTON) then
+     begin
+      //
+     end else
+     begin
+      mouse_touch_state:=mtInEnd;
+     end;
+    end;
+  mtInEnd:
+    begin
+     if GetAsyncKeyState(VK_RBUTTON) then
+     begin
+      mouse_touch_state:=mtOutBegin;
+     end else
+     begin
+     //
+     end;
+    end;
+  mtOutBegin:
+    begin
+     if GetAsyncKeyState(VK_RBUTTON) then
+     begin
+      //
+     end else
+     begin
+      mouse_touch_state:=mtOutEnd;
+     end;
+    end;
+ end;
+
+ if (mouse_touch_state in [mtInBegin,mtInEnd]) then
+ begin
+  pos:=Default(TPoint);
+  Windows.GetCursorPos(pos);
+
+  Result.touchNum:=1;
+  Result.touch[0].id:=0;
+  Result.touch[0].x :=Min(Max(pos.x,0),1920);
+  Result.touch[0].y :=Min(Max(pos.y,0),942);
+ end;
+
+end;
+
 Function hidIoctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 var
  td:p_kthread;
@@ -417,7 +501,10 @@ begin
       //u.pad_state.analogButtons.l2:=5;
       //u.pad_state.analogButtons.r2:=6;
 
+      u.pad_state.touch_gcount:=1;
+      u.pad_state.touch_groups[0]:=get_touch_group;
 
+      {
       u.pad_state.touch_gcount:=1;
       u.pad_state.touch_groups[0].touchNum:=2;
 
@@ -428,6 +515,7 @@ begin
       u.pad_state.touch_groups[0].touch[1].id:=4;
       u.pad_state.touch_groups[0].touch[1].x :=5;
       u.pad_state.touch_groups[0].touch[1].y :=6;
+      }
 
 
       u.pad_state.unique_len :=7;
@@ -487,6 +575,9 @@ begin
 
       if GetAsyncKeyState(VK_NUMPAD4) then
        u.pad_state.buttons:=u.pad_state.buttons or SCE_PAD_BUTTON_SQUARE;
+
+      if GetAsyncKeyState(VK_NUMPAD5) then
+       u.pad_state.buttons:=u.pad_state.buttons or SCE_PAD_BUTTON_TOUCH_PAD;
 
       if GetAsyncKeyState(VK_Q) then
        u.pad_state.buttons:=u.pad_state.buttons or SCE_PAD_BUTTON_L1;
