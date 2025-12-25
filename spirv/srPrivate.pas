@@ -211,15 +211,19 @@ begin
 
  if (src.IsType(TsrVectorArray)) then
  begin
-  Assert(false,'AddStore:TsrVectorArray');
+  //Assert(false,'AddStore:TsrVectorArray');
+ end else
+ begin
+  Assert(src.pLine<>nil);
+  pLine:=src.pLine;
+  Assert(pLine<>nil);
  end;
 
- Assert(src.pLine<>nil);
- pLine:=src.pLine;
- Assert(pLine<>nil);
  node:=Emit.specialize New<TStoreNode>; //cache in free list?
  node.src :=src;
+
  //node.line:=pLine;
+
  if FZeroRead then
  begin
   src.mark_read(Self);
@@ -1248,6 +1252,11 @@ begin
  begin
 
   tmp:=RegDown(node.src);
+
+  if (tmp.IsType(TsrVectorArray)) then
+  begin
+   Assert(false,'AddStore:TsrVectorArray');
+  end;
 
   if (src<>tmp) {and (pPrivate^.pVar<>get_load_from(tmp))} then
   begin
