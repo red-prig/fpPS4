@@ -930,6 +930,7 @@ begin
     NUMBER_SNORM:Result:=VK_FORMAT_R8_SNORM;
     NUMBER_UINT :Result:=VK_FORMAT_R8_UINT;
     NUMBER_SINT :Result:=VK_FORMAT_R8_SINT;
+    NUMBER_SRGB :Result:=VK_FORMAT_R8_SRGB;
     else;
    end;
   COLOR_8_8:
@@ -2455,7 +2456,8 @@ function _get_tsharp8_image_info(PT:PTSharpResource8;hint:s_image_usage):TvImage
 begin
  Result:=_get_tsharp4_image_info(PTSharpResource4(PT),hint);
  //
- Result.params.pitch:=PT^.pitch+1;
+ Result.params.pitch    :=PT^.pitch+1;
+ Result.params.pad_width:=Result.params.pitch;
  //
  if (p_neomode<>0) then
  begin
