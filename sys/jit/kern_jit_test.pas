@@ -832,11 +832,6 @@ begin
  used_op[OPPnone,OPvgatherq,OPSx_d]:=True;
  used_op[OPPnone,OPvgatherq,OPSx_ps]:=True;
  used_op[OPPnone,OPvgatherq,OPSx_q]:=True;
- used_op[OPPnone,OPvpbroadcast,OPSx_b]:=True;
- used_op[OPPnone,OPvpbroadcast,OPSx_d]:=True;
- used_op[OPPnone,OPvpbroadcast,OPSx_i128]:=True;
- used_op[OPPnone,OPvpbroadcast,OPSx_q]:=True;
- used_op[OPPnone,OPvpbroadcast,OPSx_w]:=True;
  used_op[OPPnone,OPvperm,OPSx_d]:=True;
  used_op[OPPnone,OPvperm,OPSx_pd]:=True;
  used_op[OPPnone,OPvperm,OPSx_ps]:=True;

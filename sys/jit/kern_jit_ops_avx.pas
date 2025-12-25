@@ -1051,6 +1051,7 @@ end;
 
 procedure op_invalid(var ctx:t_jit_context2);
 begin
+ //do not tell the decompiler to stop
  ctx.builder.ud2;
 end;
 
@@ -1314,6 +1315,14 @@ begin
  //3DNow
  jit_cbs[OPPnone,OPpavgusb,OPSnone]:=@op_invalid;
  //3DNow
+
+ //AVX2
+ jit_cbs[OPPnone,OPvpbroadcast,OPSx_b   ]:=@op_invalid;
+ jit_cbs[OPPnone,OPvpbroadcast,OPSx_d   ]:=@op_invalid;
+ jit_cbs[OPPnone,OPvpbroadcast,OPSx_i128]:=@op_invalid;
+ jit_cbs[OPPnone,OPvpbroadcast,OPSx_q   ]:=@op_invalid;
+ jit_cbs[OPPnone,OPvpbroadcast,OPSx_w   ]:=@op_invalid;
+ //AVX2
 
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
  jit_cbs[OPPv,OPpextr,OPSx_d]:=@op_avx3_mri;
