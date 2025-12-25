@@ -1323,7 +1323,8 @@ begin
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_q   ]:=@op_invalid;
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_w   ]:=@op_invalid;
 
- jit_cbs[OPPv,OPpblend,OPSx_d           ]:=@op_invalid;
+ jit_cbs[OPPv,OPpblend ,OPSx_d          ]:=@op_invalid;
+ jit_cbs[OPPv,OPextract,OPSx_i128       ]:=@op_invalid;
  //AVX2
 
  jit_cbs[OPPv,OPpextr,OPSx_b]:=@op_avx3_mri;
