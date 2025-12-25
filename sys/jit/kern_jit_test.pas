@@ -268,7 +268,6 @@ begin
  used_op[OPPnone,OPemms,OPSnone]:=True;
  used_op[OPPnone,OPenter,OPSnone]:=True;
  used_op[OPPnone,OPextract,OPSx_f128]:=True;
- used_op[OPPnone,OPextract,OPSx_i128]:=True;
  used_op[OPPnone,OPextract,OPSx_ps]:=True;
  used_op[OPPnone,OPf2xm1,OPSnone]:=True;
  used_op[OPPnone,OPfabs,OPSnone]:=True;
@@ -369,7 +368,6 @@ begin
  used_op[OPPnone,OPins,OPSx_d]:=True;
  used_op[OPPnone,OPins,OPSx_w]:=True;
  used_op[OPPnone,OPinsert,OPSx_f128]:=True;
- used_op[OPPnone,OPinsert,OPSx_i128]:=True;
  used_op[OPPnone,OPinsert,OPSx_ps]:=True;
  used_op[OPPnone,OPinsert,OPSx_q]:=True;
  used_op[OPPnone,OPint,OPSnone]:=True;
@@ -538,7 +536,6 @@ begin
  used_op[OPPnone,OPpavg,OPSx_w]:=True;
  used_op[OPPnone,OPpavgusb,OPSnone]:=True;
  used_op[OPPnone,OPpblendvb,OPSnone]:=True;
- used_op[OPPnone,OPpblend,OPSx_d]:=True;
  used_op[OPPnone,OPpblend,OPSx_w]:=True;
  used_op[OPPnone,OPpclmulqdq,OPSnone]:=True;
  used_op[OPPnone,OPpcmpeq,OPSx_b]:=True;
