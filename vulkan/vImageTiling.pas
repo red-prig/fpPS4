@@ -74,9 +74,13 @@ type
 Function GetLinearSize(const key:TvImageKey;mode:TLinearMode):Ptruint;
 var
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight,m_paddepth:Ptruint;
- m_slice:Ptruint;
+ m_level    :Ptruint;
+ m_width    :Ptruint;
+ m_height   :Ptruint;
+ m_padwidth :Ptruint;
+ m_padheight:Ptruint;
+ m_paddepth :Ptruint;
+ m_slice    :Ptruint;
 begin
  if key.params.samples>1 then
  begin
@@ -90,16 +94,11 @@ begin
  m_width :=key.params.width;
  m_height:=key.params.height;
 
- if (key.params.pow2pad<>0) then
- begin
-  m_width :=nextPowerOfTwo(m_width);
-  m_height:=nextPowerOfTwo(m_height);
- end;
-
  m_paddepth:=key.params.depth;
 
  if (key.params.tiling.idx=kTileModeThick_1dThick) then
  begin
+  //m_tileThickness
   m_paddepth:=max((m_paddepth+3) and (not 3),4);
  end;
 
@@ -156,6 +155,7 @@ var
  m_bytePerElement:Ptruint;
  m_level      :Ptruint;
  m_width      :Ptruint;
+ m_pitch      :Ptruint;
  m_height     :Ptruint;
  m_depth      :Ptruint;
  m_arrayLayers:Ptruint;
@@ -174,25 +174,25 @@ begin
  m_depth      :=key.params.depth;
  m_arrayLayers:=key.params.arrayLayers;
 
+ m_pitch:=max(key.params.pitch,key.params.width);
+
  if (key.params.pow2pad<>0) then
  begin
-  m_width      :=nextPowerOfTwo(m_width);
-  m_height     :=nextPowerOfTwo(m_height);
-  m_depth      :=nextPowerOfTwo(m_depth);
   m_arrayLayers:=nextPowerOfTwo(m_arrayLayers);
  end;
 
  tiler.init_surface(m_bytePerElement,
-                    ord(IsTexelFormat(key.cformat)),
                     key.params.tiling.idx,
-                    key.params.tiling.alt);
+                    key.params.tiling.alt,
+                    IsTexelFormat(key.cformat),
+                    (key.params.pow2pad<>0));
 
  Result:=0;
 
  while (m_level>0) do
  begin
 
-  tiler.init_size(m_width,m_height,m_depth);
+  tiler.init_size(m_width,m_pitch,m_height,m_depth);
 
   if (m_level<>1) then
   begin
@@ -219,6 +219,7 @@ begin
 
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
+  m_pitch :=Max(1,m_pitch  shr 1);
   m_height:=Max(1,m_height shr 1);
  end;
 
@@ -538,7 +539,13 @@ var
  tiler:Tiler1d;
 
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
+
+ m_level      :Ptruint;
+ m_width      :Ptruint;
+ m_pitch      :Ptruint;
+ m_height     :Ptruint;
+ m_depth      :Ptruint;
+ m_arrayLayers:Ptruint;
 
  src:Pointer;
  dst:Pointer;
@@ -551,9 +558,10 @@ begin
  m_bytePerElement:=getFormatSize(image.key.cformat);
 
  tiler.init_surface(m_bytePerElement,
-                    ord(IsTexelFormat(image.key.cformat)),
                     image.key.params.tiling.idx,
-                    image.key.params.tiling.alt);
+                    image.key.params.tiling.alt,
+                    IsTexelFormat(image.key.cformat),
+                    (image.key.params.pow2pad<>0));
 
  //TvBuffer
 
@@ -563,20 +571,19 @@ begin
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
 
- if (image.key.params.pow2pad<>0) then
- begin
-  m_width :=nextPowerOfTwo(m_width);
-  m_height:=nextPowerOfTwo(m_height);
- end;
+ m_pitch:=max(image.key.params.pitch,image.key.params.width);
+
+ m_depth:=image.key.params.depth;
+ m_arrayLayers:=image.key.params.arrayLayers;
 
  src:=image.key.addr;
 
  while (m_level>0) do
  begin
-  tiler.init_size(m_width,m_height,image.key.params.depth);
+  tiler.init_size(m_width,m_pitch,m_height,m_depth);
 
   //array
-  for a:=0 to image.key.params.arrayLayers-1 do
+  for a:=0 to m_arrayLayers-1 do
   begin
 
    if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
@@ -613,17 +620,18 @@ begin
 
   if (image.key.params.pow2pad<>0) then
   begin
-   a:=nextPowerOfTwo(image.key.params.arrayLayers)-image.key.params.arrayLayers;
+   a:=nextPowerOfTwo(m_arrayLayers)-m_arrayLayers;
 
    src:=src+tiler.m_tiledSizeBytes*a;
   end;
 
-  //Writeln('nextPowerOfTwo =',nextPowerOfTwo(image.key.params.arrayLayers));
+  //Writeln('nextPowerOfTwo =',nextPowerOfTwo(m_arrayLayers));
 
   src:=Pointer((qword(src)+255) and (not 255));
 
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
+  m_pitch :=Max(1,m_pitch  shr 1);
   m_height:=Max(1,m_height shr 1);
  end;
  //mips

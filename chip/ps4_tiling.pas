@@ -362,15 +362,16 @@ type
   m_tilesPerRow    :DWORD;
   m_tilesPerSlice  :DWORD;
 
-  m_isBlockCompressed:DWORD;
+  m_isBlockCompressed:Boolean;
+  m_isPow2Pad        :Boolean;
 
   m_element_table  :p_element_table_xyz;
 
   m_copy_tile2linear:t_copy_cbs;
   m_copy_linear2tile:t_copy_cbs;
 
-  procedure init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
-  procedure init_size(width,height,depth:DWORD);
+  procedure init_surface(bytePerElement,tile_idx,tile_alt:DWORD;isBlockCompressed,isPow2Pad:Boolean);
+  procedure init_size(width,pitch,height,depth:DWORD);
   function  getTiledElementByteOffset(var outTiledByteOffset:QWORD;x,y,z:DWORD):integer;
   function  getTiledElementBitOffset (var outTiledBitOffset :QWORD;x,y,z:DWORD):integer;
  end;
@@ -3038,7 +3039,7 @@ begin
  Result:=bank;
 end;
 
-procedure Tiler1d.init_surface(bytePerElement,isBlockCompressed,tile_idx,tile_alt:DWORD);
+procedure Tiler1d.init_surface(bytePerElement,tile_idx,tile_alt:DWORD;isBlockCompressed,isPow2Pad:Boolean);
 begin
  m_minGpuMode    :=tile_alt;
  m_tileMode      :=tile_idx;
@@ -3057,6 +3058,7 @@ begin
  m_tileBytes     := kMicroTileWidth * kMicroTileHeight * m_tileThickness * m_bytePerElement;
 
  m_isBlockCompressed := isBlockCompressed;
+ m_isPow2Pad         := isPow2Pad;
 
  m_element_table :=getElementTableXYZ(m_bitsPerElement,m_microTileMode,m_arrayMode);
 
@@ -3080,29 +3082,53 @@ begin
 
 end;
 
-procedure Tiler1d.init_size(width,height,depth:DWORD);
+function nextPowerOfTwo(x:Ptruint):Ptruint; inline;
+begin
+ x:=(x-1);
+ x:=x or (x shr 1);
+ x:=x or (x shr 2);
+ x:=x or (x shr 4);
+ x:=x or (x shr 8);
+ x:=x or (x shr 16);
+ x:=x or (x shr 32);
+ Result:=(x+1);
+end;
+
+procedure Tiler1d.init_size(width,pitch,height,depth:DWORD);
 var
  log_sz:QWORD;
 begin
+ if (m_isBlockCompressed) then
+ begin
+  width :=(width +3) shr 2;
+  pitch :=(pitch +3) shr 2;
+  height:=(height+3) shr 2;
+ end;
+
  m_linearWidth :=width;
  m_linearHeight:=height;
  m_linearDepth :=depth;
 
- if (m_isBlockCompressed<>0) then
+ m_paddedWidth :=pitch;
+ m_paddedHeight:=height;
+ m_paddedDepth :=depth;
+
+ if (m_isPow2Pad) then
  begin
-  m_linearWidth :=(m_linearWidth +3) shr 2;
-  m_linearHeight:=(m_linearHeight+3) shr 2;
+  m_paddedWidth :=nextPowerOfTwo(m_paddedWidth);
+  m_paddedHeight:=nextPowerOfTwo(m_paddedHeight);
+  m_paddedDepth :=nextPowerOfTwo(m_paddedDepth);
  end;
 
  //microtile align
- m_paddedWidth :=max((m_linearWidth +7) and (not 7),8);
- m_paddedHeight:=max((m_linearHeight+7) and (not 7),8);
- m_paddedDepth :=max(Align(depth,m_tileThickness),m_tileThickness);
+ m_paddedWidth :=max((m_paddedWidth +7) and (not 7),8);
+ m_paddedHeight:=max((m_paddedHeight+7) and (not 7),8);
+ m_paddedDepth :=max(Align(m_paddedDepth,m_tileThickness),m_tileThickness);
 
  //update to detiling pad (AVX)
- m_linearWidth :=m_paddedWidth;
- m_linearHeight:=m_paddedHeight;
- m_linearDepth :=m_paddedDepth;
+ m_linearWidth :=max((m_linearWidth +7) and (not 7),8);
+ m_linearHeight:=max((m_linearHeight+7) and (not 7),8);
+ m_linearDepth :=max(Align(m_linearDepth,m_tileThickness),m_tileThickness);
 
  //align pitch to pipe_interleave_size
  log_sz:=(m_paddedWidth*m_paddedHeight*m_bytePerElement*m_tileThickness);
