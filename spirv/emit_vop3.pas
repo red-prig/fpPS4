@@ -77,6 +77,7 @@ type
   procedure emit_V_MOV_B32;
   procedure emit_V_CVT(OpId:DWORD;dst_type,src_type:TsrDataType);
   procedure emit_V_CVT_F16_F32;
+  procedure emit_V_CVT_F32_F16;
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
@@ -1318,6 +1319,32 @@ begin
  dst^.New(dtVec2h).pWriter:=dstv;
 end;
 
+procedure TEmit_VOP3.emit_V_CVT_F32_F16; //vdst.f = ConvertHalfFloatToFloat(vsrc[15:0].hf)
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ dst0:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtVec2h{dtUnknow});
+
+ //src:=OpBitwiseAndTo(src,$FFFF);
+ //src^.PrepType(ord(dtHalf16));
+
+ dst0:=NewReg(dtHalf16);
+ OpExtract(line,dst0,src,0);
+
+ src:=OpFToF({src}dst0,dtFloat32);
+
+ emit_src_abs_bit(@src,1,dtFloat32);
+ emit_src_neg_bit(@src,1,dtFloat32);
+
+ MakeCopy(dst,src);
+
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
+end;
+
 procedure TEmit_VOP3.emit_V_EXT_F32(OpId:DWORD);
 Var
  dst:PsrRegSlot;
@@ -1897,6 +1924,7 @@ begin
   384+V_CVT_I32_F32: emit_V_CVT(Op.OpConvertFToS,dtInt32  ,dtFloat32);
 
   384+V_CVT_F16_F32: emit_V_CVT_F16_F32;
+  384+V_CVT_F32_F16: emit_V_CVT_F32_F16;
 
   384+V_MOV_B32  : emit_V_MOV_B32;
 
