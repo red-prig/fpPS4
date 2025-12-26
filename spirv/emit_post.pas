@@ -109,26 +109,8 @@ begin
  end;
 end;
 
-function Enum1Reg(cb:TRegsCb;pLine:TspirvOp):Integer;
-var
- node:POpParamNode;
- pReg:TsrRegNode;
-begin
- Result:=0;
- if (cb=nil) or (pLine=nil) then Exit;
- node:=pLine.ParamFirst;
- if (node<>nil) then
- begin
-  if node.Value.IsType(ntReg) then
-  begin
-   pReg:=node.AsReg;
-   Result:=Result+cb(pLine,pReg);
-   node.Value:=pReg;
-  end;
- end;
-end;
 
-function Enum2Reg(cb:TRegsCb;pLine:TspirvOp):Integer;
+function EnumRegs(cb:TRegsCb;pLine:TspirvOp;ids:array of Integer):Integer;
 var
  i:Integer;
  node:POpParamNode;
@@ -136,9 +118,9 @@ var
 begin
  Result:=0;
  if (cb=nil) or (pLine=nil) then Exit;
- For i:=0 to 1 do
+ For i:=0 to High(ids) do
  begin
-  node:=pLine.ParamNode(i);
+  node:=pLine.ParamNode(ids[i]);
   if (node<>nil) then
   begin
    if node.Value.IsType(ntReg) then
@@ -600,15 +582,16 @@ begin
  if not node.pDst.IsType(ntReg) then Exit; //is reg
 
  Case node.OpId of
-  Op.OpBitFieldInsert    :Result:=Enum2Reg(@RegSTStrict,node);
-  Op.OpBitFieldSExtract  ,
-  Op.OpBitFieldUExtract  :Result:=Enum1Reg(@RegSTStrict,node);
-  Op.OpSelect            :Result:=EnumLineRegs(@RegSTStrict,node);
-  Op.OpIAddCarry         ,
-  Op.OpISubBorrow        ,
-  Op.OpUMulExtended      ,
-  Op.OpSMulExtended      ,
-  Op.OpCompositeConstruct:Result:=EnumLineRegs(@RegVTStrict,node);
+  Op.OpBitFieldInsert          :Result:=EnumRegs(@RegSTStrict,node,[0,1]);
+  Op.OpBitFieldSExtract        ,
+  Op.OpBitFieldUExtract        :Result:=EnumRegs(@RegSTStrict,node,[0]);
+  Op.OpGroupNonUniformBroadcast:Result:=EnumRegs(@RegSTStrict,node,[1]);
+  Op.OpSelect                  :Result:=EnumLineRegs(@RegSTStrict,node);
+  Op.OpIAddCarry               ,
+  Op.OpISubBorrow              ,
+  Op.OpUMulExtended            ,
+  Op.OpSMulExtended            ,
+  Op.OpCompositeConstruct      :Result:=EnumLineRegs(@RegVTStrict,node);
   else;
  end;
 

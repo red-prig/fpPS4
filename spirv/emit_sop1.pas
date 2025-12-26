@@ -37,6 +37,8 @@ type
   procedure emit_S_BREV_B32;
   procedure emit_S_BREV_B64;
   procedure emit_S_BCNT1_I32_B32;
+  procedure emit_S_FF1_I32_B32;
+  procedure emit_S_BITSET_B32(value:Byte);
  end;
 
 implementation
@@ -431,6 +433,33 @@ begin
  OpISccNotZero(src);
 end;
 
+procedure TEmit_SOP1.emit_S_FF1_I32_B32;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUInt32);
+
+ OpGlsl1(GlslOp.FindILsb,dtInt32,dst,src);
+end;
+
+procedure TEmit_SOP1.emit_S_BITSET_B32(value:Byte); //sdst[ssrc[4:0]:] = value
+Var
+ dst:PsrRegSlot;
+ old:TsrRegNode;
+ src:TsrRegNode;
+begin
+ dst:=get_sdst7(FSPI.SOP1.SDST);
+ old:=fetch_ssrc8(FSPI.SOP1.SDST,dtUInt32);
+ src:=fetch_ssrc9(FSPI.SOP1.SSRC,dtUInt32);
+
+ src:=OpAndTo(src,31);
+ src.PrepType(ord(dtUInt32));
+
+ Op4(Op.OpBitFieldInsert,dtUInt32,dst,old,NewImm_i(dtUInt32,value),src,NewImm_i(dtUInt32,1));
+end;
+
 procedure TEmit_SOP1.emit_SOP1;
 begin
 
@@ -448,6 +477,11 @@ begin
   S_BREV_B64        : emit_S_BREV_B64;
 
   S_BCNT1_I32_B32   : emit_S_BCNT1_I32_B32;
+
+  S_FF1_I32_B32     : emit_S_FF1_I32_B32;
+
+  S_BITSET0_B32     : emit_S_BITSET_B32(0);
+  S_BITSET1_B32     : emit_S_BITSET_B32(1);
 
   S_GETPC_B64       : emit_S_GETPC_B64;
   S_SETPC_B64       : emit_S_SETPC_B64;
