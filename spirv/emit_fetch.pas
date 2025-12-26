@@ -29,6 +29,7 @@ uses
 type
  TEmitFetch=class(TEmitFlow)
   //
+  function  GroupingSImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingVImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  TryShortVSharp(inps:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingSharp (src :PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
@@ -211,6 +212,36 @@ begin
  if (pair=nil) then Exit;
 
  Result:=pair.pWriter.specialize AsType<ntConst>;
+end;
+
+function TEmitFetch.GroupingSImm(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+var
+ ssharp:TSSharpResource4;
+
+ i:Integer;
+ imm:TsrConst;
+begin
+ Result:=nil;
+
+ if (rtype<>rtSSharp4) then Exit;
+
+ // S_MOV_B32  s30, #0x05000000
+ // S_MOV_B32  s31, 2.0
+ // S_MOVK_I32 s28, 146
+ // S_BFM_B32  s29, 12, 12
+
+ ssharp:=Default(TSSharpResource4);
+
+ For i:=0 to 3 do
+ begin
+  imm:=GetRegConst(regs[i]);
+  if (imm=nil) then Exit;
+  PDWORD(@ssharp)[i]:=imm.AsInt32;
+ end;
+
+ //print_ssharp4(@ssharp);
+
+ Result:=DataLayoutList.FetchImm(@ssharp,rtype);
 end;
 
 function TEmitFetch.GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
@@ -471,6 +502,9 @@ begin
  begin
   regs[i]:=RegDown(src[i]^.current);
  end;
+
+ Result:=GroupingSImm(@regs,rtype);
+ if (Result<>nil) then Exit;
 
  Result:=GroupingVImm(@regs,rtype);
  if (Result<>nil) then Exit;

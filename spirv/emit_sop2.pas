@@ -494,11 +494,26 @@ Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
  one:TsrRegNode;
+ pImm:array[0..1] of TsrConst;
+ data:DWORD;
 begin
  dst:=get_sdst7(FSPI.SOP2.SDST);
 
  src[0]:=fetch_ssrc9(FSPI.SOP2.SSRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtUInt32);
+
+ //early optimization
+ pImm[0]:=src[0].pWriter.specialize AsType<ntConst>;
+ pImm[1]:=src[1].pWriter.specialize AsType<ntConst>;
+
+ if (pImm[0]<>nil) and (pImm[1]<>nil) then
+ begin
+  data:=(1 shl ((pImm[0].AsUint32 and 31)-1)) shl (pImm[1].AsUint32 and 31);
+
+  SetConst_i(dst,dtUnknow,data);
+
+  Exit;
+ end;
 
  src[0]:=OpAndTo(src[0],31);
  src[1]:=OpAndTo(src[1],31);

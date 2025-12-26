@@ -10,6 +10,7 @@ uses
   spirv,
   srType,
   srReg,
+  srConst,
   emit_fetch;
 
 type
@@ -45,7 +46,9 @@ type
   procedure emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
   procedure emit_V_MUL_LO(rtype:TsrDataType);
+  function  fetch_i24(src:TsrRegNode):TsrRegNode;
   procedure emit_V_MUL_I32_I24;
+  function  fetch_u24(src:TsrRegNode):TsrRegNode;
   procedure emit_V_MUL_U32_U24;
   procedure emit_V_MUL_HI(rtype:TsrDataType);
   procedure emit_V_MAC_F32;
@@ -493,6 +496,28 @@ begin
  OpIMul(dst,src[0],src[1]);
 end;
 
+function int24(b:Integer):Integer; inline;
+const
+ shift=BitSizeOf(Integer)-24;
+begin
+ Result:=SarLongint((b shl shift),shift);
+end;
+
+function TEmit_VOP3.fetch_i24(src:TsrRegNode):TsrRegNode;
+var
+ pImm:TsrConst;
+begin
+ //early optimization
+ pImm:=src.pWriter.specialize AsType<ntConst>;
+ if (pImm<>nil) then
+ begin
+  Result:=NewImm_i(dtInt32,int24(pImm.AsInt32));
+ end else
+ begin
+  Result:=OpBFSETo(src,NewImm_i(dtInt32,0),NewImm_i(dtInt32,24));
+ end;
+end;
+
 procedure TEmit_VOP3.emit_V_MUL_I32_I24; //vdst = (vsrc0[23:0].s * vsrc1[23:0].s)
 Var
  dst:PsrRegSlot;
@@ -508,17 +533,32 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
 
- src[0]:=OpBFSETo(src[0],NewImm_i(dtInt32,0),NewImm_i(dtInt32,24));
- src[1]:=OpBFSETo(src[1],NewImm_i(dtInt32,0),NewImm_i(dtInt32,24));
+ src[0]:=fetch_i24(src[0]);
+ src[1]:=fetch_i24(src[1]);
 
  OpIMul(dst,src[0],src[1]);
+end;
+
+function TEmit_VOP3.fetch_u24(src:TsrRegNode):TsrRegNode;
+var
+ pImm:TsrConst;
+begin
+ //early optimization
+ pImm:=src.pWriter.specialize AsType<ntConst>;
+ if (pImm<>nil) then
+ begin
+  Result:=NewImm_i(dtUInt32,(pImm.AsInt32 and $FFFFFF));
+ end else
+ begin
+  Result:=OpAndTo(src,NewImm_q(dtUInt32,$FFFFFF));
+  Result.PrepType(ord(dtUInt32));
+ end;
 end;
 
 procedure TEmit_VOP3.emit_V_MUL_U32_U24;
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
- bit24:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -530,13 +570,8 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
 
- bit24:=NewImm_q(dtUInt32,$FFFFFF);
-
- src[0]:=OpAndTo(src[0],bit24);
- src[0].PrepType(ord(dtUInt32));
-
- src[1]:=OpAndTo(src[1],bit24);
- src[1].PrepType(ord(dtUInt32));
+ src[0]:=fetch_u24(src[0]);
+ src[1]:=fetch_u24(src[1]);
 
  OpIMul(dst,src[0],src[1]);
 end;
@@ -837,6 +872,7 @@ procedure TEmit_VOP3.emit_V_MAD_I32_I24; //vdst.i = vsrc0[23:0].i * vsrc1[23:0].
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
+ pImm:TsrConst;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -849,8 +885,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtInt32);
 
- src[0]:=OpBFSETo(src[0],NewImm_i(dtInt32,0),NewImm_i(dtInt32,24));
- src[1]:=OpBFSETo(src[1],NewImm_i(dtInt32,0),NewImm_i(dtInt32,24));
+ src[0]:=fetch_i24(src[0]);
+ src[1]:=fetch_i24(src[1]);
 
  OpFmaI32(dst,src[0],src[1],src[2]);
 end;
@@ -859,7 +895,6 @@ procedure TEmit_VOP3.emit_V_MAD_U32_U24; //vdst.u = vsrc0[23:0].u * vsrc1[23:0].
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
- bit24:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
@@ -872,13 +907,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUInt32);
 
- bit24:=NewImm_q(dtUInt32,$FFFFFF);
-
- src[0]:=OpAndTo(src[0],bit24);
- src[0].PrepType(ord(dtUInt32));
-
- src[1]:=OpAndTo(src[1],bit24);
- src[1].PrepType(ord(dtUInt32));
+ src[0]:=fetch_u24(src[0]);
+ src[1]:=fetch_u24(src[1]);
 
  OpFmaU32(dst,src[0],src[1],src[2]);
 end;

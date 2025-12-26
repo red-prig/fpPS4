@@ -2324,7 +2324,7 @@ begin
 
  if (rBase=nil) or (rIndex=nil) or (rCount=nil) then Exit;
 
- dtype:=rBase.dtype;
+ dtype:=node.pType.dtype;
 
  //else
 
