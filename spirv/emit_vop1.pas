@@ -89,6 +89,8 @@ Var
 
  dst:PsrRegSlot;
  src:TsrRegNode;
+
+ tmp:PsrRegSlot;
 begin
  idx:=MakeRead(get_m0,dtUnknow);
 
@@ -107,6 +109,22 @@ begin
 
   vmin:=FSPI.VOP1.SRC0-256;
   vmax:=FVGPRS;
+  Assert(vmin<vmax);
+
+  //extra bound
+  i:=vmin;
+  while (i<vmax) do
+  begin
+   tmp:=RegsStory.get_vsrc8(i);
+   if (tmp^.Category=cVectorArray) then
+   begin
+    vmax:=i;
+    Break;
+   end;
+   //
+   Inc(i);
+  end;
+  //extra bound
   Assert(vmin<vmax);
 
   priv :=PrivateList.FetchArray(dtFloat32,vmax-vmin);
