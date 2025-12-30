@@ -2151,7 +2151,7 @@ var
  arrayMode:Byte;
 begin
  Result:=-$7f2d0000;
- if (outMacroTileMode <> nil) then Exit;
+ if (outMacroTileMode = nil) then Exit;
 
  if (numFragmentsPerPixel > 8) or (not isPowerOfTwo(numFragmentsPerPixel)) then Exit;
 
@@ -2160,7 +2160,7 @@ begin
 
  Result := -$7f2d0000;
 
- if (bitsPerElement < 1) or (bitsPerElement > 128) or (not isMacroTiled(arrayMode)) then Exit;
+ if (bitsPerElement < 1) or (bitsPerElement > 128) or (not isMacroTiled(tileMode)) then Exit;
 
  if (numFragmentsPerPixel < 1) or (numFragmentsPerPixel > 16) or (not isPowerOfTwo(numFragmentsPerPixel)) then Exit;
 
@@ -2198,6 +2198,7 @@ begin
  else
   outMacroTileMode^:=mtmIndex;
 
+ Result:=0;
 end;
 
 function getPipeCount(pipeConfig:Byte):DWORD; forward;
@@ -2533,6 +2534,7 @@ begin
          sVar1:=3;
        end;
        Result := ((((1 shl ((_NumBanks + 1) and $1f)) -1) shl sVar1) and BASE) shr 4;
+       //Result = (~(-1 << (_NumBanks + 1U & 0x1f)) << sVar5 & base) >> 4;
        Exit;
      end;
    end;
