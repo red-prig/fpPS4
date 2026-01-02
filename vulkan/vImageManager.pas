@@ -1122,6 +1122,7 @@ procedure _SetName(t:TvCustomImage2);
 var
  ch:Char;
 begin
+ if (t=nil) then Exit;
 
  Case t.key.cformat of
   //stencil
@@ -1226,6 +1227,8 @@ begin
   begin
 
    _SetName(t);
+   _SetName(t.DepthOnly  );
+   _SetName(t.StencilOnly);
 
    req:=t.GetRequirements;
 
