@@ -1141,6 +1141,10 @@ begin
   QWORD($7DCE68F83F66B337):Result:=True;
   QWORD($B3628C7542451F40):Result:=True;
   QWORD($1248CAD0608E843B):Result:=True;
+  QWORD($DB06DF2E551ED4BB):Result:=True;
+  QWORD($19FC060ACE401D0D):Result:=True;
+  QWORD($0D6FBF4C0B683DF5):Result:=True;
+  QWORD($E53B6A82F600389E):Result:=True;
   else
    Result:=False;
  end;

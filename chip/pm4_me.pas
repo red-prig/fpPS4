@@ -2682,6 +2682,56 @@ begin
 
 end;
 
+function Detect_buf_meta(var ctx:t_me_render_context;
+                         var UniformBuilder:TvUniformBuilder):Boolean;
+var
+ i:Integer;
+
+ buffer:p_pm4_resource;
+
+ ht:TvMetaHtile;
+ hc:TvMetaCmask;
+begin
+ Result:=False;
+
+ //buffers
+ if (Length(UniformBuilder.FBuffers)<>0) then
+ begin
+  For i:=0 to High(UniformBuilder.FBuffers) do
+  With UniformBuilder.FBuffers[i] do
+  begin
+
+   //get buffer with write usege
+   if ((memuse and TM_WRITE)<>0) then
+   begin
+
+    buffer:=ctx.stream^.find_buffer_resource(R_BUF,addr,size);
+
+    if (buffer<>nil) then
+    begin
+
+     ht:=FetchHtile(ctx.Cmd,buffer^.rkey,size);
+     if (ht<>nil) then
+     begin
+      Exit(True);
+     end;
+
+     hc:=FetchCmask(ctx.Cmd,buffer^.rkey,size);
+     if (hc<>nil) then
+     begin
+      Exit(True);
+     end;
+
+    end;
+
+   end;
+
+  end;
+ end;
+ //buffers
+
+end;
+
 procedure Prepare_buf_clear(var ctx:t_me_render_context;
                             var UniformBuilder:TvUniformBuilder);
 var
@@ -2787,6 +2837,14 @@ begin
  //htile/cmask/rt heuristic
  if (CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].IsCSClearShader) then
  begin
+  Prepare_buf_clear(ctx,FUniformBuilder);
+  //
+  ctx.InsertLabel('clear htile/cmask/rt');
+ end else
+ if Detect_buf_meta(ctx,FUniformBuilder) then
+ begin
+  Writeln('Detect_buf_meta:0x',HexStr(CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn,16));
+  //
   Prepare_buf_clear(ctx,FUniformBuilder);
   //
   ctx.InsertLabel('clear htile/cmask/rt');
