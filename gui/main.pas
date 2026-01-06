@@ -1157,7 +1157,7 @@ begin
     TBStopClick(Sender);
    end else
    begin
-    FProcess.Release;
+    //
    end;
   end;
 
