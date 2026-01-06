@@ -490,7 +490,7 @@ begin
  mul:=MakeRead(dst,dtFloat32);
 
  //dst,cond,src_true,src_false
- OpSelect(dst,cmp,zero,mul);
+ OpSelect(dst,cmp,src[2],mul);
 end;
 
 procedure TEmit_VOP2.emit_V_MADAK_F32; //vdst = vsrc0.f * vsrc1.f + kadd.f

@@ -858,15 +858,15 @@ begin
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
+ mul:=MakeRead(dst,dtFloat32);
+
+ //dst,cond,src_true,src_false
+ OpSelect(dst,cmp,src[2],mul);
+
  emit_dst_omod__f(dst,dtFloat32);
  emit_dst_clamp_f(dst,dtFloat32);
  //
 
-
- mul:=MakeRead(dst,dtFloat32);
-
- //dst,cond,src_true,src_false
- OpSelect(dst,cmp,zero,mul);
 end;
 
 procedure TEmit_VOP3.emit_V_MAD_I32_I24; //vdst.i = vsrc0[23:0].i * vsrc1[23:0].i + vsrc2.i
