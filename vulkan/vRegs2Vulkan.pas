@@ -2259,6 +2259,9 @@ begin
      IMG_DATA_FORMAT_BC7        :Result:=VK_FORMAT_BC7_UNORM_BLOCK;
 
      IMG_DATA_FORMAT_2_10_10_10 :Result:=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+
+     IMG_DATA_FORMAT_32         :Result:=VK_FORMAT_R32_UINT; //TODO: verify
+
      else;
     end;
   end;
