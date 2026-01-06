@@ -616,7 +616,7 @@ var
  cfg:TGameRunConfig;
  Item:TGameItem;
 begin
- Result:=Ptruint(-1);
+ Result:=0;
 
  if (FGameItem=nil) then Exit;
  if (obj=nil) then Exit;
@@ -626,7 +626,6 @@ begin
  if (FGameProcess=nil) then
  begin
   FreeAndNil(data);
-  FreeAndNil(obj);
   Exit;
  end;
 
@@ -681,7 +680,6 @@ begin
  end;
 
  FreeAndNil(data);
- FreeAndNil(obj);
 end;
 
 
