@@ -198,7 +198,7 @@ end;
 
 Function ConvertCountVGPRS(VGPRS:Byte):Byte;
 begin
- Result:=(VGPRS+1)*4
+ Result:=(VGPRS+1)*4;
 end;
 
 Function ConvertCountSGPRS(SGPRS:Byte):Byte;

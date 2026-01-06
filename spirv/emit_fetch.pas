@@ -30,7 +30,8 @@ type
  TEmitFetch=class(TEmitFlow)
   //
   function  GroupingSImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
-  function  GroupingVImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  GroupingVImm1 (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  GroupingVImm2 (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  TryShortVSharp(inps:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingSharp (src :PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
   //
@@ -244,7 +245,32 @@ begin
  Result:=DataLayoutList.FetchImm(@ssharp,rtype);
 end;
 
-function TEmitFetch.GroupingVImm(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+function TEmitFetch.GroupingVImm1(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+var
+ vsharp:TVSharpResource4;
+
+ i:Integer;
+ imm:TsrConst;
+begin
+ Result:=nil;
+
+ if (rtype<>rtVSharp4) then Exit;
+
+ vsharp:=Default(TVSharpResource4);
+
+ For i:=0 to 3 do
+ begin
+  imm:=GetRegConst(regs[i]);
+  if (imm=nil) then Exit;
+  PDWORD(@vsharp)[i]:=imm.AsInt32;
+ end;
+
+ //print_vsharp(@vsharp);
+
+ Result:=DataLayoutList.FetchImm(@vsharp,rtype);
+end;
+
+function TEmitFetch.GroupingVImm2(regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
 var
  vsharp:TVSharpResource4;
 
@@ -475,6 +501,8 @@ begin
  chain[0]:=GetChainRegNode(regs[0]);
  chain[1]:=GetChainRegNode(regs[1]);
 
+ if (chain[0]=nil) or (chain[1]=nil) then Exit;
+
  Result:=DataLayoutList.Grouping(chain,rtVSharp2,V1);
 
  if (Result<>nil) then
@@ -506,7 +534,10 @@ begin
  Result:=GroupingSImm(@regs,rtype);
  if (Result<>nil) then Exit;
 
- Result:=GroupingVImm(@regs,rtype);
+ Result:=GroupingVImm1(@regs,rtype);
+ if (Result<>nil) then Exit;
+
+ Result:=GroupingVImm2(@regs,rtype);
  if (Result<>nil) then Exit;
 
  Result:=TryShortVSharp(@regs,rtype);
