@@ -101,115 +101,113 @@ begin
  _OpGlsl3(line,GlslOp.FClamp,Result,src,min,max);
 end;
 
-{
+const
+ UF10_EXPONENT_BIAS  =15;
+ UF10_EXPONENT_BITS  =$1F;
+ UF10_EXPONENT_SHIFT =5;
+ UF10_MANTISSA_BITS  =$1F;
+ UF10_MANTISSA_SHIFT =(23 - UF10_EXPONENT_SHIFT);
+ UF10_MAX_EXPONENT   =(UF10_EXPONENT_BITS shl UF10_EXPONENT_SHIFT);
 
-uint F32ToF10(float f) {
-    uint i = *reinterpret_cast<uint*>(&f);
-
-    uint t1 = i & 0x7fffffff; // Non-sign bits
-    uint t3 = i & 0xff800000; // Exponent + sign
-
-    t1 = t1 >> 18; // Align mantissa on MSB
-
-    t1 = t1 - 0xE00; // Adjust bias
-
-    if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
-    if (t3 > 0x47000000) t1 = 0x3FF; // Clamp-to-max
-
-    return t1;
-}
-
-uint F32ToF11(float f) {
-    uint i = *reinterpret_cast<uint*>(&f);
-
-    uint t1 = i & 0x7fffffff; // Non-sign bits
-    uint t3 = i & 0xff800000; // Exponent + sign
-
-    //    [S|E|M]
-    //F32 [1|8|23]
-    //F16 [1|5|10] -> 13 -> 0x1C000 -> 0x7BFF -> 0x47000000
-    //F11 [0|6|5]  -> 18 -> 0x1C00  -> 0x7FF  -> 0x87000000
-    //F10 [0|5|5]  -> 18 -> 0xE00   -> 0x3FF  -> 0x47000000
-
-    t1 = t1 >> 18; // Align mantissa on MSB
-
-    t1 = t1 - 0x1C00; // Adjust bias
-
-    if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
-    if (t3 > 0x87000000) t1 = 0x7FF; // Clamp-to-max
-
-    return t1;
-}
-
-//10_11_11
-//      RR  GG  BB
-//high [10][11][11] low
-
-//11_11_10
-//      RR  GG  BB
-//high [11][11][10] low
-
-}
+ UF11_EXPONENT_BIAS  =15;
+ UF11_EXPONENT_BITS  =$1F;
+ UF11_EXPONENT_SHIFT =6;
+ UF11_MANTISSA_BITS  =$3F;
+ UF11_MANTISSA_SHIFT =(23 - UF11_EXPONENT_SHIFT);
+ UF11_MAX_EXPONENT   =(UF11_EXPONENT_BITS shl UF11_EXPONENT_SHIFT);
 
 function TEmit_vbuf_store.F32ToF10(reg:TsrRegNode):TsrRegNode;
 var
- i,t1,t3,cond:TsrRegNode;
+ i:TsrRegNode;
+
+ f_is_nan:TsrRegNode;
+ f_is_neg:TsrRegNode;
+ f_is_inf:TsrRegNode;
+ f_is_ovf:TsrRegNode;
+ f_value :TsrRegNode;
 begin
+ //nan
+ f_is_nan:=BitcastList.FetchRead(dtFloat32,reg);
+ f_is_nan:=OpIsNanTo(reg);
+
  i:=BitcastList.FetchRead(dtUint32,reg);
 
- t1:=OpAndTo(i,$7fffffff); // Non-sign bits
- t3:=OpAndTo(i,$ff800000); // Exponent + sign
+ //negative float or denormal
+ f_is_neg:=OpCmpTo(Op.OpSLessThan,i,NewImm_q(dtUint32,$38000000)); //(Integer(ui32Src) <= $38000000)
 
- t1.PrepType(ord(dtUint32));
- t3.PrepType(ord(dtInt32 ));
+ // Infinity
+ f_is_inf:=OpCmpTo(Op.OpIEqual,i,NewImm_q(dtUint32,$7F800000));
 
- t1:=OpShrTo(t1,18); // Align mantissa on MSB
+ // Overflow
+ f_is_ovf:=OpCmpTo(Op.OpUGreaterThan,i,NewImm_q(dtUint32,$47000000)); //(ui32Src > $47000000)
 
- t1:=OpISubTo(t1,$E00); // Adjust bias
-
- cond:=OpCmpTo(Op.OpSLessThan,t3,NewImm_q(dtUint32,$38800000)); //(t3 < 0x38800000)
-
- //cond,src_true,src_false
- t1:=OpSelectTo(cond,NewImm_q(dtUint32,0),t1); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
-
- cond:=OpCmpTo(Op.OpSGreaterThan,t3,NewImm_q(dtUint32,$47000000)); //(t3 > 0x47000000)
+ // Representable value
+ f_value:=OpShrTo(OpISubTo(i,$38000000),UF10_MANTISSA_SHIFT);
 
  //cond,src_true,src_false
- t1:=OpSelectTo(cond,NewImm_q(dtUint32,$3FF),t1); //if (t3 > 0x47000000) t1 = 0x3FF; // Clamp-to-max
+ f_value:=OpSelectTo(f_is_ovf,NewImm_q(dtUint32,(30 shl UF10_EXPONENT_SHIFT) or UF10_MANTISSA_BITS),f_value);
 
- Result:=t1;
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_inf,NewImm_q(dtUint32,UF10_MAX_EXPONENT),f_value);
+
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_neg,NewImm_q(dtUint32,0),f_value);
+
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_nan,NewImm_q(dtUint32,UF10_MAX_EXPONENT or UF10_MANTISSA_BITS),f_value);
+
+ Exit(f_value);
 end;
 
 function TEmit_vbuf_store.F32ToF11(reg:TsrRegNode):TsrRegNode;
 var
- i,t1,t3,cond:TsrRegNode;
+ i:TsrRegNode;
+
+ f_is_nan:TsrRegNode;
+ f_is_neg:TsrRegNode;
+ f_is_inf:TsrRegNode;
+ f_is_ovf:TsrRegNode;
+ f_value :TsrRegNode;
 begin
+ //nan
+ f_is_nan:=BitcastList.FetchRead(dtFloat32,reg);
+ f_is_nan:=OpIsNanTo(reg);
+
  i:=BitcastList.FetchRead(dtUint32,reg);
 
- t1:=OpAndTo(i,$7fffffff); // Non-sign bits
- t3:=OpAndTo(i,$ff800000); // Exponent + sign
+ //negative float or denormal
+ f_is_neg:=OpCmpTo(Op.OpSLessThan,i,NewImm_q(dtUint32,$38000000)); //(Integer(ui32Src) <= $38000000)
 
- t1.PrepType(ord(dtUint32));
- t3.PrepType(ord(dtInt32 ));
+ // Infinity
+ f_is_inf:=OpCmpTo(Op.OpIEqual,i,NewImm_q(dtUint32,$7F800000));
 
- t1:=OpShrTo(t1,18); // Align mantissa on MSB
+ // Overflow
+ f_is_ovf:=OpCmpTo(Op.OpUGreaterThan,i,NewImm_q(dtUint32,$47000000)); //(ui32Src > $47000000)
 
- t1:=OpISubTo(t1,$1C00); // Adjust bias
-
- cond:=OpCmpTo(Op.OpSLessThan,t3,NewImm_q(dtUint32,$38800000)); //(t3 < 0x38800000)
-
- //cond,src_true,src_false
- t1:=OpSelectTo(cond,NewImm_q(dtUint32,0),t1); //if (t3 < 0x38800000) t1 = 0;     // Flush-to-zero
-
- cond:=OpCmpTo(Op.OpSGreaterThan,t3,NewImm_q(dtUint32,$87000000)); //(t3 > 0x87000000)
+ // Representable value
+ f_value:=OpShrTo(OpISubTo(i,$38000000),UF11_MANTISSA_SHIFT);
 
  //cond,src_true,src_false
- t1:=OpSelectTo(cond,NewImm_q(dtUint32,$7FF),t1); //if (t3 > 0x47000000) t1 = 0x7FF; // Clamp-to-max
+ f_value:=OpSelectTo(f_is_ovf,NewImm_q(dtUint32,(30 shl UF11_EXPONENT_SHIFT) or UF11_MANTISSA_BITS),f_value);
 
- Result:=t1;
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_inf,NewImm_q(dtUint32,UF11_MAX_EXPONENT),f_value);
+
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_neg,NewImm_q(dtUint32,0),f_value);
+
+ //cond,src_true,src_false
+ f_value:=OpSelectTo(f_is_nan,NewImm_q(dtUint32,UF11_MAX_EXPONENT or UF11_MANTISSA_BITS),f_value);
+
+ Exit(f_value);
 end;
 
+const
+ use_fake_11_11_10:Boolean=True;
+
 procedure TEmit_vbuf_store.make_store_cv(var lc:Tstore_cache);
+label
+ f_10_11_11;
 var
  rsl:TsrRegNode;
  i:Byte;
@@ -250,41 +248,47 @@ begin
    BUF_DATA_FORMAT_10_11_11:
      begin
       //10_11_11
-      //      RR  GG  BB
+      //      BB  GG  RR
       //high [10][11][11] low
 
-      lc.elm[0]:=F32ToF10(lc.elm[0]); //R
-      lc.elm[1]:=F32ToF11(lc.elm[1]); //G
-      lc.elm[2]:=F32ToF11(lc.elm[2]); //B
+      Assert(lc.info.NFMT=BUF_NUM_FORMAT_FLOAT);
 
-      lc.elm[0]:=OpShlTo(lc.elm[0],11+11);
-      lc.elm[1]:=OpShlTo(lc.elm[1],11);
-
-      lc.elm[2]:=OpOrTo(lc.elm[2],lc.elm[1]); //G|B
-
-      lc.elm[0]:=OpOrTo(lc.elm[2],lc.elm[0]); //R|G|B
-      lc.elm[1]:=nil;
-      lc.elm[2]:=nil;
-     end;
-   BUF_DATA_FORMAT_11_11_10:
-     begin
-      //11_11_10
-      //      RR  GG  BB
-      //high [11][11][10] low
+      f_10_11_11:
 
       lc.elm[0]:=F32ToF11(lc.elm[0]); //R
       lc.elm[1]:=F32ToF11(lc.elm[1]); //G
       lc.elm[2]:=F32ToF10(lc.elm[2]); //B
 
-      lc.elm[0]:=OpShlTo(lc.elm[0],11+10);
-      lc.elm[1]:=OpShlTo(lc.elm[1],10);
+      lc.elm[1]:=OpShlTo(lc.elm[1],11);
+      lc.elm[2]:=OpShlTo(lc.elm[2],11+11);
 
-      lc.elm[2]:=OpOrTo(lc.elm[2],lc.elm[1]); //G|B
-
-      lc.elm[0]:=OpOrTo(lc.elm[2],lc.elm[0]); //R|G|B
+      lc.elm[0]:=OpOrTo(OpOrTo(lc.elm[0],lc.elm[1]),lc.elm[2]);
       lc.elm[1]:=nil;
       lc.elm[2]:=nil;
      end;
+
+   BUF_DATA_FORMAT_11_11_10:
+     begin
+      //11_11_10
+      //      BB  GG  RR
+      //high [11][11][10] low
+
+      Assert(lc.info.NFMT=BUF_NUM_FORMAT_FLOAT);
+
+      if use_fake_11_11_10 then goto f_10_11_11;
+
+      lc.elm[0]:=F32ToF10(lc.elm[0]); //R
+      lc.elm[1]:=F32ToF11(lc.elm[1]); //G
+      lc.elm[2]:=F32ToF11(lc.elm[2]); //B
+
+      lc.elm[1]:=OpShlTo(lc.elm[1],10);
+      lc.elm[2]:=OpShlTo(lc.elm[2],11+10);
+
+      lc.elm[0]:=OpOrTo(OpOrTo(lc.elm[0],lc.elm[1]),lc.elm[2]);
+      lc.elm[1]:=nil;
+      lc.elm[2]:=nil;
+     end;
+
    else
 
      case lc.elem_resl of
