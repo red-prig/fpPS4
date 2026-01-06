@@ -1881,6 +1881,14 @@ begin
     color_instance[i]:=ctx.node^.scope.find_image_resource_instance(ctx.rt_info^.RT_INFO[i].FImageInfo);
 
     Assert(color_instance[i]<>nil);
+
+    if (color_instance[i]^.curr.clr_usage<>ctx.rt_info^.RT_INFO[i].IMAGE_USAGE) then
+    begin
+     color_instance[i]^.curr.clr_usage:=ctx.rt_info^.RT_INFO[i].IMAGE_USAGE;
+     color_instance[i]^.curr.mem_usage:=ctx.rt_info^.RT_INFO[i].IMAGE_USAGE;
+     //TODO: next usage!
+    end;
+
    end;
 
    //TODO: fixup cformat
@@ -1920,6 +1928,16 @@ begin
     meta_instance^.resource^.rclear:=False;
    end;
 
+  end;
+
+  d_instance:=ctx.node^.scope.find_image_resource_instance(GetDepthOnly  (ctx.rt_info^.DB_INFO.FImageInfo));
+
+  if (d_instance<>nil) then
+  if (d_instance^.curr.dsa_usage<>ctx.rt_info^.DB_INFO.DEPTH_USAGE) then
+  begin
+   d_instance^.curr.dsa_usage:=ctx.rt_info^.DB_INFO.DEPTH_USAGE;
+   d_instance^.curr.mem_usage:=ctx.rt_info^.DB_INFO.DEPTH_USAGE;
+   //TODO: next usage!
   end;
 
   //TODO: fixup cformat
