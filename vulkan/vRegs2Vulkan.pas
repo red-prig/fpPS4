@@ -704,6 +704,12 @@ var
  BLEND_CONTROL:TCB_BLEND0_CONTROL;
  COMP_MAP:TCOMP_MAP;
  m:Byte;
+
+ has_alpha_masked_out      :Boolean;
+ has_src_alpha_in_src_blend:Boolean;
+ has_src_alpha_in_dst_blend:Boolean;
+const
+ ComponentA = (1 shl 3);
 begin
  Result:=Default(TVkPipelineColorBlendAttachmentState);
 
@@ -736,6 +742,38 @@ begin
   Result.srcColorBlendFactor:=GetBlendFactor(BLEND_CONTROL.COLOR_SRCBLEND);
   Result.dstColorBlendFactor:=GetBlendFactor(BLEND_CONTROL.COLOR_DESTBLEND);
   Result.colorBlendOp       :=GetBlendOp    (BLEND_CONTROL.COLOR_COMB_FCN);
+
+  //https://github.com/shadps4-emu/shadPS4/blob/42220dfbba3f77dc4feecf07b8659086bc0348b1/src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp#L328
+
+  has_alpha_masked_out:=(_SHADER_MASK(i) and ComponentA)=0;
+
+  has_src_alpha_in_src_blend:=(Result.srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA) or
+                              (Result.srcColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+
+  has_src_alpha_in_dst_blend:=(Result.dstColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA) or
+                              (Result.dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+
+  if (has_alpha_masked_out and has_src_alpha_in_src_blend) then
+  begin
+   if (Result.srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA) then
+   begin
+    Result.srcColorBlendFactor:=VK_BLEND_FACTOR_ONE;
+   end else
+   begin
+    Result.srcColorBlendFactor:=VK_BLEND_FACTOR_ZERO;
+   end;
+  end;
+
+  if (has_alpha_masked_out and has_src_alpha_in_dst_blend) then
+  begin
+   if (Result.dstColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA) then
+   begin
+    Result.dstColorBlendFactor:=VK_BLEND_FACTOR_ONE;
+   end else
+   begin
+    Result.dstColorBlendFactor:=VK_BLEND_FACTOR_ZERO;
+   end;
+  end;
 
   if (BLEND_CONTROL.SEPARATE_ALPHA_BLEND=0) then
   begin
@@ -1011,13 +1049,13 @@ begin
     else;
    end;
 
-  COLOR_10_11_11: //R:11 G:11 B:10
+  COLOR_10_11_11: //high B:[10] G:[11] R:[11] low
    Case NUMBER_TYPE of
     NUMBER_FLOAT  :Result:=VK_FORMAT_B10G11R11_UFLOAT_PACK32;
     else;
    end;
 
-  COLOR_11_11_10: //R:10 G:11 B:11
+  COLOR_11_11_10: //high B:[11] G:[11] R:[10] low
    Case NUMBER_TYPE of
     NUMBER_FLOAT  :Result:=VK_FORMAT_R10G11B11_UFLOAT_FAKE32; //Not directly handled to a vulkan
     else;
@@ -1788,15 +1826,27 @@ begin
   Result.State.cullMode:=ord(VK_CULL_MODE_NONE);
  end else
  begin
-  //VK_EXT_depth_clip_enable:TVkPipelineRasterizationDepthClipStateCreateInfoEXT
-  Result.DepthClip:=ord(PA_CL_CLIP_CNTL.CLIP_DISABLE=0);
+  //PA_CL_CLIP_CNTL.CLIP_DISABLE -> user_clip_planes
 
-  depthClampDisable:=PA_CL_CLIP_CNTL.ZCLIP_NEAR_DISABLE or PA_CL_CLIP_CNTL.ZCLIP_FAR_DISABLE;
+  //VK_EXT_depth_clip_enable:TVkPipelineRasterizationDepthClipStateCreateInfoEXT
+  Result.DepthClip:=ord(not Boolean(PA_CL_CLIP_CNTL.ZCLIP_NEAR_DISABLE or PA_CL_CLIP_CNTL.ZCLIP_FAR_DISABLE));
+
+  depthClampDisable:=CX_REG^.DB_RENDER_OVERRIDE.DISABLE_VIEWPORT_CLAMP;
 
   Result.State.cullMode:=get_cull_mode(SU_SC_MODE_CNTL);
  end;
 
- Result.State.depthClampEnable       :=ord(not Boolean(depthClampDisable));
+ Result.State.depthClampEnable       :=ord((not Boolean(depthClampDisable)) and
+                                           ((not boolean(Result.DepthClip)) or limits.VK_EXT_depth_clip_enable)
+                                          );
+ {
+ //if (UC_REG^.VGT_PRIMITIVE_TYPE.PRIM_TYPE<>DI_PT_RECTLIST) then
+ if (Result.DepthClip=1) and (Result.State.depthClampEnable=1) then
+ begin
+  Result.State.depthClampEnable:=0;
+ end;
+ }
+
  Result.State.polygonMode            :=get_polygon_mode(SU_SC_MODE_CNTL);
  Result.State.frontFace              :=TVkFrontFace    (SU_SC_MODE_CNTL.FACE); //1:1
  Result.State.lineWidth              :=(CX_REG^.PA_SU_LINE_CNTL.WIDTH/8);
