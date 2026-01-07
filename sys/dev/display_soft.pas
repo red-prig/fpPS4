@@ -80,8 +80,7 @@ type
   bSubmitFlip,
   bSubmitFlipEop,
   bTriggerFlipEop,
-  bFinishFlip,
-  bNopVBlank
+  bFinishFlip
  );
 
  TDisplayHandleSoft=class(TDisplayHandle)
@@ -1165,21 +1164,6 @@ begin
      //save buffer index to next reset
      FPrevBufIndex:=bufferIndex;
     end;
-  bNopVBlank:
-    begin
-
-     //reset prev label
-     if (FPrevBufIndex<>-1) then
-     begin
-      labels[FPrevBufIndex]:=0;
-      gc_wakeup_internal_ptr(@labels[FPrevBufIndex]);
-     end;
-     labels[16]:=0; //bufferIndex = -1 ???
-
-     //save buffer index to next reset
-     FPrevBufIndex:=-1;
-
-    end;
  end;
 end;
 
@@ -1404,13 +1388,10 @@ procedure dce_thread(parameter:pointer); SysV_ABI_CDecl;
 var
  dce:TDisplayHandleSoft;
  Node:PQNodeSubmit;
- is_event:Boolean;
 begin
  sched_prio(curkthread,64);
 
  dce:=TDisplayHandleSoft(parameter);
-
- is_event:=False;
 
  repeat
 
@@ -1429,17 +1410,8 @@ begin
    dce.OnFlip(Node);
    dce.FSubmitAlloc.Free(Node);
    //
-   is_event:=False;
   end else
   begin
-   if is_event then
-   begin
-    mtx_lock(dce.dce_mtx^);
-     dce.BufferChangeState(bNopVBlank,-1);
-    mtx_unlock(dce.dce_mtx^);
-   end;
-   //
-   is_event:=True;
    RTLEventWaitFor(dce.FHEvent);
   end;
 
