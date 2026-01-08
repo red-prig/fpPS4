@@ -276,7 +276,6 @@ type
  t_lea_hint=Set Of (not_use_segment,
                     not_use_r_tmp0,
                     not_use_r_tmp1,
-                    inc8_rsp,
                     code_ref);
 
 procedure build_lea(var ctx:t_jit_context2;id:Byte;
@@ -1264,7 +1263,7 @@ begin
  end;
 end;
 
-function is_segment(const i:TInstruction):Boolean;
+function is_segment(const i:TInstruction):Boolean; inline;
 begin
  Result:=False;
 
@@ -1275,11 +1274,11 @@ begin
  end;
 end;
 
-function get_segment(const i:TInstruction):Integer;
+function get_segment(SegmentReg:Byte):Integer; inline;
 begin
  Result:=0;
 
- case i.SegmentReg of
+ case SegmentReg of
   4:Result:=teb_fsbase;
   5:Result:=teb_gsbase;
   else
@@ -1287,27 +1286,205 @@ begin
  end;
 end;
 
-procedure optimal_swap(var RegValue:TRegValues);
-var
- t:TRegValue;
+function get_segment(const i:TInstruction):Integer; inline;
 begin
- if (RegValue[0].AType<>regNone) and
-    (RegValue[1].AType<>regNone) and
-    (not is_preserved(RegValue[0])) and
-    (is_preserved(RegValue[1])) and
-    (RegValue[0].AScale<=1) then
+ Result:=get_segment(i.SegmentReg);
+end;
+
+type
+ t_lea_component=(
+  REG_NONE   ,
+  REG_DIRECT ,
+  REG_LOAD   ,
+  REG_SCALE  ,
+  REG_OFFSET ,
+  REG_SEGMENT
+ );
+
+ t_lea_action=record
+  op:t_lea_component;
+  case Byte of
+   0:(AReg:TRegValue);
+   1:(AScale:Byte);
+   2:(AOfs:Int64);
+   3:(ASegment:Byte);
+ end;
+
+ t_lea_builder=packed object
+  actions:array[0..4] of t_lea_action;
+  actions_len :Byte;
+  direct_count:Byte;
+  loads_count :Byte;
+  is_scale    :Boolean;
+  function  is_reordering:Boolean;
+  function  is_ext_reg   :Boolean;
+  function  is_all_clear :Boolean;
+  Procedure add_reg    (Reg:TRegValue);
+  Procedure add_scale  (Scale:Byte);
+  Procedure add_offset (Ofs:Int64);
+  Procedure add_load   (Reg:TRegValue);
+  Procedure add_segment(Segment:Byte);
+ end;
+
+function t_lea_builder.is_reordering:Boolean;
+begin
+ Result:=(direct_count<=1) and (loads_count=0) {and (not is_scale)};
+end;
+
+function t_lea_builder.is_ext_reg:Boolean;
+begin
+ Result:=(ord(direct_count<>0)+loads_count)>1;
+end;
+
+function t_lea_builder.is_all_clear:Boolean;
+var
+ r:Integer;
+begin
+ Result:=True;
+ for r:=0 to actions_len-1 do
  begin
-  //optimal swap
-  t:=RegValue[0];
-  RegValue[0]:=RegValue[1];
-  RegValue[1]:=t;
+  if (actions[r].op<>REG_NONE) then
+  begin
+   Exit(False);
+  end;
  end;
 end;
 
-function lea_reg_is_used(var RegValue:TRegValues;reg:TRegValue):Boolean; inline;
+Procedure t_lea_builder.add_reg(Reg:TRegValue);
+var
+ i:Integer;
 begin
- Result:=(RegValue[1].AType<>regNone) and
-         (RegValue[1].AIndex=reg.AIndex);
+ if (Reg.AType=regNone) then Exit;
+ Reg.AScale:=0;
+
+ i:=actions_len;
+
+ actions[i].op  :=REG_DIRECT;
+ actions[i].AReg:=Reg;
+
+ Inc(actions_len);
+ Inc(direct_count);
+end;
+
+Procedure t_lea_builder.add_scale(Scale:Byte);
+var
+ i:Integer;
+begin
+ if (Scale<=1) then Exit;
+
+ i:=actions_len;
+
+ actions[i].op    :=REG_SCALE;
+ actions[i].AScale:=Scale;
+
+ Inc(actions_len);
+ is_scale:=True;
+end;
+
+Procedure t_lea_builder.add_offset(Ofs:Int64);
+var
+ i:Integer;
+begin
+ if (Ofs=0) then Exit;
+
+ i:=actions_len;
+
+ actions[i].op  :=REG_OFFSET;
+ actions[i].AOfs:=Ofs;
+
+ Inc(actions_len);
+end;
+
+Procedure t_lea_builder.add_load(Reg:TRegValue);
+var
+ i:Integer;
+begin
+ if (Reg.AType=regNone) then Exit;
+ Reg.AScale:=0;
+
+ if is_reordering then
+ begin
+  //move
+  if (actions_len<>0) then
+  For i:=actions_len-1 downto 0 do
+  begin
+   actions[i+1]:=actions[i];
+  end;
+  //add to first
+  i:=0;
+ end else
+ begin
+  //add to last
+  i:=actions_len;
+ end;
+
+ actions[i].op  :=REG_LOAD;
+ actions[i].AReg:=Reg;
+
+ Inc(actions_len);
+ Inc(loads_count);
+end;
+
+Procedure t_lea_builder.add_segment(Segment:Byte);
+var
+ i:Integer;
+begin
+
+ if is_reordering then
+ begin
+  //move
+  if (actions_len<>0) then
+  For i:=actions_len-1 downto 0 do
+  begin
+   actions[i+1]:=actions[i];
+  end;
+  //add to first
+  i:=0;
+ end else
+ begin
+  //add to last
+  i:=actions_len;
+ end;
+
+ actions[i].op      :=REG_SEGMENT;
+ actions[i].ASegment:=Segment;
+
+ Inc(actions_len);
+ Inc(loads_count);
+end;
+
+type
+ t_lea_allocs=object
+  regs:array[0..1] of TRegValue;
+  function count:Byte;
+  function alloc:TRegValue;
+ end;
+
+function t_lea_allocs.count:Byte; inline;
+begin
+ Result:=ord(regs[0].AType<>regNone) + ord(regs[1].AType<>regNone);
+end;
+
+function t_lea_allocs.alloc:TRegValue;
+begin
+ if (regs[0].AType<>regNone) then
+ begin
+  Result:=regs[0];
+  regs[0]:=Default(TRegValue);
+ end else
+ if (regs[1].AType<>regNone) then
+ begin
+  Result:=regs[1];
+  regs[1]:=Default(TRegValue);
+ end else
+ begin
+  Assert(False,'t_lea_allocs');
+ end;
+end;
+
+function get_reg_count(const addres:t_jit_lea):Byte;  inline;
+begin
+ Result:=ord(addres.ARegValue[0].AType<>regNone) + ord(addres.ARegValue[1].AType<>regNone);
 end;
 
 procedure build_lea(var ctx:t_jit_context2;id:Byte;
@@ -1315,14 +1492,18 @@ procedure build_lea(var ctx:t_jit_context2;id:Byte;
 var
  RegValue:TRegValues;
  adr:TRegValue;
- new1,new2:TRegValue;
+ tmp:TRegValue;
+ new:TRegValue;
+
  ofs:Int64;
- i:Integer;
- AScale:Byte;
- save_r_tmp0:Boolean;
- reg1_used  :Boolean;
- scale_ofs  :Boolean;
- fix_rsp    :Boolean;
+
+ i,r:Integer;
+
+ saved_reg    :Boolean;
+
+ lea_builder:t_lea_builder;
+ lea_allocs :t_lea_allocs;
+ addres     :t_jit_lea;
 begin
  RegValue:=ctx.din.Operand[id].RegValue;
 
@@ -1333,51 +1514,35 @@ begin
   adr.ASize:=os64;
  end;
 
- with ctx.builder do
+ case adr.AIndex of
+  14:hint:=hint+[not_use_r_tmp0]; //r14
+  15:hint:=hint+[not_use_r_tmp1]; //r15
+  else;
+ end;
+
+ //reg1*scale + reg2 + offset + [segment]
+
+ lea_builder:=Default(t_lea_builder);
+
+ if is_rip(RegValue[0]) then //rip relative
  begin
-  if (not (not_use_segment in hint)) and
-     is_segment(ctx.din) then
-  begin
+  ofs:=0;
+  GetTargetOfs(ctx.din,ctx.code,id,ofs);
+  ofs:=Int64(ctx.ptr_next)+ofs;
 
-   if (RegValue[0].AType=regNone) then //absolute offset
-   begin
-    ofs:=0;
-    GetTargetOfs(ctx.din,ctx.code,id,ofs);
+  add_rip_entry(ctx,ofs,hint);
 
-    if (ofs=0) then
-    begin
-     movq(reg,[GS+get_segment(ctx.din)]); //endpoint
-    end else
-    begin
-     movq(adr,[GS+get_segment(ctx.din)]);
-     leaq(reg,[adr+ofs]); //endpoint
-    end;
-
-   end else
-   begin
-    Assert(false,'TODO');
-   end;
-
-  end else
-  if (RegValue[0].AType=regNone) then //absolute offset
-  begin
-   ofs:=0;
-   GetTargetOfs(ctx.din,ctx.code,id,ofs);
-
-   //sign extend
-   movi(reg,ofs); //endpoint
-  end else
-  if is_rip(RegValue[0]) then //rip relative
-  begin
-   ofs:=0;
-   GetTargetOfs(ctx.din,ctx.code,id,ofs);
-   ofs:=Int64(ctx.ptr_next)+ofs;
-
-   add_rip_entry(ctx,ofs,hint);
-
+  with ctx.builder do
    if (classif_offset_u64(ofs)=os64) then
    begin
-    movi64(adr,ofs); //endpoint
+    if (reg.ASize=os64) then
+    begin
+     movi64(adr,ofs); //endpoint
+    end else
+    begin
+     //32 bit relative address?
+     movi(new_reg_size(reg,os32),ofs); //endpoint
+    end;
    end else
    begin
     if (reg.ASize=os64) then
@@ -1389,191 +1554,226 @@ begin
      movi(reg,ofs); //endpoint
     end;
    end;
-  end else
-  if is_preserved(RegValue) then
+
+  Exit; //break
+ end;
+
+ //reg1
+ if is_preserved(RegValue[0]) then
+ begin
+  lea_builder.add_load(RegValue[0]);
+ end else
+ begin
+  lea_builder.add_reg(RegValue[0]);
+ end;
+
+ if (RegValue[0].AType<>regNone) and
+    (RegValue[1].AType<>regNone) and
+    cmp_reg(RegValue[0],RegValue[1]) then
+ begin
+  //2,3,5,9
+  lea_builder.add_scale(RegValue[0].AScale+1);
+ end else
+ begin
+  lea_builder.add_scale(RegValue[0].AScale);
+
+  //reg2
+  if is_preserved(RegValue[1]) then
   begin
+   lea_builder.add_load(RegValue[1]);
+  end else
+  begin
+   lea_builder.add_reg(RegValue[1]);
+  end;
+ end;
 
-   optimal_swap(RegValue);
+ ofs:=0;
+ GetTargetOfs(ctx.din,ctx.code,id,ofs);
 
-   save_r_tmp0:=False;
-   if lea_reg_is_used(RegValue,adr) then
-   begin
-    adr:=new_reg_size(r_tmp0,adr.ASize);
-    save_r_tmp0:=(not_use_r_tmp0 in hint);
-   end;
+ lea_builder.add_offset(ofs);
 
-   if save_r_tmp0 then
-   begin
-    //use rbp
-    push(rbp);
-    adr:=new_reg_size(rbp,adr.ASize);
-   end;
+ if (not (not_use_segment in hint)) and
+    is_segment(ctx.din) then
+ begin
+  lea_builder.add_segment(ctx.din.SegmentReg);
+ end;
 
-   AScale:=RegValue[0].AScale;
+ if (lea_builder.actions_len=1) then
+ begin
+  //simple case
 
-   ofs:=0;
-   GetTargetOfs(ctx.din,ctx.code,id,ofs);
-
-   reg1_used:=(RegValue[1].AType<>regNone);
-
-   //1
-   if is_preserved(RegValue[0]) then
-   begin
-    fix_rsp:=false;
-
-    if (inc8_rsp in hint) and is_rsp(RegValue[0]) then
+  with ctx.builder do
+  case lea_builder.actions[0].op of
+   REG_DIRECT:
     begin
-     //fix rsp relative
-     if (AScale<=1) and
-        (classif_offset_64(ofs+8)<>os64) then
+     if not cmp_reg(reg,lea_builder.actions[0].AReg) then
      begin
-      //shift ofs
-      ofs:=ofs+8;
-     end else
-     begin
-      //fix in lea
-      fix_rsp:=true;
+      movq(reg,lea_builder.actions[0].AReg); //endpoint
      end;
     end;
-
-    scale_ofs:=(AScale>1) or (ofs<>0);
-
-    i:=GetFrameOffset(RegValue[0]);
-
-    if reg1_used or
-       fix_rsp or
-       scale_ofs then
+   REG_LOAD:
     begin
-     movq(adr,[r_thrd+i]);
-    end else
-    begin
+     i:=GetFrameOffset(lea_builder.actions[0].AReg);
      movq(reg,[r_thrd+i]); //endpoint
     end;
-
-    //fix rsp relative
-    if fix_rsp then
+   REG_OFFSET:
     begin
-     if reg1_used or
-        scale_ofs then
-     begin
-      leaq(adr,[adr+8]);
-     end else
-     begin
-      leaq(reg,[adr+8]); //endpoint
-     end;
+     //sign extend
+     movi(reg,lea_builder.actions[0].AOfs); //endpoint
     end;
-
-    if scale_ofs then
+   REG_SEGMENT:
     begin
-     if reg1_used then
-     begin
-      leaq(adr,[adr*AScale+ofs]);
-     end else
-     begin
-      leaq(reg,[adr*AScale+ofs]); //endpoint
-     end;
+     i:=get_segment(lea_builder.actions[0].ASegment);
+     movq(reg,[GS+i]); //endpoint
     end;
-   end else
-   begin
-    new1:=RegValue[0];
-    //
-    //AScale in new1
-    if reg1_used then
-    begin
-     leaq(adr,[new1+ofs]);
-    end else
-    begin
-     leaq(reg,[new1+ofs]); //endpoint
-    end;
-   end;
-   //1
-
-   //2
-   if reg1_used then
-   begin
-
-    if is_preserved(RegValue[1]) then
-    begin
-     i:=GetFrameOffset(RegValue[1]);
-
-     new2:=new_reg_size(r_tmp1,adr.ASize);
-
-     if (not_use_r_tmp1 in hint) then
-     begin
-      if save_r_tmp0 then
-      begin
-       push(r_tmp1);
-      end else
-      begin
-       //use rbp
-       push(rbp);
-       new2:=new_reg_size(rbp,adr.ASize);
-      end;
-     end;
-
-     movq(new2,[r_thrd+i]);
-
-     if (inc8_rsp in hint) and is_rsp(RegValue[1]) then
-     begin
-      //fix rsp relative
-      leaq(reg,[adr+new2+8]); //endpoint
-     end else
-     begin
-      leaq(reg,[adr+new2]); //endpoint
-     end;
-
-     if (not_use_r_tmp1 in hint) then
-     begin
-      if save_r_tmp0 then
-      begin
-       pop(r_tmp1);
-      end else
-      begin
-       //restore rbp
-       pop(rbp);
-       //movq(rbp,rsp);
-      end;
-     end;
-
-    end else
-    begin
-     new1:=RegValue[1];
-     leaq(reg,[adr+new1]); //endpoint
-    end;
-
-   end;
-   //2
-
-   if save_r_tmp0 then
-   begin
-    //restore rbp
-    pop(rbp);
-    //movq(rbp,rsp);
-   end;
-
-   //is_preserved
-  end else
-  begin
-   //direct
-   ofs:=0;
-   GetTargetOfs(ctx.din,ctx.code,id,ofs);
-
-   new1:=RegValue[0];
-
-   if (RegValue[1].AType<>regNone) then
-   begin
-    new2:=RegValue[1];
-    //
-    //AScale in new1
-    leaq(reg,[new1+new2+ofs]); //endpoint
-   end else
-   begin
-    //AScale in new1
-    leaq(reg,[new1+ofs]); //endpoint
-   end;
-
+   else;
   end;
 
+  Exit; //break
+ end;
+
+ //prepare temp reg
+ tmp:=Default(TRegValue);
+ saved_reg:=False;
+ if (lea_builder.is_ext_reg) then
+ begin
+  if ([not_use_r_tmp0,not_use_r_tmp1]*hint=[not_use_r_tmp0,not_use_r_tmp1]) then
+  begin
+   //use rbp
+   with ctx.builder do
+   begin
+    tmp:=rbp;
+    push(tmp);
+   end;
+   saved_reg:=True;
+  end else
+  if (not_use_r_tmp0 in hint) then
+  begin
+   tmp:=r_tmp1;
+  end else
+  begin
+   tmp:=r_tmp0;
+  end;
+  //
+  lea_allocs.regs[0]:=tmp;
+  lea_allocs.regs[1]:=adr;
+ end else
+ begin
+  lea_allocs.regs[0]:=adr;
+  lea_allocs.regs[1]:=Default(TRegValue);
+ end;
+
+ addres:=Default(t_jit_lea);
+
+ repeat //start loop
+
+  //prepare regs
+  with ctx.builder do
+  for r:=0 to lea_builder.actions_len-1 do
+  begin
+   case lea_builder.actions[r].op of
+    REG_DIRECT:Break; //stop to do lea
+    REG_LOAD:
+      begin
+       if (lea_allocs.count=0) then Break;
+       new:=lea_allocs.alloc;
+       i:=GetFrameOffset(lea_builder.actions[r].AReg);
+       movq(new,[r_thrd+i]);
+       //override
+       lea_builder.actions[r].op  :=REG_DIRECT;
+       lea_builder.actions[r].AReg:=new;
+      end;
+    REG_SEGMENT:
+      begin
+       if (lea_allocs.count=0) then Break;
+       new:=lea_allocs.alloc;
+       i:=get_segment(lea_builder.actions[r].ASegment);
+       movq(new,[GS+i]);
+       //override
+       lea_builder.actions[r].op  :=REG_DIRECT;
+       lea_builder.actions[r].AReg:=new;
+      end;
+    else;
+   end;
+  end;
+
+  //prepare addres arg
+  with ctx.builder do
+  for r:=0 to lea_builder.actions_len-1 do
+  begin
+   case lea_builder.actions[r].op of
+    REG_DIRECT:
+     begin
+      i:=get_reg_count(addres);
+      if (i=2) then Break;
+      //custom ordering add
+      addres.ARegValue[i]:=lea_builder.actions[r].AReg;
+      //clear
+      lea_builder.actions[r].op:=REG_NONE;
+     end;
+    REG_SCALE:
+     begin
+      i:=get_reg_count(addres);
+      if (lea_builder.actions[r].AScale and 1)<>0 then
+      begin
+       //3,5,9
+       Assert(i=1,'unexpected sequence of scale');
+       addres.ARegValue[1]:=addres.ARegValue[0];
+       addres.ARegValue[0].AScale:=(lea_builder.actions[r].AScale-1);
+      end else
+      begin
+       Assert(i<>0,'unexpected sequence of scale');
+       if (i=2) then
+       begin
+        //swap
+        new:=addres.ARegValue[1];
+        new.AScale:=lea_builder.actions[r].AScale;
+        addres.ARegValue[1]:=addres.ARegValue[0];
+        addres.ARegValue[0]:=new;
+       end else
+       begin
+        addres.ARegValue[0].AScale:=lea_builder.actions[r].AScale;
+       end;
+      end;
+      //clear
+      lea_builder.actions[r].op:=REG_NONE;
+     end;
+    REG_OFFSET:
+     begin
+      addres.AOffset:=lea_builder.actions[r].AOfs;
+      //clear
+      lea_builder.actions[r].op:=REG_NONE;
+     end;
+   end; //case
+  end; //for
+
+  with ctx.builder do
+  begin
+   if lea_builder.is_all_clear then
+   begin
+    leaq(reg,[addres]); //endpoint
+
+    Break; //all is clear -> Break;
+   end else
+   begin
+    leaq(adr,[addres]);
+
+    //new reg summ
+    addres:=adr;
+
+    //restore allocs
+    lea_allocs.regs[0]:=tmp;
+    lea_allocs.regs[1]:=Default(TRegValue);
+   end;
+  end;
+
+ until false;
+
+ with ctx.builder do
+ if saved_reg then
+ begin
+  //restore temp
+  pop(tmp);
  end;
 
 end;

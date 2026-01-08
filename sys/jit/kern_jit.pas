@@ -579,7 +579,7 @@ begin
  begin
   new1:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
   //
-  build_lea(ctx,1,new1,[{inc8_rsp,}code_ref]);
+  build_lea(ctx,1,new1,[code_ref]);
   //
   op_uplift(ctx,new1,os64); //in/out:r14
   //
