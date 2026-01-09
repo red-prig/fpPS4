@@ -60,6 +60,7 @@ type
   //
   Constructor Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
   Destructor  Destroy; override;
+  procedure   SetObjectName(const name:RawByteString);
   Procedure   remove_all;
   Procedure   Unmap;
   Procedure   Flush;
@@ -85,7 +86,7 @@ type
 
 Const
  GRANULAR_DEV_BLOCK_SIZE=128*1024*1024;
- GRANULAR_MAP_BLOCK_SIZE= 16*1024*1024;
+ GRANULAR_MAP_BLOCK_SIZE= 1{6}*1024*1024;
 
 type
  PvHeap=^TvHeap;
@@ -874,12 +875,18 @@ end;
 
 function convert_meminfo(mem_type:Byte;mem_info:PVkMemoryType):TvMemInfo; inline;
 begin
- Result.heap_index     :=mem_info^.heapIndex;
- Result.mem_type       :=mem_type;
- Result.device_local   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ))<>0;
- Result.device_coherent:=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0;
- Result.host_visible   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ))<>0;
- Result.host_coherent  :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ))<>0;
+ if (mem_info=nil) then
+ begin
+  Result:=Default(TvMemInfo);
+ end else
+ begin
+  Result.heap_index     :=mem_info^.heapIndex;
+  Result.mem_type       :=mem_type;
+  Result.device_local   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT       ))<>0;
+  Result.device_coherent:=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD))<>0;
+  Result.host_visible   :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT       ))<>0;
+  Result.host_coherent  :=(mem_info^.propertyFlags and ord(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT      ))<>0;
+ end;
 end;
 
 Constructor TvDeviceMemory.Create(Handle:TVkDeviceMemory;Size:TVkDeviceSize;mem_type:Byte;mem_info:PVkMemoryType);
@@ -910,6 +917,12 @@ begin
  end;
  //
  inherited;
+end;
+
+procedure TvDeviceMemory.SetObjectName(const name:RawByteString);
+begin
+ //FName:=name;
+ DebugReport.SetObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY,FHandle,PChar(name));
 end;
 
 Procedure TvDeviceMemory.remove_all;
@@ -2022,6 +2035,7 @@ begin
   end;
 
   node:=TvHostMemory.Create(FHandle,tmp,mtindex,@FProperties.memoryTypes[mtindex]);
+  node.SetObjectName('H_'+HexStr(FStart_align,10)+'..'+HexStr(F__End_align,10));
 
   node.FStart:=FStart_align;
   node.F__End:=F__End_align;
