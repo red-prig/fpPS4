@@ -200,7 +200,7 @@ begin
   begin
    tdf^.td_flags:=tdf^.td_flags or (TDF_ASTPENDING or TDF_SUSP_CTX);
 
-   if TD_IS_RUNNING(tdf) then
+   if (TD_IS_RUNNING(tdf) or TD_ON_RUNQ(tdf)) then
    begin
     forward_signal(tdf);
    end;

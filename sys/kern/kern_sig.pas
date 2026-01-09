@@ -1512,7 +1512,7 @@ begin
 
  if ((prop and SA_CONT)<>0) then
  begin
-  sigqueue_delete_stopmask_proc
+  sigqueue_delete_stopmask_proc;
  end else
  if ((prop and SA_STOP)<>0) then
  begin
@@ -1520,7 +1520,11 @@ begin
  end;
 
  Result:=sigqueue_add(sigqueue,sig,ksi);
- if (Result<>0) then Exit;
+ if (Result<>0) then
+ begin
+  Writeln('sigqueue_add:',Result);
+  Exit;
+ end;
  signotify(td);
 
  if (action=sig_t(SIG_HOLD)) and ((prop and SA_CONT)=0) then Exit;
@@ -1596,7 +1600,7 @@ begin
   sleepq_abort(td,intrval);
  end else
  begin
-  if TD_IS_RUNNING(td) and (td<>curkthread) then
+  if (TD_IS_RUNNING(td) or TD_ON_RUNQ(td)) and (td<>curkthread) then
   begin
    forward_signal(td);
   end;
