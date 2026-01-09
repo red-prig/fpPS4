@@ -1218,14 +1218,14 @@ begin
    data:=Default(tdata16);
    Move(ctx.Code^,data,i);
 
-   data[i+0]:=get_segment_value(ctx.din.Operand[2]);
+   data[i]:=get_segment_value(ctx.din.Operand[2]);
 
    Code:=ctx.Code;
    Operand:=ctx.din.Operand[2];
 
    ctx.din.Operand[2].RegValue :=Default(TRegValues);
-   ctx.din.Operand[2].Size     :=ctx.din.Operand[1].Size;
-   ctx.din.Operand[2].ByteCount:=i;
+   ctx.din.Operand[2].Size     :=os16;
+   ctx.din.Operand[2].ByteCount:=2;
 
    op_emit2(ctx,mov_desc);
 
