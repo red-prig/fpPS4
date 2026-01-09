@@ -1260,6 +1260,7 @@ begin
      addr,
      size,
      memuse,
+     [iu_buffer],
      'Prepare_Uniforms');
    end;
 
@@ -2311,7 +2312,7 @@ begin
    begin
 
     //is write on current stage
-    if ((resource_instance^.curr.mem_usage and TM_WRITE)<>0) then
+    if ((resource_instance^.curr.mem_usage and (TM_WRITE or TM_CLEAR))<>0) then
     begin
 
      ri.mark_init;
@@ -2497,10 +2498,10 @@ begin
  case node^.ntype of
   ntDrawIndex2:
    begin
-    Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
-                                          node^.indexOffset ,',',
-                                          node^.vertexOffset,',',
-                                          node^.indexCount  ,')');
+    Writeln(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
+                                                     node^.indexOffset ,',',
+                                                     node^.vertexOffset,',',
+                                                     node^.indexCount  ,')');
 
     ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),
                              node^.indexOffset,
@@ -2509,10 +2510,10 @@ begin
    end;
   ntDrawIndexOffset2:
    begin
-    Writeln(node^.id,':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
-                                          node^.indexOffset ,',',
-                                          node^.vertexOffset,',',
-                                          node^.indexCount  ,')');
+    Writeln(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
+                                                     node^.indexOffset ,',',
+                                                     node^.vertexOffset,',',
+                                                     node^.indexCount  ,')');
 
     ctx.Cmd.DrawIndexOffset2(Pointer(node^.indexBase),
                              node^.indexOffset,
@@ -2521,21 +2522,23 @@ begin
    end;
   ntDrawIndexAuto:
    begin
-    Writeln(node^.id,':DrawIndexAuto(',node^.vertexOffset,',',
-                                       node^.indexCount  ,')');
+    Writeln(HexStr(node^.id,16),':DrawIndexAuto(',node^.vertexOffset,',',
+                                                  node^.indexCount  ,')');
 
     ctx.Cmd.DrawIndexAuto(node^.vertexOffset,
                           node^.indexCount);
    end;
   ntClearDepth:
    begin
+    Writeln(HexStr(node^.id,16),':ClearDepth');
+
     pm4_ClearDepth(node^.rt_info,ctx);
    end;
 
   ntDrawIndexIndirect:
    begin
-    Writeln(node^.id,':DrawIndexIndirect(',HexStr(Pointer(node^.indirectBase)),',',
-                                           node^.dataOffset,')');
+    Writeln(HexStr(node^.id,16),':DrawIndexIndirect(',HexStr(Pointer(node^.indirectBase)),',',
+                                                      node^.dataOffset,')');
 
     ctx.Cmd.DrawIndexIndirect(
      Pointer(node^.indexBase),
@@ -2553,11 +2556,11 @@ begin
 
   ntDrawIndexIndirectCountMulti:
    begin
-    Writeln(node^.id,':DrawIndexIndirectCountMulti(',HexStr(Pointer(node^.indirectBase)),',',
-                                                     HexStr(Pointer(node^.countAddr   )),',',
-                                                     node^.dataOffset,',',
-                                                     node^.stride    ,',',
-                                                     node^.count     ,')');
+    Writeln(HexStr(node^.id,16),':DrawIndexIndirectCountMulti(',HexStr(Pointer(node^.indirectBase)),',',
+                                                                HexStr(Pointer(node^.countAddr   )),',',
+                                                                node^.dataOffset,',',
+                                                                node^.stride    ,',',
+                                                                node^.count     ,')');
 
     ctx.Cmd.DrawIndexIndirect(
      Pointer(node^.indexBase),
@@ -2936,7 +2939,7 @@ begin
 
  if not pm4_DispatchPrepare(ctx,node) then Exit;
 
- Writeln('DispatchIndirect(0x',HexStr(node^.BASE,11),',0x',HexStr(node^.Offset,8),')');
+ Writeln(HexStr(node^.id,16),':DispatchIndirect(0x',HexStr(node^.BASE,11),',0x',HexStr(node^.Offset,8),')');
 
  ctx.Cmd.DispatchIndirect(Pointer(node^.BASE),node^.Offset);
 
@@ -3810,7 +3813,7 @@ begin
     begin
      if p_print_gpu_ops then
      begin
-      Writeln('+',ctx.node^.id,':',ctx.node^.ntype);
+      Writeln('+',HexStr(ctx.node^.id,16),':',ctx.node^.ntype);
      end;
      ctx.stream^.hint_cmds:=True;
     end;

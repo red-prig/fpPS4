@@ -94,7 +94,7 @@ const
  TM_INVAL=16; //invalid buffer/image
 
 type
- t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_transfer,iu_buffer,iu_htile,iu_cmask,iu_degamma);
+ t_image_usage=(iu_attachment,iu_depthstenc,iu_sampled,iu_storage,iu_transfer,iu_buffer,iu_index,iu_indirect,iu_htile,iu_cmask,iu_degamma);
  s_image_usage=set of t_image_usage;
 
 type
@@ -466,7 +466,8 @@ begin
 
   VK_FORMAT_R32G32_UINT               ,
   VK_FORMAT_R32G32_SINT               ,
-  VK_FORMAT_R32G32_SFLOAT             :Result:=8;
+  VK_FORMAT_R32G32_SFLOAT             ,
+  VK_FORMAT_R64_UINT                  :Result:=8;
 
   VK_FORMAT_R32G32B32_UINT            ,
   VK_FORMAT_R32G32B32_SINT            ,
@@ -2259,6 +2260,23 @@ begin
  _test_and_set_to(Result,AccessMask,VK_ACCESS_MEMORY_WRITE_BIT                  ,'MW' );
 end;
 
+function GetLayoutStr(ImageLayout:TVkImageLayout):RawByteString;
+begin
+ case ImageLayout of
+  VK_IMAGE_LAYOUT_UNDEFINED                       :Result:='UNDEFINED';
+  VK_IMAGE_LAYOUT_GENERAL                         :Result:='GENERAL';
+  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL        :Result:='COLOR_ATTACHMENT_OPTIMAL';
+  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:Result:='DEPTH_STENCIL_ATTACHMENT_OPTIMAL';
+  VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :Result:='DEPTH_STENCIL_READ_ONLY_OPTIMAL';
+  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL        :Result:='SHADER_READ_ONLY_OPTIMAL';
+  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL            :Result:='TRANSFER_SRC_OPTIMAL';
+  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL            :Result:='TRANSFER_DST_OPTIMAL';
+  VK_IMAGE_LAYOUT_PREINITIALIZED                  :Result:='PREINITIALIZED';
+  else
+   Result:=IntToStr(ord(ImageLayout));
+ end;
+end;
+
 function TvImageBarrier.Push(cmd:TVkCommandBuffer;
                              cb:t_push_cb;
                              image:TVkImage;
@@ -2307,9 +2325,11 @@ begin
           ' image        =0x',HexStr(image,16),#13#10,
           ' srcAccessMask=',GetAccessMaskStr(AccessMask),#13#10,
           ' dstAccessMask=',GetAccessMaskStr(dstAccessMask),#13#10,
-          ' oldLayout    ='  ,ImgLayout,#13#10,
-          ' newLayout    ='  ,newImageLayout
+          ' oldLayout    ='  ,GetLayoutStr(ImgLayout),#13#10,
+          ' newLayout    ='  ,GetLayoutStr(newImageLayout)
          );
+
+  range.layerCount:=VK_REMAINING_ARRAY_LAYERS; //TODO: maintenance9
 
   info:=Default(TVkImageMemoryBarrier);
   info.sType           :=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

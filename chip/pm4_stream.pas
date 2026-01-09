@@ -247,7 +247,7 @@ type
   function  fetch_buffer_resource        (rtype:Integer;addr:Pointer;size:DWORD;hint:PChar):p_pm4_resource;
   function  fetch_resource_instance      (scope:p_pm4_resource_curr_scope;r:p_pm4_resource;mem_usage:Integer;img_usage:s_image_usage):p_pm4_resource_instance;
   function  insert_image_resource        (scope:p_pm4_resource_curr_scope;const rkey:TvImageKey;mem_usage:Integer;img_usage:s_image_usage;hint:PChar):p_pm4_resource_instance;
-  function  insert_buffer_resource       (scope:p_pm4_resource_curr_scope;rtype:Integer;addr:Pointer;size:DWORD;mem_usage:Integer;hint:PChar):p_pm4_resource_instance;
+  function  insert_buffer_resource       (scope:p_pm4_resource_curr_scope;rtype:Integer;addr:Pointer;size:DWORD;mem_usage:Integer;buf_usage:s_image_usage;hint:PChar):p_pm4_resource_instance;
   procedure connect_resource_instance    (i:p_pm4_resource_instance);
   procedure connect_resource_scope       (scope:p_pm4_resource_curr_scope);
  end;
@@ -784,13 +784,13 @@ begin
  Result:=i;
 end;
 
-function t_pm4_resource_stream_scope.insert_buffer_resource(scope:p_pm4_resource_curr_scope;rtype:Integer;addr:Pointer;size:DWORD;mem_usage:Integer;hint:PChar):p_pm4_resource_instance;
+function t_pm4_resource_stream_scope.insert_buffer_resource(scope:p_pm4_resource_curr_scope;rtype:Integer;addr:Pointer;size:DWORD;mem_usage:Integer;buf_usage:s_image_usage;hint:PChar):p_pm4_resource_instance;
 var
  r:p_pm4_resource;
  i:p_pm4_resource_instance;
 begin
  r:=fetch_buffer_resource  (rtype,addr,size,hint);
- i:=fetch_resource_instance(scope,r,mem_usage,[iu_buffer]);
+ i:=fetch_resource_instance(scope,r,mem_usage,buf_usage);
 
  if ((mem_usage and TM_READ)<>0) then
  if (i^.prev.mem_usage=0) then //no prev usage
@@ -977,6 +977,7 @@ begin
                         addr,
                         num_dw*SizeOf(DWORD),
                         TM_READ,
+                        [iu_buffer],
                         'LoadConstRam');
 
  add_node(node);
@@ -999,6 +1000,7 @@ begin
                         addr,
                         num_dw*SizeOf(DWORD),
                         TM_WRITE,
+                        [iu_buffer],
                         'DumpConstRam');
 
  add_node(node);
@@ -1115,6 +1117,7 @@ begin
                          addr,
                          get_data_size,
                          TM_WRITE,
+                         [iu_buffer],
                          'EventWriteEop');
  end;
 
@@ -1152,6 +1155,7 @@ begin
                          addr,
                          get_data_size,
                          TM_WRITE,
+                         [iu_buffer],
                          'EventWriteEos');
  end;
 
@@ -1208,6 +1212,7 @@ begin
                          addr,
                          get_data_size,
                          TM_WRITE,
+                         [iu_buffer],
                          'ReleaseMem');
  end;
 
@@ -1239,6 +1244,7 @@ begin
                            Pointer(srcOrData),
                            numBytes,
                            TM_READ,
+                           [iu_buffer],
                            'DmaData');
    end;
   else;
@@ -1254,6 +1260,7 @@ begin
                           Pointer(dst),
                           numBytes,
                           TM_WRITE,
+                          [iu_buffer],
                           'DmaData');
   end;
  end;
@@ -1288,6 +1295,7 @@ begin
                          src,
                          num_dw*SizeOf(DWORD),
                          TM_READ,
+                         [iu_buffer],
                          'WriteData');
  end;
 
@@ -1302,6 +1310,7 @@ begin
                            Pointer(dst),
                            num_dw*SizeOf(DWORD),
                            TM_WRITE,
+                           [iu_buffer],
                            'WriteData');
    end;
   else;
@@ -1362,6 +1371,7 @@ begin
                         RT.CMASK_INFO.KEY.Addr,
                         RT.CMASK_INFO.SIZE,
                         RT.IMAGE_USAGE,
+                        [iu_buffer],
                         'FastClear'
                        );
 
@@ -1512,6 +1522,7 @@ begin
                           addr,
                           size,
                           memuse,
+                          [iu_buffer],
                           'Init_Uniforms');
 
   end;
@@ -1543,6 +1554,7 @@ begin
                           addr,
                           Shader.FPushConst.size,
                           TM_READ,
+                          [iu_buffer],
                           'Init_Pushs');
 
   end;
@@ -1632,6 +1644,7 @@ begin
                            RT.CMASK_INFO.KEY.Addr,
                            RT.CMASK_INFO.SIZE,
                            RT.IMAGE_USAGE,
+                           [iu_buffer],
                            'Build_rt_info');
    end;
 
@@ -1687,6 +1700,7 @@ begin
                                              rt_info.DB_INFO.HTILE_INFO.KEY.Addr,
                                              rt_info.DB_INFO.HTILE_INFO.SIZE,
                                              rt_info.DB_INFO.DEPTH_USAGE,
+                                             [iu_buffer],
                                              'Build_rt_info');
   end;
 
@@ -1739,6 +1753,13 @@ begin
  rt_info.ShaderGroup.ExportUnifBuilder(FUniformBuilder,@rt_info.USERDATA);
 
  Init_Uniforms(node,FUniformBuilder);
+end;
+
+function GET_INDEX_TYPE_SIZE(INDEX_TYPE:Byte):Byte; inline;
+const
+ _s:array[0..1] of Byte=(2,4);
+begin
+ Result:=_s[ord(INDEX_TYPE) and 1];
 end;
 
 function t_pm4_stream.BuildDraw(ntype:t_pm4_node_type;context:p_amd_context):p_pm4_node_draw;
@@ -1809,10 +1830,24 @@ begin
 end;
 
 procedure t_pm4_stream.DrawIndex2(context:p_amd_context);
+var
+ node:p_pm4_node_draw;
 begin
  if ColorControl(context^.CX_REG) then Exit;
 
- BuildDraw(ntDrawIndex2,context);
+ node:=BuildDraw(ntDrawIndex2,context);
+
+ if (node<>nil) then
+ begin
+  insert_buffer_resource(@node^.scope,
+                         R_BUF,
+                         Pointer(node^.indexBase),
+                         (node^.indexOffset+node^.indexCount)*GET_INDEX_TYPE_SIZE(node^.INDEX_TYPE),
+                         TM_READ,
+                         [iu_buffer,iu_index],
+                         'DrawIndex2');
+ end;
+
 end;
 
 procedure t_pm4_stream.DrawIndexAuto(context:p_amd_context);
@@ -1834,6 +1869,15 @@ begin
  if (node<>nil) then
  begin
   node^.indexOffset:=indexOffset;
+
+  insert_buffer_resource(@node^.scope,
+                         R_BUF,
+                         Pointer(node^.indexBase),
+                         (node^.indexOffset+node^.indexCount)*GET_INDEX_TYPE_SIZE(node^.INDEX_TYPE),
+                         TM_READ,
+                         [iu_buffer,iu_index],
+                         'DrawIndexOffset2');
+
  end;
 
 end;
@@ -1854,6 +1898,15 @@ begin
   node^.stride      :=sizeof(TDrawIndexedIndirectArgs);
   node^.count       :=1;
   node^.countAddr   :=0;
+
+  insert_buffer_resource(@node^.scope,
+                         R_BUF,
+                         Pointer(node^.indexBase),
+                         (node^.indexOffset+node^.indexCount)*GET_INDEX_TYPE_SIZE(node^.INDEX_TYPE),
+                         TM_READ,
+                         [iu_buffer,iu_indirect],
+                         'DrawIndexIndirect');
+
  end;
 
 end;
@@ -1877,6 +1930,15 @@ begin
   node^.stride      :=stride;
   node^.count       :=count;
   node^.countAddr   :=countAddr;
+
+  insert_buffer_resource(@node^.scope,
+                         R_BUF,
+                         Pointer(node^.indexBase),
+                         (node^.indexOffset+node^.indexCount)*GET_INDEX_TYPE_SIZE(node^.INDEX_TYPE),
+                         TM_READ,
+                         [iu_buffer,iu_index],
+                         'DrawIndexIndirectCountMulti');
+
  end;
 
 end;
@@ -1961,6 +2023,7 @@ begin
                          Pointer(BASE+Offset),
                          3*4,
                          TM_READ,
+                         [iu_buffer,iu_indirect],
                          'DispatchIndirect');
  end;
 
