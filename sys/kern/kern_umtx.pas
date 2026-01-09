@@ -2154,6 +2154,8 @@ begin
    umtxq_unlock(@uq^.uq_key);
   end;
 
+  if (Result<>0) then Break;
+
   Result:=umtxq_check_susp(td);
   if (Result<>0) then Break;
  end; //while
