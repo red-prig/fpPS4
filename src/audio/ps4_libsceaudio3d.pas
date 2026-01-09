@@ -25,6 +25,11 @@ const
  SCE_AUDIO3D_BLOCKING_ASYNC=0;
  SCE_AUDIO3D_BLOCKING_SYNC =1;
 
+ //SceAudio3dOutputRoute
+ SCE_AUDIO3D_OUTPUT_BOTH    =0;
+ SCE_AUDIO3D_OUTPUT_HMU_ONLY=1;
+ SCE_AUDIO3D_OUTPUT_TV_ONLY =2;
+
 type
  pSceAudio3dFormat=^SceAudio3dFormat;
  SceAudio3dFormat=Integer;
@@ -54,6 +59,8 @@ type
 
  pSceAudio3dRate=^SceAudio3dRate;
  SceAudio3dRate=Integer;
+
+ SceAudio3dOutputRoute=Integer;
 
  pSceAudio3dOpenParameters=^SceAudio3dOpenParameters;
  SceAudio3dOpenParameters=packed record
@@ -94,6 +101,10 @@ function ps4_sceAudio3dPortOpen(iUserId:Integer;
                                 const pParameters:pSceAudio3dOpenParameters;
                                 pId:pSceAudio3dPortId):Integer;
 begin
+ if (pId<>nil) then
+ begin
+  pId^:=$3dd;
+ end;
  Result:=0;
 end;
 
@@ -153,13 +164,26 @@ begin
  Result:=0;
 end;
 
-function ps4_sceAudio3dBedWrite(uiPortId:SceAudio3dPortId;
-                                uiNumChannels:Integer;
-                                eFormat:SceAudio3dFormat;
-                                const pBuffer:Pointer;
-                                _uiNumChannels:Integer):Integer;
+function ps4_sceAudio3dBedWrite(uiPortId      :SceAudio3dPortId;
+                                uiNumChannels :DWORD;
+                                eFormat       :SceAudio3dFormat;
+                                const pBuffer :Pointer;
+                                uiNumSamples  :DWORD
+                               ):Integer;
 begin
  Result:=0;
+end;
+
+function ps4_sceAudio3dBedWrite2(uiPortId     :SceAudio3dPortId;
+                                 uiNumChannels:DWORD;
+                                 eFormat      :SceAudio3dFormat;
+                                 const pBuffer:Pointer;
+                                 uiNumSamples :DWORD;
+                                 eOutputRoute :SceAudio3dOutputRoute;
+                                 bRestricted  :Boolean
+                                ):Integer;
+begin
+  Result:=0;
 end;
 
 function ps4_sceAudio3dTerminate():Integer;
@@ -187,6 +211,7 @@ begin
  lib.set_proc($ECD604CC9F5225B3,@ps4_sceAudio3dAudioOutOutput);
  lib.set_proc($61A6836C3C0AA453,@ps4_sceAudio3dPortGetQueueLevel);
  lib.set_proc($F6D130134195D2AA,@ps4_sceAudio3dBedWrite);
+ lib.set_proc($C47E10F5420B2F7A,@ps4_sceAudio3dBedWrite2);
  lib.set_proc($596D534B68B3E727,@ps4_sceAudio3dTerminate);
 end;
 
