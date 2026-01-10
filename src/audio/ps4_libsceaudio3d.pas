@@ -108,6 +108,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceAudio3dPortClose(uiPortId:SceAudio3dPortId):Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceAudio3dObjectReserve(uiPortId:SceAudio3dPortId;
                                      pId:pSceAudio3dObjectId):Integer;
 begin
@@ -201,6 +206,7 @@ begin
  lib.set_proc($5260AF8D29AE648C,@ps4_sceAudio3dInitialize);
  lib.set_proc($226FA33A86B95802,@ps4_sceAudio3dGetDefaultOpenParameters);
  lib.set_proc($5DE0C32B4C495900,@ps4_sceAudio3dPortOpen);
+ lib.set_proc($3B256A39E54DB529,@ps4_sceAudio3dPortClose);
  lib.set_proc($8CEDAD79CE1D2763,@ps4_sceAudio3dObjectReserve);
  lib.set_proc($E2EC8737DAB865E5,@ps4_sceAudio3dObjectSetAttributes);
  lib.set_proc($62AF5B7D4434B898,@ps4_sceAudio3dPortSetAttribute);
