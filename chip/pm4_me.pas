@@ -2731,13 +2731,13 @@ begin
     if (buffer<>nil) then
     begin
 
-     ht:=FetchHtile(ctx.Cmd,buffer^.rkey,size);
+     ht:=FetchHtile(ctx.Cmd,buffer^.rkey,size,False);
      if (ht<>nil) then
      begin
       Exit(True);
      end;
 
-     hc:=FetchCmask(ctx.Cmd,buffer^.rkey,size);
+     hc:=FetchCmask(ctx.Cmd,buffer^.rkey,size,False);
      if (hc<>nil) then
      begin
       Exit(True);
