@@ -1745,6 +1745,11 @@ begin
  jit_cbs[OPPnone,OPlgs      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPlsl      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPltr      ,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPswapgs  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysenter,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysexit ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysret  ,OPSnone]:=@op_invalid;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
