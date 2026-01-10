@@ -935,8 +935,11 @@ begin
 
   if (original>15) or (recompil>511) then
   begin
+   Writeln('(',original,'>15) or (recompil>',recompil,')');
    Writeln('0x',HexStr(curr));
-   Writeln(original,':',recompil);
+
+   print_disassemble(curr,original);
+
    Assert(False);
   end;
 

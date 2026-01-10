@@ -2388,6 +2388,12 @@ begin
 
   dis.Disassemble(dm64,ptr,din);
 
+  if (ptr-ctx.code)>15 then
+  begin
+   //trunc error
+   ptr:=ctx.code+15;
+  end;
+
   apply_din_stat(din,(ptr-ctx.code));
 
   ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
