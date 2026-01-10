@@ -20,8 +20,6 @@ uses
   emit_fetch;
 
 type
- Tdst_sel=array[0..3] of Byte;
-
  TEmit_EXP=class(TEmitFetch)
   procedure emit_EXP;
   function  get_export_type(TGT:Byte):TsrDataType;
@@ -71,8 +69,6 @@ const
 
 const
  z=0;
-
- dst_sel_ident:Tdst_sel=(4,5,6,7);
 
  shader_swizzle_map:array[1..4,SWAP_STD..SWAP_ALT_REV] of Tdst_sel=(
   (

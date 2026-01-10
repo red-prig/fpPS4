@@ -53,7 +53,7 @@ begin
  if (v.vType=vcUniformVector) then
  begin
   //reset dst sel
-  info.dsel:=dst_sel_identity;
+  info.dsel:=dst_sel_ident;
  end else
  begin
   info.dsel:=get_reverse_dst_sel(info.dsel);

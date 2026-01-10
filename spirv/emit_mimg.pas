@@ -48,7 +48,8 @@ type
   procedure emit_MIMG;
   procedure DistribDmask            (DMASK:Byte;dst:TsrRegNode;info:PsrImageInfo);
   procedure DistribDmaskExt         (DMASK:Byte;const ext:AExtDistrib;info:PsrImageInfo);
-  function  GatherDmask             (info:PsrImageInfo;relax:Boolean):TsrRegNode;
+  procedure shuffle                 (dst_sel:Tdst_sel;rtype:TsrDataType;src:PPsrRegNode;count:Byte);
+  function  GatherDmask             (info:PsrImageInfo;relax,dsel:Boolean):TsrRegNode;
   Function  GatherGrad_f            (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_f           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
   Function  GatherCoord_u           (var offset:DWORD;info:PsrImageInfo):TsrRegNode;
@@ -503,6 +504,11 @@ begin
   Result.Cube         :=True;
   Result.tinfo.Arrayed:=1;
  end;
+
+ Result.dsel[0]:=PT^.dst_sel_x;
+ Result.dsel[1]:=PT^.dst_sel_y;
+ Result.dsel[2]:=PT^.dst_sel_z;
+ Result.dsel[3]:=PT^.dst_sel_w;
 end;
 
 function GetImageMods(OP:Byte):TsrImageMods;
@@ -671,7 +677,42 @@ begin
 
 end;
 
-function TEmit_MIMG.GatherDmask(info:PsrImageInfo;relax:Boolean):TsrRegNode;
+procedure TEmit_MIMG.shuffle(dst_sel:Tdst_sel;rtype:TsrDataType;src:PPsrRegNode;count:Byte);
+var
+ i:Byte;
+ dst:array[0..3] of TsrRegNode;
+begin
+ For i:=0 to count-1 do
+ begin
+
+  case dst_sel[i] of
+   0:dst[i]:=NewImm_i(rtype,0);
+   1:begin
+      if rtype.isInt then
+      begin
+       dst[i]:=NewImm_i(rtype,1);
+      end else
+      begin
+       dst[i]:=NewImm_s(rtype,1.0);
+      end;
+     end;
+   4:dst[i]:=src[0];
+   5:dst[i]:=src[1];
+   6:dst[i]:=src[2];
+   7:dst[i]:=src[3];
+   else
+    dst[i]:=NewImm_i(rtype,0);
+  end;
+
+ end;
+ //
+ For i:=0 to count-1 do
+ begin
+  src[i]:=dst[i];
+ end;
+end;
+
+function TEmit_MIMG.GatherDmask(info:PsrImageInfo;relax,dsel:Boolean):TsrRegNode;
 var
  src:array[0..3] of TsrRegNode;
  i,d,m:Byte;
@@ -694,6 +735,11 @@ begin
   begin
    src[i]:=NewImm_i(info^.dtype,0);
   end;
+ end;
+
+ if dsel then
+ begin
+  shuffle(info^.dsel,info^.dtype,@src,m);
  end;
 
  if (m=1) then
@@ -1152,7 +1198,7 @@ var
 
  node:TSpirvOp;
 begin
- dst:=GatherDmask(info,False);
+ dst:=GatherDmask(info,False,True);
 
  roffset:=0;
 
@@ -1378,6 +1424,8 @@ begin
      info.tinfo.Sampled:=2;
      Tgrp:=FetchImage(pLayout_Tgrp,info);
 
+     pLayout_Tgrp.RINF:=True; //mark used dstsel
+
      emit_image_store(Tgrp,@info);
     end;
 
@@ -1388,6 +1436,8 @@ begin
      //Tgrp:=FetchImageRuntimeArray(pLayout_Tgrp,info);
      Tgrp:=FetchImageArray(pLayout_Tgrp,info,16);
      TsrUniform(Tgrp).FMipArray:=True;
+
+     pLayout_Tgrp.RINF:=True; //mark used dstsel
 
      emit_image_store(Tgrp,@info);
     end;

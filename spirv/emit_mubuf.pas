@@ -269,7 +269,7 @@ begin
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
-           dst_sel_identity,
+           dst_sel_ident,
            dfmt,
            //PV^.nfmt,
            BUF_NUM_FORMAT_FLOAT,
@@ -302,7 +302,7 @@ begin
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
-           dst_sel_identity,
+           dst_sel_ident,
            dfmt,
            //PV^.nfmt,
            BUF_NUM_FORMAT_FLOAT,
@@ -408,7 +408,7 @@ begin
 
  buf_atomic(
   Buf_info(grp,
-           dst_sel_identity,
+           dst_sel_ident,
            dfmt,
            nfmt,
            count,

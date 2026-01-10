@@ -9,6 +9,7 @@ uses
   ps4_pssl,
   ps4_shader,
   srReg,
+  srType,
   srLayout,
   emit_fetch,
   srVBufInfo,
@@ -39,7 +40,7 @@ begin
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
-           dst_sel_identity,
+           dst_sel_ident,
            FSPI.MTBUF.DFMT,
            FSPI.MTBUF.NFMT,
            count,
@@ -65,7 +66,7 @@ begin
 
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
-           dst_sel_identity,
+           dst_sel_ident,
            FSPI.MTBUF.DFMT,
            FSPI.MTBUF.NFMT,
            count,

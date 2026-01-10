@@ -124,10 +124,19 @@ type
   Format :bit23; //ImageFormat.*
  end;
 
+ //Destination channel select:
+ //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
+ Tdst_sel=array[0..3] of Byte;
+
+const
+ dst_sel_ident:Tdst_sel=(4,5,6,7);
+
+type
  PsrImageInfo=^TsrImageInfo;
  TsrImageInfo=packed record
   dtype:TsrDataType;
   tinfo:TsrTypeImageInfo;
+  dsel :Tdst_sel;
   count:Byte;
   Cube :Boolean;
   GLC  :Boolean;
@@ -144,7 +153,42 @@ function CompareType(rtype1,rtype2:TsrDataType):Boolean;
 function TryBitcastType(rtype1,rtype2:TsrDataType):Boolean;
 function is_unprep_type(old,new:TsrDataType;weak:Boolean):Boolean;
 
+function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
+function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
+
 implementation
+
+function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
+begin
+ Result[0]:=r;
+ Result[1]:=g;
+ Result[2]:=b;
+ Result[3]:=a;
+end;
+
+function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
+var
+ i,f,d:Byte;
+begin
+ Result:=Default(Tdst_sel);
+ For i:=0 to 3 do
+  For f:=0 to 3 do
+  begin
+   d:=dst[f];
+   Case d of
+    4..7:
+     begin
+      d:=d-4;
+      if (i=d) then
+      begin
+       Result[i]:=f+4;
+       Break;
+      end;
+     end;
+    else;
+   end;
+  end;
+end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;
 begin

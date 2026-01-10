@@ -11,10 +11,6 @@ uses
   spirv;
 
 type
- //Destination channel select:
- //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
- Tdst_sel=array[0..3] of Byte;
-
  TBuf_info=packed object
   grp  :TsrDataLayout;
   dsel :Tdst_sel;
@@ -37,12 +33,7 @@ type
   function GetImageInfoElement:TsrImageInfo;
  end;
 
-const
- dst_sel_identity:Tdst_sel=(4,5,6,7);
-
 function Buf_info(grp:TsrDataLayout;dsel:Tdst_sel;DFMT,NFMT,count,GLC,SLC:Byte;num_records:DWORD):TBuf_info; inline;
-function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
-function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
 
 implementation
 
@@ -116,38 +107,6 @@ begin
   //force to invalid
   Result.DFMT:=0;
  end;
-end;
-
-function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
-begin
- Result[0]:=r;
- Result[1]:=g;
- Result[2]:=b;
- Result[3]:=a;
-end;
-
-function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
-var
- i,f,d:Byte;
-begin
- Result:=Default(Tdst_sel);
- For i:=0 to 3 do
-  For f:=0 to 3 do
-  begin
-   d:=dst[f];
-   Case d of
-    4..7:
-     begin
-      d:=d-4;
-      if (i=d) then
-      begin
-       Result[i]:=f+4;
-       Break;
-      end;
-     end;
-    else;
-   end;
-  end;
 end;
 
 function TBuf_info.GetResultType:TsrDataType;
