@@ -1124,6 +1124,8 @@ begin
  jit_cbs[OPPnone,OPpmaddubsw,OPSnone]:=@op_reg_mem_rw;
  jit_cbs[OPPnone,OPpmaddwd  ,OPSnone]:=@op_reg_mem_rw;
 
+ jit_cbs[OPPnone,OPpsadbw,OPSnone]:=@op_reg_mem_rw;
+
  jit_cbs[OPPnone,OPcvtsi2 ,OPSx_ss]:=@op_reg_mem_wo;
  jit_cbs[OPPnone,OPcvtsi2 ,OPSx_sd]:=@op_reg_mem_wo;
 
