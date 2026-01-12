@@ -100,7 +100,7 @@ begin
   PV:=grp.GetSharp;
 
   //
-  grp.RINF:=True;
+  grp.mark_precomp([pfDSEL]);
   //
 
   info:=Buf_info(grp,
@@ -190,7 +190,7 @@ begin
  PV:=grp.GetSharp;
 
  //
- grp.RINF:=True;
+ grp.mark_precomp([pfOFFSET,pfSTRIDE,pfDSEL,pfFMT]);
  //
 
  TEmit_vbuf_load(TObject(Self)).buf_load(
@@ -229,7 +229,7 @@ begin
  PV:=grp.GetSharp;
 
  //
- grp.RINF:=True;
+ grp.mark_precomp([pfOFFSET,pfSTRIDE,pfDSEL,pfFMT]);
  //
 
  TEmit_vbuf_store(TObject(Self)).buf_store(

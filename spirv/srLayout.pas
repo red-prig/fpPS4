@@ -145,6 +145,8 @@ type
   rtype :TsrResourceType;
  end;
 
+ TsrPrecompFlags=Set Of (pfOFFSET,pfSTRIDE,pfDSEL,pfFMT);
+
  TsrDescriptor=class;
 
  TsrDataLayout=class
@@ -171,7 +173,7 @@ type
    FChainList:TChainList;
    FChainTree:TChainTree;
    //
-   RINF:Boolean; //Resource data precompiled (dst_sel,nfmt,dfmt)
+   RINF:TsrPrecompFlags; //Resource data precompiled (dst_sel,nfmt,dfmt)
    //
   class function c(n1,n2:PsrDataLayoutKey):Integer; static;
   function  Order:Integer;
@@ -188,6 +190,7 @@ type
   function  UseBitcast:Boolean;
   function  GetStride:PtrUint;
   function  GetTypeChar:Char;
+  procedure mark_precomp(f:TsrPrecompFlags);
  end;
 
  PsrDataImmKey=^TsrDataImmKey;
@@ -628,6 +631,11 @@ begin
  end;
 end;
 
+procedure TsrDataLayout.mark_precomp(f:TsrPrecompFlags);
+begin
+ RINF:=RINF+f;
+end;
+
 class function TsrDataImm.c(a,b:PsrDataImmKey):Integer;
 begin
  //first size
@@ -942,9 +950,56 @@ begin
  //pList.OpSource(Space(deep+1)+name+':'+HexLen(P,len));
 end;
 
-function IsInvalidVSharp(dfmt,num_records:DWORD):Boolean; inline;
+function IsInvalidVSharp(nfmt,dfmt:Byte;num_records:DWORD):Boolean; inline;
 begin
- Result:=(dfmt=0) or (num_records=0);
+ Result:=(dfmt=0) or (dfmt=15) or (num_records=0);
+end;
+
+function IsInvalidTSharp(nfmt,dfmt,_type:Byte):Boolean; inline;
+begin
+ Result:=(nfmt in [IMG_NUM_FORMAT_RESERVED_6 ,
+                   IMG_NUM_FORMAT_RESERVED_8 ,
+                   IMG_NUM_FORMAT_RESERVED_10,
+                   IMG_NUM_FORMAT_RESERVED_11,
+                   IMG_NUM_FORMAT_RESERVED_12,
+                   IMG_NUM_FORMAT_RESERVED_13,
+                   IMG_NUM_FORMAT_RESERVED_14,
+                   IMG_NUM_FORMAT_RESERVED_15]
+         ) or
+         (dfmt in [IMG_DATA_FORMAT_INVALID    ,
+                   IMG_DATA_FORMAT_RESERVED_15,
+                   IMG_DATA_FORMAT_RESERVED_23,
+                   IMG_DATA_FORMAT_RESERVED_24,
+                   IMG_DATA_FORMAT_RESERVED_25,
+                   IMG_DATA_FORMAT_RESERVED_26,
+                   IMG_DATA_FORMAT_RESERVED_27,
+                   IMG_DATA_FORMAT_RESERVED_28,
+                   IMG_DATA_FORMAT_RESERVED_29,
+                   IMG_DATA_FORMAT_RESERVED_30,
+                   IMG_DATA_FORMAT_RESERVED_31]
+         ) or
+         (_type in [SQ_RSRC_IMG_RSVD_0,
+                    SQ_RSRC_IMG_RSVD_1,
+                    SQ_RSRC_IMG_RSVD_2,
+                    SQ_RSRC_IMG_RSVD_3,
+                    SQ_RSRC_IMG_RSVD_4,
+                    SQ_RSRC_IMG_RSVD_5,
+                    SQ_RSRC_IMG_RSVD_6,
+                    SQ_RSRC_IMG_RSVD_7]
+         );
+end;
+
+function _get_rinf_str(f:TsrPrecompFlags):RawByteString; inline;
+const
+ _O:array[0..1] of AnsiChar='_O';
+ _S:array[0..1] of AnsiChar='_S';
+ _D:array[0..1] of AnsiChar='_D';
+ _F:array[0..1] of AnsiChar='_F';
+begin
+ Result:=_O[ord(pfOFFSET in f)]+
+         _S[ord(pfSTRIDE in f)]+
+         _D[ord(pfDSEL   in f)]+
+         _F[ord(pfFMT    in f)];
 end;
 
 procedure TsrDataLayoutList.AllocSourceExtension2;
@@ -969,29 +1024,21 @@ begin
   //start block
   Writer.Header('#'+Writer.node.GetTypeChar);
 
-  case Writer.node.key.rtype of
-   rtFunPtr2,
-   rtBufPtr2,
-   rtVSharp2,
-   rtVSharp4,
-   rtSSharp4,
-   rtTSharp4,
-   rtTSharp8:
-    begin
+  //offset
+  if (Writer.node.key.offset<>0) then
+  begin
+   Writer.HexOpt('OFS',Writer.node.key.offset);
+  end;
 
-     //offset
-     if (Writer.node.key.offset<>0) then
-     begin
-      Writer.HexOpt('OFS',Writer.node.key.offset);
-     end;
-     //mask
-     if (Writer.node.key.mask<>0) then
-     begin
-      Writer.HexOpt('MSK',Writer.node.key.mask);
-     end;
+  //mask rtVSharp2
+  if (Writer.node.key.mask<>0) then
+  begin
+   Writer.HexOpt('MSK',Writer.node.key.mask);
+  end;
 
-    end;
-   else;
+  if (Writer.node.RINF<>[]) then
+  begin
+   Writer.StrOpt('RINF',_get_rinf_str(Writer.node.RINF));
   end;
 
   case Writer.node.key.rtype of
@@ -1004,24 +1051,31 @@ begin
 
      with PV^ do
      begin
-      if (Writer.node.RINF) then
+
+      if IsInvalidVSharp(nfmt,dfmt,num_records) then
       begin
-       Writer.IntOpt('RINF',1);
-       if IsInvalidVSharp(dfmt,num_records) then
-       begin
-        Writer.IntOpt('INVL',1);
-       end;
-       Writer.IntOpt('DFMT',dfmt);
-       Writer.IntOpt('NFMT',nfmt);
-       Writer.IntOpt('STRD',stride);
-       Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
+       Writer.IntOpt('INVL',1);
       end else
       begin
-       if IsInvalidVSharp(dfmt,num_records) then
+
+       if (pfSTRIDE in Writer.node.RINF) then
        begin
-        Writer.IntOpt('INVL',1);
+        Writer.IntOpt('STRD',stride);
        end;
+
+       if (pfDSEL in Writer.node.RINF) then
+       begin
+        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
+       end;
+
+       if (pfFMT in Writer.node.RINF) then
+       begin
+        Writer.IntOpt('DFMT',dfmt);
+        Writer.IntOpt('NFMT',nfmt);
+       end;
+
       end;
+
      end;
 
     end;
@@ -1051,18 +1105,28 @@ begin
 
      with PT^ do
      begin
-      Writer.IntOpt('TYPE',_type);
-      if (Writer.node.RINF) then
+
+      if IsInvalidTSharp(nfmt,dfmt,_type) then
       begin
-       Writer.StrOpt('RINF','1');
-       Writer.IntOpt('DFMT',dfmt);
-       Writer.IntOpt('NFMT',nfmt);
-       Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
+       Writer.IntOpt('INVL',1);
       end else
       begin
-       Writer.IntOpt('DFMT',dfmt); //0->invalid
-       Writer.IntOpt('NFMT',nfmt);
+
+       Writer.IntOpt('TYPE',_type);
+
+       if (pfDSEL in Writer.node.RINF) then
+       begin
+        Writer.StrOpt('DSEL',_get_dst_sel_str(dst_sel_x,dst_sel_y,dst_sel_z,dst_sel_w));
+       end;
+
+       if (pfFMT in Writer.node.RINF) then
+       begin
+        Writer.IntOpt('DFMT',dfmt);
+        Writer.IntOpt('NFMT',nfmt);
+       end;
+
       end;
+
      end;
 
     end;

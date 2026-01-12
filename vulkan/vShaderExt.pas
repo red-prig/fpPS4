@@ -38,6 +38,7 @@ type
  );
 
  TvDescriptorType=(
+  dtDATA   ,
   dtVTX_ATR, //VERTEX ATTRIBUTE
   dtSAMPLER, //VK_DESCRIPTOR_TYPE_SAMPLER
   dtSAM_IMG, //VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
@@ -56,15 +57,25 @@ type
  end;
 
  TvResInfo=bitpacked record
-  enable :Boolean;  //1 -> dfmt,nfmt,dstsel
-  invalid:Boolean;  //1
-  dfmt   :0..63;    //6
-  nfmt   :0..15;    //4
-  rtype  :0..15;    //4
-  dstsel :TrDstSel; //16
-  degam  :Boolean;  //1
-  _align :0..32767; //15
-  stride :Word;     //16
+  roffset:Boolean;  // 0.. 1 :1
+  rstride:Boolean;  // 1.. 2 :1
+  rdsel  :Boolean;  // 2.. 3 :1
+  rfmt   :Boolean;  // 3.. 4 :1
+  invalid:Boolean;  // 4.. 5 :1
+  degam  :Boolean;  // 5.. 6 :1
+  _align1:0..3;     // 6.. 8 :2
+
+  dfmt   :0..63;    // 8..14 :6
+  _align2:0..3;     //14..16 :2
+
+  nfmt   :0..15;    //16..20 :4
+  rtype  :0..15;    //20..24 :4
+
+  _align3:Byte;     //24..32 :8
+
+  dstsel :TrDstSel; //32..48 :16
+
+  stride :Word;     //48..64 :16
  end;
 
  {$IF sizeof(TvResInfo)<>8}{$STOP sizeof(TvResInfo)<>8}{$ENDIF}
@@ -161,6 +172,8 @@ type
 
   FSetLayout:TvSetLayout;
 
+  FDataLayouts:ACustomLayout;
+
   FVertLayouts:ACustomLayout;
   FUnifLayouts:ACustomLayout;
   FFuncLayouts:ACustomLayout;
@@ -197,6 +210,7 @@ type
   Procedure  EnumFuncLayout(cb:TvFuncCb);
   Procedure  AddVertLayout2(addr:ADataLayout;bind:DWORD);
   Procedure  EnumVertLayout(cb:TvCustomLayoutCb;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
+  Procedure  AddDataLayout2(addr:ADataLayout;offset:DWORD);
   Procedure  AddBuffLayout2(dtype:TvDescriptorType;
                             addr:ADataLayout;
                             bind,size,offset,mask:DWORD;
@@ -326,11 +340,6 @@ type
   Procedure Export2(var input:TvVertexInputEXT);
  end;
 
- TvUnifChecker=object
-  FResult:Boolean;
-  procedure AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
- end;
-
  TvShaderGroup=class
   FKey   :TvShadersKey;
   FLayout:TvPipelineLayout;
@@ -343,6 +352,8 @@ type
 function GetSharpByPatch(pUserData,pImmData:Pointer;const addr:ADataLayout):Pointer;
 
 function IsClearDepthShaders(const FShaders:AvShaderStage):Boolean; inline;
+
+function test_desc(const b:TvCustomLayout;pUserData,pImmData:PDWORD):Boolean;
 
 implementation
 
@@ -771,6 +782,22 @@ begin
  end;
 end;
 
+procedure StrToRinfo(const s:RawByteString;var rinfo:TvResInfo);
+var
+ i:Integer;
+begin
+ For i:=1 to Length(s) do
+ begin
+  case UpCase(s[i]) of
+   'O':rinfo.roffset:=True;
+   'S':rinfo.rstride:=True;
+   'D':rinfo.rdsel  :=True;
+   'F':rinfo.rfmt   :=True;
+   else;
+  end;
+ end;
+end;
+
 procedure TvShaderParserExt.OnValue(const N,V:RawByteString);
 var
  L:PvDataLayout2;
@@ -786,7 +813,7 @@ begin
   'FLG':L^.flags:=StrToFlags(V);
   'MSK':L^.mask :=StrToDWord2(V);
 
-  'RINF':L^.rinfo.enable :=(StrToDWord2(V)<>0);
+  'RINF':StrToRinfo(V,L^.rinfo);
   'INVL':L^.rinfo.invalid:=(StrToDWord2(V)<>0);
   'DFMT':L^.rinfo.dfmt   :=StrToDWord2(V);
   'NFMT':L^.rinfo.nfmt   :=StrToDWord2(V);
@@ -933,16 +960,23 @@ end;
 
 procedure TvShaderParserExt.PopData(L:PvDataLayout2);
 begin
+
  case L^.rtype of
   vtFunPtr2:
-    begin
      with TvShaderExt(FOwner) do
      begin
       AddFuncLayout2(Self.GetLayoutAddr,L^.size,L^.imm);
      end;
-    end;
-  else;
+  vtImmData:; //skip
+  vtLDS    :; //skip
+  vtGDS    :; //skip
+  else
+     with TvShaderExt(FOwner) do
+     begin
+      AddDataLayout2(Self.GetLayoutAddr,0);
+     end;
  end;
+
 end;
 
 procedure TvShaderParserExt.PopDesc(L:PvDataLayout2);
@@ -1000,6 +1034,34 @@ begin
  end;
 end;
 
+function CmpADataLayout(const a,b:ADataLayout):Boolean;
+begin
+ Result:=False;
+ if (Length(a)=Length(b)) then
+ begin
+  Result:=(CompareByte(a[0],b[0],SizeOf(TvDataLayout)*Length(a))=0);
+ end;
+end;
+
+Procedure TvShaderExt.AddDataLayout2(addr:ADataLayout;offset:DWORD);
+
+var
+ v:TvCustomLayout;
+begin
+ if (Length(FDataLayouts)<>0) then
+ if CmpADataLayout(FDataLayouts[High(FDataLayouts)].addr,addr) then
+ begin
+  Exit;
+ end;
+
+ v:=Default(TvCustomLayout);
+ v.dtype :=dtDATA;
+ v.addr  :=addr;
+ v.offset:=offset;
+
+ AddToCustomLayout(FDataLayouts,v);
+end;
+
 Procedure TvShaderExt.AddBuffLayout2(dtype:TvDescriptorType;
                                      addr:ADataLayout;
                                      bind,size,offset,mask:DWORD;
@@ -1008,6 +1070,8 @@ Procedure TvShaderExt.AddBuffLayout2(dtype:TvDescriptorType;
 var
  v:TvCustomLayout;
 begin
+ AddDataLayout2(addr,offset); //moving the offset from the desc to the data
+
  v:=Default(TvCustomLayout);
  v.dtype :=dtype;
  v.bind  :=bind;
@@ -1256,7 +1320,7 @@ begin
 
      end;
    else
-    Assert(false,'GetSharpByPatch');
+    Assert(false,'GetSharpByPatch:'+IntToStr(ord(addr[i].rtype)));
   end;
 
  end;
@@ -1506,9 +1570,43 @@ begin
  InsertBuffer(b);
 end;
 
-function IsInvalidVSharp(dfmt,num_records:DWORD):Boolean; inline;
+function IsInvalidVSharp(nfmt,dfmt:Byte;num_records:DWORD):Boolean; inline;
 begin
- Result:=(dfmt=0) or (num_records=0);
+ Result:=(dfmt=0) or (dfmt=15) or (num_records=0);
+end;
+
+function IsInvalidTSharp(nfmt,dfmt,_type:Byte):Boolean; inline;
+begin
+ Result:=(nfmt in [IMG_NUM_FORMAT_RESERVED_6 ,
+                   IMG_NUM_FORMAT_RESERVED_8 ,
+                   IMG_NUM_FORMAT_RESERVED_10,
+                   IMG_NUM_FORMAT_RESERVED_11,
+                   IMG_NUM_FORMAT_RESERVED_12,
+                   IMG_NUM_FORMAT_RESERVED_13,
+                   IMG_NUM_FORMAT_RESERVED_14,
+                   IMG_NUM_FORMAT_RESERVED_15]
+         ) or
+         (dfmt in [IMG_DATA_FORMAT_INVALID    ,
+                   IMG_DATA_FORMAT_RESERVED_15,
+                   IMG_DATA_FORMAT_RESERVED_23,
+                   IMG_DATA_FORMAT_RESERVED_24,
+                   IMG_DATA_FORMAT_RESERVED_25,
+                   IMG_DATA_FORMAT_RESERVED_26,
+                   IMG_DATA_FORMAT_RESERVED_27,
+                   IMG_DATA_FORMAT_RESERVED_28,
+                   IMG_DATA_FORMAT_RESERVED_29,
+                   IMG_DATA_FORMAT_RESERVED_30,
+                   IMG_DATA_FORMAT_RESERVED_31]
+         ) or
+         (_type in [SQ_RSRC_IMG_RSVD_0,
+                    SQ_RSRC_IMG_RSVD_1,
+                    SQ_RSRC_IMG_RSVD_2,
+                    SQ_RSRC_IMG_RSVD_3,
+                    SQ_RSRC_IMG_RSVD_4,
+                    SQ_RSRC_IMG_RSVD_5,
+                    SQ_RSRC_IMG_RSVD_6,
+                    SQ_RSRC_IMG_RSVD_7]
+         );
 end;
 
 Procedure TvUniformBuilder.AddVSharp4(PV:PVSharpResource4;fset,bind,size,offset:DWord;flags:TvLayoutFlags);
@@ -1523,7 +1621,7 @@ begin
 
  //print_vsharp(PV);
 
- invalid:=ord(IsInvalidVSharp(PV^.dfmt,PV^.num_records))*TM_INVAL;
+ invalid:=ord(IsInvalidVSharp(PV^.nfmt,PV^.dfmt,PV^.num_records))*TM_INVAL;
 
  b:=Default(TBufBindExt);
  b.fset  :=fset;
@@ -1993,7 +2091,7 @@ begin
  end;
 end;
 
-procedure TvUnifChecker.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
+function test_desc(const b:TvCustomLayout;pUserData,pImmData:PDWORD):Boolean;
 var
  P:Pointer;
  PV:PVSharpResource4 absolute P;
@@ -2002,54 +2100,22 @@ var
  a:QWORD;
  rinfo:TvResInfo;
 begin
- if not FResult then Exit;
+ Result:=True;
 
  P:=GetSharpByPatch(pUserData,pImmData,b.addr);
  if (P=nil) then Exit;
 
- Case b.dtype of
-  dtUNF_BUF,
-  dtSTR_BUF:
-    Case b.addr[0].rtype of
-     vtRoot,
-     vtBufPtr2:
-       begin
-        a:=AlignShift(P,limits.minStorageBufferOffsetAlignment);
-        if (a<>b.offset) then
-        begin
-         FResult:=False;
-         Exit;
-        end;
-       end;
-     vtVSharp2,
-     vtVSharp4:
-       begin
-        a:=AlignShift(Pointer(PV^.base and (not 3)),limits.minStorageBufferOffsetAlignment);
-        if (a<>b.offset) then
-        begin
-         FResult:=False;
-         Exit;
-        end;
-       end;
-     else
-      Assert(false,'AddAttr');
-    end;
-
-  else;
- end;
-
  rinfo:=b.addr[0].rinfo;
- //
+
  Case b.addr[0].rtype of
   vtVSharp2:
    with PVSharpResource2(P)^ do
    begin
 
-    if rinfo.enable then
+    if rinfo.rstride then
     if (stride<>rinfo.stride) then
     begin
-     FResult:=False;
-     Exit;
+     Exit(False);
     end;
 
    end;
@@ -2057,27 +2123,36 @@ begin
    with PV^ do
    begin
 
-    if rinfo.enable then
+    if (IsInvalidVSharp(nfmt,dfmt,num_records)<>rinfo.invalid) then
     begin
-     if (IsInvalidVSharp(dfmt,num_records)<>rinfo.invalid) or
-        (     dfmt<>rinfo.dfmt    ) or
-        (     nfmt<>rinfo.nfmt    ) or
-        (   stride<>rinfo.stride  ) or
-        (dst_sel_x<>rinfo.dstsel.x) or
-        (dst_sel_y<>rinfo.dstsel.y) or
-        (dst_sel_z<>rinfo.dstsel.z) or
-        (dst_sel_w<>rinfo.dstsel.w) then
-     begin
-      FResult:=False;
-      Exit;
-     end;
+     Exit(False);
     end else
+    if rinfo.invalid then
     begin
-     if (IsInvalidVSharp(dfmt,num_records)<>rinfo.invalid) then
-     begin
-      FResult:=False;
-      Exit;
-     end;
+     //do not check further
+     Exit(True);
+    end;
+
+    if rinfo.rstride then
+    if (stride<>rinfo.stride) then
+    begin
+     Exit(False);
+    end;
+
+    if rinfo.rdsel then
+    if (dst_sel_x<>rinfo.dstsel.x) or
+       (dst_sel_y<>rinfo.dstsel.y) or
+       (dst_sel_z<>rinfo.dstsel.z) or
+       (dst_sel_w<>rinfo.dstsel.w) then
+    begin
+     Exit(False);
+    end;
+
+    if rinfo.rfmt then
+    if (dfmt<>rinfo.dfmt) or
+       (nfmt<>rinfo.nfmt) then
+    begin
+     Exit(False);
     end;
 
    end;
@@ -2086,11 +2161,12 @@ begin
    begin
     with PS^ do
     begin
+
      if (force_degamma<>ord(rinfo.degam)) then
      begin
-      FResult:=False;
-      Exit;
+      Exit(False);
      end;
+
     end;
    end;
 
@@ -2099,36 +2175,63 @@ begin
    with PT^ do
    begin
 
-    if rinfo.rtype<>_type then
+    if (IsInvalidTSharp(nfmt,dfmt,_type)<>rinfo.invalid) then
     begin
-     FResult:=False;
-     Exit;
+     Exit(False);
+    end else
+    if rinfo.invalid then
+    begin
+     //do not check further
+     Exit(True);
     end;
 
-    if rinfo.enable then
+    if (rinfo.rtype<>_type) then
     begin
-     if (     dfmt<>rinfo.dfmt    ) or
-        (     nfmt<>rinfo.nfmt    ) or
-        (dst_sel_x<>rinfo.dstsel.x) or
-        (dst_sel_y<>rinfo.dstsel.y) or
-        (dst_sel_z<>rinfo.dstsel.z) or
-        (dst_sel_w<>rinfo.dstsel.w) then
-     begin
-      FResult:=False;
-      Exit;
-     end;
-    end else
+     Exit(False);
+    end;
+
+    if rinfo.rdsel then
+    if (dst_sel_x<>rinfo.dstsel.x) or
+       (dst_sel_y<>rinfo.dstsel.y) or
+       (dst_sel_z<>rinfo.dstsel.z) or
+       (dst_sel_w<>rinfo.dstsel.w) then
     begin
-     if (            dfmt<>rinfo.dfmt ) or
-        (GetNumType(nfmt)<>GetNumType(rinfo.nfmt)) then
-     begin
-      FResult:=False;
-      Exit;
-     end;
+     Exit(False);
+    end;
+
+    if rinfo.rfmt then
+    if (dfmt            <>rinfo.dfmt) or
+       (GetNumType(nfmt)<>GetNumType(rinfo.nfmt)) then
+    begin
+     Exit(False);
     end;
 
    end;
   else;
+ end;
+
+ if rinfo.roffset then
+ Case b.addr[0].rtype of
+  vtRoot,
+  vtBufPtr2:
+    begin
+     a:=AlignShift(P,limits.minStorageBufferOffsetAlignment);
+     if (a<>b.offset) then
+     begin
+      Exit(False);
+     end;
+    end;
+  vtVSharp2,
+  vtVSharp4:
+    begin
+     a:=AlignShift(Pointer(PV^.base and (not 3)),limits.minStorageBufferOffsetAlignment);
+     if (a<>b.offset) then
+     begin
+      Exit(False);
+     end;
+    end;
+  else
+   Assert(false,'AddAttr');
  end;
 
 end;

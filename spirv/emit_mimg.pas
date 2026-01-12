@@ -1373,6 +1373,8 @@ begin
     end;
  end;
 
+ pLayout_Tgrp.mark_precomp([pfFMT]); //mark dfmt,nfmt by default
+
  info:=GetImageInfo(pLayout_Tgrp.GetSharp);
 
  info.GLC:=(FSPI.MIMG.GLC<>0);
@@ -1424,7 +1426,7 @@ begin
      info.tinfo.Sampled:=2;
      Tgrp:=FetchImage(pLayout_Tgrp,info);
 
-     pLayout_Tgrp.RINF:=True; //mark used dstsel
+     pLayout_Tgrp.mark_precomp([pfDSEL]); //mark used dstsel
 
      emit_image_store(Tgrp,@info);
     end;
@@ -1437,7 +1439,7 @@ begin
      Tgrp:=FetchImageArray(pLayout_Tgrp,info,16);
      TsrUniform(Tgrp).FMipArray:=True;
 
-     pLayout_Tgrp.RINF:=True; //mark used dstsel
+     pLayout_Tgrp.mark_precomp([pfDSEL]); //mark used dstsel
 
      emit_image_store(Tgrp,@info);
     end;

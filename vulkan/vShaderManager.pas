@@ -488,19 +488,22 @@ end;
 
 function test_unif(FShader:TvShaderExt;FDescSetId:Integer;pUserData:Pointer):Boolean;
 var
- ch:TvUnifChecker;
+ i:Integer;
 begin
  if (FShader.FDescSetId<>FDescSetId) then Exit(False);
 
- ch.FResult:=True; //init state
+ if (Length(FShader.FDataLayouts)=0) then Exit;
+ For i:=0 to High(FShader.FDataLayouts) do
+ begin
 
- FShader.EnumUnifLayout(@ch.AddAttr,FDescSetId,pUserData,FShader.GetImmData);
+  if not test_desc(FShader.FDataLayouts[i],pUserData,FShader.GetImmData) then
+  begin
+   Exit(False);
+  end;
 
- if (not ch.FResult) then Exit(False); //early exit
+ end;
 
- FShader.EnumVertLayout(@ch.AddAttr,FDescSetId,pUserData,FShader.GetImmData);
-
- Result:=ch.FResult;
+ Exit(True);
 end;
 
 function test_push_const(FShader:TvShaderExt;pc_offset,pc_size:DWORD):Boolean;
