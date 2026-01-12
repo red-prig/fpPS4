@@ -267,6 +267,10 @@ begin
  grp:=GroupingSharp(@src,rtVSharp4);
  PV:=grp.GetSharp;
 
+ //
+ grp.mark_precomp([pfOFFSET,pfSTRIDE,pfFMT]);
+ //
+
  TEmit_vbuf_load(TObject(Self)).buf_load(
   Buf_info(grp,
            dst_sel_ident,
@@ -405,6 +409,10 @@ begin
 
  grp:=GroupingSharp(@src,rtVSharp4);
  PV:=grp.GetSharp;
+
+ //
+ grp.mark_precomp([pfOFFSET,pfSTRIDE,pfFMT]);
+ //
 
  buf_atomic(
   Buf_info(grp,

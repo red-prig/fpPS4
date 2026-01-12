@@ -37,6 +37,7 @@ var
  is_const_offset:Boolean;
  offset:PtrUint;
 begin
+ grp.mark_precomp([pfOFFSET]);
 
  if (FSPI.SMRD.IMM<>0) then
  begin
