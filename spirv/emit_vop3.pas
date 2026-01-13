@@ -358,7 +358,7 @@ begin
  emit_src_abs_bit(@src,2,dtFloat32);
  emit_src_neg_bit(@src,2,dtFloat32);
 
- vec:=OpMakeVec(line,dtVec2f,@src);
+ vec:=OpVectorTo(line,dtVec2f,@src);
 
  OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,vec);
 end;
@@ -380,7 +380,7 @@ begin
  emit_src_abs_bit(@src,2,dtFloat32);
  emit_src_neg_bit(@src,2,dtFloat32);
 
- vec:=OpMakeVec(line,dtVec2f,@src);
+ vec:=OpVectorTo(line,dtVec2f,@src);
 
  OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
 end;
@@ -1314,7 +1314,7 @@ begin
  src[0]:=OpFToF(src[0],dtHalf16);
  src[1]:=NewImm_s(dtHalf16,0);
 
- dstv:=OpMakeVec(line,dtVec2h,@src);
+ dstv:=OpVectorTo(line,dtVec2h,@src);
 
  dst^.New(dtVec2h).pWriter:=dstv;
 end;

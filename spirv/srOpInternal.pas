@@ -18,8 +18,7 @@ const
 
  OpPackAnc=DWORD(-7);
  OpPackOfs=DWORD(-8);
- OpMakeExp=DWORD(-9);
- OpMakeVec=DWORD(-10);
+ OpExport =DWORD(-9);
 
 function OpGetStrInternal(OpId:DWORD):RawByteString;
 
@@ -39,8 +38,7 @@ begin
 
   OpPackAnc:Result:='[OpPackAnc]';
   OpPackOfs:Result:='[OpPackOfs]';
-  OpMakeExp:Result:='[OpMakeExp]';
-  OpMakeVec:Result:='[OpMakeVec]';
+  OpExport :Result:='[OpExport]';
 
   else
    Result:=Op.GetStr(OpId);

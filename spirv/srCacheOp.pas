@@ -13,34 +13,31 @@ uses
  srOp;
 
 type
- PsrCacheOpKey=^TsrCacheOpKey;
- TsrCacheOpKey=packed record
-  place:TsrOpBlock;
-  OpId :DWORD;
-  dtype:TsrDataType;
-  count:DWORD;
-  pData:PPsrRegNode;
+ PsrCSEKey=^TsrCSEKey;
+ TsrCSEKey=packed record
+  pLine  :TSpirvOp;
+  pParent:TSpirvOp;
  end;
 
- TsrCacheOp=class
+ TsrCSENode=class
   public
-   pLeft,pRight:TsrCacheOp;
-   class function c(n1,n2:PsrCacheOpKey):Integer; static;
-  private
-   key:TsrCacheOpKey;
+   pLeft,pRight:TsrCSENode;
+   class function c(n1,n2:PsrCSEKey):Integer; static;
   public
-   pDst:TsrNode;
+   key:TsrCSEKey;
+  public
  end;
 
  PsrCacheOpList=^TsrCacheOpList;
  TsrCacheOpList=object
   type
-   TNodeTree=specialize TNodeTreeClass<TsrCacheOp>;
+   TCSETree=specialize TNodeTreeClass<TsrCSENode>;
   var
    FEmit:TCustomEmit;
-   FTree:TNodeTree;
+   FCSETree:TCSETree;
   Procedure Init(Emit:TCustomEmit); inline;
-  function  Fetch(place:TsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):TsrCacheOp;
+  function  FindLocalCSE(node:TspirvOp):TsrCSENode;
+  function  AddLocalCSE (node:TspirvOp):TsrCSENode;
  end;
 
 function  _up_to_real(t:TsrOpBlock):TsrOpBlock;
@@ -59,22 +56,43 @@ end;
 
 //--
 
-class function TsrCacheOp.c(n1,n2:PsrCacheOpKey):Integer;
+function CompareParams(p1,p2:TSpirvOp):Integer;
+var
+ n1,n2:POpParamNode;
+ r1,r2:TsrNode;
 begin
- //place (not need order sort)
- Result:=ord(ptruint(n1^.place)>ptruint(n2^.place))-ord(ptruint(n1^.place)<ptruint(n2^.place));
+ Result:=0;
+
+ n1:=p1.ParamNode(0);
+ n2:=p2.ParamNode(0);
+
+ While (n1<>nil) do
+ begin
+  r1:=n1.Value;
+  r2:=n2.Value;
+
+  Result:=ord(ptruint(r1)>ptruint(r2))-ord(ptruint(r1)<ptruint(r2));
+  if (Result<>0) then Exit;
+
+  n1:=n1.Next;
+  n2:=n2.Next;
+ end;
+
+end;
+
+class function TsrCSENode.c(n1,n2:PsrCSEKey):Integer;
+begin
+ //pParent
+ Result:=ord(ptruint(n1^.pParent)>ptruint(n2^.pParent))-ord(ptruint(n1^.pParent)<ptruint(n2^.pParent));
  if (Result<>0) then Exit;
  //OpId
- Result:=ord(n1^.OpId>n2^.OpId)-ord(n1^.OpId<n2^.OpId);
+ Result:=ord(n1^.pLine.OpId>n2^.pLine.OpId)-ord(n1^.pLine.OpId<n2^.pLine.OpId);
  if (Result<>0) then Exit;
- //dtype
- Result:=ord(n1^.dtype>n2^.dtype)-ord(n1^.dtype<n2^.dtype);
+ //pType
+ Result:=ord(ptruint(n1^.pLine.pType)>ptruint(n2^.pLine.pType))-ord(ptruint(n1^.pLine.pType)<ptruint(n2^.pLine.pType));
  if (Result<>0) then Exit;
- //count
- Result:=ord(n1^.count>n2^.count)-ord(n1^.count<n2^.count);
- if (Result<>0) then Exit;
- //(not need order sort)
- Result:=ComparePtruint(PPtruint(n1^.pData),PPtruint(n2^.pData),n1^.count);
+
+ Result:=CompareParams(n1^.pLine,n2^.pLine);
 end;
 
 Procedure TsrCacheOpList.Init(Emit:TCustomEmit); inline;
@@ -82,34 +100,37 @@ begin
  FEmit:=Emit;
 end;
 
-function TsrCacheOpList.Fetch(place:TsrOpBlock;OpId:DWORD;rtype:TsrDataType;count:Byte;src:PPsrRegNode):TsrCacheOp;
+function TsrCacheOpList.FindLocalCSE(node:TspirvOp):TsrCSENode;
 var
- size:ptruint;
- key:TsrCacheOpKey;
+ key:TsrCSEKey;
 begin
- Assert(place<>nil);
- place:=_up_to_real(place);
  Result:=nil;
- //
- key:=Default(TsrCacheOpKey);
- key.place:=place;
- key.OpId :=OpId;
- key.dtype:=rtype;
- key.count:=count;
- key.pData:=src;
- //
- Result:=FTree.Find(@key);
- if (Result=nil) then
+
+ key.pLine  :=node;
+ key.pParent:=_up_to_real(node.Parent);
+
+ //search for dominance
+ while (Result=nil) and (key.pParent<>nil) do
  begin
-  Result:=FEmit.specialize New<TsrCacheOp>;
-  Result.key:=key;
-
-  size:=count*SizeOf(Pointer);
-  Result.key.pData:=FEmit.Alloc(size);
-  Move(src^,Result.key.pData^,size);
-
-  FTree.Insert(Result);
+  Result:=FCSETree.Find(@key);
+  key.pParent:=_up_to_real(key.pParent.Parent);
  end;
+
+end;
+
+function TsrCacheOpList.AddLocalCSE(node:TspirvOp):TsrCSENode;
+var
+ key:TsrCSEKey;
+begin
+ Result:=nil;
+
+ key.pLine  :=node;
+ key.pParent:=_up_to_real(node.Parent);
+
+ Result:=FEmit.specialize New<TsrCSENode>;
+ Result.key:=key;
+
+ FCSETree.Insert(Result);
 end;
 
 end.

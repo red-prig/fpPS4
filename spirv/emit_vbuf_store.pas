@@ -366,7 +366,7 @@ begin
   1:rsl:=lc.elm[0];
   else
    begin
-    rsl:=OpMakeVec(line,lc.elem_orig.AsVector(lc.elem_count),@lc.elm);
+    rsl:=OpVectorTo(line,lc.elem_orig.AsVector(lc.elem_count),@lc.elm);
    end;
  end;
 
@@ -457,7 +457,7 @@ begin
   1:rsl:=lc.elm[0];
   else
    begin
-    rsl:=OpMakeVec(line,lc.elem_resl.AsVector(lc.elem_count),@lc.elm);
+    rsl:=OpVectorTo(line,lc.elem_resl.AsVector(lc.elem_count),@lc.elm);
    end;
  end;
 

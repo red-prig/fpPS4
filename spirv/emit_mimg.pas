@@ -747,7 +747,7 @@ begin
   Result:=src[0];
  end else
  begin
-  Result:=OpMakeVec(line,info^.dtype.AsVector(m),@src);
+  Result:=OpVectorTo(line,info^.dtype.AsVector(m),@src);
  end;
 end;
 
@@ -769,7 +769,7 @@ begin
   Result:=src[0];
  end else
  begin
-  Result:=OpMakeVec(line,TsrDataType(dtFloat32).AsVector(count),@src);
+  Result:=OpVectorTo(line,TsrDataType(dtFloat32).AsVector(count),@src);
  end;
 
  offset:=offset+count;
@@ -807,7 +807,7 @@ begin
 
   end;
 
-  Result:=OpMakeVec(line,TsrDataType(dtFloat32).AsVector(3),@src);
+  Result:=OpVectorTo(line,TsrDataType(dtFloat32).AsVector(3),@src);
 
  end else
  begin
@@ -834,7 +834,7 @@ begin
    Result:=src[0];
   end else
   begin
-   Result:=OpMakeVec(line,TsrDataType(dtFloat32).AsVector(count),@src);
+   Result:=OpVectorTo(line,TsrDataType(dtFloat32).AsVector(count),@src);
   end;
 
  end;
@@ -873,7 +873,7 @@ begin
 
   end;
 
-  Result:=OpMakeVec(line,TsrDataType(dtInt32).AsVector(3),@src);
+  Result:=OpVectorTo(line,TsrDataType(dtInt32).AsVector(3),@src);
 
  end else
  begin
@@ -900,7 +900,7 @@ begin
    Result:=src[0];
   end else
   begin
-   Result:=OpMakeVec(line,TsrDataType(dtInt32).AsVector(count),@src);
+   Result:=OpVectorTo(line,TsrDataType(dtInt32).AsVector(count),@src);
   end;
 
  end;

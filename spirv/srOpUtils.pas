@@ -264,13 +264,16 @@ function GetMaxPlace(pLine:TSpirvOp;count:Byte;src:PPsrRegNode):TSpirvOp;
 var
  m:TSpirvOp;
  i:Byte;
+ r:TsrRegNode;
 begin
  Result:=pLine;
  if (count=0) or (src=nil) then Exit;
+
  m:=nil;
  For i:=0 to count-1 do
  begin
-  if (not src[i].is_const) then
+  r:=RegDown(src[i]);
+  if (not r.is_const) and (not r.pWriter.IsType(ntVolatile)) then
   //Dependencies can be in grouping blocks
   //if IsParentOfLine(pLine,src[i].pLine) then
   begin

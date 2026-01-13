@@ -678,8 +678,7 @@ var
 begin
  if not fetch_ssrc9_pair(SSRC,@src,dtUint32) then Assert(false);
 
- dst:=NewReg(dtVec2u);
- OpMakeCon(line,dst,@src);
+ dst:=OpVectorTo(line,dtVec2u,@src);
 
  Result:=BitcastList.FetchRead(rtype,dst);
 end;
@@ -930,9 +929,7 @@ begin
  rsl[0]:=OpFToF(src0,dtHalf16);
  rsl[1]:=OpFToF(src1,dtHalf16);
 
- dst^.New(dtVec2h);
-
- OpMakeCon(line,dst^.current,@rsl);
+ MakeCopy(dst,OpVectorTo(line,dtVec2h,@rsl));
 end;
 
 //

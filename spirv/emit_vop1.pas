@@ -256,7 +256,7 @@ begin
  src[0]:=OpFToF(src[0],dtHalf16);
  src[1]:=NewImm_s(dtHalf16,0);
 
- dstv:=OpMakeVec(line,dtVec2h,@src);
+ dstv:=OpVectorTo(line,dtVec2h,@src);
 
  dst^.New(dtVec2h).pWriter:=dstv;
 end;

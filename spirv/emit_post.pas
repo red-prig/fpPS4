@@ -21,6 +21,7 @@ uses
   srOp,
   srOpUtils,
   srDecorate,
+  srCacheOp,
   emit_fetch;
 
 type
@@ -38,8 +39,6 @@ type
   function  RegSTStrict(pLine:TspirvOp;var node:TsrRegNode):Integer;
   function  RegVTStrict(pLine:TspirvOp;var node:TsrRegNode):Integer;
 
-  //function  NodeOpSameOp(node:TspirvOp):Integer;
-
   function  NodeOpStrict(node:TspirvOp):Integer;
 
   function  OnOpStep1(node:TspirvOp):Integer; //backward
@@ -48,7 +47,8 @@ type
   function  OnOpStep4(node:TspirvOp):Integer; //forward
   function  OnOpStep5(node:TspirvOp):Integer; //backward
   function  OnOpStep6(node:TspirvOp):Integer; //backward
-  function  OnOpStep7(node:TspirvOp):Integer; //backward
+  function  OnOpStep7(node:TspirvOp):Integer; //forward
+  function  OnOpStep8(node:TspirvOp):Integer; //backward
 
   function  OnDecorate(node:TspirvOp):Integer;
 
@@ -540,42 +540,6 @@ begin
  end;
 end;
 
-{
-function TSprvEmit_post.NodeOpSameOp(node:TspirvOp):Integer;
-var
- tmp:TspirvOp;
- dst,src:TsrRegNode;
-begin
- Result:=0;
- if (node^.dst.ntype<>ntReg) then Exit; //is reg
-
- Case node^.OpId of
-  Op.OpLoad:;
-  Op.OpCompositeConstruct:;
-  OpMakeExp:;
-  OpMakeVec:;
-  OpPackOfs:;
-  else
-    Exit;
- end;
-
- tmp:=FindUpSameOp(node^.pPrev,node);
- if (tmp=nil) then Exit;
-
- src:=tmp^.dst.AsReg;
- dst:=node^.dst.AsReg;
-
- if (src=nil) or (dst=nil) then Exit;
-
- dst^.SetReg(src);
-
- node^.OpId:=OpLinks; //mark remove
- node^.dst:=Default(TOpParamSingle);
-
- Result:=1;
-end;
-}
-
 function TSprvEmit_post.NodeOpStrict(node:TspirvOp):Integer;
 begin
  Result:=0;
@@ -702,7 +666,104 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep7(node:TspirvOp):Integer; //backward
+//Local CSE
+function TSprvEmit_post.OnOpStep7(node:TspirvOp):Integer; //forward
+var
+ val:TsrCSENode;
+ dst:TsrNode;
+ src:TsrRegNode;
+begin
+ Result:=0;
+ if node.is_cleared then Exit;
+ if node.can_clear  then Exit;
+ if (node.pDst=nil) then Exit;
+
+ //Writeln(OpGetStrDebug(node));
+
+ case node.OpId of
+
+  Op.OpFunction,
+  Op.OpBranch,
+  Op.OpBranchConditional,
+  Op.OpSwitch,
+  Op.OpReturn,
+  Op.OpReturnValue,
+  Op.OpKill,
+  Op.OpTerminateInvocation,
+  Op.OpDemoteToHelperInvocation,
+  Op.OpUnreachable,
+  Op.OpSelectionMerge,
+  Op.OpLoopMerge,
+  Op.OpLabel,
+  Op.OpEmitVertex,
+  Op.OpEndPrimitive,
+  Op.OpControlBarrier:Exit;
+
+  Op.OpLoad          ,
+  Op.OpStore         ,
+  Op.OpAtomicStore   ,
+  Op.OpAtomicExchange,
+  Op.OpAtomicIAdd    ,
+  Op.OpAtomicISub    ,
+  Op.OpAtomicSMin    ,
+  Op.OpAtomicUMin    ,
+  Op.OpAtomicSMax    ,
+  Op.OpAtomicUMax    ,
+  Op.OpAtomicAnd     ,
+  Op.OpAtomicOr      ,
+  Op.OpAtomicXor     ,
+  Op.OpAtomicFMinEXT ,
+  Op.OpAtomicFMaxEXT :Exit;
+
+  Op.OpAtomicCompareExchange    :Exit;
+  Op.OpAtomicCompareExchangeWeak:Exit;
+
+  Op.OpSampledImage,
+  Op.OpImageSampleImplicitLod,
+  Op.OpImageSampleExplicitLod,
+  Op.OpImageSampleDrefExplicitLod,
+  Op.OpImageGather,
+  Op.OpImageDrefGather,
+  Op.OpImageFetch,
+  Op.OpImageRead,
+  Op.OpImageWrite,
+  Op.OpImageQuerySizeLod:Exit;
+
+  else
+   //Exit;
+ end;
+
+ val:=CacheOpList.FindLocalCSE(node);
+
+ if (val=nil) then
+ begin
+  CacheOpList.AddLocalCSE(node);
+  Exit;
+ end;
+
+ //replace
+ src:=val.key.pLine.pDst;
+ dst:=node.pDst;
+
+ if dst.IsType(TsrRegNode) then
+ begin
+  TsrRegNode(dst).pWriter:=src;
+ end else
+ if dst.IsType(TsrChain) then
+ begin
+  TsrChain(dst).pWriter:=src;
+ end else
+ begin
+  Exit; //unknow
+ end;
+
+ node.mark([soNotUsed]);
+ node.pDst:=nil;
+
+ Result:=1;
+end;
+
+function TSprvEmit_post.OnOpStep8(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -818,10 +879,13 @@ label
 var
  pFunc:TSpirvFunc;
  data_layout:Boolean;
+ cse_pass:Boolean;
  i,r4:Integer;
 begin
  Result:=0;
  data_layout:=false;
+ cse_pass   :=True;
+
  //backward analize
  pFunc:=FuncList.FList.pTail;
  While (pFunc<>nil) do
@@ -911,9 +975,21 @@ begin
    goto _pass;
   end;
 
+  if cse_pass then
+  begin
+   cse_pass:=False;
+   //CSE
+   i:=EnumBlockOpForward(@OnOpStep7,pFunc.pTop);
+   if (i<>0) then
+   begin
+    //pass agian
+    goto _pass;
+   end;
+  end;
+
   PrivateList.RemoveAllStore;
 
-  Result:=Result+EnumBlockOpBackward(@OnOpStep7,pFunc.pTop); //OnOpStep7 Remove Lines
+  Result:=Result+EnumBlockOpBackward(@OnOpStep8,pFunc.pTop); //OnOpStep7 Remove Lines
 
   EnumBlockOpForward(@OnDecorate,pFunc.pTop); //NoContraction
 

@@ -223,7 +223,7 @@ begin
   Inc(push_count);
 
   exc:=GetThreadBit(get_exec0,get_exec1,dtBool);
-  node:=AddSpirvOp(srOpInternal.OpMakeExp);
+  node:=AddSpirvOp(srOpInternal.OpExport);
   node.AddParam(exc); //<-fetch read
  end;
 
@@ -321,7 +321,7 @@ begin
 
    shuffle(dst_sel,rtype,@src,p);
 
-   dst:=OpMakeVec(line,rtype,@src);
+   dst:=OpVectorTo(line,rtype,@src);
 
    dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
    dout.FetchStore(line,dst);
@@ -363,7 +363,7 @@ begin
 
   shuffle(dst_sel,rtype,@src,4);
 
-  dst:=OpMakeVec(line,rtype,@src);
+  dst:=OpVectorTo(line,rtype,@src);
 
   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
   dout.FetchStore(line,dst);

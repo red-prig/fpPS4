@@ -393,7 +393,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
 
- vec:=OpMakeVec(line,dtVec2f,@src);
+ vec:=OpVectorTo(line,dtVec2f,@src);
 
  OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,vec);
 end;
@@ -409,7 +409,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
 
- vec:=OpMakeVec(line,dtVec2f,@src);
+ vec:=OpVectorTo(line,dtVec2f,@src);
 
  OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
 end;

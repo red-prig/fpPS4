@@ -117,11 +117,11 @@ type
   procedure OpMED3U(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpMED3F(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   //
-  function  OpPackOfs(pLine:TspirvOp;rtype:TsrDataType;count:Byte;src:TsrRegNode):TsrRegNode;
-  function  OpMakeCon(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
-  function  OpMakeVec(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
-  function  fetch64  (src:PPsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
-  function  fetch64  (src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpPackOfs (pLine:TspirvOp;rtype:TsrDataType;count:Byte;src:TsrRegNode):TsrRegNode;
+  function  OpVector  (pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
+  function  OpVectorTo(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
+  function  fetch64   (src:PPsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  fetch64   (src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
   //
   procedure OpIAdd(dst:PsrRegSlot;src0,src1:TsrRegNode);
@@ -1039,98 +1039,69 @@ end;
 
 function TEmitOp.OpPackOfs(pLine:TspirvOp;rtype:TsrDataType;count:Byte;src:TsrRegNode):TsrRegNode;
 Var
- p:TsrCacheOp;
+
  dst:TsrRegNode;
  node:TspirvOp;
 begin
  Assert(count<>0);
  Assert(src<>nil);
 
- pLine:=GetMaxPlace(pLine,1,@src);
+ node:=AddSpirvOp(pLine,srOpInternal.OpPackOfs); //need first
 
- p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpPackOfs,rtype,1,@src);
+ dst:=NewReg(rtype);
 
- if (p.pDst=nil) then
- begin
-  node:=AddSpirvOp(pLine,srOpInternal.OpPackOfs); //need first
+ node.pDst:=dst;
+ node.AddLiteral(count);
+ node.AddParam(src);
 
-  dst:=NewReg(rtype);
-
-  node.pDst:=dst;
-  node.AddLiteral(count);
-  node.AddParam(src);
-
-  p.pDst:=dst; //save
-  Result:=dst;
- end else
- begin
-  Result:=p.pDst;
- end;
+ Result:=dst;
 end;
 
-function TEmitOp.OpMakeCon(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
+function TEmitOp.OpVector(pLine:TspirvOp;dst:TsrRegNode;src:PPsrRegNode):TspirvOp;
 Var
- p:TsrCacheOp;
- node:TspirvOp;
  rtype:TsrDataType;
+ node:TspirvOp;
  i:Byte;
 begin
- Result:=pLine;
+ Assert(dst<>nil);
  Assert(src<>nil);
 
  rtype:=dst.dtype;
 
- pLine:=GetMaxPlace(pLine,rtype.Count,src);
+ node:=AddSpirvOp(pLine,Op.OpCompositeConstruct); //need first
 
- p:=CacheOpList.Fetch(pLine.Parent,Op.OpCompositeConstruct,rtype,rtype.Count,src);
+ node.pDst :=dst;
+ node.pType:=TypeList.Fetch(rtype);
 
- if (p.pDst=nil) then
+ For i:=0 to rtype.Count-1 do
  begin
-  node:=OpConstruct(pLine,dst);
-  For i:=0 to rtype.Count-1 do
-  begin
-   node.AddParam(src[i]);
-  end;
-  p.pDst:=dst; //save
-  Result:=node;
- end else
- begin
-  dst.pWriter:=p.pDst;
+  node.AddParam(src[i]);
  end;
+
+ Result:=node;
 end;
 
-function TEmitOp.OpMakeVec(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
+function TEmitOp.OpVectorTo(pLine:TspirvOp;rtype:TsrDataType;src:PPsrRegNode):TsrRegNode;
 Var
- p:TsrCacheOp;
  dst:TsrRegNode;
  node:TspirvOp;
  i:Byte;
 begin
  Assert(src<>nil);
 
- pLine:=GetMaxPlace(pLine,rtype.Count,src);
+ node:=AddSpirvOp(pLine,Op.OpCompositeConstruct); //need first
 
- p:=CacheOpList.Fetch(pLine.Parent,srOpInternal.OpMakeVec,rtype,rtype.Count,src);
+ dst:=NewReg(rtype);
 
- if (p.pDst=nil) then
+ node.pDst :=dst;
+ node.pType:=TypeList.Fetch(rtype);
+
+ For i:=0 to rtype.Count-1 do
  begin
-  node:=AddSpirvOp(pLine,srOpInternal.OpMakeVec); //need first
-
-  dst:=NewReg(rtype);
-
-  node.pDst:=dst;
-
-  For i:=0 to rtype.Count-1 do
-  begin
-   node.AddParam(src[i]);
-  end;
-
-  p.pDst:=dst; //save
-  Result:=dst;
- end else
- begin
-  Result:=p.pDst;
+  node.AddParam(src[i]);
  end;
+
+ Result:=dst;
 end;
 
 type
@@ -1175,8 +1146,8 @@ begin
 
  if (dst=nil) then
  begin
-  dst:=NewReg(dtVec2u);
-  _set_line(ppLine,OpMakeCon(_get_line(ppLine),dst,src));
+  dst:=OpVectorTo(_get_line(ppLine),dtVec2u,src);
+  _set_line(ppLine,dst.pLine);
  end;
 
  Result:=BitcastList.FetchRead(rtype,dst);
@@ -1192,54 +1163,55 @@ begin
  Result:=fetch64(@src,rtype,ppLine);
 end;
 
-Function FindByHalfSpace(node:TspirvOp;pDst:TsrNode):Boolean;
+Function FindByHalfSpaceSampledImage(node:TspirvOp;Tgrp,Sgrp:TsrNode):TsrRegSampledImage;
+Var
+ parent:TspirvOp;
+ dst:TsrRegSampledImage;
 begin
- Result:=False;
+ Result:=nil;
+ parent:=_up_to_real(node.Parent);
  while (node<>nil) do
  begin
-  if (node.pDst=pDst) then Exit(True);
+  if (node.OpId=Op.OpSampledImage) then
+  begin
+   dst:=node.pDst.specialize AsType<TsrRegSampledImage>;
+   if (dst<>nil) then
+   if (dst.Tgrp=Tgrp) and (dst.Sgrp=Sgrp) then
+   begin
+    Exit(dst);
+   end;
+  end;
   //
   if node.IsType(ntOpBlock) then
   if IsReal(TsrOpBlock(node).bType) then
   begin
-   Exit(False);
+   Exit(nil);
   end;
   //
   node:=flow_down_prev_up(node);
+  //
+  if (parent<>_up_to_real(node.Parent)) then
+  begin
+   Exit(nil);
+  end;
+  //
  end;
 end;
 
 function TEmitOp.OpSampledImage(pLine:TspirvOp;Tgrp,Sgrp:TsrNode;dtype:TsrDataType;info:TsrTypeImageInfo):TsrRegSampledImage;
 Var
- src:array[0..1] of TsrNode;
  pType:TsrType;
- p:TsrCacheOp;
  dst:TsrRegSampledImage;
  node:TspirvOp;
 begin
  Assert(Tgrp<>nil);
  Assert(Sgrp<>nil);
 
- src[0]:=Tgrp;
- src[1]:=Sgrp;
-
  Assert(pLine<>nil);
 
- p:=CacheOpList.Fetch(pLine.Parent,Op.OpSampledImage,dtTypeSampledImage,2,@src);
+ dst:=FindByHalfSpaceSampledImage(pLine,Tgrp,Sgrp);
 
- if (p.pDst<>nil) then //check that it is in the current half-space
- begin
-  if FindByHalfSpace(pLine,p.pDst) then
-  begin
-   //use it
-  end else
-  begin
-   //reset
-   p.pDst:=nil;
-  end;
- end;
-
- if (p.pDst=nil) then
+ if (dst=nil) then
  begin
   node:=AddSpirvOp(pLine,Op.OpSampledImage); //need first
 
@@ -1261,11 +1233,10 @@ begin
   node.AddParam(Tgrp);
   node.AddParam(Sgrp);
 
-  p.pDst:=dst; //save
   Result:=dst;
  end else
  begin
-  Result:=TsrRegSampledImage(p.pDst);
+  Result:=dst;
  end;
 end;
 

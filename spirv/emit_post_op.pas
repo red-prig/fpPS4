@@ -61,10 +61,10 @@ type
   function  OnSelect1(node:TSpirvOp):Integer;
   //
   procedure MakeVecConst(rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode);
-  procedure MakeVecOne(dst:TsrRegNode;src:PPsrRegNode);
-  function  MakeVecComp(pLine:TSpirvOp;rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode):TSpirvOp;
+  procedure MakeVecOne  (dst:TsrRegNode;src:PPsrRegNode);
+  function  MakeVecComp (pLine:TSpirvOp;rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode):Boolean;
   //
-  function  OnMakeVec2(node:TSpirvOp):Integer;
+  function  OnVector_2(node:TSpirvOp):Integer;
   function  OnReturn_2(node:TSpirvOp):Integer;
   function  OnMakeExp2(node:TSpirvOp):Integer;
   function  OnIAddExt2(node:TSpirvOp):Integer;
@@ -131,11 +131,12 @@ begin
 
   srOpInternal.OpIAddExt:Result:=OnIAddExt2(node);
   srOpInternal.OpISubExt:Result:=OnISubExt2(node);
-  srOpInternal.OpMakeVec:Result:=OnMakeVec2(node);
   srOpInternal.OpPackAnc:Result:=OnPackAnc2(node);
 
+  Op.OpCompositeConstruct:Result:=OnVector_2(node);
+
   Op.OpReturn:Result:=OnReturn_2(node);
-  OpMakeExp  :Result:=OnMakeExp2(node);
+  OpExport   :Result:=OnMakeExp2(node);
 
   Op.OpImageSampleImplicitLod,
   Op.OpImageSampleExplicitLod,
@@ -2076,7 +2077,7 @@ begin
       rvec[1]:=OpBFSETo(src,NewImm_i(dtInt32,8),vint6,@pLine);
 
       src:=NewReg(dtVec2i);
-      pLine:=OpMakeCon(pLine,src,@rvec);
+      pLine:=OpVector(pLine,src,@rvec);
      end;
    3:
      begin
@@ -2085,7 +2086,7 @@ begin
       rvec[2]:=OpBFSETo(src,NewImm_i(dtInt32,16),vint6,@pLine);
 
       src:=NewReg(dtVec3i);
-      pLine:=OpMakeCon(pLine,src,@rvec);
+      pLine:=OpVector(pLine,src,@rvec);
      end;
    else
     Assert(False);
@@ -2675,6 +2676,7 @@ begin
  For i:=0 to rtype.Count-1 do
  begin
   nodes[i]:=src[i].AsConst;
+  nodes[i]:=ConstList.Bitcast(rtype.Child,nodes[i]);
  end;
 
  h:=ConstList.FetchVector(rtype,@nodes,true);
@@ -2691,12 +2693,12 @@ begin
  dst.pWriter:=rsrc;
 end;
 
-function TEmitPostOp.MakeVecComp(pLine:TSpirvOp;rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode):TSpirvOp;
+function TEmitPostOp.MakeVecComp(pLine:TSpirvOp;rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode):Boolean;
 var
  r:Integer;
  i:Byte;
 begin
- Result:=pLine;
+ Result:=False;
 
  repeat
   r:=0;
@@ -2708,21 +2710,20 @@ begin
   if is_all_const(src,rtype.Count) then
   begin
    MakeVecConst(rtype,dst,src);
-   Exit; //
+   Exit(True); //
   end;
 
   if is_all_in_one_comp(src,rtype,rtype.Count) then
   begin
    MakeVecOne(dst,src);
-   Exit; //
+   Exit(True); //
   end;
 
  until (r=0);
 
- Result:=OpMakeCon(pLine,dst,src);
 end;
 
-function TEmitPostOp.OnMakeVec2(node:TSpirvOp):Integer;
+function TEmitPostOp.OnVector_2(node:TSpirvOp):Integer;
 var
  pParam:POpParamNode;
  dst:TsrRegNode;
@@ -2730,7 +2731,7 @@ var
  rtype:TsrDataType;
  i:Byte;
 begin
- Result:=1;
+ Result:=0;
 
  dst:=node.pDst.specialize AsType<ntReg>;
  if (dst=nil) then Exit;
@@ -2743,13 +2744,16 @@ begin
  begin
   src[i]:=pParam.AsReg;
   pParam:=pParam.Next;
-  if (src[i]=nil) then Assert(false,'OnMakeVec2');
+  if (src[i]=nil) then Assert(false,'OnVector_2');
  end;
 
- MakeVecComp(node,rtype,dst,@src);
+ if MakeVecComp(node,rtype,dst,@src) then
+ begin
+  node.mark([soNotUsed]);
+  node.pDst:=nil;
 
- node.mark([soNotUsed]);
- node.pDst:=nil;
+  Result:=1;
+ end;
 end;
 
 function TEmitPostOp.OnReturn_2(node:TSpirvOp):Integer;

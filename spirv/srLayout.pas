@@ -464,8 +464,8 @@ begin
  //search for dominance
  while (Result=nil) and (_key.parent<>nil) do
  begin
-  _key.parent:=_key.parent.Parent;
   Result:=FChainTree.Find(@_key);
+  _key.parent:=_up_to_real(_key.parent.Parent);
  end;
  _key.parent:=parent; //restore
 
