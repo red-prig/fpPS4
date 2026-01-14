@@ -153,7 +153,7 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        MaxLength = 65
+        MaxLength = 4096
         TabOrder = 5
       end
       object PanelHalf: TPanel
