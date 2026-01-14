@@ -304,6 +304,10 @@ begin
  grp:=GroupingSharp(@src,rtVSharp4);
  PV:=grp.GetSharp;
 
+ //
+ grp.mark_precomp([pfOFFSET,pfSTRIDE,pfFMT]);
+ //
+
  TEmit_vbuf_store(TObject(Self)).buf_store(
   Buf_info(grp,
            dst_sel_ident,
