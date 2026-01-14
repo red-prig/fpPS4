@@ -1559,7 +1559,17 @@ begin
  if ((Result.STENCIL_USAGE and TM_CLEAR)<>0) then
  begin
   //force clear all
-  //VK_COMPARE_OP_NEVER|VK_STENCIL_OP_KEEP
+  Result.ds_state.stencilTestEnable:=VK_TRUE;
+
+  Result.ds_state.front.failOp     :=VK_STENCIL_OP_KEEP;
+  Result.ds_state.front.passOp     :=VK_STENCIL_OP_REPLACE;
+  Result.ds_state.front.depthFailOp:=VK_STENCIL_OP_KEEP;
+  Result.ds_state.front.compareOp  :=VK_COMPARE_OP_ALWAYS;
+  Result.ds_state.front.compareMask:=$FF;
+  Result.ds_state.front.writeMask  :=$FF;
+  Result.ds_state.front.reference  :=CX_REG^.DB_STENCIL_CLEAR.CLEAR;
+
+  Result.ds_state.back:=Result.ds_state.front;
  end else
  begin
 
