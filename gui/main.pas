@@ -1400,11 +1400,14 @@ begin
 end;
 
 procedure TfrmMain.MIRunClick(Sender: TObject);
+label
+ _exit;
 var
  Item:TGameItem;
  ParamSfo:TParamSfoFile;
  aRow:Integer;
  cfg:TGameRunConfig;
+ a:Integer;
 begin
  if (FGameProcess<>nil) then Exit;
 
@@ -1419,6 +1422,27 @@ begin
 
  LogEnd;
  ClearLog;
+
+ if FConfigInfo.BootParamInfo.neo then
+ if (ParamSfo<>nil) then
+ begin
+  a:=ParamSfo.GetUInt('ATTRIBUTE');
+
+  if (a and $800000)=0 then
+  begin
+
+   if (MessageDlg('Question',
+                  'Looks like "'+Item.FGameInfo.Name+'" doesn`t support PS4 Pro, Continue?',
+                  mtConfirmation,
+                  [mbYes, mbNo],
+                  0)=mrNo) then
+   begin
+    goto _exit;
+   end;
+
+  end;
+
+ end;
 
  Pages.ActivePage:=TabLog;
 
@@ -1447,7 +1471,8 @@ begin
   SetButtonsState(mdsStarted);
  end;
 
- FreeAndNil(ParamSfo);
+ _exit:
+  FreeAndNil(ParamSfo);
 end;
 
 procedure TfrmMain.TBPlayClick(Sender: TObject);
