@@ -810,7 +810,12 @@ begin
 
   if (g_port_table[port_id]<>nil) then
   begin
-   Result:=g_port_table[port_id].Output(ptr);
+   mtx_unlock(g_port_lock);
+
+    Result:=g_port_table[port_id].Output(ptr);
+
+   mtx_lock(g_port_lock);
+
    if (Result<0) then Result:=SCE_AUDIO_OUT_ERROR_BUSY;
   end else
   begin
@@ -935,7 +940,11 @@ begin
   end;
 
   //output all
-  g_audioout_interface.Outputs(@params,num);
+  mtx_unlock(g_port_lock);
+
+   g_audioout_interface.Outputs(@params,num);
+
+  mtx_lock(g_port_lock);
 
  _unlock:
 
