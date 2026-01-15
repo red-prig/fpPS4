@@ -788,7 +788,7 @@ function vm_map_entry_create(map:vm_map_t):vm_map_entry_t;
 var
  new_entry:vm_map_entry_t;
 begin
- new_entry:=uma_zalloc(mapentzone, M_WAITOK);
+ new_entry:=uma_zalloc(mapentzone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'vm_map_entry_create: kernel resources exhausted');
  Result:=new_entry;
 end;
