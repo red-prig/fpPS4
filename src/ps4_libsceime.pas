@@ -1157,11 +1157,13 @@ begin
 
  //_sig_unlock;
 
+ {
  if (g_hook=0) then
  begin
   store_release(keyboard_init,0);
   Exit(SCE_IME_ERROR_INTERNAL);
  end;
+ }
 
  g_handler:=param^.handler;
  g_cb_arg :=param^.arg;
