@@ -74,6 +74,7 @@ type
   //
   change_rate:t_change_rate;
   //
+  in_list    :Integer;
   Parent     :TvCustomImage2;
   DepthOnly  :TvCustomImage2;
   StencilOnly:TvCustomImage2;
@@ -151,6 +152,9 @@ type
   function    Compile(ext:Pointer):Boolean; override;
   procedure   restore_vm_track; override;
   procedure   assign_vm_track;  override;
+  procedure   Detach(img:TvCustomImage2);
+  procedure   AttachDepthOnly  (img:TvCustomImage2);
+  procedure   AttachStencilOnly(img:TvCustomImage2);
   Destructor  Destroy; override;
  end;
 
@@ -928,19 +932,86 @@ begin
  end;
 end;
 
+procedure Delist(img:TvCustomImage2);
+begin
+ if (img<>nil) then
+ if (System.InterlockedExchange(img.in_list,0)<>0) then
+ begin
+  FImage2Set.delete(@img.key);
+  TAILQ_REMOVE(@FImageList,img,@img.entry);
+
+  img.Release(nil); //map ref
+ end;
+end;
+
+function Attlist(img:TvCustomImage2):Boolean;
+begin
+ Result:=False;
+ if (img<>nil) then
+ begin
+
+  if (img.in_list<>0) then
+  begin
+   Result:=True;
+  end else
+  if FImage2Set.Insert(@img.key) then
+  begin
+   TAILQ_INSERT_HEAD(@FImageList,img,@img.entry);
+
+   img.Acquire(nil); //map ref
+   img.in_list:=1;
+   Result:=True;
+  end;
+
+ end;
+end;
+
+procedure TvDepthStencilImage2.Detach(img:TvCustomImage2);
+begin
+ if (img<>nil) and (img<>Self) then
+ begin
+  if (DepthOnly=img) then
+  begin
+   DepthOnly:=nil;
+   img.Release(Self);
+  end;
+  if (StencilOnly=img) then
+  begin
+   StencilOnly:=nil;
+   img.Release(Self);
+  end;
+ end;
+end;
+
+procedure TvDepthStencilImage2.AttachDepthOnly(img:TvCustomImage2);
+begin
+ if (img<>nil) and (img<>Self) then
+ begin
+  Detach(DepthOnly);
+
+  img.Acquire(Self);
+  DepthOnly:=img;
+ end;
+end;
+
+procedure TvDepthStencilImage2.AttachStencilOnly(img:TvCustomImage2);
+begin
+ if (img<>nil) and (img<>Self) then
+ begin
+  Detach(StencilOnly);
+
+  img.Acquire(Self);
+  StencilOnly:=img;
+ end;
+end;
+
 Destructor TvDepthStencilImage2.Destroy;
 begin
- if (DepthOnly<>nil) and
-    (DepthOnly<>Self) then
- begin
-  FreeAndNil(DepthOnly);
- end;
+ Delist(DepthOnly);
+ Delist(StencilOnly);
 
- if (StencilOnly<>nil) and
-    (StencilOnly<>Self) then
- begin
-  FreeAndNil(StencilOnly);
- end;
+ Detach(DepthOnly);
+ Detach(StencilOnly);
 
  inherited;
 end;
@@ -977,6 +1048,9 @@ begin
 end;
 
 function _NewImage(const F:TvImageKey;usage:s_image_usage):TvImage2;
+var
+ DepthOnly  :TvCustomImage2;
+ StencilOnly:TvCustomImage2;
 begin
  Case F.cformat of
   //stencil
@@ -986,8 +1060,10 @@ begin
     Result.key   :=F;
     Result.FUsage:=usage;
     //
-    Result.StencilOnly:=TvChildImage2.Create;
-    Result.StencilOnly.key   :=GetStencilOnly(F);
+    StencilOnly:=TvChildImage2.Create;
+    StencilOnly.key:=GetStencilOnly(F);
+    //
+    TvDepthStencilImage2(Result).AttachStencilOnly(StencilOnly);
    end;
   //depth
   VK_FORMAT_D16_UNORM,
@@ -1009,13 +1085,16 @@ begin
     Result.key   :=F;
     Result.FUsage:=usage;
     //
-    Result.DepthOnly:=TvChildImage2.Create;
-    Result.DepthOnly.key   :=GetDepthOnly(F);
-    Result.DepthOnly.Parent:=Result;
+    DepthOnly:=TvChildImage2.Create;
+    DepthOnly.key   :=GetDepthOnly(F);
+    DepthOnly.Parent:=Result;
     //
-    Result.StencilOnly:=TvChildImage2.Create;
-    Result.StencilOnly.key   :=GetStencilOnly(F);
-    Result.StencilOnly.Parent:=Result;
+    StencilOnly:=TvChildImage2.Create;
+    StencilOnly.key   :=GetStencilOnly(F);
+    StencilOnly.Parent:=Result;
+    //
+    TvDepthStencilImage2(Result).AttachDepthOnly  (DepthOnly);
+    TvDepthStencilImage2(Result).AttachStencilOnly(StencilOnly);
    end;
   else
    begin
@@ -1029,24 +1108,19 @@ end;
 
 procedure _DeleteImage(t:TvCustomImage2);
 begin
- FImage2Set.delete(@t.key);
- TAILQ_REMOVE(@FImageList,t,@t.entry);
-
  if (t.DepthOnly<>nil) and
     (t.DepthOnly<>t) then
  begin
-  FImage2Set.delete(@t.DepthOnly.key);
-  TAILQ_REMOVE(@FImageList,t.DepthOnly,@t.DepthOnly.entry);
+  Delist(t.DepthOnly);
  end;
 
  if (t.StencilOnly<>nil) and
     (t.StencilOnly<>t) then
  begin
-  FImage2Set.delete(@t.StencilOnly.key);
-  TAILQ_REMOVE(@FImageList,t.StencilOnly,@t.StencilOnly.entry);
+  Delist(t.StencilOnly);
  end;
 
- t.Release(nil); //map ref
+ Delist(t);
 end;
 
 function _DeleteAlias(const F:TvImageKey):Boolean;
@@ -1063,10 +1137,9 @@ end;
 
 function _InsertImage(t:TvCustomImage2):Boolean;
 begin
- if FImage2Set.Insert(@t.key) then
+ if Attlist(t) then
  begin
-  TAILQ_INSERT_HEAD(@FImageList,t,@t.entry);
-  t.Acquire(nil); //map ref
+  //
  end else
  begin
   Exit(False);
@@ -1075,15 +1148,18 @@ begin
  if (t.DepthOnly<>nil) and
     (t.DepthOnly<>t) then
  begin
-  if FImage2Set.Insert(@t.DepthOnly.key) then
+  if Attlist(t.DepthOnly) then
   begin
-   TAILQ_INSERT_HEAD(@FImageList,t.DepthOnly,@t.DepthOnly.entry);
+   //
   end else
   begin
    //alias? -> delete
    _DeleteAlias(t.DepthOnly.key);
    //again
-   if not FImage2Set.Insert(@t.DepthOnly.key) then
+   if Attlist(t.DepthOnly) then
+   begin
+    //
+   end else
    begin
     //wtf?
     _DeleteImage(t);
@@ -1095,15 +1171,18 @@ begin
  if (t.StencilOnly<>nil) and
     (t.StencilOnly<>t) then
  begin
-  if FImage2Set.Insert(@t.StencilOnly.key) then
+  if Attlist(t.StencilOnly) then
   begin
-   TAILQ_INSERT_HEAD(@FImageList,t.StencilOnly,@t.StencilOnly.entry);
+   //
   end else
   begin
    //alias? -> delete
    _DeleteAlias(t.StencilOnly.key);
    //again
-   if not FImage2Set.Insert(@t.StencilOnly.key) then
+   if Attlist(t.StencilOnly) then
+   begin
+    //
+   end else
    begin
     //wtf?
     _DeleteImage(t);
