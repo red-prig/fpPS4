@@ -8,8 +8,6 @@ uses
  ginodes,
  srNode,
  srCFGParser,
- srType,
- srReg,
  srOp;
 
 type

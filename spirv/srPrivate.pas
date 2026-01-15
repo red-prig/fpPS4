@@ -959,13 +959,17 @@ begin
   if new_vol then
   begin
 
-   Assert(prv.pWriter=orig,'123');
+   if (prv<>orig) then
+   begin
+    Assert(prv.pWriter=orig,'unknow loopback state');
 
-   //need to use orig to create a loopback dependency
-   prv:=orig;
+    //need to use orig to create a loopback dependency
+    prv:=orig;
 
-   //save if new created
-   pVolatile.AddStore(prv);
+    //save if new created
+    pVolatile.AddStore(prv);
+   end;
+
   end;
   rtype:=LazyType2(rtype,prv.dtype);
  end;

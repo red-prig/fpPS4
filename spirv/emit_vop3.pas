@@ -873,7 +873,6 @@ procedure TEmit_VOP3.emit_V_MAD_I32_I24; //vdst.i = vsrc0[23:0].i * vsrc1[23:0].
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
- pImm:TsrConst;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
