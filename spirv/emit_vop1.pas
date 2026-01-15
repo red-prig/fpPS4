@@ -75,7 +75,18 @@ begin
 
  reg:=MakeRead(src,dtUnknow);
 
- MakeCopy(dst,reg);
+ case reg.dtype of
+  dtFloat32:; //allow
+  dtInt32  :; //allow
+  dtUint32 :; //allow
+  else
+   begin
+    //retype
+    reg:=MakeRead(src,dtUint32);
+   end;
+ end;
+
+ Op2(Op.OpGroupNonUniformBroadcastFirst,reg.dtype,dst,NewImm_i(dtUint32,Scope.Subgroup),reg);
 end;
 
 procedure TEmit_VOP1.emit_V_MOVRELS_B32; //vdst = VGPR[vgpr_index_of(vsrc) + M0.u] OOB:VGPR0

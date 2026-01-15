@@ -546,16 +546,21 @@ begin
  if not node.pDst.IsType(ntReg) then Exit; //is reg
 
  Case node.OpId of
-  Op.OpBitFieldInsert          :Result:=EnumRegs(@RegSTStrict,node,[0,1]);
-  Op.OpBitFieldSExtract        ,
-  Op.OpBitFieldUExtract        :Result:=EnumRegs(@RegSTStrict,node,[0]);
-  Op.OpGroupNonUniformBroadcast:Result:=EnumRegs(@RegSTStrict,node,[1]);
-  Op.OpSelect                  :Result:=EnumLineRegs(@RegSTStrict,node);
-  Op.OpIAddCarry               ,
-  Op.OpISubBorrow              ,
-  Op.OpUMulExtended            ,
-  Op.OpSMulExtended            ,
-  Op.OpCompositeConstruct      :Result:=EnumLineRegs(@RegVTStrict,node);
+  Op.OpBitFieldInsert               :Result:=EnumRegs(@RegSTStrict,node,[0,1]);
+
+  Op.OpBitFieldSExtract             ,
+  Op.OpBitFieldUExtract             :Result:=EnumRegs(@RegSTStrict,node,[0]);
+
+  Op.OpGroupNonUniformBroadcast     ,
+  Op.OpGroupNonUniformBroadcastFirst:Result:=EnumRegs(@RegSTStrict,node,[1]);
+
+  Op.OpSelect                       :Result:=EnumLineRegs(@RegSTStrict,node);
+
+  Op.OpIAddCarry                    ,
+  Op.OpISubBorrow                   ,
+  Op.OpUMulExtended                 ,
+  Op.OpSMulExtended                 ,
+  Op.OpCompositeConstruct           :Result:=EnumLineRegs(@RegVTStrict,node);
   else;
  end;
 
@@ -832,7 +837,8 @@ begin
      //
      AddCapability(Capability.GroupNonUniformQuad);
     end;
-  Op.OpGroupNonUniformBroadcast:
+  Op.OpGroupNonUniformBroadcast,
+  Op.OpGroupNonUniformBroadcastFirst:
     begin
      r:=node.ParamNode(2).Value;
      r:=RegDown(r);
