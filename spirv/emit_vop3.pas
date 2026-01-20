@@ -166,9 +166,6 @@ var
  i,ABS,NEG:Byte;
  tmp:TsrDataType;
 
- pImm_0x80000000:TsrConst;
- pImm_0x7FFFFFFF:TsrConst;
-
  function Filter(t:TsrDataType):TsrDataType; inline;
  begin
   if t.isFloat or t.isInt then
@@ -195,9 +192,6 @@ begin
     end;
  end;
 
- pImm_0x80000000:=nil;
- pImm_0x7FFFFFFF:=nil;
-
  if (ABS<>0) or (NEG<>0) then
  For i:=0 to count-1 do
  begin
@@ -212,22 +206,19 @@ begin
    if ABS.TestBit(i) and NEG.TestBit(i) then
    begin
     //val or 0x80000000
-    if (pImm_0x80000000=nil) then pImm_0x80000000:=NewImm_q(dtUInt32,$80000000);
-    src[i]:=OpOrTo(src[i],pImm_0x80000000);
+    src[i]:=OpOrTo(src[i],NewImm_q(tmp.AsUnsigned, QWORD(1) shl (tmp.BitSize-1) ));
     src[i].PrepType(ord(tmp));
    end else
    if ABS.TestBit(i) then
    begin
     //val and !0x80000000
-    if (pImm_0x7FFFFFFF=nil) then pImm_0x7FFFFFFF:=NewImm_q(dtUInt32,$7FFFFFFF);
-    src[i]:=OpAndTo(src[i],pImm_0x7FFFFFFF);
+    src[i]:=OpAndTo(src[i],NewImm_q(tmp.AsUnsigned, not (QWORD(1) shl (tmp.BitSize-1)) ));
     src[i].PrepType(ord(tmp));
    end else
    if NEG.TestBit(i) then
    begin
     //val xor 0x80000000
-    if (pImm_0x80000000=nil) then pImm_0x80000000:=NewImm_q(dtUInt32,$80000000);
-    src[i]:=OpXorTo(src[i],pImm_0x80000000);
+    src[i]:=OpXorTo(src[i],NewImm_q(tmp.AsUnsigned, QWORD(1) shl (tmp.BitSize-1) ));
     src[i].PrepType(ord(tmp));
    end;
    //int

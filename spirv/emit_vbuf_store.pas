@@ -407,7 +407,6 @@ var
  i:Byte;
 begin
  orig:=TsrChain(lc.v.data[0]);
- sum_d:=orig.pIndex;
 
  For i:=0 to lc.elem_count-1 do
   if (lc.elm[i]<>nil) then
@@ -418,7 +417,7 @@ begin
     elm:=orig;
    end else
    begin
-    sum_d:=OpIAddTo(sum_d,i);
+    sum_d:=OpIAddTo(orig.pIndex,i);
 
     lvl_0.offset:=0;
     lvl_0.size  :=orig.size;

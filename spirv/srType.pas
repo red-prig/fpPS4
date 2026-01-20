@@ -93,6 +93,8 @@ type
   function Child:TsrDataType;
   function Count:Byte;
   function Sign:Byte;
+  function AsSigned:TsrDataType;
+  function AsUnsigned:TsrDataType;
   function BitSize:Byte;
   function High:QWORD;
   function AsVector(_count:Byte):TsrDataType;
@@ -331,11 +333,7 @@ begin
 
   dtVec2i,
   dtVec3i,
-  dtVec4i,
-
-  dtVec2f,
-  dtVec3f,
-  dtVec4f:
+  dtVec4i:
    Result:=True;
 
   else
@@ -529,6 +527,48 @@ begin
 
   else
    Result:=0;
+ end;
+end;
+
+function TsrDataTypeHelper.AsSigned:TsrDataType;
+begin
+ Case Self of
+  dtUint8     :Result:=dtInt8      ;
+  dtUint16    :Result:=dtInt16     ;
+  dtUint32    :Result:=dtInt32     ;
+  dtUint64    :Result:=dtInt64     ;
+  dtStruct2u  :Result:=dtStruct2i  ;
+  dtStruct2u64:Result:=dtStruct2i64;
+  dtVec4u8    :Result:=dtVec2u8    ;
+  dtVec4i8    :Result:=dtVec2i8    ;
+  dtVec4u16   :Result:=dtVec2u16   ;
+  dtVec4i16   :Result:=dtVec2i16   ;
+  dtVec2i     :Result:=dtVec2u     ;
+  dtVec3i     :Result:=dtVec3u     ;
+  dtVec4i     :Result:=dtVec4u     ;
+  else
+               Result:=Self;
+ end;
+end;
+
+function TsrDataTypeHelper.AsUnsigned:TsrDataType;
+begin
+ Case Self of
+  dtInt8      :Result:=dtUint8     ;
+  dtInt16     :Result:=dtUint16    ;
+  dtInt32     :Result:=dtUint32    ;
+  dtInt64     :Result:=dtUint64    ;
+  dtStruct2i  :Result:=dtStruct2u  ;
+  dtStruct2i64:Result:=dtStruct2u64;
+  dtVec2u8    :Result:=dtVec4u8    ;
+  dtVec2i8    :Result:=dtVec4i8    ;
+  dtVec2u16   :Result:=dtVec4u16   ;
+  dtVec2i16   :Result:=dtVec4i16   ;
+  dtVec2u     :Result:=dtVec2i     ;
+  dtVec3u     :Result:=dtVec3i     ;
+  dtVec4u     :Result:=dtVec4i     ;
+  else
+               Result:=Self;
  end;
 end;
 
