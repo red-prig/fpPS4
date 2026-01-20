@@ -680,7 +680,7 @@ begin
 
  dst:=OpVectorTo(line,dtVec2u,@src);
 
- Result:=BitcastList.FetchRead(rtype,dst);
+ Result:=MakeRead(dst,rtype,False);
 end;
 
 function TEmitFetch.fetch_vsrc8(VSRC:Word;rtype:TsrDataType):TsrRegNode;
@@ -965,13 +965,17 @@ var
 begin
  if (step_rate>1) then
  begin
-  src:=AddInput(@RegsStory.FUnattach,dtUInt32,itVInstance,id);
+  src:=AddInput(@RegsStory.FUnattach,dtUInt32,itInstanceId,id);
   src:=OpIDivTo(src,step_rate);
 
   MakeCopy(dst,src);
  end else
+ if (FBaseInstance<>nil) then
  begin
-  src:=AddInput(dst,dtUInt32,itVInstance,id);
+  src:=AddInput(dst,dtUInt32,itInstanceId,id);
+ end else
+ begin
+  src:=AddInput(dst,dtUInt32,itInstanceIndex,id);
  end;
 
  Result:=src;

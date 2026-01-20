@@ -289,6 +289,40 @@ begin
  until false;
 end;
 
+function get_srd_op_str(i:Word):RawByteString;
+const
+ IT_DRAW_INDEX_INDIRECT             = $00000025;
+ IT_DRAW_INDEX_INDIRECT_MULTI       = $00000038;
+ IT_DRAW_INDEX_INDIRECT_COUNT_MULTI = $0000009d;
+begin
+ case i of
+  0:Result:='nop';
+  IT_DRAW_INDEX_INDIRECT            :Result:='DRAW_INDEX_INDIRECT';
+  IT_DRAW_INDEX_INDIRECT_MULTI      :Result:='DRAW_INDEX_INDIRECT_MULTI';
+  IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:Result:='DRAW_INDEX_INDIRECT_COUNT_MULTI';
+  else
+    Result:=IntToStr(i);
+ end;
+end;
+
+function get_srd_reg_str(i:Word):RawByteString;
+begin
+ case i of
+  mmSPI_SHADER_USER_DATA_VS_0..
+  mmSPI_SHADER_USER_DATA_VS_15:
+    begin
+     Result:='s'+IntToStr(i-mmSPI_SHADER_USER_DATA_VS_0);
+    end;
+  mmSPI_SHADER_USER_DATA_ES_0..
+  mmSPI_SHADER_USER_DATA_ES_15:
+    begin
+     Result:='s'+IntToStr(i-mmSPI_SHADER_USER_DATA_ES_0);
+    end;
+  else
+     Result:='nop';
+ end;
+end;
+
 const
  c_registerCount:array[0..1] of PChar=('4DW','8DW');
  c_resourceType :array[0..1] of PChar=('V#' ,'T#' );
@@ -418,6 +452,18 @@ begin
    end;
    Writeln;
   end;
+
+ end; //(info<>nil)
+
+ if cfg.FPrintInfo then
+ if (GPU_REGS.SDP<>nil) then
+ begin
+  Writeln('ShaderDrawParam');
+  Writeln(' op          =',get_srd_op_str (GPU_REGS.SDP^.op));
+  Writeln(' baseVtxReg  =',get_srd_reg_str(GPU_REGS.SDP^.baseVtxReg  ));
+  Writeln(' startInstReg=',get_srd_reg_str(GPU_REGS.SDP^.startInstReg));
+  Writeln(' drawIndexReg=',get_srd_reg_str(GPU_REGS.SDP^.drawIndexReg));
+  Writeln;
  end;
 
  SprvEmit:=TSprvEmit.Create;
@@ -450,10 +496,6 @@ begin
             ' SGPRS:',ConvertCountSGPRS(GPU_REGS.VS.RSRC1.SGPRS));
    end;
 
-   SprvEmit.InitVs(GPU_REGS.VS.RSRC1,GPU_REGS.VS.RSRC2,1,1);
-
-   SprvEmit.SetUserData(@GPU_REGS.VS.USER_DATA);
-
    if (GPU_REGS.SDP<>nil) then
    begin
     SprvEmit.SET_DRAW_PARAM(GPU_REGS.SDP^.op,
@@ -461,6 +503,10 @@ begin
                             GPU_REGS.SDP^.startInstReg,
                             GPU_REGS.SDP^.drawIndexReg);
    end;
+
+   SprvEmit.InitVs(GPU_REGS.VS.RSRC1,GPU_REGS.VS.RSRC2,1,1);
+
+   SprvEmit.SetUserData(@GPU_REGS.VS.USER_DATA);
 
   end;
   kShaderTypeCs:
@@ -494,7 +540,7 @@ begin
   Writeln(StdErr,'Shader Parse Err');
  end;
 
- if cfg.cfg.PrintAsm or cfg.FPrintSpv or (cfg.FSave<>'') then
+ if cfg.cfg.PrintAsm or cfg.FPrintSpv or cfg.cfg.PrintCfg or (cfg.FSave<>'') then
  begin
   SprvEmit.PostStage;
   SprvEmit.AllocStage;

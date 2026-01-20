@@ -59,8 +59,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
 
  //Force type
- src[0]:=BitcastList.FetchRead(dtInt32,src[0]);
- src[1]:=BitcastList.FetchRead(dtInt32,src[1]);
+ src[0]:=MakeRead(src[0],dtInt32,False);
+ src[1]:=MakeRead(src[1],dtInt32,False);
 
  OpIAdd(dst,src[0],src[1]);
 
@@ -104,8 +104,8 @@ begin
  src[1]:=fetch_ssrc9(FSPI.SOP2.SSRC1,dtInt32);
 
  //Force type
- src[0]:=BitcastList.FetchRead(dtInt32,src[0]);
- src[1]:=BitcastList.FetchRead(dtInt32,src[1]);
+ src[0]:=MakeRead(src[0],dtInt32,False);
+ src[1]:=MakeRead(src[1],dtInt32,False);
 
  OpISub(dst,src[0],src[1]);
 
@@ -208,8 +208,8 @@ begin
  end else
  begin
   //force type
-  src0:=BitcastList.FetchRead(dtBool,src0);
-  src1:=BitcastList.FetchRead(dtBool,src1);
+  src0:=MakeRead(src0,dtBool,False);
+  src1:=MakeRead(src1,dtBool,False);
 
   OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
  end;

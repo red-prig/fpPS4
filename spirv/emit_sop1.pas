@@ -123,8 +123,8 @@ begin
  end else
  begin
   //force type
-  src0:=BitcastList.FetchRead(dtBool,src0);
-  src1:=BitcastList.FetchRead(dtBool,src1);
+  src0:=MakeRead(src0,dtBool,False);
+  src1:=MakeRead(src1,dtBool,False);
 
   OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
  end;

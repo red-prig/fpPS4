@@ -127,10 +127,10 @@ var
  f_value :TsrRegNode;
 begin
  //nan
- f_is_nan:=BitcastList.FetchRead(dtFloat32,reg);
+ f_is_nan:=MakeRead(reg,dtFloat32,False);
  f_is_nan:=OpIsNanTo(reg);
 
- i:=BitcastList.FetchRead(dtUint32,reg);
+ i:=MakeRead(reg,dtUint32,False);
 
  //negative float or denormal
  f_is_neg:=OpCmpTo(Op.OpSLessThan,i,NewImm_q(dtUint32,$38000000)); //(Integer(ui32Src) <= $38000000)
@@ -170,10 +170,10 @@ var
  f_value :TsrRegNode;
 begin
  //nan
- f_is_nan:=BitcastList.FetchRead(dtFloat32,reg);
+ f_is_nan:=MakeRead(reg,dtFloat32,False);
  f_is_nan:=OpIsNanTo(reg);
 
- i:=BitcastList.FetchRead(dtUint32,reg);
+ i:=MakeRead(reg,dtUint32,False);
 
  //negative float or denormal
  f_is_neg:=OpCmpTo(Op.OpSLessThan,i,NewImm_q(dtUint32,$38000000)); //(Integer(ui32Src) <= $38000000)

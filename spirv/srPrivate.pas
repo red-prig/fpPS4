@@ -716,13 +716,52 @@ begin
  end;
 end;
 
+type
+ TsrTypeSelector=record
+  main:TsrDataType;
+  bool:TsrDataType;
+ end;
+
+function nBool(t:TsrDataType):TsrDataType; inline;
+begin
+ if (t=dtBool) then
+  Result:=dtUnknow
+ else
+  Result:=t;
+end;
+
+function oBool(t:TsrDataType):TsrDataType; inline;
+begin
+ if (t=dtBool) then
+  Result:=t
+ else
+  Result:=dtUnknow;
+end;
+
+operator := (i:TsrDataType):TsrTypeSelector;
+begin
+ Result.main:=nBool(i);
+ Result.bool:=oBool(i);
+end;
+
+operator + (a,b:TsrTypeSelector):TsrTypeSelector;
+begin
+ Result.main:=LazyType2(nBool(a.main),nBool(b.main));
+ Result.bool:=LazyType2(oBool(a.bool),oBool(b.bool));
+end;
+
+operator := (s:TsrTypeSelector):TsrDataType;
+begin
+ Result:=LazyType2(s.main,s.bool);
+end;
+
 procedure TsrPrivateList.build_slot_endif(var ctx:TsrVolatileContext;pSlot:PsrRegSlot;var orig,prev,_next:TsrRegNode);
 var
  pLine    :TSpirvOp;
  org,prv  :TsrRegNode;
  cur      :TsrRegNode;
  pVolatile:TsrVolatile;
- rtype    :TsrDataType;
+ rtype    :TsrTypeSelector;
  cur_c_org:Boolean;
  cur_c_prv:Boolean;
 begin
@@ -762,21 +801,27 @@ begin
  if (cur_c_org<>cur_c_prv)  then //Do not add orig if both values are assigned
  begin
   pVolatile.AddStore(org);
-  rtype:=LazyType2(rtype,org.dtype);
  end;
  //
  if (prv<>nil) then
  if (not cur_c_prv) then //Do not add prev If the value has not changed
  begin
   pVolatile.AddStore(prv);
-  rtype:=LazyType2(rtype,prv.dtype);
+  rtype:=rtype+prv.dtype;
  end;
  //
  if (cur<>nil) then
  begin
   pVolatile.AddStore(cur);
   pVolatile.FBase:=cur;
-  rtype:=LazyType2(rtype,cur.dtype);
+  rtype:=rtype+cur.dtype;
+ end;
+ //
+ if (org<>nil) then
+ if (cur_c_org<>cur_c_prv)  then //Do not add orig if both values are assigned
+ begin
+  //lower prio of type
+  rtype:=rtype+org.dtype;
  end;
 
  pLine:=ctx.after;
@@ -799,7 +844,7 @@ var
  cur,nxt  :TsrRegNode;
  pVolatile:TsrVolatile;
  new_vol  :Boolean;
- rtype    :TsrDataType;
+ rtype    :TsrTypeSelector;
 begin
  cur:=RegDownSlot(pSlot^.current);
  nxt:=RegDownSlot(_next);
@@ -848,14 +893,14 @@ begin
    //save if new created
    pVolatile.AddStore(nxt);
   end;
-  rtype:=LazyType2(rtype,nxt.dtype);
+  rtype:=rtype+nxt.dtype;
  end;
  //
  if (cur<>nil) then
  begin
   pVolatile.AddStore(cur);
   pVolatile.FBase:=cur;
-  rtype:=LazyType2(rtype,cur.dtype);
+  rtype:=rtype+cur.dtype;
  end;
 
  //save Volatile
@@ -878,10 +923,10 @@ begin
  if (_next<>nil) then
  begin
   //update pref type
-  if (rtype<>dtUnknow) then
+  if (TsrDataType(rtype)<>dtUnknow) then
   if (_next.dtype=dtUnknow) then
   begin
-   _next.PrepType(ord(rtype));
+   _next.PrepType(ord(TsrDataType(rtype)));
   end;
  end;
 
@@ -893,7 +938,7 @@ var
  cur,prv  :TsrRegNode;
  pVolatile:TsrVolatile;
  new_vol  :Boolean;
- rtype    :TsrDataType;
+ rtype    :TsrTypeSelector;
 begin
  cur:=RegDownSlot(pSlot^.current);
  prv:=RegDownSlot(prev);
@@ -971,7 +1016,7 @@ begin
    end;
 
   end;
-  rtype:=LazyType2(rtype,prv.dtype);
+  rtype:=rtype+prv.dtype;
  end;
 
  {
@@ -998,7 +1043,7 @@ begin
  begin
   pVolatile.AddStore(cur);
   pVolatile.FBase:=cur;
-  rtype:=LazyType2(rtype,cur.dtype);
+  rtype:=rtype+cur.dtype;
  end;
 
  //save Volatile
@@ -1026,10 +1071,10 @@ begin
  if (prev<>nil) then
  begin
   //update pref type
-  if (rtype<>dtUnknow) then
+  if (TsrDataType(rtype)<>dtUnknow) then
   if (prev.dtype=dtUnknow) then
   begin
-   prev.PrepType(ord(rtype));
+   prev.PrepType(ord(TsrDataType(rtype)));
   end;
  end;
 

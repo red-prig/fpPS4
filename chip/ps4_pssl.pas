@@ -358,12 +358,13 @@ const
  V_MQSAD_PK_U16_U8=$173;
  V_TRIG_PREOP_F64 =$174;
  V_MQSAD_U32_U8   =$175;
- V_MAD_U64_U32    =$176;
- V_MAD_I64_I32    =$177;
 
  //VOP3b
  V_DIV_SCALE_F32  =$16D;
  V_DIV_SCALE_F64  =$16E;
+
+ V_MAD_U64_U32    =$176;
+ V_MAD_I64_I32    =$177;
 
  //SMRD
  S_LOAD_DWORD          =$00;
@@ -2875,8 +2876,6 @@ begin
   V_MQSAD_PK_U16_U8       :str:='V_MQSAD_PK_U16_U8';
   V_TRIG_PREOP_F64        :str:='V_TRIG_PREOP_F64';
   V_MQSAD_U32_U8          :str:='V_MQSAD_U32_U8';
-  V_MAD_U64_U32           :str:='V_MAD_U64_U32';
-  V_MAD_I64_I32           :str:='V_MAD_I64_I32';
 
   384+V_NOP               :str:='V_NOP';
   384+V_MOV_B32           :str:='V_MOV_B32';
@@ -3023,10 +3022,36 @@ function _get_str_VOP3b(Var VOP3:TVOP3b):RawByteString;
 var
  str:RawByteString;
 
+ function get_dword_count_1:Byte; inline;
+ begin
+  Case VOP3.OP of
+   V_DIV_SCALE_F64,
+   V_MAD_U64_U32,
+   V_MAD_I64_I32:
+    Result:=2;
+   else
+    Result:=1;
+  end;
+ end;
+
  function get_dword_count:Byte; inline;
  begin
   Case VOP3.OP of
    V_DIV_SCALE_F64:
+    Result:=2;
+   else
+    Result:=1;
+  end;
+ end;
+
+ function get_dword_count_2:Byte; inline;
+ begin
+  Case VOP3.OP of
+    256+V_SUBB_U32,
+    256+V_SUBBREV_U32,
+    V_DIV_SCALE_F64,
+    V_MAD_U64_U32,
+    V_MAD_I64_I32:
     Result:=2;
    else
     Result:=1;
@@ -3046,13 +3071,16 @@ begin
   V_DIV_SCALE_F32  :str:='V_DIV_SCALE_F32';
   V_DIV_SCALE_F64  :str:='V_DIV_SCALE_F64';
 
+  V_MAD_U64_U32    :str:='V_MAD_U64_U32';
+  V_MAD_I64_I32    :str:='V_MAD_I64_I32';
+
   else
       str:='VOP3b?'+IntToStr(VOP3.OP);
  end;
  str:=str+' ';
 
  //operand #1
- str:=str+_get_vdst8_cnt(VOP3.VDST,get_dword_count);
+ str:=str+_get_vdst8_cnt(VOP3.VDST,get_dword_count_1);
 
  //dest modifier
  Case VOP3.OMOD of
@@ -3065,7 +3093,7 @@ begin
  str:=str+', ';
 
  //operand #2
- str:=str+_get_sdst7_cnt(VOP3.SDST,get_dword_count);
+ str:=str+_get_sdst7_cnt(VOP3.SDST,2);
  str:=str+', ';
 
  //operand #3
@@ -3080,7 +3108,7 @@ begin
 
  //operand #5
  if Byte(VOP3.NEG).TestBit(2) then str:=str+'-';
- str:=str+_get_ssrc9_cnt(VOP3.SRC2,get_dword_count);
+ str:=str+_get_ssrc9_cnt(VOP3.SRC2,get_dword_count_2);
 
  str:=str+' ; VOP3b';
 
@@ -3092,7 +3120,8 @@ begin
  Case SPI.VOP3a.OP of
     0..255:Result:=_get_str_VOP3c(SPI.VOP3a);
   293..298,
-  365..366:Result:=_get_str_VOP3b(SPI.VOP3b);
+  365..366,
+  374..375:Result:=_get_str_VOP3b(SPI.VOP3b);
   else
            Result:=_get_str_VOP3a(SPI.VOP3a);
  end;

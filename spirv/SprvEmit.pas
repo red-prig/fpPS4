@@ -294,7 +294,13 @@ begin
 
  //vgrp
  p:=1;
- AddInput(@RegsStory.VGRP[0],dtUint32,itVIndex);
+ if (FBaseVertex<>nil) then
+ begin
+  AddInput(@RegsStory.VGRP[0],dtUint32,itVertexId);
+ end else
+ begin
+  AddInput(@RegsStory.VGRP[0],dtUint32,itVertexIndex);
+ end;
 
  //0 plain
  //1 step rate 0
@@ -319,6 +325,20 @@ begin
  if (VGPR_COMP_CNT>=3) then
  begin
   AddInstance(@RegsStory.VGRP[p],0,1);
+ end;
+
+ //ShaderDrawParams
+ if (FBaseVertex<>nil) then
+ begin
+  AddInput(FBaseVertex,dtUint32,itBaseVertex);
+ end;
+ if (FBaseInstance<>nil) then
+ begin
+  AddInput(FBaseInstance,dtUint32,itBaseInstance);
+ end;
+ if (FDrawIndex<>nil) then
+ begin
+  AddInput(FDrawIndex,dtUint32,itDrawIndex);
  end;
 
  FLDS_SIZE:=0;
@@ -592,17 +612,25 @@ begin
 
  if (i>=0) and (i<16) then //TODO: check user sgpr
  begin
-  AddInput(@RegsStory.SGRP[i],dtUint32,itype);
+
+  case itype of
+   itBaseVertex  :FBaseVertex  :=@RegsStory.SGRP[i];
+   itBaseInstance:FBaseInstance:=@RegsStory.SGRP[i];
+   itDrawIndex   :FDrawIndex   :=@RegsStory.SGRP[i];
+   else;
+  end;
+
  end;
 end;
 
+//before init
 Procedure TSprvEmit.SET_DRAW_PARAM(op,baseVtxReg,startInstReg,drawIndexReg:WORD);
 begin
  if (op=0) then Exit;
 
- AddSdpParam(baseVtxReg  ,itBaseVertex);
+ AddSdpParam(baseVtxReg  ,itBaseVertex  );
  AddSdpParam(startInstReg,itBaseInstance);
- AddSdpParam(drawIndexReg,itDrawIndex);
+ AddSdpParam(drawIndexReg,itDrawIndex   );
 end;
 
 //ps_z_export_en           -> mrtz.R
@@ -834,7 +862,8 @@ begin
   W_VOP3  :Case FSPI.VOP3a.OP of
               0..255:TEmit_VOP3(obj).emit_VOP3c;
             293..298,
-            365..366:TEmit_VOP3(obj).emit_VOP3b;
+            365..366,
+            374..375:TEmit_VOP3(obj).emit_VOP3b;
             else
                      TEmit_VOP3(obj).emit_VOP3a;
            end;

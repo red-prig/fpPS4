@@ -11,6 +11,7 @@ uses
   srType,
   srReg,
   srConst,
+  srInput,
   emit_fetch;
 
 type
@@ -22,8 +23,7 @@ type
   procedure emit_V_CMP_C(r,x:Boolean);
   procedure emit_V_CMP_CLASS_32(x:Boolean);
 
-  procedure emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
-  procedure emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
+  procedure emit_src_abs_neg(src:PPsrRegNode;count:Byte;rtype:TsrDataType;mask:Byte=7);
   procedure emit_dst_omod__f(dst:PsrRegSlot;rtype:TsrDataType);
   procedure emit_dst_clamp_f(dst:PsrRegSlot;rtype:TsrDataType);
   function  get_legacy_cmp(src0,src1,zero:TsrRegNode):TsrRegNode;
@@ -105,8 +105,9 @@ begin
   src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
  end;
 
- emit_src_abs_bit(@src,2,rtype);
- emit_src_neg_bit(@src,2,rtype);
+ //ignore OMOD/CLAMP
+
+ emit_src_abs_neg(@src,2,rtype);
 
  OpCmpV(OpId,dst[0],dst[1],src[0],src[1]);
 
@@ -144,14 +145,12 @@ Var
 begin
  if not get_sdst7_pair(FSPI.VOP3a.VDST,@dst) then Exit;
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32 );
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  OpCmpClass(dst[0],dst[1],src[0],src[1]);
 
@@ -162,34 +161,93 @@ begin
  end;
 end;
 
-procedure TEmit_VOP3.emit_src_neg_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
+procedure TEmit_VOP3.emit_src_abs_neg(src:PPsrRegNode;count:Byte;rtype:TsrDataType;mask:Byte=7);
 var
- i:Byte;
+ i,ABS,NEG:Byte;
+ tmp:TsrDataType;
+
+ pImm_0x80000000:TsrConst;
+ pImm_0x7FFFFFFF:TsrConst;
+
+ function Filter(t:TsrDataType):TsrDataType; inline;
+ begin
+  if t.isFloat or t.isInt then
+   Result:=t
+  else
+   Result:=dtUnknow;
+ end;
+
 begin
- if (FSPI.VOP3a.NEG=0) then Exit;
- if not rtype.isFloat then Exit;
 
+ Case FSPI.VOP3a.OP of
+  293..298,
+  365..366,
+  374..375:
+    begin
+     //VOP3b
+     ABS:=0;
+     NEG:=FSPI.VOP3b.NEG and mask;
+    end;
+  else
+    begin
+     ABS:=FSPI.VOP3a.ABS and mask;
+     NEG:=FSPI.VOP3a.NEG and mask;
+    end;
+ end;
+
+ pImm_0x80000000:=nil;
+ pImm_0x7FFFFFFF:=nil;
+
+ if (ABS<>0) or (NEG<>0) then
  For i:=0 to count-1 do
-  if Byte(FSPI.VOP3a.NEG).TestBit(i) then
-  begin
-   Assert(src[i].dtype=rtype);
-   src[i]:=OpFNegateTo(src[i]);
-  end;
-end;
+ begin
 
-procedure TEmit_VOP3.emit_src_abs_bit(src:PPsrRegNode;count:Byte;rtype:TsrDataType);
-var
- i:Byte;
-begin
- if (FSPI.VOP3a.ABS=0) then Exit;
- if not rtype.isFloat then Exit;
+  tmp:=LazyType3(Filter(src[i].dtype),Filter(rtype),dtFloat32);
 
- For i:=0 to count-1 do
-  if Byte(FSPI.VOP3a.ABS).TestBit(i) then
+  src[i]:=MakeRead(src[i],tmp,True);
+
+  if tmp.isInt then
   begin
-   Assert(src[i].dtype=rtype);
-   src[i]:=OpFAbsTo(src[i]);
+   //int
+   if ABS.TestBit(i) and NEG.TestBit(i) then
+   begin
+    //val or 0x80000000
+    if (pImm_0x80000000=nil) then pImm_0x80000000:=NewImm_q(dtUInt32,$80000000);
+    src[i]:=OpOrTo(src[i],pImm_0x80000000);
+    src[i].PrepType(ord(tmp));
+   end else
+   if ABS.TestBit(i) then
+   begin
+    //val and !0x80000000
+    if (pImm_0x7FFFFFFF=nil) then pImm_0x7FFFFFFF:=NewImm_q(dtUInt32,$7FFFFFFF);
+    src[i]:=OpAndTo(src[i],pImm_0x7FFFFFFF);
+    src[i].PrepType(ord(tmp));
+   end else
+   if NEG.TestBit(i) then
+   begin
+    //val xor 0x80000000
+    if (pImm_0x80000000=nil) then pImm_0x80000000:=NewImm_q(dtUInt32,$80000000);
+    src[i]:=OpXorTo(src[i],pImm_0x80000000);
+    src[i].PrepType(ord(tmp));
+   end;
+   //int
+  end else
+  begin
+   //float
+   if ABS.TestBit(i) then
+   begin
+    src[i]:=OpFAbsTo(src[i]);
+   end;
+   //
+   if NEG.TestBit(i) then
+   begin
+    src[i]:=OpFNegateTo(src[i]);
+   end;
+   //float
   end;
+
+ end;
+
 end;
 
 procedure TEmit_VOP3.emit_dst_omod__f(dst:PsrRegSlot;rtype:TsrDataType);
@@ -260,30 +318,16 @@ procedure TEmit_VOP3.emit_V_CNDMASK_B32; //vdst = smask[thread_id:] ? vsrc1 : vs
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
- rtype:TsrDataType;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //ignore OMOD/CLAMP
 
- if (Byte(FSPI.VOP3a.ABS).TestBit(0)) or
-    (Byte(FSPI.VOP3a.NEG).TestBit(0)) or
-    (Byte(FSPI.VOP3a.ABS).TestBit(1)) or
-    (Byte(FSPI.VOP3a.NEG).TestBit(1)) then
- begin
-  rtype:=dtFloat32;
- end else
- begin
-  rtype:=dtUnknow;
- end;
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUnknow);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUnknow);
  src[2]:=GetThreadBit(get_ssrc9(FSPI.VOP3a.SRC2),get_ssrc9(FSPI.VOP3a.SRC2+1),dtBool);
 
- emit_src_abs_bit(@src,2,rtype);
- emit_src_neg_bit(@src,2,rtype);
+ emit_src_abs_neg(@src,2,dtUnknow);
 
  //dst,cond,src_true,src_false
  OpSelect(dst,src[2],src[1],src[0]);
@@ -302,8 +346,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2,dtFloat32);
- emit_src_neg_bit(@src,2,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  zero:=NewImm_s(dtFloat32,0);
  cmp:=get_legacy_cmp(src[0],src[1],zero);
@@ -329,8 +372,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2,dtFloat32);
- emit_src_neg_bit(@src,2,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  case rev of
   False:Op2(OpId,dtFloat32,dst,src[0],src[1]);
@@ -355,8 +397,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2,dtFloat32);
- emit_src_neg_bit(@src,2,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  vec:=OpVectorTo(line,dtVec2f,@src);
 
@@ -377,8 +418,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2,dtFloat32);
- emit_src_neg_bit(@src,2,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  vec:=OpVectorTo(line,dtVec2f,@src);
 
@@ -398,8 +438,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
 
- emit_src_abs_bit(@src,2,dtFloat32);
- emit_src_neg_bit(@src,2,dtFloat32);
+ emit_src_abs_neg(@src,2,dtFloat32);
 
  OpConvFloatToHalf2(dst,src[0],src[1]);
 end;
@@ -414,8 +453,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
 
- emit_src_abs_bit(@src,2,rtype);
- emit_src_neg_bit(@src,2,rtype);
+ emit_src_abs_neg(@src,2,rtype);
 
  OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 
@@ -435,8 +473,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,rtype);
 
- emit_src_abs_bit(@src,3,rtype);
- emit_src_neg_bit(@src,3,rtype);
+ emit_src_abs_neg(@src,3,rtype);
 
  OpGlsl2(OpId,rtype,dst,src[0],src[1]);
 
@@ -455,10 +492,7 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  case rev of
   False:
@@ -473,6 +507,8 @@ begin
     end;
  end;
 
+ emit_src_abs_neg(@src,1,rtype);
+
  src[1]:=OpAndTo(src[1],31);
  src[1].PrepType(ord(dtUInt32));
 
@@ -486,13 +522,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
+
+ emit_src_abs_neg(@src,2,rtype);
 
  OpIMul(dst,src[0],src[1]);
 end;
@@ -526,13 +561,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
-
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+
+ //ignore OMOD/CLAMP
+
+ //There is no need to used ABS/NEG since the value is truncated
 
  src[0]:=fetch_i24(src[0]);
  src[1]:=fetch_i24(src[1]);
@@ -563,13 +597,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
-
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
+
+ //ignore OMOD/CLAMP
+
+ //There is no need to used ABS/NEG since the value is truncated
 
  src[0]:=fetch_u24(src[0]);
  src[1]:=fetch_u24(src[1]);
@@ -586,13 +619,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,rtype);
+
+ emit_src_abs_neg(@src,2,rtype);
 
  tst:=rtype.AsStruct2;
  Assert(tst<>dtUnknow);
@@ -623,8 +655,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=MakeRead(dst,dtFloat32);
 
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
@@ -643,8 +674,7 @@ begin
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,1,dtFloat32);
 
  two:=NewImm_s(dtFloat32,2);
  src[1]:=OpSToF(src[1],dtFloat32);
@@ -664,13 +694,12 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ emit_src_abs_neg(@src,2,dtUint32);
 
  src[0]:=OpBitCountTo(src[0]);
 
@@ -688,13 +717,12 @@ begin
 
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ emit_src_abs_neg(@src,2,dtUint32);
 
  src[0]:=OpAndTo(src[0],1); //mean mask_lo_threads_before=1
  src[0]:=OpBitCountTo(src[0]);
@@ -713,13 +741,12 @@ begin
 
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
- //src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ emit_src_abs_neg(@src,2,dtUint32);
 
  //only lower thread_id mean
  MakeCopy(dst,src[1]);
@@ -732,14 +759,13 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ emit_src_abs_neg(@src,3,dtUint32);
 
  OpBFE_32(dst,src[0],src[1],src[2]);
 end;
@@ -751,14 +777,13 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ emit_src_abs_neg(@src,3,dtUint32);
 
  OpBFE_32(dst,src[0],src[1],src[2]);
 end;
@@ -766,53 +791,50 @@ end;
 procedure TEmit_VOP3.emit_V_BFI_B32;
 Var
  dst:PsrRegSlot;
- bitmsk:TsrRegNode;
- src:array[0..1] of TsrRegNode;
+ src:array[0..2] of TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- //ignore
- //Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- //Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- //Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- //Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
- bitmsk:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+ src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
 
- OpBFIB32(dst,bitmsk,src[0],src[1]);
+ emit_src_abs_neg(@src,3,dtUint32);
+
+ OpBFIB32(dst,src[0],src[1],src[2]);
 end;
 
 procedure TEmit_VOP3.emit_V_BFM_B32; //vdst = ((1<<vsize[4:0]) - 1) << voffset[4:0]
 Var
  dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
  vsize  :TsrRegNode;
  voffset:TsrRegNode;
- src    :TsrRegNode;
+ val    :TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
- vsize  :=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
- voffset:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
 
- vsize  :=OpAndTo(vsize  ,15); //[0:4]
- voffset:=OpAndTo(voffset,15); //[0:4]
+ emit_src_abs_neg(@src,2,dtUint32);
+
+ vsize  :=OpAndTo(src[0],15); //[0:4]
+ voffset:=OpAndTo(src[1],15); //[0:4]
 
  vsize  .PrepType(ord(dtUint32));
  voffset.PrepType(ord(dtUint32));
 
- src:=OpShlTo (NewImm_q(dtUint32,1),vsize);
- src:=OpISubTo(vsize,1);
+ val:=OpShlTo (NewImm_q(dtUint32,1),vsize);
+ val:=OpISubTo(vsize,1);
 
- src:=OpShlTo(src,voffset);
+ val:=OpShlTo(val,voffset);
 
- MakeCopy(dst,src);
+ MakeCopy(dst,val);
 end;
 
 procedure TEmit_VOP3.emit_V_MAD_F32; //vdst = vsrc0.f * vsrc1.f + vadd.f
@@ -826,8 +848,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
@@ -853,8 +874,7 @@ begin
  cmp:=get_legacy_cmp(src[0],src[1],zero);
 
  //
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
@@ -876,14 +896,14 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- //FSPI.VOP3a.ABS   ignored
- //FSPI.VOP3a.CLAMP ignored
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtInt32);
+
+ //There is no need (src0,src1) to used ABS/NEG since the value is truncated
+ emit_src_abs_neg(@src,3,dtInt32,4);
 
  src[0]:=fetch_i24(src[0]);
  src[1]:=fetch_i24(src[1]);
@@ -898,14 +918,14 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- //FSPI.VOP3a.ABS   ignored
- //FSPI.VOP3a.CLAMP ignored
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUInt32);
+
+ //There is no need (src0,src1) to used ABS/NEG since the value is truncated
+ emit_src_abs_neg(@src,3,dtUInt32,4);
 
  src[0]:=fetch_u24(src[0]);
  src[1]:=fetch_u24(src[1]);
@@ -921,17 +941,17 @@ Var
  mul,sum,car:TsrRegNode;
  //exc:TsrRegNode;
 begin
- dst[0]:=get_vdst8(FSPI.VOP3a.VDST+0);
- dst[1]:=get_vdst8(FSPI.VOP3a.VDST+1);
+ dst[0]:=get_vdst8(FSPI.VOP3b.VDST+0);
+ dst[1]:=get_vdst8(FSPI.VOP3b.VDST+1);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- //FSPI.VOP3a.ABS   ignored
- //FSPI.VOP3a.CLAMP ignored
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
- src[0]:=fetch_ssrc9   (FSPI.VOP3a.SRC0,dtUInt32);
- src[1]:=fetch_ssrc9   (FSPI.VOP3a.SRC1,dtUInt32);
- src[2]:=fetch_ssrc9_64(FSPI.VOP3a.SRC2,dtUint64);
+ src[0]:=fetch_ssrc9   (FSPI.VOP3b.SRC0,dtUInt32);
+ src[1]:=fetch_ssrc9   (FSPI.VOP3b.SRC1,dtUInt32);
+ src[2]:=fetch_ssrc9_64(FSPI.VOP3b.SRC2,dtUint64);
+
+ emit_src_abs_neg(@src,3,dtUInt32,3);
+ emit_src_abs_neg(@src,3,dtUint64,4);
 
  src[0]:=OpUToU(src[0],dtUint64);
  src[1]:=OpUToU(src[1],dtUint64);
@@ -942,10 +962,10 @@ begin
 
  _Op2(line,Op.OpIMul,mul,src[0],src[1]); //vsrc0.u * vsrc1.u
  OpIAddExt(sum,car,mul,src[2]);          //mul + vsrc2.du | carry
- car:=OpIntToBoolTo(car);
 
  MakeCopy64(dst[0],dst[1],sum);
 
+ //car:=OpIntToBoolTo(car);
  {
   TODO:
   if (EXEC[i]) {
@@ -962,32 +982,73 @@ begin
  //OpBitwiseAnd(get_vcc0,car,exc);
 end;
 
-procedure TEmit_VOP3.emit_V_SAD_U32; //dst.u = abs(vsrc0.u - vsrc1.u) + vaccum.u[15:0]
+procedure TEmit_VOP3.emit_V_SAD_U32; //dst.u = abs(vsrc0.u - vsrc1.u) + vaccum.u
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
- rdif,rvac:TsrRegNode;
- bit16:TsrRegNode;
+ rdif:TsrRegNode;
+ inp:array[0..1] of TsrInput;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUInt32);
 
- rdif:=NewReg(dtUInt32);
- OpAbsDiff(line,rdif,src[0],src[1]);
+ emit_src_abs_neg(@src,3,dtUInt32);
 
- bit16:=NewImm_q(dtUInt32,$FFFF);
- rvac:=OpAndTo(src[2],bit16);
- rvac.PrepType(ord(dtUInt32));
+ //early optimization
+ rdif:=nil;
+ if src[0].is_const then
+ begin
+  if src[0].AsConst.isZeroVal then
+  begin
+   //src[1]-0
+   rdif:=src[1];
+  end;
+ end else
+ if src[1].is_const then
+ begin
+  if src[1].AsConst.isZeroVal then
+  begin
+   //src[0]-0
+   rdif:=src[0];
+  end;
+ end;
 
- OpIAdd(dst,rdif,rvac);
+ if (rdif=nil) then
+ begin
+  rdif:=NewReg(dtUInt32);
+  OpAbsDiff(line,rdif,src[0],src[1]);
+ end;
+
+ //VertexIndex/InstanceIndex detect
+ inp[0]:=GetInputRegNode(rdif);
+ inp[1]:=GetInputRegNode(src[2]);
+
+ if (inp[0]<>nil) and (inp[1]<>nil) then
+ begin
+
+  if ((inp[0].itype=itVertexId  ) and (inp[1].itype=itBaseVertex)) or
+     ((inp[0].itype=itBaseVertex) and (inp[1].itype=itVertexId  )) then
+  begin
+   AddInput(dst,dtUint32,itVertexIndex);
+   Exit;
+  end;
+
+  if ((inp[0].itype=itInstanceId  ) and (inp[1].itype=itBaseInstance)) or
+     ((inp[0].itype=itBaseInstance) and (inp[1].itype=itInstanceId  )) then
+  begin
+   AddInput(dst,dtUint32,itInstanceIndex);
+   Exit;
+  end;
+
+ end;
+
+ //Uses all vaccum.u bits, verified!
+ OpIAdd(dst,rdif,src[2]);
 end;
 
 procedure TEmit_VOP3.emit_V_MED3_F32;
@@ -1001,8 +1062,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  OpMED3F(dst,src[0],src[1],src[2]);
 
@@ -1017,14 +1077,13 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtInt32);
+
+ emit_src_abs_neg(@src,3,dtInt32);
 
  OpMED3I(dst,src[0],src[1],src[2]);
 end;
@@ -1036,14 +1095,13 @@ Var
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
- Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtUint32);
+
+ emit_src_abs_neg(@src,3,dtUint32);
 
  OpMED3U(dst,src[0],src[1],src[2]);
 end;
@@ -1059,8 +1117,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  OpFmaF32(dst,src[0],src[1],src[2]);
 
@@ -1082,8 +1139,7 @@ begin
  src[0]:=fetch_ssrc9_64(FSPI.VOP3a.SRC0,dtFloat64);
  src[1]:=fetch_ssrc9_64(FSPI.VOP3a.SRC1,dtFloat64);
 
- emit_src_abs_bit(@src,2,dtFloat64);
- emit_src_neg_bit(@src,2,dtFloat64);
+ emit_src_abs_neg(@src,2,dtFloat64);
 
  OpGlsl2(OpId,dtFloat64,mmx,src[0],src[1]);
 
@@ -1163,8 +1219,7 @@ begin
  src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
  src[2]:=fetch_ssrc9(FSPI.VOP3a.SRC2,dtFloat32);
 
- emit_src_abs_bit(@src,3,dtFloat32);
- emit_src_neg_bit(@src,3,dtFloat32);
+ emit_src_abs_neg(@src,3,dtFloat32);
 
  case OpId of
   V_CUBEID_F32:
@@ -1238,26 +1293,14 @@ procedure TEmit_VOP3.emit_V_MOV_B32;
 Var
  dst:PsrRegSlot;
  src:TsrRegNode;
- rtype:TsrDataType;
 begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
 
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+ //ignore OMOD/CLAMP
 
- if (Byte(FSPI.VOP3a.ABS).TestBit(0)) or
-    (Byte(FSPI.VOP3a.NEG).TestBit(0)) then
- begin
-  rtype:=dtFloat32;
- end else
- begin
-  rtype:=dtUnknow;
- end;
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUnknow);
 
- src:=fetch_ssrc9(FSPI.VOP3a.SRC0,rtype);
-
- emit_src_abs_bit(@src,1,rtype);
- emit_src_neg_bit(@src,1,rtype);
+ emit_src_abs_neg(@src,1,dtUnknow);
 
  MakeCopy(dst,src);
 end;
@@ -1270,14 +1313,14 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,src_type);
 
+ //TODO: check
  if (not src_type.isFloat) then
  begin
   Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
   Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
  end;
 
- emit_src_abs_bit(@src,1,src_type);
- emit_src_neg_bit(@src,1,src_type);
+ emit_src_abs_neg(@src,1,src_type);
 
  Op1(OpId,dst_type,dst,src);
 
@@ -1300,8 +1343,8 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
- emit_src_abs_bit(@src[0],1,dtFloat32);
- emit_src_neg_bit(@src[0],1,dtFloat32);
+ //TODO: check
+ emit_src_abs_neg(@src[0],1,dtFloat32);
 
  MakeCopy(dst,src[0]);
 
@@ -1335,8 +1378,7 @@ begin
 
  src:=OpFToF({src}dst0,dtFloat32);
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,1,dtFloat32);
 
  MakeCopy(dst,src);
 
@@ -1352,8 +1394,7 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,1,dtFloat32);
 
  OpGlsl1(OpId,dtFloat32,dst,src);
 
@@ -1373,8 +1414,7 @@ begin
 
  src:=OpFMulToS(src,PI2);
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,1,dtFloat32);
 
  OpGlsl1(OpId,dtFloat32,dst,src);
 
@@ -1391,8 +1431,7 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
 
- emit_src_abs_bit(@src,1,dtFloat32);
- emit_src_neg_bit(@src,1,dtFloat32);
+ emit_src_abs_neg(@src,1,dtFloat32);
 
  one:=NewImm_s(dtFloat32,1);
 
@@ -1652,12 +1691,13 @@ begin
  dst:=get_vdst8(FSPI.VOP3b.VDST);
  car:=get_sdst7(FSPI.VOP3b.SDST);
 
- Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
- Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3b.SRC2,dtUInt32);
+
+ emit_src_abs_neg(@src,2,dtUInt32);
 
  src[2]:=OpAndTo(src[2],1);
  src[2].PrepType(ord(dtUInt32));
@@ -1677,7 +1717,7 @@ begin
   TODO:
   if (EXEC[i]) {
     V_ADDC_U32
-    SDST[i] = bor;
+    SDST[i] = car;
   }
   else {
     SDST[i] = 0;
@@ -1699,12 +1739,13 @@ begin
  dst:=get_vdst8(FSPI.VOP3b.VDST);
  bor:=get_sdst7(FSPI.VOP3b.SDST);
 
- Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
- Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
  src[2]:=fetch_ssrc9(FSPI.VOP3b.SRC2,dtUInt32);
+
+ emit_src_abs_neg(@src,2,dtUInt32);
 
  src[2]:=OpAndTo(src[2],1);
  src[2].PrepType(ord(dtUInt32));
@@ -1747,11 +1788,12 @@ begin
  dst:=get_vdst8(FSPI.VOP3b.VDST);
  car:=get_sdst7(FSPI.VOP3b.SDST);
 
- Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
- Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
+
+ emit_src_abs_neg(@src,2,dtUInt32);
 
  OpIAddExt(dst,car,src[0],src[1],dtUint32);
 
@@ -1779,12 +1821,12 @@ begin
  dst:=get_vdst8(FSPI.VOP3b.VDST);
  bor:=get_sdst7(FSPI.VOP3b.SDST);
 
- //ignored
- //Assert(FSPI.VOP3b.OMOD=0,'FSPI.VOP3b.OMOD');
- //Assert(FSPI.VOP3b.NEG =0,'FSPI.VOP3b.NEG');
+ //ignore OMOD/CLAMP
 
  src[0]:=fetch_ssrc9(FSPI.VOP3b.SRC0,dtUInt32);
  src[1]:=fetch_ssrc9(FSPI.VOP3b.SRC1,dtUInt32);
+
+ emit_src_abs_neg(@src,2,dtUInt32);
 
  OpISubExt(dst,bor,src[0],src[1],dtUInt32);
 
@@ -1811,6 +1853,8 @@ begin
 
   256+V_ADD_I32 : emit_V_ADD_I32;
   256+V_SUB_I32 : emit_V_SUB_I32;
+
+  V_MAD_U64_U32: emit_V_MAD_U64_U32;
 
   else
    Assert(false,'VOP3b?'+IntToStr(FSPI.VOP3b.OP)+' '+get_str_spi(FSPI));
@@ -1887,7 +1931,6 @@ begin
 
   V_MAD_I32_I24: emit_V_MAD_I32_I24;
   V_MAD_U32_U24: emit_V_MAD_U32_U24;
-  V_MAD_U64_U32: emit_V_MAD_U64_U32;
 
   V_SAD_U32 : emit_V_SAD_U32;
 

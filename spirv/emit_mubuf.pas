@@ -93,7 +93,7 @@ begin
  idx:=get_vsrc8(FSPI.MUBUF.VADDR+0)^.current;
  inp_idx:=GetInputRegNode(idx);
  if (inp_idx<>nil) then
- if (inp_idx.itype=itVIndex) then //is input attach
+ if (inp_idx.itype=itVertexIndex) then //is input attach
  begin
 
   grp:=GroupingSharp(src,rtVSharp4);

@@ -85,6 +85,10 @@ type
   FSGPRS             :WORD;
   FGeometryInfo      :TGeometryInfo;
   //
+  FBaseVertex        :PsrRegSlot;
+  FBaseInstance      :PsrRegSlot;
+  FDrawIndex         :PsrRegSlot;
+  //
   FThread_id         :TsrRegNode;
   //
   Config:TsrConfig;
@@ -202,6 +206,7 @@ type
   //
   procedure PrepTypeSlot (pSlot:PsrRegSlot;rtype:TsrDataType);
   function  MakeRead     (pSlot:PsrRegSlot;rtype:TsrDataType):TsrRegNode;
+  function  MakeRead     (pReg:TsrRegNode;rtype:TsrDataType;relax:Boolean):TsrRegNode;
   function  PrepTypeNode (var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
   function  PrepTypeDst  (var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
   function  PrepTypeParam(node:POpParamNode;rtype:TsrDataType;relax:Boolean=true):Integer;
@@ -731,6 +736,31 @@ begin
  end;
 end;
 
+function TEmitInterface.MakeRead(pReg:TsrRegNode;rtype:TsrDataType;relax:Boolean):TsrRegNode;
+begin
+ Result:=pReg;
+ if (pReg=nil) then Exit;
+
+ if is_unprep_type(pReg.dtype,rtype,relax) then
+ begin
+  pReg.PrepType(ord(rtype));
+ end else
+ if (rtype<>dtUnknow) then
+ begin
+  Case relax of
+   True :relax:=CompareType(pReg.dtype,rtype);
+   False:relax:=(pReg.dtype=rtype);
+  end;
+  if relax then
+  begin
+   //
+  end else
+  begin
+   Result:=BitcastList.FetchRead(rtype,pReg);
+  end;
+ end;
+end;
+
 function TEmitInterface.PrepTypeNode(var node:TsrRegNode;rtype:TsrDataType;relax:Boolean=true):Integer;
 begin
  Result:=0;
@@ -747,7 +777,10 @@ begin
    True :relax:=CompareType(node.dtype,rtype);
    False:relax:=(node.dtype=rtype);
   end;
-  if not relax then
+  if relax then
+  begin
+   //
+  end else
   begin
    node:=BitcastList.FetchRead(rtype,node);
    Inc(Result);

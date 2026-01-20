@@ -174,6 +174,7 @@ type
   function  OpLogicalNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpNotTo(src:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpXorTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpAndTo(src0:TsrRegNode;src1:QWORD;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpLogicalOrTo (src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -234,7 +235,7 @@ var
  dst:TsrRegNode;
  node:array[0..1] of TsrRegNode;
 begin
- dst:=BitcastList.FetchRead(dtVec2u,src);
+ dst:=MakeRead(src,dtVec2u,False);
 
  node[0]:=dst0^.New(dtUint32,line);
  node[1]:=dst1^.New(dtUint32,line);
@@ -254,12 +255,11 @@ begin
   Result:=OpShrTo(mask,FThread_id,ppLine);
   Result:=OpUToU (Result,dtUint32,ppLine);
   Result:=OpAndTo(Result,1,ppLine);
-  Result.PrepType(ord(dtUint32));
-  Result:=BitcastList.FetchRead(rtype,Result);
+  Result:=MakeRead(Result,rtype,False);
 
   //Result:=OpBFUETo(mask,FThread_id,NewImm_i(dtUint32,1));
   //Result:=OpUToU(Result,dtUint32);
-  //Result:=BitcastList.FetchRead(rtype,Result);
+  //Result:=MakeRead(Result,rtype,False);
  end else
  begin
   //It means that lane_id=0
@@ -274,7 +274,7 @@ begin
  if Config.UseExtendedEXECMask and (FExecutionModel=ExecutionModel.GLCompute) then
  begin
 
-  val:=BitcastList.FetchRead(dtUint32,val);
+  val:=MakeRead(val,dtUint32,False);
   val:=OpUToU (val,dtUint64);
   val:=OpShlTo(val,FThread_id);
 
@@ -292,7 +292,7 @@ begin
 
   MakeCopy64(exe0,exe1,mask);
 
-  //val:=BitcastList.FetchRead(dtUint32,val);
+  //val:=MakeRead(val,dtUint32,False);
   //val:=OpUToU(val,dtUint64);
   //mask:=fetch64(exe0^.current,exe1^.current,dtUint64);
   //mask:=OpBFITo(mask,val,FThread_id,NewImm_i(dtUint32,1));
@@ -1150,7 +1150,7 @@ begin
   _set_line(ppLine,dst.pLine);
  end;
 
- Result:=BitcastList.FetchRead(rtype,dst);
+ Result:=MakeRead(dst,rtype,False);
 end;
 
 function TEmitOp.fetch64(src0,src1:TsrRegNode;rtype:TsrDataType;ppLine:PPspirvOp=nil):TsrRegNode;
@@ -1579,6 +1579,12 @@ function TEmitOp.OpOrTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(dtUnknow);
  _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpBitwiseOr,Result,src0,src1)); //post type
+end;
+
+function TEmitOp.OpXorTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(dtUnknow);
+ _set_line(ppLine,_Op2(_get_line(ppLine),Op.OpBitwiseXor,Result,src0,src1)); //post type
 end;
 
 function TEmitOp.OpAndTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;

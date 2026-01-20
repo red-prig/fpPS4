@@ -320,12 +320,6 @@ begin
   end;
   vShaderStageVs:
   begin
-   SprvEmit.InitVs(GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_VS,
-                   GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC2_VS,
-                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
-                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
-
-   SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
 
    if (GPU_REGS.SDP<>nil) then
    begin
@@ -334,6 +328,13 @@ begin
                             GPU_REGS.SDP^.startInstReg,
                             GPU_REGS.SDP^.drawIndexReg);
    end;
+
+   SprvEmit.InitVs(GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC1_VS,
+                   GPU_REGS.SG_REG^.SPI_SHADER_PGM_RSRC2_VS,
+                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_0,
+                   GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1);
+
+   SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
 
   end;
   vShaderStageCs:

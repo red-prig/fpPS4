@@ -54,7 +54,7 @@ begin
  imm:=NewImm_i(dtInt32,i);
 
  //Force type
- src:=BitcastList.FetchRead(dtInt32,src);
+ src:=MakeRead(src,dtInt32,False);
 
  OpIAdd(dst,src,imm);
 
@@ -90,7 +90,7 @@ begin
  imm:=NewImm_i(dtInt32,i);
 
  //Force type
- src:=BitcastList.FetchRead(dtInt32,src);
+ src:=MakeRead(src,dtInt32,False);
 
  OpIMul(dst,src,imm);
 end;

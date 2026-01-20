@@ -31,8 +31,11 @@ type
   itWaveId,
   itScratch,
 
-  itVIndex,
-  itVInstance,
+  itVertexId,
+  itVertexIndex,
+
+  itInstanceId,
+  itInstanceIndex,
 
   itPsState,
   itWaveCnt,
@@ -289,11 +292,19 @@ begin
       begin
        pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.LocalInvocationID);
       end;
-    itVIndex:
+    itVertexId:
+      begin
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.VertexId);
+      end;
+    itVertexIndex:
       begin
        pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.VertexIndex);
       end;
-    itVInstance:
+    itInstanceId:
+      begin
+       pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.InstanceId);
+      end;
+    itInstanceIndex:
       begin
        pDecorateList.OpDecorate(pVar,Decoration.BuiltIn,BuiltIn.InstanceIndex);
       end;
