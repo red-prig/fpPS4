@@ -217,8 +217,6 @@ end;
 
 Procedure TvGraphicsPipelineKey.AddVPort(const V:TVkViewport;const S:TVkRect2D);
 begin
- if (s.extent.width=0) or (s.extent.height=0) then Assert(false);
-
  if (viewportCount>15) then Exit;
 
  Viewports[viewportCount]:=V;
