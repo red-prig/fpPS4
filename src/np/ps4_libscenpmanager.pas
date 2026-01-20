@@ -604,6 +604,15 @@ begin
  Result:=SCE_NP_ERROR_SIGNED_OUT;
 end;
 
+function ps4_sceNpManagerIntGetUserIdByOnlineId(pOnlineId:pSceNpOnlineId;pUserId:PInteger):Integer;
+begin
+ if (pUserId<>nil) then
+ begin
+  pUserId^:=base_user_id;
+ end;
+ Result:=0;
+end;
+
 //+JmXFo3Jh6g
 function ps4_JmXFo3Jh6g(SdkVersion,error:DWORD):DWORD;
 const
@@ -806,6 +815,7 @@ begin
  lib.set_proc($1E7782F92A5E2F07,@ps4_sceNpManagerIntDeleteRequest);
  lib.set_proc($3D9873FAF8E9D823,@ps4_sceNpManagerIntSetTimeout);
  lib.set_proc($9B826253C9363F22,@ps4_sceNpManagerIntCheckNpAvailability);
+ lib.set_proc($B922E05B3F2885A9,@ps4_sceNpManagerIntGetUserIdByOnlineId);
  lib.set_proc($F89997168DC987A8,@ps4_JmXFo3Jh6g);
 
  lib:=Result^.add_lib('libSceNpManagerForToolkit');
