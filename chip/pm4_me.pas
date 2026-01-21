@@ -3737,6 +3737,49 @@ begin
  RTLEventSetEvent(node^.event);
 end;
 
+procedure pm4_WaitSemaphore(var ctx:t_me_render_context;node:p_pm4_node_Semaphore);
+var
+ addr:PQWORD;
+begin
+ addr:=node^.addr;
+
+ if (addr^>0) then
+ begin
+  //is signaled
+
+  if (node^.behavior=0) then
+  begin
+   //decrement
+   addr^:=addr^-1;
+  end;
+
+ end else
+ begin
+  ctx.switch_task;
+ end;
+
+end;
+
+procedure pm4_SignalSemaphore(var ctx:t_me_render_context;node:p_pm4_node_Semaphore);
+var
+ addr:PQWORD;
+begin
+ if not ctx.WaitConfirmOrSwitch then Exit;
+
+ addr:=node^.addr;
+
+ if (node^.behavior=0) then
+ begin
+  //Increment
+  addr^:=addr^+1;
+ end else
+ begin
+  //Set 1
+  addr^:=1;
+ end;
+
+end;
+
 //
 
 procedure pm4_me_thread(me:p_pm4_me); SysV_ABI_CDecl;
@@ -3852,6 +3895,9 @@ begin
       ntWaitOnDECounterDiff:pm4_WaitOnDECounterDiff(ctx,Pointer(ctx.node));
 
       ntPfpSyncMe          :pm4_PfpSyncMe          (ctx,Pointer(ctx.node));
+
+      ntWaitSemaphore      :pm4_WaitSemaphore      (ctx,Pointer(ctx.node));
+      ntSignalSemaphore    :pm4_SignalSemaphore    (ctx,Pointer(ctx.node));
 
       else
        begin

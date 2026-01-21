@@ -923,6 +923,43 @@ type
    );
  end;
 
+const
+ // PM4CMDMEMSEMAPHORE - values for fields
+ MEM_SEMA_SIGNAL=$6;
+ MEM_SEMA_WAIT  =$7;
+
+ MEM_SEMA_CP    =$00;
+ MEM_SEMA_CB    =$01;
+ MEM_SEMA_DB    =$10;
+
+type
+ PPM4CMDMEMSEMAPHORE=^PM4CMDMEMSEMAPHORE;
+ PM4CMDMEMSEMAPHORE=bitpacked record
+  header:PM4_TYPE_3_HEADER;
+  //
+  addr               :bit40; //Semaphore address bits [39:3]
+  reserved1          :bit4;
+  waitOnSignal       :bit1; // < deprecated on SI?
+  reserved2          :bit3;
+  useMailbox         :bit1; // < 0 -  Signal Semaphore will not wait for
+                            // <      mailbox to be written
+                            // < 1 -  Signal Semaphore will wait for mailbox
+                            // <      to be written
+  reserved3          :bit3; // < reserved
+  signalType         :bit1; // < signal Type
+                            // < 0 - SEM_SEL = Signal Semaphore and signal type
+                            // < is increment, or the SEM_SEL = Wait Semaphore.
+                            // < 1 - SEM_SEL = Signal Semaphore and signal
+                            // < type is write '1'.
+  reserved4          :bit3; // < reserved
+  clientCode         :bit2; // < values can be MEM_SEMA_[CP|CB|DB]
+  reserved5          :bit3; // < reserved
+  semSel             :bit3; // < this is a multi-bit field to be DW
+                            // < compatible with EVENT_WRITE_EOP
+                            // < values can be MEM_SEMA_[SIGNAL|WAIT]
+ end;
+
+type
  TUSERCONFIG_REG_SHORT=packed record
   CP_COHER_BASE_HI  :TCP_COHER_BASE_HI;   // 0xC079
   CP_COHER_CNTL     :TCP_COHER_CNTL;      // 0xC07C

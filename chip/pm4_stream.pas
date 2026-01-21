@@ -137,7 +137,9 @@ type
   ntDrawIndexAuto,
   ntDispatchDirect,
   ntDispatchIndirect,
-  ntPfpSyncMe
+  ntPfpSyncMe,
+  ntWaitSemaphore,
+  ntSignalSemaphore
  );
 
 const
@@ -421,6 +423,13 @@ type
   event:PRTLEvent;
  end;
 
+ p_pm4_node_Semaphore=^t_pm4_node_Semaphore;
+ t_pm4_node_Semaphore=object(t_pm4_node)
+  addr         :Pointer;
+  behavior     :Byte;
+  updateConfirm:Byte;
+ end;
+
  p_pm4_stream=^t_pm4_stream;
  t_pm4_stream=object(t_pm4_resource_stream_scope)
   //
@@ -490,6 +499,8 @@ type
                              BASE  :QWORD;
                              Offset:DWORD);
   procedure PfpSyncMe(event:PRTLEvent);
+  procedure WaitSemaphore  (addr:Pointer;behavior:Byte);
+  procedure SignalSemaphore(addr:Pointer;behavior,updateConfirm:Byte);
  end;
 
 implementation
@@ -2040,6 +2051,38 @@ begin
  node^.scope:=Default(t_pm4_resource_curr_scope);
 
  node^.event:=event;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.WaitSemaphore(addr:Pointer;behavior:Byte);
+var
+ node:p_pm4_node_Semaphore;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_Semaphore));
+
+ node^.ntype:=ntWaitSemaphore;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+
+ node^.addr         :=addr;
+ node^.behavior     :=behavior;
+ node^.updateConfirm:=0;
+
+ add_node(node);
+end;
+
+procedure t_pm4_stream.SignalSemaphore(addr:Pointer;behavior,updateConfirm:Byte);
+var
+ node:p_pm4_node_Semaphore;
+begin
+ node:=allocator.Alloc(SizeOf(t_pm4_node_Semaphore));
+
+ node^.ntype:=ntSignalSemaphore;
+ node^.scope:=Default(t_pm4_resource_curr_scope);
+
+ node^.addr         :=addr;
+ node^.behavior     :=behavior;
+ node^.updateConfirm:=updateConfirm;
 
  add_node(node);
 end;

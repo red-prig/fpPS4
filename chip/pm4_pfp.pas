@@ -1438,6 +1438,23 @@ begin
  FlushAndWaitMe(pctx);
 end;
 
+procedure onMemSemaphore(pctx:p_pfp_ctx;Body:PPM4CMDMEMSEMAPHORE);
+begin
+ case Body^.semSel of
+  MEM_SEMA_SIGNAL:
+    pctx^.stream[pctx^.stream_type].SignalSemaphore(
+     Pointer(Body^.addr and (not QWORD(7))),
+     Body^.signalType,
+     Body^.useMailbox);
+  MEM_SEMA_WAIT  :
+    pctx^.stream[pctx^.stream_type].WaitSemaphore(
+     Pointer(Body^.addr and (not QWORD(7))),
+     Body^.signalType);
+  else
+   Assert(false,'onMemSemaphore:'+IntToStr(Body^.semSel));
+ end;
+end;
+
 procedure onPushMarker(pctx:p_pfp_ctx;Body:PChar;size:Integer);
 begin
  if p_print_gpu_hint then
@@ -1672,6 +1689,7 @@ begin
       IT_DISPATCH_DIRECT                :onDispatchDirect             (pctx,buff);
       IT_DISPATCH_INDIRECT              :onDispatchIndirect           (pctx,buff);
       IT_PFP_SYNC_ME                    :onPfpSyncMe                  (pctx,buff);
+      IT_MEM_SEMAPHORE                  :onMemSemaphore               (pctx,buff);
 
       IT_SET_BASE                       :onSetBase                    (pctx,buff);
       IT_SET_PREDICATION                :onSetPredication             (pctx,buff);
@@ -1862,6 +1880,10 @@ begin
       IT_WAIT_REG_MEM                   :onWaitRegMem           (pctx,buff);
       IT_ACQUIRE_MEM                    :onAcquireMem           (pctx,buff);
       IT_INDIRECT_BUFFER                :onIndirectBufferCompute(pctx,buff);
+
+      IT_MEM_SEMAPHORE                  :onMemSemaphore         (pctx,buff);
+
+      IT_SET_QUEUE_REG                  :Writeln('SET_QUEUE_REG:Skip');
 
       else
        begin
