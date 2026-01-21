@@ -1304,25 +1304,16 @@ begin
  dst:=get_vdst8(FSPI.VOP3a.VDST);
  src:=fetch_ssrc9(FSPI.VOP3a.SRC0,src_type);
 
- //TODO: check
- if (not src_type.isFloat) then
- begin
-  Assert(FSPI.VOP3a.ABS  =0,'FSPI.VOP3a.ABS');
-  Assert(FSPI.VOP3a.NEG  =0,'FSPI.VOP3a.NEG');
- end;
-
  emit_src_abs_neg(@src,1,src_type);
 
  Op1(OpId,dst_type,dst,src);
 
- if (not dst_type.isFloat) then
+ if (dst_type.isFloat) then
  begin
-  Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
-  Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+  emit_dst_omod__f(dst,dst_type);
+  emit_dst_clamp_f(dst,dst_type);
  end;
 
- emit_dst_omod__f(dst,dst_type);
- emit_dst_clamp_f(dst,dst_type);
 end;
 
 procedure TEmit_VOP3.emit_V_CVT_F16_F32; //vdst[15:0].hf = ConvertFloatToHalfFloat(vsrc.f)
