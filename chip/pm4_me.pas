@@ -3050,8 +3050,6 @@ begin
 end;
 
 procedure pm4_SubmitFlipEop(var ctx:t_me_render_context;node:p_pm4_node_SubmitFlipEop);
-var
- curr:QWORD;
 begin
  if not ctx.stream^.hint_repeat then
  begin
@@ -3068,14 +3066,7 @@ begin
   ctx.me^.on_submit_flip_eop(node^.eop_value);
  end;
 
- curr:=md_rdtsc_unit;
-
- if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
-    (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT_ON_CONFIRM) then
- begin
-  ctx.me^.knote_eventid($40,0,curr*NSEC_PER_UNIT,0); //(absolute time) (freq???)
- end;
-
+ //do not trigger eop!
 end;
 
 function get_compute_pipe_id(buft:t_pm4_stream_type):Byte; inline;
