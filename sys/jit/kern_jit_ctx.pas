@@ -248,6 +248,7 @@ type
                    his_xchg,
                    his_bt,
                    his_mri8,   //mem-reg-mm8
+                   his_reg,    //reg only
                    his_ro,     //read only
                    his_wo,     //write only
                    his_rw,     //read-write
@@ -2371,8 +2372,8 @@ begin
      mem_size:=ctx.din.Operand[1].Size;
      Assert(mem_size<>os0);
 
-     if (his_ro in hint) or
-        (mem_size<>os32) then
+     if (not (his_reg in hint)) and
+        ((his_ro in hint) or (mem_size<>os32)) then
      begin
       i:=GetFrameOffset(ctx.din.Operand[1]);
       _M(desc,[r_thrd+i,mem_size]);

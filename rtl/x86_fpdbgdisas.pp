@@ -2688,6 +2688,7 @@ begin
         DecodeSIMD([soNone]);
         case SimdOpcode of
           soNone: begin SetOpcode(OPrdrand); AddRv; end;
+          so66  : begin SetOpcode(OPrdrand); AddRv; end;
         end;
       end
       else begin
@@ -2705,6 +2706,7 @@ begin
         DecodeSIMD([soNone, soF3]);
         case SimdOpcode of
           soNone: begin SetOpcode(OPrdseed); AddRv; end;
+          so66:   begin SetOpcode(OPrdseed); AddRv; end;
           soF3:   begin SetOpcode(OPrdpid);  AddRd_q; end;
         end;
       end

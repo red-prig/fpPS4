@@ -1548,6 +1548,26 @@ begin
  end;
 end;
 
+procedure op_reg_only(var ctx:t_jit_context2);
+var
+ tmp:t_op_type;
+begin
+ if is_preserved(ctx.din) then
+ begin
+  tmp:=Default(t_op_type);
+
+  tmp.op   :=ctx.dis.opcode;
+  tmp.index:=ctx.dis.ModRM.Index;
+  tmp.opt  :=[not_os8];
+
+  op_emit1(ctx,tmp,[his_reg]);
+ end else
+ begin
+  add_orig(ctx);
+ end;
+end;
+
+
 //
 
 procedure op_shift2_gen(var ctx:t_jit_context2);
@@ -1832,6 +1852,9 @@ begin
  jit_cbs[OPPnone,OPset__,OPSc_nl ]:=@op_emit1_gn_np;
  jit_cbs[OPPnone,OPset__,OPSc_le ]:=@op_emit1_gn_np;
  jit_cbs[OPPnone,OPset__,OPSc_nle]:=@op_emit1_gn_np;
+
+ jit_cbs[OPPnone,OPrdrand,OPSnone]:=@op_reg_only;
+ jit_cbs[OPPnone,OPrdseed,OPSnone]:=@op_reg_only;
 
  jit_cbs[OPPnone,OPemms      ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfemms     ,OPSnone]:=@add_orig;

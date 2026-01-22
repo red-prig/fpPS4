@@ -2590,6 +2590,7 @@ begin
   node_next:=link_next._node;
 
   //////
+  {
   i:=0;
   if (node_curr<>node_next) and
      (node_curr<>nil) then
@@ -2601,18 +2602,17 @@ begin
 
     i:=i+node^.AInstructionSize;
 
-    {
     if not test_disassemble(@node^.AData,node^.ASize) then
     begin
      print_asm:=True;
      Break;
     end;
-    }
 
 
     node:=TAILQ_NEXT(node,@node^.entry);
    end;
   end;
+  }
 
   apply_jit_stat(i);
   //////
