@@ -6,6 +6,8 @@ unit ps4_libSceAjm;
 interface
 
 uses
+ time,
+ md_sleep,
  subr_dynlib;
 
 implementation
@@ -561,9 +563,9 @@ begin
     SCE_AJM_FLAG_SIDEBAND_STREAM:
      begin
       //Writeln('SCE_AJM_FLAG_SIDEBAND_STREAM');
-      u.sStream.iSizeConsumed:=1;
-      u.sStream.iSizeProduced:=1;
-      u.sStream.uiTotalDecodedSamples:=1; //loop or div to zero
+      u.sStream.iSizeConsumed:=48000;
+      u.sStream.iSizeProduced:=48000;
+      u.sStream.uiTotalDecodedSamples:=48000; //loop or div to zero
       commit(@u.sStream,SizeOf(u.sStream));
      end;
 
@@ -574,7 +576,7 @@ begin
       u.sFormat.uiChannelMask      :=1;
       u.sFormat.uiSamplingFrequency:=48000;
       u.sFormat.eSampleEncoding    :=0;
-      u.sFormat.uiBitrate          :=1;
+      u.sFormat.uiBitrate          :=1024;
       u.sFormat._reserved          :=0;
       commit(@u.sFormat,SizeOf(u.sFormat));
      end;
@@ -784,22 +786,36 @@ begin
 end;
 
 function ps4_sceAjmBatchStartBuffer(
-          uiContext:SceAjmContextId;
+          uiContext     :SceAjmContextId;
           pBatchCommands:Pointer;
-          szBatchSize:qword;
-          iPriority:Integer;
-          pBatchError:pSceAjmBatchError;
-          pBatch:pSceAjmBatchId):Integer;
+          szBatchSize   :qword;
+          iPriority     :Integer;
+          pBatchError   :pSceAjmBatchError;
+          pBatch        :pSceAjmBatchId):Integer;
 begin
+
+ if (pBatchError<>nil) then
+ begin
+  pBatchError^:=Default(SceAjmBatchError);
+ end;
+
  Result:=0;
 end;
 
 function ps4_sceAjmBatchWait(
-          uiContext:SceAjmContextId;
-          uiBatch:SceAjmBatchId;
-          uiTimeout:DWORD;
+          uiContext  :SceAjmContextId;
+          uiBatch    :SceAjmBatchId;
+          uiTimeout  :DWORD;
           pBatchError:pSceAjmBatchError):Integer;
 begin
+
+ msleep_td(hz div 2);
+
+ if (pBatchError<>nil) then
+ begin
+  pBatchError^:=Default(SceAjmBatchError);
+ end;
+
  Result:=0;
 end;
 
