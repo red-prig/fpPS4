@@ -1974,7 +1974,12 @@ begin
  GP_KEY.SetPrimType (ctx.rt_info^.PRIM_TYPE,GP_KEY.FShaderGroup.FKey.FPrimtype);
  GP_KEY.SetPrimReset(ctx.rt_info^.PRIM_RESET);
 
- if (ctx.rt_info^.VP_COUNT<>0) then
+ if (ctx.rt_info^.VP_COUNT=0) then
+ begin
+  //special case
+  Writeln(':VP_COUNT=0');
+  GP_KEY.AddVPort(Default(TVkViewport),Default(TVkRect2D));
+ end else
  For i:=0 to ctx.rt_info^.VP_COUNT-1 do
   begin
    GP_KEY.AddVPort(ctx.rt_info^.VPORT[i],ctx.rt_info^.SCISSOR[i]);
@@ -2007,6 +2012,15 @@ begin
  end;
 
  GP:=FetchGraphicsPipeline(ctx.Cmd,@GP_KEY);
+
+ if (GP=nil) then
+ begin
+  Writeln(stderr,'FetchGraphicsPipeline=nil');
+
+  DumpShaderGroup(ctx.rt_info^.ShaderGroup);
+
+  Assert (false ,'FetchGraphicsPipeline=nil');
+ end;
 
  if limits.VK_KHR_imageless_framebuffer then
  begin
