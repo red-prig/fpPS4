@@ -130,6 +130,14 @@ begin
   error:=copyinstr(ndp^.ni_dirp, cnp^.cn_pnbuf, MAXPATHLEN, @ndp^.ni_pathlen);
  end;
 
+ //Sony!!!
+ if (error=0) then
+ if (ndp^.ni_segflg=UIO_USERSPACE) then
+ if (cnp^.cn_pnbuf^<>'/') then
+ begin
+  error:=EINVAL;
+ end;
+
  {
   * Don't allow empty pathnames.
   }

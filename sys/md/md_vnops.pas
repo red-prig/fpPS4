@@ -1289,15 +1289,30 @@ begin
   Exit(0);
  end;
 
- sx_xlock(@dd^.ufs_md_lock);
+ if ((flags and ISDOTDOT)<>0) then
+ begin
+  if ((flags and ISLASTCN)<>0) and (nameiop<>LOOKUP) then
+  begin
+   Exit(EINVAL);
+  end;
+ end;
 
  Result:=0;
- de:=md_find_cache(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
 
- if (de=nil) then
- begin
-  Result:=md_lookup_dirent(dvp^.v_mount,dd,cnp^.cn_nameptr,cnp^.cn_namelen,de);
- end;
+ sx_xlock(@dd^.ufs_md_lock);
+
+  if ((flags and ISDOTDOT)<>0) then
+  begin
+   de:=dd^.ufs_dir;
+  end else
+  begin
+   de:=md_find_cache(dd, cnp^.cn_nameptr, cnp^.cn_namelen, 0);
+
+   if (de=nil) then
+   begin
+    Result:=md_lookup_dirent(dvp^.v_mount,dd,cnp^.cn_nameptr,cnp^.cn_namelen,de);
+   end;
+  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
 
