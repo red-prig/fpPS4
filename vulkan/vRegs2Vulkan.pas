@@ -1114,15 +1114,30 @@ begin
   Result.FImageInfo.Addr:=Pointer(QWORD(Result.FImageInfo.Addr) or Byte(RENDER_TARGET.VIEW.SLICE_START));
  end;
 
+ tmp:=(RENDER_TARGET.PITCH.TILE_MAX+1);
+ Result.FImageInfo.params.pad_width :=tmp*8;
+ Result.FImageInfo.params.pad_height:=(RENDER_TARGET.SLICE.TILE_MAX+1)*8 div tmp;
+
  scr:=GET_SCREEN_SIZE;
+
+ if (scr.width=0) or (scr.width>Result.FImageInfo.params.pad_width) then
+ begin
+  scr.width:=Result.FImageInfo.params.pad_width;
+ end;
+
+ if (scr.height=0) then
+ begin
+  scr.height:=Result.FImageInfo.params.pad_height;
+ end;
+
+ if (scr.height=0) then
+ begin
+  scr.height:=1;
+ end;
 
  Result.FImageInfo.params.width :=scr.width;
  Result.FImageInfo.params.height:=scr.height;
  Result.FImageInfo.params.depth :=1;
-
- tmp:=(RENDER_TARGET.PITCH.TILE_MAX+1);
- Result.FImageInfo.params.pad_width :=tmp*8;
- Result.FImageInfo.params.pad_height:=(RENDER_TARGET.SLICE.TILE_MAX+1)*8 div tmp;
 
  Assert(RENDER_TARGET.INFO.ENDIAN=ENDIAN_NONE,'ENDIAN:'+IntToStr(RENDER_TARGET.INFO.ENDIAN));
  //Assert(RENDER_TARGET[i].INFO.COMPRESSION=0);  //FMASK and MSAA
