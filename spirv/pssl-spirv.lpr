@@ -599,6 +599,8 @@ begin
      '-eoh':cfg.cfg.UseOutput16:=True;
      '-doh':cfg.cfg.UseOutput16:=False;
 
+     '-v13':cfg.cfg.UseTargetVulkan13:=True;
+
        '-b':n:=0;
 
     '-mubo':n:=1;//maxUniformBufferRange

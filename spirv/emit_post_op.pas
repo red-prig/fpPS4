@@ -57,6 +57,7 @@ type
   function  OpBitReverse1(node:TSpirvOp):Integer;
   //
   function  OpGroupNonUniformBallotBitCount1(node:TSpirvOp):Integer;
+  function  OpIEqual1(node:TSpirvOp):Integer;
   //
   function  OnSelect1(node:TSpirvOp):Integer;
   //
@@ -118,6 +119,8 @@ begin
   Op.OpBitReverse       :Result:=OpBitReverse1(node);
 
   Op.OpGroupNonUniformBallotBitCount:Result:=OpGroupNonUniformBallotBitCount1(node);
+
+  Op.OpIEqual           :Result:=OpIEqual1(node);
 
   else;
  end;
@@ -1103,6 +1106,83 @@ begin
   data:=PopCnt(data); //BitCount
 
   _SetConst(dst.dtype,data);
+  Exit;
+ end;
+
+end;
+
+Function GetBroadcastFirstSrc(src:TsrRegNode):TsrRegNode;
+var
+ node:TSpirvOp;
+begin
+ Result:=nil;
+
+ node:=src.pWriter.specialize AsType<ntOp>;
+ if (node=nil) then Exit;
+
+ if (node.OpId<>Op.OpGroupNonUniformBroadcastFirst) then Exit;
+
+ Result:=RegDown(node.ParamNode(1).AsReg);
+end;
+
+Procedure RemoveBroadcastFirst(src:TsrRegNode);
+var
+ node:TSpirvOp;
+ dst:TsrRegNode;
+begin
+ node:=src.pWriter.specialize AsType<ntOp>;
+ if (node=nil) then Exit;
+
+ if (node.OpId<>Op.OpGroupNonUniformBroadcastFirst) then Exit;
+
+ dst:=node.pDst.specialize AsType<ntReg>;
+ if (dst=nil) then Exit;
+
+ src:=node.ParamNode(1).AsReg;
+ if (dst=nil) then Exit;
+
+ dst.pWriter:=src;
+ node.mark([soNotUsed]);
+ node.pDst:=nil;
+end;
+
+function TEmitPostOp.OpIEqual1(node:TSpirvOp):Integer;
+var
+ dst,src0,src1,val:TsrRegNode;
+
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst.pWriter:=NewImm_q(dtype,value,node);
+  node.mark([soNotUsed]);
+  node.pDst:=nil;
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node.pDst.specialize AsType<ntReg>;
+ if (dst=nil) then Exit;
+
+ //READFIRSTLANE loop detection heuristic
+
+ src0:=RegDown(node.ParamNode(0).AsReg);
+ src1:=RegDown(node.ParamNode(1).AsReg);
+
+ val:=GetBroadcastFirstSrc(src0);
+
+ if (val<>nil) and (val=src1) then
+ begin
+  RemoveBroadcastFirst(src0);
+  _SetConst(dtBool,1);
+  Exit;
+ end;
+
+ val:=GetBroadcastFirstSrc(src1);
+
+ if (val<>nil) and (val=src0) then
+ begin
+  RemoveBroadcastFirst(src1);
+  _SetConst(dtBool,1);
   Exit;
  end;
 

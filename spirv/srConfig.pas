@@ -17,6 +17,7 @@ type
   UseAtomicFloatMinMax    :Boolean;
   UseOnlyUserdataPushConst:Boolean;
   UseExtendedEXECMask     :Boolean;
+  UseTargetVulkan13       :Boolean;
   //
   DescriptorSet:DWORD; //0
   //
@@ -57,10 +58,8 @@ begin
 end;
 
 Function TsrConfig.CanUseStorageBufferClass:Boolean;
-const
- target_vulkan13=False;
 begin
- if target_vulkan13 then
+ if UseTargetVulkan13 then
  begin
   UpgradeVersion13;
   Result:=True;
