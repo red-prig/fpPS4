@@ -230,13 +230,15 @@ begin
 end;
 
 function op_add_local_cache(var ctx:t_jit_context2):t_jit_i_link;
+var
+ w:WORD;
 begin
  with ctx.builder do
  begin
-  //jit_frame->call_ret_cache
-  leaq(r15,[r13-jit_frame_offset-64*1024]);
+  w:=Word(QWORD(ctx.ptr_next)*16);
 
-  movi(r15w,Word(QWORD(ctx.ptr_next)*16)); //r15 = r15 && (!0xFFFF) || IMM
+  //jit_frame->call_ret_cache
+  leaq(r15,[r13-jit_frame_offset-64*1024+w]);
 
   Result:=leaj(r14,[rip+$7FFFFFFF],nil_link); //set deferred
   movq([r15+8,os64],r14); //dst
@@ -333,7 +335,7 @@ end;
 var
  jit_nop_sequence:Boolean=False;
 
-function is_nop_sequence(addr:Pointer):Boolean;
+function is_nop_sequence(addr,_end:Pointer):Boolean;
 type
  t_data_16=array[0..15] of Byte;
 var
@@ -371,7 +373,19 @@ begin
    Exit(True);
   end;
 
+  if (PBYTE(beg)^=$c3) then //c3
+  begin
+   //ret
+   Exit(True);
+  end;
+
   dis.Disassemble(dm64,ptr,din);
+
+  if (ptr-beg)>15 then
+  begin
+   //invalid size
+   Exit(False);
+  end;
 
   addr:=addr+(ptr-beg);
 
@@ -393,13 +407,13 @@ begin
     end;
   end;
 
- until false;
+ until (addr>=_end);
 
 end;
 
 procedure trim_flow(var ctx:t_jit_context2);
 begin
- if is_nop_sequence(ctx.ptr_next) then
+ if is_nop_sequence(ctx.ptr_next,Pointer(ctx.text___end)) then
  begin
   //
  end else
@@ -1750,6 +1764,10 @@ begin
  jit_cbs[OPPnone,OPsysenter,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsysexit ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsysret  ,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPrsm     ,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPxabort  ,OPSnone]:=@op_invalid;
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
@@ -1956,6 +1974,16 @@ begin
  end;
 
  Writeln(str,'<-');
+end;
+
+procedure print_trace(nid:QWORD); SysV_ABI_CDecl;
+var
+ td:p_kthread;
+begin
+ td:=curkthread;
+ set_jit_ctx_state(@td^.td_frame,False);
+ subr_backtrace.print_backtrace_td(stderr);
+ set_jit_ctx_state(@td^.td_frame,True);
 end;
 
 function pick_locked_internal(var ctx:t_jit_context2):p_jit_dynamic_blob;

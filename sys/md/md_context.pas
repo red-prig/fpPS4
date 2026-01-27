@@ -629,6 +629,8 @@ asm
  mov   $7,%eax
  xor %edx,%edx
 
+ movqq $0,t_fpstate.XCOMP_BV(%rdi) //save any
+
  //xsave64 (%rdi) //480FAE27
  .byte 0x48, 0x0F, 0xAE, 0x27
  //
@@ -639,7 +641,10 @@ asm
  mov   $7,%eax
  xor %edx,%edx
 
-//xrstor (%rdi) //0FAE2F
+ movqq $0,t_fpstate.XCOMP_BV(%rdi) //restore all
+ and __INITIAL_MXCSR_MASK__, t_fpstate.XMM_SAVE_AREA.MxCsr_Mask(%rdi) //guard mask
+
+ //xrstor (%rdi) //0FAE2F
  .byte 0x0F, 0xAE, 0x2F
  //
 end;

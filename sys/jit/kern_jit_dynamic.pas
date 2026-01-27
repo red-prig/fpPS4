@@ -207,7 +207,7 @@ procedure blob_track(blob:p_jit_dynamic_blob);
 
 function  build(var ctx:t_jit_context2):p_jit_dynamic_blob;
 
-procedure preload(addr:Pointer);
+procedure jit_preload(addr:Pointer);
 
 implementation
 
@@ -270,7 +270,7 @@ begin
 
 end;
 
-procedure preload(addr:Pointer);
+procedure jit_preload(addr:Pointer); public;
 var
  node:p_jit_entry_point;
  ctx:t_jit_context2;
@@ -394,7 +394,7 @@ begin
 
  if (node=nil) then
  begin
-  preload(Pointer(td^.td_frame.tf_rip));
+  jit_preload(Pointer(td^.td_frame.tf_rip));
   goto _start;
  end;
 
@@ -803,7 +803,7 @@ begin
 
  if (node=nil) then
  begin
-  preload(addr);
+  jit_preload(addr);
   goto _start;
  end;
 

@@ -92,6 +92,7 @@ function  kern_umtx_wake  (td:p_kthread;umtx:Pointer;n_wake,priv:Integer):Intege
 function  umtx_copyin_timeout(addr:Pointer;tsp:p_timespec):Integer; external;
 
 procedure jit_ctx_free(td:p_kthread);  external;
+procedure jit_preload(addr:Pointer); external;
 
 //
 
@@ -630,6 +631,8 @@ begin
  begin
   sched_prio(newtd,newtd^.td_user_pri);
  end;
+
+ jit_preload(start_func);
 
  n:=cpu_sched_add(newtd);
  if (n<>0) then

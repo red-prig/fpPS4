@@ -158,6 +158,20 @@ asm
  movqq   $0,kthread.td_frame.tf_flags (%r15)
  movqq   $2,kthread.td_frame.tf_err   (%r15) //sizeof(syscall)
 
+ // //save fpstate
+ // leaq kthread.td_fpstate(%r15),%rdi
+ //
+ // mov   $7,%eax
+ // xor %edx,%edx
+ //
+ // movqq $0,t_fpstate.XCOMP_BV(%rdi) //save any
+ //
+ // //xsave64 (%rdi) //480FAE27
+ // .byte 0x48, 0x0F, 0xAE, 0x27
+ // //
+ // movqq TF_HASFPXSTATE,kthread.td_frame.tf_flags(%r15)
+ // //
+
  call amd64_syscall
 
  _after_call:
@@ -171,6 +185,19 @@ asm
 
  testl TDF_AST,kthread.td_flags(%r15)
  jne _ast
+
+ // //restore fpstate
+ // leaq kthread.td_fpstate(%r15),%rdi
+ //
+ // mov   $7,%eax
+ // xor %edx,%edx
+ //
+ // movqq $0,t_fpstate.XCOMP_BV(%rdi) //restore all
+ // and __INITIAL_MXCSR_MASK__, t_fpstate.XMM_SAVE_AREA.MxCsr_Mask(%rdi) //guard mask
+ //
+ // //xrstor (%rdi) //0FAE2F
+ // .byte 0x0F, 0xAE, 0x2F
+ // //
 
  //Restore preserved registers.
 
@@ -368,8 +395,7 @@ asm
  //and $-32,%rdi
 
  {$IFDEF USE_XSAVE}
-  movqq $0,t_fpstate.XSTATE_BV(%rdi)
-  movqq $0,t_fpstate.XCOMP_BV (%rdi)
+  movqq $0,t_fpstate.XCOMP_BV(%rdi) //save any
 
   mov   $7,%eax
   xor %edx,%edx
@@ -408,7 +434,8 @@ asm
   mov   $7,%eax
   xor %edx,%edx
 
-  and __INITIAL_MXCSR_MASK__, t_fpstate.XMM_SAVE_AREA.MxCsr_Mask(%rdi)
+  movqq $0,t_fpstate.XCOMP_BV(%rdi) //restore all
+  and __INITIAL_MXCSR_MASK__, t_fpstate.XMM_SAVE_AREA.MxCsr_Mask(%rdi) //guard mask
 
   //xrstor (%rdi) //0FAE2F
   .byte 0x0F, 0xAE, 0x2F

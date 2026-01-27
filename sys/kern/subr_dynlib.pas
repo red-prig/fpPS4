@@ -3502,8 +3502,18 @@ begin
          with ctx.add_forward_point(fpCall,addr)^ do
          begin
           if jit_trace_hle_call then
-          begin
-           nid:=h_entry^.nid;
+          case RawByteString(dynlib_basename(obj^.lib_path)) of
+           'libkernel.sprx':;
+           'libSceLibcInternal.sprx':;
+           'libSceSysmodule.sprx':;
+           'libSceDiscMap.sprx':;
+           'libSceFios2.prx':;
+           'libc.prx':;
+           else
+            begin
+             //Writeln(dynlib_basename(obj^.lib_path));
+             nid:=h_entry^.nid;
+            end;
           end;
          end;
 

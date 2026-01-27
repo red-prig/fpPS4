@@ -27,6 +27,7 @@ type
  t_pm4_ibuffer=record
   next:TAILQ_ENTRY;
   base:Pointer;
+  endp:Pointer;
   buff:Pointer;
   size:Ptruint;
   bpos:Ptruint;
@@ -121,6 +122,7 @@ begin
  ibuf^.picb:=icb;
  ibuf^.buft:=buft;
  ibuf^.c_id:=c_id;
+ ibuf^.endp:=nil;
 end;
 
 function pm4_ibuf_init(ibuf:p_pm4_ibuffer;
@@ -133,6 +135,8 @@ var
  addr:Pointer;
 begin
  Result:=False;
+
+ ibuf^.endp:=nil;
 
  case buf^.header.opcode of
   IT_INDIRECT_BUFFER_CNST:;
@@ -192,6 +196,12 @@ begin
   end else
   begin
    len:=PM4_LENGTH(token);
+  end;
+
+  if (ibuf^.endp<>nil) then
+  if (buff + len)>ibuf^.endp then
+  begin
+   Writeln('COMPUTE OVERFLOW!:');
   end;
 
   if (len>i) then

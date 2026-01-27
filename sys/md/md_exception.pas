@@ -382,6 +382,27 @@ begin
    end;
  end;
 
+ {
+ thread_suspend_all(curkthread);
+
+ Writeln('ProcessException:0x',HexStr(get_exception(p),8));
+
+ while not IsDebuggerPresent do sleep(1000);
+
+ thread_resume_all(curkthread);
+
+ asm
+  int3
+ end;
+
+ Exit(EXCEPTION_CONTINUE_EXECUTION);
+ }
+
+ if IsDebuggerPresent then
+ asm
+  int3
+ end;
+
  Result:=ProcessException3(curkthread,p);
 
  if (Result=0) then

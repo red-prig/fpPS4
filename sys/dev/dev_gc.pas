@@ -392,6 +392,8 @@ begin
       //adjust guest addr
       ibuf.base:=base_guest_addr;
 
+      ibuf.endp:=map_queue_hqd[c_id].base_dmem_addr + (map_queue_hqd[c_id].ringSizeDw*4);
+
       i:=pm4_ibuf_parse(@pfp_ctx,@ibuf);
 
       if (i<>0) then

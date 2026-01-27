@@ -3087,7 +3087,13 @@ end;
  }
 function sys_mkdir(path:PChar;mode:Integer):Integer;
 begin
- Exit(kern_mkdir(path, UIO_USERSPACE, mode));
+ Result:=(kern_mkdir(path, UIO_USERSPACE, mode));
+ //
+ if (curkthread<>nil) then
+ if is_guest_addr(curkthread^.td_frame.tf_rip) then
+ begin
+  Writeln('sys_mkdir("',path,'",','0',OctStr(mode,3),'):',Result);
+ end;
 end;
 
 function sys_mkdirat(fd:Integer;path:PChar;mode:Integer):Integer;

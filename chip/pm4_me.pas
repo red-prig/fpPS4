@@ -1974,12 +1974,7 @@ begin
  GP_KEY.SetPrimType (ctx.rt_info^.PRIM_TYPE,GP_KEY.FShaderGroup.FKey.FPrimtype);
  GP_KEY.SetPrimReset(ctx.rt_info^.PRIM_RESET);
 
- if (ctx.rt_info^.VP_COUNT=0) then
- begin
-  //special case
-  Writeln(':VP_COUNT=0');
-  GP_KEY.AddVPort(Default(TVkViewport),Default(TVkRect2D));
- end else
+ if (ctx.rt_info^.VP_COUNT<>0) then
  For i:=0 to ctx.rt_info^.VP_COUNT-1 do
   begin
    GP_KEY.AddVPort(ctx.rt_info^.VPORT[i],ctx.rt_info^.SCISSOR[i]);
@@ -2486,6 +2481,12 @@ begin
  begin
   ctx.InsertLabel('decompress Dcc/Depth/Fmask');
   //zero attachment (decompress Dcc/Depth/Fmask) skip
+  Exit;
+ end;
+
+ if (ctx.rt_info^.VP_COUNT=0) then
+ begin
+  //no viewports?
   Exit;
  end;
 
