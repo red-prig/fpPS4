@@ -40,6 +40,8 @@ type
   procedure emit_V_FFBH_U32;
   procedure emit_V_FFBL_B32;
   procedure emit_V_BFREV_B32;
+  procedure emit_V_FREXP_EXP_I32_F32;
+  procedure emit_V_FREXP_MANT_F32;
  end;
 
 implementation
@@ -512,6 +514,44 @@ begin
  Op1(Op.OpBitReverse,dtUInt32,dst,src);
 end;
 
+procedure TEmit_VOP1.emit_V_FREXP_EXP_I32_F32;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ rec:TsrRegNode;
+ val:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+
+ rec:=NewReg(dtStruct2fi);
+ _OpGlsl1(line,GlslOp.FrexpStruct,rec,src);
+
+ val:=NewReg(dtInt32);
+ OpExtract(line,val,rec,1);
+
+ MakeCopy(dst,val);
+end;
+
+procedure TEmit_VOP1.emit_V_FREXP_MANT_F32;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ rec:TsrRegNode;
+ val:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP1.VDST);
+ src:=fetch_ssrc9(FSPI.VOP1.SRC0,dtFloat32);
+
+ rec:=NewReg(dtStruct2fi);
+ _OpGlsl1(line,GlslOp.FrexpStruct,rec,src);
+
+ val:=NewReg(dtFloat32);
+ OpExtract(line,val,rec,0);
+
+ MakeCopy(dst,val);
+end;
+
 procedure TEmit_VOP1.emit_VOP1;
 begin
 
@@ -568,6 +608,9 @@ begin
   V_FFBL_B32 : emit_V_FFBL_B32;
 
   V_BFREV_B32: emit_V_BFREV_B32;
+
+  V_FREXP_EXP_I32_F32: emit_V_FREXP_EXP_I32_F32;
+  V_FREXP_MANT_F32   : emit_V_FREXP_MANT_F32;
 
   V_MOVRELS_B32: emit_V_MOVRELS_B32;
   V_MOVRELD_B32: emit_V_MOVRELD_B32;

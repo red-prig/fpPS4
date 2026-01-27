@@ -291,6 +291,7 @@ begin
     PBYTE(@Result)[3]:=GetConst(3).AsUint8;
    end;
 
+  dtStruct2i,
   dtStruct2u,
   dtVec2u,
   dtVec2i,
@@ -557,6 +558,7 @@ begin
      Result:=_Fetch1(dtype,Op.OpConstant,value);
     end;
 
+  dtStruct2i,
   dtStruct2u,
   dtVec2u8,
   dtVec4u8,

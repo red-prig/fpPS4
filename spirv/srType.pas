@@ -42,6 +42,8 @@ type
   dtStruct2i64,
   dtStruct2u64,
 
+  dtStruct2fi,
+
   dtVec2u8,
   dtVec4u8,
 
@@ -226,6 +228,8 @@ begin
   dtStruct2i64 :Result:='rec2i64';
   dtStruct2u64 :Result:='rec2u64';
 
+  dtStruct2fi  :Result:='rec2fi';
+
   dtVec2u8     :Result:='u8vec2';
   dtVec4u8     :Result:='u8vec4';
 
@@ -387,6 +391,8 @@ begin
   dtStruct2i64,
   dtStruct2u64,
 
+  dtStruct2fi,
+
   dtVec2u8,
   dtVec4u8,
 
@@ -484,7 +490,8 @@ begin
   dtStruct2i,
   dtStruct2u,
   dtStruct2i64,
-  dtStruct2u64:Result:=2;
+  dtStruct2u64,
+  dtStruct2fi:Result:=2;
 
   dtVec3b,
   dtVec3u,
@@ -605,7 +612,8 @@ begin
   dtVec2f,
   dtVec4h,
   dtStruct2i,
-  dtStruct2u:Result:=64;
+  dtStruct2u,
+  dtStruct2fi:Result:=64;
 
   dtVec3u,
   dtVec3i,
@@ -699,10 +707,10 @@ function TsrDataTypeHelper.AsStruct2:TsrDataType;
 begin
  Result:=dtUnknow;
  Case Self of
-  dtInt32 :Result:=dtStruct2i;
-  dtUint32:Result:=dtStruct2u;
-  dtInt64 :Result:=dtStruct2i64;
-  dtUint64:Result:=dtStruct2u64;
+  dtInt32  :Result:=dtStruct2i;
+  dtUint32 :Result:=dtStruct2u;
+  dtInt64  :Result:=dtStruct2i64;
+  dtUint64 :Result:=dtStruct2u64;
   else;
  end;
 end;

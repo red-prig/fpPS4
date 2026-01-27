@@ -81,6 +81,8 @@ type
   procedure emit_V_EXT_F32(OpId:DWORD);
   procedure emit_V_SIN_COS(OpId:DWORD);
   procedure emit_V_RCP_F32;
+  procedure emit_V_FREXP_EXP_I32_F32;
+  procedure emit_V_FREXP_MANT_F32;
  end;
 
 implementation
@@ -1423,6 +1425,51 @@ begin
  emit_dst_clamp_f(dst,dtFloat32);
 end;
 
+procedure TEmit_VOP3.emit_V_FREXP_EXP_I32_F32;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ rec:TsrRegNode;
+ val:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+
+ emit_src_abs_neg(@src,1,dtFloat32);
+
+ rec:=NewReg(dtStruct2fi);
+ _OpGlsl1(line,GlslOp.FrexpStruct,rec,src);
+
+ val:=NewReg(dtInt32);
+ OpExtract(line,val,rec,1);
+
+ MakeCopy(dst,val);
+end;
+
+procedure TEmit_VOP3.emit_V_FREXP_MANT_F32;
+Var
+ dst:PsrRegSlot;
+ src:TsrRegNode;
+ rec:TsrRegNode;
+ val:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+ src:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+
+ emit_src_abs_neg(@src,1,dtFloat32);
+
+ rec:=NewReg(dtStruct2fi);
+ _OpGlsl1(line,GlslOp.FrexpStruct,rec,src);
+
+ val:=NewReg(dtFloat32);
+ OpExtract(line,val,rec,0);
+
+ MakeCopy(dst,val);
+
+ emit_dst_omod__f(dst,dtFloat32);
+ emit_dst_clamp_f(dst,dtFloat32);
+end;
+
 procedure TEmit_VOP3.emit_VOP3c;
 begin
  Case FSPI.VOP3a.OP of
@@ -1968,8 +2015,11 @@ begin
   384+V_SIN_F32  : emit_V_SIN_COS(GlslOp.Sin);
   384+V_COS_F32  : emit_V_SIN_COS(GlslOp.Cos);
 
-  384+V_RCP_F32  : emit_V_RCP_F32;
+  384+V_RCP_F32      : emit_V_RCP_F32;
   384+V_RCP_IFLAG_F32: emit_V_RCP_F32;
+
+  384+V_FREXP_EXP_I32_F32: emit_V_FREXP_EXP_I32_F32;
+  384+V_FREXP_MANT_F32   : emit_V_FREXP_MANT_F32;
 
   else
    Assert(false,'VOP3a?'+IntToStr(FSPI.VOP3a.OP)+' '+get_str_spi(FSPI));

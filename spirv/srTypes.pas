@@ -75,7 +75,7 @@ type
   function  _FetchVector(dtype:TsrDataType):TsrType;
   function  _FetchInt(dtype:TsrDataType):TsrType;
   function  _FetchFloat(dtype:TsrDataType):TsrType;
-  function  _FetchStruct2(dtype:TsrDataType):TsrType;
+  function  _FetchStruct2(dtype,src0,src1:TsrDataType):TsrType;
   function  _FetchConst(dtype:TsrDataType;Value:QWORD):TsrType;
   function  Fetch(dtype:TsrDataType):TsrType;
   function  FetchPointer(child:TsrType;storage_class:DWORD):TsrType;
@@ -477,14 +477,14 @@ begin
  Result:=_Fetch(@key,True);
 end;
 
-function TsrTypeList._FetchStruct2(dtype:TsrDataType):TsrType;
+function TsrTypeList._FetchStruct2(dtype,src0,src1:TsrDataType):TsrType;
 var
  key:TsrTypeKey;
  item:array[0..1] of TsrNode;
 begin
  Result:=nil;
- item[0]:=Fetch(dtype.Child);
- item[1]:=item[0];
+ item[0]:=Fetch(src0);
+ item[1]:=Fetch(src1);
  //
  key:=Default(TsrTypeKey);
  key.fdtype:=dtype;
@@ -604,8 +604,16 @@ begin
   dtStruct2i64,
   dtStruct2u64:
     begin
-     Result:=_FetchStruct2(dtype);
+     Result:=_FetchStruct2(dtype,dtype.Child,dtype.Child);
     end;
+
+  //
+
+  dtStruct2fi:
+    begin
+     Result:=_FetchStruct2(dtype,dtFloat32,dtInt32);
+    end;
+
   //
 
   else
