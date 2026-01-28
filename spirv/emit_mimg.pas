@@ -1456,6 +1456,8 @@ begin
 
  info:=GetImageInfo(pLayout_Tgrp.GetSharp);
 
+ if (info.count=0) then Exit; //skip invalid
+
  info.GLC:=(FSPI.MIMG.GLC<>0);
 
  if (pLayout_Sgrp<>nil) then
