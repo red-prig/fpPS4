@@ -294,7 +294,7 @@ begin
    img:=info.GetImageInfoElement;
 
    Result.vType  :=vcUniformElement;
-   Result.data[0]:=FetchImage(info.grp,img);
+   Result.data[0]:=FetchImage(info.grp,img,True);
    Result.data[1]:=sum_d;
 
    Exit;
@@ -326,7 +326,7 @@ begin
    img:=info.GetImageInfo;
 
    Result.vType  :=vcUniformVector;
-   Result.data[0]:=FetchImage(info.grp,img);
+   Result.data[0]:=FetchImage(info.grp,img,True);
    Result.data[1]:=sum_d;
 
    Exit;
@@ -344,7 +344,7 @@ begin
    img:=info.GetImageInfoElement;
 
    Result.vType  :=vcUniformElement;
-   Result.data[0]:=FetchImage(info.grp,img);
+   Result.data[0]:=FetchImage(info.grp,img,True);
    Result.data[1]:=sum_d;
 
    Exit;

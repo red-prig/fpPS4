@@ -61,6 +61,9 @@ type
   procedure emit_image_sample_gather(Tgrp,Sgrp:TsrNode;info:PsrImageInfo);
   procedure emit_image_load         (Tgrp:TsrNode;info:PsrImageInfo);
   procedure emit_image_store        (Tgrp:TsrNode;info:PsrImageInfo);
+  function  OpImageTexelPointer     (pLine:TspirvOp;dtype:TsrDataType;Tgrp:TsrNode;idx:TsrRegNode):TsrNode;
+  function  OpImageAtomic           (pLine:TspirvOp;ref:TsrNode;OpId:DWORD;src:TsrRegNode):TsrRegNode;
+  procedure emit_image_atomic       (Tgrp:TsrNode;info:PsrImageInfo);
   procedure emit_image_get_resinfo  (Tgrp:TsrNode;info:PsrImageInfo);
   procedure emit_image_get_lod      (Tgrp,Sgrp:TsrNode;info:PsrImageInfo);
  end;
@@ -1192,13 +1195,13 @@ end;
 
 procedure TEmit_MIMG.emit_image_store(Tgrp:TsrNode;info:PsrImageInfo);
 var
- dst,coord,lod,smp:TsrRegNode;
+ src,coord,lod,smp:TsrRegNode;
 
  roffset:DWORD;
 
  node:TSpirvOp;
 begin
- dst:=GatherDmask(info,False,True);
+ src:=GatherDmask(info,False,True);
 
  roffset:=0;
 
@@ -1208,7 +1211,7 @@ begin
      coord:=GatherCoord_u(roffset,info);
 
      //scalar or vector
-     node:=OpImageWrite(line,Tgrp,coord,dst);
+     node:=OpImageWrite(line,Tgrp,coord,src);
 
      if (info^.tinfo.MS<>0) then //fragid T# 2D MSAA
      begin
@@ -1232,10 +1235,86 @@ begin
      Tgrp:=TsrUniform(Tgrp).FetchArrayChain(line,lod);
 
      //scalar or vector
-     node:=OpImageWrite(line,Tgrp,coord,dst);
+     node:=OpImageWrite(line,Tgrp,coord,src);
     end;
   else
     Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
+ end;
+
+end;
+
+function TEmit_MIMG.OpImageTexelPointer(pLine:TspirvOp;dtype:TsrDataType;Tgrp:TsrNode;idx:TsrRegNode):TsrNode;
+Var
+ node:TspirvOp;
+begin
+ node:=AddSpirvOp(pLine,Op.OpImageTexelPointer); //need first
+
+ node.pType:=TypeList.FetchPointer(TypeList.Fetch(dtype),StorageClass.Image);
+ node.pDst :=NewRefNode;
+
+ node.AddParam(Tgrp);
+ node.AddParam(idx);
+ node.AddParam(NewImm_i(dtUint32,0));
+
+ Result:=node.pDst;
+end;
+
+function TEmit_MIMG.OpImageAtomic(pLine:TspirvOp;ref:TsrNode;OpId:DWORD;src:TsrRegNode):TsrRegNode;
+Var
+ node:TspirvOp;
+begin
+ node:=AddSpirvOp(pLine,OpId); //need first
+
+ node.pDst :=NewReg(src.dtype);
+ node.pType:=TypeList.Fetch(src.dtype);
+
+ node.AddParam(ref);
+
+ //scope
+ node.AddParam(NewImm_i(dtInt32,Scope.Device));
+
+ //MemorySemantics
+ node.AddParam(NewImm_i(dtInt32,MemorySemantics.ImageMemory or MemorySemantics.AcquireRelease));
+
+ //val
+ node.AddParam(src);
+
+ Result:=node.pDst;
+end;
+
+procedure TEmit_MIMG.emit_image_atomic(Tgrp:TsrNode;info:PsrImageInfo);
+var
+ ref:TsrNode;
+ src,dst,coord:TsrRegNode;
+
+ roffset:DWORD;
+begin
+ src:=GatherDmask(info,False,False);
+
+ roffset:=0;
+ coord:=GatherCoord_u(roffset,info);
+
+ ref:=OpImageTexelPointer(line,src.dtype,Tgrp,coord);
+
+ dst:=nil;
+
+ Case FSPI.MIMG.OP of
+  IMAGE_ATOMIC_ADD:
+   begin
+    dst:=OpImageAtomic(line,ref,Op.OpAtomicIAdd,src);
+   end;
+ else
+   Assert(false,'MIMG?'+IntToStr(FSPI.MIMG.OP));
+ end;
+
+ if (info^.GLC) then
+ begin
+  //save result
+  DistribDmask(FSPI.MIMG.DMASK,dst,info);
+ end else
+ begin
+  //no result
+  dst.mark_read(nil); //self link
  end;
 
 end;
@@ -1397,7 +1476,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      emit_image_sample(Tgrp,Sgrp,@info);
     end;
@@ -1407,7 +1486,7 @@ begin
      Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
 
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      emit_image_sample_gather(Tgrp,Sgrp,@info);
     end;
@@ -1415,7 +1494,7 @@ begin
   IMAGE_LOAD..IMAGE_LOAD_MIP_PCK_SGN: //loaded
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      emit_image_load(Tgrp,@info);
     end;
@@ -1424,7 +1503,7 @@ begin
   IMAGE_STORE_PCK: //stored
     begin
      info.tinfo.Sampled:=2;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      pLayout_Tgrp.mark_precomp([pfDSEL]); //mark used dstsel
 
@@ -1444,10 +1523,18 @@ begin
      emit_image_store(Tgrp,@info);
     end;
 
+  IMAGE_ATOMIC_ADD:
+    begin
+     info.tinfo.Sampled:=2;
+     Tgrp:=FetchImage(pLayout_Tgrp,info,False);
+
+     emit_image_atomic(Tgrp,@info);
+    end;
+
   IMAGE_GET_RESINFO: //get info by mip
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      emit_image_get_resinfo(Tgrp,@info);
     end;
@@ -1455,7 +1542,7 @@ begin
   IMAGE_GET_LOD:
     begin
      info.tinfo.Sampled:=1;
-     Tgrp:=FetchImage(pLayout_Tgrp,info);
+     Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
      emit_image_get_lod(Tgrp,Sgrp,@info);
     end;
