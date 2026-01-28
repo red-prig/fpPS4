@@ -3507,6 +3507,7 @@ begin
            'libSceLibcInternal.sprx':;
            'libSceSysmodule.sprx':;
            'libSceDiscMap.sprx':;
+           'libSceNgs2.sprx':;
            'libSceFios2.prx':;
            'libc.prx':;
            else
