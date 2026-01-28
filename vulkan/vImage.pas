@@ -2277,6 +2277,40 @@ begin
  end;
 end;
 
+function isDraw(AccessMask:TVkAccessFlags;ImageLayout:TVkImageLayout):Boolean;
+begin
+ case ImageLayout of
+  VK_IMAGE_LAYOUT_GENERAL:
+   begin
+
+    Result:=(ord(AccessMask) and
+             (
+              ord(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT         ) or
+              ord(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT        ) or
+              ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT ) or
+              ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+             )
+            )<>0;
+
+   end;
+  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL        :Result:=True;
+  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:Result:=True;
+  VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :Result:=True;
+  else
+   Result:=False;
+ end;
+end;
+
+function ChangeLayout(curr,next:TVkImageLayout):Boolean; inline;
+begin
+ Result:=(curr<>VK_IMAGE_LAYOUT_GENERAL) and (curr<>next);
+end;
+
+function ChangeAccess(curr,next:TVkAccessFlags):Boolean; inline;
+begin
+ Result:=((not curr) and next)<>0;
+end;
+
 function TvImageBarrier.Push(cmd:TVkCommandBuffer;
                              cb:t_push_cb;
                              image:TVkImage;
@@ -2286,6 +2320,7 @@ function TvImageBarrier.Push(cmd:TVkCommandBuffer;
 	                     dstStageMask:TVkPipelineStageFlags):Boolean;
 var
  info:TVkImageMemoryBarrier;
+ waw:Boolean;
 begin
  Result:=False;
 
@@ -2295,15 +2330,22 @@ begin
  //WAR
  //WAW
 
- if (AccessMask<>dstAccessMask ) or
-    (ImgLayout <>newImageLayout) or
-    (ImgLayout     =VK_IMAGE_LAYOUT_GENERAL) or
-    (newImageLayout=VK_IMAGE_LAYOUT_GENERAL) or
-    ChangeStage(StageMask,dstStageMask) or
+ waw:=IsWrite(AccessMask) and IsWrite(dstAccessMask);
+
+ if isDraw(AccessMask,ImgLayout) and isDraw(dstAccessMask,newImageLayout) then
+ if waw then
+ begin
+  Exit;
+ end;
+
+ if //(AccessMask<>dstAccessMask) or
+    ChangeAccess(AccessMask,dstAccessMask) or
+    ChangeLayout(ImgLayout,newImageLayout) or
+    ChangeStage(StageMask,dstStageMask) {or
 
     (IsRead (AccessMask) and IsWrite(dstAccessMask)) or
     (IsWrite(AccessMask) and IsRead (dstAccessMask)) or
-    (IsWrite(AccessMask) and IsWrite(dstAccessMask))
+    (waw)}
 
     then
  begin
