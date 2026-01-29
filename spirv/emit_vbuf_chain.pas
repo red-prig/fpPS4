@@ -132,6 +132,8 @@ var
 begin
  foffset:=adr.soffset+adr.ioffset+adr.voffset;
 
+ sum_d:=nil;
+
  if (foffset mod adr.aligned_size=0) and       //const offset is align
     ((adr.idx=nil) or                          //no index or
      (adr.stride mod adr.aligned_size=0)) then //stride is align
@@ -280,7 +282,7 @@ begin
 
  //result=Align(foffset+ofs+idx*stride)  in byte
 
- if (adr.ofs<>nil) then
+ if (adr.ofs<>nil) or (adr.csize>adr.stride) then //dynamic offset or result vector>stride
  begin
   sum_d:=get_sum_ofs(adr);
 
