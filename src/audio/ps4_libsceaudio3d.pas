@@ -155,7 +155,7 @@ function ps4_sceAudio3dAudioOutOpen(uiPortId:SceAudio3dPortId;
                                     userId,_type,index:Integer;
                                     len,freq,param:DWORD):Integer;
 begin
- Result:=ps4_sceAudioOutOpen(userId,_type,index,len,freq,param);
+ Result:=ps4_sceAudioOutOpen(userId,_type or AUDIO3D_INTERNAL,index,len,freq,param);
 end;
 
 function ps4_sceAudio3dAudioOutOutput(handle:Integer;ptr:Pointer):Integer;

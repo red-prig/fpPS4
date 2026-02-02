@@ -24,6 +24,9 @@ type
   ptr   :Pointer;
  end;
 
+const
+ AUDIO3D_INTERNAL=DWORD($80000000);
+
 function ps4_sceAudioOutOpen(userId,_type,index:Integer;
                              len,freq,param:DWORD):Integer;
 
@@ -389,12 +392,12 @@ begin
  if (_type<0) then
  begin
   case DWORD(_type) of
-   $80000000,
-   $80000001,
-   $80000002,
-   $80000003,
-   $80000004,
-   $8000007f:
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_MAIN,
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_BGM,
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_VOICE,
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_PERSONAL,
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_PADSPK,
+   AUDIO3D_INTERNAL or SCE_AUDIO_OUT_PORT_TYPE_AUX:
      begin
       if (freq <> 48000) then
       begin
@@ -437,7 +440,7 @@ begin
   end;
  end;
 
- DWORD(_type):=DWORD(_type) and $7fffffff;
+ DWORD(_type):=DWORD(_type) and (not AUDIO3D_INTERNAL);
 
  mtx_lock(g_port_lock);
   Result:=_out_open(userId,_type,len,param);
