@@ -508,10 +508,10 @@ begin
   Result.tinfo.Arrayed:=1;
  end;
 
- Result.dsel[0]:=PT^.dst_sel_x;
- Result.dsel[1]:=PT^.dst_sel_y;
- Result.dsel[2]:=PT^.dst_sel_z;
- Result.dsel[3]:=PT^.dst_sel_w;
+ Result.dsel.x:=PT^.dst_sel_x;
+ Result.dsel.y:=PT^.dst_sel_y;
+ Result.dsel.z:=PT^.dst_sel_z;
+ Result.dsel.w:=PT^.dst_sel_w;
 end;
 
 function GetImageMods(OP:Byte):TsrImageMods;
@@ -688,7 +688,7 @@ begin
  For i:=0 to count-1 do
  begin
 
-  case dst_sel[i] of
+  case dst_sel.d[i] of
    0:dst[i]:=NewImm_i(rtype,0);
    1:begin
       if rtype.isInt then
@@ -742,6 +742,7 @@ begin
 
  if dsel then
  begin
+  //TODO: check reverse/GetElemCount for images
   shuffle(info^.dsel,info^.dtype,@src,m);
  end;
 
@@ -1475,7 +1476,7 @@ begin
   IMAGE_SAMPLE   ..IMAGE_SAMPLE_C_LZ_O,    //sampled
   IMAGE_SAMPLE_CD..IMAGE_SAMPLE_C_CD_CL_O: //sampled, coarse derivatives
     begin
-     Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
+     Assert(FSPI.MIMG.UNRM=0,'(FSPI.MIMG.UNRM<>0):'+get_str_spi(FSPI));
 
      info.tinfo.Sampled:=1;
      Tgrp:=FetchImage(pLayout_Tgrp,info,True);
@@ -1485,7 +1486,7 @@ begin
 
   IMAGE_GATHER4..IMAGE_GATHER4_C_LZ_O: //sampled, gather
     begin
-     Assert(FSPI.MIMG.UNRM=0,'FSPI.MIMG.UNRM');
+     Assert(FSPI.MIMG.UNRM=0,'(FSPI.MIMG.UNRM<>0):'+get_str_spi(FSPI));
 
      info.tinfo.Sampled:=1;
      Tgrp:=FetchImage(pLayout_Tgrp,info,True);
@@ -1495,6 +1496,8 @@ begin
 
   IMAGE_LOAD..IMAGE_LOAD_MIP_PCK_SGN: //loaded
     begin
+     //Assert(FSPI.MIMG.UNRM<>0,'(FSPI.MIMG.UNRM=0):'+get_str_spi(FSPI));
+
      info.tinfo.Sampled:=1;
      Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
@@ -1504,6 +1507,8 @@ begin
   IMAGE_STORE,
   IMAGE_STORE_PCK: //stored
     begin
+     //Assert(FSPI.MIMG.UNRM<>0,'(FSPI.MIMG.UNRM=0):'+get_str_spi(FSPI));
+
      info.tinfo.Sampled:=2;
      Tgrp:=FetchImage(pLayout_Tgrp,info,True);
 
@@ -1515,6 +1520,8 @@ begin
   IMAGE_STORE_MIP,
   IMAGE_STORE_MIP_PCK: //stored mip
     begin
+     //Assert(FSPI.MIMG.UNRM<>0,'(FSPI.MIMG.UNRM=0):'+get_str_spi(FSPI));
+
      info.tinfo.Sampled:=2;
      //Tgrp:=FetchImageRuntimeArray(pLayout_Tgrp,info);
      Tgrp:=FetchImageArray(pLayout_Tgrp,info,16);

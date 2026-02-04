@@ -127,17 +127,20 @@ begin
    dst:=get_vdst8(FSPI.MUBUF.VDATA+i);
    if (dst=nil) then Assert(false);
 
-   //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
-   Case info.dsel[i] of
+   //0=0, 1=1, 2=0, 3=1, 4=R, 5=G, 6=B, 7=A
+   Case info.dsel.d[i] of
     0:begin //0
        make_load_zero(dst,elem_res);
       end;
     1:begin //1
        make_load_one(dst,elem_res);
       end;
+    3:begin //3
+       make_load_one(dst,elem_res);
+      end;
     4..7:
       begin //RGBA
-       d:=info.dsel[i]-4;
+       d:=info.dsel.d[i]-4;
 
        if (d<elem_count) then
        begin

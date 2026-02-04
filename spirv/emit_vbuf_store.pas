@@ -56,7 +56,7 @@ begin
   info.dsel:=dst_sel_ident;
  end else
  begin
-  info.dsel:=get_reverse_dst_sel(info.dsel);
+  info.dsel:=get_reverse_dst_sel(info.dsel,info.GetElemCount,info.count);
  end;
 
  buf_store_cv(info,v);
@@ -217,16 +217,6 @@ var
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
 begin
-
- For i:=0 to lc.elem_count-1 do //fill
-  if (lc.elm[i]=nil) then
-  begin
-   Case lc.info.dsel[i] of
-    1:lc.elm[i]:=fetch_one(lc);
-    else
-      lc.elm[i]:=fetch_zero(lc);
-   end;
-  end;
 
  //special types
  Case lc.info.DFMT of
@@ -442,16 +432,6 @@ var
  i:Byte;
 begin
 
- For i:=0 to lc.elem_count-1 do //fill
-  if (lc.elm[i]=nil) then
-  begin
-   Case lc.info.dsel[i] of
-    1:lc.elm[i]:=fetch_one(lc);
-    else
-      lc.elm[i]:=fetch_zero(lc);
-   end;
-  end;
-
  Case lc.elem_count of
   1:rsl:=lc.elm[0];
   else
@@ -494,7 +474,7 @@ procedure TEmit_vbuf_store.buf_store_cv(info:TBuf_info;v:TvarChain);
 var
  lc:Tstore_cache;
 
- i:Byte;
+ i,d:Byte;
 begin
 
  Case v.vType of
@@ -515,26 +495,32 @@ begin
  lc.elem_orig :=info.GetElemType;
  lc.elem_count:=info.GetElemCount;
 
+ //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
  For i:=0 to lc.elem_count-1 do
  begin
   lc.elm[i]:=nil;
-  Case lc.info.dsel[i] of
+  Case lc.info.dsel.d[i] of
+   1:
+     begin
+      lc.elm[i]:=fetch_one(lc);
+     end;
+   3:
+     begin
+      //special value:0x3f800001
+      lc.elm[i]:=NewImm_q(lc.elem_resl,$3f800001);
+     end;
    4..7:
      begin //RGBA
-      lc.elm[i]:=fetch_id(lc,lc.info.dsel[i]-4);
+      d:=info.dsel.d[i]-4;
+
+      lc.elm[i]:=fetch_id(lc,d);
      end;
-   else;
+   else
+     begin
+      lc.elm[i]:=fetch_zero(lc);
+     end;
   end;
  end;
-
- While (lc.elem_count<>0) do //trim count
- begin
-  i:=lc.elem_count-1;
-  if (lc.elm[i]<>nil) then Break;
-  Dec(lc.elem_count);
- end;
-
- if (lc.elem_count=0) then Exit;
 
  Case v.vType of
   vcChainVector   :make_store_cv(lc);

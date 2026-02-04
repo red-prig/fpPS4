@@ -2568,6 +2568,7 @@ begin
  Case b of
   0:Result:=VK_SWIZZLE_Z;
   1:Result:=VK_SWIZZLE_O;
+  3:Result:=VK_SWIZZLE_O; //3-> for reads
   4:Result:=VK_SWIZZLE_R;
   5:Result:=VK_SWIZZLE_G;
   6:Result:=VK_SWIZZLE_B;

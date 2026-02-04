@@ -129,11 +129,15 @@ type
  end;
 
  //Destination channel select:
- //0=0, 1=1, 2=0, 3=0, 4=R, 5=G, 6=B, 7=A
- Tdst_sel=array[0..3] of Byte;
+ //0=0, 1=1, 2=0, 3=1, 4=R, 5=G, 6=B, 7=A
+ Tdst_sel=packed record
+  case Byte of
+   0:(x,y,z,w:Byte);
+   1:(d:array[0..3] of Byte);
+ end;
 
 const
- dst_sel_ident:Tdst_sel=(4,5,6,7);
+ dst_sel_ident:Tdst_sel=(x:4;y:5;z:6;w:7);
 
 type
  PsrImageInfo=^TsrImageInfo;
@@ -157,41 +161,168 @@ function CompareType(rtype1,rtype2:TsrDataType):Boolean;
 function TryBitcastType(rtype1,rtype2:TsrDataType):Boolean;
 function is_unprep_type(old,new:TsrDataType;weak:Boolean):Boolean;
 
-function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
-function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
+function dst_sel(x,y,z,w:Byte):Tdst_sel; inline;
+function get_reverse_dst_sel(dst:Tdst_sel;elem_count,store_count:Byte):Tdst_sel;
 
 implementation
 
-function dst_sel(r,g,b,a:Byte):Tdst_sel; inline;
+function dst_sel(x,y,z,w:Byte):Tdst_sel; inline;
 begin
- Result[0]:=r;
- Result[1]:=g;
- Result[2]:=b;
- Result[3]:=a;
+ Result.x:=x;
+ Result.y:=y;
+ Result.z:=z;
+ Result.w:=w;
 end;
 
-function get_reverse_dst_sel(dst:Tdst_sel):Tdst_sel;
-var
- i,f,d:Byte;
+function filter_sel(i,store_count:Byte):Byte; inline;
+begin
+ Result:=i;
+ case i of
+  4..7:if ((i - 4) >= store_count) then Result:=0;
+  else;
+ end;
+end;
+
+function fix_cst_sel(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=0;
+  else
+       Result:=i;
+ end;
+end;
+
+function convert_sel(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=0;
+  4..7:Result:=(11-i);
+  else
+       Result:=i;
+ end;
+end;
+
+function filter_no_cst(i:Byte):Byte; inline;
+begin
+ case i of
+  4..7:Result:=i;
+  else
+       Result:=0;
+ end;
+end;
+
+function _get_reverse_dst_sel_1(dst:Tdst_sel;store_count:Byte):Tdst_sel; inline;
 begin
  Result:=Default(Tdst_sel);
- For i:=0 to 3 do
-  For f:=0 to 3 do
-  begin
-   d:=dst[f];
-   Case d of
-    4..7:
-     begin
-      d:=d-4;
-      if (i=d) then
-      begin
-       Result[i]:=f+4;
-       Break;
-      end;
-     end;
-    else;
+
+ case store_count of
+  1:
+   begin
+    case dst.x of
+     2:result.x:=1;
+     3:result.x:=3; //special value:0x3f800001
+     4..7:
+       result.x:=4;
+     else
+       result.x:=dst.x;
+    end;
    end;
-  end;
+  2..4:
+   begin
+    case dst.x of
+     0..3:
+       result.x:=7;
+     5..7:
+       result.x:=7;
+     else
+       result.x:=dst.x;
+    end;
+
+    result.x:=filter_sel(result.x, store_count);
+   end;
+ end;
+
+end;
+
+function _get_reverse_dst_sel_2(dst:Tdst_sel;store_count:Byte):Tdst_sel; inline;
+begin
+ dst.x:=filter_no_cst(dst.x);
+ dst.y:=filter_no_cst(dst.y);
+ dst.z:=filter_no_cst(dst.z);
+
+ result.x:=5;
+ result.y:=4;
+ result.z:=0;
+ result.w:=0;
+
+ if ((dst.x <> 4) and (dst.z <> 0)) then
+ begin
+  result.x:=7;
+  result.y:=4;
+ end else
+ if ((dst.y = 0) or ((dst.x <> 0) and (dst.z <> 0))) then
+ begin
+  result.x:=4;
+  result.y:=7;
+ end else
+ if ((dst.x = 4) and (dst.z = 0)) then
+ begin
+  result.x:=4;
+  result.y:=5;
+ end;
+
+ result.x:=filter_sel(result.x, store_count);
+ result.y:=filter_sel(result.y, store_count);
+end;
+
+function _get_reverse_dst_sel_3(dst:Tdst_sel;store_count:Byte):Tdst_sel; inline;
+begin
+ result.x:=fix_cst_sel(dst.x);
+ result.y:=fix_cst_sel(dst.y);
+ result.z:=fix_cst_sel(dst.z);
+ result.w:=0;
+
+ result.x:=filter_sel(result.x, store_count);
+ result.y:=filter_sel(result.y, store_count);
+ result.z:=filter_sel(result.z, store_count);
+end;
+
+function _get_reverse_dst_sel_4(dst:Tdst_sel;store_count:Byte):Tdst_sel; inline;
+begin
+ if (dst.y = 5) then
+ begin
+  result.x:=fix_cst_sel(dst.x);
+  result.y:=fix_cst_sel(dst.y);
+  result.z:=fix_cst_sel(dst.z);
+  result.w:=fix_cst_sel(dst.w);
+ end else
+ begin
+  result.x:=convert_sel(dst.w);
+  result.y:=convert_sel(dst.z);
+  result.z:=convert_sel(dst.y);
+  result.w:=convert_sel(dst.x);
+ end;
+
+ result.x:=filter_sel(result.x, store_count);
+ result.y:=filter_sel(result.y, store_count);
+ result.z:=filter_sel(result.z, store_count);
+ result.w:=filter_sel(result.w, store_count);
+end;
+
+//verified!
+function get_reverse_dst_sel(dst:Tdst_sel;elem_count,store_count:Byte):Tdst_sel;
+begin
+ Result:=Default(Tdst_sel);
+
+ case elem_count of
+  1:Result:=_get_reverse_dst_sel_1(dst,store_count);
+  2:Result:=_get_reverse_dst_sel_2(dst,store_count);
+  3:Result:=_get_reverse_dst_sel_3(dst,store_count);
+  4:Result:=_get_reverse_dst_sel_4(dst,store_count);
+  else;
+ end;
 end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;
