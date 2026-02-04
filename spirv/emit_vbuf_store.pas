@@ -506,8 +506,14 @@ begin
      end;
    3:
      begin
-      //special value:0x3f800001
-      lc.elm[i]:=NewImm_q(lc.elem_resl,$3f800001);
+      if (FSPI.MUBUF.IDXEN<>0) then
+      begin
+       //special value:0x3f800001
+       lc.elm[i]:=NewImm_q(lc.elem_resl,$3f800001);
+      end else
+      begin
+       lc.elm[i]:=fetch_zero(lc);
+      end;
      end;
    4..7:
      begin //RGBA
