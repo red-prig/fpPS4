@@ -531,15 +531,18 @@ begin
  end;
 end;
 
+const
+ C_40BIT_A4=((QWORD(1) shl 40)-1) and (not QWORD(3));
+
 function TsrDataLayout.GetData:Pointer;
 begin
  Result:=nil;
  Case key.rtype of
-  rtRoot,
+  rtRoot   :Result:=PPointer(@FData)^;
   rtBufPtr2,
-  rtFunPtr2:Result:=PPointer(@FData)^;
+  rtFunPtr2:Result:=Pointer(PQWORD(@FData)^ and C_40BIT_A4);
   rtVSharp2,
-  rtVSharp4:Result:=Pointer(PVSharpResource4(@FData)^.base and (not 3));
+  rtVSharp4:Result:=Pointer(PQWORD(@FData)^ and C_40BIT_A4);
   rtTSharp4,
   rtTSharp8:Result:=Pointer(QWORD(PTSharpResource4(@FData)^.base) shl 8);
   rtImmData:Result:=TsrDataImm(PPointer(@FData)^).key.pData;
@@ -670,6 +673,7 @@ end;
 function TsrDataLayoutList.Fetch(p:TsrDataLayout;o,m:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
 var
  key:TsrDataLayoutKey;
+ i:Integer;
 begin
  Assert(p<>nil);
  key:=Default(TsrDataLayoutKey);
@@ -699,13 +703,19 @@ begin
    case t of
     rtRoot   :PPointer(@Result.FData)^:=pData;
     rtFunPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^);
-    rtBufPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^ and (not 3));
+    rtBufPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^);
     rtImmData:PPointer(@Result.FData)^:=pData;
     rtVSharp2,
     rtVSharp4,
     rtSSharp4,
     rtTSharp4,
-    rtTSharp8:Move(Pointer(pData+o)^,Result.FData,GetResourceSizeDw(t)*SizeOf(DWORD));
+    rtTSharp8://Move(Pointer(pData+o)^,Result.FData,GetResourceSizeDw(t)*SizeOf(DWORD));
+     begin
+      for i:=0 to GetResourceSizeDw(t)-1 do
+      begin
+       Result.FData[i]:=PDWORD(pData+o)[i];
+      end;
+     end;
    end;
 
   end;

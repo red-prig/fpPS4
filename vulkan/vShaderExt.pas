@@ -1241,6 +1241,9 @@ end;
 
 ///
 
+const
+ C_40BIT_A4=((QWORD(1) shl 40)-1) and (not QWORD(3));
+
 function GetSharpByPatch(pUserData,pImmData:Pointer;const addr:ADataLayout):Pointer;
 var
  i:Integer;
@@ -1274,7 +1277,7 @@ begin
      end;
    vtBufPtr2:
      begin
-      pData:=Pointer(PPtrUint(pDmem)^ and (not 3));
+      pData:=Pointer(PQWORD(pDmem)^ and C_40BIT_A4);
 
       pDmem:=get_dmem_ptr(pData);
 
@@ -1282,7 +1285,7 @@ begin
      end;
    vtFunPtr2:
      begin
-      pData:=PPointer(pDmem)^;
+      pData:=Pointer(PQWORD(pDmem)^ and C_40BIT_A4);
 
       pDmem:=get_dmem_ptr(pData);
 
@@ -1295,7 +1298,7 @@ begin
 
       if (i<>0) then
       begin
-       pData:=Pointer(PVSharpResource4(pDmem)^.base and (not 3));
+       pData:=Pointer(PQWORD(pDmem)^ and C_40BIT_A4);
 
        pDmem:=get_dmem_ptr(pData);
       end;
@@ -1693,7 +1696,7 @@ var
  b:TImageBindExt;
  hint:s_image_usage;
 
- //start,__end:QWORD;
+ start,__end:QWORD;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1721,7 +1724,6 @@ begin
  b.FImage:=_get_tsharp4_image_info(PT,hint);
  b.FView :=_get_tsharp4_image_view(PT,hint);
 
- {
  //Marking textures that contain incorrect
  // virtual memory as invalid,
  // I don't know how correct this approach is
@@ -1733,7 +1735,6 @@ begin
   Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
   b.FImage.params.invalid:=1;
  end;
- }
 
  b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
 
@@ -1745,7 +1746,7 @@ var
  b:TImageBindExt;
  hint:s_image_usage;
 
- //start,__end:QWORD;
+ start,__end:QWORD;
 begin
  Assert(PT<>nil);
  if (PT=nil) then Exit;
@@ -1773,7 +1774,6 @@ begin
  b.FImage:=_get_tsharp8_image_info(PT,hint);
  b.FView :=_get_tsharp8_image_view(PT,hint);
 
- {
  //Marking textures that contain incorrect
  // virtual memory as invalid,
  // I don't know how correct this approach is
@@ -1785,7 +1785,6 @@ begin
   Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
   b.FImage.params.invalid:=1;
  end;
- }
 
  b.memuse:=b.memuse or (b.FImage.params.invalid)*TM_INVAL;
 
