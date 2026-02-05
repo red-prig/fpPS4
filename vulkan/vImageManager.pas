@@ -653,10 +653,35 @@ begin
   end;
 
   //uplift imageview
-  if (FFormat=VK_FORMAT_D32_SFLOAT_S8_UINT) and
-     (cinfo.format=VK_FORMAT_D32_SFLOAT) then
+  if (FFormat=VK_FORMAT_D32_SFLOAT_S8_UINT) then
   begin
-   cinfo.format:=VK_FORMAT_D32_SFLOAT_S8_UINT;
+   case cinfo.format of
+    VK_FORMAT_D32_SFLOAT:
+     begin
+      cinfo.format:=VK_FORMAT_D32_SFLOAT_S8_UINT;
+
+      //update mask
+      if (usage and ord(VK_IMAGE_USAGE_SAMPLED_BIT))<>0 then
+      begin
+       cinfo.subresourceRange.aspectMask:=ord(VK_IMAGE_ASPECT_DEPTH_BIT);
+      end else
+      begin
+       cinfo.subresourceRange.aspectMask:=ord(VK_IMAGE_ASPECT_DEPTH_BIT) or ord(VK_IMAGE_ASPECT_STENCIL_BIT);
+      end;
+
+     end;
+    VK_FORMAT_R8_UNORM,
+    VK_FORMAT_R8_SNORM,
+    VK_FORMAT_R8_UINT,
+    VK_FORMAT_R8_SINT,
+    VK_FORMAT_R8_SRGB:
+     begin
+      cinfo.format:=VK_FORMAT_S8_UINT;
+
+      //update mask
+      cinfo.subresourceRange.aspectMask:=ord(VK_IMAGE_ASPECT_STENCIL_BIT);
+     end;
+   end;
   end;
 
   cinfo.format:=vkFixFormatSupport(cinfo.format,VK_IMAGE_TILING_OPTIMAL,usage);
@@ -677,7 +702,7 @@ begin
    minfo.minLod:=key_view.minLod;
   end;
 
-  Writeln('vkCreateImageView:',cinfo.format);
+  Writeln('vkCreateImageView:',FFormat,'->',cinfo.format);
 
   FView:=VK_NULL_HANDLE;
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);

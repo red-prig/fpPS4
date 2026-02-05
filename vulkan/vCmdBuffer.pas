@@ -1289,8 +1289,8 @@ Const
   ord(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) or
   ord(VK_ACCESS_TRANSFER_READ_BIT                 ) or
   ord(VK_ACCESS_TRANSFER_WRITE_BIT                ) or
-  ord(VK_ACCESS_HOST_READ_BIT                     ) or
-  ord(VK_ACCESS_HOST_WRITE_BIT                    ) or
+  //ord(VK_ACCESS_HOST_READ_BIT                     ) or
+  //ord(VK_ACCESS_HOST_WRITE_BIT                    ) or
   ord(VK_ACCESS_MEMORY_READ_BIT                   ) or
   ord(VK_ACCESS_MEMORY_WRITE_BIT                  );
 

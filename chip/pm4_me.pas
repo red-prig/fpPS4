@@ -1110,13 +1110,36 @@ begin
     end;
   //
   VK_FORMAT_D32_SFLOAT:
-   if (iu_storage in usage) then
+   if ([iu_attachment,iu_storage]*usage<>[]) then
    begin
     //D32 -> R32
     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R32_SFLOAT);
    end;
+  VK_FORMAT_D32_SFLOAT_S8_UINT:
+   if ([iu_attachment,iu_storage]*usage<>[]) then
+   begin
+    case F.cformat of
+     VK_FORMAT_R32_UINT,
+     VK_FORMAT_R32_SINT,
+     VK_FORMAT_R32_SFLOAT:
+      begin
+       //D32 -> R32
+       Result:=ConvertImage(ctx,usage,Result,F.cformat);
+      end;
+     VK_FORMAT_R8_UNORM,
+     VK_FORMAT_R8_SNORM,
+     VK_FORMAT_R8_UINT,
+     VK_FORMAT_R8_SINT,
+     VK_FORMAT_R8_SRGB:
+      begin
+       //S8 -> R8
+       Result:=ConvertImage(ctx,usage,Result,F.cformat);
+      end;
+    end;
+   end;
+  //
   VK_FORMAT_D16_UNORM:
-   if (iu_storage in usage) then
+   if ([iu_attachment,iu_storage]*usage<>[]) then
    begin
     //D16 -> R16
     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R16_UNORM);
@@ -1470,14 +1493,19 @@ begin
 
     //ri:=TvImage2(resource_instance^.resource^.rimage);
 
-    ri:=FetchImage(ctx.Cmd,
-                   FImage,
-                   resource_instance^.curr.img_usage
-                  );
+    ri:=FetchImageForce(ctx,
+                        FImage,
+                        resource_instance^.curr.img_usage
+                       );
 
     Assert(ri<>nil);
 
     Layout:=GetImageLayout(resource_instance^.curr);
+
+    if (ri.Barrier.ImgLayout=VK_IMAGE_LAYOUT_GENERAL) then
+    begin
+     Layout:=VK_IMAGE_LAYOUT_GENERAL;
+    end;
 
     case btype of
      vbSampled:
