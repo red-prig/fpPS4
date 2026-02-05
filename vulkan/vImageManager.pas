@@ -670,11 +670,7 @@ begin
       end;
 
      end;
-    VK_FORMAT_R8_UNORM,
-    VK_FORMAT_R8_SNORM,
-    VK_FORMAT_R8_UINT,
-    VK_FORMAT_R8_SINT,
-    VK_FORMAT_R8_SRGB:
+    VK_FORMAT_S8_UINT:
      begin
       cinfo.format:=VK_FORMAT_S8_UINT;
 

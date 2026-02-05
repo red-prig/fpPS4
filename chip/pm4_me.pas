@@ -1003,7 +1003,7 @@ begin
  until (Result<>nil);
 end;
 
-function ConvertImage(var ctx:t_me_render_context;usage:s_image_usage;src:TvImage2;ToFormat:TVkFormat):TvImage2;
+function ConvertImage(var ctx:t_me_render_context;usage:s_image_usage;src:TvImage2;FromFormat,ToFormat:TVkFormat):TvImage2;
 var
  F:TvImageKey;
  dst:TvImage2;
@@ -1034,7 +1034,7 @@ begin
                  ord(VK_PIPELINE_STAGE_TRANSFER_BIT));
 
  //
- range.srcSubresource.aspectMask    :=GetAspectMaskByFormat(src.key.cformat);
+ range.srcSubresource.aspectMask    :=GetAspectMaskByFormat(FromFormat);
  range.srcSubresource.mipLevel      :=0;
  range.srcSubresource.baseArrayLayer:=0;
  range.srcSubresource.layerCount    :=src.key.params.layerCount;
@@ -1043,7 +1043,7 @@ begin
  range.srcOffset.y:=0;
  range.srcOffset.z:=0;
 
- range.dstSubresource.aspectMask    :=GetAspectMaskByFormat(dst.key.cformat);
+ range.dstSubresource.aspectMask    :=GetAspectMaskByFormat(ToFormat);
  range.dstSubresource.mipLevel      :=0;
  range.dstSubresource.baseArrayLayer:=0;
  range.dstSubresource.layerCount    :=dst.key.params.layerCount;
@@ -1065,6 +1065,7 @@ begin
   range_all[i].dstSubresource.mipLevel:=i;
  end;
 
+ if (FromFormat<>VK_FORMAT_S8_UINT) then //TODO: do this using a special shader
  ctx.Cmd.CopyImage(
   src.FHandle,
   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -1073,6 +1074,8 @@ begin
   m,
   @range_all[0]
  );
+
+ dst.change_rate:=src.change_rate;
 
  Result:=dst;
 end;
@@ -1095,7 +1098,7 @@ begin
     if (iu_depthstenc in usage) then
     begin
      //R32 -> D32
-     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D32_SFLOAT);
+     Result:=ConvertImage(ctx,usage,Result,Result.FFormat,VK_FORMAT_D32_SFLOAT);
     end;
   //
   VK_FORMAT_R16_UNORM,
@@ -1106,43 +1109,43 @@ begin
     if (iu_depthstenc in usage) then
     begin
      //R16 -> D16
-     Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D16_UNORM);
+     Result:=ConvertImage(ctx,usage,Result,Result.FFormat,VK_FORMAT_D16_UNORM);
     end;
   //
   VK_FORMAT_D32_SFLOAT:
    if ([iu_attachment,iu_storage]*usage<>[]) then
    begin
     //D32 -> R32
-    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R32_SFLOAT);
+    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D32_SFLOAT,VK_FORMAT_R32_SFLOAT);
    end;
   VK_FORMAT_D32_SFLOAT_S8_UINT:
-   if ([iu_attachment,iu_storage]*usage<>[]) then
-   begin
+
     case F.cformat of
      VK_FORMAT_R32_UINT,
      VK_FORMAT_R32_SINT,
      VK_FORMAT_R32_SFLOAT:
+      if ([iu_attachment,iu_storage]*usage<>[]) then
       begin
        //D32 -> R32
-       Result:=ConvertImage(ctx,usage,Result,F.cformat);
+       Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D32_SFLOAT,F.cformat);
       end;
      VK_FORMAT_R8_UNORM,
      VK_FORMAT_R8_SNORM,
      VK_FORMAT_R8_UINT,
      VK_FORMAT_R8_SINT,
      VK_FORMAT_R8_SRGB:
+      if ([iu_attachment,iu_storage,iu_sampled]*usage<>[]) then
       begin
        //S8 -> R8
-       Result:=ConvertImage(ctx,usage,Result,F.cformat);
+       Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_S8_UINT,F.cformat);
       end;
     end;
-   end;
   //
   VK_FORMAT_D16_UNORM:
    if ([iu_attachment,iu_storage]*usage<>[]) then
    begin
     //D16 -> R16
-    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_R16_UNORM);
+    Result:=ConvertImage(ctx,usage,Result,VK_FORMAT_D16_UNORM,VK_FORMAT_R16_UNORM);
    end
   //
   else;
