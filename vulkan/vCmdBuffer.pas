@@ -1261,6 +1261,7 @@ begin
   Exit;
  end;
 
+ EndRenderPass;
  if (not BeginCmdBuffer) then Exit;
 
  Inc(cmd_count);
