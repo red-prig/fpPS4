@@ -225,7 +225,7 @@ type
   FImages     :AvFramebufferAShort;
   Procedure SetRenderPass(r:TvRenderPass);
   Procedure SetSize(Size:TVkExtent2D);
-  Procedure AddImageAt(Key:TvImageKey);
+  Procedure AddImageAt(Image:TvImageKey;View:TvImageViewKey);
   Procedure Export(var F:AvFramebufferAttach);
  end;
 
@@ -1261,31 +1261,36 @@ begin
  FLayers:=1;
 end;
 
-Procedure TvFramebufferImagelessKey.AddImageAt(Key:TvImageKey);
+Procedure TvFramebufferImagelessKey.AddImageAt(Image:TvImageKey;View:TvImageViewKey);
+var
+ cnt:Word;
 begin
  if (FImagesCount>=Length(FImages)) then Exit;
 
- if (Key.params.width>FWidth) then
+ if (Image.params.width>FWidth) then
  begin
-  FWidth:=Key.params.width;
+  FWidth:=Image.params.width;
  end;
 
- if (Key.params.height>FHeight) then
+ if (Image.params.height>FHeight) then
  begin
-  FHeight:=Key.params.height;
+  FHeight:=Image.params.height;
  end;
 
- if (Key.params.layerCount>FLayers) then
+ cnt:=View.layerCount;
+ Assert(cnt<>0);
+
+ if (cnt>FLayers) then
  begin
-  FLayers:=Key.params.layerCount;
+  FLayers:=cnt;
  end;
 
  with FImages[FImagesCount] do
  begin
-  cformat   :=Key.cformat;
-  width     :=Key.params.width;
-  height    :=Key.params.height;
-  layerCount:=key.params.layerCount;
+  cformat   :=Image.cformat;
+  width     :=Image.params.width;
+  height    :=Image.params.height;
+  layerCount:=cnt;
  end;
 
  Inc(FImagesCount);

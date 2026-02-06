@@ -2060,14 +2060,14 @@ begin
    begin
     //TODO: fixup cformat
 
-    FB_KEY.AddImageAt(ctx.rt_info^.RT_INFO[i].FImageInfo);
+    FB_KEY.AddImageAt(ctx.rt_info^.RT_INFO[i].FImageInfo,ctx.rt_info^.RT_INFO[i].FImageView);
    end;
 
   if ctx.rt_info^.DB_ENABLE then
   begin
    //TODO: fixup cformat
 
-   FB_KEY.AddImageAt(ctx.rt_info^.DB_INFO.FImageInfo);
+   FB_KEY.AddImageAt(ctx.rt_info^.DB_INFO.FImageInfo,ctx.rt_info^.DB_INFO.FImageView);
   end;
  end else
  begin
