@@ -85,8 +85,9 @@ var
  elem_res:TsrDataType;
  elem_vec:TsrDataType;
 
- i,d,elem_count:Byte;
+ i,d:Byte;
 
+ dsel:Tdst_sel;
 begin
  Result:=False;
 
@@ -120,7 +121,7 @@ begin
 
   rsl:=AddVertLayout(grp,elem_vec);
 
-  elem_count:=info.GetElemCount;
+  dsel:=get_load_dst_sel(info.dsel,info.GetElemCount);
 
   For i:=0 to count-1 do
   begin
@@ -128,28 +129,18 @@ begin
    if (dst=nil) then Assert(false);
 
    //0=0, 1=1, 2=0, 3=1, 4=R, 5=G, 6=B, 7=A
-   Case info.dsel.d[i] of
+   Case dsel.d[i] of
     0:begin //0
        make_load_zero(dst,elem_res);
       end;
     1:begin //1
        make_load_one(dst,elem_res);
       end;
-    3:begin //3
-       make_load_one(dst,elem_res);
-      end;
     4..7:
       begin //RGBA
-       d:=info.dsel.d[i]-4;
+       d:=dsel.d[i]-4;
 
-       if (d<elem_count) then
-       begin
-        make_load_comp(dst,elem_res,rsl,d);
-       end else
-       begin //as zero
-        make_load_zero(dst,elem_res);
-       end;
-
+       make_load_comp(dst,elem_res,rsl,d);
       end;
     else
      begin //as zero

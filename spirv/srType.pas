@@ -163,6 +163,7 @@ function is_unprep_type(old,new:TsrDataType;weak:Boolean):Boolean;
 
 function dst_sel(x,y,z,w:Byte):Tdst_sel; inline;
 function get_reverse_dst_sel(dst:Tdst_sel;elem_count,store_count:Byte):Tdst_sel;
+function get_load_dst_sel(dst:Tdst_sel;elem_count:Byte):Tdst_sel;
 
 implementation
 
@@ -323,6 +324,89 @@ begin
   4:Result:=_get_reverse_dst_sel_4(dst,store_count);
   else;
  end;
+end;
+
+function _get_load_dst_sel_1(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=4;
+  4..7:Result:=4;
+  else
+       Result:=i;
+ end;
+end;
+
+function _get_load_dst_sel_2(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=0;
+     6:Result:=4;
+     7:Result:=5;
+  else
+       Result:=i;
+ end;
+end;
+
+function _get_load_dst_sel_3(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=0;
+     7:Result:=4;
+  else
+       Result:=i;
+ end;
+end;
+
+function _get_load_dst_sel_4(i:Byte):Byte; inline;
+begin
+ case i of
+     2:Result:=1;
+     3:Result:=0;
+  else
+       Result:=i;
+ end;
+end;
+
+//verified!
+function get_load_dst_sel(dst:Tdst_sel;elem_count:Byte):Tdst_sel;
+begin
+
+ case elem_count of
+  1:
+   begin
+    Result.x:=_get_load_dst_sel_1(dst.x);
+    Result.y:=_get_load_dst_sel_1(dst.y);
+    Result.z:=_get_load_dst_sel_1(dst.z);
+    Result.w:=_get_load_dst_sel_1(dst.w);
+   end;
+  2:
+   begin
+    Result.x:=_get_load_dst_sel_2(dst.x);
+    Result.y:=_get_load_dst_sel_2(dst.y);
+    Result.z:=_get_load_dst_sel_2(dst.z);
+    Result.w:=_get_load_dst_sel_2(dst.w);
+   end;
+  3:
+   begin
+    Result.x:=_get_load_dst_sel_3(dst.x);
+    Result.y:=_get_load_dst_sel_3(dst.y);
+    Result.z:=_get_load_dst_sel_3(dst.z);
+    Result.w:=_get_load_dst_sel_3(dst.w);
+   end;
+  4:
+   begin
+    Result.x:=_get_load_dst_sel_4(dst.x);
+    Result.y:=_get_load_dst_sel_4(dst.y);
+    Result.z:=_get_load_dst_sel_4(dst.z);
+    Result.w:=_get_load_dst_sel_4(dst.w);
+   end;
+  else
+    Result:=Default(Tdst_sel);
+ end;
+
 end;
 
 function type_get_base_name1(dtype:TsrDataType):RawByteString;
