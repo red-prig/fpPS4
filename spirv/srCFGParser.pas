@@ -117,8 +117,9 @@ type
   pCache:TObject;
   u:record
    Case Byte of
-    0:(id  :PtrUint);
-    1:(cond:TsrCondition);
+    0:(id   :PtrUint);
+    1:(cond :TsrCondition);
+    2:(place:TsrSourceLabel);
   end;
  end;
 
@@ -191,6 +192,7 @@ function parse_code_cfg2(var pCode:TsrCodeRegion;bType:TsrBlockType;Body,Dmem:Po
 implementation
 
 type
+ PsrCFGParser2=^TsrCFGParser2;
  TsrCFGParser2=object
   FEmit:TCustomEmit;
   pCode:TsrCodeRegion;
@@ -217,7 +219,7 @@ type
   Function  NewCopy (pCond:TsrStatement):TsrStatement;
   Function  NewVar  :TsrStatement;
   Function  NewStore(pVar,pCond:TsrStatement):TsrStatement;
-  Function  NewBreak:TsrStatement;
+  Function  NewBreak(pLabel:TsrSourceLabel):TsrStatement;
   Function  NewNot  (pCond:TsrStatement):TsrStatement;
   Function  NewOr   (pCond1,pCond2:TsrStatement):TsrStatement;
   Function  NewAnd  (pCond1,pCond2:TsrStatement):TsrStatement;
@@ -673,12 +675,13 @@ begin
  Result.pSrc :=pCond;
 end;
 
-Function TsrCFGParser2.NewBreak:TsrStatement;
+Function TsrCFGParser2.NewBreak(pLabel:TsrSourceLabel):TsrStatement;
 begin
  Result:=FEmit.specialize New<TsrStatement>;
  Inc(order);
  Result.order:=order;
  Result.sType:=sBreak;
+ Result.u.place:=pLabel;
 end;
 
 const
@@ -1072,15 +1075,19 @@ begin
  mode:=2;
  //
  node:=FGotoList.pHead;
- //
- while (node<>nil) do
- begin
-  next:=node.FGoto.pNext;
+ repeat
   //
-  RemoveGoto(node);
+  while (node<>nil) do
+  begin
+   next:=node.FGoto.pNext;
+   //
+   RemoveGoto(node);
+   //
+   node:=next;
+  end;
   //
-  node:=next;
- end;
+  node:=FGotoList.pHead;
+ until (node=nil);
 end;
 
 procedure MoveListBefore(var List:TsrSourceNodeList;before:TsrSourceNode);
@@ -1296,6 +1303,16 @@ begin
  parent.InsertBefore(node,new);
 end;
 
+function FindUpLoop(node:TsrSourceBlock):TsrSourceBlock;
+begin
+ Result:=nil;
+ While (node<>nil) do
+ begin
+  if (node.bType=btLoop) then Exit(node);
+  node:=node.pParent;
+ end;
+end;
+
 procedure TsrCFGParser2.EliminateAsConditional(goto_stmt:TsrSourceGoto);
 var
  label_stmt:TsrSourceLabel;
@@ -1327,24 +1344,70 @@ begin
  FreeGoto(goto_stmt);
 end;
 
-function SanitizeNoBreaks(node_first,node_last:TsrSourceNode):Boolean;
+Function isEmpty(block:TsrSourceBlock;exclude:TsrSourceNode):Boolean;
 var
- node,next:TsrSourceNode;
+ node:TsrSourceNode;
 begin
  Result:=True;
- node:=node_first;
-
- while (node<>nil) and (node<>node_last) do
+ node:=block.FList.pHead;
+ //
+ while (node<>nil) do
  begin
-
-  if (node.ntype=TsrStatement) then
+  if (node=exclude) then
   begin
-   if (TsrStatement(node).sType=sBreak) then
+   //
+  end else
+  if (node.ntype=TsrSourceInstruction) then
+  begin
+   if TsrSourceInstruction(node).used then
    begin
     Exit(False);
    end;
+  end else
+  begin
+   Exit(False);
   end;
+  //
+  node:=node.pNext;
+ end;
+ //
+ node:=block.FInit.pHead;
+ //
+ while (node<>nil) do
+ begin
+  if (node=exclude) then
+  begin
+   //
+  end else
+  if (node.ntype=TsrSourceInstruction) then
+  begin
+   if TsrSourceInstruction(node).used then
+   begin
+    Exit(False);
+   end;
+  end else
+  begin
+   Exit(False);
+  end;
+  //
+  node:=node.pNext;
+ end;
+ //
+end;
 
+function SanitizeNoBreaks(node_first,node_last:TsrSourceNode;Force:PsrCFGParser2):Boolean;
+label
+ _start;
+var
+ node,next,pafter:TsrSourceNode;
+ new_goto:TsrSourceGoto;
+ parent:TsrSourceBlock;
+ cond:TsrStatement;
+
+ function get_next(node:TsrSourceNode):TsrSourceNode;
+ var
+  next:TsrSourceNode;
+ begin
   next:=node.First; //down
 
   if (next<>nil) then
@@ -1361,6 +1424,57 @@ begin
    until (node=nil) or (next<>nil) or (node=node_last);
   end;
 
+  Result:=next;
+ end;
+
+begin
+ Result:=True;
+ node:=node_first;
+
+ while (node<>nil) and (node<>node_last) do
+ begin
+
+  next:=get_next(node);
+
+  if (node.ntype=TsrStatement) then
+  begin
+   if (TsrStatement(node).sType=sBreak) then
+   begin
+
+    if (Force=nil) then
+    begin
+     Exit(False);
+    end;
+
+    //de break
+    parent:=node.pParent;
+    pafter:=node;
+
+    if (parent.bType=btCond) and isEmpty(parent,node) then
+    begin
+     cond:=parent.pCond;
+     parent:=parent.pParent;
+     Assert(parent.bType=btMerg);
+     pafter:=parent;
+     parent:=parent.pParent;
+    end else
+    begin
+     cond:=Force^.NewCond(cTrue);
+    end;
+
+    //new goto
+    new_goto:=Force^.NewGoto(cond,TsrStatement(node).u.place);
+    Force^.FGotoList.Push_tail(new_goto);
+    Inc(Force^.hits);
+
+    //add after
+    parent.InsertAfter(pafter,new_goto);
+
+    //remove break/remove merge
+    parent.Remove(pafter);
+   end;
+  end;
+
   node:=next;
  end;
 end;
@@ -1373,7 +1487,7 @@ var
 begin
  label_stmt:=goto_stmt.pLabel;
 
- if not SanitizeNoBreaks(label_stmt, goto_stmt) then
+ if not SanitizeNoBreaks(label_stmt, goto_stmt,@Self) then
  begin
   Assert(false,'SanitizeNoBreaks:EliminateAsLoop');
  end;
@@ -1391,16 +1505,6 @@ begin
 
  //
  FreeGoto(goto_stmt);
-end;
-
-function FindUpLoop(node:TsrSourceBlock):TsrSourceBlock;
-begin
- Result:=nil;
- While (node<>nil) do
- begin
-  if (node.bType=btLoop) then Exit(node);
-  node:=node.pParent;
- end;
 end;
 
 function IsBreakLoop(goto_stmt:TsrSourceGoto):Boolean;
@@ -1498,7 +1602,7 @@ begin
     begin
      Exit(False);
     end else
-    if SanitizeNoBreaks(parent,label_stmt) then
+    if SanitizeNoBreaks(parent,label_stmt,nil) then
     begin
      Exit(True);
     end else
@@ -1783,6 +1887,7 @@ var
  label_stmt:TsrSourceLabel;
  pmerge    :TsrSourceBlock;
  cond      :TsrStatement;
+ neg_cond  :TsrStatement;
  new_goto  :TsrSourceGoto;
  if_stmt   :TsrSourceBlock;
  if_else   :TsrSourceBlock;
@@ -1812,6 +1917,10 @@ begin
   Inc(hits);
  end;
 
+ //if (expr)
+ cond:=if_stmt.pCond;
+ //save original
+
  if (NextUsed(pmerge)=nil) or
     (NextUsedFlowUp(pmerge)=label_stmt) then
  begin
@@ -1819,17 +1928,38 @@ begin
  end else
  begin
 
-  if_else:=NewBlock(btElse);
-  if_else.pIf  :=if_stmt;
-  if_stmt.pElse:=if_else;
-  pmerge.InsertAfter(if_stmt,if_else);
-
-  if AreOrdered(pmerge,label_stmt) then
+  if isEmpty(if_stmt,goto_stmt) then
   begin
-   if_else.splice(pmerge.pNext,label_stmt);
+   //empty if
+   neg_cond:=NewNot(if_stmt.pCond);
+   pmerge.FInit.Push_tail(neg_cond);
+
+   if_stmt.pCond:=neg_cond;
+
+   if AreOrdered(pmerge,label_stmt) then
+   begin
+    if_stmt.splice(pmerge.pNext,label_stmt);
+   end else
+   begin
+    if_stmt.splice(pmerge.pNext,nil);
+   end;
+   //
   end else
   begin
-   if_else.splice(pmerge.pNext,nil);
+   //
+   if_else:=NewBlock(btElse);
+   if_else.pIf  :=if_stmt;
+   if_stmt.pElse:=if_else;
+   pmerge.InsertAfter(if_stmt,if_else);
+
+   if AreOrdered(pmerge,label_stmt) then
+   begin
+    if_else.splice(pmerge.pNext,label_stmt);
+   end else
+   begin
+    if_else.splice(pmerge.pNext,nil);
+   end;
+   //
   end;
 
  end;
@@ -1837,9 +1967,6 @@ begin
  //
  FreeGoto(goto_stmt);
  //
-
- //if (expr)
- cond:=if_stmt.pCond;
 
  if (NextUsedFlowUp(pmerge)<>label_stmt) then
  begin
@@ -2026,7 +2153,7 @@ begin
   end;
 
   //break;
-  InsertBefore(goto_stmt,NewBreak);
+  InsertBefore(goto_stmt,NewBreak(label_stmt));
  end else
  begin
   //if (cond) {
@@ -2045,7 +2172,7 @@ begin
   end;
 
   //break;
-  if_stmt.Push_tail(NewBreak);
+  if_stmt.Push_tail(NewBreak(label_stmt));
  end;
 
  //
@@ -2088,7 +2215,7 @@ begin
 
  nested_stmt:=SiblingFromNephew(label_stmt,goto_stmt,True);
 
- if not SanitizeNoBreaks(nested_stmt, label_stmt) then
+ if not SanitizeNoBreaks(nested_stmt, label_stmt, @Self) then
  begin
   Assert(false,'SanitizeNoBreaks:MoveOutwardSwitch');
  end;
@@ -2271,25 +2398,25 @@ begin
     begin
      if_stmt:=nested_stmt.pIf;
      Assert(if_stmt<>nil);
-     Assert(nested_stmt.pCond<>nil);
+     Assert(if_stmt.pCond<>nil);
      //load before
 
-     if IsUnreachable(nested_stmt.pCond) then
+     if IsUnreachable(if_stmt.pCond) then
      begin
-      new_op:=nested_stmt.pCond;
+      new_op:=if_stmt.pCond;
      end else
      begin
       //!goto_L1
       neg_cond:=NewNot(new_copy);
       nested_real.FInit.Push_tail(neg_cond);
       //(!goto_L1 && expr)
-      new_op:=NewAnd(neg_cond,nested_stmt.pCond);
+      new_op:=NewAnd(neg_cond,if_stmt.pCond);
       //
       nested_real.FInit.Push_tail(new_op);
      end;
 
      // Update nested if condition
-     nested_stmt.pCond:=new_op;
+     if_stmt.pCond:=new_op;
     end;
   btLoop:
     begin
@@ -2354,7 +2481,7 @@ begin
 
  nested_stmt:=SiblingFromNephew(goto_stmt,label_stmt,True);
 
- if not SanitizeNoBreaks(nested_stmt, goto_stmt) then
+ if not SanitizeNoBreaks(nested_stmt, goto_stmt, @Self) then
  begin
   Assert(false,'SanitizeNoBreaks:Lift');
  end;
