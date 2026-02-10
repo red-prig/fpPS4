@@ -227,7 +227,9 @@ end;
 
 function t_blockpool.commit(count,onion,writeback:DWORD;buf:PDWORD):Integer;
 label
- _repeat;
+ _repeat,
+ _find_cached_and_flushed,
+ _find_flushed;
 var
  saved_count:DWORD;
  s:Integer;
@@ -268,6 +270,8 @@ begin
   begin
    //count > Cached.availableBlocks
 
+   _find_cached_and_flushed:
+
    if (Cached.availableBlocks<>0) then
    begin
 
@@ -285,6 +289,8 @@ begin
     end;
 
    end;
+
+   _find_flushed:
 
    // flushed
    while (count<>0) do
@@ -304,21 +310,7 @@ begin
 
   if (count <= Flushed.availableBlocks) then
   begin
-
-   // flushed
-   while (count<>0) do
-   begin
-    s:=Flushed.FindFirst;
-    if (s=-1) then Break;
-
-    Flushed.Commit(s);
-
-    buf[0]:=s;
-    Inc(buf);
-    Dec(Count);
-   end;
-
-   goto _repeat;
+   goto _find_flushed;
   end;
 
   if (Cached.availableBlocks < 32) then
@@ -326,56 +318,10 @@ begin
 
    if ((count - Flushed.availableBlocks)=0) then
    begin
-
-    // cached
-    while (count<>0) do
-    begin
-     s:=Cached.FindFirst;
-     if (s=-1) then Break;
-
-     Cached.Commit(s);
-
-     buf[0]:=s;
-     Inc(buf);
-     Dec(Count);
-    end;
-
-    goto _repeat;
+    goto _find_flushed;
    end;
 
-   if (Flushed.availableBlocks<>0) then
-   begin
-
-    // flushed
-    while (count<>0) do
-    begin
-     s:=Flushed.FindFirst;
-     if (s=-1) then Break;
-
-     Flushed.Commit(s);
-
-     buf[0]:=s;
-     Inc(buf);
-     Dec(Count);
-    end;
-
-   end;
-
-
-   // cached
-   while (count<>0) do
-   begin
-    s:=Cached.FindFirst;
-    if (s=-1) then Break;
-
-    Cached.Commit(s);
-
-    buf[0]:=s;
-    Inc(buf);
-    Dec(Count);
-   end;
-
-   goto _repeat;
+   goto _find_cached_and_flushed;
   end;
 
   flush();
