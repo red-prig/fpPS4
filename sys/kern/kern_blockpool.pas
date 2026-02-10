@@ -321,7 +321,7 @@ begin
    goto _repeat;
   end;
 
-  if (Flushed.availableBlocks < 32) then
+  if (Cached.availableBlocks < 32) then
   begin
 
    if ((count - Flushed.availableBlocks)=0) then
