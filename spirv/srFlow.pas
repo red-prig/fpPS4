@@ -116,11 +116,7 @@ var
  begin
   Assert(pMrgOp<>nil);
 
-  if not is_term_op(line) then
-  begin
-   OpBranch(line,pMrgOp);
-  end;
-
+  OpBranch  (line,pMrgOp);
   AddSpirvOp(line,pMrgOp); //end
  end;
 
@@ -215,17 +211,11 @@ var
   if (parent.pCond<>nil) then
   begin
    //have post conditions
-   if not is_term_op(line) then
-   begin
-    OpBranch(line,pMrgOp); //LoopMerge
-   end;
+   OpBranch(line,pMrgOp); //LoopMerge
   end else
   begin
    //not post conditions
-   if not is_term_op(line) then
-   begin
-    OpBranch(line,pEndOp); //break
-   end;
+   OpBranch(line,pEndOp); //break
   end;
 
   AddSpirvOp(line,pMrgOp); //OpLoopMerge end
@@ -307,10 +297,7 @@ var
   //pMrgOp???
   if (pEndOp<>nil) then
   begin
-   if not is_term_op(line) then
-   begin
-    OpBranch(line,pEndOp);
-   end;
+   OpBranch  (line,pEndOp);
    AddSpirvOp(line,pEndOp);
   end;
  end;
@@ -885,10 +872,7 @@ begin
  pBegOp:=Result.Labels.pBegOp;
  pMrgOp:=Result.Labels.pMrgOp;
 
- if not is_term_op(line) then
- begin
-  OpBranch (line,pMrgOp); //goto end
- end;
+ OpBranch  (line,pMrgOp); //goto end
  AddSpirvOp(line,pBegOp); //start else
 
  //down body group
@@ -1079,6 +1063,7 @@ begin
    PopBlockOp;
   end;
 
+ AddSpirvOp(Op.OpReturn);
  AddSpirvOp(Op.OpFunctionEnd);
 end;
 

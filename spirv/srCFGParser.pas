@@ -1209,7 +1209,7 @@ begin
  label_stmt:=goto_stmt.pLabel;
  if (IsIndirectlyRelated(goto_stmt, label_stmt)) then
  begin
-  if (mode=0) then Exit;
+  //if (mode=0) then Exit;
   // Move goto_stmt out using outward-movement transformation until it becomes
   // directly related to label_stmt
   while (not IsDirectlyRelated(goto_stmt, label_stmt)) do
@@ -1226,7 +1226,7 @@ begin
   goto_level :=Level(goto_stmt);
   if (goto_level > label_level) then
   begin
-   if (mode=0) then Exit;
+   //if (mode=0) then Exit;
    // Move goto_stmt out of its level using outward-movement transformations
    while (goto_level > label_level) do
    begin
@@ -1632,12 +1632,16 @@ begin
   Exit(MoveOutwardElse(goto_stmt));
  end;
 
+ if (mode=0) then
+ begin
+  Exit(nil);
+ end;
+
  if (mode=2) then
  if IsBreakSwitch(goto_stmt) then
  begin
   Exit(MoveOutwardSwitch(goto_stmt));
  end;
-
 
  if IsBreakLoop(goto_stmt) then
  begin
@@ -1980,6 +1984,12 @@ begin
 
  new_goto:=NewGoto(cond,label_stmt);
  InsertAfter(pmerge,new_goto);
+
+ if (mode=0) then
+ begin
+  RestoreGoto(new_goto);
+  Exit(nil);
+ end;
 
  Result:=new_goto;
 end;

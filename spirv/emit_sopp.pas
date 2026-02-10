@@ -52,10 +52,7 @@ begin
 
   S_ENDPGM:
    begin
-    if not is_term_op(line) then
-    begin
-     AddSpirvOp(Op.OpReturn);
-    end;
+    AddSpirvOp(Op.OpReturn);
     //mark hints
     mark_end_of(vmEndpg);
    end;

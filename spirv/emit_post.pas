@@ -48,7 +48,8 @@ type
   function  OnOpStep5(node:TspirvOp):Integer; //backward
   function  OnOpStep6(node:TspirvOp):Integer; //backward
   function  OnOpStep7(node:TspirvOp):Integer; //forward
-  function  OnOpStep8(node:TspirvOp):Integer; //backward
+  function  OnOpStep8(node:TspirvOp):Integer; //forward
+  function  OnOpStep9(node:TspirvOp):Integer; //backward
 
   function  OnDecorate(node:TspirvOp):Integer;
 
@@ -768,7 +769,25 @@ begin
  Result:=1;
 end;
 
-function TSprvEmit_post.OnOpStep8(node:TspirvOp):Integer; //backward
+function TSprvEmit_post.OnOpStep8(node:TspirvOp):Integer; //forward
+
+begin
+ Result:=0;
+ if node.is_cleared then Exit;
+ if node.can_clear  then Exit;
+
+ if is_term_op(node.OpId) then
+ begin
+  if is_term_op(flow_down_prev_up(node)) then
+  begin
+   node.mark([soClear]);
+   Inc(Result);
+  end;
+ end;
+
+end;
+
+function TSprvEmit_post.OnOpStep9(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -993,9 +1012,11 @@ begin
    end;
   end;
 
+  EnumBlockOpForward(@OnOpStep8,pFunc.pTop); //OnOpStep8 Remove term
+
   PrivateList.RemoveAllStore;
 
-  Result:=Result+EnumBlockOpBackward(@OnOpStep8,pFunc.pTop); //OnOpStep7 Remove Lines
+  Result:=Result+EnumBlockOpBackward(@OnOpStep9,pFunc.pTop); //OnOpStep9 Remove Lines
 
   EnumBlockOpForward(@OnDecorate,pFunc.pTop); //NoContraction
 

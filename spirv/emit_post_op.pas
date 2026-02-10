@@ -66,7 +66,6 @@ type
   function  MakeVecComp (pLine:TSpirvOp;rtype:TsrDataType;dst:TsrRegNode;src:PPsrRegNode):Boolean;
   //
   function  OnVector_2(node:TSpirvOp):Integer;
-  function  OnReturn_2(node:TSpirvOp):Integer;
   function  OnMakeExp2(node:TSpirvOp):Integer;
   function  OnIAddExt2(node:TSpirvOp):Integer;
   function  OnISubExt2(node:TSpirvOp):Integer;
@@ -138,7 +137,6 @@ begin
 
   Op.OpCompositeConstruct:Result:=OnVector_2(node);
 
-  Op.OpReturn:Result:=OnReturn_2(node);
   OpExport   :Result:=OnMakeExp2(node);
 
   Op.OpImageSampleImplicitLod,
@@ -2834,18 +2832,6 @@ begin
 
   Result:=1;
  end;
-end;
-
-function TEmitPostOp.OnReturn_2(node:TSpirvOp):Integer;
-begin
- Result:=0;
-
- if is_term_op(flow_down_prev_up(node)) then
- begin
-  node.mark([soNotUsed]);
-  Inc(Result);
- end;
-
 end;
 
 function TEmitPostOp.OnMakeExp2(node:TSpirvOp):Integer;

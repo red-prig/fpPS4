@@ -358,6 +358,7 @@ end;
 
 Function is_term_op(OpId:DWORD):Boolean;
 begin
+ //This instruction must be the last instruction in a block.
  Case OpId of
   Op.OpBranch,
   Op.OpBranchConditional,
@@ -390,13 +391,14 @@ begin
 
  repeat //up
 
-  if pLine.IsType(ntOpBlock) then
+  if (not pLine.is_cleared) then
   begin
-   //
-  end else
-  if pLine.IsType(ntOp) then
-  begin
-   if not pLine.is_cleared then
+
+   if pLine.IsType(ntOpBlock) then
+   begin
+    //
+   end else
+   if pLine.IsType(ntOp) then
    begin
     Case pLine.OpId of
      Op.OpNop :; //
@@ -404,11 +406,12 @@ begin
      else
       Break;
     end;
+   end else
+   begin
+    Exit;
    end;
-  end else
-  begin
-   Exit;
-  end;
+
+  end; //is_cleared
 
   pLine:=flow_down_prev_up(pLine);
 
