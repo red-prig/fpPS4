@@ -835,7 +835,8 @@ var
 
 begin
 
- msk:=src1.AsConst;
+ //RegDown() is a hack, it doesn't take into account the value in the loop
+ msk:=RegDown(src1).AsConst;
 
  if (msk<>nil) then
  begin
