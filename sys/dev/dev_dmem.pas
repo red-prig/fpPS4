@@ -62,14 +62,18 @@ type
   size     :QWORD;
  end;
 
- p_set_prt_aperture=^t_set_prt_aperture;
- t_set_prt_aperture=packed record
+ p_prt_aperture=^t_prt_aperture;
+ t_prt_aperture=packed record
   addr      :Pointer;
   len       :QWORD;
-  apertureId:Integer;
+  apertureId:DWORD;
  end;
 
-function set_prt_aperture(data:p_set_prt_aperture):Integer;
+var
+ PRT_APERTURE_LOW :array[0..3] of QWORD;
+ PRT_APERTURE_HIGH:array[0..3] of QWORD;
+
+function set_prt_aperture(data:p_prt_aperture):Integer;
 var
  addr:QWORD;
  len :QWORD;
@@ -110,7 +114,29 @@ begin
   Exit(EINVAL);
  end;
 
+ PRT_APERTURE_LOW [data^.apertureId]:=addr;
+ PRT_APERTURE_HIGH[data^.apertureId]:=addr + len;
+
  Writeln('TODO:set_prt_aperture(0x',HexStr(addr,10),',0x',HexStr(len,10),',',data^.apertureId,')');
+end;
+
+function get_prt_aperture(data:p_prt_aperture):Integer;
+var
+ low :QWORD;
+ high:QWORD;
+begin
+ Result:=0;
+
+ if (DWORD(data^.apertureId) > 2) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ low :=PRT_APERTURE_LOW [data^.apertureId];
+ high:=PRT_APERTURE_HIGH[data^.apertureId];
+
+ data^.addr:=Pointer(low);
+ data^.len :=high - low;
 end;
 
 Function dmem_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
@@ -204,8 +230,14 @@ begin
 
   $80188008: //sceKernelSetPrtAperture
             begin
-             set_prt_aperture(data);
+             Result:=set_prt_aperture(data);
             end;
+
+  $C018800C: //sceKernelGetPrtAperture
+            begin
+             Result:=get_prt_aperture(data);
+            end
+
 
   else
    begin
