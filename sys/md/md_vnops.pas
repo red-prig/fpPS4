@@ -10,6 +10,9 @@ uses
  ntapi,
  mqueue,
  vm_pmap,
+ vm_map,
+ kern_proc,
+ vm_tracking_map,
  time,
  vfile,
  vmount,
@@ -2852,6 +2855,15 @@ begin
   begin
    OFFSET:=uio^.uio_offset;
   end;
+
+  //TODO: lock/unlock vm_map or pmap
+
+  //trigger and restore
+  vm_map_track_trigger(p_proc.p_vmspace,
+                       QWORD(vec.iov_base),
+                       QWORD(vec.iov_base)+vec.iov_len,
+                       nil,
+                       M_CPU_WRITE);
 
   BLK:=Default(IO_STATUS_BLOCK);
 
