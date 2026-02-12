@@ -756,7 +756,7 @@ begin
   end;
 
   writeln('not guest addr:0x',HexStr(addr));
-  Assert(False,'TODO');
+  Assert(False,'attempted execute of noguest memory:0x'+HexStr(addr));
 
   //td^.td_teb^.jitcall:=addr;
   //Exit(@jit_jmp_internal);
@@ -767,7 +767,7 @@ begin
  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
  begin
   writeln('not excec:0x',HexStr(addr));
-  Assert(False,'TODO');
+  Assert(False,'attempted execute of noexecute memory:0x'+HexStr(addr));
  end;
 
  jctx:=@td^.td_jctx;
