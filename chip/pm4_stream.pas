@@ -472,6 +472,7 @@ type
   procedure WaitRegMem   (pollAddr:Pointer;refValue,mask:DWORD;compareFunc:Byte);
   procedure FastClear    (var CX_REG:TCONTEXT_REG_GROUP);
   procedure Resolve      (var CX_REG:TCONTEXT_REG_GROUP);
+  function  DepthStencilCopy(var CX_REG:TCONTEXT_REG_GROUP):Boolean;
   function  ColorControl (var CX_REG:TCONTEXT_REG_GROUP):Boolean;
   procedure Init_Uniforms(node:p_pm4_node;var UniformBuilder:TvUniformBuilder);
   procedure Init_Pushs   (node:p_pm4_node;
@@ -1438,15 +1439,60 @@ begin
  add_node(node);
 end;
 
+function t_pm4_stream.DepthStencilCopy(var CX_REG:TCONTEXT_REG_GROUP):Boolean;
+var
+ DB_RENDER_OVERRIDE:TDB_RENDER_OVERRIDE;
+ DEPTH_CONTROL     :TDB_DEPTH_CONTROL;
+ DB_DEPTH_VIEW     :TDB_DEPTH_VIEW;
+ DB_Z_INFO         :TDB_Z_INFO;
+ DB_STENCIL_INFO   :TDB_STENCIL_INFO;
+
+ depth_copy,stencil_copy:Boolean;
+begin
+ Result:=False;
+
+ DB_RENDER_OVERRIDE:=CX_REG.DB_RENDER_OVERRIDE;
+ DEPTH_CONTROL     :=CX_REG.DB_DEPTH_CONTROL;
+ DB_DEPTH_VIEW     :=CX_REG.DB_DEPTH_VIEW;
+ DB_Z_INFO         :=CX_REG.DB_Z_INFO;
+ DB_STENCIL_INFO   :=CX_REG.DB_STENCIL_INFO;
+
+ depth_copy:=(DB_RENDER_OVERRIDE.FORCE_Z_DIRTY<>0) and
+             (DB_RENDER_OVERRIDE.FORCE_Z_VALID<>0) and
+             (DB_Z_INFO.FORMAT<>0)                 and
+             (DEPTH_CONTROL.Z_ENABLE<>0)           and
+             (DEPTH_CONTROL.Z_WRITE_ENABLE<>0)     and
+             (DB_DEPTH_VIEW.Z_READ_ONLY=0)         and
+             (CX_REG.DB_Z_READ_BASE<>CX_REG.DB_Z_WRITE_BASE);
+
+ stencil_copy:=(DB_RENDER_OVERRIDE.FORCE_STENCIL_DIRTY<>0) and
+               (DB_RENDER_OVERRIDE.FORCE_STENCIL_VALID<>0) and
+               (DB_STENCIL_INFO.FORMAT<>0)                 and
+               (DEPTH_CONTROL.STENCIL_ENABLE<>0)           and
+               (DB_DEPTH_VIEW.STENCIL_READ_ONLY=0)         and
+               (CX_REG.DB_STENCIL_READ_BASE<>CX_REG.DB_STENCIL_WRITE_BASE);
+
+ if depth_copy or stencil_copy then
+ begin
+  Assert(False,'TODO:DepthStencilCopy('+IntToStr(ord(depth_copy))+','+IntToStr(ord(stencil_copy))+')');
+ end;
+
+ Result:=True;
+end;
+
 function t_pm4_stream.ColorControl(var CX_REG:TCONTEXT_REG_GROUP):Boolean;
 begin
  Result:=False;
 
  case CX_REG.CB_COLOR_CONTROL.MODE of
   CB_DISABLE:
-   if p_print_gpu_ops then
    begin
-    Writeln('DISABLE');
+    Result:=DepthStencilCopy(CX_REG);
+    if not Result then
+    if p_print_gpu_ops then
+    begin
+     Writeln('DISABLE');
+    end;
    end;
   CB_NORMAL:; //next
   CB_ELIMINATE_FAST_CLEAR:
