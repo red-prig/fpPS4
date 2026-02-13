@@ -52,6 +52,7 @@ var
 implementation
 
 var
+ _back_ref:QWORD=0;
  //
  //function SDL_SetHint(name: PAnsiChar; value: PAnsiChar): Boolean; cdecl;
  //function SDL_SetHintWithPriority(name: PAnsiChar; value: PAnsiChar; priority: TSDL_HintPriority): Boolean; cdecl;
@@ -67,36 +68,44 @@ var
 function SDL_WasInit(flags: Integer): Integer;
 begin
  Result:=0;
+ System.InterlockedIncrement64(_back_ref);
  if (_SDL_WasInit<>nil) then
  begin
   Result:=_SDL_WasInit(flags);
  end;
+ System.InterlockedDecrement64(_back_ref);
 end;
 
 procedure SDL_free(mem: Pointer);
 begin
+ System.InterlockedIncrement64(_back_ref);
  if (_SDL_free<>nil) then
  begin
   _SDL_free(mem);
  end;
+ System.InterlockedDecrement64(_back_ref);
 end;
 
 function SDL_PollEvent(event: PSDL_Event): Boolean;
 begin
  Result:=False;
+ System.InterlockedIncrement64(_back_ref);
  if (_SDL_PollEvent<>nil) then
  begin
   Result:=_SDL_PollEvent(event);
  end;
+ System.InterlockedDecrement64(_back_ref);
 end;
 
 function SDL_WaitEvent(event: PSDL_Event): Boolean;
 begin
  Result:=False;
+ System.InterlockedIncrement64(_back_ref);
  if (_SDL_WaitEvent<>nil) then
  begin
   Result:=_SDL_WaitEvent(event);
  end;
+ System.InterlockedDecrement64(_back_ref);
 end;
 
 function SDL_InitSubSystem(flags: Integer): Boolean;
@@ -171,9 +180,7 @@ begin
 
  if (i=0) then
  begin
-  UnloadLibrary(sdl3_lib_handle);
-  sdl3_lib_handle:=NilHandle;
-
+  //first unlink
   Pointer(_SDL_Init)         :=nil;
   Pointer(_SDL_InitSubSystem):=nil;
   Pointer(_SDL_QuitSubSystem):=nil;
@@ -181,6 +188,13 @@ begin
   Pointer(_SDL_free)         :=nil;
   Pointer(_SDL_PollEvent)    :=nil;
   Pointer(_SDL_WaitEvent)    :=nil;
+
+  //wait exit
+  while (_back_ref<>0) do;
+
+  //free lib
+  UnloadLibrary(sdl3_lib_handle);
+  sdl3_lib_handle:=NilHandle;
  end;
 
  //.....
