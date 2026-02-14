@@ -6,17 +6,14 @@ unit rmem_map;
 interface
 
 uses
- mqueue,
  uma,
  vm,
+ vm_key_instance,
  kern_mtx;
 
 type
  p_rmem_vaddr_instance=^t_rmem_vaddr_instance;
- t_rmem_vaddr_instance=record
-  entry:TAILQ_ENTRY; //p_rmem_map_entry->vaddr
-  vaddr:QWORD;
- end;
+ t_rmem_vaddr_instance=t_vm_key_instance;
 
  pp_rmem_map_entry=^p_rmem_map_entry;
  p_rmem_map_entry=^t_rmem_map_entry;
@@ -27,8 +24,8 @@ type
   right:p_rmem_map_entry; // right child in binary search tree
   start:QWORD;            // start address
   __end:QWORD;            // end address
-  vlist:TAILQ_HEAD;       // virtual addr mapping
-  count:QWORD;
+  vinst:Pointer;         // virtual addr mapping
+  count:DWORD;
  end;
 
  p_rmem_map=^t_rmem_map;
@@ -103,33 +100,20 @@ var
  node:p_rmem_vaddr_instance;
 begin
  node:=uma_zalloc(map^.instance_zone, M_WAITOK or M_ZERO);
+ node^.key:=Pointer(vaddr);
 
- node^.vaddr:=vaddr;
-
- TAILQ_INSERT_TAIL(@entry^.vlist,node,@node^.entry);
+ vm_key_instance_insert(entry^.vinst,node);
  Inc(entry^.count);
 end;
 
 function rmem_entry_add_vaddr(map:p_rmem_map;entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
-var
- node:p_rmem_vaddr_instance;
 begin
- node:=TAILQ_FIRST(@entry^.vlist);
-
- while (node<>nil) do
+ if vm_key_instance_find(entry^.vinst,Pointer(vaddr)) then
  begin
-
-  if (node^.vaddr=vaddr) then
-  begin
-   Exit(False);
-  end;
-
-  node:=TAILQ_NEXT(node,@node^.entry);
+  Exit(False);
  end;
 
- //if not one vaddr
- Result:=(TAILQ_FIRST(@entry^.vlist)<>nil);
-
+ Result:=True;
  _rmem_entry_add_vaddr(map,entry,vaddr);
 end;
 
@@ -145,18 +129,18 @@ begin
 
  vm_track_map_lock(tmap);
 
- node:=TAILQ_FIRST(@entry^.vlist);
+ node:=vm_key_instance_first(entry^.vinst);
 
  while (node<>nil) do
  begin
 
-  vaddr:=node^.vaddr;
+  vaddr:=QWORD(node^.key);
   if (vaddr<>dst) then
   begin
    _vm_track_map_insert_mirror(tmap,vaddr,vaddr+size,dst);
   end;
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=vm_key_instance_next(entry^.vinst,node);
  end;
 
  vm_track_map_unlock(tmap);
@@ -165,72 +149,37 @@ end;
 function _rmem_entry_del_node(map:p_rmem_map;entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
 begin
  Dec(entry^.count);
- TAILQ_REMOVE(@entry^.vlist,node,@node^.entry);
+ vm_key_instance_delete(entry^.vinst,node);
 
  uma_zfree(map^.instance_zone, node);
 
- Result:=(TAILQ_FIRST(@entry^.vlist)=nil);
+ if ((entry^.count=0) and (entry^.vinst<>nil)) or
+    ((entry^.count<>0) and (entry^.vinst=nil)) then
+ begin
+  Assert(False,'_rmem_entry_del_node');
+ end;
+
+ Result:=(entry^.vinst=nil);
 end;
 
 function rmem_entry_del_vaddr(map:p_rmem_map;entry:p_rmem_map_entry;vaddr:QWORD):Boolean;
-var
- node:p_rmem_vaddr_instance;
 begin
- node:=TAILQ_FIRST(@entry^.vlist);
-
- while (node<>nil) do
- begin
-
-  if (node^.vaddr=vaddr) then
-  begin
-   Result:=_rmem_entry_del_node(map,entry,node);
-
-   Exit;
-  end;
-
-  node:=TAILQ_NEXT(node,@node^.entry);
- end;
-
  Result:=False;
+ if vm_key_instance_find(entry^.vinst,Pointer(vaddr)) then
+ begin
+  Result:=_rmem_entry_del_node(map,entry,entry^.vinst);
+ end;
 end;
 
 procedure rmem_entry_del_vaddr_all(map:p_rmem_map;entry:p_rmem_map_entry);
-var
- node,next:p_rmem_vaddr_instance;
 begin
- node:=TAILQ_FIRST(@entry^.vlist);
-
- while (node<>nil) do
+ while (entry^.vinst<>nil) do
  begin
-  next:=TAILQ_NEXT(node,@node^.entry);
-
-  _rmem_entry_del_node(map,entry,node);
-
-  node:=next;
+  _rmem_entry_del_node(map,entry,entry^.vinst);
  end;
 end;
 
 //
-
-function in_vaddr_list(const b:TAILQ_HEAD;vaddr:QWORD):Boolean;
-var
- node:p_rmem_vaddr_instance;
-begin
- Result:=False;
-
- node:=TAILQ_FIRST(@b);
-
- while (node<>nil) do
- begin
-
-  if (node^.vaddr=vaddr) then
-  begin
-   Exit(True);
-  end;
-
-  node:=TAILQ_NEXT(node,@node^.entry);
- end;
-end;
 
 function compare_vaddr_list(a:p_rmem_map_entry;offset:QWORD;b:p_rmem_map_entry):Boolean;
 var
@@ -241,17 +190,17 @@ begin
   Exit(False);
  end;
 
- node:=TAILQ_FIRST(@a^.vlist);
+ node:=vm_key_instance_first(a^.vinst);
 
  while (node<>nil) do
  begin
 
-  if not in_vaddr_list(b^.vlist,node^.vaddr + offset) then
+  if not vm_key_instance_find(b^.vinst,node^.key + offset) then
   begin
    Exit(False);
   end;
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=vm_key_instance_next(a^.vinst,node);
  end;
 
  Result:=True;
@@ -259,15 +208,20 @@ end;
 
 procedure inc_vaddr_list(src:p_rmem_map_entry;offset:QWORD);
 var
- node:p_rmem_vaddr_instance;
+ node,next:p_rmem_vaddr_instance;
 begin
- node:=TAILQ_FIRST(@src^.vlist);
+ node:=vm_key_instance_first(src^.vinst);
 
  while (node<>nil) do
  begin
-  node^.vaddr:=node^.vaddr + offset;
+  next:=vm_key_instance_next(src^.vinst,node);
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  //re insert
+  vm_key_instance_delete(src^.vinst,node);
+   node^.key:=node^.key+offset;
+  vm_key_instance_insert(src^.vinst,node);
+
+  node:=next;
  end;
 end;
 
@@ -275,17 +229,17 @@ procedure copy_vaddr_list(map:p_rmem_map;src,dst:p_rmem_map_entry;offset:QWORD);
 var
  node:p_rmem_vaddr_instance;
 begin
-
- TAILQ_INIT(@dst^.vlist); //init
+ //init
+ dst^.vinst:=nil;
  dst^.count:=0;
 
- node:=TAILQ_FIRST(@src^.vlist);
+ node:=vm_key_instance_first(src^.vinst);
 
  while (node<>nil) do
  begin
-  _rmem_entry_add_vaddr(map,dst,node^.vaddr + offset);
+  _rmem_entry_add_vaddr(map,dst,QWORD(node^.key) + offset);
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=vm_key_instance_next(src^.vinst,node);
  end;
 end;
 
@@ -380,8 +334,6 @@ var
 begin
  new_entry:=uma_zalloc(map^.entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'rmem_map_entry_create: kernel resources exhausted');
-
- TAILQ_INIT(@new_entry^.vlist);
 
  Result:=new_entry;
 end;
@@ -700,11 +652,11 @@ begin
    rmem_entry_del_vaddr_all(map,entry);
 
    //move
-   entry^.vlist:=prev^.vlist;
+   entry^.vinst:=prev^.vinst;
    entry^.count:=prev^.count;
 
    //zero
-   TAILQ_INIT(@prev^.vlist);
+   prev^.vinst:=nil;
    prev^.count:=0;
 
    rmem_entry_deallocate(map,prev);
@@ -915,19 +867,19 @@ var
  start:vm_offset_t;
  __end:vm_offset_t;
 begin
- node:=TAILQ_FIRST(@entry^.vlist);
+ node:=vm_key_instance_first(entry^.vinst);
 
  while (node<>nil) do
  begin
 
-  start:=node^.vaddr+diff;
+  start:=QWORD(node^.key)+diff;
   __end:=start+size;
 
   //Writeln('rmem_entry_track:',HexStr(start,16),'..',HexStr(__end,16),'..',HexStr(source,16));
 
   _vm_track_map_insert_deferred(tmap,start,__end,source,tobj);
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=vm_key_instance_next(entry^.vinst,node);
  end;
 end;
 

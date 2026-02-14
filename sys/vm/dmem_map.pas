@@ -123,6 +123,7 @@ uses
  kern_thr,
  systm,
  vm_map,
+ vm_key_instance,
  rmem_map,
  kern_budget;
 
@@ -989,15 +990,15 @@ var
 begin
  size:=(entry^.__end-entry^.start);
 
- node:=TAILQ_FIRST(@entry^.vlist);
+ node:=vm_key_instance_first(entry^.vinst);
 
  while (node<>nil) do
  begin
-  vaddr:=node^.vaddr;
+  vaddr:=QWORD(node^.key);
 
   vm_map_delete(vmap, vaddr, vaddr + size, MAP_COW_NO_RMAP_FREE);
 
-  node:=TAILQ_NEXT(node,@node^.entry);
+  node:=vm_key_instance_next(entry^.vinst,node);
  end;
 end;
 
