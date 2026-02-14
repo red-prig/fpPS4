@@ -278,7 +278,13 @@ begin
  if info.IsExtFormat then
  begin
   //TODO: ExtFormat
-  Assert(false,'TODO: ExtFormat='+IntToStr(info.DFMT));
+  Case info.DFMT of
+   BUF_DATA_FORMAT_10_11_11   :Assert(false,'TODO: LOAD:10_11_11');
+   BUF_DATA_FORMAT_11_11_10   :Assert(false,'TODO: LOAD:11_11_10');
+   BUF_DATA_FORMAT_10_10_10_2 :Assert(false,'TODO: LOAD:10_10_10_2');
+   BUF_DATA_FORMAT_2_10_10_10 :Assert(false,'TODO: LOAD:2_10_10_10');
+   else;
+  end;
  end;
 
  lc:=Default(Tload_cache);
