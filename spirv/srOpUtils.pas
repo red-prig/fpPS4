@@ -32,6 +32,11 @@ Function  IsParentOf(pLine,pCurr:TsrOpBlock):Boolean;
 Function  IsParentOfLine(pLine,pCurr:TSpirvOp):Boolean;
 function  GetMaxPlace(pLine:TSpirvOp;count:Byte;src:PPsrRegNode):TSpirvOp;
 
+type
+ AsrChain=array of TsrChain;
+
+function  GetChainRegNode2(node:TsrRegNode):AsrChain;
+
 function  GetChainRegNode (node:TsrRegNode):TsrChain;
 function  GetSourceRegNode(node:TsrRegNode):TsrNode;
 
@@ -576,9 +581,6 @@ begin
   Result:=nil;
  end;
 end;
-
-type
- AsrChain=array of TsrChain;
 
 function GetChainRegNode2(node:TsrRegNode):AsrChain;
 var

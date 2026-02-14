@@ -32,8 +32,10 @@ type
   function  GroupingSImm  (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingVImm1 (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingVImm2 (regs:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
+  function  GroupingBLane (regs:PPsrRegNode;rtype:TsrResourceType;var ofs:TsrRegNode):TsrDataLayout;
   function  TryShortVSharp(inps:PPsrRegNode;rtype:TsrResourceType):TsrDataLayout;
   function  GroupingSharp (src :PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
+  procedure GroupingSharp2(src:PPsrRegSlot;rtype:TsrResourceType;var Layout:TsrDataLayout;var ofs:TsrRegNode);
   //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
   function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
@@ -335,6 +337,174 @@ begin
  Result:=DataLayoutList.FetchImm(@vsharp,rtype);
 end;
 
+Function GetBroadcastFirstSrc(src:TsrRegNode):TsrRegNode;
+var
+ node:TSpirvOp;
+begin
+ Result:=nil;
+
+ node:=src.pWriter.specialize AsType<ntOp>;
+ if (node=nil) then Exit;
+
+ if (node.OpId<>Op.OpGroupNonUniformBroadcastFirst) then Exit;
+
+ Result:=RegDown(node.ParamNode(1).AsReg);
+end;
+
+function GetVariantPairLine(node:TsrRegNode):TSpirvOp;
+var
+ pOp:TSpirvOp;
+ V:TsrVolatile;
+ snode:TStoreNode;
+ reg:TsrRegNode;
+begin
+ Result:=nil;
+
+ node:=RegDown(node);
+
+ if node.pWriter.IsType(TsrVolatile) then
+ begin
+  V:=node.pWriter.specialize AsType<TsrVolatile>;
+
+  snode:=V.FList.pHead;
+
+  while (snode<>nil) do
+  begin
+   reg:=snode.src;
+
+   pOp:=GetRegPairOp(reg);
+
+   if (pOp<>nil) then
+   begin
+    Exit(pOp)
+   end;
+
+   snode:=snode.pNext;
+  end;
+
+ end;
+end;
+
+function GetChain_IADD(pLine:TSpirvOp):AsrChain;
+begin
+ Result:=nil;
+
+ if (pLine.OpId<>srOpInternal.OpIAddExt) then Exit;
+
+ Result:=GetChainRegNode2(pLine.ParamNode(0).AsReg);
+ if (Result<>nil) then Exit;
+
+ Result:=GetChainRegNode2(pLine.ParamNode(1).AsReg);
+end;
+
+function ResolveChain_IADD(pLine0,pLine1:TSpirvOp):TsrChains;
+var
+ A0:AsrChain;
+ A1:AsrChain;
+
+ chain:TsrChains;
+
+ x,y:Integer;
+begin
+ A0:=GetChain_IADD(pLine0);
+ A1:=GetChain_IADD(pLine1);
+
+ if (A0=nil) or (A1=nil) then Exit;
+
+ //check all combination to valid
+ For x:=0 to High(A0) do
+ For y:=0 to High(A1) do
+ begin
+  chain[0]:=A0[x];
+  chain[1]:=A1[y];
+
+  if is_consistents(chain,2) then
+  if is_no_index_chains(chain,2) then
+  begin
+   Exit(chain);
+  end;
+ end;
+
+end;
+
+function GetOffset_IADD(pLine:TSpirvOp):TsrRegNode;
+var
+ chain:AsrChain;
+begin
+ Result:=nil;
+
+ if (pLine.OpId<>srOpInternal.OpIAddExt) then Exit;
+
+ chain:=GetChainRegNode2(pLine.ParamNode(0).AsReg);
+ if (chain=nil) then
+ begin
+  Exit(pLine.ParamNode(1).AsReg);
+ end;
+
+ chain:=GetChainRegNode2(pLine.ParamNode(1).AsReg);
+ if (chain=nil) then
+ begin
+  Exit(pLine.ParamNode(0).AsReg);
+ end;
+end;
+
+function TEmitFetch.GroupingBLane(regs:PPsrRegNode;rtype:TsrResourceType;var ofs:TsrRegNode):TsrDataLayout;
+var
+ base:array[0..1] of TsrRegNode;
+
+ pop_1:array[0..1] of TSpirvOp;
+ pop_2:array[0..1] of TSpirvOp;
+
+ chain:TsrChains;
+begin
+ Result:=nil;
+
+ if (rtype<>rtBufPtr2) then Exit;
+
+ //S_MOVK_I32 VCC_LO, 112                   VCC_LO = 112
+ //   V_MUL_LO_I32 v1, VCC_LO, v0 ; VOP3a   v1 = VCC_LO * v0
+ //   V_ADD_I32 v0, #0x00000050, v1         v0 = v1 + 0x00000050
+ //   V_ADD_I32 v5, s22, v0                 v5 = s22 + v0
+ //   V_MOV_B32 v0, s23                     v0 = s23
+ //   V_ADDC_U32 v6, 0, v0                  v6 = 0 + (v0=s23) + (s22 + v0).carry
+ //V_READFIRSTLANE_B32 s8, v5
+ //V_READFIRSTLANE_B32 s9, v6
+
+ base[0]:=GetBroadcastFirstSrc(regs[0]);
+ base[1]:=GetBroadcastFirstSrc(regs[1]);
+
+ if (base[0]=nil) or (base[1]=nil) then Exit;
+
+ pop_1[0]:=GetVariantPairLine(base[0]);
+ pop_1[1]:=GetVariantPairLine(base[1]);
+
+ if (pop_1[0]=nil) or (pop_1[1]=nil) then Exit;
+
+ //V_ADD_I32
+ if (pop_1[0].OpId<>srOpInternal.OpIAddExt) then Exit;
+ if (pop_1[1].OpId<>srOpInternal.OpIAddExt) then Exit;
+
+ //V_ADDC_U32
+ //(vsrc0+vsrc1)+scarry
+ pop_2[0]:=GetRegPairOp(pop_1[1].ParamNode(0).AsReg); //(vsrc0+vsrc1)
+ //pop_2[1]:=GetRegPairOp(pop_1[1].ParamNode(1).AsReg); //scarry
+
+ if (pop_2[0]=nil) then Exit;
+
+ chain:=ResolveChain_IADD(pop_1[0],pop_2[0]);
+
+ ofs:=GetOffset_IADD(pop_1[0]);
+
+ if (ofs<>nil) then
+ if is_consistents(chain,2) then
+ if is_no_index_chains(chain,2) then
+ begin
+  Result:=DataLayoutList.Grouping(chain,rtype);
+ end;
+
+end;
+
+
 function TryDisableAnisoLod0(regs:PPsrRegNode;rtype:TsrResourceType):Boolean;
 var
  reg:TsrRegNode;
@@ -514,6 +684,18 @@ begin
 end;
 
 function TEmitFetch.GroupingSharp(src:PPsrRegSlot;rtype:TsrResourceType):TsrDataLayout;
+var
+ idx:TsrRegNode;
+begin
+ Result:=nil;
+ idx   :=nil;
+
+ GroupingSharp2(src,rtype,Result,idx);
+
+ Assert(idx=nil,'move to GroupingSharp2!');
+end;
+
+procedure TEmitFetch.GroupingSharp2(src:PPsrRegSlot;rtype:TsrResourceType;var Layout:TsrDataLayout;var ofs:TsrRegNode);
 type
  TsrRegs=array[0..7] of TsrRegNode;
 var
@@ -521,7 +703,9 @@ var
  chain:TsrChains;
  i,n:Byte;
 begin
- Result:=nil;
+ Layout:=nil;
+ ofs   :=nil;
+
  chain:=Default(TsrChains);
  regs :=Default(TsrRegs);
  n:=GetResourceSizeDw(rtype);
@@ -531,17 +715,20 @@ begin
   regs[i]:=RegDown(src[i]^.current);
  end;
 
- Result:=GroupingSImm(@regs,rtype);
- if (Result<>nil) then Exit;
+ Layout:=GroupingBLane(@regs,rtype,ofs);
+ if (Layout<>nil) then Exit;
 
- Result:=GroupingVImm1(@regs,rtype);
- if (Result<>nil) then Exit;
+ Layout:=GroupingSImm(@regs,rtype);
+ if (Layout<>nil) then Exit;
 
- Result:=GroupingVImm2(@regs,rtype);
- if (Result<>nil) then Exit;
+ Layout:=GroupingVImm1(@regs,rtype);
+ if (Layout<>nil) then Exit;
 
- Result:=TryShortVSharp(@regs,rtype);
- if (Result<>nil) then Exit;
+ Layout:=GroupingVImm2(@regs,rtype);
+ if (Layout<>nil) then Exit;
+
+ Layout:=TryShortVSharp(@regs,rtype);
+ if (Layout<>nil) then Exit;
 
  //TODO: mark "disable_aniso"
  TryDisableAnisoLod0(@regs,rtype);
@@ -551,7 +738,7 @@ begin
   chain[i]:=GetChainRegNode(regs[i]);
  end;
 
- Result:=DataLayoutList.Grouping(chain,rtype);
+ Layout:=DataLayoutList.Grouping(chain,rtype);
 end;
 
 //

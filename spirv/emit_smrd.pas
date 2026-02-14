@@ -16,14 +16,14 @@ uses
 type
  TEmit_SMRD=class(TEmitFetch)
   procedure emit_SMRD;
-  procedure emit_LOAD_DWORDX(grp:TsrDataLayout;count:Byte);
+  procedure emit_LOAD_DWORDX(grp:TsrDataLayout;ofs_lane:TsrRegNode;count:Byte);
   procedure emit_LOAD_DWORDX(count:Byte);
   procedure emit_BUFFER_LOAD_DWORDX(count:Byte);
  end;
 
 implementation
 
-procedure TEmit_SMRD.emit_LOAD_DWORDX(grp:TsrDataLayout;count:Byte);
+procedure TEmit_SMRD.emit_LOAD_DWORDX(grp:TsrDataLayout;ofs_lane:TsrRegNode;count:Byte);
 var
  dst:PsrRegSlot;
 
@@ -59,6 +59,8 @@ begin
   is_const_offset:=False;
  end;
 
+ is_const_offset:=is_const_offset and (ofs_lane=nil);
+
  if is_const_offset then
  begin
   For i:=0 to count-1 do
@@ -73,7 +75,34 @@ begin
   end;
  end else
  begin
-  ofs_r:=fetch_ssrc9(FSPI.SMRD.OFFSET,dtUint32);
+
+  if (ofs_lane<>nil) and
+     (FSPI.SMRD.IMM<>0) and
+     (FSPI.SMRD.OFFSET=0) then
+  begin
+   ofs_r:=ofs_lane;
+   ofs_lane:=nil;
+  end else
+  begin
+
+   if (FSPI.SMRD.IMM<>0) then
+   begin
+    offset:=FSPI.SMRD.OFFSET;
+    //offset is represented as a DWORD value
+    offset:=offset*4;
+
+    ofs_r:=NewImm_i(dtUint32,offset);
+   end else
+   begin
+    ofs_r:=fetch_ssrc9(FSPI.SMRD.OFFSET,dtUint32);
+   end;
+
+   if (ofs_lane<>nil) then
+   begin
+    ofs_r:=OpIAddTo(ofs_r,ofs_lane);
+   end;
+
+  end;
 
   idx_r:=OpShrTo(ofs_r,2);
 
@@ -106,10 +135,15 @@ procedure TEmit_SMRD.emit_LOAD_DWORDX(count:Byte);
 var
  src:array[0..1] of PsrRegSlot;
  grp:TsrDataLayout;
+ ofs:TsrRegNode;
 begin
  if not get_sbase(FSPI.SMRD.SBASE,2,@src) then Assert(false);
- grp:=GroupingSharp(@src,rtBufPtr2);
- emit_LOAD_DWORDX(grp,count);
+
+ grp:=nil;
+ ofs:=nil;
+ GroupingSharp2(@src,rtBufPtr2,grp,ofs);
+
+ emit_LOAD_DWORDX(grp,ofs,count);
 end;
 
 procedure TEmit_SMRD.emit_BUFFER_LOAD_DWORDX(count:Byte);
@@ -119,7 +153,7 @@ var
 begin
  if not get_sbase(FSPI.SMRD.SBASE,4,@src) then Assert(false);
  grp:=GroupingSharp(@src,rtVSharp4);
- emit_LOAD_DWORDX(grp,count);
+ emit_LOAD_DWORDX(grp,nil,count);
 end;
 
 procedure TEmit_SMRD.emit_SMRD;
