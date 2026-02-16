@@ -1055,7 +1055,7 @@ begin
      Inc(nerrors);
     end else
     begin
-     Exit(0); //goto done;
+     Exit; //goto done;
     end;
    end;
   end;
