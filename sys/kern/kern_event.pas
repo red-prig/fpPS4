@@ -635,17 +635,10 @@ begin
  Inc(kn^.kn_kevent.data);
  KNOTE_ACTIVATE(kn, 0); { XXX - handle locking }
 
- {
-  * timertoticks() uses tvtohz() which always adds 1 to allow
-  * for the time until the next clock interrupt being strictly
-  * less than 1 clock tick.  We don't want that here since we
-  * want to appear to be in sync with the clock interrupt even
-  * when we're delayed.
-  }
  if ((kn^.kn_flags and EV_ONESHOT)<>EV_ONESHOT) then
  begin
   calloutp:=kn^.kn_hook;
-  callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata) - 1, @filt_timerexpire, kn);
+  callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata), @filt_timerexpire, kn);
  end;
 end;
 
