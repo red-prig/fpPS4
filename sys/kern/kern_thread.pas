@@ -163,7 +163,7 @@ begin
 
    while (td_first<>nil) do
    begin
-    td_next:=TAILQ_NEXT(td_first,@td_first^.td_slpq);
+    td_next:=TAILQ_NEXT(td_first,@td_first^.td_zombie);
 
     if cpu_thread_finished(td_first) then
     begin
