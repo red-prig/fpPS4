@@ -77,6 +77,7 @@ var
  m_level    :Ptruint;
  m_width    :Ptruint;
  m_height   :Ptruint;
+ m_depth    :Ptruint;
  m_padwidth :Ptruint;
  m_padheight:Ptruint;
  m_paddepth :Ptruint;
@@ -93,14 +94,7 @@ begin
  m_level :=key.params.mipLevels;
  m_width :=key.params.width;
  m_height:=key.params.height;
-
- m_paddepth:=key.params.depth;
-
- if (key.params.tiling.idx=kTileModeThick_1dThick) then
- begin
-  //m_tileThickness
-  m_paddepth:=max((m_paddepth+3) and (not 3),4);
- end;
+ m_depth :=key.params.depth;
 
  Result:=0;
 
@@ -108,6 +102,7 @@ begin
  begin
   m_padwidth :=m_width;
   m_padheight:=m_height;
+  m_paddepth :=m_depth;
 
   if IsTexelFormat(key.cformat) then
   begin
@@ -128,6 +123,12 @@ begin
    else;
   end;
 
+  if (key.params.tiling.idx=kTileModeThick_1dThick) then
+  begin
+   //m_tileThickness
+   m_paddepth:=max((m_paddepth+3) and (not 3),4);
+  end;
+
   m_slice:=m_padwidth*
            m_padheight*
            m_paddepth*
@@ -141,6 +142,7 @@ begin
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
 
 end;
@@ -173,8 +175,7 @@ begin
  m_height     :=key.params.height;
  m_depth      :=key.params.depth;
  m_arrayLayers:=key.params.arrayLayers;
-
- m_pitch:=max(key.params.pitch,key.params.width);
+ m_pitch      :=max(key.params.pitch,key.params.width);
 
  if (key.params.pow2pad<>0) then
  begin
@@ -209,7 +210,7 @@ begin
 
    m_slice:=tiler.m_paddedWidth*
             tiler.m_paddedHeight*
-            key.params.depth*
+            tiler.m_paddedDepth*
             key.params.arrayLayers*
             m_bytePerElement;
 
@@ -221,6 +222,7 @@ begin
   m_width :=Max(1,m_width  shr 1);
   m_pitch :=Max(1,m_pitch  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
 
 end;
@@ -346,12 +348,16 @@ var
  BufferImageCopyA:array of TVkBufferImageCopy;
 
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
- m_slice :Ptruint;
- m_offset:Ptruint;
+ m_level    :Ptruint;
+ m_width    :Ptruint;
+ m_height   :Ptruint;
+ m_depth    :Ptruint;
+ m_padwidth :Ptruint;
+ m_padheight:Ptruint;
+ m_slice    :Ptruint;
+ m_offset   :Ptruint;
 
- a,d,b:Ptruint;
+ a,b:Ptruint;
 begin
 
  buf.Hold(nil);
@@ -397,10 +403,10 @@ begin
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
  BufferImageCopy.imageSubresource.layerCount:=1;
- BufferImageCopy.imageExtent.depth:=1;
 
+ //depth mips
  BufferImageCopyA:=nil;
- SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
+ SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.mipLevels);
  b:=0;
 
  m_offset:=0;
@@ -409,6 +415,7 @@ begin
  m_level :=image.key.params.mipLevels;
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
+ m_depth :=image.key.params.depth;
 
  while (m_level>0) do
  begin
@@ -416,6 +423,7 @@ begin
 
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
+  BufferImageCopy.imageExtent.depth :=m_depth;
 
   m_padwidth :=m_width ;
   m_padheight:=m_height;
@@ -445,17 +453,15 @@ begin
    BufferImageCopy.bufferImageHeight:=BufferImageCopy.bufferImageHeight shl 2;
   end;
 
-  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+  m_slice:=m_padwidth*m_padheight*m_depth*m_bytePerElement;
 
   //array
   for a:=0 to image.key.params.arrayLayers-1 do
-  for d:=0 to image.key.params.depth-1 do
   begin
    //Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
@@ -467,6 +473,7 @@ begin
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
  //mips
 
@@ -568,13 +575,11 @@ begin
  //mips
  m_level :=image.key.params.mipLevels;
  //
- m_width :=image.key.params.width;
- m_height:=image.key.params.height;
-
- m_pitch:=max(image.key.params.pitch,image.key.params.width);
-
- m_depth:=image.key.params.depth;
+ m_width      :=image.key.params.width;
+ m_height     :=image.key.params.height;
+ m_depth      :=image.key.params.depth;
  m_arrayLayers:=image.key.params.arrayLayers;
+ m_pitch      :=max(image.key.params.pitch,image.key.params.width);
 
  src:=image.key.addr;
 
@@ -633,6 +638,7 @@ begin
   m_width :=Max(1,m_width  shr 1);
   m_pitch :=Max(1,m_pitch  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
  //mips
 
@@ -767,12 +773,16 @@ var
  BufferImageCopyA:array of TVkBufferImageCopy;
 
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
- m_slice :Ptruint;
- m_offset:Ptruint;
+ m_level    :Ptruint;
+ m_width    :Ptruint;
+ m_height   :Ptruint;
+ m_depth    :Ptruint;
+ m_padwidth :Ptruint;
+ m_padheight:Ptruint;
+ m_slice    :Ptruint;
+ m_offset   :Ptruint;
 
- a,d,b:Ptruint;
+ a,b:Ptruint;
 begin
  Result:=True;
 
@@ -814,16 +824,16 @@ begin
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
  BufferImageCopy.imageSubresource.layerCount:=1;
- BufferImageCopy.imageExtent.depth:=1;
 
  BufferImageCopyA:=nil;
- SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
+ SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.mipLevels);
  b:=0;
 
  //mips
  m_level :=image.key.params.mipLevels;
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
+ m_depth :=image.key.params.depth;
 
  {
  SaveToTGA('shader_dump\texture_mip'+IntToStr(m_level)+
@@ -842,6 +852,7 @@ begin
 
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
+  BufferImageCopy.imageExtent.depth :=m_depth;
 
   if (image.key.params.tiling.idx=kTileModeDisplay_LinearAligned) then
   begin
@@ -858,18 +869,16 @@ begin
    m_padheight:=m_height;
   end;
 
-  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+  m_slice:=m_padwidth*m_padheight*m_depth*m_bytePerElement;
 
   //array
   for a:=0 to image.key.params.arrayLayers-1 do
-  for d:=0 to image.key.params.depth-1 do
   begin
    //Assert((m_offset and 3)=0,'align by 4');
 
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
@@ -881,6 +890,7 @@ begin
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
  //mips
 
@@ -902,12 +912,16 @@ var
  BufferImageCopyA:array of TVkBufferImageCopy;
 
  m_bytePerElement:Ptruint;
- m_level,m_width,m_height:Ptruint;
- m_padwidth,m_padheight:Ptruint;
- m_slice :Ptruint;
- m_offset:Ptruint;
+ m_level    :Ptruint;
+ m_width    :Ptruint;
+ m_height   :Ptruint;
+ m_depth    :Ptruint;
+ m_padwidth :Ptruint;
+ m_padheight:Ptruint;
+ m_slice    :Ptruint;
+ m_offset   :Ptruint;
 
- a,d,b:Ptruint;
+ a,b:Ptruint;
 begin
  Result:=True;
 
@@ -949,16 +963,16 @@ begin
  BufferImageCopy:=Default(TVkBufferImageCopy);
  BufferImageCopy.imageSubresource:=image.GetSubresLayer;
  BufferImageCopy.imageSubresource.layerCount:=1;
- BufferImageCopy.imageExtent.depth:=1;
 
  BufferImageCopyA:=nil;
- SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.depth*image.key.params.mipLevels);
+ SetLength(BufferImageCopyA,image.key.params.arrayLayers*image.key.params.mipLevels);
  b:=0;
 
  //mips
  m_level :=image.key.params.mipLevels;
  m_width :=image.key.params.width;
  m_height:=image.key.params.height;
+ m_depth :=image.key.params.depth;
 
  while (m_level>0) do
  begin
@@ -966,6 +980,7 @@ begin
 
   BufferImageCopy.imageExtent.width :=m_width;
   BufferImageCopy.imageExtent.height:=m_height;
+  BufferImageCopy.imageExtent.depth :=m_depth;
 
   if (image.key.params.tiling.idx=kTileModeDisplay_LinearAligned) then
   begin
@@ -982,17 +997,15 @@ begin
    m_padheight:=m_height;
   end;
 
-  m_slice:=m_padwidth*m_padheight*m_bytePerElement;
+  m_slice:=m_padwidth*m_padheight*m_depth*m_bytePerElement;
 
   //array
   for a:=0 to image.key.params.arrayLayers-1 do
-  for d:=0 to image.key.params.depth-1 do
   begin
    //Assert((m_offset and 3)=0,'align by 4');
    BufferImageCopy.bufferOffset:=m_offset;
 
    BufferImageCopy.imageSubresource.baseArrayLayer:=a;
-   BufferImageCopy.imageOffset.z:=d;
 
    BufferImageCopyA[b]:=BufferImageCopy;
    Inc(b);
@@ -1004,6 +1017,7 @@ begin
   Dec(m_level);
   m_width :=Max(1,m_width  shr 1);
   m_height:=Max(1,m_height shr 1);
+  m_depth :=Max(1,m_depth  shr 1);
  end;
  //mips
 
