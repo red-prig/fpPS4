@@ -3037,7 +3037,8 @@ begin
  begin
 
   addr_dmem:=nil;
-  if (node^.dataSel<>EVENTWRITEEOP_DATA_SEL_DISCARD) then
+  if (node^.intSel <>EVENTWRITEEOP_INT_SEL_SEND_INT) and
+     (node^.dataSel<>EVENTWRITEEOP_DATA_SEL_DISCARD) then
   begin
    addr_dmem:=get_dmem_ptr(node^.addr);
   end;
@@ -3084,6 +3085,7 @@ begin
     Assert(false,'pm4_EventWriteEop');
   end;
 
+  if (addr_dmem<>nil) then
   vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
  end;
 
