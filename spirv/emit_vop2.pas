@@ -31,6 +31,8 @@ type
   procedure emit_V_CVT_PKRTZ_F16_F32;
   procedure emit_V_CVT_PKNORM_I16_F32;
   procedure emit_V_CVT_PKNORM_U16_F32;
+  procedure emit_V_CVT_PK_U16_U32;
+  procedure emit_V_CVT_PK_I16_I32;
 
   procedure emit_V_MUL_I32_I24;
   procedure emit_V_MUL_U32_U24;
@@ -386,32 +388,75 @@ procedure TEmit_VOP2.emit_V_CVT_PKNORM_I16_F32;
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
- vec:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
 
- vec:=OpVectorTo(line,dtVec2f,@src);
-
- OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,vec);
+ OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,OpVectorTo(line,dtVec2f,@src));
 end;
 
 procedure TEmit_VOP2.emit_V_CVT_PKNORM_U16_F32;
 Var
  dst:PsrRegSlot;
  src:array[0..1] of TsrRegNode;
- vec:TsrRegNode;
 begin
  dst:=get_vdst8(FSPI.VOP2.VDST);
 
  src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtFloat32);
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
 
- vec:=OpVectorTo(line,dtVec2f,@src);
+ OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,OpVectorTo(line,dtVec2f,@src));
+end;
 
- OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
+//vdst[15:0]  = Min(vsrc0.u,0xffff);
+//vdst[31:16] = Min(vsrc1.u,0xffff);
+procedure TEmit_VOP2.emit_V_CVT_PK_U16_U32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ max:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtUint32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtUint32);
+
+ max:=NewImm_i(dtUint32,$ffff);
+
+ src[0]:=OpUMinTo(src[0],max);
+ src[1]:=OpUMinTo(src[1],max);
+
+ src[0]:=OpUToU(src[0],dtUint16);
+ src[1]:=OpUToU(src[1],dtUint16);
+
+ MakeCopy(dst,OpVectorTo(line,dtVec2u16,@src));
+end;
+
+//vdst[15:0]  = Clamp(vsrc0.s,-0x8000, 0x7fff);
+//vdst[31:16] = Clamp(vsrc1.s,-0x8000, 0x7fff);
+procedure TEmit_VOP2.emit_V_CVT_PK_I16_I32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ min,max:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP2.SRC0 ,dtInt32);
+ src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtInt32);
+
+ min:=NewImm_i(dtInt32,-$8000);
+ max:=NewImm_i(dtInt32, $7fff);
+
+ src[0]:=OpSClampTo(src[0],min,max);
+ src[1]:=OpSClampTo(src[1],min,max);
+
+ src[0]:=OpSToS(src[0],dtInt16);
+ src[1]:=OpSToS(src[1],dtInt16);
+
+ MakeCopy(dst,OpVectorTo(line,dtVec2i16,@src));
 end;
 
 procedure TEmit_VOP2.emit_V_MUL_I32_I24; //vdst = (vsrc0[23:0].s * vsrc1[23:0].s)
@@ -776,9 +821,12 @@ begin
   V_MUL_F32    : emit_V2_F32(Op.OpFMul,False);
   V_MUL_LEGACY_F32: emit_V_MUL_LEGACY_F32;
 
-  V_CVT_PKRTZ_F16_F32 : emit_V_CVT_PKRTZ_F16_F32;
-  V_CVT_PKNORM_I16_F32: emit_V_CVT_PKNORM_I16_F32;
   V_CVT_PKNORM_U16_F32: emit_V_CVT_PKNORM_U16_F32;
+  V_CVT_PKNORM_I16_F32: emit_V_CVT_PKNORM_I16_F32;
+  V_CVT_PKRTZ_F16_F32 : emit_V_CVT_PKRTZ_F16_F32;
+
+  V_CVT_PK_U16_U32: emit_V_CVT_PK_U16_U32;
+  V_CVT_PK_I16_I32: emit_V_CVT_PK_I16_I32;
 
   V_MUL_I32_I24: emit_V_MUL_I32_I24;
   V_MUL_U32_U24: emit_V_MUL_U32_U24;

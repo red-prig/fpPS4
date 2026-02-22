@@ -113,6 +113,11 @@ type
   function  OpNMinTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   function  OpNMaxTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
   //
+  function  OpFClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpNClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpUClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  function  OpSClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+  //
   procedure OpMED3I(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpMED3U(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpMED3F(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
@@ -996,6 +1001,30 @@ function TEmitOp.OpNMaxTo(src0,src1:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
 begin
  Result:=NewReg(src0.dtype);
  _set_line(ppLine,_OpGlsl2(_get_line(ppLine),GlslOp.NMax,Result,src0,src1));
+end;
+
+function TEmitOp.OpFClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(val.dtype);
+ _set_line(ppLine,_OpGlsl3(_get_line(ppLine),GlslOp.FClamp,Result,val,min,max));
+end;
+
+function TEmitOp.OpNClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(val.dtype);
+ _set_line(ppLine,_OpGlsl3(_get_line(ppLine),GlslOp.NClamp,Result,val,min,max));
+end;
+
+function TEmitOp.OpUClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(val.dtype);
+ _set_line(ppLine,_OpGlsl3(_get_line(ppLine),GlslOp.UClamp,Result,val,min,max));
+end;
+
+function TEmitOp.OpSClampTo(val,min,max:TsrRegNode;ppLine:PPspirvOp=nil):TsrRegNode;
+begin
+ Result:=NewReg(val.dtype);
+ _set_line(ppLine,_OpGlsl3(_get_line(ppLine),GlslOp.SClamp,Result,val,min,max));
 end;
 
 procedure TEmitOp.OpMED3I(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);

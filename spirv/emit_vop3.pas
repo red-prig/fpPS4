@@ -42,6 +42,9 @@ type
   procedure emit_V_CVT_PKNORM_U16_F32;
   procedure emit_V_CVT_PKRTZ_F16_F32;
 
+  procedure emit_V_CVT_PK_U16_U32;
+  procedure emit_V_CVT_PK_I16_I32;
+
   procedure emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_MMX3(OpId:DWORD;rtype:TsrDataType);
   procedure emit_V_SH(OpId:DWORD;rtype:TsrDataType;rev:Boolean);
@@ -376,48 +379,6 @@ begin
  emit_dst_clamp_f(dst,dtFloat32);
 end;
 
-procedure TEmit_VOP3.emit_V_CVT_PKNORM_I16_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of TsrRegNode;
- vec:TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP3a.VDST);
-
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
-
- emit_src_abs_neg(@src,2,dtFloat32);
-
- vec:=OpVectorTo(line,dtVec2f,@src);
-
- OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,vec);
-end;
-
-procedure TEmit_VOP3.emit_V_CVT_PKNORM_U16_F32;
-Var
- dst:PsrRegSlot;
- src:array[0..1] of TsrRegNode;
- vec:TsrRegNode;
-begin
- dst:=get_vdst8(FSPI.VOP3a.VDST);
-
- Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
- Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
-
- src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
- src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
-
- emit_src_abs_neg(@src,2,dtFloat32);
-
- vec:=OpVectorTo(line,dtVec2f,@src);
-
- OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,vec);
-end;
-
 procedure TEmit_VOP3.emit_V_CVT_PKRTZ_F16_F32;
 Var
  dst:PsrRegSlot;
@@ -434,6 +395,95 @@ begin
  emit_src_abs_neg(@src,2,dtFloat32);
 
  OpConvFloatToHalf2(dst,src[0],src[1]);
+end;
+
+procedure TEmit_VOP3.emit_V_CVT_PKNORM_I16_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_neg(@src,2,dtFloat32);
+
+ OpGlsl1(GlslOp.packSnorm2x16,dtInt32,dst,OpVectorTo(line,dtVec2f,@src));
+end;
+
+procedure TEmit_VOP3.emit_V_CVT_PKNORM_U16_F32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP3a.VDST);
+
+ Assert(FSPI.VOP3a.OMOD =0,'FSPI.VOP3a.OMOD');
+ Assert(FSPI.VOP3a.CLAMP=0,'FSPI.VOP3a.CLAMP');
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtFloat32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtFloat32);
+
+ emit_src_abs_neg(@src,2,dtFloat32);
+
+ OpGlsl1(GlslOp.PackUnorm2x16,dtUint32,dst,OpVectorTo(line,dtVec2f,@src));
+end;
+
+//vdst[15:0]  = Min(vsrc0.u,0xffff);
+//vdst[31:16] = Min(vsrc1.u,0xffff);
+procedure TEmit_VOP3.emit_V_CVT_PK_U16_U32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ max:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtUint32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtUint32);
+
+ emit_src_abs_neg(@src,2,dtUint32);
+
+ max:=NewImm_i(dtUint32,$ffff);
+
+ src[0]:=OpUMinTo(src[0],max);
+ src[1]:=OpUMinTo(src[1],max);
+
+ src[0]:=OpUToU(src[0],dtUint16);
+ src[1]:=OpUToU(src[1],dtUint16);
+
+ MakeCopy(dst,OpVectorTo(line,dtVec2u16,@src));
+end;
+
+//vdst[15:0]  = Clamp(vsrc0.s,-0x8000, 0x7fff);
+//vdst[31:16] = Clamp(vsrc1.s,-0x8000, 0x7fff);
+procedure TEmit_VOP3.emit_V_CVT_PK_I16_I32;
+Var
+ dst:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+ min,max:TsrRegNode;
+begin
+ dst:=get_vdst8(FSPI.VOP2.VDST);
+
+ src[0]:=fetch_ssrc9(FSPI.VOP3a.SRC0,dtInt32);
+ src[1]:=fetch_ssrc9(FSPI.VOP3a.SRC1,dtInt32);
+
+ emit_src_abs_neg(@src,2,dtInt32);
+
+ min:=NewImm_i(dtInt32,-$8000);
+ max:=NewImm_i(dtInt32, $7fff);
+
+ src[0]:=OpSClampTo(src[0],min,max);
+ src[1]:=OpSClampTo(src[1],min,max);
+
+ src[0]:=OpSToS(src[0],dtInt16);
+ src[1]:=OpSToS(src[1],dtInt16);
+
+ MakeCopy(dst,OpVectorTo(line,dtVec2i16,@src));
 end;
 
 procedure TEmit_VOP3.emit_V_MMX(OpId:DWORD;rtype:TsrDataType);
@@ -1912,6 +1962,9 @@ begin
   256+V_CVT_PKNORM_I16_F32:emit_V_CVT_PKNORM_I16_F32;
   256+V_CVT_PKNORM_U16_F32:emit_V_CVT_PKNORM_U16_F32;
   256+V_CVT_PKRTZ_F16_F32: emit_V_CVT_PKRTZ_F16_F32;
+
+  256+V_CVT_PK_U16_U32: emit_V_CVT_PK_U16_U32;
+  256+V_CVT_PK_I16_I32: emit_V_CVT_PK_I16_I32;
 
   256+V_MIN_LEGACY_F32:emit_V_MMX(GlslOp.NMin,dtFloat32);
   256+V_MAX_LEGACY_F32:emit_V_MMX(GlslOp.NMax,dtFloat32);
