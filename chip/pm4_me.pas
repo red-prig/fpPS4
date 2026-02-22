@@ -3199,6 +3199,7 @@ begin
     Assert(false,'pm4_ReleaseMem:srcSel');
   end;
 
+  if (addr_dmem<>nil) then
   vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
  end;
 
