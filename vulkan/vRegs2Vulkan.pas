@@ -150,8 +150,11 @@ type
   SPI_PS_INPUT_ADDR       :TSPI_PS_INPUT_ADDR;                          // 0xA1B4
   SPI_INTERP_CONTROL_0    :TSPI_INTERP_CONTROL_0;                       // 0xA1B5
   SPI_PS_IN_CONTROL       :TSPI_PS_IN_CONTROL;                          // 0xA1B6
+  SPI_SHADER_Z_FORMAT     :TSPI_SHADER_Z_FORMAT;                        // 0xA1C4
+  SPI_SHADER_COL_FORMAT   :TSPI_SHADER_COL_FORMAT;                      // 0xA1C5
   SPI_PS_INPUT_CNTL       :array[0..31] of TSPI_PS_INPUT_CNTL_0;        // 0xA191
   DB_SHADER_CONTROL       :TDB_SHADER_CONTROL;                          // 0xA203
+  PA_CL_VS_OUT_CNTL       :TPA_CL_VS_OUT_CNTL;                          // 0xA207
   VGT_INSTANCE_STEP_RATE_0:TVGT_INSTANCE_STEP_RATE_0;                   // 0xA2A8
   VGT_INSTANCE_STEP_RATE_1:TVGT_INSTANCE_STEP_RATE_1;                   // 0xA2A9
   RENDER_TARGET           :array[0..7] of TRENDER_TARGET;               // 0xA318
