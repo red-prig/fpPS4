@@ -56,7 +56,10 @@ type
   Procedure   SET_DRAW_PARAM    (op,baseVtxReg,startInstReg,drawIndexReg:WORD);
   Procedure   SET_SHADER_CONTROL(const SHADER_CONTROL:TDB_SHADER_CONTROL);
   Procedure   SET_INPUT_CNTL    (INPUT_CNTL:PSPI_PS_INPUT_CNTL_0;NUM_INTERP:Byte);
+  Procedure   DEFAULT_RENDER_TARGETS;
   Procedure   SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
+  Procedure   SET_SHADER_COL_FORMAT(F:TSPI_SHADER_COL_FORMAT);
+  Procedure   SET_OUT_CNTL(C:TPA_CL_VS_OUT_CNTL);
 
   Procedure   InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;
                      RSRC2:TCOMPUTE_PGM_RSRC2);
@@ -357,6 +360,7 @@ Procedure TSprvEmit.InitPs(RSRC1:TSPI_SHADER_PGM_RSRC1_PS;
 var
  p:Byte;
 begin
+ DEFAULT_RENDER_TARGETS;
  FExecutionModel:=ExecutionModel.Fragment;
 
  //sgrp
@@ -665,19 +669,124 @@ begin
  end;
 end;
 
+Procedure TSprvEmit.DEFAULT_RENDER_TARGETS;
+var
+ i:Byte;
+begin
+ for i:=0 to 7 do
+ begin
+  OutputList.FExportMrt[i].RENDER_FORMAT:=$a;
+  OutputList.FExportMrt[i].NUMBER_TYPE  :=0;
+  OutputList.FExportMrt[i].COMP_SWAP    :=0;
+  OutputList.FExportMrt[0].EXPORT_FORMAT:=4;
+ end;
+end;
+
 Procedure TSprvEmit.SET_RENDER_TARGETS(R:PRENDER_TARGET;COUNT:Byte);
 var
  i:Byte;
 begin
- EXPORT_COUNT:=COUNT;
- //
  if (COUNT<>0) then
  for i:=0 to COUNT-1 do
  begin
-  FExportInfo[i].FORMAT     :=R[i].INFO.FORMAT;
-  FExportInfo[i].NUMBER_TYPE:=R[i].INFO.NUMBER_TYPE;
-  FExportInfo[i].COMP_SWAP  :=R[i].INFO.COMP_SWAP;
+  OutputList.FExportMrt[i].RENDER_FORMAT:=R[i].INFO.FORMAT;
+  OutputList.FExportMrt[i].NUMBER_TYPE  :=R[i].INFO.NUMBER_TYPE;
+  OutputList.FExportMrt[i].COMP_SWAP    :=R[i].INFO.COMP_SWAP;
  end;
+end;
+
+Procedure TSprvEmit.SET_SHADER_COL_FORMAT(F:TSPI_SHADER_COL_FORMAT);
+begin
+ OutputList.FExportMrt[0].EXPORT_FORMAT:=F.COL0_EXPORT_FORMAT;
+ OutputList.FExportMrt[1].EXPORT_FORMAT:=F.COL1_EXPORT_FORMAT;
+ OutputList.FExportMrt[2].EXPORT_FORMAT:=F.COL2_EXPORT_FORMAT;
+ OutputList.FExportMrt[3].EXPORT_FORMAT:=F.COL3_EXPORT_FORMAT;
+ OutputList.FExportMrt[4].EXPORT_FORMAT:=F.COL4_EXPORT_FORMAT;
+ OutputList.FExportMrt[5].EXPORT_FORMAT:=F.COL5_EXPORT_FORMAT;
+ OutputList.FExportMrt[6].EXPORT_FORMAT:=F.COL6_EXPORT_FORMAT;
+ OutputList.FExportMrt[7].EXPORT_FORMAT:=F.COL7_EXPORT_FORMAT;
+end;
+
+Procedure TSprvEmit.SET_OUT_CNTL(C:TPA_CL_VS_OUT_CNTL);
+var
+ num:Integer;
+ misc_vec,ccdist:PExportPos;
+begin
+ FillChar(OutputList.FExportPos,SizeOf(OutputList.FExportPos),0);
+ num:=0;
+
+ OutputList.FOUT_CNTL:=DWORD(C);
+
+ if (C.VS_OUT_MISC_VEC_ENA<>0) then
+ begin
+  misc_vec:=@OutputList.FExportPos[num]; Inc(num);
+
+  if (C.USE_VTX_POINT_SIZE<>0) then
+  begin
+   misc_vec^[0]:=ptPointSize;
+  end;
+
+  if (C.USE_VTX_EDGE_FLAG<>0) then
+  begin
+   misc_vec^[1]:=ptEdgeFlag;
+  end else
+  if (C.USE_VTX_GS_CUT_FLAG<>0) then
+  begin
+   misc_vec^[1]:=ptGsCutFlag;
+  end;
+
+  if (C.USE_VTX_KILL_FLAG<>0) then
+  begin
+   misc_vec^[2]:=ptKillFlag;
+  end else
+  if (C.USE_VTX_RENDER_TARGET_INDX<>0) then
+  begin
+   misc_vec^[2]:=ptRenderTargetIndex;
+  end;
+
+  if (C.USE_VTX_VIEWPORT_INDX<>0) then
+  begin
+   misc_vec^[3]:=ptViewportIndex;
+  end;
+
+ end; //VS_OUT_MISC_VEC_ENA
+
+ if (C.VS_OUT_CCDIST0_VEC_ENA<>0) then
+ begin
+  ccdist:=@OutputList.FExportPos[num]; Inc(num);
+
+  if (c.CLIP_DIST_ENA_0<>0) then ccdist^[0]:=ptClipDist0 else
+  if (c.CULL_DIST_ENA_0<>0) then ccdist^[0]:=ptCullDist0;
+
+  if (c.CLIP_DIST_ENA_1<>0) then ccdist^[1]:=ptClipDist1 else
+  if (c.CULL_DIST_ENA_1<>0) then ccdist^[1]:=ptCullDist1;
+
+  if (c.CLIP_DIST_ENA_2<>0) then ccdist^[2]:=ptClipDist2 else
+  if (c.CULL_DIST_ENA_2<>0) then ccdist^[2]:=ptCullDist2;
+
+  if (c.CLIP_DIST_ENA_3<>0) then ccdist^[3]:=ptClipDist3 else
+  if (c.CULL_DIST_ENA_3<>0) then ccdist^[3]:=ptCullDist3;
+
+ end; //VS_OUT_CCDIST0_VEC_ENA
+
+ if (C.VS_OUT_CCDIST1_VEC_ENA<>0) then
+ begin
+  ccdist:=@OutputList.FExportPos[num]; Inc(num);
+
+  if (c.CLIP_DIST_ENA_4<>0) then ccdist^[0]:=ptClipDist4 else
+  if (c.CULL_DIST_ENA_4<>0) then ccdist^[0]:=ptCullDist4;
+
+  if (c.CLIP_DIST_ENA_5<>0) then ccdist^[1]:=ptClipDist5 else
+  if (c.CULL_DIST_ENA_5<>0) then ccdist^[1]:=ptCullDist5;
+
+  if (c.CLIP_DIST_ENA_6<>0) then ccdist^[2]:=ptClipDist6 else
+  if (c.CULL_DIST_ENA_6<>0) then ccdist^[2]:=ptCullDist6;
+
+  if (c.CLIP_DIST_ENA_7<>0) then ccdist^[3]:=ptClipDist7 else
+  if (c.CULL_DIST_ENA_7<>0) then ccdist^[3]:=ptCullDist7;
+
+ end; //VS_OUT_CCDIST1_VEC_ENA
+
 end;
 
 Procedure TSprvEmit.InitCs(RSRC1:TCOMPUTE_PGM_RSRC1;

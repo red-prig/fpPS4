@@ -486,6 +486,8 @@ begin
 
    SprvEmit.SET_SHADER_CONTROL(GPU_REGS.PS.SHADER_CONTROL);
    SprvEmit.SET_INPUT_CNTL    (@GPU_REGS.PS.INPUT_CNTL,GPU_REGS.PS.IN_CONTROL.NUM_INTERP);
+   //SprvEmit.SET_RENDER_TARGETS
+   SprvEmit.SET_SHADER_COL_FORMAT(GPU_REGS.PS.COL_FORMAT);
   end;
   kShaderTypeVsVs:
   begin
@@ -508,6 +510,7 @@ begin
 
    SprvEmit.SetUserData(@GPU_REGS.VS.USER_DATA);
 
+   SprvEmit.SET_OUT_CNTL(GPU_REGS.VS.OUT_CNTL);
   end;
   kShaderTypeCs:
   begin

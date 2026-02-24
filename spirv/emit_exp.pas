@@ -5,7 +5,9 @@ unit emit_EXP;
 interface
 
 uses
+  typinfo,
   sysutils,
+  spirv,
   ps4_pssl,
   si_ci_vi_merged_enum,
   srCFGCursor,
@@ -20,12 +22,17 @@ uses
   emit_fetch;
 
 type
+ TsrNormMode=(Normal,UNorm16,SNorm16);
+
+type
  TEmit_EXP=class(TEmitFetch)
   procedure emit_EXP;
   function  get_export_type(TGT:Byte):TsrDataType;
+  function  get_export_type_compr(TGT:Byte):TsrDataType;
+  function  get_export_norm_compr(TGT:Byte):TsrNormMode;
   function  is_bindless(TGT:Byte):Boolean;
   function  get_export_sel(TGT:Byte):Tdst_sel;
-  procedure fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:TsrRegNode);
+  procedure fetch_vsrc8_vec2(VSRC:Word;nmode:TsrNormMode;rtype:TsrDataType;var dst0,dst1:TsrRegNode);
   procedure shuffle(dst_sel:Tdst_sel;rtype:TsrDataType;src:PPsrRegNode;count:Byte);
  end;
 
@@ -94,21 +101,105 @@ const
   )
  );
 
+// R   G   B    A
+//SPI_SHADER_ZERO         0  -   -   -    -
+//SPI_SHADER_32_R         1  R   -   -    -
+//SPI_SHADER_32_GR        2  R   G   -    -
+//SPI_SHADER_32_AR        3  R   -   -    A
+//SPI_SHADER_32_ABGR      9  R   G   B    A
+//SPI_SHADER_FP16_ABGR    4 R|G B|A
+//SPI_SHADER_UNORM16_ABGR 5 R|G B|A
+//SPI_SHADER_SNORM16_ABGR 6 R|G B|A
+//SPI_SHADER_UINT16_ABGR  7 R|G B|A
+//SPI_SHADER_SINT16_ABGR  8 R|G B|A
+
 function TEmit_EXP.get_export_type(TGT:Byte):TsrDataType;
 begin
  Result:=dtFloat32;
- case TpsslExportType(TGT) of
+ case TgcnExportType(TGT) of
   etMrt0..etMrt7:
    begin
     if is_bindless(TGT) then
     begin
-     Result:=dtFloat32;
+     //
     end else
-    case (FExportInfo[TGT].NUMBER_TYPE and 7) of
-     NUMBER_UINT:Result:=dtUint32;
-     NUMBER_SINT:Result:=dtInt32;
-    else;
+    case (OutputList.FExportMrt[TGT].EXPORT_FORMAT and 15) of
+
+     SPI_SHADER_32_R   ,
+     SPI_SHADER_32_GR  ,
+     SPI_SHADER_32_AR  ,
+     SPI_SHADER_32_ABGR:
+        case (OutputList.FExportMrt[TGT].NUMBER_TYPE and 7) of
+         NUMBER_UINT:Result:=dtUint32;
+         NUMBER_SINT:Result:=dtInt32;
+        else;
+        end;
+
+     SPI_SHADER_FP16_ABGR   ,
+     SPI_SHADER_UNORM16_ABGR,
+     SPI_SHADER_SNORM16_ABGR,
+     SPI_SHADER_UINT16_ABGR ,
+     SPI_SHADER_SINT16_ABGR :
+        Result:=dtUint32;
+
+     else;
     end;
+
+   end;
+ else;
+ end;
+end;
+
+function TEmit_EXP.get_export_type_compr(TGT:Byte):TsrDataType;
+begin
+ Result:=dtHalf16;
+ case TgcnExportType(TGT) of
+  etMrt0..etMrt7:
+   begin
+    if is_bindless(TGT) then
+    begin
+     //
+    end else
+    case (OutputList.FExportMrt[TGT].EXPORT_FORMAT and 15) of
+
+     SPI_SHADER_32_R   ,
+     SPI_SHADER_32_GR  ,
+     SPI_SHADER_32_AR  ,
+     SPI_SHADER_32_ABGR:
+        Result:=dtUint16;
+
+     SPI_SHADER_FP16_ABGR   :Result:=dtHalf16;
+     SPI_SHADER_UNORM16_ABGR:Result:=dtFloat32;
+     SPI_SHADER_SNORM16_ABGR:Result:=dtFloat32;
+     SPI_SHADER_UINT16_ABGR :Result:=dtUint16;
+     SPI_SHADER_SINT16_ABGR :Result:=dtInt16;
+
+     else;
+    end;
+
+   end;
+ else;
+ end;
+end;
+
+function TEmit_EXP.get_export_norm_compr(TGT:Byte):TsrNormMode;
+begin
+ Result:=Normal;
+ case TgcnExportType(TGT) of
+  etMrt0..etMrt7:
+   begin
+    if is_bindless(TGT) then
+    begin
+     //
+    end else
+    case (OutputList.FExportMrt[TGT].EXPORT_FORMAT and 15) of
+
+     SPI_SHADER_UNORM16_ABGR:Result:=UNorm16;
+     SPI_SHADER_SNORM16_ABGR:Result:=SNorm16;
+
+     else;
+    end;
+
    end;
  else;
  end;
@@ -117,10 +208,11 @@ end;
 function TEmit_EXP.is_bindless(TGT:Byte):Boolean;
 begin
  Result:=False;
- case TpsslExportType(TGT) of
+ case TgcnExportType(TGT) of
   etMrt0..etMrt7:
    begin
-    Result:=COLOR_COUNT[FExportInfo[TGT].FORMAT and 31]=0;
+    Result:=(COLOR_COUNT[OutputList.FExportMrt[TGT].RENDER_FORMAT and 31]=0) or
+            ((OutputList.FExportMrt[TGT].EXPORT_FORMAT and 15)=0);
    end;
  else;
  end;
@@ -131,7 +223,7 @@ var
  i:Byte;
 begin
  Result:=dst_sel_ident;
- case TpsslExportType(TGT) of
+ case TgcnExportType(TGT) of
   etMrt0..etMrt7:
    begin
     if is_bindless(TGT) then
@@ -139,27 +231,46 @@ begin
      Result:=dst_sel_ident;
     end else
     begin
-     i:=COLOR_COUNT[FExportInfo[TGT].FORMAT and 31];
+     i:=COLOR_COUNT[OutputList.FExportMrt[TGT].RENDER_FORMAT and 31];
      //
-     Result:=shader_swizzle_map[i,FExportInfo[TGT].COMP_SWAP and 3];
+     Result:=shader_swizzle_map[i,OutputList.FExportMrt[TGT].COMP_SWAP and 3];
     end;
    end;
  else;
  end;
 end;
 
-procedure TEmit_EXP.fetch_vsrc8_vec2h(VSRC:Word;var dst0,dst1:TsrRegNode);
+procedure TEmit_EXP.fetch_vsrc8_vec2(VSRC:Word;nmode:TsrNormMode;rtype:TsrDataType;var dst0,dst1:TsrRegNode);
 var
  pSlot:PsrRegSlot;
- dst:TsrRegNode;
+ src,dst:TsrRegNode;
 begin
  pSlot:=RegsStory.get_vsrc8(VSRC);
 
- dst:=MakeRead(pSlot,dtVec2h);
- Assert(dst<>nil,'fetch_vsrc8_vec2h');
+ case nmode of
+  Normal:
+    begin
+     dst:=MakeRead(pSlot,rtype.AsVector(2));
+     Assert(dst<>nil,'fetch_vsrc8_vec2');
+    end;
+  UNorm16:
+    begin
+     src:=MakeRead(pSlot,dtUint32);
+     Assert(src<>nil,'fetch_vsrc8_vec2');
+     dst:=NewReg(dtVec2f);
+     _OpGlsl1(line,GlslOp.UnpackUnorm2x16,dst,src);
+    end;
+  SNorm16:
+    begin
+     src:=MakeRead(pSlot,dtUint32);
+     Assert(src<>nil,'fetch_vsrc8_vec2');
+     dst:=NewReg(dtVec2f);
+     _OpGlsl1(line,GlslOp.UnpackSnorm2x16,dst,src);
+    end;
+ end;
 
- dst0:=NewReg(dtHalf16);
- dst1:=NewReg(dtHalf16);
+ dst0:=NewReg(rtype);
+ dst1:=NewReg(rtype);
 
  OpExtract(line,dst0,dst,0);
  OpExtract(line,dst1,dst,1);
@@ -203,9 +314,12 @@ Var
  dst:TsrRegNode;
  src:array[0..3] of TsrRegNode;
  rtype:TsrDataType;
+ nmode:TsrNormMode;
  f,i,p:DWORD;
 
  dst_sel:Tdst_sel;
+
+ misc:PExportPos;
 
  push_count:DWORD;
 begin
@@ -228,9 +342,9 @@ begin
  end;
 
  //before
- if (TpsslExportType(FSPI.EXP.TGT)=etNull) or //only set kill mask
-    (FSPI.EXP.EN=0){ or                        //nop
-    is_bindless(FSPI.EXP.TGT)} then            //not binded
+ if (TgcnExportType(FSPI.EXP.TGT)=etNull) or //only set kill mask
+    (FSPI.EXP.EN=0){ or                       //nop
+    is_bindless(FSPI.EXP.TGT)} then           //not binded
  begin
 
   While (push_count<>0) do
@@ -285,8 +399,7 @@ begin
 
    //shuffle ???
 
-   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   dout.FetchStore(line,src[0]);
+   dst:=src[0];
   end else
   begin
    //vector
@@ -317,46 +430,68 @@ begin
     Inc(i);
    end;
 
+   //TODO:SHADER_POS_FORMAT:accounting for parameters passed to the pixel shader
+   //TODO:SHADER_COL_FORMAT:accounting for partial 32-bit formats and 16-bit formats
+
    dst_sel:=get_export_sel(FSPI.EXP.TGT);
 
    shuffle(dst_sel,rtype,@src,p);
 
    dst:=OpVectorTo(line,rtype,@src);
-
-   dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
-   dout.FetchStore(line,dst);
   end;
 
  end else
- begin //half16
+ begin //half16,unorm16,snorm16,uint16,sint16
 
+  rtype:=get_export_type_compr(FSPI.EXP.TGT);
+  nmode:=get_export_norm_compr(FSPI.EXP.TGT);
+
+  //TODO:SHADER_COL_FORMAT:accounting for 32-bit formats
   Case f of
     3,
     $F:
       begin
-       fetch_vsrc8_vec2h(FSPI.EXP.VSRC0,src[0],src[1]);
-       fetch_vsrc8_vec2h(FSPI.EXP.VSRC1,src[2],src[3]);
+       fetch_vsrc8_vec2(FSPI.EXP.VSRC0,nmode,rtype,src[0],src[1]);
+       fetch_vsrc8_vec2(FSPI.EXP.VSRC1,nmode,rtype,src[2],src[3]);
       end;
    $C:
       begin
-       fetch_vsrc8_vec2h(FSPI.EXP.VSRC2,src[0],src[1]);
-       fetch_vsrc8_vec2h(FSPI.EXP.VSRC3,src[2],src[3]);
+       fetch_vsrc8_vec2(FSPI.EXP.VSRC2,nmode,rtype,src[0],src[1]);
+       fetch_vsrc8_vec2(FSPI.EXP.VSRC3,nmode,rtype,src[2],src[3]);
       end;
    else
     Assert(false,'FSPI.EXP.COMPR='+HexStr(f,1));
   end;
 
+  //TODO:SHADER_POS_FORMAT:accounting for parameters passed to the pixel shader
+  //TODO:SHADER_COL_FORMAT:accounting for 32-bit formats
+
   if Config.UseOutput16 then
   begin
-   rtype:=dtVec4h;
+   rtype:=rtype.AsVector(4);
   end else
   begin
-   src[0]:=OpFToF(src[0],dtFloat32);
-   src[1]:=OpFToF(src[1],dtFloat32);
-   src[2]:=OpFToF(src[2],dtFloat32);
-   src[3]:=OpFToF(src[3],dtFloat32);
 
-   rtype:=dtVec4f;
+   case rtype of
+    dtHalf16:
+      begin
+       rtype:=dtFloat32;
+       for i:=0 to 3 do src[i]:=OpFToF(src[i],rtype);
+      end;
+    dtUint16:
+      begin
+       rtype:=dtUint32;
+       for i:=0 to 3 do src[i]:=OpUToU(src[i],rtype);
+      end;
+    dtInt16:
+      begin
+       rtype:=dtInt32;
+       for i:=0 to 3 do src[i]:=OpSToS(src[i],rtype);
+      end;
+    else;
+   end;
+
+   rtype:=rtype.AsVector(4);
   end;
 
   dst_sel:=get_export_sel(FSPI.EXP.TGT);
@@ -364,8 +499,27 @@ begin
   shuffle(dst_sel,rtype,@src,4);
 
   dst:=OpVectorTo(line,rtype,@src);
+ end;
 
-  dout:=FetchOutput(TpsslExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
+ misc:=OutputList.GetExportPos(TgcnExportType(FSPI.EXP.TGT));
+
+ if (misc<>nil) then
+ begin
+
+  for i:=0 to 3 do
+  begin
+   case misc^[i] of
+    ptNone:; //skip
+    ptCullDist0..ptCullDist7:; //TODO: CullDist
+    ptClipDist0..ptClipDist7:; //TODO: ClipDist
+    else
+     Assert(false,'Export:'+GetEnumName(TypeInfo(TgcnPosType),ord(misc^[i])));
+   end;
+  end;
+
+ end else
+ begin
+  dout:=FetchOutput(TgcnExportType(FSPI.EXP.TGT),rtype); //output in FSPI.EXP.TGT
   dout.FetchStore(line,dst);
  end;
 

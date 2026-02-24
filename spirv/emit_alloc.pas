@@ -51,6 +51,7 @@ procedure TSprvEmit_alloc.AllocSourceExtension;
 var
  i:Integer;
  Writer:TseWriter;
+ EXPORT_MASK:DWORD;
 begin
  DataLayoutList.AllocSourceExtension2;
 
@@ -60,14 +61,23 @@ begin
  Writer.Header('-C');
 
  if (FExecutionModel=ExecutionModel.Vertex) then
- if (VGPR_COMP_CNT>=1) then
  begin
-  Writer.IntOpt('VGPR_COMP_CNT'   ,VGPR_COMP_CNT);
-  Writer.HexOpt('VGT_STEP_RATE_0' ,VGT_STEP_RATE_0);
-  if (VGPR_COMP_CNT>=2) then
+  //
+  if (VGPR_COMP_CNT>=1) then
   begin
-   Writer.HexOpt('VGT_STEP_RATE_1',VGT_STEP_RATE_1);
+   Writer.IntOpt('VGPR_COMP_CNT'   ,VGPR_COMP_CNT);
+   Writer.HexOpt('VGT_STEP_RATE_0' ,VGT_STEP_RATE_0);
+   if (VGPR_COMP_CNT>=2) then
+   begin
+    Writer.HexOpt('VGT_STEP_RATE_1',VGT_STEP_RATE_1);
+   end;
   end;
+  //
+  if (OutputList.FOUT_CNTL<>0) then
+  begin
+   Writer.HexOpt('OUT_CNTL',OutputList.FOUT_CNTL);
+  end;
+  //
  end;
 
  if (FExecutionModel=ExecutionModel.Fragment) then
@@ -83,22 +93,26 @@ begin
    end;
   end;
   //
-  if (EXPORT_COUNT<>0) then
+  EXPORT_MASK:=OutputList.GetExportMask;
+  if (EXPORT_MASK<>0) then
   begin
-   Writer.IntOpt('EXPORT_COUNT',EXPORT_COUNT);
-   for i:=0 to EXPORT_COUNT-1 do
+   Writer.HexOpt('EXPORT_MASK',EXPORT_MASK);
+   for i:=0 to 7 do
+   if (EXPORT_MASK and (1 shl i))<>0 then
    begin
     Inc(Writer.deep);
     //
     Writer.Header('-EXPORT_COLOR');
     //
-    Writer.IntOpt('FORMAT'     ,FExportInfo[i].FORMAT);
-    Writer.IntOpt('NUMBER_TYPE',FExportInfo[i].NUMBER_TYPE);
-    Writer.IntOpt('COMP_SWAP'  ,FExportInfo[i].COMP_SWAP);
+    Writer.IntOpt('RENDER_FORMAT',OutputList.FExportMrt[i].RENDER_FORMAT);
+    Writer.IntOpt('NUMBER_TYPE'  ,OutputList.FExportMrt[i].NUMBER_TYPE);
+    Writer.IntOpt('COMP_SWAP'    ,OutputList.FExportMrt[i].COMP_SWAP);
+    Writer.IntOpt('EXPORT_FORMAT',OutputList.FExportMrt[i].EXPORT_FORMAT);
     //
     Dec(Writer.deep);
    end;
   end;
+  //
  end;
 
  if (FExecutionModel=ExecutionModel.GLCompute) then

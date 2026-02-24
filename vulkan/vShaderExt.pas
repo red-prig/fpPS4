@@ -155,9 +155,10 @@ type
  PRENDER_TARGET=^TRENDER_TARGET;
 
  TEXPORT_COLOR=packed record
-  FORMAT     :Byte;
-  NUMBER_TYPE:Byte;
-  COMP_SWAP  :Byte;
+  RENDER_FORMAT:Byte;
+  NUMBER_TYPE  :Byte;
+  COMP_SWAP    :Byte;
+  EXPORT_FORMAT:Byte;
  end;
  AEXPORT_COLOR=array[0..7] of TEXPORT_COLOR;
 
@@ -186,10 +187,12 @@ type
    VGPR_COMP_CNT:Byte;
    //
    NUM_INTERP   :Byte;
-   EXPORT_COUNT :Byte;
+   EXPORT_MASK  :Byte;
 
    STEP_RATE_0:DWORD;
    STEP_RATE_1:DWORD;
+   //
+   OUT_CNTL:DWORD;
    //
    SHADER_CONTROL:TDB_SHADER_CONTROL;
    INPUT_CNTL    :A_INPUT_CNTL;
@@ -719,7 +722,21 @@ begin
  L.state:=cCache;
 
  case N of
-  'EXPORT_COLOR':Inc(FEXPORT_INFO_ID);
+  'EXPORT_COLOR':
+    begin
+     if (FEXPORT_INFO_ID=-1) then
+     begin
+      with TvShaderExt(FOwner) do
+      begin
+       //first
+       FEXPORT_INFO_ID:=FParams.EXPORT_MASK;
+      end;
+     end else
+     begin
+      //next
+      FEXPORT_INFO_ID:=FEXPORT_INFO_ID and (not (1 shl BsfDWord(FEXPORT_INFO_ID)));
+     end;
+    end;
   else;
  end;
 
@@ -801,6 +818,7 @@ end;
 procedure TvShaderParserExt.OnValue(const N,V:RawByteString);
 var
  L:PvDataLayout2;
+ i:Integer;
 begin
  if (Length(FDataStack)=0) then Exit;
  L:=@FDataStack[High(FDataStack)];
@@ -840,6 +858,12 @@ begin
      FParams.STEP_RATE_1:=StrToDWord2(V);
     end;
 
+  'OUT_CNTL':
+    with TvShaderExt(FOwner) do
+    begin
+     FParams.OUT_CNTL:=StrToDWord2(V);
+    end;
+
   'DB_SHADER_CONTROL':
     with TvShaderExt(FOwner) do
     begin
@@ -862,39 +886,53 @@ begin
      end;
     end;
 
-  'EXPORT_COUNT':
+  'EXPORT_MASK':
     with TvShaderExt(FOwner) do
     begin
-     FParams.EXPORT_COUNT:=StrToDWord2(V);
+     FParams.EXPORT_MASK:=StrToDWord2(V);
     end;
 
-  'FORMAT':
+  'RENDER_FORMAT':
     with TvShaderExt(FOwner) do
     begin
-     if (FEXPORT_INFO_ID>=0) then
-     if (FEXPORT_INFO_ID<Length(AEXPORT_COLOR)) then
+     i:=BsfDWord(FEXPORT_INFO_ID);
+     if (i>=0) then
+     if (i<Length(AEXPORT_COLOR)) then
      begin
-      FParams.EXPORT_COLOR[FEXPORT_INFO_ID].FORMAT:=StrToDWord2(V);
+      FParams.EXPORT_COLOR[i].RENDER_FORMAT:=StrToDWord2(V);
      end;
     end;
 
   'NUMBER_TYPE':
     with TvShaderExt(FOwner) do
     begin
-     if (FEXPORT_INFO_ID>=0) then
-     if (FEXPORT_INFO_ID<Length(AEXPORT_COLOR)) then
+     i:=BsfDWord(FEXPORT_INFO_ID);
+     if (i>=0) then
+     if (i<Length(AEXPORT_COLOR)) then
      begin
-      FParams.EXPORT_COLOR[FEXPORT_INFO_ID].NUMBER_TYPE:=StrToDWord2(V);
+      FParams.EXPORT_COLOR[i].NUMBER_TYPE:=StrToDWord2(V);
      end;
     end;
 
   'COMP_SWAP':
     with TvShaderExt(FOwner) do
     begin
-     if (FEXPORT_INFO_ID>=0) then
-     if (FEXPORT_INFO_ID<Length(AEXPORT_COLOR)) then
+     i:=BsfDWord(FEXPORT_INFO_ID);
+     if (i>=0) then
+     if (i<Length(AEXPORT_COLOR)) then
      begin
-      FParams.EXPORT_COLOR[FEXPORT_INFO_ID].COMP_SWAP:=StrToDWord2(V);
+      FParams.EXPORT_COLOR[i].COMP_SWAP:=StrToDWord2(V);
+     end;
+    end;
+
+  'EXPORT_FORMAT':
+    with TvShaderExt(FOwner) do
+    begin
+     i:=BsfDWord(FEXPORT_INFO_ID);
+     if (i>=0) then
+     if (i<Length(AEXPORT_COLOR)) then
+     begin
+      FParams.EXPORT_COLOR[i].EXPORT_FORMAT:=StrToDWord2(V);
      end;
     end;
 

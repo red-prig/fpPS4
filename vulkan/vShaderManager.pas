@@ -317,6 +317,7 @@ begin
    SprvEmit.SET_INPUT_CNTL    (GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
                                GPU_REGS.CX_REG^.SPI_PS_IN_CONTROL.NUM_INTERP);
    SprvEmit.SET_RENDER_TARGETS(@GPU_REGS.CX_REG^.RENDER_TARGET,GPU_REGS.GET_HI_RT+1);
+   SprvEmit.SET_SHADER_COL_FORMAT(GPU_REGS.CX_REG^.SPI_SHADER_COL_FORMAT);
   end;
   vShaderStageVs:
   begin
@@ -336,6 +337,7 @@ begin
 
    SprvEmit.SetUserData(GPU_REGS.get_user_data(FStage));
 
+   SprvEmit.SET_OUT_CNTL(GPU_REGS.CX_REG^.PA_CL_VS_OUT_CNTL);
   end;
   vShaderStageCs:
   begin
@@ -443,19 +445,23 @@ begin
   if (FShader.FParams.STEP_RATE_1<>GPU_REGS.CX_REG^.VGT_INSTANCE_STEP_RATE_1) then Exit(False);
  end;
 
+ if (FShader.FParams.OUT_CNTL<>DWORD(GPU_REGS.CX_REG^.PA_CL_VS_OUT_CNTL)) then Exit(False);
+
  Result:=True;
 end;
 
-function CompareExportInfo(FShader:TvShaderExt;R:PRENDER_TARGET):Boolean;
+function CompareExportInfo(FShader:TvShaderExt;var GPU_REGS:TGPU_REGS):Boolean;
 var
  i:Byte;
 begin
- if (FShader.FParams.EXPORT_COUNT<>0) then
- for i:=0 to FShader.FParams.EXPORT_COUNT-1 do
+ if (FShader.FParams.EXPORT_MASK<>0) then
+ for i:=0 to 7 do
+ if (FShader.FParams.EXPORT_MASK and (1 shl i))<>0 then
  begin
-  if (FShader.FParams.EXPORT_COLOR[i].FORMAT     <>R[i].INFO.FORMAT     ) then Exit(False);
-  if (FShader.FParams.EXPORT_COLOR[i].NUMBER_TYPE<>R[i].INFO.NUMBER_TYPE) then Exit(False);
-  if (FShader.FParams.EXPORT_COLOR[i].COMP_SWAP  <>R[i].INFO.COMP_SWAP  ) then Exit(False);
+  if (FShader.FParams.EXPORT_COLOR[i].RENDER_FORMAT<>GPU_REGS.CX_REG^.RENDER_TARGET[i].INFO.FORMAT                     ) then Exit(False);
+  if (FShader.FParams.EXPORT_COLOR[i].NUMBER_TYPE  <>GPU_REGS.CX_REG^.RENDER_TARGET[i].INFO.NUMBER_TYPE                ) then Exit(False);
+  if (FShader.FParams.EXPORT_COLOR[i].COMP_SWAP    <>GPU_REGS.CX_REG^.RENDER_TARGET[i].INFO.COMP_SWAP                  ) then Exit(False);
+  if (FShader.FParams.EXPORT_COLOR[i].EXPORT_FORMAT<>((DWORD(GPU_REGS.CX_REG^.SPI_SHADER_COL_FORMAT) shr (i*4)) and 15)) then Exit(False);
  end;
  //
  Result:=True;
@@ -474,7 +480,7 @@ begin
                   GPU_REGS.CX_REG^.SPI_PS_INPUT_CNTL,
                   SizeOf(TSPI_PS_INPUT_CNTL_0)*FShader.FParams.NUM_INTERP)<>0) then Exit(False);
 
-  if (not CompareExportInfo(FShader,@GPU_REGS.CX_REG^.RENDER_TARGET)) then Exit(False);
+  if (not CompareExportInfo(FShader,GPU_REGS)) then Exit(False);
  end;
 
  if (FStage=vShaderStageCs) then

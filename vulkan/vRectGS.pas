@@ -118,7 +118,7 @@ begin
   for a:=0 to INPUT_COUNT-1 do
   begin
    InputParams [a]:=SprvEmit.AddParametersInput(INPUT_INFO[a].LAYOUT_ID,3);
-   OutputParams[a]:=SprvEmit.FetchOutput(TpsslExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f).pVar;
+   OutputParams[a]:=SprvEmit.FetchOutput(TgcnExportType(ord(etParam0)+INPUT_INFO[a].LAYOUT_ID),dtVec4f).pVar;
   end;
  end;
 

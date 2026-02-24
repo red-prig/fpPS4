@@ -55,19 +55,12 @@ type
   function FLAT_SHADE :Boolean;
  end;
 
- TExportInfo=packed record
-  FORMAT     :Byte;
-  NUMBER_TYPE:Byte;
-  COMP_SWAP  :Byte;
- end;
-
  TEmitInterface=class(TCustomEmit)
   FExecutionModel    :Word;
   FEarlyFragmentTests:Boolean;
   //
   VGPR_COMP_CNT      :Byte;
   PS_NUM_INTERP      :Byte;
-  EXPORT_COUNT       :Byte;
   //
   VGT_STEP_RATE_0    :DWORD;
   VGT_STEP_RATE_1    :DWORD;
@@ -77,7 +70,6 @@ type
   CS_NUM_THREAD_Z    :DWORD;
   //
   FPSInputCntl       :array[0..31] of TPSInputCntl;
-  FExportInfo        :array[0..7] of TExportInfo;
   //
   FLocalSize         :TLocalSize;
   FLDS_SIZE          :DWORD;
