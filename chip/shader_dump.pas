@@ -297,6 +297,12 @@ begin
    DUMP_REG(F,mmSPI_PS_INPUT_CNTL_0+i,GPU_REGS);
   end;
 
+  //RENDER_TARGET.INFO
+  For i:=0 to 7 do
+  begin
+   DUMP_REG(F,mmCB_COLOR0_INFO+(i*(mmCB_COLOR1_INFO-mmCB_COLOR0_INFO)),GPU_REGS);
+  end;
+
   FileClose(F);
 
  end;
