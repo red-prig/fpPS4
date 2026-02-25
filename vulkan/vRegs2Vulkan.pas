@@ -1064,6 +1064,12 @@ begin
     else;
    end;
 
+  COLOR_1_5_5_5: //high A:[1] B:[5] G:[5] R:[5] low
+   Case NUMBER_TYPE of
+    NUMBER_UNORM  :Result:=VK_FORMAT_A1R5G5B5_UNORM_PACK16;
+    else;
+   end;
+
   else;
  end;
 
