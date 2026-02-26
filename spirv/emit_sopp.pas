@@ -11,16 +11,34 @@ uses
   srConst,
   srOp,
   srOpUtils,
+  srOpInternal,
   spirv,
   emit_fetch;
 
 type
  TEmit_SOPP=class(TEmitFetch)
   procedure emit_SOPP;
+  procedure emit_S_WAITCNT;
   procedure emit_S_BARRIER;
  end;
 
 implementation
+
+procedure TEmit_SOPP.emit_S_WAITCNT;
+Var
+ node:TspirvOp;
+begin
+ if (Twaitcnt_simm(FSPI.SOPP.SIMM).lgkmcnt<>15) or
+    (Twaitcnt_simm(FSPI.SOPP.SIMM).expcnt <>7 ) or
+    (Twaitcnt_simm(FSPI.SOPP.SIMM).vmcnt  <>15) then
+ begin
+  node:=AddSpirvOp(line,srOpInternal.OpWaitCnt); //need first
+  node.AddLiteral(Twaitcnt_simm(FSPI.SOPP.SIMM).lgkmcnt);
+  node.AddLiteral(Twaitcnt_simm(FSPI.SOPP.SIMM).expcnt );
+  node.AddLiteral(Twaitcnt_simm(FSPI.SOPP.SIMM).vmcnt  );
+ end;
+
+end;
 
 procedure TEmit_SOPP.emit_S_BARRIER;
 Var
@@ -45,7 +63,7 @@ procedure TEmit_SOPP.emit_SOPP;
 begin
  Case FSPI.SOPP.OP of
   S_NOP,
-  S_WAITCNT:;
+  S_WAITCNT:emit_S_WAITCNT;
 
   S_TTRACEDATA:; //write_thread_trace_data(M0[31:0])
   S_SETPRIO   :; //USER_PRIO[1:0] = imm16[1:0].u

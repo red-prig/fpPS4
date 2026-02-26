@@ -8,6 +8,7 @@ uses
   sysutils,
   spirv,
   srNode,
+  srRefId,
   srType,
   srTypes,
   srConst,
@@ -20,8 +21,10 @@ uses
   srOutput,
   srOp,
   srOpUtils,
+  srOpInternal,
   srDecorate,
   srCacheOp,
+  srCFGParser,
   emit_fetch;
 
 type
@@ -41,15 +44,16 @@ type
 
   function  NodeOpStrict(node:TspirvOp):Integer;
 
-  function  OnOpStep1(node:TspirvOp):Integer; //backward
-  function  OnOpStep2(node:TspirvOp):Integer; //forward
-  function  OnOpStep3(node:TspirvOp):Integer; //forward
-  function  OnOpStep4(node:TspirvOp):Integer; //forward
-  function  OnOpStep5(node:TspirvOp):Integer; //backward
-  function  OnOpStep6(node:TspirvOp):Integer; //backward
-  function  OnOpStep7(node:TspirvOp):Integer; //forward
-  function  OnOpStep8(node:TspirvOp):Integer; //forward
-  function  OnOpStep9(node:TspirvOp):Integer; //backward
+  function  OnRegCollapse    (node:TspirvOp):Integer; //backward
+  function  OnPostForward1   (node:TspirvOp):Integer; //forward
+  function  PostForward2     (node:TspirvOp):Integer; //forward
+  function  OnVolatileReslove(node:TspirvOp):Integer; //forward
+  function  OnWeakReslove    (node:TspirvOp):Integer; //backward
+  function  OnRegTypecast    (node:TspirvOp):Integer; //backward
+  function  OnPassCSE        (node:TspirvOp):Integer; //forward
+  function  OnPassWaitCnt    (node:TspirvOp):Integer; //backward
+  function  OnRemoveTerm     (node:TspirvOp):Integer; //forward
+  function  OnRemoveLines    (node:TspirvOp):Integer; //backward
 
   function  OnDecorate(node:TspirvOp):Integer;
 
@@ -569,7 +573,7 @@ end;
 
 //
 
-function TSprvEmit_post.OnOpStep1(node:TspirvOp):Integer; //backward
+function TSprvEmit_post.OnRegCollapse(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -586,7 +590,7 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep2(node:TspirvOp):Integer; //forward
+function TSprvEmit_post.OnPostForward1(node:TspirvOp):Integer; //forward
 begin
  Result:=0;
 
@@ -601,7 +605,7 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep3(node:TspirvOp):Integer; //forward
+function TSprvEmit_post.PostForward2(node:TspirvOp):Integer; //forward
 begin
  Result:=0;
 
@@ -616,18 +620,9 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep4(node:TspirvOp):Integer; //forward
+function TSprvEmit_post.OnVolatileReslove(node:TspirvOp):Integer; //forward
 begin
  Result:=0;
-
- {
- //prior
- if node.is_post then
- begin
-  Result:=Result+EnumLineRegs(@RegVResolve,node);
-  Exit;
- end;
- }
 
  if node.is_cleared then Exit;
 
@@ -640,7 +635,7 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep5(node:TspirvOp):Integer; //backward
+function TSprvEmit_post.OnWeakReslove(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -655,7 +650,7 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnOpStep6(node:TspirvOp):Integer; //backward
+function TSprvEmit_post.OnRegTypecast(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -673,7 +668,7 @@ begin
 end;
 
 //Local CSE
-function TSprvEmit_post.OnOpStep7(node:TspirvOp):Integer; //forward
+function TSprvEmit_post.OnPassCSE(node:TspirvOp):Integer; //forward
 var
  val:TsrCSENode;
  dst:TsrNode;
@@ -769,8 +764,315 @@ begin
  Result:=1;
 end;
 
-function TSprvEmit_post.OnOpStep8(node:TspirvOp):Integer; //forward
+type
+ t_waitcnt_params=packed record
+  Semantics:Integer;
+ end;
 
+function _get_waitcnt_params(node:TspirvOp):t_waitcnt_params; inline;
+var
+ _lgkmcnt,_expcnt,_vmcnt:PtrUint;
+begin
+ _lgkmcnt:=0;
+ _expcnt :=0;
+ _vmcnt  :=0;
+
+ node.ParamNode(0).TryGetValue(_lgkmcnt);
+ node.ParamNode(1).TryGetValue(_expcnt );
+ node.ParamNode(2).TryGetValue(_vmcnt  );
+
+ Result.Semantics:=0;
+
+ Result.Semantics:=Result.Semantics or (ord(_lgkmcnt<>15)*(MemorySemantics.SubgroupMemory or MemorySemantics.WorkgroupMemory));
+ Result.Semantics:=Result.Semantics or (ord(_vmcnt  <>15)*(MemorySemantics.UniformMemory  or MemorySemantics.ImageMemory    ));
+end;
+
+type
+ t_visit_node=record
+  Block:TsrOpBlock;
+  tracked:t_waitcnt_params;
+  writed :t_waitcnt_params;
+ end;
+
+function TSprvEmit_post.OnPassWaitCnt(node:TspirvOp):Integer; //backward
+label
+ _next_or_up,
+ _up,
+ _pop_to_real;
+var
+ tracked:t_waitcnt_params;
+ writed :t_waitcnt_params;
+ tmp    :t_waitcnt_params;
+
+ Block:TsrOpBlock;
+
+ curr,next,new_node:TspirvOp;
+ dst:TsrNode;
+
+ Chain:TsrChain;
+ pBuffer:TsrBuffer;
+
+ memory,memory_semantics:TsrConst;
+
+ stack:array of t_visit_node;
+
+ function InStack(Block:TsrOpBlock):boolean;
+ var
+  i:Integer;
+ begin
+  Result:=False;
+  if (Length(stack)<>0) then
+  For i:=High(stack) downto 0 do
+  begin
+   if (stack[i].Block=Block) then Exit(True);
+  end;
+ end;
+
+ procedure PushStack(Block:TsrOpBlock);
+ var
+  node:t_visit_node;
+ begin
+  node.Block  :=Block;
+  node.tracked:=tracked;
+  node.writed :=writed;
+  Insert(node,stack,Length(stack));
+ end;
+
+ function PopStack(Block:TsrOpBlock):Boolean;
+ var
+  node:t_visit_node;
+ begin
+  Result:=False;
+  if (Length(stack)<>0) then
+  begin
+   node:=stack[High(stack)];
+   if (node.Block=Block) then
+   begin
+    SetLength(stack,High(stack));
+    //filtred
+    writed.Semantics:=(tracked.Semantics and writed.Semantics);
+    //summary
+    writed.Semantics:=(writed.Semantics or node.writed.Semantics);
+    //restore
+    tracked:=node.tracked;
+    //
+    Result:=True;
+   end;
+  end;
+ end;
+
+begin
+ Result:=0;
+ if node.is_cleared then Exit;
+
+ if (node.OpId<>srOpInternal.OpWaitCnt) then Exit;
+
+ stack:=nil;
+
+ tracked:=_get_waitcnt_params(node);
+ writed :=Default(t_waitcnt_params);
+ curr   :=node;
+
+ While (curr<>nil) do
+ begin
+
+  if (curr<>node) then
+  if not curr.is_cleared then
+  if curr.IsType(ntOp) then
+  begin
+
+   Case curr.OpId of
+    srOpInternal.OpWaitCnt:
+      begin
+       tmp:=_get_waitcnt_params(curr);
+
+       //filter tracked
+       tracked.Semantics:=(tracked.Semantics xor tmp.Semantics);
+      end;
+
+    Op.OpStore:
+      if not node.can_clear then
+      begin
+       dst:=curr.ParamNode(0).Value;
+
+       if (dst<>nil) then
+       begin
+        if dst.IsType(TsrVariable) then
+        begin
+         //
+        end else
+        if dst.IsType(TsrChain) then
+        begin
+         Chain  :=dst.specialize AsType<TsrChain>;
+         pBuffer:=Chain.pBuffer.specialize AsType<TsrBuffer>;
+         Assert(pBuffer<>nil,'OnPassWaitCnt');
+         Assert(pBuffer.pLayout<>nil,'OnPassWaitCnt');
+
+         case pBuffer.pLayout.key.rtype of
+           rtLDS,rtGDS:
+             begin
+              writed.Semantics:=writed.Semantics or (tracked.Semantics and (MemorySemantics.SubgroupMemory or MemorySemantics.WorkgroupMemory));
+             end;
+           else
+             case pBuffer.bType of
+              btStorageBuffer,
+              btUniformBuffer:
+                begin
+                 writed.Semantics:=writed.Semantics or (tracked.Semantics and MemorySemantics.UniformMemory);
+                end
+              else;
+             end;
+         end;
+
+        end else
+        if dst.IsType(TsrRefNode) then
+        begin
+         //OpAccessChainTo
+        end else
+        begin
+         Writeln('OnPassWaitCnt:',dst.ClassName);
+         Assert(False);
+        end;
+
+       end;
+
+      end;
+    Op.OpImageWrite:
+      if not node.can_clear then
+      begin
+       writed.Semantics:=writed.Semantics or (tracked.Semantics and MemorySemantics.ImageMemory);
+      end;
+    else;
+   end;
+
+   if (tracked.Semantics=0) then
+   begin
+    //all is untracked
+    goto _pop_to_real;
+   end;
+
+   if (tracked.Semantics=writed.Semantics) then
+   begin
+    //all is tracked
+    Break; //endof
+   end;
+
+  end; //curr.IsType(ntOp)
+
+  next:=curr.First; //down
+  if (next=nil) then
+  begin
+   _next_or_up:
+   repeat //up
+    next:=curr.Next;
+    curr:=curr.Parent;
+    //
+    if (next=nil) and (curr<>nil) then
+    if curr.IsType(ntOpBlock) then
+    begin
+     _up:
+     //up
+     Block:=curr;
+     //
+     if (Block.bType in [btCond,btElse,btLoop]) then
+     begin
+      if PopStack(Block) then
+      begin
+       //
+      end else
+      if (Block.bType=btLoop) then
+      if not InStack(Block) then
+      begin
+       PushStack(Block);
+       //restart loop
+       next:=curr.First; //down
+      end;
+     end;
+     //up
+    end;
+    //
+   until (curr=nil) or (next<>nil);
+  end else
+  if curr.IsType(ntOpBlock) then
+  begin
+   //down
+   Block:=curr;
+   //
+   if (Block.bType in [btCond,btElse,btLoop]) then
+   begin
+    if InStack(Block) then
+    begin
+     //skip
+     goto _next_or_up;
+    end else
+    begin
+     PushStack(Block);
+    end;
+   end;
+   //down
+  end;
+
+  curr:=next;
+
+  if (curr=node) then
+  begin
+   //popToReal
+   _pop_to_real:
+   //
+   if Length(stack)=0 then
+   begin
+    Break; //endof
+   end;
+   //
+   next:=curr.Parent;
+   while (next<>nil) do
+   begin
+    //
+    if next.IsType(ntOpBlock) then
+    begin
+     Block:=next;
+     //
+     if (Block.bType in [btCond,btElse,btLoop]) then
+     begin
+      Break;
+     end;
+     //
+    end;
+    //
+    curr:=next;
+    next:=curr.Parent;
+   end;
+   if (next=nil) then
+   begin
+    Break; //endof
+   end;
+   curr:=next;
+   next:=nil;
+   goto _up;
+  end;
+
+ end;
+
+ //filtred
+ writed.Semantics:=(tracked.Semantics and writed.Semantics);
+
+ if (writed.Semantics<>0) then
+ begin
+  new_node:=AddSpirvOp(node,Op.OpMemoryBarrier); //new_node after node
+
+  memory          :=ConstList.Fetch(dtUint32,Scope.Device);
+  memory_semantics:=ConstList.Fetch(dtUint32,MemorySemantics.AcquireRelease or writed.Semantics);
+
+  new_node.AddParam(memory);
+  new_node.AddParam(memory_semantics);
+ end;
+
+ node.mark([soNotUsed]);
+
+ Result:=1;
+end;
+
+function TSprvEmit_post.OnRemoveTerm(node:TspirvOp):Integer; //forward
 begin
  Result:=0;
  if node.is_cleared then Exit;
@@ -787,7 +1089,7 @@ begin
 
 end;
 
-function TSprvEmit_post.OnOpStep9(node:TspirvOp):Integer; //backward
+function TSprvEmit_post.OnRemoveLines(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
 
@@ -920,24 +1222,24 @@ begin
 
   _pass:
 
-  repeat //OnOpStep5
+  repeat //Weak Reslove
 
-   repeat //OnOpStep3
+   repeat //PostForward2
 
-    repeat //OnOpStep2
+    repeat //OnPostForward1
 
-     repeat //OnOpStep1
-      i:=EnumBlockOpBackward(@OnOpStep1,pFunc.pTop); //OnOpStep1 Reg Collapse
+     repeat //OnRegCollapse
+      i:=EnumBlockOpBackward(@OnRegCollapse,pFunc.pTop); //Reg Collapse
       if (i=0) then Break;
       Result:=Result+i;
      until false;
 
-     i:=EnumBlockOpForward(@OnOpStep2,pFunc.pTop); //OnOpStep2 PostForward1
+     i:=EnumBlockOpForward(@OnPostForward1,pFunc.pTop); //PostForward1
      if (i=0) then Break;
      Result:=Result+i;
     until false;
 
-    i:=EnumBlockOpForward(@OnOpStep3,pFunc.pTop); //OnOpStep3 PostForward2
+    i:=EnumBlockOpForward(@PostForward2,pFunc.pTop); //PostForward2
     if (i=0) then Break;
     Result:=Result+i;
    until false;
@@ -947,15 +1249,15 @@ begin
     Result:=Result+PostAllocField;
    end;
 
-   repeat //OnOpStep4 Volatile Reslove
-    i:=EnumBlockOpForward(@OnOpStep4,pFunc.pTop);
+   repeat //Volatile Reslove
+    i:=EnumBlockOpForward(@OnVolatileReslove,pFunc.pTop);
     if (i=0) then Break;
     Result:=Result+i;
    until false;
 
    r4:=0;
-   repeat //OnOpStep5 Weak Reslove
-    i:=EnumBlockOpBackward(@OnOpStep5,pFunc.pTop);
+   repeat //Weak Reslove
+    i:=EnumBlockOpBackward(@OnWeakReslove,pFunc.pTop);
     if (i=0) then Break;
     r4:=r4+i;
    until false;
@@ -987,8 +1289,8 @@ begin
   end;
   }
 
-  repeat //OnOpStep6 Typecast
-   i:=EnumBlockOpBackward(@OnOpStep6,pFunc.pTop);
+  repeat //Typecast
+   i:=EnumBlockOpBackward(@OnRegTypecast,pFunc.pTop);
    if (i=0) then Break;
    Result:=Result+i;
   until false;
@@ -1004,7 +1306,7 @@ begin
   begin
    cse_pass:=False;
    //CSE
-   i:=EnumBlockOpForward(@OnOpStep7,pFunc.pTop);
+   i:=EnumBlockOpForward(@OnPassCSE,pFunc.pTop);
    if (i<>0) then
    begin
     //pass agian
@@ -1012,11 +1314,13 @@ begin
    end;
   end;
 
-  EnumBlockOpForward(@OnOpStep8,pFunc.pTop); //OnOpStep8 Remove term
+  EnumBlockOpBackward(@OnPassWaitCnt,pFunc.pTop); //Pass WaitCnt
+
+  EnumBlockOpForward(@OnRemoveTerm,pFunc.pTop); //Remove term
 
   PrivateList.RemoveAllStore;
 
-  Result:=Result+EnumBlockOpBackward(@OnOpStep9,pFunc.pTop); //OnOpStep9 Remove Lines
+  Result:=Result+EnumBlockOpBackward(@OnRemoveLines,pFunc.pTop); //Remove Lines
 
   EnumBlockOpForward(@OnDecorate,pFunc.pTop); //NoContraction
 

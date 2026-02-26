@@ -20,6 +20,8 @@ const
  OpPackOfs=DWORD(-8);
  OpExport =DWORD(-9);
 
+ OpWaitCnt=DWORD(-10);
+
 function OpGetStrInternal(OpId:DWORD):RawByteString;
 
 implementation
