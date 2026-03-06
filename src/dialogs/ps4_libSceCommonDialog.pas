@@ -24,6 +24,7 @@ Const
  SCE_COMMON_DIALOG_MAGIC_NUMBER=$C0D1A109;
 
 type
+ pSceCommonDialogBaseParam=^SceCommonDialogBaseParam;
  SceCommonDialogBaseParam=packed record
   size    :QWORD;
   reserved:array[0..35] of Byte;
@@ -48,11 +49,145 @@ const
  SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED             =-2135425009; // 0x80B8000F
  SCE_COMMON_DIALOG_ERROR_INHIBIT_SHAREPLAY_CLIENT  =-2135425008; // 0x80B80010
 
+function ps4_sceCommonDialogIsUsed():Boolean;
+
+{$CALLING default}
+
+type
+ TCommonDialogClient=class  //(TSerializeObject)
+   status:Integer;
+  public
+   function   isInitializedStatus:Boolean;
+   function   isFinish:Boolean;
+   function   launchCmnDialog:Integer;
+   function   updateState:Integer;     virtual;
+   function   Close:Integer;           virtual;
+   Procedure  Terminate;               virtual;
+   Destructor Destroy;                 override;
+ end;
+
+function NewClient(client:TCommonDialogClient):Integer;
+function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
+
 implementation
 
 var
  g_common_dialog_init:Byte=0;
  g_common_dialog_mtx :mtx;
+ g_curr_client       :TCommonDialogClient;
+
+function clientRegister(client:TCommonDialogClient):Boolean;
+begin
+ Result:=False;
+
+ mtx_lock(g_common_dialog_mtx);
+
+ if (g_curr_client=nil) then
+ begin
+  g_curr_client:=client;
+  Result:=True;
+ end;
+
+ mtx_unlock(g_common_dialog_mtx);
+end;
+
+function clientDeregister(client:TCommonDialogClient):Boolean;
+begin
+ Result:=False;
+
+ mtx_lock(g_common_dialog_mtx);
+
+ if (g_curr_client=client) then
+ begin
+  g_curr_client:=nil;
+  Result:=True;
+ end;
+
+ mtx_unlock(g_common_dialog_mtx);
+end;
+
+//QXFsLON5QWw
+function NewClient(client:TCommonDialogClient):Integer;
+begin
+ if clientRegister(client) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_UNEXPECTED_FATAL;
+ end;
+end;
+
+//afLdI6i0lQw
+function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
+var
+ i:Integer;
+begin
+ if (pBaseParam^.magic<>DWORD(PtrUint(pBaseParam)+SCE_COMMON_DIALOG_MAGIC_NUMBER)) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ if (pBaseParam^.size<>$30) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ For i:=0 to High(SceCommonDialogBaseParam.reserved) do
+ if (pBaseParam^.reserved[i]<>0) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ Result:=0;
+end;
+
+function TCommonDialogClient.isInitializedStatus:Boolean;
+begin
+ Result:=(status=SCE_COMMON_DIALOG_STATUS_INITIALIZED);
+end;
+
+function TCommonDialogClient.isFinish:Boolean;
+begin
+ Result:=(status=SCE_COMMON_DIALOG_STATUS_FINISHED);
+end;
+
+function TCommonDialogClient.launchCmnDialog:Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
+
+ if (status=SCE_COMMON_DIALOG_STATUS_NONE) then
+ begin
+  //
+  Result:=0;
+  status:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+ end;
+
+end;
+
+function TCommonDialogClient.updateState:Integer;
+begin
+ Result:=0;
+end;
+
+function TCommonDialogClient.Close:Integer;
+begin
+ Result:=0;
+end;
+
+Procedure TCommonDialogClient.Terminate;
+begin
+ Free;
+end;
+
+Destructor TCommonDialogClient.Destroy;
+begin
+ clientDeregister(Self);
+ inherited;
+end;
+
+{$CALLING SysV_ABI_CDecl}
+//
 
 function ps4_sceCommonDialogInitialize():Integer;
 begin
@@ -74,7 +209,11 @@ end;
 
 function ps4_sceCommonDialogIsUsed():Boolean;
 begin
- Result:=True;
+ mtx_lock(g_common_dialog_mtx);
+
+ Result:=(g_curr_client<>nil);
+
+ mtx_unlock(g_common_dialog_mtx);
 end;
 
 //

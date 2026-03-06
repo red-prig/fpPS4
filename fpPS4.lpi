@@ -1748,6 +1748,10 @@
         <Filename Value="rtl\core_serialization.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\dialogs\ps4_libSceMsgDialog.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
