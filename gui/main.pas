@@ -24,6 +24,7 @@ uses
 
   ms_shell_hack,
 
+  core_serialization,
   host_ipc,
   game_info,
   game_edit,
@@ -48,7 +49,7 @@ type
     procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
   end;
 
-  TGameList=class(TAbstractArray)
+  TGameList=class(TSerializeArray)
    FGrid: TStringGrid;
    //
    function  GetItem(i:SizeInt):TGameItem;
@@ -61,12 +62,12 @@ type
    //
    Function  GetArrayCount:SizeInt;          override;
    Function  GetArrayItem(i:SizeInt):TValue; override;
-   Function  AddObject:TAbstractObject;      override;
-   Function  AddArray :TAbstractArray;       override;
+   Function  AddObject:TSerializeObject;     override;
+   Function  AddArray :TSerializeArray;      override;
    procedure AddValue(Value:TValue);         override;
   end;
 
-  TGameListObject=class(TAbstractObject)
+  TGameListObject=class(TSerializeObject)
    private
     FGameList:TGameList;
    published
@@ -595,7 +596,7 @@ begin
  end;
 end;
 
-function encode_shell(argv:TStringArray):RawByteString;
+function encode_shell(argv:TSerializeStringArray):RawByteString;
 var
  i:Integer;
 begin
@@ -801,14 +802,14 @@ begin
  end;
 end;
 
-Function TGameList.AddObject:TAbstractObject;
+Function TGameList.AddObject:TSerializeObject;
 begin
  Result:=TGameItem.Create;
  //
  AddItem(TGameItem(Result));
 end;
 
-Function TGameList.AddArray:TAbstractArray;
+Function TGameList.AddArray:TSerializeArray;
 begin
  Result:=nil;
 end;

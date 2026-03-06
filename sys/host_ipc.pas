@@ -10,7 +10,7 @@ uses
  time,
  mqueue,
  LFQueue,
- game_info,
+ core_serialization,
  host_ipc_interface,
  kern_thr,
  sys_event,
@@ -120,8 +120,8 @@ procedure ReleaseAndNil(var obj:TGameProcess);
 procedure StopAndNil   (var obj:TGameProcess);
 procedure Stop         (obj:TGameProcess);
 procedure BindHandler  (Process:TGameProcess;Handler:THostIpcHandler);
-function  SendSync     (Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject):Ptruint;
-procedure SendAsyn     (Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject);
+function  SendSync     (Process:TGameProcess;const msg:RawByteString;obj:TSerializeObject):Ptruint;
+procedure SendAsyn     (Process:TGameProcess;const msg:RawByteString;obj:TSerializeObject);
 
 implementation
 
@@ -161,7 +161,7 @@ begin
  end;
 end;
 
-function SendSync(Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject):Ptruint;
+function SendSync(Process:TGameProcess;const msg:RawByteString;obj:TSerializeObject):Ptruint;
 begin
  Result:=Ptruint(-1);
  if (Process<>nil) then
@@ -171,7 +171,7 @@ begin
  end;
 end;
 
-procedure SendAsyn(Process:TGameProcess;const msg:RawByteString;obj:TAbstractObject);
+procedure SendAsyn(Process:TGameProcess;const msg:RawByteString;obj:TSerializeObject);
 begin
  if (Process<>nil) then
  if (Process.g_ipc<>nil) then

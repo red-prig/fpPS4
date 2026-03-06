@@ -10,7 +10,7 @@ uses
  murmurhash,
  kern_hamt,
  sys_event,
- game_info;
+ core_serialization;
 
 const
  iRESULT=0;
@@ -42,7 +42,7 @@ type
     //
     PCBNodeObject=^TCBNodeObject;
     TCBNodeObject=object(TCBNode)
-     Creator:TAbstractObjectClass;
+     Creator:TSerializeObjectClass;
      cb_obj :TOnObject;
      function OnObject(mlen:DWORD;buf:Pointer):Ptruint;
     end;
@@ -53,7 +53,7 @@ type
    Destructor Destroy; override;
    //
    Procedure  AddCallback(const msg:RawByteString;cb:TOnMessage);
-   Procedure  AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TAbstractObjectClass);
+   Procedure  AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TSerializeObjectClass);
    Procedure  DelCallback(const msg:RawByteString);
    Function   GetCallback(mtype:DWORD):TOnMessage;
  end;
@@ -80,10 +80,10 @@ type
    function    SendSync(mtype,mlen:DWORD;buf:Pointer):Ptruint;
    procedure   SendAsyn(mtype,mlen:DWORD;buf:Pointer);
    function    SendSync(const msg:RawByteString):Ptruint;
-   function    SendSync(mtype:DWORD;obj:TAbstractObject):Ptruint;
-   procedure   SendAsyn(mtype:DWORD;obj:TAbstractObject);
-   function    SendSync(const msg:RawByteString;obj:TAbstractObject):Ptruint;
-   procedure   SendAsyn(const msg:RawByteString;obj:TAbstractObject);
+   function    SendSync(mtype:DWORD;obj:TSerializeObject):Ptruint;
+   procedure   SendAsyn(mtype:DWORD;obj:TSerializeObject);
+   function    SendSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
+   procedure   SendAsyn(const msg:RawByteString;obj:TSerializeObject);
    //
  end;
 
@@ -161,7 +161,7 @@ end;
 function THostIpcHandler.TCBNodeObject.OnObject(mlen:DWORD;buf:Pointer):Ptruint;
 var
  mem:TPCharStream;
- obj:TAbstractObject;
+ obj:TSerializeObject;
 begin
  if (Creator=nil) or (cb_obj=nil) then
  begin
@@ -184,7 +184,7 @@ begin
  Result:=cb_obj(obj);
 end;
 
-Procedure THostIpcHandler.AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TAbstractObjectClass);
+Procedure THostIpcHandler.AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TSerializeObjectClass);
 var
  hash:DWORD;
  ptr :PCBNodeObject;
@@ -303,7 +303,7 @@ begin
  Result:=SendSync(HashIpcStr(msg),0,nil);
 end;
 
-function THostIpcInterface.SendSync(mtype:DWORD;obj:TAbstractObject):Ptruint;
+function THostIpcInterface.SendSync(mtype:DWORD;obj:TSerializeObject):Ptruint;
 var
  key:Pointer;
  mem:TMemoryStream;
@@ -332,7 +332,7 @@ begin
  FreeSyncKey(key);
 end;
 
-procedure THostIpcInterface.SendAsyn(mtype:DWORD;obj:TAbstractObject);
+procedure THostIpcInterface.SendAsyn(mtype:DWORD;obj:TSerializeObject);
 var
  mem:TMemoryStream;
 begin
@@ -350,12 +350,12 @@ begin
  end;
 end;
 
-function THostIpcInterface.SendSync(const msg:RawByteString;obj:TAbstractObject):Ptruint;
+function THostIpcInterface.SendSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
 begin
  Result:=SendSync(HashIpcStr(msg),obj);
 end;
 
-procedure THostIpcInterface.SendAsyn(const msg:RawByteString;obj:TAbstractObject);
+procedure THostIpcInterface.SendAsyn(const msg:RawByteString;obj:TSerializeObject);
 begin
  SendAsyn(HashIpcStr(msg),obj);
 end;

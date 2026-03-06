@@ -584,12 +584,12 @@ end;
 
 procedure TCfgFormData.SetClass(control:TComponent;Obj:TObject);
 var
- A:TStringArray;
+ A:TSerializeStringArray;
  i:Integer;
 begin
  if control.InheritsFrom(TListBox) then
  begin
-  A:=TStringArray(Obj);
+  A:=TSerializeStringArray(Obj);
 
   TListBox(control).Items.Clear;
 
@@ -604,12 +604,12 @@ end;
 
 procedure TCfgFormData.GetClass(control:TComponent;Obj:TObject);
 var
- A:TStringArray;
+ A:TSerializeStringArray;
  i,c:Integer;
 begin
  if control.InheritsFrom(TListBox) then
  begin
-  A:=TStringArray(Obj);
+  A:=TSerializeStringArray(Obj);
 
   c:=TListBox(control).Items.Count;
 

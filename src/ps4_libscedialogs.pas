@@ -8,24 +8,14 @@ interface
 
 uses
   subr_dynlib,
+  ps4_libSceCommonDialog,
   ps4_libSceIme{,
   ps4_libSceSaveData};
 
 implementation
 
 Const
- //SceCommonDialogStatus
- SCE_COMMON_DIALOG_STATUS_NONE        = 0;
- SCE_COMMON_DIALOG_STATUS_INITIALIZED = 1;
- SCE_COMMON_DIALOG_STATUS_RUNNING     = 2;
- SCE_COMMON_DIALOG_STATUS_FINISHED    = 3;
-
- //SceCommonDialogResult
- SCE_COMMON_DIALOG_RESULT_OK           =0;
- SCE_COMMON_DIALOG_RESULT_USER_CANCELED=1;
  SCE_NP_COMMERCE_DIALOG_RESULT_PURCHASED=2;
-
- SCE_COMMON_DIALOG_MAGIC_NUMBER=$C0D1A109;
 
  //SceMsgDialogMode
  SCE_MSG_DIALOG_MODE_INVALID     =(0);
@@ -56,17 +46,6 @@ Const
  //SceSaveDataDialogAnimation
  SCE_SAVE_DATA_DIALOG_ANIMATION_ON  =(0);
  SCE_SAVE_DATA_DIALOG_ANIMATION_OFF =(1);
-
-function ps4_sceCommonDialogInitialize():Integer;
-begin
- Writeln('sceCommonDialogInitialize');
- Result:=0;
-end;
-
-function ps4_sceCommonDialogIsUsed():Boolean;
-begin
- Result:=True;
-end;
 
 //
 
@@ -205,9 +184,6 @@ begin
  Result:=0;
 end;
 
-const
- SCE_COMMON_DIALOG_ERROR_NOT_FINISHED=-2135425019;//0x80B80005
-
 function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer;
 begin
  //Writeln('sceSaveDataDialogGetResult');
@@ -241,12 +217,6 @@ begin
 end;
 
 type
- SceCommonDialogBaseParam=packed record
-  size:QWORD;
-  reserved:array[0..35] of Byte;
-  magic:DWORD;
- end; //__attribute__ ((__aligned__(8)));
-
  pSceMsgDialogButtonsParam=^SceMsgDialogButtonsParam;
  SceMsgDialogButtonsParam=packed record
   msg1,msg2:Pchar;
@@ -289,10 +259,6 @@ type
   reserved:array[0..39] of Byte;
   _align2:Integer;
  end;
-
-const
- SCE_COMMON_DIALOG_ERROR_PARAM_INVALID=-2135425014; // 0x80B8000A
- SCE_COMMON_DIALOG_ERROR_ARG_NULL     =-2135425011; // 0x80B8000D
 
 function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer;
 begin
@@ -663,19 +629,6 @@ end;
 
 //
 
-function Load_libSceCommonDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceCommonDialog');
-
- lib:=Result^.add_lib('libSceCommonDialog');
- lib.set_proc($BA85292C6364CA09,@ps4_sceCommonDialogInitialize);
- lib.set_proc($050DED7B2D099903,@ps4_sceCommonDialogIsUsed);
-end;
-
-//
-
 function Load_libSceErrorDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -854,7 +807,6 @@ var
  stub:array[0..13] of t_int_file;
 
 initialization
- RegisteredInternalFile(stub[0] ,'libSceCommonDialog.prx'          ,@Load_libSceCommonDialog          );
  RegisteredInternalFile(stub[1] ,'libSceErrorDialog.prx'           ,@Load_libSceErrorDialog           );
  RegisteredInternalFile(stub[2] ,'libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog       );
  RegisteredInternalFile(stub[3] ,'libSceSaveDataDialog.prx'        ,@Load_libSceSaveDataDialog        );
