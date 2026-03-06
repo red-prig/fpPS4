@@ -360,8 +360,9 @@ begin
   Writeln('isSrt                   =',info^.isSrt                   );
   Writeln('isSrtUsedInfoValid      =',info^.isSrtUsedInfoValid      );
   Writeln('isExtendedUsageInfo     =',info^.isExtendedUsageInfo     );
+  Writeln('SourceHashType          =',info^.SourceHashType          );
   Writeln('reserved2               =',info^.reserved2               );
-  Writeln('reserved3               =',info^.reserved3               );
+  Writeln('footer_version          =',info^.footer_version          );
   Writeln('shaderHash0             =','0x',HexStr(info^.shaderHash0,8));
   Writeln('shaderHash1             =','0x',HexStr(info^.shaderHash1,8));
   Writeln('crc32                   =','0x',HexStr(info^.crc32,8)      );

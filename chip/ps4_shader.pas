@@ -32,8 +32,9 @@ type
   isSrt                   :bit1;     // if this shader uses shader resource tables and has an SrtDef table embedded below the input usage table and any extended usage info
   isSrtUsedInfoValid      :bit1;     // if SrtDef::m_isUsed=0 indicates an element is definitely unused; 0 if SrtDef::m_isUsed=0 indicates only that the element is not known to be used (m_isUsed=1 always indicates a resource is known to be used)
   isExtendedUsageInfo     :bit1;     // if this shader has extended usage info for the InputUsage table embedded below the input usage table
-  reserved2               :bit5;
-  reserved3               :Byte;
+  SourceHashType          :bit2;
+  reserved2               :bit3;
+  footer_version          :Byte;
 
   shaderHash0:DWORD;                 // Association hash first 4 bytes
   shaderHash1:DWORD;                 // Association hash second 4 bytes
