@@ -7,6 +7,8 @@ interface
 
 uses
  kern_mtx,
+ sys_bootparam,
+ host_ipc_interface,
  core_serialization,
  subr_dynlib;
 
@@ -60,13 +62,14 @@ type
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
    function   launchCmnDialog:Integer;
+   Procedure  Send(const msg:RawByteString;buf:Pointer;len:DWORD);
+   function   Open(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
    function   updateState:Integer;     virtual;
    function   Close:Integer;           virtual;
    Procedure  Terminate;               virtual;
    Destructor Destroy;                 override;
  end;
 
-function NewClient(client:TCommonDialogClient):Integer;
 function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
 
 implementation
@@ -82,11 +85,11 @@ begin
 
  mtx_lock(g_common_dialog_mtx);
 
- if (g_curr_client=nil) then
- begin
-  g_curr_client:=client;
-  Result:=True;
- end;
+  if (g_curr_client=nil) then
+  begin
+   g_curr_client:=client;
+   Result:=True;
+  end;
 
  mtx_unlock(g_common_dialog_mtx);
 end;
@@ -97,25 +100,13 @@ begin
 
  mtx_lock(g_common_dialog_mtx);
 
- if (g_curr_client=client) then
- begin
-  g_curr_client:=nil;
-  Result:=True;
- end;
+  if (g_curr_client=client) then
+  begin
+   g_curr_client:=nil;
+   Result:=True;
+  end;
 
  mtx_unlock(g_common_dialog_mtx);
-end;
-
-//QXFsLON5QWw
-function NewClient(client:TCommonDialogClient):Integer;
-begin
- if clientRegister(client) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=SCE_COMMON_DIALOG_ERROR_UNEXPECTED_FATAL;
- end;
 end;
 
 //afLdI6i0lQw
@@ -152,17 +143,38 @@ begin
  Result:=(status=SCE_COMMON_DIALOG_STATUS_FINISHED);
 end;
 
+//QXFsLON5QWw
 function TCommonDialogClient.launchCmnDialog:Integer;
 begin
- Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
-
- if (status=SCE_COMMON_DIALOG_STATUS_NONE) then
+ Result:=SCE_COMMON_DIALOG_ERROR_UNEXPECTED_FATAL;
+ if clientRegister(Self) then
  begin
-  //
-  Result:=0;
-  status:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+  Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
+  if (status=SCE_COMMON_DIALOG_STATUS_NONE) then
+  begin
+   Result:=0;
+   status:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+  end;
  end;
+end;
 
+Procedure TCommonDialogClient.Send(const msg:RawByteString;buf:Pointer;len:DWORD);
+begin
+ p_host_ipc.SendAsyn(HashIpcStr(msg),len,buf);
+end;
+
+function TCommonDialogClient.Open(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
+begin
+ if (status<>SCE_COMMON_DIALOG_STATUS_INITIALIZED) and
+    (status<>SCE_COMMON_DIALOG_STATUS_FINISHED)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+ end;
+ //
+ Send(msg,buf,len);
+ //
+ status:=SCE_COMMON_DIALOG_STATUS_RUNNING;
+ Result:=0;
 end;
 
 function TCommonDialogClient.updateState:Integer;
@@ -198,6 +210,9 @@ begin
  begin
   g_common_dialog_init:=1;
   mtx_lock(g_common_dialog_mtx);
+
+   //p_host_handler.AddCallback('CDLG_RESULT',@);
+
   //DialogInitialize
   mtx_unlock(g_common_dialog_mtx);
  end else
@@ -211,7 +226,7 @@ function ps4_sceCommonDialogIsUsed():Boolean;
 begin
  mtx_lock(g_common_dialog_mtx);
 
- Result:=(g_curr_client<>nil);
+  Result:=(g_curr_client<>nil);
 
  mtx_unlock(g_common_dialog_mtx);
 end;

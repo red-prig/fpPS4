@@ -19,7 +19,6 @@ uses
   SynEditMarkupBracket,
 
   TypInfo,
-  Rtti,
   jsonscanner,
 
   ms_shell_hack,

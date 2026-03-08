@@ -157,7 +157,6 @@ implementation
 
 uses
  TypInfo,
- Rtti,
 
  ms_shell_hack,
  ps4_libSceSystemService;

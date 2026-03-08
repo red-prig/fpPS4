@@ -15,19 +15,6 @@ uses
 const
  iRESULT=0;
 
-{
-type
- t_mtype=(
-  iRESULT,
-  iERROR,
-  iKEV_CHANGE,
-  iKEV_EVENT,
-  iMOUNT,
-  iMAIN_WINDOWS,
-  iCAPTION_FPS
- );
-}
-
 type
  TOnMessage=function(mlen:DWORD;buf:Pointer):Ptruint of object;
  TOnObject =function(obj:TObject):Ptruint            of object;

@@ -74,8 +74,7 @@ implementation
 {$R *.lfm}
 
 uses
- TypInfo,
- Rtti;
+ TypInfo;
 
 { TfrmGameEditor }
 

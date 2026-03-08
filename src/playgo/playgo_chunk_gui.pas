@@ -7,7 +7,6 @@ interface
 uses
  sysutils,
  bittype,
- rtti,
  core_serialization;
 
 const

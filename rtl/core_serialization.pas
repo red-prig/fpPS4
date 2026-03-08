@@ -13,6 +13,10 @@ uses
   fpjson;
 
 type
+ TValue=Rtti.TValue;
+
+ TRttiProperty=Rtti.TRttiProperty;
+
  TRttiPropertyIterator=object
   Ctx:TRTTIContext;
   A  :specialize TArray<TRttiProperty>;

@@ -6,8 +6,10 @@ unit ps4_libSceMsgDialog;
 interface
 
 uses
+ sysutils,
  kern_mtx,
  subr_dynlib,
+ kern_proc,
  ps4_libSceCommonDialog;
 
 const
@@ -56,59 +58,44 @@ const
 {$CALLING default}
 
 type
+ TMsgDialogOpen=record
+  mode      :Integer;                //SceMsgDialogMode
+  buttonType:Integer;                //SceMsgDialogButtonType
+  barType   :Integer;                //SceMsgDialogProgressBarType
+  sysMsgType:Integer;                //SceMsgDialogSystemMessageType
+  userId    :Integer;                //SceUserServiceUserId
+  msg       :array[0..8191] of Char; //char[8192]
+  msg1      :array[0..63]   of Char; //char[64]
+  msg2      :array[0..63]   of Char; //char[64]
+ end;
+
+ {
+ TMsgDialogOpen=class(TSerializeObject)
+  Fmode      :Integer;       //SceMsgDialogMode
+  FbuttonType:Integer;       //SceMsgDialogButtonType
+  FbarType   :Integer;       //SceMsgDialogProgressBarType
+  FsysMsgType:Integer;       //SceMsgDialogSystemMessageType
+  FuserId    :Integer;       //SceUserServiceUserId
+  Fmsg       :RawByteString; //char[8192]
+  Fmsg1      :RawByteString; //char[64]
+  Fmsg2      :RawByteString; //char[64]
+ published
+  property mode      :Integer       read Fmode       write Fmode      ;
+  property buttonType:Integer       read FbuttonType write FbuttonType;
+  property barType   :Integer       read FbarType    write FbarType   ;
+  property sysMsgType:Integer       read FsysMsgType write FsysMsgType;
+  property userId    :Integer       read FuserId     write FuserId    ;
+  property msg       :RawByteString read Fmsg        write Fmsg       ;
+  property msg1      :RawByteString read Fmsg1       write Fmsg1      ;
+  property msg2      :RawByteString read Fmsg2       write Fmsg2      ;
+ end;
+ }
+
  TMsgDialogClient=class(TCommonDialogClient)
-  //
+  data:TMsgDialogOpen;
  end;
 
 implementation
-
-var
- g_msg_mtx:mtx;
- g_client :TMsgDialogClient=nil;
-
-{$CALLING SysV_ABI_CDecl}
-
-function ps4_sceMsgDialogInitialize():Integer;
-var
- client:TMsgDialogClient;
-begin
- Result:=0;
- Writeln('sceMsgDialogInitialize');
-
- mtx_lock(g_msg_mtx);
-
-  Result:=SCE_COMMON_DIALOG_ERROR_ALREADY_INITIALIZED;
-  if (g_client=nil) then
-  begin
-
-   Result:=SCE_COMMON_DIALOG_ERROR_BUSY;
-   if (not ps4_sceCommonDialogIsUsed) then
-   begin
-    client:=TMsgDialogClient.Create;
-
-    Result:=NewClient(client);
-
-    if (Result=0) then
-    begin
-     Result:=client.launchCmnDialog();
-    end;
-
-    if (Result<>0) then
-    begin
-     client.Free;
-    end else
-    begin
-     //
-     g_client:=client;
-     //
-    end;
-
-   end;
-
-  end;
-
- mtx_unlock(g_msg_mtx);
-end;
 
 type
  pSceMsgDialogButtonsParam=^SceMsgDialogButtonsParam;
@@ -154,8 +141,247 @@ type
   _align2     :Integer;
  end;
 
-function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer;
+ pSceMsgDialogResult=^SceMsgDialogResult;
+ SceMsgDialogResult=packed record
+  mode    :Integer; //SceMsgDialogMode
+  result  :Integer;
+  buttonId:Integer; //SceMsgDialogButtonId
+  reserved:array[0..31] of Byte;
+ end;
+
+var
+ g_msg_mtx:mtx;
+ g_client :TMsgDialogClient=nil;
+
+{$CALLING SysV_ABI_CDecl}
+
+function ps4_sceMsgDialogInitialize():Integer;
+var
+ client:TMsgDialogClient;
 begin
+ Result:=0;
+ Writeln('sceMsgDialogInitialize');
+
+ mtx_lock(g_msg_mtx);
+
+  Result:=SCE_COMMON_DIALOG_ERROR_ALREADY_INITIALIZED;
+  if (g_client=nil) then
+  begin
+
+   Result:=SCE_COMMON_DIALOG_ERROR_BUSY;
+   if (not ps4_sceCommonDialogIsUsed) then
+   begin
+    client:=TMsgDialogClient.Create;
+
+    Result:=client.launchCmnDialog();
+
+    if (Result<>0) then
+    begin
+     client.Free;
+    end else
+    begin
+     //
+     g_client:=client;
+     //
+    end;
+
+   end;
+
+  end;
+
+ mtx_unlock(g_msg_mtx);
+end;
+
+function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
+var
+ i:size_t;
+begin
+ if (s=nil) then Exit(0);
+ i:=0;
+ if (maxlen<>0) then
+ begin
+  repeat
+   if (s[i]=#0) then Exit(i);
+   Inc(i);
+  until (maxlen = i);
+ end;
+ Exit(maxlen);
+end;
+
+function CheckButtonsParam(buttonsParam:pSceMsgDialogButtonsParam):Boolean;
+var
+ len,i:DWORD;
+begin
+ Result:=True;
+
+ if (buttonsParam=nil) then
+ begin
+  Exit(False);
+ end;
+
+ if (buttonsParam^.msg1=nil) then
+ begin
+  Exit(False);
+ end;
+
+ len:=strnlen_s(buttonsParam^.msg1,64);
+
+ if (len >= 64) then
+ begin
+  Exit(False);
+ end;
+
+ i:=0;
+ repeat
+  case buttonsParam^.msg1[i] of
+    #0:Break;
+   #10:Exit(False);
+   #13:Exit(False);
+   else;
+  end;
+  Inc(i);
+ until (i = 64);
+
+ if (buttonsParam^.msg2=nil) then
+ begin
+  Exit(False);
+ end;
+
+ len:=strnlen_s(buttonsParam^.msg2,64);
+
+ if (len >= 64) then
+ begin
+  Exit(False);
+ end;
+
+ i:=0;
+ repeat
+  case buttonsParam^.msg2[i] of
+    #0:Break;
+   #10:Exit(False);
+   #13:Exit(False);
+   else;
+  end;
+  Inc(i);
+ until (i = 64);
+ //
+end;
+
+function CheckUserMsgParam(userMsgParam:pSceMsgDialogUserMessageParam):Boolean;
+var
+ maxlen,len,i:DWORD;
+begin
+ Result:=True;
+
+ if (userMsgParam=nil) then
+ begin
+  Exit(False);
+ end;
+
+ if (DWORD(userMsgParam^.buttonType)>9) then
+ begin
+  Exit(False);
+ end;
+
+ if (p_proc.p_sdk_version < $1500000) then
+ begin
+  maxlen:=$200;
+ end else
+ begin
+  maxlen:=$2000;
+ end;
+
+ len:=strnlen_s(userMsgParam^.msg,maxlen);
+
+ if (len >= maxlen) then
+ begin
+  Exit(False);
+ end;
+
+ for i:=0 to High(SceMsgDialogUserMessageParam.reserved) do
+ if (userMsgParam^.reserved[i]<>0) then
+ begin
+  Exit(False);
+ end;
+
+ if (userMsgParam^.buttonType=SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS) then
+ begin
+  Result:=CheckButtonsParam(userMsgParam^.buttonsParam);
+ end else
+ begin
+  Result:=(userMsgParam^.buttonsParam=nil);
+ end;
+ //
+end;
+
+function CheckProgBarParam(progBarParam:pSceMsgDialogProgressBarParam):Boolean;
+var
+ len,i:DWORD;
+begin
+ Result:=True;
+
+ if (progBarParam=nil) then
+ begin
+  Exit(False);
+ end;
+
+ if (DWORD(progBarParam^.barType)>1) then
+ begin
+  Exit(False);
+ end;
+
+ if (p_proc.p_sdk_version >= $1500000) then
+ begin
+  len:=strnlen_s(progBarParam^.msg,$2000);
+  if (len >= $2000) then
+  begin
+   Exit(False);
+  end;
+ end;
+
+ for i:=0 to High(SceMsgDialogProgressBarParam.reserved) do
+ if (progBarParam^.reserved[i]<>0) then
+ begin
+  Exit(False);
+ end;
+ //
+end;
+
+function CheckSystemMessageParam(sysMsgParam:pSceMsgDialogSystemMessageParam;userId:Integer):Boolean;
+begin
+ Result:=True;
+
+ if (sysMsgParam=nil) then
+ begin
+  Exit(False);
+ end;
+
+ if (DWORD(sysMsgParam^.sysMsgType)>=6) then
+ begin
+  Exit(False);
+ end;
+
+ case sysMsgParam^.sysMsgType of
+  SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION,
+  SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION,
+  SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED,
+  SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION:
+   begin
+    //sceUserServiceIsLoggedIn(param->userId)
+   end;
+
+  else;
+ end;
+
+ //
+end;
+
+function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer;
+var
+ maxlen,i:DWORD;
+begin
+ Result:=0;
+
  if (param=nil) then
  begin
   Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
@@ -166,29 +392,130 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- if (g_client=nil) then
+ if (param^.size<>$88) then
  begin
-  Exit(SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED);
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ case param^.mode of
+   SCE_MSG_DIALOG_MODE_USER_MSG:
+     begin
+      //
+      if (param^.sysMsgParam<>nil) or (param^.progBarParam<>nil) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+
+      if not CheckUserMsgParam(param^.userMsgParam) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+      //
+     end;
+   SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
+     begin
+      //
+      if (param^.userMsgParam<>nil) or (param^.sysMsgParam<>nil) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+
+      if not CheckProgBarParam(param^.progBarParam) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+      //
+     end;
+   SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
+     begin
+      //
+      if (param^.userMsgParam<>nil) or (param^.progBarParam<>nil) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+
+      if not CheckSystemMessageParam(param^.sysMsgParam,param^.userId) then
+      begin
+       Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+      end;
+      //
+     end;
+   else
+    Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ for i:=0 to High(SceMsgDialogParam.reserved) do
+ if (param^.reserved[i]<>0) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
  Writeln('sceMsgDialogOpen');
 
- Case param^.mode of
-   SCE_MSG_DIALOG_MODE_USER_MSG:
-    begin
-     if (param^.userMsgParam=nil) then Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ mtx_lock(g_msg_mtx);
 
-     Writeln(param^.userMsgParam^.msg);
+  if (g_client<>nil) then
+  begin
 
-     //TODO
-    end;
-  //else
-  // Assert(false,'TODO');
- end;
+   g_client.data.mode  :=param^.mode;
+   g_client.data.userId:=param^.userId;
 
- //status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+   case g_client.data.mode of
+     SCE_MSG_DIALOG_MODE_USER_MSG:
+       begin
+        //
+        g_client.data.buttonType:=param^.userMsgParam^.buttonType;
+        //
+        if (p_proc.p_sdk_version < $1500000) then
+        begin
+         maxlen:=$1ff;
+        end else
+        begin
+         maxlen:=$1fff;
+        end;
+        StrLCopy(g_client.data.msg,param^.userMsgParam^.msg,maxlen);
+        //
+        if (g_client.data.buttonType=SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS) then
+        begin
+         StrLCopy(g_client.data.msg1,param^.userMsgParam^.buttonsParam^.msg1,63);
+         StrLCopy(g_client.data.msg2,param^.userMsgParam^.buttonsParam^.msg2,63);
+        end;
+        //
+       end;
+     SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
+       begin
+        //
+        g_client.data.barType:=param^.progBarParam^.barType;
+        //
+        if (p_proc.p_sdk_version < $1500000) then
+        begin
+         maxlen:=$1ff;
+        end else
+        begin
+         maxlen:=$1fff;
+        end;
+        StrLCopy(g_client.data.msg,param^.progBarParam^.msg,maxlen);
+        //
+       end;
+     SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
+       begin
+        //
+        g_client.data.sysMsgType:=param^.sysMsgParam^.sysMsgType;
+        //
+       end;
+     else;
+   end;
 
- Result:=0;
+  end else
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+  end;
+
+  //reTFEla4NQw
+  Result:=g_client.Open('MSG_DIALOG_OPEN',@g_client.data,SizeOf(g_client.data));
+
+ mtx_unlock(g_msg_mtx);
+ //
 end;
 
 function ps4_sceMsgDialogClose():Integer;
@@ -200,22 +527,15 @@ end;
 
 function ps4_sceMsgDialogUpdateStatus():Integer;
 begin
+ Result:=0;
  //Result:=status_msg_dialog;
 end;
 
 function ps4_sceMsgDialogGetStatus():Integer;
 begin
+ Result:=0;
  //Result:=status_msg_dialog;
 end;
-
-type
- pSceMsgDialogResult=^SceMsgDialogResult;
- SceMsgDialogResult=packed record
-  mode    :Integer; //SceMsgDialogMode
-  result  :Integer;
-  buttonId:Integer; //SceMsgDialogButtonId
-  reserved:array[0..31] of Byte;
- end;
 
 function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer;
 begin

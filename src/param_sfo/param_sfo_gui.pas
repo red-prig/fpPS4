@@ -6,7 +6,6 @@ interface
 
 uses
  sysutils,
- rtti,
  core_serialization;
 
 const

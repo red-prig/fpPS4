@@ -10,7 +10,6 @@ uses
  Controls,
  StdCtrls,
  TypInfo,
- Rtti,
  core_serialization;
 
 type
