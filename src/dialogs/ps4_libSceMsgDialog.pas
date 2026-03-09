@@ -58,6 +58,7 @@ const
 {$CALLING default}
 
 type
+ PMsgDialogOpen=^TMsgDialogOpen;
  TMsgDialogOpen=record
   mode      :Integer;                //SceMsgDialogMode
   buttonType:Integer;                //SceMsgDialogButtonType
@@ -456,6 +457,8 @@ begin
 
   if (g_client<>nil) then
   begin
+
+   g_client.data:=Default(TMsgDialogOpen);
 
    g_client.data.mode  :=param^.mode;
    g_client.data.userId:=param^.userId;

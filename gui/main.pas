@@ -33,7 +33,9 @@ uses
   param_sfo_gui,
   playgo_chunk_gui,
 
-  host_ipc_interface;
+  host_ipc_interface,
+
+  ps4_libSceMsgDialog;
 
 type
   TMainButtonsState=(mbsStopped,
@@ -154,14 +156,15 @@ type
 
     FGameMainForm:TGameMainForm;
 
-    function  OnKevent      (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
-    function  OnMainWindows (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
-    function  OnCaptionFPS  (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
-    function  OnError       (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
-    function  OnWarning     (mlen:DWORD;buf:Pointer):Ptruint; //WARNING
-    function  OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
-    function  OnPlaygoInit  (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
-    function  OnLoadExec    (obj:TObject)           :Ptruint; //LOAD_EXEC
+    function  OnKevent       (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
+    function  OnMainWindows  (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
+    function  OnCaptionFPS   (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+    function  OnError        (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+    function  OnWarning      (mlen:DWORD;buf:Pointer):Ptruint; //WARNING
+    function  OnParamSfoInit (mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
+    function  OnPlaygoInit   (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
+    function  OnLoadExec     (obj:TObject)           :Ptruint; //LOAD_EXEC
+    function  OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
 
     function  get_caption_format:RawByteString;
     function  OpenMainWindows():THandle;
@@ -682,8 +685,248 @@ begin
  FreeAndNil(data);
 end;
 
+function NewBtn(MsgForm:TForm;DlgPos:TAnchorSideReference;const Caption:RawByteString;ModalResult:Integer):TButton;
+var
+ MsgBtnz:TButton;
+begin
+ MsgBtnz:=TButton.Create(MsgForm);
 
+ case DlgPos of
+  asrTop:
+    begin
+     MsgBtnz.Anchors:=[akLeft,akBottom];
+     MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akLeft  ].Side   :=asrTop;
+     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
+    end;
+  asrBottom:
+    begin
+     MsgBtnz.Anchors:=[akRight,akBottom];
+     MsgBtnz.AnchorSide[akRight ].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akRight ].Side   :=asrBottom;
+     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
+    end;
+  asrCenter:
+    begin
+     MsgBtnz.Anchors:=[akLeft,akBottom];
+     MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akLeft  ].Side   :=asrCenter;
+     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
+     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
+    end;
+ end;
 
+ MsgBtnz.BorderSpacing.Around :=10;
+ MsgBtnz.Constraints.MinHeight:=25;
+ MsgBtnz.Constraints.MinWidth :=75;
+ MsgBtnz.AutoSize   :=True;
+ MsgBtnz.Caption    :=Caption;
+ MsgBtnz.Parent     :=MsgForm;
+ MsgBtnz.ModalResult:=ModalResult;
+
+ Result:=MsgBtnz;
+end;
+
+function TfrmMain.OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
+var
+ data:TMsgDialogOpen;
+
+ AParent:TForm;
+ MsgBtnz:TButton;
+ MsgForm:TForm;
+ MsgMemo:TMemo;
+ MsgPBar:TProgressBar;
+
+begin
+ Result:=0;
+
+ if (FGameItem=nil) then Exit;
+
+ if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
+ data:=Default(TMsgDialogOpen);
+ Move(buf^,data,mlen);
+
+ AParent:=Self;
+ if (FGameMainForm<>nil) then AParent:=FGameMainForm;
+
+ MsgBtnz:=nil;
+ MsgPBar:=nil;
+
+ MsgForm:=TForm.Create(nil);
+ try
+  MsgForm.Caption    :='Dialog';
+  MsgForm.Position   :=poDesigned;
+  MsgForm.BorderIcons:=[biSystemMenu];
+  MsgForm.FormStyle  :=fsSystemStayOnTop;
+  MsgForm.Left:= AParent.Left + (AParent.Width  - MsgForm.Width ) div 2;
+  MsgForm.Top := AParent.Top  + (AParent.Height - MsgForm.Height) div 2;
+  MsgForm.Width :=400;
+  MsgForm.Height:=200;
+
+  case data.mode of
+   SCE_MSG_DIALOG_MODE_USER_MSG:
+     begin
+      //
+      case data.buttonType of
+       SCE_MSG_DIALOG_BUTTON_TYPE_OK:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&OK' ,SCE_MSG_DIALOG_BUTTON_ID_OK);
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_YESNO:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&Yes',SCE_MSG_DIALOG_BUTTON_ID_YES);
+          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&No' ,SCE_MSG_DIALOG_BUTTON_ID_NO );
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_NONE:
+         begin
+          //
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&OK'    ,SCE_MSG_DIALOG_BUTTON_ID_OK     );
+          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_WAIT:
+         begin
+          //
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_WAIT_CANCEL:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_YESNO_FOCUS_NO:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&No' ,SCE_MSG_DIALOG_BUTTON_ID_NO );
+          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&Yes',SCE_MSG_DIALOG_BUTTON_ID_YES);
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL_FOCUS_CANCEL:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
+          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&OK'    ,SCE_MSG_DIALOG_BUTTON_ID_OK     );
+         end;
+       SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&'+data.msg1,SCE_MSG_DIALOG_BUTTON_ID_BUTTON1);
+          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&'+data.msg2,SCE_MSG_DIALOG_BUTTON_ID_BUTTON2);
+         end
+       else;
+      end;
+      //
+     end;
+   SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
+     begin
+      //
+
+      MsgPBar:=TProgressBar.Create(MsgForm);
+      MsgPBar.Min:=0;
+      MsgPBar.Max:=100;
+      MsgPBar.Position:=0;
+      MsgPBar.Smooth:=True;
+      MsgPBar.BorderSpacing.Left  :=5;
+      MsgPBar.BorderSpacing.Right :=5;
+      MsgPBar.BorderSpacing.Bottom:=5;
+
+      case data.barType of
+       SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE:;
+       SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE_CANCEL:
+         begin
+          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
+         end;
+       else;
+      end;
+      //
+     end;
+   SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
+     begin
+      MsgBtnz:=NewBtn(MsgForm,asrCenter,'&OK',SCE_MSG_DIALOG_BUTTON_ID_OK);
+     end;
+   else;
+  end;
+
+  //
+  MsgMemo:=TMemo.Create(MsgForm);
+  MsgMemo.ReadOnly:=True;
+  MsgMemo.Font.Name:='Courier New';
+  MsgMemo.Font.Size:=GetRealFontSize(AParent.Font) + 2;
+  //
+  MsgMemo.Anchors:=[akTop,akLeft,akRight,akBottom];
+  MsgMemo.AnchorSide[akTop   ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akTop   ].Side   :=asrTop;
+  MsgMemo.AnchorSide[akLeft  ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akLeft  ].Side   :=asrTop;
+  MsgMemo.AnchorSide[akRight ].Control:=MsgForm;
+  MsgMemo.AnchorSide[akRight ].Side   :=asrBottom;
+  MsgMemo.AnchorSide[akBottom].Control:=MsgForm;
+  MsgMemo.AnchorSide[akBottom].Side   :=asrBottom;
+
+  if (MsgPBar<>nil) then
+  begin
+   MsgPBar.Anchors:=[akLeft,akRight,akBottom];
+   MsgPBar.AnchorSide[akLeft  ].Control:=MsgForm;
+   MsgPBar.AnchorSide[akLeft  ].Side   :=asrTop;
+   MsgPBar.AnchorSide[akRight ].Control:=MsgForm;
+   MsgPBar.AnchorSide[akRight ].Side   :=asrBottom;
+   //
+   if (MsgBtnz<>nil) then
+   begin
+    MsgPBar.AnchorSide[akBottom].Control:=MsgBtnz;
+    MsgPBar.AnchorSide[akBottom].Side   :=asrTop;
+   end else
+   begin
+    MsgPBar.AnchorSide[akBottom].Control:=MsgForm;
+    MsgPBar.AnchorSide[akBottom].Side   :=asrBottom;
+   end;
+   //
+   MsgPBar.Parent:=MsgForm;
+   //
+   MsgMemo.AnchorSide[akBottom].Control:=MsgPBar;
+   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
+  end else
+  if (MsgBtnz<>nil) then
+  begin
+   MsgMemo.AnchorSide[akBottom].Control:=MsgBtnz;
+   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
+  end;
+
+  MsgMemo.BorderSpacing.Bottom:=10;
+
+  case data.mode of
+   SCE_MSG_DIALOG_MODE_USER_MSG:
+     begin
+      MsgMemo.Text:=data.msg;
+     end;
+   SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
+     begin
+      MsgMemo.Text:=data.msg;
+     end;
+   SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
+     begin
+      case data.sysMsgType of
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_EMPTY_STORE                            :MsgMemo.Text:='TRC_EMPTY_STORE';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION                   :MsgMemo.Text:='TRC_PSN_CHAT_RESTRICTION';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION                    :MsgMemo.Text:='TRC_PSN_UGC_RESTRICTION';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_WARNING_SWITCH_TO_SIMULVIEW            :MsgMemo.Text:='TRC_WARNING_SWITCH_TO_SIMULVIEW';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_CAMERA_NOT_CONNECTED                       :MsgMemo.Text:='CAMERA_NOT_CONNECTED';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED:MsgMemo.Text:='WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION              :MsgMemo.Text:='PSN_COMMUNICATION_RESTRICTION';
+      end;
+     end;
+   else;
+  end;
+
+  //
+  MsgMemo.Parent:=MsgForm;
+  //
+
+  MsgForm.Show;
+
+ except
+  MsgForm.Free;
+ end;
+
+end;
 
 //ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
 
@@ -974,14 +1217,15 @@ begin
 
  IpcHandler:=THostIpcHandler.Create;
 
- IpcHandler.AddCallback('KEV_EVENT'     ,@OnKevent      );
- IpcHandler.AddCallback('MAIN_WINDOWS'  ,@OnMainWindows );
- IpcHandler.AddCallback('CAPTION_FPS'   ,@OnCaptionFPS  );
- IpcHandler.AddCallback('ERROR'         ,@OnError       );
- IpcHandler.AddCallback('WARNING',       @OnWarning     );
- IpcHandler.AddCallback('PARAM_SFO_INIT',@OnParamSfoInit);
- IpcHandler.AddCallback('PLAYGO_INIT'   ,@OnPlaygoInit  );
- IpcHandler.AddCallback('LOAD_EXEC'     ,@OnLoadExec    ,TPS4LoadExec);
+ IpcHandler.AddCallback('KEV_EVENT'      ,@OnKevent      );
+ IpcHandler.AddCallback('MAIN_WINDOWS'   ,@OnMainWindows );
+ IpcHandler.AddCallback('CAPTION_FPS'    ,@OnCaptionFPS  );
+ IpcHandler.AddCallback('ERROR'          ,@OnError       );
+ IpcHandler.AddCallback('WARNING',        @OnWarning     );
+ IpcHandler.AddCallback('PARAM_SFO_INIT' ,@OnParamSfoInit);
+ IpcHandler.AddCallback('PLAYGO_INIT'    ,@OnPlaygoInit  );
+ IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    ,TPS4LoadExec);
+ IpcHandler.AddCallback('MSG_DIALOG_OPEN',@OnMsgDialogOpen);
 
  ReadConfigFile;
 
