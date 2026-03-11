@@ -258,9 +258,10 @@ end;
 function TDialogsManager.OnCdlgClose(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLOSE
 begin
  Result:=0;
+ if (FDialog=nil) then Exit;
 
  //What should the result code be?
- pContext^.SendAsyn('CDLG_SET_RESULT',0,nil);
+ pContext^.SendAsyn('CDLG_FINISH',0,nil);
 
  CloseDialog();
 end;
@@ -286,7 +287,7 @@ begin
   rzdata.resultId:=1;
  end;
 
- pContext^.SendAsyn('CDLG_SET_RESULT',SizeOf(rzdata),@rzdata);
+ pContext^.SendAsyn('CDLG_FINISH',SizeOf(rzdata),@rzdata);
 
  CloseDialog();
 end;

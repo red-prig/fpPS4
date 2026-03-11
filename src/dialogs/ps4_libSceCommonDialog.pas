@@ -6,6 +6,7 @@ unit ps4_libSceCommonDialog;
 interface
 
 uses
+ sysutils,
  kern_mtx,
  sys_bootparam,
  host_ipc_interface,
@@ -62,7 +63,7 @@ type
    finish:Byte;
    closed:Byte;
    rzdata:array of Byte;
-   function   OnCdlgSetResult(mlen:DWORD;buf:Pointer):Ptruint;
+   function   OnCdlgFinish(mlen:DWORD;buf:Pointer):Ptruint;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
@@ -74,11 +75,14 @@ type
    function   getFinishData(buf:Pointer;len:DWORD):Integer;
    function   updateState:Integer;     virtual;
    function   Close:Integer;           virtual;
-   function   Terminate:Integer;       virtual;
+   procedure  Terminate;               virtual;
    Destructor Destroy;                 override;
  end;
 
 function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
+function CheckReserved(var buf;len:DWORD):Integer;
+function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
+function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
 
 implementation
 
@@ -139,6 +143,40 @@ begin
  end;
 
  Result:=0;
+end;
+
+function CheckReserved(var buf;len:DWORD):Integer;
+var
+ i:DWORD;
+begin
+ for i:=0 to len-1 do
+ if (PByte(@buf)[i]<>0) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+ Result:=0;
+end;
+
+function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
+var
+ i:size_t;
+begin
+ if (s=nil) then Exit(0);
+ i:=0;
+ if (maxlen<>0) then
+ begin
+  repeat
+   if (s[i]=#0) then Exit(i);
+   Inc(i);
+  until (maxlen = i);
+ end;
+ Exit(maxlen);
+end;
+
+function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
+begin
+ if (dst=nil) or (src=nil) then Exit(nil);
+ Result:=StrLCopy(dst,src,maxlen);
 end;
 
 function TCommonDialogClient.isInitializedStatus:Boolean;
@@ -228,10 +266,14 @@ end;
 
 function TCommonDialogClient.updateState:Integer;
 begin
- if (finish<>0) and (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
- begin
-  status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
- end;
+ mtx_lock(g_common_dialog_mtx);
+
+  if (finish<>0) and (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+  begin
+   status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+  end;
+
+ mtx_unlock(g_common_dialog_mtx);
  //
  Result:=0;
 end;
@@ -254,9 +296,9 @@ begin
  Result:=0;
 end;
 
-function TCommonDialogClient.Terminate:Integer;
+procedure TCommonDialogClient.Terminate;
 begin
- Result:=Close;
+ Close;
  //
  Free;
 end;
@@ -267,7 +309,7 @@ begin
  inherited;
 end;
 
-function TCommonDialogClient.OnCdlgSetResult(mlen:DWORD;buf:Pointer):Ptruint;
+function TCommonDialogClient.OnCdlgFinish(mlen:DWORD;buf:Pointer):Ptruint;
 begin
  Result:=0;
 
@@ -279,8 +321,6 @@ begin
    begin
     SetLength(rzdata,mlen);
     Move(buf^,rzdata[0],mlen);
-    //
-    System.ReadWriteBarrier;
     //
     finish:=1;
    end;
@@ -302,7 +342,7 @@ begin
   mtx_lock(g_common_dialog_mtx);
 
    //DialogInitialize
-   p_host_handler.AddCallback('CDLG_SET_RESULT',@TCommonDialogClient(nil).OnCdlgSetResult);
+   p_host_handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
 
   mtx_unlock(g_common_dialog_mtx);
  end else
@@ -321,6 +361,16 @@ begin
  mtx_unlock(g_common_dialog_mtx);
 end;
 
+function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
+begin
+ mtx_lock(g_common_dialog_mtx);
+
+  p_host_handler.DelCallback('CDLG_FINISH');
+
+ mtx_unlock(g_common_dialog_mtx);
+ Result:=0;
+end;
+
 //
 
 function Load_libSceCommonDialog(name:pchar):p_lib_info;
@@ -328,6 +378,8 @@ var
  lib:TLIBRARY;
 begin
  Result:=obj_new_int('libSceCommonDialog');
+
+ Result^.fini_proc_addr.native:=@dt_fini;
 
  lib:=Result^.add_lib('libSceCommonDialog');
  lib.set_proc($BA85292C6364CA09,@ps4_sceCommonDialogInitialize);

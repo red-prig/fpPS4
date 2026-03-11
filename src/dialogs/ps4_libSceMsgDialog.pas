@@ -6,7 +6,6 @@ unit ps4_libSceMsgDialog;
 interface
 
 uses
- sysutils,
  kern_mtx,
  subr_dynlib,
  kern_proc,
@@ -177,22 +176,6 @@ begin
  mtx_unlock(g_msg_mtx);
 end;
 
-function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- if (s=nil) then Exit(0);
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
-end;
-
 function CheckButtonsParam(buttonsParam:pSceMsgDialogButtonsParam):Boolean;
 var
  len,i:DWORD;
@@ -254,7 +237,7 @@ end;
 
 function CheckUserMsgParam(userMsgParam:pSceMsgDialogUserMessageParam):Boolean;
 var
- maxlen,len,i:DWORD;
+ maxlen,len:DWORD;
 begin
  Result:=True;
 
@@ -283,8 +266,7 @@ begin
   Exit(False);
  end;
 
- for i:=0 to High(SceMsgDialogUserMessageParam.reserved) do
- if (userMsgParam^.reserved[i]<>0) then
+ if CheckReserved(userMsgParam^.reserved,SizeOf(userMsgParam^.reserved))<>0 then
  begin
   Exit(False);
  end;
@@ -301,7 +283,7 @@ end;
 
 function CheckProgBarParam(progBarParam:pSceMsgDialogProgressBarParam):Boolean;
 var
- len,i:DWORD;
+ len:DWORD;
 begin
  Result:=True;
 
@@ -324,8 +306,7 @@ begin
   end;
  end;
 
- for i:=0 to High(SceMsgDialogProgressBarParam.reserved) do
- if (progBarParam^.reserved[i]<>0) then
+ if CheckReserved(progBarParam^.reserved,SizeOf(progBarParam^.reserved))<>0 then
  begin
   Exit(False);
  end;
@@ -363,7 +344,7 @@ end;
 
 function ps4_sceMsgDialogOpen(param:pSceMsgDialogParam):Integer;
 var
- maxlen,i:DWORD;
+ maxlen:DWORD;
 begin
  Result:=0;
 
@@ -429,8 +410,7 @@ begin
     Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- for i:=0 to High(SceMsgDialogParam.reserved) do
- if (param^.reserved[i]<>0) then
+ if CheckReserved(param^.reserved,SizeOf(param^.reserved))<>0 then
  begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
@@ -461,12 +441,12 @@ begin
         begin
          maxlen:=$1fff;
         end;
-        StrLCopy(g_client.data.msg,param^.userMsgParam^.msg,maxlen);
+        strncpy_s(g_client.data.msg,param^.userMsgParam^.msg,maxlen);
         //
         if (g_client.data.buttonType=SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS) then
         begin
-         StrLCopy(g_client.data.msg1,param^.userMsgParam^.buttonsParam^.msg1,63);
-         StrLCopy(g_client.data.msg2,param^.userMsgParam^.buttonsParam^.msg2,63);
+         strncpy_s(g_client.data.msg1,param^.userMsgParam^.buttonsParam^.msg1,63);
+         strncpy_s(g_client.data.msg2,param^.userMsgParam^.buttonsParam^.msg2,63);
         end;
         //
        end;
@@ -482,7 +462,7 @@ begin
         begin
          maxlen:=$1fff;
         end;
-        StrLCopy(g_client.data.msg,param^.progBarParam^.msg,maxlen);
+        strncpy_s(g_client.data.msg,param^.progBarParam^.msg,maxlen);
         //
        end;
      SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
@@ -536,47 +516,16 @@ begin
 
   if (g_client<>nil) then
   begin
-   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
-   if (not g_client.isInitializedStatus) then
-   if (not g_client.isFinish) then
-   begin
-    Result:=g_client.Terminate;
-    g_client:=nil;
-   end;
+   g_client.Terminate;
+   g_client:=nil;
+   Result:=0;
   end;
 
  mtx_unlock(g_msg_mtx);
  //
-
- Result:=0;
 end;
 
 function ps4_sceMsgDialogUpdateStatus():Integer;
-begin
- Result:=SCE_COMMON_DIALOG_STATUS_NONE;
-
- mtx_lock(g_msg_mtx);
-
-  if (g_client<>nil) then
-  begin
-   Result:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
-   if (not g_client.isInitializedStatus) then
-   begin
-    if (g_client.isFinish) then
-    begin
-     Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
-    end else
-    begin
-     Result:=SCE_COMMON_DIALOG_STATUS_RUNNING;
-    end;
-   end;
-  end;
-
- mtx_unlock(g_msg_mtx);
- //
-end;
-
-function ps4_sceMsgDialogGetStatus():Integer;
 begin
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 
@@ -606,9 +555,33 @@ begin
  //
 end;
 
+function ps4_sceMsgDialogGetStatus():Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+   if (not g_client.isInitializedStatus) then
+   begin
+    if (g_client.isFinish) then
+    begin
+     Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+    end else
+    begin
+     Result:=SCE_COMMON_DIALOG_STATUS_RUNNING;
+    end;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+end;
+
 function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer;
 var
- i:Integer;
  rzdata:TMsgDialogResult;
 begin
  if (pResult=nil) then
@@ -616,8 +589,7 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
  end;
 
- for i:=0 to High(SceMsgDialogResult.reserved) do
- if (pResult^.reserved[i]<>0) then
+ if CheckReserved(pResult^.reserved,SizeOf(pResult^.reserved))<>0 then
  begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
