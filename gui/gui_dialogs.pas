@@ -259,6 +259,9 @@ function TDialogsManager.OnCdlgClose(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLO
 begin
  Result:=0;
 
+ //What should the result code be?
+ pContext^.SendAsyn('CDLG_SET_RESULT',0,nil);
+
  CloseDialog();
 end;
 

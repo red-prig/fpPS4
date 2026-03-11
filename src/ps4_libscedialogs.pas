@@ -456,6 +456,16 @@ end;
 
 //
 
+function ps4_sceInvitationDialogInitialize():Integer;
+begin
+ Result:=0;
+end;
+
+function ps4_sceInvitationDialogTerminate():Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceInvitationDialogUpdateStatus():Integer;
 begin
  Result:=0;
@@ -623,6 +633,8 @@ begin
  Result:=obj_new_int('libSceInvitationDialog');
 
  lib:=Result^.add_lib('libSceInvitationDialog');
+ lib.set_proc($5EF039292E7AC1CB,@ps4_sceInvitationDialogInitialize);
+ lib.set_proc($07A1D526D0D8C441,@ps4_sceInvitationDialogTerminate);
  lib.set_proc($F7E83D88EABEEE48,@ps4_sceInvitationDialogUpdateStatus);
 end;
 

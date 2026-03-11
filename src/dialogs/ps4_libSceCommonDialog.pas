@@ -59,7 +59,8 @@ type
  TCommonDialogClient=class  //(TSerializeObject)
   private
    status:Integer;
-   finish:Integer;
+   finish:Byte;
+   closed:Byte;
    rzdata:array of Byte;
    function   OnCdlgSetResult(mlen:DWORD;buf:Pointer):Ptruint;
   public
@@ -178,9 +179,13 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
  end;
  //
+ SetLength(rzdata,0);
+ finish:=0;
+ closed:=0;
+ status:=SCE_COMMON_DIALOG_STATUS_RUNNING;
+ //
  Send(msg,buf,len);
  //
- status:=SCE_COMMON_DIALOG_STATUS_RUNNING;
  Result:=0;
 end;
 
@@ -225,7 +230,6 @@ function TCommonDialogClient.updateState:Integer;
 begin
  if (finish<>0) and (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
  begin
-  finish:=0;
   status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  end;
  //
@@ -239,9 +243,14 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
  end;
 
+ if (closed<>0)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_ALREADY_CLOSE);
+ end;
+
  Send('CDLG_CLOSE',nil,0);
 
- status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+ closed:=1;
  Result:=0;
 end;
 
@@ -268,10 +277,12 @@ begin
   with g_curr_client do
    if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
    begin
-    finish:=1;
-    //
     SetLength(rzdata,mlen);
     Move(buf^,rzdata[0],mlen);
+    //
+    System.ReadWriteBarrier;
+    //
+    finish:=1;
    end;
 
  mtx_unlock(g_common_dialog_mtx);
