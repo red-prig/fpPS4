@@ -189,7 +189,7 @@ begin
   begin
    info.func_addr:=0;
 
-   adr:=QWORD(obj^.init_proc_addr);
+   adr:=QWORD(obj^.init_proc_addr.addr);
    if (adr<=QWORD(r.Addr)) then
    if (adr>info.func_addr) then
    begin
@@ -198,7 +198,7 @@ begin
     Result:=True;
    end;
 
-   adr:=QWORD(obj^.fini_proc_addr);
+   adr:=QWORD(obj^.fini_proc_addr.addr);
    if (adr<=QWORD(r.Addr)) then
    if (adr>info.func_addr) then
    begin

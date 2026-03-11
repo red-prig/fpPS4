@@ -1117,11 +1117,11 @@ begin
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
  dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
 
- init_proc_addr:=obj^.fini_proc_addr;
- fini_proc_addr:=obj^.init_proc_addr;
+ init_proc_addr:=obj^.fini_proc_addr.addr;
+ fini_proc_addr:=obj^.init_proc_addr.addr;
 
- obj^.fini_proc_addr:=nil;
- obj^.init_proc_addr:=nil;
+ obj^.fini_proc_addr.addr:=nil;
+ obj^.init_proc_addr.addr:=nil;
 
  tail:=TAILQ_LAST(@dynlibs_info.obj_list);
  if (tail=nil) then
@@ -1134,8 +1134,8 @@ begin
                       tail,
                       dynlibs_info.init_proc_list);
 
- obj^.init_proc_addr:=init_proc_addr;
- obj^.fini_proc_addr:=fini_proc_addr;
+ obj^.init_proc_addr.addr:=init_proc_addr;
+ obj^.fini_proc_addr.addr:=fini_proc_addr;
 
  ///
 end;

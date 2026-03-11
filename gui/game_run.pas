@@ -17,7 +17,9 @@ uses
  host_ipc_interface,
  md_host_ipc,
  param_sfo_gui,
+ core_shell,
  game_info,
+ game_run_context,
  game_mount;
 
 type
@@ -39,7 +41,7 @@ type
   Destructor Destroy; override;
  end;
 
-function run_item(const cfg:TGameRunConfig):TGameProcess;
+function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 
 implementation
 
@@ -209,146 +211,6 @@ begin
  ps4_libSceAudioOut.FHeadphoneDevice :=ConfInfo.PS4Audio.HeadphoneDevice;
  ps4_libSceAudioOut.FControllerDevice:=ConfInfo.PS4Audio.ControllerDevice;
  ps4_libSceAudioOut.FSpecialDevice   :=ConfInfo.PS4Audio.SpecialDevice;
-end;
-
-procedure free_params(argv:PPChar);
-var
- curr:PPChar;
-begin
- if (argv=nil) then Exit;
- curr:=argv;
- while (curr^<>nil) do
- begin
-  FreeMem(curr^);
-  Inc(curr);
- end;
- FreeMem(argv);
-end;
-
-function parse_params(const params:RawByteString;var argv:PPChar):Integer;
-var
- curr:PChar;
- last:PChar;
-
- barg:PChar;
- blen:Integer;
-
- argc:Integer;
-
- state:char;
-
- procedure concat_arg(delta:Integer);
- var
-  i:Integer;
- begin
-  if (curr<>last) then
-  begin
-   i:=(curr-last);
-   ReAllocMem(barg,blen+i+1); //zero truncate
-   Move(last^,barg[blen],i);
-   blen:=blen+i;
-   barg[blen]:=#0;
-  end;
-  last:=curr+delta;
- end;
-
- procedure next_arg;
- begin
-  if (barg<>nil) then
-  begin
-   ReAllocMem(argv,SizeOf(Pointer)*(argc+1+1)); //zero truncate
-   argv[argc]:=barg;
-   Inc(argc);
-   argv[argc]:=nil; //truncate
-   barg:=nil;       //reset
-   blen:=0;         //reset
-  end;
- end;
-
-begin
- Result:=1;
-
- //init
- argc:=0;
- argv:=AllocMem(SizeOf(Pointer)*2);
- argv[0]:=nil; //truncate
-
- curr:=@params[1];
- last:=curr;
-
- barg:=nil;
- blen:=0;
-
- state:=#0;
-
- if (curr<>nil) then
- while (curr^<>#0) do
- begin
-
-  case state of
-   ' ':
-     if (curr^<>' ') then
-     begin
-      last:=curr; //update pos
-      state:=#0;
-     end;
-   '\':
-     begin
-      last:=curr; //update pos
-      state:=#0;
-      //skip
-      Inc(curr);
-      Continue;
-     end;
-   else;
-  end;
-
-  case curr^ of
-
-   ' ':
-     begin
-      if (state=#0) then
-      begin
-       concat_arg(1);
-       next_arg;
-       state:=' ';
-      end;
-     end;
-
-   '''',
-    '"':
-     begin
-      if (state=#0) then
-      begin
-       concat_arg(1);
-       state:=curr^;
-      end else
-      if (state=curr^) then
-      begin
-       concat_arg(1);
-       state:=#0;
-      end;
-     end;
-
-    '\':
-     begin
-      concat_arg(1);
-      state:='\';
-     end;
-
-   else;
-  end;
-
-  Inc(curr);
- end;
-
- if (state<>' ') then
- begin
-  concat_arg(0);
-  next_arg;
- end;
-
- Result:=argc;
 end;
 
 function get_errno_str(err:Integer):RawByteString;
@@ -658,7 +520,7 @@ byte GetBesteffort(t_app_m_info *param_1)
 
 }
 
-function run_item(const cfg:TGameRunConfig):TGameProcess;
+function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 label
  _error;
 var
@@ -678,7 +540,7 @@ var
  GameStartupInfo:TGameStartupInfo;
  mem:TMemoryStream;
 begin
- Result:=nil;
+ Result:=0;
  r:=0;
 
  GameStartupInfo:=TGameStartupInfo.Create(False);
@@ -735,10 +597,10 @@ begin
 
  if cfg.FConfInfo.MiscInfo.fork_proc then
  begin
-  Result:=TGameProcessPipe.Create;
-  Result.g_fork:=True;
+  Context.FGameProcess:=TGameProcessPipe.Create;
+  Context.FGameProcess.g_fork:=True;
 
-  with TGameProcessPipe(Result) do
+  with TGameProcessPipe(Context.FGameProcess) do
   begin
    r:=md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
@@ -771,10 +633,10 @@ begin
   mem.Free;
  end else
  begin
-  Result:=TGameProcessSimple.Create;
-  Result.g_fork:=False;
+  Context.FGameProcess:=TGameProcessSimple.Create;
+  Context.FGameProcess.g_fork:=False;
 
-  with TGameProcessSimple(Result) do
+  with TGameProcessSimple(Context.FGameProcess) do
   begin
 
    s_kern_ipc:=THostIpcSimpleKERN.Create;
@@ -800,15 +662,14 @@ begin
  if (r<>0) then
  begin
   _error:
-  ShowMessage('error run process code=0x'+HexStr(r,8));
-  FreeAndNil(Result);
-  Exit;
+  FreeAndNil(Context.FGameProcess);
+  Exit(r);
  end;
 
- Result.g_proc :=fork_info.hProcess;
- Result.g_p_pid:=fork_info.fork_pid;
+ Context.FGameProcess.g_proc :=fork_info.hProcess;
+ Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Result.g_ipc.thread_new;
+ Context.FGameProcess.g_ipc.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;
@@ -817,10 +678,16 @@ begin
  kev.data  :=0;
  kev.udata :=nil;
 
- Result.g_ipc.kevent(@kev,1);
+ Context.FGameProcess.g_ipc.kevent(@kev,1);
+
+ if (not cfg.FLoadExec) then
+ begin
+  Context.FParamSfo:=cfg.FParamSfo;
+  Context.FGameItem:=cfg.FGameItem;
+  Context.FGameItem.FLock:=True;
+ end;
 
 end;
-
 
 
 end.

@@ -57,16 +57,23 @@ function ps4_sceCommonDialogIsUsed():Boolean;
 
 type
  TCommonDialogClient=class  //(TSerializeObject)
+  private
    status:Integer;
+   finish:Integer;
+   rzdata:array of Byte;
+   function   OnCdlgSetResult(mlen:DWORD;buf:Pointer):Ptruint;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
    function   launchCmnDialog:Integer;
    Procedure  Send(const msg:RawByteString;buf:Pointer;len:DWORD);
    function   Open(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
+   function   SetValue(buf:Pointer;len:DWORD):Integer;
+   function   SetMsg  (buf:Pointer;len:DWORD):Integer;
+   function   getFinishData(buf:Pointer;len:DWORD):Integer;
    function   updateState:Integer;     virtual;
    function   Close:Integer;           virtual;
-   Procedure  Terminate;               virtual;
+   function   Terminate:Integer;       virtual;
    Destructor Destroy;                 override;
  end;
 
@@ -177,18 +184,71 @@ begin
  Result:=0;
 end;
 
+function TCommonDialogClient.SetValue(buf:Pointer;len:DWORD):Integer;
+begin
+ if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+ end;
+
+ Send('CDLG_SET_VALUE',buf,len);
+
+ Result:=0;
+end;
+
+function TCommonDialogClient.SetMsg(buf:Pointer;len:DWORD):Integer;
+begin
+ if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+ end;
+
+ Send('CDLG_SET_MSG',buf,len);
+
+ Result:=0;
+end;
+
+function TCommonDialogClient.getFinishData(buf:Pointer;len:DWORD):Integer;
+begin
+ if (status<>SCE_COMMON_DIALOG_STATUS_FINISHED)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+ end;
+
+ if (len>Length(rzdata)) then len:=Length(rzdata);
+ Move(rzdata[0],buf^,len);
+
+ Result:=0;
+end;
+
 function TCommonDialogClient.updateState:Integer;
 begin
+ if (finish<>0) and (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+ begin
+  finish:=0;
+  status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+ end;
+ //
  Result:=0;
 end;
 
 function TCommonDialogClient.Close:Integer;
 begin
+ if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING)  then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+ end;
+
+ Send('CDLG_CLOSE',nil,0);
+
+ status:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
 
-Procedure TCommonDialogClient.Terminate;
+function TCommonDialogClient.Terminate:Integer;
 begin
+ Result:=Close;
+ //
  Free;
 end;
 
@@ -196,6 +256,25 @@ Destructor TCommonDialogClient.Destroy;
 begin
  clientDeregister(Self);
  inherited;
+end;
+
+function TCommonDialogClient.OnCdlgSetResult(mlen:DWORD;buf:Pointer):Ptruint;
+begin
+ Result:=0;
+
+ mtx_lock(g_common_dialog_mtx);
+
+  if (g_curr_client<>nil) then
+  with g_curr_client do
+   if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+   begin
+    finish:=1;
+    //
+    SetLength(rzdata,mlen);
+    Move(buf^,rzdata[0],mlen);
+   end;
+
+ mtx_unlock(g_common_dialog_mtx);
 end;
 
 {$CALLING SysV_ABI_CDecl}
@@ -211,9 +290,9 @@ begin
   g_common_dialog_init:=1;
   mtx_lock(g_common_dialog_mtx);
 
-   //p_host_handler.AddCallback('CDLG_RESULT',@);
+   //DialogInitialize
+   p_host_handler.AddCallback('CDLG_SET_RESULT',@TCommonDialogClient(nil).OnCdlgSetResult);
 
-  //DialogInitialize
   mtx_unlock(g_common_dialog_mtx);
  end else
  begin

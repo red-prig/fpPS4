@@ -1,13 +1,13 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 556
+  Left = 557
   Height = 339
-  Top = 88
+  Top = 89
   Width = 459
   Caption = 'Config Editor'
   ClientHeight = 339
   ClientWidth = 459
   Position = poMainFormCenter
-  LCLVersion = '4.2.0.0'
+  LCLVersion = '4.4.0.0'
   object EditPages: TPageControl
     AnchorSideLeft.Control = Owner
     AnchorSideTop.Control = Owner
@@ -18,14 +18,14 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 289
     Top = 5
     Width = 449
-    ActivePage = Tab_PS4Audio
+    ActivePage = Tab_MainInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Left = 5
     BorderSpacing.Top = 5
     BorderSpacing.Right = 5
     BorderSpacing.Bottom = 10
-    TabIndex = 6
+    TabIndex = 0
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'

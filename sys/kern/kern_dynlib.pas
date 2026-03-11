@@ -476,8 +476,8 @@ begin
    begin
     if (obj^.rtld_flags.not_get_proc=0) then
     begin
-     dst^.init_proc_addr:=obj^.init_proc_addr;
-     dst^.fini_proc_addr:=obj^.fini_proc_addr;
+     dst^.init_proc_addr:=obj^.init_proc_addr.addr;
+     dst^.fini_proc_addr:=obj^.fini_proc_addr.addr;
     end;
 
     dst^.segments[0].addr:=obj^.map_base;
@@ -635,11 +635,11 @@ begin
    case num of
     1:if (obj^.rtld_flags.not_get_proc=0) then
       begin
-       dst:=obj^.init_proc_addr;
+       dst:=obj^.init_proc_addr.addr;
       end;
     2:if (obj^.rtld_flags.not_get_proc=0) then
       begin
-       dst:=obj^.fini_proc_addr;
+       dst:=obj^.fini_proc_addr.addr;
       end;
     3:begin
        dst:=obj^.eh_frame_hdr_addr;

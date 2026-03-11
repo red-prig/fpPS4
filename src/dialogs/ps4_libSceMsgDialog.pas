@@ -70,30 +70,14 @@ type
   msg2      :array[0..63]   of Char; //char[64]
  end;
 
- {
- TMsgDialogOpen=class(TSerializeObject)
-  Fmode      :Integer;       //SceMsgDialogMode
-  FbuttonType:Integer;       //SceMsgDialogButtonType
-  FbarType   :Integer;       //SceMsgDialogProgressBarType
-  FsysMsgType:Integer;       //SceMsgDialogSystemMessageType
-  FuserId    :Integer;       //SceUserServiceUserId
-  Fmsg       :RawByteString; //char[8192]
-  Fmsg1      :RawByteString; //char[64]
-  Fmsg2      :RawByteString; //char[64]
- published
-  property mode      :Integer       read Fmode       write Fmode      ;
-  property buttonType:Integer       read FbuttonType write FbuttonType;
-  property barType   :Integer       read FbarType    write FbarType   ;
-  property sysMsgType:Integer       read FsysMsgType write FsysMsgType;
-  property userId    :Integer       read FuserId     write FuserId    ;
-  property msg       :RawByteString read Fmsg        write Fmsg       ;
-  property msg1      :RawByteString read Fmsg1       write Fmsg1      ;
-  property msg2      :RawByteString read Fmsg2       write Fmsg2      ;
+ TMsgDialogResult=record
+  resultId:Integer;
+  buttonId:Integer; //SceMsgDialogButtonId
  end;
- }
 
  TMsgDialogClient=class(TCommonDialogClient)
   data:TMsgDialogOpen;
+  rate:DWORD;
  end;
 
 implementation
@@ -459,6 +443,7 @@ begin
   begin
 
    g_client.data:=Default(TMsgDialogOpen);
+   g_client.rate:=0;
 
    g_client.data.mode  :=param^.mode;
    g_client.data.userId:=param^.userId;
@@ -523,38 +508,304 @@ end;
 
 function ps4_sceMsgDialogClose():Integer;
 begin
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  Writeln('sceMsgDialogClose');
- //status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isInitializedStatus) then
+   if (not g_client.isFinish) then
+   begin
+    Result:=g_client.Close;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+end;
+
+function ps4_sceMsgDialogTerminate():Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ Writeln('sceMsgDialogTerminate');
+
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isInitializedStatus) then
+   if (not g_client.isFinish) then
+   begin
+    Result:=g_client.Terminate;
+    g_client:=nil;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+
  Result:=0;
 end;
 
 function ps4_sceMsgDialogUpdateStatus():Integer;
 begin
- Result:=0;
- //Result:=status_msg_dialog;
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+   if (not g_client.isInitializedStatus) then
+   begin
+    if (g_client.isFinish) then
+    begin
+     Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+    end else
+    begin
+     Result:=SCE_COMMON_DIALOG_STATUS_RUNNING;
+    end;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
 end;
 
 function ps4_sceMsgDialogGetStatus():Integer;
 begin
- Result:=0;
- //Result:=status_msg_dialog;
+ Result:=SCE_COMMON_DIALOG_STATUS_NONE;
+
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
+   if (not g_client.isInitializedStatus) then
+   begin
+    Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+    if (not g_client.isFinish) then
+    begin
+     g_client.updateState;
+     if (g_client.isFinish) then
+     begin
+      Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
+     end else
+     begin
+      Result:=SCE_COMMON_DIALOG_STATUS_RUNNING;
+     end;
+    end;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
 end;
 
 function ps4_sceMsgDialogGetResult(pResult:pSceMsgDialogResult):Integer;
+var
+ i:Integer;
+ rzdata:TMsgDialogResult;
 begin
- //Writeln('sceMsgDialogGetResult');
- if (pResult<>nil) then
+ if (pResult=nil) then
  begin
-  pResult^.result:=0;
-  pResult^.buttonId:=1;
+  Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
  end;
- Result:=0;
+
+ for i:=0 to High(SceMsgDialogResult.reserved) do
+ if (pResult^.reserved[i]<>0) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
+   if (g_client.isFinish) then
+   begin
+    rzdata:=Default(TMsgDialogResult);;
+    g_client.getFinishData(@rzdata,sizeof(rzdata));
+
+    //fixup
+    if (p_proc.p_sdk_version >= $3000000) then
+    if (rzdata.buttonId = 0) and (rzdata.resultId = 1) then
+    begin
+     case g_client.data.mode of
+       SCE_MSG_DIALOG_MODE_USER_MSG:
+         begin
+          case g_client.data.buttonType of
+           0:begin
+              rzdata.resultId:=0;
+              rzdata.buttonId:=1;
+             end;
+           1,7:
+             begin
+              rzdata.resultId:=0;
+              rzdata.buttonId:=2;
+             end;
+           else
+             begin
+              rzdata.resultId:=1;
+              rzdata.buttonId:=0;
+             end;
+          end;
+         end;
+       SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
+         case g_client.data.sysMsgType of
+          3:; //skip
+          5:; //skip
+          else
+            rzdata.resultId:=0;
+            rzdata.buttonId:=1;
+         end;
+       else;
+     end;
+    end;
+
+    pResult^.mode    :=0;
+    pResult^.result  :=rzdata.resultId;
+    pResult^.buttonId:=rzdata.buttonId;
+
+    Result:=rzdata.resultId;
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
 end;
 
-function ps4_sceMsgDialogTerminate():Integer;
+function ps4_sceMsgDialogProgressBarSetValue(target:Integer;rate:DWORD):Integer;
 begin
- Writeln('sceMsgDialogTerminate');
- //status_msg_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  if (not g_client.isInitializedStatus) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isFinish) then
+   begin
+    //
+    if (g_client.data.mode<>SCE_MSG_DIALOG_MODE_PROGRESS_BAR) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED;
+    end else
+    if (target<>0) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+    end else
+    begin
+     g_client.rate:=rate;
+     Result:=g_client.SetValue(@g_client.rate,SizeOf(g_client.rate));
+    end;
+    //
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+end;
+
+function ps4_sceMsgDialogProgressBarInc(target:Integer;delta:DWORD):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  if (not g_client.isInitializedStatus) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isFinish) then
+   begin
+    //
+    if (g_client.data.mode<>SCE_MSG_DIALOG_MODE_PROGRESS_BAR) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED;
+    end else
+    if (target<>0) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+    end else
+    begin
+     g_client.rate:=g_client.rate + delta;
+     Result:=g_client.SetValue(@g_client.rate,SizeOf(g_client.rate));
+    end;
+    //
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+end;
+
+function ps4_sceMsgDialogProgressBarSetMsg(target:Integer;barMsg:pchar):Integer;
+var
+ maxlen,len:DWORD;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_msg_mtx);
+
+  if (g_client<>nil) then
+  if (not g_client.isInitializedStatus) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isFinish) then
+   begin
+    //
+    if (g_client.data.mode<>SCE_MSG_DIALOG_MODE_PROGRESS_BAR) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED;
+    end else
+    if (target<>0) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+    end else
+    begin
+     Result:=0;
+     if (p_proc.p_sdk_version >= $1700000) then
+     begin
+      //
+      if (p_proc.p_sdk_version > $1500000) then
+      begin
+       len:=strnlen_s(barMsg,$2000);
+       if (len>=$2000) then
+       begin
+        mtx_unlock(g_msg_mtx);
+        Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID)
+       end;
+      end;
+      //
+      if (p_proc.p_sdk_version < $1500000) then
+      begin
+       maxlen:=$200;
+      end else
+      begin
+       maxlen:=$2000;
+      end;
+      //
+      len:=strnlen_s(barMsg,maxlen);
+      //
+      Result:=g_client.SetMsg(barMsg,len);
+     end;
+    end;
+    //
+   end;
+  end;
+
+ mtx_unlock(g_msg_mtx);
+ //
+end;
+
+function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
+begin
+ ps4_sceMsgDialogTerminate();
  Result:=0;
 end;
 
@@ -566,14 +817,19 @@ var
 begin
  Result:=obj_new_int('libSceMsgDialog');
 
+ Result^.fini_proc_addr.native:=@dt_fini;
+
  lib:=Result^.add_lib('libSceMsgDialog');
  lib.set_proc($943AB1698D546C4A,@ps4_sceMsgDialogInitialize);
  lib.set_proc($6F4E878740CF11A1,@ps4_sceMsgDialogOpen);
  lib.set_proc($1D3ADC0CA9452AE3,@ps4_sceMsgDialogClose);
+ lib.set_proc($78FC3F92A6667A5A,@ps4_sceMsgDialogTerminate);
  lib.set_proc($E9F202DD72ADDA4D,@ps4_sceMsgDialogUpdateStatus);
  lib.set_proc($096556EFC41CDDF2,@ps4_sceMsgDialogGetStatus);
  lib.set_proc($2EBF28BC71FD97A0,@ps4_sceMsgDialogGetResult);
- lib.set_proc($78FC3F92A6667A5A,@ps4_sceMsgDialogTerminate);
+ lib.set_proc($C13A5F825926BF7E,@ps4_sceMsgDialogProgressBarSetValue);
+ lib.set_proc($19CE64D6A70AE1FB,@ps4_sceMsgDialogProgressBarInc);
+ lib.set_proc($E87FFBD4E76BA573,@ps4_sceMsgDialogProgressBarSetMsg);
 
  mtx_init(g_msg_mtx,'g_msg_mtx');
 end;

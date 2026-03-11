@@ -7,9 +7,9 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
-  LMessages,
+  StdCtrls,
   LCLType,
-  LCLIntf, StdCtrls,
+  LCLIntf,
 
   g_bufstream,
   LineStream,
@@ -25,15 +25,18 @@ uses
 
   core_serialization,
   host_ipc,
+  host_ipc_interface,
   game_info,
   game_edit,
   cfg_edit,
+  game_run_context,
   game_run,
 
   param_sfo_gui,
   playgo_chunk_gui,
 
-  host_ipc_interface,
+  core_shell,
+  gui_dialogs,
 
   ps4_libSceMsgDialog;
 
@@ -42,13 +45,6 @@ type
                      mdsStarted,
                      mdsRunned,
                      mdsSuspended);
-
-  TGameMainForm=class(TForm)
-   public
-    caption_format:RawByteString;
-    procedure SetCaptionFPS(Ffps:QWORD);
-    procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
-  end;
 
   TGameList=class(TSerializeArray)
    FGrid: TStringGrid;
@@ -135,10 +131,8 @@ type
   private
     FDblClickRow:Integer;
   public
-    FGameList   :TGameList;
-    FGameProcess:TGameProcess;
-    FGameItem   :TGameItem;
-    FParamSfo   :TParamSfoFile;
+    FGameList:TGameList;
+    FContext :TGameRunContext;
 
     FConfigInfo:TConfigInfo;
 
@@ -154,7 +148,7 @@ type
 
     FMainButtonsState:TMainButtonsState;
 
-    FGameMainForm:TGameMainForm;
+    FDialogsManager:TDialogsManager;
 
     function  OnKevent       (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
     function  OnMainWindows  (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
@@ -164,14 +158,6 @@ type
     function  OnParamSfoInit (mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
     function  OnPlaygoInit   (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
     function  OnLoadExec     (obj:TObject)           :Ptruint; //LOAD_EXEC
-    function  OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
-
-    function  get_caption_format:RawByteString;
-    function  OpenMainWindows():THandle;
-    Procedure CloseMainWindows();
-    Procedure ShowMainWindows();
-    Procedure HideMainWindows();
-    procedure SetCaptionFPS(Ffps:QWORD);
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -210,16 +196,6 @@ Const
  fpps4File   ='fpps4.json';
  GameListFile='GameList.json';
 
-procedure TGameMainForm.SetCaptionFPS(Ffps:QWORD);
-begin
- Caption:=Format(caption_format,[Ffps]);
-end;
-
-procedure TGameMainForm.WMEraseBkgnd(var Message:TLMEraseBkgnd);
-begin
- Message.Result:=1;
-end;
-
 type
  TMySynLog=class(TCustomSynLog)
   Form:TfrmMain;
@@ -245,14 +221,6 @@ end;
 
 const
  section_prefix='game-';
-
-function GetRealFontSize(Font:TFont):Integer;
-var
- fd: TFontData;
-begin
- fd := Graphics.GetFontData(Font.Handle);
- Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
-end;
 
 const
  MsgDlgBtnToStr: array[TMsgDlgBtn] of PChar = (
@@ -420,13 +388,13 @@ var
 
 function TfrmMain.OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
 begin
- Result:=OpenMainWindows();
+ Result:=FDialogsManager.OpenMainWindows;
 end;
 
 function TfrmMain.OnCaptionFPS(mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
 begin
  Result:=0;
- SetCaptionFPS(PQWORD(buf)^);
+ FDialogsManager.SetCaptionFPS(PQWORD(buf)^);
 end;
 
 function TfrmMain.OnKevent(mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
@@ -451,7 +419,7 @@ begin
       begin
        //ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
        ShowMessage('The process reported exit!');
-       Stop(FGameProcess);
+       FContext.Stop();
       end;
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin
@@ -473,7 +441,7 @@ begin
  Result:=0;
  if (MessageDlgEx(PChar(buf),'Error',[mbOK,mbAbort],Self)=mrAbort) then
  begin
-  Stop(FGameProcess);
+  FContext.Stop();
  end;
 end;
 
@@ -482,7 +450,7 @@ begin
  Result:=MessageDlgEx(PChar(buf),'Warning',[mbYes,mbNo,mbAbort],Self);
  if (Result=mrAbort) then
  begin
-  Stop(FGameProcess);
+  FContext.Stop();
  end;
  if (Result=mrYes) then
  begin
@@ -505,14 +473,14 @@ var
 begin
  Result:=Ptruint(-1);
 
- if (FGameItem=nil) then Exit;
+ if (FContext.FGameItem=nil) then Exit;
 
- if (FParamSfo=nil) then
+ if (FContext.FParamSfo=nil) then
  begin
-  FParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
+  FContext.FParamSfo:=LoadParamSfoFile2(FContext.FGameItem.MountList.game);
  end;
 
- if (FParamSfo=nil) then
+ if (FContext.FParamSfo=nil) then
  begin
   V:='"{$GAME}/sce_sys/param.sfo" not found, continue?';
 
@@ -525,7 +493,7 @@ begin
   end;
  end;
 
- SendSync(FGameProcess,'PARAM_SFO_LOAD',FParamSfo);
+ FContext.SendSync('PARAM_SFO_LOAD',FContext.FParamSfo);
 
  Result:=0;
 end;
@@ -537,9 +505,9 @@ var
 begin
  Result:=Ptruint(-1);
 
- if (FGameItem=nil) then Exit;
+ if (FContext.FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.game;
+ V:=FContext.FGameItem.MountList.game;
 
  playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
                              DirectorySeparator+
@@ -560,57 +528,10 @@ begin
   end;
  end;
 
- SendSync(FGameProcess,'PLAYGO_LOAD',playgo_file);
+ FContext.SendSync('PLAYGO_LOAD',playgo_file);
 
  FreeAndNil(playgo_file);
  Result:=0;
-end;
-
-function encode_shell(const src:RawByteString):RawByteString;
-var
- i:Integer;
-begin
- if (Pos(' ',src)=0) then
- begin
-  Result:=src;
- end else
- if (Pos('"',src)=0) then
- begin
-  Result:='"'+src+'"';
- end else
- if (Pos('''',src)=0) then
- begin
-  Result:=''''+src+'''';
- end else
- begin
-  Result:='"';
-  For i:=1 to Length(src) do
-  begin
-   if (src[i]='"') then
-   begin
-    Result:=Result+'"'+'\"'+'"';
-   end else
-   begin
-    Result:=Result+src[i];
-   end;
-  end;
-  Result:=Result+'"';
- end;
-end;
-
-function encode_shell(argv:TSerializeStringArray):RawByteString;
-var
- i:Integer;
-begin
- Result:='';
- if Length(argv.values)<>0 then
- begin
-  For i:=0 to High(argv.values) do
-  begin
-   if (Result<>'') then Result:=Result+' ';
-   Result:=Result+encode_shell(argv.values[i]);
-  end;
- end;
 end;
 
 function TfrmMain.OnLoadExec(obj:TObject):Ptruint; //LOAD_EXEC
@@ -618,15 +539,16 @@ var
  data:TPS4LoadExec;
  cfg:TGameRunConfig;
  Item:TGameItem;
+ r:Integer;
 begin
  Result:=0;
 
- if (FGameItem=nil) then Exit;
  if (obj=nil) then Exit;
 
  data:=TPS4LoadExec(obj);
 
- if (FGameProcess=nil) then
+ if (FContext.FGameItem=nil) or
+    (FContext.FGameProcess=nil) then
  begin
   FreeAndNil(data);
   Exit;
@@ -635,7 +557,7 @@ begin
  if (UpperCase(data.Path)='EXIT') then
  begin
   FreeAndNil(data);
-  Stop(FGameProcess);
+  FContext.Stop();
   Exit;
  end;
 
@@ -643,15 +565,15 @@ begin
  begin
 
   //terminate
-  StopAndNil(FGameProcess);
+  FContext.StopAndNil();
   //
-  CloseMainWindows;
+  FDialogsManager.CloseMainWindow;
   //
 
   //re-run
 
   Item:=TGameItem.Create;
-  FGameItem.CopyTo(Item);
+  FContext.FGameItem.CopyTo(Item);
 
   Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
 
@@ -662,16 +584,20 @@ begin
 
   cfg.FConfInfo:=FConfigInfo;
   cfg.FGameItem:=Item;
-  cfg.FParamSfo:=FParamSfo;
+  cfg.FParamSfo:=FContext.FParamSfo;
   cfg.FLoadExec:=True;
 
-  FGameProcess:=run_item(cfg);
+  r:=run_item(cfg,FContext);
+  if (r<>0) then
+  begin
+   ShowMessage('error run process code=0x'+HexStr(r,8));
+  end;
 
-  BindHandler(FGameProcess,IpcHandler);
+  FContext.BindHandler(IpcHandler);
 
   FreeAndNil(Item);
 
-  if (FGameProcess=nil) then
+  if (r<>0) then
   begin
    //stop on error
    TBStopClick(Self);
@@ -683,249 +609,6 @@ begin
  end;
 
  FreeAndNil(data);
-end;
-
-function NewBtn(MsgForm:TForm;DlgPos:TAnchorSideReference;const Caption:RawByteString;ModalResult:Integer):TButton;
-var
- MsgBtnz:TButton;
-begin
- MsgBtnz:=TButton.Create(MsgForm);
-
- case DlgPos of
-  asrTop:
-    begin
-     MsgBtnz.Anchors:=[akLeft,akBottom];
-     MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akLeft  ].Side   :=asrTop;
-     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-    end;
-  asrBottom:
-    begin
-     MsgBtnz.Anchors:=[akRight,akBottom];
-     MsgBtnz.AnchorSide[akRight ].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akRight ].Side   :=asrBottom;
-     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-    end;
-  asrCenter:
-    begin
-     MsgBtnz.Anchors:=[akLeft,akBottom];
-     MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akLeft  ].Side   :=asrCenter;
-     MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-     MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-    end;
- end;
-
- MsgBtnz.BorderSpacing.Around :=10;
- MsgBtnz.Constraints.MinHeight:=25;
- MsgBtnz.Constraints.MinWidth :=75;
- MsgBtnz.AutoSize   :=True;
- MsgBtnz.Caption    :=Caption;
- MsgBtnz.Parent     :=MsgForm;
- MsgBtnz.ModalResult:=ModalResult;
-
- Result:=MsgBtnz;
-end;
-
-function TfrmMain.OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
-var
- data:TMsgDialogOpen;
-
- AParent:TForm;
- MsgBtnz:TButton;
- MsgForm:TForm;
- MsgMemo:TMemo;
- MsgPBar:TProgressBar;
-
-begin
- Result:=0;
-
- if (FGameItem=nil) then Exit;
-
- if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
- data:=Default(TMsgDialogOpen);
- Move(buf^,data,mlen);
-
- AParent:=Self;
- if (FGameMainForm<>nil) then AParent:=FGameMainForm;
-
- MsgBtnz:=nil;
- MsgPBar:=nil;
-
- MsgForm:=TForm.Create(nil);
- try
-  MsgForm.Caption    :='Dialog';
-  MsgForm.Position   :=poDesigned;
-  MsgForm.BorderIcons:=[biSystemMenu];
-  MsgForm.FormStyle  :=fsSystemStayOnTop;
-  MsgForm.Left:= AParent.Left + (AParent.Width  - MsgForm.Width ) div 2;
-  MsgForm.Top := AParent.Top  + (AParent.Height - MsgForm.Height) div 2;
-  MsgForm.Width :=400;
-  MsgForm.Height:=200;
-
-  case data.mode of
-   SCE_MSG_DIALOG_MODE_USER_MSG:
-     begin
-      //
-      case data.buttonType of
-       SCE_MSG_DIALOG_BUTTON_TYPE_OK:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&OK' ,SCE_MSG_DIALOG_BUTTON_ID_OK);
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_YESNO:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&Yes',SCE_MSG_DIALOG_BUTTON_ID_YES);
-          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&No' ,SCE_MSG_DIALOG_BUTTON_ID_NO );
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_NONE:
-         begin
-          //
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&OK'    ,SCE_MSG_DIALOG_BUTTON_ID_OK     );
-          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_WAIT:
-         begin
-          //
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_WAIT_CANCEL:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_YESNO_FOCUS_NO:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&No' ,SCE_MSG_DIALOG_BUTTON_ID_NO );
-          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&Yes',SCE_MSG_DIALOG_BUTTON_ID_YES);
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_OK_CANCEL_FOCUS_CANCEL:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
-          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&OK'    ,SCE_MSG_DIALOG_BUTTON_ID_OK     );
-         end;
-       SCE_MSG_DIALOG_BUTTON_TYPE_2BUTTONS:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&'+data.msg1,SCE_MSG_DIALOG_BUTTON_ID_BUTTON1);
-          MsgBtnz:=NewBtn(MsgForm,asrBottom,'&'+data.msg2,SCE_MSG_DIALOG_BUTTON_ID_BUTTON2);
-         end
-       else;
-      end;
-      //
-     end;
-   SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
-     begin
-      //
-
-      MsgPBar:=TProgressBar.Create(MsgForm);
-      MsgPBar.Min:=0;
-      MsgPBar.Max:=100;
-      MsgPBar.Position:=0;
-      MsgPBar.Smooth:=True;
-      MsgPBar.BorderSpacing.Left  :=5;
-      MsgPBar.BorderSpacing.Right :=5;
-      MsgPBar.BorderSpacing.Bottom:=5;
-
-      case data.barType of
-       SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE:;
-       SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE_CANCEL:
-         begin
-          MsgBtnz:=NewBtn(MsgForm,asrCenter,'&Cancel',SCE_MSG_DIALOG_BUTTON_ID_INVALID);
-         end;
-       else;
-      end;
-      //
-     end;
-   SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
-     begin
-      MsgBtnz:=NewBtn(MsgForm,asrCenter,'&OK',SCE_MSG_DIALOG_BUTTON_ID_OK);
-     end;
-   else;
-  end;
-
-  //
-  MsgMemo:=TMemo.Create(MsgForm);
-  MsgMemo.ReadOnly:=True;
-  MsgMemo.Font.Name:='Courier New';
-  MsgMemo.Font.Size:=GetRealFontSize(AParent.Font) + 2;
-  //
-  MsgMemo.Anchors:=[akTop,akLeft,akRight,akBottom];
-  MsgMemo.AnchorSide[akTop   ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akTop   ].Side   :=asrTop;
-  MsgMemo.AnchorSide[akLeft  ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akLeft  ].Side   :=asrTop;
-  MsgMemo.AnchorSide[akRight ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akRight ].Side   :=asrBottom;
-  MsgMemo.AnchorSide[akBottom].Control:=MsgForm;
-  MsgMemo.AnchorSide[akBottom].Side   :=asrBottom;
-
-  if (MsgPBar<>nil) then
-  begin
-   MsgPBar.Anchors:=[akLeft,akRight,akBottom];
-   MsgPBar.AnchorSide[akLeft  ].Control:=MsgForm;
-   MsgPBar.AnchorSide[akLeft  ].Side   :=asrTop;
-   MsgPBar.AnchorSide[akRight ].Control:=MsgForm;
-   MsgPBar.AnchorSide[akRight ].Side   :=asrBottom;
-   //
-   if (MsgBtnz<>nil) then
-   begin
-    MsgPBar.AnchorSide[akBottom].Control:=MsgBtnz;
-    MsgPBar.AnchorSide[akBottom].Side   :=asrTop;
-   end else
-   begin
-    MsgPBar.AnchorSide[akBottom].Control:=MsgForm;
-    MsgPBar.AnchorSide[akBottom].Side   :=asrBottom;
-   end;
-   //
-   MsgPBar.Parent:=MsgForm;
-   //
-   MsgMemo.AnchorSide[akBottom].Control:=MsgPBar;
-   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
-  end else
-  if (MsgBtnz<>nil) then
-  begin
-   MsgMemo.AnchorSide[akBottom].Control:=MsgBtnz;
-   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
-  end;
-
-  MsgMemo.BorderSpacing.Bottom:=10;
-
-  case data.mode of
-   SCE_MSG_DIALOG_MODE_USER_MSG:
-     begin
-      MsgMemo.Text:=data.msg;
-     end;
-   SCE_MSG_DIALOG_MODE_PROGRESS_BAR:
-     begin
-      MsgMemo.Text:=data.msg;
-     end;
-   SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
-     begin
-      case data.sysMsgType of
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_EMPTY_STORE                            :MsgMemo.Text:='TRC_EMPTY_STORE';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION                   :MsgMemo.Text:='TRC_PSN_CHAT_RESTRICTION';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION                    :MsgMemo.Text:='TRC_PSN_UGC_RESTRICTION';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_WARNING_SWITCH_TO_SIMULVIEW            :MsgMemo.Text:='TRC_WARNING_SWITCH_TO_SIMULVIEW';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_CAMERA_NOT_CONNECTED                       :MsgMemo.Text:='CAMERA_NOT_CONNECTED';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED:MsgMemo.Text:='WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION              :MsgMemo.Text:='PSN_COMMUNICATION_RESTRICTION';
-      end;
-     end;
-   else;
-  end;
-
-  //
-  MsgMemo.Parent:=MsgForm;
-  //
-
-  MsgForm.Show;
-
- except
-  MsgForm.Free;
- end;
-
 end;
 
 //ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
@@ -1202,6 +885,8 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
+ FDialogsManager.FImages :=SmallImageList;
+ FDialogsManager.pContext:=@FContext;
 
   ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
 
@@ -1225,7 +910,8 @@ begin
  IpcHandler.AddCallback('PARAM_SFO_INIT' ,@OnParamSfoInit);
  IpcHandler.AddCallback('PLAYGO_INIT'    ,@OnPlaygoInit  );
  IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    ,TPS4LoadExec);
- IpcHandler.AddCallback('MSG_DIALOG_OPEN',@OnMsgDialogOpen);
+
+ FDialogsManager.BindHandler(IpcHandler);
 
  ReadConfigFile;
 
@@ -1383,9 +1069,9 @@ begin
   FLogUpdateTime:=GetTickCount64;
  end;
 
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  FProcess:=FGameProcess;
+  FProcess:=FContext.FGameProcess;
   FProcess.Acquire;
 
   if (FProcess.g_ipc<>nil) then
@@ -1396,7 +1082,7 @@ begin
   if (FProcess.is_terminated) or
      (FProcess.is_stoped) then
   begin
-   if (FGameProcess=FProcess) then
+   if (FContext.FGameProcess=FProcess) then
    begin
     TBStopClick(Sender);
    end else
@@ -1408,88 +1094,6 @@ begin
   FProcess.Release;
  end;
 
-end;
-
-function TfrmMain.get_caption_format:RawByteString;
-var
- TITLE,TITLE_ID,APP_VER:RawByteString;
-begin
- Result:='';
-
- if (FGameItem=nil) then Exit;
-
- TITLE   :=FGameItem.FGameInfo.Name;
- TITLE_ID:=FGameItem.FGameInfo.TitleId;
- APP_VER :=FGameItem.FGameInfo.AppVer;
-
- if (TITLE='') then
- begin
-  TITLE:=ExtractFileName(FGameItem.FGameInfo.Exec);
- end;
-
- if (TITLE_ID<>'') then TITLE_ID:='-' +TITLE_ID;
- if (APP_VER <>'') then APP_VER :=':v'+APP_VER;
-
- Result:=Format('fpPS4 (%s) [%s%s%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
-end;
-
-function TfrmMain.OpenMainWindows():THandle;
-const
- pd_Width=1280;
- pd_Height=720;
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Show;
-  Exit(FGameMainForm.Handle);
- end;
-
- FGameMainForm:=TGameMainForm.CreateNew(Self);
- FGameMainForm.ShowInTaskBar:=stAlways;
- FGameMainForm.DoubleBuffered:=False;
- FGameMainForm.ParentDoubleBuffered:=False;
- FGameMainForm.FormStyle:=fsNormal;
- FGameMainForm.SetBounds(100, 100, pd_Width, pd_Height);
- FGameMainForm.caption_format:=get_caption_format;
- FGameMainForm.SetCaptionFPS(0);
- //FGameMainForm.OnClose:=@FGameMainForm.CloseEvent;
- //FGameMainForm.OnKeyDown:=@FGameMainForm.KeyEvent;
- FGameMainForm.Position:=poScreenCenter;
-
- ///
- ///
-
- FGameMainForm.Show;
-
- Exit(FGameMainForm.Handle);
-end;
-
-Procedure TfrmMain.CloseMainWindows();
-begin
- FreeAndNil(FGameMainForm);
-end;
-
-Procedure TfrmMain.ShowMainWindows();
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Show;
- end;
-end;
-
-Procedure TfrmMain.HideMainWindows();
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Hide;
- end;
-end;
-
-procedure TfrmMain.SetCaptionFPS(Ffps:QWORD);
-begin
- if (FGameMainForm=nil) then Exit;
-
- FGameMainForm.SetCaptionFPS(Ffps);
 end;
 
 procedure TfrmMain.MIAddClick(Sender: TObject);
@@ -1652,8 +1256,9 @@ var
  aRow:Integer;
  cfg:TGameRunConfig;
  a:Integer;
+ r:Integer;
 begin
- if (FGameProcess<>nil) then Exit;
+ if (FContext.FGameProcess<>nil) then Exit;
 
  aRow:=ListGrid.Row;
 
@@ -1701,16 +1306,17 @@ begin
 
  if Item.FLock then Exit;
 
- FGameProcess:=run_item(cfg);
-
- BindHandler(FGameProcess,IpcHandler);
-
- if (FGameProcess<>nil) then
+ r:=run_item(cfg,FContext);
+ if (r<>0) then
  begin
-  Item.FLock:=True;
-  FGameItem:=Item;
-  FParamSfo:=ParamSfo;
-  ParamSfo:=nil;
+  ShowMessage('error run process code=0x'+HexStr(r,8));
+ end;
+
+ if (r=0) then
+ begin
+  FContext.BindHandler(IpcHandler);
+
+  ParamSfo:=nil; //do not free
 
   SetButtonsState(mdsStarted);
  end;
@@ -1721,17 +1327,17 @@ end;
 
 procedure TfrmMain.TBPlayClick(Sender: TObject);
 begin
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  if (not FGameProcess.g_fork) and
-     (FGameProcess.is_stoped) then
+  if (not FContext.FGameProcess.g_fork) and
+     (FContext.FGameProcess.is_stoped) then
   begin
    ShowMessage('Restart the emulator manually!');
   end else
   begin
    //resume
-   ShowMainWindows();
-   FGameProcess.resume;
+   FDialogsManager.ShowMainWindow();
+   FContext.FGameProcess.resume;
    SetButtonsState(mdsRunned);
   end;
  end else
@@ -1743,10 +1349,10 @@ end;
 
 procedure TfrmMain.TBPauseClick(Sender: TObject);
 begin
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
   //suspend
-  FGameProcess.suspend;
+  FContext.FGameProcess.suspend;
   SetButtonsState(mdsSuspended);
  end;
 end;
@@ -1754,9 +1360,9 @@ end;
 function TfrmMain.GameProcessForked:Boolean;
 begin
  Result:=False;
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  Result:=FGameProcess.g_fork;
+  Result:=FContext.FGameProcess.g_fork;
  end;
 end;
 
@@ -1765,30 +1371,27 @@ var
  exit_code:DWORD;
  r:RawByteString;
 begin
- if (FGameProcess=nil) then Exit;
+ if (FContext.FGameProcess=nil) then Exit;
 
  if GameProcessForked then //only forked
  begin
   exit_code:=0;
 
-  if FGameProcess.is_terminated then
+  if FContext.FGameProcess.is_terminated then
   begin
-   exit_code:=FGameProcess.exit_code;
+   exit_code:=FContext.FGameProcess.exit_code;
   end;
 
   //terminate
-  StopAndNil(FGameProcess);
+  FContext.StopAndNil();
+  //
+  FreeAndNil(FContext.FParamSfo);
+  //
+  FContext.CloseItem();
+  //
+  FDialogsManager.CloseMainWindow;
+  //
   SetButtonsState(mbsStopped);
-  //
-  if (FGameItem<>nil) then
-  begin
-   FGameItem.FLock:=False;
-   FGameItem:=nil;
-  end;
-  FreeAndNil(FParamSfo);
-  //
-  CloseMainWindows;
-  //
   Pages.ActivePage:=TabList;
 
   if (exit_code<>0) then
