@@ -73,16 +73,17 @@ type
    function   SetValue(buf:Pointer;len:DWORD):Integer;
    function   SetMsg  (buf:Pointer;len:DWORD):Integer;
    function   getFinishData(buf:Pointer;len:DWORD):Integer;
-   function   updateState:Integer;     virtual;
-   function   Close:Integer;           virtual;
-   procedure  Terminate;               virtual;
-   Destructor Destroy;                 override;
+   function   updateState:Integer;                  virtual;
+   function   Close(buf:Pointer;len:DWORD):Integer; virtual;
+   procedure  Terminate;                            virtual;
+   Destructor Destroy;                              override;
  end;
 
 function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
 function CheckReserved(var buf;len:DWORD):Integer;
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
 function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
+function strncmp  (str1,str2:PChar;maxlen:ptrint):Integer;
 
 implementation
 
@@ -179,6 +180,11 @@ begin
  Result:=StrLCopy(dst,src,maxlen);
 end;
 
+function strncmp(str1,str2:PChar;maxlen:ptrint):Integer;
+begin
+ Result:=CompareChar0(str1^,str2^,maxlen);
+end;
+
 function TCommonDialogClient.isInitializedStatus:Boolean;
 begin
  Result:=(status=SCE_COMMON_DIALOG_STATUS_INITIALIZED);
@@ -255,7 +261,7 @@ function TCommonDialogClient.getFinishData(buf:Pointer;len:DWORD):Integer;
 begin
  if (status<>SCE_COMMON_DIALOG_STATUS_FINISHED)  then
  begin
-  Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
+  Exit(SCE_COMMON_DIALOG_ERROR_RESULT_NONE);
  end;
 
  if (len>Length(rzdata)) then len:=Length(rzdata);
@@ -278,19 +284,19 @@ begin
  Result:=0;
 end;
 
-function TCommonDialogClient.Close:Integer;
+function TCommonDialogClient.Close(buf:Pointer;len:DWORD):Integer;
 begin
- if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING)  then
+ if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING) or (finish<>0) then
  begin
   Exit(SCE_COMMON_DIALOG_ERROR_INVALID_STATE);
  end;
 
- if (closed<>0)  then
+ if (closed<>0) then
  begin
   Exit(SCE_COMMON_DIALOG_ERROR_ALREADY_CLOSE);
  end;
 
- Send('CDLG_CLOSE',nil,0);
+ Send('CDLG_CLOSE',buf,len);
 
  closed:=1;
  Result:=0;
@@ -298,7 +304,7 @@ end;
 
 procedure TCommonDialogClient.Terminate;
 begin
- Close;
+ Close(nil,0);
  //
  Free;
 end;
@@ -318,6 +324,7 @@ begin
   if (g_curr_client<>nil) then
   with g_curr_client do
    if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+   if (finish=0) then
    begin
     SetLength(rzdata,mlen);
     Move(buf^,rzdata[0],mlen);

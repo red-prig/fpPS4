@@ -128,7 +128,9 @@ type
  end;
 
  PSceSaveDataDirName=^SceSaveDataDirName;
- SceSaveDataDirName=array[0..SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE-1] of Char;
+ SceSaveDataDirName=packed record
+  data:array[0..SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE-1] of Char;
+ end;
 
  PSceSaveDataMountPoint=^SceSaveDataMountPoint;
  SceSaveDataMountPoint=array[0..SCE_SAVE_DATA_MOUNT_POINT_DATA_MAXSIZE-1] of Char;

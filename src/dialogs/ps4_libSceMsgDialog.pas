@@ -164,9 +164,7 @@ begin
      client.Free;
     end else
     begin
-     //
      g_client:=client;
-     //
     end;
 
    end;
@@ -499,7 +497,7 @@ begin
    if (not g_client.isInitializedStatus) then
    if (not g_client.isFinish) then
    begin
-    Result:=g_client.Close;
+    Result:=g_client.Close(nil,0);
    end;
   end;
 
