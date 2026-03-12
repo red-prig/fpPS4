@@ -600,7 +600,7 @@ begin
    Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
    if (g_client.isFinish) then
    begin
-    rzdata:=Default(TMsgDialogResult);;
+    rzdata:=Default(TMsgDialogResult);
     g_client.getFinishData(@rzdata,sizeof(rzdata));
 
     //fixup

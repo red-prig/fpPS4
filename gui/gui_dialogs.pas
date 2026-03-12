@@ -22,7 +22,8 @@ uses
   game_info,
   game_run_context,
 
-  ps4_libSceMsgDialog;
+  ps4_libSceMsgDialog,
+  ps4_libSceSaveDataDialog;
 
 type
  TGameMainForm=class(TForm)
@@ -52,8 +53,11 @@ type
   function  OnCdlgSetValue(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_VALUE
   function  OnCdlgClose   (mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLOSE
   procedure CloseDialog();
+  //
   procedure OnMsgDialogClick(Sender:TObject);
   function  OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
+  //
+  function  OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
  end;
 
  function GetRealFontSize(Font:TFont):Integer;
@@ -217,10 +221,11 @@ end;
 
 procedure TDialogsManager.BindHandler(Handler:THostIpcHandler);
 begin
- Handler.AddCallback('CDLG_SET_MSG'   ,@OnCdlgSetMsg);
- Handler.AddCallback('CDLG_SET_VALUE' ,@OnCdlgSetValue);
- Handler.AddCallback('CDLG_CLOSE'     ,@OnCdlgClose);
- Handler.AddCallback('MSG_DIALOG_OPEN',@OnMsgDialogOpen);
+ Handler.AddCallback('CDLG_SET_MSG'    ,@OnCdlgSetMsg);
+ Handler.AddCallback('CDLG_SET_VALUE'  ,@OnCdlgSetValue);
+ Handler.AddCallback('CDLG_CLOSE'      ,@OnCdlgClose);
+ Handler.AddCallback('MSG_DIALOG_OPEN' ,@OnMsgDialogOpen);
+ Handler.AddCallback('SAVE_DIALOG_OPEN',@OnSaveDialogOpen);
 end;
 
 function TDialogsManager.OnCdlgSetMsg(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_MSG
@@ -306,6 +311,7 @@ var
 begin
  Result:=0;
 
+ Assert(FDialog=nil);
  if (FDialog<>nil) then Exit;
 
  if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
@@ -488,13 +494,20 @@ begin
    SCE_MSG_DIALOG_MODE_SYSTEM_MSG:
      begin
       case data.sysMsgType of
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_EMPTY_STORE                            :MsgMemo.Text:='TRC_EMPTY_STORE';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION                   :MsgMemo.Text:='TRC_PSN_CHAT_RESTRICTION';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION                    :MsgMemo.Text:='TRC_PSN_UGC_RESTRICTION';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_WARNING_SWITCH_TO_SIMULVIEW            :MsgMemo.Text:='TRC_WARNING_SWITCH_TO_SIMULVIEW';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_CAMERA_NOT_CONNECTED                       :MsgMemo.Text:='CAMERA_NOT_CONNECTED';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED:MsgMemo.Text:='WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED';
-       SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION              :MsgMemo.Text:='PSN_COMMUNICATION_RESTRICTION';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_EMPTY_STORE:
+         MsgMemo.Text:='No Product Available to Purchase';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_CHAT_RESTRICTION:
+         MsgMemo.Text:='Chat/messeges Restriction';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_PSN_UGC_RESTRICTION:
+         MsgMemo.Text:='User-Generated Media Restriction';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_TRC_WARNING_SWITCH_TO_SIMULVIEW:
+         MsgMemo.Text:='Video output mode switches to SimulView';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_CAMERA_NOT_CONNECTED:
+         MsgMemo.Text:='PlayStation Camera is not connected';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED:
+         MsgMemo.Text:='Name and profile not shared';
+       SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION:
+         MsgMemo.Text:='Parental Control - Social Feature Restriction';
       end;
      end;
    else;
@@ -519,6 +532,23 @@ begin
 
 end;
 
+function TDialogsManager.OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
+var
+ data:TSaveDialogOpen;
+
+begin
+ Result:=0;
+
+ Assert(FDialog=nil);
+ if (FDialog<>nil) then Exit;
+
+ if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
+ data:=Default(TSaveDialogOpen);
+ Move(buf^,data,mlen);
+
+ Assert(false,'TODO:OnSaveDialogOpen');
+ //
+end;
 
 end.
 

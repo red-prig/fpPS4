@@ -73,6 +73,7 @@ const
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_RESTORE              =9;
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_DELETE =10;
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_CREATE =11;
+ SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_12                   =12;
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_RESTORE=13;
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_TOTAL_SIZE_EXCEEDED  =14;
  SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_RESTORE      =15;
@@ -103,18 +104,59 @@ const
 {$CALLING default}
 
 type
+ TSaveDialogNewItem=record
+  title   :array[0..127] of Char;
+  iconBuf :array[0..116735] of Byte;
+  iconSize:QWORD;
+ end;
+
  PSaveDialogOpen=^TSaveDialogOpen;
  TSaveDialogOpen=record
-  //
+  //base
+  mode           :Byte; //SceSaveDataDialogMode
+  dispType       :Byte; //SceSaveDataDialogType
+  userOK         :Byte; //SceSaveDataDialogAnimation
+  userCancel     :Byte; //SceSaveDataDialogAnimation
+  back           :Byte; //SceSaveDataDialogOptionBack
+  focusPos       :Byte; //SceSaveDataDialogFocusPos
+  itemStyle      :Byte; //SceSaveDataDialogItemStyle
+  is_new         :Byte;
+  bar_sysMsgType :Byte; //SceSaveDataDialogProgressSystemMessageType
+  sys_sysMsgType :Byte; //SceSaveDataDialogSystemMessageType
+  buttonType     :Byte; //SceSaveDataDialogButtonType
+  msgType        :Byte; //SceSaveDataDialogUserMessageType
+  userData       :Pointer;
+  //SystemMessage_info
+  sys_value      :QWORD;
+  //dir info
+  userId         :Integer;
+  dirNameNum     :DWORD;
+  titleId        :array[0..SCE_SAVE_DATA_TITLE_ID_DATA_SIZE-1] of Char;
+  dirNames       :array[0..1023] of SceSaveDataDirName;
+  new_item       :TSaveDialogNewItem;
+  focusPosDirName:SceSaveDataDirName;
+  //error info
+  errorCode      :Integer;
+  //WizardParam info
+  option         :Integer;
+  fingerprint    :array[0..SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1] of Char;
+  //ProgressBar info
+  bar_msg        :array[0..255] of Char;
+  //UserMessage info
+  user_msg       :array[0..255] of Char;
  end;
 
  TSaveDialogResult=record
-  //
+  resultId:Integer;
+  buttonId:Integer; //SceSaveDataDialogButtonId
+  dirName :SceSaveDataDirName;
+  param   :SceSaveDataParam;
  end;
 
  TSaveDialogClient=class(TCommonDialogClient)
-  data:TSaveDialogOpen;
-  rate:DWORD;
+  data  :TSaveDialogOpen;
+  rate  :DWORD;
+  rzdata:TSaveDialogResult;
  end;
 
 implementation
@@ -200,7 +242,7 @@ type
   option     :Integer; //SceSaveDataDialogWizardOption
   reserved1  :Integer;
   fingerprint:pSceSaveDataFingerprint;
-  reserved   :array[0..31] of Byte;
+  reserved2  :array[0..31] of Byte;
  end;
 
  pSceSaveDataDialogParam=^SceSaveDataDialogParam;
@@ -335,6 +377,39 @@ end;
 function CheckFocusPos(focusPos:Integer):Integer; inline;
 begin
  if (focusPos < 0) or (6 < focusPos) then
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckBarType(barType:Integer):Integer; inline;
+begin
+ if (barType = 0) then
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckSysMsgType(sysMsgType:Integer):Integer; inline;
+begin
+ if (sysMsgType < 0) or (2 < sysMsgType) then
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckButtonType(buttonType:Integer):Integer; inline;
+begin
+ if (buttonType < 0) or (3 < buttonType) then
  begin
   Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
  end else
@@ -488,12 +563,12 @@ begin
  if (len < 10) then
  begin
   for i:=0 to 3 do
-   if (ord(titleId[i]) < ord('A')) or(ord(titleId[i]) > ord('Z')) then
+   if (titleId[i] < 'A') or(titleId[i] > 'Z') then
    begin
     Exit;
    end;
   for i:=4 to 8 do
-   if (ord(titleId[i]) < ord('0')) or(ord(titleId[i]) > ord('9')) then
+   if (titleId[i] < '0') or(titleId[i] > '9') then
    begin
     Exit;
    end;
@@ -763,7 +838,6 @@ begin
 
 end;
 
-
 function CheckItems(param:pSceSaveDataDialogParam):Integer;
 begin
  if (param^.mode<>SCE_SAVE_DATA_DIALOG_MODE_LIST) and
@@ -779,6 +853,637 @@ begin
   Result:=CheckListItems_new(param^.mode,param^.dispType,param^.items);
  end;
 end;
+
+//g_error_vtable
+function CheckErrorCodeParam(errorCodeParam:pSceSaveDataDialogErrorCodeParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (errorCodeParam^.errorCode < 0) then
+ if (CheckReserved(errorCodeParam^.reserved,sizeof(errorCodeParam^.reserved))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckMsg(msg:pchar):Integer; inline;
+begin
+ //CheckUtf8???
+ Result:=0;
+end;
+
+function CheckProgBarParam(progBarParam:pSceSaveDataDialogProgressBarParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckBarType(progBarParam^.barType)=0) then
+ if (CheckSysMsgType(progBarParam^.sysMsgType)=0) then
+ if (p_proc.p_sdk_version < $2000000) or
+    (progBarParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_PRGRESS_SYSMSG_TYPE_INVALID) then
+ if (progBarParam^.msg = nil)  or
+    (progBarParam^.msg[0] = #0) or
+    (CheckMsg(progBarParam^.msg)=0) then
+ if (CheckReserved(progBarParam^.reserved,sizeof(progBarParam^.reserved))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+//g_progress_vtable
+function CheckProgBarMode(param:pSceSaveDataDialogParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckProgBarParam(param^.progBarParam)=0) then
+ begin
+
+  if (
+      (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_LOAD  ) or
+      (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_DELETE)
+     ) and
+     (
+      (param^.items = nil) or
+      ( (param^.items <> nil) and (param^.items^.dirNameNum = 0) )
+     ) then
+  begin
+   Exit;
+  end;
+
+  Result:=0;
+
+ end;
+end;
+
+function CheckSysMsgType(dispType,sysMsgType:Integer):Integer;
+begin
+ if (sysMsgType < 1) or (15 < sysMsgType) then
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ end else
+ if (dispType = SCE_SAVE_DATA_DIALOG_TYPE_SAVE) or
+    (
+     (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_OVERWRITE) and
+     (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE) and
+     (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_CONTINUABLE) and
+     (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_TOTAL_SIZE_EXCEEDED)
+    ) then
+ begin
+   if (
+       (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_RESTORE) or
+       (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_RESTORE)
+      ) and
+      (dispType <> SCE_SAVE_DATA_DIALOG_TYPE_SAVE) and
+      (dispType <> SCE_SAVE_DATA_DIALOG_TYPE_LOAD) then
+   begin
+    Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+   end else
+   if (
+       (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_DELETE) or
+       (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_CREATE) or
+       (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_RESTORE)
+      ) and
+      (dispType <> SCE_SAVE_DATA_DIALOG_TYPE_SAVE) and
+      (dispType <> SCE_SAVE_DATA_DIALOG_TYPE_LOAD) then
+   begin
+    Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+   end else
+   begin
+    Result:=0;
+   end;
+ end else
+ begin
+  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ end;
+end;
+
+function CheckSystemMessageParam(dispType:Integer;sysMsgParam:pSceSaveDataDialogSystemMessageParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckSysMsgType(dispType,sysMsgParam^.sysMsgType)=0) then
+ if (CheckReserved(sysMsgParam^.reserved,sizeof(sysMsgParam^.reserved))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+//g_system_vtable
+function CheckSystemMode(param:pSceSaveDataDialogParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckSystemMessageParam(param^.dispType,param^.sysMsgParam)=0) then
+ begin
+
+  if (p_proc.p_sdk_version < $2000000) then
+  begin
+   if (p_proc.p_sdk_version < $1700000) then
+   begin
+    if (param^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NODATA) then
+    begin
+     if (param^.items <> nil) and (param^.items^.dirNameNum <> 0) then
+     begin
+      Exit;
+     end;
+    end else
+    if (param^.items = nil) or
+       ( (param^.items <> nil) and (param^.items^.dirNameNum = 0) ) then
+    begin
+     Exit;
+    end;
+   end else
+   if (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NODATA) and
+      (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE) and
+      (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_CONTINUABLE) and
+      (
+       (param^.items = nil) or
+       ( (param^.items <> nil) and (param^.items^.dirNameNum = 0) )
+      ) then
+   begin
+    Exit;
+   end;
+  end else
+  if (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NODATA) and
+     (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE) and
+     (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_CONTINUABLE) and
+     (param^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_TOTAL_SIZE_EXCEEDED) then
+  begin
+   if (param^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_RESTORE) or
+      (param^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CORRUPTED_AND_RESTORE) then
+   begin
+    if (param^.items = nil) or
+       (param^.items^.userId = -1) or
+       (param^.items^.dirName = nil) or
+       (param^.items^.dirName^.data[0] = #0) or
+       (param^.items^.newItem <> nil) then
+    begin
+     Exit;
+    end;
+   end else
+   if (param^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_RESTORE) then
+   begin
+     if (param^.items^.userId = -1) or
+        (param^.items^.dirName = nil) or
+        (param^.items^.dirNameNum = 0) or
+        (param^.items^.newItem <> nil) then
+     begin
+      Exit;
+     end;
+   end else
+   if (param^.items = nil) or
+      ( (param^.items^.dirName <> nil) and (param^.items^.dirNameNum = 0) ) or
+      ( (param^.items^.dirName = nil) and (param^.items^.dirNameNum <> 0) ) then
+   begin
+    Exit;
+   end
+  end;
+
+  if (param^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_12) then
+  begin
+   //sceLncUtilGetAppStatus
+  end;
+
+  Result:=0;
+ end;
+
+end;
+
+function CheckUserMsgParam_old(userMsgParam:pSceSaveDataDialogUserMessageParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckButtonType(userMsgParam^.buttonType)=0) then
+ if (userMsgParam^.msg <> nil) then
+ if (CheckMsg(userMsgParam^.msg)=0) then
+ if (CheckReserved(userMsgParam^.reserved,sizeof(userMsgParam^.reserved))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckUserMsgParam_new(userMsgParam:pSceSaveDataDialogUserMessageParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckButtonType(userMsgParam^.buttonType)=0) then
+ if (userMsgParam^.msgType = SCE_SAVE_DATA_DIALOG_USERMSG_TYPE_NORMAL) or
+    (userMsgParam^.msgType = SCE_SAVE_DATA_DIALOG_USERMSG_TYPE_ERROR ) then
+ if (userMsgParam^.msg <> nil) then
+ if (CheckMsg(userMsgParam^.msg)=0) then
+ if (CheckReserved(userMsgParam^.reserved,sizeof(userMsgParam^.reserved))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+//g_user_vtable
+function CheckUserMode(param:pSceSaveDataDialogParam):Integer;
+begin
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  Result:=CheckUserMsgParam_old(param^.userMsgParam);
+ end else
+ begin
+  Result:=CheckUserMsgParam_new(param^.userMsgParam);
+ end;
+end;
+
+function _CheckFingerprint(fingerprint:pchar):Integer;
+var
+ len,i:DWORD;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ len:=strnlen_s(fingerprint,65);
+ if (len < 65) then
+ begin
+  i:=0;
+  while (i < len) do
+  begin
+   if ((fingerprint[i] < 'a') or ('f' < fingerprint[i])) and
+      ((fingerprint[i] < '0') or ('9' < fingerprint[i])) then
+   begin
+    Exit;
+   end;
+   i:=i+1;
+  end;
+  //
+  Result:=0;
+ end;
+end;
+
+function CheckFingerprint(fingerprint:pSceSaveDataFingerprint):Integer;
+begin
+ if (fingerprint=nil) then Exit(0);
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (_CheckFingerprint(@fingerprint^.data)=0) then
+ if (CheckReserved(fingerprint^.padding,sizeof(fingerprint^.padding))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckWizardParam(wizardParam:pSceSaveDataDialogWizardParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (wizardParam<>nil) then
+ if (wizardParam^.option<>0) then
+ if ((wizardParam^.option and (not $30003))<>0) then
+ if ((wizardParam^.option and $ffff) in [0..3]) then
+ if (wizardParam^.fingerprint = nil) or
+    (CheckFingerprint(wizardParam^.fingerprint)=0) then
+ if (wizardParam^.reserved1 = 0) then
+ if (CheckReserved(wizardParam^.reserved2,sizeof(wizardParam^.reserved2))=0) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckFingerprintItems(WizardParam:pSceSaveDataDialogWizardParam;Items:pSceSaveDataDialogItems):Integer;
+begin
+ if (WizardParam^.fingerprint = nil) then
+ begin
+  if (Items <> nil) and (Items^.titleId <> nil) then
+  begin
+   Exit;
+  end;
+ end else
+ begin
+ if (Items = nil) or (Items^.titleId = nil) then
+  begin
+   Exit;
+  end;
+ end;
+ Result:=0;
+end;
+
+//g_wizardconfirm_vtable
+function CheckWizardConfirmMode(param:pSceSaveDataDialogParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckWizardParam(param^.wizardParam)=0) then
+ begin
+
+  if (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_DELETE) then
+  begin
+   if ((param^.wizardParam^.option and $ffff) <> 0) then
+   begin
+    Exit;
+   end;
+  end else
+  begin
+   if ((param^.wizardParam^.option and $ffff) = 0) then
+   begin
+    Exit;
+   end;
+  end;
+
+  if ((param^.wizardParam^.option and SCE_SAVE_DATA_DIALOG_WIZARD_OPTION_DISPLAY_NO_DATA) = 0) or
+     (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_LOAD) or
+     (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_DELETE) then
+  if (param^.optionParam = nil) then
+  if (CheckFingerprintItems(param^.wizardParam,param^.items)=0) then
+  begin
+
+   if (param^.items = nil) or
+      (param^.items^.dirName = nil) or
+      (param^.items^.dirNameNum = 0) then
+   begin
+    Exit;
+   end;
+
+   Result:=0;
+  end;
+
+ end;
+
+end;
+
+//g_wizardlist_vtable
+function CheckWizardListMode(param:pSceSaveDataDialogParam):Integer;
+begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+ if (CheckWizardParam(param^.wizardParam)=0) then
+ begin
+
+  if (param^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_DELETE) then
+  begin
+   if (param^.wizardParam^.option <> SCE_SAVE_DATA_DIALOG_WIZARD_OPTION_SELECT_WITH_CONFIRMATION) then
+   begin
+    Exit;
+   end;
+  end else
+  begin
+   if ((param^.wizardParam^.option and $ffff) = 0) then
+   begin
+    Exit;
+   end;
+  end;
+
+  if ((param^.wizardParam^.option and SCE_SAVE_DATA_DIALOG_WIZARD_OPTION_DISPLAY_NO_DATA) = 0) then
+  if (param^.optionParam = nil) then
+  if (CheckFingerprintItems(param^.wizardParam,param^.items)=0) then
+  begin
+   Result:=0;
+  end;
+
+ end;
+end;
+
+//////////////////////
+
+procedure CopyBackMode(src:pSceSaveDataDialogParam;var back:Byte);
+var
+ sysMsgType:DWORD;
+ buttonType:DWORD;
+begin
+  if (p_proc.p_sdk_version < $4500000) then
+  begin
+   if (src^.optionParam <> nil) then
+   begin
+    back := src^.optionParam^.back;
+   end;
+  end else
+  begin
+   back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
+   case (src^.mode) of
+    SCE_SAVE_DATA_DIALOG_MODE_LIST,
+    SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST:
+      if (src^.optionParam <> nil) then
+      begin
+       back := src^.optionParam^.back;
+      end;
+    SCE_SAVE_DATA_DIALOG_MODE_USER_MSG :
+      begin
+       buttonType := src^.userMsgParam^.buttonType;
+       if (SCE_SAVE_DATA_DIALOG_BUTTON_TYPE_YESNO < buttonType) then
+       begin
+        if (buttonType = SCE_SAVE_DATA_DIALOG_BUTTON_TYPE_NONE) then
+        begin
+         if (src^.optionParam = nil) then
+         begin
+          Exit;
+         end;
+         back := src^.optionParam^.back;
+         Exit;
+        end;
+        if (buttonType <> SCE_SAVE_DATA_DIALOG_BUTTON_TYPE_OKCANCEL) then
+        begin
+         Exit;
+        end;
+       end;
+       back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
+      end;
+    SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG:
+      begin
+       sysMsgType := src^.sysMsgParam^.sysMsgType;
+       if (3 < DWORD(sysMsgType-1)) then
+       begin
+        if (sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_PROGRESS) then
+        begin
+         if (src^.optionParam <> nil) then
+         begin
+          back := src^.optionParam^.back;
+          Exit;
+         end;
+         back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_DISABLE;
+         Exit;
+        end;
+        if (2 < DWORD(sysMsgType-6)) and
+           (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_12) and
+           (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_TOTAL_SIZE_EXCEEDED) and
+           (sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_RESTORE) then
+        begin
+         if (src^.optionParam = nil) then
+         begin
+          Exit;
+         end;
+         back := src^.optionParam^.back;
+         Exit;
+        end;
+       end;
+       back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
+      end;
+    SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE :
+      back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
+    SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR :
+      back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_DISABLE;
+    SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM :
+      back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
+    end;
+  end
+end;
+
+procedure CopyBase(src:pSceSaveDataDialogParam;var dst:TSaveDialogOpen);
+begin
+ dst.mode     := src^.mode;
+ dst.dispType := src^.dispType;
+ if (src^.animParam <> nil) then
+ begin
+  dst.userOK     := src^.animParam^.userOK;
+  dst.userCancel := src^.animParam^.userCancel;
+ end;
+ dst.userData := src^.userData;
+ CopyBackMode(src,dst.back);
+end;
+
+procedure CopyNewItem(src:pSceSaveDataDialogNewItem;var dst:TSaveDialogNewItem);
+begin
+ if (src <> nil) then
+ begin
+  if (src^.title <> nil) then
+  begin
+   strncpy_s(@dst.title,src^.title,127);
+   dst.title[127]:=#0;
+  end;
+  if ((src^.iconBuf <> nil) and (src^.iconSize <> 0)) then
+  begin
+   Move(src^.iconBuf^,dst.iconBuf,src^.iconSize);
+   dst.iconSize:=src^.iconSize;
+  end;
+ end;
+end;
+
+procedure CopyDirNames(src:pSceSaveDataDialogParam;var dst:TSaveDialogOpen);
+var
+ items:pSceSaveDataDialogItems;
+begin
+ FillChar(dst.titleId        ,sizeof(dst.titleId),0);
+ FillChar(dst.dirNames       ,sizeof(dst.dirNames),0);
+ FillChar(dst.new_item       ,sizeof(dst.new_item),0);
+ FillChar(dst.focusPosDirName,sizeof(dst.focusPosDirName),0);
+ //
+ items:=src^.items;
+ dst.userId:=items^.userId;
+ //
+ if (items^.titleId <> nil) then
+ begin
+  dst.titleId:=items^.titleId^.data;
+ end;
+ //
+ if (items^.dirName <> nil) then
+ begin
+  if (src^.mode = SCE_SAVE_DATA_DIALOG_MODE_LIST) or
+     (src^.mode = SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST) then
+  begin
+   Move(items^.dirName^,dst.dirNames,items^.dirNameNum*sizeof(SceSaveDataDirName));
+   dst.dirNameNum := items^.dirNameNum;
+  end else
+  if (src^.sysMsgParam = nil) or
+     (
+      (src^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NODATA) and
+      (src^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE) and
+      (src^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_CONTINUABLE) and
+      (src^.sysMsgParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_TOTAL_SIZE_EXCEEDED)
+     ) then
+  begin
+   dst.dirNames[0]:=items^.dirName^;
+   dst.dirNameNum := 1;
+  end else
+  begin
+   dst.dirNameNum := 0;
+  end;
+ end;
+ //
+ if (src^.dispType = SCE_SAVE_DATA_DIALOG_TYPE_SAVE) then
+ begin
+  if (src^.mode = SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG) then
+  begin
+   if (p_proc.p_sdk_version < $2000000) then
+   begin
+    dst.is_new:=0;
+   end else
+   if (items^.dirName = nil) and
+      (items^.dirNameNum = 0) and
+      (
+       (src^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_CONFIRM) or
+       (src^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE) or
+       (src^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_PROGRESS) or
+       (src^.sysMsgParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_SYSMSG_TYPE_NOSPACE_CONTINUABLE)
+      ) then
+   begin
+    dst.is_new:=1;
+   end else
+   begin
+    dst.is_new:=0;
+   end;
+  end else
+  if (items^.dirNameNum = 0) then
+  begin
+   dst.is_new:=1;
+  end else
+  if (items^.dirNameNum <> 0) then
+  begin
+   if (items^.newItem = nil) then
+   begin
+    dst.is_new:=0;
+   end else
+   begin
+    dst.is_new:=1;
+   end
+  end;
+  if ((dst.is_new and 1) = 1) then
+  begin
+   CopyNewItem(items^.newItem,dst.new_item);
+  end;
+ end else
+ begin
+  dst.is_new := 0;
+ end;
+ //
+ dst.focusPos := items^.focusPos;
+ if (items^.focusPosDirName <> nil) then
+ begin
+  dst.focusPosDirName:=items^.focusPosDirName^;
+ end;
+ dst.itemStyle := items^.itemStyle;
+end;
+
+procedure CopyProgBarParam(src:pSceSaveDataDialogProgressBarParam;var dst:TSaveDialogOpen);
+begin
+ if (p_proc.p_sdk_version >= $4500000) then
+ begin
+  FillChar(dst.bar_msg,sizeof(dst.bar_msg),0);
+ end;
+ if (src^.msg <> nil) then
+ begin
+  Move(src^.msg^,dst.bar_msg,255);
+  dst.bar_msg[255] := #0;
+ end;
+ dst.bar_sysMsgType := src^.sysMsgType;
+end;
+
+procedure CopySystemMessage(src:pSceSaveDataDialogSystemMessageParam;var dst:TSaveDialogOpen);
+begin
+ dst.sys_sysMsgType:=src^.sysMsgType;
+ dst.sys_value     :=src^.value;
+end;
+
+procedure CopyErrorCode(src:pSceSaveDataDialogErrorCodeParam;var dst:TSaveDialogOpen);
+begin
+ dst.errorCode:=src^.errorCode;
+end;
+
+procedure CopyUserMsgParam(src:pSceSaveDataDialogUserMessageParam;var dst:TSaveDialogOpen);
+begin
+ dst.buttonType := src^.buttonType;
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  dst.msgType := SCE_SAVE_DATA_DIALOG_USERMSG_TYPE_NORMAL;
+ end else
+ begin
+  dst.msgType := src^.msgType;
+ end;
+ if (src^.msg <> nil) then
+ begin
+  Move(src^.msg^,dst.user_msg,255);
+  dst.user_msg[255] := #0;
+ end;
+end;
+
+procedure CopyWizardParam(src:pSceSaveDataDialogWizardParam;var dst:TSaveDialogOpen);
+begin
+ dst.option := src^.option;
+ if (src^.fingerprint <> nil) then
+ begin
+  strncpy_s(@dst.fingerprint,@src^.fingerprint^.data,64);
+  dst.fingerprint[64] := #0;
+ end;
+end;
+
+//////////////////////
 
 function ps4_sceSaveDataDialogOpen(param:pSceSaveDataDialogParam):Integer;
 begin
@@ -810,20 +1515,50 @@ begin
    if (CheckSaveDataParam(param)=0) then
    if (CheckItems(param)=0) then
    begin
-
     case param^.mode of
-     SCE_SAVE_DATA_DIALOG_MODE_LIST          :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_USER_MSG      :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG    :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE    :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR  :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST   :Assert(False);
-     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM:Assert(False);
+     SCE_SAVE_DATA_DIALOG_MODE_LIST          :Result:=0;
+     SCE_SAVE_DATA_DIALOG_MODE_USER_MSG      :Result:=CheckUserMode(param);
+     SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG    :Result:=CheckSystemMode(param);
+     SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE    :Result:=CheckErrorCodeParam(param^.errorCodeParam);
+     SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR  :Result:=CheckProgBarMode(param);
+     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST   :Result:=CheckWizardListMode(param);
+     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM:Result:=CheckWizardConfirmMode(param);
      else
        Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
     end;
-
    end;
+
+   //copy
+   if (Result=0) then
+   begin
+    //
+    if (p_proc.p_sdk_version >= $6000000) then
+    begin
+     g_client.rate:=0;
+    end;
+    //
+    CopyBase    (param,g_client.data);
+    CopyDirNames(param,g_client.data);
+
+    case param^.mode of
+     SCE_SAVE_DATA_DIALOG_MODE_USER_MSG:
+        CopyUserMsgParam(param^.userData,g_client.data);
+     SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG:
+        CopySystemMessage(param^.sysMsgParam,g_client.data);
+     SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE:
+       CopyErrorCode(param^.errorCodeParam,g_client.data);
+     SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR:
+       CopyProgBarParam(param^.progBarParam,g_client.data);
+     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST,
+     SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM:
+       CopyWizardParam(param^.wizardParam,g_client.data);
+     else;
+    end;
+
+    //reTFEla4NQw
+    Result:=g_client.Open('SAVE_DIALOG_OPEN',@g_client.data,SizeOf(g_client.data));
+   end;
+
   end;
 
  mtx_unlock(g_SaveDialog_mtx);
@@ -894,7 +1629,23 @@ end;
 
 function ps4_sceSaveDataDialogIsReadyToDisplay:Integer;
 begin
- Result:=1;
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+
+ mtx_lock(g_SaveDialog_mtx);
+
+  if (g_client<>nil) then
+  begin
+   if g_client.isFinish then
+   begin
+    Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
+   end else
+   begin
+    Result:=1; //IsReadyToDisplay
+   end;
+  end;
+
+ mtx_unlock(g_SaveDialog_mtx);
+ //
 end;
 
 function ps4_sceSaveDataDialogUpdateStatus():Integer;
@@ -952,22 +1703,126 @@ begin
  //
 end;
 
+procedure CopyResult(src:TSaveDialogClient;pResult:pSceSaveDataDialogResult);
+begin
+ pResult^.mode     := src.data.mode;
+ pResult^.result   := src.rzdata.resultId;
+ pResult^.buttonId := src.rzdata.buttonId;
+ //
+ if (p_proc.p_sdk_version >= $4500000) and
+    ( (src.rzdata.resultId = 1) or (src.rzdata.resultId < 0) ) then
+ begin
+  pResult^.buttonId := SCE_SAVE_DATA_DIALOG_BUTTON_ID_INVALID;
+ end;
+ //
+ if (pResult^.dirName <> nil) then
+ begin
+  pResult^.dirName^ := src.rzdata.dirName;
+ end;
+ //
+ if (pResult^.param <> nil) then
+ begin
+  Move(src.rzdata.param,pResult^.param^,sizeof(SceSaveDataParam));
+ end;
+ //
+ pResult^.userData := src.data.userData;
+end;
+
 function ps4_sceSaveDataDialogGetResult(pResult:pSceSaveDataDialogResult):Integer;
 begin
- //Writeln('sceSaveDataDialogGetResult');
- Result:=0;
+ if (pResult=nil) then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_ARG_NULL);
+ end;
+
+ if CheckReserved(pResult^.reserved,SizeOf(pResult^.reserved))<>0 then
+ begin
+  Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
+ end;
+
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_SaveDialog_mtx);
+
+  if (g_client<>nil) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_FINISHED;
+   if (g_client.isFinish) then
+   begin
+    g_client.rzdata:=Default(TSaveDialogResult);
+    g_client.getFinishData(@g_client.rzdata,sizeof(g_client.rzdata));
+
+    CopyResult(g_client,pResult);
+
+    Result:=g_client.rzdata.resultId;
+   end;
+  end;
+
+ mtx_unlock(g_SaveDialog_mtx);
+ //
 end;
 
 function ps4_sceSaveDataDialogProgressBarSetValue(target:Integer;rate:DWORD):Integer;
 begin
- Writeln('sceSaveDataDialogProgressBarSetValue:',rate);
- Result:=0;
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_SaveDialog_mtx);
+
+  if (g_client<>nil) then
+  if (not g_client.isInitializedStatus) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isFinish) then
+   begin
+    //
+    if (g_client.data.mode<>SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED;
+    end else
+    if (target<>0) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+    end else
+    begin
+     g_client.rate:=rate;
+     Result:=g_client.SetValue(@g_client.rate,SizeOf(g_client.rate));
+    end;
+    //
+   end;
+  end;
+
+ mtx_unlock(g_SaveDialog_mtx);
+ //
 end;
 
 function ps4_sceSaveDataDialogProgressBarInc(target:Integer;delta:DWORD):Integer;
 begin
- Writeln('sceSaveDataDialogProgressBarInc:',delta);
- Result:=0;
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+ mtx_lock(g_SaveDialog_mtx);
+
+  if (g_client<>nil) then
+  if (not g_client.isInitializedStatus) then
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_NOT_RUNNING;
+   if (not g_client.isFinish) then
+   begin
+    //
+    if (g_client.data.mode<>SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_NOT_SUPPORTED;
+    end else
+    if (target<>0) then
+    begin
+     Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
+    end else
+    begin
+     g_client.rate:=g_client.rate + delta;
+     Result:=g_client.SetValue(@g_client.rate,SizeOf(g_client.rate));
+    end;
+    //
+   end;
+  end;
+
+ mtx_unlock(g_SaveDialog_mtx);
+ //
 end;
 
 function Load_libSceSaveDataDialog(name:pchar):p_lib_info;

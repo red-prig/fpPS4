@@ -154,7 +154,7 @@ type
 
  pSceSaveDataFingerprint=^SceSaveDataFingerprint;
  SceSaveDataFingerprint=packed record
-  data   :array[0..SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1] of Byte;
+  data   :array[0..SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1] of Char;
   padding:array[0..14] of Byte;
  end;
 
