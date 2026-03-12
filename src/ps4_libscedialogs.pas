@@ -10,6 +10,7 @@ uses
   subr_dynlib,
   ps4_libSceCommonDialog,
   ps4_libSceMsgDialog,
+  ps4_libSceSaveDataDialog,
   ps4_libSceIme{,
   ps4_libSceSaveData};
 
@@ -17,10 +18,6 @@ implementation
 
 Const
  SCE_NP_COMMERCE_DIALOG_RESULT_PURCHASED=2;
-
- //SceSaveDataDialogAnimation
- SCE_SAVE_DATA_DIALOG_ANIMATION_ON  =(0);
- SCE_SAVE_DATA_DIALOG_ANIMATION_OFF =(1);
 
 //
 
@@ -90,92 +87,6 @@ end;
 
 function ps4_sceNpProfileDialogTerminate():Integer;
 begin
- Result:=0;
-end;
-
-//
-
-var
- status_save_dialog:Integer=SCE_COMMON_DIALOG_STATUS_NONE;
-
-function ps4_sceSaveDataDialogInitialize():Integer;
-begin
- Writeln('sceSaveDataDialogInitialize');
- status_save_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
- Result:=0;
-end;
-
-//SceSaveDataDialogParam
-function ps4_sceSaveDataDialogOpen(param:Pointer):Integer;
-begin
- if (param=nil) then Exit(SCE_ERROR_DIALOG_ERROR_PARAM_INVALID);
- Writeln('sceSaveDataDialogOpen:');
- status_save_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
- Result:=0;
-end;
-
-function ps4_sceSaveDataDialogIsReadyToDisplay:Integer;
-begin
- Result:=1;
-end;
-
-function ps4_sceSaveDataDialogUpdateStatus():Integer;
-begin
- Result:=status_save_dialog;
-end;
-
-function ps4_sceSaveDataDialogGetStatus():Integer;
-begin
- Result:=status_save_dialog;
-end;
-
-type
- pSceSaveDataDirName=pchar;
- pSceSaveDataParam=Pointer;
-
- pSceSaveDataDialogResult=^SceSaveDataDialogResult;
- SceSaveDataDialogResult=packed record
-  mode:Integer;//SceSaveDataDialogMode;         //Mode of function
-  result:Integer;                               //Result of executing function
-  buttonId:Integer;//SceSaveDataDialogButtonId; //Id of button user selected
-  _align:Integer;
-  dirName:pSceSaveDataDirName;        //savedata directory name
-  param:pSceSaveDataParam;            //Buffer to receive savedata information ( can be set NULL if you don't need it)
-  userData:Pointer;                   //Userdata specified at calling function
-  reserved:array[0..31] of Byte;      //Reserved range (must be filled by zero)
- end;
-
-
-function ps4_sceSaveDataDialogProgressBarSetValue(target:Integer;rate:DWORD):Integer;
-begin
- Writeln('sceSaveDataDialogProgressBarSetValue:',rate);
- Result:=0;
-end;
-
-function ps4_sceSaveDataDialogTerminate():Integer;
-begin
- Writeln('sceSaveDataDialogTerminate');
- status_save_dialog:=SCE_COMMON_DIALOG_STATUS_NONE;
- Result:=0;
-end;
-
-function ps4_sceSaveDataDialogGetResult(_result:pSceSaveDataDialogResult):Integer;
-begin
- //Writeln('sceSaveDataDialogGetResult');
- Result:=0;
-end;
-
-type
- pSceSaveDataDialogCloseParam=^SceSaveDataDialogCloseParam;
- SceSaveDataDialogCloseParam=packed record
-  anim:Integer;
-  reserved:array[0..31] of Byte;
- end;
-
-function ps4_sceSaveDataDialogClose(closeParam:pSceSaveDataDialogCloseParam):Integer;
-begin
- Writeln('sceSaveDataDialogClose');
- status_save_dialog:=SCE_COMMON_DIALOG_STATUS_FINISHED;
  Result:=0;
 end;
 
@@ -520,23 +431,7 @@ end;
 
 //
 
-function Load_libSceSaveDataDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceSaveDataDialog');
 
- lib:=Result^.add_lib('libSceSaveDataDialog');
- lib.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);
- lib.set_proc($E2D3E1B0FE85A432,@ps4_sceSaveDataDialogOpen);
- lib.set_proc($7A7EE03559E1F3BF,@ps4_sceSaveDataDialogIsReadyToDisplay);
- lib.set_proc($28ADC1760D5158AD,@ps4_sceSaveDataDialogUpdateStatus);
- lib.set_proc($1112B392C6AE0090,@ps4_sceSaveDataDialogGetStatus);
- lib.set_proc($85ACB509F4E62F20,@ps4_sceSaveDataDialogProgressBarSetValue);
- lib.set_proc($62E1F6140EDACEA4,@ps4_sceSaveDataDialogTerminate);
- lib.set_proc($C84889FEAAABE828,@ps4_sceSaveDataDialogGetResult);
- lib.set_proc($7C7E3A2DA83CF176,@ps4_sceSaveDataDialogClose);
-end;
 
 function Load_libSceNpCommerce(name:pchar):p_lib_info;
 var
@@ -656,7 +551,6 @@ var
 initialization
  RegisteredInternalFile(stub[1] ,'libSceErrorDialog.prx'           ,@Load_libSceErrorDialog           );
  RegisteredInternalFile(stub[2] ,'libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog       );
- RegisteredInternalFile(stub[3] ,'libSceSaveDataDialog.prx'        ,@Load_libSceSaveDataDialog        );
  RegisteredInternalFile(stub[5] ,'libSceNpCommerce.prx'            ,@Load_libSceNpCommerce            );
  RegisteredInternalFile(stub[6] ,'libSceSigninDialog.prx'          ,@Load_libSceSigninDialog          );
  RegisteredInternalFile(stub[7] ,'libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);

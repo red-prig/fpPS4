@@ -59,7 +59,7 @@ function ps4_sceCommonDialogIsUsed():Boolean;
 type
  TCommonDialogClient=class  //(TSerializeObject)
   private
-   status:Integer;
+   status:Byte;
    finish:Byte;
    closed:Byte;
    rzdata:array of Byte;

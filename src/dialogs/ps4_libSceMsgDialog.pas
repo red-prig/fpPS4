@@ -134,8 +134,8 @@ type
  end;
 
 var
- g_msg_mtx:mtx;
- g_client :TMsgDialogClient=nil;
+ g_MsgDialog_mtx:mtx;
+ g_client       :TMsgDialogClient=nil;
 
 {$CALLING SysV_ABI_CDecl}
 
@@ -146,7 +146,7 @@ begin
  Result:=0;
  Writeln('sceMsgDialogInitialize');
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   Result:=SCE_COMMON_DIALOG_ERROR_ALREADY_INITIALIZED;
   if (g_client=nil) then
@@ -173,7 +173,7 @@ begin
 
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
 end;
 
 function CheckButtonsParam(buttonsParam:pSceMsgDialogButtonsParam):Boolean;
@@ -417,7 +417,7 @@ begin
 
  Writeln('sceMsgDialogOpen');
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -482,7 +482,7 @@ begin
   //reTFEla4NQw
   Result:=g_client.Open('MSG_DIALOG_OPEN',@g_client.data,SizeOf(g_client.data));
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -491,7 +491,7 @@ begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  Writeln('sceMsgDialogClose');
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -503,7 +503,7 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -512,7 +512,7 @@ begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  Writeln('sceMsgDialogTerminate');
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -521,7 +521,7 @@ begin
    Result:=0;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -529,7 +529,7 @@ function ps4_sceMsgDialogUpdateStatus():Integer;
 begin
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -551,7 +551,7 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -559,7 +559,7 @@ function ps4_sceMsgDialogGetStatus():Integer;
 begin
  Result:=SCE_COMMON_DIALOG_STATUS_NONE;
 
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -576,7 +576,7 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -595,7 +595,7 @@ begin
  end;
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   begin
@@ -649,14 +649,14 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
 function ps4_sceMsgDialogProgressBarSetValue(target:Integer;rate:DWORD):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   if (not g_client.isInitializedStatus) then
@@ -681,14 +681,14 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
 function ps4_sceMsgDialogProgressBarInc(target:Integer;delta:DWORD):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   if (not g_client.isInitializedStatus) then
@@ -713,7 +713,7 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -722,7 +722,7 @@ var
  maxlen,len:DWORD;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- mtx_lock(g_msg_mtx);
+ mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
   if (not g_client.isInitializedStatus) then
@@ -749,7 +749,7 @@ begin
        len:=strnlen_s(barMsg,$2000);
        if (len>=$2000) then
        begin
-        mtx_unlock(g_msg_mtx);
+        mtx_unlock(g_MsgDialog_mtx);
         Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID)
        end;
       end;
@@ -771,7 +771,7 @@ begin
    end;
   end;
 
- mtx_unlock(g_msg_mtx);
+ mtx_unlock(g_MsgDialog_mtx);
  //
 end;
 
@@ -803,14 +803,14 @@ begin
  lib.set_proc($19CE64D6A70AE1FB,@ps4_sceMsgDialogProgressBarInc);
  lib.set_proc($E87FFBD4E76BA573,@ps4_sceMsgDialogProgressBarSetMsg);
 
- mtx_init(g_msg_mtx,'g_msg_mtx');
+ mtx_init(g_MsgDialog_mtx,'g_MsgDialog_mtx');
 end;
 
 var
  stub:t_int_file;
 
 initialization
-RegisteredInternalFile(stub,'libSceMsgDialog.prx',@Load_libSceMsgDialog);
+ RegisteredInternalFile(stub,'libSceMsgDialog.prx',@Load_libSceMsgDialog);
 
 end.
 
