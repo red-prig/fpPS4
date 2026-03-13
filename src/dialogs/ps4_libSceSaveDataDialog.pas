@@ -387,7 +387,7 @@ end;
 
 function CheckBarType(barType:Integer):Integer; inline;
 begin
- if (barType = 0) then
+ if (barType <> 0) then
  begin
   Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
  end else
@@ -876,14 +876,35 @@ begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
  if (CheckBarType(progBarParam^.barType)=0) then
  if (CheckSysMsgType(progBarParam^.sysMsgType)=0) then
- if (p_proc.p_sdk_version < $2000000) or
-    (progBarParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_PRGRESS_SYSMSG_TYPE_INVALID) then
- if (progBarParam^.msg = nil)  or
-    (progBarParam^.msg[0] = #0) or
-    (CheckMsg(progBarParam^.msg)=0) then
- if (CheckReserved(progBarParam^.reserved,sizeof(progBarParam^.reserved))=0) then
  begin
-  Result:=0;
+
+  if (progBarParam^.msg = nil)  or
+     (progBarParam^.msg[0] = #0) then
+  begin
+   if (p_proc.p_sdk_version >= $2000000) and
+      (progBarParam^.sysMsgType = SCE_SAVE_DATA_DIALOG_PRGRESS_SYSMSG_TYPE_INVALID) then
+   begin
+    Exit;
+   end;
+  end else
+  begin
+   if (p_proc.p_sdk_version >= $2000000) and
+      (progBarParam^.sysMsgType <> SCE_SAVE_DATA_DIALOG_PRGRESS_SYSMSG_TYPE_INVALID) then
+   begin
+    Exit;
+   end;
+   //
+   if (CheckMsg(progBarParam^.msg)<>0) then
+   begin
+    Exit;
+   end;
+  end;
+
+  if (CheckReserved(progBarParam^.reserved,sizeof(progBarParam^.reserved))=0) then
+  begin
+   Result:=0;
+  end;
+
  end;
 end;
 
