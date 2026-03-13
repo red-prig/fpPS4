@@ -1133,6 +1133,7 @@ end;
 
 function CheckFingerprintItems(WizardParam:pSceSaveDataDialogWizardParam;Items:pSceSaveDataDialogItems):Integer;
 begin
+ Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
  if (WizardParam^.fingerprint = nil) then
  begin
   if (Items <> nil) and (Items^.titleId <> nil) then
@@ -1296,11 +1297,11 @@ begin
        end;
        back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
       end;
-    SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE :
+    SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE:
       back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
-    SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR :
+    SCE_SAVE_DATA_DIALOG_MODE_PROGRESS_BAR:
       back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_DISABLE;
-    SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM :
+    SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM:
       back := SCE_SAVE_DATA_DIALOG_OPTION_BACK_ENABLE;
     end;
   end
@@ -1542,7 +1543,7 @@ begin
 
     case param^.mode of
      SCE_SAVE_DATA_DIALOG_MODE_USER_MSG:
-        CopyUserMsgParam(param^.userData,g_client.data);
+        CopyUserMsgParam(param^.userMsgParam,g_client.data);
      SCE_SAVE_DATA_DIALOG_MODE_SYSTEM_MSG:
         CopySystemMessage(param^.sysMsgParam,g_client.data);
      SCE_SAVE_DATA_DIALOG_MODE_ERROR_CODE:
