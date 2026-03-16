@@ -14,9 +14,12 @@ uses
   ExtCtrls,
   Graphics,
   Buttons,
+  Grids,
   LMessages,
   LCLType,
   LCLIntf,
+
+  CharStream,
 
   host_ipc_interface,
   game_info,
@@ -82,6 +85,7 @@ type
   FDialog  :TPanel;
   FMsgMemo :TMemo;
   FMsgPBar :TProgressBar;
+  FCustom  :TWinControl;
   //
   function  get_caption_format:RawByteString;
   function  OpenMainWindows:THandle;
@@ -322,6 +326,7 @@ begin
   FreeAndNil(FDialog);
   FMsgMemo:=nil;
   FMsgPBar:=nil;
+  FreeAndNil(FCustom);
  end;
 end;
 
@@ -372,8 +377,8 @@ begin
   MsgForm.AnchorSide[akRight ].Side   :=asrCenter;
   MsgForm.AnchorSide[akBottom].Control:=AParent;
   MsgForm.AnchorSide[akBottom].Side   :=asrCenter;
-  MsgForm.Width :=400;
-  MsgForm.Height:=200;
+  MsgForm.Width :=400 + 200;
+  MsgForm.Height:=200 + 200;
 
   if Attributes.Caption.Enable or Attributes.CloseButton.Enable then
   begin
@@ -582,6 +587,7 @@ begin
   FDialog :=MsgForm;
   FMsgMemo:=MsgMemo;
   FMsgPBar:=MsgPBar;
+  FCustom :=Attributes.Custom;
   //save
 
  except
@@ -764,6 +770,29 @@ begin
  CloseDialog();
 end;
 
+type
+ TSaveDataGrid=class(TStringGrid)
+  procedure CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+ end;
+
+procedure TSaveDataGrid.CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+var
+ Icon:TCustomBitmap;
+begin
+ if (aCol=0) then
+ begin
+  //PNG
+  Icon:=TCustomBitmap(Objects[0,aRow]);
+  if Icon.InheritsFrom(TCustomBitmap) then
+  begin
+   Canvas.StretchDraw(aRect,Icon);
+  end;
+ end else
+ begin
+  DefaultDrawCell(aCol,aRow,aRect,aState);
+ end;
+end;
+
 function TDialogsManager.OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
 
 const
@@ -841,6 +870,10 @@ const
 var
  data:TSaveDialogOpen;
  Attributes:TDialogAttributes;
+ Grid:TSaveDataGrid;
+ Icon:TCustomBitmap;
+ Stream:TPCharStream;
+ i,p:Integer;
 begin
  Result:=0;
 
@@ -862,6 +895,59 @@ begin
 
  Attributes.Caption.Enable :=True;
  Attributes.Caption.Message:=SysDispCaption[data.dispType];
+
+ if (data.is_new<>0) or
+    (data.dirNameNum<>0) then
+ begin
+  Grid:=TSaveDataGrid.Create(nil);
+  Grid.OnDrawCell:=@Grid.CustomDrawCell;
+  Grid.AutoEdit:=False;
+  Grid.AutoFillColumns:=TRue;
+  Grid.BorderStyle:=bsNone;
+  Grid.Constraints.MinWidth :=228;
+  Grid.Constraints.MinHeight:=128;
+  Grid.RowCount:=data.is_new + data.dirNameNum;
+  Grid.ColCount:=2;
+  Grid.FixedCols:=1;
+  Grid.FixedRows:=0;
+  Grid.GridLineWidth:=0;
+  Grid.Options:=[goRowSelect,goThumbTracking,goSmoothScroll];
+  //
+  Grid.ColWidths[0]:=228;
+  for i:=0 to Grid.RowCount-1 do
+  begin
+   Grid.RowHeights[i]:=128;
+  end;
+  //
+  p:=0;
+  if (data.is_new<>0) then
+  begin
+   if (data.new_item.iconSize<>0) then
+   begin
+    Stream:=TPCharStream.Create(@data.new_item.iconBuf,data.new_item.iconSize);
+
+    Icon:=TPortableNetworkGraphic.Create;
+    Icon.LoadFromStream(Stream);
+    //TODO: Destructor!
+
+    Grid.Objects[0,0]:=Icon;
+
+    FreeAndNil(Stream);
+    Icon:=nil;
+   end;
+
+   Grid.Cells[1,0]:=data.new_item.title;
+   p:=1;
+  end;
+  //
+  if (data.dirNameNum<>0) then
+  for i:=0 to data.dirNameNum-1 do
+  begin
+   Grid.Cells[1,p+i]:=data.dirNames[i].data;
+  end;
+
+  Attributes.Custom:=Grid;
+ end;
 
  //TODO:new data
 
