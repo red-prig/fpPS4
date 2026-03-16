@@ -11,6 +11,7 @@ uses
   ps4_libSceCommonDialog,
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
+  ps4_libSceErrorDialog,
   ps4_libSceIme{,
   ps4_libSceSaveData};
 
@@ -18,55 +19,6 @@ implementation
 
 Const
  SCE_NP_COMMERCE_DIALOG_RESULT_PURCHASED=2;
-
-//
-
-var
- status_err_dialog:Integer=0; //SCE_ERROR_DIALOG_STATUS_NONE
-
-function ps4_sceErrorDialogInitialize():Integer;
-begin
- Writeln('sceErrorDialogInitialize');
- status_err_dialog:=1; //SCE_ERROR_DIALOG_STATUS_INITIALIZED
- Result:=0;
-end;
-
-type
- pSceErrorDialogParam=^SceErrorDialogParam;
- SceErrorDialogParam=packed record
-  size:Integer;
-  errorCode:Integer;
-  userId:Integer;
-  reserved:Integer;
- end;
-
-const
- SCE_ERROR_DIALOG_ERROR_PARAM_INVALID=Integer($80ED0003);
-
-function ps4_sceErrorDialogOpen(param:pSceErrorDialogParam):Integer;
-begin
- if (param=nil) then Exit(SCE_ERROR_DIALOG_ERROR_PARAM_INVALID);
- Writeln('sceErrorDialogOpen:',HexStr(param^.errorCode,4));
- status_err_dialog:=3; //SCE_ERROR_DIALOG_STATUS_FINISHED
- Result:=0;
-end;
-
-function ps4_sceErrorDialogUpdateStatus():Integer;
-begin
- Result:=status_err_dialog;
-end;
-
-function ps4_sceErrorDialogGetStatus():Integer;
-begin
- Result:=status_err_dialog;
-end;
-
-function ps4_sceErrorDialogTerminate():Integer;
-begin
- Writeln('sceErrorDialogTerminate');
- status_err_dialog:=0; //SCE_ERROR_DIALOG_STATUS_NONE
- Result:=0;
-end;
 
 //
 
@@ -401,19 +353,7 @@ end;
 
 //
 
-function Load_libSceErrorDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceErrorDialog');
 
- lib:=Result^.add_lib('libSceErrorDialog');
- lib.set_proc($23CF0A0A19729D2B,@ps4_sceErrorDialogInitialize);
- lib.set_proc($336645FC294B8606,@ps4_sceErrorDialogOpen);
- lib.set_proc($596886BA1F577E04,@ps4_sceErrorDialogUpdateStatus);
- lib.set_proc($B7616F1D15F382A9,@ps4_sceErrorDialogGetStatus);
- lib.set_proc($F570312B63CCC24F,@ps4_sceErrorDialogTerminate);
-end;
 
 //
 
@@ -549,7 +489,6 @@ var
  stub:array[0..13] of t_int_file;
 
 initialization
- RegisteredInternalFile(stub[1] ,'libSceErrorDialog.prx'           ,@Load_libSceErrorDialog           );
  RegisteredInternalFile(stub[2] ,'libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog       );
  RegisteredInternalFile(stub[5] ,'libSceNpCommerce.prx'            ,@Load_libSceNpCommerce            );
  RegisteredInternalFile(stub[6] ,'libSceSigninDialog.prx'          ,@Load_libSceSigninDialog          );

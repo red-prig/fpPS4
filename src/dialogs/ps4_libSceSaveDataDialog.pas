@@ -1847,11 +1847,19 @@ begin
  //
 end;
 
+function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
+begin
+ ps4_sceSaveDataDialogTerminate();
+ Result:=0;
+end;
+
 function Load_libSceSaveDataDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
 begin
  Result:=obj_new_int('libSceSaveDataDialog');
+
+ Result^.fini_proc_addr.native:=@dt_fini;
 
  lib:=Result^.add_lib('libSceSaveDataDialog');
  lib.set_proc($B3D7B7F98A519F3C,@ps4_sceSaveDataDialogInitialize);

@@ -26,9 +26,16 @@ uses
   game_run_context,
 
   ps4_libSceMsgDialog,
-  ps4_libSceSaveDataDialog;
+  ps4_libSceSaveDataDialog,
+  ps4_libSceErrorDialog;
 
 type
+ TDialogMode=(
+  dmNone,
+  dmCDLG,
+  dmERROR
+ );
+
  TDialogButtonsType=(
   btnOk,
   btnYesNo,
@@ -82,10 +89,12 @@ type
   FImages  :TImageList;
   pContext :PGameRunContext;
   FMainForm:TGameMainForm;
+  //
   FDialog  :TPanel;
   FMsgMemo :TMemo;
   FMsgPBar :TProgressBar;
   FCustom  :TWinControl;
+  FMode    :TDialogMode;
   //
   function  get_caption_format:RawByteString;
   function  OpenMainWindows:THandle;
@@ -99,13 +108,18 @@ type
   function  OnCdlgSetValue(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_VALUE
   function  OnCdlgClose   (mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLOSE
   procedure CloseDialog();
-  procedure NewDialogOpen(var Attributes:TDialogAttributes);
+  procedure NewDialogOpen(var Attributes:TDialogAttributes;mode:TDialogMode);
   //
   procedure OnMsgDialogClick(Sender:TObject);
   function  OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
   //
   procedure OnSaveDialogClick(Sender:TObject);
   function  OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
+  //
+  procedure OnErrDlgClick(Sender:TObject);
+  function  OnErrDlgOpen  (mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_OPEN
+  function  OnErrDlgClose (mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_CLOSE
+  function  OnErrDlgUpdate(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_UPDATE
  end;
 
  function GetRealFontSize(Font:TFont):Integer;
@@ -269,11 +283,14 @@ end;
 
 procedure TDialogsManager.BindHandler(Handler:THostIpcHandler);
 begin
- Handler.AddCallback('CDLG_SET_MSG'    ,@OnCdlgSetMsg);
- Handler.AddCallback('CDLG_SET_VALUE'  ,@OnCdlgSetValue);
- Handler.AddCallback('CDLG_CLOSE'      ,@OnCdlgClose);
- Handler.AddCallback('MSG_DIALOG_OPEN' ,@OnMsgDialogOpen);
- Handler.AddCallback('SAVE_DIALOG_OPEN',@OnSaveDialogOpen);
+ Handler.AddCallback('CDLG_SET_MSG'     ,@OnCdlgSetMsg);
+ Handler.AddCallback('CDLG_SET_VALUE'   ,@OnCdlgSetValue);
+ Handler.AddCallback('CDLG_CLOSE'       ,@OnCdlgClose);
+ Handler.AddCallback('MSG_DIALOG_OPEN'  ,@OnMsgDialogOpen);
+ Handler.AddCallback('SAVE_DIALOG_OPEN' ,@OnSaveDialogOpen);
+ Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
+ Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
+ Handler.AddCallback('ERR_DIALOG_UPDATE',@OnErrDlgUpdate);
 end;
 
 function TDialogsManager.OnCdlgSetMsg(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_MSG
@@ -328,9 +345,10 @@ begin
   FMsgPBar:=nil;
   FreeAndNil(FCustom);
  end;
+ FMode:=dmNone;
 end;
 
-procedure TDialogsManager.NewDialogOpen(var Attributes:TDialogAttributes);
+procedure TDialogsManager.NewDialogOpen(var Attributes:TDialogAttributes;mode:TDialogMode);
 var
  AParent:TForm;
  MsgForm:TPanel;
@@ -590,6 +608,8 @@ begin
   FCustom :=Attributes.Custom;
   //save
 
+  FMode:=mode;
+
  except
   MsgForm.Free;
  end;
@@ -738,7 +758,7 @@ begin
   else;
  end;
 
- NewDialogOpen(Attributes);
+ NewDialogOpen(Attributes,dmCDLG);
 end;
 
 procedure TDialogsManager.OnSaveDialogClick(Sender:TObject);
@@ -772,7 +792,8 @@ end;
 
 type
  TSaveDataGrid=class(TStringGrid)
-  procedure CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+  procedure  CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+  Destructor Destroy; override;
  end;
 
 procedure TSaveDataGrid.CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
@@ -790,6 +811,19 @@ begin
  end else
  begin
   DefaultDrawCell(aCol,aRow,aRect,aState);
+ end;
+end;
+
+Destructor TSaveDataGrid.Destroy;
+var
+ i:Integer;
+ o:TObject;
+begin
+ if RowCount<>0 then
+ for i:=0 to RowCount-1 do
+ begin
+  o:=Objects[0,i];
+  FreeAndNil(o);
  end;
 end;
 
@@ -928,7 +962,6 @@ begin
 
     Icon:=TPortableNetworkGraphic.Create;
     Icon.LoadFromStream(Stream);
-    //TODO: Destructor!
 
     Grid.Objects[0,0]:=Icon;
 
@@ -949,13 +982,10 @@ begin
   Attributes.Custom:=Grid;
  end;
 
- //TODO:new data
-
  case data.mode of
   SCE_SAVE_DATA_DIALOG_MODE_LIST,
   SCE_SAVE_DATA_DIALOG_MODE_WIZARD_LIST:
     begin
-     //TODO:Attributes.Custom
      //list table
      //
      Attributes.Buttons.Enable :=True;
@@ -1082,8 +1112,63 @@ begin
   else;
  end;
 
- NewDialogOpen(Attributes);
+ NewDialogOpen(Attributes,dmCDLG);
 end;
+
+//
+
+//
+function TDialogsManager.OnErrDlgOpen(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_OPEN
+var
+ data:TErrDialogOpen;
+ Attributes:TDialogAttributes;
+begin
+ Result:=0;
+
+ if (FDialog<>nil) then Exit(-2);
+
+ if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
+ FillChar(data,SizeOf(data),0);
+ Move(buf^,data,mlen);
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ Attributes.OnClick:=@OnErrDlgClick;
+
+ Attributes.Caption.Enable :=True;
+ Attributes.Caption.Message:='Error';
+
+ Attributes.CloseButton.Enable:=True;
+
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:='An error has occurred.'#13'0x'+HexStr(data.errorCode,8);
+
+ Attributes.Buttons.Enable :=True;
+ Attributes.Buttons.BtnType:=btnOk;
+
+ NewDialogOpen(Attributes,dmERROR);
+end;
+
+procedure TDialogsManager.OnErrDlgClick(Sender:TObject);
+begin
+ CloseDialog();
+end;
+
+function TDialogsManager.OnErrDlgClose(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_CLOSE
+begin
+ CloseDialog();
+end;
+
+function TDialogsManager.OnErrDlgUpdate(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_UPDATE
+begin
+ if (FMode=dmERROR) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=1;
+ end;
+end;
+
 
 end.
 
