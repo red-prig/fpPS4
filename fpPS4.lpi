@@ -1772,6 +1772,10 @@
         <Filename Value="src\dialogs\ps4_libSceErrorDialog.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="gui\gui_dialog_fabric.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
