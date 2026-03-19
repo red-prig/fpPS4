@@ -12,7 +12,7 @@ uses
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceErrorDialog,
-  ps4_libSceIme{,
+  ime_types{,
   ps4_libSceSaveData};
 
 implementation
@@ -215,7 +215,7 @@ type
  pSceImeDialogParam=^SceImeDialogParam;
  SceImeDialogParam=packed record
   userId             :Integer;
-  _type              :SceImeType;
+  ImeType            :SceImeType;
   supportedLanguages :QWORD;
   enterLabel         :SceImeEnterLabel;
   inputMethod        :SceImeInputMethod;
@@ -245,6 +245,7 @@ type
   colorText               :SceImeColor;
   colorSpecial            :SceImeColor;
   priority                :SceImePanelPriority;
+  _align                  :Integer;
   additionalDictionaryPath:PChar;
   extKeyboardFilter       :SceImeExtKeyboardFilter;
   disableDevice           :DWORD;
@@ -255,9 +256,10 @@ type
 var
  status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
 
-function ps4_sceImeDialogInit(const param:pSceImeDialogParam;
-                              const extended:pSceImeParamExtended):Integer;
+function ps4_sceImeDialogInit(param   :pSceImeDialogParam;
+                              extended:pSceImeParamExtended):Integer;
 begin
+ writeln;
  Result:=0;
 end;
 
@@ -266,9 +268,17 @@ begin
  Result:=0;
 end;
 
-function ps4_sceImeDialogGetStatus:Integer;
+function ps4_sceImeDialogGetStatus():Integer;
 begin
  Result:=status_ime_dialog;
+end;
+
+function ps4_sceImeDialogGetPanelSizeExtended(param   :pSceImeDialogParam;
+                                              extended:pSceImeParamExtended;
+                                              p_width :PDWORD;
+                                              p_height:PDWORD):Integer;
+begin
+ Result:=0;
 end;
 
 //
@@ -424,6 +434,7 @@ begin
  lib.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit);
  lib.set_proc($8324F2567F9B5CCC,@ps4_sceImeDialogTerm);
  lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
+ lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);
 end;
 
 function Load_libSceLoginDialog(name:pchar):p_lib_info;
