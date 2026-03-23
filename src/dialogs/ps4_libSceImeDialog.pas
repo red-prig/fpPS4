@@ -6,6 +6,7 @@ unit ps4_libSceImeDialog;
 interface
 
 uses
+ sysutils,
  kern_mtx,
  subr_dynlib,
  kern_proc,
@@ -18,6 +19,45 @@ uses
 type
  PImeDialogOpen=^TImeDialogOpen;
  TImeDialogOpen=record
+  userId                  :Integer;
+  ImeType                 :SceImeType;
+  supportedLanguages      :QWORD;
+  enterLabel              :SceImeEnterLabel;
+  inputMethod             :SceImeInputMethod;
+  filter                  :SceImeTextFilter;
+  option                  :DWORD;
+  maxTextLength           :DWORD;
+  posx                    :Single;
+  posy                    :Single;
+  horizontalAlignment     :SceImeHorizontalAlignment;
+  verticalAlignment       :SceImeVerticalAlignment;
+  inputTextBuffer         :array[0..2047] of WideChar;
+  placeholder             :array[0..127] of WideChar;
+  title                   :array[0.. 63] of WideChar;
+  //
+  ExtOption               :DWORD;
+  colorBase               :SceImeColor;
+  colorLine               :SceImeColor;
+  colorTextField          :SceImeColor;
+  colorPreedit            :SceImeColor;
+  colorButtonDefault      :SceImeColor;
+  colorButtonFunction     :SceImeColor;
+  colorButtonSymbol       :SceImeColor;
+  colorText               :SceImeColor;
+  colorSpecial            :SceImeColor;
+  priority                :SceImePanelPriority;
+  extKeyboardFilter       :SceImeExtKeyboardFilter;
+  disableDevice           :DWORD;
+  extKeyboardMode         :DWORD;
+  additionalDictionaryPath:array[0..1023] of AnsiChar;
+ end;
+
+ TImeDialogStatus=(dRUNNING,sFINISHED,dABORTED);
+
+ TImeDialogClient=class
+  data  :TImeDialogOpen;
+  output:PWideChar;
+  state :TImeDialogStatus;
   //
  end;
 
@@ -25,7 +65,7 @@ implementation
 
 var
  g_ImeDialog_mtx:mtx;
- g_state        :Integer=0;
+ g_dialog       :TImeDialogClient=nil;
 
 {$CALLING SysV_ABI_CDecl}
 
@@ -35,30 +75,74 @@ const
  SCE_IME_DIALOG_STATUS_RUNNING =1;
  SCE_IME_DIALOG_STATUS_FINISHED=2;
 
+function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
+begin
+ if (dst=nil) or (src=nil) then Exit(nil);
+ Result:=StrLCopy(dst,src,maxlen);
+end;
+
+function wcsncpy_s(dst,src:PWideChar;maxlen:ptrint):PWideChar;
+begin
+ if (dst=nil) or (src=nil) then Exit(nil);
+ Result:=StrLCopy(dst,src,maxlen);
+end;
+
+Function CheckOption_old(option:DWORD):Boolean; inline;
 var
- status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
-
-function ps4_sceImeDialogInit(param   :pSceImeDialogParam;
-                              extended:pSceImeParamExtended):Integer;
+ filter:DWORD;
 begin
- writeln;
- Result:=0;
+
+ if (p_proc.p_sdk_version > $14fffff) then
+ begin
+ filter:=$f7f06fff;
+ end else
+ begin
+  filter:=$ff706eff;
+ end;
+
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  filter:=filter and $ffe06bff;
+ end else
+ begin
+  filter:=filter or $8600000;
+ end;
+
+ if (p_proc.p_sdk_version > $174ffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $fff067ff;
+ end;
+
+ if (p_proc.p_sdk_version > $34fffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $fff04fff;
+ end;
+
+ if (p_proc.p_sdk_version > $3ffffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $fff02fff;
+ end;
+
+ if (((not filter) and option)<>0) then
+ begin
+  Result:=False;
+ end else
+ begin
+  Result:=True;
+ end;
+
 end;
 
-function ps4_sceImeDialogTerm():Integer;
-begin
- Result:=0;
-end;
-
-//sceImeDialogAbort
-//sceImeDialogForceClose
-
-function ps4_sceImeDialogGetStatus():Integer;
-begin
- Result:=status_ime_dialog;
-end;
-
-Function CheckOption(option:DWORD):Boolean; inline;
+Function CheckOption_new(option:DWORD):Boolean; inline;
 var
  filter:DWORD;
 begin
@@ -105,14 +189,55 @@ begin
 
 end;
 
-Function CheckLang(supportedLanguages:QWORD):Boolean; inline;
+Function CheckLang_old(supportedLanguages:QWORD):Boolean; inline;
 var
  filter:QWORD;
 begin
 
- filter:=ord($1ffffff < p_proc.p_sdk_version) * $1000000 + $3fe1fffff;
+ filter:=ord(p_proc.p_sdk_version > $1ffffff) * $1000000 + $303fe1fffff;
 
- if ($24fffff < p_proc.p_sdk_version) then
+ if (p_proc.p_sdk_version > $24fffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $303fd1fffff;
+ end;
+
+ if (p_proc.p_sdk_version > $4ffffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $302031fffff;
+ end;
+
+ if (p_proc.p_sdk_version > $fffffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $301ff1fffff;
+ end;
+
+ if (((not filter) and supportedLanguages)<>0) then
+ begin
+  Result:=False;
+ end else
+ begin
+  Result:=True;
+ end;
+
+end;
+
+Function CheckLang_new(supportedLanguages:QWORD):Boolean; inline;
+var
+ filter:QWORD;
+begin
+
+ filter:=ord(p_proc.p_sdk_version > $1ffffff) * $1000000 + $3fe1fffff;
+
+ if (p_proc.p_sdk_version > $24fffff) then
  begin
   filter:=filter;
  end else
@@ -120,7 +245,7 @@ begin
   filter:=filter and $3fd1fffff;
  end;
 
- if ($4ffffff < p_proc.p_sdk_version) then
+ if (p_proc.p_sdk_version > $4ffffff) then
  begin
   filter:=filter;
  end else
@@ -128,7 +253,7 @@ begin
   filter:=filter and $2031fffff;
  end;
 
- if ($fffffff < p_proc.p_sdk_version) then
+ if (p_proc.p_sdk_version > $fffffff) then
  begin
   filter:=filter;
  end else
@@ -146,7 +271,37 @@ begin
 
 end;
 
-Function CheckExtendedOption(option:DWORD):Boolean; inline;
+Function CheckExtendedOption_old(option:DWORD):Boolean; inline;
+var
+ filter:DWORD;
+begin
+
+ if (p_proc.p_sdk_version < $1560000) then
+ begin
+  filter:=$41df;
+ end else
+ begin
+  filter:=$4fdf;
+ end;
+
+ if ((option and $4080)=$4000) then
+ begin
+  Result:=false;
+ end else
+ begin
+  if (p_proc.p_sdk_version > $5ffffff) then
+  begin
+   filter:=filter;
+  end else
+  begin
+   filter:=filter and $fdf;
+  end;
+  Result:=((not filter) and option)=0;
+ end;
+
+end;
+
+Function CheckExtendedOption_new(option:DWORD):Boolean; inline;
 var
  filter:DWORD;
 begin
@@ -182,6 +337,376 @@ begin
 
 end;
 
+function CheckReserved(var buf;len:DWORD):Boolean;
+var
+ i:DWORD;
+begin
+ for i:=0 to len-1 do
+ if (PByte(@buf)[i]<>0) then
+ begin
+  Exit(False);
+ end;
+ Result:=True;
+end;
+
+function IsRegistered(userId:Integer):Boolean; inline;
+begin
+ //sceUserServiceGetRegisteredUserIdList
+ Result:=True;
+end;
+
+const
+ posx_per2k:array[0..1] of Single=(3840.0,1920.0);
+ posy_per2k:array[0..1] of Single=(2160.0,1080.0);
+
+function imeDialogInitParamCheck(param   :pSceImeDialogParam;
+                                 extended:pSceImeParamExtended;
+                                 below_15:Boolean):Integer;
+var
+ extKeyboardMode:DWORD;
+begin
+
+ if (param=nil) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_ADDRESS);
+ end;
+
+ if (below_15) then
+ begin
+
+  if (SCE_IME_TYPE_NUMBER < DWORD(param^.ImeType)) and
+     (1 < DWORD(param^.ImeType - 256)) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_TYPE);
+  end;
+
+  if not CheckOption_old(param^.option) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_OPTION);
+  end;
+
+  if not CheckLang_old(param^.supportedLanguages) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_SUPPORTED_LANGUAGES);
+  end;
+
+ end else
+ begin
+
+  if (SCE_IME_TYPE_NUMBER < DWORD(param^.ImeType)) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_TYPE);
+  end;
+
+  if not CheckOption_new(param^.option) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_OPTION);
+  end;
+
+  if not CheckLang_new(param^.supportedLanguages) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_SUPPORTED_LANGUAGES);
+  end;
+
+ end;
+
+ //
+
+ if (p_proc.p_sdk_version < $1500000) then
+ begin
+  if (1919 < param^.posx) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSX);
+  end;
+  if (1079 < param^.posy) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSY);
+  end;
+ end else
+ begin
+  if (param^.posx < 0.0) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSX);
+  end;
+  if (posx_per2k[ord((param^.option and SCE_IME_OPTION_USE_OVER_2K_COORDINATES)=0)] <= param^.posx) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSX);
+  end;
+  if (param^.posy < 0.0) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSY);
+  end;
+  if (posy_per2k[ord((param^.option and SCE_IME_OPTION_USE_OVER_2K_COORDINATES)=0)] <= param^.posy) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_POSY);
+  end;
+ end;
+
+ //
+
+ if (DWORD(param^.horizontalAlignment) > 2) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_HORIZONTAL_ALIGNMENT);
+ end;
+ if (DWORD(param^.verticalAlignment) > 2) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_VERTICAL_ALIGNMENT);
+ end;
+
+ //
+
+ if (((not param^.option) and 5)<>0) and
+    (
+     ((param^.option and SCE_IME_OPTION_PASSWORD)=0) or
+     (SCE_IME_TYPE_MAIL < DWORD(param^.ImeType)) or
+     (param^.ImeType=SCE_IME_TYPE_BASIC_LATIN)
+    ) and
+    (
+     ((param^.option and SCE_IME_OPTION_MULTILINE)=0) or
+     (2 < DWORD(param^.ImeType - 2))
+    ) then
+ begin
+  //
+ end else
+ begin
+  Exit(SCE_IME_ERROR_INVALID_PARAM);
+ end;
+
+ //
+
+ if (below_15) then
+ begin
+  if (1 < DWORD(param^.userId +   1)) and
+     (1 < DWORD(param^.userId - $fe)) and
+     (not IsRegistered(param^.userId)) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_USER_ID);
+  end;
+ end else
+ begin
+  if (not IsRegistered(param^.userId)) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_USER_ID);
+  end;
+  if (p_proc.p_sdk_version < $1500000) and
+     (param^.userId=-1) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_USER_ID);
+  end;
+ end;
+
+ //
+
+ if not CheckReserved(param^.reserved,sizeof(param^.reserved)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_RESERVED);
+ end;
+
+ if (param^.inputTextBuffer=nil) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_INPUT_TEXT_BUFFER);
+ end;
+
+ //
+
+ if (extended=nil) then
+ begin
+  Exit(0);
+ end;
+
+ if (SCE_IME_PANEL_PRIORITY_ACCENT < DWORD(extended^.priority)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+ end;
+
+ if (p_proc.p_sdk_version < $1500000) then
+ begin
+  if ((extended^.option and $ffffff20)<>0) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+  end;
+ end else
+ begin
+  if (p_proc.p_sdk_version < $2500000) then
+  begin
+   if not CheckExtendedOption_old(extended^.option) then
+   begin
+    Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+   end;
+  end else
+  begin
+   if not CheckExtendedOption_new(extended^.option) then
+   begin
+    Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+   end;
+  end;
+ end;
+
+ if not CheckReserved(extended^.reserved,sizeof(extended^.reserved)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+ end;
+
+ if (p_proc.p_sdk_version < $1560000) then
+ begin
+  if (extended^.extKeyboardFilter<>nil) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+  end;
+  if (extended^.disableDevice<>0) then
+  begin
+   Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+  end;
+  extKeyboardMode:=extended^.extKeyboardMode;
+ end else
+ begin
+  extKeyboardMode:=extended^.extKeyboardMode and $e3fffffc;
+ end;
+
+ if (extKeyboardMode<>0) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+ end;
+
+ if (7 < DWORD(extended^.disableDevice)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_EXTENDED);
+ end;
+
+ Result:=0;
+end;
+
+Procedure CopyParams(g_dialog:TImeDialogClient;
+                     param   :pSceImeDialogParam;
+                     extended:pSceImeParamExtended);
+begin
+ g_dialog.data.userId             :=param^.userId             ;
+ g_dialog.data.ImeType            :=param^.ImeType            ;
+ g_dialog.data.supportedLanguages :=param^.supportedLanguages ;
+ g_dialog.data.enterLabel         :=param^.enterLabel         ;
+ g_dialog.data.inputMethod        :=param^.inputMethod        ;
+ g_dialog.data.filter             :=param^.filter             ;
+ g_dialog.data.option             :=param^.option             ;
+ g_dialog.data.maxTextLength      :=param^.maxTextLength      ;
+ g_dialog.data.posx               :=param^.posx               ;
+ g_dialog.data.posy               :=param^.posy               ;
+ g_dialog.data.horizontalAlignment:=param^.horizontalAlignment;
+ g_dialog.data.verticalAlignment  :=param^.verticalAlignment  ;
+ //
+ wcsncpy_s(@g_dialog.data.inputTextBuffer,param^.inputTextBuffer,Length(g_dialog.data.inputTextBuffer));
+ wcsncpy_s(@g_dialog.data.placeholder    ,param^.placeholder    ,Length(g_dialog.data.placeholder));
+ wcsncpy_s(@g_dialog.data.title          ,param^.title          ,Length(g_dialog.data.title));
+ //
+ g_dialog.output:=param^.inputTextBuffer;
+ //
+ if (extended<>nil) then
+ begin
+  g_dialog.data.ExtOption               :=extended^.option             ;
+  g_dialog.data.colorBase               :=extended^.colorBase          ;
+  g_dialog.data.colorLine               :=extended^.colorLine          ;
+  g_dialog.data.colorTextField          :=extended^.colorTextField     ;
+  g_dialog.data.colorPreedit            :=extended^.colorPreedit       ;
+  g_dialog.data.colorButtonDefault      :=extended^.colorButtonDefault ;
+  g_dialog.data.colorButtonFunction     :=extended^.colorButtonFunction;
+  g_dialog.data.colorButtonSymbol       :=extended^.colorButtonSymbol  ;
+  g_dialog.data.colorText               :=extended^.colorText          ;
+  g_dialog.data.colorSpecial            :=extended^.colorSpecial       ;
+  g_dialog.data.priority                :=extended^.priority           ;
+  g_dialog.data.extKeyboardFilter       :=extended^.extKeyboardFilter  ;
+  g_dialog.data.disableDevice           :=extended^.disableDevice      ;
+  g_dialog.data.extKeyboardMode         :=extended^.extKeyboardMode    ;
+  //
+  strncpy_s(@g_dialog.data.additionalDictionaryPath,extended^.additionalDictionaryPath,Length(g_dialog.data.additionalDictionaryPath));
+ end;
+end;
+
+function SendSync(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
+begin
+ Result:=p_host_ipc.SendSync(HashIpcStr(msg),len,buf);
+ if (Result=-1) then
+ begin
+  Result:=SCE_IME_ERROR_CONNECTION_FAILED;
+ end else
+ if (Result<0) then
+ begin
+  Result:=SCE_IME_ERROR_INTERNAL;
+ end;
+end;
+
+function ps4_sceImeDialogInit(param   :pSceImeDialogParam;
+                              extended:pSceImeParamExtended):Integer;
+begin
+
+ if (g_dialog<>nil) then
+ begin
+  Exit(SCE_IME_ERROR_BUSY);
+ end;
+
+ if (param=nil) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_ADDRESS);
+ end;
+
+ Result:=imeDialogInitParamCheck(param,extended,p_proc.p_sdk_version < $1500000);
+ if (Result<>0) then Exit;
+
+ g_dialog:=TImeDialogClient.Create;
+ CopyParams(g_dialog,param,extended);
+
+ Result:=SendSync('IME_DIALOG_OPEN',@g_dialog.data,sizeof(g_dialog.data));
+
+ if (Result=0) then
+ begin
+  g_dialog.state:=dRUNNING;
+ end else
+ begin
+  FreeAndNil(g_dialog);
+ end;
+
+end;
+
+function ps4_sceImeDialogTerm():Integer;
+begin
+
+ if (g_dialog=nil) then
+ begin
+  Exit(SCE_IME_DIALOG_ERROR_NOT_IN_USE);
+ end;
+
+ Result:=SendSync('IME_DIALOG_CLOSE',nil,0);
+
+ if (Result=0) then
+ begin
+  FreeAndNil(g_dialog);
+ end;
+
+end;
+
+function ps4_sceImeDialogAbort():Integer;
+begin
+
+ if (g_dialog=nil) then
+ begin
+  Exit(SCE_IME_DIALOG_ERROR_NOT_IN_USE);
+ end;
+
+ if (g_dialog.state<>sFINISHED) then
+ begin
+  if (g_dialog.state<>dABORTED) then
+  begin
+   Result:=SendSync('IME_DIALOG_CLOSE',nil,0);
+  end;
+  g_dialog.state:=dABORTED;
+ end;
+
+end;
+
+//sceImeDialogForceClose
+
+function ps4_sceImeDialogGetStatus():Integer;
+begin
+ Result:=0;
+end;
 
 function ps4_sceImeDialogGetPanelSize(param   :pSceImeDialogParam;
                                       p_width :PDWORD;
@@ -198,17 +723,17 @@ begin
   Exit(SCE_IME_ERROR_INVALID_ADDRESS);
  end;
 
- if (SCE_IME_TYPE_NUMBER < param^.ImeType) then
+ if (SCE_IME_TYPE_NUMBER < DWORD(param^.ImeType)) then
  begin
   Exit(SCE_IME_ERROR_INVALID_TYPE);
  end;
 
- if not CheckOption(param^.option) then
+ if not CheckOption_new(param^.option) then
  begin
   Exit(SCE_IME_ERROR_INVALID_OPTION);
  end;
 
- if not CheckLang(param^.supportedLanguages) then
+ if not CheckLang_new(param^.supportedLanguages) then
  begin
   Exit(SCE_IME_ERROR_INVALID_SUPPORTED_LANGUAGES);
  end;
@@ -280,17 +805,17 @@ begin
   Exit(SCE_IME_ERROR_INVALID_ADDRESS);
  end;
 
- if (SCE_IME_TYPE_NUMBER < param^.ImeType) then
+ if (SCE_IME_TYPE_NUMBER < DWORD(param^.ImeType)) then
  begin
   Exit(SCE_IME_ERROR_INVALID_TYPE);
  end;
 
- if not CheckOption(param^.option) then
+ if not CheckOption_new(param^.option) then
  begin
   Exit(SCE_IME_ERROR_INVALID_OPTION);
  end;
 
- if not CheckLang(param^.supportedLanguages) then
+ if not CheckLang_new(param^.supportedLanguages) then
  begin
   Exit(SCE_IME_ERROR_INVALID_SUPPORTED_LANGUAGES);
  end;
@@ -302,7 +827,7 @@ begin
 
  if (p_proc.p_sdk_version > $16fffff) then
  begin
-  if not CheckExtendedOption(extended^.option) then
+  if not CheckExtendedOption_new(extended^.option) then
   begin
    Exit(SCE_IME_ERROR_INVALID_EXTENDED);
   end;
@@ -451,6 +976,7 @@ begin
  lib:=Result^.add_lib('libSceImeDialog');
  lib.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit);
  lib.set_proc($8324F2567F9B5CCC,@ps4_sceImeDialogTerm);
+ lib.set_proc($A019B0E31AE67CAB,@ps4_sceImeDialogAbort);
  lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
  lib.set_proc($C2AB09BD15F0979F,@ps4_sceImeDialogGetPanelSize);
  lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);

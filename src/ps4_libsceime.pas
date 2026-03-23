@@ -789,7 +789,7 @@ begin
   Exit(SCE_IME_ERROR_INVALID_ADDRESS);
  end;
 
- if (SCE_IME_TYPE_NUMBER < param^.ImeType) then
+ if (SCE_IME_TYPE_NUMBER < DWORD(param^.ImeType)) then
  begin
   Exit(SCE_IME_ERROR_INVALID_TYPE);
  end;
