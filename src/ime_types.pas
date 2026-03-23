@@ -483,6 +483,68 @@ type
 
  SceImeEventHandler=procedure(arg:Pointer;e:pSceImeEvent);
 
+ pSceImeParam=^SceImeParam;
+ SceImeParam=packed record
+  userId             :SceUserServiceUserId;
+  ImeType            :SceImeType;
+  supportedLanguages :QWORD;
+  enterLabel         :SceImeEnterLabel;
+  inputMethod        :SceImeInputMethod;
+  filter             :SceImeTextFilter;
+  option             :DWORD;
+  maxTextLength      :DWORD;
+  inputTextBuffer    :PWideChar;
+  posx               :Single;
+  posy               :Single;
+  horizontalAlignment:SceImeHorizontalAlignment;
+  verticalAlignment  :SceImeVerticalAlignment;
+  work               :Pointer;
+  arg                :Pointer;
+  handler            :SceImeEventHandler;
+  reserved           :QWORD;
+ end;
+
+ pSceImeParamExtended=^SceImeParamExtended;
+ SceImeParamExtended=packed record
+  option                  :DWORD;
+  colorBase               :SceImeColor;
+  colorLine               :SceImeColor;
+  colorTextField          :SceImeColor;
+  colorPreedit            :SceImeColor;
+  colorButtonDefault      :SceImeColor;
+  colorButtonFunction     :SceImeColor;
+  colorButtonSymbol       :SceImeColor;
+  colorText               :SceImeColor;
+  colorSpecial            :SceImeColor;
+  priority                :SceImePanelPriority;
+  _align                  :Integer;
+  additionalDictionaryPath:PChar;
+  extKeyboardFilter       :SceImeExtKeyboardFilter;
+  disableDevice           :DWORD;
+  extKeyboardMode         :DWORD;
+  reserved                :array[0..59] of ShortInt;
+ end;
+
+ pSceImeDialogParam=^SceImeDialogParam;
+ SceImeDialogParam=packed record
+  userId             :SceUserServiceUserId;
+  ImeType            :SceImeType;
+  supportedLanguages :QWORD;
+  enterLabel         :SceImeEnterLabel;
+  inputMethod        :SceImeInputMethod;
+  filter             :SceImeTextFilter;
+  option             :DWORD;
+  maxTextLength      :DWORD;
+  inputTextBuffer    :PWideChar;
+  posx               :Single;
+  posy               :Single;
+  horizontalAlignment:SceImeHorizontalAlignment;
+  verticalAlignment  :SceImeVerticalAlignment;
+  placeholder        :PWideChar;
+  title              :PWideChar;
+  reserved           :array[0..15] of ShortInt;
+ end;
+
  pSceImeKeyboardParam=^SceImeKeyboardParam;
  SceImeKeyboardParam=packed record
   option   :DWORD;

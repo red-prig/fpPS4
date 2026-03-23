@@ -12,8 +12,7 @@ uses
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceErrorDialog,
-  ime_types{,
-  ps4_libSceSaveData};
+  ps4_libSceImeDialog;
 
 implementation
 
@@ -206,83 +205,6 @@ end;
 
 //
 
-const
- SCE_IME_DIALOG_STATUS_NONE    =0;
- SCE_IME_DIALOG_STATUS_RUNNING =1;
- SCE_IME_DIALOG_STATUS_FINISHED=2;
-
-type
- pSceImeDialogParam=^SceImeDialogParam;
- SceImeDialogParam=packed record
-  userId             :Integer;
-  ImeType            :SceImeType;
-  supportedLanguages :QWORD;
-  enterLabel         :SceImeEnterLabel;
-  inputMethod        :SceImeInputMethod;
-  filter             :SceImeTextFilter;
-  option             :DWORD;
-  maxTextLength      :DWORD;
-  inputTextBuffer    :PWideChar;
-  posx               :Single;
-  posy               :Single;
-  horizontalAlignment:SceImeHorizontalAlignment;
-  verticalAlignment  :SceImeVerticalAlignment;
-  placeholder        :PWideChar;
-  title              :PWideChar;
-  reserved           :array[0..15] of ShortInt;
- end;
-
- pSceImeParamExtended=^SceImeParamExtended;
- SceImeParamExtended=packed record
-  option                  :DWORD;
-  colorBase               :SceImeColor;
-  colorLine               :SceImeColor;
-  colorTextField          :SceImeColor;
-  colorPreedit            :SceImeColor;
-  colorButtonDefault      :SceImeColor;
-  colorButtonFunction     :SceImeColor;
-  colorButtonSymbol       :SceImeColor;
-  colorText               :SceImeColor;
-  colorSpecial            :SceImeColor;
-  priority                :SceImePanelPriority;
-  _align                  :Integer;
-  additionalDictionaryPath:PChar;
-  extKeyboardFilter       :SceImeExtKeyboardFilter;
-  disableDevice           :DWORD;
-  extKeyboardMode         :DWORD;
-  reserved                :array[0..59] of ShortInt;
- end;
-
-var
- status_ime_dialog:Integer=SCE_IME_DIALOG_STATUS_NONE;
-
-function ps4_sceImeDialogInit(param   :pSceImeDialogParam;
-                              extended:pSceImeParamExtended):Integer;
-begin
- writeln;
- Result:=0;
-end;
-
-function ps4_sceImeDialogTerm():Integer;
-begin
- Result:=0;
-end;
-
-function ps4_sceImeDialogGetStatus():Integer;
-begin
- Result:=status_ime_dialog;
-end;
-
-function ps4_sceImeDialogGetPanelSizeExtended(param   :pSceImeDialogParam;
-                                              extended:pSceImeParamExtended;
-                                              p_width :PDWORD;
-                                              p_height:PDWORD):Integer;
-begin
- Result:=0;
-end;
-
-//
-
 function ps4_sceLoginDialogInitialize():Integer;
 begin
  Result:=0;
@@ -424,19 +346,6 @@ begin
  lib.set_proc($8039B96BA19213DE,@ps4_scePlayerInvitationDialogTerminate);
 end;
 
-function Load_libSceImeDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceImeDialog');
-
- lib:=Result^.add_lib('libSceImeDialog');
- lib.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit);
- lib.set_proc($8324F2567F9B5CCC,@ps4_sceImeDialogTerm);
- lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
- lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);
-end;
-
 function Load_libSceLoginDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -504,7 +413,6 @@ initialization
  RegisteredInternalFile(stub[5] ,'libSceNpCommerce.prx'            ,@Load_libSceNpCommerce            );
  RegisteredInternalFile(stub[6] ,'libSceSigninDialog.prx'          ,@Load_libSceSigninDialog          );
  RegisteredInternalFile(stub[7] ,'libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
- RegisteredInternalFile(stub[8] ,'libSceImeDialog.prx'             ,@Load_libSceImeDialog             );
  RegisteredInternalFile(stub[9] ,'libSceLoginDialog.prx'           ,@Load_libSceLoginDialog           );
  RegisteredInternalFile(stub[10],'libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog        );
  RegisteredInternalFile(stub[11],'libSceNpFriendListDialog.prx'    ,@Load_libSceNpFriendListDialog    );

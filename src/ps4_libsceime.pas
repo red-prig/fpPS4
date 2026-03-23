@@ -7,9 +7,7 @@ interface
 
 uses
   windows,
-  //sys_types,
-  //sys_signal,
-  //ps4_time,
+  kern_proc,
   subr_dynlib,
   syscalls,
   time,
@@ -760,6 +758,126 @@ begin
  g_ime_event_queue.Create(256);
 end;
 
+procedure ps4_sceImeParamInit(param:pSceImeParam);
+begin
+ param^:=Default(SceImeParam);
+ param^.userId:=-1;
+end;
+
+function ps4_sceImeOpen(param   :pSceImeParam;
+                        extended:pSceImeParamExtended):Integer;
+begin
+ Result:=0;
+ Assert(False);
+end;
+
+function ps4_sceImeGetPanelSize(param   :pSceImeParam;
+                                p_width :PDWORD;
+                                p_height:PDWORD):Integer;
+label
+ _end;
+var
+ filter:DWORD;
+ width :DWORD;
+ height:DWORD;
+begin
+
+ if (param=nil) or
+    (p_width=nil) or
+    (p_height=nil) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_ADDRESS);
+ end;
+
+ if (SCE_IME_TYPE_NUMBER < param^.ImeType) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_TYPE);
+ end;
+
+ filter:=ord(p_proc.p_sdk_version > $14fffff) shl 8;
+
+ if (p_proc.p_sdk_version > $174ffff) then
+ begin
+  filter:=filter or $78ff;
+ end else
+ begin
+  filter:=filter or $70ff;
+ end;
+
+ if (p_proc.p_sdk_version > $2ffffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $69ff;
+ end;
+
+ if (p_proc.p_sdk_version > $34fffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $59ff;
+ end;
+
+ if (p_proc.p_sdk_version > $3ffffff) then
+ begin
+  filter:=filter;
+ end else
+ begin
+  filter:=filter and $39ff;
+ end;
+
+ if ((param^.option and (filter xor $fffffdff))<>0) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_OPTION);
+ end;
+
+ if (param^.ImeType=SCE_IME_TYPE_BASIC_LATIN) then
+ begin
+  width :=793;
+  height:=408;
+ end else
+ begin
+  if (param^.ImeType<>SCE_IME_TYPE_NUMBER) then
+  begin
+   if ((param^.option and $c0000004)<>SCE_IME_OPTION_PASSWORD) then
+   begin
+    height:=408;
+    width :=793;
+    goto _end;
+   end else
+   begin
+    width :=793;
+    height:=408;
+   end;
+  end else
+  begin
+   width :=370;
+   height:=402;
+  end;
+ end;
+
+ if (p_proc.p_sdk_version > $16fffff) then
+ begin
+  height:=height;
+ end else
+ begin
+  height:=368;
+ end;
+
+ _end:
+ if ((param^.option and SCE_IME_OPTION_USE_OVER_2K_COORDINATES)<>0) then
+ begin
+  width :=width  shl 1;
+  height:=height shl 1;
+ end;
+
+ p_width^ :=width;
+ p_height^:=height;
+ Result:=0;
+end;
+
 function Load_libSceIme(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -772,6 +890,10 @@ begin
  lib.set_proc($FF81827D874D175B,@ps4_sceImeUpdate);
  lib.set_proc($74A69DA9916028A4,@ps4_sceImeKeyboardGetResourceId);
  lib.set_proc($564A8B3C0ADF15D7,@ps4_sceImeKeyboardGetInfo);
+ //
+ lib.set_proc($5A6603CDD0B81072,@ps4_sceImeParamInit);
+ lib.set_proc($44FC9DBFF26BD5B7,@ps4_sceImeOpen);
+ lib.set_proc($CE23C37088CED159,@ps4_sceImeGetPanelSize);
 
  init_ime;
 end;
