@@ -34,6 +34,22 @@ type
   btnIdNoBtn2
  );
 
+ PImeDialogAttributes=^TImeDialogAttributes;
+ TImeDialogAttributes=record
+  Multiline  :Boolean;
+  Password   :Boolean;
+  FixedPos   :Boolean;
+  Over2kCoord:Boolean;
+  hAlign     :TAnchorSideReference;
+  vAlign     :TAnchorSideReference;
+  MaxLength  :DWORD;
+  posx       :Single;
+  posy       :Single;
+  width      :Single;
+  height     :Single;
+  EditLabel  :RawByteString;
+ end;
+
  TDialogAttributes=record
   AParent:TForm;
   AImages:TImageList;
@@ -49,6 +65,7 @@ type
   Memo:record
    Enable :Boolean;
    Message:RawByteString;
+   Ime    :PImeDialogAttributes;
   end;
   ProgressBar:record
    Enable :Boolean;
@@ -67,6 +84,14 @@ type
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;
   Destructor Destroy; override;
+ end;
+
+ TImeDialog=class(TDialogCustom)
+  public
+   state      :Byte;
+   button     :Byte;
+   FixedPos   :Boolean;
+   Over2kCoord:Boolean;
  end;
 
 function NewDialogOpen(var Attributes:TDialogAttributes):TDialogCustom;
@@ -147,6 +172,10 @@ var
  MsgPBar:TProgressBar;
  MsgCncl:TSpeedButton;
 
+ VirtualWidth :Single;
+ VirtualHeight:Single;
+ VRect        :TRect;
+
  //Top           [Caption - X]
  //Custom        [           ]
  //Memo          [   Body    ]
@@ -167,7 +196,17 @@ begin
  MsgPBar:=nil;
  MsgCncl:=nil;
 
- MsgForm:=TDialogCustom.Create(nil);
+ if (Attributes.Memo.Ime<>nil) then
+ begin
+  MsgForm:=TImeDialog.Create(nil);
+  TImeDialog(MsgForm).state      :=1;
+  TImeDialog(MsgForm).FixedPos   :=Attributes.Memo.Ime^.FixedPos;
+  TImeDialog(MsgForm).Over2kCoord:=Attributes.Memo.Ime^.Over2kCoord;
+ end else
+ begin
+  MsgForm:=TDialogCustom.Create(nil);
+ end;
+
  try
   MsgForm.ParentBackground:=False;
   MsgForm.Anchors:=[akTop,akLeft,akRight,akBottom];
@@ -181,6 +220,59 @@ begin
   MsgForm.AnchorSide[akBottom].Side   :=asrCenter;
   MsgForm.Width :=400 + 200;
   MsgForm.Height:=200 + 200;
+
+  if (Attributes.Memo.Ime<>nil) then
+  begin
+   //TODO:Virtual window position adjustment and movement
+   MsgForm.Anchors:=[];
+
+   if Attributes.Memo.Ime^.Over2kCoord then
+   begin
+    VirtualWidth :=3840.0;
+    VirtualHeight:=1920.0;
+   end else
+   begin
+    VirtualWidth :=2160.0;
+    VirtualHeight:=1080.0;
+   end;
+
+   VRect.Left  :=Trunc((Attributes.Memo.Ime^.posx  /VirtualWidth )*AParent.Width );
+   VRect.Top   :=Trunc((Attributes.Memo.Ime^.posy  /VirtualHeight)*AParent.Height);
+   VRect.Width :=Trunc((Attributes.Memo.Ime^.Width /VirtualWidth )*AParent.Width );
+   VRect.Height:=Trunc((Attributes.Memo.Ime^.Height/VirtualHeight)*AParent.Height);
+
+   //reposition
+   case Attributes.Memo.Ime^.hAlign of
+    asrBottom:VRect.SetLocation(VRect.Right        ,VRect.Top);
+    asrCenter:VRect.SetLocation(VRect.CenterPoint.X,VRect.Top);
+    else;
+   end;
+
+   //reposition
+   case Attributes.Memo.Ime^.vAlign of
+    asrBottom:VRect.SetLocation(VRect.Left,VRect.Bottom);
+    asrCenter:VRect.SetLocation(VRect.Left,VRect.CenterPoint.Y);
+    else;
+   end;
+
+   //fixup
+   if (VRect.Right>AParent.Width) then
+   begin
+    VRect.Offset(AParent.Width-VRect.Right,0);
+   end;
+
+   //fixup
+   if (VRect.Bottom>AParent.Height) then
+   begin
+    VRect.Offset(0,AParent.Height-VRect.Bottom);
+   end;
+
+   //
+   MsgForm.Left  :=VRect.Left  ;
+   MsgForm.Top   :=VRect.Top   ;
+   MsgForm.Width :=VRect.Width ;
+   MsgForm.Height:=VRect.Height;
+  end;
 
   if Attributes.Caption.Enable or Attributes.CloseButton.Enable then
   begin
@@ -268,6 +360,25 @@ begin
    MsgMemo.Parent:=MsgBody;
    //
    MCenter:=MsgMemo;
+   //
+   if (Attributes.Memo.Ime<>nil) then
+   begin
+    MsgMemo.ReadOnly :=False;
+    MsgMemo.Alignment:=taLeftJustify;
+    //
+    if not Attributes.Memo.Ime^.Multiline then
+    begin
+     MsgMemo.ScrollBars :=ssNone;
+     MsgMemo.WantReturns:=False;
+     MsgMemo.WordWrap   :=False;
+    end;
+    if Attributes.Memo.Ime^.Password then
+    begin
+     MsgMemo.PasswordChar:='*';
+    end;
+    MsgMemo.MaxLength:=Attributes.Memo.Ime^.MaxLength;
+   end;
+   //
   end;
 
   if (Attributes.Custom<>nil) then
@@ -328,6 +439,10 @@ begin
    end;
   end;
 
+  if (Attributes.Memo.Ime<>nil) then
+  begin
+   MsgBtnz:=NewBtn(MsgForm,asrBottom,'&'+Attributes.Memo.Ime^.EditLabel,ord(btnIdOkYesBtn1),Attributes.OnClick);
+  end else
   if Attributes.Buttons.Enable then
   case Attributes.Buttons.BtnType of
    btnOk:

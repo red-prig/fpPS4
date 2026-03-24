@@ -23,10 +23,8 @@ type
   FHeader:TNodeHeader;
   FState :Integer;
 
-  FPush  :t_push_cb;
-
   procedure Send(mtype,mlen,mtid:DWORD;buf:Pointer);
-  procedure Recv;
+  procedure Recv(FPush:t_push_cb);
  end;
 
  THostIpcPipe=class(THostIpcConnect)
@@ -34,8 +32,8 @@ type
   proto :t_ipc_proto;
   procedure   set_pipe(fd:THandle);
   procedure   Recv_pipe; virtual;
-  Function    Push(Node:Pointer):Boolean; virtual;
-  procedure   SendImpl(mtype,mlen,mtid:DWORD;buf:Pointer); override;
+  Function    Push(Node:Pointer):Boolean;
+  procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); override;
   procedure   WakeupKevent(); override;
   Constructor Create;
   Destructor  Destroy; override;
@@ -44,7 +42,6 @@ type
  THostIpcPipeMGUI=class(THostIpcPipe)
   Ftd_handle:TThreadID;
   procedure   Recv_pipe;   override;
-  Function    Push(Node:Pointer):Boolean; override;
   procedure   thread_new;  override;
   procedure   thread_free; override;
  end;
@@ -73,7 +70,7 @@ begin
  bufferevent_write(Fbev);
 end;
 
-procedure t_ipc_proto.Recv;
+procedure t_ipc_proto.Recv(FPush:t_push_cb);
 label
  _next;
 var
@@ -99,10 +96,10 @@ begin
       _next:
 
       node:=AllocMem(SizeOf(TQNode)+FHeader.mlen);
-
       node^.header:=FHeader;
+      node^.value :=TIpcValue.Static(@node^.buf,FHeader.mlen);
 
-      evbuffer_remove(Finput,@node^.buf,FHeader.mlen);
+      evbuffer_remove(Finput,node^.value.GetBuf,FHeader.mlen);
 
       FPush(node);
 
@@ -154,25 +151,32 @@ begin
  proto.Finput :=bufferevent_get_input (proto.Fbev);
  proto.Foutput:=bufferevent_get_output(proto.Fbev);
 
- proto.FPush  :=@Self.Push;
-
  bufferevent_setcb(proto.Fbev,@eventcb,Pointer(Self));
  bufferevent_enable(proto.Fbev);
 end;
 
 procedure THostIpcPipe.Recv_pipe;
 begin
- proto.Recv;
+ proto.Recv(@Self.Push);
 end;
 
 Function THostIpcPipe.Push(Node:Pointer):Boolean;
 begin
- Result:=FQueue.Push(node);
+ if (PQNode(Node)^.header.mtype=iRESULT) then
+ begin
+  //Trigger Direct
+  TriggerNodeSync(PQNode(Node)^.header.mtid,PQNode(Node)^.value);
+  FreeMem(Node);
+ end else
+ begin
+  Result:=FQueue.Push(node);
+ end;
 end;
 
-procedure THostIpcPipe.SendImpl(mtype,mlen,mtid:DWORD;buf:Pointer);
+procedure THostIpcPipe.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
 begin
- proto.Send(mtype,mlen,mtid,buf);
+ proto.Send(mtype,value.GetLen,mtid,value.GetBuf);
+ value.Free;
 end;
 
 Procedure ev_wakeup(param1:SizeUInt;param2:Pointer); register;
@@ -213,18 +217,6 @@ begin
  end;
 end;
 
-Function THostIpcPipeMGUI.Push(Node:Pointer):Boolean;
-begin
- if (PQNode(Node)^.header.mtype=iRESULT) then
- begin
-  //Trigger Direct on GUI side!
-  RecvResultNode(Node);
- end else
- begin
-  Result:=inherited;
- end;
-end;
-
 procedure THostIpcPipeMGUI.thread_new;
 begin
  if (Ftd_handle=0) then
@@ -247,8 +239,7 @@ end;
 
 Function THostIpcPipeKERN.GetCallback(mtype:DWORD):TOnMessage;
 begin
- if (iKEV_CHANGE=0) then iKEV_CHANGE:=HashIpcStr('KEV_CHANGE');
- if (mtype=iKEV_CHANGE) then
+ if (mtype=iKEV_CHANGE.mtype) then
  begin
   Result:=@RecvKevent;
  end else
@@ -267,7 +258,7 @@ procedure THostIpcPipeKERN.thread_new;
 begin
  if (Ftd=nil) then
  begin
-  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,0,'[ipc_pipe]');
+  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,0,'[ipc_pipe]',TDP_KIGNSUSP);
  end;
 end;
 

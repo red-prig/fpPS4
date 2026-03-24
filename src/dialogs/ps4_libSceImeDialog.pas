@@ -12,30 +12,44 @@ uses
  kern_proc,
  sys_bootparam,
  ime_types,
- host_ipc_interface;
+ host_ipc;
 
 {$CALLING default}
 
 type
- PImeDialogOpen=^TImeDialogOpen;
+ TImeDialogResult=record
+  result   :Integer;
+  endstatus:SceImeDialogEndStatus;
+  inputText:array[0..2047] of WideChar;
+ end;
+
+ TImeDialogPosAndForm=record
+  PanelType          :Byte; //SceImePanelType
+  horizontalAlignment:Byte; //SceImeHorizontalAlignment
+  verticalAlignment  :Byte; //SceImeVerticalAlignment
+  posx               :Single;
+  posy               :Single;
+  width              :DWORD;
+  height             :DWORD;
+ end;
+
  TImeDialogOpen=record
+  ImeType                 :Byte;  // SceImeType
+  enterLabel              :Byte;  // SceImeEnterLabel
+  option                  :WORD;  // SCE_IME_OPTION
+  ExtOption               :WORD;  // SCE_IME_EXT_OPTION
+  priority                :Byte;  // SceImePanelPriority
+  disableDevice           :Byte;  // SCE_IME_DISABLE_DEVICE
+  extKeyboardMode         :DWORD; // SCE_IME_INIT_EXT_KEYBOARD_MODE
+  //
   userId                  :Integer;
-  ImeType                 :SceImeType;
   supportedLanguages      :QWORD;
-  enterLabel              :SceImeEnterLabel;
-  inputMethod             :SceImeInputMethod;
-  filter                  :SceImeTextFilter;
-  option                  :DWORD;
   maxTextLength           :DWORD;
-  posx                    :Single;
-  posy                    :Single;
-  horizontalAlignment     :SceImeHorizontalAlignment;
-  verticalAlignment       :SceImeVerticalAlignment;
-  inputTextBuffer         :array[0..2047] of WideChar;
+  PosAndForm              :TImeDialogPosAndForm;
+  result                  :TImeDialogResult;
   placeholder             :array[0..127] of WideChar;
   title                   :array[0.. 63] of WideChar;
   //
-  ExtOption               :DWORD;
   colorBase               :SceImeColor;
   colorLine               :SceImeColor;
   colorTextField          :SceImeColor;
@@ -45,20 +59,18 @@ type
   colorButtonSymbol       :SceImeColor;
   colorText               :SceImeColor;
   colorSpecial            :SceImeColor;
-  priority                :SceImePanelPriority;
-  extKeyboardFilter       :SceImeExtKeyboardFilter;
-  disableDevice           :DWORD;
-  extKeyboardMode         :DWORD;
+  //
   additionalDictionaryPath:array[0..1023] of AnsiChar;
  end;
 
  TImeDialogStatus=(dRUNNING,sFINISHED,dABORTED);
 
  TImeDialogClient=class
-  data  :TImeDialogOpen;
-  output:PWideChar;
-  state :TImeDialogStatus;
-  //
+  data             :TImeDialogOpen;
+  output           :PWideChar;
+  filter           :SceImeTextFilter;
+  extKeyboardFilter:SceImeExtKeyboardFilter;
+  state            :TImeDialogStatus;
  end;
 
 implementation
@@ -74,6 +86,11 @@ const
  SCE_IME_DIALOG_STATUS_NONE    =0;
  SCE_IME_DIALOG_STATUS_RUNNING =1;
  SCE_IME_DIALOG_STATUS_FINISHED=2;
+
+ //SceImeDialogEndStatus
+ SCE_IME_DIALOG_END_STATUS_OK           =0;
+ SCE_IME_DIALOG_END_STATUS_USER_CANCELED=1;
+ SCE_IME_DIALOG_END_STATUS_ABORTED      =2;
 
 function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
 begin
@@ -576,6 +593,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceImeDialogGetPanelSizeExtended(param   :pSceImeDialogParam;
+                                              extended:pSceImeParamExtended;
+                                              p_width :PDWORD;
+                                              p_height:PDWORD):Integer; forward;
+
 Procedure CopyParams(g_dialog:TImeDialogClient;
                      param   :pSceImeDialogParam;
                      extended:pSceImeParamExtended);
@@ -584,18 +606,23 @@ begin
  g_dialog.data.ImeType            :=param^.ImeType            ;
  g_dialog.data.supportedLanguages :=param^.supportedLanguages ;
  g_dialog.data.enterLabel         :=param^.enterLabel         ;
- g_dialog.data.inputMethod        :=param^.inputMethod        ;
- g_dialog.data.filter             :=param^.filter             ;
+ g_dialog.filter                  :=param^.filter             ;
  g_dialog.data.option             :=param^.option             ;
  g_dialog.data.maxTextLength      :=param^.maxTextLength      ;
- g_dialog.data.posx               :=param^.posx               ;
- g_dialog.data.posy               :=param^.posy               ;
- g_dialog.data.horizontalAlignment:=param^.horizontalAlignment;
- g_dialog.data.verticalAlignment  :=param^.verticalAlignment  ;
  //
- wcsncpy_s(@g_dialog.data.inputTextBuffer,param^.inputTextBuffer,Length(g_dialog.data.inputTextBuffer));
- wcsncpy_s(@g_dialog.data.placeholder    ,param^.placeholder    ,Length(g_dialog.data.placeholder));
- wcsncpy_s(@g_dialog.data.title          ,param^.title          ,Length(g_dialog.data.title));
+ g_dialog.data.PosAndForm.PanelType          :=SCE_IME_PANEL_TYPE_DIALOG;
+ g_dialog.data.PosAndForm.posx               :=param^.posx               ;
+ g_dialog.data.PosAndForm.posy               :=param^.posy               ;
+ g_dialog.data.PosAndForm.horizontalAlignment:=param^.horizontalAlignment;
+ g_dialog.data.PosAndForm.verticalAlignment  :=param^.verticalAlignment  ;
+ //
+ ps4_sceImeDialogGetPanelSizeExtended(param,extended,
+                                      @g_dialog.data.PosAndForm.width,
+                                      @g_dialog.data.PosAndForm.height);
+ //
+ wcsncpy_s(@g_dialog.data.result.inputText,param^.inputTextBuffer,g_dialog.data.maxTextLength);
+ wcsncpy_s(@g_dialog.data.placeholder     ,param^.placeholder    ,Length(g_dialog.data.placeholder));
+ wcsncpy_s(@g_dialog.data.title           ,param^.title          ,Length(g_dialog.data.title));
  //
  g_dialog.output:=param^.inputTextBuffer;
  //
@@ -612,7 +639,7 @@ begin
   g_dialog.data.colorText               :=extended^.colorText          ;
   g_dialog.data.colorSpecial            :=extended^.colorSpecial       ;
   g_dialog.data.priority                :=extended^.priority           ;
-  g_dialog.data.extKeyboardFilter       :=extended^.extKeyboardFilter  ;
+  g_dialog.extKeyboardFilter            :=extended^.extKeyboardFilter  ;
   g_dialog.data.disableDevice           :=extended^.disableDevice      ;
   g_dialog.data.extKeyboardMode         :=extended^.extKeyboardMode    ;
   //
@@ -620,16 +647,30 @@ begin
  end;
 end;
 
-function SendSync(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
+function InvokeSync2(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
 begin
- Result:=p_host_ipc.SendSync(HashIpcStr(msg),len,buf);
+ Result:=p_host_ipc.InvokeSync2(msg,buf,len);
  if (Result=-1) then
  begin
   Result:=SCE_IME_ERROR_CONNECTION_FAILED;
  end else
  if (Result<0) then
  begin
-  Result:=SCE_IME_ERROR_INTERNAL;
+  Result:=SCE_IME_ERROR_NOT_ACTIVE;
+ end;
+end;
+
+function InvokeSync(const msg:RawByteString;var Output:TIpcValue):Integer;
+begin
+ Output:=p_host_ipc.InvokeSync(msg);
+ Result:=Output.GetQWORD;
+ if (Result=-1) then
+ begin
+  Result:=SCE_IME_ERROR_CONNECTION_FAILED;
+ end else
+ if (Result<0) then
+ begin
+  Result:=SCE_IME_ERROR_NOT_ACTIVE;
  end;
 end;
 
@@ -650,63 +691,162 @@ begin
  Result:=imeDialogInitParamCheck(param,extended,p_proc.p_sdk_version < $1500000);
  if (Result<>0) then Exit;
 
- g_dialog:=TImeDialogClient.Create;
- CopyParams(g_dialog,param,extended);
+ mtx_lock(g_ImeDialog_mtx);
 
- Result:=SendSync('IME_DIALOG_OPEN',@g_dialog.data,sizeof(g_dialog.data));
+  if (g_dialog<>nil) then
+  begin
+   Result:=SCE_IME_ERROR_BUSY;
+  end else
+  begin
+   g_dialog:=TImeDialogClient.Create;
+   CopyParams(g_dialog,param,extended);
 
- if (Result=0) then
- begin
-  g_dialog.state:=dRUNNING;
- end else
- begin
-  FreeAndNil(g_dialog);
- end;
+   Assert(g_dialog.filter=nil,'TODO:filter');
+   Assert(g_dialog.extKeyboardFilter=nil,'TODO:extKeyboardFilter');
 
+   Result:=InvokeSync2('IME_DIALOG_OPEN',@g_dialog.data,sizeof(g_dialog.data));
+   if (Result=0) then
+   begin
+    g_dialog.state:=dRUNNING;
+   end else
+   begin
+    FreeAndNil(g_dialog);
+   end;
+
+  end;
+
+ mtx_unlock(g_ImeDialog_mtx);
 end;
 
 function ps4_sceImeDialogTerm():Integer;
 begin
+ Result:=SCE_IME_DIALOG_ERROR_NOT_IN_USE;
+ if (g_dialog=nil) then Exit;
 
- if (g_dialog=nil) then
- begin
-  Exit(SCE_IME_DIALOG_ERROR_NOT_IN_USE);
- end;
+ mtx_lock(g_ImeDialog_mtx);
 
- Result:=SendSync('IME_DIALOG_CLOSE',nil,0);
+  if (g_dialog<>nil) then
+  begin
+   Result:=InvokeSync2('IME_DIALOG_TERM',nil,0);
 
- if (Result=0) then
- begin
-  FreeAndNil(g_dialog);
- end;
+   if (Result=0) then
+   begin
+    FreeAndNil(g_dialog);
+   end;
+  end;
 
+ mtx_unlock(g_ImeDialog_mtx);
+end;
+
+function ps4_sceImeDialogForceClose():Integer;
+begin
+ Result:=ps4_sceImeDialogTerm();
 end;
 
 function ps4_sceImeDialogAbort():Integer;
 begin
+ Result:=SCE_IME_DIALOG_ERROR_NOT_IN_USE;
+ if (g_dialog=nil) then Exit;
 
- if (g_dialog=nil) then
- begin
-  Exit(SCE_IME_DIALOG_ERROR_NOT_IN_USE);
- end;
+ mtx_lock(g_ImeDialog_mtx);
 
- if (g_dialog.state<>sFINISHED) then
- begin
-  if (g_dialog.state<>dABORTED) then
+  if (g_dialog<>nil) then
   begin
-   Result:=SendSync('IME_DIALOG_CLOSE',nil,0);
-  end;
-  g_dialog.state:=dABORTED;
- end;
 
+   if (g_dialog.state<>sFINISHED) then
+   begin
+    if (g_dialog.state<>dABORTED) then
+    begin
+     Result:=InvokeSync2('IME_DIALOG_ABORT',nil,0);
+    end;
+    g_dialog.state:=dABORTED;
+   end;
+
+  end;
+
+ mtx_unlock(g_ImeDialog_mtx);
 end;
 
-//sceImeDialogForceClose
+//
 
 function ps4_sceImeDialogGetStatus():Integer;
 begin
- Result:=0;
+ Result:=SCE_IME_DIALOG_STATUS_NONE;
+ if (g_dialog=nil) then Exit;
+
+ mtx_lock(g_ImeDialog_mtx);
+
+  if (g_dialog<>nil) then
+  begin
+   if (g_dialog.state=sFINISHED) or
+      (g_dialog.state=dABORTED) then
+   begin
+    Result:=SCE_IME_DIALOG_STATUS_FINISHED;
+   end else
+   begin
+
+    Result:=SCE_IME_DIALOG_STATUS_RUNNING;
+    if (InvokeSync2('IME_DIALOG_UPDATE',nil,0)=2) then
+    begin
+     g_dialog.state:=sFINISHED;
+     Result:=SCE_IME_DIALOG_STATUS_FINISHED;
+    end;
+   end;
+
+  end;
+
+ mtx_unlock(g_ImeDialog_mtx);
 end;
+
+function ps4_sceImeDialogGetResult(pResult:pSceImeDialogResult):Integer;
+var
+ Output:TIpcValue;
+begin
+ Result:=SCE_IME_DIALOG_ERROR_NOT_IN_USE;
+ if (g_dialog=nil) then Exit;
+
+ mtx_lock(g_ImeDialog_mtx);
+
+  if (g_dialog<>nil) then
+  begin
+   Result:=SCE_IME_ERROR_INVALID_ADDRESS;
+   if (pResult<>nil) then
+   begin
+    Result:=SCE_IME_ERROR_INVALID_RESERVED;
+    if CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+    begin
+
+     case g_dialog.state of
+      dRUNNING:Result:=SCE_IME_DIALOG_ERROR_NOT_FINISHED;
+      dABORTED:
+               begin;
+                pResult^.endstatus:=SCE_IME_DIALOG_END_STATUS_ABORTED;
+                wcsncpy_s(g_dialog.output,g_dialog.data.result.inputText,g_dialog.data.maxTextLength);
+               end;
+      sFINISHED:
+               begin
+                Result:=InvokeSync('IME_DIALOG_RESULT',Output);
+                if (Result=0) then
+                begin
+                 FillChar(g_dialog.data.result,sizeof(g_dialog.data.result),0);
+                 Output.MoveTo(@g_dialog.data.result,sizeof(g_dialog.data.result));
+                 //
+                 pResult^.endstatus:=g_dialog.data.result.endstatus;
+                 wcsncpy_s(g_dialog.output,g_dialog.data.result.inputText,g_dialog.data.maxTextLength);
+                end;
+                Output.Free;
+               end;
+      else;
+     end;
+
+    end;
+   end;
+  end;
+
+ mtx_unlock(g_ImeDialog_mtx);
+end;
+
+//
 
 function ps4_sceImeDialogGetPanelSize(param   :pSceImeDialogParam;
                                       p_width :PDWORD;
@@ -976,8 +1116,10 @@ begin
  lib:=Result^.add_lib('libSceImeDialog');
  lib.set_proc($354781ACDEE1CDFD,@ps4_sceImeDialogInit);
  lib.set_proc($8324F2567F9B5CCC,@ps4_sceImeDialogTerm);
+ lib.set_proc($6D7E07FACC4F23FA,@ps4_sceImeDialogForceClose);
  lib.set_proc($A019B0E31AE67CAB,@ps4_sceImeDialogAbort);
  lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
+ lib.set_proc($C74D63C6EFAFC657,@ps4_sceImeDialogGetResult);
  lib.set_proc($C2AB09BD15F0979F,@ps4_sceImeDialogGetPanelSize);
  lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);
 

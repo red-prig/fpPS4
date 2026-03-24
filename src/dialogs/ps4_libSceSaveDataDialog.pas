@@ -110,7 +110,6 @@ type
   iconSize:QWORD;
  end;
 
- PSaveDialogOpen=^TSaveDialogOpen;
  TSaveDialogOpen=record
   //base
   mode           :Byte; //SceSaveDataDialogMode

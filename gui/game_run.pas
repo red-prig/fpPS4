@@ -14,7 +14,6 @@ uses
  md_sleep,
  md_pipe,
  host_ipc,
- host_ipc_interface,
  md_host_ipc,
  param_sfo_gui,
  core_shell,

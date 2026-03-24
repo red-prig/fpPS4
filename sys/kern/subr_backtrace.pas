@@ -319,7 +319,7 @@ end;
 
 procedure print_error_td(const str:shortstring;resumable:Boolean=False);
 begin
- thread_suspend_all(p_host_ipc_td);
+ thread_suspend_all(nil);
 
  Writeln(StdErr,str);
  print_backtrace_td(StdErr);
@@ -328,7 +328,7 @@ begin
 
  if resumable then
  begin
-  thread_resume_all(p_host_ipc_td);
+  thread_resume_all(nil);
  end;
 end;
 

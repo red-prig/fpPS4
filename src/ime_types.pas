@@ -98,6 +98,7 @@ const
  SCE_IME_LANGUAGE_VIETNAMESE         =$0000000040000000;
  SCE_IME_LANGUAGE_ROMANIAN           =$0000000080000000;
  SCE_IME_LANGUAGE_HUNGARIAN          =$0000000100000000;
+ SCE_IME_LANGUAGE_UKRAINIAN          =$0000000200000000;
 
  //IME options
  SCE_IME_OPTION_DEFAULT                           =$00000000;
@@ -340,6 +341,7 @@ const
  SCE_IME_KEYBOARD_TYPE_VIETNAMESE       = 35; //LANG_VIETNAMESE
  SCE_IME_KEYBOARD_TYPE_ROMANIAN         = 36; //LANG_ROMANIAN
  SCE_IME_KEYBOARD_TYPE_HUNGARIAN        = 37; //LANG_HUNGARIAN
+ SCE_IME_KEYBOARD_TYPE_UKRAINIAN        = 38; //LANG_UKRAINIAN
 
  //Keyboard device types
  //SceImeKeyboardDeviceType
@@ -364,8 +366,24 @@ const
  SCE_IME_DEVICE_TYPE_REMOTE_OSK   = 3;
 
 type
+ SceImeType                  =Integer;
+ SceImeEnterLabel            =Integer;
+ SceImeInputMethod           =Integer;
+ SceImeHorizontalAlignment   =Integer;
+ SceImeVerticalAlignment     =Integer;
+ SceImePanelPriority         =Integer;
+ SceImeKeyboardType          =Integer;
+ SceImeKeyboardStatus        =Integer;
+ SceImeTextAreaMode          =Integer;
+ SceImeKeyboardDeviceType    =Integer;
+ SceImePanelType             =Integer;
+ SceImeCaretMovementDirection=Integer;
+ SceImeDeviceType            =Integer;
+ SceImeEventId               =Integer;
+ SceImeDialogEndStatus       =Integer;
+
  SceImeTextAreaProperty=packed record
-  mode  :Integer; //SceImeTextAreaMode
+  mode  :SceImeTextAreaMode;
   index :DWORD;
   length:Integer;
  end;
@@ -378,11 +396,11 @@ type
  end;
 
  SceImePositionAndForm=packed record
-  PanelType          :Integer; //SceImePanelType
+  PanelType          :SceImePanelType;
   posx               :Single;
   posy               :Single;
-  horizontalAlignment:Integer; //SceImeHorizontalAlignment
-  verticalAlignment  :Integer; //SceImeVerticalAlignment
+  horizontalAlignment:SceImeHorizontalAlignment;
+  verticalAlignment  :SceImeVerticalAlignment;
   width              :DWORD;
   height             :DWORD;
  end;
@@ -415,11 +433,11 @@ type
  pSceImeKeyboardInfo=^SceImeKeyboardInfo;
  SceImeKeyboardInfo=packed record
   userId     :SceUserServiceUserId;
-  device     :Integer; //SceImeKeyboardDeviceType
-  ktype      :Integer; //SceImeKeyboardType
+  device     :SceImeKeyboardDeviceType;
+  ktype      :SceImeKeyboardType;
   repeatDelay:DWORD;
   repeatRate :DWORD;
-  status     :Integer; //SceImeKeyboardStatus
+  status     :SceImeKeyboardStatus;
   reserved   :array[0..11] of Byte;
  end;
 
@@ -429,11 +447,12 @@ type
   resourceId:array[0..SCE_IME_KEYBOARD_MAX_NUMBER-1] of DWORD;
  end;
 
+ pSceImeKeycode=^SceImeKeycode;
  SceImeKeycode=packed record
   keycode   :Word;
   character :WideChar;
   status    :DWORD;
-  ktype     :Integer; //SceImeKeyboardType
+  ktype     :SceImeKeyboardType;
   userId    :SceUserServiceUserId;
   resourceId:DWORD;
   _align    :Integer;
@@ -443,29 +462,25 @@ type
  pSceImeEventParam=^SceImeEventParam;
  SceImeEventParam=packed record
   Case Byte of
-   0:(rect:SceImeRect);
-   1:(text:SceImeEditText);
-   2:(caretMove:Integer); //SceImeCaretMovementDirection
-   3:(keycode:SceImeKeycode);
-   4:(resourceIdArray:SceImeKeyboardResourceIdArray);
-   5:(candidateWord:PWideChar);
-   6:(candidateIndex:Integer);
-   7:(deviceType:Integer); //SceImeDeviceType
-   8:(panelType:Integer);  //SceImePanelType
-   9:(inputMethodState:DWORD);
-  10:(reserved:array[0..63] of Byte);
+   0:(rect            :SceImeRect);
+   1:(text            :SceImeEditText);
+   2:(caretMove       :SceImeCaretMovementDirection);
+   3:(keycode         :SceImeKeycode);
+   4:(resourceIdArray :SceImeKeyboardResourceIdArray);
+   5:(candidateWord   :PWideChar);
+   6:(candidateIndex  :Integer);
+   7:(deviceType      :SceImeDeviceType);
+   8:(panelType       :SceImePanelType);
+   9:(inputMethodState:DWORD); //SCE_IME_INPUT_METHOD_STATE
+  10:(reserved        :array[0..63] of Byte);
  end;
 
  pSceImeEvent=^SceImeEvent;
  SceImeEvent=packed record
-  id    :Integer; //SceImeEventId
+  id    :SceImeEventId;
   _align:Integer;
   param :SceImeEventParam;
  end;
-
- SceImeType       =Integer;
- SceImeEnterLabel =Integer;
- SceImeInputMethod=Integer;
 
  SceImeTextFilter=function(
   outText      :PWideChar;
@@ -474,14 +489,10 @@ type
   srcTextLength:DWORD
  ):Integer;
 
- SceImeHorizontalAlignment=Integer;
- SceImeVerticalAlignment  =Integer;
- SceImePanelPriority      =Integer;
- SceImeKeyboardType       =Integer;
 
  SceImeExtKeyboardFilter=function(
-  srcKeycode:SceImeKeycode;
-  outKeycode:Word;
+  srcKeycode:pSceImeKeycode;
+  outKeycode:PWord;
   outStatus :PDWORD;
   reserved  :Pointer
  ):Integer;
@@ -496,7 +507,7 @@ type
   enterLabel         :SceImeEnterLabel;
   inputMethod        :SceImeInputMethod;
   filter             :SceImeTextFilter;
-  option             :DWORD;
+  option             :DWORD; // SCE_IME_OPTION
   maxTextLength      :DWORD;
   inputTextBuffer    :PWideChar;
   posx               :Single;
@@ -511,7 +522,7 @@ type
 
  pSceImeParamExtended=^SceImeParamExtended;
  SceImeParamExtended=packed record
-  option                  :DWORD;
+  option                  :DWORD; // SCE_IME_EXT_OPTION
   colorBase               :SceImeColor;
   colorLine               :SceImeColor;
   colorTextField          :SceImeColor;
@@ -525,9 +536,9 @@ type
   _align                  :Integer;
   additionalDictionaryPath:PChar;
   extKeyboardFilter       :SceImeExtKeyboardFilter;
-  disableDevice           :DWORD;
-  extKeyboardMode         :DWORD;
-  reserved                :array[0..59] of ShortInt;
+  disableDevice           :DWORD; // SCE_IME_DISABLE_DEVICE
+  extKeyboardMode         :DWORD; // SCE_IME_INIT_EXT_KEYBOARD_MODE
+  reserved                :array[0..59] of Byte;
  end;
 
  pSceImeDialogParam=^SceImeDialogParam;
@@ -538,7 +549,7 @@ type
   enterLabel         :SceImeEnterLabel;
   inputMethod        :SceImeInputMethod;
   filter             :SceImeTextFilter;
-  option             :DWORD;
+  option             :DWORD; // SCE_IME_OPTION
   maxTextLength      :DWORD;
   inputTextBuffer    :PWideChar;
   posx               :Single;
@@ -547,7 +558,13 @@ type
   verticalAlignment  :SceImeVerticalAlignment;
   placeholder        :PWideChar;
   title              :PWideChar;
-  reserved           :array[0..15] of ShortInt;
+  reserved           :array[0..15] of Byte;
+ end;
+
+ pSceImeDialogResult=^SceImeDialogResult;
+ SceImeDialogResult=packed record
+  endstatus:SceImeDialogEndStatus;
+  reserved :array[0..11] of Byte;
  end;
 
  pSceImeKeyboardParam=^SceImeKeyboardParam;

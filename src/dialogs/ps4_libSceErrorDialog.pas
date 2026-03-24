@@ -10,12 +10,11 @@ uses
  subr_dynlib,
  kern_proc,
  sys_bootparam,
- host_ipc_interface;
+ host_ipc;
 
 {$CALLING default}
 
 type
- PErrDialogOpen=^TErrDialogOpen;
  TErrDialogOpen=record
   errorCode:Integer;
   userId   :Integer;
@@ -67,9 +66,9 @@ begin
  mtx_unlock(g_ErrDialog_mtx);
 end;
 
-function SendSync(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
+function InvokeSync2(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
 begin
- Result:=p_host_ipc.SendSync(HashIpcStr(msg),len,buf);
+ Result:=p_host_ipc.InvokeSync2(msg,buf,len);
  if (Result=-1) then
  begin
   Result:=SCE_ERROR_DIALOG_ERROR_SERVICE_BUSY;
@@ -129,7 +128,7 @@ begin
      Result:=SCE_ERROR_DIALOG_ERROR_INVALID_STATE;
    else
      begin
-      Result:=SendSync('ERR_DIALOG_OPEN',@data,sizeof(data));
+      Result:=InvokeSync2('ERR_DIALOG_OPEN',@data,sizeof(data));
       if (Result=0) then
       begin
        g_state:=SCE_ERROR_DIALOG_STATUS_RUNNING;
@@ -149,7 +148,7 @@ begin
      Result:=SCE_ERROR_DIALOG_ERROR_NOT_INITIALIZED;
    SCE_ERROR_DIALOG_STATUS_RUNNING:
      begin
-      Result:=SendSync('ERR_DIALOG_CLOSE',nil,0);
+      Result:=InvokeSync2('ERR_DIALOG_CLOSE',nil,0);
       if (Result=0) then
       begin
        g_state:=SCE_ERROR_DIALOG_STATUS_FINISHED;
@@ -168,7 +167,7 @@ begin
 
   if (g_state=SCE_ERROR_DIALOG_STATUS_RUNNING) then
   begin
-   if (SendSync('ERR_DIALOG_UPDATE',nil,0)=1) then
+   if (InvokeSync2('ERR_DIALOG_UPDATE',nil,0)=1) then
    begin
     g_state:=SCE_ERROR_DIALOG_STATUS_FINISHED;
    end;
@@ -199,7 +198,7 @@ begin
      Result:=SCE_ERROR_DIALOG_ERROR_NOT_INITIALIZED;
    SCE_ERROR_DIALOG_STATUS_RUNNING:
      begin
-      SendSync('ERR_DIALOG_CLOSE',nil,0);
+      InvokeSync2('ERR_DIALOG_CLOSE',nil,0);
       g_state:=SCE_ERROR_DIALOG_STATUS_NONE;
       Result:=0;
      end;

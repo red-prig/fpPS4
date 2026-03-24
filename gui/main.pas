@@ -25,7 +25,6 @@ uses
 
   core_serialization,
   host_ipc,
-  host_ipc_interface,
   game_info,
   game_edit,
   cfg_edit,
@@ -150,14 +149,14 @@ type
 
     FDialogsManager:TDialogsManager;
 
-    function  OnKevent       (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
-    function  OnMainWindows  (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
-    function  OnCaptionFPS   (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
-    function  OnError        (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
-    function  OnWarning      (mlen:DWORD;buf:Pointer):Ptruint; //WARNING
-    function  OnParamSfoInit (mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
-    function  OnPlaygoInit   (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
-    function  OnLoadExec     (obj:TObject)           :Ptruint; //LOAD_EXEC
+    function  OnKevent       (Value:TIpcValue):TIpcValue; //KEV_EVENT
+    function  OnMainWindows  (Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+    function  OnCaptionFPS   (Value:TIpcValue):TIpcValue; //CAPTION_FPS
+    function  OnError        (Value:TIpcValue):TIpcValue; //ERROR
+    function  OnWarning      (Value:TIpcValue):TIpcValue; //WARNING
+    function  OnParamSfoInit (Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
+    function  OnPlaygoInit   (Value:TIpcValue):TIpcValue; //PLAYGO_INIT
+    function  OnLoadExec     (Value:TIpcValue):TIpcValue; //LOAD_EXEC
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -386,18 +385,18 @@ end;
 var
  IpcHandler:THostIpcHandler;
 
-function TfrmMain.OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
+function TfrmMain.OnMainWindows(Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
 begin
  Result:=FDialogsManager.OpenMainWindows;
 end;
 
-function TfrmMain.OnCaptionFPS(mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+function TfrmMain.OnCaptionFPS(Value:TIpcValue):TIpcValue; //CAPTION_FPS
 begin
  Result:=0;
- FDialogsManager.SetCaptionFPS(PQWORD(buf)^);
+ FDialogsManager.SetCaptionFPS(Value.GetQWORD);
 end;
 
-function TfrmMain.OnKevent(mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
+function TfrmMain.OnKevent(Value:TIpcValue):TIpcValue; //KEV_EVENT
 var
  kev:p_kevent;
  count:Integer;
@@ -406,8 +405,8 @@ var
 begin
  Result:=0;
 
- kev  :=buf;
- count:=mlen div sizeof(t_kevent);
+ kev  :=Value.GetBuf;
+ count:=Value.GetLen div sizeof(t_kevent);
 
  i:=0;
  while (i<>count) do
@@ -436,26 +435,29 @@ begin
 
 end;
 
-function TfrmMain.OnError(mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+function TfrmMain.OnError(Value:TIpcValue):TIpcValue; //ERROR
 begin
  Result:=0;
- if (MessageDlgEx(PChar(buf),'Error',[mbOK,mbAbort],Self)=mrAbort) then
+ if (MessageDlgEx(Value.GetString,'Error',[mbOK,mbAbort],Self)=mrAbort) then
  begin
   FContext.Stop();
  end;
 end;
 
-function TfrmMain.OnWarning(mlen:DWORD;buf:Pointer):Ptruint; //WARNING
+function TfrmMain.OnWarning(Value:TIpcValue):TIpcValue; //WARNING
+var
+ i:Integer;
 begin
- Result:=MessageDlgEx(PChar(buf),'Warning',[mbYes,mbNo,mbAbort],Self);
- if (Result=mrAbort) then
+ i:=MessageDlgEx(Value.GetString,'Warning',[mbYes,mbNo,mbAbort],Self);
+ if (i=mrAbort) then
  begin
   FContext.Stop();
  end;
- if (Result=mrYes) then
+ if (i=mrYes) then
  begin
-  Result:=0;
+  i:=0;
  end;
+ Result:=i;
 end;
 
 function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
@@ -467,11 +469,11 @@ begin
                           'param.sfo');
 end;
 
-function TfrmMain.OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
+function TfrmMain.OnParamSfoInit(Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
 var
  V:RawByteString;
 begin
- Result:=Ptruint(-1);
+ Result:=0;
 
  if (FContext.FGameItem=nil) then Exit;
 
@@ -489,21 +491,20 @@ begin
    Exit(0);
   end else
   begin
-   Exit(Ptruint(-1));
+   TBStopClick(nil);
+   Exit(0);
   end;
  end;
 
- FContext.SendSync('PARAM_SFO_LOAD',FContext.FParamSfo);
-
- Result:=0;
+ Result:=TIpcValue.&Object(FContext.FParamSfo);
 end;
 
-function TfrmMain.OnPlaygoInit(mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
+function TfrmMain.OnPlaygoInit(Value:TIpcValue):TIpcValue; //PLAYGO_INIT
 var
  playgo_file:TPlaygoFile;
  V:RawByteString;
 begin
- Result:=Ptruint(-1);
+ Result:=0;
 
  if (FContext.FGameItem=nil) then Exit;
 
@@ -524,17 +525,16 @@ begin
    Exit(0);
   end else
   begin
-   Exit(Ptruint(-1));
+   TBStopClick(nil);
+   Exit(0);
   end;
  end;
 
- FContext.SendSync('PLAYGO_LOAD',playgo_file);
-
+ Result:=TIpcValue.&Object(playgo_file);
  FreeAndNil(playgo_file);
- Result:=0;
 end;
 
-function TfrmMain.OnLoadExec(obj:TObject):Ptruint; //LOAD_EXEC
+function TfrmMain.OnLoadExec(Value:TIpcValue):TIpcValue; //LOAD_EXEC
 var
  data:TPS4LoadExec;
  cfg:TGameRunConfig;
@@ -543,9 +543,8 @@ var
 begin
  Result:=0;
 
- if (obj=nil) then Exit;
-
- data:=TPS4LoadExec(obj);
+ data:=TPS4LoadExec(Value.GetObject(TPS4LoadExec));
+ if (data=nil) then Exit;
 
  if (FContext.FGameItem=nil) or
     (FContext.FGameProcess=nil) then
@@ -909,7 +908,7 @@ begin
  IpcHandler.AddCallback('WARNING',        @OnWarning     );
  IpcHandler.AddCallback('PARAM_SFO_INIT' ,@OnParamSfoInit);
  IpcHandler.AddCallback('PLAYGO_INIT'    ,@OnPlaygoInit  );
- IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    ,TPS4LoadExec);
+ IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    );
 
  FDialogsManager.BindHandler(IpcHandler);
 

@@ -8,7 +8,6 @@ uses
  SysUtils,
  core_serialization,
  host_ipc,
- host_ipc_interface,
  game_info,
  param_sfo_gui;
 
@@ -48,9 +47,9 @@ type
   Procedure CloseItem();
   //
   procedure BindHandler(Handler:THostIpcHandler);
-  function  SendSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
-  procedure SendAsyn(const msg:RawByteString;obj:TSerializeObject);
-  procedure SendAsyn(const msg:RawByteString;mlen:DWORD;buf:Pointer);
+  function  InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
+  procedure InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
+  procedure InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
  end;
 
 implementation
@@ -111,7 +110,7 @@ begin
  g_stop:=True;
  if (g_ipc<>nil) then
  begin
-  g_ipc.FStop:=True;
+  g_ipc.Disconnect();
  end;
 end;
 
@@ -166,31 +165,31 @@ begin
  end;
 end;
 
-function TGameRunContext.SendSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
+function TGameRunContext.InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
 begin
  Result:=Ptruint(-1);
  if (FGameProcess<>nil) then
  if (FGameProcess.g_ipc<>nil) then
  begin
-  Result:=FGameProcess.g_ipc.SendSync(msg,obj);
+  Result:=FGameProcess.g_ipc.InvokeSync2(msg,TIpcValue.&Object(obj));
  end;
 end;
 
-procedure TGameRunContext.SendAsyn(const msg:RawByteString;obj:TSerializeObject);
+procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
 begin
  if (FGameProcess<>nil) then
  if (FGameProcess.g_ipc<>nil) then
  begin
-  FGameProcess.g_ipc.SendAsyn(msg,obj);
+  FGameProcess.g_ipc.InvokeAsyn(msg,TIpcValue.&Object(obj));
  end;
 end;
 
-procedure TGameRunContext.SendAsyn(const msg:RawByteString;mlen:DWORD;buf:Pointer);
+procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
 begin
  if (FGameProcess<>nil) then
  if (FGameProcess.g_ipc<>nil) then
  begin
-  FGameProcess.g_ipc.SendAsyn(HashIpcStr(msg),mlen,buf);
+  FGameProcess.g_ipc.InvokeAsyn(msg,buf,mlen);
  end;
 end;
 

@@ -37,8 +37,6 @@ var
  p_host_ipc           :THostIpcInterface=nil;
  p_host_handler       :THostIpcHandler  =nil;
 
-function p_host_ipc_td:Pointer;
-
 procedure set_neo_mode(neo:Boolean);
 
 implementation
@@ -58,15 +56,6 @@ begin
     p_base_ps4_mode:=0;
     p_neomode      :=1;
    end;
- end;
-end;
-
-function p_host_ipc_td:Pointer;
-begin
- Result:=nil;
- if (p_host_ipc<>nil) then
- begin
-  Result:=p_host_ipc.Ftd;
  end;
 end;
 

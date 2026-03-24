@@ -57,7 +57,6 @@ const
 {$CALLING default}
 
 type
- PMsgDialogOpen=^TMsgDialogOpen;
  TMsgDialogOpen=record
   mode      :Integer;                //SceMsgDialogMode
   buttonType:Integer;                //SceMsgDialogButtonType

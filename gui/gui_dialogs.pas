@@ -21,7 +21,7 @@ uses
 
   CharStream,
 
-  host_ipc_interface,
+  host_ipc,
   game_info,
   game_run_context,
 
@@ -29,7 +29,8 @@ uses
 
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
-  ps4_libSceErrorDialog;
+  ps4_libSceErrorDialog,
+  ps4_libSceImeDialog;
 
 type
  TGameMainForm=class(TForm)
@@ -46,6 +47,7 @@ type
   //
   FCommonDialog:TDialogCustom;
   FErrorDialog :TDialogCustom;
+  FImeDialog   :TImeDialog;
   //
   function  get_caption_format:RawByteString;
   function  OpenMainWindows:THandle;
@@ -56,21 +58,28 @@ type
   procedure SetCaptionFPS(Ffps:QWORD);
   //
   procedure BindHandler(Handler:THostIpcHandler);
-  function  OnCdlgSetMsg  (mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_MSG
-  function  OnCdlgSetValue(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_VALUE
-  function  OnCdlgClose   (mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLOSE
+  function  OnCdlgSetMsg  (Value:TIpcValue):TIpcValue; //CDLG_SET_MSG
+  function  OnCdlgSetValue(Value:TIpcValue):TIpcValue; //CDLG_SET_VALUE
+  function  OnCdlgClose   (Value:TIpcValue):TIpcValue; //CDLG_CLOSE
   procedure NewDialogOpen(var Attributes:TDialogAttributes;var pResult:TDialogCustom);
   //
   procedure OnMsgDialogClick(Sender:TObject);
-  function  OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
+  function  OnMsgDialogOpen(Value:TIpcValue):TIpcValue; //MSG_DIALOG_OPEN
   //
   procedure OnSaveDialogClick(Sender:TObject);
-  function  OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
+  function  OnSaveDialogOpen(Value:TIpcValue):TIpcValue; //SAVE_DIALOG_OPEN
   //
   procedure OnErrDlgClick(Sender:TObject);
-  function  OnErrDlgOpen  (mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_OPEN
-  function  OnErrDlgClose (mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_CLOSE
-  function  OnErrDlgUpdate(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_UPDATE
+  function  OnErrDlgOpen  (Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
+  function  OnErrDlgClose (Value:TIpcValue):TIpcValue; //ERR_DIALOG_CLOSE
+  function  OnErrDlgUpdate(Value:TIpcValue):TIpcValue; //ERR_DIALOG_UPDATE
+  //
+  procedure OnImeDialogClick(Sender:TObject);
+  function  OnImeDlgOpen  (Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
+  function  OnImeDlgTerm  (Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
+  function  OnImeDlgAbort (Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
+  function  OnImeDlgUpdate(Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
+  function  OnImeDlgResult(Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
  end;
 
  function GetRealFontSize(Font:TFont):Integer;
@@ -202,24 +211,23 @@ begin
  Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
  Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
  Handler.AddCallback('ERR_DIALOG_UPDATE',@OnErrDlgUpdate);
+ Handler.AddCallback('IME_DIALOG_OPEN'  ,@OnImeDlgOpen);
+ Handler.AddCallback('IME_DIALOG_TERM'  ,@OnImeDlgTerm);
+ Handler.AddCallback('IME_DIALOG_ABORT' ,@OnImeDlgAbort);
+ Handler.AddCallback('IME_DIALOG_UPDATE',@OnImeDlgUpdate);
+ Handler.AddCallback('IME_DIALOG_RESULT',@OnImeDlgResult);
 end;
 
-function TDialogsManager.OnCdlgSetMsg(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_MSG
-var
- str:RawByteString;
+function TDialogsManager.OnCdlgSetMsg(Value:TIpcValue):TIpcValue; //CDLG_SET_MSG
 begin
  Result:=0;
  if (FCommonDialog=nil) then Exit;
  if (FCommonDialog.FMsgMemo=nil) then Exit;
 
- str:='';
- SetLength(str,mlen);
- Move(buf^,str[1],mlen);
-
- FCommonDialog.FMsgMemo.Text:=str;
+ FCommonDialog.FMsgMemo.Text:=Value.GetString;
 end;
 
-function TDialogsManager.OnCdlgSetValue(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_SET_VALUE
+function TDialogsManager.OnCdlgSetValue(Value:TIpcValue):TIpcValue; //CDLG_SET_VALUE
 var
  rate:DWORD;
 begin
@@ -227,20 +235,21 @@ begin
  if (FCommonDialog=nil) then Exit;
  if (FCommonDialog.FMsgPBar=nil) then Exit;
 
- if (mlen>SizeOf(DWORD)) then mlen:=SizeOf(DWORD);
- rate:=0;
- Move(buf^,rate,mlen);
+ rate:=Value.GetDWORD;
 
- FCommonDialog.FMsgPBar.Position:=rate;
+ if (rate<=100) then
+ begin
+  FCommonDialog.FMsgPBar.Position:=rate;
+ end;
 end;
 
-function TDialogsManager.OnCdlgClose(mlen:DWORD;buf:Pointer):Ptruint; //CDLG_CLOSE
+function TDialogsManager.OnCdlgClose(Value:TIpcValue):TIpcValue; //CDLG_CLOSE
 begin
  Result:=0;
  if (FCommonDialog=nil) then Exit;
 
  //What should the result code be?
- pContext^.SendAsyn('CDLG_FINISH',0,nil);
+ pContext^.InvokeAsyn('CDLG_FINISH',nil);
 
  FreeAndNil(FCommonDialog);
 end;
@@ -267,12 +276,12 @@ begin
   rzdata.resultId:=1;
  end;
 
- pContext^.SendAsyn('CDLG_FINISH',SizeOf(rzdata),@rzdata);
+ pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
 
-function TDialogsManager.OnMsgDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //MSG_DIALOG_OPEN
+function TDialogsManager.OnMsgDialogOpen(Value:TIpcValue):TIpcValue; //MSG_DIALOG_OPEN
 var
  data:TMsgDialogOpen;
  Attributes:TDialogAttributes;
@@ -281,9 +290,8 @@ begin
 
  Assert(FCommonDialog=nil);
 
- if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
  FillChar(data,SizeOf(data),0);
- Move(buf^,data,mlen);
+ Value.MoveTo(@data,SizeOf(data));
 
  FillChar(Attributes,SizeOf(Attributes),0);
  Attributes.OnClick:=@OnMsgDialogClick;
@@ -424,7 +432,7 @@ begin
  // reserved :array[0..31] of Byte;
  //end;
 
- pContext^.SendAsyn('CDLG_FINISH',SizeOf(rzdata),@rzdata);
+ pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
@@ -468,7 +476,7 @@ begin
  inherited;
 end;
 
-function TDialogsManager.OnSaveDialogOpen(mlen:DWORD;buf:Pointer):Ptruint; //SAVE_DIALOG_OPEN
+function TDialogsManager.OnSaveDialogOpen(Value:TIpcValue):TIpcValue; //SAVE_DIALOG_OPEN
 
 const
  SysDispCaption:array[0..3] of PChar=(
@@ -554,9 +562,8 @@ begin
 
  Assert(FCommonDialog=nil);
 
- if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
  FillChar(data,SizeOf(data),0);
- Move(buf^,data,mlen);
+ Value.MoveTo(@data,SizeOf(data));
 
  FillChar(Attributes,SizeOf(Attributes),0);
  Attributes.OnClick:=@OnSaveDialogClick;
@@ -758,18 +765,17 @@ end;
 //
 
 //
-function TDialogsManager.OnErrDlgOpen(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_OPEN
+function TDialogsManager.OnErrDlgOpen(Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
 var
  data:TErrDialogOpen;
  Attributes:TDialogAttributes;
 begin
  Result:=0;
 
- if (FErrorDialog<>nil) then Exit(-2);
+ if (FErrorDialog<>nil) then Exit(Ptruint(-2));
 
- if (mlen>SizeOf(data)) then mlen:=SizeOf(data);
  FillChar(data,SizeOf(data),0);
- Move(buf^,data,mlen);
+ Value.MoveTo(@data,SizeOf(data));
 
  FillChar(Attributes,SizeOf(Attributes),0);
  Attributes.OnClick:=@OnErrDlgClick;
@@ -793,13 +799,13 @@ begin
  FreeAndNil(FErrorDialog);
 end;
 
-function TDialogsManager.OnErrDlgClose(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_CLOSE
+function TDialogsManager.OnErrDlgClose(Value:TIpcValue):TIpcValue; //ERR_DIALOG_CLOSE
 begin
  Result:=0;
  FreeAndNil(FErrorDialog);
 end;
 
-function TDialogsManager.OnErrDlgUpdate(mlen:DWORD;buf:Pointer):Ptruint; //ERR_DIALOG_UPDATE
+function TDialogsManager.OnErrDlgUpdate(Value:TIpcValue):TIpcValue; //ERR_DIALOG_UPDATE
 begin
  if (FErrorDialog<>nil) then
  begin
@@ -810,6 +816,128 @@ begin
  end;
 end;
 
+//
+
+procedure TDialogsManager.OnImeDialogClick(Sender:TObject);
+var
+ buttonId:TDialogButtonId;
+begin
+ if (FImeDialog<>nil) then
+ begin
+  buttonId:=TDialogButtonId(TCustomButton(Sender).Tag);
+
+  if (buttonId=btnIdCancel) then
+  begin
+   FImeDialog.button:=1; //STATUS_USER_CANCELED
+  end else
+  begin
+   FImeDialog.button:=0; //STATUS_OK
+  end;
+
+  FImeDialog.state:=2;
+  FImeDialog.Hide;
+ end;
+end;
+
+function TDialogsManager.OnImeDlgOpen(Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
+var
+ data:TImeDialogOpen;
+ Attributes:TDialogAttributes;
+ Ime:TImeDialogAttributes;
+
+ function GetAnchor(Align:Byte):TAnchorSideReference; inline;
+ begin
+  Result:=asrTop;
+  case Align of
+   0:Result:=asrTop;    // LEFT/TOP
+   1:Result:=asrCenter; // CENTER
+   2:Result:=asrBottom; // RIGHT/BOTTOM
+  end;
+ end;
+
+begin
+ Result:=0;
+
+ if (FImeDialog<>nil) then Exit(Ptruint(-2));
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ FillChar(Ime,SizeOf(Ime),0);
+ Attributes.OnClick:=@OnImeDialogClick;
+
+ Attributes.Caption.Enable :=True;
+ Attributes.Caption.Message:=UTF8Encode(WideString(data.title));
+ //
+ Attributes.CloseButton.Enable:=True;
+ Attributes.CloseButton.btnId :=btnIdCancel;
+ //
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:=UTF8Encode(WideString(data.result.inputText));
+ Attributes.Memo.Ime    :=@Ime;
+
+ Ime.Multiline  :=(data.option and     1)<>0;
+ Ime.Password   :=(data.option and     4)<>0;
+ Ime.FixedPos   :=(data.option and   $40)<>0;
+ Ime.Over2kCoord:=(data.option and $4000)<>0;
+ Ime.hAlign     :=GetAnchor(data.PosAndForm.horizontalAlignment);
+ Ime.vAlign     :=GetAnchor(data.PosAndForm.verticalAlignment);
+ Ime.MaxLength  :=data.maxTextLength;
+ Ime.posx       :=data.PosAndForm.posx;
+ Ime.posy       :=data.PosAndForm.posy;
+ Ime.width      :=data.PosAndForm.width;
+ Ime.height     :=data.PosAndForm.height;
+
+ case data.enterLabel of
+  0:Ime.EditLabel:='OK'    ; //DEFAULT
+  1:Ime.EditLabel:='SEND'  ; //SEND
+  2:Ime.EditLabel:='SEARCH'; //SEARCH
+  3:Ime.EditLabel:='GO'    ; //GO
+ end;
+
+ NewDialogOpen(Attributes,TDialogCustom(FImeDialog));
+end;
+
+function TDialogsManager.OnImeDlgTerm(Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
+begin
+ Result:=0;
+ FreeAndNil(FImeDialog);
+end;
+
+function TDialogsManager.OnImeDlgAbort(Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
+begin
+ Result:=0;
+ if (FImeDialog<>nil) then
+ begin
+  FImeDialog.button:=2; //STATUS_ABORTED
+  FImeDialog.state :=2;
+  FImeDialog.Hide;
+ end;
+end;
+
+function TDialogsManager.OnImeDlgUpdate(Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  Result:=FImeDialog.state;
+ end;
+end;
+
+function TDialogsManager.OnImeDlgResult(Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
+var
+ data:TImeDialogResult;
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  FillChar(data,SizeOf(data),0);
+  data.endstatus:=FImeDialog.state;
+  data.inputText:=UTF8Decode(FImeDialog.FMsgMemo.Text);
+  Result:=TIpcValue.New(@data,SizeOf(data));
+ end;
+end;
 
 end.
 

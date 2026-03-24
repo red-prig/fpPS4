@@ -22,22 +22,8 @@ uses
  sysutils,
  atomic,
  sys_bootparam,
- host_ipc_interface,
+ host_ipc,
  kern_rwlock;
-
-type
- TPlaygoLoaderIpc=object
-  function OnLoad(obj:TObject):Ptruint;
- end;
-
-function TPlaygoLoaderIpc.OnLoad(obj:TObject):Ptruint;
-begin
- Result:=0;
-
- Writeln('PLAYGO_LOAD');
-
- playgo_file:=TPlaygoFile(obj);
-end;
 
 function is_init_playgo:Boolean;
 begin
@@ -46,8 +32,7 @@ end;
 
 procedure init_playgo;
 var
- Loader:TPlaygoLoaderIpc;
- err:Integer;
+ Value:TIpcValue;
 begin
  if (playgo_lazy_init=2) then Exit;
 
@@ -57,14 +42,9 @@ begin
  begin
   rw_wlock(playgo_lock);
 
-  p_host_handler.AddCallback('PLAYGO_LOAD',@Loader.OnLoad,TPlaygoFile);
-
-  err:=p_host_ipc.SendSync('PLAYGO_INIT');
-
-  if (err<>0) then
-  begin
-   Assert(false,'PLAYGO_LOAD error='+IntToStr(err));
-  end;
+  Value:=p_host_ipc.InvokeSync('PLAYGO_INIT');
+  playgo_file:=TPlaygoFile(Value.GetObject(TPlaygoFile));
+  Value.Free;
 
   playgo_lazy_init:=2;
   rw_wunlock(playgo_lock);

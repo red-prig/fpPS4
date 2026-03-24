@@ -12,6 +12,7 @@ uses
   subr_dynlib,
   sys_bootparam,
   game_info,
+  host_ipc,
   ps4_libSceUserService,
   ps4_libSceNpCommon;
 
@@ -554,7 +555,7 @@ begin
   end;
  end;
 
- Result:=p_host_ipc.SendSync('LOAD_EXEC',data);
+ Result:=p_host_ipc.InvokeSync2('LOAD_EXEC',TIpcValue.&Object(data));
 
  data.Free;
 end;

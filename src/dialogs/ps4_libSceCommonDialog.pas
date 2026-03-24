@@ -9,7 +9,7 @@ uses
  sysutils,
  kern_mtx,
  sys_bootparam,
- host_ipc_interface,
+ host_ipc,
  core_serialization,
  subr_dynlib;
 
@@ -63,7 +63,7 @@ type
    finish:Byte;
    closed:Byte;
    rzdata:array of Byte;
-   function   OnCdlgFinish(mlen:DWORD;buf:Pointer):Ptruint;
+   function   OnCdlgFinish(Value:TIpcValue):TIpcValue;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
@@ -212,7 +212,7 @@ end;
 
 Procedure TCommonDialogClient.Send(const msg:RawByteString;buf:Pointer;len:DWORD);
 begin
- p_host_ipc.SendAsyn(HashIpcStr(msg),len,buf);
+ p_host_ipc.InvokeAsyn(msg,buf,len);
 end;
 
 function TCommonDialogClient.Open(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
@@ -315,7 +315,7 @@ begin
  inherited;
 end;
 
-function TCommonDialogClient.OnCdlgFinish(mlen:DWORD;buf:Pointer):Ptruint;
+function TCommonDialogClient.OnCdlgFinish(Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
 
@@ -326,8 +326,8 @@ begin
    if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
    if (finish=0) then
    begin
-    SetLength(rzdata,mlen);
-    Move(buf^,rzdata[0],mlen);
+    SetLength(rzdata,Value.GetLen);
+    Value.MoveTo(@rzdata[0],Value.GetLen);
     //
     finish:=1;
    end;
@@ -343,20 +343,21 @@ begin
  Result:=0;
  Writeln('sceCommonDialogInitialize');
 
- if (g_common_dialog_init=0) then
- begin
-  g_common_dialog_init:=1;
-  mtx_lock(g_common_dialog_mtx);
+ mtx_lock(g_common_dialog_mtx);
 
-   //DialogInitialize
-   p_host_handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+  if (g_common_dialog_init=0) then
+  begin
+   g_common_dialog_init:=1;
 
-  mtx_unlock(g_common_dialog_mtx);
- end else
- begin
-  Result:=SCE_COMMON_DIALOG_ERROR_ALREADY_SYSTEM_INITIALIZED;
- end;
+    //DialogInitialize
+    p_host_handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
 
+  end else
+  begin
+   Result:=SCE_COMMON_DIALOG_ERROR_ALREADY_SYSTEM_INITIALIZED;
+  end;
+
+ mtx_unlock(g_common_dialog_mtx);
 end;
 
 function ps4_sceCommonDialogIsUsed():Boolean;
