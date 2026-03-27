@@ -822,6 +822,7 @@ begin
                begin;
                 pResult^.endstatus:=SCE_IME_DIALOG_END_STATUS_ABORTED;
                 wcsncpy_s(g_dialog.output,g_dialog.data.result.inputText,g_dialog.data.maxTextLength);
+                Result:=0;
                end;
       sFINISHED:
                begin
@@ -840,6 +841,38 @@ begin
      end;
 
     end;
+   end;
+  end;
+
+ mtx_unlock(g_ImeDialog_mtx);
+end;
+
+function ps4_sceImeDialogGetPanelPositionAndForm(posForm:pSceImePositionAndForm):Integer;
+begin
+ Result:=SCE_IME_DIALOG_ERROR_NOT_IN_USE;
+ if (g_dialog=nil) then Exit;
+
+ mtx_lock(g_ImeDialog_mtx);
+
+  if (g_dialog<>nil) then
+  begin
+   Result:=SCE_IME_ERROR_INVALID_ADDRESS;
+   if (posForm<>nil) then
+   begin
+    if (g_dialog.state=dRUNNING) then
+    begin
+     // TODO: 'IME_DIALOG_POS'
+    end;
+    //
+    posForm^.PanelType          :=g_dialog.data.PosAndForm.PanelType;
+    posForm^.posx               :=g_dialog.data.PosAndForm.posx;
+    posForm^.posy               :=g_dialog.data.PosAndForm.posy;
+    posForm^.horizontalAlignment:=g_dialog.data.PosAndForm.horizontalAlignment;
+    posForm^.verticalAlignment  :=g_dialog.data.PosAndForm.verticalAlignment;
+    posForm^.width              :=g_dialog.data.PosAndForm.width;
+    posForm^.height             :=g_dialog.data.PosAndForm.height;
+    //
+    Result:=0;
    end;
   end;
 
@@ -1120,6 +1153,7 @@ begin
  lib.set_proc($A019B0E31AE67CAB,@ps4_sceImeDialogAbort);
  lib.set_proc($2000E60F8B527016,@ps4_sceImeDialogGetStatus);
  lib.set_proc($C74D63C6EFAFC657,@ps4_sceImeDialogGetResult);
+ lib.set_proc($F23AB3CCF8A8625F,@ps4_sceImeDialogGetPanelPositionAndForm);
  lib.set_proc($C2AB09BD15F0979F,@ps4_sceImeDialogGetPanelSize);
  lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);
 

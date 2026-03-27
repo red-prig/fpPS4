@@ -933,7 +933,7 @@ begin
  if (FImeDialog<>nil) then
  begin
   FillChar(data,SizeOf(data),0);
-  data.endstatus:=FImeDialog.state;
+  data.endstatus:=FImeDialog.button;
   data.inputText:=UTF8Decode(FImeDialog.FMsgMemo.Text);
   Result:=TIpcValue.New(@data,SizeOf(data));
  end;

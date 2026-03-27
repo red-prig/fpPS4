@@ -395,6 +395,7 @@ type
   textArea  :array[0..SCE_IME_MAX_TEXT_AREA-1] of SceImeTextAreaProperty;
  end;
 
+ pSceImePositionAndForm=^SceImePositionAndForm;
  SceImePositionAndForm=packed record
   PanelType          :SceImePanelType;
   posx               :Single;
