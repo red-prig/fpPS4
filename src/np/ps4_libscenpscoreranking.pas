@@ -40,14 +40,14 @@ type
   npId       :SceNpId;
   reserved   :array[0..48] of Byte;
   pad0       :array[0..2] of Byte;
-  pcId       :Integer;
-  serialRank :DWORD;
-  rank       :DWORD;
-  highestRank:DWORD;
-  scoreValue :Int64;
+  pcId       :Integer; //SceNpScorePcId
+  serialRank :DWORD;   //SceNpScoreRankNumber
+  rank       :DWORD;   //SceNpScoreRankNumber
+  highestRank:DWORD;   //SceNpScoreRankNumber
   hasGameData:Integer;
   pad1       :array[0..3] of Byte;
-  recordDate :QWORD;
+  scoreValue :Int64;   //SceNpScoreValue
+  recordDate :QWORD;   //SceRtcTick
  end;
 
  PSceNpScoreRankDataA=^SceNpScoreRankDataA;
@@ -195,6 +195,33 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpScoreGetRankingByNpId(
+	reqId:Integer;
+	boardId:DWORD;
+	npIdArray:pSceNpId;
+	npIdArraySize:size_t;
+	rankArray:Pointer; //pSceNpScorePlayerRankData
+	rankArraySize:size_t;
+	commentArray:pSceNpScoreComment;
+	commentArraySize:size_t;
+	infoArray:pSceNpScoreGameInfo;
+	infoArraySize:size_t;
+	arrayNum:size_t;
+	lastSortDate:PQWORD;
+	totalRecord:pSceNpScoreRankNumber;
+	option:Pointer):Integer;
+begin
+ if (lastSortDate<>nil) then
+ begin
+  lastSortDate^:=0;
+ end;
+ if (totalRecord<>nil) then
+ begin
+  totalRecord^:=0;
+ end;
+ Result:=0;
+end;
+
 function ps4_sceNpScoreGetRankingByRange(
              reqId:Integer;
              boardId:DWORD;
@@ -307,7 +334,8 @@ begin
  lib.set_proc($74AF3F4A061FEABE,@ps4_sceNpScoreDeleteRequest);
  lib.set_proc($F24B88CD4C3ABAD4,@ps4_sceNpScoreGetFriendsRanking);
  lib.set_proc($80C6CE9FEFFA7970,@ps4_sceNpScoreGetFriendsRankingA);
- lib.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByAccountIdPcId);
+ lib.set_proc($F66644828884ABA6,@ps4_sceNpScoreGetRankingByNpId);
+ lib.set_proc($C093D6C9C546CEBB,@ps4_sceNpScoreGetRankingByAccountIdPcId);
  lib.set_proc($2811F10E3CA4FE30,@ps4_sceNpScoreGetRankingByRange);
  lib.set_proc($CD3D1706D82D3922,@ps4_sceNpScoreRecordScore);
  lib.set_proc($00D26CB0FCF7998D,@ps4_sceNpScoreRecordScoreAsync);
