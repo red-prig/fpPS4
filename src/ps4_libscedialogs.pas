@@ -12,6 +12,7 @@ uses
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceErrorDialog,
+  ps4_libSigninDialog,
   ps4_libSceImeDialog;
 
 implementation
@@ -134,68 +135,6 @@ begin
 end;
 
 //
-
-const
- SCE_SIGNIN_DIALOG_STATUS_NONE       =0;
- SCE_SIGNIN_DIALOG_STATUS_INITIALIZED=1;
- SCE_SIGNIN_DIALOG_STATUS_RUNNING    =2;
- SCE_SIGNIN_DIALOG_STATUS_FINISHED   =3;
-
- //SceSigninDialogResultType
- SCE_SIGNIN_DIALOG_RESULT_OK           =0;
- SCE_SIGNIN_DIALOG_RESULT_USER_CANCELED=1;
-
-type
- pSceSigninDialogResultType=^SceSigninDialogResultType;
- SceSigninDialogResultType=Integer;
-
- pSceSigninDialogResult=^SceSigninDialogResult;
- SceSigninDialogResult=packed record
-  _result :SceSigninDialogResultType;
-  reserved:array[0..2] of Integer;
- end;
-
-var
- status_signin_dialog:Integer=SCE_SIGNIN_DIALOG_STATUS_NONE;
-
-function ps4_sceSigninDialogInitialize():Integer;
-begin
- Writeln('sceSigninDialogInitialize');
- status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_INITIALIZED;
- Result:=0;
-end;
-
-function ps4_sceSigninDialogGetResult(_result:pSceSigninDialogResult):Integer;
-begin
- Result:=0;
-end;
-
-function ps4_sceSigninDialogTerminate():Integer;
-begin
- Writeln('sceSigninDialogTerminate');
- status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_NONE;
- Result:=0;
-end;
-
-type
- pSceSigninDialogParam=^SceSigninDialogParam;
- SceSigninDialogParam=packed record
-  size:Integer;
-  userId:Integer;
-  reserved:array[0..1] of Integer;
- end;
-
-function ps4_sceSigninDialogOpen(param:pSceSigninDialogParam):Integer;
-begin
- Writeln('sceSigninDialogOpen');
- status_signin_dialog:=SCE_SIGNIN_DIALOG_STATUS_FINISHED;
- Result:=0;
-end;
-
-function ps4_sceSigninDialogUpdateStatus:Integer;
-begin
- Result:=status_signin_dialog;
-end;
 
 function ps4_scePlayerInvitationDialogTerminate():Integer;
 begin
@@ -322,20 +261,6 @@ begin
  lib.set_proc($76CA8256C34CD198,@ps4_sceNpCommerceHidePsStoreIcon);
 end;
 
-function Load_libSceSigninDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceSigninDialog');
-
- lib:=Result^.add_lib('libSceSigninDialog');
- lib.set_proc($9A56067E6A84DDF4,@ps4_sceSigninDialogInitialize);
- lib.set_proc($265A49568456BFB5,@ps4_sceSigninDialogOpen);
- lib.set_proc($070DF59624C54F70,@ps4_sceSigninDialogUpdateStatus);
- lib.set_proc($9EA1BBAEA9D8C355,@ps4_sceSigninDialogGetResult);
- lib.set_proc($2D79664BA3EF25D5,@ps4_sceSigninDialogTerminate);
-end;
-
 function Load_libScePlayerInvitationDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -411,7 +336,6 @@ var
 initialization
  RegisteredInternalFile(stub[2] ,'libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog       );
  RegisteredInternalFile(stub[5] ,'libSceNpCommerce.prx'            ,@Load_libSceNpCommerce            );
- RegisteredInternalFile(stub[6] ,'libSceSigninDialog.prx'          ,@Load_libSceSigninDialog          );
  RegisteredInternalFile(stub[7] ,'libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
  RegisteredInternalFile(stub[9] ,'libSceLoginDialog.prx'           ,@Load_libSceLoginDialog           );
  RegisteredInternalFile(stub[10],'libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog        );

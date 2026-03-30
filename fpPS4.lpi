@@ -1784,6 +1784,10 @@
         <Filename Value="src\dialogs\ps4_libSceImeDialog.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\dialogs\ps4_libSigninDialog.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

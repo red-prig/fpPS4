@@ -8,7 +8,7 @@ uses
  Classes,
  CharStream,
  murmurhash,
- kern_hamt,
+ hamt,
  sys_event,
  core_serialization;
 

@@ -30,7 +30,8 @@ uses
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceErrorDialog,
-  ps4_libSceImeDialog;
+  ps4_libSceImeDialog,
+  ps4_libSigninDialog;
 
 type
  TGameMainForm=class(TForm)
@@ -47,7 +48,8 @@ type
   //
   FCommonDialog:TDialogCustom;
   FErrorDialog :TDialogCustom;
-  FImeDialog   :TImeDialog;
+  FImeDialog   :TDialogCustom;
+  FSigninDialog:TDialogCustom;
   //
   function  get_caption_format:RawByteString;
   function  OpenMainWindows:THandle;
@@ -80,6 +82,13 @@ type
   function  OnImeDlgAbort (Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
   function  OnImeDlgUpdate(Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
   function  OnImeDlgResult(Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
+  //
+  procedure OnSigninDlgClick(Sender:TObject);
+  function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
+  function  OnSigninDlgClose (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_CLOSE
+  function  OnSigninDlgTerm  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_TERM
+  function  OnSigninDlgUpdate(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_UPDATE
+  function  OnSigninDlgResult(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_RESULT
  end;
 
  function GetRealFontSize(Font:TFont):Integer;
@@ -203,19 +212,27 @@ end;
 
 procedure TDialogsManager.BindHandler(Handler:THostIpcHandler);
 begin
- Handler.AddCallback('CDLG_SET_MSG'     ,@OnCdlgSetMsg);
- Handler.AddCallback('CDLG_SET_VALUE'   ,@OnCdlgSetValue);
- Handler.AddCallback('CDLG_CLOSE'       ,@OnCdlgClose);
- Handler.AddCallback('MSG_DIALOG_OPEN'  ,@OnMsgDialogOpen);
- Handler.AddCallback('SAVE_DIALOG_OPEN' ,@OnSaveDialogOpen);
+ Handler.AddCallback('CDLG_SET_MSG'    ,@OnCdlgSetMsg);
+ Handler.AddCallback('CDLG_SET_VALUE'  ,@OnCdlgSetValue);
+ Handler.AddCallback('CDLG_CLOSE'      ,@OnCdlgClose);
+ Handler.AddCallback('MSG_DIALOG_OPEN' ,@OnMsgDialogOpen);
+ Handler.AddCallback('SAVE_DIALOG_OPEN',@OnSaveDialogOpen);
+ //
  Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
  Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
  Handler.AddCallback('ERR_DIALOG_UPDATE',@OnErrDlgUpdate);
+ //
  Handler.AddCallback('IME_DIALOG_OPEN'  ,@OnImeDlgOpen);
  Handler.AddCallback('IME_DIALOG_TERM'  ,@OnImeDlgTerm);
  Handler.AddCallback('IME_DIALOG_ABORT' ,@OnImeDlgAbort);
  Handler.AddCallback('IME_DIALOG_UPDATE',@OnImeDlgUpdate);
  Handler.AddCallback('IME_DIALOG_RESULT',@OnImeDlgResult);
+ //
+ Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
+ Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
+ Handler.AddCallback('SIGNIN_DIALOG_TERM'  ,@OnSigninDlgTerm);
+ Handler.AddCallback('SIGNIN_DIALOG_UPDATE',@OnSigninDlgUpdate);
+ Handler.AddCallback('SIGNIN_DIALOG_RESULT',@OnSigninDlgResult);
 end;
 
 function TDialogsManager.OnCdlgSetMsg(Value:TIpcValue):TIpcValue; //CDLG_SET_MSG
@@ -772,7 +789,7 @@ var
 begin
  Result:=0;
 
- if (FErrorDialog<>nil) then Exit(Ptruint(-2));
+ if (FErrorDialog<>nil) then Exit(-2);
 
  FillChar(data,SizeOf(data),0);
  Value.MoveTo(@data,SizeOf(data));
@@ -816,7 +833,7 @@ begin
  end;
 end;
 
-//
+/////
 
 procedure TDialogsManager.OnImeDialogClick(Sender:TObject);
 var
@@ -858,7 +875,7 @@ var
 begin
  Result:=0;
 
- if (FImeDialog<>nil) then Exit(Ptruint(-2));
+ if (FImeDialog<>nil) then Exit(-2);
 
  FillChar(data,SizeOf(data),0);
  Value.MoveTo(@data,SizeOf(data));
@@ -938,6 +955,104 @@ begin
   Result:=TIpcValue.New(@data,SizeOf(data));
  end;
 end;
+
+////
+
+procedure TDialogsManager.OnSigninDlgClick(Sender:TObject);
+var
+ buttonId:TDialogButtonId;
+begin
+ if (FSigninDialog<>nil) then
+ begin
+  buttonId:=TDialogButtonId(TCustomButton(Sender).Tag);
+
+  if (buttonId=btnIdCancel) then
+  begin
+   FSigninDialog.button:=1; //STATUS_USER_CANCELED
+  end else
+  begin
+   FSigninDialog.button:=0; //STATUS_OK
+  end;
+
+  FSigninDialog.state:=1;
+  FSigninDialog.Hide;
+ end;
+end;
+
+function TDialogsManager.OnSigninDlgOpen(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
+var
+ data:TSigninDialogOpen;
+ Attributes:TDialogAttributes;
+begin
+ Result:=0;
+
+ if (FSigninDialog<>nil) then
+ begin
+  if (FSigninDialog.state=1) then
+  begin
+   //reopen
+   FreeAndNil(FSigninDialog);
+  end else
+  begin
+   Exit(-2);
+  end;
+ end;
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ Attributes.OnClick:=@OnSigninDlgClick;
+
+ Attributes.Caption.Enable :=True;
+ Attributes.Caption.Message:='Sign in';
+
+ Attributes.CloseButton.Enable:=True;
+
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:='Sign in to Network';
+
+ Attributes.Buttons.Enable :=True;
+ Attributes.Buttons.BtnType:=btnOkCancel;
+
+ NewDialogOpen(Attributes,FSigninDialog);
+end;
+
+function TDialogsManager.OnSigninDlgClose(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_CLOSE
+begin
+ Result:=0;
+ if (FSigninDialog<>nil) then
+ begin
+  FSigninDialog.button:=1; //STATUS_USER_CANCELED
+  FSigninDialog.state :=1;
+  FSigninDialog.Hide;
+ end;
+end;
+
+function TDialogsManager.OnSigninDlgTerm(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_TERM
+begin
+ Result:=0;
+ FreeAndNil(FSigninDialog);
+end;
+
+function TDialogsManager.OnSigninDlgUpdate(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_UPDATE
+begin
+ Result:=-1;
+ if (FSigninDialog<>nil) then
+ begin
+  Result:=FSigninDialog.state;
+ end;
+end;
+
+function TDialogsManager.OnSigninDlgResult(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_RESULT
+begin
+ Result:=-1;
+ if (FSigninDialog<>nil) then
+ begin
+  Result:=FSigninDialog.button;
+ end;
+end;
+
 
 end.
 

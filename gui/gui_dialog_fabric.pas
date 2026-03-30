@@ -83,15 +83,12 @@ type
    FMsgMemo:TMemo;
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;
-  Destructor Destroy; override;
- end;
-
- TImeDialog=class(TDialogCustom)
   public
    state      :Byte;
    button     :Byte;
    FixedPos   :Boolean;
    Over2kCoord:Boolean;
+  Destructor Destroy; override;
  end;
 
 function NewDialogOpen(var Attributes:TDialogAttributes):TDialogCustom;
@@ -196,15 +193,13 @@ begin
  MsgPBar:=nil;
  MsgCncl:=nil;
 
+ MsgForm:=TDialogCustom.Create(nil);
+
  if (Attributes.Memo.Ime<>nil) then
  begin
-  MsgForm:=TImeDialog.Create(nil);
-  TImeDialog(MsgForm).state      :=1;
-  TImeDialog(MsgForm).FixedPos   :=Attributes.Memo.Ime^.FixedPos;
-  TImeDialog(MsgForm).Over2kCoord:=Attributes.Memo.Ime^.Over2kCoord;
- end else
- begin
-  MsgForm:=TDialogCustom.Create(nil);
+  MsgForm.state      :=1;
+  MsgForm.FixedPos   :=Attributes.Memo.Ime^.FixedPos;
+  MsgForm.Over2kCoord:=Attributes.Memo.Ime^.Over2kCoord;
  end;
 
  try

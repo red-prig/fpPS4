@@ -8,7 +8,6 @@ interface
 uses
  kern_mtx,
  subr_dynlib,
- kern_proc,
  sys_bootparam,
  host_ipc;
 
@@ -72,6 +71,10 @@ begin
  if (Result=-1) then
  begin
   Result:=SCE_ERROR_DIALOG_ERROR_SERVICE_BUSY;
+ end else
+ if (Result=-2) then
+ begin
+  Result:=SCE_ERROR_DIALOG_ERROR_INVALID_USER_ID;
  end else
  if (Result<0) then
  begin
