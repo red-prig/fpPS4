@@ -895,6 +895,8 @@ begin
 end;
 
 function ps4_sceImeDialogGetPanelPositionAndForm(posForm:pSceImePositionAndForm):Integer;
+var
+ Output:TIpcValue;
 begin
  Result:=SCE_IME_DIALOG_ERROR_NOT_IN_USE;
  if (g_dialog=nil) then Exit;
@@ -906,9 +908,15 @@ begin
    Result:=SCE_IME_ERROR_INVALID_ADDRESS;
    if (posForm<>nil) then
    begin
+    //
     if (g_dialog.state=dRUNNING) then
     begin
-     // TODO: 'IME_DIALOG_POS'
+     Result:=InvokeSync('IME_DIALOG_GETPOS',Output);
+     if (Result>=0) then
+     begin
+      Output.MoveTo(@g_dialog.data.PosAndForm,sizeof(g_dialog.data.PosAndForm));
+     end;
+     Output.Free;
     end;
     //
     posForm^.PanelType          :=g_dialog.data.PosAndForm.PanelType;

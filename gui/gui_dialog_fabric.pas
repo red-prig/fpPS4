@@ -85,11 +85,34 @@ type
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;
   public
-   state      :Byte;
-   button     :Byte;
+   state :Byte;
+   button:Byte;
+  Destructor Destroy; override;
+ end;
+
+ TImeDialog=class(TDialogCustom)
+  private
+   procedure SetInfo(Ime:PImeDialogAttributes);
+   procedure DoResize(Sender:TObject);
+   procedure DoMouseMoveEvent(Sender:TObject;Shift:TShiftState;X,Y:Integer);
+   procedure DoMouseDown(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
+   procedure DoMouseUp(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
+  public
    FixedPos   :Boolean;
    Over2kCoord:Boolean;
-  Destructor Destroy; override;
+   IsMoved    :Boolean;
+   hAlign     :TAnchorSideReference;
+   vAlign     :TAnchorSideReference;
+   Fposx      :Single;
+   Fposy      :Single;
+   Fwidth     :Single;
+   Fheight    :Single;
+   FLastMove  :TPoint;
+   //
+   function GetPosX:Single;
+   function GetPosY:Single;
+   function GetVirtualWidth:Single;
+   function GetVirtualHeight:Single;
  end;
 
 function NewDialogOpen(var Attributes:TDialogAttributes):TDialogCustom;
@@ -156,6 +179,155 @@ begin
  Result:=MsgBtnz;
 end;
 
+//
+
+procedure TImeDialog.SetInfo(Ime:PImeDialogAttributes);
+begin
+ state      :=1;
+ //
+ FixedPos   :=Ime^.FixedPos;
+ Over2kCoord:=Ime^.Over2kCoord;
+ hAlign     :=Ime^.hAlign;
+ vAlign     :=Ime^.vAlign;
+ Fposx      :=Ime^.posx;
+ Fposy      :=Ime^.posy;
+ Fwidth     :=Ime^.width;
+ Fheight    :=Ime^.height;
+ //
+
+ //reposition
+ case hAlign of
+  asrBottom:Fposx:=Fposx-Fwidth;
+  asrCenter:Fposx:=Fposx-(Fwidth/2);
+  else;
+ end;
+
+ //reposition
+ case vAlign of
+  asrBottom:Fposy:=Fposy-Fheight;
+  asrCenter:Fposy:=Fposy-(Fheight/2);
+  else;
+ end;
+
+ if (Fposx<0) then Fposx:=0;
+ if (Fposy<0) then Fposy:=0;
+
+ //fixup
+ if ((Fposx+Fwidth)>GetVirtualWidth) then
+ begin
+  Fposx:=GetVirtualWidth-Fwidth;
+ end;
+
+ //fixup
+ if ((Fposy+Fheight)>GetVirtualHeight) then
+ begin
+  Fposy:=GetVirtualHeight-Fheight;
+ end;
+
+ //
+ OnResize   :=@DoResize;
+ OnMouseDown:=@DoMouseDown;
+ OnMouseUp  :=@DoMouseUp;
+ OnMouseMove:=@DoMouseMoveEvent;
+end;
+
+function TImeDialog.GetPosX:Single;
+begin
+ Result:=Fposx;
+ case hAlign of
+  asrBottom:Result:=Result+Fwidth;
+  asrCenter:Result:=Result+(Fwidth/2);
+  else;
+ end;
+end;
+
+function TImeDialog.GetPosY:Single;
+begin
+ Result:=Fposy;
+ case vAlign of
+  asrBottom:Result:=Result+Fheight;
+  asrCenter:Result:=Result+(Fheight/2);
+  else;
+ end;
+end;
+
+function TImeDialog.GetVirtualWidth:Single;
+begin
+ if Over2kCoord then
+ begin
+  Result:=3840.0;
+ end else
+ begin
+  Result:=1920.0;
+ end;
+end;
+
+function TImeDialog.GetVirtualHeight:Single;
+begin
+ if Over2kCoord then
+ begin
+  Result:=2160.0;
+ end else
+ begin
+  Result:=1080.0;
+ end;
+end;
+
+procedure TImeDialog.DoResize(Sender:TObject);
+var
+ VRect:TRect;
+begin
+ //
+ VRect.Left  :=Trunc((Fposx  /GetVirtualWidth )*Parent.Width );
+ VRect.Top   :=Trunc((Fposy  /GetVirtualHeight)*Parent.Height);
+ VRect.Width :=Trunc((FWidth /GetVirtualWidth )*Parent.Width );
+ VRect.Height:=Trunc((FHeight/GetVirtualHeight)*Parent.Height);
+ //
+ BoundsRect:=VRect;
+end;
+
+procedure TImeDialog.DoMouseMoveEvent(Sender:TObject;Shift:TShiftState;X,Y:Integer);
+var
+ new,diff:TPoint;
+begin
+ if IsMoved then
+ begin
+  new:=Mouse.CursorPos;
+
+  diff:=new.Subtract(FLastMove);
+  FLastMove:=new;
+  //
+  new.X:=Left+diff.X;
+  new.Y:=Top +diff.Y;
+
+  if (new.X<0) then Exit;
+  if (new.Y<0) then Exit;
+
+  if (new.X+Width >Parent.Width ) then Exit;
+  if (new.Y+Height>Parent.Height) then Exit;
+
+  //
+  Fposx:=(new.X/Parent.Width )*GetVirtualWidth;
+  Fposy:=(new.Y/Parent.Height)*GetVirtualHeight;
+  Left :=new.X;
+  Top  :=new.Y;
+ end;
+end;
+
+procedure TImeDialog.DoMouseDown(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
+begin
+ if (not FixedPos) and (Btn=mbLeft) then
+ begin
+  FLastMove:=Mouse.CursorPos;
+  IsMoved:=True;
+ end;
+end;
+
+procedure TImeDialog.DoMouseUp(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
+begin
+ IsMoved:=False;
+end;
+
 function NewDialogOpen(var Attributes:TDialogAttributes):TDialogCustom;
 var
  AParent:TForm;
@@ -169,10 +341,6 @@ var
  MsgMemo:TMemo;
  MsgPBar:TProgressBar;
  MsgCncl:TSpeedButton;
-
- VirtualWidth :Single;
- VirtualHeight:Single;
- VRect        :TRect;
 
  //Top           [Caption - X]
  //Custom        [           ]
@@ -194,13 +362,14 @@ begin
  MsgPBar:=nil;
  MsgCncl:=nil;
 
- MsgForm:=TDialogCustom.Create(nil);
-
  if (Attributes.Memo.Ime<>nil) then
  begin
-  MsgForm.state      :=1;
-  MsgForm.FixedPos   :=Attributes.Memo.Ime^.FixedPos;
-  MsgForm.Over2kCoord:=Attributes.Memo.Ime^.Over2kCoord;
+  MsgForm:=TImeDialog.Create(nil);
+  //
+  TImeDialog(MsgForm).SetInfo(Attributes.Memo.Ime);
+ end else
+ begin
+  MsgForm:=TDialogCustom.Create(nil);
  end;
 
  try
@@ -219,55 +388,7 @@ begin
 
   if (Attributes.Memo.Ime<>nil) then
   begin
-   //TODO:Virtual window position adjustment and movement
    MsgForm.Anchors:=[];
-
-   if Attributes.Memo.Ime^.Over2kCoord then
-   begin
-    VirtualWidth :=3840.0;
-    VirtualHeight:=1920.0;
-   end else
-   begin
-    VirtualWidth :=2160.0;
-    VirtualHeight:=1080.0;
-   end;
-
-   VRect.Left  :=Trunc((Attributes.Memo.Ime^.posx  /VirtualWidth )*AParent.Width );
-   VRect.Top   :=Trunc((Attributes.Memo.Ime^.posy  /VirtualHeight)*AParent.Height);
-   VRect.Width :=Trunc((Attributes.Memo.Ime^.Width /VirtualWidth )*AParent.Width );
-   VRect.Height:=Trunc((Attributes.Memo.Ime^.Height/VirtualHeight)*AParent.Height);
-
-   //reposition
-   case Attributes.Memo.Ime^.hAlign of
-    asrBottom:VRect.SetLocation(VRect.Right        ,VRect.Top);
-    asrCenter:VRect.SetLocation(VRect.CenterPoint.X,VRect.Top);
-    else;
-   end;
-
-   //reposition
-   case Attributes.Memo.Ime^.vAlign of
-    asrBottom:VRect.SetLocation(VRect.Left,VRect.Bottom);
-    asrCenter:VRect.SetLocation(VRect.Left,VRect.CenterPoint.Y);
-    else;
-   end;
-
-   //fixup
-   if (VRect.Right>AParent.Width) then
-   begin
-    VRect.Offset(AParent.Width-VRect.Right,0);
-   end;
-
-   //fixup
-   if (VRect.Bottom>AParent.Height) then
-   begin
-    VRect.Offset(0,AParent.Height-VRect.Bottom);
-   end;
-
-   //
-   MsgForm.Left  :=VRect.Left  ;
-   MsgForm.Top   :=VRect.Top   ;
-   MsgForm.Width :=VRect.Width ;
-   MsgForm.Height:=VRect.Height;
   end;
 
   if Attributes.Caption.Enable or Attributes.CloseButton.Enable then
@@ -486,6 +607,22 @@ begin
   begin
    MsgBody.AnchorSide[akTop].Control:=MsgFTop;
    MsgBody.AnchorSide[akTop].Side   :=asrBottom;
+
+   if (Attributes.Memo.Ime<>nil) then
+   begin
+    MsgFTop.OnMouseDown:=@TImeDialog(MsgForm).DoMouseDown;
+    MsgFTop.OnMouseUp  :=@TImeDialog(MsgForm).DoMouseUp;
+    MsgFTop.OnMouseMove:=@TImeDialog(MsgForm).DoMouseMoveEvent;
+   end;
+
+   if (MsgCapt<>nil) then
+   if (Attributes.Memo.Ime<>nil) then
+   begin
+    MsgCapt.OnMouseDown:=@TImeDialog(MsgForm).DoMouseDown;
+    MsgCapt.OnMouseUp  :=@TImeDialog(MsgForm).DoMouseUp;
+    MsgCapt.OnMouseMove:=@TImeDialog(MsgForm).DoMouseMoveEvent;
+   end;
+
   end;
 
   if (MsgBtnz<>nil) then

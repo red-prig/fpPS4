@@ -52,6 +52,7 @@ type
   FSigninDialog:TDialogCustom;
   //
   function  get_caption_format:RawByteString;
+  procedure DoResize(Sender:TObject);
   function  OpenMainWindows:THandle;
   procedure CloseDialogs();
   Procedure CloseMainWindow();
@@ -84,6 +85,7 @@ type
   function  OnImeDlgResult (Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
   function  OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
   function  OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
+  function  OnImeDlgGetPos (Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
   //
   procedure OnSigninDlgClick(Sender:TObject);
   function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
@@ -143,6 +145,15 @@ begin
  Result:=Format('fpPS4 (%s) [%s%s%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
 end;
 
+procedure TDialogsManager.DoResize(Sender:TObject);
+begin
+ if (FImeDialog<>nil) then
+ if (FImeDialog.OnResize<>nil) then
+ begin
+  FImeDialog.OnResize(Sender);
+ end;
+end;
+
 function TDialogsManager.OpenMainWindows:THandle;
 const
  pd_Width=1280;
@@ -155,6 +166,7 @@ begin
  end;
 
  FMainForm:=TGameMainForm.CreateNew(nil);
+ FMainForm.OnResize:=@DoResize;
  FMainForm.ShowInTaskBar:=stAlways;
  FMainForm.DoubleBuffered:=False;
  FMainForm.ParentDoubleBuffered:=False;
@@ -231,7 +243,7 @@ begin
  Handler.AddCallback('IME_DIALOG_RESULT' ,@OnImeDlgResult);
  Handler.AddCallback('IME_DIALOG_GETTEXT',@OnImeDlgGetText);
  Handler.AddCallback('IME_DIALOG_SETTEXT',@OnImeDlgSetText);
-
+ Handler.AddCallback('IME_DIALOG_GETPOS' ,@OnImeDlgGetPos);
  //
  Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
  Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
@@ -1007,6 +1019,36 @@ begin
     FImeDialog.FMsgMemo.CaretPos:=CaretPos;
    end;
   end;
+ end;
+end;
+
+function TDialogsManager.OnImeDlgGetPos(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
+var
+ data:TImeDialogPosAndForm;
+
+ function GetAlign(Side:TAnchorSideReference):Byte; inline;
+ begin
+  Result:=0;
+  case Side of
+   asrTop   :Result:=0; // LEFT/TOP
+   asrCenter:Result:=1; // CENTER
+   asrBottom:Result:=2; // RIGHT/BOTTOM
+  end;
+ end;
+
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  data.PanelType          :=2;
+  data.horizontalAlignment:=GetAlign(TImeDialog(FImeDialog).hAlign);
+  data.verticalAlignment  :=GetAlign(TImeDialog(FImeDialog).vAlign);
+  data.posx               :=TImeDialog(FImeDialog).GetPosX;
+  data.posy               :=TImeDialog(FImeDialog).GetPosY;
+  data.width              :=Trunc(TImeDialog(FImeDialog).Fwidth);
+  data.height             :=Trunc(TImeDialog(FImeDialog).Fheight);
+  //
+  Result:=TIpcValue.New(@data,SizeOf(data));
  end;
 end;
 
