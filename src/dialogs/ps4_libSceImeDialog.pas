@@ -17,10 +17,16 @@ uses
 {$CALLING default}
 
 type
- TImeDialogResult=record
+ TImeDialogResult=packed record
   result   :Integer;
   endstatus:SceImeDialogEndStatus;
   inputText:array[0..2047] of WideChar;
+ end;
+
+ TImeDialogTextFilter=packed record
+  result    :Integer;
+  Text      :array[0..120] of WideChar;
+  TextLength:Integer;
  end;
 
  TImeDialogPosAndForm=record
@@ -68,7 +74,11 @@ type
  TImeDialogClient=class
   data             :TImeDialogOpen;
   output           :PWideChar;
-  filter           :SceImeTextFilter;
+  filter:record
+   addr:SceImeTextFilter;
+   src :TImeDialogTextFilter;
+   dst :TImeDialogTextFilter;
+  end;
   extKeyboardFilter:SceImeExtKeyboardFilter;
   state            :TImeDialogStatus;
  end;
@@ -606,7 +616,7 @@ begin
  g_dialog.data.ImeType            :=param^.ImeType            ;
  g_dialog.data.supportedLanguages :=param^.supportedLanguages ;
  g_dialog.data.enterLabel         :=param^.enterLabel         ;
- g_dialog.filter                  :=param^.filter             ;
+ g_dialog.filter.addr             :=param^.filter             ;
  g_dialog.data.option             :=param^.option             ;
  g_dialog.data.maxTextLength      :=param^.maxTextLength      ;
  //
@@ -701,7 +711,6 @@ begin
    g_dialog:=TImeDialogClient.Create;
    CopyParams(g_dialog,param,extended);
 
-   Assert(g_dialog.filter=nil,'TODO:filter');
    Assert(g_dialog.extKeyboardFilter=nil,'TODO:extKeyboardFilter');
 
    Result:=InvokeSync2('IME_DIALOG_OPEN',@g_dialog.data,sizeof(g_dialog.data));
@@ -769,7 +778,17 @@ end;
 
 //
 
+function ExecuteTextFilter(
+          addr:Pointer;
+          outText      :PWideChar;
+          outTextLength:PDWORD;
+          srcText      :PWideChar;
+          srcTextLength:DWORD
+         ):Integer; external name 'ExecuteGuest';
+
 function ps4_sceImeDialogGetStatus():Integer;
+var
+ Output:TIpcValue;
 begin
  Result:=SCE_IME_DIALOG_STATUS_NONE;
  if (g_dialog=nil) then Exit;
@@ -791,7 +810,35 @@ begin
      g_dialog.state:=sFINISHED;
      Result:=SCE_IME_DIALOG_STATUS_FINISHED;
     end;
-   end;
+
+    if (g_dialog.filter.addr<>nil) then
+    begin
+     FillChar(g_dialog.filter.src,sizeof(g_dialog.filter.src),0);
+     FillChar(g_dialog.filter.dst,sizeof(g_dialog.filter.dst),0);
+
+     g_dialog.filter.src.result:=InvokeSync('IME_DIALOG_GETTEXT',Output);
+     if (g_dialog.filter.src.result=0) then
+     begin
+      Output.MoveTo(@g_dialog.filter.src,sizeof(g_dialog.filter.src));
+      Output.Free;
+
+      g_dialog.filter.dst.result:=ExecuteTextFilter(
+        g_dialog.filter.addr,
+       @g_dialog.filter.dst.Text,
+       @g_dialog.filter.dst.TextLength,
+       @g_dialog.filter.src.Text,
+        g_dialog.filter.src.TextLength);
+
+      if (g_dialog.filter.dst.result=0) then
+      begin
+       InvokeSync2('IME_DIALOG_SETTEXT',@g_dialog.filter.dst,sizeof(g_dialog.filter.dst))
+      end;
+
+     end;
+
+    end; //filter
+
+   end; //state
 
   end;
 

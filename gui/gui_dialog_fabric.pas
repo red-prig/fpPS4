@@ -40,6 +40,7 @@ type
   Password   :Boolean;
   FixedPos   :Boolean;
   Over2kCoord:Boolean;
+  NumbersOnly:Boolean;
   hAlign     :TAnchorSideReference;
   vAlign     :TAnchorSideReference;
   MaxLength  :DWORD;
@@ -371,6 +372,7 @@ begin
     begin
      MsgMemo.PasswordChar:='*';
     end;
+    MsgMemo.NumbersOnly:=Attributes.Memo.Ime^.NumbersOnly;
     MsgMemo.MaxLength:=Attributes.Memo.Ime^.MaxLength;
    end;
    //

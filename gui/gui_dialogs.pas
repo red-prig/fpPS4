@@ -77,11 +77,13 @@ type
   function  OnErrDlgUpdate(Value:TIpcValue):TIpcValue; //ERR_DIALOG_UPDATE
   //
   procedure OnImeDialogClick(Sender:TObject);
-  function  OnImeDlgOpen  (Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
-  function  OnImeDlgTerm  (Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
-  function  OnImeDlgAbort (Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
-  function  OnImeDlgUpdate(Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
-  function  OnImeDlgResult(Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
+  function  OnImeDlgOpen   (Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
+  function  OnImeDlgTerm   (Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
+  function  OnImeDlgAbort  (Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
+  function  OnImeDlgUpdate (Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
+  function  OnImeDlgResult (Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
+  function  OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
+  function  OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
   //
   procedure OnSigninDlgClick(Sender:TObject);
   function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
@@ -222,11 +224,14 @@ begin
  Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
  Handler.AddCallback('ERR_DIALOG_UPDATE',@OnErrDlgUpdate);
  //
- Handler.AddCallback('IME_DIALOG_OPEN'  ,@OnImeDlgOpen);
- Handler.AddCallback('IME_DIALOG_TERM'  ,@OnImeDlgTerm);
- Handler.AddCallback('IME_DIALOG_ABORT' ,@OnImeDlgAbort);
- Handler.AddCallback('IME_DIALOG_UPDATE',@OnImeDlgUpdate);
- Handler.AddCallback('IME_DIALOG_RESULT',@OnImeDlgResult);
+ Handler.AddCallback('IME_DIALOG_OPEN'   ,@OnImeDlgOpen);
+ Handler.AddCallback('IME_DIALOG_TERM'   ,@OnImeDlgTerm);
+ Handler.AddCallback('IME_DIALOG_ABORT'  ,@OnImeDlgAbort);
+ Handler.AddCallback('IME_DIALOG_UPDATE' ,@OnImeDlgUpdate);
+ Handler.AddCallback('IME_DIALOG_RESULT' ,@OnImeDlgResult);
+ Handler.AddCallback('IME_DIALOG_GETTEXT',@OnImeDlgGetText);
+ Handler.AddCallback('IME_DIALOG_SETTEXT',@OnImeDlgSetText);
+
  //
  Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
  Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
@@ -898,6 +903,7 @@ begin
  Ime.Password   :=(data.option and     4)<>0;
  Ime.FixedPos   :=(data.option and   $40)<>0;
  Ime.Over2kCoord:=(data.option and $4000)<>0;
+ Ime.NumbersOnly:=(data.ImeType=4);
  Ime.hAlign     :=GetAnchor(data.PosAndForm.horizontalAlignment);
  Ime.vAlign     :=GetAnchor(data.PosAndForm.verticalAlignment);
  Ime.MaxLength  :=data.maxTextLength;
@@ -953,6 +959,54 @@ begin
   data.endstatus:=FImeDialog.button;
   data.inputText:=UTF8Decode(FImeDialog.FMsgMemo.Text);
   Result:=TIpcValue.New(@data,SizeOf(data));
+ end;
+end;
+
+function TDialogsManager.OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
+var
+ data:TImeDialogTextFilter;
+ w:WideString;
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  FillChar(data,SizeOf(data),0);
+  //
+  w:=UTF8Decode(FImeDialog.FMsgMemo.Text);
+  if (Length(w)>120) then SetLength(w,120);
+  //
+  data.Text      :=w;
+  data.TextLength:=Length(w);
+  Result:=TIpcValue.New(@data,SizeOf(data));
+ end;
+end;
+
+function TDialogsManager.OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
+var
+ data:TImeDialogTextFilter;
+ w:WideString;
+ s:RawByteString;
+ CaretPos:TPoint;
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  FillChar(data,SizeOf(data),0);
+  Value.MoveTo(@data,sizeof(data));
+  //
+  if (data.result=0) then
+  begin
+   if (data.TextLength>120) then data.TextLength:=120;
+   SetLength(w,data.TextLength);
+   Move(data.Text,w[1],data.TextLength*sizeof(WideChar));
+   s:=UTF8Encode(w);
+   if (s<>FImeDialog.FMsgMemo.Text) then
+   begin
+    CaretPos:=FImeDialog.FMsgMemo.CaretPos;
+    FImeDialog.FMsgMemo.Text:=s;
+    FImeDialog.FMsgMemo.CaretPos:=CaretPos;
+   end;
+  end;
  end;
 end;
 
