@@ -768,7 +768,7 @@ function ps4_sceImeOpen(param   :pSceImeParam;
                         extended:pSceImeParamExtended):Integer;
 begin
  Result:=0;
- Assert(False);
+ Assert(False,'TODO:sceImeOpen');
 end;
 
 function ps4_sceImeGetPanelSize(param   :pSceImeParam;

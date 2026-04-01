@@ -414,6 +414,7 @@ begin
 
  Writeln('sceMsgDialogOpen');
 
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
@@ -471,13 +472,9 @@ begin
      else;
    end;
 
-  end else
-  begin
-   Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
+   //reTFEla4NQw
+   Result:=g_client.Open('MSG_DIALOG_OPEN',@g_client.data,SizeOf(g_client.data));
   end;
-
-  //reTFEla4NQw
-  Result:=g_client.Open('MSG_DIALOG_OPEN',@g_client.data,SizeOf(g_client.data));
 
  mtx_unlock(g_MsgDialog_mtx);
  //
@@ -485,9 +482,9 @@ end;
 
 function ps4_sceMsgDialogClose():Integer;
 begin
- Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  Writeln('sceMsgDialogClose');
 
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
@@ -506,9 +503,9 @@ end;
 
 function ps4_sceMsgDialogTerminate():Integer;
 begin
- Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  Writeln('sceMsgDialogTerminate');
 
+ Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);
 
   if (g_client<>nil) then
