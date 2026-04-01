@@ -29,6 +29,7 @@ uses
 
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
+  ps4_libSceNpCommerce,
   ps4_libSceErrorDialog,
   ps4_libSceImeDialog,
   ps4_libSigninDialog;
@@ -71,6 +72,9 @@ type
   //
   procedure OnSaveDialogClick(Sender:TObject);
   function  OnSaveDialogOpen(Value:TIpcValue):TIpcValue; //SAVE_DIALOG_OPEN
+  //
+  procedure OnNpCommerceDialogClick(Sender:TObject);
+  function  OnNpCommerceDialogOpen(Value:TIpcValue):TIpcValue; //NPCOMMERCE_DIALOG_OPEN
   //
   procedure OnErrDlgClick(Sender:TObject);
   function  OnErrDlgOpen  (Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
@@ -226,11 +230,12 @@ end;
 
 procedure TDialogsManager.BindHandler(Handler:THostIpcHandler);
 begin
- Handler.AddCallback('CDLG_SET_MSG'    ,@OnCdlgSetMsg);
- Handler.AddCallback('CDLG_SET_VALUE'  ,@OnCdlgSetValue);
- Handler.AddCallback('CDLG_CLOSE'      ,@OnCdlgClose);
- Handler.AddCallback('MSG_DIALOG_OPEN' ,@OnMsgDialogOpen);
- Handler.AddCallback('SAVE_DIALOG_OPEN',@OnSaveDialogOpen);
+ Handler.AddCallback('CDLG_SET_MSG'          ,@OnCdlgSetMsg);
+ Handler.AddCallback('CDLG_SET_VALUE'        ,@OnCdlgSetValue);
+ Handler.AddCallback('CDLG_CLOSE'            ,@OnCdlgClose);
+ Handler.AddCallback('MSG_DIALOG_OPEN'       ,@OnMsgDialogOpen);
+ Handler.AddCallback('SAVE_DIALOG_OPEN'      ,@OnSaveDialogOpen);
+ Handler.AddCallback('NPCOMMERCE_DIALOG_OPEN',@OnNpCommerceDialogOpen);
  //
  Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
  Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
@@ -798,6 +803,73 @@ end;
 
 //
 
+procedure TDialogsManager.OnNpCommerceDialogClick(Sender:TObject);
+var
+ rzdata:TNpCommerceDialogResult;
+begin
+ FillChar(rzdata,SizeOf(rzdata),0);
+
+ case TDialogButtonId(TCustomButton(Sender).Tag) of
+  btnIdCancel   :rzdata.resultId:=1;
+  btnIdOkYesBtn1:rzdata.resultId:=2;
+  else;
+ end;
+
+ rzdata.authorized:=False; //PS Plus features
+
+ pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+
+ FreeAndNil(FCommonDialog);
+end;
+
+function  TDialogsManager.OnNpCommerceDialogOpen(Value:TIpcValue):TIpcValue; //NPCOMMERCE_DIALOG_OPEN
+var
+ data:TNpCommerceDialogOpen;
+ Attributes:TDialogAttributes;
+ i:Integer;
+begin
+ Result:=0;
+
+ Assert(FCommonDialog=nil);
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ Attributes.OnClick:=@OnNpCommerceDialogClick;
+
+ Attributes.Caption.Enable:=True;
+ case data.mode of
+  SCE_NP_COMMERCE_DIALOG_MODE_CATEGORY    :Attributes.Caption.Message:='CATEGORY';
+  SCE_NP_COMMERCE_DIALOG_MODE_PRODUCT     :Attributes.Caption.Message:='PRODUCT';
+  SCE_NP_COMMERCE_DIALOG_MODE_PRODUCT_CODE:Attributes.Caption.Message:='PRODUCT_CODE';
+  SCE_NP_COMMERCE_DIALOG_MODE_CHECKOUT    :Attributes.Caption.Message:='CHECKOUT';
+  SCE_NP_COMMERCE_DIALOG_MODE_DOWNLOADLIST:Attributes.Caption.Message:='DOWNLOADLIST';
+  SCE_NP_COMMERCE_DIALOG_MODE_PLUS        :Attributes.Caption.Message:='PLUS';
+ end;
+
+ Attributes.CloseButton.Enable:=True;
+ Attributes.CloseButton.btnId :=btnIdCancel;
+
+ Attributes.Buttons.Enable :=True;
+ Attributes.Buttons.BtnType:=btnPurchaseCancel;
+
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:='';
+
+ if (data.numTargets<>0) then
+ For i:=0 to data.numTargets-1 do
+ begin
+  if (i<>0) then
+   Attributes.Memo.Message:=Attributes.Memo.Message+#13#10;
+  Attributes.Memo.Message:=Attributes.Memo.Message+data.targets[i];
+ end;
+
+ NewDialogOpen(Attributes,FCommonDialog);
+end;
+
+//
+
 //
 function TDialogsManager.OnErrDlgOpen(Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
 var
@@ -1104,6 +1176,7 @@ begin
  Attributes.Caption.Message:='Sign in';
 
  Attributes.CloseButton.Enable:=True;
+ Attributes.CloseButton.btnId :=btnIdCancel;
 
  Attributes.Memo.Enable :=True;
  Attributes.Memo.Message:='Sign in to Network';

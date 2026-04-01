@@ -50,10 +50,10 @@ type
 
  TNpCommerceDialogOpen=record
   userId      :Integer;
-  mode        :SceNpCommerceDialogMode;
-  serviceLabel:DWORD;   //SceNpServiceLabel
+  mode        :Byte; //SceNpCommerceDialogMode
+  serviceLabel:Byte; //SceNpServiceLabel
+  numTargets  :Byte;
   targets     :array[0..9] of TNpCommerceTarget;
-  numTargets  :DWORD;
   features    :QWORD;
   userData    :Pointer;
  end;
@@ -61,7 +61,6 @@ type
  TNpCommerceDialogResult=record
   resultId  :Integer;
   authorized:Boolean;
-  userData  :Pointer;
  end;
 
  TNpCommerceDialogClient=class(TCommonDialogClient)
@@ -406,7 +405,7 @@ begin
 
     pResult^.result    :=rzdata.resultId;
     pResult^.authorized:=rzdata.authorized;
-    pResult^.userData  :=rzdata.userData;
+    pResult^.userData  :=g_client.data.userData;
 
     if (p_proc.p_sdk_version > $16fffff) then
     begin

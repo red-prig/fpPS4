@@ -25,7 +25,8 @@ type
   btnCancel,
   btnNoYes,
   btnCancelYes,
-  btn2Buttons
+  btn2Buttons,
+  btnPurchaseCancel
  );
 
  TDialogButtonId=(
@@ -595,6 +596,11 @@ begin
     begin
      MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&'+Attributes.Buttons.BtnMsg[0],ord(btnIdOkYesBtn1),Attributes.OnClick);
      MsgBtnz:=NewBtn(MsgForm,asrBottom,'&'+Attributes.Buttons.BtnMsg[1],ord(btnIdNoBtn2)   ,Attributes.OnClick);
+    end;
+   btnPurchaseCancel:
+    begin
+     MsgBtnz:=NewBtn(MsgForm,asrTop   ,'&Purchase',ord(btnIdOkYesBtn1),Attributes.OnClick);
+     MsgBtnz:=NewBtn(MsgForm,asrBottom,'&Cancel'  ,ord(btnIdCancel)   ,Attributes.OnClick);
     end;
    else;
   end;
