@@ -719,7 +719,6 @@ begin
  used_op[OPPnone,OPsetssbsy,OPSnone]:=True;
  used_op[OPPnone,OPsfence,OPSnone]:=True;
  used_op[OPPnone,OPsgdt,OPSnone]:=True;
- used_op[OPPnone,OPsha1rnds4,OPSnone]:=True;
  used_op[OPPnone,OPshl,OPSnone]:=True;
  used_op[OPPnone,OPshl,OPSx_d]:=True;
  used_op[OPPnone,OPshl,OPSx_x]:=True;

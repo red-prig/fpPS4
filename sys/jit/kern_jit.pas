@@ -1771,6 +1771,15 @@ begin
 
  jit_cbs[OPPnone,OPverr    ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPverw    ,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPsha1nexte  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha1msg1   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha1msg2   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha256rnds2,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha256msg1 ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha256msg2 ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsha1rnds4  ,OPSnone]:=@op_invalid;
+
 end;
 
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
