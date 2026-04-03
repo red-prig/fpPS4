@@ -1081,7 +1081,7 @@ var
   ),
   (//[204]
      sy_narg:2;
-     sy_call:nil;
+     sy_call:@sys_munlock;
      sy_name:'sys_munlock'
   ),
   (//[205]

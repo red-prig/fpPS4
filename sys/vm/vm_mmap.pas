@@ -12,6 +12,7 @@ uses
  vm_object;
 
 function sys_mlock(addr:Pointer;len:QWORD):Integer;
+function sys_munlock(addr:Pointer;len:QWORD):Integer;
 
 function sys_mmap(vaddr:Pointer;
                   vlen :QWORD;
@@ -98,7 +99,7 @@ begin
 
  map:=p_proc.p_vmspace;
 
- error:=vm_map_wire(map, start, _end, VM_MAP_WIRE_USER or VM_MAP_WIRE_NOHOLES);
+ error:=vm_map_wire(map, start, _end, VM_MAP_WIRE_USER);
 
  if (error=KERN_SUCCESS) then
  begin
@@ -107,6 +108,30 @@ begin
  begin
   Result:=ENOMEM;
  end;
+end;
+
+function sys_munlock(addr:Pointer;len:QWORD):Integer;
+var
+ _adr,_end,last,start,size:vm_offset_t;
+ map:vm_map_t;
+ error:Integer;
+begin
+ _adr :=vm_offset_t(addr);
+ size :=len;
+ last :=_adr + size;
+ start:=trunc_page(_adr);
+ _end :=round_page(last);
+
+ if (last < _adr) or (_end < _adr) then
+ begin
+  Exit(EINVAL);
+ end;
+
+ map:=p_proc.p_vmspace;
+
+ error:=vm_map_unwire(map, start, _end, VM_MAP_WIRE_USER);
+
+ Result:=vm_mmap_to_errno(error);
 end;
 
 function vm_mmap_cdev(objsize     :vm_size_t;

@@ -106,6 +106,7 @@ function  setrlimit(which:Integer;rlp:Pointer):Integer;
 function  _getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
 function  __sysctl(name:PInteger;namelen:DWORD;old:Pointer;oldlenp:PQWORD;new:Pointer;newlen:QWORD):Integer;
 function  mlock(addr:Pointer;len:QWORD):Integer;
+function  munlock(addr:Pointer;len:QWORD):Integer;
 function  futimes(fd:Integer;tptr:Pointer):Integer;
 function  getpgid(pid:Integer):Integer;
 function  poll(fds:Pointer;nfds:DWORD;timeout:Integer):Integer;
@@ -973,6 +974,13 @@ end;
 function mlock(addr:Pointer;len:QWORD):Integer; assembler; nostackframe;
 asm
  movq  $203,%rax
+ call  fast_syscall
+ jmp   cerror
+end;
+
+function munlock(addr:Pointer;len:QWORD):Integer; assembler; nostackframe;
+asm
+ movq  $204,%rax
  call  fast_syscall
  jmp   cerror
 end;
