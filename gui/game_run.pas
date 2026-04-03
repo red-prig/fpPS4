@@ -95,6 +95,7 @@ uses
  ps4_libSceNpSignaling,
  ps4_libSceNpSessionSignaling,
  ps4_libSceNpParty,
+ ps4_libSceNpEntitlementAccess,
  ps4_libSceRemoteplay,
  ps4_libSceScreenShot,
  ps4_libSceSaveData,
