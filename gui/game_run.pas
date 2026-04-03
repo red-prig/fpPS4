@@ -93,6 +93,7 @@ uses
  ps4_libSceNpSns,
  ps4_libSceNpMatching2,
  ps4_libSceNpSignaling,
+ ps4_libSceNpSessionSignaling,
  ps4_libSceNpParty,
  ps4_libSceRemoteplay,
  ps4_libSceScreenShot,
