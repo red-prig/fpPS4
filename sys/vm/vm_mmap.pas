@@ -70,6 +70,7 @@ uses
  kern_mtx,
  kern_descrip,
  kern_authinfo,
+ kern_budget,
  vmount,
  vstat,
  vfile,
@@ -799,7 +800,7 @@ begin
 
  fp:=nil;
 
- if ((flags and MAP_SANITIZER)<>0) {and (devkit_parameter(0)=0)} then
+ if ((flags and MAP_SANITIZER)<>0) {and (dipsw_parameter(0)=0)} then
  begin
   Exit(Pointer(EINVAL));
  end;
@@ -1523,8 +1524,56 @@ begin
 end;
 
 function sys_get_page_table_stats(vm_container,cpu_gpu:Integer;p_total,p_available:PInteger):Integer;
+var
+ total,available:Integer;
 begin
- Exit(ENOENT); //devkit_parameter(0)=0
+ Result:=ENOENT;
+
+ if (p_proc.p_sdk_version >= $5000000) {or (dipsw_parameter(0)<>0)} then
+ begin
+
+  if (vm_container=-1) then
+  begin
+   vm_container:=p_proc.p_vm_container;
+  end else
+  begin
+   //sceSblACMgrIsSystemUcred
+   Exit(EPERM);
+  end;
+
+  if (DWORD(vm_container) > 1) then
+  begin
+   Exit(EINVAL);
+  end;
+
+  case cpu_gpu of
+   1:begin
+      //cpu
+      total    :=$1800;
+      available:=$1800 - (vm_budget_used(PTYPE_BIG_APP,field_mlock) shr 21);
+     end;
+   2:begin
+      //gpu
+      total    :=$0a00;
+      available:=$0a00; //TODO: GPU counter
+     end;
+   else
+     Exit(EINVAL);
+  end;
+
+  if (suword32(PDWORD(p_total)^,total)<>0) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  if (suword32(PDWORD(p_available)^,available)<>0) then
+  begin
+   Exit(EFAULT);
+  end;
+
+  Result:=0;
+ end;
+
 end;
 
 function mirror_map(paddr:Pointer;psize:QWORD):Pointer;
