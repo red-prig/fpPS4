@@ -42,8 +42,8 @@ function md_memfd_open  (var hMem:THandle;hFile:THandle;maxprot:Byte):Integer;
 function md_memfd_close (hMem:THandle):Integer; inline;
 
 function md_protect (base:Pointer;size:QWORD;prot:Integer;hProcess:THandle=NtCurrentProcess):Integer;
-function md_dontneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
-function md_activate(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
+function md_dontneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_willneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 
 function md_mmap  (var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
 function md_unmap (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
@@ -405,7 +405,10 @@ begin
          );
 end;
 
-function md_dontneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
+function md_dontneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+var
+ range:MEMORY_RANGE_ENTRY;
+ MemoryPriority:ULONG;
 begin
  Result:=NtAllocateVirtualMemory(
           hProcess,
@@ -415,9 +418,25 @@ begin
           MEM_RESET,
           PAGE_NOACCESS
          );
+
+ if (Result=0) then
+ begin
+  range.VirtualAddress:=base;
+  range.NumberOfBytes :=size;
+  MemoryPriority      :=MEMORY_PRIORITY_LOWEST;
+  Result:=NtSetInformationVirtualMemory(
+           hProcess,
+           VmPagePriorityInformation,
+           1,
+           @range,
+           @MemoryPriority,
+           4
+          );
+ end;
+
 end;
 
-function md_activate(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
+function md_willneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 begin
  Result:=NtAllocateVirtualMemory(
           hProcess,

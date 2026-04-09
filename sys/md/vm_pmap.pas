@@ -7,7 +7,6 @@ interface
 
 uses
  subr_backtrace,
- mqueue,
  vm,
  vmparam,
  vm_object,
@@ -18,7 +17,8 @@ uses
  md_map,
  vm_pmap_prot,
  vm_tracking_map,
- vm_nt_map;
+ vm_nt_map,
+ vm_priv_map;
 
 const
  PMAPP_BLK_SHIFT =29;
@@ -37,20 +37,6 @@ var
   DEV_PTR :Pointer;
  end;
 
-type
- P_PRIV_FD=^T_PRIV_FD;
- T_PRIV_FD=record
-  elist:TAILQ_ENTRY;
-  efree:TAILQ_ENTRY;
-  obj  :vm_nt_file_obj;
-  size :DWORD;
-  pos  :DWORD;
- end;
-
-var
- PRIV_FD_LIST:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD_LIST.tqh_first);
- PRIV_FD_FREE:TAILQ_HEAD=(tqh_first:nil;tqh_last:@PRIV_FD_FREE.tqh_first);
-
 function  uplift(addr:Pointer):Pointer;
 procedure iov_uplift(iov:p_iovec);
 
@@ -63,6 +49,7 @@ type
   nt_map:t_vm_nt_map;
   gp_map:t_vm_nt_map;
   tr_map:t_vm_track_map;
+  priv_p:t_vm_priv_pool;
  end;
 
  pmap_t=p_pmap;
@@ -328,6 +315,8 @@ begin
  vm_track_map_init(@pmap^.tr_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,vm_map);
 
  pmap^.tr_map.pmap:=pmap;
+
+ vm_priv_pool_init(@pmap^.priv_p);
 end;
 
 type
@@ -339,153 +328,28 @@ type
   olocal:QWORD;
  end;
 
-function get_priv_block_count:Integer;
+procedure get_priv_fd(pmap:pmap_t;var info:t_fd_info);
 var
- node:P_PRIV_FD;
-begin
- Result:=0;
- node:=TAILQ_FIRST(@PRIV_FD_LIST);
- While (node<>nil) do
- begin
-  Inc(Result);
-  node:=TAILQ_NEXT(node,@node^.elist);
- end;
-end;
-
-function get_priv_free_count:Integer;
-var
- node:P_PRIV_FD;
-begin
- Result:=0;
- node:=TAILQ_FIRST(@PRIV_FD_FREE);
- While (node<>nil) do
- begin
-  Inc(Result);
-  node:=TAILQ_NEXT(node,@node^.efree);
- end;
-end;
-
-procedure insert_to_free_list(node:P_PRIV_FD); inline;
-begin
- if (node^.efree.tqe_next=nil) and
-    (node^.efree.tqe_prev=nil) then
- begin
-  TAILQ_INSERT_TAIL(@PRIV_FD_FREE,node,@node^.efree);
- end;
-end;
-
-procedure delete_from_free_list(node:P_PRIV_FD); inline;
-begin
- if (node^.efree.tqe_next<>nil) or
-    (node^.efree.tqe_prev<>nil) then
- begin
-  TAILQ_REMOVE(@PRIV_FD_FREE,node,@node^.efree);
-  node^.efree:=Default(TAILQ_ENTRY);
- end;
-end;
-
-procedure on_free_priv(obj:p_vm_nt_file_obj);
-var
- node:P_PRIV_FD;
-begin
- node:=POINTER(PTRUINT(obj)-PTRUINT(@P_PRIV_FD(nil)^.obj));
-
- delete_from_free_list(node);
-
- TAILQ_REMOVE(@PRIV_FD_LIST,node,@node^.elist);
-
- FreeMem(node);
-end;
-
-function find_from_free_priv(size:DWORD):P_PRIV_FD;
-var
- node:P_PRIV_FD;
-begin
- Result:=nil;
- node:=TAILQ_FIRST(@PRIV_FD_FREE);
- While (node<>nil) do
- begin
-  if ((node^.size-node^.pos)>=size) then
-  begin
-   Exit(node);
-  end;
-  //
-  node:=TAILQ_NEXT(node,@node^.efree);
- end;
-end;
-
-procedure get_priv_fd(var info:t_fd_info);
-const
- MAX_PRIV_SIZE=256*1024*1024;
-var
- node  :P_PRIV_FD;
  size  :QWORD;
- offset:QWORD;
  R     :DWORD;
+ palloc:t_vm_priv_alloc;
 begin
- //Find empty space or create new one (do not reuse old ones) no more than 256MB
-
  size:=(info.__end-info.start);
 
- if (size<MAX_PRIV_SIZE) then
+ R:=vm_priv_pool_alloc(@pmap^.priv_p,size,@palloc);
+ if (R<>0) then
  begin
-  node:=find_from_free_priv(size);
- end else
- begin
-  node:=nil;
+  Writeln('failed vm_priv_pool_alloc(',HexStr(size,11),'):0x',HexStr(r,8));
+  Writeln(' priv_stat=',pmap^.priv_p.size,':',pmap^.priv_p.invm);
+
+  print_backtrace_td(stderr);
+
+  Assert(false,'get_priv_fd');
  end;
 
- if (node<>nil) then
- begin
-  //linear alloc
-  offset:=node^.pos;
-  node^.pos:=node^.pos+size;
-
-  if (node^.pos=node^.size) then
-  begin
-   //delete from free list
-   delete_from_free_list(node);
-  end;
-
- end else
- begin
-  //trunc size
-  if (size>MAX_PRIV_SIZE) then size:=MAX_PRIV_SIZE;
-  offset:=0;
-
-  //new block
-  node:=AllocMem(SizeOf(T_PRIV_FD));
-  node^.obj.free :=@on_free_priv;
-  node^.obj.flags:=NT_FILE_FREE;
-  node^.obj.maxp :=VM_RW;
-  node^.size     :=MAX_PRIV_SIZE;
-  node^.pos      :=size; //prealloc
-
-  //insert to list
-  TAILQ_INSERT_TAIL(@PRIV_FD_LIST,node,@node^.elist);
-
-  if (node^.pos<>node^.size) then
-  begin
-   //insert with free list
-   insert_to_free_list(node);
-  end;
-
-  R:=md_memfd_create(node^.obj.hfile,MAX_PRIV_SIZE,VM_RW);
-
-  if (R<>0) then
-  begin
-   Writeln('failed md_memfd_create(',HexStr(MAX_PRIV_SIZE,11),'):0x',HexStr(r,8));
-   Writeln(' priv_block_count=',get_priv_block_count,':',get_priv_free_count);
-
-   print_backtrace_td(stderr);
-
-   Assert(false,'get_priv_fd');
-  end;
- end;
-
- info.obj   :=@node^.obj;
- info.olocal:=offset;          //block local offset
- info.__end :=info.start+size; //apply size
+ info.obj   :=palloc.obj;
+ info.olocal:=palloc.start;           //block local offset
+ info.__end :=info.start+palloc.size; //apply size
 
  vm_nt_file_obj_reference(info.obj);
 end;
@@ -884,7 +748,7 @@ begin
 
       while (info.start<>info.__end) do
       begin
-       get_priv_fd(info);
+       get_priv_fd(pmap,info);
 
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
@@ -924,12 +788,6 @@ begin
          Assert(false,'pmap_enter_object');
         end;
        end;
-
-       //fill zero if needed
-       vm_nt_map_madvise(@pmap^.nt_map,
-                         info.start,
-                         info.__end,
-                         MADV_NORMAL);
 
        info.start :=info.start+delta;
        info.__end :=__end;
@@ -1127,7 +985,7 @@ begin
 
       while (info.start<>info.__end) do
       begin
-       get_priv_fd(info);
+       get_priv_fd(pmap,info);
 
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
@@ -1167,12 +1025,6 @@ begin
          Assert(false,'pmap_enter_object');
         end;
        end;
-
-       //restore
-       vm_nt_map_madvise(@pmap^.nt_map,
-                         info.start,
-                         info.__end,
-                         MADV_WILLNEED);
 
        //copy
        pmap_copy(cow,
@@ -1736,12 +1588,6 @@ begin
 
   OBJT_DEFAULT:
     begin
-
-     //Disable page caching in swap file
-     vm_nt_map_madvise(@pmap^.nt_map,
-                       start,
-                       __end,
-                       MADV_FREE);
 
      _default:
 

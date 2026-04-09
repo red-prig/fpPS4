@@ -751,7 +751,8 @@ begin
   FixSidebandOutput(uiInstance,uiFlags,pSidebandOutput,szSidebandOutputSize);
  end;
 
- FillChar(pDataOutput^,szDataOutputSize,0);
+ //FillChar(pDataOutput^,szDataOutputSize,0);
+
 end;
 
 function ps4_sceAjmBatchJobRunSplitBufferRa(

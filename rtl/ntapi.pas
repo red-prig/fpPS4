@@ -290,6 +290,24 @@ const
  PsAttributeTebAddress   =4;
  PsAttributeMemoryReserve=7;
 
+ VmPrefetchInformation                  = 0;
+ VmPagePriorityInformation              = 1;
+ VmCfgCallTargetInformation             = 2;
+ VmPageDirtyStateInformation            = 3;
+ VmImageHotPatchInformation             = 4;
+ VmPhysicalContiguityInformation        = 5;
+ VmVirtualMachinePrepopulateInformation = 6;
+ VmRemoveFromWorkingSetInformation      = 7;
+
+ MEMORY_PRIORITY_LOWEST      =0;
+ MEMORY_PRIORITY_VERY_LOW    =1;
+ MEMORY_PRIORITY_LOW         =2;
+ MEMORY_PRIORITY_MEDIUM      =3;
+ MEMORY_PRIORITY_BELOW_NORMAL=4;
+ MEMORY_PRIORITY_NORMAL      =5;
+ MEMORY_PRIORITY_ABOVE_NORMAL=6;
+ MEMORY_PRIORITY_HIGH        =7;
+
 type
  PIO_STATUS_BLOCK=^IO_STATUS_BLOCK;
  IO_STATUS_BLOCK=packed record
@@ -724,6 +742,12 @@ type
  PS_MEMORY_RESERVE=packed record
   ReserveAddress:Pointer;
   ReserveSize   :ULONG_PTR;
+ end;
+
+ PMEMORY_RANGE_ENTRY=^MEMORY_RANGE_ENTRY;
+ MEMORY_RANGE_ENTRY=packed record
+  VirtualAddress:Pointer;
+  NumberOfBytes :QWORD;
  end;
 
 function NtClose(Handle:THandle):DWORD; stdcall; external 'ntdll';
@@ -1317,6 +1341,15 @@ function NtQueryVirtualMemory(
           Buffer                :Pointer;
           Length                :ULONG_PTR;
           ResultLength          :PULONG_PTR
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtSetInformationVirtualMemory(
+          ProcessHandle      :THandle;
+          VmInformationClass :DWORD;
+          NumberOfEntries    :QWORD;
+          VirtualAddresses   :PMEMORY_RANGE_ENTRY;
+          VmInformation      :Pointer;
+          VmInformationLength:ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 //

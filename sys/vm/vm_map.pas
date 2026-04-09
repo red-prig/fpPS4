@@ -1215,7 +1215,7 @@ begin
  if (Result=KERN_SUCCESS) then
  begin
 
-  if ((obj=nil) and (max=0) and (prot=0)) or
+  if ((max=0) and (prot=0)) or
      BLOCKPOOL then
   begin
    //reserved or blockpool

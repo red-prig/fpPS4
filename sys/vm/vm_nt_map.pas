@@ -44,11 +44,14 @@ type
  pp_vm_nt_file_obj=^p_vm_nt_file_obj;
  p_vm_nt_file_obj=^vm_nt_file_obj;
 
- t_nt_obj_free_cb=procedure(obj:p_vm_nt_file_obj);
+ t_nt_obj_free_cb =procedure(obj:p_vm_nt_file_obj);
+ t_nt_obj_mmmap_cb=procedure(obj:p_vm_nt_file_obj;start,offset,size:QWORD);
 
  vm_nt_file_obj=packed record
   hfile:THandle;
   free :t_nt_obj_free_cb;
+  mmmap:t_nt_obj_mmmap_cb;
+  unmap:t_nt_obj_mmmap_cb;
   refs :QWORD;
   flags:Byte;
   maxp :Byte;
@@ -195,7 +198,7 @@ end;
 procedure vm_nt_file_obj_destroy(obj:p_vm_nt_file_obj);
 var
  r:Integer;
- free :t_nt_obj_free_cb;
+ free:t_nt_obj_free_cb;
 begin
  if ((obj^.flags and NT_FILE_FREE)<>0) then
  if (obj^.hfile<>0) then
@@ -316,6 +319,11 @@ begin
     Writeln('failed md_placeholder_commit(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
+  end;
+
+  if (entry^.obj^.mmmap<>nil) then
+  begin
+   entry^.obj^.mmmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
   end;
 
   if ((prot and VM_RW)<>(max and VM_RW)) then
@@ -603,18 +611,30 @@ procedure vm_unmap(map:p_vm_nt_map;entry:p_vm_nt_entry);
 var
  start:vm_offset_t;
  __end:vm_offset_t;
+ size :vm_size_t;
  r:Integer;
 begin
  if (entry^.obj<>nil) then
- if (entry^.obj^.hfile<>0) then
  begin
-  r:=md_placeholder_decommit(Pointer(entry^.start),(entry^.__end-entry^.start));
-  if (r<>0) then
+
+  if (entry^.obj^.unmap<>nil) then
   begin
-   Writeln('failed md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
-   Assert(false,'vm_unmap');
+   entry^.obj^.unmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
   end;
-  //Writeln('md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+
+  if (entry^.obj^.hfile<>0) then
+  begin
+   size:=(entry^.__end-entry^.start);
+
+   r:=md_placeholder_decommit(Pointer(entry^.start),size);
+   if (r<>0) then
+   begin
+    Writeln('failed md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+    Assert(false,'vm_unmap');
+   end;
+   //Writeln('md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+  end;
+
  end;
 
  vm_get_space(map,entry,start,__end);
@@ -1390,29 +1410,6 @@ begin
  vm_nt_map_unlock(map);
 end;
 
-//rdi, rsi
-procedure ZeroPages(addr:Pointer;size:Ptruint); assembler nostackframe SysV_ABI_CDecl;
-label
- _exit,
- _rep;
-asm
- shr $5, %rsi // div 32
- jz _exit
-
-  vpxor %ymm0, %ymm0, %ymm0 //zero
-
-  _rep:
-
-   vmovaps %ymm0, (%rdi)
-
-   lea 32(%rdi),%rdi
-   dec %rsi
-
-  jnz _rep
-
- _exit:
-end;
-
 procedure vm_nt_map_madvise(map   :p_vm_nt_map;
                             start :vm_offset_t;
                             __end :vm_offset_t;
@@ -1452,24 +1449,11 @@ begin
   size:=size-base;
 
   case advise of
-   MADV_WILLNEED:md_activate(Pointer(base),size);
+   MADV_WILLNEED:md_willneed(Pointer(base),size);
    //
    MADV_DONTNEED:md_dontneed(Pointer(base),size);
    MADV_FREE    :md_dontneed(Pointer(base),size);
    //
-   MADV_NORMAL: //internal only
-    if (md_activate(Pointer(base),size)=0) then
-    begin
-     //page is restored, zero it
-
-     mirror:=vm_nt_map_mirror(map,base,base+size);
-     if (mirror<>nil) then
-     begin
-      ZeroPages           (mirror,size);
-      md_placeholder_unmap(mirror,size);
-     end;
-
-    end;
    else;
   end;
 

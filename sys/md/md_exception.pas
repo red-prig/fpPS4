@@ -330,6 +330,9 @@ begin
     begin
      instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
 
+     //Checking for memory splitting and remapping.
+     //An exception can occur after the danger zone has been canceled,
+     //so need to check the memory protect next
      if pmap_danger_zone(vm_map_t(p_proc.p_vmspace)^.pmap,
                          get_pageflt_addr(p),
                          instr.mema_size
@@ -344,6 +347,9 @@ begin
          if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_READ)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_READ');
+
+          //
+          Exit(EXCEPTION_CONTINUE_EXECUTION);
          end;
         end;
       VM_PROT_WRITE:
