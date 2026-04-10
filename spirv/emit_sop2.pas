@@ -26,6 +26,7 @@ type
   procedure emit_S_MUL_I32;
   procedure OpISccNotZero(src:TsrRegNode);
   procedure OpISccNotZero2(src0,src1:TsrRegNode);
+  procedure OpISccNotZero64(src:TsrRegNode);
   procedure emit_S_SH(OpId:DWORD;rtype:TsrDataType);
   procedure emit_S_AND_B32;
   procedure emit_S_AND_B64;
@@ -37,6 +38,7 @@ type
   procedure emit_S_ORN2_B64;
   procedure emit_S_NAND_B64;
   procedure emit_S_NOR_B64;
+  procedure emit_S_LSHL_B64;
   procedure emit_S_CSELECT_B32;
   procedure emit_S_CSELECT_B64;
   procedure emit_S_BFE_U32;
@@ -213,6 +215,15 @@ begin
 
   OpLogicalOr(get_scc,src0,src1); //implict cast (int != 0)
  end;
+end;
+
+procedure TEmit_SOP2.OpISccNotZero64(src:TsrRegNode);
+Var
+ src0:TsrRegNode;
+begin
+ src0:=NewImm_q(src.dtype,0,line);
+
+ Op2(Op.OpINotEqual,dtBool,get_scc,src,src0);
 end;
 
 procedure TEmit_SOP2.emit_S_SH(OpId:DWORD;rtype:TsrDataType);
@@ -423,6 +434,31 @@ begin
  OpISccNotZero2(src2[0],src2[1]); //implict cast (int != 0)
 end;
 
+procedure TEmit_SOP2.emit_S_LSHL_B64; //sdst[2].du = (ssrc0[2].du << ssrc1[5:0].du); SCC = (sdst[2].du != 0)
+Var
+ dst:array[0..1] of PsrRegSlot;
+ rsl:PsrRegSlot;
+ src0,src1,sdst64:TsrRegNode;
+begin
+ if not get_sdst7_pair(FSPI.SOP2.SDST,@dst) then Assert(False);
+
+ src0:=fetch_ssrc9_64(FSPI.SOP2.SSRC0,dtUInt64);
+ src1:=fetch_ssrc9   (FSPI.SOP2.SSRC1,dtUInt32);
+
+ src1:=OpAndTo(src1,63);
+ src1.PrepType(ord(dtUInt32));
+
+ rsl:=@RegsStory.FUnattach;
+
+ Op2(Op.OpShiftLeftLogical,dtUInt64,rsl,src0,src1);
+
+ sdst64:=rsl^.current;
+
+ MakeCopy64(dst[0],dst[1],sdst64);
+
+ OpISccNotZero64(sdst64); //SCC = (sdst[2].u != 0)
+end;
+
 procedure TEmit_SOP2.emit_S_CSELECT_B32; //sdst = SCC ? ssrc0 : ssrc1
 Var
  dst:PsrRegSlot;
@@ -570,6 +606,8 @@ begin
   S_NAND_B64: emit_S_NAND_B64;
 
   S_NOR_B64: emit_S_NOR_B64;
+
+  S_LSHL_B64: emit_S_LSHL_B64;
 
   S_CSELECT_B32: emit_S_CSELECT_B32;
   S_CSELECT_B64: emit_S_CSELECT_B64;
