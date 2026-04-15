@@ -27,7 +27,7 @@ const
  UMA_ZONE_STATIC     =$0004; { Statically sized zone }
  UMA_ZONE_OFFPAGE    =$0008; { Force the slab structure allocation
                                off of the real memory }
- UMA_ZONE_MALLOC     =$0010; { For use by malloc(9) only! }
+ //UMA_ZONE_MALLOC     =$0010; { For use by malloc(9) only! }
  UMA_ZONE_NOFREE     =$0020; { Do not free slabs of this type! }
  UMA_ZONE_MTXCLASS   =$0040; { Create a new lock class }
  UMA_ZONE_VM         =$0080; {
@@ -39,21 +39,21 @@ const
                                information in the vm_page.
                               }
  UMA_ZONE_SECONDARY  =$0200; { Zone is a Secondary Zone }
- UMA_ZONE_REFCNT     =$0400; { Allocate refcnts in slabs }
+ {UMA_ZONE_REFCNT     =$0400;} { Allocate refcnts in slabs }
  UMA_ZONE_MAXBUCKET  =$0800; { Use largest buckets }
- UMA_ZONE_CACHESPREAD=$1000; {
+ {UMA_ZONE_CACHESPREAD=$1000;} {
                                Spread memory start locations across
                                all possible cache lines.  May
                                require many virtually contiguous
                                backend pages and can fail early.
                               }
- UMA_ZONE_VTOSLAB    =$2000; { Zone uses vtoslab for lookup. }
+ {UMA_ZONE_VTOSLAB    =$2000;} { Zone uses vtoslab for lookup. }
  UMA_ZONE_NODUMP     =$4000; {
                                Zone's pages will not be included in
                                mini-dumps.
                               }
 
- UMA_ZONE_INHERIT=(UMA_ZONE_OFFPAGE or UMA_ZONE_MALLOC or  UMA_ZONE_HASH or UMA_ZONE_REFCNT or UMA_ZONE_VTOSLAB);
+ UMA_ZONE_INHERIT=(UMA_ZONE_OFFPAGE {or UMA_ZONE_MALLOC} or  UMA_ZONE_HASH {or UMA_ZONE_REFCNT} {or UMA_ZONE_VTOSLAB});
 
  UMA_ALIGN_PTR  =(sizeof(Pointer) - 1);
  UMA_ALIGN_LONG =(sizeof(DWORD) - 1);
@@ -131,15 +131,9 @@ type
 //uma_int
 
 const
- UMA_SLAB_SIZE =MD_ALLOC_GRANULARITY;           // How big are our slabs?
- UMA_SLAB_MASK =(MD_ALLOC_GRANULARITY - 1);     // Mask to get back to the page
- UMA_SLAB_SHIFT=BsfQWORD(MD_ALLOC_GRANULARITY); // Number of bits PAGE_MASK
-
- {$IF UMA_SLAB_SIZE>MD_PAGE_SIZE}
-  UMA_SUB_PAGES=((UMA_SLAB_SIZE div UMA_SMALLEST_UNIT)+254) div 255;
- {$ELSE}
-  UMA_SUB_PAGES=1;
- {$ENDIF}
+ UMA_SLAB_SIZE =MD_PAGE_SIZE;           // How big are our slabs?
+ UMA_SLAB_MASK =(MD_PAGE_SIZE - 1);     // Mask to get back to the page
+ UMA_SLAB_SHIFT=BsfQWORD(MD_PAGE_SIZE); // Number of bits PAGE_MASK
 
  UMA_BOOT_PAGES_CONST=64 div (UMA_SLAB_SIZE div MD_PAGE_SIZE); // Pages allocated for startup
 
@@ -216,25 +210,11 @@ type
   uk_pgoff:WORD;  // Offset to uma_slab struct
   uk_ppera:WORD;  // pages per allocation from backend
   uk_ipers:WORD;  // Items per slab
-  {$IF UMA_SUB_PAGES>1}
-  uk_ssubc:Byte;  // sub pages count
-  uk_isubl:Byte;  // Items in last sub page
-  {$ENDIF}
   uk_flags:DWORD; // Internal flags
  end;
  uma_keg_t=^uma_keg;
 
-const
- us_word_bitsize=8;
-
 type
- us_word=Byte;
-
- us_free_info=packed record
-  ui_count:us_word; // How many are free?
-  ui_first:us_word; // First free item index
- end;
-
  // Page management structure
 
  // Sorry for the union, but space efficiency is important
@@ -248,11 +228,12 @@ type
   us_hlink:SLIST_ENTRY; // (uma_slab) Link for hash table
   us_data     :pbyte;   // First item
   us_flags    :Byte;    // Page flags see uma.h
-  us_free     :array[0..UMA_SUB_PAGES-1] of us_free_info;
+  us_freecount:Byte;    // How many are free?
+  us_firstfree:Byte;    // First free item index
  end;
 
  t_us_freelist_uma_slab=packed record
-  us_item:us_word;
+  us_item:Byte;
  end;
 
  // The standard slab structure
@@ -266,37 +247,15 @@ type
   property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
   property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
   property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
+  property us_freecount:Byte        read us_head.us_freecount      write us_head.us_freecount    ;
+  property us_firstfree:Byte        read us_head.us_firstfree      write us_head.us_firstfree    ;
   //
  end;
 
- {
-   The slab structure for UMA_ZONE_REFCNT zones for whose items we
-   maintain reference counters in the slab for.
- }
-
- t_us_freelist_uma_slab_refcnt=bitpacked record
-  us_item  :us_word;
-  us_refcnt:0..(1 shl (32-us_word_bitsize))-1;
- end;
-
- uma_slab_refcnt=packed object
-  us_head    :uma_slab_head; // slab header data
-  us_freelist:array[0..0] of t_us_freelist_uma_slab_refcnt; //actual number bigger
-  //
-  property us_keg      :uma_keg_t   read us_head.us_keg            write us_head.us_keg          ;
-  property us_link     :LIST_ENTRY  read us_head.us_type._us_link  write us_head.us_type._us_link;
-  property us_size     :QWORD       read us_head.us_type._us_size  write us_head.us_type._us_size;
-  property us_hlink    :SLIST_ENTRY read us_head.us_hlink          write us_head.us_hlink        ;
-  property us_data     :pbyte       read us_head.us_data           write us_head.us_data         ;
-  property us_flags    :Byte        read us_head.us_flags          write us_head.us_flags        ;
- end;
-
- uma_slab_t      =^uma_slab;
- uma_slabrefcnt_t=^uma_slab_refcnt;
+ uma_slab_t=^uma_slab;
 
 const
- UMA_FRITM_SZ   =(sizeof(uma_slab)        - sizeof(uma_slab_head));
- UMA_FRITMREF_SZ=(sizeof(uma_slab_refcnt) - sizeof(uma_slab_head));
+ UMA_FRITM_SZ =(sizeof(uma_slab) - sizeof(uma_slab_head));
 
 type
  uma_klink=record
@@ -392,8 +351,6 @@ procedure uma_zfree     (zone:uma_zone_t;item:Pointer); inline;
 procedure uma_reclaim(); external;
 procedure uma_set_align(align:Integer); external;
 
-//int uma_zone_set_obj(uma_zone_t zone, struct vm_object *obj, int size);
-
 function uma_zone_set_max(zone:uma_zone_t;nitems:Integer):Integer; external;
 function uma_zone_get_max(zone:uma_zone_t):Integer; external;
 function uma_zone_get_cur(zone:uma_zone_t):Integer; external;
@@ -408,7 +365,6 @@ procedure uma_zone_set_allocf(zone:uma_zone_t;allocf:uma_alloc); external;
 procedure uma_zone_set_freef(zone:uma_zone_t;freef:uma_free); external;
 
 procedure uma_prealloc(zone:uma_zone_t;items:Integer); external;
-//u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item);
 
 function uma_zone_exhausted(zone:uma_zone_t):Integer; external;
 function uma_zone_exhausted_nolock(zone:uma_zone_t):Integer; external;
