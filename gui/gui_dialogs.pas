@@ -32,6 +32,7 @@ uses
   ps4_libSceNpCommerce,
   ps4_libSceErrorDialog,
   ps4_libSceImeDialog,
+  ps4_libSceIme,
   ps4_libSigninDialog;
 
 type
@@ -90,6 +91,8 @@ type
   function  OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
   function  OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
   function  OnImeDlgGetPos (Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
+  //
+  function  OnImeOpen      (Value:TIpcValue):TIpcValue; //IME_OPEN
   //
   procedure OnSigninDlgClick(Sender:TObject);
   function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
@@ -193,7 +196,9 @@ end;
 procedure TDialogsManager.CloseDialogs();
 begin
  FreeAndNil(FCommonDialog);
- FreeAndNil(FErrorDialog);
+ FreeAndNil(FErrorDialog );
+ FreeAndNil(FImeDialog   );
+ FreeAndNil(FSigninDialog);
 end;
 
 Procedure TDialogsManager.CloseMainWindow();
@@ -249,6 +254,8 @@ begin
  Handler.AddCallback('IME_DIALOG_GETTEXT',@OnImeDlgGetText);
  Handler.AddCallback('IME_DIALOG_SETTEXT',@OnImeDlgSetText);
  Handler.AddCallback('IME_DIALOG_GETPOS' ,@OnImeDlgGetPos);
+ //
+ Handler.AddCallback('IME_OPEN'          ,@OnImeOpen);
  //
  Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
  Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
@@ -1048,7 +1055,7 @@ end;
 
 function TDialogsManager.OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
 var
- data:TImeDialogTextFilter;
+ data:TImeDialogTextToFilter;
  w:WideString;
 begin
  Result:=-1;
@@ -1067,7 +1074,7 @@ end;
 
 function TDialogsManager.OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
 var
- data:TImeDialogTextFilter;
+ data:TImeDialogTextToFilter;
  w:WideString;
  s:RawByteString;
  CaretPos:TPoint;
@@ -1122,6 +1129,68 @@ begin
   //
   Result:=TIpcValue.New(@data,SizeOf(data));
  end;
+end;
+
+////
+
+function TDialogsManager.OnImeOpen(Value:TIpcValue):TIpcValue; //IME_OPEN
+var
+ data:TImeOpen;
+ Attributes:TDialogAttributes;
+ Ime:TImeDialogAttributes;
+
+ function GetAnchor(Align:Byte):TAnchorSideReference; inline;
+ begin
+  Result:=asrTop;
+  case Align of
+   0:Result:=asrTop;    // LEFT/TOP
+   1:Result:=asrCenter; // CENTER
+   2:Result:=asrBottom; // RIGHT/BOTTOM
+  end;
+ end;
+
+begin
+ Result:=0;
+
+ if (FImeDialog<>nil) then Exit(-2);
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ FillChar(Ime,SizeOf(Ime),0);
+ //Attributes.OnClick:=@OnImeDialogClick;
+
+ Attributes.Caption.Enable :=False;
+ //
+ Attributes.CloseButton.Enable:=True;
+ Attributes.CloseButton.btnId :=btnIdCancel;
+ //
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:=UTF8Encode(WideString(data.inputText));
+ Attributes.Memo.Ime    :=@Ime;
+
+ Ime.Multiline  :=(data.option and     1)<>0;
+ Ime.Password   :=(data.option and     4)<>0;
+ Ime.FixedPos   :=(data.option and   $40)<>0;
+ Ime.Over2kCoord:=(data.option and $4000)<>0;
+ Ime.NumbersOnly:=(data.ImeType=4);
+ Ime.hAlign     :=GetAnchor(data.PosAndForm.horizontalAlignment);
+ Ime.vAlign     :=GetAnchor(data.PosAndForm.verticalAlignment);
+ Ime.MaxLength  :=data.maxTextLength;
+ Ime.posx       :=data.PosAndForm.posx;
+ Ime.posy       :=data.PosAndForm.posy;
+ Ime.width      :=data.PosAndForm.width;
+ Ime.height     :=data.PosAndForm.height;
+
+ case data.enterLabel of
+  0:Ime.EditLabel:='OK'    ; //DEFAULT
+  1:Ime.EditLabel:='SEND'  ; //SEND
+  2:Ime.EditLabel:='SEARCH'; //SEARCH
+  3:Ime.EditLabel:='GO'    ; //GO
+ end;
+
+ NewDialogOpen(Attributes,TDialogCustom(FImeDialog));
 end;
 
 ////

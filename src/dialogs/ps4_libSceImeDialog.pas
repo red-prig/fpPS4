@@ -23,12 +23,6 @@ type
   inputText:array[0..2047] of WideChar;
  end;
 
- TImeDialogTextFilter=packed record
-  result    :Integer;
-  Text      :array[0..120] of WideChar;
-  TextLength:Integer;
- end;
-
  TImeDialogPosAndForm=record
   PanelType          :Byte; //SceImePanelType
   horizontalAlignment:Byte; //SceImeHorizontalAlignment
@@ -69,16 +63,24 @@ type
   additionalDictionaryPath:array[0..1023] of AnsiChar;
  end;
 
+ TImeDialogTextToFilter=packed record
+  result    :Integer;
+  Text      :array[0..120] of WideChar;
+  TextLength:Integer;
+ end;
+
+ PImeDialogFilterData=^TImeDialogFilterData;
+ TImeDialogFilterData=record
+  src:TImeDialogTextToFilter;
+  dst:TImeDialogTextToFilter;
+ end;
+
  TImeDialogStatus=(dRUNNING,sFINISHED,dABORTED);
 
  TImeDialogClient=class
   data             :TImeDialogOpen;
   output           :PWideChar;
-  filter:record
-   addr:SceImeTextFilter;
-   src :TImeDialogTextFilter;
-   dst :TImeDialogTextFilter;
-  end;
+  filter           :SceImeTextFilter;
   extKeyboardFilter:SceImeExtKeyboardFilter;
   state            :TImeDialogStatus;
  end;
@@ -88,6 +90,7 @@ implementation
 var
  g_ImeDialog_mtx:mtx;
  g_dialog       :TImeDialogClient=nil;
+ g_filter_data  :PImeDialogFilterData=nil;
 
 {$CALLING SysV_ABI_CDecl}
 
@@ -102,13 +105,13 @@ const
  SCE_IME_DIALOG_END_STATUS_USER_CANCELED=1;
  SCE_IME_DIALOG_END_STATUS_ABORTED      =2;
 
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
+function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar; inline;
 begin
  if (dst=nil) or (src=nil) then Exit(nil);
  Result:=StrLCopy(dst,src,maxlen);
 end;
 
-function wcsncpy_s(dst,src:PWideChar;maxlen:ptrint):PWideChar;
+function wcsncpy_s(dst,src:PWideChar;maxlen:ptrint):PWideChar; inline;
 begin
  if (dst=nil) or (src=nil) then Exit(nil);
  Result:=StrLCopy(dst,src,maxlen);
@@ -121,7 +124,7 @@ begin
 
  if (p_proc.p_sdk_version > $14fffff) then
  begin
- filter:=$f7f06fff;
+  filter:=$f7f06fff;
  end else
  begin
   filter:=$ff706eff;
@@ -137,7 +140,7 @@ begin
 
  if (p_proc.p_sdk_version > $174ffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $fff067ff;
@@ -145,7 +148,7 @@ begin
 
  if (p_proc.p_sdk_version > $34fffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $fff04fff;
@@ -153,20 +156,13 @@ begin
 
  if (p_proc.p_sdk_version > $3ffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $fff02fff;
  end;
 
- if (((not filter) and option)<>0) then
- begin
-  Result:=False;
- end else
- begin
-  Result:=True;
- end;
-
+ Result:=(((not filter) and option)=0);
 end;
 
 Function CheckOption_new(option:DWORD):Boolean; inline;
@@ -184,7 +180,7 @@ begin
 
  if (p_proc.p_sdk_version > $174ffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $80061ff;
@@ -192,7 +188,7 @@ begin
 
  if (p_proc.p_sdk_version > $34fffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $80049ff;
@@ -200,20 +196,13 @@ begin
 
  if (p_proc.p_sdk_version > $3ffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $80029ff;
  end;
 
- if ((option and (filter xor $fffffdff))<>0) then
- begin
-  Result:=False;
- end else
- begin
-  Result:=True;
- end;
-
+ Result:=((option and (filter xor $fffffdff))=0);
 end;
 
 Function CheckLang_old(supportedLanguages:QWORD):Boolean; inline;
@@ -225,7 +214,7 @@ begin
 
  if (p_proc.p_sdk_version > $24fffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $303fd1fffff;
@@ -233,7 +222,7 @@ begin
 
  if (p_proc.p_sdk_version > $4ffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $302031fffff;
@@ -241,20 +230,13 @@ begin
 
  if (p_proc.p_sdk_version > $fffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $301ff1fffff;
  end;
 
- if (((not filter) and supportedLanguages)<>0) then
- begin
-  Result:=False;
- end else
- begin
-  Result:=True;
- end;
-
+ Result:=(((not filter) and supportedLanguages)=0);
 end;
 
 Function CheckLang_new(supportedLanguages:QWORD):Boolean; inline;
@@ -266,7 +248,7 @@ begin
 
  if (p_proc.p_sdk_version > $24fffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $3fd1fffff;
@@ -274,7 +256,7 @@ begin
 
  if (p_proc.p_sdk_version > $4ffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $2031fffff;
@@ -282,20 +264,13 @@ begin
 
  if (p_proc.p_sdk_version > $fffffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $1ff1fffff;
  end;
 
- if (((not filter) and supportedLanguages)<>0) then
- begin
-  Result:=False;
- end else
- begin
-  Result:=True;
- end;
-
+ Result:=(((not filter) and supportedLanguages)=0);
 end;
 
 Function CheckExtendedOption_old(option:DWORD):Boolean; inline;
@@ -318,7 +293,7 @@ begin
  begin
   if (p_proc.p_sdk_version > $5ffffff) then
   begin
-   filter:=filter;
+   //
   end else
   begin
    filter:=filter and $fdf;
@@ -343,7 +318,7 @@ begin
 
  if (p_proc.p_sdk_version > $24fffff) then
  begin
-  filter:=filter;
+  //
  end else
  begin
   filter:=filter and $4fdf;
@@ -354,7 +329,7 @@ begin
  begin
   if (p_proc.p_sdk_version > $5ffffff) then
   begin
-   filter:=filter;
+   //
   end else
   begin
    filter:=filter and $3fdf;
@@ -471,11 +446,11 @@ begin
 
  //
 
- if (DWORD(param^.horizontalAlignment) > 2) then
+ if (DWORD(param^.horizontalAlignment) > SCE_IME_HALIGN_RIGHT) then
  begin
   Exit(SCE_IME_ERROR_INVALID_HORIZONTAL_ALIGNMENT);
  end;
- if (DWORD(param^.verticalAlignment) > 2) then
+ if (DWORD(param^.verticalAlignment) > SCE_IME_VALIGN_BOTTOM) then
  begin
   Exit(SCE_IME_ERROR_INVALID_VERTICAL_ALIGNMENT);
  end;
@@ -616,7 +591,7 @@ begin
  g_dialog.data.ImeType            :=param^.ImeType            ;
  g_dialog.data.supportedLanguages :=param^.supportedLanguages ;
  g_dialog.data.enterLabel         :=param^.enterLabel         ;
- g_dialog.filter.addr             :=param^.filter             ;
+ g_dialog.filter                  :=param^.filter             ;
  g_dialog.data.option             :=param^.option             ;
  g_dialog.data.maxTextLength      :=param^.maxTextLength      ;
  //
@@ -811,27 +786,28 @@ begin
      Result:=SCE_IME_DIALOG_STATUS_FINISHED;
     end;
 
-    if (g_dialog.filter.addr<>nil) then
+    if (g_dialog.filter<>nil) then
     begin
-     FillChar(g_dialog.filter.src,sizeof(g_dialog.filter.src),0);
-     FillChar(g_dialog.filter.dst,sizeof(g_dialog.filter.dst),0);
+     FillChar(g_filter_data^,sizeof(g_filter_data^),0);
 
-     g_dialog.filter.src.result:=InvokeSync('IME_DIALOG_GETTEXT',Output);
-     if (g_dialog.filter.src.result=0) then
+     g_filter_data^.src.result:=InvokeSync('IME_DIALOG_GETTEXT',Output);
+     if (g_filter_data^.src.result=0) then
      begin
-      Output.MoveTo(@g_dialog.filter.src,sizeof(g_dialog.filter.src));
+      Output.MoveTo(@g_filter_data^.src,sizeof(g_filter_data^.src));
       Output.Free;
 
-      g_dialog.filter.dst.result:=ExecuteTextFilter(
-        g_dialog.filter.addr,
-       @g_dialog.filter.dst.Text,
-       @g_dialog.filter.dst.TextLength,
-       @g_dialog.filter.src.Text,
-        g_dialog.filter.src.TextLength);
+      g_filter_data^.dst.TextLength:=120;
 
-      if (g_dialog.filter.dst.result=0) then
+      g_filter_data^.dst.result:=ExecuteTextFilter(
+        g_dialog.filter,
+       @g_filter_data^.dst.Text,
+       @g_filter_data^.dst.TextLength,
+       @g_filter_data^.src.Text,
+        g_filter_data^.src.TextLength);
+
+      if (g_filter_data^.dst.result=0) then
       begin
-       InvokeSync2('IME_DIALOG_SETTEXT',@g_dialog.filter.dst,sizeof(g_dialog.filter.dst))
+       InvokeSync2('IME_DIALOG_SETTEXT',@g_filter_data^.dst,sizeof(g_filter_data^.dst))
       end;
 
      end;
@@ -1211,6 +1187,8 @@ begin
  lib.set_proc($F23AB3CCF8A8625F,@ps4_sceImeDialogGetPanelPositionAndForm);
  lib.set_proc($C2AB09BD15F0979F,@ps4_sceImeDialogGetPanelSize);
  lib.set_proc($0910FE8D212B1094,@ps4_sceImeDialogGetPanelSizeExtended);
+
+ lib.add_data(@g_filter_data,sizeof(g_filter_data^));
 
  mtx_init(g_ImeDialog_mtx,'g_ImeDialog_mtx');
 end;
