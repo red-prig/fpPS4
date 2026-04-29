@@ -1020,7 +1020,7 @@ begin
    Exit(SCE_IME_ERROR_INVALID_OPTION);
   end;
 
-  if ((not param^.option) and 5)<>0 then
+  if (((not param^.option) and 5)=0) then
   begin
    Exit(SCE_IME_ERROR_INVALID_PARAM);
   end;
