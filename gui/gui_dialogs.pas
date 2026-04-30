@@ -93,6 +93,8 @@ type
   function  OnImeDlgGetPos (Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
   //
   function  OnImeOpen      (Value:TIpcValue):TIpcValue; //IME_OPEN
+  function  OnImeClose     (Value:TIpcValue):TIpcValue; //IME_CLOSE
+  function  OnImeGetPos    (Value:TIpcValue):TIpcValue; //IME_GETPOS
   //
   procedure OnSigninDlgClick(Sender:TObject);
   function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
@@ -256,6 +258,8 @@ begin
  Handler.AddCallback('IME_DIALOG_GETPOS' ,@OnImeDlgGetPos);
  //
  Handler.AddCallback('IME_OPEN'          ,@OnImeOpen);
+ Handler.AddCallback('IME_CLOSE'         ,@OnImeClose);
+ Handler.AddCallback('IME_GETPOS'        ,@OnImeGetPos);
  //
  Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
  Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
@@ -1191,6 +1195,42 @@ begin
  end;
 
  NewDialogOpen(Attributes,TDialogCustom(FImeDialog));
+end;
+
+function TDialogsManager.OnImeClose(Value:TIpcValue):TIpcValue; //IME_CLOSE
+begin
+ Result:=0;
+ FreeAndNil(FImeDialog);
+end;
+
+function TDialogsManager.OnImeGetPos(Value:TIpcValue):TIpcValue; //IME_GETPOS
+var
+ data:TImeDialogPosAndForm;
+
+ function GetAlign(Side:TAnchorSideReference):Byte; inline;
+ begin
+  Result:=0;
+  case Side of
+   asrTop   :Result:=0; // LEFT/TOP
+   asrCenter:Result:=1; // CENTER
+   asrBottom:Result:=2; // RIGHT/BOTTOM
+  end;
+ end;
+
+begin
+ Result:=-1;
+ if (FImeDialog<>nil) then
+ begin
+  data.PanelType          :=1;
+  data.horizontalAlignment:=GetAlign(TImeDialog(FImeDialog).hAlign);
+  data.verticalAlignment  :=GetAlign(TImeDialog(FImeDialog).vAlign);
+  data.posx               :=TImeDialog(FImeDialog).GetPosX;
+  data.posy               :=TImeDialog(FImeDialog).GetPosY;
+  data.width              :=Trunc(TImeDialog(FImeDialog).Fwidth);
+  data.height             :=Trunc(TImeDialog(FImeDialog).Fheight);
+  //
+  Result:=TIpcValue.New(@data,SizeOf(data));
+ end;
 end;
 
 ////

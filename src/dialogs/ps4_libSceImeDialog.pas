@@ -587,15 +587,15 @@ Procedure CopyParams(g_dialog:TImeDialogClient;
                      param   :pSceImeDialogParam;
                      extended:pSceImeParamExtended);
 begin
- g_dialog.data.userId             :=param^.userId             ;
- g_dialog.data.ImeType            :=param^.ImeType            ;
- g_dialog.data.supportedLanguages :=param^.supportedLanguages ;
- g_dialog.data.enterLabel         :=param^.enterLabel         ;
- g_dialog.filter                  :=param^.filter             ;
- g_dialog.data.option             :=param^.option             ;
- g_dialog.data.maxTextLength      :=param^.maxTextLength      ;
+ g_dialog.data.userId             :=param^.userId            ;
+ g_dialog.data.ImeType            :=param^.ImeType           ;
+ g_dialog.data.supportedLanguages :=param^.supportedLanguages;
+ g_dialog.data.enterLabel         :=param^.enterLabel        ;
+ g_dialog.filter                  :=param^.filter            ;
+ g_dialog.data.option             :=param^.option            ;
+ g_dialog.data.maxTextLength      :=param^.maxTextLength     ;
  //
- g_dialog.data.PosAndForm.PanelType          :=SCE_IME_PANEL_TYPE_DIALOG;
+ g_dialog.data.PosAndForm.PanelType          :=SCE_IME_PANEL_TYPE_DIALOG ;
  g_dialog.data.PosAndForm.posx               :=param^.posx               ;
  g_dialog.data.PosAndForm.posy               :=param^.posy               ;
  g_dialog.data.PosAndForm.horizontalAlignment:=param^.horizontalAlignment;
