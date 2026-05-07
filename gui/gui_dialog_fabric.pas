@@ -97,7 +97,7 @@ type
    procedure DoResize(Sender:TObject);
    procedure DoMouseMoveEvent(Sender:TObject;Shift:TShiftState;X,Y:Integer);
    procedure DoMouseDown(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
-   procedure DoMouseUp(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
+   procedure DoMouseUp  (Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
   public
    FixedPos   :Boolean;
    Over2kCoord:Boolean;
@@ -117,8 +117,30 @@ type
  end;
 
 function NewDialogOpen(var Attributes:TDialogAttributes):TDialogCustom;
+function GetAnchor(Align:Byte):TAnchorSideReference; inline;
+function GetAlign(Side:TAnchorSideReference):Byte; inline;
 
 implementation
+
+function GetAnchor(Align:Byte):TAnchorSideReference; inline;
+begin
+ Result:=asrTop;
+ case Align of
+  0:Result:=asrTop;    // LEFT/TOP
+  1:Result:=asrCenter; // CENTER
+  2:Result:=asrBottom; // RIGHT/BOTTOM
+ end;
+end;
+
+function GetAlign(Side:TAnchorSideReference):Byte; inline;
+begin
+ Result:=0;
+ case Side of
+  asrTop   :Result:=0; // LEFT/TOP
+  asrCenter:Result:=1; // CENTER
+  asrBottom:Result:=2; // RIGHT/BOTTOM
+ end;
+end;
 
 Destructor TDialogCustom.Destroy;
 begin
@@ -495,7 +517,7 @@ begin
      MsgMemo.PasswordChar:='*';
     end;
     MsgMemo.NumbersOnly:=Attributes.Memo.Ime^.NumbersOnly;
-    MsgMemo.MaxLength:=Attributes.Memo.Ime^.MaxLength;
+    MsgMemo.MaxLength  :=Attributes.Memo.Ime^.MaxLength;
    end;
    //
   end;

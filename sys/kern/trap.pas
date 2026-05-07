@@ -377,6 +377,7 @@ asm
  movqq $0,%r11
 
  //epilog (debugger)
+ movq  %rbp,%rsp
  popq  %rbp
  //interrupt/ret
  jmp %gs:teb.jit_trp

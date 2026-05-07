@@ -22,6 +22,16 @@ uses
   ps4_libSceUserService;
 
 type
+ TImeSetCaret=record
+  mode :Integer;
+  index:Integer;
+ end;
+
+ TImeEvent=record
+  valid:Integer;
+  event:SceImeEvent;
+ end;
+
  TImePosAndForm=record
   PanelType          :Byte; //SceImePanelType
   horizontalAlignment:Byte; //SceImeHorizontalAlignment
@@ -85,6 +95,7 @@ type
   state            :TImeStatus;
   caret_index      :Integer;
   //
+  event_data       :pSceImeEvent;
   filter_data      :PImeFilterData;
  end;
 
@@ -973,6 +984,46 @@ begin
  if (Result=-1) then Result:=maxlen;
 end;
 
+function w_del_char(src:PWideChar;maxlen,pos:ptrint):Boolean;
+var
+ len:ptrint;
+begin
+ if (pos<0) then Exit(False);
+
+ len:=wcsnlen_s(src,maxlen);
+
+ if (len>pos) then
+ begin
+  Move(src[pos+1],src[pos],(len-pos)*SizeOf(WideChar));
+  Result:=True;
+ end else
+ begin
+  Result:=False;
+ end;
+
+end;
+
+function w_ins_char(src:PWideChar;maxlen,pos:ptrint;chr:WideChar):Boolean;
+var
+ len:ptrint;
+begin
+ if (pos<0) then Exit(False);
+
+ len:=wcsnlen_s(src,maxlen);
+
+ if (len>=pos) then
+ begin
+  Move(src[pos],src[pos+1],(len-pos)*SizeOf(WideChar));
+  src[pos]:=chr;
+  src[len+1]:=#0;
+  Result:=True;
+ end else
+ begin
+  Result:=False;
+ end;
+
+end;
+
 function ps4_sceImeGetPanelSize(param   :pSceImeParam;
                                 p_width :PDWORD;
                                 p_height:PDWORD):Integer; forward;
@@ -1021,14 +1072,15 @@ begin
   g_dialog.data.extKeyboardMode         :=extended^.extKeyboardMode    ;
   //
   strncpy_s(@g_dialog.data.additionalDictionaryPath,extended^.additionalDictionaryPath,Length(g_dialog.data.additionalDictionaryPath));
-  //
-  g_dialog.work   :=param^.work;
-  g_dialog.arg    :=param^.arg;
-  g_dialog.handler:=param^.handler;
-  //
-  //alloc in work buf
-  g_dialog.filter_data:=param^.work;
  end;
+ //
+ g_dialog.work   :=param^.work;
+ g_dialog.arg    :=param^.arg;
+ g_dialog.handler:=param^.handler;
+ //
+ //alloc in work buf
+ g_dialog.event_data :=param^.work;
+ g_dialog.filter_data:=@g_dialog.event_data[1];
 end;
 
 function InvokeSync2(const msg:RawByteString;buf:Pointer;len:DWORD):Integer;
@@ -1137,6 +1189,15 @@ begin
  mtx_unlock(g_Ime_mtx);
 end;
 
+function InvokeSetCaret(mode,index:Integer):Integer;
+var
+ data:TImeSetCaret;
+begin
+ data.mode :=mode;
+ data.index:=index;
+ Result:=InvokeSync2('IME_SET_CARET',@data,SizeOf(data));
+end;
+
 function ps4_sceImeSetCaret(caret:pSceImeCaret):Integer;
 begin
  Result:=SCE_IME_ERROR_NOT_OPENED;
@@ -1150,11 +1211,11 @@ begin
    if (caret<>nil) then
    begin
     Result:=SCE_IME_ERROR_INVALID_PARAM;
-    if (caret^.index > wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)) then
+    if (caret^.index > 0) then
+    if (caret^.index <= wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)) then
     begin
      g_dialog.caret_index:=caret^.index;
-     //TODO: invoke caret index
-     Result:=0;
+     Result:=InvokeSetCaret(1,g_dialog.caret_index);
     end;
    end;
   end;
@@ -1223,10 +1284,11 @@ begin
 
      if (Result=0) then
      begin
-      wcsncpy_s(g_dialog.output,text,Min(SCE_IME_MAX_TEXT_LENGTH,length));
+      wcsncpy_s(g_dialog.output,text,Min(g_dialog.data.maxTextLength,length));
       g_dialog.caret_index:=-1;
-      //TODO: invoke set text
-      Result:=0;
+      Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
+                          wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+      Result:=InvokeSetCaret(0,-1);
      end;
 
     end;
@@ -1434,9 +1496,201 @@ end;
 
 ///
 
+function ExecuteHandler(
+          addr :Pointer;
+          arg  :Pointer;
+          event:pSceImeEvent
+         ):Integer; external name 'ExecuteGuest';
+
 function ps4_sceImeVshUpdate(work:Pointer):Integer;
+var
+ data:TImeEvent;
+ Output:TIpcValue;
 begin
- Result:=0;
+ Result:=InvokeSync('IME_UPDATE',Output);
+ if (Result>=0) then
+ begin
+  if (Result=1) then //valid
+  begin
+   Output.MoveTo(@data,sizeof(data));
+
+   case data.event.id of
+    SCE_IME_EVENT_UPDATE_TEXT:
+     begin
+      //fixup link
+      data.event.param.text.str:=g_dialog.output;
+      //update caret
+      g_dialog.caret_index:=data.event.param.text.caretIndex;
+     end;
+    SCE_IME_KEYBOARD_EVENT_KEYCODE_DOWN,
+    SCE_IME_KEYBOARD_EVENT_KEYCODE_REPEAT:
+     begin
+      //clear valid
+      data.valid:=0;
+
+      //perform actions
+      case data.event.param.keycode.keycode of
+       SCE_IME_KEYCODE_BACKSPACE:
+        begin
+         if (g_dialog.caret_index > 0) then
+         if w_del_char(g_dialog.output,g_dialog.data.maxTextLength,g_dialog.caret_index-1) then
+         begin
+          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
+                  wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+
+          Dec(g_dialog.caret_index);
+
+          Result:=InvokeSetCaret(0,g_dialog.caret_index);
+
+          data.valid:=1;
+
+          data.event:=Default(SceImeEvent);
+          data.event.id:=SCE_IME_EVENT_UPDATE_TEXT;
+
+          data.event.param.text.str       :=g_dialog.output;
+          data.event.param.text.caretIndex:=g_dialog.caret_index;
+          data.event.param.text.areaNum   :=1;
+          data.event.param.text.textArea[0].mode  :=SCE_IME_TEXT_AREA_MODE_EDIT;
+          data.event.param.text.textArea[0].index :=g_dialog.caret_index;
+          data.event.param.text.textArea[0].length:=-1;
+         end;
+        end;
+       SCE_IME_KEYCODE_DELETE:
+        begin
+         if w_del_char(g_dialog.output,
+                       g_dialog.data.maxTextLength,
+                       g_dialog.caret_index) then
+         begin
+          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
+                  wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+
+          Result:=InvokeSetCaret(0,g_dialog.caret_index);
+
+          data.valid:=1;
+
+          data.event:=Default(SceImeEvent);
+          data.event.id:=SCE_IME_EVENT_UPDATE_TEXT;
+
+          data.event.param.text.str       :=g_dialog.output;
+          data.event.param.text.caretIndex:=g_dialog.caret_index;
+          data.event.param.text.areaNum   :=1;
+          data.event.param.text.textArea[0].mode  :=SCE_IME_TEXT_AREA_MODE_EDIT;
+          data.event.param.text.textArea[0].index :=g_dialog.caret_index;
+          data.event.param.text.textArea[0].length:=-1;
+         end;
+        end;
+       SCE_IME_KEYCODE_LEFTARROW:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_LEFT;
+        end;
+       SCE_IME_KEYCODE_RIGHTARROW:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_RIGHT;
+        end;
+       SCE_IME_KEYCODE_UPARROW:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_UP;
+        end;
+       SCE_IME_KEYCODE_DOWNARROW:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_DOWN;
+        end;
+       SCE_IME_KEYCODE_HOME:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_HOME;
+        end;
+       SCE_IME_KEYCODE_END:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_END;
+        end;
+       SCE_IME_KEYCODE_PAGEUP:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_PAGE_UP;
+        end;
+       SCE_IME_KEYCODE_PAGEDOWN:
+        begin
+         data.valid:=1;
+
+         data.event:=Default(SceImeEvent);
+         data.event.id:=SCE_IME_EVENT_UPDATE_CARET;
+         data.event.param.caretMove:=SCE_IME_CARET_MOVE_PAGE_DOWN;
+        end;
+       else
+        begin
+         if (data.event.param.keycode.status and SCE_IME_KEYCODE_STATE_CHARACTER_VALID)<>0 then
+         if w_ins_char(g_dialog.output,
+                       g_dialog.data.maxTextLength,
+                       g_dialog.caret_index,
+                       data.event.param.keycode.character) then
+         begin
+          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
+                    wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+
+          data.valid:=1;
+
+          Inc(g_dialog.caret_index);
+          Result:=InvokeSetCaret(0,g_dialog.caret_index);
+
+          data.event:=Default(SceImeEvent);
+          data.event.id:=SCE_IME_EVENT_UPDATE_TEXT;
+
+          data.event.param.text.str       :=g_dialog.output;
+          data.event.param.text.caretIndex:=g_dialog.caret_index;
+          data.event.param.text.areaNum   :=1;
+          data.event.param.text.textArea[0].mode  :=SCE_IME_TEXT_AREA_MODE_EDIT;
+          data.event.param.text.textArea[0].index :=g_dialog.caret_index-1;
+          data.event.param.text.textArea[0].length:=1;
+         end;
+        end;
+      end; //case
+     end; //SCE_IME_KEYBOARD_EVENT_KEYCODE_DOWN
+    else;
+   end;
+
+
+   if (data.valid=1) then
+   begin
+    g_dialog.event_data^:=data.event;
+
+    ExecuteHandler(g_dialog.handler,
+                   g_dialog.arg,
+                   g_dialog.event_data
+                  );
+
+   end;
+
+  end;
+  Result:=0;
+ end;
+ Output.Free;
 end;
 
 function ps4_sceImeUpdate(handler:SceImeEventHandler):Integer;

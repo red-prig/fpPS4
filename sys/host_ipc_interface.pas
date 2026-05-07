@@ -42,7 +42,7 @@ type
   function  GetLen:DWORD;
   function  GetBuf:Pointer;
   procedure MoveTo(buf:Pointer;maxlen:DWORD);
-  function  GetDWORD:QWORD;
+  function  GetDWORD:DWORD;
   function  GetQWORD:QWORD;
   function  GetString:RawByteString;
   function  GetObject(src:TSerializeObjectClass):TSerializeObject;
@@ -296,7 +296,7 @@ begin
  SmallMove(GetBuf,buf,len);
 end;
 
-function TIpcValue.GetDWORD:QWORD;
+function TIpcValue.GetDWORD:DWORD;
 begin
  if (Fmode=m_imm) then
  begin
@@ -304,7 +304,7 @@ begin
  end else
  if (Flen>=SizeOf(DWORD)) then
  begin
-  Result:=PQWORD(GetBuf)^
+  Result:=PDWORD(GetBuf)^
  end else
  begin
   Result:=0;
