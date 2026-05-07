@@ -1139,7 +1139,7 @@ begin
    if (Result=0) then
    begin
     g_dialog.state:=dRUNNING;
-    g_dialog.caret_index:=0;
+    g_dialog.caret_index:=-1;
    end else
    begin
     FreeAndNil(g_dialog);
@@ -1189,13 +1189,57 @@ begin
  mtx_unlock(g_Ime_mtx);
 end;
 
-function InvokeSetCaret(mode,index:Integer):Integer;
+function ps4_sceImeConfirmCandidate(index:Integer):Integer;
+begin
+ Result:=SCE_IME_ERROR_NOT_OPENED;
+ if (g_dialog=nil) then Exit;
+
+ mtx_lock(g_Ime_mtx);
+
+  if (g_dialog<>nil) then
+  begin
+   Result:=SCE_IME_ERROR_INVALID_PARAM;
+   if (index > -1) {and (index < g_max_index)} then
+   begin
+    Result:=0;
+   end;
+  end;
+
+ mtx_unlock(g_Ime_mtx);
+end;
+
+function ps4_sceImeDisableController():Integer;
+begin
+ Result:=SCE_IME_ERROR_NOT_OPENED;
+ if (g_dialog=nil) then Exit;
+
+ mtx_lock(g_Ime_mtx);
+
+  if (g_dialog<>nil) then
+  begin
+   Result:=0;
+  end;
+
+ mtx_unlock(g_Ime_mtx);
+end;
+
+function InvokeSetCaret(mode,index:Integer):Integer; inline;
 var
  data:TImeSetCaret;
 begin
  data.mode :=mode;
  data.index:=index;
  Result:=InvokeSync2('IME_SET_CARET',@data,SizeOf(data));
+end;
+
+function InvokeSetText():Integer; inline;
+begin
+ Result:=InvokeSync2('IME_SET_TEXT',
+                     g_dialog.output,
+                     wcsnlen_s(
+                      g_dialog.output,
+                      g_dialog.data.maxTextLength
+                     )*SizeOf(WideChar));
 end;
 
 function ps4_sceImeSetCaret(caret:pSceImeCaret):Integer;
@@ -1214,8 +1258,14 @@ begin
     if (caret^.index > 0) then
     if (caret^.index <= wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)) then
     begin
-     g_dialog.caret_index:=caret^.index;
-     Result:=InvokeSetCaret(1,g_dialog.caret_index);
+     if (g_dialog.caret_index=caret^.index) then
+     begin
+      Result:=0;
+     end else
+     begin
+      g_dialog.caret_index:=caret^.index;
+      Result:=InvokeSetCaret(1,g_dialog.caret_index);
+     end;
     end;
    end;
   end;
@@ -1284,11 +1334,16 @@ begin
 
      if (Result=0) then
      begin
-      wcsncpy_s(g_dialog.output,text,Min(g_dialog.data.maxTextLength,length));
-      g_dialog.caret_index:=-1;
-      Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
-                          wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
-      Result:=InvokeSetCaret(0,-1);
+      length:=Min(g_dialog.data.maxTextLength,length);
+      wcsncpy_s(g_dialog.output,text,length);
+      Result:=InvokeSetText();
+
+      if (g_dialog.caret_index>length) then
+      begin
+       g_dialog.caret_index:=length;
+       Result:=InvokeSetCaret(0,g_dialog.caret_index);
+      end;
+
      end;
 
     end;
@@ -1507,6 +1562,8 @@ var
  data:TImeEvent;
  Output:TIpcValue;
 begin
+ if (g_dialog=nil) then Exit(SCE_IME_ERROR_NOT_OPENED);
+
  Result:=InvokeSync('IME_UPDATE',Output);
  if (Result>=0) then
  begin
@@ -1532,14 +1589,11 @@ begin
       case data.event.param.keycode.keycode of
        SCE_IME_KEYCODE_BACKSPACE:
         begin
-         if (g_dialog.caret_index > 0) then
          if w_del_char(g_dialog.output,g_dialog.data.maxTextLength,g_dialog.caret_index-1) then
          begin
-          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
-                  wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+          Result:=InvokeSetText();
 
           Dec(g_dialog.caret_index);
-
           Result:=InvokeSetCaret(0,g_dialog.caret_index);
 
           data.valid:=1;
@@ -1561,10 +1615,7 @@ begin
                        g_dialog.data.maxTextLength,
                        g_dialog.caret_index) then
          begin
-          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
-                  wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
-
-          Result:=InvokeSetCaret(0,g_dialog.caret_index);
+          Result:=InvokeSetText();
 
           data.valid:=1;
 
@@ -1651,8 +1702,7 @@ begin
                        g_dialog.caret_index,
                        data.event.param.keycode.character) then
          begin
-          Result:=InvokeSync2('IME_SET_TEXT',g_dialog.output,
-                    wcsnlen_s(g_dialog.output,g_dialog.data.maxTextLength)*SizeOf(WideChar));
+          Result:=InvokeSetText();
 
           data.valid:=1;
 
@@ -1691,6 +1741,13 @@ begin
   Result:=0;
  end;
  Output.Free;
+
+ //update caret
+ if (g_dialog<>nil) then
+ begin
+  InvokeSetCaret(0,g_dialog.caret_index);
+ end;
+
 end;
 
 function ps4_sceImeUpdate(handler:SceImeEventHandler):Integer;
@@ -1754,6 +1811,8 @@ begin
  lib.set_proc($44FC9DBFF26BD5B7,@ps4_sceImeOpen);
  lib.set_proc($4E654FF0BCDC15C6,@ps4_sceImeClose);
  lib.set_proc($4D06A88126AA9049,@ps4_sceImeSetCandidateIndex);
+ lib.set_proc($B4A2E6548524A723,@ps4_sceImeConfirmCandidate);
+ lib.set_proc($13E7F59FC7BC0C0C,@ps4_sceImeDisableController);
  lib.set_proc($58BC5437658C8A6F,@ps4_sceImeSetCaret);
  lib.set_proc($89E08DAD5AF329DE,@ps4_sceImeSetText);
  lib.set_proc($4D7607151B8BF146,@ps4_sceImeSetTextGeometry);

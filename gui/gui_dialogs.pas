@@ -53,8 +53,11 @@ type
   procedure Push(const event:SceImeEvent);
   function  Pop (var event:SceImeEvent):Boolean;
   procedure PushOpen        (posx,posy:Single;width,height:DWORD);
-  procedure PushUpdateText  (len,caretIndex:DWORD);
+  procedure PushUpdate      (caretIndex:DWORD);
+  procedure PushPreedit     (caretIndex:DWORD);
   procedure PushChangeDevice(deviceType:SceImeDeviceType);
+  procedure PushClose       ();
+  procedure PushEnter       ();
   procedure PushKey         (key:Word;Chr:WideChar;down:Byte);
  end;
 
@@ -127,6 +130,7 @@ type
   function  OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
   function  OnImeDlgGetPos (Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
   //
+  procedure OnImeClick(Sender:TObject);
   function  OnImeOpen      (Value:TIpcValue):TIpcValue; //IME_OPEN
   function  OnImeClose     (Value:TIpcValue):TIpcValue; //IME_CLOSE
   function  OnImeGetPos    (Value:TIpcValue):TIpcValue; //IME_GETPOS
@@ -1207,7 +1211,7 @@ begin
  Push(event);
 end;
 
-procedure TImeEventQueue.PushUpdateText(len,caretIndex:DWORD);
+procedure TImeEventQueue.PushUpdate(caretIndex:DWORD);
 var
  event:SceImeEvent;
 begin
@@ -1218,12 +1222,21 @@ begin
  event.param.text.areaNum   :=1;
  event.param.text.textArea[0].mode:=SCE_IME_TEXT_AREA_MODE_EDIT;
 
- if (caretIndex<>len) then
- begin
-  event.param.text.areaNum:=2;
-  event.param.text.textArea[1].mode :=SCE_IME_TEXT_AREA_MODE_PREEDIT;
-  event.param.text.textArea[1].index:=caretIndex;
- end;
+ Push(event);
+end;
+
+procedure TImeEventQueue.PushPreedit(caretIndex:DWORD);
+var
+ event:SceImeEvent;
+begin
+ event:=Default(SceImeEvent);
+ event.id:=SCE_IME_EVENT_UPDATE_TEXT;
+
+ event.param.text.caretIndex:=caretIndex;
+ event.param.text.areaNum   :=2;
+ event.param.text.textArea[0].mode:=SCE_IME_TEXT_AREA_MODE_EDIT;
+ event.param.text.textArea[1].mode:=SCE_IME_TEXT_AREA_MODE_PREEDIT;
+ event.param.text.textArea[1].index:=caretIndex;
 
  Push(event);
 end;
@@ -1236,6 +1249,26 @@ begin
  event.id:=SCE_IME_EVENT_CHANGE_DEVICE;
 
  event.param.deviceType:=deviceType;
+
+ Push(event);
+end;
+
+procedure TImeEventQueue.PushClose();
+var
+ event:SceImeEvent;
+begin
+ event:=Default(SceImeEvent);
+ event.id:=SCE_IME_EVENT_PRESS_CLOSE;
+
+ Push(event);
+end;
+
+procedure TImeEventQueue.PushEnter();
+var
+ event:SceImeEvent;
+begin
+ event:=Default(SceImeEvent);
+ event.id:=SCE_IME_EVENT_PRESS_ENTER;
 
  Push(event);
 end;
@@ -1437,6 +1470,26 @@ begin
 
 end;
 
+procedure TDialogsManager.OnImeClick(Sender:TObject);
+var
+ buttonId:TDialogButtonId;
+begin
+ if (FImeDialog<>nil) then
+ begin
+  buttonId:=TDialogButtonId(TCustomButton(Sender).Tag);
+
+  if (buttonId=btnIdCancel) then
+  begin
+   FImeData.ime_queue.PushClose();
+  end else
+  begin
+   FImeData.ime_queue.PushEnter();
+  end;
+
+  FImeDialog.Hide;
+ end;
+end;
+
 function TDialogsManager.OnImeOpen(Value:TIpcValue):TIpcValue; //IME_OPEN
 var
  data:TImeOpen;
@@ -1453,7 +1506,7 @@ begin
 
  FillChar(Attributes,SizeOf(Attributes),0);
  FillChar(Ime,SizeOf(Ime),0);
- //Attributes.OnClick:=@OnImeDialogClick;
+ Attributes.OnClick:=@OnImeClick;
 
  w:=WideString(data.inputText);
 
@@ -1500,7 +1553,7 @@ begin
   Trunc(TImeDialog(FImeDialog).Fheight)
  );
 
- FImeData.ime_queue.PushUpdateText  (Length(FImeData.input),Length(FImeData.input));
+ FImeData.ime_queue.PushUpdate      (Length(FImeData.input));
  FImeData.ime_queue.PushChangeDevice(SCE_IME_DEVICE_TYPE_CONTROLLER);
 
  FImeDialog.FMsgMemo.OnUTF8KeyPress:=@OnImeUTF8KeyPress;
@@ -1508,6 +1561,7 @@ begin
  FImeDialog.FMsgMemo.OnKeyUp       :=@OnImeKeyUp;
  FImeDialog.FMsgMemo.WantTabs      :=True;
  FImeDialog.FMsgMemo.ReadOnly      :=True;
+ FImeDialog.FMsgMemo.SetFocus;
 
 end;
 
@@ -1783,7 +1837,7 @@ begin
 
   if (data.mode=1) then
   begin
-   FImeData.ime_queue.PushUpdateText(Length(FImeData.input),data.index);
+   FImeData.ime_queue.PushPreedit(data.index);
   end;
 
   Result:=0;
