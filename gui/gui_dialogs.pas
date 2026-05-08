@@ -27,7 +27,7 @@ uses
 
   gui_dialog_fabric,
 
-  time,
+  md_time,
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceNpCommerce,
@@ -1455,7 +1455,7 @@ begin
  event.param.keycode.ktype     :=SCE_IME_KEYBOARD_TYPE_ENGLISH_US; //TODO: keyboard lang
  event.param.keycode.userId    :=-1;
  event.param.keycode.resourceId:=1;
- event.param.keycode.timestamp :=guest_rdtsc();
+ event.param.keycode.timestamp :=GetRtcTick;
 
  Push(event);
 end;
