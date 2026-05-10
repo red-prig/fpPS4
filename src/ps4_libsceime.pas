@@ -72,16 +72,10 @@ type
 
  TImeStatus=(dRUNNING,sFINISHED,dABORTED);
 
- TImeTextToFilter=packed record
-  result    :Integer;
-  Text      :array[0..150] of WideChar;
-  TextLength:Integer;
- end;
-
  PImeFilterData=^TImeFilterData;
  TImeFilterData=record
-  src:TImeTextToFilter;
-  dst:TImeTextToFilter;
+  Text      :array[0..150] of WideChar;
+  TextLength:Integer;
  end;
 
  TImeClient=class
@@ -1551,6 +1545,54 @@ end;
 
 ///
 
+function ExecuteTextFilter(
+          addr:Pointer;
+          outText      :PWideChar;
+          outTextLength:PDWORD;
+          srcText      :PWideChar;
+          srcTextLength:DWORD
+         ):Integer; external name 'ExecuteGuest';
+
+function do_text_filter():Boolean;
+var
+ filter_data:PImeFilterData;
+ srcTextLength:DWORD;
+ ret:Integer;
+begin
+ Result:=False;
+ if (g_dialog=nil) then Exit;
+ if (g_dialog.filter=nil) then Exit;
+
+ filter_data:=g_dialog.filter_data;
+
+ FillChar(filter_data^,sizeof(filter_data^),0);
+
+ srcTextLength:=wcsnlen_s(g_dialog.output,151);
+
+ filter_data^.TextLength:=150;
+
+ ret:=ExecuteTextFilter(
+       g_dialog.filter,
+      @filter_data^.Text,
+      @filter_data^.TextLength,
+       g_dialog.output,
+       srcTextLength);
+
+ if (filter_data^.TextLength>150) then
+ begin
+  filter_data^.TextLength:=150;
+ end;
+
+ if (ret=0) then
+ begin
+  wcsncpy_s(g_dialog.output,@filter_data^.Text,filter_data^.TextLength);
+  g_dialog.output[filter_data^.TextLength]:=#0;
+
+  Result:=True;
+ end;
+
+end;
+
 function ExecuteHandler(
           addr :Pointer;
           arg  :Pointer;
@@ -1591,6 +1633,8 @@ begin
         begin
          if w_del_char(g_dialog.output,g_dialog.data.maxTextLength,g_dialog.caret_index-1) then
          begin
+          do_text_filter();
+
           Result:=InvokeSetText();
 
           Dec(g_dialog.caret_index);
@@ -1615,6 +1659,8 @@ begin
                        g_dialog.data.maxTextLength,
                        g_dialog.caret_index) then
          begin
+          do_text_filter();
+
           Result:=InvokeSetText();
 
           data.valid:=1;
@@ -1702,6 +1748,8 @@ begin
                        g_dialog.caret_index,
                        data.event.param.keycode.character) then
          begin
+          do_text_filter();
+
           Result:=InvokeSetText();
 
           data.valid:=1;

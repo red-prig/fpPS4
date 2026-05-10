@@ -805,6 +805,11 @@ begin
        @g_filter_data^.src.Text,
         g_filter_data^.src.TextLength);
 
+      if (g_filter_data^.dst.TextLength>120) then
+      begin
+       g_filter_data^.dst.TextLength:=120;
+      end;
+
       if (g_filter_data^.dst.result=0) then
       begin
        InvokeSync2('IME_DIALOG_SETTEXT',@g_filter_data^.dst,sizeof(g_filter_data^.dst))
