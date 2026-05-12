@@ -791,7 +791,7 @@ begin
      FillChar(g_filter_data^,sizeof(g_filter_data^),0);
 
      g_filter_data^.src.result:=InvokeSync('IME_DIALOG_GETTEXT',Output);
-     if (g_filter_data^.src.result=0) then
+     if (g_filter_data^.src.result=1) then
      begin
       Output.MoveTo(@g_filter_data^.src,sizeof(g_filter_data^.src));
       Output.Free;
