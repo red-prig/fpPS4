@@ -30,6 +30,7 @@ uses
   ps4_libSceMsgDialog,
   ps4_libSceSaveDataDialog,
   ps4_libSceNpCommerce,
+  ps4_libSceHmdSetupDialog,
   ps4_libSceErrorDialog,
   laz2ime,
   ime_types,
@@ -80,6 +81,9 @@ type
   //
   procedure OnNpCommerceDialogClick(Sender:TObject);
   function  OnNpCommerceDialogOpen(Value:TIpcValue):TIpcValue; //NPCOMMERCE_DIALOG_OPEN
+  //
+  procedure OnHmdSetupDialogClick(Sender:TObject);
+  function  OnHmdSetupDialogOpen(Value:TIpcValue):TIpcValue; //HMDSETUP_DIALOG_OPEN
   //
   procedure OnErrDlgClick(Sender:TObject);
   function  OnErrDlgOpen  (Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
@@ -251,6 +255,7 @@ begin
  Handler.AddCallback('MSG_DIALOG_OPEN'       ,@OnMsgDialogOpen);
  Handler.AddCallback('SAVE_DIALOG_OPEN'      ,@OnSaveDialogOpen);
  Handler.AddCallback('NPCOMMERCE_DIALOG_OPEN',@OnNpCommerceDialogOpen);
+ Handler.AddCallback('HMDSETUP_DIALOG_OPEN'  ,@OnHmdSetupDialogOpen);
  //
  Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
  Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
@@ -886,6 +891,55 @@ begin
    Attributes.Memo.Message:=Attributes.Memo.Message+#13#10;
   Attributes.Memo.Message:=Attributes.Memo.Message+data.targets[i];
  end;
+
+ NewDialogOpen(Attributes,FCommonDialog);
+end;
+
+//
+
+procedure TDialogsManager.OnHmdSetupDialogClick(Sender:TObject);
+var
+ rzdata:THmdSetupDialogResult;
+begin
+ FillChar(rzdata,SizeOf(rzdata),0);
+
+ case TDialogButtonId(TCustomButton(Sender).Tag) of
+  btnIdCancel   :rzdata.resultId:=1;
+  btnIdOkYesBtn1:rzdata.resultId:=0;
+  else;
+ end;
+
+ pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+
+ FreeAndNil(FCommonDialog);
+end;
+
+function TDialogsManager.OnHmdSetupDialogOpen(Value:TIpcValue):TIpcValue; //HMDSETUP_DIALOG_OPEN
+var
+ data:THmdSetupDialogOpen;
+ Attributes:TDialogAttributes;
+begin
+ Result:=0;
+
+ Assert(FCommonDialog=nil);
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ FillChar(Attributes,SizeOf(Attributes),0);
+ Attributes.OnClick:=@OnNpCommerceDialogClick;
+
+ Attributes.Caption.Enable:=True;
+ Attributes.Caption.Message:='Hmd Setup';
+
+ Attributes.CloseButton.Enable:=True;
+ Attributes.CloseButton.btnId :=btnIdCancel;
+
+ Attributes.Buttons.Enable :=True;
+ Attributes.Buttons.BtnType:=btnOk;
+
+ Attributes.Memo.Enable :=True;
+ Attributes.Memo.Message:='Connect VR and turn it on';
 
  NewDialogOpen(Attributes,FCommonDialog);
 end;

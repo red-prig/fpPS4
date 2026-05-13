@@ -13,6 +13,7 @@ uses
   ps4_libSceSaveDataDialog,
   ps4_libSceErrorDialog,
   ps4_libSceNpCommerce,
+  ps4_libSceHmdSetupDialog,
   ps4_libSigninDialog,
   ps4_libSceImeDialog;
 
@@ -56,34 +57,6 @@ begin
 end;
 
 function ps4_sceLoginDialogUpdateStatus():Integer;
-begin
- Result:=0;
-end;
-
-//
-
-function ps4_sceHmdSetupDialogInitialize():Integer;
-begin
- Result:=0;
-end;
-
-function ps4_sceHmdSetupDialogOpen(param:Pointer):Integer;
-begin
- Assert(False,'TODO:sceHmdSetupDialogOpen');
- Result:=0;
-end;
-
-function ps4_sceHmdSetupDialogUpdateStatus():Integer;
-begin
- Result:=SCE_COMMON_DIALOG_STATUS_FINISHED;
-end;
-
-function ps4_sceHmdSetupDialogGetResult(pResult:Pointer):Integer;
-begin
- Result:=0;
-end;
-
-function ps4_sceHmdSetupDialogTerminate():Integer;
 begin
  Result:=0;
 end;
@@ -170,20 +143,6 @@ begin
  lib.set_proc($DAB73E7A049F6F90,@ps4_sceLoginDialogUpdateStatus);
 end;
 
-function Load_libSceHmdSetupDialog(name:pchar):p_lib_info;
-var
- lib:TLIBRARY;
-begin
- Result:=obj_new_int('libSceHmdSetupDialog');
-
- lib:=Result^.add_lib('libSceHmdSetupDialog');
- lib.set_proc($341D58DA40368C26,@ps4_sceHmdSetupDialogInitialize);
- lib.set_proc($34D8225784FE6A45,@ps4_sceHmdSetupDialogOpen);
- lib.set_proc($51DEE3DFE4432018,@ps4_sceHmdSetupDialogUpdateStatus);
- lib.set_proc($EA55511CC5792D8D,@ps4_sceHmdSetupDialogGetResult);
- lib.set_proc($FB3E0E26616B7997,@ps4_sceHmdSetupDialogTerminate);
-end;
-
 function Load_libSceNpFriendListDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -225,7 +184,6 @@ initialization
  RegisteredInternalFile(stub[2] ,'libSceNpProfileDialog.prx'       ,@Load_libSceNpProfileDialog       );
  RegisteredInternalFile(stub[7] ,'libScePlayerInvitationDialog.prx',@Load_libScePlayerInvitationDialog);
  RegisteredInternalFile(stub[9] ,'libSceLoginDialog.prx'           ,@Load_libSceLoginDialog           );
- RegisteredInternalFile(stub[10],'libSceHmdSetupDialog.prx'        ,@Load_libSceHmdSetupDialog        );
  RegisteredInternalFile(stub[11],'libSceNpFriendListDialog.prx'    ,@Load_libSceNpFriendListDialog    );
  RegisteredInternalFile(stub[12],'libSceInvitationDialog.prx'      ,@Load_libSceInvitationDialog      );
  RegisteredInternalFile(stub[13],'libSceWebBrowserDialog.prx'      ,@Load_libSceWebBrowserDialog      );
