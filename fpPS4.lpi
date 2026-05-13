@@ -1796,6 +1796,10 @@
         <Filename Value="gui\laz2ime.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\dialogs\ps4_libSceHmdSetupDialog.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
