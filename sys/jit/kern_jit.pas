@@ -1401,14 +1401,6 @@ begin
      movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)],rsp);
      movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rbp)],rbp);
 
-     //load guest stack
-     movq(r14,[r13-jit_frame_offset+(@p_kthread(nil)^.td_ustack.stack)]);
-     movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_ustack.sttop)]);
-
-     //set teb
-     movq([GS+teb_stack],r14);
-     movq([GS+teb_sttop],r15);
-
      //load rsp,rbp
      movq(rsp,[r13+(@p_jit_frame(nil)^.tf_rsp)]);
      movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rbp)]);
@@ -1494,14 +1486,6 @@ begin
      //load rsp,rbp
      movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rsp);
      movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp);
-
-     //load host stack
-     movq(r14,[r13-jit_frame_offset+(@p_kthread(nil)^.td_kstack.stack)]);
-     movq(r15,[r13-jit_frame_offset+(@p_kthread(nil)^.td_kstack.sttop)]);
-
-     //set teb
-     movq([GS+teb_stack],r14);
-     movq([GS+teb_sttop],r15);
 
      //load internal stack
      movq(rsp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)]);

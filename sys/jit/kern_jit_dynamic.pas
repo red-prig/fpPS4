@@ -441,11 +441,6 @@ begin
   td^.td_teb^.jit_trp:=@jit_interrupt_nop;
  end;
 
- //teb stack
- td^.td_teb^.sttop:=td^.td_kstack.sttop;
- td^.td_teb^.stack:=td^.td_kstack.stack;
- //teb stack
-
  //
  if (node<>nil) then
  begin

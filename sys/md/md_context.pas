@@ -86,9 +86,6 @@ const
  __INITIAL_MXCSR__     =$9FC0; //verified
  __INITIAL_MXCSR_MASK__=$FFBF; //verified
 
-procedure teb_set_kernel(td:p_kthread);
-procedure teb_set_user  (td:p_kthread);
-
 Function  GetContextSize(ContextFlags:DWORD):QWORD;
 function  InitializeContextExtended(data:Pointer;ContextFlags:DWORD):Pointer;
 
@@ -118,35 +115,6 @@ uses
  signal;
 
 //
-
-procedure teb_set_kernel(td:p_kthread);
-begin
- //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  td^.td_teb^.sttop:=td^.td_kstack.sttop;
-  td^.td_teb^.stack:=td^.td_kstack.stack;
- end;
- //teb stack
-end;
-
-procedure teb_set_user(td:p_kthread);
-begin
- //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  if (sigonstack(td^.td_frame.tf_rsp)<>0) then
-  begin
-   td^.td_teb^.stack:=td^.td_sigstk.ss_sp;
-   td^.td_teb^.sttop:=td^.td_sigstk.ss_sp-td^.td_sigstk.ss_size;
-  end else
-  begin
-   td^.td_teb^.stack:=td^.td_ustack.stack;
-   td^.td_teb^.sttop:=td^.td_ustack.sttop;
-  end;
- end;
- //teb stack
-end;
 
 function GetEnabledXStateFeatures:QWORD; stdcall external 'kernel32';
 
@@ -677,10 +645,6 @@ begin
 
  //Writeln('ipi_sigreturn');
 
- //teb stack
- teb_set_kernel(td);
- //teb stack
-
  switch_to_jit(td);
 
  regs:=@td^.td_frame;
@@ -735,10 +699,6 @@ begin
   md_set_fpcontext(Context,@td^.td_fpstate);
  end;
  //xmm,ymm
-
- //teb stack
- teb_set_user(td);
- //teb stack
 
  //Writeln('ipi_sigreturn');
 

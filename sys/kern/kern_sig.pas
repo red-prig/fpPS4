@@ -1820,17 +1820,6 @@ begin
 
  //Writeln('ast');
 
- //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  sttop:=td^.td_teb^.sttop;
-  stack:=td^.td_teb^.stack;
-  //
-  td^.td_teb^.sttop:=td^.td_kstack.sttop;
-  td^.td_teb^.stack:=td^.td_kstack.stack;
- end;
- //teb stack
-
  thread_lock(td);
 
  flags:=td^.td_flags;
@@ -1929,14 +1918,6 @@ begin
   td^.td_flags:=td^.td_flags and (not TDF_UNUSED09); //sony ext????
   thread_unlock(td);
  end;
-
- //teb stack
- if ((td^.pcb_flags and PCB_IS_JIT)=0) then
- begin
-  td^.td_teb^.sttop:=sttop;
-  td^.td_teb^.stack:=stack;
- end;
- //teb stack
 
 end;
 

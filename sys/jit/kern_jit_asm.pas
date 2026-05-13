@@ -617,14 +617,6 @@ asm
  movq jit_frame.tf_rsp(%r13),%rsp
  movq jit_frame.tf_rbp(%r13),%rbp
  //switch stack
-
- //teb
- movq - kthread.td_frame.tf_r13 + kthread.td_kstack.sttop(%r13) ,%r14
- movq - kthread.td_frame.tf_r13 + kthread.td_kstack.stack(%r13) ,%r15
-
- movq %r14,%gs:teb.sttop
- movq %r15,%gs:teb.stack
- //teb
 end;
 
 //unused
@@ -634,14 +626,6 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13), %rsp
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13), %rbp
  //switch stack
-
- //teb
- movq - kthread.td_frame.tf_r13 + kthread.td_ustack.sttop(%r13) ,%r14
- movq - kthread.td_frame.tf_r13 + kthread.td_ustack.stack(%r13) ,%r15
-
- movq %r14,%gs:teb.sttop
- movq %r15,%gs:teb.stack
- //teb
 
  //uplift %rsp/%rbp ???
 end;

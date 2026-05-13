@@ -102,26 +102,18 @@ end;
 
 procedure cpu_init_jit(td:p_kthread);
 begin
- //teb stack
- teb_set_kernel(td);
- //teb stack
+ //
 end;
 
 procedure cpu_fini_jit(td:p_kthread);
 begin
- //teb stack
- teb_set_user(td);
- //teb stack
+ //
 end;
 
 procedure cpu_fetch_syscall_args(td:p_kthread);
 begin
  td^.td_retval[0]:=0;
  td^.td_retval[1]:=td^.td_frame.tf_rdx;
-
- //teb stack
- teb_set_kernel(td);
- //teb stack
 end;
 
 procedure cpu_set_syscall_retval(td:p_kthread;error:Integer);
@@ -150,9 +142,6 @@ begin
     end;
  end;
 
- //teb stack
- teb_set_user(td);
- //teb stack
 end;
 
 procedure cpu_set_upcall_kse(td:p_kthread;entry,arg:Pointer;stack:p_stack_t);

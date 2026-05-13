@@ -135,6 +135,7 @@ const
 type
  p_teb=^teb;
  teb=packed record
+  //[TIB]
   SEH               :Pointer;
   stack             :Pointer;
   sttop             :Pointer;
@@ -142,15 +143,23 @@ type
   FiberData         :Pointer;
   Arbitrary         :Pointer;
   TIB               :Pointer;
+  //[TIB]
   EnvironmentPointer:Pointer;
   ClientId          :array[0..1] of QWORD;
   ActiveRpcHandle   :QWORD;
   ThreadLocalStorage:Pointer;
   PEB               :Pointer;
-  _align1           :array[0..18] of QWORD;
+  LastErrorValue    :DWORD;
+  CountOfOwnedcs    :DWORD;
+  CsrClientThread   :Pointer;
+  Win32ThreadInfo   :Pointer;
+  User32Reserved    :array[0..15] of QWORD;
   WOW64             :Pointer;                 //0x100
-  _align2           :array[0..18] of QWORD;
-  _resrv1           :array[0..3] of QWORD;
+  CurrentLocale     :DWORD;
+  FpSoftwareStatus  :DWORD;
+  ReservedDebugger  :array[0..15] of QWORD;
+  //[SystemReserved1]                         //0x190
+  _resrv1           :array[0..5] of QWORD;
   thread            :Pointer;                 //0x1C0
   fsbase            :Pointer;                 //0x1C8
   gsbase            :Pointer;                 //0x1D0
@@ -158,11 +167,14 @@ type
   jit_trp           :Pointer;                 //0x1E0
   ipi_rip           :Pointer;                 //0x1E8
   iflag             :QWORD;                   //0x1F0
-  _resrv2           :array[0..17] of QWORD;
-  _align3           :array[0..7] of QWORD;
-  actctx            :Pointer;                 //0x2C8
-  _align4           :array[0..180] of QWORD;
-  _align5           :array[0..383] of QWORD;
+  _resrv2           :array[0..11] of QWORD;
+  //[SystemReserved1]
+  HeapFlsData       :Pointer;
+  RngState          :array[0..3] of QWORD;
+  _align1           :array[0..8] of QWORD;
+  ActivationContext :Pointer;                 //0x2C8
+  _align2           :array[0..180] of QWORD;
+  _align3           :array[0..383] of QWORD;
   DeallocationStack :Pointer;                 //0x1478
  end;
 
@@ -173,7 +185,7 @@ const
  teb_thread =ptruint(@teb(nil^).thread );
  teb_fsbase =ptruint(@teb(nil^).fsbase );
  teb_gsbase =ptruint(@teb(nil^).gsbase );
- teb_actctx =ptruint(@teb(nil^).actctx );
+ teb_actctx =ptruint(@teb(nil^).ActivationContext);
  teb_jit_trp=ptruint(@teb(nil^).jit_trp);
  teb_iflag  =ptruint(@teb(nil^).iflag  );
  teb_dealloc=ptruint(@teb(nil^).DeallocationStack);

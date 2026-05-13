@@ -29,7 +29,7 @@ Const
 function  cpu_thread_alloc(pages:Word):p_kthread;
 function  cpu_thread_free(td:p_kthread):Integer;
 
-function  BaseQueryInfo(td:p_kthread):Integer;
+function  cpu_teb_init(td:p_kthread):Integer;
 
 function  cpu_thread_create(td:p_kthread;
                             stack_base:Pointer;
@@ -164,7 +164,7 @@ begin
           );
 end;
 
-function BaseQueryInfo(td:p_kthread):Integer;
+function cpu_teb_init(td:p_kthread):Integer;
 var
  data:array[0..SizeOf(THREAD_BASIC_INFORMATION)-1+7] of Byte;
  P_TBI:PTHREAD_BASIC_INFORMATION;
@@ -185,7 +185,10 @@ begin
  td^.td_teb   :=P_TBI^.TebBaseAddress;
  td^.td_cpuset:=P_TBI^.AffinityMask;
 
- td^.td_teb^.thread:=td; //self
+ td^.td_teb^.stack:=Pointer(-1); //MAX
+ td^.td_teb^.sttop:=nil;         //MIN
+
+ td^.td_teb^.thread           :=td;  //self
  td^.td_teb^.DeallocationStack:=nil; //dont free memory
 end;
 
@@ -350,7 +353,7 @@ begin
 
   if (Result=0) then
   begin
-   Result:=BaseQueryInfo(td);
+   Result:=cpu_teb_init(td);
   end;
 
   if (Result<>0) then
