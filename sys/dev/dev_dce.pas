@@ -394,6 +394,17 @@ begin
 
 end;
 
+procedure FreeAndNilDce(var obj:TDisplayHandle);
+var
+ tmp:TDisplayHandle;
+begin
+ tmp:=obj;
+ obj:=nil;
+ mtx_unlock(dce_mtx);
+  tmp.free;
+ mtx_lock(dce_mtx);
+end;
+
 var
  f_vopen_counter:QWORD=0;
  f_eop_count:Integer=1;
@@ -510,7 +521,7 @@ begin
         Result:=EINVAL;
        end else
        begin
-        FreeAndNil(dce_handle);
+        FreeAndNilDce(dce_handle);
        end;
 
        if (Result=0) then

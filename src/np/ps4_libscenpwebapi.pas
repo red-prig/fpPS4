@@ -7,6 +7,7 @@ interface
 
 uses
  subr_dynlib,
+ np_error,
  ps4_libSceNpCommon,
  ps4_libSceNpManager;
 
@@ -84,7 +85,7 @@ function ps4_sceNpWebApiSendRequest(requestId:Int64;
                                     pData:Pointer;
                                     dataSize:size_t):Integer;
 begin
- Result:=0;
+ Result:=SCE_NP_WEBAPI_ERROR_REQUEST_NOT_FOUND;
 end;
 
 type
@@ -108,7 +109,7 @@ begin
   pRespInfoOption^.httpStatus:=404;
   pRespInfoOption^.responseDataSize:=0;
  end;
- Result:=0;
+ Result:=SCE_NP_WEBAPI_ERROR_REQUEST_NOT_FOUND;
 end;
 
 function ps4_sceNpWebApiGetHttpStatusCode(requestId:Int64;

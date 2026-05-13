@@ -139,7 +139,7 @@ begin
   md_halt(rv);
  end else
  begin
-  thread_suspend_all(p_host_ipc_td);
+  thread_suspend_all(nil);
   msleep_td(0);
  end;
 end;

@@ -14,7 +14,7 @@ uses
  sysutils,
  atomic,
  sys_bootparam,
- host_ipc_interface,
+ host_ipc,
  param_sfo_gui,
  kern_rwlock;
 
@@ -23,24 +23,9 @@ var
  param_sfo_lazy_init:Integer=0;
  param_sfo_file     :TParamSfoFile=nil;
 
-type
- TParamSfoLoaderIpc=object
-  function OnLoad(obj:TObject):Ptruint;
- end;
-
-function TParamSfoLoaderIpc.OnLoad(obj:TObject):Ptruint;
-begin
- Result:=0;
-
- Writeln('PARAM_SFO_LOAD');
-
- param_sfo_file:=TParamSfoFile(obj);
-end;
-
 procedure init_param_sfo;
 var
- Loader:TParamSfoLoaderIpc;
- err:Integer;
+ Value:TIpcValue;
 begin
  if (param_sfo_lazy_init=2) then Exit;
 
@@ -50,14 +35,9 @@ begin
  begin
   rw_wlock(param_sfo_lock);
 
-  p_host_handler.AddCallback('PARAM_SFO_LOAD',@Loader.OnLoad,TParamSfoFile);
-
-  err:=p_host_ipc.SendSync('PARAM_SFO_INIT');
-
-  if (err<>0) then
-  begin
-   Assert(false,'PARAM_SFO_INIT error='+IntToStr(err));
-  end;
+  Value:=p_host_ipc.InvokeSync('PARAM_SFO_INIT');
+  param_sfo_file:=TParamSfoFile(Value.GetObject(TParamSfoFile));
+  Value.Free;
 
   param_sfo_lazy_init:=2;
   rw_wunlock(param_sfo_lock);

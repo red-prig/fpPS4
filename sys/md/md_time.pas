@@ -35,6 +35,8 @@ procedure get_thread_cputime(time:PInt64);
 procedure gettimezone(z:p_timezone);
 procedure getadjtime(tv:p_timeval);
 
+Function  GetRtcTick:QWORD;
+
 function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function  kern_clock_gettime(clock_id:Integer;tp:p_timespec):Integer;
 function  kern_clock_getres(clock_id:Integer;tp:p_timespec):Integer;
@@ -321,6 +323,13 @@ begin
   tv^.tv_sec :=(STA.TimeAdjustment div UNIT_PER_SEC);
   tv^.tv_usec:=(STA.TimeAdjustment mod UNIT_PER_SEC) div UNIT_PER_USEC;
  end;
+end;
+
+Function GetRtcTick:QWORD;
+begin
+ Result:=0;
+ unittime(@Result);
+ Result:=((Result-DELTA_EPOCH_IN_UNIT) div UNIT_PER_USEC)+QWORD($dcbffeff2bc000);
 end;
 
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;

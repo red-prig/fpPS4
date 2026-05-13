@@ -17,7 +17,7 @@ uses
  si_ci_vi_merged_groups,
 
  sys_bootparam,
- host_ipc_interface,
+ host_ipc,
  md_sleep,
 
  Vulkan,
@@ -3572,7 +3572,7 @@ end;
 
 function SendWarnMsg(const s:RawByteString):Integer;
 begin
- Result:=p_host_ipc.SendSync(HashIpcStr('WARNING'),Length(s)+1,pchar(s));
+ Result:=p_host_ipc.warning(s);
 end;
 
 procedure pm4_WaitRegMem(var ctx:t_me_render_context;node:p_pm4_node_WaitRegMem);

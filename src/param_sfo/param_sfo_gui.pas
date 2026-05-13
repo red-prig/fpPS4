@@ -6,8 +6,7 @@ interface
 
 uses
  sysutils,
- rtti,
- game_info;
+ core_serialization;
 
 const
  //sfo_value_format
@@ -40,7 +39,7 @@ type
 
 //
 
- TParamSfoValue=class(TAbstractObject)
+ TParamSfoValue=class(TSerializeObject)
   private
    Fformat:ptruint;
    Fname  :RawByteString;
@@ -54,7 +53,7 @@ type
    Function GetUInt  :DWORD;
  end;
 
- TParamSfoFile=class(TAbstractArray)
+ TParamSfoFile=class(TSerializeArray)
   params:array of TParamSfoValue;
   //
   Destructor Destroy; override;
@@ -64,8 +63,8 @@ type
   //
   Function   GetArrayCount:SizeInt;          override;
   Function   GetArrayItem(i:SizeInt):TValue; override;
-  Function   AddObject:TAbstractObject;      override;
-  Function   AddArray :TAbstractArray;       override;
+  Function   AddObject:TSerializeObject;     override;
+  Function   AddArray :TSerializeArray;      override;
   procedure  AddValue(Value:TValue);         override;
  end;
 
@@ -314,12 +313,12 @@ begin
  end;
 end;
 
-Function TParamSfoFile.AddObject:TAbstractObject;
+Function TParamSfoFile.AddObject:TSerializeObject;
 begin
  Result:=TParamSfoValue.Create;
 end;
 
-Function TParamSfoFile.AddArray:TAbstractArray;
+Function TParamSfoFile.AddArray:TSerializeArray;
 begin
  Result:=nil;
 end;

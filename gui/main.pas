@@ -7,9 +7,9 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
-  LMessages,
+  StdCtrls,
   LCLType,
-  LCLIntf, StdCtrls,
+  LCLIntf,
 
   g_bufstream,
   LineStream,
@@ -19,21 +19,25 @@ uses
   SynEditMarkupBracket,
 
   TypInfo,
-  Rtti,
   jsonscanner,
 
   ms_shell_hack,
 
+  core_serialization,
   host_ipc,
   game_info,
   game_edit,
   cfg_edit,
+  game_run_context,
   game_run,
 
   param_sfo_gui,
   playgo_chunk_gui,
 
-  host_ipc_interface;
+  core_shell,
+  gui_dialogs,
+
+  ps4_libSceMsgDialog;
 
 type
   TMainButtonsState=(mbsStopped,
@@ -41,14 +45,7 @@ type
                      mdsRunned,
                      mdsSuspended);
 
-  TGameMainForm=class(TForm)
-   public
-    caption_format:RawByteString;
-    procedure SetCaptionFPS(Ffps:QWORD);
-    procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
-  end;
-
-  TGameList=class(TAbstractArray)
+  TGameList=class(TSerializeArray)
    FGrid: TStringGrid;
    //
    function  GetItem(i:SizeInt):TGameItem;
@@ -61,12 +58,12 @@ type
    //
    Function  GetArrayCount:SizeInt;          override;
    Function  GetArrayItem(i:SizeInt):TValue; override;
-   Function  AddObject:TAbstractObject;      override;
-   Function  AddArray :TAbstractArray;       override;
+   Function  AddObject:TSerializeObject;     override;
+   Function  AddArray :TSerializeArray;      override;
    procedure AddValue(Value:TValue);         override;
   end;
 
-  TGameListObject=class(TAbstractObject)
+  TGameListObject=class(TSerializeObject)
    private
     FGameList:TGameList;
    published
@@ -133,10 +130,8 @@ type
   private
     FDblClickRow:Integer;
   public
-    FGameList   :TGameList;
-    FGameProcess:TGameProcess;
-    FGameItem   :TGameItem;
-    FParamSfo   :TParamSfoFile;
+    FGameList:TGameList;
+    FContext :TGameRunContext;
 
     FConfigInfo:TConfigInfo;
 
@@ -152,23 +147,16 @@ type
 
     FMainButtonsState:TMainButtonsState;
 
-    FGameMainForm:TGameMainForm;
+    FDialogsManager:TDialogsManager;
 
-    function  OnKevent      (mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
-    function  OnMainWindows (mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
-    function  OnCaptionFPS  (mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
-    function  OnError       (mlen:DWORD;buf:Pointer):Ptruint; //ERROR
-    function  OnWarning     (mlen:DWORD;buf:Pointer):Ptruint; //WARNING
-    function  OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
-    function  OnPlaygoInit  (mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
-    function  OnLoadExec    (obj:TObject)           :Ptruint; //LOAD_EXEC
-
-    function  get_caption_format:RawByteString;
-    function  OpenMainWindows():THandle;
-    Procedure CloseMainWindows();
-    Procedure ShowMainWindows();
-    Procedure HideMainWindows();
-    procedure SetCaptionFPS(Ffps:QWORD);
+    function  OnKevent       (Value:TIpcValue):TIpcValue; //KEV_EVENT
+    function  OnMainWindows  (Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+    function  OnCaptionFPS   (Value:TIpcValue):TIpcValue; //CAPTION_FPS
+    function  OnError        (Value:TIpcValue):TIpcValue; //ERROR
+    function  OnWarning      (Value:TIpcValue):TIpcValue; //WARNING
+    function  OnParamSfoInit (Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
+    function  OnPlaygoInit   (Value:TIpcValue):TIpcValue; //PLAYGO_INIT
+    function  OnLoadExec     (Value:TIpcValue):TIpcValue; //LOAD_EXEC
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -207,16 +195,6 @@ Const
  fpps4File   ='fpps4.json';
  GameListFile='GameList.json';
 
-procedure TGameMainForm.SetCaptionFPS(Ffps:QWORD);
-begin
- Caption:=Format(caption_format,[Ffps]);
-end;
-
-procedure TGameMainForm.WMEraseBkgnd(var Message:TLMEraseBkgnd);
-begin
- Message.Result:=1;
-end;
-
 type
  TMySynLog=class(TCustomSynLog)
   Form:TfrmMain;
@@ -242,14 +220,6 @@ end;
 
 const
  section_prefix='game-';
-
-function GetRealFontSize(Font:TFont):Integer;
-var
- fd: TFontData;
-begin
- fd := Graphics.GetFontData(Font.Handle);
- Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
-end;
 
 const
  MsgDlgBtnToStr: array[TMsgDlgBtn] of PChar = (
@@ -415,18 +385,18 @@ end;
 var
  IpcHandler:THostIpcHandler;
 
-function TfrmMain.OnMainWindows(mlen:DWORD;buf:Pointer):Ptruint; //MAIN_WINDOWS
+function TfrmMain.OnMainWindows(Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
 begin
- Result:=OpenMainWindows();
+ Result:=FDialogsManager.OpenMainWindows;
 end;
 
-function TfrmMain.OnCaptionFPS(mlen:DWORD;buf:Pointer):Ptruint; //CAPTION_FPS
+function TfrmMain.OnCaptionFPS(Value:TIpcValue):TIpcValue; //CAPTION_FPS
 begin
  Result:=0;
- SetCaptionFPS(PQWORD(buf)^);
+ FDialogsManager.SetCaptionFPS(Value.GetQWORD);
 end;
 
-function TfrmMain.OnKevent(mlen:DWORD;buf:Pointer):Ptruint; //KEV_EVENT
+function TfrmMain.OnKevent(Value:TIpcValue):TIpcValue; //KEV_EVENT
 var
  kev:p_kevent;
  count:Integer;
@@ -435,8 +405,8 @@ var
 begin
  Result:=0;
 
- kev  :=buf;
- count:=mlen div sizeof(t_kevent);
+ kev  :=Value.GetBuf;
+ count:=Value.GetLen div sizeof(t_kevent);
 
  i:=0;
  while (i<>count) do
@@ -448,7 +418,7 @@ begin
       begin
        //ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
        ShowMessage('The process reported exit!');
-       Stop(FGameProcess);
+       FContext.Stop();
       end;
       if ((kev[i].fflags and NOTE_EXEC)<>0) then
       begin
@@ -465,26 +435,29 @@ begin
 
 end;
 
-function TfrmMain.OnError(mlen:DWORD;buf:Pointer):Ptruint; //ERROR
+function TfrmMain.OnError(Value:TIpcValue):TIpcValue; //ERROR
 begin
  Result:=0;
- if (MessageDlgEx(PChar(buf),'Error',[mbOK,mbAbort],Self)=mrAbort) then
+ if (MessageDlgEx(Value.GetString,'Error',[mbOK,mbAbort],Self)=mrAbort) then
  begin
-  Stop(FGameProcess);
+  FContext.Stop();
  end;
 end;
 
-function TfrmMain.OnWarning(mlen:DWORD;buf:Pointer):Ptruint; //WARNING
+function TfrmMain.OnWarning(Value:TIpcValue):TIpcValue; //WARNING
+var
+ i:Integer;
 begin
- Result:=MessageDlgEx(PChar(buf),'Warning',[mbYes,mbNo,mbAbort],Self);
- if (Result=mrAbort) then
+ i:=MessageDlgEx(Value.GetString,'Warning',[mbYes,mbNo,mbAbort],Self);
+ if (i=mrAbort) then
  begin
-  Stop(FGameProcess);
+  FContext.Stop();
  end;
- if (Result=mrYes) then
+ if (i=mrYes) then
  begin
-  Result:=0;
+  i:=0;
  end;
+ Result:=i;
 end;
 
 function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
@@ -496,20 +469,20 @@ begin
                           'param.sfo');
 end;
 
-function TfrmMain.OnParamSfoInit(mlen:DWORD;buf:Pointer):Ptruint; //PARAM_SFO_INIT
+function TfrmMain.OnParamSfoInit(Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
 var
  V:RawByteString;
 begin
- Result:=Ptruint(-1);
+ Result:=0;
 
- if (FGameItem=nil) then Exit;
+ if (FContext.FGameItem=nil) then Exit;
 
- if (FParamSfo=nil) then
+ if (FContext.FParamSfo=nil) then
  begin
-  FParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
+  FContext.FParamSfo:=LoadParamSfoFile2(FContext.FGameItem.MountList.game);
  end;
 
- if (FParamSfo=nil) then
+ if (FContext.FParamSfo=nil) then
  begin
   V:='"{$GAME}/sce_sys/param.sfo" not found, continue?';
 
@@ -518,25 +491,24 @@ begin
    Exit(0);
   end else
   begin
-   Exit(Ptruint(-1));
+   TBStopClick(nil);
+   Exit(0);
   end;
  end;
 
- SendSync(FGameProcess,'PARAM_SFO_LOAD',FParamSfo);
-
- Result:=0;
+ Result:=TIpcValue.&Object(FContext.FParamSfo);
 end;
 
-function TfrmMain.OnPlaygoInit(mlen:DWORD;buf:Pointer):Ptruint; //PLAYGO_INIT
+function TfrmMain.OnPlaygoInit(Value:TIpcValue):TIpcValue; //PLAYGO_INIT
 var
  playgo_file:TPlaygoFile;
  V:RawByteString;
 begin
- Result:=Ptruint(-1);
+ Result:=0;
 
- if (FGameItem=nil) then Exit;
+ if (FContext.FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.game;
+ V:=FContext.FGameItem.MountList.game;
 
  playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
                              DirectorySeparator+
@@ -553,77 +525,29 @@ begin
    Exit(0);
   end else
   begin
-   Exit(Ptruint(-1));
+   TBStopClick(nil);
+   Exit(0);
   end;
  end;
 
- SendSync(FGameProcess,'PLAYGO_LOAD',playgo_file);
-
+ Result:=TIpcValue.&Object(playgo_file);
  FreeAndNil(playgo_file);
- Result:=0;
 end;
 
-function encode_shell(const src:RawByteString):RawByteString;
-var
- i:Integer;
-begin
- if (Pos(' ',src)=0) then
- begin
-  Result:=src;
- end else
- if (Pos('"',src)=0) then
- begin
-  Result:='"'+src+'"';
- end else
- if (Pos('''',src)=0) then
- begin
-  Result:=''''+src+'''';
- end else
- begin
-  Result:='"';
-  For i:=1 to Length(src) do
-  begin
-   if (src[i]='"') then
-   begin
-    Result:=Result+'"'+'\"'+'"';
-   end else
-   begin
-    Result:=Result+src[i];
-   end;
-  end;
-  Result:=Result+'"';
- end;
-end;
-
-function encode_shell(argv:TStringArray):RawByteString;
-var
- i:Integer;
-begin
- Result:='';
- if Length(argv.values)<>0 then
- begin
-  For i:=0 to High(argv.values) do
-  begin
-   if (Result<>'') then Result:=Result+' ';
-   Result:=Result+encode_shell(argv.values[i]);
-  end;
- end;
-end;
-
-function TfrmMain.OnLoadExec(obj:TObject):Ptruint; //LOAD_EXEC
+function TfrmMain.OnLoadExec(Value:TIpcValue):TIpcValue; //LOAD_EXEC
 var
  data:TPS4LoadExec;
  cfg:TGameRunConfig;
  Item:TGameItem;
+ r:Integer;
 begin
  Result:=0;
 
- if (FGameItem=nil) then Exit;
- if (obj=nil) then Exit;
+ data:=TPS4LoadExec(Value.GetObject(TPS4LoadExec));
+ if (data=nil) then Exit;
 
- data:=TPS4LoadExec(obj);
-
- if (FGameProcess=nil) then
+ if (FContext.FGameItem=nil) or
+    (FContext.FGameProcess=nil) then
  begin
   FreeAndNil(data);
   Exit;
@@ -632,7 +556,7 @@ begin
  if (UpperCase(data.Path)='EXIT') then
  begin
   FreeAndNil(data);
-  Stop(FGameProcess);
+  FContext.Stop();
   Exit;
  end;
 
@@ -640,15 +564,15 @@ begin
  begin
 
   //terminate
-  StopAndNil(FGameProcess);
+  FContext.StopAndNil();
   //
-  CloseMainWindows;
+  FDialogsManager.CloseMainWindow;
   //
 
   //re-run
 
   Item:=TGameItem.Create;
-  FGameItem.CopyTo(Item);
+  FContext.FGameItem.CopyTo(Item);
 
   Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
 
@@ -659,16 +583,20 @@ begin
 
   cfg.FConfInfo:=FConfigInfo;
   cfg.FGameItem:=Item;
-  cfg.FParamSfo:=FParamSfo;
+  cfg.FParamSfo:=FContext.FParamSfo;
   cfg.FLoadExec:=True;
 
-  FGameProcess:=run_item(cfg);
+  r:=run_item(cfg,FContext);
+  if (r<>0) then
+  begin
+   ShowMessage('error run process code=0x'+HexStr(r,8));
+  end;
 
-  BindHandler(FGameProcess,IpcHandler);
+  FContext.BindHandler(IpcHandler);
 
   FreeAndNil(Item);
 
-  if (FGameProcess=nil) then
+  if (r<>0) then
   begin
    //stop on error
    TBStopClick(Self);
@@ -681,9 +609,6 @@ begin
 
  FreeAndNil(data);
 end;
-
-
-
 
 //ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
 
@@ -801,14 +726,14 @@ begin
  end;
 end;
 
-Function TGameList.AddObject:TAbstractObject;
+Function TGameList.AddObject:TSerializeObject;
 begin
  Result:=TGameItem.Create;
  //
  AddItem(TGameItem(Result));
 end;
 
-Function TGameList.AddArray:TAbstractArray;
+Function TGameList.AddArray:TSerializeArray;
 begin
  Result:=nil;
 end;
@@ -959,6 +884,8 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
+ FDialogsManager.FImages :=SmallImageList;
+ FDialogsManager.pContext:=@FContext;
 
   ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
 
@@ -974,14 +901,16 @@ begin
 
  IpcHandler:=THostIpcHandler.Create;
 
- IpcHandler.AddCallback('KEV_EVENT'     ,@OnKevent      );
- IpcHandler.AddCallback('MAIN_WINDOWS'  ,@OnMainWindows );
- IpcHandler.AddCallback('CAPTION_FPS'   ,@OnCaptionFPS  );
- IpcHandler.AddCallback('ERROR'         ,@OnError       );
- IpcHandler.AddCallback('WARNING',       @OnWarning     );
- IpcHandler.AddCallback('PARAM_SFO_INIT',@OnParamSfoInit);
- IpcHandler.AddCallback('PLAYGO_INIT'   ,@OnPlaygoInit  );
- IpcHandler.AddCallback('LOAD_EXEC'     ,@OnLoadExec    ,TPS4LoadExec);
+ IpcHandler.AddCallback('KEV_EVENT'      ,@OnKevent      );
+ IpcHandler.AddCallback('MAIN_WINDOWS'   ,@OnMainWindows );
+ IpcHandler.AddCallback('CAPTION_FPS'    ,@OnCaptionFPS  );
+ IpcHandler.AddCallback('ERROR'          ,@OnError       );
+ IpcHandler.AddCallback('WARNING',        @OnWarning     );
+ IpcHandler.AddCallback('PARAM_SFO_INIT' ,@OnParamSfoInit);
+ IpcHandler.AddCallback('PLAYGO_INIT'    ,@OnPlaygoInit  );
+ IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    );
+
+ FDialogsManager.BindHandler(IpcHandler);
 
  ReadConfigFile;
 
@@ -1139,9 +1068,9 @@ begin
   FLogUpdateTime:=GetTickCount64;
  end;
 
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  FProcess:=FGameProcess;
+  FProcess:=FContext.FGameProcess;
   FProcess.Acquire;
 
   if (FProcess.g_ipc<>nil) then
@@ -1152,7 +1081,7 @@ begin
   if (FProcess.is_terminated) or
      (FProcess.is_stoped) then
   begin
-   if (FGameProcess=FProcess) then
+   if (FContext.FGameProcess=FProcess) then
    begin
     TBStopClick(Sender);
    end else
@@ -1164,88 +1093,6 @@ begin
   FProcess.Release;
  end;
 
-end;
-
-function TfrmMain.get_caption_format:RawByteString;
-var
- TITLE,TITLE_ID,APP_VER:RawByteString;
-begin
- Result:='';
-
- if (FGameItem=nil) then Exit;
-
- TITLE   :=FGameItem.FGameInfo.Name;
- TITLE_ID:=FGameItem.FGameInfo.TitleId;
- APP_VER :=FGameItem.FGameInfo.AppVer;
-
- if (TITLE='') then
- begin
-  TITLE:=ExtractFileName(FGameItem.FGameInfo.Exec);
- end;
-
- if (TITLE_ID<>'') then TITLE_ID:='-' +TITLE_ID;
- if (APP_VER <>'') then APP_VER :=':v'+APP_VER;
-
- Result:=Format('fpPS4 (%s) [%s%s%s]',[{$I tag.inc},TITLE,TITLE_ID,APP_VER])+' FPS:%d';
-end;
-
-function TfrmMain.OpenMainWindows():THandle;
-const
- pd_Width=1280;
- pd_Height=720;
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Show;
-  Exit(FGameMainForm.Handle);
- end;
-
- FGameMainForm:=TGameMainForm.CreateNew(Self);
- FGameMainForm.ShowInTaskBar:=stAlways;
- FGameMainForm.DoubleBuffered:=False;
- FGameMainForm.ParentDoubleBuffered:=False;
- FGameMainForm.FormStyle:=fsNormal;
- FGameMainForm.SetBounds(100, 100, pd_Width, pd_Height);
- FGameMainForm.caption_format:=get_caption_format;
- FGameMainForm.SetCaptionFPS(0);
- //FGameMainForm.OnClose:=@FGameMainForm.CloseEvent;
- //FGameMainForm.OnKeyDown:=@FGameMainForm.KeyEvent;
- FGameMainForm.Position:=poScreenCenter;
-
- ///
- ///
-
- FGameMainForm.Show;
-
- Exit(FGameMainForm.Handle);
-end;
-
-Procedure TfrmMain.CloseMainWindows();
-begin
- FreeAndNil(FGameMainForm);
-end;
-
-Procedure TfrmMain.ShowMainWindows();
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Show;
- end;
-end;
-
-Procedure TfrmMain.HideMainWindows();
-begin
- if (FGameMainForm<>nil) then
- begin
-  FGameMainForm.Hide;
- end;
-end;
-
-procedure TfrmMain.SetCaptionFPS(Ffps:QWORD);
-begin
- if (FGameMainForm=nil) then Exit;
-
- FGameMainForm.SetCaptionFPS(Ffps);
 end;
 
 procedure TfrmMain.MIAddClick(Sender: TObject);
@@ -1408,8 +1255,9 @@ var
  aRow:Integer;
  cfg:TGameRunConfig;
  a:Integer;
+ r:Integer;
 begin
- if (FGameProcess<>nil) then Exit;
+ if (FContext.FGameProcess<>nil) then Exit;
 
  aRow:=ListGrid.Row;
 
@@ -1457,16 +1305,17 @@ begin
 
  if Item.FLock then Exit;
 
- FGameProcess:=run_item(cfg);
-
- BindHandler(FGameProcess,IpcHandler);
-
- if (FGameProcess<>nil) then
+ r:=run_item(cfg,FContext);
+ if (r<>0) then
  begin
-  Item.FLock:=True;
-  FGameItem:=Item;
-  FParamSfo:=ParamSfo;
-  ParamSfo:=nil;
+  ShowMessage('error run process code=0x'+HexStr(r,8));
+ end;
+
+ if (r=0) then
+ begin
+  FContext.BindHandler(IpcHandler);
+
+  ParamSfo:=nil; //do not free
 
   SetButtonsState(mdsStarted);
  end;
@@ -1477,17 +1326,17 @@ end;
 
 procedure TfrmMain.TBPlayClick(Sender: TObject);
 begin
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  if (not FGameProcess.g_fork) and
-     (FGameProcess.is_stoped) then
+  if (not FContext.FGameProcess.g_fork) and
+     (FContext.FGameProcess.is_stoped) then
   begin
    ShowMessage('Restart the emulator manually!');
   end else
   begin
    //resume
-   ShowMainWindows();
-   FGameProcess.resume;
+   FDialogsManager.ShowMainWindow();
+   FContext.FGameProcess.resume;
    SetButtonsState(mdsRunned);
   end;
  end else
@@ -1499,10 +1348,10 @@ end;
 
 procedure TfrmMain.TBPauseClick(Sender: TObject);
 begin
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
   //suspend
-  FGameProcess.suspend;
+  FContext.FGameProcess.suspend;
   SetButtonsState(mdsSuspended);
  end;
 end;
@@ -1510,9 +1359,9 @@ end;
 function TfrmMain.GameProcessForked:Boolean;
 begin
  Result:=False;
- if (FGameProcess<>nil) then
+ if (FContext.FGameProcess<>nil) then
  begin
-  Result:=FGameProcess.g_fork;
+  Result:=FContext.FGameProcess.g_fork;
  end;
 end;
 
@@ -1521,30 +1370,27 @@ var
  exit_code:DWORD;
  r:RawByteString;
 begin
- if (FGameProcess=nil) then Exit;
+ if (FContext.FGameProcess=nil) then Exit;
 
  if GameProcessForked then //only forked
  begin
   exit_code:=0;
 
-  if FGameProcess.is_terminated then
+  if FContext.FGameProcess.is_terminated then
   begin
-   exit_code:=FGameProcess.exit_code;
+   exit_code:=FContext.FGameProcess.exit_code;
   end;
 
   //terminate
-  StopAndNil(FGameProcess);
+  FContext.StopAndNil();
+  //
+  FreeAndNil(FContext.FParamSfo);
+  //
+  FContext.CloseItem();
+  //
+  FDialogsManager.CloseMainWindow;
+  //
   SetButtonsState(mbsStopped);
-  //
-  if (FGameItem<>nil) then
-  begin
-   FGameItem.FLock:=False;
-   FGameItem:=nil;
-  end;
-  FreeAndNil(FParamSfo);
-  //
-  CloseMainWindows;
-  //
   Pages.ActivePage:=TabList;
 
   if (exit_code<>0) then

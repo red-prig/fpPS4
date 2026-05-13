@@ -1581,7 +1581,14 @@ asm
  movq %gs:teb.jitcall,%r14
  movq %r14,jit_frame.tf_r13(%r13)
 
- //alloc rbp,rsp
+ //alloc stack frame[
+ movq jit_frame.tf_rsp(%r13), %r15 //mov r15,rsp
+ leaq -8(%r15), %r15               //lea r15,[r15-8]
+ movq jit_frame.tf_rbp(%r13), %r14 //mov r14,rbp      (pushq %rbp)
+ movq %r14,(%r15)                  //mov [r15],r14
+ movq %r15, jit_frame.tf_rbp(%r13) //mov rbp,r15      (movqq %rsp,%rbp)
+ andq     $-16, %r15               //align stack
+ //]
 
  //load addr
  movq %rdi,%r14
@@ -1593,25 +1600,35 @@ asm
  movq %r8 ,%rcx
  movq %r9 ,%r8
 
- //call
- xorq %r15,%r15
- call jit_jmp_dispatch //in:r14(addr) r15(plt) out:r14(addr)
-
- movq jit_frame.tf_rsp(%r13), %r15 //mov r15,rsp
+ //set return cookie
  leaq -8(%r15), %r15               //lea r15,[r15-8]
-
  movq $-55579219,(%r15)            //mov [r15],magic (sign extend)
 
  movq %r15, jit_frame.tf_rsp(%r13) //mov rsp,r15
 
+ //call
+ xorq %r15,%r15
+ call jit_jmp_dispatch //in:r14(addr) r15(plt) out:r14(addr)
+
  call %r14
 
- //restore rbp,rsp
+ //restore rbp,rsp[
+ movq jit_frame.tf_rbp(%r13), %r15 //mov r15,rbp     (movqq %rbp,%rsp)
+ movq (%r15),%r14                  //mov [r15],r14
+ movq %r14, jit_frame.tf_rbp(%r13) //mov rbp,r15     (popq  %rbp)
+ leaq 8(%r15), %r15                //lea r15,[r15+8]
+ movq %r15, jit_frame.tf_rsp(%r13) //mov rsp,r15
+ //]
 
  //load r14,r15,r13
  movq jit_frame.tf_r14(%r13),%r14
  movq jit_frame.tf_r15(%r13),%r15
  movq jit_frame.tf_r13(%r13),%r13
+end;
+
+procedure ExecuteStop; assembler; nostackframe; public;
+asm
+ //Return JIT->HLE
 end;
 
 procedure init_cbs;

@@ -7,7 +7,7 @@ interface
 uses
  windows,
  ntapi,
- host_ipc;
+ game_run_context;
 
 type
  TGameProcessPipe=class(TGameProcess)

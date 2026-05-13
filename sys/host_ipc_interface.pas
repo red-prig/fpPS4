@@ -8,29 +8,53 @@ uses
  Classes,
  CharStream,
  murmurhash,
- kern_hamt,
+ hamt,
  sys_event,
- game_info;
+ core_serialization;
 
 const
  iRESULT=0;
 
-{
 type
- t_mtype=(
-  iRESULT,
-  iERROR,
-  iKEV_CHANGE,
-  iKEV_EVENT,
-  iMOUNT,
-  iMAIN_WINDOWS,
-  iCAPTION_FPS
- );
-}
+ TIpcValue=packed object
+  const
+   m_imm   =0;
+   m_owned =1;
+   m_static=2;
+   m_stream=3;
+  var
+   Flen   :DWORD;
+   Fmode  :Word;
+   Foffset:Word;
+   u:record
+    case Byte of
+     0:(Fimm:Ptruint); // len <= 8
+     1:(Fbuf:Pointer); // len >  8
+   end;
+  function  New    (buf:Pointer;len:DWORD):TIpcValue; static;
+  function  Inplace(node,buf:Pointer;len:DWORD):TIpcValue; static;
+  function  Static (buf:Pointer;len:DWORD):TIpcValue; static;
+  function  Stream (mem:TCustomMemoryStream):TIpcValue; static;
+  function  &Object(obj:TSerializeObject):TIpcValue; static;
+  function  AsQWORD(v:QWORD):TIpcValue; static;
+  function  Copy:TIpcValue;
+  Procedure Free;
+  function  GetLen:DWORD;
+  function  GetBuf:Pointer;
+  procedure MoveTo(buf:Pointer;maxlen:DWORD);
+  function  GetDWORD:DWORD;
+  function  GetQWORD:QWORD;
+  function  GetString:RawByteString;
+  function  GetObject(src:TSerializeObjectClass):TSerializeObject;
+ end;
 
-type
- TOnMessage=function(mlen:DWORD;buf:Pointer):Ptruint of object;
- TOnObject =function(obj:TObject):Ptruint            of object;
+ TOnMessage=function(Value:TIpcValue):TIpcValue of object;
+
+ TMsgHash=object
+  f_mtype:DWORD;
+  msg:RawByteString;
+  function mtype:DWORD;
+ end;
 
  THostIpcHandler=class
   private
@@ -39,13 +63,6 @@ type
     TCBNode=object
      cb:TOnMessage;
     end;
-    //
-    PCBNodeObject=^TCBNodeObject;
-    TCBNodeObject=object(TCBNode)
-     Creator:TAbstractObjectClass;
-     cb_obj :TOnObject;
-     function OnObject(mlen:DWORD;buf:Pointer):Ptruint;
-    end;
    var
     FLock    :Pointer;
     FMsgTable:TSTUB_HAMT32;
@@ -53,7 +70,6 @@ type
    Destructor Destroy; override;
    //
    Procedure  AddCallback(const msg:RawByteString;cb:TOnMessage);
-   Procedure  AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TAbstractObjectClass);
    Procedure  DelCallback(const msg:RawByteString);
    Function   GetCallback(mtype:DWORD):TOnMessage;
  end;
@@ -61,46 +77,282 @@ type
  THostIpcInterface=class
   public
    FHandler:THostIpcHandler;
-   Ftd     :Pointer; //p_kthread
-   FStop   :Boolean;
    //
    procedure   error(const s:RawByteString);
+   function    warning(const s:RawByteString):Ptruint;
    procedure   kevent(kev:p_kevent;count:Integer);
    function    OpenMainWindows():THandle;
    procedure   SetCaptionFps(Ffps:QWORD);
    //
-   Function    GetCallback(mtype:DWORD):TOnMessage;            virtual;
-   function    NewSyncKey:Pointer;                             virtual; abstract;
-   procedure   FreeSyncKey (key:Pointer);                      virtual; abstract;
-   procedure   WaitSyncKey (key:Pointer);                      virtual; abstract;
-   function    GetSyncValue(key:Pointer):Ptruint;              virtual; abstract;
-   procedure   Send(mtype,mlen:DWORD;buf,key:Pointer);         virtual; abstract;
-   procedure   Update  ();                                     virtual;
+   Function    GetCallback(mtype:DWORD):TOnMessage;           virtual;
+   function    NewSyncKey:Pointer;                            virtual; abstract;
+   procedure   FreeSyncKey (key:Pointer);                     virtual; abstract;
+   procedure   WaitSyncKey (key:Pointer);                     virtual; abstract;
+   function    GetSyncValue(key:Pointer):TIpcValue;           virtual; abstract;
+   procedure   Send(mtype:DWORD;key:Pointer;value:TIpcValue); virtual; abstract;
+   procedure   Update();                                      virtual;
+   procedure   Disconnect();                                  virtual;
    //
-   function    SendSync(mtype,mlen:DWORD;buf:Pointer):Ptruint;
-   procedure   SendAsyn(mtype,mlen:DWORD;buf:Pointer);
-   function    SendSync(const msg:RawByteString):Ptruint;
-   function    SendSync(mtype:DWORD;obj:TAbstractObject):Ptruint;
-   procedure   SendAsyn(mtype:DWORD;obj:TAbstractObject);
-   function    SendSync(const msg:RawByteString;obj:TAbstractObject):Ptruint;
-   procedure   SendAsyn(const msg:RawByteString;obj:TAbstractObject);
+   function    InvokeSync(msg:TMsgHash;Value:TIpcValue):TIpcValue;
+   function    InvokeSync(msg:TMsgHash):TIpcValue;
+   //
+   function    InvokeSync2(msg:TMsgHash;Value:TIpcValue):Ptruint;
+   function    InvokeSync2(msg:TMsgHash;buf:Pointer;mlen:DWORD):Ptruint;
+   function    InvokeSync2(msg:TMsgHash):Ptruint;
+   //
+   procedure   InvokeAsyn(msg:TMsgHash;Value:TIpcValue);
+   procedure   InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
+   procedure   InvokeAsyn(msg:TMsgHash);
    //
  end;
+
+operator := (A:RawByteString):TMsgHash;
+operator := (A:DWORD):TMsgHash;
 
 Function HashIpcStr(const msg:RawByteString):DWORD;
 
 //id cache
 var
- iERROR       :DWORD=0;
- iKEV_CHANGE  :DWORD=0;
- iKEV_EVENT   :DWORD=0;
- iMAIN_WINDOWS:DWORD=0;
- iCAPTION_FPS :DWORD=0;
+ iERROR       :TMsgHash=(msg:'ERROR');
+ iWARNING     :TMsgHash=(msg:'WARNING');
+ iKEV_CHANGE  :TMsgHash=(msg:'KEV_CHANGE');
+ iKEV_EVENT   :TMsgHash=(msg:'KEV_EVENT');
+ iMAIN_WINDOWS:TMsgHash=(msg:'MAIN_WINDOWS');
+ iCAPTION_FPS :TMsgHash=(msg:'CAPTION_FPS');
 
 implementation
 
 uses
  kern_rwlock;
+
+function TMsgHash.mtype:DWORD;
+begin
+ if (f_mtype=0) then
+ begin
+  f_mtype:=HashIpcStr(msg)
+ end;
+ Result:=f_mtype;
+end;
+
+operator := (A:RawByteString):TMsgHash;
+begin
+ Result:=Default(TMsgHash);
+ Result.msg:=A;
+end;
+
+operator := (A:DWORD):TMsgHash;
+begin
+ Result:=Default(TMsgHash);
+ Result.f_mtype:=A;
+end;
+
+Procedure SmallMove(src,dst:Pointer;count:DWORD); inline;
+type
+ PXWORD=^TXWORD;
+ TXWORD=array[0..1] of QWORD;
+begin
+ case count of
+   0:;
+   1:PByte(dst)[0]:=PByte(src)[0];
+   2:PWORD(dst)[0]:=PWORD(src)[0];
+   4:PDWORD(dst)[0]:=PDWORD(src)[0];
+   8:PQWORD(dst)[0]:=PQWORD(src)[0];
+  16:PXWORD(dst)[0]:=PXWORD(src)[0];
+  else
+    Move(src^,dst^,count);
+ end;
+end;
+
+function TIpcValue.New(buf:Pointer;len:DWORD):TIpcValue;
+begin
+ Result:=Default(TIpcValue);
+ Result.Flen:=len;
+ //
+ if (len<=SizeOf(Ptruint)) then
+ begin
+  //imm
+  Result.Fmode:=m_imm;
+  SmallMove(buf,@Result.u.Fimm,len);
+ end else
+ begin
+  //copy
+  Result.Fmode:=m_owned;
+  Result.u.Fbuf:=GetMem(len);
+  SmallMove(buf,Result.u.Fbuf,len);
+ end;
+end;
+
+function TIpcValue.Inplace(node,buf:Pointer;len:DWORD):TIpcValue;
+var
+ offset:PtrInt;
+begin
+ offset:=PtrInt(buf)-PtrInt(node);
+ Assert(PtrUint(offset)<=High(Word));
+ //
+ Result:=Default(TIpcValue);
+ Result.Flen   :=len;
+ Result.Foffset:=offset;
+ Result.Fmode  :=m_owned;
+ Result.u.Fbuf :=node;
+end;
+
+function TIpcValue.Static(buf:Pointer;len:DWORD):TIpcValue;
+begin
+ Result:=Default(TIpcValue);
+ Result.Flen:=len;
+ //
+ if (len<=SizeOf(Ptruint)) then
+ begin
+  //imm
+  Result.Fmode:=m_imm;
+  SmallMove(buf,@Result.u.Fimm,len);
+ end else
+ begin
+  //static
+  Result.Fmode :=m_static;
+  Result.u.Fbuf:=buf;
+ end;
+end;
+
+function TIpcValue.Stream(mem:TCustomMemoryStream):TIpcValue;
+begin
+ Result:=Default(TIpcValue);
+ if (mem<>nil) then
+ begin
+  Result.Flen  :=mem.Size;
+  Result.Fmode :=m_stream;
+  Result.u.Fbuf:=mem;
+ end;
+end;
+
+function TIpcValue.&Object(obj:TSerializeObject):TIpcValue; static;
+var
+ mem:TMemoryStream;
+begin
+ mem:=nil;
+ if (obj<>nil) then
+ begin
+  mem:=TMemoryStream.Create;
+  obj.Serialize(mem);
+ end;
+ Result:=TIpcValue.Stream(mem);
+end;
+
+function TIpcValue.AsQWORD(v:QWORD):TIpcValue;
+begin
+ Result:=Default(TIpcValue);
+ Result.Flen:=SizeOf(QWORD);
+ //imm
+ Result.Fmode :=m_imm;
+ Result.u.Fimm:=v;
+end;
+
+function TIpcValue.Copy:TIpcValue;
+begin
+ if (Fmode=m_static) then
+ begin
+  Result:=TIpcValue.New(GetBuf,GetLen);
+ end else
+ begin
+  Result:=Self;
+ end;
+end;
+
+Procedure TIpcValue.Free;
+begin
+ case Fmode of
+  m_owned :FreeMem(u.Fbuf);
+  m_imm   :;
+  m_static:;
+  m_stream:TObject(u.Fbuf).Free;
+  else;
+ end;
+ Self:=Default(TIpcValue);
+end;
+
+function TIpcValue.GetLen:DWORD;
+begin
+ Result:=Flen;
+end;
+
+function TIpcValue.GetBuf:Pointer;
+begin
+ case Fmode of
+  m_imm   :Result:=@u.Fimm;
+  m_owned :Result:=u.Fbuf+Foffset;
+  m_static:Result:=u.Fbuf+Foffset;
+  m_stream:Result:=TCustomMemoryStream(u.Fbuf).Memory+Foffset;
+  else
+           Result:=nil;
+ end;
+end;
+
+procedure TIpcValue.MoveTo(buf:Pointer;maxlen:DWORD);
+var
+ len:DWORD;
+begin
+ len:=Flen;
+ if (len>maxlen) then len:=maxlen;
+ SmallMove(GetBuf,buf,len);
+end;
+
+function TIpcValue.GetDWORD:DWORD;
+begin
+ if (Fmode=m_imm) then
+ begin
+  Result:=u.Fimm;
+ end else
+ if (Flen>=SizeOf(DWORD)) then
+ begin
+  Result:=PDWORD(GetBuf)^
+ end else
+ begin
+  Result:=0;
+  SmallMove(GetBuf,@Result,Flen);
+ end;
+end;
+
+function TIpcValue.GetQWORD:QWORD;
+begin
+ if (Fmode=m_imm) then
+ begin
+  Result:=u.Fimm;
+ end else
+ if (Flen>=SizeOf(QWORD)) then
+ begin
+  Result:=PQWORD(GetBuf)^
+ end else
+ begin
+  Result:=0;
+  SmallMove(GetBuf,@Result,Flen);
+ end;
+end;
+
+function TIpcValue.GetString:RawByteString;
+begin
+ Result:='';
+ SetLength(Result,Flen);
+ SmallMove(GetBuf,@Result[1],Flen);
+end;
+
+function TIpcValue.GetObject(src:TSerializeObjectClass):TSerializeObject;
+var
+ mem:TPCharStream;
+begin
+ if (src=nil) or (Flen=0) then
+ begin
+  Exit(nil);
+ end;
+
+ mem:=TPCharStream.Create(GetBuf,Flen);
+
+ Result:=src.Create;
+ Result.Deserialize(mem);
+
+ mem.Free;
+end;
+
+//
 
 Function HashIpcStr(const msg:RawByteString):DWORD;
 var
@@ -134,69 +386,6 @@ begin
 
  ptr:=AllocMem(SizeOf(TCBNode));
  ptr^.cb:=cb;
-
- rw_wlock(FLock);
-
- data:=HAMT_insert32(@FMsgTable,hash,ptr);
-
- if (data<>nil) then
- begin
-  if (data^=ptr) then
-  begin
-   //
-  end else
-  begin
-   Assert(False,'AddCallback');
-   //FreeMem(data^); //free old
-   //data^:=ptr;     //set new
-  end;
- end else
- begin
-  Assert(False,'NOMEM');
- end;
-
- rw_wunlock(FLock);
-end;
-
-function THostIpcHandler.TCBNodeObject.OnObject(mlen:DWORD;buf:Pointer):Ptruint;
-var
- mem:TPCharStream;
- obj:TAbstractObject;
-begin
- if (Creator=nil) or (cb_obj=nil) then
- begin
-  Exit(Ptruint(-1));
- end;
-
- if (mlen=0) then
- begin
-  obj:=nil;
- end else
- begin
-  mem:=TPCharStream.Create(buf,mlen);
-
-  obj:=Creator.Create;
-  obj.Deserialize(mem);
-
-  mem.Free;
- end;
-
- Result:=cb_obj(obj);
-end;
-
-Procedure THostIpcHandler.AddCallback(const msg:RawByteString;cb:TOnObject;Creator:TAbstractObjectClass);
-var
- hash:DWORD;
- ptr :PCBNodeObject;
- data:PPointer;
-begin
- hash:=HashIpcStr(msg);
- Assert(hash<>iRESULT,'Hash is zero!');
-
- ptr:=AllocMem(SizeOf(TCBNodeObject));
- ptr^.cb:=@ptr^.OnObject;
- ptr^.Creator:=Creator;
- ptr^.cb_obj :=cb;
 
  rw_wlock(FLock);
 
@@ -271,13 +460,13 @@ begin
  end;
 end;
 
-function THostIpcInterface.SendSync(mtype,mlen:DWORD;buf:Pointer):Ptruint;
+function THostIpcInterface.InvokeSync(msg:TMsgHash;Value:TIpcValue):TIpcValue;
 var
  key:Pointer;
 begin
  key:=NewSyncKey;
 
- Send(mtype,mlen,buf,key);
+ Send(msg.mtype,key,Value);
 
  WaitSyncKey(key);
 
@@ -286,9 +475,43 @@ begin
  FreeSyncKey(key);
 end;
 
-procedure THostIpcInterface.SendAsyn(mtype,mlen:DWORD;buf:Pointer);
+function THostIpcInterface.InvokeSync(msg:TMsgHash):TIpcValue;
 begin
- Send(mtype,mlen,buf,nil);
+ Result:=InvokeSync(msg,Default(TIpcValue));
+end;
+
+function THostIpcInterface.InvokeSync2(msg:TMsgHash;Value:TIpcValue):Ptruint;
+var
+ Output:TIpcValue;
+begin
+ Output:=InvokeSync(msg,Value);
+ Result:=Output.GetQWORD;
+ Output.Free;
+end;
+
+function THostIpcInterface.InvokeSync2(msg:TMsgHash;buf:Pointer;mlen:DWORD):Ptruint;
+begin
+ Result:=InvokeSync2(msg,TIpcValue.Static(buf,mlen));
+end;
+
+function THostIpcInterface.InvokeSync2(msg:TMsgHash):Ptruint;
+begin
+ Result:=InvokeSync2(msg,Default(TIpcValue));
+end;
+
+procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash;Value:TIpcValue);
+begin
+ Send(msg.mtype,nil,Value);
+end;
+
+procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
+begin
+ Send(msg.mtype,nil,TIpcValue.Static(buf,mlen));
+end;
+
+procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash);
+begin
+ Send(msg.mtype,nil,Default(TIpcValue));
 end;
 
 procedure THostIpcInterface.Update();
@@ -296,68 +519,9 @@ begin
  //
 end;
 
-//
-
-function THostIpcInterface.SendSync(const msg:RawByteString):Ptruint;
+procedure THostIpcInterface.Disconnect();
 begin
- Result:=SendSync(HashIpcStr(msg),0,nil);
-end;
-
-function THostIpcInterface.SendSync(mtype:DWORD;obj:TAbstractObject):Ptruint;
-var
- key:Pointer;
- mem:TMemoryStream;
-begin
- if (obj<>nil) then
- begin
-  mem:=TMemoryStream.Create;
-  obj.Serialize(mem);
- end;
-
- key:=NewSyncKey;
-
- if (obj<>nil) then
- begin
-  Send(mtype,mem.Size,mem.Memory,key);
-  mem.Free;
- end else
- begin
-  Send(mtype,0,nil,key);
- end;
-
- WaitSyncKey(key);
-
- Result:=GetSyncValue(key);
-
- FreeSyncKey(key);
-end;
-
-procedure THostIpcInterface.SendAsyn(mtype:DWORD;obj:TAbstractObject);
-var
- mem:TMemoryStream;
-begin
- if (obj<>nil) then
- begin
-  mem:=TMemoryStream.Create;
-  obj.Serialize(mem);
-
-  Send(mtype,mem.Size,mem.Memory,nil);
-
-  mem.Free;
- end else
- begin
-  Send(mtype,0,nil,nil);
- end;
-end;
-
-function THostIpcInterface.SendSync(const msg:RawByteString;obj:TAbstractObject):Ptruint;
-begin
- Result:=SendSync(HashIpcStr(msg),obj);
-end;
-
-procedure THostIpcInterface.SendAsyn(const msg:RawByteString;obj:TAbstractObject);
-begin
- SendAsyn(HashIpcStr(msg),obj);
+ //
 end;
 
 //
@@ -365,29 +529,31 @@ end;
 procedure THostIpcInterface.error(const s:RawByteString);
 begin
  if (self=nil) then Exit;
- if (iERROR=0) then iERROR:=HashIpcStr('ERROR');
- SendSync(iERROR,Length(s)+1,pchar(s));
+ InvokeSync2(iERROR.mtype,pchar(s),Length(s));
+end;
+
+function THostIpcInterface.warning(const s:RawByteString):Ptruint;
+begin
+ if (self=nil) then Exit(-1);
+ Result:=InvokeSync2(iWARNING.mtype,pchar(s),Length(s));
 end;
 
 procedure THostIpcInterface.kevent(kev:p_kevent;count:Integer);
 begin
  if (self=nil) then Exit;
- if (iKEV_CHANGE=0) then iKEV_CHANGE:=HashIpcStr('KEV_CHANGE');
- SendAsyn(iKEV_CHANGE,count*SizeOf(t_kevent),kev);
+ InvokeAsyn(iKEV_CHANGE.mtype,kev,count*SizeOf(t_kevent));
 end;
 
 function THostIpcInterface.OpenMainWindows():THandle;
 begin
  if (self=nil) then Exit(0);
- if (iMAIN_WINDOWS=0) then iMAIN_WINDOWS:=HashIpcStr('MAIN_WINDOWS');
- Result:=THandle(SendSync(iMAIN_WINDOWS,0,nil));
+ Result:=THandle(InvokeSync2(iMAIN_WINDOWS.mtype));
 end;
 
 procedure THostIpcInterface.SetCaptionFps(Ffps:QWORD);
 begin
  if (self=nil) then Exit;
- if (iCAPTION_FPS=0) then iCAPTION_FPS:=HashIpcStr('CAPTION_FPS');
- SendAsyn(iCAPTION_FPS,SizeOf(Ffps),@Ffps);
+ InvokeAsyn(iCAPTION_FPS.mtype,@Ffps,SizeOf(Ffps));
 end;
 
 

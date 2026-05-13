@@ -189,7 +189,7 @@ begin
   begin
    info.func_addr:=0;
 
-   adr:=QWORD(obj^.init_proc_addr);
+   adr:=QWORD(obj^.init_proc_addr.addr);
    if (adr<=QWORD(r.Addr)) then
    if (adr>info.func_addr) then
    begin
@@ -198,7 +198,7 @@ begin
     Result:=True;
    end;
 
-   adr:=QWORD(obj^.fini_proc_addr);
+   adr:=QWORD(obj^.fini_proc_addr.addr);
    if (adr<=QWORD(r.Addr)) then
    if (adr>info.func_addr) then
    begin
@@ -319,7 +319,7 @@ end;
 
 procedure print_error_td(const str:shortstring;resumable:Boolean=False);
 begin
- thread_suspend_all(p_host_ipc_td);
+ thread_suspend_all(nil);
 
  Writeln(StdErr,str);
  print_backtrace_td(StdErr);
@@ -328,7 +328,7 @@ begin
 
  if resumable then
  begin
-  thread_resume_all(p_host_ipc_td);
+  thread_resume_all(nil);
  end;
 end;
 

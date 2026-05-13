@@ -10,8 +10,7 @@ uses
  Controls,
  StdCtrls,
  TypInfo,
- Rtti,
- game_info;
+ core_serialization;
 
 type
  TFormDataProvider=class
@@ -39,27 +38,27 @@ type
 procedure PageLoad(Parent:TComponent;
                    const TabName:RawByteString;
                    Provider:TFormDataProvider;
-                   src:TAbstractObject);
+                   src:TSerializeObject);
 
 procedure FormLoad(Parent:TComponent;
                     Provider:TFormDataProvider;
-                    src:TAbstractObject);
+                    src:TSerializeObject);
 
 procedure PageSave(Parent:TComponent;
                    const TabName:RawByteString;
                    Provider:TFormDataProvider;
-                   dst:TAbstractObject);
+                   dst:TSerializeObject);
 
 procedure FormSave(Parent:TComponent;
                    Provider:TFormDataProvider;
-                   dst:TAbstractObject);
+                   dst:TSerializeObject);
 
 implementation
 
 procedure PageLoad(Parent:TComponent;
                    const TabName:RawByteString;
                    Provider:TFormDataProvider;
-                   src:TAbstractObject);
+                   src:TSerializeObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -119,7 +118,7 @@ end;
 
 procedure FormLoad(Parent:TComponent;
                    Provider:TFormDataProvider;
-                   src:TAbstractObject);
+                   src:TSerializeObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -139,9 +138,9 @@ begin
       obj:=p.GetValue(src).AsObject;
 
       if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractObject) then
+      if obj.InheritsFrom(TSerializeObject) then
       begin
-       PageLoad(Parent,p.Name,Provider,TAbstractObject(obj));
+       PageLoad(Parent,p.Name,Provider,TSerializeObject(obj));
       end;
      end;
 
@@ -161,7 +160,7 @@ end;
 procedure PageSave(Parent:TComponent;
                    const TabName:RawByteString;
                    Provider:TFormDataProvider;
-                   dst:TAbstractObject);
+                   dst:TSerializeObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -221,7 +220,7 @@ end;
 
 procedure FormSave(Parent:TComponent;
                    Provider:TFormDataProvider;
-                   dst:TAbstractObject);
+                   dst:TSerializeObject);
 var
  i:TRttiPropertyIterator;
  p:TRttiProperty;
@@ -241,9 +240,9 @@ begin
       obj:=p.GetValue(dst).AsObject;
 
       if (obj<>nil) then
-      if obj.InheritsFrom(TAbstractObject) then
+      if obj.InheritsFrom(TSerializeObject) then
       begin
-       PageSave(Parent,p.Name,Provider,TAbstractObject(obj));
+       PageSave(Parent,p.Name,Provider,TSerializeObject(obj));
       end;
      end;
 

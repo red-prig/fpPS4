@@ -89,6 +89,8 @@ const
  TDP_DEVMEMIO     =$20000000; // Accessing memory for /dev/mem
  TDP_EXECVMSPC    =$40000000; // Execve destroyed old vmspace
 
+ TDP_KIGNSUSP     =$80000000; // emu ext
+
  TDI_SUSPENDED    =$0001; // On suspension queue.
  TDI_SLEEPING     =$0002; // Actually asleep! (tricky).
  TDI_SWAPPED      =$0004; // Stack not in mem.  Bad juju if run.
@@ -395,7 +397,7 @@ function  tdfind(tid:DWORD):p_kthread; external;
 procedure thread_suspend_all(exclude:p_kthread); external;
 procedure thread_resume_all (exclude:p_kthread); external;
 
-function  kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer; external;
+function  kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar;pflags:DWORD=0):Integer; external;
 procedure kthread_exit(); external;
 
 function  thread_get_local_buffer(td:p_kthread;size:QWORD):Pointer;

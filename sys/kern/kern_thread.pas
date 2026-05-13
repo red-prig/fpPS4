@@ -55,7 +55,7 @@ function  SIGPENDING(td:p_kthread):Boolean;
 
 procedure threadinit; //SYSINIT
 
-function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer;
+function  kthread_add (func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar;pflags:DWORD=0):Integer;
 procedure kthread_exit();
 
 procedure thread_suspend_all(exclude:p_kthread);
@@ -643,7 +643,7 @@ begin
  end;
 end;
 
-function kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar):Integer; public;
+function kthread_add(func,arg:Pointer;newtdp:pp_kthread;pages:Word;name:PChar;pflags:DWORD=0):Integer; public;
 var
  td:p_kthread;
  newtd:p_kthread;
@@ -718,7 +718,7 @@ begin
 
  thread_link(newtd);
 
- newtd^.td_pflags:=newtd^.td_pflags or TDP_KTHREAD;
+ newtd^.td_pflags:=newtd^.td_pflags or TDP_KTHREAD or pflags;
 
  if (name<>nil) then
  begin
@@ -899,7 +899,9 @@ begin
    while (ttd<>nil) do
    begin
 
-    if (ttd<>td) and (ttd<>exclude) then
+    if (ttd<>td) and
+       (ttd<>exclude) and
+       ((ttd^.td_pflags and TDP_KIGNSUSP)=0) then
     begin
      md_suspend(ttd);
     end;
@@ -923,7 +925,9 @@ begin
    while (ttd<>nil) do
    begin
 
-    if (ttd<>td) and (ttd<>exclude) then
+    if (ttd<>td) and
+       (ttd<>exclude) and
+       ((ttd^.td_pflags and TDP_KIGNSUSP)=0) then
     begin
      md_resume(ttd);
     end;
@@ -1156,14 +1160,17 @@ end;
 
 function strnlen(s:PChar;maxlen:ptrint):ptrint;
 var
- len:size_t;
+ i:size_t;
 begin
- For len:=0 to maxlen-1 do
+ i:=0;
+ if (maxlen<>0) then
  begin
-  if (s^=#0) then Break;
-  Inc(s);
+  repeat
+   if (s[i]=#0) then Exit(i);
+   Inc(i);
+  until (maxlen = i);
  end;
- Exit(len);
+ Exit(maxlen);
 end;
 
 function sys_thr_get_name(id:DWORD;pname:PChar):Integer;

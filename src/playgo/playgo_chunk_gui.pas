@@ -7,8 +7,7 @@ interface
 uses
  sysutils,
  bittype,
- rtti,
- game_info;
+ core_serialization;
 
 const
  PLAYGO_MAGIC=$6F676C70;
@@ -113,7 +112,7 @@ type
 
 //
 
- TPlaygoChunk=class(TAbstractObject)
+ TPlaygoChunk=class(TSerializeObject)
   private
    Freq_locus    :QWORD;
    Flanguage_mask:QWORD;
@@ -126,7 +125,7 @@ type
    property label_name   :RawByteString read Flabel_name    write Flabel_name;
  end;
 
- TPlaygoFile=class(TAbstractArray)
+ TPlaygoFile=class(TSerializeArray)
   private
    Fcontent_id:RawByteString;
   public
@@ -139,8 +138,8 @@ type
    //
    Function   GetArrayCount:SizeInt;          override;
    Function   GetArrayItem(i:SizeInt):TValue; override;
-   Function   AddObject:TAbstractObject;      override;
-   Function   AddArray :TAbstractArray;       override;
+   Function   AddObject:TSerializeObject;     override;
+   Function   AddArray :TSerializeArray;      override;
    procedure  AddValue(Value:TValue);         override;
  end;
 
@@ -295,12 +294,12 @@ begin
  end;
 end;
 
-Function TPlaygoFile.AddObject:TAbstractObject;
+Function TPlaygoFile.AddObject:TSerializeObject;
 begin
  Result:=TPlaygoChunk.Create;
 end;
 
-Function TPlaygoFile.AddArray:TAbstractArray;
+Function TPlaygoFile.AddArray:TSerializeArray;
 begin
  Result:=nil;
 end;

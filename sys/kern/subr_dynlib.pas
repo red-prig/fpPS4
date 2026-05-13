@@ -87,6 +87,11 @@ type
   original_filename:pchar;
  end;
 
+ t_init_entry=record
+  native:Pointer; //HLE
+  addr  :Pointer; //guest
+ end;
+
  p_lib_info=^t_lib_info;
  t_lib_info=object(t_id_named_desc)
   link:TAILQ_ENTRY;
@@ -128,8 +133,8 @@ type
   mod_table  :TAILQ_HEAD; //Lib_Entry
   names      :TAILQ_HEAD; //Name_Entry
 
-  init_proc_addr:Pointer;
-  fini_proc_addr:Pointer;
+  init_proc_addr:t_init_entry;
+  fini_proc_addr:t_init_entry;
 
   eh_frame_hdr_addr:Pointer;
   eh_frame_hdr_size:QWORD;
@@ -1474,12 +1479,12 @@ begin
   initlist_add_neededs(fini_proc_list,obj^.needed.tqh_first,init_proc_list);
  end;
 
- if (obj^.init_proc_addr<>nil) then
+ if (obj^.init_proc_addr.addr<>nil) then
  begin
   objlist_push_tail(init_proc_list,obj);
  end;
 
- if (obj^.fini_proc_addr<>nil) and
+ if (obj^.fini_proc_addr.addr<>nil) and
     (obj^.rtld_flags.on_fini_list=0) then
  begin
   objlist_push_tail(fini_proc_list,obj);
@@ -1599,7 +1604,7 @@ begin
     DT_INIT:
       begin
        addr:=obj^.relocbase+dt_ent^.d_un.d_val;
-       obj^.init_proc_addr:=addr;
+       obj^.init_proc_addr.addr:=addr;
 
        if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
@@ -1611,7 +1616,7 @@ begin
     DT_FINI:
       begin
        addr:=obj^.relocbase+dt_ent^.d_un.d_val;
-       obj^.fini_proc_addr:=addr;
+       obj^.fini_proc_addr.addr:=addr;
 
        if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
@@ -3329,6 +3334,18 @@ begin
  ctx.map____end:=ctx.text_start+obj^.map_size;
  ctx.modes:=[cmInternal];
 
+ //load export dt_init
+ if (obj^.init_proc_addr.native<>nil) then
+ begin
+  ctx.add_export_point(0,obj^.init_proc_addr.native,@obj^.init_proc_addr.addr);
+ end;
+
+ //load export dt_fini
+ if (obj^.fini_proc_addr.native<>nil) then
+ begin
+  ctx.add_export_point(1,obj^.fini_proc_addr.native,@obj^.fini_proc_addr.addr);
+ end;
+
  //load exports
  lib_entry:=TAILQ_FIRST(@obj^.lib_table);
  while (lib_entry<>nil) do
@@ -3471,8 +3488,8 @@ begin
 
  if (obj^.rtld_flags.mainprog=0) then
  begin
-  ctx.add_forward_point(fpCall,obj^.init_proc_addr);
-  ctx.add_forward_point(fpCall,obj^.fini_proc_addr);
+  ctx.add_forward_point(fpCall,obj^.init_proc_addr.addr);
+  ctx.add_forward_point(fpCall,obj^.fini_proc_addr.addr);
  end;
 
  //load export links

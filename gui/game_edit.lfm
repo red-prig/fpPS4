@@ -1,25 +1,25 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 318
+  Left = 319
   Height = 311
-  Top = 113
+  Top = 114
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
   ClientWidth = 467
-  OnClose = FormClose
   Position = poMainFormCenter
-  LCLVersion = '3.8.0.0'
+  LCLVersion = '4.4.0.0'
+  OnClose = FormClose
   object EditPages: TPageControl
     AnchorSideBottom.Control = BtnOk
     Left = 0
     Height = 266
     Top = 0
     Width = 467
-    ActivePage = TabFolders
+    ActivePage = TabMain
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 1
+    TabIndex = 0
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
@@ -233,7 +233,7 @@ object frmGameEditor: TfrmGameEditor
         Left = 10
         Height = 23
         Top = 35
-        Width = 414
+        Width = 408
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -246,7 +246,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Control = Edt_MountList_game
         AnchorSideBottom.Side = asrBottom
-        Left = 388
+        Left = 382
         Height = 21
         Top = 36
         Width = 35
@@ -266,10 +266,10 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = TabFolders
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Side = asrCenter
-        Left = 429
-        Height = 20
-        Top = 36
-        Width = 20
+        Left = 423
+        Height = 26
+        Top = 33
+        Width = 26
         Anchors = [akTop, akRight]
         AutoSize = True
         BorderSpacing.Left = 5
@@ -300,7 +300,7 @@ object frmGameEditor: TfrmGameEditor
         Left = 10
         Height = 23
         Top = 93
-        Width = 414
+        Width = 408
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -315,10 +315,10 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = TabFolders
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Side = asrCenter
-        Left = 429
-        Height = 20
-        Top = 94
-        Width = 20
+        Left = 423
+        Height = 26
+        Top = 91
+        Width = 26
         Anchors = [akTop, akRight]
         AutoSize = True
         BorderSpacing.Left = 5

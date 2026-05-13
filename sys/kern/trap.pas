@@ -153,7 +153,7 @@ var
  count:integer;
  str:shortstring;
 begin
- thread_suspend_all(p_host_ipc_td);
+ thread_suspend_all(nil);
 
  count:=p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_narg;
  Assert(count<=6);
@@ -377,6 +377,7 @@ asm
  movqq $0,%r11
 
  //epilog (debugger)
+ movq  %rbp,%rsp
  popq  %rbp
  //interrupt/ret
  jmp %gs:teb.jit_trp
