@@ -6,7 +6,8 @@ unit ps4_libSceAppContent;
 interface
 
 uses
- subr_dynlib;
+ subr_dynlib,
+ kern_proc;
 
 implementation
 
@@ -90,13 +91,50 @@ type
 var
  InitAppContent:Boolean=False;
 
+function CheckReserved(var buf;len:DWORD):Boolean; inline;
+var
+ i:DWORD;
+begin
+ for i:=0 to len-1 do
+ if (PByte(@buf)[i]<>0) then
+ begin
+  Exit(False);
+ end;
+ Result:=True;
+end;
+
 function ps4_sceAppContentInitialize(initParam:pSceAppContentInitParam;bootParam:pSceAppContentBootParam):Integer;
 begin
  Writeln('sceAppContentInitialize');
 
- if (initParam=nil) or (bootParam=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+ if ($14fffff < p_proc.p_sdk_version) then
+ begin
 
- if InitAppContent then Exit(SCE_APP_CONTENT_ERROR_BUSY);
+  if InitAppContent then Exit(SCE_APP_CONTENT_ERROR_BUSY);
+
+  if (initParam=nil) or (bootParam=nil) then
+  begin
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+  end;
+
+  if not CheckReserved(initParam^.reserved,sizeof(initParam^.reserved)) then
+  begin
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+  end;
+
+  if not CheckReserved(bootParam^.reserved1,sizeof(bootParam^.reserved1)) then
+  begin
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+  end;
+
+  if not CheckReserved(bootParam^.reserved2,sizeof(bootParam^.reserved2)) then
+  begin
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+  end;
+
+ end;
+
+ if InitAppContent then Exit(0);
 
  param_sfo_ipc.init_param_sfo;
 

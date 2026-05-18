@@ -10,6 +10,7 @@ uses
   windows,
   atomic,
   subr_dynlib,
+  kern_proc,
   sys_bootparam,
   game_info,
   host_ipc,
@@ -341,6 +342,63 @@ begin
     begin
      FLanguage:=GetHostSystemLang;
     end;
+
+    case FLanguage of
+     SCE_SYSTEM_PARAM_LANG_ARABIC:
+      begin
+       if ($1ffffff < p_proc.p_sdk_version) then
+       begin
+        //
+       end else
+       begin
+        FLanguage:=SCE_SYSTEM_PARAM_LANG_ENGLISH_GB;
+       end;
+      end;
+     SCE_SYSTEM_PARAM_LANG_FRENCH_CA:
+      begin
+       if ($24fffff < p_proc.p_sdk_version) then
+       begin
+        //
+       end else
+       begin
+        FLanguage:=SCE_SYSTEM_PARAM_LANG_FRENCH;
+       end;
+      end;
+     SCE_SYSTEM_PARAM_LANG_CZECH,
+     SCE_SYSTEM_PARAM_LANG_HUNGARIAN,
+     SCE_SYSTEM_PARAM_LANG_GREEK,
+     SCE_SYSTEM_PARAM_LANG_ROMANIAN:
+      begin
+       if ($4ffffff < p_proc.p_sdk_version) then
+       begin
+        //
+       end else
+       begin
+        FLanguage:=SCE_SYSTEM_PARAM_LANG_ENGLISH_GB;
+       end;
+      end;
+     SCE_SYSTEM_PARAM_LANG_THAI,
+     SCE_SYSTEM_PARAM_LANG_VIETNAMESE,
+     SCE_SYSTEM_PARAM_LANG_INDONESIAN:
+      begin
+       if ($4ffffff < p_proc.p_sdk_version) then
+       begin
+        //
+       end else
+       begin
+        FLanguage:=SCE_SYSTEM_PARAM_LANG_ENGLISH_US;
+       end;
+      end;
+     SCE_SYSTEM_PARAM_LANG_UKRAINIAN:
+      begin
+       if (p_proc.p_sdk_version < $10000000) then
+       begin
+        FLanguage:=SCE_SYSTEM_PARAM_LANG_ENGLISH_GB;
+       end;
+      end;
+     else;
+    end;
+
     //
     value^:=FLanguage;
    end;
