@@ -1140,6 +1140,11 @@ begin
  ///
 end;
 
+function get_sdk_version_str(version:QWORD):RawByteString;
+begin
+ Result:=HexStr((version shr 24),2)+'.'+HexStr(((version shr 12) and $fff),3)+'.'+HexStr((version and $fff),3);
+end;
+
 function dynlib_copy_executable_sdk_version():Integer;
 var
  proc_param:pSceProcParam;
@@ -1154,6 +1159,7 @@ begin
  begin
   Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
  end;
+ Writeln('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
 end;
 
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
