@@ -15,8 +15,8 @@ uses
  kern_jit_asm;
 
 //simplified recompilation mode, for debugging purposes only
-const
- use_lazy_jit=False;
+var
+ use_lazy_jit:Boolean=False;
 
 function op_lazy_jit(var ctx:t_jit_context2):Boolean;
 

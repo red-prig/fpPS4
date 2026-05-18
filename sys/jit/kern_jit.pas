@@ -332,10 +332,7 @@ begin
  end;
 end;
 
-var
- jit_nop_sequence:Boolean=False;
-
-function is_nop_sequence(addr,_end:Pointer):Boolean;
+function is_nop_sequence(var ctx:t_jit_context2;addr,_end:Pointer):Boolean;
 type
  t_data_16=array[0..15] of Byte;
 var
@@ -348,7 +345,7 @@ var
 begin
  Result:=False;
 
- if not jit_nop_sequence then Exit;
+ if (cmDontScanNop in ctx.modes) then Exit;
 
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
@@ -413,7 +410,7 @@ end;
 
 procedure trim_flow(var ctx:t_jit_context2);
 begin
- if is_nop_sequence(ctx.ptr_next,Pointer(ctx.text___end)) then
+ if is_nop_sequence(ctx,ctx.ptr_next,Pointer(ctx.text___end)) then
  begin
   //
  end else
@@ -2329,6 +2326,23 @@ begin
   on_error:=@on_builder_error;
   on_udata:=@ctx;
  end;
+
+ //load config
+ if not jit_relative_analize then
+ begin
+  ctx.modes:=ctx.modes+[cmDontScanRipRel];
+ end;
+
+ if not jit_scan_switchtable then
+ begin
+  ctx.modes:=ctx.modes+[cmDontScanSwitchTable];
+ end;
+
+ if not jit_scan_nopsequence then
+ begin
+  ctx.modes:=ctx.modes+[cmDontScanNop];
+ end;
+ //load config
 
  if (cmDontScanRipRel in ctx.modes) then
  begin

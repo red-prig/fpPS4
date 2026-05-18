@@ -64,6 +64,7 @@ uses
 
  kern_jit,
  kern_jit_ctx,
+ kern_lazy_jit,
 
  dev_dce,
  display_soft,
@@ -185,7 +186,10 @@ begin
  kern_jit.debug_info:=ConfInfo.JITInfo.debug_info;
 
  kern_jit_ctx.jit_relative_analize:=ConfInfo.JITInfo.relative_analize;
+ kern_jit_ctx.jit_scan_switchtable:=ConfInfo.JITInfo.scan_switchtable;
+ kern_jit_ctx.jit_scan_nopsequence:=ConfInfo.JITInfo.scan_nopsequence;
  kern_jit_ctx.jit_memory_guard    :=ConfInfo.JITInfo.memory_guard;
+ kern_lazy_jit.use_lazy_jit       :=ConfInfo.JITInfo.lazy_jit;
 
  //
 

@@ -359,13 +359,16 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
+        Hint = 'Print assembler instructions to log'
         Top = 10
         Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'print asm code'
+        Caption = 'Print asm code'
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 0
       end
       object Edt_JITInfo_debug_info: TCheckBox
@@ -376,6 +379,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
+        Hint = 'Additional information inside the code for viewing in the debugger'
         Top = 39
         Width = 421
         Anchors = [akTop, akLeft, akRight]
@@ -383,6 +387,8 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Inline debug info'
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 1
       end
       object Edt_JITInfo_relative_analize: TCheckBox
@@ -393,6 +399,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
+        Hint = 'Attempts to find code that is located relative to jumps within the current memory segment.'
         Top = 68
         Width = 421
         Anchors = [akTop, akLeft, akRight]
@@ -400,9 +407,31 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Try relative analize'
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 2
       end
       object Edt_JITInfo_memory_guard: TCheckBox
+        AnchorSideLeft.Control = Tab_JIT
+        AnchorSideTop.Control = Edt_JITInfo_scan_nopsequence
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_JIT
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Hint = 'Software check of addressable memory'
+        Top = 155
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Guest memory guard'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 5
+      end
+      object Edt_JITInfo_scan_switchtable: TCheckBox
         AnchorSideLeft.Control = Tab_JIT
         AnchorSideTop.Control = Edt_JITInfo_relative_analize
         AnchorSideTop.Side = asrBottom
@@ -410,14 +439,57 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 19
+        Hint = 'Heuristics for reading case-switch tables that are compiled as jump tables'
         Top = 97
         Width = 421
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'Guest memory guard'
+        Caption = 'Scan switch table'
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 3
+      end
+      object Edt_JITInfo_scan_nopsequence: TCheckBox
+        AnchorSideLeft.Control = Tab_JIT
+        AnchorSideTop.Control = Edt_JITInfo_scan_switchtable
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_JIT
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Hint = 'Attempts to find sequences of nop instructions and the start of the next function after the terminating instruction'
+        Top = 126
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Scan nop sequence'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 4
+      end
+      object Edt_JITInfo_lazy_jit: TCheckBox
+        AnchorSideLeft.Control = Tab_JIT
+        AnchorSideTop.Control = Edt_JITInfo_memory_guard
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_JIT
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 19
+        Hint = 'simplified recompilation mode, for debugging purposes only'
+        Top = 184
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Lazy jit mode'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 6
       end
     end
     object Tab_Misc: TTabSheet

@@ -17,7 +17,7 @@ const
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
- t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmInternal);
+ t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop,cmInternal);
 
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object
@@ -342,6 +342,8 @@ function get_instruction_info(addr:Pointer):t_instruction_info;
 
 var
  jit_relative_analize:Boolean=True;
+ jit_scan_switchtable:Boolean=True;
+ jit_scan_nopsequence:Boolean=True;
  jit_memory_guard    :Boolean=False;
 
 const
@@ -1221,7 +1223,6 @@ procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 var
  new_ofs:Int64;
 begin
- if not jit_relative_analize then Exit;
 
  if (code_ref in hint) then
  begin

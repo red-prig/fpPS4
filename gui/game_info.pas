@@ -36,12 +36,18 @@ type
   Fprint_asm       :Boolean;
   Fdebug_info      :Boolean;
   Frelative_analize:Boolean;
+  Fscan_switchtable:Boolean;
+  Fscan_nopsequence:Boolean;
   Fmemory_guard    :Boolean;
+  Flazy_jit        :Boolean;
  published
   property print_asm       :Boolean read Fprint_asm        write Fprint_asm       ;
   property debug_info      :Boolean read Fdebug_info       write Fdebug_info      ;
   property relative_analize:Boolean read Frelative_analize write Frelative_analize;
+  property scan_switchtable:Boolean read Fscan_switchtable write Fscan_switchtable;
+  property scan_nopsequence:Boolean read Fscan_nopsequence write Fscan_nopsequence;
   property memory_guard    :Boolean read Fmemory_guard     write Fmemory_guard    ;
+  property lazy_jit        :Boolean read Flazy_jit         write Flazy_jit        ;
  public
   Constructor Create; override;
  end;
@@ -236,6 +242,8 @@ Constructor TJITInfo.Create;
 begin
  inherited;
  Frelative_analize:=True;
+ Fscan_switchtable:=True;
+ Fscan_nopsequence:=True;
 end;
 
 Constructor TMainInfo.Create;

@@ -65,6 +65,9 @@ type
     BtnAddFw: TSpeedButton;
     BtnOk: TButton;
     BtnLogOpen: TButton;
+    Edt_JITInfo_lazy_jit: TCheckBox;
+    Edt_JITInfo_scan_nopsequence: TCheckBox;
+    Edt_JITInfo_scan_switchtable: TCheckBox;
     Edt_MainInfo_DefaultFirmware: TComboBox;
     Edt_MiscInfo_fork_proc: TCheckBox;
     Edt_PS4Audio_SpecialDevice_cmb: TComboBox;

@@ -290,7 +290,7 @@ begin
   ctx.text___end:=scan_up_exc(QWORD(addr));
   ctx.map____end:=ctx.text___end;
 
-  ctx.modes     :=[cmDontScanRipRel]; //dont scan rip relative
+  ctx.modes     :=[cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop];
 
   ctx.add_forward_point(fpCall,addr);
 
