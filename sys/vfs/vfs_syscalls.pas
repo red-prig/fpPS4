@@ -2322,9 +2322,6 @@ end;
  }
 function sys_chmod(path:PChar;mode:Integer):Integer;
 begin
- //priv_check(td,683);
- Exit(EPERM);
-
  Exit(kern_chmod(path, UIO_USERSPACE, mode));
 end;
 
@@ -2360,9 +2357,6 @@ var
  fp:p_file;
  error:Integer;
 begin
- //priv_check(td,683);
- Exit(EPERM);
-
  error:=fget(fd, CAP_FCHMOD, @fp);
  if (error<>0) then
  begin
