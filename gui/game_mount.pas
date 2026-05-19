@@ -561,8 +561,8 @@ var
   CurSrcDir: RawByteString;
   CurFilename: RawByteString;
 const
-  c_block_size =16*1024; //????
-  c_dirent_size=16;
+  c_block_size =4*1024; //????
+  c_dirent_size=8;
   c_inode_size =168;
   c_inodes_per_block=c_block_size div c_inode_size;
 label
@@ -584,7 +584,6 @@ begin
        continue;
      end;
      //
-     inode_count:=inode_count+1;
      dirent_size:=dirent_size+AlignUp(c_dirent_size+Length(FileInfo.Name)+1,8);
      //
      if ((FileInfo.Attr and faDirectory)>0)
@@ -595,6 +594,11 @@ begin
        Push(CurFilename);
      end else
      begin
+       if (FileInfo.Size<>0) then
+       begin
+        inode_count:=inode_count+1;
+       end;
+
        files_size:=files_size+AlignUp(FileInfo.Size,c_block_size);
      end;
    until SysUtils.FindNext(FileInfo)<>0;
