@@ -182,7 +182,6 @@ begin
    Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,size);
 
    case format of
-    SFO_FORMAT_STRING_SPECIAL,
     SFO_FORMAT_STRING:
       begin
        //fixup len
@@ -213,8 +212,8 @@ var
 begin
  Result:='';
  case format of
-  SFO_FORMAT_STRING_SPECIAL,
   SFO_FORMAT_STRING        :Result:=value;
+  SFO_FORMAT_STRING_SPECIAL,
   SFO_FORMAT_UINT32        :
     begin
      D:=PDWORD(PChar(value))^;
@@ -230,13 +229,13 @@ var
 begin
  Result:=0;
  case format of
-  SFO_FORMAT_STRING_SPECIAL,
   SFO_FORMAT_STRING        :
     begin
      D:=0;
      TryStrToDWord(value,D);
      Result:=D;
     end;
+  SFO_FORMAT_STRING_SPECIAL,
   SFO_FORMAT_UINT32        :
     begin
      D:=PDWORD(PChar(value))^;

@@ -197,12 +197,12 @@ begin
  if (Length(FParamSfo.params)=0) then Exit;
  For i:=0 to High(FParamSfo.params) do
  begin
-  if (FParamSfo.params[i].format=SFO_FORMAT_UINT32) then
-  begin
-   V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
-  end else
-  begin
-   V:=Trim(FParamSfo.params[i].GetString);
+  case FParamSfo.params[i].format of
+   SFO_FORMAT_STRING_SPECIAL:V:=IntToStr(FParamSfo.params[i].GetUInt);
+   SFO_FORMAT_STRING        :V:=Trim(FParamSfo.params[i].GetString);
+   SFO_FORMAT_UINT32        :V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
+   else
+    V:='???';
   end;
   AddRow(GridParamSfo,FParamSfo.params[i].name,V,nil);
  end;
