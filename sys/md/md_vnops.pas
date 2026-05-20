@@ -1863,6 +1863,57 @@ begin
  NtClose(FD);
 end;
 
+function pfs_get_va_mode(va_mode,is_system:Integer;p_out:PInteger):Integer;
+var
+ val:Integer;
+begin
+ if (is_system=0) then
+ begin
+  if ((va_mode and 6)=6) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  val:=&0555;
+ end else
+ begin
+  if ((va_mode and &0606)=&0606) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0604)=&0604) then
+  begin
+   p_out^:=&0775;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0404)=&0404) then
+  begin
+   p_out^:=&0555;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0600)=&0600) then
+  begin
+   p_out^:=&0770;
+   Exit(0);
+  end;
+
+  val:=&0550;
+ end;
+
+ if ((va_mode and S_IRUSR)=0) then
+ begin
+  Exit(22);
+ end;
+
+ p_out^:=val;
+ Exit(0);
+end;
+
 function md_mkdir(ap:p_vop_mkdir_args):Integer;
 var
  dvp:p_vnode;
@@ -1871,6 +1922,7 @@ var
  dmp:p_ufs_mount;
  dd:p_ufs_dirent;
  de:p_ufs_dirent;
+ va_mode:Integer;
 
  w:WideString;
  OBJ:TOBJ_ATTR;
@@ -1882,6 +1934,10 @@ begin
  cnp:=ap^.a_cnp;
  vap:=ap^.a_vap;
  dmp:=VFSTOUFS(dvp^.v_mount);
+
+ va_mode:=0;
+ Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ if (Result<>0) then Exit;
 
  dd:=dvp^.v_data;
 
@@ -1941,7 +1997,7 @@ begin
   Exit(ENOMEM);
  end;
 
- de^.ufs_mode:=vap^.va_mode;
+ de^.ufs_mode:=va_mode;
 
  sx_xunlock(@dd^.ufs_md_lock);
 
@@ -2234,6 +2290,7 @@ var
  cnp:p_componentname;
  vap:p_vattr;
  dmp:p_ufs_mount;
+ va_mode:Integer;
 
  dd:p_ufs_dirent;
  nd:p_ufs_dirent;
@@ -2256,6 +2313,10 @@ begin
  cnp:=ap^.a_cnp;
  vap:=ap^.a_vap;
 
+ va_mode:=0;
+ Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ if (Result<>0) then Exit;
+
  //emu ext
  flags:=0;
  with ap^ do
@@ -2271,7 +2332,7 @@ begin
  if (nd=nil) then Exit(ENOMEM);
 
  nd^.ufs_flags:=0;
- nd^.ufs_mode :=vap^.va_mode;
+ nd^.ufs_mode :=va_mode;
  nd^.ufs_dir  :=dd;
 
  nd^.ufs_dirent^.d_type:=DT_REG;
@@ -2526,6 +2587,7 @@ var
  error:Integer;
  uid:uid_t;
  gid:gid_t;
+ va_mode:Integer;
 
  change_time,change_size:Boolean;
 
@@ -2616,7 +2678,12 @@ begin
   // if (error<>0) then
   //  Exit(error);
   //end;
-  de^.ufs_mode:=vap^.va_mode;
+
+  va_mode:=0;
+  Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+  if (Result<>0) then goto _err;
+
+  de^.ufs_mode:=va_mode;
  end;
 
  if (vap^.va_atime.tv_sec<>VNOVAL) or
@@ -2630,7 +2697,11 @@ begin
   begin
    if ((vap^.va_vaflags and VA_UTIMES_NULL)=0) then Exit(error);
    error:=VOP_ACCESS(vp, VWRITE);
-   if (error<>0) then Exit(error);
+   if (error<>0) then
+   begin
+    Result:=error;
+    goto _err;
+   end;
   end;
 
   if (vap^.va_atime.tv_sec<>VNOVAL) then
@@ -2669,7 +2740,7 @@ begin
   end else
   begin
    Result:=md_open_dirent_file(de,True,@FD);
-   if (Result<>0) then Exit;
+   if (Result<>0) then goto _err;
    RL:=FD;
   end;
 
