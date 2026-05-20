@@ -1248,7 +1248,10 @@ begin
  Assert(fd<>nil,'fd=nil');
  Assert(fp<>nil,'fp=nil');
 
- if not id_new(@fd_table.fd_ofiles,@fp^.desc,fd) then
+ if id_new(@fd_table.fd_ofiles,@fp^.desc,fd) then
+ begin
+  id_release(@fp^.desc); //<-id_new
+ end else
  begin
   Exit(ENFILE);
  end;

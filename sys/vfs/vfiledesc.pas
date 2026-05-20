@@ -114,8 +114,7 @@ begin
  fd_table.fd_cmask:=CMASK;
 end;
 
-finalization
- id_table_fini(@fd_table.fd_ofiles);
+//id_table_fini(@fd_table.fd_ofiles);
 
 end.
 
