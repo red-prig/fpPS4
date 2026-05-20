@@ -10,9 +10,9 @@ uses
 
 const
  //sfo_value_format
- SFO_FORMAT_STRING_SPECIAL=$004;
- SFO_FORMAT_STRING        =$204;
- SFO_FORMAT_UINT32        =$404;
+ SFO_FORMAT_BLOB  =$004;
+ SFO_FORMAT_STRING=$204;
+ SFO_FORMAT_UINT32=$404;
 
  SFO_MAGIC=$46535000;
 
@@ -49,8 +49,10 @@ type
    property name  :RawByteString read Fname   write Fname;
    property value :RawByteString read Fvalue  write Fvalue;
   public
+   Function GetLength:QWORD;
    Function GetString:RawByteString;
    Function GetUInt  :DWORD;
+   Function GetUInt64:QWORD;
  end;
 
  TParamSfoFile=class(TSerializeArray)
@@ -91,7 +93,7 @@ Var
  key_table:PChar;
  value_table:PByte;
 
- size:DWORD;
+ size,data_size:DWORD;
  name,value:RawByteString;
 
  function load_chunk(offset,size:DWORD):Pointer;
@@ -177,15 +179,26 @@ begin
 
    value:='';
    size:=entry_table[i].max_size;
-   SetLength(value,size);
+   data_size:=size;
 
-   Move(PChar(value_table+entry_table[i].value_offset)^,PChar(value)^,size);
+   case format of
+    SFO_FORMAT_UINT32:
+      begin
+      if (data_size<4) then data_size:=4;
+      end;
+    else;
+   end;
+
+   SetLength(value,data_size);
+   FillChar(value[1],data_size,0);
+
+   Move(PChar(value_table+entry_table[i].value_offset)^,value[1],size);
 
    case format of
     SFO_FORMAT_STRING:
       begin
        //fixup len
-       SetLength(value,strlen(PChar(value)));
+       SetLength(value,strlen(PChar(@value[1])));
       end;
     else;
    end;
@@ -206,17 +219,38 @@ end;
 
 //
 
+function Min(a,b:QWORD):QWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+Function TParamSfoValue.GetLength:QWORD;
+begin
+ Result:=Length(value);
+end;
+
 Function TParamSfoValue.GetString:RawByteString;
 var
  D:DWORD;
 begin
  Result:='';
  case format of
-  SFO_FORMAT_STRING        :Result:=value;
-  SFO_FORMAT_STRING_SPECIAL,
-  SFO_FORMAT_UINT32        :
+  SFO_FORMAT_BLOB:
     begin
-     D:=PDWORD(PChar(value))^;
+     Result:='';
+     if Length(value)<>0 then
+     For D:=1 to Length(value) do
+     begin
+      Result:=Result+HexStr(Byte(value[D]),2);
+     end;
+    end;
+  SFO_FORMAT_STRING:
+    begin
+     Result:=value;
+    end;
+  SFO_FORMAT_UINT32:
+    begin
+     D:=PDWORD(@value[1])^;
      Result:=UIntToStr(D);
     end;
   else;
@@ -229,16 +263,48 @@ var
 begin
  Result:=0;
  case format of
-  SFO_FORMAT_STRING        :
+  SFO_FORMAT_BLOB:
+    begin
+     D:=0;
+     Move(value[1],D,Min(SizeOf(DWORD),Length(value)));
+     Result:=D;
+    end;
+  SFO_FORMAT_STRING:
     begin
      D:=0;
      TryStrToDWord(value,D);
      Result:=D;
     end;
-  SFO_FORMAT_STRING_SPECIAL,
-  SFO_FORMAT_UINT32        :
+  SFO_FORMAT_UINT32:
     begin
-     D:=PDWORD(PChar(value))^;
+     D:=PDWORD(@value[1])^;
+     Result:=D;
+    end;
+  else;
+ end;
+end;
+
+Function TParamSfoValue.GetUInt64:QWORD;
+var
+ D:QWORD;
+begin
+ Result:=0;
+ case format of
+  SFO_FORMAT_BLOB:
+    begin
+     D:=0;
+     Move(value[1],D,Min(SizeOf(QWORD),Length(value)));
+     Result:=D;
+    end;
+  SFO_FORMAT_STRING:
+    begin
+     D:=0;
+     TryStrToQWord(value,D);
+     Result:=D;
+    end;
+  SFO_FORMAT_UINT32:
+    begin
+     D:=PDWORD(@value[1])^;
      Result:=D;
     end;
   else;

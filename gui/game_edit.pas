@@ -198,9 +198,15 @@ begin
  For i:=0 to High(FParamSfo.params) do
  begin
   case FParamSfo.params[i].format of
-   SFO_FORMAT_STRING_SPECIAL:V:=IntToStr(FParamSfo.params[i].GetUInt);
-   SFO_FORMAT_STRING        :V:=Trim(FParamSfo.params[i].GetString);
-   SFO_FORMAT_UINT32        :V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
+   SFO_FORMAT_BLOB:
+     case FParamSfo.params[i].GetLength of
+      4:V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
+      8:V:='0x'+HexStr(FParamSfo.params[i].GetUInt64,16);
+      else
+        V:=FParamSfo.params[i].GetString;
+     end;
+   SFO_FORMAT_STRING:V:=Trim(FParamSfo.params[i].GetString);
+   SFO_FORMAT_UINT32:V:='0x'+HexStr(FParamSfo.params[i].GetUInt,8);
    else
     V:='???';
   end;
