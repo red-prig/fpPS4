@@ -227,6 +227,9 @@ begin
 
  case ctx.din.OpCode.Opcode of
 
+  OPpmovsx:Result:=vlR256;
+  OPpmovzx:Result:=vlR256;
+
   OPcvtdq2:
     case ctx.din.OpCode.Suffix of
      OPSx_pd:Result:=vlR256;
