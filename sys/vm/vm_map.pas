@@ -4330,7 +4330,7 @@ begin
    if (obj<>nil) then
    if (obj^.otype=OBJT_BLOCKPOOL) then
    begin
-    //vm_blockpool_name_split
+    vm_blockpool_name_map_set_name(@map^.bname_map,entry^.start,entry^.__end,nil);
 
     blockpool_obj_unmap(map,obj,entry^.start,0,IDX_TO_OFF(obj^.size) div M_64K);
 
