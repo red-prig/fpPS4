@@ -484,9 +484,8 @@ begin
  obj^.otype :=OBJT_DEAD;
 end;
 
-procedure vm_blockpool_get_name(map:vm_map_t;
+procedure vm_blockpool_get_name(map    :vm_map_t;
                                 address:vm_offset_t;
-                                p_start:PQWORD;
                                 p___end:PQWORD;
                                 name   :pchar);
 var
@@ -497,15 +496,13 @@ begin
  begin
   if (entry^.start <= address) and (address < entry^.__end) then
   begin
-   p_start^:=entry^.start;
    p___end^:=entry^.__end;
    Move(entry^.name,name^,Sizeof(t_entry_name));
    Exit;
   end;
- end else
- begin
-  name[0]:=#0;
  end;
+
+ name[0]:=#0;
 end;
 
 function blockpool_obj_get_info(map  :vm_map_t;
@@ -515,6 +512,7 @@ function blockpool_obj_get_info(map  :vm_map_t;
                                 has_sdk_version_5:Boolean):Integer; public;
 var
  vm_start   :QWORD;
+ objb_end   :QWORD;
  start      :QWORD;
  __end      :QWORD;
  i          :DWORD;
@@ -529,18 +527,20 @@ begin
 
  start:=addr;
  __end:=QWORD(qinfo^.p__end);
- vm_blockpool_get_name(map,addr,@start,@__end,@qinfo^.name);
+ vm_blockpool_get_name(map,addr,@__end,@qinfo^.name);
 
  block_start:=0;
- if (vm_start <= start) then
+ if (vm_start < start) then
  begin
   block_start:=(start - vm_start) div M_64K;
  end;
 
- block___end:=IDX_TO_OFF(obj^.size) div M_64K;
- if (((__end - vm_start) div M_64K) <= block___end) then
+ objb_end:=QWORD(obj^.size) div (M_64K div PAGE_SIZE);
+
+ block___end:=(__end - vm_start) div M_64K;
+ if (block___end > objb_end) then
  begin
-  block___end:=(__end - vm_start) div M_64K;
+  block___end:=objb_end;
  end;
 
  tlb_64k:=obj^.un_pager.bpl.tlb_64k;
