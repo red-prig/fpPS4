@@ -9,6 +9,7 @@ uses
  vm,
  vmparam,
  vm_blockpool,
+ vm_blockpool_name,
  vm_object,
  vm_map,
  vm_pmap,
@@ -483,6 +484,30 @@ begin
  obj^.otype :=OBJT_DEAD;
 end;
 
+procedure vm_blockpool_get_name(map:vm_map_t;
+                                address:vm_offset_t;
+                                p_start:PQWORD;
+                                p___end:PQWORD;
+                                name   :pchar);
+var
+ entry:p_vm_blockpool_name_entry;
+begin
+
+ if vm_blockpool_name_map_lookup_entry(@map^.bname_map,address,@entry) then
+ begin
+  if (entry^.start <= address) and (address < entry^.__end) then
+  begin
+   p_start^:=entry^.start;
+   p___end^:=entry^.__end;
+   Move(entry^.name,name^,Sizeof(t_entry_name));
+   Exit;
+  end;
+ end else
+ begin
+  name[0]:=#0;
+ end;
+end;
+
 function blockpool_obj_get_info(map  :vm_map_t;
                                 obj  :vm_map_object;
                                 addr :QWORD;
@@ -504,7 +529,7 @@ begin
 
  start:=addr;
  __end:=QWORD(qinfo^.p__end);
- //vm_blockpool_get_name(map,addr,&start,&__end,name);
+ vm_blockpool_get_name(map,addr,@start,@__end,@qinfo^.name);
 
  block_start:=0;
  if (vm_start <= start) then

@@ -10,6 +10,7 @@ uses
  vm,
  vmparam,
  vm_blockpool,
+ vm_blockpool_name,
  vm_pmap,
  vm_object,
  kern_vm_object,
@@ -25,8 +26,6 @@ type
  vm_eflags_t=type Integer;
 
  vm_map_object=vm_object_t;
-
- t_entry_name=array[0..31] of AnsiChar;
 
  p_vm_map_entry_t=^vm_map_entry_t;
  vm_map_entry_t=^vm_map_entry;
@@ -68,6 +67,7 @@ type
   root     :vm_map_entry_t; // Root of a binary search tree
   pmap     :pmap_t;         // (c) Physical map
   rmap     :Pointer;        // p_rmem_map
+  bname_map:t_vm_blockpool_name_map;
   entry_id :QWORD;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
@@ -377,7 +377,7 @@ function dmem_includes_wbgarlic(map  :Pointer;
 ////
 
 var
- mapentzone:uma_zone_t;
+ mapentzone:uma_zone_t; public;
 
  sgrowsiz:QWORD=vmparam.SGROWSIZ;
  stack_guard_page:Integer=0;
@@ -423,7 +423,7 @@ end;
  * Asserts that the starting and ending region
  * addresses fall within the valid range of the map.
  }
-procedure VM_MAP_RANGE_CHECK(map:vm_map_t;var start,__end:vm_offset_t);
+procedure VM_MAP_RANGE_CHECK(map:vm_map_t;var start,__end:vm_offset_t); inline;
 begin
  if (start<vm_map_min(map)) then
  begin
@@ -766,6 +766,8 @@ begin
  mtx_init(map^.vm_mtx,'user map');
 
  //mtx_init(map^.lock,'user map');
+
+ vm_blockpool_name_map_init(@map^.bname_map,min,max);
 end;
 
 {
@@ -2160,7 +2162,7 @@ begin
      (coal or (prev^.entry_id=entry^.entry_id))
      then
   begin
-   if (strlcomp(pchar(@prev^.name),pchar(@entry^.name),32)=0) then
+   if (strlcomp(pchar(@prev^.name),pchar(@entry^.name),sizeof(t_entry_name))=0) then
    begin
     vm_map_entry_unlink(map, prev);
     entry^.start :=prev^.start;
@@ -2212,7 +2214,7 @@ begin
      (coal or (next^.entry_id=entry^.entry_id))
      then
   begin
-   if (strlcomp(pchar(@next^.name),pchar(@entry^.name),32)=0) then
+   if (strlcomp(pchar(@next^.name),pchar(@entry^.name),sizeof(t_entry_name))=0) then
    begin
     vm_map_entry_unlink(map, next);
     entry^.__end:=next^.__end;
@@ -5185,9 +5187,9 @@ begin
  vm_map_unlock(map);
 end;
 
-procedure vm_blockpool_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
+procedure vm_blockpool_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar); inline;
 begin
- Writeln('TODO:vm_blockpool_set_name');
+ vm_blockpool_name_map_set_name(@map^.bname_map,start,__end,name);
 end;
 
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
@@ -5247,7 +5249,7 @@ begin
   vm_map_clip_end(map,current,__end);
 
   current^.name:=Default(t_entry_name);
-  MoveChar0(name^,current^.name,32);
+  MoveChar0(name^,current^.name,sizeof(t_entry_name));
 
   if sdk_7 then
   begin
@@ -5291,7 +5293,7 @@ begin
   vm_map_clip_end(map,current,__end);
 
   current^.name:=Default(t_entry_name);
-  MoveChar0(name^,current^.name,32);
+  MoveChar0(name^,current^.name,sizeof(t_entry_name));
   current^.inheritance:=i;
 
   vm_map_simplify_entry(map, current);

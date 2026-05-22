@@ -31,6 +31,8 @@ type
  p_vm_memattr_t=^vm_memattr_t;
  vm_memattr_t=Byte;
 
+ t_entry_name=array[0..31] of AnsiChar;
+
 const
  VM_INHERIT_SHARE  =vm_inherit_t(0);
  VM_INHERIT_COPY   =vm_inherit_t(1);

@@ -1804,6 +1804,10 @@
         <Filename Value="src\dialogs\ps4_libSceHmdSetupDialog.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\vm\vm_blockpool_name.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
