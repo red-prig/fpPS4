@@ -652,8 +652,9 @@ begin
    end else
    if (ext[i].dst.dtype.isScalar) then
    begin
+    max:=1;
 
-    if (i=0) then
+    if (ext[i].id<max) then
     begin
      MakeCopy(pSlot,ext[i].dst);
     end else
@@ -665,7 +666,7 @@ begin
    begin
     max:=ext[i].dst.dtype.Count;
 
-    if (i<max) then
+    if (ext[i].id<max) then
     begin
      OpExtract(line,pSlot^.New(ext[i].dtype),ext[i].dst,ext[i].id);
     end else
@@ -1323,7 +1324,9 @@ end;
 procedure TEmit_MIMG.emit_image_get_resinfo(Tgrp:TsrNode;info:PsrImageInfo);
 var
  offset:DWORD;
- dst,lod:TsrRegNode;
+ dst_whds,dst_mips,lod:TsrRegNode;
+
+ has_whds,has_mips:Boolean;
 
  dvec:TsrDataType;
  i,count_dim,count_query:Byte;
@@ -1334,34 +1337,8 @@ begin
  lod:=Gather_value(offset,dtUint32);
 
  //{width, height, depth, num_mip_levels}
-
- if (FSPI.MIMG.DMASK and 8)<>0 then
- begin
-  Assert(false,'TODO: IMAGE_GET_RESINFO->OpImageQueryLevels');
- end;
-
- Case info^.tinfo.Dim of
-  Dim.Dim2D:count_dim:=2;
-  Dim.Cube :count_dim:=2;
-  Dim.Dim3D:count_dim:=3;
-  else
-            count_dim:=1;
- end;
-
- count_query:=count_dim;
- if (info^.tinfo.Arrayed<>0) then
- begin
-  Inc(count_query);
- end;
-
- //
-
- dvec:=TsrDataType(dtUint32).AsVector(count_query);
-
- dst:=NewReg(dvec);
-
- //(width [, height] [, depth] [, elements])
- OpImageQuerySizeLod(line,Tgrp,dst,lod);
+ has_whds:=(FSPI.MIMG.DMASK and 7)<>0;
+ has_mips:=(FSPI.MIMG.DMASK and 8)<>0;
 
  //fill
  ext:=Default(AExtDistrib);
@@ -1370,11 +1347,48 @@ begin
   ext[i].dtype:=dtUint32;
  end;
 
- //fill except arrayed elements
- For i:=0 to count_dim-1 do
+ //
+
+ if has_whds then
  begin
-  ext[i].dst:=dst;
-  ext[i].id :=i;
+
+  Case info^.tinfo.Dim of
+   Dim.Dim2D:count_dim:=2;
+   Dim.Cube :count_dim:=2;
+   Dim.Dim3D:count_dim:=3;
+   else
+             count_dim:=1;
+  end;
+
+  count_query:=count_dim;
+  if (info^.tinfo.Arrayed<>0) then
+  begin
+   Inc(count_query);
+  end;
+
+  dvec:=TsrDataType(dtUint32).AsVector(count_query);
+  dst_whds:=NewReg(dvec);
+
+  //(width [, height] [, depth] [, elements])
+  OpImageQuerySizeLod(line,Tgrp,dst_whds,lod);
+
+  //fill except arrayed elements
+  For i:=0 to count_dim-1 do
+  begin
+   ext[i].dst:=dst_whds;
+   ext[i].id :=i;
+  end;
+
+ end;
+
+ if has_mips then
+ begin
+  dst_mips:=NewReg(dtUint32);
+
+  OpImageQueryLevels(line,Tgrp,dst_mips);
+
+  ext[3].dst:=dst_mips;
+  ext[3].id :=0;
  end;
 
  DistribDmaskExt(FSPI.MIMG.DMASK,ext,info);

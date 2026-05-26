@@ -209,6 +209,7 @@ type
   function  OpImageRead(pLine:TspirvOp;Tgrp:TsrNode;dst,idx:TsrRegNode):TspirvOp;
   function  OpImageWrite(pLine:TspirvOp;Tgrp:TsrNode;idx,src:TsrRegNode):TspirvOp;
   function  OpImageQuerySizeLod(pLine:TspirvOp;img:TsrNode;dst,lod:TsrRegNode):TspirvOp;
+  function  OpImageQueryLevels(pLine:TspirvOp;img:TsrNode;dst:TsrRegNode):TspirvOp;
   function  OpImageQueryLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
  end;
 
@@ -1918,6 +1919,11 @@ end;
 function TEmitOp.OpImageQuerySizeLod(pLine:TspirvOp;img:TsrNode;dst,lod:TsrRegNode):TspirvOp;
 begin
  Result:=_Op2(pLine,Op.OpImageQuerySizeLod,dst,img,lod);
+end;
+
+function TEmitOp.OpImageQueryLevels(pLine:TspirvOp;img:TsrNode;dst:TsrRegNode):TspirvOp;
+begin
+ Result:=_Op1(pLine,Op.OpImageQueryLevels,dst,img);
 end;
 
 function TEmitOp.OpImageQueryLod(pLine:TspirvOp;img:TsrNode;dst,coord:TsrRegNode):TspirvOp;
