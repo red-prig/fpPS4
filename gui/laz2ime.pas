@@ -33,6 +33,7 @@ type
 
  TKeyStates=object
   ime_input :Boolean;
+  Multiline :Boolean;
   ime_change:Boolean;
   kbd_input :Boolean;
   //
@@ -358,6 +359,7 @@ Procedure TKeyStates.PushKey(key:Word;Chr:WideChar;down:Byte);
 begin
 
  if ime_input and ((down=0) or (down=1)) then
+ if (key<>VK_RETURN) or Multiline then
  begin
   ime_queue.PushKey(key,Chr,down);
  end;
@@ -381,6 +383,8 @@ Procedure TKeyStates.ImeOpen(Dialog:TImeDialog;const w:WideString);
 begin
  ime_input:=True;
  ime_queue.Reset;
+
+ Multiline:=Dialog.Multiline;
 
  input:=w;
 

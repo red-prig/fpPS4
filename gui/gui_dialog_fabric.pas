@@ -99,6 +99,7 @@ type
    procedure DoMouseDown(Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
    procedure DoMouseUp  (Sender:TObject;Btn:TMouseButton;Shift:TShiftState;X,Y:Integer);
   public
+   Multiline  :Boolean;
    FixedPos   :Boolean;
    Over2kCoord:Boolean;
    IsMoved    :Boolean;
@@ -208,6 +209,7 @@ procedure TImeDialog.SetInfo(Ime:PImeDialogAttributes);
 begin
  state      :=1;
  //
+ Multiline  :=Ime^.Multiline;
  FixedPos   :=Ime^.FixedPos;
  Over2kCoord:=Ime^.Over2kCoord;
  hAlign     :=Ime^.hAlign;
