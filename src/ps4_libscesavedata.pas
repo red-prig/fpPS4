@@ -6,9 +6,13 @@ unit ps4_libSceSaveData;
 interface
 
 uses
-  mpmc_queue,
-  subr_dynlib,
-  ps4_libSceUserService;
+ kern_thr,
+ kern_proc,
+ kern_ksched,
+ kern_authinfo,
+ mpmc_queue,
+ subr_dynlib,
+ ps4_libSceUserService;
 
 Const
  SCE_SAVE_DATA_ERROR_PARAMETER                           =-2137063424; // 0x809F0000
@@ -52,6 +56,22 @@ Const
  SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END=3;
 
 type
+ pSceSaveDataInitParams=^SceSaveDataInitParams;
+ SceSaveDataInitParams=packed record
+  priority:Integer;
+  reserved:array[0..31] of Byte;
+ end;
+
+ pSceSaveDataInitParams2=^SceSaveDataInitParams2;
+ SceSaveDataInitParams2=packed record
+  priority       :Integer;
+  threadStackSize:DWORD;
+  cpuAffinityMask:QWORD;
+  reserved       :array[0..31] of Byte;
+ end;
+
+ pSceSaveDataInitParams3=Pointer;
+
  PSceSaveDataParam=^SceSaveDataParam;
  SceSaveDataParam=packed record
   title    :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1] of AnsiChar;
@@ -196,8 +216,8 @@ type
  SceSaveDataMountResult=packed record
   mountPoint    :SceSaveDataMountPoint;
   requiredBlocks:QWORD;
-  unused        :DWORD;
-  mountStatus   :DWORD;
+  progress      :DWORD; //SDK_VERSION <  0x3500000
+  mountStatus   :DWORD; //SDK_VERSION >= 0x3500000
   reserved      :array[0..27] of Byte;
   align1        :Integer;
  end;
@@ -312,19 +332,238 @@ begin
  end;
 end;
 
-function ps4_sceSaveDataInitialize(params:Pointer):Integer;
+///
+
+type
+ t_init_version=(VERSION_INIT_0,VERSION_INIT_2,VERSION_INIT_3,VERSION_INIT_CDLG);
+
+ TSaveDataInstance=class
+  version             :t_init_version;
+  memory_timeout_10sec:Boolean;
+  force_default_prio  :Boolean;
+  not_prio_by_cusaname:Boolean;
+  priority            :Integer;
+  threadStackSize     :DWORD;
+  cpuAffinityMask     :QWORD;
+  job_thread          :Pointer;
+ end;
+
+var
+ g_instance:TSaveDataInstance;
+
+function CheckReserved(var buf;len:DWORD):Boolean;
+var
+ i:DWORD;
 begin
- Result:=0;
+ for i:=0 to len-1 do
+ if (PByte(@buf)[i]<>0) then
+ begin
+  Exit(False);
+ end;
+ Result:=True;
 end;
 
-function ps4_sceSaveDataInitialize2(params:Pointer):Integer;
+function CheckDataInitParams0(params:pSceSaveDataInitParams):Integer; inline;
 begin
- Result:=0;
+ if (params=nil) then Exit(0);
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (DWORD(params^.priority-256)<512) then
+ if (Byte(params^.reserved[0])<2) then
+ if CheckReserved(params^.reserved[1],sizeof(params^.reserved)-1) then
+ begin
+  Result:=0;
+ end;
 end;
 
-function ps4_sceSaveDataInitialize3(params:Pointer):Integer;
+function CheckDataInitParams1(params:pSceSaveDataInitParams):Integer; inline;
+begin
+ if (params=nil) then Exit(0);
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (DWORD(params^.priority-256)<512) then
+ if CheckReserved(params^.reserved,sizeof(params^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckDataInitParams2(params:pSceSaveDataInitParams2):Integer; inline;
+begin
+ if (params=nil) then Exit(0);
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (DWORD(params^.priority-256)<512) then
+ if (DWORD(params^.threadStackSize-1)>$3ffe) then
+ if (QWORD(params^.cpuAffinityMask)<64) then
+ if CheckReserved(params^.reserved,sizeof(params^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckDataInitParams3(params:Pointer):Integer; inline;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (params=nil) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function InitInstance(instance:TSaveDataInstance;params:Pointer;version:t_init_version):Integer;
+begin
+ instance.version        :=version;
+ instance.priority       :=700;
+ instance.threadStackSize:=$4000;
+ instance.cpuAffinityMask:=0;
+
+ case version of
+  VERSION_INIT_0:
+   begin
+    if (params=nil) then Exit(0);
+
+    if (p_proc.p_sdk_version >= $2000000) then
+    begin
+     Result:=CheckDataInitParams1(params);
+     if (Result=0) then
+     begin
+      instance.priority            :=pSceSaveDataInitParams(params)^.priority;
+      instance.not_prio_by_cusaname:=true;
+     end;
+    end else
+    begin
+     Result:=CheckDataInitParams0(params);
+     if (Result=0) then
+     begin
+      instance.priority            :=pSceSaveDataInitParams(params)^.priority;
+      instance.force_default_prio  :=(pSceSaveDataInitParams(params)^.reserved[0]<>0);
+      instance.not_prio_by_cusaname:=true;
+     end;
+    end;
+
+   end;
+  VERSION_INIT_2:
+   begin
+    Result:=CheckDataInitParams2(params);
+    if (Result=0) then
+    begin
+     instance.priority            :=pSceSaveDataInitParams2(params)^.priority;
+     instance.not_prio_by_cusaname:=true;
+     instance.threadStackSize     :=pSceSaveDataInitParams2(params)^.threadStackSize;
+     instance.cpuAffinityMask     :=pSceSaveDataInitParams2(params)^.cpuAffinityMask;
+    end;
+   end;
+  VERSION_INIT_3:
+   begin
+    Result:=CheckDataInitParams3(params);
+   end;
+  VERSION_INIT_CDLG:
+   Assert(False,'VERSION_INIT_CDLG');
+ end;
+
+end;
+
+procedure Getprio_by_cusaname(instance:TSaveDataInstance);
+var
+ sched_param:t_sched_param;
+begin
+ if (p_proc.p_sdk_version < $2000000) and
+    (instance.force_default_prio=false) then
+ begin
+  instance.priority:=700;
+ end;
+
+ if (instance.not_prio_by_cusaname=false) then
+ begin
+
+  case String(g_appinfo.CUSANAME) of
+   'CUSA00503',
+   'CUSA01425',
+   'CUSA00220':
+     begin
+      //scePthreadGetprio(scePthreadSelf(),&instance->prio)
+
+      sched_param:=Default(t_sched_param);
+
+      PROC_LOCK();
+      ksched_getparam(@ksched, curkthread, @sched_param);
+      PROC_UNLOCK();
+
+      if (sched_param.sched_priority<>0) then
+      begin
+       instance.priority:=sched_param.sched_priority;
+      end;
+
+     end;
+   else;
+  end;
+
+ end;
+end;
+
+function ConnectInstance(instance:TSaveDataInstance):Integer;
 begin
  Result:=0;
+
+ if (instance.version=VERSION_INIT_3) then
+ begin
+
+  if (p_proc.p_sdk_version < $6500000) then
+  begin
+
+   if (
+       g_appinfo.titleWorkaround.ids[0] and
+       (QWORD(1) shl BUG180029_SAVE_DATA_MEMORY_TIMEOUT_10SEC)
+      )<>0 then
+   begin
+    instance.memory_timeout_10sec:=True;
+   end;
+
+  end else
+  begin
+   instance.memory_timeout_10sec:=True;
+  end;
+
+ end else
+ begin
+  Getprio_by_cusaname(instance);
+
+  //init_job_thread
+ end;
+
+end;
+
+function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;
+var
+ instance:TSaveDataInstance;
+begin
+ if (g_instance<>nil) then Exit(0);
+
+ instance:=TSaveDataInstance.Create;
+ Result:=InitInstance(instance,params,version);
+ g_instance:=instance;
+
+ if (Result<0) then
+ begin
+  g_instance.Free;
+  g_instance:=nil;
+  Exit;
+ end;
+
+ Result:=ConnectInstance(g_instance);
+end;
+
+function ps4_sceSaveDataInitialize(params:pSceSaveDataInitParams):Integer;
+begin
+ Result:=CreateSaveDataInstance(params,VERSION_INIT_0);
+end;
+
+function ps4_sceSaveDataInitialize2(params:pSceSaveDataInitParams2):Integer;
+begin
+ Result:=CreateSaveDataInstance(params,VERSION_INIT_2);
+end;
+
+function ps4_sceSaveDataInitialize3(params:pSceSaveDataInitParams3):Integer;
+begin
+ Result:=CreateSaveDataInstance(params,VERSION_INIT_3);
 end;
 
 function ps4_sceSaveDataTerminate:Integer;
