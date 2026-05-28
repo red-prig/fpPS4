@@ -178,6 +178,18 @@ type
   padding:array[0..14] of Byte;
  end;
 
+ SceSaveDataBlocks=QWORD;
+
+const
+ //SceSaveDataMountMode
+ SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
+ SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
+ SCE_SAVE_DATA_MOUNT_MODE_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
+ SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
+ SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
+
+type
  pSceSaveDataMount=^SceSaveDataMount;
  SceSaveDataMount=packed record
   userId     :SceUserServiceUserId;
@@ -185,9 +197,8 @@ type
   titleId    :pSceSaveDataTitleId;
   dirName    :PSceSaveDataDirName;
   fingerprint:pSceSaveDataFingerprint;
-  blocks     :QWORD; //SceSaveDataBlocks
+  blocks     :SceSaveDataBlocks;
   mountMode  :DWORD; //SceSaveDataMountMode
-  align2     :Integer;
   reserved   :array[0..31] of Byte;
  end;
 
@@ -196,7 +207,7 @@ type
   userId   :SceUserServiceUserId;
   align1   :Integer;
   dirName  :PSceSaveDataDirName;
-  blocks   :QWORD;
+  blocks   :SceSaveDataBlocks;
   mountMode:DWORD;
   reserved :array[0..31] of Byte;
   align2   :Integer;
@@ -215,7 +226,7 @@ type
  PSceSaveDataMountResult=^SceSaveDataMountResult;
  SceSaveDataMountResult=packed record
   mountPoint    :SceSaveDataMountPoint;
-  requiredBlocks:QWORD;
+  requiredBlocks:SceSaveDataBlocks;
   progress      :DWORD; //SDK_VERSION <  0x3500000
   mountStatus   :DWORD; //SDK_VERSION >= 0x3500000
   reserved      :array[0..27] of Byte;
@@ -224,8 +235,8 @@ type
 
  pSceSaveDataMountInfo=^SceSaveDataMountInfo;
  SceSaveDataMountInfo=packed record
-  blocks    :QWORD; //SceSaveDataBlocks
-  freeBlocks:QWORD; //SceSaveDataBlocks
+  blocks    :SceSaveDataBlocks;
+  freeBlocks:SceSaveDataBlocks;
   reserved  :array[0..31] of Byte;
  end;
 
@@ -242,8 +253,8 @@ type
 
  pSceSaveDataSearchInfo=^SceSaveDataSearchInfo;
  SceSaveDataSearchInfo=packed record
-  blocks    :QWORD; //SceSaveDataBlocks
-  freeBlocks:QWORD; //SceSaveDataBlocks
+  blocks    :SceSaveDataBlocks;
+  freeBlocks:SceSaveDataBlocks;
   reserved  :array[0..31] of Byte;
  end;
 
@@ -641,17 +652,15 @@ begin
  Result:=0;
 end;
 
-const
- SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
- SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
- SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
- SCE_SAVE_DATA_MOUNT_MODE_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
- SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
- SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
-
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
                               mountResult:pSceSaveDataMountResult):Integer;
 begin
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
@@ -678,6 +687,12 @@ end;
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
                                mountResult:PSceSaveDataMountResult):Integer;
 begin
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
@@ -704,6 +719,12 @@ end;
 function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
                                           mountResult:PSceSaveDataMountResult):Integer;
 begin
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  mountResult^:=Default(SceSaveDataMountResult);
 
@@ -723,6 +744,11 @@ function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer;
 begin
  Result:=0;
 
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Writeln('sceSaveDataUmount');
 
  {
@@ -737,6 +763,11 @@ var
  event:SceSaveDataEvent;
 begin
  Result:=0;
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
 
  Writeln('sceSaveDataUmountWithBackup');
 
