@@ -10,6 +10,7 @@ uses
  kern_proc,
  kern_ksched,
  kern_authinfo,
+ kern_mtx,
  mpmc_queue,
  subr_dynlib,
  ps4_libSceUserService;
@@ -182,12 +183,12 @@ type
 
 const
  //SceSaveDataMountMode
- SCE_SAVE_DATA_MOUNT_MODE_RDONLY      =1;  //Read-only
- SCE_SAVE_DATA_MOUNT_MODE_RDWR        =2;  //Read/write-enabled
- SCE_SAVE_DATA_MOUNT_MODE_CREATE      =4;  //Create new (error if save data directory already exists)
- SCE_SAVE_DATA_MOUNT_MODE_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
- SCE_SAVE_DATA_MOUNT_MODE_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
- SCE_SAVE_DATA_MOUNT_MODE_CREATE2     =32; //Create new (mount save data directory if it already exists)
+ SDM_RDONLY      =1;  //Read-only
+ SDM_RDWR        =2;  //Read/write-enabled
+ SDM_CREATE      =4;  //Create new (error if save data directory already exists)
+ SDM_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
+ SDM_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
+ SDM_CREATE2     =32; //Create new (mount save data directory if it already exists)
 
 type
  pSceSaveDataMount=^SceSaveDataMount;
@@ -357,6 +358,7 @@ type
   threadStackSize     :DWORD;
   cpuAffinityMask     :QWORD;
   job_thread          :Pointer;
+  mtx                 :mtx;
  end;
 
 var
@@ -421,6 +423,7 @@ end;
 
 function InitInstance(instance:TSaveDataInstance;params:Pointer;version:t_init_version):Integer;
 begin
+ mtx_init(instance.mtx,'SaveDataInstance');
  instance.version        :=version;
  instance.priority       :=700;
  instance.threadStackSize:=$4000;
@@ -652,6 +655,426 @@ begin
  Result:=0;
 end;
 
+function IsLoggedIn(userId:Integer):Integer; inline;
+begin
+ //sceUserServiceIsLoggedIn
+ Result:=0;
+end;
+
+function CheckTitleId(titleId:pSceSaveDataTitleId):Integer;
+var
+ i:DWORD;
+begin
+ if (titleId=nil) then
+ begin
+  Exit(0);
+ end;
+
+ if CheckReserved(titleId^.data,sizeof(titleId^.data)) then
+ begin
+  Exit(0);
+ end;
+
+ for i:=0 to 3 do
+  if (titleId^.data[i] < 'A') or (titleId^.data[i] > 'Z') then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ for i:=4 to 8 do
+  if (titleId^.data[i] < '0') or (titleId^.data[i] > '9') then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+ if not CheckReserved(titleId^.padding,sizeof(titleId^.padding)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=0;
+end;
+
+function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
+var
+ i:size_t;
+begin
+ if (s=nil) then Exit(0);
+ i:=0;
+ if (maxlen<>0) then
+ begin
+  repeat
+   if (s[i]=#0) then Exit(i);
+   Inc(i);
+  until (maxlen = i);
+ end;
+ Exit(maxlen);
+end;
+
+function is_sdm(name:pchar):Boolean;
+begin
+ Result:=False;
+ if (PQWORD(@name[0])^=QWORD($656D64735F656373)) then //sce_sdme
+ if (PDWORD(@name[8])^=DWORD($79726F6D)) then         //mory
+ begin
+  case Byte(name[12]) of
+   $00:Result:=True;
+   $31,
+   $32,
+   $33:if (name[13]=#0) then Result:=True;
+   else;
+  end;
+ end;
+end;
+
+function CheckDirName(dirName:pSceSaveDataDirName;allow_sdm:Boolean):Integer;
+var
+ len,i:DWORD;
+begin
+ if (dirName=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if allow_sdm then
+ if is_sdm(@dirName^.data) then
+ begin
+  Exit(0);
+ end;
+
+ len:=strnlen_s(@dirName^.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+ if (len=0) or (len=SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (len<>0) then
+ for i:=0 to len-1 do
+ begin
+  case dirName^.data[i] of
+   'a'..'z':;
+   'A'..'Z':;
+   '0'..'9':;
+   '-',
+   '.',
+   '@':;
+   else
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ Result:=0;
+end;
+
+function CheckFingerprint(ptr:pSceSaveDataFingerprint):Integer;
+var
+ len,i:DWORD;
+begin
+ if (ptr=nil) then
+ begin
+  Exit(0);
+ end;
+
+ len:=strnlen_s(@ptr^.data,SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE);
+
+ if (len=SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ for i:=0 to SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1 do
+ begin
+  case ptr^.data[i] of
+   'a'..'z':;
+   '0'..'9':;
+   else
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ if not CheckReserved(ptr^.padding,sizeof(ptr^.padding)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=0;
+end;
+
+function CheckMountMode(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
+const
+ RDONLY_RDWR  =SDM_RDONLY or SDM_RDWR;
+ RDONLY_CREATE=SDM_RDONLY or SDM_CREATE;
+begin
+ Result:=(
+          ((mountMode and SDM_CREATE)=0) or
+          (blocks>95)
+         ) and (
+          (mountMode and RDONLY_RDWR)<>RDONLY_RDWR
+         ) and (
+          mountMode<>0
+         ) and
+         (
+          (mountMode and RDONLY_CREATE)<>RDONLY_CREATE
+         );
+end;
+
+function CheckSceSaveDataMount1(mount:pSceSaveDataMount;allow_sdm:Boolean):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (mount=nil) then Exit;
+
+ if IsLoggedIn(mount^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(mount^.titleId)=0 then
+ if CheckDirName(mount^.dirName,allow_sdm)=0 then
+ if CheckFingerprint(mount^.fingerprint)=0 then
+ if CheckMountMode(mount^.mountMode,mount^.blocks) then
+ if CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckSceSaveDataMount2(mount:pSceSaveDataMount):Integer;
+begin
+ Result:=CheckSceSaveDataMount1(mount,False);
+ if (Result=0) then
+ begin
+
+  if (mount^.titleId=nil) then
+  begin
+   if (mount^.fingerprint=nil) then
+   begin
+    Exit(0);
+   end;
+  end else
+  if (mount^.fingerprint<>nil) then
+  begin
+   Exit(0);
+  end;
+
+  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ end;
+end;
+
+function CheckSceSaveDataMount3(mount:pSceSaveDataMount):Integer;
+const
+ CREATE_COPY_ICON=SDM_CREATE or SDM_COPY_ICON;
+begin
+ Result:=CheckSceSaveDataMount1(mount,False);
+ if (Result=0) then
+ begin
+
+  if (mount^.titleId=nil) then
+  begin
+   if (mount^.fingerprint<>nil) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+  end else
+  if (mount^.fingerprint=nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  if ((mount^.mountMode and CREATE_COPY_ICON)=SDM_COPY_ICON) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  Result:=0;
+ end;
+end;
+
+function CheckSceSaveDataTransferringMount(mount:pSceSaveDataMount):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (mount<>nil) then
+ if (mount^.titleId<>nil) and
+    (mount^.fingerprint<>nil) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckSceSaveDataMount4(mount:pSceSaveDataMount):Integer;
+const
+ CREATE_COPY_ICON=SDM_CREATE or SDM_COPY_ICON;
+begin
+ Result:=CheckSceSaveDataMount1(mount,True);
+ if (Result=0) then
+ begin
+  if is_sdm(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  if (mount^.titleId=nil) then
+  begin
+   if (mount^.fingerprint<>nil) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+  end else
+  if (mount^.fingerprint=nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  if ((mount^.mountMode and CREATE_COPY_ICON)=SDM_COPY_ICON) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  Result:=0;
+ end;
+end;
+
+function CheckMountMode2(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
+const
+ CREATE_CREATE2          =SDM_CREATE or SDM_CREATE2;
+ RDONLY_CREATE           =SDM_RDONLY or SDM_CREATE;
+ RDONLY_CREATE2          =SDM_RDONLY or SDM_CREATE2;
+ RDONLY_RDWR             =SDM_RDONLY or SDM_RDWR;
+ CREATE_COPY_ICON_CREATE2=SDM_CREATE or SDM_COPY_ICON or SDM_CREATE2;
+begin
+ Result:=(
+          ((mountMode and CREATE_CREATE2)=0) or
+          (blocks>95)
+         ) and (
+          mountMode<>0
+         ) and
+         (
+          (mountMode and RDONLY_CREATE)<>RDONLY_CREATE
+         ) and
+         (
+          (mountMode and RDONLY_CREATE2)<>RDONLY_CREATE2
+         ) and
+         (
+          (mountMode and CREATE_CREATE2)<>CREATE_CREATE2
+         ) and (
+          (mountMode and RDONLY_RDWR)<>RDONLY_RDWR
+         ) and (
+          (mountMode and CREATE_COPY_ICON_CREATE2)<>SDM_COPY_ICON
+         );
+end;
+
+function CheckSceSaveDataMount5(mount:pSceSaveDataMount):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (mount=nil) then Exit;
+
+ if IsLoggedIn(mount^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(mount^.titleId)=0 then
+ if CheckDirName(mount^.dirName,True)=0 then
+ if CheckFingerprint(mount^.fingerprint)=0 then
+ if CheckMountMode2(mount^.mountMode,mount^.blocks) then
+ if CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
+ begin
+
+  if is_sdm(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  if (mount^.titleId=nil) then
+  begin
+   if (mount^.fingerprint=nil) then
+   begin
+    Exit(0);
+   end;
+  end else
+  if (mount^.fingerprint<>nil) then
+  begin
+   Exit(0);
+  end;
+
+  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ end;
+end;
+
+function CheckOutputSceSaveDataMountPoint1(pResult:pSceSaveDataMountResult):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (pResult=nil) then Exit;
+
+ if CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckOutputSceSaveDataMountPoint2(pResult:pSceSaveDataMountResult):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (pResult=nil) then Exit;
+
+ if (pResult^.progress=0) then
+ if CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckSaveDataMount(mount      :pSceSaveDataMount;
+                            pResult    :pSceSaveDataMountResult;
+                            Transfering:Boolean):Integer;
+begin
+
+ if (p_proc.p_sdk_version < $1500000) then
+ begin
+  Result:=CheckSceSaveDataMount1(mount,False);
+ end else
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  Result:=CheckSceSaveDataMount2(mount);
+ end else
+ if (p_proc.p_sdk_version < $2500000) then
+ begin
+  Result:=CheckSceSaveDataMount3(mount);
+ end else
+ begin
+
+  if (Transfering) then
+  begin
+   Result:=CheckSceSaveDataTransferringMount(mount);
+   if (Result<>0) then Exit;
+  end;
+
+  if (p_proc.p_sdk_version < $4500000) then
+  begin
+   Result:=CheckSceSaveDataMount4(mount);
+  end else
+  begin
+   Result:=CheckSceSaveDataMount5(mount);
+  end;
+
+ end;
+
+ if (Result<>0) then Exit;
+
+ if (p_proc.p_sdk_version < $3500000) then
+ begin
+  Result:=CheckOutputSceSaveDataMountPoint1(pResult);
+ end else
+ if (p_proc.p_sdk_version < $4500000) then
+ begin
+  Result:=CheckOutputSceSaveDataMountPoint2(pResult);
+ end else
+ begin
+  Result:=CheckOutputSceSaveDataMountPoint2(pResult);
+ end;
+
+end;
+
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
                               mountResult:pSceSaveDataMountResult):Integer;
 begin
@@ -661,7 +1084,14 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (mount=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=CheckSaveDataMount(mount,mountResult,False);
+ if (Result<>0) then Exit;
+
  mountResult^:=Default(SceSaveDataMountResult);
 
  mountResult^.mountPoint :='/savedata0';
@@ -677,7 +1107,7 @@ begin
  Writeln('sceSaveDataMount');
 
  if (Result=0) and
-    ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
+    ((mount^.mountMode and (SDM_CREATE or SDM_CREATE2))<>0) then
  begin
   mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
  end;
@@ -686,6 +1116,8 @@ end;
 
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
                                mountResult:PSceSaveDataMountResult):Integer;
+var
+ tmp:SceSaveDataMount;
 begin
 
  if (g_instance=nil) then
@@ -693,7 +1125,25 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (mount=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if not CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ tmp:=Default(SceSaveDataMount);
+ tmp.userId   :=mount^.userId   ;
+ tmp.dirName  :=mount^.dirName  ;
+ tmp.blocks   :=mount^.blocks   ;
+ tmp.mountMode:=mount^.mountMode;
+
+ Result:=CheckSaveDataMount(@tmp,mountResult,False);
+ if (Result<>0) then Exit;
+
  mountResult^:=Default(SceSaveDataMountResult);
 
  mountResult^.mountPoint :='/savedata0';
@@ -709,7 +1159,7 @@ begin
  Writeln('sceSaveDataMount2');
 
  if (Result=0) and
-    ((mount^.mountMode and (SCE_SAVE_DATA_MOUNT_MODE_CREATE or SCE_SAVE_DATA_MOUNT_MODE_CREATE2))<>0) then
+    ((mount^.mountMode and (SDM_CREATE or SDM_CREATE2))<>0) then
  begin
   mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
  end;
@@ -718,6 +1168,8 @@ end;
 
 function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
                                           mountResult:PSceSaveDataMountResult):Integer;
+var
+ tmp:SceSaveDataMount;
 begin
 
  if (g_instance=nil) then
@@ -725,7 +1177,26 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (mount=nil) or (mountResult=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (mount=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if not CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ tmp:=Default(SceSaveDataMount);
+ tmp.userId     :=mount^.userId     ;
+ tmp.titleId    :=mount^.titleId    ;
+ tmp.dirName    :=mount^.dirName    ;
+ tmp.fingerprint:=mount^.fingerprint;
+ tmp.mountMode  :=SDM_RDONLY        ;
+
+ Result:=CheckSaveDataMount(@tmp,mountResult,True);
+ if (Result<>0) then Exit;
+
  mountResult^:=Default(SceSaveDataMountResult);
 
  Result:=0;
