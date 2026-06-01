@@ -10,8 +10,9 @@ uses
 
 type
  TGameMountConfig=class
-  LocalDir:RawByteString;
-  TitleId :String[10];
+  LocalDir   :RawByteString;
+  GameTitleId:array[0..9] of AnsiChar;
+  SaveTitleId:array[0..9] of AnsiChar;
   //
   mount_mtx:mtx;
   //
@@ -23,6 +24,7 @@ type
   function GetTemporaryTitleIdFile:RawByteString;
   function GetAppTemporaryFolder:RawByteString;
   function GetAppDownloadFolder(i:Byte):RawByteString;
+  function GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
  end;
 
 var
@@ -37,6 +39,9 @@ function TemporaryDataUnmount(mountPoint:pchar):Integer;
 function TemporaryDataFormat (mountPoint:pchar):Integer;
 function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
+
+function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
+function FormatMount(const fs_src:RawByteString):Integer;
 
 implementation
 
@@ -66,8 +71,9 @@ end;
 
 Constructor TGameMountConfig.Create;
 begin
- LocalDir:='';
- TitleId :='?????????';
+ LocalDir   :='';
+ GameTitleId:='?????????';
+ SaveTitleId:='?????????';
  //
  mtx_init(mount_mtx,'mount_mtx');
 end;
@@ -92,8 +98,20 @@ const
 begin
  Result:=Format(unix_to_host(APP_DOWNLOAD),[
   ExcludeTrailingPathDelimiter(LocalDir),
-  TitleId,
+  GameTitleId,
   i
+ ]);
+end;
+
+function TGameMountConfig.GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+const
+ APP_SAVE='%s/user/home/%s/savedata/%s/%s';
+begin
+ Result:=Format(unix_to_host(APP_SAVE),[
+  ExcludeTrailingPathDelimiter(LocalDir),
+  HexStr(user_id,8),
+  titleId,
+  dirName
  ]);
 end;
 
@@ -275,19 +293,24 @@ begin
 
  if (GameStartupInfo.TITLE_ID<>'') then
  begin
-  GameMountConfig.TitleId:=GameStartupInfo.TITLE_ID;
+  GameMountConfig.GameTitleId:=GameStartupInfo.TITLE_ID;
  end else
  if (GameStartupInfo.FGameItem.GameInfo.TitleId<>'') then
  begin
-  GameMountConfig.TitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
+  GameMountConfig.GameTitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
+ end;
+
+ if (GameStartupInfo.INSTALL_DIR_SAVEDATA<>'') then
+ begin
+  GameMountConfig.SaveTitleId:=GameStartupInfo.INSTALL_DIR_SAVEDATA;
+ end else
+ begin
+  GameMountConfig.SaveTitleId:=GameMountConfig.GameTitleId;
  end;
 
  GameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
  GameMountConfig.DownloadKb[1]:=GameStartupInfo.DownloadMb_1*1024;
  //save to global
-
- //temp hack
- err:=mount_into_sandbox('ufs','/savedata0','savedata',nil,MNT_BIG_APP,True);
 
  fs_source[MM_GAME    ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.game    );
  fs_source[MM_FIRMWARE]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.firmware);
@@ -655,7 +678,7 @@ begin
    strlcopy(mountPoint,TEMP0,MOUNT_MAXSIZE);
    GameMountConfig.TemporaryMount:=True;
 
-   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.TitleId);
+   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.GameTitleId);
 
    if format or (not ValidTitleId) then
    begin
@@ -664,7 +687,7 @@ begin
 
    if (not ValidTitleId) then
    begin
-    SaveTemporaryTitleId(GameMountConfig.TitleId);
+    SaveTemporaryTitleId(GameMountConfig.GameTitleId);
    end;
 
   end;
@@ -799,7 +822,6 @@ begin
 
  Result:=0;
 end;
-
 
 end.
 

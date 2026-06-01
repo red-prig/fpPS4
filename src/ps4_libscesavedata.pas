@@ -6,6 +6,7 @@ unit ps4_libSceSaveData;
 interface
 
 uses
+ sysutils,
  kern_thr,
  kern_proc,
  kern_ksched,
@@ -13,6 +14,8 @@ uses
  kern_mtx,
  mpmc_queue,
  subr_dynlib,
+ game_mount,
+ vfs_mountroot,
  ps4_libSceUserService;
 
 Const
@@ -31,6 +34,7 @@ Const
  SCE_SAVE_DATA_ERROR_BAD_MOUNTED                         =-2137063411; // 0x809F000D
  SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND                      =-2137063410; // 0x809F000E
  SCE_SAVE_DATA_ERROR_BROKEN                              =-2137063409; // 0x809F000F
+ SCE_SAVE_DATA_ERROR_MOUNT_INHIBIT                       =-2137063408; // 0x809f0010
  SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER                  =-2137063407; // 0x809F0011
  SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY                    =-2137063406; // 0x809F0012
  SCE_SAVE_DATA_ERROR_BACKUP_BUSY                         =-2137063405; // 0x809F0013
@@ -168,7 +172,7 @@ type
   align1  :Integer;
   titleId :pSceSaveDataTitleId;
   dirName :pSceSaveDataDirName;
-  unused  :Integer;
+  progress:Integer;  //SDK_VERSION < 0x3500000
   reserved:array[0..31] of Byte;
   align2  :Integer;
  end;
@@ -349,6 +353,15 @@ end;
 type
  t_init_version=(VERSION_INIT_0,VERSION_INIT_2,VERSION_INIT_3,VERSION_INIT_CDLG);
 
+ TMountSlot=record
+  active     :Integer;
+  userId     :SceUserServiceUserId;
+  titleId    :SceSaveDataTitleId;
+  dirName    :SceSaveDataDirName;
+  fingerprint:SceSaveDataFingerprint;
+  max_blocks :SceSaveDataBlocks;
+ end;
+
  TSaveDataInstance=class
   version             :t_init_version;
   memory_timeout_10sec:Boolean;
@@ -359,10 +372,18 @@ type
   cpuAffinityMask     :QWORD;
   job_thread          :Pointer;
   mtx                 :mtx;
+  //
+  MountSlots:array[0..15] of TMountSlot;
  end;
 
 var
  g_instance:TSaveDataInstance;
+
+function IsLoggedIn(userId:Integer):Integer; inline;
+begin
+ //sceUserServiceIsLoggedIn
+ Result:=0;
+end;
 
 function CheckReserved(var buf;len:DWORD):Boolean;
 var
@@ -374,6 +395,201 @@ begin
   Exit(False);
  end;
  Result:=True;
+end;
+
+function CheckTitleId(titleId:pSceSaveDataTitleId):Integer;
+var
+ i:DWORD;
+begin
+ if (titleId=nil) then
+ begin
+  Exit(0);
+ end;
+
+ if CheckReserved(titleId^.data,sizeof(titleId^.data)) then
+ begin
+  Exit(0);
+ end;
+
+ for i:=0 to 3 do
+  if (titleId^.data[i] < 'A') or (titleId^.data[i] > 'Z') then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ for i:=4 to 8 do
+  if (titleId^.data[i] < '0') or (titleId^.data[i] > '9') then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+ if not CheckReserved(titleId^.padding,sizeof(titleId^.padding)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=0;
+end;
+
+function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
+var
+ i:size_t;
+begin
+ if (s=nil) then Exit(0);
+ i:=0;
+ if (maxlen<>0) then
+ begin
+  repeat
+   if (s[i]=#0) then Exit(i);
+   Inc(i);
+  until (maxlen = i);
+ end;
+ Exit(maxlen);
+end;
+
+function strncasecmp(str1,str2:PChar;maxlen:ptrint):Integer;
+begin
+ if (maxlen<>0) then
+ begin
+  repeat
+   if (LowerCase(str1^)<>LowerCase(str2^)) then
+   begin
+    Exit(ord(LowerCase(str1^))-ord(LowerCase(str2^)));
+   end;
+
+   if (str1^=#0) then break;
+
+   Inc(str1);
+   Inc(str2);
+
+   Dec(maxlen);
+  until (maxlen=0);
+
+ end;
+ Result:=0;
+end;
+
+function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar; inline;
+begin
+ if (dst=nil) or (src=nil) then Exit(nil);
+ Result:=StrLCopy(dst,src,maxlen);
+end;
+
+function is_sdm(name:pchar):Boolean;
+begin
+ Result:=False;
+ if (PQWORD(@name[0])^=QWORD($656D64735F656373)) then //sce_sdme
+ if (PDWORD(@name[8])^=DWORD($79726F6D)) then         //mory
+ begin
+  case Byte(name[12]) of
+   $00:Result:=True;
+   $31,
+   $32,
+   $33:if (name[13]=#0) then Result:=True;
+   else;
+  end;
+ end;
+end;
+
+function CheckDirName(dirName:pSceSaveDataDirName;allow_sdm:Boolean):Integer;
+var
+ len,i:DWORD;
+begin
+ if (dirName=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if allow_sdm then
+ if is_sdm(@dirName^.data) then
+ begin
+  Exit(0);
+ end;
+
+ len:=strnlen_s(@dirName^.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+ if (len=0) or (len=SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (len<>0) then
+ for i:=0 to len-1 do
+ begin
+  case dirName^.data[i] of
+   'a'..'z':;
+   'A'..'Z':;
+   '0'..'9':;
+   '-',
+   '.',
+   '@':;
+   else
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ Result:=0;
+end;
+
+function GetMountSlotId(userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
+var
+ i,first_id:Integer;
+begin
+
+ first_id:=-1;
+
+ For i:=0 to High(g_instance.MountSlots) do
+ if (g_instance.MountSlots[i].active<>0) then
+ begin
+
+  if (g_instance.MountSlots[i].userId=userId) then
+  if (strncasecmp(@g_instance.MountSlots[i].titleId.data,
+                  titleId,
+                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
+  if (strncasecmp(@g_instance.MountSlots[i].dirName.data,
+                  dirName,
+                  SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_BUSY);
+  end;
+
+ end else
+ if (first_id=-1) then
+ begin
+  first_id:=i;
+ end;
+
+ if (first_id=-1) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MOUNT_FULL);
+ end;
+
+ slot_id:=first_id;
+ Result:=0;
+end;
+
+function IsActiveMount(userId:Integer;dirName,titleId:pchar):Boolean;
+var
+ i,first_id:Integer;
+begin
+ Result:=False;
+
+ For i:=0 to High(g_instance.MountSlots) do
+ if (g_instance.MountSlots[i].active<>0) then
+ begin
+
+  if (g_instance.MountSlots[i].userId=userId) then
+  if (strncasecmp(@g_instance.MountSlots[i].titleId.data,
+                  titleId,
+                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
+  if (strncasecmp(@g_instance.MountSlots[i].dirName.data,
+                  dirName,
+                  SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
+  begin
+   Exit(True);
+  end;
+
+ end;
+
 end;
 
 function CheckDataInitParams0(params:pSceSaveDataInitParams):Integer; inline;
@@ -650,120 +866,116 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer;
+function CheckSaveDataDelete1(del:pSceSaveDataDelete):Integer;
 begin
- Result:=0;
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (del=nil) then Exit;
+
+ if IsLoggedIn(del^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(del^.titleId)=0 then
+ if CheckDirName(del^.dirName,False)=0 then
+ if CheckReserved(del^.reserved,sizeof(del^.reserved)) then
+ begin
+  Result:=0;
+ end;
 end;
 
-function IsLoggedIn(userId:Integer):Integer; inline;
+function CheckSaveDataDelete2(del:pSceSaveDataDelete):Integer;
 begin
- //sceUserServiceIsLoggedIn
- Result:=0;
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (del=nil) then Exit;
+
+ if IsLoggedIn(del^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(del^.titleId)=0 then
+ if CheckDirName(del^.dirName,False)=0 then
+ if (del^.progress=0) then
+ if CheckReserved(del^.reserved,sizeof(del^.reserved)) then
+ begin
+  Result:=0;
+ end;
 end;
 
-function CheckTitleId(titleId:pSceSaveDataTitleId):Integer;
+function SaveDataDelete(del:pSceSaveDataDelete):Integer;
 var
- i:DWORD;
+ titleId:pchar;
+ dirName:pchar;
+ fs_src :RawByteString;
 begin
+ if (p_proc.p_sdk_version < $3500000) then
+ begin
+  Result:=CheckSaveDataDelete1(del);
+ end else
+ begin
+  Result:=CheckSaveDataDelete2(del);
+ end;
+ if (Result<>0) then Exit;
+
+ titleId:=@del^.titleId^.data;
  if (titleId=nil) then
  begin
-  Exit(0);
- end;
-
- if CheckReserved(titleId^.data,sizeof(titleId^.data)) then
+  titleId:=@GameMountConfig.SaveTitleId;
+ end else
+ if (titleId[0]=#0) then
  begin
-  Exit(0);
+  titleId:=@GameMountConfig.SaveTitleId;
  end;
 
- for i:=0 to 3 do
-  if (titleId^.data[i] < 'A') or (titleId^.data[i] > 'Z') then
+ dirName:=@del^.dirName^.data;
+
+ mtx_lock(g_instance.mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
+
+  if IsActiveMount(del^.userId,dirName,titleId) then
   begin
-   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
-  end;
- for i:=4 to 8 do
-  if (titleId^.data[i] < '0') or (titleId^.data[i] > '9') then
+   Result:=SCE_SAVE_DATA_ERROR_BUSY;
+  end else
+  if (strncasecmp(@GameMountConfig.SaveTitleId,
+                  titleId,
+                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
   begin
+   //trying to delete another game?
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end else
+  begin
+   fs_src:=GameMountConfig.GetSaveDataFolder(del^.userId,titleId,dirName);
+
+   if game_mount.DeleteDirectory(fs_src,False) then
+   begin
+    //delete backup?
+    Result:=0;
+   end else
+   begin
+    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+   end;
+
   end;
 
- if not CheckReserved(titleId^.padding,sizeof(titleId^.padding)) then
+ mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(g_instance.mtx);
+end;
+
+function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer;
+begin
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ if (del=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- Result:=0;
-end;
-
-function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- if (s=nil) then Exit(0);
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
-end;
-
-function is_sdm(name:pchar):Boolean;
-begin
- Result:=False;
- if (PQWORD(@name[0])^=QWORD($656D64735F656373)) then //sce_sdme
- if (PDWORD(@name[8])^=DWORD($79726F6D)) then         //mory
- begin
-  case Byte(name[12]) of
-   $00:Result:=True;
-   $31,
-   $32,
-   $33:if (name[13]=#0) then Result:=True;
-   else;
-  end;
- end;
-end;
-
-function CheckDirName(dirName:pSceSaveDataDirName;allow_sdm:Boolean):Integer;
-var
- len,i:DWORD;
-begin
- if (dirName=nil) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- end;
-
- if allow_sdm then
- if is_sdm(@dirName^.data) then
- begin
-  Exit(0);
- end;
-
- len:=strnlen_s(@dirName^.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
-
- if (len=0) or (len=SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- end;
-
- if (len<>0) then
- for i:=0 to len-1 do
- begin
-  case dirName^.data[i] of
-   'a'..'z':;
-   'A'..'Z':;
-   '0'..'9':;
-   '-',
-   '.',
-   '@':;
-   else
-    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
-  end;
- end;
-
- Result:=0;
+ Result:=SaveDataDelete(del);
 end;
 
 function CheckFingerprint(ptr:pSceSaveDataFingerprint):Integer;
@@ -1075,6 +1287,174 @@ begin
 
 end;
 
+const
+ mount_savedata_slot_name:array[0..15] of SceSaveDataMountPoint=(
+  '/savedata0',
+  '/savedata1',
+  '/savedata2',
+  '/savedata3',
+  '/savedata4',
+  '/savedata5',
+  '/savedata6',
+  '/savedata7',
+  '/savedata8',
+  '/savedata9',
+  '/savedata10',
+  '/savedata11',
+  '/savedata12',
+  '/savedata13',
+  '/savedata14',
+  '/savedata15'
+ );
+
+function SaveDataMount(mount      :pSceSaveDataMount;
+                       pResult    :pSceSaveDataMountResult;
+                       Transfering:Boolean):Integer;
+var
+ mountMode  :DWORD;
+ mountStatus:DWORD;
+ slot_id    :Integer;
+ titleId    :pchar;
+ dirName    :pchar;
+ fs_src     :RawByteString;
+begin
+ Result:=CheckSaveDataMount(mount,pResult,Transfering);
+ if (Result<>0) then Exit;
+
+ mountMode:=mount^.mountMode;
+ if (p_proc.p_sdk_version < $4500000) then
+ begin
+  mountMode:=mountMode and (not SDM_CREATE2);
+ end;
+
+ titleId:=@mount^.titleId^.data;
+ if (titleId=nil) then
+ begin
+  titleId:=@GameMountConfig.SaveTitleId;
+ end else
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.SaveTitleId;
+ end;
+
+ dirName:=@mount^.dirName^.data;
+
+ if ((mountMode and SDM_RDWR)<>0) then
+ if (strncasecmp(@GameMountConfig.SaveTitleId,
+                 titleId,
+                 SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
+ begin
+  //trying to mount another game with RW?
+  //FINGERPRINT?
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ slot_id:=0;
+
+ mtx_lock(g_instance.mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
+
+  Result:=GetMountSlotId(mount^.userId,
+                         dirName,
+                         titleId,
+                         slot_id);
+  if (Result=0) then
+  begin
+
+   fs_src:=GameMountConfig.GetSaveDataFolder(mount^.userId,titleId,dirName);
+
+   mountStatus:=0;
+
+   if DirectoryExists(fs_src) then
+   begin
+
+    if ((mountMode and SDM_CREATE2)<>0) then
+    begin
+     //force
+     FormatMount(fs_src);
+    end else
+    if ((mountMode and SDM_CREATE)<>0) then
+    begin
+     //error
+     Result:=SCE_SAVE_DATA_ERROR_EXISTS;
+    end;
+
+   end else
+   begin
+
+    if ((mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
+    begin
+     //create
+     if ForceDirectories(fs_src) then
+     begin
+      mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+     end else
+     begin
+      Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+     end;
+    end else
+    begin
+     //error
+     Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+    end;
+
+   end;
+
+   if (Result=0) then
+   begin
+
+    Result:=vfs_mountroot.mount_into_sandbox('ufs',
+                                             mount_savedata_slot_name[slot_id],
+                                             pchar(fs_src),
+                                             nil,
+                                             ord((mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
+                                             MNT_EMU_PFS);
+    if (Result<>0) then
+    begin
+     Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    end;
+
+   end;
+
+   if (Result=0) then
+   begin
+
+    //save info
+    g_instance.MountSlots[slot_id].active:=1;
+    g_instance.MountSlots[slot_id].userId:=mount^.userId;
+
+    strncpy_s(@g_instance.MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
+    strncpy_s(@g_instance.MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+    if (mount^.fingerprint=nil) then
+    begin
+     g_instance.MountSlots[slot_id].fingerprint:=Default(SceSaveDataFingerprint);
+    end else
+    begin
+     g_instance.MountSlots[slot_id].fingerprint:=mount^.fingerprint^;
+    end;
+
+    g_instance.MountSlots[slot_id].max_blocks:=mount^.blocks;
+
+    //out
+    pResult^.mountPoint:=mount_savedata_slot_name[slot_id];
+
+    if (p_proc.p_sdk_version < $3500000) then
+    begin
+     pResult^.progress:=100;
+    end else
+    begin
+     pResult^.mountStatus:=mountStatus;
+    end;
+
+   end;
+
+  end;
+
+ mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(g_instance.mtx);
+end;
+
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
                               mountResult:pSceSaveDataMountResult):Integer;
 begin
@@ -1089,29 +1469,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- Result:=CheckSaveDataMount(mount,mountResult,False);
- if (Result<>0) then Exit;
-
- mountResult^:=Default(SceSaveDataMountResult);
-
- mountResult^.mountPoint :='/savedata0';
- mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-
- Result:=0;
- {
- _sig_lock;
- Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
- _sig_unlock;
- }
-
- Writeln('sceSaveDataMount');
-
- if (Result=0) and
-    ((mount^.mountMode and (SDM_CREATE or SDM_CREATE2))<>0) then
- begin
-  mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
- end;
-
+ Result:=SaveDataMount(mount,mountResult,False);
 end;
 
 function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
@@ -1141,29 +1499,7 @@ begin
  tmp.blocks   :=mount^.blocks   ;
  tmp.mountMode:=mount^.mountMode;
 
- Result:=CheckSaveDataMount(@tmp,mountResult,False);
- if (Result<>0) then Exit;
-
- mountResult^:=Default(SceSaveDataMountResult);
-
- mountResult^.mountPoint :='/savedata0';
- mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-
- Result:=0;
- {
- _sig_lock;
- Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,mount^.mountMode);
- _sig_unlock;
- }
-
- Writeln('sceSaveDataMount2');
-
- if (Result=0) and
-    ((mount^.mountMode and (SDM_CREATE or SDM_CREATE2))<>0) then
- begin
-  mountResult^.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
- end;
-
+ Result:=SaveDataMount(@tmp,mountResult,False);
 end;
 
 function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
@@ -1194,21 +1530,7 @@ begin
  tmp.fingerprint:=mount^.fingerprint;
  tmp.mountMode  :=SDM_RDONLY        ;
 
- Result:=CheckSaveDataMount(@tmp,mountResult,True);
- if (Result<>0) then Exit;
-
- mountResult^:=Default(SceSaveDataMountResult);
-
- Result:=0;
-
- Writeln('sceSaveDataTransferringMount');
-
- {
- _sig_lock;
- Result:=FetchSaveMount(PChar(mount^.dirName),@mountResult^.mountPoint,SCE_SAVE_DATA_MOUNT_MODE_RDONLY);
- _sig_unlock;
- }
-
+ Result:=SaveDataMount(@tmp,mountResult,True);
 end;
 
 function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer;
