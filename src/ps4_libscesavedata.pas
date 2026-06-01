@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ errno,
  kern_thr,
  kern_proc,
  kern_ksched,
@@ -157,7 +158,7 @@ type
   data:array[0..SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE-1] of Char;
  end;
 
- PSceSaveDataMountPoint=^SceSaveDataMountPoint;
+ pSceSaveDataMountPoint=^SceSaveDataMountPoint;
  SceSaveDataMountPoint=array[0..SCE_SAVE_DATA_MOUNT_POINT_DATA_MAXSIZE-1] of Char;
 
  pSceSaveDataTitleId=^SceSaveDataTitleId;
@@ -569,7 +570,7 @@ end;
 
 function IsActiveMount(userId:Integer;dirName,titleId:pchar):Boolean;
 var
- i,first_id:Integer;
+ i:Integer;
 begin
  Result:=False;
 
@@ -1533,7 +1534,83 @@ begin
  Result:=SaveDataMount(@tmp,mountResult,True);
 end;
 
-function ps4_sceSaveDataUmount(mountPoint:PSceSaveDataMountPoint):Integer;
+function GetMountSlotId(name:pchar;var slot_id:Integer):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (name<>nil) then
+ if (name[0]='/') then
+ if (PQWORD(@name[1])^=QWORD($6174616465766173)) then // savedata
+ begin
+  if (name[10]=#0) then
+  begin
+   case name[9] of
+    '0'..'9':
+     begin
+      slot_id:=ord(name[9])-ord('0');
+      Result:=0;
+     end;
+    else;
+   end;
+  end else
+  if (name[11]=#0) then
+  begin
+   Case PWORD(@name[9])^ of
+    $3031, //10
+    $3131, //11
+    $3231, //12
+    $3331, //13
+    $3431, //14
+    $3531: //15
+      begin
+       slot_id:=ord(name[10])-ord('0')+10;
+       Result:=0;
+      end;
+   end;
+  end;
+ end;
+end;
+
+function SaveDataUmount(mountPoint:pSceSaveDataMountPoint):Integer;
+var
+ slot_id:Integer;
+begin
+ slot_id:=0;
+ Result:=GetMountSlotId(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+ mtx_lock(GameMountConfig.mount_mtx);
+
+  if (g_instance.MountSlots[slot_id].active=0) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
+  end else
+  begin
+
+   Result:=vfs_mountroot.unmount_from_sandbox(pchar(mountPoint),0);
+   if (Result<>0) then
+   begin
+    case Result of
+     EBUSY:Result:=SCE_SAVE_DATA_ERROR_BUSY;
+     else
+           Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    end;
+   end else
+   begin
+
+    //free
+    g_instance.MountSlots[slot_id]:=Default(TMountSlot);
+
+   end;
+
+  end;
+
+
+ mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(g_instance.mtx);
+end;
+
+function ps4_sceSaveDataUmount(mountPoint:pSceSaveDataMountPoint):Integer;
 begin
  Result:=0;
 
@@ -1542,16 +1619,10 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Writeln('sceSaveDataUmount');
-
- {
- _sig_lock;
- Result:=UnMountSavePath(PChar(mountPoint));
- _sig_unlock;
- }
+ Result:=SaveDataUmount(mountPoint);
 end;
 
-function ps4_sceSaveDataUmountWithBackup(mountPoint:PSceSaveDataMountPoint):Integer;
+function ps4_sceSaveDataUmountWithBackup(mountPoint:pSceSaveDataMountPoint):Integer;
 var
  event:SceSaveDataEvent;
 begin
@@ -1562,11 +1633,9 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Writeln('sceSaveDataUmountWithBackup');
+ Result:=SaveDataUmount(mountPoint);
 
  {
- _sig_lock;
- Result:=UnMountSavePath(PChar(mountPoint));
  //backup this
  //...
 
@@ -1582,7 +1651,7 @@ begin
  }
 end;
 
-function ps4_sceSaveDataGetMountInfo(mountPoint:PSceSaveDataMountPoint;
+function ps4_sceSaveDataGetMountInfo(mountPoint:pSceSaveDataMountPoint;
                                      info:pSceSaveDataMountInfo):Integer;
 begin
  Result:=0;
@@ -1735,7 +1804,7 @@ begin
 
 end;
 
-function ps4_sceSaveDataGetParam(mountPoint:PSceSaveDataMountPoint;
+function ps4_sceSaveDataGetParam(mountPoint:pSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
                                  paramBufSize:QWORD;
@@ -1750,7 +1819,7 @@ begin
 end;
 
 //Save icon
-function ps4_sceSaveDataSetParam(mountPoint:PSceSaveDataMountPoint;
+function ps4_sceSaveDataSetParam(mountPoint:pSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
                                  paramBufSize:QWORD):Integer;
@@ -1758,7 +1827,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataSaveIcon(mountPoint:PSceSaveDataMountPoint;
+function ps4_sceSaveDataSaveIcon(mountPoint:pSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer;
 begin
  if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
@@ -1767,7 +1836,7 @@ begin
 end;
 
 //Load icon
-function ps4_sceSaveDataLoadIcon(mountPoint:PSceSaveDataMountPoint;
+function ps4_sceSaveDataLoadIcon(mountPoint:pSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer;
 begin
  if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
