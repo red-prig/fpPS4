@@ -15,6 +15,8 @@ uses
  kern_mtx,
  kern_rangelock,
  md_map,
+ md_file,
+ vfcntl,
  vm_pmap_prot,
  vm_tracking_map,
  vm_nt_map,
@@ -522,7 +524,7 @@ begin
  end;
 end;
 
-function get_vnode_handle(obj:vm_object_t):THandle;
+function get_vnode_handle(obj:vm_object_t;var maxprot:Integer):THandle;
 var
  vp:p_vnode;
 begin
@@ -535,6 +537,7 @@ begin
   VI_LOCK(vp);
 
   Result:=THandle(vp^.v_un);
+  maxprot:=vp^.v_prot;
 
   VI_UNLOCK(vp);
  end;
@@ -936,20 +939,29 @@ begin
 
      VM_OBJECT_LOCK(obj);
 
-       fd:=get_vnode_handle(obj);
+       fd:=get_vnode_handle(obj,max);
 
        if (fd<>0) then
        begin
         size:=fit_to_vnode_size(obj,offset,(__end-start));
 
-        max:=VM_PROT_RW;
-        r:=md_memfd_open(md,fd,max);
-
-        if (DWORD(r)=STATUS_ACCESS_DENIED) then
+        if (max=2) then //WRONLY
         begin
-         max:=VM_PROT_READ;
+         //reopen file to RW
+         r:=md_openat(fd,'',O_RDWR,0,fd);
+
+         if (r=0) then
+         begin
+          max:=VM_RW;
+          r:=md_memfd_open(md,fd,max);
+          md_close(fd); //close dub
+         end;
+
+        end else
+        begin
          r:=md_memfd_open(md,fd,max);
         end;
+
        end;
 
      VM_OBJECT_UNLOCK(obj);

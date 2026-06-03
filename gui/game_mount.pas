@@ -41,7 +41,7 @@ function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWO
 implementation
 
 uses
- md_map,
+ md_file,
  sysutils,
  strings,
  errno,

@@ -312,16 +312,14 @@ begin
  end;
 
  if ((flags and MAP_SHARED)<>0) then
+ if ((va.va_flags and (SF_SNAPSHOT or IMMUTABLE or APPEND))<>0) then
  begin
-  if ((va.va_flags and (SF_SNAPSHOT or IMMUTABLE or APPEND))<>0) then
+  if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
   begin
-   if ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) then
-   begin
-    error:=EPERM;
-    goto done;
-   end;
-   maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
+   error:=EPERM;
+   goto done;
   end;
+  maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE or VM_PROT_GPU_WRITE));
  end;
 
  {
@@ -945,11 +943,13 @@ begin
      //no VM_PROT_EXECUTE at all!
      maxprot:=VM_PROT_NONE;
 
-     if ((fp^.f_flag and FREAD)<>0) then
+     if ( ((prot and VM_PROT_WRITE)=0) and
+          ((prot and (VM_PROT_READ or VM_PROT_GPU_READ))=0)
+         ) or
+        ((fp^.f_flag and FREAD)<>0) then
      begin
       maxprot:=maxprot or (VM_PROT_READ or VM_PROT_GPU_READ);
      end else
-     if ((prot and (VM_PROT_READ or VM_PROT_GPU_READ))<>0) then
      begin
       Result:=Pointer(EACCES);
       goto _done;

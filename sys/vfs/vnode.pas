@@ -36,6 +36,17 @@ const
  VV_MD         =$0800; // vnode backs the md device
  VV_FORCEINSMQ =$1000; // force the insmntque to succeed
 
+ // Sony extension
+ VV_0x2000            =   $2000;
+ VV_LARGEWRITE        =   $4000;
+ VV_NOCRYPT           =   $8000;
+ VV_COMPRESS          =  $10000;
+ VV_LARGEWRITEMMAPABLE=  $20000;
+ VV_LVD               =  $40000;
+ VV_RDONLYMAPPING     =  $80000;
+ VV_WRONLYMAPPING     = $100000;
+ VV_ROLE_DATA         =$1000000;
+
  //Flags for va_vaflags.
  VA_UTIMES_NULL=$01; // utimes argument was NULL
  VA_EXCLUSIVE  =$02; // exclusive create request
@@ -226,6 +237,7 @@ type
 
   //Fields which define the identity of the vnode
   v_type:vtype;         // u vnode type
+  v_prot:Integer;       // emu ext
   v_tag :PChar;         // u type of underlying data
   v_op  :p_vop_vector;  // u vnode operations vector
   v_data:Pointer;       // u private data for fs
@@ -238,13 +250,13 @@ type
 
   v_hash:DWORD;
 
-  v_holdcnt :Integer;    //i prevents recycling.
-  v_usecount:Integer;    //i ref count of users
+  v_holdcnt   :Integer;  //i prevents recycling.
+  v_usecount  :Integer;  //i ref count of users
   v_writecount:Integer;  //v ref count of writers
 
-  v_lock:mtx;            // u (if fs don't have one)
-  v_interlock:mtx;       // lock for "i" things
-  v_vnlock:p_mtx;        //u pointer to vnode lock
+  v_lock     :mtx;       //u (if fs don't have one)
+  v_interlock:mtx;       //lock for "i" things
+  v_vnlock   :p_mtx;     //u pointer to vnode lock
 
   v_iflag:QWORD;         //i vnode flags (see below)
   v_vflag:QWORD;         //v vnode flags

@@ -515,7 +515,7 @@ begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtOpenFile(@F,
@@ -550,7 +550,7 @@ begin
  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  opt:=FILE_OPEN_FOR_BACKUP_INTENT or FILE_SYNCHRONOUS_IO_NONALERT;
@@ -1067,7 +1067,7 @@ begin
  w:=_UTF8Decode(name,namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
 
  R:=NtQueryAttributesFile(@OBJ,@FBI);
 
@@ -1685,7 +1685,7 @@ begin
  w:=_UTF8Decode(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtCreateFile(@FD,
@@ -1954,7 +1954,7 @@ begin
  w:=_UTF8Decode(cnp^.cn_nameptr,cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  R:=NtCreateFile(@FD,
@@ -2232,7 +2232,7 @@ begin
 
  if ((flags and FWRITE)<>0) then
  begin
-  Result:=Result or FILE_WRITE_DATA or FILE_APPEND_DATA;
+  Result:=Result or (FILE_WRITE_DATA or FILE_APPEND_DATA);
  end;
 end;
 
@@ -2343,7 +2343,7 @@ begin
  w:=_UTF8Decode(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
- INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+ INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
  BLK:=Default(IO_STATUS_BLOCK);
 
  DA:=GetDesiredAccess(flags);
@@ -2394,7 +2394,8 @@ begin
  ap^.a_vpp^:=vp;
 
  //save to vnode
- vp^.v_un:=Pointer(FD);
+ vp^.v_un  :=Pointer(FD);
+ vp^.v_prot:=(flags and (FREAD or FWRITE));
 
  //emu ext
  with ap^ do
@@ -2473,7 +2474,7 @@ begin
   w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
   OBJ:=Default(TOBJ_ATTR);
-  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),0,w);
+  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
   BLK:=Default(IO_STATUS_BLOCK);
 
   DA:=GetDesiredAccess(flags);
@@ -2502,7 +2503,8 @@ begin
   end;
 
   //save to vnode
-  vp^.v_un:=Pointer(FD);
+  vp^.v_un  :=Pointer(FD);
+  vp^.v_prot:=(flags and (FREAD or FWRITE));
  end;
 
  Result:=md_update_dirent(FD,de,nil);
@@ -2543,8 +2545,6 @@ begin
  begin
   NtClose(FD);
  end;
-
- vnode_destroy_vobject(vp);
 
  Result:=0;
 end;

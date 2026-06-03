@@ -1191,7 +1191,9 @@ begin
   S_IFIFO:
    begin
     if (dev=0) then
+    begin
      Exit(kern_mkfifoat(fd, path, pathseg, mode));
+    end;
     error:=EINVAL;
    end
   else
@@ -1264,8 +1266,9 @@ restart:
  if (error=0) then
  begin
   if (whiteout<>0) then
-   error:=VOP_WHITEOUT(nd.ni_dvp, @nd.ni_cnd, CREATE)
-  else
+  begin
+   error:=VOP_WHITEOUT(nd.ni_dvp, @nd.ni_cnd, CREATE);
+  end else
   begin
    error:=VOP_MKNOD(nd.ni_dvp, @nd.ni_vp, @nd.ni_cnd, @vattr);
 

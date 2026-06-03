@@ -2494,7 +2494,9 @@ loop:
    VOP_UNLOCK(rootvp, 0);
    busy:=0;
   end else
+  begin
    VI_UNLOCK(rootvp);
+  end;
  end;
  if (busy<>0) then
  begin
@@ -2546,7 +2548,7 @@ procedure vgonel(vp:p_vnode);
 var
  oweinact:Integer;
  active:Integer;
- mp:p_mount;
+ //mp:p_mount;
 begin
  ASSERT_VOP_ELOCKED(vp, 'vgonel');
  ASSERT_VI_LOCKED(vp, 'vgonel');
@@ -2571,7 +2573,7 @@ begin
   * Clean out any buffers associated with the vnode.
   * If the flush fails, just toss the buffers.
   }
- mp:=nil;
+ //mp:=nil;
 
  //if (not TAILQ_EMPTY(@vp^.v_bufobj.bo_dirty.bv_hd)) then
  // vn_start_secondary_write(vp, &mp, V_WAIT);

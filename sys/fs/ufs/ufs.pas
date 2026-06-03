@@ -531,7 +531,7 @@ begin
  flags:=0;
 
  fmp:=VFSTOUFS(mp);
- Assert(fmp^.ufs_mount<>nil,'devfs_unmount unmounted devfs_mount');
+ Assert(fmp^.ufs_mount<>nil,'ufs_unmount unmounted ufs_mount');
 
  error:=vflush(mp, 1, flags);
  if (error<>0) then
