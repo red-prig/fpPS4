@@ -475,7 +475,7 @@ begin
  Result:=StrLCopy(dst,src,maxlen);
 end;
 
-function is_sdm(name:pchar):Boolean;
+function is_sdmemory(name:pchar):Boolean;
 begin
  Result:=False;
  if (PQWORD(@name[0])^=QWORD($656D64735F656373)) then //sce_sdme
@@ -501,7 +501,7 @@ begin
  end;
 
  if allow_sdm then
- if is_sdm(@dirName^.data) then
+ if is_sdmemory(@dirName^.data) then
  begin
   Exit(0);
  end;
@@ -938,25 +938,20 @@ begin
   begin
    Result:=SCE_SAVE_DATA_ERROR_BUSY;
   end else
-  if (strncasecmp(@GameMountConfig.SaveTitleId,
-                  titleId,
-                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
   begin
-   //trying to delete another game?
-   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
-  end else
-  begin
-   fs_src:=GameMountConfig.GetSaveDataFolder(del^.userId,titleId,dirName);
 
-   if game_mount.DeleteDirectory(fs_src,False) then
+   if (strncasecmp(@GameMountConfig.SaveTitleId,
+                   titleId,
+                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
    begin
-    //delete backup?
-    Result:=0;
-   end else
-   begin
-    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    //trying to delete another game?
+    //check FINGERPRINT?
    end;
 
+   fs_src:=GameMountConfig.GetSaveDataFolder(del^.userId,titleId,dirName);
+
+   //dont check errors
+   game_mount.DeleteDirectory(fs_src,False);
   end;
 
  mtx_unlock(GameMountConfig.mount_mtx);
@@ -1121,7 +1116,7 @@ begin
  Result:=CheckSceSaveDataMount1(mount,True);
  if (Result=0) then
  begin
-  if is_sdm(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -1193,7 +1188,7 @@ begin
  if CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
  begin
 
-  if is_sdm(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -1346,8 +1341,7 @@ begin
                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
  begin
   //trying to mount another game with RW?
-  //FINGERPRINT?
-  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  //check FINGERPRINT?
  end;
 
  slot_id:=0;
