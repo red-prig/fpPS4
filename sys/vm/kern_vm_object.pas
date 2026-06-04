@@ -196,48 +196,66 @@ begin
 
   VM_OBJECT_LOCK(obj);
 
+   vfslocked:=0;
+
+ restart:
+
    if (obj^.otype=OBJT_VNODE) then
    begin
-    restart:
+    vp:=obj^.handle;
 
-     vp:=obj^.handle;
-
-     vfslocked:=0;
-     if VFS_NEEDSGIANT(vp^.v_mount) then
+    if VFS_NEEDSGIANT(vp^.v_mount) and (vfslocked=0) then
+    begin
+     vfslocked:=1;
+     if not mtx_trylock(VFS_Giant) then
      begin
-      vfslocked:=1;
-      if not mtx_trylock(VFS_Giant) then
-      begin
-       VM_OBJECT_UNLOCK(obj);
-       mtx_lock(VFS_Giant);
-       goto restart;
-      end;
+      VM_OBJECT_UNLOCK(obj);
+      mtx_lock(VFS_Giant);
+      goto restart;
      end;
+    end;
 
-     vm_object_vndeallocate(obj);
-     VFS_UNLOCK_GIANT(vfslocked);
-     Exit;
+    vm_object_vndeallocate(obj);
+    VFS_UNLOCK_GIANT(vfslocked);
+    Exit;
+   end else
+   begin
+    VFS_UNLOCK_GIANT(vfslocked);
    end;
-
-   tmp:=obj^.backing_object;
 
    Dec(obj^.ref_count);
 
+   if (obj^.ref_count>1) then
+   begin
+    VM_OBJECT_UNLOCK(obj);
+    Exit;
+   end else
    if (obj^.ref_count=1) then
    begin
     vm_object_set_flag(obj, OBJ_ONEMAPPING);
+    VM_OBJECT_UNLOCK(obj);
+    Exit;
    end else
    if (obj^.ref_count=0) then
-   if ((obj^.flags and OBJ_DEAD)=0) then
    begin
-    vm_object_terminate(obj);
-    //object deleted
-    Exit;
+    tmp:=obj^.backing_object;
+
+    if (tmp<>nil) then
+    begin
+     obj^.backing_object:=nil;
+    end;
+
+    if ((obj^.flags and OBJ_DEAD)=0) then
+    begin
+     vm_object_terminate(obj);
+    end else
+    begin
+     VM_OBJECT_UNLOCK(obj);
+    end;
+
+    obj:=tmp;
    end;
 
-  VM_OBJECT_UNLOCK(obj);
-
-  obj:=tmp;
  end; //while
 end;
 
