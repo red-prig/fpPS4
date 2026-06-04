@@ -25,6 +25,7 @@ uses
   vm_pmap,
   vm_pmap_prot,
   vm_tracking_map,
+  vm_fault,
   kern_proc,
   kern_jit_ctx,
   kern_jit_dynamic,
@@ -292,6 +293,7 @@ end;
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 var
  instr:t_instruction_info;
+ rv:Integer;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
  if (curkthread=nil) then Exit;
@@ -369,6 +371,17 @@ begin
          end;
         end;
       else;
+     end;
+
+     rv:=vm_fault_hold(p_proc.p_vmspace,
+                       get_pageflt_addr(p),
+                       p^.ContextRecord^.Rip,
+                       get_pageflt_err(p)
+                      );
+
+     if (rv=0) then
+     begin
+      Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
 
      //if not usermode

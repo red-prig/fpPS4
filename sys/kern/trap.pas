@@ -561,7 +561,6 @@ function trap_pfault(frame:p_trapframe;usermode:Boolean):Integer;
 var
  td:p_kthread;
  eva:vm_offset_t;
- map:vm_map_t;
  rv:Integer;
 begin
  Result:=SIGSEGV;
@@ -577,13 +576,10 @@ begin
 
  if is_guest_addr(eva) then
  begin
-  map:=p_proc.p_vmspace;
-
-  rv:=vm_fault.vm_fault(map,
-                        frame^.tf_addr,
-                        frame^.tf_rip,
-                        frame^.tf_err,
-                        VM_FAULT_NORMAL);
+  rv:=vm_fault_hold(p_proc.p_vmspace,
+                    frame^.tf_addr,
+                    frame^.tf_rip,
+                    frame^.tf_err);
 
   case rv of
                          0:Exit(0);

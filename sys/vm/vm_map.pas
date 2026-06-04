@@ -227,7 +227,8 @@ function  vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
                         out_entry  :p_vm_map_entry_t;  { OUT }
                         vm_obj     :p_vm_object_t;     { OUT }
                         pindex     :p_vm_pindex_t;     { OUT }
-                        out_prot   :p_vm_prot_t        { OUT }
+                        out_prot   :p_vm_prot_t;       { OUT }
+                        wired      :PBoolean           { OUT }
                        ):Integer;
 
 function  vm_map_lookup_locked(var_map    :p_vm_map_t;        { IN/OUT }
@@ -1229,10 +1230,10 @@ begin
   end else
   begin
 
-   //force copy
-   if ((cow and MAP_COPY_ON_WRITE)<>0) then
+   //mark RDONLY
+   if ((cow and MAP_ENTRY_COW)<>0) then
    begin
-    prot:=prot or VM_PROT_COPY;
+    prot:=prot and (not VM_PROT_WRITE);
    end;
 
    pmap_enter_object(map^.pmap,
@@ -2498,6 +2499,10 @@ begin
                          prot);
 end;
 
+procedure vm_fault_copy_entry(dst_map,src_map:vm_map_t;
+                              dst_entry,src_entry:vm_map_entry_t;
+                              fork_charge:p_vm_ooffset_t); external;
+
 {
  * vm_map_protect:
  *
@@ -2766,7 +2771,7 @@ begin
      ((current^.protection and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))<>0) and
      ((old_prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE))=0) then
   begin
-   //vm_fault_copy_entry(map, map, current, current, nil);
+   vm_fault_copy_entry(map, map, current, current, nil);
   end;
 
   vm_map_protect_internal(map,current,old_prot);
@@ -3542,6 +3547,10 @@ _done:
  Exit(rv);
 end;
 
+function vm_fault_wire(map  :vm_map_t;
+                       start:vm_offset_t;
+                       __end:vm_offset_t):Integer; external;
+
 {
  vm_map_wire:
 
@@ -3768,7 +3777,7 @@ begin
 
    ////vm_map_busy(map);
    ////vm_map_unlock(map);
-   ////rv:=vm_fault_wire(map, saved_start, saved_end,fictitious);
+   rv:=vm_fault_wire(map, saved_start, saved_end);
    ////vm_map_lock(map);
    ////vm_map_unbusy(map);
 
@@ -4940,6 +4949,19 @@ begin
  Exit(0);
 end;
 
+procedure vm_object_shadow(entry:vm_map_entry_t);
+var
+ source,new:vm_object_t;
+begin
+ source:=entry^.vm_obj;
+
+ new:=vm_object_allocate(OBJT_DEFAULT, atop(entry^.__end - entry^.start));
+
+ new^.backing_object:=source;
+
+ entry^.vm_obj:=new;
+end;
+
 {
  * vm_map_lookup:
  *
@@ -4968,7 +4990,8 @@ function vm_map_lookup(var_map    :p_vm_map_t;        { IN/OUT }
                        out_entry  :p_vm_map_entry_t;  { OUT }
                        vm_obj     :p_vm_object_t;     { OUT }
                        pindex     :p_vm_pindex_t;     { OUT }
-                       out_prot   :p_vm_prot_t        { OUT }
+                       out_prot   :p_vm_prot_t;       { OUT }
+                       wired      :PBoolean           { OUT }
                       ):Integer;
 label
  RetryLookup;
@@ -4979,6 +5002,7 @@ var
  fault_type:vm_prot_t;
  size:vm_size_t;
  old_map:vm_map_t;
+ eobject:vm_object_t;
 begin
  map:=var_map^;
  fault_type:=fault_typea;
@@ -5016,18 +5040,25 @@ RetryLookup:
   }
  prot:=entry^.protection;
  fault_type:=fault_type and (VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE);
- if ((fault_type and prot)<>fault_type) or (prot=VM_PROT_NONE) then
+
+ if ((fault_type and prot)<>fault_type) or (entry^.max_protection=0) then
  begin
   vm_map_unlock(map);
   Exit(KERN_PROTECTION_FAILURE);
  end;
- Assert(((prot and VM_PROT_WRITE)=0) or ((entry^.eflags and MAP_ENTRY_NEEDS_COPY)<>MAP_ENTRY_NEEDS_COPY),'entry %p flags %x');
+
  if ((fault_typea and VM_PROT_COPY)<>0) and
     ((entry^.max_protection and VM_PROT_WRITE)=0) and
     ((entry^.eflags and MAP_ENTRY_COW)=0) then
  begin
   vm_map_unlock(map);
   Exit(KERN_PROTECTION_FAILURE);
+ end;
+
+ wired^:=(entry^.wired_count<>0);
+ if (wired^) then
+ begin
+  fault_type:=entry^.protection;
  end;
 
  size:=entry^.__end - entry^.start;
@@ -5052,9 +5083,20 @@ RetryLookup:
     * -- one just moved from the map to the new
     * object.
     }
-   //vm_object_shadow(@entry^.vm_obj, @entry^.offset, size);
+   entry^.cred:=True;
+
+   vm_object_shadow(entry);
 
    entry^.eflags:=entry^.eflags and (not MAP_ENTRY_NEEDS_COPY);
+
+   eobject:=entry^.vm_obj;
+   if (eobject<>nil) then
+   if (eobject^.cred<>False) then
+   begin
+    //swap_release_by_cred
+    eobject^.cred:=False;
+   end;
+
   end else
   begin
    {
@@ -5063,6 +5105,12 @@ RetryLookup:
     }
    prot:=prot and (not VM_PROT_WRITE);
   end;
+ end;
+
+ if (entry^.vm_obj=nil) then
+ begin
+  entry^.vm_obj:=vm_object_allocate(OBJT_DEFAULT,atop(size));
+  entry^.cred:=False;
  end;
 
  {

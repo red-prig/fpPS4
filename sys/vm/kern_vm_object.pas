@@ -187,51 +187,58 @@ procedure vm_object_deallocate(obj:vm_object_t); public;
 label
  restart;
 var
+ tmp:vm_object_t;
  vfslocked:Integer;
  vp:p_vnode;
 begin
- if (obj=nil) then Exit;
+ while (obj<>nil) do
+ begin
 
- VM_OBJECT_LOCK(obj);
+  VM_OBJECT_LOCK(obj);
 
-  if (obj^.otype=OBJT_VNODE) then
-  begin
-   restart:
+   if (obj^.otype=OBJT_VNODE) then
+   begin
+    restart:
 
-    vp:=obj^.handle;
+     vp:=obj^.handle;
 
-    vfslocked:=0;
-    if VFS_NEEDSGIANT(vp^.v_mount) then
-    begin
-     vfslocked:=1;
-     if not mtx_trylock(VFS_Giant) then
+     vfslocked:=0;
+     if VFS_NEEDSGIANT(vp^.v_mount) then
      begin
-      VM_OBJECT_UNLOCK(obj);
-      mtx_lock(VFS_Giant);
-      goto restart;
+      vfslocked:=1;
+      if not mtx_trylock(VFS_Giant) then
+      begin
+       VM_OBJECT_UNLOCK(obj);
+       mtx_lock(VFS_Giant);
+       goto restart;
+      end;
      end;
-    end;
 
-    vm_object_vndeallocate(obj);
-    VFS_UNLOCK_GIANT(vfslocked);
+     vm_object_vndeallocate(obj);
+     VFS_UNLOCK_GIANT(vfslocked);
+     Exit;
+   end;
+
+   tmp:=obj^.backing_object;
+
+   Dec(obj^.ref_count);
+
+   if (obj^.ref_count=1) then
+   begin
+    vm_object_set_flag(obj, OBJ_ONEMAPPING);
+   end else
+   if (obj^.ref_count=0) then
+   if ((obj^.flags and OBJ_DEAD)=0) then
+   begin
+    vm_object_terminate(obj);
+    //object deleted
     Exit;
-  end;
+   end;
 
-  Dec(obj^.ref_count);
+  VM_OBJECT_UNLOCK(obj);
 
-  if (obj^.ref_count=1) then
-  begin
-   vm_object_set_flag(obj, OBJ_ONEMAPPING);
-  end else
-  if (obj^.ref_count=0) then
-  if ((obj^.flags and OBJ_DEAD)=0) then
-  begin
-   vm_object_terminate(obj);
-   //object deleted
-   Exit;
-  end;
-
- VM_OBJECT_UNLOCK(obj);
+  obj:=tmp;
+ end; //while
 end;
 
 procedure vm_object_pip_wakeup(obj:vm_object_t);

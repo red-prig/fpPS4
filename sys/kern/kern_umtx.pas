@@ -634,10 +634,10 @@ end;
 function umtx_key_get(addr:Pointer;_type,share:Integer;key:p_umtx_key):Integer;
 var
  td:p_kthread;
- map:vm_map_t;
  entry:vm_map_entry_t;
  pindex:vm_pindex_t;
  prot:vm_prot_t;
+ wire:Boolean;
 begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
@@ -654,9 +654,8 @@ begin
  end else
  begin
   Assert((share=PROCESS_SHARE) or (share=AUTO_SHARE));
-  map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
-  if (vm_map_lookup(@map, vm_offset_t(addr), VM_PROT_WRITE,
-       @entry, @key^.info.shared.vm_obj, @pindex, @prot
+  if (vm_map_lookup(p_proc.p_vmspace, vm_offset_t(addr), VM_PROT_WRITE,
+       @entry, @key^.info.shared.vm_obj, @pindex, @prot, @wire
        )<>KERN_SUCCESS) then
   begin
    Exit(EFAULT);
@@ -675,7 +674,7 @@ begin
    key^.info.private.vs  :=p_proc.p_vmspace;
    key^.info.private.addr:=QWORD(addr);
   end;
-  vm_map_lookup_done(map, entry);
+  vm_map_lookup_done(p_proc.p_vmspace, entry);
  end;
 
  umtxq_hash(key);

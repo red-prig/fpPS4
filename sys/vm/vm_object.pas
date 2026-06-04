@@ -32,20 +32,21 @@ type
  p_vm_object_t=^vm_object_t;
  vm_object_t=^t_vm_object;
  t_vm_object=record
-  mtx       :mtx;
-  patchq    :TAILQ_HEAD;              // list of patches
-  size      :vm_pindex_t;             // Object size
-  generation:Integer;                 // generation ID
-  ref_count :Integer;                 // How many refs??
-  otype     :objtype_t;               // type of pager
-  pg_color  :Word;
-  flags     :Word;                    // see below
-  pip       :Integer;
-  budget_id :Integer;
-  handle    :Pointer;
-  cred      :Boolean;                 // ucred imitate
-  fakeshared:Boolean;                 // shared imitate
-  un_pager  :record
+  mtx           :mtx;
+  patchq        :TAILQ_HEAD;  // list of patches
+  size          :vm_pindex_t; // Object size
+  generation    :Integer;     // generation ID
+  ref_count     :Integer;     // How many refs??
+  otype         :objtype_t;   // type of pager
+  pg_color      :Word;
+  flags         :Word;        // see below
+  pip           :Integer;
+  budget_id     :Integer;
+  handle        :Pointer;
+  backing_object:vm_object_t;
+  cred          :Boolean;     // ucred imitate
+  fakeshared    :Boolean;     // shared imitate
+  un_pager      :record
    case Byte of
     0:(map_base :Pointer);
     1:(vnp:record
@@ -60,7 +61,7 @@ type
         tlb_64k :Pointer;
        end);
   end;
-  charge    :vm_ooffset_t;
+  charge:vm_ooffset_t;
  end;
 
 const
