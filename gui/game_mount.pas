@@ -25,6 +25,7 @@ type
   function GetAppTemporaryFolder:RawByteString;
   function GetAppDownloadFolder(i:Byte):RawByteString;
   function GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+  function GetSaveDataBackupFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
  end;
 
 var
@@ -106,6 +107,18 @@ end;
 function TGameMountConfig.GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
 const
  APP_SAVE='%s/user/home/%s/savedata/%s/%s';
+begin
+ Result:=Format(unix_to_host(APP_SAVE),[
+  ExcludeTrailingPathDelimiter(LocalDir),
+  HexStr(user_id,8),
+  titleId,
+  dirName
+ ]);
+end;
+
+function TGameMountConfig.GetSaveDataBackupFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+const
+ APP_SAVE='%s/user/home/%s/savedata/%s/sce_bu_%s';
 begin
  Result:=Format(unix_to_host(APP_SAVE),[
   ExcludeTrailingPathDelimiter(LocalDir),

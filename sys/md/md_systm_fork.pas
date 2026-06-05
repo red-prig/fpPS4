@@ -10,6 +10,10 @@ uses
  windows,
  ntapi;
 
+const
+ MD_FORK_PDEATHSIG=1;
+ MD_FORK_PGAMEVMA =2;
+
 type
  t_fork_cb=procedure(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 
@@ -27,10 +31,8 @@ type
   fork_pid:Integer; //out
  end;
 
-function  md_getppid:DWORD;
-
 procedure md_run_forked;
-function  md_fork_process(var info:t_fork_proc):Integer;
+function  md_fork_process(var info:t_fork_proc;options:Integer):Integer;
 
 implementation
 
@@ -40,26 +42,6 @@ uses
  md_systm,
  md_systm_reserve,
  md_map;
-
-function md_getppid:DWORD;
-var
- data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
- p_info:PPROCESS_BASIC_INFORMATION;
- R:DWORD;
-begin
- Result:=0;
- p_info:=Align(@data,8);
-
- R:=NtQueryInformationProcess(NtCurrentProcess,
-                              ProcessBasicInformation,
-                              p_info,
-                              SizeOf(PROCESS_BASIC_INFORMATION),
-                              nil);
- if (R=0) then
- begin
-  Result:=p_info^.InheritedFromUPI;
- end;
-end;
 
 const
  JobObjectExtendedLimitInformation=9;
@@ -524,7 +506,7 @@ begin
  end;
 end;
 
-function md_fork_process(var info:t_fork_proc):Integer;
+function md_fork_process(var info:t_fork_proc;options:Integer):Integer;
 type
  PBUF_PROC_INFO=^TBUF_PROC_INFO;
  TBUF_PROC_INFO=packed record
@@ -562,29 +544,35 @@ begin
  b:=CreateProcessW(PWideChar(@P_BUF^.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
  if not b then Exit(-1);
 
- b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
- if not b then Exit(-1);
-
- rip:=0;
- Result:=NtMoveStack(pi.hProcess,pi.hThread,rip);
- if (Result<>0) then
+ if (options and MD_FORK_PDEATHSIG)<>0 then
  begin
-  Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
-  Exit;
+  b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
+  if not b then Exit(-1);
  end;
 
- Result:=NtMoveProcessParameters(pi.hProcess);
- if (Result<>0) then
+ if (options and MD_FORK_PGAMEVMA)<>0 then
  begin
-  Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
-  Exit;
- end;
+  rip:=0;
+  Result:=NtMoveStack(pi.hProcess,pi.hThread,rip);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
+   Exit;
+  end;
 
- Result:=NtReserve(pi.hProcess,rip);
- if (Result<>0) then
- begin
-  Writeln(stderr,'NtReserve:0x',HexStr(Result,8));
-  Exit;
+  Result:=NtMoveProcessParameters(pi.hProcess);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
+   Exit;
+  end;
+
+  Result:=NtReserve(pi.hProcess,rip);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtReserve:0x',HexStr(Result,8));
+   Exit;
+  end;
  end;
 
  Result:=NtCreateShared(pi.hProcess,info);

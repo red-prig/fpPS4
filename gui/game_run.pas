@@ -451,9 +451,8 @@ begin
  kipc:=THostIpcPipeKERN.Create;
  kipc.set_pipe(pipefd);
 
- p_host_ipc    :=kipc;
- p_host_handler:=THostIpcHandler.Create;
- p_host_ipc    .FHandler:=p_host_handler;
+ p_host_ipc:=kipc;
+ p_host_ipc.FHandler:=THostIpcHandler.Create;
 
  //CreateNtTerminateTrap;
 
@@ -631,7 +630,7 @@ begin
   fork_info.data:=mem.Memory;
   fork_info.size:=mem.Size;
 
-  r:=md_fork_process(fork_info);
+  r:=md_fork_process(fork_info,MD_FORK_PDEATHSIG or MD_FORK_PGAMEVMA);
 
   mem.Free;
  end else
@@ -650,9 +649,8 @@ begin
 
    g_ipc:=s_mgui_ipc;
 
-   p_host_ipc    :=s_kern_ipc;
-   p_host_handler:=THostIpcHandler.Create;
-   p_host_ipc    .FHandler:=p_host_handler;
+   p_host_ipc:=s_kern_ipc;
+   p_host_ipc.FHandler:=THostIpcHandler.Create;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');

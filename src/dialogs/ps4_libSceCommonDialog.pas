@@ -350,7 +350,7 @@ begin
    g_common_dialog_init:=1;
 
     //DialogInitialize
-    p_host_handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+    p_host_ipc.FHandler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
 
   end else
   begin
@@ -373,7 +373,7 @@ function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
 begin
  mtx_lock(g_common_dialog_mtx);
 
-  p_host_handler.DelCallback('CDLG_FINISH');
+  p_host_ipc.FHandler.DelCallback('CDLG_FINISH');
 
  mtx_unlock(g_common_dialog_mtx);
  Result:=0;

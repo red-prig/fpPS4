@@ -323,6 +323,7 @@ uses
  sys_signal;
 }
 
+{
 type
  t_backup_event_queue=specialize mpmc_bounded_queue<SceSaveDataEvent>;
 
@@ -332,6 +333,7 @@ var
   cb:SceSaveDataEventCallbackFunc;
   userdata:Pointer;
  end;
+
 
 Procedure push_event(event:pSceSaveDataEvent);
 var
@@ -348,6 +350,7 @@ begin
   backup.queue.dequeue(tmp); //drop first
  end;
 end;
+}
 
 ///
 
@@ -373,6 +376,9 @@ type
   cpuAffinityMask     :QWORD;
   job_thread          :Pointer;
   mtx                 :mtx;
+  //
+  cb_event   :SceSaveDataEventCallbackFunc;
+  cb_userdata:Pointer;
   //
   MountSlots:array[0..15] of TMountSlot;
  end;
@@ -1840,9 +1846,50 @@ end;
 
 function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer;
 begin
- backup.cb:=cb;
- backup.userdata:=userdata;
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ if (cb=nil) or (g_instance.version=VERSION_INIT_3) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ mtx_lock(g_instance.mtx);
+
+  g_instance.cb_event   :=cb;
+  g_instance.cb_userdata:=userdata;
+
+ mtx_unlock(g_instance.mtx);
+
  Result:=0;
+end;
+
+function ps4_sceSaveDataUnregisterEventCallback(cb:SceSaveDataEventCallbackFunc):Integer;
+begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ if (cb=nil) or (g_instance.version=VERSION_INIT_3) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=SCE_SAVE_DATA_ERROR_NOT_REGIST_CALLBACK;
+
+ mtx_lock(g_instance.mtx);
+
+   if (g_instance.cb_event=cb) then
+   begin
+    g_instance.cb_event   :=nil;
+    g_instance.cb_userdata:=nil;
+    Result:=0;
+   end;
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataGetEventResult(param:pSceSaveDataEventParam;
@@ -1852,6 +1899,7 @@ begin
 
  event^:=Default(SceSaveDataEvent);
 
+ {
  if backup.queue.dequeue(event^) then
  begin
   Result:=0;
@@ -1859,6 +1907,7 @@ begin
  begin
   Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
  end;
+ }
 end;
 
 function ps4_sceSaveDataClearProgress():Integer;
@@ -1883,7 +1932,7 @@ end;
 
 procedure init_save;
 begin
- backup.queue.Create(32);
+ //backup.queue.Create(32);
 end;
 
 function Load_libSceSaveData(name:pchar):p_lib_info;
@@ -1917,6 +1966,7 @@ begin
  lib.set_proc($73CF18CB9E0CC74C,@ps4_sceSaveDataSaveIcon);
  lib.set_proc($7068CEDF0337576F,@ps4_sceSaveDataLoadIcon);
  lib.set_proc($86C29DE5CDB5B107,@ps4_sceSaveDataRegisterEventCallback);
+ lib.set_proc($BFF00AD40C50852D,@ps4_sceSaveDataUnregisterEventCallback);
  lib.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
  lib.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
  lib.set_proc($CF5240F3F889B779,@ps4_sceSaveDataBackup);
