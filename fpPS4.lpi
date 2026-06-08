@@ -1812,6 +1812,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceSaveData"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\savedata\scesavedata.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SceSaveData"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

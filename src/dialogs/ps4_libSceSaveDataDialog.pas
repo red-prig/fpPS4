@@ -9,7 +9,7 @@ uses
  kern_mtx,
  subr_dynlib,
  kern_proc,
- ps4_libSceSaveData,
+ SceSaveData,
  ps4_libSceCommonDialog;
 
 const
