@@ -418,10 +418,11 @@ begin
 end;
 }
 
-procedure fork_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
+procedure game_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
  td:p_kthread;
  r:Integer;
+ ppid:Integer;
 
  pipefd:THandle;
  parent:THandle;
@@ -443,7 +444,11 @@ begin
  //free shared
  FreeMem(data);
 
- parent:=md_pidfd_open(md_getppid);
+ ppid:=md_getppid;
+
+ Writeln('game_process started pid:',md_getpid,' parent_pid:',ppid);
+
+ parent:=md_pidfd_open(ppid);
 
  pipefd:=GameStartupInfo.Pipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
@@ -626,7 +631,7 @@ begin
   fork_info.hOutput:=cfg.hOutput;
   fork_info.hError :=cfg.hError;
 
-  fork_info.proc:=@fork_process;
+  fork_info.proc:=@game_process;
   fork_info.data:=mem.Memory;
   fork_info.size:=mem.Size;
 

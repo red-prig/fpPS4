@@ -10,6 +10,23 @@ uses
  vfcntl,
  vstat;
 
+const
+ O_RDONLY  =vfcntl.O_RDONLY  ;
+ O_WRONLY  =vfcntl.O_WRONLY  ;
+ O_RDWR    =vfcntl.O_RDWR    ;
+ O_NONBLOCK=vfcntl.O_NONBLOCK;
+ O_APPEND  =vfcntl.O_APPEND  ;
+ O_ASYNC   =vfcntl.O_ASYNC   ;
+ O_FSYNC   =vfcntl.O_FSYNC   ;
+ O_SYNC    =vfcntl.O_SYNC    ;
+ O_NOFOLLOW=vfcntl.O_NOFOLLOW;
+ O_CREAT   =vfcntl.O_CREAT   ;
+ O_TRUNC   =vfcntl.O_TRUNC   ;
+ O_EXCL    =vfcntl.O_EXCL    ;
+ O_DSYNC   =vfcntl.O_DSYNC   ;
+
+ AT_FDCWD  =vfcntl.AT_FDCWD;
+
 function  md_openat(at_fd:THandle;const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_open  (const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_close (fd:THandle):DWORD;

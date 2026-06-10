@@ -9,6 +9,7 @@ uses
  sysutils,
  errno,
  SceSaveData,
+ SaveDataBackend,
  kern_thr,
  kern_proc,
  kern_ksched,
@@ -81,6 +82,8 @@ type
   cpuAffinityMask     :QWORD;
   job_thread          :Pointer;
   mtx                 :mtx;
+  //
+  Backend:TSaveDataBackend;
   //
   cb_event   :SceSaveDataEventCallbackFunc;
   cb_userdata:Pointer;
@@ -320,6 +323,8 @@ begin
   //init_job_thread
  end;
 
+ instance.Backend:=TSaveDataBackend.Create;
+ instance.Backend.Init;
 end;
 
 function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;

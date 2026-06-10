@@ -179,7 +179,7 @@ uses
 
  game_find,
 
- windows,
+ md_file,
 
  md_arc4random,
 
@@ -853,26 +853,9 @@ begin
 end;
 
 procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
-var
- FLogFileW:WideString;
 begin
- FLogFileW:=UTF8Decode(LogFile);
-
- FAddHandle:=CreateFileW(PWideChar(FLogFileW),
-                         GENERIC_READ or GENERIC_WRITE,
-                         FILE_SHARE_READ,
-                         nil,
-                         OPEN_ALWAYS,
-                         0,
-                         0);
-
- FGetHandle:=CreateFileW(PWideChar(FLogFileW),
-                         GENERIC_READ,
-                         FILE_SHARE_READ or FILE_SHARE_WRITE,
-                         nil,
-                         OPEN_EXISTING,
-                         0,
-                         0);
+ md_openat(AT_FDCWD,LogFile,O_RDWR or O_CREAT or O_TRUNC,&0777,FAddHandle);
+ md_openat(FAddHandle,'',O_RDONLY,0,FGetHandle);
 
  //SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
  //SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
