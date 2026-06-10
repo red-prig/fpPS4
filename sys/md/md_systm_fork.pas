@@ -45,7 +45,8 @@ uses
 
 const
  JobObjectExtendedLimitInformation=9;
- JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=$00002000;
+ JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK=$00001000;
+ JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE  =$00002000;
 
 type
  JOBOBJECT_BASIC_LIMIT_INFORMATION = record
@@ -450,7 +451,7 @@ begin
  hProcJob:=CreateJobObjectA(nil,nil);
 
  info:=Default(JOBOBJECT_EXTENDED_LIMIT_INFORMATION);
- info.BasicLimitInformation.LimitFlags:=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+ info.BasicLimitInformation.LimitFlags:=JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK or JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 
  SetInformationJobObject(hProcJob,
                          JobObjectExtendedLimitInformation,
