@@ -1822,6 +1822,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="SaveDataBackend"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\md\md_event.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

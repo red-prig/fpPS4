@@ -13,6 +13,7 @@ uses
  host_ipc_interface,
  kern_thr,
  sys_event,
+ md_event,
  kern_mtx;
 
 const
@@ -38,7 +39,7 @@ type
  PNodeIpcSync=^TNodeIpcSync;
  TNodeIpcSync=packed record
   entry:LIST_ENTRY;
-  event:PRTLEvent;
+  event:t_event;
   value:TIpcValue;
   tid  :DWORD;
  end;
@@ -331,10 +332,9 @@ var
  node:PNodeIpcSync;
 begin
  node:=AllocMem(SizeOf(TNodeIpcSync));
- node^.event:=RTLEventCreate;
- node^.tid  :=ThreadID;
+ node^.tid:=ThreadID;
 
- RTLEventResetEvent(node^.event);
+ ev_init(node^.event,'TNodeIpcSync');
 
  mtx_lock(FWLock);
   LIST_INSERT_HEAD(@FWaits,node,@node^.entry);
@@ -349,7 +349,7 @@ begin
   LIST_REMOVE(node,@node^.entry);
  mtx_unlock(FWLock);
 
- RTLEventDestroy(node^.event);
+ ev_destroy(node^.event);
 
  FreeMem(node);
 end;
@@ -367,7 +367,7 @@ begin
    begin
     node^.value:=value.Copy;
 
-    RTLEventSetEvent(node^.event);
+    ev_signal(node^.event);
 
     Break;
    end;
@@ -414,7 +414,7 @@ var
 begin
  if (node<>nil) then
  begin
-  RTLEventWaitFor(node^.event);
+  ev_wait(node^.event);
  end;
 end;
 
