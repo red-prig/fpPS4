@@ -604,12 +604,14 @@ begin
  end;
 end;
 
+function vm_map_locked(map:vm_map_t):Boolean; forward;
+
 procedure vm_map_unlock(map:vm_map_t;def:Boolean=True); public;
 begin
+ Assert(vm_map_locked(map));
+
  with curkthread^ do
  begin
-  Assert(td_map_cookie<>nil);
-  //
   with p_rl_q_entry(td_map_cookie)^ do
    if (rl_q_count=0) then
    begin
@@ -715,9 +717,19 @@ end;
  * Returns a non-zero value if the caller holds a write (exclusive) lock
  * on the specified map and the value "0" otherwise.
  }
-function vm_map_locked(map:vm_map_t):Boolean; public; inline;
+function vm_map_locked(map:vm_map_t):Boolean; public;
 begin
- Result:=(curkthread^.td_map_cookie<>nil);
+
+ if (curkthread^.td_map_cookie=nil) then
+ begin
+  Result:=False;
+ end else
+ with p_rl_q_entry(curkthread^.td_map_cookie)^ do
+ begin
+  Result:=(rl_q_start=0) and
+          (rl_q___end=High(off_t)) and
+          ((rl_q_flags and RL_LOCK_WRITE)<>0);
+ end;
 
  //Result:=mtx_owned(map^.lock);
 end;

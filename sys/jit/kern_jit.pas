@@ -1875,6 +1875,7 @@ begin
    if (node<>nil) then
    begin
     node^.dec_ref('preload_entry');
+    ctx.Free;
     goto _exit;
    end;
   end;

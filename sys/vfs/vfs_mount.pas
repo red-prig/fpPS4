@@ -825,7 +825,7 @@ function vfs_mount_alloc(vp    :p_vnode;
 var
  mp:p_mount;
 begin
- mp:=uma_zalloc(mount_zone, M_WAITOK);
+ mp:=uma_zalloc(mount_zone, M_WAITOK or M_ZERO);
 
  TAILQ_INIT(@mp^.mnt_nvnodelist);
  mp^.mnt_nvnodelistsize:=0;

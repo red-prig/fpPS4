@@ -437,8 +437,6 @@ begin
   link:=builder.Alloc(Sizeof(t_forward_link));
  end;
  //
- link:=builder.Alloc(Sizeof(t_forward_link));
- //
  link^.instruction:=instruction;
  link^.next       :=node^.links.root;
  node^.links.root:=link;
