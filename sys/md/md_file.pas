@@ -5,6 +5,7 @@ unit md_file;
 interface
 
 uses
+ sysutils,
  ntapi,
  windows,
  vfcntl,
@@ -143,21 +144,25 @@ begin
  w:='';
  if (at_fd=THandle(AT_FDCWD)) then
  begin
+  //current dir
   at_fd:=0;
 
   SetLength(w,GetCurrentDirectoryW(0,nil));
   GetCurrentDirectoryW(Length(w),@w[1]);
   SetLength(w,Length(w)-1);
 
-  w:='\??\'+w+'\';
+  w:='\??\'+w+'\'+UTF8Decode(path);
  end else
  if (at_fd=0) or (at_fd=INVALID_HANDLE_VALUE) then
  begin
+  //full path
   at_fd:=0;
-  w:='\??\';
+  w:='\??\'+UTF8Decode(ExpandFileName(path));
+ end else
+ begin
+  //relative opened
+  w:=UTF8Decode(path);
  end;
-
- w:=w+UTF8Decode(path);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,at_fd,OBJ_CASE_INSENSITIVE,w);
