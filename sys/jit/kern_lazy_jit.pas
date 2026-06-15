@@ -480,7 +480,7 @@ begin
   end;
 
   ji:=default_jit_instruction;
-  Move(ctx.code^,ji.AData,ctx.dis.CodeIdx);
+  Move(ctx.code^,ji.AData^,ctx.dis.CodeIdx);
   ji.AInstructionSize:=ctx.dis.CodeIdx;
 
   RipIdx:=GetRipIdx(ctx.din);
@@ -527,7 +527,7 @@ begin
     end;
   end;
 
-  if check_dis_rip(ctx.code,@ji.AData,rr_ctx.reg_str) then
+  if check_dis_rip(ctx.code,ji.AData,rr_ctx.reg_str) then
   begin
 
    op_prolog(ctx,p_regs);
@@ -543,7 +543,7 @@ begin
   begin
 
    //print_disassemble(ctx.code,ctx.dis.CodeIdx);
-   //print_disassemble(@ji.AData,ji.AInstructionSize);
+   //print_disassemble(ji.AData,ji.AInstructionSize);
 
    //print_asm:=True;
    Exit(False);

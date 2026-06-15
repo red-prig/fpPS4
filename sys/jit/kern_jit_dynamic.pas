@@ -888,7 +888,7 @@ begin
 
  jcode^.start:=start;
  jcode^.__end:=__end;
- jcode^.dest :=QWORD(blob^.base)+clabel^.link_curr.offset;
+ jcode^.dest :=QWORD(blob^.base)+clabel^.link_curr.unzip.offset;
  jcode^.hash :=hash ;
 
  table:=@jcode^.table;
@@ -906,8 +906,8 @@ begin
 
   next:=clabel^.next;
 
-  link_curr:=clabel^.link_curr;
-  link_next:=clabel^.link_next;
+  link_curr:=clabel^.link_curr.unzip;
+  link_next:=clabel^.link_next.unzip;
 
   if (link_prev<>nil_link) then
   begin
@@ -1008,8 +1008,8 @@ begin
 
   next:=QWORD(clabel^.next);
 
-  link_curr:=clabel^.link_curr;
-  link_next:=clabel^.link_next;
+  link_curr:=clabel^.link_curr.unzip;
+  link_next:=clabel^.link_next.unzip;
 
   if (link_prev<>nil_link) then
   begin
@@ -1075,18 +1075,18 @@ begin
  entry_point:=ctx.entry_list;
  while (entry_point<>nil) do
  begin
-  addr:=blob^.base+entry_point^.instruction.offset;
+  addr:=blob^.base+entry_point^.zinstruction.unzip.offset;
   //
   blob^.add_entry_point(entry_point^.src,addr);
   //
-  entry_point:=entry_point^.next;
+  entry_point:=entry_point^.znext.unzip;
  end;
 
  start:=0;
  __end:=0;
 
  //copy chunks
- chunk:=TAILQ_FIRST(@ctx.builder.ACodeChunkList);
+ chunk:=ctx.builder.ACodeChunkList.pHead;
 
  while (chunk<>nil) do
  begin
@@ -1118,7 +1118,7 @@ begin
    end;
   end;
   //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
+  chunk:=chunk^.zNext.unzip;
  end;
 
  if (start<>0) then

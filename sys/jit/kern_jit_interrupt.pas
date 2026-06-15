@@ -247,7 +247,7 @@ var
 begin
  ji:=default_jit_instruction;
 
- Move(ctx.code^,ji.AData,ctx.dis.CodeIdx);
+ Move(ctx.code^,ji.AData^,ctx.dis.CodeIdx);
 
  ji.AInstructionSize:=ctx.dis.CodeIdx;
 

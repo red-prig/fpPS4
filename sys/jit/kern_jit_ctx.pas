@@ -68,29 +68,41 @@ type
    t_jumpslot_set=specialize TNodeSplay<t_jumpslot>;
 
    p_label=^t_label;
-   t_label=object
-    pLeft    :p_label;
-    pRight   :p_label;
+   t_label=packed object
+    zLeft    :t_zip_pointer;
+    zRight   :t_zip_pointer;
     curr     :Pointer;
     next     :Pointer;
-    link_curr:t_jit_i_link;
-    link_next:t_jit_i_link;
-    flags    :Integer;
-    function c(n1,n2:p_label):Integer; static;
+    link_curr:t_jit_i_link_zip;
+    link_next:t_jit_i_link_zip;
+    flags    :Byte;
+    function  c(n1,n2:p_label):Integer; static;
+    function  get_left:p_label;     inline;
+    procedure set_left(p:p_label);  inline;
+    function  get_right:p_label;    inline;
+    procedure set_right(p:p_label); inline;
+    property  pLeft :p_label read get_left  write set_left;
+    property  pRight:p_label read get_right write set_right;
    end;
    t_label_set=specialize TNodeSplay<t_label>;
 
    p_entry_point=^t_entry_point;
-   t_entry_point=object
-    pLeft      :p_entry_point;
-    pRight     :p_entry_point;
+   t_entry_point=packed object
+    zLeft       :t_zip_pointer;
+    zRight      :t_zip_pointer;
     //
-    next       :p_entry_point;
+    znext       :t_zip_pointer;
     //
-    src        :Pointer;
-    instruction:t_jit_i_link;
+    src         :Pointer;
+    zinstruction:t_jit_i_link_zip;
     //
-    function c(n1,n2:p_entry_point):Integer; static;
+    function  c(n1,n2:p_entry_point):Integer; static;
+    function  get_left:p_entry_point;     inline;
+    procedure set_left(p:p_entry_point);  inline;
+    function  get_right:p_entry_point;    inline;
+    procedure set_right(p:p_entry_point); inline;
+    property  pLeft :p_entry_point read get_left  write set_left;
+    property  pRight:p_entry_point read get_right write set_right;
    end;
    t_entry_point_set=specialize TNodeSplay<t_entry_point>;
 
@@ -150,6 +162,17 @@ type
 
    builder:t_jit_builder;
 
+   stats:record
+    t_export_point     :QWORD;
+    t_import_point     :QWORD;
+    t_forward_link     :QWORD;
+    t_forward_point    :QWORD;
+    t_jumpslot         :QWORD;
+    t_switchtable_point:QWORD;
+    t_label            :QWORD;
+    t_entry_point      :QWORD;
+   end;
+
   function  is_text_addr(addr:QWORD):Boolean;
   function  is_map_addr (addr:QWORD):Boolean;
   procedure add_export_point (nid:QWORD;native:Pointer;dst:PPointer);
@@ -173,6 +196,8 @@ type
   function  get_label(src:Pointer):p_label;
   function  get_link (src:Pointer):t_jit_i_link;
   procedure add_entry_point(src:Pointer;label_id:t_jit_i_link);
+  function  find_entry_point(src:Pointer):p_entry_point;
+  procedure print_alloc_stats;
   procedure Free;
  end;
 
@@ -381,9 +406,49 @@ begin
  Result:=Integer(n1^.curr>n2^.curr)-Integer(n1^.curr<n2^.curr);
 end;
 
+function t_jit_context2.t_label.get_left:p_label; inline;
+begin
+ Result:=zLeft.unzip;
+end;
+
+procedure t_jit_context2.t_label.set_left(p:p_label); inline;
+begin
+ zLeft.unzip:=p;
+end;
+
+function t_jit_context2.t_label.get_right:p_label; inline;
+begin
+ Result:=zRight.unzip;
+end;
+
+procedure t_jit_context2.t_label.set_right(p:p_label); inline;
+begin
+ zRight.unzip:=p;
+end;
+
 function t_jit_context2.t_entry_point.c(n1,n2:p_entry_point):Integer;
 begin
  Result:=Integer(n1^.src>n2^.src)-Integer(n1^.src<n2^.src);
+end;
+
+function t_jit_context2.t_entry_point.get_left:p_entry_point; inline;
+begin
+ Result:=zLeft.unzip;
+end;
+
+procedure t_jit_context2.t_entry_point.set_left(p:p_entry_point); inline;
+begin
+ zLeft.unzip:=p;
+end;
+
+function t_jit_context2.t_entry_point.get_right:p_entry_point; inline;
+begin
+ Result:=zRight.unzip;
+end;
+
+procedure t_jit_context2.t_entry_point.set_right(p:p_entry_point); inline;
+begin
+ zRight.unzip:=p;
 end;
 
 function t_jit_context2.is_text_addr(addr:QWORD):Boolean;
@@ -401,7 +466,7 @@ var
  node:p_export_point;
 begin
  if (native=nil) or (dst=nil) then Exit;
- node:=builder.Alloc(Sizeof(t_export_point));
+ node:=builder.Alloc(Sizeof(t_export_point)); Inc(stats.t_export_point);
  node^.nid   :=nid;
  node^.native:=native;
  node^.dst   :=dst;
@@ -414,7 +479,7 @@ var
  node:p_import_point;
 begin
  if (guest=nil) or (dst=nil) then Exit;
- node:=builder.Alloc(Sizeof(t_import_point));
+ node:=builder.Alloc(Sizeof(t_import_point)); Inc(stats.t_import_point);
  node^.guest:=guest;
  node^.dst  :=dst;
  node^.next :=import_list;
@@ -434,7 +499,7 @@ begin
   link^.next:=nil
  end else
  begin
-  link:=builder.Alloc(Sizeof(t_forward_link));
+  link:=builder.Alloc(Sizeof(t_forward_link)); Inc(stats.t_forward_link);
  end;
  //
  link^.instruction:=instruction;
@@ -488,7 +553,7 @@ begin
    Result^.pLeft:=nil;
   end else
   begin
-   Result:=builder.Alloc(Sizeof(t_forward_point));
+   Result:=builder.Alloc(Sizeof(t_forward_point)); Inc(stats.t_forward_point);
   end;
   //
   Result^.dst:=dst;
@@ -517,7 +582,7 @@ begin
 
  if (jumpslot_set.Find(@_node)=nil) then
  begin
-  pnode:=builder.Alloc(Sizeof(t_jumpslot));
+  pnode:=builder.Alloc(Sizeof(t_jumpslot)); Inc(stats.t_jumpslot);
   pnode^.addr:=addr;
 
   jumpslot_set.Insert(pnode);
@@ -545,7 +610,7 @@ begin
  if (Result=nil) then
  begin
   //
-  Result:=builder.Alloc(Sizeof(t_switchtable_point));
+  Result:=builder.Alloc(Sizeof(t_switchtable_point)); Inc(stats.t_switchtable_point);
   //
   Result^.table:=table;
   Result^.curr :=table;
@@ -634,7 +699,7 @@ procedure t_jit_context2.mark_chunk(ptype:t_point_type);
 var
  node:p_jit_code_chunk;
 begin
- node:=builder.ACodeChunkCurr;
+ node:=builder.ACodeChunkList.pCurr;
  if (node<>nil) then
  if (t_point_type(node^.data)=fpData) then
  begin
@@ -647,7 +712,7 @@ var
  node:p_jit_code_chunk;
 begin
  Result:=fpCall;
- node:=builder.ACodeChunkCurr;
+ node:=builder.ACodeChunkList.pCurr;
  if (node<>nil) then
  begin
   Result:=t_point_type(node^.data);
@@ -716,13 +781,13 @@ begin
  node.curr:=curr;
  Result:=label_set.Find(@node);
  if (Result<>nil) then Exit;
- Result:=builder.Alloc(Sizeof(t_label));
+ Result:=builder.Alloc(Sizeof(t_label)); Inc(stats.t_label);
  //
- Result^.curr     :=curr;
- Result^.next     :=next;
- Result^.link_curr:=link_curr;
- Result^.link_next:=link_next;
- Result^.flags    :=flags;
+ Result^.curr           :=curr;
+ Result^.next           :=next;
+ Result^.link_curr.unzip:=link_curr;
+ Result^.link_next.unzip:=link_next;
+ Result^.flags          :=flags;
  //
  label_set.Insert(Result);
 end;
@@ -743,7 +808,7 @@ begin
  Result:=nil_link;
  node:=get_label(src);
  if (node=nil) then Exit;
- Result:=node^.link_curr;
+ Result:=node^.link_curr.unzip;
 end;
 
 procedure t_jit_context2.add_entry_point(src:Pointer;label_id:t_jit_i_link);
@@ -754,19 +819,49 @@ begin
  if (src=nil) then Exit;
  //set key
  key:=Default(t_entry_point);
- key.src        :=src;
- key.instruction:=label_id;
+ key.src:=src;
  //find exists
  node:=entry_set.Find(@key);
  if (node<>nil) then Exit; //Already added
  //new
- node:=builder.Alloc(Sizeof(t_entry_point));
- node^:=key;
+ node:=builder.Alloc(Sizeof(t_entry_point)); Inc(stats.t_entry_point);
+ node^:=Default(t_entry_point);
+ node^.src               :=src;
+ node^.zinstruction.unzip:=label_id;
  //insert set
  entry_set.Insert(node);
  //insert list
- node^.next    :=entry_list;
+ node^.znext.unzip:=entry_list;
  entry_list:=node;
+end;
+
+function t_jit_context2.find_entry_point(src:Pointer):p_entry_point;
+var
+ key :t_entry_point;
+begin
+ if (src=nil) then Exit(nil);
+ //set key
+ key:=Default(t_entry_point);
+ key.src:=src;
+ //find exists
+ Result:=entry_set.Find(@key);
+end;
+
+procedure t_jit_context2.print_alloc_stats;
+begin
+ Writeln('t_jit_context2:[alloc_stats]');
+ Writeln(' t_export_point     =',stats.t_export_point     ,' (',stats.t_export_point     *sizeof(t_export_point     ),')');
+ Writeln(' t_import_point     =',stats.t_import_point     ,' (',stats.t_import_point     *sizeof(t_import_point     ),')');
+ Writeln(' t_forward_link     =',stats.t_forward_link     ,' (',stats.t_forward_link     *sizeof(t_forward_link     ),')');
+ Writeln(' t_forward_point    =',stats.t_forward_point    ,' (',stats.t_forward_point    *sizeof(t_forward_point    ),')');
+ Writeln(' t_jumpslot         =',stats.t_jumpslot         ,' (',stats.t_jumpslot         *sizeof(t_jumpslot         ),')');
+ Writeln(' t_switchtable_point=',stats.t_switchtable_point,' (',stats.t_switchtable_point*sizeof(t_switchtable_point),')');
+ Writeln(' t_label            =',stats.t_label            ,' (',stats.t_label            *sizeof(t_label            ),')');
+ Writeln(' t_entry_point      =',stats.t_entry_point      ,' (',stats.t_entry_point      *sizeof(t_entry_point      ),')');
+
+ Writeln(' t_jit_code_chunk   =',builder.stats.t_jit_code_chunk ,' (',builder.stats.t_jit_code_chunk*sizeof(t_jit_code_chunk),')');
+ Writeln(' t_jit_instruction  =',builder.stats.t_jit_instruction,' (',builder.stats.t_jit_instruction_bytes,')');
+ Writeln(' t_jit_data         =',builder.stats.t_jit_data       ,' (',builder.stats.t_jit_data*sizeof(t_jit_data),')');
 end;
 
 procedure t_jit_context2.Free;
@@ -1111,7 +1206,7 @@ var
 begin
  ji:=default_jit_instruction;
 
- Move(ctx.code^,ji.AData,ctx.dis.CodeIdx);
+ Move(ctx.code^,ji.AData^,ctx.dis.CodeIdx);
 
  ji.AInstructionSize:=ctx.dis.CodeIdx;
 

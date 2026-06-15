@@ -2658,7 +2658,7 @@ begin
 
     i:=i+node^.AInstructionSize;
 
-    if not test_disassemble(@node^.AData,node^.ASize) then
+    if not test_disassemble(node^.AData,node^.ASize) then
     begin
      print_asm:=True;
      Break;
@@ -2687,16 +2687,16 @@ begin
   if (node_curr<>node_next) and
      (node_curr<>nil) then
   begin
-   node:=TAILQ_NEXT(node_curr,@node_curr^.entry);
+   node:=node_curr^.zNext.unzip;
 
    Writeln('recompiled----------------------':32,' ','');
    while (node<>nil) do
    begin
 
-    print_disassemble(@node^.AData,node^.AInstructionSize);
+    print_disassemble(node^.AData,node^.AInstructionSize);
 
 
-    node:=TAILQ_NEXT(node,@node^.entry);
+    node:=node^.zNext.unzip;
    end;
    Writeln('recompiled----------------------':32,' ','');
   end;
@@ -2830,6 +2830,11 @@ begin
  if debug_info then
  begin
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+ end;
+
+ if (p_print_jit_preload) then
+ begin
+  ctx.print_alloc_stats;
  end;
 
  Result:=build(ctx);

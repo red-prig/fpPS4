@@ -9,9 +9,19 @@ unit x86_jit;
 interface
 
 uses
+ md_map,
  mqueue,
  g_node_splay,
  x86_fpdbgdisas;
+
+type
+ p_zip_pointer=^t_zip_pointer;
+ t_zip_pointer=packed object
+  raw:DWORD;
+  function  get_ptr:Pointer;    inline;
+  procedure set_ptr(p:Pointer); inline;
+  property  unzip:Pointer read get_ptr write set_ptr;
+ end;
 
 type
  t_jit_flags=Set Of (sES,sCS,sSS,sDS,sFS,sGS,sLOCK);
@@ -75,35 +85,43 @@ const
 type
  p_jit_instruction=^t_jit_instruction;
  t_jit_instruction=packed object
-  entry:TAILQ_ENTRY;
-  AInstructionOffset:Integer;
+  zPrev:t_zip_pointer;
+  zNext:t_zip_pointer;
+  AInstructionOffset:DWORD;
   ABitInfo:bitpacked record
-   InstructionSize:0..31; //5 [0..16]
-   Uncompressed   :0.. 1; //1 [False,True]
+   InstructionSize:0..15; //4 [0..15]
+   TargetOffset   :0..15; //4 [0..15]
+   Compressed     :0.. 1; //1 [False,True]
    TargetRequired :0.. 1; //1
    TargetSize     :0.. 1; //1 [t_jit_target_size]
    TargetType     :0.. 7; //3 [t_jit_link_type]
-   TargetOffset   :0..31; //5 [0..16]
+   TargetAlloc    :0.. 1; //1
+   TargetZip      :0.. 1; //1
   end;
-  ATargetAddr:Pointer;
-  AData:array[0..15] of Byte;
+  FTargetAddr:Pointer;    //optional
+  FData:array[0..15] of Byte;
   function  AGetInstructionSize:Integer;    inline;
   procedure ASetInstructionSize(i:Integer); inline;
   function  AInstructionEnd :Integer; inline;
   function  AGetTargetRequired  :Boolean;  inline;
-  procedure ASetTargetRequired(s:Boolean); inline;
+  procedure ASetTargetRequired(s:Boolean);
   function  AGetTargetSize  :t_jit_target_size;  inline;
   procedure ASetTargetSize(s:t_jit_target_size); inline;
-  function  AGetTargetType:t_jit_link_type;    inline;
+  function  AGetTargetType:  t_jit_link_type;  inline;
   procedure ASetTargetType(A:t_jit_link_type); inline;
-  function  AGetTargetOffset   :Integer; inline;
+  function  AGetTargetOffset  :Integer;  inline;
   procedure ASetTargetOffset(i:Integer); inline;
+  function  AGetTargetAddr  :Pointer;
+  procedure ASetTargetAddr(p:Pointer);
+  function  AGetCompressedSize(min_isize:Byte):Byte; inline;
   //
   property  AInstructionSize:Integer           read AGetInstructionSize write ASetInstructionSize;
   property  ATargetRequired :Boolean           read AGetTargetRequired  write ASetTargetRequired;
   property  ATargetSize     :t_jit_target_size read AGetTargetSize      write ASetTargetSize;
   property  ATargetType     :t_jit_link_type   read AGetTargetType      write ASetTargetType;
   property  ATargetOffset   :Integer           read AGetTargetOffset    write ASetTargetOffset;
+  property  ATargetAddr     :Pointer           read AGetTargetAddr      write ASetTargetAddr;
+  function  AData:PByte;
   //
   procedure EmitByte(b:byte); inline;
   procedure EmitWord(w:Word); inline;
@@ -116,6 +134,8 @@ type
   procedure EmitRvvv(rexR:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
   procedure EmitRXBm(rexB,rexX,rexR:Boolean;mm:Byte); inline;
   procedure EmitWvvv(rexW:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
+  //
+  procedure _RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
   //micro core
   procedure m_jmp_8 ();
   procedure m_jmp_32();
@@ -129,7 +149,7 @@ type
 
 const
  default_jit_instruction:t_jit_instruction=(
-  AData:($90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90);
+  FData:($90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,$90);
  );
 
 type
@@ -152,15 +172,24 @@ type
  end;
 
  p_jit_code_chunk=^t_jit_code_chunk;
- t_jit_code_chunk=object
-  entry :TAILQ_ENTRY;
-  pLeft :p_jit_code_chunk;
-  pRight:p_jit_code_chunk;
-  start:QWORD;
-  __end:QWORD;
-  data :QWORD;
-  AInstructions:TAILQ_HEAD;
-  function c(n1,n2:p_jit_code_chunk):Integer; static;
+ t_jit_code_chunk=packed object
+  zPrev :t_zip_pointer;
+  zNext :t_zip_pointer;
+  zLeft :t_zip_pointer;
+  zRight:t_zip_pointer;
+  start :QWORD;
+  __end :QWORD;
+  data  :QWORD;
+  AInstructions:packed record
+   zHead,zTail:t_zip_pointer;
+  end;
+  function  c(n1,n2:p_jit_code_chunk):Integer; static;
+  function  get_left:p_jit_code_chunk;     inline;
+  procedure set_left(p:p_jit_code_chunk);  inline;
+  function  get_right:p_jit_code_chunk;    inline;
+  procedure set_right(p:p_jit_code_chunk); inline;
+  property  pLeft :p_jit_code_chunk read get_left  write set_left;
+  property  pRight:p_jit_code_chunk read get_right write set_right;
  end;
 
  t_jit_code_chunk_set=specialize TNodeSplay<t_jit_code_chunk>;
@@ -182,6 +211,14 @@ type
    property  target:t_jit_i_link read get_target write set_target;
  end;
 
+ t_jit_i_link_zip=packed object
+  AType:Byte;
+  ALink:t_zip_pointer;
+  function  get_link:t_jit_i_link;
+  procedure set_link(p:t_jit_i_link);
+  property  unzip:t_jit_i_link read get_link write set_link;
+ end;
+
 const
  nil_link:t_jit_i_link=(AType:lnkNone;ALink:nil);
 
@@ -195,7 +232,9 @@ type
   type
    PAllocNode=^TAllocNode;
    TAllocNode=packed record
-    link:PAllocNode;
+    link:t_zip_pointer;
+    pages:DWORD;
+    //link:PAllocNode;
     data:record end;
    end;
   var
@@ -348,8 +387,11 @@ type
    ymm15:TRegValue=(AType:regXmm;ASize:os256;AIndex: 15);
   var
    ACodeChunkSet   :t_jit_code_chunk_set;
-   ACodeChunkList  :TAILQ_HEAD;
-   ACodeChunkCurr  :p_jit_code_chunk;
+   ACodeChunkList  :record
+    pHead:p_jit_code_chunk;
+    pTail:p_jit_code_chunk;
+    pCurr:p_jit_code_chunk;
+   end;
    //
    ADataSet        :t_jit_data_set;
    ADataList       :TAILQ_HEAD;
@@ -362,13 +404,20 @@ type
    //
    on_error:procedure(const Msg:RawByteString;userdata:Pointer); register;
    on_udata:Pointer;
+   //
+   stats:record
+    t_jit_code_chunk       :QWORD;
+    t_jit_instruction      :QWORD;
+    t_jit_instruction_bytes:QWORD;
+    t_jit_data             :QWORD;
+   end;
   //
   Function  Alloc(Size:ptruint):Pointer;
   Procedure Free;
   procedure Assert(value:Boolean;const Msg:RawByteString=''); inline;
   Function  _new_chunk(start:QWORD):p_jit_code_chunk;
   procedure _end_chunk(__end:QWORD);
-  procedure _add(const ji:t_jit_instruction;min_isize:Byte=0);
+  Function  _add(const ji:t_jit_instruction;min_isize:Byte=0):p_jit_instruction;
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _add_plt:Integer;
@@ -555,6 +604,67 @@ function classif_offset_se64(AOffset:Int64):TOperandSize;
 
 implementation
 
+Procedure SmallMove(src,dst:Pointer;count:DWORD); inline;
+type
+ PXWORD=^TXWORD;
+ TXWORD=array[0..1] of QWORD;
+begin
+ case count of
+   0:;
+   1:PByte(dst)[0]:=PByte(src)[0];
+   2:PWORD(dst)[0]:=PWORD(src)[0];
+   3:begin
+      PWORD(dst)[0]:=PWORD(src)[0];
+      PByte(dst)[2]:=PByte(src)[2];
+     end;
+   4:PDWORD(dst)[0]:=PDWORD(src)[0];
+   5:begin
+      PDWORD(dst)[0]:=PDWORD(src)[0];
+      PByte(dst)[4]:=PByte(src)[4];
+     end;
+   6:begin
+      PDWORD(dst)[0]:=PDWORD(src)[0];
+      PWORD(dst)[2]:=PWORD(src)[2];
+     end;
+   7:begin
+      PDWORD(dst)[0]:=PDWORD(src)[0];
+      PWORD(dst)[2]:=PWORD(src)[2];
+      PByte(dst)[6]:=PByte(src)[6];
+     end;
+   8:PQWORD(dst)[0]:=PQWORD(src)[0];
+  16:PXWORD(dst)[0]:=PXWORD(src)[0];
+  else
+    Move(src^,dst^,count);
+ end;
+end;
+
+//
+
+function t_zip_pointer.get_ptr:Pointer; inline;
+begin
+ if (raw=0) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  Result:=Pointer(((QWORD(@Self) shr 3)+Integer(raw)) shl 3);
+ end;
+end;
+
+procedure t_zip_pointer.set_ptr(p:Pointer); inline;
+begin
+ if (p=nil) then
+ begin
+  raw:=0;
+ end else
+ begin
+  raw:=(QWORD(p) shr 3)-(QWORD(@Self) shr 3);
+  //Assert(get_ptr=p,HexStr(get_ptr)+'<>'+HexStr(p));
+ end;
+end;
+
+//
+
 function t_jit_lea.ASegment:t_jit_flags; inline;
 begin
  Result:=AFlags-[sLOCK];
@@ -575,6 +685,26 @@ end;
 function t_jit_code_chunk.c(n1,n2:p_jit_code_chunk):Integer;
 begin
  Result:=Integer(n1^.start>n2^.start)-Integer(n1^.start<n2^.start);
+end;
+
+function t_jit_code_chunk.get_left:p_jit_code_chunk; inline;
+begin
+ Result:=zLeft.unzip;
+end;
+
+procedure t_jit_code_chunk.set_left(p:p_jit_code_chunk); inline;
+begin
+ zLeft.unzip:=p;
+end;
+
+function t_jit_code_chunk.get_right:p_jit_code_chunk; inline;
+begin
+ Result:=zRight.unzip;
+end;
+
+procedure t_jit_code_chunk.set_right(p:p_jit_code_chunk); inline;
+begin
+ zRight.unzip:=p;
 end;
 
 function is_valid_reg_type(reg:TRegValue):Boolean; inline;
@@ -1032,7 +1162,7 @@ begin
   lnkLabelAfter:
    begin
     Result.AType:=lnkLabelBefore;
-    Result.ALink:=TAILQ_PREV(ALink,@p_jit_instruction(ALink)^.entry);
+    Result.ALink:=p_jit_instruction(ALink)^.zPrev.unzip;
    end;
   else;
  end;
@@ -1062,7 +1192,7 @@ begin
   lnkLabelAfter:
    begin
     Result.AType:=lnkLabelBefore;
-    Result.ALink:=TAILQ_NEXT(ALink,@p_jit_instruction(ALink)^.entry);
+    Result.ALink:=p_jit_instruction(ALink)^.zNext.unzip;
    end;
   else;
  end;
@@ -1093,6 +1223,18 @@ begin
  Result:=(A.ALink=B.ALink) and (A.AType=B.AType);
 end;
 
+function t_jit_i_link_zip.get_link:t_jit_i_link;
+begin
+ Result.AType:=t_jit_link_type(AType);
+ Result.ALink:=ALink.unzip;
+end;
+
+procedure t_jit_i_link_zip.set_link(p:t_jit_i_link);
+begin
+ AType      :=Integer(p.AType);
+ ALink.unzip:=p.ALink;
+end;
+
 ////
 
 function t_jit_instruction.AGetInstructionSize:Integer; inline;
@@ -1115,9 +1257,20 @@ begin
  Result:=Boolean(ABitInfo.TargetRequired);
 end;
 
-procedure t_jit_instruction.ASetTargetRequired(s:Boolean); inline;
+procedure t_jit_instruction.ASetTargetRequired(s:Boolean);
 begin
- ABitInfo.TargetRequired:=ord(s);
+ if (ABitInfo.Compressed=0) then
+ begin
+  ABitInfo.TargetRequired:=ord(s);
+  ABitInfo.TargetAlloc   :=ord(s);
+ end else
+ begin
+  ABitInfo.TargetRequired:=ord(s);
+  if (ABitInfo.TargetRequired<>0) and (ABitInfo.TargetAlloc=0) then
+  begin
+   Assert(False,'cannot be set for compressed');
+  end;
+ end;
 end;
 
 function t_jit_instruction.AGetTargetSize:t_jit_target_size;  inline;
@@ -1150,29 +1303,97 @@ begin
  ABitInfo.TargetOffset:=i;
 end;
 
+function t_jit_instruction.AGetTargetAddr:Pointer;
+begin
+ if (ABitInfo.Compressed=0) then
+ begin
+  Result:=FTargetAddr;
+ end else
+ if (ABitInfo.TargetAlloc=0) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  if (ABitInfo.TargetZip=0) then
+  begin
+   Result:=Pointer(PDWORD(@FTargetAddr)[0]);
+  end else
+  begin
+   Result:=p_zip_pointer(@FTargetAddr)[0].unzip;
+  end;
+ end;
+end;
+
+procedure t_jit_instruction.ASetTargetAddr(p:Pointer);
+begin
+ if (ABitInfo.Compressed=0) then
+ begin
+  FTargetAddr:=p;
+ end else
+ if (ABitInfo.TargetAlloc<>0) then
+ begin
+  if (QWORD(p)<=High(DWORD)) then
+  begin
+   ABitInfo.TargetZip:=0;
+   PDWORD(@FTargetAddr)[0]:=QWORD(p);
+  end else
+  begin
+   ABitInfo.TargetZip:=1;
+   p_zip_pointer(@FTargetAddr)[0].unzip:=p;
+  end;
+ end else
+ if (p<>nil) then
+ begin
+  Assert(False,'cannot be set for compressed');
+ end;
+end;
+
+function t_jit_instruction.AData:PByte;
+begin
+ if (ABitInfo.Compressed=0) then
+ begin
+  Result:=@FData;
+ end else
+ begin
+  Result:=@PDWORD(@FTargetAddr)[ABitInfo.TargetAlloc];
+ end;
+end;
+
+function t_jit_instruction.AGetCompressedSize(min_isize:Byte):Byte; inline;
+begin
+ Result:=ABitInfo.InstructionSize;
+ if (Result<min_isize) then Result:=min_isize;
+
+ Result:=(SizeOf(t_jit_instruction)-
+          sizeof(t_jit_instruction.FData)-
+          sizeof(t_jit_instruction.FTargetAddr))
+         +(sizeof(t_zip_pointer)*ABitInfo.TargetAlloc)
+         +Result;
+end;
+
 //
 
 procedure t_jit_instruction.EmitByte(b:byte); inline;
 begin
- AData[AInstructionSize]:=b;
+ AData()[AInstructionSize]:=b;
  AInstructionSize:=AInstructionSize+SizeOf(Byte);
 end;
 
 procedure t_jit_instruction.EmitWord(w:Word); inline;
 begin
- PWord(@AData[AInstructionSize])^:=w;
+ PWord(@AData()[AInstructionSize])^:=w;
  AInstructionSize:=AInstructionSize+SizeOf(Word);
 end;
 
 procedure t_jit_instruction.EmitInt32(i:Integer); inline;
 begin
- PInteger(@AData[AInstructionSize])^:=i;
+ PInteger(@AData()[AInstructionSize])^:=i;
  AInstructionSize:=AInstructionSize+SizeOf(Integer);
 end;
 
 procedure t_jit_instruction.EmitInt64(i:Int64); inline;
 begin
- PInt64(@AData[AInstructionSize])^:=i;
+ PInt64(@AData()[AInstructionSize])^:=i;
  AInstructionSize:=AInstructionSize+SizeOf(Int64);
 end;
 
@@ -1252,1178 +1473,6 @@ begin
 end;
 
 //
-
-procedure t_jit_instruction.m_jmp_8();
-begin
- AInstructionSize:=0;
-
- EmitByte($EB);
-
- ATargetSize  :=tz1;
- ATargetOffset:=AInstructionSize;
-
- EmitByte(0);
-end;
-
-procedure t_jit_instruction.m_jmp_32();
-begin
- AInstructionSize:=0;
-
- EmitByte($E9);
-
- ATargetSize  :=tz4;
- ATargetOffset:=AInstructionSize;
-
- EmitInt32(0);
-end;
-
-procedure t_jit_instruction.m_jcc_8(mop:Byte);
-begin
- AInstructionSize:=0;
-
- mop:=$70 or (mop and $F);
-
- EmitByte(mop);
-
- ATargetSize  :=tz1;
- ATargetOffset:=AInstructionSize;
-
- EmitByte(0);
-end;
-
-procedure t_jit_instruction.m_jcc_32(mop:Byte);
-begin
- AInstructionSize:=0;
-
- mop:=$80 or (mop and $F);
-
- EmitByte($0F);
- EmitByte(mop);
-
- ATargetSize  :=tz4;
- ATargetOffset:=AInstructionSize;
-
- EmitInt32(0);
-end;
-
-{
-$E0|0 -> LOOPNE
-$E0|1 -> LOOPE
-$E0|2 -> LOOP
-$E0|3 -> JCXZ
----
-$10   -> 32bit
-}
-procedure t_jit_instruction.m_jcx_8(mop:Byte);
-begin
- AInstructionSize:=0;
-
- if ((mop and MR_32BIT)<>0) then
- begin
-  EmitByte($67); //Address-size override prefix (32)
- end;
-
- mop:=$E0 or (mop and $3);
-
- EmitByte(mop);
-
- ATargetSize  :=tz1;
- ATargetOffset:=AInstructionSize;
-
- EmitByte(0);
-end;
-
-{
-$E3 02          jcxz  [+2]
-$EB 05          jmp   [+5]
-$E9 XX XX XX XX jmp32 [addr]
-}
-procedure t_jit_instruction.m_jcx_32(mop:Byte);
-begin
- AInstructionSize:=0;
-
- if ((mop and MR_32BIT)<>0) then
- begin
-  EmitByte($67); //Address-size override prefix (32)
- end;
-
- EmitInt32($05EB02E0 or (mop and $3));
-
- EmitByte($E9);
-
- ATargetSize  :=tz4;
- ATargetOffset:=AInstructionSize;
-
- EmitInt32(0);
-end;
-
-function t_jit_instruction.get_micro_op:Byte;
-var
- ptr:PByte;
-begin
- if (AInstructionSize=0) then Exit(0);
- //
- Result:=(ord(ATargetSize=tz4)*MT_32BIT);
- //
- ptr:=@AData;
- //
- if (ptr[0]=$67) then
- begin
-  ptr:=@ptr[1];
-  Result:=Result or MR_32BIT;
- end;
- //
- case ptr[0] of
-  $0F:
-      case ptr[1] of
-       $80..$8F:Result:=Result or MOP_JCC or (ptr[1] and Byte($F)); //jcc_32
-       else;
-      end;
-  $70..$7F:Result:=Result or MOP_JCC or (ptr[0] and Byte($F));      //jcc_8
-  $E0..$E3:Result:=Result or MOP_JCX or (ptr[0] and Byte($3));      //jcx_8/32
-       $EB:Result:=Result or MOP_JMP;                               //jmp_8
-       $E9:Result:=Result or MOP_JMP;                               //jmp_32
-  else;
- end;
-end;
-
-//
-
-Function t_jit_builder_allocator.Alloc(Size:ptruint):Pointer;
-const
- asize=(2*1024*1024)-SizeOf(ptruint)*3;
-var
- mem_size:ptruint;
- node:PAllocNode;
-
- function _alloc:Pointer;
- begin
-  if (Size>asize-SizeOf(Pointer)) then
-  begin
-   Result:=AllocMem(Size+SizeOf(Pointer));
-  end else
-  begin
-   Result:=AllocMem(asize);
-  end;
- end;
-
-begin
- if (pHead.slh_first=nil) or (Size>curr_size) then
- begin
-  node:=_alloc;
-  SLIST_INSERT_HEAD(@pHead,node,@node^.link);
-
-  //Push_head(_alloc);
-  mem_size:=MemSize(node);
-  curr_apos:=0;
-  curr_size:=mem_size-SizeOf(Pointer);
-  Inc(full_size,mem_size);
- end;
-
- node:=SLIST_FIRST(@pHead);
-
- Result:=@PByte(@node^.data)[curr_apos];
-
- Inc(used_size,Size);
- Size:=Align(Size,SizeOf(ptruint));
- Inc(curr_apos,Size);
- Dec(curr_size,Size);
-end;
-
-Procedure t_jit_builder_allocator.Free;
-var
- node:PAllocNode;
-begin
- //node:=Pop_head;
- node:=pHead.slh_first;
- if (node<>nil) then
- begin
-  pHead.slh_first:=node^.link;
- end;
- While (node<>nil) do
- begin
-  FreeMem(node);
-  //node:=Pop_head;
-  node:=pHead.slh_first;
-  if (node<>nil) then
-  begin
-   pHead.slh_first:=node^.link;
-  end;
- end;
- Self:=Default(t_jit_builder_allocator);
-end;
-
-Function t_jit_builder.Alloc(Size:ptruint):Pointer;
-begin
- Result:=Allocator.Alloc(Size);
-end;
-
-Procedure t_jit_builder.Free;
-begin
- Allocator.Free;
-end;
-
-procedure t_jit_builder.Assert(value:Boolean;const Msg:RawByteString=''); inline;
-begin
- if (not value) then
- begin
-  if (on_error<>nil) then
-  begin
-   on_error(Msg,on_udata);
-  end;
-  System.Assert(value,Msg);
- end;
-end;
-
-//
-
-Function t_jit_builder._new_chunk(start:QWORD):p_jit_code_chunk;
-var
- node:t_jit_code_chunk;
-begin
- Result:=nil;
- node:=Default(t_jit_code_chunk);
- node.start:=start;
- Result:=ACodeChunkSet.Find(@node);
- if (Result=nil) then
- begin
-  Result:=Alloc(SizeOf(t_jit_code_chunk));
-  Result^.start:=start;
-  TAILQ_INIT(@Result^.AInstructions);
-  ACodeChunkSet.Insert(Result);
-  ACodeChunkCurr:=Result;
- end else
- begin
-  Result:=nil;
- end;
-end;
-
-procedure t_jit_builder._end_chunk(__end:QWORD);
-begin
- if (ACodeChunkCurr<>nil) then
- begin
-  ACodeChunkCurr^.__end:=__end;
-  ACodeChunkCurr:=nil;
- end;
-end;
-
-procedure t_jit_builder._add(const ji:t_jit_instruction;min_isize:Byte=0);
-var
- node:p_jit_instruction;
- i_size:Byte;
-begin
- if (ACodeChunkCurr=nil) then
- begin
-  _new_chunk(0);
-  Assert(ACodeChunkCurr<>nil);
- end;
-
- i_size:=ji.AInstructionSize;
-
- if (i_size<min_isize) then i_size:=min_isize;
-
- node:=Alloc(SizeOf(t_jit_instruction)-16+i_size);
-
- node^.ABitInfo   :=ji.ABitInfo;
- node^.ATargetAddr:=ji.ATargetAddr;
-
- Move(ji.AData,node^.AData,i_size);
-
- node^.AInstructionOffset:=AInstructionSize;
-
- TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.entry);
- Inc(AInstructionSize,ji.AInstructionSize);
-end;
-
-Function t_jit_builder.get_curr_label:t_jit_i_link;
-var
- node:p_jit_instruction;
-begin
- if (ACodeChunkCurr=nil) then
- begin
-  _add(Default(t_jit_instruction));
- end;
-
- node:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
-
- if (node=nil) then
- begin
-  _add(Default(t_jit_instruction));
-  node:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
- end;
-
- Result.AType:=lnkLabelBefore;
- Result.ALink:=node;
-end;
-
-Function t_jit_builder._add_data(P:Pointer):p_jit_data;
-var
- node:t_jit_data;
-begin
- Result:=nil;
- node:=Default(t_jit_data);
- node.pData:=p;
- Result:=ADataSet.Find(@node);
- if (Result=nil) then
- begin
-  Result:=Alloc(SizeOf(t_jit_data));
-  Result^.pData:=P;
-  Result^.pId:=ADataCount;
-  ADataSet.Insert(Result);
-  if (ADataList.tqh_last=nil) then
-  begin
-   TAILQ_INIT(@ADataList);
-  end;
-  TAILQ_INSERT_TAIL(@ADataList,Result,@Result^.entry);
-  Inc(ADataCount);
- end;
-end;
-
-Function t_jit_builder._add_plt:Integer;
-begin
- Result:=APltCount;
- Inc(APltCount);
-end;
-
-function t_jit_builder._get_base_offset(AType:t_jit_link_type):Integer;
-begin
- Result:=0;
- case AType of
-  lnkData:Result:=GetInstructionsSize;
-  lnkPlt :Result:=GetInstructionsSize+GetDataSize;
-  else;
- end;
-end;
-
-Function t_jit_builder.last_instruction:p_jit_instruction;
-begin
- Result:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
-end;
-
-Function t_jit_builder.call_far(P:Pointer):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($FF);
- ji.EmitByte($15);
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=lnkData;
- ji.ATargetSize    :=tz4;
- ji.ATargetOffset  :=ji.AInstructionSize;
- ji.ATargetAddr    :=_add_data(P);
-
- ji.EmitInt32(0);
-
- _add(ji);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
- LinkLabel(Result.ALink);
-end;
-
-Function t_jit_builder.jmp_far(P:Pointer):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($FF);
- ji.EmitByte($25);
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=lnkData;
- ji.ATargetSize    :=tz4;
- ji.ATargetOffset  :=ji.AInstructionSize;
- ji.ATargetAddr    :=_add_data(P);
-
- ji.EmitInt32(0);
-
- _add(ji);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.call(target:t_jit_i_link):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- ji.EmitByte($E8);
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=target.AType;
- ji.ATargetSize    :=tz4;
- ji.ATargetOffset  :=ji.AInstructionSize;
- ji.ATargetAddr    :=target.ALink;
-
- ji.EmitInt32(0);
-
- _add(ji);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.jmp(target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- if (osize=os8) then
- begin
-  ji.m_jmp_8();
- end else
- begin
-  ji.m_jmp_32();
- end;
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=target.AType;
- ji.ATargetAddr    :=target.ALink;
-
- _add(ji);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
- LinkLabel(Result.ALink);
-end;
-
-const
- COND_OP:array[OPSc_o..OPSc_nle] of Byte=(
-  $0,$1,$2,$3,$4,$5,$6,$7,
-  $8,$9,$A,$B,$C,$D,$E,$F
- );
-
-function t_jit_builder.jcc(op:TOpCodeSuffix;target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
-var
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- case op of
-  OPSc_o..OPSc_nle:;
-  else
-   Assert(false,'Unknow jcc op');
- end;
-
- if (osize=os8) then
- begin
-  ji.m_jcc_8(COND_OP[op]);
- end else
- begin
-  ji.m_jcc_32(COND_OP[op]);
- end;
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=target.AType;
- ji.ATargetAddr    :=target.ALink;
-
- _add(ji,6);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.loop(op:TOpCodeSuffix;target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
-var
- ji:t_jit_instruction;
- mop:Byte;
-begin
- ji:=default_jit_instruction;
-
- case op of
-  OPSc_ne:mop:=(ord(rsize=as32)*MR_32BIT) or $0;
-  OPSc_e :mop:=(ord(rsize=as32)*MR_32BIT) or $1;
-  OPSnone:mop:=(ord(rsize=as32)*MR_32BIT) or $2;
-  else
-   Assert(false);
- end;
-
- if (osize=os8) then
- begin
-  ji.m_jcx_8(mop);
- end else
- begin
-  ji.m_jcx_32(mop);
- end;
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=target.AType;
- ji.ATargetAddr    :=target.ALink;
-
- _add(ji,10);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.jcxz(target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
-var
- ji:t_jit_instruction;
- mop:Byte;
-begin
- ji:=default_jit_instruction;
-
- mop:=(ord(rsize=as32)*MR_32BIT) or $3;
-
- if (osize=os8) then
- begin
-  ji.m_jcx_8(mop);
- end else
- begin
-  ji.m_jcx_32(mop);
- end;
-
- ji.ATargetRequired:=True;
- ji.ATargetType    :=target.AType;
- ji.ATargetAddr    :=target.ALink;
-
- _add(ji,10);
-
- Result.ALink:=last_instruction;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
-var
- jt:p_jit_instruction;
-begin
- movq(reg,mem);
-
- jt:=last_instruction;
-
- jt^.ATargetRequired:=True;
- jt^.ATargetType    :=target.AType;
- jt^.ATargetAddr    :=target.ALink;
-
- Result.ALink:=jt;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.movp(reg:TRegValue;P:Pointer):t_jit_i_link;
-var
- jt:p_jit_instruction;
-begin
- movq(reg,[rip+$7FFFFFFF]);
-
- jt:=last_instruction;
-
- jt^.ATargetRequired:=True;
- jt^.ATargetType    :=lnkData;
- jt^.ATargetAddr    :=_add_data(P);
-
- Result.ALink:=jt;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
-var
- jt:p_jit_instruction;
-begin
- leaq(reg,mem);
-
- jt:=last_instruction;
-
- jt^.ATargetRequired:=True;
- jt^.ATargetType    :=target.AType;
- jt^.ATargetAddr    :=target.ALink;
-
- Result.ALink:=jt;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.leap(reg:TRegValue):t_jit_i_link;
-var
- jt:p_jit_instruction;
-begin
- leaq(reg,[rip+$7FFFFFFF]);
-
- jt:=last_instruction;
-
- jt^.ATargetRequired:=True;
- jt^.ATargetType    :=lnkPlt;
- jt^.ATargetAddr    :=Pointer(_add_plt);
-
- Result.ALink:=jt;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-function t_jit_builder.leap(reg:TRegValue;prev:t_jit_i_link):t_jit_i_link;
-var
- plt:Pointer;
- jt:p_jit_instruction;
-begin
- //
- jt :=prev.ALink;
- plt:=jt^.ATargetAddr;
- //
-
- leaq(reg,[rip+$7FFFFFFF]);
-
- jt:=last_instruction;
-
- jt^.ATargetRequired:=True;
- jt^.ATargetType    :=lnkPlt;
- jt^.ATargetAddr    :=plt;
-
- Result.ALink:=jt;
- Result.AType:=lnkLabelBefore;
-
- LinkLabel(Result.ALink);
-end;
-
-Procedure t_jit_builder.jmp(reg:TRegValue);
-const
- desc:t_op_type=(op:$FF;index:4);
-begin
- Assert(is_reg_size(reg,[os64]));
-
- _R(desc,reg);
-end;
-
-Procedure t_jit_builder.jmp(mem:t_jit_leas);
-const
- desc:t_op_type=(op:$FF;index:4);
-begin
- _M(desc,mem);
-end;
-
-Procedure t_jit_builder.call(reg:TRegValue);
-const
- desc:t_op_type=(op:$FF;index:2);
-begin
- Assert(is_reg_size(reg,[os64]));
-
- _R(desc,reg);
-end;
-
-Procedure t_jit_builder.call(mem:t_jit_leas);
-const
- desc:t_op_type=(op:$FF;index:2);
-begin
- _M(desc,mem);
-end;
-
-Procedure t_jit_builder.reta;
-begin
- _O($C3);
-end;
-
-Procedure t_jit_builder.ud2;
-begin
- _O($0F0B);
-end;
-
-Procedure _gen_nop(P:Pointer;length:DWORD);
-begin
- while (length<>0) do
- begin
-  case length of
-   1: begin PByte (P)[0]:=$90;                                                   Break; end;
-   2: begin PWord (P)[0]:=$9066;                                                 Break; end;
-   3: begin PWord (P)[0]:=$1F0F;             PByte(P)[2]:=$00;                   Break; end;
-   4: begin PDWORD(P)[0]:=$00401F0F;                                             Break; end;
-   5: begin PDWORD(P)[0]:=$00441F0F;         PByte(P)[4]:=$00;                   Break; end;
-   6: begin PDWORD(P)[0]:=$441F0F66;         PWord(P)[2]:=$00;                   Break; end;
-   7: begin PDWORD(P)[0]:=$00801F0F;         PWord(P)[2]:=$00; PByte(P)[6]:=$00; Break; end;
-   8: begin PQWORD(P)[0]:=$0000000000841F0F;                                     Break; end;
-   9: begin PQWORD(P)[0]:=$00000000841F0F66; PByte(P)[8]:=$00;                   Break; end;
-   else
-      begin
-       PQWORD(P)[0]:=$0000000000841F0F; //8
-       Inc(P     ,8);
-       Dec(length,8);
-      end;
-  end;
- end;
-end;
-
-Procedure t_jit_builder.nop(length:DWORD);
-var
- ji:t_jit_instruction;
-begin
- if (length=0) then Exit;
-
- ji:=default_jit_instruction;
-
- while (length<>0) do
- begin
-  case length of
-   1: begin ji.EmitByte ($90);                                                   Break; end;
-   2: begin ji.EmitWord ($9066);                                                 Break; end;
-   3: begin ji.EmitWord ($1F0F);             ji.EmitByte($00);                   Break; end;
-   4: begin ji.EmitInt32($00401F0F);                                             Break; end;
-   5: begin ji.EmitInt32($00441F0F);         ji.EmitByte($00);                   Break; end;
-   6: begin ji.EmitInt32($441F0F66);         ji.EmitWord($00);                   Break; end;
-   7: begin ji.EmitInt32($00801F0F);         ji.EmitWord($00); ji.EmitByte($00); Break; end;
-   8: begin ji.EmitInt64($0000000000841F0F);                                     Break; end;
-   9: begin ji.EmitInt64($00000000841F0F66); ji.EmitByte($00);                   Break; end;
-   10..15:
-      begin
-       ji.EmitInt64($0000000000841F0F); //8
-       Dec(length,8);
-      end;
-   else
-      begin
-       ji.EmitInt64($0000000000841F0F); //8
-       ji.EmitInt64($0000000000841F0F); //8
-       Dec(length,16);
-       //flush
-       _add(ji);
-       ji:=default_jit_instruction;
-      end;
-  end;
- end;
-
- if (ji.AInstructionSize<>0) then
- begin
-  _add(ji);
- end;
-end;
-
-Function t_jit_builder.GetInstructionsSize:Integer;
-begin
- Result:=(AInstructionSize+7) and (not 7);
-end;
-
-Function t_jit_builder.GetDataSize:Integer;
-begin
- Result:=ADataCount*SizeOf(Pointer);
-end;
-
-Function t_jit_builder.GetPltSize:Integer;
-begin
- Result:=APltCount*SizeOf(t_jit_plt);
-end;
-
-Function t_jit_builder.GetPltStart:Integer;
-begin
- Result:=GetInstructionsSize+GetDataSize;
-end;
-
-Function t_jit_builder.GetMemSize:Integer;
-begin
- Result:=GetInstructionsSize+GetDataSize+GetPltSize;
-end;
-
-Procedure t_jit_builder.RebuldChunkList;
-var
- chunk:p_jit_code_chunk;
-begin
- ACodeChunkCurr:=nil;
-
- TAILQ_INIT(@ACodeChunkList);
-
- chunk:=ACodeChunkSet.Min;
-
- while (chunk<>nil) do
- begin
-  TAILQ_INSERT_TAIL(@ACodeChunkList,chunk,@chunk^.entry);
-
-  chunk:=ACodeChunkSet.Next(chunk);
- end;
-end;
-
-Procedure t_jit_builder.RebuldInstructionOffset;
-var
- chunk:p_jit_code_chunk;
- node:p_jit_instruction;
-begin
- AInstructionSize:=0;
-
- chunk:=TAILQ_FIRST(@ACodeChunkList);
-
- while (chunk<>nil) do
- begin
-  node:=TAILQ_FIRST(@chunk^.AInstructions);
-  //
-  while (node<>nil) do
-  begin
-   node^.AInstructionOffset:=AInstructionSize;
-   Inc(AInstructionSize,node^.AInstructionSize);
-   //
-   node:=TAILQ_NEXT(node,@node^.entry);
-  end;
-  //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
- end;
-end;
-
-procedure _set_data(node:p_jit_instruction;d:Integer); inline;
-begin
- With node^ do
- begin
-  case ATargetSize of
-   tz1:PByte   (@node^.AData[ATargetOffset])^:=d;
-   tz4:PInteger(@node^.AData[ATargetOffset])^:=d;
-   else;
-  end;
- end;
-end;
-
-Procedure LinkLabel(node:p_jit_instruction);
-var
- d:Integer;
-begin
- //Pre-linking, for debugging only
- d:=0;
- if (node=nil) then Exit;
- if (node^.ATargetAddr=nil) and
-    (node^.ATargetType<>lnkPlt) then Exit;
- //
- With node^ do
-  case ATargetType of
-   lnkData:
-     begin
-      d:=_get_link_offset(ATargetType,ATargetAddr);
-      _set_data(node,d);
-     end;
-   lnkPlt:
-     begin
-      d:=_get_link_offset(ATargetType,ATargetAddr);
-      _set_data(node,d);
-     end;
-   lnkLabelBefore,
-   lnkLabelAfter:
-     begin
-      d:=_get_link_offset(ATargetType,ATargetAddr);
-      d:=d-AInstructionEnd;
-      _set_data(node,d);
-     end;
-   else;
-  end;
-end;
-
-function is_8bit_offset(d:Integer):Boolean; inline;
-begin
- case d of
-  -128..127:Result:=True;
-  else
-            Result:=False;
- end;
-end;
-
-function _test_link(ATargetType:t_jit_link_type;ATargetAddr:Pointer):Boolean;
-begin
- Result:=False;
- case ATargetType of
-  lnkData:
-   begin
-    Result:=(ATargetAddr<>nil);
-   end;
-  lnkPlt:
-   begin
-    Result:=True;
-   end;
-  lnkLabelBefore:
-   begin
-    Result:=(ATargetAddr<>nil);
-   end;
-  lnkLabelAfter:
-   begin
-    Result:=(ATargetAddr<>nil);
-   end;
-  else;
- end;
-end;
-
-Procedure t_jit_builder.LinkData;
-label
- _start;
-var
- chunk:p_jit_code_chunk;
- node:p_jit_instruction;
- d:Integer;
-
- mop:Byte;
- is_change:Boolean;
-begin
-
- _start:
- is_change:=False;
-
- d:=0;
-
- chunk:=TAILQ_FIRST(@ACodeChunkList);
-
- while (chunk<>nil) do
- begin
-  node:=TAILQ_FIRST(@chunk^.AInstructions);
-  //
-  while (node<>nil) do
-  begin
-
-   With node^ do
-    if ATargetRequired then
-    begin
-     if not _test_link(ATargetType,ATargetAddr) then
-     begin
-      Assert(False);
-     end;
-    end;
-
-   With node^ do
-    case ATargetType of
-     lnkData,
-     lnkPlt :
-       if not is_change then
-       begin
-        d:=_get_link_offset(ATargetType,ATargetAddr);
-        d:=d+_get_base_offset(ATargetType);
-        d:=d-AInstructionEnd;
-        _set_data(node,d);
-       end;
-     lnkLabelBefore,
-     lnkLabelAfter:
-      begin
-       d:=_get_link_offset(ATargetType,ATargetAddr);
-       d:=d+_get_base_offset(ATargetType);
-       d:=d-AInstructionEnd;
-
-       mop:=node^.get_micro_op;
-
-       if ((mop and MOP_ANY)<>MOP_NONE) then
-       begin
-
-        if (d=0) then
-        begin
-         //clear instr
-
-         ATargetRequired :=False;
-         ATargetType     :=lnkNone;
-         AInstructionSize:=0;
-
-         is_change:=True;
-        end;
-
-        if (AInstructionSize<>0) then
-        if is_8bit_offset(d) then
-        begin
-         if ((mop and MT_32BIT)<>0) then
-         begin
-          //32 -> 8
-          case (mop and MOP_ANY) of
-           MOP_JMP:
-            begin
-             //jmp_32->jmp_8
-             m_jmp_8();
-             is_change:=True;
-            end;
-           MOP_JCC:
-            begin
-             //jcc_32->jcc_8
-             m_jcc_8(mop);
-             is_change:=True;
-            end;
-           MOP_JCX:
-            begin
-             //jcx_32->jcx_8
-             m_jcx_8(mop);
-             is_change:=True;
-            end;
-           else;
-          end;
-          //32 -> 8
-         end;
-        end else
-        begin
-         if ((mop and MT_32BIT)=0) then
-         begin
-          //8 -> 32
-          case (mop and MOP_ANY) of
-           MOP_JMP:
-            begin
-             //jmp_8->jmp_32
-             m_jmp_32();
-             is_change:=True;
-            end;
-           MOP_JCC:
-            begin
-             //jcc_8->jcc_32
-             m_jcc_32(mop);
-             is_change:=True;
-            end;
-           MOP_JCX:
-            begin
-             //jcx_8->jcx_32
-             m_jcx_32(mop);
-             is_change:=True;
-            end;
-           else;
-          end;
-          //8 -> 32
-         end;
-        end;
-
-       end; //<>MOP_NONE
-
-       if not is_change then
-       begin
-        _set_data(node,d);
-       end;
-
-      end;
-     else;
-    end;
-   //
-   node:=TAILQ_NEXT(node,@node^.entry);
-  end;
-  //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
- end;
-
- if is_change then
- begin
-  RebuldInstructionOffset;
-  goto _start;
- end;
-
-end;
-
-Function t_jit_builder.CopyChunks(var rec:t_jit_copy_ptr):Boolean;
-var
- chunk:p_jit_code_chunk;
- node_code:p_jit_instruction;
- s:Integer;
-begin
- Result:=True;
-
- chunk:=TAILQ_FIRST(@ACodeChunkList);
-
- while (chunk<>nil) do
- begin
-  node_code:=TAILQ_FIRST(@chunk^.AInstructions);
-  //
-  while (node_code<>nil) do
-  begin
-   s:=node_code^.AInstructionSize;
-   //
-   if ((rec.pos+s)>rec.size) then
-   begin
-    Exit(False);
-   end;
-   //
-   Move(node_code^.AData,rec.ptr^,s);
-   Inc(rec.pos,s);
-   Inc(rec.ptr,s);
-   //
-   node_code:=TAILQ_NEXT(node_code,@node_code^.entry);
-  end;
-  //
-  chunk:=TAILQ_NEXT(chunk,@chunk^.entry);
- end;
-
- //padding
- s:=GetInstructionsSize-AInstructionSize;
- if (s<>0) then
- begin
-  //
-  if ((rec.pos+s)>rec.size) then
-  begin
-   Exit(False);
-  end;
-  //
-  _gen_nop(rec.ptr,s);
-  Inc(rec.pos,s);
-  Inc(rec.ptr,s);
-  //
- end;
-
-end;
-
-Function t_jit_builder.CopyData(var rec:t_jit_copy_ptr):Boolean;
-var
- node_data:p_jit_data;
- s:Integer;
-begin
- Result:=True;
-
- node_data:=TAILQ_FIRST(@ADataList);
-
- while (node_data<>nil) do
- begin
-  s:=SizeOf(Pointer);
-  if ((rec.pos+s)>rec.size) then
-  begin
-   Exit(False);
-  end;
-  Move(node_data^.pData,rec.ptr^,s);
-  Inc(rec.pos,s);
-  Inc(rec.ptr,s);
-  //
-  node_data:=TAILQ_NEXT(node_data,@node_data^.entry);
- end;
-
-end;
-
-Function t_jit_builder.CopyPlt(var rec:t_jit_copy_ptr):Boolean;
-var
- s:Integer;
-begin
- Result:=True;
-
- s:=GetPltSize;
- if (s<>0) then
- begin
-  if (s>rec.size) then s:=rec.size;
-
-  FillChar(rec.ptr^,s,0);
-
-  Inc(rec.pos,s);
-  Inc(rec.ptr,s);
- end;
-end;
-
-Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
-var
- rec:t_jit_copy_ptr;
-begin
- RebuldChunkList;
- RebuldInstructionOffset;
- LinkData;
-
- Result:=0;
-
- rec.ptr :=ptr;
- rec.size:=size;
- rec.pos :=0;
-
- if not CopyChunks(rec) then
- begin
-  Exit(rec.pos);
- end;
-
- if not CopyData(rec) then
- begin
-  Exit(rec.pos);
- end;
-
- CopyPlt(rec);
-
- Exit(rec.pos);
-end;
 
 type
  t_modrm_info=object
@@ -2802,7 +1851,9 @@ begin
 
 end;
 
-procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+//
+
+procedure t_jit_instruction._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
 var
  mreg:t_jit_lea;
 
@@ -2811,8 +1862,6 @@ var
  Prefix:Byte;
 
  modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
 begin
  Assert(not (not_impl in desc.opt));
  Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
@@ -2831,7 +1880,7 @@ begin
   mreg.AMemSize:=reg.ASize;
  end;
 
- ji:=default_jit_instruction;
+ Self:=default_jit_instruction;
 
  rexW:=False;
  Prefix:=0;
@@ -2862,24 +1911,1238 @@ begin
 
  if mreg.ALock then
  begin
-  ji.EmitByte($F0);
+  Self.EmitByte($F0);
  end;
 
- ji.EmitSelector(mreg.ASegment);
+ Self.EmitSelector(mreg.ASegment);
 
  if (Prefix<>0) then
  begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+  Self.EmitByte(Prefix); //Operand-size override prefix (16,128)
  end;
 
  if (mreg.ARegValue[0].ASize=os32) then
  begin
-  ji.EmitByte($67); //Address-size override prefix (32)
+  Self.EmitByte($67); //Address-size override prefix (32)
  end;
 
- modrm_info.emit_gop(ji,rexW,op);
+ modrm_info.emit_gop(Self,rexW,op);
 
- modrm_info.emit_mrm(ji);
+ modrm_info.emit_mrm(Self);
+end;
+
+//
+
+procedure t_jit_instruction.m_jmp_8();
+begin
+ AInstructionSize:=0;
+
+ EmitByte($EB);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+procedure t_jit_instruction.m_jmp_32();
+begin
+ AInstructionSize:=0;
+
+ EmitByte($E9);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+procedure t_jit_instruction.m_jcc_8(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ mop:=$70 or (mop and $F);
+
+ EmitByte(mop);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+procedure t_jit_instruction.m_jcc_32(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ mop:=$80 or (mop and $F);
+
+ EmitByte($0F);
+ EmitByte(mop);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+{
+$E0|0 -> LOOPNE
+$E0|1 -> LOOPE
+$E0|2 -> LOOP
+$E0|3 -> JCXZ
+---
+$10   -> 32bit
+}
+procedure t_jit_instruction.m_jcx_8(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ if ((mop and MR_32BIT)<>0) then
+ begin
+  EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ mop:=$E0 or (mop and $3);
+
+ EmitByte(mop);
+
+ ATargetSize  :=tz1;
+ ATargetOffset:=AInstructionSize;
+
+ EmitByte(0);
+end;
+
+{
+$E3 02          jcxz  [+2]
+$EB 05          jmp   [+5]
+$E9 XX XX XX XX jmp32 [addr]
+}
+procedure t_jit_instruction.m_jcx_32(mop:Byte);
+begin
+ AInstructionSize:=0;
+
+ if ((mop and MR_32BIT)<>0) then
+ begin
+  EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ EmitInt32($05EB02E0 or (mop and $3));
+
+ EmitByte($E9);
+
+ ATargetSize  :=tz4;
+ ATargetOffset:=AInstructionSize;
+
+ EmitInt32(0);
+end;
+
+function t_jit_instruction.get_micro_op:Byte;
+var
+ ptr:PByte;
+begin
+ if (AInstructionSize=0) then Exit(0);
+ //
+ Result:=(ord(ATargetSize=tz4)*MT_32BIT);
+ //
+ ptr:=AData;
+ //
+ if (ptr[0]=$67) then
+ begin
+  ptr:=@ptr[1];
+  Result:=Result or MR_32BIT;
+ end;
+ //
+ case ptr[0] of
+  $0F:
+      case ptr[1] of
+       $80..$8F:Result:=Result or MOP_JCC or (ptr[1] and Byte($F)); //jcc_32
+       else;
+      end;
+  $70..$7F:Result:=Result or MOP_JCC or (ptr[0] and Byte($F));      //jcc_8
+  $E0..$E3:Result:=Result or MOP_JCX or (ptr[0] and Byte($3));      //jcx_8/32
+       $EB:Result:=Result or MOP_JMP;                               //jmp_8
+       $E9:Result:=Result or MOP_JMP;                               //jmp_32
+  else;
+ end;
+end;
+
+//
+
+Function t_jit_builder_allocator.Alloc(Size:ptruint):Pointer;
+const
+ //asize=(2*1024*1024)-SizeOf(ptruint)*3;
+ asize=(2*1024*1024);
+var
+ mem_size:ptruint;
+ node:PAllocNode;
+
+ function _alloc:Pointer;
+ begin
+  Assert(Size<=High(DWORD));
+  if (Size>asize-SizeOf(Pointer)) then
+  begin
+   mem_size:=(Size+(MD_ALLOC_GRANULARITY-1)) and (not MD_ALLOC_GRANULARITY);
+   Result:=kmem_alloc(mem_size, VM_RW);
+   //Result:=AllocMem(Size+SizeOf(Pointer));
+  end else
+  begin
+   mem_size:=asize;
+   Result:=kmem_alloc(asize, VM_RW);
+   //Result:=AllocMem(asize);
+  end;
+  //mem_size:=MemSize(node);
+  PAllocNode(Result)^.pages:=mem_size shr 12;
+ end;
+
+begin
+ if (pHead.slh_first=nil) or (Size>curr_size) then
+ begin
+  node:=_alloc;
+  //SLIST_INSERT_HEAD(@pHead,node,@node^.link);
+  node^.link.unzip:=pHead.slh_first;
+  pHead.slh_first:=node;
+
+  curr_apos:=0;
+  curr_size:=mem_size-SizeOf(TAllocNode);
+  Inc(full_size,mem_size);
+ end;
+
+ node:=pHead.slh_first;
+
+ Result:=@PByte(@node^.data)[curr_apos];
+
+ Inc(used_size,Size);
+ Size:=Align(Size,SizeOf(ptruint));
+ Inc(curr_apos,Size);
+ Dec(curr_size,Size);
+end;
+
+Procedure t_jit_builder_allocator.Free;
+var
+ node:PAllocNode;
+begin
+ node:=pHead.slh_first;
+ if (node<>nil) then
+ begin
+  pHead.slh_first:=node^.link.unzip;
+ end;
+ While (node<>nil) do
+ begin
+  kmem_free(node,node^.pages shl 12);
+  //FreeMem(node);
+  node:=pHead.slh_first;
+  if (node<>nil) then
+  begin
+   pHead.slh_first:=node^.link.unzip;
+  end;
+ end;
+ Self:=Default(t_jit_builder_allocator);
+end;
+
+Function t_jit_builder.Alloc(Size:ptruint):Pointer;
+begin
+ Result:=Allocator.Alloc(Size);
+end;
+
+Procedure t_jit_builder.Free;
+begin
+ Allocator.Free;
+end;
+
+procedure t_jit_builder.Assert(value:Boolean;const Msg:RawByteString=''); inline;
+begin
+ if (not value) then
+ begin
+  if (on_error<>nil) then
+  begin
+   on_error(Msg,on_udata);
+  end;
+  System.Assert(value,Msg);
+ end;
+end;
+
+//
+
+Function t_jit_builder._new_chunk(start:QWORD):p_jit_code_chunk;
+var
+ node:t_jit_code_chunk;
+begin
+ Result:=nil;
+ node:=Default(t_jit_code_chunk);
+ node.start:=start;
+ Result:=ACodeChunkSet.Find(@node);
+ if (Result=nil) then
+ begin
+  Result:=Alloc(SizeOf(t_jit_code_chunk)); Inc(stats.t_jit_code_chunk);
+  Result^.start:=start;
+  //TAILQ_INIT(@Result^.AInstructions);
+  ACodeChunkSet.Insert(Result);
+  ACodeChunkList.pCurr:=Result;
+ end else
+ begin
+  Result:=nil;
+ end;
+end;
+
+procedure t_jit_builder._end_chunk(__end:QWORD);
+begin
+ if (ACodeChunkList.pCurr<>nil) then
+ begin
+  ACodeChunkList.pCurr^.__end:=__end;
+  ACodeChunkList.pCurr:=nil;
+ end;
+end;
+
+procedure _insert_instruction(chunk:p_jit_code_chunk;node:p_jit_instruction);
+begin
+ with chunk^.AInstructions do
+ begin
+  if (zTail.unzip=nil) then
+  begin
+   zHead.unzip:=node;
+   node^.zPrev.unzip:=nil;
+  end else
+  begin
+   p_jit_instruction(zTail.unzip)^.zNext.unzip:=node;
+   node^.zPrev.unzip:=zTail.unzip;
+  end;
+  node^.zNext.unzip:=nil;
+  zTail.unzip:=node;
+ end;
+end;
+
+Function t_jit_builder._add(const ji:t_jit_instruction;min_isize:Byte=0):p_jit_instruction;
+var
+ node:p_jit_instruction;
+ size:Byte;
+begin
+ if (ACodeChunkList.pCurr=nil) then
+ begin
+  _new_chunk(0);
+  Assert(ACodeChunkList.pCurr<>nil);
+ end;
+
+ size:=ji.AGetCompressedSize(min_isize);
+
+ node:=Alloc(size);
+
+ Inc(stats.t_jit_instruction);
+ Inc(stats.t_jit_instruction_bytes,size);
+
+ node^.ABitInfo           :=ji.ABitInfo;
+ node^.ABitInfo.Compressed:=1;
+ node^.ATargetAddr        :=ji.ATargetAddr;
+
+ SmallMove(ji.AData,node^.AData,ji.AInstructionSize);
+
+ node^.AInstructionOffset:=AInstructionSize;
+
+ _insert_instruction(ACodeChunkList.pCurr,node);
+
+ //TAILQ_INSERT_TAIL(@ACodeChunkCurr^.AInstructions,node,@node^.entry);
+
+ Inc(AInstructionSize,ji.AInstructionSize);
+
+ Result:=node;
+end;
+
+Function t_jit_builder.get_curr_label:t_jit_i_link;
+var
+ node:p_jit_instruction;
+begin
+ if (ACodeChunkList.pCurr=nil) then
+ begin
+  _add(Default(t_jit_instruction));
+ end;
+
+ node:=last_instruction;
+
+ if (node=nil) then
+ begin
+  node:=_add(Default(t_jit_instruction));
+ end;
+
+ Result.AType:=lnkLabelBefore;
+ Result.ALink:=node;
+end;
+
+Function t_jit_builder._add_data(P:Pointer):p_jit_data;
+var
+ node:t_jit_data;
+begin
+ Result:=nil;
+ node:=Default(t_jit_data);
+ node.pData:=p;
+ Result:=ADataSet.Find(@node);
+ if (Result=nil) then
+ begin
+  Result:=Alloc(SizeOf(t_jit_data)); Inc(stats.t_jit_data);
+  Result^.pData:=P;
+  Result^.pId:=ADataCount;
+  ADataSet.Insert(Result);
+  if (ADataList.tqh_last=nil) then
+  begin
+   TAILQ_INIT(@ADataList);
+  end;
+  TAILQ_INSERT_TAIL(@ADataList,Result,@Result^.entry);
+  Inc(ADataCount);
+ end;
+end;
+
+Function t_jit_builder._add_plt:Integer;
+begin
+ Result:=APltCount;
+ Inc(APltCount);
+end;
+
+function t_jit_builder._get_base_offset(AType:t_jit_link_type):Integer;
+begin
+ Result:=0;
+ case AType of
+  lnkData:Result:=GetInstructionsSize;
+  lnkPlt :Result:=GetInstructionsSize+GetDataSize;
+  else;
+ end;
+end;
+
+Function t_jit_builder.last_instruction:p_jit_instruction;
+begin
+ Result:=ACodeChunkList.pCurr^.AInstructions.zTail.unzip;
+ //Result:=TAILQ_LAST(@ACodeChunkCurr^.AInstructions);
+end;
+
+Function t_jit_builder.call_far(P:Pointer):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($FF);
+ ji.EmitByte($15);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=_add_data(P);
+
+ ji.EmitInt32(0);
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+Function t_jit_builder.jmp_far(P:Pointer):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($FF);
+ ji.EmitByte($25);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=_add_data(P);
+
+ ji.EmitInt32(0);
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.call(target:t_jit_i_link):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($E8);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=target.ALink;
+
+ ji.EmitInt32(0);
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.jmp(target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ if (osize=os8) then
+ begin
+  ji.m_jmp_8();
+ end else
+ begin
+  ji.m_jmp_32();
+ end;
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+const
+ COND_OP:array[OPSc_o..OPSc_nle] of Byte=(
+  $0,$1,$2,$3,$4,$5,$6,$7,
+  $8,$9,$A,$B,$C,$D,$E,$F
+ );
+
+function t_jit_builder.jcc(op:TOpCodeSuffix;target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ case op of
+  OPSc_o..OPSc_nle:;
+  else
+   Assert(false,'Unknow jcc op');
+ end;
+
+ if (osize=os8) then
+ begin
+  ji.m_jcc_8(COND_OP[op]);
+ end else
+ begin
+  ji.m_jcc_32(COND_OP[op]);
+ end;
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji,6);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.loop(op:TOpCodeSuffix;target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+ mop:Byte;
+begin
+ ji:=default_jit_instruction;
+
+ case op of
+  OPSc_ne:mop:=(ord(rsize=as32)*MR_32BIT) or $0;
+  OPSc_e :mop:=(ord(rsize=as32)*MR_32BIT) or $1;
+  OPSnone:mop:=(ord(rsize=as32)*MR_32BIT) or $2;
+  else
+   Assert(false);
+ end;
+
+ if (osize=os8) then
+ begin
+  ji.m_jcx_8(mop);
+ end else
+ begin
+  ji.m_jcx_32(mop);
+ end;
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji,10);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.jcxz(target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+ mop:Byte;
+begin
+ ji:=default_jit_instruction;
+
+ mop:=(ord(rsize=as32)*MR_32BIT) or $3;
+
+ if (osize=os8) then
+ begin
+  ji.m_jcx_8(mop);
+ end else
+ begin
+  ji.m_jcx_32(mop);
+ end;
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji,10);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+const
+ movq_desc:t_op_type=(op:$8B;index:0);
+var
+ ji:t_jit_instruction;
+begin
+ ji._RM(movq_desc,reg,mem);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.movp(reg:TRegValue;P:Pointer):t_jit_i_link;
+const
+ movq_desc:t_op_type=(op:$8B;index:0);
+var
+ ji:t_jit_instruction;
+begin
+ ji._RM(movq_desc,reg,[rip+$7FFFFFFF]);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetAddr    :=_add_data(P);
+
+ Result.ALink:= _add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+const
+ leaq_desc:t_op_type=(op:$8D;index:0);
+var
+ ji:t_jit_instruction;
+begin
+ ji._RM(leaq_desc,reg,mem);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=target.AType;
+ ji.ATargetAddr    :=target.ALink;
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.leap(reg:TRegValue):t_jit_i_link;
+const
+ leaq_desc:t_op_type=(op:$8D;index:0);
+var
+ ji:t_jit_instruction;
+begin
+ ji._RM(leaq_desc,reg,[rip+$7FFFFFFF]);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkPlt;
+ ji.ATargetAddr    :=Pointer(_add_plt);
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+function t_jit_builder.leap(reg:TRegValue;prev:t_jit_i_link):t_jit_i_link;
+const
+ leaq_desc:t_op_type=(op:$8D;index:0);
+var
+ jt:p_jit_instruction;
+ plt:Pointer;
+ ji:t_jit_instruction;
+begin
+ //
+ jt :=prev.ALink;
+ plt:=jt^.ATargetAddr;
+ //
+
+ ji._RM(leaq_desc,reg,[rip+$7FFFFFFF]);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkPlt;
+ ji.ATargetAddr    :=plt;
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+Procedure t_jit_builder.jmp(reg:TRegValue);
+const
+ desc:t_op_type=(op:$FF;index:4);
+begin
+ Assert(is_reg_size(reg,[os64]));
+
+ _R(desc,reg);
+end;
+
+Procedure t_jit_builder.jmp(mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$FF;index:4);
+begin
+ _M(desc,mem);
+end;
+
+Procedure t_jit_builder.call(reg:TRegValue);
+const
+ desc:t_op_type=(op:$FF;index:2);
+begin
+ Assert(is_reg_size(reg,[os64]));
+
+ _R(desc,reg);
+end;
+
+Procedure t_jit_builder.call(mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$FF;index:2);
+begin
+ _M(desc,mem);
+end;
+
+Procedure t_jit_builder.reta;
+begin
+ _O($C3);
+end;
+
+Procedure t_jit_builder.ud2;
+begin
+ _O($0F0B);
+end;
+
+Procedure _gen_nop(P:Pointer;length:DWORD);
+begin
+ while (length<>0) do
+ begin
+  case length of
+   1: begin PByte (P)[0]:=$90;                                                   Break; end;
+   2: begin PWord (P)[0]:=$9066;                                                 Break; end;
+   3: begin PWord (P)[0]:=$1F0F;             PByte(P)[2]:=$00;                   Break; end;
+   4: begin PDWORD(P)[0]:=$00401F0F;                                             Break; end;
+   5: begin PDWORD(P)[0]:=$00441F0F;         PByte(P)[4]:=$00;                   Break; end;
+   6: begin PDWORD(P)[0]:=$441F0F66;         PWord(P)[2]:=$00;                   Break; end;
+   7: begin PDWORD(P)[0]:=$00801F0F;         PWord(P)[2]:=$00; PByte(P)[6]:=$00; Break; end;
+   8: begin PQWORD(P)[0]:=$0000000000841F0F;                                     Break; end;
+   9: begin PQWORD(P)[0]:=$00000000841F0F66; PByte(P)[8]:=$00;                   Break; end;
+   else
+      begin
+       PQWORD(P)[0]:=$0000000000841F0F; //8
+       Inc(P     ,8);
+       Dec(length,8);
+      end;
+  end;
+ end;
+end;
+
+Procedure t_jit_builder.nop(length:DWORD);
+var
+ ji:t_jit_instruction;
+begin
+ if (length=0) then Exit;
+
+ ji:=default_jit_instruction;
+
+ while (length<>0) do
+ begin
+  case length of
+   1: begin ji.EmitByte ($90);                                                   Break; end;
+   2: begin ji.EmitWord ($9066);                                                 Break; end;
+   3: begin ji.EmitWord ($1F0F);             ji.EmitByte($00);                   Break; end;
+   4: begin ji.EmitInt32($00401F0F);                                             Break; end;
+   5: begin ji.EmitInt32($00441F0F);         ji.EmitByte($00);                   Break; end;
+   6: begin ji.EmitInt32($441F0F66);         ji.EmitWord($00);                   Break; end;
+   7: begin ji.EmitInt32($00801F0F);         ji.EmitWord($00); ji.EmitByte($00); Break; end;
+   8: begin ji.EmitInt64($0000000000841F0F);                                     Break; end;
+   9: begin ji.EmitInt64($00000000841F0F66); ji.EmitByte($00);                   Break; end;
+   10..15:
+      begin
+       ji.EmitInt64($0000000000841F0F); //8
+       Dec(length,8);
+      end;
+   else
+      begin
+       ji.EmitInt64($0000000000841F0F); //8
+       ji.EmitInt64($0000000000841F0F); //8
+       Dec(length,16);
+       //flush
+       _add(ji);
+       ji:=default_jit_instruction;
+      end;
+  end;
+ end;
+
+ if (ji.AInstructionSize<>0) then
+ begin
+  _add(ji);
+ end;
+end;
+
+Function t_jit_builder.GetInstructionsSize:Integer;
+begin
+ Result:=(AInstructionSize+7) and (not 7);
+end;
+
+Function t_jit_builder.GetDataSize:Integer;
+begin
+ Result:=ADataCount*SizeOf(Pointer);
+end;
+
+Function t_jit_builder.GetPltSize:Integer;
+begin
+ Result:=APltCount*SizeOf(t_jit_plt);
+end;
+
+Function t_jit_builder.GetPltStart:Integer;
+begin
+ Result:=GetInstructionsSize+GetDataSize;
+end;
+
+Function t_jit_builder.GetMemSize:Integer;
+begin
+ Result:=GetInstructionsSize+GetDataSize+GetPltSize;
+end;
+
+Procedure _insert_chunk(var b:t_jit_builder;node:p_jit_code_chunk); inline;
+begin
+ with b.ACodeChunkList do
+ begin
+  if (pTail=nil) then
+  begin
+   pHead:=node;
+   node^.zPrev.unzip:=nil;
+  end else
+  begin
+   pTail^.zNext.unzip:=node;
+   node^.zPrev.unzip:=pTail;
+  end;
+  node^.zNext.unzip:=nil;
+  pTail:=node;
+ end;
+end;
+
+Procedure t_jit_builder.RebuldChunkList;
+var
+ chunk:p_jit_code_chunk;
+begin
+ ACodeChunkList.pHead:=nil;
+ ACodeChunkList.pTail:=nil;
+ ACodeChunkList.pCurr:=nil;
+
+ chunk:=ACodeChunkSet.Min;
+
+ while (chunk<>nil) do
+ begin
+  _insert_chunk(self,chunk);
+  //TAILQ_INSERT_TAIL(@ACodeChunkList,chunk,@chunk^.entry);
+
+  chunk:=ACodeChunkSet.Next(chunk);
+ end;
+end;
+
+Procedure t_jit_builder.RebuldInstructionOffset;
+var
+ chunk:p_jit_code_chunk;
+ node:p_jit_instruction;
+begin
+ AInstructionSize:=0;
+
+ chunk:=ACodeChunkList.pHead;
+
+ while (chunk<>nil) do
+ begin
+  node:=chunk^.AInstructions.zHead.unzip;
+  //node:=TAILQ_FIRST(@chunk^.AInstructions);
+  //
+  while (node<>nil) do
+  begin
+   node^.AInstructionOffset:=AInstructionSize;
+   Inc(AInstructionSize,node^.AInstructionSize);
+   //
+   node:=node^.zNext.unzip;
+  end;
+  //
+  chunk:=chunk^.zNext.unzip;
+ end;
+end;
+
+procedure _set_data(node:p_jit_instruction;d:Integer); inline;
+begin
+ With node^ do
+ begin
+  case ATargetSize of
+   tz1:PByte   (@node^.AData()[ATargetOffset])^:=d;
+   tz4:PInteger(@node^.AData()[ATargetOffset])^:=d;
+   else;
+  end;
+ end;
+end;
+
+Procedure LinkLabel(node:p_jit_instruction);
+var
+ d:Integer;
+begin
+ //Pre-linking, for debugging only
+ d:=0;
+ if (node=nil) then Exit;
+ if (node^.ATargetAddr=nil) and
+    (node^.ATargetType<>lnkPlt) then Exit;
+ //
+ With node^ do
+  case ATargetType of
+   lnkData:
+     begin
+      d:=_get_link_offset(ATargetType,ATargetAddr);
+      _set_data(node,d);
+     end;
+   lnkPlt:
+     begin
+      d:=_get_link_offset(ATargetType,ATargetAddr);
+      _set_data(node,d);
+     end;
+   lnkLabelBefore,
+   lnkLabelAfter:
+     begin
+      d:=_get_link_offset(ATargetType,ATargetAddr);
+      d:=d-AInstructionEnd;
+      _set_data(node,d);
+     end;
+   else;
+  end;
+end;
+
+function is_8bit_offset(d:Integer):Boolean; inline;
+begin
+ case d of
+  -128..127:Result:=True;
+  else
+            Result:=False;
+ end;
+end;
+
+function _test_link(ATargetType:t_jit_link_type;ATargetAddr:Pointer):Boolean;
+begin
+ Result:=False;
+ case ATargetType of
+  lnkData:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  lnkPlt:
+   begin
+    Result:=True;
+   end;
+  lnkLabelBefore:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  lnkLabelAfter:
+   begin
+    Result:=(ATargetAddr<>nil);
+   end;
+  else;
+ end;
+end;
+
+Procedure t_jit_builder.LinkData;
+label
+ _start;
+var
+ chunk:p_jit_code_chunk;
+ node:p_jit_instruction;
+ d:Integer;
+
+ mop:Byte;
+ is_change:Boolean;
+begin
+
+ _start:
+ is_change:=False;
+
+ d:=0;
+
+ chunk:=ACodeChunkList.pHead;
+
+ while (chunk<>nil) do
+ begin
+  node:=chunk^.AInstructions.zHead.unzip;
+  //node:=TAILQ_FIRST(@chunk^.AInstructions);
+  //
+  while (node<>nil) do
+  begin
+
+   With node^ do
+    if ATargetRequired then
+    begin
+     if not _test_link(ATargetType,ATargetAddr) then
+     begin
+      Assert(False,'_test_link');
+     end;
+    end;
+
+   With node^ do
+    case ATargetType of
+     lnkData,
+     lnkPlt :
+       if not is_change then
+       begin
+        d:=_get_link_offset(ATargetType,ATargetAddr);
+        d:=d+_get_base_offset(ATargetType);
+        d:=d-AInstructionEnd;
+        _set_data(node,d);
+       end;
+     lnkLabelBefore,
+     lnkLabelAfter:
+      begin
+       d:=_get_link_offset(ATargetType,ATargetAddr);
+       d:=d+_get_base_offset(ATargetType);
+       d:=d-AInstructionEnd;
+
+       mop:=node^.get_micro_op;
+
+       if ((mop and MOP_ANY)<>MOP_NONE) then
+       begin
+
+        if (d=0) then
+        begin
+         //clear instr
+
+         ATargetRequired :=False;
+         ATargetType     :=lnkNone;
+         AInstructionSize:=0;
+
+         is_change:=True;
+        end;
+
+        if (AInstructionSize<>0) then
+        if is_8bit_offset(d) then
+        begin
+         if ((mop and MT_32BIT)<>0) then
+         begin
+          //32 -> 8
+          case (mop and MOP_ANY) of
+           MOP_JMP:
+            begin
+             //jmp_32->jmp_8
+             m_jmp_8();
+             is_change:=True;
+            end;
+           MOP_JCC:
+            begin
+             //jcc_32->jcc_8
+             m_jcc_8(mop);
+             is_change:=True;
+            end;
+           MOP_JCX:
+            begin
+             //jcx_32->jcx_8
+             m_jcx_8(mop);
+             is_change:=True;
+            end;
+           else;
+          end;
+          //32 -> 8
+         end;
+        end else
+        begin
+         if ((mop and MT_32BIT)=0) then
+         begin
+          //8 -> 32
+          case (mop and MOP_ANY) of
+           MOP_JMP:
+            begin
+             //jmp_8->jmp_32
+             m_jmp_32();
+             is_change:=True;
+            end;
+           MOP_JCC:
+            begin
+             //jcc_8->jcc_32
+             m_jcc_32(mop);
+             is_change:=True;
+            end;
+           MOP_JCX:
+            begin
+             //jcx_8->jcx_32
+             m_jcx_32(mop);
+             is_change:=True;
+            end;
+           else;
+          end;
+          //8 -> 32
+         end;
+        end;
+
+       end; //<>MOP_NONE
+
+       if not is_change then
+       begin
+        _set_data(node,d);
+       end;
+
+      end;
+     else;
+    end;
+   //
+   node:=node^.zNext.unzip;
+  end;
+  //
+  chunk:=chunk^.zNext.unzip;
+ end;
+
+ if is_change then
+ begin
+  RebuldInstructionOffset;
+  goto _start;
+ end;
+
+end;
+
+Function t_jit_builder.CopyChunks(var rec:t_jit_copy_ptr):Boolean;
+var
+ chunk:p_jit_code_chunk;
+ node_code:p_jit_instruction;
+ s:Integer;
+begin
+ Result:=True;
+
+ chunk:=ACodeChunkList.pHead;
+
+ while (chunk<>nil) do
+ begin
+  node_code:=chunk^.AInstructions.zHead.unzip;
+  //node_code:=TAILQ_FIRST(@chunk^.AInstructions);
+  //
+  while (node_code<>nil) do
+  begin
+   s:=node_code^.AInstructionSize;
+   //
+   if ((rec.pos+s)>rec.size) then
+   begin
+    Exit(False);
+   end;
+   //
+   SmallMove(node_code^.AData,rec.ptr,s);
+   Inc(rec.pos,s);
+   Inc(rec.ptr,s);
+   //
+   node_code:=node_code^.zNext.unzip;
+  end;
+  //
+  chunk:=chunk^.zNext.unzip;
+ end;
+
+ //padding
+ s:=GetInstructionsSize-AInstructionSize;
+ if (s<>0) then
+ begin
+  //
+  if ((rec.pos+s)>rec.size) then
+  begin
+   Exit(False);
+  end;
+  //
+  _gen_nop(rec.ptr,s);
+  Inc(rec.pos,s);
+  Inc(rec.ptr,s);
+  //
+ end;
+
+end;
+
+Function t_jit_builder.CopyData(var rec:t_jit_copy_ptr):Boolean;
+var
+ node_data:p_jit_data;
+ s:Integer;
+begin
+ Result:=True;
+
+ node_data:=TAILQ_FIRST(@ADataList);
+
+ while (node_data<>nil) do
+ begin
+  s:=SizeOf(Pointer);
+  if ((rec.pos+s)>rec.size) then
+  begin
+   Exit(False);
+  end;
+  SmallMove(@node_data^.pData,rec.ptr,s);
+  Inc(rec.pos,s);
+  Inc(rec.ptr,s);
+  //
+  node_data:=TAILQ_NEXT(node_data,@node_data^.entry);
+ end;
+
+end;
+
+Function t_jit_builder.CopyPlt(var rec:t_jit_copy_ptr):Boolean;
+var
+ s:Integer;
+begin
+ Result:=True;
+
+ s:=GetPltSize;
+ if (s<>0) then
+ begin
+  if (s>rec.size) then s:=rec.size;
+
+  FillChar(rec.ptr^,s,0);
+
+  Inc(rec.pos,s);
+  Inc(rec.ptr,s);
+ end;
+end;
+
+Function t_jit_builder.SaveTo(ptr:PByte;size:Integer):Integer;
+var
+ rec:t_jit_copy_ptr;
+begin
+ RebuldChunkList;
+ RebuldInstructionOffset;
+ LinkData;
+
+ Result:=0;
+
+ rec.ptr :=ptr;
+ rec.size:=size;
+ rec.pos :=0;
+
+ if not CopyChunks(rec) then
+ begin
+  Exit(rec.pos);
+ end;
+
+ if not CopyData(rec) then
+ begin
+  Exit(rec.pos);
+ end;
+
+ CopyPlt(rec);
+
+ Exit(rec.pos);
+end;
+
+procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+var
+ ji:t_jit_instruction;
+begin
+ ji._RM(desc,reg,mem);
 
  _add(ji);
 end;
