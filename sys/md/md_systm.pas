@@ -21,6 +21,7 @@ function  md_pidfd_getfd (pidfd,targetfd:THandle):THandle;
 function  md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
 function  md_pidfd_open  (pid:DWORD):THandle;
 function  md_waitpidfd   (pidfd:THandle;status:PDWORD):Integer;
+function  md_pidfd_close (pidfd:THandle):Integer;
 
 implementation
 
@@ -152,6 +153,10 @@ begin
  end;
 end;
 
+function md_pidfd_close(pidfd:THandle):Integer;
+begin
+ Result:=NtClose(pidfd);
+end;
 
 end.
 

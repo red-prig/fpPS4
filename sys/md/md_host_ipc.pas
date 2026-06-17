@@ -5,8 +5,10 @@ unit md_host_ipc;
 interface
 
 uses
+ sysutils,
  Classes,
- kern_thr,
+ sys_crt_gui,
+ kern_mtx,
  evbuffer,
  evpoll,
  host_ipc_interface,
@@ -27,33 +29,106 @@ type
   procedure Recv(FPush:t_push_cb);
  end;
 
+ TGlobalEvpoll=class
+  evpoll   :Tevpoll;
+  td_handle:TThreadID;
+  refs     :Integer;
+  Constructor Create;
+  Destructor  Destroy; override;
+ end;
+
  THostIpcPipe=class(THostIpcConnect)
-  evpoll:Tevpoll;
-  proto :t_ipc_proto;
+  proto:t_ipc_proto;
+  attach_evpoll:Boolean;
   procedure   set_pipe(fd:THandle);
   procedure   Recv_pipe; virtual;
   Function    Push(Node:Pointer):Boolean;
   procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); override;
   procedure   WakeupKevent(); override;
-  Constructor Create;
   Destructor  Destroy; override;
+  procedure   thread_new;  override;
+  procedure   thread_free; override;
  end;
 
  THostIpcPipeMGUI=class(THostIpcPipe)
-  Ftd_handle:TThreadID;
   procedure   Recv_pipe;   override;
-  procedure   thread_new;  override;
-  procedure   thread_free; override;
  end;
 
  THostIpcPipeKERN=class(THostIpcPipe)
   Function    GetCallback(mtype:DWORD):TOnMessage; override;
   procedure   Recv_pipe;   override;
-  procedure   thread_new;  override;
-  procedure   thread_free; override;
  end;
 
 implementation
+
+var
+ global_evpoll_mtx:mtx;
+ global_evpoll    :TGlobalEvpoll;
+
+Constructor TGlobalEvpoll.Create;
+begin
+ inherited;
+ evpoll_init(@evpoll,nil);
+end;
+
+Destructor TGlobalEvpoll.Destroy;
+begin
+ evpoll_free(@evpoll);
+ inherited;
+end;
+
+function pipe_thread(parameter:pointer):ptrint;
+begin
+ Result:=0;
+ sys_crt_gui.sys_crt_init;
+ evpoll_loop(parameter);
+end;
+
+procedure THostIpcPipe.thread_new;
+begin
+ if attach_evpoll then Exit;
+
+ mtx_lock(global_evpoll_mtx);
+
+  if (global_evpoll=nil) then
+  begin
+   global_evpoll:=TGlobalEvpoll.Create;
+  end;
+
+  if (global_evpoll.refs=0) then
+  begin
+   global_evpoll.td_handle:=BeginThread(@pipe_thread,@global_evpoll.evpoll);
+  end;
+
+  Inc(global_evpoll.refs);
+
+ mtx_unlock(global_evpoll_mtx);
+
+ attach_evpoll:=True;
+end;
+
+procedure THostIpcPipe.thread_free;
+begin
+ if not attach_evpoll then Exit;
+
+ mtx_lock(global_evpoll_mtx);
+
+  Dec(global_evpoll.refs);
+
+  if (global_evpoll.refs=0) then
+  begin
+   evpoll_break(@global_evpoll.evpoll);
+   //
+   WaitForThreadTerminate(global_evpoll.td_handle,0);
+   CloseThread(global_evpoll.td_handle);
+   //
+   FreeAndNil(global_evpoll);
+  end;
+
+ mtx_unlock(global_evpoll_mtx);
+
+ attach_evpoll:=False;
+end;
 
 procedure t_ipc_proto.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 var
@@ -113,12 +188,6 @@ begin
 
 end;
 
-function pipe_gui_thread(parameter:pointer):ptrint;
-begin
- Result:=0;
- evpoll_loop(parameter);
-end;
-
 procedure pipe_kern_thread(parameter:pointer); SysV_ABI_CDecl;
 begin
  evpoll_loop(parameter);
@@ -147,7 +216,9 @@ end;
 
 procedure THostIpcPipe.set_pipe(fd:THandle);
 begin
- proto.Fbev   :=bufferevent_pipe_new  (@evpoll,fd);
+ thread_new;
+
+ proto.Fbev   :=bufferevent_pipe_new  (@global_evpoll.evpoll,fd);
  proto.Finput :=bufferevent_get_input (proto.Fbev);
  proto.Foutput:=bufferevent_get_output(proto.Fbev);
 
@@ -186,22 +257,13 @@ end;
 
 procedure THostIpcPipe.WakeupKevent();
 begin
- evpoll_post(@evpoll,@ev_wakeup,0,Pointer(Self));
-end;
-
-Constructor THostIpcPipe.Create;
-begin
- inherited;
- evpoll_init(@evpoll,nil);
- //thread_new;
+ evpoll_post(@global_evpoll.evpoll,@ev_wakeup,0,Pointer(Self));
 end;
 
 Destructor THostIpcPipe.Destroy;
 begin
- evpoll_break(@evpoll);
- thread_free;
  bufferevent_free(proto.Fbev);
- evpoll_free(@evpoll);
+ thread_free;
  inherited;
 end;
 
@@ -214,24 +276,6 @@ begin
  if Assigned(Classes.WakeMainThread) then
  begin
   Classes.WakeMainThread(nil);
- end;
-end;
-
-procedure THostIpcPipeMGUI.thread_new;
-begin
- if (Ftd_handle=0) then
- begin
-  Ftd_handle:=BeginThread(@pipe_gui_thread,@evpoll);
- end;
-end;
-
-procedure THostIpcPipeMGUI.thread_free;
-begin
- if (Ftd_handle<>0) then
- begin
-  WaitForThreadTerminate(Ftd_handle,0);
-  CloseThread(Ftd_handle);
-  Ftd_handle:=0;
  end;
 end;
 
@@ -254,24 +298,8 @@ begin
  Update();
 end;
 
-procedure THostIpcPipeKERN.thread_new;
-begin
- if (Ftd=nil) then
- begin
-  kthread_add(@pipe_kern_thread,@evpoll,@Ftd,0,'[ipc_pipe]',TDP_KIGNSUSP);
- end;
-end;
-
-procedure THostIpcPipeKERN.thread_free;
-begin
- if (Ftd<>nil) then
- begin
-  WaitForThreadTerminate(p_kthread(Ftd)^.td_handle,0);
-  thread_dec_ref(Ftd);
-  Ftd:=nil;
- end;
-end;
-
+initialization
+ mtx_init(global_evpoll_mtx,'global_evpool_mtx');
 
 end.
 

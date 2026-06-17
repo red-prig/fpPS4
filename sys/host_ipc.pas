@@ -54,7 +54,6 @@ type
    FQueue:TIntrusiveMPSCQueue;
    FWaits:LIST_HEAD;
    FWLock:mtx;
-   Ftd   :Pointer; //p_kthread
    Fkq   :Pointer;
    FTerm :Boolean;
    procedure   SyncResult(tid:DWORD;value:TIpcValue);
@@ -95,6 +94,7 @@ type
  THostIpcSimpleKERN=class(THostIpcConnect)
   FDest :THostIpcSimpleMGUI;
   FEvent:PRTLEvent;
+  Ftd   :p_kthread;
   Constructor Create;
   Destructor  Destroy;     override;
   procedure   thread_new;  override;

@@ -83,12 +83,14 @@ type
   job_thread          :Pointer;
   mtx                 :mtx;
   //
-  Backend:TSaveDataBackend;
+  Backend:TSaveDataBackendConnect;
   //
   cb_event   :SceSaveDataEventCallbackFunc;
   cb_userdata:Pointer;
   //
   MountSlots:array[0..15] of TMountSlot;
+  //
+  procedure Terminate;
  end;
 
 var
@@ -323,8 +325,7 @@ begin
   //init_job_thread
  end;
 
- instance.Backend:=TSaveDataBackend.Create;
- instance.Backend.Init;
+ instance.Backend:=TSaveDataBackendConnect.Create;
 end;
 
 function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;
@@ -362,9 +363,24 @@ begin
  Result:=CreateSaveDataInstance(params,VERSION_INIT_3);
 end;
 
+procedure TSaveDataInstance.Terminate;
+begin
+ if (Backend<>nil) then
+ begin
+  Backend.Free;
+ end;
+ Free;
+end;
+
 function ps4_sceSaveDataTerminate:Integer;
 begin
- Result:=0;
+ if (g_instance<>nil) then
+ begin
+  g_instance.Terminate;
+  g_instance:=nil;
+  Exit(0);
+ end;
+ Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory(
