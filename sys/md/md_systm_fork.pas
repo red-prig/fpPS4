@@ -399,6 +399,62 @@ type
   data      :record end;
  end;
 
+Procedure InitStdIo;
+var
+ dev_null:THandle;
+
+ Procedure Apply(var Target:THandle); inline;
+ begin
+  if (Target=0) then
+  begin
+   if (dev_null=0) then
+   begin
+    //redirect to NULL
+    dev_null:=FileOpen('NUL',fmOpenReadWrite);
+   end;
+   Target:=dev_null;
+  end;
+ end;
+
+begin
+ if AttachConsole(ATTACH_PARENT_PROCESS) then
+ begin
+  //
+ end else
+ begin
+  dev_null:=0;
+  Apply(StdInputHandle );
+  Apply(StdOutputHandle);
+  Apply(StdErrorHandle );
+  SetStdHandle(STD_INPUT_HANDLE ,StdInputHandle );
+  SetStdHandle(STD_OUTPUT_HANDLE,StdOutputHandle);
+  SetStdHandle(STD_ERROR_HANDLE ,StdErrorHandle );
+ end;
+
+ //mark console I/O (will also enable automatic initialization in new threads)
+ IsConsole:=True;
+
+ //reinit std I/O
+ SysInitStdIO;
+end;
+
+Procedure InitForkStdIo(hStdInput,hStdOutput,hStdError:THandle);
+begin
+ SetStdHandle(STD_INPUT_HANDLE ,hStdInput );
+ SetStdHandle(STD_ERROR_HANDLE ,hStdOutput);
+ SetStdHandle(STD_OUTPUT_HANDLE,hStdError );
+
+ StdInputHandle :=hStdInput ;
+ StdOutputHandle:=hStdOutput;
+ StdErrorHandle :=hStdError ;
+
+ //mark console I/O (will also enable automatic initialization in new threads)
+ IsConsole:=True;
+
+ //reinit std I/O
+ SysInitStdIO;
+end;
+
 function get_cur_peb:PPEB; assembler; nostackframe;
 asm
  movqq %gs:teb.PEB,Result
@@ -412,11 +468,16 @@ var
  proc :Pointer;
 begin
  base:=System.InterlockedExchange(get_cur_peb^.SubSystemData,nil);
- if (base=nil) then Exit;
+ if (base=nil) then
+ begin
+  //normal GUI start
+  InitStdIo;
+  Exit;
+ end;
 
- SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
- SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
- SetStdHandle(STD_OUTPUT_HANDLE,base^.hStdError );
+ //while not IsDebuggerPresent do sleep(100);
+
+ InitForkStdIo(base^.hStdInput,base^.hStdOutput,base^.hStdError);
 
  proc:=base^.proc;
 

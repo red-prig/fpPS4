@@ -351,21 +351,21 @@ var
 begin
  For i:=0 to High(std_tty) do
  begin
-  std_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
-  std_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+  std_tty[i].t_rd_handle:=StdInputHandle;
+  std_tty[i].t_wr_handle:=StdOutputHandle;
  end;
 
  For i:=0 to High(deci_tty) do
  begin
-  deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
-  deci_tty[i].t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+  deci_tty[i].t_rd_handle:=StdInputHandle;
+  deci_tty[i].t_wr_handle:=StdOutputHandle;
  end;
 
- std_tty [2].t_wr_handle:=GetStdHandle(STD_ERROR_HANDLE);
- deci_tty[2].t_wr_handle:=GetStdHandle(STD_ERROR_HANDLE);
+ std_tty [2].t_wr_handle:=StdErrorHandle;
+ deci_tty[2].t_wr_handle:=StdErrorHandle;
 
- debug_tty.t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
- debug_tty.t_wr_handle:=GetStdHandle(STD_OUTPUT_HANDLE);
+ debug_tty.t_rd_handle:=StdInputHandle;
+ debug_tty.t_wr_handle:=StdOutputHandle;
 end;
 
 initialization

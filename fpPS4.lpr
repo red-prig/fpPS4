@@ -12,7 +12,6 @@ uses
   game_edit,
   cfg_edit,
   game_find,
-  sys_crt_gui,
   md_systm_fork,
   md_systm_reserve;
 

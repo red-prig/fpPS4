@@ -63,15 +63,6 @@ end;
 type
  t_init_version=(VERSION_INIT_0,VERSION_INIT_2,VERSION_INIT_3,VERSION_INIT_CDLG);
 
- TMountSlot=record
-  active     :Integer;
-  userId     :SceUserServiceUserId;
-  titleId    :SceSaveDataTitleId;
-  dirName    :SceSaveDataDirName;
-  fingerprint:SceSaveDataFingerprint;
-  max_blocks :SceSaveDataBlocks;
- end;
-
  TSaveDataInstance=class
   version             :t_init_version;
   memory_timeout_10sec:Boolean;
@@ -88,75 +79,11 @@ type
   cb_event   :SceSaveDataEventCallbackFunc;
   cb_userdata:Pointer;
   //
-  MountSlots:array[0..15] of TMountSlot;
-  //
   procedure Terminate;
  end;
 
 var
  g_instance:TSaveDataInstance;
-
-function GetMountSlotId(userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
-var
- i,first_id:Integer;
-begin
-
- first_id:=-1;
-
- For i:=0 to High(g_instance.MountSlots) do
- if (g_instance.MountSlots[i].active<>0) then
- begin
-
-  if (g_instance.MountSlots[i].userId=userId) then
-  if (strncasecmp(@g_instance.MountSlots[i].titleId.data,
-                  titleId,
-                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@g_instance.MountSlots[i].dirName.data,
-                  dirName,
-                  SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
-  begin
-   Exit(SCE_SAVE_DATA_ERROR_BUSY);
-  end;
-
- end else
- if (first_id=-1) then
- begin
-  first_id:=i;
- end;
-
- if (first_id=-1) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_MOUNT_FULL);
- end;
-
- slot_id:=first_id;
- Result:=0;
-end;
-
-function IsActiveMount(userId:Integer;dirName,titleId:pchar):Boolean;
-var
- i:Integer;
-begin
- Result:=False;
-
- For i:=0 to High(g_instance.MountSlots) do
- if (g_instance.MountSlots[i].active<>0) then
- begin
-
-  if (g_instance.MountSlots[i].userId=userId) then
-  if (strncasecmp(@g_instance.MountSlots[i].titleId.data,
-                  titleId,
-                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@g_instance.MountSlots[i].dirName.data,
-                  dirName,
-                  SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
-  begin
-   Exit(True);
-  end;
-
- end;
-
-end;
 
 function CheckDataInitParams0(params:pSceSaveDataInitParams):Integer; inline;
 begin
@@ -449,50 +376,14 @@ begin
 end;
 
 function SaveDataDelete(del:pSceSaveDataDelete):Integer;
-var
- titleId:pchar;
- dirName:pchar;
- fs_src :RawByteString;
 begin
  Result:=CheckSaveDataDelete(del);
  if (Result<>0) then Exit;
 
- titleId:=@del^.titleId^.data;
- if (titleId=nil) then
- begin
-  titleId:=@GameMountConfig.SaveTitleId;
- end else
- if (titleId[0]=#0) then
- begin
-  titleId:=@GameMountConfig.SaveTitleId;
- end;
-
- dirName:=@del^.dirName^.data;
-
  mtx_lock(g_instance.mtx);
- mtx_lock(GameMountConfig.mount_mtx);
 
-  if IsActiveMount(del^.userId,dirName,titleId) then
-  begin
-   Result:=SCE_SAVE_DATA_ERROR_BUSY;
-  end else
-  begin
+  Result:=g_instance.Backend.SaveDataDelete(del);
 
-   if (strncasecmp(@GameMountConfig.SaveTitleId,
-                   titleId,
-                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
-   begin
-    //trying to delete another game?
-    //check FINGERPRINT?
-   end;
-
-   fs_src:=GameMountConfig.GetSaveDataFolder(del^.userId,titleId,dirName);
-
-   //dont check errors
-   game_mount.DeleteDirectory(fs_src,False);
-  end;
-
- mtx_unlock(GameMountConfig.mount_mtx);
  mtx_unlock(g_instance.mtx);
 end;
 
@@ -516,12 +407,8 @@ function SaveDataMount(mount      :pSceSaveDataMount;
                        pResult    :pSceSaveDataMountResult;
                        Transfering:Boolean):Integer;
 var
- mountMode  :DWORD;
- mountStatus:DWORD;
- slot_id    :Integer;
- titleId    :pchar;
- dirName    :pchar;
- fs_src     :RawByteString;
+ mountMode:DWORD;
+ output   :TSaveDataMountResult;
 begin
  Result:=CheckSaveDataMount(mount,pResult,Transfering);
  if (Result<>0) then Exit;
@@ -532,130 +419,25 @@ begin
   mountMode:=mountMode and (not SDM_CREATE2);
  end;
 
- titleId:=@mount^.titleId^.data;
- if (titleId=nil) then
- begin
-  titleId:=@GameMountConfig.SaveTitleId;
- end else
- if (titleId[0]=#0) then
- begin
-  titleId:=@GameMountConfig.SaveTitleId;
- end;
-
- dirName:=@mount^.dirName^.data;
-
- if ((mountMode and SDM_RDWR)<>0) then
- if (strncasecmp(@GameMountConfig.SaveTitleId,
-                 titleId,
-                 SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
- begin
-  //trying to mount another game with RW?
-  //check FINGERPRINT?
- end;
-
- slot_id:=0;
-
  mtx_lock(g_instance.mtx);
- mtx_lock(GameMountConfig.mount_mtx);
 
-  Result:=GetMountSlotId(mount^.userId,
-                         dirName,
-                         titleId,
-                         slot_id);
+  Result:=g_instance.Backend.SaveDataMount(mount,output,Transfering);
+
   if (Result=0) then
   begin
+   //out
+   pResult^.mountPoint    :=output.mountPoint;
+   pResult^.requiredBlocks:=output.requiredBlocks;
 
-   fs_src:=GameMountConfig.GetSaveDataFolder(mount^.userId,titleId,dirName);
-
-   mountStatus:=0;
-
-   if DirectoryExists(fs_src) then
+   if (p_proc.p_sdk_version < $3500000) then
    begin
-
-    if ((mountMode and SDM_CREATE2)<>0) then
-    begin
-     //force
-     FormatMount(fs_src);
-    end else
-    if ((mountMode and SDM_CREATE)<>0) then
-    begin
-     //error
-     Result:=SCE_SAVE_DATA_ERROR_EXISTS;
-    end;
-
+    pResult^.progress:=100;
    end else
    begin
-
-    if ((mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
-    begin
-     //create
-     if ForceDirectories(fs_src) then
-     begin
-      mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-     end else
-     begin
-      Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-     end;
-    end else
-    begin
-     //error
-     Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
-    end;
-
+    pResult^.mountStatus:=output.mountStatus;
    end;
-
-   if (Result=0) then
-   begin
-
-    Result:=vfs_mountroot.mount_into_sandbox('ufs',
-                                             mount_savedata_slot_name[slot_id],
-                                             pchar(fs_src),
-                                             nil,
-                                             ord((mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
-                                             MNT_EMU_PFS);
-    if (Result<>0) then
-    begin
-     Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-    end;
-
-   end;
-
-   if (Result=0) then
-   begin
-
-    //save info
-    g_instance.MountSlots[slot_id].active:=1;
-    g_instance.MountSlots[slot_id].userId:=mount^.userId;
-
-    strncpy_s(@g_instance.MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
-    strncpy_s(@g_instance.MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
-
-    if (mount^.fingerprint=nil) then
-    begin
-     g_instance.MountSlots[slot_id].fingerprint:=Default(SceSaveDataFingerprint);
-    end else
-    begin
-     g_instance.MountSlots[slot_id].fingerprint:=mount^.fingerprint^;
-    end;
-
-    g_instance.MountSlots[slot_id].max_blocks:=mount^.blocks;
-
-    //out
-    pResult^.mountPoint:=mount_savedata_slot_name[slot_id];
-
-    if (p_proc.p_sdk_version < $3500000) then
-    begin
-     pResult^.progress:=100;
-    end else
-    begin
-     pResult^.mountStatus:=mountStatus;
-    end;
-
-   end;
-
   end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
  mtx_unlock(g_instance.mtx);
 end;
 
@@ -746,34 +528,9 @@ begin
  if (Result<>0) then Exit;
 
  mtx_lock(g_instance.mtx);
- mtx_lock(GameMountConfig.mount_mtx);
 
-  if (g_instance.MountSlots[slot_id].active=0) then
-  begin
-   Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
-  end else
-  begin
+  Result:=g_instance.Backend.SaveDataUmount(slot_id);
 
-   Result:=vfs_mountroot.unmount_from_sandbox(pchar(mountPoint),0);
-   if (Result<>0) then
-   begin
-    case Result of
-     EBUSY:Result:=SCE_SAVE_DATA_ERROR_BUSY;
-     else
-           Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-    end;
-   end else
-   begin
-
-    //free
-    g_instance.MountSlots[slot_id]:=Default(TMountSlot);
-
-   end;
-
-  end;
-
-
- mtx_unlock(GameMountConfig.mount_mtx);
  mtx_unlock(g_instance.mtx);
 end;
 

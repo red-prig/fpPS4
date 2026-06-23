@@ -15,7 +15,6 @@ function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint;hProces
 
 function  md_fuword(var base:Pointer):Pointer;
 
-function  md_getpid:DWORD;
 function  md_getppid:DWORD;
 function  md_pidfd_getfd (pidfd,targetfd:THandle):THandle;
 function  md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
@@ -73,11 +72,6 @@ begin
 end;
 
 ///
-
-function md_getpid:DWORD;
-begin
- Result:=GetCurrentProcessId;
-end;
 
 function md_getppid:DWORD;
 var

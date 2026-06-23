@@ -10,8 +10,6 @@ uses
 
   lclintf,
 
-  sys_crt_gui,
-
   Vulkan,
   vDevice,
 
@@ -181,7 +179,6 @@ end;
 function GetPhysicalDeviceList_thread(parameter:pointer):ptrint; register;
 begin
  Result:=0;
- sys_crt_gui.sys_crt_init;
  //
  if vDevice.LoadVulkan then
  begin

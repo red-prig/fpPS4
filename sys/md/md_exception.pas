@@ -443,6 +443,7 @@ var
  ExObj:Exception;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
+ if (curkthread=nil) then Exit;
 
  {
  case get_exception(p) of
@@ -462,8 +463,6 @@ begin
   DBG_PRINTEXCEPTION_WIDE_C:Exit(EXCEPTION_CONTINUE_EXECUTION); //RenderDoc issuse
   EXCEPTION_UNCAUGHT_CXX   :Exit(EXCEPTION_CONTINUE_SEARCH);
  end;
-
- if (curkthread=nil) then Exit;
 
  rec:=p^.ExceptionRecord;
 

@@ -5,7 +5,6 @@ unit game_run;
 interface
 
 uses
- windows,
  Classes,
  SysUtils,
  CharStream,
@@ -153,14 +152,14 @@ var
 begin
  For i:=0 to High(std_tty) do
  begin
-  //std_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  //std_tty[i].t_rd_handle:=StdInputHandle;
   //std_tty[i].t_wr_handle:=t_wr_handle;
   //std_tty[i].t_update   :=@WakeMainThread;
  end;
 
  For i:=0 to High(deci_tty) do
  begin
-  //deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  //deci_tty[i].t_rd_handle:=StdInputHandle;
   //deci_tty[i].t_wr_handle:=t_wr_handle;
   //deci_tty[i].t_update   :=@WakeMainThread;
  end;
@@ -446,7 +445,7 @@ begin
 
  ppid:=md_getppid;
 
- Writeln('game_process started pid:',md_getpid,' parent_pid:',ppid);
+ Writeln('game_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  parent:=md_pidfd_open(ppid);
 
@@ -596,9 +595,12 @@ begin
  end;
 
  ////
+ StdOutputHandle:=cfg.hOutput;
+ StdErrorHandle :=cfg.hError ;
 
- SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
- SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
+ //reinit std I/O
+ SysInitStdIO;
+  ////
 
  fork_info:=Default(t_fork_proc);
 
@@ -627,7 +629,7 @@ begin
   GameStartupInfo.Serialize(mem);
   FreeAndNil(GameStartupInfo);
 
-  fork_info.hInput :=GetStdHandle(STD_INPUT_HANDLE);
+  fork_info.hInput :=StdInputHandle;
   fork_info.hOutput:=cfg.hOutput;
   fork_info.hError :=cfg.hError;
 

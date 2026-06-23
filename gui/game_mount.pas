@@ -5,14 +5,15 @@ unit game_mount;
 interface
 
 uses
+ core_serialization,
  game_info,
  kern_mtx;
 
 type
  TGameMountConfig=class
-  LocalDir   :RawByteString;
-  GameTitleId:array[0..9] of AnsiChar;
-  SaveTitleId:array[0..9] of AnsiChar;
+  LocalDir  :RawByteString;
+  TitleId   :array[0..9] of AnsiChar;
+  InstallDir:array[0..9] of AnsiChar;
   //
   mount_mtx:mtx;
   //
@@ -24,14 +25,29 @@ type
   function GetTemporaryTitleIdFile:RawByteString;
   function GetAppTemporaryFolder:RawByteString;
   function GetAppDownloadFolder(i:Byte):RawByteString;
-  function GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
-  function GetSaveDataBackupFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+  function GetSaveDataFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+  function GetSaveDataBackupFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+ end;
+
+ TGameMountConfigExport=class(TSerializeObject)
+ public
+  FLocalDir  :RawByteString;
+  FTitleId   :RawByteString;
+  FInstallDir:RawByteString;
+ published
+  property LocalDir  :RawByteString read FLocalDir   write FLocalDir;
+  property TitleId   :RawByteString read FTitleId    write FTitleId;
+  property InstallDir:RawByteString read FInstallDir write FInstallDir;
+ public
  end;
 
 var
  GameMountConfig:TGameMountConfig;
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
+
+function  GameMountConfigExport:TGameMountConfigExport;
+procedure GameMountConfigImport(e:TGameMountConfigExport);
 
 //
 
@@ -72,9 +88,9 @@ end;
 
 Constructor TGameMountConfig.Create;
 begin
- LocalDir   :='';
- GameTitleId:='?????????';
- SaveTitleId:='?????????';
+ LocalDir  :='';
+ TitleId   :='?????????';
+ InstallDir:='?????????';
  //
  mtx_init(mount_mtx,'mount_mtx');
 end;
@@ -99,31 +115,31 @@ const
 begin
  Result:=Format(unix_to_host(APP_DOWNLOAD),[
   ExcludeTrailingPathDelimiter(LocalDir),
-  GameTitleId,
+  TitleId,
   i
  ]);
 end;
 
-function TGameMountConfig.GetSaveDataFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+function TGameMountConfig.GetSaveDataFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
 const
  APP_SAVE='%s/user/home/%s/savedata/%s/%s';
 begin
  Result:=Format(unix_to_host(APP_SAVE),[
   ExcludeTrailingPathDelimiter(LocalDir),
   HexStr(user_id,8),
-  titleId,
+  _titleId,
   dirName
  ]);
 end;
 
-function TGameMountConfig.GetSaveDataBackupFolder(user_id:Integer;titleId,dirName:pchar):RawByteString;
+function TGameMountConfig.GetSaveDataBackupFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
 const
  APP_SAVE='%s/user/home/%s/savedata/%s/sce_bu_%s';
 begin
  Result:=Format(unix_to_host(APP_SAVE),[
   ExcludeTrailingPathDelimiter(LocalDir),
   HexStr(user_id,8),
-  titleId,
+  _titleId,
   dirName
  ]);
 end;
@@ -306,19 +322,17 @@ begin
 
  if (GameStartupInfo.TITLE_ID<>'') then
  begin
-  GameMountConfig.GameTitleId:=GameStartupInfo.TITLE_ID;
+  GameMountConfig.TitleId:=GameStartupInfo.TITLE_ID;
  end else
  if (GameStartupInfo.FGameItem.GameInfo.TitleId<>'') then
  begin
-  GameMountConfig.GameTitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
+  GameMountConfig.TitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
  end;
 
+ GameMountConfig.InstallDir:=GameMountConfig.TitleId;
  if (GameStartupInfo.INSTALL_DIR_SAVEDATA<>'') then
  begin
-  GameMountConfig.SaveTitleId:=GameStartupInfo.INSTALL_DIR_SAVEDATA;
- end else
- begin
-  GameMountConfig.SaveTitleId:=GameMountConfig.GameTitleId;
+  GameMountConfig.InstallDir:=GameStartupInfo.INSTALL_DIR_SAVEDATA;
  end;
 
  GameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
@@ -384,6 +398,27 @@ begin
  //UPDATE: sandbox root IS NOT read-only
  //err:=vfs_mount_path('ufs','/','/',nil,MNT_RDONLY or MNT_UPDATE);
 
+end;
+
+function GameMountConfigExport:TGameMountConfigExport;
+begin
+ if (GameMountConfig=nil) then Exit(nil);
+
+ Result:=TGameMountConfigExport.Create;
+ Result.LocalDir  :=GameMountConfig.LocalDir;
+ Result.TitleId   :=GameMountConfig.TitleId;
+ Result.InstallDir:=GameMountConfig.InstallDir;
+end;
+
+procedure GameMountConfigImport(e:TGameMountConfigExport);
+begin
+ if (GameMountConfig=nil) then
+ begin
+  GameMountConfig:=TGameMountConfig.Create;
+ end;
+ GameMountConfig.LocalDir  :=e.LocalDir;
+ GameMountConfig.TitleId   :=e.TitleId;
+ GameMountConfig.InstallDir:=e.InstallDir;
 end;
 
 const
@@ -691,7 +726,7 @@ begin
    strlcopy(mountPoint,TEMP0,MOUNT_MAXSIZE);
    GameMountConfig.TemporaryMount:=True;
 
-   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.GameTitleId);
+   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.TitleId);
 
    if format or (not ValidTitleId) then
    begin
@@ -700,7 +735,7 @@ begin
 
    if (not ValidTitleId) then
    begin
-    SaveTemporaryTitleId(GameMountConfig.GameTitleId);
+    SaveTemporaryTitleId(GameMountConfig.TitleId);
    end;
 
   end;

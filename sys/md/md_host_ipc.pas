@@ -7,7 +7,6 @@ interface
 uses
  sysutils,
  Classes,
- sys_crt_gui,
  kern_mtx,
  evbuffer,
  evpoll,
@@ -80,7 +79,6 @@ end;
 function pipe_thread(parameter:pointer):ptrint;
 begin
  Result:=0;
- sys_crt_gui.sys_crt_init;
  evpoll_loop(parameter);
 end;
 

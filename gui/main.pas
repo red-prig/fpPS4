@@ -857,9 +857,6 @@ begin
  md_open(LogFile,O_RDWR or O_CREAT or O_TRUNC,&0777,FAddHandle);
  md_openat(FAddHandle,'',O_RDONLY,0,FGetHandle);
 
- //SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
- //SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
-
  FileSeek(FAddHandle,0,fsFromEnd);
 end;
 
