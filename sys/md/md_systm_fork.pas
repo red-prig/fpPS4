@@ -7,6 +7,7 @@ interface
 
 uses
  sysutils,
+ Forms,
  windows,
  ntapi;
 
@@ -453,6 +454,12 @@ begin
 
  //reinit std I/O
  SysInitStdIO;
+
+ //restrore default Exceptions
+ if (Application<>nil) then
+ begin
+  Application.CaptureExceptions:=False;
+ end;
 end;
 
 function get_cur_peb:PPEB; assembler; nostackframe;
