@@ -67,21 +67,23 @@ type
  end;
 
  THostIpcPipeSave=class(THostIpcPipe)
-  event:p_event;
-  procedure Recv_pipe; override;
+  event:t_event;
+  Constructor Create;
+  procedure   Recv_pipe; override;
  end;
 
  TSaveDataBackendProcess=class
-  ppid  :Integer;
-  parent:THandle;
-  kipc  :THostIpcPipeSave;
-  queue :TIntrusiveMPSCQueue;
-  event :t_event;
+  ppid     :Integer;
+  parent   :THandle;
+  kipc     :THostIpcPipeSave;
+  job_queue:TIntrusiveMPSCQueue;
+  job_event:t_event;
   //
   MountSlots:array[0..15] of TMountSlot;
   //
   Constructor Create;
   procedure   SendCmd(cmd:TCustomCommand);
+  function    RecvCmd(var cmd:TCustomCommand):Boolean;
   function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
   function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
   function    OnSaveDataDelete(Value:TIpcValue):TIpcValue; //SaveDataDelete
@@ -160,10 +162,16 @@ end;
 
 ///
 
+Constructor THostIpcPipeSave.Create;
+begin
+ inherited;
+ ev_init(event,'THostIpcPipeSave');
+end;
+
 procedure THostIpcPipeSave.Recv_pipe;
 begin
  inherited;
- ev_signal(event^);
+ ev_signal(event);
 end;
 
 ///
@@ -207,6 +215,24 @@ begin
  gSaveDataBackend.OnExitProc(Default(TIpcValue));
 end;
 
+function job_thread(parameter:pointer):ptrint;
+var
+ cmd:TCustomCommand;
+begin
+ Result:=0;
+ repeat
+  ev_wait(gSaveDataBackend.job_event);
+
+  cmd:=nil;
+  while gSaveDataBackend.RecvCmd(cmd) do
+  begin
+   cmd.Run;
+   cmd.Free;
+  end;
+
+ until false;
+end;
+
 procedure OnExitProc;
 begin
  gSaveDataBackend.kipc.InvokeBroken();
@@ -218,9 +244,6 @@ var
 
  pipefd:THandle;
  parent:THandle;
-
- node:PQNode;
- cmd:TCustomCommand;
 begin
  //while not IsDebuggerPresent do sleep(100);
 
@@ -250,20 +273,12 @@ begin
  AddExitProc(@OnExitProc);
 
  BeginThread(@wait_parent,nil);
+ BeginThread(@job_thread,nil);
 
  repeat
-  ev_wait(gSaveDataBackend.event);
+  ev_wait(gSaveDataBackend.kipc.event);
 
   gSaveDataBackend.kipc.Update();
-
-  node:=nil;
-  while gSaveDataBackend.queue.Pop(node) do
-  begin
-   cmd:=node^.self_;
-   cmd.Run;
-   cmd.Free;
-  end;
-
  until false;
 
 end;
@@ -272,12 +287,11 @@ end;
 
 Constructor TSaveDataBackendProcess.Create;
 begin
- queue.Create;
- ev_init(event,'event');
+ job_queue.Create;
+ ev_init(job_event,'job_event');
  //
  kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
- kipc.event:=@event;
  //
  kipc.FHandler.AddCallback('EXIT_PROC'     ,@OnExitProc);
  kipc.FHandler.AddCallback('MOUNT_CONFIG'  ,@OnMountConfig);
@@ -292,11 +306,22 @@ end;
 procedure TSaveDataBackendProcess.SendCmd(cmd:TCustomCommand);
 begin
  if (cmd=nil) then Exit;
-
- queue.Push(@cmd.node);
-
- ev_signal(event);
+ job_queue.Push(@cmd.node);
+ ev_signal(job_event);
 end;
+
+function TSaveDataBackendProcess.RecvCmd(var cmd:TCustomCommand):Boolean;
+var
+ node:PQNode;
+begin
+ node:=nil;
+ Result:=job_queue.Pop(node);
+ if Result then
+ begin
+  cmd:=node^.self_;
+ end;
+end;
+
 
 function TSaveDataBackendProcess.OnExitProc(Value:TIpcValue):TIpcValue; //EXIT_PROC
 begin
