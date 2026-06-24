@@ -14,6 +14,7 @@ uses
 
 const
  iRESULT=0;
+ iBROKEN=0;
 
 type
  TIpcValue=packed object
@@ -103,6 +104,7 @@ type
    procedure   InvokeAsyn(msg:TMsgHash;Value:TIpcValue);
    procedure   InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
    procedure   InvokeAsyn(msg:TMsgHash);
+   procedure   InvokeBroken();
    //
  end;
 
@@ -512,6 +514,11 @@ end;
 procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash);
 begin
  Send(msg.mtype,nil,Default(TIpcValue));
+end;
+
+procedure THostIpcInterface.InvokeBroken();
+begin
+ Send(iRESULT,nil,Default(TIpcValue));
 end;
 
 procedure THostIpcInterface.Update();

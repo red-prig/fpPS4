@@ -88,7 +88,7 @@ type
 implementation
 
 var
- gSaveDataBackendProcess:TSaveDataBackendProcess=nil;
+ gSaveDataBackend:TSaveDataBackendProcess=nil;
 
 type
  PForkData=^TForkData;
@@ -174,7 +174,7 @@ type
 
 procedure TCmdExitProc.Run;
 begin
- Writeln('savedata_process stopped pid:',GetProcessID,' parent_pid:',gSaveDataBackendProcess.ppid);
+ Writeln('savedata_process stopped pid:',GetProcessID,' parent_pid:',gSaveDataBackend.ppid);
 
  Halt;
 end;
@@ -183,7 +183,7 @@ end;
 
 function wait_parent(parameter:pointer):ptrint;
 begin
- Result:=md_waitpidfd(gSaveDataBackendProcess.parent,nil);
+ Result:=md_waitpidfd(gSaveDataBackend.parent,nil);
 
  if (Result<>0) then
  begin
@@ -191,7 +191,12 @@ begin
   Assert(false,'savedata_process');
  end;
 
- gSaveDataBackendProcess.OnExitProc(Default(TIpcValue));
+ gSaveDataBackend.OnExitProc(Default(TIpcValue));
+end;
+
+procedure OnExitProc;
+begin
+ gSaveDataBackend.kipc.InvokeBroken();
 end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
@@ -221,21 +226,23 @@ begin
  //dup
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
- gSaveDataBackendProcess:=TSaveDataBackendProcess.Create;
- gSaveDataBackendProcess.kipc.set_pipe(pipefd);
+ gSaveDataBackend:=TSaveDataBackendProcess.Create;
+ gSaveDataBackend.kipc.set_pipe(pipefd);
 
- gSaveDataBackendProcess.ppid  :=ppid  ;
- gSaveDataBackendProcess.parent:=parent;
+ gSaveDataBackend.ppid  :=ppid  ;
+ gSaveDataBackend.parent:=parent;
 
  //////////////
+
+ AddExitProc(@OnExitProc);
 
  BeginThread(@wait_parent,nil);
 
  repeat
-  ev_wait(gSaveDataBackendProcess.event);
+  ev_wait(gSaveDataBackend.event);
 
   node:=nil;
-  while gSaveDataBackendProcess.queue.Pop(node) do
+  while gSaveDataBackend.queue.Pop(node) do
   begin
    cmd:=node^.self_;
    cmd.Run;
@@ -321,15 +328,15 @@ begin
 
  first_id:=-1;
 
- For i:=0 to High(gSaveDataBackendProcess.MountSlots) do
- if (gSaveDataBackendProcess.MountSlots[i].active<>0) then
+ For i:=0 to High(gSaveDataBackend.MountSlots) do
+ if (gSaveDataBackend.MountSlots[i].active<>0) then
  begin
 
-  if (gSaveDataBackendProcess.MountSlots[i].userId=userId) then
-  if (strncasecmp(@gSaveDataBackendProcess.MountSlots[i].titleId.data,
+  if (gSaveDataBackend.MountSlots[i].userId=userId) then
+  if (strncasecmp(@gSaveDataBackend.MountSlots[i].titleId.data,
                   titleId,
                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@gSaveDataBackendProcess.MountSlots[i].dirName.data,
+  if (strncasecmp(@gSaveDataBackend.MountSlots[i].dirName.data,
                   dirName,
                   SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
   begin
@@ -357,15 +364,15 @@ var
 begin
  Result:=False;
 
- For i:=0 to High(gSaveDataBackendProcess.MountSlots) do
- if (gSaveDataBackendProcess.MountSlots[i].active<>0) then
+ For i:=0 to High(gSaveDataBackend.MountSlots) do
+ if (gSaveDataBackend.MountSlots[i].active<>0) then
  begin
 
-  if (gSaveDataBackendProcess.MountSlots[i].userId=userId) then
-  if (strncasecmp(@gSaveDataBackendProcess.MountSlots[i].titleId.data,
+  if (gSaveDataBackend.MountSlots[i].userId=userId) then
+  if (strncasecmp(@gSaveDataBackend.MountSlots[i].titleId.data,
                   titleId,
                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@gSaveDataBackendProcess.MountSlots[i].dirName.data,
+  if (strncasecmp(@gSaveDataBackend.MountSlots[i].dirName.data,
                   dirName,
                   SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
   begin
@@ -591,14 +598,14 @@ begin
    begin
 
     //save info
-    gSaveDataBackendProcess.MountSlots[slot_id].active:=1;
-    gSaveDataBackendProcess.MountSlots[slot_id].userId:=data.userId;
+    gSaveDataBackend.MountSlots[slot_id].active:=1;
+    gSaveDataBackend.MountSlots[slot_id].userId:=data.userId;
 
-    strncpy_s(@gSaveDataBackendProcess.MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
-    strncpy_s(@gSaveDataBackendProcess.MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+    strncpy_s(@gSaveDataBackend.MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
+    strncpy_s(@gSaveDataBackend.MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
 
-    gSaveDataBackendProcess.MountSlots[slot_id].fingerprint:=data.fingerprint;
-    gSaveDataBackendProcess.MountSlots[slot_id].max_blocks :=data.blocks;
+    gSaveDataBackend.MountSlots[slot_id].fingerprint:=data.fingerprint;
+    gSaveDataBackend.MountSlots[slot_id].max_blocks :=data.blocks;
 
     //out
     output.slot_id       :=slot_id;
@@ -655,7 +662,7 @@ begin
 
  mtx_lock(GameMountConfig.mount_mtx);
 
-  if (gSaveDataBackendProcess.MountSlots[slot_id].active=0) then
+  if (gSaveDataBackend.MountSlots[slot_id].active=0) then
   begin
    Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
   end else
@@ -676,7 +683,7 @@ begin
 
  mtx_lock(GameMountConfig.mount_mtx);
 
-  if (gSaveDataBackendProcess.MountSlots[slot_id].active=0) then
+  if (gSaveDataBackend.MountSlots[slot_id].active=0) then
   begin
    Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
   end else
@@ -684,7 +691,7 @@ begin
    Result:=0;
 
    //free
-   gSaveDataBackendProcess.MountSlots[slot_id]:=Default(TMountSlot);
+   gSaveDataBackend.MountSlots[slot_id]:=Default(TMountSlot);
   end;
 
 

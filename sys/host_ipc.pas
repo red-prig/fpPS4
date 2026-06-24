@@ -56,6 +56,7 @@ type
    FWLock:mtx;
    Fkq   :Pointer;
    FTerm :Boolean;
+   FBroke:Boolean;
    procedure   SyncResult(tid:DWORD;value:TIpcValue);
    function    NewNodeSync:PNodeIpcSync;
    procedure   FreeNodeSync(node:PNodeIpcSync);
@@ -359,11 +360,17 @@ var
  node:PNodeIpcSync;
 begin
  mtx_lock(FWLock);
+
+  if (tid=iBROKEN) then
+  begin
+   FBroke:=True;
+  end;
+
   node:=LIST_FIRST(@FWaits);
 
   while (node<>nil) do
   begin
-   if (node^.tid=tid) then
+   if (node^.tid=tid) or (tid=iBROKEN) then
    begin
     node^.value:=value.Copy;
 
@@ -412,6 +419,8 @@ procedure THostIpcConnect.WaitSyncKey(key:Pointer);
 var
  node:PNodeIpcSync absolute key;
 begin
+ if FTerm or FBroke then Exit;
+
  if (node<>nil) then
  begin
   ev_wait(node^.event);
@@ -422,6 +431,10 @@ function THostIpcConnect.GetSyncValue(key:Pointer):TIpcValue;
 var
  node:PNodeIpcSync absolute key;
 begin
+ if FBroke then
+ begin
+  Result:=-1;
+ end else
  if (node<>nil) then
  begin
   Result:=node^.value;
