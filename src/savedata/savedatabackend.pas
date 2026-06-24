@@ -66,10 +66,15 @@ type
   max_blocks :SceSaveDataBlocks;
  end;
 
+ THostIpcPipeSave=class(THostIpcPipe)
+  event:p_event;
+  procedure Recv_pipe; override;
+ end;
+
  TSaveDataBackendProcess=class
   ppid  :Integer;
   parent:THandle;
-  kipc  :THostIpcPipeKERN;
+  kipc  :THostIpcPipeSave;
   queue :TIntrusiveMPSCQueue;
   event :t_event;
   //
@@ -151,6 +156,14 @@ begin
  //
  kipc.Free;
  inherited;
+end;
+
+///
+
+procedure THostIpcPipeSave.Recv_pipe;
+begin
+ inherited;
+ ev_signal(event^);
 end;
 
 ///
@@ -241,6 +254,8 @@ begin
  repeat
   ev_wait(gSaveDataBackend.event);
 
+  gSaveDataBackend.kipc.Update();
+
   node:=nil;
   while gSaveDataBackend.queue.Pop(node) do
   begin
@@ -260,8 +275,9 @@ begin
  queue.Create;
  ev_init(event,'event');
  //
- kipc:=THostIpcPipeKERN.Create;
+ kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
+ kipc.event:=@event;
  //
  kipc.FHandler.AddCallback('EXIT_PROC'     ,@OnExitProc);
  kipc.FHandler.AddCallback('MOUNT_CONFIG'  ,@OnMountConfig);
