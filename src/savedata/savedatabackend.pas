@@ -26,7 +26,7 @@ type
  TSaveDataMountResult=packed record
   result        :Integer;
   mountStatus   :DWORD;
-  mountPoint    :SceSaveDataMountPoint;
+  slot_id       :DWORD;
   requiredBlocks:SceSaveDataBlocks;
   fs_src        :array[0..260] of Char;
  end;
@@ -77,12 +77,12 @@ type
   //
   Constructor Create;
   procedure   SendCmd(cmd:TCustomCommand);
-  function    OnExitProc          (Value:TIpcValue):TIpcValue; //EXIT_PROC
-  function    OnMountConfig       (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
-  function    OnSaveDataDelete    (Value:TIpcValue):TIpcValue; //SaveDataDelete
-  function    OnSaveDataMount     (Value:TIpcValue):TIpcValue; //SaveDataMount
-  function    OnIsActiveMountSlot (Value:TIpcValue):TIpcValue; //IsActiveMountSlot
-  function    OnSaveDataUmountSlot(Value:TIpcValue):TIpcValue; //SaveDataUmountSlot
+  function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
+  function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
+  function    OnSaveDataDelete(Value:TIpcValue):TIpcValue; //SaveDataDelete
+  function    OnSaveDataMount (Value:TIpcValue):TIpcValue; //SaveDataMount
+  function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
+  function    OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
  end;
 
 implementation
@@ -256,12 +256,12 @@ begin
  kipc:=THostIpcPipeKERN.Create;
  kipc.FHandler:=THostIpcHandler.Create;
  //
- kipc.FHandler.AddCallback('EXIT_PROC'         ,@OnExitProc);
- kipc.FHandler.AddCallback('MOUNT_CONFIG'      ,@OnMountConfig);
- kipc.FHandler.AddCallback('SaveDataDelete'    ,@OnSaveDataDelete);
- kipc.FHandler.AddCallback('SaveDataMount'     ,@OnSaveDataMount);
- kipc.FHandler.AddCallback('IsActiveMountSlot' ,@OnIsActiveMountSlot);
- kipc.FHandler.AddCallback('SaveDataUmountSlot',@OnSaveDataUmountSlot);
+ kipc.FHandler.AddCallback('EXIT_PROC'     ,@OnExitProc);
+ kipc.FHandler.AddCallback('MOUNT_CONFIG'  ,@OnMountConfig);
+ kipc.FHandler.AddCallback('SaveDataDelete',@OnSaveDataDelete);
+ kipc.FHandler.AddCallback('SaveDataMount' ,@OnSaveDataMount);
+ kipc.FHandler.AddCallback('IsActiveMount' ,@OnIsActiveMount);
+ kipc.FHandler.AddCallback('SaveDataUmount',@OnSaveDataUmount);
  //
  inherited;
 end;
@@ -410,10 +410,6 @@ begin
  Value.MoveTo(@data,SizeOf(data));
 
  titleId:=@data.titleId.data;
- if (titleId=nil) then
- begin
-  titleId:=@GameMountConfig.InstallDir;
- end else
  if (titleId[0]=#0) then
  begin
   titleId:=@GameMountConfig.InstallDir;
@@ -486,7 +482,7 @@ begin
  begin
 
   Result:=vfs_mountroot.mount_into_sandbox('ufs',
-                                           pchar(pResult.mountPoint),
+                                           pchar(mount_savedata_slot_name[pResult.slot_id]),
                                            pchar(pResult.fs_src),
                                            nil,
                                            ord((data.mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
@@ -495,6 +491,7 @@ begin
   begin
    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
    //unmount
+   kipc.InvokeSync2('SaveDataUmount',TIpcValue.Static(@pResult.slot_id,sizeof(pResult.slot_id)));
   end;
 
  end;
@@ -524,10 +521,6 @@ begin
  end;
 
  titleId:=@data.titleId.data;
- if (titleId=nil) then
- begin
-  titleId:=@GameMountConfig.InstallDir;
- end else
  if (titleId[0]=#0) then
  begin
   titleId:=@GameMountConfig.InstallDir;
@@ -608,7 +601,7 @@ begin
     gSaveDataBackendProcess.MountSlots[slot_id].max_blocks :=data.blocks;
 
     //out
-    output.mountPoint    :=mount_savedata_slot_name[slot_id];
+    output.slot_id       :=slot_id;
     output.requiredBlocks:=0; //TODO
     output.fs_src        :=fs_src;
    end;
@@ -628,7 +621,7 @@ end;
 
 function TSaveDataBackendConnect.SaveDataUmount(slot_id:Integer):Integer;
 begin
- Result:=kipc.InvokeSync2('IsActiveMountSlot',TIpcValue.Static(@slot_id,sizeof(slot_id)));
+ Result:=kipc.InvokeSync2('IsActiveMount',TIpcValue.Static(@slot_id,sizeof(slot_id)));
 
  if (Result=0) then
  begin
@@ -645,14 +638,14 @@ begin
   begin
 
    //free
-   Result:=kipc.InvokeSync2('SaveDataUmountSlot',TIpcValue.Static(@slot_id,sizeof(slot_id)));
+   Result:=kipc.InvokeSync2('SaveDataUmount',TIpcValue.Static(@slot_id,sizeof(slot_id)));
   end;
 
  end;
 
 end;
 
-function TSaveDataBackendProcess.OnIsActiveMountSlot(Value:TIpcValue):TIpcValue; //IsActiveMountSlot
+function TSaveDataBackendProcess.OnIsActiveMount(Value:TIpcValue):TIpcValue; //IsActiveMount
 var
  slot_id:Integer;
 begin
@@ -673,7 +666,7 @@ begin
  mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
-function TSaveDataBackendProcess.OnSaveDataUmountSlot(Value:TIpcValue):TIpcValue; //SaveDataUmountSlot
+function TSaveDataBackendProcess.OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
 var
  slot_id:Integer;
 begin

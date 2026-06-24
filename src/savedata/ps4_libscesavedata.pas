@@ -426,7 +426,7 @@ begin
   if (Result=0) then
   begin
    //out
-   pResult^.mountPoint    :=output.mountPoint;
+   pResult^.mountPoint    :=mount_savedata_slot_name[output.slot_id];
    pResult^.requiredBlocks:=output.requiredBlocks;
 
    if (p_proc.p_sdk_version < $3500000) then

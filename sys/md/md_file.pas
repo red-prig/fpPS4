@@ -74,11 +74,11 @@ begin
 
  if ((flags and O_RDWR)<>0) then
  begin
-  Result:=Result or (FILE_READ_DATA or FILE_WRITE_DATA or FILE_APPEND_DATA);
+  Result:=Result or (ord((flags and O_APPEND)=0)*FILE_WRITE_DATA) or (FILE_READ_DATA or FILE_APPEND_DATA);
  end else
  if ((flags and O_WRONLY)<>0) then
  begin
-  Result:=Result or (FILE_WRITE_DATA or FILE_APPEND_DATA);
+  Result:=Result or (ord((flags and O_APPEND)=0)*FILE_WRITE_DATA) or FILE_APPEND_DATA;
  end else
  begin
   Result:=Result or FILE_READ_DATA;
