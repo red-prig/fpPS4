@@ -354,6 +354,8 @@ function CheckSaveDataMount(mount      :pSceSaveDataMount;
                             pResult    :pSceSaveDataMountResult;
                             Transfering:Boolean):Integer;
 
+function CheckSaveDataBackup(backup:pSceSaveDataBackup):Integer;
+
 implementation
 
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
@@ -898,6 +900,23 @@ begin
   Result:=CheckOutputSceSaveDataMountPoint2(pResult);
  end;
 
+end;
+
+function CheckSaveDataBackup(backup:pSceSaveDataBackup):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (backup=nil) then Exit;
+
+ if IsLoggedIn(backup^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(backup^.titleId)=0 then
+ if CheckDirName(backup^.dirName,false)=0 then
+ begin
+  Result:=0;
+ end;
 end;
 
 

@@ -519,7 +519,7 @@ begin
  Result:=SaveDataMount(@tmp,mountResult,True);
 end;
 
-function SaveDataUmount(mountPoint:pSceSaveDataMountPoint):Integer;
+function SaveDataUmount(mountPoint:pSceSaveDataMountPoint;backup:boolean):Integer;
 var
  slot_id:Integer;
 begin
@@ -529,50 +529,31 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataUmount(slot_id);
+  Result:=g_instance.Backend.SaveDataUmount(slot_id,backup);
 
  mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataUmount(mountPoint:pSceSaveDataMountPoint):Integer;
 begin
- Result:=0;
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=SaveDataUmount(mountPoint);
+ Result:=SaveDataUmount(mountPoint,False);
 end;
 
 function ps4_sceSaveDataUmountWithBackup(mountPoint:pSceSaveDataMountPoint):Integer;
 var
  event:SceSaveDataEvent;
 begin
- Result:=0;
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=SaveDataUmount(mountPoint);
-
- {
- //backup this
- //...
-
- //in another thread?
- event:=Default(SceSaveDataEvent);
- event._type:=SCE_SAVE_DATA_EVENT_TYPE_UMOUNT_BACKUP_END;
- event.userId:=1;
- //event.titleId:SceSaveDataTitleId;
- //event.dirName:SceSaveDataDirName;
- push_event(@event);
-
- _sig_unlock;
- }
+ Result:=SaveDataUmount(mountPoint,True);
 end;
 
 function ps4_sceSaveDataGetMountInfo(mountPoint:pSceSaveDataMountPoint;
@@ -836,7 +817,19 @@ end;
 
 function ps4_sceSaveDataBackup(backup:pSceSaveDataBackup):Integer;
 begin
- Result:=0;
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ Result:=CheckSaveDataBackup(backup);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.SaveDataBackup(backup);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataCheckBackupData(check:pSceSaveDataCheckBackupData):Integer;
