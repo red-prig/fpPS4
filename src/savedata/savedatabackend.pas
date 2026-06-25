@@ -66,6 +66,7 @@ type
   dirName    :SceSaveDataDirName;
   fingerprint:SceSaveDataFingerprint;
   max_blocks :SceSaveDataBlocks;
+  mountMode  :DWORD; //SceSaveDataMountMode
  end;
 
  THostIpcPipeSave=class(THostIpcPipe)
@@ -74,18 +75,18 @@ type
   procedure   Recv_pipe; override;
  end;
 
- PBackupInNode=^TBackupInNode;
- TBackupInNode=object
+ PLockDirNode=^TLockDirNode;
+ TLockDirNode=object
   //
-  pLeft :PBackupInNode;
-  pRight:PBackupInNode;
+  pLeft :PLockDirNode;
+  pRight:PLockDirNode;
   //
-  fs_src:array[0..260] of Char;
+  fs_src:RawByteString;
   //
-  function c(n1,n2:PBackupInNode):Integer; static;
+  function c(n1,n2:PLockDirNode):Integer; static;
  end;
 
- TBackupInSplay=specialize TNodeSplay<TBackupInNode>;
+ TLockDirSplay=specialize TNodeSplay<TLockDirNode>;
 
  TSaveDataBackendProcess=class
   ppid     :Integer;
@@ -96,28 +97,36 @@ type
   //
   MountSlots:array[0..15] of TMountSlot;
   //
-  BackupInProgress:TBackupInSplay;
-  BackupInMtx     :mtx;
+  LockDirMap:TLockDirSplay;
+  LockDirMtx:mtx;
   //
   Constructor Create;
   procedure   SendCmd(cmd:TCustomCommand);
   function    RecvCmd(var cmd:TCustomCommand):Boolean;
+  function    LockDir  (const fs_src:RawByteString):Boolean;
+  function    UnLockDir(const fs_src:RawByteString):Boolean;
   function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
   function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
+  function    GetMountSlotId  (userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
+  function    IsActiveMount   (userId:Integer;dirName,titleId:pchar):Boolean;
   function    OnSaveDataDelete(Value:TIpcValue):TIpcValue; //SaveDataDelete
   function    OnSaveDataMount (Value:TIpcValue):TIpcValue; //SaveDataMount
   function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
   function    OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
   function    OnSaveDataBackup(Value:TIpcValue):TIpcValue; //SaveDataBackup
+  function    SendBackupJob   (userId     :SceUserServiceUserId;
+                               titleId    :pchar;
+                               dirName    :pchar;
+                               fingerprint:pSceSaveDataFingerprint):Integer;
  end;
 
 implementation
 
 //
 
-function TBackupInNode.c(n1,n2:PBackupInNode):Integer;
+function TLockDirNode.c(n1,n2:PLockDirNode):Integer;
 begin
- Result:=CompareChar0(n1^.fs_src,n2^.fs_src,SizeOf(TBackupInNode.fs_src));
+ Result:=CompareText(n1^.fs_src,n2^.fs_src);
 end;
 
 //
@@ -218,7 +227,7 @@ end;
 
 type
  TCmdExitProc=class(TCustomCommand)
-  procedure   Run; override;
+  procedure Run; override;
  end;
 
 procedure TCmdExitProc.Run;
@@ -318,7 +327,7 @@ begin
  job_queue.Create;
  ev_init(job_event,'job_event');
  //
- mtx_init(BackupInMtx,'BackupInMtx');
+ mtx_init(LockDirMtx,'LockDirMtx');
  //
  kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
@@ -353,6 +362,49 @@ begin
  end;
 end;
 
+function TSaveDataBackendProcess.LockDir(const fs_src:RawByteString):Boolean;
+var
+ node:PLockDirNode;
+begin
+ node:=AllocMem(sizeof(TLockDirNode));
+ node^.fs_src:=fs_src;
+
+ mtx_lock(LockDirMtx);
+
+  Result:=LockDirMap.Insert(node);
+
+ mtx_unlock(LockDirMtx);
+
+ if Result then
+ begin
+  //
+ end else
+ begin
+  node^.fs_src:=Default(RawByteString);
+  FreeMem(node);
+ end;
+end;
+
+function TSaveDataBackendProcess.UnLockDir(const fs_src:RawByteString):Boolean;
+var
+ data:TLockDirNode;
+ node:PLockDirNode;
+begin
+ data.fs_src:=fs_src;
+
+ mtx_lock(LockDirMtx);
+
+  node:=LockDirMap.Find(@data);
+  Result:=LockDirMap.Delete(node);
+
+ mtx_unlock(LockDirMtx);
+
+ if (node<>nil) then
+ begin
+  node^.fs_src:=Default(RawByteString);
+  FreeMem(node);
+ end;
+end;
 
 function TSaveDataBackendProcess.OnExitProc(Value:TIpcValue):TIpcValue; //EXIT_PROC
 begin
@@ -393,22 +445,22 @@ end;
 
 ///
 
-function GetMountSlotId(userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
+function TSaveDataBackendProcess.GetMountSlotId(userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
 var
  i,first_id:Integer;
 begin
 
  first_id:=-1;
 
- For i:=0 to High(gSaveDataBackend.MountSlots) do
- if (gSaveDataBackend.MountSlots[i].active<>0) then
+ For i:=0 to High(MountSlots) do
+ if (MountSlots[i].active<>0) then
  begin
 
-  if (gSaveDataBackend.MountSlots[i].userId=userId) then
-  if (strncasecmp(@gSaveDataBackend.MountSlots[i].titleId.data,
+  if (MountSlots[i].userId=userId) then
+  if (strncasecmp(@MountSlots[i].titleId.data,
                   titleId,
                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@gSaveDataBackend.MountSlots[i].dirName.data,
+  if (strncasecmp(@MountSlots[i].dirName.data,
                   dirName,
                   SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
   begin
@@ -430,21 +482,21 @@ begin
  Result:=0;
 end;
 
-function IsActiveMount(userId:Integer;dirName,titleId:pchar):Boolean;
+function TSaveDataBackendProcess.IsActiveMount(userId:Integer;dirName,titleId:pchar):Boolean;
 var
  i:Integer;
 begin
  Result:=False;
 
- For i:=0 to High(gSaveDataBackend.MountSlots) do
- if (gSaveDataBackend.MountSlots[i].active<>0) then
+ For i:=0 to High(MountSlots) do
+ if (MountSlots[i].active<>0) then
  begin
 
-  if (gSaveDataBackend.MountSlots[i].userId=userId) then
-  if (strncasecmp(@gSaveDataBackend.MountSlots[i].titleId.data,
+  if (MountSlots[i].userId=userId) then
+  if (strncasecmp(@MountSlots[i].titleId.data,
                   titleId,
                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)=0) then
-  if (strncasecmp(@gSaveDataBackend.MountSlots[i].dirName.data,
+  if (strncasecmp(@MountSlots[i].dirName.data,
                   dirName,
                   SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)=0) then
   begin
@@ -496,29 +548,35 @@ begin
 
  dirName:=@data.dirName.data;
 
- mtx_lock(GameMountConfig.mount_mtx);
+ if IsActiveMount(data.userId,dirName,titleId) then
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_BUSY;
+ end else
+ begin
 
-  if IsActiveMount(data.userId,dirName,titleId) then
+  if (strncasecmp(@GameMountConfig.InstallDir,
+                  titleId,
+                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
   begin
-   Result:=SCE_SAVE_DATA_ERROR_BUSY;
-  end else
-  begin
-
-   if (strncasecmp(@GameMountConfig.InstallDir,
-                   titleId,
-                   SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
-   begin
-    //trying to delete another game?
-    //check FINGERPRINT?
-   end;
-
-   fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
-
-   //dont check errors
-   game_mount.DeleteDirectory(fs_src,False);
+   //trying to delete another game?
+   //check FINGERPRINT?
   end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+  fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
+
+  if LockDir(fs_src) then
+  begin
+   //dont check errors
+   game_mount.DeleteDirectory(fs_src,False);
+
+   UnLockDir(fs_src);
+  end else
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_BACKUP_BUSY;
+  end;
+
+ end;
+
 end;
 
 type
@@ -618,76 +676,78 @@ begin
 
  slot_id:=0;
 
- mtx_lock(GameMountConfig.mount_mtx);
+ output.result:=GetMountSlotId(data.userId,
+                               dirName,
+                               titleId,
+                               slot_id);
+ if (output.result=0) then
+ begin
 
-  output.result:=GetMountSlotId(data.userId,
-                                dirName,
-                                titleId,
-                                slot_id);
-  if (output.result=0) then
+  fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
+
+  output.mountStatus:=0;
+
+  if DirectoryExists(fs_src) then
   begin
 
-   fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
-
-   output.mountStatus:=0;
-
-   if DirectoryExists(fs_src) then
+   if ((mountMode and SDM_CREATE2)<>0) then
    begin
-
-    if ((mountMode and SDM_CREATE2)<>0) then
-    begin
-     //force
-     FormatMount(fs_src);
-    end else
-    if ((mountMode and SDM_CREATE)<>0) then
-    begin
-     //error
-     output.result:=SCE_SAVE_DATA_ERROR_EXISTS;
-    end;
-
+    //force
+    FormatMount(fs_src);
    end else
+   if ((mountMode and SDM_CREATE)<>0) then
    begin
-
-    if ((mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
-    begin
-     //create
-     if ForceDirectories(fs_src) then
-     begin
-      output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-     end else
-     begin
-      output.result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-     end;
-    end else
-    begin
-     //error
-     output.result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
-    end;
-
+    //error
+    output.result:=SCE_SAVE_DATA_ERROR_EXISTS;
    end;
 
-   if (output.result=0) then
+  end else
+  begin
+
+   if ((mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
    begin
-
-    //save info
-    gSaveDataBackend.MountSlots[slot_id].active:=1;
-    gSaveDataBackend.MountSlots[slot_id].userId:=data.userId;
-
-    strncpy_s(@gSaveDataBackend.MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
-    strncpy_s(@gSaveDataBackend.MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
-
-    gSaveDataBackend.MountSlots[slot_id].fingerprint:=data.fingerprint;
-    gSaveDataBackend.MountSlots[slot_id].max_blocks :=data.blocks;
-
-    //out
-    output.slot_id       :=slot_id;
-    output.requiredBlocks:=0; //TODO
-    output.fs_src        :=fs_src;
+    //create
+    if ForceDirectories(fs_src) then
+    begin
+     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+    end else
+    begin
+     output.result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    end;
+   end else
+   begin
+    //error
+    output.result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
    end;
 
   end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+  if (output.result=0) then
+  if not LockDir(fs_src) then
+  begin
+   output.result:=SCE_SAVE_DATA_ERROR_BACKUP_BUSY;
+  end;
+
+  if (output.result=0) then
+  begin
+   //save info
+   MountSlots[slot_id].active:=1;
+   MountSlots[slot_id].userId:=data.userId;
+
+   strncpy_s(@MountSlots[slot_id].titleId.data,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE  );
+   strncpy_s(@MountSlots[slot_id].dirName.data,dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+   MountSlots[slot_id].fingerprint:=data.fingerprint;
+   MountSlots[slot_id].max_blocks :=data.blocks;
+   MountSlots[slot_id].mountMode  :=mountMode;
+
+   //out
+   output.slot_id       :=slot_id;
+   output.requiredBlocks:=0; //TODO
+   output.fs_src        :=fs_src;
+  end;
+
+ end;
 
  if (output.result=0) then
  begin
@@ -745,22 +805,21 @@ begin
 
  if (DWORD(slot_id)>15) then Exit(-1);
 
- mtx_lock(GameMountConfig.mount_mtx);
+ if (MountSlots[slot_id].active=0) then
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
+ end else
+ begin
+  Result:=0;
+ end;
 
-  if (gSaveDataBackend.MountSlots[slot_id].active=0) then
-  begin
-   Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
-  end else
-  begin
-   Result:=0;
-  end;
-
- mtx_unlock(GameMountConfig.mount_mtx);
 end;
 
 function TSaveDataBackendProcess.OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
 var
  data:TSaveDataUmount;
+ prev:TMountSlot;
+ fs_src:RawByteString;
 begin
  Result:=0;
  data:=Default(TSaveDataUmount);
@@ -768,25 +827,31 @@ begin
 
  if (DWORD(data.slot_id)>15) then Exit(-1);
 
- mtx_lock(GameMountConfig.mount_mtx);
+ if (MountSlots[data.slot_id].active=0) then
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
+ end else
+ begin
+  Result:=0;
 
-  if (gSaveDataBackend.MountSlots[data.slot_id].active=0) then
-  begin
-   Result:=SCE_SAVE_DATA_ERROR_NOT_MOUNTED;
-  end else
-  begin
-   Result:=0;
+  //save
+  prev:=MountSlots[data.slot_id];
 
-   //free
-   gSaveDataBackend.MountSlots[data.slot_id]:=Default(TMountSlot);
-  end;
+  //free
+  MountSlots[data.slot_id]:=Default(TMountSlot);
 
-  if data.backup then
-  begin
-   Writeln('TODO:Umount backup');
-  end;
+  fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId,@prev.dirName);
+  UnLockDir(fs_src);
+ end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ if data.backup and ((prev.mountMode and SDM_RDWR)<>0) then
+ begin
+  SendBackupJob(prev.userId,
+               @prev.titleId,
+               @prev.dirName,
+               @prev.fingerprint);
+ end;
+
 end;
 
 type
@@ -816,13 +881,90 @@ end;
 function TSaveDataBackendProcess.OnSaveDataBackup(Value:TIpcValue):TIpcValue; //SaveDataBackup
 var
  data:TSaveDataBackup;
+ titleId:pchar;
 begin
  Result:=0;
  FillChar(data,SizeOf(data),0);
  Value.MoveTo(@data,SizeOf(data));
 
- Writeln('OnSaveDataBackup:',data.dirName.data);
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.InstallDir;
+ end;
+
+ Result:=SendBackupJob(data.userId,
+                      titleId,
+                      @data.dirName.data,
+                      @data.fingerprint);
 end;
+
+type
+ TBackupJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  fs_dst:RawByteString;
+  fs_tmp:RawByteString;
+  //
+  procedure Run; override;
+ end;
+
+procedure TBackupJob.Run;
+begin
+
+ Writeln(fs_src);
+ Writeln(fs_dst);
+ Writeln(fs_tmp);
+
+ sleep(1000);
+
+ ///
+ gSaveDataBackend.UnLockDir(fs_src)
+end;
+
+function TSaveDataBackendProcess.SendBackupJob(userId     :SceUserServiceUserId;
+                                               titleId    :pchar;
+                                               dirName    :pchar;
+                                               fingerprint:pSceSaveDataFingerprint):Integer;
+var
+ fs_src:RawByteString;
+ fs_dst:RawByteString;
+ fs_tmp:RawByteString;
+ job:TBackupJob;
+begin
+ Result:=0;
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
+ Writeln(fs_src);
+
+ if IsActiveMount(userId,titleId,dirName) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY);
+ end;
+
+ if not DirectoryExists(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);
+ end;
+
+ if not LockDir(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
+ end;
+
+ fs_dst:=GameMountConfig.GetSaveDataBackupFolder(userId,titleId,dirName,False);
+ fs_tmp:=GameMountConfig.GetSaveDataBackupFolder(userId,titleId,dirName,True);
+
+ job:=TBackupJob.Create;
+
+ job.fs_src:=fs_src;
+ job.fs_dst:=fs_dst;
+ job.fs_tmp:=fs_tmp;
+
+ SendCmd(job);
+end;
+
+
 
 end.
 
