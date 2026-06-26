@@ -26,7 +26,9 @@ type
   function GetAppTemporaryFolder:RawByteString;
   function GetAppDownloadFolder(i:Byte):RawByteString;
   function GetSaveDataFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
-  function GetSaveDataBackupFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+  function GetSaveDataBackupDst(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+  function GetSaveDataBackupOld(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+  function GetSaveDataBackupNew(user_id:Integer;_titleId,dirName:pchar):RawByteString;
  end;
 
  TGameMountConfigExport=class(TSerializeObject)
@@ -58,6 +60,7 @@ function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWO
 function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 
 function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
+function CopyDirectory  (const src,dst:RawByteString): boolean;
 function FormatMount(const fs_src:RawByteString):Integer;
 
 implementation
@@ -99,49 +102,101 @@ function TGameMountConfig.GetTemporaryTitleIdFile:RawByteString;
 const
  TEMP_FILE='/system_data/game/tempdata.dat';
 begin
+ mtx_lock(mount_mtx);
+
  Result:=ExcludeTrailingPathDelimiter(LocalDir)+unix_to_host(TEMP_FILE);
+
+ mtx_unlock(mount_mtx);
 end;
 
 function TGameMountConfig.GetAppTemporaryFolder:RawByteString;
 const
  APP_TEMP ='/app_tmp/';
 begin
+ mtx_lock(mount_mtx);
+
  Result:=ExcludeTrailingPathDelimiter(LocalDir)+unix_to_host(APP_TEMP);
+
+ mtx_unlock(mount_mtx);
 end;
 
 function TGameMountConfig.GetAppDownloadFolder(i:Byte):RawByteString;
 const
  APP_DOWNLOAD='%s/user/download/%s/download%d.dat'; // On PS4 these are files, on the emulator, folders
 begin
+ mtx_lock(mount_mtx);
+
  Result:=Format(unix_to_host(APP_DOWNLOAD),[
   ExcludeTrailingPathDelimiter(LocalDir),
   TitleId,
   i
  ]);
+
+ mtx_unlock(mount_mtx);
 end;
 
 function TGameMountConfig.GetSaveDataFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
 const
  APP_SAVE='%s/user/home/%s/savedata/%s/%s';
 begin
+ mtx_lock(mount_mtx);
+
  Result:=Format(unix_to_host(APP_SAVE),[
   ExcludeTrailingPathDelimiter(LocalDir),
   HexStr(user_id,8),
   _titleId,
   dirName
  ]);
+
+ mtx_unlock(mount_mtx);
 end;
 
-function TGameMountConfig.GetSaveDataBackupFolder(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+function TGameMountConfig.GetSaveDataBackupDst(user_id:Integer;_titleId,dirName:pchar):RawByteString;
 const
  APP_SAVE='%s/user/home/%s/savedata/%s/sce_bu_%s';
 begin
+ mtx_lock(mount_mtx);
+
  Result:=Format(unix_to_host(APP_SAVE),[
   ExcludeTrailingPathDelimiter(LocalDir),
   HexStr(user_id,8),
   _titleId,
   dirName
  ]);
+
+ mtx_unlock(mount_mtx);
+end;
+
+function TGameMountConfig.GetSaveDataBackupOld(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+const
+ APP_SAVE='%s/user/home/%s/savedata/%s/sce_bu_tmp_%s';
+begin
+ mtx_lock(mount_mtx);
+
+ Result:=Format(unix_to_host(APP_SAVE),[
+  ExcludeTrailingPathDelimiter(LocalDir),
+  HexStr(user_id,8),
+  _titleId,
+  dirName
+ ]);
+
+ mtx_unlock(mount_mtx);
+end;
+
+function TGameMountConfig.GetSaveDataBackupNew(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+const
+ APP_SAVE='%s/user/home/%s/savedata/sce_backup/%s';
+begin
+ mtx_lock(mount_mtx);
+
+ Result:=Format(unix_to_host(APP_SAVE),[
+  ExcludeTrailingPathDelimiter(LocalDir),
+  HexStr(user_id,8),
+  _titleId,
+  dirName
+ ]);
+
+ mtx_unlock(mount_mtx);
 end;
 
 function get_errno_str(err:Integer):RawByteString;
@@ -572,6 +627,168 @@ _next:
   end;
 
   Result:=true;
+end;
+
+function CopyFile(const SrcFilename, DestFilename: RawByteString): boolean;
+var
+  SrcHandle: THandle;
+  DestHandle: THandle;
+  Buffer: array[1..4096] of byte;
+  ReadCount, WriteCount, TryCount: Integer;
+begin
+  Result := False;
+
+  // check directory
+  if (not DirectoryExists(ExtractFilePath(DestFileName))) then
+  begin
+   if (not ForceDirectories(ExtractFilePath(DestFileName))) then Exit;
+  end;
+
+  TryCount := 0;
+  While (TryCount <> 3) Do
+  Begin
+   SrcHandle := FileOpen(SrcFilename, fmOpenRead or fmShareDenyWrite);
+   if (SrcHandle = feInvalidHandle) then
+   Begin
+     Inc(TryCount);
+     Sleep(10);
+   end else
+   Begin
+     TryCount := 0;
+     Break;
+   end;
+  End;
+
+  If (TryCount > 0) then Exit;
+
+  try
+    DestHandle := FileCreate(DestFileName);
+    if (DestHandle = feInvalidHandle) then Exit;
+    try
+      repeat
+        ReadCount:=FileRead(SrcHandle,Buffer[1],High(Buffer));
+        if (ReadCount<=0) then break;
+        WriteCount:=FileWrite(DestHandle,Buffer[1],ReadCount);
+        if (WriteCount<ReadCount) then Exit;
+      until false;
+    finally
+      FileClose(DestHandle);
+    end;
+
+    //
+    FileSetDate(DestFilename, FileGetDate(SrcHandle));
+    FileSetAttr(DestFilename, FileGetAttr(SrcFilename));
+    //
+
+    Result := True;
+  finally
+     FileClose(SrcHandle);
+  end;
+end;
+
+function CopyDirectory(const src,dst:RawByteString): boolean;
+type
+ PNode=^TNode;
+ TNode=record
+  N:PNode;
+  fdst:RawByteString;
+  fsrc:RawByteString;
+ end;
+
+var
+ stack:PNode;
+
+ procedure Push(const dst,src:RawByteString);
+ var
+  new:PNode;
+ begin
+  new:=GetMem(SizeOf(TNode));
+  Initialize(new^);
+  new^.N:=stack;
+  new^.fdst:=dst;
+  new^.fsrc:=src;
+  stack:=new;
+ end;
+
+ Function Pop(var dst,src:RawByteString):Boolean;
+ var
+  old:PNode;
+ begin
+  if (stack<>nil) then
+  begin
+   old:=stack;
+   stack:=old^.N;
+   dst:=old^.fdst;
+   src:=old^.fsrc;
+   Finalize(old^);
+   FreeMem(old);
+   Result:=True;
+  end else
+  begin
+   Result:=False;
+  end;
+ end;
+
+var
+  FileInfo: TSearchRec;
+  CurDstDir: RawByteString;
+  CurSrcDir: RawByteString;
+  NewDstDir: RawByteString;
+  NewSrcDir: RawByteString;
+label
+  _next,
+  _fail;
+begin
+  Result:=false;
+  CurDstDir:=IncludeTrailingPathDelimiter(dst);
+  CurSrcDir:=IncludeTrailingPathDelimiter(src);
+
+  Result:=ForceDirectories(CurDstDir);
+  if not Result then Exit;
+
+  stack:=nil;
+ _next:
+  if SysUtils.FindFirst(CurSrcDir+GetAllFilesMask,FindMask,FileInfo)=0 then
+  begin
+   repeat
+     // check if special file
+     if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
+     begin
+       continue;
+     end;
+     //
+     if ((FileInfo.Attr and faDirectory)>0)
+        {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
+     begin
+       NewDstDir:=IncludeTrailingPathDelimiter(CurDstDir+FileInfo.Name);
+       NewSrcDir:=IncludeTrailingPathDelimiter(CurSrcDir+FileInfo.Name);
+       Push(NewDstDir,NewSrcDir);
+       //
+       Result:=CreateDir(NewDstDir);
+       if (not Result) then goto _fail;
+     end else
+     begin
+      NewDstDir:=(CurDstDir+FileInfo.Name);
+      NewSrcDir:=(CurSrcDir+FileInfo.Name);
+
+      Result:=CopyFile(NewSrcDir,NewDstDir);
+      if (not Result) then
+      begin
+       _fail:
+        while Pop(CurDstDir,CurSrcDir) do;
+        Exit;
+      end;
+     end;
+   until SysUtils.FindNext(FileInfo)<>0;
+   SysUtils.FindClose(FileInfo);
+  end;
+
+  if Pop(CurDstDir,CurSrcDir) then
+  begin
+   goto _next;
+  end;
+
+ Result:=True;
 end;
 
 function GetDirectorySizeLikePFS(const DirectoryName:RawByteString):Int64;

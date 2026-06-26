@@ -29,7 +29,6 @@ type
   mountStatus   :DWORD;
   slot_id       :DWORD;
   requiredBlocks:SceSaveDataBlocks;
-  fs_src        :array[0..260] of Char;
  end;
 
  TSaveDataBackendConnect=class
@@ -380,7 +379,7 @@ begin
   //
  end else
  begin
-  node^.fs_src:=Default(RawByteString);
+  Finalize(node^);
   FreeMem(node);
  end;
 end;
@@ -401,7 +400,7 @@ begin
 
  if (node<>nil) then
  begin
-  node^.fs_src:=Default(RawByteString);
+  Finalize(node^);
   FreeMem(node);
  end;
 end;
@@ -594,6 +593,9 @@ function TSaveDataBackendConnect.SaveDataMount(mount:pSceSaveDataMount;var pResu
 var
  data:TSaveDataMount;
  Value:TIpcValue;
+
+ titleId:pchar;
+ fs_src :RawByteString;
 begin
  FillChar(data,SizeOf(data),0);
   data.userId     :=mount^.userId;
@@ -608,7 +610,8 @@ begin
   data.Transfering:=Transfering;
 
  Value:=kipc.InvokeSync('SaveDataMount',TIpcValue.Static(@data,sizeof(data)));
- FillChar(data,SizeOf(data),0);
+
+ FillChar(pResult,SizeOf(pResult),0);
  Value.MoveTo(@pResult,SizeOf(pResult));
 
  Value.Free;
@@ -618,9 +621,17 @@ begin
  if (Result=0) then
  begin
 
+  titleId:=@data.titleId.data;
+  if (titleId[0]=#0) then
+  begin
+   titleId:=@GameMountConfig.InstallDir;
+  end;
+
+  fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,@data.dirName.data);
+
   Result:=vfs_mountroot.mount_into_sandbox('ufs',
                                            pchar(mount_savedata_slot_name[pResult.slot_id]),
-                                           pchar(pResult.fs_src),
+                                           pchar(fs_src),
                                            nil,
                                            ord((data.mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
                                            MNT_EMU_PFS);
@@ -744,7 +755,6 @@ begin
    //out
    output.slot_id       :=slot_id;
    output.requiredBlocks:=0; //TODO
-   output.fs_src        :=fs_src;
   end;
 
  end;
@@ -904,19 +914,110 @@ type
   //
   fs_src:RawByteString;
   fs_dst:RawByteString;
-  fs_tmp:RawByteString;
+  fs_old:RawByteString;
+  fs_new:RawByteString;
   //
+  function  Prepare:Boolean;
+  function  Backup :Boolean;
   procedure Run; override;
  end;
 
+function TBackupJob.Prepare:Boolean;
+begin
+ Result:=False;
+
+ if DirectoryExists(fs_old) and (not DirectoryExists(fs_dst)) then
+ begin
+  //rollback an unfinished transaction
+  if RenameFile(fs_old,fs_dst) then
+  begin
+   Writeln('rollback an unfinished transaction:',{$INCLUDE %LINENUM%});
+  end else
+  begin
+   Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+   Exit;
+  end;
+ end;
+
+ //clear new
+ if DirectoryExists(fs_new) then
+ begin
+  if game_mount.DeleteDirectory(fs_new,False) then
+  begin
+   //
+  end else
+  begin
+   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+   Exit;
+  end;
+ end;
+
+ Result:=True;
+end;
+
+function TBackupJob.Backup:Boolean;
+begin
+ Result:=False;
+
+ if not Prepare then Exit;
+
+ //copy src->new
+ if game_mount.CopyDirectory(fs_src,fs_new) then
+ begin
+  //
+ end else
+ begin
+  Writeln('CopyDirectory failed:',{$INCLUDE %LINENUM%});
+  Prepare;
+  Exit;
+ end;
+
+ //move dst->old
+ if DirectoryExists(fs_dst) then
+ begin
+  if RenameFile(fs_dst,fs_old) then
+  begin
+   //
+  end else
+  begin
+   Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+   Prepare;
+   Exit;
+  end;
+ end;
+
+ //move new->dst
+ if RenameFile(fs_new,fs_dst) then
+ begin
+  //
+ end else
+ begin
+  Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+  Prepare;
+  Exit;
+ end;
+
+ //delete old
+ if DirectoryExists(fs_old) then
+ begin
+  if game_mount.DeleteDirectory(fs_old,False) then
+  begin
+   //
+  end else
+  begin
+   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+   Exit;
+  end;
+ end;
+
+ Result:=True;
+end;
+
 procedure TBackupJob.Run;
 begin
+ Backup;
 
- Writeln(fs_src);
- Writeln(fs_dst);
- Writeln(fs_tmp);
-
- sleep(1000);
+ sleep(200);
 
  ///
  gSaveDataBackend.UnLockDir(fs_src)
@@ -928,14 +1029,11 @@ function TSaveDataBackendProcess.SendBackupJob(userId     :SceUserServiceUserId;
                                                fingerprint:pSceSaveDataFingerprint):Integer;
 var
  fs_src:RawByteString;
- fs_dst:RawByteString;
- fs_tmp:RawByteString;
  job:TBackupJob;
 begin
  Result:=0;
 
  fs_src:=GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
- Writeln(fs_src);
 
  if IsActiveMount(userId,titleId,dirName) then
  begin
@@ -952,14 +1050,12 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
  end;
 
- fs_dst:=GameMountConfig.GetSaveDataBackupFolder(userId,titleId,dirName,False);
- fs_tmp:=GameMountConfig.GetSaveDataBackupFolder(userId,titleId,dirName,True);
-
  job:=TBackupJob.Create;
 
  job.fs_src:=fs_src;
- job.fs_dst:=fs_dst;
- job.fs_tmp:=fs_tmp;
+ job.fs_dst:=GameMountConfig.GetSaveDataBackupDst(userId,titleId,dirName);
+ job.fs_old:=GameMountConfig.GetSaveDataBackupOld(userId,titleId,dirName);
+ job.fs_new:=GameMountConfig.GetSaveDataBackupNew(userId,titleId,dirName);
 
  SendCmd(job);
 end;
