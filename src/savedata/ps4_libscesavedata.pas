@@ -834,6 +834,14 @@ end;
 
 function ps4_sceSaveDataCheckBackupData(check:pSceSaveDataCheckBackupData):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ Result:=CheckCheckBackupData(check,False);
+ if (Result<>0) then Exit;
+
  Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
 end;
 

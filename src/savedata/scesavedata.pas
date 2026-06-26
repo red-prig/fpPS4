@@ -319,6 +319,19 @@ type
   reserved   :array[0..31] of Byte;
  end;
 
+ pSceSaveDataRestoreBackupData=^SceSaveDataRestoreBackupData;
+ SceSaveDataRestoreBackupData=packed record
+  userId     :SceUserServiceUserId;
+  _align1    :Integer;
+  titleId    :pSceSaveDataTitleId;
+  dirName    :pSceSaveDataDirName;
+  fingerprint:pSceSaveDataFingerprint;
+  progress   :DWORD; //SDK_VERSION <  0x3500000
+  reserved   :array[0..31] of Byte;
+  _align2    :Integer;
+ end;
+
+
 const
  mount_savedata_slot_name:array[0..15] of SceSaveDataMountPoint=(
   '/savedata0',
@@ -354,7 +367,9 @@ function CheckSaveDataMount(mount      :pSceSaveDataMount;
                             pResult    :pSceSaveDataMountResult;
                             Transfering:Boolean):Integer;
 
-function CheckSaveDataBackup(backup:pSceSaveDataBackup):Integer;
+function CheckSaveDataBackup   (backup:pSceSaveDataBackup):Integer;
+function CheckCheckBackupData  (check:pSceSaveDataCheckBackupData;internal:Boolean):Integer;
+function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
 
 implementation
 
@@ -919,6 +934,89 @@ begin
  end;
 end;
 
+function CheckSaveDataIcon(icon:pSceSaveDataIcon):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (icon=nil) then Exit;
+
+ if (icon^.buf<>nil) then
+ if (icon^.bufSize<>0) then
+ if CheckReserved(icon^.reserved,sizeof(icon^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckCheckBackupData(check:pSceSaveDataCheckBackupData;internal:Boolean):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (check=nil) then Exit;
+
+ if IsLoggedIn(check^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(check^.titleId)=0 then
+ begin
+  if (check^.dirName=nil) then Exit;
+  if (check^.dirName^.data[0]=#0) then Exit;
+
+  if CheckDirName(check^.dirName,internal)=0 then
+  begin
+
+   if (check^.param<>nil) then
+   begin
+    if not CheckReserved(check^.param^.reserved,sizeof(check^.param^.reserved)) then
+    begin
+     Exit;
+    end;
+   end;
+
+   if (check^.icon<>nil) then
+   begin
+    if CheckSaveDataIcon(check^.icon)<>0 then
+    begin
+     Exit;
+    end;
+   end;
+
+   if CheckReserved(check^.reserved,sizeof(check^.reserved)) then
+   begin
+    Result:=0;
+   end;
+  end;
+ end;
+end;
+
+function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (restore=nil) then Exit;
+
+ if IsLoggedIn(restore^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(restore^.titleId)=0 then
+ if CheckDirName(restore^.dirName,False)=0 then
+ if CheckFingerprint(restore^.fingerprint)=0 then
+ if CheckReserved(restore^.reserved,sizeof(restore^.reserved)) then
+ begin
+
+  if (restore^.titleId=nil) and (restore^.fingerprint<>nil) then
+  begin
+   Exit;
+  end else
+  if (restore^.fingerprint=nil) then
+  begin
+   Exit;
+  end;
+
+  Result:=0;
+ end;
+end;
 
 end.
 

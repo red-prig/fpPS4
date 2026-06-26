@@ -534,6 +534,9 @@ var
  titleId:pchar;
  dirName:pchar;
  fs_src :RawByteString;
+ fs_dst :RawByteString;
+ fs_old :RawByteString;
+ fs_new :RawByteString;
 begin
  Result:=0;
  FillChar(data,SizeOf(data),0);
@@ -565,7 +568,14 @@ begin
 
   if LockDir(fs_src) then
   begin
+   fs_dst:=GameMountConfig.GetSaveDataBackupDst(data.userId,titleId,dirName);
+   fs_old:=GameMountConfig.GetSaveDataBackupOld(data.userId,titleId,dirName);
+   fs_new:=GameMountConfig.GetSaveDataBackupNew(data.userId,titleId,dirName);
+
    //dont check errors
+   game_mount.DeleteDirectory(fs_dst,False);
+   game_mount.DeleteDirectory(fs_old,False);
+   game_mount.DeleteDirectory(fs_new,False);
    game_mount.DeleteDirectory(fs_src,False);
 
    UnLockDir(fs_src);
