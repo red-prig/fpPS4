@@ -38,10 +38,12 @@ type
   Constructor Create;
   Destructor  Destroy; override;
   procedure   SendMountConfig();
-  function    SaveDataDelete(del:pSceSaveDataDelete):Integer;
-  function    SaveDataMount (mount:pSceSaveDataMount;var pResult:TSaveDataMountResult;Transfering:Boolean):Integer;
-  function    SaveDataUmount(slot_id:Integer;backup:boolean):Integer;
-  function    SaveDataBackup(backup:pSceSaveDataBackup):Integer;
+  function    SaveDataDelete   (del:pSceSaveDataDelete):Integer;
+  function    SaveDataMount    (mount:pSceSaveDataMount;var pResult:TSaveDataMountResult;Transfering:Boolean):Integer;
+  function    SaveDataUmount   (slot_id:Integer;backup:boolean):Integer;
+  function    SaveDataBackup   (backup:pSceSaveDataBackup):Integer;
+  function    CheckBackupData  (check:pSceSaveDataCheckBackupData):Integer;
+  function    RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
  end;
 
  TCustomCommand=class;
@@ -117,6 +119,8 @@ type
                                titleId    :pchar;
                                dirName    :pchar;
                                fingerprint:pSceSaveDataFingerprint):Integer;
+  function    OnCheckBackupData(Value:TIpcValue):TIpcValue; //CheckBackupData
+  function    OnRestoreBackupData(Value:TIpcValue):TIpcValue; //RestoreBackupData
  end;
 
 implementation
@@ -331,13 +335,15 @@ begin
  kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
  //
- kipc.FHandler.AddCallback('EXIT_PROC'     ,@OnExitProc);
- kipc.FHandler.AddCallback('MOUNT_CONFIG'  ,@OnMountConfig);
- kipc.FHandler.AddCallback('SaveDataDelete',@OnSaveDataDelete);
- kipc.FHandler.AddCallback('SaveDataMount' ,@OnSaveDataMount);
- kipc.FHandler.AddCallback('IsActiveMount' ,@OnIsActiveMount);
- kipc.FHandler.AddCallback('SaveDataUmount',@OnSaveDataUmount);
- kipc.FHandler.AddCallback('SaveDataBackup',@OnSaveDataBackup);
+ kipc.FHandler.AddCallback('EXIT_PROC'        ,@OnExitProc);
+ kipc.FHandler.AddCallback('MOUNT_CONFIG'     ,@OnMountConfig);
+ kipc.FHandler.AddCallback('SaveDataDelete'   ,@OnSaveDataDelete);
+ kipc.FHandler.AddCallback('SaveDataMount'    ,@OnSaveDataMount);
+ kipc.FHandler.AddCallback('IsActiveMount'    ,@OnIsActiveMount);
+ kipc.FHandler.AddCallback('SaveDataUmount'   ,@OnSaveDataUmount);
+ kipc.FHandler.AddCallback('SaveDataBackup'   ,@OnSaveDataBackup);
+ kipc.FHandler.AddCallback('CheckBackupData'  ,@OnCheckBackupData);
+ kipc.FHandler.AddCallback('RestoreBackupData',@OnRestoreBackupData);
  //
  inherited;
 end;
@@ -920,19 +926,42 @@ begin
 end;
 
 type
- TBackupJob=class(TCustomCommand)
+ TCustomBackupJob=class(TCustomCommand)
   //
   fs_src:RawByteString;
   fs_dst:RawByteString;
   fs_old:RawByteString;
   fs_new:RawByteString;
   //
+  procedure Init(user_id:Integer;_titleId,_dirName:pchar);
+  procedure UnLock();
   function  Prepare:Boolean;
-  function  Backup :Boolean;
+  function  Check:Boolean;
+ end;
+
+ TBackupJob=class(TCustomBackupJob)
+  function  Backup:Boolean;
   procedure Run; override;
  end;
 
-function TBackupJob.Prepare:Boolean;
+ TRestoreJob=class(TCustomBackupJob)
+  function  Restore:Boolean;
+ end;
+
+procedure TCustomBackupJob.Init(user_id:Integer;_titleId,_dirName:pchar);
+begin
+ fs_src:=GameMountConfig.GetSaveDataFolder   (user_id,_titleId,_dirName);
+ fs_dst:=GameMountConfig.GetSaveDataBackupDst(user_id,_titleId,_dirName);
+ fs_old:=GameMountConfig.GetSaveDataBackupOld(user_id,_titleId,_dirName);
+ fs_new:=GameMountConfig.GetSaveDataBackupNew(user_id,_titleId,_dirName);
+end;
+
+procedure TCustomBackupJob.UnLock();
+begin
+ gSaveDataBackend.UnLockDir(fs_src);
+end;
+
+function TCustomBackupJob.Prepare:Boolean;
 begin
  Result:=False;
 
@@ -945,6 +974,19 @@ begin
   end else
   begin
    Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+   Exit;
+  end;
+ end;
+
+ //clear old
+ if DirectoryExists(fs_old) then
+ begin
+  if game_mount.DeleteDirectory(fs_old,False) then
+  begin
+   //
+  end else
+  begin
+   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
    Exit;
   end;
  end;
@@ -963,6 +1005,11 @@ begin
  end;
 
  Result:=True;
+end;
+
+function TCustomBackupJob.Check:Boolean;
+begin
+ Result:=DirectoryExists(fs_dst);
 end;
 
 function TBackupJob.Backup:Boolean;
@@ -1030,7 +1077,45 @@ begin
  sleep(200);
 
  ///
- gSaveDataBackend.UnLockDir(fs_src)
+ UnLock;
+end;
+
+function TRestoreJob.Restore:Boolean;
+begin
+ Result:=False;
+
+ if not Prepare then Exit;
+
+ //TODO: set corrupt flag
+
+ //TODO: partial delete
+
+ //delete files in src
+ if game_mount.DeleteDirectory(fs_src,True) then
+ begin
+  //
+ end else
+ begin
+  Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+  Exit;
+ end;
+
+ //TODO: partial copy
+
+ //copy dst->src
+ if game_mount.CopyDirectory(fs_dst,fs_src) then
+ begin
+  //
+ end else
+ begin
+  Writeln('CopyDirectory failed:',{$INCLUDE %LINENUM%});
+  Prepare;
+  Exit;
+ end;
+
+ //TODO: reset corrupt flag
+
+ Result:=True;
 end;
 
 function TSaveDataBackendProcess.SendBackupJob(userId     :SceUserServiceUserId;
@@ -1043,12 +1128,12 @@ var
 begin
  Result:=0;
 
- fs_src:=GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
-
- if IsActiveMount(userId,titleId,dirName) then
+ if IsActiveMount(userId,dirName,titleId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_BUSY);
  end;
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
 
  if not DirectoryExists(fs_src) then
  begin
@@ -1061,15 +1146,146 @@ begin
  end;
 
  job:=TBackupJob.Create;
-
- job.fs_src:=fs_src;
- job.fs_dst:=GameMountConfig.GetSaveDataBackupDst(userId,titleId,dirName);
- job.fs_old:=GameMountConfig.GetSaveDataBackupOld(userId,titleId,dirName);
- job.fs_new:=GameMountConfig.GetSaveDataBackupNew(userId,titleId,dirName);
+ job.Init(userId,titleId,dirName);
 
  SendCmd(job);
 end;
 
+function TSaveDataBackendConnect.CheckBackupData(check:pSceSaveDataCheckBackupData):Integer;
+var
+ data:TSaveDataBackup;
+begin
+ FillChar(data,SizeOf(data),0);
+  data.userId     :=check^.userId;
+ if (check^.titleId<>nil) then
+  data.titleId    :=check^.titleId^;
+ if (check^.dirName<>nil) then
+  data.dirName    :=check^.dirName^;
+
+ Result:=kipc.InvokeSync2('CheckBackupData',@data,sizeof(data));
+
+ //TODO result:
+ //param      :pSceSaveDataParam;
+ //icon       :pSceSaveDataIcon;
+end;
+
+function TSaveDataBackendProcess.OnCheckBackupData(Value:TIpcValue):TIpcValue; //CheckBackupData
+var
+ data:TSaveDataBackup;
+ titleId:pchar;
+ dirName:pchar;
+
+ fs_src:RawByteString;
+ job:TCustomBackupJob;
+begin
+ Result:=0;
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.InstallDir;
+ end;
+
+ dirName:=@data.dirName.data;
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
+
+ if not DirectoryExists(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);
+ end;
+
+ if not LockDir(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
+ end;
+
+ job:=TBackupJob.Create;
+ job.Init(data.userId,titleId,dirName);
+
+ if job.Prepare then
+ begin
+  if not job.Check then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+  end;
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end;
+
+ job.UnLock();
+ job.Free;
+end;
+
+function TSaveDataBackendConnect.RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+var
+ data:TSaveDataBackup;
+begin
+ FillChar(data,SizeOf(data),0);
+  data.userId     :=restore^.userId;
+ if (restore^.titleId<>nil) then
+  data.titleId    :=restore^.titleId^;
+ if (restore^.dirName<>nil) then
+  data.dirName    :=restore^.dirName^;
+
+ Result:=kipc.InvokeSync2('RestoreBackupData',@data,sizeof(data));
+end;
+
+function TSaveDataBackendProcess.OnRestoreBackupData(Value:TIpcValue):TIpcValue; //RestoreBackupData
+var
+ data:TSaveDataBackup;
+ titleId:pchar;
+ dirName:pchar;
+
+ fs_src:RawByteString;
+ job:TRestoreJob;
+begin
+ Result:=0;
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.InstallDir;
+ end;
+
+ dirName:=@data.dirName.data;
+
+ if IsActiveMount(data.userId,dirName,titleId) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY);
+ end;
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
+
+ if not DirectoryExists(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);
+ end;
+
+ if not LockDir(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
+ end;
+
+ job:=TRestoreJob.Create;
+ job.Init(data.userId,titleId,dirName);
+
+ if job.Restore then
+ begin
+  //
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end;
+
+ job.UnLock();
+ job.Free;
+end;
 
 
 end.

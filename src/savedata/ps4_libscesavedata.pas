@@ -385,6 +385,18 @@ begin
   Result:=g_instance.Backend.SaveDataDelete(del);
 
  mtx_unlock(g_instance.mtx);
+
+ if (Result=0) then
+ begin
+  if (p_proc.p_sdk_version < $3500000) then
+  begin
+   del^.progress:=100;
+  end else
+  begin
+   //
+  end;
+ end;
+
 end;
 
 function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer;
@@ -423,22 +435,23 @@ begin
 
   Result:=g_instance.Backend.SaveDataMount(mount,output,Transfering);
 
-  if (Result=0) then
-  begin
-   //out
-   pResult^.mountPoint    :=mount_savedata_slot_name[output.slot_id];
-   pResult^.requiredBlocks:=output.requiredBlocks;
-
-   if (p_proc.p_sdk_version < $3500000) then
-   begin
-    pResult^.progress:=100;
-   end else
-   begin
-    pResult^.mountStatus:=output.mountStatus;
-   end;
-  end;
-
  mtx_unlock(g_instance.mtx);
+
+ if (Result=0) then
+ begin
+  //out
+  pResult^.mountPoint    :=mount_savedata_slot_name[output.slot_id];
+  pResult^.requiredBlocks:=output.requiredBlocks;
+
+  if (p_proc.p_sdk_version < $3500000) then
+  begin
+   pResult^.progress:=100;
+  end else
+  begin
+   pResult^.mountStatus:=output.mountStatus;
+  end;
+ end;
+
 end;
 
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
@@ -812,6 +825,29 @@ begin
  //sceSaveDataDelete()
  //sceSaveDataRestoreBackupData()
  //sceSaveDataGetProgress()
+
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ Result:=0;
+end;
+
+function ps4_sceSaveDataGetProgress(progress:PSingle):Integer;
+begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ if (progress=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ progress^:=0;
+
  Result:=0;
 end;
 
@@ -842,7 +878,40 @@ begin
  Result:=CheckCheckBackupData(check,False);
  if (Result<>0) then Exit;
 
- Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.CheckBackupData(check);
+
+ mtx_unlock(g_instance.mtx);
+end;
+
+function ps4_sceSaveDataRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ Result:=CheckRestoreBackupData(restore);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.RestoreBackupData(restore);
+
+ mtx_unlock(g_instance.mtx);
+
+ if (Result=0) then
+ begin
+  if (p_proc.p_sdk_version < $3500000) then
+  begin
+   restore^.progress:=100;
+  end else
+  begin
+   //
+  end;
+ end;
+
 end;
 
 procedure init_save;
@@ -884,8 +953,10 @@ begin
  lib.set_proc($BFF00AD40C50852D,@ps4_sceSaveDataUnregisterEventCallback);
  lib.set_proc($8FCC4AB62163D126,@ps4_sceSaveDataGetEventResult);
  lib.set_proc($5B3FF82597DE3BD8,@ps4_sceSaveDataClearProgress);
+ lib.set_proc($00D9925948B2C864,@ps4_sceSaveDataGetProgress);
  lib.set_proc($CF5240F3F889B779,@ps4_sceSaveDataBackup);
  lib.set_proc($4503AA0DB9376D25,@ps4_sceSaveDataCheckBackupData);
+ lib.set_proc($954F58445B20C125,@ps4_sceSaveDataRestoreBackupData);
 
  //init_save;
 end;

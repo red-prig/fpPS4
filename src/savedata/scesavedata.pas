@@ -989,7 +989,7 @@ begin
  end;
 end;
 
-function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+function CheckRestoreBackupData1(restore:pSceSaveDataRestoreBackupData):Integer; inline;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (restore=nil) then Exit;
@@ -1005,9 +1005,12 @@ begin
  if CheckReserved(restore^.reserved,sizeof(restore^.reserved)) then
  begin
 
-  if (restore^.titleId=nil) and (restore^.fingerprint<>nil) then
+  if (restore^.titleId=nil) then
   begin
-   Exit;
+   if (restore^.fingerprint<>nil) then
+   begin
+    Exit;
+   end;
   end else
   if (restore^.fingerprint=nil) then
   begin
@@ -1015,6 +1018,50 @@ begin
   end;
 
   Result:=0;
+ end;
+end;
+
+function CheckRestoreBackupData2(restore:pSceSaveDataRestoreBackupData):Integer; inline;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (restore=nil) then Exit;
+
+ if IsLoggedIn(restore^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(restore^.titleId)=0 then
+ if CheckDirName(restore^.dirName,False)=0 then
+ if CheckFingerprint(restore^.fingerprint)=0 then
+ if (restore^.progress=0) then
+ if CheckReserved(restore^.reserved,sizeof(restore^.reserved)) then
+ begin
+
+  if (restore^.titleId=nil) then
+  begin
+   if (restore^.fingerprint<>nil) then
+   begin
+    Exit;
+   end;
+  end else
+  if (restore^.fingerprint=nil) then
+  begin
+   Exit;
+  end;
+
+  Result:=0;
+ end;
+end;
+
+function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+begin
+ if (p_proc.p_sdk_version < $3500000) then
+ begin
+  Result:=CheckRestoreBackupData1(restore);
+ end else
+ begin
+  Result:=CheckRestoreBackupData2(restore);
  end;
 end;
 
