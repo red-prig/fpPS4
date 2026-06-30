@@ -854,8 +854,8 @@ end;
 
 procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
 begin
- md_open(LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FAddHandle);
- md_openat(FAddHandle,'',O_RDONLY,0,FGetHandle);
+ md_open  (LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FAddHandle);
+ md_openat(FAddHandle,'',O_RDWR,0,FGetHandle);
 
  FileSeek(FAddHandle,0,fsFromEnd);
 end;
@@ -1195,7 +1195,7 @@ end;
 procedure TfrmMain.ClearLog;
 begin
  //reset file
- FileTruncate(FAddHandle,0);
+ FileTruncate(FGetHandle,0);
  FList.Reset(True);
  //
 end;
