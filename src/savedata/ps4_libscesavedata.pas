@@ -7,6 +7,8 @@ interface
 
 uses
  sysutils,
+ LFQueue,
+ mqueue,
  errno,
  SceSaveData,
  SaveDataBackend,
@@ -14,6 +16,7 @@ uses
  kern_proc,
  kern_ksched,
  kern_authinfo,
+ md_event,
  kern_mtx,
  mpmc_queue,
  subr_dynlib,
@@ -63,6 +66,31 @@ end;
 type
  t_init_version=(VERSION_INIT_0,VERSION_INIT_2,VERSION_INIT_3,VERSION_INIT_CDLG);
 
+ TCustomCommand=class
+  type
+   PQNode=^TQNode;
+   TQNode=object
+    entry:TAILQ_ENTRY;
+    self_:TCustomCommand;
+   end;
+  var
+   node  :TQNode;
+   finish:Boolean;
+  Constructor Create;
+  procedure   Run; virtual;
+ end;
+
+ TJobList=object
+  signal:t_event;
+  queue :TIntrusiveMPSCQueue;
+  tqlist:TAILQ_HEAD;
+  count :Integer;
+  procedure Init;
+  procedure Fini;
+  procedure SendCmd(cmd:TCustomCommand);
+  procedure Action;
+ end;
+
  TSaveDataInstance=class
   version             :t_init_version;
   memory_timeout_10sec:Boolean;
@@ -74,6 +102,8 @@ type
   cpuAffinityMask     :QWORD;
   job_thread          :Pointer;
   mtx                 :mtx;
+  //
+  job_list            :TJobList;
   //
   Backend:TSaveDataBackendConnect;
   //
@@ -134,6 +164,8 @@ end;
 function InitInstance(instance:TSaveDataInstance;params:Pointer;version:t_init_version):Integer;
 begin
  mtx_init(instance.mtx,'SaveDataInstance');
+ //
+
  instance.version        :=version;
  instance.priority       :=700;
  instance.threadStackSize:=$4000;
@@ -223,14 +255,110 @@ begin
  end;
 end;
 
-procedure job_thread(instance:TSaveDataInstance); SysV_ABI_CDecl;
+///
+
+Constructor TCustomCommand.Create;
 begin
+ node.self_:=self;
+ finish:=False;
+end;
+
+procedure TCustomCommand.Run;
+begin
+ //
+end;
+
+//
+
+procedure TJobList.Init;
+begin
+ ev_init(signal,'signal');
+ queue.Create;
+ TAILQ_INIT(@tqlist);
+ count:=0;
+end;
+
+procedure TJobList.Fini;
+var
+ node:TCustomCommand.PQNode;
+ cmd:TCustomCommand;
+begin
+ node:=nil;
+ while (queue.Pop(node)) do
+ begin
+  cmd:=node^.self_;
+  cmd.Free;
+ end;
+
+ node:=TAILQ_FIRST(@tqlist);
+ while (node<>nil) do
+ begin
+  cmd:=node^.self_;
+  cmd.Free;
+  ///
+  node:=TAILQ_FIRST(@tqlist);
+ end;
+
+ count:=0;
+end;
+
+procedure TJobList.SendCmd(cmd:TCustomCommand);
+begin
+ if (cmd=nil) then Exit;
+ queue.Push(@cmd.node);
+ ev_signal(signal);
+end;
+
+procedure TJobList.Action;
+var
+ node,next:TCustomCommand.PQNode;
+ cmd:TCustomCommand;
+begin
+ node:=nil;
+ while (queue.Pop(node)) do
+ begin
+  TAILQ_INSERT_TAIL(@tqlist,node,@node^.entry);
+  Inc(count);
+ end;
+
+ if (count=0) then
+ begin
+  ev_wait(signal);
+ end;
+
+ node:=TAILQ_FIRST(@tqlist);
+ while (node<>nil) do
+ begin
+  next:=TAILQ_NEXT(node,@node^.entry);
+  //
+  cmd:=node^.self_;
+
+  if cmd.finish then
+  begin
+   TAILQ_REMOVE(@tqlist,node,@node^.entry);
+   Dec(count);
+   cmd.Free;
+  end else
+  begin
+   cmd.Run;
+  end;
+
+  ///
+  node:=next;
+ end;
+end;
+
+function job_thread(data:Pointer):Pointer; SysV_ABI_CDecl;
+var
+ instance:TSaveDataInstance;
+begin
+ Result:=nil;
  instance:=g_instance;
 
  writeln('job_thread');
 
  repeat
-  //
+  instance.job_list.Action;
 
   sleep(16);
  until instance.thread_stop;
@@ -270,6 +398,7 @@ var
  p_policy     :PInteger;
  p_thread_name:PChar;
 begin
+ instance.job_list.Init;
  instance.thread_stop:=False;
  instance.job_thread :=nil;
 
@@ -314,8 +443,12 @@ begin
  if (instance.job_thread<>nil) then
  begin
   instance.thread_stop:=True;
+  ev_signal(instance.job_list.signal);
+  //
   ps4_scePthreadJoin(instance.job_thread,nil);
   instance.job_thread:=nil;
+  //
+  instance.job_list.Fini;
  end;
 end;
 

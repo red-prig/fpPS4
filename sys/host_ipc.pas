@@ -20,43 +20,45 @@ const
  iRESULT=host_ipc_interface.iRESULT;
 
 type
- PNodeHeader=^TNodeHeader;
- TNodeHeader=packed record
-  mtype:DWORD;
-  mlen :DWORD;
-  mtid :DWORD;
-  buf  :record end;
- end;
-
- PQNode=^TQNode;
- TQNode=packed record
-  next_ :PQNode;
-  header:TNodeHeader;
-  value :TIpcValue;
-  buf   :record end;
- end;
-
- PNodeIpcSync=^TNodeIpcSync;
- TNodeIpcSync=packed record
-  entry:LIST_ENTRY;
-  event:t_event;
-  value:TIpcValue;
-  tid  :DWORD;
- end;
-
  TIpcValue        =host_ipc_interface.TIpcValue;
  TOnMessage       =host_ipc_interface.TOnMessage;
  THostIpcHandler  =host_ipc_interface.THostIpcHandler;
  THostIpcInterface=host_ipc_interface.THostIpcInterface;
 
  THostIpcConnect=class(THostIpcInterface)
+  public
+   type
+    PNodeHeader=^TNodeHeader;
+    TNodeHeader=packed record
+     mtype:DWORD;
+     mlen :DWORD;
+     mtid :DWORD;
+     buf  :record end;
+    end;
+
+    PQNode=^TQNode;
+    TQNode=packed record
+     next_ :PQNode;
+     header:TNodeHeader;
+     value :TIpcValue;
+     buf   :record end;
+    end;
+
+    PNodeIpcSync=^TNodeIpcSync;
+    TNodeIpcSync=packed record
+     entry:LIST_ENTRY;
+     event:t_event;
+     value:TIpcValue;
+     tid  :DWORD;
+    end;
   protected
-   FQueue:TIntrusiveMPSCQueue;
-   FWaits:LIST_HEAD;
-   FWLock:mtx;
-   Fkq   :Pointer;
-   FTerm :Boolean;
-   FBroke:Boolean;
+   var
+    FQueue:TIntrusiveMPSCQueue;
+    FWaits:LIST_HEAD;
+    FWLock:mtx;
+    Fkq   :Pointer;
+    FTerm :Boolean;
+    FBroke:Boolean;
    procedure   SyncResult(tid:DWORD;value:TIpcValue);
    function    NewNodeSync:PNodeIpcSync;
    procedure   FreeNodeSync(node:PNodeIpcSync);

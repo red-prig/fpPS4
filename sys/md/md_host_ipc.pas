@@ -21,7 +21,7 @@ type
   Finput :Pevbuffer;
   Foutput:Pevbuffer;
 
-  FHeader:TNodeHeader;
+  FHeader:THostIpcConnect.TNodeHeader;
   FState :Integer;
 
   procedure Send(mtype,mlen,mtid:DWORD;buf:Pointer);
@@ -130,15 +130,15 @@ end;
 
 procedure t_ipc_proto.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 var
- node:PNodeHeader;
+ node:THostIpcConnect.PNodeHeader;
 begin
- node:=AllocMem(SizeOf(TNodeHeader)+mlen);
+ node:=AllocMem(SizeOf(THostIpcConnect.TNodeHeader)+mlen);
  node^.mtype:=DWORD(mtype);
  node^.mlen :=mlen;
  node^.mtid :=mtid;
  Move(buf^,node^.buf,mlen);
 
- evbuffer_add_ref(Foutput,node,0,SizeOf(TNodeHeader)+mlen,Freemem_ptr);
+ evbuffer_add_ref(Foutput,node,0,SizeOf(THostIpcConnect.TNodeHeader)+mlen,Freemem_ptr);
 
  bufferevent_write(Fbev);
 end;
@@ -147,16 +147,16 @@ procedure t_ipc_proto.Recv(FPush:t_push_cb);
 label
  _next;
 var
- node:PQNode;
+ node:THostIpcConnect.PQNode;
 begin
  repeat
 
   case FState of
    0:
      begin
-      if (evbuffer_get_length(Finput)<SizeOf(TNodeHeader)) then Exit;
+      if (evbuffer_get_length(Finput)<SizeOf(THostIpcConnect.TNodeHeader)) then Exit;
 
-      evbuffer_remove(Finput,@FHeader,SizeOf(TNodeHeader));
+      evbuffer_remove(Finput,@FHeader,SizeOf(THostIpcConnect.TNodeHeader));
 
       FState:=1;
 
@@ -168,7 +168,7 @@ begin
 
       _next:
 
-      node:=AllocMem(SizeOf(TQNode)+FHeader.mlen);
+      node:=AllocMem(SizeOf(THostIpcConnect.TQNode)+FHeader.mlen);
       node^.header:=FHeader;
       node^.value :=TIpcValue.Static(@node^.buf,FHeader.mlen);
 

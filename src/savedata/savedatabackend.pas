@@ -48,14 +48,15 @@ type
 
  TCustomCommand=class;
 
- PQNode=^TQNode;
- TQNode=object
-  next_:PQNode;
-  self_:TCustomCommand;
- end;
-
  TCustomCommand=class
-  node:TQNode;
+  type
+   PQNode=^TQNode;
+   TQNode=object
+    next_:PQNode;
+    self_:TCustomCommand;
+   end;
+  var
+   node:TQNode;
   Constructor Create;
   procedure   Run; virtual;
  end;
@@ -357,7 +358,7 @@ end;
 
 function TSaveDataBackendProcess.RecvCmd(var cmd:TCustomCommand):Boolean;
 var
- node:PQNode;
+ node:TCustomCommand.PQNode;
 begin
  node:=nil;
  Result:=job_queue.Pop(node);
