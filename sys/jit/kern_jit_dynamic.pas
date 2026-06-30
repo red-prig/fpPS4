@@ -1330,6 +1330,11 @@ var
 begin
  if (pltc<>0) then
  begin
+  plt_stub.plt:=nil;
+  plt_stub.src:=nil;
+  plt_stub.neg:=Pointer(-QWORD(nil));
+  plt_stub.dst:=@jit_jmp_null;
+
   plt_stub.self_block:=@Self;
   plt_stub.dest_block:=@Self;
 

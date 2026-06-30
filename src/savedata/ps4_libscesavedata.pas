@@ -68,6 +68,7 @@ type
   memory_timeout_10sec:Boolean;
   force_default_prio  :Boolean;
   not_prio_by_cusaname:Boolean;
+  thread_stop         :Boolean;
   priority            :Integer;
   threadStackSize     :DWORD;
   cpuAffinityMask     :QWORD;
@@ -222,6 +223,102 @@ begin
  end;
 end;
 
+procedure job_thread(instance:TSaveDataInstance); SysV_ABI_CDecl;
+begin
+ instance:=g_instance;
+
+ writeln('job_thread');
+
+ repeat
+  //
+
+  sleep(16);
+ until instance.thread_stop;
+
+end;
+
+type
+ p_pthread_attr_t=^pthread_attr_t;
+ pthread_attr_t  =Pointer;
+
+ p_pthread_t=^pthread_t;
+ pthread_t  =Pointer;
+
+var
+ ps4_job_thread                   :Pointer=nil;
+ ps4_scePthreadAttrInit           :function(pAttr:p_pthread_attr_t):Integer;
+ ps4_scePthreadAttrDestroy        :function(pAttr:p_pthread_attr_t):Integer;
+ ps4_scePthreadAttrSetstacksize   :function(pAttr:p_pthread_attr_t;size:QWORD):Integer;
+ ps4_scePthreadAttrSetaffinity    :function(pAttr:p_pthread_attr_t;mask:QWORD):Integer;
+ ps4_scePthreadAttrSetinheritsched:function(pAttr:p_pthread_attr_t;sched_inherit:Integer):Integer;
+ ps4_scePthreadAttrSetschedpolicy :function(pAttr:p_pthread_attr_t;policy:Integer):Integer;
+ ps4_scePthreadAttrSetschedparam  :function(pAttr:p_pthread_attr_t;param:PInteger):Integer;
+ ps4_scePthreadCreate             :function(pthread:p_pthread_t;
+                                            pAttr  :p_pthread_attr_t;
+                                            entry  :Pointer;
+                                            arg    :Pointer;
+                                            name   :Pchar):Integer;
+ ps4_scePthreadJoin               :function(pthread:pthread_t;value_ptr:PPointer):Integer;
+
+procedure InitJobThread(instance:TSaveDataInstance);
+const
+ ThreadName='SceSaveData'#0;
+var
+ ga:TGUEST_STACK;
+ p_attr       :p_pthread_attr_t;
+ p_pthread    :p_pthread_t;
+ p_policy     :PInteger;
+ p_thread_name:PChar;
+begin
+ instance.thread_stop:=False;
+ instance.job_thread :=nil;
+
+ ga:=prolog;
+
+ p_attr       :=ga.alloca(SizeOf(Pointer));
+ p_pthread    :=ga.alloca(SizeOf(pthread_t));
+ p_policy     :=ga.alloca(SizeOf(Integer));
+ p_thread_name:=ga.alloca(Length(ThreadName));
+
+ p_attr^:=nil;
+ StrPCopy(p_thread_name,ThreadName);
+
+ ps4_scePthreadAttrInit(p_attr);
+ ps4_scePthreadAttrSetstacksize(p_attr,instance.threadStackSize);
+ ps4_scePthreadAttrSetschedpolicy(p_attr,2);
+
+ if (instance.priority <> 0) then
+ begin
+  p_policy^:=instance.priority;
+  ps4_scePthreadAttrSetschedparam(p_attr,p_policy);
+ end;
+
+ if (instance.cpuAffinityMask <> 0) then
+ begin
+  ps4_scePthreadAttrSetaffinity(p_attr,instance.cpuAffinityMask);
+ end;
+
+ ps4_scePthreadCreate(p_pthread,p_attr,ps4_job_thread,nil,p_thread_name);
+
+ instance.job_thread:=p_pthread^;
+
+ ps4_scePthreadAttrDestroy(p_attr);
+
+ ga.epilog;
+
+ Assert(instance.job_thread<>nil);
+end;
+
+procedure JoinThread(instance:TSaveDataInstance);
+begin
+ if (instance.job_thread<>nil) then
+ begin
+  instance.thread_stop:=True;
+  ps4_scePthreadJoin(instance.job_thread,nil);
+  instance.job_thread:=nil;
+ end;
+end;
+
 function ConnectInstance(instance:TSaveDataInstance):Integer;
 begin
  Result:=0;
@@ -249,7 +346,7 @@ begin
  begin
   Getprio_by_cusaname(instance);
 
-  //init_job_thread
+  InitJobThread(instance);
  end;
 
  instance.Backend:=TSaveDataBackendConnect.Create;
@@ -292,6 +389,7 @@ end;
 
 procedure TSaveDataInstance.Terminate;
 begin
+ JoinThread(self);
  if (Backend<>nil) then
  begin
   Backend.Free;
@@ -922,6 +1020,7 @@ end;
 function Load_libSceSaveData(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
+ module:TMODULE;
 begin
  Result:=obj_new_int('libSceSaveData');
 
@@ -957,6 +1056,23 @@ begin
  lib.set_proc($CF5240F3F889B779,@ps4_sceSaveDataBackup);
  lib.set_proc($4503AA0DB9376D25,@ps4_sceSaveDataCheckBackupData);
  lib.set_proc($954F58445B20C125,@ps4_sceSaveDataRestoreBackupData);
+
+ //
+ lib.add_func(@ps4_job_thread,@job_thread).Argc(1);
+ //
+
+ module:=Result^.add_mod('libkernel',1);
+ lib:=module.add_lib('libkernel');
+
+ lib.set_proc($9EC628351CB0C0D8,@ps4_scePthreadAttrInit           );
+ lib.set_proc($EB6282C04326CDC3,@ps4_scePthreadAttrDestroy        );
+ lib.set_proc($5135F325B5A18531,@ps4_scePthreadAttrSetstacksize   );
+ lib.set_proc($DEAC603387B31130,@ps4_scePthreadAttrSetaffinity    );
+ lib.set_proc($7976D44A911A4EC0,@ps4_scePthreadAttrSetinheritsched);
+ lib.set_proc($E3E87D133C0A1782,@ps4_scePthreadAttrSetschedpolicy );
+ lib.set_proc($0F3112F61405E1FE,@ps4_scePthreadAttrSetschedparam  );
+ lib.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate             );
+ lib.set_proc($A27358F41CA7FD6F,@ps4_scePthreadJoin               );
 
  //init_save;
 end;

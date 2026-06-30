@@ -964,8 +964,8 @@ begin
  lib.set_proc($798807216C741DCA,@ps4__ZN3sce2np5Mutex6UnlockEv);
  //
  lib.add_data(@global_evf_cbs    ,SizeOf(t_obj_cbs));
- lib.add_func(@init_evf_cbs.clear,@ps4__ZN3sce2np9EventFlagD2Ev);
- lib.add_func(@init_evf_cbs.free ,@ps4__ZN3sce2np9EventFlagD0Ev);
+ lib.add_func(@init_evf_cbs.clear,@ps4__ZN3sce2np9EventFlagD2Ev).Argc(1);
+ lib.add_func(@init_evf_cbs.free ,@ps4__ZN3sce2np9EventFlagD0Ev).Argc(2);
  //
  lib.add_data(@global_mutex_cbs  ,SizeOf(t_obj_cbs));
  init_mutex_cbs.clear:=Pointer(1);
