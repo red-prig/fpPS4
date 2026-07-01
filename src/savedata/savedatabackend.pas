@@ -35,9 +35,13 @@ type
   kipc    :THostIpcPipeKERN;
   hProcess:THandle;
   fork_pid:Integer;
+  //
+  MountSlots:array[0..15] of Boolean;
+  //
   Constructor Create;
   Destructor  Destroy; override;
   procedure   SendMountConfig();
+  procedure   UmountAllForce;
   function    SaveDataDelete   (del:pSceSaveDataDelete):Integer;
   function    SaveDataMount    (mount:pSceSaveDataMount;var pResult:TSaveDataMountResult;Transfering:Boolean):Integer;
   function    SaveDataUmount   (slot_id:Integer;backup:boolean):Integer;
@@ -507,6 +511,18 @@ begin
  FreeAndNil(data);
 end;
 
+procedure TSaveDataBackendConnect.UmountAllForce;
+var
+ slot_id:Integer;
+begin
+ For slot_id:=0 to High(MountSlots) do
+ if (MountSlots[slot_id]) then
+ begin
+  Writeln('unmount ', mount_savedata_slot_name[slot_id], ' force');
+  vfs_mountroot.unmount_from_sandbox(pchar(mount_savedata_slot_name[slot_id]),MNT_FORCE);
+ end;
+end;
+
 function TSaveDataBackendProcess.OnMountConfig(Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
 var
  data:TGameMountConfigExport;
@@ -729,7 +745,10 @@ begin
                                            nil,
                                            ord((data.mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
                                            MNT_EMU_PFS);
-  if (Result<>0) then
+  if (Result=0) then
+  begin
+   MountSlots[pResult.slot_id]:=True;
+  end else
   begin
    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
    //unmount
@@ -872,6 +891,13 @@ function TSaveDataBackendConnect.SaveDataUmount(slot_id:Integer;backup:boolean):
 var
  data:TSaveDataUmount;
 begin
+ if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (MountSlots[slot_id]=False) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
  data.slot_id:=slot_id;
  data.backup :=backup;
 
@@ -890,6 +916,7 @@ begin
    end;
   end else
   begin
+   MountSlots[slot_id]:=False;
 
    //free
    Result:=kipc.InvokeSync2('SaveDataUmount',@data,sizeof(data));

@@ -12,6 +12,7 @@ uses
 const
  MNT_RDONLY =vmount.MNT_RDONLY;
  MNT_UPDATE =vmount.MNT_UPDATE;
+ MNT_FORCE  =vmount.MNT_FORCE;
  MNT_EMU_PFS=vmount.MNT_EMU_PFS;
  MNT_BIG_APP=vmount.MNT_BIG_APP;
 

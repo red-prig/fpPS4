@@ -611,6 +611,7 @@ begin
  JoinThread(self);
  if (Backend<>nil) then
  begin
+  Backend.UmountAllForce;
   Backend.Free;
  end;
  Free;
