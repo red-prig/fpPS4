@@ -44,6 +44,7 @@ type
   function    SaveDataBackup   (backup:pSceSaveDataBackup):Integer;
   function    CheckBackupData  (check:pSceSaveDataCheckBackupData):Integer;
   function    RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+  function    GetEventResult   (event:pSceSaveDataEvent):Integer;
  end;
 
  TCustomCommand=class;
@@ -90,6 +91,17 @@ type
 
  TLockDirSplay=specialize TNodeSplay<TLockDirNode>;
 
+ TEventQueue=object
+  mtx:mtx;
+  rd_pos:Byte;
+  wr_pos:Byte;
+  data:array[0..19] of SceSaveDataEvent;
+  procedure Init;
+  procedure Push(const event:SceSaveDataEvent);
+  procedure Push(_type,errorCode,userId:Integer;titleId:pSceSaveDataTitleId;dirName:pSceSaveDataDirName);
+  function  Pop (var event:SceSaveDataEvent):Boolean;
+ end;
+
  TSaveDataBackendProcess=class
   ppid     :Integer;
   parent   :THandle;
@@ -101,6 +113,8 @@ type
   //
   LockDirMap:TLockDirSplay;
   LockDirMtx:mtx;
+  //
+  EventQueue:TEventQueue;
   //
   Constructor Create;
   procedure   SendCmd(cmd:TCustomCommand);
@@ -119,9 +133,11 @@ type
   function    SendBackupJob   (userId     :SceUserServiceUserId;
                                titleId    :pchar;
                                dirName    :pchar;
-                               fingerprint:pSceSaveDataFingerprint):Integer;
-  function    OnCheckBackupData(Value:TIpcValue):TIpcValue; //CheckBackupData
+                               fingerprint:pSceSaveDataFingerprint;
+                               umount     :Boolean):Integer;
+  function    OnCheckBackupData  (Value:TIpcValue):TIpcValue; //CheckBackupData
   function    OnRestoreBackupData(Value:TIpcValue):TIpcValue; //RestoreBackupData
+  function    OnGetEventResult   (Value:TIpcValue):TIpcValue; //GetEventResult
  end;
 
 implementation
@@ -131,6 +147,64 @@ implementation
 function TLockDirNode.c(n1,n2:PLockDirNode):Integer;
 begin
  Result:=CompareText(n1^.fs_src,n2^.fs_src);
+end;
+
+//
+
+procedure TEventQueue.Init;
+begin
+ mtx_init(mtx,'TEventQueue');
+ rd_pos:=0;
+ wr_pos:=0;
+end;
+
+procedure TEventQueue.Push(const event:SceSaveDataEvent);
+begin
+ mtx_lock(mtx);
+
+ data[wr_pos]:=event;
+
+ wr_pos:=(wr_pos+1) mod Length(data);
+
+ if (wr_pos=rd_pos) then
+ begin
+  rd_pos:=(rd_pos+1) mod Length(data);
+ end;
+
+ mtx_unlock(mtx);
+end;
+
+procedure TEventQueue.Push(_type,errorCode,userId:Integer;titleId:pSceSaveDataTitleId;dirName:pSceSaveDataDirName);
+var
+ event:SceSaveDataEvent;
+begin
+ event:=Default(SceSaveDataEvent);
+ event._type    :=_type;
+ event.errorCode:=errorCode;
+ event.userId   :=userId;
+ event.titleId  :=titleId^;
+ event.dirName  :=dirName^;
+ //
+ Push(event);
+end;
+
+function TEventQueue.Pop(var event:SceSaveDataEvent):Boolean;
+begin
+ mtx_lock(mtx);
+
+ if (wr_pos=rd_pos) then
+ begin
+  Result:=False;
+ end else
+ begin
+  event:=data[rd_pos];
+
+  rd_pos:=(rd_pos+1) mod Length(data);
+
+  Result:=True;
+ end;
+
+ mtx_unlock(mtx);
 end;
 
 //
@@ -333,6 +407,8 @@ begin
  //
  mtx_init(LockDirMtx,'LockDirMtx');
  //
+ EventQueue.Init;
+ //
  kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
  //
@@ -345,6 +421,7 @@ begin
  kipc.FHandler.AddCallback('SaveDataBackup'   ,@OnSaveDataBackup);
  kipc.FHandler.AddCallback('CheckBackupData'  ,@OnCheckBackupData);
  kipc.FHandler.AddCallback('RestoreBackupData',@OnRestoreBackupData);
+ kipc.FHandler.AddCallback('GetEventResult'   ,@OnGetEventResult);
  //
  inherited;
 end;
@@ -876,7 +953,8 @@ begin
   SendBackupJob(prev.userId,
                @prev.titleId,
                @prev.dirName,
-               @prev.fingerprint);
+               @prev.fingerprint,
+               True);
  end;
 
 end;
@@ -923,24 +1001,30 @@ begin
  Result:=SendBackupJob(data.userId,
                       titleId,
                       @data.dirName.data,
-                      @data.fingerprint);
+                      @data.fingerprint,
+                      False);
 end;
 
 type
  TCustomBackupJob=class(TCustomCommand)
+  //
+  user_id:Integer;
+  titleId:SceSaveDataTitleId;
+  dirName:SceSaveDataDirName;
   //
   fs_src:RawByteString;
   fs_dst:RawByteString;
   fs_old:RawByteString;
   fs_new:RawByteString;
   //
-  procedure Init(user_id:Integer;_titleId,_dirName:pchar);
+  procedure Init(_user_id:Integer;_titleId,_dirName:pchar);
   procedure UnLock();
   function  Prepare:Boolean;
   function  Check:Boolean;
  end;
 
  TBackupJob=class(TCustomBackupJob)
+  umount:Boolean;
   function  Backup:Boolean;
   procedure Run; override;
  end;
@@ -949,12 +1033,16 @@ type
   function  Restore:Boolean;
  end;
 
-procedure TCustomBackupJob.Init(user_id:Integer;_titleId,_dirName:pchar);
+procedure TCustomBackupJob.Init(_user_id:Integer;_titleId,_dirName:pchar);
 begin
- fs_src:=GameMountConfig.GetSaveDataFolder   (user_id,_titleId,_dirName);
- fs_dst:=GameMountConfig.GetSaveDataBackupDst(user_id,_titleId,_dirName);
- fs_old:=GameMountConfig.GetSaveDataBackupOld(user_id,_titleId,_dirName);
- fs_new:=GameMountConfig.GetSaveDataBackupNew(user_id,_titleId,_dirName);
+ user_id:=_user_id;
+ strlcopy(@titleId.data,_titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);
+ strlcopy(@dirName.data,_dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+ //
+ fs_src:=GameMountConfig.GetSaveDataFolder   (_user_id,_titleId,_dirName);
+ fs_dst:=GameMountConfig.GetSaveDataBackupDst(_user_id,_titleId,_dirName);
+ fs_old:=GameMountConfig.GetSaveDataBackupOld(_user_id,_titleId,_dirName);
+ fs_new:=GameMountConfig.GetSaveDataBackupNew(_user_id,_titleId,_dirName);
 end;
 
 procedure TCustomBackupJob.UnLock();
@@ -1072,8 +1160,24 @@ begin
 end;
 
 procedure TBackupJob.Run;
+var
+ id,err:Integer;
+ res:Boolean;
 begin
- Backup;
+ res:=Backup;
+
+ case umount of
+  True :id:=SCE_SAVE_DATA_EVENT_TYPE_UMOUNT_BACKUP_END;
+  False:id:=SCE_SAVE_DATA_EVENT_TYPE_BACKUP_END;
+ end;
+
+ //SCE_SAVE_DATA_ERROR_NO_SPACE_FS
+ case res of
+  True :err:=0;
+  False:err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end;
+
+ gSaveDataBackend.EventQueue.Push(id,err,user_id,@titleId,@dirName);
 
  sleep(200);
 
@@ -1122,7 +1226,8 @@ end;
 function TSaveDataBackendProcess.SendBackupJob(userId     :SceUserServiceUserId;
                                                titleId    :pchar;
                                                dirName    :pchar;
-                                               fingerprint:pSceSaveDataFingerprint):Integer;
+                                               fingerprint:pSceSaveDataFingerprint;
+                                               umount     :Boolean):Integer;
 var
  fs_src:RawByteString;
  job:TBackupJob;
@@ -1148,6 +1253,7 @@ begin
 
  job:=TBackupJob.Create;
  job.Init(userId,titleId,dirName);
+ job.umount:=umount;
 
  SendCmd(job);
 end;
@@ -1288,6 +1394,45 @@ begin
  job.Free;
 end;
 
+type
+ TEventResult=record
+  result:qword;
+  event :SceSaveDataEvent
+ end;
+
+function TSaveDataBackendConnect.GetEventResult(event:pSceSaveDataEvent):Integer;
+var
+ Value:TIpcValue;
+ data:TEventResult;
+begin
+ Value:=kipc.InvokeSync('GetEventResult');
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ Result:=data.result;
+
+ if (Result=0) then
+ begin
+  event^:=data.event;
+ end;
+end;
+
+function TSaveDataBackendProcess.OnGetEventResult(Value:TIpcValue):TIpcValue; //GetEventResult
+var
+ data:TEventResult;
+begin
+ data:=Default(TEventResult);
+
+ if gSaveDataBackend.EventQueue.Pop(data.event) then
+ begin
+  Result:=TIpcValue.New(@data,SizeOf(data));
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+ end;
+
+end;
 
 end.
 

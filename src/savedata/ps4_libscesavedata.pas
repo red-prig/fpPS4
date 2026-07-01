@@ -26,41 +26,6 @@ uses
 
 implementation
 
-{
-uses
- sys_path,
- sys_signal;
-}
-
-{
-type
- t_backup_event_queue=specialize mpmc_bounded_queue<SceSaveDataEvent>;
-
-var
- backup:record
-  queue:t_backup_event_queue;
-  cb:SceSaveDataEventCallbackFunc;
-  userdata:Pointer;
- end;
-
-
-Procedure push_event(event:pSceSaveDataEvent);
-var
- tmp:SceSaveDataEvent;
-begin
-
- if (backup.cb<>nil) then
- begin
-  backup.cb(event,backup.userdata);
- end;
-
- while not backup.queue.enqueue(event^) do
- begin
-  backup.queue.dequeue(tmp); //drop first
- end;
-end;
-}
-
 ///
 
 type
@@ -76,8 +41,21 @@ type
   var
    node  :TQNode;
    finish:Boolean;
+   refs  :Integer;
   Constructor Create;
+  procedure   inc_ref;
+  procedure   dec_ref;
   procedure   Run; virtual;
+ end;
+
+ TProgressJob=class(TCustomCommand)
+  p_progress:PInteger;
+  procedure   Run; override;
+ end;
+
+ TEventJob=class(TCustomCommand)
+  repeat_count:Integer;
+  procedure   Run; override;
  end;
 
  TJobList=object
@@ -88,6 +66,7 @@ type
   procedure Init;
   procedure Fini;
   procedure SendCmd(cmd:TCustomCommand);
+  procedure SendEventJob();
   procedure Action;
  end;
 
@@ -263,12 +242,108 @@ begin
  finish:=False;
 end;
 
+procedure TCustomCommand.inc_ref;
+begin
+ System.InterlockedIncrement(refs);
+end;
+
+procedure TCustomCommand.dec_ref;
+begin
+ if (System.InterlockedDecrement(refs)=0) then
+ begin
+  Free;
+ end;
+end;
+
 procedure TCustomCommand.Run;
 begin
  //
 end;
 
-//
+///
+
+procedure TProgressJob.Run;
+var
+ progres:Single;
+begin
+ if (g_instance=nil) then
+ begin
+  finish:=True;
+  Exit;
+ end;
+
+ //TODO: Invoke GetProgress
+ progres:=1;
+
+ if (p_progress <> nil) then
+ begin
+  p_progress^:=Trunc(progres*100);
+ end;
+
+ if (p_progress <> nil) and
+    (p_progress^ = 100) then
+ begin
+  finish:=True;
+ end;
+end;
+
+///
+
+procedure ExecuteGuest_cb_event(addr,event,userdata:Pointer); external name 'ExecuteGuest';
+
+procedure TEventJob.Run;
+var
+ err:Integer;
+ event:SceSaveDataEvent;
+ ga:TGUEST_STACK;
+ p_event:pSceSaveDataEvent;
+begin
+ if (g_instance=nil) then
+ begin
+  finish:=True;
+  Exit;
+ end;
+
+ if (repeat_count < 60) then
+ begin
+  Inc(repeat_count);
+  Exit;
+ end;
+
+ mtx_lock(g_instance.mtx);
+
+  err:=g_instance.Backend.GetEventResult(@event);
+
+ mtx_unlock(g_instance.mtx);
+
+ if (err=SCE_SAVE_DATA_ERROR_NOT_FOUND) then
+ begin
+  repeat_count:=0;
+  Exit;
+ end;
+
+ //CallEventCallback
+ mtx_lock(g_instance.mtx);
+
+  if (g_instance.cb_event<>nil) then
+  begin
+   ga:=prolog;
+
+   p_event:=ga.alloca(SizeOf(SceSaveDataEvent));
+   p_event^:=event;
+
+   ExecuteGuest_cb_event(g_instance.cb_event,p_event,g_instance.cb_userdata);
+
+   ga.epilog;
+  end;
+
+ mtx_unlock(g_instance.mtx);
+ //CallEventCallback
+
+ finish:=True;
+end;
+
+///
 
 procedure TJobList.Init;
 begin
@@ -293,6 +368,8 @@ begin
  node:=TAILQ_FIRST(@tqlist);
  while (node<>nil) do
  begin
+  TAILQ_REMOVE(@tqlist,node,@node^.entry);
+  //
   cmd:=node^.self_;
   cmd.Free;
   ///
@@ -305,8 +382,17 @@ end;
 procedure TJobList.SendCmd(cmd:TCustomCommand);
 begin
  if (cmd=nil) then Exit;
+ cmd.inc_ref;
  queue.Push(@cmd.node);
  ev_signal(signal);
+end;
+
+procedure TJobList.SendEventJob();
+var
+ cmd:TEventJob;
+begin
+ cmd:=TEventJob.Create;
+ SendCmd(cmd);
 end;
 
 procedure TJobList.Action;
@@ -337,7 +423,7 @@ begin
   begin
    TAILQ_REMOVE(@tqlist,node,@node^.entry);
    Dec(count);
-   cmd.Free;
+   cmd.dec_ref;
   end else
   begin
    cmd.Run;
@@ -776,6 +862,12 @@ begin
   Result:=g_instance.Backend.SaveDataUmount(slot_id,backup);
 
  mtx_unlock(g_instance.mtx);
+
+ if (Result=0) and backup then
+ if (g_instance.job_thread<>nil) then
+ begin
+  g_instance.job_list.SendEventJob();
+ end;
 end;
 
 function ps4_sceSaveDataUmount(mountPoint:pSceSaveDataMountPoint):Integer;
@@ -789,8 +881,6 @@ begin
 end;
 
 function ps4_sceSaveDataUmountWithBackup(mountPoint:pSceSaveDataMountPoint):Integer;
-var
- event:SceSaveDataEvent;
 begin
  if (g_instance=nil) then
  begin
@@ -957,7 +1047,6 @@ begin
  Result:=0;
 end;
 
-//Save icon
 function ps4_sceSaveDataSetParam(mountPoint:pSceSaveDataMountPoint;
                                  paramType:SceSaveDataParamType;
                                  paramBuf:Pointer;
@@ -966,6 +1055,7 @@ begin
  Result:=0;
 end;
 
+//Save icon
 function ps4_sceSaveDataSaveIcon(mountPoint:pSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer;
 begin
@@ -1031,22 +1121,32 @@ begin
  mtx_unlock(g_instance.mtx);
 end;
 
+//sceSaveDataBackup()
+//sceSaveDataUmountWithBackup()
+//sceSaveDataSyncSaveDataMemory()
 function ps4_sceSaveDataGetEventResult(param:pSceSaveDataEventParam;
                                        event:pSceSaveDataEvent):Integer;
 begin
- if (event=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
-
- event^:=Default(SceSaveDataEvent);
-
- {
- if backup.queue.dequeue(event^) then
+ if (g_instance=nil) then
  begin
-  Result:=0;
- end else
- begin
-  Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
- }
+
+ if (g_instance.version<>VERSION_INIT_3) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (event=nil) or (param<>nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.GetEventResult(event);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataClearProgress():Integer;
@@ -1097,6 +1197,12 @@ begin
   Result:=g_instance.Backend.SaveDataBackup(backup);
 
  mtx_unlock(g_instance.mtx);
+
+ if (Result=0) then
+ if (g_instance.job_thread<>nil) then
+ begin
+  g_instance.job_list.SendEventJob();
+ end;
 end;
 
 function ps4_sceSaveDataCheckBackupData(check:pSceSaveDataCheckBackupData):Integer;

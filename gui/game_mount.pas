@@ -672,6 +672,7 @@ begin
         if (WriteCount<ReadCount) then Exit;
       until false;
     finally
+      FileFlush(DestHandle);
       FileClose(DestHandle);
     end;
 
