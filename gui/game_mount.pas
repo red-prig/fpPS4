@@ -60,8 +60,15 @@ function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWO
 function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 
 function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
+function TruncFile      (const DestFilename:RawByteString;size:Ptrint):Boolean;
+function WriteToFile    (const DestFilename:RawByteString;buf:Pointer;size:Ptrint):Ptrint;
+function ReadFromFile   (const SrcFilename:RawByteString;buf:Pointer;size:Ptrint):Ptrint;
+function CopyFile       (const SrcFilename, DestFilename: RawByteString): boolean;
 function CopyDirectory  (const src,dst:RawByteString): boolean;
+
 function FormatMount(const fs_src:RawByteString):Integer;
+
+function unix_to_host(const name:RawByteString):RawByteString;
 
 implementation
 
@@ -524,6 +531,7 @@ begin
 
  FileWrite(F,pchar(TitleId)^,Length(TitleId)+1);
 
+ FileFlush(F);
  FileClose(F);
 end;
 
@@ -627,6 +635,50 @@ _next:
   end;
 
   Result:=true;
+end;
+
+function TruncFile(const DestFilename:RawByteString;size:Ptrint):Boolean;
+var
+ DestHandle:THandle;
+ err:Integer;
+begin
+ DestHandle:=0;
+ err:=md_open(DestFilename,O_CREAT or O_TRUNC or O_RDWR,&0604,DestHandle);
+ if (err<>0) then Exit(False);
+
+ Result:=FileTruncate(DestHandle,size);
+
+ FileFlush(DestHandle);
+ FileClose(DestHandle);
+end;
+
+function WriteToFile(const DestFilename:RawByteString;buf:Pointer;size:Ptrint):Ptrint;
+var
+ DestHandle:THandle;
+ err:Integer;
+begin
+ DestHandle:=0;
+ err:=md_open(DestFilename,O_CREAT or O_TRUNC or O_RDWR,&0600,DestHandle);
+ if (err<>0) then Exit(-1);
+
+ Result:=FileWrite(DestHandle,buf^,size);
+
+ FileFlush(DestHandle);
+ FileClose(DestHandle);
+end;
+
+function ReadFromFile(const SrcFilename:RawByteString;buf:Pointer;size:Ptrint):Ptrint;
+var
+ SrcHandle:THandle;
+ err:Integer;
+begin
+ SrcHandle:=0;
+ err:=md_open(SrcFilename,0,0,SrcHandle);
+ if (err<>0) then Exit(-1);
+
+ Result:=FileRead(SrcHandle,buf^,size);
+
+ FileClose(SrcHandle);
 end;
 
 function CopyFile(const SrcFilename, DestFilename: RawByteString): boolean;

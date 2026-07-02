@@ -80,7 +80,13 @@ type
   reserved :array[0..31] of Byte;
  end;
 
- PSceSaveDataIcon=^SceSaveDataIcon;
+const
+ SCE_SAVE_DATA_ICON_WIDTH       =228;
+ SCE_SAVE_DATA_ICON_HEIGHT      =128;
+ SCE_SAVE_DATA_ICON_FILE_MAXSIZE=SCE_SAVE_DATA_ICON_WIDTH*SCE_SAVE_DATA_ICON_HEIGHT*4;
+
+type
+ pSceSaveDataIcon=^SceSaveDataIcon;
  SceSaveDataIcon=packed record
   buf     :Pointer;
   bufSize :QWORD;
@@ -176,6 +182,12 @@ type
  end;
 
  SceSaveDataBlocks=QWORD;
+
+const
+ SCE_SAVE_DATA_BLOCK_SIZE     =32768;
+ SCE_SAVE_DATA_BLOCKS_MIN2    =96;
+ SCE_SAVE_DATA_BLOCKS_MAX     =32768;
+ SCE_SAVE_DATA_MEMORY_MAXSIZE3=32*1024*1024;
 
 const
  //SceSaveDataMountMode

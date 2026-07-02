@@ -9,7 +9,7 @@ uses
  g_node_splay,
  errno,
  LFQueue,
- windows,
+ //windows,
  md_event,
  kern_mtx,
  kern_proc,
@@ -18,12 +18,23 @@ uses
  md_pipe,
  md_systm,
  md_systm_fork,
+ param_sfo,
  game_mount,
  vfs_mountroot,
  ps4_libSceUserService,
  SceSaveData;
 
 type
+ TSaveDataMount=packed record
+  userId     :SceUserServiceUserId;
+  titleId    :SceSaveDataTitleId;
+  dirName    :SceSaveDataDirName;
+  fingerprint:SceSaveDataFingerprint;
+  blocks     :SceSaveDataBlocks;
+  mountMode  :DWORD; //SceSaveDataMountMode
+  Transfering:Boolean;
+ end;
+
  TSaveDataMountResult=packed record
   result        :Integer;
   mountStatus   :DWORD;
@@ -130,6 +141,9 @@ type
   function    GetMountSlotId  (userId:Integer;dirName,titleId:pchar;var slot_id:Integer):Integer;
   function    IsActiveMount   (userId:Integer;dirName,titleId:pchar):Boolean;
   function    OnSaveDataDelete(Value:TIpcValue):TIpcValue; //SaveDataDelete
+  function    CreateParamSfo  (const data:TSaveDataMount;const fs_src:RawByteString):Boolean;
+  function    CreateTmpFiles  (const fs_src:RawByteString):Boolean;
+  function    CreateMount     (const data:TSaveDataMount;const fs_src:RawByteString):Boolean;
   function    OnSaveDataMount (Value:TIpcValue):TIpcValue; //SaveDataMount
   function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
   function    OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
@@ -209,6 +223,112 @@ begin
  end;
 
  mtx_unlock(mtx);
+end;
+
+//
+
+type
+ t_sfo_param_params_s=packed record
+  version          :DWORD;                // =0
+  user_id          :DWORD;                //
+  psid_hmac        :array[0..31] of Byte; //
+  counter_id       :DWORD;                //  =1  2  3
+  title_id_1       :array[0..15] of Char; //   |  |  |
+  title_id_2       :array[0..15] of Char; //   |  |  |
+  RETAIL_counter1  :DWORD;                // <-/  |  |
+  DEX_TOOL_counter2:DWORD;                // <----/  |
+  DEX_TOOL_counter3:DWORD;                // <-------/
+  fake_owner       :DWORD;                // =0/1
+  flags            :DWORD;                // =4
+  archive_time1    :QWORD;
+  archive_time2    :QWORD;
+  corrupt_flag     :DWORD;                // =0/1
+  padding          :array[0..907] of Byte;
+ end;
+ {$IF sizeof(t_sfo_param_params_s)<>$400}{$STOP sizeof(t_sfo_param_params_s)<>$400}{$ENDIF}
+
+{
+the flags parameter is cumulative
+
+app0_dir_id                        flags
+----------------------------------+------
+unknow(error?)                    | 0x01
+disc                       (0) -> | 0x08
+PkgSpCore                  (1)    |
+                PS_CLOUD:true  -> | 0x02
+                PS_CLOUD:false -> | 0x04
+debug                      (2) -> | 0x10
+debug hostapp/app data/app (3) -> | 0x20
+}
+
+type
+ t_savedata_sfo_values=packed object
+  CATEGORY           :array[0..3] of Char;
+  FORMAT             :array[0..3] of Char;
+  TITLE_ID           :array[0..11] of Char;
+  ATTRIBUTE          :DWORD;
+  SAVEDATA_BLOCKS    :QWORD;
+  PARAMS             :t_sfo_param_params_s;
+  MAINTITLE          :array[0..127] of Char;
+  SUBTITLE           :array[0..127] of Char;
+  DETAIL             :array[0..1023] of Char;
+  SAVEDATA_LIST_PARAM:DWORD;
+  SAVEDATA_DIRECTORY :array[0..31] of Char;
+  ACCOUNT_ID         :QWORD;
+  //
+  Procedure New(const data:TSaveDataMount);
+  function  SaveToFile(const fname:RawByteString):Boolean;
+ end;
+
+Procedure t_savedata_sfo_values.New(const data:TSaveDataMount);
+var
+ titleId:PChar;
+begin
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.TitleId;
+ end;
+
+ Self:=Default(t_savedata_sfo_values);
+ //
+ CATEGORY       :='sd';
+ FORMAT         :='obs';
+ ACCOUNT_ID     :=$6F6C6C6F706122E7;
+ SAVEDATA_BLOCKS:=data.blocks;
+ params.user_id :=data.userId;
+ params.flags   :=4;
+
+ //MAINTITLE
+
+ strlcopy(@TITLE_ID         ,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);
+ strlcopy(@params.title_id_1,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);
+ strlcopy(@params.title_id_2,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);
+
+ strlcopy(@SAVEDATA_DIRECTORY,@data.dirName.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+end;
+
+function t_savedata_sfo_values.SaveToFile(const fname:RawByteString):Boolean;
+var
+ F:TParamSfoFileLoader;
+begin
+ F.New(192,136,2380);
+
+ F.AddNameValue('ACCOUNT_ID'         ,@ACCOUNT_ID         ,SFO_FORMAT_BLOB  ,sizeof(ACCOUNT_ID)                  ,sizeof(ACCOUNT_ID));
+ F.AddNameValue('ATTRIBUTE'          ,@ATTRIBUTE          ,SFO_FORMAT_UINT32,sizeof(ATTRIBUTE)                   ,sizeof(ATTRIBUTE));
+ F.AddNameValue('CATEGORY'           ,@CATEGORY           ,SFO_FORMAT_STRING,strlen(pchar(@CATEGORY ))+1         ,sizeof(CATEGORY));
+ F.AddNameValue('DETAIL'             ,@DETAIL             ,SFO_FORMAT_STRING,strlen(pchar(@DETAIL   ))+1         ,sizeof(DETAIL   ));
+ F.AddNameValue('FORMAT'             ,@FORMAT             ,SFO_FORMAT_STRING,strlen(pchar(@FORMAT   ))+1         ,sizeof(FORMAT   ));
+ F.AddNameValue('MAINTITLE'          ,@MAINTITLE          ,SFO_FORMAT_STRING,strlen(pchar(@MAINTITLE))+1         ,sizeof(MAINTITLE));
+ F.AddNameValue('PARAMS'             ,@PARAMS             ,SFO_FORMAT_BLOB  ,sizeof(PARAMS)                      ,sizeof(PARAMS));
+ F.AddNameValue('SAVEDATA_BLOCKS'    ,@SAVEDATA_BLOCKS    ,SFO_FORMAT_BLOB  ,sizeof(SAVEDATA_BLOCKS)             ,sizeof(SAVEDATA_BLOCKS));
+ F.AddNameValue('SAVEDATA_DIRECTORY' ,@SAVEDATA_DIRECTORY ,SFO_FORMAT_STRING,strlen(pchar(@SAVEDATA_DIRECTORY))+1,sizeof(SAVEDATA_DIRECTORY));
+ F.AddNameValue('SAVEDATA_LIST_PARAM',@SAVEDATA_LIST_PARAM,SFO_FORMAT_UINT32,sizeof(SAVEDATA_LIST_PARAM)         ,sizeof(SAVEDATA_LIST_PARAM));
+ F.AddNameValue('SUBTITLE'           ,@SUBTITLE           ,SFO_FORMAT_STRING,strlen(pchar(@SUBTITLE))+1          ,sizeof(SUBTITLE));
+ F.AddNameValue('TITLE_ID'           ,@TITLE_ID           ,SFO_FORMAT_STRING,strlen(pchar(@TITLE_ID))+1          ,sizeof(TITLE_ID));
+
+ Result:=F.save(fname);
+ F.Free;
 end;
 
 //
@@ -518,7 +638,7 @@ begin
  For slot_id:=0 to High(MountSlots) do
  if (MountSlots[slot_id]) then
  begin
-  Writeln('unmount ', mount_savedata_slot_name[slot_id], ' force');
+  Writeln('Force umount ', mount_savedata_slot_name[slot_id]);
   vfs_mountroot.unmount_from_sandbox(pchar(mount_savedata_slot_name[slot_id]),MNT_FORCE);
  end;
 end;
@@ -688,17 +808,6 @@ begin
 
 end;
 
-type
- TSaveDataMount=packed record
-  userId     :SceUserServiceUserId;
-  titleId    :SceSaveDataTitleId;
-  dirName    :SceSaveDataDirName;
-  fingerprint:SceSaveDataFingerprint;
-  blocks     :SceSaveDataBlocks;
-  mountMode  :DWORD; //SceSaveDataMountMode
-  Transfering:Boolean;
- end;
-
 function TSaveDataBackendConnect.SaveDataMount(mount:pSceSaveDataMount;var pResult:TSaveDataMountResult;Transfering:Boolean):Integer;
 var
  data:TSaveDataMount;
@@ -759,12 +868,65 @@ begin
 
 end;
 
+function TSaveDataBackendProcess.CreateParamSfo(const data:TSaveDataMount;const fs_src:RawByteString):Boolean;
+var
+ fname:RawByteString;
+ sfo:t_savedata_sfo_values;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys');
+ Result:=ForceDirectories(fname);
+ if not Result then Exit;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+
+ sfo.New(data);
+ Result:=sfo.SaveToFile(fname);
+end;
+
+function TSaveDataBackendProcess.CreateTmpFiles(const fs_src:RawByteString):Boolean;
+var
+ fname:RawByteString;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys');
+ Result:=ForceDirectories(fname);
+ if not Result then Exit;
+
+ if (p_proc.p_sdk_version<$4500000) then
+ begin
+  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/sce_paramsfo1');
+  Result:=TruncFile(fname,$8000);
+  if not Result then Exit;
+ end;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/sce_icon0png0');
+ Result:=TruncFile(fname,$1c800);
+ if not Result then Exit;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/sce_icon0png1');
+ Result:=TruncFile(fname,$1c800);
+end;
+
+function TSaveDataBackendProcess.CreateMount(const data:TSaveDataMount;const fs_src:RawByteString):Boolean;
+begin
+ Result:=CreateParamSfo(data,fs_src);
+ if not Result then Exit;
+
+ Result:=CreateTmpFiles(fs_src);
+ if not Result then Exit;
+
+ if ((data.mountMode and SDM_COPY_ICON)<>0) then
+ begin
+  Writeln('TODO:COPY_ICON');
+ end;
+
+end;
+
+
 function TSaveDataBackendProcess.OnSaveDataMount(Value:TIpcValue):TIpcValue; //SaveDataMount
 var
  data:TSaveDataMount;
  output:TSaveDataMountResult;
 
- mountMode:DWORD;
  slot_id  :Integer;
  titleId  :pchar;
  dirName  :pchar;
@@ -775,10 +937,14 @@ begin
  FillChar(data,SizeOf(data),0);
  Value.MoveTo(@data,SizeOf(data));
 
- mountMode:=data.mountMode;
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  data.mountMode:=data.mountMode and (not SDM_COPY_ICON);
+ end;
+
  if (p_proc.p_sdk_version < $4500000) then
  begin
-  mountMode:=mountMode and (not SDM_CREATE2);
+  data.mountMode:=data.mountMode and (not SDM_CREATE2);
  end;
 
  titleId:=@data.titleId.data;
@@ -789,7 +955,7 @@ begin
 
  dirName:=@data.dirName.data;
 
- if ((mountMode and SDM_RDWR)<>0) then
+ if ((data.mountMode and SDM_RDWR)<>0) then
  if (strncasecmp(@GameMountConfig.InstallDir,
                  titleId,
                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
@@ -814,12 +980,14 @@ begin
   if DirectoryExists(fs_src) then
   begin
 
-   if ((mountMode and SDM_CREATE2)<>0) then
+   if ((data.mountMode and SDM_CREATE2)<>0) then
    begin
     //force
     FormatMount(fs_src);
+    //
+    CreateMount(data,fs_src);
    end else
-   if ((mountMode and SDM_CREATE)<>0) then
+   if ((data.mountMode and SDM_CREATE)<>0) then
    begin
     //error
     output.result:=SCE_SAVE_DATA_ERROR_EXISTS;
@@ -828,11 +996,13 @@ begin
   end else
   begin
 
-   if ((mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
+   if ((data.mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
    begin
     //create
     if ForceDirectories(fs_src) then
     begin
+     CreateMount(data,fs_src);
+     //
      output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
     end else
     begin
@@ -863,7 +1033,7 @@ begin
 
    MountSlots[slot_id].fingerprint:=data.fingerprint;
    MountSlots[slot_id].max_blocks :=data.blocks;
-   MountSlots[slot_id].mountMode  :=mountMode;
+   MountSlots[slot_id].mountMode  :=data.mountMode;
 
    //out
    output.slot_id       :=slot_id;
