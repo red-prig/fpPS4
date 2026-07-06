@@ -106,6 +106,8 @@ type
    procedure   InvokeAsyn(msg:TMsgHash);
    procedure   InvokeBroken();
    //
+   function    HoldResult:DWORD;                        virtual; abstract;
+   procedure   InvokeResult(tid:DWORD;value:TIpcValue); virtual; abstract;
  end;
 
 operator := (A:RawByteString):TMsgHash;

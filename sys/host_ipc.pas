@@ -57,9 +57,9 @@ type
     FWaits:LIST_HEAD;
     FWLock:mtx;
     Fkq   :Pointer;
+    FRTid :Integer;
     FTerm :Boolean;
     FBroke:Boolean;
-   procedure   SyncResult(tid:DWORD;value:TIpcValue);
    function    NewNodeSync:PNodeIpcSync;
    procedure   FreeNodeSync(node:PNodeIpcSync);
    procedure   TriggerNodeSync(tid:DWORD;value:TIpcValue);
@@ -80,6 +80,9 @@ type
    procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); virtual;
    procedure   Update();                                    override;
    procedure   Disconnect();                                override;
+   //
+   function    HoldResult:DWORD;                        override;
+   procedure   InvokeResult(tid:DWORD;value:TIpcValue); override;
    //
    Constructor Create;
    Destructor  Destroy;     override;
@@ -281,10 +284,11 @@ begin
   //
 
   input:=node^.value;
+  FRTid:=node^.header.mtid;
 
   if (node^.header.mtype=iRESULT) then
   begin
-   TriggerNodeSync(node^.header.mtid,input);
+   TriggerNodeSync(FRTid,input);
    input:=Default(TIpcValue); //transfer owned
   end else
   begin
@@ -298,9 +302,9 @@ begin
     output:=-1;
    end;
    //is sync
-   if (node^.header.mtid<>0) then
+   if (FRTid<>0) then
    begin
-    SyncResult(node^.header.mtid,output);
+    InvokeResult(FRTid,output);
     output:=Default(TIpcValue); //transfer owned
    end;
   end;
@@ -323,9 +327,16 @@ end;
 
 //
 
-procedure THostIpcConnect.SyncResult(tid:DWORD;value:TIpcValue);
+procedure THostIpcConnect.InvokeResult(tid:DWORD;value:TIpcValue);
 begin
+ Assert(tid<>iBROKEN);
  SendImpl(iRESULT,tid,value);
+end;
+
+function THostIpcConnect.HoldResult:DWORD;
+begin
+ Result:=FRTid;
+ FRTid:=0;
 end;
 
 //
