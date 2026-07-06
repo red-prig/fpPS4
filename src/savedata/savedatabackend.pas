@@ -1332,6 +1332,7 @@ begin
  fs_src:=GameMountConfig.GetSaveDataFolder(mount.userId,@mount.titleId,@mount.dirName);
 
  blocks:=GetDirectorySizeLikePFS(fs_src);
+ blocks:=blocks+1024+4*1024+4*1024; //pulling
 
  blocks:=(blocks+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE;
 

@@ -846,6 +846,18 @@ begin
  Result:=True;
 end;
 
+procedure GetFileSize(const FileName:RawByteString;var Size:Int64);
+Var
+ F:THandle;
+ i:Int64;
+begin
+ F:=FileOpen(FileName,fmOpenRead or fmShareDenyNone);
+ if (F=feInvalidHandle) then Exit;
+ i:=FileSeek(F,0,fsFromEnd);
+ if (i>=0) then Size:=i;
+ FileClose(F);
+end;
+
 function GetDirectorySizeLikePFS(const DirectoryName:RawByteString):Int64;
 type
  PNode=^TNode;
@@ -927,22 +939,23 @@ begin
        continue;
      end;
      //
+     CurFilename:=CurSrcDir+FileInfo.Name;
+     //
+     GetFileSize(CurFilename,FileInfo.Size); //file size isn't updated immediately, so we'll force it
+     //
      dirent_size:=dirent_size+AlignUp(c_dirent_size+Length(FileInfo.Name)+1,8);
      //
      if ((FileInfo.Attr and faDirectory)>0)
         {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then
      begin
-       CurFilename:=CurSrcDir+FileInfo.Name;
-       CurFilename:=IncludeTrailingPathDelimiter(CurFilename);
-       Push(CurFilename);
+       Push(IncludeTrailingPathDelimiter(CurFilename));
      end else
      begin
        if (FileInfo.Size<>0) then
        begin
         inode_count:=inode_count+1;
+        files_size:=files_size+AlignUp(FileInfo.Size,c_block_size);
        end;
-
-       files_size:=files_size+AlignUp(FileInfo.Size,c_block_size);
      end;
    until SysUtils.FindNext(FileInfo)<>0;
    SysUtils.FindClose(FileInfo);
