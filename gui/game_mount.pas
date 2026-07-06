@@ -66,6 +66,8 @@ function ReadFromFile   (const SrcFilename:RawByteString;buf:Pointer;size:Ptrint
 function CopyFile       (const SrcFilename, DestFilename: RawByteString): boolean;
 function CopyDirectory  (const src,dst:RawByteString): boolean;
 
+function GetDirectorySizeLikePFS(const DirectoryName:RawByteString):Int64;
+
 function FormatMount(const fs_src:RawByteString):Integer;
 
 function unix_to_host(const name:RawByteString):RawByteString;
@@ -431,7 +433,7 @@ begin
                             pchar(fs_src),
                             nil,
                             ord(mfReadOnly in flags)*MNT_RDONLY  or
-                            ord(mfPFS      in flags)*MNT_EMU_PFS or
+                            ord(mfPFS      in flags)*MNT_PFS_64K or
                             ord(mfBudget   in flags)*MNT_BIG_APP,
                             mfIgnoreErr in flags);
    end;

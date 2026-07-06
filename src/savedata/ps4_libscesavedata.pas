@@ -893,14 +893,26 @@ end;
 
 function ps4_sceSaveDataGetMountInfo(mountPoint:pSceSaveDataMountPoint;
                                      info:pSceSaveDataMountInfo):Integer;
+var
+ slot_id:Integer;
 begin
- Result:=0;
- if (info<>nil) then
+ if (g_instance=nil) then
  begin
-  info^:=Default(SceSaveDataMountInfo);
-  info^.blocks    :=100000;
-  info^.freeBlocks:=100000;
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
+
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ Result:=CheckMountInfo(info);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.GetMountInfo(slot_id,info);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function _convert_dir_name_search(P:PChar):RawByteString;

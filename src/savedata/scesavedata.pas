@@ -382,6 +382,7 @@ function CheckSaveDataMount(mount      :pSceSaveDataMount;
 function CheckSaveDataBackup   (backup:pSceSaveDataBackup):Integer;
 function CheckCheckBackupData  (check:pSceSaveDataCheckBackupData;internal:Boolean):Integer;
 function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+function CheckMountInfo        (info:pSceSaveDataMountInfo):Integer;
 
 implementation
 
@@ -1076,6 +1077,18 @@ begin
   Result:=CheckRestoreBackupData2(restore);
  end;
 end;
+
+function CheckMountInfo(info:pSceSaveDataMountInfo):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (info=nil) then Exit;
+
+ if CheckReserved(info^.reserved,sizeof(info^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
 
 end.
 

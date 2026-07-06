@@ -56,6 +56,7 @@ type
   function    SaveDataDelete   (del:pSceSaveDataDelete):Integer;
   function    SaveDataMount    (mount:pSceSaveDataMount;var pResult:TSaveDataMountResult;Transfering:Boolean):Integer;
   function    SaveDataUmount   (slot_id:Integer;backup:boolean):Integer;
+  function    GetMountInfo     (slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
   function    SaveDataBackup   (backup:pSceSaveDataBackup):Integer;
   function    CheckBackupData  (check:pSceSaveDataCheckBackupData):Integer;
   function    RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
@@ -146,6 +147,7 @@ type
   function    OnSaveDataMount (Value:TIpcValue):TIpcValue; //SaveDataMount
   function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
   function    OnSaveDataUmount(Value:TIpcValue):TIpcValue; //SaveDataUmount
+  function    OnGetMountInfo  (Value:TIpcValue):TIpcValue; //GetMountInfo
   function    OnSaveDataBackup(Value:TIpcValue):TIpcValue; //SaveDataBackup
   function    SendBackupJob   (userId     :SceUserServiceUserId;
                                titleId    :pchar;
@@ -554,6 +556,7 @@ begin
  kipc.FHandler.AddCallback('SaveDataMount'    ,@OnSaveDataMount);
  kipc.FHandler.AddCallback('IsActiveMount'    ,@OnIsActiveMount);
  kipc.FHandler.AddCallback('SaveDataUmount'   ,@OnSaveDataUmount);
+ kipc.FHandler.AddCallback('GetMountInfo'     ,@OnGetMountInfo);
  kipc.FHandler.AddCallback('SaveDataBackup'   ,@OnSaveDataBackup);
  kipc.FHandler.AddCallback('CheckBackupData'  ,@OnCheckBackupData);
  kipc.FHandler.AddCallback('RestoreBackupData',@OnRestoreBackupData);
@@ -910,7 +913,7 @@ begin
                                            pchar(fs_src),
                                            nil,
                                            ord((data.mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
-                                           MNT_EMU_PFS);
+                                           MNT_PFS_32K);
   if (Result=0) then
   begin
    MountSlots[pResult.slot_id]:=True;
@@ -934,7 +937,6 @@ type
   procedure Init(const _data:TSaveDataMount);
   function  Lock():Boolean;
   procedure UnLock();
-  procedure Invoke(value:TIpcValue);
   function  CreateParamSfo():Boolean;
   function  CreateTmpFiles():Boolean;
   function  CreateMount():Boolean;
@@ -955,11 +957,6 @@ end;
 procedure TMountJob.UnLock();
 begin
  gSaveDataBackend.UnLockDir(fs_src);
-end;
-
-procedure TMountJob.Invoke(value:TIpcValue);
-begin
- gSaveDataBackend.kipc.InvokeResult(rid,value);
 end;
 
 function TMountJob.CreateParamSfo():Boolean;
@@ -1217,6 +1214,13 @@ begin
 
 end;
 
+type
+ SaveDataMountInfo=packed record
+  result    :QWORD;
+  blocks    :SceSaveDataBlocks;
+  freeBlocks:SceSaveDataBlocks;
+ end;
+
 function TSaveDataBackendProcess.OnIsActiveMount(Value:TIpcValue):TIpcValue; //IsActiveMount
 var
  slot_id:Integer;
@@ -1225,7 +1229,7 @@ begin
  slot_id:=0;
  Value.MoveTo(@slot_id,SizeOf(slot_id));
 
- if (DWORD(slot_id)>15) then Exit(-1);
+ if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if (MountSlots[slot_id].active=0) then
  begin
@@ -1247,7 +1251,7 @@ begin
  data:=Default(TSaveDataUmount);
  Value.MoveTo(@data,SizeOf(data));;
 
- if (DWORD(data.slot_id)>15) then Exit(-1);
+ if (DWORD(data.slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if (MountSlots[data.slot_id].active=0) then
  begin
@@ -1275,6 +1279,70 @@ begin
                True);
  end;
 
+end;
+
+function TSaveDataBackendConnect.GetMountInfo(slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
+var
+ Value:TIpcValue;
+ data:SaveDataMountInfo;
+begin
+ if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (MountSlots[slot_id]=False) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
+ Value:=kipc.InvokeSync('GetMountInfo',slot_id);
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ Value.Free;
+
+ Result:=data.result;
+
+ if (Result=0) then
+ begin
+  info^.blocks    :=data.blocks    ;
+  info^.freeBlocks:=data.freeBlocks;
+ end;
+end;
+
+function TSaveDataBackendProcess.OnGetMountInfo(Value:TIpcValue):TIpcValue; //GetMountInfo
+var
+ slot_id:Integer;
+ mount:TMountSlot;
+ fs_src:RawByteString;
+ output:SaveDataMountInfo;
+ blocks:Int64;
+begin
+ Result:=0;
+ slot_id:=Value.GetDWORD;
+
+ if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (MountSlots[slot_id].active=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
+ mount:=MountSlots[slot_id];
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(mount.userId,@mount.titleId,@mount.dirName);
+
+ blocks:=GetDirectorySizeLikePFS(fs_src);
+
+ blocks:=(blocks+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE;
+
+ blocks:=mount.max_blocks-blocks-32;
+ if (blocks<0) then blocks:=0;
+
+ output.result    :=0;
+ output.blocks    :=mount.max_blocks;
+ output.freeBlocks:=blocks;
+
+ Result:=TIpcValue.New(@output,sizeof(output));
 end;
 
 type

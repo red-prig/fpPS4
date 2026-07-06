@@ -448,9 +448,13 @@ begin
  begin
   d_blksize:=16384;
  end else
- if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
   d_blksize:=65536;
+ end else
+ if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
+ begin
+  d_blksize:=32768;
  end else
  begin
   d_blksize:=32768;
@@ -1405,7 +1409,7 @@ begin
  restart:=True;
 
  mp:=ap^.a_vp^.v_mount;
- emu_pfs:=((mp^.mnt_flag and MNT_EMU_PFS)<>0);
+ emu_pfs:=((mp^.mnt_flag and MNT_PFS_ANY)<>0);
 
  sx_xlock(@dd^.ufs_md_lock);
 
@@ -3018,7 +3022,7 @@ begin
   VDIR:
    begin
     mp:=vp^.v_mount;
-    if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+    if ((mp^.mnt_flag and MNT_PFS_ANY)<>0) then
     begin
      Result:=_VOP_READDIR(@md_pfs_readdir, vp, ap^.a_uio);
     end else
