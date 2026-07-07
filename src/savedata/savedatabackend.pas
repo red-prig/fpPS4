@@ -263,6 +263,7 @@ debug hostapp/app data/app (3) -> | 0x20
 }
 
 type
+ p_savedata_sfo_values=^t_savedata_sfo_values;
  t_savedata_sfo_values=packed object
   CATEGORY           :array[0..3] of Char;
   FORMAT             :array[0..3] of Char;
@@ -279,6 +280,7 @@ type
   //
   Procedure New(const data:TSaveDataMount);
   function  SaveToFile(const fname:RawByteString):Boolean;
+  function  LoadFromFile(const fname:RawByteString):Boolean;
  end;
 
 Procedure t_savedata_sfo_values.New(const data:TSaveDataMount);
@@ -293,12 +295,18 @@ begin
 
  Self:=Default(t_savedata_sfo_values);
  //
- CATEGORY       :='sd';
- FORMAT         :='obs';
- ACCOUNT_ID     :=$6F6C6C6F706122E7;
- SAVEDATA_BLOCKS:=data.blocks;
- params.user_id :=data.userId;
- params.flags   :=4;
+ CATEGORY         :='sd';
+ FORMAT           :='obs';
+ ACCOUNT_ID       :=$6F6C6C6F706122E7;
+ SAVEDATA_BLOCKS  :=data.blocks;
+ params.user_id   :=data.userId;
+ params.counter_id:=1;
+ params.flags     :=4;
+
+ if ((data.mountMode and SDM_DESTRUCT_OFF)=0) then
+ begin
+  PARAMS.corrupt_flag:=1;
+ end;
 
  //MAINTITLE
 
@@ -330,6 +338,63 @@ begin
 
  Result:=F.save(fname);
  F.Free;
+end;
+
+procedure _on_load_sfo(userdata:Pointer;name,value:pchar;format:WORD;size,max_size,i:DWORD);
+
+ procedure copy_value(dst:Pointer;field_format:WORD;max_field_size:DWORD); inline;
+ begin
+  if (field_format=format) then
+  begin
+   if (size>max_field_size) then size:=max_field_size;
+   Move(value^,dst^,size);
+  end;
+ end;
+
+begin
+ with p_savedata_sfo_values(userdata)^ do
+ begin
+  case RawByteString(name) of
+   'ACCOUNT_ID'         :copy_value(@ACCOUNT_ID         ,SFO_FORMAT_BLOB  ,sizeof(ACCOUNT_ID));
+   'ATTRIBUTE'          :copy_value(@ATTRIBUTE          ,SFO_FORMAT_UINT32,sizeof(ATTRIBUTE));
+   'CATEGORY'           :copy_value(@CATEGORY           ,SFO_FORMAT_STRING,sizeof(CATEGORY));
+   'DETAIL'             :copy_value(@DETAIL             ,SFO_FORMAT_STRING,sizeof(DETAIL   ));
+   'FORMAT'             :copy_value(@FORMAT             ,SFO_FORMAT_STRING,sizeof(FORMAT   ));
+   'MAINTITLE'          :copy_value(@MAINTITLE          ,SFO_FORMAT_STRING,sizeof(MAINTITLE));
+   'PARAMS'             :copy_value(@PARAMS             ,SFO_FORMAT_BLOB  ,sizeof(PARAMS));
+   'SAVEDATA_BLOCKS'    :copy_value(@SAVEDATA_BLOCKS    ,SFO_FORMAT_BLOB  ,sizeof(SAVEDATA_BLOCKS));
+   'SAVEDATA_DIRECTORY' :copy_value(@SAVEDATA_DIRECTORY ,SFO_FORMAT_STRING,sizeof(SAVEDATA_DIRECTORY));
+   'SAVEDATA_LIST_PARAM':copy_value(@SAVEDATA_LIST_PARAM,SFO_FORMAT_UINT32,sizeof(SAVEDATA_LIST_PARAM));
+   'SUBTITLE'           :copy_value(@SUBTITLE           ,SFO_FORMAT_STRING,sizeof(SUBTITLE));
+   'TITLE_ID'           :copy_value(@TITLE_ID           ,SFO_FORMAT_STRING,sizeof(TITLE_ID));
+   else;
+  end;
+ end;
+end;
+
+function t_savedata_sfo_values.LoadFromFile(const fname:RawByteString):Boolean;
+var
+ F:TParamSfoFileLoader;
+begin
+ Result:=False;
+
+ if not F.open(fname) then
+ begin
+  Exit;
+ end;
+
+ if not F.parse() then
+ begin
+  F.Free;
+  Exit;
+ end;
+
+ Self:=Default(t_savedata_sfo_values);
+ F.ForAll(@_on_load_sfo,@Self);
+
+ F.Free;
+
+ Result:=True;
 end;
 
 //
@@ -934,12 +999,17 @@ type
   fs_src:RawByteString;
   data  :TSaveDataMount;
   //
+  param_sfo:t_savedata_sfo_values;
+  //
   procedure Init(const _data:TSaveDataMount);
   function  Lock():Boolean;
   procedure UnLock();
   function  CreateParamSfo():Boolean;
+  procedure SaveCorruptFlag(v:Byte);
+  function  OpenParamSfo():Integer;
   function  CreateTmpFiles():Boolean;
-  function  CreateMount():Boolean;
+  function  CheckMountData(is_created:Boolean):Integer;
+  function  CreateMount(force:Boolean):Integer;
   //
   function  Run:TIpcValue; override;
  end;
@@ -962,7 +1032,6 @@ end;
 function TMountJob.CreateParamSfo():Boolean;
 var
  fname:RawByteString;
- sfo:t_savedata_sfo_values;
 begin
  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys');
  Result:=ForceDirectories(fname);
@@ -970,8 +1039,72 @@ begin
 
  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
 
- sfo.New(data);
- Result:=sfo.SaveToFile(fname);
+ param_sfo.New(data);
+ Result:=param_sfo.SaveToFile(fname);
+end;
+
+procedure TMountJob.SaveCorruptFlag(v:Byte);
+var
+ fname:RawByteString;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+
+ param_sfo.PARAMS.corrupt_flag:=v;
+ param_sfo.SaveToFile(fname);
+end;
+
+function TMountJob.OpenParamSfo():Integer;
+var
+ fname:RawByteString;
+ titleId:PChar;
+begin
+ Result:=0;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+
+ if not param_sfo.LoadFromFile(fname) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if (param_sfo.CATEGORY<>'sd') or
+    (param_sfo.FORMAT<>'obs') or
+    (param_sfo.SAVEDATA_BLOCKS<96) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.TitleId;
+ end;
+
+ if CompareChar0(param_sfo.TITLE_ID,titleId^,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if CompareChar0(param_sfo.SAVEDATA_DIRECTORY,data.dirName.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if (param_sfo.PARAMS.version<>0) or
+    (param_sfo.PARAMS.counter_id<>1) or
+    (param_sfo.PARAMS.corrupt_flag<>0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ //sfo.PARAMS.user_id
+ //sfo.PARAMS.title_id_1
+ //sfo.PARAMS.title_id_2
+
+ //update blocks
+ data.blocks:=param_sfo.SAVEDATA_BLOCKS;
+
+ SaveCorruptFlag(1);
 end;
 
 function TMountJob.CreateTmpFiles():Boolean;
@@ -997,19 +1130,63 @@ begin
  Result:=TruncFile(fname,$1c800);
 end;
 
-function TMountJob.CreateMount():Boolean;
+function TMountJob.CheckMountData(is_created:Boolean):Integer;
 begin
- Result:=CreateParamSfo();
- if not Result then Exit;
+ Result:=0;
 
- Result:=CreateTmpFiles();
- if not Result then Exit;
+ if (p_proc.p_sdk_version < $3000000) then
+ begin
+  //
+ end else
+ if (not is_created) or
+    ((GameMountConfig.ATTRIBUTE and $80000)<>0) or
+    (data.blocks < 32769) then
+ begin
+  //
+ end else
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if data.Transfering then
+ begin
+  //TODO: SAVE_DATA_TRANSFER_TITLE_ID_LIST
+  //SCE_SAVE_DATA_ERROR_PARAMSFO_TRANSFER_TITLE_ID_NOT_FOUND
+ end;
+
+end;
+
+function TMountJob.CreateMount(force:Boolean):Integer;
+begin
+ Result:=CheckMountData(True);
+ if (Result<>0) then Exit;
+
+ if force then
+ begin
+  if not DeleteDirectory(fs_src,True) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+  end;
+ end;
+
+ if not ForceDirectories(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ end;
+
+ if not CreateParamSfo then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if not CreateTmpFiles then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if ((data.mountMode and SDM_COPY_ICON)<>0) then
  begin
   Writeln('TODO:COPY_ICON');
  end;
 
+ //end
+ if ((data.mountMode and SDM_DESTRUCT_OFF)=0) then
+ begin
+  SaveCorruptFlag(0);
+ end;
 end;
 
 function TMountJob.Run:TIpcValue;
@@ -1074,18 +1251,28 @@ begin
   begin
    if DirectoryExists(fs_src) then
    begin
+
+    //if (output.result=0) then
+
     //replace or exists error
     if ((data.mountMode and SDM_CREATE2)<>0) then
     begin
+     //output.result:=OpenParamSfo(); //TODO: check
+
      //force
-     FormatMount(fs_src);
+     output.result:=CreateMount(True);
      //
-     CreateMount();
+     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+     //
     end else
     if ((data.mountMode and SDM_CREATE)<>0) then
     begin
      //error
      output.result:=SCE_SAVE_DATA_ERROR_EXISTS;
+    end else
+    begin
+     //open
+     output.result:=OpenParamSfo();
     end;
 
    end else
@@ -1095,15 +1282,10 @@ begin
     if ((data.mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
     begin
      //create
-     if ForceDirectories(fs_src) then
-     begin
-      CreateMount();
-      //
-      output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-     end else
-     begin
-      output.result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-     end;
+     output.result:=CreateMount(False);
+     //
+     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+     //
     end else
     begin
      //error

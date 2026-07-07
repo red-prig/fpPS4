@@ -484,13 +484,35 @@ end;
 
 {
  isInitUserAlwaysLogin
- (m_attribute & 1) == 0     || param_sfo_not_found
+   (m_attribute & 1) == 0
 
  isBgSuspend
- (m_attribute & 0x10) != 0  || param_sfo_not_found
+   (m_attribute & 0x10) != 0
 
  isBgSuspendIfSpecial
- (m_attribute & 0x100) != 0 || param_sfo_not_found
+   (m_attribute & 0x100) != 0
+
+ //Best effort threads use 2 CPU cores. [0xC0] [m_type=MINI_APP,BIG_APP] [SdkVersion < 0x3000000]
+ IsNotSetBestEffortOnNewProcess
+   ((&param_1->m_attribute + 2) & 0x20) >> 5) != 0
+
+ IsNotCheckWorkaroundExtraUsbAudioDevice
+   (((&param_1->m_attribute + 2) & 4) >> 2) != 0
+
+ ///////////////
+
+ isEnlargeFmem256mb
+   (&m_attribute2 + 1) & 0x40) >> 6) != 0
+
+ savedata:[ServerCmdBackup]
+  if ((compiledSdkVer < 0x4500000) && ( (((&ATTRIBUTE2 + 2) & 2) >> 1) == false )) {
+    slot = 1;
+  }
+  else {
+    slot = 2;
+  }
+  sceFsISSchedConfigCurrentThread(slot,4);
+
 }
 
 {
@@ -510,21 +532,6 @@ end;
 
 }
 
-{
-
-//Best effort threads use 2 CPU cores. [0xC0] [m_type=MINI_APP]
-byte GetBesteffort(t_app_m_info *param_1)
-{
-  if (param_1->NewProcess != 0) {
-    return 1;
-  }
-  if (param_1->m_is_param_sfo_not_found != 0) {
-    return 0;
-  }
-  return (*(byte *)((long)&param_1->m_attribute + 2) & 0x20) >> 5;
-}
-
-}
 
 function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 label

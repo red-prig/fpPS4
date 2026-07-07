@@ -11,6 +11,7 @@ uses
 
 type
  TGameMountConfig=class
+  ATTRIBUTE :DWORD;
   LocalDir  :RawByteString;
   TitleId   :array[0..9] of AnsiChar;
   InstallDir:array[0..9] of AnsiChar;
@@ -33,10 +34,12 @@ type
 
  TGameMountConfigExport=class(TSerializeObject)
  public
+  FATTRIBUTE :DWORD;
   FLocalDir  :RawByteString;
   FTitleId   :RawByteString;
   FInstallDir:RawByteString;
  published
+  property ATTRIBUTE :DWORD         read FATTRIBUTE  write FATTRIBUTE;
   property LocalDir  :RawByteString read FLocalDir   write FLocalDir;
   property TitleId   :RawByteString read FTitleId    write FTitleId;
   property InstallDir:RawByteString read FInstallDir write FInstallDir;
@@ -382,7 +385,9 @@ begin
 
  //save to global
  GameMountConfig:=TGameMountConfig.Create;
- GameMountConfig.LocalDir:=GameStartupInfo.LocalDir;
+
+ GameMountConfig.ATTRIBUTE:=GameStartupInfo.ATTRIBUTE;
+ GameMountConfig.LocalDir :=GameStartupInfo.LocalDir;
 
  if (GameStartupInfo.TITLE_ID<>'') then
  begin
@@ -469,6 +474,8 @@ begin
  if (GameMountConfig=nil) then Exit(nil);
 
  Result:=TGameMountConfigExport.Create;
+
+ Result.ATTRIBUTE :=GameMountConfig.ATTRIBUTE;
  Result.LocalDir  :=GameMountConfig.LocalDir;
  Result.TitleId   :=GameMountConfig.TitleId;
  Result.InstallDir:=GameMountConfig.InstallDir;
@@ -480,6 +487,8 @@ begin
  begin
   GameMountConfig:=TGameMountConfig.Create;
  end;
+
+ GameMountConfig.ATTRIBUTE :=e.ATTRIBUTE;
  GameMountConfig.LocalDir  :=e.LocalDir;
  GameMountConfig.TitleId   :=e.TitleId;
  GameMountConfig.InstallDir:=e.InstallDir;
