@@ -197,7 +197,7 @@ end;
 
 function TGameMountConfig.GetSaveDataBackupNew(user_id:Integer;_titleId,dirName:pchar):RawByteString;
 const
- APP_SAVE='%s/user/home/%s/savedata/sce_backup/%s';
+ APP_SAVE='%s/user/home/%s/savedata/sce_backup/%s_%s';
 begin
  mtx_lock(mount_mtx);
 

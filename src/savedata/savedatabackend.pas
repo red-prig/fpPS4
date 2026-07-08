@@ -888,7 +888,7 @@ begin
  //dont check errors
  game_mount.DeleteDirectory(fs_dst,False);
  game_mount.DeleteDirectory(fs_old,False);
- game_mount.DeleteDirectory(ExtractFilePath(fs_new),False);
+ game_mount.DeleteDirectory(fs_new,False);
  game_mount.DeleteDirectory(fs_src,False);
 
  Unlock;
@@ -1802,7 +1802,7 @@ begin
  //clear new
  if DirectoryExists(fs_new) then
  begin
-  if game_mount.DeleteDirectory(ExtractFilePath(fs_new),False) then
+  if game_mount.DeleteDirectory(fs_new,False) then
   begin
    //
   end else
@@ -1940,8 +1940,6 @@ begin
   Exit;
  end;
 
- ForceDirectories(ExtractFilePath(fs_new));
-
  //move src->new
  if RenameFile(fs_src,fs_new) then
  begin
@@ -1965,7 +1963,7 @@ begin
  end;
 
  //delete files in new
- if game_mount.DeleteDirectory(ExtractFilePath(fs_new),True) then
+ if game_mount.DeleteDirectory(fs_new,False) then
  begin
   //
  end else

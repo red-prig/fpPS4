@@ -94,9 +94,16 @@ type
   reserved:array[0..31] of Byte;
  end;
 
+const
+ //SceSaveDataSaveDataMemoryOption
+ SCE_SAVE_DATA_MEMORY_OPTION_NONE         =0;
+ SCE_SAVE_DATA_MEMORY_OPTION_SET_PARAM    =1;
+ SCE_SAVE_DATA_MEMORY_OPTION_DOUBLE_BUFFER=2;
+
+type
  PSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
  SceSaveDataMemorySetup2=packed record
-  option        :DWORD;
+  option        :DWORD; //SceSaveDataSaveDataMemoryOption
   userId        :SceUserServiceUserId;
   memorySize    :QWORD;
   iconMemorySize:QWORD;
