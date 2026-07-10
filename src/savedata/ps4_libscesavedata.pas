@@ -629,26 +629,41 @@ begin
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory(
-           userId:SceUserServiceUserId;
+           userId    :SceUserServiceUserId;
            memorySize:QWORD;
-           param:PSceSaveDataParam):Integer;
+           param     :PSceSaveDataParam):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory2(
            setupParam:PSceSaveDataMemorySetup2;
-           _result:PSceSaveDataMemorySetupResult):Integer;
+           pResult   :PSceSaveDataMemorySetupResult):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory(
-           userId:SceUserServiceUserId;
-           buf:Pointer;
+           userId :SceUserServiceUserId;
+           buf    :Pointer;
            bufSize:QWORD;
-           offset:QWORD):Integer;
+           offset :QWORD):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (buf<>nil) then
  begin
   FillChar(buf^,bufSize,0);
@@ -659,6 +674,11 @@ end;
 function ps4_sceSaveDataGetSaveDataMemory2(
            getParam:PSceSaveDataMemoryGet2):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (getParam<>nil) then
  begin
   if (getParam^.data<>nil) then
@@ -673,23 +693,38 @@ begin
 end;
 
 function ps4_sceSaveDataSetSaveDataMemory(
-           userId:SceUserServiceUserId;
-           buf:Pointer;
+           userId :SceUserServiceUserId;
+           buf    :Pointer;
            bufSize:QWORD;
-           offset:QWORD):Integer;
+           offset :QWORD):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
 function ps4_sceSaveDataSetSaveDataMemory2(
            setParam:PSceSaveDataMemorySet2):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
 function ps4_sceSaveDataSyncSaveDataMemory(
            syncParam:PSceSaveDataMemorySync):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
@@ -719,7 +754,6 @@ end;
 
 function ps4_sceSaveDataDelete(del:pSceSaveDataDelete):Integer;
 begin
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
@@ -775,7 +809,6 @@ end;
 function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
                               mountResult:pSceSaveDataMountResult):Integer;
 begin
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
@@ -794,7 +827,6 @@ function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
 var
  tmp:SceSaveDataMount;
 begin
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
@@ -824,7 +856,6 @@ function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
 var
  tmp:SceSaveDataMount;
 begin
-
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
@@ -956,6 +987,11 @@ var
  i,n:Integer;
  }
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 
  if (cond=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
@@ -1053,6 +1089,11 @@ function ps4_sceSaveDataGetParam(mountPoint:pSceSaveDataMountPoint;
                                  gotSize:PQWORD
                                 ):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  if (gotSize<>nil) then
  begin
   gotSize^:=0;
@@ -1065,24 +1106,57 @@ function ps4_sceSaveDataSetParam(mountPoint:pSceSaveDataMountPoint;
                                  paramBuf:Pointer;
                                  paramBufSize:QWORD):Integer;
 begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
  Result:=0;
 end;
 
 //Save icon
 function ps4_sceSaveDataSaveIcon(mountPoint:pSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer;
+var
+ slot_id:Integer;
 begin
- if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- Result:=0;
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ Result:=CheckSaveSaveDataIcon(param);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.SaveDataSaveIcon(slot_id,param);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 //Load icon
 function ps4_sceSaveDataLoadIcon(mountPoint:pSceSaveDataMountPoint;
                                  param:pSceSaveDataIcon):Integer;
+var
+ slot_id:Integer;
 begin
- if (mountPoint=nil) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- if (param=nil)      then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ Result:=CheckLoadSaveDataIcon(param);
+ if (Result<>0) then Exit;
+
  Result:=SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND;
 end;
 

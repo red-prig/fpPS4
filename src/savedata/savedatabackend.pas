@@ -6,6 +6,9 @@ interface
 
 uses
  sysutils,
+ fpimage,
+ fpreadpng,
+ CharStream,
  g_node_splay,
  errno,
  LFQueue,
@@ -62,6 +65,7 @@ type
   function    CheckBackupData  (check:pSceSaveDataCheckBackupData):Integer;
   function    RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
   function    GetEventResult   (event:pSceSaveDataEvent):Integer;
+  function    SaveDataSaveIcon (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
  end;
 
  TCustomCommand=class;
@@ -159,6 +163,7 @@ type
   function    OnCheckBackupData  (Value:TIpcValue):TIpcValue; //CheckBackupData
   function    OnRestoreBackupData(Value:TIpcValue):TIpcValue; //RestoreBackupData
   function    OnGetEventResult   (Value:TIpcValue):TIpcValue; //GetEventResult
+  function    OnSaveDataSaveIcon (Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
  end;
 
 implementation
@@ -632,6 +637,7 @@ begin
  kipc.FHandler.AddCallback('CheckBackupData'  ,@OnCheckBackupData);
  kipc.FHandler.AddCallback('RestoreBackupData',@OnRestoreBackupData);
  kipc.FHandler.AddCallback('GetEventResult'   ,@OnGetEventResult);
+ kipc.FHandler.AddCallback('SaveDataSaveIcon' ,@OnSaveDataSaveIcon);
  //
  inherited;
 end;
@@ -741,7 +747,8 @@ begin
  GameMountConfigImport(data);
 
  Writeln('[MOUNT_CONFIG]');
- Writeln(' LocalDir  =',data.LocalDir );
+ Writeln(' ATTRIBUTE =0x',HexStr(data.ATTRIBUTE,8));
+ Writeln(' LocalDir  =',data.LocalDir  );
  Writeln(' TitleId   =',data.TitleId   );
  Writeln(' InstallDir=',data.InstallDir);
 
@@ -2228,6 +2235,69 @@ begin
  end;
 
 end;
+
+type
+ p_icon_buf=^t_icon_buf;
+ t_icon_buf=packed record
+  slot:DWORD;
+  size:DWORD;
+  data:array[0..116735] of Byte;
+ end;
+
+function TSaveDataBackendConnect.SaveDataSaveIcon(slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+var
+ data:p_icon_buf;
+begin
+ data:=AllocMem(sizeof(t_icon_buf));
+ data^.slot:=slot_id;
+ data^.size:=icon^.dataSize;
+ Move(icon^.buf^,data^.data,icon^.dataSize);
+
+ Result:=kipc.InvokeSync2('SaveDataSaveIcon',TIpcValue.Inplace(data,data,sizeof(t_icon_buf)));
+end;
+
+function TSaveDataBackendProcess.OnSaveDataSaveIcon(Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+var
+ err:Integer;
+ len:DWORD;
+ data:p_icon_buf;
+
+ Mem:TPCharStream;
+ Img:TFPMemoryImage;
+ Reader:TFPReaderPNG;
+begin
+ Result:=0;
+ len :=Value.GetLen;
+ data:=Value.GetBuf;
+ if (len<8) then Exit(-1);
+
+ Mem:=TPCharStream.Create(@data^.data,data^.size);
+ Img:=TFPMemoryImage.Create(0,0);
+ Reader:=TFPReaderPNG.Create;
+
+ err:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ try
+   Img.LoadFromStream(Mem, Reader);
+
+   if (Img.Width=228) then
+   if (Img.Height=128) then
+   if (Reader.ColorType=2) then //is RGB
+   if (Reader.BitDepth=8) then
+   begin
+    err:=0;
+   end;
+
+ finally
+   Reader.Free;
+   Img.Free;
+   Mem.Free;
+ end;
+
+ Result:=err;
+end;
+
+
 
 end.
 

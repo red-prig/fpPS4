@@ -420,6 +420,9 @@ function CheckSaveDataMount(mount      :pSceSaveDataMount;
                             pResult    :pSceSaveDataMountResult;
                             Transfering:Boolean):Integer;
 
+function CheckLoadSaveDataIcon (icon:pSceSaveDataIcon):Integer;
+function CheckSaveSaveDataIcon (icon:pSceSaveDataIcon):Integer;
+
 function CheckSaveDataBackup   (backup:pSceSaveDataBackup):Integer;
 function CheckCheckBackupData  (check:pSceSaveDataCheckBackupData;internal:Boolean):Integer;
 function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
@@ -971,6 +974,34 @@ begin
 
 end;
 
+function CheckLoadSaveDataIcon(icon:pSceSaveDataIcon):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (icon=nil) then Exit;
+
+ if (icon^.buf<>nil) then
+ if (icon^.bufSize<>0) then
+ if CheckReserved(icon^.reserved,sizeof(icon^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
+function CheckSaveSaveDataIcon(icon:pSceSaveDataIcon):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (icon=nil) then Exit;
+
+ if (icon^.buf<>nil) then
+ if (icon^.bufSize<>0) then
+ if (QWORD(icon^.dataSize-1)<116736) then
+ if (icon^.dataSize<=icon^.bufSize) then
+ if CheckReserved(icon^.reserved,sizeof(icon^.reserved)) then
+ begin
+  Result:=0;
+ end;
+end;
+
 function CheckSaveDataBackup(backup:pSceSaveDataBackup):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
@@ -983,19 +1014,6 @@ begin
 
  if CheckTitleId(backup^.titleId)=0 then
  if CheckDirName(backup^.dirName,false)=0 then
- begin
-  Result:=0;
- end;
-end;
-
-function CheckSaveDataIcon(icon:pSceSaveDataIcon):Integer;
-begin
- Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
- if (icon=nil) then Exit;
-
- if (icon^.buf<>nil) then
- if (icon^.bufSize<>0) then
- if CheckReserved(icon^.reserved,sizeof(icon^.reserved)) then
  begin
   Result:=0;
  end;
@@ -1029,7 +1047,7 @@ begin
 
    if (check^.icon<>nil) then
    begin
-    if CheckSaveDataIcon(check^.icon)<>0 then
+    if CheckLoadSaveDataIcon(check^.icon)<>0 then
     begin
      Exit;
     end;
