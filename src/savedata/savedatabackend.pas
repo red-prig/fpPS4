@@ -85,14 +85,14 @@ type
   procedure   Invoke(value:TIpcValue);
  end;
 
- TMountSlot=record
-  active     :Integer;
+ TMountSlot=packed record
+  active     :WORD;
+  mountMode  :WORD; //SceSaveDataMountMode
   userId     :SceUserServiceUserId;
   titleId    :SceSaveDataTitleId;
   dirName    :SceSaveDataDirName;
   fingerprint:SceSaveDataFingerprint;
   max_blocks :SceSaveDataBlocks;
-  mountMode  :DWORD; //SceSaveDataMountMode
  end;
 
  THostIpcPipeSave=class(THostIpcPipe)
@@ -2256,26 +2256,17 @@ begin
  Result:=kipc.InvokeSync2('SaveDataSaveIcon',TIpcValue.Inplace(data,data,sizeof(t_icon_buf)));
 end;
 
-function TSaveDataBackendProcess.OnSaveDataSaveIcon(Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+function CheckPng(data:Pointer;len:DWORD):Integer;
 var
- err:Integer;
- len:DWORD;
- data:p_icon_buf;
-
  Mem:TPCharStream;
  Img:TFPMemoryImage;
  Reader:TFPReaderPNG;
 begin
- Result:=0;
- len :=Value.GetLen;
- data:=Value.GetBuf;
- if (len<8) then Exit(-1);
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
 
- Mem:=TPCharStream.Create(@data^.data,data^.size);
+ Mem:=TPCharStream.Create(data,len);
  Img:=TFPMemoryImage.Create(0,0);
  Reader:=TFPReaderPNG.Create;
-
- err:=SCE_SAVE_DATA_ERROR_PARAMETER;
 
  try
    Img.LoadFromStream(Mem, Reader);
@@ -2285,7 +2276,7 @@ begin
    if (Reader.ColorType=2) then //is RGB
    if (Reader.BitDepth=8) then
    begin
-    err:=0;
+    Result:=0;
    end;
 
  finally
@@ -2293,6 +2284,34 @@ begin
    Img.Free;
    Mem.Free;
  end;
+end;
+
+function TSaveDataBackendProcess.OnSaveDataSaveIcon(Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+var
+ err:Integer;
+ len:DWORD;
+ data:p_icon_buf;
+begin
+ Result:=0;
+ len :=Value.GetLen;
+ data:=Value.GetBuf;
+ if (len<8) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ len:=len-8;
+ if (len>data^.size) then len:=data^.size;
+
+ if (DWORD(data^.slot)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (MountSlots[data^.slot].active=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
+ if (MountSlots[data^.slot].mountMode and SDM_RDONLY)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BAD_MOUNTED);
+ end;
+
+ err:=CheckPng(@data^.data,len);
 
  Result:=err;
 end;
