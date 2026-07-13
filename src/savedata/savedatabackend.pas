@@ -13,6 +13,7 @@ uses
  errno,
  LFQueue,
  //windows,
+ md_file,
  md_event,
  kern_mtx,
  kern_proc,
@@ -66,6 +67,7 @@ type
   function    RestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
   function    GetEventResult   (event:pSceSaveDataEvent):Integer;
   function    SaveDataSaveIcon (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+  function    SaveDataLoadIcon (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
  end;
 
  TCustomCommand=class;
@@ -164,6 +166,7 @@ type
   function    OnRestoreBackupData(Value:TIpcValue):TIpcValue; //RestoreBackupData
   function    OnGetEventResult   (Value:TIpcValue):TIpcValue; //GetEventResult
   function    OnSaveDataSaveIcon (Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+  function    OnSaveDataLoadIcon (Value:TIpcValue):TIpcValue; //SaveDataLoadIcon
  end;
 
 implementation
@@ -638,6 +641,7 @@ begin
  kipc.FHandler.AddCallback('RestoreBackupData',@OnRestoreBackupData);
  kipc.FHandler.AddCallback('GetEventResult'   ,@OnGetEventResult);
  kipc.FHandler.AddCallback('SaveDataSaveIcon' ,@OnSaveDataSaveIcon);
+ kipc.FHandler.AddCallback('SaveDataLoadIcon' ,@OnSaveDataLoadIcon);
  //
  inherited;
 end;
@@ -1477,8 +1481,7 @@ var
  slot_id:Integer;
 begin
  Result:=0;
- slot_id:=0;
- Value.MoveTo(@slot_id,SizeOf(slot_id));
+ slot_id:=Value.GetDWORD;
 
  if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
@@ -2239,7 +2242,7 @@ end;
 type
  p_icon_buf=^t_icon_buf;
  t_icon_buf=packed record
-  slot:DWORD;
+  slot:DWORD; //or result
   size:DWORD;
   data:array[0..116735] of Byte;
  end;
@@ -2286,11 +2289,88 @@ begin
  end;
 end;
 
-function TSaveDataBackendProcess.OnSaveDataSaveIcon(Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+function SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
+var
+ fdir :RawByteString;
+ ficon:RawByteString;
+ fpng0:RawByteString;
+ fpng1:RawByteString;
+begin
+ Result:=False;
+
+ fdir:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys');
+ Result:=ForceDirectories(fdir);
+ if not Result then Exit;
+
+ ficon:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/icon0.png');
+ fpng0:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/sce_icon0png0');
+ fpng1:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/sce_icon0png1');
+
+ if FileExists(fpng0) then
+ if not DeleteFile(fpng0) then
+ begin
+  Exit(False);
+ end;
+
+ if FileExists(fpng1) then
+ if not DeleteFile(fpng1) then
+ begin
+  Exit(False);
+ end;
+
+ if WriteToFile(fpng0,data,len)<>len then
+ begin
+  Exit(False);
+ end;
+
+ if FileExists(ficon) then
+ if not RenameFile(ficon,fpng1) then
+ begin
+  Exit(False);
+ end;
+
+ if not RenameFile(fpng0,ficon) then
+ begin
+  Exit(False);
+ end;
+
+ Result:=TruncFile(fpng1,$1c800);
+end;
+
+type
+ TSaveIconJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  //
+  len :DWORD;
+  data:array[0..116735] of Byte;
+  //
+  function  Run:TIpcValue; override;
+ end;
+
+function TSaveIconJob.Run:TIpcValue;
 var
  err:Integer;
+begin
+ err:=CheckPng(@data,len);
+
+ if (err=0) then
+ begin
+  if not SaveIcon(fs_src,@data,len) then
+  begin
+   err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  end;
+ end;
+
+ Result:=err;
+end;
+
+function TSaveDataBackendProcess.OnSaveDataSaveIcon(Value:TIpcValue):TIpcValue; //SaveDataSaveIcon
+var
  len:DWORD;
  data:p_icon_buf;
+ prev:TMountSlot;
+ job:TSaveIconJob;
 begin
  Result:=0;
  len :=Value.GetLen;
@@ -2311,10 +2391,186 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_BAD_MOUNTED);
  end;
 
- err:=CheckPng(@data^.data,len);
+ prev:=MountSlots[data^.slot];
 
- Result:=err;
+ job:=TSaveIconJob.Create(kipc.HoldResult);
+ job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
+
+ job.len:=len;
+ Move(data^.data,job.data,len);
+
+ SendCmd(job);
 end;
+
+function TSaveDataBackendConnect.SaveDataLoadIcon(slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+label
+ _memcpy;
+const
+ internal=False;
+var
+ len:DWORD;
+ Value:TIpcValue;
+ data:p_icon_buf;
+begin
+ Value:=kipc.InvokeSync('SaveDataLoadIcon',slot_id);
+
+ Result:=Value.GetDWORD;
+
+ if (Result=0) then
+ begin
+
+  len :=Value.GetLen;
+  data:=Value.GetBuf;
+  if (len<8) then
+  begin
+   len:=0;
+  end else
+  begin
+   len:=len-8;
+   if (len>data^.size) then len:=data^.size;
+  end;
+
+  if (p_proc.p_sdk_version < $4000000) then
+  begin
+   if (icon^.bufSize < len) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+   _memcpy:
+    Move(data^.data,icon^.buf^,len);
+  end else
+  begin
+   if (internal) then
+   begin
+    if (icon^.bufSize < len) then
+    begin
+     Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+    end;
+    goto _memcpy;
+   end;
+   if (icon^.bufSize >= len) then
+   begin
+    goto _memcpy;
+   end;
+   icon^.buf:=nil;
+  end;
+
+  icon^.dataSize:=len;
+ end;
+
+ Value.Free;
+end;
+
+type
+ t_load_icon_buf=packed record
+  err :Integer;
+  size:DWORD;
+  data:p_icon_buf;
+ end;
+
+function LoadIcon(const ficon:RawByteString):t_load_icon_buf;
+var
+ F:THandle;
+ size:Int64;
+ err:Integer;
+begin
+ Result:=Default(t_load_icon_buf);
+
+ F:=0;
+ err:=md_open(ficon,0,0,F);
+ if (err<>0) then
+ begin
+  Result.err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  Exit;
+ end;
+
+ size:=FileSeek(F,0,fsFromEnd);
+ if (size<0) or (size>$1c800) then
+ begin
+  FileClose(F);
+  Result.err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  Exit;
+ end;
+
+ FileSeek(F,0,fsFromBeginning);
+
+ Result.size:=size+8;
+ Result.data:=AllocMem(Result.size);
+
+ if (FileRead(F,Result.data^.data,size)<>size) then
+ begin
+  FileClose(F);
+  FreeMem(Result.data);
+  Result.data:=nil;
+  Result.err :=SCE_SAVE_DATA_ERROR_INTERNAL;
+  Exit;
+ end;
+
+ FileClose(F);
+
+ Result.data^.slot:=0;
+ Result.data^.size:=size;
+end;
+
+type
+ TLoadIconJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  //
+  function  Run:TIpcValue; override;
+ end;
+
+function TLoadIconJob.Run:TIpcValue;
+var
+ ficon:RawByteString;
+ buf:t_load_icon_buf;
+begin
+ Result:=0;
+
+ ficon:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/icon0.png');
+
+ if not FileExists(ficon) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND);
+ end;
+
+ buf:=LoadIcon(ficon);
+
+ if (buf.err=0) then
+ begin
+  Result:=TIpcValue.Inplace(buf.data,buf.data,buf.size);
+ end else
+ begin
+  Result:=buf.err;
+ end;
+
+end;
+
+function TSaveDataBackendProcess.OnSaveDataLoadIcon(Value:TIpcValue):TIpcValue; //SaveDataLoadIcon
+var
+ slot_id:Integer;
+ prev:TMountSlot;
+ job:TLoadIconJob;
+begin
+ Result:=0;
+
+ slot_id:=Value.GetDWORD;
+
+ if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (MountSlots[slot_id].active=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
+ prev:=MountSlots[slot_id];
+
+ job:=TLoadIconJob.Create(kipc.HoldResult);
+ job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
+
+ SendCmd(job);
+end;
+
 
 
 

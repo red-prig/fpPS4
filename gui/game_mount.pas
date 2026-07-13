@@ -62,6 +62,7 @@ function TemporaryDataFormat (mountPoint:pchar):Integer;
 function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 function DownloadDataGetAvailableSpaceKb (mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
 
+function DeleteFile     (const FileName:RawByteString):boolean;
 function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
 function TruncFile      (const DestFilename:RawByteString;size:Ptrint):Boolean;
 function WriteToFile    (const DestFilename:RawByteString;buf:Pointer;size:Ptrint):Ptrint;
@@ -546,6 +547,11 @@ begin
  FileClose(F);
 end;
 
+function DeleteFile(const FileName:RawByteString):boolean;
+begin
+ Result:=md_delete_file(FileName)=0;
+end;
+
 const
   //Don't follow symlinks on *nix, just delete them
   FindMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
@@ -629,7 +635,11 @@ _next:
        goto _next;
      end else
      begin
-      md_delete_file(CurFilename);
+      if not DeleteFile(CurFilename) then
+      begin
+       while Pop(CurSrcDir,OnlyChildren) do;
+       Exit;
+      end;
      end;
    until SysUtils.FindNext(FileInfo)<>0;
    SysUtils.FindClose(FileInfo);
@@ -637,7 +647,11 @@ _next:
 
   if (not OnlyChildren) then
   begin
-   if (not SysUtils.RemoveDir(CurSrcDir)) then exit;
+   if (not SysUtils.RemoveDir(CurSrcDir)) then
+   begin
+    while Pop(CurSrcDir,OnlyChildren) do;
+    Exit;
+   end;
   end;
 
   if Pop(CurSrcDir,OnlyChildren) then
@@ -668,6 +682,7 @@ var
  DestHandle:THandle;
  err:Integer;
 begin
+ Result:=0;
  DestHandle:=0;
  err:=md_open(DestFilename,O_CREAT or O_TRUNC or O_RDWR,&0600,DestHandle);
  if (err<>0) then Exit(-1);
@@ -683,6 +698,7 @@ var
  SrcHandle:THandle;
  err:Integer;
 begin
+ Result:=0;
  SrcHandle:=0;
  err:=md_open(SrcFilename,0,0,SrcHandle);
  if (err<>0) then Exit(-1);

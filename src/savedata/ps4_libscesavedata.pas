@@ -1157,7 +1157,11 @@ begin
  Result:=CheckLoadSaveDataIcon(param);
  if (Result<>0) then Exit;
 
- Result:=SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND;
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.SaveDataLoadIcon(slot_id,param);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataRegisterEventCallback(cb:SceSaveDataEventCallbackFunc;userdata:Pointer):Integer;
