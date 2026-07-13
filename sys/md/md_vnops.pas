@@ -2826,6 +2826,27 @@ begin
 
  case ap^.a_command of
   FIOSEEKDATA:Result:=0;
+  $400866d4:Assert(False,'$400866d4');
+  $800466a2:Assert(False,'$800466a2');
+  $800466b5:Assert(False,'$800466b5'); //ffs_ioctl_set_crypt_flag
+  $800466b6:Assert(False,'$800466b6'); //ffs_ioctl_set_compress_flag
+  $800866b7:Assert(False,'$800866b7'); //sceKernelLwfsSetAttribute
+  $80106488:Assert(False,'$80106488'); //DIOCGDELETE
+  $801066a3:Assert(False,'$801066a3');
+  $801066b8:Assert(False,'$801066b8'); //sceKernelLwfsAllocateBlock
+  $801066bc:Assert(False,'$801066bc'); //sceKernelLwfsTrimBlock
+  $801066d2:Assert(False,'$801066d2'); //ffs_recryptblocks
+  $802066be:Assert(False,'$802066be'); //FIOREALLOCZONES
+  $c00866a4:Assert(False,'$c00866a4'); //FIOFREEZEBLOCKMAP
+  $c01066d3:Assert(False,'$c01066d3'); //ffs_recryptblocks
+  $c01866a0:Assert(False,'$c01866a0');
+  $c01866b4:Assert(False,'$c01866b4'); //ffs_ioctl_block_coloring_stat
+  $c02066b9:Assert(False,'$c02066b9'); //sceKernelLwfsWrite
+  $c02866a6:Assert(False,'$c02866a6');
+  $c03866a7:Assert(False,'$c03866a7');
+  $c01866ba:Assert(False,'$c01866ba'); //sceKernelLwfsLseek
+  $c02066a1:Assert(False,'$c02066a1');
+  $c02066a5:Assert(False,'$c02066a5'); //FIODIRECTWRITE
   else;
  end;
 
