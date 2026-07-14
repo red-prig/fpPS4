@@ -69,7 +69,7 @@ type
 
  pSceSaveDataInitParams3=Pointer;
 
- PSceSaveDataParam=^SceSaveDataParam;
+ pSceSaveDataParam=^SceSaveDataParam;
  SceSaveDataParam=packed record
   title    :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1] of AnsiChar;
   subTitle :array[0..SCE_SAVE_DATA_SUBTITLE_MAXSIZE-1] of AnsiChar;
@@ -101,24 +101,24 @@ const
  SCE_SAVE_DATA_MEMORY_OPTION_DOUBLE_BUFFER=2;
 
 type
- PSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
+ pSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
  SceSaveDataMemorySetup2=packed record
   option        :DWORD; //SceSaveDataSaveDataMemoryOption
   userId        :SceUserServiceUserId;
   memorySize    :QWORD;
   iconMemorySize:QWORD;
-  initParam     :PSceSaveDataParam;
-  initIcon      :PSceSaveDataIcon;
+  initParam     :pSceSaveDataParam;
+  initIcon      :pSceSaveDataIcon;
   reserved      :array[0..23] of Byte;
  end;
 
- PSceSaveDataMemorySetupResult=^SceSaveDataMemorySetupResult;
+ pSceSaveDataMemorySetupResult=^SceSaveDataMemorySetupResult;
  SceSaveDataMemorySetupResult=packed record
   existedMemorySize:QWORD;
   reserved         :array[0..15] of Byte;
  end;
 
- PSceSaveDataMemoryData=^SceSaveDataMemoryData;
+ pSceSaveDataMemoryData=^SceSaveDataMemoryData;
  SceSaveDataMemoryData=packed record
   buf     :Pointer;
   bufSize :QWORD;
@@ -126,30 +126,30 @@ type
   reserved:array[0..39] of Byte;
  end;
 
- PSceSaveDataMemoryGet2=^SceSaveDataMemoryGet2;
+ pSceSaveDataMemoryGet2=^SceSaveDataMemoryGet2;
  SceSaveDataMemoryGet2=packed record
   userId  :SceUserServiceUserId;
   padding :array[0..3] of Byte;
-  data    :PSceSaveDataMemoryData;
-  param   :PSceSaveDataParam;
-  icon    :PSceSaveDataIcon;
+  data    :pSceSaveDataMemoryData;
+  param   :pSceSaveDataParam;
+  icon    :pSceSaveDataIcon;
   slotId  :DWORD;
   reserved:array[0..27] of Byte;
  end;
 
- PSceSaveDataMemorySet2=^SceSaveDataMemorySet2;
+ pSceSaveDataMemorySet2=^SceSaveDataMemorySet2;
  SceSaveDataMemorySet2=packed record
   userId  :SceUserServiceUserId;
   padding :array[0..3] of Byte;
-  data    :PSceSaveDataMemoryData;
-  param   :PSceSaveDataParam;
-  icon    :PSceSaveDataIcon;
+  data    :pSceSaveDataMemoryData;
+  param   :pSceSaveDataParam;
+  icon    :pSceSaveDataIcon;
   dataNum :DWORD;
   slotId  :DWORD;
   reserved:array[0..23] of Byte;
  end;
 
- PSceSaveDataMemorySync=^SceSaveDataMemorySync;
+ pSceSaveDataMemorySync=^SceSaveDataMemorySync;
  SceSaveDataMemorySync=packed record
   userId  :SceUserServiceUserId;
   slotId  :DWORD;
@@ -157,7 +157,7 @@ type
   reserved:array[0..27] of Byte;
  end;
 
- PSceSaveDataDirName=^SceSaveDataDirName;
+ pSceSaveDataDirName=^SceSaveDataDirName;
  SceSaveDataDirName=packed record
   data:array[0..SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE-1] of Char;
  end;
@@ -211,18 +211,18 @@ type
   userId     :SceUserServiceUserId;
   align1     :Integer;
   titleId    :pSceSaveDataTitleId;
-  dirName    :PSceSaveDataDirName;
+  dirName    :pSceSaveDataDirName;
   fingerprint:pSceSaveDataFingerprint;
   blocks     :SceSaveDataBlocks;
   mountMode  :DWORD; //SceSaveDataMountMode
   reserved   :array[0..31] of Byte;
  end;
 
- PSceSaveDataMount2=^SceSaveDataMount2;
+ pSceSaveDataMount2=^SceSaveDataMount2;
  SceSaveDataMount2=packed record
   userId   :SceUserServiceUserId;
   align1   :Integer;
-  dirName  :PSceSaveDataDirName;
+  dirName  :pSceSaveDataDirName;
   blocks   :SceSaveDataBlocks;
   mountMode:DWORD;
   reserved :array[0..31] of Byte;
@@ -234,12 +234,12 @@ type
   userId     :SceUserServiceUserId;
   align1     :Integer;
   titleId    :pSceSaveDataTitleId;
-  dirName    :PSceSaveDataDirName;
+  dirName    :pSceSaveDataDirName;
   fingerprint:pSceSaveDataFingerprint;
   reserved   :array[0..31] of Byte;
  end;
 
- PSceSaveDataMountResult=^SceSaveDataMountResult;
+ pSceSaveDataMountResult=^SceSaveDataMountResult;
  SceSaveDataMountResult=packed record
   mountPoint    :SceSaveDataMountPoint;
   requiredBlocks:SceSaveDataBlocks;
@@ -300,6 +300,16 @@ type
   _align2    :Integer;
  end;
 
+const
+ //SceSaveDataParamType
+ SCE_SAVE_DATA_PARAM_TYPE_ALL       =0;
+ SCE_SAVE_DATA_PARAM_TYPE_TITLE     =1;
+ SCE_SAVE_DATA_PARAM_TYPE_SUB_TITLE =2;
+ SCE_SAVE_DATA_PARAM_TYPE_DETAIL    =3;
+ SCE_SAVE_DATA_PARAM_TYPE_USER_PARAM=4;
+ SCE_SAVE_DATA_PARAM_TYPE_MTIME     =5;
+
+type
  SceSaveDataParamType=DWORD;
 
  pSceSaveDataEvent=^SceSaveDataEvent;
@@ -427,6 +437,14 @@ function CheckSaveDataBackup   (backup:pSceSaveDataBackup):Integer;
 function CheckCheckBackupData  (check:pSceSaveDataCheckBackupData;internal:Boolean):Integer;
 function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
 function CheckMountInfo        (info:pSceSaveDataMountInfo):Integer;
+
+function CheckGetParamData(paramType   :SceSaveDataParamType;
+                           paramBuf    :Pointer;
+                           paramBufSize:QWORD):Integer;
+
+function CheckSetDataParam(paramType   :SceSaveDataParamType;
+                           paramBuf    :Pointer;
+                           paramBufSize:QWORD):Integer;
 
 implementation
 
@@ -1146,6 +1164,157 @@ begin
  begin
   Result:=0;
  end;
+end;
+
+function CheckGetParamData(paramType   :SceSaveDataParamType;
+                           paramBuf    :Pointer;
+                           paramBufSize:QWORD):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (DWORD(paramType) < 6) then
+ begin
+  //
+ end else
+ begin
+  Exit;
+ end;
+
+ if (paramBuf<>nil) or (paramBufSize<>0) then
+ begin
+  //
+ end else
+ begin
+  Exit;
+ end;
+
+ case paramType of
+  SCE_SAVE_DATA_PARAM_TYPE_ALL:
+    if (paramBufSize > 1327) then
+    with pSceSaveDataParam(paramBuf)^ do
+    begin
+     if CheckReserved(reserved,sizeof(reserved)) then
+     begin
+      Result:=0;
+     end;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_TITLE,
+  SCE_SAVE_DATA_PARAM_TYPE_SUB_TITLE:
+    if (paramBufSize > 127) then
+    begin
+     Result:=0;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_DETAIL:
+    if (paramBufSize > 1023) then
+    begin
+     Result:=0;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_USER_PARAM:
+    if (paramBufSize > 3) then
+    begin
+     Result:=0;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_MTIME:
+    if (paramBufSize > 7) then
+    begin
+     Result:=0;
+    end;
+  else;
+ end;
+
+end;
+
+function CheckParamTitle(title:pchar):Boolean; inline;
+var
+ i:DWORD;
+begin
+ Result:=False;
+
+ i:=0;
+ repeat
+  case title[i] of
+    #0:Break;
+   #10:Exit;
+   #13:Exit;
+   else;
+  end;
+  Inc(i);
+ until (i = 128);
+ //
+ //CheckUtf8???
+
+ Result:=(i<>128);
+end;
+
+function CheckParamDetail(detail:pchar):Boolean; inline;
+var
+ i:DWORD;
+begin
+ Result:=False;
+
+ i:=0;
+ repeat
+  case detail[i] of
+    #0:Break;
+   else;
+  end;
+  Inc(i);
+ until (i = 1024);
+
+ Result:=(i<>1024);
+end;
+
+function CheckSetDataParam(paramType   :SceSaveDataParamType;
+                           paramBuf    :Pointer;
+                           paramBufSize:QWORD):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (DWORD(paramType) < 5) then
+ begin
+  //
+ end else
+ begin
+  Exit;
+ end;
+
+ if (paramBuf=nil) or (paramBufSize=0) or (paramBufSize>$1c800) then
+ begin
+  Exit;
+ end;
+
+ case paramType of
+  SCE_SAVE_DATA_PARAM_TYPE_ALL:
+    with pSceSaveDataParam(paramBuf)^ do
+    begin
+     if CheckParamTitle (@title) then
+     if CheckParamTitle (@subTitle) then
+     if CheckParamDetail(@detail) then
+     if CheckReserved   (reserved,sizeof(reserved)) then
+     begin
+      Result:=0;
+     end;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_TITLE,
+  SCE_SAVE_DATA_PARAM_TYPE_SUB_TITLE:
+    if CheckParamTitle(paramBuf) then
+    begin
+     Result:=0;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_DETAIL:
+    if CheckParamDetail(paramBuf) then
+    begin
+     Result:=0;
+    end;
+  SCE_SAVE_DATA_PARAM_TYPE_USER_PARAM:
+    if (paramBufSize=4) then
+    begin
+     Result:=0;
+    end;
+  else;
+ end;
+
+
 end;
 
 

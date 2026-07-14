@@ -631,7 +631,7 @@ end;
 function ps4_sceSaveDataSetupSaveDataMemory(
            userId    :SceUserServiceUserId;
            memorySize:QWORD;
-           param     :PSceSaveDataParam):Integer;
+           param     :pSceSaveDataParam):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -642,8 +642,8 @@ begin
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory2(
-           setupParam:PSceSaveDataMemorySetup2;
-           pResult   :PSceSaveDataMemorySetupResult):Integer;
+           setupParam:pSceSaveDataMemorySetup2;
+           pResult   :pSceSaveDataMemorySetupResult):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -672,7 +672,7 @@ begin
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory2(
-           getParam:PSceSaveDataMemoryGet2):Integer;
+           getParam:pSceSaveDataMemoryGet2):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -707,7 +707,7 @@ begin
 end;
 
 function ps4_sceSaveDataSetSaveDataMemory2(
-           setParam:PSceSaveDataMemorySet2):Integer;
+           setParam:pSceSaveDataMemorySet2):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -718,7 +718,7 @@ begin
 end;
 
 function ps4_sceSaveDataSyncSaveDataMemory(
-           syncParam:PSceSaveDataMemorySync):Integer;
+           syncParam:pSceSaveDataMemorySync):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -735,7 +735,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataDelete(del);
+  Result:=g_instance.Backend.DoDelete(del);
 
  mtx_unlock(g_instance.mtx);
 
@@ -772,7 +772,7 @@ function SaveDataMount(mount      :pSceSaveDataMount;
                        Transfering:Boolean):Integer;
 var
  mountMode:DWORD;
- output   :TSaveDataMountResult;
+ output   :TMountResult;
 begin
  Result:=CheckSaveDataMount(mount,pResult,Transfering);
  if (Result<>0) then Exit;
@@ -785,7 +785,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataMount(mount,output,Transfering);
+  Result:=g_instance.Backend.DoMount(mount,output,Transfering);
 
  mtx_unlock(g_instance.mtx);
 
@@ -806,7 +806,7 @@ begin
 
 end;
 
-function ps4_sceSaveDataMount(mount:pSceSaveDataMount;
+function ps4_sceSaveDataMount(mount      :pSceSaveDataMount;
                               mountResult:pSceSaveDataMountResult):Integer;
 begin
  if (g_instance=nil) then
@@ -822,8 +822,8 @@ begin
  Result:=SaveDataMount(mount,mountResult,False);
 end;
 
-function ps4_sceSaveDataMount2(mount:PSceSaveDataMount2;
-                               mountResult:PSceSaveDataMountResult):Integer;
+function ps4_sceSaveDataMount2(mount      :pSceSaveDataMount2;
+                               mountResult:pSceSaveDataMountResult):Integer;
 var
  tmp:SceSaveDataMount;
 begin
@@ -851,8 +851,8 @@ begin
  Result:=SaveDataMount(@tmp,mountResult,False);
 end;
 
-function ps4_sceSaveDataTransferringMount(mount:pSceSaveDataTransferringMount;
-                                          mountResult:PSceSaveDataMountResult):Integer;
+function ps4_sceSaveDataTransferringMount(mount      :pSceSaveDataTransferringMount;
+                                          mountResult:pSceSaveDataMountResult):Integer;
 var
  tmp:SceSaveDataMount;
 begin
@@ -891,7 +891,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataUmount(slot_id,backup);
+  Result:=g_instance.Backend.DoUmount(slot_id,backup);
 
  mtx_unlock(g_instance.mtx);
 
@@ -1082,36 +1082,58 @@ begin
 
 end;
 
-function ps4_sceSaveDataGetParam(mountPoint:pSceSaveDataMountPoint;
-                                 paramType:SceSaveDataParamType;
-                                 paramBuf:Pointer;
+function ps4_sceSaveDataGetParam(mountPoint  :pSceSaveDataMountPoint;
+                                 paramType   :SceSaveDataParamType;
+                                 paramBuf    :Pointer;
                                  paramBufSize:QWORD;
-                                 gotSize:PQWORD
+                                 gotSize     :PQWORD
                                 ):Integer;
+var
+ slot_id:Integer;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (gotSize<>nil) then
- begin
-  gotSize^:=0;
- end;
- Result:=0;
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ Result:=CheckGetParamData(paramType,paramBuf,paramBufSize);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.GetParam(slot_id,paramType,paramBuf,paramBufSize,gotSize);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
-function ps4_sceSaveDataSetParam(mountPoint:pSceSaveDataMountPoint;
-                                 paramType:SceSaveDataParamType;
-                                 paramBuf:Pointer;
+function ps4_sceSaveDataSetParam(mountPoint  :pSceSaveDataMountPoint;
+                                 paramType   :SceSaveDataParamType;
+                                 paramBuf    :Pointer;
                                  paramBufSize:QWORD):Integer;
+var
+ slot_id:Integer;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ Result:=CheckSetDataParam(paramType,paramBuf,paramBufSize);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.SetParam(slot_id,paramType,paramBuf,paramBufSize);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 //Save icon
@@ -1134,7 +1156,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataSaveIcon(slot_id,param);
+  Result:=g_instance.Backend.SaveIcon(slot_id,param);
 
  mtx_unlock(g_instance.mtx);
 end;
@@ -1159,7 +1181,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataLoadIcon(slot_id,param);
+  Result:=g_instance.Backend.LoadIcon(slot_id,param);
 
  mtx_unlock(g_instance.mtx);
 end;
@@ -1285,7 +1307,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.SaveDataBackup(backup);
+  Result:=g_instance.Backend.DoBackup(backup);
 
  mtx_unlock(g_instance.mtx);
 
@@ -1308,7 +1330,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.CheckBackupData(check);
+  Result:=g_instance.Backend.CheckBackup(check);
 
  mtx_unlock(g_instance.mtx);
 end;
@@ -1325,7 +1347,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.RestoreBackupData(restore);
+  Result:=g_instance.Backend.RestoreBackup(restore);
 
  mtx_unlock(g_instance.mtx);
 

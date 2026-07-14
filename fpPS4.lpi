@@ -1830,6 +1830,16 @@
         <Filename Value="rtl\param_sfo.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatabackendsfo.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataBackendSfo"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatabackendutils.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataBackendUtils"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
