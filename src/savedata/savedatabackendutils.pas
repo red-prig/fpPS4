@@ -101,15 +101,8 @@ type
   data  :record end;
  end;
 
- t_load_icon_buf=packed record
-  err :Integer;
-  size:DWORD;
-  data:p_output_buf;
- end;
-
 function CheckPng(data:Pointer;len:DWORD):Integer;
 function SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
-function LoadIcon(const ficon:RawByteString):t_load_icon_buf;
 
 implementation
 
@@ -413,49 +406,6 @@ begin
  Result:=TruncFile(fpng1,$1c800);
 end;
 
-function LoadIcon(const ficon:RawByteString):t_load_icon_buf;
-var
- F:THandle;
- size:Int64;
- err:Integer;
-begin
- Result:=Default(t_load_icon_buf);
-
- F:=0;
- err:=md_open(ficon,0,0,F);
- if (err<>0) then
- begin
-  Result.err:=SCE_SAVE_DATA_ERROR_INTERNAL;
-  Exit;
- end;
-
- size:=FileSeek(F,0,fsFromEnd);
- if (size<0) or (size>$1c800) then
- begin
-  FileClose(F);
-  Result.err:=SCE_SAVE_DATA_ERROR_INTERNAL;
-  Exit;
- end;
-
- FileSeek(F,0,fsFromBeginning);
-
- Result.size:=size+sizeof(t_output_buf) ;
- Result.data:=AllocMem(Result.size);
-
- if (FileRead(F,Result.data^.data,size)<>size) then
- begin
-  FileClose(F);
-  FreeMem(Result.data);
-  Result.data:=nil;
-  Result.err :=SCE_SAVE_DATA_ERROR_INTERNAL;
-  Exit;
- end;
-
- FileClose(F);
-
- Result.data^.result:=0;
- Result.data^.size  :=size;
-end;
 
 end.
 

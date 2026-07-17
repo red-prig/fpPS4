@@ -807,6 +807,10 @@ begin
 end;
 
 function TMountJob.CreateMount(force:Boolean):Integer;
+var
+ ficon:RawByteString;
+ icon_data:Pointer;
+ icon_size:Ptrint;
 begin
  Result:=CheckMountData(True);
  if (Result<>0) then Exit;
@@ -829,7 +833,21 @@ begin
 
  if ((data.mountMode and SDM_COPY_ICON)<>0) then
  begin
-  Writeln('TODO:COPY_ICON');
+  ficon:=ExcludeTrailingPathDelimiter(GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
+
+  icon_data:=AllocMem($1C800);
+
+  icon_size:=ReadFromFile(ficon,icon_data,$1C800);
+
+  if (icon_size<=0) then
+  begin
+   //
+  end else
+  begin
+   SaveIcon(fs_src,icon_data,icon_size)
+  end;
+
+  FreeMem(icon_data);
  end;
 
 end;
@@ -1658,9 +1676,29 @@ begin
  SendCmd(job);
 end;
 
+type
+ TCheckBackup=packed record
+  userId   :SceUserServiceUserId;
+  titleId  :SceSaveDataTitleId;
+  dirName  :SceSaveDataDirName;
+  get_param:Boolean;
+  get_icon :Boolean;
+ end;
+
+ PCheckBackupOutput=^TCheckBackupOutput;
+ TCheckBackupOutput=packed record
+  result   :DWORD;
+  params   :SceSaveDataParam;
+  icon_size:DWORD;
+  icon_data:record end;
+ end;
+
 function TSaveDataBackendConnect.CheckBackup(check:pSceSaveDataCheckBackupData):Integer;
 var
- data:TBackup;
+ data:TCheckBackup;
+ icon_size:DWORD;
+ Value:TIpcValue;
+ output:PCheckBackupOutput;
 begin
  FillChar(data,SizeOf(data),0);
   data.userId     :=check^.userId;
@@ -1669,40 +1707,114 @@ begin
  if (check^.dirName<>nil) then
   data.dirName    :=check^.dirName^;
 
- Result:=kipc.InvokeSync2('CheckBackup',@data,sizeof(data));
+ data.get_param:=(check^.param<>nil);
+ data.get_icon :=(check^.icon <>nil);
 
- //TODO result:
- //param      :pSceSaveDataParam;
- //icon       :pSceSaveDataIcon;
+ Value:=kipc.InvokeSync('CheckBackup',TIpcValue.New(@data,sizeof(data)));
+
+ Result:=Value.GetDWORD;
+
+ if (Result=0) then
+ begin
+  output:=Value.GetBuf;
+
+  if (check^.param<>nil) then
+  if (Value.GetLen>=sizeof(TCheckBackupOutput)) then
+  begin
+   check^.param^:=output^.params;
+  end;
+
+  if (check^.icon<>nil) then
+  begin
+   icon_size:=Value.GetLen;
+   if (icon_size<sizeof(TCheckBackupOutput)) then
+   begin
+    icon_size:=0;
+   end else
+   begin
+    icon_size:=icon_size-sizeof(TCheckBackupOutput);
+    if (icon_size>output^.icon_size) then icon_size:=output^.icon_size;
+   end;
+
+   if (icon_size <= check^.icon^.bufSize) then
+   begin
+    Move(output^.icon_data,check^.icon^.buf^,icon_size);
+    check^.icon^.dataSize:=icon_size;
+   end;
+  end;
+
+ end;
+
+ Value.Free;
 end;
 
 type
  TCheckJob=class(TCustomBackupJob)
+  //
+  get_param:Boolean;
+  get_icon :Boolean;
+  //
   function Run:TIpcValue; override;
  end;
 
 function TCheckJob.Run:TIpcValue;
+var
+ err :Integer;
+ size:Ptrint;
+ data:PCheckBackupOutput;
+ ficon:RawByteString;
 begin
  Result:=0;
 
  if Prepare then
  begin
-  Result:=CheckBackup;
+  err:=CheckBackup;
+  if (err<>0) then Exit(err);
+
+  if (not get_param) and (not get_icon) then
+  begin
+   Result:=err;
+  end else
+  begin
+
+   data:=AllocMem($1C800*ord(get_icon)+sizeof(TCheckBackupOutput));
+
+   if get_param then
+   begin
+    param_sfo.GetParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,@data^.params,@size);
+   end;
+
+   size:=0;
+   if get_icon then
+   begin
+    ficon:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/icon0.png');
+
+    size:=ReadFromFile(ficon,@data^.icon_data,$1C800);
+
+    if (size<=0) then
+    begin
+     size:=0;
+    end else
+    begin
+     data^.icon_size:=size;
+    end;
+
+    Result:=TIpcValue.Inplace(data,data,size+sizeof(TCheckBackupOutput));
+   end;
+
+  end;
+
  end else
  begin
   Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
  end;
-
- //TODO result:
- //param      :pSceSaveDataParam;
- //icon       :pSceSaveDataIcon;
 
  UnLock;
 end;
 
 function TSaveDataBackendProcess.OnCheckBackup(Value:TIpcValue):TIpcValue; //CheckBackup
 var
- data:TBackup;
+ data:TCheckBackup;
  titleId:pchar;
  dirName:pchar;
 
@@ -1735,6 +1847,9 @@ begin
 
  job:=TCheckJob.Create(kipc.HoldResult);
  job.Init(data.userId,titleId,dirName);
+
+ job.get_param:=data.get_param;
+ job.get_icon :=data.get_icon ;
 
  SendCmd(job);
 end;
@@ -1980,13 +2095,14 @@ type
   //
   fs_src:RawByteString;
   //
-  function  Run:TIpcValue; override;
+  function Run:TIpcValue; override;
  end;
 
 function TLoadIconJob.Run:TIpcValue;
 var
  ficon:RawByteString;
- buf:t_load_icon_buf;
+ data:p_output_buf;
+ size:Ptrint;
 begin
  Result:=0;
 
@@ -1997,14 +2113,17 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_FILE_NOT_FOUND);
  end;
 
- buf:=LoadIcon(ficon);
+ data:=AllocMem($1C800+sizeof(t_output_buf));
 
- if (buf.err=0) then
+ size:=ReadFromFile(ficon,@data^.data,$1C800);
+
+ if (size<=0) then
  begin
-  Result:=TIpcValue.Inplace(buf.data,buf.data,buf.size);
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
  end else
  begin
-  Result:=buf.err;
+  data^.size:=size;
+  Result:=TIpcValue.Inplace(data,data,size+sizeof(t_output_buf));
  end;
 
 end;

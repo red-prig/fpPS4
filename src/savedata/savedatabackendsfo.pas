@@ -262,42 +262,37 @@ end;
 procedure t_savedata_sfo_values.GetParam(paramType:SceSaveDataParamType;
                                          paramBuf :Pointer;
                                          gotSize  :PDWORD);
-var
- d:pchar;
 begin
 
  case paramType of
   SCE_SAVE_DATA_PARAM_TYPE_ALL:
     begin
      pSceSaveDataParam(paramBuf)^:=Default(SceSaveDataParam);
-     with pSceSaveDataParam(paramBuf)^ do
-     begin
-      title    :=MAINTITLE;
-      subTitle :=SUBTITLE;
-      detail   :=DETAIL;
-      userParam:=SAVEDATA_LIST_PARAM;
-     end;
+     pSceSaveDataParam(paramBuf)^.title    :=MAINTITLE;
+     pSceSaveDataParam(paramBuf)^.subTitle :=SUBTITLE;
+     pSceSaveDataParam(paramBuf)^.detail   :=DETAIL;
+     pSceSaveDataParam(paramBuf)^.userParam:=SAVEDATA_LIST_PARAM;
      gotSize^:=sizeof(SceSaveDataParam);
     end;
   SCE_SAVE_DATA_PARAM_TYPE_TITLE:
     begin
-     d:=strlcopy(paramBuf,@MAINTITLE,sizeof(MAINTITLE));
-     gotSize^:=(d-paramBuf);
+     strlcopy(pchar(paramBuf),@MAINTITLE,sizeof(MAINTITLE));
+     gotSize^:=sizeof(MAINTITLE);
     end;
   SCE_SAVE_DATA_PARAM_TYPE_SUB_TITLE:
     begin
-     d:=strlcopy(paramBuf,@SUBTITLE,sizeof(SUBTITLE));
-     gotSize^:=(d-paramBuf);
+     strlcopy(pchar(paramBuf),@SUBTITLE,sizeof(SUBTITLE));
+     gotSize^:=sizeof(SUBTITLE);
     end;
   SCE_SAVE_DATA_PARAM_TYPE_DETAIL:
     begin
-     d:=strlcopy(paramBuf,@DETAIL,sizeof(DETAIL));
-     gotSize^:=(d-paramBuf);
+     strlcopy(pchar(paramBuf),@DETAIL,sizeof(DETAIL));
+     gotSize^:=sizeof(DETAIL);
     end;
   SCE_SAVE_DATA_PARAM_TYPE_USER_PARAM:
     begin
      PDWORD(paramBuf)^:=SAVEDATA_LIST_PARAM;
-     gotSize^:=4;
+     gotSize^:=sizeof(SAVEDATA_LIST_PARAM);
     end;
   //TODO: SCE_SAVE_DATA_PARAM_TYPE_MTIME
   else;
