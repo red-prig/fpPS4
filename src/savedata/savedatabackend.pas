@@ -626,7 +626,7 @@ begin
                                            pchar(mount_savedata_slot_name[pResult.slot_id]),
                                            pchar(fs_src),
                                            nil,
-                                           ord((data.mountMode and SDM_RDONLY)<>0)*MNT_RDONLY or
+                                           ord((data.mountMode and SDMM_RDONLY)<>0)*MNT_RDONLY or
                                            MNT_PFS_32K);
   if (Result=0) then
   begin
@@ -649,6 +649,8 @@ type
   data  :TMount;
   //
   param_sfo:t_savedata_sfo_values;
+  //
+  mtime:QWORD;
   //
   procedure Init(const _data:TMount);
   function  Lock():Boolean;
@@ -691,7 +693,7 @@ begin
 
  param_sfo.New(data.userId,@data.titleId.data,@data.dirName.data,data.blocks,gSaveDataBackend.systemLang);
 
- if ((data.mountMode and SDM_DESTRUCT_OFF)=0) then
+ if ((data.mountMode and SDMM_DESTRUCT_OFF)=0) then
  begin
   param_sfo.PARAMS.corrupt_flag:=1;
  end;
@@ -731,7 +733,7 @@ begin
  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
 
  //update data to sfo
- if ((data.mountMode and SDM_RDWR)<>0) then
+ if ((data.mountMode and SDMM_RDWR)<>0) then
  begin
   //
   titleId:=@data.titleId.data;
@@ -744,7 +746,7 @@ begin
   Inc(param_sfo.PARAMS.RETAIL_counter1);
 
   //mark in-mount
-  if ((data.mountMode and SDM_DESTRUCT_OFF)=0) then
+  if ((data.mountMode and SDMM_DESTRUCT_OFF)=0) then
   begin
    param_sfo.PARAMS.corrupt_flag:=1;
   end;
@@ -831,7 +833,7 @@ begin
  if not CreateParamSfo then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
  if not CreateTmpFiles then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- if ((data.mountMode and SDM_COPY_ICON)<>0) then
+ if ((data.mountMode and SDMM_COPY_ICON)<>0) then
  begin
   ficon:=ExcludeTrailingPathDelimiter(GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
 
@@ -850,6 +852,7 @@ begin
   FreeMem(icon_data);
  end;
 
+ update_mtime(fs_src,mtime);
 end;
 
 function TMountJob.OpenMount():Integer;
@@ -862,6 +865,8 @@ begin
 
  Result:=MountParamSfo();
  if (Result<>0) then Exit;
+
+ load_mtime(fs_src,mtime);
 end;
 
 function SaveDataExists(const fs_src:RawByteString):Boolean; forward;
@@ -882,12 +887,12 @@ begin
 
  if (p_proc.p_sdk_version < $1700000) then
  begin
-  data.mountMode:=data.mountMode and (not SDM_COPY_ICON);
+  data.mountMode:=data.mountMode and (not SDMM_COPY_ICON);
  end;
 
  if (p_proc.p_sdk_version < $4500000) then
  begin
-  data.mountMode:=data.mountMode and (not SDM_CREATE2);
+  data.mountMode:=data.mountMode and (not SDMM_CREATE2);
  end;
 
  titleId:=@data.titleId.data;
@@ -898,7 +903,7 @@ begin
 
  dirName:=@data.dirName.data;
 
- if ((data.mountMode and SDM_RDWR)<>0) then
+ if ((data.mountMode and SDMM_RDWR)<>0) then
  if (strncasecmp(@GameMountConfig.InstallDir,
                  titleId,
                  SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
@@ -932,7 +937,7 @@ begin
     //if (output.result=0) then
 
     //replace or exists error
-    if ((data.mountMode and SDM_CREATE2)<>0) then
+    if ((data.mountMode and SDMM_CREATE2)<>0) then
     begin
      //output.result:=OpenParamSfo(); //TODO: check
 
@@ -942,7 +947,7 @@ begin
      output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
      //
     end else
-    if ((data.mountMode and SDM_CREATE)<>0) then
+    if ((data.mountMode and SDMM_CREATE)<>0) then
     begin
      //error
      output.result:=SCE_SAVE_DATA_ERROR_EXISTS;
@@ -956,7 +961,7 @@ begin
    begin
     //create or not found error
 
-    if ((data.mountMode and (SDM_CREATE2 or SDM_CREATE))<>0) then
+    if ((data.mountMode and (SDMM_CREATE2 or SDMM_CREATE))<>0) then
     begin
      //create
      output.result:=CreateMount(False);
@@ -987,6 +992,7 @@ begin
     minfo.mountMode  :=data.mountMode;
 
     minfo.param_sfo  :=param_sfo;
+    minfo.mtime      :=mtime;
 
     gSaveDataBackend.MountManager.SetMount(slot_id,minfo);
 
@@ -1128,10 +1134,10 @@ begin
  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
 
  //update data to sfo
- if ((minfo.mountMode and SDM_RDWR)<>0) then
+ if ((minfo.mountMode and SDMM_RDWR)<>0) then
  begin
   //mark in-free
-  if ((minfo.mountMode and SDM_DESTRUCT_OFF)=0) then
+  if ((minfo.mountMode and SDMM_DESTRUCT_OFF)=0) then
   begin
    minfo.param_sfo.PARAMS.corrupt_flag:=0;
   end;
@@ -1173,7 +1179,9 @@ begin
   Unlock;
  end;
 
- if (err=0) and data.backup and ((minfo.mountMode and SDM_RDWR)<>0) then
+ update_mtime(fs_src,minfo.mtime);
+
+ if (err=0) and data.backup and ((minfo.mountMode and SDMM_RDWR)<>0) then
  begin
   gSaveDataBackend.SendBackupJob(minfo.userId,
                                 @minfo.titleId,
@@ -1763,6 +1771,7 @@ var
  size:Ptrint;
  data:PCheckBackupOutput;
  ficon:RawByteString;
+ mtime:QWORD;
 begin
  Result:=0;
 
@@ -1781,7 +1790,8 @@ begin
 
    if get_param then
    begin
-    param_sfo.GetParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,@data^.params,@size);
+    load_mtime(fs_dst,mtime);
+    param_sfo.GetParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,@data^.params,@size,mtime);
    end;
 
    size:=0;
@@ -1971,6 +1981,7 @@ type
   //
   fs_src:RawByteString;
   //
+  slot:DWORD;
   len :DWORD;
   data:array[0..116735] of Byte;
   //
@@ -1980,6 +1991,7 @@ type
 function TSaveIconJob.Run:TIpcValue;
 var
  err:Integer;
+ mtime:QWORD;
 begin
  err:=CheckPng(@data,len);
 
@@ -1989,6 +2001,12 @@ begin
   begin
    err:=SCE_SAVE_DATA_ERROR_INTERNAL;
   end;
+ end;
+
+ if (err=0) then
+ begin
+  update_mtime(fs_src,mtime);
+  gSaveDataBackend.MountManager.SetMtime(slot,mtime);
  end;
 
  Result:=err;
@@ -2025,7 +2043,8 @@ begin
  job:=TSaveIconJob.Create(kipc.HoldResult);
  job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
 
- job.len:=len;
+ job.slot:=data^.slot;
+ job.len :=len;
  Move(data^.data,job.data,len);
 
  SendCmd(job);
@@ -2183,6 +2202,8 @@ type
   //
   fs_src:RawByteString;
   //
+  slot:DWORD;
+  //
   param_sfo:t_savedata_sfo_values;
   //
   function Run:TIpcValue; override;
@@ -2191,16 +2212,26 @@ type
 function TSetParamJob.Run:TIpcValue;
 var
  fname:RawByteString;
+ err:Integer;
+ mtime:QWORD;
 begin
  fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
 
  if param_sfo.SaveToFile(fname) then
  begin
-  Result:=0;
+  err:=0;
  end else
  begin
-  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  err:=SCE_SAVE_DATA_ERROR_INTERNAL;
  end;
+
+ if (err=0) then
+ begin
+  update_mtime(fs_src,mtime);
+  gSaveDataBackend.MountManager.SetMtime(slot,mtime);
+ end;
+
+ Result:=err;
 end;
 
 function TSaveDataBackendProcess.OnSetParam(Value:TIpcValue):TIpcValue; //SetParam
@@ -2235,6 +2266,7 @@ begin
 
  job:=TSetParamJob.Create(kipc.HoldResult);
  job.fs_src   :=GameMountConfig.GetSaveDataFolder(minfo.userId,@minfo.titleId.data,@minfo.dirName.data);
+ job.slot     :=data^.slot;
  job.param_sfo:=minfo.param_sfo;
 
  SendCmd(job);

@@ -96,9 +96,10 @@ type
 
 const
  //SceSaveDataSaveDataMemoryOption
- SCE_SAVE_DATA_MEMORY_OPTION_NONE         =0;
- SCE_SAVE_DATA_MEMORY_OPTION_SET_PARAM    =1;
- SCE_SAVE_DATA_MEMORY_OPTION_DOUBLE_BUFFER=2;
+ SDMO_NONE         =0;
+ SDMO_SET_PARAM    =1;
+ SDMO_DOUBLE_BUFFER=2;
+ SDMO_INTERNAL55   =4;
 
 type
  pSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
@@ -109,7 +110,8 @@ type
   iconMemorySize:QWORD;
   initParam     :pSceSaveDataParam;
   initIcon      :pSceSaveDataIcon;
-  reserved      :array[0..23] of Byte;
+  slotId        :DWORD;
+  reserved      :array[0..19] of Byte;
  end;
 
  pSceSaveDataMemorySetupResult=^SceSaveDataMemorySetupResult;
@@ -198,12 +200,12 @@ const
 
 const
  //SceSaveDataMountMode
- SDM_RDONLY      =1;  //Read-only
- SDM_RDWR        =2;  //Read/write-enabled
- SDM_CREATE      =4;  //Create new (error if save data directory already exists)
- SDM_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
- SDM_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
- SDM_CREATE2     =32; //Create new (mount save data directory if it already exists)
+ SDMM_RDONLY      =1;  //Read-only
+ SDMM_RDWR        =2;  //Read/write-enabled
+ SDMM_CREATE      =4;  //Create new (error if save data directory already exists)
+ SDMM_DESTRUCT_OFF=8;  //Turn off corrupt flag (not recommended)
+ SDMM_COPY_ICON   =16; //Copy save_data.png in package as icon when newly creating save data
+ SDMM_CREATE2     =32; //Create new (mount save data directory if it already exists)
 
 type
  pSceSaveDataMount=^SceSaveDataMount;
@@ -446,6 +448,12 @@ function CheckSetDataParam(paramType   :SceSaveDataParamType;
                            paramBuf    :Pointer;
                            paramBufSize:QWORD):Integer;
 
+function CheckSetupSaveDataParam(userId    :SceUserServiceUserId;
+                                 memorySize:QWORD;
+                                 param     :pSceSaveDataParam):Integer;
+
+function CheckSetupParam(setupParam:pSceSaveDataMemorySetup2;sum_size:DWORD):Integer;
+
 implementation
 
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
@@ -671,11 +679,11 @@ end;
 
 function CheckMountMode(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
 const
- RDONLY_RDWR  =SDM_RDONLY or SDM_RDWR;
- RDONLY_CREATE=SDM_RDONLY or SDM_CREATE;
+ RDONLY_RDWR  =SDMM_RDONLY or SDMM_RDWR;
+ RDONLY_CREATE=SDMM_RDONLY or SDMM_CREATE;
 begin
  Result:=(
-          ((mountMode and SDM_CREATE)=0) or
+          ((mountMode and SDMM_CREATE)=0) or
           (blocks>95)
          ) and (
           (mountMode and RDONLY_RDWR)<>RDONLY_RDWR
@@ -689,11 +697,11 @@ end;
 
 function CheckMountMode2(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
 const
- CREATE_CREATE2          =SDM_CREATE or SDM_CREATE2;
- RDONLY_CREATE           =SDM_RDONLY or SDM_CREATE;
- RDONLY_CREATE2          =SDM_RDONLY or SDM_CREATE2;
- RDONLY_RDWR             =SDM_RDONLY or SDM_RDWR;
- CREATE_COPY_ICON_CREATE2=SDM_CREATE or SDM_COPY_ICON or SDM_CREATE2;
+ CREATE_CREATE2          =SDMM_CREATE or SDMM_CREATE2;
+ RDONLY_CREATE           =SDMM_RDONLY or SDMM_CREATE;
+ RDONLY_CREATE2          =SDMM_RDONLY or SDMM_CREATE2;
+ RDONLY_RDWR             =SDMM_RDONLY or SDMM_RDWR;
+ CREATE_COPY_ICON_CREATE2=SDMM_CREATE or SDMM_COPY_ICON or SDMM_CREATE2;
 begin
  Result:=(
           ((mountMode and CREATE_CREATE2)=0) or
@@ -712,7 +720,7 @@ begin
          ) and (
           (mountMode and RDONLY_RDWR)<>RDONLY_RDWR
          ) and (
-          (mountMode and CREATE_COPY_ICON_CREATE2)<>SDM_COPY_ICON
+          (mountMode and CREATE_COPY_ICON_CREATE2)<>SDMM_COPY_ICON
          );
 end;
 
@@ -808,7 +816,7 @@ end;
 
 function CheckSceSaveDataMount3(mount:pSceSaveDataMount):Integer;
 const
- CREATE_COPY_ICON=SDM_CREATE or SDM_COPY_ICON;
+ CREATE_COPY_ICON=SDMM_CREATE or SDMM_COPY_ICON;
 begin
  Result:=CheckSceSaveDataMount1(mount,False);
  if (Result=0) then
@@ -826,7 +834,7 @@ begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
 
-  if ((mount^.mountMode and CREATE_COPY_ICON)=SDM_COPY_ICON) then
+  if ((mount^.mountMode and CREATE_COPY_ICON)=SDMM_COPY_ICON) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -849,12 +857,12 @@ end;
 
 function CheckSceSaveDataMount4(mount:pSceSaveDataMount):Integer;
 const
- CREATE_COPY_ICON=SDM_CREATE or SDM_COPY_ICON;
+ CREATE_COPY_ICON=SDMM_CREATE or SDMM_COPY_ICON;
 begin
  Result:=CheckSceSaveDataMount1(mount,True);
  if (Result=0) then
  begin
-  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDMM_RDONLY)=0) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -871,7 +879,7 @@ begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
 
-  if ((mount^.mountMode and CREATE_COPY_ICON)=SDM_COPY_ICON) then
+  if ((mount^.mountMode and CREATE_COPY_ICON)=SDMM_COPY_ICON) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -897,7 +905,7 @@ begin
  if CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
  begin
 
-  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDM_RDONLY)=0) then
+  if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDMM_RDONLY)=0) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
   end;
@@ -1316,6 +1324,108 @@ begin
 
 
 end;
+
+function CheckSetupSaveDataParam(userId    :SceUserServiceUserId;
+                                 memorySize:QWORD;
+                                 param     :pSceSaveDataParam):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if IsLoggedIn(userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if (QWORD(memorySize - 1) < $800000) then
+ begin
+
+  if (param=nil) then
+  begin
+   Result:=0;
+  end else
+  begin
+   if CheckParamTitle (@param^.title) then
+   if CheckParamTitle (@param^.subTitle) then
+   if CheckParamDetail(@param^.detail) then
+   if (param^.align=0) then
+   if (param^.mtime=0) then
+   if CheckReserved   (param^.reserved,sizeof(param^.reserved)) then
+   begin
+    Result:=0;
+   end;
+  end;
+
+ end;
+
+end;
+
+function CheckSetupParam(setupParam:pSceSaveDataMemorySetup2;sum_size:DWORD):Integer;
+var
+ memorySize:QWORD;
+begin
+ Result:=0;
+
+ if (setupParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (setupParam^.option>=8) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if IsLoggedIn(setupParam^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ memorySize:=setupParam^.memorySize;
+
+ if (setupParam^.option and SDMO_INTERNAL55)=0 then
+ begin
+  if (QWORD(memorySize - 1) > $7fffff) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  if ((setupParam^.option and SDMO_DOUBLE_BUFFER)<>0) and
+     (memorySize > $400000) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end else
+ begin
+  if (QWORD(memorySize - 1) > $1ffffff) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  if ((setupParam^.option and SDMO_DOUBLE_BUFFER)<>0) and
+     (memorySize > $1000000) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ if ((setupParam^.option and SDMO_DOUBLE_BUFFER)<>0) then
+ begin
+  memorySize:=memorySize*2;
+ end;
+
+ if ((sum_size + memorySize) > $2000000) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_LIMITATION_OVER);
+ end;
+
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (setupParam^.iconMemorySize < 116737) then
+ if CheckReserved(setupParam^.reserved,sizeof(setupParam^.reserved)) then
+ begin
+  Result:=0;
+ end;
+
+end;
+
 
 
 end.

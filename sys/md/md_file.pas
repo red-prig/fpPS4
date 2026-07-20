@@ -149,6 +149,11 @@ begin
  begin
   Result:=Result or FILE_READ_DATA;
  end;
+
+ if ((flags and O_DIRECTORY)<>0) then
+ begin
+  Result:=Result or FILE_LIST_DIRECTORY;
+ end;
 end;
 
 Function GetCreationDisposition(flags:Integer):DWORD; inline;
@@ -189,8 +194,7 @@ end;
 
 Function GetCreateOptions(flags:Integer):DWORD; inline;
 begin
- Result:=FILE_SYNCHRONOUS_IO_NONALERT or
-         FILE_NON_DIRECTORY_FILE;
+ Result:=FILE_SYNCHRONOUS_IO_NONALERT;
 
  if ((flags and (O_FSYNC or O_DSYNC))<>0) then
  begin

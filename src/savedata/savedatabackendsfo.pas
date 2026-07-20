@@ -70,7 +70,8 @@ type
                      paramBufSize:QWORD);
   procedure GetParam(paramType   :SceSaveDataParamType;
                      paramBuf    :Pointer;
-                     gotSize     :PDWORD);
+                     gotSize     :PDWORD;
+                     mtime       :QWORD);
  end;
 
 implementation
@@ -261,7 +262,8 @@ end;
 
 procedure t_savedata_sfo_values.GetParam(paramType:SceSaveDataParamType;
                                          paramBuf :Pointer;
-                                         gotSize  :PDWORD);
+                                         gotSize  :PDWORD;
+                                         mtime    :QWORD);
 begin
 
  case paramType of
@@ -272,6 +274,7 @@ begin
      pSceSaveDataParam(paramBuf)^.subTitle :=SUBTITLE;
      pSceSaveDataParam(paramBuf)^.detail   :=DETAIL;
      pSceSaveDataParam(paramBuf)^.userParam:=SAVEDATA_LIST_PARAM;
+     pSceSaveDataParam(paramBuf)^.mtime    :=mtime;
      gotSize^:=sizeof(SceSaveDataParam);
     end;
   SCE_SAVE_DATA_PARAM_TYPE_TITLE:
@@ -294,7 +297,11 @@ begin
      PDWORD(paramBuf)^:=SAVEDATA_LIST_PARAM;
      gotSize^:=sizeof(SAVEDATA_LIST_PARAM);
     end;
-  //TODO: SCE_SAVE_DATA_PARAM_TYPE_MTIME
+  SCE_SAVE_DATA_PARAM_TYPE_MTIME:
+    begin
+     PQWORD(paramBuf)^:=mtime;
+     gotSize^:=sizeof(mtime);
+    end;
   else;
  end;
 

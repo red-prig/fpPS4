@@ -628,27 +628,147 @@ begin
  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
 end;
 
+function SetupSaveDataMemory2Lt65(setupParam:pSceSaveDataMemorySetup2;
+                                  param     :pSceSaveDataParam;
+                                  p_existedMemorySize:PQWORD):Integer;
+begin
+ ///////////////
+ Result:=0;
+end;
+
+function SetupSaveDataMemory2Be65(setupParam:pSceSaveDataMemorySetup2;
+                                  p_existedMemorySize:PQWORD):Integer;
+begin
+ ///////////////
+ Result:=0;
+end;
+
 function ps4_sceSaveDataSetupSaveDataMemory(
            userId    :SceUserServiceUserId;
            memorySize:QWORD;
            param     :pSceSaveDataParam):Integer;
+var
+ info:SceSaveDataMemorySetup2;
+ existedMemorySize:QWORD;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ Result:=CheckSetupSaveDataParam(userId,memorySize,param);
+ if (Result<>0) then Exit;
+
+ info:=Default(SceSaveDataMemorySetup2);
+ info.userId    :=userId;
+ info.memorySize:=memorySize;
+
+ existedMemorySize:=0;
+ Result:=SetupSaveDataMemory2Lt65(@info,param,@existedMemorySize);
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory2(
            setupParam:pSceSaveDataMemorySetup2;
            pResult   :pSceSaveDataMemorySetupResult):Integer;
+var
+ __setupParam:SceSaveDataMemorySetup2;
+ existedMemorySize:QWORD;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
+
+ if (p_proc.p_sdk_version > $34fffff) and (setupParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (p_proc.p_sdk_version < $4500000) then
+ begin
+  //TODO: get per user slot sizes
+  Result:=CheckSetupParam(setupParam,0);
+  if (Result<>0) then Exit;
+
+  if (pResult<>nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+
+  existedMemorySize:=0;
+  Result:=SetupSaveDataMemory2Lt65(setupParam,nil,@existedMemorySize);
+ end else
+ begin
+  //>=$4500000
+
+  if (p_proc.p_sdk_version > $54fffff) then
+  begin
+   __setupParam:=setupParam^;
+   __setupParam.option:=__setupParam.option or SDMO_INTERNAL55;
+   setupParam:=@__setupParam;
+  end;
+
+  //TODO: get per user slot sizes
+  Result:=CheckSetupParam(setupParam,0);
+  if (Result<>0) then Exit;
+
+  if (setupParam^.initParam<>nil) then
+  begin
+   if ((setupParam^.option and SDMO_SET_PARAM)=0) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+
+   Result:=CheckSetDataParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,setupParam^.initParam,$530);
+   if (Result<>0) then Exit;
+  end;
+
+  if (setupParam^.initIcon<>nil) then
+  begin
+   if (setupParam^.iconMemorySize=0) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+
+   Result:=CheckSaveSaveDataIcon(setupParam^.initIcon);
+   if (Result<>0) then Exit;
+
+   if (setupParam^.initIcon^.dataSize > setupParam^.iconMemorySize) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+  end;
+
+  if (pResult<>nil) then
+  begin
+   if not CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+  end;
+
+  if (p_proc.p_sdk_version < $6500000) then
+  begin
+   Result:=SetupSaveDataMemory2Lt65(setupParam,nil,@existedMemorySize);
+  end else
+  begin
+   Result:=SetupSaveDataMemory2Be65(setupParam,@existedMemorySize);
+  end;
+  if (Result<>0) then Exit;
+
+  if (pResult<>nil) then
+  begin
+   pResult^.existedMemorySize:=existedMemorySize;
+  end;
+
+  if (setupParam^.initParam<>nil) then
+  begin
+   //TODO: SetSaveDataMemory
+  end;
+
+  //>=$4500000
+ end;
+
 
  Result:=0;
 end;
@@ -771,17 +891,10 @@ function SaveDataMount(mount      :pSceSaveDataMount;
                        pResult    :pSceSaveDataMountResult;
                        Transfering:Boolean):Integer;
 var
- mountMode:DWORD;
- output   :TMountResult;
+ output:TMountResult;
 begin
  Result:=CheckSaveDataMount(mount,pResult,Transfering);
  if (Result<>0) then Exit;
-
- mountMode:=mount^.mountMode;
- if (p_proc.p_sdk_version < $4500000) then
- begin
-  mountMode:=mountMode and (not SDM_CREATE2);
- end;
 
  mtx_lock(g_instance.mtx);
 
@@ -876,7 +989,7 @@ begin
  tmp.titleId    :=mount^.titleId    ;
  tmp.dirName    :=mount^.dirName    ;
  tmp.fingerprint:=mount^.fingerprint;
- tmp.mountMode  :=SDM_RDONLY        ;
+ tmp.mountMode  :=SDMM_RDONLY       ;
 
  Result:=SaveDataMount(@tmp,mountResult,True);
 end;

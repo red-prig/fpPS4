@@ -11,6 +11,7 @@ uses
  CharStream,
  kern_mtx,
  md_file,
+ md_time,
  g_node_splay,
  game_mount,
  ps4_libSceUserService,
@@ -28,6 +29,8 @@ type
   max_blocks :SceSaveDataBlocks;
   //
   param_sfo  :t_savedata_sfo_values;
+  //
+  mtime      :QWORD;
  end;
 
  TMountManager=object
@@ -41,6 +44,7 @@ type
   procedure SetMount     (slot_id:Integer;const data:TMountSlot);
   function  GetMount     (slot_id:Integer):TMountSlot;
   procedure FreeMount    (slot_id:Integer);
+  procedure SetMtime     (slot_id     :Integer;mtime:QWORD);
   procedure SetParam     (slot_id     :Integer;
                           paramType   :SceSaveDataParamType;
                           paramBuf    :Pointer;
@@ -101,8 +105,11 @@ type
   data  :record end;
  end;
 
-function CheckPng(data:Pointer;len:DWORD):Integer;
-function SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
+function  CheckPng(data:Pointer;len:DWORD):Integer;
+function  SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
+
+procedure load_mtime  (const fs_src:RawByteString;var mtime:QWORD);
+procedure update_mtime(const fs_src:RawByteString;var mtime:QWORD);
 
 implementation
 
@@ -177,7 +184,7 @@ end;
 
 function TMountManager.IsReadOnly(slot_id:Integer):Boolean;
 begin
- Result:=(MountSlots[slot_id].mountMode and SDM_RDONLY)<>0;
+ Result:=(MountSlots[slot_id].mountMode and SDMM_RDONLY)<>0;
 end;
 
 procedure TMountManager.SetMount(slot_id:Integer;const data:TMountSlot);
@@ -195,12 +202,23 @@ begin
  MountSlots[slot_id]:=Default(TMountSlot);
 end;
 
+procedure TMountManager.SetMtime(slot_id:Integer;mtime:QWORD);
+begin
+ if (MountSlots[slot_id].active<>0) then
+ begin
+  MountSlots[slot_id].mtime:=mtime;
+ end;
+end;
+
 procedure TMountManager.SetParam(slot_id     :Integer;
                                  paramType   :SceSaveDataParamType;
                                  paramBuf    :Pointer;
                                  paramBufSize:QWORD);
 begin
- MountSlots[slot_id].param_sfo.SetParam(paramType,paramBuf,paramBufSize);
+ if (MountSlots[slot_id].active<>0) then
+ begin
+  MountSlots[slot_id].param_sfo.SetParam(paramType,paramBuf,paramBufSize);
+ end;
 end;
 
 procedure TMountManager.GetParam(slot_id  :Integer;
@@ -208,8 +226,10 @@ procedure TMountManager.GetParam(slot_id  :Integer;
                                  paramBuf :Pointer;
                                  gotSize  :PDWORD);
 begin
- MountSlots[slot_id].param_sfo.GetParam(paramType,paramBuf,gotSize);
- //TODO: SCE_SAVE_DATA_PARAM_TYPE_MTIME
+ if (MountSlots[slot_id].active<>0) then
+ begin
+  MountSlots[slot_id].param_sfo.GetParam(paramType,paramBuf,gotSize,MountSlots[slot_id].mtime);
+ end;
 end;
 
 ///
@@ -404,6 +424,32 @@ begin
  end;
 
  Result:=TruncFile(fpng1,$1c800);
+end;
+
+procedure load_mtime(const fs_src:RawByteString;var mtime:QWORD);
+var
+ info:t_stat;
+begin
+ info:=Default(t_stat);
+
+ md_stat(fs_src,@info);
+
+ mtime:=info.st_mtim.tv_sec;
+end;
+
+procedure update_mtime(const fs_src:RawByteString;var mtime:QWORD);
+var
+ ts:array[0..1] of timespec;
+begin
+ mtime:=GetRtcTime;
+
+ ts[0].tv_sec :=mtime;
+ ts[0].tv_nsec:=0;
+
+ ts[1].tv_sec :=mtime;
+ ts[1].tv_nsec:=0;
+
+ md_utimens(fs_src,@ts,2);
 end;
 
 

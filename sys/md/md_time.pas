@@ -36,6 +36,7 @@ procedure gettimezone(z:p_timezone);
 procedure getadjtime(tv:p_timeval);
 
 Function  GetRtcTick:QWORD;
+Function  GetRtcTime:QWORD;
 
 function  kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
 function  kern_clock_gettime(clock_id:Integer;tp:p_timespec):Integer;
@@ -330,6 +331,13 @@ begin
  Result:=0;
  unittime(@Result);
  Result:=((Result-DELTA_EPOCH_IN_UNIT) div UNIT_PER_USEC)+QWORD($dcbffeff2bc000);
+end;
+
+Function GetRtcTime:QWORD;
+begin
+ Result:=0;
+ unittime(@Result);
+ Result:=((Result-DELTA_EPOCH_IN_UNIT) div UNIT_PER_SEC);
 end;
 
 function kern_clock_gettime_unit(clock_id:Integer;time:PInt64):Integer;
