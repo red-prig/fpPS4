@@ -706,10 +706,19 @@ begin
  vap^.va_blocksize:=d_blksize;
  vap^.va_type     :=vp^.v_type;
 
- vap^.va_atime    :=de^.ufs_atime;
- vap^.va_mtime    :=de^.ufs_mtime;
- vap^.va_ctime    :=de^.ufs_ctime;
- vap^.va_birthtime:=de^.ufs_btime;
+ //dont fill tv_nsec
+
+ vap^.va_atime.tv_sec     :=de^.ufs_btime.tv_sec; //atime=btime
+ vap^.va_atime.tv_nsec    :=0;
+
+ vap^.va_mtime.tv_sec     :=de^.ufs_mtime.tv_sec;
+ vap^.va_mtime.tv_nsec    :=0;
+
+ vap^.va_ctime.tv_sec     :=de^.ufs_mtime.tv_sec; //ctime=mtime
+ vap^.va_ctime.tv_nsec    :=0;
+
+ vap^.va_birthtime.tv_sec :=de^.ufs_btime.tv_sec;
+ vap^.va_birthtime.tv_nsec:=0;
 
  vap^.va_gen    :=0;
  vap^.va_flags  :=0;

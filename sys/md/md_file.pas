@@ -31,6 +31,13 @@ const
 
  AT_FDCWD  =vfcntl.AT_FDCWD;
 
+type
+ p_timespec=time.p_timespec;
+ timespec  =time.timespec;
+
+ p_stat=vstat.p_stat;
+ t_stat=vstat.t_stat;
+
 function  md_openat(at_fd:THandle;const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_open  (const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_close (fd:THandle):DWORD;

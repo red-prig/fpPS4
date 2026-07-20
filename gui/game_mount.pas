@@ -720,6 +720,8 @@ var
   DestHandle: THandle;
   Buffer: array[1..4096] of byte;
   ReadCount, WriteCount, TryCount: Integer;
+  //
+  info:t_stat;
 begin
   Result := False;
 
@@ -756,13 +758,21 @@ begin
         WriteCount:=FileWrite(DestHandle,Buffer[1],ReadCount);
         if (WriteCount<ReadCount) then Exit;
       until false;
+
+      //
+      info:=Default(t_stat);
+      if md_fstat(SrcHandle,@info)=0 then
+      begin
+       md_futimens(DestHandle,@info.st_atim,2);
+      end;
+      //
+
     finally
       FileFlush(DestHandle);
       FileClose(DestHandle);
     end;
 
     //
-    FileSetDate(DestFilename, FileGetDate(SrcHandle));
     FileSetAttr(DestFilename, FileGetAttr(SrcFilename));
     //
 
@@ -783,6 +793,8 @@ type
 
 var
  stack:PNode;
+ //
+ info:t_stat;
 
  procedure Push(const dst,src:RawByteString);
  var
@@ -868,6 +880,14 @@ begin
    until SysUtils.FindNext(FileInfo)<>0;
    SysUtils.FindClose(FileInfo);
   end;
+
+  //
+  info:=Default(t_stat);
+  if md_stat(CurSrcDir,@info)=0 then
+  begin
+   md_utimens(CurDstDir,@info.st_atim,2);
+  end;
+  //
 
   if Pop(CurDstDir,CurSrcDir) then
   begin
