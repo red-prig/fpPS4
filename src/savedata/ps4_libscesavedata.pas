@@ -20,6 +20,11 @@ uses
  kern_mtx,
  mpmc_queue,
  subr_dynlib,
+ vm,
+ vmparam,
+ vm_map,
+ vm_mmap,
+ vm_object,
  game_mount,
  vfs_mountroot,
  ps4_libSceUserService;
@@ -70,6 +75,46 @@ type
   procedure Action;
  end;
 
+ PIconBufSize=^TIconBufSize;
+ TIconBufSize=packed record //64
+  max:QWORD;
+  cur:QWORD;
+  reserved:array[0..5] of QWORD;
+ end;
+
+ PSdMemoryBuffer=^TSdMemoryBuffer;
+ TSdMemoryBuffer=record
+  //shm
+  addr:Pointer;
+  size:QWORD;
+  //areas
+  memoryData    :Pointer;
+  memorySize    :QWORD;
+  //
+  iconMemorySize:PIconBufSize;
+  iconData      :Pointer;
+  //
+  ParamData     :pSceSaveDataParam;
+ end;
+
+ PPerSdSlot=^TPerSdSlot;
+ TPerSdSlot=record
+  is_setup    :Boolean;
+  bufferNum   :Byte;
+  MemoryBudget:Byte;
+  sd_buffers  :array[0..1] of TSdMemoryBuffer;
+ end;
+
+ PPerUserInfo=^TPerUserInfo;
+ TPerUserInfo=object
+  userId           :DWORD;
+  shm_size_game    :DWORD;
+  shm_size_shell   :DWORD;
+  sd_slot          :array[0..3] of TPerSdSlot;
+  UNLOCK_LIMITATION:Boolean;
+  function get_slot_node(slotId:DWORD):PPerSdSlot;
+ end;
+
  TSaveDataInstance=class
   version             :t_init_version;
   memory_timeout_10sec:Boolean;
@@ -89,8 +134,52 @@ type
   cb_event   :SceSaveDataEventCallbackFunc;
   cb_userdata:Pointer;
   //
+  users:array[0..3] of TPerUserInfo;
+  //
+  function  get_sum_shm_size(userId:DWORD):DWORD;
+  function  get_user_node(userId:DWORD):PPerUserInfo;
+  function  InitInstance(params:Pointer;_version:t_init_version):Integer;
+  procedure select_prio_by_cusaname;
+  procedure InitJobThread;
+  procedure JoinThread;
+  function  ConnectInstance:Integer;
   procedure Terminate;
  end;
+
+function TSaveDataInstance.get_sum_shm_size(userId:DWORD):DWORD;
+var
+ i:Integer;
+begin
+ Result:=0;
+ For i:=0 to High(users) do
+  if (users[i].userId=userId) then
+  begin
+   Exit(users[i].shm_size_game + users[i].shm_size_shell);
+  end;
+end;
+
+function TSaveDataInstance.get_user_node(userId:DWORD):PPerUserInfo;
+var
+ i:Integer;
+begin
+ Result:=nil;
+ For i:=0 to High(users) do
+  if (users[i].userId=userId) then
+  begin
+   Exit(@users[i]);
+  end;
+ For i:=0 to High(users) do
+  if (users[i].userId=0) then
+  begin
+   users[i].userId:=userId;
+   Exit(@users[i]);
+  end;
+end;
+
+function TPerUserInfo.get_slot_node(slotId:DWORD):PPerSdSlot;
+begin
+ Result:=@sd_slot[slotId];
+end;
 
 var
  g_instance:TSaveDataInstance;
@@ -140,15 +229,15 @@ begin
  end;
 end;
 
-function InitInstance(instance:TSaveDataInstance;params:Pointer;version:t_init_version):Integer;
+function TSaveDataInstance.InitInstance(params:Pointer;_version:t_init_version):Integer;
 begin
- mtx_init(instance.mtx,'SaveDataInstance');
+ mtx_init(mtx,'SaveDataInstance');
  //
 
- instance.version        :=version;
- instance.priority       :=700;
- instance.threadStackSize:=$4000;
- instance.cpuAffinityMask:=0;
+ version        :=_version;
+ priority       :=700;
+ threadStackSize:=$4000;
+ cpuAffinityMask:=0;
 
  case version of
   VERSION_INIT_0:
@@ -160,17 +249,17 @@ begin
      Result:=CheckDataInitParams1(params);
      if (Result=0) then
      begin
-      instance.priority            :=pSceSaveDataInitParams(params)^.priority;
-      instance.not_prio_by_cusaname:=true;
+      priority            :=pSceSaveDataInitParams(params)^.priority;
+      not_prio_by_cusaname:=true;
      end;
     end else
     begin
      Result:=CheckDataInitParams0(params);
      if (Result=0) then
      begin
-      instance.priority            :=pSceSaveDataInitParams(params)^.priority;
-      instance.force_default_prio  :=(pSceSaveDataInitParams(params)^.reserved[0]<>0);
-      instance.not_prio_by_cusaname:=true;
+      priority            :=pSceSaveDataInitParams(params)^.priority;
+      force_default_prio  :=(pSceSaveDataInitParams(params)^.reserved[0]<>0);
+      not_prio_by_cusaname:=true;
      end;
     end;
 
@@ -180,10 +269,10 @@ begin
     Result:=CheckDataInitParams2(params);
     if (Result=0) then
     begin
-     instance.priority            :=pSceSaveDataInitParams2(params)^.priority;
-     instance.not_prio_by_cusaname:=true;
-     instance.threadStackSize     :=pSceSaveDataInitParams2(params)^.threadStackSize;
-     instance.cpuAffinityMask     :=pSceSaveDataInitParams2(params)^.cpuAffinityMask;
+     priority            :=pSceSaveDataInitParams2(params)^.priority;
+     not_prio_by_cusaname:=true;
+     threadStackSize     :=pSceSaveDataInitParams2(params)^.threadStackSize;
+     cpuAffinityMask     :=pSceSaveDataInitParams2(params)^.cpuAffinityMask;
     end;
    end;
   VERSION_INIT_3:
@@ -196,17 +285,17 @@ begin
 
 end;
 
-procedure Getprio_by_cusaname(instance:TSaveDataInstance);
+procedure TSaveDataInstance.select_prio_by_cusaname;
 var
  sched_param:t_sched_param;
 begin
  if (p_proc.p_sdk_version < $2000000) and
-    (instance.force_default_prio=false) then
+    (force_default_prio=false) then
  begin
-  instance.priority:=700;
+  priority:=700;
  end;
 
- if (instance.not_prio_by_cusaname=false) then
+ if (not_prio_by_cusaname=false) then
  begin
 
   case String(g_appinfo.CUSANAME) of
@@ -224,7 +313,7 @@ begin
 
       if (sched_param.sched_priority<>0) then
       begin
-       instance.priority:=sched_param.sched_priority;
+       priority:=sched_param.sched_priority;
       end;
 
      end;
@@ -474,7 +563,7 @@ var
                                             name   :Pchar):Integer;
  ps4_scePthreadJoin               :function(pthread:pthread_t;value_ptr:PPointer):Integer;
 
-procedure InitJobThread(instance:TSaveDataInstance);
+procedure TSaveDataInstance.InitJobThread;
 const
  ThreadName='SceSaveData'#0;
 var
@@ -484,9 +573,9 @@ var
  p_policy     :PInteger;
  p_thread_name:PChar;
 begin
- instance.job_list.Init;
- instance.thread_stop:=False;
- instance.job_thread :=nil;
+ job_list.Init;
+ thread_stop:=False;
+ job_thread :=nil;
 
  ga:=prolog;
 
@@ -499,50 +588,50 @@ begin
  StrPCopy(p_thread_name,ThreadName);
 
  ps4_scePthreadAttrInit(p_attr);
- ps4_scePthreadAttrSetstacksize(p_attr,instance.threadStackSize);
+ ps4_scePthreadAttrSetstacksize(p_attr,threadStackSize);
  ps4_scePthreadAttrSetschedpolicy(p_attr,2);
 
- if (instance.priority <> 0) then
+ if (priority <> 0) then
  begin
-  p_policy^:=instance.priority;
+  p_policy^:=priority;
   ps4_scePthreadAttrSetschedparam(p_attr,p_policy);
  end;
 
- if (instance.cpuAffinityMask <> 0) then
+ if (cpuAffinityMask <> 0) then
  begin
-  ps4_scePthreadAttrSetaffinity(p_attr,instance.cpuAffinityMask);
+  ps4_scePthreadAttrSetaffinity(p_attr,cpuAffinityMask);
  end;
 
  ps4_scePthreadCreate(p_pthread,p_attr,ps4_job_thread,nil,p_thread_name);
 
- instance.job_thread:=p_pthread^;
+ job_thread:=p_pthread^;
 
  ps4_scePthreadAttrDestroy(p_attr);
 
  ga.epilog;
 
- Assert(instance.job_thread<>nil);
+ Assert(job_thread<>nil);
 end;
 
-procedure JoinThread(instance:TSaveDataInstance);
+procedure TSaveDataInstance.JoinThread;
 begin
- if (instance.job_thread<>nil) then
+ if (job_thread<>nil) then
  begin
-  instance.thread_stop:=True;
-  ev_signal(instance.job_list.signal);
+  thread_stop:=True;
+  ev_signal(job_list.signal);
   //
-  ps4_scePthreadJoin(instance.job_thread,nil);
-  instance.job_thread:=nil;
+  ps4_scePthreadJoin(job_thread,nil);
+  job_thread:=nil;
   //
-  instance.job_list.Fini;
+  job_list.Fini;
  end;
 end;
 
-function ConnectInstance(instance:TSaveDataInstance):Integer;
+function TSaveDataInstance.ConnectInstance:Integer;
 begin
  Result:=0;
 
- if (instance.version=VERSION_INIT_3) then
+ if (version=VERSION_INIT_3) then
  begin
 
   if (p_proc.p_sdk_version < $6500000) then
@@ -553,22 +642,22 @@ begin
        (QWORD(1) shl BUG180029_SAVE_DATA_MEMORY_TIMEOUT_10SEC)
       )<>0 then
    begin
-    instance.memory_timeout_10sec:=True;
+    memory_timeout_10sec:=True;
    end;
 
   end else
   begin
-   instance.memory_timeout_10sec:=True;
+   memory_timeout_10sec:=True;
   end;
 
  end else
  begin
-  Getprio_by_cusaname(instance);
+  select_prio_by_cusaname;
 
-  InitJobThread(instance);
+  InitJobThread;
  end;
 
- instance.Backend:=TSaveDataBackendConnect.Create;
+ Backend:=TSaveDataBackendConnect.Create;
 end;
 
 function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;
@@ -578,7 +667,7 @@ begin
  if (g_instance<>nil) then Exit(0);
 
  instance:=TSaveDataInstance.Create;
- Result:=InitInstance(instance,params,version);
+ Result:=instance.InitInstance(params,version);
  g_instance:=instance;
 
  if (Result<0) then
@@ -588,7 +677,7 @@ begin
   Exit;
  end;
 
- Result:=ConnectInstance(g_instance);
+ Result:=g_instance.ConnectInstance;
 end;
 
 function ps4_sceSaveDataInitialize(params:pSceSaveDataInitParams):Integer;
@@ -608,7 +697,7 @@ end;
 
 procedure TSaveDataInstance.Terminate;
 begin
- JoinThread(self);
+ JoinThread;
  if (Backend<>nil) then
  begin
   Backend.UmountAllForce;
@@ -628,18 +717,361 @@ begin
  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
 end;
 
+const
+ SHM_SHELL=0;
+ SHM_GAME =1;
+
+function GetMemoryBudget(user_node:PPerUserInfo;memorySize:QWORD;option:DWORD):Integer;
+var
+ sum:QWORD;
+begin
+ if ((option and SDMO_UNLOCK_LIMITATION)=0) then
+ begin
+  Result:=ord(($80000 + (ord((option and SDMO_DOUBLE_BUFFER)=0) * $80000)) < memorySize);
+ end else
+ begin
+  sum:=user_node^.shm_size_shell;
+
+  if ((option and SDMO_DOUBLE_BUFFER)=0) then
+  begin
+   sum:=sum+memorySize;
+  end else
+  begin
+   sum:=sum+memorySize*2;
+  end;
+
+  Result:=ord($400000 < sum);
+ end;
+end;
+
+function mmap_shm(buffer:PSdMemoryBuffer;mmapAddr:Pointer;MemoryBudget:Integer;size:QWORD):Integer;
+var
+ map:vm_map_t;
+begin
+ map:=p_proc.p_vmspace;
+
+ //create psevdo shm
+
+ if (MemoryBudget=SHM_SHELL) then
+ begin
+  Result:=vm_mmap2(map,@mmapAddr,size,3,3,MAP_ANON or MAP_PRIVATE or MAP_SYSTEM,OBJT_DEFAULT,nil,0,nil);
+ end else
+ begin
+  Result:=vm_mmap2(map,@mmapAddr,size,3,3,MAP_ANON or MAP_PRIVATE,OBJT_DEFAULT,nil,0,nil);
+ end;
+
+ if (Result=0) then
+ begin
+  buffer^.addr:=mmapAddr;
+  buffer^.size:=size;
+ end;
+
+end;
+
+function CreateShm(buffer        :PSdMemoryBuffer;
+                   mmapAddr      :Pointer;
+                   MemoryBudget  :Integer;
+                   memorySize    :QWORD;
+                   iconMemorySize:QWORD;
+                   paramSize     :QWORD):Integer;
+var
+ size:QWORD;
+ err:Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (buffer=nil) then Exit;
+
+ if (memorySize < $2000001) and
+    (iconMemorySize < $1c801) and
+    (paramSize < $531) then
+ begin
+
+  if (iconMemorySize=0) then
+  begin
+   size:=0;
+  end else
+  begin
+   size:=iconMemorySize + 64;
+  end;
+  size:=size + paramSize + memorySize;
+
+  err:=mmap_shm(buffer,mmapAddr,MemoryBudget,size);
+  if (err<>0) then Exit(SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY);
+
+  mmapAddr:=buffer^.addr;
+
+  buffer^.memoryData:=mmapAddr;
+  buffer^.memorySize:=memorySize;
+
+  if (iconMemorySize<>0) then
+  begin
+   buffer^.iconMemorySize:=(mmapAddr + memorySize);
+   buffer^.iconData      :=(buffer^.iconMemorySize + 1);
+   //
+   buffer^.iconMemorySize^:=Default(TIconBufSize);
+   buffer^.iconMemorySize^.max:=iconMemorySize;
+  end;
+
+  if (paramSize<>0) then
+  begin
+   mmapAddr:=buffer^.memoryData;
+   size    :=buffer^.memorySize;
+   if (iconMemorySize<>0) then
+   begin
+    mmapAddr:=buffer^.iconData;
+    size    :=iconMemorySize;
+   end;
+   buffer^.ParamData:=(mmapAddr + size);
+  end;
+
+  Result:=0;
+ end;
+
+end;
+
+function CreateBuffers(slot_node     :PPerSdSlot;
+                       bufferNum     :Integer;
+                       mmapAddr      :Pointer;
+                       MemoryBudget  :Integer;
+                       memorySize    :QWORD;
+                       iconMemorySize:QWORD;
+                       paramSize     :QWORD):Integer;
+var
+ i,d:Integer;
+begin
+ if (bufferNum<>1) and (bufferNum<>2) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+
+ for i:=0 to bufferNum-1 do
+ begin
+  Result:=CreateShm(@slot_node^.sd_buffers[i],mmapAddr,MemoryBudget,memorySize,iconMemorySize,paramSize);
+
+  if (Result<>0) then
+  begin
+   //destroy
+   for d:=0 to bufferNum-1 do
+   if (slot_node^.sd_buffers[d].addr<>nil) then
+   begin
+    sys_munmap(slot_node^.sd_buffers[d].addr,slot_node^.sd_buffers[d].size);
+    slot_node^.sd_buffers[d]:=Default(TSdMemoryBuffer);
+   end;
+
+   Exit;
+  end;
+
+ end;
+
+ slot_node^.is_setup    :=True;
+ slot_node^.bufferNum   :=bufferNum;
+ slot_node^.MemoryBudget:=MemoryBudget;
+end;
+
+procedure apply_memory(user_node:PPerUserInfo;slot_node:PPerSdSlot;option:DWORD);
+var
+ i:Integer;
+begin
+ if ((option and SDMO_UNLOCK_LIMITATION)<>0) then
+ begin
+  user_node^.UNLOCK_LIMITATION:=true;
+ end;
+
+ for i:=0 to slot_node^.bufferNum-1 do
+ begin
+
+  if (slot_node^.MemoryBudget=SHM_SHELL) then
+  begin
+   user_node^.shm_size_shell:=user_node^.shm_size_shell + slot_node^.sd_buffers[i].memorySize;
+  end else
+  begin
+   user_node^.shm_size_game :=user_node^.shm_size_game  + slot_node^.sd_buffers[i].memorySize;
+  end;
+
+ end;
+
+end;
+
 function SetupSaveDataMemory2Lt65(setupParam:pSceSaveDataMemorySetup2;
                                   param     :pSceSaveDataParam;
                                   p_existedMemorySize:PQWORD):Integer;
+var
+ userId        :DWORD;
+ memorySize    :QWORD;
+ iconMemorySize:QWORD;
+ paramSize     :QWORD;
+ MemoryBudget  :Integer;
+ mmapAddr      :Pointer;
+ bufferNum     :Integer;
+
+ user_node:PPerUserInfo;
 begin
- ///////////////
+ userId     :=setupParam^.userId;
+ memorySize :=setupParam^.memorySize;
+ iconMemorySize:=setupParam^.iconMemorySize;
+ paramSize  :=ord((setupParam^.option and SDMO_SET_PARAM)<>0) * $530;
+ bufferNum  :=2 - ord((setupParam^.option and SDMO_DOUBLE_BUFFER)=0);
+
+ user_node:=g_instance.get_user_node(userId);
+ Assert(user_node<>nil);
+
+ if user_node^.UNLOCK_LIMITATION and ((setupParam^.option and SDMO_UNLOCK_LIMITATION)=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (p_proc.p_sdk_version < $2500000) then
+ begin
+  mmapAddr:=nil;
+ end else
+ begin
+  mmapAddr:=Pointer($880000000);
+ end;
+
+ //SetupSaveDataMemory_0x22
+
+ MemoryBudget:=GetMemoryBudget(user_node,memorySize,setupParam^.option);
+
+ if (MemoryBudget=SHM_SHELL) then
+ begin
+
+  //if (params != NULL) {
+  //  memcpy(&input.params,params,0x524);
+  //}
+
+  //CreateSharedMemory_0x21
+
+  //SetupSaveDataMemory_0x22
+
+  Result:=CreateBuffers(user_node^.get_slot_node(0),
+                        bufferNum     ,
+                        mmapAddr      ,
+                        MemoryBudget  ,
+                        memorySize    ,
+                        iconMemorySize,
+                        paramSize     );
+  if (Result<>0) then Exit;
+
+  //CreateSharedSemaphore_0x2f
+
+  //CreateShmInternal
+
+  apply_memory(user_node,user_node^.get_slot_node(0),setupParam^.option);
+
+ end else
+ begin //SHM_GAME
+
+  //if (params != NULL) {
+  //  memcpy(&input.params,params,0x524);
+  //}
+
+  Result:=CreateBuffers(user_node^.get_slot_node(0),
+                        bufferNum     ,
+                        mmapAddr      ,
+                        MemoryBudget  ,
+                        memorySize    ,
+                        iconMemorySize,
+                        paramSize     );
+  if (Result<>0) then Exit;
+
+  //CreateSharedMemory_0x21
+
+  //CreateShmInternal
+
+  apply_memory(user_node,user_node^.get_slot_node(0),setupParam^.option);
+
+  //SetupSaveDataMemory_0x22
+
+ end;
+
+ //ReadMemoryData
+
  Result:=0;
 end;
 
 function SetupSaveDataMemory2Be65(setupParam:pSceSaveDataMemorySetup2;
                                   p_existedMemorySize:PQWORD):Integer;
+var
+ userId        :DWORD;
+ memorySize    :QWORD;
+ iconMemorySize:QWORD;
+ paramSize     :QWORD;
+ MemoryBudget  :Integer;
+ bufferNum     :Integer;
+
+ user_node:PPerUserInfo;
 begin
- ///////////////
+ userId     :=setupParam^.userId;
+ memorySize :=setupParam^.memorySize;
+ iconMemorySize:=setupParam^.iconMemorySize;
+ paramSize  :=ord((setupParam^.option and SDMO_SET_PARAM)<>0) * $530;
+ bufferNum  :=2 - ord((setupParam^.option and SDMO_DOUBLE_BUFFER)=0);
+
+ Result:=CheckSdSlotId(setupParam^.slotId);
+ if (Result<>0) then Exit;
+
+ user_node:=g_instance.get_user_node(userId);
+ Assert(user_node<>nil);
+
+ if user_node^.UNLOCK_LIMITATION and ((setupParam^.option and SDMO_UNLOCK_LIMITATION)=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ //SetupSaveDataMemory_0x51
+
+ MemoryBudget:=GetMemoryBudget(user_node,memorySize,setupParam^.option);
+
+ if (MemoryBudget=SHM_SHELL) then
+ begin
+
+  //CreateSharedMemory_0x4e
+
+  //SetupSaveDataMemory_0x51
+
+  Result:=CreateBuffers(user_node^.get_slot_node(setupParam^.slotId),
+                        bufferNum     ,
+                        Pointer($880000000),
+                        MemoryBudget  ,
+                        memorySize    ,
+                        iconMemorySize,
+                        paramSize     );
+  if (Result<>0) then Exit;
+
+  //CreateSharedSemaphore_0x50
+
+  //OpenSema
+
+  //CreateShmInternal
+
+  apply_memory(user_node,user_node^.get_slot_node(setupParam^.slotId),setupParam^.option);
+
+ end else
+ begin //SHM_GAME
+
+  Result:=CreateBuffers(user_node^.get_slot_node(setupParam^.slotId),
+                        bufferNum     ,
+                        Pointer($880000000),
+                        MemoryBudget  ,
+                        memorySize    ,
+                        iconMemorySize,
+                        paramSize     );
+  if (Result<>0) then Exit;
+
+  //CreateSharedMemory_0x4e
+
+  //CreateSharedSemaphore_0x50
+
+  //SetupSaveDataMemory_0x51
+
+  //OpenSema
+
+  //CreateShmInternal
+
+  apply_memory(user_node,user_node^.get_slot_node(setupParam^.slotId),setupParam^.option);
+
+ end;
+
+ //ReadMemoryData
+
  Result:=0;
 end;
 
@@ -664,30 +1096,28 @@ begin
  info.memorySize:=memorySize;
 
  existedMemorySize:=0;
- Result:=SetupSaveDataMemory2Lt65(@info,param,@existedMemorySize);
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=SetupSaveDataMemory2Lt65(@info,param,@existedMemorySize);
+
+ mtx_unlock(g_instance.mtx)
 end;
 
-function ps4_sceSaveDataSetupSaveDataMemory2(
+function SetupSaveDataMemory2(
            setupParam:pSceSaveDataMemorySetup2;
            pResult   :pSceSaveDataMemorySetupResult):Integer;
 var
  __setupParam:SceSaveDataMemorySetup2;
  existedMemorySize:QWORD;
+ sum_sd_size:DWORD;
 begin
- if (g_instance=nil) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
- end;
-
- if (p_proc.p_sdk_version > $34fffff) and (setupParam=nil) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
- end;
 
  if (p_proc.p_sdk_version < $4500000) then
  begin
-  //TODO: get per user slot sizes
-  Result:=CheckSetupParam(setupParam,0);
+  sum_sd_size:=g_instance.get_sum_shm_size(setupParam^.userId);
+
+  Result:=CheckSetupParam(setupParam,sum_sd_size);
   if (Result<>0) then Exit;
 
   if (pResult<>nil) then
@@ -704,12 +1134,13 @@ begin
   if (p_proc.p_sdk_version > $54fffff) then
   begin
    __setupParam:=setupParam^;
-   __setupParam.option:=__setupParam.option or SDMO_INTERNAL55;
+   __setupParam.option:=__setupParam.option or SDMO_UNLOCK_LIMITATION;
    setupParam:=@__setupParam;
   end;
 
-  //TODO: get per user slot sizes
-  Result:=CheckSetupParam(setupParam,0);
+  sum_sd_size:=g_instance.get_sum_shm_size(setupParam^.userId);
+
+  Result:=CheckSetupParam(setupParam,sum_sd_size);
   if (Result<>0) then Exit;
 
   if (setupParam^.initParam<>nil) then
@@ -769,8 +1200,28 @@ begin
   //>=$4500000
  end;
 
-
  Result:=0;
+end;
+
+function ps4_sceSaveDataSetupSaveDataMemory2(
+           setupParam:pSceSaveDataMemorySetup2;
+           pResult   :pSceSaveDataMemorySetupResult):Integer;
+begin
+ if (g_instance=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
+ end;
+
+ if (p_proc.p_sdk_version > $34fffff) and (setupParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=SetupSaveDataMemory2(setupParam,pResult);
+
+ mtx_unlock(g_instance.mtx)
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory(

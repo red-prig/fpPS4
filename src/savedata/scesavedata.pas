@@ -96,10 +96,10 @@ type
 
 const
  //SceSaveDataSaveDataMemoryOption
- SDMO_NONE         =0;
- SDMO_SET_PARAM    =1;
- SDMO_DOUBLE_BUFFER=2;
- SDMO_INTERNAL55   =4;
+ SDMO_NONE             =0;
+ SDMO_SET_PARAM        =1;
+ SDMO_DOUBLE_BUFFER    =2;
+ SDMO_UNLOCK_LIMITATION=4;
 
 type
  pSceSaveDataMemorySetup2=^SceSaveDataMemorySetup2;
@@ -453,6 +453,7 @@ function CheckSetupSaveDataParam(userId    :SceUserServiceUserId;
                                  param     :pSceSaveDataParam):Integer;
 
 function CheckSetupParam(setupParam:pSceSaveDataMemorySetup2;sum_size:DWORD):Integer;
+function CheckSdSlotId(slotId:DWORD):Integer;
 
 implementation
 
@@ -1382,7 +1383,7 @@ begin
 
  memorySize:=setupParam^.memorySize;
 
- if (setupParam^.option and SDMO_INTERNAL55)=0 then
+ if (setupParam^.option and SDMO_UNLOCK_LIMITATION)=0 then
  begin
   if (QWORD(memorySize - 1) > $7fffff) then
   begin
@@ -1426,7 +1427,14 @@ begin
 
 end;
 
-
+function CheckSdSlotId(slotId:DWORD):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+ if (slotId < 4) then
+ begin
+  Result:=0;
+ end;
+end;
 
 end.
 
