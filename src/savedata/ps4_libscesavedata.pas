@@ -83,26 +83,44 @@ type
  end;
 
  PSdMemoryBuffer=^TSdMemoryBuffer;
- TSdMemoryBuffer=record
+ TSdMemoryBuffer=object
   //shm
-  addr:Pointer;
-  size:QWORD;
+  Faddr:Pointer;
+  Fsize:QWORD;
   //areas
-  memoryData    :Pointer;
-  memorySize    :QWORD;
+  FmemoryData    :Pointer;
+  FmemorySize    :QWORD;
   //
-  iconMemorySize:PIconBufSize;
-  iconData      :Pointer;
+  FiconMemorySize:PIconBufSize;
+  FiconData      :Pointer;
   //
-  ParamData     :pSceSaveDataParam;
+  FParamData     :pSceSaveDataParam;
+  //
+  function  mmap_shm(mmapAddr:Pointer;MemoryBudget:Integer;size:QWORD):Integer;
+  Procedure Free;
+  function  CreateShm(mmapAddr      :Pointer;
+                      MemoryBudget  :Integer;
+                      memorySize    :DWORD;
+                      iconMemorySize:DWORD;
+                      paramSize     :DWORD):Integer;
  end;
 
  PPerSdSlot=^TPerSdSlot;
- TPerSdSlot=record
-  is_setup    :Boolean;
-  bufferNum   :Byte;
-  MemoryBudget:Byte;
-  sd_buffers  :array[0..1] of TSdMemoryBuffer;
+ TPerSdSlot=packed object
+  is_setup     :Boolean;
+  FslotId      :Byte;
+  FbufferNum   :Byte;
+  FMemoryBudget:Byte;
+  sd_buffers   :array[0..1] of TSdMemoryBuffer;
+  //
+  procedure Free;
+  function  CreateBuffers(bufferNum     :Integer;
+                          mmapAddr      :Pointer;
+                          MemoryBudget  :Integer;
+                          memorySize    :DWORD;
+                          iconMemorySize:DWORD;
+                          paramSize     :DWORD):Integer;
+  function  ReadMemoryData(user_id:DWORD;p_existedMemorySize:PQWORD):Integer;
  end;
 
  PPerUserInfo=^TPerUserInfo;
@@ -112,7 +130,9 @@ type
   shm_size_shell   :DWORD;
   sd_slot          :array[0..3] of TPerSdSlot;
   UNLOCK_LIMITATION:Boolean;
-  function get_slot_node(slotId:DWORD):PPerSdSlot;
+  //
+  function  get_slot_node(slotId:DWORD):PPerSdSlot;
+  procedure apply_memory_setup(slot_node:PPerSdSlot;option:DWORD);
  end;
 
  TSaveDataInstance=class
@@ -179,6 +199,7 @@ end;
 function TPerUserInfo.get_slot_node(slotId:DWORD):PPerSdSlot;
 begin
  Result:=@sd_slot[slotId];
+ Result^.FslotId:=slotId;
 end;
 
 var
@@ -744,7 +765,7 @@ begin
  end;
 end;
 
-function mmap_shm(buffer:PSdMemoryBuffer;mmapAddr:Pointer;MemoryBudget:Integer;size:QWORD):Integer;
+function TSdMemoryBuffer.mmap_shm(mmapAddr:Pointer;MemoryBudget:Integer;size:QWORD):Integer;
 var
  map:vm_map_t;
 begin
@@ -762,25 +783,31 @@ begin
 
  if (Result=0) then
  begin
-  buffer^.addr:=mmapAddr;
-  buffer^.size:=size;
+  Faddr:=mmapAddr;
+  Fsize:=size;
  end;
 
 end;
 
-function CreateShm(buffer        :PSdMemoryBuffer;
-                   mmapAddr      :Pointer;
-                   MemoryBudget  :Integer;
-                   memorySize    :QWORD;
-                   iconMemorySize:QWORD;
-                   paramSize     :QWORD):Integer;
+Procedure TSdMemoryBuffer.Free;
+begin
+ if (Faddr<>nil) then
+ begin
+  sys_munmap(Faddr,Fsize);
+  self:=Default(TSdMemoryBuffer);
+ end;
+end;
+
+function TSdMemoryBuffer.CreateShm(mmapAddr      :Pointer;
+                                   MemoryBudget  :Integer;
+                                   memorySize    :DWORD;
+                                   iconMemorySize:DWORD;
+                                   paramSize     :DWORD):Integer;
 var
  size:QWORD;
  err:Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
-
- if (buffer=nil) then Exit;
 
  if (memorySize < $2000001) and
     (iconMemorySize < $1c801) and
@@ -796,33 +823,33 @@ begin
   end;
   size:=size + paramSize + memorySize;
 
-  err:=mmap_shm(buffer,mmapAddr,MemoryBudget,size);
+  err:=mmap_shm(mmapAddr,MemoryBudget,size);
   if (err<>0) then Exit(SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY);
 
-  mmapAddr:=buffer^.addr;
+  mmapAddr:=Faddr;
 
-  buffer^.memoryData:=mmapAddr;
-  buffer^.memorySize:=memorySize;
+  FmemoryData:=mmapAddr;
+  FmemorySize:=memorySize;
 
   if (iconMemorySize<>0) then
   begin
-   buffer^.iconMemorySize:=(mmapAddr + memorySize);
-   buffer^.iconData      :=(buffer^.iconMemorySize + 1);
+   FiconMemorySize:=(mmapAddr + memorySize);
+   FiconData      :=(FiconMemorySize + 1);
    //
-   buffer^.iconMemorySize^:=Default(TIconBufSize);
-   buffer^.iconMemorySize^.max:=iconMemorySize;
+   FiconMemorySize^:=Default(TIconBufSize);
+   FiconMemorySize^.max:=iconMemorySize;
   end;
 
   if (paramSize<>0) then
   begin
-   mmapAddr:=buffer^.memoryData;
-   size    :=buffer^.memorySize;
+   mmapAddr:=FmemoryData;
+   size    :=FmemorySize;
    if (iconMemorySize<>0) then
    begin
-    mmapAddr:=buffer^.iconData;
+    mmapAddr:=FiconData;
     size    :=iconMemorySize;
    end;
-   buffer^.ParamData:=(mmapAddr + size);
+   FParamData:=(mmapAddr + size);
   end;
 
   Result:=0;
@@ -830,64 +857,137 @@ begin
 
 end;
 
-function CreateBuffers(slot_node     :PPerSdSlot;
-                       bufferNum     :Integer;
-                       mmapAddr      :Pointer;
-                       MemoryBudget  :Integer;
-                       memorySize    :QWORD;
-                       iconMemorySize:QWORD;
-                       paramSize     :QWORD):Integer;
+procedure TPerSdSlot.Free;
 var
- i,d:Integer;
+ i:Integer;
+begin
+ is_setup     :=False;
+ FbufferNum   :=0;
+ FMemoryBudget:=0;
+ //destroy
+ for i:=0 to High(sd_buffers) do
+ begin
+  sd_buffers[i].Free;
+ end;
+end;
+
+function TPerSdSlot.CreateBuffers(bufferNum     :Integer;
+                                  mmapAddr      :Pointer;
+                                  MemoryBudget  :Integer;
+                                  memorySize    :DWORD;
+                                  iconMemorySize:DWORD;
+                                  paramSize     :DWORD):Integer;
+var
+ i:Integer;
 begin
  if (bufferNum<>1) and (bufferNum<>2) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
 
  for i:=0 to bufferNum-1 do
  begin
-  Result:=CreateShm(@slot_node^.sd_buffers[i],mmapAddr,MemoryBudget,memorySize,iconMemorySize,paramSize);
-
-  if (Result<>0) then
-  begin
-   //destroy
-   for d:=0 to bufferNum-1 do
-   if (slot_node^.sd_buffers[d].addr<>nil) then
-   begin
-    sys_munmap(slot_node^.sd_buffers[d].addr,slot_node^.sd_buffers[d].size);
-    slot_node^.sd_buffers[d]:=Default(TSdMemoryBuffer);
-   end;
-
-   Exit;
-  end;
-
+  Result:=sd_buffers[i].CreateShm(mmapAddr,MemoryBudget,memorySize,iconMemorySize,paramSize);
+  if (Result<>0) then Exit;
  end;
 
- slot_node^.is_setup    :=True;
- slot_node^.bufferNum   :=bufferNum;
- slot_node^.MemoryBudget:=MemoryBudget;
+ FbufferNum   :=bufferNum;
+ FMemoryBudget:=MemoryBudget;
 end;
 
-procedure apply_memory(user_node:PPerUserInfo;slot_node:PPerSdSlot;option:DWORD);
+procedure TPerUserInfo.apply_memory_setup(slot_node:PPerSdSlot;option:DWORD);
 var
  i:Integer;
 begin
  if ((option and SDMO_UNLOCK_LIMITATION)<>0) then
  begin
-  user_node^.UNLOCK_LIMITATION:=true;
+  UNLOCK_LIMITATION:=true;
  end;
 
- for i:=0 to slot_node^.bufferNum-1 do
+ for i:=0 to slot_node^.FbufferNum-1 do
  begin
 
-  if (slot_node^.MemoryBudget=SHM_SHELL) then
+  if (slot_node^.FMemoryBudget=SHM_SHELL) then
   begin
-   user_node^.shm_size_shell:=user_node^.shm_size_shell + slot_node^.sd_buffers[i].memorySize;
+   shm_size_shell:=shm_size_shell + slot_node^.sd_buffers[i].FmemorySize;
   end else
   begin
-   user_node^.shm_size_game :=user_node^.shm_size_game  + slot_node^.sd_buffers[i].memorySize;
+   shm_size_game :=shm_size_game  + slot_node^.sd_buffers[i].FmemorySize;
   end;
 
  end;
 
+ slot_node^.is_setup:=True;
+end;
+
+function TPerSdSlot.ReadMemoryData(user_id:DWORD;p_existedMemorySize:PQWORD):Integer;
+label
+ __end;
+var
+ data:record
+  case Byte of
+   0:(minfo:SceSaveDataMount);
+   1:(icon :SceSaveDataIcon);
+ end;
+ mresult:SceSaveDataMountResult;
+ i      :Integer;
+ slot_id:Integer;
+begin
+ FillChar(data,SizeOf(data),0);
+ FillChar(mresult,SizeOf(mresult),0);
+
+ data.minfo.userId   :=user_id;
+ data.minfo.dirName  :=pSceSaveDataDirName(sdmemory_slot_name[FslotId]);
+ data.minfo.blocks   :=96;
+ data.minfo.mountMode:=SDMM_RDONLY;
+
+ Result:=g_instance.Backend.DoMount(@data.minfo,@mresult,False,True);
+ if (Result<>0) then Exit;
+
+ slot_id:=0;
+ Result:=GetMountSlotIdByMountPoint(pchar(@mresult.mountPoint),slot_id);
+ if (Result<>0) then Exit;
+
+ if (FbufferNum>0) then
+ For i:=0 to FbufferNum-1 do
+ begin
+
+  //   /memory.dat
+  if (sd_buffers[i].FmemoryData<>nil) then
+  begin
+   Result:=g_instance.Backend.ReadMemory(slot_id,sd_buffers[i].FmemoryData,sd_buffers[i].FmemorySize,p_existedMemorySize);
+
+   if (Result<>0) then goto __end;
+  end;
+
+  if (sd_buffers[i].FParamData<>nil) then
+  begin
+   Result:=g_instance.Backend.GetParam(slot_id,
+                                       SCE_SAVE_DATA_PARAM_TYPE_ALL,
+                                       sd_buffers[i].FParamData,
+                                       $530,
+                                       nil);
+
+   if (Result<>0) then goto __end;
+  end;
+
+  if (sd_buffers[i].FiconData<>nil) then
+  begin
+
+   FillChar(data,SizeOf(data),0);
+
+   data.icon.buf     :=sd_buffers[i].FiconData;
+   data.icon.bufSize :=sd_buffers[i].FiconMemorySize^.max;
+   data.icon.dataSize:=data.icon.bufSize;
+
+   Result:=g_instance.Backend.LoadIcon(slot_id,@data.icon,True);
+
+   if (Result<>0) then goto __end;
+
+   sd_buffers[i].FiconMemorySize^.cur:=data.icon.dataSize;
+  end;
+
+ end; //for
+
+ __end:
+  Result:=g_instance.Backend.DoUmount(slot_id,False);
 end;
 
 function SetupSaveDataMemory2Lt65(setupParam:pSceSaveDataMemorySetup2;
@@ -903,6 +1003,7 @@ var
  bufferNum     :Integer;
 
  user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
 begin
  userId     :=setupParam^.userId;
  memorySize :=setupParam^.memorySize;
@@ -911,11 +1012,19 @@ begin
  bufferNum  :=2 - ord((setupParam^.option and SDMO_DOUBLE_BUFFER)=0);
 
  user_node:=g_instance.get_user_node(userId);
- Assert(user_node<>nil);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if user_node^.UNLOCK_LIMITATION and ((setupParam^.option and SDMO_UNLOCK_LIMITATION)=0) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ slot_node:=user_node^.get_slot_node(0);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY);
  end;
 
  if (p_proc.p_sdk_version < $2500000) then
@@ -941,20 +1050,31 @@ begin
 
   //SetupSaveDataMemory_0x22
 
-  Result:=CreateBuffers(user_node^.get_slot_node(0),
-                        bufferNum     ,
+  Result:=slot_node^.
+          CreateBuffers(bufferNum     ,
                         mmapAddr      ,
                         MemoryBudget  ,
                         memorySize    ,
                         iconMemorySize,
                         paramSize     );
-  if (Result<>0) then Exit;
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
+
+  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize);
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
 
   //CreateSharedSemaphore_0x2f
 
   //CreateShmInternal
 
-  apply_memory(user_node,user_node^.get_slot_node(0),setupParam^.option);
+  user_node^.apply_memory_setup(slot_node,setupParam^.option);
 
  end else
  begin //SHM_GAME
@@ -963,26 +1083,37 @@ begin
   //  memcpy(&input.params,params,0x524);
   //}
 
-  Result:=CreateBuffers(user_node^.get_slot_node(0),
-                        bufferNum     ,
+  Result:=slot_node^.
+          CreateBuffers(bufferNum     ,
                         mmapAddr      ,
                         MemoryBudget  ,
                         memorySize    ,
                         iconMemorySize,
                         paramSize     );
-  if (Result<>0) then Exit;
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
 
   //CreateSharedMemory_0x21
 
   //CreateShmInternal
 
-  apply_memory(user_node,user_node^.get_slot_node(0),setupParam^.option);
+  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize);
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
+
+  user_node^.apply_memory_setup(slot_node,setupParam^.option);
 
   //SetupSaveDataMemory_0x22
 
  end;
 
- //ReadMemoryData
+ slot_node^.ReadMemoryData(userId,p_existedMemorySize);
 
  Result:=0;
 end;
@@ -998,6 +1129,7 @@ var
  bufferNum     :Integer;
 
  user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
 begin
  userId     :=setupParam^.userId;
  memorySize :=setupParam^.memorySize;
@@ -1009,11 +1141,19 @@ begin
  if (Result<>0) then Exit;
 
  user_node:=g_instance.get_user_node(userId);
- Assert(user_node<>nil);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if user_node^.UNLOCK_LIMITATION and ((setupParam^.option and SDMO_UNLOCK_LIMITATION)=0) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ slot_node:=user_node^.get_slot_node(setupParam^.slotId);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY);
  end;
 
  //SetupSaveDataMemory_0x51
@@ -1027,14 +1167,25 @@ begin
 
   //SetupSaveDataMemory_0x51
 
-  Result:=CreateBuffers(user_node^.get_slot_node(setupParam^.slotId),
-                        bufferNum     ,
+  Result:=slot_node^.
+          CreateBuffers(bufferNum     ,
                         Pointer($880000000),
                         MemoryBudget  ,
                         memorySize    ,
                         iconMemorySize,
                         paramSize     );
-  if (Result<>0) then Exit;
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
+
+  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize);
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
 
   //CreateSharedSemaphore_0x50
 
@@ -1042,19 +1193,30 @@ begin
 
   //CreateShmInternal
 
-  apply_memory(user_node,user_node^.get_slot_node(setupParam^.slotId),setupParam^.option);
+  user_node^.apply_memory_setup(slot_node,setupParam^.option);
 
  end else
  begin //SHM_GAME
 
-  Result:=CreateBuffers(user_node^.get_slot_node(setupParam^.slotId),
-                        bufferNum     ,
+  Result:=slot_node^.
+          CreateBuffers(bufferNum     ,
                         Pointer($880000000),
                         MemoryBudget  ,
                         memorySize    ,
                         iconMemorySize,
                         paramSize     );
-  if (Result<>0) then Exit;
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
+
+  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize);
+  if (Result<>0) then
+  begin
+   slot_node^.Free;
+   Exit;
+  end;
 
   //CreateSharedMemory_0x4e
 
@@ -1066,11 +1228,11 @@ begin
 
   //CreateShmInternal
 
-  apply_memory(user_node,user_node^.get_slot_node(setupParam^.slotId),setupParam^.option);
+  user_node^.apply_memory_setup(slot_node,setupParam^.option);
 
  end;
 
- //ReadMemoryData
+ slot_node^.ReadMemoryData(userId,p_existedMemorySize);
 
  Result:=0;
 end;
@@ -1112,6 +1274,7 @@ var
  existedMemorySize:QWORD;
  sum_sd_size:DWORD;
 begin
+ Result:=0;
 
  if (p_proc.p_sdk_version < $4500000) then
  begin
@@ -1200,7 +1363,6 @@ begin
   //>=$4500000
  end;
 
- Result:=0;
 end;
 
 function ps4_sceSaveDataSetupSaveDataMemory2(
@@ -1315,9 +1477,6 @@ begin
   if (p_proc.p_sdk_version < $3500000) then
   begin
    del^.progress:=100;
-  end else
-  begin
-   //
   end;
  end;
 
@@ -1341,30 +1500,21 @@ end;
 function SaveDataMount(mount      :pSceSaveDataMount;
                        pResult    :pSceSaveDataMountResult;
                        Transfering:Boolean):Integer;
-var
- output:TMountResult;
 begin
  Result:=CheckSaveDataMount(mount,pResult,Transfering);
  if (Result<>0) then Exit;
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.DoMount(mount,output,Transfering);
+  Result:=g_instance.Backend.DoMount(mount,pResult,Transfering,False);
 
  mtx_unlock(g_instance.mtx);
 
  if (Result=0) then
  begin
-  //out
-  pResult^.mountPoint    :=mount_savedata_slot_name[output.slot_id];
-  pResult^.requiredBlocks:=output.requiredBlocks;
-
   if (p_proc.p_sdk_version < $3500000) then
   begin
    pResult^.progress:=100;
-  end else
-  begin
-   pResult^.mountStatus:=output.mountStatus;
   end;
  end;
 
@@ -1745,7 +1895,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
-  Result:=g_instance.Backend.LoadIcon(slot_id,param);
+  Result:=g_instance.Backend.LoadIcon(slot_id,param,False);
 
  mtx_unlock(g_instance.mtx);
 end;

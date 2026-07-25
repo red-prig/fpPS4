@@ -417,6 +417,13 @@ const
   '/savedata15'
  );
 
+ sdmemory_slot_name:array[0..3] of PChar=(
+  'sce_sdmemory',
+  'sce_sdmemory1',
+  'sce_sdmemory2',
+  'sce_sdmemory3'
+ );
+
 function strnlen_s  (s:PChar;maxlen:ptrint):ptrint;
 function strncasecmp(str1,str2:PChar;maxlen:ptrint):Integer;
 function strncpy_s  (dst,src:PChar;maxlen:ptrint):PChar; inline;
@@ -543,7 +550,8 @@ begin
     $3231, //12
     $3331, //13
     $3431, //14
-    $3531: //15
+    $3531, //15
+    $3631: //16
       begin
        slot_id:=ord(name[10])-ord('0')+10;
        Result:=0;

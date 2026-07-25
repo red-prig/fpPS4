@@ -26,36 +26,19 @@ uses
  SaveDataBackendUtils;
 
 type
- TMount=packed record
-  userId     :SceUserServiceUserId;
-  titleId    :SceSaveDataTitleId;
-  dirName    :SceSaveDataDirName;
-  fingerprint:SceSaveDataFingerprint;
-  blocks     :SceSaveDataBlocks;
-  mountMode  :DWORD; //SceSaveDataMountMode
-  Transfering:Boolean;
- end;
-
- TMountResult=packed record
-  result        :Integer;
-  mountStatus   :WORD;
-  slot_id       :WORD;
-  requiredBlocks:SceSaveDataBlocks;
- end;
-
  TSaveDataBackendConnect=class
   kipc    :THostIpcPipeKERN;
   hProcess:THandle;
   fork_pid:Integer;
   //
-  MountSlots:array[0..15] of Boolean;
+  MountSlots:array[0..TMountManager.max-1] of Boolean;
   //
   Constructor Create;
   Destructor  Destroy; override;
   procedure   SendMountConfig();
   procedure   UmountAllForce;
   function    DoDelete      (del:pSceSaveDataDelete):Integer;
-  function    DoMount       (mount:pSceSaveDataMount;var pResult:TMountResult;Transfering:Boolean):Integer;
+  function    DoMount       (mount:pSceSaveDataMount;pResult:pSceSaveDataMountResult;Transfering,Internal:Boolean):Integer;
   function    DoUmount      (slot_id:Integer;backup:boolean):Integer;
   function    GetMountInfo  (slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
   function    DoBackup      (backup:pSceSaveDataBackup):Integer;
@@ -63,7 +46,7 @@ type
   function    RestoreBackup (restore:pSceSaveDataRestoreBackupData):Integer;
   function    GetEventResult(event:pSceSaveDataEvent):Integer;
   function    SaveIcon      (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
-  function    LoadIcon      (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+  function    LoadIcon      (slot_id:Integer;icon:pSceSaveDataIcon;internal:Boolean):Integer;
   function    SetParam      (slot_id     :Integer;
                              paramType   :SceSaveDataParamType;
                              paramBuf    :Pointer;
@@ -73,6 +56,14 @@ type
                              paramBuf    :Pointer;
                              paramBufSize:QWORD;
                              gotSize     :PQWORD):Integer;
+  function    SetupMemory   (userId        :SceUserServiceUserId;
+                             slotId        :Integer;
+                             bufferNum     :Integer;
+                             memorySize    :DWORD;
+                             iconMemorySize:DWORD;
+                             paramSize     :DWORD
+                            ):Integer;
+  function    ReadMemory    (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
  end;
 
  TCustomCommand=class;
@@ -110,6 +101,8 @@ type
   //
   LockDirManager:TLockDirManager;
   //
+  SetupMemoryManager:TSetupMemoryManager;
+  //
   EventQueue:TEventQueue;
   //
   Constructor Create;
@@ -135,6 +128,8 @@ type
   function    OnLoadIcon      (Value:TIpcValue):TIpcValue; //LoadIcon
   function    OnSetParam      (Value:TIpcValue):TIpcValue; //SetParam
   function    OnGetParam      (Value:TIpcValue):TIpcValue; //GetParam
+  function    OnSetupMemory   (Value:TIpcValue):TIpcValue; //SetupMemory
+  function    OnReadMemory    (Value:TIpcValue):TIpcValue; //ReadMemory
  end;
 
 implementation
@@ -360,6 +355,8 @@ begin
  //
  LockDirManager.Init;
  //
+ SetupMemoryManager.Init;
+ //
  EventQueue.Init;
  //
  kipc:=THostIpcPipeSave.Create;
@@ -380,6 +377,8 @@ begin
  kipc.FHandler.AddCallback('LoadIcon'      ,@OnLoadIcon);
  kipc.FHandler.AddCallback('SetParam'      ,@OnSetParam);
  kipc.FHandler.AddCallback('GetParam'      ,@OnGetParam);
+ kipc.FHandler.AddCallback('SetupMemory'   ,@OnSetupMemory);
+ kipc.FHandler.AddCallback('ReadMemory'    ,@OnReadMemory);
  //
  inherited;
 end;
@@ -513,8 +512,18 @@ end;
 
 type
  TDeleteJob=class(TCustomDirJob)
-  function Run:TIpcValue; override;
+  procedure Delete;
+  function  Run:TIpcValue; override;
  end;
+
+procedure TDeleteJob.Delete;
+begin
+ //dont check errors
+ game_mount.DeleteDirectory(fs_dst,False);
+ game_mount.DeleteDirectory(fs_old,False);
+ game_mount.DeleteDirectory(fs_new,False);
+ game_mount.DeleteDirectory(fs_src,False);
+end;
 
 function TDeleteJob.Run:TIpcValue;
 begin
@@ -528,11 +537,7 @@ begin
   //check FINGERPRINT?
  end;
 
- //dont check errors
- game_mount.DeleteDirectory(fs_dst,False);
- game_mount.DeleteDirectory(fs_old,False);
- game_mount.DeleteDirectory(fs_new,False);
- game_mount.DeleteDirectory(fs_src,False);
+ Delete;
 
  Unlock;
 end;
@@ -582,10 +587,30 @@ begin
 
 end;
 
-function TSaveDataBackendConnect.DoMount(mount:pSceSaveDataMount;var pResult:TMountResult;Transfering:Boolean):Integer;
+type
+ TMount=packed record
+  userId     :SceUserServiceUserId;
+  titleId    :SceSaveDataTitleId;
+  dirName    :SceSaveDataDirName;
+  fingerprint:SceSaveDataFingerprint;
+  blocks     :SceSaveDataBlocks;
+  mountMode  :WORD; //SceSaveDataMountMode
+  Transfering:Boolean;
+  Internal   :Boolean;
+ end;
+
+ TMountResult=packed record
+  result        :Integer;
+  mountStatus   :WORD;
+  slot_id       :WORD;
+  requiredBlocks:SceSaveDataBlocks;
+ end;
+
+function TSaveDataBackendConnect.DoMount(mount:pSceSaveDataMount;pResult:pSceSaveDataMountResult;Transfering,Internal:Boolean):Integer;
 var
  data:TMount;
  Value:TIpcValue;
+ output:TMountResult;
 
  titleId:pchar;
  fs_src :RawByteString;
@@ -598,18 +623,19 @@ begin
   data.dirName    :=mount^.dirName^;
  if (mount^.fingerprint<>nil) then
   data.fingerprint:=mount^.fingerprint^;
-  data.blocks     :=mount^.blocks;
-  data.mountMode  :=mount^.mountMode;
-  data.Transfering:=Transfering;
+ data.blocks      :=mount^.blocks;
+ data.mountMode   :=mount^.mountMode;
+ data.Transfering :=Transfering;
+ data.Internal    :=Internal;
 
  Value:=kipc.InvokeSync('Mount',TIpcValue.Static(@data,sizeof(data)));
 
- FillChar(pResult,SizeOf(pResult),0);
- Value.MoveTo(@pResult,SizeOf(pResult));
+ FillChar(output,SizeOf(output),0);
+ Value.MoveTo(@output,SizeOf(output));
 
  Value.Free;
 
- Result:=pResult.result;
+ Result:=output.result;
 
  if (Result=0) then
  begin
@@ -623,21 +649,36 @@ begin
   fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,@data.dirName.data);
 
   Result:=vfs_mountroot.mount_into_sandbox('ufs',
-                                           pchar(mount_savedata_slot_name[pResult.slot_id]),
+                                           pchar(mount_savedata_slot_name[output.slot_id]),
                                            pchar(fs_src),
                                            nil,
                                            ord((data.mountMode and SDMM_RDONLY)<>0)*MNT_RDONLY or
                                            MNT_PFS_32K);
   if (Result=0) then
   begin
-   MountSlots[pResult.slot_id]:=True;
+   MountSlots[output.slot_id]:=True;
   end else
   begin
    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
    //Umount
-   kipc.InvokeSync2('Umount',@pResult.slot_id,sizeof(pResult.slot_id));
+   kipc.InvokeSync2('Umount',@output.slot_id,sizeof(output.slot_id));
   end;
 
+ end;
+
+ if (Result=0) then
+ begin
+  //out
+  pResult^.mountPoint    :=mount_savedata_slot_name[output.slot_id];
+  pResult^.requiredBlocks:=output.requiredBlocks;
+
+  if (p_proc.p_sdk_version < $3500000) then
+  begin
+   //
+  end else
+  begin
+   pResult^.mountStatus:=output.mountStatus;
+  end;
  end;
 
 end;
@@ -657,6 +698,7 @@ type
   procedure UnLock();
   function  CreateParamSfo():Boolean;
   function  OpenParamSfo():Integer;
+  function  SaveParamSfo():Integer;
   function  MountParamSfo():Integer;
   function  CreateTmpFiles():Boolean;
   function  CheckMountData(is_created:Boolean):Integer;
@@ -693,6 +735,7 @@ begin
 
  param_sfo.New(data.userId,@data.titleId.data,@data.dirName.data,data.blocks,gSaveDataBackend.systemLang);
 
+ if ((data.mountMode and SDMM_RDWR)<>0) then
  if ((data.mountMode and SDMM_DESTRUCT_OFF)=0) then
  begin
   param_sfo.PARAMS.corrupt_flag:=1;
@@ -723,14 +766,26 @@ begin
  data.blocks:=param_sfo.SAVEDATA_BLOCKS;
 end;
 
-function TMountJob.MountParamSfo():Integer;
+function TMountJob.SaveParamSfo():Integer;
 var
  fname:RawByteString;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+
+ if param_sfo.SaveToFile(fname) then
+ begin
+  Exit(0);
+ end else
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ end;
+end;
+
+function TMountJob.MountParamSfo():Integer;
+var
  titleId:PChar;
 begin
  Result:=0;
-
- fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
 
  //update data to sfo
  if ((data.mountMode and SDMM_RDWR)<>0) then
@@ -751,10 +806,7 @@ begin
    param_sfo.PARAMS.corrupt_flag:=1;
   end;
 
-  if not param_sfo.SaveToFile(fname) then
-  begin
-   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
-  end;
+  Result:=SaveParamSfo();
   //
  end;
 end;
@@ -918,6 +970,7 @@ begin
  output.result:=gSaveDataBackend.MountManager.GetFreeSlotId(data.userId,
                                                             titleId,
                                                             dirName,
+                                                            data.Internal,
                                                             slot_id);
  if (output.result=0) then
  begin
@@ -1046,7 +1099,7 @@ function TSaveDataBackendConnect.DoUmount(slot_id:Integer;backup:boolean):Intege
 var
  data:TUmount;
 begin
- if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if (MountSlots[slot_id]=False) then
  begin
@@ -1095,7 +1148,7 @@ begin
  Result:=0;
  slot_id:=Value.GetDWORD;
 
- if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(slot_id) then
  begin
@@ -1200,9 +1253,9 @@ var
 begin
  Result:=0;
  data:=Default(TUmount);
- Value.MoveTo(@data,SizeOf(data));;
+ Value.MoveTo(@data,SizeOf(data));
 
- if (DWORD(data.slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(data.slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(data.slot_id) then
  begin
@@ -1226,7 +1279,7 @@ var
  Value:TIpcValue;
  data:TMountInfo;
 begin
- if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if (MountSlots[slot_id]=False) then
  begin
@@ -1260,7 +1313,7 @@ begin
  Result:=0;
  slot_id:=Value.GetDWORD;
 
- if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(slot_id) then
  begin
@@ -1718,7 +1771,7 @@ begin
  data.get_param:=(check^.param<>nil);
  data.get_icon :=(check^.icon <>nil);
 
- Value:=kipc.InvokeSync('CheckBackup',TIpcValue.New(@data,sizeof(data)));
+ Value:=kipc.InvokeSync('CheckBackup',TIpcValue.Static(@data,sizeof(data)));
 
  Result:=Value.GetDWORD;
 
@@ -2026,7 +2079,7 @@ begin
  len:=len-sizeof(t_input_buf);
  if (len>data^.size) then len:=data^.size;
 
- if (DWORD(data^.slot)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(data^.slot)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(data^.slot) then
  begin
@@ -2050,11 +2103,9 @@ begin
  SendCmd(job);
 end;
 
-function TSaveDataBackendConnect.LoadIcon(slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+function TSaveDataBackendConnect.LoadIcon(slot_id:Integer;icon:pSceSaveDataIcon;internal:Boolean):Integer;
 label
  _memcpy;
-const
- internal=False;
 var
  len:DWORD;
  Value:TIpcValue;
@@ -2157,7 +2208,7 @@ begin
 
  slot_id:=Value.GetDWORD;
 
- if (DWORD(slot_id)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(slot_id) then
  begin
@@ -2248,7 +2299,7 @@ begin
  len:=len-sizeof(TSetParam);
  if (len>data^.size) then len:=data^.size;
 
- if (DWORD(data^.slot)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(data^.slot)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(data^.slot) then
  begin
@@ -2293,7 +2344,7 @@ begin
  input.slot :=slot_id;
  input.ptype:=paramType;
 
- Value:=kipc.InvokeSync('GetParam',TIpcValue.New(@input,sizeof(input)));
+ Value:=kipc.InvokeSync('GetParam',TIpcValue.Static(@input,sizeof(input)));
 
  Result:=Value.GetDWORD;
 
@@ -2341,7 +2392,7 @@ begin
  input:=Default(TGetParam);
  Value.MoveTo(@input,sizeof(input));
 
- if (DWORD(input.slot)>15) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (DWORD(input.slot)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  if not MountManager.IsActiveMount(input.slot) then
  begin
@@ -2353,6 +2404,317 @@ begin
  MountManager.GetParam(input.slot,input.ptype,@data^.data,@data^.size);
 
  Result:=TIpcValue.Inplace(data,data,sizeof(t_output_buf)+$1c800);
+end;
+
+function TSaveDataBackendConnect.SetupMemory(userId        :SceUserServiceUserId;
+                                             slotId        :Integer;
+                                             bufferNum     :Integer;
+                                             memorySize    :DWORD;
+                                             iconMemorySize:DWORD;
+                                             paramSize     :DWORD
+                                            ):Integer;
+var
+ data:TSetupMemory;
+begin
+ data.userId        :=userId        ;
+ data.slotId        :=slotId        ;
+ data.bufferNum     :=bufferNum     ;
+ data.paramSize     :=paramSize     ;
+ data.memorySize    :=memorySize    ;
+ data.iconMemorySize:=iconMemorySize;
+
+ Result:=kipc.InvokeSync2('SetupMemory',@data,sizeof(data));
+end;
+
+type
+ TSetupMemoryJob=class(TMountJob)
+  function Run:TIpcValue; override;
+ end;
+
+function TSetupMemoryJob.Run:TIpcValue;
+var
+ titleId:pchar;
+ dirName:pchar;
+ blocks :SceSaveDataBlocks;
+
+ err:Integer;
+ is_locked:Boolean;
+ is_change:Boolean;
+
+ RestoreJob:TRestoreJob;
+begin
+ err:=0;
+
+ titleId:=@data.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.InstallDir;
+ end;
+
+ dirName:=@data.dirName.data;
+
+ blocks:=data.blocks;
+
+ is_locked:=False;
+
+ fs_src:=GameMountConfig.GetSaveDataFolder(data.userId,titleId,dirName);
+
+ is_locked:=Lock();
+
+ if not is_locked then
+ begin
+  err:=SCE_SAVE_DATA_ERROR_BUSY;
+ end else
+ begin
+  if SaveDataExists(fs_src) then
+  begin
+   //open
+   err:=OpenMount();
+  end else
+  begin
+   //create
+   err:=CreateMount(False);
+  end;
+
+  ///
+  if (err=SCE_SAVE_DATA_ERROR_BROKEN) then
+  begin
+   RestoreJob:=TRestoreJob.Create(0);
+   RestoreJob.Init(data.userId,titleId,dirName);
+
+   if RestoreJob.Prepare then
+   begin
+    err:=RestoreJob.CheckBackup;
+   end else
+   begin
+    err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+   end;
+
+   if (err=0) then
+   begin
+
+    if RestoreJob.Restore then
+    begin
+     err:=0;
+    end else
+    begin
+     err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    end;
+
+   end else
+   if (err=SCE_SAVE_DATA_ERROR_NOT_FOUND) then
+   begin
+    //hack delete
+    TDeleteJob(RestoreJob).Delete;
+    //create
+    err:=CreateMount(False);
+   end;
+
+   RestoreJob.Free;
+  end;
+  ///
+
+  if (err=0) then
+  begin
+   is_change:=False;
+
+   //AllocSpace
+   if (param_sfo.SAVEDATA_BLOCKS<>blocks) then
+   begin
+    param_sfo.SAVEDATA_BLOCKS:=blocks;
+    is_change:=True;
+   end;
+
+   //InitParams
+
+   if is_change then
+   begin
+    err:=SaveParamSfo();
+   end;
+  end;
+
+ end;
+
+ if is_locked then
+ begin
+  Unlock;
+ end;
+
+ Result:=err;
+end;
+
+function ceill(x:Double):Double; inline;
+begin
+ Result:=Trunc(x)+ord(Frac(x)>0);
+end;
+
+function GetBlocks(memorySize:DWORD):Int64;
+const
+ max:Double=9.223372e+18;
+var
+ ccc:Double;
+ dif:Double;
+begin
+ if (memorySize > $800000) then
+ begin
+  ccc:=ceill((memorySize * 1.1) * 3.0517578e-05);
+  dif:=0;
+  if (max <= ccc) then
+  begin
+   dif:=max;
+  end;
+  Result:=((QWORD(max <= ccc) shl 63) xor Trunc(ccc - dif)) + 64;
+ end else
+ begin
+  Result:=96;
+  if (memorySize > $100000) then
+  begin
+   Result:=320;
+  end;
+ end;
+end;
+
+function TSaveDataBackendProcess.OnSetupMemory(Value:TIpcValue):TIpcValue; //SetupMemory
+var
+ input:TSetupMemory;
+ minfo:TMount;
+ job:TSetupMemoryJob;
+begin
+ Result:=0;
+
+ input:=Default(TSetupMemory);
+ Value.MoveTo(@input,sizeof(input));
+
+ if (input.slotId>=4) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if (input.bufferNum<>1) and (input.bufferNum<>2) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ SetupMemoryManager.Setup(input);
+
+ minfo:=Default(TMount);
+ minfo.userId      :=input.userId;
+ minfo.dirName.data:=sdmemory_slot_name[input.slotId];
+ minfo.blocks      :=GetBlocks(input.memorySize);
+ minfo.mountMode   :=SDMM_RDONLY;
+
+ job:=TSetupMemoryJob.Create(kipc.HoldResult);
+ job.Init(minfo);
+
+ SendCmd(job);
+end;
+
+type
+ TReadMemory=record
+  slot_id :Integer;
+  dataSize:DWORD;
+ end;
+
+function TSaveDataBackendConnect.ReadMemory(slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
+var
+ input:TReadMemory;
+ len:DWORD;
+ Value:TIpcValue;
+ data:p_output_buf;
+begin
+ input.slot_id :=slot_id;
+ input.dataSize:=dataSize;
+
+ Value:=kipc.InvokeSync('ReadMemory',TIpcValue.Static(@input,SizeOf(input)));
+
+ Result:=Value.GetDWORD;
+
+ if (Result=0) then
+ begin
+
+  len :=Value.GetLen;
+  data:=Value.GetBuf;
+  if (len<sizeof(t_output_buf)) then
+  begin
+   len:=0;
+   p_existedMemorySize^:=0;
+  end else
+  begin
+   len:=len-sizeof(t_output_buf);
+   if (len>dataSize) then len:=dataSize;
+
+   Move(data^.data,dataBuf^,len);
+
+   p_existedMemorySize^:=data^.size;
+  end;
+
+ end;
+
+ Value.Free;
+end;
+
+type
+ TReadMemoryJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  //
+  dataSize:DWORD;
+  //
+  function Run:TIpcValue; override;
+ end;
+
+function TReadMemoryJob.Run:TIpcValue;
+var
+ fmemory:RawByteString;
+ data:p_output_buf;
+ read_size:Ptrint;
+ existedMemorySize:QWORD;
+begin
+ Result:=0;
+
+ fmemory:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory.dat');
+
+ if not FileExists(fmemory) then
+ begin
+  Exit(0);
+ end;
+
+ data:=AllocMem(dataSize+sizeof(t_output_buf));
+
+ read_size:=ReadFromFile(fmemory,@data^.data,dataSize);
+
+ if (read_size<=0) then
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end else
+ begin
+  get_file_size(fmemory,existedMemorySize);
+  data^.size:=existedMemorySize;
+
+  Result:=TIpcValue.Inplace(data,data,read_size+sizeof(t_output_buf));
+ end;
+
+end;
+
+function TSaveDataBackendProcess.OnReadMemory(Value:TIpcValue):TIpcValue; //ReadMemory
+var
+ input:TReadMemory;
+ prev:TMountSlot;
+ job:TReadMemoryJob;
+begin
+ Result:=0;
+
+ input:=Default(TReadMemory);
+ Value.MoveTo(@input,sizeof(input));
+
+ if (DWORD(input.slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if not MountManager.IsActiveMount(input.slot_id) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
+ prev:=MountManager.GetMount(input.slot_id);
+
+ job:=TReadMemoryJob.Create(kipc.HoldResult);
+ job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
+
+ job.dataSize:=input.dataSize;
+
+ SendCmd(job);
 end;
 
 

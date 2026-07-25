@@ -34,10 +34,13 @@ type
  end;
 
  TMountManager=object
+  const
+   max=17; //16 for normal mount + 1 for ReadMemoryData
   //
-  MountSlots:array[0..15] of TMountSlot;
+  var
+   MountSlots:array[0..max-1] of TMountSlot;
   //
-  function  GetFreeSlotId(userId:Integer;titleId,dirName:pchar;var slot_id:Integer):Integer;
+  function  GetFreeSlotId(userId:Integer;titleId,dirName:pchar;Internal:Boolean;var slot_id:Integer):Integer;
   function  IsActiveMount(userId:Integer;titleId,dirName:pchar):Boolean;
   function  IsActiveMount(slot_id:Integer):Boolean;
   function  IsReadOnly   (slot_id:Integer):Boolean;
@@ -75,6 +78,34 @@ type
   function  UnLockDir(const fs_src:RawByteString):Boolean;
  end;
 
+ TSetupMemory=packed record
+  userId        :DWORD;
+  slotId        :Byte;
+  bufferNum     :Byte;
+  paramSize     :WORD;
+  memorySize    :DWORD;
+  iconMemorySize:DWORD;
+ end;
+
+ PSetupMemoryNode=^TSetupMemoryNode;
+ TSetupMemoryNode=object
+  //
+  pLeft :PSetupMemoryNode;
+  pRight:PSetupMemoryNode;
+  //
+  data  :TSetupMemory;
+  //
+  function c(n1,n2:PSetupMemoryNode):Integer; static;
+ end;
+
+ TSetupMemorySplay=specialize TNodeSplay<TSetupMemoryNode>;
+
+ TSetupMemoryManager=object(TSetupMemorySplay)
+  mtx:mtx;
+  Procedure Init;
+  function  Setup(const data:TSetupMemory):PSetupMemoryNode;
+ end;
+
 ///
 
  TEventQueue=object
@@ -110,12 +141,13 @@ function  SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
 
 procedure load_mtime  (const fs_src:RawByteString;var mtime:QWORD);
 procedure update_mtime(const fs_src:RawByteString;var mtime:QWORD);
+procedure get_file_size(const fs_src:RawByteString;var size:QWORD);
 
 implementation
 
 ///
 
-function TMountManager.GetFreeSlotId(userId:Integer;titleId,dirName:pchar;var slot_id:Integer):Integer;
+function TMountManager.GetFreeSlotId(userId:Integer;titleId,dirName:pchar;Internal:Boolean;var slot_id:Integer):Integer;
 var
  i,first_id:Integer;
 begin
@@ -144,6 +176,12 @@ begin
  end;
 
  if (first_id=-1) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MOUNT_FULL);
+ end;
+
+ if not Internal then
+ if (first_id=High(MountSlots)) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_MOUNT_FULL);
  end;
@@ -199,7 +237,10 @@ end;
 
 procedure TMountManager.FreeMount(slot_id:Integer);
 begin
- MountSlots[slot_id]:=Default(TMountSlot);
+ if (MountSlots[slot_id].active<>0) then
+ begin
+  MountSlots[slot_id]:=Default(TMountSlot);
+ end;
 end;
 
 procedure TMountManager.SetMtime(slot_id:Integer;mtime:QWORD);
@@ -286,6 +327,44 @@ begin
   Finalize(node^);
   FreeMem(node);
  end;
+end;
+
+///
+
+function TSetupMemoryNode.c(n1,n2:PSetupMemoryNode):Integer; static;
+begin
+ Result:=Integer(n1^.data.userId>n2^.data.userId)-Integer(n1^.data.userId<n2^.data.userId);
+ if (Result<>0) then Exit;
+ Result:=Integer(n1^.data.slotId>n2^.data.slotId)-Integer(n1^.data.slotId<n2^.data.slotId);
+end;
+
+Procedure TSetupMemoryManager.Init;
+begin
+ mtx_init(mtx,'SetupMemoryMtx');
+end;
+
+function TSetupMemoryManager.Setup(const data:TSetupMemory):PSetupMemoryNode;
+var
+ key :TSetupMemoryNode;
+ node:PSetupMemoryNode;
+begin
+ key:=Default(TSetupMemoryNode);
+ key.data:=data;
+
+ mtx_lock(mtx);
+
+  node:=Find(@key);
+
+  if (node=nil) then
+  begin
+   node:=GetMem(sizeof(TSetupMemoryNode));
+   node^:=key;
+   Insert(node);
+  end;
+
+ mtx_unlock(mtx);
+
+ Result:=node;
 end;
 
 ///
@@ -450,6 +529,17 @@ begin
  ts[1].tv_nsec:=0;
 
  md_utimens(fs_src,@ts,2);
+end;
+
+procedure get_file_size(const fs_src:RawByteString;var size:QWORD);
+var
+ info:t_stat;
+begin
+ info:=Default(t_stat);
+
+ md_stat(fs_src,@info);
+
+ size:=info.st_size;
 end;
 
 
