@@ -85,16 +85,16 @@ type
  PSdMemoryBuffer=^TSdMemoryBuffer;
  TSdMemoryBuffer=object
   //shm
-  Faddr:Pointer;
+  Paddr:Pointer;
   Fsize:QWORD;
   //areas
-  FmemoryData    :Pointer;
+  PmemoryData    :Pointer;
   FmemorySize    :QWORD;
   //
-  FiconMemorySize:PIconBufSize;
-  FiconData      :Pointer;
+  PiconMemorySize:PIconBufSize;
+  PiconData      :Pointer;
   //
-  FParamData     :pSceSaveDataParam;
+  PParamData     :pSceSaveDataParam;
   //
   function  mmap_shm(mmapAddr:Pointer;MemoryBudget:Integer;size:QWORD):Integer;
   Procedure Free;
@@ -106,10 +106,11 @@ type
  end;
 
  PPerSdSlot=^TPerSdSlot;
- TPerSdSlot=packed object
+ TPerSdSlot=object
   is_setup     :Boolean;
   FslotId      :Byte;
   FbufferNum   :Byte;
+  FbufferId    :Byte;
   FMemoryBudget:Byte;
   sd_buffers   :array[0..1] of TSdMemoryBuffer;
   //
@@ -129,6 +130,7 @@ type
   shm_size_game    :DWORD;
   shm_size_shell   :DWORD;
   sd_slot          :array[0..3] of TPerSdSlot;
+  is_setup         :Boolean;
   UNLOCK_LIMITATION:Boolean;
   //
   function  get_slot_node(slotId:DWORD):PPerSdSlot;
@@ -172,7 +174,7 @@ var
 begin
  Result:=0;
  For i:=0 to High(users) do
-  if (users[i].userId=userId) then
+  if users[i].is_setup and (users[i].userId=userId) then
   begin
    Exit(users[i].shm_size_game + users[i].shm_size_shell);
   end;
@@ -184,12 +186,12 @@ var
 begin
  Result:=nil;
  For i:=0 to High(users) do
-  if (users[i].userId=userId) then
+  if users[i].is_setup and (users[i].userId=userId) then
   begin
    Exit(@users[i]);
   end;
  For i:=0 to High(users) do
-  if (users[i].userId=0) then
+  if not users[i].is_setup then
   begin
    users[i].userId:=userId;
    Exit(@users[i]);
@@ -783,7 +785,7 @@ begin
 
  if (Result=0) then
  begin
-  Faddr:=mmapAddr;
+  Paddr:=mmapAddr;
   Fsize:=size;
  end;
 
@@ -791,9 +793,9 @@ end;
 
 Procedure TSdMemoryBuffer.Free;
 begin
- if (Faddr<>nil) then
+ if (Paddr<>nil) then
  begin
-  sys_munmap(Faddr,Fsize);
+  sys_munmap(Paddr,Fsize);
   self:=Default(TSdMemoryBuffer);
  end;
 end;
@@ -826,30 +828,30 @@ begin
   err:=mmap_shm(mmapAddr,MemoryBudget,size);
   if (err<>0) then Exit(SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY);
 
-  mmapAddr:=Faddr;
+  mmapAddr:=Paddr;
 
-  FmemoryData:=mmapAddr;
+  PmemoryData:=mmapAddr;
   FmemorySize:=memorySize;
 
   if (iconMemorySize<>0) then
   begin
-   FiconMemorySize:=(mmapAddr + memorySize);
-   FiconData      :=(FiconMemorySize + 1);
+   PiconMemorySize:=(mmapAddr + memorySize);
+   PiconData      :=(PiconMemorySize + 1);
    //
-   FiconMemorySize^:=Default(TIconBufSize);
-   FiconMemorySize^.max:=iconMemorySize;
+   PiconMemorySize^:=Default(TIconBufSize);
+   PiconMemorySize^.max:=iconMemorySize;
   end;
 
   if (paramSize<>0) then
   begin
-   mmapAddr:=FmemoryData;
+   mmapAddr:=PmemoryData;
    size    :=FmemorySize;
    if (iconMemorySize<>0) then
    begin
-    mmapAddr:=FiconData;
+    mmapAddr:=PiconData;
     size    :=iconMemorySize;
    end;
-   FParamData:=(mmapAddr + size);
+   PParamData:=(mmapAddr + size);
   end;
 
   Result:=0;
@@ -863,6 +865,7 @@ var
 begin
  is_setup     :=False;
  FbufferNum   :=0;
+ FbufferId    :=0;
  FMemoryBudget:=0;
  //destroy
  for i:=0 to High(sd_buffers) do
@@ -889,6 +892,7 @@ begin
  end;
 
  FbufferNum   :=bufferNum;
+ FbufferId    :=0;
  FMemoryBudget:=MemoryBudget;
 end;
 
@@ -915,6 +919,7 @@ begin
  end;
 
  slot_node^.is_setup:=True;
+ is_setup:=True;
 end;
 
 function TPerSdSlot.ReadMemoryData(user_id:DWORD;p_existedMemorySize:PQWORD):Integer;
@@ -950,38 +955,38 @@ begin
  begin
 
   //   /memory.dat
-  if (sd_buffers[i].FmemoryData<>nil) then
+  if (sd_buffers[i].PmemoryData<>nil) then
   begin
-   Result:=g_instance.Backend.ReadMemory(slot_id,sd_buffers[i].FmemoryData,sd_buffers[i].FmemorySize,p_existedMemorySize);
+   Result:=g_instance.Backend.ReadMemory(slot_id,sd_buffers[i].PmemoryData,sd_buffers[i].FmemorySize,p_existedMemorySize);
 
    if (Result<>0) then goto __end;
   end;
 
-  if (sd_buffers[i].FParamData<>nil) then
+  if (sd_buffers[i].PParamData<>nil) then
   begin
    Result:=g_instance.Backend.GetParam(slot_id,
                                        SCE_SAVE_DATA_PARAM_TYPE_ALL,
-                                       sd_buffers[i].FParamData,
+                                       sd_buffers[i].PParamData,
                                        $530,
                                        nil);
 
    if (Result<>0) then goto __end;
   end;
 
-  if (sd_buffers[i].FiconData<>nil) then
+  if (sd_buffers[i].PiconData<>nil) then
   begin
 
    FillChar(data,SizeOf(data),0);
 
-   data.icon.buf     :=sd_buffers[i].FiconData;
-   data.icon.bufSize :=sd_buffers[i].FiconMemorySize^.max;
+   data.icon.buf     :=sd_buffers[i].PiconData;
+   data.icon.bufSize :=sd_buffers[i].PiconMemorySize^.max;
    data.icon.dataSize:=data.icon.bufSize;
 
    Result:=g_instance.Backend.LoadIcon(slot_id,@data.icon,True);
 
    if (Result<>0) then goto __end;
 
-   sd_buffers[i].FiconMemorySize^.cur:=data.icon.dataSize;
+   sd_buffers[i].PiconMemorySize^.cur:=data.icon.dataSize;
   end;
 
  end; //for
@@ -1266,6 +1271,9 @@ begin
  mtx_unlock(g_instance.mtx)
 end;
 
+function SetSaveDataMemory2Lt65(setParam:pSceSaveDataMemorySet2):Integer; forward;
+function SetSaveDataMemory2Be65(setParam:pSceSaveDataMemorySet2):Integer; forward;
+
 function SetupSaveDataMemory2(
            setupParam:pSceSaveDataMemorySetup2;
            pResult   :pSceSaveDataMemorySetupResult):Integer;
@@ -1273,6 +1281,7 @@ var
  __setupParam:SceSaveDataMemorySetup2;
  existedMemorySize:QWORD;
  sum_sd_size:DWORD;
+ sdm:SceSaveDataMemorySet2;
 begin
  Result:=0;
 
@@ -1355,9 +1364,22 @@ begin
    pResult^.existedMemorySize:=existedMemorySize;
   end;
 
-  if (setupParam^.initParam<>nil) then
+  if ((setupParam^.initParam<>nil) or (setupParam^.initIcon<>nil)) and (existedMemorySize=0) then
   begin
-   //TODO: SetSaveDataMemory
+   sdm:=Default(SceSaveDataMemorySet2);
+   sdm.userId:=setupParam^.userId;
+   sdm.slotId:=setupParam^.slotId;
+   sdm.param :=setupParam^.initParam;
+   sdm.icon  :=setupParam^.initIcon;
+
+   if (p_proc.p_sdk_version < $6500000) then
+   begin
+    Result:=SetSaveDataMemory2Lt65(@sdm);
+   end else
+   begin
+    Result:=SetSaveDataMemory2Be65(@sdm);
+   end;
+
   end;
 
   //>=$4500000
@@ -1404,8 +1426,7 @@ begin
  Result:=0;
 end;
 
-function ps4_sceSaveDataGetSaveDataMemory2(
-           getParam:pSceSaveDataMemoryGet2):Integer;
+function ps4_sceSaveDataGetSaveDataMemory2(getParam:pSceSaveDataMemoryGet2):Integer;
 begin
  if (g_instance=nil) then
  begin
@@ -1425,33 +1446,337 @@ begin
  Result:=0;
 end;
 
+///
+
+function WriteToBuf(dst:PSdMemoryBuffer;src:pSceSaveDataMemorySet2):Integer;
+var
+ iconBufSize:QWORD;
+ data:pSceSaveDataMemoryData;
+ icon:pSceSaveDataIcon;
+begin
+
+ if (dst^.PiconMemorySize=nil) then
+ begin
+  iconBufSize:=0;
+ end else
+ begin
+  iconBufSize:=dst^.PiconMemorySize^.max;
+ end;
+
+ Result:=CheckSaveDataMemoryWrite(src,dst^.FmemorySize,dst^.PParamData,dst^.PiconData,iconBufSize);
+ if (Result<>0) then Exit;
+
+ data:=src^.data;
+ if (data<>nil) then
+ begin
+  Move(data^.buf^,(dst^.PmemoryData+data^.offset)^,data^.bufSize);
+ end;
+
+ icon:=src^.icon;
+ if (icon<>nil) and (dst^.PiconMemorySize<>nil) then
+ begin
+  Move(icon^.buf^,dst^.PiconData^,icon^.dataSize);
+  dst^.PiconMemorySize^.cur:=src^.icon^.dataSize;
+ end;
+
+ if (src^.param<>nil) then
+ begin
+  Move(src^.param^,dst^.PParamData^,$530);
+ end;
+
+ Result:=0;
+end;
+
+function WriteToBufv(dst:PSdMemoryBuffer;src:pSceSaveDataMemorySet2):Integer;
+var
+ iconBufSize:QWORD;
+ data:pSceSaveDataMemoryData;
+ icon:pSceSaveDataIcon;
+ md:SceSaveDataMemoryData;
+ i:Integer;
+begin
+
+ if (dst^.PiconMemorySize=nil) then
+ begin
+  iconBufSize:=0;
+ end else
+ begin
+  iconBufSize:=dst^.PiconMemorySize^.max;
+ end;
+
+ Result:=CheckSaveDataMemoryWritev(src,dst^.PParamData,dst^.PiconData,iconBufSize);
+ if (Result<>0) then Exit;
+
+ data:=src^.data;
+ if (data<>nil) and (src^.dataNum<>0) then
+ begin
+
+  For i:=0 to src^.dataNum-1 do
+  begin
+   md:=data[i];
+   Result:=CheckSaveDataMemoryDatav(@md,dst^.FmemorySize);
+   if (Result<>0) then Exit;
+
+   Move(md.buf^,(dst^.PmemoryData+md.offset)^,md.bufSize);
+  end;
+
+ end;
+
+ icon:=src^.icon;
+ if (icon<>nil) and (dst^.PiconMemorySize<>nil) then
+ begin
+  Move(icon^.buf^,dst^.PiconData^,icon^.dataSize);
+  dst^.PiconMemorySize^.cur:=src^.icon^.dataSize;
+ end;
+
+ if (src^.param<>nil) then
+ begin
+  Move(src^.param^,dst^.PParamData^,$530);
+ end;
+
+ Result:=0;
+end;
+
+procedure CopyBuf(dst,src:PSdMemoryBuffer);
+var
+ max:QWORD;
+begin
+ if (src^.PmemoryData=nil) then
+ begin
+  dst^.PmemoryData:=nil;
+ end else
+ begin
+  Move(src^.PmemoryData^,dst^.PmemoryData^,src^.FmemorySize);
+ end;
+
+ dst^.FmemorySize:=src^.FmemorySize;
+
+ if (src^.PiconMemorySize=nil) then
+ begin
+  dst^.PiconMemorySize:=nil;
+ end else
+ begin
+  dst^.PiconMemorySize^:=src^.PiconMemorySize^;
+ end;
+
+ if (src^.PiconData=nil) then
+ begin
+  dst^.PiconData:=nil;
+ end else
+ begin
+
+  if (src^.PiconMemorySize=nil) then
+  begin
+   max:=0;
+  end else
+  begin
+   max:=src^.PiconMemorySize^.max;
+  end;
+
+  Move(src^.PiconMemorySize^,dst^.PiconMemorySize^,max);
+ end;
+
+ if (src^.PParamData=nil) then
+ begin
+  dst^.PParamData:=nil;
+ end else
+ begin
+  Move(src^.PParamData^,dst^.PParamData^,$530);
+ end;
+
+end;
+
+///
+
+function SetParamsLt40(slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
+var
+ data:pSceSaveDataMemoryData;
+ buffer_id:Integer;
+begin
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ if (slot_node^.FbufferNum < 2) then
+ begin
+  buffer_id:=0;
+ end else
+ begin
+  buffer_id:=slot_node^.FbufferId xor 1;
+  slot_node^.FbufferId:=buffer_id;
+
+  data:=src^.data;
+
+  if (data<>nil) then
+  begin
+   if (data^.offset<>0) or
+      (data^.bufSize<>slot_node^.sd_buffers[buffer_id].FmemorySize) then
+   begin
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+   end;
+  end;
+
+ end;
+
+ Result:=WriteToBuf(@slot_node^.sd_buffers[buffer_id],src);
+
+ //TODO: Backend
+end;
+
+function SetParamsBe40(slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
+var
+ buffer_id:Integer;
+begin
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ if (slot_node^.FbufferNum < 2) then
+ begin
+  if (src^.dataNum = 0) then
+  begin
+   Result:=WriteToBuf(@slot_node^.sd_buffers[0],src);
+  end else
+  begin
+   Result:=WriteToBufv(@slot_node^.sd_buffers[0],src);
+  end;
+  if (Result<>0) then Exit;
+ end else
+ begin
+  buffer_id:=slot_node^.FbufferId;
+
+  if (src^.data<>nil) and
+     (src^.data^.bufSize <> slot_node^.sd_buffers[buffer_id].FmemorySize) then
+  begin
+   CopyBuf(@slot_node^.sd_buffers[buffer_id xor 1],@slot_node^.sd_buffers[buffer_id]);
+  end;
+
+  if (src^.dataNum = 0) then
+  begin
+   Result:=WriteToBuf(@slot_node^.sd_buffers[buffer_id xor 1],src);
+  end else
+  begin
+   Result:=WriteToBufv(@slot_node^.sd_buffers[buffer_id xor 1],src);
+  end;
+  if (Result<>0) then Exit;
+
+  slot_node^.FbufferId:=buffer_id xor 1;
+ end;
+
+ //TODO: Backend
+end;
+
+function SetSaveDataMemory2Lt65(setParam:pSceSaveDataMemorySet2):Integer;
+var
+ user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
+begin
+ Result:=CheckSaveDataMemorySet2Lt65(setParam);
+ if (Result<>0) then Exit;
+
+ user_node:=g_instance.get_user_node(setParam^.userId);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ slot_node:=user_node^.get_slot_node(0);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ if (p_proc.p_sdk_version < $4000000) then
+ begin
+  Result:=SetParamsLt40(slot_node,setParam);
+ end else
+ begin
+  Result:=SetParamsBe40(slot_node,setParam);
+ end;
+
+end;
+
+function SetSaveDataMemory2Be65(setParam:pSceSaveDataMemorySet2):Integer;
+var
+ user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
+begin
+ Result:=CheckSaveDataMemorySet2Be65(setParam);
+ if (Result<>0) then Exit;
+
+ user_node:=g_instance.get_user_node(setParam^.userId);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ slot_node:=user_node^.get_slot_node(setParam^.slotId);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Result:=SetParamsBe40(slot_node,setParam);
+end;
+
+///
+
 function ps4_sceSaveDataSetSaveDataMemory(
            userId :SceUserServiceUserId;
            buf    :Pointer;
            bufSize:QWORD;
            offset :QWORD):Integer;
+var
+ data:SceSaveDataMemoryData;
+ info:SceSaveDataMemorySet2;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ if (buf=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (p_proc.p_sdk_version < $1750000) then
+ begin
+  offset:=0;
+ end;
+
+ data:=Default(SceSaveDataMemoryData);
+ data.buf    :=buf;
+ data.bufSize:=bufSize;
+ data.offset :=offset;
+
+ info:=Default(SceSaveDataMemorySet2);
+ info.userId:=userId;
+ info.data  :=@data;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=SetSaveDataMemory2Lt65(@info);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
-function ps4_sceSaveDataSetSaveDataMemory2(
-           setParam:pSceSaveDataMemorySet2):Integer;
+function ps4_sceSaveDataSetSaveDataMemory2(setParam:pSceSaveDataMemorySet2):Integer;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ mtx_lock(g_instance.mtx);
+
+  if (p_proc.p_sdk_version < $6500000) then
+  begin
+   Result:=SetSaveDataMemory2Lt65(setParam);
+  end else
+  begin
+   Result:=SetSaveDataMemory2Be65(setParam);
+  end;
+
+ mtx_unlock(g_instance.mtx);
 end;
 
-function ps4_sceSaveDataSyncSaveDataMemory(
-           syncParam:pSceSaveDataMemorySync):Integer;
+function ps4_sceSaveDataSyncSaveDataMemory(syncParam:pSceSaveDataMemorySync):Integer;
 begin
  if (g_instance=nil) then
  begin
