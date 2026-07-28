@@ -480,6 +480,16 @@ function CheckSaveDataMemoryWritev(src        :pSceSaveDataMemorySet2;
                                    iconBufSize:DWORD
                                   ):Integer;
 
+function CheckSaveDataMemoryGet2Lt65(getParam:pSceSaveDataMemoryGet2):Integer;
+function CheckSaveDataMemoryGet2Be65(getParam:pSceSaveDataMemoryGet2):Integer;
+
+function CheckSaveDataMemoryRead(dst        :pSceSaveDataMemoryGet2;
+                                 memorySize :DWORD;
+                                 ParamBuf   :Pointer;
+                                 iconData   :Pointer;
+                                 iconBufSize:DWORD
+                                ):Integer;
+
 implementation
 
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
@@ -1711,6 +1721,122 @@ begin
  end;
 
  if not CheckReserved(src^.reserved,sizeof(src^.reserved)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+end;
+
+function CheckSaveDataMemoryGet2Lt65(getParam:pSceSaveDataMemoryGet2):Integer;
+begin
+ Result:=0;
+
+ if (getParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if IsLoggedIn(getParam^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+end;
+
+function CheckSaveDataMemoryGet2Be65(getParam:pSceSaveDataMemoryGet2):Integer;
+begin
+ Result:=0;
+
+ if (getParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=CheckSdSlotId(getParam^.slotId);
+ if (Result<>0) then Exit;
+
+ if IsLoggedIn(getParam^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+end;
+
+function CheckSaveDataMemoryRead(dst        :pSceSaveDataMemoryGet2;
+                                 memorySize :DWORD;
+                                 ParamBuf   :Pointer;
+                                 iconData   :Pointer;
+                                 iconBufSize:DWORD
+                                ):Integer;
+var
+ data:pSceSaveDataMemoryData;
+ icon:pSceSaveDataIcon;
+begin
+ Result:=0;
+
+ if (dst=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if IsLoggedIn(dst^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if not CheckReserved(dst^.padding,sizeof(dst^.padding)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ data:=dst^.data;
+ if (data<>nil) then
+ begin
+  if (data^.buf=nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  //
+  if not CheckReserved(data^.reserved,sizeof(data^.reserved)) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  //
+  if (memorySize < (data^.bufSize + data^.offset)) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ if (dst^.param<>nil) then
+ begin
+  if (ParamBuf=nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  //
+  if not CheckReserved(dst^.param^.reserved,sizeof(dst^.param^.reserved)) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ icon:=dst^.icon;
+ if (icon<>nil) then
+ begin
+  if (icon^.buf=nil) or (iconData=nil) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+  //
+  Result:=CheckLoadSaveDataIcon(icon);
+  if (Result<>0) then Exit;
+  //
+  if (icon^.dataSize > iconBufSize) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ if not CheckReserved(dst^.reserved,sizeof(dst^.reserved)) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;

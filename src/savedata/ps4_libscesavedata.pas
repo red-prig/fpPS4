@@ -1408,22 +1408,152 @@ begin
  mtx_unlock(g_instance.mtx)
 end;
 
+///
+
+function ReadFromBuf(src:PSdMemoryBuffer;dst:pSceSaveDataMemoryGet2):Integer;
+var
+ iconBufSize:QWORD;
+ data:pSceSaveDataMemoryData;
+ icon:pSceSaveDataIcon;
+begin
+
+ if (src^.PiconMemorySize=nil) then
+ begin
+  iconBufSize:=0;
+ end else
+ begin
+  iconBufSize:=src^.PiconMemorySize^.max;
+ end;
+
+ Result:=CheckSaveDataMemoryRead(dst,src^.FmemorySize,src^.PParamData,src^.PiconData,iconBufSize);
+ if (Result<>0) then Exit;
+
+ data:=dst^.data;
+ if (data<>nil) then
+ begin
+  Move((src^.PmemoryData+data^.offset)^,data^.buf^,data^.bufSize);
+ end;
+
+ icon:=dst^.icon;
+ if (icon<>nil) then
+ begin
+  if (src^.PiconMemorySize=nil) then
+  begin
+   iconBufSize:=0;
+  end else
+  begin
+   iconBufSize:=src^.PiconMemorySize^.cur;
+   Move(src^.PiconData^,icon^.buf^,iconBufSize);
+  end;
+  icon^.dataSize:=iconBufSize;
+ end;
+
+ if (dst^.param<>nil) then
+ begin
+  Move(src^.PParamData^,dst^.param^,$530);
+ end;
+
+ Result:=0;
+end;
+
+///
+
+function GetParams(slot_node:PPerSdSlot;dst:pSceSaveDataMemoryGet2):Integer;
+begin
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ Result:=ReadFromBuf(@slot_node^.sd_buffers[slot_node^.FbufferId],dst);
+end;
+
+///
+
+function GetSaveDataMemory2Lt65(getParam:pSceSaveDataMemoryGet2):Integer;
+var
+ user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
+begin
+ Result:=CheckSaveDataMemoryGet2Lt65(getParam);
+ if (Result<>0) then Exit;
+
+ user_node:=g_instance.get_user_node(getParam^.userId);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ slot_node:=user_node^.get_slot_node(0);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ Result:=GetParams(slot_node,getParam);
+end;
+
+function GetSaveDataMemory2Be65(getParam:pSceSaveDataMemoryGet2):Integer;
+var
+ user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
+begin
+ Result:=CheckSaveDataMemoryGet2Be65(getParam);
+ if (Result<>0) then Exit;
+
+ user_node:=g_instance.get_user_node(getParam^.userId);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ slot_node:=user_node^.get_slot_node(getParam^.slotId);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if not slot_node^.is_setup then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+ end;
+
+ Result:=GetParams(slot_node,getParam);
+end;
+
+//
+
 function ps4_sceSaveDataGetSaveDataMemory(
            userId :SceUserServiceUserId;
            buf    :Pointer;
            bufSize:QWORD;
            offset :QWORD):Integer;
+var
+ data:SceSaveDataMemoryData;
+ info:SceSaveDataMemoryGet2;
 begin
  if (g_instance=nil) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (buf<>nil) then
+ if (buf=nil) then
  begin
-  FillChar(buf^,bufSize,0);
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
- Result:=0;
+
+ if (p_proc.p_sdk_version < $1750000) then
+ begin
+  offset:=0;
+ end;
+
+ data:=Default(SceSaveDataMemoryData);
+ data.buf    :=buf;
+ data.bufSize:=bufSize;
+ data.offset :=offset;
+
+ info:=Default(SceSaveDataMemoryGet2);
+ info.userId:=userId;
+ info.data  :=@data;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=GetSaveDataMemory2Lt65(@info);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataGetSaveDataMemory2(getParam:pSceSaveDataMemoryGet2):Integer;
@@ -1433,17 +1563,17 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- if (getParam<>nil) then
- begin
-  if (getParam^.data<>nil) then
+ mtx_lock(g_instance.mtx);
+
+  if (p_proc.p_sdk_version < $6500000) then
   begin
-   if (getParam^.data^.buf<>nil) then
-   begin
-    FillChar(getParam^.data^.buf^,getParam^.data^.bufSize,0);
-   end;
+   Result:=GetSaveDataMemory2Lt65(getParam);
+  end else
+  begin
+   Result:=GetSaveDataMemory2Be65(getParam);
   end;
- end;
- Result:=0;
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 ///
