@@ -1381,12 +1381,13 @@ begin
    Result:=0;
   end else
   begin
+   if (param^.title[0]<>#0) then //It must not be empty for the old SDK
    if CheckParamTitle (@param^.title) then
    if CheckParamTitle (@param^.subTitle) then
    if CheckParamDetail(@param^.detail) then
    if (param^.align=0) then
    if (param^.mtime=0) then
-   if CheckReserved   (param^.reserved,sizeof(param^.reserved)) then
+   if CheckReserved   (param^.reserved,20) then //align + mtime + 20 = 32 for the old SDK
    begin
     Result:=0;
    end;
