@@ -85,6 +85,39 @@ type
   paramSize     :WORD;
   memorySize    :DWORD;
   iconMemorySize:DWORD;
+  //
+  title         :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1]    of AnsiChar;
+  subTitle      :array[0..SCE_SAVE_DATA_SUBTITLE_MAXSIZE-1] of AnsiChar;
+  detail        :array[0..SCE_SAVE_DATA_DETAIL_MAXSIZE-1]   of AnsiChar;
+  userParam     :DWORD;
+ end;
+
+ PIconBufSize=^TIconBufSize;
+ TIconBufSize=packed record //64
+  max:QWORD;
+  cur:QWORD;
+  reserved:array[0..5] of QWORD;
+ end;
+
+ PSdMemoryBuffer=^TSdMemoryBuffer;
+ TSdMemoryBuffer=object
+  //shm
+  Paddr:Pointer;
+  Fsize:QWORD;
+  //areas
+  PmemoryData    :Pointer;
+  FmemorySize    :QWORD;
+  //
+  PiconMemorySize:PIconBufSize;
+  PiconData      :Pointer;
+  //
+  PParamData     :pSceSaveDataParam;
+  //
+  function  mmap_shm(size:QWORD):Integer;
+  Procedure Free;
+  function  CreateShm(memorySize    :DWORD;
+                      iconMemorySize:DWORD;
+                      paramSize     :DWORD):Integer;
  end;
 
  PSetupMemoryNode=^TSetupMemoryNode;
@@ -95,7 +128,14 @@ type
   //
   data  :TSetupMemory;
   //
+  is_setup  :Boolean;
+  is_writed :Boolean;
+  FbufferId :Byte;
+  sd_buffers:array[0..1] of TSdMemoryBuffer;
+  //
   function c(n1,n2:PSetupMemoryNode):Integer; static;
+  //
+  function CreateBuffers():Integer;
  end;
 
  TSetupMemorySplay=specialize TNodeSplay<TSetupMemoryNode>;
@@ -104,6 +144,7 @@ type
   mtx:mtx;
   Procedure Init;
   function  Setup(const data:TSetupMemory):PSetupMemoryNode;
+  function  Get(userId,slotId:DWORD):PSetupMemoryNode;
  end;
 
 ///
@@ -331,11 +372,116 @@ end;
 
 ///
 
+function TSdMemoryBuffer.mmap_shm(size:QWORD):Integer;
+begin
+ //create psevdo shm
+
+ Paddr:=AllocMem(size);
+ Fsize:=size;
+
+ if (Paddr=nil) then
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY;
+ end else
+ begin
+  Result:=0;
+ end;
+
+end;
+
+Procedure TSdMemoryBuffer.Free;
+begin
+ if (Paddr<>nil) then
+ begin
+  FreeMem(Paddr,Fsize);
+  self:=Default(TSdMemoryBuffer);
+ end;
+end;
+
+function TSdMemoryBuffer.CreateShm(memorySize    :DWORD;
+                                   iconMemorySize:DWORD;
+                                   paramSize     :DWORD):Integer;
+var
+ mmapAddr      :Pointer;
+ size:QWORD;
+ err:Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (memorySize < $2000001) and
+    (iconMemorySize < $1c801) and
+    (paramSize < $531) then
+ begin
+
+  if (iconMemorySize=0) then
+  begin
+   size:=0;
+  end else
+  begin
+   size:=iconMemorySize + 64;
+  end;
+  size:=size + paramSize + memorySize;
+
+  err:=mmap_shm(size);
+  if (err<>0) then Exit(SCE_SAVE_DATA_ERROR_OUT_OF_MEMORY);
+
+  mmapAddr:=Paddr;
+
+  PmemoryData:=mmapAddr;
+  FmemorySize:=memorySize;
+
+  if (iconMemorySize<>0) then
+  begin
+   PiconMemorySize:=(mmapAddr + memorySize);
+   PiconData      :=(PiconMemorySize + 1);
+   //
+   PiconMemorySize^:=Default(TIconBufSize);
+   PiconMemorySize^.max:=iconMemorySize;
+  end;
+
+  if (paramSize<>0) then
+  begin
+   mmapAddr:=PmemoryData;
+   size    :=FmemorySize;
+   if (iconMemorySize<>0) then
+   begin
+    mmapAddr:=PiconData;
+    size    :=iconMemorySize;
+   end;
+   PParamData:=(mmapAddr + size);
+  end;
+
+  Result:=0;
+ end;
+
+end;
+
 function TSetupMemoryNode.c(n1,n2:PSetupMemoryNode):Integer; static;
 begin
  Result:=Integer(n1^.data.userId>n2^.data.userId)-Integer(n1^.data.userId<n2^.data.userId);
  if (Result<>0) then Exit;
  Result:=Integer(n1^.data.slotId>n2^.data.slotId)-Integer(n1^.data.slotId<n2^.data.slotId);
+end;
+
+function TSetupMemoryNode.CreateBuffers():Integer;
+var
+ i:Integer;
+begin
+ if is_setup then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (data.bufferNum<>1) and (data.bufferNum<>2) then Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+
+ for i:=0 to data.bufferNum-1 do
+ begin
+  Result:=sd_buffers[i].CreateShm(data.memorySize,data.iconMemorySize,data.paramSize);
+  if (Result<>0) then Exit;
+ end;
+
+ is_setup :=True;
+ is_writed:=False;
+ FbufferId:=0;
+
+ Result:=0;
 end;
 
 Procedure TSetupMemoryManager.Init;
@@ -365,6 +511,20 @@ begin
  mtx_unlock(mtx);
 
  Result:=node;
+end;
+
+function TSetupMemoryManager.Get(userId,slotId:DWORD):PSetupMemoryNode;
+var
+ key:TSetupMemoryNode;
+begin
+ key.data.userId:=userId;
+ key.data.slotId:=slotId;
+
+ mtx_lock(mtx);
+
+  Result:=Find(@key);
+
+ mtx_unlock(mtx);
 end;
 
 ///

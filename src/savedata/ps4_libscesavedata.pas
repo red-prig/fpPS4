@@ -133,6 +133,7 @@ type
   is_setup         :Boolean;
   UNLOCK_LIMITATION:Boolean;
   //
+  procedure Free;
   function  get_slot_node(slotId:DWORD):PPerSdSlot;
   procedure apply_memory_setup(slot_node:PPerSdSlot;option:DWORD);
  end;
@@ -160,6 +161,7 @@ type
   //
   function  get_sum_shm_size(userId:DWORD):DWORD;
   function  get_user_node(userId:DWORD):PPerUserInfo;
+  procedure free_user(userId:Integer);
   function  InitInstance(params:Pointer;_version:t_init_version):Integer;
   procedure select_prio_by_cusaname;
   procedure InitJobThread;
@@ -196,6 +198,33 @@ begin
    users[i].userId:=userId;
    Exit(@users[i]);
   end;
+end;
+
+procedure TSaveDataInstance.free_user(userId:Integer);
+var
+ i:Integer;
+begin
+ For i:=0 to High(users) do
+  if (userId=-1) or (users[i].is_setup and (users[i].userId=userId)) then
+  begin
+   users[i].Free;
+  end;
+end;
+
+procedure TPerUserInfo.Free;
+var
+ i:Integer;
+begin
+ userId           :=0;
+ shm_size_game    :=0;
+ shm_size_shell   :=0;
+ is_setup         :=False;
+ UNLOCK_LIMITATION:=False;
+ //destroy
+ for i:=0 to High(sd_slot) do
+ begin
+  sd_slot[i].Free;
+ end;
 end;
 
 function TPerUserInfo.get_slot_node(slotId:DWORD):PPerSdSlot;
@@ -721,6 +750,7 @@ end;
 procedure TSaveDataInstance.Terminate;
 begin
  JoinThread;
+ free_user(-1);
  if (Backend<>nil) then
  begin
   Backend.UmountAllForce;
@@ -996,7 +1026,7 @@ begin
 end;
 
 function SetupSaveDataMemory2Lt65(setupParam:pSceSaveDataMemorySetup2;
-                                  param     :pSceSaveDataParam;
+                                  InitParam :pSceSaveDataParam;
                                   p_existedMemorySize:PQWORD):Integer;
 var
  userId        :DWORD;
@@ -1068,7 +1098,7 @@ begin
    Exit;
   end;
 
-  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize);
+  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize,InitParam);
   if (Result<>0) then
   begin
    slot_node^.Free;
@@ -1105,7 +1135,7 @@ begin
 
   //CreateShmInternal
 
-  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize);
+  Result:=g_instance.Backend.SetupMemory(userId,0,bufferNum,memorySize,iconMemorySize,paramSize,InitParam);
   if (Result<>0) then
   begin
    slot_node^.Free;
@@ -1185,7 +1215,7 @@ begin
    Exit;
   end;
 
-  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize);
+  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize,nil);
   if (Result<>0) then
   begin
    slot_node^.Free;
@@ -1216,7 +1246,7 @@ begin
    Exit;
   end;
 
-  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize);
+  Result:=g_instance.Backend.SetupMemory(userId,setupParam^.slotId,bufferNum,memorySize,iconMemorySize,paramSize,nil);
   if (Result<>0) then
   begin
    slot_node^.Free;
@@ -1906,6 +1936,34 @@ begin
  mtx_unlock(g_instance.mtx);
 end;
 
+function SaveDataSyncSaveDataMemory(syncParam:pSceSaveDataMemorySync):Integer;
+var
+ user_node:PPerUserInfo;
+ slot_node:PPerSdSlot;
+begin
+ user_node:=g_instance.get_user_node(syncParam^.userId);
+ if (user_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ slot_node:=user_node^.get_slot_node(syncParam^.slotId);
+ if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ if (p_proc.p_sdk_version < $6500000) then
+ begin
+  if not slot_node^.is_setup then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+  end;
+ end else
+ begin
+  if not slot_node^.is_setup then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_MEMORY_NOT_READY);
+  end;
+ end;
+
+ Result:=g_instance.Backend.SyncMemory(syncParam);
+end;
+
 function ps4_sceSaveDataSyncSaveDataMemory(syncParam:pSceSaveDataMemorySync):Integer;
 begin
  if (g_instance=nil) then
@@ -1913,7 +1971,20 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ Result:=CheckSceSaveDataMemorySync(syncParam);
+ if (Result<>0) then Exit;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=SaveDataSyncSaveDataMemory(syncParam);
+
+ mtx_unlock(g_instance.mtx);
+
+ if (Result=0) and ((syncParam^.option and 1)=0) then
+ if (g_instance.job_thread<>nil) then
+ begin
+  g_instance.job_list.SendEventJob();
+ end;
 end;
 
 function SaveDataDelete(del:pSceSaveDataDelete):Integer;

@@ -61,9 +61,11 @@ type
                              bufferNum     :Integer;
                              memorySize    :DWORD;
                              iconMemorySize:DWORD;
-                             paramSize     :DWORD
+                             paramSize     :DWORD;
+                             InitParam     :pSceSaveDataParam
                             ):Integer;
   function    ReadMemory    (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
+  function    SyncMemory    (syncParam:pSceSaveDataMemorySync):Integer;
  end;
 
  TCustomCommand=class;
@@ -130,6 +132,7 @@ type
   function    OnGetParam      (Value:TIpcValue):TIpcValue; //GetParam
   function    OnSetupMemory   (Value:TIpcValue):TIpcValue; //SetupMemory
   function    OnReadMemory    (Value:TIpcValue):TIpcValue; //ReadMemory
+  function    OnSyncMemory    (Value:TIpcValue):TIpcValue; //SyncMemory
  end;
 
 implementation
@@ -379,6 +382,7 @@ begin
  kipc.FHandler.AddCallback('GetParam'      ,@OnGetParam);
  kipc.FHandler.AddCallback('SetupMemory'   ,@OnSetupMemory);
  kipc.FHandler.AddCallback('ReadMemory'    ,@OnReadMemory);
+ kipc.FHandler.AddCallback('SyncMemory'    ,@OnSyncMemory);
  //
  inherited;
 end;
@@ -2411,17 +2415,27 @@ function TSaveDataBackendConnect.SetupMemory(userId        :SceUserServiceUserId
                                              bufferNum     :Integer;
                                              memorySize    :DWORD;
                                              iconMemorySize:DWORD;
-                                             paramSize     :DWORD
+                                             paramSize     :DWORD;
+                                             InitParam     :pSceSaveDataParam
                                             ):Integer;
 var
  data:TSetupMemory;
 begin
+ FillChar(data,SizeOf(data),0);
  data.userId        :=userId        ;
  data.slotId        :=slotId        ;
  data.bufferNum     :=bufferNum     ;
  data.paramSize     :=paramSize     ;
  data.memorySize    :=memorySize    ;
  data.iconMemorySize:=iconMemorySize;
+
+ if (InitParam<>nil) then
+ begin
+  data.title    :=InitParam^.title    ;
+  data.subTitle :=InitParam^.subTitle ;
+  data.detail   :=InitParam^.detail   ;
+  data.userParam:=InitParam^.userParam;
+ end;
 
  Result:=kipc.InvokeSync2('SetupMemory',@data,sizeof(data));
 end;
@@ -2577,8 +2591,10 @@ end;
 function TSaveDataBackendProcess.OnSetupMemory(Value:TIpcValue):TIpcValue; //SetupMemory
 var
  input:TSetupMemory;
+ node :PSetupMemoryNode;
  minfo:TMount;
- job:TSetupMemoryJob;
+ job  :TSetupMemoryJob;
+ err  :Integer;
 begin
  Result:=0;
 
@@ -2588,7 +2604,11 @@ begin
  if (input.slotId>=4) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
  if (input.bufferNum<>1) and (input.bufferNum<>2) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- SetupMemoryManager.Setup(input);
+ node:=SetupMemoryManager.Setup(input);
+ if (node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ err:=node^.CreateBuffers();
+ if (err<>0) then Exit(err);
 
  minfo:=Default(TMount);
  minfo.userId      :=input.userId;
@@ -2713,6 +2733,116 @@ begin
  job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
 
  job.dataSize:=input.dataSize;
+
+ SendCmd(job);
+end;
+
+type
+ TSyncMemory=packed record
+  userId:SceUserServiceUserId;
+  slotId:WORD;
+  option:WORD; //SceSaveDataMemorySyncOption
+ end;
+
+function TSaveDataBackendConnect.SyncMemory(syncParam:pSceSaveDataMemorySync):Integer;
+var
+ data:TSyncMemory;
+begin
+ data.userId:=syncParam^.userId;
+ data.slotId:=syncParam^.slotId;
+ data.option:=syncParam^.option;
+
+ Result:=kipc.InvokeSync2('SyncMemory',@data,sizeof(data));
+end;
+
+type
+ TSyncMemoryJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  //
+  userId  :DWORD;
+  titleId :SceSaveDataTitleId;
+  dirName :SceSaveDataDirName;
+  is_async:Boolean;
+  //
+  procedure UnLock;
+  function  Run:TIpcValue; override;
+ end;
+
+procedure TSyncMemoryJob.UnLock;
+begin
+ gSaveDataBackend.LockDirManager.UnLockDir(fs_src);
+end;
+
+function TSyncMemoryJob.Run:TIpcValue;
+var
+ err:Integer;
+begin
+ Result:=0;
+
+ err:=0;
+
+ //////////////////
+
+ if is_async then
+ begin
+  gSaveDataBackend.EventQueue.Push(SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,err,userId,@titleId,@dirName);
+ end else
+ begin
+  Result:=err;
+ end;
+
+ ///
+ UnLock;
+end;
+
+function TSaveDataBackendProcess.OnSyncMemory(Value:TIpcValue):TIpcValue; //SyncMemory
+var
+ input   :TSyncMemory;
+ node    :PSetupMemoryNode;
+ titleId :pchar;
+ dirName :pchar;
+ job     :TSyncMemoryJob;
+ fs_src  :RawByteString;
+ is_async:Boolean;
+begin
+ Result:=0;
+
+ input:=Default(TSyncMemory);
+ Value.MoveTo(@input,sizeof(input));
+
+ node:=SetupMemoryManager.Get(input.userId,input.slotId);
+ if (node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ titleId:=@GameMountConfig.InstallDir;
+ dirName:=sdmemory_slot_name[input.slotId];
+
+ fs_src  :=GameMountConfig.GetSaveDataFolder(input.userId,titleId,dirName);
+ is_async:=(input.option and 1)=0;
+
+ if MountManager.IsActiveMount(input.userId,titleId,dirName) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY);
+ end;
+
+ if not LockDirManager.LockDir(fs_src) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
+ end;
+
+ if is_async then
+ begin
+  job:=TSyncMemoryJob.Create(kipc.HoldResult);
+ end else
+ begin
+  job:=TSyncMemoryJob.Create(0);
+ end;
+
+ job.fs_src      :=fs_src;
+ job.userId      :=input.userId;
+ job.titleId.data:=titleId;
+ job.dirName.data:=dirName;
+ job.is_async    :=is_async;
 
  SendCmd(job);
 end;

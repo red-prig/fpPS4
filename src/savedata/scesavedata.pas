@@ -490,6 +490,8 @@ function CheckSaveDataMemoryRead(dst        :pSceSaveDataMemoryGet2;
                                  iconBufSize:DWORD
                                 ):Integer;
 
+function CheckSceSaveDataMemorySync(syncParam:pSceSaveDataMemorySync):Integer;
+
 implementation
 
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
@@ -1844,6 +1846,35 @@ begin
 
 end;
 
+function CheckSceSaveDataMemorySync(syncParam:pSceSaveDataMemorySync):Integer;
+begin
+ Result:=0;
+
+ if (syncParam=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if IsLoggedIn(syncParam^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if (syncParam^.option < 2) then
+ begin
+  //
+ end else
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if not CheckReserved(syncParam^.reserved,sizeof(syncParam^.reserved)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ Result:=CheckSdSlotId(syncParam^.slotId);
+end;
 
 
 end.
