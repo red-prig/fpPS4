@@ -134,6 +134,7 @@ type
   //
   is_setup  :Boolean;
   is_writed :Boolean;
+  is_eventd :Boolean;
   FbufferId :Byte;
   job_count :DWORD;
   sd_buffers:array[0..1] of TSdMemoryBuffer;
@@ -193,6 +194,9 @@ function  SaveMemory(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
 procedure load_mtime  (const fs_src:RawByteString;var mtime:QWORD);
 procedure update_mtime(const fs_src:RawByteString;var mtime:QWORD);
 procedure get_file_size(const fs_src:RawByteString;var size:QWORD);
+
+function  GetFreeBlocks(const fs_src:RawByteString;max_blocks:Int64):Int64;
+function  GetBlocks(memorySize:DWORD):Int64;
 
 implementation
 
@@ -793,6 +797,47 @@ begin
  size:=info.st_size;
 end;
 
+function GetFreeBlocks(const fs_src:RawByteString;max_blocks:Int64):Int64;
+begin
+ Result:=GetDirectorySizeLikePFS(fs_src);
+ Result:=Result+1024+4*1024+4*1024; //pulling
+
+ Result:=(Result+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE;
+
+ Result:=max_blocks-Result-32;
+ if (Result<0) then Result:=0;
+end;
+
+function ceill(x:Double):Double; inline;
+begin
+ Result:=Trunc(x)+ord(Frac(x)>0);
+end;
+
+function GetBlocks(memorySize:DWORD):Int64;
+const
+ max:Double=9.223372e+18;
+var
+ ccc:Double;
+ dif:Double;
+begin
+ if (memorySize > $800000) then
+ begin
+  ccc:=ceill((memorySize * 1.1) * 3.0517578e-05);
+  dif:=0;
+  if (max <= ccc) then
+  begin
+   dif:=max;
+  end;
+  Result:=((QWORD(max <= ccc) shl 63) xor Trunc(ccc - dif)) + 64;
+ end else
+ begin
+  Result:=96;
+  if (memorySize > $100000) then
+  begin
+   Result:=320;
+  end;
+ end;
+end;
 
 end.
 

@@ -264,7 +264,7 @@ const
  SDSK_USER_PARAM =1;
  SDSK_BLOCKS     =2;
  SDSK_MTIME      =3;
- SDSK_FREE_BLOCKS=4;
+ SDSK_FREE_BLOCKS=5;
 
  //SceSaveDataSortOrder
  SDSO_ASCENT =0;
@@ -492,6 +492,9 @@ function CheckSaveDataMemoryRead(dst        :pSceSaveDataMemoryGet2;
 
 function CheckSceSaveDataMemorySync(syncParam:pSceSaveDataMemorySync):Integer;
 
+function CheckDirNameSearchCond  (cond:pSceSaveDataDirNameSearchCond;internal:Boolean):Integer;
+function CheckDirNameSearchResult(pResult:pSceSaveDataDirNameSearchResult):Integer;
+
 implementation
 
 function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
@@ -583,7 +586,7 @@ begin
     $3531, //15
     $3631: //16
       begin
-       slot_id:=ord(name[10])-ord('0')+10;
+       slot_id:=ord(name[10])-(ord('0')+10);
        Result:=0;
       end;
    end;
@@ -668,9 +671,9 @@ begin
  for i:=0 to len-1 do
  begin
   case dirName^.data[i] of
-   'a'..'z':;
-   'A'..'Z':;
    '0'..'9':;
+   'A'..'Z':;
+   'a'..'z':;
    '-',
    '.',
    '@':;
@@ -734,7 +737,7 @@ begin
          );
 end;
 
-function CheckMountMode2(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
+function CheckMountModeBe45(mountMode:DWORD;blocks:SceSaveDataBlocks):Boolean; inline;
 const
  CREATE_CREATE2          =SDMM_CREATE or SDMM_CREATE2;
  RDONLY_CREATE           =SDMM_RDONLY or SDMM_CREATE;
@@ -763,7 +766,7 @@ begin
          );
 end;
 
-function CheckSaveDataDelete1(del:pSceSaveDataDelete):Integer;
+function CheckSaveDataDeleteLt35(del:pSceSaveDataDelete):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (del=nil) then Exit;
@@ -781,7 +784,7 @@ begin
  end;
 end;
 
-function CheckSaveDataDelete2(del:pSceSaveDataDelete):Integer;
+function CheckSaveDataDeleteBe35(del:pSceSaveDataDelete):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (del=nil) then Exit;
@@ -804,14 +807,14 @@ function CheckSaveDataDelete(del:pSceSaveDataDelete):Integer;
 begin
  if (p_proc.p_sdk_version < $3500000) then
  begin
-  Result:=CheckSaveDataDelete1(del);
+  Result:=CheckSaveDataDeleteLt35(del);
  end else
  begin
-  Result:=CheckSaveDataDelete2(del);
+  Result:=CheckSaveDataDeleteBe35(del);
  end;
 end;
 
-function CheckSceSaveDataMount1(mount:pSceSaveDataMount;allow_sdm:Boolean):Integer;
+function CheckSceSaveDataMountLt15(mount:pSceSaveDataMount;allow_sdm:Boolean):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (mount=nil) then Exit;
@@ -831,9 +834,9 @@ begin
  end;
 end;
 
-function CheckSceSaveDataMount2(mount:pSceSaveDataMount):Integer;
+function CheckSceSaveDataMountLt17(mount:pSceSaveDataMount):Integer;
 begin
- Result:=CheckSceSaveDataMount1(mount,False);
+ Result:=CheckSceSaveDataMountLt15(mount,False);
  if (Result=0) then
  begin
 
@@ -853,11 +856,11 @@ begin
  end;
 end;
 
-function CheckSceSaveDataMount3(mount:pSceSaveDataMount):Integer;
+function CheckSceSaveDataMountLt25(mount:pSceSaveDataMount):Integer;
 const
  CREATE_COPY_ICON=SDMM_CREATE or SDMM_COPY_ICON;
 begin
- Result:=CheckSceSaveDataMount1(mount,False);
+ Result:=CheckSceSaveDataMountLt15(mount,False);
  if (Result=0) then
  begin
 
@@ -894,11 +897,11 @@ begin
  end;
 end;
 
-function CheckSceSaveDataMount4(mount:pSceSaveDataMount):Integer;
+function CheckSceSaveDataMountLt45(mount:pSceSaveDataMount):Integer;
 const
  CREATE_COPY_ICON=SDMM_CREATE or SDMM_COPY_ICON;
 begin
- Result:=CheckSceSaveDataMount1(mount,True);
+ Result:=CheckSceSaveDataMountLt15(mount,True);
  if (Result=0) then
  begin
   if is_sdmemory(@mount^.dirName^.data) and ((mount^.mountMode and SDMM_RDONLY)=0) then
@@ -927,7 +930,7 @@ begin
  end;
 end;
 
-function CheckSceSaveDataMount5(mount:pSceSaveDataMount):Integer;
+function CheckSceSaveDataMountBe45(mount:pSceSaveDataMount):Integer;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (mount=nil) then Exit;
@@ -940,7 +943,7 @@ begin
  if CheckTitleId(mount^.titleId)=0 then
  if CheckDirName(mount^.dirName,True)=0 then
  if CheckFingerprint(mount^.fingerprint)=0 then
- if CheckMountMode2(mount^.mountMode,mount^.blocks) then
+ if CheckMountModeBe45(mount^.mountMode,mount^.blocks) then
  if CheckReserved(mount^.reserved,sizeof(mount^.reserved)) then
  begin
 
@@ -965,7 +968,7 @@ begin
  end;
 end;
 
-function CheckOutputSceSaveDataMountPoint1(pResult:pSceSaveDataMountResult):Integer; inline;
+function CheckOutputSceSaveDataMountPointLt35(pResult:pSceSaveDataMountResult):Integer; inline;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (pResult=nil) then Exit;
@@ -976,7 +979,7 @@ begin
  end;
 end;
 
-function CheckOutputSceSaveDataMountPoint2(pResult:pSceSaveDataMountResult):Integer; inline;
+function CheckOutputSceSaveDataMountPointLt45(pResult:pSceSaveDataMountResult):Integer; inline;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (pResult=nil) then Exit;
@@ -995,15 +998,15 @@ begin
 
  if (p_proc.p_sdk_version < $1500000) then
  begin
-  Result:=CheckSceSaveDataMount1(mount,False);
+  Result:=CheckSceSaveDataMountLt15(mount,False);
  end else
  if (p_proc.p_sdk_version < $1700000) then
  begin
-  Result:=CheckSceSaveDataMount2(mount);
+  Result:=CheckSceSaveDataMountLt17(mount);
  end else
  if (p_proc.p_sdk_version < $2500000) then
  begin
-  Result:=CheckSceSaveDataMount3(mount);
+  Result:=CheckSceSaveDataMountLt25(mount);
  end else
  begin
 
@@ -1015,10 +1018,10 @@ begin
 
   if (p_proc.p_sdk_version < $4500000) then
   begin
-   Result:=CheckSceSaveDataMount4(mount);
+   Result:=CheckSceSaveDataMountLt45(mount);
   end else
   begin
-   Result:=CheckSceSaveDataMount5(mount);
+   Result:=CheckSceSaveDataMountBe45(mount);
   end;
 
  end;
@@ -1027,14 +1030,14 @@ begin
 
  if (p_proc.p_sdk_version < $3500000) then
  begin
-  Result:=CheckOutputSceSaveDataMountPoint1(pResult);
+  Result:=CheckOutputSceSaveDataMountPointLt35(pResult);
  end else
  if (p_proc.p_sdk_version < $4500000) then
  begin
-  Result:=CheckOutputSceSaveDataMountPoint2(pResult);
+  Result:=CheckOutputSceSaveDataMountPointLt45(pResult);
  end else
  begin
-  Result:=CheckOutputSceSaveDataMountPoint2(pResult);
+  Result:=CheckOutputSceSaveDataMountPointLt45(pResult); //identically
  end;
 
 end;
@@ -1126,7 +1129,7 @@ begin
  end;
 end;
 
-function CheckRestoreBackupData1(restore:pSceSaveDataRestoreBackupData):Integer; inline;
+function CheckRestoreBackupDataLt35(restore:pSceSaveDataRestoreBackupData):Integer; inline;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (restore=nil) then Exit;
@@ -1158,7 +1161,7 @@ begin
  end;
 end;
 
-function CheckRestoreBackupData2(restore:pSceSaveDataRestoreBackupData):Integer; inline;
+function CheckRestoreBackupDataBe35(restore:pSceSaveDataRestoreBackupData):Integer; inline;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (restore=nil) then Exit;
@@ -1195,10 +1198,10 @@ function CheckRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
 begin
  if (p_proc.p_sdk_version < $3500000) then
  begin
-  Result:=CheckRestoreBackupData1(restore);
+  Result:=CheckRestoreBackupDataLt35(restore);
  end else
  begin
-  Result:=CheckRestoreBackupData2(restore);
+  Result:=CheckRestoreBackupDataBe35(restore);
  end;
 end;
 
@@ -1876,6 +1879,117 @@ begin
  Result:=CheckSdSlotId(syncParam^.slotId);
 end;
 
+function CheckDirNameCond(dirname:pSceSaveDataDirName;internal:Boolean):Integer;
+var
+ len,i:DWORD;
+begin
+ Result:=0;
+
+ if (dirname=nil) then //no filter
+ begin
+  Exit(0);
+ end;
+
+ if not internal then
+ begin
+  if (PDWORD(@dirname^.data[0])^=$5F656373) then //sce_
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+ len:=strnlen_s(@dirName^.data,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+ if (len=0) or (len=SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if (len<>0) then
+ for i:=0 to len-1 do
+ begin
+  case dirName^.data[i] of
+   '0'..'9':;
+   'A'..'Z':;
+   'a'..'z':;
+   '%', //wildcard
+   '_', //wildcard
+   '-',
+   '.',
+   '@':;
+   else
+    Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+  end;
+ end;
+
+end;
+
+function CheckDirNameSearchCond(cond:pSceSaveDataDirNameSearchCond;internal:Boolean):Integer;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (cond=nil) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ if IsLoggedIn(cond^.userId)<>0 then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
+ end;
+
+ if CheckTitleId(cond^.titleId)=0 then
+ if CheckDirNameCond(cond^.dirName,internal)=0 then
+ if (cond^.key < 6) then
+ if (cond^.order < 2) then
+ if CheckReserved(cond^.reserved,sizeof(cond^.reserved)) then
+ begin
+  Result:=0;
+ end;
+
+end;
+
+function CheckDirNameSearchResultLt17(pResult:pSceSaveDataDirNameSearchResult):Integer; inline;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (pResult<>nil) then
+ if (pResult^.dirNames<>nil) then
+ if (pResult^.dirNamesNum<>0) then
+ if CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+ begin
+  Result:=0;
+ end;
+
+end;
+
+function CheckDirNameSearchResultBe17(pResult:pSceSaveDataDirNameSearchResult):Integer; inline;
+begin
+ Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
+
+ if (pResult<>nil) then
+ if (pResult^.dirNames<>nil) then
+ if (DWORD(pResult^.dirNamesNum - 1) < $400) then
+ if CheckReserved(pResult^.reserved,sizeof(pResult^.reserved)) then
+ begin
+  Result:=0;
+ end;
+
+end;
+
+function CheckDirNameSearchResult(pResult:pSceSaveDataDirNameSearchResult):Integer;
+begin
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  Result:=CheckDirNameSearchResultLt17(pResult);
+ end else
+ begin
+  Result:=CheckDirNameSearchResultBe17(pResult);
+ end;
+end;
+
 
 end.
+
+
 

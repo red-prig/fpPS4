@@ -474,8 +474,18 @@ begin
  NewDialogOpen(Attributes,FCommonDialog);
 end;
 
+type
+ TSaveDataGrid=class(TStringGrid)
+  public
+   is_new:Boolean;
+   procedure  CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+   Destructor Destroy; override;
+ end;
+
 procedure TDialogsManager.OnSaveDialogClick(Sender:TObject);
 var
+ Grid:TSaveDataGrid;
+ min,Row:Integer;
  rzdata:TSaveDialogResult;
 begin
  FillChar(rzdata,SizeOf(rzdata),0);
@@ -485,7 +495,26 @@ begin
   rzdata.resultId:=1;
  end;
 
- //TODO:rzdata.dirName
+ if (rzdata.resultId=0) then //OK
+ if (FCommonDialog.FCustom<>nil) then
+ begin
+  Grid:=TSaveDataGrid(FCommonDialog.FCustom);
+  Row:=Grid.Row;
+
+  if Grid.is_new then
+  begin
+   min:=1;
+  end else
+  begin
+   min:=0;
+  end;
+
+  if (Row>=min) then
+  begin
+   rzdata.dirName.data:=Grid.Cells[1,Row];
+  end;
+ end;
+
  //TODO:rzdata.param
 
  //SceSaveDataParam=packed record
@@ -503,13 +532,6 @@ begin
  FreeAndNil(FCommonDialog);
 end;
 
-type
- TSaveDataGrid=class(TStringGrid)
-  public
-   procedure  CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
-   Destructor Destroy; override;
- end;
-
 procedure TSaveDataGrid.CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
 var
  Icon:TCustomBitmap;
@@ -518,6 +540,7 @@ begin
  begin
   //PNG
   Icon:=TCustomBitmap(Objects[0,aRow]);
+  if (Icon<>nil) then
   if Icon.InheritsFrom(TCustomBitmap) then
   begin
    Canvas.StretchDraw(aRect,Icon);
@@ -647,6 +670,7 @@ begin
     (data.dirNameNum<>0) then
  begin
   Grid:=TSaveDataGrid.Create(nil);
+  Grid.AutoSize:=True;
   Grid.OnDrawCell:=@Grid.CustomDrawCell;
   Grid.AutoEdit:=False;
   Grid.AutoFillColumns:=TRue;
@@ -669,6 +693,8 @@ begin
   p:=0;
   if (data.is_new<>0) then
   begin
+   Grid.is_new:=True;
+
    if (data.new_item.iconSize<>0) then
    begin
     Stream:=TPCharStream.Create(@data.new_item.iconBuf,data.new_item.iconSize);

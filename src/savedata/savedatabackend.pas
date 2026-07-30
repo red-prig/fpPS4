@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ classes,
  errno,
  LFQueue,
  //windows,
@@ -67,6 +68,9 @@ type
   function    ReadMemory    (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
   procedure   WriteMemory   (userId,slotId,bufferId:DWORD;addr:Pointer;size:DWORD);
   function    SyncMemory    (syncParam:pSceSaveDataMemorySync):Integer;
+  function    DirNameSearch (cond    :pSceSaveDataDirNameSearchCond;
+                             pResult :pSceSaveDataDirNameSearchResult;
+                             internal:Boolean):Integer;
  end;
 
  TCustomCommand=class;
@@ -136,8 +140,9 @@ type
   function    OnReadMemory    (Value:TIpcValue):TIpcValue; //ReadMemory
   function    OnSetWriteSlot  (Value:TIpcValue):TIpcValue; //SetWriteSlot
   function    OnWriteMemory   (Value:TIpcValue):TIpcValue; //WriteMemory
-  function    SendSyncJob     (userId,slotId,option:DWORD):Integer;
+  function    SendSyncJob     (userId,slotId,option:DWORD;hold:Boolean):Integer;
   function    OnSyncMemory    (Value:TIpcValue):TIpcValue; //SyncMemory
+  function    OnDirNameSearch (Value:TIpcValue):TIpcValue; //DirNameSearch
  end;
 
 implementation
@@ -390,6 +395,7 @@ begin
  kipc.FHandler.AddCallback('SetWriteSlot'  ,@OnSetWriteSlot);
  kipc.FHandler.AddCallback('WriteMemory'   ,@OnWriteMemory);
  kipc.FHandler.AddCallback('SyncMemory'    ,@OnSyncMemory);
+ kipc.FHandler.AddCallback('DirNameSearch' ,@OnDirNameSearch);
  //
  inherited;
 end;
@@ -1336,13 +1342,7 @@ begin
 
  fs_src:=GameMountConfig.GetSaveDataFolder(mount.userId,@mount.titleId,@mount.dirName);
 
- blocks:=GetDirectorySizeLikePFS(fs_src);
- blocks:=blocks+1024+4*1024+4*1024; //pulling
-
- blocks:=(blocks+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE;
-
- blocks:=mount.max_blocks-blocks-32;
- if (blocks<0) then blocks:=0;
+ blocks:=GetFreeBlocks(fs_src,mount.max_blocks);
 
  output.result    :=0;
  output.blocks    :=mount.max_blocks;
@@ -2550,37 +2550,6 @@ begin
  Result:=err;
 end;
 
-function ceill(x:Double):Double; inline;
-begin
- Result:=Trunc(x)+ord(Frac(x)>0);
-end;
-
-function GetBlocks(memorySize:DWORD):Int64;
-const
- max:Double=9.223372e+18;
-var
- ccc:Double;
- dif:Double;
-begin
- if (memorySize > $800000) then
- begin
-  ccc:=ceill((memorySize * 1.1) * 3.0517578e-05);
-  dif:=0;
-  if (max <= ccc) then
-  begin
-   dif:=max;
-  end;
-  Result:=((QWORD(max <= ccc) shl 63) xor Trunc(ccc - dif)) + 64;
- end else
- begin
-  Result:=96;
-  if (memorySize > $100000) then
-  begin
-   Result:=320;
-  end;
- end;
-end;
-
 function TSaveDataBackendProcess.OnSetupMemory(Value:TIpcValue):TIpcValue; //SetupMemory
 var
  input:TSetupMemory;
@@ -2805,7 +2774,7 @@ begin
 
   if (pWriteSlot^.job_count<2) then
   begin
-   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,1);
+   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,1,False);
   end;
  end;
 end;
@@ -2934,6 +2903,7 @@ var
  buf:PSdMemoryBuffer;
  params:SceSaveDataParam;
  is_writed:Boolean;
+ is_eventd:Boolean;
  err      :Integer;
 begin
  Result:=0;
@@ -2960,9 +2930,13 @@ begin
  mtx_lock(nslot^.mtx);
 
   is_writed:=nslot^.is_writed;
+  is_eventd:=nslot^.is_eventd;
 
   if is_writed then
   begin
+   is_eventd       :=False;
+   nslot^.is_eventd:=False;
+
    buf:=@nslot^.sd_buffers[nslot^.FbufferId];
 
    if (buf^.PParamData=nil) then
@@ -3024,12 +2998,23 @@ begin
 
  if is_async then
  begin
-  gSaveDataBackend.EventQueue.Push(
-   SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,
-   err,
-   nslot^.data.userId,
-   @titleId,
-   @dirName);
+  if (not is_eventd) then
+  begin
+
+   mtx_lock(nslot^.mtx);
+
+    nslot^.is_eventd:=True;
+
+   mtx_unlock(nslot^.mtx);
+
+   gSaveDataBackend.EventQueue.Push(
+    SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,
+    err,
+    nslot^.data.userId,
+    @titleId,
+    @dirName);
+
+  end;
  end else
  begin
   Result:=err;
@@ -3051,7 +3036,7 @@ begin
  UnLock;
 end;
 
-function TSaveDataBackendProcess.SendSyncJob(userId,slotId,option:DWORD):Integer;
+function TSaveDataBackendProcess.SendSyncJob(userId,slotId,option:DWORD;hold:Boolean):Integer;
 var
  node    :PSetupMemoryNode;
  titleId :pchar;
@@ -3073,7 +3058,7 @@ begin
 
  if is_async then
  begin
-  job:=TSyncMemoryJob.Create(kipc.HoldResult);
+  job:=TSyncMemoryJob.Create(0);
  end else
  begin
 
@@ -3087,7 +3072,14 @@ begin
    Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
   end;
 
-  job:=TSyncMemoryJob.Create(0);
+  if hold then
+  begin
+   job:=TSyncMemoryJob.Create(kipc.HoldResult);
+  end else
+  begin
+   job:=TSyncMemoryJob.Create(0);
+  end;
+
  end;
 
  System.InterlockedIncrement(node^.job_count);
@@ -3108,8 +3100,382 @@ begin
  input:=Default(TSyncMemory);
  Value.MoveTo(@input,sizeof(input));
 
- Result:=SendSyncJob(input.userId,input.slotId,input.option);
+ Result:=SendSyncJob(input.userId,input.slotId,input.option,True);
 end;
+
+type
+ TDirNameSearch=record
+  userId    :DWORD;
+  max       :Word; //<=1024
+  key       :Byte;
+  order     :Byte;
+  has_params:Boolean;
+  has_infos :Boolean;
+  internal  :Boolean;
+  titleId   :SceSaveDataTitleId;
+  dirName   :SceSaveDataDirName;
+ end;
+
+ PDirNameSearchNode=^TDirNameSearchNode;
+ TDirNameSearchNode=record
+  dirName:SceSaveDataDirName;
+  params :SceSaveDataParam;
+  infos  :SceSaveDataSearchInfo;
+ end;
+
+function Min(x, y: integer): integer; inline;
+begin
+  if x < y then Result := x else Result := y;
+end;
+
+function TSaveDataBackendConnect.DirNameSearch(cond    :pSceSaveDataDirNameSearchCond;
+                                               pResult :pSceSaveDataDirNameSearchResult;
+                                               internal:Boolean):Integer;
+var
+ data    :TDirNameSearch;
+ Value   :TIpcValue;
+ output  :PDirNameSearchNode;
+ dirNames:pSceSaveDataDirName;
+ params  :pSceSaveDataParam;
+ infos   :pSceSaveDataSearchInfo;
+ i,count :Integer;
+begin
+ Result:=0;
+
+ FillChar(data,SizeOf(data),0);
+  data.userId    :=cond^.userId;
+  data.max       :=Min(pResult^.dirNamesNum,1024);
+  data.key       :=cond^.key;
+  data.order     :=cond^.order;
+  data.has_params:=(pResult^.params<>nil);
+  data.has_infos :=(pResult^.infos <>nil);
+  data.internal  :=internal;
+ if (cond^.titleId<>nil) then
+  data.titleId:=cond^.titleId^;
+ if (cond^.dirName<>nil) then
+  data.dirName:=cond^.dirName^;
+
+ if (data.max=0) then
+ begin
+  count:=0;
+ end else
+ begin
+  Value:=kipc.InvokeSync('DirNameSearch',TIpcValue.Static(@data,sizeof(data)));
+
+  output:=Value.GetBuf;
+  count :=Value.GetLen div SizeOf(TDirNameSearchNode);
+
+  dirNames:=pResult^.dirNames;
+  params  :=pResult^.params;
+  infos   :=pResult^.infos;
+
+  if (count<>0) then
+  For i:=0 to count-1 do
+  begin
+   if (dirNames<>nil) then
+   begin
+    dirNames[i]:=output[i].dirName;
+   end;
+   //
+   if (params<>nil) then
+   begin
+    params[i]:=output[i].params;
+   end;
+   //
+   if (infos<>nil) then
+   begin
+    infos[i]:=output[i].infos;
+   end;
+  end;
+
+  Value.Free;
+ end;
+
+ pResult^.hitNum:=count;
+ if (p_proc.p_sdk_version < $1700000) then
+ begin
+  pResult^.hitNum:=count;
+ end else
+ begin
+  pResult^.setNum:=count;
+ end;
+
+end;
+
+type
+ TDirNameSearchJob=class(TCustomCommand)
+  //
+  fs_src:RawByteString;
+  //
+  data:TDirNameSearch;
+  //
+  List     :TFPList;
+  param_sfo:t_savedata_sfo_values;
+  //
+  procedure IterateDirectory();
+  procedure Sort();
+  function  Run:TIpcValue; override;
+ end;
+
+function convert_dir_name_search(P:PChar):RawByteString;
+var
+ i:Integer;
+begin
+ Result:=RawByteString(P); //copy
+ if (Length(Result)=0) then
+ begin
+  Result:='*';
+ end else
+ For i:=1 to Length(Result) do
+ begin
+  Case Result[i] of
+   '%':Result[i]:='*';
+   '_':Result[i]:='?';
+   else;
+  end;
+ end;
+end;
+
+function NeedSfoByKey(key:Byte):Boolean; inline;
+begin
+ Result:=False;
+ case key of
+  SDSK_USER_PARAM,
+  SDSK_BLOCKS,
+  SDSK_FREE_BLOCKS:Result:=True;
+  else;
+ end;
+end;
+
+procedure TDirNameSearchJob.IterateDirectory();
+var
+ FileInfo :TSearchRec;
+ CurParent:RawByteString;
+ CurDir   :RawByteString;
+ fname    :RawByteString;
+ dirName  :SceSaveDataDirName;
+ dir_node :PDirNameSearchNode;
+ mtime    :QWORD;
+ size     :DWORD;
+ load_sfo :Boolean;
+begin
+ List:=TFPList.Create;
+
+ load_sfo:=data.has_params or data.has_infos or NeedSfoByKey(data.key);
+
+ CurParent:=IncludeTrailingPathDelimiter(fs_src);
+
+ //Writeln(CurParent);
+
+ if SysUtils.FindFirst(CurParent+convert_dir_name_search(@data.dirName.data),faDirectory,FileInfo)=0 then
+ begin
+  repeat
+    // check if special file
+    if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
+    begin
+      continue;
+    end;
+
+    dirName.data:=copy(FileInfo.Name,1,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+
+    // filter
+    if not data.internal then
+    begin
+     if (PDWORD(@dirName.data)^=$5F656373) or (dirName.data[0]='_') then //sce_* or _*
+     begin
+       continue;
+     end;
+    end;
+
+    CurDir:=CurParent+FileInfo.Name;
+
+    dir_node:=AllocMem(SizeOf(TDirNameSearchNode));
+    dir_node^.dirName:=dirName;
+
+    if load_sfo then
+    begin
+     fname:=ExcludeTrailingPathDelimiter(CurDir)+unix_to_host('/sce_sys/param.sfo');
+     //
+     if param_sfo.LoadFromFile(fname) then
+     begin
+      mtime:=0;
+      if data.has_params or (data.key=SDSK_MTIME) then
+      begin
+       load_mtime(CurDir,mtime);
+      end;
+      //
+      param_sfo.GetParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,@dir_node^.params,@size,mtime);
+      //
+      dir_node^.infos.blocks:=param_sfo.SAVEDATA_BLOCKS;
+      //
+      if data.has_infos or (data.key=SDSK_FREE_BLOCKS) then
+      begin
+       dir_node^.infos.freeBlocks:=GetFreeBlocks(CurDir,param_sfo.SAVEDATA_BLOCKS);
+      end;
+     end;
+    end;
+
+    List.Add(dir_node);
+    dir_node:=nil;
+
+    //Writeln(CurDir);
+
+  until SysUtils.FindNext(FileInfo)<>0;
+  SysUtils.FindClose(FileInfo);
+ end;
+
+end;
+
+function SDSK_DIRNAME_ASC(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=CompareByte(Item1^.dirName,Item2^.dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+end;
+
+function SDSK_DIRNAME_DES(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=CompareByte(Item2^.dirName,Item1^.dirName,SCE_SAVE_DATA_DIRNAME_DATA_MAXSIZE);
+end;
+
+function SDSK_USER_PARAM_ASC(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=(Item1^.params.userParam-Item2^.params.userParam);
+end;
+
+function SDSK_USER_PARAM_DES(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=(Item2^.params.userParam-Item1^.params.userParam);
+end;
+
+function SDSK_BLOCKS_ASC(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.infos.blocks>Item2^.infos.blocks)-Integer(Item1^.infos.blocks<Item2^.infos.blocks);
+end;
+
+function SDSK_BLOCKS_DES(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.infos.blocks<Item2^.infos.blocks)-Integer(Item1^.infos.blocks>Item2^.infos.blocks);
+end;
+
+function SDSK_MTIME_ASC(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.params.mtime>Item2^.params.mtime)-Integer(Item1^.params.mtime<Item2^.params.mtime);
+end;
+
+function SDSK_MTIME_DES(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.params.mtime<Item2^.params.mtime)-Integer(Item1^.params.mtime>Item2^.params.mtime);
+end;
+
+function SDSK_FREE_BLOCKS_ASC(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.infos.freeBlocks>Item2^.infos.freeBlocks)-Integer(Item1^.infos.freeBlocks<Item2^.infos.freeBlocks);
+end;
+
+function SDSK_FREE_BLOCKS_DES(Item1,Item2:PDirNameSearchNode): Integer;
+begin
+ Result:=Integer(Item1^.infos.freeBlocks<Item2^.infos.freeBlocks)-Integer(Item1^.infos.freeBlocks>Item2^.infos.freeBlocks);
+end;
+
+procedure TDirNameSearchJob.Sort();
+var
+ Compare:TListSortCompare;
+begin
+ if (List=nil) then Exit;
+
+ Compare:=nil;
+
+ if (data.order=SDSO_ASCENT) then
+ begin
+  case data.key of
+   SDSK_DIRNAME    :Compare:=TListSortCompare(@SDSK_DIRNAME_ASC    );
+   SDSK_USER_PARAM :Compare:=TListSortCompare(@SDSK_USER_PARAM_ASC );
+   SDSK_BLOCKS     :Compare:=TListSortCompare(@SDSK_BLOCKS_ASC     );
+   SDSK_MTIME      :Compare:=TListSortCompare(@SDSK_MTIME_ASC      );
+   SDSK_FREE_BLOCKS:Compare:=TListSortCompare(@SDSK_FREE_BLOCKS_ASC);
+   else;
+  end;
+ end else
+ begin
+  case data.key of
+   SDSK_DIRNAME    :Compare:=TListSortCompare(@SDSK_DIRNAME_DES    );
+   SDSK_USER_PARAM :Compare:=TListSortCompare(@SDSK_USER_PARAM_DES );
+   SDSK_BLOCKS     :Compare:=TListSortCompare(@SDSK_BLOCKS_DES     );
+   SDSK_MTIME      :Compare:=TListSortCompare(@SDSK_MTIME_DES      );
+   SDSK_FREE_BLOCKS:Compare:=TListSortCompare(@SDSK_FREE_BLOCKS_DES);
+   else;
+  end;
+ end;
+
+ if (Compare<>nil) then
+ begin
+  List.Sort(Compare);
+ end;
+end;
+
+procedure FreeDirNameSearchNode(data,arg:pointer);
+begin
+ FreeMem(data);
+end;
+
+function TDirNameSearchJob.Run:TIpcValue;
+var
+ i,Count:Integer;
+ dir_node:PDirNameSearchNode;
+ output  :PDirNameSearchNode;
+begin
+ Result:=TIpcValue.Static(nil,0);
+
+ IterateDirectory();
+ Sort();
+
+ if (List=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Count:=Min(List.Count,data.max);
+
+ if (Count>0) then
+ begin
+  output:=AllocMem(Count*SizeOf(TDirNameSearchNode));
+  //
+  For i:=0 to Count-1 do
+  begin
+   dir_node:=List.Items[i];
+   if (dir_node<>nil) then
+   begin
+    output[i]:=dir_node^;
+   end;
+  end;
+  //
+  Result:=TIpcValue.Inplace(output,output,Count*SizeOf(TDirNameSearchNode));
+ end;
+
+ List.ForEachCall(@FreeDirNameSearchNode,nil);
+ List.Free;
+end;
+
+function TSaveDataBackendProcess.OnDirNameSearch(Value:TIpcValue):TIpcValue; //DirNameSearch
+var
+ input:TDirNameSearch;
+ titleId:pchar;
+ job:TDirNameSearchJob;
+begin
+ Result:=0;
+ input:=Default(TDirNameSearch);
+ Value.MoveTo(@input,sizeof(input));
+
+ titleId:=@input.titleId.data;
+ if (titleId[0]=#0) then
+ begin
+  titleId:=@GameMountConfig.InstallDir;
+ end;
+
+ job:=TDirNameSearchJob.Create(kipc.HoldResult);
+
+ job.fs_src:=GameMountConfig.GetSaveDataFolder(input.userId,titleId,'');
+ job.data  :=input;
+
+ SendCmd(job);
+end;
+
 
 
 end.

@@ -561,12 +561,7 @@ end;
 const
   //Don't follow symlinks on *nix, just delete them
   FindMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
-
-  {$IFDEF WINDOWS}
-  GetAllFilesMask='*.*';
-  {$ELSE}
   GetAllFilesMask='*';
-  {$ENDIF}
 
 function DeleteDirectory(const DirectoryName: RawByteString; OnlyChildren: boolean): boolean;
 type
