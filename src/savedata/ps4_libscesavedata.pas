@@ -1748,7 +1748,7 @@ end;
 
 ///
 
-function SetParamsLt40(slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
+function SetParamsLt40(user_node:PPerUserInfo;slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
 var
  data:pSceSaveDataMemoryData;
  buffer_id:Integer;
@@ -1781,10 +1781,14 @@ begin
 
  Result:=WriteToBuf(@slot_node^.sd_buffers[buffer_id],src);
 
- //TODO: Backend
+ g_instance.Backend.WriteMemory(user_node^.userId,
+                                slot_node^.FslotId,
+                                buffer_id,
+                                slot_node^.sd_buffers[buffer_id].Paddr,
+                                slot_node^.sd_buffers[buffer_id].Fsize);
 end;
 
-function SetParamsBe40(slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
+function SetParamsBe40(user_node:PPerUserInfo;slot_node:PPerSdSlot;src:pSceSaveDataMemorySet2):Integer;
 var
  buffer_id:Integer;
 begin
@@ -1802,7 +1806,8 @@ begin
   begin
    Result:=WriteToBufv(@slot_node^.sd_buffers[0],src);
   end;
-  if (Result<>0) then Exit;
+
+  buffer_id:=0;
  end else
  begin
   buffer_id:=slot_node^.FbufferId;
@@ -1813,19 +1818,27 @@ begin
    CopyBuf(@slot_node^.sd_buffers[buffer_id xor 1],@slot_node^.sd_buffers[buffer_id]);
   end;
 
+  buffer_id:=buffer_id xor 1;
+
   if (src^.dataNum = 0) then
   begin
-   Result:=WriteToBuf(@slot_node^.sd_buffers[buffer_id xor 1],src);
+   Result:=WriteToBuf(@slot_node^.sd_buffers[buffer_id],src);
   end else
   begin
-   Result:=WriteToBufv(@slot_node^.sd_buffers[buffer_id xor 1],src);
+   Result:=WriteToBufv(@slot_node^.sd_buffers[buffer_id],src);
   end;
-  if (Result<>0) then Exit;
 
-  slot_node^.FbufferId:=buffer_id xor 1;
+  if (Result=0) then
+  begin
+   slot_node^.FbufferId:=buffer_id;
+  end;
  end;
 
- //TODO: Backend
+ g_instance.Backend.WriteMemory(user_node^.userId,
+                                slot_node^.FslotId,
+                                buffer_id,
+                                slot_node^.sd_buffers[buffer_id].Paddr,
+                                slot_node^.sd_buffers[buffer_id].Fsize);
 end;
 
 function SetSaveDataMemory2Lt65(setParam:pSceSaveDataMemorySet2):Integer;
@@ -1849,10 +1862,10 @@ begin
 
  if (p_proc.p_sdk_version < $4000000) then
  begin
-  Result:=SetParamsLt40(slot_node,setParam);
+  Result:=SetParamsLt40(user_node,slot_node,setParam);
  end else
  begin
-  Result:=SetParamsBe40(slot_node,setParam);
+  Result:=SetParamsBe40(user_node,slot_node,setParam);
  end;
 
 end;
@@ -1871,7 +1884,7 @@ begin
  slot_node:=user_node^.get_slot_node(setParam^.slotId);
  if (slot_node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- Result:=SetParamsBe40(slot_node,setParam);
+ Result:=SetParamsBe40(user_node,slot_node,setParam);
 end;
 
 ///

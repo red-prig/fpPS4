@@ -74,7 +74,16 @@ type
                      mtime       :QWORD);
  end;
 
+function GET_MAINTITLE_DEFAULT(systemLang:DWORD):PChar;
+
 implementation
+
+function GET_MAINTITLE_DEFAULT(systemLang:DWORD):PChar;
+begin
+ if (systemLang>High(MAINTITLE_DEFAULT)) then systemLang:=1;
+
+ Result:=MAINTITLE_DEFAULT[systemLang];
+end;
 
 Procedure t_savedata_sfo_values.New(userId:Integer;titleId,dirName:pchar;blocks:QWORD;systemLang:DWORD);
 begin
@@ -93,8 +102,7 @@ begin
  params.counter_id:=1;
  params.flags     :=4;
 
- if (systemLang>High(MAINTITLE_DEFAULT)) then systemLang:=0;
- StrCopy(@MAINTITLE,MAINTITLE_DEFAULT[systemLang]);
+ strlcopy(@MAINTITLE,GET_MAINTITLE_DEFAULT(systemLang),SCE_SAVE_DATA_TITLE_MAXSIZE);
 
  strlcopy(@TITLE_ID         ,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);
  strlcopy(@params.title_id_1,titleId,SCE_SAVE_DATA_TITLE_ID_DATA_SIZE);

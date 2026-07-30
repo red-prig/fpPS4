@@ -62,9 +62,10 @@ type
                              memorySize    :DWORD;
                              iconMemorySize:DWORD;
                              paramSize     :DWORD;
-                             InitParam     :pSceSaveDataParam
+                             InitParams    :pSceSaveDataParam
                             ):Integer;
   function    ReadMemory    (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
+  procedure   WriteMemory   (userId,slotId,bufferId:DWORD;addr:Pointer;size:DWORD);
   function    SyncMemory    (syncParam:pSceSaveDataMemorySync):Integer;
  end;
 
@@ -104,6 +105,7 @@ type
   LockDirManager:TLockDirManager;
   //
   SetupMemoryManager:TSetupMemoryManager;
+  pWriteSlot:PSetupMemoryNode;
   //
   EventQueue:TEventQueue;
   //
@@ -132,6 +134,9 @@ type
   function    OnGetParam      (Value:TIpcValue):TIpcValue; //GetParam
   function    OnSetupMemory   (Value:TIpcValue):TIpcValue; //SetupMemory
   function    OnReadMemory    (Value:TIpcValue):TIpcValue; //ReadMemory
+  function    OnSetWriteSlot  (Value:TIpcValue):TIpcValue; //SetWriteSlot
+  function    OnWriteMemory   (Value:TIpcValue):TIpcValue; //WriteMemory
+  function    SendSyncJob     (userId,slotId,option:DWORD):Integer;
   function    OnSyncMemory    (Value:TIpcValue):TIpcValue; //SyncMemory
  end;
 
@@ -382,6 +387,8 @@ begin
  kipc.FHandler.AddCallback('GetParam'      ,@OnGetParam);
  kipc.FHandler.AddCallback('SetupMemory'   ,@OnSetupMemory);
  kipc.FHandler.AddCallback('ReadMemory'    ,@OnReadMemory);
+ kipc.FHandler.AddCallback('SetWriteSlot'  ,@OnSetWriteSlot);
+ kipc.FHandler.AddCallback('WriteMemory'   ,@OnWriteMemory);
  kipc.FHandler.AddCallback('SyncMemory'    ,@OnSyncMemory);
  //
  inherited;
@@ -902,7 +909,10 @@ begin
    //
   end else
   begin
-   SaveIcon(fs_src,icon_data,icon_size)
+   if CheckPng(icon_data,icon_size)=0 then
+   begin
+    SaveIcon(fs_src,icon_data,icon_size);
+   end;
   end;
 
   FreeMem(icon_data);
@@ -924,8 +934,6 @@ begin
 
  load_mtime(fs_src,mtime);
 end;
-
-function SaveDataExists(const fs_src:RawByteString):Boolean; forward;
 
 function TMountJob.Run:TIpcValue;
 var
@@ -1443,21 +1451,6 @@ begin
  begin
   Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
  end;
-end;
-
-function SaveDataExists(const fs_src:RawByteString):Boolean;
-var
- fs_tmp:RawByteString;
-begin
- fs_tmp:=fs_src+'_tmp_cp0';
-
- if DirectoryExists(fs_tmp) and (not DirectoryExists(fs_src)) then
- begin
-  //try repair
-  RenameFile(fs_tmp,fs_src);
- end;
-
- Result:=DirectoryExists(fs_src);
 end;
 
 function TCustomBackupJob.Prepare:Boolean;
@@ -2416,7 +2409,7 @@ function TSaveDataBackendConnect.SetupMemory(userId        :SceUserServiceUserId
                                              memorySize    :DWORD;
                                              iconMemorySize:DWORD;
                                              paramSize     :DWORD;
-                                             InitParam     :pSceSaveDataParam
+                                             InitParams    :pSceSaveDataParam
                                             ):Integer;
 var
  data:TSetupMemory;
@@ -2429,12 +2422,12 @@ begin
  data.memorySize    :=memorySize    ;
  data.iconMemorySize:=iconMemorySize;
 
- if (InitParam<>nil) then
+ if (InitParams<>nil) then
  begin
-  data.title    :=InitParam^.title    ;
-  data.subTitle :=InitParam^.subTitle ;
-  data.detail   :=InitParam^.detail   ;
-  data.userParam:=InitParam^.userParam;
+  data.InitParams.title    :=InitParams^.title    ;
+  data.InitParams.subTitle :=InitParams^.subTitle ;
+  data.InitParams.detail   :=InitParams^.detail   ;
+  data.InitParams.userParam:=InitParams^.userParam;
  end;
 
  Result:=kipc.InvokeSync2('SetupMemory',@data,sizeof(data));
@@ -2685,12 +2678,12 @@ var
 begin
  Result:=0;
 
- fmemory:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory.dat');
-
- if not FileExists(fmemory) then
+ if not SaveMemoryExists(fs_src) then
  begin
   Exit(0);
  end;
+
+ fmemory:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory.dat');
 
  data:=AllocMem(dataSize+sizeof(t_output_buf));
 
@@ -2738,8 +2731,88 @@ begin
 end;
 
 type
+ TSetWriteSlot=packed record
+  userId  :DWORD;
+  slotId  :WORD;
+  bufferId:WORD;
+ end;
+
+procedure TSaveDataBackendConnect.WriteMemory(userId,slotId,bufferId:DWORD;addr:Pointer;size:DWORD);
+var
+ data:TSetWriteSlot;
+begin
+ data.userId  :=userId;
+ data.slotId  :=slotId;
+ data.bufferId:=bufferId;
+
+ kipc.InvokeAsyn('SetWriteSlot',@data,Sizeof(data));
+
+ kipc.InvokeAsyn('WriteMemory',addr,size);
+end;
+
+function TSaveDataBackendProcess.OnSetWriteSlot(Value:TIpcValue):TIpcValue; //SetWriteSlot
+var
+ data:TSetWriteSlot;
+ node:PSetupMemoryNode;
+begin
+ Result:=0;
+ pWriteSlot:=nil;
+
+ data:=Default(TSetWriteSlot);
+ Value.MoveTo(@data,sizeof(data));
+
+ node:=SetupMemoryManager.Get(data.userId,data.slotId);
+ if (node=nil) then Exit;
+
+ if (node^.is_setup) then
+ if (data.bufferId<node^.data.bufferNum) then
+ begin
+  node^.FbufferId:=data.bufferId;
+  pWriteSlot:=node;
+ end;
+
+end;
+
+function TSaveDataBackendProcess.OnWriteMemory(Value:TIpcValue):TIpcValue; //WriteMemory
+var
+ src_addr:Pointer;
+ src_size:QWORD;
+
+ buf:PSdMemoryBuffer;
+ is_writed:Boolean;
+begin
+ Result:=0;
+ if (pWriteSlot=nil) then Exit;
+
+ buf:=@pWriteSlot^.sd_buffers[pWriteSlot^.FbufferId];
+
+ src_addr:=Value.GetBuf;
+ src_size:=Value.GetLen;
+
+ if (src_size>buf^.Fsize) then src_size:=buf^.Fsize;
+
+ is_writed:=CompareByte(src_addr^,buf^.Paddr^,src_size)<>0;
+
+ if is_writed then
+ begin
+  mtx_lock(pWriteSlot^.mtx);
+
+   Move(src_addr^,buf^.Paddr^,src_size);
+
+   pWriteSlot^.is_writed:=True;
+
+  mtx_unlock(pWriteSlot^.mtx);
+
+  if (pWriteSlot^.job_count<2) then
+  begin
+   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,1);
+  end;
+ end;
+end;
+
+type
  TSyncMemory=packed record
-  userId:SceUserServiceUserId;
+  userId:DWORD;
   slotId:WORD;
   option:WORD; //SceSaveDataMemorySyncOption
  end;
@@ -2758,47 +2831,228 @@ end;
 type
  TSyncMemoryJob=class(TCustomCommand)
   //
-  fs_src:RawByteString;
+  fs_src  :RawByteString;
   //
-  userId  :DWORD;
+  nslot   :PSetupMemoryNode;
   titleId :SceSaveDataTitleId;
   dirName :SceSaveDataDirName;
   is_async:Boolean;
   //
+  function  Lock():Boolean;
   procedure UnLock;
+  function  SetParams(params:pSceSaveDataParam):Integer;
+  function  SyncIcon (iconData:Pointer;iconBufSize:Ptrint):Integer;
   function  Run:TIpcValue; override;
  end;
+
+function TSyncMemoryJob.Lock():Boolean;
+begin
+ Result:=gSaveDataBackend.LockDirManager.LockDir(fs_src);
+end;
 
 procedure TSyncMemoryJob.UnLock;
 begin
  gSaveDataBackend.LockDirManager.UnLockDir(fs_src);
 end;
 
+function TSyncMemoryJob.SetParams(params:pSceSaveDataParam):Integer;
+var
+ param_sfo:t_savedata_sfo_values;
+ fname:RawByteString;
+begin
+ Result:=0;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+
+ if not param_sfo.LoadFromFile(fname) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if not param_sfo.Verif(nslot^.data.userId,@dirName.data) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ param_sfo.SetParam(SCE_SAVE_DATA_PARAM_TYPE_ALL,params,$530);
+
+ if param_sfo.SaveToFile(fname) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end;
+end;
+
+function TSyncMemoryJob.SyncIcon(iconData:Pointer;iconBufSize:Ptrint):Integer;
+var
+ ficon:RawByteString;
+begin
+ Result:=0;
+
+ if (iconBufSize=0) then
+ begin
+  //CopyIcon
+
+  ficon:=ExcludeTrailingPathDelimiter(GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
+
+  iconData:=AllocMem($1C800);
+
+  iconBufSize:=ReadFromFile(ficon,iconData,$1C800);
+
+  if (iconBufSize<=0) then
+  begin
+   //
+  end else
+  begin
+   Result:=CheckPng(iconData,iconBufSize);
+   if (Result<>0) then Exit;
+
+   if not SaveIcon(fs_src,iconData,iconBufSize) then
+   begin
+    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+   end;
+  end;
+
+  FreeMem(iconData);
+ end else
+ begin
+  Result:=CheckPng(iconData,iconBufSize);
+  if (Result<>0) then Exit;
+
+  if not SaveIcon(fs_src,iconData,iconBufSize) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  end;
+ end;
+
+end;
+
 function TSyncMemoryJob.Run:TIpcValue;
 var
- err:Integer;
+ buf:PSdMemoryBuffer;
+ params:SceSaveDataParam;
+ is_writed:Boolean;
+ err      :Integer;
 begin
  Result:=0;
 
  err:=0;
 
- //////////////////
+ if is_async then
+ begin
+
+  if gSaveDataBackend.MountManager.IsActiveMount(nslot^.data.userId,@titleId.data,@dirName.data) then
+  begin
+   System.InterlockedDecrement(nslot^.job_count);
+   Exit(0); //????
+  end;
+
+  if not Lock() then
+  begin
+   System.InterlockedDecrement(nslot^.job_count);
+   Exit(0);
+  end;
+
+ end;
+
+ mtx_lock(nslot^.mtx);
+
+  is_writed:=nslot^.is_writed;
+
+  if is_writed then
+  begin
+   buf:=@nslot^.sd_buffers[nslot^.FbufferId];
+
+   if (buf^.PParamData=nil) then
+   begin
+    //SyncInitParam
+    params:=Default(SceSaveDataParam);
+
+    params.title    :=nslot^.data.InitParams.title;
+    params.subTitle :=nslot^.data.InitParams.subTitle;
+    params.detail   :=nslot^.data.InitParams.detail;
+    params.userParam:=nslot^.data.InitParams.userParam;
+
+    if (params.title[0]=#0) then
+    begin
+     strlcopy(@params.title,GET_MAINTITLE_DEFAULT(gSaveDataBackend.systemLang),SCE_SAVE_DATA_TITLE_MAXSIZE);
+    end;
+
+    params.title   [127] :=#0;
+    params.subTitle[127] :=#0;
+    params.detail  [1023]:=#0;
+
+    err:=SetParams(@params);
+   end else
+   begin
+    //SyncParamBuf
+    err:=SetParams(buf^.PParamData);
+   end;
+
+   if (err=0) and (buf^.PmemoryData<>nil) then
+   begin
+    if not SaveMemory(fs_src,buf^.PmemoryData,buf^.FmemorySize) then
+    begin
+     Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+    end;
+   end;
+
+   if (err=0) then
+   begin
+    if (buf^.PiconMemorySize=nil) then
+    begin
+     err:=SyncIcon(nil,0);
+    end else
+    begin
+     err:=SyncIcon(buf^.PiconData,buf^.PiconMemorySize^.cur);
+    end;
+   end;
+
+   nslot^.is_writed:=False;
+  end;
+
+  if (err=0) then
+  begin
+   update_mtime(fs_src,params.mtime);
+  end;
+
+ mtx_unlock(nslot^.mtx);
+
+ ///
 
  if is_async then
  begin
-  gSaveDataBackend.EventQueue.Push(SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,err,userId,@titleId,@dirName);
+  gSaveDataBackend.EventQueue.Push(
+   SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,
+   err,
+   nslot^.data.userId,
+   @titleId,
+   @dirName);
  end else
  begin
   Result:=err;
  end;
 
+ if is_writed then
+ begin
+  if (err=0) then
+  begin
+   Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is done.');
+  end else
+  begin
+   Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is failed : ',HexStr(err,8));
+  end;
+ end;
+
  ///
+ System.InterlockedDecrement(nslot^.job_count);
  UnLock;
 end;
 
-function TSaveDataBackendProcess.OnSyncMemory(Value:TIpcValue):TIpcValue; //SyncMemory
+function TSaveDataBackendProcess.SendSyncJob(userId,slotId,option:DWORD):Integer;
 var
- input   :TSyncMemory;
  node    :PSetupMemoryNode;
  titleId :pchar;
  dirName :pchar;
@@ -2808,43 +3062,53 @@ var
 begin
  Result:=0;
 
- input:=Default(TSyncMemory);
- Value.MoveTo(@input,sizeof(input));
-
- node:=SetupMemoryManager.Get(input.userId,input.slotId);
+ node:=SetupMemoryManager.Get(userId,slotId);
  if (node=nil) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  titleId:=@GameMountConfig.InstallDir;
- dirName:=sdmemory_slot_name[input.slotId];
+ dirName:=sdmemory_slot_name[slotId];
 
- fs_src  :=GameMountConfig.GetSaveDataFolder(input.userId,titleId,dirName);
- is_async:=(input.option and 1)=0;
-
- if MountManager.IsActiveMount(input.userId,titleId,dirName) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_BUSY);
- end;
-
- if not LockDirManager.LockDir(fs_src) then
- begin
-  Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
- end;
+ fs_src  :=GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
+ is_async:=(option and 1)=0;
 
  if is_async then
  begin
   job:=TSyncMemoryJob.Create(kipc.HoldResult);
  end else
  begin
+
+  if MountManager.IsActiveMount(userId,titleId,dirName) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_BUSY);
+  end;
+
+  if not LockDirManager.LockDir(fs_src) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
+  end;
+
   job:=TSyncMemoryJob.Create(0);
  end;
 
+ System.InterlockedIncrement(node^.job_count);
+
  job.fs_src      :=fs_src;
- job.userId      :=input.userId;
+ job.nslot       :=node;
  job.titleId.data:=titleId;
  job.dirName.data:=dirName;
  job.is_async    :=is_async;
 
  SendCmd(job);
+end;
+
+function TSaveDataBackendProcess.OnSyncMemory(Value:TIpcValue):TIpcValue; //SyncMemory
+var
+ input:TSyncMemory;
+begin
+ input:=Default(TSyncMemory);
+ Value.MoveTo(@input,sizeof(input));
+
+ Result:=SendSyncJob(input.userId,input.slotId,input.option);
 end;
 
 

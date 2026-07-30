@@ -510,7 +510,7 @@ end;
 
 procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
 begin
- Send(msg.mtype,nil,TIpcValue.Static(buf,mlen));
+ Send(msg.mtype,nil,TIpcValue.New(buf,mlen));
 end;
 
 procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash);

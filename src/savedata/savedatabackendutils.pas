@@ -86,10 +86,12 @@ type
   memorySize    :DWORD;
   iconMemorySize:DWORD;
   //
-  title         :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1]    of AnsiChar;
-  subTitle      :array[0..SCE_SAVE_DATA_SUBTITLE_MAXSIZE-1] of AnsiChar;
-  detail        :array[0..SCE_SAVE_DATA_DETAIL_MAXSIZE-1]   of AnsiChar;
-  userParam     :DWORD;
+  InitParams:packed record
+   title        :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1]    of AnsiChar;
+   subTitle     :array[0..SCE_SAVE_DATA_SUBTITLE_MAXSIZE-1] of AnsiChar;
+   detail       :array[0..SCE_SAVE_DATA_DETAIL_MAXSIZE-1]   of AnsiChar;
+   userParam    :DWORD;
+  end;
  end;
 
  PIconBufSize=^TIconBufSize;
@@ -126,11 +128,14 @@ type
   pLeft :PSetupMemoryNode;
   pRight:PSetupMemoryNode;
   //
+  mtx   :mtx;
+  //
   data  :TSetupMemory;
   //
   is_setup  :Boolean;
   is_writed :Boolean;
   FbufferId :Byte;
+  job_count :DWORD;
   sd_buffers:array[0..1] of TSdMemoryBuffer;
   //
   function c(n1,n2:PSetupMemoryNode):Integer; static;
@@ -177,8 +182,13 @@ type
   data  :record end;
  end;
 
+function  SaveDataExists(const fs_src:RawByteString):Boolean;
+
 function  CheckPng(data:Pointer;len:DWORD):Integer;
 function  SaveIcon(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
+
+function  SaveMemoryExists(const fs_src:RawByteString):Boolean;
+function  SaveMemory(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
 
 procedure load_mtime  (const fs_src:RawByteString;var mtime:QWORD);
 procedure update_mtime(const fs_src:RawByteString;var mtime:QWORD);
@@ -481,6 +491,8 @@ begin
  is_writed:=False;
  FbufferId:=0;
 
+ mtx_init(mtx,'SetupMemory');
+
  Result:=0;
 end;
 
@@ -587,6 +599,21 @@ end;
 
 ///
 
+function SaveDataExists(const fs_src:RawByteString):Boolean;
+var
+ fs_tmp:RawByteString;
+begin
+ fs_tmp:=fs_src+'_tmp_cp0';
+
+ if DirectoryExists(fs_tmp) and (not DirectoryExists(fs_src)) then
+ begin
+  //try repair
+  RenameFile(fs_tmp,fs_src);
+ end;
+
+ Result:=DirectoryExists(fs_src);
+end;
+
 function CheckPng(data:Pointer;len:DWORD):Integer;
 var
  Mem:TPCharStream;
@@ -663,6 +690,70 @@ begin
  end;
 
  Result:=TruncFile(fpng1,$1c800);
+end;
+
+function SaveMemoryExists(const fs_src:RawByteString):Boolean;
+var
+ fmem :RawByteString;
+ fmem1:RawByteString;
+begin
+ fmem :=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory.dat');
+ fmem1:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory1.dat');
+
+ if FileExists(fmem1) and (not FileExists(fmem)) then
+ begin
+  //try repair
+  RenameFile(fmem1,fmem);
+ end;
+
+ Result:=FileExists(fmem);
+end;
+
+function SaveMemory(const fs_src:RawByteString;data:Pointer;len:DWORD):Boolean;
+var
+ fmem :RawByteString;
+ fmem0:RawByteString;
+ fmem1:RawByteString;
+begin
+ Result:=False;
+
+ fmem :=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory.dat');
+ fmem0:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory0.dat');
+ fmem1:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/memory1.dat');
+
+ if FileExists(fmem0) then
+ if not DeleteFile(fmem0) then
+ begin
+  Exit(False);
+ end;
+
+ if WriteToFile(fmem0,data,len)<>len then
+ begin
+  Exit(False);
+ end;
+
+ if FileExists(fmem1) then
+ if not DeleteFile(fmem1) then
+ begin
+  Exit(False);
+ end;
+
+ if FileExists(fmem) then
+ if not RenameFile(fmem,fmem1) then
+ begin
+  Exit(False);
+ end;
+
+ if not RenameFile(fmem0,fmem) then
+ begin
+  Exit(False);
+ end;
+
+ if FileExists(fmem1) then
+ if not DeleteFile(fmem1) then
+ begin
+  Exit(False);
+ end;
 end;
 
 procedure load_mtime(const fs_src:RawByteString;var mtime:QWORD);
