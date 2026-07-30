@@ -20,6 +20,7 @@ uses
  vuio,
  vnode,
  vnamei,
+ vfs_vnops,
  vnode_if,
  vfilio,
  vfs_default,
@@ -893,6 +894,7 @@ begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
  de:=AllocMem(i);
+
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;
  de^.ufs_dirent^.d_reclen:=GENERIC_DIRSIZ(@d);
@@ -2116,8 +2118,12 @@ end;
 
 function md_rename(ap:p_vop_rename_args):Integer;
 label
+ _relock,
+ _releout,
  _exit;
 var
+ fdvp:p_vnode;
+ tdvp:p_vnode;
  fvp:p_vnode;
  tvp:p_vnode;
  dd_f,dd_t:p_ufs_dirent;
@@ -2131,27 +2137,58 @@ var
  i:Integer;
 
 begin
- Result:=md_mount_is_valid(ap^.a_tdvp);
+ fdvp:=ap^.a_fdvp;
+ tdvp:=ap^.a_tdvp;
+
+ Result:=md_mount_is_valid(tdvp);
  if (Result<>0) then Exit;
 
  fvp:=ap^.a_fvp;
  tvp:=ap^.a_tvp;
 
+ VOP_UNLOCK(tdvp, 0);
+ if ((tvp <> nil) and (tvp <> tdvp)) then
+ begin
+  VOP_UNLOCK(tvp, 0);
+ end;
+
  if (fvp^.v_type=VDIR) and
     (fvp^.v_mountedhere<>nil) then
  begin
-  Exit(EXDEV);
+  Result:=EXDEV;
+  goto _releout;
  end;
 
  if (tvp<>nil) then
  if (tvp^.v_type=VDIR) and
     (tvp^.v_mountedhere<>nil) then
  begin
-  Exit(EXDEV);
+  Result:=EXDEV;
+  goto _releout;
  end;
 
- dd_f :=ap^.a_fdvp^.v_data;
- dd_t :=ap^.a_tdvp^.v_data;
+ _relock:
+
+  Result:=vn_lock(fdvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+  if (Result<>0) then goto _releout;
+
+  if (vn_lock(tdvp, LK_EXCLUSIVE or LK_NOWAIT,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%}) <> 0) then
+  begin
+   VOP_UNLOCK(fdvp, 0);
+
+   Result:=vn_lock(tdvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+   if (Result<>0) then goto _releout;
+
+   VOP_UNLOCK(tdvp, 0);
+   //atomic_add_int(&rename_restarts, 1);
+   goto _relock;
+  end;
+
+ Result:=vn_lock(fvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+ if (Result<>0) then goto _releout;
+
+ dd_f :=fdvp^.v_data;
+ dd_t :=tdvp^.v_data;
  de_f :=fvp^.v_data;
  cnp_t:=ap^.a_tcnp;
 
@@ -2209,18 +2246,39 @@ begin
 
  _exit:
 
- if (de_f<>nil) then
- begin
-  sx_xunlock(@de_f^.ufs_md_lock);
- end;
+  if (de_f<>nil) then
+  begin
+   sx_xunlock(@de_f^.ufs_md_lock);
+  end;
 
- sx_xunlock(@dd_f^.ufs_md_lock);
- if (dd_f<>dd_t) then
- begin
-  sx_xunlock(@dd_t^.ufs_md_lock);
- end;
+  sx_xunlock(@dd_f^.ufs_md_lock);
+  if (dd_f<>dd_t) then
+  begin
+   sx_xunlock(@dd_t^.ufs_md_lock);
+  end;
 
- NtClose(FD);
+  NtClose(FD);
+
+ //unlockout:
+   vput(fdvp);
+   vput(fvp);
+   vput(tdvp);
+   if (tvp<>nil) then
+   begin
+    vput(tvp);
+   end;
+
+ Exit;
+
+ _releout:
+  vrele(fdvp);
+  vrele(fvp);
+  vrele(tdvp);
+  if (tvp<>nil) then
+  begin
+   vrele(tvp);
+  end;
+
 end;
 
 Function GetDesiredAccess(flags:Integer):DWORD; inline;

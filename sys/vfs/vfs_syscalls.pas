@@ -2842,8 +2842,9 @@ begin
  mp:=nil;
 
  //bwillwrite();
- NDINIT_ATRIGHTS(@fromnd, DELETE, LOCKPARENT or LOCKLEAF or SAVESTART or
-     MPSAFE or AUDITVNODE1, pathseg, old, oldfd, CAP_DELETE, curkthread);
+
+ NDINIT_ATRIGHTS(@fromnd, DELETE, WANTPARENT or SAVESTART or MPSAFE or
+     AUDITVNODE1, pathseg, old, oldfd, CAP_DELETE, curkthread);
 
  error:=nd_namei(@fromnd);
  if (error<>0) then
@@ -2856,12 +2857,11 @@ begin
 
  //error:=mac_vnode_check_rename_from(td^.td_ucred, fromnd.ni_dvp,
  //    fromnd.ni_vp, @fromnd.ni_cnd);
-
- VOP_UNLOCK(fromnd.ni_dvp, 0);
- if (fromnd.ni_dvp<>fromnd.ni_vp) then
- begin
-  VOP_UNLOCK(fromnd.ni_vp, 0);
- end;
+ //VOP_UNLOCK(fromnd.ni_dvp, 0);
+ //if (fromnd.ni_dvp<>fromnd.ni_vp) then
+ //begin
+ // VOP_UNLOCK(fromnd.ni_vp, 0);
+ //end;
 
  fvp:=fromnd.ni_vp;
  if (error=0) then
@@ -2904,7 +2904,7 @@ begin
 
  tvfslocked:=NDHASGIANT(@tond);
  tdvp:=tond.ni_dvp;
- tvp:=tond.ni_vp;
+ tvp :=tond.ni_vp;
  if (tvp<>nil) then
  begin
   if (fvp^.v_type=VDIR) and (tvp^.v_type<>VDIR) then
@@ -2940,11 +2940,11 @@ begin
  begin
   error:=VOP_RENAME(fromnd.ni_dvp, fromnd.ni_vp, @fromnd.ni_cnd, tond.ni_dvp, tond.ni_vp, @tond.ni_cnd);
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
-  NDFREE(@tond, NDF_ONLY_PNBUF);
+  NDFREE(@tond  , NDF_ONLY_PNBUF);
  end else
  begin
   NDFREE(@fromnd, NDF_ONLY_PNBUF);
-  NDFREE(@tond, NDF_ONLY_PNBUF);
+  NDFREE(@tond  , NDF_ONLY_PNBUF);
 
   if (tvp<>nil) then
   begin
@@ -2959,6 +2959,7 @@ begin
   vrele(fromnd.ni_dvp);
   vrele(fvp);
  end;
+
  vrele(tond.ni_startdir);
  vn_finished_write(mp);
 out1:

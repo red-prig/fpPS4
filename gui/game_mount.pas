@@ -108,8 +108,8 @@ end;
 Constructor TGameMountConfig.Create;
 begin
  LocalDir  :='';
- TitleId   :='?????????';
- InstallDir:='?????????';
+ TitleId   :='NPXS00000';
+ InstallDir:='NPXS00000';
  //
  mtx_init(mount_mtx,'mount_mtx');
 end;

@@ -275,9 +275,9 @@ Constructor TGameInfo.Create;
 begin
  inherited;
  FExec:='/app0/eboot.bin';
- FTitleId:='???';
- FVersion:='???';
- FAppVer :='???';
+ FTitleId:='NPXS00000';
+ FVersion:='0.0';
+ FAppVer :='0.0';
 end;
 
 Constructor TMountList.Create;
