@@ -83,8 +83,9 @@ type
     self_:TCustomCommand;
    end;
   var
-   node:TQNode;
-   rid :DWORD;
+   node :TQNode;
+   rid  :DWORD;
+   defer:Boolean;
   Constructor Create(_rid:DWORD);
   function    Run:TIpcValue; virtual;
   procedure   Invoke(value:TIpcValue);
@@ -116,19 +117,21 @@ type
   Constructor Create;
   procedure   SendCmd(cmd:TCustomCommand);
   function    RecvCmd(var cmd:TCustomCommand):Boolean;
+  procedure   DoExit          ();
   function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
   function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
   function    OnDelete        (Value:TIpcValue):TIpcValue; //Delete
   function    OnMount         (Value:TIpcValue):TIpcValue; //Mount
   function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
   function    OnUmount        (Value:TIpcValue):TIpcValue; //Umount
+  procedure   UmountAll       ();
   function    OnGetMountInfo  (Value:TIpcValue):TIpcValue; //GetMountInfo
   function    OnBackup        (Value:TIpcValue):TIpcValue; //Backup
   function    SendBackupJob   (userId     :SceUserServiceUserId;
                                titleId    :pchar;
                                dirName    :pchar;
                                fingerprint:pSceSaveDataFingerprint;
-                               umount     :Boolean):Integer;
+                               event_type :Byte):Integer;
   function    OnCheckBackup   (Value:TIpcValue):TIpcValue; //CheckBackup
   function    OnRestoreBackup (Value:TIpcValue):TIpcValue; //RestoreBackup
   function    OnGetEventResult(Value:TIpcValue):TIpcValue; //GetEventResult
@@ -284,12 +287,13 @@ begin
   Assert(false,'savedata_process');
  end;
 
- gSaveDataBackend.OnExitProc(Default(TIpcValue));
+ gSaveDataBackend.DoExit();
 end;
 
 function job_thread(parameter:pointer):ptrint;
 var
  cmd:TCustomCommand;
+ Value:TIpcValue;
 begin
  Result:=0;
  repeat
@@ -298,8 +302,17 @@ begin
   cmd:=nil;
   while gSaveDataBackend.RecvCmd(cmd) do
   begin
-   cmd.Invoke(cmd.Run);
-   cmd.Free;
+   Value:=cmd.Run;
+   if cmd.defer then
+   begin
+    cmd.defer:=False;
+    Value.Free;
+    gSaveDataBackend.SendCmd(cmd);
+   end else
+   begin
+    cmd.Invoke(Value);
+    cmd.Free;
+   end;
   end;
 
  until false;
@@ -419,11 +432,17 @@ begin
  end;
 end;
 
+procedure TSaveDataBackendProcess.DoExit();
+begin
+ kipc.Disconnect();
+ UmountAll();
+ SendCmd(TCmdExitProc.Create(0));
+end;
+
 function TSaveDataBackendProcess.OnExitProc(Value:TIpcValue):TIpcValue; //EXIT_PROC
 begin
  Result:=0;
- kipc.Disconnect();
- SendCmd(TCmdExitProc.Create(0));
+ DoExit();
 end;
 
 procedure TSaveDataBackendConnect.SendMountConfig();
@@ -1228,6 +1247,12 @@ var
 
  err:Integer;
 begin
+
+ if not gSaveDataBackend.MountManager.IsActiveMount(data.slot_id) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
+ end;
+
  titleId:=@minfo.titleId.data;
  if (titleId[0]=#0) then
  begin
@@ -1258,7 +1283,7 @@ begin
                                 @minfo.titleId,
                                 @minfo.dirName,
                                 @minfo.fingerprint,
-                                True);
+                                SDET_UMOUNT_BACKUP_END);
  end;
 
  Result:=err;
@@ -1286,6 +1311,25 @@ begin
 
   job.minfo:=MountManager.GetMount(data.slot_id);
   job.data :=data;
+
+  SendCmd(job);
+ end;
+
+end;
+
+procedure TSaveDataBackendProcess.UmountAll();
+var
+ i:Integer;
+ job:TUmountJob;
+begin
+
+ For i:=0 to MountManager.max-1 do
+ if MountManager.IsActiveMount(i) then
+ begin
+  job:=TUmountJob.Create(0);
+
+  job.minfo:=MountManager.GetMount(i);
+  job.data.slot_id:=i;
 
   SendCmd(job);
  end;
@@ -1394,7 +1438,7 @@ begin
                       titleId,
                       @data.dirName.data,
                       @data.fingerprint,
-                      False);
+                      SDET_BACKUP_END);
 end;
 
 type
@@ -1408,7 +1452,7 @@ type
  end;
 
  TBackupJob=class(TCustomBackupJob)
-  umount:Boolean;
+  event_type:Byte;
   function Backup:Boolean;
   function Run:TIpcValue; override;
  end;
@@ -1569,16 +1613,11 @@ end;
 
 function TBackupJob.Run:TIpcValue;
 var
- id,err:Integer;
+ err:Integer;
  res:Boolean;
 begin
  Result:=0;
  res:=Backup;
-
- case umount of
-  True :id:=SCE_SAVE_DATA_EVENT_TYPE_UMOUNT_BACKUP_END;
-  False:id:=SCE_SAVE_DATA_EVENT_TYPE_BACKUP_END;
- end;
 
  //SCE_SAVE_DATA_ERROR_NO_SPACE_FS
  case res of
@@ -1586,9 +1625,10 @@ begin
   False:err:=SCE_SAVE_DATA_ERROR_INTERNAL;
  end;
 
- gSaveDataBackend.EventQueue.Push(id,err,user_id,@titleId,@dirName);
-
- sleep(200);
+ if (event_type<>0) then
+ begin
+  gSaveDataBackend.EventQueue.Push(event_type,err,user_id,@titleId,@dirName);
+ end;
 
  ///
  UnLock;
@@ -1695,7 +1735,7 @@ function TSaveDataBackendProcess.SendBackupJob(userId     :SceUserServiceUserId;
                                                titleId    :pchar;
                                                dirName    :pchar;
                                                fingerprint:pSceSaveDataFingerprint;
-                                               umount     :Boolean):Integer;
+                                               event_type :Byte):Integer;
 var
  fs_src:RawByteString;
  job:TBackupJob;
@@ -1721,7 +1761,7 @@ begin
 
  job:=TBackupJob.Create(0); //async
  job.Init(userId,titleId,dirName);
- job.umount:=umount;
+ job.event_type:=event_type;
 
  Result:=job.OpenParamSfo(fs_src);
  if (Result<>0) then
@@ -2774,7 +2814,7 @@ begin
 
   if (pWriteSlot^.job_count<2) then
   begin
-   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,1,False);
+   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,0,False);
   end;
  end;
 end;
@@ -2806,6 +2846,7 @@ type
   titleId :SceSaveDataTitleId;
   dirName :SceSaveDataDirName;
   is_async:Boolean;
+  is_event:Boolean;
   //
   function  Lock():Boolean;
   procedure UnLock;
@@ -2915,13 +2956,13 @@ begin
 
   if gSaveDataBackend.MountManager.IsActiveMount(nslot^.data.userId,@titleId.data,@dirName.data) then
   begin
-   System.InterlockedDecrement(nslot^.job_count);
+   defer:=True;
    Exit(0); //????
   end;
 
   if not Lock() then
   begin
-   System.InterlockedDecrement(nslot^.job_count);
+   defer:=True;
    Exit(0);
   end;
 
@@ -2998,7 +3039,7 @@ begin
 
  if is_async then
  begin
-  if (not is_eventd) then
+  if is_event and (not is_eventd) then
   begin
 
    mtx_lock(nslot^.mtx);
@@ -3008,7 +3049,7 @@ begin
    mtx_unlock(nslot^.mtx);
 
    gSaveDataBackend.EventQueue.Push(
-    SCE_SAVE_DATA_EVENT_TYPE_SAVE_DATA_MEMORY_SYNC_END,
+    SDET_SAVE_DATA_MEMORY_SYNC_END,
     err,
     nslot^.data.userId,
     @titleId,
@@ -3022,6 +3063,14 @@ begin
 
  if is_writed then
  begin
+  UnLock; //unlock first
+
+  gSaveDataBackend.SendBackupJob(nslot^.data.userId,
+                                 @titleId.data,
+                                 @dirName.data,
+                                 nil,
+                                 0);
+
   if (err=0) then
   begin
    Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is done.');
@@ -3029,11 +3078,14 @@ begin
   begin
    Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is failed : ',HexStr(err,8));
   end;
+
+ end else
+ begin
+  UnLock;
  end;
 
- ///
+ ///deref
  System.InterlockedDecrement(nslot^.job_count);
- UnLock;
 end;
 
 function TSaveDataBackendProcess.SendSyncJob(userId,slotId,option:DWORD;hold:Boolean):Integer;
@@ -3089,6 +3141,7 @@ begin
  job.titleId.data:=titleId;
  job.dirName.data:=dirName;
  job.is_async    :=is_async;
+ job.is_event    :=hold and is_async;
 
  SendCmd(job);
 end;
