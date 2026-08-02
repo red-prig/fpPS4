@@ -585,7 +585,6 @@ type
 var
  si:TSTARTUPINFO;
  pi:PROCESS_INFORMATION;
- data:array[0..SizeOf(TBUF_PROC_INFO)-1+7] of Byte;
  P_BUF:PBUF_PROC_INFO;
  LEN:ULONG;
  rip:QWORD;
@@ -593,9 +592,8 @@ var
 begin
  Result:=0;
 
- P_BUF:=Align(@data,8);
+ P_BUF:=AllocMem(sizeof(TBUF_PROC_INFO));
 
- P_BUF^:=Default(TBUF_PROC_INFO);
  LEN:=SizeOf(TBUF_PROC_INFO);
 
  Result:=NtQueryInformationProcess(NtCurrentProcess,
@@ -603,7 +601,11 @@ begin
                                    P_BUF,
                                    LEN,
                                    @LEN);
- if (Result<>0) then Exit;
+ if (Result<>0) then
+ begin
+  FreeMem(P_BUF);
+  Exit;
+ end;
 
  si:=Default(TSTARTUPINFO);
  pi:=Default(PROCESS_INFORMATION);
@@ -611,6 +613,9 @@ begin
  si.cb:=SizeOf(si);
 
  b:=CreateProcessW(PWideChar(@P_BUF^.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
+
+ FreeMem(P_BUF);
+
  if not b then Exit(-1);
 
  if (options and MD_FORK_PDEATHSIG)<>0 then
