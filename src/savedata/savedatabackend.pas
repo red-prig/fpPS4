@@ -46,6 +46,8 @@ type
   function    CheckBackup   (check:pSceSaveDataCheckBackupData):Integer;
   function    RestoreBackup (restore:pSceSaveDataRestoreBackupData):Integer;
   function    GetEventResult(event:pSceSaveDataEvent):Integer;
+  function    GetProgress   (p_progress:PSingle):Integer;
+  function    ClearProgress ():Integer;
   function    SaveIcon      (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
   function    LoadIcon      (slot_id:Integer;icon:pSceSaveDataIcon;internal:Boolean):Integer;
   function    SetParam      (slot_id     :Integer;
@@ -89,12 +91,19 @@ type
   Constructor Create(_rid:DWORD);
   function    Run:TIpcValue; virtual;
   procedure   Invoke(value:TIpcValue);
+  function    GetProgress:Single; virtual;
  end;
 
  THostIpcPipeSave=class(THostIpcPipe)
   event:t_event;
   Constructor Create;
   procedure   Recv_pipe; override;
+ end;
+
+ TProgressInfo=record
+  mtx  :mtx;
+  cmd  :TCustomCommand; //Mount, Delete, RestoreBackupData
+  Value:Single;
  end;
 
  TSaveDataBackendProcess=class
@@ -114,9 +123,11 @@ type
   //
   EventQueue:TEventQueue;
   //
+  Progress:TProgressInfo;
+  //
   Constructor Create;
-  procedure   SendCmd(cmd:TCustomCommand);
-  function    RecvCmd(var cmd:TCustomCommand):Boolean;
+  procedure   SendCmd         (cmd:TCustomCommand);
+  function    RecvCmd         (var cmd:TCustomCommand):Boolean;
   procedure   DoExit          ();
   function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
   function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
@@ -124,7 +135,7 @@ type
   function    OnMount         (Value:TIpcValue):TIpcValue; //Mount
   function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
   function    OnUmount        (Value:TIpcValue):TIpcValue; //Umount
-  procedure   UmountAll       ();
+  procedure   UmountAllForce  ();
   function    OnGetMountInfo  (Value:TIpcValue):TIpcValue; //GetMountInfo
   function    OnBackup        (Value:TIpcValue):TIpcValue; //Backup
   function    SendBackupJob   (userId     :SceUserServiceUserId;
@@ -135,6 +146,9 @@ type
   function    OnCheckBackup   (Value:TIpcValue):TIpcValue; //CheckBackup
   function    OnRestoreBackup (Value:TIpcValue):TIpcValue; //RestoreBackup
   function    OnGetEventResult(Value:TIpcValue):TIpcValue; //GetEventResult
+  function    OnGetProgress   (Value:TIpcValue):TIpcValue; //GetProgress
+  function    OnClearProgress (Value:TIpcValue):TIpcValue; //ClearProgress
+  procedure   SetProgressJob  (cmd:TCustomCommand);
   function    OnSaveIcon      (Value:TIpcValue):TIpcValue; //SaveIcon
   function    OnLoadIcon      (Value:TIpcValue):TIpcValue; //LoadIcon
   function    OnSetParam      (Value:TIpcValue):TIpcValue; //SetParam
@@ -258,6 +272,11 @@ begin
  begin
   gSaveDataBackend.kipc.InvokeResult(rid,value);
  end;
+end;
+
+function TCustomCommand.GetProgress:Single;
+begin
+ Result:=0;
 end;
 
 //
@@ -385,6 +404,8 @@ begin
  //
  EventQueue.Init;
  //
+ mtx_init(Progress.mtx,'Progress');
+ //
  kipc:=THostIpcPipeSave.Create;
  kipc.FHandler:=THostIpcHandler.Create;
  //
@@ -399,6 +420,8 @@ begin
  kipc.FHandler.AddCallback('CheckBackup'   ,@OnCheckBackup);
  kipc.FHandler.AddCallback('RestoreBackup' ,@OnRestoreBackup);
  kipc.FHandler.AddCallback('GetEventResult',@OnGetEventResult);
+ kipc.FHandler.AddCallback('GetProgress'   ,@OnGetProgress);
+ kipc.FHandler.AddCallback('ClearProgress' ,@OnClearProgress);
  kipc.FHandler.AddCallback('SaveIcon'      ,@OnSaveIcon);
  kipc.FHandler.AddCallback('LoadIcon'      ,@OnLoadIcon);
  kipc.FHandler.AddCallback('SetParam'      ,@OnSetParam);
@@ -435,7 +458,7 @@ end;
 procedure TSaveDataBackendProcess.DoExit();
 begin
  kipc.Disconnect();
- UmountAll();
+ UmountAllForce();
  SendCmd(TCmdExitProc.Create(0));
 end;
 
@@ -525,6 +548,7 @@ type
   //
   procedure Init(_user_id:Integer;_titleId,_dirName:pchar);
   procedure UnLock;
+  procedure DoDelete(p_progress:PSingle;add:Single);
  end;
 
 procedure TCustomDirJob.Init(_user_id:Integer;_titleId,_dirName:pchar);
@@ -544,22 +568,23 @@ begin
  gSaveDataBackend.LockDirManager.UnLockDir(fs_src);
 end;
 
+procedure TCustomDirJob.DoDelete(p_progress:PSingle;add:Single);
+begin
+ //dont check errors
+ game_mount.DeleteDirectory(fs_dst,False); if (p_progress<>nil) then p_progress^:=p_progress^+add;
+ game_mount.DeleteDirectory(fs_old,False); if (p_progress<>nil) then p_progress^:=p_progress^+add;
+ game_mount.DeleteDirectory(fs_new,False); if (p_progress<>nil) then p_progress^:=p_progress^+add;
+ game_mount.DeleteDirectory(fs_src,False); if (p_progress<>nil) then p_progress^:=p_progress^+add;
+end;
+
 ///
 
 type
  TDeleteJob=class(TCustomDirJob)
-  procedure Delete;
+  Progress:Single;
   function  Run:TIpcValue; override;
+  function  GetProgress:Single; override;
  end;
-
-procedure TDeleteJob.Delete;
-begin
- //dont check errors
- game_mount.DeleteDirectory(fs_dst,False);
- game_mount.DeleteDirectory(fs_old,False);
- game_mount.DeleteDirectory(fs_new,False);
- game_mount.DeleteDirectory(fs_src,False);
-end;
 
 function TDeleteJob.Run:TIpcValue;
 begin
@@ -573,9 +598,17 @@ begin
   //check FINGERPRINT?
  end;
 
- Delete;
+ Progress:=1/5;
 
+ DoDelete(@Progress,1/5);
+
+ gSaveDataBackend.SetProgressJob(nil);
  Unlock;
+end;
+
+function TDeleteJob.GetProgress:Single;
+begin
+ Result:=Progress;
 end;
 
 function TSaveDataBackendProcess.OnDelete(Value:TIpcValue):TIpcValue; //Delete
@@ -613,6 +646,7 @@ begin
    job:=TDeleteJob.Create(kipc.HoldResult);
    job.Init(data.userId,titleId,dirName);
 
+   SetProgressJob(job);
    SendCmd(job);
   end else
   begin
@@ -728,6 +762,7 @@ type
   param_sfo:t_savedata_sfo_values;
   //
   mtime:QWORD;
+  Progress:Single;
   //
   procedure Init(const _data:TMount);
   function  Lock():Boolean;
@@ -742,6 +777,7 @@ type
   function  OpenMount():Integer;
   //
   function  Run:TIpcValue; override;
+  function  GetProgress:Single; override;
  end;
 
 procedure TMountJob.Init(const _data:TMount);
@@ -902,6 +938,8 @@ var
  icon_data:Pointer;
  icon_size:Ptrint;
 begin
+ Progress:=2/9;
+
  Result:=CheckMountData(True);
  if (Result<>0) then Exit;
 
@@ -913,13 +951,22 @@ begin
   end;
  end;
 
+ Progress:=3/9;
+
  if not ForceDirectories(fs_src) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
  end;
 
+ Progress:=4/9;
+
  if not CreateParamSfo then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Progress:=5/9;
+
  if not CreateTmpFiles then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Progress:=6/9;
 
  if ((data.mountMode and SDMM_COPY_ICON)<>0) then
  begin
@@ -943,19 +990,29 @@ begin
   FreeMem(icon_data);
  end;
 
+ Progress:=7/9;
+
  update_mtime(fs_src,mtime);
 end;
 
 function TMountJob.OpenMount():Integer;
 begin
+ Progress:=2/9;
+
  Result:=CheckMountData(False);
  if (Result<>0) then Exit;
+
+ Progress:=4/9;
 
  Result:=OpenParamSfo();
  if (Result<>0) then Exit;
 
+ Progress:=6/9;
+
  Result:=MountParamSfo();
  if (Result<>0) then Exit;
+
+ Progress:=7/9;
 
  load_mtime(fs_src,mtime);
 end;
@@ -1009,6 +1066,9 @@ begin
                                                             dirName,
                                                             data.Internal,
                                                             slot_id);
+
+ Progress:=1/9;
+
  if (output.result=0) then
  begin
 
@@ -1066,6 +1126,8 @@ begin
 
    end;
 
+   Progress:=8/9;
+
    if (output.result=0) then
    begin
     //save info
@@ -1095,6 +1157,10 @@ begin
 
  end;
 
+ Progress:=9/9;
+
+ gSaveDataBackend.SetProgressJob(nil);
+
  if (output.result<>0) and is_locked then
  begin
   Unlock;
@@ -1110,6 +1176,11 @@ begin
 
 end;
 
+function TMountJob.GetProgress:Single;
+begin
+ Result:=Progress;
+end;
+
 function TSaveDataBackendProcess.OnMount(Value:TIpcValue):TIpcValue; //Mount
 var
  data:TMount;
@@ -1123,6 +1194,7 @@ begin
  job:=TMountJob.Create(kipc.HoldResult);
  job.Init(data);
 
+ SetProgressJob(job);
  SendCmd(job);
 end;
 
@@ -1204,6 +1276,7 @@ type
   //
   minfo:TMountSlot;
   data :TUmount;
+  force:Boolean;
   //
   procedure UnLock;
   function  UmountParamSfo():Integer;
@@ -1264,8 +1337,12 @@ begin
  fs_src:=GameMountConfig.GetSaveDataFolder(minfo.userId,titleId,dirName);
 
  //
+ err:=0;
 
- err:=UmountParamSfo();
+ if not force then
+ begin
+  err:=UmountParamSfo();
+ end;
 
  if (err=0) then
  begin
@@ -1275,7 +1352,10 @@ begin
   Unlock;
  end;
 
- update_mtime(fs_src,minfo.mtime);
+ if not force then
+ begin
+  update_mtime(fs_src,minfo.mtime);
+ end;
 
  if (err=0) and data.backup and ((minfo.mountMode and SDMM_RDWR)<>0) then
  begin
@@ -1317,7 +1397,7 @@ begin
 
 end;
 
-procedure TSaveDataBackendProcess.UmountAll();
+procedure TSaveDataBackendProcess.UmountAllForce();
 var
  i:Integer;
  job:TUmountJob;
@@ -1330,6 +1410,7 @@ begin
 
   job.minfo:=MountManager.GetMount(i);
   job.data.slot_id:=i;
+  job.force:=True;
 
   SendCmd(job);
  end;
@@ -1443,12 +1524,15 @@ end;
 
 type
  TCustomBackupJob=class(TCustomDirJob)
+  //
   param_sfo:t_savedata_sfo_values;
+  Progress:Single;
   //
   function OpenParamSfo(const fdir:RawByteString):Integer;
   function SaveParamSfo(const fdir:RawByteString):Integer;
   function Prepare:Boolean;
   function CheckBackup:Integer;
+  function GetProgress:Single; override;
  end;
 
  TBackupJob=class(TCustomBackupJob)
@@ -1501,6 +1585,8 @@ function TCustomBackupJob.Prepare:Boolean;
 begin
  Result:=False;
 
+ Progress:=1/12;
+
  if DirectoryExists(fs_old) and (not DirectoryExists(fs_dst)) then
  begin
   //rollback an unfinished transaction
@@ -1513,6 +1599,8 @@ begin
    Exit;
   end;
  end;
+
+ Progress:=2/12;
 
  //clear old
  if DirectoryExists(fs_old) then
@@ -1527,6 +1615,8 @@ begin
   end;
  end;
 
+ Progress:=3/12;
+
  //clear new
  if DirectoryExists(fs_new) then
  begin
@@ -1540,6 +1630,8 @@ begin
   end;
  end;
 
+ Progress:=4/12;
+
  Result:=True;
 end;
 
@@ -1550,7 +1642,16 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_FOUND);
  end;
 
+ Progress:=5/12;
+
  Result:=OpenParamSfo(fs_dst);
+
+ Progress:=6/12;
+end;
+
+function TCustomBackupJob.GetProgress:Single;
+begin
+ Result:=Progress;
 end;
 
 function TBackupJob.Backup:Boolean;
@@ -1642,6 +1743,8 @@ begin
 
  fs_tmp:=fs_src+'_tmp_cp0';
 
+ Progress:=7/12;
+
  //delete files in tmp
  if game_mount.DeleteDirectory(fs_tmp,True) then
  begin
@@ -1652,6 +1755,8 @@ begin
   Prepare;
   Exit;
  end;
+
+ Progress:=8/12;
 
  //copy dst->tmp
  if game_mount.CopyDirectory(fs_dst,fs_tmp) then
@@ -1664,6 +1769,8 @@ begin
   Exit;
  end;
 
+ Progress:=9/12;
+
  //move src->new
  if RenameFile(fs_src,fs_new) then
  begin
@@ -1674,6 +1781,8 @@ begin
   Prepare;
   Exit;
  end;
+
+ Progress:=10/12;
 
  //move tmp->src
  if RenameFile(fs_tmp,fs_src) then
@@ -1686,6 +1795,8 @@ begin
   Exit;
  end;
 
+ Progress:=11/12;
+
  //delete files in new
  if game_mount.DeleteDirectory(fs_new,False) then
  begin
@@ -1696,6 +1807,8 @@ begin
   Prepare;
   Exit;
  end;
+
+ Progress:=12/12;
 
  Result:=True;
 end;
@@ -1728,6 +1841,7 @@ begin
 
  Result:=err;
 
+ gSaveDataBackend.SetProgressJob(nil);
  UnLock;
 end;
 
@@ -2009,6 +2123,7 @@ begin
  job:=TRestoreJob.Create(kipc.HoldResult);
  job.Init(data.userId,titleId,dirName);
 
+ SetProgressJob(job);
  SendCmd(job);
 end;
 
@@ -2050,6 +2165,85 @@ begin
   Result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
  end;
 
+end;
+
+type
+ TGetProgress=packed record
+  result  :Integer;
+  progress:Single;
+ end;
+
+function TSaveDataBackendConnect.GetProgress(p_progress:PSingle):Integer;
+var
+ Value:TIpcValue;
+ data:TGetProgress;
+begin
+ Value:=kipc.InvokeSync('GetProgress');
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ Result:=data.result;
+
+ if (Result=0) then
+ begin
+  p_progress^:=data.progress;
+ end;
+end;
+
+function TSaveDataBackendProcess.OnGetProgress(Value:TIpcValue):TIpcValue; //GetProgress
+var
+ data:TGetProgress;
+begin
+ mtx_lock(Progress.mtx);
+
+  if (Progress.cmd=nil) then
+  begin
+   //
+  end else
+  begin
+   Progress.Value:=Progress.cmd.GetProgress;
+  end;
+
+  data.result  :=0;
+  data.progress:=Progress.Value;
+
+  Result:=TIpcValue.New(@data,SizeOf(data));
+
+ mtx_unlock(Progress.mtx);
+end;
+
+function TSaveDataBackendConnect.ClearProgress():Integer;
+begin
+ Result:=kipc.InvokeSync2('ClearProgress');
+end;
+
+function TSaveDataBackendProcess.OnClearProgress(Value:TIpcValue):TIpcValue; //ClearProgress
+begin
+ Result:=0;
+ mtx_lock(Progress.mtx);
+
+  Progress.Value:=0;
+
+ mtx_unlock(Progress.mtx);
+end;
+
+procedure TSaveDataBackendProcess.SetProgressJob(cmd:TCustomCommand);
+begin
+ mtx_lock(Progress.mtx);
+
+  if (Progress.cmd<>nil) then
+  begin
+   Progress.Value:=Progress.cmd.GetProgress;
+  end;
+
+  Progress.cmd:=cmd;
+  if (cmd<>nil) then
+  begin
+   Progress.Value:=0;
+  end;
+
+ mtx_unlock(Progress.mtx);
 end;
 
 function TSaveDataBackendConnect.SaveIcon(slot_id:Integer;icon:pSceSaveDataIcon):Integer;
@@ -2551,8 +2745,8 @@ begin
    end else
    if (err=SCE_SAVE_DATA_ERROR_NOT_FOUND) then
    begin
-    //hack delete
-    TDeleteJob(RestoreJob).Delete;
+    //delete
+    RestoreJob.DoDelete(nil,0);
     //create
     err:=CreateMount(False);
    end;

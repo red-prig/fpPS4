@@ -50,6 +50,7 @@ type
   Constructor Create;
   procedure   inc_ref;
   procedure   dec_ref;
+  procedure   Stop;
   procedure   Run; virtual;
  end;
 
@@ -72,6 +73,7 @@ type
   procedure Fini;
   procedure SendCmd(cmd:TCustomCommand);
   procedure SendEventJob();
+  function  SendProgressJob(p_progress:PInteger):TProgressJob;
   procedure Action;
  end;
 
@@ -396,6 +398,11 @@ begin
  end;
 end;
 
+procedure TCustomCommand.Stop;
+begin
+ finish:=True;
+end;
+
 procedure TCustomCommand.Run;
 begin
  //
@@ -405,26 +412,35 @@ end;
 
 procedure TProgressJob.Run;
 var
+ err:Integer;
  progres:Single;
 begin
  if (g_instance=nil) then
  begin
-  finish:=True;
+  Stop;
   Exit;
  end;
 
- //TODO: Invoke GetProgress
- progres:=1;
+ mtx_lock(g_instance.mtx);
 
- if (p_progress <> nil) then
- begin
-  p_progress^:=Trunc(progres*100);
- end;
+  err:=g_instance.Backend.GetProgress(@progres);
 
- if (p_progress <> nil) and
-    (p_progress^ = 100) then
+ mtx_unlock(g_instance.mtx);
+
+ if (err=0) then
  begin
-  finish:=True;
+
+  if (p_progress <> nil) then
+  begin
+   p_progress^:=Trunc(progres*100);
+  end;
+
+  if (p_progress <> nil) and
+     (p_progress^ = 100) then
+  begin
+   Stop;
+  end;
+
  end;
 end;
 
@@ -441,7 +457,7 @@ var
 begin
  if (g_instance=nil) then
  begin
-  finish:=True;
+  Stop;
   Exit;
  end;
 
@@ -481,7 +497,7 @@ begin
  mtx_unlock(g_instance.mtx);
  //CallEventCallback
 
- finish:=True;
+ Stop;
 end;
 
 ///
@@ -534,6 +550,17 @@ var
 begin
  cmd:=TEventJob.Create;
  SendCmd(cmd);
+end;
+
+function TJobList.SendProgressJob(p_progress:PInteger):TProgressJob;
+var
+ cmd:TProgressJob;
+begin
+ cmd:=TProgressJob.Create;
+ cmd.p_progress:=p_progress;
+ cmd.inc_ref;
+ SendCmd(cmd);
+ Result:=cmd;
 end;
 
 procedure TJobList.Action;
@@ -2001,13 +2028,26 @@ begin
 end;
 
 function SaveDataDelete(del:pSceSaveDataDelete):Integer;
+var
+ cmd:TProgressJob;
 begin
  Result:=CheckSaveDataDelete(del);
  if (Result<>0) then Exit;
 
  mtx_lock(g_instance.mtx);
 
+  if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
+  begin
+   cmd:=g_instance.job_list.SendProgressJob(@del^.progress);
+  end;
+
   Result:=g_instance.Backend.DoDelete(del);
+
+  if (cmd<>nil) then
+  begin
+   cmd.Stop;
+   cmd.dec_ref;
+  end;
 
  mtx_unlock(g_instance.mtx);
 
@@ -2039,13 +2079,30 @@ end;
 function SaveDataMount(mount      :pSceSaveDataMount;
                        pResult    :pSceSaveDataMountResult;
                        Transfering:Boolean):Integer;
+var
+ cmd:TProgressJob;
 begin
  Result:=CheckSaveDataMount(mount,pResult,Transfering);
  if (Result<>0) then Exit;
 
+ cmd:=nil;
+
  mtx_lock(g_instance.mtx);
 
+  if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
+  begin
+   cmd:=g_instance.job_list.SendProgressJob(@pResult^.progress);
+  end;
+
   Result:=g_instance.Backend.DoMount(mount,pResult,Transfering,False);
+
+  Writeln('SaveDataMount:0x',HexStr(Result,8));
+
+  if (cmd<>nil) then
+  begin
+   cmd.Stop;
+   cmd.dec_ref;
+  end;
 
  mtx_unlock(g_instance.mtx);
 
@@ -2425,7 +2482,16 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_INITIALIZED);
  end;
 
- Result:=0;
+ if not (g_instance.version in [VERSION_INIT_2,VERSION_INIT_3]) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.ClearProgress();
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataGetProgress(progress:PSingle):Integer;
@@ -2440,9 +2506,16 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- progress^:=0;
+ if not (g_instance.version in [VERSION_INIT_2,VERSION_INIT_3]) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
 
- Result:=0;
+ mtx_lock(g_instance.mtx);
+
+  Result:=g_instance.Backend.GetProgress(progress);
+
+ mtx_unlock(g_instance.mtx);
 end;
 
 function ps4_sceSaveDataBackup(backup:pSceSaveDataBackup):Integer;
@@ -2486,6 +2559,8 @@ begin
 end;
 
 function ps4_sceSaveDataRestoreBackupData(restore:pSceSaveDataRestoreBackupData):Integer;
+var
+ cmd:TProgressJob;
 begin
  if (g_instance=nil) then
  begin
@@ -2497,7 +2572,18 @@ begin
 
  mtx_lock(g_instance.mtx);
 
+  if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
+  begin
+   cmd:=g_instance.job_list.SendProgressJob(@restore^.progress);
+  end;
+
   Result:=g_instance.Backend.RestoreBackup(restore);
+
+  if (cmd<>nil) then
+  begin
+   cmd.Stop;
+   cmd.dec_ref;
+  end;
 
  mtx_unlock(g_instance.mtx);
 
@@ -2506,9 +2592,6 @@ begin
   if (p_proc.p_sdk_version < $3500000) then
   begin
    restore^.progress:=100;
-  end else
-  begin
-   //
   end;
  end;
 
