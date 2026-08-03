@@ -10,6 +10,7 @@ uses
  subr_dynlib,
  kern_proc,
  SceSaveData,
+ ps4_libSceUserService,
  ps4_libSceCommonDialog;
 
 const
@@ -541,16 +542,15 @@ begin
  end;
 end;
 
-function IsLoggedIn(userId:Integer):Integer; inline;
+function IsLoggedIn(userId:Integer):Boolean; inline;
 begin
- //sceUserServiceIsLoggedIn
- Result:=0;
+ Result:=(ps4_sceUserServiceIsLoggedIn(userId)=1);
 end;
 
-function IsRegistered(userId:Integer):Integer; inline;
+function IsRegistered(userId:Integer):Boolean; inline;
 begin
  //sceUserServiceGetRegisteredUserIdList
- Result:=0;
+ Result:=True;
 end;
 
 function _CheckTitleId(titleId:pchar):Integer;
@@ -698,9 +698,9 @@ end;
 function CheckNonListItems(dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
  if (p_proc.p_sdk_version < $1700000) or
-    (IsRegistered(items^.userId)=0) then
+    IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  if (items^.dirNameNum <= $400) then
@@ -723,9 +723,9 @@ end;
 function CheckListItems_old(dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
  if (p_proc.p_sdk_version < $1700000) or
-    (IsRegistered(items^.userId)=0) then
+    IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  begin
@@ -780,8 +780,8 @@ end;
 function CheckListItems_new(mode,dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
- if (IsRegistered(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
+ if IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  begin

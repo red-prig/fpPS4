@@ -594,10 +594,9 @@ begin
  end;
 end;
 
-function IsLoggedIn(userId:Integer):Integer; inline;
+function IsLoggedIn(userId:Integer):Boolean; inline;
 begin
- //sceUserServiceIsLoggedIn
- Result:=0;
+ Result:=(ps4_sceUserServiceIsLoggedIn(userId)=1);
 end;
 
 function CheckReserved(var buf;len:DWORD):Boolean;
@@ -771,7 +770,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (del=nil) then Exit;
 
- if IsLoggedIn(del^.userId)<>0 then
+ if not IsLoggedIn(del^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -789,7 +788,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (del=nil) then Exit;
 
- if IsLoggedIn(del^.userId)<>0 then
+ if not IsLoggedIn(del^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -819,7 +818,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (mount=nil) then Exit;
 
- if IsLoggedIn(mount^.userId)<>0 then
+ if not IsLoggedIn(mount^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -935,7 +934,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (mount=nil) then Exit;
 
- if IsLoggedIn(mount^.userId)<>0 then
+ if not IsLoggedIn(mount^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1075,7 +1074,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (backup=nil) then Exit;
 
- if IsLoggedIn(backup^.userId)<>0 then
+ if not IsLoggedIn(backup^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1092,7 +1091,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (check=nil) then Exit;
 
- if IsLoggedIn(check^.userId)<>0 then
+ if not IsLoggedIn(check^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1134,7 +1133,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (restore=nil) then Exit;
 
- if IsLoggedIn(restore^.userId)<>0 then
+ if not IsLoggedIn(restore^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1166,7 +1165,7 @@ begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
  if (restore=nil) then Exit;
 
- if IsLoggedIn(restore^.userId)<>0 then
+ if not IsLoggedIn(restore^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1373,7 +1372,7 @@ function CheckSetupSaveDataParam(userId    :SceUserServiceUserId;
 begin
  Result:=SCE_SAVE_DATA_ERROR_PARAMETER;
 
- if IsLoggedIn(userId)<>0 then
+ if not IsLoggedIn(userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1418,7 +1417,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(setupParam^.userId)<>0 then
+ if not IsLoggedIn(setupParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1532,7 +1531,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(setParam^.userId)<>0 then
+ if not IsLoggedIn(setParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1560,7 +1559,7 @@ begin
  Result:=CheckSdSlotId(setParam^.slotId);
  if (Result<>0) then Exit;
 
- if IsLoggedIn(setParam^.userId)<>0 then
+ if not IsLoggedIn(setParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1593,7 +1592,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(src^.userId)<>0 then
+ if not IsLoggedIn(src^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1673,7 +1672,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(src^.userId)<>0 then
+ if not IsLoggedIn(src^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1742,7 +1741,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(getParam^.userId)<>0 then
+ if not IsLoggedIn(getParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1760,7 +1759,7 @@ begin
  Result:=CheckSdSlotId(getParam^.slotId);
  if (Result<>0) then Exit;
 
- if IsLoggedIn(getParam^.userId)<>0 then
+ if not IsLoggedIn(getParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1783,7 +1782,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(dst^.userId)<>0 then
+ if not IsLoggedIn(dst^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1858,7 +1857,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(syncParam^.userId)<>0 then
+ if not IsLoggedIn(syncParam^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;
@@ -1933,7 +1932,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- if IsLoggedIn(cond^.userId)<>0 then
+ if not IsLoggedIn(cond^.userId) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INVALID_LOGIN_USER);
  end;

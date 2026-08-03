@@ -9,6 +9,7 @@ uses
  kern_mtx,
  subr_dynlib,
  kern_proc,
+ ps4_libSceUserService,
  ps4_libSceCommonDialog;
 
 Const
@@ -137,8 +138,7 @@ end;
 
 function IsLoggedIn(userId:Integer):Boolean; inline;
 begin
- //sceUserServiceIsLoggedIn
- Result:=True;
+ Result:=(ps4_sceUserServiceIsLoggedIn(userId)=1);
 end;
 
 function ps4_sceNpCommerceDialogOpen(param:pSceNpCommerceDialogParam):Integer;
