@@ -715,8 +715,6 @@ var
   DestHandle: THandle;
   Buffer: array[1..4096] of byte;
   ReadCount, WriteCount, TryCount: Integer;
-  //
-  info:t_stat;
 begin
   Result := False;
 
@@ -753,23 +751,11 @@ begin
         WriteCount:=FileWrite(DestHandle,Buffer[1],ReadCount);
         if (WriteCount<ReadCount) then Exit;
       until false;
-
-      //
-      info:=Default(t_stat);
-      if md_fstat(SrcHandle,@info)=0 then
-      begin
-       md_futimens(DestHandle,@info.st_atim,2);
-      end;
-      //
-
     finally
       FileFlush(DestHandle);
+      md_fcopy_attrib(DestHandle,SrcHandle);
       FileClose(DestHandle);
     end;
-
-    //
-    FileSetAttr(DestFilename, FileGetAttr(SrcFilename));
-    //
 
     Result := True;
   finally
@@ -788,8 +774,6 @@ type
 
 var
  stack:PNode;
- //
- info:t_stat;
 
  procedure Push(const dst,src:RawByteString);
  var
@@ -877,11 +861,7 @@ begin
   end;
 
   //
-  info:=Default(t_stat);
-  if md_stat(CurSrcDir,@info)=0 then
-  begin
-   md_utimens(CurDstDir,@info.st_atim,2);
-  end;
+  md_copy_attrib(CurDstDir,CurSrcDir);
   //
 
   if Pop(CurDstDir,CurSrcDir) then

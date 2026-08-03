@@ -45,6 +45,9 @@ function  md_close (fd:THandle):DWORD;
 Function  md_create_swap_file(const path:RawByteString;SIZE:QWORD;Var fd:THandle):DWORD;
 Function  md_delete_file     (const path:RawByteString):DWORD;
 
+function  md_fcopy_attrib(dst,src:THandle):Integer;
+function  md_copy_attrib (const dst,src:RawByteString):Integer;
+
 function  md_fstat(fd:THandle;sb:p_stat):Integer;
 function  md_stat (const path:RawByteString;sb:p_stat):Integer;
 
@@ -400,6 +403,63 @@ begin
  Result:=ntf2px(NtMarkDelete(fd,@BLK));
 
  NtClose(fd); //<-actual delete
+end;
+
+function md_fcopy_attrib(dst,src:THandle):Integer;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ if (dst=0) or (dst=INVALID_HANDLE_VALUE) then Exit(EINVAL);
+ if (src=0) or (src=INVALID_HANDLE_VALUE) then Exit(EINVAL);
+
+ //load time
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     src,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ //save time
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtSetInformationFile(
+     dst,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation);
+
+ Result:=ntf2px(R);
+end;
+
+function md_copy_attrib(const dst,src:RawByteString):Integer;
+var
+ fdst,fsrc:THandle;
+begin
+ Result:=md_open(dst,O_RDONLY,0,fdst);
+ if (Result<>0) then Exit;
+
+ Result:=md_open(src,O_RDONLY,0,fsrc);
+ if (Result<>0) then
+ begin
+  NtClose(fdst);
+  Exit;
+ end;
+
+ Result:=md_fcopy_attrib(fdst,fsrc);
+
+ NtClose(fdst);
+ NtClose(fsrc);
 end;
 
 function md_fstat(fd:THandle;sb:p_stat):Integer;
