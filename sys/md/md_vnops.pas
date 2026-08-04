@@ -336,38 +336,95 @@ begin
  end;
 end;
 
-function _UTF8Encode(P:PWideChar;len:SizeInt):RawByteString;
+function WinToUnix(P:PWideChar;len:SizeInt):RawByteString;
 var
- i:SizeInt;
- hs:RawByteString;
+ i:SizeUInt;
 begin
  Result:='';
  if (p=nil) or (len<=0) then exit;
- hs:='';
- SetLength(hs,len*3);
- i:=UnicodeToUtf8(PAnsiChar(hs),length(hs)+1,P,len);
+ //
+ for i:=0 to len-1 do
+ begin
+  case P[i] of
+   #$2039:P[i]:='<';
+   #$203A:P[i]:='>';
+   #$A789:P[i]:=':';
+   #$02EE:P[i]:='"';
+   #$2216:P[i]:='\';
+   #$01C0:P[i]:='|';
+   #$0294:P[i]:='?';
+   #$204E:P[i]:='*';
+   else;
+  end;
+ end;
+ //
+ SetLength(Result,len*3);
+ i:=UnicodeToUtf8(PAnsiChar(Result),length(Result)+1,P,len);
  if (i>0) then
  begin
-  SetLength(hs,i-1);
-  Result:=hs;
+  SetLength(Result,i-1);
+ end else
+ begin
+  Result:='';
  end;
 end;
 
-function _UTF8Decode(P:PAnsiChar;len:SizeInt):WideString;
+function WinToUnix(Dest:PChar;MaxDestBytes:SizeUInt;Source:PUnicodeChar;SourceChars:SizeUInt):SizeUInt;
 var
- i:SizeInt;
- hs:WideString;
+ i:SizeUInt;
+begin
+ //
+ if (SourceChars<>0) then
+ for i:=0 to SourceChars-1 do
+ begin
+  case Source[i] of
+   #$2039:Source[i]:='<';
+   #$203A:Source[i]:='>';
+   #$A789:Source[i]:=':';
+   #$02EE:Source[i]:='"';
+   #$2216:Source[i]:='\';
+   #$01C0:Source[i]:='|';
+   #$0294:Source[i]:='?';
+   #$204E:Source[i]:='*';
+   else;
+  end;
+ end;
+ //
+ Result:=UnicodeToUtf8(Dest,MaxDestBytes,Source,SourceChars);
+end;
+
+function UnixToWin(P:PAnsiChar;len:SizeInt):WideString;
+var
+ i:SizeUInt;
 begin
  Result:='';
  if (p=nil) or (len<=0) then exit;
- hs:='';
- SetLength(hs,len);
- i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len);
+ SetLength(Result,len);
+ i:=Utf8ToUnicode(PWideChar(Result),length(Result)+1,P,len);
  if (i>0) then
  begin
-  SetLength(hs,i-1);
-  Result:=hs;
+  SetLength(Result,i-1);
+ end else
+ begin
+  Result:='';
  end;
+ //
+ if (Length(Result)<>0) then
+ for i:=1 to Length(Result) do
+ begin
+  case Result[i] of
+   '<':Result[i]:=#$2039;
+   '>':Result[i]:=#$203A;
+   ':':Result[i]:=#$A789;
+   '"':Result[i]:=#$02EE;
+   '\':Result[i]:=#$2216;
+   '|':Result[i]:=#$01C0;
+   '?':Result[i]:=#$0294;
+   '*':Result[i]:=#$204E;
+   else;
+  end;
+ end;
+ //
 end;
 
 function md_mount_is_valid(vp:p_vnode):Integer;
@@ -517,7 +574,7 @@ var
 begin
  Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
- w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -552,7 +609,7 @@ begin
 
  Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
- w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -743,7 +800,7 @@ begin
   if (Result<>0) then Exit;
  end;
 
- U:=_UTF8Encode(P,len);
+ U:=WinToUnix(P,len);
 
  fix_unix_path(PAnsiChar(U),Length(U));
 
@@ -1070,7 +1127,7 @@ begin
  Result:=0;
  nd:=nil;
 
- w:=_UTF8Decode(name,namelen);
+ w:=UnixToWin(name,namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -1441,10 +1498,10 @@ begin
 
   dt:=Default(t_dirent);
 
-  i:=UnicodeToUtf8(@dt.d_name,
-                   t_dirent.MAXNAMLEN+1,
-                   @NT_DIRENT.Name,
-                   NT_DIRENT.Info.FileNameLength div 2);
+  i:=WinToUnix(@dt.d_name,
+               t_dirent.MAXNAMLEN+1,
+               @NT_DIRENT.Name,
+               NT_DIRENT.Info.FileNameLength div 2);
   //i->zero include
 
   if (i<=0) then
@@ -1540,10 +1597,10 @@ begin
 
   dt:=Default(t_pfs_dirent);
 
-  i:=UnicodeToUtf8(@dt.d_name,
-                   t_dirent.MAXNAMLEN+1,
-                   @NT_DIRENT.Name,
-                   NT_DIRENT.Info.FileNameLength div 2);
+  i:=WinToUnix(@dt.d_name,
+               t_dirent.MAXNAMLEN+1,
+               @NT_DIRENT.Name,
+               NT_DIRENT.Info.FileNameLength div 2);
   //i->zero include
 
   if (i<=0) then
@@ -1688,7 +1745,7 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
- w:=_UTF8Decode(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
+ w:=UnixToWin(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -1714,7 +1771,7 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then goto _err;
 
- w:=_UTF8Decode(ap^.a_target,len);
+ w:=UnixToWin(ap^.a_target,len);
  len:=Length(w);
 
  NT_SYMLINK:=Default(T_NT_SYMLINK);
@@ -1957,7 +2014,7 @@ begin
   Exit(EEXIST);
  end;
 
- w:=_UTF8Decode(cnp^.cn_nameptr,cnp^.cn_namelen);
+ w:=UnixToWin(cnp^.cn_nameptr,cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -2402,7 +2459,7 @@ begin
  sx_xlock(@dd^.ufs_md_lock);
  sx_xlock(@nd^.ufs_md_lock);
 
- w:=_UTF8Decode(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -2533,7 +2590,7 @@ begin
   FD:=THandle(vp^.v_un);
  end else
  begin
-  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+  w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
   OBJ:=Default(TOBJ_ATTR);
   INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
