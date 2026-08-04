@@ -164,9 +164,13 @@ var
 begin
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.ADDR64<>0) then
+ begin
+  Assert(false,'TODO: FSPI.MUBUF.ADDR64');
+ end;
+
  if (FSPI.MUBUF.LDS<>0) then
  begin
-  //TODO: FSPI.MUBUF.LDS
   Assert(false,'TODO: FSPI.MUBUF.LDS');
  end;
 
@@ -213,9 +217,13 @@ var
 begin
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.ADDR64<>0) then
+ begin
+  Assert(false,'TODO: FSPI.MUBUF.ADDR64');
+ end;
+
  if (FSPI.MUBUF.LDS<>0) then
  begin
-  //TODO: FSPI.MUBUF.LDS
   Assert(false,'TODO: FSPI.MUBUF.LDS');
  end;
 
@@ -252,9 +260,13 @@ var
 begin
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.ADDR64<>0) then
+ begin
+  Assert(false,'TODO: FSPI.MUBUF.ADDR64');
+ end;
+
  if (FSPI.MUBUF.LDS<>0) then
  begin
-  //TODO: FSPI.MUBUF.LDS
   Assert(false,'TODO: FSPI.MUBUF.LDS');
  end;
 
@@ -289,9 +301,13 @@ var
 begin
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.ADDR64<>0) then
+ begin
+  Assert(false,'TODO: FSPI.MUBUF.ADDR64');
+ end;
+
  if (FSPI.MUBUF.LDS<>0) then
  begin
-  //TODO: FSPI.MUBUF.LDS
   Assert(false,'TODO: FSPI.MUBUF.LDS');
  end;
 
@@ -399,9 +415,13 @@ var
 begin
  if not get_srsrc(FSPI.MUBUF.SRSRC,4,@src) then Assert(false);
 
+ if (FSPI.MUBUF.ADDR64<>0) then
+ begin
+  Assert(false,'TODO: FSPI.MUBUF.ADDR64');
+ end;
+
  if (FSPI.MUBUF.LDS<>0) then
  begin
-  //TODO: FSPI.MUBUF.LDS
   Assert(false,'TODO: FSPI.MUBUF.LDS');
  end;
 

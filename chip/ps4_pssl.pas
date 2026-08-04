@@ -1163,7 +1163,7 @@ type
   OFFEN:bit1;    //1
   IDXEN:bit1;    //1
   GLC:bit1;      //1
-  reserved1:bit1;//1
+  ADDR64:bit1;   //1
   LDS:bit1;      //1
   reserved2:bit1;//1
   OP:bit7;       //7
