@@ -569,12 +569,13 @@ begin
  if (cfg.FParamSfo<>nil) then
  begin
 
-  GameStartupInfo.CATEGORY             :=cfg.FParamSfo.GetString('CATEGORY');
-  GameStartupInfo.TITLE                :=cfg.FParamSfo.GetString('TITLE');
-  GameStartupInfo.TITLE_ID             :=cfg.FParamSfo.GetString('TITLE_ID');
-  GameStartupInfo.CONTENT_ID           :=cfg.FParamSfo.GetString('CONTENT_ID');
-  GameStartupInfo.INSTALL_DIR_SAVEDATA :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
-  GameStartupInfo.APP_VER              :=cfg.FParamSfo.GetString('APP_VER');
+  GameStartupInfo.CATEGORY                        :=cfg.FParamSfo.GetString('CATEGORY');
+  GameStartupInfo.TITLE                           :=cfg.FParamSfo.GetString('TITLE');
+  GameStartupInfo.TITLE_ID                        :=cfg.FParamSfo.GetString('TITLE_ID');
+  GameStartupInfo.CONTENT_ID                      :=cfg.FParamSfo.GetString('CONTENT_ID');
+  GameStartupInfo.INSTALL_DIR_SAVEDATA            :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
+  GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST:=cfg.FParamSfo.GetString('SAVE_DATA_TRANSFER_TITLE_ID_LIST');
+  GameStartupInfo.APP_VER                         :=cfg.FParamSfo.GetString('APP_VER');
 
   GameStartupInfo.SYSTEM_VER           :=cfg.FParamSfo.GetUInt('SYSTEM_VER');
   GameStartupInfo.ATTRIBUTE            :=cfg.FParamSfo.GetUInt('ATTRIBUTE');

@@ -11,11 +11,12 @@ uses
 
 type
  TGameMountConfig=class
-  ATTRIBUTE :DWORD;
-  Game      :RawByteString;
-  LocalDir  :RawByteString;
-  TitleId   :array[0..9] of AnsiChar;
-  InstallDir:array[0..9] of AnsiChar;
+  ATTRIBUTE   :DWORD;
+  Game        :RawByteString;
+  LocalDir    :RawByteString;
+  TransferList:RawByteString;
+  TitleId     :array[0..9] of AnsiChar;
+  InstallDir  :array[0..9] of AnsiChar;
   //
   mount_mtx:mtx;
   //
@@ -31,21 +32,24 @@ type
   function GetSaveDataBackupDst(user_id:Integer;_titleId,dirName:pchar):RawByteString;
   function GetSaveDataBackupOld(user_id:Integer;_titleId,dirName:pchar):RawByteString;
   function GetSaveDataBackupNew(user_id:Integer;_titleId,dirName:pchar):RawByteString;
+  function InTransferList(_titleId:pchar):Boolean;
  end;
 
  TGameMountConfigExport=class(TSerializeObject)
  public
-  FATTRIBUTE :DWORD;
-  FGame      :RawByteString;
-  FLocalDir  :RawByteString;
-  FTitleId   :RawByteString;
-  FInstallDir:RawByteString;
+  FATTRIBUTE   :DWORD;
+  FGame        :RawByteString;
+  FLocalDir    :RawByteString;
+  FTransferList:RawByteString;
+  FTitleId     :RawByteString;
+  FInstallDir  :RawByteString;
  published
-  property ATTRIBUTE :DWORD         read FATTRIBUTE  write FATTRIBUTE;
-  property Game      :RawByteString read FGame       write FGame;
-  property LocalDir  :RawByteString read FLocalDir   write FLocalDir;
-  property TitleId   :RawByteString read FTitleId    write FTitleId;
-  property InstallDir:RawByteString read FInstallDir write FInstallDir;
+  property ATTRIBUTE   :DWORD         read FATTRIBUTE    write FATTRIBUTE;
+  property Game        :RawByteString read FGame         write FGame;
+  property LocalDir    :RawByteString read FLocalDir     write FLocalDir;
+  property TransferList:RawByteString read FTransferList write FTransferList;
+  property TitleId     :RawByteString read FTitleId      write FTitleId;
+  property InstallDir  :RawByteString read FInstallDir   write FInstallDir;
  public
  end;
 
@@ -211,6 +215,15 @@ begin
   _titleId,
   dirName
  ]);
+
+ mtx_unlock(mount_mtx);
+end;
+
+function TGameMountConfig.InTransferList(_titleId:pchar):Boolean;
+begin
+ mtx_lock(mount_mtx);
+
+  Result:=Pos(_titleId,TransferList)<>0;
 
  mtx_unlock(mount_mtx);
 end;
@@ -390,9 +403,10 @@ begin
  //save to global
  GameMountConfig:=TGameMountConfig.Create;
 
- GameMountConfig.ATTRIBUTE:=GameStartupInfo.ATTRIBUTE;
- GameMountConfig.Game     :=GameStartupInfo.FGameItem.FMountList.game;
- GameMountConfig.LocalDir :=GameStartupInfo.LocalDir;
+ GameMountConfig.ATTRIBUTE   :=GameStartupInfo.ATTRIBUTE;
+ GameMountConfig.Game        :=GameStartupInfo.FGameItem.FMountList.game;
+ GameMountConfig.LocalDir    :=GameStartupInfo.LocalDir;
+ GameMountConfig.TransferList:=GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST;
 
  if (GameStartupInfo.TITLE_ID<>'') then
  begin
@@ -480,11 +494,12 @@ begin
 
  Result:=TGameMountConfigExport.Create;
 
- Result.ATTRIBUTE :=GameMountConfig.ATTRIBUTE;
- Result.Game      :=GameMountConfig.Game;
- Result.LocalDir  :=GameMountConfig.LocalDir;
- Result.TitleId   :=GameMountConfig.TitleId;
- Result.InstallDir:=GameMountConfig.InstallDir;
+ Result.ATTRIBUTE   :=GameMountConfig.ATTRIBUTE;
+ Result.Game        :=GameMountConfig.Game;
+ Result.LocalDir    :=GameMountConfig.LocalDir;
+ Result.TransferList:=GameMountConfig.TransferList;
+ Result.TitleId     :=GameMountConfig.TitleId;
+ Result.InstallDir  :=GameMountConfig.InstallDir;
 end;
 
 procedure GameMountConfigImport(e:TGameMountConfigExport);
@@ -494,11 +509,12 @@ begin
   GameMountConfig:=TGameMountConfig.Create;
  end;
 
- GameMountConfig.ATTRIBUTE :=e.ATTRIBUTE;
- GameMountConfig.Game      :=e.Game;
- GameMountConfig.LocalDir  :=e.LocalDir;
- GameMountConfig.TitleId   :=e.TitleId;
- GameMountConfig.InstallDir:=e.InstallDir;
+ GameMountConfig.ATTRIBUTE   :=e.ATTRIBUTE;
+ GameMountConfig.Game        :=e.Game;
+ GameMountConfig.LocalDir    :=e.LocalDir;
+ GameMountConfig.TransferList:=e.TransferList;
+ GameMountConfig.TitleId     :=e.TitleId;
+ GameMountConfig.InstallDir  :=e.InstallDir;
 end;
 
 const

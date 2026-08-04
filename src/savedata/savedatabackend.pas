@@ -907,6 +907,8 @@ begin
 end;
 
 function TMountJob.CheckMountData(is_created:Boolean):Integer;
+var
+ titleId:pchar;
 begin
  Result:=0;
 
@@ -926,8 +928,18 @@ begin
 
  if data.Transfering then
  begin
-  //TODO: SAVE_DATA_TRANSFER_TITLE_ID_LIST
-  //SCE_SAVE_DATA_ERROR_PARAMSFO_TRANSFER_TITLE_ID_NOT_FOUND
+
+  titleId:=@data.titleId.data;
+  if (titleId[0]=#0) then
+  begin
+   titleId:=@GameMountConfig.InstallDir;
+  end;
+
+  if not GameMountConfig.InTransferList(titleId) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_PARAMSFO_TRANSFER_TITLE_ID_NOT_FOUND);
+  end;
+
  end;
 
 end;
