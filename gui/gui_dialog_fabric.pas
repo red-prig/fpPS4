@@ -82,6 +82,7 @@ type
 
  TDialogCustom=class(TPanel)
   public
+   FClient :TObject;
    FMsgMemo:TMemo;
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;

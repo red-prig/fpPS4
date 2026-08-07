@@ -34,7 +34,7 @@ var
  p_print_gpu_ops      :Boolean=False;
  p_print_gpu_hint     :Boolean=False;
 
- p_host_ipc           :THostIpcInterface=nil;
+ p_host_ipc           :THostIpc=nil;
 
 procedure set_neo_mode(neo:Boolean);
 

@@ -33,7 +33,6 @@ uses
   ps4_libSceHmdSetupDialog,
   ps4_libSceErrorDialog,
   laz2ime,
-  ime_types,
   ps4_libSceImeDialog,
   ps4_libSceIme,
   ps4_libSigninDialog;
@@ -46,75 +45,82 @@ type
    procedure WMEraseBkgnd(var Message:TLMEraseBkgnd); message LM_ERASEBKGND;
  end;
 
- TDialogsManager=object
-  FImages  :TImageList;
-  pContext :PGameRunContext;
-  FMainForm:TGameMainForm;
-  //
-  FCommonDialog:TDialogCustom;
-  FErrorDialog :TDialogCustom;
-  FImeDialog   :TDialogCustom;
-  FSigninDialog:TDialogCustom;
-  //
-  FImeData:TKeyStates;
-  //
-  function  get_caption_format:RawByteString;
-  procedure DoResize(Sender:TObject);
-  function  OpenMainWindows:THandle;
-  procedure CloseDialogs();
-  Procedure CloseMainWindow();
-  Procedure ShowMainWindow();
-  Procedure HideMainWindow();
-  procedure SetCaptionFPS(Ffps:QWORD);
-  //
-  procedure BindHandler(Handler:THostIpcHandler);
-  function  OnCdlgSetMsg  (Value:TIpcValue):TIpcValue; //CDLG_SET_MSG
-  function  OnCdlgSetValue(Value:TIpcValue):TIpcValue; //CDLG_SET_VALUE
-  function  OnCdlgClose   (Value:TIpcValue):TIpcValue; //CDLG_CLOSE
-  procedure NewDialogOpen(var Attributes:TDialogAttributes;var pResult:TDialogCustom);
-  //
-  procedure OnMsgDialogClick(Sender:TObject);
-  function  OnMsgDialogOpen(Value:TIpcValue):TIpcValue; //MSG_DIALOG_OPEN
-  //
-  procedure OnSaveDialogClick(Sender:TObject);
-  function  OnSaveDialogOpen(Value:TIpcValue):TIpcValue; //SAVE_DIALOG_OPEN
-  //
-  procedure OnNpCommerceDialogClick(Sender:TObject);
-  function  OnNpCommerceDialogOpen(Value:TIpcValue):TIpcValue; //NPCOMMERCE_DIALOG_OPEN
-  //
-  procedure OnHmdSetupDialogClick(Sender:TObject);
-  function  OnHmdSetupDialogOpen(Value:TIpcValue):TIpcValue; //HMDSETUP_DIALOG_OPEN
-  //
-  procedure OnErrDlgClick(Sender:TObject);
-  function  OnErrDlgOpen  (Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
-  function  OnErrDlgClose (Value:TIpcValue):TIpcValue; //ERR_DIALOG_CLOSE
-  function  OnErrDlgUpdate(Value:TIpcValue):TIpcValue; //ERR_DIALOG_UPDATE
-  //
-  procedure OnImeDialogClick(Sender:TObject);
-  function  OnImeDlgOpen   (Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
-  function  OnImeDlgTerm   (Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
-  function  OnImeDlgAbort  (Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
-  function  OnImeDlgUpdate (Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
-  function  OnImeDlgResult (Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
-  function  OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
-  function  OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
-  function  OnImeDlgGetPos (Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
-  //
-  procedure OnImeClick(Sender:TObject);
-  function  OnImeOpen      (Value:TIpcValue):TIpcValue; //IME_OPEN
-  function  OnImeClose     (Value:TIpcValue):TIpcValue; //IME_CLOSE
-  function  OnImeGetPos    (Value:TIpcValue):TIpcValue; //IME_GETPOS
-  function  OnImeUpdate    (Value:TIpcValue):TIpcValue; //IME_UPDATE
-  function  OnImeSetCaret  (Value:TIpcValue):TIpcValue; //IME_SET_CARET
-  function  OnImeSetText   (Value:TIpcValue):TIpcValue; //IME_SET_TEXT
-  //
-  procedure OnSigninDlgClick(Sender:TObject);
-  function  OnSigninDlgOpen  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
-  function  OnSigninDlgClose (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_CLOSE
-  function  OnSigninDlgTerm  (Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_TERM
-  function  OnSigninDlgUpdate(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_UPDATE
-  function  OnSigninDlgResult(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_RESULT
+ {$M+}
+
+ TDialogsManager=class
+  public
+   FImages  :TImageList;
+   pContext :PGameRunContext;
+   FMainForm:TGameMainForm;
+   //
+   FCommonDialog:TDialogCustom;
+   FErrorDialog :TDialogCustom;
+   FImeDialog   :TDialogCustom;
+   FSigninDialog:TDialogCustom;
+   //
+   FImeData:TKeyStates;
+   //
+   function  get_caption_format:RawByteString;
+   procedure DoResize(Sender:TObject);
+   function  OpenMainWindows:THandle;
+   procedure CloseDialogs();
+   Procedure CloseMainWindow();
+   Procedure ShowMainWindow();
+   Procedure HideMainWindow();
+   procedure SetCaptionFPS(Ffps:QWORD);
+   //
+   procedure BindHandler(Handler:THostIpcHandler);
+   procedure NewDialogOpen(Client:THostIpc;var Attributes:TDialogAttributes;var pResult:TDialogCustom);
+   procedure OnMsgDialogClick(Sender:TObject);
+   procedure OnSaveDialogClick(Sender:TObject);
+   procedure OnNpCommerceDialogClick(Sender:TObject);
+   procedure OnHmdSetupDialogClick(Sender:TObject);
+   procedure OnErrDlgClick(Sender:TObject);
+   procedure OnImeDlgClick(Sender:TObject);
+   procedure OnImeClick(Sender:TObject);
+   procedure OnSigninDlgClick(Sender:TObject);
+  published
+   //All functions available for the IPC
+   function  CDLG_SET_MSG  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  CDLG_SET_VALUE(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  CDLG_CLOSE    (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  MSG_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  SAVE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  NPCOMMERCE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  HMDSETUP_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  ERR_DIALOG_OPEN   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  ERR_DIALOG_CLOSE  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  ERR_DIALOG_UPDATE (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  IME_DIALOG_OPEN   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_TERM   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_ABORT  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_UPDATE (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_RESULT (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_GETTEXT(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_SETTEXT(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_DIALOG_GETPOS (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  IME_OPEN     (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_CLOSE    (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_GETPOS   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_UPDATE   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_SET_CARET(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  IME_SET_TEXT (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  SIGNIN_DIALOG_OPEN  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  SIGNIN_DIALOG_CLOSE (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  SIGNIN_DIALOG_TERM  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  SIGNIN_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  SIGNIN_DIALOG_RESULT(Client:THostIpc;Value:TIpcValue):TIpcValue;
  end;
+
+ {$M-}
 
  function GetRealFontSize(Font:TFont):Integer;
 
@@ -249,42 +255,10 @@ end;
 
 procedure TDialogsManager.BindHandler(Handler:THostIpcHandler);
 begin
- Handler.AddCallback('CDLG_SET_MSG'          ,@OnCdlgSetMsg);
- Handler.AddCallback('CDLG_SET_VALUE'        ,@OnCdlgSetValue);
- Handler.AddCallback('CDLG_CLOSE'            ,@OnCdlgClose);
- Handler.AddCallback('MSG_DIALOG_OPEN'       ,@OnMsgDialogOpen);
- Handler.AddCallback('SAVE_DIALOG_OPEN'      ,@OnSaveDialogOpen);
- Handler.AddCallback('NPCOMMERCE_DIALOG_OPEN',@OnNpCommerceDialogOpen);
- Handler.AddCallback('HMDSETUP_DIALOG_OPEN'  ,@OnHmdSetupDialogOpen);
- //
- Handler.AddCallback('ERR_DIALOG_OPEN'  ,@OnErrDlgOpen);
- Handler.AddCallback('ERR_DIALOG_CLOSE' ,@OnErrDlgClose);
- Handler.AddCallback('ERR_DIALOG_UPDATE',@OnErrDlgUpdate);
- //
- Handler.AddCallback('IME_DIALOG_OPEN'   ,@OnImeDlgOpen);
- Handler.AddCallback('IME_DIALOG_TERM'   ,@OnImeDlgTerm);
- Handler.AddCallback('IME_DIALOG_ABORT'  ,@OnImeDlgAbort);
- Handler.AddCallback('IME_DIALOG_UPDATE' ,@OnImeDlgUpdate);
- Handler.AddCallback('IME_DIALOG_RESULT' ,@OnImeDlgResult);
- Handler.AddCallback('IME_DIALOG_GETTEXT',@OnImeDlgGetText);
- Handler.AddCallback('IME_DIALOG_SETTEXT',@OnImeDlgSetText);
- Handler.AddCallback('IME_DIALOG_GETPOS' ,@OnImeDlgGetPos);
- //
- Handler.AddCallback('IME_OPEN'          ,@OnImeOpen);
- Handler.AddCallback('IME_CLOSE'         ,@OnImeClose);
- Handler.AddCallback('IME_GETPOS'        ,@OnImeGetPos);
- Handler.AddCallback('IME_UPDATE'        ,@OnImeUpdate);
- Handler.AddCallback('IME_SET_CARET'     ,@OnImeSetCaret);
- Handler.AddCallback('IME_SET_TEXT'      ,@OnImeSetText);
- //
- Handler.AddCallback('SIGNIN_DIALOG_OPEN'  ,@OnSigninDlgOpen);
- Handler.AddCallback('SIGNIN_DIALOG_CLOSE' ,@OnSigninDlgClose);
- Handler.AddCallback('SIGNIN_DIALOG_TERM'  ,@OnSigninDlgTerm);
- Handler.AddCallback('SIGNIN_DIALOG_UPDATE',@OnSigninDlgUpdate);
- Handler.AddCallback('SIGNIN_DIALOG_RESULT',@OnSigninDlgResult);
+ Handler.AddPublished(Self);
 end;
 
-function TDialogsManager.OnCdlgSetMsg(Value:TIpcValue):TIpcValue; //CDLG_SET_MSG
+function TDialogsManager.CDLG_SET_MSG(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  if (FCommonDialog=nil) then Exit;
@@ -293,7 +267,7 @@ begin
  FCommonDialog.FMsgMemo.Text:=Value.GetString;
 end;
 
-function TDialogsManager.OnCdlgSetValue(Value:TIpcValue):TIpcValue; //CDLG_SET_VALUE
+function TDialogsManager.CDLG_SET_VALUE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  rate:DWORD;
 begin
@@ -309,18 +283,18 @@ begin
  end;
 end;
 
-function TDialogsManager.OnCdlgClose(Value:TIpcValue):TIpcValue; //CDLG_CLOSE
+function TDialogsManager.CDLG_CLOSE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  if (FCommonDialog=nil) then Exit;
 
  //What should the result code be?
- pContext^.InvokeAsyn('CDLG_FINISH',nil);
+ Client.InvokeAsyn('CDLG_FINISH');
 
  FreeAndNil(FCommonDialog);
 end;
 
-procedure TDialogsManager.NewDialogOpen(var Attributes:TDialogAttributes;var pResult:TDialogCustom);
+procedure TDialogsManager.NewDialogOpen(Client:THostIpc;var Attributes:TDialogAttributes;var pResult:TDialogCustom);
 begin
  Assert(pResult=nil,'NewDialogOpen');
 
@@ -329,12 +303,15 @@ begin
  Attributes.AImages:=FImages;
 
  pResult:=gui_dialog_fabric.NewDialogOpen(Attributes);
+ pResult.FClient:=Client;
 end;
 
 procedure TDialogsManager.OnMsgDialogClick(Sender:TObject);
 var
  rzdata:TMsgDialogResult;
 begin
+ if (FCommonDialog=nil) then Exit;
+
  rzdata.resultId:=0;
  rzdata.buttonId:=TCustomButton(Sender).Tag;
  if (rzdata.buttonId=0) then
@@ -342,12 +319,12 @@ begin
   rzdata.resultId:=1;
  end;
 
- pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
 
-function TDialogsManager.OnMsgDialogOpen(Value:TIpcValue):TIpcValue; //MSG_DIALOG_OPEN
+function TDialogsManager.MSG_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TMsgDialogOpen;
  Attributes:TDialogAttributes;
@@ -471,7 +448,7 @@ begin
   else;
  end;
 
- NewDialogOpen(Attributes,FCommonDialog);
+ NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
 type
@@ -488,6 +465,8 @@ var
  min,Row:Integer;
  rzdata:TSaveDialogResult;
 begin
+ if (FCommonDialog=nil) then Exit;
+
  FillChar(rzdata,SizeOf(rzdata),0);
  rzdata.buttonId:=TCustomButton(Sender).Tag;
  if (rzdata.buttonId=0) then
@@ -527,7 +506,7 @@ begin
  // reserved :array[0..31] of Byte;
  //end;
 
- pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
@@ -565,7 +544,7 @@ begin
  inherited;
 end;
 
-function TDialogsManager.OnSaveDialogOpen(Value:TIpcValue):TIpcValue; //SAVE_DIALOG_OPEN
+function TDialogsManager.SAVE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 
 const
  SysDispCaption:array[0..3] of PChar=(
@@ -851,7 +830,7 @@ begin
   else;
  end;
 
- NewDialogOpen(Attributes,FCommonDialog);
+ NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
 //
@@ -860,6 +839,8 @@ procedure TDialogsManager.OnNpCommerceDialogClick(Sender:TObject);
 var
  rzdata:TNpCommerceDialogResult;
 begin
+ if (FCommonDialog=nil) then Exit;
+
  FillChar(rzdata,SizeOf(rzdata),0);
 
  case TDialogButtonId(TCustomButton(Sender).Tag) of
@@ -870,12 +851,12 @@ begin
 
  rzdata.authorized:=False; //PS Plus features
 
- pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
 
-function  TDialogsManager.OnNpCommerceDialogOpen(Value:TIpcValue):TIpcValue; //NPCOMMERCE_DIALOG_OPEN
+function  TDialogsManager.NPCOMMERCE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TNpCommerceDialogOpen;
  Attributes:TDialogAttributes;
@@ -914,11 +895,13 @@ begin
  For i:=0 to data.numTargets-1 do
  begin
   if (i<>0) then
+  begin
    Attributes.Memo.Message:=Attributes.Memo.Message+#13#10;
+  end;
   Attributes.Memo.Message:=Attributes.Memo.Message+data.targets[i];
  end;
 
- NewDialogOpen(Attributes,FCommonDialog);
+ NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
 //
@@ -927,6 +910,8 @@ procedure TDialogsManager.OnHmdSetupDialogClick(Sender:TObject);
 var
  rzdata:THmdSetupDialogResult;
 begin
+ if (FCommonDialog=nil) then Exit;
+
  FillChar(rzdata,SizeOf(rzdata),0);
 
  case TDialogButtonId(TCustomButton(Sender).Tag) of
@@ -935,12 +920,12 @@ begin
   else;
  end;
 
- pContext^.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
 
-function TDialogsManager.OnHmdSetupDialogOpen(Value:TIpcValue):TIpcValue; //HMDSETUP_DIALOG_OPEN
+function TDialogsManager.HMDSETUP_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:THmdSetupDialogOpen;
  Attributes:TDialogAttributes;
@@ -967,13 +952,13 @@ begin
  Attributes.Memo.Enable :=True;
  Attributes.Memo.Message:='Connect VR and turn it on';
 
- NewDialogOpen(Attributes,FCommonDialog);
+ NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
 //
 
 //
-function TDialogsManager.OnErrDlgOpen(Value:TIpcValue):TIpcValue; //ERR_DIALOG_OPEN
+function TDialogsManager.ERR_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TErrDialogOpen;
  Attributes:TDialogAttributes;
@@ -999,7 +984,7 @@ begin
  Attributes.Buttons.Enable :=True;
  Attributes.Buttons.BtnType:=btnOk;
 
- NewDialogOpen(Attributes,FErrorDialog);
+ NewDialogOpen(Client,Attributes,FErrorDialog);
 end;
 
 procedure TDialogsManager.OnErrDlgClick(Sender:TObject);
@@ -1007,13 +992,13 @@ begin
  FreeAndNil(FErrorDialog);
 end;
 
-function TDialogsManager.OnErrDlgClose(Value:TIpcValue):TIpcValue; //ERR_DIALOG_CLOSE
+function TDialogsManager.ERR_DIALOG_CLOSE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  FreeAndNil(FErrorDialog);
 end;
 
-function TDialogsManager.OnErrDlgUpdate(Value:TIpcValue):TIpcValue; //ERR_DIALOG_UPDATE
+function TDialogsManager.ERR_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  if (FErrorDialog<>nil) then
  begin
@@ -1026,7 +1011,7 @@ end;
 
 /////
 
-procedure TDialogsManager.OnImeDialogClick(Sender:TObject);
+procedure TDialogsManager.OnImeDlgClick(Sender:TObject);
 var
  buttonId:TDialogButtonId;
 begin
@@ -1047,7 +1032,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgOpen(Value:TIpcValue):TIpcValue; //IME_DIALOG_OPEN
+function TDialogsManager.IME_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogOpen;
  Attributes:TDialogAttributes;
@@ -1062,7 +1047,7 @@ begin
 
  FillChar(Attributes,SizeOf(Attributes),0);
  FillChar(Ime,SizeOf(Ime),0);
- Attributes.OnClick:=@OnImeDialogClick;
+ Attributes.OnClick:=@OnImeDlgClick;
 
  Attributes.Caption.Enable :=True;
  Attributes.Caption.Message:=UTF8Encode(WideString(data.title));
@@ -1094,18 +1079,18 @@ begin
   3:Ime.EditLabel:='GO'    ; //GO
  end;
 
- NewDialogOpen(Attributes,TDialogCustom(FImeDialog));
+ NewDialogOpen(Client,Attributes,TDialogCustom(FImeDialog));
 
  FImeData.ImeDlgOpen(TImeDialog(FImeDialog));
 end;
 
-function TDialogsManager.OnImeDlgTerm(Value:TIpcValue):TIpcValue; //IME_DIALOG_TERM
+function TDialogsManager.IME_DIALOG_TERM(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  FreeAndNil(FImeDialog);
 end;
 
-function TDialogsManager.OnImeDlgAbort(Value:TIpcValue):TIpcValue; //IME_DIALOG_ABORT
+function TDialogsManager.IME_DIALOG_ABORT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  if (FImeDialog<>nil) then
@@ -1116,7 +1101,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgUpdate(Value:TIpcValue):TIpcValue; //IME_DIALOG_UPDATE
+function TDialogsManager.IME_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=-1;
  if (FImeDialog<>nil) then
@@ -1125,7 +1110,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgResult(Value:TIpcValue):TIpcValue; //IME_DIALOG_RESULT
+function TDialogsManager.IME_DIALOG_RESULT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogResult;
 begin
@@ -1139,7 +1124,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgGetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETTEXT
+function TDialogsManager.IME_DIALOG_GETTEXT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogTextToFilter;
  w:WideString;
@@ -1167,7 +1152,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgSetText(Value:TIpcValue):TIpcValue; //IME_DIALOG_SETTEXT
+function TDialogsManager.IME_DIALOG_SETTEXT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogTextToFilter;
  w:WideString;
@@ -1196,7 +1181,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeDlgGetPos(Value:TIpcValue):TIpcValue; //IME_DIALOG_GETPOS
+function TDialogsManager.IME_DIALOG_GETPOS(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogPosAndForm;
 begin
@@ -1238,7 +1223,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeOpen(Value:TIpcValue):TIpcValue; //IME_OPEN
+function TDialogsManager.IME_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeOpen;
  Attributes:TDialogAttributes;
@@ -1287,19 +1272,19 @@ begin
   3:Ime.EditLabel:='GO'    ; //GO
  end;
 
- NewDialogOpen(Attributes,TDialogCustom(FImeDialog));
+ NewDialogOpen(Client,Attributes,TDialogCustom(FImeDialog));
 
  FImeData.ImeOpen(TImeDialog(FImeDialog),w);
 end;
 
-function TDialogsManager.OnImeClose(Value:TIpcValue):TIpcValue; //IME_CLOSE
+function TDialogsManager.IME_CLOSE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  FImeData.ime_input:=False;
  Result:=0;
  FreeAndNil(FImeDialog);
 end;
 
-function TDialogsManager.OnImeGetPos(Value:TIpcValue):TIpcValue; //IME_GETPOS
+function TDialogsManager.IME_GETPOS(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeDialogPosAndForm;
 begin
@@ -1318,7 +1303,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeUpdate(Value:TIpcValue):TIpcValue; //IME_UPDATE
+function TDialogsManager.IME_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeEvent;
 begin
@@ -1337,7 +1322,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeSetCaret(Value:TIpcValue):TIpcValue; //IME_SET_CARET
+function TDialogsManager.IME_SET_CARET(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TImeSetCaret;
  i:Integer;
@@ -1376,7 +1361,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnImeSetText(Value:TIpcValue):TIpcValue; //IME_SET_TEXT
+function TDialogsManager.IME_SET_TEXT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  w:WideString;
  s:RawByteString;
@@ -1425,7 +1410,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnSigninDlgOpen(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_OPEN
+function TDialogsManager.SIGNIN_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TSigninDialogOpen;
  Attributes:TDialogAttributes;
@@ -1462,10 +1447,10 @@ begin
  Attributes.Buttons.Enable :=True;
  Attributes.Buttons.BtnType:=btnOkCancel;
 
- NewDialogOpen(Attributes,FSigninDialog);
+ NewDialogOpen(Client,Attributes,FSigninDialog);
 end;
 
-function TDialogsManager.OnSigninDlgClose(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_CLOSE
+function TDialogsManager.SIGNIN_DIALOG_CLOSE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  if (FSigninDialog<>nil) then
@@ -1476,13 +1461,13 @@ begin
  end;
 end;
 
-function TDialogsManager.OnSigninDlgTerm(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_TERM
+function TDialogsManager.SIGNIN_DIALOG_TERM(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  FreeAndNil(FSigninDialog);
 end;
 
-function TDialogsManager.OnSigninDlgUpdate(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_UPDATE
+function TDialogsManager.SIGNIN_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=-1;
  if (FSigninDialog<>nil) then
@@ -1491,7 +1476,7 @@ begin
  end;
 end;
 
-function TDialogsManager.OnSigninDlgResult(Value:TIpcValue):TIpcValue; //SIGNIN_DIALOG_RESULT
+function TDialogsManager.SIGNIN_DIALOG_RESULT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=-1;
  if (FSigninDialog<>nil) then

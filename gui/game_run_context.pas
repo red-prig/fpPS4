@@ -46,10 +46,6 @@ type
   procedure StopAndNil();
   Procedure CloseItem();
   //
-  procedure BindHandler(Handler:THostIpcHandler);
-  function  InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
-  procedure InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
-  procedure InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
  end;
 
 implementation
@@ -155,43 +151,6 @@ begin
 end;
 
 //
-
-procedure TGameRunContext.BindHandler(Handler:THostIpcHandler);
-begin
- if (FGameProcess=nil) or (Handler=nil) then Exit;
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.FHandler:=Handler;
- end;
-end;
-
-function TGameRunContext.InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
-begin
- Result:=Ptruint(-1);
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  Result:=FGameProcess.g_ipc.InvokeSync2(msg,TIpcValue.&Object(obj));
- end;
-end;
-
-procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
-begin
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.InvokeAsyn(msg,TIpcValue.&Object(obj));
- end;
-end;
-
-procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
-begin
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.InvokeAsyn(msg,buf,mlen);
- end;
-end;
 
 end.
 

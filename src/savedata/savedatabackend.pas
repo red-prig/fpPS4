@@ -7,6 +7,8 @@ interface
 uses
  sysutils,
  classes,
+ mqueue,
+ sys_bootparam,
  errno,
  LFQueue,
  //windows,
@@ -28,7 +30,7 @@ uses
 
 type
  TSaveDataBackendConnect=class
-  kipc    :THostIpcPipeKERN;
+  kipc    :THostIpcPipe;
   hProcess:THandle;
   fork_pid:Integer;
   //
@@ -86,18 +88,20 @@ type
    end;
   var
    node :TQNode;
-   rid  :DWORD;
+   rid  :THostIpcResult;
    defer:Boolean;
-  Constructor Create(_rid:DWORD);
+  Constructor Create(_rid:THostIpcResult);
+  Destructor  Destroy; override;
   function    Run:TIpcValue; virtual;
   procedure   Invoke(value:TIpcValue);
   function    GetProgress:Single; virtual;
  end;
 
- THostIpcPipeSave=class(THostIpcPipe)
+ TIpcEventDispatch=class(THostIpcDispatchQueue)
   event:t_event;
-  Constructor Create;
-  procedure   Recv_pipe; override;
+  Constructor Create(_Handler:THostIpcHandler);
+  Destructor  Destroy; override;
+  procedure   QueuePush(node:PQNode); override;
  end;
 
  TProgressInfo=record
@@ -106,61 +110,85 @@ type
   Value:Single;
  end;
 
- TSaveDataBackendProcess=class
-  systemLang:DWORD;
-  ppid      :Integer;
-  parent    :THandle;
-  kipc      :THostIpcPipeSave;
-  job_queue :TIntrusiveMPSCQueue;
-  job_event :t_event;
+ TSaveDataBackendClient=class(THostIpcPipe)
+  entry:TAILQ_ENTRY;
   //
-  MountManager:TMountManager;
-  //
-  LockDirManager:TLockDirManager;
-  //
-  SetupMemoryManager:TSetupMemoryManager;
-  pWriteSlot:PSetupMemoryNode;
-  //
-  EventQueue:TEventQueue;
-  //
-  Progress:TProgressInfo;
-  //
-  Constructor Create;
-  procedure   SendCmd         (cmd:TCustomCommand);
-  function    RecvCmd         (var cmd:TCustomCommand):Boolean;
-  procedure   DoExit          ();
-  function    OnExitProc      (Value:TIpcValue):TIpcValue; //EXIT_PROC
-  function    OnMountConfig   (Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
-  function    OnDelete        (Value:TIpcValue):TIpcValue; //Delete
-  function    OnMount         (Value:TIpcValue):TIpcValue; //Mount
-  function    OnIsActiveMount (Value:TIpcValue):TIpcValue; //IsActiveMount
-  function    OnUmount        (Value:TIpcValue):TIpcValue; //Umount
-  procedure   UmountAllForce  ();
-  function    OnGetMountInfo  (Value:TIpcValue):TIpcValue; //GetMountInfo
-  function    OnBackup        (Value:TIpcValue):TIpcValue; //Backup
-  function    SendBackupJob   (userId     :SceUserServiceUserId;
-                               titleId    :pchar;
-                               dirName    :pchar;
-                               fingerprint:pSceSaveDataFingerprint;
-                               event_type :Byte):Integer;
-  function    OnCheckBackup   (Value:TIpcValue):TIpcValue; //CheckBackup
-  function    OnRestoreBackup (Value:TIpcValue):TIpcValue; //RestoreBackup
-  function    OnGetEventResult(Value:TIpcValue):TIpcValue; //GetEventResult
-  function    OnGetProgress   (Value:TIpcValue):TIpcValue; //GetProgress
-  function    OnClearProgress (Value:TIpcValue):TIpcValue; //ClearProgress
-  procedure   SetProgressJob  (cmd:TCustomCommand);
-  function    OnSaveIcon      (Value:TIpcValue):TIpcValue; //SaveIcon
-  function    OnLoadIcon      (Value:TIpcValue):TIpcValue; //LoadIcon
-  function    OnSetParam      (Value:TIpcValue):TIpcValue; //SetParam
-  function    OnGetParam      (Value:TIpcValue):TIpcValue; //GetParam
-  function    OnSetupMemory   (Value:TIpcValue):TIpcValue; //SetupMemory
-  function    OnReadMemory    (Value:TIpcValue):TIpcValue; //ReadMemory
-  function    OnSetWriteSlot  (Value:TIpcValue):TIpcValue; //SetWriteSlot
-  function    OnWriteMemory   (Value:TIpcValue):TIpcValue; //WriteMemory
-  function    SendSyncJob     (userId,slotId,option:DWORD;hold:Boolean):Integer;
-  function    OnSyncMemory    (Value:TIpcValue):TIpcValue; //SyncMemory
-  function    OnDirNameSearch (Value:TIpcValue):TIpcValue; //DirNameSearch
  end;
+
+ TClientManager=object
+  List:TAILQ_HEAD;
+  mtx :mtx;
+  //
+  procedure Init;
+  function  NewClient(Dispatcher:TIpcEventDispatch):TSaveDataBackendClient;
+  procedure InvokeBrokenAll;
+  procedure DisconnectAll;
+ end;
+
+ {$M+}
+
+ TSaveDataBackendProcess=class
+  public
+   systemLang:DWORD;
+   ppid      :Integer;
+   parent    :THandle;
+   Dispatcher:TIpcEventDispatch;
+   Clients   :TClientManager;
+   //
+   job_queue :TIntrusiveMPSCQueue;
+   job_event :t_event;
+   //
+   MountManager:TMountManager;
+   //
+   LockDirManager:TLockDirManager;
+   //
+   SetupMemoryManager:TSetupMemoryManager;
+   pWriteSlot:PSetupMemoryNode;
+   //
+   EventQueue:TEventQueue;
+   //
+   Progress:TProgressInfo;
+   //
+   Constructor Create;
+   procedure   SendCmd         (cmd:TCustomCommand);
+   function    RecvCmd         (var cmd:TCustomCommand):Boolean;
+   procedure   DoExit          ();
+   procedure   UmountAllForce  ();
+   function    SendBackupJob   (userId     :SceUserServiceUserId;
+                                titleId    :pchar;
+                                dirName    :pchar;
+                                fingerprint:pSceSaveDataFingerprint;
+                                event_type :Byte):Integer;
+   procedure   SetProgressJob  (cmd:TCustomCommand);
+   function    SendSyncJob     (Client:THostIpc;userId,slotId,option:DWORD):Integer;
+  published
+   //All functions available for the IPC
+   function    EXIT_PROC     (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    MOUNT_CONFIG  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    Delete        (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    Mount         (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    IsActiveMount (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    Umount        (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    GetMountInfo  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    Backup        (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    CheckBackup   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    RestoreBackup (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    GetEventResult(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    GetProgress   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    ClearProgress (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    SaveIcon      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    LoadIcon      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    SetParam      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    GetParam      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    SetupMemory   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    ReadMemory    (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    SetWriteSlot  (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    WriteMemory   (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    SyncMemory    (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function    DirNameSearch (Client:THostIpc;Value:TIpcValue):TIpcValue;
+ end;
+
+ {$M-}
 
 implementation
 
@@ -194,7 +222,7 @@ begin
   Assert(false,'TSaveDataBackend');
  end;
 
- kipc:=THostIpcPipeKERN.Create;
+ kipc:=THostIpcPipe.Create(THostIpcConnect(p_host_ipc).Dispatcher);
  kipc.set_pipe(kern2svdt[0]);
 
  data.pipefd     :=kern2svdt[1];
@@ -238,13 +266,19 @@ end;
 
 ///
 
-Constructor THostIpcPipeSave.Create;
+Constructor TIpcEventDispatch.Create(_Handler:THostIpcHandler);
 begin
  inherited;
  ev_init(event,'THostIpcPipeSave');
 end;
 
-procedure THostIpcPipeSave.Recv_pipe;
+Destructor TIpcEventDispatch.Destroy;
+begin
+ ev_destroy(event);
+ inherited;
+end;
+
+procedure TIpcEventDispatch.QueuePush(node:PQNode);
 begin
  inherited;
  ev_signal(event);
@@ -252,10 +286,16 @@ end;
 
 ///
 
-Constructor TCustomCommand.Create(_rid:DWORD);
+Constructor TCustomCommand.Create(_rid:THostIpcResult);
 begin
  node.self_:=self;
  rid:=_rid;
+end;
+
+Destructor TCustomCommand.Destroy;
+begin
+ FreeAndNil(rid);
+ inherited;
 end;
 
 function TCustomCommand.Run:TIpcValue;
@@ -265,12 +305,13 @@ end;
 
 procedure TCustomCommand.Invoke(value:TIpcValue);
 begin
- if (rid=0) then
+ if (rid=nil) then
  begin
   value.Free;
  end else
  begin
-  gSaveDataBackend.kipc.InvokeResult(rid,value);
+  rid.InvokeResult(value);
+  FreeAndNil(rid);
  end;
 end;
 
@@ -337,9 +378,67 @@ begin
  until false;
 end;
 
+//
+
+//TClientManager=object
+// List:TAILQ_HEAD;
+// mtx :mtx;
+ //
+
+procedure TClientManager.Init;
+begin
+ TAILQ_INIT(@List);
+ mtx_init(mtx,'TClientManager');
+end;
+
+function TClientManager.NewClient(Dispatcher:TIpcEventDispatch):TSaveDataBackendClient;
+begin
+ Result:=TSaveDataBackendClient.Create(Dispatcher);
+ //
+ mtx_lock(mtx);
+  TAILQ_INSERT_TAIL(@List,Result,@Result.entry);
+ mtx_unlock(mtx);
+end;
+
+procedure TClientManager.InvokeBrokenAll;
+var
+ node:TSaveDataBackendClient;
+begin
+ mtx_lock(mtx);
+  node:=TSaveDataBackendClient(TAILQ_FIRST(@List));
+  while (node<>nil) do
+  begin
+   node.InvokeBroken();
+   //
+   node:=TSaveDataBackendClient(TAILQ_NEXT(node,@node.entry));
+  end;
+ mtx_unlock(mtx);
+end;
+
+procedure TClientManager.DisconnectAll;
+var
+ node,next:TSaveDataBackendClient;
+begin
+ mtx_lock(mtx);
+  node:=TSaveDataBackendClient(TAILQ_FIRST(@List));
+  while (node<>nil) do
+  begin
+   next:=TSaveDataBackendClient(TAILQ_NEXT(node,@node.entry));
+   //
+   node.Disconnect;
+   TAILQ_REMOVE(@List,node,@node.entry);
+   node.Release;
+   //
+   node:=next;
+  end;
+ mtx_unlock(mtx);
+end;
+
+//
+
 procedure OnExitProc;
 begin
- gSaveDataBackend.kipc.InvokeBroken();
+ gSaveDataBackend.Clients.InvokeBrokenAll;
 end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
@@ -350,6 +449,8 @@ var
 
  pipefd:THandle;
  parent:THandle;
+
+ kipc:TSaveDataBackendClient;
 begin
  //while not IsDebuggerPresent do sleep(100);
 
@@ -370,7 +471,9 @@ begin
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
  gSaveDataBackend:=TSaveDataBackendProcess.Create;
- gSaveDataBackend.kipc.set_pipe(pipefd);
+
+ kipc:=gSaveDataBackend.Clients.NewClient(gSaveDataBackend.Dispatcher);
+ kipc.set_pipe(pipefd);
 
  gSaveDataBackend.ppid  :=ppid  ;
  gSaveDataBackend.parent:=parent;
@@ -384,9 +487,9 @@ begin
  BeginThread(@job_thread,nil);
 
  repeat
-  ev_wait(gSaveDataBackend.kipc.event);
+  ev_wait(gSaveDataBackend.Dispatcher.event);
 
-  gSaveDataBackend.kipc.Update();
+  gSaveDataBackend.Dispatcher.Update();
  until false;
 
 end;
@@ -395,6 +498,10 @@ end;
 
 Constructor TSaveDataBackendProcess.Create;
 begin
+ inherited;
+ //
+ Clients.Init;
+ //
  job_queue.Create;
  ev_init(job_event,'job_event');
  //
@@ -406,34 +513,11 @@ begin
  //
  mtx_init(Progress.mtx,'Progress');
  //
- kipc:=THostIpcPipeSave.Create;
- kipc.FHandler:=THostIpcHandler.Create;
+ Dispatcher:=TIpcEventDispatch.Create(THostIpcHandler.Create);
+ Dispatcher.Acquire;
  //
- kipc.FHandler.AddCallback('EXIT_PROC'     ,@OnExitProc);
- kipc.FHandler.AddCallback('MOUNT_CONFIG'  ,@OnMountConfig);
- kipc.FHandler.AddCallback('Delete'        ,@OnDelete);
- kipc.FHandler.AddCallback('Mount'         ,@OnMount);
- kipc.FHandler.AddCallback('IsActiveMount' ,@OnIsActiveMount);
- kipc.FHandler.AddCallback('Umount'        ,@OnUmount);
- kipc.FHandler.AddCallback('GetMountInfo'  ,@OnGetMountInfo);
- kipc.FHandler.AddCallback('Backup'        ,@OnBackup);
- kipc.FHandler.AddCallback('CheckBackup'   ,@OnCheckBackup);
- kipc.FHandler.AddCallback('RestoreBackup' ,@OnRestoreBackup);
- kipc.FHandler.AddCallback('GetEventResult',@OnGetEventResult);
- kipc.FHandler.AddCallback('GetProgress'   ,@OnGetProgress);
- kipc.FHandler.AddCallback('ClearProgress' ,@OnClearProgress);
- kipc.FHandler.AddCallback('SaveIcon'      ,@OnSaveIcon);
- kipc.FHandler.AddCallback('LoadIcon'      ,@OnLoadIcon);
- kipc.FHandler.AddCallback('SetParam'      ,@OnSetParam);
- kipc.FHandler.AddCallback('GetParam'      ,@OnGetParam);
- kipc.FHandler.AddCallback('SetupMemory'   ,@OnSetupMemory);
- kipc.FHandler.AddCallback('ReadMemory'    ,@OnReadMemory);
- kipc.FHandler.AddCallback('SetWriteSlot'  ,@OnSetWriteSlot);
- kipc.FHandler.AddCallback('WriteMemory'   ,@OnWriteMemory);
- kipc.FHandler.AddCallback('SyncMemory'    ,@OnSyncMemory);
- kipc.FHandler.AddCallback('DirNameSearch' ,@OnDirNameSearch);
+ Dispatcher.FHandler.AddPublished(Self);
  //
- inherited;
 end;
 
 procedure TSaveDataBackendProcess.SendCmd(cmd:TCustomCommand);
@@ -457,12 +541,12 @@ end;
 
 procedure TSaveDataBackendProcess.DoExit();
 begin
- kipc.Disconnect();
+ Clients.DisconnectAll;
  UmountAllForce();
- SendCmd(TCmdExitProc.Create(0));
+ SendCmd(TCmdExitProc.Create(nil));
 end;
 
-function TSaveDataBackendProcess.OnExitProc(Value:TIpcValue):TIpcValue; //EXIT_PROC
+function TSaveDataBackendProcess.EXIT_PROC(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  DoExit();
@@ -491,7 +575,7 @@ begin
  end;
 end;
 
-function TSaveDataBackendProcess.OnMountConfig(Value:TIpcValue):TIpcValue; //MOUNT_CONFIG
+function TSaveDataBackendProcess.MOUNT_CONFIG(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TGameMountConfigExport;
 begin
@@ -611,7 +695,7 @@ begin
  Result:=Progress;
 end;
 
-function TSaveDataBackendProcess.OnDelete(Value:TIpcValue):TIpcValue; //Delete
+function TSaveDataBackendProcess.Delete(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TDelete;
 
@@ -643,7 +727,7 @@ begin
 
   if LockDirManager.LockDir(fs_src) then
   begin
-   job:=TDeleteJob.Create(kipc.HoldResult);
+   job:=TDeleteJob.Create(Client.HoldResult);
    job.Init(data.userId,titleId,dirName);
 
    SetProgressJob(job);
@@ -1193,7 +1277,7 @@ begin
  Result:=Progress;
 end;
 
-function TSaveDataBackendProcess.OnMount(Value:TIpcValue):TIpcValue; //Mount
+function TSaveDataBackendProcess.Mount(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TMount;
 
@@ -1203,7 +1287,7 @@ begin
  FillChar(data,SizeOf(data),0);
  Value.MoveTo(@data,SizeOf(data));
 
- job:=TMountJob.Create(kipc.HoldResult);
+ job:=TMountJob.Create(Client.HoldResult);
  job.Init(data);
 
  SetProgressJob(job);
@@ -1262,7 +1346,7 @@ type
   freeBlocks:SceSaveDataBlocks;
  end;
 
-function TSaveDataBackendProcess.OnIsActiveMount(Value:TIpcValue):TIpcValue; //IsActiveMount
+function TSaveDataBackendProcess.IsActiveMount(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  slot_id:Integer;
 begin
@@ -1381,7 +1465,7 @@ begin
  Result:=err;
 end;
 
-function TSaveDataBackendProcess.OnUmount(Value:TIpcValue):TIpcValue; //Umount
+function TSaveDataBackendProcess.Umount(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TUmount;
  job:TUmountJob;
@@ -1399,7 +1483,7 @@ begin
  begin
   Result:=0;
 
-  job:=TUmountJob.Create(kipc.HoldResult);
+  job:=TUmountJob.Create(Client.HoldResult);
 
   job.minfo:=MountManager.GetMount(data.slot_id);
   job.data :=data;
@@ -1418,7 +1502,7 @@ begin
  For i:=0 to MountManager.max-1 do
  if MountManager.IsActiveMount(i) then
  begin
-  job:=TUmountJob.Create(0);
+  job:=TUmountJob.Create(nil);
 
   job.minfo:=MountManager.GetMount(i);
   job.data.slot_id:=i;
@@ -1457,13 +1541,13 @@ begin
  end;
 end;
 
-function TSaveDataBackendProcess.OnGetMountInfo(Value:TIpcValue):TIpcValue; //GetMountInfo
+function TSaveDataBackendProcess.GetMountInfo(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  slot_id:Integer;
- mount:TMountSlot;
- fs_src:RawByteString;
- output:TMountInfo;
- blocks:Int64;
+ minfo  :TMountSlot;
+ fs_src :RawByteString;
+ output :TMountInfo;
+ blocks :Int64;
 begin
  Result:=0;
  slot_id:=Value.GetDWORD;
@@ -1475,14 +1559,14 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
  end;
 
- mount:=MountManager.GetMount(slot_id);
+ minfo:=MountManager.GetMount(slot_id);
 
- fs_src:=GameMountConfig.GetSaveDataFolder(mount.userId,@mount.titleId,@mount.dirName);
+ fs_src:=GameMountConfig.GetSaveDataFolder(minfo.userId,@minfo.titleId,@minfo.dirName);
 
- blocks:=GetFreeBlocks(fs_src,mount.max_blocks);
+ blocks:=GetFreeBlocks(fs_src,minfo.max_blocks);
 
  output.result    :=0;
- output.blocks    :=mount.max_blocks;
+ output.blocks    :=minfo.max_blocks;
  output.freeBlocks:=blocks;
 
  Result:=TIpcValue.New(@output,sizeof(output));
@@ -1512,7 +1596,7 @@ begin
  Result:=kipc.InvokeSync2('Backup',@data,sizeof(data));
 end;
 
-function TSaveDataBackendProcess.OnBackup(Value:TIpcValue):TIpcValue; //Backup
+function TSaveDataBackendProcess.Backup(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TBackup;
  titleId:pchar;
@@ -1528,10 +1612,10 @@ begin
  end;
 
  Result:=SendBackupJob(data.userId,
-                      titleId,
-                      @data.dirName.data,
-                      @data.fingerprint,
-                      SDET_BACKUP_END);
+                       titleId,
+                       @data.dirName.data,
+                       @data.fingerprint,
+                       SDET_BACKUP_END);
 end;
 
 type
@@ -1885,7 +1969,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
  end;
 
- job:=TBackupJob.Create(0); //async
+ job:=TBackupJob.Create(nil); //async
  job.Init(userId,titleId,dirName);
  job.event_type:=event_type;
 
@@ -2038,7 +2122,7 @@ begin
  UnLock;
 end;
 
-function TSaveDataBackendProcess.OnCheckBackup(Value:TIpcValue):TIpcValue; //CheckBackup
+function TSaveDataBackendProcess.CheckBackup(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TCheckBackup;
  titleId:pchar;
@@ -2071,7 +2155,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
  end;
 
- job:=TCheckJob.Create(kipc.HoldResult);
+ job:=TCheckJob.Create(Client.HoldResult);
  job.Init(data.userId,titleId,dirName);
 
  job.get_param:=data.get_param;
@@ -2094,7 +2178,7 @@ begin
  Result:=kipc.InvokeSync2('RestoreBackup',@data,sizeof(data));
 end;
 
-function TSaveDataBackendProcess.OnRestoreBackup(Value:TIpcValue):TIpcValue; //RestoreBackup
+function TSaveDataBackendProcess.RestoreBackup(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TBackup;
  titleId:pchar;
@@ -2132,7 +2216,7 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_BACKUP_BUSY);
  end;
 
- job:=TRestoreJob.Create(kipc.HoldResult);
+ job:=TRestoreJob.Create(Client.HoldResult);
  job.Init(data.userId,titleId,dirName);
 
  SetProgressJob(job);
@@ -2163,7 +2247,7 @@ begin
  end;
 end;
 
-function TSaveDataBackendProcess.OnGetEventResult(Value:TIpcValue):TIpcValue; //GetEventResult
+function TSaveDataBackendProcess.GetEventResult(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TEventResult;
 begin
@@ -2203,7 +2287,7 @@ begin
  end;
 end;
 
-function TSaveDataBackendProcess.OnGetProgress(Value:TIpcValue):TIpcValue; //GetProgress
+function TSaveDataBackendProcess.GetProgress(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TGetProgress;
 begin
@@ -2230,7 +2314,7 @@ begin
  Result:=kipc.InvokeSync2('ClearProgress');
 end;
 
-function TSaveDataBackendProcess.OnClearProgress(Value:TIpcValue):TIpcValue; //ClearProgress
+function TSaveDataBackendProcess.ClearProgress(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
  mtx_lock(Progress.mtx);
@@ -2308,7 +2392,7 @@ begin
  Result:=err;
 end;
 
-function TSaveDataBackendProcess.OnSaveIcon(Value:TIpcValue):TIpcValue; //SaveIcon
+function TSaveDataBackendProcess.SaveIcon(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  len:DWORD;
  data:p_input_buf;
@@ -2336,7 +2420,7 @@ begin
 
  prev:=MountManager.GetMount(data^.slot);
 
- job:=TSaveIconJob.Create(kipc.HoldResult);
+ job:=TSaveIconJob.Create(Client.HoldResult);
  job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
 
  job.slot:=data^.slot;
@@ -2441,7 +2525,7 @@ begin
 
 end;
 
-function TSaveDataBackendProcess.OnLoadIcon(Value:TIpcValue):TIpcValue; //LoadIcon
+function TSaveDataBackendProcess.LoadIcon(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  slot_id:Integer;
  prev:TMountSlot;
@@ -2460,7 +2544,7 @@ begin
 
  prev:=MountManager.GetMount(slot_id);
 
- job:=TLoadIconJob.Create(kipc.HoldResult);
+ job:=TLoadIconJob.Create(Client.HoldResult);
  job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
 
  SendCmd(job);
@@ -2528,7 +2612,7 @@ begin
  Result:=err;
 end;
 
-function TSaveDataBackendProcess.OnSetParam(Value:TIpcValue):TIpcValue; //SetParam
+function TSaveDataBackendProcess.SetParam(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  len:DWORD;
  data:PSetParam;
@@ -2558,7 +2642,7 @@ begin
 
  minfo:=MountManager.GetMount(data^.slot);
 
- job:=TSetParamJob.Create(kipc.HoldResult);
+ job:=TSetParamJob.Create(Client.HoldResult);
  job.fs_src   :=GameMountConfig.GetSaveDataFolder(minfo.userId,@minfo.titleId.data,@minfo.dirName.data);
  job.slot     :=data^.slot;
  job.param_sfo:=minfo.param_sfo;
@@ -2625,7 +2709,7 @@ begin
  Value.Free;
 end;
 
-function TSaveDataBackendProcess.OnGetParam(Value:TIpcValue):TIpcValue; //GetParam
+function TSaveDataBackendProcess.GetParam(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  input:TGetParam;
  data :p_output_buf;
@@ -2732,7 +2816,7 @@ begin
   ///
   if (err=SCE_SAVE_DATA_ERROR_BROKEN) then
   begin
-   RestoreJob:=TRestoreJob.Create(0);
+   RestoreJob:=TRestoreJob.Create(nil);
    RestoreJob.Init(data.userId,titleId,dirName);
 
    if RestoreJob.Prepare then
@@ -2796,7 +2880,7 @@ begin
  Result:=err;
 end;
 
-function TSaveDataBackendProcess.OnSetupMemory(Value:TIpcValue):TIpcValue; //SetupMemory
+function TSaveDataBackendProcess.SetupMemory(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  input:TSetupMemory;
  node :PSetupMemoryNode;
@@ -2824,7 +2908,7 @@ begin
  minfo.blocks      :=GetBlocks(input.memorySize);
  minfo.mountMode   :=SDMM_RDONLY;
 
- job:=TSetupMemoryJob.Create(kipc.HoldResult);
+ job:=TSetupMemoryJob.Create(Client.HoldResult);
  job.Init(minfo);
 
  SendCmd(job);
@@ -2917,7 +3001,7 @@ begin
 
 end;
 
-function TSaveDataBackendProcess.OnReadMemory(Value:TIpcValue):TIpcValue; //ReadMemory
+function TSaveDataBackendProcess.ReadMemory(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  input:TReadMemory;
  prev:TMountSlot;
@@ -2937,7 +3021,7 @@ begin
 
  prev:=MountManager.GetMount(input.slot_id);
 
- job:=TReadMemoryJob.Create(kipc.HoldResult);
+ job:=TReadMemoryJob.Create(Client.HoldResult);
  job.fs_src:=GameMountConfig.GetSaveDataFolder(prev.userId,@prev.titleId.data,@prev.dirName.data);
 
  job.dataSize:=input.dataSize;
@@ -2965,7 +3049,7 @@ begin
  kipc.InvokeAsyn('WriteMemory',addr,size);
 end;
 
-function TSaveDataBackendProcess.OnSetWriteSlot(Value:TIpcValue):TIpcValue; //SetWriteSlot
+function TSaveDataBackendProcess.SetWriteSlot(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  data:TSetWriteSlot;
  node:PSetupMemoryNode;
@@ -2988,7 +3072,7 @@ begin
 
 end;
 
-function TSaveDataBackendProcess.OnWriteMemory(Value:TIpcValue):TIpcValue; //WriteMemory
+function TSaveDataBackendProcess.WriteMemory(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  src_addr:Pointer;
  src_size:QWORD;
@@ -3020,7 +3104,7 @@ begin
 
   if (pWriteSlot^.job_count<2) then
   begin
-   SendSyncJob(pWriteSlot^.data.userId,pWriteSlot^.data.slotId,0,False);
+   SendSyncJob(nil,pWriteSlot^.data.userId,pWriteSlot^.data.slotId,0);
   end;
  end;
 end;
@@ -3294,7 +3378,7 @@ begin
  System.InterlockedDecrement(nslot^.job_count);
 end;
 
-function TSaveDataBackendProcess.SendSyncJob(userId,slotId,option:DWORD;hold:Boolean):Integer;
+function TSaveDataBackendProcess.SendSyncJob(Client:THostIpc;userId,slotId,option:DWORD):Integer;
 var
  node    :PSetupMemoryNode;
  titleId :pchar;
@@ -3316,7 +3400,7 @@ begin
 
  if is_async then
  begin
-  job:=TSyncMemoryJob.Create(0);
+  job:=TSyncMemoryJob.Create(nil);
  end else
  begin
 
@@ -3330,12 +3414,12 @@ begin
    Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
   end;
 
-  if hold then
+  if (Client<>nil) then
   begin
-   job:=TSyncMemoryJob.Create(kipc.HoldResult);
+   job:=TSyncMemoryJob.Create(Client.HoldResult);
   end else
   begin
-   job:=TSyncMemoryJob.Create(0);
+   job:=TSyncMemoryJob.Create(nil);
   end;
 
  end;
@@ -3347,19 +3431,19 @@ begin
  job.titleId.data:=titleId;
  job.dirName.data:=dirName;
  job.is_async    :=is_async;
- job.is_event    :=hold and is_async;
+ job.is_event    :=(Client<>nil) and is_async;
 
  SendCmd(job);
 end;
 
-function TSaveDataBackendProcess.OnSyncMemory(Value:TIpcValue):TIpcValue; //SyncMemory
+function TSaveDataBackendProcess.SyncMemory(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  input:TSyncMemory;
 begin
  input:=Default(TSyncMemory);
  Value.MoveTo(@input,sizeof(input));
 
- Result:=SendSyncJob(input.userId,input.slotId,input.option,True);
+ Result:=SendSyncJob(Client,input.userId,input.slotId,input.option);
 end;
 
 type
@@ -3711,7 +3795,7 @@ begin
  List.Free;
 end;
 
-function TSaveDataBackendProcess.OnDirNameSearch(Value:TIpcValue):TIpcValue; //DirNameSearch
+function TSaveDataBackendProcess.DirNameSearch(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  input:TDirNameSearch;
  titleId:pchar;
@@ -3727,7 +3811,7 @@ begin
   titleId:=@GameMountConfig.InstallDir;
  end;
 
- job:=TDirNameSearchJob.Create(kipc.HoldResult);
+ job:=TDirNameSearchJob.Create(Client.HoldResult);
 
  job.fs_src:=GameMountConfig.GetSaveDataFolder(input.userId,titleId,'');
  job.data  :=input;

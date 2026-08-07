@@ -14,48 +14,39 @@ uses
  host_ipc;
 
 type
- t_push_cb=Function(Node:Pointer):Boolean of object;
-
  t_ipc_proto=object
-  Fbev   :Pbufferevent;
-  Finput :Pevbuffer;
-  Foutput:Pevbuffer;
+  type
+   PQNode     =THostIpcDispatchQueue.PQNode;
+   TQNode     =THostIpcDispatchQueue.TQNode;
+   PNodeHeader=THostIpcDispatchQueue.PNodeHeader;
+   TNodeHeader=THostIpcDispatchQueue.TNodeHeader;
+   t_push_cb  =procedure(Node:PQNode) of object;
+  var
+   Fbev   :Pbufferevent;
+   Finput :Pevbuffer;
+   Foutput:Pevbuffer;
 
-  FHeader:THostIpcConnect.TNodeHeader;
-  FState :Integer;
+   FHeader:TNodeHeader;
+   FState :Integer;
 
   procedure Send(mtype,mlen,mtid:DWORD;buf:Pointer);
-  procedure Recv(FPush:t_push_cb);
+  procedure Recv(Client:THostIpcConnect;Dispatch:THostIpcDispatchQueue);
  end;
 
  TGlobalEvpoll=class
   evpoll   :Tevpoll;
   td_handle:TThreadID;
-  refs     :Integer;
   Constructor Create;
   Destructor  Destroy; override;
  end;
 
  THostIpcPipe=class(THostIpcConnect)
-  proto:t_ipc_proto;
-  attach_evpoll:Boolean;
+  evpoll:TGlobalEvpoll;
+  proto :t_ipc_proto;
   procedure   set_pipe(fd:THandle);
-  procedure   Recv_pipe; virtual;
-  Function    Push(Node:Pointer):Boolean;
+  procedure   Recv_pipe;
   procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); override;
-  procedure   WakeupKevent(); override;
   Destructor  Destroy; override;
-  procedure   thread_new;  override;
-  procedure   thread_free; override;
- end;
-
- THostIpcPipeMGUI=class(THostIpcPipe)
-  procedure   Recv_pipe;   override;
- end;
-
- THostIpcPipeKERN=class(THostIpcPipe)
-  Function    GetCallback(mtype:DWORD):TOnMessage; override;
-  procedure   Recv_pipe;   override;
  end;
 
 implementation
@@ -64,16 +55,18 @@ var
  global_evpoll_mtx:mtx;
  global_evpoll    :TGlobalEvpoll;
 
-Constructor TGlobalEvpoll.Create;
+function fetch_global_server:TGlobalEvpoll;
 begin
- inherited;
- evpoll_init(@evpoll,nil);
-end;
+ mtx_lock(global_evpoll_mtx);
 
-Destructor TGlobalEvpoll.Destroy;
-begin
- evpoll_free(@evpoll);
- inherited;
+  if (global_evpoll=nil) then
+  begin
+   global_evpoll:=TGlobalEvpoll.Create;
+  end;
+
+  Result:=global_evpoll;
+
+ mtx_unlock(global_evpoll_mtx);
 end;
 
 function pipe_thread(parameter:pointer):ptrint;
@@ -82,81 +75,61 @@ begin
  evpoll_loop(parameter);
 end;
 
-procedure THostIpcPipe.thread_new;
+Constructor TGlobalEvpoll.Create;
 begin
- if attach_evpoll then Exit;
-
- mtx_lock(global_evpoll_mtx);
-
-  if (global_evpoll=nil) then
-  begin
-   global_evpoll:=TGlobalEvpoll.Create;
-  end;
-
-  if (global_evpoll.refs=0) then
-  begin
-   global_evpoll.td_handle:=BeginThread(@pipe_thread,@global_evpoll.evpoll);
-  end;
-
-  Inc(global_evpoll.refs);
-
- mtx_unlock(global_evpoll_mtx);
-
- attach_evpoll:=True;
+ inherited;
+ if (td_handle=0) then
+ begin
+  evpoll_init(@evpoll,nil);
+  //
+  td_handle:=BeginThread(@pipe_thread,@evpoll);
+ end;
 end;
 
-procedure THostIpcPipe.thread_free;
+Destructor TGlobalEvpoll.Destroy;
 begin
- if not attach_evpoll then Exit;
-
- mtx_lock(global_evpoll_mtx);
-
-  Dec(global_evpoll.refs);
-
-  if (global_evpoll.refs=0) then
-  begin
-   evpoll_break(@global_evpoll.evpoll);
-   //
-   WaitForThreadTerminate(global_evpoll.td_handle,0);
-   CloseThread(global_evpoll.td_handle);
-   //
-   FreeAndNil(global_evpoll);
-  end;
-
- mtx_unlock(global_evpoll_mtx);
-
- attach_evpoll:=False;
+ if (td_handle<>0) then
+ begin
+  evpoll_break(@evpoll);
+  //
+  WaitForThreadTerminate(td_handle,0);
+  CloseThread(td_handle);
+  //
+  evpoll_free(@evpoll);
+ end;
+ inherited;
 end;
 
 procedure t_ipc_proto.Send(mtype,mlen,mtid:DWORD;buf:Pointer);
 var
- node:THostIpcConnect.PNodeHeader;
+ node:PNodeHeader;
 begin
- node:=AllocMem(SizeOf(THostIpcConnect.TNodeHeader)+mlen);
+ node:=AllocMem(SizeOf(TNodeHeader)+mlen);
  node^.mtype:=DWORD(mtype);
  node^.mlen :=mlen;
  node^.mtid :=mtid;
  Move(buf^,node^.buf,mlen);
 
- evbuffer_add_ref(Foutput,node,0,SizeOf(THostIpcConnect.TNodeHeader)+mlen,Freemem_ptr);
+ evbuffer_add_ref(Foutput,node,0,SizeOf(TNodeHeader)+mlen,Freemem_ptr);
 
  bufferevent_write(Fbev);
 end;
 
-procedure t_ipc_proto.Recv(FPush:t_push_cb);
+procedure t_ipc_proto.Recv(Client:THostIpcConnect;Dispatch:THostIpcDispatchQueue);
 label
  _next;
 var
- node:THostIpcConnect.PQNode;
+ node:PQNode;
+ Fimm:Ptruint;
 begin
  repeat
 
   case FState of
    0:
      begin
-      if (evbuffer_get_length(Finput)<SizeOf(THostIpcConnect.TNodeHeader)) then Exit;
+      if (evbuffer_get_length(Finput)<SizeOf(TNodeHeader)) then Exit;
 
-      evbuffer_remove(Finput,@FHeader,SizeOf(THostIpcConnect.TNodeHeader));
+      evbuffer_remove(Finput,@FHeader,SizeOf(TNodeHeader));
 
       FState:=1;
 
@@ -168,13 +141,37 @@ begin
 
       _next:
 
-      node:=AllocMem(SizeOf(THostIpcConnect.TQNode)+FHeader.mlen);
-      node^.header:=FHeader;
-      node^.value :=TIpcValue.Static(@node^.buf,FHeader.mlen);
+      //alloc optimization
+      if (FHeader.mlen<=SizeOf(Fimm)) then
+      begin
+       Fimm:=0;
+       evbuffer_remove(Finput,@Fimm,FHeader.mlen);
 
-      evbuffer_remove(Finput,node^.value.GetBuf,FHeader.mlen);
+       if (FHeader.mtype=iRESULT) then
+       begin
+        //Trigger Direct!
+        Client.TriggerNodeSync(FHeader.mtid,TIpcValue.Static(@Fimm,FHeader.mlen));
+       end else
+       begin
+        node:=AllocMem(SizeOf(TQNode));
+        node^.Client:=Client;
+        node^.header:=FHeader;
+        node^.value :=TIpcValue.Static(@Fimm,FHeader.mlen);
 
-      FPush(node);
+        Dispatch.QueuePush(node);
+       end;
+
+      end else
+      begin
+       node:=AllocMem(SizeOf(TQNode)+FHeader.mlen);
+       node^.Client:=Client;
+       node^.header:=FHeader;
+       node^.value :=TIpcValue.Static(@node^.buf,FHeader.mlen);
+
+       evbuffer_remove(Finput,node^.value.GetBuf,FHeader.mlen);
+
+       Dispatch.QueuePush(node);
+      end;
 
       FState:=0;
      end;
@@ -214,32 +211,22 @@ end;
 
 procedure THostIpcPipe.set_pipe(fd:THandle);
 begin
- thread_new;
+ if (evpoll=nil) then
+ begin
+  evpoll:=fetch_global_server;
+ end;
 
- proto.Fbev   :=bufferevent_pipe_new  (@global_evpoll.evpoll,fd);
+ proto.Fbev   :=bufferevent_pipe_new  (@evpoll.evpoll,fd);
  proto.Finput :=bufferevent_get_input (proto.Fbev);
  proto.Foutput:=bufferevent_get_output(proto.Fbev);
 
- bufferevent_setcb(proto.Fbev,@eventcb,Pointer(Self));
+ bufferevent_setcb (proto.Fbev,@eventcb,Pointer(Self));
  bufferevent_enable(proto.Fbev);
 end;
 
 procedure THostIpcPipe.Recv_pipe;
 begin
- proto.Recv(@Self.Push);
-end;
-
-Function THostIpcPipe.Push(Node:Pointer):Boolean;
-begin
- if (PQNode(Node)^.header.mtype=iRESULT) then
- begin
-  //Trigger Direct
-  TriggerNodeSync(PQNode(Node)^.header.mtid,PQNode(Node)^.value);
-  FreeMem(Node);
- end else
- begin
-  Result:=FQueue.Push(node);
- end;
+ proto.Recv(Self,THostIpcDispatchQueue(Dispatcher));
 end;
 
 procedure THostIpcPipe.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
@@ -248,53 +235,12 @@ begin
  value.Free;
 end;
 
-Procedure ev_wakeup(param1:SizeUInt;param2:Pointer); register;
-begin
- THostIpcPipe(param2).UpdateKevent();
-end;
-
-procedure THostIpcPipe.WakeupKevent();
-begin
- evpoll_post(@global_evpoll.evpoll,@ev_wakeup,0,Pointer(Self));
-end;
-
 Destructor THostIpcPipe.Destroy;
 begin
  bufferevent_free(proto.Fbev);
- thread_free;
  inherited;
 end;
-
 //
-
-procedure THostIpcPipeMGUI.Recv_pipe;
-begin
- inherited;
- //
- if Assigned(Classes.WakeMainThread) then
- begin
-  Classes.WakeMainThread(nil);
- end;
-end;
-
-//
-
-Function THostIpcPipeKERN.GetCallback(mtype:DWORD):TOnMessage;
-begin
- if (mtype=iKEV_CHANGE.mtype) then
- begin
-  Result:=@RecvKevent;
- end else
- begin
-  Result:=inherited;
- end;
-end;
-
-procedure THostIpcPipeKERN.Recv_pipe;
-begin
- inherited;
- Update();
-end;
 
 initialization
  mtx_init(global_evpoll_mtx,'global_evpool_mtx');

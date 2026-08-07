@@ -5,6 +5,7 @@ unit host_ipc_interface;
 interface
 
 uses
+ TypInfo,
  Classes,
  CharStream,
  murmurhash,
@@ -49,7 +50,9 @@ type
   function  GetObject(src:TSerializeObjectClass):TSerializeObject;
  end;
 
- TOnMessage=function(Value:TIpcValue):TIpcValue of object;
+ THostIpc=class;
+
+ TOnMessage=function(Client:THostIpc;Value:TIpcValue):TIpcValue of object;
 
  TMsgHash=object
   f_mtype:DWORD;
@@ -73,11 +76,17 @@ type
    Procedure  AddCallback(const msg:RawByteString;cb:TOnMessage);
    Procedure  DelCallback(const msg:RawByteString);
    Function   GetCallback(mtype:DWORD):TOnMessage;
+   //
+   Procedure  AddPublished(obj:TObject);
+   Procedure  DelPublished(obj:TObject);
  end;
 
- THostIpcInterface=class
+ THostIpcResult=class
+  procedure InvokeResult(value:TIpcValue); virtual; abstract;
+ end;
+
+ THostIpc=class
   public
-   FHandler:THostIpcHandler;
    //
    procedure   error(const s:RawByteString);
    function    warning(const s:RawByteString):Ptruint;
@@ -85,13 +94,13 @@ type
    function    OpenMainWindows():THandle;
    procedure   SetCaptionFps(Ffps:QWORD);
    //
-   Function    GetCallback(mtype:DWORD):TOnMessage;           virtual;
+   function    handler:THostIpcHandler; virtual; abstract;
+   //
    function    NewSyncKey:Pointer;                            virtual; abstract;
    procedure   FreeSyncKey (key:Pointer);                     virtual; abstract;
    procedure   WaitSyncKey (key:Pointer);                     virtual; abstract;
    function    GetSyncValue(key:Pointer):TIpcValue;           virtual; abstract;
    procedure   Send(mtype:DWORD;key:Pointer;value:TIpcValue); virtual; abstract;
-   procedure   Update();                                      virtual;
    procedure   Disconnect();                                  virtual;
    //
    function    InvokeSync(msg:TMsgHash;Value:TIpcValue):TIpcValue;
@@ -106,8 +115,7 @@ type
    procedure   InvokeAsyn(msg:TMsgHash);
    procedure   InvokeBroken();
    //
-   function    HoldResult:DWORD;                        virtual; abstract;
-   procedure   InvokeResult(tid:DWORD;value:TIpcValue); virtual; abstract;
+   function    HoldResult:THostIpcResult; virtual; abstract;
  end;
 
 operator := (A:RawByteString):TMsgHash;
@@ -455,16 +463,54 @@ begin
  rw_runlock(FLock);
 end;
 
-Function THostIpcInterface.GetCallback(mtype:DWORD):TOnMessage;
+Procedure THostIpcHandler.AddPublished(obj:TObject);
+var
+ methodtable:PVmtMethodTable;
+ i:dword;
+ ovmt:PVmt;
+ Method:TMethod;
 begin
- Result:=nil;
- if (FHandler<>nil) then
+ ovmt:=PVmt(obj.ClassType);
+ Method.Data:=Pointer(obj);
+ while assigned(ovmt) do
  begin
-  Result:=FHandler.GetCallback(mtype);
+  methodtable:=PVmtMethodTable(ovmt^.vMethodTable);
+  if assigned(methodtable) then
+  begin
+   for i:=0 to methodtable^.count-1 do
+   begin
+    Method.Code:=methodtable^.Entry[i]^.CodeAddress;
+    AddCallback(methodtable^.Entry[i]^.name^,TOnMessage(Method));
+   end;
+  end;
+  ovmt:=ovmt^.vParent;
  end;
 end;
 
-function THostIpcInterface.InvokeSync(msg:TMsgHash;Value:TIpcValue):TIpcValue;
+Procedure THostIpcHandler.DelPublished(obj:TObject);
+var
+ methodtable:PVmtMethodTable;
+ i:dword;
+ ovmt:PVmt;
+begin
+ ovmt:=PVmt(obj.ClassType);
+ while assigned(ovmt) do
+ begin
+  methodtable:=PVmtMethodTable(ovmt^.vMethodTable);
+  if assigned(methodtable) then
+  begin
+   for i:=0 to methodtable^.count-1 do
+   begin
+    DelCallback(methodtable^.Entry[i]^.name^);
+   end;
+  end;
+  ovmt:=ovmt^.vParent;
+ end;
+end;
+
+//
+
+function THostIpc.InvokeSync(msg:TMsgHash;Value:TIpcValue):TIpcValue;
 var
  key:Pointer;
 begin
@@ -479,12 +525,12 @@ begin
  FreeSyncKey(key);
 end;
 
-function THostIpcInterface.InvokeSync(msg:TMsgHash):TIpcValue;
+function THostIpc.InvokeSync(msg:TMsgHash):TIpcValue;
 begin
  Result:=InvokeSync(msg,Default(TIpcValue));
 end;
 
-function THostIpcInterface.InvokeSync2(msg:TMsgHash;Value:TIpcValue):Ptruint;
+function THostIpc.InvokeSync2(msg:TMsgHash;Value:TIpcValue):Ptruint;
 var
  Output:TIpcValue;
 begin
@@ -493,73 +539,68 @@ begin
  Output.Free;
 end;
 
-function THostIpcInterface.InvokeSync2(msg:TMsgHash;buf:Pointer;mlen:DWORD):Ptruint;
+function THostIpc.InvokeSync2(msg:TMsgHash;buf:Pointer;mlen:DWORD):Ptruint;
 begin
  Result:=InvokeSync2(msg,TIpcValue.Static(buf,mlen));
 end;
 
-function THostIpcInterface.InvokeSync2(msg:TMsgHash):Ptruint;
+function THostIpc.InvokeSync2(msg:TMsgHash):Ptruint;
 begin
  Result:=InvokeSync2(msg,Default(TIpcValue));
 end;
 
-procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash;Value:TIpcValue);
+procedure THostIpc.InvokeAsyn(msg:TMsgHash;Value:TIpcValue);
 begin
  Send(msg.mtype,nil,Value);
 end;
 
-procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
+procedure THostIpc.InvokeAsyn(msg:TMsgHash;buf:Pointer;mlen:DWORD);
 begin
  Send(msg.mtype,nil,TIpcValue.New(buf,mlen));
 end;
 
-procedure THostIpcInterface.InvokeAsyn(msg:TMsgHash);
+procedure THostIpc.InvokeAsyn(msg:TMsgHash);
 begin
  Send(msg.mtype,nil,Default(TIpcValue));
 end;
 
-procedure THostIpcInterface.InvokeBroken();
+procedure THostIpc.InvokeBroken();
 begin
  Send(iRESULT,nil,Default(TIpcValue));
 end;
 
-procedure THostIpcInterface.Update();
-begin
- //
-end;
-
-procedure THostIpcInterface.Disconnect();
+procedure THostIpc.Disconnect();
 begin
  //
 end;
 
 //
 
-procedure THostIpcInterface.error(const s:RawByteString);
+procedure THostIpc.error(const s:RawByteString);
 begin
  if (self=nil) then Exit;
  InvokeSync2(iERROR.mtype,pchar(s),Length(s));
 end;
 
-function THostIpcInterface.warning(const s:RawByteString):Ptruint;
+function THostIpc.warning(const s:RawByteString):Ptruint;
 begin
  if (self=nil) then Exit(-1);
  Result:=InvokeSync2(iWARNING.mtype,pchar(s),Length(s));
 end;
 
-procedure THostIpcInterface.kevent(kev:p_kevent;count:Integer);
+procedure THostIpc.kevent(kev:p_kevent;count:Integer);
 begin
  if (self=nil) then Exit;
  InvokeAsyn(iKEV_CHANGE.mtype,kev,count*SizeOf(t_kevent));
 end;
 
-function THostIpcInterface.OpenMainWindows():THandle;
+function THostIpc.OpenMainWindows():THandle;
 begin
  if (self=nil) then Exit(0);
  Result:=THandle(InvokeSync2(iMAIN_WINDOWS.mtype));
 end;
 
-procedure THostIpcInterface.SetCaptionFps(Ffps:QWORD);
+procedure THostIpc.SetCaptionFps(Ffps:QWORD);
 begin
  if (self=nil) then Exit;
  InvokeAsyn(iCAPTION_FPS.mtype,@Ffps,SizeOf(Ffps));

@@ -12,6 +12,7 @@ uses
  kern_thr,
  md_sleep,
  md_pipe,
+ host_ipc_interface,
  host_ipc,
  md_host_ipc,
  param_sfo_gui,
@@ -39,7 +40,7 @@ type
   Destructor Destroy; override;
  end;
 
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function run_item(Dispatcher:THostIpcDispatcher;const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 
 implementation
 
@@ -257,7 +258,7 @@ begin
 
  if (p_host_ipc<>nil) then
  begin
-  THostIpcConnect(p_host_ipc).thread_new;
+  THostIpcConnect(p_host_ipc).Dispatcher.thread_new;
  end;
 
  //p_cpuid        :=CPUID_NEO_MODE;
@@ -417,6 +418,85 @@ begin
 end;
 }
 
+type
+ TKevKqueue=class
+  FClient:THostIpc;
+  Fkq    :Pointer;
+  Constructor Create(Client:THostIpc);
+  Destructor  Destroy; override;
+  procedure   UpdateKevent;
+  procedure   WakeupKevent;
+  function    OnKevChange(Client:THostIpc;Value:TIpcValue):TIpcValue;
+ end;
+
+procedure kq_wakeup(data:Pointer); SysV_ABI_CDecl;
+begin
+ TKevKqueue(data).WakeupKevent();
+end;
+
+Constructor TKevKqueue.Create(Client:THostIpc);
+begin
+ FClient:=Client;
+ Fkq:=kern_kqueue2('[ipc]',@kq_wakeup,Pointer(Self));
+end;
+
+Destructor TKevKqueue.Destroy;
+begin
+ if (Fkq<>nil) then
+ begin
+  kqueue_close2(Fkq);
+ end;
+end;
+
+procedure TKevKqueue.UpdateKevent;
+var
+ kev:array[0..7] of t_kevent;
+ t:timespec;
+ r:Integer;
+begin
+ if (Fkq=nil) then Exit;
+ t:=Default(timespec);
+
+ repeat
+
+  r:=0;
+  kern_kevent2(Fkq,nil,0,@kev,8,@t,@r);
+
+  if (r>0) then
+  begin
+   FClient.InvokeAsyn(iKEV_EVENT.mtype,@kev,r*SizeOf(t_kevent));
+  end;
+
+ until (r<>8);
+end;
+
+procedure TKevKqueue.WakeupKevent;
+begin
+ UpdateKevent;
+end;
+
+function TKevKqueue.OnKevChange(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ kev:p_kevent;
+ count:Integer;
+ KevObj:TKevKqueue;
+begin
+ kev  :=Value.GetBuf;
+ count:=Value.GetLen div SizeOf(t_kevent);
+
+ with THostIpcConnect(Client) do
+ begin
+  if (FKevObj=nil) then
+  begin
+   FKevObj:=TKevKqueue.Create(Client);
+  end;
+  KevObj:=TKevKqueue(FKevObj);
+ end;
+
+ //changelist
+ Result:=kern_kevent2(KevObj.Fkq,kev,count,nil,0,nil,@count);
+end;
+
 procedure game_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
  td:p_kthread;
@@ -426,7 +506,8 @@ var
  pipefd:THandle;
  parent:THandle;
 
- kipc:THostIpcPipeKERN;
+ IpcHandler:THostIpcHandler;
+ kipc:THostIpcPipe;
 
  mem:TPCharStream;
  GameStartupInfo:TGameStartupInfo;
@@ -452,11 +533,13 @@ begin
  pipefd:=GameStartupInfo.Pipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
- kipc:=THostIpcPipeKERN.Create;
+ IpcHandler:=THostIpcHandler.Create;
+ IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
+
+ kipc:=THostIpcPipe.Create(THostIpcDispatchKern.Create(IpcHandler));
  kipc.set_pipe(pipefd);
 
  p_host_ipc:=kipc;
- p_host_ipc.FHandler:=THostIpcHandler.Create;
 
  //CreateNtTerminateTrap;
 
@@ -533,7 +616,7 @@ end;
 }
 
 
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function run_item(Dispatcher:THostIpcDispatcher;const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 label
  _error;
 var
@@ -545,10 +628,12 @@ var
 
  kev:t_kevent;
 
- p_mgui_ipc:THostIpcPipeMGUI;
+ IpcHandler:THostIpcHandler;
 
- s_kern_ipc:THostIpcSimpleKERN;
- s_mgui_ipc:THostIpcSimpleMGUI;
+ p_mgui_ipc:THostIpcPipe;
+
+ s_kern_ipc:THostIpcSimple;
+ s_mgui_ipc:THostIpcSimple;
 
  GameStartupInfo:TGameStartupInfo;
  mem:TMemoryStream;
@@ -622,7 +707,7 @@ begin
    r:=md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
 
-   p_mgui_ipc:=THostIpcPipeMGUI.Create;
+   p_mgui_ipc:=THostIpcPipe.Create(Dispatcher);
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
@@ -656,8 +741,11 @@ begin
   with TGameProcessSimple(Context.FGameProcess) do
   begin
 
-   s_kern_ipc:=THostIpcSimpleKERN.Create;
-   s_mgui_ipc:=THostIpcSimpleMGUI.Create;
+   IpcHandler:=THostIpcHandler.Create;
+   IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
+
+   s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
+   s_mgui_ipc:=THostIpcSimple.Create(Dispatcher);
 
    s_kern_ipc.FDest:=s_mgui_ipc;
    s_mgui_ipc.FDest:=s_kern_ipc;
@@ -665,7 +753,6 @@ begin
    g_ipc:=s_mgui_ipc;
 
    p_host_ipc:=s_kern_ipc;
-   p_host_ipc.FHandler:=THostIpcHandler.Create;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');
@@ -685,7 +772,7 @@ begin
  Context.FGameProcess.g_proc :=fork_info.hProcess;
  Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Context.FGameProcess.g_ipc.thread_new;
+ Dispatcher.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;

@@ -63,7 +63,7 @@ type
    finish:Byte;
    closed:Byte;
    rzdata:array of Byte;
-   function   OnCdlgFinish(Value:TIpcValue):TIpcValue;
+   function   OnCdlgFinish(Client:THostIpc;Value:TIpcValue):TIpcValue;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
@@ -315,7 +315,7 @@ begin
  inherited;
 end;
 
-function TCommonDialogClient.OnCdlgFinish(Value:TIpcValue):TIpcValue;
+function TCommonDialogClient.OnCdlgFinish(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
 
@@ -350,7 +350,7 @@ begin
    g_common_dialog_init:=1;
 
     //DialogInitialize
-    p_host_ipc.FHandler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+    p_host_ipc.Handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
 
   end else
   begin
@@ -373,7 +373,7 @@ function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
 begin
  mtx_lock(g_common_dialog_mtx);
 
-  p_host_ipc.FHandler.DelCallback('CDLG_FINISH');
+  p_host_ipc.Handler.DelCallback('CDLG_FINISH');
 
  mtx_unlock(g_common_dialog_mtx);
  Result:=0;
