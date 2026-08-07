@@ -712,22 +712,24 @@ end;
 
 function OpenSaveDataBackend():THandle;
 var
- ppid  :Integer;
- pipefd:THandle;
+ Value :TIpcValue;
+ data  :array[0..1] of QWORD;
  parent:THandle;
 begin
- pipefd:=p_host_ipc.InvokeSync2('OpenSaveDataBackend');
- if (Int64(pipefd)=-1) then Exit(pipefd);
+ data[0]:=0; //pid
+ data[1]:=0; //pipefd
 
- ppid:=md_getppid;
+ Value:=p_host_ipc.InvokeSync('OpenSaveDataBackend');
+ Value.MoveTo(@data,sizeof(data));
+ Value.Free;
 
- parent:=md_pidfd_open(ppid);
+ if (Int64(data[0])=-1) then Exit(data[0]);
 
- pipefd:=md_pidfd_getfd(parent,pipefd);
+ parent:=md_pidfd_open(data[0]);
+
+ Result:=md_pidfd_getfd(parent,data[1]);
 
  md_pidfd_close(parent);
-
- Result:=pipefd;
 end;
 
 function TSaveDataInstance.ConnectInstance:Integer;

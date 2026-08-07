@@ -893,7 +893,7 @@ begin
  FContext.FIpcDispatch:=THostIpcDispatchGui.Create(IpcHandler);
  FContext.FIpcDispatch.Acquire;
 
- IpcHandler.AddCallback('OpenSaveDataBackend',@FContext.OpenSaveDataBackend);
+ IpcHandler.AddPublished(FContext);
 
  ReadConfigFile;
 

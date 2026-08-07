@@ -5,6 +5,7 @@ unit game_run_context;
 interface
 
 uses
+ md_pipe,
  SysUtils,
  core_serialization,
  host_ipc,
@@ -36,23 +37,30 @@ type
 
 procedure ReleaseAndNil(var obj:TGameProcess);
 
+{$M+}
+
 type
  TGameRunContext=class
-  FIpcDispatch:THostIpcDispatchGui;
-  //
-  FGameItem   :TGameItem;
-  FGameProcess:TGameProcess;
-  FParamSfo   :TParamSfoFile;
-  FSaveData   :TSaveDataBackendConnect;
-  //
-  Procedure Stop();
-  procedure StopAndNil();
-  Procedure CloseItem();
-  //
-  Procedure CloseSavdata();
-  function  FetchSavdata:TSaveDataBackendConnect;
-  function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
+  public
+   FIpcDispatch:THostIpcDispatchGui;
+   //
+   FGameItem   :TGameItem;
+   FGameProcess:TGameProcess;
+   FParamSfo   :TParamSfoFile;
+   FSaveData   :TSaveDataBackendConnect;
+   FClient     :THandle;
+   //
+   Procedure Stop();
+   procedure StopAndNil();
+   Procedure CloseItem();
+   //
+   Procedure CloseSavdata();
+   function  FetchSavdata:TSaveDataBackendConnect;
+  published
+   function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
  end;
+
+{$M-}
 
 implementation
 
@@ -158,7 +166,14 @@ end;
 
 Procedure TGameRunContext.CloseSavdata();
 begin
+ if (FSaveData<>nil) then
+ begin
+  FSaveData.ExitProcess;
+ end;
  FreeAndNil(FSaveData);
+ //
+ md_pipe_close(FClient);
+ FClient:=0;
 end;
 
 function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
@@ -172,14 +187,20 @@ end;
 
 function TGameRunContext.OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
- pipefd:THandle;
  Backend:TSaveDataBackendConnect;
+ data:array[0..1] of QWORD;
 begin
  Backend:=FetchSavdata;
 
- pipefd:=Backend.NewClient();
+ md_pipe_close(FClient);
+ FClient:=0;
 
- Result:=TIpcValue.Static(@pipefd,SizeOf(pipefd));
+ data[0]:=GetProcessID;
+ data[1]:=Backend.NewClient();
+
+ FClient:=data[1]; //let's put it off
+
+ Result:=TIpcValue.Static(@data,SizeOf(data));
 end;
 
 //

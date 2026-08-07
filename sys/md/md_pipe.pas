@@ -17,6 +17,7 @@ type
  t_pipe_pair=array[0..1] of THandle;
 
 function md_pipe2(var pipefd:t_pipe_pair;flags:Integer):Integer;
+function md_pipe_close(fd:THandle):DWORD;
 
 implementation
 
@@ -120,6 +121,15 @@ begin
 
  pipefd[0]:=hFd[0];
  pipefd[1]:=hFd[1];
+end;
+
+function md_pipe_close(fd:THandle):DWORD;
+begin
+ Result:=0;
+ if (fd<>0) and (fd<>INVALID_HANDLE_VALUE) then
+ begin
+  Result:=NtClose(fd);
+ end;
 end;
 
 end.

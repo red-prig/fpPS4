@@ -149,7 +149,11 @@ end;
 
 function md_pidfd_close(pidfd:THandle):Integer;
 begin
- Result:=NtClose(pidfd);
+ Result:=0;
+ if (pidfd<>0) and (pidfd<>INVALID_HANDLE_VALUE) then
+ begin
+  Result:=NtClose(pidfd);
+ end;
 end;
 
 end.
