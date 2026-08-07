@@ -9,7 +9,8 @@ uses
  core_serialization,
  host_ipc,
  game_info,
- param_sfo_gui;
+ param_sfo_gui,
+ SaveDataBackend;
 
 type
  TGameProcess=class
@@ -36,16 +37,21 @@ type
 procedure ReleaseAndNil(var obj:TGameProcess);
 
 type
- PGameRunContext=^TGameRunContext;
- TGameRunContext=object
+ TGameRunContext=class
+  FIpcDispatch:THostIpcDispatchGui;
+  //
   FGameItem   :TGameItem;
   FGameProcess:TGameProcess;
   FParamSfo   :TParamSfoFile;
+  FSaveData   :TSaveDataBackendConnect;
   //
   Procedure Stop();
   procedure StopAndNil();
   Procedure CloseItem();
   //
+  Procedure CloseSavdata();
+  function  FetchSavdata:TSaveDataBackendConnect;
+  function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
  end;
 
 implementation
@@ -148,6 +154,32 @@ begin
   FGameItem.FLock:=False;
   FGameItem:=nil;
  end;
+end;
+
+Procedure TGameRunContext.CloseSavdata();
+begin
+ FreeAndNil(FSaveData);
+end;
+
+function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
+begin
+ if (FSaveData=nil) then
+ begin
+  FSaveData:=TSaveDataBackendConnect.CreateProcess(FIpcDispatch);
+ end;
+ Result:=FSaveData;
+end;
+
+function TGameRunContext.OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ pipefd:THandle;
+ Backend:TSaveDataBackendConnect;
+begin
+ Backend:=FetchSavdata;
+
+ pipefd:=Backend.NewClient();
+
+ Result:=TIpcValue.Static(@pipefd,SizeOf(pipefd));
 end;
 
 //

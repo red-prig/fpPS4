@@ -136,12 +136,15 @@ type
   is_writed :Boolean;
   is_eventd :Boolean;
   FbufferId :Byte;
-  job_count :DWORD;
+  FRefs     :DWORD;
   sd_buffers:array[0..1] of TSdMemoryBuffer;
   //
   function c(n1,n2:PSetupMemoryNode):Integer; static;
   //
-  function CreateBuffers():Integer;
+  function  CreateBuffers():Integer;
+  procedure Acquire;
+  procedure Release;
+  procedure Free;
  end;
 
  TSetupMemorySplay=specialize TNodeSplay<TSetupMemoryNode>;
@@ -151,6 +154,7 @@ type
   Procedure Init;
   function  Setup(const data:TSetupMemory):PSetupMemoryNode;
   function  Get(userId,slotId:DWORD):PSetupMemoryNode;
+  procedure Free;
  end;
 
 ///
@@ -500,6 +504,35 @@ begin
  Result:=0;
 end;
 
+procedure TSetupMemoryNode.Acquire;
+begin
+ System.InterlockedIncrement(FRefs);
+end;
+
+procedure TSetupMemoryNode.Release;
+begin
+ if System.InterlockedDecrement(FRefs)=0 then
+ begin
+  Free;
+ end;
+end;
+
+procedure TSetupMemoryNode.Free;
+var
+ i:Integer;
+begin
+ data:=Default(TSetupMemory);
+ is_setup :=False;
+ is_writed:=False;
+ is_eventd:=False;
+ FbufferId:=0;
+ //destroy
+ for i:=0 to High(sd_buffers) do
+ begin
+  sd_buffers[i].Free;
+ end;
+end;
+
 Procedure TSetupMemoryManager.Init;
 begin
  mtx_init(mtx,'SetupMemoryMtx');
@@ -521,6 +554,7 @@ begin
   begin
    node:=GetMem(sizeof(TSetupMemoryNode));
    node^:=key;
+   node^.Acquire;
    Insert(node);
   end;
 
@@ -539,6 +573,27 @@ begin
  mtx_lock(mtx);
 
   Result:=Find(@key);
+
+ mtx_unlock(mtx);
+end;
+
+procedure TSetupMemoryManager.Free;
+var
+ node,_next:PSetupMemoryNode;
+begin
+ mtx_lock(mtx);
+
+  node:=Min;
+  while (node<>nil) do
+  begin
+   _next:=Next(node);
+   //
+   Delete(node);
+   node^.Free;
+   FreeMem(node);
+   //
+   node:=_next;
+  end;
 
  mtx_unlock(mtx);
 end;

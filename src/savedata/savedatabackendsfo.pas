@@ -61,7 +61,7 @@ type
   SAVEDATA_DIRECTORY :array[0..31] of Char;
   ACCOUNT_ID         :QWORD;
   //
-  Procedure New(userId:Integer;titleId,dirName:pchar;blocks:QWORD;systemLang:DWORD);
+  Procedure New(GameMountConfig:TGameMountConfig;userId:Integer;titleId,dirName:pchar;blocks:QWORD;systemLang:DWORD);
   function  SaveToFile(const fname:RawByteString):Boolean;
   function  LoadFromFile(const fname:RawByteString):Boolean;
   function  Verif(userId:Integer;dirName:pchar):Boolean;
@@ -85,7 +85,7 @@ begin
  Result:=MAINTITLE_DEFAULT[systemLang];
 end;
 
-Procedure t_savedata_sfo_values.New(userId:Integer;titleId,dirName:pchar;blocks:QWORD;systemLang:DWORD);
+Procedure t_savedata_sfo_values.New(GameMountConfig:TGameMountConfig;userId:Integer;titleId,dirName:pchar;blocks:QWORD;systemLang:DWORD);
 begin
  if (titleId[0]=#0) then
  begin

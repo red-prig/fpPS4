@@ -130,8 +130,7 @@ type
   private
     FDblClickRow:Integer;
   public
-    IpcHandler :THostIpcHandler;
-    IpcDispatch:THostIpcDispatchGui;
+    IpcHandler:THostIpcHandler;
 
     FGameList:TGameList;
     FContext :TGameRunContext;
@@ -583,7 +582,7 @@ begin
   cfg.FParamSfo:=FContext.FParamSfo;
   cfg.FLoadExec:=True;
 
-  r:=run_item(IpcDispatch,cfg,FContext);
+  r:=run_item(cfg,FContext);
   if (r<>0) then
   begin
    ShowMessage('error run process code=0x'+HexStr(r,8));
@@ -859,10 +858,12 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
+ FContext:=TGameRunContext.Create;
+
  FDialogsManager:=TDialogsManager.Create;
 
  FDialogsManager.FImages :=SmallImageList;
- FDialogsManager.pContext:=@FContext;
+ FDialogsManager.FContext:=FContext;
 
   ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
 
@@ -889,8 +890,10 @@ begin
 
  FDialogsManager.BindHandler(IpcHandler);
 
- IpcDispatch:=THostIpcDispatchGui.Create(IpcHandler);
- IpcDispatch.Acquire;
+ FContext.FIpcDispatch:=THostIpcDispatchGui.Create(IpcHandler);
+ FContext.FIpcDispatch.Acquire;
+
+ IpcHandler.AddCallback('OpenSaveDataBackend',@FContext.OpenSaveDataBackend);
 
  ReadConfigFile;
 
@@ -1055,7 +1058,7 @@ begin
   FProcess:=FContext.FGameProcess;
   FProcess.Acquire;
 
-  IpcDispatch.Update();
+  FContext.FIpcDispatch.Update();
 
   if (FProcess.is_terminated) or
      (FProcess.is_stoped) then
@@ -1284,7 +1287,7 @@ begin
 
  if Item.FLock then Exit;
 
- r:=run_item(IpcDispatch,cfg,FContext);
+ r:=run_item(cfg,FContext);
  if (r<>0) then
  begin
   ShowMessage('error run process code=0x'+HexStr(r,8));
@@ -1364,6 +1367,7 @@ begin
   FreeAndNil(FContext.FParamSfo);
   //
   FContext.CloseItem();
+  FContext.CloseSavdata();
   //
   FDialogsManager.CloseMainWindow;
   //

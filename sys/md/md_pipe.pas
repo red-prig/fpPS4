@@ -13,7 +13,10 @@ Const
  MD_PIPE_ASYNC0=1;
  MD_PIPE_ASYNC1=2;
 
-function md_pipe2(pipefd:PHandle;flags:Integer):Integer;
+type
+ t_pipe_pair=array[0..1] of THandle;
+
+function md_pipe2(var pipefd:t_pipe_pair;flags:Integer):Integer;
 
 implementation
 
@@ -25,7 +28,7 @@ const
 Const
  NamedPipe:PWideChar='\Device\NamedPipe\';
 
-function md_pipe2(pipefd:PHandle;flags:Integer):Integer;
+function md_pipe2(var pipefd:t_pipe_pair;flags:Integer):Integer;
 var
  BLK:IO_STATUS_BLOCK;
  UNAME:UNICODE_STRING;

@@ -54,12 +54,12 @@ type
  end;
 
 var
- GameMountConfig:TGameMountConfig;
+ gGameMountConfig:TGameMountConfig;
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 
 function  GameMountConfigExport:TGameMountConfigExport;
-procedure GameMountConfigImport(e:TGameMountConfigExport);
+procedure GameMountConfigImport(var GameMountConfig:TGameMountConfig;e:TGameMountConfigExport);
 
 //
 
@@ -401,30 +401,30 @@ var
 begin
 
  //save to global
- GameMountConfig:=TGameMountConfig.Create;
+ gGameMountConfig:=TGameMountConfig.Create;
 
- GameMountConfig.ATTRIBUTE   :=GameStartupInfo.ATTRIBUTE;
- GameMountConfig.Game        :=GameStartupInfo.FGameItem.FMountList.game;
- GameMountConfig.LocalDir    :=GameStartupInfo.LocalDir;
- GameMountConfig.TransferList:=GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST;
+ gGameMountConfig.ATTRIBUTE   :=GameStartupInfo.ATTRIBUTE;
+ gGameMountConfig.Game        :=GameStartupInfo.FGameItem.FMountList.game;
+ gGameMountConfig.LocalDir    :=GameStartupInfo.LocalDir;
+ gGameMountConfig.TransferList:=GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST;
 
  if (GameStartupInfo.TITLE_ID<>'') then
  begin
-  GameMountConfig.TitleId:=GameStartupInfo.TITLE_ID;
+  gGameMountConfig.TitleId:=GameStartupInfo.TITLE_ID;
  end else
  if (GameStartupInfo.FGameItem.GameInfo.TitleId<>'') then
  begin
-  GameMountConfig.TitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
+  gGameMountConfig.TitleId:=GameStartupInfo.FGameItem.GameInfo.TitleId;
  end;
 
- GameMountConfig.InstallDir:=GameMountConfig.TitleId;
+ gGameMountConfig.InstallDir:=gGameMountConfig.TitleId;
  if (GameStartupInfo.INSTALL_DIR_SAVEDATA<>'') then
  begin
-  GameMountConfig.InstallDir:=GameStartupInfo.INSTALL_DIR_SAVEDATA;
+  gGameMountConfig.InstallDir:=GameStartupInfo.INSTALL_DIR_SAVEDATA;
  end;
 
- GameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
- GameMountConfig.DownloadKb[1]:=GameStartupInfo.DownloadMb_1*1024;
+ gGameMountConfig.DownloadKb[0]:=GameStartupInfo.DownloadMb_0*1024;
+ gGameMountConfig.DownloadKb[1]:=GameStartupInfo.DownloadMb_1*1024;
  //save to global
 
  fs_source[MM_GAME    ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.FGameItem.FMountList.game    );
@@ -468,10 +468,10 @@ begin
  //--sandbox--
 
  //download
- For i:=0 to High(GameMountConfig.DownloadKb) do
- if (GameMountConfig.DownloadKb[i]<>0) then
+ For i:=0 to High(gGameMountConfig.DownloadKb) do
+ if (gGameMountConfig.DownloadKb[i]<>0) then
  begin
-  fs_src:=GameMountConfig.GetAppDownloadFolder(i);
+  fs_src:=gGameMountConfig.GetAppDownloadFolder(i);
   ForceDirectories(fs_src);
 
   err:=mount_into_sandbox('ufs',
@@ -490,19 +490,19 @@ end;
 
 function GameMountConfigExport:TGameMountConfigExport;
 begin
- if (GameMountConfig=nil) then Exit(nil);
+ if (gGameMountConfig=nil) then Exit(nil);
 
  Result:=TGameMountConfigExport.Create;
 
- Result.ATTRIBUTE   :=GameMountConfig.ATTRIBUTE;
- Result.Game        :=GameMountConfig.Game;
- Result.LocalDir    :=GameMountConfig.LocalDir;
- Result.TransferList:=GameMountConfig.TransferList;
- Result.TitleId     :=GameMountConfig.TitleId;
- Result.InstallDir  :=GameMountConfig.InstallDir;
+ Result.ATTRIBUTE   :=gGameMountConfig.ATTRIBUTE;
+ Result.Game        :=gGameMountConfig.Game;
+ Result.LocalDir    :=gGameMountConfig.LocalDir;
+ Result.TransferList:=gGameMountConfig.TransferList;
+ Result.TitleId     :=gGameMountConfig.TitleId;
+ Result.InstallDir  :=gGameMountConfig.InstallDir;
 end;
 
-procedure GameMountConfigImport(e:TGameMountConfigExport);
+procedure GameMountConfigImport(var GameMountConfig:TGameMountConfig;e:TGameMountConfigExport);
 begin
  if (GameMountConfig=nil) then
  begin
@@ -529,7 +529,7 @@ var
  F:THandle;
  s:Integer;
 begin
- fs_src:=GameMountConfig.GetTemporaryTitleIdFile;
+ fs_src:=gGameMountConfig.GetTemporaryTitleIdFile;
 
  F:=FileOpen(fs_src,fmOpenRead);
  if (F=THandle(-1)) then Exit('');
@@ -556,7 +556,7 @@ var
  fs_dir:RawByteString;
  F:THandle;
 begin
- fs_src:=GameMountConfig.GetTemporaryTitleIdFile;
+ fs_src:=gGameMountConfig.GetTemporaryTitleIdFile;
  fs_dir:=ExtractFilePath(fs_src);
  ForceDirectories(fs_dir);
 
@@ -1032,14 +1032,14 @@ var
  fs_src:RawByteString;
  ValidTitleId:Boolean;
 begin
- mtx_lock(GameMountConfig.mount_mtx);
+ mtx_lock(gGameMountConfig.mount_mtx);
 
- if GameMountConfig.TemporaryMount then
+ if gGameMountConfig.TemporaryMount then
  begin
   Result:=EBUSY;
  end else
  begin
-  fs_src:=GameMountConfig.GetAppTemporaryFolder;
+  fs_src:=gGameMountConfig.GetAppTemporaryFolder;
   ForceDirectories(fs_src);
 
   Result:=vfs_mountroot.mount_into_sandbox('ufs',
@@ -1051,9 +1051,9 @@ begin
   if (Result=0) then
   begin
    strlcopy(mountPoint,TEMP0,MOUNT_MAXSIZE);
-   GameMountConfig.TemporaryMount:=True;
+   gGameMountConfig.TemporaryMount:=True;
 
-   ValidTitleId:=(ReadTemporaryTitleId=GameMountConfig.TitleId);
+   ValidTitleId:=(ReadTemporaryTitleId=gGameMountConfig.TitleId);
 
    if format or (not ValidTitleId) then
    begin
@@ -1062,29 +1062,29 @@ begin
 
    if (not ValidTitleId) then
    begin
-    SaveTemporaryTitleId(GameMountConfig.TitleId);
+    SaveTemporaryTitleId(gGameMountConfig.TitleId);
    end;
 
   end;
 
  end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(gGameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(GameMountConfig.mount_mtx);
+ mtx_lock(gGameMountConfig.mount_mtx);
 
- if GameMountConfig.TemporaryMount then
+ if gGameMountConfig.TemporaryMount then
  begin
   Result:=vfs_mountroot.unmount_from_sandbox(TEMP0,0);
 
   if (Result=0) then
   begin
-   GameMountConfig.TemporaryMount:=False;
+   gGameMountConfig.TemporaryMount:=False;
   end;
 
  end else
@@ -1092,7 +1092,7 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(gGameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataFormat(mountPoint:pchar):Integer;
@@ -1101,11 +1101,11 @@ var
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(GameMountConfig.mount_mtx);
+ mtx_lock(gGameMountConfig.mount_mtx);
 
- if GameMountConfig.TemporaryMount then
+ if gGameMountConfig.TemporaryMount then
  begin
-  fs_src:=GameMountConfig.GetAppTemporaryFolder;
+  fs_src:=gGameMountConfig.GetAppTemporaryFolder;
 
   Result:=FormatMount(fs_src);
  end else
@@ -1113,7 +1113,7 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(gGameMountConfig.mount_mtx);
 end;
 
 function TemporaryDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
@@ -1125,11 +1125,11 @@ var
 begin
  if (strlcomp(mountPoint,TEMP0,MOUNT_MAXSIZE)<>0) then Exit(ENOTDIR);
 
- mtx_lock(GameMountConfig.mount_mtx);
+ mtx_lock(gGameMountConfig.mount_mtx);
 
- if GameMountConfig.TemporaryMount then
+ if gGameMountConfig.TemporaryMount then
  begin
-  fs_src:=GameMountConfig.GetAppTemporaryFolder;
+  fs_src:=gGameMountConfig.GetAppTemporaryFolder;
 
   size:=GetDirectorySizeLikePFS(fs_src);
   size:=size div 1024; //to KB
@@ -1150,7 +1150,7 @@ begin
   Result:=ENOTDIR;
  end;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(gGameMountConfig.mount_mtx);
 end;
 
 function DownloadDataGetAvailableSpaceKb(mountPoint:pchar;availableSpaceKb:PQWORD):Integer;
@@ -1171,29 +1171,29 @@ begin
   Exit(ENOTDIR);
  end;
 
- if (GameMountConfig.DownloadKb[i]=0) then
+ if (gGameMountConfig.DownloadKb[i]=0) then
  begin
   Exit(ENOTDIR);
  end;
 
- mtx_lock(GameMountConfig.mount_mtx);
+ mtx_lock(gGameMountConfig.mount_mtx);
 
-  fs_src:=GameMountConfig.GetAppDownloadFolder(i);
+  fs_src:=gGameMountConfig.GetAppDownloadFolder(i);
 
   size:=GetDirectorySizeLikePFS(fs_src);
   size:=size div 1024; //to KB
 
-  if (size>GameMountConfig.DownloadKb[i]) then
+  if (size>gGameMountConfig.DownloadKb[i]) then
   begin
    size:=0;
   end else
   begin
-   size:=GameMountConfig.DownloadKb[i]-size;
+   size:=gGameMountConfig.DownloadKb[i]-size;
   end;
 
   availableSpaceKb^:=size;
 
- mtx_unlock(GameMountConfig.mount_mtx);
+ mtx_unlock(gGameMountConfig.mount_mtx);
 
  Result:=0;
 end;

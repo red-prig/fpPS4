@@ -50,7 +50,7 @@ type
  TDialogsManager=class
   public
    FImages  :TImageList;
-   pContext :PGameRunContext;
+   FContext :TGameRunContext;
    FMainForm:TGameMainForm;
    //
    FCommonDialog:TDialogCustom;
@@ -155,15 +155,15 @@ var
 begin
  Result:='';
 
- if (pContext^.FGameItem=nil) then Exit;
+ if (FContext.FGameItem=nil) then Exit;
 
- TITLE   :=pContext^.FGameItem.FGameInfo.Name;
- TITLE_ID:=pContext^.FGameItem.FGameInfo.TitleId;
- APP_VER :=pContext^.FGameItem.FGameInfo.AppVer;
+ TITLE   :=FContext.FGameItem.FGameInfo.Name;
+ TITLE_ID:=FContext.FGameItem.FGameInfo.TitleId;
+ APP_VER :=FContext.FGameItem.FGameInfo.AppVer;
 
  if (TITLE='') then
  begin
-  TITLE:=ExtractFileName(pContext^.FGameItem.FGameInfo.Exec);
+  TITLE:=ExtractFileName(FContext.FGameItem.FGameInfo.Exec);
  end;
 
  if (TITLE_ID<>'') then TITLE_ID:='-' +TITLE_ID;

@@ -40,7 +40,7 @@ type
   Destructor Destroy; override;
  end;
 
-function run_item(Dispatcher:THostIpcDispatcher;const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 
 implementation
 
@@ -533,6 +533,8 @@ begin
  pipefd:=GameStartupInfo.Pipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
+ md_pidfd_close(parent);
+
  IpcHandler:=THostIpcHandler.Create;
  IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
 
@@ -616,13 +618,13 @@ end;
 }
 
 
-function run_item(Dispatcher:THostIpcDispatcher;const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 label
  _error;
 var
  r:Integer;
 
- kern2mgui:array[0..1] of THandle;
+ kern2mgui:t_pipe_pair;
 
  fork_info:t_fork_proc;
 
@@ -704,10 +706,10 @@ begin
 
   with TGameProcessPipe(Context.FGameProcess) do
   begin
-   r:=md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
+   r:=md_pipe2(kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
 
-   p_mgui_ipc:=THostIpcPipe.Create(Dispatcher);
+   p_mgui_ipc:=THostIpcPipe.Create(Context.FIpcDispatch);
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
@@ -745,7 +747,7 @@ begin
    IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
 
    s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
-   s_mgui_ipc:=THostIpcSimple.Create(Dispatcher);
+   s_mgui_ipc:=THostIpcSimple.Create(Context.FIpcDispatch);
 
    s_kern_ipc.FDest:=s_mgui_ipc;
    s_mgui_ipc.FDest:=s_kern_ipc;
@@ -772,7 +774,7 @@ begin
  Context.FGameProcess.g_proc :=fork_info.hProcess;
  Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Dispatcher.thread_new;
+ Context.FIpcDispatch.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;

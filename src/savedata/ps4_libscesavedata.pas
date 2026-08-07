@@ -27,7 +27,11 @@ uses
  vm_object,
  game_mount,
  vfs_mountroot,
- ps4_libSceUserService;
+ ps4_libSceUserService,
+ ps4_libSceSystemService,
+ md_systm,
+ sys_bootparam,
+ host_ipc;
 
 implementation
 
@@ -706,7 +710,30 @@ begin
  end;
 end;
 
+function OpenSaveDataBackend():THandle;
+var
+ ppid  :Integer;
+ pipefd:THandle;
+ parent:THandle;
+begin
+ pipefd:=p_host_ipc.InvokeSync2('OpenSaveDataBackend');
+ if (Int64(pipefd)=-1) then Exit(pipefd);
+
+ ppid:=md_getppid;
+
+ parent:=md_pidfd_open(ppid);
+
+ pipefd:=md_pidfd_getfd(parent,pipefd);
+
+ md_pidfd_close(parent);
+
+ Result:=pipefd;
+end;
+
 function TSaveDataInstance.ConnectInstance:Integer;
+var
+ pipefd    :THandle;
+ systemLang:DWORD;
 begin
  Result:=0;
 
@@ -736,7 +763,15 @@ begin
   InitJobThread;
  end;
 
- Backend:=TSaveDataBackendConnect.Create;
+ systemLang:=0;
+ ps4_sceSystemServiceParamGetInt(SCE_SYSTEM_SERVICE_PARAM_ID_LANG,@systemLang);
+
+ pipefd:=OpenSaveDataBackend();
+ if (Int64(pipefd)=-1) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Backend:=TSaveDataBackendConnect.CreateClient(THostIpcConnect(p_host_ipc).Dispatcher,pipefd);
+ Backend.SendSystemConfig(p_proc.p_sdk_version,systemLang);
+ Backend.SendMountConfig();
 end;
 
 function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;
@@ -757,6 +792,13 @@ begin
  end;
 
  Result:=g_instance.ConnectInstance;
+
+ if (Result<0) then
+ begin
+  g_instance.Free;
+  g_instance:=nil;
+  Exit;
+ end;
 end;
 
 function ps4_sceSaveDataInitialize(params:pSceSaveDataInitParams):Integer;
@@ -780,6 +822,7 @@ begin
  free_user(-1);
  if (Backend<>nil) then
  begin
+  Backend.ExitClient;
   Backend.UmountAllForce;
   Backend.Free;
  end;
