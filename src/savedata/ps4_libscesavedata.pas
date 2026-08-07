@@ -2096,7 +2096,7 @@ begin
 
   Result:=g_instance.Backend.DoMount(mount,pResult,Transfering,False);
 
-  Writeln('SaveDataMount:0x',HexStr(Result,8));
+  Writeln('SaveDataMount("',mount^.dirName^.data,'"):0x',HexStr(Result,8));
 
   if (cmd<>nil) then
   begin

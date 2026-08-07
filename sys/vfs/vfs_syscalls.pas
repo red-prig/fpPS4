@@ -1681,7 +1681,9 @@ end;
  }
 function sys_unlink(path:PChar):Integer;
 begin
- Exit(kern_unlink(path, UIO_USERSPACE));
+ Result:=kern_unlink(path, UIO_USERSPACE);
+
+ Writeln('sys_unlink("',path,'"):',Result);
 end;
 
 {
