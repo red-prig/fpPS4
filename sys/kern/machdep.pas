@@ -507,8 +507,7 @@ begin
 
  regs^.tf_rsp:=QWORD(sfp);
 
- if ((td^.pcb_flags and PCB_IS_JIT)=0) or
-    ((td^.pcb_flags and PCB_IS_HLE)<>0) then
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin
   regs^.tf_rip:=QWORD(@host_sigcode);
  end else

@@ -468,6 +468,8 @@ begin
   Exit;
  end;
 
+ //is bugged
+ {
  if (info^.jflags.CAN_RESTART<>0) then
  begin
   call_interrupt(ctx,addr);
@@ -476,6 +478,7 @@ begin
   ctx.atype:=naCurr;
   Exit;
  end;
+ }
 
  if FixupEnd(addr,ctx.start,ctx.__end)=Pointer(ctx.__end) then
  begin
@@ -645,6 +648,8 @@ _start:
 
      if (info.recompil = Rip) then
      begin
+      //Writeln('jit_direct');
+
       //push %rip
       Rsp:=Rsp-8;
       PQWORD(Rsp)[0]:=Rip;
