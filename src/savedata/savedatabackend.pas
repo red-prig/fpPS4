@@ -1038,7 +1038,7 @@ type
   function  MountParamSfo():Integer;
   function  CreateTmpFiles():Boolean;
   function  CheckMountData(is_created:Boolean):Integer;
-  function  CreateMount(force:Boolean):Integer;
+  function  CreateMount():Integer;
   function  OpenMount():Integer;
   //
   function  Run:TIpcValue; override;
@@ -1209,7 +1209,7 @@ begin
 
 end;
 
-function TMountJob.CreateMount(force:Boolean):Integer;
+function TMountJob.CreateMount():Integer;
 var
  ficon:RawByteString;
  icon_data:Pointer;
@@ -1219,14 +1219,6 @@ begin
 
  Result:=CheckMountData(True);
  if (Result<>0) then Exit;
-
- if force then
- begin
-  if not DeleteDirectory(fs_src,True) then
-  begin
-   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
-  end;
- end;
 
  Progress:=3/9;
 
@@ -1360,19 +1352,12 @@ begin
   begin
    if SaveDataExists(fs_src) then
    begin
+    //open or exists error
 
-    //if (output.result=0) then
-
-    //replace or exists error
     if ((data.mountMode and SDMM_CREATE2)<>0) then
     begin
-     //output.result:=OpenParamSfo(); //TODO: check
-
-     //force
-     output.result:=CreateMount(True);
-     //
-     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-     //
+     //open
+     output.result:=OpenMount();
     end else
     if ((data.mountMode and SDMM_CREATE)<>0) then
     begin
@@ -1391,7 +1376,7 @@ begin
     if ((data.mountMode and (SDMM_CREATE2 or SDMM_CREATE))<>0) then
     begin
      //create
-     output.result:=CreateMount(False);
+     output.result:=CreateMount();
      //
      output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
      //
@@ -2994,7 +2979,7 @@ begin
   end else
   begin
    //create
-   err:=CreateMount(False);
+   err:=CreateMount();
   end;
 
   ///
@@ -3028,7 +3013,7 @@ begin
     //delete
     RestoreJob.DoDelete(nil,0);
     //create
-    err:=CreateMount(False);
+    err:=CreateMount();
    end;
 
    RestoreJob.Free;
