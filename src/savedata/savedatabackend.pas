@@ -3676,6 +3676,13 @@ begin
  begin
   Value:=kipc.InvokeSync('DirNameSearch',TIpcValue.Static(@data,sizeof(data)));
 
+  if (Value.GetLen<=8) then
+  begin
+   Result:=Value.GetDWORD;
+   Value.Free;
+   Exit;
+  end;
+
   output:=Value.GetBuf;
   count :=Value.GetLen div SizeOf(TDirNameSearchNode);
 
@@ -3975,6 +3982,25 @@ begin
  Result:=0;
  input:=Default(TDirNameSearch);
  Value.MoveTo(@input,sizeof(input));
+
+ if (input.max>1024) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ case input.key of
+  SDSK_DIRNAME,
+  SDSK_USER_PARAM,
+  SDSK_BLOCKS,
+  SDSK_MTIME,
+  SDSK_FREE_BLOCKS:;
+  else
+   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ end;
+
+ case input.order of
+  SDSO_ASCENT,
+  SDSO_DESCENT:;
+  else
+   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ end;
 
  titleId:=@input.titleId.data;
  if (titleId[0]=#0) then
