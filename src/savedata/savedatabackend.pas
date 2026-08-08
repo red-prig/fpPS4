@@ -27,8 +27,14 @@ uses
  SaveDataBackendUtils;
 
 type
+ TPipeSend=record
+  parent_pid:Int64;
+  pipe_fd   :THandle;
+ end;
+
  TSaveDataBackendConnect=class
   kipc    :THostIpcPipe;
+  //
   hProcess:THandle;
   fork_pid:Integer;
   //
@@ -180,6 +186,7 @@ type
    function    SendSyncJob     (Client:TSaveDataClient;userId,slotId,option:DWORD):Integer;
   published
    //All functions available for the IPC
+   function    Confirm       (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    ExitProcess   (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    SystemConfig  (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    NewClient     (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
@@ -266,6 +273,11 @@ begin
 
  hProcess:=fork_info.hProcess;
  fork_pid:=fork_info.fork_pid;
+
+ kipc.InvokeSync2('Confirm');
+
+ //The handle has been copied by another process, close it
+ md_pipe_close(data.pipefd);
 end;
 
 Constructor TSaveDataBackendConnect.CreateClient(_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
@@ -292,6 +304,7 @@ Destructor TSaveDataBackendConnect.Destroy;
 begin
  //
  kipc.Free;
+ //
  inherited;
 end;
 
@@ -616,6 +629,11 @@ begin
  end;
 end;
 
+function TSaveDataBackendProcess.Confirm(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
+begin
+ Result:=0;
+end;
+
 procedure TSaveDataBackendProcess.DoExit();
 begin
  Clients.DisconnectAll;
@@ -660,7 +678,7 @@ end;
 function TSaveDataBackendConnect.NewClient():THandle;
 var
  kern2svdt:t_pipe_pair;
- pipefd:THandle;
+ data:TPipeSend;
  r:DWORD;
 begin
  r:=md_pipe2(kern2svdt,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
@@ -671,27 +689,38 @@ begin
  end;
 
  Result:=kern2svdt[0];
- pipefd:=kern2svdt[1];
 
- kipc.InvokeAsyn('NewClient',TIpcValue.Static(@pipefd,SizeOf(pipefd)));
+ data.parent_pid:=GetProcessID;
+ data.pipe_fd   :=kern2svdt[1];
+
+ kipc.InvokeSync2('NewClient',TIpcValue.Static(@data,SizeOf(data)));
+
+ //The handle has been copied by another process, close it
+ md_pipe_close(data.pipe_fd);
 end;
 
 function TSaveDataBackendProcess.NewClient(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
 var
- pipefd:THandle;
- kipc:TSaveDataClient;
+ data  :TPipeSend;
+ procfd:THandle;
+ kipc  :TSaveDataClient;
 begin
  Result:=0;
- pipefd:=0;
- Value.MoveTo(@pipefd,sizeof(pipefd));
 
- Writeln('NewClient started pid:',GetProcessID,' parent_pid:',ppid);
+ data:=Default(TPipeSend);
+ Value.MoveTo(@data,sizeof(data));
+
+ Writeln('NewClient started pid:',GetProcessID,' parent_pid:',data.parent_pid);
+
+ procfd:=md_pidfd_open(data.parent_pid);
 
  //dup
- pipefd:=md_pidfd_getfd(parent,pipefd);
+ data.pipe_fd:=md_pidfd_getfd(procfd,data.pipe_fd);
+
+ md_pidfd_close(procfd);
 
  kipc:=Clients.NewClient(Dispatcher);
- kipc.set_pipe(pipefd);
+ kipc.set_pipe(data.pipe_fd);
 end;
 
 function TSaveDataBackendProcess.ExitClient(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;

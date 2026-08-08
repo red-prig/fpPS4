@@ -48,7 +48,7 @@ type
    FGameProcess:TGameProcess;
    FParamSfo   :TParamSfoFile;
    FSaveData   :TSaveDataBackendConnect;
-   FClient     :THandle;
+   FSdClient   :THandle;
    //
    Procedure Stop();
    procedure StopAndNil();
@@ -172,8 +172,8 @@ begin
  end;
  FreeAndNil(FSaveData);
  //
- md_pipe_close(FClient);
- FClient:=0;
+ md_pipe_close(FSdClient);
+ FSdClient:=0;
 end;
 
 function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
@@ -188,17 +188,17 @@ end;
 function TGameRunContext.OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  Backend:TSaveDataBackendConnect;
- data:array[0..1] of QWORD;
+ data:TPipeSend;
 begin
  Backend:=FetchSavdata;
 
- md_pipe_close(FClient);
- FClient:=0;
+ md_pipe_close(FSdClient);
+ FSdClient:=0;
 
- data[0]:=GetProcessID;
- data[1]:=Backend.NewClient();
+ data.parent_pid:=GetProcessID;
+ data.pipe_fd   :=Backend.NewClient();
 
- FClient:=data[1]; //let's put it off
+ FSdClient:=data.pipe_fd; //let's put it off
 
  Result:=TIpcValue.Static(@data,SizeOf(data));
 end;

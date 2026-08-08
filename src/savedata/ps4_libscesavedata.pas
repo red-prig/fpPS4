@@ -713,21 +713,20 @@ end;
 function OpenSaveDataBackend():THandle;
 var
  Value :TIpcValue;
- data  :array[0..1] of QWORD;
+ data  :TPipeSend;
  parent:THandle;
 begin
- data[0]:=0; //pid
- data[1]:=0; //pipefd
+ data:=Default(TPipeSend);
 
  Value:=p_host_ipc.InvokeSync('OpenSaveDataBackend');
  Value.MoveTo(@data,sizeof(data));
  Value.Free;
 
- if (Int64(data[0])=-1) then Exit(data[0]);
+ if (data.parent_pid=-1) then Exit(data.parent_pid);
 
- parent:=md_pidfd_open(data[0]);
+ parent:=md_pidfd_open(data.parent_pid);
 
- Result:=md_pidfd_getfd(parent,data[1]);
+ Result:=md_pidfd_getfd(parent,data.pipe_fd);
 
  md_pidfd_close(parent);
 end;
