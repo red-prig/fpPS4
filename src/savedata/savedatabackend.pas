@@ -38,7 +38,7 @@ type
   hProcess:THandle;
   fork_pid:Integer;
   //
-  MountSlots:array[0..TMountManager.max-1] of Boolean;
+  MountSlots:DWORD;
   //
   Constructor CreateProcess(_Dispatcher:THostIpcDispatcher);
   Constructor CreateClient (_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
@@ -748,8 +748,9 @@ procedure TSaveDataBackendConnect.UmountAllForce;
 var
  slot_id:Integer;
 begin
- For slot_id:=0 to High(MountSlots) do
- if (MountSlots[slot_id]) then
+ if (MountSlots<>0) then
+ For slot_id:=0 to TMountManager.max-1 do
+ if (MountSlots and (DWORD(1) shl slot_id))<>0 then
  begin
   Writeln('Force umount ', mount_savedata_slot_name[slot_id]);
   vfs_mountroot.unmount_from_sandbox(pchar(mount_savedata_slot_name[slot_id]),MNT_FORCE);
@@ -991,7 +992,7 @@ begin
                                            MNT_PFS_32K);
   if (Result=0) then
   begin
-   MountSlots[output.slot_id]:=True;
+   MountSlots:=MountSlots or (DWORD(1) shl output.slot_id);
   end else
   begin
    Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
@@ -1472,7 +1473,7 @@ var
 begin
  if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- if (MountSlots[slot_id]=False) then
+ if (MountSlots and (DWORD(1) shl slot_id))=0 then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
  end;
@@ -1495,7 +1496,7 @@ begin
    end;
   end else
   begin
-   MountSlots[slot_id]:=False;
+   MountSlots:=MountSlots and (not (DWORD(1) shl slot_id));
 
    //free
    Result:=kipc.InvokeSync2('Umount',@data,sizeof(data));
@@ -1687,7 +1688,7 @@ var
 begin
  if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- if (MountSlots[slot_id]=False) then
+ if (MountSlots and (DWORD(1) shl slot_id))=0 then
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
  end;
@@ -2934,6 +2935,9 @@ end;
 
 type
  TSetupMemoryJob=class(TMountJob)
+  //
+  nslot:PSetupMemoryNode;
+  //
   function Run:TIpcValue; override;
  end;
 
@@ -2946,6 +2950,7 @@ var
  err:Integer;
  is_locked:Boolean;
  is_change:Boolean;
+ is_init  :Boolean;
 
  RestoreJob:TRestoreJob;
 begin
@@ -2976,10 +2981,12 @@ begin
   begin
    //open
    err:=OpenMount();
+   is_init:=False;
   end else
   begin
    //create
    err:=CreateMount();
+   is_init:=True;
   end;
 
   ///
@@ -3032,6 +3039,19 @@ begin
    end;
 
    //InitParams
+   if is_init then
+   begin
+    if (nslot^.data.InitParams.title[0]<>#0) then
+    begin
+     param_sfo.MAINTITLE:=nslot^.data.InitParams.title;
+    end;
+
+    param_sfo.SUBTITLE           :=nslot^.data.InitParams.subTitle;
+    param_sfo.DETAIL             :=nslot^.data.InitParams.detail;
+    param_sfo.SAVEDATA_LIST_PARAM:=nslot^.data.InitParams.userParam;
+
+    is_change:=True;
+   end;
 
    if is_change then
    begin
@@ -3045,6 +3065,9 @@ begin
  begin
   Unlock;
  end;
+
+ ///deref
+ nslot^.Release;
 
  Result:=err;
 end;
@@ -3079,6 +3102,9 @@ begin
 
  job:=TSetupMemoryJob.Create(Client,Client.HoldResult);
  job.Init(minfo);
+
+ node^.Acquire;
+ job.nslot:=node;
 
  SendCmd(job);
 end;
@@ -3581,7 +3607,8 @@ begin
 
   if not LockDirManager.LockDir(fs_src) then
   begin
-   Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
+   Exit(0);
+   //Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
   end;
 
   if (Client<>nil) then

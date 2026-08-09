@@ -834,6 +834,14 @@ function ps4_sceSaveDataTerminate:Integer;
 begin
  if (g_instance<>nil) then
  begin
+
+  if (p_proc.p_sdk_version > $3ffffff) then
+  if (g_instance.Backend<>nil) then
+  if (g_instance.Backend.MountSlots<>0) then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_BUSY);
+  end;
+
   g_instance.Terminate;
   g_instance:=nil;
   Exit(0);
@@ -2080,6 +2088,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
+  cmd:=nil;
   if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
   begin
    cmd:=g_instance.job_list.SendProgressJob(@del^.progress);
@@ -2133,6 +2142,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
+  cmd:=nil;
   if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
   begin
    cmd:=g_instance.job_list.SendProgressJob(@pResult^.progress);
@@ -2616,6 +2626,7 @@ begin
 
  mtx_lock(g_instance.mtx);
 
+  cmd:=nil;
   if (p_proc.p_sdk_version < $3500000) and (g_instance.job_thread<>nil) then
   begin
    cmd:=g_instance.job_list.SendProgressJob(@restore^.progress);
