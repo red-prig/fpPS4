@@ -15,7 +15,8 @@ uses
   Graphics,
   Buttons,
   LCLType,
-  LCLIntf;
+  LCLIntf,
+  host_ipc;
 
 type
  TDialogButtonsType=(
@@ -83,7 +84,7 @@ type
 
  TDialogCustom=class(TPanel)
   public
-   FClient :TObject;
+   FClient :THostIpc;
    FMsgMemo:TMemo;
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;

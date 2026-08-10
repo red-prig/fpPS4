@@ -1660,9 +1660,8 @@ begin
    begin
     Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
    end else
-   if (g_client.IsReadyToDisplay=1) then
    begin
-    Result:=1;
+    Result:=g_client.IsReadyToDisplay;
    end;
   end;
 

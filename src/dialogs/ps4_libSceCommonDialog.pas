@@ -62,8 +62,10 @@ type
    status:Byte;
    finish:Byte;
    closed:Byte;
+   ready :Byte;
    rzdata:array of Byte;
-   function   OnCdlgFinish(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function   OnCdlgFinish (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function   OnCdlgIsReady(Client:THostIpc;Value:TIpcValue):TIpcValue;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
@@ -227,6 +229,7 @@ begin
  SetLength(rzdata,0);
  finish:=0;
  closed:=0;
+ ready :=0;
  status:=SCE_COMMON_DIALOG_STATUS_RUNNING;
  //
  Send(msg,buf,len);
@@ -287,7 +290,7 @@ end;
 
 function TCommonDialogClient.IsReadyToDisplay:Integer;
 begin
- Result:=p_host_ipc.InvokeSync2('IsReadyToDisplay');
+ Result:=ready;
 end;
 
 function TCommonDialogClient.Close(buf:Pointer;len:DWORD):Integer;
@@ -341,6 +344,22 @@ begin
  mtx_unlock(g_common_dialog_mtx);
 end;
 
+function TCommonDialogClient.OnCdlgIsReady(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=0;
+
+ mtx_lock(g_common_dialog_mtx);
+
+  if (g_curr_client<>nil) then
+  with g_curr_client do
+   if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+   begin
+    ready:=1;
+   end;
+
+ mtx_unlock(g_common_dialog_mtx);
+end;
+
 {$CALLING SysV_ABI_CDecl}
 //
 
@@ -357,6 +376,7 @@ begin
 
     //DialogInitialize
     p_host_ipc.Handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+    p_host_ipc.Handler.AddCallback('CDLG_READY' ,@TCommonDialogClient(nil).OnCdlgIsReady);
 
   end else
   begin
@@ -380,6 +400,7 @@ begin
  mtx_lock(g_common_dialog_mtx);
 
   p_host_ipc.Handler.DelCallback('CDLG_FINISH');
+  p_host_ipc.Handler.DelCallback('CDLG_READY');
 
  mtx_unlock(g_common_dialog_mtx);
  Result:=0;

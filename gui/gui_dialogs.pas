@@ -89,8 +89,6 @@ type
    //
    function  MSG_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
    //
-   function  IsReadyToDisplay(Client:THostIpc;Value:TIpcValue):TIpcValue;
-   //
    function  SAVE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
    //
    function  NPCOMMERCE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -328,7 +326,7 @@ begin
   rzdata.resultId:=1;
  end;
 
- THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ FCommonDialog.FClient.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
@@ -460,17 +458,6 @@ begin
  NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
-function TDialogsManager.IsReadyToDisplay(Client:THostIpc;Value:TIpcValue):TIpcValue;
-begin
- if (FCommonDialog=nil) then
- begin
-  Result:=0;
- end else
- begin
-  Result:=1;
- end;
-end;
-
 type
  TSaveDataGridItem=class
   Icon   :TCustomBitmap;
@@ -529,7 +516,7 @@ begin
 
  end;
 
- THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ FCommonDialog.FClient.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
@@ -1012,6 +999,8 @@ begin
  Attributes.ALittleMore:=True;
 
  NewDialogOpen(Client,Attributes,FCommonDialog);
+
+ Client.InvokeAsyn('CDLG_READY');
 end;
 
 //
@@ -1032,7 +1021,7 @@ begin
 
  rzdata.authorized:=False; //PS Plus features
 
- THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ FCommonDialog.FClient.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
@@ -1101,7 +1090,7 @@ begin
   else;
  end;
 
- THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
+ FCommonDialog.FClient.InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
  FreeAndNil(FCommonDialog);
 end;
