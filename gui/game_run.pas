@@ -497,6 +497,22 @@ begin
  Result:=kern_kevent2(KevObj.Fkq,kev,count,nil,0,nil,@count);
 end;
 
+type
+ TMountConfigInvoke=object
+  function OnGetMountConfig(Client:THostIpc;Value:TIpcValue):TIpcValue;
+ end;
+
+function TMountConfigInvoke.OnGetMountConfig(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ data:TGameMountConfigExport;
+begin
+ data:=GameMountConfigExport;
+
+ Result:=TIpcValue.&Object(data);
+
+ FreeAndNil(data);
+end;
+
 procedure game_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
  td:p_kthread;
@@ -536,7 +552,8 @@ begin
  md_pidfd_close(parent);
 
  IpcHandler:=THostIpcHandler.Create;
- IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
+ IpcHandler.AddCallback(iKEV_CHANGE.msg ,@TKevKqueue(nil).OnKevChange);
+ IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
 
  kipc:=THostIpcPipe.Create(THostIpcDispatchKern.Create(IpcHandler));
  kipc.set_pipe(pipefd);
@@ -745,6 +762,7 @@ begin
 
    IpcHandler:=THostIpcHandler.Create;
    IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
+   IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
 
    s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
    s_mgui_ipc:=THostIpcSimple.Create(Context.FIpcDispatch);

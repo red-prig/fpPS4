@@ -37,6 +37,8 @@ type
 
  TGameMountConfigExport=class(TSerializeObject)
  public
+  Fsdk_version :DWORD;
+  FsystemLang  :DWORD;
   FATTRIBUTE   :DWORD;
   FGame        :RawByteString;
   FLocalDir    :RawByteString;
@@ -44,6 +46,8 @@ type
   FTitleId     :RawByteString;
   FInstallDir  :RawByteString;
  published
+  property sdk_version :DWORD         read Fsdk_version  write Fsdk_version;
+  property systemLang  :DWORD         read FsystemLang   write FsystemLang;
   property ATTRIBUTE   :DWORD         read FATTRIBUTE    write FATTRIBUTE;
   property Game        :RawByteString read FGame         write FGame;
   property LocalDir    :RawByteString read FLocalDir     write FLocalDir;
@@ -59,7 +63,6 @@ var
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 
 function  GameMountConfigExport:TGameMountConfigExport;
-procedure GameMountConfigImport(var GameMountConfig:TGameMountConfig;e:TGameMountConfigExport);
 
 //
 
@@ -92,6 +95,7 @@ uses
  errno,
  kern_proc,
  vfs_mountroot,
+ ps4_libSceSystemService,
  subr_backtrace;
 
 function unix_to_host(const name:RawByteString):RawByteString;
@@ -494,27 +498,16 @@ begin
 
  Result:=TGameMountConfigExport.Create;
 
+ ps4_sceSystemServiceParamGetInt(SCE_SYSTEM_SERVICE_PARAM_ID_LANG,@Result.systemLang);
+
+ Result.sdk_version :=p_proc.p_sdk_version;
+
  Result.ATTRIBUTE   :=gGameMountConfig.ATTRIBUTE;
  Result.Game        :=gGameMountConfig.Game;
  Result.LocalDir    :=gGameMountConfig.LocalDir;
  Result.TransferList:=gGameMountConfig.TransferList;
  Result.TitleId     :=gGameMountConfig.TitleId;
  Result.InstallDir  :=gGameMountConfig.InstallDir;
-end;
-
-procedure GameMountConfigImport(var GameMountConfig:TGameMountConfig;e:TGameMountConfigExport);
-begin
- if (GameMountConfig=nil) then
- begin
-  GameMountConfig:=TGameMountConfig.Create;
- end;
-
- GameMountConfig.ATTRIBUTE   :=e.ATTRIBUTE;
- GameMountConfig.Game        :=e.Game;
- GameMountConfig.LocalDir    :=e.LocalDir;
- GameMountConfig.TransferList:=e.TransferList;
- GameMountConfig.TitleId     :=e.TitleId;
- GameMountConfig.InstallDir  :=e.InstallDir;
 end;
 
 const

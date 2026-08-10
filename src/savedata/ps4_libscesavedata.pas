@@ -28,7 +28,6 @@ uses
  game_mount,
  vfs_mountroot,
  ps4_libSceUserService,
- ps4_libSceSystemService,
  md_systm,
  sys_bootparam,
  host_ipc;
@@ -733,8 +732,7 @@ end;
 
 function TSaveDataInstance.ConnectInstance:Integer;
 var
- pipefd    :THandle;
- systemLang:DWORD;
+ pipefd:THandle;
 begin
  Result:=0;
 
@@ -764,15 +762,11 @@ begin
   InitJobThread;
  end;
 
- systemLang:=0;
- ps4_sceSystemServiceParamGetInt(SCE_SYSTEM_SERVICE_PARAM_ID_LANG,@systemLang);
-
  pipefd:=OpenSaveDataBackend();
  if (Int64(pipefd)=-1) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  Backend:=TSaveDataBackendConnect.CreateClient(THostIpcConnect(p_host_ipc).Dispatcher,pipefd);
- Backend.SendSystemConfig(p_proc.p_sdk_version,systemLang);
- Backend.SendMountConfig();
+ Backend.SendMountConfig(GameMountConfigExport);
 end;
 
 function CreateSaveDataInstance(params:Pointer;version:t_init_version):Integer;

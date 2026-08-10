@@ -73,7 +73,7 @@ type
    Constructor Create(_Handler:THostIpcHandler);
    Destructor  Destroy; override;
    function    QueueRecv:PQNode;
-   procedure   QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
+   procedure   QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); virtual;
    procedure   QueuePush(node:PQNode); virtual;
    procedure   QueueFlush;
    procedure   DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue); override;
@@ -139,13 +139,15 @@ type
  end;
 
  THostIpcDispatchGui=class(THostIpcDispatchQueue)
+  procedure QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); override;
   procedure QueuePush(node:PQNode); override;
  end;
 
  THostIpcDispatchKern=class(THostIpcDispatchQueue)
   FEvent:t_event;
   Ftd   :p_kthread;
-  procedure QueuePush (node:PQNode); override;
+  procedure QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); override;
+  procedure QueuePush(node:PQNode); override;
   procedure thread_new;  override;
   procedure thread_free; override;
  end;
@@ -634,6 +636,17 @@ end;
 
 //
 
+procedure THostIpcDispatchGui.QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
+begin
+ //queued, but executed in the main thread along with the GUI
+ inherited;
+ //
+ if Assigned(Classes.WakeMainThread) then
+ begin
+  Classes.WakeMainThread(nil);
+ end;
+end;
+
 procedure THostIpcDispatchGui.QueuePush(node:PQNode);
 begin
  //queued, but executed in the main thread along with the GUI
@@ -646,6 +659,14 @@ begin
 end;
 
 //
+
+procedure THostIpcDispatchKern.QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
+begin
+ //queued, but executed in the kern thread
+ inherited;
+ //
+ ev_signal(FEvent);
+end;
 
 procedure THostIpcDispatchKern.QueuePush(node:PQNode);
 begin

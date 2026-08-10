@@ -150,7 +150,7 @@ type
   resultId:Integer;
   buttonId:Integer; //SceSaveDataDialogButtonId
   dirName :SceSaveDataDirName;
-  param   :SceSaveDataParam;
+  params  :SceSaveDataParam;
  end;
 
  TSaveDialogClient=class(TCommonDialogClient)
@@ -1660,8 +1660,9 @@ begin
    begin
     Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
    end else
+   if (g_client.IsReadyToDisplay=1) then
    begin
-    Result:=1; //IsReadyToDisplay
+    Result:=1;
    end;
   end;
 
@@ -1743,7 +1744,7 @@ begin
  //
  if (pResult^.param <> nil) then
  begin
-  Move(src.rzdata.param,pResult^.param^,sizeof(SceSaveDataParam));
+  Move(src.rzdata.params,pResult^.param^,sizeof(SceSaveDataParam));
  end;
  //
  pResult^.userData := src.data.userData;

@@ -7,6 +7,7 @@ interface
 uses
   Classes,
   SysUtils,
+  dateutils,
   Forms,
   Controls,
   ComCtrls,
@@ -73,6 +74,7 @@ type
    procedure NewDialogOpen(Client:THostIpc;var Attributes:TDialogAttributes;var pResult:TDialogCustom);
    procedure OnMsgDialogClick(Sender:TObject);
    procedure OnSaveDialogClick(Sender:TObject);
+   function  SaveDialogLoadGrid(Client:THostIpc;var data:TSaveDialogOpen):TWinControl;
    procedure OnNpCommerceDialogClick(Sender:TObject);
    procedure OnHmdSetupDialogClick(Sender:TObject);
    procedure OnErrDlgClick(Sender:TObject);
@@ -86,6 +88,8 @@ type
    function  CDLG_CLOSE    (Client:THostIpc;Value:TIpcValue):TIpcValue;
    //
    function  MSG_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   //
+   function  IsReadyToDisplay(Client:THostIpc;Value:TIpcValue):TIpcValue;
    //
    function  SAVE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
    //
@@ -125,6 +129,11 @@ type
  function GetRealFontSize(Font:TFont):Integer;
 
 implementation
+
+uses
+ game_mount,
+ SceSaveData,
+ SaveDataBackend;
 
 function GetRealFontSize(Font:TFont):Integer;
 var
@@ -451,18 +460,45 @@ begin
  NewDialogOpen(Client,Attributes,FCommonDialog);
 end;
 
+function TDialogsManager.IsReadyToDisplay(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ if (FCommonDialog=nil) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=1;
+ end;
+end;
+
+type
+ TSaveDataGridItem=class
+  Icon   :TCustomBitmap;
+  dirName:SceSaveDataDirName;
+  params :SceSaveDataParam;
+  infos  :SceSaveDataMountInfo;
+  Destructor Destroy; override;
+ end;
+
+Destructor TSaveDataGridItem.Destroy;
+begin
+ FreeAndNil(Icon);
+ inherited;
+end;
+
 type
  TSaveDataGrid=class(TStringGrid)
   public
-   is_new:Boolean;
    procedure  CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
+   procedure  PrepareCanvasEvent(Sender: TObject; aCol, aRow: Integer; aState: TGridDrawState);
    Destructor Destroy; override;
  end;
 
 procedure TDialogsManager.OnSaveDialogClick(Sender:TObject);
 var
- Grid:TSaveDataGrid;
- min,Row:Integer;
+ Grid  :TSaveDataGrid;
+ Row   :Integer;
+ Item  :TSaveDataGridItem;
  rzdata:TSaveDialogResult;
 begin
  if (FCommonDialog=nil) then Exit;
@@ -480,31 +516,18 @@ begin
   Grid:=TSaveDataGrid(FCommonDialog.FCustom);
   Row:=Grid.Row;
 
-  if Grid.is_new then
+  if (Row>=0) then
   begin
-   min:=1;
-  end else
-  begin
-   min:=0;
+   Item:=TSaveDataGridItem(Grid.Objects[0,Row]);
+   if (Item<>nil) then
+   if (Item is TSaveDataGridItem) then
+   begin
+    rzdata.dirName:=Item.dirName;
+    rzdata.params :=Item.params;
+   end;
   end;
 
-  if (Row>=min) then
-  begin
-   rzdata.dirName.data:=Grid.Cells[1,Row];
-  end;
  end;
-
- //TODO:rzdata.param
-
- //SceSaveDataParam=packed record
- // title    :array[0..SCE_SAVE_DATA_TITLE_MAXSIZE-1] of AnsiChar;
- // subTitle :array[0..SCE_SAVE_DATA_SUBTITLE_MAXSIZE-1] of AnsiChar;
- // detail   :array[0..SCE_SAVE_DATA_DETAIL_MAXSIZE-1] of AnsiChar;
- // userParam:DWORD;
- // align    :DWORD;
- // mtime    :QWORD;
- // reserved :array[0..31] of Byte;
- //end;
 
  THostIpc(FCommonDialog.FClient).InvokeAsyn('CDLG_FINISH',@rzdata,SizeOf(rzdata));
 
@@ -513,21 +536,34 @@ end;
 
 procedure TSaveDataGrid.CustomDrawCell(Sender: TObject; aCol, aRow: Integer; aRect: TRect; aState:TGridDrawState);
 var
- Icon:TCustomBitmap;
+ Item:TSaveDataGridItem;
 begin
  if (aCol=0) then
  begin
-  //PNG
-  Icon:=TCustomBitmap(Objects[0,aRow]);
-  if (Icon<>nil) then
-  if Icon.InheritsFrom(TCustomBitmap) then
+  Item:=TSaveDataGridItem(Objects[0,aRow]);
+  if (Item<>nil) then
+  if (Item is TSaveDataGridItem) then
   begin
-   Canvas.StretchDraw(aRect,Icon);
+   //PNG
+   if (Item.Icon<>nil) then
+   begin
+    Canvas.StretchDraw(aRect,Item.Icon);
+    Exit;
+   end;
   end;
- end else
- begin
-  DefaultDrawCell(aCol,aRow,aRect,aState);
  end;
+ //
+ DefaultDrawCell(aCol,aRow,aRect,aState);
+end;
+
+procedure TSaveDataGrid.PrepareCanvasEvent(Sender: TObject; aCol, aRow: Integer; aState: TGridDrawState);
+var
+ ATextStyle: TTextStyle;
+begin
+ ATextStyle := Canvas.TextStyle;
+ ATextStyle.SingleLine := false;
+ ATextStyle.Wordbreak  := true;
+ Canvas.TextStyle := ATextStyle;
 end;
 
 Destructor TSaveDataGrid.Destroy;
@@ -542,6 +578,202 @@ begin
   FreeAndNil(o);
  end;
  inherited;
+end;
+
+procedure SaveDialogPrepare(Backend:TSaveDataBackendConnect;Client:THostIpc);
+var
+ Value :TIpcValue;
+ Config:TGameMountConfigExport;
+begin
+ if (Backend=nil) then Exit;
+
+ Value:=Client.InvokeSync('GetMountConfig');
+ Config:=TGameMountConfigExport(Value.GetObject(TGameMountConfigExport));
+ Value.Free;
+
+ Backend.SendMountConfig(Config);
+end;
+
+procedure SaveDialogLoadDir(Backend :TSaveDataBackendConnect;
+                            var data:TSaveDialogOpen;
+                            dir_id  :Integer;
+                            var Item:TSaveDataGridItem;
+                            var Text:RawByteString);
+var
+ mount  :SceSaveDataMount;
+ titleId:SceSaveDataTitleId;
+
+ slot_id:Integer;
+ i,ret:Integer;
+
+ iconBuf:Pointer;
+ icon:SceSaveDataIcon;
+
+ Stream:TPCharStream;
+
+ Params:SceSaveDataParam;
+ infos :SceSaveDataMountInfo;
+begin
+ Item:=TSaveDataGridItem.Create;
+ Item.dirName:=data.dirNames[dir_id];
+
+ if (Backend=nil) then Exit;
+
+ titleId.data:=data.titleId;
+
+ mount:=Default(SceSaveDataMount);
+ mount.userId   :=data.userId;
+ mount.titleId  :=@titleId;
+ mount.dirName  :=@data.dirNames[dir_id];
+ mount.mountMode:=SDMM_RDONLY;
+
+ slot_id:=0;
+ for i:=0 to 9 do
+ begin
+  ret:=Backend.DoMountSys(@mount,slot_id);
+  if (ret<>SCE_SAVE_DATA_ERROR_BACKUP_BUSY) then Break;
+ end;
+
+ if (ret<>0) then Exit;
+
+ iconBuf:=AllocMem(116736);
+
+ icon:=Default(SceSaveDataIcon);
+ icon.buf     :=iconBuf;
+ icon.bufSize :=116736;
+ icon.dataSize:=116736;
+
+ ret:=Backend.LoadIcon(slot_id,@icon,True);
+
+ if (ret=0) and (icon.dataSize<>0) then
+ begin
+  Stream:=TPCharStream.Create(iconBuf,icon.dataSize);
+
+  try
+    Item.Icon:=TPortableNetworkGraphic.Create;
+    Item.Icon.LoadFromStream(Stream);
+  finally
+    //
+  end;
+
+  FreeAndNil(Stream);
+ end;
+
+ FreeMem(iconBuf);
+
+ ret:=Backend.GetParam(slot_id,
+                       SCE_SAVE_DATA_PARAM_TYPE_ALL,
+                       @Params,
+                       $530,
+                       nil);
+
+ if (ret=0) then
+ begin
+  Item.params:=Params;
+
+  infos:=Default(SceSaveDataMountInfo);
+  ret:=Backend.GetMountInfoSys(slot_id,@infos);
+
+  if (ret=0) then
+  begin
+   Item.infos:=infos;
+  end;
+
+  Text:=Params.title;
+
+  if (data.itemStyle=SCE_SAVE_DATA_DIALOG_ITEM_STYLE_TITLE_SUBTITLE_DATESIZE) then
+  begin
+   Text:=Text + #13#10 + Params.subTitle;
+  end;
+
+  Text:=Text + #13#10 + DateTimeToStr(UnixToDateTime(Params.mtime,False))+' '+IntToStr((infos.blocks+31) div 32)+'MiB';
+
+  if (data.itemStyle=SCE_SAVE_DATA_DIALOG_ITEM_STYLE_TITLE_DATESIZE_SUBTITLE) then
+  begin
+   Text:=Text + #13#10 + Params.subTitle;
+  end;
+
+ end;
+
+ Backend.DoUmountSys(slot_id);
+end;
+
+function TDialogsManager.SaveDialogLoadGrid(Client:THostIpc;var data:TSaveDialogOpen):TWinControl;
+var
+ Grid:TSaveDataGrid;
+ Item:TSaveDataGridItem;
+ Stream:TPCharStream;
+ i,p:Integer;
+ Text:RawByteString;
+begin
+ SaveDialogPrepare(FContext.FetchSavdata,Client);
+
+ Grid:=TSaveDataGrid.Create(nil);
+ Grid.AutoSize:=True;
+ Grid.OnDrawCell:=@Grid.CustomDrawCell;
+ Grid.OnPrepareCanvas:=@Grid.PrepareCanvasEvent;
+ Grid.AutoEdit:=False;
+ Grid.AutoFillColumns:=TRue;
+ Grid.BorderStyle:=bsNone;
+ Grid.RowCount:=data.is_new + data.dirNameNum;
+ Grid.ColCount:=2;
+ Grid.FixedCols:=1;
+ Grid.FixedRows:=0;
+ Grid.GridLineWidth:=1;
+ Grid.Options:=[goVertLine,goHorzLine,goRowSelect,goThumbTracking,goSmoothScroll];
+ //
+ Grid.Constraints.MinWidth :=228+Grid.GridLineWidth;
+ Grid.Constraints.MinHeight:=128+Grid.GridLineWidth;
+ //
+ Grid.ColWidths[0]:=228+Grid.GridLineWidth;
+ for i:=0 to Grid.RowCount-1 do
+ begin
+  Grid.RowHeights[i]:=128+Grid.GridLineWidth;
+ end;
+ //
+ p:=0;
+ if (data.is_new<>0) then
+ begin
+  Item:=TSaveDataGridItem.Create;
+
+  if (data.new_item.iconSize<>0) then
+  begin
+   Stream:=TPCharStream.Create(@data.new_item.iconBuf,data.new_item.iconSize);
+
+   try
+     Item.Icon:=TPortableNetworkGraphic.Create;
+     Item.Icon.LoadFromStream(Stream);
+   finally
+     //
+   end;
+
+   FreeAndNil(Stream);
+  end;
+
+  Grid.Cells  [1,0]:=data.new_item.title;
+  Grid.Objects[0,0]:=Item;
+
+  p:=1;
+ end;
+ //
+ if (data.dirNameNum<>0) then
+ for i:=0 to data.dirNameNum-1 do
+ begin
+  Item:=nil;
+  Text :=data.dirNames[i].data;
+
+  SaveDialogLoadDir(FContext.FetchSavdata,
+                    data,
+                    i,
+                    Item,
+                    Text);
+
+  Grid.Cells  [1,p+i]:=Text;
+  Grid.Objects[0,p+i]:=Item;
+ end;
+
+ //
+ Result:=Grid;
 end;
 
 function TDialogsManager.SAVE_DIALOG_OPEN(Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -621,10 +853,6 @@ const
 var
  data:TSaveDialogOpen;
  Attributes:TDialogAttributes;
- Grid:TSaveDataGrid;
- Icon:TCustomBitmap;
- Stream:TPCharStream;
- i,p:Integer;
 begin
  Result:=0;
 
@@ -648,56 +876,7 @@ begin
  if (data.is_new<>0) or
     (data.dirNameNum<>0) then
  begin
-  Grid:=TSaveDataGrid.Create(nil);
-  Grid.AutoSize:=True;
-  Grid.OnDrawCell:=@Grid.CustomDrawCell;
-  Grid.AutoEdit:=False;
-  Grid.AutoFillColumns:=TRue;
-  Grid.BorderStyle:=bsNone;
-  Grid.Constraints.MinWidth :=228;
-  Grid.Constraints.MinHeight:=128;
-  Grid.RowCount:=data.is_new + data.dirNameNum;
-  Grid.ColCount:=2;
-  Grid.FixedCols:=1;
-  Grid.FixedRows:=0;
-  Grid.GridLineWidth:=0;
-  Grid.Options:=[goRowSelect,goThumbTracking,goSmoothScroll];
-  //
-  Grid.ColWidths[0]:=228;
-  for i:=0 to Grid.RowCount-1 do
-  begin
-   Grid.RowHeights[i]:=128;
-  end;
-  //
-  p:=0;
-  if (data.is_new<>0) then
-  begin
-   Grid.is_new:=True;
-
-   if (data.new_item.iconSize<>0) then
-   begin
-    Stream:=TPCharStream.Create(@data.new_item.iconBuf,data.new_item.iconSize);
-
-    Icon:=TPortableNetworkGraphic.Create;
-    Icon.LoadFromStream(Stream);
-
-    Grid.Objects[0,0]:=Icon;
-
-    FreeAndNil(Stream);
-    Icon:=nil;
-   end;
-
-   Grid.Cells[1,0]:=data.new_item.title;
-   p:=1;
-  end;
-  //
-  if (data.dirNameNum<>0) then
-  for i:=0 to data.dirNameNum-1 do
-  begin
-   Grid.Cells[1,p+i]:=data.dirNames[i].data;
-  end;
-
-  Attributes.Custom:=Grid;
+  Attributes.Custom:=SaveDialogLoadGrid(Client,data);
  end;
 
  case data.mode of
@@ -829,6 +1008,8 @@ begin
   SCE_SAVE_DATA_DIALOG_MODE_WIZARD_CONFIRM:Assert(false,'TODO:MODE_WIZARD_CONFIRM');
   else;
  end;
+
+ Attributes.ALittleMore:=True;
 
  NewDialogOpen(Client,Attributes,FCommonDialog);
 end;

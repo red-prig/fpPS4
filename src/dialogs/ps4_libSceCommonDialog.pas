@@ -74,6 +74,7 @@ type
    function   SetMsg  (buf:Pointer;len:DWORD):Integer;
    function   getFinishData(buf:Pointer;len:DWORD):Integer;
    function   updateState:Integer;                  virtual;
+   function   IsReadyToDisplay:Integer;
    function   Close(buf:Pointer;len:DWORD):Integer; virtual;
    procedure  Terminate;                            virtual;
    Destructor Destroy;                              override;
@@ -282,6 +283,11 @@ begin
  mtx_unlock(g_common_dialog_mtx);
  //
  Result:=0;
+end;
+
+function TCommonDialogClient.IsReadyToDisplay:Integer;
+begin
+ Result:=p_host_ipc.InvokeSync2('IsReadyToDisplay');
 end;
 
 function TCommonDialogClient.Close(buf:Pointer;len:DWORD):Integer;

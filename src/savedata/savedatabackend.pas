@@ -33,57 +33,59 @@ type
  end;
 
  TSaveDataBackendConnect=class
-  kipc    :THostIpcPipe;
+  kipc      :THostIpcPipe;
   //
-  hProcess:THandle;
-  fork_pid:Integer;
+  hProcess  :THandle;
+  fork_pid  :Integer;
   //
   MountSlots:DWORD;
   //
   Constructor CreateProcess(_Dispatcher:THostIpcDispatcher);
   Constructor CreateClient (_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
   Destructor  Destroy; override;
-  procedure   SendMountConfig();
-  procedure   SendSystemConfig(sdk_version,systemLang:DWORD);
+  procedure   SendMountConfig(Config:TGameMountConfigExport);
   function    NewClient():THandle;
   procedure   ExitClient;
   procedure   ExitProcess;
   procedure   UmountAllForce;
-  function    DoDelete      (del:pSceSaveDataDelete):Integer;
-  function    DoMount       (mount:pSceSaveDataMount;pResult:pSceSaveDataMountResult;Transfering,Internal:Boolean):Integer;
-  function    DoUmount      (slot_id:Integer;backup:boolean):Integer;
-  function    GetMountInfo  (slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
-  function    DoBackup      (backup:pSceSaveDataBackup):Integer;
-  function    CheckBackup   (check:pSceSaveDataCheckBackupData):Integer;
-  function    RestoreBackup (restore:pSceSaveDataRestoreBackupData):Integer;
-  function    GetEventResult(event:pSceSaveDataEvent):Integer;
-  function    GetProgress   (p_progress:PSingle):Integer;
-  function    ClearProgress ():Integer;
-  function    SaveIcon      (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
-  function    LoadIcon      (slot_id:Integer;icon:pSceSaveDataIcon;internal:Boolean):Integer;
-  function    SetParam      (slot_id     :Integer;
-                             paramType   :SceSaveDataParamType;
-                             paramBuf    :Pointer;
-                             paramBufSize:QWORD):Integer;
-  function    GetParam      (slot_id     :Integer;
-                             paramType   :SceSaveDataParamType;
-                             paramBuf    :Pointer;
-                             paramBufSize:QWORD;
-                             gotSize     :PQWORD):Integer;
-  function    SetupMemory   (userId        :SceUserServiceUserId;
-                             slotId        :Integer;
-                             bufferNum     :Integer;
-                             memorySize    :DWORD;
-                             iconMemorySize:DWORD;
-                             paramSize     :DWORD;
-                             InitParams    :pSceSaveDataParam
-                            ):Integer;
-  function    ReadMemory    (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
-  procedure   WriteMemory   (userId,slotId,bufferId:DWORD;addr:Pointer;size:DWORD);
-  function    SyncMemory    (syncParam:pSceSaveDataMemorySync):Integer;
-  function    DirNameSearch (cond    :pSceSaveDataDirNameSearchCond;
-                             pResult :pSceSaveDataDirNameSearchResult;
-                             internal:Boolean):Integer;
+  function    DoDelete       (del:pSceSaveDataDelete):Integer;
+  function    DoMount        (mount:pSceSaveDataMount;pResult:pSceSaveDataMountResult;Transfering,Internal:Boolean):Integer;
+  function    DoMountSys     (mount:pSceSaveDataMount;var slot_id:Integer):Integer;
+  function    DoUmount       (slot_id:Integer;backup:boolean):Integer;
+  function    DoUmountSys    (slot_id:Integer):Integer;
+  function    GetMountInfo   (slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
+  function    GetMountInfoSys(slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
+  function    DoBackup       (backup:pSceSaveDataBackup):Integer;
+  function    CheckBackup    (check:pSceSaveDataCheckBackupData):Integer;
+  function    RestoreBackup  (restore:pSceSaveDataRestoreBackupData):Integer;
+  function    GetEventResult (event:pSceSaveDataEvent):Integer;
+  function    GetProgress    (p_progress:PSingle):Integer;
+  function    ClearProgress  ():Integer;
+  function    SaveIcon       (slot_id:Integer;icon:pSceSaveDataIcon):Integer;
+  function    LoadIcon       (slot_id:Integer;icon:pSceSaveDataIcon;internal:Boolean):Integer;
+  function    SetParam       (slot_id     :Integer;
+                              paramType   :SceSaveDataParamType;
+                              paramBuf    :Pointer;
+                              paramBufSize:QWORD):Integer;
+  function    GetParam       (slot_id     :Integer;
+                              paramType   :SceSaveDataParamType;
+                              paramBuf    :Pointer;
+                              paramBufSize:QWORD;
+                              gotSize     :PQWORD):Integer;
+  function    SetupMemory    (userId        :SceUserServiceUserId;
+                              slotId        :Integer;
+                              bufferNum     :Integer;
+                              memorySize    :DWORD;
+                              iconMemorySize:DWORD;
+                              paramSize     :DWORD;
+                              InitParams    :pSceSaveDataParam
+                             ):Integer;
+  function    ReadMemory     (slot_id:Integer;dataBuf:Pointer;dataSize:DWORD;p_existedMemorySize:PQWORD):Integer;
+  procedure   WriteMemory    (userId,slotId,bufferId:DWORD;addr:Pointer;size:DWORD);
+  function    SyncMemory     (syncParam:pSceSaveDataMemorySync):Integer;
+  function    DirNameSearch  (cond    :pSceSaveDataDirNameSearchCond;
+                              pResult :pSceSaveDataDirNameSearchResult;
+                              internal:Boolean):Integer;
  end;
 
  TSaveDataClient=class;
@@ -188,7 +190,6 @@ type
    //All functions available for the IPC
    function    Confirm       (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    ExitProcess   (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
-   function    SystemConfig  (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    NewClient     (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    ExitClient    (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
    function    MountConfig   (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
@@ -439,6 +440,8 @@ Constructor TSaveDataClient.Create(_Dispatcher:THostIpcDispatcher);
 begin
  inherited;
  //
+ GameMountConfig:=TGameMountConfig.Create;
+ //
  SetupMemoryManager.Init;
  //
  EventQueue.Init;
@@ -647,34 +650,6 @@ begin
  DoExit();
 end;
 
-type
- TSystemData=record
-  sdk_version:DWORD;
-  systemLang :DWORD;
- end;
-
-procedure TSaveDataBackendConnect.SendSystemConfig(sdk_version,systemLang:DWORD);
-var
- data:TSystemData;
-begin
- data.sdk_version:=sdk_version;
- data.systemLang :=systemLang ;
-
- kipc.InvokeAsyn('SystemConfig',TIpcValue.Static(@data,SizeOf(data)));
-end;
-
-function TSaveDataBackendProcess.SystemConfig(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
-var
- data:TSystemData;
-begin
- Result:=0;
- data:=Default(TSystemData);
- Value.MoveTo(@data,sizeof(data));
-
- Client.sdk_version:=data.sdk_version;
- Client.systemLang :=data.systemLang ;
-end;
-
 function TSaveDataBackendConnect.NewClient():THandle;
 var
  kern2svdt:t_pipe_pair;
@@ -733,15 +708,13 @@ begin
  Clients.FreeClient(Client);
 end;
 
-procedure TSaveDataBackendConnect.SendMountConfig();
-var
- data:TGameMountConfigExport;
+procedure TSaveDataBackendConnect.SendMountConfig(Config:TGameMountConfigExport);
 begin
- data:=GameMountConfigExport;
+ if (Config=nil) then Exit;
 
- kipc.InvokeAsyn('MountConfig',TIpcValue.&Object(data));
+ kipc.InvokeAsyn('MountConfig',TIpcValue.&Object(Config));
 
- FreeAndNil(data);
+ FreeAndNil(Config);
 end;
 
 procedure TSaveDataBackendConnect.UmountAllForce;
@@ -766,13 +739,25 @@ begin
  data:=TGameMountConfigExport(Value.GetObject(TGameMountConfigExport));
  if (data=nil) then Exit;
 
- GameMountConfigImport(Client.GameMountConfig,data);
+ Client.sdk_version:=data.sdk_version;
+ Client.systemLang :=data.systemLang ;
+
+ Client.GameMountConfig.ATTRIBUTE   :=data.ATTRIBUTE;
+ Client.GameMountConfig.Game        :=data.Game;
+ Client.GameMountConfig.LocalDir    :=data.LocalDir;
+ Client.GameMountConfig.TransferList:=data.TransferList;
+ Client.GameMountConfig.TitleId     :=data.TitleId;
+ Client.GameMountConfig.InstallDir  :=data.InstallDir;
 
  Writeln('[MOUNT_CONFIG]');
- Writeln(' ATTRIBUTE =0x',HexStr(data.ATTRIBUTE,8));
- Writeln(' LocalDir  =',data.LocalDir  );
- Writeln(' TitleId   =',data.TitleId   );
- Writeln(' InstallDir=',data.InstallDir);
+ Writeln(' sdk_version =0x',HexStr(data.sdk_version,8));
+ Writeln(' systemLang  =0x',HexStr(data.systemLang,8));
+ Writeln(' ATTRIBUTE   =0x',HexStr(data.ATTRIBUTE,8));
+ Writeln(' Game        =',data.Game);
+ Writeln(' LocalDir    =',data.LocalDir);
+ Writeln(' TransferList=',data.TransferList);
+ Writeln(' TitleId     =',data.TitleId);
+ Writeln(' InstallDir  =',data.InstallDir);
 
  FreeAndNil(data);
 end;
@@ -1017,6 +1002,36 @@ begin
   end;
  end;
 
+end;
+
+function TSaveDataBackendConnect.DoMountSys(mount:pSceSaveDataMount;var slot_id:Integer):Integer;
+var
+ data:TMount;
+ Value:TIpcValue;
+ output:TMountResult;
+begin
+ FillChar(data,SizeOf(data),0);
+  data.userId     :=mount^.userId;
+ if (mount^.titleId<>nil) then
+  data.titleId    :=mount^.titleId^;
+ if (mount^.dirName<>nil) then
+  data.dirName    :=mount^.dirName^;
+ if (mount^.fingerprint<>nil) then
+  data.fingerprint:=mount^.fingerprint^;
+ data.blocks      :=mount^.blocks;
+ data.mountMode   :=mount^.mountMode;
+ data.Internal    :=True;
+
+ Value:=kipc.InvokeSync('Mount',TIpcValue.Static(@data,sizeof(data)));
+
+ FillChar(output,SizeOf(output),0);
+ Value.MoveTo(@output,SizeOf(output));
+
+ Value.Free;
+
+ Result:=output.result;
+
+ slot_id:=output.slot_id
 end;
 
 type
@@ -1506,6 +1521,25 @@ begin
 
 end;
 
+function TSaveDataBackendConnect.DoUmountSys(slot_id:Integer):Integer;
+var
+ data:TUmount;
+begin
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ data.slot_id:=slot_id;
+ data.backup :=False;
+
+ Result:=kipc.InvokeSync2('IsActiveMount',@data.slot_id,sizeof(data.slot_id));
+
+ if (Result=0) then
+ begin
+  //free
+  Result:=kipc.InvokeSync2('Umount',@data,sizeof(data));
+ end;
+
+end;
+
 type
  TMountInfo=packed record
   result    :QWORD;
@@ -1615,7 +1649,7 @@ begin
   Unlock;
  end;
 
- if not force then
+ if (not force) and ((minfo.mountMode and SDMM_RDWR)<>0) then
  begin
   update_mtime(fs_src,minfo.mtime);
  end;
@@ -1692,6 +1726,29 @@ begin
  begin
   Exit(SCE_SAVE_DATA_ERROR_NOT_MOUNTED);
  end;
+
+ Value:=kipc.InvokeSync('GetMountInfo',slot_id);
+
+ FillChar(data,SizeOf(data),0);
+ Value.MoveTo(@data,SizeOf(data));
+
+ Value.Free;
+
+ Result:=data.result;
+
+ if (Result=0) then
+ begin
+  info^.blocks    :=data.blocks    ;
+  info^.freeBlocks:=data.freeBlocks;
+ end;
+end;
+
+function TSaveDataBackendConnect.GetMountInfoSys(slot_id:Integer;info:pSceSaveDataMountInfo):Integer;
+var
+ Value:TIpcValue;
+ data:TMountInfo;
+begin
+ if (DWORD(slot_id)>=TMountManager.max) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  Value:=kipc.InvokeSync('GetMountInfo',slot_id);
 
