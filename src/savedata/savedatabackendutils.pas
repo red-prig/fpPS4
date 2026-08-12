@@ -855,7 +855,7 @@ end;
 function GetFreeBlocks(const fs_src:RawByteString;max_blocks:Int64):Int64;
 begin
  Result:=GetDirectorySizeLikePFS(fs_src);
- Result:=Result+1024+4*1024+4*1024; //pulling
+ Result:=Result+1024+4*1024; //pulling
 
  Result:=(Result+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE;
 

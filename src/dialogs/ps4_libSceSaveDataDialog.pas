@@ -1110,7 +1110,7 @@ begin
  if (len < 65) then
  begin
   i:=0;
-  while (i < len) do
+  while (i < 64) do
   begin
    if ((fingerprint[i] < 'a') or ('f' < fingerprint[i])) and
       ((fingerprint[i] < '0') or ('9' < fingerprint[i])) then

@@ -1840,6 +1840,15 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="SaveDataBackendUtils"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatakeystone.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataKeystone"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\sha256.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

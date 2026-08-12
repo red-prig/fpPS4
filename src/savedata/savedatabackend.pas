@@ -24,7 +24,8 @@ uses
  ps4_libSceUserService,
  SceSaveData,
  SaveDataBackendSfo,
- SaveDataBackendUtils;
+ SaveDataBackendUtils,
+ SaveDataKeystone;
 
 type
  TPipeSend=record
@@ -142,10 +143,19 @@ type
   //
   Progress:TProgressInfo;
   //
+  IconData   :Pointer;
+  iconBufSize:Ptrint;
+  //
+  Keystone:p_keystone_file;
+  //
   Constructor Create(_Dispatcher:THostIpcDispatcher);
   Destructor  Destroy; override;
   procedure   UmountAllForce(Backend:TSaveDataBackendProcess);
+  function    GetProgress(var p:Single):Integer;
+  procedure   ClearProgress();
   procedure   SetProgressJob(cmd:TCustomCommand);
+  function    LoadPkgIcon    (var _iconData:Pointer):Ptrint;
+  function    LoadPkgKeystone():p_keystone_file;
  end;
 
  TClientManager=object
@@ -456,6 +466,10 @@ begin
  SetupMemoryManager.Free;
  //
  FreeAndNil(GameMountConfig);
+ //
+ if (IconData<>nil) then FreeMem(IconData);
+ //
+ if (Keystone<>nil) then FreeMem(Keystone);
  //
  inherited;
 end;
@@ -841,14 +855,6 @@ function TDeleteJob.Run:TIpcValue;
 begin
  Result:=0;
 
- if (strncasecmp(@Client.GameMountConfig.InstallDir,
-                 @titleId,
-                 SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
- begin
-  //trying to delete another game?
-  //check FINGERPRINT?
- end;
-
  Progress:=1/5;
 
  DoDelete(@Progress,1/5);
@@ -1053,6 +1059,8 @@ type
   function  SaveParamSfo():Integer;
   function  MountParamSfo():Integer;
   function  CreateTmpFiles():Boolean;
+  function  CreateKeystone():Boolean;
+  function  OpenKeystone():Integer;
   function  CheckMountData(is_created:Boolean):Integer;
   function  CreateMount():Integer;
   function  OpenMount():Integer;
@@ -1187,6 +1195,67 @@ begin
  Result:=TruncFile(fname,$1c800);
 end;
 
+function TMountJob.CreateKeystone():Boolean;
+var
+ fname:RawByteString;
+ app_keystone:p_keystone_file;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys');
+ Result:=ForceDirectories(fname);
+ if not Result then Exit;
+
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/keystone');
+
+ app_keystone:=Client.LoadPkgKeystone();
+
+ Result:=WriteToFile(fname,app_keystone,SizeOf(t_keystone_file))=SizeOf(t_keystone_file);
+end;
+
+function TMountJob.OpenKeystone():Integer;
+var
+ fname:RawByteString;
+ keystone_app:p_keystone_file;
+ keystone_msd:t_keystone_file;
+begin
+ fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/keystone');
+
+ keystone_msd:=Default(t_keystone_file);
+
+ if (ReadFromFile(fname,@keystone_msd,SizeOf(t_keystone_file))<>sizeof(t_keystone_file)) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if (data.fingerprint.data[0]=#0) then
+ begin
+  Result:=sceSblSsCheckKeystone(@keystone_msd);
+
+  if (Result<>0) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_BROKEN;
+  end else
+  begin
+   keystone_app:=Client.LoadPkgKeystone();
+
+   if (CompareByte(keystone_msd,keystone_app^,SizeOf(t_keystone_file))<>0) then
+   begin
+    Result:=SCE_SAVE_DATA_ERROR_BROKEN;
+   end;
+  end;
+
+ end else
+ begin
+  Result:=sceSblSsVerifyKeystone(@keystone_msd,@data.fingerprint.data);
+
+  if (Result<>0) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_FINGERPRINT_MISMATCH;
+  end;
+
+ end;
+
+end;
+
 function TMountJob.CheckMountData(is_created:Boolean):Integer;
 var
  titleId:pchar;
@@ -1225,54 +1294,92 @@ begin
 
 end;
 
-function TMountJob.CreateMount():Integer;
+function TSaveDataClient.LoadPkgIcon(var _iconData:Pointer):Ptrint;
 var
  ficon:RawByteString;
- icon_data:Pointer;
- icon_size:Ptrint;
+begin
+ if (IconData<>nil) then
+ begin
+  _iconData:=IconData;
+  Exit(iconBufSize);
+ end;
+
+ ficon:=ExcludeTrailingPathDelimiter(GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
+
+ iconData:=AllocMem($1C800);
+
+ iconBufSize:=ReadFromFile(ficon,iconData,$1C800);
+
+ _iconData:=IconData;
+ Exit(iconBufSize);
+end;
+
+function TSaveDataClient.LoadPkgKeystone():p_keystone_file;
+var
+ fkeystone:RawByteString;
+begin
+ if (Keystone<>nil) then
+ begin
+  Exit(Keystone);
+ end;
+
+ fkeystone:=ExcludeTrailingPathDelimiter(GameMountConfig.Game)+unix_to_host('/sce_sys/keystone');
+
+ Keystone:=AllocMem(SizeOf(t_keystone_file));
+
+ if (ReadFromFile(fkeystone,Keystone,SizeOf(t_keystone_file))<>sizeof(t_keystone_file)) then
+ begin
+  Writeln('Warning: /app0/sce_sys/keystone not loaded -> fill to fake pkg keystone');
+  Keystone^:=fake_pkg_keystone;
+ end;
+
+ Exit(Keystone);
+end;
+
+function TMountJob.CreateMount():Integer;
+var
+ iconData   :Pointer;
+ iconBufSize:Ptrint;
 begin
  Progress:=2/9;
 
  Result:=CheckMountData(True);
  if (Result<>0) then Exit;
 
- Progress:=3/9;
-
  if not ForceDirectories(fs_src) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
  end;
 
- Progress:=4/9;
+ Progress:=3/9;
 
  if not CreateParamSfo then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
- Progress:=5/9;
+ Progress:=4/9;
 
  if not CreateTmpFiles then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+
+ Progress:=5/9;
+
+ if not CreateKeystone then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 
  Progress:=6/9;
 
  if ((data.mountMode and SDMM_COPY_ICON)<>0) then
  begin
-  ficon:=ExcludeTrailingPathDelimiter(Client.GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
+  iconBufSize:=Client.LoadPkgIcon(iconData);
 
-  icon_data:=AllocMem($1C800);
-
-  icon_size:=ReadFromFile(ficon,icon_data,$1C800);
-
-  if (icon_size<=0) then
+  if (iconBufSize<=0) then
   begin
    //
   end else
   begin
-   if CheckPng(icon_data,icon_size)=0 then
+   if CheckPng(iconData,iconBufSize)=0 then
    begin
-    SaveIcon(fs_src,icon_data,icon_size);
+    SaveIcon(fs_src,iconData,iconBufSize);
    end;
   end;
 
-  FreeMem(icon_data);
  end;
 
  Progress:=7/9;
@@ -1287,9 +1394,14 @@ begin
  Result:=CheckMountData(False);
  if (Result<>0) then Exit;
 
- Progress:=4/9;
+ Progress:=3/9;
 
  Result:=OpenParamSfo();
+ if (Result<>0) then Exit;
+
+ Progress:=4/9;
+
+ Result:=OpenKeystone();
  if (Result<>0) then Exit;
 
  Progress:=6/9;
@@ -1326,6 +1438,11 @@ begin
   data.mountMode:=data.mountMode and (not SDMM_CREATE2);
  end;
 
+ if (data.fingerprint.data[0]<>#0) and ((data.mountMode and SDMM_RDONLY)=0) then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
+ end;
+
  titleId:=@data.titleId.data;
  if (titleId[0]=#0) then
  begin
@@ -1333,15 +1450,6 @@ begin
  end;
 
  dirName:=@data.dirName.data;
-
- if ((data.mountMode and SDMM_RDWR)<>0) then
- if (strncasecmp(@Client.GameMountConfig.InstallDir,
-                 titleId,
-                 SCE_SAVE_DATA_TITLE_ID_DATA_SIZE)<>0) then
- begin
-  //trying to mount another game with RW?
-  //check FINGERPRINT?
- end;
 
  is_locked:=False;
  slot_id:=0;
@@ -1847,11 +1955,12 @@ end;
 type
  TCustomBackupJob=class(TCustomDirJob)
   //
-  param_sfo:t_savedata_sfo_values;
-  Progress:Single;
+  param_sfo  :t_savedata_sfo_values;
+  fingerprint:SceSaveDataFingerprint;
+  Progress   :Single;
   //
   function OpenParamSfo(const fdir:RawByteString):Integer;
-  function SaveParamSfo(const fdir:RawByteString):Integer;
+  function OpenKeystone(const fdir:RawByteString):Integer;
   function Prepare:Boolean;
   function CheckBackup:Integer;
   function GetProgress:Single; override;
@@ -1859,7 +1968,7 @@ type
 
  TBackupJob=class(TCustomBackupJob)
   event_type:Byte;
-  function Backup:Boolean;
+  function Backup:Integer;
   function Run:TIpcValue; override;
  end;
 
@@ -1888,19 +1997,49 @@ begin
 
 end;
 
-function TCustomBackupJob.SaveParamSfo(const fdir:RawByteString):Integer;
+function TCustomBackupJob.OpenKeystone(const fdir:RawByteString):Integer;
 var
  fname:RawByteString;
+ keystone_app:p_keystone_file;
+ keystone_msd:t_keystone_file;
 begin
- fname:=ExcludeTrailingPathDelimiter(fs_src)+unix_to_host('/sce_sys/param.sfo');
+ fname:=ExcludeTrailingPathDelimiter(fdir)+unix_to_host('/sce_sys/keystone');
 
- if param_sfo.SaveToFile(fname) then
+ keystone_msd:=Default(t_keystone_file);
+
+ if (ReadFromFile(fname,@keystone_msd,SizeOf(t_keystone_file))<>sizeof(t_keystone_file)) then
  begin
-  Result:=0
+  Exit(SCE_SAVE_DATA_ERROR_BROKEN);
+ end;
+
+ if (fingerprint.data[0]=#0) then
+ begin
+  Result:=sceSblSsCheckKeystone(@keystone_msd);
+
+  if (Result<>0) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_BROKEN;
+  end else
+  begin
+   keystone_app:=Client.LoadPkgKeystone();
+
+   if (CompareByte(keystone_msd,keystone_app^,SizeOf(t_keystone_file))<>0) then
+   begin
+    Result:=SCE_SAVE_DATA_ERROR_BROKEN;
+   end;
+  end;
+
  end else
  begin
-  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+  Result:=sceSblSsVerifyKeystone(@keystone_msd,@fingerprint.data);
+
+  if (Result<>0) then
+  begin
+   Result:=SCE_SAVE_DATA_ERROR_FINGERPRINT_MISMATCH;
+  end;
+
  end;
+
 end;
 
 function TCustomBackupJob.Prepare:Boolean;
@@ -1967,8 +2106,12 @@ begin
  Progress:=5/12;
 
  Result:=OpenParamSfo(fs_dst);
+ if (Result<>0) then Exit;
 
  Progress:=6/12;
+
+ Result:=OpenKeystone(fs_dst);
+ if (Result<>0) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
 end;
 
 function TCustomBackupJob.GetProgress:Single;
@@ -1976,9 +2119,9 @@ begin
  Result:=Progress;
 end;
 
-function TBackupJob.Backup:Boolean;
+function TBackupJob.Backup:Integer;
 begin
- Result:=False;
+ Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
 
  if not Prepare then Exit;
 
@@ -2031,22 +2174,23 @@ begin
   end;
  end;
 
- Result:=True;
+ Result:=0;
 end;
 
 function TBackupJob.Run:TIpcValue;
 var
  err:Integer;
- res:Boolean;
 begin
  Result:=0;
- res:=Backup;
+
+ err:=OpenParamSfo(fs_src);
+ if (err<>0) then Exit(err);
+
+ err:=OpenKeystone(fs_src);
+ if (err<>0) then Exit(err);
 
  //SCE_SAVE_DATA_ERROR_NO_SPACE_FS
- case res of
-  True :err:=0;
-  False:err:=SCE_SAVE_DATA_ERROR_INTERNAL;
- end;
+ err:=Backup;
 
  if (event_type<>0) then
  begin
@@ -2200,12 +2344,9 @@ begin
  job.Init(userId,titleId,dirName);
  job.event_type:=event_type;
 
- Result:=job.OpenParamSfo(fs_src);
- if (Result<>0) then
+ if (fingerprint<>nil) then
  begin
-  job.UnLock;
-  job.Free;
-  Exit;
+  job.fingerprint:=fingerprint^;
  end;
 
  SendCmd(job);
@@ -2446,6 +2587,8 @@ begin
  job:=TRestoreJob.Create(Client,Client.HoldResult);
  job.Init(data.userId,titleId,dirName);
 
+ job.fingerprint:=data.fingerprint;
+
  Client.SetProgressJob(job);
  SendCmd(job);
 end;
@@ -2518,22 +2661,9 @@ function TSaveDataBackendProcess.GetProgress(Client:TSaveDataClient;Value:TIpcVa
 var
  data:TGetProgress;
 begin
- mtx_lock(Client.Progress.mtx);
+ data.result:=Client.GetProgress(data.progress);
 
-  if (Client.Progress.cmd=nil) then
-  begin
-   //
-  end else
-  begin
-   Client.Progress.Value:=Client.Progress.cmd.GetProgress;
-  end;
-
-  data.result  :=0;
-  data.progress:=Client.Progress.Value;
-
-  Result:=TIpcValue.New(@data,SizeOf(data));
-
- mtx_unlock(Client.Progress.mtx);
+ Result:=TIpcValue.New(@data,SizeOf(data));
 end;
 
 function TSaveDataBackendConnect.ClearProgress():Integer;
@@ -2544,11 +2674,36 @@ end;
 function TSaveDataBackendProcess.ClearProgress(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
- mtx_lock(Client.Progress.mtx);
+ Client.ClearProgress;
+end;
 
-  Client.Progress.Value:=0;
+function TSaveDataClient.GetProgress(var p:Single):Integer;
+begin
+ Result:=0;
+ p:=0;
 
- mtx_unlock(Client.Progress.mtx);
+ mtx_lock(Progress.mtx);
+
+  if (Progress.cmd=nil) then
+  begin
+   //
+  end else
+  begin
+   Progress.Value:=Progress.cmd.GetProgress;
+  end;
+
+  p:=Progress.Value;
+
+ mtx_unlock(Progress.mtx);
+end;
+
+procedure TSaveDataClient.ClearProgress();
+begin
+ mtx_lock(Progress.mtx);
+
+  Progress.Value:=0;
+
+ mtx_unlock(Progress.mtx);
 end;
 
 procedure TSaveDataClient.SetProgressJob(cmd:TCustomCommand);
@@ -3438,8 +3593,6 @@ begin
 end;
 
 function TSyncMemoryJob.SyncIcon(iconData:Pointer;iconBufSize:Ptrint):Integer;
-var
- ficon:RawByteString;
 begin
  Result:=0;
 
@@ -3447,11 +3600,7 @@ begin
  begin
   //CopyIcon
 
-  ficon:=ExcludeTrailingPathDelimiter(Client.GameMountConfig.Game)+unix_to_host('/sce_sys/save_data.png');
-
-  iconData:=AllocMem($1C800);
-
-  iconBufSize:=ReadFromFile(ficon,iconData,$1C800);
+  iconBufSize:=Client.LoadPkgIcon(iconData);
 
   if (iconBufSize<=0) then
   begin
@@ -3467,7 +3616,6 @@ begin
    end;
   end;
 
-  FreeMem(iconData);
  end else
  begin
   Result:=CheckPng(iconData,iconBufSize);

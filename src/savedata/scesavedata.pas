@@ -700,10 +700,11 @@ begin
   Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
  end;
 
- for i:=0 to SCE_SAVE_DATA_FINGERPRINT_DATA_SIZE-1 do
+ for i:=0 to 63 do
  begin
   case ptr^.data[i] of
-   'a'..'z':;
+   //A..F NOT ALLOW!
+   'a'..'f':;
    '0'..'9':;
    else
     Exit(SCE_SAVE_DATA_ERROR_PARAMETER);
