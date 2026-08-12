@@ -75,7 +75,7 @@ end;
 
 function to9(b:DWORD):DWORD; inline;
 begin
- Result:=b + (b shl 3)
+ Result:=b + (b shl 3);
 end;
 
 function hex_to_val_i(i:DWORD):DWORD; inline;
