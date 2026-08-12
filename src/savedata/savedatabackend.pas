@@ -195,7 +195,7 @@ type
                                 dirName    :pchar;
                                 fingerprint:pSceSaveDataFingerprint;
                                 event_type :Byte):Integer;
-   function    SendSyncJob     (Client:TSaveDataClient;userId,slotId,option:DWORD):Integer;
+   function    SendSyncJob     (Client:TSaveDataClient;userId,slotId:DWORD;is_async,is_event:Boolean):Integer;
   published
    //All functions available for the IPC
    function    Confirm       (Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
@@ -1962,13 +1962,14 @@ type
   function OpenParamSfo(const fdir:RawByteString):Integer;
   function OpenKeystone(const fdir:RawByteString):Integer;
   function Prepare:Boolean;
-  function CheckBackup:Integer;
+  function CheckBackup(check_keystone:Boolean):Integer;
   function GetProgress:Single; override;
  end;
 
  TBackupJob=class(TCustomBackupJob)
   event_type:Byte;
   function Backup:Integer;
+  function OpenBackup:Integer;
   function Run:TIpcValue; override;
  end;
 
@@ -2096,7 +2097,7 @@ begin
  Result:=True;
 end;
 
-function TCustomBackupJob.CheckBackup:Integer;
+function TCustomBackupJob.CheckBackup(check_keystone:Boolean):Integer;
 begin
  if not SaveDataExists(fs_dst) then
  begin
@@ -2110,8 +2111,11 @@ begin
 
  Progress:=6/12;
 
- Result:=OpenKeystone(fs_dst);
- if (Result<>0) then Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ if check_keystone then
+ begin
+  Result:=OpenKeystone(fs_dst);
+  if (Result<>0) then Result:=SCE_SAVE_DATA_ERROR_BROKEN;
+ end;
 end;
 
 function TCustomBackupJob.GetProgress:Single;
@@ -2177,17 +2181,19 @@ begin
  Result:=0;
 end;
 
+function TBackupJob.OpenBackup:Integer;
+begin
+ Result:=OpenParamSfo(fs_src);
+ if (Result<>0) then Exit;
+
+ Result:=OpenKeystone(fs_src);
+end;
+
 function TBackupJob.Run:TIpcValue;
 var
  err:Integer;
 begin
  Result:=0;
-
- err:=OpenParamSfo(fs_src);
- if (err<>0) then Exit(err);
-
- err:=OpenKeystone(fs_src);
- if (err<>0) then Exit(err);
 
  //SCE_SAVE_DATA_ERROR_NO_SPACE_FS
  err:=Backup;
@@ -2286,7 +2292,7 @@ begin
 
  if Prepare then
  begin
-  err:=CheckBackup;
+  err:=CheckBackup(True);
  end else
  begin
   err:=SCE_SAVE_DATA_ERROR_INTERNAL;
@@ -2347,6 +2353,14 @@ begin
  if (fingerprint<>nil) then
  begin
   job.fingerprint:=fingerprint^;
+ end;
+
+ Result:=job.OpenBackup();
+ if (Result<>0) then
+ begin
+  job.UnLock;
+  job.Free;
+  Exit;
  end;
 
  SendCmd(job);
@@ -2445,7 +2459,7 @@ begin
 
  if Prepare then
  begin
-  err:=CheckBackup;
+  err:=CheckBackup(False);
   if (err<>0) then Exit(err);
 
   if (not get_param) and (not get_icon) then
@@ -2542,6 +2556,8 @@ begin
   data.titleId    :=restore^.titleId^;
  if (restore^.dirName<>nil) then
   data.dirName    :=restore^.dirName^;
+ if (restore^.fingerprint<>nil) then
+  data.fingerprint:=restore^.fingerprint^;
 
  Result:=kipc.InvokeSync2('RestoreBackup',@data,sizeof(data));
 end;
@@ -2586,7 +2602,6 @@ begin
 
  job:=TRestoreJob.Create(Client,Client.HoldResult);
  job.Init(data.userId,titleId,dirName);
-
  job.fingerprint:=data.fingerprint;
 
  Client.SetProgressJob(job);
@@ -3209,7 +3224,7 @@ begin
 
    if RestoreJob.Prepare then
    begin
-    err:=RestoreJob.CheckBackup;
+    err:=RestoreJob.CheckBackup(True);
    end else
    begin
     err:=SCE_SAVE_DATA_ERROR_INTERNAL;
@@ -3511,7 +3526,7 @@ begin
 
   if (Client.pWriteSlot^.FRefs<2) then
   begin
-   SendSyncJob(Client,Client.pWriteSlot^.data.userId,Client.pWriteSlot^.data.slotId,0);
+   SendSyncJob(Client,Client.pWriteSlot^.data.userId,Client.pWriteSlot^.data.slotId,True,False);
   end;
  end;
 end;
@@ -3779,14 +3794,13 @@ begin
  nslot^.Release;
 end;
 
-function TSaveDataBackendProcess.SendSyncJob(Client:TSaveDataClient;userId,slotId,option:DWORD):Integer;
+function TSaveDataBackendProcess.SendSyncJob(Client:TSaveDataClient;userId,slotId:DWORD;is_async,is_event:Boolean):Integer;
 var
  node    :PSetupMemoryNode;
  titleId :pchar;
  dirName :pchar;
  job     :TSyncMemoryJob;
  fs_src  :RawByteString;
- is_async:Boolean;
 begin
  Result:=0;
 
@@ -3797,7 +3811,6 @@ begin
  dirName:=sdmemory_slot_name[slotId];
 
  fs_src  :=Client.GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
- is_async:=(option and 1)=0;
 
  if is_async then
  begin
@@ -3834,7 +3847,7 @@ begin
  job.titleId.data:=titleId;
  job.dirName.data:=dirName;
  job.is_async    :=is_async;
- job.is_event    :=(Client<>nil) and is_async;
+ job.is_event    :=is_event and is_async;
 
  SendCmd(job);
 end;
@@ -3846,7 +3859,7 @@ begin
  input:=Default(TSyncMemory);
  Value.MoveTo(@input,sizeof(input));
 
- Result:=SendSyncJob(Client,input.userId,input.slotId,input.option);
+ Result:=SendSyncJob(Client,input.userId,input.slotId,((input.option and 1)=0),True);
 end;
 
 type
