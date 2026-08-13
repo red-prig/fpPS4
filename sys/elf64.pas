@@ -607,12 +607,13 @@ type
  PSceKernelMemParam=^TSceKernelMemParam;
  TSceKernelMemParam=packed record
   Size:QWORD;
-  sceKernelExtendedPageTable   :PQWORD; //in bytes (virtual), MAX 64GB
-  sceKernelFlexibleMemorySize  :PQWORD; //in bytes, MAX 448MB
-  sceKernelExtendedMemory1     :PByte ; //bool (SCE_KERNEL_EXTENDED_DMEM_NEO_256)
-  sceKernelExtendedGpuPageTable:PQWORD; //in bytes (virtual), MAX 64GB
-  sceKernelExtendedMemory2     :PByte ; //bool (SCE_KERNEL_EXTENDED_DMEM_BASE_128)
-  sceKernelExtendedCpuPageTable:PQWORD; //in bytes (virtual), MAX 64GB
+  sceKernelExtendedPageTable   :PQWORD;  //in bytes (virtual), MAX 64GB
+  sceKernelFlexibleMemorySize  :PQWORD;  //in bytes, MAX 448MB
+  sceKernelExtendedMemory1     :PByte ;  //bool (SCE_KERNEL_EXTENDED_DMEM_NEO_256)
+  sceKernelExtendedGpuPageTable:PQWORD;  //in bytes (virtual), MAX 64GB
+  sceKernelExtendedMemory2     :PByte ;  //bool (SCE_KERNEL_EXTENDED_DMEM_BASE_128)
+  sceKernelExtendedCpuPageTable:PQWORD;  //in bytes (virtual), MAX 64GB
+  sceKernelProcOpt0            :Pointer; //SCE_KERNEL_PROC_OPT0
  end;
 
  PSceKernelFsParam=^TSceKernelFsParam;
