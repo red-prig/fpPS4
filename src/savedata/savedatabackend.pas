@@ -1358,7 +1358,7 @@ begin
 
  if (data.blocks*SCE_SAVE_DATA_BLOCK_SIZE)>free_size then
  begin
-  requiredBlocks:=data.blocks - ( (free_size+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE ) + 1;
+  requiredBlocks:=data.blocks - (free_size div SCE_SAVE_DATA_BLOCK_SIZE) + 1;
   Exit(SCE_SAVE_DATA_ERROR_NO_SPACE_FS);
  end;
 
