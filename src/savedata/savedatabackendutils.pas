@@ -202,6 +202,8 @@ procedure get_file_size(const fs_src:RawByteString;var size:QWORD);
 function  GetFreeBlocks(const fs_src:RawByteString;max_blocks:Int64):Int64;
 function  GetBlocks(memorySize:DWORD):Int64;
 
+function  GetFreeSpace(const path:RawByteString;var free_size:QWORD):Integer;
+
 implementation
 
 ///
@@ -892,6 +894,33 @@ begin
    Result:=320;
   end;
  end;
+end;
+
+function GetFreeSpace(const path:RawByteString;var free_size:QWORD):Integer;
+var
+ r:Integer;
+ info:t_statfs;
+begin
+ Result:=0;
+ free_size:=0;
+
+ r:=md_statfs(path,@info);
+ if (r<>0) then Exit();
+
+ if (r=0) then
+ begin
+
+  if (info.f_bfree<info.f_bavail) then
+  begin
+   info.f_bavail:=info.f_bfree;
+  end;
+
+  free_size:=info.f_bsize*info.f_bavail;
+ end else
+ begin
+  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+ end;
+
 end;
 
 end.

@@ -11,7 +11,8 @@ uses
  windows,
  time,
  vfcntl,
- vstat;
+ vstat,
+ vmount;
 
 const
  O_RDONLY   =vfcntl.O_RDONLY   ;
@@ -38,6 +39,9 @@ type
  p_stat=vstat.p_stat;
  t_stat=vstat.t_stat;
 
+ p_statfs=vmount.p_statfs;
+ t_statfs=vmount.t_statfs;
+
 function  md_openat(at_fd:THandle;const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_open  (const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_close (fd:THandle):DWORD;
@@ -53,6 +57,9 @@ function  md_stat (const path:RawByteString;sb:p_stat):Integer;
 
 function  md_futimens(fd:THandle;ts:p_timespec;numtimes:Integer):Integer;
 function  md_utimens (const path:RawByteString;ts:p_timespec;numtimes:Integer):Integer;
+
+function  md_fstatfs(fd:THandle;sbp:p_statfs):Integer;
+function  md_statfs (const path:RawByteString;sbp:p_statfs):Integer;
 
 implementation
 
@@ -617,7 +624,54 @@ begin
  NtClose(fd);
 end;
 
+function md_fstatfs(fd:THandle;sbp:p_statfs):Integer;
+var
+ FFF:FILE_FS_FULL_SIZE_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ Sector:Int64;
+ R:DWORD;
+begin
+ if (fd=0) or (fd=INVALID_HANDLE_VALUE) or (sbp=nil) then Exit(EINVAL);
 
+ FFF:=Default(FILE_FS_FULL_SIZE_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryVolumeInformationFile(
+           fd,
+           @BLK,
+           @FFF,
+           SizeOf(FFF),
+           FileFsFullSizeInformation
+          );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ sbp^:=Default(t_statfs);
+
+ Sector:=(FFF.SectorsPerAllocationUnit*FFF.BytesPerSector);
+
+ sbp^.f_bsize :=Sector;
+ sbp^.f_iosize:=Sector;
+
+ sbp^.f_bavail:=QWORD(FFF.CallerAvailableAllocationUnits);
+ sbp^.f_blocks:=QWORD(FFF.TotalAllocationUnits          );
+ sbp^.f_bfree :=QWORD(FFF.ActualAvailableAllocationUnits);
+end;
+
+function md_statfs(const path:RawByteString;sbp:p_statfs):Integer;
+var
+ fd:THandle;
+begin
+ if (sbp=nil) then Exit(EINVAL);
+
+ Result:=md_open(path,O_RDONLY,0,fd);
+ if (Result<>0) then Exit;
+
+ Result:=md_fstatfs(fd,sbp);
+
+ NtClose(fd);
+end;
 
 end.
 

@@ -1050,6 +1050,7 @@ type
   //
   mtime:QWORD;
   Progress:Single;
+  requiredBlocks:QWORD;
   //
   procedure Init(const _data:TMount);
   function  Lock():Boolean;
@@ -1338,6 +1339,7 @@ end;
 
 function TMountJob.CreateMount():Integer;
 var
+ free_size  :QWORD;
  iconData   :Pointer;
  iconBufSize:Ptrint;
 begin
@@ -1349,6 +1351,15 @@ begin
  if not ForceDirectories(fs_src) then
  begin
   Exit(SCE_SAVE_DATA_ERROR_INTERNAL);
+ end;
+
+ Result:=GetFreeSpace(Client.GameMountConfig.LocalDir,free_size);
+ if (Result<>0) then Exit;
+
+ if (data.blocks*SCE_SAVE_DATA_BLOCK_SIZE)>free_size then
+ begin
+  requiredBlocks:=data.blocks - ( (free_size+(SCE_SAVE_DATA_BLOCK_SIZE-1)) div SCE_SAVE_DATA_BLOCK_SIZE ) + 1;
+  Exit(SCE_SAVE_DATA_ERROR_NO_SPACE_FS);
  end;
 
  Progress:=3/9;
@@ -1401,8 +1412,11 @@ begin
 
  Progress:=4/9;
 
- Result:=OpenKeystone();
- if (Result<>0) then Exit;
+ if (param_sfo.PARAMS.fake_owner=0) then
+ begin
+  Result:=OpenKeystone();
+  if (Result<>0) then Exit;
+ end;
 
  Progress:=6/9;
 
@@ -1501,13 +1515,20 @@ begin
     begin
      //create
      output.result:=CreateMount();
-     //
-     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
-     //
     end else
     begin
      //error
      output.result:=SCE_SAVE_DATA_ERROR_NOT_FOUND;
+    end;
+
+    if (output.result=0) and ((data.mountMode and SDMM_CREATE2)<>0) then
+    begin
+     output.mountStatus:=SCE_SAVE_DATA_MOUNT_STATUS_CREATED;
+    end;
+
+    if (output.result=SCE_SAVE_DATA_ERROR_NO_SPACE_FS) then
+    begin
+     output.requiredBlocks:=requiredBlocks;
     end;
 
    end;
@@ -1535,8 +1556,7 @@ begin
     Client.MountManager.SetMount(slot_id,minfo);
 
     //out
-    output.slot_id       :=slot_id;
-    output.requiredBlocks:=0; //TODO
+    output.slot_id:=slot_id;
    end;
 
   end;
@@ -2112,6 +2132,7 @@ begin
  Progress:=6/12;
 
  if check_keystone then
+ if (param_sfo.PARAMS.fake_owner=0) then
  begin
   Result:=OpenKeystone(fs_dst);
   if (Result<>0) then Result:=SCE_SAVE_DATA_ERROR_BROKEN;
@@ -2124,10 +2145,21 @@ begin
 end;
 
 function TBackupJob.Backup:Integer;
+var
+ free_size:QWORD;
 begin
  Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
-
  if not Prepare then Exit;
+
+ Result:=GetFreeSpace(Client.GameMountConfig.LocalDir,free_size);
+ if (Result<>0) then Exit;
+
+ if (param_sfo.SAVEDATA_BLOCKS*SCE_SAVE_DATA_BLOCK_SIZE)>free_size then
+ begin
+  Exit(SCE_SAVE_DATA_ERROR_NO_SPACE_FS);
+ end;
+
+ Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
 
  //copy src->new
  if game_mount.CopyDirectory(fs_src,fs_new) then
@@ -2186,7 +2218,10 @@ begin
  Result:=OpenParamSfo(fs_src);
  if (Result<>0) then Exit;
 
- Result:=OpenKeystone(fs_src);
+ if (param_sfo.PARAMS.fake_owner=0) then
+ begin
+  Result:=OpenKeystone(fs_src);
+ end;
 end;
 
 function TBackupJob.Run:TIpcValue;
@@ -2195,7 +2230,6 @@ var
 begin
  Result:=0;
 
- //SCE_SAVE_DATA_ERROR_NO_SPACE_FS
  err:=Backup;
 
  if (event_type<>0) then
@@ -2287,6 +2321,7 @@ end;
 
 function TRestoreJob.Run:TIpcValue;
 var
+ free_size:QWORD;
  err:Integer;
 begin
 
@@ -2300,6 +2335,14 @@ begin
 
  if (err=0) then
  begin
+
+  err:=GetFreeSpace(Client.GameMountConfig.LocalDir,free_size);
+  if (err<>0) then Exit;
+
+  if (param_sfo.SAVEDATA_BLOCKS*SCE_SAVE_DATA_BLOCK_SIZE)>free_size then
+  begin
+   Exit(SCE_SAVE_DATA_ERROR_NO_SPACE_FS);
+  end;
 
   if Restore then
   begin
