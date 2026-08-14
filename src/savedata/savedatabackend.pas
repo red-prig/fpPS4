@@ -3705,15 +3705,15 @@ begin
   if Client.MountManager.IsActiveMount(nslot^.data.userId,@titleId.data,@dirName.data) then
   begin
    defer:=True;
-   Exit(0); //????
-  end;
-
-  if not Lock() then
-  begin
-   defer:=True;
    Exit(0);
   end;
 
+ end;
+
+ if not Lock() then
+ begin
+  defer:=True;
+  Exit(0);
  end;
 
  mtx_lock(nslot^.mtx);
@@ -3853,7 +3853,7 @@ begin
  titleId:=@Client.GameMountConfig.InstallDir;
  dirName:=sdmemory_slot_name[slotId];
 
- fs_src  :=Client.GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
+ fs_src :=Client.GameMountConfig.GetSaveDataFolder(userId,titleId,dirName);
 
  if is_async then
  begin
@@ -3864,12 +3864,6 @@ begin
   if Client.MountManager.IsActiveMount(userId,titleId,dirName) then
   begin
    Exit(SCE_SAVE_DATA_ERROR_BUSY);
-  end;
-
-  if not LockDirManager.LockDir(fs_src) then
-  begin
-   Exit(0);
-   //Exit(SCE_SAVE_DATA_ERROR_BUSY_FOR_SAVING);
   end;
 
   if (Client<>nil) then
