@@ -82,7 +82,7 @@ type
 
  THostIpcClientResult=class(THostIpcResult)
   Client:THostIpcConnect;
-  rid   :DWORD;
+  mtid  :DWORD;
   //
   procedure  InvokeResult(value:TIpcValue); override;
   Destructor Destroy; override;
@@ -103,8 +103,8 @@ type
     FDispatcher:THostIpcDispatcher;
     FWaits     :LIST_HEAD;
     FWLock     :mtx;
+    PMtid      :PDWORD;
     FRefs      :Integer;
-    FRTid      :Integer;
     FTerm      :Boolean;
     FBroke     :Boolean;
    procedure   SetDispatcher(_Dispatcher:THostIpcDispatcher);
@@ -226,19 +226,23 @@ end;
 
 procedure THostIpcDispatcher.DoMethod(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
 var
+ Pprev :PDWORD;
  output:TIpcValue;
  OnMsg :TOnMessage;
 begin
  output:=Default(TIpcValue);
 
+ //push
+ Pprev:=Client.PMtid;
+ Client.PMtid:=@mtid;
+
  if (Client<>nil) then
  if (not Client.FTerm) then
  begin
-  Client.FRTid:=mtid;
 
   if (mtype=iRESULT) then
   begin
-   Client.TriggerNodeSync(Client.FRTid,input);
+   Client.TriggerNodeSync(mtid,input);
    input:=Default(TIpcValue); //transfer owned
   end else
   begin
@@ -252,17 +256,22 @@ begin
     output:=-1;
    end;
    //is sync
-   if (Client.FRTid<>0) then
+   if (mtid<>0) then
    begin
-    Client.InvokeResult(Client.FRTid,output);
+    Client.InvokeResult(mtid,output);
     output:=Default(TIpcValue); //transfer owned
    end;
+
   end;
  end;
 
  //
  input.Free;
  output.Free;
+ //
+
+ //pop
+ Client.PMtid:=Pprev;
 end;
 
 procedure THostIpcDispatcher.DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
@@ -453,7 +462,7 @@ procedure THostIpcClientResult.InvokeResult(value:TIpcValue);
 begin
  if (Client<>nil) then
  begin
-  Client.InvokeResult(rid,value);
+  Client.InvokeResult(mtid,value);
  end;
 end;
 
@@ -471,15 +480,16 @@ function THostIpcConnect.HoldResult:THostIpcResult;
 var
  r:THostIpcClientResult;
 begin
- if (FRTid=0) then Exit(nil);
+ if (PMtid=nil) then Exit(nil);
+ if (PMtid^=0)  then Exit(nil);
  //
  Acquire;
  r:=THostIpcClientResult.Create;
  r.Client:=Self;
- r.rid   :=FRTid;
+ r.mtid  :=PMtid^;
  //
  Result:=r;
- FRTid:=0;
+ PMtid^:=0;
 end;
 
 //
