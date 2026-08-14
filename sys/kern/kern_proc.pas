@@ -49,7 +49,7 @@ type
 
    p_comm           :array[0..MAXCOMLEN] of AnsiChar;
    p_prog_name      :array[0..1023] of AnsiChar;
-   p_randomized_path:array[0..7] of AnsiChar;
+   p_randomized_path:array[0..255] of AnsiChar;
 
    p_sigqueue       :sigqueue_t; //Sigs not delivered to a td.
    p_pendingcnt     :Integer;    //how many signals are pending
