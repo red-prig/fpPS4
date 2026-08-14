@@ -497,7 +497,7 @@ begin
  OpIMul(dst,src[0],src[1]);
 end;
 
-procedure TEmit_VOP2.emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f  -> fma
+procedure TEmit_VOP2.emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
@@ -508,10 +508,10 @@ begin
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
  src[2]:=MakeRead(dst,dtFloat32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 end;
 
-procedure TEmit_VOP2.emit_V_MAC_LEGACY_F32;
+procedure TEmit_VOP2.emit_V_MAC_LEGACY_F32; //vdst = ((vsrc0.f == 0 || vsrc1.f == 0) ? 0 : vsrc0.f * vsrc1.f) + vdst.f
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
@@ -529,7 +529,7 @@ begin
  cmp:=get_legacy_cmp(src[0],src[1],zero);
 
  //
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
  //
 
  mul:=MakeRead(dst,dtFloat32);
@@ -549,7 +549,7 @@ begin
  src[1]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
  src[2]:=NewImm_q(dtFloat32,FSPI.INLINE32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 end;
 
 procedure TEmit_VOP2.emit_V_MADMK_F32; //vdst = vsrc0.f * kmul.f + vadd.f
@@ -563,7 +563,7 @@ begin
  src[1]:=NewImm_q(dtFloat32,FSPI.INLINE32);
  src[2]:=fetch_vsrc8(FSPI.VOP2.VSRC1,dtFloat32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 end;
 
 procedure TEmit_VOP2.emit_V_BCNT_U32_B32; //vdst = bit_count(vsrc0) + vsrc1.u

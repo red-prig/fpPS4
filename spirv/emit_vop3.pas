@@ -687,7 +687,7 @@ begin
  OpExtract(line,dst_r,tmp_r,1);
 end;
 
-procedure TEmit_VOP3.emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f  -> fma
+procedure TEmit_VOP3.emit_V_MAC_F32; //vdst = vsrc0.f * vsrc1.f + vdst.f
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
@@ -700,7 +700,7 @@ begin
 
  emit_src_abs_neg(@src,3,dtFloat32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 
  emit_dst_omod__f(dst,dtFloat32);
  emit_dst_clamp_f(dst,dtFloat32);
@@ -893,13 +893,13 @@ begin
 
  emit_src_abs_neg(@src,3,dtFloat32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 
  emit_dst_omod__f(dst,dtFloat32);
  emit_dst_clamp_f(dst,dtFloat32);
 end;
 
-procedure TEmit_VOP3.emit_V_MAD_LEGACY_F32;
+procedure TEmit_VOP3.emit_V_MAD_LEGACY_F32; //vdst = ((vsrc0.f == 0 || vsrc1.f == 0) ? 0 : vsrc0.f * vsrc1.f) + vdst.f
 Var
  dst:PsrRegSlot;
  src:array[0..2] of TsrRegNode;
@@ -919,7 +919,7 @@ begin
  //
  emit_src_abs_neg(@src,3,dtFloat32);
 
- OpFmaF32(dst,src[0],src[1],src[2]);
+ OpMadF32(dst,src[0],src[1],src[2]);
 
  mul:=MakeRead(dst,dtFloat32);
 

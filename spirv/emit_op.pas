@@ -78,6 +78,7 @@ type
   function  OpEmitVertex(pLine:TspirvOp):TspirvOp;
   function  OpEndPrimitive(pLine:TspirvOp):TspirvOp;
   //
+  procedure OpMadF32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpFmaF32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpFmaI32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
   procedure OpFmaU32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
@@ -752,6 +753,12 @@ begin
 end;
 
 //
+
+procedure TEmitOp.OpMadF32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
+begin
+ //vdst = vsrc0.f * vsrc1.f + vdst.f
+ Op2(Op.OpFAdd,dtFloat32,dst,OpFMulTo(src0,src1),src2);
+end;
 
 procedure TEmitOp.OpFmaF32(dst:PsrRegSlot;src0,src1,src2:TsrRegNode);
 begin
