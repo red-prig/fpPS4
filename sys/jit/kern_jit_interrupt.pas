@@ -52,6 +52,7 @@ type
   __end:QWORD;
   adest:QWORD;
   atype:t_next_addr_type;
+  debug:Boolean;
   //
   dis:TX86Disassembler;
   din:TInstruction;
@@ -503,6 +504,16 @@ begin
   link_curr:=ctx.builder.get_curr_label.after;
 
   case ctx.din.OpCode.Opcode of
+   OPcli:ctx.debug:=True;  //start debug info
+   OPsti:ctx.debug:=False; //end   debug info
+  end;
+
+  if ctx.debug then
+  begin
+   add_orig(ctx);
+  end else
+  case ctx.din.OpCode.Opcode of
+
    OPcall :op_call(ctx);
    OPj__  ,
    OPloop ,
