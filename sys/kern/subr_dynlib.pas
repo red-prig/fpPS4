@@ -16,16 +16,23 @@ uses
  kern_sx;
 
 type
+ TSYMBOL=packed object
+  handle:Pointer; //p_sym_hash_entry
+  procedure Argc(count:Integer);
+  function  get_native_value():Pointer;
+  function  get_sym_st_value():Pointer;
+ end;
+
  TLIBRARY=packed object
   libptr:Pointer; //p_Lib_Entry
   mod_id:Word;
-  function set_symb (nid:QWORD;info:Byte;value:Pointer;size:QWORD):Boolean;
-  function set_proc (nid:QWORD;value:Pointer):Boolean;            //publish procedure export:[JIT->HLE] or import:[JIT->value^]
-  function set_data (nid:QWORD;value:Pointer;size:QWORD):Boolean; //publish data      export:[JIT->HLE]
-  function set_weak (nid:QWORD;value:Pointer):Boolean;
-  function add_data (value:PPointer;size:QWORD):Boolean;          //alloc local data [guest->value^]
-  function add_func (value:PPointer;code:Pointer):Boolean;        //alloc JIT addr   [guest->value^]
-  function get_value(nid:QWORD):Pointer;
+  function set_symb (nid:QWORD;info:Byte;value:Pointer;size:QWORD):TSYMBOL;
+  function set_proc (nid:QWORD;value:Pointer):TSYMBOL;            //publish procedure export:[JIT->HLE] or import:[JIT->value^]
+  function set_data (nid:QWORD;value:Pointer;size:QWORD):TSYMBOL; //publish data      export:[JIT->HLE]
+  function set_weak (nid:QWORD;value:Pointer):TSYMBOL;
+  function add_data (value:PPointer;size:QWORD):TSYMBOL;          //alloc local data [guest->value^]
+  function add_func (value:PPointer;code:Pointer):TSYMBOL;        //alloc JIT addr   [guest->value^]
+  function get_value(nid:QWORD):TSYMBOL;
  end;
 
  TMODULE=packed object
@@ -197,11 +204,12 @@ type
  end;
 
  p_sym_hash_entry=^t_sym_hash_entry;
- t_sym_hash_entry=record
+ t_sym_hash_entry=packed record
   link  :TAILQ_ENTRY;
   nid   :QWORD;
   mod_id:WORD;
   lib_id:WORD;
+  argc  :Integer;
   native:Pointer; //HLE
   sym   :elf64_sym;
  end;
@@ -579,7 +587,7 @@ begin
  Result.mod_id:=mod_id;
 end;
 
-function TLIBRARY.set_symb(nid:QWORD;info:Byte;value:Pointer;size:QWORD):Boolean;
+function TLIBRARY.set_symb(nid:QWORD;info:Byte;value:Pointer;size:QWORD):TSYMBOL;
 var
  lib_entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
@@ -592,6 +600,7 @@ begin
  h_entry^.nid   :=nid;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
  h_entry^.lib_id:=lib_entry^.dval.id;
+ h_entry^.argc  :=-1;
  //
  h_entry^.sym.st_info :=info;
  h_entry^.sym.st_value:=0; //jit build
@@ -607,42 +616,41 @@ begin
  end;
  //
  data:=HAMT_insert64(Lib_Entry^.hamt,nid,h_entry);
- if (data=nil) then Exit(False); //NOMEM
+ if (data=nil) then Exit(Default(TSYMBOL)); //NOMEM
  //
  if (data^<>h_entry) then
  begin
    //is another exists
   uma_zfree(sym_hash_entry_zone, h_entry);
-  Result:=False;
+  Result.handle:=nil;
  end else
  begin
   //new
   TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
   Inc(Lib_Entry^.count);
-  Result:=True;
+  Result.handle:=h_entry;
  end;
 end;
 
-function TLIBRARY.set_proc(nid:QWORD;value:Pointer):Boolean;
+function TLIBRARY.set_proc(nid:QWORD;value:Pointer):TSYMBOL;
 begin
  Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_FUN,value,0);
 end;
 
-function TLIBRARY.set_data(nid:QWORD;value:Pointer;size:QWORD):Boolean;
+function TLIBRARY.set_data(nid:QWORD;value:Pointer;size:QWORD):TSYMBOL;
 begin
  Result:=set_symb(nid,(STB_GLOBAL shl 4) or STT_OBJECT,value,size);
 end;
 
-function TLIBRARY.set_weak(nid:QWORD;value:Pointer):Boolean;
+function TLIBRARY.set_weak(nid:QWORD;value:Pointer):TSYMBOL;
 begin
  Result:=set_symb(nid,(STB_WEAK shl 4) or STT_FUN,value,0);
 end;
 
-function TLIBRARY.add_data(value:PPointer;size:QWORD):Boolean;
+function TLIBRARY.add_data(value:PPointer;size:QWORD):TSYMBOL;
 var
  lib_entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
- data:PPointer;
 begin
  lib_entry:=libptr;
  //
@@ -651,6 +659,7 @@ begin
  h_entry^.nid   :=0;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
  h_entry^.lib_id:=lib_entry^.dval.id;
+ h_entry^.argc  :=-1;
  //
  h_entry^.sym.st_info :=(STB_LOCAL shl 4) or STT_OBJECT;
  h_entry^.sym.st_value:=0; //preload build
@@ -660,14 +669,13 @@ begin
 
  TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
  Inc(Lib_Entry^.count);
- Result:=True;
+ Result.handle:=h_entry;
 end;
 
-function TLIBRARY.add_func(value:PPointer;code:Pointer):Boolean;
+function TLIBRARY.add_func(value:PPointer;code:Pointer):TSYMBOL;
 var
  lib_entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
- data:PPointer;
 begin
  lib_entry:=libptr;
  //
@@ -676,6 +684,7 @@ begin
  h_entry^.nid   :=0;
  h_entry^.mod_id:=mod_id; //export -> mod_id=0
  h_entry^.lib_id:=lib_entry^.dval.id;
+ h_entry^.argc  :=-1;
  //
  h_entry^.sym.st_info :=(STB_LOCAL shl 4) or STT_FUN;
  h_entry^.sym.st_value:=PtrUint(code);
@@ -685,10 +694,10 @@ begin
 
  TAILQ_INSERT_TAIL(@Lib_Entry^.syms,h_entry,@h_entry^.link);
  Inc(Lib_Entry^.count);
- Result:=True;
+ Result.handle:=h_entry;
 end;
 
-function TLIBRARY.get_value(nid:QWORD):Pointer;
+function TLIBRARY.get_value(nid:QWORD):TSYMBOL;
 var
  lib_entry:p_Lib_Entry;
  h_entry:p_sym_hash_entry;
@@ -696,12 +705,32 @@ var
 begin
  lib_entry:=libptr;
  //
- if (Lib_Entry^.hamt=nil) then Exit(nil);
+ if (Lib_Entry^.hamt=nil) then Exit(Default(TSYMBOL));
  data:=HAMT_search64(Lib_Entry^.hamt,nid);
- if (data=nil) then Exit(nil);
+ if (data=nil) then Exit(Default(TSYMBOL));
  h_entry:=data^;
- if (h_entry=nil) then Exit(nil);
- Result:=h_entry^.native;
+ if (h_entry=nil) then Exit(Default(TSYMBOL));
+ Result.handle:=h_entry;
+end;
+
+//
+
+function TSYMBOL.get_native_value():Pointer;
+begin
+ if (handle=nil) then Exit(nil);
+ Result:=p_sym_hash_entry(handle)^.native;
+end;
+
+function TSYMBOL.get_sym_st_value():Pointer;
+begin
+ if (handle=nil) then Exit(nil);
+ Result:=Pointer(p_sym_hash_entry(handle)^.sym.st_value);
+end;
+
+procedure TSYMBOL.Argc(count:Integer);
+begin
+ if (handle=nil) then Exit();
+ p_sym_hash_entry(handle)^.argc:=count;
 end;
 
 //
@@ -2797,6 +2826,7 @@ begin
     h_entry^.nid   :=nid;
     h_entry^.mod_id:=mod_id;
     h_entry^.lib_id:=lib_id;
+    h_entry^.argc  :=-1;
     h_entry^.sym   :=symp^;
     //
     if (Lib_Entry^.hamt=nil) then
@@ -3337,13 +3367,13 @@ begin
  //load export dt_init
  if (obj^.init_proc_addr.native<>nil) then
  begin
-  ctx.add_export_point(0,obj^.init_proc_addr.native,@obj^.init_proc_addr.addr);
+  ctx.add_export_point(0,obj^.init_proc_addr.native,@obj^.init_proc_addr.addr,3);
  end;
 
  //load export dt_fini
  if (obj^.fini_proc_addr.native<>nil) then
  begin
-  ctx.add_export_point(1,obj^.fini_proc_addr.native,@obj^.fini_proc_addr.addr);
+  ctx.add_export_point(1,obj^.fini_proc_addr.native,@obj^.fini_proc_addr.addr,3);
  end;
 
  //load exports
@@ -3364,7 +3394,7 @@ begin
       STT_FUN,
       STT_SCE:
          begin
-          ctx.add_export_point(h_entry^.nid,Pointer(h_entry^.sym.st_value),h_entry^.native);
+          ctx.add_export_point(h_entry^.nid,Pointer(h_entry^.sym.st_value),h_entry^.native,h_entry^.argc);
          end;
       else;
      end; //case
@@ -3378,7 +3408,7 @@ begin
       STT_FUN,
       STT_SCE:
          begin
-          ctx.add_export_point(h_entry^.nid,h_entry^.native,@h_entry^.sym.st_value);
+          ctx.add_export_point(h_entry^.nid,h_entry^.native,@h_entry^.sym.st_value,h_entry^.argc);
          end;
       else;
      end; //case
@@ -3408,7 +3438,7 @@ begin
      STT_FUN,
      STT_SCE:
         begin
-         ctx.add_import_point(hle_import_table[i].import_place_addr,@hle_import_table[i].jit_guest_addr);
+         ctx.add_import_point(hle_import_table[i].import_place_addr,@hle_import_table[i].jit_guest_addr,h_entry^.argc);
         end;
      else;
     end; //case

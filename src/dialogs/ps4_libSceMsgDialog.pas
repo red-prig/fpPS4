@@ -9,6 +9,7 @@ uses
  kern_mtx,
  subr_dynlib,
  kern_proc,
+ ps4_libSceUserService,
  ps4_libSceCommonDialog;
 
 const
@@ -330,7 +331,7 @@ begin
   SCE_MSG_DIALOG_SYSMSG_TYPE_WARNING_PROFILE_PICTURE_AND_NAME_NOT_SHARED,
   SCE_MSG_DIALOG_SYSMSG_TYPE_PSN_COMMUNICATION_RESTRICTION:
    begin
-    //sceUserServiceIsLoggedIn(param->userId)
+    Result:=(ps4_sceUserServiceIsLoggedIn(userId)=1);
    end;
 
   else;

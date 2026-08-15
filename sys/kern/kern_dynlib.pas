@@ -441,6 +441,7 @@ begin
     dst^.tls_index:=tls_index;
    end;
 
+   {
    Writeln(' get_info_ex  :',obj^.lib_path);
    Writeln(' obj.id       :',obj^.id);
    Writeln(' tls_flags    :0x',HexStr(tls_index shr 16,4));
@@ -450,6 +451,7 @@ begin
    Writeln(' tls_size     :0x',HexStr(obj^.tls_size     ,8));
    Writeln(' tls_offset   :0x',HexStr(obj^.tls_offset   ,8));
    Writeln(' tls_align    :0x',HexStr(obj^.tls_align    ,8));
+   }
 
    if ((flags and 2)<>0) then
    begin

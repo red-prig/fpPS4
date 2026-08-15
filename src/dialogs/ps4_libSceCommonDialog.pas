@@ -62,8 +62,10 @@ type
    status:Byte;
    finish:Byte;
    closed:Byte;
+   ready :Byte;
    rzdata:array of Byte;
-   function   OnCdlgFinish(Value:TIpcValue):TIpcValue;
+   function   OnCdlgFinish (Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function   OnCdlgIsReady(Client:THostIpc;Value:TIpcValue):TIpcValue;
   public
    function   isInitializedStatus:Boolean;
    function   isFinish:Boolean;
@@ -74,6 +76,7 @@ type
    function   SetMsg  (buf:Pointer;len:DWORD):Integer;
    function   getFinishData(buf:Pointer;len:DWORD):Integer;
    function   updateState:Integer;                  virtual;
+   function   IsReadyToDisplay:Integer;
    function   Close(buf:Pointer;len:DWORD):Integer; virtual;
    procedure  Terminate;                            virtual;
    Destructor Destroy;                              override;
@@ -226,6 +229,7 @@ begin
  SetLength(rzdata,0);
  finish:=0;
  closed:=0;
+ ready :=0;
  status:=SCE_COMMON_DIALOG_STATUS_RUNNING;
  //
  Send(msg,buf,len);
@@ -284,6 +288,11 @@ begin
  Result:=0;
 end;
 
+function TCommonDialogClient.IsReadyToDisplay:Integer;
+begin
+ Result:=ready;
+end;
+
 function TCommonDialogClient.Close(buf:Pointer;len:DWORD):Integer;
 begin
  if (status<>SCE_COMMON_DIALOG_STATUS_RUNNING) or (finish<>0) then
@@ -315,7 +324,7 @@ begin
  inherited;
 end;
 
-function TCommonDialogClient.OnCdlgFinish(Value:TIpcValue):TIpcValue;
+function TCommonDialogClient.OnCdlgFinish(Client:THostIpc;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
 
@@ -330,6 +339,22 @@ begin
     Value.MoveTo(@rzdata[0],Value.GetLen);
     //
     finish:=1;
+   end;
+
+ mtx_unlock(g_common_dialog_mtx);
+end;
+
+function TCommonDialogClient.OnCdlgIsReady(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=0;
+
+ mtx_lock(g_common_dialog_mtx);
+
+  if (g_curr_client<>nil) then
+  with g_curr_client do
+   if (status=SCE_COMMON_DIALOG_STATUS_RUNNING) then
+   begin
+    ready:=1;
    end;
 
  mtx_unlock(g_common_dialog_mtx);
@@ -350,7 +375,8 @@ begin
    g_common_dialog_init:=1;
 
     //DialogInitialize
-    p_host_handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+    p_host_ipc.Handler.AddCallback('CDLG_FINISH',@TCommonDialogClient(nil).OnCdlgFinish);
+    p_host_ipc.Handler.AddCallback('CDLG_READY' ,@TCommonDialogClient(nil).OnCdlgIsReady);
 
   end else
   begin
@@ -373,7 +399,8 @@ function dt_fini(args:QWORD;argp,addr:Pointer):Integer;
 begin
  mtx_lock(g_common_dialog_mtx);
 
-  p_host_handler.DelCallback('CDLG_FINISH');
+  p_host_ipc.Handler.DelCallback('CDLG_FINISH');
+  p_host_ipc.Handler.DelCallback('CDLG_READY');
 
  mtx_unlock(g_common_dialog_mtx);
  Result:=0;

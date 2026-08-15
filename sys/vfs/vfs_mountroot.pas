@@ -12,7 +12,10 @@ uses
 const
  MNT_RDONLY =vmount.MNT_RDONLY;
  MNT_UPDATE =vmount.MNT_UPDATE;
- MNT_EMU_PFS=vmount.MNT_EMU_PFS;
+ MNT_FORCE  =vmount.MNT_FORCE;
+ MNT_PFS_64K=vmount.MNT_PFS_64K;
+ MNT_PFS_32K=vmount.MNT_PFS_32K;
+ MNT_PFS_ANY=vmount.MNT_PFS_ANY;
  MNT_BIG_APP=vmount.MNT_BIG_APP;
 
 procedure vfs_mountroot();

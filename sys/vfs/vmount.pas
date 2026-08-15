@@ -72,7 +72,9 @@ const
  MNT_BYFSID   =$0000000008000000; // specify filesystem by ID.
 
  //emu ext
- MNT_EMU_PFS  =$0000000200000000; // emulate PFS
+ MNT_PFS_64K  =$0000000200000000; // emulate PFS 64k blocks
+ MNT_PFS_32K  =$0000000400000000; // emulate PFS 32k blocks
+ MNT_PFS_ANY  =$0000000600000000; // emulate PFS all
 
  //emu ext
  MNT_BIG_APP  =$0000001000000000;

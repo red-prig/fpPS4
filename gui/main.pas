@@ -130,6 +130,8 @@ type
   private
     FDblClickRow:Integer;
   public
+    IpcHandler:THostIpcHandler;
+
     FGameList:TGameList;
     FContext :TGameRunContext;
 
@@ -149,14 +151,14 @@ type
 
     FDialogsManager:TDialogsManager;
 
-    function  OnKevent       (Value:TIpcValue):TIpcValue; //KEV_EVENT
-    function  OnMainWindows  (Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
-    function  OnCaptionFPS   (Value:TIpcValue):TIpcValue; //CAPTION_FPS
-    function  OnError        (Value:TIpcValue):TIpcValue; //ERROR
-    function  OnWarning      (Value:TIpcValue):TIpcValue; //WARNING
-    function  OnParamSfoInit (Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
-    function  OnPlaygoInit   (Value:TIpcValue):TIpcValue; //PLAYGO_INIT
-    function  OnLoadExec     (Value:TIpcValue):TIpcValue; //LOAD_EXEC
+    function  OnKevent       (Client:THostIpc;Value:TIpcValue):TIpcValue; //KEV_EVENT
+    function  OnMainWindows  (Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+    function  OnCaptionFPS   (Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
+    function  OnError        (Client:THostIpc;Value:TIpcValue):TIpcValue; //ERROR
+    function  OnWarning      (Client:THostIpc;Value:TIpcValue):TIpcValue; //WARNING
+    function  OnParamSfoInit (Client:THostIpc;Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
+    function  OnPlaygoInit   (Client:THostIpc;Value:TIpcValue):TIpcValue; //PLAYGO_INIT
+    function  OnLoadExec     (Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -179,7 +181,7 @@ uses
 
  game_find,
 
- windows,
+ md_file,
 
  md_arc4random,
 
@@ -217,9 +219,6 @@ begin
 
  Result:=Form.FList;
 end;
-
-const
- section_prefix='game-';
 
 const
  MsgDlgBtnToStr: array[TMsgDlgBtn] of PChar = (
@@ -382,21 +381,18 @@ begin
  }
 end;
 
-var
- IpcHandler:THostIpcHandler;
-
-function TfrmMain.OnMainWindows(Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+function TfrmMain.OnMainWindows(Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
 begin
  Result:=FDialogsManager.OpenMainWindows;
 end;
 
-function TfrmMain.OnCaptionFPS(Value:TIpcValue):TIpcValue; //CAPTION_FPS
+function TfrmMain.OnCaptionFPS(Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
 begin
  Result:=0;
  FDialogsManager.SetCaptionFPS(Value.GetQWORD);
 end;
 
-function TfrmMain.OnKevent(Value:TIpcValue):TIpcValue; //KEV_EVENT
+function TfrmMain.OnKevent(Client:THostIpc;Value:TIpcValue):TIpcValue; //KEV_EVENT
 var
  kev:p_kevent;
  count:Integer;
@@ -435,7 +431,7 @@ begin
 
 end;
 
-function TfrmMain.OnError(Value:TIpcValue):TIpcValue; //ERROR
+function TfrmMain.OnError(Client:THostIpc;Value:TIpcValue):TIpcValue; //ERROR
 begin
  Result:=0;
  if (MessageDlgEx(Value.GetString,'Error',[mbOK,mbAbort],Self)=mrAbort) then
@@ -444,7 +440,7 @@ begin
  end;
 end;
 
-function TfrmMain.OnWarning(Value:TIpcValue):TIpcValue; //WARNING
+function TfrmMain.OnWarning(Client:THostIpc;Value:TIpcValue):TIpcValue; //WARNING
 var
  i:Integer;
 begin
@@ -469,7 +465,7 @@ begin
                           'param.sfo');
 end;
 
-function TfrmMain.OnParamSfoInit(Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
+function TfrmMain.OnParamSfoInit(Client:THostIpc;Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
 var
  V:RawByteString;
 begin
@@ -499,7 +495,7 @@ begin
  Result:=TIpcValue.&Object(FContext.FParamSfo);
 end;
 
-function TfrmMain.OnPlaygoInit(Value:TIpcValue):TIpcValue; //PLAYGO_INIT
+function TfrmMain.OnPlaygoInit(Client:THostIpc;Value:TIpcValue):TIpcValue; //PLAYGO_INIT
 var
  playgo_file:TPlaygoFile;
  V:RawByteString;
@@ -534,7 +530,7 @@ begin
  FreeAndNil(playgo_file);
 end;
 
-function TfrmMain.OnLoadExec(Value:TIpcValue):TIpcValue; //LOAD_EXEC
+function TfrmMain.OnLoadExec(Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
 var
  data:TPS4LoadExec;
  cfg:TGameRunConfig;
@@ -591,8 +587,6 @@ begin
   begin
    ShowMessage('error run process code=0x'+HexStr(r,8));
   end;
-
-  FContext.BindHandler(IpcHandler);
 
   FreeAndNil(Item);
 
@@ -853,29 +847,9 @@ begin
 end;
 
 procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
-var
- FLogFileW:WideString;
 begin
- FLogFileW:=UTF8Decode(LogFile);
-
- FAddHandle:=CreateFileW(PWideChar(FLogFileW),
-                         GENERIC_READ or GENERIC_WRITE,
-                         FILE_SHARE_READ,
-                         nil,
-                         OPEN_ALWAYS,
-                         0,
-                         0);
-
- FGetHandle:=CreateFileW(PWideChar(FLogFileW),
-                         GENERIC_READ,
-                         FILE_SHARE_READ or FILE_SHARE_WRITE,
-                         nil,
-                         OPEN_EXISTING,
-                         0,
-                         0);
-
- //SetStdHandle(STD_OUTPUT_HANDLE,FAddHandle);
- //SetStdHandle(STD_ERROR_HANDLE ,FAddHandle);
+ md_open  (LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FAddHandle);
+ md_openat(FAddHandle,'',O_RDWR,0,FGetHandle);
 
  FileSeek(FAddHandle,0,fsFromEnd);
 end;
@@ -884,8 +858,12 @@ procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
+ FContext:=TGameRunContext.Create;
+
+ FDialogsManager:=TDialogsManager.Create;
+
  FDialogsManager.FImages :=SmallImageList;
- FDialogsManager.pContext:=@FContext;
+ FDialogsManager.FContext:=FContext;
 
   ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
 
@@ -911,6 +889,11 @@ begin
  IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    );
 
  FDialogsManager.BindHandler(IpcHandler);
+
+ FContext.FIpcDispatch:=THostIpcDispatchGui.Create(IpcHandler);
+ FContext.FIpcDispatch.Acquire;
+
+ IpcHandler.AddPublished(FContext);
 
  ReadConfigFile;
 
@@ -1068,15 +1051,14 @@ begin
   FLogUpdateTime:=GetTickCount64;
  end;
 
+
+
  if (FContext.FGameProcess<>nil) then
  begin
   FProcess:=FContext.FGameProcess;
   FProcess.Acquire;
 
-  if (FProcess.g_ipc<>nil) then
-  begin
-   FProcess.g_ipc.Update();
-  end;
+  FContext.FIpcDispatch.Update();
 
   if (FProcess.is_terminated) or
      (FProcess.is_stoped) then
@@ -1215,7 +1197,7 @@ end;
 procedure TfrmMain.ClearLog;
 begin
  //reset file
- FileTruncate(FAddHandle,0);
+ FileTruncate(FGetHandle,0);
  FList.Reset(True);
  //
 end;
@@ -1313,8 +1295,6 @@ begin
 
  if (r=0) then
  begin
-  FContext.BindHandler(IpcHandler);
-
   ParamSfo:=nil; //do not free
 
   SetButtonsState(mdsStarted);
@@ -1387,6 +1367,7 @@ begin
   FreeAndNil(FContext.FParamSfo);
   //
   FContext.CloseItem();
+  FContext.CloseSavdata();
   //
   FDialogsManager.CloseMainWindow;
   //

@@ -20,6 +20,7 @@ uses
  vuio,
  vnode,
  vnamei,
+ vfs_vnops,
  vnode_if,
  vfilio,
  vfs_default,
@@ -335,38 +336,95 @@ begin
  end;
 end;
 
-function _UTF8Encode(P:PWideChar;len:SizeInt):RawByteString;
+function WinToUnix(P:PWideChar;len:SizeInt):RawByteString;
 var
- i:SizeInt;
- hs:RawByteString;
+ i:SizeUInt;
 begin
  Result:='';
  if (p=nil) or (len<=0) then exit;
- hs:='';
- SetLength(hs,len*3);
- i:=UnicodeToUtf8(PAnsiChar(hs),length(hs)+1,P,len);
+ //
+ for i:=0 to len-1 do
+ begin
+  case P[i] of
+   #$2039:P[i]:='<';
+   #$203A:P[i]:='>';
+   #$A789:P[i]:=':';
+   #$02EE:P[i]:='"';
+   #$2216:P[i]:='\';
+   #$01C0:P[i]:='|';
+   #$0294:P[i]:='?';
+   #$204E:P[i]:='*';
+   else;
+  end;
+ end;
+ //
+ SetLength(Result,len*3);
+ i:=UnicodeToUtf8(PAnsiChar(Result),length(Result)+1,P,len);
  if (i>0) then
  begin
-  SetLength(hs,i-1);
-  Result:=hs;
+  SetLength(Result,i-1);
+ end else
+ begin
+  Result:='';
  end;
 end;
 
-function _UTF8Decode(P:PAnsiChar;len:SizeInt):WideString;
+function WinToUnix(Dest:PChar;MaxDestBytes:SizeUInt;Source:PUnicodeChar;SourceChars:SizeUInt):SizeUInt;
 var
- i:SizeInt;
- hs:WideString;
+ i:SizeUInt;
+begin
+ //
+ if (SourceChars<>0) then
+ for i:=0 to SourceChars-1 do
+ begin
+  case Source[i] of
+   #$2039:Source[i]:='<';
+   #$203A:Source[i]:='>';
+   #$A789:Source[i]:=':';
+   #$02EE:Source[i]:='"';
+   #$2216:Source[i]:='\';
+   #$01C0:Source[i]:='|';
+   #$0294:Source[i]:='?';
+   #$204E:Source[i]:='*';
+   else;
+  end;
+ end;
+ //
+ Result:=UnicodeToUtf8(Dest,MaxDestBytes,Source,SourceChars);
+end;
+
+function UnixToWin(P:PAnsiChar;len:SizeInt):WideString;
+var
+ i:SizeUInt;
 begin
  Result:='';
  if (p=nil) or (len<=0) then exit;
- hs:='';
- SetLength(hs,len);
- i:=Utf8ToUnicode(PWideChar(hs),length(hs)+1,P,len);
+ SetLength(Result,len);
+ i:=Utf8ToUnicode(PWideChar(Result),length(Result)+1,P,len);
  if (i>0) then
  begin
-  SetLength(hs,i-1);
-  Result:=hs;
+  SetLength(Result,i-1);
+ end else
+ begin
+  Result:='';
  end;
+ //
+ if (Length(Result)<>0) then
+ for i:=1 to Length(Result) do
+ begin
+  case Result[i] of
+   '<':Result[i]:=#$2039;
+   '>':Result[i]:=#$203A;
+   ':':Result[i]:=#$A789;
+   '"':Result[i]:=#$02EE;
+   '\':Result[i]:=#$2216;
+   '|':Result[i]:=#$01C0;
+   '?':Result[i]:=#$0294;
+   '*':Result[i]:=#$204E;
+   else;
+  end;
+ end;
+ //
 end;
 
 function md_mount_is_valid(vp:p_vnode):Integer;
@@ -448,9 +506,13 @@ begin
  begin
   d_blksize:=16384;
  end else
- if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
   d_blksize:=65536;
+ end else
+ if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
+ begin
+  d_blksize:=32768;
  end else
  begin
   d_blksize:=32768;
@@ -512,7 +574,7 @@ var
 begin
  Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
- w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -547,7 +609,7 @@ begin
 
  Assert(de^.ufs_dir^.ufs_md_fp<>nil);
 
- w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(de^.ufs_dir^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -738,7 +800,7 @@ begin
   if (Result<>0) then Exit;
  end;
 
- U:=_UTF8Encode(P,len);
+ U:=WinToUnix(P,len);
 
  fix_unix_path(PAnsiChar(U),Length(U));
 
@@ -889,6 +951,7 @@ begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
  de:=AllocMem(i);
+
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;
  de^.ufs_dirent^.d_reclen:=GENERIC_DIRSIZ(@d);
@@ -1064,7 +1127,7 @@ begin
  Result:=0;
  nd:=nil;
 
- w:=_UTF8Decode(name,namelen);
+ w:=UnixToWin(name,namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -1405,7 +1468,7 @@ begin
  restart:=True;
 
  mp:=ap^.a_vp^.v_mount;
- emu_pfs:=((mp^.mnt_flag and MNT_EMU_PFS)<>0);
+ emu_pfs:=((mp^.mnt_flag and MNT_PFS_ANY)<>0);
 
  sx_xlock(@dd^.ufs_md_lock);
 
@@ -1435,10 +1498,10 @@ begin
 
   dt:=Default(t_dirent);
 
-  i:=UnicodeToUtf8(@dt.d_name,
-                   t_dirent.MAXNAMLEN+1,
-                   @NT_DIRENT.Name,
-                   NT_DIRENT.Info.FileNameLength div 2);
+  i:=WinToUnix(@dt.d_name,
+               t_dirent.MAXNAMLEN+1,
+               @NT_DIRENT.Name,
+               NT_DIRENT.Info.FileNameLength div 2);
   //i->zero include
 
   if (i<=0) then
@@ -1534,10 +1597,10 @@ begin
 
   dt:=Default(t_pfs_dirent);
 
-  i:=UnicodeToUtf8(@dt.d_name,
-                   t_dirent.MAXNAMLEN+1,
-                   @NT_DIRENT.Name,
-                   NT_DIRENT.Info.FileNameLength div 2);
+  i:=WinToUnix(@dt.d_name,
+               t_dirent.MAXNAMLEN+1,
+               @NT_DIRENT.Name,
+               NT_DIRENT.Info.FileNameLength div 2);
   //i->zero include
 
   if (i<=0) then
@@ -1682,7 +1745,7 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
- w:=_UTF8Decode(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
+ w:=UnixToWin(ap^.a_cnp^.cn_nameptr, ap^.a_cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -1708,7 +1771,7 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then goto _err;
 
- w:=_UTF8Decode(ap^.a_target,len);
+ w:=UnixToWin(ap^.a_target,len);
  len:=Length(w);
 
  NT_SYMLINK:=Default(T_NT_SYMLINK);
@@ -1951,7 +2014,7 @@ begin
   Exit(EEXIST);
  end;
 
- w:=_UTF8Decode(cnp^.cn_nameptr,cnp^.cn_namelen);
+ w:=UnixToWin(cnp^.cn_nameptr,cnp^.cn_namelen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -2112,8 +2175,12 @@ end;
 
 function md_rename(ap:p_vop_rename_args):Integer;
 label
+ _relock,
+ _releout,
  _exit;
 var
+ fdvp:p_vnode;
+ tdvp:p_vnode;
  fvp:p_vnode;
  tvp:p_vnode;
  dd_f,dd_t:p_ufs_dirent;
@@ -2127,27 +2194,58 @@ var
  i:Integer;
 
 begin
- Result:=md_mount_is_valid(ap^.a_tdvp);
+ fdvp:=ap^.a_fdvp;
+ tdvp:=ap^.a_tdvp;
+
+ Result:=md_mount_is_valid(tdvp);
  if (Result<>0) then Exit;
 
  fvp:=ap^.a_fvp;
  tvp:=ap^.a_tvp;
 
+ VOP_UNLOCK(tdvp, 0);
+ if ((tvp <> nil) and (tvp <> tdvp)) then
+ begin
+  VOP_UNLOCK(tvp, 0);
+ end;
+
  if (fvp^.v_type=VDIR) and
     (fvp^.v_mountedhere<>nil) then
  begin
-  Exit(EXDEV);
+  Result:=EXDEV;
+  goto _releout;
  end;
 
  if (tvp<>nil) then
  if (tvp^.v_type=VDIR) and
     (tvp^.v_mountedhere<>nil) then
  begin
-  Exit(EXDEV);
+  Result:=EXDEV;
+  goto _releout;
  end;
 
- dd_f :=ap^.a_fdvp^.v_data;
- dd_t :=ap^.a_tdvp^.v_data;
+ _relock:
+
+  Result:=vn_lock(fdvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+  if (Result<>0) then goto _releout;
+
+  if (vn_lock(tdvp, LK_EXCLUSIVE or LK_NOWAIT,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%}) <> 0) then
+  begin
+   VOP_UNLOCK(fdvp, 0);
+
+   Result:=vn_lock(tdvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+   if (Result<>0) then goto _releout;
+
+   VOP_UNLOCK(tdvp, 0);
+   //atomic_add_int(&rename_restarts, 1);
+   goto _relock;
+  end;
+
+ Result:=vn_lock(fvp, LK_EXCLUSIVE,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+ if (Result<>0) then goto _releout;
+
+ dd_f :=fdvp^.v_data;
+ dd_t :=tdvp^.v_data;
  de_f :=fvp^.v_data;
  cnp_t:=ap^.a_tcnp;
 
@@ -2205,18 +2303,39 @@ begin
 
  _exit:
 
- if (de_f<>nil) then
- begin
-  sx_xunlock(@de_f^.ufs_md_lock);
- end;
+  if (de_f<>nil) then
+  begin
+   sx_xunlock(@de_f^.ufs_md_lock);
+  end;
 
- sx_xunlock(@dd_f^.ufs_md_lock);
- if (dd_f<>dd_t) then
- begin
-  sx_xunlock(@dd_t^.ufs_md_lock);
- end;
+  sx_xunlock(@dd_f^.ufs_md_lock);
+  if (dd_f<>dd_t) then
+  begin
+   sx_xunlock(@dd_t^.ufs_md_lock);
+  end;
 
- NtClose(FD);
+  NtClose(FD);
+
+ //unlockout:
+   vput(fdvp);
+   vput(fvp);
+   vput(tdvp);
+   if (tvp<>nil) then
+   begin
+    vput(tvp);
+   end;
+
+ Exit;
+
+ _releout:
+  vrele(fdvp);
+  vrele(fvp);
+  vrele(tdvp);
+  if (tvp<>nil) then
+  begin
+   vrele(tvp);
+  end;
+
 end;
 
 Function GetDesiredAccess(flags:Integer):DWORD; inline;
@@ -2340,7 +2459,7 @@ begin
  sx_xlock(@dd^.ufs_md_lock);
  sx_xlock(@nd^.ufs_md_lock);
 
- w:=_UTF8Decode(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
+ w:=UnixToWin(@nd^.ufs_dirent^.d_name,nd^.ufs_dirent^.d_namlen);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -2471,7 +2590,7 @@ begin
   FD:=THandle(vp^.v_un);
  end else
  begin
-  w:=_UTF8Decode(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
+  w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
 
   OBJ:=Default(TOBJ_ATTR);
   INIT_OBJ(OBJ,THandle(dd^.ufs_md_fp),OBJ_CASE_INSENSITIVE,w);
@@ -3039,7 +3158,7 @@ begin
   VDIR:
    begin
     mp:=vp^.v_mount;
-    if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+    if ((mp^.mnt_flag and MNT_PFS_ANY)<>0) then
     begin
      Result:=_VOP_READDIR(@md_pfs_readdir, vp, ap^.a_uio);
     end else

@@ -61,7 +61,7 @@ end;
 
 function GENERIC_DIRSIZ(dp:p_dirent):Integer; inline;
 begin
- Result:=SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1)+((dp^.d_namlen+1 + 3) and (not 3));
+ Result:=(SizeOf(t_dirent)-sizeof(t_dirent.d_name))+((dp^.d_namlen+1 + 3) and (not 3));
 end;
 
 end.

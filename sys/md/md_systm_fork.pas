@@ -7,8 +7,13 @@ interface
 
 uses
  sysutils,
+ Forms,
  windows,
  ntapi;
+
+const
+ MD_FORK_PDEATHSIG=1;
+ MD_FORK_PGAMEVMA =2;
 
 type
  t_fork_cb=procedure(data:Pointer;size:QWORD); SysV_ABI_CDecl;
@@ -27,10 +32,8 @@ type
   fork_pid:Integer; //out
  end;
 
-function  md_getppid:DWORD;
-
 procedure md_run_forked;
-function  md_fork_process(var info:t_fork_proc):Integer;
+function  md_fork_process(var info:t_fork_proc;options:Integer):Integer;
 
 implementation
 
@@ -41,29 +44,10 @@ uses
  md_systm_reserve,
  md_map;
 
-function md_getppid:DWORD;
-var
- data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
- p_info:PPROCESS_BASIC_INFORMATION;
- R:DWORD;
-begin
- Result:=0;
- p_info:=Align(@data,8);
-
- R:=NtQueryInformationProcess(NtCurrentProcess,
-                              ProcessBasicInformation,
-                              p_info,
-                              SizeOf(PROCESS_BASIC_INFORMATION),
-                              nil);
- if (R=0) then
- begin
-  Result:=p_info^.InheritedFromUPI;
- end;
-end;
-
 const
  JobObjectExtendedLimitInformation=9;
- JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=$00002000;
+ JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK=$00001000;
+ JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE  =$00002000;
 
 type
  JOBOBJECT_BASIC_LIMIT_INFORMATION = record
@@ -416,6 +400,68 @@ type
   data      :record end;
  end;
 
+Procedure InitStdIo;
+var
+ dev_null:THandle;
+
+ Procedure Apply(var Target:THandle); inline;
+ begin
+  if (Target=0) then
+  begin
+   if (dev_null=0) then
+   begin
+    //redirect to NULL
+    dev_null:=FileOpen('NUL',fmOpenReadWrite);
+   end;
+   Target:=dev_null;
+  end;
+ end;
+
+begin
+ if AttachConsole(ATTACH_PARENT_PROCESS) then
+ begin
+  //
+ end else
+ begin
+  dev_null:=0;
+  Apply(StdInputHandle );
+  Apply(StdOutputHandle);
+  Apply(StdErrorHandle );
+  SetStdHandle(STD_INPUT_HANDLE ,StdInputHandle );
+  SetStdHandle(STD_OUTPUT_HANDLE,StdOutputHandle);
+  SetStdHandle(STD_ERROR_HANDLE ,StdErrorHandle );
+ end;
+
+ //mark console I/O (will also enable automatic initialization in new threads)
+ IsConsole:=True;
+
+ //reinit std I/O
+ SysInitStdIO;
+end;
+
+Procedure InitForkStdIo(hStdInput,hStdOutput,hStdError:THandle);
+begin
+ SetStdHandle(STD_INPUT_HANDLE ,hStdInput );
+ SetStdHandle(STD_ERROR_HANDLE ,hStdOutput);
+ SetStdHandle(STD_OUTPUT_HANDLE,hStdError );
+
+ StdInputHandle :=hStdInput ;
+ StdOutputHandle:=hStdOutput;
+ StdErrorHandle :=hStdError ;
+
+ //mark console I/O (will also enable automatic initialization in new threads)
+ IsConsole:=True;
+
+ //reinit std I/O
+ SysInitStdIO;
+
+ //restrore default Exceptions
+ if (Application<>nil) then
+ begin
+  Application.CaptureExceptions:=False;
+ end;
+end;
+
 function get_cur_peb:PPEB; assembler; nostackframe;
 asm
  movqq %gs:teb.PEB,Result
@@ -429,11 +475,16 @@ var
  proc :Pointer;
 begin
  base:=System.InterlockedExchange(get_cur_peb^.SubSystemData,nil);
- if (base=nil) then Exit;
+ if (base=nil) then
+ begin
+  //normal GUI start
+  InitStdIo;
+  Exit;
+ end;
 
- SetStdHandle(STD_INPUT_HANDLE ,base^.hStdInput );
- SetStdHandle(STD_ERROR_HANDLE ,base^.hStdOutput);
- SetStdHandle(STD_OUTPUT_HANDLE,base^.hStdError );
+ //while not IsDebuggerPresent do sleep(100);
+
+ InitForkStdIo(base^.hStdInput,base^.hStdOutput,base^.hStdError);
 
  proc:=base^.proc;
 
@@ -468,7 +519,7 @@ begin
  hProcJob:=CreateJobObjectA(nil,nil);
 
  info:=Default(JOBOBJECT_EXTENDED_LIMIT_INFORMATION);
- info.BasicLimitInformation.LimitFlags:=JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+ info.BasicLimitInformation.LimitFlags:=JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK or JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 
  SetInformationJobObject(hProcJob,
                          JobObjectExtendedLimitInformation,
@@ -524,7 +575,7 @@ begin
  end;
 end;
 
-function md_fork_process(var info:t_fork_proc):Integer;
+function md_fork_process(var info:t_fork_proc;options:Integer):Integer;
 type
  PBUF_PROC_INFO=^TBUF_PROC_INFO;
  TBUF_PROC_INFO=packed record
@@ -534,7 +585,6 @@ type
 var
  si:TSTARTUPINFO;
  pi:PROCESS_INFORMATION;
- data:array[0..SizeOf(TBUF_PROC_INFO)-1+7] of Byte;
  P_BUF:PBUF_PROC_INFO;
  LEN:ULONG;
  rip:QWORD;
@@ -542,9 +592,8 @@ var
 begin
  Result:=0;
 
- P_BUF:=Align(@data,8);
+ P_BUF:=AllocMem(sizeof(TBUF_PROC_INFO));
 
- P_BUF^:=Default(TBUF_PROC_INFO);
  LEN:=SizeOf(TBUF_PROC_INFO);
 
  Result:=NtQueryInformationProcess(NtCurrentProcess,
@@ -552,7 +601,11 @@ begin
                                    P_BUF,
                                    LEN,
                                    @LEN);
- if (Result<>0) then Exit;
+ if (Result<>0) then
+ begin
+  FreeMem(P_BUF);
+  Exit;
+ end;
 
  si:=Default(TSTARTUPINFO);
  pi:=Default(PROCESS_INFORMATION);
@@ -560,31 +613,40 @@ begin
  si.cb:=SizeOf(si);
 
  b:=CreateProcessW(PWideChar(@P_BUF^.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
+
+ FreeMem(P_BUF);
+
  if not b then Exit(-1);
 
- b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
- if not b then Exit(-1);
-
- rip:=0;
- Result:=NtMoveStack(pi.hProcess,pi.hThread,rip);
- if (Result<>0) then
+ if (options and MD_FORK_PDEATHSIG)<>0 then
  begin
-  Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
-  Exit;
+  b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
+  if not b then Exit(-1);
  end;
 
- Result:=NtMoveProcessParameters(pi.hProcess);
- if (Result<>0) then
+ if (options and MD_FORK_PGAMEVMA)<>0 then
  begin
-  Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
-  Exit;
- end;
+  rip:=0;
+  Result:=NtMoveStack(pi.hProcess,pi.hThread,rip);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
+   Exit;
+  end;
 
- Result:=NtReserve(pi.hProcess,rip);
- if (Result<>0) then
- begin
-  Writeln(stderr,'NtReserve:0x',HexStr(Result,8));
-  Exit;
+  Result:=NtMoveProcessParameters(pi.hProcess);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
+   Exit;
+  end;
+
+  Result:=NtReserve(pi.hProcess,rip);
+  if (Result<>0) then
+  begin
+   Writeln(stderr,'NtReserve:0x',HexStr(Result,8));
+   Exit;
+  end;
  end;
 
  Result:=NtCreateShared(pi.hProcess,info);

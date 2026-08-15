@@ -7,7 +7,9 @@ interface
 uses
  windows,
  ntapi,
- game_run_context;
+ game_run_context,
+ md_systm,
+ md_pipe;
 
 type
  TGameProcessPipe=class(TGameProcess)
@@ -68,8 +70,8 @@ end;
 
 Destructor TGameProcessPipe.Destroy;
 begin
- CloseHandle(g_proc);
- CloseHandle(FChildpip);
+ md_pidfd_close(g_proc);
+ md_pipe_close (FChildpip);
  inherited;
 end;
 

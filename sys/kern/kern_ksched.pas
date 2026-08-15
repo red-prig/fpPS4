@@ -7,7 +7,8 @@ interface
 
 uses
  rtprio,
- time;
+ time,
+ kern_thr;
 
 const
  //POSIX scheduling policies
@@ -34,14 +35,7 @@ function sys_sched_get_priority_max(policy:Integer):Integer;
 function sys_sched_get_priority_min(policy:Integer):Integer;
 function sys_sched_rr_get_interval(pid:Integer;interval:Pointer):Integer;
 
-implementation
-
-uses
- errno,
- systm,
- kern_thr,
- kern_proc,
- md_proc;
+function ksched_getparam(ksched:p_ksched;td:p_kthread;param:p_sched_param):Integer;
 
 const
  sched_rr_interval=4;
@@ -49,6 +43,14 @@ const
 var
  //Configured in kernel version:
  ksched:t_ksched=(rr_interval:(tv_sec:0;tv_nsec:1000000000 div sched_rr_interval));
+
+implementation
+
+uses
+ errno,
+ systm,
+ kern_proc,
+ md_proc;
 
 function ksched_get_priority_max(ksched:p_ksched;policy:DWORD;prio:PInteger):Integer;
 begin

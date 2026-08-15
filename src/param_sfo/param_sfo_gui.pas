@@ -5,40 +5,16 @@ unit param_sfo_gui;
 interface
 
 uses
+ param_sfo,
  sysutils,
  core_serialization;
 
 const
- //sfo_value_format
- SFO_FORMAT_BLOB  =$004;
- SFO_FORMAT_STRING=$204;
- SFO_FORMAT_UINT32=$404;
-
- SFO_MAGIC=$46535000;
-
- SFO_HEADER_SIZE     =$14;
- SFO_TABLE_ENTRY_SIZE=$10;
+ SFO_FORMAT_BLOB  =param_sfo.SFO_FORMAT_BLOB  ;
+ SFO_FORMAT_STRING=param_sfo.SFO_FORMAT_STRING;
+ SFO_FORMAT_UINT32=param_sfo.SFO_FORMAT_UINT32;
 
 type
- t_sfo_header=packed record
-  magic             :DWORD;
-  version           :DWORD;
-  key_table_offset  :DWORD;
-  value_table_offset:DWORD;
-  entry_count       :DWORD;
- end;
-
- p_sfo_table_entry=^t_sfo_table_entry;
- t_sfo_table_entry=packed record
-  key_offset  :WORD;   //<-key_table
-  format      :WORD;
-  size        :DWORD;
-  max_size    :DWORD;
-  value_offset:DWORD;  //<-value_table
- end;
-
-//
-
  TParamSfoValue=class(TSerializeObject)
   private
    Fformat:ptruint;
@@ -74,147 +50,74 @@ function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
 
 implementation
 
+procedure on_load(userdata:Pointer;name,value:pchar;format:WORD;size,max_size,i:DWORD);
+var
+ data_size:DWORD;
+ svalue:RawByteString;
+begin
+
+  svalue:='';
+  data_size:=max_size;
+
+  case format of
+   SFO_FORMAT_UINT32:
+     begin
+     if (data_size<4) then data_size:=4;
+     end;
+   else;
+  end;
+
+  SetLength(svalue,data_size);
+  FillChar (svalue[1],data_size,0);
+
+  Move(value^,svalue[1],size);
+
+  case format of
+   SFO_FORMAT_STRING:
+     begin
+      //fixup len
+      SetLength(svalue,strlen(PChar(@svalue[1])));
+     end;
+   else;
+  end;
+
+  with TParamSfoFile(userdata) do
+  begin
+   params[i]:=TParamSfoValue.Create;
+   params[i].format:=format;
+   params[i].name  :=name;
+   params[i].value :=svalue;
+  end;
+
+end;
+
 function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
 Var
- fd:THandle;
-
- fsize:Int64;
-
- i:DWORD;
-
- key_table_size  :DWORD;
- value_table_size:DWORD;
-
- format:WORD;
-
- hdr:t_sfo_header;
-
- entry_table:p_sfo_table_entry;
- key_table:PChar;
- value_table:PByte;
-
- size,data_size:DWORD;
- name,value:RawByteString;
-
- function load_chunk(offset,size:DWORD):Pointer;
- begin
-  Result:=AllocMem(size);
-  FileSeek(fd,offset,fsFromBeginning);
-  if (FileRead(fd,Result^,size)<>size) then
-  begin
-   FreeMem(Result);
-   Result:=nil;
-  end;
- end;
-
+ Loader:TParamSfoFileLoader;
 begin
  Result:=nil;
 
- fd:=FileOpen(path,fmOpenRead);
- if (fd=feInvalidHandle) then
+ if not Loader.open(path) then
  begin
-  Writeln(StdErr,'Error open:',path);
   Exit;
  end;
 
- hdr:=Default(t_sfo_header);
- if (FileRead(fd,hdr,SizeOf(hdr))<>SizeOf(hdr)) then
+ if not Loader.parse() then
  begin
-  Writeln(StdErr,'Error read:',path);
-  FileClose(fd);
-  Exit;
- end;
-
- if (hdr.magic<>SFO_MAGIC) then
- begin
-  Writeln(StdErr,'Invalid file:',path);
-  FileClose(fd);
-  Exit;
- end;
-
- entry_table:=load_chunk(SizeOf(hdr),hdr.entry_count*SizeOf(t_sfo_table_entry));
-
- fsize:=FileSeek(fd,0,fsFromEnd);
-
- if (hdr.key_table_offset>hdr.value_table_offset) then
- begin
-  key_table_size  :=fsize               -hdr.key_table_offset;
-  value_table_size:=hdr.key_table_offset-hdr.value_table_offset;
- end else
- begin
-  key_table_size  :=hdr.value_table_offset-hdr.key_table_offset;
-  value_table_size:=fsize                 -hdr.value_table_offset;
- end;
-
- key_table  :=load_chunk(hdr.key_table_offset  ,key_table_size);
- value_table:=load_chunk(hdr.value_table_offset,value_table_size);
-
- //
-
- if (entry_table=nil) or
-    (key_table=nil) or
-    (value_table=nil) then
- begin
-  Writeln(StdErr,'Error read:',path);
-
-  FreeMem(entry_table);
-  FreeMem(key_table);
-  FreeMem(value_table);
-
-  FileClose(fd);
+  Loader.Free;
   Exit;
  end;
 
  Result:=TParamSfoFile.Create;
 
- if (hdr.entry_count<>0) then
+ if (Loader.hdr.entry_count<>0) then
  begin
-  SetLength(Result.params,hdr.entry_count);
+  SetLength(Result.params,Loader.hdr.entry_count);
 
-  For i:=0 to hdr.entry_count-1 do
-  begin
-   format:=entry_table[i].format;
-
-   name :=PChar(key_table+entry_table[i].key_offset);
-
-   value:='';
-   size:=entry_table[i].max_size;
-   data_size:=size;
-
-   case format of
-    SFO_FORMAT_UINT32:
-      begin
-      if (data_size<4) then data_size:=4;
-      end;
-    else;
-   end;
-
-   SetLength(value,data_size);
-   FillChar(value[1],data_size,0);
-
-   Move(PChar(value_table+entry_table[i].value_offset)^,value[1],size);
-
-   case format of
-    SFO_FORMAT_STRING:
-      begin
-       //fixup len
-       SetLength(value,strlen(PChar(@value[1])));
-      end;
-    else;
-   end;
-
-   Result.params[i]:=TParamSfoValue.Create;
-   Result.params[i].format:=format;
-   Result.params[i].name  :=name;
-   Result.params[i].value :=value;
-  end;
+  Loader.ForAll(@on_load,Pointer(Result));
  end;
 
- FreeMem(entry_table);
- FreeMem(key_table);
- FreeMem(value_table);
-
- FileClose(fd);
+ Loader.Free;
 end;
 
 //

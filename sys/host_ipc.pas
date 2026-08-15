@@ -13,60 +13,112 @@ uses
  host_ipc_interface,
  kern_thr,
  sys_event,
+ md_event,
  kern_mtx;
 
 const
  iRESULT=host_ipc_interface.iRESULT;
 
 type
- PNodeHeader=^TNodeHeader;
- TNodeHeader=packed record
-  mtype:DWORD;
-  mlen :DWORD;
-  mtid :DWORD;
-  buf  :record end;
- end;
+ TIpcValue      =host_ipc_interface.TIpcValue;
+ TOnMessage     =host_ipc_interface.TOnMessage;
+ THostIpcHandler=host_ipc_interface.THostIpcHandler;
+ THostIpcResult =host_ipc_interface.THostIpcResult;
+ THostIpc       =host_ipc_interface.THostIpc;
 
- PQNode=^TQNode;
- TQNode=packed record
-  next_ :PQNode;
-  header:TNodeHeader;
-  value :TIpcValue;
-  buf   :record end;
- end;
+ THostIpcConnect=class;
 
- PNodeIpcSync=^TNodeIpcSync;
- TNodeIpcSync=packed record
-  entry:LIST_ENTRY;
-  event:PRTLEvent;
-  value:TIpcValue;
-  tid  :DWORD;
- end;
-
- TIpcValue        =host_ipc_interface.TIpcValue;
- TOnMessage       =host_ipc_interface.TOnMessage;
- THostIpcHandler  =host_ipc_interface.THostIpcHandler;
- THostIpcInterface=host_ipc_interface.THostIpcInterface;
-
- THostIpcConnect=class(THostIpcInterface)
+ THostIpcDispatcher=class
   protected
-   FQueue:TIntrusiveMPSCQueue;
-   FWaits:LIST_HEAD;
-   FWLock:mtx;
-   Ftd   :Pointer; //p_kthread
-   Fkq   :Pointer;
-   FTerm :Boolean;
-   procedure   SyncResult(tid:DWORD;value:TIpcValue);
+   var
+    FRefs:Integer;
+    FTerm:Boolean;
+  public
+   FHandler:THostIpcHandler;
+   Constructor Create(_Handler:THostIpcHandler);
+   Destructor  Destroy; override;
+   procedure   Acquire;
+   procedure   Release;
+   procedure   DoMethod  (Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
+   procedure   DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue); virtual;
+   procedure   thread_new;  virtual;
+   procedure   thread_free; virtual;
+   Function    GetCallback(mtype:DWORD):TOnMessage; virtual;
+   procedure   Update(); virtual;
+ end;
+
+ THostIpcDispatchQueue=class(THostIpcDispatcher)
+  public
+   type
+    PNodeHeader=^TNodeHeader;
+    TNodeHeader=packed record
+     mtype:DWORD;
+     mlen :DWORD;
+     mtid :DWORD;
+     buf  :record end;
+    end;
+
+    PQNode=^TQNode;
+    TQNode=packed record
+     next_ :PQNode;
+     Client:THostIpcConnect;
+     header:TNodeHeader;
+     value :TIpcValue;
+     buf   :record end;
+    end;
+  protected
+   var
+    FQueue:TIntrusiveMPSCQueue;
+  public
+   Constructor Create(_Handler:THostIpcHandler);
+   Destructor  Destroy; override;
+   function    QueueRecv:PQNode;
+   procedure   QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); virtual;
+   procedure   QueuePush(node:PQNode); virtual;
+   procedure   QueueFlush;
+   procedure   DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue); override;
+   procedure   Update(); override;
+ end;
+
+ THostIpcClientResult=class(THostIpcResult)
+  Client:THostIpcConnect;
+  mtid  :DWORD;
+  //
+  procedure  InvokeResult(value:TIpcValue); override;
+  Destructor Destroy; override;
+ end;
+
+ THostIpcConnect=class(THostIpc)
+  public
+   type
+    PNodeIpcSync=^TNodeIpcSync;
+    TNodeIpcSync=packed record
+     entry:LIST_ENTRY;
+     event:t_event;
+     value:TIpcValue;
+     tid  :DWORD;
+    end;
+  protected
+   var
+    FDispatcher:THostIpcDispatcher;
+    FWaits     :LIST_HEAD;
+    FWLock     :mtx;
+    PMtid      :PDWORD;
+    FRefs      :Integer;
+    FTerm      :Boolean;
+    FBroke     :Boolean;
+   procedure   SetDispatcher(_Dispatcher:THostIpcDispatcher);
    function    NewNodeSync:PNodeIpcSync;
    procedure   FreeNodeSync(node:PNodeIpcSync);
-   procedure   TriggerNodeSync(tid:DWORD;value:TIpcValue);
-   procedure   QueueSend(mtype,mtid:DWORD;value:TIpcValue);
-   function    QueueRecv:PQNode;
-   procedure   QueueFlush;
-   function    RecvKevent  (Value:TIpcValue):TIpcValue;
-   procedure   UpdateKevent();
-   procedure   WakeupKevent(); virtual;
   public
+   var
+    FKevObj:TObject;
+   //
+   property    Dispatcher:THostIpcDispatcher read FDispatcher write SetDispatcher;
+   //
+   function    Handler:THostIpcHandler; override;
+   //
+   procedure   TriggerNodeSync(tid:DWORD;value:TIpcValue);
    //
    function    NewSyncKey:Pointer;       override;
    procedure   FreeSyncKey(key:Pointer); override;
@@ -75,32 +127,34 @@ type
    //
    procedure   Send    (mtype:DWORD;key:Pointer;value:TIpcValue); override;
    procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); virtual;
-   procedure   Update();                                    override;
-   procedure   Disconnect();                                override;
+   procedure   Disconnect();                               override;
    //
-   Constructor Create;
-   Destructor  Destroy;     override;
-   procedure   thread_new;  virtual;
-   procedure   thread_free; virtual;
+   function    HoldResult:THostIpcResult; override;
+   procedure   InvokeResult(tid:DWORD;value:TIpcValue);
+   //
+   Constructor Create(_Dispatcher:THostIpcDispatcher);
+   Destructor  Destroy; override;
+   procedure   Acquire;
+   procedure   Release;
  end;
 
- THostIpcSimpleKERN=class;
+ THostIpcDispatchGui=class(THostIpcDispatchQueue)
+  procedure QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); override;
+  procedure QueuePush(node:PQNode); override;
+ end;
 
- THostIpcSimpleMGUI=class(THostIpcConnect)
-  FDest:THostIpcSimpleKERN;
+ THostIpcDispatchKern=class(THostIpcDispatchQueue)
+  FEvent:t_event;
+  Ftd   :p_kthread;
+  procedure QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue); override;
+  procedure QueuePush(node:PQNode); override;
+  procedure thread_new;  override;
+  procedure thread_free; override;
+ end;
+
+ THostIpcSimple=class(THostIpcConnect)
+  FDest:THostIpcSimple;
   procedure SendImpl(mtype,mtid:DWORD;value:TIpcValue); override;
- end;
-
- THostIpcSimpleKERN=class(THostIpcConnect)
-  FDest :THostIpcSimpleMGUI;
-  FEvent:PRTLEvent;
-  Constructor Create;
-  Destructor  Destroy;     override;
-  procedure   thread_new;  override;
-  procedure   thread_free; override;
-  procedure   SendImpl(mtype,mtid:DWORD;value:TIpcValue); override;
-  Function    GetCallback(mtype:DWORD):TOnMessage;     override;
-  procedure   WakeupKevent(); override;
  end;
 
 operator := (A:RawByteString):TMsgHash;
@@ -144,46 +198,146 @@ end;
 
 //
 
-Constructor THostIpcConnect.Create;
+Constructor THostIpcDispatcher.Create(_Handler:THostIpcHandler);
+begin
+ inherited Create;
+ FHandler:=_Handler;
+end;
+
+Destructor THostIpcDispatcher.Destroy;
+begin
+ FTerm:=True;
+ thread_free;
+ inherited;
+end;
+
+procedure THostIpcDispatcher.Acquire;
+begin
+ System.InterlockedIncrement(FRefs);
+end;
+
+procedure THostIpcDispatcher.Release;
+begin
+ if System.InterlockedDecrement(FRefs)=0 then
+ begin
+  Free;
+ end;
+end;
+
+procedure THostIpcDispatcher.DoMethod(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
+var
+ Pprev :PDWORD;
+ output:TIpcValue;
+ OnMsg :TOnMessage;
+begin
+ output:=Default(TIpcValue);
+
+ //push
+ Pprev:=Client.PMtid;
+ Client.PMtid:=@mtid;
+
+ if (Client<>nil) then
+ if (not Client.FTerm) then
+ begin
+
+  if (mtype=iRESULT) then
+  begin
+   Client.TriggerNodeSync(mtid,input);
+   input:=Default(TIpcValue); //transfer owned
+  end else
+  begin
+   OnMsg:=GetCallback(mtype);
+   if (OnMsg<>nil) then
+   begin
+    output:=OnMsg(Client,input);
+   end else
+   begin
+    //nop?
+    output:=-1;
+   end;
+   //is sync
+   if (mtid<>0) then
+   begin
+    Client.InvokeResult(mtid,output);
+    output:=Default(TIpcValue); //transfer owned
+   end;
+
+  end;
+ end;
+
+ //
+ input.Free;
+ output.Free;
+ //
+
+ //pop
+ Client.PMtid:=Pprev;
+end;
+
+procedure THostIpcDispatcher.DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
+begin
+ DoMethod(Client,mtype,mtid,input);
+end;
+
+procedure THostIpcDispatcher.thread_new;
+begin
+ //
+end;
+
+procedure THostIpcDispatcher.thread_free;
+begin
+ //
+end;
+
+Function THostIpcDispatcher.GetCallback(mtype:DWORD):TOnMessage;
+begin
+ Result:=nil;
+ if (FHandler<>nil) then
+ begin
+  Result:=FHandler.GetCallback(mtype);
+ end;
+end;
+
+procedure THostIpcDispatcher.Update();
+begin
+ //
+end;
+
+//
+
+Constructor THostIpcDispatchQueue.Create(_Handler:THostIpcHandler);
 begin
  inherited;
  FQueue.Create;
- LIST_INIT(@FWaits);
- mtx_init(FWLock,'ipc');
 end;
 
-Destructor THostIpcConnect.Destroy;
+Destructor THostIpcDispatchQueue.Destroy;
 begin
+ FTerm:=True;
  QueueFlush;
- mtx_destroy(FWLock);
- if (Fkq<>nil) then
- begin
-  kqueue_close2(Fkq);
- end;
  inherited;
 end;
 
-procedure THostIpcConnect.thread_new;
+function THostIpcDispatchQueue.QueueRecv:PQNode;
 begin
- //
+ Result:=nil;
+ FQueue.Pop(Result);
 end;
 
-procedure THostIpcConnect.thread_free;
-begin
- //
-end;
-
-procedure THostIpcConnect.QueueSend(mtype,mtid:DWORD;value:TIpcValue);
+procedure THostIpcDispatchQueue.QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
 var
  node:PQNode;
 begin
  if (mtype=iRESULT) then
  begin
   //Trigger Direct!
-  TriggerNodeSync(mtid,value);
+  Client.TriggerNodeSync(mtid,value);
  end else
  begin
+  Client.Acquire;
+  //
   node:=AllocMem(SizeOf(TQNode));
+  node^.Client:=Client;
   node^.header.mtype:=mtype;
   node^.header.mlen :=value.GetLen;
   node^.header.mtid :=mtid;
@@ -194,13 +348,22 @@ begin
  end;
 end;
 
-function THostIpcConnect.QueueRecv:PQNode;
+procedure THostIpcDispatchQueue.QueuePush(node:PQNode);
 begin
- Result:=nil;
- FQueue.Pop(Result);
+ if (node^.header.mtype=iRESULT) then
+ begin
+  //Trigger Direct!
+  node^.Client.TriggerNodeSync(node^.header.mtid,node^.value);
+  FreeMem(Node);
+ end else
+ begin
+  node^.Client.Acquire;
+  //
+  FQueue.Push(node);
+ end;
 end;
 
-procedure THostIpcConnect.QueueFlush;
+procedure THostIpcDispatchQueue.QueueFlush;
 var
  node:PQNode;
 begin
@@ -212,61 +375,15 @@ begin
  end;
 end;
 
-procedure kq_wakeup(data:Pointer); SysV_ABI_CDecl;
+procedure THostIpcDispatchQueue.DoDispatch(Client:THostIpcConnect;mtype,mtid:DWORD;input:TIpcValue);
 begin
- THostIpcConnect(data).WakeupKevent();
+ QueueSend(Client,mtype,mtid,input);
 end;
 
-function THostIpcConnect.RecvKevent(Value:TIpcValue):TIpcValue;
-var
- kev:p_kevent;
- count:Integer;
-begin
- kev  :=Value.GetBuf;
- count:=Value.GetLen div SizeOf(t_kevent);
-
- if (Fkq=nil) then
- begin
-  Fkq:=kern_kqueue2('[ipc]',@kq_wakeup,Pointer(Self));
- end;
-
- //changelist
- Result:=kern_kevent2(Fkq,kev,count,nil,0,nil,@count);
-end;
-
-procedure THostIpcConnect.UpdateKevent();
-var
- kev:array[0..7] of t_kevent;
- t:timespec;
- r:Integer;
-begin
- if (Fkq=nil) then Exit;
- t:=Default(timespec);
-
- repeat
-
-  r:=0;
-  kern_kevent2(Fkq,nil,0,@kev,8,@t,@r);
-
-  if (r>0) then
-  begin
-   InvokeAsyn(iKEV_EVENT.mtype,@kev,r*SizeOf(t_kevent));
-  end;
-
- until (r<>8);
-end;
-
-procedure THostIpcConnect.WakeupKevent();
-begin
- //
-end;
-
-procedure THostIpcConnect.Update();
+procedure THostIpcDispatchQueue.Update();
 var
  node  :PQNode;
- input :TIpcValue;
- output:TIpcValue;
- OnMsg :TOnMessage;
+ Client:THostIpcConnect;
 begin
  if FTerm then Exit;
 
@@ -275,40 +392,54 @@ begin
  while (node<>nil) do
  begin
   //
+  Client:=node^.Client;
+  Assert(Client<>nil);
 
-  input:=node^.value;
-
-  if (node^.header.mtype=iRESULT) then
-  begin
-   TriggerNodeSync(node^.header.mtid,input);
-   input:=Default(TIpcValue); //transfer owned
-  end else
-  begin
-   OnMsg:=GetCallback(node^.header.mtype);
-   if (OnMsg<>nil) then
-   begin
-    output:=OnMsg(input);
-   end else
-   begin
-    //nop?
-    output:=-1;
-   end;
-   //is sync
-   if (node^.header.mtid<>0) then
-   begin
-    SyncResult(node^.header.mtid,output);
-    output:=Default(TIpcValue); //transfer owned
-   end;
-  end;
+  DoMethod(Client,node^.header.mtype,node^.header.mtid,node^.value);
 
   //
   FreeMem(node);
-  input.Free;
-  output.Free;
+  //
+  Client.Release;
   //
   if FTerm then Exit;
   //
   node:=QueueRecv;
+ end;
+end;
+
+//
+
+Constructor THostIpcConnect.Create(_Dispatcher:THostIpcDispatcher);
+begin
+ inherited Create;
+ Dispatcher:=_Dispatcher;
+ FRefs:=1;
+ LIST_INIT(@FWaits);
+ mtx_init(FWLock,'ipc');
+end;
+
+Destructor THostIpcConnect.Destroy;
+begin
+ FreeAndNil(FKevObj);
+ //
+ Dispatcher:=nil;
+ //
+ mtx_destroy(FWLock);
+ //
+ inherited;
+end;
+
+procedure THostIpcConnect.Acquire;
+begin
+ System.InterlockedIncrement(FRefs);
+end;
+
+procedure THostIpcConnect.Release;
+begin
+ if System.InterlockedDecrement(FRefs)=0 then
+ begin
+  Free;
  end;
 end;
 
@@ -319,22 +450,84 @@ end;
 
 //
 
-procedure THostIpcConnect.SyncResult(tid:DWORD;value:TIpcValue);
+procedure THostIpcConnect.InvokeResult(tid:DWORD;value:TIpcValue);
 begin
+ Assert(tid<>iBROKEN);
  SendImpl(iRESULT,tid,value);
 end;
 
 //
+
+procedure THostIpcClientResult.InvokeResult(value:TIpcValue);
+begin
+ if (Client<>nil) then
+ begin
+  Client.InvokeResult(mtid,value);
+ end;
+end;
+
+Destructor THostIpcClientResult.Destroy;
+begin
+ if (Client<>nil) then
+ begin
+  Client.Release;
+ end;
+end;
+
+//
+
+function THostIpcConnect.HoldResult:THostIpcResult;
+var
+ r:THostIpcClientResult;
+begin
+ if (PMtid=nil) then Exit(nil);
+ if (PMtid^=0)  then Exit(nil);
+ //
+ Acquire;
+ r:=THostIpcClientResult.Create;
+ r.Client:=Self;
+ r.mtid  :=PMtid^;
+ //
+ Result:=r;
+ PMtid^:=0;
+end;
+
+//
+
+procedure THostIpcConnect.SetDispatcher(_Dispatcher:THostIpcDispatcher);
+begin
+ if (FDispatcher=_Dispatcher) then Exit;
+ //
+ if (FDispatcher<>nil) then
+ begin
+  FDispatcher.Release;
+ end;
+ //
+ FDispatcher:=_Dispatcher;
+ //
+ if (FDispatcher<>nil) then
+ begin
+  FDispatcher.Acquire;
+ end;
+end;
+
+function THostIpcConnect.Handler:THostIpcHandler;
+begin
+ Result:=nil;
+ if (FDispatcher<>nil) then
+ begin
+  Result:=FDispatcher.FHandler;
+ end;
+end;
 
 function THostIpcConnect.NewNodeSync:PNodeIpcSync;
 var
  node:PNodeIpcSync;
 begin
  node:=AllocMem(SizeOf(TNodeIpcSync));
- node^.event:=RTLEventCreate;
- node^.tid  :=ThreadID;
+ node^.tid:=ThreadID;
 
- RTLEventResetEvent(node^.event);
+ ev_init(node^.event,'TNodeIpcSync');
 
  mtx_lock(FWLock);
   LIST_INSERT_HEAD(@FWaits,node,@node^.entry);
@@ -349,7 +542,7 @@ begin
   LIST_REMOVE(node,@node^.entry);
  mtx_unlock(FWLock);
 
- RTLEventDestroy(node^.event);
+ ev_destroy(node^.event);
 
  FreeMem(node);
 end;
@@ -359,15 +552,21 @@ var
  node:PNodeIpcSync;
 begin
  mtx_lock(FWLock);
+
+  if (tid=iBROKEN) then
+  begin
+   FBroke:=True;
+  end;
+
   node:=LIST_FIRST(@FWaits);
 
   while (node<>nil) do
   begin
-   if (node^.tid=tid) then
+   if (node^.tid=tid) or (tid=iBROKEN) then
    begin
     node^.value:=value.Copy;
 
-    RTLEventSetEvent(node^.event);
+    ev_signal(node^.event);
 
     Break;
    end;
@@ -412,9 +611,11 @@ procedure THostIpcConnect.WaitSyncKey(key:Pointer);
 var
  node:PNodeIpcSync absolute key;
 begin
+ if FTerm or FBroke then Exit;
+
  if (node<>nil) then
  begin
-  RTLEventWaitFor(node^.event);
+  ev_wait(node^.event);
  end;
 end;
 
@@ -422,6 +623,10 @@ function THostIpcConnect.GetSyncValue(key:Pointer):TIpcValue;
 var
  node:PNodeIpcSync absolute key;
 begin
+ if FBroke then
+ begin
+  Result:=-1;
+ end else
  if (node<>nil) then
  begin
   Result:=node^.value;
@@ -436,99 +641,100 @@ end;
 
 procedure THostIpcConnect.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
 begin
- //
+ value.Free;
 end;
 
-procedure THostIpcSimpleMGUI.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
+//
+
+procedure THostIpcDispatchGui.QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
 begin
- if (FDest<>nil) then
+ //queued, but executed in the main thread along with the GUI
+ inherited;
+ //
+ if Assigned(Classes.WakeMainThread) then
  begin
-  FDest.QueueSend(mtype,mtid,value);
-  //
-  RTLEventSetEvent(FDest.FEvent);
-  //
+  Classes.WakeMainThread(nil);
  end;
+end;
+
+procedure THostIpcDispatchGui.QueuePush(node:PQNode);
+begin
+ //queued, but executed in the main thread along with the GUI
+ inherited;
+ //
+ if Assigned(Classes.WakeMainThread) then
+ begin
+  Classes.WakeMainThread(nil);
+ end;
+end;
+
+//
+
+procedure THostIpcDispatchKern.QueueSend(Client:THostIpcConnect;mtype,mtid:DWORD;value:TIpcValue);
+begin
+ //queued, but executed in the kern thread
+ inherited;
+ //
+ ev_signal(FEvent);
+end;
+
+procedure THostIpcDispatchKern.QueuePush(node:PQNode);
+begin
+ //queued, but executed in the kern thread
+ inherited;
+ //
+ ev_signal(FEvent);
 end;
 
 procedure simple_kern_thread(parameter:pointer); SysV_ABI_CDecl;
 var
- ipc:THostIpcSimpleKERN;
+ ipc:THostIpcDispatchKern;
 begin
  Writeln('[simple_kern_thread]');
 
- ipc:=THostIpcSimpleKERN(parameter);
+ ipc:=THostIpcDispatchKern(parameter);
 
  repeat
   if ipc.FQueue.IsEmpty then
   begin
-   RTLEventWaitFor(ipc.FEvent);
+   ev_wait(ipc.FEvent);
   end;
   ipc.Update();
  until ipc.FTerm;
 
 end;
 
-Constructor THostIpcSimpleKERN.Create;
-begin
- inherited;
- FEvent:=RTLEventCreate;
-end;
-
-Destructor THostIpcSimpleKERN.Destroy;
-begin
- thread_free;
- RTLEventDestroy(FEvent);
- inherited;
-end;
-
-procedure THostIpcSimpleKERN.thread_new;
+procedure THostIpcDispatchKern.thread_new;
 begin
  if (Ftd=nil) then
  begin
+  ev_init(FEvent,'THostIpcServerSimpleKern');
   kthread_add(@simple_kern_thread,Self,@Ftd,0,'[ipc_pipe]',TDP_KIGNSUSP);
  end;
 end;
 
-procedure THostIpcSimpleKERN.thread_free;
+procedure THostIpcDispatchKern.thread_free;
 begin
  if (Ftd<>nil) then
  begin
   FTerm:=True;
-  RTLEventSetEvent(FEvent);
+  ev_signal(FEvent);
   WaitForThreadTerminate(p_kthread(Ftd)^.td_handle,0);
   thread_dec_ref(Ftd);
   Ftd:=nil;
+  ev_destroy(FEvent);
  end;
 end;
 
-Function THostIpcSimpleKERN.GetCallback(mtype:DWORD):TOnMessage;
-begin
- if (mtype=iKEV_CHANGE.mtype) then
- begin
-  Result:=@RecvKevent;
- end else
- begin
-  Result:=inherited;
- end;
-end;
+//
 
-procedure THostIpcSimpleKERN.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
+procedure THostIpcSimple.SendImpl(mtype,mtid:DWORD;value:TIpcValue);
 begin
  if (FDest<>nil) then
+ if (FDest.Dispatcher<>nil) then
  begin
-  FDest.QueueSend(mtype,mtid,value);
-  //
-  if Assigned(Classes.WakeMainThread) then
-  begin
-   Classes.WakeMainThread(nil);
-  end;
-  //
+  FDest.Dispatcher.DoDispatch(FDest,mtype,mtid,value);
  end;
-end;
-
-procedure THostIpcSimpleKERN.WakeupKevent();
-begin
- UpdateKevent();
 end;
 
 //

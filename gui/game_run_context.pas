@@ -5,11 +5,13 @@ unit game_run_context;
 interface
 
 uses
+ md_pipe,
  SysUtils,
  core_serialization,
  host_ipc,
  game_info,
- param_sfo_gui;
+ param_sfo_gui,
+ SaveDataBackend;
 
 type
  TGameProcess=class
@@ -35,22 +37,30 @@ type
 
 procedure ReleaseAndNil(var obj:TGameProcess);
 
+{$M+}
+
 type
- PGameRunContext=^TGameRunContext;
- TGameRunContext=object
-  FGameItem   :TGameItem;
-  FGameProcess:TGameProcess;
-  FParamSfo   :TParamSfoFile;
-  //
-  Procedure Stop();
-  procedure StopAndNil();
-  Procedure CloseItem();
-  //
-  procedure BindHandler(Handler:THostIpcHandler);
-  function  InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
-  procedure InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
-  procedure InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
+ TGameRunContext=class
+  public
+   FIpcDispatch:THostIpcDispatchGui;
+   //
+   FGameItem   :TGameItem;
+   FGameProcess:TGameProcess;
+   FParamSfo   :TParamSfoFile;
+   FSaveData   :TSaveDataBackendConnect;
+   FSdClient   :THandle;
+   //
+   Procedure Stop();
+   procedure StopAndNil();
+   Procedure CloseItem();
+   //
+   Procedure CloseSavdata();
+   function  FetchSavdata:TSaveDataBackendConnect;
+  published
+   function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
  end;
+
+{$M-}
 
 implementation
 
@@ -154,44 +164,46 @@ begin
  end;
 end;
 
+Procedure TGameRunContext.CloseSavdata();
+begin
+ if (FSaveData<>nil) then
+ begin
+  FSaveData.ExitProcess;
+ end;
+ FreeAndNil(FSaveData);
+ //
+ md_pipe_close(FSdClient);
+ FSdClient:=0;
+end;
+
+function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
+begin
+ if (FSaveData=nil) then
+ begin
+  FSaveData:=TSaveDataBackendConnect.CreateProcess(FIpcDispatch);
+ end;
+ Result:=FSaveData;
+end;
+
+function TGameRunContext.OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ Backend:TSaveDataBackendConnect;
+ data:TPipeSend;
+begin
+ Backend:=FetchSavdata;
+
+ md_pipe_close(FSdClient);
+ FSdClient:=0;
+
+ data.parent_pid:=GetProcessID;
+ data.pipe_fd   :=Backend.NewClient();
+
+ FSdClient:=data.pipe_fd; //let's put it off
+
+ Result:=TIpcValue.Static(@data,SizeOf(data));
+end;
+
 //
-
-procedure TGameRunContext.BindHandler(Handler:THostIpcHandler);
-begin
- if (FGameProcess=nil) or (Handler=nil) then Exit;
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.FHandler:=Handler;
- end;
-end;
-
-function TGameRunContext.InvokeSync(const msg:RawByteString;obj:TSerializeObject):Ptruint;
-begin
- Result:=Ptruint(-1);
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  Result:=FGameProcess.g_ipc.InvokeSync2(msg,TIpcValue.&Object(obj));
- end;
-end;
-
-procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;obj:TSerializeObject);
-begin
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.InvokeAsyn(msg,TIpcValue.&Object(obj));
- end;
-end;
-
-procedure TGameRunContext.InvokeAsyn(const msg:RawByteString;buf:Pointer;mlen:DWORD);
-begin
- if (FGameProcess<>nil) then
- if (FGameProcess.g_ipc<>nil) then
- begin
-  FGameProcess.g_ipc.InvokeAsyn(msg,buf,mlen);
- end;
-end;
 
 end.
 

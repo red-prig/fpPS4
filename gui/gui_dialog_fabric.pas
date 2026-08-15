@@ -15,7 +15,8 @@ uses
   Graphics,
   Buttons,
   LCLType,
-  LCLIntf;
+  LCLIntf,
+  host_ipc;
 
 type
  TDialogButtonsType=(
@@ -78,10 +79,12 @@ type
    BtnMsg :array[0..1] of RawByteString;
   end;
   OnClick:TNotifyEvent;
+  ALittleMore:Boolean;
  end;
 
  TDialogCustom=class(TPanel)
   public
+   FClient :THostIpc;
    FMsgMemo:TMemo;
    FMsgPBar:TProgressBar;
    FCustom :TWinControl;
@@ -410,6 +413,12 @@ begin
   MsgForm.AnchorSide[akBottom].Side   :=asrCenter;
   MsgForm.Width :=400 + 200;
   MsgForm.Height:=200 + 200;
+
+  if (Attributes.ALittleMore) then
+  begin
+   MsgForm.Width :=MsgForm.Width  + (MsgForm.Width  div 2);
+   MsgForm.Height:=MsgForm.Height + (MsgForm.Height div 2);
+  end;
 
   if (Attributes.Memo.Ime<>nil) then
   begin

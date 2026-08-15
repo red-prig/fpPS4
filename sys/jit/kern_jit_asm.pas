@@ -55,6 +55,7 @@ type
 procedure jit_syscall;       assembler;
 procedure jit_jmp_plt_cache; assembler;
 procedure jit_jmp_dispatch;  assembler;
+procedure jit_jmp_null;      assembler;
 
 procedure jit_hle_trace; assembler;
 
@@ -559,9 +560,9 @@ asm
  andq  $-16,%rsp //align stack
 
  //rdi,rsi,rdx
- mov    %r14,%rdi
- mov    %r15,%rsi
- mov 8(%rbp),%rdx
+ mov    %r14,%rdi //addr
+ mov    %r15,%rsi //plt
+ mov 8(%rbp),%rdx //from
 
  call jmp_dispatcher
 
@@ -577,6 +578,40 @@ asm
  jmp %gs:teb.jit_trp
  //marker
  .globl .endof_jit_jmp_dispatch
+end;
+
+procedure jit_jmp_null; assembler; nostackframe;
+asm
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ movq %gs:teb.thread,%r13                //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ call jit_save_ctx // -> pushf
+
+ andq  $-16,%rsp //align stack
+
+ //rdi,rsi,rdx
+ mov      $0,%rdi //addr
+ mov      $0,%rsi //plt
+ mov      $0,%rdx //from
+
+ call jmp_dispatcher
+
+ mov  %rax,%r14
+
+ call jit_load_ctx // -> popf
+
+ //epilog
+ movq %rbp,%rsp
+ pop  %rbp
+
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
+ //marker
+ .globl .endof_jit_jmp_null
 end;
 
 //in:r14(nid) r15(caller)
@@ -1106,6 +1141,7 @@ procedure endof_jit_save_ctx     ; external name '.endof_jit_save_ctx';
 procedure endof_jit_load_ctx     ; external name '.endof_jit_load_ctx';
 procedure endof_jit_jmp_plt_cache; external name '.endof_jit_jmp_plt_cache';
 procedure endof_jit_jmp_dispatch ; external name '.endof_jit_jmp_dispatch';
+procedure endof_jit_jmp_null     ; external name '.endof_jit_jmp_null';
 procedure endof_jit_hle_trace    ; external name '.endof_jit_hle_trace';
 procedure endof_jit_cpuid        ; external name '.endof_jit_cpuid';
 procedure endof_jit_interrupt_ast; external name '.endof_jit_interrupt_ast';
@@ -1135,6 +1171,10 @@ begin
     (
      (rip>=QWORD(@jit_jmp_dispatch)) and
      (rip<=(QWORD(@endof_jit_jmp_dispatch)))
+    ) or
+    (
+     (rip>=QWORD(@jit_jmp_null)) and
+     (rip<=(QWORD(@endof_jit_jmp_null)))
     ) or
     (
      (rip>=QWORD(@jit_hle_trace)) and

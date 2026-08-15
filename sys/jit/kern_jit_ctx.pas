@@ -112,6 +112,7 @@ type
     nid   :QWORD;
     native:Pointer;
     dst   :PPointer;
+    argc  :Integer;
    end;
 
    p_import_point=^t_import_point;
@@ -119,6 +120,7 @@ type
     next :p_import_point;
     guest:PPointer;
     dst  :PPointer;
+    argc :Integer;
    end;
 
   var
@@ -175,8 +177,8 @@ type
 
   function  is_text_addr(addr:QWORD):Boolean;
   function  is_map_addr (addr:QWORD):Boolean;
-  procedure add_export_point (nid:QWORD;native:Pointer;dst:PPointer);
-  procedure add_import_point (guest,dst:PPointer);
+  procedure add_export_point (nid:QWORD;native:Pointer;dst:PPointer;argc:Integer);
+  procedure add_import_point (guest,dst:PPointer;argc:Integer);
   procedure add_forward_link (node:p_forward_point;instruction:t_jit_i_link);
   procedure Resolve_forwards (var links:t_forward_links;target:t_jit_i_link);
   function  add_forward_point(ptype:t_point_type;instruction:t_jit_i_link;dst:Pointer):p_forward_point;
@@ -461,7 +463,7 @@ begin
  Result:=(addr>=text_start) and (addr<map____end);
 end;
 
-procedure t_jit_context2.add_export_point(nid:QWORD;native:Pointer;dst:PPointer);
+procedure t_jit_context2.add_export_point(nid:QWORD;native:Pointer;dst:PPointer;argc:Integer);
 var
  node:p_export_point;
 begin
@@ -470,11 +472,12 @@ begin
  node^.nid   :=nid;
  node^.native:=native;
  node^.dst   :=dst;
+ node^.argc  :=argc;
  node^.next  :=export_list;
  export_list :=node;
 end;
 
-procedure t_jit_context2.add_import_point(guest,dst:PPointer);
+procedure t_jit_context2.add_import_point(guest,dst:PPointer;argc:Integer);
 var
  node:p_import_point;
 begin
@@ -482,6 +485,7 @@ begin
  node:=builder.Alloc(Sizeof(t_import_point)); Inc(stats.t_import_point);
  node^.guest:=guest;
  node^.dst  :=dst;
+ node^.argc :=argc;
  node^.next :=import_list;
  import_list:=node;
 end;

@@ -5,7 +5,6 @@ unit game_run;
 interface
 
 uses
- windows,
  Classes,
  SysUtils,
  CharStream,
@@ -13,6 +12,7 @@ uses
  kern_thr,
  md_sleep,
  md_pipe,
+ host_ipc_interface,
  host_ipc,
  md_host_ipc,
  param_sfo_gui,
@@ -153,14 +153,14 @@ var
 begin
  For i:=0 to High(std_tty) do
  begin
-  //std_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  //std_tty[i].t_rd_handle:=StdInputHandle;
   //std_tty[i].t_wr_handle:=t_wr_handle;
   //std_tty[i].t_update   :=@WakeMainThread;
  end;
 
  For i:=0 to High(deci_tty) do
  begin
-  //deci_tty[i].t_rd_handle:=GetStdHandle(STD_INPUT_HANDLE);
+  //deci_tty[i].t_rd_handle:=StdInputHandle;
   //deci_tty[i].t_wr_handle:=t_wr_handle;
   //deci_tty[i].t_update   :=@WakeMainThread;
  end;
@@ -258,7 +258,7 @@ begin
 
  if (p_host_ipc<>nil) then
  begin
-  THostIpcConnect(p_host_ipc).thread_new;
+  THostIpcConnect(p_host_ipc).Dispatcher.thread_new;
  end;
 
  //p_cpuid        :=CPUID_NEO_MODE;
@@ -418,15 +418,112 @@ begin
 end;
 }
 
-procedure fork_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
+type
+ TKevKqueue=class
+  FClient:THostIpc;
+  Fkq    :Pointer;
+  Constructor Create(Client:THostIpc);
+  Destructor  Destroy; override;
+  procedure   UpdateKevent;
+  procedure   WakeupKevent;
+  function    OnKevChange(Client:THostIpc;Value:TIpcValue):TIpcValue;
+ end;
+
+procedure kq_wakeup(data:Pointer); SysV_ABI_CDecl;
+begin
+ TKevKqueue(data).WakeupKevent();
+end;
+
+Constructor TKevKqueue.Create(Client:THostIpc);
+begin
+ FClient:=Client;
+ Fkq:=kern_kqueue2('[ipc]',@kq_wakeup,Pointer(Self));
+end;
+
+Destructor TKevKqueue.Destroy;
+begin
+ if (Fkq<>nil) then
+ begin
+  kqueue_close2(Fkq);
+ end;
+end;
+
+procedure TKevKqueue.UpdateKevent;
+var
+ kev:array[0..7] of t_kevent;
+ t:timespec;
+ r:Integer;
+begin
+ if (Fkq=nil) then Exit;
+ t:=Default(timespec);
+
+ repeat
+
+  r:=0;
+  kern_kevent2(Fkq,nil,0,@kev,8,@t,@r);
+
+  if (r>0) then
+  begin
+   FClient.InvokeAsyn(iKEV_EVENT.mtype,@kev,r*SizeOf(t_kevent));
+  end;
+
+ until (r<>8);
+end;
+
+procedure TKevKqueue.WakeupKevent;
+begin
+ UpdateKevent;
+end;
+
+function TKevKqueue.OnKevChange(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ kev:p_kevent;
+ count:Integer;
+ KevObj:TKevKqueue;
+begin
+ kev  :=Value.GetBuf;
+ count:=Value.GetLen div SizeOf(t_kevent);
+
+ with THostIpcConnect(Client) do
+ begin
+  if (FKevObj=nil) then
+  begin
+   FKevObj:=TKevKqueue.Create(Client);
+  end;
+  KevObj:=TKevKqueue(FKevObj);
+ end;
+
+ //changelist
+ Result:=kern_kevent2(KevObj.Fkq,kev,count,nil,0,nil,@count);
+end;
+
+type
+ TMountConfigInvoke=object
+  function OnGetMountConfig(Client:THostIpc;Value:TIpcValue):TIpcValue;
+ end;
+
+function TMountConfigInvoke.OnGetMountConfig(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ data:TGameMountConfigExport;
+begin
+ data:=GameMountConfigExport;
+
+ Result:=TIpcValue.&Object(data);
+
+ FreeAndNil(data);
+end;
+
+procedure game_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
  td:p_kthread;
  r:Integer;
+ ppid:Integer;
 
  pipefd:THandle;
  parent:THandle;
 
- kipc:THostIpcPipeKERN;
+ IpcHandler:THostIpcHandler;
+ kipc:THostIpcPipe;
 
  mem:TPCharStream;
  GameStartupInfo:TGameStartupInfo;
@@ -443,17 +540,25 @@ begin
  //free shared
  FreeMem(data);
 
- parent:=md_pidfd_open(md_getppid);
+ ppid:=md_getppid;
+
+ Writeln('game_process started pid:',GetProcessID,' parent_pid:',ppid);
+
+ parent:=md_pidfd_open(ppid);
 
  pipefd:=GameStartupInfo.Pipe;
  pipefd:=md_pidfd_getfd(parent,pipefd);
 
- kipc:=THostIpcPipeKERN.Create;
+ md_pidfd_close(parent);
+
+ IpcHandler:=THostIpcHandler.Create;
+ IpcHandler.AddCallback(iKEV_CHANGE.msg ,@TKevKqueue(nil).OnKevChange);
+ IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
+
+ kipc:=THostIpcPipe.Create(THostIpcDispatchKern.Create(IpcHandler));
  kipc.set_pipe(pipefd);
 
- p_host_ipc    :=kipc;
- p_host_handler:=THostIpcHandler.Create;
- p_host_ipc    .FHandler:=p_host_handler;
+ p_host_ipc:=kipc;
 
  //CreateNtTerminateTrap;
 
@@ -481,13 +586,35 @@ end;
 
 {
  isInitUserAlwaysLogin
- (m_attribute & 1) == 0     || param_sfo_not_found
+   (m_attribute & 1) == 0
 
  isBgSuspend
- (m_attribute & 0x10) != 0  || param_sfo_not_found
+   (m_attribute & 0x10) != 0
 
  isBgSuspendIfSpecial
- (m_attribute & 0x100) != 0 || param_sfo_not_found
+   (m_attribute & 0x100) != 0
+
+ //Best effort threads use 2 CPU cores. [0xC0] [m_type=MINI_APP,BIG_APP] [SdkVersion < 0x3000000]
+ IsNotSetBestEffortOnNewProcess
+   ((&param_1->m_attribute + 2) & 0x20) >> 5) != 0
+
+ IsNotCheckWorkaroundExtraUsbAudioDevice
+   (((&param_1->m_attribute + 2) & 4) >> 2) != 0
+
+ ///////////////
+
+ isEnlargeFmem256mb
+   (&m_attribute2 + 1) & 0x40) >> 6) != 0
+
+ savedata:[ServerCmdBackup]
+  if ((compiledSdkVer < 0x4500000) && ( (((&ATTRIBUTE2 + 2) & 2) >> 1) == false )) {
+    slot = 1;
+  }
+  else {
+    slot = 2;
+  }
+  sceFsISSchedConfigCurrentThread(slot,4);
+
 }
 
 {
@@ -507,21 +634,6 @@ end;
 
 }
 
-{
-
-//Best effort threads use 2 CPU cores. [0xC0] [m_type=MINI_APP]
-byte GetBesteffort(t_app_m_info *param_1)
-{
-  if (param_1->NewProcess != 0) {
-    return 1;
-  }
-  if (param_1->m_is_param_sfo_not_found != 0) {
-    return 0;
-  }
-  return (*(byte *)((long)&param_1->m_attribute + 2) & 0x20) >> 5;
-}
-
-}
 
 function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 label
@@ -529,16 +641,18 @@ label
 var
  r:Integer;
 
- kern2mgui:array[0..1] of THandle;
+ kern2mgui:t_pipe_pair;
 
  fork_info:t_fork_proc;
 
  kev:t_kevent;
 
- p_mgui_ipc:THostIpcPipeMGUI;
+ IpcHandler:THostIpcHandler;
 
- s_kern_ipc:THostIpcSimpleKERN;
- s_mgui_ipc:THostIpcSimpleMGUI;
+ p_mgui_ipc:THostIpcPipe;
+
+ s_kern_ipc:THostIpcSimple;
+ s_mgui_ipc:THostIpcSimple;
 
  GameStartupInfo:TGameStartupInfo;
  mem:TMemoryStream;
@@ -559,12 +673,13 @@ begin
  if (cfg.FParamSfo<>nil) then
  begin
 
-  GameStartupInfo.CATEGORY             :=cfg.FParamSfo.GetString('CATEGORY');
-  GameStartupInfo.TITLE                :=cfg.FParamSfo.GetString('TITLE');
-  GameStartupInfo.TITLE_ID             :=cfg.FParamSfo.GetString('TITLE_ID');
-  GameStartupInfo.CONTENT_ID           :=cfg.FParamSfo.GetString('CONTENT_ID');
-  GameStartupInfo.INSTALL_DIR_SAVEDATA :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
-  GameStartupInfo.APP_VER              :=cfg.FParamSfo.GetString('APP_VER');
+  GameStartupInfo.CATEGORY                        :=cfg.FParamSfo.GetString('CATEGORY');
+  GameStartupInfo.TITLE                           :=cfg.FParamSfo.GetString('TITLE');
+  GameStartupInfo.TITLE_ID                        :=cfg.FParamSfo.GetString('TITLE_ID');
+  GameStartupInfo.CONTENT_ID                      :=cfg.FParamSfo.GetString('CONTENT_ID');
+  GameStartupInfo.INSTALL_DIR_SAVEDATA            :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
+  GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST:=cfg.FParamSfo.GetString('SAVE_DATA_TRANSFER_TITLE_ID_LIST');
+  GameStartupInfo.APP_VER                         :=cfg.FParamSfo.GetString('APP_VER');
 
   GameStartupInfo.SYSTEM_VER           :=cfg.FParamSfo.GetUInt('SYSTEM_VER');
   GameStartupInfo.ATTRIBUTE            :=cfg.FParamSfo.GetUInt('ATTRIBUTE');
@@ -592,9 +707,12 @@ begin
  end;
 
  ////
+ StdOutputHandle:=cfg.hOutput;
+ StdErrorHandle :=cfg.hError ;
 
- SetStdHandle(STD_OUTPUT_HANDLE,cfg.hOutput);
- SetStdHandle(STD_ERROR_HANDLE ,cfg.hError );
+ //reinit std I/O
+ SysInitStdIO;
+  ////
 
  fork_info:=Default(t_fork_proc);
 
@@ -605,10 +723,10 @@ begin
 
   with TGameProcessPipe(Context.FGameProcess) do
   begin
-   r:=md_pipe2(@kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
+   r:=md_pipe2(kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
 
-   p_mgui_ipc:=THostIpcPipeMGUI.Create;
+   p_mgui_ipc:=THostIpcPipe.Create(Context.FIpcDispatch);
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
@@ -623,15 +741,15 @@ begin
   GameStartupInfo.Serialize(mem);
   FreeAndNil(GameStartupInfo);
 
-  fork_info.hInput :=GetStdHandle(STD_INPUT_HANDLE);
+  fork_info.hInput :=StdInputHandle;
   fork_info.hOutput:=cfg.hOutput;
   fork_info.hError :=cfg.hError;
 
-  fork_info.proc:=@fork_process;
+  fork_info.proc:=@game_process;
   fork_info.data:=mem.Memory;
   fork_info.size:=mem.Size;
 
-  r:=md_fork_process(fork_info);
+  r:=md_fork_process(fork_info,MD_FORK_PDEATHSIG or MD_FORK_PGAMEVMA);
 
   mem.Free;
  end else
@@ -642,17 +760,19 @@ begin
   with TGameProcessSimple(Context.FGameProcess) do
   begin
 
-   s_kern_ipc:=THostIpcSimpleKERN.Create;
-   s_mgui_ipc:=THostIpcSimpleMGUI.Create;
+   IpcHandler:=THostIpcHandler.Create;
+   IpcHandler.AddCallback(iKEV_CHANGE.msg,@TKevKqueue(nil).OnKevChange);
+   IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
+
+   s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
+   s_mgui_ipc:=THostIpcSimple.Create(Context.FIpcDispatch);
 
    s_kern_ipc.FDest:=s_mgui_ipc;
    s_mgui_ipc.FDest:=s_kern_ipc;
 
    g_ipc:=s_mgui_ipc;
 
-   p_host_ipc    :=s_kern_ipc;
-   p_host_handler:=THostIpcHandler.Create;
-   p_host_ipc    .FHandler:=p_host_handler;
+   p_host_ipc:=s_kern_ipc;
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');
@@ -672,7 +792,7 @@ begin
  Context.FGameProcess.g_proc :=fork_info.hProcess;
  Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Context.FGameProcess.g_ipc.thread_new;
+ Context.FIpcDispatch.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;

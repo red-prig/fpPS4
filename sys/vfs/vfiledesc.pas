@@ -106,7 +106,7 @@ end;
 
 procedure fd_table_init;
 const
- CMASK=&022; // default file mask: S_IWGRP|S_IWOTH
+ CMASK=0; // PS4 init as zero!
 begin
  id_table_init(@fd_table.fd_ofiles,0,maxfilesperproc);
  FILEDESC_LOCK_INIT(@fd_table);

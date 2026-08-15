@@ -659,12 +659,19 @@ begin
   d_bytes  :=16384;
   d_blksize:=16384;
  end else
- if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
   d_fsid   :=$2905ff1e;
   d_size   :=65536; //dirent sizes?
   d_bytes  :=65536;
   d_blksize:=65536;
+ end else
+ if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
+ begin
+  d_fsid   :=$2905ff1e;
+  d_size   :=32768; //dirent sizes?
+  d_bytes  :=32768;
+  d_blksize:=32768;
  end else
  begin
   d_fsid   :=$2905ff22;
@@ -699,10 +706,19 @@ begin
  vap^.va_blocksize:=d_blksize;
  vap^.va_type     :=vp^.v_type;
 
- vap^.va_atime    :=de^.ufs_atime;
- vap^.va_mtime    :=de^.ufs_mtime;
- vap^.va_ctime    :=de^.ufs_ctime;
- vap^.va_birthtime:=de^.ufs_btime;
+ //dont fill tv_nsec
+
+ vap^.va_atime.tv_sec     :=de^.ufs_btime.tv_sec; //atime=btime
+ vap^.va_atime.tv_nsec    :=0;
+
+ vap^.va_mtime.tv_sec     :=de^.ufs_mtime.tv_sec;
+ vap^.va_mtime.tv_nsec    :=0;
+
+ vap^.va_ctime.tv_sec     :=de^.ufs_mtime.tv_sec; //ctime=mtime
+ vap^.va_ctime.tv_nsec    :=0;
+
+ vap^.va_birthtime.tv_sec :=de^.ufs_btime.tv_sec;
+ vap^.va_birthtime.tv_nsec:=0;
 
  vap^.va_gen    :=0;
  vap^.va_flags  :=0;

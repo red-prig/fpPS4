@@ -1371,81 +1371,44 @@ begin
  //debug
 end;
 
-type
- t_convert_mode=(mInstruction,mExport,mImport);
-
-procedure op_jit2native(var ctx:t_jit_context2;mode:t_convert_mode);
+procedure op_jit2native_export(var ctx:t_jit_context2;argc:Integer);
 var
- i:Integer;
+ i,count:Integer;
 begin
+ //assume 16 arguments if there no information
+ if (argc<0) then argc:=16;
+
+ //rdi,rsi,rdx,rcx,r8,r9 -> 6
+ count:=argc-6;
+
  with ctx.builder do
  begin
+  //set PCB_IS_HLE
+  ori([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_HLE));
 
-  case mode of
-   mExport,
-   mImport:
-    begin
-     //set PCB_IS_HLE
-     ori([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_HLE));
-    end;
-   else;
-  end;
+  //prolog (debugger)
+  push(rbp);
+  movq(rbp,rsp);
 
-  case mode of
-   mInstruction:
-    begin
-     //save internal stack
-     movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)],rsp);
-     movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rbp)],rbp);
+  //load guest stack
 
-     //load rsp,rbp
-     movq(rsp,[r13+(@p_jit_frame(nil)^.tf_rsp)]);
-     movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rbp)]);
-     //
-    end;
-   mExport:
-    begin
-     //load guest stack
+  //movq  %rsp,%rbp
+  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
 
-     //pushq %rbp
-     //////////push([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+  leaq(rsp,[rsp-$8]); //shift guard
 
-     //movq  %rsp,%rbp
-     movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
-     //////////movq([r13+(@p_jit_frame(nil)^.tf_rbp)],r14); //->rbp
+  if (count>0) then
+  begin
+   //alloc host stack
+   leaq(rsp,[rsp-(count*8)]);
 
-     //prolog (debugger)
-     push(rbp);
-     movq(rbp,rsp);
-
-     leaq(rsp,[rsp-$8]); //shift guard
-
-     //alloc host stack
-     leaq(rsp,[rsp-$50]);
-
-     //preload stack argc
-
-     //$50 = 10*8
-     For i:=0 to 7 do
-     begin
-      movq(r15,[r14+i*8+(8)]); //call(8)
-      movq([rsp+i*8],r15);
-     end;
-     //
-    end;
-   mImport:
-    begin
-     //restore guest/host stack
-
-     //movq  %rbp,%rsp
-     movq(r14,[r13+(@p_jit_frame(nil)^.tf_rbp)]); //<-rbp
-     movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //->rsp
-
-     //popq  %rbp
-     pop([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
-     //
-    end;
-   else;
+   //preload stack argc
+   For i:=0 to count-1 do
+   begin
+    movq(r15,[r14+(i*8)+(8)]); //call(8)
+    movq([rsp+(i*8)],r15);
+   end;
+   //
   end;
 
   //load r14,r15,r13
@@ -1455,19 +1418,16 @@ begin
  end;
 end;
 
-procedure op_native2jit(var ctx:t_jit_context2;mode:t_convert_mode);
-var
- i:Integer;
+procedure op_native2jit_export(var ctx:t_jit_context2);
 begin
  with ctx.builder do
  begin
-
   //save r13
   movq([GS+teb_jitcall],r13);
 
   //load curkthread,jit_ctx
   movq(r13,[GS +teb_thread]);
-  leaq(r13,[r13+jit_frame_offset   ]);
+  leaq(r13,[r13+jit_frame_offset]);
 
   //load r14,r15
   movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14);
@@ -1477,77 +1437,99 @@ begin
   movq(r14,[GS+teb_jitcall]);
   movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14);
 
-  case mode of
-   mInstruction:
-    begin
-     //load rsp,rbp
-     movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rsp);
-     movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp);
+  //free host stack
 
-     //load internal stack
-     movq(rsp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)]);
-     movq(rbp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rbp)]);
-     //
-    end;
-   mExport:
-    begin
-     //free host stack
+  //epilog (debugger)
+  movq(rsp,rbp);
+  pop (rbp);
 
-     //epilog (debugger)
-     movq(rsp,rbp);
-     pop (rbp);
+  //reset PCB_IS_HLE
+  andi([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_HLE));
+  //
+ end;
+end;
 
-     //restore guest/host stack
+procedure op_jit2native_import(var ctx:t_jit_context2);
+begin
+ with ctx.builder do
+ begin
+  //set PCB_IS_HLE
+  ori([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_HLE));
 
-     //movq  %rbp,%rsp
-     //////////movq(r14,[r13+(@p_jit_frame(nil)^.tf_rbp)]); //<-rbp
-     //////////movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //->rsp
+  //restore guest/host stack
 
-     //popq  %rbp
-     //////////pop([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
-     //
-    end;
-   mImport:
-    begin
-     //load guest stack
+  //movq  %rbp,%rsp
+  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rbp)]); //<-rbp
+  movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //->rsp
 
-     //pushq %rbp
-     push([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+  //popq  %rbp
+  pop([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+  //
 
-     //movq  %rsp,%rbp
-     movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
-     movq([r13+(@p_jit_frame(nil)^.tf_rbp)],r14); //->rbp
+  //load r14,r15,r13
+  movq(r14,[r13+(@p_jit_frame(nil)^.tf_r14)]);
+  movq(r15,[r13+(@p_jit_frame(nil)^.tf_r15)]);
+  movq(r13,[r13+(@p_jit_frame(nil)^.tf_r13)]);
+ end;
+end;
 
-     leaq(r14,[r14-$8]); //shift guard
+procedure op_native2jit_import(var ctx:t_jit_context2;argc:Integer);
+var
+ i,count:Integer;
+begin
+ //assume 16 arguments if there no information
+ if (argc<0) then argc:=16;
 
-     //alloc guest rsp
-     leaq(r14,[r14-$50]);
-     movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //rsp
+ //rdi,rsi,rdx,rcx,r8,r9 -> 6
+ count:=argc-6;
 
-     //preload stack argc
+ with ctx.builder do
+ begin
+  //save r13
+  movq([GS+teb_jitcall],r13);
 
-     //$50 = 10*8
-     For i:=0 to 7 do
-     begin
-      movq(r15,[rsp+i*8+(8+8)]); //call(8) + push(8)
-      movq([r14+i*8],r15);
-     end;
-     //
-    end;
-   else;
+  //load curkthread,jit_ctx
+  movq(r13,[GS +teb_thread]);
+  leaq(r13,[r13+jit_frame_offset]);
+
+  //load r14,r15
+  movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14);
+  movq([r13+(@p_jit_frame(nil)^.tf_r15)],r15);
+
+  //load r13
+  movq(r14,[GS+teb_jitcall]);
+  movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14);
+
+  //load guest stack
+
+  //pushq %rbp
+  push([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+
+  //movq  %rsp,%rbp
+  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
+  movq([r13+(@p_jit_frame(nil)^.tf_rbp)],r14); //->rbp
+
+  leaq(r14,[r14-$8]); //shift guard
+
+  if (count>0) then
+  begin
+   //alloc guest rsp
+   leaq(r14,[r14-(count*8)]);
+   movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //rsp
+
+   //preload stack argc
+
+   For i:=0 to count-1 do
+   begin
+    movq(r15,[rsp+(i*8)+(8+8)]); //call(8) + push(8)
+    movq([r14+(i*8)],r15);
+   end;
+   //
   end;
 
-  case mode of
-   mExport,
-   mImport:
-    begin
-     //reset PCB_IS_HLE
-     andi([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_HLE));
-     //
-    end;
-   else;
-  end;
-
+  //reset PCB_IS_HLE
+  andi([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_HLE));
+  //
  end;
 end;
 
@@ -2045,7 +2027,7 @@ begin
    call_far(@jit_hle_trace);
   end;
 
-  op_jit2native(ctx,mExport);
+  op_jit2native_export(ctx,node_export^.argc);
   //[JIT->HLE]
 
   ctx.builder.call_far(node_export^.native);
@@ -2053,7 +2035,7 @@ begin
   op_debug_info_addr(ctx,node_export^.native);
 
   //[HLE->JIT]
-  op_native2jit(ctx,mExport); //TODO: [HLE->JIT] combine with [ret]
+  op_native2jit_export(ctx); //TODO: [HLE->JIT] combine with [ret]
 
   //end
   if jit_trace_hle_call then
@@ -2119,7 +2101,7 @@ begin
   //
 
   //[HLE->JIT]
-  op_native2jit(ctx,mImport);
+  op_native2jit_import(ctx,node_import^.argc);
 
   with ctx.builder do
   begin
@@ -2164,7 +2146,7 @@ begin
 
   //--EPILOG--
 
-  op_jit2native(ctx,mImport);
+  op_jit2native_import(ctx);
   //[JIT->HLE]
 
   //

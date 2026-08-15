@@ -96,12 +96,13 @@ const
  UF_NOUNLINK =$00000010; // file may not be removed or renamed
 
 //Super-user changeable flags.
- SF_SETTABLE =$ffff0000; // mask of superuser changeable flags
- SF_ARCHIVED =$00010000; // file is archived
- SF_IMMUTABLE=$00020000; // file may not be changed
- SF_APPEND   =$00040000; // writes to file may only append
- SF_NOUNLINK =$00100000; // file may not be removed or renamed
- SF_SNAPSHOT =$00200000; // snapshot inode
+ SF_SETTABLE  =$ffff0000; // mask of superuser changeable flags
+ SF_ARCHIVED  =$00010000; // file is archived
+ SF_IMMUTABLE =$00020000; // file may not be changed
+ SF_APPEND    =$00040000; // writes to file may only append
+ SF_NOUNLINK  =$00100000; // file may not be removed or renamed
+ SF_SNAPSHOT  =$00200000; // snapshot inode
+ SF_LARGEWRITE=$04000000; // ps4 ext
 
            //  $8000000  //PFS???
            // $10000000  //PFS???

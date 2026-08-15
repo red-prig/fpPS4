@@ -128,9 +128,9 @@ const
 
 const
  //mtype
- SCE_KERNEL_WB_ONION  = 0;
- SCE_KERNEL_WC_GARLIC = 3;
- SCE_KERNEL_WB_GARLIC =10;
+ SCE_KERNEL_WB_ONION  = 0; //Onion bus is fully coherent with the CPU
+ SCE_KERNEL_WC_GARLIC = 3; //Garlic bus is not coherent with the CPU
+ SCE_KERNEL_WB_GARLIC =10; //Garlic bus CPU/GPU Read only
 
  //deprecated
  SCE_KERNEL_WB_ONION_NONVOLATILE  = 1;
