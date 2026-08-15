@@ -6,7 +6,6 @@ interface
 
 uses
  sysutils,
- sys_crt_gui,
  LFQueue,
  SDL3;
 
@@ -75,7 +74,6 @@ var
  event:TSDL_Event;
 begin
  Result:=0;
- sys_crt_gui.sys_crt_init;
 
  repeat
 

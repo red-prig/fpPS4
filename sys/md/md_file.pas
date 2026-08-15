@@ -5,10 +5,42 @@ unit md_file;
 interface
 
 uses
+ sysutils,
+ errno,
  ntapi,
  windows,
+ time,
  vfcntl,
- vstat;
+ vstat,
+ vmount;
+
+const
+ O_RDONLY   =vfcntl.O_RDONLY   ;
+ O_WRONLY   =vfcntl.O_WRONLY   ;
+ O_RDWR     =vfcntl.O_RDWR     ;
+ O_NONBLOCK =vfcntl.O_NONBLOCK ;
+ O_APPEND   =vfcntl.O_APPEND   ;
+ O_ASYNC    =vfcntl.O_ASYNC    ;
+ O_FSYNC    =vfcntl.O_FSYNC    ;
+ O_SYNC     =vfcntl.O_SYNC     ;
+ O_NOFOLLOW =vfcntl.O_NOFOLLOW ;
+ O_CREAT    =vfcntl.O_CREAT    ;
+ O_TRUNC    =vfcntl.O_TRUNC    ;
+ O_EXCL     =vfcntl.O_EXCL     ;
+ O_DSYNC    =vfcntl.O_DSYNC    ;
+ O_DIRECTORY=vfcntl.O_DIRECTORY;
+
+ AT_FDCWD  =vfcntl.AT_FDCWD;
+
+type
+ p_timespec=time.p_timespec;
+ timespec  =time.timespec;
+
+ p_stat=vstat.p_stat;
+ t_stat=vstat.t_stat;
+
+ p_statfs=vmount.p_statfs;
+ t_statfs=vmount.t_statfs;
 
 function  md_openat(at_fd:THandle;const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
 function  md_open  (const path:RawByteString;flags,mode:DWORD;Var fd:THandle):DWORD;
@@ -16,6 +48,18 @@ function  md_close (fd:THandle):DWORD;
 
 Function  md_create_swap_file(const path:RawByteString;SIZE:QWORD;Var fd:THandle):DWORD;
 Function  md_delete_file     (const path:RawByteString):DWORD;
+
+function  md_fcopy_attrib(dst,src:THandle):Integer;
+function  md_copy_attrib (const dst,src:RawByteString):Integer;
+
+function  md_fstat(fd:THandle;sb:p_stat):Integer;
+function  md_stat (const path:RawByteString;sb:p_stat):Integer;
+
+function  md_futimens(fd:THandle;ts:p_timespec;numtimes:Integer):Integer;
+function  md_utimens (const path:RawByteString;ts:p_timespec;numtimes:Integer):Integer;
+
+function  md_fstatfs(fd:THandle;sbp:p_statfs):Integer;
+function  md_statfs (const path:RawByteString;sbp:p_statfs):Integer;
 
 implementation
 
@@ -48,6 +92,56 @@ begin
  OBJ.UPATH:=INIT_UNICODE(FileName);
 end;
 
+function ntf2px(n:Integer):Integer; inline;
+begin
+ Case DWORD(n) of
+  STATUS_SUCCESS               :Result:=0;
+  STATUS_PENDING               :Result:=EWOULDBLOCK;
+  STATUS_NO_MORE_FILES         :Result:=0;
+  STATUS_ACCESS_VIOLATION      :Result:=EFAULT;
+  STATUS_INVALID_HANDLE        :Result:=EBADF;
+  STATUS_NO_SUCH_FILE          :Result:=ENOENT;
+  STATUS_END_OF_FILE           :Result:=0;
+  STATUS_NO_MEMORY             :Result:=ENOMEM;
+  STATUS_ACCESS_DENIED         :Result:=EACCES;
+  STATUS_DISK_CORRUPT_ERROR    :Result:=EIO;
+  STATUS_OBJECT_NAME_NOT_FOUND :Result:=ENOENT;
+  STATUS_OBJECT_NAME_COLLISION :Result:=EEXIST;
+  STATUS_OBJECT_PATH_NOT_FOUND :Result:=ENOENT;
+  STATUS_OBJECT_PATH_SYNTAX_BAD:Result:=ENOTDIR;
+  STATUS_SHARING_VIOLATION     :Result:=EACCES;
+  STATUS_FILE_LOCK_CONFLICT    :Result:=EWOULDBLOCK;
+  STATUS_LOCK_NOT_GRANTED      :Result:=EWOULDBLOCK;
+  STATUS_RANGE_NOT_LOCKED      :Result:=ENOLCK;
+  STATUS_DISK_FULL             :Result:=ENOSPC;
+  STATUS_FILE_IS_A_DIRECTORY   :Result:=EISDIR;
+  STATUS_NOT_SAME_DEVICE       :Result:=EXDEV;
+  STATUS_INSUFFICIENT_RESOURCES:Result:=ENOMEM;
+  STATUS_DIRECTORY_NOT_EMPTY   :Result:=ENOTEMPTY;
+  STATUS_FILE_CORRUPT_ERROR    :Result:=EIO;
+  STATUS_NOT_A_DIRECTORY       :Result:=ENOTDIR;
+  STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
+  STATUS_IO_DEVICE_ERROR       :Result:=EIO;
+  STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
+  STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
+  else
+                                Result:=EINVAL;
+ end;
+end;
+
+function get_unix_file_time(time:LARGE_INTEGER):timespec; inline;
+begin
+ Int64(time):=Int64(time)-DELTA_EPOCH_IN_UNIT;
+ Result.tv_sec :=(Int64(time) div UNIT_PER_SEC);
+ Result.tv_nsec:=(Int64(time) mod UNIT_PER_SEC)*NSEC_PER_UNIT;
+end;
+
+function get_win_file_time(time:timespec):LARGE_INTEGER; inline;
+begin
+ Int64(Result):=(time.tv_sec*UNIT_PER_SEC)+(time.tv_nsec div NSEC_PER_UNIT);
+ Int64(Result):=Int64(Result)+DELTA_EPOCH_IN_UNIT;
+end;
+
 Function GetDesiredAccess(flags:Integer):DWORD; inline;
 begin
  Result:=SYNCHRONIZE or
@@ -56,16 +150,20 @@ begin
 
  if ((flags and O_RDWR)<>0) then
  begin
-  Result:=Result or (FILE_READ_DATA or FILE_WRITE_DATA or FILE_APPEND_DATA);
+  Result:=Result or (ord((flags and O_APPEND)=0)*FILE_WRITE_DATA) or (FILE_READ_DATA or FILE_APPEND_DATA);
  end else
  if ((flags and O_WRONLY)<>0) then
  begin
-  Result:=Result or (FILE_WRITE_DATA or FILE_APPEND_DATA);
+  Result:=Result or (ord((flags and O_APPEND)=0)*FILE_WRITE_DATA) or FILE_APPEND_DATA;
  end else
  begin
   Result:=Result or FILE_READ_DATA;
  end;
 
+ if ((flags and O_DIRECTORY)<>0) then
+ begin
+  Result:=Result or FILE_LIST_DIRECTORY;
+ end;
 end;
 
 Function GetCreationDisposition(flags:Integer):DWORD; inline;
@@ -106,11 +204,16 @@ end;
 
 Function GetCreateOptions(flags:Integer):DWORD; inline;
 begin
- Result:=FILE_SYNCHRONOUS_IO_NONALERT or
-         FILE_NON_DIRECTORY_FILE;
+ Result:=FILE_SYNCHRONOUS_IO_NONALERT;
+
  if ((flags and (O_FSYNC or O_DSYNC))<>0) then
  begin
   Result:=Result or FILE_WRITE_THROUGH;
+ end;
+
+ if ((flags and O_DIRECTORY)<>0) then
+ begin
+  Result:=Result or (FILE_DIRECTORY_FILE or FILE_OPEN_FOR_BACKUP_INTENT);
  end;
 end;
 
@@ -126,21 +229,25 @@ begin
  w:='';
  if (at_fd=THandle(AT_FDCWD)) then
  begin
+  //current dir
   at_fd:=0;
 
   SetLength(w,GetCurrentDirectoryW(0,nil));
   GetCurrentDirectoryW(Length(w),@w[1]);
   SetLength(w,Length(w)-1);
 
-  w:='\??\'+w+'\';
+  w:='\??\'+w+'\'+UTF8Decode(path);
  end else
  if (at_fd=0) or (at_fd=INVALID_HANDLE_VALUE) then
  begin
+  //full path
   at_fd:=0;
-  w:='\??\';
+  w:='\??\'+UTF8Decode(ExpandFileName(path));
+ end else
+ begin
+  //relative opened
+  w:=UTF8Decode(path);
  end;
-
- w:=w+UTF8Decode(path);
 
  OBJ:=Default(TOBJ_ATTR);
  INIT_OBJ(OBJ,at_fd,OBJ_CASE_INSENSITIVE,w);
@@ -151,17 +258,17 @@ begin
  CD:=GetCreationDisposition(flags);
  CO:=GetCreateOptions(flags);
 
- Result:=NtCreateFile(@fd,
-                      DA,
-                      @OBJ,
-                      @BLK,
-                      nil,
-                      FA,
-                      FILE_SHARE_ALL,
-                      CD,
-                      CO,
-                      nil,
-                      0);
+ Result:=ntf2px(NtCreateFile(@fd,
+                             DA,
+                             @OBJ,
+                             @BLK,
+                             nil,
+                             FA,
+                             FILE_SHARE_ALL,
+                             CD,
+                             CO,
+                             nil,
+                             0));
 
 end;
 
@@ -175,7 +282,7 @@ begin
  Result:=0;
  if (fd<>0) and (fd<>INVALID_HANDLE_VALUE) then
  begin
-  Result:=NtClose(fd);
+  Result:=ntf2px(NtClose(fd));
  end;
 end;
 
@@ -231,30 +338,30 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
  fd:=0;
 
- Result:=NtCreateFile(@fd,
-                      FILE_READ_DATA or
-                      FILE_WRITE_DATA or
-                      FILE_APPEND_DATA or
-                      FILE_READ_ATTRIBUTES or
-                      FILE_WRITE_ATTRIBUTES or
-                      FILE_CAN_DELETE or
-                      SYNCHRONIZE,
-                      @OBJ,
-                      @BLK,
-                      nil,
-                      FILE_ATTRIBUTE_TEMPORARY,
-                      0,
-                      FILE_OVERWRITE_IF,
-                      FILE_SYNCHRONOUS_IO_NONALERT or
-                      FILE_OPEN_REPARSE_POINT or
-                      FILE_NON_DIRECTORY_FILE or
-                      FILE_DELETE_ON_CLOSE,
-                      nil,
-                      0);
+ Result:=ntf2px(NtCreateFile(@fd,
+                             FILE_READ_DATA or
+                             FILE_WRITE_DATA or
+                             FILE_APPEND_DATA or
+                             FILE_READ_ATTRIBUTES or
+                             FILE_WRITE_ATTRIBUTES or
+                             FILE_CAN_DELETE or
+                             SYNCHRONIZE,
+                             @OBJ,
+                             @BLK,
+                             nil,
+                             FILE_ATTRIBUTE_TEMPORARY,
+                             0,
+                             FILE_OVERWRITE_IF,
+                             FILE_SYNCHRONOUS_IO_NONALERT or
+                             FILE_OPEN_REPARSE_POINT or
+                             FILE_NON_DIRECTORY_FILE or
+                             FILE_DELETE_ON_CLOSE,
+                             nil,
+                             0));
 
  if (Result<>0) then Exit;
 
- Result:=NtTruncate(fd,@BLK,SIZE);
+ Result:=ntf2px(NtTruncate(fd,@BLK,SIZE));
 
  if (Result<>0) then
  begin
@@ -284,25 +391,286 @@ begin
  BLK:=Default(IO_STATUS_BLOCK);
  fd:=0;
 
- Result:=NtOpenFile(@fd,
-               SYNCHRONIZE or
-               FILE_CAN_DELETE or
-               FILE_READ_DATA or
-               FILE_READ_ATTRIBUTES or
-               FILE_WRITE_ATTRIBUTES,
-               @OBJ,
-               @BLK,
-               FILE_SHARE_ALL,
-               FILE_OPEN_FOR_BACKUP_INTENT or
-               FILE_SYNCHRONOUS_IO_NONALERT or
-               FILE_OPEN_REPARSE_POINT
- );
+ Result:=ntf2px(NtOpenFile(@fd,
+                           SYNCHRONIZE or
+                           FILE_CAN_DELETE or
+                           FILE_READ_DATA or
+                           FILE_READ_ATTRIBUTES or
+                           FILE_WRITE_ATTRIBUTES,
+                           @OBJ,
+                           @BLK,
+                           FILE_SHARE_ALL,
+                           FILE_OPEN_FOR_BACKUP_INTENT or
+                           FILE_SYNCHRONOUS_IO_NONALERT or
+                           FILE_OPEN_REPARSE_POINT
+ ));
 
  if (Result<>0) then Exit;
 
- Result:=NtMarkDelete(fd,@BLK);
+ Result:=ntf2px(NtMarkDelete(fd,@BLK));
 
  NtClose(fd); //<-actual delete
+end;
+
+function md_fcopy_attrib(dst,src:THandle):Integer;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ if (dst=0) or (dst=INVALID_HANDLE_VALUE) then Exit(EINVAL);
+ if (src=0) or (src=INVALID_HANDLE_VALUE) then Exit(EINVAL);
+
+ //load time
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     src,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ //save time
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtSetInformationFile(
+     dst,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation);
+
+ Result:=ntf2px(R);
+end;
+
+function md_copy_attrib(const dst,src:RawByteString):Integer;
+var
+ fdst,fsrc:THandle;
+begin
+ Result:=md_open(dst,O_RDONLY,0,fdst);
+ if (Result<>0) then Exit;
+
+ Result:=md_open(src,O_RDONLY,0,fsrc);
+ if (Result<>0) then
+ begin
+  NtClose(fdst);
+  Exit;
+ end;
+
+ Result:=md_fcopy_attrib(fdst,fsrc);
+
+ NtClose(fdst);
+ NtClose(fsrc);
+end;
+
+function md_fstat(fd:THandle;sb:p_stat):Integer;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ FSI:FILE_STANDARD_INFORMATION;
+ FII:FILE_INTERNAL_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ if (fd=0) or (fd=INVALID_HANDLE_VALUE) or (sb=nil) then Exit(EINVAL);
+
+ //load time and file type
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     FD,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ sb^.st_atim    :=get_unix_file_time(FBI.LastAccessTime);
+ sb^.st_mtim    :=get_unix_file_time(FBI.LastWriteTime);
+ sb^.st_ctim    :=get_unix_file_time(FBI.ChangeTime);
+ sb^.st_birthtim:=get_unix_file_time(FBI.CreationTime);
+ sb^.st_flags   :=FBI.FileAttributes;
+
+ if ((FBI.FileAttributes and FILE_ATTRIBUTE_READONLY)<>0) then
+ begin
+  sb^.st_mode:=(&0777 and (not &0222));
+ end else
+ begin
+  sb^.st_mode:=0777;
+ end;
+
+ //load size
+ FSI:=Default(FILE_STANDARD_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     FD,
+     @BLK,
+     @FSI,
+     SizeOf(FSI),
+     FileStandardInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ sb^.st_nlink  :=FSI.NumberOfLinks;
+ sb^.st_size   :=Int64(FSI.EndOfFile);
+ sb^.st_blocks :=Int64(FSI.AllocationSize) div S_BLKSIZE;
+ sb^.st_blksize:=S_BLKSIZE;
+
+ //load inode
+ FII:=Default(FILE_INTERNAL_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     FD,
+     @BLK,
+     @FII,
+     SizeOf(FII),
+     FileInternalInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ sb^.st_dev:=FII.IndexNumber.HighPart;
+ sb^.st_ino:=FII.IndexNumber.LowPart;
+end;
+
+function md_stat(const path:RawByteString;sb:p_stat):Integer;
+var
+ fd:THandle;
+begin
+ if (sb=nil) then Exit(EINVAL);
+
+ Result:=md_open(path,O_RDONLY,0,fd);
+ if (Result<>0) then Exit;
+
+ Result:=md_fstat(fd,sb);
+
+ NtClose(fd);
+end;
+
+function md_futimens(fd:THandle;ts:p_timespec;numtimes:Integer):Integer;
+var
+ FBI:FILE_BASIC_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ R:DWORD;
+begin
+ if (fd=0) or (fd=INVALID_HANDLE_VALUE) or (ts=nil) then Exit(EINVAL);
+
+ //load time and file type
+ FBI:=Default(FILE_BASIC_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryInformationFile(
+     FD,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation
+    );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ FBI.LastAccessTime:=get_win_file_time(ts[0]);
+ FBI.LastWriteTime :=get_win_file_time(ts[1]);
+
+ if (numtimes < 3) and
+    (QWORD(FBI.LastWriteTime) < QWORD(FBI.CreationTime)) then
+ begin
+  FBI.CreationTime:=FBI.LastWriteTime;
+ end;
+
+ if (numtimes > 2) then
+ begin
+  FBI.CreationTime:=get_win_file_time(ts[2]);
+ end;
+
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtSetInformationFile(
+     FD,
+     @BLK,
+     @FBI,
+     SizeOf(FBI),
+     FileBasicInformation);
+
+ Result:=ntf2px(R);
+end;
+
+function md_utimens(const path:RawByteString;ts:p_timespec;numtimes:Integer):Integer;
+var
+ fd:THandle;
+begin
+ if (ts=nil) then Exit(EINVAL);
+
+ Result:=md_open(path,O_RDWR,0,fd);
+ if (Result<>0) then Exit;
+
+ Result:=md_futimens(fd,ts,numtimes);
+
+ NtClose(fd);
+end;
+
+function md_fstatfs(fd:THandle;sbp:p_statfs):Integer;
+var
+ FFF:FILE_FS_FULL_SIZE_INFORMATION;
+ BLK:IO_STATUS_BLOCK;
+ Sector:Int64;
+ R:DWORD;
+begin
+ if (fd=0) or (fd=INVALID_HANDLE_VALUE) or (sbp=nil) then Exit(EINVAL);
+
+ FFF:=Default(FILE_FS_FULL_SIZE_INFORMATION);
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ R:=NtQueryVolumeInformationFile(
+           fd,
+           @BLK,
+           @FFF,
+           SizeOf(FFF),
+           FileFsFullSizeInformation
+          );
+
+ Result:=ntf2px(R);
+ if (Result<>0) then Exit;
+
+ sbp^:=Default(t_statfs);
+
+ Sector:=(FFF.SectorsPerAllocationUnit*FFF.BytesPerSector);
+
+ sbp^.f_bsize :=Sector;
+ sbp^.f_iosize:=Sector;
+
+ sbp^.f_bavail:=QWORD(FFF.CallerAvailableAllocationUnits);
+ sbp^.f_blocks:=QWORD(FFF.TotalAllocationUnits          );
+ sbp^.f_bfree :=QWORD(FFF.ActualAvailableAllocationUnits);
+end;
+
+function md_statfs(const path:RawByteString;sbp:p_statfs):Integer;
+var
+ fd:THandle;
+begin
+ if (sbp=nil) then Exit(EINVAL);
+
+ Result:=md_open(path,O_RDONLY,0,fd);
+ if (Result<>0) then Exit;
+
+ Result:=md_fstatfs(fd,sbp);
+
+ NtClose(fd);
 end;
 
 end.

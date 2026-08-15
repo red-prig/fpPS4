@@ -65,6 +65,9 @@ procedure mtx_unlock (var m:mtx);
 function  mtx_owned  (var m:mtx):Boolean;
 procedure mtx_assert (var m:mtx);
 
+var
+ KeyedEventHandle:THandle=0;
+
 implementation
 
 {$IFDEF DEBUG_MTX}
@@ -72,9 +75,6 @@ uses
  md_systm,
  kern_thr;
 {$ENDIF}
-
-var
- qhandle:THandle=0;
 
 procedure mtx_init(var m:mtx;name:PChar); inline;
 begin
@@ -114,8 +114,8 @@ begin
 
   if (old.owned=0) or (old.owned=ThreadID) then
   begin
-   new.recursion:=old.recursion+1;
-   new.waiters  :=old.waiters;
+   new:=old;
+   new.recursion:=new.recursion+1;
    new.owned    :=ThreadID;
 
    if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
@@ -135,7 +135,7 @@ begin
 
     if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
     begin
-     NtWaitForKeyedEvent(qhandle, GetKey(m), False, nil);
+     NtWaitForKeyedEvent(KeyedEventHandle, GetKey(m), False, nil);
     end;
 
     i:=0;
@@ -171,8 +171,8 @@ begin
 
   if (old.owned=0) or (old.owned=ThreadID) then
   begin
-   new.recursion:=old.recursion+1;
-   new.waiters  :=old.waiters;
+   new:=old;
+   new.recursion:=new.recursion+1;
    new.owned    :=ThreadID;
 
    if System.InterlockedCompareExchange64(QWORD(m.fast_mutex),QWORD(new),QWORD(old)) = QWORD(old) then
@@ -251,7 +251,7 @@ begin
 
    if (new.recursion=0) and (old.waiters<>0) then
    begin
-    NtReleaseKeyedEvent(qhandle, GetKey(m), False, nil);
+    NtReleaseKeyedEvent(KeyedEventHandle, GetKey(m), False, nil);
    end;
 
    Break;
@@ -274,7 +274,7 @@ begin
 end;
 
 initialization
- NtCreateKeyedEvent(@qhandle, DWORD(-1), nil, 0);
+ NtCreateKeyedEvent(@KeyedEventHandle, DWORD(-1), nil, 0);
 
 end.
 

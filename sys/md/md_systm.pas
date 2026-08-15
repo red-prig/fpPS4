@@ -15,9 +15,12 @@ function  md_copyout(kaddr,udaddr:Pointer;len:ptruint;lencopied:pptruint;hProces
 
 function  md_fuword(var base:Pointer):Pointer;
 
-function  md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
+function  md_getppid:DWORD;
+function  md_pidfd_getfd (pidfd,targetfd:THandle):THandle;
 function  md_dup_to_pidfd(pidfd,targetfd:THandle):THandle;
-function  md_pidfd_open (pid:DWORD):THandle;
+function  md_pidfd_open  (pid:DWORD):THandle;
+function  md_waitpidfd   (pidfd:THandle;status:PDWORD):Integer;
+function  md_pidfd_close (pidfd:THandle):Integer;
 
 implementation
 
@@ -70,6 +73,26 @@ end;
 
 ///
 
+function md_getppid:DWORD;
+var
+ data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
+ p_info:PPROCESS_BASIC_INFORMATION;
+ R:DWORD;
+begin
+ Result:=0;
+ p_info:=Align(@data,8);
+
+ R:=NtQueryInformationProcess(NtCurrentProcess,
+                              ProcessBasicInformation,
+                              p_info,
+                              SizeOf(PROCESS_BASIC_INFORMATION),
+                              nil);
+ if (R=0) then
+ begin
+  Result:=p_info^.InheritedFromUPI;
+ end;
+end;
+
 function md_pidfd_getfd(pidfd,targetfd:THandle):THandle;
 begin
  Result:=0;
@@ -111,7 +134,26 @@ begin
  OATTR:=Default(OBJECT_ATTRIBUTES);
  OATTR.Length:=SizeOf(OBJECT_ATTRIBUTES);
 
- NtOpenProcess(@Result,PROCESS_DUP_HANDLE,@OATTR,@ClientId);
+ NtOpenProcess(@Result,SYNCHRONIZE or PROCESS_DUP_HANDLE or PROCESS_QUERY_LIMITED_INFORMATION,@OATTR,@ClientId);
+end;
+
+function md_waitpidfd(pidfd:THandle;status:PDWORD):Integer;
+begin
+ Result:=NtWaitForSingleObject(pidfd,False,nil);
+
+ if (Result=STATUS_WAIT_0) and (status<>nil) then
+ begin
+  GetExitCodeProcess(pidfd,status);
+ end;
+end;
+
+function md_pidfd_close(pidfd:THandle):Integer;
+begin
+ Result:=0;
+ if (pidfd<>0) and (pidfd<>INVALID_HANDLE_VALUE) then
+ begin
+  Result:=NtClose(pidfd);
+ end;
 end;
 
 end.

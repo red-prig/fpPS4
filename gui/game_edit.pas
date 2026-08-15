@@ -189,8 +189,9 @@ begin
 
  if (FParamSfo=nil) then
  begin
-  Edt_GameInfo_TitleId.Text:='???';
-  Edt_GameInfo_Version.Text:='???';
+  Edt_GameInfo_TitleId.Text:='NPXS00000';
+  Edt_GameInfo_Version.Text:='0.0';
+  Edt_GameInfo_AppVer .Text:='0.0';
   Exit;
  end;
 

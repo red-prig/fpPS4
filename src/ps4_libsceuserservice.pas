@@ -12,6 +12,7 @@ uses
   SysUtils;
 
 type
+ //[0x10000000..0x3FFFFFFF]
  pSceUserServiceUserId=^SceUserServiceUserId;
  SceUserServiceUserId=Integer;
 
@@ -57,10 +58,13 @@ const
  SCE_USER_SERVICE_ERROR_NOT_INITIALIZED =-2137653246; //0x80960002
  SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT=-2137653243; //0x80960005
  SCE_USER_SERVICE_ERROR_NO_EVENT        =-2137653241; //0x80960007
+ SCE_USER_SERVICE_ERROR_NOT_LOGGED_IN   =-2137653239; //0x80960009
  SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT=-2137653238; //0x8096000A
 
 const
  base_user_id=$167a1a93;
+
+function ps4_sceUserServiceIsLoggedIn(userId:Integer):Integer;
 
 implementation
 
@@ -98,10 +102,22 @@ begin
  Result:=0;
 end;
 
+function ps4_sceUserServiceIsLoggedIn(userId:Integer):Integer;
+begin
+ if (userId=base_user_id) then
+ begin
+  Result:=1;
+ end else
+ begin
+  Result:=0;
+ end;
+end;
+
 function ps4_sceUserServiceGetUserName(userId:Integer;userName:PChar;size:size_t):Integer;
 Const
  cuser:PChar='user'#0;
 begin
+ if (userId<>base_user_id) then Exit(SCE_USER_SERVICE_ERROR_NOT_LOGGED_IN);
  if (userName=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
  if (size<Length(cuser)) then Exit(SCE_USER_SERVICE_ERROR_BUFFER_TOO_SHORT);
  Move(cuser^,userName^,Length(cuser));
@@ -139,6 +155,7 @@ function ps4_sceUserServiceGetUserColor(userId:SceUserServiceUserId;
                                         color:pInteger  //SceUserServiceUserColor
                                        ):Integer;
 begin
+ if (userId<>base_user_id) then Exit(SCE_USER_SERVICE_ERROR_NOT_LOGGED_IN);
  if (color=nil) then Exit(SCE_USER_SERVICE_ERROR_INVALID_ARGUMENT);
  color^:=SCE_USER_SERVICE_USER_COLOR_BLUE;
  Result:=0;
@@ -156,6 +173,7 @@ begin
  lib.set_proc($6F01634BE6D7F660,@ps4_sceUserServiceTerminate);
  lib.set_proc($7CF87298A36F2BF0,@ps4_sceUserServiceGetLoginUserIdList);
  lib.set_proc($09D5A9D281D61ABD,@ps4_sceUserServiceGetInitialUser);
+ lib.set_proc($319C47F34DBDF968,@ps4_sceUserServiceIsLoggedIn);
  lib.set_proc($D71C5C3221AED9FA,@ps4_sceUserServiceGetUserName);
  lib.set_proc($C87D7B43A356B558,@ps4_sceUserServiceGetEvent);
  lib.set_proc($954A2AC1342EE06A,@ps4_sceUserServiceGetUserColor);

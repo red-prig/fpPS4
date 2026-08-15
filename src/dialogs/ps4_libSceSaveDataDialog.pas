@@ -9,7 +9,8 @@ uses
  kern_mtx,
  subr_dynlib,
  kern_proc,
- ps4_libSceSaveData,
+ SceSaveData,
+ ps4_libSceUserService,
  ps4_libSceCommonDialog;
 
 const
@@ -149,7 +150,7 @@ type
   resultId:Integer;
   buttonId:Integer; //SceSaveDataDialogButtonId
   dirName :SceSaveDataDirName;
-  param   :SceSaveDataParam;
+  params  :SceSaveDataParam;
  end;
 
  TSaveDialogClient=class(TCommonDialogClient)
@@ -541,16 +542,15 @@ begin
  end;
 end;
 
-function IsLoggedIn(userId:Integer):Integer; inline;
+function IsLoggedIn(userId:Integer):Boolean; inline;
 begin
- //sceUserServiceIsLoggedIn
- Result:=0;
+ Result:=(ps4_sceUserServiceIsLoggedIn(userId)=1);
 end;
 
-function IsRegistered(userId:Integer):Integer; inline;
+function IsRegistered(userId:Integer):Boolean; inline;
 begin
  //sceUserServiceGetRegisteredUserIdList
- Result:=0;
+ Result:=True;
 end;
 
 function _CheckTitleId(titleId:pchar):Integer;
@@ -698,9 +698,9 @@ end;
 function CheckNonListItems(dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
  if (p_proc.p_sdk_version < $1700000) or
-    (IsRegistered(items^.userId)=0) then
+    IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  if (items^.dirNameNum <= $400) then
@@ -723,9 +723,9 @@ end;
 function CheckListItems_old(dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
  if (p_proc.p_sdk_version < $1700000) or
-    (IsRegistered(items^.userId)=0) then
+    IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  begin
@@ -780,8 +780,8 @@ end;
 function CheckListItems_new(mode,dispType:Integer;items:pSceSaveDataDialogItems):Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
- if (IsLoggedIn(items^.userId)=0) then
- if (IsRegistered(items^.userId)=0) then
+ if IsLoggedIn(items^.userId) then
+ if IsRegistered(items^.userId) then
  if (items^.titleId = nil) or
     (CheckTitleId(items^.titleId)=0) then
  begin
@@ -1110,7 +1110,7 @@ begin
  if (len < 65) then
  begin
   i:=0;
-  while (i < len) do
+  while (i < 64) do
   begin
    if ((fingerprint[i] < 'a') or ('f' < fingerprint[i])) and
       ((fingerprint[i] < '0') or ('9' < fingerprint[i])) then
@@ -1661,7 +1661,7 @@ begin
     Result:=SCE_COMMON_DIALOG_ERROR_INVALID_STATE;
    end else
    begin
-    Result:=1; //IsReadyToDisplay
+    Result:=g_client.IsReadyToDisplay;
    end;
   end;
 
@@ -1743,7 +1743,7 @@ begin
  //
  if (pResult^.param <> nil) then
  begin
-  Move(src.rzdata.param,pResult^.param^,sizeof(SceSaveDataParam));
+  Move(src.rzdata.params,pResult^.param^,sizeof(SceSaveDataParam));
  end;
  //
  pResult^.userData := src.data.userData;

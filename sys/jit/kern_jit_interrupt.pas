@@ -52,6 +52,7 @@ type
   __end:QWORD;
   adest:QWORD;
   atype:t_next_addr_type;
+  debug:Boolean;
   //
   dis:TX86Disassembler;
   din:TInstruction;
@@ -468,6 +469,8 @@ begin
   Exit;
  end;
 
+ //is bugged
+ {
  if (info^.jflags.CAN_RESTART<>0) then
  begin
   call_interrupt(ctx,addr);
@@ -476,6 +479,7 @@ begin
   ctx.atype:=naCurr;
   Exit;
  end;
+ }
 
  if FixupEnd(addr,ctx.start,ctx.__end)=Pointer(ctx.__end) then
  begin
@@ -500,6 +504,16 @@ begin
   link_curr:=ctx.builder.get_curr_label.after;
 
   case ctx.din.OpCode.Opcode of
+   OPcli:ctx.debug:=True;  //start debug info
+   OPsti:ctx.debug:=False; //end   debug info
+  end;
+
+  if ctx.debug then
+  begin
+   add_orig(ctx);
+  end else
+  case ctx.din.OpCode.Opcode of
+
    OPcall :op_call(ctx);
    OPj__  ,
    OPloop ,
@@ -645,6 +659,8 @@ _start:
 
      if (info.recompil = Rip) then
      begin
+      //Writeln('jit_direct');
+
       //push %rip
       Rsp:=Rsp-8;
       PQWORD(Rsp)[0]:=Rip;

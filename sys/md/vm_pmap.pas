@@ -16,7 +16,6 @@ uses
  kern_rangelock,
  md_map,
  md_file,
- vfcntl,
  vm_pmap_prot,
  vm_tracking_map,
  vm_nt_map,

@@ -26,7 +26,7 @@
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir);sys"/>
             <Libraries Value="gui"/>
-            <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src;src\np;src\audio;src\param_sfo;src\playgo;src\ajm;src\dialogs"/>
+            <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src;src\np;src\audio;src\param_sfo;src\playgo;src\ajm;src\dialogs;src\savedata"/>
             <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -1438,11 +1438,6 @@
         <UnitName Value="ps4_libSceScreenShot"/>
       </Unit>
       <Unit>
-        <Filename Value="src\ps4_libscesavedata.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="ps4_libSceSaveData"/>
-      </Unit>
-      <Unit>
         <Filename Value="src\audio\ps4_libsceaudioout.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="ps4_libSceAudioOut"/>
@@ -1812,6 +1807,48 @@
         <Filename Value="sys\md\md_file.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="src\savedata\ps4_libscesavedata.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="ps4_libSceSaveData"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\scesavedata.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SceSaveData"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatabackend.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataBackend"/>
+      </Unit>
+      <Unit>
+        <Filename Value="sys\md\md_event.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\param_sfo.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatabackendsfo.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataBackendSfo"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatabackendutils.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataBackendUtils"/>
+      </Unit>
+      <Unit>
+        <Filename Value="src\savedata\savedatakeystone.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SaveDataKeystone"/>
+      </Unit>
+      <Unit>
+        <Filename Value="rtl\sha256.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -1823,7 +1860,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir);sys"/>
       <Libraries Value="gui"/>
-      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src;src\np;src\audio;src\param_sfo;src\playgo;src\ajm;src\dialogs"/>
+      <OtherUnitFiles Value="gui;rtl;sys;sys\dev;sys\fs;sys\jit;sys\kern;sys\md;sys\vfs;sys\vm;sys\fs\deadfs;sys\fs\devfs;sys\fs\fdescfs;sys\fs\nullfs;sys\fs\ufs;sys\test;kernel\libthr;vulkan;chip;shaders;spirv;src;src\np;src\audio;src\param_sfo;src\playgo;src\ajm;src\dialogs;src\savedata"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

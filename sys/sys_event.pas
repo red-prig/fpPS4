@@ -166,7 +166,7 @@ type
  t_klist =SLIST_HEAD; //knote
 
  p_kqlist=^t_kqlist;
- t_kqlist=SLIST_HEAD; //kqueue
+ t_kqlist=TAILQ_HEAD; //kqueue
 
  p_knlist=^t_knlist;
  t_knlist=packed record

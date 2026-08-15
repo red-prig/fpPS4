@@ -2393,6 +2393,7 @@ begin
   end;
   vput(rootvp);
  end;
+
 loop:
  vp:=__mnt_vnode_first_all(@mvp,mp);
  while (vp<>nil) do
@@ -2477,7 +2478,8 @@ loop:
   vdropl(vp);
   //
   vp:=__mnt_vnode_next_all(@mvp,mp);
- end;
+ end; //while
+
  if (rootrefs > 0) and ((flags and FORCECLOSE)=0) then
  begin
   {
@@ -2521,7 +2523,7 @@ begin
  ASSERT_VOP_ELOCKED(vp, 'vrecycle');
  recycled:=0;
  VI_LOCK(vp);
- if (vp^.v_usecount=0)then
+ if (vp^.v_usecount=0) then
  begin
   recycled:=1;
   vgonel(vp);
@@ -3250,15 +3252,21 @@ end;
 procedure vop_rename_pre(ap:p_vop_rename_args); public;
 begin
  if (ap^.a_tdvp<>ap^.a_fdvp) then
+ begin
   vhold(ap^.a_fdvp);
+ end;
 
  if (ap^.a_tvp<>ap^.a_fvp) then
+ begin
   vhold(ap^.a_fvp);
+ end;
 
  vhold(ap^.a_tdvp);
 
  if (ap^.a_tvp<>nil) then
+ begin
   vhold(ap^.a_tvp);
+ end;
 end;
 
 procedure vop_create_post(ap:p_vop_create_args;rc:Integer); public;
@@ -3319,11 +3327,14 @@ begin
  begin
   vdrop(ap^.a_fdvp);
  end;
+
  if (ap^.a_tvp<>ap^.a_fvp) then
  begin
   vdrop(ap^.a_fvp);
  end;
+
  vdrop(ap^.a_tdvp);
+
  if (ap^.a_tvp<>nil) then
  begin
   vdrop(ap^.a_tvp);

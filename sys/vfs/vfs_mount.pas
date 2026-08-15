@@ -960,7 +960,7 @@ begin
  { XXXMAC: pass to vfs_mount_alloc? }
  mp^.mnt_optnew:=optlist^;
  { Set the mount level flags. }
- mp^.mnt_flag     :=(fsflags and (MNT_UPDATEMASK or MNT_ROOTFS or MNT_RDONLY or MNT_EMU_PFS));
+ mp^.mnt_flag     :=(fsflags and (MNT_UPDATEMASK or MNT_ROOTFS or MNT_RDONLY or MNT_PFS_ANY));
  mp^.mnt_budget_id:=((fsflags and MNT_BUDGET) div MNT_BIG_APP)-1;
 
  {

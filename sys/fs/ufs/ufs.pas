@@ -427,7 +427,7 @@ begin
  begin
   strlcopy(@mp^.mnt_stat.f_fstypename, 'tmpfs', MFSNAMELEN);
  end else
- if ((mp^.mnt_flag and MNT_EMU_PFS)<>0) then
+ if ((mp^.mnt_flag and MNT_PFS_ANY)<>0) then
  begin
   strlcopy(@mp^.mnt_stat.f_fstypename, 'pfs', MFSNAMELEN);
  end;
