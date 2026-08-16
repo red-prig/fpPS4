@@ -41,6 +41,11 @@ uses
  kern_jit_asm,
  kern_lazy_jit,
  kern_thr,
+ signal,
+ signalvar,
+ trap,
+ kern_sig,
+ md_context,
  subr_backtrace;
 
 procedure jit_assert(tf_rip:QWORD);
@@ -84,22 +89,39 @@ begin
  Assert(False,'jit_unknow_int');
 end;
 
-procedure jit_exit_proc(tf_rip:QWORD);
+procedure jit_SIGILL(tf_rip:QWORD);
 var
  td:p_kthread;
+ ksi:ksiginfo_t;
 begin
+ //full soft trap
+
  td:=curkthread;
  set_jit_ctx_state(@td^.td_frame,False);
  td^.td_frame.tf_rip:=tf_rip;
- print_error_td('TODO:jit_exit_proc');
- Assert(False);
+
+ ksiginfo_init_trap(@ksi);
+ ksi.ksi_info.si_signo :=SIGILL;
+ ksi.ksi_info.si_code  :=ILL_PRVOPC;
+ ksi.ksi_info._reason._fault._trapno:=T_PRIVINFLT;
+ ksi.ksi_info.si_addr  :=Pointer(tf_rip);
+
+ trapsignal(td, @ksi);
+
+ //userret(td, frame);
+
+ //interrupt guard set
+ td^.td_teb^.iflag:=1;
+
+ ipi_sigreturn;
+ //
 end;
 
-procedure _jit_exit_proc; assembler; nostackframe;
+procedure _jit_SIGILL; assembler; nostackframe;
 asm
  call jit_save_ctx
  mov  %r14,%rdi
- jmp  jit_exit_proc
+ jmp  jit_SIGILL
 end;
 
 //in:r14(addr) out:r14(addr)
@@ -1192,28 +1214,22 @@ end;
 
 procedure op_ud2(var ctx:t_jit_context2);
 begin
- //exit proc?
- ctx.builder.int3;
  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
- ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
+ ctx.builder.call_far(@_jit_SIGILL);
  trim_flow(ctx);
 end;
 
 procedure op_iretq(var ctx:t_jit_context2);
 begin
- //exit proc?
- ctx.builder.int3;
  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
- ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
+ ctx.builder.call_far(@_jit_SIGILL);
  trim_flow(ctx);
 end;
 
 procedure op_hlt(var ctx:t_jit_context2);
 begin
- //stop thread?
- ctx.builder.int3;
  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
- ctx.builder.call_far(@_jit_exit_proc); //TODO exit dispatcher
+ ctx.builder.call_far(@_jit_SIGILL);
 end;
 
 procedure op_cpuid(var ctx:t_jit_context2);

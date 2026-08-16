@@ -70,6 +70,7 @@ Function  sys_sigaltstack(ss,oss:Pointer):Integer;
 function  sys_kill(pid,signum:Integer):Integer;
 function  sys_sigqueue(pid,signum:Integer;value:Pointer):Integer;
 
+procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
 //
 
 Function  sigonstack(sp:size_t):Integer;
