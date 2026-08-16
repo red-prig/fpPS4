@@ -105,6 +105,57 @@ const
  TF_JIT_RIP    =$10;
  TF_JIT_AST    =TF_HASFPXSTATE or TF_JIT_CTX;
 
+ // si_code
+ // codes for SIGILL
+ ILL_ILLOPC=1; // Illegal opcode.
+ ILL_ILLOPN=2; // Illegal operand.
+ ILL_ILLADR=3; // Illegal addressing mode.
+ ILL_ILLTRP=4; // Illegal trap.
+ ILL_PRVOPC=5; // Privileged opcode.
+ ILL_PRVREG=6; // Privileged register.
+ ILL_COPROC=7; // Coprocessor error.
+ ILL_BADSTK=8; // Internal stack error.
+
+ // codes for SIGBUS
+ BUS_ADRALN=1; // Invalid address alignment.
+ BUS_ADRERR=2; // Nonexistent physical address.
+ BUS_OBJERR=3; // Object-specific hardware error.
+
+ // codes for SIGSEGV
+ SEGV_MAPERR=1; // Address not mapped to object.
+ SEGV_ACCERR=2; // Invalid permissions for mapped object.
+
+ // codes for SIGFPE */
+ FPE_INTOVF=1; // Integer overflow.
+ FPE_INTDIV=2; // Integer divide by zero.
+ FPE_FLTDIV=3; // Floating point divide by zero.
+ FPE_FLTOVF=4; // Floating point overflow.
+ FPE_FLTUND=5; // Floating point underflow.
+ FPE_FLTRES=6; // Floating point inexact result.
+ FPE_FLTINV=7; // Invalid floating point operation.
+ FPE_FLTSUB=8; // Subscript out of range.
+
+ // codes for SIGTRAP
+ TRAP_BRKPT =1; // Process breakpoint.
+ TRAP_TRACE =2; // Process trace trap.
+ TRAP_DTRACE=3; // DTrace induced trap.
+
+ // codes for SIGCHLD
+ CLD_EXITED   =1; // Child has exited
+ CLD_KILLED   =2; // Child has terminated abnormally but did not create a core file
+ CLD_DUMPED   =3; // Child has terminated abnormally and created a core file
+ CLD_TRAPPED  =4; // Traced child has trapped
+ CLD_STOPPED  =5; // Child has stopped
+ CLD_CONTINUED=6; // Stopped child has continued
+
+ // codes for SIGPOLL
+ POLL_IN =1; // Data input available
+ POLL_OUT=2; // Output buffers available
+ POLL_MSG=3; // Input message available
+ POLL_ERR=4; // I/O Error
+ POLL_PRI=5; // High priority input available
+ POLL_HUP=6; // Device disconnected
+
 type
  p_sigset_t=^sigset_t;
  sigset_t=packed record //16
