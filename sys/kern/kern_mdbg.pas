@@ -165,27 +165,25 @@ end;
 
 procedure mdbg_out(p:PChar);
 var
- buf:PChar;
- len:ptruint;
- uio:t_uio;
- aio:iovec;
+ buf :PChar;
+ len :ptruint;
+ auio:t_uio;
+ aiov:iovec;
 begin
  buf:=AllocMem($1000);
  len:=0;
  if copyinstr(p,buf,$1000,@len)=0 then
  begin
-  uio:=Default(t_uio);
-  aio:=Default(iovec);
+  aiov.iov_base  :=buf;
+  aiov.iov_len   :=len;
+  auio.uio_iov   :=@aiov;
+  auio.uio_iovcnt:=1;
+  auio.uio_offset:=0;
+  auio.uio_resid :=len;
+  auio.uio_segflg:=UIO_SYSSPACE;
+  auio.uio_rw    :=UIO_WRITE;
   //
-  aio.iov_base  :=buf;
-  aio.iov_len   :=len;
-  //
-  uio.uio_iov   :=@aio;
-  uio.uio_iovcnt:=1;
-  uio.uio_segflg:=UIO_SYSSPACE;
-  uio.uio_resid :=len;
-  //
-  ttydisc_write(@debug_tty,@uio,0);
+  ttydisc_write(@debug_tty,@auio,0);
  end;
  FreeMem(buf);
 end;
