@@ -74,6 +74,8 @@ implementation
 uses
  md_systm,
  kern_thr;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 {$ENDIF}
 
 procedure mtx_init(var m:mtx;name:PChar); inline;
@@ -101,7 +103,7 @@ var
  rbp:Pointer;
 {$ENDIF}
 begin
- //Writeln('lock:',m.n,':',HexStr(@m));
+ //LOG_TRACE('lock:',m.n,':',HexStr(@m));
  {$IFDEF DEBUG_MTX}
  if curkthread<>nil then
   curkthread^.td_debug_mtx:=@m;

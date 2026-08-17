@@ -48,6 +48,8 @@ uses
  md_context,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 procedure jit_assert(tf_rip:QWORD);
 var
  td:p_kthread;
@@ -1958,7 +1960,7 @@ begin
   'sceSystemServiceGetStatus'         :Exit;
  end;
 
- Writeln(str,'->');
+ LOG_TRACE(str,'->');
 end;
 
 procedure print_end_hle(nid:QWORD); SysV_ABI_CDecl;
@@ -1982,7 +1984,7 @@ begin
   'sceSystemServiceGetStatus'         :Exit;
  end;
 
- Writeln(str,'<-');
+ LOG_TRACE(str,'<-');
 end;
 
 procedure print_trace(nid:QWORD); SysV_ABI_CDecl;
@@ -2205,10 +2207,7 @@ begin
  //
  sw_data:=sw_table^.curr;
  //
- if print_asm then
- begin
-  Writeln('switchtable:0x',HexStr(QWORD(sw_table^.table),11),'..0x',HexStr(QWORD(sw_next),11));
- end;
+ LOG_TRACE('switchtable:0x',HexStr(QWORD(sw_table^.table),11),'..0x',HexStr(QWORD(sw_next),11));
  //
  if ctx.is_text_addr(QWORD(sw_data)) and
        (
@@ -2229,10 +2228,7 @@ begin
 
    if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
    begin
-    if print_asm then
-    begin
-     Writeln(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
-    end;
+    LOG_TRACE(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
     //
     ctx.add_forward_point(fpCall,Pointer(ofs));
     //step up
@@ -2262,18 +2258,18 @@ begin
 
  with ctx^ do
  begin
-  Writeln('original------------------------':32,' ','0x',HexStr(ptr_curr));
+  LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_curr));
   print_disassemble(code,dis.CodeIdx);
-  Writeln('original------------------------':32,' ','0x',HexStr(ptr_next));
+  LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_next));
 
-  Writeln('builder error:',
+  LOG_ERROR('builder error:',
           din.OpCode.Prefix,',',
           din.OpCode.Opcode,',',
           din.OpCode.Suffix,' ',
           din.Operand[1].Size,' ',
           din.Operand[2].Size);
 
-  Writeln('opcode=$',HexStr(dis.opcode,8),' ',
+  LOG_TRACE('opcode=$',HexStr(dis.opcode,8),' ',
           'MIndex=',dis.ModRM.Index,' ',
           'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
           'mm=',MCODES[dis.mm and 3],':',dis.mm);
@@ -2354,10 +2350,10 @@ begin
 
  if (p_print_jit_preload) then
  begin
-  Writeln(' ctx.text_start:0x',HexStr(ctx.text_start,16));
-  Writeln(' ctx.max_reloc :0x',HexStr(ctx.max_reloc ,16));
-  Writeln(' ctx.text___end:0x',HexStr(ctx.text___end,16));
-  Writeln(' ctx.map____end:0x',HexStr(ctx.map____end,16));
+  LOG_TRACE(' ctx.text_start:0x',HexStr(ctx.text_start,16));
+  LOG_TRACE(' ctx.max_reloc :0x',HexStr(ctx.max_reloc ,16));
+  LOG_TRACE(' ctx.text___end:0x',HexStr(ctx.text___end,16));
+  LOG_TRACE(' ctx.map____end:0x',HexStr(ctx.map____end,16));
  end;
 
  if System.InterlockedExchange(_print_stat,1)=0 then
@@ -2393,7 +2389,7 @@ begin
   begin
    if (p_print_jit_preload) then
    begin
-    writeln('not excec:0x',HexStr(ptr));
+    LOG_TRACE('not excec:0x',HexStr(ptr));
    end;
    ctx.ptr_curr:=ptr;
    goto _invalid;
@@ -2403,7 +2399,7 @@ begin
   begin
    if (p_print_jit_preload) then
    begin
-    writeln('not excec:0x',HexStr(ptr));
+    LOG_TRACE('not excec:0x',HexStr(ptr));
    end;
    ctx.ptr_curr:=ptr;
    goto _invalid;
@@ -2458,7 +2454,7 @@ begin
      //invalid
      if (p_print_jit_preload) then
      begin
-      writeln('invalid1:0x',HexStr(ctx.ptr_curr));
+      LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr));
      end;
 
      _invalid:
@@ -2466,9 +2462,9 @@ begin
      if (p_print_jit_preload) then
      begin
       print_frame(stdout,ctx.ptr_curr);
-      Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+      LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
       print_disassemble(ctx.code,dis.CodeIdx);
-      Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+      LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
      end;
 
      ctx.mark_chunk(fpInvalid);
@@ -2501,16 +2497,16 @@ begin
   begin
    if (p_print_jit_preload) then
    begin
-    writeln('invalid2:0x',HexStr(ctx.ptr_curr));
+    LOG_ERROR('invalid2:0x',HexStr(ctx.ptr_curr));
    end;
    goto _invalid;
   end;
 
   if print_asm then
   begin
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
    print_disassemble(ctx.code,dis.CodeIdx);
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
   end;
 
   ctx.dis:=dis;
@@ -2544,7 +2540,7 @@ begin
     fpData,
     fpInvalid:
      begin
-      writeln('skip:0x',HexStr(ctx.ptr_curr));
+      LOG_TRACE('skip:0x',HexStr(ctx.ptr_curr));
       goto _invalid;
      end
     else;
@@ -2557,18 +2553,18 @@ begin
 
    with ctx do
    begin
-    Writeln('original------------------------':32,' ','0x',HexStr(ptr_curr));
+    LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_curr));
     print_disassemble(code,dis.CodeIdx);
-    Writeln('original------------------------':32,' ','0x',HexStr(ptr_next));
+    LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_next));
 
-    Writeln('Unhandled jit:',
+    LOG_ERROR('Unhandled jit:',
             din.OpCode.Prefix,',',
             din.OpCode.Opcode,',',
             din.OpCode.Suffix,' ',
             din.Operand[1].Size,' ',
             din.Operand[2].Size);
 
-    Writeln('opcode=$',HexStr(dis.opcode,8),' ',
+    LOG_TRACE('opcode=$',HexStr(dis.opcode,8),' ',
             'MIndex=',dis.ModRM.Index,' ',
             'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
             'mm=',MCODES[dis.mm and 3],':',dis.mm);
@@ -2674,9 +2670,9 @@ begin
   {
   if print_asm then
   begin
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
    print_disassemble(ctx.code,dis.CodeIdx);
-   Writeln('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
   end;
   }
 
@@ -2687,7 +2683,7 @@ begin
   begin
    node:=node_curr^.zNext.unzip;
 
-   Writeln('recompiled----------------------':32,' ','');
+   LOG_TRACE('recompiled----------------------':32,' ','');
    while (node<>nil) do
    begin
 
@@ -2696,7 +2692,7 @@ begin
 
     node:=node^.zNext.unzip;
    end;
-   Writeln('recompiled----------------------':32,' ','');
+   LOG_TRACE('recompiled----------------------':32,' ','');
   end;
 
   //print_asm:=False;
@@ -2731,7 +2727,7 @@ begin
    if (link_new<>nil_link) then
    begin
     ctx.builder.jmp(link_new);
-    //Writeln('jmp next:0x',HexStr(ptr));
+    //LOG_TRACE('jmp next:0x',HexStr(ptr));
     ctx.trim:=True;
    end;
   end;
@@ -2781,7 +2777,7 @@ begin
     link_new:=ctx.get_link(addr);
     if (link_new=nil_link) then
     begin
-     //Writeln('not found:0x',HexStr(addr));
+     //LOG_TRACE('not found:0x',HexStr(addr));
      Break;
     end else
     begin

@@ -34,6 +34,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 ///
 
 type
@@ -612,7 +614,7 @@ begin
  Result:=nil;
  instance:=g_instance;
 
- writeln('job_thread');
+ LOG_INFO('job_thread');
 
  repeat
   instance.job_list.Action;
@@ -2144,7 +2146,7 @@ begin
 
   Result:=g_instance.Backend.DoMount(mount,pResult,Transfering,False);
 
-  Writeln('SaveDataMount("',mount^.dirName^.data,'"):0x',HexStr(Result,8));
+  LOG_TRACE('SaveDataMount("',mount^.dirName^.data,'"):0x',HexStr(Result,8));
 
   if (cmd<>nil) then
   begin

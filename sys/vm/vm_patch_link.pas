@@ -44,6 +44,8 @@ uses
  vmparam,
  vm_object;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  p_patch_page=^t_patch_page;
  t_patch_page=TAILQ_HEAD;
@@ -230,7 +232,7 @@ var
  obj:vm_object_t;
  node:p_patch_node;
 begin
- //Writeln('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
+ //LOG_TRACE('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
 
  obj:=_obj;
  node:=AllocMem(SizeOf(t_patch_node));

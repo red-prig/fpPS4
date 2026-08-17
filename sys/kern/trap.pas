@@ -117,6 +117,8 @@ uses
  kern_jit_asm,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 type
@@ -196,12 +198,12 @@ begin
 
  if (FPUCW<>__INITIAL_FPUCW__) then
  begin
-  //writeln('changed FPUCW(0x',HexStr(FPUCW,4),') on ',td^.td_name);
+  //LOG_TRACE('changed FPUCW(0x',HexStr(FPUCW,4),') on ',td^.td_name);
  end;
 
  if ((MXCSR and __INITIAL_MXCSR__)<>__INITIAL_MXCSR__) then
  begin
-  writeln('changed MXCSR(0x',HexStr((MXCSR  and __INITIAL_MXCSR__),8),') on ',td^.td_name);
+  LOG_TRACE('changed MXCSR(0x',HexStr((MXCSR  and __INITIAL_MXCSR__),8),') on ',td^.td_name);
  end;
 
  td^.td_fpstate.XMM_SAVE_AREA.ControlWord:=FPUCW;
@@ -257,7 +259,7 @@ begin
   EJUSTRETURN:; //nothing
   else
     begin
-     Writeln('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name,' error:',error);
+     LOG_ERROR('Guest syscall:',p_proc.p_sysent^.sv_table[td_frame^.tf_rax].sy_name,' error:',error);
 
      print_backtrace_td(StdErr);
     end;
@@ -610,20 +612,20 @@ begin
  else
   msg2:='kernel';
 
- Writeln(StdErr,'Fatal trap ',trapno,': ',msg,' while in ',msg2,' mode');
+ LOG_CRITICAL(StdErr,'Fatal trap ',trapno,': ',msg,' while in ',msg2,' mode');
 
- Writeln(StdErr,'fault virtual address = 0x',HexStr(eva,16));
- Writeln(StdErr,'instruction pointer   = 0x',HexStr(frame^.tf_rip,16));
- Writeln(StdErr,'stack pointer         = 0x',HexStr(frame^.tf_rsp,16));
- Writeln(StdErr,'frame pointer         = 0x',HexStr(frame^.tf_rbp,16));
+ LOG_TRACE(StdErr,'fault virtual address = 0x',HexStr(eva,16));
+ LOG_TRACE(StdErr,'instruction pointer   = 0x',HexStr(frame^.tf_rip,16));
+ LOG_TRACE(StdErr,'stack pointer         = 0x',HexStr(frame^.tf_rsp,16));
+ LOG_TRACE(StdErr,'frame pointer         = 0x',HexStr(frame^.tf_rbp,16));
 
  td:=curkthread;
  if (td<>nil) then
  begin
-  Writeln(StdErr,'td_ustack.stack       = 0x',HexStr(td^.td_ustack.stack));
-  Writeln(StdErr,'td_ustack.sttop       = 0x',HexStr(td^.td_ustack.sttop));
-  Writeln(StdErr,'td_kstack.stack       = 0x',HexStr(td^.td_kstack.stack));
-  Writeln(StdErr,'td_kstack.sttop       = 0x',HexStr(td^.td_kstack.sttop));
+  LOG_TRACE(StdErr,'td_ustack.stack       = 0x',HexStr(td^.td_ustack.stack));
+  LOG_TRACE(StdErr,'td_ustack.sttop       = 0x',HexStr(td^.td_ustack.sttop));
+  LOG_TRACE(StdErr,'td_kstack.stack       = 0x',HexStr(td^.td_kstack.stack));
+  LOG_TRACE(StdErr,'td_kstack.sttop       = 0x',HexStr(td^.td_kstack.sttop));
  end;
 end;
 
@@ -640,7 +642,7 @@ begin
 
  if ((td^.td_pflags and TDP_NOFAULTING)<>0) then
  begin
-  Writeln('TDP_NOFAULTING:',curkthread^.td_name);
+  LOG_INFO('TDP_NOFAULTING:',curkthread^.td_name);
   Exit(SIGSEGV);
  end;
 
@@ -660,7 +662,7 @@ begin
 
  end else
  begin
-  //Writeln('not is_guest_addr:0x',HexStr(eva,16),':',curkthread^.td_name);
+  LOG_TRACE('not is_guest_addr:0x',HexStr(eva,16),':',curkthread^.td_name);
   Result:=SIGSEGV;
  end;
 
@@ -668,7 +670,7 @@ begin
  begin
   if (td^.pcb_onfault<>nil) then
   begin
-   Writeln('pcb_onfault<:',HexStr(td^.pcb_onfault),':',curkthread^.td_name);
+   LOG_TRACE('pcb_onfault<:',HexStr(td^.pcb_onfault),':',curkthread^.td_name);
    frame^.tf_rip:=QWORD(td^.pcb_onfault);
    Exit(0);
   end else

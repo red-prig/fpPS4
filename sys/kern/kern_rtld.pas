@@ -210,6 +210,8 @@ uses
  kern_budget,
  kern_patcher;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function maxInt64(a,b:Int64):Int64; inline;
 begin
  if (a>b) then Result:=a else Result:=b;
@@ -365,7 +367,7 @@ begin
       For i:=0 to count-1 do
        if ((self_segs[i].flags and (SELF_PROPS_ENCRYPTED or SELF_PROPS_COMPRESSED))<>0) then
        begin
-        Writeln(StdErr,'exec_load_self:',imgp^.execpath,' is encrypted!');
+        LOG_ERROR(StdErr,'exec_load_self:',imgp^.execpath,' is encrypted!');
         FreeMem(self_hdr);
         Exit(ENOEXEC);
        end;
@@ -581,7 +583,7 @@ begin
 
  if ((endp - path + 2) > PATH_MAX) then
  begin
-  Writeln(StdErr,'Filename is too long:',path);
+  LOG_ERROR(StdErr,'Filename is too long:',path);
   Exit(-1);
  end;
 
@@ -645,14 +647,14 @@ begin
   paddr^:=0;
  end;
 
- Writeln(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+size,12),':',Result,':',hint);
+ LOG_TRACE(' rtld_mmap:0x',HexStr(addr,12),'..0x',HexStr(addr+size,12),':',Result,':',hint);
 end;
 
 procedure rtld_munmap(base:Pointer;size:QWORD;hint:PChar);
 var
  map:vm_map_t;
 begin
- Writeln(' rtld_munmap:0x',HexStr(QWORD(base),12),'..0x',HexStr(QWORD(base)+size,12),':',hint);
+ LOG_TRACE(' rtld_munmap:0x',HexStr(QWORD(base),12),'..0x',HexStr(QWORD(base)+size,12),':',hint);
 
  if (base<>nil) and (size<>0) then
  begin
@@ -697,7 +699,7 @@ begin
          ((vaddr and PAGE_MASK)<>0) or
          ((phdr[i].p_offset and PAGE_MASK)<>0) then
       begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,' segment #',i,' is not page aligned');
+       LOG_ERROR(StdErr,'scan_phdr:',imgp^.execpath,' segment #',i,' is not page aligned');
        Exit(ENOEXEC);
       end;
 
@@ -789,7 +791,7 @@ begin
 
       if (phdr[i].p_align > 32) then
       begin
-       Writeln(StdErr,'scan_phdr:',imgp^.execpath,' alignment of segment #',i,' it must be less than 32.');
+       LOG_ERROR(StdErr,'scan_phdr:',imgp^.execpath,' alignment of segment #',i,' it must be less than 32.');
        Exit(ENOEXEC);
       end;
      end;
@@ -1087,19 +1089,19 @@ begin
 
  if (memsz<filesz) then
  begin
-  Writeln(StdErr,'[KERNEL] self_load_section: memsz',HexStr(memsz,8),') < filesz(',HexStr(filesz,8),') at segment ',id);
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: memsz',HexStr(memsz,8),') < filesz(',HexStr(filesz,8),') at segment ',id);
   Exit(ENOEXEC);
  end;
 
  if ((prot and 6)=6) then
  begin
-  Writeln(StdErr,'[KERNEL] self_load_section: writeable text segment ',id,', ',HexStr(vaddr,8));
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: writeable text segment ',id,', ',HexStr(vaddr,8));
   Exit(ENOEXEC);
  end;
 
  if ((vaddr and PAGE_MASK)<>0) then
  begin
-  Writeln(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: non-aligned segment ',id,', ',HexStr(vaddr,8));
   Exit(ENOEXEC);
  end;
 
@@ -1149,8 +1151,8 @@ begin
   //
   vm_object_deallocate(imgp^.obj);
   //
-  Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
+  LOG_ERROR(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: vm_map_insert failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
   Exit(vm_mmap_to_errno(Result));
  end;
 
@@ -1165,7 +1167,7 @@ begin
 
  //if ((prot and VM_PROT_EXECUTE)<>0) then
  begin
-  Writeln(' ',_rwxs(prot),':vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
+  LOG_TRACE(' ',_rwxs(prot),':vaddr=0x',HexStr(vaddr,12),' offset=0x',HexStr(offset,6),' memsz=0x',HexStr(memsz,6),' filesz=0x',HexStr(filesz,6));
   patcher_process_section(imgp,cache,Pointer(vaddr_lo),filesz,memsz,prot);
  end;
 
@@ -1174,7 +1176,7 @@ begin
  begin
   vm_map_unlock(map);
   //
-  Writeln(StdErr,'[KERNEL] self_load_section: copyout failed ',
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: copyout failed ',
     id,', ',HexStr(base),'->',HexStr(vaddr_lo,8),':',HexStr(memsz,8),' (',Result,')');
   Assert(false,'self_load_section');
   Exit;
@@ -1185,7 +1187,7 @@ begin
  begin
   vm_map_unlock(map);
   //
-  Writeln(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
+  LOG_ERROR(StdErr,'[KERNEL] self_load_section: vm_map_protect failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
   Exit(vm_mmap_to_errno(Result));
  end;
 
@@ -1204,8 +1206,8 @@ begin
   begin
    vm_object_deallocate(imgp^.obj);
    //
-   Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
-   Writeln(StdErr,'[KERNEL] self_load_section: vm_map_wire failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
+   LOG_ERROR(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
+   LOG_ERROR(StdErr,'[KERNEL] self_load_section: vm_map_wire failed ',id,', ',HexStr(vaddr,8),' (',Result,')');
    Exit(vm_mmap_to_errno(Result));
   end;
  end;

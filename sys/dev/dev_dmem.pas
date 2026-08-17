@@ -26,6 +26,8 @@ uses
  kern_budget,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  PAvailableDirectMemorySize=^TAvailableDirectMemorySize;
  TAvailableDirectMemorySize=packed record
@@ -117,7 +119,7 @@ begin
  PRT_APERTURE_LOW [data^.apertureId]:=addr;
  PRT_APERTURE_HIGH[data^.apertureId]:=addr + len;
 
- Writeln('TODO:set_prt_aperture(0x',HexStr(addr,10),',0x',HexStr(len,10),',',data^.apertureId,')');
+ LOG_WARNING('TODO:set_prt_aperture(0x',HexStr(addr,10),',0x',HexStr(len,10),',',data^.apertureId,')');
 end;
 
 function get_prt_aperture(data:p_prt_aperture):Integer;
@@ -147,7 +149,7 @@ begin
 
  dmap:=dev^.si_drv1;
 
- Writeln('dmem_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(fflag,8),')');
+ LOG_TRACE('dmem_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(fflag,8),')');
 
  case cmd of
   $4008800A: //sceKernelGetDirectMemorySize
@@ -170,7 +172,7 @@ begin
              begin
               Result:=dmem_map_alloc(dmap^.dmem,start,__end,len,align,mtype,acl_app,start);
               {
-              Writeln('dmem_map_alloc(0x',HexStr(start,11),
+              LOG_TRACE('dmem_map_alloc(0x',HexStr(start,11),
                                     ',0x',HexStr(__end,11),
                                     ',0x',HexStr(len,11),
                                     ',0x',HexStr(align,11),
@@ -272,7 +274,7 @@ begin
   Exit(EPERM);
  end;
 
- Writeln('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
+ LOG_TRACE('dmem_mmap("',dev^.si_name,'",0x',HexStr(offset,8),',0x',HexStr(paddr),',',nprot,')');
 
  dmap:=dev^.si_drv1;
 
@@ -313,7 +315,7 @@ begin
   Exit(EPERM);
  end;
 
- Writeln('dmem_mmap_single2("',dev^.si_name,'",0x',HexStr(offset^,8),',0x',HexStr(size,8),',',nprot,')');
+ LOG_TRACE('dmem_mmap_single2("',dev^.si_name,'",0x',HexStr(offset^,8),',0x',HexStr(size,8),',',nprot,')');
 
  ofs:=offset^;
 

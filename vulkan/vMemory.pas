@@ -215,6 +215,8 @@ uses
  kern_rwlock,
  kern_dmem;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  global_mem_lock:Pointer=nil;
 
@@ -1197,16 +1199,16 @@ var
  s:RawByteString;
  i:Byte;
 begin
- Writeln('[HostMappedRequirements]');
+ LOG_INFO('[HostMappedRequirements]');
 
  c:=GetCompatibleHostMapped(0);
- Writeln('  BufferHostMapped=',c);
+ LOG_INFO('  BufferHostMapped=',c);
 
  if c then
  begin
   mr:=GetHostMappedRequirements;
 
-  Writeln('  Alignment=',mr.alignment);
+  LOG_INFO('  Alignment=',mr.alignment);
   s:='';
   For i:=0 to VK_MAX_MEMORY_TYPES-1 do
   if ((1 shl i) and (mr.memoryTypeBits))<>0 then
@@ -1219,13 +1221,13 @@ begin
     s:=s+','+IntToStr(i);
    end;
   end;
-  Writeln('  MemoryType=',S);
+  LOG_INFO('  MemoryType=',S);
  end;
 
  FSparceMemoryTypes:=0;
 
  c:=GetCompatibleHostMapped(ord(VK_BUFFER_CREATE_SPARSE_BINDING_BIT));
- Writeln('  SparceHostMapped=',c);
+ LOG_INFO('  SparceHostMapped=',c);
 
  if c then
  begin
@@ -1243,7 +1245,7 @@ begin
     s:=s+','+IntToStr(i);
    end;
   end;
-  Writeln('  SparceType=',s);
+  LOG_INFO('  SparceType=',s);
  end;
 
  FProperties:=Default(TVkPhysicalDeviceMemoryProperties);
@@ -1402,10 +1404,10 @@ var
 begin
  For i:=0 to FProperties.memoryHeapCount-1 do
  begin
-  Writeln('[Heap]:',i);
-  Writeln(' size =0x',HexStr(FProperties.memoryHeaps[i].size,16));
-  Writeln(' flags=',get_flags_str(FProperties.memoryHeaps[i].flags));
-  Writeln(' types=',get_types_str(i));
+  LOG_INFO('[Heap]:',i);
+  LOG_INFO(' size =0x',HexStr(FProperties.memoryHeaps[i].size,16));
+  LOG_INFO(' flags=',get_flags_str(FProperties.memoryHeaps[i].flags));
+  LOG_INFO(' types=',get_types_str(i));
 
  end;
 
@@ -1414,14 +1416,14 @@ begin
  if Length(FHeaps)<>0 then
  For i:=0 to High(FHeaps) do
  begin
-  Writeln('[Heap]:',i);
-  Writeln(' heap_size      =0x',HexStr(FHeaps[i].heap_size,16));
-  Writeln(' heap_id        =',FHeaps[i].heap_index);
-  Writeln(' def_mem_type   =',FHeaps[i].def_mem_type);
-  Writeln(' device_local   =',FHeaps[i].device_local);
-  Writeln(' device_coherent=',FHeaps[i].device_coherent);
-  Writeln(' host_visible   =',FHeaps[i].host_visible);
-  Writeln(' host_coherent  =',FHeaps[i].host_coherent);
+  LOG_INFO('[Heap]:',i);
+  LOG_INFO(' heap_size      =0x',HexStr(FHeaps[i].heap_size,16));
+  LOG_INFO(' heap_id        =',FHeaps[i].heap_index);
+  LOG_INFO(' def_mem_type   =',FHeaps[i].def_mem_type);
+  LOG_INFO(' device_local   =',FHeaps[i].device_local);
+  LOG_INFO(' device_coherent=',FHeaps[i].device_coherent);
+  LOG_INFO(' host_visible   =',FHeaps[i].host_visible);
+  LOG_INFO(' host_coherent  =',FHeaps[i].host_coherent);
  end;
 end;
 
@@ -1776,7 +1778,7 @@ begin
  begin
   node:=FBacked;
   FBacked:=nil;
-  Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+  LOG_TRACE('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
   Result:=Result+node.FSize;
   ReleaseAndNil(node);
   if (Result>=max) then Exit;
@@ -1791,7 +1793,7 @@ begin
   if (node.FMemInfo.heap_index=heap_index) then
   if (node.FHold=0) then //lock Hold?
   begin
-   Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+   LOG_TRACE('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
    //
    Result:=Result+node.FSize;
    //
@@ -1823,7 +1825,7 @@ begin
   if (node.FMemInfo.heap_index=heap_index) then
   if (node.FHold=0) then //lock Hold?
   begin
-   Writeln('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+   LOG_TRACE('Unload:0x',HexStr(node),':0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
    //
    Result:=Result+node.FSize;
    //
@@ -1995,7 +1997,7 @@ begin
 
   if (FStart_align=0) then
   begin
-   Writeln('Addres:0x',HexStr(FStart,11),' not gpu mapped!');
+   LOG_CRITICAL(StdErr,'Addres:0x',HexStr(FStart,11),' not gpu mapped!');
    Assert(false,'FetchHostMap:gpu_get_bound');
   end;
 
@@ -2146,15 +2148,15 @@ var
 begin
  if (Self=nil) then Exit;
 
- Writeln('[Host]:');
+ LOG_INFO('[Host]:');
 
  node:=TvHostMemory(TAILQ_FIRST(@FHosts));
  while (node<>nil) do
  begin
 
-  Writeln(' 0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+  LOG_INFO(' 0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
 
-  Writeln('   0x',HexStr(node.FStart,16),'..',HexStr(node.F__End,16));
+  LOG_INFO('   0x',HexStr(node.FStart,16),'..',HexStr(node.F__End,16));
 
   node:=TvHostMemory(TAILQ_NEXT(node,@node.entry));
  end;
@@ -2181,7 +2183,7 @@ begin
  while (entry<>@map^.header) do
  begin
 
-  Writeln('    ',(entry^.start),'..',(entry^.__end),':',(entry^.__end-entry^.start),':',get_desc_str(entry^.desc));
+  LOG_INFO('    ',(entry^.start),'..',(entry^.__end),':',(entry^.__end-entry^.start),':',get_desc_str(entry^.desc));
 
   entry:=entry^.next;
  end;
@@ -2193,15 +2195,15 @@ var
 begin
  if (Self=nil) then Exit;
 
- Writeln('[Devs]:');
+ LOG_INFO('[Devs]:');
 
  node:=TvDeviceMemory(TAILQ_FIRST(@FDevs));
  while (node<>nil) do
  begin
 
-  Writeln(' 0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
+  LOG_INFO(' 0x',HexStr(node.FHandle,16),':[',get_str_mem_info(node.FMemInfo),']');
 
-  Writeln('   ',(node.FMap.size),'/',(node.FSize),':',(node.FMap.size/node.FSize)*100:0:2,'%');
+  LOG_INFO('   ',(node.FMap.size),'/',(node.FSize),':',(node.FMap.size/node.FSize)*100:0:2,'%');
 
   gpu_map_print_all(@node.FMap);
 
@@ -2230,7 +2232,7 @@ begin
  if (r<>VK_SUCCESS) then
  begin
   last_alloc_error:=r;
-  Writeln(StdErr,'vkAllocateMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex);
+  LOG_ERROR(StdErr,'vkAllocateMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex);
   //print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  end;
 end;
@@ -2257,7 +2259,7 @@ begin
  if (r<>VK_SUCCESS) then
  begin
   last_alloc_error:=r;
-  Writeln(StdErr,'vkAllocHostMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex,' addr=0x',HexStr(addr));
+  LOG_ERROR(StdErr,'vkAllocHostMemory:',r,' Size=0x',HexStr(Size,16),' mtindex=',mtindex,' addr=0x',HexStr(addr));
  end;
 end;
 
@@ -2280,7 +2282,7 @@ begin
  if (r<>VK_SUCCESS) then
  begin
   last_alloc_error:=r;
-  Writeln(StdErr,'vkAllocateMemory:',r);
+  LOG_ERROR(StdErr,'vkAllocateMemory:',r);
  end;
 end;
 
@@ -2303,7 +2305,7 @@ begin
  if (r<>VK_SUCCESS) then
  begin
   last_alloc_error:=r;
-  Writeln(StdErr,'vkAllocateMemory:',r);
+  LOG_ERROR(StdErr,'vkAllocateMemory:',r);
  end;
 end;
 
@@ -2360,7 +2362,7 @@ begin
  budget:=Default(TVkPhysicalDeviceMemoryBudgetPropertiesEXT);
  if GetMemoryBudget(budget) then
  begin
-  Writeln('[MemoryBudget]');
+  LOG_INFO('[MemoryBudget]');
   For i:=0 to VK_MAX_MEMORY_HEAPS-1 do
   if (budget.heapBudget[i]<>0) then
   begin
@@ -2372,7 +2374,7 @@ begin
     FMemInfo:=convert_meminfo(mem_type,@MemManager.FProperties.memoryTypes[mem_type]);
    end;
 
-   Writeln(' [',i,']:',get_str_mem_info(FMemInfo),':0x',HexStr(budget.heapUsage[i],16),'/',HexStr(budget.heapBudget[i],16),':',
+   LOG_INFO(' [',i,']:',get_str_mem_info(FMemInfo),':0x',HexStr(budget.heapUsage[i],16),'/',HexStr(budget.heapBudget[i],16),':',
            (budget.heapUsage[i]/budget.heapBudget[i]*100):0:2,'%'
           );
   end;

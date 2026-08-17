@@ -58,6 +58,8 @@ uses
  md_context,
  kern_jit_asm;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //clearing memory without AVX optimizations
 procedure bzero(ptr:Pointer;size:ptrint);
 begin
@@ -397,7 +399,7 @@ var
 begin
  td:=curkthread;
 
- Writeln('sendsig');
+ LOG_INFO('sendsig');
 
  sig:=ksi^.ksi_info.si_signo;
 
@@ -531,7 +533,7 @@ var
 begin
  td:=curkthread;
 
- Writeln('sys_sigreturn');
+ LOG_INFO('sys_sigreturn');
  //print_backtrace_td(stderr);
 
  Result:=copyin(sigcntxp,@uc,sizeof(ucontext_t));

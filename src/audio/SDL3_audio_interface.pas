@@ -48,6 +48,8 @@ uses
  kern_thr,
  md_thread;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  SDL3Audio:TSDL3Audio=nil;
 
@@ -290,8 +292,8 @@ begin
   end;
  end;
 
- if f_param.is_restricted  then Writeln('TODO: is_restricted ');
- if f_param.is_mix_to_main then Writeln('TODO: is_mix_to_main');
+ if f_param.is_restricted  then LOG_WARNING('TODO: is_restricted ');
+ if f_param.is_mix_to_main then LOG_WARNING('TODO: is_mix_to_main');
 
  Device:=SDL3Audio.SDL_OpenAudioDevice(FindOutDevice(device_id),@Spec);
  if (Device=0) then

@@ -42,6 +42,8 @@ uses
  kern_thr,
  kern_mtx;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function strdup(src:PChar):PChar; inline;
 var
  i:ptrint;
@@ -189,7 +191,7 @@ begin
  //error:=kern_symlink('/', 'dev', UIO_SYSSPACE);
  //if (error<>0) then
  //begin
- // Writeln('kern_symlink /dev / returns ',error);
+ // LOG_ERROR('kern_symlink /dev / returns ',error);
  //end;
 
  Exit(error);
@@ -206,12 +208,12 @@ var
   Write(prefix,':');
   if (vp=nil) then
   begin
-   Writeln(' nil');
+   LOG_INFO(' nil');
    Exit;
   end;
   Write(' v_tag:',vp^.v_tag);
   m:=vp^.v_mount;
-  Writeln(
+  LOG_INFO(
    ' fstype:',m^.mnt_stat.f_fstypename,
    ' mntfrom:',m^.mnt_stat.f_mntfromname,
    ' mnton:',m^.mnt_stat.f_mntonname
@@ -219,7 +221,7 @@ var
  end;
 
 begin
- Writeln('[mount_print]->');
+ LOG_INFO('[mount_print]->');
 
  mtx_lock(mountlist_mtx);
 
@@ -232,7 +234,7 @@ begin
  m:=TAILQ_FIRST(@mountlist);
  while (m<>nil) do
  begin
-  Writeln(
+  LOG_INFO(
    ' fstype:',m^.mnt_stat.f_fstypename,
    ' mntfrom:',m^.mnt_stat.f_mntfromname,
    ' mnton:',m^.mnt_stat.f_mntonname
@@ -243,7 +245,7 @@ begin
 
  mtx_unlock(mountlist_mtx);
 
- Writeln('<-[mount_print]');
+ LOG_INFO('<-[mount_print]');
 end;
 
 function vfs_mountroot_shuffle(mpdevfs:p_mount):Integer;
@@ -328,7 +330,7 @@ begin
 
  if (error<>0) then
  begin
-  Writeln('mountroot: unable to remount devfs under /dev ', error);
+  LOG_ERROR('mountroot: unable to remount devfs under /dev ', error);
  end;
 
  NDFREE(@nd, NDF_ONLY_PNBUF);
@@ -339,7 +341,7 @@ begin
   { Unlink the no longer needed /dev/dev ^. / symlink }
   //error:=kern_unlink('/dev/dev', UIO_SYSSPACE);
   //if (error<>0) then
-  // Writeln('mountroot: unable to unlink /dev/dev ', error);
+  // LOG_ERROR('mountroot: unable to unlink /dev/dev ', error);
  end;
 
  Exit(0);

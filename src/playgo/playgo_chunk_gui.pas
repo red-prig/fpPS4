@@ -147,6 +147,8 @@ function LoadPlaygoFile(const path:RawByteString):TPlaygoFile;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 function LoadPlaygoFile(const path:RawByteString):TPlaygoFile;
@@ -183,21 +185,21 @@ begin
  fd:=FileOpen(path,fmOpenRead);
  if (fd=feInvalidHandle) then
  begin
-  Writeln(StdErr,'Error open:',path);
+  LOG_ERROR(StdErr,'Error open:',path);
   Exit;
  end;
 
  hdr:=Default(t_playgo_header);
  if (FileRead(fd,hdr,SizeOf(hdr))<>SizeOf(hdr)) then
  begin
-  Writeln(StdErr,'Error read:',path);
+  LOG_ERROR(StdErr,'Error read:',path);
   FileClose(fd);
   Exit;
  end;
 
  if (hdr.magic<>PLAYGO_MAGIC) then
  begin
-  Writeln(StdErr,'Invalid file:',path);
+  LOG_ERROR(StdErr,'Invalid file:',path);
   FileClose(fd);
   Exit;
  end;
@@ -212,7 +214,7 @@ begin
     (chunk_labels=nil) or
     (mchunk_attrs=nil) then
  begin
-  Writeln(StdErr,'Error read:',path);
+  LOG_ERROR(StdErr,'Error read:',path);
 
   FreeMem(chunk_attrs  );
   FreeMem(chunk_mchunks);

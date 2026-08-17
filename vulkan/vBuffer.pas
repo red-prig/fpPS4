@@ -37,6 +37,8 @@ function GetRequirements(sparce:boolean;size:TVkDeviceSize;usage:TVkFlags;ext:Po
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function VkBindSparseBufferMemory(queue:TVkQueue;buffer:TVkBuffer;bindCount:TVkUInt32;pBinds:PVkSparseMemoryBind):TVkResult;
 var
  finfo:TVkFenceCreateInfo;
@@ -50,7 +52,7 @@ begin
  Result:=vkCreateFence(Device.FHandle,@finfo,nil,@fence);
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateFence:',Result);
+  LOG_ERROR(StdErr,'vkCreateFence:',Result);
   Exit;
  end;
 
@@ -68,7 +70,7 @@ begin
 
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkQueueBindSparse:',Result);
+  LOG_ERROR(StdErr,'vkQueueBindSparse:',Result);
   vkDestroyFence(Device.FHandle,fence,nil);
   Exit;
  end;
@@ -76,7 +78,7 @@ begin
  Result:=vkWaitForFences(Device.FHandle,1,@fence,VK_TRUE,TVkUInt64(-1));
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkWaitForFences:',Result);
+  LOG_ERROR(StdErr,'vkWaitForFences:',Result);
  end;
 
  vkDestroyFence(Device.FHandle,fence,nil);
@@ -111,7 +113,7 @@ begin
  r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateBuffer:',r);
+  LOG_ERROR(StdErr,'vkCreateBuffer:',r);
   Exit;
  end;
 end;
@@ -134,7 +136,7 @@ begin
  r:=vkCreateBuffer(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateBuffer:',r);
+  LOG_ERROR(StdErr,'vkCreateBuffer:',r);
   Exit;
  end;
 end;
@@ -203,7 +205,7 @@ begin
 
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
+  LOG_ERROR(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
  end;
 end;
 

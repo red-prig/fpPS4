@@ -70,6 +70,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_NpCommerce_mtx:mtx;
  g_client        :TNpCommerceDialogClient=nil;
@@ -106,7 +108,7 @@ function ps4_sceNpCommerceDialogInitialize():Integer;
 var
  client:TNpCommerceDialogClient;
 begin
- Writeln('sceNpCommerceDialogInitialize');
+ LOG_INFO('sceNpCommerceDialogInitialize');
 
  mtx_lock(g_NpCommerce_mtx);
 
@@ -159,7 +161,7 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- Writeln('sceNpCommerceDialogOpen');
+ LOG_INFO('sceNpCommerceDialogOpen');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_NpCommerce_mtx);
@@ -291,7 +293,7 @@ end;
 
 function ps4_sceNpCommerceDialogClose():Integer;
 begin
- Writeln('sceNpCommerceDialogClose');
+ LOG_INFO('sceNpCommerceDialogClose');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_NpCommerce_mtx);
@@ -312,7 +314,7 @@ end;
 
 function ps4_sceNpCommerceDialogTerminate():Integer;
 begin
- Writeln('sceNpCommerceDialogTerminate');
+ LOG_INFO('sceNpCommerceDialogTerminate');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_NpCommerce_mtx);
@@ -422,19 +424,19 @@ end;
 
 function ps4_sceNpCommerceShowPsStoreIcon(pos:SceNpCommercePsStoreIconPos):Integer;
 begin
- Writeln('sceNpCommerceShowPsStoreIcon:',pos);
+ LOG_INFO('sceNpCommerceShowPsStoreIcon:',pos);
  Result:=0;
 end;
 
 function ps4_sceNpCommerceHidePsStoreIcon():Integer;
 begin
- Writeln('sceNpCommerceHidePsStoreIcon');
+ LOG_INFO('sceNpCommerceHidePsStoreIcon');
  Result:=0;
 end;
 
 function ps4_sceNpCommerceSetPsStoreIconLayout(layout:SceNpCommercePsStoreIconLayout):Integer;
 begin
- Writeln('sceNpCommerceSetPsStoreIconLayout:',layout);
+ LOG_INFO('sceNpCommerceSetPsStoreIconLayout:',layout);
  Result:=0;
 end;
 

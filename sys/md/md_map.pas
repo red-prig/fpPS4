@@ -61,6 +61,8 @@ procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function MD_MAP_ALIGN(align:QWORD):DWORD; inline;
 begin
  Result:=BsfQWORD(align) shl MD_MAP_ALIGN_SHIFT;
@@ -648,7 +650,7 @@ begin
  r:=md_mmap(Result,size,prot);
  if (r<>0) then
  begin
-  Writeln(stderr,'kmem_alloc(0x',HexStr(size,11),',0x',HexStr(prot,3),'):0x',HexStr(r,8));
+  LOG_ERROR(stderr,'kmem_alloc(0x',HexStr(size,11),',0x',HexStr(prot,3),'):0x',HexStr(r,8));
  end;
 end;
 

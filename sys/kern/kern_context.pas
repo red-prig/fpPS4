@@ -28,6 +28,8 @@ uses
  sched_ule,
  machdep;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * The first two fields of a ucontext_t are the signal mask and the machine
  * context.  The next field is uc_link; we want to avoid destroying the link
@@ -155,7 +157,7 @@ begin
      end
    else
      begin
-      Writeln('get_ucontext: an illegal state ',tdf^.td_state);
+      LOG_INFO('get_ucontext: an illegal state ',tdf^.td_state);
       thread_unlock(tdf);
       thread_dec_ref(tdf);
       PROC_UNLOCK;

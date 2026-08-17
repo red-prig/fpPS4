@@ -117,6 +117,8 @@ uses
  md_time,
  sys_capability;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  selfd_zone:uma_zone_t;
  mtxpool_select:p_mtx_pool;
@@ -536,7 +538,7 @@ var
 begin
  if (com > $ffffffff) then
  begin
-  Writeln('WARNING pid %d (%s): ioctl sign-extension ioctl ',com);
+  LOG_INFO('WARNING pid %d (%s): ioctl sign-extension ioctl ',com);
   com:=com and $ffffffff;
  end;
 
@@ -550,7 +552,7 @@ begin
     (((com and (IOC_IN or IOC_OUT))<>0) and (size=0)) or
     (((com and IOC_VOID)<>0) and (size > 0) and (size<>sizeof(Integer))) then
  begin
-  Writeln('com:0x',HexStr(com,16),':ENOTTY');
+  LOG_TRACE('com:0x',HexStr(com,16),':ENOTTY');
   Exit(ENOTTY);
  end;
 

@@ -132,6 +132,8 @@ uses
  sched_ule,
  sys_sleepqueue;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  max_pending_per_proc=128;
 
@@ -1471,10 +1473,10 @@ begin
 
  if (td=nil) then
  begin
-  Writeln('tdsendsignal(','nil',':','nil',',',sig,')');
+  LOG_INFO('tdsendsignal(','nil',':','nil',',',sig,')');
  end else
  begin
-  Writeln('tdsendsignal(',td^.td_tid,':',td^.td_name,',',sig,')');
+  LOG_INFO('tdsendsignal(',td^.td_tid,':',td^.td_name,',',sig,')');
  end;
 
  KNOTE_LOCKED(@p_proc.p_klist, NOTE_SIGNAL or sig);
@@ -1534,7 +1536,7 @@ begin
  Result:=sigqueue_add(sigqueue,sig,ksi);
  if (Result<>0) then
  begin
-  Writeln('sigqueue_add:',Result);
+  LOG_INFO('sigqueue_add:',Result);
   Exit;
  end;
  signotify(td);
@@ -1830,7 +1832,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit;
 
- //Writeln('ast');
+ //LOG_INFO('ast');
 
  thread_lock(td);
 

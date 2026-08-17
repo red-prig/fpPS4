@@ -40,6 +40,8 @@ function WriteHook  (var page:t_hook_page;const h:t_hook_plan):Boolean;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function NtQueryPeb(hProcess:THandle;var peb:PPEB):Integer;
 var
  data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
@@ -217,7 +219,7 @@ begin
  r:=md_mmap(lower,size,prot,0,0,hProcess);
  if (r<>0) then
  begin
-  Writeln(stderr,'md_mmap:0x'+HexStr(r,8));
+  LOG_ERROR(stderr,'md_mmap:0x'+HexStr(r,8));
   Exit;
  end;
 

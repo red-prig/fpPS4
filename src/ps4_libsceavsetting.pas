@@ -11,6 +11,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceAvSettingInit:Integer;
 begin
  Result:=0;
@@ -52,7 +54,7 @@ function ps4_sceAvSettingChangeOutputMode3(
           submit :QWORD
          ):Integer;
 begin
- Writeln('sceAvSettingChangeOutputMode3');
+ LOG_INFO('sceAvSettingChangeOutputMode3');
  Result:=0;
 end;
 

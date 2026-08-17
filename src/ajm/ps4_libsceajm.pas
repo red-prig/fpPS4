@@ -15,6 +15,8 @@ implementation
 uses
  kern_id;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {$I ajm_error.inc}
 
 const
@@ -335,13 +337,13 @@ begin
  end;
 
  Case uiCodec of
-  SCE_AJM_CODEC_MP3_DEC  :Writeln('SCE_AJM_CODEC_MP3_DEC  ');
-  SCE_AJM_CODEC_AT9_DEC  :Writeln('SCE_AJM_CODEC_AT9_DEC  ');
-  SCE_AJM_CODEC_M4AAC_DEC:Writeln('SCE_AJM_CODEC_M4AAC_DEC');
-  SCE_AJM_CODEC_CELP8_DEC:Writeln('SCE_AJM_CODEC_CELP8_DEC');
-  SCE_AJM_CODEC_CELP8_ENC:Writeln('SCE_AJM_CODEC_CELP8_ENC');
-  SCE_AJM_CODEC_CELP_DEC :Writeln('SCE_AJM_CODEC_CELP_DEC ');
-  SCE_AJM_CODEC_CELP_ENC :Writeln('SCE_AJM_CODEC_CELP_ENC ');
+  SCE_AJM_CODEC_MP3_DEC  :LOG_INFO('SCE_AJM_CODEC_MP3_DEC  ');
+  SCE_AJM_CODEC_AT9_DEC  :LOG_INFO('SCE_AJM_CODEC_AT9_DEC  ');
+  SCE_AJM_CODEC_M4AAC_DEC:LOG_INFO('SCE_AJM_CODEC_M4AAC_DEC');
+  SCE_AJM_CODEC_CELP8_DEC:LOG_INFO('SCE_AJM_CODEC_CELP8_DEC');
+  SCE_AJM_CODEC_CELP8_ENC:LOG_INFO('SCE_AJM_CODEC_CELP8_ENC');
+  SCE_AJM_CODEC_CELP_DEC :LOG_INFO('SCE_AJM_CODEC_CELP_DEC ');
+  SCE_AJM_CODEC_CELP_ENC :LOG_INFO('SCE_AJM_CODEC_CELP_ENC ');
  end;
 
  id_release(@H.desc); //<-id_ctx_get
@@ -562,7 +564,7 @@ begin
 
     SCE_AJM_FLAG_SIDEBAND_STREAM:
      begin
-      //Writeln('SCE_AJM_FLAG_SIDEBAND_STREAM');
+      LOG_TRACE('SCE_AJM_FLAG_SIDEBAND_STREAM');
       u.sStream.iSizeConsumed:=48000;
       u.sStream.iSizeProduced:=48000;
       u.sStream.uiTotalDecodedSamples:=48000; //loop or div to zero
@@ -571,7 +573,7 @@ begin
 
     SCE_AJM_FLAG_SIDEBAND_FORMAT:
      begin
-      //Writeln('SCE_AJM_FLAG_SIDEBAND_FORMAT');
+      LOG_TRACE('SCE_AJM_FLAG_SIDEBAND_FORMAT');
       u.sFormat.eChannelNumber     :=1;
       u.sFormat.uiChannelMask      :=1;
       u.sFormat.uiSamplingFrequency:=48000;
@@ -583,7 +585,7 @@ begin
 
     SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE:
      begin
-      //Writeln('SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE');
+      LOG_TRACE('SCE_AJM_FLAG_SIDEBAND_GAPLESS_DECODE');
       u.sGapless.uiTotalSamples  :=1;
       u.sGapless.uiSkipSamples   :=0;
       u.sGapless.uiSkippedSamples:=0;
@@ -592,7 +594,7 @@ begin
 
     SCE_AJM_FLAG_STATISTICS_ENGINE:
      begin
-      //Writeln('SCE_AJM_FLAG_STATISTICS_ENGINE');
+      LOG_TRACE('SCE_AJM_FLAG_STATISTICS_ENGINE');
       u.sEngine.fUsageBatch      :=80;
       u.sEngine.fUsageInterval[0]:=80;
       u.sEngine.fUsageInterval[1]:=80;
@@ -602,7 +604,7 @@ begin
 
     SCE_AJM_FLAG_STATISTICS_ENGINE_PER_CODEC:
      begin
-      //Writeln('SCE_AJM_FLAG_STATISTICS_ENGINE_PER_CODEC');
+      LOG_TRACE('SCE_AJM_FLAG_STATISTICS_ENGINE_PER_CODEC');
       u.sEnginePerCodec.iCodecCount        :=0;
       u.sEnginePerCodec.iCodecId[0]        :=0;
       u.sEnginePerCodec.iCodecId[1]        :=0;
@@ -615,7 +617,7 @@ begin
 
     SCE_AJM_FLAG_STATISTICS_MEMORY:
      begin
-      //Writeln('SCE_AJM_FLAG_STATISTICS_MEMORY');
+      LOG_TRACE('SCE_AJM_FLAG_STATISTICS_MEMORY');
       u.sMemory.uiInstanceFree:=1;
       u.sMemory.uiBufferFree  :=1;
       u.sMemory.uiBatchSize   :=1;
@@ -627,7 +629,7 @@ begin
 
      SCE_AJM_FLAG_CONTROL_INITIALIZE:
       begin
-       //Writeln('SCE_AJM_FLAG_CONTROL_INITIALIZE');
+       LOG_TRACE('SCE_AJM_FLAG_CONTROL_INITIALIZE');
        u.sInit.uiConfigData:=0;
        u.sInit._reserved   :=0;
        commit(@u.sInit,SizeOf(u.sInit));
@@ -635,12 +637,12 @@ begin
 
      SCE_AJM_FLAG_CONTROL_RESET:
       begin
-       //Writeln('SCE_AJM_FLAG_CONTROL_RESET');
+       LOG_TRACE('SCE_AJM_FLAG_CONTROL_RESET');
       end;
 
      SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES:
       begin
-       //Writeln('SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES');
+       LOG_TRACE('SCE_AJM_FLAG_RUN_MULTIPLE_FRAMES');
        u.sMFrame.uiNumFrames:=1;
        u.sMFrame._reserved  :=0;
        commit(@u.sMFrame,SizeOf(u.sMFrame));
@@ -651,7 +653,7 @@ begin
        case ps4_sceAjmInstanceCodecType(uiInstance) of
         SCE_AJM_CODEC_MP3_DEC:
          begin
-          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_MP3_DEC');
+          LOG_TRACE('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_MP3_DEC');
           u.sMp3CodecInfo.uiHeader       :=$00474154;
           u.sMp3CodecInfo.ucCrc          :=1;
           u.sMp3CodecInfo.ucMode         :=0;
@@ -666,7 +668,7 @@ begin
          end;
         SCE_AJM_CODEC_AT9_DEC:
          begin
-          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_AT9_DEC');
+          LOG_TRACE('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_AT9_DEC');
           u.sAt9CodecInfo.uiSuperFrameSize    :=1;
           u.sAt9CodecInfo.uiFramesInSuperFrame:=1;
           u.sAt9CodecInfo.uiNextFrameSize     :=1;
@@ -675,14 +677,14 @@ begin
          end;
         SCE_AJM_CODEC_M4AAC_DEC:
          begin
-          //Writeln('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_M4AAC_DEC');
+          LOG_TRACE('SCE_AJM_FLAG_RUN_GET_CODEC_INFO:SCE_AJM_CODEC_M4AAC_DEC');
           u.sM4aacCodecInfo.uiHeaac   :=0;
           u.sM4aacCodecInfo.uiReserved:=0;
           commit(@u.sM4aacCodecInfo,SizeOf(u.sM4aacCodecInfo));
          end;
         else
           begin
-           Writeln(stderr,'SCE_AJM_FLAG_RUN_GET_CODEC_INFO:',ps4_sceAjmInstanceCodecType(uiInstance));
+           LOG_ERROR(stderr,'SCE_AJM_FLAG_RUN_GET_CODEC_INFO:',ps4_sceAjmInstanceCodecType(uiInstance));
            Break;
           end;
        end;
@@ -690,7 +692,7 @@ begin
 
     else
       begin
-       Writeln(stderr,'Unknow Sideband Flag:1 << ',i);
+       LOG_ERROR(stderr,'Unknow Sideband Flag:1 << ',i);
        Break;
       end;
    end;
@@ -825,7 +827,7 @@ function ps4_sceAjmMemoryRegister(
           pRegion:Pointer;
           szNumPages:QWORD):Integer;
 begin
- Writeln('sceAjmMemoryRegister(0x',HexStr(pRegion),',0x',HexStr(szNumPages,16),')');
+ LOG_TRACE('sceAjmMemoryRegister(0x',HexStr(pRegion),',0x',HexStr(szNumPages,16),')');
  Result:=0;
 end;
 

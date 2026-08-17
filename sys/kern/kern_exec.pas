@@ -71,6 +71,8 @@ uses
  md_context,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function exec_alloc_args(args:p_image_args):Integer;
 begin
  args^.buf:=AllocMem(PATH_MAX + ARG_MAX);
@@ -408,7 +410,7 @@ begin
 
  stack_addr:=QWORD(vmspace^.sv_usrstack) - ssiz;
 
- Writeln('vm_map_stack:0x',HexStr(stack_addr,11),'..0x',HexStr(stack_addr+ssiz,11));
+ LOG_INFO('vm_map_stack:0x',HexStr(stack_addr,11),'..0x',HexStr(stack_addr+ssiz,11));
 
  error:=vm_map_stack(map,
                      stack_addr,ssiz,
@@ -761,7 +763,7 @@ begin
 
    if (bigapp_max_fmem_size < (p_memsz - p_offset)) then
    begin
-    Writeln(stderr,'vm_budget ENOMEM');
+    LOG_ERROR(stderr,'vm_budget ENOMEM');
     Exit(ENOMEM);
    end;
 
@@ -779,8 +781,8 @@ begin
      size:=max_size2;
      if (g_mode_2mb<>M2MB_DEFAULT) then
      begin
-      Writeln(stderr,'unknown 2mb mode');
-      Assert(false,'unknown 2mb mode');
+      LOG_CRITICAL(stderr,'unknown 2mb mode');
+      Assert      (false,'unknown 2mb mode');
      end;
     end;
    end;
@@ -806,7 +808,7 @@ begin
 
    if (limit < (used + (max_size1 - max_size2))) then
    begin
-    Writeln(stderr,'vm_budget ENOMEM');
+    LOG_ERROR(stderr,'vm_budget ENOMEM');
     Exit(ENOMEM);
    end;
   end;
@@ -929,9 +931,9 @@ begin
   Exit(ENOMEM);
  end;
 
- Writeln('  text addr=0x',HexStr(text_addr ,16),'..',HexStr(text_addr +text_size ,16));
- Writeln('  data addr=0x',HexStr(data_addr ,16),'..',HexStr(data_addr +data_size ,16));
- Writeln(' relro addr=0x',HexStr(relro_addr,16),'..',HexStr(relro_addr+relro_size,16));
+ LOG_INFO('  text addr=0x',HexStr(text_addr ,16),'..',HexStr(text_addr +text_size ,16));
+ LOG_INFO('  data addr=0x',HexStr(data_addr ,16),'..',HexStr(data_addr +data_size ,16));
+ LOG_INFO(' relro addr=0x',HexStr(relro_addr,16),'..',HexStr(relro_addr+relro_size,16));
 
  vms:=p_proc.p_vmspace;
 
@@ -956,7 +958,7 @@ begin
 
  imgp^.entry_addr:=Pointer(addr + hdr^.e_entry);
 
- Writeln(' entry_addr=0x',HexStr(imgp^.entry_addr));
+ LOG_INFO(' entry_addr=0x',HexStr(imgp^.entry_addr));
 
  //Do not update if the ET_SCE_EXEC hack is used
  if (imgp^.hdr_e_type=hdr^.e_type) then
@@ -1106,7 +1108,7 @@ begin
  Result:=digest_dynamic(obj);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'dynlib_proc_initialize_step2:','digest_dynamic()=',Result);
+  LOG_ERROR(StdErr,'dynlib_proc_initialize_step2:','digest_dynamic()=',Result);
   Exit;
  end;
 
@@ -1159,7 +1161,7 @@ begin
  begin
   Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
  end;
- Writeln('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
+ LOG_INFO('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
 end;
 
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
@@ -1193,7 +1195,7 @@ begin
 
  if (obj=nil) then
  begin
-  Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
+  LOG_ERROR(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
  str:='/libSceLibcInternal.sprx';
@@ -1201,7 +1203,7 @@ begin
 
  if (obj=nil) then
  begin
-  Writeln(StdErr,'preload_prx_modules:',str,' not loaded');
+  LOG_ERROR(StdErr,'preload_prx_modules:',str,' not loaded');
  end;
 
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
@@ -1277,14 +1279,14 @@ begin
   ET_SCE_DYNEXEC    :
   else
    begin
-    Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_type:0x',HexStr(hdr^.e_type,4));
+    LOG_ERROR(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_type:0x',HexStr(hdr^.e_type,4));
     Exit(ENOEXEC);
    end;
  end;
 
  if (hdr^.e_machine<>EM_X86_64) then
  begin
-  Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_machine:',hdr^.e_machine);
+  LOG_ERROR(StdErr,'exec_self_imgact:',imgp^.execpath,' unspported e_machine:',hdr^.e_machine);
   Exit(ENOEXEC);
  end;
 
@@ -1295,13 +1297,13 @@ begin
  Result:=scan_phdr(imgp,phdr,hdr^.e_phnum);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'exec_self_imgact:','found illegal segment header in ',imgp^.execpath);
+  LOG_ERROR(StdErr,'exec_self_imgact:','found illegal segment header in ',imgp^.execpath);
   Exit;
  end;
 
  if (imgp^.dyn_exist=0) and (hdr^.e_type=ET_SCE_DYNEXEC) then
  begin
-  Writeln(StdErr,'exec_self_imgact:','illegal ELF file image',imgp^.execpath);
+  LOG_ERROR(StdErr,'exec_self_imgact:','illegal ELF file image',imgp^.execpath);
   Exit(ENOEXEC);
  end;
 
@@ -1381,21 +1383,21 @@ begin
  Result:=dynlib_proc_initialize_step1(imgp);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' dynlib_proc_initialize_step1:',Result);
+  LOG_ERROR(StdErr,'exec_self_imgact:',imgp^.execpath,' dynlib_proc_initialize_step1:',Result);
   Exit;
  end;
 
  Result:=dynlib_proc_initialize_step2(imgp);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'exec_self_imgact:',imgp^.execpath,' dynlib_proc_initialize_step1:',Result);
+  LOG_ERROR(StdErr,'exec_self_imgact:',imgp^.execpath,' dynlib_proc_initialize_step1:',Result);
   Exit;
  end;
 
  Result:=dynlib_copy_executable_sdk_version();
  if (Result<>0) then
  begin
-  Writeln(StdErr,'exec_self_imgact:','sdk version is not found in ',imgp^.execpath);
+  LOG_ERROR(StdErr,'exec_self_imgact:','sdk version is not found in ',imgp^.execpath);
   Exit;
  end;
 
@@ -1898,7 +1900,7 @@ end;
 procedure main_switch_context;
 begin
  ipi_sigreturn;
- Writeln(stderr,'I''m a teapot!');
+ LOG_CRITICAL(stderr,'I''m a teapot!');
 end;
 
 function sys_execve(fname:pchar;argv,envv:ppchar):Integer;

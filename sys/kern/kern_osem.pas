@@ -36,6 +36,8 @@ uses
  kern_named_id,
  kern_namedobj;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SEMA_ATTR_DELF=$1000;
 
@@ -136,7 +138,7 @@ var
 begin
  Result:=0;
 
- //Writeln('osem_cancel(',HexStr(sem),',',setCount,')');
+ LOG_TRACE('osem_cancel(',HexStr(sem),',',setCount,')');
 
  mtx_lock(sem^.mtx);
  if ((sem^.attr and SEMA_ATTR_DELF)=0) then
@@ -190,7 +192,7 @@ var
 begin
  Result:=0;
 
- //Writeln('osem_post(',HexStr(sem),',',signalCount,')');
+ LOG_TRACE('osem_post(',HexStr(sem),',',signalCount,')');
 
  mtx_lock(sem^.mtx);
 
@@ -239,7 +241,7 @@ var
 begin
  Result:=0;
 
- //Writeln('osem_trywait(',HexStr(sem),',',needCount,')');
+ LOG_TRACE('osem_trywait(',HexStr(sem),',',needCount,')');
 
  mtx_lock(sem^.mtx);
 
@@ -280,7 +282,7 @@ begin
  td:=curkthread;
  mtx_lock(sem^.mtx);
 
- //Writeln('osem_wait(',HexStr(sem),',',needCount,')');
+ LOG_TRACE('osem_wait(',HexStr(sem),',',needCount,')');
 
  if ((sem^.attr and SEMA_ATTR_DELF)=0) then
  begin
@@ -420,7 +422,7 @@ begin
 
  if ((attr and SEMA_ATTR_SHRD)<>0) then
  begin
-  Writeln(StdErr,'sys_evf_create:',name,':process shared osem not supported');
+  LOG_WARNING(StdErr,'sys_evf_create:',name,':process shared osem not supported');
   //Exit(EPERM);
  end;
 
@@ -439,7 +441,7 @@ begin
  osem_init(sem,attr,initCount,maxCount);
  sem^.name:=_name;
 
- //Writeln('osem_create(',HexStr(sem),',',name,',',HexStr(attr,2),',',initCount,',',maxCount,')');
+ LOG_TRACE('osem_create(',HexStr(sem),',',name,',',HexStr(attr,2),',',initCount,',',maxCount,')');
 
  if not id_name_new(@named_table,@sem^.desc,@key) then
  begin
@@ -566,7 +568,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- Writeln(StdErr,'sys_osem_open:',name,':process shared osem not supported');
+ LOG_WARNING(StdErr,'sys_osem_open:',name,':process shared osem not supported');
  //Exit(EPERM);
 
  td^.td_retval[0]:=444;
@@ -575,7 +577,7 @@ end;
 
 function sys_osem_close(key:Integer):Integer;
 begin
- Writeln(StdErr,'sys_osem_close:','process shared osem not supported');
+ LOG_WARNING(StdErr,'sys_osem_close:','process shared osem not supported');
  Exit(EPERM);
 end;
 

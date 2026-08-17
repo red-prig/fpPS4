@@ -363,6 +363,8 @@ implementation
 uses
  kern_dmem;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function TvCustomLayout.GetVulkanDescType:TVkDescriptorType;
 begin
  case dtype of
@@ -539,7 +541,7 @@ begin
  c_hdtp :=#0;
  c_name :='';
 
- //Writeln(P);
+ //LOG_TRACE(P);
 
  curr:=P;
  while (curr^<>#0) do
@@ -956,7 +958,7 @@ begin
    Assert(false,'Unknow Value '+N);
  end;
 
- //Writeln(N,' ',V);
+ //LOG_TRACE(N,' ',V);
 end;
 
 function TvShaderParserExt.GetLayoutAddr:ADataLayout;
@@ -1770,7 +1772,7 @@ begin
  gpu_get_bound(start,__end);
  if (start=0) then
  begin
-  Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
+  LOG_ERROR(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
   b.FImage.params.invalid:=1;
  end;
 
@@ -1820,7 +1822,7 @@ begin
  gpu_get_bound(start,__end);
  if (start=0) then
  begin
-  Writeln(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
+  LOG_ERROR(HexStr(QWORD(b.FImage.Addr),10),'->INVALID');
   b.FImage.params.invalid:=1;
  end;
 
@@ -1887,7 +1889,7 @@ begin
    Assert(false,'AddAttr');
  end;
 
- //Writeln('----');
+ //LOG_TRACE('----');
 end;
 
 function AlignShift(addr:Pointer;alignment:PtrUInt):PtrUInt; inline;

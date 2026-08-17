@@ -35,6 +35,8 @@ uses
  vfcntl,
  vcapability;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  Convert a user file descriptor to a kernel file entry and check that, if
  it is a capability, the right rights are present. A reference on the file
@@ -615,7 +617,7 @@ begin
   if (error<>0) then Exit(error);
  end;
 
- Writeln('sys_getsockopt(',s,',',level,',',name,',0x',HexStr(QWORD(val),11),',',HexStr(QWORD(avalsize),11),')');
+ LOG_CRITICAL(StdErr,'sys_getsockopt(',s,',',level,',',name,',0x',HexStr(QWORD(val),11),',',HexStr(QWORD(avalsize),11),')');
  Assert(False);
 
  //error:=kern_getsockopt(s, level, name, val, UIO_USERSPACE, @valsize);

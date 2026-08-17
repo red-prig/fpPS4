@@ -19,6 +19,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 var
@@ -26,7 +28,7 @@ var
 
 function ps4_sceNpProfileDialogInitialize():Integer;
 begin
- Writeln('sceNpProfileDialogInitialize');
+ LOG_INFO('sceNpProfileDialogInitialize');
  status_profile_dialog:=SCE_COMMON_DIALOG_STATUS_INITIALIZED;
  Result:=0;
 end;
@@ -45,7 +47,7 @@ end;
 
 function ps4_scePlayerInvitationDialogTerminate():Integer;
 begin
- Writeln('scePlayerInvitationDialogTerminate');
+ LOG_INFO('scePlayerInvitationDialogTerminate');
  Result:=0;
 end;
 

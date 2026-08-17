@@ -22,6 +22,8 @@ uses
  kern_proc,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  t_SetProcessProperty=packed record //0x48
   f_0:QWORD;
@@ -93,7 +95,7 @@ begin
 
  mtx_unlock(p_proc.p_mtx);
 
- Writeln('init_mdbg_pevt');
+ LOG_INFO('init_mdbg_pevt');
 
  Exit(props);
 end;
@@ -155,7 +157,7 @@ begin
 
  if (Result<>0) then Exit;
 
- Writeln('SetProcessProperty("',data.name,'",0x',
+ LOG_INFO('SetProcessProperty("',data.name,'",0x',
                                 HexStr(data.f_1,16),',0x',
                                 HexStr(data.f_2,16),',0x',
                                 HexStr(data.f_3,16),',0x',
@@ -213,7 +215,7 @@ begin
 
   4: //sceKernelDebugRaiseExceptionOnReleaseMode
     begin
-     Writeln('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
+     LOG_ERROR('sceKernelDebugRaiseExceptionOnReleaseMode:0x',HexStr(DWORD(arg1),8));
      print_backtrace_td(stderr);
      Result:=0;
     end;
@@ -287,7 +289,7 @@ begin
 
          if (Result=0) then
          begin
-          Writeln('mDBG: Debughandler starting(',curkthread^.td_tid,':',curkthread^.td_name,')');
+          LOG_INFO('mDBG: Debughandler starting(',curkthread^.td_tid,':',curkthread^.td_name,')');
          end;
 
         end;

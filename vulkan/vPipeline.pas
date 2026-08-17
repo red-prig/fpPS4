@@ -84,6 +84,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Procedure TvSetLayout.Add(aBind:TVkUInt32;dType:TVkDescriptorType;Flags:TVkShaderStageFlags;count:TVkUInt32=1);
 var
  i:Integer;
@@ -177,7 +179,7 @@ begin
  r:=vkCreateDescriptorSetLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateDescriptorSetLayout:',r);
+  LOG_ERROR(StdErr,'vkCreateDescriptorSetLayout:',r);
   Exit;
  end;
  Result:=True;
@@ -300,7 +302,7 @@ begin
  r:=vkCreatePipelineLayout(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreatePipelineLayout:',r);
+  LOG_ERROR(StdErr,'vkCreatePipelineLayout:',r);
   Exit;
  end;
 
@@ -352,7 +354,7 @@ begin
 
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreatePipelineCache:',r);
+  LOG_ERROR(StdErr,'vkCreatePipelineCache:',r);
  end;
 end;
 

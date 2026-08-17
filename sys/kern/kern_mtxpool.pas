@@ -50,6 +50,8 @@ var
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  POINTER_BITS   =64;
  HASH_MULTIPLIER=11400714819323198485; { (2^64)*(sqrt(5)-1)/2 }
@@ -103,7 +105,7 @@ var
 begin
  if (pool_size <= 0) or (not powerof2(pool_size)) then
  begin
-  Writeln('WARNING: %s pool size is not a power of 2.', mtx_name);
+  LOG_WARNING('WARNING: %s pool size is not a power of 2.', mtx_name);
   pool_size:=128;
  end;
  pool:=AllocMem(sizeof(mtx_pool)+

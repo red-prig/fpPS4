@@ -13,6 +13,8 @@ implementation
 uses
  kern_proc;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_VIDEO_RECORDING_INFO_SUBTITLE        =$0002;
  SCE_VIDEO_RECORDING_INFO_DESCRIPTION     =$0006;
@@ -63,7 +65,7 @@ type
 
 function ps4_sceVideoRecordingSetInfo(info:Integer;pInfo:Pointer;infoLen:size_t):Integer;
 begin
- Writeln('sceVideoRecordingSetInfo,info=',info,',infoLen=',infoLen);
+ LOG_INFO('sceVideoRecordingSetInfo,info=',info,',infoLen=',infoLen);
 
  if (info<$9004) then
  begin
@@ -128,25 +130,25 @@ end;
 
 function ps4_sceVideoRecordingClose(discard:Integer):Integer;
 begin
- Writeln('sceVideoRecordingClose,discard=',discard);
+ LOG_INFO('sceVideoRecordingClose,discard=',discard);
  Result:=0;
 end;
 
 function ps4_sceVideoRecordingGetStatus:Integer;
 begin
- Writeln('sceVideoRecordingGetStatus');
+ LOG_INFO('sceVideoRecordingGetStatus');
  Result:=SCE_VIDEO_RECORDING_STATUS_NONE;
 end;
 
 function ps4_sceVideoRecordingStart:Integer;
 begin
- Writeln('sceVideoRecordingStart');
+ LOG_INFO('sceVideoRecordingStart');
  Result:=0;
 end;
 
 function ps4_sceVideoRecordingStop:Integer;
 begin
- Writeln('sceVideoRecordingStop');
+ LOG_INFO('sceVideoRecordingStop');
  Result:=0;
 end;
 
@@ -155,13 +157,13 @@ function ps4_sceVideoRecordingOpen2(pPath:Pchar;
                                     pHeap:Pointer;
                                     heapSize:Integer):Integer;
 begin
- Writeln('sceVideoRecordingOpen2,pPath=',pPath);
+ LOG_INFO('sceVideoRecordingOpen2,pPath=',pPath);
  Result:=0;
 end;
 
 function ps4_sceVideoRecordingQueryMemSize2(pParam:PSceVideoRecordingParam2):Integer;
 begin
- Writeln('sceVideoRecordingQueryMemSize2');
+ LOG_INFO('sceVideoRecordingQueryMemSize2');
  Result:=1024;
 end;
 

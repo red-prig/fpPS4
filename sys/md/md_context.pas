@@ -114,6 +114,8 @@ uses
  systm,
  signal;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 function GetEnabledXStateFeatures:QWORD; stdcall external 'kernel32';
@@ -639,11 +641,11 @@ begin
  td:=curkthread;
  if (td=nil) then
  begin
-  Writeln(stderr,'ipi_sigreturn with zero thread');
+  LOG_ERROR(stderr,'ipi_sigreturn with zero thread');
   Exit;
  end;
 
- //Writeln('ipi_sigreturn');
+ LOG_TRACE('ipi_sigreturn');
 
  switch_to_jit(td);
 
@@ -700,7 +702,7 @@ begin
  end;
  //xmm,ymm
 
- //Writeln('ipi_sigreturn');
+ //LOG_INFO('ipi_sigreturn');
 
  //interrupt guard
  if (td^.td_teb^.iflag<>0) then
@@ -715,7 +717,7 @@ begin
 
  td^.td_teb^.iflag:=0;
 
- Writeln(stderr,'NtContinue:0x',HexStr(R,8));
+ LOG_ERROR(stderr,'NtContinue:0x',HexStr(R,8));
 end;
 
 procedure host_sigipi; external;
@@ -738,9 +740,9 @@ begin
 
  xsave(fpstate);
 
- //Writeln('on_ipi:',td^.td_name);
+ LOG_TRACE('on_ipi:',td^.td_name);
 
- //Writeln('ContextFlags=',HexStr(ContextRecord^.ContextFlags,8),' ',((ContextRecord^.ContextFlags and $40)<>0));
+ //LOG_TRACE('ContextFlags=',HexStr(ContextRecord^.ContextFlags,8),' ',((ContextRecord^.ContextFlags and $40)<>0));
 
  if ((td^.pcb_flags and PCB_IS_JIT)=0) then
  begin

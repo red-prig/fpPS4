@@ -74,6 +74,8 @@ uses
  kern_thr,
  kern_proc;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //////////
 
 function IDX_TO_OFF(x:QWORD):QWORD; inline;
@@ -137,7 +139,7 @@ end;
 
 function sys_set_chicken_switches(flags:Integer):Integer;
 begin
- Writeln('[KERNEL] set_chicken_switches(',flags,')');
+ LOG_INFO('[KERNEL] set_chicken_switches(',flags,')');
  p_proc.p_dmem_aliasing:=p_proc.p_dmem_aliasing or flags;
  //0x1 - kern_mmap_dmem -> any alias
  //0x2 - kern_mmap_dmem -> GPU -> CPU only
@@ -279,12 +281,12 @@ begin
    begin
     if ((prot and VM_PROT_GPU_ALL)<>0) then
     begin
-     Writeln('TODO check aliasing prot');
+     LOG_WARNING('TODO check aliasing prot');
     end;
     goto _rmap_insert;
    end else
    begin
-    Writeln('[KERNEL] multiple VA mappings are detected. va:[0x',HexStr(vaddr,16),',0x',HexStr(v_end,16),')');
+    LOG_INFO('[KERNEL] multiple VA mappings are detected. va:[0x',HexStr(vaddr,16),',0x',HexStr(v_end,16),')');
     Result:=EBUSY;
    end;
 
@@ -485,7 +487,7 @@ begin
 
  td^.td_retval[0]:=addr;
 
- Writeln('0x',HexStr(QWORD(stack_addr),11),'->',
+ LOG_TRACE('0x',HexStr(QWORD(stack_addr),11),'->',
          'sys_mmap_dmem(','0x',HexStr(QWORD(vaddr),11),
                          ',0x',HexStr(length,11),
                          ',0x',HexStr(mtype,1),
@@ -736,7 +738,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- //Writeln('sys_virtual_query:',HexStr(addr),' ',flags);
+ LOG_TRACE('sys_virtual_query:',HexStr(addr),' ',flags);
 
  QWORD(addr):=QWORD(addr) and QWORD(not PAGE_MASK);
 
@@ -909,7 +911,7 @@ begin
  end;
 
  {
- Writeln('[qinfo]:',#13#10' pstart:',HexStr(qinfo.pstart)
+ LOG_TRACE('[qinfo]:',#13#10' pstart:',HexStr(qinfo.pstart)
                    ,#13#10' p__end:',HexStr(qinfo.p__end)
                    ,#13#10' offset:',HexStr(qinfo.offset,16)
                    ,#13#10' protec:',HexStr(qinfo.protection,2)

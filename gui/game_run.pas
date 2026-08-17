@@ -125,6 +125,8 @@ uses
  sys_bootparam,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 procedure TGameProcessSimple.suspend;
@@ -308,16 +310,16 @@ begin
 
  LoadExec:=GameStartupInfo.LoadExec;
 
- Writeln('Name    :',Item.FGameInfo.Name      );
- Writeln('TitleId :',Item.FGameInfo.TitleId   );
- Writeln('Version :',Item.FGameInfo.Version   );
- Writeln('AppVer  :',Item.FGameInfo.AppVer    );
- Writeln('Exec    :',Item.FGameInfo.Exec      );
+ LOG_INFO('Name    :',Item.FGameInfo.Name      );
+ LOG_INFO('TitleId :',Item.FGameInfo.TitleId   );
+ LOG_INFO('Version :',Item.FGameInfo.Version   );
+ LOG_INFO('AppVer  :',Item.FGameInfo.AppVer    );
+ LOG_INFO('Exec    :',Item.FGameInfo.Exec      );
 
- Writeln('game    :',Item.FMountList.game     );
- Writeln('firmware:',Item.FMountList.firmware );
+ LOG_INFO('game    :',Item.FMountList.game     );
+ LOG_INFO('firmware:',Item.FMountList.firmware );
 
- Writeln('LocalDir:',GameStartupInfo.LocalDir );
+ LOG_INFO('LocalDir:',GameStartupInfo.LocalDir );
 
  InitMount(GameStartupInfo);
 
@@ -326,16 +328,16 @@ begin
  argv:=nil;
  argc:=parse_params(Item.FGameInfo.Exec,argv);
 
- Writeln('main_thread:',HexStr(curkthread));
+ LOG_TRACE('main_thread:',HexStr(curkthread));
 
  //
  FreeAndNil(GameStartupInfo);
  //
 
- Writeln('main_execve->');
+ LOG_INFO('main_execve->');
  For i:=0 to argc-1 do
  begin
-  Writeln(' argv[',i,']:',argv[i]);
+  LOG_INFO(' argv[',i,']:',argv[i]);
  end;
 
  Flush(stdout);
@@ -381,7 +383,7 @@ end;
 function NtTerminateProcessTrap(ProcessHandle:THANDLE;ExitStatus:DWORD):DWORD; MS_ABI_Default;
 begin
  Result:=0;
- Writeln(stderr,'NtTerminateProcess:0x',HexStr(ExitStatus,8));
+ LOG_ERROR(stderr,'NtTerminateProcess:0x',HexStr(ExitStatus,8));
  print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  print_backtrace_td(StdErr);
  asm
@@ -414,7 +416,7 @@ begin
 
  num:=0;
  R:=WriteProcessMemory(GetCurrentProcess,adr,@rop,SizeOf(rop),num);
- Writeln('CreateNtTerminateTrap:0x',HexStr(adr),' ',R,' ',num);
+ LOG_TRACE('CreateNtTerminateTrap:0x',HexStr(adr),' ',R,' ',num);
 end;
 }
 
@@ -542,7 +544,7 @@ begin
 
  ppid:=md_getppid;
 
- Writeln('game_process started pid:',GetProcessID,' parent_pid:',ppid);
+ LOG_INFO('game_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  parent:=md_pidfd_open(ppid);
 

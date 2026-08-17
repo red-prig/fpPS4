@@ -201,6 +201,8 @@ uses
  sys_conf,
  kern_daemon;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 var
@@ -3161,7 +3163,7 @@ end;
 
 procedure vfs_badlock(msg,str:PChar;vp:p_vnode);
 begin
- Writeln(msg,' ',str);
+ LOG_CRITICAL(StdErr, msg,' ',str);
  Assert(false,RawByteString(msg)+' '+RawByteString(str));
 end;
 

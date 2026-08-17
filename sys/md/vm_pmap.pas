@@ -165,6 +165,8 @@ uses
  md_systm_reserve,
  sys_bootparam;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function atop(x:QWORD):DWORD; inline;
 begin
  Result:=QWORD(x) shr PAGE_SHIFT;
@@ -206,8 +208,8 @@ begin
   r:=md_create_swap_file(fname,size,fd);
   if (r<>0) then
   begin
-   Writeln('failed md_create_swap_file("',fname,'",',HexStr(size,16),'):0x',HexStr(r,8));
-   Assert(false,'dmem_init');
+   LOG_CRITICAL(StdErr,'failed md_create_swap_file("',fname,'",',HexStr(size,16),'):0x',HexStr(r,8));
+   Assert      (false,'dmem_init');
   end;
 
   md:=0;
@@ -231,8 +233,8 @@ begin
  R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
  begin
-  Writeln('failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-  Assert(false,'dev_mem_init'+HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert      (false,'dev_mem_init'+HexStr(r,8));
  end;
 
  DEV_INFO.DEV_FD.maxp:=VM_RW;
@@ -242,8 +244,8 @@ begin
  r:=md_placeholder_commit(DEV_INFO.DEV_PTR,DEV_INFO.DEV_SIZE,VM_RW,DEV_INFO.DEV_FD.hfile,0);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_commit(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
-  Assert(false,'dev_mem_init:'+HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_placeholder_commit(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
+  Assert      (false,'dev_mem_init:'+HexStr(r,8));
  end;
 end;
 
@@ -272,8 +274,8 @@ begin
  m:=md_map_reserve();
  if (m.error<>0) then
  begin
-  Writeln('failed pmap_reserve(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));
-  Assert(false,'pmap_pinit');
+  LOG_CRITICAL(StdErr,'failed pmap_reserve(',HexStr(m.base),',',HexStr(m.base+m.size),'):0x',HexStr(m.error,8));
+  Assert      (false,'pmap_pinit');
   Exit;
  end;
 
@@ -345,8 +347,8 @@ begin
  R:=vm_priv_pool_alloc(@pmap^.priv_p,size,@palloc);
  if (R<>0) then
  begin
-  Writeln('failed vm_priv_pool_alloc(',HexStr(size,11),'):0x',HexStr(r,8));
-  Writeln(' priv_stat=',pmap^.priv_p.size,':',pmap^.priv_p.invm);
+  LOG_ERROR('failed vm_priv_pool_alloc(',HexStr(size,11),'):0x',HexStr(r,8));
+  LOG_INFO(' priv_stat=',pmap^.priv_p.size,':',pmap^.priv_p.invm);
 
   print_backtrace_td(stderr);
 
@@ -365,10 +367,10 @@ var
  i:Integer;
  base:Pointer;
 begin
- Writeln('[DMEM_FD]');
+ LOG_INFO('[DMEM_FD]');
  if external_dmem_swap_mode then
  begin
-  Writeln(' 0x',HexStr(VM_MIN_GPU_ADDRESS,16),'..',HexStr(VM_MAX_GPU_ADDRESS,16));
+  LOG_INFO(' 0x',HexStr(VM_MIN_GPU_ADDRESS,16),'..',HexStr(VM_MAX_GPU_ADDRESS,16));
  end else
  begin
 
@@ -378,7 +380,7 @@ begin
    if (DMEM_FD[i].hfile<>0) then
    begin
     base:=Pointer(VM_MIN_GPU_ADDRESS+i*PMAPP_BLK_SIZE);
-    Writeln(' 0x',HexStr(base),'..',HexStr(base+PMAPP_BLK_SIZE));
+    LOG_INFO(' 0x',HexStr(base),'..',HexStr(base+PMAPP_BLK_SIZE));
    end;
   end;
 
@@ -448,8 +450,8 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
-    Assert(false,'get_dmem_fd');
+    LOG_CRITICAL(StdErr,'failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
+    Assert      (false,'get_dmem_fd');
    end;
   end;
 
@@ -578,7 +580,7 @@ function pmap_wlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer; inline;
 begin
- //Writeln('pmap_wlock:',HexStr(start,11),'..',HexStr(__end,11));
+ LOG_TRACE('pmap_wlock:',HexStr(start,11),'..',HexStr(__end,11));
 
  Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_WRITE);
 end;
@@ -587,14 +589,14 @@ function pmap_rlock(pmap :pmap_t;
                     start:vm_offset_t;
                     __end:vm_offset_t):Pointer; inline;
 begin
- //Writeln('pmap_rlock:',HexStr(start,11),'..',HexStr(__end,11));
+ LOG_TRACE('pmap_rlock:',HexStr(start,11),'..',HexStr(__end,11));
 
  Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_READ);
 end;
 
 procedure pmap_unlock(pmap:pmap_t;cookie:Pointer); inline;
 begin
- //Writeln('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,11),'..',HexStr(p_rl_q_entry(cookie)^.rl_q_end,11));
+ LOG_TRACE('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,11),'..',HexStr(p_rl_q_entry(cookie)^.rl_q___end,11));
 
  vm_map_unlock_range(pmap^.vm_map,cookie);
 end;
@@ -614,8 +616,8 @@ begin
  r:=md_placeholder_mmap(dst,size);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_mmap(',HexStr(size,11),'):0x',HexStr(r,8));
-  Assert(false,'pmap_copy');
+  LOG_CRITICAL(StdErr,'failed md_placeholder_mmap(',HexStr(size,11),'):0x',HexStr(r,8));
+  Assert      (false,'pmap_copy');
   Exit;
  end;
 
@@ -623,7 +625,7 @@ begin
  r:=md_placeholder_commit(dst,size,VM_RW,dst_obj^.hfile,dst_ofs);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_commit(',HexStr(dst),',',
+  LOG_ERROR('failed md_placeholder_commit(',HexStr(dst),',',
                                           size,',',
                                           'VM_RW',',',
                                           HexStr(dst_obj^.hfile,16),',',
@@ -640,8 +642,8 @@ begin
  r:=md_placeholder_unmap(dst,size);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_unmap(',HexStr(dst),',',size,'):0x',HexStr(r,8));
-  Assert(false,'pmap_copy');
+  LOG_CRITICAL(StdErr,'failed md_placeholder_unmap(',HexStr(dst),',',size,'):0x',HexStr(r,8));
+  Assert      (false,'pmap_copy');
  end;
 
 end;
@@ -680,7 +682,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_copy_pages:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+  LOG_TRACE('pmap_copy_pages:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
  prot:=fixup_prot(prot);
@@ -718,8 +720,8 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-    Assert(false,'pmap_enter_object');
+    LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert      (false,'pmap_enter_object');
    end;
 
    //map to GPU
@@ -738,8 +740,8 @@ begin
 
     if (r<>0) then
     begin
-     Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-     Assert(false,'pmap_enter_object');
+     LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+     Assert      (false,'pmap_enter_object');
     end;
    end;
 
@@ -778,7 +780,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+  LOG_TRACE('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
  prot:=fixup_prot(prot);
@@ -818,8 +820,8 @@ begin
 
        if (r<>0) then
        begin
-        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert(false,'pmap_enter_object');
+        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert      (false,'pmap_enter_object');
        end;
 
        //map to GPU
@@ -838,8 +840,8 @@ begin
 
         if (r<>0) then
         begin
-         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-         Assert(false,'pmap_enter_object');
+         LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+         Assert      (false,'pmap_enter_object');
         end;
        end;
 
@@ -862,7 +864,7 @@ begin
 
       if (p_print_pmap) then
       begin
-       Writeln('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
+       LOG_TRACE('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
       end;
 
       info.start :=start;
@@ -878,7 +880,7 @@ begin
 
        if (p_print_pmap) then
        begin
-        Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+        LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
        end;
 
        //map to guest
@@ -892,8 +894,8 @@ begin
 
        if (r<>0) then
        begin
-        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert(false,'pmap_enter_object');
+        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert      (false,'pmap_enter_object');
        end;
 
        //map to GPU
@@ -912,8 +914,8 @@ begin
 
         if (r<>0) then
         begin
-         Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-         Assert(false,'pmap_enter_object');
+         LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+         Assert      (false,'pmap_enter_object');
         end;
        end;
 
@@ -927,7 +929,7 @@ begin
 
       if (p_print_pmap) then
       begin
-       Writeln('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
+       LOG_TRACE('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
       end;
 
       info.start :=start;
@@ -940,7 +942,7 @@ begin
 
       if (p_print_pmap) then
       begin
-       Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+       LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
       end;
 
       //map to guest
@@ -954,8 +956,8 @@ begin
 
       if (r<>0) then
       begin
-       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-       Assert(false,'pmap_enter_object');
+       LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+       Assert      (false,'pmap_enter_object');
       end;
 
       //map to GPU
@@ -974,8 +976,8 @@ begin
 
        if (r<>0) then
        begin
-        Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert(false,'pmap_enter_object');
+        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+        Assert      (false,'pmap_enter_object');
        end;
       end;
 
@@ -1019,14 +1021,14 @@ begin
 
      if (r<>0) then
      begin
-      Writeln('failed md_memfd_open:0x',HexStr(r,8));
-      Assert(false,'pmap_enter_object');
+      LOG_CRITICAL(StdErr,'failed md_memfd_open:0x',HexStr(r,8));
+      Assert      (false,'pmap_enter_object');
      end;
 
      if (md=0) then
      begin
-      Writeln('zero file fd');
-      Assert(false,'pmap_enter_object');
+      LOG_CRITICAL(StdErr,'zero file fd');
+      Assert      (false,'pmap_enter_object');
      end;
 
      //align host page
@@ -1048,8 +1050,8 @@ begin
 
      if (r<>0) then
      begin
-      Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-      Assert(false,'pmap_enter_object');
+      LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+      Assert      (false,'pmap_enter_object');
      end;
 
      //map to GPU
@@ -1068,8 +1070,8 @@ begin
 
       if (r<>0) then
       begin
-       Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-       Assert(false,'pmap_enter_object');
+       LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+       Assert      (false,'pmap_enter_object');
       end;
      end;
 
@@ -1089,8 +1091,8 @@ begin
     end;
   else
     begin
-     Writeln('TODO:',vm_object_type(obj));
-     Assert(False);
+     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
+     Assert      (False);
     end;
  end;
 
@@ -1113,7 +1115,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+  LOG_TRACE('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
  prot:=fixup_prot(prot);
@@ -1162,8 +1164,8 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-    Assert(false,'pmap_gpu_enter_object');
+    LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert      (false,'pmap_gpu_enter_object');
    end;
   end;
 
@@ -1192,7 +1194,7 @@ begin
 
  if (p_print_pmap) then
  begin
-  Writeln('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
+  LOG_TRACE('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
  end;
 
  prot:=fixup_prot(prot);
@@ -1216,7 +1218,7 @@ begin
 
   if (p_print_pmap) then
   begin
-   Writeln('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+   LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
   end;
 
   //map to guest
@@ -1230,8 +1232,8 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-   Assert(false,'pmap_enter_object');
+   LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+   Assert      (false,'pmap_enter_object');
   end;
 
   //map to GPU
@@ -1250,8 +1252,8 @@ begin
 
    if (r<>0) then
    begin
-    Writeln('failed vm_nt_map_insert:0x',HexStr(r,8));
-    Assert(false,'pmap_enter_object');
+    LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert      (false,'pmap_enter_object');
    end;
   end;
 
@@ -1339,7 +1341,7 @@ label
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
+  LOG_TRACE('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
  end;
 
  prot:=fixup_prot(prot);
@@ -1373,10 +1375,10 @@ begin
      begin
       if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
       begin
-       Writeln('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+       LOG_TRACE('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
       end else
       begin
-       Writeln('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+       LOG_TRACE('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
       end;
      end;
 
@@ -1388,7 +1390,7 @@ begin
     end;
   else
     begin
-     Writeln('TODO:',vm_object_type(obj));
+     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
      Assert(False);
     end;
  end;
@@ -1428,7 +1430,7 @@ begin
 
  if (p_print_pmap) then
  begin
-  Writeln('pmap_prot_track:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+  LOG_TRACE('pmap_prot_track:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
  end;
 
  start:=start              and (not PMAPP_MASK);
@@ -1454,7 +1456,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
+  LOG_TRACE('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
  start:=start              and (not PMAPP_MASK);
@@ -1484,7 +1486,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_madvise:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
+  LOG_TRACE('pmap_madvise:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
  end;
 
  lock:=pmap_wlock(pmap,start,__end);
@@ -1520,14 +1522,14 @@ begin
     end;
   else
     begin
-     Writeln('TODO:',vm_object_type(obj));
+     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
      Assert(False);
     end;
  end;
 
  if (r<>0) then
  begin
-  Writeln('failed md_reset:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_reset:0x',HexStr(r,8));
   Assert(false,'pmap_madvise');
  end;
 
@@ -1549,7 +1551,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
+  LOG_TRACE('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
  lock:=pmap_wlock(pmap,start,__end);
@@ -1573,7 +1575,7 @@ begin
 
      if (r<>0) then
      begin
-      Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
+      LOG_CRITICAL(StdErr,'failed vm_nt_map_delete:0x',HexStr(r,8));
       Assert(false,'pmap_remove');
      end;
 
@@ -1583,7 +1585,7 @@ begin
 
      if (r<>0) then
      begin
-      Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
+      LOG_CRITICAL(StdErr,'failed vm_nt_map_delete:0x',HexStr(r,8));
       Assert(false,'pmap_remove');
      end;
 
@@ -1599,10 +1601,10 @@ begin
      begin
       if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
       begin
-       Writeln('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
+       LOG_TRACE('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
       end else
       begin
-       Writeln('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
+       LOG_TRACE('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
       end;
      end;
 
@@ -1614,7 +1616,7 @@ begin
     end;
   else
     begin
-     Writeln('TODO:',vm_object_type(obj));
+     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
      Assert(False);
     end;
  end;
@@ -1635,7 +1637,7 @@ var
 begin
  if (p_print_pmap) then
  begin
-  Writeln('pmap_gpu_remove:',HexStr(start,11),':',HexStr(__end,11));
+  LOG_TRACE('pmap_gpu_remove:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
  lock:=pmap_wlock(pmap,start,__end);
@@ -1646,7 +1648,7 @@ begin
 
  if (r<>0) then
  begin
-  Writeln('failed vm_nt_map_delete:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed vm_nt_map_delete:0x',HexStr(r,8));
   Assert(false,'pmap_gpu_remove');
  end;
 
@@ -1677,7 +1679,7 @@ begin
  r:=md_placeholder_unmap(base,size);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_unmap:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_placeholder_unmap:0x',HexStr(r,8));
   Assert(false,'pmap_mirror_unmap');
  end;
 end;
@@ -1706,7 +1708,7 @@ begin
 
  if (p_print_pmap) then
  begin
-  Writeln('pmap_expand:',HexStr(start,11),':',HexStr(__end,11));
+  LOG_TRACE('pmap_expand:',HexStr(start,11),':',HexStr(__end,11));
  end;
 
  base:=Pointer(start);
@@ -1717,7 +1719,7 @@ begin
 
   if (r<>0) then
   begin
-   Writeln('failed md_placeholder_mmap:0x',HexStr(r,8));
+   LOG_CRITICAL(StdErr,'failed md_placeholder_mmap:0x',HexStr(r,8));
    Assert(false,'pmap_expand');
    Result:=False;
   end;

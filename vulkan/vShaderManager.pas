@@ -98,6 +98,8 @@ uses
  kern_rwlock,
  kern_dmem;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  TShadersKeyCompare=object
   function c(a,b:PvShadersKey):Integer; static;
@@ -380,7 +382,7 @@ begin
 
  if (SprvEmit.ParseStage(pData)>1) then
  begin
-  Writeln(StdErr,'Shader Parse Err');
+  LOG_ERROR(StdErr,'Shader Parse Err');
   SprvEmit.Free;
   Exit;
  end;
@@ -602,10 +604,10 @@ begin
     vShaderStageCs:str:=DumpCS(GPU_REGS,t.key.FHash,Length(t.FShaderAliases));
     else
      begin
-      Writeln(stderr,'Unhandle stage:',FStage);
+      LOG_ERROR(stderr,'Unhandle stage:',FStage);
      end;
    end;
-  // Writeln(str);
+  // LOG_TRACE(str);
   end;
   //
 
@@ -619,7 +621,7 @@ begin
 
   str:=' ('+HexStr(t.key.FHash,16)+') '+GetDumpSpvName(FStage,FHash_spv);
 
-  Writeln('Compile:',str);
+  LOG_TRACE('Compile:',str);
 
   pUserData:=GPU_REGS.get_user_data(FStage);
 

@@ -34,6 +34,8 @@ uses
  kern_param,
  kern_mtx;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
  Result:=QWORD(x) shl PAGE_SHIFT;
@@ -244,7 +246,7 @@ begin
 
  if (vp=nil) then
  begin
-  Writeln(StdErr,'vnode_pager_dealloc: pager already dealloced');
+  LOG_ERROR(StdErr,'vnode_pager_dealloc: pager already dealloced');
   Exit;
  end;
 

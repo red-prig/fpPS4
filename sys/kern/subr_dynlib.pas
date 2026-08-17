@@ -447,6 +447,8 @@ uses
  kern_jit_asm,
  kern_jit_dynamic;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  lib_info_zone      :uma_zone_t;
  Objlist_Entry_zone :uma_zone_t;
@@ -877,7 +879,7 @@ begin
       SCE_PLTREL:=true;
       if (dt_ent^.d_un.d_val<>7) then
       begin
-       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_PLTREL entry',' found in ',new^.lib_path);
+       LOG_ERROR(StdErr,'preprocess_dt_entries:','illegal value in DT_PLTREL entry',' found in ',new^.lib_path);
        Exit(EINVAL);
       end;
      end;
@@ -895,7 +897,7 @@ begin
       SCE_RELAENT:=true;
       if (dt_ent^.d_un.d_val<>24) then
       begin
-       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_RELAENT entry',' found in ',new^.lib_path);
+       LOG_ERROR(StdErr,'preprocess_dt_entries:','illegal value in DT_RELAENT entry',' found in ',new^.lib_path);
        Exit(EINVAL);
       end;
      end;
@@ -913,7 +915,7 @@ begin
       SCE_SYMENT:=true;
       if (dt_ent^.d_un.d_val<>24) then
       begin
-       Writeln(StdErr,'preprocess_dt_entries:','illegal value in DT_SYMENT entry',' found in ',new^.lib_path);
+       LOG_ERROR(StdErr,'preprocess_dt_entries:','illegal value in DT_SYMENT entry',' found in ',new^.lib_path);
        Exit(EINVAL);
       end;
      end;
@@ -1021,7 +1023,7 @@ begin
    $6100003e:
      begin
       _unsupp:
-      Writeln(StdErr,'preprocess_dt_entries:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      LOG_ERROR(StdErr,'preprocess_dt_entries:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
       Exit(ENOEXEC);
      end;
 
@@ -1031,7 +1033,7 @@ begin
    DT_RELA,
    DT_JMPREL:
      begin
-      Writeln(StdErr,'preprocess_dt_entries:','ORBIS object file does not support DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
+      LOG_ERROR(StdErr,'preprocess_dt_entries:','ORBIS object file does not support DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',new^.lib_path);
       Exit(EINVAL);
      end;
 
@@ -1059,12 +1061,12 @@ begin
        (not SCE_SYMTAB) or
        (not SCE_SYMENT) then
    begin
-    Writeln(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have required tabs.');
+    LOG_ERROR(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have required tabs.');
     Exit(EINVAL);
    end;
  end else
  begin
-  Writeln(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have DT_SCE_SYMTABSZ or DT_SCE_HASHSZ tabs.');
+  LOG_ERROR(StdErr,'preprocess_dt_entries:',new^.lib_path,' does not have DT_SCE_SYMTABSZ or DT_SCE_HASHSZ tabs.');
   Exit(EINVAL);
  end;
 
@@ -1194,7 +1196,7 @@ begin
 
  obj^.tls_offset:=off;
 
- Writeln('allocate_tls_offset: tls_index=',obj^.tls_index,' tls_size=',obj^.tls_size,' tls_align=',obj^.tls_align,' tls_offset=',obj^.tls_offset);
+ LOG_INFO('allocate_tls_offset: tls_index=',obj^.tls_index,' tls_size=',obj^.tls_size,' tls_align=',obj^.tls_align,' tls_offset=',obj^.tls_offset);
 
  dynlibs_info.tls_last_offset:=off;
  dynlibs_info.tls_last_size  :=obj^.tls_size;
@@ -1337,7 +1339,7 @@ function obj_get_str(obj:p_lib_info;offset:Int64):pchar;
 begin
  if (obj^.rel_data^.strtab_size<=offset) then
  begin
-  Writeln(StdErr,'obj_get_str:','offset=0x',HexStr(offset,8),' is out of range of string table of ',obj^.lib_path);
+  LOG_ERROR(StdErr,'obj_get_str:','offset=0x',HexStr(offset,8),' is out of range of string table of ',obj^.lib_path);
   Exit(nil);
  end;
 
@@ -1622,7 +1624,7 @@ begin
 
        if (str=nil) then
        begin
-        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(EINVAL);
        end;
 
@@ -1637,7 +1639,7 @@ begin
 
        if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
-        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
        end;
       end;
@@ -1649,14 +1651,14 @@ begin
 
        if (obj^.map_base>addr) or ((addr+8)>(obj^.map_base+obj^.text_size)) then
        begin
-        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
        end;
       end;
 
     DT_SYMBOLIC:
       begin
-       Writeln(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
+       LOG_ERROR(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
        Exit(EINVAL);
       end;
 
@@ -1671,13 +1673,13 @@ begin
 
        if ((dval and DF_SYMBOLIC)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DT_SYMBOLIC is obsolete.');
         Exit(EINVAL);
        end;
 
        if ((dval and DF_BIND_NOW)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DF_BIND_NOW is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DF_BIND_NOW is obsolete.');
         Exit(EINVAL);
        end;
 
@@ -1694,7 +1696,7 @@ begin
        if (obj^.rel_data=nil) or
           ((dt_fingerprint + 20)>obj^.rel_data^.sce_dynlib_size) then
        begin
-        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(ENOEXEC);
        end;
       end;
@@ -1705,7 +1707,7 @@ begin
 
        if (str=nil) then
        begin
-        Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+        LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
         Exit(EINVAL);
        end;
 
@@ -1735,7 +1737,7 @@ begin
 
        if (lib_entry=nil) then
        begin
-        Writeln(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_MODULE_ATTR entry ',TLibraryAttr(dval).id);
+        LOG_ERROR(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_MODULE_ATTR entry ',TLibraryAttr(dval).id);
         Exit(EINVAL);
        end;
 
@@ -1766,7 +1768,7 @@ begin
 
        if (lib_entry=nil) then
        begin
-        Writeln(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_LIB_ATTR entry ',TLibraryAttr(dval).id);
+        LOG_ERROR(StdErr,'digest_dynamic:','unknown ID found in DT_SCE_*_LIB_ATTR entry ',TLibraryAttr(dval).id);
         Exit(EINVAL);
        end;
 
@@ -1779,32 +1781,32 @@ begin
 
        if ((dval and DF_1_BIND_NOW)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DF_1_BIND_NOW is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DF_1_BIND_NOW is obsolete.');
         Exit(EINVAL);
        end;
 
        if ((dval and DF_1_NODELETE)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DF_1_NODELETE is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DF_1_NODELETE is obsolete.');
         Exit(EINVAL);
        end;
 
        if ((dval and DF_1_LOADFLTR)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DF_1_LOADFLTR is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DF_1_LOADFLTR is obsolete.');
         Exit(EINVAL);
        end;
 
        if ((dval and DF_1_NOOPEN)<>0) then
        begin
-        Writeln(StdErr,'digest_dynamic:','DF_1_NOOPEN is obsolete.');
+        LOG_ERROR(StdErr,'digest_dynamic:','DF_1_NOOPEN is obsolete.');
         Exit(EINVAL);
        end;
       end;
 
     else
       begin
-       Writeln(StdErr,'digest_dynamic:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',obj^.lib_path);
+       LOG_ERROR(StdErr,'digest_dynamic:','Unsupported DT tag 0x',HexStr(dt_ent^.d_tag,8),' found in ',obj^.lib_path);
        Exit(ENOEXEC);
       end;
 
@@ -1848,7 +1850,7 @@ begin
 
   if (str=nil) then
   begin
-   Writeln(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
+   LOG_ERROR(StdErr,'digest_dynamic:',{$INCLUDE %LINE%});
    Exit(EINVAL);
   end;
 
@@ -2235,7 +2237,7 @@ begin
  if (error<>0) then
  begin
   if (error<>EACCES) then Exit(error);
-  Writeln(StdErr,'self_load_shared_object:','namei() error (path=',path,')');
+  LOG_ERROR(StdErr,'self_load_shared_object:','namei() error (path=',path,')');
   Exit(error);
  end;
 
@@ -2255,7 +2257,7 @@ begin
     (attr.va_type<>VREG) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
-  Writeln(StdErr,'self_load_shared_object:','mount flag / attribute error (path=',path,')');
+  LOG_ERROR(StdErr,'self_load_shared_object:','mount flag / attribute error (path=',path,')');
   Exit(EACCES);
  end;
 
@@ -2269,7 +2271,7 @@ begin
  if (error<>0) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
-  Writeln(StdErr,'self_load_shared_object:','VOP_ACCESS() error (path=',path,')');
+  LOG_ERROR(StdErr,'self_load_shared_object:','VOP_ACCESS() error (path=',path,')');
   Exit(error);
  end;
 
@@ -2283,7 +2285,7 @@ begin
  if (error<>0) then
  begin
   NDFREE(@nd, NDF_ONLY_PNBUF);
-  Writeln(StdErr,'self_load_shared_object:','VOP_OPEN() error (path=',path,')');
+  LOG_ERROR(StdErr,'self_load_shared_object:','VOP_OPEN() error (path=',path,')');
   Exit(error);
  end;
 
@@ -2298,7 +2300,7 @@ begin
   ET_SCE_DYNAMIC:
   else
    begin
-    Writeln(StdErr,'self_load_shared_object:',imgp^.execpath,' Unsupported ELF e_type:0x',HexStr(hdr^.e_type,4));
+    LOG_ERROR(StdErr,'self_load_shared_object:',imgp^.execpath,' Unsupported ELF e_type:0x',HexStr(hdr^.e_type,4));
     error:=ENOEXEC;
     goto _fail_dealloc;
    end;
@@ -2356,13 +2358,13 @@ begin
  error:=scan_phdr(imgp,phdr,hdr^.e_phnum);
  if (error<>0) then
  begin
-  Writeln(StdErr,'self_load_shared_object:','found illegal segment header in ',imgp^.execpath);
+  LOG_ERROR(StdErr,'self_load_shared_object:','found illegal segment header in ',imgp^.execpath);
   goto _fail_dealloc;
  end;
 
  if (imgp^.dyn_exist=0) then
  begin
-  Writeln(StdErr,'self_load_shared_object:','illegal ELF file image',imgp^.execpath);
+  LOG_ERROR(StdErr,'self_load_shared_object:','illegal ELF file image',imgp^.execpath);
   error:=ENOEXEC;
   goto _fail_dealloc;
  end;
@@ -2411,7 +2413,7 @@ begin
 
  if (error<>0) then
  begin
-  Writeln(StdErr,'self_load_shared_object:','failed to allocate VA for ',imgp^.execpath);
+  LOG_ERROR(StdErr,'self_load_shared_object:','failed to allocate VA for ',imgp^.execpath);
   goto _fail_dealloc;
  end;
 
@@ -2444,7 +2446,7 @@ begin
  error:=acquire_per_file_info_obj(imgp,new);
  if (error<>0) then
  begin
-  Writeln(StdErr,'self_load_shared_object:','acquire_per_file_info_obj()=',error);
+  LOG_ERROR(StdErr,'self_load_shared_object:','acquire_per_file_info_obj()=',error);
   goto _fail_dealloc;
  end;
 
@@ -2476,7 +2478,7 @@ begin
   Result:=vm_map_protect(map,QWORD(addr),QWORD(addr)+size,prot,False);
   if (Result<>0) then
   begin
-   Writeln(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
+   LOG_ERROR(StdErr,'change_relro_protection:','failed to make RELRO segment writable.');
   end;
  end;
 end;
@@ -2527,7 +2529,7 @@ begin
   mirror_unmap(base,p_size);
  end else
  begin
-  Writeln(StdErr,'relocate_text_or_data_segment:','text relocation is prohibited.');
+  LOG_ERROR(StdErr,'relocate_text_or_data_segment:','text relocation is prohibited.');
   Exit(ENOEXEC);
  end;
 end;
@@ -2684,8 +2686,8 @@ begin
    err:=copyout(@kaddr,addr,SizeOf(Pointer));
    if (err<>0) then
    begin
-    Writeln(StdErr,'relro:0x',HexStr(obj^.relro_addr),'..0x',HexStr(obj^.relro_addr+obj^.relro_size));
-    Writeln(StdErr,'dynlib_initialize_pltgot_each:','ERROR in .pltrela: where=0x',HexStr(addr));
+    LOG_ERROR(StdErr,'relro:0x',HexStr(obj^.relro_addr),'..0x',HexStr(obj^.relro_addr+obj^.relro_size));
+    LOG_ERROR(StdErr,'dynlib_initialize_pltgot_each:','ERROR in .pltrela: where=0x',HexStr(addr));
     Result:=ENOEXEC;
     Break;
    end;
@@ -2910,7 +2912,7 @@ var
 begin
  Result:=nil;
 
- Writeln(' do_load_object:',dynlib_basename(path));
+ LOG_INFO(' do_load_object:',dynlib_basename(path));
 
  new:=obj_new();
 
@@ -2930,20 +2932,20 @@ begin
  err:=digest_dynamic(new);
  if (err<>0) then
  begin
-  Writeln(StdErr,'do_load_object:','digest_dynamic() failed rv=',err);
+  LOG_ERROR(StdErr,'do_load_object:','digest_dynamic() failed rv=',err);
   goto _error;
  end;
 
  err:=dynlib_initialize_pltgot_each(new);
  if (err<>0) then
  begin
-  Writeln(StdErr,'do_load_object:','dynlib_initialize_pltgot_each() failed rv=',err);
+  LOG_ERROR(StdErr,'do_load_object:','dynlib_initialize_pltgot_each() failed rv=',err);
   goto _error;
  end;
 
  if (new^.rtld_flags.textrel<>0) then
  begin
-  Writeln(StdErr,'do_load_object:',new^.lib_path,' has impure text');
+  LOG_ERROR(StdErr,'do_load_object:',new^.lib_path,' has impure text');
   err:=EINVAL;
   goto _error;
  end;
@@ -2995,7 +2997,7 @@ var
 begin
  Assert(root^.ref_count=0,'unload_object ref_count');
 
- Writeln(' unload_object:',dynlib_basename(root^.lib_path));
+ LOG_INFO(' unload_object:',dynlib_basename(root^.lib_path));
 
  {
   * Pass over the DAG removing unreferenced objects from
@@ -3116,7 +3118,7 @@ begin
 
  if (error<>0) then
  begin
-  Writeln(StdErr,'[KERNEL] preload_prx_internal:','failed to allocate VA for ',obj^.lib_path,' (',error,')');
+  LOG_ERROR(StdErr,'[KERNEL] preload_prx_internal:','failed to allocate VA for ',obj^.lib_path,' (',error,')');
   Exit(error);
  end;
 
@@ -3138,8 +3140,8 @@ begin
   begin
    vm_map_unlock(map);
    //
-   Writeln(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_insert failed ',HexStr(vaddr_lo,8),' (',error,')');
+   LOG_ERROR(StdErr,'[',HexStr(vaddr_lo,8),'..',HexStr(vaddr_hi,8),']');
+   LOG_ERROR(StdErr,'[KERNEL] preload_prx_internal: vm_map_insert failed ',HexStr(vaddr_lo,8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
@@ -3238,7 +3240,7 @@ begin
   begin
    vm_map_unlock(map);
    //
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(vaddr_lo,8),' (',error,')');
+   LOG_ERROR(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(vaddr_lo,8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
@@ -3249,7 +3251,7 @@ begin
   begin
    vm_map_unlock(map);
    //
-   Writeln(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(QWORD(data),8),' (',error,')');
+   LOG_ERROR(StdErr,'[KERNEL] preload_prx_internal: vm_map_protect failed ',HexStr(QWORD(data),8),' (',error,')');
    error:=vm_mmap_to_errno(error);
    Exit(error);
   end;
@@ -3316,7 +3318,7 @@ begin
     err:=digest_dynamic(Result);
     if (err<>0) then
     begin
-     Writeln(StdErr,'preload_prx_internal:','digest_dynamic() failed rv=',err);
+     LOG_ERROR(StdErr,'preload_prx_internal:','digest_dynamic() failed rv=',err);
      goto _error;
     end;
 
@@ -3330,7 +3332,7 @@ begin
     Result^.rtld_flags.tls_done :=1;
     Result^.loaded:=1;
 
-    Writeln(' preload_prx_internal:',name);
+    LOG_INFO(' preload_prx_internal:',name);
 
     //
     Exit;
@@ -3355,7 +3357,7 @@ var
 
  node:p_jit_entry_point;
 begin
- Writeln('pick_obj_internal:',obj^.lib_path);
+ LOG_INFO('pick_obj_internal:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
  ctx.obj:=obj;
@@ -3505,7 +3507,7 @@ begin
 
  relocate_object_export_only(obj);
 
- Writeln('pick_obj:',obj^.lib_path);
+ LOG_INFO('pick_obj:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
  ctx.obj:=obj;
@@ -3559,7 +3561,7 @@ begin
            'libc.prx':;
            else
             begin
-             //Writeln(dynlib_basename(obj^.lib_path));
+             //LOG_INFO(dynlib_basename(obj^.lib_path));
              nid:=h_entry^.nid;
             end;
           end;
@@ -3738,7 +3740,7 @@ begin
  Result:=preload_prx_internal(pchar(fname),path,IF_POSTLOAD);
  if (Result<>nil) then goto _do_pick;
 
- Writeln(StdErr,' prx_module_not_found:',dynlib_basename(path));
+ LOG_ERROR(StdErr,' prx_module_not_found:',dynlib_basename(path));
  print_backtrace_td(stderr);
 
  err:=ENOENT;
@@ -3859,7 +3861,7 @@ begin
    begin
     unload_object(obj);
    end;
-   Writeln(StdErr,'load_prx:','Fail to relocate ',path);
+   LOG_ERROR(StdErr,'load_prx:','Fail to relocate ',path);
    Exit(err);
   end;
  end else
@@ -4079,7 +4081,7 @@ begin
 
   if (i<0) then
   begin
-   Writeln(StdErr,'dynlib_load_needed_shared_objects:','load_needed_objects() fails');
+   LOG_ERROR(StdErr,'dynlib_load_needed_shared_objects:','load_needed_objects() fails');
    Exit(EINVAL);
   end;
  end;

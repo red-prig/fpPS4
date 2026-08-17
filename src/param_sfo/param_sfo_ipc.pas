@@ -18,6 +18,8 @@ uses
  param_sfo_gui,
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  param_sfo_lock     :Pointer=nil;
  param_sfo_lazy_init:Integer=0;
@@ -29,7 +31,7 @@ var
 begin
  if (param_sfo_lazy_init=2) then Exit;
 
- Writeln('PARAM_SFO_INIT');
+ LOG_INFO('PARAM_SFO_INIT');
 
  if CAS(param_sfo_lazy_init,0,1) then
  begin

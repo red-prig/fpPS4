@@ -28,6 +28,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_HmdSetup_mtx:mtx;
  g_client      :THmdSetupDialogClient=nil;
@@ -55,7 +57,7 @@ function ps4_sceHmdSetupDialogInitialize():Integer;
 var
  client:THmdSetupDialogClient;
 begin
- Writeln('sceHmdSetupDialogInitialize');
+ LOG_INFO('sceHmdSetupDialogInitialize');
 
  mtx_lock(g_HmdSetup_mtx);
 
@@ -114,7 +116,7 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- Writeln('sceHmdSetupDialogOpen');
+ LOG_INFO('sceHmdSetupDialogOpen');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_HmdSetup_mtx);
@@ -132,7 +134,7 @@ end;
 
 function ps4_sceHmdSetupDialogClose():Integer;
 begin
- Writeln('sceHmdSetupDialogClose');
+ LOG_INFO('sceHmdSetupDialogClose');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_HmdSetup_mtx);
@@ -153,7 +155,7 @@ end;
 
 function ps4_sceHmdSetupDialogTerminate():Integer;
 begin
- Writeln('sceHmdSetupDialogTerminate');
+ LOG_INFO('sceHmdSetupDialogTerminate');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_HmdSetup_mtx);

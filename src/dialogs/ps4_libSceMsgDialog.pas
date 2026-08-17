@@ -81,6 +81,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  pSceMsgDialogButtonsParam=^SceMsgDialogButtonsParam;
  SceMsgDialogButtonsParam=packed record
@@ -144,7 +146,7 @@ var
  client:TMsgDialogClient;
 begin
  Result:=0;
- Writeln('sceMsgDialogInitialize');
+ LOG_INFO('sceMsgDialogInitialize');
 
  mtx_lock(g_MsgDialog_mtx);
 
@@ -413,7 +415,7 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- Writeln('sceMsgDialogOpen');
+ LOG_INFO('sceMsgDialogOpen');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);
@@ -483,7 +485,7 @@ end;
 
 function ps4_sceMsgDialogClose():Integer;
 begin
- Writeln('sceMsgDialogClose');
+ LOG_INFO('sceMsgDialogClose');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);
@@ -504,7 +506,7 @@ end;
 
 function ps4_sceMsgDialogTerminate():Integer;
 begin
- Writeln('sceMsgDialogTerminate');
+ LOG_INFO('sceMsgDialogTerminate');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_MsgDialog_mtx);

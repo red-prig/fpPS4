@@ -68,6 +68,8 @@ function ps4_sceUserServiceIsLoggedIn(userId:Integer):Integer;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceUserServiceInitialize(params:PUserServiceInitializeParams):Integer;
 begin
  Result:=0;
@@ -126,7 +128,7 @@ end;
 
 function ps4_sceUserServiceRegisterEventCallback(func:TUserServiceEventCallback;arg:Pointer):Integer;
 begin
- //Writeln('sceUserServiceRegisterEventCallback:',HexStr(func));
+ LOG_WARNING('sceUserServiceRegisterEventCallback:',HexStr(func));
  Result:=0;
 end;
 

@@ -101,6 +101,8 @@ uses
  kern_proc,
  kern_budget;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function not_dynamic:Boolean; inline;
 begin
  Result:=True;
@@ -121,14 +123,14 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_dlsym:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_dlsym:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
  Result:=copyinstr(symbol,@fsym,sizeof(fsym),nil);
  if (Result<>0) then Exit;
 
- Writeln('sys_dynlib_dlsym:',fsym);
+ LOG_INFO('sys_dynlib_dlsym:',fsym);
 
  dynlibs_lock;
 
@@ -164,7 +166,7 @@ function sys_dynlib_process_needed_and_relocate():Integer;
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_process_needed_and_relocate:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_process_needed_and_relocate:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -206,7 +208,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_load_prx:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_load_prx:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -219,7 +221,7 @@ begin
  Result:=copyinstr(moduleFileName,@fname,sizeof(fname),@len);
  if (Result<>0) then Exit;
 
- Writeln('sys_dynlib_load_prx("',fname,'",0x',HexStr(flags,6),')');
+ LOG_TRACE('sys_dynlib_load_prx("',fname,'",0x',HexStr(flags,6),')');
 
  dynlibs_lock;
 
@@ -265,11 +267,11 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_unload_prx:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_unload_prx:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
- //Writeln('sys_dynlib_unload_prx:',handle);
+ LOG_INFO('sys_dynlib_unload_prx:',handle);
 
  dynlibs_lock;
 
@@ -354,7 +356,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_info:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_get_info:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -383,7 +385,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_info2:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_get_info2:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -442,15 +444,15 @@ begin
    end;
 
    {
-   Writeln(' get_info_ex  :',obj^.lib_path);
-   Writeln(' obj.id       :',obj^.id);
-   Writeln(' tls_flags    :0x',HexStr(tls_index shr 16,4));
-   Writeln(' tls_index    :0x',HexStr(tls_index,4));
-   Writeln(' tls_init_addr:0x',HexStr(QWORD(obj^.tls_init_addr),11));
-   Writeln(' tls_init_size:0x',HexStr(obj^.tls_init_size,8));
-   Writeln(' tls_size     :0x',HexStr(obj^.tls_size     ,8));
-   Writeln(' tls_offset   :0x',HexStr(obj^.tls_offset   ,8));
-   Writeln(' tls_align    :0x',HexStr(obj^.tls_align    ,8));
+   LOG_TRACE(' get_info_ex  :',obj^.lib_path);
+   LOG_TRACE(' obj.id       :',obj^.id);
+   LOG_TRACE(' tls_flags    :0x',HexStr(tls_index shr 16,4));
+   LOG_TRACE(' tls_index    :0x',HexStr(tls_index,4));
+   LOG_TRACE(' tls_init_addr:0x',HexStr(QWORD(obj^.tls_init_addr),11));
+   LOG_TRACE(' tls_init_size:0x',HexStr(obj^.tls_init_size,8));
+   LOG_TRACE(' tls_size     :0x',HexStr(obj^.tls_size     ,8));
+   LOG_TRACE(' tls_offset   :0x',HexStr(obj^.tls_offset   ,8));
+   LOG_TRACE(' tls_align    :0x',HexStr(obj^.tls_align    ,8));
    }
 
    if ((flags and 2)<>0) then
@@ -508,7 +510,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_info_ex:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_get_info_ex:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -543,7 +545,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'copyout_module_handle_list:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'copyout_module_handle_list:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -584,7 +586,7 @@ begin
 
  if (i<>count) and ((flags and 1)<>0) then
  begin
-  Writeln(StdErr,'copyout_module_handle_list:','WARNING: num<>dp^.obj_count');
+  LOG_ERROR(StdErr,'copyout_module_handle_list:','WARNING: num<>dp^.obj_count');
  end;
 
  Result:=copyout(src,pArray,w*SizeOf(Integer));
@@ -619,7 +621,7 @@ var
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_obj_member:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_get_obj_member:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 
@@ -677,7 +679,7 @@ function sys_dynlib_get_proc_param(pout:PPointer;psize:PQWORD):Integer;
 begin
  if not_dynamic then
  begin
-  Writeln(StdErr,'sys_dynlib_get_proc_param:','this is not dynamic linked program.');
+  LOG_ERROR(StdErr,'sys_dynlib_get_proc_param:','this is not dynamic linked program.');
   Exit(EPERM);
  end;
 

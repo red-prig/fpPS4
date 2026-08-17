@@ -12,6 +12,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceNpScoreCreateNpTitleCtx(npServiceLabel:SceNpServiceLabel;selfNpId:PSceNpId):Integer;
 begin
  Result:=1;
@@ -24,13 +26,13 @@ end;
 
 function ps4_sceNpScoreCreateRequest(titleCtxId:Integer):Integer;
 begin
- writeln('ScoreCreateRequest:',titleCtxId);
+ LOG_INFO('ScoreCreateRequest:',titleCtxId);
  Result:=894;
 end;
 
 function ps4_sceNpScoreDeleteRequest(reqId:Integer):Integer;
 begin
- writeln('sceNpScoreDeleteRequest:',reqId);
+ LOG_INFO('sceNpScoreDeleteRequest:',reqId);
  Result:=0;
 end;
 

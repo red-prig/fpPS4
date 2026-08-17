@@ -28,6 +28,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Constructor TvSetsPool2.Create(Layout:TvPipelineLayout;maxGroup:TVkUInt32);
 begin
  FLayout  :=Layout;
@@ -86,7 +88,7 @@ begin
  r:=vkCreateDescriptorPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateDescriptorPool:',r);
+  LOG_ERROR(StdErr,'vkCreateDescriptorPool:',r);
   Exit;
  end;
 
@@ -115,7 +117,7 @@ begin
  r:=vkAllocateDescriptorSets(Device.FHandle,@ainfo,@FResult);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkAllocateDescriptorSets:',r);
+  LOG_ERROR(StdErr,'vkAllocateDescriptorSets:',r);
   Exit;
  end;
 

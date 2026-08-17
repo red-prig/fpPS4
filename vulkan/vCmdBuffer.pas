@@ -231,6 +231,8 @@ uses
  vBuffer,
  vHostBufferManager;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function TvSemaphoreWait.c(a,b:PvSemaphoreWait):Integer;
 begin
  Result:=Integer(Pointer(a^.FSemaphore)>Pointer(b^.FSemaphore))-Integer(Pointer(a^.FSemaphore)<Pointer(b^.FSemaphore));
@@ -295,7 +297,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -311,7 +313,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -336,7 +338,7 @@ begin
  r:=vkBeginCommandBuffer(FCmdbuf,@Info);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkBeginCommandBuffer:',r);
+  LOG_TRACE(StdErr,'vkBeginCommandBuffer:',r);
   Exit;
  end;
  FCBState:=cbBegin;
@@ -349,7 +351,7 @@ var
 begin
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -372,7 +374,7 @@ begin
  r:=vkEndCommandBuffer(FCmdbuf);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkEndCommandBuffer:',r);
+  LOG_TRACE(StdErr,'vkEndCommandBuffer:',r);
  end;
 
  FCBState:=cbEnd;
@@ -382,7 +384,7 @@ Procedure TvCustomCmdBuffer.BindPipeline(BindPoint:TVkPipelineBindPoint;F:TVkPip
 begin
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -405,7 +407,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -459,7 +461,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -471,7 +473,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -496,7 +498,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -513,7 +515,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -545,7 +547,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -609,16 +611,16 @@ begin
   FFenceHandle:=FFence.FHandle;
  end;
 
- //Writeln('vkQueueSubmit>');
+ LOG_TRACE('vkQueueSubmit>');
 
  Result:=FQueue.Submit(1,@info,FFenceHandle);
 
- //Writeln('vkQueueSubmit<');
+ LOG_TRACE('vkQueueSubmit<');
 
  ret:=Integer(Result);
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkQueueSubmit:',Result);
+  LOG_ERROR(StdErr,'vkQueueSubmit:',Result);
  end;
 
  FCBState:=cbSubmit;
@@ -630,7 +632,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -661,7 +663,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -691,7 +693,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -838,7 +840,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -857,7 +859,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -882,7 +884,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -906,7 +908,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -929,7 +931,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -953,7 +955,7 @@ Procedure TvCustomCmdBuffer.BindIndexBuffer(buffer:TVkBuffer;offset:TVkDeviceSiz
 begin
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -993,7 +995,7 @@ var
 begin
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1045,7 +1047,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1076,7 +1078,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1116,7 +1118,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1144,7 +1146,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1173,7 +1175,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1200,7 +1202,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1228,7 +1230,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1257,7 +1259,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1303,7 +1305,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1374,7 +1376,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1442,7 +1444,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1522,7 +1524,7 @@ Procedure TvCmdBuffer.WriteEvent(eventType:Byte);
 begin
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1657,7 +1659,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1727,7 +1729,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1840,7 +1842,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -1944,7 +1946,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 
@@ -2005,7 +2007,7 @@ begin
 
  if (Self=nil) then
  begin
-  Writeln(stderr,'Self=nil,',{$I %LINE%});
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
   Exit;
  end;
 

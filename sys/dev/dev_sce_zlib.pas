@@ -26,6 +26,8 @@ uses
  kern_thr,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  p_zlib_node=^t_zlib_node;
  t_zlib_node=record
@@ -490,7 +492,7 @@ Function zlib_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- Writeln('zlib_ioctl:0x',HexStr(cmd,8));
+ LOG_TRACE('zlib_ioctl:0x',HexStr(cmd,8));
 
  case cmd of
 

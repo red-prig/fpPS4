@@ -136,6 +136,7 @@ var
  SRGB_HACK:Boolean=True;
 
 implementation
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 Procedure TvFlipCursor.Free;
 begin
@@ -478,7 +479,7 @@ begin
   memr.memoryTypeBits:=memr.memoryTypeBits and memr2.memoryTypeBits;
  end;
 
- //Writeln(buf^.DstImg.GetDedicatedAllocation);
+ //LOG_TRACE(buf^.DstImg.GetDedicatedAllocation);
 
  buf^.DevcMem:=MemManager.Alloc(memr,ord(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 
@@ -594,7 +595,7 @@ begin
    VK_NOT_READY:Exit(False);
    else
     begin
-     Writeln(StdErr,'vkGetEventStatus:',r);
+     LOG_TRACE(StdErr,'vkGetEventStatus:',r);
      Exit;
     end;
   end;
@@ -679,7 +680,7 @@ begin
    VK_SUBOPTIMAL_KHR:recreateSwapChain;
    else
     begin
-     Writeln(StdErr,'vkAcquireNextImageKHR:',R);
+     LOG_TRACE(StdErr,'vkAcquireNextImageKHR:',R);
      Exit;
     end;
   end;
@@ -687,12 +688,12 @@ begin
  until false;
  SwapImage:=FSwapChain.FImages[imageIndex];
 
- //Writeln('>Flip.Fence.Wait');
+ //LOG_TRACE('>Flip.Fence.Wait');
  if (buf^.cmdbuf.ret=0) then
  begin
   buf^.cmdbuf.Fence.Wait(High(uint64));
  end;
- //Writeln('<Flip.Fence.Wait');
+ //LOG_TRACE('<Flip.Fence.Wait');
 
  buf^.cmdbuf.Fence.Reset;
  buf^.cmdbuf.ReleaseResource;
@@ -1024,7 +1025,7 @@ begin
   VK_SUBOPTIMAL_KHR:recreateSwapChain;
    else
     begin
-     Writeln(StdErr,'vkQueuePresentKHR:',R);
+     LOG_TRACE(StdErr,'vkQueuePresentKHR:',R);
      Exit;
     end;
  end;

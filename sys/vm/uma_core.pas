@@ -227,6 +227,8 @@ uses
  kern_thr,
  kern_daemon;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  UMA_SLAB_GRANULARITY=MD_ALLOC_GRANULARITY div MD_PAGE_SIZE;
 
@@ -1505,7 +1507,7 @@ begin
    }
   if (totsize > UMA_SLAB_SIZE * keg^.uk_ppera) then
   begin
-   Writeln(stderr,'zone ',zone^.uz_name,' ipers ',keg^.uk_ipers,' rsize ',keg^.uk_rsize,' size ',keg^.uk_size);
+   LOG_CRITICAL(stderr,'zone ',zone^.uz_name,' ipers ',keg^.uk_ipers,' rsize ',keg^.uk_rsize,' size ',keg^.uk_size);
    Assert(False, 'UMA slab won`t fit.');
   end;
  end;
@@ -1657,7 +1659,7 @@ begin
  KEG_LOCK(keg);
  if (keg^.uk_free<>0) then
  begin
-  Writeln('Freed UMA keg (',keg^.uk_name,') was not empty (',keg^.uk_free,' items). ',
+  LOG_INFO('Freed UMA keg (',keg^.uk_name,') was not empty (',keg^.uk_free,' items). ',
           ' Lost ',keg^.uk_pages,' pages of memory.');
  end;
  KEG_UNLOCK(keg);
@@ -3134,7 +3136,7 @@ end;
 
 procedure slab_print(slab:uma_slab_t);
 begin
- Writeln('slab: keg ',HexStr(slab^.us_keg),', data ',HexStr(slab^.us_data),', freecount ',slab^.us_freecount);
+ LOG_TRACE('slab: keg ',HexStr(slab^.us_keg),', data ',HexStr(slab^.us_data),', freecount ',slab^.us_freecount);
 end;
 
 procedure cache_print(cache:uma_cache_t);
@@ -3156,7 +3158,7 @@ procedure cache_print(cache:uma_cache_t);
  end;
 
 begin
- Writeln('alloc: ',HexStr(cache^.uc_allocbucket),'(',uc_allocbucket_ub_cnt,'), free: ',HexStr(cache^.uc_freebucket),'(',uc_freebucket_ub_cnt,')');
+ LOG_TRACE('alloc: ',HexStr(cache^.uc_allocbucket),'(',uc_allocbucket_ub_cnt,'), free: ',HexStr(cache^.uc_freebucket),'(',uc_freebucket_ub_cnt,')');
 end;
 
 procedure LIST_FOREACH_slab(h:P_LIST_HEAD);
@@ -3174,18 +3176,18 @@ end;
 
 procedure uma_print_keg(keg:uma_keg_t);
 begin
- Writeln('keg: ',keg^.uk_name,'(',HexStr(keg),') size ',keg^.uk_size,'(',keg^.uk_rsize,') flags ',HexStr(keg^.uk_flags,4),
+ LOG_TRACE('keg: ',keg^.uk_name,'(',HexStr(keg),') size ',keg^.uk_size,'(',keg^.uk_rsize,') flags ',HexStr(keg^.uk_flags,4),
          ' ipers ',keg^.uk_ipers,
          ' ppera ',keg^.uk_ppera,
          ' out ',(keg^.uk_ipers * keg^.uk_pages) - keg^.uk_free,
          ' free ', keg^.uk_free,
          ' limit ',(keg^.uk_maxpages div keg^.uk_ppera) * keg^.uk_ipers
         );
- Writeln('Part slabs:');
+ LOG_INFO('Part slabs:');
  LIST_FOREACH_slab(@keg^.uk_part_slab);
- Writeln('Free slabs:');
+ LOG_INFO('Free slabs:');
  LIST_FOREACH_slab(@keg^.uk_free_slab);
- Writeln('Full slabs:');
+ LOG_INFO('Full slabs:');
  LIST_FOREACH_slab(@keg^.uk_full_slab);
 end;
 
@@ -3195,7 +3197,7 @@ var
  kl:uma_klink_t;
  i:Integer;
 begin
- Writeln('zone: ',zone^.uz_name,'(',HexStr(zone),') size ',zone^.uz_size,' flags ',HexStr(zone^.uz_flags,4));
+ LOG_TRACE('zone: ',zone^.uz_name,'(',HexStr(zone),') size ',zone^.uz_size,' flags ',HexStr(zone^.uz_flags,4));
 
  kl:=LIST_FIRST(@zone^.uz_kegs);
  while (kl<>nil) do
@@ -3209,7 +3211,7 @@ begin
  while CPU_FOREACH(i) do
  begin
   cache:=@zone^.uz_cpu[i];
-  Writeln('CPU ',i,' Cache:');
+  LOG_INFO('CPU ',i,' Cache:');
   cache_print(cache);
  end;
 end;

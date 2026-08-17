@@ -20,6 +20,8 @@ uses
  kern_thr,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  pad_counter:Byte=0;
 
@@ -402,7 +404,7 @@ begin
          (port_type  <> 3) or   //port_type
          (port_index <> 0) then //port_index
       begin
-       Writeln('sceHidOpenPortForUser(',port_userid,',',
+       LOG_INFO('sceHidOpenPortForUser(',port_userid,',',
                                         port_type  ,',',
                                         port_index ,')');
 
@@ -411,7 +413,7 @@ begin
       //handle
       td^.td_retval[0]:=generateHandle(port_type,0,0);
 
-      Writeln('handle=0x',HexStr(td^.td_retval[0],8));
+      LOG_TRACE('handle=0x',HexStr(td^.td_retval[0],8));
      end;
     end;
 
@@ -420,7 +422,7 @@ begin
      with p_close_args(data)^ do
      begin
 
-      Writeln('sceHidClosePortForUser(',port_type,',0x',HexStr(handle,8),')');
+      LOG_TRACE('sceHidClosePortForUser(',port_type,',0x',HexStr(handle,8),')');
 
       Result:=0;
      end;
@@ -430,7 +432,7 @@ begin
     begin
      with p_pad_state_args(data)^ do
      begin
-      Writeln('device_id=0x',HexStr(id,8));
+      LOG_TRACE('device_id=0x',HexStr(id,8));
 
       fill_device_info(u.pad_device_info);
 
@@ -442,7 +444,7 @@ begin
     begin
      with p_pad_state_args(data)^ do
      begin
-      //Writeln('handle=0x',HexStr(id,8));
+      LOG_TRACE('handle=0x',HexStr(id,8));
 
       fill_device_info(u.pad_device_info);
 
@@ -454,7 +456,7 @@ begin
     begin
      with p_pad_state_args(data)^ do
      begin
-      Writeln('device_id=0x',HexStr(id,8));
+      LOG_TRACE('device_id=0x',HexStr(id,8));
 
       u.motion_calib_state:=Default(t_motion_calib_state);
 
@@ -466,7 +468,7 @@ begin
     begin
      with p_pad_state_args(data)^ do
      begin
-      Writeln('device_id=0x',HexStr(id,8));
+      LOG_TRACE('device_id=0x',HexStr(id,8));
 
       u.motion_scale_param:=Default(t_motion_scale_param);
 
@@ -479,7 +481,7 @@ begin
      with p_read_state_args(data)^ do
      begin
 
-      //Writeln('handle=0x',HexStr(handle,8));
+      LOG_TRACE('handle=0x',HexStr(handle,8));
 
       u.pad_state:=Default(t_pad_state);
 

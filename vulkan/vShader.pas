@@ -73,6 +73,8 @@ function _GetIdByType(i:TVkDescriptorType):Byte;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Destructor TvShader.Destroy;
 begin
  if (FHandle<>VK_NULL_HANDLE) then
@@ -118,7 +120,7 @@ begin
  r:=vkCreateShaderModule(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln('vkCreateShaderModule:',r);
+  LOG_TRACE('vkCreateShaderModule:',r);
   Exit;
  end;
 end;

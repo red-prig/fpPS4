@@ -58,6 +58,8 @@ uses
  subr_backtrace,
  ps4libdoc;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function symlook_obj(req:p_SymLook;obj:p_lib_info):Integer;
 label
  _next;
@@ -668,7 +670,7 @@ begin
  begin
   if (ST_BIND=STT_SECTION) then
   begin
-   Writeln(StdErr,'find_symdef:',refobj^.lib_path,': Bogus symbol table entry ',symnum);
+   LOG_WARNING(StdErr,'find_symdef:',refobj^.lib_path,': Bogus symbol table entry ',symnum);
   end;
 
   req:=Default(t_SymLook);

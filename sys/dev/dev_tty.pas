@@ -31,6 +31,8 @@ uses
  vsys_generic,
  sys_event;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * Operations that are exposed through the character device in /dev.
  }
@@ -38,7 +40,7 @@ Function ttydev_open(dev:p_cdev;oflags,devtype:Integer):Integer;
 var
  tp:p_tty;
 begin
- Writeln('ttydev_open("',dev^.si_name,'",',oflags,',',devtype,')');
+ LOG_INFO('ttydev_open("',dev^.si_name,'",',oflags,',',devtype,')');
 
  tp:=dev^.si_drv1;
  if (tp=nil) then Exit(EWOULDBLOCK);
@@ -107,7 +109,7 @@ begin
   else;
  end;
 
- Writeln('ttydev_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8),')');
+ LOG_TRACE('ttydev_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8),')');
  //error:=tty_ioctl(tp, cmd, data, fflag, td);
 
  //done:

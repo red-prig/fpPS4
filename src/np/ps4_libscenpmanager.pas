@@ -57,9 +57,11 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceNpSetContentRestriction(pRestriction:PSceNpContentRestriction):Integer;
 begin
- Writeln('sceNpSetContentRestriction:',HexStr(pRestriction));
+ LOG_TRACE('sceNpSetContentRestriction:',HexStr(pRestriction));
  Result:=0;
 end;
 
@@ -365,7 +367,7 @@ begin
  if (titleId=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
  if (titleSecret=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
- Writeln('sceNpSetNpTitleId:',GetStr(@titleId^.id,StrLen(@titleId^.id)));
+ LOG_INFO('sceNpSetNpTitleId:',GetStr(@titleId^.id,StrLen(@titleId^.id)));
  Result:=0;
 end;
 

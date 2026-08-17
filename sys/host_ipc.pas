@@ -166,6 +166,8 @@ operator := (A:RawByteString):TIpcValue;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 
 operator := (A:RawByteString):TMsgHash;
 begin
@@ -690,7 +692,7 @@ procedure simple_kern_thread(parameter:pointer); SysV_ABI_CDecl;
 var
  ipc:THostIpcDispatchKern;
 begin
- Writeln('[simple_kern_thread]');
+ LOG_INFO('[simple_kern_thread]');
 
  ipc:=THostIpcDispatchKern(parameter);
 

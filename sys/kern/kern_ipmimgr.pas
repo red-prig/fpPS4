@@ -16,6 +16,8 @@ uses
  subr_backtrace,
  kern_named_id;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  p_IpmiClientCreateData=^t_IpmiClientCreateData;
  t_IpmiClientCreateData=packed record
@@ -63,7 +65,7 @@ begin
  if (data.size > $150) then Exit(EINVAL);
  if (data.f_0x8 > $10) then Exit(EINVAL);
 
- Writeln('syscallCreateClient(',HexStr(src^.this),',"',name,'")');
+ LOG_TRACE('syscallCreateClient(',HexStr(src^.this),',"',name,'")');
 
  kid:=222;
  dst^:=kid;
@@ -102,7 +104,7 @@ begin
   if (Result<>0) then Exit;
  end;
 
- Writeln('syscallConnectWithWaitServer(',kid,',',
+ LOG_INFO('syscallConnectWithWaitServer(',kid,',',
                                          HexStr(src^.param_0,16),',',
                                          HexStr(src^.param_1,16),',',
                                          HexStr(src^.pRes),',',
@@ -154,7 +156,7 @@ begin
  if (src^.bufCount  >10) then Exit(EINVAL);
  if (src^.resultCount>1) then Exit(EINVAL);
 
- Writeln('syscallSendReceiveInvokeSyncMethod(',kid,',',
+ LOG_INFO('syscallSendReceiveInvokeSyncMethod(',kid,',',
                                                src^.method,',',
                                                src^.dataCount,',',
                                                src^.bufCount,',',
@@ -188,7 +190,7 @@ var
  kval:QWORD;
 begin
 
- Writeln('syscallPollEventFlag(',kid,',',
+ LOG_INFO('syscallPollEventFlag(',kid,',',
                                  src^.unk_id,',',
                                  src^.bitPattern,',',
                                  src^.waitMode,')');
@@ -213,7 +215,7 @@ begin
  Result:=0;
  dst:=0;
 
- Writeln('sys_ipmimgr_call(',op,',',kid,',',paramsSize,')');
+ LOG_INFO('sys_ipmimgr_call(',op,',',kid,',',paramsSize,')');
 
  if (paramsSize > 64) then
  begin

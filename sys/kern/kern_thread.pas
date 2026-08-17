@@ -83,6 +83,8 @@ uses
  sched_ule,
  sys_sleepqueue;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 procedure umtx_thread_init(td:p_kthread); external;
@@ -167,7 +169,7 @@ begin
 
     if cpu_thread_finished(td_first) then
     begin
-     //Writeln('thread_reap:',HexStr(td_first));
+     LOG_TRACE('thread_reap:',HexStr(td_first));
      TAILQ_REMOVE(@zombie_threads,td_first,@td_first^.td_zombie);
      thread_free(td_first);
     end else
@@ -391,7 +393,7 @@ begin
   //switch
  set_pcb_flags(curkthread,PCB_IS_JIT); //force JIT mode
  ipi_sigreturn;
- Writeln(stderr,'I''m a teapot!');
+ LOG_CRITICAL(stderr,'I''m a teapot!');
 end;
 
 procedure before_start_kern(td:p_kthread);
@@ -453,7 +455,7 @@ begin
   Exit(EPROCLIM);
  end;
 
- writeln('create_thread[',name,']'#13#10,
+ LOG_INFO('create_thread[',name,']'#13#10,
          ' start_func:0x',HexStr(start_func),#13#10,
          ' arg       :0x',HexStr(arg),#13#10,
          ' stack_base:0x',HexStr(stack_base),#13#10,
@@ -542,7 +544,7 @@ begin
   Exit(EINVAL);
  end;
 
- writeln('create_thread[',name,']'#13#10,
+ LOG_INFO('create_thread[',name,']'#13#10,
          ' newtd:0x',HexStr(newtd),#13#10,
          '   tid:',newtd^.td_tid
         );
@@ -588,7 +590,7 @@ begin
   cpu_set_upcall_kse(newtd,start_func,arg,@stack);
   // Setup user TLS address and TLS pointer register.
   cpu_set_fsbase(newtd,tls_base);
-  Writeln('set_fsbase=0x',HexStr(tls_base));
+  LOG_TRACE('set_fsbase=0x',HexStr(tls_base));
   //init FPU
   fpuinit(newtd);
  end;
@@ -696,7 +698,7 @@ begin
 
  if (n<>0) then
  begin
-  Writeln(StdErr,'failed cpu_thread_create:0x',HexStr(n,8));
+  LOG_ERROR(StdErr,'failed cpu_thread_create:0x',HexStr(n,8));
   thread_free(newtd);
   Exit(EINVAL);
  end;

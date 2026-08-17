@@ -140,6 +140,8 @@ uses
  subr_dynlib,
  kern_authinfo;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  budget_vm_limit  :array[0..3] of t_budget_info;
  budget_vm_reserve:array[0..3] of t_budget_info;
@@ -170,7 +172,7 @@ procedure vm_set_budget_limit(ptype,field:Integer;value:QWORD);
 begin
  if (DWORD(ptype)>3) or (DWORD(field-1)>2) then Exit;
 
- Writeln('vm_set_budget_limit(',ptype_str[ptype],',',field_str[field],',0x',HexStr(value,16),')');
+ LOG_TRACE('vm_set_budget_limit(',ptype_str[ptype],',',field_str[field],',0x',HexStr(value,16),')');
 
  rw_wlock(budget_vm_lock);
 
@@ -252,7 +254,7 @@ procedure bp_set_budget_limit(ptype:Integer;value:DWORD);
 begin
  if (DWORD(ptype)>3) then Exit;
 
- Writeln('bp_set_budget_limit(',ptype_str[ptype],',0x',HexStr(value,8),')');
+ LOG_TRACE('bp_set_budget_limit(',ptype_str[ptype],',0x',HexStr(value,8),')');
 
  rw_wlock(budget_bp_lock);
 
@@ -421,7 +423,7 @@ begin
    if (is_2MB_align<>0) and
       ((game_fmem_size and PAGE_2MB_MASK)<>0) then
    begin
-    Writeln(stderr,'game_fmem_size is not multiple of 2MB: 0x',HexStr(game_fmem_size,8));
+    LOG_ERROR(stderr,'game_fmem_size is not multiple of 2MB: 0x',HexStr(game_fmem_size,8));
    end;
 
    limit_value   :=BigAppMemory - size;
@@ -468,7 +470,7 @@ begin
   Exit(BigAppMemory - game_fmem_size);
  end;
 
- Writeln(stderr,'expand_and_reserve_game_fmem=',size);
+ LOG_CRITICAL(stderr,'expand_and_reserve_game_fmem=',size);
  Assert(false,'expand_and_reserve_game_fmem');
 end;
 
@@ -493,8 +495,8 @@ begin
 
  if (vm_budget_reserve(PTYPE_BIG_APP,field_mlock,size)<>0) then
  begin
-  Writeln(stderr,'wrong MLOCK budget accounting');
-  Assert(false,'wrong MLOCK budget accounting');
+  LOG_CRITICAL(stderr,'wrong MLOCK budget accounting');
+  Assert      (false,'wrong MLOCK budget accounting');
  end;
 end;
 
@@ -523,7 +525,7 @@ begin
 
    if (QWORD(bigapp_max_fmem_size - game_fmem_size) < size) then
    begin
-    Writeln('[KERNEL] WARNING: Failed to allocate extended page table pool.  shortage = '
+    LOG_ERROR('[KERNEL] WARNING: Failed to allocate extended page table pool.  shortage = '
            ,(game_fmem_size - bigapp_max_fmem_size) + $fffff + (size shr 20),
            'MiB');
     Exit(ENOMEM);
@@ -595,7 +597,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln('[KERNEL] ERROR: failed to load memory parameter: ',Result);
+  LOG_ERROR('[KERNEL] ERROR: failed to load memory parameter: ',Result);
  end;
 
  if (Byte((mmap_flags xor 1) or ord(g_self_loading=0))=0) then
@@ -663,7 +665,7 @@ begin
     //
     if (ExtendedMemory2) then
     begin
-     Writeln('[System] : SCE_KERNEL_EXTENDED_DMEM_BASE_128 was ignored');
+     LOG_WARNING('[System] : SCE_KERNEL_EXTENDED_DMEM_BASE_128 was ignored');
     end;
     //
    end else
@@ -719,7 +721,7 @@ begin
   if (ExtendedCpuPageTable > $1000000000) then
   begin
    ExtendedCpuPageTable:=0;
-   Writeln(stderr,'[KERNEL] ERROR: The extended CPU page table pool must be smaller than 64GiB');
+   LOG_ERROR(stderr,'[KERNEL] ERROR: The extended CPU page table pool must be smaller than 64GiB');
    Result:=ENOMEM;
   end;
 
@@ -765,7 +767,7 @@ begin
           (FMEM_SIZE < bigapp_size) or
           ((FMEM_SIZE and QWORD(not PAGE_MASK))<>FMEM_SIZE) then
        begin
-        Writeln(stderr,'[KERNEL] ERROR: invalid FMEM size (0x',HexStr(FlexibleMemorySize,16),') is specified.');
+        LOG_ERROR(stderr,'[KERNEL] ERROR: invalid FMEM size (0x',HexStr(FlexibleMemorySize,16),') is specified.');
         Result:=EINVAL;
         FMEM_SIZE:=bigapp_max_fmem_size;
        end;
@@ -778,7 +780,7 @@ begin
 
   end else
   begin
-   Writeln('[KERNEL] ERROR: The extended GPU page table pool must be smaller than 64GiB');
+   LOG_ERROR('[KERNEL] ERROR: The extended GPU page table pool must be smaller than 64GiB');
    Result:=ENOMEM;
    ExtendedSize:=0;
    FMEM_SIZE:=bigapp_max_fmem_size;
@@ -786,7 +788,7 @@ begin
 
   if (FMEM_SIZE < game_fmem_size) then
   begin
-   Writeln(stderr,'[KERNEL] ERROR: The executable file size (= 0x',HexStr(game_fmem_size,16),
+   LOG_ERROR(stderr,'[KERNEL] ERROR: The executable file size (= 0x',HexStr(game_fmem_size,16),
                   ') < specified FMEM size (=0x',HexStr(FMEM_SIZE,16),')');
    if (Result=0) then
    begin
@@ -820,19 +822,19 @@ begin
    end;
   end else
   begin
-   Writeln(stderr,'[KERNEL] ERROR: failed to extend page table pool: ',Result);
+   LOG_ERROR(stderr,'[KERNEL] ERROR: failed to extend page table pool: ',Result);
   end;
 
  end;
 
- Writeln('DMEM_LIMIT      =0x',HexStr(DMEM_LIMIT,16));
- Writeln('FMEM_LIMIT      =0x',HexStr(FMEM_LIMIT,16));
- Writeln('BigAppMem       =0x',HexStr(BigAppMemory,16));
- Writeln('game_fmem_size  =0x',HexStr(game_fmem_size,16));
+ LOG_TRACE('DMEM_LIMIT      =0x',HexStr(DMEM_LIMIT,16));
+ LOG_TRACE('FMEM_LIMIT      =0x',HexStr(FMEM_LIMIT,16));
+ LOG_TRACE('BigAppMem       =0x',HexStr(BigAppMemory,16));
+ LOG_TRACE('game_fmem_size  =0x',HexStr(game_fmem_size,16));
  //
- Writeln('vm_budget_dmem  =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mdmem ),16));
- Writeln('vm_budget_mlock =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mlock ),16));
- Writeln('vm_budget_malloc=0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_malloc),16));
+ LOG_TRACE('vm_budget_dmem  =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mdmem ),16));
+ LOG_TRACE('vm_budget_mlock =0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_mlock ),16));
+ LOG_TRACE('vm_budget_malloc=0x',HexStr(vm_budget_limit(PTYPE_BIG_APP,field_malloc),16));
 end;
 
 function get_mlock_avail():QWORD;
@@ -941,8 +943,8 @@ begin
     used:=vm_budget_used(PTYPE_BIG_APP,field_mlock);
     if (used<>0) then
     begin
-     Writeln(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
-     Assert(false,'BUDGET_MEMORY_MLOCK');
+     LOG_CRITICAL(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
+     Assert      (false,'BUDGET_MEMORY_MLOCK');
     end;
    end;
   as___end_game_app_mount:
@@ -957,8 +959,8 @@ begin
     used:=vm_budget_used(PTYPE_BIG_APP,field_mlock);
     if (used<>0) then
     begin
-     Writeln(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
-     Assert(false,'BUDGET_MEMORY_MLOCK');
+     LOG_CRITICAL(stderr,'BUDGET_MEMORY_MLOCK of game is being used: ',used,' bytes');
+     Assert      (false,'BUDGET_MEMORY_MLOCK');
     end;
 
     set_bigapp_limits(bigapp_size,0);
@@ -969,8 +971,8 @@ begin
    begin
     if (g_ext_game_fmem<>0) then
     begin
-     Writeln(stderr,'ext_game_fmem is already enabled');
-     Assert (false ,'ext_game_fmem is already enabled');
+     LOG_CRITICAL(stderr,'ext_game_fmem is already enabled');
+     Assert      (false ,'ext_game_fmem is already enabled');
     end;
 
     g_ext_game_fmem:=1;
@@ -1001,7 +1003,7 @@ begin
  end else
  if (g_mode_2mb_size<>g_mode_2mb_rsrv) then
  begin
-  Writeln(stderr,'2mpage budget');
+  LOG_CRITICAL(stderr,'2mpage budget');
   Assert(false,'2mpage budget');
  end else
  begin
@@ -1033,7 +1035,7 @@ begin
 
  if (game_fmem_size<>bigapp_size) then
  begin
-  Writeln(stderr,'[KERNEL] WARNING: The last bigapp termination handling was incomplete.');
+  LOG_ERROR(stderr,'[KERNEL] WARNING: The last bigapp termination handling was incomplete.');
   Exit(EPERM);
  end;
 

@@ -81,6 +81,8 @@ uses
  sys_conf,
  vm_pager;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function sys_mlock(addr:Pointer;len:QWORD):Integer;
 var
  _adr,_end,last,start,size:vm_offset_t;
@@ -1024,7 +1026,7 @@ begin
 
   else
     begin
-     Writeln('DTYPE_',fp^.f_type,' TODO');
+     LOG_WARNING('DTYPE_',fp^.f_type,' TODO');
      Result:=Pointer(ENODEV);
      goto _done;
     end;
@@ -1065,7 +1067,7 @@ _map:
 
  end;
 
- Writeln('0x',HexStr(QWORD(stack_addr),11),'->',
+ LOG_TRACE('0x',HexStr(QWORD(stack_addr),11),'->',
          'sys_mmap(','0x',HexStr(QWORD(vaddr),11),
                     ',0x',HexStr(vlen,11),
                     ',0x',HexStr(prot,2),
@@ -1116,7 +1118,7 @@ begin
 
  Result:=vm_map_remove(map, qword(addr), qword(addr) + size);
 
- Writeln('sys_munmap(','0x',HexStr(QWORD(addr),11),
+ LOG_TRACE('sys_munmap(','0x',HexStr(QWORD(addr),11),
                       ',0x',HexStr(len,11),
                        '):',Integer(Result)
                      );
@@ -1316,7 +1318,7 @@ begin
 
  vm_map_set_name(map,start,__end,@_name);
 
- Writeln('sys_mname(','0x',HexStr(QWORD(addr),11),
+ LOG_TRACE('sys_mname(','0x',HexStr(QWORD(addr),11),
                      ',0x',HexStr(len,11),
                        ',','"',name,'"',
                        ')'

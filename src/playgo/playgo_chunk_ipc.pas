@@ -25,6 +25,8 @@ uses
  host_ipc,
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function is_init_playgo:Boolean;
 begin
  Result:=(playgo_lazy_init=2);
@@ -36,7 +38,7 @@ var
 begin
  if (playgo_lazy_init=2) then Exit;
 
- Writeln('PLAYGO_INIT');
+ LOG_INFO('PLAYGO_INIT');
 
  if CAS(playgo_lazy_init,0,1) then
  begin

@@ -150,6 +150,8 @@ uses
  vm_object,
  kern_vm_object;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * Sync each mounted filesystem.
  }
@@ -1071,7 +1073,7 @@ begin
  if (curkthread<>nil) then
  if is_guest_addr(curkthread^.td_frame.tf_rip) then
  begin
-  Writeln('sys_open("',path,'",0x',HexStr(flags,6),',0',OctStr(mode,3),'):',Result);
+  LOG_TRACE('sys_open("',path,'",0x',HexStr(flags,6),',0',OctStr(mode,3),'):',Result);
  end;
 end;
 
@@ -1085,7 +1087,7 @@ begin
  if (curkthread<>nil) then
  if is_guest_addr(curkthread^.td_frame.tf_rip) then
  begin
-  Writeln('sys_openat(',fd,',"',path,'",0x',HexStr(flags,4),',0',OctStr(mode,3),'):',Result);
+  LOG_TRACE('sys_openat(',fd,',"',path,'",0x',HexStr(flags,4),',0',OctStr(mode,3),'):',Result);
  end;
 end;
 
@@ -1683,7 +1685,7 @@ function sys_unlink(path:PChar):Integer;
 begin
  Result:=kern_unlink(path, UIO_USERSPACE);
 
- Writeln('sys_unlink("',path,'"):',Result);
+ LOG_INFO('sys_unlink("',path,'"):',Result);
 end;
 
 {
@@ -1980,7 +1982,7 @@ begin
   error:=copyout(@sb, ub, sizeof(sb));
  end;
 
- Writeln('sys_stat("',path,'"):',error);
+ LOG_ERROR('sys_stat("',path,'"):',error);
 
  Exit(error);
 end;
@@ -3092,7 +3094,7 @@ begin
  if (curkthread<>nil) then
  if is_guest_addr(curkthread^.td_frame.tf_rip) then
  begin
-  Writeln('sys_mkdir("',path,'",','0',OctStr(mode,3),'):',Result);
+  LOG_INFO('sys_mkdir("',path,'",','0',OctStr(mode,3),'):',Result);
  end;
 end;
 

@@ -10,6 +10,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_MOVE_ERROR_INVALID_ARG   =-2131886077; //0x80EE0003
  SCE_MOVE_ERROR_INVALID_HANDLE=-2131886076; //0x80EE0004
@@ -55,19 +57,19 @@ type
 
 function ps4_sceMoveInit:Integer;
 begin
- Writeln('sceMoveInit');
+ LOG_INFO('sceMoveInit');
  Result:=0;
 end;
 
 function ps4_sceMoveOpen(userId,_type,index:Integer):Integer;
 begin
- Writeln('sceMoveOpen:',userId,' ',_type,' ',index);
+ LOG_INFO('sceMoveOpen:',userId,' ',_type,' ',index);
  Result:=0;
 end;
 
 function ps4_sceMoveClose(handle:Integer):Integer;
 begin
- Writeln('sceMoveClose:',handle);
+ LOG_INFO('sceMoveClose:',handle);
  Result:=0;
 end;
 

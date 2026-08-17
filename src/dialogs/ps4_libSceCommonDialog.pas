@@ -90,6 +90,8 @@ function strncmp  (str1,str2:PChar;maxlen:ptrint):Integer;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_common_dialog_init:Byte=0;
  g_common_dialog_mtx :mtx;
@@ -366,7 +368,7 @@ end;
 function ps4_sceCommonDialogInitialize():Integer;
 begin
  Result:=0;
- Writeln('sceCommonDialogInitialize');
+ LOG_INFO('sceCommonDialogInitialize');
 
  mtx_lock(g_common_dialog_mtx);
 

@@ -28,6 +28,8 @@ uses
  ps4libdoc,
  x86_fpdbgdisas;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function IS_TRAP_FUNC(rip:qword):Boolean; external;
 function GET_JIT_FUNC(rip:qword):Byte;    external;
 
@@ -259,26 +261,26 @@ begin
    offset1:=QWORD(frame)-QWORD(info.base_addr);
    offset2:=QWORD(frame)-QWORD(info.func_addr);
 
-   Writeln(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
+   LOG_TRACE(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
   end else
   begin
    if (info.base_addr<>0) then
    begin
     offset1:=QWORD(frame)-QWORD(info.base_addr);
 
-    Writeln(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source);
+    LOG_TRACE(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source);
    end else
    begin
-    Writeln(f,'  $',HexStr(frame),'  ',info.source);
+    LOG_TRACE(f,'  $',HexStr(frame),'  ',info.source);
    end;
   end;
  end else
  if (BackTraceStrFunc<>nil) then
  begin
-  Writeln(f,BackTraceStrFunc(frame));
+  LOG_INFO(f,BackTraceStrFunc(frame));
  end else
  begin
-  Writeln(f,'  $',HexStr(frame));
+  LOG_TRACE(f,'  $',HexStr(frame));
  end;
 end;
 
@@ -321,7 +323,7 @@ procedure print_error_td(const str:shortstring;resumable:Boolean=False);
 begin
  thread_suspend_all(nil);
 
- Writeln(StdErr,str);
+ LOG_ERROR(StdErr,str);
  print_backtrace_td(StdErr);
 
  p_host_ipc.error(str);
@@ -370,7 +372,7 @@ begin
  while (ptr<fin) and (max>0) do
  begin
   adec.Disassemble(ptr,ACodeBytes,ACode);
-  Writeln(ACodeBytes:32,' ',ACode);
+  LOG_INFO(ACodeBytes:32,' ',ACode);
   Dec(max);
  end;
 

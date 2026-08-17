@@ -151,6 +151,8 @@ uses
  kern_param,
  md_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  p_range=^t_range;
  t_range=record
@@ -206,7 +208,7 @@ begin
   r:=md_memfd_close(obj^.hfile);
   if (r<>0) then
   begin
-   Writeln('failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
+   LOG_CRITICAL(StdErr,'failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
    Assert(false,'vm_nt_file_obj_destroy');
   end;
   obj^.hfile:=0;
@@ -300,7 +302,7 @@ begin
    r:=md_placeholder_split(Pointer(entry^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_split(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_placeholder_split(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
@@ -316,7 +318,7 @@ begin
                             entry^.offset);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_commit(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_placeholder_commit(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
@@ -331,12 +333,12 @@ begin
    r:=md_protect(Pointer(entry^.start),size,(prot and VM_RW));
    if (r<>0) then
    begin
-    Writeln('failed md_protect(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_protect(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
   end;
 
-  //Writeln('md_file_mmap(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
+  LOG_TRACE('md_file_mmap(',HexStr(entry^.start,11),',',HexStr(entry^.start+size,11),'):0x',HexStr(r,8));
  end;
 end;
 
@@ -501,12 +503,12 @@ begin
     r:=md_placeholder_decommit(Pointer(p^.start),size);
     if (r<>0) then
     begin
-     Writeln('failed md_placeholder_decommit(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
+     LOG_CRITICAL(StdErr,'failed md_placeholder_decommit(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
    end;
    //
-   //Writeln('md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
+   LOG_TRACE('md_file_unmap_ex(',HexStr(p^.start,11),',',HexStr(p^.__end,11),'):0x',HexStr(r,8));
    //
    Inc(r_count);
   end;
@@ -520,10 +522,10 @@ begin
   r:=md_placeholder_union(Pointer(start),size);
   if (r<>0) then
   begin
-   Writeln('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
+   LOG_CRITICAL(StdErr,'failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
    Assert(false,'vm_remap');
   end;
-  //Writeln('md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
+  LOG_TRACE('md_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
  end;
 
  //split to parts
@@ -539,14 +541,14 @@ begin
    r:=md_placeholder_split(Pointer(curr^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_split(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
+    LOG_ERROR('failed md_placeholder_split(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
 
-    Writeln('(',HexStr(start,11),',',HexStr(__end,11),')');
+    LOG_CRITICAL(StdErr,'(',HexStr(start,11),',',HexStr(__end,11),')');
 
     Assert(false,'vm_remap');
    end;
 
-   //Writeln('md_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+   LOG_TRACE('md_split(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
 
    Break; //middle or last splt
   end;
@@ -572,11 +574,11 @@ begin
                              curr^.offset);
     if (r<>0) then
     begin
-     Writeln('failed md_placeholder_commit(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
+     LOG_CRITICAL(StdErr,'failed md_placeholder_commit(',HexStr(curr^.start,11),',',HexStr(curr^.__end,11),'):0x',HexStr(r,8));
      Assert(false,'vm_remap');
     end;
 
-    //Writeln('md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
+    LOG_TRACE('md_file_mmap_ex(',HexStr(ets[i]^.start,11),',',HexStr(ets[i]^.__end,11),'):0x',HexStr(r,8));
    end;
   end;
  end;
@@ -629,10 +631,10 @@ begin
    r:=md_placeholder_decommit(Pointer(entry^.start),size);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
     Assert(false,'vm_unmap');
    end;
-   //Writeln('md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+   LOG_TRACE('md_placeholder_decommit(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
   end;
 
  end;
@@ -646,9 +648,9 @@ begin
   r:=md_placeholder_union(Pointer(start),__end-start);
   if (r<>0) then
   begin
-   Writeln('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
+   LOG_ERROR('failed md_placeholder_union(',HexStr(start,11),',',HexStr(__end,11),'):0x',HexStr(r,8));
 
-   Writeln('(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
+   LOG_CRITICAL(StdErr,'(',HexStr(entry^.start,11),',',HexStr(entry^.__end,11),'):0x',HexStr(r,8));
 
    Assert(false,'vm_unmap');
   end;
@@ -1484,7 +1486,7 @@ begin
  r:=md_placeholder_mmap(Result,__end-start);
  if (r<>0) then
  begin
-  Writeln('failed md_placeholder_mmap(',HexStr(__end-start,11),'):0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_placeholder_mmap(',HexStr(__end-start,11),'):0x',HexStr(r,8));
   Assert(false,'vm_map');
   Exit;
  end;
@@ -1531,7 +1533,7 @@ begin
     r:=md_placeholder_split(curr,size);
     if (r<>0) then
     begin
-     Writeln('failed md_placeholder_split(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+     LOG_CRITICAL(StdErr,'failed md_placeholder_split(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
      Assert(false,'vm_map');
     end;
    end;
@@ -1547,7 +1549,7 @@ begin
                             offset);
    if (r<>0) then
    begin
-    Writeln('failed md_placeholder_commit(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_placeholder_commit(',HexStr(curr),',',HexStr(curr+size),'):0x',HexStr(r,8));
     Assert(false,'vm_map');
    end;
 

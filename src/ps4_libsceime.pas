@@ -95,6 +95,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_dialog:TImeClient=nil;
  g_Ime_mtx:mtx;
@@ -504,7 +506,7 @@ function ps4_sceImeKeyboardOpen(
           param:pSceImeKeyboardParam
           ):Integer;
 begin
- Writeln('sceImeKeyboardOpen:',userId,' ',HexStr(param));
+ LOG_TRACE('sceImeKeyboardOpen:',userId,' ',HexStr(param));
 
  if (param=nil) then Exit(SCE_IME_ERROR_INVALID_ADDRESS);
 
@@ -541,7 +543,7 @@ end;
 
 function ps4_sceImeKeyboardClose(userId:SceUserServiceUserId):Integer;
 begin
- Writeln('sceImeKeyboardClose:',userId);
+ LOG_INFO('sceImeKeyboardClose:',userId);
 
  if not CAS(keyboard_init,2,3) then Exit(SCE_IME_ERROR_NOT_OPENED);
 

@@ -95,6 +95,8 @@ uses
  vm_map,
  vm_tracking_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function PM4_TYPE(token:DWORD):Byte; inline;
 begin
  Result:=(token shr 30) and 3;
@@ -143,8 +145,8 @@ begin
   IT_INDIRECT_BUFFER     :;
   else
    begin
-    Writeln('init not indirect buffer:0x',HexStr(DWORD(buf^.header),8));
-    Assert(false,'init not indirect buffer');
+    LOG_CRITICAL(StdErr,'init not indirect buffer:0x',HexStr(DWORD(buf^.header),8));
+    Assert      (false,'init not indirect buffer');
    end;
  end;
 
@@ -153,7 +155,7 @@ begin
 
  addr:=get_dmem_ptr(Pointer(ib_base));
 
- //Writeln(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
+ //LOG_TRACE(' addr:0x'+HexStr(ib_base,16)+' '+HexStr(ib_size,16));
 
  ibuf^.next:=Default(TAILQ_ENTRY);
  ibuf^.base:=Pointer(ib_base); //adjust guest addr
@@ -201,7 +203,7 @@ begin
   if (ibuf^.endp<>nil) then
   if (buff + len)>ibuf^.endp then
   begin
-   Writeln('COMPUTE OVERFLOW!:');
+   LOG_TRACE('COMPUTE OVERFLOW!:');
   end;
 
   if (len>i) then
@@ -310,7 +312,7 @@ begin
  if not context.set_reg(i,data) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,'Unknow:',getRegName(i),':=0x',HexStr(data,8));
+  LOG_TRACE(stderr,'Unknow:',getRegName(i),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -319,7 +321,7 @@ begin
  if not context.set_sh_reg(i,data) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
+  LOG_TRACE(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -332,7 +334,7 @@ begin
  if not context.set_asc_reg(c_id,i,data) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
+  LOG_TRACE(stderr,'Unknow:',getRegName(i+$2C00),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -341,7 +343,7 @@ begin
  if not context.set_ctx_reg(i,data) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,'Unknow:',getRegName(i+$A000),':=0x',HexStr(data,8));
+  LOG_TRACE(stderr,'Unknow:',getRegName(i+$A000),':=0x',HexStr(data,8));
  end;
 end;
 
@@ -352,9 +354,9 @@ begin
  Assert(pctx^.stream_type=stGfxCcb);
 
  {
- Writeln(' adr=0x',HexStr(Body^.addr,16));
- Writeln(' len=0x',HexStr(Body^.numDwords*4,4));
- Writeln(' ofs=0x',HexStr(Body^.offset,4));
+ LOG_TRACE(' adr=0x',HexStr(Body^.addr,16));
+ LOG_TRACE(' len=0x',HexStr(Body^.numDwords*4,4));
+ LOG_TRACE(' ofs=0x',HexStr(Body^.offset,4));
  }
 
  pctx^.stream[stGfxCcb].LoadConstRam(Pointer(Body^.addr and (not QWORD(31))),
@@ -450,10 +452,10 @@ begin
 
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
-     if p_print_gpu_ops then Writeln('PM4_TYPE_0');
+     if p_print_gpu_ops then LOG_TRACE('PM4_TYPE_0');
     end;
   2:begin //PM4_TYPE_2
-     if p_print_gpu_ops then Writeln('PM4_TYPE_2');
+     if p_print_gpu_ops then LOG_TRACE('PM4_TYPE_2');
      //no body
     end;
   3:begin //PM4_TYPE_3
@@ -461,7 +463,7 @@ begin
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
         (not p_print_gpu_hint) then
      begin
-      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+      LOG_TRACE('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
                 ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
               ' len:',PM4_LENGTH(token));
      end;
@@ -478,7 +480,7 @@ begin
 
       else
        begin
-        Writeln(stderr,'[CCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        LOG_CRITICAL(StdErr,'[CCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
         Assert (False ,'[CCB]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
@@ -486,7 +488,7 @@ begin
     end;
   else
    begin
-    Writeln(stderr,'[CCB]PM4_TYPE_',PM4_TYPE(token));
+    LOG_CRITICAL(StdErr,'[CCB]PM4_TYPE_',PM4_TYPE(token));
     Assert (False ,'[CCB]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;
@@ -525,36 +527,36 @@ begin
 
  if p_print_gpu_ops then
  Case Body^.eventType of
-  CS_PARTIAL_FLUSH           :Writeln(' eventType=CS_PARTIAL_FLUSH');
-  CACHE_FLUSH_AND_INV_EVENT  :Writeln(' eventType=FLUSH_AND_INV_EVENT');
-  DB_CACHE_FLUSH_AND_INV     :Writeln(' eventType=DB_CACHE_FLUSH_AND_INV');
-  FLUSH_AND_INV_DB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_DB_DATA_TS');
-  FLUSH_AND_INV_DB_META      :Writeln(' eventType=FLUSH_AND_INV_DB_META');
-  FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
-  FLUSH_AND_INV_CB_META      :Writeln(' eventType=FLUSH_AND_INV_CB_META');
-  FLUSH_AND_INV_CB_PIXEL_DATA:Writeln(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
-  THREAD_TRACE_MARKER        :Writeln(' eventType=THREAD_TRACE_MARKER');
-  PIXEL_PIPE_STAT_CONTROL    :Writeln(' eventType=PIXEL_PIPE_STAT_CONTROL');
-  PIXEL_PIPE_STAT_DUMP       :Writeln(' eventType=PIXEL_PIPE_STAT_DUMP');
-  PIXEL_PIPE_STAT_RESET      :Writeln(' eventType=PIXEL_PIPE_STAT_RESET');
-  PIPELINESTAT_STOP          :Writeln(' eventType=PIPELINESTAT_STOP');
-  PERFCOUNTER_START          :Writeln(' eventType=PERFCOUNTER_START');
-  PERFCOUNTER_STOP           :Writeln(' eventType=PERFCOUNTER_STOP');
-  PERFCOUNTER_SAMPLE         :Writeln(' eventType=PERFCOUNTER_SAMPLE');
+  CS_PARTIAL_FLUSH           :LOG_TRACE(' eventType=CS_PARTIAL_FLUSH');
+  CACHE_FLUSH_AND_INV_EVENT  :LOG_TRACE(' eventType=FLUSH_AND_INV_EVENT');
+  DB_CACHE_FLUSH_AND_INV     :LOG_TRACE(' eventType=DB_CACHE_FLUSH_AND_INV');
+  FLUSH_AND_INV_DB_DATA_TS   :LOG_TRACE(' eventType=FLUSH_AND_INV_DB_DATA_TS');
+  FLUSH_AND_INV_DB_META      :LOG_TRACE(' eventType=FLUSH_AND_INV_DB_META');
+  FLUSH_AND_INV_CB_DATA_TS   :LOG_TRACE(' eventType=FLUSH_AND_INV_CB_DATA_TS');
+  FLUSH_AND_INV_CB_META      :LOG_TRACE(' eventType=FLUSH_AND_INV_CB_META');
+  FLUSH_AND_INV_CB_PIXEL_DATA:LOG_TRACE(' eventType=FLUSH_AND_INV_CB_PIXEL_DATA');
+  THREAD_TRACE_MARKER        :LOG_TRACE(' eventType=THREAD_TRACE_MARKER');
+  PIXEL_PIPE_STAT_CONTROL    :LOG_TRACE(' eventType=PIXEL_PIPE_STAT_CONTROL');
+  PIXEL_PIPE_STAT_DUMP       :LOG_TRACE(' eventType=PIXEL_PIPE_STAT_DUMP');
+  PIXEL_PIPE_STAT_RESET      :LOG_TRACE(' eventType=PIXEL_PIPE_STAT_RESET');
+  PIPELINESTAT_STOP          :LOG_TRACE(' eventType=PIPELINESTAT_STOP');
+  PERFCOUNTER_START          :LOG_TRACE(' eventType=PERFCOUNTER_START');
+  PERFCOUNTER_STOP           :LOG_TRACE(' eventType=PERFCOUNTER_STOP');
+  PERFCOUNTER_SAMPLE         :LOG_TRACE(' eventType=PERFCOUNTER_SAMPLE');
   else
-                              Writeln(' eventType=0x',HexStr(Body^.eventType,2));
+                              LOG_TRACE(' eventType=0x',HexStr(Body^.eventType,2));
  end;
 
  if p_print_gpu_ops then
  Case Body^.eventType of
   PIXEL_PIPE_STAT_CONTROL:
    begin
-    Writeln('  counter_id=',Body^.u.Control.counter_id);
-    Writeln('  stride    =',c_p_stride[Body^.u.Control.stride]);
+    LOG_TRACE('  counter_id=',Body^.u.Control.counter_id);
+    LOG_TRACE('  stride    =',c_p_stride[Body^.u.Control.stride]);
    end;
   PIXEL_PIPE_STAT_DUMP:
    begin
-    Writeln('  address=0x',HexStr(Body^.u.address and QWORD($FFFFFFFFF8),10));
+    LOG_TRACE('  address=0x',HexStr(Body^.u.address and QWORD($FFFFFFFFF8),10));
    end;
  end;
 
@@ -599,16 +601,16 @@ begin
  if p_print_gpu_ops then
  begin
   Case Body^.eventType of
-   CACHE_FLUSH_TS              :Writeln(' eventType  =','FlushCbDbCaches');
-   CACHE_FLUSH_AND_INV_TS_EVENT:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
-   BOTTOM_OF_PIPE_TS           :Writeln(' eventType  =','CbDbReadsDone');
+   CACHE_FLUSH_TS              :LOG_TRACE(' eventType  =','FlushCbDbCaches');
+   CACHE_FLUSH_AND_INV_TS_EVENT:LOG_ERROR(' eventType  =','FlushAndInvalidateCbDbCaches');
+   BOTTOM_OF_PIPE_TS           :LOG_TRACE(' eventType  =','CbDbReadsDone');
    else;
   end;
 
-  Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
-  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
-  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,10));
-  Writeln(' immValue   =0x',HexStr(Body^.DATA,16));
+  LOG_TRACE(' interrupt  =0x',HexStr(Body^.intSel,2));
+  LOG_TRACE(' srcSelector=0x',HexStr(Body^.dataSel,2));
+  LOG_TRACE(' dstGpuAddr =0x',HexStr(Body^.address,10));
+  LOG_TRACE(' immValue   =0x',HexStr(Body^.DATA,16));
  end;
 
  //if (Body^.destTcL2<>0) then Exit; //write to L2
@@ -630,20 +632,20 @@ begin
   PS_DONE:;
   else
    Assert(False,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
-   //Writeln(stderr,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
+   //LOG_TRACE(stderr,'EventWriteEos: eventType=0x'+HexStr(Body^.eventType,1));
  end;
 
  if p_print_gpu_ops then
  Case Body^.eventType of
-  CS_DONE:Writeln(' CS_DONE');
-  PS_DONE:Writeln(' PS_DONE');
+  CS_DONE:LOG_TRACE(' CS_DONE');
+  PS_DONE:LOG_TRACE(' PS_DONE');
   else;
  end;
 
  if (Body^.eventIndex<>EVENT_WRITE_INDEX_ANY_EOS_TIMESTAMP) then
  begin
   Assert(False,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
-  //Writeln(stderr,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
+  //LOG_TRACE(stderr,'EventWriteEos: eventIndex=0x'+HexStr(Body^.eventIndex,1));
  end;
 
  DWORD(pctx^.context.CX_REG.VGT_EVENT_INITIATOR):=Body^.eventType;
@@ -701,7 +703,7 @@ begin
 
     if p_print_gpu_ops then
     begin
-     Writeln('[1]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
+     LOG_TRACE('[1]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
     end;
 
     pctx^.stream[stGfxDcb].DmaData(dstSel,adrDst,srcSel,adrSrc,byteCount,Body^.Flags1.cpSync);
@@ -714,7 +716,7 @@ begin
 
     if p_print_gpu_ops then
     begin
-     Writeln('[2]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
+     LOG_TRACE('[2]DmaData:0x',HexStr(adrSrc,10),'->',HexStr(adrDst,10),':size=0x',HexStr(byteCount,6));
     end;
 
     adrDst_dmem:=get_dmem_ptr(Pointer(adrDst));
@@ -768,14 +770,14 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln(' engine     =',engine_str[Body^.CONTROL.engineSel]);
-  Writeln(' dstSel     =',Body^.CONTROL.dstSel,' ',Body^.CONTROL.wrConfirm);
-  Writeln(' dstAddr    =0x',HexStr(Body^.dstAddr,10));
-  Writeln(' length     =',count*4);
+  LOG_TRACE(' engine     =',engine_str[Body^.CONTROL.engineSel]);
+  LOG_TRACE(' dstSel     =',Body^.CONTROL.dstSel,' ',Body^.CONTROL.wrConfirm);
+  LOG_TRACE(' dstAddr    =0x',HexStr(Body^.dstAddr,10));
+  LOG_TRACE(' length     =',count*4);
 
   case count of
-   1:Writeln(' data       =0x',HexStr(PDWORD(@Body^.DATA)^,8 ));
-   2:Writeln(' data       =0x',HexStr(PQWORD(@Body^.DATA)^,16));
+   1:LOG_TRACE(' data       =0x',HexStr(PDWORD(@Body^.DATA)^,8 ));
+   2:LOG_TRACE(' data       =0x',HexStr(PQWORD(@Body^.DATA)^,16));
    else;
   end;
  end;
@@ -850,13 +852,13 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln(' engine     =',engine_str[Body^.engine]);
-  Writeln(' memSpace   =',Body^.memSpace);
-  Writeln(' operation  =',Body^.operation);
-  Writeln(' pollAddress=0x',HexStr(Body^.pollAddress,10));
-  Writeln(' reference  =0x',HexStr(Body^.reference,8));
-  Writeln(' mask       =0x',HexStr(Body^.mask,8));
-  Writeln(' compareFunc=0x',HexStr(Body^.compareFunc,1));
+  LOG_TRACE(' engine     =',engine_str[Body^.engine]);
+  LOG_TRACE(' memSpace   =',Body^.memSpace);
+  LOG_TRACE(' operation  =',Body^.operation);
+  LOG_TRACE(' pollAddress=0x',HexStr(Body^.pollAddress,10));
+  LOG_TRACE(' reference  =0x',HexStr(Body^.reference,8));
+  LOG_TRACE(' mask       =0x',HexStr(Body^.mask,8));
+  LOG_TRACE(' compareFunc=0x',HexStr(Body^.compareFunc,1));
  end;
 
  Assert(Body^.operation=0,'WaitRegMem: operation=0x'+HexStr(Body^.operation,1));
@@ -946,10 +948,10 @@ begin
   addr:=(QWORD(Body^.coherBaseLo) shl 8) or (QWORD(Body^.coherBaseHi) shl 40);
   size:=(QWORD(Body^.coherSizeLo) shl 8) or (QWORD(Body^.coherSizeHi) shl 40);
 
-  Writeln('onAcquireMem:');
-  Writeln(' Cntl=',coherCntl_str(pctx^.context.UC_REG.CP_COHER_CNTL));
-  Writeln(' addr=0x',HexStr(addr,10));
-  Writeln(' size=0x',HexStr(size,10));
+  LOG_TRACE('onAcquireMem:');
+  LOG_TRACE(' Cntl=',coherCntl_str(pctx^.context.UC_REG.CP_COHER_CNTL));
+  LOG_TRACE(' addr=0x',HexStr(addr,10));
+  LOG_TRACE(' size=0x',HexStr(size,10));
  end;
 
  //FlushAndWaitMe(pctx);
@@ -963,8 +965,8 @@ begin
     (DWORD(Body^.shadowEnable)<>$80000000) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' loadControl =b',revbinstr(DWORD(Body^.loadControl ),32));
-  Writeln(stderr,' shadowEnable=b',revbinstr(DWORD(Body^.shadowEnable),32));
+  LOG_TRACE(stderr,' loadControl =b',revbinstr(DWORD(Body^.loadControl ),32));
+  LOG_TRACE(stderr,' shadowEnable=b',revbinstr(DWORD(Body^.shadowEnable),32));
  end;
 end;
 
@@ -990,8 +992,8 @@ begin
  if (addr<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(' baseIndex=0x',GetBaseIndexStr(Body^.baseIndex));
-  Writeln(' address  =0x',HexStr(addr,11));
+  LOG_TRACE(' baseIndex=0x',GetBaseIndexStr(Body^.baseIndex));
+  LOG_TRACE(' address  =0x',HexStr(addr,11));
  end;
 
  case Body^.baseIndex of
@@ -1015,11 +1017,11 @@ begin
  if p_print_gpu_ops then
  if (Body^.predOp<>SET_PRED_CLEAR) or (Body^.startAddress<>0) then
  begin
-  Writeln(' startAddress=0x',HexStr(Body^.startAddress,10));
-  Writeln(' pred        =',c_pred_b[Body^.predicationBoolean]);
-  Writeln(' hint        =',c_hint_v[Body^.hint]);
-  Writeln(' predOp      =',c_pred_o[Body^.predOp and 3]);
-  Writeln(' continueBit =',Body^.continueBit);
+  LOG_TRACE(' startAddress=0x',HexStr(Body^.startAddress,10));
+  LOG_TRACE(' pred        =',c_pred_b[Body^.predicationBoolean]);
+  LOG_TRACE(' hint        =',c_hint_v[Body^.hint]);
+  LOG_TRACE(' predOp      =',c_pred_o[Body^.predOp and 3]);
+  LOG_TRACE(' continueBit =',Body^.continueBit);
  end;
 end;
 
@@ -1059,7 +1061,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r),':=0x',HexStr(v,8));
+    LOG_TRACE(' SET:',getRegName(r),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_reg(r,v);
@@ -1089,7 +1091,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r+CONTEXT_REG_BASE),':=0x',HexStr(v,8));
+    LOG_TRACE(' SET:',getRegName(r+CONTEXT_REG_BASE),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_ctx_reg(r,v);
@@ -1119,7 +1121,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r+SH_REG_BASE),':=0x',HexStr(v,8));
+    LOG_TRACE(' SET:',getRegName(r+SH_REG_BASE),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_sh_reg(r,v);
@@ -1149,7 +1151,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' SET:',getRegName(r),':=0x',HexStr(v,8));
+    LOG_TRACE(' SET:',getRegName(r),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_reg(r,v);
@@ -1197,7 +1199,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln(' indexBase=',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
+  LOG_TRACE(' indexBase=',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
  end;
 
  pctx^.context.CX_REG.VGT_DMA_BASE             :=Body^.indexBaseLo and (not 1);
@@ -1210,7 +1212,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln(' numInstances=',Body^.numInstances);
+  LOG_TRACE(' numInstances=',Body^.numInstances);
  end;
 
  pctx^.context.CX_REG.VGT_DMA_NUM_INSTANCES:=Body^.numInstances;
@@ -1224,13 +1226,13 @@ begin
  if (DWORD(Body^.drawInitiator)<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' indexBase =',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
-  Writeln(' indexCount=',Body^.indexCount);
+  LOG_TRACE(' indexBase =',HexStr(PQWORD(@Body^.indexBaseLo)^,10));
+  LOG_TRACE(' indexCount=',Body^.indexCount);
  end;
 
  pctx^.context.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
@@ -1254,7 +1256,7 @@ begin
  if (DWORD(Body^.drawInitiator)<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
 
  pctx^.context.CX_REG.VGT_DMA_MAX_SIZE         :=Body^.maxSize;
@@ -1277,12 +1279,12 @@ begin
  if (DWORD(Body^.drawInitiator)<>2) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' indexCount=',Body^.indexCount);
+  LOG_TRACE(' indexCount=',Body^.indexCount);
  end;
 
  pctx^.context.CX_REG.VGT_DMA_SIZE      :=Body^.indexCount;
@@ -1305,15 +1307,15 @@ begin
  if (DWORD(Body^.drawInitiator)<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.context.BASE_ADDR_DRAW_INDIRECT,16));
-  Writeln(' dataOffset             =',Body^.dataOffset);
-  Writeln(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
-  Writeln(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
+  LOG_TRACE(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.context.BASE_ADDR_DRAW_INDIRECT,16));
+  LOG_TRACE(' dataOffset             =',Body^.dataOffset);
+  LOG_TRACE(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
+  LOG_TRACE(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
  end;
 
  pctx^.context.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
@@ -1342,21 +1344,21 @@ begin
  if (DWORD(Body^.drawInitiator)<>0) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.context.BASE_ADDR_DRAW_INDIRECT,16));
-  Writeln(' dataOffset             =',Body^.dataOffset            );
-  Writeln(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
-  Writeln(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
-  Writeln(' drawIndexLoc           =',getRegName(SH_REG_BASE+Body^.drawIndexLoc));
-  Writeln(' countIndirectEnable    =',Body^.countIndirectEnable   );
-  Writeln(' drawIndexEnable        =',Body^.drawIndexEnable       );
-  Writeln(' count                  =',Body^.count                 );
-  Writeln(' countAddr              =0x',HexStr(Body^.countAddr,16));
-  Writeln(' stride                 =',Body^.stride                );
+  LOG_TRACE(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.context.BASE_ADDR_DRAW_INDIRECT,16));
+  LOG_TRACE(' dataOffset             =',Body^.dataOffset            );
+  LOG_TRACE(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
+  LOG_TRACE(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
+  LOG_TRACE(' drawIndexLoc           =',getRegName(SH_REG_BASE+Body^.drawIndexLoc));
+  LOG_TRACE(' countIndirectEnable    =',Body^.countIndirectEnable   );
+  LOG_TRACE(' drawIndexEnable        =',Body^.drawIndexEnable       );
+  LOG_TRACE(' count                  =',Body^.count                 );
+  LOG_TRACE(' countAddr              =0x',HexStr(Body^.countAddr,16));
+  LOG_TRACE(' stride                 =',Body^.stride                );
  end;
 
  pctx^.context.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
@@ -1398,12 +1400,12 @@ begin
  if (DWORD(Body^.dispatchInitiator)<>1) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+  LOG_TRACE(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' dim=',Body^.dimX,' ',Body^.dimY,' ',Body^.dimZ);
+  LOG_TRACE(' dim=',Body^.dimX,' ',Body^.dimY,' ',Body^.dimZ);
  end;
 
  pctx^.context.SC_REG.COMPUTE_DIM_X:=Body^.dimX;
@@ -1423,12 +1425,12 @@ begin
  if (DWORD(Body^.dispatchInitiator)<>1) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+  LOG_TRACE(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
  end;
 
  if p_print_gpu_ops then
  begin
-  Writeln(' dataOffset=',Body^.dataOffset);
+  LOG_TRACE(' dataOffset=',Body^.dataOffset);
  end;
 
  pctx^.context.SC_REG.COMPUTE_DISPATCH_INITIATOR:=Body^.dispatchInitiator;
@@ -1469,7 +1471,7 @@ procedure onPushMarker(pctx:p_pfp_ctx;Body:PChar;size:Integer);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_PUSH_MARKER:',Body);
+  LOG_TRACE('\HINT_PUSH_MARKER:',Body);
  end;
  pctx^.stream[pctx^.stream_type].Hint('\HINT_PUSH_MARKER:',Body,size);
 end;
@@ -1478,7 +1480,7 @@ procedure onPopMarker(pctx:p_pfp_ctx);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_POP_MARKER');
+  LOG_TRACE('\HINT_POP_MARKER');
  end;
  pctx^.stream[pctx^.stream_type].Hint('\HINT_POP_MARKER','',0);
 end;
@@ -1487,7 +1489,7 @@ procedure onSetMarker(pctx:p_pfp_ctx;Body:PChar;size:Integer);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_SET_MARKER:',Body);
+  LOG_TRACE('\HINT_SET_MARKER:',Body);
  end;
  pctx^.stream[pctx^.stream_type].Hint('\HINT_SET_MARKER:',Body,size);
 end;
@@ -1496,7 +1498,7 @@ procedure onMarker(pctx:p_pfp_ctx;Body:PChar;size:Integer);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_MARKER');
+  LOG_TRACE('\HINT_MARKER');
  end;
  pctx^.stream[pctx^.stream_type].Hint('\HINT_MARKER','',0);
 end;
@@ -1505,7 +1507,7 @@ procedure onWidthHeight(Body:PWORD);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_',Body[0],'_',Body[1]);
+  LOG_TRACE('\HINT_',Body[0],'_',Body[1]);
  end;
 end;
 
@@ -1513,7 +1515,7 @@ procedure onPrepareFlipLabel(Body:PPM4PrepareFlip);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_PREPARE_FLIP_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+  LOG_TRACE('\HINT_PREPARE_FLIP_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
  end;
 end;
 
@@ -1521,7 +1523,7 @@ procedure onPrepareFlipWithEopInterrupt(Body:PPM4PrepareFlipWithEopInterrupt);
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+  LOG_TRACE('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
  end;
 end;
 
@@ -1529,7 +1531,7 @@ procedure onPrepareFlipWithEopInterruptLabel(Body:PPM4PrepareFlipWithEopInterrup
 begin
  if p_print_gpu_hint then
  begin
-  Writeln('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
+  LOG_TRACE('\HINT_PREPARE_FLIP_WITH_EOP_INTERRUPT_LABEL:0x',HexStr(Body^.ADDRES,16),':',HexStr(Body^.DATA,8));
  end;
 end;
 
@@ -1617,7 +1619,7 @@ begin
   else
    if p_print_gpu_hint then
    begin
-    Writeln('\HINT_',get_hint_name(Body[1]));
+    LOG_TRACE('\HINT_',get_hint_name(Body[1]));
    end;
  end;
 end;
@@ -1630,7 +1632,7 @@ var
 begin
  if p_print_gpu_ops then
  begin
-  Writeln('[DCB]INDIRECT_BUFFER 0x',HexStr(Body^.ibBase,10));
+  LOG_TRACE('[DCB]INDIRECT_BUFFER 0x',HexStr(Body^.ibBase,10));
  end;
 
  if pm4_ibuf_init(@ibuf,Body,@pm4_parse_dcb,pctx^.stream_type) then
@@ -1654,11 +1656,11 @@ begin
 
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
-     if p_print_gpu_ops then Writeln('PM4_TYPE_0 len:',PM4_LENGTH(token));
+     if p_print_gpu_ops then LOG_TRACE('PM4_TYPE_0 len:',PM4_LENGTH(token));
      onPm40(pctx,buff);
     end;
   2:begin //PM4_TYPE_2
-     if p_print_gpu_ops then Writeln('PM4_TYPE_2');
+     if p_print_gpu_ops then LOG_TRACE('PM4_TYPE_2');
      //no body
     end;
   3:begin //PM4_TYPE_3
@@ -1666,7 +1668,7 @@ begin
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
         (not p_print_gpu_hint) then
      begin
-      Writeln('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+      LOG_TRACE('IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
                 ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
               ' len:',PM4_LENGTH(token));
      end;
@@ -1711,7 +1713,7 @@ begin
 
       else
        begin
-        Writeln(stderr,'[DCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        LOG_CRITICAL(StdErr,'[DCB]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
         Assert (False ,'[DCB]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
@@ -1729,7 +1731,7 @@ begin
     end;
   else
    begin
-    Writeln(stderr,'[DCB]PM4_TYPE_',PM4_TYPE(token));
+    LOG_CRITICAL(StdErr,'[DCB]PM4_TYPE_',PM4_TYPE(token));
     Assert (False ,'[DCB]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;
@@ -1751,7 +1753,7 @@ begin
    //
    if p_print_gpu_ops then
    begin
-    Writeln(' [ASC]SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
+    LOG_TRACE(' [ASC]SET:',getRegName(r+$2C00),':=0x',HexStr(v,8));
    end;
    //
    pctx^.set_asc_reg(r,v);
@@ -1769,7 +1771,7 @@ begin
  if (DWORD(Body^.dispatchInitiator)<>1) then
  if p_print_gpu_ops then
  begin
-  Writeln(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
+  LOG_TRACE(stderr,' dispatchInitiator=b',revbinstr(DWORD(Body^.dispatchInitiator),32));
  end;
 
  c_id:=pctx^.curr_ibuf^.c_id;
@@ -1808,19 +1810,19 @@ begin
  begin
   Case Body^.eventType of
    CS_DONE,
-   CACHE_FLUSH_TS              :Writeln(' eventType  =','FlushCbDbCache');
-   CACHE_FLUSH_AND_INV_TS_EVENT:Writeln(' eventType  =','FlushAndInvalidateCbDbCaches');
-   BOTTOM_OF_PIPE_TS           :Writeln(' eventType  =','CbDbReadsDone');
-   FLUSH_AND_INV_DB_DATA_TS    :Writeln(' eventType  =','FlushAndInvalidateDbCache');
-   FLUSH_AND_INV_CB_DATA_TS    :Writeln(' eventType  =','FlushAndInvalidateCbCache');
+   CACHE_FLUSH_TS              :LOG_TRACE(' eventType  =','FlushCbDbCache');
+   CACHE_FLUSH_AND_INV_TS_EVENT:LOG_ERROR(' eventType  =','FlushAndInvalidateCbDbCaches');
+   BOTTOM_OF_PIPE_TS           :LOG_TRACE(' eventType  =','CbDbReadsDone');
+   FLUSH_AND_INV_DB_DATA_TS    :LOG_ERROR(' eventType  =','FlushAndInvalidateDbCache');
+   FLUSH_AND_INV_CB_DATA_TS    :LOG_ERROR(' eventType  =','FlushAndInvalidateCbCache');
    else;
   end;
 
-  Writeln(' interrupt  =0x',HexStr(Body^.intSel,2));
-  Writeln(' srcSelector=0x',HexStr(Body^.dataSel,2));
-  Writeln(' dstSelector=0x',HexStr(Body^.dstSel,2));
-  Writeln(' dstGpuAddr =0x',HexStr(Body^.address,10));
-  Writeln(' immValue   =0x',HexStr(Body^.data,16));
+  LOG_TRACE(' interrupt  =0x',HexStr(Body^.intSel,2));
+  LOG_TRACE(' srcSelector=0x',HexStr(Body^.dataSel,2));
+  LOG_TRACE(' dstSelector=0x',HexStr(Body^.dstSel,2));
+  LOG_TRACE(' dstGpuAddr =0x',HexStr(Body^.address,10));
+  LOG_TRACE(' immValue   =0x',HexStr(Body^.data,16));
  end;
 
  pctx^.stream[pctx^.stream_type].ReleaseMem(Pointer(Body^.address),Body^.data,Body^.eventType,Body^.dataSel,Body^.dstSel,Body^.intSel);
@@ -1836,7 +1838,7 @@ var
 begin
  if p_print_gpu_ops then
  begin
-  Writeln('[ASC]INDIRECT_BUFFER (CS) 0x',HexStr(Body^.ibBase,10));
+  LOG_TRACE('[ASC]INDIRECT_BUFFER (CS) 0x',HexStr(Body^.ibBase,10));
  end;
 
  if pm4_ibuf_init(@ibuf,Body,@pm4_parse_compute_ring,pctx^.stream_type) then
@@ -1863,11 +1865,11 @@ begin
 
  case PM4_TYPE(token) of
   0:begin //PM4_TYPE_0
-     if p_print_gpu_ops then Writeln('[ASC]PM4_TYPE_0 len:',PM4_LENGTH(token));
+     if p_print_gpu_ops then LOG_TRACE('[ASC]PM4_TYPE_0 len:',PM4_LENGTH(token));
      onPm40(pctx,buff);
     end;
   2:begin //PM4_TYPE_2
-     if p_print_gpu_ops then Writeln('[ASC]PM4_TYPE_2');
+     if p_print_gpu_ops then LOG_TRACE('[ASC]PM4_TYPE_2');
      //no body
     end;
   3:begin //PM4_TYPE_3
@@ -1875,7 +1877,7 @@ begin
      if (PM4_TYPE_3_HEADER(token).opcode<>IT_NOP) or
         (not p_print_gpu_hint) then
      begin
-      Writeln('[ASC]IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
+      LOG_TRACE('[ASC]IT_',get_op_name(PM4_TYPE_3_HEADER(token).opcode),
                 ' ',ShdrType[PM4_TYPE_3_HEADER(token).shaderType],
               ' len:',PM4_LENGTH(token));
      end;
@@ -1893,11 +1895,11 @@ begin
 
       IT_MEM_SEMAPHORE                  :onMemSemaphore         (pctx,buff);
 
-      IT_SET_QUEUE_REG                  :Writeln('SET_QUEUE_REG:Skip');
+      IT_SET_QUEUE_REG                  :LOG_TRACE('SET_QUEUE_REG:Skip');
 
       else
        begin
-        Writeln(stderr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
+        LOG_CRITICAL(StdErr,'[ASC]PM4_TYPE_3.opcode:',get_op_name(PM4_TYPE_3_HEADER(token).opcode));
         Assert (False ,'[ASC]PM4_TYPE_3.opcode:'+get_op_name(PM4_TYPE_3_HEADER(token).opcode));
        end;
      end;
@@ -1905,7 +1907,7 @@ begin
     end;
   else
    begin
-    Writeln(stderr,'[ASC]PM4_TYPE_',PM4_TYPE(token));
+    LOG_CRITICAL(StdErr,'[ASC]PM4_TYPE_',PM4_TYPE(token));
     Assert (False ,'[ASC]PM4_TYPE_'+IntToStr(PM4_TYPE(token)));
    end;
  end;

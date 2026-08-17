@@ -72,6 +72,8 @@ implementation
 uses
  uma;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  rl_entry_zone:uma_zone_t;
 
@@ -180,7 +182,7 @@ begin
     if ranges_overlap(entry, entry1) then
     begin
      {
-     Writeln('ranges_overlap:',
+     LOG_INFO('ranges_overlap:',
               HexStr(entry),',',
               HexStr(entry^.rl_q_start,11),',',
               HexStr(entry^.rl_q_end,11),
@@ -204,7 +206,7 @@ begin
   // Grant this lock.
   entry^.rl_q_flags:=entry^.rl_q_flags or RL_LOCK_GRANTED;
   wakeup(entry);
-  //Writeln('rl_wakeup:',HexStr(entry));
+  //LOG_TRACE('rl_wakeup:',HexStr(entry));
 
   //
   entry:=nextentry;
@@ -351,7 +353,7 @@ begin
    Exit(nil);
   end;
 
-  //Writeln('rl_msleep:',HexStr(entry));
+  //LOG_TRACE('rl_msleep:',HexStr(entry));
   msleep(entry, ilk, 0, 'range', 0);
  end;
 
@@ -394,7 +396,7 @@ begin
  prev_flags:=entry^.rl_q_flags;
 
  {
- Writeln('rangelock_update:',HexStr(prev_start,16),',',
+ LOG_TRACE('rangelock_update:',HexStr(prev_start,16),',',
                              HexStr(prev___end,16),',',
                              get_flags_str(prev_flags),'->',
                              HexStr(start,16),',',
@@ -456,7 +458,7 @@ begin
    Exit(False);
   end;
 
-  //Writeln('rl_msleep:',HexStr(entry));
+  //LOG_TRACE('rl_msleep:',HexStr(entry));
   msleep(entry, ilk, 0, 'range', 0);
  end;
 

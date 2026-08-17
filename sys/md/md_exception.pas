@@ -32,6 +32,8 @@ uses
   kern_jit_dynamic,
   kern_jit_interrupt;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  EXCEPTION_SET_THREADNAME  = $406D1388;
  DBG_PRINTEXCEPTION_C      = $40010006;
@@ -198,14 +200,14 @@ begin
 
  is_jit:=exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@info);
 
- Writeln('cr_rip:0x',HexStr(p^.ContextRecord^.Rip,16));
- Writeln('cr_rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
- Writeln('cr_rbp:0x',HexStr(p^.ContextRecord^.Rbp,16));
+ LOG_TRACE('cr_rip:0x',HexStr(p^.ContextRecord^.Rip,16));
+ LOG_TRACE('cr_rsp:0x',HexStr(p^.ContextRecord^.Rsp,16));
+ LOG_TRACE('cr_rbp:0x',HexStr(p^.ContextRecord^.Rbp,16));
 
- Writeln('jitcall:0x',HexStr(td^.td_teb^.jitcall));
+ LOG_TRACE('jitcall:0x',HexStr(td^.td_teb^.jitcall));
  //print_frame(stderr,td^.td_teb^.jitcall);
 
- //Writeln('tf_rip:0x',HexStr(tf_addr,16));
+ //LOG_TRACE('tf_rip:0x',HexStr(tf_addr,16));
 
  if (is_jit) then
  begin
@@ -221,37 +223,37 @@ begin
   td^.td_frame.tf_rip:=info.original;
  end;
 
- Writeln('registers:');
- Writeln('rax: ',HexStr(td^.td_frame.tf_rax,16),'  rbx: ',HexStr(td^.td_frame.tf_rbx,16));
- Writeln('rcx: ',HexStr(td^.td_frame.tf_rcx,16),'  rdx: ',HexStr(td^.td_frame.tf_rdx,16));
- Writeln('rsi: ',HexStr(td^.td_frame.tf_rsi,16),'  rdi: ',HexStr(td^.td_frame.tf_rdi,16));
- Writeln('rbp: ',HexStr(td^.td_frame.tf_rbp,16),'  rsp: ',HexStr(td^.td_frame.tf_rsp,16));
- Writeln('r8 : ',HexStr(td^.td_frame.tf_r8 ,16),'  r9 : ',HexStr(td^.td_frame.tf_r9 ,16));
- Writeln('r10: ',HexStr(td^.td_frame.tf_r10,16),'  r11: ',HexStr(td^.td_frame.tf_r11,16));
- Writeln('r12: ',HexStr(td^.td_frame.tf_r12,16),'  r13: ',HexStr(td^.td_frame.tf_r13,16));
- Writeln('r14: ',HexStr(td^.td_frame.tf_r14,16),'  r15: ',HexStr(td^.td_frame.tf_r15,16));
- Writeln('rip: ',HexStr(td^.td_frame.tf_rip,16),'  eflags: ',HexStr(td^.td_frame.tf_rflags,8));
- Writeln('BrF: ',HexStr(td^.td_frame.tf_BrF,16),'  BrT: ',HexStr(td^.td_frame.tf_BrT,16));
+ LOG_INFO('registers:');
+ LOG_INFO('rax: ',HexStr(td^.td_frame.tf_rax,16),'  rbx: ',HexStr(td^.td_frame.tf_rbx,16));
+ LOG_INFO('rcx: ',HexStr(td^.td_frame.tf_rcx,16),'  rdx: ',HexStr(td^.td_frame.tf_rdx,16));
+ LOG_INFO('rsi: ',HexStr(td^.td_frame.tf_rsi,16),'  rdi: ',HexStr(td^.td_frame.tf_rdi,16));
+ LOG_INFO('rbp: ',HexStr(td^.td_frame.tf_rbp,16),'  rsp: ',HexStr(td^.td_frame.tf_rsp,16));
+ LOG_INFO('r8 : ',HexStr(td^.td_frame.tf_r8 ,16),'  r9 : ',HexStr(td^.td_frame.tf_r9 ,16));
+ LOG_INFO('r10: ',HexStr(td^.td_frame.tf_r10,16),'  r11: ',HexStr(td^.td_frame.tf_r11,16));
+ LOG_INFO('r12: ',HexStr(td^.td_frame.tf_r12,16),'  r13: ',HexStr(td^.td_frame.tf_r13,16));
+ LOG_INFO('r14: ',HexStr(td^.td_frame.tf_r14,16),'  r15: ',HexStr(td^.td_frame.tf_r15,16));
+ LOG_INFO('rip: ',HexStr(td^.td_frame.tf_rip,16),'  eflags: ',HexStr(td^.td_frame.tf_rflags,8));
+ LOG_INFO('BrF: ',HexStr(td^.td_frame.tf_BrF,16),'  BrT: ',HexStr(td^.td_frame.tf_BrT,16));
 
  {
- Writeln('tf_rip:0x',HexStr(td^.td_frame.tf_rip,16));
- Writeln('tf_rsp:0x',HexStr(td^.td_frame.tf_rsp,16));
- Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
- Writeln('tf_rdi:0x',HexStr(td^.td_frame.tf_rdi,16));
- Writeln('tf_rsi:0x',HexStr(td^.td_frame.tf_rsi,16));
- Writeln('tf_rdx:0x',HexStr(td^.td_frame.tf_rdx,16));
- Writeln('tf_rcx:0x',HexStr(td^.td_frame.tf_rcx,16));
- Writeln('tf_r8 :0x',HexStr(td^.td_frame.tf_r8 ,16));
- Writeln('tf_r9 :0x',HexStr(td^.td_frame.tf_r9 ,16));
- Writeln('tf_rax:0x',HexStr(td^.td_frame.tf_rax,16));
- Writeln('tf_rbx:0x',HexStr(td^.td_frame.tf_rbx,16));
- Writeln('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
- Writeln('tf_r10:0x',HexStr(td^.td_frame.tf_r10,16));
- Writeln('tf_r11:0x',HexStr(td^.td_frame.tf_r11,16));
- Writeln('tf_r12:0x',HexStr(td^.td_frame.tf_r12,16));
- Writeln('tf_r13:0x',HexStr(td^.td_frame.tf_r13,16));
- Writeln('tf_r14:0x',HexStr(td^.td_frame.tf_r14,16));
- Writeln('tf_r15:0x',HexStr(td^.td_frame.tf_r15,16));
+ LOG_INFO('tf_rip:0x',HexStr(td^.td_frame.tf_rip,16));
+ LOG_INFO('tf_rsp:0x',HexStr(td^.td_frame.tf_rsp,16));
+ LOG_INFO('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+ LOG_INFO('tf_rdi:0x',HexStr(td^.td_frame.tf_rdi,16));
+ LOG_INFO('tf_rsi:0x',HexStr(td^.td_frame.tf_rsi,16));
+ LOG_INFO('tf_rdx:0x',HexStr(td^.td_frame.tf_rdx,16));
+ LOG_INFO('tf_rcx:0x',HexStr(td^.td_frame.tf_rcx,16));
+ LOG_INFO('tf_r8 :0x',HexStr(td^.td_frame.tf_r8 ,16));
+ LOG_INFO('tf_r9 :0x',HexStr(td^.td_frame.tf_r9 ,16));
+ LOG_INFO('tf_rax:0x',HexStr(td^.td_frame.tf_rax,16));
+ LOG_INFO('tf_rbx:0x',HexStr(td^.td_frame.tf_rbx,16));
+ LOG_INFO('tf_rbp:0x',HexStr(td^.td_frame.tf_rbp,16));
+ LOG_INFO('tf_r10:0x',HexStr(td^.td_frame.tf_r10,16));
+ LOG_INFO('tf_r11:0x',HexStr(td^.td_frame.tf_r11,16));
+ LOG_INFO('tf_r12:0x',HexStr(td^.td_frame.tf_r12,16));
+ LOG_INFO('tf_r13:0x',HexStr(td^.td_frame.tf_r13,16));
+ LOG_INFO('tf_r14:0x',HexStr(td^.td_frame.tf_r14,16));
+ LOG_INFO('tf_r15:0x',HexStr(td^.td_frame.tf_r15,16));
  }
 
  print_backtrace_td(stderr);
@@ -266,10 +268,10 @@ begin
     begin
      tf_addr:=get_pageflt_addr(p);
 
-     Writeln('tf_addr:0x',HexStr(tf_addr,16));
+     LOG_TRACE('tf_addr:0x',HexStr(tf_addr,16));
 
-     //Writeln(HexStr(p^.ContextRecord^.Rip,16));
-     //Writeln(HexStr(Get_pc_addr));
+     //LOG_TRACE(HexStr(p^.ContextRecord^.Rip,16));
+     //LOG_TRACE(HexStr(Get_pc_addr));
 
      //_get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
 
@@ -355,7 +357,7 @@ begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
  if (curkthread=nil) then Exit;
 
- //Writeln('ProcessException:0x',HexStr(get_exception(p),8));
+ //LOG_ERROR('ProcessException:0x',HexStr(get_exception(p),8));
 
  case get_exception(p) of
   FPC_EXCEPTION_CODE       :Exit(EXCEPTION_CONTINUE_SEARCH);
@@ -372,7 +374,7 @@ begin
     begin
      Dr7:=0;
      EFlags:=EFlags or $10000; //RF
-     //Writeln('SINGLE_STEP:',HexStr(Rip,16));
+     LOG_TRACE('SINGLE_STEP:',HexStr(Rip,16));
      JIT_AST_HANDLER(curkthread,Rip,Rsp,EFlags,@Dr0);
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
@@ -381,7 +383,7 @@ begin
     with p^.ContextRecord^ do
     if (Rip=QWORD(@jit_interrupt_ud2)) then
     begin
-     //Writeln('ILLEGAL_INSTRUCTION:',HexStr(Rip,16));
+     LOG_TRACE('ILLEGAL_INSTRUCTION:',HexStr(Rip,16));
      JIT_AST_HANDLER(curkthread,Rip,Rsp,EFlags,@Dr0);
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
@@ -406,7 +408,7 @@ begin
         begin
          if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_READ)<>0) then
          begin
-          Writeln(stderr,'Unhandled VM_PROT_READ');
+          LOG_ERROR(stderr,'Unhandled VM_PROT_READ');
 
           //
           Exit(EXCEPTION_CONTINUE_EXECUTION);
@@ -416,7 +418,7 @@ begin
         begin
          if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
-          //Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
+          LOG_TRACE('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,
@@ -519,7 +521,7 @@ begin
   else
    if not IsDefaultExceptions(get_exception(p)) then
    begin
-    Writeln(stderr,'Unknow ExceptionCode:0x',HexStr(get_exception(p),8));
+    LOG_ERROR(stderr,'Unknow ExceptionCode:0x',HexStr(get_exception(p),8));
     Exit;
    end;
  end;
@@ -527,7 +529,7 @@ begin
  {
  thread_suspend_all(curkthread);
 
- Writeln('ProcessException:0x',HexStr(get_exception(p),8));
+ LOG_ERROR('ProcessException:0x',HexStr(get_exception(p),8));
 
  while not IsDebuggerPresent do sleep(1000);
 
@@ -552,7 +554,7 @@ begin
   Result:=EXCEPTION_CONTINUE_EXECUTION;
  end else
  begin
-  Writeln(stderr,'ExceptionCode:0x',HexStr(get_exception(p),8));
+  LOG_ERROR(stderr,'ExceptionCode:0x',HexStr(get_exception(p),8));
   Result:=EXCEPTION_CONTINUE_SEARCH;
  end;
 end;
@@ -571,7 +573,7 @@ begin
   DBG_PRINTEXCEPTION_C     :;
   DBG_PRINTEXCEPTION_WIDE_C:;
   else
-    Writeln('UnhandledException:0x',HexStr(get_exception(p),8));
+    LOG_ERROR('UnhandledException:0x',HexStr(get_exception(p),8));
  end;
  }
 
@@ -602,16 +604,16 @@ begin
 
  if (curkthread<>nil) then
  begin
-  Writeln('curkthread^.td_name:',curkthread^.td_name);
+  LOG_INFO('curkthread^.td_name:',curkthread^.td_name);
  end;
 
  if (ExObj=nil) then
  begin
-  Writeln(stderr,'Runtime error ',code,' at $',hexstr(rec^.ExceptionAddress));
+  LOG_ERROR(stderr,'Runtime error ',code,' at $',hexstr(rec^.ExceptionAddress));
  end else
  begin
-  Writeln(stderr,'An unhandled exception occurred at $',hexstr(rec^.ExceptionAddress));
-  Writeln(stderr,ExObj.ClassName,': ',ExObj.Message);
+  LOG_ERROR(stderr,'An unhandled exception occurred at $',hexstr(rec^.ExceptionAddress));
+  LOG_ERROR(stderr,ExObj.ClassName,': ',ExObj.Message);
  end;
 
  print_backtrace(stderr,
@@ -653,7 +655,7 @@ begin
   Exit;
  end;
 
- Writeln(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
+ LOG_CRITICAL(stderr,_get_msg(Msg),' (',FName,', line ',LineNo,').');
  p_host_ipc.error(_get_msg(Msg)+' ('+FName+', line '+IntToStr(LineNo)+').');
 
  print_backtrace(stderr,Get_pc_addr,get_frame,2);

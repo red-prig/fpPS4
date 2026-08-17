@@ -16,11 +16,13 @@ uses
  errno,
  vm;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Function camera_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- Writeln('camera_ioctl(0x',HexStr(cmd,8),')');
+ LOG_TRACE('camera_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
 
@@ -53,7 +55,7 @@ end;
 
 Function camera_mmap(dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
 begin
- Writeln('TODO:camera_mmap');
+ LOG_WARNING('TODO:camera_mmap');
  Exit(EINVAL);
 end;
 

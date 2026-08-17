@@ -17,25 +17,27 @@ uses
  sys_bootparam,
  kern_authinfo;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Function dipsw_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
  case cmd of
-  $20008800:Writeln('dipsw_ioctl("InitializeDipsw")');
-  $40048806:Writeln('dipsw_ioctl("isDevelopmentMode")');
-  $40048807:Writeln('dipsw_ioctl("isTestKit")');
-  $40088808:Writeln('dipsw_ioctl("IsDisableRazor")');
-  $40088809:Writeln('dipsw_ioctl("IsDisableBinaryVersionCheck")');
-  $80028801:Writeln('dipsw_ioctl("SetDipsw")');
-  $80028802:Writeln('dipsw_ioctl("UnsetDipsw")');
-  $c0088803:Writeln('dipsw_ioctl("CheckDipsw")');
-  $80108804:Writeln('dipsw_ioctl("ReadDipswData")');
-  $80108805:Writeln('dipsw_ioctl("WriteDipswData")');
-  $8010880a:Writeln('dipsw_ioctl("GetAllDipswData")');
+  $20008800:LOG_INFO('dipsw_ioctl("InitializeDipsw")');
+  $40048806:LOG_INFO('dipsw_ioctl("isDevelopmentMode")');
+  $40048807:LOG_INFO('dipsw_ioctl("isTestKit")');
+  $40088808:LOG_INFO('dipsw_ioctl("IsDisableRazor")');
+  $40088809:LOG_INFO('dipsw_ioctl("IsDisableBinaryVersionCheck")');
+  $80028801:LOG_INFO('dipsw_ioctl("SetDipsw")');
+  $80028802:LOG_INFO('dipsw_ioctl("UnsetDipsw")');
+  $c0088803:LOG_INFO('dipsw_ioctl("CheckDipsw")');
+  $80108804:LOG_INFO('dipsw_ioctl("ReadDipswData")');
+  $80108805:LOG_INFO('dipsw_ioctl("WriteDipswData")');
+  $8010880a:LOG_INFO('dipsw_ioctl("GetAllDipswData")');
   else
    begin
-    Writeln('dipsw_ioctl(0x',HexStr(cmd,8),')');
+    LOG_ERROR('dipsw_ioctl(0x',HexStr(cmd,8),')');
     Exit(EINVAL);
    end;
  end;
@@ -50,7 +52,7 @@ begin
    $40088809:; //IsDisableBinaryVersionCheck
    else
     begin
-     Writeln('dipsw_ioctl(0x',HexStr(cmd,8),')');
+     LOG_ERROR('dipsw_ioctl(0x',HexStr(cmd,8),')');
      Exit(EINVAL);
     end;
   end;

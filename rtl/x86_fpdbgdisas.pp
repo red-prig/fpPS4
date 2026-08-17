@@ -613,6 +613,8 @@ function RegName(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte): RawBy
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
   ADDRESS_BYTES: array[TAddressSize] of Byte = (2, 4, 8);
   OPERAND_BYTES: array[TOperandSize] of Word = (0, 1,  2,  4,  8,   6, 10,  16,  32,  64,  512);
@@ -1004,7 +1006,7 @@ begin
   Inc(OperIdx);
   if OperIdx > High(Instruction^.Operand)
   then begin
-    Writeln(Format('AddOperand: Only %d operands supported, got %d', [High(Instruction^.Operand), OperIdx]));
+    LOG_TRACE(Format('AddOperand: Only %d operands supported, got %d', [High(Instruction^.Operand), OperIdx]));
     Exit;
   end;
 
@@ -4789,7 +4791,7 @@ begin
     Inc(CodeIdx);
     if CodeIdx > 16 // max instruction length
     then begin
-      Writeln('Disassemble: instruction longer than 16 bytes');
+      LOG_DEBUG('Disassemble: instruction longer than 16 bytes');
       Exit;
     end;
   until Instruction^.Opcode.Opcode <> OPX_InternalUnknown;

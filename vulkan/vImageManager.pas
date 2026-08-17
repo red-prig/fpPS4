@@ -176,6 +176,8 @@ implementation
 uses
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  TvImageKeyCompare=object
   function c(a,b:PvImageKey):Integer; static;
@@ -234,7 +236,7 @@ begin
 
  image:=TvCustomImage2(handle);
 
- //Writeln('on_trigger image');
+ //LOG_TRACE('on_trigger image');
 
  case mode of
   M_CPU_WRITE,
@@ -616,9 +618,9 @@ begin
       cinfo.subresourceRange.layerCount) > self.key.params.layerCount
    then
   begin
-   Writeln(stderr,'cinfo.subresourceRange.baseArrayLayer=',cinfo.subresourceRange.baseArrayLayer);
-   Writeln(stderr,'cinfo.subresourceRange.layerCount    =',cinfo.subresourceRange.layerCount);
-   Writeln(stderr,'self.key.params.layerCount           =',self.key.params.layerCount);
+   LOG_CRITICAL(stderr,'cinfo.subresourceRange.baseArrayLayer=',cinfo.subresourceRange.baseArrayLayer);
+   LOG_CRITICAL(stderr,'cinfo.subresourceRange.layerCount    =',cinfo.subresourceRange.layerCount);
+   LOG_CRITICAL(StdErr,'self.key.params.layerCount           =',self.key.params.layerCount);
    Assert(false);
   end;
 
@@ -698,14 +700,14 @@ begin
    minfo.minLod:=key_view.minLod;
   end;
 
-  Writeln('vkCreateImageView:',FFormat,'->',cinfo.format);
+  LOG_TRACE('vkCreateImageView:',FFormat,'->',cinfo.format);
 
   FView:=VK_NULL_HANDLE;
   r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
    rw_wunlock(lock);
-   Writeln(StdErr,'vkCreateImageView:',r);
+   LOG_ERROR(StdErr,'vkCreateImageView:',r);
    Exit;
   end;
 
