@@ -70,6 +70,7 @@ Function  sys_sigaltstack(ss,oss:Pointer):Integer;
 function  sys_kill(pid,signum:Integer):Integer;
 function  sys_sigqueue(pid,signum:Integer;value:Pointer):Integer;
 
+function  is_sigcatch(td:p_kthread;sig:Integer):Boolean;
 procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
 //
 
@@ -1340,11 +1341,21 @@ end;
 
 function tdsendsignal(td:p_kthread;sig:Integer;ksi:p_ksiginfo):Integer; forward;
 
+function is_sigcatch(td:p_kthread;sig:Integer):Boolean;
+begin
+ ps_mtx_lock;
+
+  Result:=SIGISMEMBER(@p_sigacts.ps_sigcatch,sig) and
+          (not SIGISMEMBER(@td^.td_sigmask,sig));
+
+ ps_mtx_unlock;
+end;
+
 procedure trapsignal(td:p_kthread;ksi:p_ksiginfo);
 var
  sig:Integer;
 begin
- sig :=ksi^.ksi_info.si_signo;
+ sig:=ksi^.ksi_info.si_signo;
 
  Assert(_SIG_VALID(sig),'invalid signal');
 
