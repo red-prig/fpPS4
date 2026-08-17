@@ -112,6 +112,9 @@ uses
  signal,
  kern_proc,
  sys_bootparam,
+ signalvar,
+ kern_sig,
+ kern_jit_asm,
  subr_backtrace;
 
 //
@@ -505,20 +508,87 @@ end;
 }
 
 function trap(frame:p_trapframe;usermode:Boolean):Integer;
+label
+ _userout,_user;
+var
+ ksi:ksiginfo_t;
 begin
  Result:=0;
+
+ ksiginfo_init_trap(@ksi);
+ ksi.ksi_info._reason._fault._trapno:=frame^.tf_trapno;
+ ksi.ksi_info.si_code:=0;
 
  case frame^.tf_trapno of
   T_PAGEFLT:
     begin
-     Result:=trap_pfault(frame,usermode);
+     ksi.ksi_info.si_addr:=Pointer(frame^.tf_addr);
 
-     //print_backtrace_td(stderr);
-     //writeln;
+     ksi.ksi_info.si_signo:=trap_pfault(frame,usermode);
 
+     if (ksi.ksi_info.si_signo=-1) then goto _userout;
+     if (ksi.ksi_info.si_signo=0)  then goto _user;
+
+     if (ksi.ksi_info.si_signo=SIGSEGV) then
+     begin
+      ksi.ksi_info.si_code:=SEGV_MAPERR;
+     end;
+
+     Result:=1;
     end;
 
+  T_DIVIDE:
+  begin
+   ksi.ksi_info.si_addr:=Pointer(frame^.tf_rip);
+
+   ksi.ksi_info.si_code :=FPE_INTDIV;
+   ksi.ksi_info.si_signo:=SIGFPE;
+
+   Result:=1;
+  end;
+
+  T_OFLOW:
+  begin
+   ksi.ksi_info.si_addr:=Pointer(frame^.tf_rip);
+
+   ksi.ksi_info.si_code :=FPE_INTOVF;
+   ksi.ksi_info.si_signo:=SIGFPE;
+
+   Result:=1;
+  end;
+
+  T_ARITHTRAP:
+  begin
+   ksi.ksi_info.si_addr:=Pointer(frame^.tf_rip);
+
+   //ucode = fputrap_x87();
+   //if (ucode == -1) goto userout;
+   ksi.ksi_info.si_signo:=SIGFPE;
+
+   Result:=1;
+  end;
+
+  T_XMMFLT:
+  begin
+   ksi.ksi_info.si_addr:=Pointer(frame^.tf_rip);
+
+   //ucode = fputrap_sse();
+   //if (ucode == -1) goto userout;
+   ksi.ksi_info.si_signo:=SIGFPE;
+
+   Result:=1;
+  end;
+
  end;
+
+ if (Result=0) then Exit;
+
+ trapsignal(curkthread, @ksi);
+
+_user:
+ //userret(td, frame);
+
+_userout:
 
 end;
 
@@ -590,7 +660,7 @@ begin
 
  end else
  begin
-  Writeln('not is_guest_addr:0x',HexStr(eva,16),':',curkthread^.td_name);
+  //Writeln('not is_guest_addr:0x',HexStr(eva,16),':',curkthread^.td_name);
   Result:=SIGSEGV;
  end;
 

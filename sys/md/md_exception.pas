@@ -19,6 +19,7 @@ uses
   subr_backtrace,
   trap,
   signal,
+  kern_sig,
   ucontext,
   vm,
   vm_map,
@@ -135,11 +136,55 @@ begin
  Result:=p^.ExceptionRecord^.ExceptionCode;
 end;
 
+function get_trapno(p:PExceptionPointers):Byte; inline;
+begin
+ case p^.ExceptionRecord^.ExceptionCode of
+  EXCEPTION_ACCESS_VIOLATION     :Result:=T_PAGEFLT;
+  EXCEPTION_INT_DIVIDE_BY_ZERO   :Result:=T_DIVIDE;
+  EXCEPTION_INT_OVERFLOW         :Result:=T_OFLOW;
+
+  EXCEPTION_FLT_DIVIDE_BY_ZERO   ,
+  EXCEPTION_FLT_INVALID_OPERATION,
+  EXCEPTION_FLT_OVERFLOW         ,
+  EXCEPTION_FLT_UNDERFLOW        ,
+  EXCEPTION_FLT_DENORMAL_OPERAND ,
+  EXCEPTION_FLT_INEXACT_RESULT   ,
+  EXCEPTION_FLT_STACK_CHECK      ,
+  STATUS_FLOAT_MULTIPLE_FAULTS   ,
+  STATUS_FLOAT_MULTIPLE_TRAPS    :Result:=T_ARITHTRAP; //TODO:T_XMMFLT
+
+  else
+    Result:=0;
+ end;
+end;
+
+function get_sig(p:PExceptionPointers):Byte; inline;
+begin
+ case p^.ExceptionRecord^.ExceptionCode of
+  EXCEPTION_ACCESS_VIOLATION     :Result:=SIGSEGV;
+
+  EXCEPTION_INT_DIVIDE_BY_ZERO   ,
+  EXCEPTION_INT_OVERFLOW         ,
+  EXCEPTION_FLT_DIVIDE_BY_ZERO   ,
+  EXCEPTION_FLT_INVALID_OPERATION,
+  EXCEPTION_FLT_OVERFLOW         ,
+  EXCEPTION_FLT_UNDERFLOW        ,
+  EXCEPTION_FLT_DENORMAL_OPERAND ,
+  EXCEPTION_FLT_INEXACT_RESULT   ,
+  EXCEPTION_FLT_STACK_CHECK      ,
+  STATUS_FLOAT_MULTIPLE_FAULTS   ,
+  STATUS_FLOAT_MULTIPLE_TRAPS    :Result:=SIGFPE;
+
+  else
+    Result:=0;
+ end;
+end;
+
 procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean); SysV_ABI_CDecl; external;
 
 function ProcessException3(td:p_kthread;p:PExceptionPointers):longint; SysV_ABI_CDecl;
 var
- tf_addr:QWORD;
+ //tf_addr:QWORD;
  info:t_jit_addr_info;
  rv:Integer;
  is_jit:Boolean;
@@ -162,7 +207,12 @@ begin
 
  //Writeln('tf_rip:0x',HexStr(tf_addr,16));
 
- md_get_frame(p^.ContextRecord,@td^.td_frame,{@td^.td_fpstate}nil);
+ if (is_jit) then
+ begin
+  td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_JIT_CTX;
+ end;
+
+ md_get_frame(p^.ContextRecord,@td^.td_frame,@td^.td_fpstate);
 
  if (is_jit) then
  begin
@@ -210,8 +260,9 @@ begin
 
  rv:=-1;
 
+ {
  case get_exception(p) of
-  STATUS_ACCESS_VIOLATION:
+  EXCEPTION_ACCESS_VIOLATION:
     begin
      tf_addr:=get_pageflt_addr(p);
 
@@ -231,6 +282,7 @@ begin
 
   else;
  end;
+ }
 
  if (is_jit) then
  begin
@@ -293,7 +345,11 @@ end;
 
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 var
- instr:t_instruction_info;
+ data:record
+  Case Byte of
+   0:(instr:t_instruction_info);
+   1:(info :t_jit_addr_info);
+ end;
  rv:Integer;
 begin
  Result:=EXCEPTION_CONTINUE_SEARCH;
@@ -330,16 +386,16 @@ begin
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
 
-  STATUS_ACCESS_VIOLATION:
+  EXCEPTION_ACCESS_VIOLATION:
     begin
-     instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
+     data.instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
 
      //Checking for memory splitting and remapping.
      //An exception can occur after the danger zone has been canceled,
      //so need to check the memory protect next
      if pmap_danger_zone(vm_map_t(p_proc.p_vmspace)^.pmap,
                          get_pageflt_addr(p),
-                         instr.mema_size
+                         data.instr.mema_size
                         ) then
      begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
@@ -348,7 +404,7 @@ begin
      case get_pageflt_err(p) of
       VM_PROT_READ:
         begin
-         if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_READ)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_READ)<>0) then
          begin
           Writeln(stderr,'Unhandled VM_PROT_READ');
 
@@ -358,14 +414,14 @@ begin
         end;
       VM_PROT_WRITE:
         begin
-         if ((ppmap_get_prot(get_pageflt_addr(p),instr.mema_size) and VM_PROT_WRITE)<>0) then
+         if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
           //Writeln('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,
                                get_pageflt_addr(p),
-                               get_pageflt_addr(p)+instr.mema_size,
+                               get_pageflt_addr(p)+data.instr.mema_size,
                                nil,
                                M_CPU_WRITE);
           //
@@ -393,7 +449,72 @@ begin
       Exit(EXCEPTION_CONTINUE_EXECUTION);
      end;
 
-    end;
+     if is_sigcatch(curkthread,SIGSEGV) then
+     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) then
+     with curkthread^ do
+     begin
+      td_frame.tf_flags:=td_frame.tf_flags or TF_JIT_CTX;
+
+      md_get_frame(p^.ContextRecord,@td_frame,@td_fpstate);
+
+      set_jit_ctx_state(@td_frame,False);
+      td_frame.tf_rip:=data.info.original;
+      //TODO: override_mem_*
+
+      td_frame.tf_trapno:=T_PAGEFLT;
+      td_frame.tf_err   :=get_pageflt_err(p);
+      td_frame.tf_addr  :=get_pageflt_addr(p);
+
+      rv:=trap.trap(@td_frame,True);
+
+      if (rv<>0) then
+      begin
+       ipi_sigreturn;
+      end;
+
+     end;
+
+    end; //EXCEPTION_ACCESS_VIOLATION
+
+  EXCEPTION_INT_DIVIDE_BY_ZERO   ,
+  EXCEPTION_INT_OVERFLOW         ,
+  EXCEPTION_FLT_DIVIDE_BY_ZERO   ,
+  EXCEPTION_FLT_INVALID_OPERATION,
+  EXCEPTION_FLT_OVERFLOW         ,
+  EXCEPTION_FLT_UNDERFLOW        ,
+  EXCEPTION_FLT_DENORMAL_OPERAND ,
+  EXCEPTION_FLT_INEXACT_RESULT   ,
+  EXCEPTION_FLT_STACK_CHECK      ,
+  STATUS_FLOAT_MULTIPLE_FAULTS   ,
+  STATUS_FLOAT_MULTIPLE_TRAPS    :
+    begin
+
+     if is_sigcatch(curkthread,get_sig(p)) then
+     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) then
+     with curkthread^ do
+     begin
+      td_frame.tf_flags:=td_frame.tf_flags or TF_JIT_CTX;
+
+      md_get_frame(p^.ContextRecord,@td_frame,@td_fpstate);
+
+      set_jit_ctx_state(@td_frame,False);
+      td_frame.tf_rip:=data.info.original;
+      //TODO: override_mem_*
+
+      td_frame.tf_trapno:=get_trapno(p);
+      td_frame.tf_err   :=0;
+      td_frame.tf_addr  :=td_frame.tf_rip;
+
+      rv:=trap.trap(@td_frame,True);
+
+      if (rv<>0) then
+      begin
+       ipi_sigreturn;
+      end;
+
+     end;
+
+    end
 
   else
    if not IsDefaultExceptions(get_exception(p)) then

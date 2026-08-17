@@ -11,15 +11,15 @@ uses
 
 type
  sigacts=packed record
-  ps_sigact    :array[0.._SIG_MAXSIG-1] of sig_t;
-  ps_catchmask :array[0.._SIG_MAXSIG-1] of sigset_t;
-  ps_sigonstack:sigset_t;
-  ps_sigintr   :sigset_t;
-  ps_sigreset  :sigset_t;
-  ps_signodefer:sigset_t;
-  ps_siginfo   :sigset_t;
-  ps_sigignore :sigset_t;
-  ps_sigcatch  :sigset_t;
+  ps_sigact    :array[0.._SIG_MAXSIG-1] of sig_t;    // Disposition of signals.
+  ps_catchmask :array[0.._SIG_MAXSIG-1] of sigset_t; // Signals to be blocked.
+  ps_sigonstack:sigset_t;                            // Signals to take on sigstack.
+  ps_sigintr   :sigset_t;                            // Signals that interrupt syscalls.
+  ps_sigreset  :sigset_t;                            // Signals that reset when caught.
+  ps_signodefer:sigset_t;                            // Signals not masked while handled.
+  ps_siginfo   :sigset_t;                            // Signals that want SA_SIGINFO args.
+  ps_sigignore :sigset_t;                            // Signals being ignored.
+  ps_sigcatch  :sigset_t;                            // Signals being caught by user.
   ps_mtx       :mtx;
   ps_flag      :Integer;
  end;
@@ -31,8 +31,6 @@ const
  PS_NOCLDWAIT=$0001; // No zombies if child dies
  PS_NOCLDSTOP=$0002; // No SIGCHLD when children stop.
  PS_CLDSIGIGN=$0004; // The SIGCHLD handler is SIG_IGN.
-
- SIG_CATCH=2;
 
 type
  p_ksiginfo=^ksiginfo_t;
