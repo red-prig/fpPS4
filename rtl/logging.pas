@@ -54,7 +54,6 @@ var
 
 type
  t_filtres=object
-  tail_:_p_log_filter_node;
   stub_:_t_log_filter_node;
   head_:_p_log_filter_node;
   procedure Push(Node:_p_log_filter_node);
@@ -95,26 +94,21 @@ Var
  prev:_p_log_filter_node;
 begin
  if not Assigned(Node) then Exit;
- store_release(Node^.next,nil);
- prev:=XCHG(head_,Node);
- store_release(prev^.next,Node);
+
+ if (System.InterlockedCompareExchange(Pointer(Node^.next),Pointer(@stub_),Pointer(nil))=nil) then
+ begin
+  prev:=XCHG(head_,Node);
+  store_release(prev^.next,Node);
+ end;
+
 end;
 
 procedure t_filtres.Reset(cbs:_t_log_filter_cb);
 Var
- tail,n:_p_log_filter_node;
+ n:_p_log_filter_node;
 begin
- tail:=tail_;
- if not Assigned(tail) then Exit;
+ n:=load_consume(stub_.next);
 
- n:=load_consume(tail^.next);
- if (tail=@stub_) then
- begin
-  if not Assigned(n) then Exit;
-  tail:=n;
- end;
-
- n:=tail;
  while (n<>nil) and (n<>@stub_) do
  begin
   WriteBarrier;
@@ -125,14 +119,13 @@ begin
 end;
 
 var
- filtres:array[t_log_level] of t_filtres=(
-  (tail_:@filtres[Trace   ].stub_;head_:@filtres[Trace   ].stub_),
-  (tail_:@filtres[Debug   ].stub_;head_:@filtres[Debug   ].stub_),
-  (tail_:@filtres[Info    ].stub_;head_:@filtres[Info    ].stub_),
-  (tail_:@filtres[Warning ].stub_;head_:@filtres[Warning ].stub_),
-  (tail_:@filtres[Error   ].stub_;head_:@filtres[Error   ].stub_),
-  (tail_:@filtres[Critical].stub_;head_:@filtres[Critical].stub_),
-  (tail_:@filtres[Off     ].stub_;head_:@filtres[Off     ].stub_)
+ filtres:array[Trace..Critical] of t_filtres=(
+  (head_:@filtres[Trace   ].stub_),
+  (head_:@filtres[Debug   ].stub_),
+  (head_:@filtres[Info    ].stub_),
+  (head_:@filtres[Warning ].stub_),
+  (head_:@filtres[Error   ].stub_),
+  (head_:@filtres[Critical].stub_)
  );
 
 const
@@ -326,6 +319,8 @@ begin
  e:=#0;
  d:=#0;
 
+ while (p^<=' ') do Inc(p);
+
  while True do
  begin
   c:=p^;
@@ -336,21 +331,31 @@ begin
   begin
    e:=#0;
   end else
+  if (c<=' ') then
+  begin
+
+   if (e=#0) then
+   begin
+    _params.Final;
+
+    //Writeln(_params._file,'|',_params._level,' ',_get_log_level(@_params._level));
+
+    Add;
+
+    _params.Reinit;
+    d:=#0;
+
+    inc(p);
+    while (p^<=' ') do Inc(p);
+    Continue;
+   end;
+
+   _params.Add(d<>#0,c);
+  end else
   case c of
    '"',
    '''':e:=c;
    ':' :d:=c;
-   ' ' :if (e=#0) then
-        begin
-         _params.Final;
-
-         //Writeln(_params._file,'|',_params._level,' ',_get_log_level(@_params._level));
-
-         Add;
-
-         _params.Reinit;
-         d:=#0;
-        end;
    else
     _params.Add(d<>#0,c);
   end;
@@ -439,6 +444,7 @@ end;
 function _log_filter_default(min:t_log_level;self:_p_log_filter_node;fname:Pchar):Boolean; inline;
 var
  epoch:Integer;
+ fcbs :_t_log_filter_cb;
 begin
  epoch:=load_consume(global_epoch);
  System.InterlockedIncrement(epoch_count[epoch]);
@@ -449,13 +455,19 @@ begin
 
  if Result then
  begin
-  self^.fcbs:=@_log_filter_y;
+  fcbs:=@_log_filter_y;
  end else
  begin
-  self^.fcbs:=@_log_filter_n;
+  fcbs:=@_log_filter_n;
  end;
 
- filtres[min].Push(self);
+ Pointer(fcbs):=XCHG(Pointer(self^.fcbs),Pointer(fcbs));
+
+ if (fcbs<>@_log_filter_y) and (fcbs<>@_log_filter_n) then
+ begin
+  filtres[min].Push(self);
+ end;
+
 end;
 
 function _log_filter_default_Trace(self:Pointer;fname:Pchar):Boolean; register; [public, alias:'_log_filter_default_Trace'];
@@ -489,21 +501,20 @@ begin
 end;
 
 const
- _log_filter_default_:array[t_log_level] of _t_log_filter_cb=(
+ _log_filter_default_:array[Trace..Critical] of _t_log_filter_cb=(
   @_log_filter_default_Trace,
   @_log_filter_default_Debug,
   @_log_filter_default_Info,
   @_log_filter_default_Warning,
   @_log_filter_default_Error,
-  @_log_filter_default_Critical,
-  nil
+  @_log_filter_default_Critical
  );
 
 Procedure ResetAll;
 var
  i:t_log_level;
 begin
- for i:=Low(t_log_level) to High(t_log_level) do
+ for i:=Trace to Critical do
  begin
   filtres[i].Reset(_log_filter_default_[i]);
  end;

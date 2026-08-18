@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 557
+  Left = 743
   Height = 339
-  Top = 89
+  Top = 107
   Width = 459
   Caption = 'Config Editor'
   ClientHeight = 339
@@ -18,14 +18,14 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 289
     Top = 5
     Width = 449
-    ActivePage = Tab_MainInfo
+    ActivePage = Tab_BootparamInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Left = 5
     BorderSpacing.Top = 5
     BorderSpacing.Right = 5
     BorderSpacing.Bottom = 10
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
@@ -279,7 +279,7 @@ object frmCfgEditor: TfrmCfgEditor
         Caption = 'print guest syscall'
         TabOrder = 2
       end
-      object Edt_BootparamInfo_print_pmap: TCheckBox
+      object Edt_BootparamInfo_print_gpu_ops: TCheckBox
         AnchorSideLeft.Control = Tab_BootparamInfo
         AnchorSideTop.Control = Edt_BootparamInfo_print_guest_syscall
         AnchorSideTop.Side = asrBottom
@@ -293,12 +293,12 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'print pmap'
+        Caption = 'print gpu packed ops'
         TabOrder = 3
       end
-      object Edt_BootparamInfo_print_jit_preload: TCheckBox
+      object Edt_BootparamInfo_print_gpu_hint: TCheckBox
         AnchorSideLeft.Control = Tab_BootparamInfo
-        AnchorSideTop.Control = Edt_BootparamInfo_print_pmap
+        AnchorSideTop.Control = Edt_BootparamInfo_print_gpu_ops
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_BootparamInfo
         AnchorSideRight.Side = asrBottom
@@ -310,42 +310,8 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'print jit preload'
-        TabOrder = 4
-      end
-      object Edt_BootparamInfo_print_gpu_ops: TCheckBox
-        AnchorSideLeft.Control = Tab_BootparamInfo
-        AnchorSideTop.Control = Edt_BootparamInfo_print_jit_preload
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_BootparamInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 19
-        Top = 155
-        Width = 421
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        Caption = 'print gpu packed ops'
-        TabOrder = 5
-      end
-      object Edt_BootparamInfo_print_gpu_hint: TCheckBox
-        AnchorSideLeft.Control = Tab_BootparamInfo
-        AnchorSideTop.Control = Edt_BootparamInfo_print_gpu_ops
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = Tab_BootparamInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 19
-        Top = 184
-        Width = 421
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
         Caption = 'print gpu packed hint'
-        TabOrder = 6
+        TabOrder = 4
       end
     end
     object Tab_JIT: TTabSheet

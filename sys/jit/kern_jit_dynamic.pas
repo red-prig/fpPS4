@@ -277,10 +277,7 @@ var
  node:p_jit_entry_point;
  ctx:t_jit_context2;
 begin
- if (p_print_jit_preload) then
- begin
-  LOG_TRACE('preload addr:0x',HexStr(addr));
- end;
+ LOG_TRACE('preload addr:0x',HexStr(addr));
 
  node:=preload_entry(addr);
 
@@ -675,10 +672,7 @@ begin
 
   if (dest<>0) then
   begin
-   if (p_print_jit_preload) then
-   begin
-    LOG_TRACE('cache:',HexStr(addr),'->',HexStr(dest,16));
-   end;
+   LOG_TRACE('cache:',HexStr(addr),'->',HexStr(dest,16));
 
    blob:=curr^.blob;
 
@@ -965,10 +959,7 @@ begin
  end;
  jcode^.d_end:=QWORD(jcode^.dest)+recompil;
 
- if (p_print_jit_preload) then
- begin
-  LOG_TRACE('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
- end;
+ LOG_TRACE('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
 
  //LOG_TRACE('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
 end;
@@ -1064,10 +1055,7 @@ begin
 
  blob^.init_plt;
 
- if (p_print_jit_preload) then
- begin
-  LOG_TRACE('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
- end;
+ LOG_TRACE('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
 
  //F:=FileCreate('recompile.bin');
  //FileWrite(F,blob^.base^,ctx.builder.GetMemSize);

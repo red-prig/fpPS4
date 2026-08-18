@@ -87,8 +87,6 @@ type
     Edt_JITInfo_relative_analize: TCheckBox;
     Edt_JITInfo_print_asm: TCheckBox;
     Edt_BootparamInfo_print_guest_syscall: TCheckBox;
-    Edt_BootparamInfo_print_pmap: TCheckBox;
-    Edt_BootparamInfo_print_jit_preload: TCheckBox;
     Edt_JITInfo_memory_guard: TCheckBox;
     Edt_MainInfo_LogFile: TEdit;
     Edt_BootparamInfo_neo: TCheckBox;

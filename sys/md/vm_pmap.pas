@@ -680,10 +680,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_copy_pages:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_copy_pages:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
  prot:=fixup_prot(prot);
 
@@ -778,10 +775,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
  prot:=fixup_prot(prot);
 
@@ -862,10 +856,7 @@ begin
      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
 
-      if (p_print_pmap) then
-      begin
-       LOG_TRACE('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
-      end;
+      LOG_TRACE('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
 
       info.start :=start;
       info.__end :=__end;
@@ -878,10 +869,7 @@ begin
        delta:=(info.__end-info.start);
        if (delta=0) then Break;
 
-       if (p_print_pmap) then
-       begin
-        LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
-       end;
+       LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
 
        //map to guest
        r:=vm_nt_map_insert(@pmap^.nt_map,
@@ -927,10 +915,7 @@ begin
      end else
      begin
 
-      if (p_print_pmap) then
-      begin
-       LOG_TRACE('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
-      end;
+      LOG_TRACE('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
 
       info.start :=start;
       info.__end :=__end;
@@ -940,10 +925,7 @@ begin
 
       delta:=(info.__end-info.start);
 
-      if (p_print_pmap) then
-      begin
-       LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
-      end;
+      LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
 
       //map to guest
       r:=vm_nt_map_insert(@pmap^.nt_map,
@@ -1113,10 +1095,7 @@ var
  p_offset:vm_offset_t;
  p____obj:p_vm_nt_file_obj;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
  prot:=fixup_prot(prot);
 
@@ -1192,10 +1171,7 @@ var
 begin
  __end:=start+(64*1024);
 
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_enter_dmem_block:',HexStr(offset,11),':',HexStr(start,11),':',HexStr(prot,2));
 
  prot:=fixup_prot(prot);
 
@@ -1216,10 +1192,7 @@ begin
   delta:=(info.__end-info.start);
   if (delta=0) then Break;
 
-  if (p_print_pmap) then
-  begin
-   LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
-  end;
+  LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
 
   //map to guest
   r:=vm_nt_map_insert(@pmap^.nt_map,
@@ -1339,10 +1312,7 @@ var
 label
  _default;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_protect:',HexStr(start,11),':',HexStr(__end,11),':prot:',HexStr(prot,2));
 
  prot:=fixup_prot(prot);
 
@@ -1371,15 +1341,12 @@ begin
       goto _default;
      end;
 
-     if (p_print_pmap) then
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
-      begin
-       LOG_TRACE('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
-      end else
-      begin
-       LOG_TRACE('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
-      end;
+      LOG_TRACE('pmap_protect_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
+     end else
+     begin
+      LOG_TRACE('pmap_protect_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
      end;
 
      goto _default;
@@ -1428,10 +1395,7 @@ var
 begin
  //exit;
 
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_prot_track:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
- end;
+ LOG_TRACE('pmap_prot_track:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
@@ -1454,10 +1418,7 @@ procedure pmap_prot_restore(pmap :pmap_t;
 var
  lock:Pointer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
- end;
+ LOG_TRACE('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
 
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
@@ -1484,10 +1445,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_madvise:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
- end;
+ LOG_TRACE('pmap_madvise:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(advise,2));
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1549,10 +1507,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
- end;
+ LOG_TRACE('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1597,15 +1552,12 @@ begin
       goto _default;
      end;
 
-     if (p_print_pmap) then
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
      begin
-      if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
-      begin
-       LOG_TRACE('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
-      end else
-      begin
-       LOG_TRACE('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
-      end;
+      LOG_TRACE('pmap_remove_gpuobj:',HexStr(start,11),':',HexStr(__end,11));
+     end else
+     begin
+      LOG_TRACE('pmap_remove_devobj:',HexStr(start,11),':',HexStr(__end,11));
      end;
 
      goto _default;
@@ -1635,10 +1587,7 @@ var
 
  r:Integer;
 begin
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_gpu_remove:',HexStr(start,11),':',HexStr(__end,11));
- end;
+ LOG_TRACE('pmap_gpu_remove:',HexStr(start,11),':',HexStr(__end,11));
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -1706,10 +1655,7 @@ var
 begin
  Result:=True;
 
- if (p_print_pmap) then
- begin
-  LOG_TRACE('pmap_expand:',HexStr(start,11),':',HexStr(__end,11));
- end;
+ LOG_TRACE('pmap_expand:',HexStr(start,11),':',HexStr(__end,11));
 
  base:=Pointer(start);
 

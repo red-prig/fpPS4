@@ -2348,13 +2348,10 @@ begin
   ctx.max_reloc:=QWORD(ctx.max_forward_point);
  end;
 
- if (p_print_jit_preload) then
- begin
-  LOG_TRACE(' ctx.text_start:0x',HexStr(ctx.text_start,16));
-  LOG_TRACE(' ctx.max_reloc :0x',HexStr(ctx.max_reloc ,16));
-  LOG_TRACE(' ctx.text___end:0x',HexStr(ctx.text___end,16));
-  LOG_TRACE(' ctx.map____end:0x',HexStr(ctx.map____end,16));
- end;
+ LOG_TRACE(' ctx.text_start:0x',HexStr(ctx.text_start,16));
+ LOG_TRACE(' ctx.max_reloc :0x',HexStr(ctx.max_reloc ,16));
+ LOG_TRACE(' ctx.text___end:0x',HexStr(ctx.text___end,16));
+ LOG_TRACE(' ctx.map____end:0x',HexStr(ctx.map____end,16));
 
  if System.InterlockedExchange(_print_stat,1)=0 then
  begin
@@ -2387,20 +2384,14 @@ begin
 
   if not ctx.is_text_addr(QWORD(ptr)) then
   begin
-   if (p_print_jit_preload) then
-   begin
-    LOG_TRACE('not excec:0x',HexStr(ptr));
-   end;
+   LOG_TRACE('not excec:0x',HexStr(ptr));
    ctx.ptr_curr:=ptr;
    goto _invalid;
   end;
 
   if ((ppmap_get_prot(QWORD(ptr)) and PAGE_PROT_EXECUTE)=0) then
   begin
-   if (p_print_jit_preload) then
-   begin
-    LOG_TRACE('not excec:0x',HexStr(ptr));
-   end;
+   LOG_TRACE('not excec:0x',HexStr(ptr));
    ctx.ptr_curr:=ptr;
    goto _invalid;
   end;
@@ -2452,14 +2443,11 @@ begin
    OPX_Invalid..OPX_GroupP:
     begin
      //invalid
-     if (p_print_jit_preload) then
-     begin
-      LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr));
-     end;
+     LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr));
 
      _invalid:
 
-     if (p_print_jit_preload) then
+     if IS_LOG_TRACE then
      begin
       print_frame(stdout,ctx.ptr_curr);
       LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
@@ -2495,10 +2483,7 @@ begin
      (din.ParseFlags * [preF3,preF2] <> []) or
      is_invalid(din) then
   begin
-   if (p_print_jit_preload) then
-   begin
-    LOG_ERROR('invalid2:0x',HexStr(ctx.ptr_curr));
-   end;
+   LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr));
    goto _invalid;
   end;
 
@@ -2826,10 +2811,7 @@ begin
   op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
  end;
 
- if (p_print_jit_preload) then
- begin
-  ctx.print_alloc_stats;
- end;
+ ctx.print_alloc_stats;
 
  Result:=build(ctx);
 
