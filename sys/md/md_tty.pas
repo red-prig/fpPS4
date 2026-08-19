@@ -121,42 +121,6 @@ begin
  end;
 end;
 
-{
-function tty_get_full_size(tp:p_tty;uio:p_uio):QWORD; inline;
-begin
- Result:=0;
- //
- if (tp^.t_newline<>0) then
- begin
-  if ((tp^.t_flags and TF_TTY_NAME_PREFIX)<>0) then
-  begin
-   Result:=Result+tp^.t_nlen;
-  end;
-  //
-  if (uio^.uio_td<>nil) then
-  if ((tp^.t_flags and TF_THD_NAME_PREFIX)<>0) then
-  begin
-   with p_kthread(uio^.uio_td)^ do
-   begin
-    if td_name[0]=#0 then
-    begin
-     Result:=Result+8+3;
-    end else
-    begin
-     Result:=Result+strlen(@td_name)+3;
-    end;
-   end;
-   if ((tp^.t_flags and TF_FIB_ADDR_PREFIX)<>0) then
-   begin
-    Result:=Result+4+10;
-   end;
-  end;
- end;
- //
- Result:=Result+uio^.uio_resid;
-end;
-}
-
 type
  p_tcb=^t_tcb;
  t_tcb=record
@@ -360,6 +324,8 @@ var
  p_error :p_priv_tty;
 begin
 
+ tty_prefix.build('%td_name%>:',@tty_prefix_values,Length(tty_prefix_values));
+
  p_output:=md_tty_new(StdInputHandle,StdOutputHandle);
  p_error :=md_tty_new(StdInputHandle,StdErrorHandle);
 
@@ -380,8 +346,6 @@ end;
 
 initialization
  init_tty:=@md_init_tty;
-
- tty_prefix.build('%td_name%>:',@tty_prefix_values,Length(tty_prefix_values));
 
 
 end.
