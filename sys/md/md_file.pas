@@ -204,7 +204,13 @@ end;
 
 Function GetCreateOptions(flags:Integer):DWORD; inline;
 begin
- Result:=FILE_SYNCHRONOUS_IO_NONALERT;
+ if ((flags and O_ASYNC)<>0) then
+ begin
+  Result:=0;
+ end else
+ begin
+  Result:=FILE_SYNCHRONOUS_IO_NONALERT;
+ end;
 
  if ((flags and (O_FSYNC or O_DSYNC))<>0) then
  begin
