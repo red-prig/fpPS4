@@ -9,12 +9,8 @@ interface
 uses
  sysutils,
  vselinfo,
- kern_mtx;
-
-const
- TF_TTY_NAME_PREFIX=$00001;
- TF_THD_NAME_PREFIX=$00002;
- TF_FIB_ADDR_PREFIX=$00004;
+ kern_mtx,
+ subr_msgbuf;
 
 type
  p_tty=^t_tty;
@@ -22,8 +18,7 @@ type
   t_name   :PChar;
   t_nlen   :DWORD;
 
-  t_flags  :WORD;
-  t_newline:WORD;
+  //t_flags  :WORD;
 
   t_mtx    :p_mtx;      // TTY lock.
   t_mtxobj :mtx;        // Per-TTY lock (when not borrowing).
@@ -32,15 +27,15 @@ type
   t_inpoll :t_selinfo;  // (t) Input  poll queue.
   t_outpoll:t_selinfo;  // (t) Output poll queue.
 
-  t_rd_handle :THandle;
-  t_wr_handle :THandle;
+  priv:Pointer;
+
   t_update    :TProcedure;
  end;
 
 procedure tty_lock  (tp:p_tty);
 procedure tty_unlock(tp:p_tty);
 
-procedure tty_init(tp:p_tty;name:PChar;mutex:p_mtx;flags:WORD);
+procedure tty_init(tp:p_tty;name:PChar;mutex:p_mtx);
 procedure tty_fini(tp:p_tty);
 
 var
@@ -66,7 +61,7 @@ begin
  mtx_unlock(tp^.t_mtx^)
 end;
 
-procedure tty_init(tp:p_tty;name:PChar;mutex:p_mtx;flags:WORD);
+procedure tty_init(tp:p_tty;name:PChar;mutex:p_mtx);
 begin
  if (tp=nil) then Exit;
 
@@ -89,8 +84,7 @@ begin
  knlist_init_mtx(@tp^.t_inpoll .si_note, tp^.t_mtx);
  knlist_init_mtx(@tp^.t_outpoll.si_note, tp^.t_mtx);
 
- tp^.t_flags  :=flags;
- tp^.t_newline:=1;
+ //tp^.t_flags:=flags;
 end;
 
 procedure tty_fini(tp:p_tty);

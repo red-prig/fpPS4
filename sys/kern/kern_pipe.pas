@@ -1329,7 +1329,7 @@ begin
 
    if (error=0) then
    begin
-    wpipe^.pipe_buffer._in:= + size;
+    wpipe^.pipe_buffer._in:=wpipe^.pipe_buffer._in + size;
     if (wpipe^.pipe_buffer._in >= wpipe^.pipe_buffer.size) then
     begin
      Assert(wpipe^.pipe_buffer._in = (size - segsize + wpipe^.pipe_buffer.size), 'Expected wraparound bad');

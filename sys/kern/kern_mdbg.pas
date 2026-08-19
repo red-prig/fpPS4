@@ -185,7 +185,7 @@ begin
   auio.uio_segflg:=UIO_SYSSPACE;
   auio.uio_rw    :=UIO_WRITE;
   //
-  ttydisc_write(@debug_tty,@auio,0);
+  md_tty_write(@debug_tty,debug_tty.priv,@auio,0);
  end;
  FreeMem(buf);
 end;

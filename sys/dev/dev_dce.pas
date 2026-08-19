@@ -639,7 +639,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      LOG_INFO('SetFlipRate:',data^.arg3);
+      LOG_TRACE('SetFlipRate:',data^.arg3);
 
       Exit(0);
      end;
