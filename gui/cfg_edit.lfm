@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 743
+  Left = 711
   Height = 339
-  Top = 107
+  Top = 100
   Width = 459
   Caption = 'Config Editor'
   ClientHeight = 339
@@ -18,51 +18,22 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 289
     Top = 5
     Width = 449
-    ActivePage = Tab_BootparamInfo
+    ActivePage = Tab_MainInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Left = 5
     BorderSpacing.Top = 5
     BorderSpacing.Right = 5
     BorderSpacing.Bottom = 10
-    TabIndex = 1
+    TabIndex = 0
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
       ClientHeight = 261
       ClientWidth = 441
-      object Label1: TLabel
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Tab_MainInfo
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 15
-        Top = 10
-        Width = 421
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        Caption = 'Log File:'
-      end
-      object Edt_MainInfo_LogFile: TEdit
-        AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Label1
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = BtnExpLog
-        Left = 10
-        Height = 23
-        Top = 35
-        Width = 390
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        TabOrder = 0
-      end
       object Label2: TLabel
         AnchorSideLeft.Control = Tab_MainInfo
-        AnchorSideTop.Control = Edt_MainInfo_LogFile
+        AnchorSideTop.Control = Edt_MainInfo_LocalDir
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
@@ -75,45 +46,6 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Default Firmware folder:'
-      end
-      object BtnLogOpen: TButton
-        AnchorSideTop.Control = Edt_MainInfo_LogFile
-        AnchorSideRight.Control = Edt_MainInfo_LogFile
-        AnchorSideRight.Side = asrBottom
-        AnchorSideBottom.Control = Edt_MainInfo_LogFile
-        AnchorSideBottom.Side = asrBottom
-        Left = 364
-        Height = 21
-        Top = 36
-        Width = 35
-        Anchors = [akTop, akRight, akBottom]
-        AutoSize = True
-        BorderSpacing.Top = 1
-        BorderSpacing.Right = 1
-        BorderSpacing.Bottom = 1
-        Caption = '...'
-        TabOrder = 1
-        OnClick = BtnLogOpenClick
-      end
-      object BtnExpLog: TSpeedButton
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = Edt_MainInfo_LogFile
-        AnchorSideTop.Side = asrCenter
-        AnchorSideRight.Control = Tab_MainInfo
-        AnchorSideRight.Side = asrBottom
-        AnchorSideBottom.Control = Edt_MainInfo_LogFile
-        AnchorSideBottom.Side = asrCenter
-        Left = 405
-        Height = 26
-        Top = 33
-        Width = 26
-        Anchors = [akTop, akRight]
-        AutoSize = True
-        BorderSpacing.Left = 5
-        BorderSpacing.Right = 10
-        Images = frmMain.SmallImageList
-        ImageIndex = 0
-        OnClick = BtnExpLogClick
       end
       object Edt_MainInfo_FirmwareList: TListBox
         AnchorSideLeft.Control = Tab_MainInfo
@@ -133,7 +65,7 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Right = 10
         BorderSpacing.Bottom = 10
         ItemHeight = 0
-        TabOrder = 3
+        TabOrder = 1
       end
       object BtnAddFw: TSpeedButton
         AnchorSideLeft.Control = Edt_MainInfo_FirmwareList
@@ -173,7 +105,6 @@ object frmCfgEditor: TfrmCfgEditor
       object Label3: TLabel
         AnchorSideLeft.Control = BtnRemFw
         AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = Edt_MainInfo_LogFile
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
@@ -201,7 +132,7 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         ItemHeight = 15
-        TabOrder = 2
+        TabOrder = 0
         OnGetItems = Edt_MainInfo_DefaultFirmwareGetItems
       end
       object BtnExpSys: TSpeedButton
@@ -210,7 +141,6 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideTop.Side = asrCenter
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
-        AnchorSideBottom.Control = Edt_MainInfo_LogFile
         AnchorSideBottom.Side = asrCenter
         Left = 405
         Height = 26
@@ -223,6 +153,210 @@ object frmCfgEditor: TfrmCfgEditor
         Images = frmMain.SmallImageList
         ImageIndex = 0
         OnClick = BtnExpSysClick
+      end
+      object Label14: TLabel
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Tab_MainInfo
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Local Dir:'
+      end
+      object Edt_MainInfo_LocalDir: TEdit
+        AnchorSideLeft.Control = Tab_MainInfo
+        AnchorSideTop.Control = Label14
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = BtnExpLocalDir
+        Left = 10
+        Height = 23
+        Top = 35
+        Width = 390
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        TabOrder = 2
+      end
+      object BtnLocalDirOpen: TButton
+        AnchorSideTop.Control = Edt_MainInfo_LocalDir
+        AnchorSideRight.Control = Edt_MainInfo_LocalDir
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MainInfo_LocalDir
+        AnchorSideBottom.Side = asrBottom
+        Left = 364
+        Height = 21
+        Top = 36
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
+        TabOrder = 3
+        OnClick = BtnLocalDirOpenClick
+      end
+      object BtnExpLocalDir: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MainInfo_LocalDir
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = Tab_MainInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Side = asrCenter
+        Left = 405
+        Height = 26
+        Top = 33
+        Width = 26
+        Anchors = [akTop, akRight]
+        AutoSize = True
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpLocalDirClick
+      end
+    end
+    object Tab_LogInfo: TTabSheet
+      Caption = 'Log'
+      ClientHeight = 261
+      ClientWidth = 441
+      object Label1: TLabel
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Tab_LogInfo
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 10
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Log File:'
+      end
+      object Edt_LogInfo_LogFile: TEdit
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Label1
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = BtnExpLog
+        Left = 10
+        Height = 23
+        Top = 35
+        Width = 390
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        TabOrder = 0
+      end
+      object BtnLogOpen: TButton
+        AnchorSideTop.Control = Edt_LogInfo_LogFile
+        AnchorSideRight.Control = Edt_LogInfo_LogFile
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_LogInfo_LogFile
+        AnchorSideBottom.Side = asrBottom
+        Left = 364
+        Height = 21
+        Top = 36
+        Width = 35
+        Anchors = [akTop, akRight, akBottom]
+        AutoSize = True
+        BorderSpacing.Top = 1
+        BorderSpacing.Right = 1
+        BorderSpacing.Bottom = 1
+        Caption = '...'
+        TabOrder = 1
+        OnClick = BtnLogOpenClick
+      end
+      object BtnExpLog: TSpeedButton
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_LogInfo_LogFile
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_LogInfo_LogFile
+        AnchorSideBottom.Side = asrCenter
+        Left = 405
+        Height = 26
+        Top = 33
+        Width = 26
+        Anchors = [akTop, akRight]
+        AutoSize = True
+        BorderSpacing.Left = 5
+        BorderSpacing.Right = 10
+        Images = frmMain.SmallImageList
+        ImageIndex = 0
+        OnClick = BtnExpLogClick
+      end
+      object Label15: TLabel
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Edt_LogInfo_LogFile
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 68
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Log Filter:'
+      end
+      object Edt_LogInfo_LogFilter: TEdit
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Label15
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 93
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 2
+      end
+      object Label16: TLabel
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Edt_LogInfo_LogFilter
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 126
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Tty prefix:'
+      end
+      object Edt_LogInfo_TtyPrefix: TEdit
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Label16
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 151
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 3
       end
     end
     object Tab_BootparamInfo: TTabSheet

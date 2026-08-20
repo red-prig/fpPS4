@@ -39,6 +39,19 @@ function md_tty_write_poll(tp:p_tty;priv:p_priv_tty):QWORD;
 function md_tty_read (tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 function md_tty_write(tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 
+const
+ tty_prefix_values:array[0..3] of t_placeholder_value=(
+  (id:0;maxsize: 9;name:'tty_name';fmt:'%0:s'),
+  (id:1;maxsize:31;name:'td_name' ;fmt:'%1:s'),
+  (id:2;maxsize: 7;name:'td_tid'  ;fmt:'%2:d'),
+  (id:3;maxsize:10;name:'fib_addr';fmt:'%3:10.10x')
+ );
+
+var
+ tty_prefix:t_fmt_builder;
+
+procedure md_init_tty(const placeholder:RawByteString);
+
 implementation
 
 uses
@@ -199,17 +212,6 @@ end;
 
 //  if (td^.td_name='SceVideoOutServiceThread') then exit;
 
-const
- tty_prefix_values:array[0..3] of t_placeholder_value=(
-  (id:0;maxsize: 9;name:'tty_name';fmt:'%0:s'),
-  (id:1;maxsize:31;name:'td_name' ;fmt:'%1:s'),
-  (id:2;maxsize: 7;name:'td_tid'  ;fmt:'%2:d'),
-  (id:3;maxsize:10;name:'fib_addr';fmt:'%3:10.10x')
- );
-
-var
- tty_prefix:t_fmt_builder;
-
 function md_tty_write(tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 var
  BLK   :IO_STATUS_BLOCK;
@@ -228,6 +230,8 @@ var
  _tid_str:array[0..7] of AnsiChar;
 begin
  Result:=0;
+
+ if (priv=nil) then Exit;
 
  _td_name :='';
  _td_tid  :=0;
@@ -316,15 +320,14 @@ begin
  msgbuf_init(@Result^.wr_msgbuf, Result+1, MSGBUF_SIZE);
 end;
 
-procedure md_init_tty; register;
+procedure md_init_tty(const placeholder:RawByteString);
 var
  i:Integer;
 
  p_output:p_priv_tty;
  p_error :p_priv_tty;
 begin
-
- tty_prefix.build('%td_name%>:',@tty_prefix_values,Length(tty_prefix_values));
+ tty_prefix.build(placeholder,@tty_prefix_values,Length(tty_prefix_values));
 
  p_output:=md_tty_new(StdInputHandle,StdOutputHandle);
  p_error :=md_tty_new(StdInputHandle,StdErrorHandle);
@@ -345,7 +348,6 @@ begin
 end;
 
 initialization
- init_tty:=@md_init_tty;
 
 
 end.

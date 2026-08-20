@@ -359,25 +359,6 @@ end;
 
 procedure ttyconsdev_init();
 begin
- tty_init( @std_tty[ 0],'Input' ,nil);
- tty_init( @std_tty[ 1],'Output',nil);
- tty_init( @std_tty[ 2],'Error' ,nil);
- //
- tty_init(@deci_tty[ 0],'stdin' ,nil);
- tty_init(@deci_tty[ 1],'stdout',nil);
- tty_init(@deci_tty[ 2],'stderr',nil);
- tty_init(@deci_tty[ 3],'tty2'  ,nil);
- tty_init(@deci_tty[ 4],'tty3'  ,nil);
- tty_init(@deci_tty[ 5],'tty4'  ,nil);
- tty_init(@deci_tty[ 6],'tty5'  ,nil);
- tty_init(@deci_tty[ 7],'tty6'  ,nil);
- tty_init(@deci_tty[ 8],'tty7'  ,nil);
- tty_init(@deci_tty[ 9],'ttya0' ,nil);
- tty_init(@deci_tty[10],'ttyb0' ,nil);
- tty_init(@deci_tty[11],'ttyc0' ,nil);
- //
- tty_init(@debug_tty   ,'Debug' ,nil);
- //
  dev_console:=make_dev_credf(MAKEDEV_ETERNAL, @ttyconsdev_cdevsw, 0, UID_ROOT, GID_WHEEL, &600, 'console',[]);
  dev_console^.si_drv1:=@debug_tty;
  //
@@ -394,11 +375,6 @@ begin
  tty_makedev(@deci_tty[10],'deci_ttyb0' ,[]);
  tty_makedev(@deci_tty[11],'deci_ttyc0' ,[]);
  //
-
- if (init_tty<>nil) then
- begin
-  init_tty();
- end;
 end;
 
 end.

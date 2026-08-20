@@ -316,6 +316,8 @@ begin
  _params.Init;
 
  p:=@log_filter[1];
+ if (p=nil) then p:='';
+
  e:=#0;
  d:=#0;
 

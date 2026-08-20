@@ -16,6 +16,8 @@ uses
   SDL3,
   SDL3_audio,
 
+  placeholder_fmt,
+
   game_info,
   form_filler;
 
@@ -57,16 +59,23 @@ type
   { TfrmCfgEditor }
 
   TfrmCfgEditor = class(TForm)
+    BtnExpLocalDir: TSpeedButton;
+    BtnExpLog: TSpeedButton;
     BtnExpSys: TSpeedButton;
+    BtnLocalDirOpen: TButton;
+    BtnLogOpen: TButton;
     BtnRemFw: TSpeedButton;
     BtnCancel: TButton;
     BtnAddFw: TSpeedButton;
     BtnOk: TButton;
-    BtnLogOpen: TButton;
     Edt_JITInfo_lazy_jit: TCheckBox;
     Edt_JITInfo_scan_nopsequence: TCheckBox;
     Edt_JITInfo_scan_switchtable: TCheckBox;
+    Edt_LogInfo_LogFilter: TEdit;
+    Edt_LogInfo_TtyPrefix: TEdit;
     Edt_MainInfo_DefaultFirmware: TComboBox;
+    Edt_MainInfo_LocalDir: TEdit;
+    Edt_LogInfo_LogFile: TEdit;
     Edt_MiscInfo_fork_proc: TCheckBox;
     Edt_PS4Audio_SpecialDevice_cmb: TComboBox;
     Edt_PS4Audio_HeadphoneDevice_cmb: TComboBox;
@@ -88,7 +97,6 @@ type
     Edt_JITInfo_print_asm: TCheckBox;
     Edt_BootparamInfo_print_guest_syscall: TCheckBox;
     Edt_JITInfo_memory_guard: TCheckBox;
-    Edt_MainInfo_LogFile: TEdit;
     Edt_BootparamInfo_neo: TCheckBox;
     EditPages: TPageControl;
     Edt_MiscInfo_renderdoc_capture: TCheckBox;
@@ -97,6 +105,9 @@ type
     Label11: TLabel;
     Label12: TLabel;
     Label13: TLabel;
+    Label14: TLabel;
+    Label15: TLabel;
+    Label16: TLabel;
     Label2: TLabel;
     Label3: TLabel;
     Label4: TLabel;
@@ -107,7 +118,7 @@ type
     Label9: TLabel;
     Edt_MainInfo_FirmwareList: TListBox;
     PanelHalf: TPanel;
-    BtnExpLog: TSpeedButton;
+    Tab_LogInfo: TTabSheet;
     Tab_PS4Audio: TTabSheet;
     Tab_PS4System: TTabSheet;
     Tab_Vulkan: TTabSheet;
@@ -117,8 +128,10 @@ type
     Tab_BootparamInfo: TTabSheet;
     procedure BtnAddFwClick(Sender: TObject);
     procedure BtnCancelClick(Sender: TObject);
+    procedure BtnExpLocalDirClick(Sender: TObject);
     procedure BtnExpLogClick(Sender: TObject);
     procedure BtnExpSysClick(Sender: TObject);
+    procedure BtnLocalDirOpenClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
     procedure BtnLogOpenClick(Sender: TObject);
     procedure BtnRemFwClick(Sender: TObject);
@@ -214,22 +227,25 @@ begin
  Close;
 end;
 
-function DoOpenFile(const Input,InitialDir:RawByteString):RawByteString;
+function DoOpenFile(const Input,InitialDir:RawByteString;var Output:RawByteString):Boolean;
 var
  d:TOpenDialog;
  Cookie:Pointer;
 begin
+ Result:=False;
+ Output:='';
+
  Cookie:=RegisterDllHack;
 
- Result:=Input;
  d:=nil;
  try
   d:=TOpenDialog.Create(nil);
   d.InitialDir:=InitialDir;
   d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-  if d.Execute then
+  Result:=d.Execute;
+  if Result then
   begin
-   Result:=d.FileName;
+   Output:=d.FileName;
   end;
  except
   //
@@ -265,8 +281,25 @@ begin
 end;
 
 procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
+var
+ fname:RawByteString;
 begin
- Edt_MainInfo_LogFile.Text:=DoOpenFile(Edt_MainInfo_LogFile.Text,Edt_MainInfo_LogFile.Text);
+ fname:=ResolvePath(Edt_LogInfo_LogFile.Text);
+ if DoOpenFile(fname,fname,fname) then
+ begin
+  Edt_LogInfo_LogFile.Text:=fname;
+ end;
+end;
+
+procedure TfrmCfgEditor.BtnLocalDirOpenClick(Sender: TObject);
+var
+ fname:RawByteString;
+begin
+ fname:=ResolvePath(Edt_MainInfo_LocalDir.Text);
+ if DoOpenFile(fname,fname,fname) then
+ begin
+  Edt_MainInfo_LocalDir.Text:=fname;
+ end;
 end;
 
 procedure TfrmCfgEditor.BtnAddFwClick(Sender:TObject);
@@ -321,12 +354,17 @@ end;
 
 procedure TfrmCfgEditor.BtnExpLogClick(Sender: TObject);
 begin
- OpenFolderOfFile(Edt_MainInfo_LogFile.Text);
+ OpenFolderOfFile(ResolvePath(Edt_LogInfo_LogFile.Text));
+end;
+
+procedure TfrmCfgEditor.BtnExpLocalDirClick(Sender: TObject);
+begin
+ OpenFolderOfFile(ResolvePath(Edt_MainInfo_LocalDir.Text));
 end;
 
 procedure TfrmCfgEditor.BtnExpSysClick(Sender: TObject);
 begin
- OpenDocument(Edt_MainInfo_DefaultFirmware.Text);
+ OpenDocument(ResolvePath(Edt_MainInfo_DefaultFirmware.Text));
 end;
 
 Function TVulkanDevGuid.GetText:RawByteString;

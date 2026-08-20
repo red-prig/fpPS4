@@ -17,6 +17,9 @@ uses
  md_host_ipc,
  param_sfo_gui,
  core_shell,
+ placeholder_fmt,
+ logging,
+ md_tty,
  game_info,
  game_run_context,
  game_mount;
@@ -149,28 +152,6 @@ begin
  inherited;
 end;
 
-procedure re_init_tty; register;
-var
- i:Integer;
-begin
- For i:=0 to High(std_tty) do
- begin
-  //std_tty[i].t_rd_handle:=StdInputHandle;
-  //std_tty[i].t_wr_handle:=t_wr_handle;
-  //std_tty[i].t_update   :=@WakeMainThread;
- end;
-
- For i:=0 to High(deci_tty) do
- begin
-  //deci_tty[i].t_rd_handle:=StdInputHandle;
-  //deci_tty[i].t_wr_handle:=t_wr_handle;
-  //deci_tty[i].t_update   :=@WakeMainThread;
- end;
-
- //debug_tty.t_wr_handle:=t_wr_handle;
- //debug_tty.t_update   :=@WakeMainThread;
-end;
-
 procedure load_config(ConfInfo:TConfigInfo);
 begin
  sys_bootparam.set_neo_mode(ConfInfo.BootParamInfo.Neo);
@@ -248,10 +229,11 @@ var
  Item:TGameItem;
  LoadExec:Boolean;
 begin
- //re_init_tty;
- //init_tty:=@re_init_tty;
 
  load_config(GameStartupInfo.FConfInfo);
+
+ sys_tty.sys_tty_init;
+ md_tty.md_init_tty(GameStartupInfo.FConfInfo.LogInfo.TtyPrefix);
 
  //init all
  sys_init;
@@ -542,6 +524,8 @@ begin
 
  ppid:=md_getppid;
 
+ logging.set_log_filter(GameStartupInfo.FConfInfo.LogInfo.LogFilter);
+
  LOG_INFO('game_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  parent:=md_pidfd_open(ppid);
@@ -665,7 +649,7 @@ begin
  GameStartupInfo.FGameItem:=cfg.FGameItem;
  GameStartupInfo.LoadExec :=cfg.FLoadExec;
 
- GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
+ GameStartupInfo.LocalDir   :=ResolvePath(cfg.FConfInfo.MainInfo.LocalDir);
  GameStartupInfo.Category   :='gd'; //m_type = SCE_LNC_APP_TYPE_BIG_APP;
  GameStartupInfo.APP_VER    :='01.00';
  GameStartupInfo.hasParamSfo:=ord(cfg.FParamSfo<>nil);
@@ -773,6 +757,8 @@ begin
    g_ipc:=s_mgui_ipc;
 
    p_host_ipc:=s_kern_ipc;
+
+   logging.set_log_filter(GameStartupInfo.FConfInfo.LogInfo.LogFilter);
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');

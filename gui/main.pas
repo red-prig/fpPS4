@@ -11,6 +11,8 @@ uses
   LCLType,
   LCLIntf,
 
+  placeholder_fmt,
+
   SynEdit,
   SynGutter,
   SynGutterLineNumber,
@@ -141,13 +143,15 @@ type
     FLogMenu:TPopupMenu;
 
     FLogPollInterval:QWORD;
-    FLogLastPoll:QWORD;
-    FLogFilePos:Int64;
-    FLogPending:RawByteString;
-    FPaused:Boolean;
-    FLineNumbers:Boolean;
-    FLogLineOffset:Integer;
-    FAutoFollow:Boolean;
+    FLogLastPoll    :QWORD;
+    FLogFilePos     :Int64;
+    FLogPending     :RawByteString;
+    FPaused         :Boolean;
+    FLineNumbers    :Boolean;
+    FLogLineOffset  :Integer;
+    FLogLineDigits  :Integer;
+    FAutoFollow     :Boolean;
+    FLogPartial     :Boolean;
 
     FMainButtonsState:TMainButtonsState;
 
@@ -225,7 +229,6 @@ Const
  LogPollBusyThresh = 120;
  LogMaxChunk       = 1 shl 16;
  LogPendingLimit   = LogMaxChunk * 16;
-
 
 
 const
@@ -855,11 +858,27 @@ begin
 end;
 
 procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
+var
+ size:Int64;
 begin
  md_open  (LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FAddHandle);
  md_openat(FAddHandle,'',O_RDWR,0,FGetHandle);
 
  FileSeek(FAddHandle,0,fsFromEnd);
+
+ //
+
+ FLogFilePos:=0;
+ FLogPending:='';
+ FLogPartial:=False;
+
+ size:=FileSeek(FGetHandle,0,fsFromEnd);
+ if (size>LogPendingLimit) then
+ begin
+  FLogFilePos:=((size-LogPendingLimit) div LogMaxChunk)*LogMaxChunk;
+  FLogPartial:=True;
+ end;
+
 end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
@@ -905,7 +924,13 @@ begin
 
  ReadConfigFile;
 
- OpenLog(FConfigInfo.MainInfo.LogFile);
+ //Init Log
+ FLogLastPoll    :=0;
+ FLogPollInterval:=LogPollBase;
+ FPaused         :=False;
+ FAutoFollow     :=True;
+
+ OpenLog(ResolvePath(FConfigInfo.LogInfo.LogFile));
 
  if (Application.Tag<>0) then
  begin
@@ -914,14 +939,6 @@ begin
   ShowMessage(r);
   Halt;
  end;
-
- //Init Log
- FLogFilePos:=0;
- FLogPending:='';
- FLogLastPoll:=0;
- FLogPollInterval:=LogPollBase;
- FPaused:=False;
- FAutoFollow:=True;
 
  CreateLogView;
 
@@ -1203,6 +1220,25 @@ begin
  end;
 end;
 
+function Max(a, b: Integer): Integer; inline;
+begin
+  if a > b then
+    Result := a
+  else
+    Result := b;
+end;
+
+Function GetLineDigits(i:Integer):Integer;
+begin
+ Result:=0;
+
+ repeat
+  Inc(Result);
+  i:=i div 10;
+ until (i=0);
+
+end;
+
 procedure TfrmMain.ClearLog;
 begin
  //reset file
@@ -1210,7 +1246,9 @@ begin
 
  FLogFilePos:=0;
  FLogPending:='';
+
  FLogLineOffset:=0;
+ FLogLineDigits:=GetLineDigits(0);
 
  if (Fmlog<>nil) then
  begin
@@ -1224,7 +1262,8 @@ begin
 end;
 
 procedure TfrmMain.CreateLogView;
-var item:TMenuItem;
+var
+ item:TMenuItem;
 begin
  Fmlog:=TSynEdit.Create(TabLog);
  Fmlog.Parent:=TabLog;
@@ -1235,10 +1274,19 @@ begin
  Fmlog.Font.Style:=[];
  Fmlog.Font.Name:='Courier New';
  Fmlog.Font.Size:=GetRealFontSize(Font) + 2;
+ Fmlog.RightEdge:=-1;
 
  FLineNumbers:=True;
+
  FLogLineOffset:=0;
+ FLogLineDigits:=GetLineDigits(0);
+
+ Fmlog.Gutter.CodeFoldPart.Visible:=False;
+ Fmlog.Gutter.ChangesPart .Visible:=False;
+ Fmlog.Gutter.MarksPart   .Visible:=False;
+
  Fmlog.Gutter.Visible:=True;
+ Fmlog.Gutter.LineNumberPart.AutoSize:=True;
  Fmlog.Gutter.LineNumberPart.OnFormatLineNumber:=@LogFormatLineNumber;
 
  FLogMenu:=TPopupMenu.Create(Self);
@@ -1309,25 +1357,26 @@ begin
  FLogLastPoll:=GetTickCount64;
 
  newsize:=FileSeek(FGetHandle,0,fsFromEnd);
- if newsize<FLogFilePos then FLogFilePos:=0;
+ if (newsize<FLogFilePos) then FLogFilePos:=0;
 
  avail:=newsize-FLogFilePos;
- if avail<=0 then
+ if (avail<=0) then
  begin
-  if FLogPollInterval<LogPollMax then
+  if (FLogPollInterval<LogPollMax) then
   begin
    FLogPollInterval:=FLogPollInterval+20;
   end;
   Exit;
  end;
 
- if avail>LogMaxChunk then avail:=LogMaxChunk;
+ if (avail>LogMaxChunk) then avail:=LogMaxChunk;
 
+ s:='';
  SetLength(s,avail);
  FileSeek(FGetHandle,FLogFilePos,fsFromBeginning);
  nread:=FileRead(FGetHandle,s[1],Length(s));
  FLogFilePos:=FLogFilePos+nread;
- if nread<=0 then Exit;
+ if (nread<=0) then Exit;
  SetLength(s,nread);
 
  oldCount:=Fmlog.Lines.Count;
@@ -1335,10 +1384,12 @@ begin
  Fmlog.Lines.BeginUpdate;
  try
   added:=AppendLog(s);
-  if Fmlog.Lines.Count>LogMaxLines then
+  if (Fmlog.Lines.Count>LogMaxLines) then
   begin
    EnforceLogLimit;
   end;
+  FLogLineDigits:=GetLineDigits(FLogLineOffset+Fmlog.Lines.Count);
+  Fmlog.Gutter.LineNumberPart.DigitCount:=Max(FLogLineDigits+ord(FLogPartial)*3,2);
  finally
   Fmlog.Lines.EndUpdate;
  end;
@@ -1455,7 +1506,7 @@ end;
 procedure TfrmMain.EnforceLogLimit;
 begin
  if (Fmlog=nil) then Exit;
- if Fmlog.Lines.Count<=LogMaxLines then Exit;
+ if (Fmlog.Lines.Count<=LogMaxLines) then Exit;
 
  Fmlog.Lines.BeginUpdate;
  try
@@ -1515,6 +1566,10 @@ procedure TfrmMain.LogFormatLineNumber(Sender: TSynGutterLineNumber; ALine: Inte
                                         const ALineInfo: TSynEditGutterLineInfo);
 begin
  AText:=IntToStr(ALine + FLogLineOffset);
+ if FLogPartial then
+ begin
+  AText:='...'+AText;
+ end;
 end;
 
 procedure TfrmMain.DoLogFollowClick(Sender: TObject);

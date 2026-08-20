@@ -24,6 +24,13 @@ type
   procedure build(const placeholder:RawByteString;values:p_placeholder_value;count:Integer);
  end;
 
+type
+ t_resolve_values_cb=function(const name:RawByteString;userdata:Pointer):RawByteString;
+
+function GetPathValues(const name:RawByteString;userdata:Pointer):RawByteString;
+Function ResolvePlaceholder(const placeholder:RawByteString;values:t_resolve_values_cb;userdata:Pointer):RawByteString;
+Function ResolvePath(const placeholder:RawByteString):RawByteString;
+
 implementation
 
 procedure t_fmt_builder.build(const placeholder:RawByteString;values:p_placeholder_value;count:Integer);
@@ -38,7 +45,7 @@ var
 
   if (name='') then
   begin
-   fmt:=fmt+'%';
+   fmt:=fmt+'%%';
   end else
   begin
    name:=Trim(name);
@@ -103,5 +110,87 @@ begin
 
 end;
 
+////
+
+function GetPathValues(const name:RawByteString;userdata:Pointer):RawByteString;
+begin
+ Result:='';
+ case name of
+  'Cd'             :Result:=GetCurrentDir;
+  'TempDir'        :Result:=GetTempDir;
+  'TempFileName'   :Result:=GetTempFileName;
+  'AppConfigDir'   :Result:=GetAppConfigDir(False);
+  'UserDir'        :Result:=GetUserDir;
+  'ApplicationName':Result:=ApplicationName;
+  else
+                    Result:=GetEnvironmentVariable(name);
+ end;
+end;
+
+Function ResolvePlaceholder(const placeholder:RawByteString;values:t_resolve_values_cb;userdata:Pointer):RawByteString;
+var
+ i,state:Integer;
+ name:RawByteString;
+
+ procedure Add;
+ begin
+  name:=Trim(name);
+  Result:=Result+values(name,userdata);
+ end;
+
+begin
+ Result:='';
+ //
+ if (Length(placeholder)=0) then Exit;
+ //
+ state:=0;
+ name:='';
+
+ For i:=1 to Length(placeholder) do
+ begin
+
+  if (state=0) then
+  begin
+
+   if (placeholder[i]='%') then
+   begin
+    state:=1;
+   end else
+   begin
+    Result:=Result+placeholder[i];
+   end;
+
+  end else
+  begin
+
+   if (placeholder[i]='%') then
+   begin
+    Add;
+    name:='';
+    state:=0;
+   end else
+   begin
+    name:=name+placeholder[i];
+   end;
+
+  end;
+
+ end; //for
+
+ if (state=1) then
+ begin
+  Add;
+ end;
+
+end;
+
+Function ResolvePath(const placeholder:RawByteString):RawByteString;
+begin
+ Result:=ResolvePlaceholder(placeholder,@GetPathValues,nil);
+end;
+
+
+
 end.
+
 

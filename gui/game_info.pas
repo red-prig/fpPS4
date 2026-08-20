@@ -12,6 +12,19 @@ uses
 type
  TSerializeStringArray=core_serialization.TSerializeStringArray;
 
+ TLogInfo=class(TSerializeObject)
+ private
+  FLogFile  :RawByteString;
+  FLogFilter:RawByteString;
+  FTtyPrefix:RawByteString;
+ published
+  property LogFile  :RawByteString read FLogFile   write FLogFile;
+  property LogFilter:RawByteString read FLogFilter write FLogFilter;
+  property TtyPrefix:RawByteString read FTtyPrefix write FTtyPrefix;
+ public
+  Constructor Create; override;
+ end;
+
  TBootParamInfo=class(TSerializeObject)
  private
   FNeo                :Boolean;
@@ -50,11 +63,11 @@ type
 
  TMainInfo=class(TSerializeObject)
  private
-  FLogFile        :RawByteString;
+  FLocalDir       :RawByteString;
   FDefaultFirmware:RawByteString;
   FFirmwareList   :TSerializeStringArray;
  published
-  property LogFile        :RawByteString         read FLogFile         write FLogFile;
+  property LocalDir       :RawByteString         read FLocalDir        write FLocalDir;
   property DefaultFirmware:RawByteString         read FDefaultFirmware write FDefaultFirmware;
   property FirmwareList   :TSerializeStringArray read FFirmwareList    write FFirmwareList;
  public
@@ -127,6 +140,7 @@ type
  TConfigInfo=class(TSerializeObject)
   private
    FMainInfo        :TMainInfo;
+   FLogInfo         :TLogInfo;
    FBootParamInfo   :TBootParamInfo;
    FJITInfo         :TJITInfo;
    FMiscInfo        :TMiscInfo;
@@ -135,6 +149,7 @@ type
    FPS4Audio        :TPS4Audio;
   published
    property MainInfo        :TMainInfo         read FMainInfo         write FMainInfo;
+   property LogInfo         :TLogInfo          read FLogInfo          write FLogInfo;
    property BootParamInfo   :TBootParamInfo    read FBootParamInfo    write FBootParamInfo;
    property JITInfo         :TJITInfo          read FJITInfo          write FJITInfo;
    property MiscInfo        :TMiscInfo         read FMiscInfo         write FMiscInfo;
@@ -236,6 +251,13 @@ implementation
 
 //
 
+Constructor TLogInfo.Create;
+begin
+ inherited;
+ FLogFile  :='log.txt';
+ FTtyPrefix:='%td_name%>:';
+end;
+
 Constructor TJITInfo.Create;
 begin
  inherited;
@@ -247,7 +269,7 @@ end;
 Constructor TMainInfo.Create;
 begin
  inherited;
- FLogFile        :='log.txt';
+ FLocalDir       :='%AppConfigDir%';
  FDefaultFirmware:=DirectorySeparator+'firmware';
 end;
 

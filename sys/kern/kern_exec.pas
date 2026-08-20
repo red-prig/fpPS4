@@ -1485,7 +1485,7 @@ begin
  Exit(0);
 end;
 
-procedure init_tty; //TODO before execve
+procedure kern_init_tty; //TODO before execve
 begin
  kern_openat(STDIN_FILENO ,'/dev/deci_stdin' ,UIO_SYSSPACE,O_RDWR,0);
  kern_openat(STDOUT_FILENO,'/dev/deci_stdout',UIO_SYSSPACE,O_RDWR,0);
@@ -1756,7 +1756,7 @@ begin
  end;
 
  //init std tty (TODO before execve)
- init_tty;
+ kern_init_tty;
 
  {
   * Free any resources malloc'd earlier that we didn't use.
