@@ -11,12 +11,9 @@ uses
   LCLType,
   LCLIntf,
 
-  g_bufstream,
-  LineStream,
-  synlog,
-  SynEditLineStream,
-  LazSynEditText,
-  SynEditMarkupBracket,
+  SynEdit,
+  SynGutter,
+  SynGutterLineNumber,
 
   TypInfo,
   jsonscanner,
@@ -140,12 +137,17 @@ type
     FAddHandle:THandle;
     FGetHandle:THandle;
 
-    FFile:TStream;
-    FList:TSynEditLineStream;
+    Fmlog:TSynEdit;
+    FLogMenu:TPopupMenu;
 
-    Fmlog:TCustomSynLog;
-
-    FLogUpdateTime:QWORD;
+    FLogPollInterval:QWORD;
+    FLogLastPoll:QWORD;
+    FLogFilePos:Int64;
+    FLogPending:RawByteString;
+    FPaused:Boolean;
+    FLineNumbers:Boolean;
+    FLogLineOffset:Integer;
+    FAutoFollow:Boolean;
 
     FMainButtonsState:TMainButtonsState;
 
@@ -166,8 +168,27 @@ type
     procedure DoAdd(Sender: TObject);
     procedure DoEdit(Sender: TObject);
     procedure DoConfigSave(Sender: TObject);
+    procedure LogStart;
     procedure LogEnd;
     procedure ClearLog;
+
+    procedure CreateLogView;
+    procedure PollLog;
+    function  AppendLog(Const AText:RawByteString):Integer;
+    procedure EnforceLogLimit;
+
+    procedure DoLogCopyClick   (Sender: TObject);
+    procedure DoLogCopyAllClick(Sender: TObject);
+    procedure DoLogClearClick  (Sender: TObject);
+    procedure DoLogPauseClick  (Sender: TObject);
+    procedure DoLogFrontClick  (Sender: TObject);
+    procedure DoLogLinesClick  (Sender: TObject);
+    procedure DoLogFollowClick (Sender: TObject);
+
+    procedure LogFormatLineNumber(Sender: TSynGutterLineNumber; ALine: Integer;
+                                  out AText: string;
+                                  const ALineInfo: TSynEditGutterLineInfo);
+
     function  GameProcessForked:Boolean;
     procedure SetButtonsState(s:TMainButtonsState);
   end;
@@ -197,28 +218,15 @@ Const
  fpps4File   ='fpps4.json';
  GameListFile='GameList.json';
 
-type
- TMySynLog=class(TCustomSynLog)
-  Form:TfrmMain;
-  constructor Create(AOwner: TComponent; AForm:TfrmMain);
-  function    LinesCreate:TSynEditStringListBase; override;
- end;
+ LogMaxLines       = 5000;
+ LogPollBase       = 100;
+ LogPollMin        = 25;
+ LogPollMax        = 400;
+ LogPollBusyThresh = 120;
+ LogMaxChunk       = 1 shl 16;
+ LogPendingLimit   = LogMaxChunk * 16;
 
-constructor TMySynLog.Create(AOwner: TComponent; AForm:TfrmMain);
-begin
- Form:=AForm;
- inherited Create(AOwner);
-end;
 
-function TMySynLog.LinesCreate:TSynEditStringListBase;
-begin
- Form.FList:=TSynEditLineStream.Create;
-
- Form.FList.FSynLog:=Self;
- Form.FList.FStream:=TLineStream.Create(Form.FFile);
-
- Result:=Form.FList;
-end;
 
 const
  MsgDlgBtnToStr: array[TMsgDlgBtn] of PChar = (
@@ -907,18 +915,15 @@ begin
   Halt;
  end;
 
- FFile:=TBufferedFileStream.Create(FGetHandle);
+ //Init Log
+ FLogFilePos:=0;
+ FLogPending:='';
+ FLogLastPoll:=0;
+ FLogPollInterval:=LogPollBase;
+ FPaused:=False;
+ FAutoFollow:=True;
 
- Fmlog:=TMySynLog.Create(TabLog,Self);
- Fmlog.Parent:=TabLog;
-
- Fmlog.Align:=alClient;
-
- Fmlog.BracketHighlightStyle:=sbhsBoth;
-
- Fmlog.Font.Style:=[];
- Fmlog.Font.Name:='Courier New';
- Fmlog.Font.Size:=GetRealFontSize(Font) + 2;
+ CreateLogView;
 
  Pages.ActivePageIndex:=0;
 
@@ -1042,14 +1047,7 @@ var
 begin
  Done:=True;
 
- if (GetTickCount64-FLogUpdateTime)>100 then
- begin
-  if (FList<>nil) then
-  begin
-   FList.Update;
-  end;
-  FLogUpdateTime:=GetTickCount64;
- end;
+ PollLog;
 
 
 
@@ -1189,17 +1187,179 @@ begin
  FreeAndNil(M);
 end;
 
+procedure TfrmMain.LogStart;
+begin
+ if (Fmlog<>nil) then
+ begin
+  Fmlog.TopLine:=0;
+ end;
+end;
+
 procedure TfrmMain.LogEnd;
 begin
- Fmlog.TopLine:=Fmlog.Lines.Count;
+ if (Fmlog<>nil) then
+ begin
+  Fmlog.TopLine:=Fmlog.Lines.Count;
+ end;
 end;
 
 procedure TfrmMain.ClearLog;
 begin
  //reset file
  FileTruncate(FGetHandle,0);
- FList.Reset(True);
- //
+
+ FLogFilePos:=0;
+ FLogPending:='';
+ FLogLineOffset:=0;
+
+ if (Fmlog<>nil) then
+ begin
+  Fmlog.Lines.BeginUpdate;
+  try
+   Fmlog.Lines.Clear;
+  finally
+   Fmlog.Lines.EndUpdate;
+  end;
+ end;
+end;
+
+procedure TfrmMain.CreateLogView;
+var item:TMenuItem;
+begin
+ Fmlog:=TSynEdit.Create(TabLog);
+ Fmlog.Parent:=TabLog;
+ Fmlog.Align:=alClient;
+
+ Fmlog.ReadOnly:=True;
+ Fmlog.ScrollBars:=ssBoth;
+ Fmlog.Font.Style:=[];
+ Fmlog.Font.Name:='Courier New';
+ Fmlog.Font.Size:=GetRealFontSize(Font) + 2;
+
+ FLineNumbers:=True;
+ FLogLineOffset:=0;
+ Fmlog.Gutter.Visible:=True;
+ Fmlog.Gutter.LineNumberPart.OnFormatLineNumber:=@LogFormatLineNumber;
+
+ FLogMenu:=TPopupMenu.Create(Self);
+ Fmlog.PopupMenu:=FLogMenu;
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='&Copy';
+ item.OnClick:=@DoLogCopyClick;
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='Copy &all';
+ item.OnClick:=@DoLogCopyAllClick;
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='Scroll to &front';
+ item.OnClick:=@DoLogFrontClick;
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='-';
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='&Pause updates';
+ item.OnClick:=@DoLogPauseClick;
+ FLogMenu.Items.Add(item);
+ FPaused:=False;
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='Follow &tail';
+ item.OnClick:=@DoLogFollowClick;
+ FLogMenu.Items.Add(item);
+ item.Checked:=FAutoFollow;
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='-';
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='Show &line numbers';
+ item.OnClick:=@DoLogLinesClick;
+ FLogMenu.Items.Add(item);
+ item.Checked:=True;
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='-';
+ FLogMenu.Items.Add(item);
+
+ item:=TMenuItem.Create(FLogMenu);
+ item.Caption:='C&lear log';
+ item.OnClick:=@DoLogClearClick;
+ FLogMenu.Items.Add(item);
+end;
+
+procedure TfrmMain.PollLog;
+var
+ newsize,avail:Int64;
+ nread:Longint;
+ s:RawByteString;
+ oldCount,added:Integer;
+begin
+ if (Fmlog=nil) then Exit;
+ if FPaused then Exit;
+
+ if (GetTickCount64-FLogLastPoll)<FLogPollInterval then Exit;
+ FLogLastPoll:=GetTickCount64;
+
+ newsize:=FileSeek(FGetHandle,0,fsFromEnd);
+ if newsize<FLogFilePos then FLogFilePos:=0;
+
+ avail:=newsize-FLogFilePos;
+ if avail<=0 then
+ begin
+  if FLogPollInterval<LogPollMax then
+  begin
+   FLogPollInterval:=FLogPollInterval+20;
+  end;
+  Exit;
+ end;
+
+ if avail>LogMaxChunk then avail:=LogMaxChunk;
+
+ SetLength(s,avail);
+ FileSeek(FGetHandle,FLogFilePos,fsFromBeginning);
+ nread:=FileRead(FGetHandle,s[1],Length(s));
+ FLogFilePos:=FLogFilePos+nread;
+ if nread<=0 then Exit;
+ SetLength(s,nread);
+
+ oldCount:=Fmlog.Lines.Count;
+
+ Fmlog.Lines.BeginUpdate;
+ try
+  added:=AppendLog(s);
+  if Fmlog.Lines.Count>LogMaxLines then
+  begin
+   EnforceLogLimit;
+  end;
+ finally
+  Fmlog.Lines.EndUpdate;
+ end;
+
+ if (added>=LogPollBusyThresh) then
+  FLogPollInterval:=LogPollMin
+ else
+ if (added>0) then
+  FLogPollInterval:=LogPollBase
+ else
+ if (FLogPollInterval<LogPollMax) then
+  FLogPollInterval:=FLogPollInterval+20;
+
+ if FAutoFollow then
+ begin
+  Fmlog.TopLine:=Fmlog.Lines.Count
+ end else
+ if ((Fmlog.TopLine+Fmlog.LinesInWindow)>=(oldCount-3)) then
+ begin
+  Fmlog.TopLine:=Fmlog.Lines.Count;
+ end;
 end;
 
 procedure TfrmMain.MIShowExplorerClick(Sender: TObject);
@@ -1226,6 +1386,146 @@ begin
  end;
 
  OpenDocument(S);
+end;
+
+function TfrmMain.AppendLog(Const AText:RawByteString):Integer;
+var
+ line:RawByteString;
+ lineStart,p,L:Integer;
+ ch:AnsiChar;
+begin
+ Result:=0;
+ if Length(AText)<=0 then Exit;
+
+ if (Length(FLogPending)>LogPendingLimit) then
+ begin
+  Fmlog.Lines.Add(String(FLogPending));
+  FLogPending:='';
+  Result:=1;
+ end;
+
+ FLogPending:=FLogPending+AText;
+
+ L:=Length(FLogPending);
+ lineStart:=1;
+
+ while lineStart<=L do
+ begin
+  p:=lineStart;
+  while p<=L do
+  begin
+   ch:=FLogPending[p];
+   if (ch=#10) or (ch=#13) then break;
+   Inc(p);
+  end;
+
+  if p>L then
+  begin
+   if (lineStart>1) then
+   begin
+    line:=Copy(FLogPending,lineStart,L-lineStart+1);
+    FLogPending:=line;
+   end;
+   Exit(Result);
+  end;
+
+  if (p>lineStart) then
+  begin
+   line:=Copy(FLogPending,lineStart,p-lineStart);
+  end else
+  begin
+   line:='';
+  end;
+  Fmlog.Lines.Add(String(line));
+  Inc(Result);
+
+  lineStart:=p;
+  if (lineStart<=L) then
+  begin
+   Inc(lineStart);
+   if (lineStart<=L) and
+      (FLogPending[lineStart-1]=#13) and
+      (FLogPending[lineStart]=#10) then Inc(lineStart);
+  end;
+ end;
+
+ FLogPending:='';
+end;
+
+procedure TfrmMain.EnforceLogLimit;
+begin
+ if (Fmlog=nil) then Exit;
+ if Fmlog.Lines.Count<=LogMaxLines then Exit;
+
+ Fmlog.Lines.BeginUpdate;
+ try
+  while (Fmlog.Lines.Count>LogMaxLines) do
+  begin
+   Fmlog.Lines.Delete(0);
+   Inc(FLogLineOffset);
+  end;
+ finally
+  Fmlog.Lines.EndUpdate;
+ end;
+end;
+
+procedure TfrmMain.DoLogCopyClick(Sender: TObject);
+begin
+ if (Fmlog<>nil) and (Fmlog.SelText<>'') then
+  Fmlog.CopyToClipboard;
+end;
+
+procedure TfrmMain.DoLogCopyAllClick(Sender: TObject);
+begin
+ if (Fmlog=nil) then Exit;
+ Fmlog.SelectAll;
+ Fmlog.CopyToClipboard;
+end;
+
+procedure TfrmMain.DoLogClearClick(Sender: TObject);
+begin
+ ClearLog;
+end;
+
+procedure TfrmMain.DoLogPauseClick(Sender: TObject);
+begin
+ FPaused:=not FPaused;
+ if (Sender is TMenuItem) then
+  TMenuItem(Sender).Checked:=FPaused;
+end;
+
+procedure TfrmMain.DoLogFrontClick(Sender: TObject);
+begin
+ LogStart;
+end;
+
+procedure TfrmMain.DoLogLinesClick(Sender: TObject);
+begin
+ if (Fmlog=nil) then Exit;
+
+ FLineNumbers:=not FLineNumbers;
+ Fmlog.Gutter.Visible:=FLineNumbers;
+
+ if (Sender is TMenuItem) then
+  TMenuItem(Sender).Checked:=FLineNumbers;
+end;
+
+procedure TfrmMain.LogFormatLineNumber(Sender: TSynGutterLineNumber; ALine: Integer;
+                                        out AText: string;
+                                        const ALineInfo: TSynEditGutterLineInfo);
+begin
+ AText:=IntToStr(ALine + FLogLineOffset);
+end;
+
+procedure TfrmMain.DoLogFollowClick(Sender: TObject);
+begin
+ FAutoFollow:=not FAutoFollow;
+
+ if FAutoFollow then
+  LogEnd;
+
+ if (Sender is TMenuItem) then
+  TMenuItem(Sender).Checked:=FAutoFollow;
 end;
 
 procedure TfrmMain.MIRunClick(Sender: TObject);

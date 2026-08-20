@@ -101,27 +101,8 @@
         <ResourceBaseClass Value="Form"/>
       </Unit>
       <Unit>
-        <Filename Value="gui\synlog.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="SynLog"/>
-      </Unit>
-      <Unit>
         <Filename Value="gui\game_info.pas"/>
         <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="gui\g_bufstream.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
-        <Filename Value="gui\linestream.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="LineStream"/>
-      </Unit>
-      <Unit>
-        <Filename Value="gui\syneditlinestream.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="SynEditLineStream"/>
       </Unit>
       <Unit>
         <Filename Value="gui\game_run.pas"/>
