@@ -73,6 +73,8 @@ type
     Edt_JITInfo_scan_switchtable: TCheckBox;
     Edt_LogInfo_LogFilter: TEdit;
     Edt_LogInfo_TtyPrefix: TEdit;
+    Edt_LogInfo_TtyRedirect: TEdit;
+
     Edt_MainInfo_DefaultFirmware: TComboBox;
     Edt_MainInfo_LocalDir: TEdit;
     Edt_LogInfo_LogFile: TEdit;

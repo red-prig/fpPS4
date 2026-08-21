@@ -15,7 +15,7 @@ uses
  sys_tty,
  kern_mtx,
  subr_msgbuf,
- placeholder_fmt;
+ md_file;
 
 const
  TTY_STACKBUF=256;
@@ -39,18 +39,7 @@ function md_tty_write_poll(tp:p_tty;priv:p_priv_tty):QWORD;
 function md_tty_read (tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 function md_tty_write(tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 
-const
- tty_prefix_values:array[0..3] of t_placeholder_value=(
-  (id:0;maxsize: 9;name:'tty_name';fmt:'%0:s'),
-  (id:1;maxsize:31;name:'td_name' ;fmt:'%1:s'),
-  (id:2;maxsize: 7;name:'td_tid'  ;fmt:'%2:d'),
-  (id:3;maxsize:10;name:'fib_addr';fmt:'%3:10.10x')
- );
-
-var
- tty_prefix:t_fmt_builder;
-
-procedure md_init_tty(const placeholder:RawByteString);
+procedure md_init_tty;
 
 implementation
 
@@ -212,6 +201,30 @@ end;
 
 //  if (td^.td_name='SceVideoOutServiceThread') then exit;
 
+procedure uio_drain(uio:p_uio);
+var
+ iov:p_iovec;
+ cnt:QWORD;
+begin
+ while (uio^.uio_resid > 0) do
+ begin
+  iov:=uio^.uio_iov;
+  cnt:=iov^.iov_len;
+
+  if (cnt=0) then
+  begin
+   Inc(uio^.uio_iov);
+   Dec(uio^.uio_iovcnt);
+   continue;
+  end;
+
+  Inc(iov^.iov_base  ,cnt);
+  Dec(iov^.iov_len   ,cnt);
+  Dec(uio^.uio_resid ,cnt);
+  Inc(uio^.uio_offset,cnt);
+ end;
+end;
+
 function md_tty_write(tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 var
  BLK   :IO_STATUS_BLOCK;
@@ -232,6 +245,12 @@ begin
  Result:=0;
 
  if (priv=nil) then Exit;
+
+ if (priv^.wr_handle=INVALID_HANDLE_VALUE) then
+ begin
+  uio_drain(uio);
+  Exit;
+ end;
 
  _td_name :='';
  _td_tid  :=0;
@@ -320,31 +339,40 @@ begin
  msgbuf_init(@Result^.wr_msgbuf, Result+1, MSGBUF_SIZE);
 end;
 
-procedure md_init_tty(const placeholder:RawByteString);
+procedure md_init_tty;
 var
  i:Integer;
 
- p_output:p_priv_tty;
- p_error :p_priv_tty;
+ priv:p_priv_tty;
+ wr_handle:THandle;
 begin
- tty_prefix.build(placeholder,@tty_prefix_values,Length(tty_prefix_values));
+ For i:=0 to High(tty_init_array) do
+ with tty_init_array[i].tp^ do
+  if (t_target<>nil) then
+  begin
+   priv:=t_target^.priv;
+   //
+   if (priv=nil) then
+   begin
 
- p_output:=md_tty_new(StdInputHandle,StdOutputHandle);
- p_error :=md_tty_new(StdInputHandle,StdErrorHandle);
+    case LowerCase(RawByteString(t_target^.target)) of
+     'null'  :wr_handle:=INVALID_HANDLE_VALUE;
+     'stdin' :wr_handle:=StdInputHandle;
+     'stdout':wr_handle:=StdOutputHandle;
+     'stderr':wr_handle:=StdErrorHandle;
+     else
+              begin
+               wr_handle:=INVALID_HANDLE_VALUE;
+               md_open(t_target^.target,O_WRONLY or O_CREAT or O_APPEND,&0777,wr_handle);
+              end;
+    end;
 
- For i:=0 to High(std_tty) do
- begin
-  std_tty[i].priv:=p_output;
- end;
- For i:=0 to High(deci_tty) do
- begin
-  deci_tty[i].priv:=p_output;
- end;
-
- std_tty [2].priv:=p_error;
- deci_tty[2].priv:=p_error;
-
- debug_tty.priv:=p_output;
+    priv:=md_tty_new(StdInputHandle,wr_handle);
+    t_target^.priv:=priv;
+   end;
+   //
+   t_priv:=priv;
+  end;
 end;
 
 initialization

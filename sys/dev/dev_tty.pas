@@ -60,7 +60,7 @@ var
 begin
  tp:=dev^.si_drv1;
 
- error:=md_tty_read(tp, tp^.priv, uio, ioflag);
+ error:=md_tty_read(tp, tp^.t_priv, uio, ioflag);
 
  if (error=ENXIO) then error:=0;
  Exit(error);
@@ -73,7 +73,7 @@ var
 begin
  tp:=dev^.si_drv1;
 
- error:=md_tty_write(tp, tp^.priv, uio, ioflag);
+ error:=md_tty_write(tp, tp^.t_priv, uio, ioflag);
 
  Exit(error);
 end;
@@ -137,7 +137,7 @@ begin
  if ((events and (POLLIN or POLLRDNORM))<>0) then
  begin
   { See if we can read something. }
-  if (md_tty_read_poll(tp, tp^.priv) > 0) then
+  if (md_tty_read_poll(tp, tp^.t_priv) > 0) then
   begin
    revents:=revents or events and (POLLIN or POLLRDNORM);
   end;
@@ -151,7 +151,7 @@ begin
  if ((events and (POLLOUT or POLLWRNORM))<>0) then
  begin
   { See if we can write something. }
-  if (md_tty_write_poll(tp, tp^.priv) > 0) then
+  if (md_tty_write_poll(tp, tp^.t_priv) > 0) then
   begin
    revents:=revents or events and (POLLOUT or POLLWRNORM);
   end;
@@ -213,7 +213,7 @@ begin
  // Exit(1);
  //end else
  begin
-  kn^.kn_data:=md_tty_read_poll(tp, tp^.priv);
+  kn^.kn_data:=md_tty_read_poll(tp, tp^.t_priv);
   Exit(ord(kn^.kn_data > 0));
  end;
 end;
@@ -241,7 +241,7 @@ begin
  // Exit(1);
  //end else
  begin
-  kn^.kn_data:=md_tty_write_poll(tp, tp^.priv);
+  kn^.kn_data:=md_tty_write_poll(tp, tp^.t_priv);
   Exit(ord(kn^.kn_data > 0));
  end;
 end;

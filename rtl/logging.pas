@@ -18,6 +18,8 @@ procedure set_log_filter(const log_filter:RawByteString);
 //LOG_ERROR
 //LOG_CRITICAL
 
+function IsWild(i,w:PChar;max:DWORD):Boolean;
+
 implementation
 
 uses

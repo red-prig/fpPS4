@@ -232,8 +232,8 @@ begin
 
  load_config(GameStartupInfo.FConfInfo);
 
- sys_tty.sys_tty_init;
- md_tty.md_init_tty(GameStartupInfo.FConfInfo.LogInfo.TtyPrefix);
+ sys_tty.sys_tty_init(GameStartupInfo.FConfInfo.LogInfo.TtyPrefix,GameStartupInfo.FConfInfo.LogInfo.TtyRedirect);
+ md_tty.md_init_tty;
 
  //init all
  sys_init;

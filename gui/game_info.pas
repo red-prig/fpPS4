@@ -14,13 +14,15 @@ type
 
  TLogInfo=class(TSerializeObject)
  private
-  FLogFile  :RawByteString;
-  FLogFilter:RawByteString;
-  FTtyPrefix:RawByteString;
+  FLogFile    :RawByteString;
+  FLogFilter  :RawByteString;
+  FTtyPrefix  :RawByteString;
+  FTtyRedirect:RawByteString;
  published
-  property LogFile  :RawByteString read FLogFile   write FLogFile;
-  property LogFilter:RawByteString read FLogFilter write FLogFilter;
-  property TtyPrefix:RawByteString read FTtyPrefix write FTtyPrefix;
+  property LogFile    :RawByteString read FLogFile     write FLogFile;
+  property LogFilter  :RawByteString read FLogFilter   write FLogFilter;
+  property TtyPrefix  :RawByteString read FTtyPrefix   write FTtyPrefix;
+  property TtyRedirect:RawByteString read FTtyRedirect write FTtyRedirect;
  public
   Constructor Create; override;
  end;
@@ -254,9 +256,11 @@ implementation
 Constructor TLogInfo.Create;
 begin
  inherited;
- FLogFile  :='log.txt';
- FTtyPrefix:='%td_name%>:';
+ FLogFile    :='log.txt';
+ FTtyPrefix  :='%td_name%>:';
+ FTtyRedirect:='*:log.txt';
 end;
+
 
 Constructor TJITInfo.Create;
 begin

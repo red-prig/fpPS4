@@ -1,7 +1,7 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 711
+  Left = 534
   Height = 339
-  Top = 100
+  Top = 84
   Width = 459
   Caption = 'Config Editor'
   ClientHeight = 339
@@ -18,14 +18,14 @@ object frmCfgEditor: TfrmCfgEditor
     Height = 289
     Top = 5
     Width = 449
-    ActivePage = Tab_MainInfo
+    ActivePage = Tab_LogInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Left = 5
     BorderSpacing.Top = 5
     BorderSpacing.Right = 5
     BorderSpacing.Bottom = 10
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
@@ -357,6 +357,38 @@ object frmCfgEditor: TfrmCfgEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         TabOrder = 3
+      end
+      object Label17: TLabel
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Edt_LogInfo_TtyPrefix
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Top = 184
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Tty redirect (mask:target; ...):'
+      end
+      object Edt_LogInfo_TtyRedirect: TEdit
+        AnchorSideLeft.Control = Tab_LogInfo
+        AnchorSideTop.Control = Label17
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = Tab_LogInfo
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Top = 209
+        Width = 421
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        TabOrder = 4
       end
     end
     object Tab_BootparamInfo: TTabSheet

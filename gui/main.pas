@@ -1250,6 +1250,8 @@ begin
  FLogLineOffset:=0;
  FLogLineDigits:=GetLineDigits(0);
 
+ FLogPartial:=False;
+
  if (Fmlog<>nil) then
  begin
   Fmlog.Lines.BeginUpdate;
