@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 319
+  Left = 407
   Height = 311
-  Top = 114
+  Top = 116
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
@@ -15,11 +15,11 @@ object frmGameEditor: TfrmGameEditor
     Height = 266
     Top = 0
     Width = 467
-    ActivePage = TabMain
+    ActivePage = TabFolders
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
@@ -32,6 +32,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 15
+        Hint = 'Display name of the game.'
         Top = 10
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -39,6 +40,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Name:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_GameInfo_Name: TEdit
         AnchorSideLeft.Control = TabMain
@@ -48,6 +51,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 23
+        Hint = 'Display name of the game'
         Top = 35
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -55,6 +59,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         MaxLength = 65
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 0
       end
       object Label2: TLabel
@@ -65,13 +71,16 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 15
+        Hint = 'Unique game identifier (from param.sfo). Read-only.'
         Top = 68
         Width = 439
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
-        Caption = 'TitleId:'
+        Caption = 'Title ID:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_GameInfo_TitleId: TEdit
         AnchorSideLeft.Control = TabMain
@@ -81,6 +90,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 23
+        Hint = 'Unique game identifier (from param.sfo), read-only'
         Top = 93
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -88,7 +98,9 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         MaxLength = 65
+        ParentShowHint = False
         ReadOnly = True
+        ShowHint = True
         TabOrder = 1
       end
       object Label3: TLabel
@@ -98,6 +110,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = PanelHalf
         Left = 10
         Height = 15
+        Hint = 'Master version of the game (from param.sfo). Read-only.'
         Top = 126
         Width = 203
         Anchors = [akTop, akLeft, akRight]
@@ -105,6 +118,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Master version:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_GameInfo_Version: TEdit
         AnchorSideLeft.Control = TabMain
@@ -113,6 +128,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = PanelHalf
         Left = 10
         Height = 23
+        Hint = 'Master version of the game, read-only'
         Top = 151
         Width = 203
         Anchors = [akTop, akLeft, akRight]
@@ -120,7 +136,9 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         MaxLength = 65
+        ParentShowHint = False
         ReadOnly = True
+        ShowHint = True
         TabOrder = 2
       end
       object Label4: TLabel
@@ -131,6 +149,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 15
+        Hint = 'Command line used to launch the game executable.'
         Top = 184
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -138,6 +157,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Exec command:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_GameInfo_Exec: TEdit
         AnchorSideLeft.Control = TabMain
@@ -147,6 +168,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 23
+        Hint = 'Command line used to launch the game executable'
         Top = 209
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -154,6 +176,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         MaxLength = 4096
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 5
       end
       object PanelHalf: TPanel
@@ -178,6 +202,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 245
         Height = 15
+        Hint = 'Application version of the game (from param.sfo). Read-only.'
         Top = 126
         Width = 204
         Anchors = [akTop, akLeft, akRight]
@@ -185,6 +210,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Application version:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_GameInfo_AppVer: TEdit
         AnchorSideLeft.Control = PanelHalf
@@ -195,6 +222,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 245
         Height = 23
+        Hint = 'Application version of the game, read-only'
         Top = 151
         Width = 204
         Anchors = [akTop, akLeft, akRight]
@@ -202,7 +230,9 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         MaxLength = 65
+        ParentShowHint = False
         ReadOnly = True
+        ShowHint = True
         TabOrder = 3
       end
     end
@@ -217,6 +247,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 10
         Height = 15
+        Hint = 'Path to the game folder/package.'
         Top = 10
         Width = 439
         Anchors = [akTop, akLeft, akRight]
@@ -224,6 +255,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Game:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_MountList_game: TEdit
         AnchorSideLeft.Control = TabFolders
@@ -232,11 +265,14 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = BtnExpGame
         Left = 10
         Height = 23
+        Hint = 'Path to the game folder/package'
         Top = 35
         Width = 408
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 0
         OnExit = Edt_MountList_gameExit
       end
@@ -248,6 +284,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Side = asrBottom
         Left = 382
         Height = 21
+        Hint = 'Browse for the game folder/package'
         Top = 36
         Width = 35
         Anchors = [akTop, akRight, akBottom]
@@ -256,6 +293,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Right = 1
         BorderSpacing.Bottom = 1
         Caption = '...'
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 1
         OnClick = BtnGameOpenClick
       end
@@ -268,6 +307,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Side = asrCenter
         Left = 423
         Height = 26
+        Hint = 'Open the game folder'
         Top = 33
         Width = 26
         Anchors = [akTop, akRight]
@@ -276,6 +316,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Right = 10
         Images = frmMain.SmallImageList
         ImageIndex = 0
+        ShowHint = True
+        ParentShowHint = False
         OnClick = BtnExpGameClick
       end
       object Label6: TLabel
@@ -284,6 +326,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         Left = 8
         Height = 15
+        Hint = 'PS4 firmware version used by this game.'
         Top = 68
         Width = 451
         Anchors = [akTop, akLeft, akRight]
@@ -291,6 +334,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Top = 10
         BorderSpacing.Right = 10
         Caption = 'Firmware:'
+        ParentShowHint = False
+        ShowHint = True
       end
       object Edt_MountList_firmware: TComboBox
         AnchorSideLeft.Control = TabFolders
@@ -299,12 +344,15 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Control = BtnExpFw
         Left = 10
         Height = 23
+        Hint = 'PS4 firmware version used by this game'
         Top = 93
         Width = 408
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
         ItemHeight = 15
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 2
         OnGetItems = Edt_MountList_firmwareGetItems
       end
@@ -317,6 +365,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Side = asrCenter
         Left = 423
         Height = 26
+        Hint = 'Open the firmware folder'
         Top = 91
         Width = 26
         Anchors = [akTop, akRight]
@@ -325,6 +374,8 @@ object frmGameEditor: TfrmGameEditor
         BorderSpacing.Right = 10
         Images = frmMain.SmallImageList
         ImageIndex = 0
+        ShowHint = True
+        ParentShowHint = False
         OnClick = BtnExpFwClick
       end
     end
