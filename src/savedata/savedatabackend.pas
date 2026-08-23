@@ -1,6 +1,7 @@
 unit SaveDataBackend;
 
 {$mode objfpc}{$H+}
+{$I-}
 
 interface
 
@@ -41,7 +42,7 @@ type
   //
   MountSlots:DWORD;
   //
-  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher);
+  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle);
   Constructor CreateClient (_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
   Destructor  Destroy; override;
   procedure   SendMountConfig(Config:TGameMountConfigExport);
@@ -245,7 +246,7 @@ type
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl; forward;
 
-Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher);
+Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle);
 var
  kern2svdt:t_pipe_pair;
  fork_info:t_fork_proc;
@@ -268,9 +269,9 @@ begin
 
  data.pipefd:=kern2svdt[1];
 
- fork_info.hInput :=StdInputHandle ;
- fork_info.hOutput:=StdOutputHandle;
- fork_info.hError :=StdErrorHandle ;
+ fork_info.hInput :=hInput ;
+ fork_info.hOutput:=hOutput;
+ fork_info.hError :=hError ;
 
  fork_info.proc:=@savedata_process;
  fork_info.data:=@data;
@@ -579,8 +580,6 @@ begin
 
  ppid:=md_getppid;
 
- LOG_INFO('savedata_process started pid:',GetProcessID,' parent_pid:',ppid);
-
  parent:=md_pidfd_open(ppid);
 
  //dup
@@ -597,6 +596,8 @@ begin
  //////////////
 
  AddExitProc(@OnExitProc);
+
+ LOG_INFO('savedata_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  BeginThread(@wait_parent,nil);
  BeginThread(@job_thread,nil);

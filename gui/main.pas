@@ -136,8 +136,8 @@ type
 
     FConfigInfo:TConfigInfo;
 
-    FAddHandle:THandle;
-    FGetHandle:THandle;
+    FLogReadFname :RawByteString;
+    FLogReadHandle:THandle;
 
     Fmlog:TSynEdit;
     FLogMenu:TPopupMenu;
@@ -585,8 +585,9 @@ begin
 
   cfg:=Default(TGameRunConfig);
 
-  cfg.hOutput:=FAddHandle;
-  cfg.hError :=FAddHandle;
+  cfg.hInput :=StdInputHandle;
+  cfg.hOutput:=FContext.hOutput;
+  cfg.hError :=FContext.hOutput;
 
   cfg.FConfInfo:=FConfigInfo;
   cfg.FGameItem:=Item;
@@ -861,10 +862,31 @@ procedure TfrmMain.OpenLog(Const LogFile:RawByteString);
 var
  size:Int64;
 begin
- md_open  (LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FAddHandle);
- md_openat(FAddHandle,'',O_RDWR,0,FGetHandle);
+ if SameFileName(Trim(FLogReadFname),Trim(LogFile)) then
+ begin
+  Exit;
+ end;
+ FLogReadFname:=LogFile;
 
- FileSeek(FAddHandle,0,fsFromEnd);
+ //close
+ if (FContext.hOutput<>0) then
+ begin
+  md_close(FContext.hOutput);
+  FContext.hOutput:=0;
+ end;
+
+ //close
+ if (FLogReadHandle<>0) then
+ begin
+  md_close(FLogReadHandle);
+  FLogReadHandle:=0;
+ end;
+
+ md_open(LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FContext.hOutput);
+
+ md_open(LogFile,O_RDWR,0,FLogReadHandle);
+
+ FileSeek(FContext.hOutput,0,fsFromEnd);
 
  //
 
@@ -872,7 +894,7 @@ begin
  FLogPending:='';
  FLogPartial:=False;
 
- size:=FileSeek(FGetHandle,0,fsFromEnd);
+ size:=FileSeek(FLogReadHandle,0,fsFromEnd);
  if (size>LogPendingLimit) then
  begin
   FLogFilePos:=((size-LogPendingLimit) div LogMaxChunk)*LogMaxChunk;
@@ -935,7 +957,7 @@ begin
  if (Application.Tag<>0) then
  begin
   r:='Critical error, memory could not be reserved! code=0x'+HexStr(Application.Tag,8)+#13#10;
-  FileWrite(FAddHandle,PChar(r)^,Length(r));
+  FileWrite(FContext.hOutput,PChar(r)^,Length(r));
   ShowMessage(r);
   Halt;
  end;
@@ -1202,6 +1224,9 @@ begin
  end;
 
  FreeAndNil(M);
+
+ //reopen
+ OpenLog(ResolvePath(FConfigInfo.LogInfo.LogFile));
 end;
 
 procedure TfrmMain.LogStart;
@@ -1242,7 +1267,7 @@ end;
 procedure TfrmMain.ClearLog;
 begin
  //reset file
- FileTruncate(FGetHandle,0);
+ FileTruncate(FLogReadHandle,0);
 
  FLogFilePos:=0;
  FLogPending:='';
@@ -1358,7 +1383,7 @@ begin
  if (GetTickCount64-FLogLastPoll)<FLogPollInterval then Exit;
  FLogLastPoll:=GetTickCount64;
 
- newsize:=FileSeek(FGetHandle,0,fsFromEnd);
+ newsize:=FileSeek(FLogReadHandle,0,fsFromEnd);
  if (newsize<FLogFilePos) then FLogFilePos:=0;
 
  avail:=newsize-FLogFilePos;
@@ -1375,8 +1400,8 @@ begin
 
  s:='';
  SetLength(s,avail);
- FileSeek(FGetHandle,FLogFilePos,fsFromBeginning);
- nread:=FileRead(FGetHandle,s[1],Length(s));
+ FileSeek(FLogReadHandle,FLogFilePos,fsFromBeginning);
+ nread:=FileRead(FLogReadHandle,s[1],Length(s));
  FLogFilePos:=FLogFilePos+nread;
  if (nread<=0) then Exit;
  SetLength(s,nread);
@@ -1635,8 +1660,9 @@ begin
 
  cfg:=Default(TGameRunConfig);
 
- cfg.hOutput:=FAddHandle;
- cfg.hError :=FAddHandle;
+ cfg.hInput :=StdInputHandle;
+ cfg.hOutput:=FContext.hOutput;
+ cfg.hError :=FContext.hOutput;
 
  cfg.FConfInfo:=FConfigInfo;
  cfg.FGameItem:=Item;
@@ -1734,7 +1760,7 @@ begin
   if (exit_code<>0) then
   begin
    r:='Game process stopped with exit code:0x'+HexStr(exit_code,8);
-   FileWrite(FAddHandle,PChar(r)^,Length(r));
+   FileWrite(FContext.hOutput,PChar(r)^,Length(r));
 
    MessageDlgEx(r,'Error',[mbOK],Self);
   end;

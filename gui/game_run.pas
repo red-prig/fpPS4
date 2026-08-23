@@ -26,6 +26,7 @@ uses
 
 type
  TGameRunConfig=record
+  hInput :THandle;
   hOutput:THandle;
   hError :THandle;
 
@@ -690,14 +691,6 @@ begin
 
  end;
 
- ////
- StdOutputHandle:=cfg.hOutput;
- StdErrorHandle :=cfg.hError ;
-
- //reinit std I/O
- SysInitStdIO;
-  ////
-
  fork_info:=Default(t_fork_proc);
 
  if cfg.FConfInfo.MiscInfo.fork_proc then
@@ -725,7 +718,7 @@ begin
   GameStartupInfo.Serialize(mem);
   FreeAndNil(GameStartupInfo);
 
-  fork_info.hInput :=StdInputHandle;
+  fork_info.hInput :=cfg.hInput;
   fork_info.hOutput:=cfg.hOutput;
   fork_info.hError :=cfg.hError;
 

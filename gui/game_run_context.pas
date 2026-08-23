@@ -44,6 +44,8 @@ type
   public
    FIpcDispatch:THostIpcDispatchGui;
    //
+   hOutput:THandle;
+   //
    FGameItem   :TGameItem;
    FGameProcess:TGameProcess;
    FParamSfo   :TParamSfoFile;
@@ -180,7 +182,7 @@ function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
 begin
  if (FSaveData=nil) then
  begin
-  FSaveData:=TSaveDataBackendConnect.CreateProcess(FIpcDispatch);
+  FSaveData:=TSaveDataBackendConnect.CreateProcess(FIpcDispatch,StdInputHandle,hOutput,hOutput);
  end;
  Result:=FSaveData;
 end;
