@@ -1846,6 +1846,11 @@
         <Filename Value="rtl\placeholder_fmt.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="gui\msgdlgext.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="MsgDlgExt"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

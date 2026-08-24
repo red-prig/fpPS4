@@ -31,12 +31,9 @@ uses
   game_run,
 
   param_sfo_gui,
-  playgo_chunk_gui,
 
   core_shell,
-  gui_dialogs,
-
-  ps4_libSceMsgDialog;
+  gui_dialogs;
 
 type
   TMainButtonsState=(mbsStopped,
@@ -155,14 +152,11 @@ type
 
     FDialogsManager:TDialogsManager;
 
-    function  OnKevent       (Client:THostIpc;Value:TIpcValue):TIpcValue; //KEV_EVENT
-    function  OnMainWindows  (Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
-    function  OnCaptionFPS   (Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
-    function  OnError        (Client:THostIpc;Value:TIpcValue):TIpcValue; //ERROR
-    function  OnWarning      (Client:THostIpc;Value:TIpcValue):TIpcValue; //WARNING
-    function  OnParamSfoInit (Client:THostIpc;Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
-    function  OnPlaygoInit   (Client:THostIpc;Value:TIpcValue):TIpcValue; //PLAYGO_INIT
-    function  OnLoadExec     (Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
+    procedure OnRunned(Sender: TObject);
+
+    function  OnMainWindows(Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+    function  OnCaptionFPS (Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
+    function  OnLoadExec   (Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -191,7 +185,6 @@ type
                                   out AText: string;
                                   const ALineInfo: TSynEditGutterLineInfo);
 
-    function  GameProcessForked:Boolean;
     procedure SetButtonsState(s:TMainButtonsState);
   end;
 
@@ -201,16 +194,9 @@ var
 implementation
 
 uses
-
+ MsgDlgExt,
  game_find,
-
- md_file,
-
- md_arc4random,
-
- vDevice,
-
- sys_event;
+ md_file;
 
 //
 
@@ -228,168 +214,6 @@ Const
  LogMaxChunk       = 1 shl 16;
  LogPendingLimit   = LogMaxChunk * 16;
 
-
-const
- MsgDlgBtnToStr: array[TMsgDlgBtn] of PChar = (
-  '&Yes',
-  '&No',
-  '&OK',
-  '&Cancel',
-  '&Abort',
-  '&Retry',
-  '&Ignore',
-  '&All',
-  '&NoToAll',
-  '&YesToAll',
-  '&Help',
-  '&Close'
- );
-
- MsgDlgBtnToResult: array[TMsgDlgBtn] of Byte = (
-  mrYes,
-  mrNo,
-  mrOK,
-  mrCancel,
-  mrAbort,
-  mrRetry,
-  mrIgnore,
-  mrAll,
-  mrNoToAll,
-  mrYesToAll,
-  mrNone, //Help
-  mrClose
- );
-
-type
- TMsgDlgAButtons=array of TMsgDlgBtn;
-
-function MessageDlgEx(const AMsg:RawByteString;
-                      const ACaption:RawByteString;
-                      AButtons:TMsgDlgAButtons;
-                      AParent:TForm):TModalResult;
-var
- MsgForm:TForm;
- MsgMemo:TMemo;
- MsgBtnz:TButton;
-
- //(asrTop, asrBottom, asrCenter);
- Procedure NewBtn(DlgType:TMsgDlgBtn;DlgPos:TAnchorSideReference);
- begin
-  MsgBtnz:=TButton.Create(MsgForm);
-
-  case DlgPos of
-   asrTop:
-     begin
-      MsgBtnz.Anchors:=[akLeft,akBottom];
-      MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akLeft  ].Side   :=asrTop;
-      MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-     end;
-   asrBottom:
-     begin
-      MsgBtnz.Anchors:=[akRight,akBottom];
-      MsgBtnz.AnchorSide[akRight ].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akRight ].Side   :=asrBottom;
-      MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-     end;
-   asrCenter:
-     begin
-      MsgBtnz.Anchors:=[akLeft,akBottom];
-      MsgBtnz.AnchorSide[akLeft  ].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akLeft  ].Side   :=asrCenter;
-      MsgBtnz.AnchorSide[akBottom].Control:=MsgForm;
-      MsgBtnz.AnchorSide[akBottom].Side   :=asrBottom;
-     end;
-  end;
-
-  MsgBtnz.BorderSpacing.Around :=10;
-  MsgBtnz.Constraints.MinHeight:=25;
-  MsgBtnz.Constraints.MinWidth :=75;
-  MsgBtnz.AutoSize   :=True;
-  MsgBtnz.Caption    :=MsgDlgBtnToStr[DlgType];
-  MsgBtnz.Parent     :=MsgForm;
-  MsgBtnz.ModalResult:=MsgDlgBtnToResult[DlgType];
- end;
-
-begin
- MsgBtnz:=nil;
-
- MsgForm:=TForm.Create(nil);
- try
-  MsgForm.Caption    :=ACaption;
-  MsgForm.Position   :=poDesigned;
-  MsgForm.BorderIcons:=[biSystemMenu];
-  MsgForm.FormStyle  :=fsSystemStayOnTop;
-  MsgForm.Left:= AParent.Left + (AParent.Width  - MsgForm.Width ) div 2;
-  MsgForm.Top := AParent.Top  + (AParent.Height - MsgForm.Height) div 2;
-  MsgForm.Width :=400;
-  MsgForm.Height:=200;
-  //
-  Case Length(AButtons) of
-   0:;
-   1:
-     begin
-      NewBtn(AButtons[0],asrTop);
-     end;
-   2:
-     begin
-      NewBtn(AButtons[0],asrTop);
-      NewBtn(AButtons[1],asrBottom);
-     end;
-   3:
-     begin
-      NewBtn(AButtons[0],asrTop);
-      NewBtn(AButtons[1],asrCenter);
-      NewBtn(AButtons[2],asrBottom);
-     end;
-   else;
-  end;
-  //
-  MsgMemo:=TMemo.Create(MsgForm);
-  MsgMemo.ReadOnly:=True;
-  MsgMemo.Font.Name:='Courier New';
-  MsgMemo.Font.Size:=GetRealFontSize(AParent.Font) + 2;
-  //
-  MsgMemo.Anchors:=[akTop,akLeft,akRight,akBottom];
-  MsgMemo.AnchorSide[akTop   ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akTop   ].Side   :=asrTop;
-  MsgMemo.AnchorSide[akLeft  ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akLeft  ].Side   :=asrTop;
-  MsgMemo.AnchorSide[akRight ].Control:=MsgForm;
-  MsgMemo.AnchorSide[akRight ].Side   :=asrBottom;
-  MsgMemo.AnchorSide[akBottom].Control:=MsgForm;
-  MsgMemo.AnchorSide[akBottom].Side   :=asrBottom;
-  if (MsgBtnz<>nil) then
-  begin
-   MsgMemo.AnchorSide[akBottom].Control:=MsgBtnz;
-   MsgMemo.AnchorSide[akBottom].Side   :=asrTop;
-  end;
-  MsgMemo.BorderSpacing.Bottom:=10;
-  //
-  MsgMemo.Text  :=AMsg;
-  MsgMemo.Parent:=MsgForm;
-  //
-  Result:=MsgForm.ShowModal;
- finally
-  MsgForm.Free;
- end;
-
- {
- MsgFrm:=CreateMessageDialog(AMsg, ADlgType, AButtons);
- try
-  MsgFrm.Position :=poDefaultSizeOnly;
-  MsgFrm.FormStyle:=fsSystemStayOnTop;
-  MsgFrm.Left:= AParent.Left + (AParent.Width  - MsgFrm.Width ) div 2;
-  MsgFrm.Top := AParent.Top  + (AParent.Height - MsgFrm.Height) div 2;
-  Result:=MsgFrm.ShowModal;
- finally
-  MsgFrm.Free
- end;
- }
-end;
-
 function TfrmMain.OnMainWindows(Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
 begin
  Result:=FDialogsManager.OpenMainWindows;
@@ -399,144 +223,6 @@ function TfrmMain.OnCaptionFPS(Client:THostIpc;Value:TIpcValue):TIpcValue; //CAP
 begin
  Result:=0;
  FDialogsManager.SetCaptionFPS(Value.GetQWORD);
-end;
-
-function TfrmMain.OnKevent(Client:THostIpc;Value:TIpcValue):TIpcValue; //KEV_EVENT
-var
- kev:p_kevent;
- count:Integer;
-
- i:Integer;
-begin
- Result:=0;
-
- kev  :=Value.GetBuf;
- count:=Value.GetLen div sizeof(t_kevent);
-
- i:=0;
- while (i<>count) do
- begin
-  case kev[i].filter of
-   EVFILT_PROC:
-     begin
-      if ((kev[i].fflags and NOTE_EXIT)<>0) then
-      begin
-       //ShowMessage('NOTE_EXIT pid:'+IntToStr(kev[i].ident));
-       ShowMessage('The process reported exit!');
-       FContext.Stop();
-      end;
-      if ((kev[i].fflags and NOTE_EXEC)<>0) then
-      begin
-       //ShowMessage('NOTE_EXEC pid:'+IntToStr(kev[i].ident));
-       SetButtonsState(mdsRunned);
-      end;
-     end;
-
-   else;
-  end;
-
-  Inc(i);
- end;
-
-end;
-
-function TfrmMain.OnError(Client:THostIpc;Value:TIpcValue):TIpcValue; //ERROR
-begin
- Result:=0;
- if (MessageDlgEx(Value.GetString,'Error',[mbOK,mbAbort],Self)=mrAbort) then
- begin
-  FContext.Stop();
- end;
-end;
-
-function TfrmMain.OnWarning(Client:THostIpc;Value:TIpcValue):TIpcValue; //WARNING
-var
- i:Integer;
-begin
- i:=MessageDlgEx(Value.GetString,'Warning',[mbYes,mbNo,mbAbort],Self);
- if (i=mrAbort) then
- begin
-  FContext.Stop();
- end;
- if (i=mrYes) then
- begin
-  i:=0;
- end;
- Result:=i;
-end;
-
-function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
-begin
- Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(game)+
-                          DirectorySeparator+
-                          'sce_sys'+
-                          DirectorySeparator+
-                          'param.sfo');
-end;
-
-function TfrmMain.OnParamSfoInit(Client:THostIpc;Value:TIpcValue):TIpcValue; //PARAM_SFO_INIT
-var
- V:RawByteString;
-begin
- Result:=0;
-
- if (FContext.FGameItem=nil) then Exit;
-
- if (FContext.FParamSfo=nil) then
- begin
-  FContext.FParamSfo:=LoadParamSfoFile2(FContext.FGameItem.MountList.game);
- end;
-
- if (FContext.FParamSfo=nil) then
- begin
-  V:='"{$GAME}/sce_sys/param.sfo" not found, continue?';
-
-  if (MessageDlgEx(V,'Error',[mbOK,mbAbort],Self)=mrOK) then
-  begin
-   Exit(0);
-  end else
-  begin
-   TBStopClick(nil);
-   Exit(0);
-  end;
- end;
-
- Result:=TIpcValue.&Object(FContext.FParamSfo);
-end;
-
-function TfrmMain.OnPlaygoInit(Client:THostIpc;Value:TIpcValue):TIpcValue; //PLAYGO_INIT
-var
- playgo_file:TPlaygoFile;
- V:RawByteString;
-begin
- Result:=0;
-
- if (FContext.FGameItem=nil) then Exit;
-
- V:=FContext.FGameItem.MountList.game;
-
- playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
-                             DirectorySeparator+
-                             'sce_sys'+
-                             DirectorySeparator+
-                             'playgo-chunk.dat');
-
- if (playgo_file=nil) then
- begin
-  V:='"{$GAME}/sce_sys/playgo-chunk.dat" not found, continue?';
-
-  if (MessageDlgEx(V,'Error',[mbOK,mbAbort],Self)=mrOK) then
-  begin
-   Exit(0);
-  end else
-  begin
-   TBStopClick(nil);
-   Exit(0);
-  end;
- end;
-
- Result:=TIpcValue.&Object(playgo_file);
- FreeAndNil(playgo_file);
 end;
 
 function TfrmMain.OnLoadExec(Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
@@ -565,7 +251,7 @@ begin
   Exit;
  end;
 
- if GameProcessForked then //only forked
+ if FContext.GameProcessForked then //only forked
  begin
 
   //terminate
@@ -613,8 +299,6 @@ begin
 
  FreeAndNil(data);
 end;
-
-//ShowMessage(GetEnumName(TypeInfo(mtype),ord(mtype)));
 
 //
 
@@ -901,11 +585,19 @@ begin
 
 end;
 
+procedure TfrmMain.OnRunned(Sender: TObject);
+begin
+ SetButtonsState(mdsRunned);
+end;
+
 procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
  FContext:=TGameRunContext.Create;
+ FContext.FParent  :=Self;
+ FContext.FOnRunned:=@OnRunned;
+ FContext.FOnStop  :=@TBStopClick;
 
  FDialogsManager:=TDialogsManager.Create;
 
@@ -926,14 +618,9 @@ begin
 
  IpcHandler:=THostIpcHandler.Create;
 
- IpcHandler.AddCallback('KEV_EVENT'      ,@OnKevent      );
- IpcHandler.AddCallback('MAIN_WINDOWS'   ,@OnMainWindows );
- IpcHandler.AddCallback('CAPTION_FPS'    ,@OnCaptionFPS  );
- IpcHandler.AddCallback('ERROR'          ,@OnError       );
- IpcHandler.AddCallback('WARNING',        @OnWarning     );
- IpcHandler.AddCallback('PARAM_SFO_INIT' ,@OnParamSfoInit);
- IpcHandler.AddCallback('PLAYGO_INIT'    ,@OnPlaygoInit  );
- IpcHandler.AddCallback('LOAD_EXEC'      ,@OnLoadExec    );
+ IpcHandler.AddCallback('MAIN_WINDOWS',@OnMainWindows );
+ IpcHandler.AddCallback('CAPTION_FPS' ,@OnCaptionFPS  );
+ IpcHandler.AddCallback('LOAD_EXEC'   ,@OnLoadExec    );
 
  FDialogsManager.BindHandler(IpcHandler);
 
@@ -1717,15 +1404,6 @@ begin
  end;
 end;
 
-function TfrmMain.GameProcessForked:Boolean;
-begin
- Result:=False;
- if (FContext.FGameProcess<>nil) then
- begin
-  Result:=FContext.FGameProcess.g_fork;
- end;
-end;
-
 procedure TfrmMain.TBStopClick(Sender: TObject);
 var
  exit_code:DWORD;
@@ -1733,7 +1411,7 @@ var
 begin
  if (FContext.FGameProcess=nil) then Exit;
 
- if GameProcessForked then //only forked
+ if FContext.GameProcessForked then //only forked
  begin
   exit_code:=0;
 
@@ -1902,7 +1580,7 @@ begin
      TBPause.ImageIndex:=1;
      TBStop .ImageIndex:=2+3;
 
-     if GameProcessForked then //only forked
+     if FContext.GameProcessForked then //only forked
      begin
       TBStop .Enabled:=True;
 
@@ -1919,7 +1597,7 @@ begin
      TBPause.ImageIndex:=1+3;
      TBStop .ImageIndex:=2+3;
 
-     if GameProcessForked then //only forked
+     if FContext.GameProcessForked then //only forked
      begin
       TBStop .Enabled:=True;
 

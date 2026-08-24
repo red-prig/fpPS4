@@ -7,7 +7,6 @@ interface
 uses
  TypInfo,
  Classes,
- CharStream,
  murmurhash,
  hamt,
  sys_event,

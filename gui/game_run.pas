@@ -7,7 +7,6 @@ interface
 uses
  Classes,
  SysUtils,
- CharStream,
  Dialogs,
  kern_thr,
  md_sleep,

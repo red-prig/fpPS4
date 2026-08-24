@@ -124,22 +124,13 @@ type
 
  {$M-}
 
- function GetRealFontSize(Font:TFont):Integer;
-
 implementation
 
 uses
+ MsgDlgExt,
  game_mount,
  SceSaveData,
  SaveDataBackend;
-
-function GetRealFontSize(Font:TFont):Integer;
-var
- fd: TFontData;
-begin
- fd := Graphics.GetFontData(Font.Handle);
- Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
-end;
 
 //
 

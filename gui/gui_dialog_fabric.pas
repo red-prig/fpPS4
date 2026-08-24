@@ -126,6 +126,9 @@ function GetAlign(Side:TAnchorSideReference):Byte; inline;
 
 implementation
 
+uses
+ MsgDlgExt;
+
 function GetAnchor(Align:Byte):TAnchorSideReference; inline;
 begin
  Result:=asrTop;
@@ -150,14 +153,6 @@ Destructor TDialogCustom.Destroy;
 begin
  FreeAndNil(FCustom);
  inherited;
-end;
-
-function GetRealFontSize(Font:TFont):Integer;
-var
- fd: TFontData;
-begin
- fd := Graphics.GetFontData(Font.Handle);
- Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
 end;
 
 function NewBtn(MsgForm:TWinControl;DlgPos:TAnchorSideReference;const Caption:RawByteString;ModalResult:Integer;OnClick:TNotifyEvent):TButton;
