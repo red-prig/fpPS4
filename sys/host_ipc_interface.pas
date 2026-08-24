@@ -577,7 +577,7 @@ end;
 
 function THostIpc.warning(const s:RawByteString):Ptruint;
 begin
- if (self=nil) then Exit(-1);
+ if (self=nil) then Exit(Ptruint(-1));
  Result:=InvokeSync2(iWARNING.mtype,pchar(s),Length(s));
 end;
 

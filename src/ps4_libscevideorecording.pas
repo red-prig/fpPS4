@@ -167,6 +167,7 @@ begin
  Result:=1024;
 end;
 
+{$WARN 4110 off}
 function Load_libSceVideoRecording(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

@@ -2,7 +2,6 @@ unit ps4_libSceAvSetting;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -162,6 +161,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceAvSetting(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

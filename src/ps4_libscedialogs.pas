@@ -2,7 +2,6 @@ unit ps4_libSceDialogs;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -107,7 +106,7 @@ end;
 //
 
 
-
+{$WARN 4110 off}
 //
 
 function Load_libSceNpProfileDialog(name:pchar):p_lib_info;

@@ -2,7 +2,6 @@ unit ps4_libSceMbus;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -42,6 +41,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceMbus(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

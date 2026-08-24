@@ -7,12 +7,10 @@ interface
 uses
  Classes,
  SysUtils,
- time,
  mqueue,
  LFQueue,
  host_ipc_interface,
  kern_thr,
- sys_event,
  md_event,
  kern_mtx;
 

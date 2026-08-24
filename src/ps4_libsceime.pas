@@ -1844,6 +1844,7 @@ begin
  mtx_unlock(g_Ime_mtx);
 end;
 
+{$WARN 4110 off}
 function Load_libSceIme(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

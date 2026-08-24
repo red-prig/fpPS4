@@ -914,6 +914,7 @@ begin
  Assert(err=0,'Mutex unlock failed.');
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpCommon(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

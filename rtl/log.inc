@@ -2,7 +2,9 @@
 type
  _t_log_filter_cb=function(self:Pointer;fname:Pchar):Boolean; register;
 
+ {$IFDEF LOG_DECLARE}
  _p_log_filter_node=^_t_log_filter_node;
+ {$ENDIF}
  _t_log_filter_node=packed object
   next:Pointer;
   fcbs:_t_log_filter_cb;
@@ -17,13 +19,14 @@ function _log_filter_default_Warning (self:Pointer;fname:Pchar):Boolean; registe
 function _log_filter_default_Error   (self:Pointer;fname:Pchar):Boolean; register; external;
 function _log_filter_default_Critical(self:Pointer;fname:Pchar):Boolean; register; external;
 
+{//$WARN 5025 OFF}
 var
- _var_log_filter_Trace   :_t_log_filter_node=(fcbs:@_log_filter_default_Trace   );
- _var_log_filter_Debug   :_t_log_filter_node=(fcbs:@_log_filter_default_Debug   );
- _var_log_filter_Info    :_t_log_filter_node=(fcbs:@_log_filter_default_Info    );
- _var_log_filter_Warning :_t_log_filter_node=(fcbs:@_log_filter_default_Warning );
- _var_log_filter_Error   :_t_log_filter_node=(fcbs:@_log_filter_default_Error   );
- _var_log_filter_Critical:_t_log_filter_node=(fcbs:@_log_filter_default_Critical);
+ {%H-}_var_log_filter_Trace   :_t_log_filter_node=(fcbs:@_log_filter_default_Trace   );
+ {%H-}_var_log_filter_Debug   :_t_log_filter_node=(fcbs:@_log_filter_default_Debug   );
+ {%H-}_var_log_filter_Info    :_t_log_filter_node=(fcbs:@_log_filter_default_Info    );
+ {%H-}_var_log_filter_Warning :_t_log_filter_node=(fcbs:@_log_filter_default_Warning );
+ {%H-}_var_log_filter_Error   :_t_log_filter_node=(fcbs:@_log_filter_default_Error   );
+ {%H-}_var_log_filter_Critical:_t_log_filter_node=(fcbs:@_log_filter_default_Critical);
 
 {$MACRO ON}
 
@@ -42,3 +45,5 @@ var
 {$DEFINE LOG_CRITICAL:=if IS_LOG_CRITICAL then Writeln}
 
 {$ENDIF}
+
+

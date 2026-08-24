@@ -103,6 +103,7 @@ begin
  Result:=SCE_MOVE_RETURN_CODE_NO_CONTROLLER_CONNECTED;
 end;
 
+{$WARN 4110 off}
 function Load_libSceMove(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

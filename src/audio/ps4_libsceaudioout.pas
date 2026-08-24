@@ -1238,6 +1238,7 @@ begin
 
 end;
 
+{$WARN 4110 off}
 function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

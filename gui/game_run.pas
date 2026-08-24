@@ -122,7 +122,6 @@ uses
  ps4_libSceAudio3d,
  //internal libs
 
- kern_rtld,
  kern_budget,
  kern_authinfo,
  sys_bootparam,
