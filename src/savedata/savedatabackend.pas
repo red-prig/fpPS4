@@ -42,7 +42,7 @@ type
   //
   MountSlots:DWORD;
   //
-  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle);
+  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle;const LogFilter:RawByteString);
   Constructor CreateClient (_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
   Destructor  Destroy; override;
   procedure   SendMountConfig(Config:TGameMountConfigExport);
@@ -231,6 +231,11 @@ type
 
 implementation
 
+uses
+ CharStream,
+ core_serialization,
+ logging;
+
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 //
@@ -239,18 +244,25 @@ var
  gSaveDataBackend:TSaveDataBackendProcess=nil;
 
 type
- PForkData=^TForkData;
- TForkData=record
-  pipefd:THandle;
+ TSaveDataStartupInfo=class(TSerializeObject)
+  public
+   FPipe     :THandle;
+   FLogFilter:RawByteString;
+  published
+   property Pipe     :THandle       read FPipe      write FPipe;
+   property LogFilter:RawByteString read FLogFilter write FLogFilter;
+  public
+   //
  end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl; forward;
 
-Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle);
+Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle;const LogFilter:RawByteString);
 var
  kern2svdt:t_pipe_pair;
  fork_info:t_fork_proc;
- data:TForkData;
+ mem:TMemoryStream;
+ StartupInfo:TSaveDataStartupInfo;
  r:DWORD;
 begin
  inherited;
@@ -267,17 +279,23 @@ begin
  kipc:=THostIpcPipe.Create(_Dispatcher);
  kipc.set_pipe(kern2svdt[0]);
 
- data.pipefd:=kern2svdt[1];
+ StartupInfo:=TSaveDataStartupInfo.Create;
+ StartupInfo.Pipe     :=kern2svdt[1];
+ StartupInfo.LogFilter:=LogFilter;
+ mem:=StartupInfo.SerializeToMem;
+ FreeAndNil(StartupInfo);
 
  fork_info.hInput :=hInput ;
  fork_info.hOutput:=hOutput;
  fork_info.hError :=hError ;
 
  fork_info.proc:=@savedata_process;
- fork_info.data:=@data;
- fork_info.size:=sizeof(data);
+ fork_info.data:=mem.Memory;
+ fork_info.size:=mem.Size;
 
  r:=md_fork_process(fork_info,0);
+
+ mem.Free;
 
  if (r<>0) then
  begin
@@ -291,7 +309,7 @@ begin
  kipc.InvokeSync2('Confirm');
 
  //The handle has been copied by another process, close it
- md_pipe_close(data.pipefd);
+ md_pipe_close(kern2svdt[1]);
 end;
 
 Constructor TSaveDataBackendConnect.CreateClient(_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
@@ -564,6 +582,8 @@ end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
+ StartupInfo:TSaveDataStartupInfo;
+
  ppid:Integer;
 
  pipefd:THandle;
@@ -573,10 +593,16 @@ var
 begin
  //while not IsDebuggerPresent do sleep(100);
 
- pipefd:=PForkData(data)^.pipefd;
+ StartupInfo:=TSaveDataStartupInfo.Create;
+ StartupInfo.DeserializeFromData(data,size);
 
  //free shared
  FreeMem(data);
+
+ logging.set_log_filter(StartupInfo.LogFilter);
+ pipefd:=StartupInfo.Pipe;
+
+ StartupInfo.Free;
 
  ppid:=md_getppid;
 

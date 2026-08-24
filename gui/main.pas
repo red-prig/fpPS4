@@ -134,8 +134,6 @@ type
     FGameList:TGameList;
     FContext :TGameRunContext;
 
-    FConfigInfo:TConfigInfo;
-
     FLogReadFname :RawByteString;
     FLogReadHandle:THandle;
 
@@ -589,7 +587,7 @@ begin
   cfg.hOutput:=FContext.hOutput;
   cfg.hError :=FContext.hOutput;
 
-  cfg.FConfInfo:=FConfigInfo;
+  cfg.FConfInfo:=FContext.FConfigInfo;
   cfg.FGameItem:=Item;
   cfg.FParamSfo:=FContext.FParamSfo;
   cfg.FLoadExec:=True;
@@ -771,7 +769,7 @@ var
 
  i,c:Integer;
 begin
- FConfigInfo:=TConfigInfo.Create;
+ FContext.FConfigInfo:=TConfigInfo.Create;
 
  FGameList:=TGameList.Create;
  FGameList.FGrid:=ListGrid;
@@ -785,7 +783,7 @@ begin
    m:=TMemoryStream.Create;
    m.LoadFromFile(fpps4File);
    JReader:=TJSONStreamReader.Create(m,[joUTF8,joComments]);
-   JReader.Execute(FConfigInfo);
+   JReader.Execute(FContext.FConfigInfo);
   except
    on E: Exception do
      MessageDlgEx(E.Message,'Error',[mbOK],Self);
@@ -952,7 +950,7 @@ begin
  FPaused         :=False;
  FAutoFollow     :=True;
 
- OpenLog(ResolvePath(FConfigInfo.LogInfo.LogFile));
+ OpenLog(ResolvePath(FContext.FConfigInfo.LogInfo.LogFile));
 
  if (Application.Tag<>0) then
  begin
@@ -1120,10 +1118,10 @@ var
 begin
  form:=TfrmGameEditor.Create(Self);
 
- form.FConfigInfo:=FConfigInfo;
+ form.FConfigInfo:=FContext.FConfigInfo;
  form.FItem      :=TGameItem.Create;
 
- form.FItem.FMountList.firmware:=FConfigInfo.MainInfo.DefaultFirmware;
+ form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
 
  form.OnSave:=@Self.DoAdd;
 
@@ -1149,10 +1147,10 @@ begin
  begin
   form:=TfrmGameEditor.Create(Self);
 
-  form.FConfigInfo:=FConfigInfo;
+  form.FConfigInfo:=FContext.FConfigInfo;
   form.FItem      :=TGameItem.Create;
 
-  form.FItem.FMountList.firmware:=FConfigInfo.MainInfo.DefaultFirmware;
+  form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
 
   form.FItem.FMountList.game:=d.FileName;
 
@@ -1183,7 +1181,7 @@ begin
 
  form:=TfrmGameEditor.Create(Self);
 
- form.FConfigInfo:=FConfigInfo;
+ form.FConfigInfo:=FContext.FConfigInfo;
  form.FItem:=Item;
 
  Item.FLock:=True;
@@ -1199,7 +1197,7 @@ begin
  begin
   frmCfgEditor:=TfrmCfgEditor.Create(Self);
   frmCfgEditor.OnSave:=@DoConfigSave;
-  frmCfgEditor.FConfigInfo:=FConfigInfo;
+  frmCfgEditor.FConfigInfo:=FContext.FConfigInfo;
  end;
 
  frmCfgEditor.FormInit;
@@ -1213,7 +1211,7 @@ begin
  m:=TMemoryStream.Create;
  jstream:=TJSONStreamWriter.Create(m);
 
- FConfigInfo.WriteJSON('',jstream);
+ FContext.FConfigInfo.WriteJSON('',jstream);
  FreeAndNil(jstream);
 
  try
@@ -1226,7 +1224,7 @@ begin
  FreeAndNil(M);
 
  //reopen
- OpenLog(ResolvePath(FConfigInfo.LogInfo.LogFile));
+ OpenLog(ResolvePath(FContext.FConfigInfo.LogInfo.LogFile));
 end;
 
 procedure TfrmMain.LogStart;
@@ -1635,7 +1633,7 @@ begin
  LogEnd;
  ClearLog;
 
- if FConfigInfo.BootParamInfo.neo then
+ if FContext.FConfigInfo.BootParamInfo.neo then
  if (ParamSfo<>nil) then
  begin
   a:=ParamSfo.GetUInt('ATTRIBUTE');
@@ -1664,7 +1662,7 @@ begin
  cfg.hOutput:=FContext.hOutput;
  cfg.hError :=FContext.hOutput;
 
- cfg.FConfInfo:=FConfigInfo;
+ cfg.FConfInfo:=FContext.FConfigInfo;
  cfg.FGameItem:=Item;
  cfg.FParamSfo:=ParamSfo;
 

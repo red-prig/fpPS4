@@ -49,6 +49,9 @@ type
   Procedure   WriteJSON  (const name:RawByteString;Stream:TJSONStreamWriter); virtual;
   Constructor Create;  virtual;
   Destructor  Destroy; override;
+  //
+  function    SerializeToMem:TMemoryStream;
+  Procedure   DeserializeFromData(data:Pointer;size:SizeUint);
  end;
 
  TSerializeObjectClass=class of TSerializeObject;
@@ -116,6 +119,9 @@ type
  end;
 
 implementation
+
+uses
+ CharStream;
 
 Procedure TRttiPropertyIterator.Free;
 begin
@@ -765,6 +771,23 @@ begin
  //
  Stream.WriteStopObject;
 end;
+
+function TSerializeObject.SerializeToMem:TMemoryStream;
+begin
+ Result:=TMemoryStream.Create;
+ Serialize(Result);
+end;
+
+Procedure TSerializeObject.DeserializeFromData(data:Pointer;size:SizeUint);
+var
+ mem:TPCharStream;
+begin
+ mem:=TPCharStream.Create(data,size);
+ Deserialize(mem);
+ mem.Free;
+end;
+
+///
 
 Procedure TSerializeArray.Serialize(Stream:TStream);
 var

@@ -46,6 +46,7 @@ type
    //
    hOutput:THandle;
    //
+   FConfigInfo :TConfigInfo;
    FGameItem   :TGameItem;
    FGameProcess:TGameProcess;
    FParamSfo   :TParamSfoFile;
@@ -182,7 +183,12 @@ function TGameRunContext.FetchSavdata:TSaveDataBackendConnect;
 begin
  if (FSaveData=nil) then
  begin
-  FSaveData:=TSaveDataBackendConnect.CreateProcess(FIpcDispatch,StdInputHandle,hOutput,hOutput);
+  FSaveData:=TSaveDataBackendConnect.CreateProcess(
+               FIpcDispatch,
+               StdInputHandle,
+               hOutput,
+               hOutput,
+               FConfigInfo.LogInfo.LogFilter);
  end;
  Result:=FSaveData;
 end;

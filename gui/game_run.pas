@@ -508,17 +508,12 @@ var
  IpcHandler:THostIpcHandler;
  kipc:THostIpcPipe;
 
- mem:TPCharStream;
  GameStartupInfo:TGameStartupInfo;
 begin
  //while not IsDebuggerPresent do sleep(100);
 
- mem:=TPCharStream.Create(data,size);
-
  GameStartupInfo:=TGameStartupInfo.Create(True);
- GameStartupInfo.Deserialize(mem);
-
- mem.Free;
+ GameStartupInfo.DeserializeFromData(data,size);
 
  //free shared
  FreeMem(data);
@@ -712,10 +707,8 @@ begin
 
   //
 
-  mem:=TMemoryStream.Create;
-
-  GameStartupInfo.FPipe:=kern2mgui[1];
-  GameStartupInfo.Serialize(mem);
+  GameStartupInfo.Pipe:=kern2mgui[1];
+  mem:=GameStartupInfo.SerializeToMem;
   FreeAndNil(GameStartupInfo);
 
   fork_info.hInput :=cfg.hInput;

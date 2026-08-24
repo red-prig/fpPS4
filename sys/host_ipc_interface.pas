@@ -348,20 +348,14 @@ begin
 end;
 
 function TIpcValue.GetObject(src:TSerializeObjectClass):TSerializeObject;
-var
- mem:TPCharStream;
 begin
  if (src=nil) or (Flen=0) then
  begin
   Exit(nil);
  end;
 
- mem:=TPCharStream.Create(GetBuf,Flen);
-
  Result:=src.Create;
- Result.Deserialize(mem);
-
- mem.Free;
+ Result.DeserializeFromData(GetBuf,Flen);
 end;
 
 //

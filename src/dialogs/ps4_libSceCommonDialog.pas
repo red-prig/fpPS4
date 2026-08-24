@@ -10,7 +10,6 @@ uses
  kern_mtx,
  sys_bootparam,
  host_ipc,
- core_serialization,
  subr_dynlib;
 
 Const
