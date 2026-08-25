@@ -424,11 +424,7 @@ begin
   Exit;
  end;
 
- mtx_lock(g_instance.mtx);
-
-  err:=g_instance.Backend.GetProgress(@progres);
-
- mtx_unlock(g_instance.mtx);
+ err:=g_instance.Backend.GetProgress(@progres);
 
  if (err=0) then
  begin
