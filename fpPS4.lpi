@@ -1851,6 +1851,10 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="MsgDlgExt"/>
       </Unit>
+      <Unit>
+        <Filename Value="gui\game_process.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

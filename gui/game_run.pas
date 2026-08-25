@@ -1,4 +1,4 @@
-unit game_run;
+﻿unit game_run;
 
 {$mode ObjFPC}{$H+}
 
@@ -20,10 +20,18 @@ uses
  logging,
  md_tty,
  game_info,
+ game_process,
  game_run_context,
  game_mount;
 
 type
+ TGameProcessSimple=class(TGameProcess)
+  Ftd:p_kthread;
+  procedure  suspend; override;
+  procedure  resume;  override;
+  Destructor Destroy; override;
+ end;
+
  TGameRunConfig=record
   hInput :THandle;
   hOutput:THandle;
@@ -36,14 +44,9 @@ type
   FLoadExec:Boolean;
  end;
 
- TGameProcessSimple=class(TGameProcess)
-  Ftd:p_kthread;
-  procedure  suspend; override;
-  procedure  resume;  override;
-  Destructor Destroy; override;
+ TGameRunContextRun=class(TGameRunContext)
+  function RunItem(const cfg:TGameRunConfig):Integer;
  end;
-
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 
 implementation
 
@@ -170,12 +173,10 @@ begin
  kern_jit_ctx.jit_scan_nopsequence:=ConfInfo.JITInfo.scan_nopsequence;
  kern_jit_ctx.jit_memory_guard    :=ConfInfo.JITInfo.memory_guard;
  kern_lazy_jit.use_lazy_jit       :=ConfInfo.JITInfo.lazy_jit;
-
  //
 
  time.strict_ps4_freq        :=ConfInfo.MiscInfo.strict_ps4_freq;
  pm4_me.use_renderdoc_capture:=ConfInfo.MiscInfo.renderdoc_capture;
-
  //
 
  vDevice.VulkanDeviceGuid:=Default(TGUID);
@@ -613,7 +614,7 @@ end;
 }
 
 
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function TGameRunContextRun.RunItem(const cfg:TGameRunConfig):Integer;
 label
  _error;
 var
@@ -688,15 +689,15 @@ begin
 
  if cfg.FConfInfo.MiscInfo.fork_proc then
  begin
-  Context.FGameProcess:=TGameProcessPipe.Create;
-  Context.FGameProcess.g_fork:=True;
+  FGameProcess:=TGameProcessPipe.Create;
+  FGameProcess.g_fork:=True;
 
-  with TGameProcessPipe(Context.FGameProcess) do
+  with TGameProcessPipe(FGameProcess) do
   begin
    r:=md_pipe2(kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
 
-   p_mgui_ipc:=THostIpcPipe.Create(Context.FIpcDispatch);
+   p_mgui_ipc:=THostIpcPipe.Create(FIpcDispatch);
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
@@ -722,10 +723,10 @@ begin
   mem.Free;
  end else
  begin
-  Context.FGameProcess:=TGameProcessSimple.Create;
-  Context.FGameProcess.g_fork:=False;
+  FGameProcess:=TGameProcessSimple.Create;
+  FGameProcess.g_fork:=False;
 
-  with TGameProcessSimple(Context.FGameProcess) do
+  with TGameProcessSimple(FGameProcess) do
   begin
 
    IpcHandler:=THostIpcHandler.Create;
@@ -733,7 +734,7 @@ begin
    IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
 
    s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
-   s_mgui_ipc:=THostIpcSimple.Create(Context.FIpcDispatch);
+   s_mgui_ipc:=THostIpcSimple.Create(FIpcDispatch);
 
    s_kern_ipc.FDest:=s_mgui_ipc;
    s_mgui_ipc.FDest:=s_kern_ipc;
@@ -755,14 +756,14 @@ begin
  if (r<>0) then
  begin
   _error:
-  FreeAndNil(Context.FGameProcess);
+  FreeAndNil(FGameProcess);
   Exit(r);
  end;
 
- Context.FGameProcess.g_proc :=fork_info.hProcess;
- Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
+ FGameProcess.g_proc :=fork_info.hProcess;
+ FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Context.FIpcDispatch.thread_new;
+ FIpcDispatch.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;
@@ -771,19 +772,16 @@ begin
  kev.data  :=0;
  kev.udata :=nil;
 
- Context.FGameProcess.g_ipc.kevent(@kev,1);
+ FGameProcess.g_ipc.kevent(@kev,1);
 
  if (not cfg.FLoadExec) then
  begin
-  Context.FParamSfo:=cfg.FParamSfo;
-  Context.FGameItem:=cfg.FGameItem;
-  Context.FGameItem.FLock:=True;
+  FParamSfo:=cfg.FParamSfo;
+  FGameItem:=cfg.FGameItem;
+  FGameItem.FLock:=True;
  end;
 
 end;
 
 
 end.
-
-
-

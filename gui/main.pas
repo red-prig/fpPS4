@@ -27,6 +27,7 @@ uses
   game_info,
   game_edit,
   cfg_edit,
+  game_process,
   game_run_context,
   game_run,
 
@@ -68,6 +69,18 @@ type
     Procedure CreateSub;  override;
     Procedure DestroySub; override;
   end;
+
+  TGameRunContextGui=class(TGameRunContextRun)
+   public
+    FDialogsManager:TDialogsManager;
+    //
+    procedure DoGameRunned; override;
+    procedure DoGameStop; override;
+    procedure DoLoadExec(const data:TPS4LoadExec); override;
+    function  DoShowError(const msg:RawByteString):Integer; override;
+    function  DoShowWarning(const msg:RawByteString):Integer; override;
+    procedure DoProcessExitMsg; override;
+   end;
 
   { TfrmMain }
 
@@ -129,7 +142,7 @@ type
     IpcHandler:THostIpcHandler;
 
     FGameList:TGameList;
-    FContext :TGameRunContext;
+    FContext :TGameRunContextGui;
 
     FLogReadFname :RawByteString;
     FLogReadHandle:THandle;
@@ -151,12 +164,6 @@ type
     FMainButtonsState:TMainButtonsState;
 
     FDialogsManager:TDialogsManager;
-
-    procedure OnRunned(Sender: TObject);
-
-    function  OnMainWindows(Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
-    function  OnCaptionFPS (Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
-    function  OnLoadExec   (Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -214,90 +221,72 @@ Const
  LogMaxChunk       = 1 shl 16;
  LogPendingLimit   = LogMaxChunk * 16;
 
-function TfrmMain.OnMainWindows(Client:THostIpc;Value:TIpcValue):TIpcValue; //MAIN_WINDOWS
+//
+
+procedure TGameRunContextGui.DoGameRunned;
 begin
- Result:=FDialogsManager.OpenMainWindows;
+ frmMain.SetButtonsState(mdsRunned);
 end;
 
-function TfrmMain.OnCaptionFPS(Client:THostIpc;Value:TIpcValue):TIpcValue; //CAPTION_FPS
+procedure TGameRunContextGui.DoGameStop;
 begin
- Result:=0;
- FDialogsManager.SetCaptionFPS(Value.GetQWORD);
+ frmMain.TBStopClick(frmMain);
 end;
 
-function TfrmMain.OnLoadExec(Client:THostIpc;Value:TIpcValue):TIpcValue; //LOAD_EXEC
+procedure TGameRunContextGui.DoLoadExec(const data:TPS4LoadExec);
 var
- data:TPS4LoadExec;
  cfg:TGameRunConfig;
  Item:TGameItem;
  r:Integer;
 begin
- Result:=0;
+ FDialogsManager.CloseMainWindow;
 
- data:=TPS4LoadExec(Value.GetObject(TPS4LoadExec));
- if (data=nil) then Exit;
+ //re-run
 
- if (FContext.FGameItem=nil) or
-    (FContext.FGameProcess=nil) then
+ Item:=TGameItem.Create;
+ FGameItem.CopyTo(Item);
+
+ Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
+
+ cfg:=Default(TGameRunConfig);
+
+ cfg.hInput :=StdInputHandle;
+ cfg.hOutput:=hOutput;
+ cfg.hError :=hOutput;
+
+ cfg.FConfInfo:=FConfigInfo;
+ cfg.FGameItem:=Item;
+ cfg.FParamSfo:=FParamSfo;
+ cfg.FLoadExec:=True;
+
+ r:=RunItem(cfg);
+ if (r<>0) then
  begin
-  FreeAndNil(data);
-  Exit;
+  ShowMessage('error run process code=0x'+HexStr(r,8));
  end;
 
- if (UpperCase(data.Path)='EXIT') then
+ FreeAndNil(Item);
+
+ if (r<>0) then
  begin
-  FreeAndNil(data);
-  FContext.Stop();
-  Exit;
+  //stop on error
+  frmMain.TBStopClick(frmMain);
  end;
+end;
 
- if FContext.GameProcessForked then //only forked
- begin
+function TGameRunContextGui.DoShowError(const msg:RawByteString):Integer;
+begin
+ Result:=MessageDlgEx(msg,'Error',[mbOK,mbAbort],frmMain);
+end;
 
-  //terminate
-  FContext.StopAndNil();
-  //
-  FDialogsManager.CloseMainWindow;
-  //
+function TGameRunContextGui.DoShowWarning(const msg:RawByteString):Integer;
+begin
+ Result:=MessageDlgEx(msg,'Warning',[mbYes,mbNo,mbAbort],frmMain);
+end;
 
-  //re-run
-
-  Item:=TGameItem.Create;
-  FContext.FGameItem.CopyTo(Item);
-
-  Item.GameInfo.Exec:=encode_shell(data.Path)+' '+encode_shell(data.argv);
-
-  cfg:=Default(TGameRunConfig);
-
-  cfg.hInput :=StdInputHandle;
-  cfg.hOutput:=FContext.hOutput;
-  cfg.hError :=FContext.hOutput;
-
-  cfg.FConfInfo:=FContext.FConfigInfo;
-  cfg.FGameItem:=Item;
-  cfg.FParamSfo:=FContext.FParamSfo;
-  cfg.FLoadExec:=True;
-
-  r:=run_item(cfg,FContext);
-  if (r<>0) then
-  begin
-   ShowMessage('error run process code=0x'+HexStr(r,8));
-  end;
-
-  FreeAndNil(Item);
-
-  if (r<>0) then
-  begin
-   //stop on error
-   TBStopClick(Self);
-  end;
-
- end else
- begin
-  MessageDlgEx('LoadExec is not supported for the current process','Error',[mbOK],Self);
- end;
-
- FreeAndNil(data);
+procedure TGameRunContextGui.DoProcessExitMsg;
+begin
+ ShowMessage('The process reported exit!');
 end;
 
 //
@@ -585,24 +574,19 @@ begin
 
 end;
 
-procedure TfrmMain.OnRunned(Sender: TObject);
-begin
- SetButtonsState(mdsRunned);
-end;
+//
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 var
  r:RawByteString;
 begin
- FContext:=TGameRunContext.Create;
- FContext.FParent  :=Self;
- FContext.FOnRunned:=@OnRunned;
- FContext.FOnStop  :=@TBStopClick;
+ FContext:=TGameRunContextGui.Create;
 
  FDialogsManager:=TDialogsManager.Create;
 
  FDialogsManager.FImages :=SmallImageList;
  FDialogsManager.FContext:=FContext;
+ FContext.FDialogsManager:=FDialogsManager;
 
   ListGrid.Canvas.Font.Size:=GetRealFontSize(ListGrid.Canvas.Font);
 
@@ -617,10 +601,6 @@ begin
   end;
 
  IpcHandler:=THostIpcHandler.Create;
-
- IpcHandler.AddCallback('MAIN_WINDOWS',@OnMainWindows );
- IpcHandler.AddCallback('CAPTION_FPS' ,@OnCaptionFPS  );
- IpcHandler.AddCallback('LOAD_EXEC'   ,@OnLoadExec    );
 
  FDialogsManager.BindHandler(IpcHandler);
 
@@ -1355,7 +1335,7 @@ begin
 
  if Item.FLock then Exit;
 
- r:=run_item(cfg,FContext);
+ r:=FContext.RunItem(cfg);
  if (r<>0) then
  begin
   ShowMessage('error run process code=0x'+HexStr(r,8));

@@ -120,7 +120,10 @@ type
    function  SIGNIN_DIALOG_TERM  (Client:THostIpc;Value:TIpcValue):TIpcValue;
    function  SIGNIN_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
    function  SIGNIN_DIALOG_RESULT(Client:THostIpc;Value:TIpcValue):TIpcValue;
- end;
+   //
+   function  MAIN_WINDOWS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  CAPTION_FPS (Client:THostIpc;Value:TIpcValue):TIpcValue;
+  end;
 
  {$M-}
 
@@ -1644,6 +1647,19 @@ begin
  begin
   Result:=FSigninDialog.button;
  end;
+end;
+
+//
+
+function TDialogsManager.MAIN_WINDOWS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=OpenMainWindows;
+end;
+
+function TDialogsManager.CAPTION_FPS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=0;
+ SetCaptionFPS(Value.GetQWORD);
 end;
 
 
