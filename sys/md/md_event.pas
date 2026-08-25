@@ -51,9 +51,7 @@ procedure ev_wait(var ev:t_event);
 var
  old:t_fast_event;
  new:t_fast_event;
- is_wait:Boolean;
 begin
- is_wait:=False;
 
  repeat
   QWORD(old):=System.InterlockedExchangeAdd64(QWORD(ev.ev_state),0);
@@ -63,11 +61,6 @@ begin
    new:=old;
    new.signals:=new.signals-1;
 
-   if is_wait then
-   begin
-    new.waiters:=new.waiters-1;
-   end;
-
    if System.InterlockedCompareExchange64(QWORD(ev.ev_state),QWORD(new),QWORD(old)) = QWORD(old) then
    begin
     Break;
@@ -76,22 +69,12 @@ begin
   end else
   begin
    new:=old;
+   new.waiters:=new.waiters+1;
 
-   if is_wait then
+   if System.InterlockedCompareExchange64(QWORD(ev.ev_state),QWORD(new),QWORD(old)) = QWORD(old) then
    begin
     NtWaitForKeyedEvent(KeyedEventHandle, GetKey(ev), False, nil);
-   end else
-   begin
-    new:=old;
-    new.waiters:=new.waiters+1;
-
-    if System.InterlockedCompareExchange64(QWORD(ev.ev_state),QWORD(new),QWORD(old)) = QWORD(old) then
-    begin
-     NtWaitForKeyedEvent(KeyedEventHandle, GetKey(ev), False, nil);
-     is_wait:=True;
-    end;
    end;
-
   end;
 
  until false;
@@ -112,6 +95,11 @@ begin
   if (new.signals<=new.waiters) then
   begin
    new.signals:=new.signals+1;
+  end;
+
+  if (new.waiters<>0) then
+  begin
+   new.waiters:=new.waiters-1;
   end;
 
   if System.InterlockedCompareExchange64(QWORD(ev.ev_state),QWORD(new),QWORD(old)) = QWORD(old) then
