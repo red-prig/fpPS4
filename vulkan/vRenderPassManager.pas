@@ -46,6 +46,8 @@ implementation
 uses
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  TvRenderPassKey2Compare=object
   function c(a,b:PvRenderPassKey):Integer; static;
@@ -331,7 +333,7 @@ begin
  r:=vkCreateRenderPass(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateRenderPass:',r);
+  LOG_ERROR(StdErr,'vkCreateRenderPass:',r);
   Exit;
  end;
 

@@ -1541,6 +1541,8 @@ function IsTileModeDepth(tiling_idx:Byte):Boolean;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function IsTileModeDepth(tiling_idx:Byte):Boolean;
 begin
  case tiling_idx of
@@ -4008,8 +4010,8 @@ begin
  bytesPerElement:=T.m_bitsPerElement div 8;
  offsetOfCacheLine:=g_offsetOfCacheLine[T.m_microTileMode][fastIntLog2(bytesPerElement)];
 
- //Writeln(HexStr(@contiguous_data));
- //Writeln(HexStr(Align(@contiguous_data,16)));
+ //LOG_TRACE(HexStr(@contiguous_data));
+ //LOG_TRACE(HexStr(Align(@contiguous_data,16)));
 
  contiguous:=Align(@contiguous_data,{16}32);
  //FillChar(contiguous^,SizeOf(TcontiguousCache),0);
@@ -4039,9 +4041,9 @@ begin
      //Move((src + tiled_offset)^,contiguous^[cacheLine][0], 64);
     end;
 
-    //Writeln(HexStr(dst + linear_offset));
-    //Writeln(HexStr(contiguous));
-    //Writeln(T.m_linearWidth);
+    //LOG_TRACE(HexStr(dst + linear_offset));
+    //LOG_TRACE(HexStr(contiguous));
+    //LOG_TRACE(T.m_linearWidth);
 
     linear_offset:=(x*bytesPerElement)+(y*bytesPerElement*T.m_linearWidth)+(z*bytesPerElement*T.m_linearWidth*T.m_linearHeight);
 

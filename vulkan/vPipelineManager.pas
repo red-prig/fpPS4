@@ -93,6 +93,8 @@ implementation
 uses
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  TvGraphicsPipelineKey2Compare=object
   function c(a,b:PvGraphicsPipelineKey):Integer; static;
@@ -399,7 +401,7 @@ begin
  r:=vkCreateGraphicsPipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateGraphicsPipelines:',r);
+  LOG_ERROR(StdErr,'vkCreateGraphicsPipelines:',r);
   Exit;
  end;
 
@@ -450,7 +452,7 @@ begin
  r:=vkCreateComputePipelines(Device.FHandle,FCache,1,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateComputePipelines:',r);
+  LOG_ERROR(StdErr,'vkCreateComputePipelines:',r);
   Exit;
  end;
  Result:=True;

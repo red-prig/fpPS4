@@ -117,6 +117,8 @@ uses
  vfs_subr,
  vfs_cache;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * ---------------------------------------------------------------------
  * Functions for building and sanitizing the mount options
@@ -526,7 +528,7 @@ begin
   end;
   if (opt=nil) then
   begin
-   Writeln(errmsg);
+   LOG_INFO(errmsg);
   end;
  end;
 end;

@@ -72,6 +72,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function TParamSfoFileLoader.open(const _path:RawByteString):Boolean;
 begin
  Result:=False;
@@ -80,7 +82,7 @@ begin
  fd:=FileOpen(path,fmOpenRead);
  if (fd=feInvalidHandle) then
  begin
-  Writeln(StdErr,'Error sfo open:',path);
+  LOG_ERROR(StdErr,'Error sfo open:',path);
   Exit;
  end;
 
@@ -123,19 +125,19 @@ begin
  hdr:=Default(t_sfo_header);
  if (FileRead(fd,hdr,SizeOf(hdr))<>SizeOf(hdr)) then
  begin
-  Writeln(StdErr,'Error sfo read:',path);
+  LOG_ERROR(StdErr,'Error sfo read:',path);
   Exit;
  end;
 
  if (hdr.magic<>SFO_MAGIC) then
  begin
-  Writeln(StdErr,'Invalid sfo file(magic<>SFO_MAGIC):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(magic<>SFO_MAGIC):',path);
   Exit;
  end;
 
  if (hdr.version<>SFO_VERSION) then
  begin
-  Writeln(StdErr,'Invalid sfo file(version<>$101):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(version<>$101):',path);
   Exit;
  end;
 
@@ -143,19 +145,19 @@ begin
 
  if (hdr.key_table_offset>=fsize) then
  begin
-  Writeln(StdErr,'Invalid sfo file(key_table_offset>=fsize):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(key_table_offset>=fsize):',path);
   Exit;
  end;
 
  if (hdr.value_table_offset>=fsize) then
  begin
-  Writeln(StdErr,'Invalid sfo file(value_table_offset>=fsize):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(value_table_offset>=fsize):',path);
   Exit;
  end;
 
  if (hdr.key_table_offset>=hdr.value_table_offset) then
  begin
-  Writeln(StdErr,'Invalid sfo file(key_table_offset>=value_table_offset):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(key_table_offset>=value_table_offset):',path);
   Exit;
  end;
 
@@ -163,7 +165,7 @@ begin
 
  if ((SizeOf(hdr)+entry_table_size)>=fsize) then
  begin
-  Writeln(StdErr,'Invalid sfo file((SizeOf(hdr)+entry_table_size)>=fsize):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file((SizeOf(hdr)+entry_table_size)>=fsize):',path);
   Exit;
  end;
 
@@ -179,19 +181,19 @@ begin
     (key_table=nil) or
     (value_table=nil) then
  begin
-  Writeln(StdErr,'Error sfo read:',path);
+  LOG_ERROR(StdErr,'Error sfo read:',path);
   Exit;
  end;
 
  if (not check_entry_table) then
  begin
-  Writeln(StdErr,'Invalid sfo file(check_entry_table):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(check_entry_table):',path);
   Exit;
  end;
 
  if (not check_key_table) then
  begin
-  Writeln(StdErr,'Invalid sfo file(check_key_table):',path);
+  LOG_ERROR(StdErr,'Invalid sfo file(check_key_table):',path);
   Exit;
  end;
 
@@ -379,7 +381,7 @@ begin
  fd:=FileCreate(path);
  if (fd=feInvalidHandle) then
  begin
-  Writeln(StdErr,'Error sfo create:',path);
+  LOG_ERROR(StdErr,'Error sfo create:',path);
   Exit;
  end;
 
@@ -395,25 +397,25 @@ begin
 
  if not save_chunk(@hdr,SizeOf(hdr)) then
  begin
-  Writeln(StdErr,'Error sfo write:',path);
+  LOG_ERROR(StdErr,'Error sfo write:',path);
   Exit;
  end;
 
  if not save_chunk(entry_table,entry_table_size) then
  begin
-  Writeln(StdErr,'Error sfo write:',path);
+  LOG_ERROR(StdErr,'Error sfo write:',path);
   Exit;
  end;
 
  if not save_chunk(key_table,key_table_size) then
  begin
-  Writeln(StdErr,'Error sfo write:',path);
+  LOG_ERROR(StdErr,'Error sfo write:',path);
   Exit;
  end;
 
  if not save_chunk(value_table,value_table_size) then
  begin
-  Writeln(StdErr,'Error sfo write:',path);
+  LOG_ERROR(StdErr,'Error sfo write:',path);
   Exit;
  end;
 

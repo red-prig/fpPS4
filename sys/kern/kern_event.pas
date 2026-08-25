@@ -117,6 +117,8 @@ uses
  kern_timeout,
  kern_namedobj;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //static MALLOC_DEFINE(M_KQUEUE, 'kqueue', 'memory for kqueue system');
 
 {
@@ -1099,7 +1101,7 @@ begin
   end;
  end;
 
- //Writeln('kern_kevent:',kq^.kq_name);
+ LOG_TRACE('kern_kevent:',kq^.kq_name);
 
  error:=_kern_kevent(td,
                      kq,
@@ -1197,7 +1199,7 @@ begin
  error:=0;
  if (filt >= 0) or (filt + EVFILT_SYSCOUNT < 0) then
  begin
-  Writeln('trying to add a filterop that is out of range: ',(not filt),' is beyond ',EVFILT_SYSCOUNT);
+  LOG_INFO('trying to add a filterop that is out of range: ',(not filt),' is beyond ',EVFILT_SYSCOUNT);
   Exit(EINVAL);
  end;
  mtx_lock(filterops_lock);
@@ -1257,11 +1259,11 @@ begin
 
  if (sysfilt_ops[not filt].fop=nil) then
  begin
-  Writeln(stderr,'kqueue filterops not found:',EVFILT_NAME(filt));
+  LOG_ERROR(stderr,'kqueue filterops not found:',EVFILT_NAME(filt));
   sysfilt_ops[not filt].fop:=@null_filtops;
  end else
  begin
-  Writeln('kqueue_fo_find:',EVFILT_NAME(filt));
+  LOG_INFO('kqueue_fo_find:',EVFILT_NAME(filt));
  end;
 
  mtx_unlock(filterops_lock);
@@ -2545,7 +2547,7 @@ begin
   }
  if (not SLIST_EMPTY(@knl^.kl_list)) then
  begin
-  Writeln('WARNING: destroying knlist w/ knotes on it!');
+  LOG_INFO('WARNING: destroying knlist w/ knotes on it!');
  end;
 
  knl^.kl_lockarg:=nil;

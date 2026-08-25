@@ -166,6 +166,8 @@ uses
  vm_map,
  vm_object;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 procedure UMTXQ_LOCKED_ASSERT(uc:p_umtxq_chain); inline;
 begin
  mtx_assert(uc^.uc_lock);
@@ -540,7 +542,7 @@ begin
   while (uq<>nil) do
   begin
    umtxq_remove_queue(uq, q);
-   //Writeln('umtxq_wakeup:',uq^.uq_thread^.td_name);
+   //LOG_TRACE('umtxq_wakeup:',uq^.uq_thread^.td_name);
    wakeup(uq);
    Inc(ret);
    if (ret >= n_wake) then
@@ -700,7 +702,7 @@ var
 begin
  Result:=0;
 
- //Writeln('_do_lock_umtx(',HexStr(umtx),',',id,',',timo,')');
+ //LOG_TRACE('_do_lock_umtx(',HexStr(umtx),',',id,',',timo,')');
 
  uq:=td^.td_umtxq;
 
@@ -831,7 +833,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_unlock_umtx(',HexStr(umtx),',',id,')');
+ //LOG_TRACE('do_unlock_umtx(',HexStr(umtx),',',id,')');
 
  owner:=fuword64(umtx^.u_owner);
 
@@ -917,7 +919,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_wait(',HexStr(addr),',',id,')');
+ //LOG_TRACE('do_wait(',HexStr(addr),',',id,')');
 
  uq:=td^.td_umtxq;
 
@@ -998,7 +1000,7 @@ var
 begin
  Result:=0;
 
- //Writeln('kern_umtx_wake(',HexStr(umtx),',',n_wake,')');
+ //LOG_TRACE('kern_umtx_wake(',HexStr(umtx),',',n_wake,')');
 
  Result:=umtx_key_get(umtx, TYPE_SIMPLE_WAIT, GET_PRIV_SHARE(priv), @key);
  if (Result<>0) then Exit;
@@ -1022,7 +1024,7 @@ var
 begin
  Result:=0;
 
- //Writeln('_do_lock_normal(',HexStr(m),',',flags,',',timo,',',mode,')');
+ //LOG_TRACE('_do_lock_normal(',HexStr(m),',',flags,',',timo,',',mode,')');
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
@@ -1146,7 +1148,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_unlock_normal(',HexStr(m),',',flags,')');
+ //LOG_TRACE('do_unlock_normal(',HexStr(m),',',flags,')');
 
  id:=td^.td_tid;
 
@@ -1260,7 +1262,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_wake_umutex(',HexStr(m),')');
+ //LOG_TRACE('do_wake_umutex(',HexStr(m),')');
 
  owner:=fuword32(m^.m_owner);
 
@@ -1283,7 +1285,7 @@ begin
 
  if (flags and $80)<>0 then
  begin
-  writeln('TODO');
+  LOG_WARNING('TODO');
  end;
 
  Result:=umtx_key_get(m, TYPE_NORMAL_UMUTEX, GET_SHARE(flags), @key);
@@ -1321,7 +1323,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_cv_signalto(',HexStr(cv),',',tid,')');
+ //LOG_TRACE('do_cv_signalto(',HexStr(cv),',',tid,')');
 
  flags:=fuword32(cv^.c_flags);
 
@@ -1378,7 +1380,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_wake3_umutex(',HexStr(m),',',flags,')');
+ //LOG_TRACE('do_wake3_umutex(',HexStr(m),',',flags,')');
 
  Case (flags and (UMUTEX_PRIO_INHERIT or UMUTEX_PRIO_PROTECT)) of
                     0:ktype:=TYPE_NORMAL_UMUTEX;
@@ -2023,7 +2025,7 @@ var
 begin
  Result:=0;
 
- //Writeln('_do_lock_pi(',HexStr(m),',',flags,',',timo,',',mode,')');
+ //LOG_TRACE('_do_lock_pi(',HexStr(m),',',flags,',',timo,',',mode,')');
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
@@ -2184,7 +2186,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_unlock_pi(',HexStr(m),',',flags,')');
+ //LOG_TRACE('do_unlock_pi(',HexStr(m),',',flags,')');
 
  id:=td^.td_tid;
 
@@ -2393,7 +2395,7 @@ var
 begin
  Result:=0;
 
- //Writeln('_do_lock_pp(',HexStr(m),',',flags,',',timo,',',mode,')');
+ //LOG_TRACE('_do_lock_pp(',HexStr(m),',',flags,',',timo,',',mode,')');
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
@@ -2618,7 +2620,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_unlock_pp(',HexStr(m),',',flags,')');
+ //LOG_TRACE('do_unlock_pp(',HexStr(m),',',flags,')');
 
  id:=td^.td_tid;
  uq:=td^.td_umtxq;
@@ -2762,7 +2764,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_set_ceiling(',HexStr(m),',',ceiling,')');
+ //LOG_TRACE('do_set_ceiling(',HexStr(m),',',ceiling,')');
 
  flags:=fuword32(m^.m_flags);
 
@@ -2942,7 +2944,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_cv_wait(',HexStr(cv),',',HexStr(m),',',wflags,')');
+ //LOG_TRACE('do_cv_wait(',HexStr(cv),',',HexStr(m),',',wflags,')');
 
  uq:=td^.td_umtxq;
 
@@ -3073,7 +3075,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_cv_signal(',HexStr(cv),')');
+ //LOG_TRACE('do_cv_signal(',HexStr(cv),')');
 
  flags:=fuword32(cv^.c_flags);
 
@@ -3112,7 +3114,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_cv_broadcast(',HexStr(cv),')');
+ //LOG_TRACE('do_cv_broadcast(',HexStr(cv),')');
 
  flags:=fuword32(cv^.c_flags);
 
@@ -3152,7 +3154,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_rw_rdlock(',HexStr(rwlock),',',fflag,')');
+ //LOG_TRACE('do_rw_rdlock(',HexStr(rwlock),',',fflag,')');
 
  uq:=td^.td_umtxq;
 
@@ -3304,7 +3306,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_rw_rdlock2(',HexStr(rwlock),',',fflag,')');
+ //LOG_TRACE('do_rw_rdlock2(',HexStr(rwlock),',',fflag,')');
 
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
@@ -3344,7 +3346,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_rw_wrlock(',HexStr(rwlock),')');
+ //LOG_TRACE('do_rw_wrlock(',HexStr(rwlock),')');
 
  uq:=td^.td_umtxq;
 
@@ -3504,7 +3506,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_rw_wrlock2(',HexStr(rwlock),')');
+ //LOG_TRACE('do_rw_wrlock2(',HexStr(rwlock),')');
 
  ts:=get_unit_uptime;
  ts:=ts+TIMESPEC_TO_UNIT(timeout);
@@ -3543,7 +3545,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_rw_unlock(',HexStr(rwlock),')');
+ //LOG_TRACE('do_rw_unlock(',HexStr(rwlock),')');
 
  uq:=td^.td_umtxq;
 
@@ -3670,7 +3672,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_sem_wait(',HexStr(sem),')');
+ //LOG_TRACE('do_sem_wait(',HexStr(sem),')');
 
  uq:=td^.td_umtxq;
 
@@ -3781,7 +3783,7 @@ var
 begin
  Result:=0;
 
- //Writeln('do_sem_wake(',HexStr(sem),')');
+ //LOG_TRACE('do_sem_wake(',HexStr(sem),')');
 
  flags:=fuword32(sem^._flags);
 
@@ -4144,7 +4146,7 @@ begin
    Exit(EINVAL);
  end;
 
- //Writeln('umtx_op(',HexStr(obj),',',op,',',val,',',HexStr(uaddr1),',',HexStr(uaddr2),'):',Result);
+ //LOG_TRACE('umtx_op(',HexStr(obj),',',op,',',val,',',HexStr(uaddr1),',',HexStr(uaddr2),'):',Result);
 end;
 
 procedure _umutex_init(mtx:p_umutex); inline;

@@ -157,6 +157,8 @@ uses
  vfs_vnops,
  vsys_generic;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * Series of placeholder functions for various error returns for
  * VOPs.
@@ -245,7 +247,7 @@ end;
 
 function vop_nostrategy(ap:p_vop_strategy_args):Integer;
 begin
- Writeln('No strategy for buffer at %p');
+ LOG_INFO('No strategy for buffer at %p');
  //ap^.a_bp^.b_ioflags:=ap^.a_bp^.b_ioflags or BIO_ERROR;
  //ap^.a_bp^.b_error:=EOPNOTSUPP;
  //bufdone(ap^.a_bp);
@@ -558,7 +560,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- //Writeln('vop_std  lock:',HexStr(ap^.a_vp^.v_vnlock));
+ //LOG_TRACE('vop_std  lock:',HexStr(ap^.a_vp^.v_vnlock));
 
  Result:=lockmgr(vp^.v_vnlock,ap^.a_flags,VI_MTX(vp));
 
@@ -574,7 +576,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- //Writeln('vop_stdunlock:',HexStr(ap^.a_vp^.v_vnlock));
+ //LOG_TRACE('vop_stdunlock:',HexStr(ap^.a_vp^.v_vnlock));
 
  Result:=lockmgr(vp^.v_vnlock,ap^.a_flags or LK_RELEASE,VI_MTX(vp));
 
@@ -585,7 +587,7 @@ end;
 function vop_stdislocked(ap:p_vop_islocked_args):Integer;
 begin
 
- //Writeln('vop_stdislocked:',HexStr(ap^.a_vp^.v_vnlock),':',mtx_owned(ap^.a_vp^.v_vnlock^));
+ //LOG_TRACE('vop_stdislocked:',HexStr(ap^.a_vp^.v_vnlock),':',mtx_owned(ap^.a_vp^.v_vnlock^));
 
  if mtx_owned(ap^.a_vp^.v_vnlock^) then
   Exit(LK_EXCLUSIVE)

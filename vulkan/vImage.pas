@@ -297,6 +297,8 @@ implementation
 uses
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function TvImageKeyParams.layerCount:Word;
 begin
  if (TVkImageType(itype)=VK_IMAGE_TYPE_3D) then
@@ -1369,7 +1371,7 @@ begin
  r:=vkCreateFramebuffer(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateFramebuffer');
+  LOG_ERROR(StdErr,'vkCreateFramebuffer');
  end;
 
  Result:=(r=VK_SUCCESS);
@@ -1443,7 +1445,7 @@ begin
  r:=vkCreateFramebuffer(Device.FHandle,@info,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateFramebuffer');
+  LOG_ERROR(StdErr,'vkCreateFramebuffer');
  end;
 
  Result:=(r=VK_SUCCESS);
@@ -1509,7 +1511,7 @@ begin
  r:=vkCreateSwapchainKHR(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateSwapchainKHR:',r);
+  LOG_ERROR(StdErr,'vkCreateSwapchainKHR:',r);
   Exit;
  end;
 
@@ -1525,7 +1527,7 @@ begin
  r:=vkGetSwapchainImagesKHR(Device.FHandle,FHandle,@count,@FImage[0]);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkGetSwapchainImagesKHR:',r);
+  LOG_ERROR(StdErr,'vkGetSwapchainImagesKHR:',r);
   Exit;
  end;
 
@@ -1550,7 +1552,7 @@ begin
   r:=vkCreateImageView(Device.FHandle,@cimg,nil,@FView);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln(StdErr,'vkCreateImageView:',r);
+   LOG_ERROR(StdErr,'vkCreateImageView:',r);
    Exit;
   end;
   FImages[i]:=TvSwapChainImage.Create;
@@ -1662,7 +1664,7 @@ begin
  r:=vkCreateImage(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateImage:',r);
+  LOG_ERROR(StdErr,'vkCreateImage:',r);
   Exit;
  end;
 
@@ -1695,7 +1697,7 @@ begin
 
  if (Result<>VK_SUCCESS) then
  begin
-  Writeln(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
+  LOG_ERROR(stderr,'Error BindMem:',Result,' To:0x',HexStr(FHandle,16));
   vMemory.MemManager._print_devs;
   vMemory.MemManager._print_host;
  end;
@@ -1892,7 +1894,7 @@ begin
  r:=vkCreateImageView(Device.FHandle,@cinfo,nil,@FImg);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateImageView:',r);
+  LOG_ERROR(StdErr,'vkCreateImageView:',r);
   Exit;
  end;
  Result:=TvImageView.Create;
@@ -2329,7 +2331,7 @@ var
 begin
  Result:=False;
 
- //Writeln('Push:0x',HexStr(image,16),' ',HexStr(dstAccessMask,8),' ',(newImageLayout),' ',HexStr(dstStageMask,8));
+ //LOG_TRACE('Push:0x',HexStr(image,16),' ',HexStr(dstAccessMask,8),' ',(newImageLayout),' ',HexStr(dstStageMask,8));
 
  //RAW
  //WAR
@@ -2368,7 +2370,7 @@ begin
    print_backtrace(StdErr,Get_pc_addr,get_frame,0);
   end;
 
-  Writeln('Barrier:'#13#10,
+  LOG_TRACE('Barrier:'#13#10,
           ' image        =0x',HexStr(image,16),#13#10,
           ' srcAccessMask=',GetAccessMaskStr(AccessMask),#13#10,
           ' dstAccessMask=',GetAccessMaskStr(dstAccessMask),#13#10,

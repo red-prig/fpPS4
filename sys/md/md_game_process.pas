@@ -7,7 +7,7 @@ interface
 uses
  windows,
  ntapi,
- game_run_context,
+ game_process,
  md_systm,
  md_pipe;
 

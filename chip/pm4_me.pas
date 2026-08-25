@@ -223,6 +223,8 @@ uses
  vm_tracking_map,
  dev_dce;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function GetAsyncKeyState(vKey:longint):Boolean; inline;
 begin
  Result:=(Windows.GetKeyState(vKey) and $8000)<>0;
@@ -734,7 +736,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('QueueSubmit:',r);
+  LOG_TRACE('QueueSubmit:',r);
  end;
 
  if (r<>VK_SUCCESS) then
@@ -761,7 +763,7 @@ begin
     Exit;
    end;
   else
-   Writeln(stderr,'last.Status=',r); //error
+   LOG_ERROR(stderr,'last.Status=',r); //error
  end;
 
  free_cmd_buffer(Cmd);
@@ -784,7 +786,7 @@ begin
    VK_SUCCESS  :;
    VK_NOT_READY:Exit;
    else
-    Writeln(stderr,'last.Status=',Result); //error
+    LOG_ERROR(stderr,'last.Status=',Result); //error
   end;
 
   TAILQ_REMOVE(@stall[i],last,@last.entry);
@@ -1170,7 +1172,7 @@ var
  resource_instance:p_pm4_resource_instance;
  b:Boolean;
 begin
- //Writeln('[Prepare_Uniforms]->');
+ LOG_TRACE('[Prepare_Uniforms]->');
 
  if (Length(UniformBuilder.FImages)<>0) then
  begin
@@ -1243,7 +1245,7 @@ begin
      resource_instance^.resource^.rimage:=ri;
     end;
 
-    //Writeln(GetVkFormatStr(ri.key.cformat));
+    LOG_TRACE(GetVkFormatStr(ri.key.cformat));
 
     repeat
 
@@ -1352,7 +1354,7 @@ begin
  end;
  //buffers
 
- //Writeln('<-[Prepare_Uniforms]');
+ LOG_TRACE('<-[Prepare_Uniforms]');
 end;
 
 procedure BindMipStorage(var ctx:t_me_render_context;
@@ -1516,7 +1518,7 @@ begin
        iv:=ri.FetchView(ctx.Cmd,FView,iu_sampled);
        Assert(iv<>nil);
 
-       Writeln('BindImage:->[',i,']'#13#10,
+       LOG_TRACE('BindImage:->[',i,']'#13#10,
                ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
                ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
@@ -1533,7 +1535,7 @@ begin
        iv:=ri.FetchView(ctx.Cmd,FView,iu_storage);
        Assert(iv<>nil);
 
-       Writeln('BindStorage:->[',i,']'#13#10,
+       LOG_TRACE('BindStorage:->[',i,']'#13#10,
                ' 0x',HexStr(ri.FHandle,16),':',ri.key.cformat,':',ri.FName,'->'#13#10,
                ' 0x',HexStr(iv.FHandle,16),':',iv.key.cformat,':',iv.FName);
 
@@ -1593,7 +1595,7 @@ begin
    if (resource_instance<>nil) then
    begin
 
-    Writeln('rb:curr:',HexStr(resource_instance^.curr.mem_usage,1),
+    LOG_TRACE('rb:curr:',HexStr(resource_instance^.curr.mem_usage,1),
               ' prev:',HexStr(resource_instance^.prev.mem_usage,1),
               ' next:',HexStr(resource_instance^.next.mem_usage,1)
            );
@@ -1617,7 +1619,7 @@ begin
 
    range:=size;
 
-   Writeln('BindBuffer:->[',i,':',bind,']:',GetVkFormatStr(cformat),' 0x',HexStr(QWORD(addr),10),' ',get_bind_str(buf.FBind),#13#10,
+   LOG_TRACE('BindBuffer:->[',i,':',bind,']:',GetVkFormatStr(cformat),' 0x',HexStr(QWORD(addr),10),' ',get_bind_str(buf.FBind),#13#10,
            ' 0x',HexStr(buf.FHandle,16),':',buf.FName,'->[',diff_a,'..',diff_a+range,']');
 
    DescriptorGroup.BindBuffer(fset,bind,
@@ -1700,7 +1702,7 @@ begin
 
    //
 
-   //Writeln('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
+   LOG_TRACE('init_img:',HexStr(resource^.rkey.Addr),' ',(resource^.rkey.params.width),'x',(resource^.rkey.params.height));
 
    //now preload only sampled image
    if (resource^.uall.img_usage=[iu_sampled]) then
@@ -1813,7 +1815,7 @@ begin
   str:=str+' ('+HexStr(ShaderGroup.FKey.FShaders[i].FHash_gcn,16)+') '+GetDumpSpvName(i,ShaderGroup.FKey.FShaders[i].FHash_spv)+#13#10;
  end;
 
- Writeln(stderr,str);
+ LOG_TRACE(stderr,str);
 end;
 
 procedure pm4_DrawPrepare(var ctx:t_me_render_context);
@@ -2045,7 +2047,7 @@ begin
 
  if (GP=nil) then
  begin
-  Writeln(stderr,'FetchGraphicsPipeline=nil');
+  LOG_TRACE(stderr,'FetchGraphicsPipeline=nil');
 
   DumpShaderGroup(ctx.rt_info^.ShaderGroup);
 
@@ -2148,7 +2150,7 @@ begin
 
    ctx.Render.AddClearColor(ctx.rt_info^.RT_INFO[i].CLEAR_COLOR);
 
-   Writeln('BindFrame:->[',i,']'#13#10,
+   LOG_TRACE('BindFrame:->[',i,']'#13#10,
            ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
            ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
@@ -2276,7 +2278,7 @@ begin
 
   ctx.Render.AddClearColor(ctx.rt_info^.DB_INFO.CLEAR_VALUE);
 
-  Writeln('BindDepth:->'#13#10,
+  LOG_TRACE('BindDepth:->'#13#10,
           ' 0x',HexStr(ri.FHandle,16),':',GetVkFormatStr(ri.key.cformat),':',ri.FName,'->'#13#10,
           ' 0x',HexStr(iv.FHandle,16),':',GetVkFormatStr(iv.key.cformat),':',iv.FName);
 
@@ -2309,7 +2311,7 @@ begin
 
  if not ctx.Cmd.BeginRenderPass(@ctx.Render,GP) then
  begin
-  Writeln(stderr,'BeginRenderPass(ctx.Render)');
+  LOG_TRACE(stderr,'BeginRenderPass(ctx.Render)');
 
   DumpShaderGroup(ctx.rt_info^.ShaderGroup);
 
@@ -2548,7 +2550,7 @@ begin
  case node^.ntype of
   ntDrawIndex2:
    begin
-    Writeln(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
                                                      node^.indexOffset ,',',
                                                      node^.vertexOffset,',',
                                                      node^.indexCount  ,')');
@@ -2560,7 +2562,7 @@ begin
    end;
   ntDrawIndexOffset2:
    begin
-    Writeln(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndexOffset2(',HexStr(Pointer(node^.indexBase)),',',
                                                      node^.indexOffset ,',',
                                                      node^.vertexOffset,',',
                                                      node^.indexCount  ,')');
@@ -2572,7 +2574,7 @@ begin
    end;
   ntDrawIndexAuto:
    begin
-    Writeln(HexStr(node^.id,16),':DrawIndexAuto(',node^.vertexOffset,',',
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndexAuto(',node^.vertexOffset,',',
                                                   node^.indexCount  ,')');
 
     ctx.Cmd.DrawIndexAuto(node^.vertexOffset,
@@ -2580,14 +2582,14 @@ begin
    end;
   ntClearDepth:
    begin
-    Writeln(HexStr(node^.id,16),':ClearDepth');
+    LOG_TRACE(HexStr(node^.id,16),':ClearDepth');
 
     pm4_ClearDepth(node^.rt_info,ctx);
    end;
 
   ntDrawIndexIndirect:
    begin
-    Writeln(HexStr(node^.id,16),':DrawIndexIndirect(',HexStr(Pointer(node^.indirectBase)),',',
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndexIndirect(',HexStr(Pointer(node^.indirectBase)),',',
                                                       node^.dataOffset,')');
 
     ctx.Cmd.DrawIndexIndirect(
@@ -2606,7 +2608,7 @@ begin
 
   ntDrawIndexIndirectCountMulti:
    begin
-    Writeln(HexStr(node^.id,16),':DrawIndexIndirectCountMulti(',HexStr(Pointer(node^.indirectBase)),',',
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndexIndirectCountMulti(',HexStr(Pointer(node^.indirectBase)),',',
                                                                 HexStr(Pointer(node^.countAddr   )),',',
                                                                 node^.dataOffset,',',
                                                                 node^.stride    ,',',
@@ -2914,7 +2916,7 @@ begin
  end else
  if Detect_buf_meta(ctx,FUniformBuilder) then
  begin
-  Writeln('Detect_buf_meta:0x',HexStr(CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn,16));
+  LOG_TRACE('Detect_buf_meta:0x',HexStr(CP_KEY.FShaderGroup.FKey.FShaders[vShaderStageCs].FHash_gcn,16));
   //
   Prepare_buf_clear(ctx,FUniformBuilder);
   //
@@ -2928,7 +2930,7 @@ begin
 
  if not ctx.Cmd.BindCompute(CP) then
  begin
-  Writeln(stderr,'BindCompute(CP)');
+  LOG_TRACE(stderr,'BindCompute(CP)');
 
   DumpShaderGroup(CP_KEY.FShaderGroup);
 
@@ -2961,7 +2963,7 @@ begin
 
  if not pm4_DispatchPrepare(ctx,node) then Exit;
 
- Writeln('DispatchDirect(',node^.DIM_X,',',node^.DIM_Y,',',node^.DIM_Z,')');
+ LOG_TRACE('DispatchDirect(',node^.DIM_X,',',node^.DIM_Y,',',node^.DIM_Z,')');
 
  ctx.Cmd.DispatchDirect(node^.DIM_X,node^.DIM_Y,node^.DIM_Z);
 
@@ -2989,7 +2991,7 @@ begin
 
  if not pm4_DispatchPrepare(ctx,node) then Exit;
 
- Writeln(HexStr(node^.id,16),':DispatchIndirect(0x',HexStr(node^.BASE,11),',0x',HexStr(node^.Offset,8),')');
+ LOG_TRACE(HexStr(node^.id,16),':DispatchIndirect(0x',HexStr(node^.BASE,11),',0x',HexStr(node^.Offset,8),')');
 
  ctx.Cmd.DispatchIndirect(Pointer(node^.BASE),node^.Offset);
 
@@ -3025,7 +3027,7 @@ begin
   ctx.InsertLabel(PChar('WriteEop:0x'+HexStr(QWORD(node^.addr),10)));
   if p_print_gpu_ops then
   begin
-   Writeln('WriteEop:0x'+HexStr(QWORD(node^.addr),10));
+   LOG_TRACE('WriteEop:0x'+HexStr(QWORD(node^.addr),10));
   end;
   ctx.stream^.hint_repeat:=True;
  end;
@@ -3231,7 +3233,7 @@ begin
      ctx.Cmd.WriteEvent(node^.eventType);
     end;
    end;
-  //FLUSH_AND_INV_CB_DATA_TS   :Writeln(' eventType=FLUSH_AND_INV_CB_DATA_TS');
+  //FLUSH_AND_INV_CB_DATA_TS   :LOG_TRACE(' eventType=FLUSH_AND_INV_CB_DATA_TS');
   THREAD_TRACE_MARKER:
    begin
     ctx.InsertLabel('THREAD_TRACE_MARKER');
@@ -3254,11 +3256,11 @@ begin
    end;
   PIXEL_PIPE_STAT_RESET: //[OcclusionQuery] Reset this query
    begin
-    Writeln(stderr,'TODO:PIXEL_PIPE_STAT_RESET');
+    LOG_WARNING(stderr,'TODO:PIXEL_PIPE_STAT_RESET');
    end;
   else
    begin
-    Writeln(stderr,'EventWrite eventType=0x',HexStr(node^.eventType,2));
+    LOG_CRITICAL(StdErr,'EventWrite eventType=0x',HexStr(node^.eventType,2));
     Assert (false ,'EventWrite eventType=0x'+HexStr(node^.eventType,2));
    end;
 
@@ -3372,7 +3374,7 @@ begin
 
       if p_print_gpu_ops then
       begin
-       Writeln('[1]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
+       LOG_TRACE('[1]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
       end;
 
       ctx.Cmd.dmaData1(node^.src,node^.dst,byteSize,node^.wrConfirm);
@@ -3382,7 +3384,7 @@ begin
 
       if p_print_gpu_ops then
       begin
-       Writeln('[2]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
+       LOG_TRACE('[2]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
       end;
 
       src_dmem:=get_dmem_ptr(node^.src);
@@ -3496,8 +3498,8 @@ begin
 
     end;
  else
-         Writeln('DmaData: srcSel='+DmaDataStr[srcSel and 15]+' dstSel='+DmaDataStr[dstSel and 15]);
-    Assert(false,'DmaData: srcSel='+DmaDataStr[srcSel and 15]+' dstSel='+DmaDataStr[dstSel and 15]);
+    LOG_CRITICAL(StdErr,'DmaData: srcSel='+DmaDataStr[srcSel and 15]+' dstSel='+DmaDataStr[dstSel and 15]);
+    Assert      (false,'DmaData: srcSel='+DmaDataStr[srcSel and 15]+' dstSel='+DmaDataStr[dstSel and 15]);
  end;
 
 end;
@@ -3525,7 +3527,7 @@ begin
  end;
  }
 
- //Writeln('me_test_mem:labels[',get_dce_label_id(dmem),']=',dmem^,' refValue=',node^.refValue,' compareFunc=',node^.compareFunc);
+ LOG_TRACE('me_test_mem:labels[',get_dce_label_id(dmem),']=',dmem^,' refValue=',node^.refValue,' compareFunc=',node^.compareFunc);
 
  val:=dmem^ and node^.mask;
  ref:=node^.refValue;
@@ -3613,19 +3615,19 @@ begin
    //loop detection
    if wait_loop_autoskip then
    begin
-    Writeln(stderr,'WaitRegMem hang detected 0x',HexStr(QWORD(node^.pollAddr),10),' -> skip');
+    LOG_TRACE(stderr,'WaitRegMem hang detected 0x',HexStr(QWORD(node^.pollAddr),10),' -> skip');
     goto _reset;
    end else
    begin
-    Writeln(stderr,'WaitRegMem hang detected 0x',HexStr(QWORD(node^.pollAddr),10));
+    LOG_TRACE(stderr,'WaitRegMem hang detected 0x',HexStr(QWORD(node^.pollAddr),10));
     //
     if SendWarnMsg('Hang in WaitRegMem instruction detected, skip instruction?')=0 then
     begin
-     Writeln(stderr,' -> skip');
+     LOG_TRACE(stderr,' -> skip');
      goto _reset;
     end else
     begin
-     Writeln(stderr,' -> repeat');
+     LOG_TRACE(stderr,' -> repeat');
      ctx.stream^.hint_loop:=0;
     end;
     //
@@ -3678,7 +3680,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('LoadConstRam:0x',HexStr(QWORD(addr_dmem),10),'->[0x',HexStr(start,4),']:size=0x',HexStr(size,6));
+  LOG_TRACE('LoadConstRam:0x',HexStr(QWORD(addr_dmem),10),'->[0x',HexStr(start,4),']:size=0x',HexStr(size,6));
  end;
 
  Move(addr_dmem^,ctx.me^.CONST_RAM[start],size);
@@ -3713,7 +3715,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('DumpConstRam:[0x',HexStr(start,4),']->0x',HexStr(QWORD(addr_dmem),10),':size=0x',HexStr(size,6));
+  LOG_TRACE('DumpConstRam:[0x',HexStr(start,4),']->0x',HexStr(QWORD(addr_dmem),10),':size=0x',HexStr(size,6));
  end;
 
  Move(ctx.me^.CONST_RAM[start],addr_dmem^,size);
@@ -3740,14 +3742,14 @@ begin
  begin
   if p_print_gpu_ops then
   begin
-   Writeln('WaitOnCECounter:(',ctx.me^.CE_COUNT,' <= ',ctx.me^.DE_COUNT,')');
+   LOG_TRACE('WaitOnCECounter:(',ctx.me^.CE_COUNT,' <= ',ctx.me^.DE_COUNT,')');
   end;
   ctx.switch_task;
  end else
  begin
   if p_print_gpu_ops then
   begin
-   Writeln('WaitOnCECounter:(',ctx.me^.CE_COUNT,' > ',ctx.me^.DE_COUNT,')');
+   LOG_TRACE('WaitOnCECounter:(',ctx.me^.CE_COUNT,' > ',ctx.me^.DE_COUNT,')');
   end;
  end;
 end;
@@ -3762,14 +3764,14 @@ begin
  begin
   if p_print_gpu_ops then
   begin
-   Writeln('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') >= ',diff);
+   LOG_TRACE('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') >= ',diff);
   end;
   ctx.switch_task;
  end else
  begin
   if p_print_gpu_ops then
   begin
-   Writeln('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') < ',diff);
+   LOG_TRACE('WaitOnDECounterDiff:(',ctx.me^.DE_COUNT,' - ',ctx.me^.CE_COUNT,') < ',diff);
   end;
  end;
 end;
@@ -3900,7 +3902,7 @@ begin
     begin
      if p_print_gpu_ops then
      begin
-      Writeln('+',HexStr(ctx.node^.id,16),':',ctx.node^.ntype);
+      LOG_TRACE('+',HexStr(ctx.node^.id,16),':',ctx.node^.ntype);
      end;
      ctx.stream^.hint_cmds:=True;
     end;
@@ -3945,7 +3947,7 @@ begin
 
       else
        begin
-        Writeln(stderr,'me:+',ctx.node^.ntype);
+        LOG_CRITICAL(StdErr,'me:+',ctx.node^.ntype);
         Assert(false,'me:+'+GetEnumName(TypeInfo(t_pm4_node_type),ord(ctx.node^.ntype)));
        end;
      end;

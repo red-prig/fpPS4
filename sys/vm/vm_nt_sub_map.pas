@@ -75,6 +75,8 @@ implementation
 uses
  md_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 procedure vm_nt_sub_map_init(map:p_vm_nt_sub_map;min,max:vm_offset_t); inline;
 begin
  map^:=Default(t_vm_nt_sub_map);
@@ -418,9 +420,9 @@ var
  entry,next,after:p_vm_nt_sub_entry;
 begin
  {
- Writeln('[vm_nt_sub_map_move]');
- Writeln(' dst:',HexStr(dst^.min_offset,16),':',HexStr(dst^.max_offset,16));
- Writeln(' src:',HexStr(src^.min_offset,16),':',HexStr(src^.max_offset,16));
+ LOG_INFO('[vm_nt_sub_map_move]');
+ LOG_TRACE(' dst:',HexStr(dst^.min_offset,16),':',HexStr(dst^.max_offset,16));
+ LOG_TRACE(' src:',HexStr(src^.min_offset,16),':',HexStr(src^.max_offset,16));
  }
 
  entry:=src^.header.next;
@@ -454,9 +456,9 @@ begin
  Assert((dst^.min_offset=src^.min_offset) or (dst^.max_offset=src^.max_offset),'vm_nt_sub_map_clip');
 
  {
- Writeln('[vm_nt_sub_map_clip]');
- Writeln(' dst:',HexStr(dst^.min_offset,16),':',HexStr(dst^.max_offset,16));
- Writeln(' src:',HexStr(src^.min_offset,16),':',HexStr(src^.max_offset,16));
+ LOG_INFO('[vm_nt_sub_map_clip]');
+ LOG_TRACE(' dst:',HexStr(dst^.min_offset,16),':',HexStr(dst^.max_offset,16));
+ LOG_TRACE(' src:',HexStr(src^.min_offset,16),':',HexStr(src^.max_offset,16));
  }
 
  entry:=nil;
@@ -554,7 +556,7 @@ begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
    begin
-    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_nt_sub_map_protect');
    end;
    //save changes
@@ -612,7 +614,7 @@ begin
    r:=md_protect(Pointer(base),size,prot);
    if (r<>0) then
    begin
-    Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
+    LOG_CRITICAL(StdErr,'failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
     Assert(false,'vm_nt_sub_map_protect');
    end;
    //save changes
@@ -689,7 +691,7 @@ begin
     r:=md_protect(Pointer(base),size,prot);
     if (r<>0) then
     begin
-     Writeln('failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
+     LOG_CRITICAL(StdErr,'failed md_protect(',HexStr(base,11),',',HexStr(base+size,11),'):0x',HexStr(r,8));
      Assert(false,'vm_nt_sub_map_prot_fixup');
     end;
     //save changes

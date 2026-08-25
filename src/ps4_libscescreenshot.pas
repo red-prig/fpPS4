@@ -10,6 +10,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_SCREENSHOT_MAX_FS_PATH            =1024;
  SCE_SCREENSHOT_MAX_PHOTO_TITLE_LENGTH =64;
@@ -47,7 +49,7 @@ function ps4_sceScreenShotSetOverlayImage(
           offsety:Integer
          ):Integer;
 begin
- Writeln('sceScreenShotSetOverlayImage:',filePath);
+ LOG_INFO('sceScreenShotSetOverlayImage:',filePath);
  Result:=0;
 end;
 
@@ -58,28 +60,29 @@ function ps4_sceScreenShotSetOverlayImageWithOrigin(
           origin:Integer //SceScreenShotOrigin
          ):Integer;
 begin
- Writeln('sceScreenShotSetOverlayImageWithOrigin:',filePath);
+ LOG_INFO('sceScreenShotSetOverlayImageWithOrigin:',filePath);
  Result:=0;
 end;
 
 function ps4_sceScreenShotEnable():Integer;
 begin
- Writeln('sceScreenShotEnable');
+ LOG_INFO('sceScreenShotEnable');
  Result:=0;
 end;
 
 function ps4_sceScreenShotDisable():Integer;
 begin
- Writeln('sceScreenShotDisable');
+ LOG_INFO('sceScreenShotDisable');
  Result:=0;
 end;
 
 function ps4_sceScreenShotSetParam(param:pSceScreenShotParam):Integer;
 begin
- Writeln('sceScreenShotSetParam');
+ LOG_INFO('sceScreenShotSetParam');
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceScreenShot(name:pchar):p_lib_info;
 var
   lib:TLIBRARY;

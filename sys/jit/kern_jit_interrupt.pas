@@ -25,6 +25,8 @@ uses
  subr_backtrace,
  g_node_splay;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  t_next_addr_type=(naCurr,naNext,naRipUnknow);
 
@@ -200,7 +202,7 @@ begin
    with curkthread^.td_frame do
    begin
     tf_rip:=(info.original); //need by AST
-    //Writeln('rev_dispatcher:0:',HexStr(addr),'->',HexStr(info.original,16));
+    LOG_TRACE('rev_dispatcher:0:',HexStr(addr),'->',HexStr(info.original,16));
    end;
    Exit;
   end;
@@ -220,19 +222,19 @@ begin
 
     Assert((info.original = tf_rip),'rev_dispatcher:1');
 
-    //Writeln('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
+    //LOG_TRACE('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
    end;
 
    Exit;
   end else
   begin
-   Writeln('rev_dispatcher:3:',HexStr(addr));
+   LOG_CRITICAL(StdErr,'rev_dispatcher:3:',HexStr(addr));
    Assert(False,'rev_dispatcher:3');
   end;
 
  end else
  begin
-  Writeln('rev_dispatcher:4:',HexStr(addr));
+  LOG_CRITICAL(StdErr,'rev_dispatcher:4:',HexStr(addr));
   Assert(False,'rev_dispatcher:4');
  end;
 end;
@@ -613,7 +615,7 @@ _start:
 
  if (f<>3) and (td^.td_teb^.iflag<>0) then
  begin
-  Writeln('TODO:rare ipi case!');
+  LOG_WARNING('TODO:rare ipi case!');
   td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
   Exit;
  end;
@@ -622,14 +624,14 @@ _start:
   1:
    begin
     //jit handler
-    //Writeln('jit handler');
+    LOG_TRACE('jit handler');
     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
     Exit;
    end;
   2:
    begin
     //jit nop handler
-    //Writeln('jit nop handler');
+    LOG_TRACE('jit nop handler');
 
     //pop %rip
     Rip:=PQWORD(Rsp)[0];
@@ -639,7 +641,7 @@ _start:
   3:
    begin
     //ipi nop
-    //Writeln('ipi nop');
+    LOG_TRACE('ipi nop');
     td^.td_teb^.iflag:=0;
     Rip:=QWORD(td^.td_teb^.ipi_rip);
     goto _start;
@@ -650,7 +652,7 @@ _start:
        (Rip<=(QWORD(td^.td_jctx.lacuna.addr + td^.td_jctx.lacuna.size))) then
     begin
      //jit lacuna
-     //Writeln('jit lacuna');
+     LOG_TRACE('jit lacuna');
      //skip
      Exit;
     end else
@@ -659,7 +661,7 @@ _start:
 
      if (info.recompil = Rip) then
      begin
-      //Writeln('jit_direct');
+      LOG_TRACE('jit_direct');
 
       //push %rip
       Rsp:=Rsp-8;
@@ -672,13 +674,13 @@ _start:
 
      jit_analize(Pointer(Rip),@info,ctx);
 
-     //Writeln('jit_analize=',ctx.atype);
+     LOG_TRACE('jit_analize=',ctx.atype);
 
      case ctx.atype of
       naRipUnknow:
        begin
         ctx.builder.Free;
-        Writeln('TODO:naRipUnknow');
+        LOG_WARNING('TODO:naRipUnknow');
         td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
         Exit;
        end;
@@ -688,13 +690,13 @@ _start:
      jit_build(td,ctx);
 
      {
-     Writeln('-----------------------------');
-     Writeln(HexStr(td^.td_jctx.lacuna.addr));
+     LOG_TRACE('-----------------------------');
+     LOG_TRACE(HexStr(td^.td_jctx.lacuna.addr));
 
      print_disassemble(td^.td_jctx.lacuna.addr,ctx.builder.GetInstructionsSize);
 
-     Writeln(HexStr(td^.td_jctx.lacuna.addr+ctx.builder.GetInstructionsSize));
-     Writeln('-----------------------------');
+     LOG_TRACE(HexStr(td^.td_jctx.lacuna.addr+ctx.builder.GetInstructionsSize));
+     LOG_TRACE('-----------------------------');
      }
 
      ctx.builder.Free;
@@ -705,7 +707,7 @@ _start:
     end else
     begin
      //internal? hle?
-     //Writeln('internal handler');
+     LOG_TRACE('internal handler');
      td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
      Exit;
     end;

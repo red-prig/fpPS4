@@ -18,6 +18,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function TvSampler.Compile(pInfo:PVkSamplerCreateInfo):Boolean;
 var
  r:TVkResult;
@@ -34,7 +36,7 @@ begin
  r:=vkCreateSampler(Device.FHandle,pInfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateSampler:',r);
+  LOG_ERROR(StdErr,'vkCreateSampler:',r);
   Exit;
  end;
  Result:=True;

@@ -161,6 +161,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  pSceSaveDataDialogCloseParam=^SceSaveDataDialogCloseParam;
  SceSaveDataDialogCloseParam=packed record
@@ -289,7 +291,7 @@ var
  client:TSaveDialogClient;
 begin
  Result:=0;
- Writeln('sceSaveDataDialogInitialize');
+ LOG_INFO('sceSaveDataDialogInitialize');
 
  mtx_lock(g_SaveDialog_mtx);
 
@@ -1525,7 +1527,7 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
 
- Writeln('sceSaveDataDialogOpen');
+ LOG_INFO('sceSaveDataDialogOpen');
 
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
  mtx_lock(g_SaveDialog_mtx);
@@ -1603,7 +1605,7 @@ var
  anim:Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- Writeln('sceSaveDataDialogClose');
+ LOG_INFO('sceSaveDataDialogClose');
 
  mtx_lock(g_SaveDialog_mtx);
 
@@ -1633,7 +1635,7 @@ end;
 function ps4_sceSaveDataDialogTerminate():Integer;
 begin
  Result:=SCE_COMMON_DIALOG_ERROR_NOT_INITIALIZED;
- Writeln('sceSaveDataDialogTerminate');
+ LOG_INFO('sceSaveDataDialogTerminate');
 
  mtx_lock(g_SaveDialog_mtx);
 
@@ -1852,6 +1854,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceSaveDataDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

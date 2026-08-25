@@ -65,6 +65,8 @@ uses
  kern_proc,
  kern_timeout;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  EVENTID_FLIP     =$0006;
  EVENTID_VBLANK   =$0007;
@@ -344,13 +346,13 @@ begin
         begin
          addr:=info.addr_lo or (QWORD(info.addr_hi) shl 32);
 
-         Writeln('dce_set_cursor_enable:',canary,' ',
+         LOG_INFO('dce_set_cursor_enable:',canary,' ',
                                           info.index,' ',
                                           HexStr(addr,16));
         end;
       0:
         begin
-         Writeln('dce_set_cursor_disable:',canary,' ',
+         LOG_INFO('dce_set_cursor_disable:',canary,' ',
                                            info.index);
         end;
      end;
@@ -360,14 +362,14 @@ begin
     begin
      addr:=p_cursor_img_addr(@info)^.addr_lo or (QWORD(p_cursor_img_addr(@info)^.addr_hi) shl 32);
 
-     Writeln('dce_set_image_addr:',canary,' ',
+     LOG_INFO('dce_set_image_addr:',canary,' ',
                                    p_cursor_img_addr(@info)^.index,' ',
                                    HexStr(addr,16));
     end;
 
   2: //SetPosition
     begin
-     Writeln('dce_set_cursor_pos:',canary,' ',
+     LOG_INFO('dce_set_cursor_pos:',canary,' ',
                                    p_cursor_pos(@info)^.index,' ',
                                    p_cursor_pos(@info)^.posX,' ',
                                    p_cursor_pos(@info)^.posY);
@@ -379,7 +381,7 @@ begin
 
   6: //IsUpdatePending
     begin
-     Writeln('dce_is_update_pending:',canary,' ',
+     LOG_INFO('dce_is_update_pending:',canary,' ',
                                       p_cursor_update_pending(@info)^.index,' ',
                                       p_cursor_update_pending(@info)^.ptype);
 
@@ -426,7 +428,7 @@ var
 begin
  Result:=0;
 
- //Writeln('dce_flip_control(',data^.id,')');
+ LOG_TRACE('dce_flip_control(',data^.id,')');
 
  //id -> 0..0x24
 
@@ -492,7 +494,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      Writeln('dce_video_open');
+      LOG_INFO('dce_video_open');
 
       ptr:=Pointer(data^.arg5);
       len:=$a5a5; //canary
@@ -533,7 +535,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      Writeln('dce_video_close:',data^.arg2);
+      LOG_INFO('dce_video_close:',data^.arg2);
 
       close_vblank;
 
@@ -573,7 +575,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      Writeln('UnregisterBuffer:',data^.arg2,' ',data^.arg3);
+      LOG_INFO('UnregisterBuffer:',data^.arg2,' ',data^.arg3);
 
       Exit(0);
      end;
@@ -605,7 +607,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      Writeln('UnregisterBufferAttribute:',data^.arg2,' ',data^.arg3);
+      LOG_INFO('UnregisterBufferAttribute:',data^.arg2,' ',data^.arg3);
 
       Exit(0);
      end;
@@ -637,7 +639,7 @@ begin
 
       if (Result<>0) then Exit;
 
-      Writeln('SetFlipRate:',data^.arg3);
+      LOG_TRACE('SetFlipRate:',data^.arg3);
 
       Exit(0);
      end;
@@ -657,7 +659,7 @@ begin
        Exit(EINVAL);
       end;
 
-      Writeln('sceVideoOutSetWindowModeMargins:',DWORD(data^.arg3),' ',DWORD(data^.arg4));
+      LOG_INFO('sceVideoOutSetWindowModeMargins:',DWORD(data^.arg3),' ',DWORD(data^.arg4));
 
       Exit(0);
      end;
@@ -739,7 +741,7 @@ begin
       //arg3 = &result;
       //arg4 = 40
 
-      //Writeln('sceVideoOutGetVblankStatus');
+      LOG_TRACE('sceVideoOutGetVblankStatus');
 
       if (data^.arg2<>$a5a5) then Exit(EINVAL);
 
@@ -786,7 +788,7 @@ begin
 
        u.i_scaler:=Default(t_scaler_info);
 
-       //Writeln('dce_flip_control(',data^.id,'):get_data?');
+       LOG_TRACE('dce_flip_control(',data^.id,'):get_data?');
        //print_backtrace_td(stderr);
 
        Result:=copyout(@u.i_scaler,ptr,len);
@@ -874,9 +876,9 @@ begin
      if (data^.arg3>13) then Exit(EINVAL);
 
      case data^.arg3 of
-      12:Writeln('SetLabelsAddr:',' 0x',HexStr(data^.arg4,10));
+      12:LOG_TRACE('SetLabelsAddr:',' 0x',HexStr(data^.arg4,10));
       else
-         Writeln('dce_flip_control(',data^.id,'):',data^.arg3,' 0x',HexStr(data^.arg4,10));
+         LOG_TRACE('dce_flip_control(',data^.id,'):',data^.arg3,' 0x',HexStr(data^.arg4,10));
      end;
 
     end;
@@ -904,7 +906,7 @@ begin
 
      if (Result<>0) then Exit;
 
-     Writeln('sceVideoOutAdjustColor(',u.color.gamma[0]:0:2,',',
+     LOG_INFO('sceVideoOutAdjustColor(',u.color.gamma[0]:0:2,',',
                                        u.color.gamma[1]:0:2,',',
                                        u.color.gamma[2]:0:2,',0x',HexStr(u.color.option,8)+')');
 
@@ -1022,7 +1024,7 @@ begin
 
  pixelFormat:=data^.pixelFormat;
 
- Writeln('pixelFormat=',getPixelFormatStr(pixelFormat));
+ LOG_INFO('pixelFormat=',getPixelFormatStr(pixelFormat));
 
  case pixelFormat of
   $80000000:; //SCE_VIDEO_OUT_PIXEL_FORMAT_A8R8G8B8_SRGB
@@ -1103,7 +1105,7 @@ begin
   kmem_size:=Align(kmem_size,align_size);
  end;
 
- Writeln('kmem_size=0x',HexStr(kmem_size,8));
+ LOG_TRACE('kmem_size=0x',HexStr(kmem_size,8));
 
  mtx_lock(dce_mtx);
 
@@ -1123,7 +1125,7 @@ begin
 
  mtx_unlock(dce_mtx);
 
- Writeln('register_buffer_attr:',data^.attrid,' ',
+ LOG_INFO('register_buffer_attr:',data^.attrid,' ',
                                  data^.submit,' ',
                                  '0x',HexStr(data^.pixelFormat,8),' ',
                                  data^.tilingMode,' ',
@@ -1166,7 +1168,7 @@ begin
 
  mtx_unlock(dce_mtx);
 
- Writeln('register_buffer_ptrs:',data^.attrid,' ',
+ LOG_INFO('register_buffer_ptrs:',data^.attrid,' ',
                                  data^.index,' ',
                                  '0x',HexStr(data^.left),' ',
                                  '0x',HexStr(data^.right));
@@ -1236,7 +1238,7 @@ begin
 
     submit_eop:=(QWORD(f_eop_count) shl 32) or QWORD($ff00a5a5);
 
-    Writeln('submit_eop=0x',HexStr(submit_eop,16));
+    LOG_TRACE('submit_eop=0x',HexStr(submit_eop,16));
 
     f_eop_count:=f_eop_count+1;
 
@@ -1244,14 +1246,14 @@ begin
 
     if (Result<>0) then
     begin
-     Writeln('SubmitFlipEopError=',Result);
+     LOG_INFO('SubmitFlipEopError=',Result);
     end;
    end else
    begin
     Result:=dce_handle.SubmitFlip(@submit);
     if (Result<>0) then
     begin
-     Writeln('SubmitFlipError=',Result);
+     LOG_INFO('SubmitFlipError=',Result);
     end;
    end;
 
@@ -1261,10 +1263,10 @@ begin
 
  //print_backtrace_td(stderr);
 
- Writeln('submit_flip: ','bufferIndex=',data^.bufferIndex,' ',
-                            'flipMode=',data^.flipMode,' ',
-                             'flipArg=','0x',HexStr(data^.flipArg,16),' ',
-                             'eop_val=','0x',HexStr(data^.eop_val));
+ LOG_TRACE('submit_flip: ','bufferIndex=',data^.bufferIndex,' ',
+                              'flipMode=',data^.flipMode,' ',
+                               'flipArg=','0x',HexStr(data^.flipArg,16),' ',
+                               'eop_val=','0x',HexStr(data^.eop_val));
  if (Result=0) then
  if (data^.eop_nz=1) then
  begin
@@ -1281,7 +1283,7 @@ end;
 
 Function dce_deregister_ident(dev:p_cdev;data:PQWORD):Integer;
 begin
- writeln('dce_deregister_ident:',HexStr(data^,16));
+ LOG_TRACE('dce_deregister_ident:',HexStr(data^,16));
 
  kqueue_deregister(EVFILT_DISPLAY,p_proc.p_pid,data^);
 
@@ -1292,7 +1294,7 @@ Function dce_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- //Writeln('dce_ioctl(0x',HexStr(cmd,8),')');
+ LOG_TRACE('dce_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
   $C0308203:Result:=dce_flip_control        (dev,data); //SCE_SYS_DCE_IOCTL_FLIP_CONTROL
@@ -1426,7 +1428,7 @@ begin
      end;
   else
    begin
-    //Writeln(stderr,'filt_display_attach:',event_id);
+    LOG_ERROR(stderr,'filt_display_attach:',event_id);
     //Assert(false,'filt_display_attach');
     Result:=EINVAL;
    end;

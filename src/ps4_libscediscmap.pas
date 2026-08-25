@@ -54,6 +54,7 @@ begin
  Result:=SCE_DISC_MAP_ERROR_NO_BITMAP_INFO;
 end;
 
+{$WARN 4110 off}
 function Load_libSceDiscMap(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

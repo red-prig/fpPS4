@@ -96,6 +96,8 @@ function  vm_priv_pool_alloc(pool:p_vm_priv_pool;length:DWORD;p_out:p_vm_priv_al
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  //Return values from the VM routines.
  KERN_SUCCESS        =0;
@@ -1098,7 +1100,7 @@ begin
     r:=md_memfd_close(node^.obj.hfile);
     if (r<>0) then
     begin
-     Writeln('failed md_memfd_close(',node^.obj.hfile,'):0x',HexStr(r,8));
+     LOG_CRITICAL(StdErr,'failed md_memfd_close(',node^.obj.hfile,'):0x',HexStr(r,8));
      Assert(false,'on_free_priv');
     end;
 

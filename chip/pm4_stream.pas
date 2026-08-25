@@ -509,6 +509,8 @@ implementation
 uses
  sys_bootparam;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  cache_block_allocator:t_cache_block_allocator;
 
@@ -677,7 +679,7 @@ begin
 
   if p_print_gpu_ops then
   begin
-   Writeln('fetch_image_resource:0x',HexStr(rkey.Addr),' 0x',HexStr(tmp.rsize,4));
+   LOG_TRACE('fetch_image_resource:0x',HexStr(rkey.Addr),' 0x',HexStr(tmp.rsize,4));
   end;
 
   Result:=allocator.Alloc(SizeOf(t_pm4_resource));
@@ -717,7 +719,7 @@ begin
 
   if p_print_gpu_ops then
   begin
-   Writeln('fetch_buffer_resource(',hint,'):0x',HexStr(addr),' 0x',HexStr(size,4));
+   LOG_TRACE('fetch_buffer_resource(',hint,'):0x',HexStr(addr),' 0x',HexStr(size,4));
   end;
 
   resource_set.Insert(Result);
@@ -911,7 +913,7 @@ begin
  end;
 
  node^.id:=System.InterlockedIncrement64(global_id);
- //Writeln('add_node:',node^.id);
+ //LOG_TRACE('add_node:',node^.id);
 
  TAILQ_INSERT_TAIL(@list,node,@node^.entry);
 
@@ -1491,7 +1493,7 @@ begin
     if not Result then
     if p_print_gpu_ops then
     begin
-     Writeln('DISABLE');
+     LOG_TRACE('DISABLE');
     end;
    end;
   CB_NORMAL:; //next
@@ -1510,17 +1512,17 @@ begin
   CB_DECOMPRESS:
    if p_print_gpu_ops then
    begin
-    Writeln('DECOMPRESS');
+    LOG_TRACE('DECOMPRESS');
    end;
   CB_FMASK_DECOMPRESS: // Fmask decompression for shader readability.
    if p_print_gpu_ops then
    begin
-    Writeln('FMASK_DECOMPRESS');
+    LOG_TRACE('FMASK_DECOMPRESS');
    end;
   CB_DCC_DECOMPRESS: // Indicates this color target view is for a DCC decompress
    if p_print_gpu_ops then
    begin
-    Writeln('DCC_DECOMPRESS');
+    LOG_TRACE('DCC_DECOMPRESS');
    end;
   else
    Assert(False,'unknow color control:0x'+HexStr(CX_REG.CB_COLOR_CONTROL.MODE,1));
@@ -1630,7 +1632,7 @@ begin
   str:=str+' ('+HexStr(ShaderGroup.FKey.FShaders[i].FHash_gcn,16)+') '+GetDumpSpvName(i,ShaderGroup.FKey.FShaders[i].FHash_spv)+#13#10;
  end;
 
- Writeln(stderr,str);
+ LOG_TRACE(stderr,str);
 end;
 
 procedure t_pm4_stream.Build_rt_info(node:p_pm4_node;
@@ -1768,7 +1770,7 @@ begin
 
  if (rt_info.RT_COUNT=0) and (not rt_info.DB_ENABLE) then
  begin
-  Writeln('zero attachment???');
+  LOG_TRACE('zero attachment???');
  end;
 
  rt_info.BLEND_INFO:=GPU_REGS.GET_BLEND_INFO;
@@ -1837,7 +1839,7 @@ begin
 
  if DWORD(context^.CX_REG.VGT_SHADER_STAGES_EN)<>0 then
  begin
-  Writeln('Skip tessellation:0x',HexStr(DWORD(context^.CX_REG.VGT_SHADER_STAGES_EN),8));
+  LOG_TRACE('Skip tessellation:0x',HexStr(DWORD(context^.CX_REG.VGT_SHADER_STAGES_EN),8));
   Exit(nil);
  end;
 

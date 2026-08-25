@@ -28,8 +28,6 @@ var
  p_is_fork            :Boolean=False;
  p_halt_on_exit       :Boolean=False;
  p_print_guest_syscall:Boolean=False;
- p_print_pmap         :Boolean=False;
- p_print_jit_preload  :Boolean=False;
 
  p_print_gpu_ops      :Boolean=False;
  p_print_gpu_hint     :Boolean=False;

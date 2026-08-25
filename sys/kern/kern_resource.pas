@@ -62,8 +62,8 @@ end;
 
 procedure lim_rlimit(which:Integer;rlp:p_rlimit);
 begin
- rlp^.rlim_cur:=lim_max(which);
- rlp^.rlim_max:=lim_cur(which);
+ rlp^.rlim_cur:=lim_cur(which);
+ rlp^.rlim_max:=lim_max(which);
 end;
 
 function sys_getrlimit(which:Integer;rlp:Pointer):Integer;

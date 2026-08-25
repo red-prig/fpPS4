@@ -28,6 +28,8 @@ procedure sx_destroy(p:p_sx);
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 procedure sx_init(p:p_sx;name:PChar);
 begin
  p^.n:=name;
@@ -48,7 +50,7 @@ end;
 
 procedure sx_slock(p:p_sx);
 begin
- //Writeln('    sx_slock:',HexStr(p),':',p^.n);
+ //LOG_TRACE('    sx_slock:',HexStr(p),':',p^.n);
 
  rw_rlock(p^.c);
  PDWORD(@p^.m)[0]:=0;
@@ -57,7 +59,7 @@ end;
 
 procedure sx_xlock(p:p_sx);
 begin
- //Writeln('    sx_xlock:',HexStr(p),':',p^.n);
+ //LOG_TRACE('    sx_xlock:',HexStr(p),':',p^.n);
 
  rw_wlock(p^.c);
  PDWORD(@p^.m)[0]:=ThreadID;
@@ -66,14 +68,14 @@ end;
 
 procedure sx_sunlock(p:p_sx);
 begin
- //Writeln('  sx_sunlock:',HexStr(p),':',p^.n);
+ //LOG_TRACE('  sx_sunlock:',HexStr(p),':',p^.n);
 
  rw_runlock(p^.c);
 end;
 
 procedure sx_xunlock(p:p_sx);
 begin
- //Writeln('  sx_xunlock:',HexStr(p),':',p^.n);
+ //LOG_TRACE('  sx_xunlock:',HexStr(p),':',p^.n);
 
  Assert(PDWORD(@p^.m)[0]=ThreadID,'sx_unlock');
 
@@ -85,7 +87,7 @@ end;
 
 procedure sx_unlock(p:p_sx);
 begin
- //Writeln(' sx_unlock:',HexStr(p),':',p^.n);
+ //LOG_TRACE(' sx_unlock:',HexStr(p),':',p^.n);
 
  case PDWORD(@p^.m)[1] of
   1:rw_runlock(p^.c);

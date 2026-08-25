@@ -76,6 +76,8 @@ implementation
 uses
  kern_dmem;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function gc_ring_create(ring:p_pm4_ring;size:ptruint):Integer;
 var
  hMem:THandle;
@@ -249,7 +251,7 @@ begin
  buf:=nil;
  if not gc_ring_pm4_alloc(ring,size,@buf) then
  begin
-  Writeln(stderr,'### gc_submit_common : Cannot allocate a space in ring buffer.');
+  LOG_ERROR(stderr,'### gc_submit_common : Cannot allocate a space in ring buffer.');
   Exit(EBUSY);
  end;
 
@@ -267,14 +269,14 @@ begin
 
   if ((op<>$c0023300) and (op<>$c0023f00)) then
   begin
-   Writeln(stderr,'## gc_insert_indirect_buffer: invalid opcode = 0x',HexStr(op,8));
+   LOG_ERROR(stderr,'## gc_insert_indirect_buffer: invalid opcode = 0x',HexStr(op,8));
    gc_ring_pm4_release(ring);
    Exit(-2142502896);
   end;
 
   if (buf^.ibSize=0) then
   begin
-   Writeln(stderr,'## gc_insert_indirect_buffer: invalid ib_size = 0x',HexStr(buf^.ibSize,5));
+   LOG_ERROR(stderr,'## gc_insert_indirect_buffer: invalid ib_size = 0x',HexStr(buf^.ibSize,5));
    gc_ring_pm4_release(ring);
    Exit(-2142502895);
   end;
@@ -295,7 +297,7 @@ begin
  buf:=nil;
  if not gc_ring_pm4_alloc(ring,sizeof(PM4CMDSWITCHBUFFER),@buf) then
  begin
-  Writeln(stderr,'### gc_switch_buffer_internal : Cannot allocate a space in ring buffer.');
+  LOG_ERROR(stderr,'### gc_switch_buffer_internal : Cannot allocate a space in ring buffer.');
   Exit(EBUSY);
  end;
 
@@ -316,7 +318,7 @@ begin
  buf:=nil;
  if not gc_ring_pm4_alloc(ring,sizeof(PM4CMDEVENTWRITEEOP),@buf) then
  begin
-  Writeln(stderr,'### gc_pm4_event_write_eop : Cannot allocate a space in ring buffer.');
+  LOG_ERROR(stderr,'### gc_pm4_event_write_eop : Cannot allocate a space in ring buffer.');
   Exit(EBUSY);
  end;
 

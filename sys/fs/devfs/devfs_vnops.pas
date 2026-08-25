@@ -208,6 +208,8 @@ uses
  subr_uio,
  vnode_pager;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
 begin
  Result:=mp^.mnt_data;
@@ -610,7 +612,7 @@ loop:
  if (error<>0) then
  begin
   devfs_allocv_drop_refs(1, dmp, de);
-  Writeln('devfs_allocv: failed to allocate new vnode');
+  LOG_ERROR('devfs_allocv: failed to allocate new vnode');
   Exit(error);
  end;
 
@@ -842,7 +844,7 @@ begin
   de:=ap^.a_vp^.v_data;
   if (error=ENXIO) {and (bo^.bo_dirty.bv_cnt > 0)} then
   begin
-   Writeln('Device %s went missing before all of the data ',
+   LOG_ERROR('Device %s went missing before all of the data ',
            'could be written to it; expect data loss.',
            de^.de_dirent^.d_name);
 
@@ -1468,7 +1470,7 @@ end;
  }
 function devfs_print(ap:p_vop_print_args):Integer;
 begin
- Writeln(Format('dev %s',[devtoname(ap^.a_vp^.v_rdev)]));
+ LOG_INFO(Format('dev %s',[devtoname(ap^.a_vp^.v_rdev)]));
  Exit(0);
 end;
 

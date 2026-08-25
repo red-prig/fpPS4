@@ -31,6 +31,8 @@ uses
  vsys_generic,
  sys_event;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 {
  * Operations that are exposed through the character device in /dev.
  }
@@ -38,7 +40,7 @@ Function ttydev_open(dev:p_cdev;oflags,devtype:Integer):Integer;
 var
  tp:p_tty;
 begin
- Writeln('ttydev_open("',dev^.si_name,'",',oflags,',',devtype,')');
+ LOG_INFO('ttydev_open("',dev^.si_name,'",',oflags,',',devtype,')');
 
  tp:=dev^.si_drv1;
  if (tp=nil) then Exit(EWOULDBLOCK);
@@ -58,7 +60,7 @@ var
 begin
  tp:=dev^.si_drv1;
 
- error:=ttydisc_read(tp, uio, ioflag);
+ error:=md_tty_read(tp, tp^.t_priv, uio, ioflag);
 
  if (error=ENXIO) then error:=0;
  Exit(error);
@@ -71,7 +73,7 @@ var
 begin
  tp:=dev^.si_drv1;
 
- error:=ttydisc_write(tp, uio, ioflag);
+ error:=md_tty_write(tp, tp^.t_priv, uio, ioflag);
 
  Exit(error);
 end;
@@ -107,7 +109,7 @@ begin
   else;
  end;
 
- Writeln('ttydev_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8),')');
+ LOG_TRACE('ttydev_ioctl("',dev^.si_name,'",0x',HexStr(cmd,8),',0x',HexStr(data),',0x',HexStr(fflag,8),')');
  //error:=tty_ioctl(tp, cmd, data, fflag, td);
 
  //done:
@@ -135,7 +137,7 @@ begin
  if ((events and (POLLIN or POLLRDNORM))<>0) then
  begin
   { See if we can read something. }
-  if (ttydisc_read_poll(tp) > 0) then
+  if (md_tty_read_poll(tp, tp^.t_priv) > 0) then
   begin
    revents:=revents or events and (POLLIN or POLLRDNORM);
   end;
@@ -149,7 +151,7 @@ begin
  if ((events and (POLLOUT or POLLWRNORM))<>0) then
  begin
   { See if we can write something. }
-  if (ttydisc_write_poll(tp) > 0) then
+  if (md_tty_write_poll(tp, tp^.t_priv) > 0) then
   begin
    revents:=revents or events and (POLLOUT or POLLWRNORM);
   end;
@@ -211,7 +213,7 @@ begin
  // Exit(1);
  //end else
  begin
-  kn^.kn_data:=ttydisc_read_poll(tp);
+  kn^.kn_data:=md_tty_read_poll(tp, tp^.t_priv);
   Exit(ord(kn^.kn_data > 0));
  end;
 end;
@@ -239,7 +241,7 @@ begin
  // Exit(1);
  //end else
  begin
-  kn^.kn_data:=ttydisc_write_poll(tp);
+  kn^.kn_data:=md_tty_write_poll(tp, tp^.t_priv);
   Exit(ord(kn^.kn_data > 0));
  end;
 end;
@@ -357,25 +359,6 @@ end;
 
 procedure ttyconsdev_init();
 begin
- tty_init( @std_tty[ 0],'[Input ]:',nil,TF_THD_NAME_PREFIX);
- tty_init( @std_tty[ 1],'[Output]:',nil,TF_THD_NAME_PREFIX);
- tty_init( @std_tty[ 2],'[Error ]:',nil,TF_THD_NAME_PREFIX);
- //
- tty_init(@deci_tty[ 0],'[stdin ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 1],'[stdout]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 2],'[stderr]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 3],'[tty2  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 4],'[tty3  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 5],'[tty4  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 6],'[tty5  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 7],'[tty6  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 8],'[tty7  ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[ 9],'[ttya0 ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[10],'[ttyb0 ]:',nil,TF_THD_NAME_PREFIX);
- tty_init(@deci_tty[11],'[ttyc0 ]:',nil,TF_THD_NAME_PREFIX);
- //
- tty_init(@debug_tty   ,'[Debug ]:',nil,TF_THD_NAME_PREFIX);
- //
  dev_console:=make_dev_credf(MAKEDEV_ETERNAL, @ttyconsdev_cdevsw, 0, UID_ROOT, GID_WHEEL, &600, 'console',[]);
  dev_console^.si_drv1:=@debug_tty;
  //
@@ -392,11 +375,6 @@ begin
  tty_makedev(@deci_tty[10],'deci_ttyb0' ,[]);
  tty_makedev(@deci_tty[11],'deci_ttyc0' ,[]);
  //
-
- if (init_tty<>nil) then
- begin
-  init_tty();
- end;
 end;
 
 end.

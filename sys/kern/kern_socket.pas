@@ -43,16 +43,18 @@ uses
  md_sleep,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function soo_read(fp:p_file;uio:p_uio;flags:Integer):Integer;
 begin
- Writeln('TODO:soo_read');
+ LOG_WARNING('TODO:soo_read');
  //msleep_td(0);
  Result:=EWOULDBLOCK;
 end;
 
 function soo_write(fp:p_file;uio:p_uio;flags:Integer):Integer;
 begin
- Writeln('TODO:soo_write');
+ LOG_WARNING('TODO:soo_write');
  //msleep_td(0);
  Result:=EWOULDBLOCK;
 end;
@@ -66,7 +68,7 @@ function soo_ioctl(fp:p_file;com:QWORD;data:Pointer):Integer;
 begin
  Result:=0;
 
- Writeln('soo_ioctl(0x',HexStr(com,8),')');
+ LOG_TRACE('soo_ioctl(0x',HexStr(com,8),')');
 
  case com of
   $802450C9: //-bnet_is_system_process()
@@ -84,21 +86,21 @@ end;
 
 function soo_poll(fp:p_file;events:Integer):Integer;
 begin
- Writeln('TODO:soo_poll');
+ LOG_CRITICAL(StdErr,'TODO:soo_poll');
  Assert(false);
  Result:=0;
 end;
 
 function soo_kqfilter(fp:p_file;kn:p_knote):Integer;
 begin
- Writeln('TODO:soo_kqfilter');
+ LOG_CRITICAL(StdErr,'TODO:soo_kqfilter');
  Assert(false);
  Result:=0;
 end;
 
 function soo_stat(fp:p_file;sb:p_stat):Integer;
 begin
- Writeln('TODO:soo_stat');
+ LOG_CRITICAL(StdErr,'TODO:soo_stat');
  Assert(false);
  Result:=0;
 end;

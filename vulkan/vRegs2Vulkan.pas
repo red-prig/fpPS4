@@ -181,6 +181,8 @@ implementation
 uses
  ps4_Tiling;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Function TGPU_REGS._SHADER_MASK(i:Byte):Byte; inline; //0..7
 begin
  Result:=(DWORD(CX_REG^.CB_SHADER_MASK) shr (i shl 2)) and 15;
@@ -296,9 +298,9 @@ begin
  begin
   //VK_EXT_depth_clamp_control
   //VkPipelineViewportDepthClampControlCreateInfoEXT
-  Writeln(stderr,'TODO:VK_EXT_depth_clamp_control');
-  Writeln(stderr,' minDepth:',Result.minDepth:0:5,' ZMIN:',CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMIN:0:5);
-  Writeln(stderr,' maxDepth:',Result.maxDepth:0:5,' ZMAX:',CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMAX:0:5);
+  LOG_WARNING(stderr,'TODO:VK_EXT_depth_clamp_control');
+  LOG_TRACE(stderr,' minDepth:',Result.minDepth:0:5,' ZMIN:',CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMIN:0:5);
+  LOG_TRACE(stderr,' maxDepth:',Result.maxDepth:0:5,' ZMAX:',CX_REG^.PA_SC_VPORT_ZMIN_MAX[i].ZMAX:0:5);
   //Assert(false,'TODO:VK_EXT_depth_clamp_control');
  end;
  }
@@ -816,7 +818,7 @@ begin
   $FF:Result:=VK_LOGIC_OP_SET;
   else
       begin
-       Writeln(stderr,'unknow logic op:0x',HexStr(ROP3,2));
+       LOG_TRACE(stderr,'unknow logic op:0x',HexStr(ROP3,2));
       end;
  end;
 end;
@@ -1245,10 +1247,10 @@ begin
 
        W:=RENDER_TARGET.CLEAR_WORD;
 
-       //Writeln((W shr (BsrDWord(COMP_MAP[0]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[1]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[0]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[1]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255);
 
        Result.CLEAR_COLOR.uint32[0]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[0]) shl 3),$FF);
        Result.CLEAR_COLOR.uint32[1]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[1]) shl 3),$FF);
@@ -1651,7 +1653,7 @@ begin
  begin
   if (Result.Z_READ_ADDR<>Result.Z_WRITE_ADDR) then
   begin
-   Writeln(stderr,'Z_R_ADDR:'+HexStr(Result.Z_READ_ADDR)+'<>Z_W_ADDR:'+HexStr(Result.Z_WRITE_ADDR));
+   LOG_CRITICAL(StdErr,'Z_R_ADDR:'+HexStr(Result.Z_READ_ADDR)+'<>Z_W_ADDR:'+HexStr(Result.Z_WRITE_ADDR));
    Assert (false ,'Z_R_ADDR:'+HexStr(Result.Z_READ_ADDR)+'<>Z_W_ADDR:'+HexStr(Result.Z_WRITE_ADDR));
   end;
  end;
@@ -1665,7 +1667,7 @@ begin
  begin
   if (Result.STENCIL_READ_ADDR<>Result.STENCIL_WRITE_ADDR) then
   begin
-   Writeln(stderr,'S_R_ADDR:'+HexStr(Result.STENCIL_READ_ADDR)+'<>S_W_ADDR:'+HexStr(Result.STENCIL_WRITE_ADDR));
+   LOG_CRITICAL(StdErr,'S_R_ADDR:'+HexStr(Result.STENCIL_READ_ADDR)+'<>S_W_ADDR:'+HexStr(Result.STENCIL_WRITE_ADDR));
    Assert (false ,'S_R_ADDR:'+HexStr(Result.STENCIL_READ_ADDR)+'<>S_W_ADDR:'+HexStr(Result.STENCIL_WRITE_ADDR));
   end;
  end;
@@ -2528,7 +2530,7 @@ begin
    end;
   else;
    begin
-    Writeln(stderr,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
+    LOG_TRACE(stderr,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
     Result.params.itype  :=ord(VK_IMAGE_TYPE_2D);
     Result.params.invalid:=1;
    end;
@@ -2647,7 +2649,7 @@ begin
   SQ_RSRC_IMG_2D_MSAA_ARRAY:Result.vtype:=ord(VK_IMAGE_VIEW_TYPE_2D_ARRAY);
   else
    begin
-    Writeln(stderr,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
+    LOG_TRACE(stderr,'Unknow tsharp4 type:0x'+HexStr(PT^._type,1));
     Result.vtype  :=ord(VK_IMAGE_VIEW_TYPE_2D);
     Result.invalid:=1;
    end;

@@ -423,6 +423,8 @@ function  GetMsType(PT:PTSharpResource4):Byte;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function getCodeAddress(lo,hi:DWORD):Pointer;
 begin
  Result:={%H-}Pointer((QWORD(hi) shl 40) or (QWORD(lo) shl 8));
@@ -918,63 +920,63 @@ procedure print_vsharp(PV:PVSharpResource4);
 begin
  if (PV=nil) then Exit;
 
- Writeln('[V#]:0x',HexStr(PV));
+ LOG_TRACE('[V#]:0x',HexStr(PV));
 
- Writeln('base=',HexStr(PV^.base and (not 3),10));
- Writeln('stride=',PV^.stride);
- Writeln('cache_swizzle=',PV^.cache_swizzle);
- Writeln('swizzle_en=',PV^.swizzle_en);
- Writeln('num_records=',PV^.num_records);
- Writeln('dst_sel=',_get_dst_sel_str(PV^.dst_sel_x,
+ LOG_TRACE('base=',HexStr(PV^.base and (not 3),10));
+ LOG_TRACE('stride=',PV^.stride);
+ LOG_TRACE('cache_swizzle=',PV^.cache_swizzle);
+ LOG_TRACE('swizzle_en=',PV^.swizzle_en);
+ LOG_TRACE('num_records=',PV^.num_records);
+ LOG_TRACE('dst_sel=',_get_dst_sel_str(PV^.dst_sel_x,
                                      PV^.dst_sel_y,
                                      PV^.dst_sel_z,
                                      PV^.dst_sel_w));
 
- Writeln('nfmt=',_get_buf_nfmt_str(PV^.nfmt)); //numeric data type (float, int, ...)
- Writeln('dfmt=',_get_buf_dfmt_str(PV^.dfmt)); //data format
+ LOG_TRACE('nfmt=',_get_buf_nfmt_str(PV^.nfmt)); //numeric data type (float, int, ...)
+ LOG_TRACE('dfmt=',_get_buf_dfmt_str(PV^.dfmt)); //data format
 
- Writeln('element_size=',_get_element_size_str(PV^.element_size));
- Writeln('index_stride=',_get_index_stride_str(PV^.index_stride));
+ LOG_TRACE('element_size=',_get_element_size_str(PV^.element_size));
+ LOG_TRACE('index_stride=',_get_index_stride_str(PV^.index_stride));
 
- Writeln('addtid_en=',PV^.addtid_en);
- Writeln('hash_en=',PV^.hash_en);
+ LOG_TRACE('addtid_en=',PV^.addtid_en);
+ LOG_TRACE('hash_en=',PV^.hash_en);
 
- Writeln('MemoryType=',getMemoryType_str(getResourceMemoryType_vsharp(PV)));
+ LOG_TRACE('MemoryType=',getMemoryType_str(getResourceMemoryType_vsharp(PV)));
 
- Writeln('type=',PV^._type);
+ LOG_TRACE('type=',PV^._type);
 end;
 
 procedure print_tsharp4(PT:PTSharpResource4);
 begin
  if (PT=nil) then Exit;
 
- Writeln('[T#]:0x',HexStr(PT));
+ LOG_TRACE('[T#]:0x',HexStr(PT));
 
- Writeln('base=',HexStr(QWORD(PT^.base) shl 8,10));
- Writeln('min_lod=',_get_lod_str(PT^.min_lod));
+ LOG_TRACE('base=',HexStr(QWORD(PT^.base) shl 8,10));
+ LOG_TRACE('min_lod=',_get_lod_str(PT^.min_lod));
 
- Writeln('dfmt=',_get_tex_dfmt_str(PT^.dfmt));
- Writeln('nfmt=',_get_tex_nfmt_str(PT^.nfmt));
+ LOG_TRACE('dfmt=',_get_tex_dfmt_str(PT^.dfmt));
+ LOG_TRACE('nfmt=',_get_tex_nfmt_str(PT^.nfmt));
 
- Writeln('width=',PT^.width+1);
- Writeln('height=',PT^.height+1);
+ LOG_TRACE('width=',PT^.width+1);
+ LOG_TRACE('height=',PT^.height+1);
 
- Writeln('perf_mod=',_get_perf_mod_str(PT^.perf_mod));
- Writeln('interlaced=',PT^.interlaced);
+ LOG_TRACE('perf_mod=',_get_perf_mod_str(PT^.perf_mod));
+ LOG_TRACE('interlaced=',PT^.interlaced);
 
- Writeln('dst_sel=',_get_dst_sel_str(PT^.dst_sel_x,
+ LOG_TRACE('dst_sel=',_get_dst_sel_str(PT^.dst_sel_x,
                                      PT^.dst_sel_y,
                                      PT^.dst_sel_z,
                                      PT^.dst_sel_w));
 
- Writeln('base_level=',PT^.base_level);
- Writeln('last_level=',PT^.last_level);
- Writeln('tiling_idx=',get_tiling_idx_str(PT^.tiling_idx));
- Writeln('pow2pad=',PT^.pow2pad);
+ LOG_TRACE('base_level=',PT^.base_level);
+ LOG_TRACE('last_level=',PT^.last_level);
+ LOG_TRACE('tiling_idx=',get_tiling_idx_str(PT^.tiling_idx));
+ LOG_TRACE('pow2pad=',PT^.pow2pad);
 
- Writeln('MemoryType=',getMemoryType_str(getResourceMemoryType_tsharp4(PT)));
+ LOG_TRACE('MemoryType=',getMemoryType_str(getResourceMemoryType_tsharp4(PT)));
 
- Writeln('type=',_get_tex_type_str(PT^._type));
+ LOG_TRACE('type=',_get_tex_type_str(PT^._type));
 end;
 
 procedure print_tsharp8(PT:PTSharpResource8);
@@ -982,60 +984,60 @@ begin
  if (PT=nil) then Exit;
  print_tsharp4(Pointer(PT));
 
- Writeln('depth=',PT^.depth+1);
- Writeln('pitch=',PT^.pitch+1);
+ LOG_TRACE('depth=',PT^.depth+1);
+ LOG_TRACE('pitch=',PT^.pitch+1);
 
- Writeln('base_array=',PT^.base_array);
- Writeln('last_array=',PT^.last_array);
+ LOG_TRACE('base_array=',PT^.base_array);
+ LOG_TRACE('last_array=',PT^.last_array);
 
- Writeln('min_lod_warn=',_get_lod_str(PT^.min_lod_warn));
+ LOG_TRACE('min_lod_warn=',_get_lod_str(PT^.min_lod_warn));
 
- Writeln('counter_bank_id=',PT^.counter_bank_id);
- Writeln('LOD_hdw_cnt_en=',PT^.LOD_hdw_cnt_en);
+ LOG_TRACE('counter_bank_id=',PT^.counter_bank_id);
+ LOG_TRACE('LOD_hdw_cnt_en=',PT^.LOD_hdw_cnt_en);
 end;
 
 procedure print_ssharp4(PS:PSSharpResource4);
 begin
  if (PS=nil) then Exit;
 
- Writeln('clamp_x=',_get_clamp_str(PS^.clamp_x));
- Writeln('clamp_y=',_get_clamp_str(PS^.clamp_y));
- Writeln('clamp_z=',_get_clamp_str(PS^.clamp_z));
+ LOG_TRACE('clamp_x=',_get_clamp_str(PS^.clamp_x));
+ LOG_TRACE('clamp_y=',_get_clamp_str(PS^.clamp_y));
+ LOG_TRACE('clamp_z=',_get_clamp_str(PS^.clamp_z));
 
- Writeln('max_aniso_ratio=',_get_aniso_ratio_str(PS^.max_aniso_ratio));
- Writeln('depth_compare_func=',_get_depth_compare_func_str(PS^.depth_compare_func));
+ LOG_TRACE('max_aniso_ratio=',_get_aniso_ratio_str(PS^.max_aniso_ratio));
+ LOG_TRACE('depth_compare_func=',_get_depth_compare_func_str(PS^.depth_compare_func));
 
- Writeln('force_unorm_coords=',PS^.force_unorm_coords);
+ LOG_TRACE('force_unorm_coords=',PS^.force_unorm_coords);
 
- Writeln('aniso_threshold=',PS^.aniso_threshold,'/8');
+ LOG_TRACE('aniso_threshold=',PS^.aniso_threshold,'/8');
 
- Writeln('mc_coord_trunc=',PS^.mc_coord_trunc);
- Writeln('force_degamma=',PS^.force_degamma);
+ LOG_TRACE('mc_coord_trunc=',PS^.mc_coord_trunc);
+ LOG_TRACE('force_degamma=',PS^.force_degamma);
 
- Writeln('aniso_bias=',_get_aniso_bias_str(PS^.aniso_bias));
+ LOG_TRACE('aniso_bias=',_get_aniso_bias_str(PS^.aniso_bias));
 
- Writeln('trunc_coord=',PS^.trunc_coord);
- Writeln('disable_cube_wrap=',PS^.disable_cube_wrap);
+ LOG_TRACE('trunc_coord=',PS^.trunc_coord);
+ LOG_TRACE('disable_cube_wrap=',PS^.disable_cube_wrap);
 
- Writeln('filter_mode=',_get_filter_mode_str(PS^.filter_mode));
+ LOG_TRACE('filter_mode=',_get_filter_mode_str(PS^.filter_mode));
 
- Writeln('min_lod=',_get_lod_str(PS^.min_lod));
- Writeln('max_lod=',_get_lod_str(PS^.max_lod));
+ LOG_TRACE('min_lod=',_get_lod_str(PS^.min_lod));
+ LOG_TRACE('max_lod=',_get_lod_str(PS^.max_lod));
 
- Writeln('perf_mip=',PS^.perf_mip);
- Writeln('perf_z=',PS^.perf_z);
+ LOG_TRACE('perf_mip=',PS^.perf_mip);
+ LOG_TRACE('perf_z=',PS^.perf_z);
 
- Writeln('lod_bias=',_get_lod_bias_str(PS^.lod_bias));
- Writeln('lod_bias_sec=',_get_lod_bias_sec_str(PS^.lod_bias_sec));
+ LOG_TRACE('lod_bias=',_get_lod_bias_str(PS^.lod_bias));
+ LOG_TRACE('lod_bias_sec=',_get_lod_bias_sec_str(PS^.lod_bias_sec));
 
- Writeln('xy_mag_filter=',_get_xy_filter_str(PS^.xy_mag_filter));
- Writeln('xy_min_filter=',_get_xy_filter_str(PS^.xy_min_filter));
- Writeln('z_filter=',_get_z_filter_str(PS^.z_filter));
- Writeln('mip_filter=',_get_mip_filter_str(PS^.mip_filter));
+ LOG_TRACE('xy_mag_filter=',_get_xy_filter_str(PS^.xy_mag_filter));
+ LOG_TRACE('xy_min_filter=',_get_xy_filter_str(PS^.xy_min_filter));
+ LOG_TRACE('z_filter=',_get_z_filter_str(PS^.z_filter));
+ LOG_TRACE('mip_filter=',_get_mip_filter_str(PS^.mip_filter));
 
- Writeln('border_color_ptr=',PS^.border_color_ptr);
+ LOG_TRACE('border_color_ptr=',PS^.border_color_ptr);
 
- Writeln('border_color_type=',_get_border_color_type_str(PS^.border_color_type));
+ LOG_TRACE('border_color_type=',_get_border_color_type_str(PS^.border_color_type));
 end;
 
 function GetElemCount(PT:PTSharpResource4):Byte;

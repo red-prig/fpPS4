@@ -27,6 +27,8 @@ uses
  vsys_generic,
  systm;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function dev2unit(d:p_cdev):Integer; inline;
 begin
  Result:=d^.si_drv0;
@@ -580,7 +582,7 @@ begin
 
  if (devsw^.d_version<>D_VERSION_03) then
  begin
-  Writeln('WARNING: Device driver has wrong version');
+  LOG_INFO('WARNING: Device driver has wrong version');
   devsw^.d_open        :=d_open_t(@_enxio);
   devsw^.d_close       :=d_close_t(@_enxio);
   devsw^.d_read        :=d_read_t(@_enxio);
@@ -984,7 +986,7 @@ begin
   msleep(csw, @devmtx, PRIBIO, 'devprg', hz div 10);
   if (dev^.si_threadcount<>0) then
   begin
-   Writeln(Format('Still %lu threads in %sn',[dev^.si_threadcount, devtoname(dev)]));
+   LOG_INFO(Format('Still %lu threads in %sn',[dev^.si_threadcount, devtoname(dev)]));
   end;
  end;
  while (dev^.si_threadcount<>0) do

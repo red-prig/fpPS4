@@ -2,7 +2,6 @@ unit ps4_libSceAvSetting;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -10,6 +9,8 @@ uses
  subr_dynlib;
 
 implementation
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 function ps4_sceAvSettingInit:Integer;
 begin
@@ -52,7 +53,7 @@ function ps4_sceAvSettingChangeOutputMode3(
           submit :QWORD
          ):Integer;
 begin
- Writeln('sceAvSettingChangeOutputMode3');
+ LOG_INFO('sceAvSettingChangeOutputMode3');
  Result:=0;
 end;
 
@@ -160,6 +161,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceAvSetting(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

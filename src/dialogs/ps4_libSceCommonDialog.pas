@@ -10,7 +10,6 @@ uses
  kern_mtx,
  sys_bootparam,
  host_ipc,
- core_serialization,
  subr_dynlib;
 
 Const
@@ -89,6 +88,8 @@ function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
 function strncmp  (str1,str2:PChar;maxlen:ptrint):Integer;
 
 implementation
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 var
  g_common_dialog_init:Byte=0;
@@ -366,7 +367,7 @@ end;
 function ps4_sceCommonDialogInitialize():Integer;
 begin
  Result:=0;
- Writeln('sceCommonDialogInitialize');
+ LOG_INFO('sceCommonDialogInitialize');
 
  mtx_lock(g_common_dialog_mtx);
 
@@ -408,6 +409,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceCommonDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

@@ -56,6 +56,7 @@ begin
  Result:=SCE_COMPANION_UTIL_ERROR_NO_EVENT;
 end;
 
+{$WARN 4110 off}
 function Load_libSceCompanionUtil(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

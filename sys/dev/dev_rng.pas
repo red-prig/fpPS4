@@ -16,11 +16,13 @@ uses
  errno,
  md_arc4random;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Function rng_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- Writeln('rng_ioctl(0x',HexStr(cmd,8),')');
+ LOG_TRACE('rng_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
   $40445301: //_get_genuine_random

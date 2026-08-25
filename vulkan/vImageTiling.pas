@@ -24,6 +24,8 @@ Function  get_image_size(const key:TvImageKey):Ptruint;
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  VK_ACCESS_BUF_ANY=ord(VK_ACCESS_MEMORY_READ_BIT) or ord(VK_ACCESS_MEMORY_WRITE_BIT);
  VK_STAGE_BUF_ANY =ord(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
@@ -85,8 +87,8 @@ var
 begin
  if key.params.samples>1 then
  begin
-  Writeln(stderr,'TODO:samples:',key.params.samples);
-  Assert(key.params.samples<=1,'key.params.samples>1');
+  LOG_CRITICAL(stderr,'TODO:samples:',key.params.samples);
+  Assert      (key.params.samples<=1,'key.params.samples>1');
  end;
 
  m_bytePerElement:=getFormatSize(key.cformat);
@@ -593,7 +595,7 @@ begin
 
    if (ptruint(dst-m_base)+tiler.m_linearSizeBytes)>m_full_linear_size then
    begin
-    Writeln(ptruint(dst-m_base)+tiler.m_linearSizeBytes,'>',m_full_linear_size);
+    LOG_CRITICAL(StdErr,ptruint(dst-m_base)+tiler.m_linearSizeBytes,'>',m_full_linear_size);
     Assert(false);
    end;
 
@@ -630,7 +632,7 @@ begin
    src:=src+tiler.m_tiledSizeBytes*a;
   end;
 
-  //Writeln('nextPowerOfTwo =',nextPowerOfTwo(m_arrayLayers));
+  //LOG_TRACE('nextPowerOfTwo =',nextPowerOfTwo(m_arrayLayers));
 
   src:=Pointer((qword(src)+255) and (not 255));
 
@@ -642,8 +644,8 @@ begin
  end;
  //mips
 
- //Writeln('size1=',(src-image.key.addr));
- //Writeln('size2=',Get1dThinSize(image.key));
+ //LOG_TRACE('size1=',(src-image.key.addr));
+ //LOG_TRACE('size2=',Get1dThinSize(image.key));
 
 end;
 
@@ -1170,14 +1172,14 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('loadfrom: ',image.FName);
+  LOG_TRACE('loadfrom: ',image.FName);
  end;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].load_from;
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  LOG_CRITICAL(StdErr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
   Assert (false ,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
   Exit;
  end;
@@ -1227,14 +1229,14 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('writeback:',image.FName);
+  LOG_TRACE('writeback:',image.FName);
  end;
 
  cb:=a_tiling_cbs[Byte(image.key.params.tiling)].write_back;
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
+  LOG_CRITICAL(StdErr,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
   Assert (false ,'tiling:'+get_tiling_name(image.key.params.tiling.idx)+' alt:'+IntToStr(image.key.params.tiling.alt));
   Exit;
  end;
@@ -1265,7 +1267,7 @@ begin
 
  if (cb=nil) then
  begin
-  Writeln(stderr,'tiling:'+get_tiling_name(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
+  LOG_CRITICAL(StdErr,'tiling:'+get_tiling_name(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
   Assert (false ,'tiling:'+get_tiling_name(key.params.tiling.idx)+' alt:'+IntToStr(key.params.tiling.alt));
   Exit(0);
  end;

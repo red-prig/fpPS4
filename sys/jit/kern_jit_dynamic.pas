@@ -228,6 +228,8 @@ uses
  kern_dlsym,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 procedure pick(var ctx:t_jit_context2;preload:Pointer); external name 'kern_jit_pick';
@@ -275,10 +277,7 @@ var
  node:p_jit_entry_point;
  ctx:t_jit_context2;
 begin
- if (p_print_jit_preload) then
- begin
-  Writeln('preload addr:0x',HexStr(addr));
- end;
+ LOG_TRACE('preload addr:0x',HexStr(addr));
 
  node:=preload_entry(addr);
 
@@ -665,7 +664,7 @@ begin
  while (curr<>nil) do
  begin
 
-  //Writeln(HexStr(addr),':',HexStr(curr^.start,16),'..',HexStr(curr^.__end,16));
+  LOG_TRACE('preload_entry:',HexStr(addr),':',HexStr(curr^.start,16),'..',HexStr(curr^.__end,16));
 
   //if (QWORD(addr)<curr^.start) then Break;
 
@@ -673,10 +672,7 @@ begin
 
   if (dest<>0) then
   begin
-   if (p_print_jit_preload) then
-   begin
-    Writeln('cache:',HexStr(addr),'->',HexStr(dest,16));
-   end;
+   LOG_TRACE('cache:',HexStr(addr),'->',HexStr(dest,16));
 
    blob:=curr^.blob;
 
@@ -747,7 +743,7 @@ begin
    end;
   end;
 
-  writeln('not guest addr:0x',HexStr(addr));
+  LOG_CRITICAL(StdErr,'not guest addr:0x',HexStr(addr));
   Assert(False,'attempted execute of noguest memory:0x'+HexStr(addr));
 
   //td^.td_teb^.jitcall:=addr;
@@ -758,7 +754,7 @@ begin
 
  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
  begin
-  writeln('not excec:0x',HexStr(addr));
+  LOG_CRITICAL(StdErr,'not excec:0x',HexStr(addr));
   Assert(False,'attempted execute of noexecute memory:0x'+HexStr(addr));
  end;
 
@@ -913,8 +909,8 @@ begin
   begin
    if (link_prev.offset<>link_curr.offset) then
    begin
-    Writeln('oaddr:',HexStr(curr),'..',HexStr(next),' prev:',HexStr(prev));
-    Writeln('table:',HexStr(blob^.base+link_prev.offset),'<>',HexStr(blob^.base+link_curr.offset));
+    LOG_TRACE('oaddr:',HexStr(curr),'..',HexStr(next),' prev:',HexStr(prev));
+    LOG_TRACE('table:',HexStr(blob^.base+link_prev.offset),'<>',HexStr(blob^.base+link_curr.offset));
 
     print_disassemble(blob^.base+link_prev.offset,link_next.offset-link_prev.offset);
 
@@ -927,8 +923,8 @@ begin
 
   if (original>15) or (recompil>511) then
   begin
-   Writeln('(',original,'>15) or (recompil>',recompil,')');
-   Writeln('0x',HexStr(curr));
+   LOG_TRACE('(',original,'>15) or (recompil>',recompil,')');
+   LOG_TRACE('0x',HexStr(curr));
 
    print_disassemble(curr,original);
 
@@ -941,7 +937,7 @@ begin
   table[i].CAN_RESTART:=ord((clabel^.flags and CAN_RESTART)<>0);
 
   {
-  writeln('|0x',HexStr(curr),'..',HexStr(next),
+  LOG_TRACE('|0x',HexStr(curr),'..',HexStr(next),
           ':0x',HexStr(link_curr.offset,8),'..',HexStr(link_next.offset,8),
           ':',i);
   }
@@ -963,12 +959,9 @@ begin
  end;
  jcode^.d_end:=QWORD(jcode^.dest)+recompil;
 
- if (p_print_jit_preload) then
- begin
-  Writeln('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
- end;
+ LOG_TRACE('build_chunk:0x',HexStr(jcode^.dest,16),'..',HexStr(jcode^.d_end,16),':',count);
 
- //writeln('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
+ //LOG_TRACE('[0x',HexStr(start,16),':0x',HexStr(__end,16),':',count);
 end;
 
 procedure build_blob(var ctx:t_jit_context2;
@@ -1000,11 +993,11 @@ begin
 
   if (clabel=nil) then
   begin
-   Writeln('(clabel=nil) 0x',HexStr(curr,16));
+   LOG_CRITICAL(StdErr,'(clabel=nil) 0x',HexStr(curr,16));
    Assert(false);
   end;
 
-  //Writeln('clabel:0x',HexStr(QWORD(blob^.base)+clabel^.link_curr.offset,16));
+  //LOG_TRACE('clabel:0x',HexStr(QWORD(blob^.base)+clabel^.link_curr.offset,16));
 
   next:=QWORD(clabel^.next);
 
@@ -1062,10 +1055,7 @@ begin
 
  blob^.init_plt;
 
- if (p_print_jit_preload) then
- begin
-  Writeln('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
- end;
+ LOG_TRACE('build:0x',HexStr(ctx.text_start,16),'->0x',HexStr(blob^.base),'..',HexStr(blob^.base+blob^.size));
 
  //F:=FileCreate('recompile.bin');
  //FileWrite(F,blob^.base^,ctx.builder.GetMemSize);
@@ -1216,18 +1206,18 @@ end;
 
 procedure t_jit_dynamic_blob.inc_ref(name:pchar);
 begin
- //Writeln('inc_ref:0x',HexStr(@self),' ',name);
+ //LOG_TRACE('inc_ref:0x',HexStr(@self),' ',name);
 
  System.InterlockedIncrement(refs);
 end;
 
 procedure t_jit_dynamic_blob.dec_ref(name:pchar);
 begin
- //Writeln('dec_ref:0x',HexStr(@self),' ',name);
+ //LOG_TRACE('dec_ref:0x',HexStr(@self),' ',name);
 
  if (System.InterlockedDecrement(refs)=0) then
  begin
-  //Writeln('free:',HexStr(@self),' ',name);
+  //LOG_TRACE('free:',HexStr(@self),' ',name);
   Free;
  end;
 end;
@@ -1246,7 +1236,7 @@ function t_jit_dynamic_blob.find_guest_by_host(addr:QWORD;info:p_jit_addr_info):
 var
  node:p_jcode_chunk;
 begin
- //Writeln('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
+ //LOG_TRACE('_ind_guest_by_host:0x',HexStr(base),' 0x',HexStr(base+size),' 0x',HexStr(addr,16));
 
  Result:=False;
  node:=chunk_list;
@@ -1711,7 +1701,7 @@ var
  _table:p_jinstr_len;
 begin
  Result:=False;
- //Writeln('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
+ LOG_TRACE('find_guest_by_host:0x',HexStr(dest,16),' 0x',HexStr(d_end,16),' 0x',HexStr(addr,16));
  if (addr>=dest) and (addr<=d_end) then
  if (count<>0) then
  begin
@@ -1968,7 +1958,7 @@ function on_destroy(handle:Pointer):Integer;
 var
  tobj:Pointer;
 begin
- //Writeln('on_destroy:',HexStr(handle));
+ //LOG_TRACE('on_destroy:',HexStr(handle));
 
  tobj:=System.InterlockedExchange(p_jcode_chunk(handle)^.tobj,nil); //mark delete
 

@@ -16,6 +16,8 @@ uses
  param_sfo_ipc,
  game_mount;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 Const
  SCE_APP_CONTENT_APPPARAM_ID_SKU_FLAG            =0;
  SCE_APP_CONTENT_APPPARAM_ID_USER_DEFINED_PARAM_1=1;
@@ -105,7 +107,7 @@ end;
 
 function ps4_sceAppContentInitialize(initParam:pSceAppContentInitParam;bootParam:pSceAppContentBootParam):Integer;
 begin
- Writeln('sceAppContentInitialize');
+ LOG_INFO('sceAppContentInitialize');
 
  if ($14fffff < p_proc.p_sdk_version) then
  begin
@@ -194,7 +196,7 @@ function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
                                              hitNum:PDWORD):Integer;
 begin
  Result:=0;
- Writeln('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
+ LOG_TRACE('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (hitNum<>nil) then
  begin
@@ -230,7 +232,7 @@ end;
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer;
 begin
- Writeln('sceAppContentTemporaryDataFormat');
+ LOG_INFO('sceAppContentTemporaryDataFormat');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -240,7 +242,7 @@ end;
 
 function ps4_sceAppContentTemporaryDataMount(mountPoint:pSceAppContentMountPoint):Integer;
 begin
- Writeln('sceAppContentTemporaryDataMount');
+ LOG_INFO('sceAppContentTemporaryDataMount');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -250,7 +252,7 @@ end;
 
 function ps4_sceAppContentTemporaryDataMount2(option:DWORD;mountPoint:pSceAppContentMountPoint):Integer;
 begin
- Writeln('sceAppContentTemporaryDataMount2');
+ LOG_INFO('sceAppContentTemporaryDataMount2');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -260,7 +262,7 @@ end;
 
 function ps4_sceAppContentTemporaryDataUnmount(mountPoint:pSceAppContentMountPoint):Integer;
 begin
- Writeln('sceAppContentTemporaryDataUnmount');
+ LOG_INFO('sceAppContentTemporaryDataUnmount');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -270,7 +272,7 @@ end;
 
 function ps4_sceAppContentTemporaryDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
 begin
- Writeln('sceAppContentTemporaryDataGetAvailableSpaceKb');
+ LOG_INFO('sceAppContentTemporaryDataGetAvailableSpaceKb');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) or (availableSpaceKb=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -280,7 +282,7 @@ end;
 
 function ps4_sceAppContentDownloadDataGetAvailableSpaceKb(mountPoint:pSceAppContentMountPoint;availableSpaceKb:PQWORD):Integer;
 begin
- Writeln('sceAppContentDownloadDataGetAvailableSpaceKb');
+ LOG_INFO('sceAppContentDownloadDataGetAvailableSpaceKb');
 
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (mountPoint=nil) or (availableSpaceKb=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
@@ -305,6 +307,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceAppContent(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

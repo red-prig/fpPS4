@@ -58,6 +58,8 @@ uses
  md_context,
  vmparam;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 var
@@ -253,8 +255,8 @@ begin
  Pointer(GetProcAddressForCaller):=GetProcAddress(GetModuleHandle('kernelbase.dll'),'GetProcAddressForCaller');
  CsrCreateRemoteThread  :=nil;
 
- //Writeln('csrsrv.dll:0x',HexStr(GetModuleHandle('csrsrv.dll'),16));
- //Writeln('csrsrv:0x',HexStr(GetModuleHandle('csrsrv'),16));
+ //LOG_TRACE('csrsrv.dll:0x',HexStr(GetModuleHandle('csrsrv.dll'),16));
+ //LOG_TRACE('csrsrv:0x',HexStr(GetModuleHandle('csrsrv'),16));
 
  if (GetProcAddressForCaller<>nil) then
  begin
@@ -271,8 +273,8 @@ begin
   Result:=CsrCreateRemoteThread(hThread,ClientId);
  end;
 
- //Writeln('GetProcAddressForCaller:0x',HexStr(GetProcAddressForCaller));
- //Writeln('CsrCreateRemoteThread  :0x',HexStr(CsrCreateRemoteThread));
+ //LOG_TRACE('GetProcAddressForCaller:0x',HexStr(GetProcAddressForCaller));
+ //LOG_TRACE('CsrCreateRemoteThread  :0x',HexStr(CsrCreateRemoteThread));
 end;
 {$ENDIF}
 
@@ -316,7 +318,7 @@ begin
  {$ENDIF}
 
  {$IFDEF NT_THREAD}
-  //Writeln('NtCreateThread');
+  LOG_TRACE('NtCreateThread');
   Result:=NtCreateThread(
            @td^.td_handle,
            THREAD_ALL_ACCESS,
@@ -327,7 +329,7 @@ begin
            InitialTeb,
            True);
  {$ELSE}
-  //Writeln('CreateThread');
+  LOG_TRACE('CreateThread');
   td^.td_handle:=CreateThread(nil,4*1024,start_func,arg,CREATE_SUSPENDED,PDWORD(@td^.td_tid)^);
 
   if (td^.td_handle<>0) then

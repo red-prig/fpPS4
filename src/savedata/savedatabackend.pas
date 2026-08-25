@@ -1,6 +1,7 @@
 unit SaveDataBackend;
 
 {$mode objfpc}{$H+}
+{$I-}
 
 interface
 
@@ -41,7 +42,7 @@ type
   //
   MountSlots:DWORD;
   //
-  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher);
+  Constructor CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle;const LogFilter:RawByteString);
   Constructor CreateClient (_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
   Destructor  Destroy; override;
   procedure   SendMountConfig(Config:TGameMountConfigExport);
@@ -230,24 +231,37 @@ type
 
 implementation
 
+uses
+ core_serialization,
+ logging;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 var
  gSaveDataBackend:TSaveDataBackendProcess=nil;
 
 type
- PForkData=^TForkData;
- TForkData=record
-  pipefd:THandle;
+ TSaveDataStartupInfo=class(TSerializeObject)
+  public
+   FPipe     :THandle;
+   FLogFilter:RawByteString;
+  published
+   property Pipe     :THandle       read FPipe      write FPipe;
+   property LogFilter:RawByteString read FLogFilter write FLogFilter;
+  public
+   //
  end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl; forward;
 
-Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher);
+Constructor TSaveDataBackendConnect.CreateProcess(_Dispatcher:THostIpcDispatcher;hInput,hOutput,hError:THandle;const LogFilter:RawByteString);
 var
  kern2svdt:t_pipe_pair;
  fork_info:t_fork_proc;
- data:TForkData;
+ mem:TMemoryStream;
+ StartupInfo:TSaveDataStartupInfo;
  r:DWORD;
 begin
  inherited;
@@ -255,7 +269,7 @@ begin
  r:=md_pipe2(kern2svdt,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
  if (r<>0) then
  begin
-  Writeln('failed md_pipe2:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_pipe2:0x',HexStr(r,8));
   Assert(false,'TSaveDataBackend');
  end;
 
@@ -264,21 +278,27 @@ begin
  kipc:=THostIpcPipe.Create(_Dispatcher);
  kipc.set_pipe(kern2svdt[0]);
 
- data.pipefd:=kern2svdt[1];
+ StartupInfo:=TSaveDataStartupInfo.Create;
+ StartupInfo.Pipe     :=kern2svdt[1];
+ StartupInfo.LogFilter:=LogFilter;
+ mem:=StartupInfo.SerializeToMem;
+ FreeAndNil(StartupInfo);
 
- fork_info.hInput :=StdInputHandle ;
- fork_info.hOutput:=StdOutputHandle;
- fork_info.hError :=StdErrorHandle ;
+ fork_info.hInput :=hInput ;
+ fork_info.hOutput:=hOutput;
+ fork_info.hError :=hError ;
 
  fork_info.proc:=@savedata_process;
- fork_info.data:=@data;
- fork_info.size:=sizeof(data);
+ fork_info.data:=mem.Memory;
+ fork_info.size:=mem.Size;
 
  r:=md_fork_process(fork_info,0);
 
+ mem.Free;
+
  if (r<>0) then
  begin
-  Writeln('failed md_fork_process:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_fork_process:0x',HexStr(r,8));
   Assert(false,'TSaveDataBackend');
  end;
 
@@ -288,7 +308,7 @@ begin
  kipc.InvokeSync2('Confirm');
 
  //The handle has been copied by another process, close it
- md_pipe_close(data.pipefd);
+ md_pipe_close(kern2svdt[1]);
 end;
 
 Constructor TSaveDataBackendConnect.CreateClient(_Dispatcher:THostIpcDispatcher;_pipefd:THandle);
@@ -396,7 +416,7 @@ type
 function TCmdExitProc.Run:TIpcValue;
 begin
  Result:=0;
- Writeln('savedata_process stopped pid:',GetProcessID,' parent_pid:',gSaveDataBackend.ppid);
+ LOG_INFO('savedata_process stopped pid:',GetProcessID,' parent_pid:',gSaveDataBackend.ppid);
 
  Halt;
 end;
@@ -409,7 +429,7 @@ begin
 
  if (Result<>0) then
  begin
-  Writeln('failed md_waitpidfd:0x',HexStr(Result,8));
+  LOG_CRITICAL(StdErr,'failed md_waitpidfd:0x',HexStr(Result,8));
   Assert(false,'savedata_process');
  end;
 
@@ -561,6 +581,8 @@ end;
 
 procedure savedata_process(data:Pointer;size:QWORD); SysV_ABI_CDecl;
 var
+ StartupInfo:TSaveDataStartupInfo;
+
  ppid:Integer;
 
  pipefd:THandle;
@@ -570,14 +592,18 @@ var
 begin
  //while not IsDebuggerPresent do sleep(100);
 
- pipefd:=PForkData(data)^.pipefd;
+ StartupInfo:=TSaveDataStartupInfo.Create;
+ StartupInfo.DeserializeFromData(data,size);
 
  //free shared
  FreeMem(data);
 
- ppid:=md_getppid;
+ logging.set_log_filter(StartupInfo.LogFilter);
+ pipefd:=StartupInfo.Pipe;
 
- Writeln('savedata_process started pid:',GetProcessID,' parent_pid:',ppid);
+ StartupInfo.Free;
+
+ ppid:=md_getppid;
 
  parent:=md_pidfd_open(ppid);
 
@@ -595,6 +621,8 @@ begin
  //////////////
 
  AddExitProc(@OnExitProc);
+
+ LOG_INFO('savedata_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  BeginThread(@wait_parent,nil);
  BeginThread(@job_thread,nil);
@@ -673,7 +701,7 @@ begin
  r:=md_pipe2(kern2svdt,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
  if (r<>0) then
  begin
-  Writeln('failed md_pipe2:0x',HexStr(r,8));
+  LOG_CRITICAL(StdErr,'failed md_pipe2:0x',HexStr(r,8));
   Assert(false,'TSaveDataBackend');
  end;
 
@@ -699,7 +727,7 @@ begin
  data:=Default(TPipeSend);
  Value.MoveTo(@data,sizeof(data));
 
- Writeln('NewClient started pid:',GetProcessID,' parent_pid:',data.parent_pid);
+ LOG_INFO('NewClient started pid:',GetProcessID,' parent_pid:',data.parent_pid);
 
  procfd:=md_pidfd_open(data.parent_pid);
 
@@ -715,7 +743,7 @@ end;
 function TSaveDataBackendProcess.ExitClient(Client:TSaveDataClient;Value:TIpcValue):TIpcValue;
 begin
  Result:=0;
- Writeln('ExitClient stopped pid:',GetProcessID,' parent_pid:',ppid);
+ LOG_INFO('ExitClient stopped pid:',GetProcessID,' parent_pid:',ppid);
 
  Client.Disconnect();
  Client.UmountAllForce(Self);
@@ -739,7 +767,7 @@ begin
  For slot_id:=0 to TMountManager.max-1 do
  if (MountSlots and (DWORD(1) shl slot_id))<>0 then
  begin
-  Writeln('Force umount ', mount_savedata_slot_name[slot_id]);
+  LOG_INFO('Force umount ', mount_savedata_slot_name[slot_id]);
   vfs_mountroot.unmount_from_sandbox(pchar(mount_savedata_slot_name[slot_id]),MNT_FORCE);
  end;
 end;
@@ -763,15 +791,15 @@ begin
  Client.GameMountConfig.TitleId     :=data.TitleId;
  Client.GameMountConfig.InstallDir  :=data.InstallDir;
 
- Writeln('[MOUNT_CONFIG]');
- Writeln(' sdk_version =0x',HexStr(data.sdk_version,8));
- Writeln(' systemLang  =0x',HexStr(data.systemLang,8));
- Writeln(' ATTRIBUTE   =0x',HexStr(data.ATTRIBUTE,8));
- Writeln(' Game        =',data.Game);
- Writeln(' LocalDir    =',data.LocalDir);
- Writeln(' TransferList=',data.TransferList);
- Writeln(' TitleId     =',data.TitleId);
- Writeln(' InstallDir  =',data.InstallDir);
+ LOG_INFO('[MOUNT_CONFIG]');
+ LOG_INFO(' sdk_version =0x',HexStr(data.sdk_version,8));
+ LOG_INFO(' systemLang  =0x',HexStr(data.systemLang,8));
+ LOG_INFO(' ATTRIBUTE   =0x',HexStr(data.ATTRIBUTE,8));
+ LOG_INFO(' Game        =',data.Game);
+ LOG_INFO(' LocalDir    =',data.LocalDir);
+ LOG_INFO(' TransferList=',data.TransferList);
+ LOG_INFO(' TitleId     =',data.TitleId);
+ LOG_INFO(' InstallDir  =',data.InstallDir);
 
  FreeAndNil(data);
 end;
@@ -1330,7 +1358,7 @@ begin
 
  if (ReadFromFile(fkeystone,Keystone,SizeOf(t_keystone_file))<>sizeof(t_keystone_file)) then
  begin
-  Writeln('Warning: /app0/sce_sys/keystone not loaded -> fill to fake pkg keystone');
+  LOG_INFO('Warning: /app0/sce_sys/keystone not loaded -> fill to fake pkg keystone');
   Keystone^:=fake_pkg_keystone;
  end;
 
@@ -2074,10 +2102,10 @@ begin
   //rollback an unfinished transaction
   if RenameFile(fs_old,fs_dst) then
   begin
-   Writeln('rollback an unfinished transaction:',{$INCLUDE %LINENUM%});
+   LOG_INFO('rollback an unfinished transaction:',{$INCLUDE %LINENUM%});
   end else
   begin
-   Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+   LOG_ERROR('RenameFile failed:',{$INCLUDE %LINENUM%});
    Exit;
   end;
  end;
@@ -2092,7 +2120,7 @@ begin
    //
   end else
   begin
-   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+   LOG_ERROR('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
    Exit;
   end;
  end;
@@ -2107,7 +2135,7 @@ begin
    //
   end else
   begin
-   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+   LOG_ERROR('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
    Exit;
   end;
  end;
@@ -2167,7 +2195,7 @@ begin
   //
  end else
  begin
-  Writeln('CopyDirectory failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('CopyDirectory failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2180,7 +2208,7 @@ begin
    //
   end else
   begin
-   Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+   LOG_ERROR('RenameFile failed:',{$INCLUDE %LINENUM%});
    Prepare;
    Exit;
   end;
@@ -2192,7 +2220,7 @@ begin
   //
  end else
  begin
-  Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('RenameFile failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2205,7 +2233,7 @@ begin
    //
   end else
   begin
-   Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+   LOG_ERROR('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
    Exit;
   end;
  end;
@@ -2257,7 +2285,7 @@ begin
   //
  end else
  begin
-  Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2270,7 +2298,7 @@ begin
   //
  end else
  begin
-  Writeln('CopyDirectory failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('CopyDirectory failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2283,7 +2311,7 @@ begin
   //
  end else
  begin
-  Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('RenameFile failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2296,7 +2324,7 @@ begin
   //
  end else
  begin
-  Writeln('RenameFile failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('RenameFile failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -2309,7 +2337,7 @@ begin
   //
  end else
  begin
-  Writeln('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
+  LOG_ERROR('DeleteDirectory failed:',{$INCLUDE %LINENUM%});
   Prepare;
   Exit;
  end;
@@ -3822,10 +3850,10 @@ begin
 
   if (err=0) then
   begin
-   Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is done.');
+   LOG_TRACE('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is done.');
   end else
   begin
-   Writeln('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is failed : ',HexStr(err,8));
+   LOG_ERROR('Sync savedata memory of user ',HexStr(nslot^.data.userId,8),' is failed : ',HexStr(err,8));
   end;
 
  end else
@@ -4068,7 +4096,7 @@ begin
 
  CurParent:=IncludeTrailingPathDelimiter(fs_src);
 
- //Writeln(CurParent);
+ //LOG_INFO(CurParent);
 
  if SysUtils.FindFirst(CurParent+convert_dir_name_search(@data.dirName.data),faDirectory,FileInfo)=0 then
  begin
@@ -4121,7 +4149,7 @@ begin
     List.Add(dir_node);
     dir_node:=nil;
 
-    //Writeln(CurDir);
+    //LOG_INFO(CurDir);
 
   until SysUtils.FindNext(FileInfo)<>0;
   SysUtils.FindClose(FileInfo);

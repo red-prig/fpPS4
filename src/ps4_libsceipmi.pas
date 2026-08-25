@@ -2,7 +2,6 @@ unit ps4_libSceIpmi;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -11,6 +10,7 @@ uses
 
 implementation
 
+{$WARN 4110 off}
 function Load_libSceIpmi(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

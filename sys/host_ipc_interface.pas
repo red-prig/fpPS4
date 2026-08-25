@@ -7,7 +7,6 @@ interface
 uses
  TypInfo,
  Classes,
- CharStream,
  murmurhash,
  hamt,
  sys_event,
@@ -348,20 +347,14 @@ begin
 end;
 
 function TIpcValue.GetObject(src:TSerializeObjectClass):TSerializeObject;
-var
- mem:TPCharStream;
 begin
  if (src=nil) or (Flen=0) then
  begin
   Exit(nil);
  end;
 
- mem:=TPCharStream.Create(GetBuf,Flen);
-
  Result:=src.Create;
- Result.Deserialize(mem);
-
- mem.Free;
+ Result.DeserializeFromData(GetBuf,Flen);
 end;
 
 //
@@ -584,7 +577,7 @@ end;
 
 function THostIpc.warning(const s:RawByteString):Ptruint;
 begin
- if (self=nil) then Exit(-1);
+ if (self=nil) then Exit(Ptruint(-1));
  Result:=InvokeSync2(iWARNING.mtype,pchar(s),Length(s));
 end;
 

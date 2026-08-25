@@ -49,6 +49,7 @@ begin
  Result:=2;
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpUtility(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

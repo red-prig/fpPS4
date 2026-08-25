@@ -1,4 +1,4 @@
-unit game_run;
+﻿unit game_run;
 
 {$mode ObjFPC}{$H+}
 
@@ -7,7 +7,6 @@ interface
 uses
  Classes,
  SysUtils,
- CharStream,
  Dialogs,
  kern_thr,
  md_sleep,
@@ -17,12 +16,24 @@ uses
  md_host_ipc,
  param_sfo_gui,
  core_shell,
+ placeholder_fmt,
+ logging,
+ md_tty,
  game_info,
+ game_process,
  game_run_context,
  game_mount;
 
 type
+ TGameProcessSimple=class(TGameProcess)
+  Ftd:p_kthread;
+  procedure  suspend; override;
+  procedure  resume;  override;
+  Destructor Destroy; override;
+ end;
+
  TGameRunConfig=record
+  hInput :THandle;
   hOutput:THandle;
   hError :THandle;
 
@@ -33,14 +44,9 @@ type
   FLoadExec:Boolean;
  end;
 
- TGameProcessSimple=class(TGameProcess)
-  Ftd:p_kthread;
-  procedure  suspend; override;
-  procedure  resume;  override;
-  Destructor Destroy; override;
+ TGameRunContextRun=class(TGameRunContext)
+  function RunItem(const cfg:TGameRunConfig):Integer;
  end;
-
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
 
 implementation
 
@@ -119,11 +125,12 @@ uses
  ps4_libSceAudio3d,
  //internal libs
 
- kern_rtld,
  kern_budget,
  kern_authinfo,
  sys_bootparam,
  subr_backtrace;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 //
 
@@ -147,36 +154,12 @@ begin
  inherited;
 end;
 
-procedure re_init_tty; register;
-var
- i:Integer;
-begin
- For i:=0 to High(std_tty) do
- begin
-  //std_tty[i].t_rd_handle:=StdInputHandle;
-  //std_tty[i].t_wr_handle:=t_wr_handle;
-  //std_tty[i].t_update   :=@WakeMainThread;
- end;
-
- For i:=0 to High(deci_tty) do
- begin
-  //deci_tty[i].t_rd_handle:=StdInputHandle;
-  //deci_tty[i].t_wr_handle:=t_wr_handle;
-  //deci_tty[i].t_update   :=@WakeMainThread;
- end;
-
- //debug_tty.t_wr_handle:=t_wr_handle;
- //debug_tty.t_update   :=@WakeMainThread;
-end;
-
 procedure load_config(ConfInfo:TConfigInfo);
 begin
  sys_bootparam.set_neo_mode(ConfInfo.BootParamInfo.Neo);
 
  sys_bootparam.p_halt_on_exit       :=ConfInfo.BootParamInfo.halt_on_exit;
  sys_bootparam.p_print_guest_syscall:=ConfInfo.BootParamInfo.print_guest_syscall;
- sys_bootparam.p_print_pmap         :=ConfInfo.BootParamInfo.print_pmap;
- sys_bootparam.p_print_jit_preload  :=ConfInfo.BootParamInfo.print_jit_preload;
  sys_bootparam.p_print_gpu_ops      :=ConfInfo.BootParamInfo.print_gpu_ops;
  sys_bootparam.p_print_gpu_hint     :=ConfInfo.BootParamInfo.print_gpu_hint;
 
@@ -190,12 +173,10 @@ begin
  kern_jit_ctx.jit_scan_nopsequence:=ConfInfo.JITInfo.scan_nopsequence;
  kern_jit_ctx.jit_memory_guard    :=ConfInfo.JITInfo.memory_guard;
  kern_lazy_jit.use_lazy_jit       :=ConfInfo.JITInfo.lazy_jit;
-
  //
 
  time.strict_ps4_freq        :=ConfInfo.MiscInfo.strict_ps4_freq;
  pm4_me.use_renderdoc_capture:=ConfInfo.MiscInfo.renderdoc_capture;
-
  //
 
  vDevice.VulkanDeviceGuid:=Default(TGUID);
@@ -248,10 +229,11 @@ var
  Item:TGameItem;
  LoadExec:Boolean;
 begin
- //re_init_tty;
- //init_tty:=@re_init_tty;
 
  load_config(GameStartupInfo.FConfInfo);
+
+ sys_tty.sys_tty_init(GameStartupInfo.FConfInfo.LogInfo.TtyPrefix,GameStartupInfo.FConfInfo.LogInfo.TtyRedirect);
+ md_tty.md_init_tty;
 
  //init all
  sys_init;
@@ -308,16 +290,16 @@ begin
 
  LoadExec:=GameStartupInfo.LoadExec;
 
- Writeln('Name    :',Item.FGameInfo.Name      );
- Writeln('TitleId :',Item.FGameInfo.TitleId   );
- Writeln('Version :',Item.FGameInfo.Version   );
- Writeln('AppVer  :',Item.FGameInfo.AppVer    );
- Writeln('Exec    :',Item.FGameInfo.Exec      );
+ LOG_INFO('Name    :',Item.FGameInfo.Name      );
+ LOG_INFO('TitleId :',Item.FGameInfo.TitleId   );
+ LOG_INFO('Version :',Item.FGameInfo.Version   );
+ LOG_INFO('AppVer  :',Item.FGameInfo.AppVer    );
+ LOG_INFO('Exec    :',Item.FGameInfo.Exec      );
 
- Writeln('game    :',Item.FMountList.game     );
- Writeln('firmware:',Item.FMountList.firmware );
+ LOG_INFO('game    :',Item.FMountList.game     );
+ LOG_INFO('firmware:',Item.FMountList.firmware );
 
- Writeln('LocalDir:',GameStartupInfo.LocalDir );
+ LOG_INFO('LocalDir:',GameStartupInfo.LocalDir );
 
  InitMount(GameStartupInfo);
 
@@ -326,16 +308,16 @@ begin
  argv:=nil;
  argc:=parse_params(Item.FGameInfo.Exec,argv);
 
- Writeln('main_thread:',HexStr(curkthread));
+ LOG_TRACE('main_thread:',HexStr(curkthread));
 
  //
  FreeAndNil(GameStartupInfo);
  //
 
- Writeln('main_execve->');
+ LOG_INFO('main_execve->');
  For i:=0 to argc-1 do
  begin
-  Writeln(' argv[',i,']:',argv[i]);
+  LOG_INFO(' argv[',i,']:',argv[i]);
  end;
 
  Flush(stdout);
@@ -381,7 +363,7 @@ end;
 function NtTerminateProcessTrap(ProcessHandle:THANDLE;ExitStatus:DWORD):DWORD; MS_ABI_Default;
 begin
  Result:=0;
- Writeln(stderr,'NtTerminateProcess:0x',HexStr(ExitStatus,8));
+ LOG_ERROR(stderr,'NtTerminateProcess:0x',HexStr(ExitStatus,8));
  print_backtrace(StdErr,Get_pc_addr,get_frame,0);
  print_backtrace_td(StdErr);
  asm
@@ -414,7 +396,7 @@ begin
 
  num:=0;
  R:=WriteProcessMemory(GetCurrentProcess,adr,@rop,SizeOf(rop),num);
- Writeln('CreateNtTerminateTrap:0x',HexStr(adr),' ',R,' ',num);
+ LOG_TRACE('CreateNtTerminateTrap:0x',HexStr(adr),' ',R,' ',num);
 end;
 }
 
@@ -525,24 +507,21 @@ var
  IpcHandler:THostIpcHandler;
  kipc:THostIpcPipe;
 
- mem:TPCharStream;
  GameStartupInfo:TGameStartupInfo;
 begin
  //while not IsDebuggerPresent do sleep(100);
 
- mem:=TPCharStream.Create(data,size);
-
  GameStartupInfo:=TGameStartupInfo.Create(True);
- GameStartupInfo.Deserialize(mem);
-
- mem.Free;
+ GameStartupInfo.DeserializeFromData(data,size);
 
  //free shared
  FreeMem(data);
 
  ppid:=md_getppid;
 
- Writeln('game_process started pid:',GetProcessID,' parent_pid:',ppid);
+ logging.set_log_filter(GameStartupInfo.FConfInfo.LogInfo.LogFilter);
+
+ LOG_INFO('game_process started pid:',GetProcessID,' parent_pid:',ppid);
 
  parent:=md_pidfd_open(ppid);
 
@@ -635,7 +614,7 @@ end;
 }
 
 
-function run_item(const cfg:TGameRunConfig;var Context:TGameRunContext):Integer;
+function TGameRunContextRun.RunItem(const cfg:TGameRunConfig):Integer;
 label
  _error;
 var
@@ -665,7 +644,7 @@ begin
  GameStartupInfo.FGameItem:=cfg.FGameItem;
  GameStartupInfo.LoadExec :=cfg.FLoadExec;
 
- GameStartupInfo.LocalDir   :=GetAppConfigDir(False);
+ GameStartupInfo.LocalDir   :=ResolvePath(cfg.FConfInfo.MainInfo.LocalDir);
  GameStartupInfo.Category   :='gd'; //m_type = SCE_LNC_APP_TYPE_BIG_APP;
  GameStartupInfo.APP_VER    :='01.00';
  GameStartupInfo.hasParamSfo:=ord(cfg.FParamSfo<>nil);
@@ -706,27 +685,19 @@ begin
 
  end;
 
- ////
- StdOutputHandle:=cfg.hOutput;
- StdErrorHandle :=cfg.hError ;
-
- //reinit std I/O
- SysInitStdIO;
-  ////
-
  fork_info:=Default(t_fork_proc);
 
  if cfg.FConfInfo.MiscInfo.fork_proc then
  begin
-  Context.FGameProcess:=TGameProcessPipe.Create;
-  Context.FGameProcess.g_fork:=True;
+  FGameProcess:=TGameProcessPipe.Create;
+  FGameProcess.g_fork:=True;
 
-  with TGameProcessPipe(Context.FGameProcess) do
+  with TGameProcessPipe(FGameProcess) do
   begin
    r:=md_pipe2(kern2mgui,MD_PIPE_ASYNC0 or MD_PIPE_ASYNC1);
    if (r<>0) then goto _error;
 
-   p_mgui_ipc:=THostIpcPipe.Create(Context.FIpcDispatch);
+   p_mgui_ipc:=THostIpcPipe.Create(FIpcDispatch);
    p_mgui_ipc.set_pipe(kern2mgui[0]);
 
    g_ipc:=p_mgui_ipc;
@@ -735,13 +706,11 @@ begin
 
   //
 
-  mem:=TMemoryStream.Create;
-
-  GameStartupInfo.FPipe:=kern2mgui[1];
-  GameStartupInfo.Serialize(mem);
+  GameStartupInfo.Pipe:=kern2mgui[1];
+  mem:=GameStartupInfo.SerializeToMem;
   FreeAndNil(GameStartupInfo);
 
-  fork_info.hInput :=StdInputHandle;
+  fork_info.hInput :=cfg.hInput;
   fork_info.hOutput:=cfg.hOutput;
   fork_info.hError :=cfg.hError;
 
@@ -754,10 +723,10 @@ begin
   mem.Free;
  end else
  begin
-  Context.FGameProcess:=TGameProcessSimple.Create;
-  Context.FGameProcess.g_fork:=False;
+  FGameProcess:=TGameProcessSimple.Create;
+  FGameProcess.g_fork:=False;
 
-  with TGameProcessSimple(Context.FGameProcess) do
+  with TGameProcessSimple(FGameProcess) do
   begin
 
    IpcHandler:=THostIpcHandler.Create;
@@ -765,7 +734,7 @@ begin
    IpcHandler.AddCallback('GetMountConfig',@TMountConfigInvoke(nil^).OnGetMountConfig);
 
    s_kern_ipc:=THostIpcSimple.Create(THostIpcDispatchKern.Create(IpcHandler));
-   s_mgui_ipc:=THostIpcSimple.Create(Context.FIpcDispatch);
+   s_mgui_ipc:=THostIpcSimple.Create(FIpcDispatch);
 
    s_kern_ipc.FDest:=s_mgui_ipc;
    s_mgui_ipc.FDest:=s_kern_ipc;
@@ -773,6 +742,8 @@ begin
    g_ipc:=s_mgui_ipc;
 
    p_host_ipc:=s_kern_ipc;
+
+   logging.set_log_filter(GameStartupInfo.FConfInfo.LogInfo.LogFilter);
 
    Ftd:=nil;
    r:=kthread_add(@prepare,GameStartupInfo,@Ftd,0,'[main]');
@@ -785,14 +756,14 @@ begin
  if (r<>0) then
  begin
   _error:
-  FreeAndNil(Context.FGameProcess);
+  FreeAndNil(FGameProcess);
   Exit(r);
  end;
 
- Context.FGameProcess.g_proc :=fork_info.hProcess;
- Context.FGameProcess.g_p_pid:=fork_info.fork_pid;
+ FGameProcess.g_proc :=fork_info.hProcess;
+ FGameProcess.g_p_pid:=fork_info.fork_pid;
 
- Context.FIpcDispatch.thread_new;
+ FIpcDispatch.thread_new;
 
  kev.ident :=fork_info.fork_pid;
  kev.filter:=EVFILT_PROC;
@@ -801,19 +772,16 @@ begin
  kev.data  :=0;
  kev.udata :=nil;
 
- Context.FGameProcess.g_ipc.kevent(@kev,1);
+ FGameProcess.g_ipc.kevent(@kev,1);
 
  if (not cfg.FLoadExec) then
  begin
-  Context.FParamSfo:=cfg.FParamSfo;
-  Context.FGameItem:=cfg.FGameItem;
-  Context.FGameItem.FLock:=True;
+  FParamSfo:=cfg.FParamSfo;
+  FGameItem:=cfg.FGameItem;
+  FGameItem.FLock:=True;
  end;
 
 end;
 
 
 end.
-
-
-

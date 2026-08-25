@@ -12,6 +12,7 @@ uses
   game_edit,
   cfg_edit,
   game_find,
+  logging,
   md_systm_fork,
   md_systm_reserve;
 

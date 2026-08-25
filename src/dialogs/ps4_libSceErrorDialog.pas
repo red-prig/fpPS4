@@ -21,6 +21,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_ErrDialog_mtx:mtx;
  g_state        :Integer=0;
@@ -52,7 +54,7 @@ type
 
 function ps4_sceErrorDialogInitialize():Integer;
 begin
- Writeln('sceErrorDialogInitialize');
+ LOG_INFO('sceErrorDialogInitialize');
  Result:=SCE_ERROR_DIALOG_ERROR_ALREADY_INITIALIZED;
  mtx_lock(g_ErrDialog_mtx);
 
@@ -120,7 +122,7 @@ begin
   Exit(SCE_ERROR_DIALOG_ERROR_INVALID_USER_ID);
  end;
 
- Writeln('sceErrorDialogOpen:',HexStr(param^.errorCode,4));
+ LOG_TRACE('sceErrorDialogOpen:',HexStr(param^.errorCode,4));
 
  mtx_lock(g_ErrDialog_mtx);
 
@@ -192,7 +194,7 @@ end;
 
 function ps4_sceErrorDialogTerminate():Integer;
 begin
- Writeln('sceErrorDialogTerminate');
+ LOG_INFO('sceErrorDialogTerminate');
 
  mtx_lock(g_ErrDialog_mtx);
 
@@ -223,6 +225,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceErrorDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

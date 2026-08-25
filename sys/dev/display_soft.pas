@@ -154,6 +154,8 @@ uses
  vm_mmap,
  vm_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 Procedure TSubmitAlloc.Init;
@@ -222,11 +224,11 @@ begin
 
  FPrevBufIndex:=-1;
 
- Writeln('OpenMainWindows->');
+ LOG_INFO('OpenMainWindows->');
 
  hWindow:=p_host_ipc.OpenMainWindows();
 
- Writeln('OpenMainWindows:',hWindow);
+ LOG_INFO('OpenMainWindows:',hWindow);
 
  FHEvent:=RTLEventCreate;
  FVEvent:=RTLEventCreate;
@@ -368,11 +370,11 @@ begin
  left :=mirror_map(buf^.left ,size);
  right:=mirror_map(buf^.right,size);
 
- Writeln('RegisterBuffer:L:',HexStr(left.oblk),'..',HexStr(left.oblk+left.size));
+ LOG_TRACE('RegisterBuffer:L:',HexStr(left.oblk),'..',HexStr(left.oblk+left.size));
 
  if (right.base<>nil) then
  begin
-  Writeln('RegisterBuffer:R:',HexStr(right.oblk),'..',HexStr(right.oblk+right.size));
+  LOG_TRACE('RegisterBuffer:R:',HexStr(right.oblk),'..',HexStr(right.oblk+right.size));
  end;
 
  m_bufs[i].init :=1;
@@ -1202,7 +1204,7 @@ begin
  Node:=FSubmitAlloc.Alloc;
  if (Node=nil) then
  begin
-  Writeln('SubmitQueue is busy!');
+  LOG_INFO('SubmitQueue is busy!');
   Exit(EBUSY);
  end;
 
@@ -1235,7 +1237,7 @@ begin
  Node:=FSubmitAlloc.Alloc;
  if (Node=nil) then
  begin
-  Writeln('SubmitQueue is busy!');
+  LOG_INFO('SubmitQueue is busy!');
   Exit(EBUSY);
  end;
 
@@ -1243,7 +1245,7 @@ begin
  if (Flip=nil) then
  begin
   FSubmitAlloc.Free(Node);
-  Writeln('FlipQueue is busy!');
+  LOG_INFO('FlipQueue is busy!');
   Exit(EBUSY);
  end;
 

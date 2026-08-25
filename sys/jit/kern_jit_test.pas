@@ -25,6 +25,8 @@ implementation
 uses
  kern_jit_ops;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  instr_sizes:array[0..16] of QWORD;
  jit_sizes  :array[0..511] of QWORD;
@@ -57,19 +59,19 @@ procedure print_din_stats;
 var
  i,s:Integer;
 begin
- Writeln('[Instruction sizes]');
+ LOG_TRACE('[Instruction sizes]');
  For i:=1 to 16 do
  begin
-  Writeln(' [',i,']:',instr_sizes[i]);
+  LOG_TRACE(' [',i,']:',instr_sizes[i]);
  end;
  //
- Writeln('[Instruction usage]');
- Writeln(' [rip]:',rip_stat);
- Writeln(' [one]:',one_stat);
+ LOG_TRACE('[Instruction usage]');
+ LOG_TRACE(' [rip]:',rip_stat);
+ LOG_TRACE(' [one]:',one_stat);
 
  For i:=0 to 15 do
  begin
-  Writeln(' [',gen_str[i],']:',gen_stat[i]);
+  LOG_TRACE(' [',gen_str[i],']:',gen_stat[i]);
  end;
 
  s:=0;
@@ -82,10 +84,10 @@ begin
   end;
  end;
 
- Writeln('[JIT sizes]');
+ LOG_TRACE('[JIT sizes]');
  For i:=0 to s do
  begin
-  Writeln(' [',i,']:',jit_sizes[i]);
+  LOG_TRACE(' [',i,']:',jit_sizes[i]);
  end;
 
 end;
@@ -1288,7 +1290,7 @@ begin
    begin
     if print_ops then
     begin
-     Writeln('Unhandled jit:',x,',',y,',',z);
+     LOG_ERROR('Unhandled jit:',x,',',y,',',z);
     end;
    end else
    if print_status then
@@ -1299,19 +1301,19 @@ begin
   if print_ops then
   if (jit_cbs[x,y,z]<>nil) then
   begin
-   Writeln('  handled jit:',x,',',y,',',z);
+   LOG_TRACE('  handled jit:',x,',',y,',',z);
   end;
  end;
 
  if print_status then
  begin
-  Writeln('[jit status]');
-  Writeln('  general:',percent(cbs_status.g,use_status.g):5:2,'%');
-  Writeln('    float:',percent(cbs_status.f,use_status.f):5:2,'%');
-  Writeln('      sse:',percent(cbs_status.s,use_status.s):5:2,'%');
-  Writeln('      avx:',percent(cbs_status.v,use_status.v):5:2,'%');
-  Writeln('      bmi:',percent(cbs_status.b,use_status.b):5:2,'%');
-  Writeln('    total:',percent(cbs_status.g+cbs_status.s+cbs_status.f+cbs_status.v+use_status.b,
+  LOG_TRACE('[jit status]');
+  LOG_TRACE('  general:',percent(cbs_status.g,use_status.g):5:2,'%');
+  LOG_TRACE('    float:',percent(cbs_status.f,use_status.f):5:2,'%');
+  LOG_TRACE('      sse:',percent(cbs_status.s,use_status.s):5:2,'%');
+  LOG_TRACE('      avx:',percent(cbs_status.v,use_status.v):5:2,'%');
+  LOG_TRACE('      bmi:',percent(cbs_status.b,use_status.b):5:2,'%');
+  LOG_TRACE('    total:',percent(cbs_status.g+cbs_status.s+cbs_status.f+cbs_status.v+use_status.b,
                                use_status.g+use_status.s+use_status.f+use_status.v+use_status.b
                               ):0:2,'%');
  end;

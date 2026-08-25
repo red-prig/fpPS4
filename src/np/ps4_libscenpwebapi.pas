@@ -13,10 +13,12 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceNpWebApiInitialize(libHttpCtxId:Integer;
                                    poolSize:size_t):Integer;
 begin
- Writeln('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
+ LOG_INFO('sceNpWebApiInitialize:',libHttpCtxId,':',poolSize);
  Result:=4;
 end;
 
@@ -27,14 +29,14 @@ end;
 
 function ps4_sceNpWebApiCreateContext(libCtxId:Integer;pOnlineId:pSceNpOnlineId):Integer;
 begin
- Writeln('sceNpWebApiCreateContext:',libCtxId,':',pOnlineId^.data);
+ LOG_INFO('sceNpWebApiCreateContext:',libCtxId,':',pOnlineId^.data);
  Result:=0;
 end;
 
 
 function ps4_sceNpWebApiCreateContextA(libCtxId,userId:Integer):Integer;
 begin
- Writeln('sceNpWebApiCreateContextA:',libCtxId,':',userId);
+ LOG_INFO('sceNpWebApiCreateContextA:',libCtxId,':',userId);
  //Result:=Integer($80552907);
  Result:=0;
 end;
@@ -127,7 +129,7 @@ function ps4_sceNpWebApiGetHttpResponseHeaderValueLength(
                                           pFieldName:PChar;
                                           pValueLength:PQWORD):Integer;
 begin
- Writeln('sceNpWebApiGetHttpResponseHeaderValueLength:',pFieldName);
+ LOG_INFO('sceNpWebApiGetHttpResponseHeaderValueLength:',pFieldName);
  if (pValueLength<>nil) then
  begin
   pValueLength^:=0;
@@ -255,6 +257,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpWebApi(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

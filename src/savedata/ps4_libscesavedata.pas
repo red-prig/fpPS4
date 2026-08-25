@@ -9,7 +9,6 @@ uses
  sysutils,
  LFQueue,
  mqueue,
- errno,
  SceSaveData,
  SaveDataBackend,
  kern_thr,
@@ -18,21 +17,20 @@ uses
  kern_authinfo,
  md_event,
  kern_mtx,
- mpmc_queue,
  subr_dynlib,
  vm,
- vmparam,
  vm_map,
  vm_mmap,
  vm_object,
  game_mount,
- vfs_mountroot,
  ps4_libSceUserService,
  md_systm,
  sys_bootparam,
  host_ipc;
 
 implementation
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 ///
 
@@ -608,7 +606,7 @@ begin
  Result:=nil;
  instance:=g_instance;
 
- writeln('job_thread');
+ LOG_INFO('job_thread');
 
  repeat
   instance.job_list.Action;
@@ -2140,7 +2138,7 @@ begin
 
   Result:=g_instance.Backend.DoMount(mount,pResult,Transfering,False);
 
-  Writeln('SaveDataMount("',mount^.dirName^.data,'"):0x',HexStr(Result,8));
+  LOG_TRACE('SaveDataMount("',mount^.dirName^.data,'"):0x',HexStr(Result,8));
 
   if (cmd<>nil) then
   begin
@@ -2642,11 +2640,7 @@ begin
 
 end;
 
-procedure init_save;
-begin
- //backup.queue.Create(32);
-end;
-
+{$WARN 4110 off}
 function Load_libSceSaveData(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;
@@ -2704,7 +2698,6 @@ begin
  lib.set_proc($E9482DC15FB4CDBE,@ps4_scePthreadCreate             );
  lib.set_proc($A27358F41CA7FD6F,@ps4_scePthreadJoin               );
 
- //init_save;
 end;
 
 var

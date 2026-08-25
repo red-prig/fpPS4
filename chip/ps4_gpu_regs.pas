@@ -417,6 +417,7 @@ function _get_tsharp8_image_view(PT:PTSharpResource8):TvImageViewKey;
 function _get_ssharp_info(PS:PSSharpResource4):TVkSamplerCreateInfo;
 
 implementation
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 Function TGPU_REGS._SHADER_MASK(i:Byte):Byte; inline; //0..7
 begin
@@ -1134,10 +1135,10 @@ begin
 
        W:=RENDER_TARGET[i].CLEAR_WORD;
 
-       //Writeln((W shr (BsrDWord(COMP_MAP[0]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[1]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255);
-       //Writeln((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[0]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[1]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[2]) shl 3)) and 255);
+       //LOG_TRACE((W shr (BsrDWord(COMP_MAP[3]) shl 3)) and 255);
 
        Result.CLEAR_COLOR.uint32[0]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[0]) shl 3),$FF);
        Result.CLEAR_COLOR.uint32[1]:=_conv_clr_to_float(NUMBER_TYPE,W shr (BsrDWord(COMP_MAP[1]) shl 3),$FF);

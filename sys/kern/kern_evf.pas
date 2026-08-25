@@ -44,6 +44,8 @@ uses
  kern_named_id,
  kern_namedobj;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  EVF_ATTR_DELF      =$1000;
 
@@ -145,7 +147,7 @@ var
 begin
  mtx_lock(evf^.mtx);
 
- //Writeln('evf_cancel(',HexStr(evf),',',HexStr(setPattern,16),')');
+ LOG_TRACE('evf_cancel(',HexStr(evf),',',HexStr(setPattern,16),')');
 
  if ((evf^.attr and EVF_ATTR_DELF)=0) then
  begin
@@ -199,7 +201,7 @@ var
 begin
  mtx_lock(evf^.mtx);
 
- //Writeln('evf_set(',HexStr(evf),',',HexStr(bitPattern,16),')');
+ LOG_TRACE('evf_set(',HexStr(evf),',',HexStr(bitPattern,16),')');
 
  if ((evf^.attr and EVF_ATTR_DELF)=0) then
  begin
@@ -277,7 +279,7 @@ var
 begin
  mtx_lock(evf^.mtx);
 
- //Writeln('evf_trywait(',HexStr(evf),',',HexStr(bitPattern,16),',',waitMode,')');
+ LOG_TRACE('evf_trywait(',HexStr(evf),',',HexStr(bitPattern,16),',',waitMode,')');
 
  if ((evf^.attr and EVF_ATTR_DELF)=0) then
  begin
@@ -366,7 +368,7 @@ var
 begin
  td:=curkthread;
 
- //Writeln('evf_wait(',HexStr(evf),',',HexStr(bitPattern,16),',',waitMode,')');
+ LOG_TRACE('evf_wait(',HexStr(evf),',',HexStr(bitPattern,16),',',waitMode,')');
 
  mtx_lock(evf^.mtx);
 
@@ -560,7 +562,7 @@ begin
 
  if ((attr and EVF_ATTR_SHRD)<>0) then
  begin
-  Writeln(StdErr,'sys_evf_create:',name,':process shared evf not supported');
+  LOG_WARNING(StdErr,'sys_evf_create:',name,':process shared evf not supported');
   //Exit(EPERM);
  end;
 
@@ -584,7 +586,7 @@ begin
  evf_init(evf,attr,initPattern);
  evf^.name:=_name;
 
- //Writeln('evf_create(',HexStr(evf),',',name,',',HexStr(attr,2),',',HexStr(initPattern,16),')');
+ LOG_TRACE('evf_create(',HexStr(evf),',',name,',',HexStr(attr,2),',',HexStr(initPattern,16),')');
 
  if not id_name_new(@named_table,evf,@key) then
  begin
@@ -760,7 +762,7 @@ begin
  td:=curkthread;
  if (td=nil) then Exit(-1);
 
- Writeln(StdErr,'sys_evf_open:',name,':process shared evf not supported');
+ LOG_WARNING(StdErr,'sys_evf_open:',name,':process shared evf not supported');
  //Exit(EPERM);
 
  td^.td_retval[0]:=333;
@@ -769,7 +771,7 @@ end;
 
 function sys_evf_close(key:Integer):Integer;
 begin
- Writeln(StdErr,'sys_evf_close:','process shared evf not supported');
+ LOG_WARNING(StdErr,'sys_evf_close:','process shared evf not supported');
  Exit(EPERM);
 end;
 

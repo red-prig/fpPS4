@@ -388,6 +388,8 @@ uses
  kern_jit_asm,
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function t_jit_context2.t_forward_point.c(n1,n2:p_forward_point):Integer;
 begin
  Result:=Integer(n1^.dst>n2^.dst)-Integer(n1^.dst<n2^.dst);
@@ -853,19 +855,19 @@ end;
 
 procedure t_jit_context2.print_alloc_stats;
 begin
- Writeln('t_jit_context2:[alloc_stats]');
- Writeln(' t_export_point     =',stats.t_export_point     ,' (',stats.t_export_point     *sizeof(t_export_point     ),')');
- Writeln(' t_import_point     =',stats.t_import_point     ,' (',stats.t_import_point     *sizeof(t_import_point     ),')');
- Writeln(' t_forward_link     =',stats.t_forward_link     ,' (',stats.t_forward_link     *sizeof(t_forward_link     ),')');
- Writeln(' t_forward_point    =',stats.t_forward_point    ,' (',stats.t_forward_point    *sizeof(t_forward_point    ),')');
- Writeln(' t_jumpslot         =',stats.t_jumpslot         ,' (',stats.t_jumpslot         *sizeof(t_jumpslot         ),')');
- Writeln(' t_switchtable_point=',stats.t_switchtable_point,' (',stats.t_switchtable_point*sizeof(t_switchtable_point),')');
- Writeln(' t_label            =',stats.t_label            ,' (',stats.t_label            *sizeof(t_label            ),')');
- Writeln(' t_entry_point      =',stats.t_entry_point      ,' (',stats.t_entry_point      *sizeof(t_entry_point      ),')');
+ LOG_TRACE('t_jit_context2:[alloc_stats]');
+ LOG_TRACE(' t_export_point     =',stats.t_export_point     ,' (',stats.t_export_point     *sizeof(t_export_point     ),')');
+ LOG_TRACE(' t_import_point     =',stats.t_import_point     ,' (',stats.t_import_point     *sizeof(t_import_point     ),')');
+ LOG_TRACE(' t_forward_link     =',stats.t_forward_link     ,' (',stats.t_forward_link     *sizeof(t_forward_link     ),')');
+ LOG_TRACE(' t_forward_point    =',stats.t_forward_point    ,' (',stats.t_forward_point    *sizeof(t_forward_point    ),')');
+ LOG_TRACE(' t_jumpslot         =',stats.t_jumpslot         ,' (',stats.t_jumpslot         *sizeof(t_jumpslot         ),')');
+ LOG_TRACE(' t_switchtable_point=',stats.t_switchtable_point,' (',stats.t_switchtable_point*sizeof(t_switchtable_point),')');
+ LOG_TRACE(' t_label            =',stats.t_label            ,' (',stats.t_label            *sizeof(t_label            ),')');
+ LOG_TRACE(' t_entry_point      =',stats.t_entry_point      ,' (',stats.t_entry_point      *sizeof(t_entry_point      ),')');
 
- Writeln(' t_jit_code_chunk   =',builder.stats.t_jit_code_chunk ,' (',builder.stats.t_jit_code_chunk*sizeof(t_jit_code_chunk),')');
- Writeln(' t_jit_instruction  =',builder.stats.t_jit_instruction,' (',builder.stats.t_jit_instruction_bytes,')');
- Writeln(' t_jit_data         =',builder.stats.t_jit_data       ,' (',builder.stats.t_jit_data*sizeof(t_jit_data),')');
+ LOG_TRACE(' t_jit_code_chunk   =',builder.stats.t_jit_code_chunk ,' (',builder.stats.t_jit_code_chunk*sizeof(t_jit_code_chunk),')');
+ LOG_TRACE(' t_jit_instruction  =',builder.stats.t_jit_instruction,' (',builder.stats.t_jit_instruction_bytes,')');
+ LOG_TRACE(' t_jit_data         =',builder.stats.t_jit_data       ,' (',builder.stats.t_jit_data*sizeof(t_jit_data),')');
 end;
 
 procedure t_jit_context2.Free;

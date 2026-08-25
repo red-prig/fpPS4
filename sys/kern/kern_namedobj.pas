@@ -39,6 +39,8 @@ uses
  kern_thr,
  kern_rwlock;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  namedobj_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@namedobj_list.tqh_first);
  namedobj_lock:Pointer;
@@ -136,7 +138,7 @@ begin
 
  td^.td_retval[0]:=key;
 
- Writeln('namedobj_create("',_name,'",0x',HexStr(QWORD(objp),11),',0x',HexStr(objt,4),'):',key);
+ LOG_TRACE('namedobj_create("',_name,'",0x',HexStr(QWORD(objp),11),',0x',HexStr(objt,4),'):',key);
 
  Result:=0;
 end;

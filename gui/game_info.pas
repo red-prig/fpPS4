@@ -12,21 +12,32 @@ uses
 type
  TSerializeStringArray=core_serialization.TSerializeStringArray;
 
+ TLogInfo=class(TSerializeObject)
+ private
+  FLogFile    :RawByteString;
+  FLogFilter  :RawByteString;
+  FTtyPrefix  :RawByteString;
+  FTtyRedirect:RawByteString;
+ published
+  property LogFile    :RawByteString read FLogFile     write FLogFile;
+  property LogFilter  :RawByteString read FLogFilter   write FLogFilter;
+  property TtyPrefix  :RawByteString read FTtyPrefix   write FTtyPrefix;
+  property TtyRedirect:RawByteString read FTtyRedirect write FTtyRedirect;
+ public
+  Constructor Create; override;
+ end;
+
  TBootParamInfo=class(TSerializeObject)
  private
   FNeo                :Boolean;
   Fhalt_on_exit       :Boolean;
   Fprint_guest_syscall:Boolean;
-  Fprint_pmap         :Boolean;
-  Fprint_jit_preload  :Boolean;
   Fprint_gpu_ops      :Boolean;
   Fprint_gpu_hint     :Boolean;
  published
   property neo                :Boolean read FNeo                 write FNeo                ;
   property halt_on_exit       :Boolean read Fhalt_on_exit        write Fhalt_on_exit       ;
   property print_guest_syscall:Boolean read Fprint_guest_syscall write Fprint_guest_syscall;
-  property print_pmap         :Boolean read Fprint_pmap          write Fprint_pmap         ;
-  property print_jit_preload  :Boolean read Fprint_jit_preload   write Fprint_jit_preload  ;
   property print_gpu_ops      :Boolean read Fprint_gpu_ops       write Fprint_gpu_ops      ;
   property print_gpu_hint     :Boolean read Fprint_gpu_hint      write Fprint_gpu_hint     ;
  end;
@@ -54,11 +65,11 @@ type
 
  TMainInfo=class(TSerializeObject)
  private
-  FLogFile        :RawByteString;
+  FLocalDir       :RawByteString;
   FDefaultFirmware:RawByteString;
   FFirmwareList   :TSerializeStringArray;
  published
-  property LogFile        :RawByteString         read FLogFile         write FLogFile;
+  property LocalDir       :RawByteString         read FLocalDir        write FLocalDir;
   property DefaultFirmware:RawByteString         read FDefaultFirmware write FDefaultFirmware;
   property FirmwareList   :TSerializeStringArray read FFirmwareList    write FFirmwareList;
  public
@@ -131,6 +142,7 @@ type
  TConfigInfo=class(TSerializeObject)
   private
    FMainInfo        :TMainInfo;
+   FLogInfo         :TLogInfo;
    FBootParamInfo   :TBootParamInfo;
    FJITInfo         :TJITInfo;
    FMiscInfo        :TMiscInfo;
@@ -139,6 +151,7 @@ type
    FPS4Audio        :TPS4Audio;
   published
    property MainInfo        :TMainInfo         read FMainInfo         write FMainInfo;
+   property LogInfo         :TLogInfo          read FLogInfo          write FLogInfo;
    property BootParamInfo   :TBootParamInfo    read FBootParamInfo    write FBootParamInfo;
    property JITInfo         :TJITInfo          read FJITInfo          write FJITInfo;
    property MiscInfo        :TMiscInfo         read FMiscInfo         write FMiscInfo;
@@ -240,6 +253,15 @@ implementation
 
 //
 
+Constructor TLogInfo.Create;
+begin
+ inherited;
+ FLogFile    :='log.txt';
+ FTtyPrefix  :='%td_name%>:';
+ FTtyRedirect:='*:log.txt';
+end;
+
+
 Constructor TJITInfo.Create;
 begin
  inherited;
@@ -251,7 +273,7 @@ end;
 Constructor TMainInfo.Create;
 begin
  inherited;
- FLogFile        :='log.txt';
+ FLocalDir       :='%AppConfigDir%';
  FDefaultFirmware:=DirectorySeparator+'firmware';
 end;
 

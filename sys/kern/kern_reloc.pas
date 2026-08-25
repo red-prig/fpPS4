@@ -25,6 +25,8 @@ uses
  systm,
  kern_dlsym;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function check_addr(obj:p_lib_info;where:Pointer;size:Integer):Integer;
 var
  map_base:Pointer;
@@ -108,7 +110,7 @@ begin
     R_X86_64_COPY:
       if (obj^.rtld_flags.mainprog=0) then
       begin
-       Writeln(StdErr,'reloc_non_plt:','Unexpected R_X86_64_COPY relocation in shared library ',dynlib_basename(obj^.lib_path));
+       LOG_ERROR(StdErr,'reloc_non_plt:','Unexpected R_X86_64_COPY relocation in shared library ',dynlib_basename(obj^.lib_path));
        Exit(ENOEXEC);
       end; //R_X86_64_COPY
 
@@ -117,7 +119,7 @@ begin
        Result:=check_addr(obj,where,SizeOf(Pointer));
        if (Result<>0) then
        begin
-        Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        LOG_ERROR(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
         Exit;
        end;
 
@@ -136,7 +138,7 @@ begin
        Result:=check_addr(obj,where,SizeOf(Pointer));
        if (Result<>0) then
        begin
-        Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        LOG_ERROR(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
         Exit;
        end;
 
@@ -169,7 +171,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -178,7 +180,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -193,7 +195,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyin() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -202,7 +204,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -216,7 +218,7 @@ begin
            begin
             if not allocate_tls_offset(defobj) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','No space available for static Thread Local Storage');
+             LOG_ERROR(StdErr,'reloc_non_plt:','No space available for static Thread Local Storage');
              Exit(ENOEXEC);
             end;
 
@@ -225,7 +227,7 @@ begin
             Result:=copyout(@data,where,SizeOf(Pointer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -247,7 +249,7 @@ begin
        Result:=check_addr(obj,where,SizeOf(Integer));
        if (Result<>0) then
        begin
-        Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        LOG_ERROR(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
         Exit;
        end;
 
@@ -269,7 +271,7 @@ begin
               Result:=check_addr(defobj,data,SizeOf(Integer));
               if (Result<>0) then
               begin
-               Writeln(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+               LOG_ERROR(StdErr,'reloc_non_plt:','idx=',i,' where32=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
                Exit;
               end;
              end;
@@ -278,7 +280,7 @@ begin
             Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -293,7 +295,7 @@ begin
             Result:=copyin(where,@data,SizeOf(Pointer)); //data:=where^
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyin() failed. where32=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyin() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -302,7 +304,7 @@ begin
             Result:=copyout(@data,where,8); //where^:=data
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -317,7 +319,7 @@ begin
            begin
             if not allocate_tls_offset(defobj) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','No space available for static Thread Local Storage');
+             LOG_ERROR(StdErr,'reloc_non_plt:','No space available for static Thread Local Storage');
              Exit(ENOEXEC);
             end;
 
@@ -326,7 +328,7 @@ begin
             Result:=copyout(@data32,where,SizeOf(Integer));
             if (Result<>0) then
             begin
-             Writeln(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
+             LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where32=0x',HexStr(where),' [',r_type,']');
              Exit(ENOEXEC);
             end;
 
@@ -343,7 +345,7 @@ begin
 
     else
       begin
-       Writeln(StdErr,'reloc_non_plt:','Unsupported reloc type=',r_type);
+       LOG_ERROR(StdErr,'reloc_non_plt:','Unsupported reloc type=',r_type);
        Exit(ENOEXEC);
       end;
    end; //case
@@ -363,7 +365,7 @@ begin
    Result:=check_addr(defobj,data,SizeOf(Pointer));
    if (Result<>0) then
    begin
-    Writeln(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
+    LOG_ERROR(StdErr,'reloc_non_plt:','idx=',i,' where=0x',HexStr(where),' ref=',dynlib_basename(defobj^.lib_path));
     Exit;
    end;
   end;
@@ -371,7 +373,7 @@ begin
   Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
   if (Result<>0) then
   begin
-   Writeln(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
+   LOG_ERROR(StdErr,'reloc_non_plt:','copyout() failed. where=0x',HexStr(where),' [',r_type,']');
    Exit(ENOEXEC);
   end;
 
@@ -409,7 +411,7 @@ begin
 
  if (ELF64_R_TYPE(entry^.r_info)<>R_X86_64_JUMP_SLOT) then
  begin
-  Writeln(StdErr,'reloc_jmpslot:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
+  LOG_ERROR(StdErr,'reloc_jmpslot:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
   Exit(3);
  end;
 
@@ -441,7 +443,7 @@ begin
  Result:=copyout(@data,where,SizeOf(Pointer));
  if (Result<>0) then
  begin
-  Writeln(StdErr,'reloc_jmpslot:','copyout() failed. where=0x',HexStr(where));
+  LOG_ERROR(StdErr,'reloc_jmpslot:','copyout() failed. where=0x',HexStr(where));
   Exit(4);
  end;
 
@@ -548,7 +550,7 @@ begin
           Result:=copyout(@data,where,SizeOf(Pointer));
           if (Result<>0) then
           begin
-           Writeln(StdErr,'reloc_hle:','copyout() failed. where=0x',HexStr(where));
+           LOG_ERROR(StdErr,'reloc_hle:','copyout() failed. where=0x',HexStr(where));
            Exit(4);
           end;
 
@@ -578,12 +580,12 @@ end;
 
 function relocate_one_object(obj:p_lib_info;jmpslots,export_only:Boolean):Integer; public;
 begin
- //Writeln(' relocate:',dynlib_basename(obj^.lib_path));
+ LOG_TRACE(' relocate:',dynlib_basename(obj^.lib_path));
 
  Result:=reloc_non_plt(obj,ord(export_only)*$200);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
+  LOG_ERROR(StdErr,'relocate_one_object:','reloc_non_plt() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
   Exit;
  end;
 
@@ -598,7 +600,7 @@ begin
    Result:=reloc_jmpslots(obj,ord(export_only)*$200);
    if (Result<>0) then
    begin
-    Writeln(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
+    LOG_ERROR(StdErr,'relocate_one_object:','reloc_jmplots() failed. obj=',dynlib_basename(obj^.lib_path),' rv=',Result);
     Exit;
    end;
    reloc_hle(obj);
@@ -624,7 +626,7 @@ begin
  begin
   if (ELF64_R_TYPE(rela^.r_info)=R_X86_64_COPY) then
   begin
-   Writeln(StdErr,'check_copy_relocations:','R_X86_64_COPY found in ',dynlib_basename(obj^.lib_path));
+   LOG_ERROR(StdErr,'check_copy_relocations:','R_X86_64_COPY found in ',dynlib_basename(obj^.lib_path));
    Exit(EINVAL);
   end;
   Inc(rela);
@@ -677,7 +679,7 @@ begin
      R_X86_64_COPY:
        if (obj^.rtld_flags.mainprog=0) then
        begin
-        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unexpected R_X86_64_COPY relocation in dynamic library ',dynlib_basename(obj^.lib_path));
+        LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unexpected R_X86_64_COPY relocation in dynamic library ',dynlib_basename(obj^.lib_path));
         Exit(-1);
        end; //R_X86_64_COPY
 
@@ -691,7 +693,7 @@ begin
         Result:=relocate_text_or_data_segment(obj,@data,where,SizeOf(Pointer));
         if (Result<>0) then
         begin
-         Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+         LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
          Exit(-1);
         end;
 
@@ -706,7 +708,7 @@ begin
        Result:=relocate_text_or_data_segment(obj,@data32,where,SizeOf(Integer));
        if (Result<>0) then
        begin
-        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+        LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
         Exit(-1);
        end;
 
@@ -721,7 +723,7 @@ begin
         Result:=copyout(@data,where,SizeOf(Pointer));
         if (Result<>0) then
         begin
-         Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+         LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
          Exit(-1);
         end;
 
@@ -735,7 +737,7 @@ begin
         Result:=copyout(@data32,where,SizeOf(Integer));
         if (Result<>0) then
         begin
-         Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+         LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','copyout() failed. where32=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
          Exit(-1);
         end;
 
@@ -744,7 +746,7 @@ begin
 
      else
        begin
-        Writeln(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unsupported reloc type=',r_type);
+        LOG_ERROR(StdErr,'dynlib_unlink_non_plt_reloc_each:','Unsupported reloc type=',r_type);
         Exit(-1);
        end;
    end;
@@ -786,7 +788,7 @@ begin
 
    if (ELF64_R_TYPE(entry^.r_info)<>R_X86_64_JUMP_SLOT) then
    begin
-    Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
+    LOG_ERROR(StdErr,'dynlib_unlink_plt_reloc_each:','R_TYPE (',ELF64_R_TYPE(entry^.r_info),') at index ',i,' is bad. (Expected: R_X86_64_JMP_SLOT) in ',dynlib_basename(obj^.lib_path));
     Exit(-1);
    end;
 
@@ -805,7 +807,7 @@ begin
      str:=obj_get_str(obj,def^.st_name);
     end;
 
-    Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','failed to lookup symbol symp=0x',HexStr(def),' name=',str);
+    LOG_ERROR(StdErr,'dynlib_unlink_plt_reloc_each:','failed to lookup symbol symp=0x',HexStr(def),' name=',str);
     Exit(-1);
    end else
    if (defobj=root) then
@@ -817,7 +819,7 @@ begin
     Result:=copyout(@data,where,SizeOf(Pointer));
     if (Result<>0) then
     begin
-     Writeln(StdErr,'dynlib_unlink_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
+     LOG_ERROR(StdErr,'dynlib_unlink_plt_reloc_each:','copyout() failed. where=0x',HexStr(where),' ref=',dynlib_basename(obj^.lib_path));
      Exit(-1);
     end;
 
@@ -834,14 +836,14 @@ begin
  Result:=dynlib_unlink_non_plt_reloc_each(root,obj);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_non_plt_reloc_each() fails ',Result);
+  LOG_ERROR(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_non_plt_reloc_each() fails ',Result);
   Exit;
  end;
 
  Result:=dynlib_unlink_plt_reloc_each(root,obj);
  if (Result<>0) then
  begin
-  Writeln(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_plt_reloc_each() fails ',Result);
+  LOG_ERROR(StdErr,'dynlib_unlink_imported_symbols_each:','dynlib_unlink_plt_reloc_each() fails ',Result);
   Exit;
  end;
 end;

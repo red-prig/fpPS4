@@ -17,6 +17,8 @@ uses
  subr_backtrace,
  md_arc4random;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function bnet_get_secure_seed():Integer;
 begin
  Result:=0;
@@ -118,7 +120,7 @@ begin
 
   else
    begin
-    Writeln(StdErr,'Unhandled netcontrol:',op);
+    LOG_ERROR(StdErr,'Unhandled netcontrol:',op);
     print_backtrace_td(StdErr);
     Assert(False);
     Result:=EINVAL;
@@ -136,7 +138,7 @@ var
  info:array[0..$1e0-1] of Byte;
  td:p_kthread;
 begin
- Writeln('TODO:sys_netgetiflist(0x',HexStr(QWORD(buf),11),',',max,')');
+ LOG_WARNING('TODO:sys_netgetiflist(0x',HexStr(QWORD(buf),11),',',max,')');
  print_backtrace_td(StdErr);
 
  FillChar(info,sizeof(info),0);

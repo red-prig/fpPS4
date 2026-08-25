@@ -36,7 +36,7 @@ Begin
  auio.uio_segflg:=UIO_SYSSPACE;
  auio.uio_rw    :=UIO_WRITE;
 
- ttydisc_write(tp,@auio,0);
+ md_tty_write(tp,tp^.t_priv,@auio,0);
 
  t.BufPos:=0;
 end;

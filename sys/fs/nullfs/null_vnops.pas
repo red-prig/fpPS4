@@ -99,6 +99,8 @@ uses
  vfs_cache,
  kern_mtx;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 type
  ppp_vnode=^pp_vnode;
 
@@ -194,7 +196,7 @@ begin
  end else
  begin
   _err:
-  Writeln(Format('null_bypass: no map for %s',[descp^.vdesc_name]));
+  LOG_INFO(Format('null_bypass: no map for %s',[descp^.vdesc_name]));
   error:=EINVAL;
  end;
 
@@ -824,7 +826,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- Writeln(Format('vp=%p, lowervp=%p', [vp,VTONULL(vp)^.null_lowervp]));
+ LOG_INFO(Format('vp=%p, lowervp=%p', [vp,VTONULL(vp)^.null_lowervp]));
  Exit(0);
 end;
 

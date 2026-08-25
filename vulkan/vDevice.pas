@@ -372,6 +372,8 @@ uses
  kern_rwlock,
  vMemory;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function shaderStorageImageExtendedFormats:Boolean;
 begin
  Result:=Boolean(limits.DeviceFeature.shaderStorageImageExtendedFormats);
@@ -570,7 +572,7 @@ begin
   vkEnumerateInstanceExtensionProperties(nil,@count,pProperties);
   For i:=0 to count-1 do
   begin
-   Writeln(pProperties[i].extensionName);
+   LOG_TRACE(pProperties[i].extensionName);
   end;
   FreeMem(pProperties);
  end;
@@ -590,7 +592,7 @@ begin
   vkEnumerateDeviceExtensionProperties(physicalDevice,nil,@count,pProperties);
   For i:=0 to count-1 do
   begin
-   Writeln(pProperties[i].extensionName);
+   LOG_TRACE(pProperties[i].extensionName);
   end;
   FreeMem(pProperties);
  end;
@@ -629,7 +631,7 @@ begin
 
  For i:=0 to count-1 do
  begin
-  Writeln(getstr_queueFlags(pFamily[i].queueFlags),':',pFamily[i].queueCount);
+  LOG_TRACE(getstr_queueFlags(pFamily[i].queueFlags),':',pFamily[i].queueCount);
  end;
 
  FreeMem(pFamily);
@@ -679,7 +681,7 @@ begin
   r:=FCreateDebugUtilsMessenger(VulkanApp.FInstance,@cinfo,nil,@FHandle);
   if (r<>VK_SUCCESS) then
   begin
-   Writeln(StdErr,'CreateDebugReportCallback:',r);
+   LOG_ERROR(StdErr,'CreateDebugReportCallback:',r);
    Exit;
   end;
  end;
@@ -756,7 +758,7 @@ begin
  if Pos('not consumed by fragment shader',pCallbackData^.pMessage)<>0 then Exit;
  if Pos('fragment shader writes to output location 0 with no matching attachment',pCallbackData^.pMessage)<>0 then Exit;
 
- Writeln(FStdOut,pCallbackData^.pMessage);
+ LOG_TRACE(FStdOut,pCallbackData^.pMessage);
 
  {
  sType:TVkStructureType;
@@ -809,7 +811,7 @@ begin
   else;
  end;
 
- Writeln(pMessage);
+ LOG_TRACE(pMessage);
  }
 
 end;
@@ -865,11 +867,11 @@ begin
  begin
   deviceProperties:=Default(TVkPhysicalDeviceProperties);
   vkGetPhysicalDeviceProperties(pPhysicalDevices[i],@deviceProperties);
-  Writeln(deviceProperties.deviceName);
-  Writeln('apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
+  LOG_TRACE(deviceProperties.deviceName);
+  LOG_TRACE('apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_PATCH(deviceProperties.apiVersion));
-  Writeln('-----------');
+  LOG_TRACE('-----------');
  end;
  //
  Result:=vkGetPhysicalDevice4Guid(pPhysicalDevices,count,VulkanDeviceGuid);
@@ -892,11 +894,11 @@ begin
  //
  FreeMem(pPhysicalDevices);
 
- Writeln('Select GPU:');
+ LOG_TRACE('Select GPU:');
  deviceProperties:=Default(TVkPhysicalDeviceProperties);
  vkGetPhysicalDeviceProperties(Result,@deviceProperties);
- Writeln(' ',deviceProperties.deviceName);
- Writeln(' apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
+ LOG_TRACE(' ',deviceProperties.deviceName);
+ LOG_TRACE(' apiVersion:',VK_VERSION_MAJOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_MINOR(deviceProperties.apiVersion),'.',
                         VK_VERSION_PATCH(deviceProperties.apiVersion));
 
@@ -969,14 +971,14 @@ begin
  vkCInfo.enabledExtensionCount  :=Length(vkExtList);
  vkCInfo.ppEnabledExtensionNames:=@vkExtList[0];
 
- Writeln('vkCreateInstance->');
+ LOG_TRACE('vkCreateInstance->');
  r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateInstance:',r);
+  LOG_ERROR(StdErr,'vkCreateInstance:',r);
   Exit;
  end;
- Writeln('<-vkCreateInstance');
+ LOG_TRACE('<-vkCreateInstance');
 
  Result:=GetPhysicalDeviceList(FInstance);
 
@@ -1080,19 +1082,19 @@ begin
   end;
  end;
 
- Writeln('vkCreateInstance->');
+ LOG_TRACE('vkCreateInstance->');
  r:=vkCreateInstance(@vkCInfo,nil,@FInstance);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateInstance:',r);
+  LOG_ERROR(StdErr,'vkCreateInstance:',r);
   Exit;
  end;
- Writeln('<-vkCreateInstance');
+ LOG_TRACE('<-vkCreateInstance');
 
  FPhysicalDevice:=vkGetPhysicalDevice(FInstance);
  if (FPhysicalDevice=VK_NULL_HANDLE) then
  begin
-  Writeln(StdErr,'failed to choice vulkan GPU');
+  LOG_ERROR(StdErr,'failed to choice vulkan GPU');
   halt;
  end;
 
@@ -1312,7 +1314,7 @@ begin
  r:=vkCreateWin32SurfaceKHR(VulkanApp.FInstance,@ci,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateWin32SurfaceKHR:',r);
+  LOG_ERROR(StdErr,'vkCreateWin32SurfaceKHR:',r);
   Exit;
  end;
  LoadFamily;
@@ -1330,7 +1332,7 @@ begin
  FPFamily:=0;
  if not vkGetQueuePresentFamily(VulkanApp.FPhysicalDevice,FHandle,FPFamily) then
  begin
-  Writeln(StdErr,'failed to chouse QueuePresentFamily');
+  LOG_ERROR(StdErr,'failed to chouse QueuePresentFamily');
   Exit;
  end;
 end;
@@ -1381,7 +1383,7 @@ begin
 
   until true;
   FreeMem(formats);
-  Writeln('VSurfaceFormat:',Fformat.format);
+  LOG_TRACE('VSurfaceFormat:',Fformat.format);
  end;
 end;
 
@@ -1533,7 +1535,7 @@ begin
  r:=vkCreateDevice(VulkanApp.FPhysicalDevice,@DeviceInfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateDevice:',r);
+  LOG_ERROR(StdErr,'vkCreateDevice:',r);
   Exit;
  end;
 
@@ -1610,7 +1612,7 @@ begin
  r:=vkCreateCommandPool(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateCommandPool:',r);
+  LOG_ERROR(StdErr,'vkCreateCommandPool:',r);
   exit;
  end;
 end;
@@ -1634,7 +1636,7 @@ begin
  r:=vkAllocateCommandBuffers(Device.FHandle,@ainfo,@Result);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkAllocateCommandBuffers:',r);
+  LOG_ERROR(StdErr,'vkAllocateCommandBuffers:',r);
   Exit;
  end;
 end;
@@ -1668,7 +1670,7 @@ begin
  r:=vkCreateFence(Device.FHandle,@cinfo,nil,@FHandle);
  if (r<>VK_SUCCESS) then
  begin
-  Writeln(StdErr,'vkCreateFence:',r);
+  LOG_ERROR(StdErr,'vkCreateFence:',r);
   Exit;
  end;
 end;
@@ -2039,7 +2041,7 @@ begin
   DeviceInfo.add_ext(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
  end else
  begin
-  Writeln(stderr,'VK_KHR_swapchain not support!');
+  LOG_WARNING(stderr,'VK_KHR_swapchain not support!');
   //raise Exception.Create('VK_KHR_swapchain not support!');
  end;
 
@@ -2049,7 +2051,7 @@ begin
   DeviceInfo.add_ext(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
  end else
  begin
-  Writeln(stderr,'VK_EXT_external_memory_host not support!');
+  LOG_WARNING(stderr,'VK_EXT_external_memory_host not support!');
   //raise Exception.Create('VK_EXT_external_memory_host not support!');
  end;
 
@@ -2328,16 +2330,16 @@ begin
 
  //ImgProp:=Default(TVkFormatProperties);
  //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_R8G8B8A8_UNORM,@ImgProp);
- //Writeln('R8G8B8A8_UNORM:',TestFFF(ImgProp.optimalTilingFeatures));
+ //LOG_TRACE('R8G8B8A8_UNORM:',TestFFF(ImgProp.optimalTilingFeatures));
  //writeln;
  //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_R8G8B8A8_SRGB,@ImgProp);
- //Writeln('R8G8B8A8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
+ //LOG_TRACE('R8G8B8A8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
  //writeln;
  //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_B8G8R8A8_SRGB,@ImgProp);
- //Writeln('B8G8R8A8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
+ //LOG_TRACE('B8G8R8A8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
  //writeln;
  //vkGetPhysicalDeviceFormatProperties(VulkanApp.FPhysicalDevice,VK_FORMAT_A8B8G8R8_SRGB_PACK32,@ImgProp);
- //Writeln('A8B8G8R8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
+ //LOG_TRACE('A8B8G8R8_SRGB:',TestFFF(ImgProp.optimalTilingFeatures));
 
 
 

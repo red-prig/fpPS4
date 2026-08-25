@@ -120,26 +120,20 @@ type
    function  SIGNIN_DIALOG_TERM  (Client:THostIpc;Value:TIpcValue):TIpcValue;
    function  SIGNIN_DIALOG_UPDATE(Client:THostIpc;Value:TIpcValue):TIpcValue;
    function  SIGNIN_DIALOG_RESULT(Client:THostIpc;Value:TIpcValue):TIpcValue;
- end;
+   //
+   function  MAIN_WINDOWS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+   function  CAPTION_FPS (Client:THostIpc;Value:TIpcValue):TIpcValue;
+  end;
 
  {$M-}
-
- function GetRealFontSize(Font:TFont):Integer;
 
 implementation
 
 uses
+ MsgDlgExt,
  game_mount,
  SceSaveData,
  SaveDataBackend;
-
-function GetRealFontSize(Font:TFont):Integer;
-var
- fd: TFontData;
-begin
- fd := Graphics.GetFontData(Font.Handle);
- Result := ((-fd.Height) * 72) div Font.PixelsPerInch;
-end;
 
 //
 
@@ -1653,6 +1647,19 @@ begin
  begin
   Result:=FSigninDialog.button;
  end;
+end;
+
+//
+
+function TDialogsManager.MAIN_WINDOWS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=OpenMainWindows;
+end;
+
+function TDialogsManager.CAPTION_FPS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+begin
+ Result:=0;
+ SetCaptionFPS(Value.GetQWORD);
 end;
 
 

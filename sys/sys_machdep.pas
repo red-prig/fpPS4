@@ -36,6 +36,8 @@ uses
  vmparam,
  kern_thread;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function amd64_get_ioperm(uap:p_i386_ioperm_args):Integer;
 begin
  if (uap^.start >= (IOPAGES * PAGE_SIZE * NBBY)) then
@@ -119,7 +121,7 @@ begin
   AMD64_SET_FSBASE:
     begin
      Result:=sys_amd64_set_fsbase(Pointer(a64base));
-     Writeln('set_fsbase=0x',HexStr(a64base,16));
+     LOG_TRACE('set_fsbase=0x',HexStr(a64base,16));
     end;
   AMD64_GET_GSBASE:
     begin

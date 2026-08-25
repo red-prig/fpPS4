@@ -53,6 +53,8 @@ uses
 
  subr_backtrace;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  gc_page:PDWORD; //SceGnmDingDongArea
 
@@ -228,7 +230,7 @@ begin
 
  if p_print_gpu_ops then
  begin
-  Writeln('[R]IT_EVENT_WRITE_EOP=0x',HexStr(submit_id,16),' ',Body^.intSel);
+  LOG_TRACE('[R]IT_EVENT_WRITE_EOP=0x',HexStr(submit_id,16),' ',Body^.intSel);
  end;
 
  pctx^.stream[stGfxDcb].SubmitFlipEop(Body^.DATA,Body^.intSel);
@@ -251,7 +253,7 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('[R]INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
+     LOG_TRACE('[R]INDIRECT_BUFFER (ccb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_ccb,stGfxCcb) then
     begin
@@ -268,7 +270,7 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('[R]INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
+     LOG_TRACE('[R]INDIRECT_BUFFER (dcb) 0x',HexStr(PPM4CMDINDIRECTBUFFER(buff)^.ibBase,10));
     end;
     if pm4_ibuf_init(@ibuf,buff,@pm4_parse_dcb,stGfxDcb) then
     begin
@@ -285,7 +287,7 @@ begin
    begin
     if p_print_gpu_ops then
     begin
-     Writeln('[R]SWITCH_BUFFER');
+     LOG_TRACE('[R]SWITCH_BUFFER');
     end;
     onSwitchBuffer(pctx,buff);
    end;
@@ -333,7 +335,7 @@ begin
 
   if gc_ring_pm4_peek(@ring_gfx,@size,@buff) then
   begin
-   //Writeln('packet:0x',HexStr(buff),':',size);
+   //LOG_TRACE('packet:0x',HexStr(buff),':',size);
 
    if pm4_ibuf_init(@ibuf,buff,size,@pm4_parse_gfx_ring,stGfxRing) then
    begin
@@ -562,7 +564,7 @@ begin
 
   if (ret<>0) then
   begin
-   Writeln(stderr,'GPU failed to become idle within 500 ms after submitDone.');
+   LOG_ERROR(stderr,'GPU failed to become idle within 500 ms after submitDone.');
   end;
 
  until (ret=0);
@@ -863,7 +865,7 @@ var
 begin
  Result:=0;
 
- //Writeln('gc_ioctl(0x',HexStr(cmd,8),')');
+ LOG_TRACE('gc_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
   $C0088111:; //sceGnmDebugHardwareStatus
@@ -882,8 +884,8 @@ begin
   $C00C8110: //sceGnmSetGsRingSizes
             begin
              with p_SetGsRingSizes(data)^ do
-              Writeln('SetGsRingSizes(0x',HexStr(esgsRingSize,8),',0x'
-                                         ,HexStr(gsvsRingSize,8),')');
+              LOG_TRACE('SetGsRingSizes(0x',HexStr(esgsRingSize,8),',0x'
+                                           ,HexStr(gsvsRingSize,8),')');
 
              pfp_ctx.set_esgs_gsvs_ring_size(p_SetGsRingSizes(data)^.esgsRingSize,
                                              p_SetGsRingSizes(data)^.gsvsRingSize);
@@ -895,9 +897,9 @@ begin
               $10001:
                      begin
                       with p_SetMipStatsReport(data)^ do
-                       Writeln('MipStatsReport(0x',HexStr(param1,8),',0x'
-                                                  ,HexStr(param2,8),',0x'
-                                                  ,HexStr(param3,8),')');
+                       LOG_TRACE('MipStatsReport(0x',HexStr(param1,8),',0x'
+                                                    ,HexStr(param2,8),',0x'
+                                                    ,HexStr(param3,8),')');
                      end;
 
               $18001:; //diag?
@@ -940,7 +942,7 @@ begin
             begin
              start_gfx_ring;
 
-             //Writeln('sceGnmSubmitDone');
+             LOG_TRACE('sceGnmSubmitDone');
 
              //rw_wlock(ring_gfx_lock);
 
@@ -951,7 +953,7 @@ begin
 
   $C0048117: //wait idle
             begin
-             Writeln('gc_wait_idle');
+             LOG_TRACE('gc_wait_idle');
 
              //rw_wlock(ring_gfx_lock);
 
@@ -962,7 +964,7 @@ begin
 
   $C004811D: //????
             begin
-             Writeln('gc_wait_free:',PInteger(data)^);
+             LOG_TRACE('gc_wait_free:',PInteger(data)^);
 
              //rw_wlock(ring_gfx_lock);
 
@@ -973,7 +975,7 @@ begin
 
   $C0048114: //sceGnmFlushGarlic
             begin
-             Writeln('sceGnmFlushGarlic');
+             LOG_TRACE('sceGnmFlushGarlic');
 
              MemManager.Flush;
             end;
@@ -982,7 +984,7 @@ begin
             begin
              start_gfx_ring;
 
-             //Writeln('gc_submit');
+             LOG_TRACE('gc_submit');
 
              rw_wlock(ring_gfx_lock);
 
@@ -1012,7 +1014,7 @@ begin
             begin
              start_gfx_ring;
 
-             //Writeln('gc_submit_eop');
+             LOG_TRACE('gc_submit_eop');
 
              rw_wlock(ring_gfx_lock);
 
@@ -1027,7 +1029,7 @@ begin
                 now this is directly sended "eop_v"
                }
 
-               Writeln('submit_eop=0x',HexStr(p_submit_args(data)^.eop_v,16),' ',p_submit_args(data)^.wait);
+               LOG_TRACE('submit_eop=0x',HexStr(p_submit_args(data)^.eop_v,16),' ',p_submit_args(data)^.wait);
 
                Result:=gc_pm4_event_write_eop(@ring_gfx,
                                               nil,
@@ -1064,7 +1066,7 @@ begin
             begin
              rw_wlock(ring_gfx_lock);
 
-              //Writeln('sceGnmMapComputeQueue');
+              LOG_TRACE('sceGnmMapComputeQueue');
 
               //reset prio
               p_map_compute_queue_args(data)^.pipePriority:=0;
@@ -1083,7 +1085,7 @@ begin
             begin
              rw_wlock(ring_gfx_lock);
 
-              //Writeln('sceGnmMapComputeQueueWithPriority');
+              LOG_TRACE('sceGnmMapComputeQueueWithPriority');
 
               Result:=gc_map_compute_queue(data);
 
@@ -1110,7 +1112,7 @@ begin
             begin
              start_gfx_ring;
 
-             Writeln('sceGnmDingDong');
+             LOG_TRACE('sceGnmDingDong');
 
              gc_retrigger_watchdog_imdone;
 
@@ -1131,16 +1133,16 @@ begin
   $C030811E: //sceGnmSetWaveLimitMultipliers
             begin
              with p_set_wave_limit_multipliers(data)^ do
-              Writeln('SetWaveLimitMultipliers(b',BinStr(bitset,8),',',
-                                               values[0],',',
-                                               values[1],',',
-                                               values[2],',',
-                                               values[3],',',
-                                               values[4],',',
-                                               values[5],',',
-                                               values[6],',',
-                                               values[7],')'
-                                              );
+              LOG_TRACE('SetWaveLimitMultipliers(b',BinStr(bitset,8),',',
+                                                    values[0],',',
+                                                    values[1],',',
+                                                    values[2],',',
+                                                    values[3],',',
+                                                    values[4],',',
+                                                    values[5],',',
+                                                    values[6],',',
+                                                    values[7],')'
+                                                   );
             end;
 
   else

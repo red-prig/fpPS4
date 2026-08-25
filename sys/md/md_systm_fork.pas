@@ -44,6 +44,8 @@ uses
  md_systm_reserve,
  md_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  JobObjectExtendedLimitInformation=9;
  JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK=$00001000;
@@ -356,7 +358,7 @@ begin
  m:=md_map_reserve(hProcess,rip);
  if (m.error<>0) then
  begin
-  Writeln(stderr,'md_placeholder_mmap(0x',HexStr(m.base),',0x',HexStr(m.size,16),'):0x',HexStr(m.error,8));
+  LOG_ERROR(stderr,'md_placeholder_mmap(0x',HexStr(m.base),',0x',HexStr(m.size,16),'):0x',HexStr(m.error,8));
   Exit(m.error);
  end;
 
@@ -576,6 +578,8 @@ begin
 end;
 
 function md_fork_process(var info:t_fork_proc;options:Integer):Integer;
+label
+ _err;
 type
  PBUF_PROC_INFO=^TBUF_PROC_INFO;
  TBUF_PROC_INFO=packed record
@@ -590,7 +594,7 @@ var
  rip:QWORD;
  b:BOOL;
 begin
- Result:=0;
+ Result:=-1;
 
  P_BUF:=AllocMem(sizeof(TBUF_PROC_INFO));
 
@@ -616,12 +620,12 @@ begin
 
  FreeMem(P_BUF);
 
- if not b then Exit(-1);
+ if not b then goto _err;
 
  if (options and MD_FORK_PDEATHSIG)<>0 then
  begin
   b:=AssignProcessToJobObject(NtFetchJob, pi.hProcess);
-  if not b then Exit(-1);
+  if not b then goto _err;
  end;
 
  if (options and MD_FORK_PGAMEVMA)<>0 then
@@ -630,43 +634,49 @@ begin
   Result:=NtMoveStack(pi.hProcess,pi.hThread,rip);
   if (Result<>0) then
   begin
-   Writeln(stderr,'NtMoveStack:0x',HexStr(Result,8));
-   Exit;
+   LOG_ERROR(stderr,'NtMoveStack:0x',HexStr(Result,8));
+   goto _err;
   end;
 
   Result:=NtMoveProcessParameters(pi.hProcess);
   if (Result<>0) then
   begin
-   Writeln(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
-   Exit;
+   LOG_ERROR(stderr,'NtMoveProcessParameters:0x',HexStr(Result,8));
+   goto _err;
   end;
 
   Result:=NtReserve(pi.hProcess,rip);
   if (Result<>0) then
   begin
-   Writeln(stderr,'NtReserve:0x',HexStr(Result,8));
-   Exit;
+   LOG_ERROR(stderr,'NtReserve:0x',HexStr(Result,8));
+   goto _err;
   end;
  end;
 
  Result:=NtCreateShared(pi.hProcess,info);
  if (Result<>0) then
  begin
-  Writeln(stderr,'NtCreateShared:0x',HexStr(Result,8));
-  Exit;
+  LOG_ERROR(stderr,'NtCreateShared:0x',HexStr(Result,8));
+  goto _err;
  end;
 
  Result:=NtResumeProcess(pi.hProcess);
  if (Result<>0) then
  begin
-  Writeln(stderr,'NtResumeProcess:0x',HexStr(Result,8));
-  Exit;
+  LOG_ERROR(stderr,'NtResumeProcess:0x',HexStr(Result,8));
+  goto _err;
  end;
 
  NtClose(pi.hThread);
 
  info.hProcess:=pi.hProcess;
  info.fork_pid:=pi.dwProcessId;
+
+ Exit(0);
+
+ _err:
+  NtClose(pi.hProcess);
+  NtClose(pi.hThread);
 end;
 
 

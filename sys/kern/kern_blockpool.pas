@@ -84,6 +84,8 @@ uses
  sys_conf,
  vstat;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 //
 
 Procedure t_dmem_bits.Fill(start,__end:DWORD);
@@ -1052,12 +1054,12 @@ begin
  case com of
   $4010a802:
     begin
-     //Writeln('sceKernelMemoryPoolGetBlockStats');
+     LOG_TRACE('sceKernelMemoryPoolGetBlockStats');
      Result:=blockpool_stats(fp^.f_data,data);
     end;
   $c020a801:
     begin
-     //Writeln('sceKernelMemoryPoolExpand');
+     LOG_TRACE('sceKernelMemoryPoolExpand');
      Result:=blockpool_expand(fp^.f_data,data);
     end;
   else

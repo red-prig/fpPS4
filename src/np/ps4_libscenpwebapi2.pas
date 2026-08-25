@@ -42,6 +42,8 @@ const
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_NP_WEBAPI_EXTD_PUSH_EVENT_EXTD_DATA_KEY_LEN_MAX=32;
 
@@ -86,7 +88,7 @@ type
 function ps4_sceNpWebApi2Initialize(libHttp2CtxId:Integer;
                                     poolSize:size_t):Integer;
 begin
- Writeln('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
+ LOG_INFO('sceNpWebApi2Initialize:',libHttp2CtxId,':',poolSize);
  Result:=4;
 end;
 
@@ -115,7 +117,7 @@ end;
 
 function ps4_sceNpWebApi2CreateUserContext(libCtxId,m_userId:Integer):Integer;
 begin
- Writeln('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
+ LOG_INFO('sceNpWebApi2CreateUserContext:',libCtxId,':',m_userId);
  Result:=5;
 end;
 
@@ -154,6 +156,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpWebApi2(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

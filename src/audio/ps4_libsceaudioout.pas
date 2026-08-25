@@ -53,6 +53,8 @@ uses
  kern_proc,
  ps4_libSceMbus;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_audioout_interface:TAbstractAudioOut=nil;
 
@@ -782,7 +784,7 @@ var
 begin
  Result:=0;
 
- //Writeln('sceAudioOutOutput->');
+ LOG_TRACE('sceAudioOutOutput->');
 
  if (_lazy_init=0) then
  begin
@@ -849,7 +851,7 @@ var
 begin
  Result:=0;
 
- //Writeln('sceAudioOutOutputs->');
+ LOG_TRACE('sceAudioOutOutputs->');
 
  if (_lazy_init=0) or (g_audioout_interface=nil) then
  begin
@@ -914,8 +916,8 @@ begin
       if (f<>i) then
       if (handle=param[f].handle) then
       begin
-       Writeln(stderr,'[AudioOut] use same handles (handle[',i,']:0x',HexStr(handle,8),
-                      ' handle[',f,']:0x',HexStr(handle,8),')');
+       LOG_TRACE(stderr,'[AudioOut] use same handles (handle[',i,']:0x',HexStr(handle,8),
+                        ' handle[',f,']:0x',HexStr(handle,8),')');
 
        Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
        goto _unlock;
@@ -951,7 +953,7 @@ begin
 
  _unlock:
 
- //Writeln('sceAudioOutOutputs<-');
+ LOG_TRACE('sceAudioOutOutputs<-');
 
  mtx_unlock(g_port_lock);
 
@@ -1236,6 +1238,7 @@ begin
 
 end;
 
+{$WARN 4110 off}
 function Load_libSceAudioOut(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

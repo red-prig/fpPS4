@@ -13,12 +13,14 @@ implementation
 uses
  ps4_libSceUserService;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_REMOTEPLAY_HEAP_SIZE=6*1024;
 
 function ps4_sceRemoteplayInitialize(pHeap:Pointer;heapSize:QWORD):Integer;
 begin
- Writeln('sceRemoteplayInitialize:',heapSize);
+ LOG_INFO('sceRemoteplayInitialize:',heapSize);
  Result:=0;
 end;
 
@@ -59,6 +61,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceRemoteplay(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

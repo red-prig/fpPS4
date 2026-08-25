@@ -132,12 +132,14 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceNpTrophyCreateContext(context     :PInteger;
                                       userId      :SceUserServiceUserId;
                                       serviceLabel:SceNpServiceLabel;
                                       options     :QWORD):Integer;
 begin
- Writeln('sceNpTrophyCreateContext');
+ LOG_INFO('sceNpTrophyCreateContext');
  if (context=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
  context^:=543;
  Result:=0;
@@ -145,7 +147,7 @@ end;
 
 function ps4_sceNpTrophyCreateHandle(handle:PInteger):Integer;
 begin
- Writeln('sceNpTrophyCreateHandle');
+ LOG_INFO('sceNpTrophyCreateHandle');
  if (handle=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
  handle^:=3333;
  Result:=0;
@@ -153,13 +155,13 @@ end;
 
 function ps4_sceNpTrophyDestroyContext(context:Integer):Integer;
 begin
- Writeln('sceNpTrophyDestroyContext');
+ LOG_INFO('sceNpTrophyDestroyContext');
  Result:=0;
 end;
 
 function ps4_sceNpTrophyDestroyHandle(handle:Integer):Integer;
 begin
- Writeln('sceNpTrophyDestroyHandle:',handle);
+ LOG_INFO('sceNpTrophyDestroyHandle:',handle);
  Result:=0;
 end;
 
@@ -172,7 +174,7 @@ function ps4_sceNpTrophyRegisterContext(context:Integer;
                                         handle :Integer;
                                         options:QWORD):Integer;
 begin
- Writeln('sceNpTrophyRegisterContext:',handle);
+ LOG_INFO('sceNpTrophyRegisterContext:',handle);
  Result:=0;
 end;
 
@@ -181,7 +183,7 @@ function ps4_sceNpTrophyGetTrophyUnlockState(context:Integer;
                                              flags  :pSceNpTrophyFlagArray;
                                              count  :PDWORD):Integer;
 begin
- Writeln('sceNpTrophyGetTrophyUnlockState:',handle);
+ LOG_INFO('sceNpTrophyGetTrophyUnlockState:',handle);
  if (flags=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
  if (count=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
  Result:=0;
@@ -194,7 +196,7 @@ function ps4_sceNpTrophyUnlockTrophy(context   :Integer;
                                      trophyId  :Integer;
                                      platinumId:PInteger):Integer;
 begin
- Writeln('sceNpTrophyUnlockTrophy:',trophyId);
+ LOG_INFO('sceNpTrophyUnlockTrophy:',trophyId);
  if (platinumId=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
  platinumId^:=SCE_NP_TROPHY_INVALID_TROPHY_ID;
  Result:=0;
@@ -205,7 +207,7 @@ function ps4_sceNpTrophyGetGameInfo(context:Integer;
                                     details:pSceNpTrophyGameDetails;
                                     data   :pSceNpTrophyGameData):Integer;
 begin
- Writeln('sceNpTrophyGetGameInfo:',handle);
+ LOG_INFO('sceNpTrophyGetGameInfo:',handle);
 
  if (details<>nil) then
  begin
@@ -292,7 +294,7 @@ function ps4_sceNpTrophyGetGameIcon(context:Integer;
                                     buffer :Pointer;
                                     size   :PQWORD):Integer;
 begin
- Writeln('sceNpTrophyGetGameIcon:',context,' ',handle);
+ LOG_INFO('sceNpTrophyGetGameIcon:',context,' ',handle);
 
  if (size=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
 
@@ -313,7 +315,7 @@ function ps4_sceNpTrophyGetTrophyIcon(context :Integer;
                                       buffer  :Pointer;
                                       size    :PQWORD):Integer;
 begin
- Writeln('sceNpTrophyGetTrophyIcon:',context,' ',handle,' ',trophyId);
+ LOG_INFO('sceNpTrophyGetTrophyIcon:',context,' ',handle,' ',trophyId);
 
  if (size=nil) then Exit(SCE_NP_TROPHY_ERROR_INVALID_ARGUMENT);
 
@@ -327,6 +329,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpTrophy(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

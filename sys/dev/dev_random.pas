@@ -19,6 +19,8 @@ uses
  vpoll,
  md_arc4random;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  RANDOM_MINOR=0;
 
@@ -91,7 +93,7 @@ Function random_ioctl(dev:p_cdev;cmd:QWORD;data:Pointer;fflag:Integer):Integer;
 begin
  Result:=0;
 
- //Writeln('random_ioctl(0x',HexStr(cmd,8),')');
+ LOG_TRACE('random_ioctl(0x',HexStr(cmd,8),')');
 
  case cmd of
   //Really handled in upper layer

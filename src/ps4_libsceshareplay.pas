@@ -12,6 +12,8 @@ uses
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 const
  SCE_SHARE_PLAY_ERROR_INVALID_ARGS       =-2129788927; // 0x810E0001
  SCE_SHARE_PLAY_ERROR_OUT_OF_MEMORY      =-2129788926; // 0x810E0002
@@ -61,13 +63,13 @@ type
 
 function ps4_sceSharePlayInitialize(pHeap:Pointer;heapSize:qword):Integer;
 begin
- Writeln('sceSharePlayInitialize:',HexStr(pHeap),':',heapSize);
+ LOG_TRACE('sceSharePlayInitialize:',HexStr(pHeap),':',heapSize);
  Result:=0;
 end;
 
 function ps4_sceSharePlaySetProhibition(mode:Integer):Integer;
 begin
- Writeln('sceSharePlaySetProhibition,mode=',mode);
+ LOG_INFO('sceSharePlaySetProhibition,mode=',mode);
  Result:=0;
 end;
 
@@ -87,6 +89,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceSharePlay(name:pchar):p_lib_info;
 var
   lib:TLIBRARY;

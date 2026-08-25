@@ -98,33 +98,35 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function ps4_sceGameLiveStreamingInitialize(heapSize:qword):Integer;
 begin
- Writeln('sceGameLiveStreamingInitialize:',heapSize);
+ LOG_INFO('sceGameLiveStreamingInitialize:',heapSize);
  Result:=0;
 end;
 
 function ps4_sceGameLiveStreamingPermitServerSideRecording(isPermit:Boolean):Integer;
 begin
- Writeln('sceGameLiveStreamingPermitServerSideRecording,isPermit=',isPermit);
+ LOG_INFO('sceGameLiveStreamingPermitServerSideRecording,isPermit=',isPermit);
  Result:=0;
 end;
 
 function ps4_sceGameLiveStreamingEnableLiveStreaming(isEnable:Boolean):Integer;
 begin
- Writeln('sceGameLiveStreamingEnableLiveStreaming,isEnable=',isEnable);
+ LOG_INFO('sceGameLiveStreamingEnableLiveStreaming,isEnable=',isEnable);
  Result:=0;
 end;
 
 function ps4_sceGameLiveStreamingPermitLiveStreaming(isPermit:Boolean):Integer;
 begin
- Writeln('sceGameLiveStreamingPermitLiveStreaming,isPermit=',isPermit);
+ LOG_INFO('sceGameLiveStreamingPermitLiveStreaming,isPermit=',isPermit);
  Result:=0;
 end;
 
 function ps4_sceGameLiveStreamingEnableSocialFeedback(isEnableSocialFeedback:Boolean):Integer;
 begin
- Writeln('sceGameLiveStreamingEnableSocialFeedback,isEnableSocialFeedback=',isEnableSocialFeedback);
+ LOG_INFO('sceGameLiveStreamingEnableSocialFeedback,isEnableSocialFeedback=',isEnableSocialFeedback);
  Result:=0;
 end;
 
@@ -157,13 +159,13 @@ end;
 
 function ps4_sceGameLiveStreamingSetMaxBitrate(isSetMaxBitrate:DWORD):Integer;
 begin
- Writeln('sceGameLiveStreamingSetMaxBitrate,isSetMaxBitrate=',isSetMaxBitrate);
+ LOG_INFO('sceGameLiveStreamingSetMaxBitrate,isSetMaxBitrate=',isSetMaxBitrate);
  Result:=0;
 end;
  
 function ps4_sceGameLiveStreamingSetStandbyScreenResource(resource:PChar):Integer;
 begin
- Writeln('sceGameLiveStreamingSetStandbyScreenResource:',resource);
+ LOG_INFO('sceGameLiveStreamingSetStandbyScreenResource:',resource);
  Result:=0;
 end;
 
@@ -199,6 +201,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceGameLiveStreaming(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

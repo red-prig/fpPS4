@@ -20,6 +20,8 @@ type
 
 implementation
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  g_SigninDialog_mtx:mtx;
  g_state        :Integer=0;
@@ -65,7 +67,7 @@ type
 
 function ps4_sceSigninDialogInitialize():Integer;
 begin
- Writeln('sceSigninDialogInitialize');
+ LOG_INFO('sceSigninDialogInitialize');
 
  Result:=SCE_SIGNIN_DIALOG_ERROR_ALREADY_INITIALIZED;
  mtx_lock(g_SigninDialog_mtx);
@@ -117,7 +119,7 @@ begin
   Exit(SCE_SIGNIN_DIALOG_ERROR_INVALID_USER_ID);
  end;
 
- Writeln('sceSigninDialogOpen');
+ LOG_INFO('sceSigninDialogOpen');
 
  mtx_lock(g_SigninDialog_mtx);
 
@@ -255,6 +257,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceSigninDialog(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

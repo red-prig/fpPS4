@@ -188,6 +188,7 @@ begin
  Result:=0;
 end;
 
+{$WARN 4110 off}
 function Load_libSceNpTus(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

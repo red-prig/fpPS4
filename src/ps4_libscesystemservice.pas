@@ -2,7 +2,6 @@ unit ps4_libSceSystemService;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
-{$WARN 4110 off}
 
 interface
 
@@ -150,6 +149,8 @@ uses
  time,
  syscalls,
  trap;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 var
  display_safe_area_update:Integer=0;
@@ -505,7 +506,7 @@ end;
 
 function ps4_sceSystemServiceGetDisplaySafeAreaInfo(info:pSceSystemServiceDisplaySafeAreaInfo):Integer;
 begin
- Writeln('sceSystemServiceGetDisplaySafeAreaInfo');
+ LOG_TRACE('sceSystemServiceGetDisplaySafeAreaInfo');
  Result:=SCE_KERNEL_ERROR_UNKNOWN;
  if (info=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
  info^:=Default(SceSystemServiceDisplaySafeAreaInfo);
@@ -541,14 +542,14 @@ begin
  status^.isOutOfVrPlayArea       :=false;
  Result:=0;
 
- //Writeln('sceSystemServiceGetStatus');
+ LOG_TRACE('sceSystemServiceGetStatus');
 end;
 
 function ps4_sceSystemServiceReceiveEvent(event:pSceSystemServiceEvent):Integer;
 begin
  if (event=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
 
- //Writeln('sceSystemServiceReceiveEvent');
+ LOG_TRACE('sceSystemServiceReceiveEvent');
 
  if CAS(display_safe_area_update,1,0) then
  begin
@@ -562,7 +563,7 @@ end;
 
 function ps4_sceSystemServiceReportAbnormalTermination(const info:pSceSystemServiceAbnormalTerminationInfo):Integer;
 begin
- Writeln(StdErr,'sceSystemServiceReportAbnormalTermination');
+ LOG_CRITICAL(StdErr,'sceSystemServiceReportAbnormalTermination');
  Assert(false);
  Result:=0;
 end;
@@ -662,6 +663,7 @@ end;
 
 //
 
+{$WARN 4110 off}
 function Load_libSceSystemService(name:pchar):p_lib_info;
 var
  lib:TLIBRARY;

@@ -79,6 +79,8 @@ uses
  kern_thr,
  vm_tracking_map;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function AlignUp(addr:PtrUInt;alignment:PtrUInt):PtrUInt; inline;
 var
  tmp:PtrUInt;
@@ -875,7 +877,7 @@ begin
   start:=QWORD(node^.key)+diff;
   __end:=start+size;
 
-  //Writeln('rmem_entry_track:',HexStr(start,16),'..',HexStr(__end,16),'..',HexStr(source,16));
+  //LOG_TRACE('rmem_entry_track:',HexStr(start,16),'..',HexStr(__end,16),'..',HexStr(source,16));
 
   _vm_track_map_insert_deferred(tmap,start,__end,source,tobj);
 
