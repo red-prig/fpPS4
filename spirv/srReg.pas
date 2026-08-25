@@ -109,6 +109,8 @@ type
 
  TsrVectorArray=class(TsrRegNode)
   FLanes:array[0..LaneCount-1] of TsrRegNode; //[0..63]
+  Function  _GetPline     :TsrNode;         override;
+  Procedure _PrepType(node:PPrepTypeNode);  override;
  end;
 
  TString7=string[7];
@@ -378,6 +380,37 @@ end;
 Function TsrRegPair._GetPline:TsrNode;
 begin
  Result:=FWriter;
+end;
+
+//
+
+Function TsrVectorArray._GetPline:TsrNode;
+var
+ p:Word;
+begin
+ Result:=nil;
+
+ For p:=0 to LaneCount-1 do
+ if (FLanes[p]<>nil) then
+ begin
+  Result:=FLanes[p].pLine;
+  if (Result<>nil) then Exit;
+ end;
+
+end;
+
+Procedure TsrVectorArray._PrepType(node:PPrepTypeNode);
+var
+ p:Word;
+begin
+ node^.dnode:=nil;
+
+ For p:=0 to LaneCount-1 do
+ if (FLanes[p]<>nil) then
+ begin
+  FLanes[p].PrepType(node^.rtype);
+ end;
+
 end;
 
 //

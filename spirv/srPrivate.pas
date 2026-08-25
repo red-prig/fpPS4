@@ -129,6 +129,9 @@ type
 
 implementation
 
+uses
+ srInterface;
+
 Procedure TsrVolatile._zero_read;
 var
  node:TStoreNode;
@@ -1302,11 +1305,6 @@ begin
 
   tmp:=RegDown(node.src);
 
-  if (tmp.IsType(TsrVectorArray)) then
-  begin
-   Assert(false,'AddStore:TsrVectorArray');
-  end;
-
   if (src<>tmp) {and (pPrivate^.pVar<>get_load_from(tmp))} then
   begin
 
@@ -1333,7 +1331,16 @@ begin
 
    //up_merge_line(pLine);
 
-   pPrivate.FetchStore(pLine,node.src);
+   if (tmp.IsType(TsrVectorArray)) then
+   begin
+    //Assert(false,'AddStore:TsrVectorArray');
+
+    pPrivate.FetchStore(pLine,TEmitInterface(FEmit).NewImm_q(node.src.dtype,0,pLine));
+   end else
+   begin
+    pPrivate.FetchStore(pLine,node.src);
+   end;
+
   end;
 
   node:=pVolatile.PopStore;
