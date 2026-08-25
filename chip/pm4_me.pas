@@ -2587,6 +2587,20 @@ begin
     pm4_ClearDepth(node^.rt_info,ctx);
    end;
 
+  ntDrawIndirect:
+   begin
+    LOG_TRACE(HexStr(node^.id,16),':DrawIndirect(',HexStr(Pointer(node^.indirectBase)),',',
+                                                   node^.dataOffset,')');
+
+    ctx.Cmd.DrawIndirect(
+     node^.vertexOffset,
+     Pointer(node^.indirectBase),
+     node^.dataOffset,
+     sizeof(TVkDrawIndexedIndirectCommand),
+     node^.count);
+
+   end;
+
   ntDrawIndexIndirect:
    begin
     LOG_TRACE(HexStr(node^.id,16),':DrawIndexIndirect(',HexStr(Pointer(node^.indirectBase)),',',
@@ -3914,6 +3928,7 @@ begin
       ntHint               :pm4_Hint               (ctx,Pointer(ctx.node));
       ntDrawIndex2         :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexOffset2   :pm4_Draw               (ctx,Pointer(ctx.node));
+      ntDrawIndirect       :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexIndirect  :pm4_Draw               (ctx,Pointer(ctx.node));
       ntDrawIndexIndirectCountMulti:pm4_Draw       (ctx,Pointer(ctx.node));
       ntDrawIndexAuto      :pm4_Draw               (ctx,Pointer(ctx.node));

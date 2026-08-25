@@ -791,6 +791,17 @@ type
   drawInitiator:TVGT_DRAW_INITIATOR;
  end;
 
+ PPM4CMDDRAWINDIRECT=^TPM4CMDDRAWINDIRECT;
+ TPM4CMDDRAWINDIRECT=bitpacked record
+  header             :PM4_TYPE_3_HEADER;
+  dataOffset         :DWORD; // < [31:2] DWORD aligned offset
+  baseVtxLoc         :WORD;  // < base vertex location
+  reserved1          :WORD;
+  startInstLoc       :WORD;  // < start instance location
+  reserved2          :WORD;
+  drawInitiator      :TVGT_DRAW_INITIATOR;
+ end;
+
  PPM4CMDDRAWINDEXINDIRECT=^TPM4CMDDRAWINDEXINDIRECT;
  TPM4CMDDRAWINDEXINDIRECT=bitpacked record
   header             :PM4_TYPE_3_HEADER;

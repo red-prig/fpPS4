@@ -132,6 +132,7 @@ type
   ntClearDepth,
   ntDrawIndex2,
   ntDrawIndexOffset2,
+  ntDrawIndirect,
   ntDrawIndexIndirect,
   ntDrawIndexIndirectCountMulti,
   ntDrawIndexAuto,
@@ -486,6 +487,8 @@ type
   procedure DrawIndex2       (context:p_amd_context);
   procedure DrawIndexOffset2 (context:p_amd_context;
                               indexOffset:DWORD);
+  procedure DrawIndirect     (context   :p_amd_context;
+                              dataOffset:DWORD);
   procedure DrawIndexIndirect(context   :p_amd_context;
                               dataOffset:DWORD);
   procedure DrawIndexIndirectCountMulti(context   :p_amd_context;
@@ -1940,6 +1943,26 @@ begin
                          [iu_buffer,iu_index],
                          'DrawIndexOffset2');
 
+ end;
+
+end;
+
+procedure t_pm4_stream.DrawIndirect(context   :p_amd_context;
+                                    dataOffset:DWORD);
+var
+ node:p_pm4_node_draw;
+begin
+ if ColorControl(context^.CX_REG) then Exit;
+
+ node:=BuildDraw(ntDrawIndirect,context);
+
+ if (node<>nil) then
+ begin
+  node^.indirectBase:=context^.BASE_ADDR_DRAW_INDIRECT;
+  node^.dataOffset  :=dataOffset;
+  node^.stride      :=sizeof(TDrawIndexedIndirectArgs);
+  node^.count       :=1;
+  node^.countAddr   :=0;
  end;
 
 end;

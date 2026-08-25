@@ -1298,6 +1298,41 @@ begin
  //FlushAndWaitMe(pctx);
 end;
 
+procedure onDrawIndirect(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDIRECT);
+var
+ dataOffset:DWORD;
+begin
+ Assert(pctx^.stream_type=stGfxDcb);
+
+ if (DWORD(Body^.drawInitiator)<>0) then
+ if p_print_gpu_ops then
+ begin
+  LOG_TRACE(stderr,' drawInitiator=b',revbinstr(DWORD(Body^.drawInitiator),32));
+ end;
+
+ if p_print_gpu_ops then
+ begin
+  LOG_TRACE(' BASE_ADDR_DRAW_INDIRECT=0x',HexStr(pctx^.context.BASE_ADDR_DRAW_INDIRECT,16));
+  LOG_TRACE(' dataOffset             =',Body^.dataOffset);
+  LOG_TRACE(' baseVtxLoc             =',getRegName(SH_REG_BASE+Body^.baseVtxLoc  ));
+  LOG_TRACE(' startInstLoc           =',getRegName(SH_REG_BASE+Body^.startInstLoc));
+ end;
+
+ pctx^.context.CX_REG.VGT_DRAW_INITIATOR:=Body^.drawInitiator;
+
+ dataOffset:=Body^.dataOffset and (not 3);
+
+ pctx^.context.DrawIndirect(IT_DRAW_INDIRECT,
+                            Body^.baseVtxLoc,
+                            Body^.startInstLoc,
+                            0);
+
+ pctx^.stream[stGfxDcb].DrawIndirect(
+  @pctx^.context,
+  dataOffset);
+
+end;
+
 procedure onDrawIndexIndirect(pctx:p_pfp_ctx;Body:PPM4CMDDRAWINDEXINDIRECT);
 var
  dataOffset:DWORD;
@@ -1696,6 +1731,7 @@ begin
       IT_DRAW_INDEX_2                   :onDrawIndex2                 (pctx,buff);
       IT_DRAW_INDEX_OFFSET_2            :onDrawIndexOffset2           (pctx,buff);
       IT_DRAW_INDEX_AUTO                :onDrawIndexAuto              (pctx,buff);
+      IT_DRAW_INDIRECT                  :onDrawIndirect               (pctx,buff);
       IT_DRAW_INDEX_INDIRECT            :onDrawIndexIndirect          (pctx,buff);
       IT_DRAW_INDEX_INDIRECT_COUNT_MULTI:onDrawIndexIndirectCountMulti(pctx,buff);
       IT_DISPATCH_DIRECT                :onDispatchDirect             (pctx,buff);

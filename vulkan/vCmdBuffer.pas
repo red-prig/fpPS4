@@ -220,6 +220,9 @@ type
 
   Procedure   DrawIndexOffset2 (IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD);
   Procedure   DrawIndexAuto    (vertexOffset,indexCount:DWORD);
+  Procedure   DrawIndirect     (vertexOffset:DWORD;
+                                indirectBase:Pointer;
+                                dataOffset,stride,count:DWORD);
   Procedure   DrawIndexIndirect(IndexBase:Pointer;indexOffset,vertexOffset,indexCount:DWORD;
                                 indirectBase,countAddr:Pointer;
                                 dataOffset,stride,count:DWORD);
@@ -1825,6 +1828,48 @@ begin
      Assert(false,'TODO');
     end;
  end;
+
+end;
+
+Procedure TvCmdBuffer.DrawIndirect(vertexOffset:DWORD;
+                                   indirectBase:Pointer;
+                                   dataOffset,stride,count:DWORD);
+var
+ IndirectBuffer:TvHostBuffer;
+ IndirectBuffer_offset:TVkDeviceSize;
+begin
+
+ if (Self=nil) then
+ begin
+  LOG_TRACE(stderr,'Self=nil,',{$I %LINE%});
+  Exit;
+ end;
+
+ ASSERT(sizeof(TVkDrawIndexedIndirectCommand) = stride);
+
+ if (FRenderPass=VK_NULL_HANDLE) then Exit;
+ if (FCurrPipeline[BP_GRAPHICS]=VK_NULL_HANDLE) then Exit;
+
+ if (not BeginCmdBuffer) then Exit;
+
+ Assert(Femulate_primtype=0);
+ Assert(vertexOffset=0);
+
+ ApplyDescriptorCache(BP_GRAPHICS);
+
+ IndirectBuffer:=FetchHostBuffer(Self,QWORD(indirectBase) + dataOffset,stride * count);
+ Assert(IndirectBuffer<>nil);
+
+ IndirectBuffer_offset:=(QWORD(indirectBase) + dataOffset)-IndirectBuffer.FAddr;
+
+ vkCmdDrawIndirect(
+   Fcmdbuf,
+   IndirectBuffer.FHandle,
+   IndirectBuffer_offset,
+   count,
+   stride);
+
+ Inc(cmd_count);
 
 end;
 
