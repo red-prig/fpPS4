@@ -1287,8 +1287,15 @@ begin
  //MemorySemantics
  pLine.AddParam(NewImm_i(dtInt32,iMemorySemantics));
 
- //val
- pLine.AddParam(src);
+ case OpId of
+  Op.OpAtomicIIncrement:; //ignore
+  Op.OpAtomicIDecrement:; //ignore
+  else
+    begin
+     //val
+     pLine.AddParam(src);
+    end;
+ end;
 
  Result:=pLine.pDst;
 end;

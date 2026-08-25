@@ -27,6 +27,7 @@ type
   procedure emit_DS_READ     (rtype:TsrDataType);
   procedure emit_DS_READ2    (rtype:TsrDataType;extra_stride:Word);
   procedure emit_DS_ATOMIC_OP(rtype:TsrDataType;OpId:DWORD;rtn:Boolean);
+  procedure emit_DS_APPEND;
  end;
 
 implementation
@@ -166,6 +167,7 @@ var
  lvl_0:TsrChainLvl_0;
  lvl_1:TsrChainLvl_1;
  stride:PtrUint;
+ gds_base:TsrRegNode;
 begin
  case FSPI.DS.GDS of
   0:pLayout:=DataLayoutList.FetchLDS(); //base:LDS_BASE  size:min(M0[16:0], LDS_SIZE)
@@ -179,12 +181,31 @@ begin
  lvl_0.size  :=stride;
  lvl_0.offset:=offset;
 
+ gds_base:=nil;
+ if (FSPI.DS.GDS=1) then
+ begin
+  gds_base:=MakeRead(get_m0,dtUint32);
+
+  if gds_base.is_const then
+  begin
+   lvl_0.offset:=lvl_0.offset + (gds_base.AsConst.GetData shr 16);
+
+   gds_base:=nil;
+  end;
+ end;
+
+ if (vbindex<>nil) then
  if vbindex.is_const then
  begin
-  //#static
-  //i = #(OFFSET + vbindex) & alignment
-
   lvl_0.offset:=lvl_0.offset + vbindex.AsConst.GetData;
+
+  vbindex:=nil;
+ end;
+
+ if (gds_base=nil) and (vbindex=nil) then
+ begin
+  //#static
+  //i = #(gds_base + OFFSET + vbindex) & alignment
 
   lvl_0.offset:=lvl_0.offset and (not (stride-1)); //4,8
 
@@ -192,9 +213,10 @@ begin
  end else
  begin
   //#dynamic
-  //i = (vbindex + OFFSET) / stride
+  //i = (gds_base + vbindex + OFFSET) / stride
 
-  lvl_1.pIndex:=OpIAddTo(vbindex,lvl_0.offset);
+  lvl_1.pIndex:=OpIAddTo(OpShrTo(gds_base,16),vbindex);
+  lvl_1.pIndex:=OpIAddTo(lvl_1.pIndex,lvl_0.offset);
   lvl_1.pIndex:=OpIDivTo(lvl_1.pIndex,stride);
   lvl_1.stride:=stride;
 
@@ -202,6 +224,7 @@ begin
 
   Result:=pLayout.Fetch(line.Parent,@lvl_0,@lvl_1,cflags(atomic));
  end;
+
 end;
 
 //vbindex, vsrc[] [OFFSET:<0..65535>] [GDS:< 0|1>]
@@ -483,6 +506,24 @@ begin
 
 end;
 
+procedure TEmit_DS.emit_DS_APPEND;
+var
+ pChain:TsrChain;
+
+ vdst:TsrRegNode;
+
+ dst:PsrRegSlot;
+begin
+ pChain:=fetch_ds_chain(nil,dtUint32,dtUint32,WORD(FSPI.DS.OFFSET));
+
+ vdst:=FetchAtomic(pChain,Op.OpAtomicIIncrement,dtUint32,nil);
+
+ //save result
+ dst:=get_vdst8(FSPI.DS.VDST);
+
+ MakeCopy(dst,vdst);
+end;
+
 procedure TEmit_DS.emit_DS;
 begin
 
@@ -545,6 +586,8 @@ begin
   DS_AND_RTN_B32:emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicAnd,True);
   DS_OR_RTN_B32 :emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicOr ,True);
   DS_XOR_RTN_B32:emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicXor,True);
+
+  DS_APPEND     :emit_DS_APPEND;
 
   DS_SWIZZLE_B32:emit_DS_SWIZZLE_B32;
 
