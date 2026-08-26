@@ -267,10 +267,17 @@ type
   PS:PSSharpResource4;
  end;
 
+ TGdsBindExt=packed record
+  fset  :TVkUInt32;
+  bind  :TVkUInt32;
+  memuse:TVkUInt32;
+ end;
+
  TvUniformBuilder=object
-  FBuffers :array of TBufBindExt;
-  FImages  :array of TImageBindExt;
-  FSamplers:array of TSamplerBindExt;
+  FBuffers  :array of TBufBindExt;
+  FImages   :array of TImageBindExt;
+  FSamplers :array of TSamplerBindExt;
+  FDataShare:array of TGdsBindExt;
 
   Procedure InsertBuffer(var b:TBufBindExt);
 
@@ -282,6 +289,8 @@ type
   Procedure AddTSharp8(PT:PTSharpResource8;btype:TvBindImageType;fset,bind:DWord;flags:TvLayoutFlags);
   Procedure AddSSharp4(PS:PSSharpResource4;fset,bind:DWord);
   procedure AddAttr   (const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
+
+  Procedure AddGds(fset,bind:DWord;flags:TvLayoutFlags);
  end;
 
  AvShaderStage=array[TvShaderStage] of TvShaderExt;
@@ -1362,6 +1371,10 @@ begin
       end;
 
      end;
+   vtGDS:
+     begin
+      Exit(Pointer(-1));
+     end
    else
     Assert(false,'GetSharpByPatch:'+IntToStr(ord(addr[i].rtype)));
   end;
@@ -1831,6 +1844,18 @@ begin
  Insert(b,FImages,Length(FImages));
 end;
 
+Procedure TvUniformBuilder.AddGds(fset,bind:DWord;flags:TvLayoutFlags);
+var
+ b:TGdsBindExt;
+begin
+ b:=Default(TGdsBindExt);
+ b.fset  :=fset;
+ b.bind  :=bind;
+ b.memuse:=_get_buf_mem_usage(flags);
+
+ Insert(b,FDataShare,Length(FDataShare));
+end;
+
 procedure TvUniformBuilder.AddAttr(const b:TvCustomLayout;Fset:TVkUInt32;pUserData,pImmData:PDWORD);
 var
  P:Pointer;
@@ -1881,6 +1906,7 @@ begin
      vtBufPtr2:AddBufPtr (P,Fset,b.bind,b.size,b.offset,b.flags);
      vtVSharp2:AddVSharp2(P,Fset,b.bind,b.size,b.offset,b.mask,b.flags);
      vtVSharp4:AddVSharp4(P,Fset,b.bind,b.size,b.offset,b.flags);
+     vtGDS    :AddGds    (Fset,b.bind,b.flags);
      else
       Assert(false,'AddAttr');
     end;

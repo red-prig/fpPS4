@@ -188,7 +188,10 @@ type
   images_size:QWORD;
   buffer_size:QWORD;
   //
+  GDataShare:TvBuffer;
+  //
   procedure Init;
+  procedure InitGds;
   procedure BeginCmdBuffer;
   procedure FinishCmdBuffer;
   function  CmdStatus(i:t_pm4_stream_type):TVkResult;
@@ -679,6 +682,36 @@ begin
   TAILQ_INIT(@stall[i]);
  end;
 
+end;
+
+procedure t_me_render_context.InitGds;
+const
+ GdsUsage=ord(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) or
+          ord(VK_BUFFER_USAGE_TRANSFER_DST_BIT) or
+          ord(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) or
+          ord(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+var
+ vmem:TvPointer;
+begin
+ if (GDataShare=nil) then Exit;
+
+ GDataShare:=TvBuffer.Create(64*1024,GdsUsage,nil);
+
+ vmem:=MemManager.FetchMemory(GDataShare.GetRequirements,V_PROP_DEVICE_LOCAL or V_PROP_HOST_VISIBLE or V_PROP_HOST_CACHED,GDataShare);
+
+ if (vmem.FMemory=nil) then
+ begin
+  vmem:=MemManager.FetchMemory(GDataShare.GetRequirements,V_PROP_HOST_VISIBLE or V_PROP_HOST_CACHED,GDataShare);
+ end;
+
+ if (vmem.FMemory=nil) then
+ begin
+  Assert(False,'Fail init GDS!');
+ end;
+
+ GDataShare.BindMem(vmem);
+
+ vmem.Release; //FetchMemory
 end;
 
 procedure t_me_render_context.BeginCmdBuffer;
@@ -1354,6 +1387,29 @@ begin
  end;
  //buffers
 
+ //GDS
+ if (Length(UniformBuilder.FDataShare)<>0) then
+ begin
+  For i:=0 to High(UniformBuilder.FDataShare) do
+  With UniformBuilder.FDataShare[i] do
+  begin
+   buf:=TvHostBuffer(ctx.GDataShare);
+
+   ctx.RefToParent(buf);
+
+   //TODO: Barrier state cache
+   ctx.Cmd.BufferMemoryBarrier(buf.FHandle,
+                               VK_ACCESS_BUF_ANY,
+                               GetAccessMaskBuf(resource_instance^.curr),
+                               0,64*1024,
+                               VK_STAGE_BUF_ANY,
+                               GetStageMask(BindPoint)
+                              );
+
+  end;
+ end;
+ //GDS
+
  LOG_TRACE('<-[Prepare_Uniforms]');
 end;
 
@@ -1635,6 +1691,22 @@ begin
   end;
  end;
  //buffers
+
+ //GDS
+ if (Length(UniformBuilder.FDataShare)<>0) then
+ begin
+  For i:=0 to High(UniformBuilder.FDataShare) do
+  With UniformBuilder.FDataShare[i] do
+  begin
+   buf:=TvHostBuffer(ctx.GDataShare);
+
+   DescriptorGroup.BindBuffer(fset,bind,
+                              buf.FHandle,
+                              0,
+                              64*1024);
+
+  end;
+ end;
 
 end;
 
@@ -3852,6 +3924,8 @@ begin
  ctx:=Default(t_me_render_context);
  ctx.Init;
  ctx.me:=me;
+
+ ctx.InitGds;
 
  imdone_count:=0;
 
