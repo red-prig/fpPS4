@@ -28,6 +28,7 @@ type
   procedure emit_DS_READ2    (rtype:TsrDataType;extra_stride:Word);
   procedure emit_DS_ATOMIC_OP(rtype:TsrDataType;OpId:DWORD;rtn:Boolean);
   procedure emit_DS_APPEND;
+  procedure emit_DS_CONSUME;
  end;
 
 implementation
@@ -518,6 +519,28 @@ begin
 
  vdst:=FetchAtomic(pChain,Op.OpAtomicIIncrement,dtUint32,nil);
 
+ //TODO: depend on v_mbcnt_*
+
+ //save result
+ dst:=get_vdst8(FSPI.DS.VDST);
+
+ MakeCopy(dst,vdst);
+end;
+
+procedure TEmit_DS.emit_DS_CONSUME;
+var
+ pChain:TsrChain;
+
+ vdst:TsrRegNode;
+
+ dst:PsrRegSlot;
+begin
+ pChain:=fetch_ds_chain(nil,dtUint32,dtUint32,WORD(FSPI.DS.OFFSET));
+
+ vdst:=FetchAtomic(pChain,Op.OpAtomicIDecrement,dtUint32,nil);
+
+ //TODO: depend on v_mbcnt_*
+
  //save result
  dst:=get_vdst8(FSPI.DS.VDST);
 
@@ -588,6 +611,7 @@ begin
   DS_XOR_RTN_B32:emit_DS_ATOMIC_OP(dtUint32,Op.OpAtomicXor,True);
 
   DS_APPEND     :emit_DS_APPEND;
+  DS_CONSUME    :emit_DS_CONSUME;
 
   DS_SWIZZLE_B32:emit_DS_SWIZZLE_B32;
 
