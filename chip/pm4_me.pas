@@ -693,7 +693,7 @@ const
 var
  vmem:TvPointer;
 begin
- if (GDataShare=nil) then Exit;
+ if (GDataShare<>nil) then Exit;
 
  GDataShare:=TvBuffer.Create(64*1024,GdsUsage,nil);
 
@@ -710,6 +710,8 @@ begin
  end;
 
  GDataShare.BindMem(vmem);
+
+ GDataShare.Acquire(nil); //global
 
  vmem.Release; //FetchMemory
 end;
