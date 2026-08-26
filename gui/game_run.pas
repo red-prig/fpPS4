@@ -718,7 +718,7 @@ begin
   fork_info.data:=mem.Memory;
   fork_info.size:=mem.Size;
 
-  r:=md_fork_process(fork_info,MD_FORK_PDEATHSIG or MD_FORK_PGAMEVMA);
+  r:=md_fork_process(fork_info,MD_FORK_PDEATHSIG or MD_FORK_PGAMEVMA,cfg.FParamSfo.GetString('TITLE_ID'));
 
   mem.Free;
  end else

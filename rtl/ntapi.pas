@@ -130,6 +130,7 @@ const
  FileCompletionInformation       =30;
  FileIdFullDirectoryInformation  =38;
  FileReplaceCompletionInformation=61;
+ FileDispositionInformationEx    =64;
 
  FileFsFullSizeInformation=7;
 
@@ -225,6 +226,13 @@ const
  FILE_OVERWRITTEN              =$00000003;
  FILE_EXISTS                   =$00000004;
  FILE_DOES_NOT_EXIST           =$00000005;
+
+ FILE_DISPOSITION_DO_NOT_DELETE            =$00000000;
+ FILE_DISPOSITION_DELETE                   =$00000001;
+ FILE_DISPOSITION_POSIX_SEMANTICS          =$00000002;
+ FILE_DISPOSITION_FORCE_IMAGE_SECTION_CHECK=$00000004;
+ FILE_DISPOSITION_ON_CLOSE                 =$00000008;
+ FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE=$00000010;
 
  // Special ByteOffset parameters (NtWriteFile LowPart)
  FILE_WRITE_TO_END_OF_FILE     =$ffffffff; //O_APPEND

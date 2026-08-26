@@ -145,6 +145,7 @@ end;
 Function GetDesiredAccess(flags:Integer):DWORD; inline;
 begin
  Result:=SYNCHRONIZE or
+         FILE_CAN_DELETE or
          FILE_READ_ATTRIBUTES or
          FILE_WRITE_ATTRIBUTES;
 
@@ -314,18 +315,21 @@ end;
 
 Function NtMarkDelete(FileHandle:THandle;IoStatusBlock:PIO_STATUS_BLOCK):DWORD; inline;
 var
- FBI:FILE_BASIC_INFORMATION;
- del_on_close:Boolean absolute FBI;
+ u:record
+  case Byte of
+   0:(FBI:FILE_BASIC_INFORMATION);
+   1:(del_on_close:Boolean);
+ end;
 begin
- FBI:=Default(FILE_BASIC_INFORMATION);
- FBI.FileAttributes:=FILE_ATTRIBUTE_NORMAL;
+ u.FBI:=Default(FILE_BASIC_INFORMATION);
+ u.FBI.FileAttributes:=FILE_ATTRIBUTE_NORMAL;
 
  // reset read-only
- NtSetInformationFile(FileHandle,IoStatusBlock,@FBI,SizeOf(FBI),FileBasicInformation);
+ NtSetInformationFile(FileHandle,IoStatusBlock,@u.FBI,SizeOf(u.FBI),FileBasicInformation);
 
  //mark delete
- del_on_close:=True;
- Result:=NtSetInformationFile(FileHandle,IoStatusBlock,@del_on_close,1,FileDispositionInformation);
+ u.del_on_close:=True;
+ Result:=NtSetInformationFile(FileHandle,IoStatusBlock,@u.del_on_close,1,FileDispositionInformation);
 end;
 
 Function md_create_swap_file(const path:RawByteString;SIZE:QWORD;Var fd:THandle):DWORD;

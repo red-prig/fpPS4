@@ -33,7 +33,7 @@ type
  end;
 
 procedure md_run_forked;
-function  md_fork_process(var info:t_fork_proc;options:Integer):Integer;
+function  md_fork_process(var info:t_fork_proc;options:Integer;const debug_name:RawByteString):Integer;
 
 implementation
 
@@ -42,7 +42,8 @@ uses
  kern_thr,
  md_systm,
  md_systm_reserve,
- md_map;
+ md_map,
+ md_file;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -577,7 +578,97 @@ begin
  end;
 end;
 
-function md_fork_process(var info:t_fork_proc;options:Integer):Integer;
+type
+ P_NT_LINK=^T_NT_LINK;
+ T_NT_LINK=packed record
+  info:FILE_LINK_INFORMATION;
+  Name:array[0..MAX_PATH] of WCHAR;
+ end;
+
+function md_link(const src,dst:RawByteString):Integer;
+var
+ FD:THandle;
+ NT_LINK:P_NT_LINK;
+ BLK:IO_STATUS_BLOCK;
+ wdst:WideString;
+begin
+ wdst:='\??\'+UTF8Decode(ExpandFileName(dst));
+
+ NT_LINK:=AllocMem(SizeOf(T_NT_LINK));
+ NT_LINK^.info.ReplaceIfExists:=True;
+
+ NT_LINK^.Name:=wdst;
+
+ NT_LINK^.info.FileNameLength:=Length(wdst)*SizeOf(WideChar); //zero exclude
+
+ FD:=0;
+ Result:=md_open(src,O_RDONLY,0,FD);
+
+ if (Result<>0) then
+ begin
+  FreeMem(NT_LINK);
+  Exit;
+ end;
+
+ BLK:=Default(IO_STATUS_BLOCK);
+
+ Result:=NtSetInformationFile(FD,
+                              @BLK,
+                              NT_LINK,
+                              NT_LINK^.info.FileNameLength+24,
+                              FileLinkInformation);
+
+ md_close(FD);
+ FreeMem(NT_LINK);
+end;
+
+function md_unlink(const dst:RawByteString):Integer;
+var
+ BLK:IO_STATUS_BLOCK;
+ FDI:QWORD;
+ fd:THandle;
+begin
+ fd:=0;
+ Result:=md_open(dst,O_RDONLY,0,fd);
+ if (Result<>0) then Exit;
+
+ BLK:=Default(IO_STATUS_BLOCK);
+ FDI:=FILE_DISPOSITION_DELETE;
+ Result:=NtSetInformationFile(fd,@BLK,@FDI,sizeof(FDI),FileDispositionInformationEx);
+
+ md_close(fd);
+end;
+
+type
+ TRtlGetVersion=function(lpVersionInformation:Pointer):DWORD; stdcall;
+
+function IsDispositionExSupport:Boolean;
+const
+ major=10;
+ minor=0;
+ build=14393;
+var
+ RtlGetVersion:TRtlGetVersion;
+ info:OSVERSIONINFOW;
+begin
+ Result:=False;
+
+ Pointer(RtlGetVersion):=GetProcAddress(GetModuleHandleW('ntdll.dll'),'RtlGetVersion');
+ if (RtlGetVersion=nil) then Exit;
+
+ info:=Default(OSVERSIONINFOW);
+ info.dwOSVersionInfoSize:=SizeOf(OSVERSIONINFOW);
+
+ if (RtlGetVersion(@info)<>0) then Exit;
+
+ if (info.dwMajorVersion > major) then Exit(true);
+ if (info.dwMajorVersion < major) then Exit(false);
+ if (info.dwMinorVersion > minor) then Exit(false);
+
+ Exit(info.dwBuildNumber >= build);
+end;
+
+function md_fork_process(var info:t_fork_proc;options:Integer;const debug_name:RawByteString):Integer;
 label
  _err;
 type
@@ -590,6 +681,8 @@ var
  si:TSTARTUPINFO;
  pi:PROCESS_INFORMATION;
  P_BUF:PBUF_PROC_INFO;
+ orig:WideString;
+ temp:RawByteString;
  LEN:ULONG;
  rip:QWORD;
  b:BOOL;
@@ -611,14 +704,40 @@ begin
   Exit;
  end;
 
+ orig:=PWideChar(@P_BUF^.DATA);
+ FreeMem(P_BUF);
+
+ temp:='';
+
+ if IsDispositionExSupport then
+ if (debug_name<>'') then
+ begin
+  temp:=IncludeTrailingPathDelimiter(GetCurrentDir)+'fpPS4_'+debug_name+'.exe';
+
+  Result:=md_link(UTF8Encode(orig),temp);
+
+  if (Result=0) then
+  begin
+   orig:=UTF8Decode(temp);
+  end else
+  begin
+   temp:='';
+  end;
+
+  Result:=0;
+ end;
+
  si:=Default(TSTARTUPINFO);
  pi:=Default(PROCESS_INFORMATION);
 
  si.cb:=SizeOf(si);
 
- b:=CreateProcessW(PWideChar(@P_BUF^.DATA),nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
+ b:=CreateProcessW(@orig[1],nil,nil,nil,False,CREATE_SUSPENDED,nil,nil,@si,@pi);
 
- FreeMem(P_BUF);
+ if (temp<>'') then
+ begin
+  md_unlink(temp);
+ end;
 
  if not b then goto _err;
 

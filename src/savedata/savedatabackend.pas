@@ -292,7 +292,7 @@ begin
  fork_info.data:=mem.Memory;
  fork_info.size:=mem.Size;
 
- r:=md_fork_process(fork_info,0);
+ r:=md_fork_process(fork_info,0,'SaveData');
 
  mem.Free;
 
