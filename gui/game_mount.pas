@@ -648,6 +648,7 @@ _next:
       if not DeleteFile(CurFilename) then
       begin
        while Pop(CurSrcDir,OnlyChildren) do;
+       SysUtils.FindClose(FileInfo);
        Exit;
       end;
      end;
@@ -862,6 +863,7 @@ begin
       begin
        _fail:
         while Pop(CurDstDir,CurSrcDir) do;
+        SysUtils.FindClose(FileInfo);
         Exit;
       end;
      end;

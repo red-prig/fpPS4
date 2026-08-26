@@ -833,7 +833,7 @@ Function me_test_mem(pollAddr:Pointer;ref,mask:DWORD;compareFunc:Byte):Boolean;
 var
  val:DWORD;
 begin
- val:=PQWORD(pollAddr)^ and mask;
+ val:=PDWORD(pollAddr)^ and mask;
  Case compareFunc of
   WAIT_REG_MEM_FUNC_ALWAYS       :Result:=True;
   WAIT_REG_MEM_FUNC_LESS         :Result:=(val<ref);

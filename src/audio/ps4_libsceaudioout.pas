@@ -470,7 +470,7 @@ begin
 
  if (g_port_table[port_id].f_busy<>0) then
  begin
-  Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+  Exit(SCE_AUDIO_OUT_ERROR_BUSY);
  end;
 
  FreeAndNil(g_port_table[port_id]);

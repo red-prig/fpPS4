@@ -501,7 +501,7 @@ var
 begin
  if (FShader.FDescSetId<>FDescSetId) then Exit(False);
 
- if (Length(FShader.FDataLayouts)=0) then Exit;
+ if (Length(FShader.FDataLayouts)=0) then Exit(True);
  For i:=0 to High(FShader.FDataLayouts) do
  begin
 

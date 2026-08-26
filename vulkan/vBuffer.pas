@@ -163,7 +163,7 @@ var
  rded:TVkMemoryDedicatedRequirements;
 begin
  Result:=false;
- if Pointer(vkGetImageMemoryRequirements2)=nil then Exit;
+ if Pointer(vkGetBufferMemoryRequirements2)=nil then Exit;
  info:=Default(TVkBufferMemoryRequirementsInfo2);
  info.sType:=VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
  info.buffer:=FHandle;

@@ -115,7 +115,7 @@ begin
       if (p_proc.p_sdk_version >= $2500000) and
          ((infoLen < 176) or
           (PSceVideoRecordingInfoUserMeta(pInfo)^.size < 176) or
-          ((PSceVideoRecordingInfoUserMeta(pInfo)^.flags or $ffff7ffc)<>0)
+          ((PSceVideoRecordingInfoUserMeta(pInfo)^.flags and $ffff7ffc)<>0)
          ) then
       begin
        Exit(SCE_VIDEO_RECORDING_ERROR_INVALID_VALUE);

@@ -80,7 +80,7 @@ begin
 
     if (aRow)>(ListGrid.TopRow + ListGrid.VisibleRowCount) then
     begin
-     ListGrid.TopRow:=ListGrid.VisibleRowCount - aRow;
+     ListGrid.TopRow:=aRow - ListGrid.VisibleRowCount + 1;
     end else
     if (aRow)<(ListGrid.TopRow) then
     begin
