@@ -496,9 +496,17 @@ begin
  begin
   Result:=dtInt32;
  end else
+ if (dtype0=dtUint32) or (dtype1=dtUint32) then
+ begin
+  Result:=dtUint32;
+ end else
  if (dtype0=dtInt64) or (dtype1=dtInt64) then
  begin
   Result:=dtInt64;
+ end else
+ if (dtype0=dtUint64) or (dtype1=dtUint64) then
+ begin
+  Result:=dtUint64;
  end else
  begin
   Result:=LazyType2(dtype0,dtype1);

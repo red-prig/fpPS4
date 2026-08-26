@@ -74,6 +74,7 @@ type
   procedure emit_V_MED3_I32;
   procedure emit_V_MED3_U32;
   procedure emit_V_FMA_F32;
+  procedure emit_V_LSHL_B64;
   procedure emit_V_MMX64(OpId:DWORD);
   function  SelectCubeResult(x,y,z,x_res,y_res,z_res:TsrRegNode):TsrRegNode;
   procedure emit_V_CUBE(OpId:Word);
@@ -1168,6 +1169,31 @@ begin
  emit_dst_clamp_f(dst,dtFloat32);
 end;
 
+procedure TEmit_VOP3.emit_V_LSHL_B64;
+Var
+ dst:array[0..1] of PsrRegSlot;
+ shx:PsrRegSlot;
+ src:array[0..1] of TsrRegNode;
+begin
+ dst[0]:=get_vdst8(FSPI.VOP3a.VDST+0);
+ dst[1]:=get_vdst8(FSPI.VOP3a.VDST+1);
+
+ shx:=@RegsStory.FUnattach;
+
+ src[0]:=fetch_ssrc9_64(FSPI.VOP3a.SRC0,dtUint64);
+ src[1]:=fetch_ssrc9   (FSPI.VOP3a.SRC1,dtUInt32);
+
+ emit_src_abs_neg(@src[0],1,dtUint64);
+ emit_src_abs_neg(@src[1],1,dtUInt32);
+
+ src[1]:=OpAndTo(src[1],63);
+ src[1].PrepType(ord(dtUInt32));
+
+ Op2(Op.OpShiftLeftLogical,dtUint64,shx,src[0],src[1]);
+
+ MakeCopy64(dst[0],dst[1],shx^.current);
+end;
+
 procedure TEmit_VOP3.emit_V_MMX64(OpId:DWORD);
 Var
  dst:array[0..1] of PsrRegSlot;
@@ -2029,6 +2055,8 @@ begin
   V_MED3_I32: emit_V_MED3_I32;
   V_MED3_U32: emit_V_MED3_U32;
   V_FMA_F32 : emit_V_FMA_F32;
+
+  V_LSHL_B64: emit_V_LSHL_B64;
 
   V_MIN_F64:emit_V_MMX64(GlslOp.FMin);
   V_MAX_F64:emit_V_MMX64(GlslOp.FMax);

@@ -667,18 +667,22 @@ begin
   src[2]:=FetchSubgroup(src[2]);
  end;
 
- src[0]:=OpLogicalAndTo(src[0],src[2]);
-
  if dwave then
  begin
+  src[0]:=OpLogicalAndTo(src[0],src[2]);
+
   src[0].dsbgr:=True;
 
   src[0]:=OpSubgroupBallotTo(src[0]);
   src[0]:=OpSubgroupBallotBitCountTo(src[0]);
  end else
  begin
+  src[0]:=OpAndTo(src[0],src[2]);
+
   src[0]:=OpBitCountTo(src[0]);
  end;
+
+ src[0]:=MakeRead(src[0],dtUint32,True);
 
  OpIAdd(dst,src[0],src[1]);
 end;
