@@ -387,7 +387,7 @@ begin
 
      addr:=1;
 
-     Result:=copyout(@addr,@p_cursor_update_pending(data)^.result,8);
+     Result:=copyout(@addr,@p_cursor_update_pending(data)^.result,4);
     end;
 
   else
@@ -1368,12 +1368,12 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,$33,off);
- obj^.un_pager.map_base:=dce_page;
-
  if (obj=nil) then
  begin
   Exit(EINVAL);
  end;
+
+ obj^.un_pager.map_base:=dce_page;
 
  pobj^:=obj;
 end;

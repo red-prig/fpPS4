@@ -2364,20 +2364,24 @@ begin
  if (err=0) then
  begin
 
+  free_size:=0;
   err:=GetFreeSpace(Client.GameMountConfig.LocalDir,free_size);
-  if (err<>0) then Exit;
 
+  if (err=0) then
   if (param_sfo.SAVEDATA_BLOCKS*SCE_SAVE_DATA_BLOCK_SIZE)>free_size then
   begin
-   Exit(SCE_SAVE_DATA_ERROR_NO_SPACE_FS);
+   err:=SCE_SAVE_DATA_ERROR_NO_SPACE_FS;
   end;
 
-  if Restore then
+  if (err=0) then
   begin
-   err:=0;
-  end else
-  begin
-   err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+   if Restore then
+   begin
+    err:=0;
+   end else
+   begin
+    err:=SCE_SAVE_DATA_ERROR_INTERNAL;
+   end;
   end;
 
  end;
@@ -2531,9 +2535,8 @@ begin
  if Prepare then
  begin
   err:=CheckBackup(False);
-  if (err<>0) then Exit(err);
 
-  if (not get_param) and (not get_icon) then
+  if (err<>0) or ((not get_param) and (not get_icon)) then
   begin
    Result:=err;
   end else
@@ -3786,7 +3789,7 @@ begin
    begin
     if not SaveMemory(fs_src,buf^.PmemoryData,buf^.FmemorySize) then
     begin
-     Result:=SCE_SAVE_DATA_ERROR_INTERNAL;
+     err:=SCE_SAVE_DATA_ERROR_INTERNAL;
     end;
    end;
 

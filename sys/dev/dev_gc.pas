@@ -1175,12 +1175,12 @@ begin
  end;
 
  obj:=vm_pager_allocate(OBJT_DEVICE,cdev,PAGE_SIZE,nprot,offset^);
- obj^.un_pager.map_base:=gc_page;
-
  if (obj=nil) then
  begin
   Exit(EINVAL);
  end;
+
+ obj^.un_pager.map_base:=gc_page;
 
  objp^:=obj;
 

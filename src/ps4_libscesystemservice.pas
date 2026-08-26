@@ -318,7 +318,7 @@ begin
  Result:=0;
  Format[0]:=#0;
 
- GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ILDATE,@Format,1);
+ GetLocaleInfo(LOCALE_USER_DEFAULT,LOCALE_ITIME,@Format,1);
 
  Case Format[0] of
   '0':Result:=SCE_SYSTEM_PARAM_TIME_FORMAT_12HOUR;

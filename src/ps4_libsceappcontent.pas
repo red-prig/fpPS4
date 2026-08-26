@@ -180,12 +180,12 @@ end;
 13 CN9 CN
 14 KRT
 }
-function ps4_sceAppContentGetRegion(p_regiion:PInteger):Integer;
+function ps4_sceAppContentGetRegion(p_region:PInteger):Integer;
 begin
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
- if (p_regiion=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+ if (p_region=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- p_regiion^:=2; //US
+ p_region^:=2; //US
 
  Result:=0;
 end;

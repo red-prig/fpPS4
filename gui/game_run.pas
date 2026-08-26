@@ -338,8 +338,9 @@ begin
   //jump to code
   main_switch_context;
  end else
- if (err<>0) then
  begin
+
+  //
   if not LoadExec then
   begin
    print_error_td('[execve error]'+#13#10+
@@ -756,6 +757,7 @@ begin
  if (r<>0) then
  begin
   _error:
+  FreeAndNil(GameStartupInfo);
   FreeAndNil(FGameProcess);
   Exit(r);
  end;

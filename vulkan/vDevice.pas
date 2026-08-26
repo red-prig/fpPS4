@@ -1140,7 +1140,7 @@ begin
   FSAF.pNext:=@FSAF2;
 
   FSAF2.sType:=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_2_FEATURES_EXT;
-  FSAF.pNext :=nil;
+  FSAF2.pNext :=nil;
 
   vkGetPhysicalDeviceFeatures2(FPhysicalDevice,@Features2);
 

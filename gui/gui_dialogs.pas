@@ -1102,7 +1102,7 @@ begin
  Value.MoveTo(@data,SizeOf(data));
 
  FillChar(Attributes,SizeOf(Attributes),0);
- Attributes.OnClick:=@OnNpCommerceDialogClick;
+ Attributes.OnClick:=@OnHmdSetupDialogClick;
 
  Attributes.Caption.Enable:=True;
  Attributes.Caption.Message:='Hmd Setup';

@@ -22,6 +22,7 @@ type
    f_userId   :DWORD;
    f_type     :DWORD;
    f_len      :DWORD;
+   f_busy     :DWORD;
    f_param    :TAudioParams;
   Function  Open(const device_id:RawByteString):Boolean; virtual; abstract;
   procedure SetVolume(channel,vol:Integer);              virtual; abstract;

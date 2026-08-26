@@ -305,7 +305,7 @@ end;
 
 function TGameList.GetItemRow(i:SizeInt):TGameItem;
 begin
- if (i<0) or (i>FGrid.RowCount) then
+ if (i<0) or (i>=FGrid.RowCount) then
  begin
   Result:=nil;
  end else

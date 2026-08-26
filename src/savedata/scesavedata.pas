@@ -588,7 +588,7 @@ begin
     $3531, //15
     $3631: //16
       begin
-       slot_id:=ord(name[10])-(ord('0')+10);
+       slot_id:=ord(name[10])-ord('0')+10;
        Result:=0;
       end;
    end;

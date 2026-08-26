@@ -468,6 +468,11 @@ begin
   Exit(SCE_AUDIO_OUT_ERROR_NOT_OPENED);
  end;
 
+ if (g_port_table[port_id].f_busy<>0) then
+ begin
+  Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+ end;
+
  FreeAndNil(g_port_table[port_id]);
  Result:=0;
 end;
@@ -476,7 +481,7 @@ function _get_port_id(handle:Integer):Integer; inline;
 begin
  Result:=DWORD(handle) and $FF;
 
- if (Result > 25) then
+ if (Result >= 25) then
  begin
   Exit(SCE_AUDIO_OUT_ERROR_INVALID_PORT);
  end;
@@ -686,8 +691,6 @@ begin
   end;
 
  mtx_unlock(g_port_lock);
-
- Result:=0;
 end;
 
 function ps4_sceAudioOutSetMixLevelPadSpk(handle,mixLevel:Integer):Integer;
@@ -815,13 +818,21 @@ begin
 
   if (g_port_table[port_id]<>nil) then
   begin
-   mtx_unlock(g_port_lock);
+   if (g_port_table[port_id].f_busy<>0) then
+   begin
+    Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+   end else
+   begin
+    g_port_table[port_id].f_busy:=1;
+    mtx_unlock(g_port_lock);
 
-    Result:=g_port_table[port_id].Output(ptr);
+     Result:=g_port_table[port_id].Output(ptr);
 
-   mtx_lock(g_port_lock);
+    mtx_lock(g_port_lock);
+    g_port_table[port_id].f_busy:=0;
 
-   if (Result<0) then Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+    if (Result<0) then Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+   end;
   end else
   begin
    Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
@@ -905,43 +916,53 @@ begin
 
    port_id:=_get_port_id(handle);
 
-   if (g_port_table[port_id]<>nil) then
-   begin
-    //test dublicate
-    if (i<>0) and
-       (num<>1) and
-       (p_proc.p_sdk_version >= $4500000) then
-    begin
-     for f:=0 to num-1 do
-      if (f<>i) then
-      if (handle=param[f].handle) then
-      begin
-       LOG_TRACE(stderr,'[AudioOut] use same handles (handle[',i,']:0x',HexStr(handle,8),
-                        ' handle[',f,']:0x',HexStr(handle,8),')');
-
-       Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
-       goto _unlock;
-      end;
-    end;
-    //
-    if (i=0) then
-    begin
-     f_len:=g_port_table[port_id].f_len;
-    end else
-    if (f_len<>g_port_table[port_id].f_len) then
-    begin
-     Result:=SCE_AUDIO_OUT_ERROR_INVALID_SIZE;
-     goto _unlock;
-    end;
-    //
-    params[i].handle:=g_port_table[port_id];
-    params[i].ptr   :=param[i].ptr;
-   end else
+   if (g_port_table[port_id]=nil) then
    begin
     Result:=SCE_AUDIO_OUT_ERROR_NOT_OPENED;
     goto _unlock;
    end;
 
+   if (g_port_table[port_id].f_busy<>0) then
+   begin
+    Result:=SCE_AUDIO_OUT_ERROR_BUSY;
+    goto _unlock;
+   end;
+
+   //test dublicate
+   if (i<>0) and
+      (num<>1) and
+      (p_proc.p_sdk_version >= $4500000) then
+   begin
+    for f:=0 to num-1 do
+     if (f<>i) then
+     if (handle=param[f].handle) then
+     begin
+      LOG_TRACE(stderr,'[AudioOut] use same handles (handle[',i,']:0x',HexStr(handle,8),
+                       ' handle[',f,']:0x',HexStr(handle,8),')');
+
+      Result:=SCE_AUDIO_OUT_ERROR_INVALID_PORT;
+      goto _unlock;
+     end;
+   end;
+   //
+   if (i=0) then
+   begin
+    f_len:=g_port_table[port_id].f_len;
+   end else
+   if (f_len<>g_port_table[port_id].f_len) then
+   begin
+    Result:=SCE_AUDIO_OUT_ERROR_INVALID_SIZE;
+    goto _unlock;
+   end;
+   //
+   params[i].handle:=g_port_table[port_id];
+   params[i].ptr   :=param[i].ptr;
+
+  end; //for
+
+  For i:=0 to num-1 do
+  begin
+   params[i].handle.f_busy:=1;
   end;
 
   //output all
@@ -950,6 +971,11 @@ begin
    g_audioout_interface.Outputs(@params,num);
 
   mtx_lock(g_port_lock);
+
+  For i:=0 to num-1 do
+  begin
+   params[i].handle.f_busy:=0;
+  end;
 
  _unlock:
 

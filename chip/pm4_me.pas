@@ -3470,6 +3470,8 @@ begin
      begin
       //soft
 
+      byteSize:=node^.num_dw*SizeOf(DWORD);
+
       if p_print_gpu_ops then
       begin
        LOG_TRACE('[2]WriteData:0x',HexStr(QWORD(node^.src),10),'->',HexStr(QWORD(node^.dst),10),':size=0x',HexStr(byteSize,5));
@@ -3478,8 +3480,6 @@ begin
       src_dmem:=get_dmem_ptr(node^.src);
 
       dst_dmem:=get_dmem_ptr(node^.dst);
-
-      byteSize:=node^.num_dw*SizeOf(DWORD);
 
       Move(src_dmem^,dst_dmem^,byteSize);
 

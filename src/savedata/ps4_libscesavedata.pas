@@ -1447,6 +1447,7 @@ begin
    end;
   end;
 
+  existedMemorySize:=0;
   if (p_proc.p_sdk_version < $6500000) then
   begin
    Result:=SetupSaveDataMemory2Lt65(setupParam,nil,@existedMemorySize);
@@ -1800,7 +1801,7 @@ begin
    max:=src^.PiconMemorySize^.max;
   end;
 
-  Move(src^.PiconMemorySize^,dst^.PiconMemorySize^,max);
+  Move(src^.PiconData^,dst^.PiconData^,max);
  end;
 
  if (src^.PParamData=nil) then

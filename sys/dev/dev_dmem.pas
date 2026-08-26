@@ -397,6 +397,7 @@ begin
   dev^.si_drv1:=@dmem_maps[i];
   //
   obj:=vm_pager_allocate(OBJT_DEVICE,dev,0,0,0);
+  if (obj=nil) then Exit;
   obj^.size:=$1400000;
   obj^.flags:=obj^.flags or OBJ_DMEM_EXT;
   obj^.un_pager.map_base:=Pointer(VM_MIN_GPU_ADDRESS);

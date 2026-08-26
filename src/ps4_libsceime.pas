@@ -552,7 +552,7 @@ begin
  //_sig_unlock;
 
  store_release(g_hook,0);
- store_release(QWORD(g_handler),9);
+ store_release(QWORD(g_handler),0);
  store_release(QWORD(g_cb_arg),0);
 
  store_release(keyboard_init,0);
@@ -609,7 +609,7 @@ begin
  info^.ktype      :=keyboard_layout_to_type(KeyBoardLayout);
  info^.repeatDelay:=1;
  info^.repeatRate :=1;
- info^.status     :=CE_IME_KEYBOARD_STATE_CONNECTED;
+ info^.status     :=SCE_IME_KEYBOARD_STATE_CONNECTED;
 end;
 
 procedure init_ime;

@@ -298,8 +298,8 @@ const
 
  //Keyboard device statuses
  //SceImeKeyboardStatus
- CE_IME_KEYBOARD_STATE_DISCONNECTED = 0;
- CE_IME_KEYBOARD_STATE_CONNECTED    = 1;
+ SCE_IME_KEYBOARD_STATE_DISCONNECTED = 0;
+ SCE_IME_KEYBOARD_STATE_CONNECTED    = 1;
 
  //Keyboard layout types for keyboard devices
  //SceImeKeyboardType

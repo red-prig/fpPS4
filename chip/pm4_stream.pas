@@ -957,11 +957,11 @@ begin
  len2:=0;
  while (maxsize<>0) do
  begin
-  Inc(len2);
   if (P2[len2]=#0) then
   begin
    Break;
   end;
+  Inc(len2);
   Dec(maxsize);
  end;
 
