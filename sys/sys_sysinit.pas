@@ -50,6 +50,7 @@ uses
  devfs_vfsops,
  fdesc_vfsops,
  null_vfsops,
+ tmpfs_vfsops,
  ufs,
  kern_descrip,
  vfs_mount,
@@ -76,6 +77,7 @@ begin
  vfs_register(@fdescfs_vfsconf);
  vfs_register(@nullfs_vfsconf);
  vfs_register(@ufs_vfsconf);
+ vfs_register(@tmpfs_vfsconf);
  vfs_mount_init();
  vfs_mountroot.vfs_mountroot();
  fildesc_drvinit;

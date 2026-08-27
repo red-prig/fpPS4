@@ -21,8 +21,7 @@ uses
 
 function bnet_get_secure_seed():Integer;
 begin
- Result:=0;
- arc4rand(@Result,SizeOf(Integer),0);
+ Result:=arc4random();
 end;
 
 type

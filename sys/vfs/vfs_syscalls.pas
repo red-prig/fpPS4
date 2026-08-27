@@ -1510,7 +1510,8 @@ begin
  VATTR_NULL(@vattr);
  vattr.va_mode:=ACCESSPERMS and (not fd_table.fd_cmask);
 
- //vattr.va_type:=VLNK;
+ vattr.va_type:=VLNK;
+
  //error:=mac_vnode_check_create(td^.td_ucred, nd.ni_dvp, @nd.ni_cnd, @vattr);
  //if (error)
  // goto out2;

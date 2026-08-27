@@ -6,6 +6,7 @@ unit md_arc4random;
 interface
 
 procedure arc4rand(ptr:Pointer;len,reseed:Integer);
+function  arc4random():DWORD;
 
 implementation
 
@@ -38,6 +39,11 @@ begin
  begin
   BCryptGenRandom(nil,ptr,len,BCRYPT_USE_SYSTEM_PREFERRED_RNG);
  end;
+end;
+
+function arc4random():DWORD;
+begin
+ arc4rand(@Result, sizeof(Result), 0);
 end;
 
 

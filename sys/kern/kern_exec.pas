@@ -69,6 +69,7 @@ uses
  signal,
  trap,
  md_context,
+ md_arc4random,
  subr_backtrace;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -482,8 +483,6 @@ begin
  {
   * Prepare the canary for SSP.
   }
- //arc4rand(canary, sizeof(canary), 0);
-
  canary[0]:=QWORD($FEEDBABEFEEDBABE);
  canary[1]:=QWORD($FEEDBABEFEEDBABE);
  canary[2]:=QWORD($FEEDBABEFEEDBABE);
@@ -492,6 +491,8 @@ begin
  canary[5]:=QWORD($FEEDBABEFEEDBABE);
  canary[6]:=QWORD($FEEDBABEFEEDBABE);
  canary[7]:=QWORD($FEEDBABEFEEDBABE);
+
+ arc4rand(@canary, sizeof(canary), 0);
 
  Dec(destp,sizeof(canary));
  imgp^.canary:=destp;
