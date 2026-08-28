@@ -553,7 +553,7 @@ begin
   FLogReadHandle:=0;
  end;
 
- md_open(LogFile,O_RDWR or O_CREAT or O_APPEND,&0777,FContext.hOutput);
+ md_open(LogFile,O_WRONLY or O_CREAT or O_APPEND,&0777,FContext.hOutput);
 
  md_open(LogFile,O_RDWR,0,FLogReadHandle);
 

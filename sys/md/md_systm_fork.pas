@@ -629,7 +629,7 @@ var
  fd:THandle;
 begin
  fd:=0;
- Result:=md_open(dst,O_RDONLY,0,fd);
+ Result:=md_open(dst,O_RDONLY or O_CANDELETE,0,fd);
  if (Result<>0) then Exit;
 
  BLK:=Default(IO_STATUS_BLOCK);

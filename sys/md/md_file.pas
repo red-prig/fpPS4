@@ -29,6 +29,7 @@ const
  O_EXCL     =vfcntl.O_EXCL     ;
  O_DSYNC    =vfcntl.O_DSYNC    ;
  O_DIRECTORY=vfcntl.O_DIRECTORY;
+ O_CANDELETE=$00200000; //ext
 
  AT_FDCWD  =vfcntl.AT_FDCWD;
 
@@ -145,7 +146,6 @@ end;
 Function GetDesiredAccess(flags:Integer):DWORD; inline;
 begin
  Result:=SYNCHRONIZE or
-         FILE_CAN_DELETE or
          FILE_READ_ATTRIBUTES or
          FILE_WRITE_ATTRIBUTES;
 
@@ -164,6 +164,11 @@ begin
  if ((flags and O_DIRECTORY)<>0) then
  begin
   Result:=Result or FILE_LIST_DIRECTORY;
+ end;
+
+ if ((flags and O_CANDELETE)<>0) then
+ begin
+  Result:=Result or FILE_CAN_DELETE;
  end;
 end;
 
