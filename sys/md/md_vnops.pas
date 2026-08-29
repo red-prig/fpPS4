@@ -2944,7 +2944,6 @@ begin
  Result:=EOPNOTSUPP;
 
  case ap^.a_command of
-  FIOSEEKDATA:Result:=0;
   $400866d4:Assert(False,'$400866d4');
   $800466a2:Assert(False,'$800466a2');
   $800466b5:Assert(False,'$800466b5'); //ffs_ioctl_set_crypt_flag

@@ -1767,7 +1767,7 @@ begin
     end;
     Inc(offset,vattr.va_size);
    end;
-  L_SET, //absolute
+  L_SET:; //pass
   SEEK_DATA:
    error:=fo_ioctl(fp, FIOSEEKDATA, @offset);
   SEEK_HOLE:
@@ -1775,6 +1775,7 @@ begin
   else
    error:=EINVAL;
  end;
+
  _break:
  if (error=0) and (noneg<>0) and (offset < 0) then
  begin

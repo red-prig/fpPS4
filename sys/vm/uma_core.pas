@@ -2047,6 +2047,7 @@ end;
 { See uma.h }
 procedure uma_zdestroy(zone:uma_zone_t); public;
 begin
+ if (zone<>nil) then
  zone_free_item(zones, zone, nil, SKIP_NONE, ZFREE_STATFREE);
 end;
 
@@ -2062,6 +2063,7 @@ var
  bucket:uma_bucket_t;
  cpu:Integer;
 begin
+ Assert(zone<>nil);
 
  if (curkthread=nil) then
  begin
@@ -2679,6 +2681,8 @@ var
  bflags:Integer;
  cpu:Integer;
 begin
+ Assert(zone<>nil);
+
  { uma_zfree(..., nil) does nothing, to match free(9). }
  if (item=nil) then
   Exit;

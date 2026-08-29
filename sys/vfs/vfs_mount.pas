@@ -1020,6 +1020,7 @@ begin
 
  vfs_event_signal(nil, VQ_MOUNT, 0);
 
+ newdp:=nil;
  if (VFS_ROOT(mp,LK_EXCLUSIVE,@newdp)<>0) then
  begin
   Assert(false,'mount: lost mount');
