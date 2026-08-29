@@ -375,7 +375,7 @@ begin
   * maximum available space was requested. }
  if (size_max=0) OR (size_max > (High(Int64) - PAGE_SIZE)) then
  begin
-  pages:=SIZE_MAX;
+  pages:=High(Int64);
  end else
  begin
   size_max:=roundup(size_max, PAGE_SIZE);
@@ -398,7 +398,7 @@ begin
  Assert(nodes_max >= 3);
 
  { Allocate the tmpfs mount structure and fill it. }
- tmp:=AllocMem(sizeof(tmpfs_mount));
+ tmp:=AllocMem(sizeof(p_tmpfs_mount^));
 
  mtx_init(tmp^.allnode_lock, 'tmpfs allnode lock');
  tmp^.tm_nodes_max:=nodes_max;
