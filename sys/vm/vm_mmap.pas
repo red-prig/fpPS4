@@ -79,7 +79,8 @@ uses
  vfs_subr,
  vnode_if,
  sys_conf,
- vm_pager;
+ vm_pager,
+ vnode_pager;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -290,7 +291,7 @@ begin
         if (locktype=LK_EXCLUSIVE) then
         begin
          writecounted^:=TRUE;
-         //vnode_pager_update_writecount(obj, 0, objsize);
+         vnode_pager_update_writecount(obj, 0, objsize);
         end;
        end;
   VCHR:
@@ -359,7 +360,7 @@ done:
  if (error<>0) and writecounted^ then
  begin
   writecounted^:=FALSE;
-  //vnode_pager_update_writecount(obj, objsize, 0);
+  vnode_pager_update_writecount(obj, objsize, 0);
  end;
 
  vput(vp);
@@ -723,7 +724,7 @@ begin
  begin
   if (writecounted) then
   begin
-   //vnode_pager_release_writecount(vm_obj, 0, size);
+   vnode_pager_release_writecount(obj, 0, size);
   end;
 
   vm_object_deallocate(obj);

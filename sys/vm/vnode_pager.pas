@@ -9,7 +9,8 @@ uses
  vnode,
  vm,
  vmparam,
- vm_object;
+ vm_object,
+ vmount;
 
 function  vnode_pager_alloc(handle:Pointer;
                             size  :vm_ooffset_t;
@@ -23,6 +24,9 @@ procedure vnode_destroy_vobject(vp:p_vnode);
 procedure vnode_pager_dealloc(obj:vm_object_t);
 
 procedure vnode_pager_setsize(vp:p_vnode;nsize:vm_ooffset_t);
+
+procedure vnode_pager_update_writecount (obj:vm_object_t;start,__end:vm_offset_t);
+procedure vnode_pager_release_writecount(obj:vm_object_t;start,__end:vm_offset_t);
 
 implementation
 
@@ -315,6 +319,84 @@ begin
  obj^.size:=nobjsize;
 
  VM_OBJECT_UNLOCK(obj);
+end;
+
+procedure vnode_pager_update_writecount(obj:vm_object_t;start,__end:vm_offset_t);
+var
+ vp:p_vnode;
+ old_wm:vm_ooffset_t;
+begin
+ VM_OBJECT_LOCK(obj);
+
+ if (obj^.otype<>OBJT_VNODE) then
+ begin
+  VM_OBJECT_UNLOCK(obj);
+  Exit;
+ end;
+
+ with obj^.un_pager.vnp do
+ begin
+  old_wm:=writemappings;
+  writemappings:=writemappings + (__end - start);
+ end;
+
+ vp:=obj^.handle;
+ if (old_wm=0) and (obj^.un_pager.vnp.writemappings<>0) then
+ begin
+  ASSERT_VOP_ELOCKED(vp, 'v_writecount inc');
+  VOP_ADD_WRITECOUNT(vp, 1);
+ end else
+ if (old_wm<>0) and (obj^.un_pager.vnp.writemappings=0) then
+ begin
+  ASSERT_VOP_ELOCKED(vp, 'v_writecount dec');
+  VOP_ADD_WRITECOUNT(vp, -1);
+ end;
+
+ VM_OBJECT_UNLOCK(obj);
+end;
+
+procedure vnode_pager_release_writecount(obj:vm_object_t;start,__end:vm_offset_t);
+var
+ vp:p_vnode;
+ mp:p_mount;
+ inc:vm_offset_t;
+ vfslocked:Integer;
+begin
+ VM_OBJECT_LOCK(obj);
+
+ if (obj^.otype<>OBJT_VNODE) then
+ begin
+  VM_OBJECT_UNLOCK(obj);
+  Exit;
+ end;
+
+ inc:=__end - start;
+
+ with obj^.un_pager.vnp do
+ if (writemappings <> inc) then
+ begin
+  writemappings:=writemappings - inc;
+  VM_OBJECT_UNLOCK(obj);
+  Exit;
+ end;
+
+ vp:=obj^.handle;
+ vhold(vp);
+ VM_OBJECT_UNLOCK(obj);
+ vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
+ mp:=nil;
+
+ vn_start_write(vp, @mp, V_WAIT);
+ vn_lock(vp, LK_EXCLUSIVE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
+
+ vnode_pager_update_writecount(obj, __end, start);
+ VOP_UNLOCK(vp, 0);
+ vdrop(vp);
+
+ if (mp <> nil) then
+  vn_finished_write(mp);
+
+ VFS_UNLOCK_GIANT(vfslocked);
 end;
 
 

@@ -6,9 +6,8 @@ unit vm_object;
 interface
 
 uses
- mqueue,
+ //mqueue,
  vm,
- vmparam,
  kern_mtx;
 
 type
@@ -31,21 +30,19 @@ type
 
  p_vm_object_t=^vm_object_t;
  vm_object_t=^t_vm_object;
- t_vm_object=record
+ t_vm_object=packed object
   mtx           :mtx;
-  patchq        :TAILQ_HEAD;  // list of patches
+  //patchq        :TAILQ_HEAD;  // list of patches
   size          :vm_pindex_t; // Object size
   generation    :Integer;     // generation ID
   ref_count     :Integer;     // How many refs??
   otype         :objtype_t;   // type of pager
   pg_color      :Word;
   flags         :Word;        // see below
-  pip           :Integer;
-  budget_id     :Integer;
-  handle        :Pointer;
+  pip           :Word;
+  budget_id     :shortint;
+  handle        :Pointer;     // p_vnode
   backing_object:vm_object_t;
-  cred          :Boolean;     // ucred imitate
-  fakeshared    :Boolean;     // shared imitate
   un_pager      :record
    case Byte of
     0:(map_base :Pointer);
@@ -62,6 +59,11 @@ type
        end);
   end;
   charge:vm_ooffset_t;
+  //
+  function  get_cred:Boolean;
+  procedure set_cred(b:Boolean);
+  //
+  property  cred:Boolean read get_cred write set_cred;
  end;
 
 const
@@ -77,6 +79,10 @@ const
  OBJ_DMEM_EXT     =$8000; // direct  memory
  OBJ_JITSHM_EXT   =$0020; // jitshim memory
  OBJ_WIRE_BUDGET  =$0080; // wire state in budget
+
+ //emu ext
+ OBJ_CRED         =$0100; // ucred imitate
+ OBJ_FAKE_SHARED  =$0200; // shared imitate
 
  OBJPC_SYNC  =$1;  // sync I/O
  OBJPC_INVAL =$2;  // invalidate
@@ -141,6 +147,18 @@ uses
  uma,
  vnode;
 
+function t_vm_object.get_cred:Boolean;
+begin
+ Result:=(flags and OBJ_CRED)<>0;
+end;
+
+procedure t_vm_object.set_cred(b:Boolean);
+begin
+ flags:=(flags and (not OBJ_CRED)) or (ord(b)*OBJ_CRED);
+end;
+
+//
+
 var
  obj_zone:uma_zone_t;
 
@@ -203,7 +221,7 @@ begin
 
  mtx_init(Result^.mtx,'vm_object');
 
- TAILQ_INIT(@Result^.patchq);
+ //TAILQ_INIT(@Result^.patchq);
 
  Result^.otype     :=t;
  Result^.size      :=size;
@@ -217,7 +235,7 @@ begin
   OBJT_DEFAULT,
   OBJT_SWAP:
     begin
-     Result^.flags:=OBJ_ONEMAPPING or OBJ_DISCONNECTWNT or $20000;
+     Result^.flags:=OBJ_ONEMAPPING or OBJ_DISCONNECTWNT;
     end;
   OBJT_DEVICE:
     begin

@@ -12,13 +12,10 @@ uses
  kern_mtx,
  systm,
  vm_pmap_prot,
+ vm_internal_object,
  vm_nt_sub_map;
 
 const
- NT_FILE_FREE=1;
- NT_MOBJ_FREE=2;
- NT_UNION_OBJ=4;
-
  MAX_UNION_SIZE=256*1024*1024;
 
 type
@@ -41,22 +38,6 @@ type
   procedure unlock;
  end;
 
- pp_vm_nt_file_obj=^p_vm_nt_file_obj;
- p_vm_nt_file_obj=^vm_nt_file_obj;
-
- t_nt_obj_free_cb =procedure(obj:p_vm_nt_file_obj);
- t_nt_obj_mmmap_cb=procedure(obj:p_vm_nt_file_obj;start,offset,size:QWORD);
-
- vm_nt_file_obj=packed record
-  hfile:THandle;
-  free :t_nt_obj_free_cb;
-  mmmap:t_nt_obj_mmmap_cb;
-  unmap:t_nt_obj_mmmap_cb;
-  refs :QWORD;
-  flags:Byte;
-  maxp :Byte;
- end;
-
  ///
 
  pp_vm_nt_entry=^p_vm_nt_entry;
@@ -68,7 +49,7 @@ type
   right :p_vm_nt_entry;     // right child in binary search tree
   usize :vm_offset_t;       // unaligned size
   offset:vm_ooffset_t;      // offset into object
-  obj   :p_vm_nt_file_obj;  // object I point to
+  obj   :p_vm_int_obj;      // object I point to
   sub   :t_vm_nt_sub_map;
   property start:vm_offset_t read sub.header.start write sub.header.start; // start address
   property __end:vm_offset_t read sub.header.__end write sub.header.__end; // end address
@@ -86,11 +67,6 @@ type
 
 procedure sys_init_vm_nt;
 
-function  vm_nt_file_obj_allocate  (hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
-procedure vm_nt_file_obj_destroy   (obj:p_vm_nt_file_obj);
-procedure vm_nt_file_obj_reference (obj:p_vm_nt_file_obj);
-procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
-
 function  vm_nt_map_max(map:p_vm_nt_map):vm_offset_t;
 function  vm_nt_map_min(map:p_vm_nt_map):vm_offset_t;
 
@@ -98,7 +74,7 @@ procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
 
 function  vm_nt_map_insert(
              map   :p_vm_nt_map;
-             obj   :p_vm_nt_file_obj;
+             obj   :p_vm_int_obj;
              offset:vm_ooffset_t;
              start :vm_offset_t;
              __end :vm_offset_t;
@@ -141,7 +117,7 @@ function  vm_nt_map_fetch(map         :p_vm_nt_map;
                           var p__start:vm_offset_t;
                           var p____end:vm_offset_t;
                           var p_offset:vm_offset_t;
-                          var p____obj:p_vm_nt_file_obj
+                          var p____obj:p_vm_int_obj
                          ):Boolean;
 
 implementation
@@ -161,7 +137,7 @@ type
  end;
 
  t_range_stat=record
-  obj:p_vm_nt_file_obj;
+  obj:p_vm_int_obj;
   //
   case Byte of
    0:(
@@ -175,73 +151,12 @@ type
  end;
 
 var
- vm_nt_obj_zone  :uma_zone_t=nil;
  vm_nt_entry_zone:uma_zone_t=nil;
 
 procedure sys_init_vm_nt;
 begin
- vm_nt_obj_zone      :=uma_zcreate('vm_nt_file_obj' , sizeof(vm_nt_file_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
-end;
-
-function vm_nt_file_obj_allocate(hfile:THandle;maxp:Byte):p_vm_nt_file_obj;
-begin
- Assert(maxp<>0);
-
- Result:=uma_zalloc(vm_nt_obj_zone, M_WAITOK or M_ZERO);
-
- Result^.hfile:=hfile;
- Result^.refs :=1;
- Result^.flags:=NT_FILE_FREE or NT_MOBJ_FREE or NT_UNION_OBJ;
- Result^.maxp :=maxp;
-end;
-
-procedure vm_nt_file_obj_destroy(obj:p_vm_nt_file_obj);
-var
- r:Integer;
- free:t_nt_obj_free_cb;
-begin
- if ((obj^.flags and NT_FILE_FREE)<>0) then
- if (obj^.hfile<>0) then
- begin
-  r:=md_memfd_close(obj^.hfile);
-  if (r<>0) then
-  begin
-   LOG_CRITICAL(StdErr,'failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
-   Assert(false,'vm_nt_file_obj_destroy');
-  end;
-  obj^.hfile:=0;
- end;
-
- free:=obj^.free;
-
- if ((obj^.flags and NT_MOBJ_FREE)<>0) then
- begin
-  uma_zfree(vm_nt_obj_zone, obj);
- end;
-
- if (free<>nil) then
- begin
-  free(obj);
- end;
-end;
-
-procedure vm_nt_file_obj_reference(obj:p_vm_nt_file_obj);
-begin
- if (obj=nil) then Exit;
-
- System.InterlockedIncrement64(obj^.refs);
-end;
-
-procedure vm_nt_file_obj_deallocate(obj:p_vm_nt_file_obj);
-begin
- if (obj=nil) then Exit;
-
- if (System.InterlockedDecrement64(obj^.refs)=0) then
- begin
-  vm_nt_file_obj_destroy(obj);
- end;
 end;
 
 //
@@ -323,9 +238,9 @@ begin
    end;
   end;
 
-  if (entry^.obj^.mmmap<>nil) then
+  if (entry^.obj^.vtable^.mmmap<>nil) then
   begin
-   entry^.obj^.mmmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
+   entry^.obj^.vtable^.mmmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
   end;
 
   if ((prot and VM_RW)<>(max and VM_RW)) then
@@ -619,9 +534,9 @@ begin
  if (entry^.obj<>nil) then
  begin
 
-  if (entry^.obj^.unmap<>nil) then
+  if (entry^.obj^.vtable^.unmap<>nil) then
   begin
-   entry^.obj^.unmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
+   entry^.obj^.vtable^.unmap(entry^.obj,entry^.start,entry^.offset,entry^.usize);
   end;
 
   if (entry^.obj^.hfile<>0) then
@@ -714,7 +629,7 @@ end;
 procedure vm_nt_entry_deallocate(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
 begin
  vm_nt_sub_map_free       (@entry^.sub);
- vm_nt_file_obj_deallocate(entry^.obj);
+ vm_int_obj_deallocate(entry^.obj);
  vm_nt_entry_dispose      (map,entry);
 end;
 
@@ -896,7 +811,7 @@ function vm_nt_map_simplify_entry(map:p_vm_nt_map;entry:p_vm_nt_entry;var sb:t_r
 
 function _vm_nt_map_insert(
            map   :p_vm_nt_map;
-           obj   :p_vm_nt_file_obj;
+           obj   :p_vm_int_obj;
            offset:vm_ooffset_t;
            start :vm_offset_t;
            __end :vm_offset_t;
@@ -951,7 +866,7 @@ end;
 
 function vm_nt_map_insert(
            map   :p_vm_nt_map;
-           obj   :p_vm_nt_file_obj;
+           obj   :p_vm_int_obj;
            offset:vm_ooffset_t;
            start :vm_offset_t;
            __end :vm_offset_t;
@@ -986,7 +901,7 @@ begin
  vm_init_stat(stat,entry);
 
  if (stat.obj<>nil) then
- if ((stat.obj^.flags and NT_UNION_OBJ)=0) then
+ if ((stat.obj^.flags and INT_UNION_OBJ)=0) then
  begin
   sb:=stat;
   Exit(False);
@@ -1105,7 +1020,7 @@ begin
   //entry^.sub.min_offset:=start;
 
   vm_nt_entry_link(map, entry^.prev, prev);
-  vm_nt_file_obj_reference(prev^.obj);
+  vm_int_obj_reference(prev^.obj);
  end;
 
  //entry[start          ,end]
@@ -1135,7 +1050,7 @@ begin
   //entry^.sub.max_offset:=__end;
 
   vm_nt_entry_link(map, entry, next);
-  vm_nt_file_obj_reference(next^.obj);
+  vm_int_obj_reference(next^.obj);
  end;
 
  //
@@ -1143,7 +1058,7 @@ begin
  if (prev<>nil) or (next<>nil) then
  begin
   //exclude entry
-  vm_nt_file_obj_deallocate(entry^.obj);
+  vm_int_obj_deallocate(entry^.obj);
   entry^.obj:=nil;
  end;
 
@@ -1189,7 +1104,7 @@ begin
   //entry^.sub.max_offset:=__end;
 
   vm_nt_entry_link(map, entry, next);
-  vm_nt_file_obj_reference(next^.obj);
+  vm_int_obj_reference(next^.obj);
  end;
 
  //
@@ -1197,7 +1112,7 @@ begin
  if (next<>nil) then
  begin
   //exclude entry
-  vm_nt_file_obj_deallocate(entry^.obj);
+  vm_int_obj_deallocate(entry^.obj);
   entry^.obj:=nil;
  end;
 
@@ -1476,7 +1391,7 @@ var
  base,b_end,size,prev:vm_size_t;
  offset:vm_ooffset_t;
  curr:Pointer;
- obj:p_vm_nt_file_obj;
+ obj:p_vm_int_obj;
  max:Integer;
  r:Integer;
 begin
@@ -1567,11 +1482,11 @@ function vm_nt_map_fetch(map         :p_vm_nt_map;
                          var p__start:vm_offset_t;
                          var p____end:vm_offset_t;
                          var p_offset:vm_offset_t;
-                         var p____obj:p_vm_nt_file_obj
+                         var p____obj:p_vm_int_obj
                         ):Boolean;
 var
  entry:p_vm_nt_entry;
- obj:p_vm_nt_file_obj;
+ obj:p_vm_int_obj;
 begin
  Result:=False;
  if (start=__end) then Exit;

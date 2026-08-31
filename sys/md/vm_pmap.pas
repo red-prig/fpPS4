@@ -18,6 +18,7 @@ uses
  md_file,
  vm_pmap_prot,
  vm_tracking_map,
+ vm_internal_object,
  vm_nt_map,
  vm_priv_map;
 
@@ -29,10 +30,10 @@ const
  PMAPP_BLK_DMEM_BLOCKS=(QWORD(VM_DMEM_SIZE)+PMAPP_BLK_MASK) shr PMAPP_BLK_SHIFT;
 
 var
- DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_nt_file_obj;
+ DMEM_FD:array[0..PMAPP_BLK_DMEM_BLOCKS-1] of vm_int_obj;
 
  DEV_INFO:record
-  DEV_FD  :vm_nt_file_obj;
+  DEV_FD  :vm_int_obj;
   DEV_SIZE:QWORD;
   DEV_POS :QWORD;
   DEV_PTR :Pointer;
@@ -216,8 +217,7 @@ begin
   r:=md_memfd_open(md,fd,VM_PROT_RW);
   Assert(r=0);
 
-  DMEM_FD[0].hfile:=md;
-  DMEM_FD[0].maxp :=VM_RW;
+  vm_int_obj_init(@DMEM_FD[0],nil,md,VM_RW,0);
  end else
  begin
   //
@@ -226,18 +226,19 @@ end;
 
 procedure dev_mem_init;
 var
+ md:THandle;
  r:Integer;
 begin
  DEV_INFO.DEV_SIZE:=VM_MAX_DEV_ADDRESS-VM_MIN_DEV_ADDRESS;
 
- R:=md_memfd_create(DEV_INFO.DEV_FD.hfile,DEV_INFO.DEV_SIZE,VM_RW);
+ R:=md_memfd_create(md,DEV_INFO.DEV_SIZE,VM_RW);
  if (r<>0) then
  begin
   LOG_CRITICAL(StdErr,'failed md_memfd_create(',HexStr(DEV_INFO.DEV_SIZE,11),'):0x',HexStr(r,8));
   Assert      (false,'dev_mem_init'+HexStr(r,8));
  end;
 
- DEV_INFO.DEV_FD.maxp:=VM_RW;
+ vm_int_obj_init(@DEV_INFO.DEV_FD,nil,md,VM_RW,0);
 
  DEV_INFO.DEV_PTR:=Pointer(VM_MIN_DEV_ADDRESS);
 
@@ -331,12 +332,12 @@ type
  t_fd_info=record
   start :QWORD;
   __end :QWORD;
-  obj   :p_vm_nt_file_obj;
+  obj   :p_vm_int_obj;
   offset:QWORD;
   olocal:QWORD;
  end;
 
-procedure get_priv_fd(pmap:pmap_t;var info:t_fd_info);
+procedure get_priv_fd(pmap:pmap_t;obj:vm_object_t;var info:t_fd_info);
 var
  size  :QWORD;
  R     :DWORD;
@@ -359,7 +360,7 @@ begin
  info.olocal:=palloc.start;           //block local offset
  info.__end :=info.start+palloc.size; //apply size
 
- vm_nt_file_obj_reference(info.obj);
+ vm_int_obj_reference(info.obj);
 end;
 
 procedure _print_dmem_fd; public;
@@ -387,10 +388,12 @@ begin
  end;
 end;
 
-procedure get_dev_fd(var info:t_fd_info;map_base:Pointer);
+procedure get_dev_fd(pmap:pmap_t;obj:vm_object_t;var info:t_fd_info);
 var
+ map_base:Pointer;
  o:QWORD;
 begin
+ map_base:=obj^.un_pager.map_base;
  o:=info.offset;
 
  if (map_base>=Pointer(VM_MIN_DEV_ADDRESS)) and
@@ -408,13 +411,14 @@ begin
   o:=0;
  end;
 
- vm_nt_file_obj_reference(info.obj);
+ vm_int_obj_reference(info.obj);
 
  info.olocal:=o; //block local offset
 end;
 
-procedure get_dmem_fd(var info:t_fd_info);
+procedure get_dmem_fd(pmap:pmap_t;obj:vm_object_t;var info:t_fd_info);
 var
+ md:Thandle;
  BLK_SIZE:QWORD;
  MEM_SIZE:QWORD;
  o:QWORD;
@@ -444,22 +448,21 @@ begin
 
   if (DMEM_FD[i].hfile=0) then
   begin
-   R:=md_memfd_create(DMEM_FD[i].hfile,BLK_SIZE,VM_RW);
-
-   DMEM_FD[i].maxp:=VM_RW;
-
+   R:=md_memfd_create(md,BLK_SIZE,VM_RW);
    if (r<>0) then
    begin
     LOG_CRITICAL(StdErr,'failed md_memfd_create(',HexStr(BLK_SIZE,11),'):0x',HexStr(r,8));
     Assert      (false,'get_dmem_fd');
    end;
+
+   vm_int_obj_init(@DMEM_FD[i],nil,md,VM_RW,0);
   end;
 
   info.obj:=@DMEM_FD[i];
  end;
  //dmem
 
- vm_nt_file_obj_reference(info.obj);
+ vm_int_obj_reference(info.obj);
 
  //current block offset
  o:=o mod BLK_SIZE;
@@ -476,6 +479,74 @@ begin
   e:=e+info.start;
   info.__end:=e;
  end;
+end;
+
+procedure get_vnode_fd(pmap:pmap_t;obj:vm_object_t;var info:t_fd_info);
+var
+ size  :QWORD;
+ offset:QWORD;
+ r:Integer;
+begin
+ size  :=(info.__end-info.start);
+ offset:=info.offset;
+
+ VM_OBJECT_LOCK(obj);
+   r:=VOP_GET_INT_OBJ(obj^.handle,offset,size,info.obj);
+ VM_OBJECT_UNLOCK(obj);
+
+ if (r<>0) then
+ begin
+  LOG_CRITICAL(StdErr,'failed VOP_GET_INT_OBJ:',r);
+  Assert      (false,'get_vnode_fd');
+ end;
+
+ Assert(info.obj<>nil);
+
+ info.__end :=info.start+size; //fixup
+ info.olocal:=offset;          //local offset
+end;
+
+type
+ t_get_fd_pages_cb=procedure(pmap:pmap_t;obj:vm_object_t;var info:t_fd_info);
+
+function get_fd_pages_cb(obj:vm_object_t):t_get_fd_pages_cb;
+begin
+ Result:=nil;
+
+ case vm_object_type(obj) of
+  OBJT_SELF  , // same?
+
+  OBJT_DEFAULT:
+    begin
+     Result:=@get_priv_fd;
+    end;
+  OBJT_DEVICE:
+    begin
+
+     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+     begin
+      Result:=@get_dmem_fd;
+     end else
+     if (obj^.un_pager.map_base=nil) then
+     begin
+      Result:=@get_priv_fd;
+     end else
+     begin
+      Result:=@get_dev_fd;
+     end;
+
+    end;
+  OBJT_VNODE:
+    begin
+     Result:=@get_vnode_fd;
+    end;
+  else
+    begin
+     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
+     Assert      (False);
+    end;
+ end;
+
 end;
 
 {
@@ -530,49 +601,6 @@ begin
  end;
 end;
 
-function get_vnode_handle(obj:vm_object_t;var maxprot:Integer):THandle;
-var
- vp:p_vnode;
-begin
- Result:=0;
-
- vp:=obj^.handle;
-
- if (vp<>nil) then
- begin
-  VI_LOCK(vp);
-
-  Result:=THandle(vp^.v_un);
-  maxprot:=vp^.v_prot;
-
-  VI_UNLOCK(vp);
- end;
-end;
-
-function Min(a,b:QWORD):QWORD; inline;
-begin
- if (a<b) then Result:=a else Result:=b;
-end;
-
-function fit_to_vnode_size(obj:vm_object_t;offset,size:QWORD):QWORD; inline;
-begin
- //max unaligned size
- size:=size+offset;
-
- size:=Min(size,obj^.un_pager.vnp.vnp_size);
-
- //dec offset
- if (size>offset) then
- begin
-  size:=size-offset;
- end else
- begin
-  size:=0;
- end;
-
- Result:=size;
-end;
-
 function  vm_map_lock_range  (map:Pointer;start,__end:off_t;mode:Integer):Pointer; external;
 procedure vm_map_unlock_range(map:Pointer;cookie:Pointer); external;
 
@@ -602,7 +630,7 @@ begin
 end;
 
 procedure pmap_copy_dst(src_adr :Pointer;
-                        dst_obj :p_vm_nt_file_obj;
+                        dst_obj :p_vm_int_obj;
                         dst_ofs :vm_ooffset_t;
                         size    :vm_ooffset_t);
 var
@@ -693,7 +721,7 @@ begin
 
   while (info.start<>info.__end) do
   begin
-   get_priv_fd(pmap,info);
+   get_priv_fd(pmap,nil,info);
 
    delta:=(info.__end-info.start);
    if (delta=0) then Break;
@@ -725,7 +753,7 @@ begin
    if (prot and VM_PROT_GPU_ALL)<>0 then
    begin
     //extra obj link
-    vm_nt_file_obj_reference(info.obj);
+    vm_int_obj_reference(info.obj);
     //
     r:=vm_nt_map_insert(@pmap^.gp_map,
                         info.obj,
@@ -756,22 +784,16 @@ procedure pmap_enter_object(pmap  :pmap_t;
                             start :vm_offset_t;
                             __end :vm_offset_t;
                             prot  :vm_prot_t);
-label
- _default;
 var
- fd:THandle;
- md:THandle;
-
- size:QWORD;
+ usize:QWORD;
+ asize:QWORD;
  delta:QWORD;
- paddi:QWORD;
 
  info:t_fd_info;
- cow :p_vm_nt_file_obj;
+
+ pages_cb:t_get_fd_pages_cb;
 
  lock:Pointer;
-
- max:Integer;
 
  r:Integer;
 begin
@@ -779,304 +801,102 @@ begin
 
  prot:=fixup_prot(prot);
 
+ pages_cb:=get_fd_pages_cb(obj);
+
  lock:=pmap_wlock(pmap,start,__end);
 
  ppmap_mark_rwx(start,__end,prot);
 
- r:=0;
- case vm_object_type(obj) of
-  OBJT_SELF  , // same?
-
-  OBJT_DEFAULT:
-    begin
-     _default:
-
-      Assert((prot and VM_PROT_COPY)=0);
-
-      info.start:=start;
-      info.__end:=__end;
-
-      while (info.start<>info.__end) do
-      begin
-       get_priv_fd(pmap,info);
-
-       delta:=(info.__end-info.start);
-       if (delta=0) then Break;
-
-       //map to guest
-       r:=vm_nt_map_insert(@pmap^.nt_map,
-                           info.obj,
-                           info.olocal, //block local offset
-                           info.start,
-                           info.__end,
-                           delta,
-                           (prot and VM_RW));
-
-       if (r<>0) then
-       begin
-        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert      (false,'pmap_enter_object');
-       end;
-
-       //map to GPU
-       if (prot and VM_PROT_GPU_ALL)<>0 then
-       begin
-        //extra obj link
-        vm_nt_file_obj_reference(info.obj);
-        //
-        r:=vm_nt_map_insert(@pmap^.gp_map,
-                            info.obj,
-                            info.olocal, //block local offset
-                            info.start+VM_MIN_GPU_ADDRESS,
-                            info.__end+VM_MIN_GPU_ADDRESS,
-                            delta,
-                            convert_to_gpu_prot(prot));
-
-        if (r<>0) then
-        begin
-         LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-         Assert      (false,'pmap_enter_object');
-        end;
-       end;
-
-       info.start :=info.start+delta;
-       info.__end :=__end;
-      end;
-
-    end;
-  OBJT_DEVICE:
-    begin
-     if (obj^.un_pager.map_base=nil) then
-     begin
-      goto _default;
-     end;
-
-     Assert((prot and VM_PROT_COPY)=0);
-
-     if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
-     begin
-
-      LOG_TRACE('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
-
-      info.start :=start;
-      info.__end :=__end;
-      info.offset:=offset;
-
-      while (info.start<>info.__end) do
-      begin
-       get_dmem_fd(info);
-
-       delta:=(info.__end-info.start);
-       if (delta=0) then Break;
-
-       LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
-
-       //map to guest
-       r:=vm_nt_map_insert(@pmap^.nt_map,
-                           info.obj,
-                           info.olocal, //block local offset
-                           info.start,
-                           info.__end,
-                           delta,
-                           (prot and VM_RW));
-
-       if (r<>0) then
-       begin
-        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert      (false,'pmap_enter_object');
-       end;
-
-       //map to GPU
-       if (prot and VM_PROT_GPU_ALL)<>0 then
-       begin
-        //extra obj link
-        vm_nt_file_obj_reference(info.obj);
-        //
-        r:=vm_nt_map_insert(@pmap^.gp_map,
-                            info.obj,
-                            info.olocal, //block local offset
-                            info.start+VM_MIN_GPU_ADDRESS,
-                            info.__end+VM_MIN_GPU_ADDRESS,
-                            delta,
-                            convert_to_gpu_prot(prot));
-
-        if (r<>0) then
-        begin
-         LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-         Assert      (false,'pmap_enter_object');
-        end;
-       end;
-
-       info.start :=info.start +delta;
-       info.__end :=__end;
-       info.offset:=info.offset+delta;
-      end;
-
-     end else
-     begin
-
-      LOG_TRACE('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
-
-      info.start :=start;
-      info.__end :=__end;
-      info.offset:=offset;
-
-      get_dev_fd(info,obj^.un_pager.map_base);
-
-      delta:=(info.__end-info.start);
-
-      LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
-
-      //map to guest
-      r:=vm_nt_map_insert(@pmap^.nt_map,
-                          info.obj,
-                          info.olocal, //block local offset
-                          info.start,
-                          info.__end,
-                          delta,
-                          (prot and VM_RW));
-
-      if (r<>0) then
-      begin
-       LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-       Assert      (false,'pmap_enter_object');
-      end;
-
-      //map to GPU
-      if (prot and VM_PROT_GPU_ALL)<>0 then
-      begin
-       //extra obj link
-       vm_nt_file_obj_reference(info.obj);
-       //
-       r:=vm_nt_map_insert(@pmap^.gp_map,
-                           info.obj,
-                           info.olocal, //block local offset
-                           info.start+VM_MIN_GPU_ADDRESS,
-                           info.__end+VM_MIN_GPU_ADDRESS,
-                           delta,
-                           convert_to_gpu_prot(prot));
-
-       if (r<>0) then
-       begin
-        LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-        Assert      (false,'pmap_enter_object');
-       end;
-      end;
-
-     end;
-
-    end;
-  OBJT_VNODE:
-    begin
-     delta:=0;
-     paddi:=0;
-     md:=0;
-
-     VM_OBJECT_LOCK(obj);
-
-       fd:=get_vnode_handle(obj,max);
-
-       if (fd<>0) then
-       begin
-        size:=fit_to_vnode_size(obj,offset,(__end-start));
-
-        if (max<>VM_RW) then
-        begin
-         //reopen file to RW
-         r:=md_openat(fd,'',O_RDWR,0,fd);
-
-         if (r=0) then
-         begin
-          max:=VM_RW;
-          r:=md_memfd_open(md,fd,max);
-          md_close(fd); //close dub
-         end;
-
-        end else
-        begin
-         r:=md_memfd_open(md,fd,max);
-        end;
-
-       end;
-
-     VM_OBJECT_UNLOCK(obj);
-
-     if (r<>0) then
-     begin
-      LOG_CRITICAL(StdErr,'failed md_memfd_open:0x',HexStr(r,8));
-      Assert      (false,'pmap_enter_object');
-     end;
-
-     if (md=0) then
-     begin
-      LOG_CRITICAL(StdErr,'zero file fd');
-      Assert      (false,'pmap_enter_object');
-     end;
-
-     //align host page
-     paddi:=(size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
-
-     info.obj   :=vm_nt_file_obj_allocate(md,max);
-     info.offset:=offset;
-     info.start :=start;
-     info.__end :=start+paddi;
-
-     //map to guest
-     r:=vm_nt_map_insert(@pmap^.nt_map,
-                         info.obj,
-                         info.offset, //offset in file
-                         info.start,
-                         info.__end,
-                         size,
-                         (prot and VM_RW));
-
-     if (r<>0) then
-     begin
-      LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-      Assert      (false,'pmap_enter_object');
-     end;
-
-     //map to GPU
-     if (prot and VM_PROT_GPU_ALL)<>0 then
-     begin
-      //extra obj link
-      vm_nt_file_obj_reference(info.obj);
-      //
-      r:=vm_nt_map_insert(@pmap^.gp_map,
-                          info.obj,
-                          info.offset, //offset in file
-                          info.start+VM_MIN_GPU_ADDRESS,
-                          info.__end+VM_MIN_GPU_ADDRESS,
-                          size,
-                          convert_to_gpu_prot(prot));
-
-      if (r<>0) then
-      begin
-       LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
-       Assert      (false,'pmap_enter_object');
-      end;
-     end;
-
-     ppmap_mark_rwx(info.start,info.__end,prot);
-
-     //upper pages
-     delta:=(paddi and PAGE_MASK);
-
-     if (delta<>0) then
-     begin
-      offset:=0;
-      start:=start+paddi;
-      prot:=prot and (not VM_PROT_COPY);
-      goto _default;
-     end;
-
-    end;
-  else
-    begin
-     LOG_CRITICAL(StdErr,'TODO:',vm_object_type(obj));
-     Assert      (False);
-    end;
+ if (vm_object_type(obj)=OBJT_DEVICE) then
+ begin
+  if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
+  begin
+   LOG_TRACE('pmap_enter_gpuobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
+  end else
+  begin
+   LOG_TRACE('pmap_enter_devobj:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(offset,11),':',HexStr(prot,2));
+  end;
  end;
+
+ r:=0;
+
+ info.start :=start;
+ info.__end :=__end;
+ info.offset:=offset;
+ info.olocal:=0;
+
+ while (info.start<info.__end) do
+ begin
+  pages_cb(pmap,obj,info);
+
+  usize:=(info.__end-info.start);
+  if (usize=0) then Break;
+
+  //align host page
+  asize:=(usize+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+
+  //fixup
+  info.__end:=info.start+asize;
+
+  LOG_TRACE('vm_nt_map_insert:',HexStr(info.start,11),':',HexStr(info.__end,11),':',HexStr(info.offset,11));
+
+  //map to guest
+  r:=vm_nt_map_insert(@pmap^.nt_map,
+                      info.obj,
+                      info.olocal, //block local offset
+                      info.start,
+                      info.__end,
+                      usize,       //unalign size
+                      (prot and VM_RW));
+
+  if (r<>0) then
+  begin
+   LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+   Assert      (false,'pmap_enter_object');
+  end;
+
+  //map to GPU
+  if (prot and VM_PROT_GPU_ALL)<>0 then
+  begin
+   //extra obj link
+   vm_int_obj_reference(info.obj);
+   //
+   r:=vm_nt_map_insert(@pmap^.gp_map,
+                       info.obj,
+                       info.olocal, //block local offset
+                       info.start+VM_MIN_GPU_ADDRESS,
+                       info.__end+VM_MIN_GPU_ADDRESS,
+                       usize,       //unalign size
+                       convert_to_gpu_prot(prot));
+
+   if (r<>0) then
+   begin
+    LOG_CRITICAL(StdErr,'failed vm_nt_map_insert:0x',HexStr(r,8));
+    Assert      (false,'pmap_enter_object');
+   end;
+  end;
+
+  if (asize<>usize) then
+  begin
+   delta:=(asize and PAGE_MASK);
+   if (delta<>0) then
+   begin
+    //in the case of files, need to fill the top pages with private map
+    pages_cb:=@get_priv_fd;
+
+    info.start :=info.start+delta;
+    info.__end :=__end;
+    info.offset:=0;
+    info.olocal:=0;
+
+    Continue;
+   end;
+  end;
+
+  info.start :=info.start +asize;
+  info.__end :=__end;
+  info.offset:=info.offset+asize;
+ end; //while
 
  pmap_unlock(pmap,lock);
 end;
@@ -1093,7 +913,7 @@ var
  p__start:vm_offset_t;
  p____end:vm_offset_t;
  p_offset:vm_offset_t;
- p____obj:p_vm_nt_file_obj;
+ p____obj:p_vm_int_obj;
 begin
  LOG_TRACE('pmap_gpu_enter_object:',HexStr(start,11),':',HexStr(__end,11),':',HexStr(prot,2));
 
@@ -1131,7 +951,7 @@ begin
   if (p____obj<>nil) then
   begin
    //extra obj link
-   vm_nt_file_obj_reference(p____obj);
+   vm_int_obj_reference(p____obj);
    //
    r:=vm_nt_map_insert(@pmap^.gp_map,
                        p____obj,
@@ -1187,7 +1007,7 @@ begin
 
  while (info.start<>info.__end) do
  begin
-  get_dmem_fd(info);
+  get_dmem_fd(pmap,nil,info);
 
   delta:=(info.__end-info.start);
   if (delta=0) then Break;
@@ -1213,7 +1033,7 @@ begin
   if (prot and VM_PROT_GPU_ALL)<>0 then
   begin
    //extra obj link
-   vm_nt_file_obj_reference(info.obj);
+   vm_int_obj_reference(info.obj);
    //
    r:=vm_nt_map_insert(@pmap^.gp_map,
                        info.obj,
@@ -1253,7 +1073,7 @@ var
  p__start:vm_offset_t;
  p____end:vm_offset_t;
  p_offset:vm_offset_t;
- p____obj:p_vm_nt_file_obj;
+ p____obj:p_vm_int_obj;
 begin
  i_start:=start;
  i___end:=__end;

@@ -11,11 +11,14 @@ uses
  kern_param,
  kern_thr;
 
-function uiomove(cp:Pointer;n:Integer;uio:p_uio):Integer;
-function uiomove_nofault(cp:Pointer;n:Integer;uio:p_uio):Integer;
+function uiomove          (cp:Pointer;n:Integer;uio:p_uio):Integer;
+function uiomove_nofault  (cp:Pointer;n:Integer;uio:p_uio):Integer;
 function uiomove_faultflag(cp:Pointer;n:Integer;uio:p_uio;nofault:Integer):Integer;
+function uiomove_zero     (n:Integer;uio:p_uio;nofault:Integer=0):Integer;
 
 function copyinuio(iovp:p_iovec;iovcnt:DWORD;uiop:pp_uio):Integer;
+
+procedure uio_drain(uio:p_uio);
 
 implementation
 
@@ -106,7 +109,82 @@ begin
   Dec(n,cnt);
  end;
 
-_out:
+ _out:
+ curthread_pflags_restore(save);
+ Exit(error);
+end;
+
+function uiomove_zero(n:Integer;uio:p_uio;nofault:Integer=0):Integer;
+label
+ _out;
+var
+ td:p_kthread;
+ iov:p_iovec;
+ cnt:QWORD;
+ error, newflags, save:Integer;
+begin
+ if (n<=0) then Exit(0);
+
+ td:=curkthread;
+ error:=0;
+
+ Assert((uio^.uio_rw=UIO_READ) or (uio^.uio_rw=UIO_WRITE),'uiomove: mode');
+ Assert((uio^.uio_segflg<>UIO_USERSPACE) or (uio^.uio_td=td),'uiomove proc');
+
+ // XXX does it make a sense to set TDP_DEADLKTREAT for UIO_SYSSPACE ?
+ newflags:=TDP_DEADLKTREAT;
+ if (uio^.uio_segflg=UIO_USERSPACE) and (nofault<>0) then
+ begin
+  {
+   * Fail if a non-spurious page fault occurs.
+  }
+  newflags:=newflags or TDP_NOFAULTING or TDP_RESETSPUR;
+ end;
+ save:=curthread_pflags_set(newflags);
+
+ while (n > 0) and (uio^.uio_resid > 0) do
+ begin
+  iov:=uio^.uio_iov;
+  cnt:=iov^.iov_len;
+  if (cnt=0) then
+  begin
+   Inc(uio^.uio_iov);
+   Dec(uio^.uio_iovcnt);
+   continue;
+  end;
+  if (cnt > n) then
+  begin
+   cnt:=n;
+  end;
+
+  case (uio^.uio_segflg) of
+   UIO_USERSPACE:
+    begin
+     maybe_yield();
+
+     if (uio^.uio_rw=UIO_READ) then
+      error:=fillout_zero(iov^.iov_base, cnt)
+     else
+      error:=0;
+
+     if (error<>0) then goto _out;
+    end;
+   UIO_SYSSPACE:
+    begin
+     if (uio^.uio_rw=UIO_READ) then
+      FillChar(iov^.iov_base^, cnt, 0);
+    end;
+   UIO_NOCOPY:;
+  end;
+
+  Inc(iov^.iov_base  ,cnt);
+  Dec(iov^.iov_len   ,cnt);
+  Dec(uio^.uio_resid ,cnt);
+  Inc(uio^.uio_offset,cnt);
+  Dec(n,cnt);
+ end;
+
+ _out:
  curthread_pflags_restore(save);
  Exit(error);
 end;
@@ -153,5 +231,32 @@ begin
  Exit(0);
 end;
 
+procedure uio_drain(uio:p_uio);
+var
+ iov:p_iovec;
+ cnt:QWORD;
+begin
+ while (uio^.uio_resid > 0) do
+ begin
+  iov:=uio^.uio_iov;
+  cnt:=iov^.iov_len;
+
+  if (cnt=0) then
+  begin
+   Inc(uio^.uio_iov);
+   Dec(uio^.uio_iovcnt);
+   continue;
+  end;
+
+  Inc(iov^.iov_base  ,cnt);
+  Dec(iov^.iov_len   ,cnt);
+  Dec(uio^.uio_resid ,cnt);
+  Inc(uio^.uio_offset,cnt);
+ end;
+end;
+
+
 end.
+
+
 

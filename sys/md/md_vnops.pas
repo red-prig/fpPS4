@@ -53,8 +53,8 @@ function md_rmdir(ap:p_vop_rmdir_args):Integer;
 function md_rename(ap:p_vop_rename_args):Integer;
 
 function md_create(ap:p_vop_create_args):Integer;
-function md_open(ap:p_vop_open_args):Integer;
-function md_close(ap:p_vop_close_args):Integer;
+function md_open_ap(ap:p_vop_open_args):Integer;
+function md_close_ap(ap:p_vop_close_args):Integer;
 function md_fsync(ap:p_vop_fsync_args):Integer;
 function md_setattr(ap:p_vop_setattr_args):Integer;
 
@@ -66,6 +66,8 @@ function md_write(ap:p_vop_write_args):Integer;
 function md_advlock(ap:p_vop_advlock_args):Integer;
 function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
 
+function md_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+
 const
  md_vnodeops_host:vop_vector=(
   vop_default       :@ufs_vnodeops_root;
@@ -76,8 +78,8 @@ const
   vop_create        :@md_create;
   vop_whiteout      :nil;
   vop_mknod         :nil;
-  vop_open          :@md_open;
-  vop_close         :@md_close;
+  vop_open          :@md_open_ap;
+  vop_close         :@md_close_ap;
   vop_access        :nil; //parent
   vop_accessx       :nil;
   vop_getattr       :@md_getattr;
@@ -119,6 +121,7 @@ const
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
+  vop_get_int_obj   :@md_get_int_obj;
  );
 
 implementation
@@ -131,7 +134,12 @@ uses
  vfs_subr,
  subr_uio,
  kern_thr,
- vnode_pager;
+ vnode_pager,
+ md_map,
+ md_file,
+ vm_internal_object;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 const
  UFS_SET_READONLY=(not &0222);
@@ -2540,7 +2548,7 @@ begin
  sx_xunlock(@dd^.ufs_md_lock);
 end;
 
-function md_open(ap:p_vop_open_args):Integer;
+function md_open_ap(ap:p_vop_open_args):Integer;
 var
  vp:p_vnode;
  mp:p_mount;
@@ -2652,7 +2660,7 @@ begin
 
 end;
 
-function md_close(ap:p_vop_close_args):Integer;
+function md_close_ap(ap:p_vop_close_args):Integer;
 var
  vp:p_vnode;
  FD:THandle;
@@ -3296,6 +3304,106 @@ function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
 begin
  //Locks are automatically released on NtClose
  Result:=0;
+end;
+
+function fit_to_vnode_size(de:p_ufs_dirent;offset,size:QWORD):QWORD; inline;
+begin
+ //max unaligned size
+ size:=size+offset;
+
+ size:=Min(size,de^.ufs_size);
+
+ //dec offset
+ if (size>offset) then
+ begin
+  size:=size-offset;
+ end else
+ begin
+  size:=0;
+ end;
+
+ Result:=size;
+end;
+
+procedure md_int_obj_free(obj:p_vm_int_obj);
+var
+ r:Integer;
+begin
+ if (obj^.hfile<>0) then
+ begin
+  r:=md_memfd_close(obj^.hfile);
+  if (r<>0) then
+  begin
+   LOG_CRITICAL(StdErr,'failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
+   Assert(false,'md_int_obj_free');
+  end;
+  obj^.hfile:=0;
+ end;
+end;
+
+const
+ md_int_obj_vtable:vm_int_obj_vtable=(
+  free:@md_int_obj_free;
+ );
+
+function md_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+ fd,md:THandle;
+ size:QWORD;
+ r:Integer;
+ maxp:Byte;
+begin
+ Result:=0;
+ vp:=ap^.a_vp;
+
+ if (vp=nil) then Exit(EINVAL);
+ if (vp^.v_type<>VREG) then Exit(EBADF);
+
+ VI_LOCK(vp);
+
+  de:=vp^.v_data;
+  fd:=THandle(vp^.v_un);
+  md:=0;
+  maxp:=vp^.v_prot;
+
+  if (fd=0) then
+  begin
+   Result:=EBADF;
+  end else
+  begin
+   size:=fit_to_vnode_size(de,ap^.a_offset,ap^.a_length);
+
+   if (maxp<>VM_RW) then
+   begin
+    //reopen file to RW
+    r:=md_openat(fd,'',O_RDWR,0,fd);
+
+    if (r=0) then
+    begin
+     maxp:=VM_RW;
+     r:=md_memfd_open(md,fd,maxp);
+     md_close(fd); //close dub
+    end;
+
+   end else
+   begin
+    r:=md_memfd_open(md,fd,maxp);
+   end;
+
+   if (r<>0) then
+   begin
+    Result:=ntf2px(R);
+   end else
+   begin
+    ap^.a_length:=size; //fixup
+    ap^.a_obj   :=vm_int_obj_allocate(@md_int_obj_vtable,md,maxp);
+   end;
+
+  end;
+
+ VI_UNLOCK(vp);
 end;
 
 

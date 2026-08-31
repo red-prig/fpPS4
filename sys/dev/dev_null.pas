@@ -11,12 +11,6 @@ uses
 const
  ZERO_REGION_SIZE=(2 * 1024 * 1024); // 2MB
 
-var
- zero_region:Pointer=nil;
-
-procedure init_zero_region;
-procedure free_zero_region;
-
 Function null_modevent(_mod,_type:Integer):Integer; //DEV_MODULE(nil, null_modevent, nil);
 
 implementation
@@ -24,7 +18,6 @@ implementation
 uses
  vm,
  vmparam,
- md_map,
  errno,
  vuio,
  vdisk,
@@ -125,40 +118,9 @@ begin
  Exit(error);
 end;
 
-procedure init_zero_region;
-var
- buf:Pointer;
- err:Integer;
-begin
- if (zero_region=nil) then
- begin
-  //create read-only zero pages
-  buf:=Pointer(KERNEL_LOWER);
-  err:=md_mmap(buf,ZERO_REGION_SIZE,VM_PROT_READ);
-  Assert(err=0,'init_zero_region');
-
-  //do not cache these pages
-  md_dontneed(buf,ZERO_REGION_SIZE);
-
-  if (System.InterlockedCompareExchange(zero_region,buf,nil)<>nil) then
-  begin
-   md_unmap(buf,ZERO_REGION_SIZE);
-  end;
- end;
-end;
-
-procedure free_zero_region;
-var
- buf:Pointer;
-begin
- buf:=System.InterlockedExchange(zero_region,nil);
- md_unmap(buf,ZERO_REGION_SIZE);
-end;
-
 { ARGSUSED }
 Function zero_read(dev:p_cdev;uio:p_uio;ioflag:Integer):Integer;
 var
- zbuf:Pointer;
  len:QWORD;
  error:Integer;
 begin
@@ -166,9 +128,6 @@ begin
 
  Assert(uio^.uio_rw=UIO_READ,'Cant be in %s for write');
 
- init_zero_region;
-
- zbuf:=zero_region;
  while (uio^.uio_resid > 0) and (error=0) do
  begin
   len:=uio^.uio_resid;
@@ -176,7 +135,7 @@ begin
   begin
    len:=ZERO_REGION_SIZE;
   end;
-  error:=uiomove(zbuf, len, uio);
+  error:=uiomove_zero(len, uio);
  end;
 
  Exit(error);
@@ -196,7 +155,6 @@ begin
    begin
     destroy_dev(null_dev);
     destroy_dev(zero_dev);
-    free_zero_region;
    end;
 
   MOD_SHUTDOWN:;

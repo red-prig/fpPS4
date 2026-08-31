@@ -147,6 +147,8 @@ const
   vop_unp_bind      :@vop_stdunp_bind      ;
   vop_unp_connect   :@vop_stdunp_connect   ;
   vop_unp_detach    :@vop_stdunp_detach    ;
+
+  vop_get_int_obj   :@VOP_EOPNOTSUPP       ;
 );
 
 implementation

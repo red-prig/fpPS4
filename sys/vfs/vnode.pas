@@ -6,7 +6,6 @@ unit vnode;
 interface
 
 uses
- mqueue,
  uma,
  kern_mtx,
  vselinfo,
@@ -221,6 +220,9 @@ type
   vop_unp_bind      :Pointer;
   vop_unp_connect   :Pointer;
   vop_unp_detach    :Pointer;
+
+  //emu ext
+  vop_get_int_obj   :Pointer;
  end;
 
  vtype=(VNON,VREG,VDIR,VBLK,VCHR,VLNK,VSOCK,VFIFO,VBAD,VMARKER);
@@ -328,6 +330,33 @@ function  vn_rangelock_rlock(vp:p_vnode;start,__end:Int64):Pointer;
 function  vn_rangelock_wlock(vp:p_vnode;start,__end:Int64):Pointer;
 
 function  vn_canvmio(vp:p_vnode):Boolean;
+
+//emu ext
+type
+ p_vop_get_int_obj_args=^vop_get_int_obj_args;
+ vop_get_int_obj_args=record
+  a_gen   :p_vnodeop_desc;
+  a_vp    :p_vnode;
+  a_offset:QWORD;   // in/out
+  a_length:QWORD;   // in/out
+  a_obj   :Pointer; // out p_vm_int_obj
+ end;
+ vop_get_int_obj_t=function(ap:p_vop_get_int_obj_args):Integer;
+
+const
+ vop_get_int_obj_vp_offsets:array[0..1] of Byte=(Byte(ptrint(@p_vop_get_int_obj_args(nil)^.a_vp)),Byte(-1));
+
+ vop_get_int_obj_desc:t_vnodeop_desc=(
+  vdesc_name                :'vop_get_int_obj';
+  vdesc_call                :@p_vop_vector(nil)^.vop_get_int_obj;
+  vdesc_vp_offsets          :@vop_get_int_obj_vp_offsets;
+  vdesc_flags               :0;
+  vdesc_vpp_offset          :-1;
+ );
+
+function VOP_GET_INT_OBJ(vp:p_vnode;var offset,length:QWORD;var obj:Pointer):Integer;
+
+//emu ext
 
 var
  rootvnode:p_vnode=nil;
@@ -494,6 +523,31 @@ begin
   end;
  end;
  Result:=False;
+end;
+
+//emu ext
+function VOP_GET_INT_OBJ(vp:p_vnode;var offset,length:QWORD;var obj:Pointer):Integer;
+var
+ c:Pointer;
+ a:vop_get_int_obj_args;
+ s:Boolean;
+begin
+ c:=get_vp_cb(vp,vop_get_int_obj_desc.vdesc_call);
+ Assert(c<>nil,'VOP_GET_INT_OBJ');
+ //
+ a.a_gen   :=@vop_get_int_obj_desc;
+ a.a_vp    :=vp;
+ a.a_offset:=offset;
+ a.a_length:=length;
+ a.a_obj   :=nil;
+ //
+ s:=VFS_PROLOGUE(vp^.v_mount);
+ Result:=vop_get_int_obj_t(c)(@a);
+ VFS_EPILOGUE(s);
+ //
+ offset:=a.a_offset;
+ length:=a.a_length;
+ obj   :=a.a_obj   ;
 end;
 
 

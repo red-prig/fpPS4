@@ -78,18 +78,6 @@ const
   vop_getwritemount :nil;
   vop_print         :nil;
   vop_pathconf      :@vop_stdpathconf;
-  vop_advlock       :nil;
-  vop_advlockasync  :nil;
-  vop_advlockpurge  :nil;
-  vop_reallocblks   :nil;
-  vop_getpages      :nil;
-  vop_putpages      :nil;
-  vop_vptofh        :nil;
-  vop_vptocnp       :nil;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
 implementation

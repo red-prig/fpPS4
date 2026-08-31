@@ -118,10 +118,6 @@ const
   vop_putpages      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
  devfs_specops:vop_vector=(
@@ -172,10 +168,6 @@ const
   vop_putpages      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
  devfs_ops_f:fileops=(

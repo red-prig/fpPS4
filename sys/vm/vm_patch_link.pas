@@ -244,7 +244,8 @@ begin
  p_inc_ref(stub);
 
  VM_OBJECT_LOCK(obj);
- TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
+ Assert(False);
+ //TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
  VM_OBJECT_UNLOCK(obj);
 
  hamt_insert_link(node);
@@ -255,7 +256,8 @@ var
  obj:vm_object_t;
 begin
  obj:=_obj;
- TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
+ Assert(False);
+ //TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
 
  hamt_remove_link(node);
 
@@ -270,6 +272,7 @@ var
 begin
  obj:=_obj;
 
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -287,6 +290,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 function vm_get_patch_link(_obj,vaddr:Pointer):p_stub_chunk;
@@ -297,6 +301,8 @@ begin
  Result:=nil;
  obj:=_obj;
 
+ Assert(False);
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -317,6 +323,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 procedure vm_rem_patch_link(_obj,vaddr:Pointer);
@@ -326,6 +333,7 @@ var
 begin
  obj:=_obj;
 
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -342,6 +350,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 end.
