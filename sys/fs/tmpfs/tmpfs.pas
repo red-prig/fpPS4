@@ -12,12 +12,12 @@ uses
  vnamei,
  kern_mtx,
  time,
- vm_object,
  vuio,
  vfile,
  vfs_subr,
  vnode_if,
  uma,
+ vm_internal_object,
  vmparam,
  subr_unit;
 
@@ -76,7 +76,7 @@ type
        end);
     2:(tn_link:PChar);
     3:(tn_reg:record
-        tn_aobj:vm_object_t;
+        tn_map:Pointer;
        end);
     4:(tn_fifo:record
         tn_fo_read :fo_rdwr_t;
@@ -89,7 +89,7 @@ type
   property tn_readdir_lastn:QWORD          read tn_spec.tn_dir.tn_readdir_lastn write tn_spec.tn_dir.tn_readdir_lastn;
   property tn_readdir_lastp:p_tmpfs_dirent read tn_spec.tn_dir.tn_readdir_lastp write tn_spec.tn_dir.tn_readdir_lastp;
   property tn_link         :PChar          read tn_spec.tn_link                 write tn_spec.tn_link;
-  property tn_aobj         :vm_object_t    read tn_spec.tn_reg.tn_aobj          write tn_spec.tn_reg.tn_aobj;
+  property tn_map          :Pointer        read tn_spec.tn_reg.tn_map           write tn_spec.tn_reg.tn_map;
   //property tn_fifo: tn_spec.tn_fifo
  end;
 
@@ -177,6 +177,7 @@ const
 
 function tmpfs_mem_avail():QWORD; external;
 function tmpfs_pages_used(tmp:p_tmpfs_mount):QWORD; external;
+function tmpfs_pages_check_avail(tmp:p_tmpfs_mount;req_pages:QWORD):Integer; external;
 
 function VFS_TO_TMPFS    (mp:p_mount):p_tmpfs_mount; inline;
 function VP_TO_TMPFS_NODE(vp:p_vnode):p_tmpfs_node; inline;

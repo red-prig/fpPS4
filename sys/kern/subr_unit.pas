@@ -1,4 +1,4 @@
-﻿unit subr_unit;
+unit subr_unit;
 
 {$mode ObjFPC}{$H+}
 {$CALLING SysV_ABI_CDecl}
@@ -285,8 +285,7 @@ begin
 
  if (ba<3) then
  begin
-  Result:=0;
-  Exit;
+  Exit(0);
  end;
 
  if (not is_bitmap(uh,us)) then
@@ -355,14 +354,12 @@ begin
   uf:=TAILQ_NEXT(us,@us^.list);
   if (uf=nil) then
   begin
-   Result:=1;
-   Exit;
+   Exit(1);
   end;
 
   if (uf^.len+us^.len>DWORD(NBITS)) then
   begin
-   Result:=1;
-   Exit;
+   Exit(1);
   end;
 
   if (uf^.ptr=nil) then

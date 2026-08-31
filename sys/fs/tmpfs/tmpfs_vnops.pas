@@ -29,7 +29,9 @@ uses
  subr_unit,
  vm,
  vm_object,
+ vm_internal_object,
  kern_mtx,
+ md_map,
  tmpfs;
 
 function tmpfs_access (v:p_vop_access_args):Integer;
@@ -38,6 +40,9 @@ function tmpfs_setattr(v:p_vop_setattr_args):Integer;
 function tmpfs_reclaim(v:p_vop_reclaim_args):Integer;
 
 implementation
+
+uses
+ tmpfs_seg;
 
 var
  tmpfs_rename_restarts:Integer=0;
@@ -428,145 +433,43 @@ begin
  Result:=error;
 end;
 
-{
-function tmpfs_nocacheread(vm_object_t tobj, vm_pindex_t idx,vm_offset_t offset, size_t tlen, struct uio *uio):Integer;
+function tmpfs_mappedread(node:p_tmpfs_node;len:QWORD;uio:p_uio):Integer;
+var
+ seg:p_tmpfs_seg;
+ local,chunk:QWORD;
 begin
- vm_page_t m;
- int  error, rv;
+ Result:=0;
 
- VM_OBJECT_LOCK(tobj);
- m:=vm_page_grab(tobj, idx, VM_ALLOC_WIRED or
-     VM_ALLOC_NORMAL or VM_ALLOC_RETRY);
- if (m^.valid<>VM_PAGE_BITS_ALL) begin
-  if (vm_pager_has_page(tobj, idx, nil, nil)) begin
-   rv:=vm_pager_get_pages(tobj, @m, 1, 0);
-   if (rv<>VM_PAGER_OK) begin
-    vm_page_lock(m);
-    vm_page_free(m);
-    vm_page_unlock(m);
-    VM_OBJECT_UNLOCK(tobj);
-    Exit(EIO);
-   end
+ seg  :=nil;
+ local:=0;
+
+ TMPFS_NODE_LOCK(node);
+
+ while (len>0) and (uio^.uio_resid>0) do
+ begin
+
+  if tmpfs_seg_lookup(node^.tn_map, uio^.uio_offset, @seg) then
+  begin
+   local:=uio^.uio_offset - seg^.start;
+   chunk:=seg^.__end - uio^.uio_offset;
+   if (chunk>len) then chunk:=len;
+
+   Result:=uiomove(seg^.buf+local, chunk, uio);
   end else
-   vm_page_zero_invalid(m, TRUE);
- end
- VM_OBJECT_UNLOCK(tobj);
- error:=uiomove_fromphys(@m, offset, tlen, uio);
- VM_OBJECT_LOCK(tobj);
- vm_page_lock(m);
- vm_page_unwire(m, TRUE);
- vm_page_unlock(m);
- vm_page_wakeup(m);
- VM_OBJECT_UNLOCK(tobj);
+  begin
+   chunk:=tmpfs_seg_get_next_space(node^.tn_map, seg, uio^.uio_offset);
+   if (chunk>len) then chunk:=len;
 
- Exit(error);
+   Result:=uiomove_zero(chunk, uio);
+  end;
+
+  if (Result<>0) then Break;
+
+  len:=len-chunk;
+ end;
+
+ TMPFS_NODE_UNLOCK(node);
 end;
-}
-
-{
-static __inline int
-tmpfs_nocacheread_buf(vm_object_t tobj, vm_pindex_t idx, vm_offset_t offset, size_t tlen, void *buf)
-begin
- struct uio uio;
- struct iovec iov;
-
- uio.uio_iovcnt:=1;
- uio.uio_iov:=@iov;
- iov.iov_base:=buf;
- iov.iov_len:=tlen;
-
- uio.uio_offset:=0;
- uio.uio_resid:=tlen;
- uio.uio_rw:=UIO_READ;
- uio.uio_segflg:=UIO_SYSSPACE;
- uio.uio_td:=curthread;
-
- Exit(tmpfs_nocacheread(tobj, idx, offset, tlen, @uio));
-end;
-}
-
-{
-static int
-tmpfs_mappedread(vm_object_t vobj, vm_object_t tobj, size_t len, struct uio *uio)
-begin
- struct sf_buf *sf;
- vm_pindex_t idx;
- vm_page_t m;
- vm_offset_t offset;
- off_t  addr;
- size_t  tlen;
- char  *ma;
- int  error;
-
- addr:=uio^.uio_offset;
- idx:=OFF_TO_IDX(addr);
- offset:=addr and PAGE_MASK;
- tlen:=MIN(PAGE_SIZE - offset, len);
-
- if ((vobj=nil) OR
-     (vobj^.resident_page_count=0 AND vobj^.cache=nil))
-  goto nocache;
-
- VM_OBJECT_LOCK(vobj);
-lookupvpg:
- if (((m:=vm_page_lookup(vobj, idx))<>nil) AND
-     vm_page_is_valid(m, offset, tlen)) begin
-  if ((m^.oflags and VPO_BUSY)<>0) begin
-   {
-    * Reference the page before unlocking and sleeping so
-    * that the page daemon is less likely to reclaim it.
-    }
-   vm_page_reference(m);
-   vm_page_sleep(m, 'tmfsmr');
-   goto lookupvpg;
-  end
-  vm_page_busy(m);
-  VM_OBJECT_UNLOCK(vobj);
-  error:=uiomove_fromphys(@m, offset, tlen, uio);
-  VM_OBJECT_LOCK(vobj);
-  vm_page_wakeup(m);
-  VM_OBJECT_UNLOCK(vobj);
-  Exit(error);
- end else if (m<>nil AND uio^.uio_segflg=UIO_NOCOPY) begin
-  Assert(offset=0,
-      ('unexpected offset in tmpfs_mappedread for sendfile'));
-  if ((m^.oflags and VPO_BUSY)<>0) begin
-   {
-    * Reference the page before unlocking and sleeping so
-    * that the page daemon is less likely to reclaim it.
-    }
-   vm_page_reference(m);
-   vm_page_sleep(m, 'tmfsmr');
-   goto lookupvpg;
-  end
-  vm_page_busy(m);
-  VM_OBJECT_UNLOCK(vobj);
-  sched_pin();
-  sf:=sf_buf_alloc(m, SFB_CPUPRIVATE);
-  ma:=(char *)sf_buf_kva(sf);
-  error:=tmpfs_nocacheread_buf(tobj, idx, 0, tlen, ma);
-  if (error=0) begin
-   if (tlen<>PAGE_SIZE)
-    bzero(ma + tlen, PAGE_SIZE - tlen);
-   uio^.uio_offset += tlen;
-   uio^.uio_resid -= tlen;
-  end
-  sf_buf_free(sf);
-  sched_unpin();
-  VM_OBJECT_LOCK(vobj);
-  if (error=0)
-   m^.valid:=VM_PAGE_BITS_ALL;
-  vm_page_wakeup(m);
-  VM_OBJECT_UNLOCK(vobj);
-  Exit(error);
- end
- VM_OBJECT_UNLOCK(vobj);
-nocache:
- error:=tmpfs_nocacheread(tobj, idx, offset, tlen, uio);
-
- Exit(error);
-end;
-}
 
 function Min(a,b:QWORD):QWORD; inline;
 begin
@@ -580,9 +483,7 @@ var
  vp:p_vnode;
  uio:p_uio;
  node:p_tmpfs_node;
- uobj:vm_object_t;
  len:QWORD;
- resid:Integer;
  error:Integer;
 begin
  vp:=v^.a_vp;
@@ -606,124 +507,50 @@ begin
 
  node^.tn_status:=node^.tn_status or TMPFS_NODE_ACCESSED;
 
- uobj:=node^.tn_aobj;
- resid:=uio^.uio_resid;
- while (resid > 0) do
+ if (node^.tn_size <= uio^.uio_offset) then
  begin
   error:=0;
-  if (node^.tn_size <= uio^.uio_offset) then
-   break;
-
-  len:=MIN(node^.tn_size - uio^.uio_offset, resid);
-  if (len=0) then
-   break;
-
-  //error:=tmpfs_mappedread(vp^.v_object, uobj, len, uio);
-
-  if (error<>0) OR (resid=uio^.uio_resid) then
-   break;
-
-  //
-  resid:=uio^.uio_resid;
+  TMPFS_NODE_UNLOCK(node);
+  goto _out;
  end;
+
+ len:=Min(node^.tn_size - uio^.uio_offset, uio^.uio_resid);
+
+ error:=tmpfs_mappedread(node, len, uio);
 
 _out:
 
  Result:=error;
 end;
 
-{
-static int
-tmpfs_mappedwrite(vm_object_t vobj, vm_object_t tobj, size_t len, struct uio *uio)
+function tmpfs_mappedwrite(tmp:p_tmpfs_mount;node:p_tmpfs_node;len:QWORD;uio:p_uio):Integer;
+var
+ seg:p_tmpfs_seg;
+ local,chunk:QWORD;
 begin
- vm_pindex_t idx;
- vm_page_t vpg, tpg;
- vm_offset_t offset;
- off_t  addr;
- size_t  tlen;
- int  error, rv;
+ Result:=0;
 
- error:=0;
+ seg  :=nil;
+ local:=0;
 
- addr:=uio^.uio_offset;
- idx:=OFF_TO_IDX(addr);
- offset:=addr and PAGE_MASK;
- tlen:=MIN(PAGE_SIZE - offset, len);
+ TMPFS_NODE_LOCK(node);
 
- if ((vobj=nil) OR
-     (vobj^.resident_page_count=0 AND vobj^.cache=nil)) begin
-  vpg:=nil;
-  goto nocache;
- end
+ while (len>0) and (uio^.uio_resid>0) do
+ begin
+  Result:=tmpfs_seg_map_fetch(tmp, node^.tn_map, uio^.uio_offset, uio^.uio_offset + len, @seg);
+  if (Result<>0) then Break;
 
- VM_OBJECT_LOCK(vobj);
-lookupvpg:
- if (((vpg:=vm_page_lookup(vobj, idx))<>nil) AND
-     vm_page_is_valid(vpg, offset, tlen)) begin
-  if ((vpg^.oflags and VPO_BUSY)<>0) begin
-   {
-    * Reference the page before unlocking and sleeping so
-    * that the page daemon is less likely to reclaim it.
-    }
-   vm_page_reference(vpg);
-   vm_page_sleep(vpg, 'tmfsmw');
-   goto lookupvpg;
-  end
-  vm_page_busy(vpg);
-  vm_page_undirty(vpg);
-  VM_OBJECT_UNLOCK(vobj);
-  error:=uiomove_fromphys(@vpg, offset, tlen, uio);
- end else begin
-  if (__predict_false(vobj^.cache<>nil))
-   vm_page_cache_free(vobj, idx, idx + 1);
-  VM_OBJECT_UNLOCK(vobj);
-  vpg:=nil;
- end
-nocache:
- VM_OBJECT_LOCK(tobj);
- tpg:=vm_page_grab(tobj, idx, VM_ALLOC_WIRED or
-     VM_ALLOC_NORMAL or VM_ALLOC_RETRY);
- if (tpg^.valid<>VM_PAGE_BITS_ALL) begin
-  if (vm_pager_has_page(tobj, idx, nil, nil)) begin
-   rv:=vm_pager_get_pages(tobj, @tpg, 1, 0);
-   if (rv<>VM_PAGER_OK) begin
-    vm_page_lock(tpg);
-    vm_page_free(tpg);
-    vm_page_unlock(tpg);
-    error:=EIO;
-    goto out;
-   end
-  end else
-   vm_page_zero_invalid(tpg, TRUE);
- end
- VM_OBJECT_UNLOCK(tobj);
- if (vpg=nil)
-  error:=uiomove_fromphys(@tpg, offset, tlen, uio);
- else begin
-  Assert(vpg^.valid=VM_PAGE_BITS_ALL, ('parts of vpg invalid'));
-  pmap_copy_page(vpg, tpg);
- end
- VM_OBJECT_LOCK(tobj);
- if (error=0) begin
-  Assert(tpg^.valid=VM_PAGE_BITS_ALL,
-      ('parts of tpg invalid'));
-  vm_page_dirty(tpg);
- end
- vm_page_lock(tpg);
- vm_page_unwire(tpg, TRUE);
- vm_page_unlock(tpg);
- vm_page_wakeup(tpg);
-out:
- VM_OBJECT_UNLOCK(tobj);
- if (vpg<>nil) begin
-  VM_OBJECT_LOCK(vobj);
-  vm_page_wakeup(vpg);
-  VM_OBJECT_UNLOCK(vobj);
- end
+  local:=uio^.uio_offset - seg^.start;
+  chunk:=seg^.__end - uio^.uio_offset;
+  if (chunk>len) then chunk:=len;
 
- Exit(error);
+  Result:=uiomove(seg^.buf+local, chunk, uio);
+
+  len:=len-chunk;
+ end;
+
+ TMPFS_NODE_UNLOCK(node);
 end;
-}
 
 function vn_rlimit_fsize(vp:p_vnode;uio:p_uio):Integer;
 begin
@@ -749,7 +576,7 @@ var
  resid:Integer;
  oldsize:Int64;
  node:p_tmpfs_node;
- uobj:vm_object_t;
+ tmp:p_tmpfs_mount;
  len:QWORD;
 begin
  vp:=v^.a_vp;
@@ -759,6 +586,7 @@ begin
  error:=0;
 
  node:=VP_TO_TMPFS_NODE(vp);
+ tmp :=VFS_TO_TMPFS(vp^.v_mount);
  oldsize:=node^.tn_size;
 
  if (uio^.uio_offset < 0) OR (vp^.v_type<>VREG) then
@@ -790,7 +618,6 @@ begin
    goto _out;
  end;
 
- uobj:=node^.tn_aobj;
  resid:=uio^.uio_resid;
  while (resid > 0) do
  begin
@@ -801,7 +628,8 @@ begin
   if (len=0) then
    break;
 
-  //error:=tmpfs_mappedwrite(vp^.v_object, uobj, len, uio);
+  error:=tmpfs_mappedwrite(tmp, node, len, uio);
+
   if (error<>0) OR (resid=uio^.uio_resid) then
    break;
 
@@ -1766,13 +1594,13 @@ begin
 end;
 
 function tmpfs_print(v:p_vop_print_args):Integer;
-var
- vp:p_vnode;
- node:p_tmpfs_node;
+//var
+ //vp:p_vnode;
+ //node:p_tmpfs_node;
 begin
- vp:=v^.a_vp;
+ //vp:=v^.a_vp;
 
- node:=VP_TO_TMPFS_NODE(vp);
+ //node:=VP_TO_TMPFS_NODE(vp);
 
  //printf('tag VT_TMPFS, tmpfs_node %p, flags 0x%x, links %d\n', node, node^.tn_flags, node^.tn_links);
  //printf('\tmode 0%o, owner %d, group %d, size %' PRIdMAX
@@ -1882,6 +1710,79 @@ begin
  end;
 end;
 
+function fit_to_vnode_size(node:p_tmpfs_node;offset,size:QWORD):QWORD; inline;
+begin
+ //max unaligned size
+ size:=size+offset;
+
+ size:=Min(size,node^.tn_size);
+
+ //dec offset
+ if (size>offset) then
+ begin
+  size:=size-offset;
+ end else
+ begin
+  size:=0;
+ end;
+
+ Result:=size;
+end;
+
+function tmpfs_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+var
+ vp:p_vnode;
+ node:p_tmpfs_node;
+ tmp:p_tmpfs_mount;
+ seg:p_tmpfs_seg;
+ size,local,chunk:QWORD;
+begin
+ Result:=0;
+ vp:=ap^.a_vp;
+
+ if (vp=nil) then Exit(EINVAL);
+ if (vp^.v_type<>VREG) then Exit(EBADF);
+
+ node:=VP_TO_TMPFS_NODE(vp);
+ tmp :=VFS_TO_TMPFS(vp^.v_mount);
+
+ seg  :=nil;
+ local:=0;
+
+ if (ap^.a_length=0) then Exit(0);
+
+ TMPFS_NODE_LOCK(node);
+
+ size:=fit_to_vnode_size(node,ap^.a_offset,ap^.a_length);
+
+ Result:=tmpfs_seg_map_fetch(tmp, node^.tn_map, ap^.a_offset, ap^.a_offset + size, @seg);
+ if (Result<>0) then
+ begin
+  TMPFS_NODE_UNLOCK(node);
+  Exit(EIO);
+ end;
+
+ if (seg^.obj=nil) then
+ begin
+  TMPFS_NODE_UNLOCK(node);
+  Exit(EIO);
+ end;
+
+ local:=ap^.a_offset - seg^.start;
+ chunk:=seg^.__end - ap^.a_offset;
+ if (chunk>size) then chunk:=size;
+
+ vm_int_obj_reference(seg^.obj);
+
+ TMPFS_NODE_UNLOCK(node);
+
+ ap^.a_offset:=local;
+ ap^.a_length:=chunk;
+ ap^.a_obj   :=seg^.obj;
+
+ Result:=0;
+end;
+
 var
  tmpfs_vnodeop_entries:vop_vector=(
   vop_default       :@default_vnodeops;
@@ -1934,6 +1835,7 @@ var
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
+  vop_get_int_obj   :@tmpfs_get_int_obj;
  ); public;
 
 

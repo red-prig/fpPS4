@@ -1879,6 +1879,10 @@
         <Filename Value="sys\vm\vm_internal_object.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\fs\tmpfs\tmpfs_seg.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

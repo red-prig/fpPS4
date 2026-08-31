@@ -26,14 +26,14 @@ uses
  vnode_if,
  subr_unit,
  vm,
- vm_pager,
- vm_object,
  kern_mtx,
  tmpfs;
 
 implementation
 
 uses
+ vm_internal_object,
+ tmpfs_seg,
  tmpfs_fifoops,
  tmpfs_vnops;
 
@@ -66,7 +66,7 @@ begin
  Exit(meta_pages + tmp^.tm_pages_used);
 end;
 
-function tmpfs_pages_check_avail(tmp:p_tmpfs_mount;req_pages:QWORD):Integer;
+function tmpfs_pages_check_avail(tmp:p_tmpfs_mount;req_pages:QWORD):Integer; public;
 begin
  if (tmpfs_mem_avail() < req_pages) then
   Exit(0);
@@ -147,7 +147,9 @@ begin
    end;
 
   VREG:
-   nnode^.tn_aobj:=vm_pager_allocate(OBJT_SWAP, nil, 0, VM_PROT_DEFAULT, 0);
+   begin
+    nnode^.tn_map:=tmpfs_seg_map_create(0, High(Int64));
+   end;
 
   else
    Assert(false,'tmpfs_alloc_node: type %p %d');
@@ -163,8 +165,6 @@ begin
 end;
 
 procedure tmpfs_free_node(tmp:p_tmpfs_mount;node:p_tmpfs_node); public;
-var
- uobj:vm_object_t;
 begin
 
  TMPFS_NODE_LOCK(node);
@@ -190,13 +190,12 @@ begin
 
   VREG:
    begin
-    uobj:=node^.tn_aobj;
-    if (uobj<>nil) then
+    if (node^.tn_map<>nil) then
     begin
-     TMPFS_LOCK(tmp);
-     tmp^.tm_pages_used:=tmp^.tm_pages_used - uobj^.size;
-     TMPFS_UNLOCK(tmp);
-     vm_object_deallocate(uobj);
+     tmpfs_seg_map_shrink(tmp, node^.tn_map,0);
+
+     tmpfs_seg_map_destroy(node^.tn_map);
+     node^.tn_map:=nil;
     end
    end;
 
@@ -788,123 +787,23 @@ begin
 end;
 
 function tmpfs_reg_resize(vp:p_vnode;newsize:QWORD;ignerr:Boolean):Integer; public;
-label
- _retry;
 var
- tmp:p_tmpfs_mount;
- node:p_tmpfs_node;
- uobj:vm_object_t;
- //vm_page_t m, ma[1];
- idx,newpages,oldpages:vm_pindex_t;
+ tmp    :p_tmpfs_mount;
+ node   :p_tmpfs_node;
  oldsize:QWORD;
- base,rv:Integer;
 begin
  Assert(vp^.v_type=VREG);
 
  node:=VP_TO_TMPFS_NODE(vp);
- uobj:=node^.tn_aobj;
- tmp:=VFS_TO_TMPFS(vp^.v_mount);
+ tmp :=VFS_TO_TMPFS(vp^.v_mount);
 
- {
-  * Convert the old and new sizes to the number of pages needed to
-  * store them.  It may happen that we do not need to do anything
-  * because the last allocated page can accommodate the change on
-  * its own.
-  }
  oldsize:=node^.tn_size;
- oldpages:=OFF_TO_IDX(oldsize + PAGE_MASK);
- Assert(oldpages=uobj^.size);
- newpages:=OFF_TO_IDX(newsize + PAGE_MASK);
+ if (newsize=oldsize) then Exit(0);
 
- if (newpages > oldpages) AND
-    (tmpfs_pages_check_avail(tmp, newpages - oldpages)=0) then
-  Exit(ENOSPC);
-
- VM_OBJECT_LOCK(uobj);
- if (newsize < oldsize) then
+ if (newsize<oldsize) then
  begin
-  {
-   * Zero the truncated part of the last page.
-   }
-  base:=newsize and PAGE_MASK;
-  if (base<>0) then
-  begin
-   idx:=OFF_TO_IDX(newsize);
-_retry:
-   {
-   m:=vm_page_lookup(uobj, idx);
-   if (m<>nil) then
-   begin
-    if ((m^.oflags and VPO_BUSY)<>0) OR (m^.busy<>0) then
-    begin
-     vm_page_sleep(m, "tmfssz");
-     goto _retry;
-    end;
-    Assert(m^.valid=VM_PAGE_BITS_ALL);
-   end else
-   if (vm_pager_has_page(uobj, idx, nil, nil)) then
-   begin
-    m:=vm_page_alloc(uobj, idx, VM_ALLOC_NORMAL);
-    if (m=nil) then
-    begin
-     VM_OBJECT_UNLOCK(uobj);
-     VM_WAIT;
-     VM_OBJECT_LOCK(uobj);
-     goto retry;
-    end else
-    if (m^.valid<>VM_PAGE_BITS_ALL) then
-    begin
-     ma[0]:=m;
-     rv:=vm_pager_get_pages(uobj, ma, 1, 0);
-     m:=vm_page_lookup(uobj, idx);
-    end else
-     { A cached page was reactivated. }
-     rv:=VM_PAGER_OK;
-
-    vm_page_lock(m);
-    if (rv=VM_PAGER_OK) then
-    begin
-     vm_page_deactivate(m);
-     vm_page_unlock(m);
-     vm_page_wakeup(m);
-    end else
-    begin
-     vm_page_free(m);
-     vm_page_unlock(m);
-     if (ignerr) then
-      m:=nil
-     else
-     begin
-      VM_OBJECT_UNLOCK(uobj);
-      Exit(EIO);
-     end;
-    end;
-   end;
-   if (m<>nil) then
-   begin
-    pmap_zero_page_area(m, base, PAGE_SIZE - base);
-    vm_page_dirty(m);
-    vm_pager_page_unswapped(m);
-   end;
-   }
-  end;
-
-  {
-   * Release any swap space and free any whole pages.
-   }
-  if (newpages < oldpages) then
-  begin
-   //swap_pager_freespace(uobj, newpages, oldpages - newpages);
-   vm_object_page_remove(uobj, newpages, 0, 0);
-  end;
+  tmpfs_seg_map_shrink(tmp, node^.tn_map, newsize);
  end;
-
- uobj^.size:=newpages;
- VM_OBJECT_UNLOCK(uobj);
-
- TMPFS_LOCK(tmp);
- tmp^.tm_pages_used:=tmp^.tm_pages_used + (newpages - oldpages);
- TMPFS_UNLOCK(tmp);
 
  node^.tn_size:=newsize;
  vnode_pager_setsize(vp, newsize);
