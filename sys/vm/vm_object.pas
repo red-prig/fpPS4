@@ -40,7 +40,7 @@ type
   pg_color      :Word;
   flags         :Word;        // see below
   pip           :Word;
-  budget_id     :shortint;
+  budget_id     :smallint;
   handle        :Pointer;     // p_vnode
   backing_object:vm_object_t;
   un_pager      :record

@@ -787,7 +787,6 @@ procedure pmap_enter_object(pmap  :pmap_t;
 var
  usize:QWORD;
  asize:QWORD;
- delta:QWORD;
 
  info:t_fd_info;
 
@@ -876,21 +875,17 @@ begin
    end;
   end;
 
-  if (asize<>usize) then
+  if (asize<>usize) and ((asize and PAGE_MASK)<>0) then
   begin
-   delta:=(asize and PAGE_MASK);
-   if (delta<>0) then
-   begin
-    //in the case of files, need to fill the top pages with private map
-    pages_cb:=@get_priv_fd;
+   //in the case of files, need to fill the top pages with private map
+   pages_cb:=@get_priv_fd;
 
-    info.start :=info.start+delta;
-    info.__end :=__end;
-    info.offset:=0;
-    info.olocal:=0;
+   info.start :=info.start+asize;
+   info.__end :=__end;
+   info.offset:=0;
+   info.olocal:=0;
 
-    Continue;
-   end;
+   Continue;
   end;
 
   info.start :=info.start +asize;
