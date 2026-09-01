@@ -52,7 +52,6 @@ procedure lazy_init;
 var
  new,old:uma_zone_t;
 begin
-
  if (vm_nt_obj_zone=nil) then
  begin
   new:=uma_zcreate('vm_int_obj',sizeof(vm_int_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
@@ -62,8 +61,6 @@ begin
    uma_zdestroy(new);
   end;
  end;
-
- vm_nt_obj_zone:=uma_zcreate('vm_int_obj',sizeof(vm_int_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
 end;
 
 function vm_int_obj_allocate(vtable:p_vm_int_obj_vtable;hfile:THandle;maxp:Byte):p_vm_int_obj;
