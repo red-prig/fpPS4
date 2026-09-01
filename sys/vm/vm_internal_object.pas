@@ -45,31 +45,14 @@ procedure vm_int_obj_deallocate(obj:p_vm_int_obj);
 
 implementation
 
-var
- vm_nt_obj_zone:uma_zone_t=nil;
-
-procedure lazy_init;
-var
- new,old:uma_zone_t;
-begin
- if (vm_nt_obj_zone=nil) then
- begin
-  new:=uma_zcreate('vm_int_obj',sizeof(vm_int_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
-  old:=System.InterlockedCompareExchange(Pointer(vm_nt_obj_zone),Pointer(new),nil);
-  if (old<>nil) then
-  begin
-   uma_zdestroy(new);
-  end;
- end;
-end;
+uses
+ kern_malloc;
 
 function vm_int_obj_allocate(vtable:p_vm_int_obj_vtable;hfile:THandle;maxp:Byte):p_vm_int_obj;
 begin
  Assert(maxp<>0);
 
- lazy_init;
-
- Result:=uma_zalloc(vm_nt_obj_zone, M_WAITOK or M_ZERO);
+ Result:=calloc(sizeof(vm_int_obj));
 
  if (vtable=nil) then
  begin
@@ -112,7 +95,7 @@ begin
 
  if ((obj^.flags and INT_MOBJ_FREE)<>0) then
  begin
-  uma_zfree(vm_nt_obj_zone, obj);
+  free(obj);
  end;
 end;
 

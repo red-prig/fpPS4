@@ -198,7 +198,8 @@ uses
  kern_descrip,
  kern_mtxpool,
  subr_uio,
- vnode_pager;
+ vnode_pager,
+ kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -263,7 +264,7 @@ begin
  if (fp=nil) then Exit(ENOENT);
 
  cdp:=cdev2priv(fp^.f_data);
- p:=AllocMem(sizeof(t_cdev_privdata));
+ p:=calloc(sizeof(t_cdev_privdata));
  p^.cdpd_data:=priv;
  p^.cdpd_dtr :=priv_dtr;
  p^.cdpd_fp  :=fp;
@@ -277,7 +278,7 @@ begin
  end else
  begin
   mtx_unlock(cdevpriv_mtx);
-  FreeMem(p);
+  free(p);
   error:=EBUSY;
  end;
  Exit(error);
@@ -290,7 +291,7 @@ begin
  LIST_REMOVE(p,@p^.cdpd_list);
  mtx_unlock(cdevpriv_mtx);
  p^.cdpd_dtr(p^.cdpd_data);
- FreeMem(p);
+ free(p);
 end;
 
 procedure devfs_fpdrop(fp:p_file); public;
@@ -1994,7 +1995,7 @@ begin
  de^.de_dirent^.d_type:=DT_LNK;
 
  i:=strlen(ap^.a_target) + 1;
- de^.de_symlink:=AllocMem(i);
+ de^.de_symlink:=calloc(i);
  Move(ap^.a_target^, de^.de_symlink^, i);
 
  //mac_devfs_create_symlink(ap^.a_cnp^.cn_cred, dmp^.dm_mount, dd, de);

@@ -28,10 +28,9 @@ uses
  vnode_if,
  subr_unit,
  vm,
- vm_object,
  vm_internal_object,
  kern_mtx,
- md_map,
+ kern_malloc,
  tmpfs;
 
 function tmpfs_access (v:p_vop_access_args):Integer;
@@ -1117,7 +1116,7 @@ begin
  if (fcnp^.cn_namelen<>tcnp^.cn_namelen) OR
     (CompareByte(fcnp^.cn_nameptr^, tcnp^.cn_nameptr^, fcnp^.cn_namelen)<>0) then
  begin
-  newname:=AllocMem(tcnp^.cn_namelen)
+  newname:=calloc(tcnp^.cn_namelen)
  end else
   newname:=nil;
 
@@ -1147,7 +1146,7 @@ begin
      TMPFS_NODE_UNLOCK(n);
      TMPFS_UNLOCK(tmp);
      error:=EINVAL;
-     if (newname<>nil) then  FreeMem(newname);
+     if (newname<>nil) then free(newname);
      goto _out_locked;
     end;
 
@@ -1173,7 +1172,7 @@ begin
    if (n=nil) then
    begin
     error:=EINVAL;
-    if (newname<>nil) then FreeMem(newname);
+    if (newname<>nil) then free(newname);
     goto _out_locked;
    end;
 
@@ -1218,7 +1217,7 @@ begin
  begin
   Assert(tcnp^.cn_namelen <= MAXNAMLEN);
 
-  FreeMem(de^.td_name);
+  free(de^.td_name);
   de^.td_namelen:=tcnp^.cn_namelen;
   Move(tcnp^.cn_nameptr^, newname^, tcnp^.cn_namelen);
   de^.td_name:=newname;
@@ -1478,7 +1477,7 @@ _outok:
   de:=nil;
 
   ncookies^:=cnt;
-  cookies^:=AllocMem(cnt * sizeof(Int64));
+  cookies^:=calloc(cnt * sizeof(Int64));
 
   if (cnt<>0) then
   for i:=0 to cnt-1 do

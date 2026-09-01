@@ -6,6 +6,7 @@ unit tmpfs_vfsops;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  errno,
  mqueue,
@@ -398,7 +399,7 @@ begin
  Assert(nodes_max >= 3);
 
  { Allocate the tmpfs mount structure and fill it. }
- tmp:=AllocMem(sizeof(p_tmpfs_mount^));
+ tmp:=calloc(sizeof(p_tmpfs_mount^));
 
  mtx_init(tmp^.allnode_lock, 'tmpfs allnode lock');
  tmp^.tm_nodes_max:=nodes_max;
@@ -437,7 +438,7 @@ begin
   uma_zdestroy(tmp^.tm_node_pool);
   uma_zdestroy(tmp^.tm_dirent_pool);
   delete_unrhdr(tmp^.tm_ino_unr);
-  FreeMem(tmp);
+  free(tmp);
   Exit(error);
  end;
 
@@ -515,7 +516,7 @@ begin
  Assert(tmp^.tm_nodes_inuse=0);
 
  { Throw away the tmpfs_mount structure. }
- FreeMem(mp^.mnt_data);
+ free(mp^.mnt_data);
  mp^.mnt_data:=nil;
 
  MNT_ILOCK(mp);

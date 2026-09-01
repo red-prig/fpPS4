@@ -6,6 +6,7 @@ unit null_vnops;
 interface
 
 uses
+ kern_malloc,
  vnode,
  vnode_if,
  vfs_default;
@@ -811,7 +812,7 @@ begin
    vput(lowervp);
  end;
 
- FreeMem(xp);
+ free(xp);
 
  Exit(0);
 end;

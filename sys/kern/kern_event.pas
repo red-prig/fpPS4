@@ -6,6 +6,7 @@ unit kern_event;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  mqueue,
  kern_param,
@@ -662,7 +663,7 @@ begin
  kn^.kn_flags :=kn^.kn_flags or EV_CLEAR;             { automatically set }
  kn^.kn_status:=kn^.kn_status and (not KN_DETACHED);  { knlist_add usually sets it }
 
- calloutp:=AllocMem(SizeOf(t_callout));
+ calloutp:=calloc(SizeOf(t_callout));
  callout_init(calloutp, CALLOUT_MPSAFE);
  kn^.kn_hook:=calloutp;
  callout_reset_curcpu(calloutp, timertoticks(kn^.kn_sdata), @filt_timerexpire, kn);
@@ -676,7 +677,7 @@ var
 begin
  calloutp:=kn^.kn_hook;
  callout_drain(calloutp);
- FreeMem(calloutp);
+ free(calloutp);
 
  System.InterlockedDecrement(kq_ncallouts);
  kn^.kn_status:=kn^.kn_status or KN_DETACHED; { knlist_remove usually clears it }
@@ -723,7 +724,7 @@ begin
  kn^.kn_flags :=kn^.kn_flags or EV_CLEAR;             { automatically set }
  kn^.kn_status:=kn^.kn_status and (not KN_DETACHED);  { knlist_add usually sets it }
 
- calloutp:=AllocMem(SizeOf(t_callout));
+ calloutp:=calloc(SizeOf(t_callout));
  callout_init(calloutp, CALLOUT_MPSAFE);
  kn^.kn_hook:=calloutp;
  callout_reset_curcpu(calloutp, TIMESPEC_TO_UNIT(@hr_ts), @filt_hr_timerexpire, kn);
@@ -737,7 +738,7 @@ var
 begin
  calloutp:=kn^.kn_hook;
  callout_drain(calloutp);
- FreeMem(calloutp);
+ free(calloutp);
 
  kn^.kn_status:=kn^.kn_status or KN_DETACHED; { knlist_remove usually clears it }
 end;
@@ -835,7 +836,7 @@ function kern_kqueue2(name:PAnsiChar;
 var
  kq:p_kqueue;
 begin
- kq:=AllocMem(SizeOf(t_kqueue));
+ kq:=calloc(SizeOf(t_kqueue));
  if (kq=nil) then Exit;
 
  mtx_init(kq^.kq_lock, 'kqueue');
@@ -1718,7 +1719,7 @@ begin
    begin
     Inc(size, KQEXTENT);
    end;
-   list:=AllocMem(size*SizeOf(t_klist));
+   list:=calloc(size*SizeOf(t_klist));
    if (list=nil) then Exit(ENOMEM);
    KQ_LOCK(kq);
    if (kq^.kq_knlistsize > fd) then
@@ -1760,7 +1761,7 @@ begin
    KQ_UNLOCK(kq);
   end;
  end;
- FreeMem(to_free);
+ free(to_free);
 
  KQ_NOTOWNED(kq);
  Exit(0);
@@ -2231,16 +2232,16 @@ begin
 
  if (kq^.kq_knhash<>nil) then
  begin
-  FreeMem(kq^.kq_knhash);
+  free(kq^.kq_knhash);
  end;
  if (kq^.kq_knlist<>nil) then
  begin
-  FreeMem(kq^.kq_knlist);
+  free(kq^.kq_knlist);
  end;
 
  //funsetown(@kq^.kq_sigio);
 
- FreeMem(kq);
+ free(kq);
 end;
 
 {ARGSUSED}

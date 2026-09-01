@@ -445,7 +445,8 @@ uses
  kern_thread,
  kern_jit_ctx,
  kern_jit_asm,
- kern_jit_dynamic;
+ kern_jit_dynamic,
+ kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -498,7 +499,7 @@ procedure t_lib_info.init_rel_data;
 begin
  if (rel_data=nil) then
  begin
-  rel_data:=AllocMem(SizeOf(t_rel_data));
+  rel_data:=calloc(SizeOf(t_rel_data));
  end;
 end;
 
@@ -511,7 +512,7 @@ begin
  len:=strlen(str)+1;
  size:=rel_data^.strtab_size;
 
- rel_data^.strtab_addr:=ReAllocMem(rel_data^.strtab_addr,size+len);
+ rel_data^.strtab_addr:=realloc(rel_data^.strtab_addr,size+len);
 
  Result:=size;
 
@@ -1078,7 +1079,7 @@ begin
  begin
   vm_object_deallocate(obj^.rel_data^.obj);
   //
-  FreeMem(obj^.rel_data);
+  free(obj^.rel_data);
   obj^.rel_data:=nil;
  end;
 end;
@@ -1097,7 +1098,7 @@ begin
             AlignUp(imgp^.sce_comment_filesz  ,8)+
             strlen(imgp^.execpath)+1;
 
- new^.rel_data:=AllocMem(full_size);
+ new^.rel_data:=calloc(full_size);
 
  dst:=Pointer(new^.rel_data+1);
 
@@ -1135,7 +1136,7 @@ begin
 
  if (Result<>0) then
  begin
-  FreeMem(new^.rel_data);
+  free(new^.rel_data);
   new^.rel_data:=nil;
   Exit;
  end;
@@ -1228,7 +1229,7 @@ begin
  while (needed<>nil) do
  begin
   TAILQ_REMOVE(@obj^.needed,needed,@needed^.link);
-  FreeMem(needed);
+  free(needed);
   needed:=TAILQ_FIRST(@obj^.needed);
  end;
 
@@ -1236,7 +1237,7 @@ begin
  while (names<>nil) do
  begin
   TAILQ_REMOVE(@obj^.names,names,@names^.link);
-  FreeMem(names);
+  free(names);
   names:=TAILQ_FIRST(@obj^.names);
  end;
 
@@ -1258,23 +1259,23 @@ begin
 
  if (obj^.lib_dirname<>nil) then
  begin
-  FreeMem(obj^.lib_dirname);
+  free(obj^.lib_dirname);
   obj^.lib_dirname:=nil;
  end;
 
  if (obj^.lib_path<>nil) then
  begin
-  FreeMem(obj^.lib_path);
+  free(obj^.lib_path);
   obj^.lib_path:=nil;
  end;
 
  if (obj^.relo_bits<>nil) then
  begin
-  FreeMem(obj^.relo_bits);
+  free(obj^.relo_bits);
   obj^.relo_bits:=nil
  end;
 
- FreeMem(obj^.hle_import_table); //HLE
+ free(obj^.hle_import_table); //HLE
 
  Lib_Entry:=TAILQ_FIRST(@obj^.lib_table);
  while (Lib_Entry<>nil) do
@@ -1352,7 +1353,7 @@ var
  entry:p_Name_Entry;
 begin
  len:=strlen(name);
- entry:=AllocMem(SizeOf(Name_Entry)+len);
+ entry:=calloc(SizeOf(Name_Entry)+len);
  Move(name^,entry^.name,len);
  //
  TAILQ_INSERT_TAIL(@obj^.names,entry,@entry^.link);
@@ -1379,7 +1380,7 @@ var
  size:int64;
 begin
  size:=strlen(path);
- obj^.lib_path:=AllocMem(size+1);
+ obj^.lib_path:=calloc(size+1);
  Move(path^,obj^.lib_path^,size);
 end;
 
@@ -1388,7 +1389,7 @@ var
  len:Integer;
 begin
  len:=strlen(str);
- Result:=AllocMem(SizeOf(Needed_Entry)+len);
+ Result:=calloc(SizeOf(Needed_Entry)+len);
  Result^.obj :=obj;
  Move(str^,Result^.name,len);
 end;
@@ -1835,7 +1836,7 @@ begin
 
  if (obj^.lib_path<>nil) then
  begin
-  obj^.lib_dirname:=AllocMem(strlen(obj^.lib_path)+1);
+  obj^.lib_dirname:=calloc(strlen(obj^.lib_path)+1);
   //
   Result:=rtld_dirname(obj^.lib_path,obj^.lib_dirname);
   if (Result<>0) then
@@ -1890,7 +1891,7 @@ begin
   obj^.relo_bits:=nil;
  end else
  begin
-  obj^.relo_bits:=AllocMem((count+7) div 8);
+  obj^.relo_bits:=calloc((count+7) div 8);
  end;
 
 end;
@@ -2045,7 +2046,7 @@ begin
    end;
    if (Result<>0) then
    begin
-    FreeMem(cache);
+    free(cache);
     Exit;
    end;
 
@@ -2073,7 +2074,7 @@ begin
   Inc(phdr);
  end;
 
- FreeMem(cache);
+ free(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin
@@ -3170,7 +3171,7 @@ begin
 
   if (import_count<>0) then
   begin
-   hle_import_table:=AllocMem(import_count*SizeOf(t_hle_import_entry));
+   hle_import_table:=calloc(import_count*SizeOf(t_hle_import_entry));
    obj^.hle_import_table:=hle_import_table;
   end;
 

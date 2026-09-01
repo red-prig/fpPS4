@@ -6,6 +6,7 @@ unit null_vfsops;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_param,
  vnode,
@@ -174,7 +175,7 @@ begin
   Exit(EDEADLK);
  end;
 
- xmp:=AllocMem(sizeof(t_null_mount));
+ xmp:=calloc(sizeof(t_null_mount));
 
  if (lowerrootvp=nil) then
  begin
@@ -201,7 +202,7 @@ begin
   }
  if (error<>0) then
  begin
-  FreeMem(xmp);
+  free(xmp);
   Exit(error);
  end;
 
@@ -301,7 +302,7 @@ begin
 
  mp^.mnt_data:=nil;
 
- FreeMem(mntdata);
+ free(mntdata);
  Exit(0);
 end;
 

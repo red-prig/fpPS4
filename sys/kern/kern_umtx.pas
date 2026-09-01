@@ -6,6 +6,7 @@ unit kern_umtx;
 interface
 
 uses
+ kern_malloc,
  atomic,
  mqueue,
  uma,
@@ -263,10 +264,10 @@ end;
 procedure umtxq_alloc(uq:p_umtx_q);
 begin
  Assert(uq<>nil);
- //uq:=AllocMem(sizeof(umtx_q));
+ //uq:=calloc(sizeof(umtx_q));
 
  //do not allocate uq_spare_queue satically, can migrate to another thread
- uq^.uq_spare_queue:=AllocMem(sizeof(umtxq_queue));
+ uq^.uq_spare_queue:=calloc(sizeof(umtxq_queue));
  //
  TAILQ_INIT(@uq^.uq_spare_queue^.head);
  TAILQ_INIT(@uq^.uq_pi_contested);
@@ -276,8 +277,8 @@ end;
 procedure umtxq_free(uq:p_umtx_q);
 begin
  Assert(uq^.uq_spare_queue<>nil);
- FreeMem(uq^.uq_spare_queue);
- //FreeMem(uq);
+ free(uq^.uq_spare_queue);
+ //free(uq);
 end;
 
 procedure umtx_thread_init(td:p_kthread); public;

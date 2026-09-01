@@ -6,6 +6,7 @@ unit vm_tracking_map;
 interface
 
 uses
+ kern_malloc,
  vm,
  mqueue,
  vm_key_instance,
@@ -160,7 +161,7 @@ procedure pmap_prot_track(pmap :Pointer;
 
 function vm_track_object_allocate(handle:Pointer;start,__end:vm_offset_t;htype:T_THANDLE_TYPE;prot:Byte):p_vm_track_object;
 begin
- Result:=AllocMem(SizeOf(t_vm_track_object));
+ Result:=calloc(SizeOf(t_vm_track_object));
 
  Result^.handle   :=handle;
  Result^.ref_count:=1;
@@ -179,7 +180,7 @@ end;
 
 procedure vm_track_object_destroy(obj:p_vm_track_object);
 begin
- FreeMem(obj);
+ free(obj);
 end;
 
 procedure vm_track_object_deallocate(obj:p_vm_track_object);
@@ -293,7 +294,7 @@ procedure _vm_track_entry_add_obj(pmap:Pointer;entry:p_vm_track_map_entry;obj:p_
 var
  node:p_vm_track_object_instance;
 begin
- node:=AllocMem(SizeOf(t_vm_track_object_instance));
+ node:=calloc(SizeOf(t_vm_track_object_instance));
 
  node^.entry :=entry;
  node^.key   :=obj;
@@ -344,7 +345,7 @@ begin
 
  vm_track_object_deallocate(obj);
 
- FreeMem(node);
+ free(node);
 
  Result:=(entry^.instances=nil);
 end;
@@ -549,14 +550,14 @@ procedure vm_track_entry_dispose(map:p_vm_track_map;pmap:Pointer;entry:p_vm_trac
 begin
  vm_track_entry_del_obj_all(pmap,entry);
  //
- FreeMem(entry);
+ free(entry);
 end;
 
 function vm_track_entry_create(map:p_vm_track_map):p_vm_track_map_entry;
 var
  new_entry:p_vm_track_map_entry;
 begin
- new_entry:=AllocMem(SizeOf(t_vm_track_map_entry));
+ new_entry:=calloc(SizeOf(t_vm_track_map_entry));
  Assert((new_entry<>nil),'vm_track_map_entry_create: kernel resources exhausted');
 
  new_entry^.instances:=nil;
@@ -1081,7 +1082,7 @@ begin
   TAILQ_REMOVE(@map^.insert_deferred.free,Result,@Result^.entry);
  end else
  begin
-  Result:=GetMem(SizeOf(t_vm_track_deferred));
+  Result:=malloc(SizeOf(t_vm_track_deferred));
  end;
 end;
 
@@ -1094,7 +1095,7 @@ begin
   TAILQ_INSERT_TAIL(@map^.insert_deferred.free,node,@node^.entry);
  end else
  begin
-  FreeMem(node);
+  free(node);
  end;
 
 end;

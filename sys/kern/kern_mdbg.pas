@@ -10,6 +10,7 @@ function sys_mdbg_service(op:Integer;arg1,arg2:Pointer):Integer;
 implementation
 
 uses
+ kern_malloc,
  sysutils,
  errno,
  systm,
@@ -84,7 +85,7 @@ begin
    Exit(props);
   end;
 
-  props:=AllocMem(SizeOf(t_mdbg_pevt));
+  props:=calloc(SizeOf(t_mdbg_pevt));
 
   mtx_init(props^.mtx,'mdbg_pevt_MTX');
   cv_init (@props^.cv,'mDBG Debug event');
@@ -172,7 +173,7 @@ var
  auio:t_uio;
  aiov:iovec;
 begin
- buf:=AllocMem($1000);
+ buf:=calloc($1000);
  len:=0;
  if copyinstr(p,buf,$1000,@len)=0 then
  begin
@@ -187,7 +188,7 @@ begin
   //
   md_tty_write(@debug_tty,debug_tty.t_priv,@auio,0);
  end;
- FreeMem(buf);
+ free(buf);
 end;
 
 function sys_mdbg_service(op:Integer;arg1,arg2:Pointer):Integer;

@@ -89,7 +89,8 @@ uses
  kern_proc,
  vfs_subr,
  subr_uio,
- vnode_pager;
+ vnode_pager,
+ kern_malloc;
 
 const
  UFS_DEL_VNLOCKED =$01;
@@ -113,7 +114,7 @@ var
 begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
- de:=AllocMem(i);
+ de:=calloc(i);
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;
  de^.ufs_dirent^.d_reclen:=GENERIC_DIRSIZ(@d);
@@ -196,7 +197,7 @@ begin
 
  if (de^.ufs_symlink<>nil) then
  begin
-  FreeMem(de^.ufs_symlink);
+  free(de^.ufs_symlink);
   de^.ufs_symlink:=nil;
  end;
 
@@ -961,7 +962,7 @@ begin
  de^.ufs_dirent^.d_type:=DT_LNK;
 
  i:=strlen(ap^.a_target) + 1;
- de^.ufs_symlink:=AllocMem(i);
+ de^.ufs_symlink:=calloc(i);
  Move(ap^.a_target^, de^.ufs_symlink^, i);
 
  TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);

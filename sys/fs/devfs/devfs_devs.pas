@@ -43,7 +43,8 @@ uses
  kern_sx,
  vfs_vnops,
  vfs_subr,
- vnode_if;
+ vnode_if,
+ kern_malloc;
 
 var
  devfs_desc:t_id_desc=(free:nil;refs:0);
@@ -62,7 +63,7 @@ var
  cdev:p_cdev;
  ts:timespec;
 begin
- cdp:=AllocMem(SizeOf(t_cdev_priv));
+ cdp:=calloc(SizeOf(t_cdev_priv));
 
  if (cdp=nil) then
   Exit(nil);
@@ -118,8 +119,10 @@ begin
  cdp:=cdev2priv(cdev);
  devfs_free_cdp_inode(cdp^.cdp_inode);
  if (cdp^.cdp_maxdirent > 0) then
-  FreeMem(cdp^.cdp_dirents);
- FreeMem(cdp);
+ begin
+  free(cdp^.cdp_dirents);
+ end;
+ free(cdp);
 end;
 
 function devfs_find(dd:p_devfs_dirent;name:PChar;namelen:Integer;_type:Integer):p_devfs_dirent; public;
@@ -163,7 +166,7 @@ var
 begin
  d.d_namlen:=namelen;
  i:=sizeof(t_devfs_dirent) + GENERIC_DIRSIZ(@d);
- de:=AllocMem(i);
+ de:=calloc(i);
  de^.de_dirent:=p_dirent(de + 1);
  de^.de_dirent^.d_namlen:=namelen;
  de^.de_dirent^.d_reclen:=GENERIC_DIRSIZ(@d);
@@ -254,7 +257,7 @@ end;
 
 procedure devfs_dirent_free(de:p_devfs_dirent); public;
 begin
- FreeMem(de);
+ free(de);
 end;
 
 {
@@ -367,7 +370,7 @@ begin
 
  if (de^.de_symlink<>nil) then
  begin
-  FreeMem(de^.de_symlink);
+  free(de^.de_symlink);
   de^.de_symlink:=nil;
  end;
 
@@ -449,20 +452,20 @@ var
  siz:Integer;
 begin
  siz:=(dm^.dm_idx + 1) * sizeof(Pointer);
- dep:=AllocMem(siz);
+ dep:=calloc(siz);
  dev_lock();
  if (dm^.dm_idx <= cdp^.cdp_maxdirent) then
  begin
   { We got raced }
   dev_unlock();
-  FreeMem(dep);
+  free(dep);
   Exit;
  end;
  Move(cdp^.cdp_dirents^,dep^,(cdp^.cdp_maxdirent + 1)*SizeOf(Pointer));
 
  if (cdp^.cdp_maxdirent > 0) then
  begin
-  FreeMem(cdp^.cdp_dirents);
+  free(cdp^.cdp_dirents);
  end;
 
  cdp^.cdp_dirents:=dep;
@@ -601,7 +604,7 @@ begin
    de^.de_dirent^.d_type:=DT_LNK;
    pdev:=cdp^.cdp_c.si_parent;
    j:=strlen(pdev^.si_name) + 1;
-   de^.de_symlink:=AllocMem(j);
+   de^.de_symlink:=calloc(j);
    Move(pdev^.si_name^,de^.de_symlink^,j);
   end else
   begin

@@ -6,6 +6,7 @@ unit null_subr;
 interface
 
 uses
+ kern_malloc,
  vmount,
  vnode,
  vfs_default,
@@ -84,17 +85,17 @@ begin
  end else
  if force then
  begin
-  Result:=AllocMem(SizeOf(LIST_HEAD));
+  Result:=calloc(SizeOf(LIST_HEAD));
   if (Result=nil) then Exit;
   data:=HAMT_insert32(@null_node_hashtbl,vfs_hash_index(vp),Result);
   if (data=nil) then
   begin
-   FreeMem(Result);
+   free(Result);
    Result:=nil;
   end else
   if (data^<>Result) then
   begin
-   FreeMem(Result);
+   free(Result);
    Result:=data^;
   end;
  end;
@@ -114,7 +115,7 @@ procedure free_hash_data_cb(data,userdata:Pointer); register;
 begin
  if (data<>nil) then
  begin
-  FreeMem(data);
+  free(data);
  end;
 end;
 
@@ -226,7 +227,7 @@ begin
  vgone(vp);
  vput(vp);
 
- FreeMem(xp);
+ free(xp);
 end;
 
 procedure null_insmntque_dtr(vp:p_vnode;xp:Pointer);
@@ -291,13 +292,13 @@ begin
   * might cause a bogus v_data pointer to get dereferenced
   * elsewhere if MALLOC should block.
   }
- xp:=AllocMem(sizeof(t_null_node));
+ xp:=calloc(sizeof(t_null_node));
 
  error:=getnewvnode('nil', mp, @null_vnodeops, @vp);
  if (error<>0) then
  begin
   vput(lowervp);
-  FreeMem(xp);
+  free(xp);
   Exit(error);
  end;
 
@@ -359,7 +360,7 @@ begin
    if LIST_EMPTY(hd) then
    if HAMT_delete32(@null_node_hashtbl,idx,nil) then
    begin
-    FreeMem(hd);
+    free(hd);
    end;
   end;
  end;

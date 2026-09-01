@@ -6,6 +6,7 @@ unit md_vnops;
 interface
 
 uses
+ kern_malloc,
  windows,
  ntapi,
  mqueue,
@@ -558,7 +559,7 @@ begin
  s:=System.InterlockedExchange(de^.ufs_symlink,nil);
  if (s<>nil) then
  begin
-  FreeMem(s);
+  free(s);
  end;
 
  if ((de^.ufs_flags and UFS_DROOT)=0) then //if not root dir
@@ -813,7 +814,7 @@ begin
  fix_unix_path(PAnsiChar(U),Length(U));
 
  //save to cache
- de^.ufs_symlink:=AllocMem(Length(U)+1);
+ de^.ufs_symlink:=calloc(Length(U)+1);
  Move(PAnsiChar(U)^, de^.ufs_symlink^, Length(U));
 end;
 
@@ -958,7 +959,7 @@ var
 begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
- de:=AllocMem(i);
+ de:=calloc(i);
 
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;

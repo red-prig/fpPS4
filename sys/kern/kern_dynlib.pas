@@ -6,6 +6,7 @@ unit kern_dynlib;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  mqueue,
  kern_rtld,
@@ -561,7 +562,7 @@ begin
   Exit(ENOMEM);
  end;
 
- src:=AllocMem(count*SizeOf(Integer));
+ src:=calloc(count*SizeOf(Integer));
 
  obj:=TAILQ_FIRST(@dynlibs_info.obj_list);
  while (obj<>nil) and (i<count) do
@@ -571,7 +572,7 @@ begin
    if (w>=numArray) then
    begin
     dynlibs_unlock;
-    FreeMem(src);
+    free(src);
     Exit(ENOMEM);
    end;
    src[w]:=obj^.id;
@@ -596,7 +597,7 @@ begin
   Result:=copyout(@w,pActualNum,8);
  end;
 
- FreeMem(src);
+ free(src);
 end;
 
 function sys_dynlib_get_list(pArray:PInteger;numArray:QWORD;pActualNum:PQWORD):Integer;

@@ -6,10 +6,11 @@ unit kern_pipe;
 interface
 
 uses
+ kern_malloc,
  errno,
  time,
  kern_mtx,
- kern_id,
+ subr_unit,
  kern_thr,
  sys_conf,
  vfcntl,
@@ -232,7 +233,7 @@ function  pipe_create(pipe:p_pipe;backing:Integer):Integer;
 function sys_pipe():Integer;
 
 var
- pipeino_unr:p_id_desc_table;
+ pipeino_unr:p_unrhdr;
  pipedev_ino:ino_t;
 
 type
@@ -268,36 +269,9 @@ end;
 
 ///////
 
-function new_unrhdr(min,max:Integer):p_id_desc_table;
-begin
- Result:=AllocMem(SizeOf(t_id_desc_table));
- id_table_init(Result,min,max);
-end;
-
-var
- unr_desc:t_id_desc=(free:nil;refs:0); //temp
-
-function alloc_unr(p:p_id_desc_table):Integer;
-begin
- if id_new(p,@unr_desc,@Result) then
- begin
-  id_release(@unr_desc); //<-id_new
- end else
- begin
-  Result:=-1;
- end;
-end;
-
-procedure free_unr(p:p_id_desc_table;i:Integer);
-begin
- id_del(p,i,nil);
-end;
-
-//
-
 procedure pipeinit;
 begin
- pipeino_unr:=new_unrhdr(1, High(Integer));
+ pipeino_unr:=new_unrhdr(1, High(Integer), nil);
  Assert(pipeino_unr<>nil, 'pipe fake inodes not initialized');
  pipedev_ino:=devfs_alloc_cdp_inode();
  Assert(pipedev_ino > 0, 'pipe dev inode not initialized');
@@ -368,7 +342,7 @@ end;
 
 function alloc_pipepair:p_pipepair;
 begin
- Result:=AllocMem(SizeOf(t_pipepair));
+ Result:=calloc(SizeOf(t_pipepair));
  pipe_zone_init(Result);
  pipe_zone_ctor(Result);
 end;
@@ -1771,7 +1745,7 @@ begin
 
   pp:=cpipe^.pipe_pair;
   pipe_zone_fini(pp);
-  FreeMem(pp);
+  free(pp);
  end else
  begin
   PIPE_UNLOCK(cpipe);

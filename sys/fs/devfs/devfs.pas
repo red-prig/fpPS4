@@ -13,7 +13,8 @@ uses
  vnode,
  vmount,
  sys_conf,
- kern_mtx;
+ kern_mtx,
+ kern_malloc;
 
 function  rid2rsn(rid:devfs_rid):devfs_rsnum;
 function  rid2rn (rid:devfs_rid):devfs_rnum;
@@ -149,7 +150,7 @@ var
  i:ptrint;
 begin
  i:=strlen(src);
- Result:=AllocMem(i+1);
+ Result:=calloc(i+1);
  Move(src^,Result^,i);
 end;
 
@@ -159,7 +160,7 @@ var
 begin
  if (dir^=#0) then Exit;
 
- dle_new:=AllocMem(sizeof(t_dirlistent));
+ dle_new:=calloc(sizeof(t_dirlistent));
  dle_new^.dir:=strdup(dir);
  dle_new^.refcnt:=1;
 
@@ -169,8 +170,8 @@ begin
  begin
   Inc(dle^.refcnt);
   mtx_unlock(dirlist_mtx);
-  FreeMem(dle_new^.dir);
-  FreeMem(dle_new);
+  free(dle_new^.dir);
+  free(dle_new);
   Exit;
  end;
  LIST_INSERT_HEAD(@devfs_dirlist,dle_new,@dle_new^.link);
@@ -203,8 +204,8 @@ begin
  begin
   LIST_REMOVE(dle,@dle^.link);
   mtx_unlock(dirlist_mtx);
-  FreeMem(dle^.dir);
-  FreeMem(dle);
+  free(dle^.dir);
+  free(dle);
  end else
  begin
   mtx_unlock(dirlist_mtx);

@@ -39,6 +39,7 @@ uses
  kern_hamt,
  kern_dmem,
  kern_mtxpool,
+ kern_malloc,
  vsys_generic,
  vfs_subr,
  vfs_lookup,
@@ -99,6 +100,7 @@ end;
 procedure sys_init;
 begin
  uma_startup4();
+ malloc_init;
  kern_hamt_init;
  timeinit;
  init_sleepqueues;

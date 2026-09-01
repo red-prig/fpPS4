@@ -6,6 +6,7 @@ unit fdesc_vnops;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_param,
  vmount,
@@ -189,12 +190,12 @@ loop:
  end;
  mtx_unlock(fdesc_hashmtx);
 
- fd:=AllocMem(sizeof(t_fdescnode));
+ fd:=calloc(sizeof(t_fdescnode));
 
  error:=getnewvnode('fdescfs', mp, @fdesc_vnodeops, @vp);
  if (error<>0) then
  begin
-  FreeMem(fd);
+  free(fd);
   Exit(error);
  end;
 
@@ -622,7 +623,7 @@ begin
  vp:=ap^.a_vp;
  fd:=VTOFDESC(vp);
  fdesc_remove_entry(fd);
- FreeMem(vp^.v_data);
+ free(vp^.v_data);
  vp^.v_data:=nil;
  Exit(0);
 end;

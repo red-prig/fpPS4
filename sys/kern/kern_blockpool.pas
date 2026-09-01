@@ -6,6 +6,7 @@ unit kern_blockpool;
 interface
 
 uses
+ kern_malloc,
  vm,
  vmparam,
  vm_blockpool,
@@ -423,7 +424,7 @@ begin
  tlb_1gb_cnt:=(size+M_1GB-1) div M_1GB;
  tlb_64k_cnt:=(size+M_64K-1) div M_64K;
 
- tlb_1gb:=AllocMem((tlb_1gb_cnt+tlb_64k_cnt)*SizeOf(DWORD));
+ tlb_1gb:=calloc((tlb_1gb_cnt+tlb_64k_cnt)*SizeOf(DWORD));
 
  if (tlb_1gb=nil) then
  begin
@@ -435,7 +436,7 @@ begin
  Result:=vm_object_allocate(OBJT_BLOCKPOOL,OFF_TO_IDX(size));
  if (Result=nil) then
  begin
-  FreeMem(tlb_1gb);
+  free(tlb_1gb);
   Exit(nil);
  end;
 
@@ -445,7 +446,7 @@ begin
   begin
    mtx_unlock(bp^.lock);
    vm_object_destroy(Result);
-   FreeMem(tlb_1gb);
+   free(tlb_1gb);
    Exit(nil);
   end;
 
@@ -476,7 +477,7 @@ begin
  end;
  bp^.allocatedCachedBlocks:=bp^.allocatedCachedBlocks-tlb_cnt;
 
- FreeMem(tlb_1gb);
+ free(tlb_1gb);
 
  blockpool_release(bp);
 
@@ -1126,7 +1127,7 @@ begin
   Exit(EMFILE);
  end;
 
- bp:=AllocMem(SizeOf(t_blockpool));
+ bp:=calloc(SizeOf(t_blockpool));
 
  mtx_init(bp^.lock,'bpoolfd');
 
@@ -1163,7 +1164,7 @@ begin
  budget_id:=bp^.budget_id;
  //
  //free_direct_memory
- FreeMem(bp);
+ free(bp);
  bp_budget_release(budget_id);
 end;
 

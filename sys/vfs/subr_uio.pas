@@ -9,7 +9,8 @@ uses
  vuio,
  systm,
  kern_param,
- kern_thr;
+ kern_thr,
+ kern_malloc;
 
 function uiomove          (cp:Pointer;n:Integer;uio:p_uio):Integer;
 function uiomove_nofault  (cp:Pointer;n:Integer;uio:p_uio):Integer;
@@ -202,12 +203,12 @@ begin
   Exit(EINVAL);
  end;
  iovlen:=iovcnt * sizeof (iovec);
- uio:=AllocMem(iovlen + sizeof(t_uio));
+ uio:=calloc(iovlen + sizeof(t_uio));
  iov:=p_iovec(uio + 1);
  error:=copyin(iovp, iov, iovlen);
  if (error<>0) then
  begin
-  FreeMem(uio);
+  free(uio);
   Exit(error);
  end;
  uio^.uio_iov   :=iov;
@@ -220,7 +221,7 @@ begin
  begin
   if (iov^.iov_len > IOSIZE_MAX - uio^.uio_resid) then
   begin
-   FreeMem(uio);
+   free(uio);
    Exit(EINVAL);
   end;
   Inc(uio^.uio_resid,iov^.iov_len);

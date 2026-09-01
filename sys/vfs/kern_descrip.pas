@@ -6,6 +6,7 @@ unit kern_descrip;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  kern_thr,
  kern_proc,
@@ -1308,7 +1309,7 @@ begin
 
  System.InterlockedDecrement(openfiles);
 
- FreeMem(fp^.f_advice);
+ free(fp^.f_advice);
  uma_zfree(file_zone, fp);
 end;
 

@@ -6,6 +6,7 @@ unit kern_mtxpool;
 interface
 
 uses
+ kern_malloc,
  kern_mtx;
 
 const
@@ -108,7 +109,7 @@ begin
   LOG_WARNING('WARNING: %s pool size is not a power of 2.', mtx_name);
   pool_size:=128;
  end;
- pool:=AllocMem(sizeof(mtx_pool)+
+ pool:=calloc(sizeof(mtx_pool)+
                 ((pool_size - 1) * sizeof(mtx))
        );
  mtx_pool_initialize(pool, mtx_name, pool_size);
@@ -127,7 +128,7 @@ begin
   mtx_destroy(pool^.mtx_pool_ary[i]);
  end;
 
- FreeMem(pool);
+ free(pool);
  poolp^:=nil;
 end;
 

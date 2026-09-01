@@ -6,6 +6,7 @@ unit fdesc_vfsops;
 interface
 
 uses
+ kern_malloc,
  vmount,
  kern_param,
  vfs_mount,
@@ -98,7 +99,7 @@ begin
  if ((mp^.mnt_flag and (MNT_UPDATE or MNT_ROOTFS))<>0) then
   Exit(EOPNOTSUPP);
 
- fmp:=AllocMem(sizeof(t_fdescmount)); { XXX }
+ fmp:=calloc(sizeof(t_fdescmount)); { XXX }
 
  {
   * We need to initialize a few bits of our local mount point struct to
@@ -111,7 +112,7 @@ begin
 
  if (error<>0) then
  begin
-  FreeMem(fmp);
+  free(fmp);
   mp^.mnt_data:=nil;
   Exit(error);
  end;
@@ -172,7 +173,7 @@ begin
  data:=mp^.mnt_data;
  mp^.mnt_data:=nil;
  mtx_unlock(fdesc_hashmtx);
- FreeMem(data); { XXX }
+ free(data); { XXX }
 
  Exit(0);
 end;

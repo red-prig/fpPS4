@@ -6,6 +6,7 @@ unit kern_exec;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  mqueue,
  kern_param,
@@ -76,7 +77,7 @@ uses
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
- args^.buf:=AllocMem(PATH_MAX + ARG_MAX);
+ args^.buf:=calloc(PATH_MAX + ARG_MAX);
  if (args^.buf=nil) then Exit(ENOMEM);
  Result:=0;
 end;
@@ -85,12 +86,12 @@ procedure exec_free_args(args:p_image_args);
 begin
  if (args^.buf<>nil) then
  begin
-  FreeMem(args^.buf);
+  free(args^.buf);
   args^.buf:=nil;
  end;
  if (args^.fname_buf<>nil) then
  begin
-  FreeMem(args^.fname_buf);
+  free(args^.fname_buf);
   args^.fname_buf:=nil;
  end;
 end;
@@ -888,7 +889,7 @@ begin
     end;
     if (Result<>0) then
     begin
-     FreeMem(cache);
+     free(cache);
      Exit;
     end;
 
@@ -917,7 +918,7 @@ begin
   end;
  end;
 
- FreeMem(cache);
+ free(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin
@@ -967,7 +968,7 @@ begin
   imgp^.reloc_base:=Pointer(addr);
  end;
 
- auxargs:=AllocMem(SizeOf(t_elf64_auxargs));
+ auxargs:=calloc(SizeOf(t_elf64_auxargs));
 
  auxargs^.execfd:=-1;
  auxargs^.phdr  :=0;
@@ -1475,7 +1476,7 @@ begin
 
  AUXARGS_ENTRY(pos, AT_NULL, 0);
 
- FreeMem(imgp^.auxargs);
+ free(imgp^.auxargs);
  imgp^.auxargs:=nil;
 
  Dec(base);
@@ -1808,7 +1809,7 @@ exec_fail_dealloc:
 
  vm_object_deallocate(imgp^.obj);
 
- FreeMem(imgp^.freepath);
+ free(imgp^.freepath);
 
  if (error=0) then
  begin

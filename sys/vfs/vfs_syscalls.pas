@@ -6,6 +6,7 @@ unit vfs_syscalls;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  kern_proc,
  time,
@@ -407,7 +408,7 @@ begin
   begin
    maxcount:=count;
   end;
-  sfsp:=AllocMem(maxcount*sizeof(t_statfs));
+  sfsp:=calloc(maxcount*sizeof(t_statfs));
   buf^:=sfsp;
  end;
  count:=0;

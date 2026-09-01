@@ -40,7 +40,8 @@ uses
  vfs_mount,
  vfs_syscalls,
  kern_thr,
- kern_mtx;
+ kern_mtx,
+ kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -49,7 +50,7 @@ var
  i:ptrint;
 begin
  i:=strlen(src);
- Result:=AllocMem(i+1);
+ Result:=calloc(i+1);
  Move(src^,Result^,i);
 end;
 
@@ -120,7 +121,7 @@ begin
   name:=strsep(@p, ',');
  end;
 
- FreeMem(opts);
+ free(opts);
  Exit(ma);
 end;
 
@@ -177,7 +178,7 @@ begin
  if (error<>0) then
   Exit(error);
 
- opts:=AllocMem(sizeof(vfsoptlist));
+ opts:=calloc(sizeof(vfsoptlist));
  TAILQ_INIT(opts);
  mp^.mnt_opt:=opts;
 

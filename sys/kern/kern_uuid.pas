@@ -6,6 +6,7 @@ unit kern_uuid;
 interface
 
 uses
+ kern_malloc,
  SysUtils;
 
 type
@@ -46,13 +47,13 @@ begin
  if (count < 1) or (count > 2048) then
   Exit(EINVAL);
 
- kstore:=AllocMem(count * sizeof(t_uuid));
+ kstore:=calloc(count * sizeof(t_uuid));
 
  kern_uuidgen(store, count);
 
  Result:=copyout(kstore, store, count * sizeof(t_uuid));
 
- FreeMem(kstore);
+ free(kstore);
 end;
 
 end.

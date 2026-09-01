@@ -6,6 +6,7 @@ unit tmpfs_seg;
 interface
 
 uses
+ kern_malloc,
  errno,
  vmparam,
  vm_internal_object,
@@ -70,20 +71,20 @@ end;
 
 function tmpfs_seg_map_create(min,max:QWORD):p_tmpfs_seg_map;
 begin
- Result:=AllocMem(SizeOf(t_tmpfs_seg_map));
+ Result:=calloc(SizeOf(t_tmpfs_seg_map));
  _tmpfs_seg_map_init(Result,min,max);
 end;
 
 procedure tmpfs_seg_map_destroy(map:p_tmpfs_seg_map);
 begin
- FreeMem(map);
+ free(map);
 end;
 
 function tmpfs_seg_create(map:p_tmpfs_seg_map):p_tmpfs_seg;
 var
  new_entry:p_tmpfs_seg;
 begin
- new_entry:=AllocMem(sizeof(t_tmpfs_seg_map));
+ new_entry:=calloc(sizeof(t_tmpfs_seg_map));
 
  //new_entry:=uma_zalloc(mapentzone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'tmpfs_seg_create: kernel resources exhausted');
@@ -109,7 +110,7 @@ begin
   end;
  end;
 
- FreeMem(entry);
+ free(entry);
 
  //uma_zfree(mapentzone, entry);
 end;

@@ -6,6 +6,7 @@ unit vm_map;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  vm,
  vmparam,
@@ -778,7 +779,7 @@ end;
  }
 function vm_map_create(pmap:pmap_t;min,max:vm_offset_t):vm_map_t;
 begin
- Result:=AllocMem(SizeOf(_vm_map));
+ Result:=calloc(SizeOf(_vm_map));
  vm_map_init(Result,pmap,min,max);
 end;
 

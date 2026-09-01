@@ -25,14 +25,13 @@ uses
  vnode_pager,
  vnode_if,
  subr_unit,
- vm,
  kern_mtx,
+ kern_malloc,
  tmpfs;
 
 implementation
 
 uses
- vm_internal_object,
  tmpfs_seg,
  tmpfs_fifoops,
  tmpfs_vnops;
@@ -142,7 +141,7 @@ begin
    begin
     Assert(strlen(target) < MAXPATHLEN);
     nnode^.tn_size:=strlen(target);
-    nnode^.tn_link:=AllocMem(nnode^.tn_size);
+    nnode^.tn_link:=calloc(nnode^.tn_size);
     Move(target^, nnode^.tn_link^, nnode^.tn_size);
    end;
 
@@ -186,7 +185,7 @@ begin
   VSOCK:;
 
   VLNK:
-   FreeMem(node^.tn_link);
+   free(node^.tn_link);
 
   VREG:
    begin
@@ -213,7 +212,7 @@ var
 begin
  nde:=uma_zalloc(tmp^.tm_dirent_pool, M_WAITOK);
 
- nde^.td_name:=AllocMem(len);
+ nde^.td_name:=calloc(len);
  nde^.td_namelen:=len;
  Move(name^, nde^.td_name^, len);
 
@@ -240,7 +239,7 @@ begin
   end;
  end;
 
- FreeMem(de^.td_name);
+ free(de^.td_name);
  uma_zfree(tmp^.tm_dirent_pool, de);
 end;
 

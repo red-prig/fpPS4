@@ -1883,6 +1883,10 @@
         <Filename Value="sys\fs\tmpfs\tmpfs_seg.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\kern\kern_malloc.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

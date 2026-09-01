@@ -6,6 +6,7 @@ unit kern_thr;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  ucontext,
  signal,
@@ -638,9 +639,9 @@ begin
  begin
   if (td^.td_temp.addr<>nil) then
   begin
-   FreeMem(td^.td_temp.addr);
+   free(td^.td_temp.addr);
   end;
-  Result:=GetMem(size);
+  Result:=malloc(size);
   td^.td_temp.addr:=Result;
   td^.td_temp.size:=MemSize(Result);
  end;
@@ -653,7 +654,7 @@ begin
 
  if (td^.td_temp.addr<>nil) then
  begin
-  FreeMem(td^.td_temp.addr);
+  free(td^.td_temp.addr);
  end;
  td^.td_temp:=Default(t_td_buffer);
 end;

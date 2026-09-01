@@ -6,6 +6,7 @@ unit vfs_subr;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  uma,
  vmount,
@@ -3626,7 +3627,7 @@ begin
   begin
    if (ap^.a_cookies<>nil) then
    begin
-    FreeMem(ap^.a_cookies);
+    free(ap^.a_cookies);
    end;
    ap^.a_cookies:=nil;
    ap^.a_ncookies^:=0;
@@ -3638,7 +3639,7 @@ begin
 
  Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
 
- ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
+ ap^.a_cookies^:=realloc(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
  ap^.a_cookies^[ap^.a_ncookies^]:=off;
 
  Inc(ap^.a_ncookies^);
@@ -3661,7 +3662,7 @@ begin
   begin
    if (ap^.a_cookies<>nil) then
    begin
-    FreeMem(ap^.a_cookies);
+    free(ap^.a_cookies);
    end;
    ap^.a_cookies:=nil;
    ap^.a_ncookies^:=0;
@@ -3673,7 +3674,7 @@ begin
 
  Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
 
- ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
+ ap^.a_cookies^:=realloc(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
  ap^.a_cookies^[ap^.a_ncookies^]:=off;
 
  Inc(ap^.a_ncookies^);
@@ -3792,7 +3793,7 @@ function __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 var
  vp:p_vnode;
 begin
- mvp^:=AllocMem(sizeof(t_vnode));
+ mvp^:=calloc(sizeof(t_vnode));
  MNT_ILOCK(mp);
  MNT_REF(mp);
  mvp^^.v_type:=VMARKER;
@@ -3809,7 +3810,7 @@ begin
  begin
   MNT_REL(mp);
   MNT_IUNLOCK(mp);
-  FreeMem(mvp^);
+  free(mvp^);
   mvp^:=nil;
   Exit(nil);
  end;
@@ -3834,7 +3835,7 @@ begin
  TAILQ_REMOVE(@mp^.mnt_nvnodelist,mvp^,@mvp^^.v_nmntvnodes);
  MNT_REL(mp);
  MNT_IUNLOCK(mp);
- FreeMem(mvp^);
+ free(mvp^);
  mvp^:=nil;
 end;
 
@@ -3849,7 +3850,7 @@ begin
  MNT_ILOCK(mp);
  MNT_REL(mp);
  MNT_IUNLOCK(mp);
- FreeMem(mvp^);
+ free(mvp^);
  mvp^:=nil;
 end;
 
@@ -3912,7 +3913,7 @@ function __mnt_vnode_first_active(mvp:pp_vnode;mp:p_mount):p_vnode;
 var
  vp:p_vnode;
 begin
- mvp^:=AllocMem(sizeof(t_vnode));
+ mvp^:=calloc(sizeof(t_vnode));
  MNT_ILOCK(mp);
  MNT_REF(mp);
  MNT_IUNLOCK(mp);

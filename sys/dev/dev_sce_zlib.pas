@@ -6,6 +6,7 @@ unit dev_sce_zlib;
 interface
 
 uses
+ kern_malloc,
  vmparam,
  sys_conf,
  sys_event;
@@ -79,7 +80,7 @@ begin
  begin
   //max queue = 64
 
-  context:=AllocMem(SizeOf(t_zlib_context));
+  context:=calloc(SizeOf(t_zlib_context));
 
   with context^ do
   begin
@@ -104,7 +105,7 @@ begin
    zlib_init   :=1;
   end else
   begin
-   FreeMem(context);
+   free(context);
   end;
 
  end else
@@ -323,7 +324,7 @@ begin
    thread_dec_ref(td);
    cv_destroy(@queue_cv);
   end;
-  FreeMem(context);
+  free(context);
 
  mtx_unlock(zlib_sc_mtx);
 end;

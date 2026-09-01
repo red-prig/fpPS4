@@ -6,6 +6,7 @@ unit vsys_generic;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_param,
  kern_mtx,
@@ -256,7 +257,7 @@ begin
   Exit(error);
  end;
  error:=kern_readv(fd, auio);
- FreeMem(auio);
+ free(auio);
  Exit(error);
 end;
 
@@ -274,7 +275,7 @@ begin
   Exit(error);
  end;
  error:=kern_preadv(fd, auio, offset);
- FreeMem(auio);
+ free(auio);
  Exit(error);
 end;
 
@@ -371,7 +372,7 @@ begin
   Exit(error);
  end;
  error:=kern_writev(fd, auio);
- FreeMem(auio);
+ free(auio);
  Exit(error);
 end;
 
@@ -389,7 +390,7 @@ begin
   Exit(error);
  end;
  error:=kern_pwritev(fd, auio, offset);
- FreeMem(auio);
+ free(auio);
  Exit(error);
 end;
 
@@ -567,7 +568,7 @@ begin
   end else
   begin
    if (size > SYS_IOCTL_SMALL_SIZE) then
-    kern_data:=AllocMem(size)
+    kern_data:=calloc(size)
    else
     kern_data:=@smalldata;
   end;
@@ -602,7 +603,7 @@ begin
 _out:
  if (size > SYS_IOCTL_SMALL_SIZE) then
  begin
-  FreeMem(kern_data);
+  free(kern_data);
  end;
  Exit(error);
 end;
@@ -879,7 +880,7 @@ begin
  if (nbufbytes <= sizeof(s_selbits)) then
   selbits:=@s_selbits[0]
  else
-  selbits:=AllocMem(nbufbytes);
+  selbits:=calloc(nbufbytes);
 
  {
   * Assign pointers into the bit buffers and fetch the input bits.
@@ -980,7 +981,7 @@ done:
 
  if (selbits<>@s_selbits[0]) then
  begin
-  FreeMem(selbits);
+  free(selbits);
  end;
 
  Exit(error);
@@ -1221,7 +1222,7 @@ begin
  ni:=nfds * sizeof(t_pollfd);
 
  if (ni > sizeof(smallbits)) then
-  bits:=AllocMem(ni)
+  bits:=calloc(ni)
  else
   bits:=@smallbits;
 
@@ -1296,7 +1297,7 @@ done:
 _out:
  if (ni > sizeof(smallbits)) then
  begin
-  FreeMem(bits);
+  free(bits);
  end;
  Exit(error);
 end;
@@ -1628,7 +1629,7 @@ begin
  begin
   goto _out;
  end;
- stp:=AllocMem(sizeof(t_seltd));
+ stp:=calloc(sizeof(t_seltd));
  td^.td_sel:=stp;
  mtx_init(stp^.st_mtx, 'sellck');
  cv_init(@stp^.st_wait,'select');
@@ -1686,7 +1687,7 @@ begin
   uma_zfree(selfd_zone, stp^.st_free2);
  end;
  td^.td_sel:=nil;
- FreeMem(stp);
+ free(stp);
 end;
 
 {

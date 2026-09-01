@@ -6,6 +6,7 @@ unit subr_unit;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  kern_mtx,
  mqueue;
@@ -190,7 +191,7 @@ begin
  begin
   TAILQ_REMOVE(@uh^.ppfree,up,@up^.list);
   mtx_unlock(uh^.mtx^);
-  FreeMem(up);
+  free(up);
   mtx_lock(uh^.mtx^);
   up:=TAILQ_FIRST(@uh^.ppfree);
  end;
@@ -209,7 +210,7 @@ var
 begin
  Assert((low>=0) and (low<=high),'UNR: use error: new_unrhdr');
 
- uh:=AllocMem(SizeOf(t_unrhdr));
+ uh:=calloc(SizeOf(t_unrhdr));
 
  if (mutex<>nil) then
   uh^.mtx:=mutex
@@ -235,7 +236,7 @@ begin
  Assert(uh^.busy=0,'UNR memory leak: unrhdr has allocations');
  Assert(uh^.alloc=0,'UNR memory leak in delete_unrhdr');
  Assert(TAILQ_FIRST(@uh^.ppfree)=nil,'unrhdr has postponed item for free');
- FreeMem(uh);
+ free(uh);
 end;
 
 function is_bitmap(uh:p_unrhdr; up:p_unr):Boolean; inline;
@@ -684,15 +685,15 @@ var
  p1,pp2:Pointer;
  i:Integer;
 begin
- p1 :=AllocMem(SizeOf(t_unr));
- pp2:=AllocMem(SizeOf(t_unr));
+ p1 :=calloc(SizeOf(t_unr));
+ pp2:=calloc(SizeOf(t_unr));
 
  mtx_lock(uh^.mtx^);
  i:=alloc_unr_specificl(uh,item,@p1,@pp2);
  mtx_unlock(uh^.mtx^);
 
- if (p1<>nil) then FreeMem(p1);
- if (pp2<>nil) then FreeMem(pp2);
+ if (p1<>nil) then free(p1);
+ if (pp2<>nil) then free(pp2);
 
  Result:=i;
 end;
@@ -813,16 +814,16 @@ procedure free_unr(uh:p_unrhdr; item:DWORD);
 var
  p1,pp2:Pointer;
 begin
- p1 :=AllocMem(SizeOf(t_unr));
- pp2:=AllocMem(SizeOf(t_unr));
+ p1 :=calloc(SizeOf(t_unr));
+ pp2:=calloc(SizeOf(t_unr));
 
  mtx_lock(uh^.mtx^);
  free_unrl(uh,item,@p1,@pp2);
  clean_unrhdrl(uh);
  mtx_unlock(uh^.mtx^);
 
- if (p1<>nil) then FreeMem(p1);
- if (pp2<>nil) then FreeMem(pp2);
+ if (p1<>nil) then free(p1);
+ if (pp2<>nil) then free(pp2);
 end;
 
 initialization

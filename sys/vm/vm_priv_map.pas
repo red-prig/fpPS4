@@ -6,6 +6,7 @@ unit vm_priv_map;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  uma,
  kern_mtx,
@@ -125,7 +126,7 @@ procedure vm_priv_map_entry_dispose(map:p_vm_priv_map;entry:p_vm_priv_map_entry)
 begin
  if (map^.zone=nil) then
  begin
-  FreeMem(entry);
+  free(entry);
  end else
  begin
   uma_zfree(map^.zone, entry);
@@ -138,7 +139,7 @@ var
 begin
  if (map^.zone=nil) then
  begin
-  new_entry:=AllocMem(sizeof(t_vm_priv_map_entry));
+  new_entry:=calloc(sizeof(t_vm_priv_map_entry));
  end else
  begin
   new_entry:=uma_zalloc(map^.zone, M_WAITOK or M_ZERO);
@@ -906,7 +907,7 @@ begin
    Exit;
   end;
 
-  node:=AllocMem(sizeof(t_vm_priv_fd));
+  node:=calloc(sizeof(t_vm_priv_fd));
 
   node^.pool:=pool;
 
@@ -1107,7 +1108,7 @@ begin
      Assert(false,'on_free_priv');
     end;
 
-    FreeMem(node);
+    free(node);
 
    end else
    begin

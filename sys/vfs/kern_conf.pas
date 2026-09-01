@@ -16,7 +16,8 @@ uses
  time,
  vm,
  vm_object,
- kern_mtx;
+ kern_mtx,
+ kern_malloc;
 
 implementation
 
@@ -209,7 +210,7 @@ begin
  while (csw<>nil) do
  begin
   SLIST_REMOVE_HEAD(@csw_free,@p_cdevsw(nil)^.d_postfree_list);
-  FreeMem(csw);
+  free(csw);
   csw:=SLIST_FIRST(@csw_free);
  end;
 end;
@@ -481,12 +482,12 @@ var
 begin
  //if (cold) then Exit;
  namelen:=strlen(dev^.si_name);
- data:=AllocMem(namelen + sizeof(prefix));
+ data:=calloc(namelen + sizeof(prefix));
  if (data=nil) then Exit;
  Move(prefix^, data^, sizeof(prefix) - 1);
  Move(dev^.si_name^, (data + sizeof(prefix) - 1)^, namelen + 1);
  //devctl_notify_f('DEVFS', 'CDEV', ev, data, mflags);
- FreeMem(data);
+ free(data);
 end;
 
 procedure notify_create(dev:p_cdev;flags:Integer);
@@ -563,7 +564,7 @@ begin
  if ((devsw^.d_flags and D_NEEDGIANT)<>0) then
  begin
   dev_unlock();
-  dsw2:=AllocMem(sizeof(t_cdevsw));
+  dsw2:=calloc(sizeof(t_cdevsw));
   dev_lock();
   if (dsw2=nil) and ((devsw^.d_flags and D_INIT)=0) then
   begin
@@ -894,7 +895,7 @@ begin
  end;
 
  devfspathbuf_len:=physpath_len + 1 + parentpath_len + 1;
- devfspath:=AllocMem(devfspathbuf_len);
+ devfspath:=calloc(devfspathbuf_len);
  if (devfspath=nil) then
  begin
   ret:=ENOMEM;
@@ -924,7 +925,7 @@ _out:
  end;
  if (devfspath<>nil) then
  begin
-  FreeMem(devfspath);
+  free(devfspath);
  end;
  Exit(ret);
 end;

@@ -6,6 +6,7 @@ unit vfs_default;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  kern_param,
  vnode,
@@ -157,7 +158,8 @@ uses
  errno,
  vfs_subr,
  vfs_vnops,
- vsys_generic;
+ vsys_generic,
+ md_map;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -344,7 +346,7 @@ begin
  if (dirbuflen < va.va_blocksize) then
   dirbuflen:=va.va_blocksize;
 
- dirbuf:=AllocMem(dirbuflen);
+ dirbuf:=calloc(dirbuflen);
 
  off:=0;
  len:=0;
@@ -362,7 +364,7 @@ begin
  until not ((len>0) or (eofflag=0));
 
 _out:
- FreeMem(dirbuf);
+ free(dirbuf);
  Exit(found);
 end;
 
@@ -850,9 +852,11 @@ begin
 
  dirbuflen:=DEV_BSIZE;
  if (dirbuflen < va.va_blocksize) then
+ begin
   dirbuflen:=va.va_blocksize;
+ end;
 
- dirbuf:=AllocMem(dirbuflen);
+ dirbuf:=malloc(dirbuflen);
 
  if (dvp^^.v_type<>VDIR) then
  begin
@@ -906,7 +910,7 @@ begin
  error:=ENOENT;
 
 _out:
- FreeMem(dirbuf);
+ free(dirbuf);
  if (error=0) then
  begin
   buflen^:=i;
@@ -957,7 +961,7 @@ begin
   iosize:=BLKDEV_IOSIZE;
  if (iosize > MAXPHYS) then
   iosize:=MAXPHYS;
- buf:=AllocMem(iosize);
+ buf:=calloc(iosize);
 
  if (offset + len > vap^.va_size) then
  begin
@@ -1035,7 +1039,7 @@ begin
  _out:
  ap^.a_len^:=len;
  ap^.a_offset^:=offset;
- FreeMem(buf);
+ free(buf);
  Exit(error);
 end;
 

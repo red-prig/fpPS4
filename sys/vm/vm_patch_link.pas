@@ -6,6 +6,7 @@ unit vm_patch_link;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_stub;
 
@@ -70,7 +71,7 @@ begin
 
  if (data=nil) then
  begin
-  page:=AllocMem(SizeOf(t_patch_page));
+  page:=calloc(SizeOf(t_patch_page));
   TAILQ_INIT(page);
   data:=HAMT_insert32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),page);
  end;
@@ -104,7 +105,7 @@ begin
  if TAILQ_EMPTY(page) then
  begin
   HAMT_delete32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),nil);
-  FreeMem(page);
+  free(page);
  end;
 
  rw_wunlock(hamt_lock);
@@ -235,7 +236,7 @@ begin
  //LOG_TRACE('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
 
  obj:=_obj;
- node:=AllocMem(SizeOf(t_patch_node));
+ node:=calloc(SizeOf(t_patch_node));
  node^.info.vaddr:=vaddr;
  node^.info.vsize:=vsize;
  node^.info.ptype:=ptype;
@@ -262,7 +263,7 @@ begin
  hamt_remove_link(node);
 
  p_dec_ref(node^.info.stub);
- FreeMem(node);
+ free(node);
 end;
 
 procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); public;

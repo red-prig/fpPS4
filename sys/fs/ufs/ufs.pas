@@ -134,6 +134,7 @@ uses
  vnode_if,
  ufs_vnops,
  md_vnops,
+ kern_malloc,
  kern_id;
 
 var
@@ -190,7 +191,7 @@ begin
  begin
   md_free_dirent(p);
   sx_destroy(@p^.ufs_md_lock);
-  FreeMem(p);
+  free(p);
   Result:=True;
  end;
 end;
@@ -207,8 +208,8 @@ Result:=False;
  begin
   md_unmount(p);
   sx_destroy(@p^.ufs_lock);
-  FreeMem(p^.ufs_path);
-  FreeMem(p);
+  free(p^.ufs_path);
+  free(p);
   Result:=True;
  end;
 end;
@@ -449,11 +450,11 @@ begin
   end;
  end;
 
- fmp:=AllocMem(sizeof(t_ufs_mount));
+ fmp:=calloc(sizeof(t_ufs_mount));
 
  if (path<>nil) then
  begin
-  fmp^.ufs_path:=AllocMem(plen);
+  fmp^.ufs_path:=calloc(plen);
   Move(path^,fmp^.ufs_path^,plen);
  end;
 
@@ -505,7 +506,7 @@ begin
   sx_xunlock(@fmp^.ufs_lock);
   sx_destroy(@fmp^.ufs_lock);
   //free_unr(ufs_unr, fmp^.ufs_idx);
-  FreeMem(fmp);
+  free(fmp);
   Exit(error);
  end;
 
