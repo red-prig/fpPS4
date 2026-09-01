@@ -1406,6 +1406,12 @@ begin
 
  FillChar(keg^,size,0);
  keg^.uk_size    :=arg^.size;
+
+ if ((keg^.uk_size and arg^.align)<>0) then
+ begin
+  keg^.uk_size:=(keg^.uk_size and (not arg^.align)) + (arg^.align + 1);
+ end;
+
  keg^.uk_init    :=arg^.uminit;
  keg^.uk_fini    :=arg^.fini;
  keg^.uk_align   :=arg^.align;
