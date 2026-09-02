@@ -128,8 +128,10 @@ begin
   * Get argument
   }
  error:=vfs_getopt(mp^.mnt_optnew, {'target'} 'from', @target, @len);
- if (error<>0) or (target[len - 1]<>#0) then
+ if (error<>0) or (len=0) or (target[len - 1]<>#0) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * Unlock lower node to avoid possible deadlock.

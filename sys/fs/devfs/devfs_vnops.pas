@@ -812,6 +812,11 @@ begin
   * NB: td may be nil if this descriptor is closed due to
   * garbage collection from a closed UNIX domain socket.
   }
+ if (td=nil) then
+ begin
+  Exit(vnops.fo_close(fp));
+ end;
+
  fpop:=td^.td_fpop;
  td^.td_fpop:=fp;
  Result:=vnops.fo_close(fp);
@@ -822,7 +827,9 @@ begin
   * are destroying the file.
   }
  if (fp^.f_cdevpriv<>nil) then
+ begin
   devfs_fpdrop(fp);
+ end;
 end;
 
 function devfs_fsync(ap:p_vop_fsync_args):Integer;

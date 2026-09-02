@@ -947,7 +947,7 @@ _releout:
  if (tvpp^<>nil) then
   vrele(tvpp^);
 
- tmpfs_rename_restarts:= + restarts;
+ tmpfs_rename_restarts:=tmpfs_rename_restarts + restarts;
 
  Exit(error);
 end;

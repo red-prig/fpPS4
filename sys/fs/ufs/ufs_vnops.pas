@@ -303,15 +303,28 @@ begin
 
  next:
 
- Assert(de_dot^.ufs_dir=de);
- Assert(de_dotdot^.ufs_dir=de);
- Assert(de^.ufs_dir=dd);
+ if (de_dot<>nil) then
+ begin
+  Assert(de_dot^.ufs_dir=de);
+  ufs_delete(dm, de_dot, UFS_DEL_NORECURSE);
+ end;
 
- ufs_de_hold(dd);
- ufs_delete(dm, de_dot   ,UFS_DEL_NORECURSE);
- ufs_delete(dm, de_dotdot,UFS_DEL_NORECURSE);
- ufs_delete(dm, de       ,UFS_DEL_NORECURSE);
- ufs_de_drop(dd);
+ if (de_dotdot<>nil) then
+ begin
+  Assert(de_dotdot^.ufs_dir=de);
+  ufs_delete(dm, de_dotdot, UFS_DEL_NORECURSE);
+ end;
+
+ if (dd<>nil) then
+ begin
+  Assert(de^.ufs_dir=dd);
+  ufs_de_hold(dd);
+  ufs_delete(dm, de, UFS_DEL_NORECURSE);
+  ufs_de_drop(dd);
+ end else
+ begin
+  ufs_delete(dm, de, UFS_DEL_NORECURSE);
+ end;
 end;
 
 procedure ufs_purge(dm:p_ufs_mount;dd:p_ufs_dirent);

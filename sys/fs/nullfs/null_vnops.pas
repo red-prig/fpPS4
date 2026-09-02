@@ -500,31 +500,25 @@ var
  tnn:p_null_node;
 begin
  vp:=ap^.a_vp;
+
  if (vrefcnt(vp) > 1) then
  begin
   lvp:=NULLVPTOLOWERVP(vp);
-  if (lvp<>nil) then
-  begin
-   VREF(lvp);
-  end;
+  VREF(lvp);
   vreleit:=1;
  end else
+ begin
   vreleit:=0;
+ end;
 
- if (lvp<>nil) then
+ tnn:=VTONULL(vp);
+ tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
+
+ retval:=null_bypass(Pointer(ap));
+
+ if (vreleit<>0) then
  begin
-  tnn:=VTONULL(vp);
-  tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
-
-  retval:=null_bypass(Pointer(ap));
-
-  if (vreleit<>0) then
-  begin
-   vrele(lvp);
-  end;
- end else
- begin
-  retval:=0;
+  vrele(lvp);
  end;
 
  Exit(retval);
@@ -575,8 +569,6 @@ begin
   tnn:=VTONULL(tvp);
   tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
  end;
-
- if (tnn^.null_lowervp=nil) then Exit(0);
 
  Exit(null_bypass(Pointer(ap)));
 end;
