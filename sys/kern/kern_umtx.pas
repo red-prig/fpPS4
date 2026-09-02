@@ -2359,6 +2359,9 @@ begin
 
   end; //(uq_first<>nil)
 
+ end else
+ begin
+  umtxq_unlock(@key);
  end;
 
  old:=casuword32(m^.m_owner, owner, t);
@@ -2801,7 +2804,8 @@ begin
 
   if (owner=DWORD(-1)) then
   begin
-   Exit(EFAULT);
+   Result:=EFAULT;
+   Break;
   end;
 
   if (owner=UMUTEX_CONTESTED) then
