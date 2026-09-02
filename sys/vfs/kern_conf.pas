@@ -26,7 +26,8 @@ uses
  errno,
  devfs_int,
  vsys_generic,
- systm;
+ systm,
+ subr_unit;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -785,7 +786,7 @@ begin
  dev^.si_mode:=mode;
 
  devfs_create(dev);
- //clean_unrhdrl(devfs_inos);
+ clean_unrhdrl(devfs_inos);
  dev_unlock_and_free();
 
  notify_create(dev, flags);
@@ -842,7 +843,7 @@ begin
  dev^.si_flags:=dev^.si_flags or SI_NAMED;
  devfs_create(dev);
  dev_dependsl(pdev, dev);
- //clean_unrhdrl(devfs_inos);
+ clean_unrhdrl(devfs_inos);
  dev_unlock();
 
  notify_create(dev, flags);

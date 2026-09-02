@@ -61,7 +61,6 @@ uses
  vfs_subr,
  vnode_if,
  kern_mtx,
- kern_id,
  fdesc_vnops;
 
 function VFSTOFDESC(mp:p_mount):p_fdescmount; inline;

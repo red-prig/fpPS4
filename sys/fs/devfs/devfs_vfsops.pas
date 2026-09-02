@@ -15,7 +15,7 @@ uses
  subr_unit;
 
 var
- devfs_unr:p_unrhdr;
+ devfs_unr:p_unrhdr=nil;
 
 function  devfs_mount  (mp:p_mount):Integer;
 function  devfs_unmount(mp:p_mount;mntflags:Integer):Integer;

@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- kern_id,
  sys_conf,
  devfs_int,
  devfs;
@@ -44,11 +43,8 @@ uses
  vfs_vnops,
  vfs_subr,
  vnode_if,
+ subr_unit,
  kern_malloc;
-
-var
- devfs_desc:t_id_desc=(free:nil;refs:0);
- devfs_inos:t_id_desc_table;
 
 //
 
@@ -691,26 +687,20 @@ end;
 
 function devfs_alloc_cdp_inode():ino_t; public;
 begin
- if id_new(@devfs_inos,@devfs_desc,@Result) then
- begin
-  id_release(@devfs_desc); //<-id_new
- end else
- begin
-  Result:=-1;
- end;
+ Result:=alloc_unr(devfs_inos);
 end;
 
 procedure devfs_free_cdp_inode(ino:ino_t); public;
 begin
  if (ino>0) then
  begin
-  id_del(@devfs_inos,ino,nil);
+  free_unr(devfs_inos, ino);
  end;
 end;
 
 procedure devfs_devs_init();
 begin
- id_table_init(@devfs_inos,DEVFS_ROOTINO + 1);
+ devfs_inos:=new_unrhdr(DEVFS_ROOTINO + 1, High(Integer), @devmtx);
 end;
 
 end.

@@ -233,7 +233,7 @@ function  pipe_create(pipe:p_pipe;backing:Integer):Integer;
 function sys_pipe():Integer;
 
 var
- pipeino_unr:p_unrhdr;
+ pipeino_unr:p_unrhdr=nil;
  pipedev_ino:ino_t;
 
 type

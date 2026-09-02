@@ -135,42 +135,38 @@ uses
  ufs_vnops,
  md_vnops,
  kern_malloc,
- kern_id;
+ subr_unit;
 
 var
- ufs_desc:t_id_desc=(free:nil;refs:0);
- ufs_inos:t_id_desc_table;
+ ufs_inos:p_unrhdr=nil;
 
 function ufs_alloc_cdp_inode():Integer;
 begin
- if id_new(@ufs_inos,@ufs_desc,@Result) then
- begin
-  id_release(@ufs_desc); //<-id_new
- end else
- begin
-  Result:=-1;
- end;
+ Result:=alloc_unr(ufs_inos);
 end;
 
 procedure ufs_free_cdp_inode(ino:Integer);
 begin
  if (ino>0) then
  begin
-  id_del(@ufs_inos,ino,nil);
+  free_unr(ufs_inos, ino);
  end;
 end;
 
 function ufs_init(cf:p_vfsconf):Integer;
 begin
  Result:=0;
- id_table_init(@ufs_inos,UFS_ROOTINO+1);
+ if (ufs_inos=nil) then
+ begin
+  ufs_inos:=new_unrhdr(UFS_ROOTINO + 1, High(Integer), nil);
+ end;
  mtx_init(ufs_interlock,'ufs_interlock');
 end;
 
 function ufs_uinit(cf:p_vfsconf):Integer;
 begin
  Result:=0;
- id_table_fini(@ufs_inos);
+ clean_unrhdrl(ufs_inos);
  mtx_destroy(ufs_interlock);
 end;
 
