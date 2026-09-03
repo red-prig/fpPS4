@@ -23,7 +23,6 @@ uses
  vnamei,
  vfs_vnops,
  vnode_if,
- vfilio,
  vfs_default,
  ufs,
  ufs_vnops,
@@ -1595,7 +1594,7 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
-  off:=-dd^.ufs_dr_off; //load cache
+  off:=-dd^.ufs_dr_off-2; //load cache
 
   restart:=(off<0) or (off>in_off);
   if restart then off:=0;
@@ -1662,9 +1661,9 @@ begin
 
   //save cache
   if (in_off<0) then
-   dd^.ufs_dr_off:=1
+   dd^.ufs_dr_off:=-(-1+2)
   else
-   dd^.ufs_dr_off:=-off;
+   dd^.ufs_dr_off:=-(off+2);
 
  sx_xunlock(@dd^.ufs_md_lock);
 
@@ -1884,7 +1883,7 @@ begin
  //new dirent
  Result:=md_new_cache(dvp^.v_mount,dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI,de);
 
- dd^.ufs_dr_off:=0; //dir changed
+ dd^.ufs_dr_off:=-1; //dir changed
 
  sx_xunlock(@dd^.ufs_md_lock);
  RtlReleasePrivilege(PrivState);
@@ -1963,7 +1962,7 @@ begin
   de:=md_find_cache(dd,cnp^.cn_nameptr,cnp^.cn_namelen,0);
   md_unlink_cache(de,False,True);
 
-  dd^.ufs_dr_off:=0; //dir changed
+  dd^.ufs_dr_off:=-1; //dir changed
  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
@@ -2106,7 +2105,7 @@ begin
 
  de^.ufs_mode:=va_mode;
 
- dd^.ufs_dr_off:=0; //dir changed
+ dd^.ufs_dr_off:=-1; //dir changed
 
  sx_xunlock(@dd^.ufs_md_lock);
 
@@ -2157,7 +2156,7 @@ begin
  //clear cache
  md_unlink_cache(de,False,True);
 
- dd^.ufs_dr_off:=0; //dir changed
+ dd^.ufs_dr_off:=-1; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2216,7 +2215,7 @@ begin
  //clear cache
  md_unlink_cache(de,False,True);
 
- dd^.ufs_dr_off:=0; //dir changed
+ dd^.ufs_dr_off:=-1; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2349,8 +2348,8 @@ begin
  md_unlink_cache(de_f,True ,True);
  md_unlink_cache(de_t,False,True);
 
- dd_f^.ufs_dr_off:=0; //dir changed
- dd_t^.ufs_dr_off:=0; //dir changed
+ dd_f^.ufs_dr_off:=-1; //dir changed
+ dd_t^.ufs_dr_off:=-1; //dir changed
 
  de_f:=nil;
 
@@ -2555,7 +2554,7 @@ begin
    Exit;
  end;
 
- dd^.ufs_dr_off:=0; //dir changed
+ dd^.ufs_dr_off:=-1; //dir changed
 
  dmp:=VFSTOUFS(dvp^.v_mount);
  sx_xlock(@dmp^.ufs_lock);
