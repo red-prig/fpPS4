@@ -106,7 +106,7 @@ var
 begin
  if (pool_size <= 0) or (not powerof2(pool_size)) then
  begin
-  LOG_WARNING('WARNING: %s pool size is not a power of 2.', mtx_name);
+  LOG_WARNING('WARNING: ', mtx_name, ' pool size is not a power of 2.');
   pool_size:=128;
  end;
  pool:=calloc(sizeof(mtx_pool)+

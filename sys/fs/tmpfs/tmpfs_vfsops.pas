@@ -450,7 +450,7 @@ begin
   Exit(error);
  end;
 
- Assert(root^.tn_id=2, 'tmpfs root with invalid ino: %d');
+ Assert(root^.tn_id=2, 'tmpfs root with invalid ino: ' + IntToStr(root^.tn_id));
  tmp^.tm_root:=root;
 
  MNT_ILOCK(mp);

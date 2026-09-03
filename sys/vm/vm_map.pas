@@ -3560,7 +3560,7 @@ _done:
 
   end;
 
-  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0,'vm_map_unwire: in-transition flag missing %p');
+  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0, 'vm_map_unwire: in-transition flag missing ' + HexStr(entry));
 
   //Assert(entry^.wiring_thread=curthread,'vm_map_unwire: alien wire %p');
 
@@ -3980,7 +3980,7 @@ _done:
   end;
 
 _next_entry_done:
-  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0,'vm_map_wire: in-transition flag missing %p');
+  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0, 'vm_map_wire: in-transition flag missing ' + HexStr(entry));
   //Assert(entry^.wiring_thread=curthread,'vm_map_wire: alien wire %p');
 
   entry^.eflags:=entry^.eflags and (not (MAP_ENTRY_IN_TRANSITION or MAP_ENTRY_WIRE_SKIPPED));

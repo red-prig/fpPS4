@@ -77,7 +77,7 @@ begin
 
  dev_lock();
  Dec(dev^.si_refcount);
- Assert(dev^.si_refcount >= 0,'dev_rel(%s) gave negative count');
+ Assert(dev^.si_refcount >= 0, 'dev_rel(' + devtoname(dev) + ') gave negative count');
 
  if (dev^.si_devsw=nil) and
     (dev^.si_refcount=0) then
@@ -168,7 +168,7 @@ procedure dev_relthread(dev:p_cdev;ref:Integer); public;
 begin
  if (ref=0) then Exit;
  dev_lock();
- Assert(dev^.si_threadcount > 0,'%s threadcount is wrong');
+ Assert(dev^.si_threadcount > 0, dev^.si_name + ' threadcount is wrong');
  Dec(dev^.si_threadcount);
  dev_unlock();
 end;
@@ -222,7 +222,7 @@ var
 begin
  mtx_assert(devmtx);
  cdp:=cdev2priv(cdev);
- Assert((cdp^.cdp_flags and CDP_UNREF_DTR)=0,'destroy_dev() was not called after delist_dev(%p)');
+ Assert((cdp^.cdp_flags and CDP_UNREF_DTR)=0, 'destroy_dev() was not called after delist_dev(' + HexStr(cdev) + ')');
  TAILQ_INSERT_HEAD(@cdevp_free_list,cdp,@cdp^.cdp_list);
 end;
 
@@ -751,7 +751,7 @@ begin
   begin
    if ((flags and MAKEDEV_CHECKNAME)=0) then
    begin
-    Assert(False,'make_dev_credv: bad si_name (error=%d, si_name=%s)');
+    Assert(False, 'make_dev_credv: bad si_name (error=' + IntToStr(res) + ', si_name=' + dev^.si_name + ')');
    end;
    if (dev=dev_new) then
    begin
@@ -781,7 +781,7 @@ begin
   dres^:=dev;
   Exit(0);
  end;
- Assert((dev^.si_flags and SI_NAMED)=0,'make_dev() by driver %s on pre-existing device (min=%x, name=%s)');
+ Assert((dev^.si_flags and SI_NAMED)=0, 'make_dev() by driver ' + devsw^.d_name + ' on pre-existing device (min=' + IntToHex(dev2unit(dev), 0) + ', name=' + devtoname(dev) + ')');
  dev^.si_flags:=dev^.si_flags or SI_NAMED;
 
  dev^.si_uid :=uid;
@@ -823,7 +823,7 @@ var
 begin
  Assert(pdev<>nil,'make_dev_alias_v: pdev is nil');
  Assert(((flags and MAKEDEV_WAITOK)=0) or ((flags and MAKEDEV_NOWAIT)=0),'make_dev_alias_v: both WAITOK and NOWAIT specified');
- Assert((flags and (not (MAKEDEV_WAITOK or MAKEDEV_NOWAIT or MAKEDEV_CHECKNAME)))=0,'make_dev_alias_v: invalid flags specified (flags=%02x)');
+ Assert((flags and (not (MAKEDEV_WAITOK or MAKEDEV_NOWAIT or MAKEDEV_CHECKNAME)))=0, 'make_dev_alias_v: invalid flags specified (flags=' + IntToHex(flags, 2) + ')');
 
  dev:=devfs_alloc(flags);
  if (dev=nil) then
@@ -942,8 +942,8 @@ var
 begin
 
  mtx_assert(devmtx);
- Assert((dev^.si_flags and SI_NAMED)<>0 ,'WARNING: Driver mistake: destroy_dev on %dn');
- Assert((dev^.si_flags and SI_ETERNAL)=0,'WARNING: Driver mistake: destroy_dev on eternal %dn');
+ Assert((dev^.si_flags and SI_NAMED)<>0, 'WARNING: Driver mistake: destroy_dev on ' + IntToStr(dev2unit(dev)));
+ Assert((dev^.si_flags and SI_ETERNAL)=0, 'WARNING: Driver mistake: destroy_dev on eternal ' + IntToStr(dev2unit(dev)));
 
  cdp:=cdev2priv(dev);
  if ((cdp^.cdp_flags and CDP_UNREF_DTR)=0) then

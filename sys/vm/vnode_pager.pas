@@ -31,6 +31,7 @@ procedure vnode_pager_release_writecount(obj:vm_object_t;start,__end:vm_offset_t
 implementation
 
 uses
+ sysutils,
  vnode_if,
  vfs_subr,
  vfs_vnops,
@@ -112,7 +113,7 @@ retry:
    // Obj has been created while we were sleeping
    VI_UNLOCK(vp);
    VM_OBJECT_LOCK(obj);
-   Assert(obj^.ref_count=1, 'leaked ref %p %d');
+   Assert(obj^.ref_count=1, 'leaked ref ' + HexStr(obj) + ' ' + IntToStr(obj^.ref_count));
 
    obj^.otype:=OBJT_DEAD;
    obj^.ref_count:=0;
@@ -313,7 +314,7 @@ begin
   Exit;
  end;
 
- Assert(obj^.otype=OBJT_VNODE,'not vnode-backed obj %p');
+ Assert(obj^.otype=OBJT_VNODE, 'not vnode-backed obj ' + HexStr(obj));
 
  obj^.un_pager.vnp.vnp_size:=nsize;
  obj^.size:=nobjsize;

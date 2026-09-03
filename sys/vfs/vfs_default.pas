@@ -203,7 +203,7 @@ end;
  }
 function vop_panic(ap:Pointer):Integer;
 begin
- Assert(false,'filesystem goof: vop_panic[%s]');
+ Assert(false, 'filesystem goof: vop_panic[' + p_vop_generic_args(ap)^.a_desc^.vdesc_name + ']');
  Exit(ENOENT);
 end;
 
@@ -251,7 +251,7 @@ end;
 
 function vop_nostrategy(ap:p_vop_strategy_args):Integer;
 begin
- LOG_INFO('No strategy for buffer at %p');
+ LOG_INFO('No strategy for buffer at ', HexStr(ap^.a_bp));
  //ap^.a_bp^.b_ioflags:=ap^.a_bp^.b_ioflags or BIO_ERROR;
  //ap^.a_bp^.b_error:=EOPNOTSUPP;
  //bufdone(ap^.a_bp);
@@ -272,8 +272,8 @@ var
  iov:iovec;
  dp:p_dirent;
 begin
- Assert(VOP_ISLOCKED(vp)<>0,'vp %p is not locked');
- Assert(vp^.v_type=VDIR,'vp %p is not a directory');
+ Assert(VOP_ISLOCKED(vp)<>0, 'vp ' + HexStr(vp) + ' is not locked');
+ Assert(vp^.v_type=VDIR, 'vp ' + HexStr(vp) + ' is not a directory');
 
  if (len^=0) then
  begin
@@ -333,8 +333,8 @@ var
  dp:p_dirent;
  va:t_vattr;
 begin
- Assert(VOP_ISLOCKED(vp)<>0, 'vp %p is not locked');
- Assert(vp^.v_type=VDIR, 'vp %p is not a directory');
+ Assert(VOP_ISLOCKED(vp)<>0, 'vp ' + HexStr(vp) + ' is not locked');
+ Assert(vp^.v_type=VDIR, 'vp ' + HexStr(vp) + ' is not a directory');
 
  found:=0;
 
@@ -712,8 +712,7 @@ loop2:
   end;
   BO_UNLOCK(bo);
   Assert(bp^.b_bufobj=bo,
-      ('bp %p wrong b_bufobj %p should be %p',
-      bp, bp^.b_bufobj, bo));
+      'bp ' + HexStr(bp) + ' wrong b_bufobj ' + HexStr(bp^.b_bufobj) + ' should be ' + HexStr(bo));
   if ((bp^.b_flags and B_DELWRI)=0) then
    panic('fsync: not dirty');
   if ((vp^.v_object<>nil) and (bp^.b_flags and B_CLUSTEROK)) then

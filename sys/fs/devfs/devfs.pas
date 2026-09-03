@@ -197,7 +197,7 @@ begin
 
  mtx_lock(dirlist_mtx);
  dle:=devfs_dir_findent_locked(dir);
- Assert(dle<>nil, 'devfs_dir_unref: dir %s not referenced');
+ Assert(dle<>nil, 'devfs_dir_unref: dir ' + dir + ' not referenced');
  Dec(dle^.refcnt);
  Assert(dle^.refcnt >= 0, 'devfs_dir_unref: negative refcnt');
  if (dle^.refcnt=0) then

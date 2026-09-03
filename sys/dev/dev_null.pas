@@ -126,7 +126,7 @@ var
 begin
  error:=0;
 
- Assert(uio^.uio_rw=UIO_READ,'Cant be in %s for write');
+ Assert(uio^.uio_rw=UIO_READ, 'Cant be in zero_read for write');
 
  while (uio^.uio_resid > 0) and (error=0) do
  begin

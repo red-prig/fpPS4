@@ -802,7 +802,7 @@ var
 begin
  td:=curkthread;
 
- Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
+ Assert(uio^.uio_td=td, 'uio_td ' + HexStr(uio^.uio_td) + ' is not td ' + HexStr(td));
  Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
  vp:=fp^.f_vnode;
 
@@ -889,7 +889,7 @@ var
 begin
  td:=curkthread;
 
- Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
+ Assert(uio^.uio_td=td, 'uio_td ' + HexStr(uio^.uio_td) + ' is not td ' + HexStr(td));
  Assert((flags and FOF_OFFSET)<>0, 'No FOF_OFFSET');
  vp:=fp^.f_vnode;
  vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);

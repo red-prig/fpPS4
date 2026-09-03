@@ -654,7 +654,7 @@ begin
        ap^.a_flags:=ap^.a_flags or LK_EXCLUSIVE;
       end;
      else
-      Assert(False,'Unsupported lock request');
+      Assert(False, 'Unsupported lock request ' + IntToStr(flags));
     end;
     VOP_UNLOCK(lvp, 0);
     error:=vop_stdlock(ap);

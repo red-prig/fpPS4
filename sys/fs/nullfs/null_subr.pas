@@ -254,7 +254,7 @@ begin
 
  if (lowervp<>nil) then
  begin
-  Assert(lowervp^.v_usecount >= 1,'Unreferenced vnode %p');
+  Assert(lowervp^.v_usecount >= 1, 'Unreferenced vnode ' + HexStr(lowervp));
  end;
 
  { Lookup the hash firstly. }
@@ -273,7 +273,7 @@ begin
  if (lowervp<>nil) then
  if (VOP_ISLOCKED(lowervp)<>LK_EXCLUSIVE) then
  begin
-  Assert((MOUNTTONULLMOUNT(mp)^.nullm_flags and NULLM_CACHE)<>0,'lowervp %p is not excl locked and cache is disabled');
+  Assert((MOUNTTONULLMOUNT(mp)^.nullm_flags and NULLM_CACHE)<>0, 'lowervp ' + HexStr(lowervp) + ' is not excl locked and cache is disabled');
   vn_lock(lowervp, LK_UPGRADE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
   if ((lowervp^.v_iflag and VI_DOOMED)<>0) then
   begin

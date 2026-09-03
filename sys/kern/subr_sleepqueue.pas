@@ -62,6 +62,7 @@ procedure init_sleepqueues; //SYSINIT
 implementation
 
 uses
+ sysutils,
  errno,
  uma,
  signal,
@@ -217,8 +218,8 @@ begin
 
   For i:=0 to NR_SLEEPQS-1 do
   begin
-   Assert(TAILQ_EMPTY(@sq^.sq_blocked[i]),'threads sleep queue %d is not empty');
-   Assert(sq^.sq_blockedcnt[i]=0         ,'threads sleep queue %d count mismatches');
+   Assert(TAILQ_EMPTY(@sq^.sq_blocked[i]), 'threads sleep queue ' + IntToStr(i) + ' is not empty');
+   Assert(sq^.sq_blockedcnt[i]=0         , 'threads sleep queue ' + IntToStr(i) + ' count mismatches');
   end;
 
   Assert(LIST_EMPTY(@sq^.sq_free),'threads sleep queue has a non-empty free list');

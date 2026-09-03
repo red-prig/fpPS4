@@ -192,6 +192,7 @@ var
 implementation
 
 uses
+ sysutils,
  errno,
  vfs_vnops,
  subr_uio,
@@ -646,7 +647,7 @@ function vtryrecycle(vp:p_vnode):Integer;
 var
  vnmp:p_mount;
 begin
- Assert(vp^.v_holdcnt<>0,'vtryrecycle: Recycling vp %p without a reference.');
+ Assert(vp^.v_holdcnt<>0, 'vtryrecycle: Recycling vp ' + HexStr(vp) + ' without a reference.');
  {
   * This vnode may found and locked via some other list, if so we
   * can't recycle it yet.
@@ -1339,7 +1340,7 @@ begin
  struct buf *root;
  struct bufv *bv;
 
- Assert(bp^.b_bufobj<>nil, 'No b_bufobj %p", bp));
+ Assert(bp^.b_bufobj<>nil, 'No b_bufobj ' + HexStr(bp^.b_bufobj));
  ASSERT_BO_LOCKED(bp^.b_bufobj);
  Assert((bp^.b_xflags and (BX_VNDIRTY|BX_VNCLEAN)) !=
      (BX_VNDIRTY|BX_VNCLEAN),
@@ -1454,7 +1455,7 @@ begin
 
  bo:=@vp^.v_bufobj;
  ASSERT_BO_LOCKED(bo);
- Assert(bp^.b_vp=nil, bp^.b_vp, 'bgetvp: not free');
+ Assert(bp^.b_vp=nil, 'bgetvp: not free');
 
  CTR3(KTR_BUF, "bgetvp(%p) vp %p flags %X", bp, vp, bp^.b_flags);
  Assert((bp^.b_xflags and (BX_VNDIRTY|BX_VNCLEAN))=0, vp,
@@ -2491,7 +2492,7 @@ loop:
    }
   VI_LOCK(rootvp);
   Assert(busy > 0, 'vflush: not busy');
-  Assert(rootvp^.v_usecount >= rootrefs,'vflush: usecount %d < rootrefs %d');
+  Assert(rootvp^.v_usecount >= rootrefs, 'vflush: usecount ' + IntToStr(rootvp^.v_usecount) + ' < rootrefs ' + IntToStr(rootrefs));
   if (busy=1) and (rootvp^.v_usecount=rootrefs) then
   begin
    VOP_LOCK(rootvp, LK_EXCLUSIVE or LK_INTERLOCK,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
@@ -2557,7 +2558,7 @@ var
 begin
  ASSERT_VOP_ELOCKED(vp, 'vgonel');
  ASSERT_VI_LOCKED(vp, 'vgonel');
- Assert(vp^.v_holdcnt<>0,'vgonel: vp %p has no reference.');
+ Assert(vp^.v_holdcnt<>0, 'vgonel: vp ' + HexStr(vp) + ' has no reference.');
 
  {
   * Don't vgonel if we're already doomed.
@@ -3888,8 +3889,8 @@ restart:
   begin
    continue;
   end;
-  Assert(vp^.v_type<>VMARKER, 'locked marker %p');
-  Assert((vp^.v_mount=mp) or (vp^.v_mount=nil),'alien vnode on the active list %p %p');
+  Assert(vp^.v_type<>VMARKER, 'locked marker ' + HexStr(vp));
+  Assert((vp^.v_mount=mp) or (vp^.v_mount=nil), 'alien vnode on the active list ' + HexStr(vp^.v_mount) + ' ' + HexStr(mp));
   if (vp^.v_mount=mp) and ((vp^.v_iflag and VI_DOOMED)=0) then
   begin
    break;
@@ -3909,7 +3910,7 @@ restart:
  TAILQ_INSERT_AFTER(@mp^.mnt_activevnodelist,vp,mvp^,@mvp^^.v_actfreelist);
  mtx_unlock(vnode_free_list_mtx);
  ASSERT_VI_LOCKED(vp, 'active iter');
- Assert((vp^.v_iflag and VI_ACTIVE)<>0, 'Non-active vp %p');
+ Assert((vp^.v_iflag and VI_ACTIVE)<>0, 'Non-active vp ' + HexStr(vp));
  Exit(vp);
 end;
 

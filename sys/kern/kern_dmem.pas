@@ -630,7 +630,7 @@ begin
                            @d_mtype);
    if (ret<>0) then
    begin
-    Assert(false,'dmem_vmo_get_type error %d');
+    Assert(false, 'dmem_vmo_get_type error ' + IntToStr(ret));
    end;
 
    qinfo^.bits.isDirectMemory:=1;

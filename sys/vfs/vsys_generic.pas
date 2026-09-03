@@ -539,7 +539,7 @@ var
 begin
  if (com > $ffffffff) then
  begin
-  LOG_INFO('WARNING pid %d (%s): ioctl sign-extension ioctl ',com);
+  LOG_INFO('WARNING pid ', com, ' (ioctl): ioctl sign-extension ioctl ');
   com:=com and $ffffffff;
  end;
 

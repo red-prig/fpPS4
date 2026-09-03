@@ -32,6 +32,7 @@ uses
 implementation
 
 uses
+ sysutils,
  tmpfs_seg,
  tmpfs_fifoops,
  tmpfs_vnops;
@@ -151,7 +152,7 @@ begin
    end;
 
   else
-   Assert(false,'tmpfs_alloc_node: type %p %d');
+   Assert(false, 'tmpfs_alloc_node: type ' + HexStr(nnode) + ' ' + IntToStr(Integer(nnode^.tn_type)));
  end;
 
  TMPFS_LOCK(tmp);
@@ -199,7 +200,7 @@ begin
    end;
 
   else
-   Assert(false,'tmpfs_free_node: type %p %d');
+   Assert(false, 'tmpfs_free_node: type ' + HexStr(node) + ' ' + IntToStr(Integer(node^.tn_type)));
  end;
 
  free_unr(tmp^.tm_ino_unr, node^.tn_id);
@@ -364,7 +365,7 @@ _loop1:
    end
 
   else
-   Assert(false,'tmpfs_alloc_vp: type %p %d');
+   Assert(false, 'tmpfs_alloc_vp: type ' + HexStr(node) + ' ' + IntToStr(Integer(node^.tn_type)));
  end;
 
  vnode_pager_setsize(vp, node^.tn_size);
@@ -709,7 +710,7 @@ begin
     VREG :d.d_type:=DT_REG;
     VSOCK:d.d_type:=DT_SOCK;
     else
-     Assert(False,'tmpfs_dir_getdents: type %p %d');
+     Assert(False, 'tmpfs_dir_getdents: type ' + HexStr(de^.td_node) + ' ' + IntToStr(Integer(de^.td_node^.tn_type)));
    end;
   end;
 

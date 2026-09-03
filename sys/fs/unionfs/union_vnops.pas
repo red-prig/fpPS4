@@ -144,7 +144,7 @@ begin
    //cache_enter(dvp, nil, cnp);
   end;
 
-  LOG_DEBUG('unionfs_lookup: leave (%d)', error);
+  LOG_DEBUG('unionfs_lookup: leave (', error, ')');
 
   Exit(error);
  end;
@@ -1182,7 +1182,7 @@ begin
   error:=unionfs_mkwhiteout(udvp, cnp, path);
  end;
 
- LOG_DEBUG('unionfs_remove: leave (%d)', error);
+ LOG_DEBUG('unionfs_remove: leave (', error, ')');
 
  Exit(error);
 end;
@@ -1613,7 +1613,7 @@ begin
   end;
  end;
 
- LOG_DEBUG('unionfs_mkdir: leave (%d)', error);
+ LOG_DEBUG('unionfs_mkdir: leave (', error, ')');
 
  Exit(error);
 end;
@@ -1723,7 +1723,7 @@ begin
   end;
  end;
 
- LOG_DEBUG('unionfs_symlink: leave (%d)', error);
+ LOG_DEBUG('unionfs_symlink: leave (', error, ')');
 
  Exit(error);
 end;
@@ -2024,7 +2024,7 @@ begin
   VI_UNLOCK(vp);
  end;
 
- LOG_DEBUG('unionfs_getwritemount: leave (%d)', error);
+ LOG_DEBUG('unionfs_getwritemount: leave (', error, ')');
 
  Exit(error);
 end;
@@ -2055,7 +2055,7 @@ begin
  unp:=VTOUNIONFS(ap^.a_vp);
  { unionfs_get_node_status(unp, curthread, @unsp); }
 
- Writeln('unionfs_vp=%p, uppervp=%p, lowervp=%p', HexStr(ap^.a_vp), HexStr(unp^.un_uppervp), HexStr(unp^.un_lowervp));
+ Writeln('unionfs_vp=', HexStr(ap^.a_vp), ' uppervp=', HexStr(unp^.un_uppervp), ' lowervp=', HexStr(unp^.un_lowervp));
 
  {
  printf('unionfs opencnt: uppervp=%d, lowervp=%d',
@@ -2511,14 +2511,14 @@ begin
 
  error:=VOP_ADVLOCK(uvp, ap^.a_id, ap^.a_op, ap^.a_fl, ap^.a_flags);
 
- LOG_DEBUG('unionfs_advlock: leave (%d)', error);
+ LOG_DEBUG('unionfs_advlock: leave (', error, ')');
 
  Exit(error);
 
 _unionfs_advlock_abort:
  VOP_UNLOCK(vp, LK_RELEASE);
 
- LOG_DEBUG('unionfs_advlock: leave (%d)', error);
+ LOG_DEBUG('unionfs_advlock: leave (', error, ')');
 
  Exit(error);
 end;

@@ -295,6 +295,7 @@ function  _einval():Integer;
 implementation
 
 uses
+ sysutils,
  errno;
 
 function dev2unit(d:p_cdev):Integer; inline;
@@ -345,7 +346,7 @@ var
 begin
  res:=make_dev_credv(0, @dev, devsw, _unit, uid, gid, mode, fmt, Args);
 
- Assert((res=0) and (dev<>nil),'make_dev: failed make_dev_credv (error=%d)');
+ Assert((res=0) and (dev<>nil), 'make_dev: failed make_dev_credv (error=' + IntToStr(res) + ')');
 
  if (res=0) then
   Exit(dev)
@@ -366,7 +367,7 @@ var
 begin
  res:=make_dev_credv(0, @dev, devsw, _unit, uid, gid, mode, fmt, Args);
 
- Assert((res=0) and (dev<>nil),'make_dev_cred: failed make_dev_credv (error=%d)');
+ Assert((res=0) and (dev<>nil), 'make_dev_cred: failed make_dev_credv (error=' + IntToStr(res) + ')');
 
  if (res=0) then
   Exit(dev)
@@ -390,7 +391,7 @@ begin
 
  Assert((((flags and MAKEDEV_NOWAIT)<>0) and (res=ENOMEM)) or
         (((flags and MAKEDEV_CHECKNAME)<>0) and (res<>ENOMEM)) or
-        (res=0),'make_dev_credf: failed make_dev_credv (error=%d)');
+        (res=0), 'make_dev_credf: failed make_dev_credv (error=' + IntToStr(res) + ')');
 
  if (res=0) then
   Exit(dev)
@@ -413,7 +414,7 @@ begin
 
  Assert((((flags and MAKEDEV_NOWAIT)<>0) and (res=ENOMEM)) or
         (((flags and MAKEDEV_CHECKNAME)<>0) and (res<>ENOMEM)) or
-        (res=0),'make_dev_p: failed make_dev_credv (error=%d)');
+        (res=0), 'make_dev_p: failed make_dev_credv (error=' + IntToStr(res) + ')');
 
  Exit(res);
 end;
@@ -427,7 +428,7 @@ var
 begin
  res:=make_dev_alias_v(MAKEDEV_WAITOK, @dev, pdev, fmt, Args);
 
- Assert((res=0) and (dev<>nil),'make_dev_alias: failed make_dev_alias_v (error=%d)');
+ Assert((res=0) and (dev<>nil), 'make_dev_alias: failed make_dev_alias_v (error=' + IntToStr(res) + ')');
 
  if (res=0) then
   Exit(dev)

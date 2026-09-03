@@ -716,7 +716,7 @@ unionlookup:
  ndp^.ni_dvp:=dp;
  ndp^.ni_vp :=nil;
  ASSERT_VOP_LOCKED(dp, 'lookup');
- Assert(vfslocked=0,'lookup: vfslocked %d');
+ Assert(vfslocked=0, 'lookup: vfslocked ' + IntToStr(vfslocked));
  {
   * If we have a shared lock we may need to upgrade the lock for the
   * last operation.

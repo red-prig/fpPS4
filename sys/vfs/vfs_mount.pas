@@ -1601,8 +1601,8 @@ begin
   error:=msleep(@mp^.mnt_lockref, MNT_MTX(mp), PVFS, 'mount drain', 0);
  end;
  MNT_IUNLOCK(mp);
- Assert(mp^.mnt_lockref=0,'%s: invalid lock refcount in the drain path @ %s:%d');
- Assert(error=0,'%s: invalid Exitvalue for msleep in the drain path @ %s:%d');
+ Assert(mp^.mnt_lockref=0, 'vfs_unmount: invalid lock refcount in the drain path @ ' + {$INCLUDE %FILE%} + ':' + {$INCLUDE %line%});
+ Assert(error=0, 'vfs_unmount: invalid Exitvalue for msleep in the drain path @ ' + {$INCLUDE %FILE%} + ':' + {$INCLUDE %line%});
 
  //if (mp^.mnt_flag and MNT_EXPUBLIC) then
  // vfs_setpublicfs(nil, nil, nil);
@@ -1716,7 +1716,7 @@ end;
  }
 function mount_argb(ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
 begin
- Assert((name[0]='n') and (name[1]='o'),'mount_argb(...,%s): name must start with no');
+ Assert((name[0]='n') and (name[1]='o'), 'mount_argb(...,' + name + '): name must start with no');
 
  Exit(mount_arg(ma, name + (ord(flag<>0)*2), nil, 0));
 end;
@@ -1849,7 +1849,7 @@ var
 begin
  Assert(ma<>nil,           'kernel_mount nil ma');
  Assert(ma^.v<>nil,        'kernel_mount nil ma^.v');
- Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (%d)');
+ Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (' + IntToStr(ma^.len) + ')');
 
  auio.uio_iov   :=ma^.v;
  auio.uio_iovcnt:=ma^.len;

@@ -24,7 +24,7 @@ var
  hashtbl:P_LIST_HEAD;
  i:Integer;
 begin
- Assert((elements > 0),'%s: bad elements');
+ Assert((elements > 0), 'hashinit: bad elements');
 
  hashsize:=1;
  while (hashsize <= elements) do hashsize:=hashsize shl 1;
@@ -53,7 +53,7 @@ begin
  hp:=hashtbl;
  while (hp <= @hashtbl[hashmask]) do
  begin
-  Assert(LIST_EMPTY(hp),'%s: hash not empty');
+  Assert(LIST_EMPTY(hp), 'hashdestroy: hash not empty');
   Inc(hp);
  end;
  free(hashtbl);
@@ -76,7 +76,7 @@ var
  hashtbl:P_LIST_HEAD;
  i:Integer;
 begin
- Assert(elements > 0,'%s: bad elements');
+ Assert(elements > 0, 'phashinit: bad elements');
 
  i:=1;
  hashsize:=primes[1];

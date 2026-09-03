@@ -121,7 +121,7 @@ begin
 
  if (vfc^.vfc_version<>VFS_VERSION) then
  begin
-  Assert(false,'ERROR: filesystem %s, unsupported ABI version');
+  Assert(false, 'ERROR: filesystem ' + vfc^.vfc_name + ', unsupported ABI version ' + IntToHex(vfc^.vfc_version, 0));
   Exit(EINVAL);
  end;
 
@@ -210,14 +210,14 @@ begin
   * and unmount operations, at the least.  The check
   * for vfsops available is just a debugging aid.
   }
- Assert(vfc^.vfc_vfsops<>nil,'Filesystem %s has no vfsops');
+ Assert(vfc^.vfc_vfsops<>nil, 'Filesystem ' + vfc^.vfc_name + ' has no vfsops');
  {
   * Check the mount and unmount operations.
   }
  vfsops:=vfc^.vfc_vfsops;
 
- Assert(vfsops^.vfs_mount<>nil,'Filesystem %s has no mount op');
- Assert(vfsops^.vfs_unmount<>nil,'Filesystem %s has no unmount op');
+ Assert(vfsops^.vfs_mount<>nil, 'Filesystem ' + vfc^.vfc_name + ' has no mount op');
+ Assert(vfsops^.vfs_unmount<>nil, 'Filesystem ' + vfc^.vfc_name + ' has no unmount op');
 
  if (vfsops^.vfs_root=nil) then
   { Exit file system's root vnode }
