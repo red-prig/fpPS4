@@ -69,21 +69,21 @@ function ufs_statfs(mp:p_mount;sbp:p_statfs):Integer;
 
 const
  _ufs_vfsops:vfsops=(
-  vfs_mount          :@ufs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@ufs_unmount;
-  vfs_root           :@ufs_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@ufs_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :@ufs_init;
-  vfs_uninit         :@ufs_uinit;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@ufs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@ufs_unmount;
+  vfs_root      :@ufs_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@ufs_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :nil;
+  vfs_checkexp  :nil;
+  vfs_init      :@ufs_init;
+  vfs_uninit    :@ufs_uinit;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
 var

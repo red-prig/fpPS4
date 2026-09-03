@@ -33,23 +33,24 @@ function tmpfs_statfs (mp:p_mount;sbp:p_statfs):Integer;
 
 const
  _tmpfs_vfsops:vfsops=(
-  vfs_mount          :@tmpfs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@tmpfs_unmount;
-  vfs_root           :@tmpfs_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@tmpfs_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :@tmpfs_fhtovp;
-  vfs_checkexp       :nil;
-  vfs_init           :nil;
-  vfs_uninit         :nil;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@tmpfs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@tmpfs_unmount;
+  vfs_root      :@tmpfs_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@tmpfs_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :@tmpfs_fhtovp;
+  vfs_checkexp  :nil;
+  vfs_init      :nil;
+  vfs_uninit    :nil;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
+var
  //VFS_SET(tmpfs_vfsops, tmpfs, 0);
  tmpfs_vfsconf:vfsconf=(
   vfc_version :VFS_VERSION;
@@ -319,16 +320,22 @@ var
  va:t_vattr;
 begin
  if (vfs_filteropt(mp^.mnt_optnew, tmpfs_opts))<>0 then
+ begin
   Exit(EINVAL);
+ end;
 
  if (mp^.mnt_flag and MNT_UPDATE)<>0 then
  begin
   { Only support update mounts for certain options. }
   if (vfs_filteropt(mp^.mnt_optnew, tmpfs_updateopts)<>0) then
+  begin
    Exit(EOPNOTSUPP);
+  end;
 
   if (vfs_flagopt(mp^.mnt_optnew, 'ro', nil, 0)<>p_tmpfs_mount(mp^.mnt_data)^.tm_ronly) then
+  begin
    Exit(EOPNOTSUPP);
+  end;
 
   Exit(0);
  end;
@@ -338,8 +345,7 @@ begin
  error:=VOP_GETATTR(mp^.mnt_vnodecovered, @va);
  VOP_UNLOCK(mp^.mnt_vnodecovered, 0);
 
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
 
  root_gid:=0;
  if //(mp^.mnt_cred^.cr_ruid<>0) OR
@@ -368,7 +374,9 @@ begin
  { Do not allow mounts if we do not have enough memory to preserve
   * the minimum reserved pages. }
  if (tmpfs_mem_avail() < TMPFS_PAGES_MINRESERVED) then
+ begin
   Exit(ENOSPC);
+ end;
 
  { Get the maximum number of memory pages this file system is
   * allowed to use, based on the maximum size the user passed in

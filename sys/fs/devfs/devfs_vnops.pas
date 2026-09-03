@@ -1301,7 +1301,9 @@ begin
   * character device, for anything else return EOPNOTSUPP.
   }
  if (ap^.a_vap^.va_type<>VCHR) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  dvp:=ap^.a_dvp;
  dmp:=VFSTODEVFS(dvp^.v_mount);
@@ -1327,14 +1329,21 @@ begin
    continue;
   end;
   if ((de^.de_flags and DE_WHITEOUT)<>0) then
+  begin
    break;
+  end;
   goto notfound;
  end;
+
  if (de=nil) then
+ begin
   goto notfound;
+ end;
+
  de^.de_flags:=de^.de_flags and (not DE_WHITEOUT);
  error:=devfs_allocv(de, dvp^.v_mount, LK_EXCLUSIVE, vpp);
  Exit(error);
+
 notfound:
  sx_xunlock(@dmp^.dm_lock);
  Exit(error);
@@ -1839,8 +1848,7 @@ end;
 
 function devfs_rread(ap:p_vop_read_args):Integer;
 begin
- if (ap^.a_vp^.v_type<>VDIR) then
-  Exit(EINVAL);
+ if (ap^.a_vp^.v_type<>VDIR) then Exit(EINVAL);
  Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
 end;
 

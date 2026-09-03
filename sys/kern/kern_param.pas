@@ -60,6 +60,10 @@ const
 
  maxfilesperproc = 13952;
 
+ MAXBSIZE=65536; // must be power of 2
+ BKVASIZE=16384; // must be power of 2
+ BKVAMASK=(BKVASIZE-1);
+
  IOSIZE_MAX      =High(Integer);
  DEVFS_IOSIZE_MAX=High(Integer);
 

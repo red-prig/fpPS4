@@ -506,7 +506,7 @@ retry:
    Inc(pipeallocfail);
    //if (ppsratecheck(@lastfail, @curfail, 1)) then
    //begin
-   // printf('kern.ipc.maxpipekva exceeded; see tuning(7)\n');
+   // printf('kern.ipc.maxpipekva exceeded; see tuning(7)');
    //end;
   end else
   begin

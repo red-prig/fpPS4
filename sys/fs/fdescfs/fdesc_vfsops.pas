@@ -24,23 +24,24 @@ function fdesc_statfs(mp:p_mount;sbp:p_statfs):Integer;
 
 const
  _fdesc_vfsops:vfsops=(
-  vfs_mount          :@fdesc_mount;
-  vfs_cmount         :@fdesc_cmount;
-  vfs_unmount        :@fdesc_unmount;
-  vfs_root           :@fdesc_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@fdesc_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :@fdesc_init;
-  vfs_uninit         :@fdesc_uninit;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@fdesc_mount;
+  vfs_cmount    :@fdesc_cmount;
+  vfs_unmount   :@fdesc_unmount;
+  vfs_root      :@fdesc_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@fdesc_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :nil;
+  vfs_checkexp  :nil;
+  vfs_init      :@fdesc_init;
+  vfs_uninit    :@fdesc_uninit;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
+var
  //VFS_SET(fdesc_vfsops, fdescfs, VFCF_SYNTHETIC);
  fdescfs_vfsconf:vfsconf=(
   vfc_version :VFS_VERSION;
@@ -96,7 +97,9 @@ begin
   * Update is a no-op
   }
  if ((mp^.mnt_flag and (MNT_UPDATE or MNT_ROOTFS))<>0) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  fmp:=calloc(sizeof(t_fdescmount)); { XXX }
 

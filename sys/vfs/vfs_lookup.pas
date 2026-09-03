@@ -21,9 +21,10 @@ uses
  kern_thr,
  kern_descrip;
 
-function  nd_namei(ndp:p_nameidata):Integer;
-function  nd_lookup(ndp:p_nameidata):Integer;
-procedure NDFREE(ndp:p_nameidata;flags:Integer);
+function  nd_namei   (ndp:p_nameidata):Integer;
+function  nd_lookup  (ndp:p_nameidata):Integer;
+function  nd_relookup(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
+procedure NDFREE     (ndp:p_nameidata;flags:Integer);
 
 procedure nameiinit; //SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_SECOND, nameiinit, NULL);
 
@@ -576,8 +577,7 @@ dirloop:
  end;
 
  if (cnp^.cn_namelen=2) and
-    (cnp^.cn_nameptr[1]='.') and
-    (cnp^.cn_nameptr[0]='.') then
+    (PWORD(cnp^.cn_nameptr)^=$2E2E) then
   cnp^.cn_flags:=cnp^.cn_flags or ISDOTDOT
  else
   cnp^.cn_flags:=cnp^.cn_flags and (not ISDOTDOT);
@@ -1033,28 +1033,33 @@ end;
 {
  * relookup - lookup a path name component
  *    Used by lookup to re-acquire things.
- }
-{
-int
-relookup(struct vnode *dvp, struct vnode **vpp, struct componentname *cnp)
+}
+function nd_relookup(dvp:p_vnode;vpp:pp_vnode;cnp:p_componentname):Integer;
+label
+ _bad;
+var
+ dp:p_vnode;          { the directory we are searching }
+ _wantparent:Integer; { 1 => wantparent or lockparent flag }
+ _rdonly    :Integer; { lookup read-only flag bit }
+ error:Integer;
 begin
- struct vnode *dp:=0;  { the directory we are searching }
- int _wantparent;   { 1 => wantparent or lockparent flag }
- int _rdonly;   { lookup read-only flag bit }
- int error:=0;
+ dp:=nil;
+ error:=0;
 
- Assert(cnp^.cn_flags and ISLASTCN,
-     ('relookup: Not given last component.'));
+ Assert((cnp^.cn_flags and ISLASTCN)<>0,'relookup: Not given last component.');
+
  {
   * Setup: break out flag bits into variables.
-  }
+ }
  _wantparent:=cnp^.cn_flags and (LOCKPARENT or WANTPARENT);
- Assert(_wantparent, ('relookup: parent not wanted.'));
+ Assert(_wantparent<>0, 'relookup: parent not wanted.');
+
  _rdonly:=cnp^.cn_flags and RDONLY;
- cnp^.cn_flags:= and ~ISSYMLINK;
+ cnp^.cn_flags:=cnp^.cn_flags and (not ISSYMLINK);
  dp:=dvp;
  cnp^.cn_lkflags:=LK_EXCLUSIVE;
- vn_lock(dp, LK_EXCLUSIVE or LK_RETRY);
+
+ vn_lock(dp, LK_EXCLUSIVE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
 
  {
   * Search a new directory.
@@ -1069,7 +1074,8 @@ begin
   * Check for '' which represents the root directory after slash
   * removal.
   }
- if (cnp^.cn_nameptr[0]='\0') begin
+ if (cnp^.cn_nameptr[0]=#0) then
+ begin
   {
    * Support only LOOKUP for '/' because lookup()
    * can't succeed for CREATE, DELETE and RENAME.
@@ -1077,38 +1083,61 @@ begin
   Assert(cnp^.cn_nameiop=LOOKUP, ('nameiop must be LOOKUP'));
   Assert(dp^.v_type=VDIR, ('dp is not a directory'));
 
-  if (!(cnp^.cn_flags and LOCKLEAF))
+  if ((cnp^.cn_flags and LOCKLEAF)=0) then
+  begin
    VOP_UNLOCK(dp, 0);
-  *vpp:=dp;
+  end;
+
+  vpp^:=dp;
+
   { XXX This should probably move to the top of function. }
-  if (cnp^.cn_flags and SAVESTART)
-   panic('lookup: SAVESTART');
+  if (cnp^.cn_flags and SAVESTART)<>0 then
+  begin
+   Assert(False,'lookup: SAVESTART');
+  end;
+
   Exit(0);
  end;
 
- if (cnp^.cn_flags and ISDOTDOT)
-  panic ('relookup: lookup on dot-dot');
+ if (cnp^.cn_flags and ISDOTDOT)<>0 then
+ begin
+  Assert(False, 'relookup: lookup on dot-dot');
+ end;
 
  {
   * We now have a segment name to search for, and a directory to search.
   }
- if ((error:=VOP_LOOKUP(dp, vpp, cnp))<>0) begin
-  Assert(*vpp=nil, ('leaf should be empty'));
-  if (error<>EJUSTRETURN)
-   goto bad;
+ error:=VOP_LOOKUP(dp, vpp, cnp);
+ if (error<>0) then
+ begin
+  Assert(vpp^=nil, 'leaf should be empty');
+
+  if (error<>EJUSTRETURN) then
+  begin
+   goto _bad;
+  end;
+
   {
    * If creating and at end of pathname, then can consider
    * allowing file to be created.
    }
-  if (_rdonly) begin
+  if (_rdonly<>0) then
+  begin
    error:=EROFS;
-   goto bad;
+   goto _bad;
   end;
+
   { ASSERT(dvp=ndp^.ni_startdir) }
-  if (cnp^.cn_flags and SAVESTART)
+  if (cnp^.cn_flags and SAVESTART)<>0 then
+  begin
    VREF(dvp);
-  if ((cnp^.cn_flags and LOCKPARENT)=0)
+  end;
+
+  if ((cnp^.cn_flags and LOCKPARENT)=0) then
+  begin
    VOP_UNLOCK(dp, 0);
+  end;
+
   {
    * We Exitwith ni_vp nil to indicate that the entry
    * doesn't currently exist, leaving a pointer to the
@@ -1117,49 +1146,60 @@ begin
   Exit(0);
  end;
 
- dp:=*vpp;
+ dp:=vpp^;
 
  {
   * Disallow directory write attempts on read-only filesystems.
   }
- if (_rdonly and
-     (cnp^.cn_nameiop=DELETE or cnp^.cn_nameiop=RENAME)) begin
-  if (dvp=dp)
-   vrele(dvp);
+ if (_rdonly<>0) and ((cnp^.cn_nameiop=DELETE) or (cnp^.cn_nameiop=RENAME)) then
+ begin
+  if (dvp=dp) then
+   vrele(dvp)
   else
    vput(dvp);
+
   error:=EROFS;
-  goto bad;
+  goto _bad;
  end;
+
  {
   * Set the parent lock/ref state to the requested state.
   }
- if ((cnp^.cn_flags and LOCKPARENT)=0 and dvp<>dp) begin
-  if (_wantparent)
-   VOP_UNLOCK(dvp, 0);
+ if ((cnp^.cn_flags and LOCKPARENT)=0) and (dvp<>dp) then
+ begin
+  if (_wantparent<>0) then
+   VOP_UNLOCK(dvp, 0)
   else
    vput(dvp);
- end; else if (!_wantparent)
+ end else
+ if (_wantparent=0) then
+ begin
   vrele(dvp);
+ end;
+
  {
   * Check for symbolic link
   }
- Assert(dp^.v_type<>VLNK or !(cnp^.cn_flags and FOLLOW),
-     ('relookup: symlink found.\n'));
+ Assert((dp^.v_type<>VLNK) or ((cnp^.cn_flags and FOLLOW)=0),'relookup: symlink found.');
 
  { ASSERT(dvp=ndp^.ni_startdir) }
- if (cnp^.cn_flags and SAVESTART)
+ if (cnp^.cn_flags and SAVESTART)<>0 then
+ begin
   VREF(dvp);
+ end;
 
- if ((cnp^.cn_flags and LOCKLEAF)=0)
+ if ((cnp^.cn_flags and LOCKLEAF)=0) then
+ begin
   VOP_UNLOCK(dp, 0);
+ end;
+
  Exit(0);
-bad:
+
+_bad:
  vput(dp);
- *vpp:=nil;
+ vpp^:=nil;
  Exit(error);
 end;
-}
 
 {
  * Free data allocated by namei(); see namei(9) for details.

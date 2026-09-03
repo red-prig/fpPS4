@@ -523,7 +523,7 @@ var
  de:p_tmpfs_dirent;
 begin
  Assert(IMPLIES(cnp^.cn_namelen=1, cnp^.cn_nameptr[0]<>'.'));
- Assert(IMPLIES(cnp^.cn_namelen=2, not ((cnp^.cn_nameptr[0]='.') AND (cnp^.cn_nameptr[1]='.'))));
+ Assert(IMPLIES(cnp^.cn_namelen=2, not (PWORD(cnp^.cn_nameptr)^=$2E2E)));
  TMPFS_VALIDATE_DIR(node);
 
  de:=TAILQ_FIRST(@node^.tn_spec.tn_dir.tn_dirhead);

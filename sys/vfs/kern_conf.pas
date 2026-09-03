@@ -694,14 +694,17 @@ begin
   begin
    Exit(EINVAL);
   end;
-  if (q - s=2) and (s[0]='.') and (s[1]='.') then
+
+  if (q - s=2) and (PWORD(s)^=$2E2E) then
   begin
    Exit(EINVAL);
   end;
+
   if (q^<>'/') then
   begin
    break;
   end;
+
   s:=q + 1;
  end;
 

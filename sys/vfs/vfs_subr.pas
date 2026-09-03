@@ -3039,15 +3039,21 @@ begin
  dac_granted:=0;
 
  { Check the owner. }
- if {(cred^.cr_uid=file_uid)} True then
+ //if (cred^.cr_uid=file_uid) then
  begin
   dac_granted:=dac_granted or VADMIN;
   if ((file_mode and S_IXUSR)<>0) then
+  begin
    dac_granted:=dac_granted or VEXEC;
+  end;
   if ((file_mode and S_IRUSR)<>0) then
+  begin
    dac_granted:=dac_granted or VREAD;
+  end;
   if ((file_mode and S_IWUSR)<>0) then
+  begin
    dac_granted:=dac_granted or (VWRITE or VAPPEND);
+  end;
 
   if ((accmode and dac_granted)=accmode) then
   begin
@@ -3058,7 +3064,7 @@ begin
  end;
 
  { Otherwise, check the groups (first match) }
- if {(groupmember(file_gid, cred))} True then
+ //if (groupmember(file_gid, cred)) then
  begin
   if ((file_mode and S_IXGRP)<>0) then
    dac_granted:=dac_granted or VEXEC;
@@ -3077,11 +3083,17 @@ begin
 
  { Otherwise, check everyone else. }
  if ((file_mode and S_IXOTH)<>0) then
+ begin
   dac_granted:=dac_granted or VEXEC;
+ end;
  if ((file_mode and S_IROTH)<>0) then
+ begin
   dac_granted:=dac_granted or VREAD;
+ end;
  if ((file_mode and S_IWOTH)<>0) then
+ begin
   dac_granted:=dac_granted or (VWRITE or VAPPEND);
+ end;
 
  if ((accmode and dac_granted)=accmode) then
  begin

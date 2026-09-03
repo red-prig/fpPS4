@@ -29,21 +29,21 @@ const
  );
 
  _devfs_vfsops:vfsops=(
-  vfs_mount          :@devfs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@devfs_unmount;
-  vfs_root           :@devfs_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@devfs_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :nil;
-  vfs_uninit         :nil;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@devfs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@devfs_unmount;
+  vfs_root      :@devfs_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@devfs_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :nil;
+  vfs_checkexp  :nil;
+  vfs_init      :nil;
+  vfs_uninit    :nil;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
 var
@@ -87,12 +87,16 @@ var
 begin
 
  if (devfs_unr=nil) then
+ begin
   devfs_unr:=new_unrhdr(0, High(Integer), nil);
+ end;
 
  error:=0;
 
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  //if (!prison_allow(td^.td_ucred, PR_ALLOW_MOUNT_DEVFS))
  // Exit(EPERM);
