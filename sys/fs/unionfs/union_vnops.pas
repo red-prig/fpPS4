@@ -2552,6 +2552,25 @@ begin
  Exit(EOPNOTSUPP);
 end;
 
+function unionfs_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+var
+ unp:p_unionfs_node;
+ vp:p_vnode;
+begin
+ KASSERT_UNIONFS_VNODE(ap^.a_vp);
+
+ unp:=VTOUNIONFS(ap^.a_vp);
+
+ if (unp^.un_uppervp<>nil) then
+  vp:=unp^.un_uppervp
+ else
+  vp:=unp^.un_lowervp;
+
+ Assert(vp<>nil,'unionfs_get_int_obj: nil');
+
+ Result:=VOP_GET_INT_OBJ(vp, ap^.a_offset, ap^.a_length, ap^.a_obj);
+end;
+
 var
  unionfs_vnodeops:vop_vector=(
   vop_default       :@default_vnodeops;
@@ -2605,7 +2624,7 @@ var
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
-  vop_get_int_obj   :nil;
+  vop_get_int_obj   :@unionfs_get_int_obj;
  ); public;
 
 
