@@ -21,7 +21,7 @@ type
  pp_ufs_dirent=^p_ufs_dirent;
  p_ufs_dirent=^t_ufs_dirent;
 
- t_ufs_dirent=record
+ t_ufs_dirent=packed record
   ufs_inode  :Integer;
   ufs_flags  :Integer;      //UFS_*
   ufs_ref    :Integer;
@@ -31,7 +31,7 @@ type
   ufs_dlist  :TAILQ_HEAD;   //dir list
   ufs_dir    :p_ufs_dirent; //parent
   ufs_links  :Integer;
-  ufs_mode   :mode_t;       //S_IFMT
+  ufs_mode   :Integer;      //S_IFMT
   ufs_uid    :uid_t;
   ufs_gid    :gid_t;
   ufs_size   :Int64;        // file size in bytes
@@ -44,10 +44,12 @@ type
   ufs_symlink:PChar;
   ufs_md_lock:t_sx;
   ufs_md_fp  :Pointer; //host data
+  //
+  ufs_dr_off :Int64;   //readdir state: last returned offset
  end;
 
  p_ufs_mount=^t_ufs_mount;
- t_ufs_mount=record
+ t_ufs_mount=packed record
   //ufs_idx       :DWORD;
   ufs_mount     :p_mount;
   ufs_rootdir   :p_ufs_dirent;

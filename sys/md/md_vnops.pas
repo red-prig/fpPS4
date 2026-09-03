@@ -602,7 +602,8 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then Exit;
 
- de^.ufs_md_fp:=Pointer(F);
+ de^.ufs_md_fp :=Pointer(F);
+ de^.ufs_dr_off:=0; //init state
 end;
 
 function md_open_dirent_file(de:p_ufs_dirent;symlink:Boolean;fdr:PHandle):Integer;
@@ -1452,7 +1453,7 @@ var
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_dirent;
- off:Int64;
+ in_off,off:Int64;
  i:Integer;
 
  NT_DIRENT:TNT_DIRENT;
@@ -1467,85 +1468,100 @@ begin
  end;
 
  uio:=ap^.a_uio;
- if (uio^.uio_offset < 0) then
+ in_off:=uio^.uio_offset;
+ if (in_off < 0) then
  begin
   Exit(EINVAL);
  end;
 
  dd:=ap^.a_vp^.v_data;
- off:=0;
- restart:=True;
 
  mp:=ap^.a_vp^.v_mount;
  emu_pfs:=((mp^.mnt_flag and MNT_PFS_ANY)<>0);
 
  sx_xlock(@dd^.ufs_md_lock);
 
- repeat
-  NT_DIRENT:=Default(TNT_DIRENT);
-  BLK:=Default(IO_STATUS_BLOCK);
+  off:=dd^.ufs_dr_off; //load cache
 
-  R:=NtQueryDirectoryFile(
-            THandle(dd^.ufs_md_fp),
-            0,
-            nil,
-            nil,
-            @BLK,
-            @NT_DIRENT,
-            SizeOf(NT_DIRENT),
-            FileIdFullDirectoryInformation,
-            True,
-            nil,
-            restart
-           );
-  restart:=false;
+  restart:=(off<0) or (off>in_off);
+  if restart then off:=0;
 
-  if (R=STATUS_NO_MORE_FILES) then Break;
+  repeat
+   NT_DIRENT:=Default(TNT_DIRENT);
+   BLK:=Default(IO_STATUS_BLOCK);
 
-  Result:=ntf2px(R);
-  if (Result<>0) then Break;
+   R:=NtQueryDirectoryFile(
+             THandle(dd^.ufs_md_fp),
+             0,
+             nil,
+             nil,
+             @BLK,
+             @NT_DIRENT,
+             SizeOf(NT_DIRENT),
+             FileIdFullDirectoryInformation,
+             True,
+             nil,
+             restart
+            );
+   restart:=false;
 
-  dt:=Default(t_dirent);
+   if (R=STATUS_NO_MORE_FILES) then Break;
 
-  i:=WinToUnix(@dt.d_name,
-               t_dirent.MAXNAMLEN+1,
-               @NT_DIRENT.Name,
-               NT_DIRENT.Info.FileNameLength div 2);
-  //i->zero include
+   Result:=ntf2px(R);
+   if (Result<>0) then
+   begin
+    in_off:=-1; //reset
+    Break;
+   end;
 
-  if (i<=0) then
-  begin
-   //skip error
-   Continue;
-  end;
+   dt:=Default(t_dirent);
 
-  if emu_pfs then
-  begin
-   //sizeof(body)+8+AlignUp(namelen,8)
-   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
-  end else
-  begin
-   //sizeof(body)+AlignUp(namelen,4)
-   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 3) and (not 3)); //zero include
-  end;
+   i:=WinToUnix(@dt.d_name,
+                t_dirent.MAXNAMLEN+1,
+                @NT_DIRENT.Name,
+                NT_DIRENT.Info.FileNameLength div 2);
+   //i->zero include
 
-  if (dt.d_reclen > uio^.uio_resid) then break;
+   if (i<=0) then i:=1;
 
-  if (off >= uio^.uio_offset) then
-  begin
-   dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
-   dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
-   dt.d_namlen:=i-1; //zero exclude
+   if emu_pfs then
+   begin
+    //sizeof(body)+8+AlignUp(namelen,8)
+    dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+   end else
+   begin
+    //sizeof(body)+AlignUp(namelen,4)
+    dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 3) and (not 3)); //zero include
+   end;
 
-   Result:=vfs_read_dirent(ap, @dt, off);
-   if (Result<>0) then break;
-  end;
+   if (dt.d_reclen > uio^.uio_resid) then
+   begin
+    in_off:=-1; //reset
+    break;
+   end;
 
-  Inc(off,dt.d_reclen);
- until false;
+   if (off >= in_off) then
+   begin
+    dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
+    dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
+    dt.d_namlen:=i-1; //zero exclude
+
+    Result:=vfs_read_dirent(ap, @dt, off);
+    if (Result<>0) then break;
+   end;
+
+   Inc(off,dt.d_reclen);
+  until false;
+
+  //save cache
+  if (in_off<0) then
+   dd^.ufs_dr_off:=-1
+  else
+   dd^.ufs_dr_off:=off;
 
  sx_xunlock(@dd^.ufs_md_lock);
- uio^.uio_offset:=off;
+
+ uio^.uio_offset:=off; //save to uio
 
  Exit(0);
 end;
@@ -1555,7 +1571,7 @@ var
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_pfs_dirent;
- off:Int64;
+ in_off,off:Int64;
  i:Integer;
 
  NT_DIRENT:TNT_DIRENT;
@@ -1569,75 +1585,90 @@ begin
  end;
 
  uio:=ap^.a_uio;
- if (uio^.uio_offset < 0) then
+ in_off:=uio^.uio_offset;
+ if (in_off < 0) then
  begin
   Exit(EINVAL);
  end;
 
  dd:=ap^.a_vp^.v_data;
- off:=0;
- restart:=True;
 
  sx_xlock(@dd^.ufs_md_lock);
 
- repeat
-  NT_DIRENT:=Default(TNT_DIRENT);
-  BLK:=Default(IO_STATUS_BLOCK);
+  off:=-dd^.ufs_dr_off; //load cache
 
-  R:=NtQueryDirectoryFile(
-            THandle(dd^.ufs_md_fp),
-            0,
-            nil,
-            nil,
-            @BLK,
-            @NT_DIRENT,
-            SizeOf(NT_DIRENT),
-            FileIdFullDirectoryInformation,
-            True,
-            nil,
-            restart
-           );
-  restart:=false;
+  restart:=(off<0) or (off>in_off);
+  if restart then off:=0;
 
-  if (R=STATUS_NO_MORE_FILES) then Break;
+  repeat
+   NT_DIRENT:=Default(TNT_DIRENT);
+   BLK:=Default(IO_STATUS_BLOCK);
 
-  Result:=ntf2px(R);
-  if (Result<>0) then Break;
+   R:=NtQueryDirectoryFile(
+             THandle(dd^.ufs_md_fp),
+             0,
+             nil,
+             nil,
+             @BLK,
+             @NT_DIRENT,
+             SizeOf(NT_DIRENT),
+             FileIdFullDirectoryInformation,
+             True,
+             nil,
+             restart
+            );
+   restart:=false;
 
-  dt:=Default(t_pfs_dirent);
+   if (R=STATUS_NO_MORE_FILES) then Break;
 
-  i:=WinToUnix(@dt.d_name,
-               t_dirent.MAXNAMLEN+1,
-               @NT_DIRENT.Name,
-               NT_DIRENT.Info.FileNameLength div 2);
-  //i->zero include
+   Result:=ntf2px(R);
+   if (Result<>0) then
+   begin
+    in_off:=-1; //reset
+    Break;
+   end;
 
-  if (i<=0) then
-  begin
-   //skip error
-   Continue;
-  end;
+   dt:=Default(t_pfs_dirent);
 
-  //sizeof(body)+8+AlignUp(namelen,8)
-  dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+   i:=WinToUnix(@dt.d_name,
+                t_dirent.MAXNAMLEN+1,
+                @NT_DIRENT.Name,
+                NT_DIRENT.Info.FileNameLength div 2);
+   //i->zero include
 
-  if (dt.d_entsize > uio^.uio_resid) then break;
+   if (i<=0) then i:=1;
 
-  if (off >= uio^.uio_offset) then
-  begin
-   dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
-   dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
-   dt.d_namelen:=i-1; //zero exclude
+   //sizeof(body)+8+AlignUp(namelen,8)
+   dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
 
-   Result:=vfs_read_pfs_dirent(ap, @dt, off);
-   if (Result<>0) then break;
-  end;
+   if (dt.d_entsize > uio^.uio_resid) then
+   begin
+    in_off:=-1; //reset
+    break;
+   end;
 
-  Inc(off,dt.d_entsize);
- until false;
+   if (off >= in_off) then
+   begin
+    dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
+    dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
+    dt.d_namelen:=i-1; //zero exclude
+
+    Result:=vfs_read_pfs_dirent(ap, @dt, off);
+    if (Result<>0) then break;
+   end;
+
+   Inc(off,dt.d_entsize);
+  until false;
+
+  //save cache
+  if (in_off<0) then
+   dd^.ufs_dr_off:=1
+  else
+   dd^.ufs_dr_off:=-off;
 
  sx_xunlock(@dd^.ufs_md_lock);
- uio^.uio_offset:=off;
+
+ uio^.uio_offset:=off; //save to uio
 
  Exit(0);
 end;
@@ -1853,6 +1884,8 @@ begin
  //new dirent
  Result:=md_new_cache(dvp^.v_mount,dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI,de);
 
+ dd^.ufs_dr_off:=0; //dir changed
+
  sx_xunlock(@dd^.ufs_md_lock);
  RtlReleasePrivilege(PrivState);
 
@@ -1929,6 +1962,8 @@ begin
   //clear cache
   de:=md_find_cache(dd,cnp^.cn_nameptr,cnp^.cn_namelen,0);
   md_unlink_cache(de,False,True);
+
+  dd^.ufs_dr_off:=0; //dir changed
  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
@@ -2071,6 +2106,8 @@ begin
 
  de^.ufs_mode:=va_mode;
 
+ dd^.ufs_dr_off:=0; //dir changed
+
  sx_xunlock(@dd^.ufs_md_lock);
 
  sx_xlock(@dmp^.ufs_lock);
@@ -2119,6 +2156,8 @@ begin
 
  //clear cache
  md_unlink_cache(de,False,True);
+
+ dd^.ufs_dr_off:=0; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2176,6 +2215,8 @@ begin
 
  //clear cache
  md_unlink_cache(de,False,True);
+
+ dd^.ufs_dr_off:=0; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2307,6 +2348,9 @@ begin
  //clear cache
  md_unlink_cache(de_f,True ,True);
  md_unlink_cache(de_t,False,True);
+
+ dd_f^.ufs_dr_off:=0; //dir changed
+ dd_t^.ufs_dr_off:=0; //dir changed
 
  de_f:=nil;
 
@@ -2510,6 +2554,8 @@ begin
    NtClose(FD);
    Exit;
  end;
+
+ dd^.ufs_dr_off:=0; //dir changed
 
  dmp:=VFSTOUFS(dvp^.v_mount);
  sx_xlock(@dmp^.ufs_lock);
