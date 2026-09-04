@@ -69,7 +69,8 @@ uses
  tmpfs_fifoops,
  tmpfs_subr,
  tmpfs_vnops,
- md_arc4random;
+ md_arc4random,
+ libkern;
 
 const
  TMPFS_DEFAULT_ROOT_MODE=(S_IRWXU or S_IRGRP or S_IXGRP or S_IROTH or S_IXOTH);
@@ -82,126 +83,6 @@ const
  tmpfs_updateopts:array[0..2] of PChar=(
   'from', 'export', nil
  );
-
-function strtoq(const nptr: PChar; endptr: PPChar; base: Integer): Int64;
-var
-  p: PChar;
-  neg: Boolean;
-  val: QWord;
-  overflow: Boolean;
-  digit: Integer;
-  any: Boolean;
-  c: Char;
-begin
- //strtoq_errno := STRTOQ_OK;
- overflow := False;
- any := False;
- val := 0;
-
- p := nptr;
- while (p^ <> #0) and (p^ in [' ', #9, #10, #13, #11, #12]) do
-   Inc(p);
-
- neg := False;
- if (p^ = '-') then
- begin
-  neg := True;
-  Inc(p);
- end else
- if (p^ = '+') then
-   Inc(p);
-
- if (base = 0) then
- begin
-  if p^ = '0' then
-  begin
-   Inc(p);
-   if (p^ = 'x') or (p^ = 'X') then
-   begin
-    Inc(p);
-    base := 16;
-   end else
-    base := 8;
-  end else
-   base := 10;
- end;
-
- if (base < 2) or (base > 36) then
- begin
-  //strtoq_errno := STRTOQ_EINVAL;
-  if (endptr <> nil) then
-    endptr^ := nptr;
-  Exit(0);
- end;
-
- while True do
- begin
-   c := p^;
-   if (c >= '0') and (c <= '9') then
-     digit := Ord(c) - Ord('0')
-   else if (c >= 'A') and (c <= 'Z') then
-     digit := Ord(c) - Ord('A') + 10
-   else if (c >= 'a') and (c <= 'z') then
-     digit := Ord(c) - Ord('a') + 10
-   else
-     Break;
-
-   if (digit >= base) then
-     Break;
-
-   if (val > (High(QWord) div QWord(base))) or
-      ((val = (High(QWord) div QWord(base))) and (QWord(digit) > (High(QWord) mod QWord(base)))) then
-   begin
-    overflow := True;
-   end else
-    val := val * QWord(base) + QWord(digit);
-
-   any := True;
-   Inc(p);
- end;
-
- if not any then
- begin
-   if (endptr <> nil) then
-     endptr^ := nptr;
-   Exit(0);
- end;
-
- if (endptr <> nil) then
-   endptr^ := p;
-
- if overflow then
- begin
-  //strtoq_errno := STRTOQ_ERANGE;
-  if neg then
-    Result := Low(Int64)
-  else
-    Result := High(Int64);
-
-  Exit;
- end;
-
- if neg then
- begin
-   if val > (QWord(High(Int64)) + 1) then
-   begin
-    //strtoq_errno := STRTOQ_ERANGE;
-    Result := Low(Int64);
-   end else
-   if val = (QWord(High(Int64)) + 1) then
-     Result := Low(Int64)
-   else
-     Result := -Int64(val);
- end else
- begin
-   if val > High(Int64) then
-   begin
-    //strtoq_errno := STRTOQ_ERANGE;
-    Result := High(Int64);
-   end else
-     Result := Int64(val);
- end;
-end;
 
 function tmpfs_getopt_size(opts:p_vfsoptlist;name:PChar;value:PInt64):Integer;
 var

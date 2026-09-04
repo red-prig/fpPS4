@@ -11,7 +11,8 @@ uses
  kern_proc,
  SceSaveData,
  ps4_libSceUserService,
- ps4_libSceCommonDialog;
+ ps4_libSceCommonDialog,
+ libkern;
 
 const
  //SceSaveDataDialogAnimation

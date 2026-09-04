@@ -19,7 +19,8 @@ uses
   host_ipc,
   Classes,
   SysUtils,
-  ps4_libSceUserService;
+  ps4_libSceUserService,
+  libkern;
 
 type
  TImeSetCaret=record
@@ -959,12 +960,6 @@ begin
 
  end; //(extended<>nil)
 
-end;
-
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar; inline;
-begin
- if (dst=nil) or (src=nil) then Exit(nil);
- Result:=StrLCopy(dst,src,maxlen);
 end;
 
 function wcsncpy_s(dst,src:PWideChar;maxlen:ptrint):PWideChar; inline;

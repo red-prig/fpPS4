@@ -41,7 +41,8 @@ uses
  vfs_syscalls,
  kern_thr,
  kern_mtx,
- kern_malloc;
+ kern_malloc,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -52,28 +53,6 @@ begin
  i:=strlen(src);
  Result:=calloc(i+1);
  Move(src^,Result^,i);
-end;
-
-function strsep(stringp:PPChar;delim:PChar):PChar;
-var
- b,e:PChar;
-begin
- b:=stringp^;
- if (b=nil) then Exit(nil);
-
- e:=strpos(b,delim)+strlen(delim);
-
- if (e^<>#0) then
- begin
-  e^:=#0;
-  Inc(e);
-  stringp^:=e;
- end else
- begin
-  stringp^:=nil;
- end;
-
- Result:=b;
 end;
 
 function parse_mountroot_options(ma:p_mntarg;options:PChar):p_mntarg;

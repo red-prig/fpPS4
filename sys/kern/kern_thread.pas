@@ -81,7 +81,8 @@ uses
  kern_proc,
  kern_rangelock,
  sched_ule,
- sys_sleepqueue;
+ sys_sleepqueue,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -1158,21 +1159,6 @@ begin
 
  thread_unlock(td);
  thread_dec_ref(td);
-end;
-
-function strnlen(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
 end;
 
 function sys_thr_get_name(id:DWORD;pname:PChar):Integer;

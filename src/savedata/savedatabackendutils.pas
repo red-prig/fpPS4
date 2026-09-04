@@ -16,7 +16,8 @@ uses
  game_mount,
  ps4_libSceUserService,
  SceSaveData,
- SaveDataBackendSfo;
+ SaveDataBackendSfo,
+ libkern;
 
 type
  TMountSlot=packed record

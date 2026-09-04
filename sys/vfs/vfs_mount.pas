@@ -116,7 +116,8 @@ uses
  subr_uio,
  vfs_vnops,
  vfs_subr,
- vfs_cache;
+ vfs_cache,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -734,12 +735,6 @@ begin
   Exit(0);
  end;
  Exit(ENOENT);
-end;
-
-function strlcpy(dst,src:PChar;size:ptrint):ptrint; inline;
-begin
- strlcopy(dst,src,size);
- Result:=strlen(dst);
 end;
 
 function vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;

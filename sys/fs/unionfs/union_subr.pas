@@ -35,20 +35,10 @@ implementation
 uses
  vfiledesc,
  subr_hash,
- kern_malloc;
+ kern_malloc,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
-
-function strcmp(s1,s2:PChar):Integer;
-begin
- while (s1^ = s2^) do
- begin
-  if (s1^ = #0) then Exit(0);
-  Inc(s1);
-  Inc(s2);
- end;
- Result:=Ord(s1^) - Ord(s2^);
-end;
 
 {
  * Initialize

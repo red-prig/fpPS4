@@ -83,9 +83,6 @@ type
 
 function CheckBaseParam(pBaseParam:pSceCommonDialogBaseParam):Integer;
 function CheckReserved(var buf;len:DWORD):Integer;
-function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
-function strncmp  (str1,str2:PChar;maxlen:ptrint):Integer;
 
 implementation
 
@@ -160,33 +157,6 @@ begin
   Exit(SCE_COMMON_DIALOG_ERROR_PARAM_INVALID);
  end;
  Result:=0;
-end;
-
-function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- if (s=nil) then Exit(0);
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
-end;
-
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar;
-begin
- if (dst=nil) or (src=nil) then Exit(nil);
- Result:=StrLCopy(dst,src,maxlen);
-end;
-
-function strncmp(str1,str2:PChar;maxlen:ptrint):Integer;
-begin
- Result:=CompareChar0(str1^,str2^,maxlen);
 end;
 
 function TCommonDialogClient.isInitializedStatus:Boolean;

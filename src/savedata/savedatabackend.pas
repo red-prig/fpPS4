@@ -233,7 +233,8 @@ implementation
 
 uses
  core_serialization,
- logging;
+ logging,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
