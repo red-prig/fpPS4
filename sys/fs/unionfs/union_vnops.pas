@@ -2561,10 +2561,27 @@ begin
 
  unp:=VTOUNIONFS(ap^.a_vp);
 
- if (unp^.un_uppervp<>nil) then
+ vp:=nil;
+
+ if (unp^.un_uppervp<>nil) AND
+    ((p_mount(unp^.un_uppervp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) then
+ begin
   vp:=unp^.un_uppervp
- else
+ end else
+ if (unp^.un_lowervp<>nil) AND
+    ((p_mount(unp^.un_lowervp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) then
+ begin
   vp:=unp^.un_lowervp;
+ end;
+
+ if (vp=nil) then
+ begin
+  vp:=unp^.un_uppervp;
+ end;
+ if (vp=nil) then
+ begin
+  vp:=unp^.un_lowervp;
+ end;
 
  Assert(vp<>nil,'unionfs_get_int_obj: nil');
 
