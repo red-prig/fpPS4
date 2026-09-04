@@ -928,12 +928,12 @@ begin
  begin
   VI_LOCK(vp);
 
-  if ((fsflags and MNT_ROOTFS)=0) and
-     ((vp^.v_vflag and VV_ROOT)<>0) and
-     (vp^.v_mount<>nil) then
-  begin
-   error:=EBUSY;
-  end else
+  //if ((fsflags and MNT_ROOTFS)=0) and
+  //   ((vp^.v_vflag and VV_ROOT)<>0) and
+  //   (vp^.v_mount<>nil) then
+  //begin
+  // error:=EBUSY;
+  //end else
   if ((vp^.v_iflag and VI_MOUNT)=0) and
      (vp^.v_mountedhere=nil) then
   begin

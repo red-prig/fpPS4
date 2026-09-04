@@ -279,7 +279,7 @@ const
  MM_LAST    =2;
 
 type
- t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS,mfBudget);
+ t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS,mfBudget,mfTmp);
 
 type
  pp_mount_dir=^p_mount_dir;
@@ -402,6 +402,8 @@ var
  fs_source:array[0..MM_LAST] of RawByteString;
  fs_dst:RawByteString;
  fs_src:RawByteString;
+
+ fs_path:RawByteString;
 begin
 
  //save to global
@@ -451,22 +453,98 @@ begin
    begin
     fs_src:=Format(unix_to_host(src),[fs_source[mode]]);
 
+    //mfTmp
+
     if (mfForceDir in flags) then
     begin
      ForceDirectories(fs_src);
     end;
 
-    err:=mount_into_sandbox('ufs',
-                            pchar(fs_dst),
-                            pchar(fs_src),
-                            nil,
-                            ord(mfReadOnly in flags)*MNT_RDONLY  or
-                            ord(mfPFS      in flags)*MNT_PFS_64K or
-                            ord(mfBudget   in flags)*MNT_BIG_APP,
-                            mfIgnoreErr in flags);
-   end;
+    if (mfTmp in flags) then
+    begin
+     err:=mount_into_sandbox('tmpfs',
+                             pchar(fs_dst),
+                             pchar(fs_src),
+                             nil,
+                             ord(mfReadOnly in flags)*MNT_RDONLY,
+                             mfIgnoreErr in flags);
+    end else
+    begin
+     err:=mount_into_sandbox('ufs',
+                             pchar(fs_dst),
+                             pchar(fs_src),
+                             nil,
+                             ord(mfReadOnly in flags)*MNT_RDONLY  or
+                             ord(mfPFS      in flags)*MNT_PFS_64K or
+                             ord(mfBudget   in flags)*MNT_BIG_APP,
+                             mfIgnoreErr in flags);
+    end;
 
-  end;
+    if (err=0) and (mode=MM_GAME) then
+    begin
+
+     err:=mount_into_sandbox('ufs',
+                             '/update',
+                             pchar(fs_src+'-UPDATE'),
+                             nil,
+                             ord(mfReadOnly in flags)*MNT_RDONLY  or
+                             ord(mfPFS      in flags)*MNT_PFS_64K or
+                             ord(mfBudget   in flags)*MNT_BIG_APP,
+                             True);
+     if (err=0) then
+     begin
+      { overlay patch (/update = upper) over base (/app0 = lower) via unionfs }
+      err:=mount_into_sandbox('unionfs',
+                              '/app0',
+                              '/update',
+                              nil,
+                              MNT_RDONLY,
+                              False);
+     end;
+
+     err:=mount_into_sandbox('ufs',
+                             '/patch',
+                             pchar(fs_src+'-patch'),
+                             nil,
+                             ord(mfReadOnly in flags)*MNT_RDONLY  or
+                             ord(mfPFS      in flags)*MNT_PFS_64K or
+                             ord(mfBudget   in flags)*MNT_BIG_APP,
+                             True);
+     if (err=0) then
+     begin
+      { overlay patch (/patch = upper) over base (/app0 = lower) via unionfs }
+      err:=mount_into_sandbox('unionfs',
+                              '/app0',
+                              '/patch',
+                              nil,
+                              MNT_RDONLY,
+                              False);
+     end;
+
+     err:=mount_into_sandbox('ufs',
+                             '/mods',
+                             pchar(fs_src+'-mods'),
+                             nil,
+                             ord(mfReadOnly in flags)*MNT_RDONLY  or
+                             ord(mfPFS      in flags)*MNT_PFS_64K or
+                             ord(mfBudget   in flags)*MNT_BIG_APP,
+                             True);
+     if (err=0) then
+     begin
+      { overlay patch (/mods = upper) over base (/app0 = lower) via unionfs }
+      err:=mount_into_sandbox('unionfs',
+                              '/app0',
+                              '/mods',
+                              nil,
+                              MNT_RDONLY,
+                              False);
+     end;
+
+    end; //MM_GAME
+
+   end; //MM_CREATE
+
+  end; //with
 
  until (not fs_iterator.next(err));
  //--sandbox--
