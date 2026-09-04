@@ -21,6 +21,8 @@ const
  DELETE=2; { setup for file deletion }
  RENAME=3; { setup for file renaming }
  OPMASK=3; { mask for operation }
+
+ DOTDOT=$2E2E; { ".." as little-endian two-byte word }
 {
  * namei operational modifier flags,stored in ni_cnd.flags
  }

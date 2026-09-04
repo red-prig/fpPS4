@@ -1352,7 +1352,7 @@ begin
 
    if (dp^.d_type=DT_WHT) OR
       ((dp^.d_namlen=1) AND (dp^.d_name[0]='.')) OR
-      ((dp^.d_namlen=2) AND (PWORD(@dp^.d_name)^=$2E2E)) then
+      ((dp^.d_namlen=2) AND (PWORD(@dp^.d_name)^=DOTDOT)) then
    begin
     goto _continue;
    end;

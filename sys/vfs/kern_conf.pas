@@ -27,7 +27,8 @@ uses
  devfs_int,
  vsys_generic,
  systm,
- subr_unit;
+ subr_unit,
+ vnamei;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -695,7 +696,7 @@ begin
    Exit(EINVAL);
   end;
 
-  if (q - s=2) and (PWORD(s)^=$2E2E) then
+  if (q - s=2) and (PWORD(s)^=DOTDOT) then
   begin
    Exit(EINVAL);
   end;

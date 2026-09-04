@@ -577,7 +577,7 @@ dirloop:
  end;
 
  if (cnp^.cn_namelen=2) and
-    (PWORD(cnp^.cn_nameptr)^=$2E2E) then
+    (PWORD(cnp^.cn_nameptr)^=DOTDOT) then
   cnp^.cn_flags:=cnp^.cn_flags or ISDOTDOT
  else
   cnp^.cn_flags:=cnp^.cn_flags and (not ISDOTDOT);
