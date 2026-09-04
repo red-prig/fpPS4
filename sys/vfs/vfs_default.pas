@@ -836,9 +836,9 @@ begin
 
  if (vp^.v_mount<>dvp^^.v_mount) and
     ((dvp^^.v_vflag and VV_ROOT)<>0) and
-    ((p_mount(dvp^^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+    ((dvp^^.v_mount^.mnt_flag and MNT_UNION)<>0) then
  begin
-  dvp^:=p_mount(dvp^^.v_mount)^.mnt_vnodecovered;
+  dvp^:=dvp^^.v_mount^.mnt_vnodecovered;
   VREF(mvp);
   VOP_UNLOCK(mvp, 0);
   vn_close(mvp, FREAD);

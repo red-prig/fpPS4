@@ -692,7 +692,7 @@ dirloop:
    end;
 
    tdp:=dp;
-   dp:=p_mount(dp^.v_mount)^.mnt_vnodecovered;
+   dp:=dp^.v_mount^.mnt_vnodecovered;
    tvfslocked:=dvfslocked;
    dvfslocked:=VFS_LOCK_GIANT(dp^.v_mount);
    VREF(dp);
@@ -754,10 +754,10 @@ unionlookup:
   if (error=ENOENT) and
      ((dp^.v_vflag and VV_ROOT)<>0) and
      (dp^.v_mount<>nil) then
-  if ((p_mount(dp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+  if ((dp^.v_mount^.mnt_flag and MNT_UNION)<>0) then
   begin
    tdp:=dp;
-   dp:=p_mount(dp^.v_mount)^.mnt_vnodecovered;
+   dp:=dp^.v_mount^.mnt_vnodecovered;
    tvfslocked:=dvfslocked;
    dvfslocked:=VFS_LOCK_GIANT(dp^.v_mount);
    VREF(dp);
@@ -894,7 +894,7 @@ unionlookup:
    error:=ENOENT;
    goto bad2;
   end;
-  if ((p_mount(dp^.v_mount)^.mnt_flag and MNT_NOSYMFOLLOW)<>0) then
+  if ((dp^.v_mount^.mnt_flag and MNT_NOSYMFOLLOW)<>0) then
   begin
    error:=EACCES;
    goto bad2;

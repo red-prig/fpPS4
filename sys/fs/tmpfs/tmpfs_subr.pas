@@ -820,7 +820,7 @@ begin
  node:=VP_TO_TMPFS_NODE(vp);
 
  { Disallow this operation if the file system is mounted read-only. }
- if (p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
   Exit(EROFS);
 
  {
@@ -880,7 +880,7 @@ begin
  node:=VP_TO_TMPFS_NODE(vp);
 
  { Disallow this operation if the file system is mounted read-only. }
- if (p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
   Exit(EROFS);
 
  { Immutable or append-only files cannot be modified, either. }
@@ -946,7 +946,7 @@ begin
  Assert((uid<>VNOVAL) AND (gid<>VNOVAL));
 
  { Disallow this operation if the file system is mounted read-only. }
- if (p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
   Exit(EROFS);
 
  { Immutable or append-only files cannot be modified, either. }
@@ -1006,7 +1006,7 @@ begin
    Exit(EISDIR);
 
   VREG:
-   if (p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+   if (vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
     Exit(EROFS);
 
   VBLK,
@@ -1045,7 +1045,7 @@ begin
  node:=VP_TO_TMPFS_NODE(vp);
 
  { Disallow this operation if the file system is mounted read-only. }
- if (p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
   Exit(EROFS);
 
  { Immutable or append-only files cannot be modified, either. }

@@ -1193,7 +1193,7 @@ begin
  lvp:=unp^.un_lowervp;
  uvp:=nil;
 
- if (p_mount(UNIONFSTOV(unp)^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (UNIONFSTOV(unp)^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
  begin
   Exit(EROFS);
  end;
@@ -1205,7 +1205,7 @@ begin
  udvp:=VTOUNIONFS(unp^.un_dvp)^.un_uppervp;
  if (udvp=nil) then Exit(EROFS);
 
- if (p_mount(udvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (udvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
  begin
   Exit(EROFS);
  end;

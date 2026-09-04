@@ -263,7 +263,7 @@ begin
     error:=ENOENT;
     break;
    end;
-   vp1:=p_mount(vp^.v_mount)^.mnt_vnodecovered;
+   vp1:=vp^.v_mount^.mnt_vnodecovered;
    vref(vp1);
    vfslocked:=VFS_LOCK_GIANT(vp^.v_mount);
    vrele(vp);

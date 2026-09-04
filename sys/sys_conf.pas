@@ -9,7 +9,6 @@ uses
  mqueue,
  time,
  kern_param,
- vmount,
  vfile,
  vuio,
  vnode,

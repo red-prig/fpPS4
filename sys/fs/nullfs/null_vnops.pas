@@ -267,7 +267,7 @@ begin
  flags:=cnp^.cn_flags;
 
  if ((flags and ISLASTCN)<>0) and
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     ((cnp^.cn_nameiop=DELETE) or (cnp^.cn_nameiop=RENAME)) then
  begin
   Exit(EROFS);
@@ -290,7 +290,7 @@ begin
 
  if (error=EJUSTRETURN) and
     ((flags and ISLASTCN)<>0) and
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     ((cnp^.cn_nameiop=CREATE) or (cnp^.cn_nameiop=RENAME)) then
   error:=EROFS;
 
@@ -344,7 +344,7 @@ begin
  vp:=ap^.a_vp;
  vap:=ap^.a_vap;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+ if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     (
      (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or
@@ -381,7 +381,7 @@ begin
       * Disallow write attempts if the filesystem is
       * mounted read-only.
       }
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -410,7 +410,7 @@ begin
   Exit(error);
  end;
 
- ap^.a_vap^.va_fsid:=p_mount(ap^.a_vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+ ap^.a_vap^.va_fsid:=ap^.a_vp^.v_mount^.mnt_stat.f_fsid.val[0];
  Exit(0);
 end;
 
@@ -437,7 +437,7 @@ begin
    VLNK,
    VREG:
     begin
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -471,7 +471,7 @@ begin
    VLNK,
    VREG:
     begin
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;

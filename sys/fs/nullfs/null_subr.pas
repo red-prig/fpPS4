@@ -7,7 +7,6 @@ interface
 
 uses
  kern_malloc,
- vmount,
  vnode,
  vfs_default,
  nullfs;
@@ -70,7 +69,7 @@ end;
 function vfs_hash_index(vp:p_vnode):DWORD;
 begin
  if (vp=nil) then Exit(0);
- Result:=(vp^.v_hash + p_mount(vp^.v_mount)^.mnt_hashseed);
+ Result:=(vp^.v_hash + vp^.v_mount^.mnt_hashseed);
 end;
 
 function NULL_NHASH(vp:p_vnode;force:Boolean):Pointer;

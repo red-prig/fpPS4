@@ -8,8 +8,6 @@ interface
 uses
  mqueue,
  uma,
- kern_param,
- time,
  sys_event,
  kern_mtx,
  //kern_synch,
@@ -197,187 +195,31 @@ const
  VQ_ASSIST     =$0040; { filesystem needs assistance from external program }
  VQ_NOTRESPLOCK=$0080; { server lockd down }
 
+
 type
- p_fsid=^fsid_t;
- fsid_t=packed record  // filesystem id type
-  val:array[0..1] of Integer;
- end;
+ fsid_t=vnode.fsid_t;
 
-{
- * File identifier.
- * These are unique per filesystem on a single machine.
-}
- p_fid=^fid;
- fid=packed record
-  fid_len  :Word;  // length of data in bytes
-  fid_data0:Word;  // force longword alignment
-  fid_data :array[0..MAXFIDSZ-1] of Byte; // data (variable length)
- end;
+ p_fid=vnode.p_fid;
+ fid  =vnode.fid;
 
- vnodelst=TAILQ_HEAD; //vnode
+ pp_vfsoptlist=vnode.pp_vfsoptlist;
+ p_vfsoptlist =vnode.p_vfsoptlist;
 
- pp_vfsoptlist=^p_vfsoptlist;
- p_vfsoptlist=^vfsoptlist;
- vfsoptlist=TAILQ_HEAD; //vfsopt
+ p_vfsopt=vnode.p_vfsopt;
+ vfsopt  =vnode.vfsopt;
 
- // Mount options list
- p_vfsopt=^vfsopt;
- vfsopt=packed record
-  link :TAILQ_ENTRY; //vfsopt
-  name :PChar;
-  value:Pointer;
-  len  :Integer;
-  pos  :Integer;
-  seen :Integer;
- end;
+ p_statfs=vnode.p_statfs;
+ t_statfs=vnode.t_statfs;
 
-{
- * Operations supported on mounted filesystem.
-}
+ p_vfsconf=vnode.p_vfsconf;
+ vfsconf  =vnode.vfsconf;
 
- PPInteger=^PInteger;
+ p_vfsops=vnode.p_vfsops;
+ vfsops  =vnode.vfsops;
 
- pp_mount=^p_mount;
- p_mount=^t_mount;
-
- pp_statfs=^p_statfs;
- p_statfs=^t_statfs;
- p_vfsconf=^vfsconf;
-
- vfs_cmount_t        =function (ma,data:Pointer;flags:QWORD):Integer;
- vfs_unmount_t       =function (mp:p_mount;mntflags:Integer):Integer;
- vfs_root_t          =function (mp:p_mount;flags:Integer;vpp:pp_vnode):Integer;
- vfs_quotactl_t      =function (mp:p_mount;cmds,uid:Integer;arg:Pointer):Integer;
- vfs_statfs_t        =function (mp:p_mount;sbp:p_statfs):Integer;
- vfs_sync_t          =function (mp:p_mount;waitfor:Integer):Integer;
- vfs_vget_t          =function (mp:p_mount;ino:DWORD;flags:Integer;vpp:pp_vnode):Integer;
- vfs_fhtovp_t        =function (mp:p_mount;fhp:p_fid;flags:Integer;vpp:pp_vnode):Integer;
- vfs_checkexp_t      =function (mp:p_mount;nam:Pointer;extflagsp,numsecflavors:Pinteger;secflavors:PPInteger):Integer;
- vfs_init_t          =function (cf:p_vfsconf):Integer;
- vfs_uninit_t        =function (cf:p_vfsconf):Integer;
- vfs_extattrctl_t    =function (mp:p_mount;cmd:Integer;filename_vp:p_vnode;attrnamespace:Integer;attrname:PChar):Integer;
- vfs_mount_t         =function (mp:p_mount):Integer;
- vfs_sysctl_t        =function (mp:p_mount;op:Integer;req:Pointer):Integer;
- vfs_susp_clean_t    =procedure(mp:p_mount);
- vfs_notify_lowervp_t=procedure(mp:p_mount;lowervp:p_vnode);
-
- p_vfsops=^vfsops;
- vfsops=packed record
-  vfs_mount     :vfs_mount_t     ;
-  vfs_cmount    :vfs_cmount_t    ;
-  vfs_unmount   :vfs_unmount_t   ;
-  vfs_root      :vfs_root_t      ;
-  vfs_quotactl  :vfs_quotactl_t  ;
-  vfs_statfs    :vfs_statfs_t    ;
-  vfs_sync      :vfs_sync_t      ;
-  vfs_vget      :vfs_vget_t      ;
-  vfs_fhtovp    :vfs_fhtovp_t    ;
-  vfs_checkexp  :vfs_checkexp_t  ;
-  vfs_init      :vfs_init_t      ;
-  vfs_uninit    :vfs_uninit_t    ;
-  vfs_extattrctl:vfs_extattrctl_t;
-  vfs_sysctl    :vfs_sysctl_t    ;
-  vfs_susp_clean:vfs_susp_clean_t;
- end;
-
- t_fsnamelen=array[0..MFSNAMELEN-1] of AnsiChar;
- t_mname    =array[0..MNAMELEN-1]   of AnsiChar;
-
-{
-  * Filesystem configuration information. One of these exists for each
-  * type of filesystem supported by the kernel. These are searched at
-  * mount time to identify the requested filesystem.
-  *
-  * XXX: Never change the first two arguments!
-}
- p_vfsoptdecl=Pointer;
-
- vfsconf=record
-  vfc_version :DWORD       ; // ABI version number
-  vfc_name    :t_fsnamelen ; // filesystem type name
-  vfc_vfsops  :p_vfsops    ; // filesystem operations vector
-  vfc_typenum :Integer     ; // historic filesystem type number
-  vfc_refcount:Integer     ; // number mounted of this type
-  vfc_flags   :Integer     ; // permanent flags
-  vfc_opts    :p_vfsoptdecl; // mount options
-  vfc_list    :TAILQ_ENTRY ; // list of vfscons
- end;
-
- t_statfs=packed record
-  f_version    :DWORD;  // structure version number
-  f_type       :DWORD;  // type of filesystem
-  f_flags      :QWORD;  // copy of mount exported flags
-  f_bsize      :QWORD;  // filesystem fragment size
-  f_iosize     :QWORD;  // optimal transfer block size
-  f_blocks     :QWORD;  // total data blocks in filesystem
-  f_bfree      :QWORD;  // free blocks in filesystem
-  f_bavail     :Int64;  // free blocks avail to non-superuser
-  f_files      :QWORD;  // total file nodes in filesystem
-  f_ffree      :Int64;  // free nodes avail to non-superuser
-  f_syncwrites :QWORD;  // count of sync writes since mount
-  f_asyncwrites:QWORD;  // count of async writes since mount
-  f_syncreads  :QWORD;  // count of sync reads since mount
-  f_asyncreads :QWORD;  // count of async reads since mount
-  f_spare:array[0..9] of QWORD;  // unused spare
-  f_namemax    :DWORD;  // maximum filename length
-  f_owner      :DWORD;  // user that mounted the filesystem
-  f_fsid       :fsid_t; // filesystem id
-  f_charspare  :array[0..79] of AnsiChar; // spare string space
-  f_fstypename :t_fsnamelen; // filesystem type name
-  f_mntfromname:t_mname;     // mounted filesystem
-  f_mntonname  :t_mname;     // directory on which mounted
- end;
- {$IF sizeof(t_statfs)<>472}{$STOP sizeof(t_statfs)<>472}{$ENDIF}
-
- {
-   * Structure per mounted filesystem.  Each mounted filesystem has an
-   * array of operations and an instance record.  The filesystems are
-   * put on a doubly linked list.
-   *
-   * Lock reference:
-   * m - mountlist_mtx
-   * i - interlock
-   * v - vnode freelist mutex
-   *
-   * Unmarked fields are considered stable as long as a ref is held.
-   *
- }
- t_mount=packed record
-  mnt_mtx                :mtx         ;// mount structure interlock
-  mnt_gen                :Integer     ;// mount generation
-  mnt_list               :TAILQ_ENTRY ;// (m) mount list
-  mnt_op                 :p_vfsops    ;// operations on fs
-  mnt_vfc                :p_vfsconf   ;// configuration info
-  mnt_vnodecovered       :p_vnode     ;// vnode we mounted on
-  mnt_syncer             :p_vnode     ;// syncer vnode
-  mnt_ref                :Integer     ;// (i) Reference count
-  mnt_nvnodelist         :vnodelst    ;// (i) list of vnodes
-  mnt_nvnodelistsize     :Integer     ;// (i) # of vnodes
-  mnt_activevnodelist    :vnodelst    ;// (v) list of active vnodes
-  mnt_activevnodelistsize:Integer     ;// (v) # of active vnodes
-  mnt_writeopcount       :Integer     ;// (i) write syscalls pending
-  mnt_kern_flag          :Integer     ;// (i) kernel only flags
-  mnt_flag               :QWORD       ;// (i) flags shared with user
-  mnt_pad_noasync        :DWORD       ;
-  mnt_opt                :p_vfsoptlist;// current mount options
-  mnt_optnew             :p_vfsoptlist;// new options passed to fs
-  mnt_maxsymlinklen      :Integer     ;// max size of short symlink
-  mnt_stat               :t_statfs    ;// cache of filesystem stats
-  mnt_data               :Pointer     ;// private data
-  mnt_time               :time_t      ;// last time written
-  mnt_iosize_max         :Integer     ;// max size for clusters, etc
-  //mnt_export             :p_netexport ;// export list
-  //mnt_label              :p_label     ;// MAC label for the fs
-  mnt_hashseed           :DWORD       ;// Random seed for vfs_hash
-  mnt_lockref            :Integer     ;// (i) Lock reference count
-  mnt_secondary_writes   :Integer     ;// (i) # of secondary writes
-  mnt_secondary_accwrites:Integer     ;// (i) secondary wr. starts
-  mnt_susp_owner         :Pointer     ;// (i) thread owning suspension
-  mnt_explock            :mtx         ;// vfs_export walkers lock
-  mnt_upper_link         :TAILQ_ENTRY ;// (m) we in the all uppers
-  mnt_uppers             :TAILQ_HEAD  ;// (m) upper mounts over us
-  mnt_budget_id          :Integer     ;
- end;
+ pp_mount=vnode.pp_mount;
+ p_mount =vnode.p_mount;
+ t_mount =vnode.t_mount;
 
  //Generic file handle
  fhandle_t=packed record

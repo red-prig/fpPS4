@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- vmount,
  vnode,
  kern_mtx,
  subr_hash;

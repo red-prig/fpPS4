@@ -642,7 +642,7 @@ begin
   *    to happen unless the file really is executable.
   * 3) Ensure that the file is a regular file.
   }
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) or
+ if ((vp^.v_mount^.mnt_flag and MNT_NOEXEC)<>0) or
     ((attr^.va_mode and (S_IXUSR or S_IXGRP or S_IXOTH))=0) or
     (attr^.va_type<>VREG) then
  begin

@@ -7,7 +7,6 @@ interface
 
 uses
  mqueue,
- vmount,
  vnode,
  vnamei,
  kern_mtx,

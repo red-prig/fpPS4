@@ -687,7 +687,7 @@ begin
      error:=vn_lock(vp, LK_SHARED,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
      if (error<>0) then
       goto readahead_vnlock_fail;
-     bsize:=p_mount(fp^.f_vnode^.v_mount)^.mnt_stat.f_iosize;
+     bsize:=fp^.f_vnode^.v_mount^.mnt_stat.f_iosize;
      VOP_UNLOCK(vp, 0);
      fp^.f_seqcount:=(arg + bsize - 1) div bsize;
      repeat

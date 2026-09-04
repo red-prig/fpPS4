@@ -9,7 +9,6 @@ uses
  kern_malloc,
  mqueue,
  kern_param,
- vmount,
  vnode,
  vfs_default,
  vnode_if,

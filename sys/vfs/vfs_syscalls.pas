@@ -3280,10 +3280,10 @@ unionread:
  end;
  if (count=auio.uio_resid) and
     ((vp^.v_vflag and VV_ROOT)<>0) and
-    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+    ((vp^.v_mount^.mnt_flag and MNT_UNION)<>0) then
  begin
   tvp:=vp;
-  vp:=p_mount(vp^.v_mount)^.mnt_vnodecovered;
+  vp:=vp^.v_mount^.mnt_vnodecovered;
   VREF(vp);
   fp^.f_vnode:=vp;
   fp^.f_data:=vp;

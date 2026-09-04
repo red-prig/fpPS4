@@ -73,7 +73,7 @@ begin
   * If read-only and op is not LOOKUP, will return EROFS.
   }
  if ((cnflags and ISLASTCN)<>0) AND
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) AND
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) AND
     (LOOKUP<>nameiop) then
  begin
   Exit(EROFS);
@@ -259,7 +259,7 @@ begin
   }
  if (uerror<>0) AND (uerror<>EJUSTRETURN) AND (udvp<>nil) AND
     (lerror=0) AND (lvp<>nil) AND (lvp^.v_type=VDIR) AND
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) AND
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)=0) AND
     ((1 < cnp^.cn_namelen) OR (cnp^.cn_nameptr[0]<>'.')) then
  begin
   { get unionfs vnode in order to create a new shadow dir. }
@@ -797,7 +797,7 @@ begin
  accmode:=ap^.a_accmode;
  error:=EACCES;
 
- if (accmode and VWRITE) AND (p_mount(ap^.a_vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+ if (accmode and VWRITE) AND (ap^.a_vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
  begin
   case (ap^.a_vp^.v_type) of
    VREG,
@@ -821,7 +821,7 @@ begin
  begin
   if (accmode and VWRITE)<>0 then
   begin
-   if (p_mount(ump^.um_uppervp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0 then
+   if (ump^.um_uppervp^.v_mount^.mnt_flag and MNT_RDONLY)<>0 then
    begin
     case (ap^.a_vp^.v_type) of
      VREG,
@@ -879,7 +879,7 @@ begin
   error:=VOP_GETATTR(uvp, ap^.a_vap);
   if (error=0) then
   begin
-   ap^.a_vap^.va_fsid:=p_mount(ap^.a_vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+   ap^.a_vap^.va_fsid:=ap^.a_vp^.v_mount^.mnt_stat.f_fsid.val[0];
   end;
 
   LOG_DEBUG('unionfs_getattr: leave mode=',
@@ -891,7 +891,7 @@ begin
 
  error:=VOP_GETATTR(lvp, ap^.a_vap);
 
- if (error=0) AND ((p_mount(ump^.um_uppervp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) then
+ if (error=0) AND ((ump^.um_uppervp^.v_mount^.mnt_flag and MNT_RDONLY)=0) then
  begin
   { correct the attr toward shadow file/dir. }
   if (ap^.a_vp^.v_type=VREG) OR (ap^.a_vp^.v_type=VDIR) then
@@ -905,7 +905,7 @@ begin
 
  if (error=0) then
  begin
-  ap^.a_vap^.va_fsid:=p_mount(ap^.a_vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+  ap^.a_vap^.va_fsid:=ap^.a_vp^.v_mount^.mnt_stat.f_fsid.val[0];
  end;
 
  LOG_DEBUG('unionfs_getattr: leave mode=',
@@ -935,7 +935,7 @@ begin
  //td:=curthread;
  vap:=ap^.a_vap;
 
- if ((p_mount(ap^.a_vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) AND
+ if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) AND
     ((vap^.va_flags<>VNOVAL) OR (vap^.va_uid<>VNOVAL) OR
      (vap^.va_gid<>VNOVAL) OR (vap^.va_atime.tv_sec<>VNOVAL) OR
      (vap^.va_mtime.tv_sec<>VNOVAL) OR (vap^.va_mode<>VNOVAL)) then
@@ -1996,7 +1996,7 @@ begin
  error:=0;
  vp:=ap^.a_vp;
 
- if (vp=nil) OR ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+ if (vp=nil) OR ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
  begin
   Exit(EACCES);
  end;
@@ -2564,12 +2564,12 @@ begin
  vp:=nil;
 
  if (unp^.un_uppervp<>nil) AND
-    ((p_mount(unp^.un_uppervp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) then
+    ((unp^.un_uppervp^.v_mount^.mnt_flag and MNT_RDONLY)=0) then
  begin
   vp:=unp^.un_uppervp
  end else
  if (unp^.un_lowervp<>nil) AND
-    ((p_mount(unp^.un_lowervp^.v_mount)^.mnt_flag and MNT_RDONLY)=0) then
+    ((unp^.un_lowervp^.v_mount^.mnt_flag and MNT_RDONLY)=0) then
  begin
   vp:=unp^.un_lowervp;
  end;

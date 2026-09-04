@@ -334,8 +334,8 @@ begin
  ump^.um_whitemode:=whitemode;
 
  MNT_ILOCK(mp);
- if ((p_mount(lowerrootvp^.v_mount)^.mnt_kern_flag and MNTK_MPSAFE)<>0) AND
-    ((p_mount(upperrootvp^.v_mount)^.mnt_kern_flag and MNTK_MPSAFE)<>0) then
+ if ((lowerrootvp^.v_mount^.mnt_kern_flag and MNTK_MPSAFE)<>0) AND
+    ((upperrootvp^.v_mount^.mnt_kern_flag and MNTK_MPSAFE)<>0) then
  begin
   mp^.mnt_kern_flag:=mp^.mnt_kern_flag or MNTK_MPSAFE;
  end;
@@ -345,7 +345,7 @@ begin
  {
   * Copy upper layer's RDONLY flag.
  }
- mp^.mnt_flag:=mp^.mnt_flag or (p_mount(ump^.um_uppervp^.v_mount)^.mnt_flag and MNT_RDONLY);
+ mp^.mnt_flag:=mp^.mnt_flag or (ump^.um_uppervp^.v_mount^.mnt_flag and MNT_RDONLY);
 
  {
   * Unlock the node
@@ -368,8 +368,8 @@ begin
  {
   * Check mnt_flag
  }
- if ((p_mount(ump^.um_lowervp^.v_mount)^.mnt_flag and MNT_LOCAL)<>0) AND
-    ((p_mount(ump^.um_uppervp^.v_mount)^.mnt_flag and MNT_LOCAL)<>0) then
+ if ((ump^.um_lowervp^.v_mount^.mnt_flag and MNT_LOCAL)<>0) AND
+    ((ump^.um_uppervp^.v_mount^.mnt_flag and MNT_LOCAL)<>0) then
  begin
   mp^.mnt_flag:=mp^.mnt_flag or MNT_LOCAL;
  end;

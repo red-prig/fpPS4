@@ -13,7 +13,6 @@ uses
  vfile,
  vfilio,
  vttycom,
- vmount,
  vdirent,
  vstat,
  vuio,

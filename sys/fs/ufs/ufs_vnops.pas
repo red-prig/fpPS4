@@ -465,7 +465,7 @@ begin
 
  //If read-only and op is not CREATE|LOOKUP, will return EROFS.
  if ((flags and ISLASTCN)<>0) and
-     ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+     ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
      (nameiop <> CREATE) and
      (nameiop <> LOOKUP) then
  begin
@@ -531,7 +531,7 @@ begin
 
      //If read-only and op is CREATE|RENAME, will return EROFS.
      if ((flags and ISLASTCN)<>0) and
-         ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+         ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -604,7 +604,7 @@ begin
  accmode:=ap^.a_accmode;
 
  if ((accmode and VWRITE)<>0) and
-    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+    ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
  begin
   case vp^.v_type of
    VREG,
@@ -743,7 +743,7 @@ begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+ if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     (
      (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or

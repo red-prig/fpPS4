@@ -514,7 +514,7 @@ begin
  if (vp^.v_type<>VFIFO) and
     ((flags and FWRITE)=0) and
     (vp^.v_mount<>nil) then
- if ((p_mount(vp^.v_mount)^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
+ if ((vp^.v_mount^.mnt_kern_flag and MNTK_EXTENDED_SHARED)<>0) then
  begin
   lock_flags:=LK_SHARED;
  end;
@@ -575,7 +575,7 @@ begin
  if (vap^.va_fsid<>VNOVAL) then
   sb^.st_dev:=vap^.va_fsid
  else
-  sb^.st_dev:=p_mount(vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+  sb^.st_dev:=vp^.v_mount^.mnt_stat.f_fsid.val[0];
 
  sb^.st_ino:=vap^.va_fileid;
 
@@ -917,7 +917,7 @@ begin
  end;
 
  if (vp^.v_mount<>nil) then
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_SYNCHRONOUS)<>0) then
+ if ((vp^.v_mount^.mnt_flag and MNT_SYNCHRONOUS)<>0) then
  begin
   ioflag:=ioflag or IO_SYNC;
  end;
