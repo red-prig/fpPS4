@@ -74,9 +74,6 @@ uses
 const
  TMPFS_DEFAULT_ROOT_MODE=(S_IRWXU or S_IRGRP or S_IXGRP or S_IROTH or S_IXOTH);
 
-//MALLOC_DEFINE(M_TMPFSMNT, 'tmpfs mount', 'tmpfs mount structures');
-//MALLOC_DEFINE(M_TMPFSNAME, 'tmpfs name', 'tmpfs file names');
-
 const
  tmpfs_opts:array[0..8] of PChar=(
   'from', 'size', 'maxfilesize', 'inodes', 'uid', 'gid', 'mode', 'export', nil
@@ -234,16 +231,16 @@ begin
  case (vtp[0]) of
   't',
   'T':
-   iv:=iv * 1024;
+   iv:=iv shl 40; //1024^4
   'g',
   'G':
-   iv:=iv * 1024;
+   iv:=iv shl 30; //1024^3
   'm',
   'M':
-   iv:=iv * 1024;
+   iv:=iv shl 20; //1024^2
   'k',
   'K':
-   iv:=iv * 1024;
+   iv:=iv shl 10; //1024
   #0:;
   else
    Exit(EINVAL);

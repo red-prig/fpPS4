@@ -43,6 +43,8 @@ implementation
 uses
  tmpfs_seg;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 var
  tmpfs_rename_restarts:Integer=0;
 
@@ -1593,24 +1595,23 @@ begin
 end;
 
 function tmpfs_print(v:p_vop_print_args):Integer;
-//var
- //vp:p_vnode;
- //node:p_tmpfs_node;
+var
+ vp:p_vnode;
+ node:p_tmpfs_node;
 begin
- //vp:=v^.a_vp;
+ vp:=v^.a_vp;
 
- //node:=VP_TO_TMPFS_NODE(vp);
+ node:=VP_TO_TMPFS_NODE(vp);
 
- //printf('tag VT_TMPFS, tmpfs_node %p, flags 0x%x, links %d\n', node, node^.tn_flags, node^.tn_links);
- //printf('\tmode 0%o, owner %d, group %d, size %' PRIdMAX
- //    ', status 0x%x\n',
- //    node^.tn_mode, node^.tn_uid, node^.tn_gid,
- //    (uintmax_t)node^.tn_size, node^.tn_status);
+ LOG_DEBUG('tag VT_TMPFS, tmpfs_node ',HexStr(node),', flags 0x',HexStr(node^.tn_flags,8),', links ',node^.tn_links);
+ LOG_DEBUG('     mode 0',OctStr(node^.tn_mode,6),', owner ',node^.tn_uid,', group ',node^.tn_gid,', size ',node^.tn_size,', status 0x',HexStr(node^.tn_status,8));
 
- //if (vp^.v_type=VFIFO) then
- // fifo_printinfo(vp);
+ if (vp^.v_type=VFIFO) then
+  begin
+   //fifo_printinfo(vp);
+  end;
 
- //printf('\n');
+ LOG_DEBUG;
 
  Result:=0;
 end;
