@@ -271,6 +271,10 @@ begin
 
  //mount_print;
 
+ { The new root fs can come up empty (e.g. tmpfs) and has no /dev yet.
+   Create it so devfs can be remounted onto it below}
+ error:=mount_mkdir('/dev');
+
  { Remount devfs under /dev }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, '/dev', curkthread);
 
@@ -396,7 +400,7 @@ begin
 
  //mount_print;
 
- error:=vfs_mount_path('ufs','/','/',nil,MNT_ROOTFS);
+ error:=vfs_mount_path('tmpfs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
 
  //mount_print;
