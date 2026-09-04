@@ -1969,10 +1969,18 @@ begin
  NtClose(FD);
 end;
 
-function pfs_get_va_mode(va_mode,is_system:Integer;p_out:PInteger):Integer;
+function pfs_get_va_mode(vp:p_vnode;va_mode,is_system:Integer;p_out:PInteger):Integer;
 var
  val:Integer;
 begin
+
+ //only for PFS emulate
+ if ((vp^.v_mount^.mnt_flag and MNT_PFS_ANY)=0) then
+ begin
+  p_out^:=val;
+  Exit(0);
+ end;
+
  if (is_system=0) then
  begin
   if ((va_mode and 6)=6) then
@@ -2042,7 +2050,7 @@ begin
  dmp:=VFSTOUFS(dvp^.v_mount);
 
  va_mode:=0;
- Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp,vap^.va_mode,0,@va_mode);
  if (Result<>0) then Exit;
 
  dd:=dvp^.v_data;
@@ -2485,7 +2493,7 @@ begin
  vap:=ap^.a_vap;
 
  va_mode:=0;
- Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp,vap^.va_mode,0,@va_mode);
  if (Result<>0) then Exit;
 
  //emu ext
@@ -2853,7 +2861,7 @@ begin
   //end;
 
   va_mode:=0;
-  Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+  Result:=pfs_get_va_mode(vp,vap^.va_mode,0,@va_mode);
   if (Result<>0) then goto _err;
 
   de^.ufs_mode:=va_mode;
