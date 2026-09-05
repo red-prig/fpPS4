@@ -179,11 +179,15 @@ type
 
  TMountList=class(TSerializeObject)
   private
-   Fgame    :RawByteString;
-   Ffirmware:RawByteString;
+   FGame       :RawByteString;
+   FFirmware   :RawByteString;
+   FOverlayAuto:Boolean;
+   FOverlayList:TSerializeStringArray;
   published
-   property game    :RawByteString read Fgame     write Fgame    ;
-   property firmware:RawByteString read Ffirmware write Ffirmware;
+   property Game       :RawByteString         read FGame        write FGame;
+   property Firmware   :RawByteString         read FFirmware    write FFirmware;
+   property OverlayAuto:Boolean               read FOverlayAuto write FOverlayAuto;
+   property OverlayList:TSerializeStringArray read FOverlayList write FOverlayList;
   public
    Constructor Create; override;
  end;
@@ -307,8 +311,9 @@ end;
 Constructor TMountList.Create;
 begin
  inherited;
- Fgame    :=DirectorySeparator;
- Ffirmware:=DirectorySeparator+'firmware';
+ Fgame       :=DirectorySeparator;
+ Ffirmware   :=DirectorySeparator+'firmware';
+ FOverlayAuto:=True;
 end;
 
 //

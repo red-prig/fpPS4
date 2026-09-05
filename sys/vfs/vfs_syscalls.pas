@@ -128,6 +128,7 @@ function kern_mkdir(path:PChar;segflg:uio_seg;mode:Integer):Integer;
 function kern_rmdirat(fd:Integer;path:PChar;pathseg:uio_seg):Integer;
 function kern_rmdir(path:PChar;pathseg:uio_seg):Integer;
 function kern_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
+function kern_chroot(path:PChar;pathseg:uio_seg):Integer;
 
 /////
 
@@ -672,10 +673,7 @@ const
 
 function change_root(vp:p_vnode):Integer; forward;
 
-{
- * Change notion of root (``/'') directory.
- }
-function sys_chroot(path:PChar):Integer;
+function kern_chroot(path:PChar;pathseg:uio_seg):Integer;
 label
  _error,
  e_vunlock;
@@ -684,19 +682,13 @@ var
  nd:t_nameidata;
  vfslocked:Integer;
 begin
- error:=EPERM;
- //error:=priv_check(td, PRIV_VFS_CHROOT);
- if (error<>0) then
- begin
-  Exit(error);
- end;
-
- NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
+ NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
  begin
   goto _error;
  end;
+
  vfslocked:=NDHASGIANT(@nd);
  error:=change_dir(nd.ni_vp);
  if (error<>0) then
@@ -719,6 +711,23 @@ e_vunlock:
 _error:
  NDFREE(@nd, NDF_ONLY_PNBUF);
  Exit(error);
+end;
+
+{
+ * Change notion of root (``/'') directory.
+ }
+function sys_chroot(path:PChar):Integer;
+var
+ error:Integer;
+begin
+ error:=EPERM;
+ //error:=priv_check(td, PRIV_VFS_CHROOT);
+ if (error<>0) then
+ begin
+  Exit(error);
+ end;
+
+ Exit(kern_chroot(path,UIO_USERSPACE));
 end;
 
 {

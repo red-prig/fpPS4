@@ -7,6 +7,7 @@ interface
 uses
  param_sfo,
  sysutils,
+ Classes,
  core_serialization;
 
 const
@@ -32,10 +33,12 @@ type
  end;
 
  TParamSfoFile=class(TSerializeArray)
+  //
   params:array of TParamSfoValue;
   //
   Destructor Destroy; override;
   //
+  Function   IndexOf  (const name:RawByteString):Integer;
   Function   GetString(const name:RawByteString):RawByteString;
   Function   GetUInt  (const name:RawByteString):DWORD;
   //
@@ -44,11 +47,108 @@ type
   Function   AddObject:TSerializeObject;     override;
   Function   AddArray :TSerializeArray;      override;
   procedure  AddValue(Value:TValue);         override;
+  //
+  procedure  Merge(src:TParamSfoFile);
  end;
 
 function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
 
+function LoadParamSfoByPath(const path:RawByteString):TParamSfoFile;
+function TestParamSfoByPath(const path,title_id:RawByteString):Boolean;
+
+procedure AutoDetectOverlays    (const path,title_id:RawByteString;dst:TStrings);
+function  LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
+
 implementation
+
+function LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
+var
+ i:Integer;
+ Tmp:TParamSfoFile;
+begin
+ Result:=LoadParamSfoByPath(path);
+ if (Result=nil) then Exit;
+
+ if (overlays.Count<>0) then
+ For i:=0 to overlays.Count-1 do
+ begin
+  Tmp:=LoadParamSfoByPath(overlays.Strings[i]);
+  if (Tmp<>nil) then
+  begin
+   Result.Merge(Tmp);
+   FreeAndNil(Tmp);
+  end;
+ end;
+
+end;
+
+procedure AutoDetectOverlays(const path,title_id:RawByteString;dst:TStrings);
+var
+ V:RawByteString;
+begin
+
+ V:=ExcludeTrailingPathDelimiter(path)+'-patch';
+ if TestParamSfoByPath(V,title_id) then
+ begin
+  dst.Add(V);
+ end;
+
+ V:=ExcludeTrailingPathDelimiter(path)+'-mods';
+ if FileExists(V) then
+ begin
+  dst.Add(V);
+ end;
+
+end;
+
+procedure TParamSfoFile.Merge(src:TParamSfoFile);
+var
+ s,d:Integer;
+begin
+ if (src=nil) then Exit;
+
+ if (Length(src.params)<>0) then
+ For s:=0 to High(src.params) do
+ if (src.params[s].name<>'CATEGORY') then
+ begin
+  d:=Self.IndexOf(src.params[s].name);
+
+  if (d=-1) then
+  begin
+   d:=Length(Self.params);
+   Insert(TParamSfoValue.Create,Self.params,d);
+  end;
+
+  Self.params[d].format:=src.params[s].format;
+  Self.params[d].name  :=src.params[s].name  ;
+  Self.params[d].value :=src.params[s].value ;
+ end;
+
+end;
+
+function LoadParamSfoByPath(const path:RawByteString):TParamSfoFile;
+begin
+ Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(path)+
+                          DirectorySeparator+
+                          'sce_sys'+
+                          DirectorySeparator+
+                          'param.sfo');
+end;
+
+function TestParamSfoByPath(const path,title_id:RawByteString):Boolean;
+var
+ ParamSfo:TParamSfoFile;
+begin
+ ParamSfo:=LoadParamSfoByPath(path);
+ //
+ if (ParamSfo=nil) then Exit(False);
+
+ Result:=(title_id=ParamSfo.GetString('TITLE_ID'));
+
+ FreeAndNil(ParamSfo);
+end;
+
+//
 
 procedure on_load(userdata:Pointer;name,value:pchar;format:WORD;size,max_size,i:DWORD);
 var
@@ -96,6 +196,11 @@ Var
  Loader:TParamSfoFileLoader;
 begin
  Result:=nil;
+
+ if not FileExists(path) then
+ begin
+  Exit;
+ end;
 
  if not Loader.open(path) then
  begin
@@ -229,20 +334,31 @@ begin
  inherited;
 end;
 
-Function TParamSfoFile.GetString(const name:RawByteString):RawByteString;
+Function TParamSfoFile.IndexOf(const name:RawByteString):Integer;
 var
  i:Integer;
 begin
- Result:='';
+ Result:=-1;
  if (Self=nil) then Exit;
  if (Length(params)=0) then Exit;
  For i:=0 to High(params) do
  begin
   if (params[i].name=name) then
   begin
-   Result:=params[i].GetString;
-   Exit;
+   Exit(i);
   end;
+ end;
+end;
+
+Function TParamSfoFile.GetString(const name:RawByteString):RawByteString;
+var
+ i:Integer;
+begin
+ Result:='';
+ i:=IndexOf(name);
+ if (i<>-1) then
+ begin
+  Result:=params[i].GetString;
  end;
 end;
 
@@ -251,15 +367,10 @@ var
  i:Integer;
 begin
  Result:=0;
- if (Self=nil) then Exit;
- if (Length(params)=0) then Exit;
- For i:=0 to High(params) do
+ i:=IndexOf(name);
+ if (i<>-1) then
  begin
-  if (params[i].name=name) then
-  begin
-   Result:=params[i].GetUInt;
-   Exit;
-  end;
+  Result:=params[i].GetUInt;
  end;
 end;
 

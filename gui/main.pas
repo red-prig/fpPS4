@@ -147,7 +147,7 @@ type
     FLogReadFname :RawByteString;
     FLogReadHandle:THandle;
 
-    Fmlog:TSynEdit;
+    Fmlog   :TSynEdit;
     FLogMenu:TPopupMenu;
 
     FLogPollInterval:QWORD;
@@ -1295,7 +1295,7 @@ begin
 
  Item:=FGameList.GetItemRow(aRow);
 
- ParamSfo:=LoadParamSfoFile2(Item.MountList.game);
+ ParamSfo:=LoadParamSfoByItem(Item);
 
  LogEnd;
  ClearLog;
@@ -1402,8 +1402,6 @@ begin
 
   //terminate
   FContext.StopAndNil();
-  //
-  FreeAndNil(FContext.FParamSfo);
   //
   FContext.CloseItem();
   FContext.CloseSavdata();

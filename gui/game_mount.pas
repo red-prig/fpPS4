@@ -95,6 +95,7 @@ uses
  errno,
  kern_proc,
  vfs_mountroot,
+ vfs_cache,
  ps4_libSceSystemService,
  subr_backtrace;
 
@@ -258,6 +259,30 @@ begin
  end;
 end;
 
+function mount_chdir(path:PChar):Integer;
+begin
+ Result:=vfs_mountroot.mount_chdir(path);
+ if (Result<>0) then
+ begin
+  print_error_td('[chdir error]'+#13#10+
+                 ' path:"'+path+'"'#13#10+
+                 '  err:'+get_errno_str(Result)
+                ,True);
+ end;
+end;
+
+function mount_chroot(path:PChar):Integer;
+begin
+ Result:=vfs_mountroot.mount_chroot(path);
+ if (Result<>0) then
+ begin
+  print_error_td('[chroot error]'+#13#10+
+                 ' path:"'+path+'"'#13#10+
+                 '  err:'+get_errno_str(Result)
+                ,True);
+ end;
+end;
+
 function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD;ignore:Boolean):Integer;
 begin
  Result:=vfs_mountroot.mount_into_sandbox(fstype,fspath,from,opts,flags);
@@ -353,49 +378,54 @@ end;
 
 const
  SYSTEM_COMMON_DIRS:array[0..12] of t_mount_dir=(
-  (dst:'/%s/common/cert'          ;src:'%s/system/common/cert'          ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // CA_LIST.cer
-  (dst:'/%s/common/etc'           ;src:'%s/system/common/etc'           ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/font'          ;src:'%s/preinst/common/font'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // *.ttf
-  (dst:'/%s/common/font2'         ;src:'%s/system/common/font2'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
-  (dst:'/%s/common/httpcache'     ;src:'%s/system_data/common/httpcache';mode:MM_LOCAL   ;flags:[mfForceDir]),
-  (dst:'/%s/common/lib'           ;src:'%s/system/common/lib'           ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
-  (dst:'/%s/common/mms'           ;src:'%s/system_data/common/mms/'     ;mode:MM_LOCAL   ;flags:[mfForceDir]),             // av_content.db
-  (dst:'/%s/common/mms_ro'        ;src:'%s/system/common/mms_ro'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]), // template_content.db
-  (dst:'/%s/common/playready'     ;src:'%s/user/common/playready'       ;mode:MM_LOCAL   ;flags:[mfReadOnly,mfForceDir ]),
-  (dst:'/%s/common/text_layout'   ;src:'%s/system/common/text_layout'   ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/text_to_speech';src:'%s/system/common/text_to_speech';mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/webkit'        ;src:'%s/system/common/webkit'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/cert'          ;src:'%s/system/common/cert'          ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // CA_LIST.cer
+  (dst:'./%s/common/etc'           ;src:'%s/system/common/etc'           ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/font'          ;src:'%s/preinst/common/font'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // *.ttf
+  (dst:'./%s/common/font2'         ;src:'%s/system/common/font2'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
+  (dst:'./%s/common/httpcache'     ;src:'%s/system_data/common/httpcache';mode:MM_LOCAL   ;flags:[mfForceDir]),
+  (dst:'./%s/common/lib'           ;src:'%s/system/common/lib'           ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
+  (dst:'./%s/common/mms'           ;src:'%s/system_data/common/mms/'     ;mode:MM_LOCAL   ;flags:[mfForceDir]),             // av_content.db
+  (dst:'./%s/common/mms_ro'        ;src:'%s/system/common/mms_ro'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]), // template_content.db
+  (dst:'./%s/common/playready'     ;src:'%s/user/common/playready'       ;mode:MM_LOCAL   ;flags:[mfReadOnly,mfForceDir ]),
+  (dst:'./%s/common/text_layout'   ;src:'%s/system/common/text_layout'   ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/text_to_speech';src:'%s/system/common/text_to_speech';mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/webkit'        ;src:'%s/system/common/webkit'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
   (term:True)
  );
 
  SYSTEM_DIRS:array[0..5] of t_mount_dir=(
-  (dst:'/%s/becore'     ;src:''              ;mode:MM_CREATE  ;flags:[]),           // system app only
-  (dst:'/%s/common'     ;src:''              ;mode:MM_CREATE  ;flags:[];childs:@SYSTEM_COMMON_DIRS),
-  (dst:'/%s/common_temp';src:''              ;mode:MM_CREATE  ;flags:[]),
-  (dst:'/%s/priv'       ;src:'%s/system/priv';mode:MM_FIRMWARE;flags:[mfReadOnly]), // system app only
-  (dst:'/%s/sqlite'     ;src:''              ;mode:MM_CREATE  ;flags:[]),
+  (dst:'./%s/becore'     ;src:''              ;mode:MM_CREATE  ;flags:[]),           // system app only
+  (dst:'./%s/common'     ;src:''              ;mode:MM_CREATE  ;flags:[];childs:@SYSTEM_COMMON_DIRS),
+  (dst:'./%s/common_temp';src:''              ;mode:MM_CREATE  ;flags:[]),
+  (dst:'./%s/priv'       ;src:'%s/system/priv';mode:MM_FIRMWARE;flags:[mfReadOnly]), // system app only
+  (dst:'./%s/sqlite'     ;src:''              ;mode:MM_CREATE  ;flags:[]),
   (term:True)
  );
 
  SANDBOX_DIRS:array[0..7] of t_mount_dir=(
-  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
-  (dst:'/av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
-  (dst:'/hostapp'    ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
-  (dst:'/system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];childs:@SYSTEM_DIRS),
+  (dst:'./app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
+  (dst:'./av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
+  (dst:'./hostapp'    ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
+  (dst:'./system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];childs:@SYSTEM_DIRS),
   (term:True)
  );
 
  DOWNLOAD_DIRS:array[0..1] of pchar=(
+  './download0',
+  './download1'
+ );
+
+ DOWNLOAD_MP:array[0..1] of pchar=(
   '/download0',
   '/download1'
  );
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 var
- i,err:Integer;
+ i,count,err:Integer;
 
  fs_iterator:t_mount_dir_iterator;
 
@@ -403,7 +433,8 @@ var
  fs_dst:RawByteString;
  fs_src:RawByteString;
 
- fs_path:RawByteString;
+ OverlayList:TSerializeStringArray;
+ fs_layer:RawByteString;
 begin
 
  //save to global
@@ -438,6 +469,25 @@ begin
  fs_source[MM_LOCAL   ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.LocalDir);
 
  //--sandbox--
+
+ //create sandbox
+ err:=mount_mkdir('/sandbox');
+ if (err<>0) then Exit;
+
+ //move to
+ err:=mount_chdir('/sandbox');
+ if (err<>0) then Exit;
+ //create sandbox
+
+ //mount /dev into the sandbox
+ err:=mount_into_sandbox('devfs',
+                         './dev',
+                         'devfs',
+                         nil,
+                         0,
+                         False);
+
+
  fs_iterator.init(@SANDBOX_DIRS);
  repeat
 
@@ -452,8 +502,6 @@ begin
    end else
    begin
     fs_src:=Format(unix_to_host(src),[fs_source[mode]]);
-
-    //mfTmp
 
     if (mfForceDir in flags) then
     begin
@@ -483,62 +531,38 @@ begin
     if (err=0) and (mode=MM_GAME) then
     begin
 
-     err:=mount_into_sandbox('ufs',
-                             '/update',
-                             pchar(fs_src+'-UPDATE'),
-                             nil,
-                             ord(mfReadOnly in flags)*MNT_RDONLY  or
-                             ord(mfPFS      in flags)*MNT_PFS_64K or
-                             ord(mfBudget   in flags)*MNT_BIG_APP,
-                             True);
-     if (err=0) then
-     begin
-      { overlay patch (/update = upper) over base (/app0 = lower) via unionfs }
-      err:=mount_into_sandbox('unionfs',
-                              '/app0',
-                              '/update',
-                              nil,
-                              MNT_RDONLY,
-                              False);
-     end;
+     //load overlays
+     OverlayList:=GameStartupInfo.FGameItem.MountList.OverlayList;
+     count:=Length(OverlayList.values);
 
-     err:=mount_into_sandbox('ufs',
-                             '/patch',
-                             pchar(fs_src+'-patch'),
-                             nil,
-                             ord(mfReadOnly in flags)*MNT_RDONLY  or
-                             ord(mfPFS      in flags)*MNT_PFS_64K or
-                             ord(mfBudget   in flags)*MNT_BIG_APP,
-                             True);
-     if (err=0) then
+     if (count<>0) then
+     For i:=0 to count-1 do
      begin
-      { overlay patch (/patch = upper) over base (/app0 = lower) via unionfs }
-      err:=mount_into_sandbox('unionfs',
-                              '/app0',
-                              '/patch',
-                              nil,
-                              MNT_RDONLY,
-                              False);
-     end;
+      fs_layer:='/layer'+IntToStr(i);
+      fs_src  :=OverlayList.values[i];
 
-     err:=mount_into_sandbox('ufs',
-                             '/mods',
-                             pchar(fs_src+'-mods'),
-                             nil,
-                             ord(mfReadOnly in flags)*MNT_RDONLY  or
-                             ord(mfPFS      in flags)*MNT_PFS_64K or
-                             ord(mfBudget   in flags)*MNT_BIG_APP,
-                             True);
-     if (err=0) then
-     begin
-      { overlay patch (/mods = upper) over base (/app0 = lower) via unionfs }
-      err:=mount_into_sandbox('unionfs',
-                              '/app0',
-                              '/mods',
+      err:=mount_into_sandbox('ufs',
+                              pchar(fs_layer),
+                              pchar(fs_src),
                               nil,
-                              MNT_RDONLY,
-                              False);
-     end;
+                              ord(mfReadOnly in flags)*MNT_RDONLY  or
+                              ord(mfPFS      in flags)*MNT_PFS_64K or
+                              ord(mfBudget   in flags)*MNT_BIG_APP,
+                              True);
+
+      if (err=0) then
+      begin
+       err:=mount_into_sandbox('unionfs',
+                               pchar(fs_dst),
+                               pchar(fs_layer),
+                               nil,
+                               ord(mfReadOnly in flags)*MNT_RDONLY,
+                               False);
+
+       Writeln('Apply layer:',fs_src);
+      end;
+
+     end; //For
 
     end; //MM_GAME
 
@@ -568,6 +592,12 @@ begin
  //UPDATE: sandbox root IS NOT read-only
  //err:=vfs_mount_path('ufs','/','/',nil,MNT_RDONLY or MNT_UPDATE);
 
+ //lock sandbox
+ err:=mount_chroot('.');
+ //lock sandbox
+
+ //enable relative mount
+ vfs_cache.disablefullpath:=1;
 end;
 
 function GameMountConfigExport:TGameMountConfigExport;
@@ -1232,11 +1262,11 @@ var
  size:QWORD;
  fs_src:RawByteString;
 begin
- if (strlcomp(mountPoint,DOWNLOAD_DIRS[0],MOUNT_MAXSIZE)=0) then
+ if (strlcomp(mountPoint,DOWNLOAD_MP[0],MOUNT_MAXSIZE)=0) then
  begin
   i:=0;
  end else
- if (strlcomp(mountPoint,DOWNLOAD_DIRS[1],MOUNT_MAXSIZE)=0) then
+ if (strlcomp(mountPoint,DOWNLOAD_MP[1],MOUNT_MAXSIZE)=0) then
  begin
   i:=1;
  end else

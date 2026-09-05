@@ -8,6 +8,9 @@ interface
 uses
  vnode;
 
+var
+ disablefullpath:Integer=0;
+
 function vn_fullpath1(vp,rdir:p_vnode;buf:PChar;retbuf:PPChar;buflen:DWORD):Integer;
 function vn_fullpath(vn:p_vnode;retbuf,freebuf:PPChar):Integer;
 function vn_fullpath_global(vn:p_vnode;retbuf,freebuf:PPChar):Integer;
@@ -44,7 +47,7 @@ var
  rdir:p_vnode;
  error,vfslocked:Integer;
 begin
- //if (disablefullpath) then Exit(ENODEV);
+ if (disablefullpath<>0) then Exit(ENODEV);
 
  if (vn=nil) then
  begin
@@ -82,7 +85,7 @@ var
  buf:PChar;
  error:Integer;
 begin
- //if (disablefullpath) then Exit(ENODEV);
+ if (disablefullpath<>0) then Exit(ENODEV);
 
  if (vn=nil) then
  begin
@@ -129,7 +132,7 @@ begin
  ASSERT_VOP_ELOCKED(vp, 'vn_path_to_global_path');
 
  { Return ENODEV if sysctl debug.disablefullpath==1 }
- //if (disablefullpath) then Exit(ENODEV);
+ if (disablefullpath<>0) then Exit(ENODEV);
 
  { Construct global filesystem path from vp. }
  VOP_UNLOCK(vp, 0);

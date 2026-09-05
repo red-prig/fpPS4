@@ -84,7 +84,7 @@ begin
  end else
  if force then
  begin
-  Result:=calloc(SizeOf(LIST_HEAD));
+  Result:=AllocMem(SizeOf(LIST_HEAD)); //need align by 2
   if (Result=nil) then Exit;
   data:=HAMT_insert32(@null_node_hashtbl,vfs_hash_index(vp),Result);
   if (data=nil) then
@@ -114,7 +114,7 @@ procedure free_hash_data_cb(data,userdata:Pointer); register;
 begin
  if (data<>nil) then
  begin
-  free(data);
+  FreeMem(data);
  end;
 end;
 

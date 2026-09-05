@@ -59,12 +59,13 @@ uses
 
  {$M-}
 
-function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
+function LoadParamSfoByItem(Item:TGameItem):TParamSfoFile;
 
 implementation
 
 uses
  Controls,
+ form_filler,
  sys_event;
 
 //
@@ -94,6 +95,7 @@ begin
   FGameItem.FLock:=False;
   FGameItem:=nil;
  end;
+ FreeAndNil(FParamSfo);
 end;
 
 //
@@ -164,13 +166,26 @@ end;
 
 //
 
-function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
+function LoadParamSfoByItem(Item:TGameItem):TParamSfoFile;
+var
+ List:TStringList;
 begin
- Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(game)+
-                          DirectorySeparator+
-                          'sce_sys'+
-                          DirectorySeparator+
-                          'param.sfo');
+ Result:=nil;
+ if (Item=nil)  then Exit;
+
+ List:=TStringList.Create;
+
+ if Item.MountList.OverlayAuto then
+ begin
+  AutoDetectOverlays(Item.MountList.game,Item.FGameInfo.TitleId,List);
+ end else
+ begin
+  SerializeStringArray2Strings(Item.MountList.OverlayList,List);
+ end;
+
+ Result:=LoadParamSfoByOverlays(Item.MountList.game,List);
+
+ FreeAndNil(List);
 end;
 
 function TGameRunContext.PARAM_SFO_INIT(Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -183,7 +198,7 @@ begin
 
  if (FParamSfo=nil) then
  begin
-  FParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
+  FParamSfo:=LoadParamSfoByItem(FGameItem);
  end;
 
  if (FParamSfo=nil) then

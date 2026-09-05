@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 407
+  Left = 520
   Height = 311
-  Top = 116
+  Top = 121
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
@@ -377,6 +377,146 @@ object frmGameEditor: TfrmGameEditor
         ShowHint = True
         ParentShowHint = False
         OnClick = BtnExpFwClick
+      end
+      object BtnAddLayer: TSpeedButton
+        AnchorSideLeft.Control = Edt_MountList_OverlayAuto
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = Edt_MountList_firmware
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MountList_OverlayList
+        Left = 164
+        Height = 26
+        Hint = 'Add a patch or mod folder'
+        Top = 126
+        Width = 26
+        AutoSize = True
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 1
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnAddLayerClick
+      end
+      object BtnRemLayer: TSpeedButton
+        AnchorSideLeft.Control = BtnAddLayer
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MountList_OverlayList
+        Left = 195
+        Height = 26
+        Hint = 'Remove selected patch/mod folder'
+        Top = 126
+        Width = 26
+        AutoSize = True
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 2
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnRemLayerClick
+      end
+      object Label8: TLabel
+        AnchorSideLeft.Control = TabFolders
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Hint = 'Game updates, patches and mods layered on top of the game folder'
+        Top = 132
+        Width = 90
+        BorderSpacing.Left = 10
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        Caption = 'Patches && mods:'
+        ParentShowHint = False
+        ShowHint = True
+      end
+      object Edt_MountList_OverlayList: TListBox
+        AnchorSideLeft.Control = TabFolders
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabFolders
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Side = asrBottom
+        Left = 10
+        Height = 83
+        Hint = 'Folders applied over the game: updates, patches and mods (top wins)'
+        Top = 155
+        Width = 439
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 3
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        ItemHeight = 0
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 4
+      end
+      object Edt_MountList_OverlayAuto: TCheckBox
+        AnchorSideLeft.Control = Label8
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        Left = 110
+        Height = 19
+        Hint = 'Automatically detect update/patch/mod folders next to the game'
+        Top = 130
+        Width = 44
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Auto'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 3
+        OnChange = Edt_MountList_OverlayAutoChange
+      end
+      object BtnDwLayer: TSpeedButton
+        AnchorSideLeft.Control = BtnRemLayer
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MountList_OverlayList
+        Left = 226
+        Height = 26
+        Hint = 'Move selected patch/mod folder down (lower priority)'
+        Top = 126
+        Width = 26
+        AutoSize = True
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 4
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnDwLayerClick
+      end
+      object BtnUpLayer: TSpeedButton
+        AnchorSideLeft.Control = BtnDwLayer
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Control = Edt_MountList_OverlayList
+        Left = 257
+        Height = 26
+        Hint = 'Move selected patch/mod folder up (higher priority)'
+        Top = 126
+        Width = 26
+        AutoSize = True
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 5
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnUpLayerClick
       end
     end
     object TabParamSfo: TTabSheet

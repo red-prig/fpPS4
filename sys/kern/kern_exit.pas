@@ -72,6 +72,8 @@ uses
  md_sleep,
  md_proc;
 
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
 function _WSTATUS(x:Integer):Integer; inline;
 begin
  Result:=(_W_INT(x) and &0177);
@@ -146,6 +148,8 @@ end;
 
 procedure sys_sys_exit(rval:Integer);
 begin
+ LOG_INFO('sys_sys_exit:',rval);
+
  exit1(W_EXITCODE(rval, 0));
  // NOTREACHED
 end;

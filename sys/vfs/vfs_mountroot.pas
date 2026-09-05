@@ -22,6 +22,8 @@ procedure vfs_mountroot();
 function  vfs_mount_path      (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 function  mount_mkdir         (path:PChar):Integer;
 function  mount_rmdir         (path:PChar):Integer;
+function  mount_chdir         (path:PChar):Integer;
+function  mount_chroot        (path:PChar):Integer;
 function  mount_into_sandbox  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 function  unmount_from_sandbox(path:PChar;flags:Integer):Integer;
 
@@ -365,7 +367,17 @@ end;
 
 function mount_rmdir(path:PChar):Integer;
 begin
-Result:=kern_rmdir(path,UIO_SYSSPACE);
+ Result:=kern_rmdir(path,UIO_SYSSPACE);
+end;
+
+function mount_chdir(path:PChar):Integer;
+begin
+ Result:=kern_chdir(path,UIO_SYSSPACE);
+end;
+
+function mount_chroot(path:PChar):Integer;
+begin
+ Result:=kern_chroot(path,UIO_SYSSPACE);
 end;
 
 function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
