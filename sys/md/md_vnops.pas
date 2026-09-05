@@ -2027,7 +2027,7 @@ begin
  //only for PFS emulate
  if ((vp^.v_mount^.mnt_flag and MNT_PFS_ANY)=0) then
  begin
-  p_out^:=val;
+  p_out^:=va_mode;
   Exit(0);
  end;
 
