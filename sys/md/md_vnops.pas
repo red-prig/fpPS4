@@ -512,17 +512,21 @@ begin
  //masquerade
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
+  //tmpfs
   d_blksize:=16384;
  end else
  if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
+  //pfs
   d_blksize:=65536;
  end else
  if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
  begin
+  //pfs
   d_blksize:=32768;
  end else
  begin
+  //ufs
   d_blksize:=32768;
  end;
 
@@ -1448,7 +1452,6 @@ end;
 
 function md_readdir(ap:p_vop_readdir_args):Integer;
 var
- mp:p_mount;
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_dirent;
@@ -1475,8 +1478,7 @@ begin
 
  dd:=ap^.a_vp^.v_data;
 
- mp:=ap^.a_vp^.v_mount;
- emu_pfs:=((mp^.mnt_flag and MNT_PFS_ANY)<>0);
+ emu_pfs:=((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_ANY)<>0);
 
  sx_xlock(@dd^.ufs_md_lock);
 
@@ -1504,7 +1506,31 @@ begin
             );
    restart:=false;
 
-   if (R=STATUS_NO_MORE_FILES) then Break;
+   if (R=STATUS_NO_MORE_FILES) then
+   begin
+
+    //masquerade
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_ROOTFS)<>0) then
+    begin
+     //tmpfs
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_64K)<>0) then
+    begin
+     //pfs
+     off:=(off+$FFFF) and (not Int64($FFFF));
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_32K)<>0) then
+    begin
+     //pfs
+     off:=(off+$7FFF) and (not Int64($7FFF));
+    end;
+    begin
+     //ufs
+     off:=(off+$1FF) and (not Int64($1FF));
+    end;
+
+    Break;
+   end;
 
    Result:=ntf2px(R);
    if (Result<>0) then
@@ -1618,7 +1644,31 @@ begin
             );
    restart:=false;
 
-   if (R=STATUS_NO_MORE_FILES) then Break;
+   if (R=STATUS_NO_MORE_FILES) then
+   begin
+
+    //masquerade
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_ROOTFS)<>0) then
+    begin
+     //tmpfs
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_64K)<>0) then
+    begin
+     //pfs
+     off:=(off+$FFFF) and (not Int64($FFFF));
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_32K)<>0) then
+    begin
+     //pfs
+     off:=(off+$7FFF) and (not Int64($7FFF));
+    end;
+    begin
+     //ufs
+     off:=(off+$1FF) and (not Int64($1FF));
+    end;
+
+    Break;
+   end;
 
    Result:=ntf2px(R);
    if (Result<>0) then

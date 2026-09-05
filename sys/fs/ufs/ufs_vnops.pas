@@ -656,6 +656,7 @@ begin
  //masquerade
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
+  //tmpfs
   d_fsid   :=$8700ff03;
   d_size   :=320;   //dirent sizes?
   d_bytes  :=16384;
@@ -663,6 +664,7 @@ begin
  end else
  if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
+  //pfs
   d_fsid   :=$2905ff1e;
   d_size   :=65536; //dirent sizes?
   d_bytes  :=65536;
@@ -670,12 +672,14 @@ begin
  end else
  if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
  begin
+  //pfs
   d_fsid   :=$2905ff1e;
   d_size   :=32768; //dirent sizes?
   d_bytes  :=32768;
   d_blksize:=32768;
  end else
  begin
+  //ufs
   d_fsid   :=$2905ff22;
   d_size   :=1024; //dirent sizes?
   d_bytes  :=4096;

@@ -497,7 +497,7 @@ begin
  ASSERT_VOP_ELOCKED(vp, {$INCLUDE %CURRENTROUTINE%});
  dnode:=VP_TO_TMPFS_DIR(vp);
  TAILQ_INSERT_TAIL(@dnode^.tn_spec.tn_dir.tn_dirhead, de, @de^.td_entries);
- dnode^.tn_size:=dnode^.tn_size + sizeof(tmpfs_dirent);
+ dnode^.tn_size  :=dnode^.tn_size + sizeof(tmpfs_dirent);
  dnode^.tn_status:=dnode^.tn_status or (TMPFS_NODE_ACCESSED or TMPFS_NODE_CHANGED or TMPFS_NODE_MODIFIED);
 end;
 
