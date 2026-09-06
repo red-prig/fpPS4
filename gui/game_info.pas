@@ -219,6 +219,7 @@ type
    FINSTALL_DIR_SAVEDATA            :RawByteString;
    FSAVE_DATA_TRANSFER_TITLE_ID_LIST:RawByteString;
    FAPP_VER                         :RawByteString;
+   FVERSION                         :RawByteString;
    FSYSTEM_VER                      :DWORD;
    FATTRIBUTE                       :DWORD;
    FATTRIBUTE2                      :DWORD;
@@ -236,6 +237,7 @@ type
    property    INSTALL_DIR_SAVEDATA            :RawByteString read FINSTALL_DIR_SAVEDATA             write FINSTALL_DIR_SAVEDATA;
    property    SAVE_DATA_TRANSFER_TITLE_ID_LIST:RawByteString read FSAVE_DATA_TRANSFER_TITLE_ID_LIST write FSAVE_DATA_TRANSFER_TITLE_ID_LIST;
    property    APP_VER                         :RawByteString read FAPP_VER                          write FAPP_VER;
+   property    VERSION                         :RawByteString read FVERSION                          write FVERSION;
    property    SYSTEM_VER                      :DWORD         read FSYSTEM_VER                       write FSYSTEM_VER;
    property    ATTRIBUTE                       :DWORD         read FATTRIBUTE                        write FATTRIBUTE;
    property    ATTRIBUTE2                      :DWORD         read FATTRIBUTE2                       write FATTRIBUTE2;

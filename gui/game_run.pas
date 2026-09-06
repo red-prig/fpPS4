@@ -220,6 +220,11 @@ begin
  Result:=(attribute2 shr 15) and 3;
 end;
 
+function get_sdk_version_str(version:QWORD):RawByteString;
+begin
+ Result:=HexStr((version shr 24),2)+'.'+HexStr(((version shr 12) and $fff),3)+'.'+HexStr((version and $fff),3);
+end;
+
 procedure prepare(GameStartupInfo:TGameStartupInfo); SysV_ABI_CDecl;
 var
  err:Integer;
@@ -290,16 +295,15 @@ begin
 
  LoadExec:=GameStartupInfo.LoadExec;
 
- LOG_INFO('Name    :',Item.FGameInfo.Name      );
- LOG_INFO('TitleId :',Item.FGameInfo.TitleId   );
- LOG_INFO('Version :',Item.FGameInfo.Version   );
- LOG_INFO('AppVer  :',Item.FGameInfo.AppVer    );
- LOG_INFO('Exec    :',Item.FGameInfo.Exec      );
-
- LOG_INFO('game    :',Item.FMountList.game     );
- LOG_INFO('firmware:',Item.FMountList.firmware );
-
- LOG_INFO('LocalDir:',GameStartupInfo.LocalDir );
+ LOG_INFO('Name      :',Item.FGameInfo.Name);
+ LOG_INFO('TitleId   :',Item.FGameInfo.TitleId);
+ LOG_INFO('APP_VER   :',GameStartupInfo.APP_VER);
+ LOG_INFO('VERSION   :',GameStartupInfo.VERSION);
+ LOG_INFO('SYSTEM_VER:0x',HexStr(GameStartupInfo.SYSTEM_VER,8),'(',get_sdk_version_str(GameStartupInfo.SYSTEM_VER),')');
+ LOG_INFO('Exec      :',Item.FGameInfo.Exec);
+ LOG_INFO('Game      :',Item.FMountList.game);
+ LOG_INFO('Firmware  :',Item.FMountList.firmware);
+ LOG_INFO('LocalDir  :',GameStartupInfo.LocalDir);
 
  InitMount(GameStartupInfo);
 
@@ -648,6 +652,8 @@ begin
  GameStartupInfo.LocalDir   :=ResolvePath(cfg.FConfInfo.MainInfo.LocalDir);
  GameStartupInfo.Category   :='gd'; //m_type = SCE_LNC_APP_TYPE_BIG_APP;
  GameStartupInfo.APP_VER    :='01.00';
+ GameStartupInfo.VERSION    :='01.00';
+ GameStartupInfo.SYSTEM_VER :=$01000000;
  GameStartupInfo.hasParamSfo:=ord(cfg.FParamSfo<>nil);
 
  if (cfg.FParamSfo<>nil) then
@@ -660,6 +666,7 @@ begin
   GameStartupInfo.INSTALL_DIR_SAVEDATA            :=cfg.FParamSfo.GetString('INSTALL_DIR_SAVEDATA');
   GameStartupInfo.SAVE_DATA_TRANSFER_TITLE_ID_LIST:=cfg.FParamSfo.GetString('SAVE_DATA_TRANSFER_TITLE_ID_LIST');
   GameStartupInfo.APP_VER                         :=cfg.FParamSfo.GetString('APP_VER');
+  GameStartupInfo.VERSION                         :=cfg.FParamSfo.GetString('VERSION');
 
   GameStartupInfo.SYSTEM_VER           :=cfg.FParamSfo.GetUInt('SYSTEM_VER');
   GameStartupInfo.ATTRIBUTE            :=cfg.FParamSfo.GetUInt('ATTRIBUTE');
