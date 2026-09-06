@@ -486,7 +486,7 @@ begin
                          nil,
                          0,
                          False);
-
+ if (err<>0) then Exit;
 
  fs_iterator.init(@SANDBOX_DIRS);
  repeat

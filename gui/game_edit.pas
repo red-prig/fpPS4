@@ -189,6 +189,10 @@ begin
 
  Edt_MountList_OverlayAutoChange(Self);
  LoadParamSfo(UpdateTitle);
+ //reupdate
+ FOverlaysNotChanged:=False;
+ UpdateOverlays;
+ LoadParamSfo(UpdateTitle);
 
  Show;
 end;
@@ -282,6 +286,9 @@ begin
 
  Edt_MountList_game.Text:=new;
 
+ LoadParamSfo(True);
+ //reupdate
+ FOverlaysNotChanged:=False;
  UpdateOverlays;
  LoadParamSfo(True);
 end;

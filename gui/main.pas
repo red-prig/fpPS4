@@ -20,7 +20,7 @@ uses
   TypInfo,
   jsonscanner,
 
-  ms_shell_hack,
+  open_dialog,
 
   core_serialization,
   host_ipc,
@@ -797,38 +797,24 @@ end;
 
 procedure TfrmMain.MIAddFolderClick(Sender: TObject);
 var
- d:TSelectDirectoryDialog;
  form:TfrmGameEditor;
-
- Cookie:Pointer;
+ path:RawByteString;
 begin
- Cookie:=RegisterDllHack;
+ path:=open_dialog.DoOpenDir('','');
+ if (path='') then Exit;
 
- d:=TSelectDirectoryDialog.Create(Self);
+ form:=TfrmGameEditor.Create(Self);
 
- //d.InitialDir:=
+ form.FConfigInfo:=FContext.FConfigInfo;
+ form.FItem      :=TGameItem.Create;
 
- d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+ form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
 
- if d.Execute then
- begin
-  form:=TfrmGameEditor.Create(Self);
+ form.FItem.FMountList.game:=path;
 
-  form.FConfigInfo:=FContext.FConfigInfo;
-  form.FItem      :=TGameItem.Create;
+ form.OnSave:=@Self.DoAdd;
 
-  form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
-
-  form.FItem.FMountList.game:=d.FileName;
-
-  form.OnSave:=@Self.DoAdd;
-
-  form.FormInit(True);
- end;
-
- FreeAndNil(d);
-
- UnregisterDllHack(Cookie);
+ form.FormInit(True);
 end;
 
 procedure TfrmMain.MIEditClick(Sender: TObject);
