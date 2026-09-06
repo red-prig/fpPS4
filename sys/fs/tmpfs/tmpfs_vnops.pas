@@ -1755,6 +1755,17 @@ begin
 
  size:=fit_to_vnode_size(node,ap^.a_offset,ap^.a_length);
 
+ if (size=0) then
+ begin
+  TMPFS_NODE_UNLOCK(node);
+
+  ap^.a_offset:=0;
+  ap^.a_length:=0;
+  ap^.a_obj   :=nil;
+
+  Exit(0);
+ end;
+
  Result:=tmpfs_seg_map_fetch(tmp, node^.tn_map, ap^.a_offset, ap^.a_offset + size, @seg);
  if (Result<>0) then
  begin

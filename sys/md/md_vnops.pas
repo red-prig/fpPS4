@@ -233,6 +233,7 @@ begin
   STATUS_NOT_A_DIRECTORY       :Result:=ENOTDIR;
   STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
   STATUS_IO_DEVICE_ERROR       :Result:=EIO;
+  STATUS_USER_MAPPED_FILE      :Result:=EBUSY;
   STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
   STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
   else
@@ -3479,33 +3480,43 @@ begin
   begin
    size:=fit_to_vnode_size(de,ap^.a_offset,ap^.a_length);
 
-   if (maxp<>VM_RW) then
+   if (size=0) then
    begin
-    //reopen file to RW
-    r:=md_openat(fd,'',O_RDWR,0,fd);
+    ap^.a_offset:=0;
+    ap^.a_length:=0;
+    ap^.a_obj   :=nil;
+   end else
+   begin
 
-    if (r=0) then
+    if (maxp<>VM_RW) then
     begin
-     maxp:=VM_RW;
+     //reopen file to RW
+     r:=md_openat(fd,'',O_RDWR,0,fd);
+
+     if (r=0) then
+     begin
+      maxp:=VM_RW;
+      r:=md_memfd_open(md,fd,maxp);
+      md_close(fd); //close dub
+     end;
+
+    end else
+    begin
      r:=md_memfd_open(md,fd,maxp);
-     md_close(fd); //close dub
     end;
 
-   end else
-   begin
-    r:=md_memfd_open(md,fd,maxp);
-   end;
+    if (r<>0) then
+    begin
+     Result:=ntf2px(R);
+    end else
+    begin
+     ap^.a_length:=size; //fixup
+     ap^.a_obj   :=vm_int_obj_allocate(@md_int_obj_vtable,md,maxp);
+    end;
 
-   if (r<>0) then
-   begin
-    Result:=ntf2px(R);
-   end else
-   begin
-    ap^.a_length:=size; //fixup
-    ap^.a_obj   :=vm_int_obj_allocate(@md_int_obj_vtable,md,maxp);
-   end;
+   end; //(size=0)
 
-  end;
+  end; //(fd=0)
 
  VI_UNLOCK(vp);
 end;
