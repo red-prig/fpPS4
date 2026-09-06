@@ -911,6 +911,12 @@ begin
  end;
 
  sx_xunlock(@dmp^.ufs_lock);
+
+ if (dd=nil) and (error=0) and (ap^.a_eofflag<>nil) then
+ begin
+  (ap^.a_eofflag)^:=1;
+ end;
+
  uio^.uio_offset:=off;
 
  {

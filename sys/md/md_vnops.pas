@@ -1530,6 +1530,11 @@ begin
      off:=(off+$1FF) and (not Int64($1FF));
     end;
 
+    if (ap^.a_eofflag<>nil) then
+    begin
+     (ap^.a_eofflag)^:=1;
+    end;
+
     Break;
    end;
 
@@ -1666,6 +1671,11 @@ begin
     begin
      //ufs
      off:=(off+$1FF) and (not Int64($1FF));
+    end;
+
+    if (ap^.a_eofflag<>nil) then
+    begin
+     (ap^.a_eofflag)^:=1;
     end;
 
     Break;
