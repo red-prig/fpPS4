@@ -1740,7 +1740,7 @@ var
  error:Integer;
  eofflag:Integer;
  locked:Integer;
- uio_offset_bk:Integer;
+ uio_offset_bk:Int64;
  unp:p_unionfs_node;
  unsp:p_unionfs_node_status;
  uio:p_uio;
