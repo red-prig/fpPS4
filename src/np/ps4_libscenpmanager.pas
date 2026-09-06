@@ -533,8 +533,15 @@ end;
 
 //
 
-function ps4_sceNpPollAsync(reqId:Integer;
-                            pResult:PInteger):Integer;
+function ps4_sceNpPollAsync(reqId:Integer;pResult:PInteger):Integer;
+begin
+ if (pResult=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
+
+ pResult^:=0;
+ Result:=0; //SCE_NP_POLL_ASYNC_RET_FINISHED
+end;
+
+function ps4_sceNpWaitAsync(reqId:Integer;pResult:PInteger):Integer;
 begin
  if (pResult=nil) then Exit(SCE_NP_ERROR_INVALID_ARGUMENT);
 
@@ -801,6 +808,7 @@ begin
  lib.set_proc($AFA33260992BCB3F,@ps4_sceNpCheckPlus);
  lib.set_proc($19AC6BA7711663F3,@ps4_sceNpNotifyPlusFeature);
  lib.set_proc($BAA70F24B58BD3C3,@ps4_sceNpPollAsync);
+ lib.set_proc($8F28B9A7D5D6512B,@ps4_sceNpWaitAsync);
  lib.set_proc($337C055DB610B400,@ps4_sceNpUnregisterStateCallbackA);
  lib.set_proc($F150537917F56702,@ps4_sceNpGetAccountDateOfBirth);
  lib.set_proc($AB733B5F304A0B7B,@ps4_sceNpGetAccountDateOfBirthA);
