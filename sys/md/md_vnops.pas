@@ -3498,7 +3498,11 @@ begin
    end else
    begin
 
-    if (maxp<>VM_RW) and ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
+    if (maxp=VM_RO) and ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
+    begin
+     r:=md_memfd_open(md,fd,maxp);
+    end else
+    if (maxp<>VM_RW) then
     begin
      //reopen file to RW
      r:=md_openat(fd,'',O_RDWR,0,fd);
