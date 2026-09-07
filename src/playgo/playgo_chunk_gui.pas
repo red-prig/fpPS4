@@ -6,6 +6,7 @@ interface
 
 uses
  sysutils,
+ Classes,
  bittype,
  core_serialization;
 
@@ -106,7 +107,7 @@ type
 
  p_playgo_mchunk_attr_entry=^t_playgo_mchunk_attr_entry;
  t_playgo_mchunk_attr_entry=packed record
-  loc:t_playgo_chunk_loc;
+  loc :t_playgo_chunk_loc;
   size:t_playgo_chunk_size;
  end;
 
@@ -114,12 +115,14 @@ type
 
  TPlaygoChunk=class(TSerializeObject)
   private
-   Freq_locus    :QWORD;
+   Freq_locus    :DWORD;
+   Fmchunk_count :DWORD;
    Flanguage_mask:QWORD;
    Ftotal_size   :QWORD;
    Flabel_name   :RawByteString;
   published
-   property req_locus    :QWORD         read Freq_locus     write Freq_locus;
+   property req_locus    :DWORD         read Freq_locus     write Freq_locus;
+   property mchunk_count :DWORD         read Fmchunk_count  write Fmchunk_count;
    property language_mask:QWORD         read Flanguage_mask write Flanguage_mask;
    property total_size   :QWORD         read Ftotal_size    write Ftotal_size;
    property label_name   :RawByteString read Flabel_name    write Flabel_name;
@@ -136,6 +139,8 @@ type
    //
    Destructor Destroy; override;
    //
+   Procedure  Merge(src:TPlaygoFile);
+   //
    Function   GetArrayCount:SizeInt;          override;
    Function   GetArrayItem(i:SizeInt):TValue; override;
    Function   AddObject:TSerializeObject;     override;
@@ -143,7 +148,10 @@ type
    procedure  AddValue(Value:TValue);         override;
  end;
 
-function LoadPlaygoFile(const path:RawByteString):TPlaygoFile;
+function  LoadPlaygoFile(const path:RawByteString):TPlaygoFile;
+
+function  LoadPlaygoFileByPath(const path:RawByteString):TPlaygoFile;
+function  LoadPlaygoFileByOverlays(const path:RawByteString;overlays:TStrings):TPlaygoFile;
 
 implementation
 
@@ -238,6 +246,7 @@ begin
 
    Result.Fchunks[i].req_locus    :=chunk_attrs[i].req_locus;
    Result.Fchunks[i].language_mask:=chunk_attrs[i].language_mask;
+   Result.Fchunks[i].mchunk_count :=chunk_attrs[i].mchunk_count;
    Result.Fchunks[i].label_name   :=PChar(chunk_labels+chunk_attrs[i].label_offset);
 
    total_size:=0;
@@ -266,6 +275,83 @@ begin
 end;
 
 //
+
+function LoadPlaygoFileByPath(const path:RawByteString):TPlaygoFile;
+var
+ V:RawByteString;
+begin
+ Result:=nil;
+
+ V:=ExcludeTrailingPathDelimiter(path)+
+    DirectorySeparator+
+    'sce_sys'+
+    DirectorySeparator+
+    'playgo-chunk.dat';
+
+ if not FileExists(V) then Exit;
+
+ Result:=LoadPlaygoFile(V);
+end;
+
+function LoadPlaygoFileByOverlays(const path:RawByteString;overlays:TStrings):TPlaygoFile;
+var
+ i:Integer;
+ Tmp:TPlaygoFile;
+begin
+ Result:=LoadPlaygoFileByPath(path);
+
+ if (Result=nil) then Exit;
+
+ if (overlays<>nil) and (overlays.Count<>0) then
+ For i:=0 to overlays.Count-1 do
+ begin
+  Tmp:=LoadPlaygoFileByPath(overlays.Strings[i]);
+  if (Tmp<>nil) then
+  begin
+   Result.Merge(Tmp);
+   FreeAndNil(Tmp);
+  end;
+ end;
+end;
+
+//
+
+Procedure TPlaygoFile.Merge(src:TPlaygoFile);
+var
+ i:Integer;
+ Chunk:TPlaygoChunk;
+begin
+ if (src=nil) then Exit;
+
+ if (content_id<>src.content_id) then Exit;
+
+ if (Length(src.Fchunks)=0) then Exit;
+
+ For i:=0 to High(src.Fchunks) do
+ begin
+  if (i<Length(Fchunks)) then
+  begin
+   if (src.Fchunks[i].mchunk_count<>0) then //check unused
+   begin
+    Fchunks[i].req_locus    :=src.Fchunks[i].req_locus;
+    Fchunks[i].language_mask:=src.Fchunks[i].language_mask;
+    Fchunks[i].mchunk_count :=src.Fchunks[i].mchunk_count;
+    Fchunks[i].total_size   :=Fchunks[i].total_size+src.Fchunks[i].total_size;
+    Fchunks[i].label_name   :=src.Fchunks[i].label_name;
+   end;
+  end else
+  begin
+   Chunk:=TPlaygoChunk.Create;
+   Chunk.req_locus    :=src.Fchunks[i].req_locus;
+   Chunk.language_mask:=src.Fchunks[i].language_mask;
+   Chunk.mchunk_count :=src.Fchunks[i].mchunk_count;
+   Chunk.total_size   :=src.Fchunks[i].total_size;
+   Chunk.label_name   :=src.Fchunks[i].label_name;
+   Insert(Chunk,Fchunks,Length(Fchunks));
+  end;
+ end;
+
+end;
 
 Destructor TPlaygoFile.Destroy;
 var

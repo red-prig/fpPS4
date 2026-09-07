@@ -60,6 +60,7 @@ uses
  {$M-}
 
 function LoadParamSfoByItem(Item:TGameItem):TParamSfoFile;
+function LoadPlaygoFileByItem(Item:TGameItem):TPlaygoFile;
 
 implementation
 
@@ -188,6 +189,28 @@ begin
  FreeAndNil(List);
 end;
 
+function LoadPlaygoFileByItem(Item:TGameItem):TPlaygoFile;
+var
+ List:TStringList;
+begin
+ Result:=nil;
+ if (Item=nil) then Exit;
+
+ List:=TStringList.Create;
+
+ if Item.MountList.OverlayAuto then
+ begin
+  AutoDetectOverlays(Item.MountList.game,Item.FGameInfo.TitleId,List);
+ end else
+ begin
+  SerializeStringArray2Strings(Item.MountList.OverlayList,List);
+ end;
+
+ Result:=LoadPlaygoFileByOverlays(Item.MountList.game,List);
+
+ FreeAndNil(List);
+end;
+
 function TGameRunContext.PARAM_SFO_INIT(Client:THostIpc;Value:TIpcValue):TIpcValue;
 var
  V:RawByteString;
@@ -229,13 +252,7 @@ begin
 
  if (FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.game;
-
- playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
-                             DirectorySeparator+
-                             'sce_sys'+
-                             DirectorySeparator+
-                             'playgo-chunk.dat');
+ playgo_file:=LoadPlaygoFileByItem(FGameItem);
 
  if (playgo_file=nil) then
  begin
@@ -249,6 +266,38 @@ begin
    DoGameStop;
    Exit(0);
   end;
+ end;
+
+ if (FParamSfo=nil) then
+ begin
+  FParamSfo:=LoadParamSfoByItem(FGameItem);
+ end;
+
+ if (FParamSfo<>nil) then
+ begin
+
+  V:=FParamSfo.GetString('CONTENT_ID');
+
+  if (V<>playgo_file.content_id) then
+  begin
+   V:='"{$GAME}/sce_sys/playgo-chunk.dat" content_id ('+
+      playgo_file.content_id+
+      ') not match param.sfo ('+
+      V+
+      '), continue?';
+
+   FreeAndNil(playgo_file);
+
+   if (DoShowError(V)=mrOK) then
+   begin
+    Exit(0);
+   end else
+   begin
+    DoGameStop;
+    Exit(0);
+   end;
+  end;
+
  end;
 
  Result:=TIpcValue.&Object(playgo_file);

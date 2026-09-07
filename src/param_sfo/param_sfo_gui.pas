@@ -72,7 +72,7 @@ begin
  LoadParamSfoByPath(path,Result);
  if (Result=nil) then Exit;
 
- if (overlays.Count<>0) then
+ if (overlays<>nil) and (overlays.Count<>0) then
  For i:=0 to overlays.Count-1 do
  begin
   Tmp:=nil;
