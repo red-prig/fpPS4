@@ -306,9 +306,36 @@ end;
 procedure TfrmGameEditor.BtnAddLayerClick(Sender: TObject);
 var
  new:RawByteString;
+ err:t_load_sfo_err;
+ dlg:RawByteString;
 begin
  new:=DoOpenDir('','');
  if (new='') then Exit;
+
+ err:=TestParamSfoByPath(new,Edt_GameInfo_TitleId.Text);
+
+ if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
+ begin
+
+  dlg:='';
+  case err of
+   ls_io            :dlg:='Error reading file param.sfo';
+   ls_broken        :dlg:='param.sfo is broken';
+   ls_wrong_category:dlg:='It looks like you''re trying to add a non-patch to the game';
+   ls_wrong_title_id:dlg:='It looks like you''re trying to add a patch from another game';
+   else;
+  end;
+
+  if (MessageDlg('Question',
+                 dlg+', Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Exit;
+  end;
+
+ end;
 
  Edt_MountList_OverlayList.Items.Add(new);
 

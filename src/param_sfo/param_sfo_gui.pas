@@ -51,10 +51,12 @@ type
   procedure  Merge(src:TParamSfoFile);
  end;
 
-function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
+ t_load_sfo_err=(ls_ok,ls_not_exists,ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id);
 
-function LoadParamSfoByPath(const path:RawByteString):TParamSfoFile;
-function TestParamSfoByPath(const path,title_id:RawByteString):Boolean;
+function LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
+
+function LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
+function TestParamSfoByPath(const path,title_id:RawByteString):t_load_sfo_err;
 
 procedure AutoDetectOverlays    (const path,title_id:RawByteString;dst:TStrings);
 function  LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
@@ -66,13 +68,15 @@ var
  i:Integer;
  Tmp:TParamSfoFile;
 begin
- Result:=LoadParamSfoByPath(path);
+ Result:=nil;
+ LoadParamSfoByPath(path,Result);
  if (Result=nil) then Exit;
 
  if (overlays.Count<>0) then
  For i:=0 to overlays.Count-1 do
  begin
-  Tmp:=LoadParamSfoByPath(overlays.Strings[i]);
+  Tmp:=nil;
+  LoadParamSfoByPath(overlays.Strings[i],Tmp);
   if (Tmp<>nil) then
   begin
    Result.Merge(Tmp);
@@ -88,7 +92,7 @@ var
 begin
 
  V:=ExcludeTrailingPathDelimiter(path)+'-patch';
- if TestParamSfoByPath(V,title_id) then
+ if (TestParamSfoByPath(V,title_id)=ls_ok) then
  begin
   dst.Add(V);
  end;
@@ -126,24 +130,33 @@ begin
 
 end;
 
-function LoadParamSfoByPath(const path:RawByteString):TParamSfoFile;
+function LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
 begin
  Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(path)+
                           DirectorySeparator+
                           'sce_sys'+
                           DirectorySeparator+
-                          'param.sfo');
+                          'param.sfo',
+                          dst);
 end;
 
-function TestParamSfoByPath(const path,title_id:RawByteString):Boolean;
+function TestParamSfoByPath(const path,title_id:RawByteString):t_load_sfo_err;
 var
  ParamSfo:TParamSfoFile;
 begin
- ParamSfo:=LoadParamSfoByPath(path);
+ ParamSfo:=nil;
+ Result:=LoadParamSfoByPath(path,ParamSfo);
  //
- if (ParamSfo=nil) then Exit(False);
+ if (ParamSfo=nil) then Exit;
 
- Result:=(title_id=ParamSfo.GetString('TITLE_ID'));
+ if (ParamSfo.GetString('CATEGORY')<>'gp') then
+ begin
+  Result:=ls_wrong_category;
+ end else
+ if (ParamSfo.GetString('TITLE_ID')<>title_id) then
+ begin
+  Result:=ls_wrong_title_id;
+ end;
 
  FreeAndNil(ParamSfo);
 end;
@@ -191,35 +204,38 @@ begin
 
 end;
 
-function LoadParamSfoFile(const path:RawByteString):TParamSfoFile;
+function LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
 Var
  Loader:TParamSfoFileLoader;
 begin
- Result:=nil;
+ Result:=ls_ok;
 
  if not FileExists(path) then
  begin
-  Exit;
+  dst:=nil;
+  Exit(ls_not_exists);
  end;
 
  if not Loader.open(path) then
  begin
-  Exit;
+  dst:=nil;
+  Exit(ls_io);
  end;
 
  if not Loader.parse() then
  begin
   Loader.Free;
-  Exit;
+  dst:=nil;
+  Exit(ls_broken);
  end;
 
- Result:=TParamSfoFile.Create;
+ dst:=TParamSfoFile.Create;
 
  if (Loader.hdr.entry_count<>0) then
  begin
-  SetLength(Result.params,Loader.hdr.entry_count);
+  SetLength(dst.params,Loader.hdr.entry_count);
 
-  Loader.ForAll(@on_load,Pointer(Result));
+  Loader.ForAll(@on_load,Pointer(dst));
  end;
 
  Loader.Free;
