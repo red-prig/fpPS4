@@ -138,12 +138,14 @@ type
     procedure BtnLogOpenClick(Sender: TObject);
     procedure BtnRemFwClick(Sender: TObject);
     procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
+    procedure Edt_MainInfo_FirmwareListSelectionChange(Sender: TObject; User: Boolean);
     procedure VulkanInit;
     procedure VulkanPostInit;
     procedure AudioInit;
     procedure FormInit;
     procedure FormSave;
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
+    procedure UpdateFwButtons;
     constructor Create(AOwner: TComponent); override;
   private
 
@@ -261,6 +263,8 @@ begin
 
  Edt_MainInfo_FirmwareList   .Items.Add(new);
  Edt_MainInfo_DefaultFirmware.Items.Add(new);
+
+ UpdateFwButtons;
 end;
 
 procedure TfrmCfgEditor.BtnRemFwClick(Sender: TObject);
@@ -272,7 +276,19 @@ begin
  begin
   Edt_MainInfo_FirmwareList   .Items.Delete(i);
   Edt_MainInfo_DefaultFirmware.Items.Delete(i);
+
+  UpdateFwButtons;
  end;
+end;
+
+procedure TfrmCfgEditor.Edt_MainInfo_FirmwareListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateFwButtons;
+end;
+
+procedure TfrmCfgEditor.UpdateFwButtons;
+begin
+ BtnRemFw.Enabled:=(Edt_MainInfo_FirmwareList.ItemIndex>=0);
 end;
 
 procedure TfrmCfgEditor.Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
@@ -290,6 +306,8 @@ begin
    Edt_MainInfo_DefaultFirmware.Items.Add(S);
   end;
  end;
+
+ UpdateFwButtons;
 end;
 
 function OpenFolderOfFile(APath:RawByteString): Boolean;
@@ -795,6 +813,8 @@ begin
  FormLoad(Self,Provider,FConfigInfo);
 
  Provider.Free;
+
+ UpdateFwButtons;
 
  Show;
 end;
