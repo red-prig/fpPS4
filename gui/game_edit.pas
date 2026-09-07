@@ -61,6 +61,7 @@ type
     procedure BtnRemLayerClick(Sender: TObject);
     procedure BtnUpLayerClick(Sender: TObject);
     procedure Edt_MountList_OverlayAutoChange(Sender: TObject);
+    procedure Edt_MountList_OverlayListSelectionChange(Sender: TObject; User: Boolean);
     procedure Edt_MountList_firmwareGetItems(Sender: TObject);
     procedure Edt_MountList_gameExit(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -72,6 +73,8 @@ type
     FOverlaysNotChanged:Boolean;
     Fgame:RawByteString;
     procedure DoMoveLayer(Dir:Integer);
+    Procedure UpdateLayerButtons;
+    procedure OverlayAutoChangeButtons;
   public
     OnSave     :TNotifyEvent;
     FConfigInfo:TConfigInfo;
@@ -187,7 +190,7 @@ begin
 
  //////
 
- Edt_MountList_OverlayAutoChange(Self);
+ OverlayAutoChangeButtons;
  LoadParamSfo(UpdateTitle);
  //reupdate
  FOverlaysNotChanged:=False;
@@ -303,6 +306,19 @@ begin
  OpenDocument(Edt_MountList_firmware.Text);
 end;
 
+Procedure TfrmGameEditor.UpdateLayerButtons;
+var
+ i:Integer;
+begin
+ if Edt_MountList_OverlayAuto.Checked then Exit;
+
+ i:=Edt_MountList_OverlayList.ItemIndex;
+
+ BtnRemLayer.Enabled:=(i>=0);
+ BtnUpLayer .Enabled:=(i>0);
+ BtnDwLayer .Enabled:=(i>=0) and (i<Edt_MountList_OverlayList.Count-1);
+end;
+
 procedure TfrmGameEditor.BtnAddLayerClick(Sender: TObject);
 var
  new:RawByteString;
@@ -338,9 +354,11 @@ begin
  end;
 
  Edt_MountList_OverlayList.Items.Add(new);
+ Edt_MountList_OverlayList.ItemIndex:=Edt_MountList_OverlayList.Count-1;
 
  FOverlaysNotChanged:=False;
  LoadParamSfo(True);
+ UpdateLayerButtons;
 end;
 
 procedure TfrmGameEditor.DoMoveLayer(Dir:Integer);
@@ -358,6 +376,7 @@ begin
 
  FOverlaysNotChanged:=False;
  LoadParamSfo(True);
+ UpdateLayerButtons;
 end;
 
 procedure TfrmGameEditor.BtnDwLayerClick(Sender: TObject);
@@ -381,6 +400,7 @@ begin
 
   FOverlaysNotChanged:=False;
   LoadParamSfo(True);
+  UpdateLayerButtons;
  end;
 end;
 
@@ -413,10 +433,28 @@ begin
   AutoDetectOverlays(Edt_MountList_game.Text,Edt_GameInfo_TitleId.Text,Edt_MountList_OverlayList.Items);
 
   FOverlaysNotChanged:=False;
+
+  UpdateLayerButtons;
  end else
  begin
   //
  end;
+
+end;
+
+procedure TfrmGameEditor.OverlayAutoChangeButtons;
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_OverlayAuto.Checked;
+
+ BtnAddLayer.Enabled              :=not Checked;
+ BtnRemLayer.Enabled              :=not Checked;
+ BtnUpLayer.Enabled               :=not Checked;
+ BtnDwLayer.Enabled               :=not Checked;
+ Edt_MountList_OverlayList.Enabled:=not Checked;
+
+ UpdateLayerButtons;
 end;
 
 procedure TfrmGameEditor.Edt_MountList_OverlayAutoChange(Sender: TObject);
@@ -425,12 +463,28 @@ var
 begin
  Checked:=Edt_MountList_OverlayAuto.Checked;
 
- BtnAddLayer.Enabled:=not Checked;
- BtnRemLayer.Enabled:=not Checked;
- Edt_MountList_OverlayList.Enabled:=not Checked;
+ if Checked and (Edt_MountList_OverlayList.Items.Count<>0) then
+ begin
+  if (MessageDlg('Question',
+                 'Auto will replace the current patch/mod list with auto-detected folders. Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Edt_MountList_OverlayAuto.Checked:=False;
+   Exit;
+  end;
+ end;
+
+ OverlayAutoChangeButtons;
 
  FOverlaysNotChanged:=False;
  UpdateOverlays;
+end;
+
+procedure TfrmGameEditor.Edt_MountList_OverlayListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateLayerButtons;
 end;
 
 procedure TfrmGameEditor.Edt_MountList_firmwareGetItems(Sender: TObject);

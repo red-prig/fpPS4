@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 520
+  Left = 693
   Height = 311
-  Top = 121
+  Top = 145
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
@@ -445,7 +445,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Side = asrBottom
         Left = 10
         Height = 83
-        Hint = 'Folders applied over the game: updates, patches and mods (top wins)'
+        Hint = 'Folders applied over the game in order: updates, patches and mods (bottom wins)'
         Top = 155
         Width = 439
         Anchors = [akTop, akLeft, akRight, akBottom]
@@ -457,6 +457,7 @@ object frmGameEditor: TfrmGameEditor
         ParentShowHint = False
         ShowHint = True
         TabOrder = 4
+        OnSelectionChange = Edt_MountList_OverlayListSelectionChange
       end
       object Edt_MountList_OverlayAuto: TCheckBox
         AnchorSideLeft.Control = Label8
@@ -487,7 +488,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Control = Edt_MountList_OverlayList
         Left = 226
         Height = 26
-        Hint = 'Move selected patch/mod folder down (lower priority)'
+        Hint = 'Move selected patch/mod folder down (applied later, higher priority)'
         Top = 126
         Width = 26
         AutoSize = True
@@ -507,7 +508,7 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideBottom.Control = Edt_MountList_OverlayList
         Left = 257
         Height = 26
-        Hint = 'Move selected patch/mod folder up (higher priority)'
+        Hint = 'Move selected patch/mod folder up (applied earlier, lower priority)'
         Top = 126
         Width = 26
         AutoSize = True
