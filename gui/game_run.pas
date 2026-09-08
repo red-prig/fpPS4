@@ -658,6 +658,11 @@ begin
 
  if (cfg.FParamSfo<>nil) then
  begin
+  //update to item
+  GameStartupInfo.FGameItem.GameInfo.Name   :=cfg.FParamSfo.GetString('TITLE');
+  GameStartupInfo.FGameItem.GameInfo.TitleId:=cfg.FParamSfo.GetString('TITLE_ID');
+  GameStartupInfo.FGameItem.GameInfo.Version:=cfg.FParamSfo.GetString('VERSION');
+  GameStartupInfo.FGameItem.GameInfo.AppVer :=cfg.FParamSfo.GetString('APP_VER');
 
   GameStartupInfo.CATEGORY                        :=cfg.FParamSfo.GetString('CATEGORY');
   GameStartupInfo.TITLE                           :=cfg.FParamSfo.GetString('TITLE');

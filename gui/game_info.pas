@@ -183,11 +183,15 @@ type
    FFirmware   :RawByteString;
    FOverlayAuto:Boolean;
    FOverlayList:TSerializeStringArray;
+   FDlcAuto    :Boolean;
+   FDlcList    :TSerializeStringArray;
   published
    property Game       :RawByteString         read FGame        write FGame;
    property Firmware   :RawByteString         read FFirmware    write FFirmware;
    property OverlayAuto:Boolean               read FOverlayAuto write FOverlayAuto;
    property OverlayList:TSerializeStringArray read FOverlayList write FOverlayList;
+   property DlcAuto    :Boolean               read FDlcAuto     write FDlcAuto;
+   property DlcList    :TSerializeStringArray read FDlcList     write FDlcList;
   public
    Constructor Create; override;
  end;
@@ -316,6 +320,7 @@ begin
  Fgame       :=DirectorySeparator;
  Ffirmware   :=DirectorySeparator+'firmware';
  FOverlayAuto:=True;
+ FDlcAuto    :=True;
 end;
 
 //

@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 693
+  Left = 695
   Height = 311
-  Top = 145
+  Top = 146
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
@@ -15,11 +15,11 @@ object frmGameEditor: TfrmGameEditor
     Height = 266
     Top = 0
     Width = 467
-    ActivePage = TabFolders
+    ActivePage = TabDlc
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 1
+    TabIndex = 2
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
@@ -520,6 +520,107 @@ object frmGameEditor: TfrmGameEditor
         OnClick = BtnUpLayerClick
       end
     end
+    object TabDlc: TTabSheet
+      Caption = 'DLC'
+      ClientHeight = 238
+      ClientWidth = 459
+      object Label9: TLabel
+        AnchorSideLeft.Control = TabDlc
+        AnchorSideTop.Control = BtnDlcAdd
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 15
+        Hint = 'Downloadable content (DLC) folders installed for this game.'
+        Top = 11
+        Width = 156
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Downloadable content (DLC):'
+        ParentShowHint = False
+        ShowHint = True
+      end
+      object BtnDlcAdd: TSpeedButton
+        AnchorSideLeft.Control = Edt_MountList_DlcAuto
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = TabDlc
+        Left = 230
+        Height = 26
+        Hint = 'Add a DLC folder'
+        Top = 5
+        Width = 26
+        AutoSize = True
+        BorderSpacing.Top = 5
+        BorderSpacing.Right = 5
+        Images = frmMain.SmallImageList
+        ImageIndex = 1
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnDlcAddClick
+      end
+      object BtnDlcRem: TSpeedButton
+        AnchorSideLeft.Control = BtnDlcAdd
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnDlcAdd
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        Left = 261
+        Height = 26
+        Hint = 'Remove selected DLC folder'
+        Top = 5
+        Width = 26
+        AutoSize = True
+        Images = frmMain.SmallImageList
+        ImageIndex = 2
+        ShowHint = True
+        ParentShowHint = False
+        OnClick = BtnDlcRemClick
+      end
+      object Edt_MountList_DlcList: TListBox
+        AnchorSideLeft.Control = TabDlc
+        AnchorSideTop.Control = BtnDlcAdd
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabDlc
+        AnchorSideRight.Side = asrBottom
+        AnchorSideBottom.Side = asrBottom
+        Left = 10
+        Height = 185
+        Hint = 'DLC folders available for this game. Each must contain sce_sys/param.sfo with CATEGORY=ac'
+        Top = 36
+        Width = 439
+        Anchors = [akTop, akLeft, akRight, akBottom]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 5
+        BorderSpacing.Right = 10
+        BorderSpacing.Bottom = 10
+        ItemHeight = 0
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 1
+        OnSelectionChange = Edt_MountList_DlcListSelectionChange
+      end
+      object Edt_MountList_DlcAuto: TCheckBox
+        AnchorSideLeft.Control = Label9
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnDlcAdd
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Side = asrBottom
+        Left = 176
+        Height = 19
+        Hint = 'Automatically detect update/patch/mod folders next to the game'
+        Top = 9
+        Width = 44
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        Caption = 'Auto'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 0
+        OnChange = Edt_MountList_DlcAutoChange
+      end
+    end
     object TabParamSfo: TTabSheet
       Caption = 'param.sfo'
       ClientHeight = 238
@@ -539,7 +640,7 @@ object frmGameEditor: TfrmGameEditor
         TitleStyle = tsNative
         ColWidths = (
           64
-          374
+          391
         )
       end
     end

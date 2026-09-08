@@ -142,6 +142,10 @@ function GetHostSystemTimeFormat:Byte;
 
 function ps4_sceSystemServiceParamGetInt(paramId:Integer;value:Pinteger):Integer;
 
+var
+ display_safe_area_update:Integer=0;
+ entitlement_update      :Integer=0;
+
 implementation
 
 uses
@@ -151,9 +155,6 @@ uses
  trap;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
-
-var
- display_safe_area_update:Integer=0;
 
 type
  pSceSystemServiceDisplaySafeAreaInfo=^SceSystemServiceDisplaySafeAreaInfo;
@@ -534,7 +535,7 @@ end;
 function ps4_sceSystemServiceGetStatus(status:PSceSystemServiceStatus):Integer;
 begin
  if (status=nil) then Exit(SCE_SYSTEM_SERVICE_ERROR_PARAMETER);
- status^.eventNum                :=ord(display_safe_area_update<>0);
+ status^.eventNum                :=ord(display_safe_area_update<>0) + ord(entitlement_update<>0);
  status^.isSystemUiOverlaid      :=false;
  status^.isInBackgroundExecution :=false;
  status^.isCpuMode7CpuNormal     :=true;
@@ -555,6 +556,13 @@ begin
  begin
   event^:=Default(SceSystemServiceEvent);
   event^.eventType:=SCE_SYSTEM_SERVICE_EVENT_DISPLAY_SAFE_AREA_UPDATE;
+  Exit(0);
+ end;
+
+ if CAS(entitlement_update,1,0) then
+ begin
+  event^:=Default(SceSystemServiceEvent);
+  event^.eventType:=SCE_SYSTEM_SERVICE_EVENT_ENTITLEMENT_UPDATE;
   Exit(0);
  end;
 

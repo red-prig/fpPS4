@@ -53,12 +53,13 @@ type
 
  t_load_sfo_err=(ls_ok,ls_not_exists,ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id);
 
-function LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
+function  LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
 
-function LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
-function TestParamSfoByPath(const path,title_id:RawByteString):t_load_sfo_err;
+function  LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
+function  TestParamSfoByPath(const path,category,title_id:RawByteString):t_load_sfo_err;
 
 procedure AutoDetectOverlays    (const path,title_id:RawByteString;dst:TStrings);
+procedure AutoDetectDlcs        (const path,title_id:RawByteString;dst:TStrings);
 function  LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
 
 implementation
@@ -86,13 +87,24 @@ begin
 
 end;
 
+function ChopRight(const S,Sub:RawByteString):RawByteString;
+var
+ i:Integer;
+begin
+ Result:=S;
+ i:=Length(Result)-Length(Sub)+1;
+ if (Copy(Result,i,Length(Sub))=Sub) then
+ begin
+  Delete(Result,i,Length(Sub));
+ end;
+end;
+
 procedure AutoDetectOverlays(const path,title_id:RawByteString;dst:TStrings);
 var
  V:RawByteString;
 begin
-
- V:=ExcludeTrailingPathDelimiter(path)+'-patch';
- if (TestParamSfoByPath(V,title_id)=ls_ok) then
+ V:=ChopRight(ExcludeTrailingPathDelimiter(path),'-app')+'-patch';
+ if (TestParamSfoByPath(V,'gp',title_id)=ls_ok) then
  begin
   dst.Add(V);
  end;
@@ -101,6 +113,37 @@ begin
  if FileExists(V) then
  begin
   dst.Add(V);
+ end;
+
+end;
+
+procedure AutoDetectDlcs(const path,title_id:RawByteString;dst:TStrings);
+var
+ CurParent:RawByteString;
+ CurDir   :RawByteString;
+ FileInfo:TSearchRec;
+begin
+ CurParent:=ChopRight(ExcludeTrailingPathDelimiter(path),'-app')+'-dlc';
+ CurParent:=IncludeTrailingPathDelimiter(CurParent);
+
+ if SysUtils.FindFirst(CurParent+'*',faDirectory,FileInfo)=0 then
+ begin
+  repeat
+    // check if special file
+    if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
+    begin
+      continue;
+    end;
+
+    CurDir:=CurParent+FileInfo.Name;
+
+    if (TestParamSfoByPath(CurDir,'ac',title_id)=ls_ok) then
+    begin
+     dst.Add(CurDir);
+    end;
+
+  until SysUtils.FindNext(FileInfo)<>0;
+  SysUtils.FindClose(FileInfo);
  end;
 
 end;
@@ -140,7 +183,7 @@ begin
                           dst);
 end;
 
-function TestParamSfoByPath(const path,title_id:RawByteString):t_load_sfo_err;
+function TestParamSfoByPath(const path,category,title_id:RawByteString):t_load_sfo_err;
 var
  ParamSfo:TParamSfoFile;
 begin
@@ -149,7 +192,7 @@ begin
  //
  if (ParamSfo=nil) then Exit;
 
- if (ParamSfo.GetString('CATEGORY')<>'gp') then
+ if (ParamSfo.GetString('CATEGORY')<>category) then
  begin
   Result:=ls_wrong_category;
  end else

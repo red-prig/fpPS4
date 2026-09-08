@@ -20,6 +20,8 @@ type
 
   TfrmGameEditor = class(TForm)
     BtnAddLayer: TSpeedButton;
+    BtnDlcAdd: TSpeedButton;
+    BtnDlcRem: TSpeedButton;
     BtnExpGame: TSpeedButton;
     BtnExpFw: TSpeedButton;
     BtnGameOpen: TButton;
@@ -35,7 +37,9 @@ type
     Edt_GameInfo_TitleId: TEdit;
     Edt_GameInfo_Version: TEdit;
     Edt_GameInfo_AppVer: TEdit;
+    Edt_MountList_DlcAuto: TCheckBox;
     Edt_MountList_OverlayList: TListBox;
+    Edt_MountList_DlcList: TListBox;
     Edt_MountList_game: TEdit;
     Edt_MountList_firmware: TComboBox;
     GridParamSfo: TStringGrid;
@@ -47,11 +51,15 @@ type
     Label6: TLabel;
     Label7: TLabel;
     Label8: TLabel;
+    Label9: TLabel;
     PanelHalf: TPanel;
     TabMain: TTabSheet;
+    TabDlc: TTabSheet;
     TabFolders: TTabSheet;
     TabParamSfo: TTabSheet;
     procedure BtnAddLayerClick(Sender: TObject);
+    procedure BtnDlcAddClick(Sender: TObject);
+    procedure BtnDlcRemClick(Sender: TObject);
     procedure BtnExpFwClick(Sender: TObject);
     procedure BtnExpGameClick(Sender: TObject);
     procedure BtnGameOpenClick(Sender: TObject);
@@ -60,6 +68,8 @@ type
     procedure BtnDwLayerClick(Sender: TObject);
     procedure BtnRemLayerClick(Sender: TObject);
     procedure BtnUpLayerClick(Sender: TObject);
+    procedure Edt_MountList_DlcAutoChange(Sender: TObject);
+    procedure Edt_MountList_DlcListSelectionChange(Sender: TObject; User: Boolean);
     procedure Edt_MountList_OverlayAutoChange(Sender: TObject);
     procedure Edt_MountList_OverlayListSelectionChange(Sender: TObject; User: Boolean);
     procedure Edt_MountList_firmwareGetItems(Sender: TObject);
@@ -71,10 +81,14 @@ type
     Procedure UpdateOverlays;
   private
     FOverlaysNotChanged:Boolean;
+    FDlcsNotChanged:Boolean;
     Fgame:RawByteString;
     procedure DoMoveLayer(Dir:Integer);
+    Procedure UpdateDlcs;
+    Procedure UpdateDlcButtons;
     Procedure UpdateLayerButtons;
     procedure OverlayAutoChangeButtons;
+    procedure DlcAutoChangeButtons;
   public
     OnSave     :TNotifyEvent;
     FConfigInfo:TConfigInfo;
@@ -191,10 +205,14 @@ begin
  //////
 
  OverlayAutoChangeButtons;
+ DlcAutoChangeButtons;
+
  LoadParamSfo(UpdateTitle);
  //reupdate
  FOverlaysNotChanged:=False;
+ FDlcsNotChanged:=False;
  UpdateOverlays;
+ UpdateDlcs;
  LoadParamSfo(UpdateTitle);
 
  Show;
@@ -277,6 +295,7 @@ end;
 procedure TfrmGameEditor.Edt_MountList_gameExit(Sender: TObject);
 begin
  UpdateOverlays;
+ UpdateDlcs;
  LoadParamSfo(True);
 end;
 
@@ -292,7 +311,9 @@ begin
  LoadParamSfo(True);
  //reupdate
  FOverlaysNotChanged:=False;
+ FDlcsNotChanged:=False;
  UpdateOverlays;
+ UpdateDlcs;
  LoadParamSfo(True);
 end;
 
@@ -306,19 +327,6 @@ begin
  OpenDocument(Edt_MountList_firmware.Text);
 end;
 
-Procedure TfrmGameEditor.UpdateLayerButtons;
-var
- i:Integer;
-begin
- if Edt_MountList_OverlayAuto.Checked then Exit;
-
- i:=Edt_MountList_OverlayList.ItemIndex;
-
- BtnRemLayer.Enabled:=(i>=0);
- BtnUpLayer .Enabled:=(i>0);
- BtnDwLayer .Enabled:=(i>=0) and (i<Edt_MountList_OverlayList.Count-1);
-end;
-
 procedure TfrmGameEditor.BtnAddLayerClick(Sender: TObject);
 var
  new:RawByteString;
@@ -328,7 +336,7 @@ begin
  new:=DoOpenDir('','');
  if (new='') then Exit;
 
- err:=TestParamSfoByPath(new,Edt_GameInfo_TitleId.Text);
+ err:=TestParamSfoByPath(new,'gp',Edt_GameInfo_TitleId.Text);
 
  if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
  begin
@@ -389,6 +397,32 @@ begin
  DoMoveLayer(-1);
 end;
 
+procedure TfrmGameEditor.Edt_MountList_DlcAutoChange(Sender: TObject);
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_DlcAuto.Checked;
+
+ if Checked and (Edt_MountList_DlcList.Items.Count<>0) then
+ begin
+  if (MessageDlg('Question',
+                 'Auto will replace the current DLC list with auto-detected folders. Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Edt_MountList_DlcAuto.Checked:=False;
+   Exit;
+  end;
+ end;
+
+ DlcAutoChangeButtons;
+
+ FDlcsNotChanged:=False;
+
+ UpdateDlcs;
+end;
+
 procedure TfrmGameEditor.BtnRemLayerClick(Sender: TObject);
 var
  i:Integer;
@@ -418,6 +452,64 @@ end;
 procedure TfrmGameEditor.BtnCancelClick(Sender: TObject);
 begin
  Close;
+end;
+
+procedure TfrmGameEditor.BtnDlcAddClick(Sender: TObject);
+var
+ new:RawByteString;
+ err:t_load_sfo_err;
+ dlg:RawByteString;
+begin
+ new:=DoOpenDir('','');
+ if (new='') then Exit;
+
+ err:=TestParamSfoByPath(new,'ac',Edt_GameInfo_TitleId.Text);
+
+ if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
+ begin
+
+  dlg:='';
+  case err of
+   ls_io            :dlg:='Error reading file param.sfo';
+   ls_broken        :dlg:='param.sfo is broken';
+   ls_wrong_category:dlg:='It looks like you''re trying to add a non-DLC folder';
+   ls_wrong_title_id:dlg:='It looks like you''re trying to add DLC from another game';
+   else;
+  end;
+
+  if (MessageDlg('Question',
+                 dlg+', Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Exit;
+  end;
+
+ end;
+
+ Edt_MountList_DlcList.Items.Add(new);
+ Edt_MountList_DlcList.ItemIndex:=Edt_MountList_DlcList.Count-1;
+
+ UpdateDlcButtons;
+end;
+
+procedure TfrmGameEditor.BtnDlcRemClick(Sender: TObject);
+var
+ i:Integer;
+begin
+ i:=Edt_MountList_DlcList.ItemIndex;
+ if (i>=0) and (i<Edt_MountList_DlcList.Count) then
+ begin
+  Edt_MountList_DlcList.Items.Delete(i);
+
+  UpdateDlcButtons;
+ end;
+end;
+
+procedure TfrmGameEditor.Edt_MountList_DlcListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateDlcButtons;
 end;
 
 Procedure TfrmGameEditor.UpdateOverlays;
@@ -455,6 +547,59 @@ begin
  Edt_MountList_OverlayList.Enabled:=not Checked;
 
  UpdateLayerButtons;
+end;
+
+Procedure TfrmGameEditor.UpdateLayerButtons;
+var
+ i:Integer;
+begin
+ if Edt_MountList_OverlayAuto.Checked then Exit;
+
+ i:=Edt_MountList_OverlayList.ItemIndex;
+
+ BtnRemLayer.Enabled:=(i>=0);
+ BtnUpLayer .Enabled:=(i>0);
+ BtnDwLayer .Enabled:=(i>=0) and (i<Edt_MountList_OverlayList.Count-1);
+end;
+
+procedure TfrmGameEditor.DlcAutoChangeButtons;
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_DlcAuto.Checked;
+
+ BtnDlcAdd.Enabled:=not Checked;
+ BtnDlcRem.Enabled:=not Checked;
+ Edt_MountList_DlcList.Enabled:=not Checked;
+
+ UpdateDlcButtons;
+end;
+
+Procedure TfrmGameEditor.UpdateDlcs;
+begin
+ if FDlcsNotChanged and SameFileName(Fgame,Edt_MountList_game.Text) then Exit;
+
+ if Edt_MountList_DlcAuto.Checked then
+ begin
+  Edt_MountList_DlcList.Clear;
+
+  AutoDetectDlcs(Edt_MountList_game.Text,Edt_GameInfo_TitleId.Text,Edt_MountList_DlcList.Items);
+
+  FDlcsNotChanged:=True;
+
+  UpdateDlcButtons;
+ end;
+end;
+
+Procedure TfrmGameEditor.UpdateDlcButtons;
+var
+ i:Integer;
+begin
+ if Edt_MountList_DlcAuto.Checked then Exit;
+
+ i:=Edt_MountList_DlcList.ItemIndex;
+
+ BtnDlcRem.Enabled:=(i>=0);
 end;
 
 procedure TfrmGameEditor.Edt_MountList_OverlayAutoChange(Sender: TObject);
