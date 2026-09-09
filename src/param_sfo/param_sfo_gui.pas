@@ -51,18 +51,117 @@ type
   procedure  Merge(src:TParamSfoFile);
  end;
 
- t_load_sfo_err=(ls_ok,ls_not_exists,ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id);
+ TServiceID=object
+  value:RawByteString;
+  function GetPublisherID     :RawByteString;
+  function GetTitleID         :RawByteString;
+  function GetNPTitleID       :RawByteString;
+ end;
+
+ TContentID=object
+  value:RawByteString;
+  function GetPublisherID     :RawByteString;
+  function GetServiceID       :RawByteString;
+  function GetTitleID         :RawByteString;
+  function GetNPTitleID       :RawByteString;
+  function GetEntitlementLabel:RawByteString;
+ end;
+
+ t_load_sfo_err=(ls_ok,ls_not_exists,ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id,ls_wrong_service_id);
+
+ ARawByteString=array of RawByteString;
 
 function  LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
 
 function  LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
-function  TestParamSfoByPath(const path,category,title_id:RawByteString):t_load_sfo_err;
+function  TestPatchByPath   (const path,title_id:RawByteString):t_load_sfo_err;
+function  TestDlcByPath     (const path:RawByteString;ServiceID:ARawByteString):t_load_sfo_err;
+Function  GetAllServiceID   (ParamSfo:TParamSfoFile):ARawByteString;
 
 procedure AutoDetectOverlays    (const path,title_id:RawByteString;dst:TStrings);
-procedure AutoDetectDlcs        (const path,title_id:RawByteString;dst:TStrings);
+procedure AutoDetectDlcs        (const path:RawByteString;ServiceID:ARawByteString;dst:TStrings);
 function  LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
 
 implementation
+
+///
+
+function TServiceID.GetPublisherID:RawByteString;
+begin
+ Result:=Copy(value,1,6);
+
+ //123456
+ //EP9000-CUSA00002_00
+end;
+
+function TServiceID.GetTitleID:RawByteString;
+begin
+ Result:=Copy(value,8,9);
+
+ //00000000
+ //12345678
+ //XXX000-XXXX00000_00
+ //       123456789
+end;
+
+function TServiceID.GetNPTitleID:RawByteString;
+begin
+ Result:=Copy(value,8,12);
+
+ //00000000
+ //12345678
+ //XXX000-XXXX00000_00
+ //       123456789012
+end;
+
+///
+
+function TContentID.GetPublisherID:RawByteString;
+begin
+ Result:=Copy(value,1,6);
+
+ //123456
+ //XXX000-XXXX00000_00-XXXXXXXXXX000000
+end;
+
+function TContentID.GetServiceID:RawByteString;
+begin
+ Result:=Copy(value,1,19);
+
+ //0000000001111111111
+ //1234567890123456789
+ //XXX000-XXXX00000_00-XXXXXXXXXX000000
+end;
+
+function TContentID.GetTitleID:RawByteString;
+begin
+ Result:=Copy(value,8,9);
+
+ //00000000
+ //12345678
+ //XXX000-XXXX00000_00-XXXXXXXXXX000000
+ //       123456789
+end;
+
+function TContentID.GetNPTitleID:RawByteString;
+begin
+ Result:=Copy(value,8,12);
+
+ //00000000
+ //12345678
+ //XXX000-XXXX00000_00-XXXXXXXXXX000000
+ //       123456789012
+end;
+
+function TContentID.GetEntitlementLabel:RawByteString;
+begin
+ Result:=Copy(value,21,16);
+
+ //000000000111111111122
+ //123456789012345678901
+ //XXX000-XXXX00000_00-XXXXXXXXXX000000
+ //                    1234567890123456
+end;
 
 function LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
 var
@@ -104,7 +203,7 @@ var
  V:RawByteString;
 begin
  V:=ChopRight(ExcludeTrailingPathDelimiter(path),'-app')+'-patch';
- if (TestParamSfoByPath(V,'gp',title_id)=ls_ok) then
+ if (TestPatchByPath(V,title_id)=ls_ok) then
  begin
   dst.Add(V);
  end;
@@ -117,7 +216,7 @@ begin
 
 end;
 
-procedure AutoDetectDlcs(const path,title_id:RawByteString;dst:TStrings);
+procedure AutoDetectDlcs(const path:RawByteString;ServiceID:ARawByteString;dst:TStrings);
 var
  CurParent:RawByteString;
  CurDir   :RawByteString;
@@ -137,7 +236,7 @@ begin
 
     CurDir:=CurParent+FileInfo.Name;
 
-    if (TestParamSfoByPath(CurDir,'ac',title_id)=ls_ok) then
+    if (TestDlcByPath(CurDir,ServiceID)=ls_ok) then
     begin
      dst.Add(CurDir);
     end;
@@ -183,7 +282,7 @@ begin
                           dst);
 end;
 
-function TestParamSfoByPath(const path,category,title_id:RawByteString):t_load_sfo_err;
+function TestPatchByPath(const path,title_id:RawByteString):t_load_sfo_err;
 var
  ParamSfo:TParamSfoFile;
 begin
@@ -192,7 +291,7 @@ begin
  //
  if (ParamSfo=nil) then Exit;
 
- if (ParamSfo.GetString('CATEGORY')<>category) then
+ if (ParamSfo.GetString('CATEGORY')<>'gp') then
  begin
   Result:=ls_wrong_category;
  end else
@@ -202,6 +301,57 @@ begin
  end;
 
  FreeAndNil(ParamSfo);
+end;
+
+function TestDlcByPath(const path:RawByteString;ServiceID:ARawByteString):t_load_sfo_err;
+var
+ ParamSfo:TParamSfoFile;
+ current:RawByteString;
+ i:Integer;
+begin
+ if Length(ServiceID)=0 then Exit(ls_wrong_service_id);
+
+ ParamSfo:=nil;
+ Result:=LoadParamSfoByPath(path,ParamSfo);
+ //
+ if (ParamSfo=nil) then Exit;
+
+ if (ParamSfo.GetString('CATEGORY')<>'ac') then
+ begin
+  Result:=ls_wrong_category;
+ end else
+ begin
+  current:=TContentID(ParamSfo.GetString('CONTENT_ID')).GetServiceID;
+
+  Result:=ls_wrong_service_id;
+
+  For i:=0 to High(ServiceID) do
+  if (current=ServiceID[i]) then
+  begin
+   Result:=ls_ok;
+   Break;
+  end;
+ end;
+
+ FreeAndNil(ParamSfo);
+end;
+
+Function GetAllServiceID(ParamSfo:TParamSfoFile):ARawByteString;
+var
+ V:RawByteString;
+ c:Char;
+begin
+ V:=TContentID(ParamSfo.GetString('CONTENT_ID')).GetServiceID;
+ Result:=[V];
+
+ For c:='1' to '7' do
+ begin
+  V:=ParamSfo.GetString('SERVICE_ID_ADDCONT_ADD_'+c);
+  if (V<>'') then
+  begin
+   Insert(V,Result,Length(Result));
+  end;
+ end;
 end;
 
 //

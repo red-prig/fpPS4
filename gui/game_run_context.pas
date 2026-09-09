@@ -179,9 +179,6 @@ begin
  if Item.MountList.OverlayAuto then
  begin
   AutoDetectOverlays(Item.MountList.game,Item.FGameInfo.TitleId,List);
-
-  //save to item
-  Strings2SerializeStringArray(List,Item.MountList.OverlayList);
  end else
  begin
   SerializeStringArray2Strings(Item.MountList.OverlayList,List);

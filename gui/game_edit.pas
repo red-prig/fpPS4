@@ -82,7 +82,7 @@ type
   private
     FOverlaysNotChanged:Boolean;
     FDlcsNotChanged:Boolean;
-    Fgame:RawByteString;
+    FGame:RawByteString;
     procedure DoMoveLayer(Dir:Integer);
     Procedure UpdateDlcs;
     Procedure UpdateDlcButtons;
@@ -208,12 +208,16 @@ begin
  DlcAutoChangeButtons;
 
  LoadParamSfo(UpdateTitle);
+
  //reupdate
- FOverlaysNotChanged:=False;
- FDlcsNotChanged:=False;
- UpdateOverlays;
- UpdateDlcs;
- LoadParamSfo(UpdateTitle);
+ if UpdateTitle then
+ begin
+  FOverlaysNotChanged:=False;
+  FDlcsNotChanged:=False;
+  UpdateOverlays;
+  UpdateDlcs;
+  LoadParamSfo(UpdateTitle);
+ end;
 
  Show;
 end;
@@ -235,14 +239,14 @@ var
  V:RawByteString;
 begin
  V:=Edt_MountList_game.Text;
- if FOverlaysNotChanged and SameFileName(Fgame,V) then Exit;
+ if FOverlaysNotChanged and SameFileName(FGame,V) then Exit;
 
  FreeAndNil(FParamSfo);
 
  FParamSfo:=LoadParamSfoByOverlays(V,Edt_MountList_OverlayList.Items);
 
  //update cache state
- Fgame:=V;
+ FGame:=V;
  FOverlaysNotChanged:=True;
 
  GridParamSfo.Clear;
@@ -292,6 +296,7 @@ begin
  Edt_GameInfo_AppVer.Text:=V;
 end;
 
+
 procedure TfrmGameEditor.Edt_MountList_gameExit(Sender: TObject);
 begin
  UpdateOverlays;
@@ -336,7 +341,7 @@ begin
  new:=DoOpenDir('','');
  if (new='') then Exit;
 
- err:=TestParamSfoByPath(new,'gp',Edt_GameInfo_TitleId.Text);
+ err:=TestPatchByPath(new,Edt_GameInfo_TitleId.Text);
 
  if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
  begin
@@ -463,17 +468,17 @@ begin
  new:=DoOpenDir('','');
  if (new='') then Exit;
 
- err:=TestParamSfoByPath(new,'ac',Edt_GameInfo_TitleId.Text);
+ err:=TestDlcByPath(new,GetAllServiceID(FParamSfo));
 
- if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
+ if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_service_id]) then
  begin
 
   dlg:='';
   case err of
-   ls_io            :dlg:='Error reading file param.sfo';
-   ls_broken        :dlg:='param.sfo is broken';
-   ls_wrong_category:dlg:='It looks like you''re trying to add a non-DLC folder';
-   ls_wrong_title_id:dlg:='It looks like you''re trying to add DLC from another game';
+   ls_io              :dlg:='Error reading file param.sfo';
+   ls_broken          :dlg:='param.sfo is broken';
+   ls_wrong_category  :dlg:='It looks like you''re trying to add a non-DLC folder';
+   ls_wrong_service_id:dlg:='It looks like you''re trying to add DLC from another game';
    else;
   end;
 
@@ -514,7 +519,7 @@ end;
 
 Procedure TfrmGameEditor.UpdateOverlays;
 begin
- if FOverlaysNotChanged and SameFileName(Fgame,Edt_MountList_game.Text) then Exit;
+ if FOverlaysNotChanged and SameFileName(FGame,Edt_MountList_game.Text) then Exit;
 
  if Edt_MountList_OverlayAuto.Checked then
  begin
@@ -577,13 +582,13 @@ end;
 
 Procedure TfrmGameEditor.UpdateDlcs;
 begin
- if FDlcsNotChanged and SameFileName(Fgame,Edt_MountList_game.Text) then Exit;
+ if FDlcsNotChanged and SameFileName(FGame,Edt_MountList_game.Text) then Exit;
 
  if Edt_MountList_DlcAuto.Checked then
  begin
   Edt_MountList_DlcList.Clear;
 
-  AutoDetectDlcs(Edt_MountList_game.Text,Edt_GameInfo_TitleId.Text,Edt_MountList_DlcList.Items);
+  AutoDetectDlcs(Edt_MountList_game.Text,GetAllServiceID(FParamSfo),Edt_MountList_DlcList.Items);
 
   FDlcsNotChanged:=True;
 
