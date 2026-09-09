@@ -24,6 +24,8 @@ type
   //
   DownloadKb:array[0..1] of QWORD;
   //
+  AddContMount:QWORD;
+  //
   Constructor Create;
   function GetTemporaryTitleIdFile:RawByteString;
   function GetAppTemporaryFolder:RawByteString;
@@ -65,6 +67,7 @@ procedure InitMount(GameStartupInfo:TGameStartupInfo);
 function  GameMountConfigExport:TGameMountConfigExport;
 
 //
+function AddContMount        (mountPoint:pchar;fs_src:RawByteString):Integer;
 
 function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
@@ -1130,6 +1133,43 @@ begin
  end;
 end;
 
+function AddContMount(mountPoint:pchar;fs_src:RawByteString):Integer;
+var
+ i:Integer;
+ m:QWORD;
+ fspath:array[0..15] of Char;
+begin
+ Result:=ESRCH;
+ mtx_lock(gGameMountConfig.mount_mtx);
+
+  For i:=0 to 63 do
+  begin
+   m:=QWORD(1) shl i;
+
+   if ((gGameMountConfig.AddContMount and m)=0) then
+   begin
+    fspath:='/addcont'+IntToStr(i);
+
+    Result:=vfs_mountroot.mount_into_sandbox('ufs',
+                                             fspath,
+                                             pchar(fs_src),
+                                             nil,
+                                             0);
+
+    if (Result=0) then
+    begin
+     strlcopy(mountPoint,fspath,MOUNT_MAXSIZE);
+     gGameMountConfig.AddContMount:=gGameMountConfig.AddContMount or m;
+    end; //(Result=0)
+
+    Break;
+   end; //((AddContMount and m)=0)
+
+  end; //For
+
+ mtx_unlock(gGameMountConfig.mount_mtx);
+end;
+
 function TemporaryDataMount(mountPoint:pchar;format:Boolean):Integer;
 var
  fs_src:RawByteString;
@@ -1168,9 +1208,9 @@ begin
     SaveTemporaryTitleId(gGameMountConfig.TitleId);
    end;
 
-  end;
+  end; //(Result=0)
 
- end;
+ end; //gGameMountConfig.TemporaryMount
 
  mtx_unlock(gGameMountConfig.mount_mtx);
 end;

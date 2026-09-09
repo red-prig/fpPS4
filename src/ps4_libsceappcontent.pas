@@ -149,7 +149,9 @@ begin
   For i:=0 to High(ServiceID) do
   if (current=ServiceID[i]) then
   begin
-   LOG_INFO('Apply Dlc:',path);
+   LOG_INFO('Apply DLC :',path);
+   LOG_INFO('TITLE     :',ParamSfo.GetString('TITLE'));
+   LOG_INFO('CONTENT_ID:',CONTENT_ID);
 
    node:=Default(TAddContInfo);
 
@@ -158,6 +160,7 @@ begin
    //node.EntitlementKey:=;
 
    Insert(node,AddContInfoByServiceLabel[i],Length(AddContInfoByServiceLabel[i]));
+   Break;
   end;
  end;
 
@@ -290,12 +293,9 @@ begin
  end;
 end;
 
-function Min(a, b: DWORD): DWORD; inline;
+function Min(a,b:DWORD): DWORD; inline;
 begin
- if a < b then
-   Result := a
- else
-   Result := b;
+ if (a<b) then Result:=a else Result:=b;
 end;
 
 function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
@@ -303,10 +303,10 @@ function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
                                              listNum     :DWORD;
                                              hitNum      :PDWORD):Integer;
 var
- i:Integer;
+ i,len:Integer;
 begin
  Result:=0;
- LOG_TRACE('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
+ LOG_TRACE('sceAppContentGetAddcontInfoList:',serviceLabel);
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (hitNum=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
@@ -315,20 +315,26 @@ begin
 
  mtx_lock(mtx_app_content);
 
-  listNum:=Min(listNum,Length(AddContInfoByServiceLabel[serviceLabel]));
+  len:=Length(AddContInfoByServiceLabel[serviceLabel]);
 
-  hitNum^:=listNum;
-
-  if (list<>nil) and (listNum>0) then
+  if (list<>nil) then
   begin
-   For i:=0 to listNum-1 do
+   len:=Min(listNum,len);
+
+   hitNum^:=len;
+
+   if (len>0) then
+   For i:=0 to len-1 do
    begin
     list[i].entitlementLabel:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel;
     list[i].status          :=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
    end;
+
   end;
 
  mtx_unlock(mtx_app_content);
+
+ hitNum^:=len;
 end;
 
 function CheckEntitlementLabel(entitlementLabel:pSceNpUnifiedEntitlementLabel):Integer;
@@ -424,11 +430,31 @@ begin
  Result:=0;
 end;
 
+function px2ce(err:Integer):Integer; inline;
+begin
+ case err of
+        0:Result:=0;
+  EINVAL :Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
+  EBUSY  :Result:=SCE_APP_CONTENT_ERROR_BUSY;
+  ENOTDIR:Result:=SCE_APP_CONTENT_ERROR_NOT_MOUNTED;
+  ENOENT :Result:=SCE_APP_CONTENT_ERROR_NOT_FOUND;
+  ESRCH  :Result:=SCE_APP_CONTENT_ERROR_MOUNT_FULL;
+  ENOSPC :Result:=SCE_APP_CONTENT_ERROR_NO_SPACE;
+  ENOTSUP:Result:=SCE_APP_CONTENT_ERROR_NOT_SUPPORTED;
+  else
+          Result:=SCE_APP_CONTENT_ERROR_INTERNAL;
+ end;
+end;
+
 function ps4_sceAppContentAddcontMount(serviceLabel    :SceNpServiceLabel;
 	                               entitlementLabel:pSceNpUnifiedEntitlementLabel;
 	                               mountPoint      :pSceAppContentMountPoint
                                       ):Integer;
+var
+ i:Integer;
 begin
+ Result:=0;
+ LOG_TRACE('sceAppContentAddcontMount:',serviceLabel,':',entitlementLabel^.data);
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (entitlementLabel=nil) or (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
@@ -438,23 +464,18 @@ begin
  Result:=CheckServiceLabel(serviceLabel);
  if (Result<>0) then Exit;
 
- Assert(False,'TODO:sceAppContentAddcontMount');
- Result:=0;
-end;
+ mtx_lock(mtx_app_content);
 
-function px2ce(err:Integer):Integer; inline;
-begin
- case err of
-        0:Result:=0;
-  EINVAL :Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
-  EBUSY  :Result:=SCE_APP_CONTENT_ERROR_BUSY;
-  ENOTDIR:Result:=SCE_APP_CONTENT_ERROR_NOT_MOUNTED;
-  ENOENT :Result:=SCE_APP_CONTENT_ERROR_NOT_FOUND;
-  ENOSPC :Result:=SCE_APP_CONTENT_ERROR_NO_SPACE;
-  ENOTSUP:Result:=SCE_APP_CONTENT_ERROR_NOT_SUPPORTED;
-  else
-          Result:=SCE_APP_CONTENT_ERROR_INTERNAL;
- end;
+  i:=FindByEntitlementLabel(serviceLabel,entitlementLabel);
+  if (i=-1) then
+  begin
+   mtx_unlock(mtx_app_content);
+   Exit(SCE_APP_CONTENT_ERROR_NOT_FOUND);
+  end;
+
+  Result:=px2ce(AddContMount(pchar(mountPoint),AddContInfoByServiceLabel[serviceLabel][i].path));
+
+ mtx_unlock(mtx_app_content);
 end;
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer;
