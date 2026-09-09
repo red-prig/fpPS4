@@ -307,6 +307,8 @@ begin
 
  InitMount(GameStartupInfo);
 
+ ps4_libSceAppContent.DlcList:=GameStartupInfo.FGameItem.MountList.DlcList.values;
+
  ///argv
 
  argv:=nil;

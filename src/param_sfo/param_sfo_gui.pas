@@ -75,11 +75,11 @@ function  LoadParamSfoFile(const path:RawByteString;var dst:TParamSfoFile):t_loa
 
 function  LoadParamSfoByPath(const path:RawByteString;var dst:TParamSfoFile):t_load_sfo_err;
 function  TestPatchByPath   (const path,title_id:RawByteString):t_load_sfo_err;
-function  TestDlcByPath     (const path:RawByteString;ServiceID:ARawByteString):t_load_sfo_err;
+function  TestDlcByPath     (const path:RawByteString;const ServiceID:ARawByteString):t_load_sfo_err;
 Function  GetAllServiceID   (ParamSfo:TParamSfoFile):ARawByteString;
 
 procedure AutoDetectOverlays    (const path,title_id:RawByteString;dst:TStrings);
-procedure AutoDetectDlcs        (const path:RawByteString;ServiceID:ARawByteString;dst:TStrings);
+procedure AutoDetectDlcs        (const path:RawByteString;const ServiceID:ARawByteString;dst:TStrings);
 function  LoadParamSfoByOverlays(const path:RawByteString;overlays:TStrings):TParamSfoFile;
 
 implementation
@@ -216,7 +216,7 @@ begin
 
 end;
 
-procedure AutoDetectDlcs(const path:RawByteString;ServiceID:ARawByteString;dst:TStrings);
+procedure AutoDetectDlcs(const path:RawByteString;const ServiceID:ARawByteString;dst:TStrings);
 var
  CurParent:RawByteString;
  CurDir   :RawByteString;
@@ -303,7 +303,7 @@ begin
  FreeAndNil(ParamSfo);
 end;
 
-function TestDlcByPath(const path:RawByteString;ServiceID:ARawByteString):t_load_sfo_err;
+function TestDlcByPath(const path:RawByteString;const ServiceID:ARawByteString):t_load_sfo_err;
 var
  ParamSfo:TParamSfoFile;
  current:RawByteString;
