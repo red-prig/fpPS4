@@ -1173,7 +1173,7 @@ end;
 
 function GetMountAddContId(name:pchar;var slot_id:Integer):Integer;
 begin
- Result:=EINVAL;
+ Result:=ENOTDIR;
  if (name<>nil) then
  if (PQWORD(@name[0])^=QWORD($746E6F636464612F)) then // /addcont
  begin
@@ -1193,7 +1193,7 @@ begin
      (name[9] in ['0'..'9']) then
   begin
    slot_id:=(ord(name[8])-ord('0'))*10 + (ord(name[9])-ord('0'));
-   Result:=ord(DWORD(slot_id)>63)*EINVAL;
+   Result:=ord(DWORD(slot_id)>63)*ENOTDIR;
   end;
  end;
 end;
