@@ -77,7 +77,7 @@ uses
 
 function exec_alloc_args(args:p_image_args):Integer;
 begin
- args^.buf:=calloc(PATH_MAX + ARG_MAX);
+ args^.buf:=AllocMem(PATH_MAX + ARG_MAX);
  if (args^.buf=nil) then Exit(ENOMEM);
  Result:=0;
 end;
@@ -86,7 +86,7 @@ procedure exec_free_args(args:p_image_args);
 begin
  if (args^.buf<>nil) then
  begin
-  free(args^.buf);
+  FreeMem(args^.buf);
   args^.buf:=nil;
  end;
  if (args^.fname_buf<>nil) then
@@ -889,7 +889,7 @@ begin
     end;
     if (Result<>0) then
     begin
-     free(cache);
+     FreeMem(cache);
      Exit;
     end;
 
@@ -918,7 +918,7 @@ begin
   end;
  end;
 
- free(cache);
+ FreeMem(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin

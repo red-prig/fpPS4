@@ -855,7 +855,7 @@ begin
   dirbuflen:=va.va_blocksize;
  end;
 
- dirbuf:=malloc(dirbuflen);
+ dirbuf:=AllocMem(dirbuflen);
 
  if (dvp^^.v_type<>VDIR) then
  begin
@@ -909,7 +909,7 @@ begin
  error:=ENOENT;
 
 _out:
- free(dirbuf);
+ FreeMem(dirbuf);
  if (error=0) then
  begin
   buflen^:=i;

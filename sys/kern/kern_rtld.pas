@@ -279,8 +279,8 @@ end;
 
 procedure rtld_free_self(imgp:p_image_params);
 begin
- free(imgp^.image_header);
- free(imgp^.image_self);
+ FreeMem(imgp^.image_header);
+ FreeMem(imgp^.image_self);
  imgp^.image_header:=nil;
  imgp^.image_self:=nil;
  imgp^.elf_size:=0;
@@ -318,12 +318,12 @@ begin
  case Magic of
   ELFMAG: //elf64
     begin
-      elf_hdr:=malloc(obj_size);
+      elf_hdr:=GetMem(obj_size);
 
       Result:=kread(vp,elf_hdr,obj_size,0);
       if (Result<>0) then
       begin
-       free(elf_hdr);
+       FreeMem(elf_hdr);
        Exit;
       end;
 
@@ -333,19 +333,19 @@ begin
     end;
   SELF_MAGIC: //self
     begin
-      self_hdr:=malloc(obj_size);
+      self_hdr:=GetMem(obj_size);
 
       Result:=kread(vp,self_hdr,obj_size,0);
       if (Result<>0) then
       begin
-       free(self_hdr);
+       FreeMem(self_hdr);
        Exit;
       end;
 
       if (self_hdr^.File_size>obj_size) then
       begin
        //resize
-       self_hdr:=realloc(self_hdr,self_hdr^.File_size);
+       self_hdr:=ReAllocMem(self_hdr,self_hdr^.File_size);
        //fill zeros
        FillChar(PBYTE(self_hdr)[obj_size],self_hdr^.File_size-obj_size,0);
        //new size
@@ -359,7 +359,7 @@ begin
 
       if (count=0) then
       begin
-       free(self_hdr);
+       FreeMem(self_hdr);
        Exit(ENOEXEC);
       end;
 
@@ -369,7 +369,7 @@ begin
        if ((self_segs[i].flags and (SELF_PROPS_ENCRYPTED or SELF_PROPS_COMPRESSED))<>0) then
        begin
         LOG_ERROR(StdErr,'exec_load_self:',imgp^.execpath,' is encrypted!');
-        free(self_hdr);
+        FreeMem(self_hdr);
         Exit(ENOEXEC);
        end;
 
@@ -394,11 +394,11 @@ begin
 
       if (MinSeg>MaxSeg) then
       begin
-       free(self_hdr);
+       FreeMem(self_hdr);
        Exit(EFAULT);
       end;
 
-      imgp^.image_header:=calloc(MaxSeg);
+      imgp^.image_header:=AllocMem(MaxSeg);
       imgp^.elf_size    :=MaxSeg;
 
       //elf_hdr part
@@ -1160,7 +1160,7 @@ begin
  vm_map_set_name_locked(map,vaddr_lo,vaddr_hi,name);
 
  memsz:=vaddr_hi-vaddr_lo;
- cache:=realloc(cache,memsz);
+ cache:=ReAllocMem(cache,memsz);
 
  FillChar(cache^,memsz,0);
 

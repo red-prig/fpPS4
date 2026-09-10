@@ -1079,7 +1079,7 @@ begin
  begin
   vm_object_deallocate(obj^.rel_data^.obj);
   //
-  free(obj^.rel_data);
+  FreeMem(obj^.rel_data);
   obj^.rel_data:=nil;
  end;
 end;
@@ -1098,7 +1098,7 @@ begin
             AlignUp(imgp^.sce_comment_filesz  ,8)+
             strlen(imgp^.execpath)+1;
 
- new^.rel_data:=calloc(full_size);
+ new^.rel_data:=AllocMem(full_size);
 
  dst:=Pointer(new^.rel_data+1);
 
@@ -1136,7 +1136,7 @@ begin
 
  if (Result<>0) then
  begin
-  free(new^.rel_data);
+  FreeMem(new^.rel_data);
   new^.rel_data:=nil;
   Exit;
  end;
@@ -1271,7 +1271,7 @@ begin
 
  if (obj^.relo_bits<>nil) then
  begin
-  free(obj^.relo_bits);
+  FreeMem(obj^.relo_bits);
   obj^.relo_bits:=nil
  end;
 
@@ -1891,7 +1891,7 @@ begin
   obj^.relo_bits:=nil;
  end else
  begin
-  obj^.relo_bits:=calloc((count+7) div 8);
+  obj^.relo_bits:=AllocMem((count+7) div 8);
  end;
 
 end;
