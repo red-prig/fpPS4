@@ -223,7 +223,7 @@ type
   //block:Pointer;
   rsp:Pointer;
   rbp:Pointer;
-  local_cache:array[0..255] of Pointer;
+  local_cache:array[0..1023] of Pointer;
   call_ret_cache:Pointer;
   lacuna:t_lacuna;
  end;

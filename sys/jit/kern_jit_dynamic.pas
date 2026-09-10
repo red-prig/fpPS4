@@ -325,6 +325,8 @@ var
 begin
  if (td=nil) then Exit;
 
+ jctx:=@td^.td_jctx;
+
  if ((td^.pcb_flags and PCB_IS_HLE)<>0) then
  begin
   //hle mode
@@ -398,8 +400,6 @@ begin
  end;
 
  _no_preload:
-
- jctx:=@td^.td_jctx;
 
  frame:=@td^.td_frame.tf_r13;
 
@@ -699,9 +699,9 @@ begin
  end;
 end;
 
-function hash_addr(addr:Pointer):Byte; inline;
+function hash_addr(addr:Pointer):Word; inline;
 begin
- Result:=Byte(QWORD(addr) shr 4) xor Byte(QWORD(addr) shr 12);
+ Result:=(Word(QWORD(addr) shr 4) xor Word(QWORD(addr) shr 14)) and $3FF;
 end;
 
 procedure ExecuteStop; external;
