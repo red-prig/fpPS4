@@ -752,12 +752,6 @@ begin
 
  _start:
 
- if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
- begin
-  LOG_CRITICAL(StdErr,'not excec:0x',HexStr(addr));
-  Assert(False,'attempted execute of noexecute memory:0x'+HexStr(addr));
- end;
-
  jctx:=@td^.td_jctx;
 
  cache:=jctx^.local_cache[hash_addr(addr)];
@@ -785,6 +779,12 @@ begin
   begin
    cache:=nil;
   end;
+ end;
+
+ if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
+ begin
+  LOG_CRITICAL(StdErr,'not excec:0x',HexStr(addr));
+  Assert(False,'attempted execute of noexecute memory:0x'+HexStr(addr));
  end;
 
  node:=fetch_entry(addr);
