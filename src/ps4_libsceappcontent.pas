@@ -478,6 +478,19 @@ begin
  mtx_unlock(mtx_app_content);
 end;
 
+function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer;
+var
+ slot_id:Integer;
+begin
+ Result:=0;
+ LOG_TRACE('sceAppContentAddcontUnmount:',pchar(mountPoint));
+ if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
+ if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ slot_id:=0;
+ Result:=px2ce(AddContUnmount(pchar(mountPoint),slot_id));
+end;
+
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer;
 begin
  LOG_INFO('sceAppContentTemporaryDataFormat');
@@ -538,12 +551,6 @@ begin
  Result:=px2ce(DownloadDataGetAvailableSpaceKb(pchar(mountPoint),availableSpaceKb));
 end;
 
-function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer;
-begin
- if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
- Result:=0;
-end;
-
 {$WARN 4110 off}
 function Load_libSceAppContent(name:pchar):p_lib_info;
 var
@@ -562,13 +569,13 @@ begin
  lib.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
  lib.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
  lib.set_proc($54036121672A61A9,@ps4_sceAppContentAddcontMount);
+ lib.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
  lib.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
  lib.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
  lib.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
  lib.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
- lib.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
 end;
 
 var

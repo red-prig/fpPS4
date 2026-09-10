@@ -68,6 +68,7 @@ function  GameMountConfigExport:TGameMountConfigExport;
 
 //
 function AddContMount        (mountPoint:pchar;fs_src:RawByteString):Integer;
+function AddContUnmount      (mountPoint:pchar;var slot_id:Integer):Integer;
 
 function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
@@ -1166,6 +1167,62 @@ begin
    end; //((AddContMount and m)=0)
 
   end; //For
+
+ mtx_unlock(gGameMountConfig.mount_mtx);
+end;
+
+function GetMountAddContId(name:pchar;var slot_id:Integer):Integer;
+begin
+ Result:=EINVAL;
+ if (name<>nil) then
+ if (PQWORD(@name[0])^=QWORD($746E6F636464612F)) then // /addcont
+ begin
+  if (name[9]=#0) then
+  begin
+   case name[8] of
+    '0'..'9':
+     begin
+      slot_id:=ord(name[8])-ord('0');
+      Result:=0;
+     end;
+    else;
+   end;
+  end else
+  if (name[10]=#0) and
+     (name[8] in ['0'..'9']) and
+     (name[9] in ['0'..'9']) then
+  begin
+   slot_id:=(ord(name[8])-ord('0'))*10 + (ord(name[9])-ord('0'));
+   Result:=ord(DWORD(slot_id)>63)*EINVAL;
+  end;
+ end;
+end;
+
+function AddContUnmount(mountPoint:pchar;var slot_id:Integer):Integer;
+var
+ m:QWORD;
+begin
+ Result:=GetMountAddContId(mountPoint,slot_id);
+ if (Result<>0) then Exit;
+
+ m:=QWORD(1) shl slot_id;
+
+ mtx_lock(gGameMountConfig.mount_mtx);
+
+  if ((gGameMountConfig.AddContMount and m)<>0) then
+  begin
+
+   Result:=vfs_mountroot.unmount_from_sandbox(mountPoint,0);
+
+   if (Result=0) then
+   begin
+    gGameMountConfig.AddContMount:=gGameMountConfig.AddContMount and (not m);
+   end;
+
+  end else
+  begin
+   Result:=ENOTDIR;
+  end;
 
  mtx_unlock(gGameMountConfig.mount_mtx);
 end;
