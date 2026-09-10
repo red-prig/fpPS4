@@ -31,10 +31,17 @@ uses
  kern_mtx,
  uma;
 
-function  malloc (size :QWORD):Pointer;
-function  calloc (size :QWORD):Pointer;
-function  malloc0(size :QWORD):Pointer;
-function  realloc(addr:Pointer;size:QWORD):Pointer;
+const
+ MALIGN_2=1;
+ MALIGN_4=2;
+ MALIGN_8=3;
+ MSYSTM_8=4;
+
+function  malloc (size:QWORD;flags:Integer=0):Pointer;
+function  calloc (size:QWORD;flags:Integer=0):Pointer;
+function  malloc0(size:QWORD;flags:Integer=0):Pointer;
+function  msize  (addr:Pointer):QWORD;
+function  realloc(addr:Pointer;size:QWORD;flags:Integer=0):Pointer;
 procedure free   (addr:Pointer);
 
 procedure malloc_init; //SYSINIT(kmem, SI_SUB_KMEM, SI_ORDER_FIRST, kmeminit, NULL);
@@ -56,41 +63,57 @@ type
  end;
 
 const
- HEAP_HEADER_MARKER=$FF;
+ HEAP_HEADER_MARKER_S=$FF;
+ HEAP_HEADER_MARKER_8=$FE;
+ HEAP_HEADER_MARKER_4=$FD;
+ HEAP_HEADER_MARKER_2=$FC;
 
  { Header sizes }
  BUCKET_HDR=SizeOf(t_bucket_hdr);  // 1
- HEAP_HDR  =SizeOf(t_heap_hdr);    // 8
+ HEAP_HDR_8=SizeOf(t_heap_hdr);    // 8
 
 { Small malloc allocations are served from fixed-size UMA buckets.
  *
- * Bucket sizes were chosen so that, after adding the 1-byte bucket header
- * and linkage in keg_small_init(), each slot divides the ~4060-byte usable
- * slab as evenly as possible (utilization >= ~95%, most ~99%).  Small
- * allocations use a fine-grained ladder to minimise rounding waste; the
- * largest bucket is 4048 (a full ~4K slab, util ~99.9%) because a request
- * of 4056 plus the header cannot fit a slab
+ * BUCKET_FULL_SIZES is the bucket ladder, sorted ascending.  Each entry is
+ * the ALIGNED full item size, so it equals the true on-slab footprint (no
+ * hidden alignment padding); payload capacity of a bucket is
+ * BUCKET_FULL_SIZES[i]-BUCKET_HDR, reduced by the alignment offset for
+ * aligned allocations.  Items smaller than UMA_SMALLEST_UNIT are clamped
+ * up by keg, so buckets 8 and 16 share the same 16-byte slot layout.
+ *
+ * The ladder mixes three kinds of kegs:
+ *  - fine-grained ONPAGE buckets (8..440): each slot divides the ~4060-byte
+ *    usable slab almost evenly, utilization >= ~96%;
+ *  - power-of-two buckets (512, 1024, 2048): these trip keg's automatic
+ *    OFFPAGE mode (check_wasted in keg_small_init): the slab header moves
+ *    to a dedicated slabzone and the page fills exactly, giving 100%
+ *    utilization;
+ *  - bucket 4096 goes through the multi-page keg path (keg_large_init) as
+ *    a single whole page per item: again 100%.
+ *
+ * keg_large_init also supports true multi-page slabs (> 4096), but such a
+ * bucket is only 100% efficient at multiples of 4096 and wastes up to a
+ * whole slab in between, while the system heap fits those requests exactly;
+ * so sizes above 4095 stay with the heap (see the header comment).
  }
 const
- BUCKET_SIZES:array[0..29] of Integer=(
-  16,24,32,40,48,56,64,80,96,112,128,
-  160,192,224,256,320,384,432,640,800,992,
-  1344,1984,2023,
-  2048,2560,3072,3840,4032,4048);
- BUCKET_COUNT=High(BUCKET_SIZES)+1;
+ BUCKET_FULL_SIZES:array[0..28] of Integer=(
+  16,24,32,40,48,56,64,72,88,104,120,136,
+  168,200,232,264,328,392,440,512,648,808,1000,1024,
+  1352,1992,2024,2048,4096);
+ BUCKET_COUNT=High(BUCKET_FULL_SIZES)+1;
 
 var
  kz_zone:array[0..BUCKET_COUNT-1] of uma_zone_t;
 
 const
  BUCKET_NAMES:array[0..BUCKET_COUNT-1] of PChar=(
-  'malloc_16','malloc_24','malloc_32','malloc_40','malloc_48','malloc_56',
-  'malloc_64','malloc_80','malloc_96','malloc_112','malloc_128',
-  'malloc_160','malloc_192','malloc_224','malloc_256','malloc_320',
-  'malloc_384','malloc_432','malloc_640','malloc_800','malloc_992',
-  'malloc_1344','malloc_1984','malloc_2023',
-  'malloc_2048','malloc_2560','malloc_3072','malloc_3840','malloc_4032',
-  'malloc_4048');
+  'malloc_16','malloc_24','malloc_32','malloc_40','malloc_48',
+  'malloc_56','malloc_64','malloc_72','malloc_88','malloc_104',
+  'malloc_120','malloc_136','malloc_168','malloc_200','malloc_232',
+  'malloc_264','malloc_328','malloc_392','malloc_440','malloc_512',
+  'malloc_648','malloc_808','malloc_1000','malloc_1024','malloc_1352',
+  'malloc_1992','malloc_2024','malloc_2048','malloc_4096');
 
 type
  t_zone_cb=procedure(i:Integer);
@@ -104,13 +127,37 @@ var
  zone_mtx:mtx;
  kz_zone_init:t_zone_cb=@null_zone;
 
+const
+ ALIGN_OFFSET_BY_FLAG:array[0..3] of Byte=(0,1,3,7);
+ MARKER_BY_FLAG      :array[0..3] of Byte=(0,HEAP_HEADER_MARKER_2,
+                                             HEAP_HEADER_MARKER_4,
+                                             HEAP_HEADER_MARKER_8);
+
+ mkofs:array[0..255] of Byte=(
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,1,3,7,0);
+
 procedure init_zone(i:Integer);
 begin
  mtx_lock(zone_mtx);
 
  if (kz_zone[i]=nil) then
  begin
-  kz_zone[i]:=uma_zcreate(BUCKET_NAMES[i], BUCKET_HDR+BUCKET_SIZES[i],
+  kz_zone[i]:=uma_zcreate(BUCKET_NAMES[i], BUCKET_FULL_SIZES[i],
                           nil, nil, nil, nil,
                           UMA_ALIGN_PTR, 0);
  end;
@@ -124,91 +171,119 @@ begin
  kz_zone_init:=@init_zone;
 end;
 
-function bucket_of(size:QWORD):Integer;
+function bucket_of(reqsize:QWORD):Integer;
 var
- i:Integer;
+ lo,hi,mid:Integer;
 begin
- for i:=0 to BUCKET_COUNT-1 do
+ lo:=0;
+ hi:=BUCKET_COUNT-1;
+ while (lo<hi) do
  begin
-  if (size<=QWORD(BUCKET_SIZES[i])) then
+  mid:=(lo+hi) shr 1;
+  if (reqsize>QWORD(BUCKET_FULL_SIZES[mid])) then
   begin
-   Exit(i);
+   lo:=mid+1;
+  end else
+  begin
+   hi:=mid;
   end;
  end;
- Result:=-1;
+ if (reqsize<=QWORD(BUCKET_FULL_SIZES[lo])) then
+  Result:=lo
+ else
+  Result:=-1;
 end;
 
-function malloc(size:QWORD):Pointer;
+function malloc(size:QWORD;flags:Integer=0):Pointer;
 var
- indx:Integer;
- bh:p_bucket_hdr;
+ indx,offset,marker:Integer;
+ bh:PByte;
  hh:p_heap_hdr;
 begin
  if (size=0) then size:=1;
 
- indx:=bucket_of(size);
- if (indx>=0) then
+ if (flags<>MSYSTM_8) then
  begin
-  if (kz_zone[indx]=nil) then
-  begin
-   kz_zone_init(indx);
-  end;
 
-  if (kz_zone[indx]<>nil) then
+  if (flags<0) or (flags>3) then flags:=0;
+
+  offset:=ALIGN_OFFSET_BY_FLAG[flags];
+  marker:=MARKER_BY_FLAG[flags];
+
+  { The zone must hold the payload plus alignment padding plus header. }
+  indx:=bucket_of(size+offset+BUCKET_HDR);
+  if (indx>=0) then
   begin
-   bh:=p_bucket_hdr(uma_zalloc(kz_zone[indx], M_WAITOK));
-   if (bh<>nil) then
+   if (kz_zone[indx]=nil) then
    begin
-    bh^.indx:=indx;
-    Exit(bh+1);
+    kz_zone_init(indx);
+   end;
+
+   if (kz_zone[indx]<>nil) then
+   begin
+    bh:=uma_zalloc(kz_zone[indx], M_WAITOK);
+    if (bh<>nil) then
+    begin
+     if (offset<>0) then bh[offset]:=marker;
+     bh[0]:=indx;
+     Exit(bh+offset+BUCKET_HDR);
+    end;
    end;
   end;
- end;
 
- hh:=GetMem(HEAP_HDR+size);
+ end; //(flags<>MSYSTM_8)
+
+ hh:=GetMem(HEAP_HDR_8+size);
  hh^.size  :=size;
- hh^.marker:=HEAP_HEADER_MARKER;
+ hh^.marker:=HEAP_HEADER_MARKER_S;
  Exit(hh+1);
 end;
 
-function calloc(size:QWORD):Pointer;
+function calloc(size:QWORD;flags:Integer=0):Pointer;
 var
  p:Pointer;
 begin
- p:=malloc(size);
+ p:=malloc(size,flags);
  if (p<>nil) then FillChar(p^,size,0);
  Result:=p;
 end;
 
-function malloc0(size:QWORD):Pointer;
+function malloc0(size:QWORD;flags:Integer=0):Pointer;
 begin
- Result:=calloc(size);
+ Result:=calloc(size,flags);
 end;
 
-function realloc(addr:Pointer;size:QWORD):Pointer;
+function msize(addr:Pointer):QWORD;
 var
  b:PByte;
- indx:Integer;
- oldsize:QWORD;
+ offset:Integer;
  hh:p_heap_hdr;
+begin
+ if (addr=nil) then Exit(0);
+ b:=PByte(addr);
+
+ if (b[-1]=HEAP_HEADER_MARKER_S) then
+ begin
+  hh:=p_heap_hdr(b-HEAP_HDR_8);
+  Exit(hh^.size);
+ end;
+
+ offset:=mkofs[b[-1]];
+ b:=b-offset;
+ Result:=BUCKET_FULL_SIZES[b[-1]]-offset-BUCKET_HDR;
+end;
+
+function realloc(addr:Pointer;size:QWORD;flags:Integer=0):Pointer;
+var
+ oldsize:QWORD;
  p:Pointer;
 begin
  if (addr=nil) then
  begin
-  Exit(malloc(size));
+  Exit(malloc(size,flags));
  end;
 
- b:=PByte(addr);
-
- if (b[-1]=HEAP_HEADER_MARKER) then
- begin
-  hh:=p_heap_hdr(b-HEAP_HDR);
-  oldsize:=hh^.size;
- end else
- begin
-  indx:=Integer(b[-1]);
-  oldsize:=BUCKET_SIZES[indx];
- end;
+ oldsize:=msize(addr);
 
  { Reuse the original block when it fits and is not far larger. }
  if (size<=oldsize) and (size>(oldsize shr 1)) then
@@ -216,7 +291,7 @@ begin
   Exit(addr);
  end;
 
- p:=malloc(size);
+ p:=malloc(size,flags);
  if (p=nil) then
  begin
   Exit(nil);
@@ -234,17 +309,16 @@ var
  b:PByte;
 begin
  if (addr=nil) then Exit;
-
  b:=PByte(addr);
 
- if (b[-1]=HEAP_HEADER_MARKER) then
+ if (b[-1]=HEAP_HEADER_MARKER_S) then
  begin
-  FreeMem(b-HEAP_HDR);
- end else
- begin
-  uma_zfree(kz_zone[b[-1]], b-1);
+  FreeMem(b-HEAP_HDR_8);
+  Exit;
  end;
 
+ b:=b-mkofs[b[-1]];
+ uma_zfree(kz_zone[b[-1]], b-BUCKET_HDR);
 end;
 
 

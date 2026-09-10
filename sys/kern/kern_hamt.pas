@@ -35,6 +35,24 @@ type
  THAMT=type Pointer;
  Tfree_data_cb=procedure(data,userdata:Pointer);
 
+ PHAL=^THAL;
+ THAL=record
+  alloc:Function (size:QWORD):Pointer;
+  free :Procedure(node:Pointer);
+  msize:Function (node:Pointer):QWORD;
+ end;
+
+Function  default_hamt_alloc(size:QWORD):Pointer;
+Procedure default_hamt_free (node:Pointer);
+Function  default_hamt_msize(node:Pointer):QWORD;
+
+const
+ DHAL:THAL=(
+  alloc:@default_hamt_alloc;
+  free :@default_hamt_free;
+  msize:@default_hamt_msize;
+ );
+
 function  HAMT_create64:THAMT;
 function  HAMT_clear64   (hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_destroy64 (hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
@@ -46,7 +64,7 @@ function  HAMT_traverse64(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_clear32   (hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 function  HAMT_search32  (hamt:THAMT;key:DWORD):PPointer;              //mutable link to data
 function  HAMT_insert32  (hamt:THAMT;key:DWORD;data:Pointer):PPointer; //mutable link to data
-function  HAMT_delete32  (hamt:THAMT;key:DWORD;old:PPointer):Boolean;  //data
+function  HAMT_delete32  (hamt:THAMT;key:DWORD;old:PPointer;A:PHAL=nil):Boolean;  //data
 function  HAMT_traverse32(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 
 type
@@ -109,76 +127,45 @@ function HAMT_prev64(i:PHAMT_Iterator64):Boolean;
 function HAMT_get_value64(i:PHAMT_Iterator64;v:PPointer):Boolean;
 
 //internal
-procedure HAMT_delete_trie64  (node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointer);
+procedure HAMT_delete_trie64  (node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointer;A:PHAL=nil);
 procedure HAMT_traverse_trie64(node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointer);
 function  _HAMT_search64      (node:PHAMTNode64;key,keypartbits:QWORD):PPointer; sysv_abi_cdecl;
-function  _HAMT_insert64      (node:PHAMTNode64;key,keypartbits:QWORD;data:Pointer):PPointer;
-function  _HAMT_delete64      (node:PHAMTNode64;key,keypartbits:QWORD;old:PPointer):Boolean;
-
-procedure kern_hamt_init;
+function  _HAMT_insert64      (node:PHAMTNode64;key,keypartbits:QWORD;data:Pointer;A:PHAL=nil):PPointer;
+function  _HAMT_delete64      (node:PHAMTNode64;key,keypartbits:QWORD;old:PPointer;A:PHAL=nil):Boolean;
 
 implementation
 
 uses
- uma;
+ kern_malloc;
 
-const
- size_index:array[0..64] of Byte=(
-  0,
-  0,1,2,2,3,3,3,3,
-  4,4,4,4,4,4,4,4,
-  5,5,5,5,5,5,5,5,
-  5,5,5,5,5,5,5,5,
-  6,6,6,6,6,6,6,6,
-  6,6,6,6,6,6,6,6,
-  6,6,6,6,6,6,6,6,
-  6,6,6,6,6,6,6,6
- );
-
- node64_zone_name:array[0..6] of pchar=(
-  'node64_1',
-  'node64_2',
-  'node64_4',
-  'node64_8',
-  'node64_16',
-  'node64_32',
-  'node64_64'
- );
-
-var
- hamt64_zone:uma_zone_t=nil;
- node64_zone:array[0..6] of uma_zone_t;
-
-procedure kern_hamt_init;
-var
- i:Integer;
+Function default_hamt_alloc(size:QWORD):Pointer;
 begin
- hamt64_zone:=uma_zcreate('hamt64',sizeof(TSTUB_HAMT64), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
- For i:=0 to High(node64_zone) do
- begin
-  node64_zone[i]:=uma_zcreate(node64_zone_name[i],(1 shl i)*sizeof(THAMTNode64), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
- end;
+ Result:=calloc(size,MALIGN_2);
 end;
 
-function need_expand(old_size,new_size:QWORD):Boolean; inline;
+Procedure default_hamt_free(node:Pointer);
 begin
- Result:=size_index[old_size]<>size_index[new_size];
+ free(node);
 end;
 
-function need_shrink(old_size,new_size:QWORD):Boolean; inline;
+Function default_hamt_msize(node:Pointer):QWORD;
 begin
- Result:=size_index[old_size]<>size_index[new_size];
+ Result:=msize(node);
 end;
 
-function AllocNodes(size:QWORD):PHAMTNode64; inline;
+//
+
+function need_expand(A:PHAL;old_ptr:Pointer;new_count:DWORD):Boolean; inline;
 begin
- Result:=uma_zalloc(node64_zone[size_index[size]], M_WAITOK or M_ZERO);
+ Result:=A^.msize(old_ptr)<new_count*sizeof(THAMTNode64);
 end;
 
-Procedure FreeNodes(size:QWORD;nodes:PHAMTNode64); inline;
+function need_shrink(A:PHAL;old_ptr:Pointer;new_count:DWORD):Boolean; inline;
 begin
- uma_zfree(node64_zone[size_index[size]], nodes);
+ Result:=A^.msize(old_ptr)>=(new_count*sizeof(THAMTNode64)*2);
 end;
+
+//
 
 procedure Move64f(src,dst:Pointer;count:QWORD); inline;
 begin
@@ -281,10 +268,10 @@ end;
 
 function HAMT_create64:THAMT;
 begin
- Result:=uma_zalloc(hamt64_zone, M_WAITOK or M_ZERO);
+ Result:=calloc(sizeof(TSTUB_HAMT64));
 end;
 
-procedure HAMT_delete_trie64(node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointer);
+procedure HAMT_delete_trie64(node:PHAMTNode64;cb:Tfree_data_cb;userdata:Pointer;A:PHAL=nil);
 type
  PStackNode=^TStackNode;
  TStackNode=packed record
@@ -293,8 +280,9 @@ type
 var
  curr:PStackNode;
  data:array[0..HAMT64.stack_max] of TStackNode;
- Size:QWORD;
+ Size:DWORD;
 begin
+ if (A=nil) then A:=@DHAL;
  if (node^.BaseValue=nil) then Exit;
  if IsSubTrie64(node) then
  begin
@@ -309,7 +297,7 @@ begin
   repeat
    if (curr^.cnode>=curr^.enode) then
    begin
-    FreeNodes(curr^.enode-curr^.bnode,curr^.bnode);
+    A^.free(curr^.bnode);
     if (curr=@data) then Break;
     Dec(curr);
     Inc(curr^.cnode);
@@ -375,7 +363,7 @@ type
 var
  curr:PStackNode;
  data:array[0..HAMT64.stack_max] of TStackNode;
- Size:QWORD;
+ Size:DWORD;
 begin
  if (node^.BaseValue=nil) or (cb=nil) then Exit;
  if IsSubTrie64(node) then
@@ -444,7 +432,7 @@ end;
 function HAMT_destroy64(hamt:THAMT;cb:Tfree_data_cb;userdata:Pointer):Boolean;
 begin
  Result:=HAMT_clear64(hamt,cb,userdata);
- uma_zfree(hamt64_zone, hamt);
+ free(hamt);
 end;
 
 //rdi:node, rsi:key, rdx:keypartbits, rcx,  r8, r9.
@@ -537,12 +525,13 @@ begin
  Exit(_HAMT_search64(node,key,HAMT32.root_bits));
 end;
 
-function _HAMT_insert64(node:PHAMTNode64;key,keypartbits:QWORD;data:Pointer):PPointer;
+function _HAMT_insert64(node:PHAMTNode64;key,keypartbits:QWORD;data:Pointer;A:PHAL=nil):PPointer;
 var
  oldnodes,newnodes:PHAMTNode64;
  key2,keypart,keypart2,Map:QWORD;
- old_size,new_size:QWORD;
+ new_count:DWORD;
 begin
+ if (A=nil) then A:=@DHAL;
 
  if (node^.BaseValue=nil) then
  begin
@@ -570,7 +559,7 @@ begin
 
      if (keypart=keypart2) then
      begin
-      newnodes:=AllocNodes(1);
+      newnodes:=A^.alloc(sizeof(THAMTNode64)*1);
       newnodes[0].BitMapKey:=key2;
       newnodes[0].BaseValue:=node^.BaseValue;
       node^.BitMapKey:=SetBitInSet64(0,keypart);
@@ -578,7 +567,7 @@ begin
       node:=@newnodes[0];
      end else
      begin
-      newnodes:=AllocNodes(2);
+      newnodes:=A^.alloc(sizeof(THAMTNode64)*2);
       if (keypart2<keypart) then
       begin
        newnodes[0].BitMapKey:=key2;
@@ -617,28 +606,26 @@ begin
   begin
    // bit is 0 in bitmap -> add node to table
 
-   old_size:=GetBitMapSize64(key2);
-
    key2:=SetBitInSet64(key2,keypart);
 
    node^.BitMapKey:=key2;
-   new_size:=GetBitMapSize64(key2);
+   new_count:=GetBitMapSize64(key2);
 
    Map:=GetMapPos64(key2,keypart);
 
    oldnodes:=GetSubTrie64(node);
 
-   if need_expand(old_size,new_size) then
+   if need_expand(A,oldnodes,new_count) then
    begin
-    newnodes:=AllocNodes(new_size);
-    Move64f(@oldnodes[0]  ,@newnodes[0]    ,             Map);
-    Move64f(@oldnodes[Map],@newnodes[Map+1],(new_size-Map-1));
-    FreeNodes(old_size,oldnodes);
+    newnodes:=A^.alloc(sizeof(THAMTNode64)*new_count);
+    Move64f(@oldnodes[0]  ,@newnodes[0]    ,              Map);
+    Move64f(@oldnodes[Map],@newnodes[Map+1],(new_count-Map-1));
+    A^.free(oldnodes);
     SetSubTrie64(node,newnodes);
    end else
    begin
     newnodes:=oldnodes;
-    Move64b(@oldnodes[Map],@newnodes[Map+1],(new_size-Map-1));
+    Move64b(@oldnodes[Map],@newnodes[Map+1],(new_count-Map-1));
    end;
 
    // Set up new node
@@ -688,11 +675,11 @@ begin
  Exit(_HAMT_insert64(node,key,HAMT32.root_bits,data));
 end;
 
-function _HAMT_delete64(node:PHAMTNode64;key,keypartbits:QWORD;old:PPointer):Boolean;
+function _HAMT_delete64(node:PHAMTNode64;key,keypartbits:QWORD;old:PPointer;A:PHAL=nil):Boolean;
 var
  oldnodes,tmp:PHAMTNode64;
  key2,keypart,Map:QWORD;
- old_size,new_size:QWORD;
+ new_count:DWORD;
 
  curr:^PHAMTNode64;
  data:array[0..HAMT64.stack_max] of PHAMTNode64;
@@ -701,22 +688,24 @@ var
  var
   newnodes:PHAMTNode64;
  begin
-  if need_shrink(old_size,new_size) then
+  if need_shrink(A,oldnodes,new_count) then
   begin
-   newnodes:=AllocNodes(new_size);
-   Move64f(@oldnodes[0]    ,@newnodes[0]  ,           Map);
-   Move64f(@oldnodes[Map+1],@newnodes[Map],(new_size-Map));
-   FreeNodes(old_size,oldnodes);
+   newnodes:=A^.alloc(new_count*sizeof(THAMTNode64));
+   Move64f(@oldnodes[0]    ,@newnodes[0]  ,            Map);
+   Move64f(@oldnodes[Map+1],@newnodes[Map],(new_count-Map));
+   A^.free(oldnodes);
    SetSubTrie64(node,newnodes);
    oldnodes:=newnodes;
   end else
   begin
-   Move64f(@oldnodes[Map+1],@oldnodes[Map],(new_size-Map));
+   Move64f(@oldnodes[Map+1],@oldnodes[Map],(new_count-Map));
   end;
  end;
 
 begin
  Result:=False;
+
+ if (A=nil) then A:=@DHAL;
 
  if (node^.BaseValue=nil) then Exit;
 
@@ -749,20 +738,19 @@ begin
     keypart:=GetNodeKeyMask64(key,keypartbits);
 
     key2:=node^.BitMapKey;
-    old_size:=GetBitMapSize64(key2);
 
     key2:=UnSetBitInSet64(key2,keypart);
     node^.BitMapKey:=key2;
 
-    new_size:=GetBitMapSize64(key2);
+    new_count:=GetBitMapSize64(key2);
     oldnodes:=GetSubTrie64(node);
 
-    if (new_size=0) then
+    if (new_count=0) then
     begin
      repeat
       //free
       node^:=Default(THAMTNode64);
-      FreeNodes(old_size,oldnodes);
+      A^.free(oldnodes);
 
       if (curr=@data) then Exit; //not in stack
 
@@ -775,21 +763,20 @@ begin
       keypart:=GetNodeKeyMask64(key,keypartbits);
 
       key2:=node^.BitMapKey;
-      old_size:=GetBitMapSize64(key2);
 
       Map:=GetMapPos64(key2,keypart);
 
       key2:=UnSetBitInSet64(key2,keypart);
       node^.BitMapKey:=key2;
 
-      new_size:=GetBitMapSize64(key2);
+      new_count:=GetBitMapSize64(key2);
       oldnodes:=GetSubTrie64(node);
 
       shrink;
 
-     until (new_size<>0);
+     until (new_count<>0);
     end else
-    if (new_size=1) then
+    if (new_count=1) then
     begin
      tmp:=@oldnodes[(Map+1) and 1];
 
@@ -797,7 +784,7 @@ begin
      begin
       //copy up
       node^:=tmp^;
-      FreeNodes(old_size,oldnodes);
+      A^.free(oldnodes);
       Exit;
      end else
      begin
@@ -854,7 +841,7 @@ begin
  Exit(_HAMT_delete64(node,key,HAMT64.root_bits,old));
 end;
 
-function HAMT_delete32(hamt:THAMT;key:DWORD;old:PPointer):Boolean;
+function HAMT_delete32(hamt:THAMT;key:DWORD;old:PPointer;A:PHAL=nil):Boolean;
 var
  node:PHAMTNode64;
  keypart:QWORD;
@@ -865,7 +852,7 @@ begin
  keypart:=GetRootKeyMask32(key);
  node:=@PHAMTNode64(hamt)[keypart];
 
- Exit(_HAMT_delete64(node,key,HAMT32.root_bits,old));
+ Exit(_HAMT_delete64(node,key,HAMT32.root_bits,old,A));
 end;
 
 //iterator64
@@ -874,7 +861,7 @@ function _HAMT_next64(i:PHAMT_Iterator64):Boolean;
 var
  curr:THAMT_Iterator64.PStackNode;
  node:PHAMTNode64;
- Size:QWORD;
+ Size:DWORD;
 begin
  Result:=False;
 
@@ -923,7 +910,7 @@ function _HAMT_prev64(i:PHAMT_Iterator64):Boolean;
 var
  curr:THAMT_Iterator64.PStackNode;
  node:PHAMTNode64;
- Size:QWORD;
+ Size:DWORD;
 begin
  Result:=False;
 
@@ -1057,7 +1044,6 @@ begin
 end;
 
 //
-
 
 end.
 

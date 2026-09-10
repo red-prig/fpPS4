@@ -37,6 +37,7 @@ uses
  vm_object,
  uma_core,
  kern_hamt,
+ kern_urcu,
  kern_dmem,
  kern_mtxpool,
  kern_malloc,
@@ -103,7 +104,7 @@ procedure sys_init;
 begin
  uma_startup4();
  malloc_init;
- kern_hamt_init;
+ kern_urcu_init;
  timeinit;
  init_sleepqueues;
  sysctl_register_all;

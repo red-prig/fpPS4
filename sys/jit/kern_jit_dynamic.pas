@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  kern_hamt,
+ kern_urcu,
  //g23tree,
  g_node_splay,
  murmurhash,
@@ -173,7 +174,8 @@ type
  TNestedNode48=record
   case Byte of
    0:(node:THAMTNode64;
-      lock:Pointer);
+      lock:Pointer;
+      version:DWORD);
    1:(line:array[0..63] of Byte);
  end;
 
@@ -1126,25 +1128,45 @@ function fetch_entry(src:Pointer):p_jit_entry_point;
 var
  data:PPointer;
  map:DWORD;
+ td:p_kthread;
+ v1,v2:DWORD;
 begin
  Result:=nil;
 
+ td:=curkthread;
+ if (td=nil) then Exit;
+
  map:=QWORD(src) and HAMT48.root_mask;
 
- rw_rlock(entry_hamt[map].lock);
+ td^.td_urcu_epoch:=QWORD(urcu_global_epoch);
+ System.ReadWriteBarrier;
 
- data:=_HAMT_search64(@entry_hamt[map].node,QWORD(src),HAMT48.root_bits);
- if (data<>nil) then
- begin
-  Result:=data^;
- end;
+ repeat
+  v1:=entry_hamt[map].version;
+  if (v1 and 1)<>0 then Continue;
+
+  System.ReadWriteBarrier;
+
+  data:=_HAMT_search64(@entry_hamt[map].node,QWORD(src),HAMT48.root_bits);
+  if (data<>nil) then
+  begin
+   Result:=data^;
+  end;
+
+  System.ReadWriteBarrier;
+
+  v2:=entry_hamt[map].version;
+ until (v1=v2);
+
+ System.ReadWriteBarrier;
 
  if (Result<>nil) then
  begin
   Result^.inc_ref('fetch_entry');
  end;
 
- rw_runlock(entry_hamt[map].lock);
+ System.ReadWriteBarrier;
+ td^.td_urcu_epoch:=0;
 end;
 
 function exist_entry(src:Pointer):Boolean;
@@ -1749,6 +1771,7 @@ var
  data:PPointer;
  old:p_jit_entry_point;
  map:DWORD;
+ my_epoch:QWORD;
 begin
  node^.inc_ref('attach_entry');
  self.inc_attach_count;
@@ -1758,7 +1781,10 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node);
+  my_epoch:=QWORD(System.InterlockedIncrement64(urcu_global_epoch));
+  System.ReadWriteBarrier;
+  System.InterlockedIncrement(entry_hamt[map].version);
+  data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node,@urcu_hamt_allocator);
   Assert(data<>nil);
   if (data^<>node) then
   begin
@@ -1768,7 +1794,11 @@ begin
    self.dec_attach_count;
   end;
   node^.entry_public:=1;
+  System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
+
+ urcu_synchronize_rcu(my_epoch);
+ urcu_flush_deferred;
 end;
 
 procedure t_jit_dynamic_blob.attach_all_entry;
@@ -1819,6 +1849,7 @@ function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
 var
  old:p_jit_entry_point;
  map:DWORD;
+ my_epoch:QWORD;
 begin
  if (node^.entry_public=0) then Exit;
 
@@ -1827,8 +1858,15 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old);
+  my_epoch:=QWORD(System.InterlockedIncrement64(urcu_global_epoch));
+  System.ReadWriteBarrier;
+  System.InterlockedIncrement(entry_hamt[map].version);
+  _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old,@urcu_hamt_allocator);
+  System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
+
+ urcu_synchronize_rcu(my_epoch);
+ urcu_flush_deferred;
 
  if (old=node) then
  begin

@@ -1911,6 +1911,10 @@
         <Filename Value="gui\open_dialog.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="sys\kern\kern_urcu.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -1966,6 +1970,9 @@
       </Item>
       <Item>
         <Name Value="EFOpenError"/>
+      </Item>
+      <Item>
+        <Name Value="External: ACCESS VIOLATION"/>
       </Item>
     </Exceptions>
   </Debugging>
