@@ -218,13 +218,18 @@ type
   orig:QWORD;
  end;
 
+ p_local_cache_node=^t_local_cache_node;
+ t_local_cache_node=packed record
+  src:Pointer;
+  dst:Pointer;
+ end;
+
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
-  //block:Pointer;
   rsp:Pointer;
   rbp:Pointer;
-  local_cache:array[0..1023] of Pointer;
-  call_ret_cache:Pointer;
+  local_cache   :p_local_cache_node;
+  call_ret_cache:PQWORD;
   lacuna:t_lacuna;
  end;
 

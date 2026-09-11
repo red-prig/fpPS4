@@ -308,6 +308,9 @@ begin
  //kmem_free(td^.td_jctx.call_ret_cache,64*1024);
  //td^.td_jctx.call_ret_cache:=nil;
 
+ kmem_free(td^.td_jctx.local_cache,64*1024);
+ td^.td_jctx.local_cache:=nil;
+
  if (td^.td_jctx.lacuna.chnk<>nil) then
  begin
   p_free(td^.td_jctx.lacuna.chnk);
@@ -420,8 +423,14 @@ begin
   jctx^.call_ret_cache:=Pointer(td)-64*1024;
   md_commit(jctx^.call_ret_cache,64*1024,VM_RW);
   //jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
+  Assert(jctx^.call_ret_cache<>nil,'call_ret_cache alocation fail');
  end;
- Assert(jctx^.call_ret_cache<>nil,'call_ret_cache aalocation fail');
+
+ if (jctx^.local_cache=nil) then
+ begin
+  jctx^.local_cache:=kmem_alloc(64*1024,VM_RW);
+  Assert(jctx^.local_cache<>nil,'local_cache alocation fail');
+ end;
 
  set_jit_ctx_state(@td^.td_frame,True);
 
@@ -703,7 +712,7 @@ end;
 
 function hash_addr(addr:Pointer):Word; inline;
 begin
- Result:=(Word(QWORD(addr) shr 4) xor Word(QWORD(addr) shr 14)) and $3FF;
+ Result:=(Word(QWORD(addr) shr 4) xor Word(QWORD(addr) shr 14)) and $FFF;
 end;
 
 procedure ExecuteStop; external;
@@ -711,16 +720,31 @@ procedure ExecuteStop; external;
 const
  EXECUTE_MAGIC_ADDR:QWORD=QWORD($FFFFFFFFFCAFEDAD);
 
+//rdi, rsi
+procedure AtomicLoad128(dst,src:Pointer); assembler; nostackframe; sysv_abi_cdecl;
+asm
+ vmovdqa (%rsi), %xmm0
+ vmovdqu  %xmm0, (%rdi)
+end;
+
+//rdi, rsi
+procedure AtomicStore128(dst,src:Pointer); assembler; nostackframe; sysv_abi_cdecl;
+asm
+ vmovdqu (%rsi), %xmm0
+ vmovdqa  %xmm0, (%rdi)
+end;
+
 function jmp_dispatcher(addr:Pointer;plt:p_jit_plt;from:Pointer):Pointer; public;
 label
  _start;
 var
- td   :p_kthread;
- node :p_jit_entry_point;
- jctx :p_td_jctx;
- curr :p_jit_dynamic_blob;
- cache:p_jplt_cache;
- info:t_jit_addr_info;
+ td    :p_kthread;
+ node  :p_jit_entry_point;
+ jctx  :p_td_jctx;
+ curr  :p_jit_dynamic_blob;
+ lcache:t_local_cache_node;
+ pcache:p_jplt_cache;
+ info  :t_jit_addr_info;
 begin
  td:=curkthread;
  if (td=nil) then Exit(nil);
@@ -756,31 +780,11 @@ begin
 
  jctx:=@td^.td_jctx;
 
- cache:=jctx^.local_cache[hash_addr(addr)];
+ AtomicLoad128(@lcache,@jctx^.local_cache[hash_addr(addr)]);
 
- if (cache<>nil) then
+ if (lcache.src=addr) then
  begin
-  if (cache^.src=addr) then
-  begin
-   //jctx^.block:=cache^.blk;
-
-   Result:=cache^.dst;
-
-   if (InterlockedExchangeAdd64(QWORD(cache^.dest_block),0)=0) then
-   begin
-    //reset all
-    cache:=nil;
-    Result:=nil;
-    jctx^.local_cache[hash_addr(addr)]:=nil;
-   end else
-   begin
-    Exit;
-   end;
-
-  end else
-  begin
-   cache:=nil;
-  end;
+  Exit(lcache.dst);
  end;
 
  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
@@ -806,8 +810,8 @@ begin
 
  if (plt<>nil) then
  begin
-  cache:=plt^.cache;
-  curr:=cache^.self_block;
+  pcache:=plt^.cache;
+  curr:=pcache^.self_block;
  end else
  begin
   curr:=nil;
@@ -818,18 +822,21 @@ begin
   //jctx^.block:=node^.blob;
  end else
  begin
-  cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
+  pcache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
 
-  jctx^.local_cache[hash_addr(addr)]:=cache;
+  lcache.src:=pcache^.src;
+  lcache.dst:=pcache^.dst;
+
+  AtomicStore128(@jctx^.local_cache[hash_addr(addr)],@lcache);
 
   //jctx^.block:=node^.blob;
 
-  Assert(cache<>nil);
-  Assert(cache^.src<>nil);
-  Assert(cache^.dst<>nil);
+  Assert(pcache<>nil);
+  Assert(pcache^.src<>nil);
+  Assert(pcache^.dst<>nil);
 
   //one element plt cache
-  System.InterlockedExchange(plt^.cache,cache);
+  System.InterlockedExchange(plt^.cache,pcache);
  end;
 
  Result:=node^.dst;
@@ -1477,7 +1484,8 @@ procedure t_jit_dynamic_blob.detach_threads;
 var
  ttd:p_kthread;
  call_ret_cache:PQWORD;
- cache:p_jplt_cache;
+ local_cache   :p_local_cache_node;
+ lcache:t_local_cache_node;
  bend:QWORD;
  src:QWORD;
  i:Integer;
@@ -1507,18 +1515,19 @@ begin
     //
 
     //
-    for i:=0 to High(ttd^.td_jctx.local_cache) do
+    local_cache:=ttd^.td_jctx.local_cache;
+
+    if (local_cache<>nil) then
+    for i:=0 to (64*1024 div 16)-1 do
     begin
-     cache:=ttd^.td_jctx.local_cache[i];
+     AtomicLoad128(@lcache,@local_cache[i]);
 
-     if (cache<>nil) then
+     if ((QWORD(lcache.src)>=QWORD(base)) and (QWORD(lcache.src)<bend)) or
+        ((QWORD(lcache.dst)>=QWORD(base)) and (QWORD(lcache.dst)<bend)) then
      begin
-      src:=QWORD(cache^.src);
-
-      if (src>=QWORD(base)) and (src<bend) then
-      begin
-       System.InterlockedCompareExchange64(QWORD(ttd^.td_jctx.local_cache[i]),0,QWORD(cache));
-      end;
+      lcache.src:=nil;
+      lcache.dst:=nil;
+      AtomicStore128(@local_cache[i],@lcache);
      end;
 
     end;
