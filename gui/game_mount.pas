@@ -308,18 +308,19 @@ const
  MM_LAST    =2;
 
 type
- t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS,mfBudget,mfTmp);
+ t_mnt_flags=Set of (mfReadOnly,mfIgnoreErr,mfForceDir,mfPFS,mfBudget);
 
 type
  pp_mount_dir=^p_mount_dir;
  p_mount_dir=^t_mount_dir;
  t_mount_dir=object
-  dst   :pchar;
-  src   :pchar;
-  mode  :Shortint;
-  flags :t_mnt_flags;
-  term  :Boolean;
-  childs:p_mount_dir;
+  dst  :pchar;
+  src  :pchar;
+  mode :Shortint;
+  flags:t_mnt_flags;
+  ftype:PChar;
+  term :Boolean;
+  child:p_mount_dir;
  end;
 
  t_mount_dir_iterator=object
@@ -349,10 +350,10 @@ begin
 
  prev:=_curr^;
 
- if (err=0) and (prev^.childs<>nil) then
+ if (err=0) and (prev^.child<>nil) then
  begin
   _curr:=_curr+1; //down
-  _curr^:=prev^.childs;
+  _curr^:=prev^.child;
  end else
  begin
   _curr^:=prev+1; //next
@@ -398,22 +399,23 @@ const
  );
 
  SYSTEM_DIRS:array[0..5] of t_mount_dir=(
-  (dst:'./%s/becore'     ;src:''              ;mode:MM_CREATE  ;flags:[]),           // system app only
-  (dst:'./%s/common'     ;src:''              ;mode:MM_CREATE  ;flags:[];childs:@SYSTEM_COMMON_DIRS),
-  (dst:'./%s/common_temp';src:''              ;mode:MM_CREATE  ;flags:[]),
+  (dst:'./%s/becore'     ;src:''              ;mode:MM_CREATE),                      // system app only
+  (dst:'./%s/common'     ;src:''              ;mode:MM_CREATE;child:@SYSTEM_COMMON_DIRS),
+  (dst:'./%s/common_temp';src:''              ;mode:MM_CREATE),
   (dst:'./%s/priv'       ;src:'%s/system/priv';mode:MM_FIRMWARE;flags:[mfReadOnly]), // system app only
-  (dst:'./%s/sqlite'     ;src:''              ;mode:MM_CREATE  ;flags:[]),
+  (dst:'./%s/sqlite'     ;src:''              ;mode:MM_CREATE),
   (term:True)
  );
 
- SANDBOX_DIRS:array[0..7] of t_mount_dir=(
+ SANDBOX_DIRS:array[0..8] of t_mount_dir=(
   (dst:'./app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
-  (dst:'./av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./dev'        ;src:'devfs'              ;mode:MM_LOCAL ;ftype:'devfs'),
+  (dst:'./system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'./data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
   (dst:'./host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
   (dst:'./hostapp'    ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
-  (dst:'./system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'./%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];childs:@SYSTEM_DIRS),
+  (dst:'./%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];child:@SYSTEM_DIRS),
+  (dst:'./av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
   (term:True)
  );
 
@@ -434,6 +436,8 @@ var
  fs_iterator:t_mount_dir_iterator;
 
  fs_source:array[0..MM_LAST] of RawByteString;
+
+ fs_type:PChar;
  fs_dst:RawByteString;
  fs_src:RawByteString;
 
@@ -483,15 +487,6 @@ begin
  if (err<>0) then Exit;
  //create sandbox
 
- //mount /dev into the sandbox
- err:=mount_into_sandbox('devfs',
-                         './dev',
-                         'devfs',
-                         nil,
-                         0,
-                         False);
- if (err<>0) then Exit;
-
  fs_iterator.init(@SANDBOX_DIRS);
  repeat
 
@@ -512,25 +507,17 @@ begin
      ForceDirectories(fs_src);
     end;
 
-    if (mfTmp in flags) then
-    begin
-     err:=mount_into_sandbox('tmpfs',
-                             pchar(fs_dst),
-                             pchar(fs_src),
-                             nil,
-                             ord(mfReadOnly in flags)*MNT_RDONLY,
-                             mfIgnoreErr in flags);
-    end else
-    begin
-     err:=mount_into_sandbox('ufs',
-                             pchar(fs_dst),
-                             pchar(fs_src),
-                             nil,
-                             ord(mfReadOnly in flags)*MNT_RDONLY  or
-                             ord(mfPFS      in flags)*MNT_PFS_64K or
-                             ord(mfBudget   in flags)*MNT_BIG_APP,
-                             mfIgnoreErr in flags);
-    end;
+    fs_type:=ftype;
+    if (fs_type=nil) then fs_type:='ufs';
+
+    err:=mount_into_sandbox(fs_type,
+                            pchar(fs_dst),
+                            pchar(fs_src),
+                            nil,
+                            ord(mfReadOnly in flags)*MNT_RDONLY  or
+                            ord(mfPFS      in flags)*MNT_PFS_64K or
+                            ord(mfBudget   in flags)*MNT_BIG_APP,
+                            mfIgnoreErr in flags);
 
     if (err=0) and (mode=MM_GAME) then
     begin
