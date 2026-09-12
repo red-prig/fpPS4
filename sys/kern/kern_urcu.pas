@@ -9,23 +9,26 @@ uses
  kern_hamt;
 
 type
- p_urcu_node=^t_urcu_node;
- t_urcu_node=record
-  entry:LIST_ENTRY;
-  nodes:PHAMTNode64;
-  epoch:QWORD;
- end;
+ t_urcu_free=procedure(P:Pointer);
 
 procedure urcu_flush_deferred;
 
 procedure urcu_synchronize_rcu(my_epoch:QWORD);
 
+procedure urcu_free(node:Pointer;free:t_urcu_free);
+
 function  urcu_hamt_alloc(size:QWORD):Pointer;
 procedure urcu_hamt_free (node:Pointer);
 function  urcu_hamt_msize(node:Pointer):QWORD;
 
+const
+ urcu_hamt_allocator:THAL=(
+  alloc:@urcu_hamt_alloc;
+  free :@urcu_hamt_free;
+  msize:@urcu_hamt_msize
+ );
+
 var
- urcu_hamt_allocator:THAL;
  urcu_global_epoch:Int64=0;
 
 procedure kern_urcu_init;
@@ -39,6 +42,17 @@ uses
  md_sleep,
  kern_malloc,
  kern_daemon;
+
+type
+ p_urcu_node=^t_urcu_node;
+ t_urcu_node=record
+  entry:LIST_ENTRY;
+  //
+  cnode:Pointer;
+  cfree:t_urcu_free;
+  //
+  epoch:QWORD;
+ end;
 
 var
  rlist_lf:TIntrusiveMPSCQueue;
@@ -117,8 +131,11 @@ begin
  while (r_node<>nil) do
  begin
   LIST_REMOVE(r_node,@r_node^.entry);
-  //delete node
-  default_hamt_free(r_node^.nodes);
+  //free element
+  if (r_node^.cfree<>nil) then
+  begin
+   r_node^.cfree(r_node^.cnode);
+  end;
   //free node
   System.InterlockedDecrement(rcount);
   free(r_node);
@@ -168,6 +185,26 @@ begin
  until all_clear;
 end;
 
+procedure urcu_free(node:Pointer;free:t_urcu_free);
+var
+ defer:p_urcu_node;
+begin
+ if (node=nil) then Exit;
+
+ defer:=calloc(SizeOf(t_urcu_node));
+ defer^.cnode:=node;
+ defer^.cfree:=free;
+ defer^.epoch:=QWORD(urcu_global_epoch);
+
+ rlist_lf.Push(defer);
+ System.InterlockedIncrement(rcount);
+ //
+ if rcount>(4*256) then
+ begin
+  urcu_scan(False);
+ end;
+end;
+
 //
 
 function urcu_hamt_alloc(size:QWORD):Pointer;
@@ -176,20 +213,8 @@ begin
 end;
 
 procedure urcu_hamt_free(node:Pointer);
-var
- defer:p_urcu_node;
 begin
- if (node=nil) then Exit;
- defer:=calloc(SizeOf(t_urcu_node));
- defer^.nodes:=node;
- defer^.epoch:=QWORD(urcu_global_epoch);
- rlist_lf.Push(defer);
- System.InterlockedIncrement(rcount);
- //
- if rcount>(4*256) then
- begin
-  urcu_scan(False);
- end;
+ urcu_free(node,@default_hamt_free);
 end;
 
 function urcu_hamt_msize(node:Pointer):QWORD;
@@ -210,10 +235,9 @@ end;
 procedure kern_urcu_init;
 begin
  rlist_lf.Create;
- urcu_hamt_allocator.alloc:=@urcu_hamt_alloc;
- urcu_hamt_allocator.free :=@urcu_hamt_free;
- urcu_hamt_allocator.msize:=@urcu_hamt_msize;
  sys_daemon_add_cbs(@daemon_stub,@urcu_daemon_scan);
 end;
 
 end.
+
+
