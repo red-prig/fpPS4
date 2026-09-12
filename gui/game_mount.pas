@@ -559,21 +559,24 @@ begin
      // /app0/sce_sys/keystone
 
      err:=mount_into_sandbox('tmpfs',
-                             './app0/sce_sys',
+                             '/layer_sce_sys',
                              '/',
                              nil,
                              0,
                              True);
      if (err=0) then
      begin
-      mount_mkdir('./app0/sce_sys/about');
+      mount_mkdir('/layer_sce_sys/sce_sys');
+      mount_mkdir('/layer_sce_sys/sce_sys/about');
 
-      err:=mount_into_sandbox('tmpfs',
-                              './app0/sce_sys',
-                              '/',
+      //TODO: copy of right.sprx and keystone ?
+
+      err:=mount_into_sandbox('unionfs',
+                              pchar(fs_dst),
+                              '/layer_sce_sys',
                               nil,
-                              MNT_UPDATE or MNT_RDONLY,
-                              True);
+                              ord(mfReadOnly in flags)*MNT_RDONLY,
+                              False);
      end;
 
     end; //MM_GAME
