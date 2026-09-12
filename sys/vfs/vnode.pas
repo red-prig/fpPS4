@@ -254,6 +254,8 @@ type
 
   v_un:Pointer; //Type specific fields, only one applies to any given vnode
 
+  v_handle:THandle;
+
   v_hash:DWORD;
 
   v_holdcnt   :Integer;  //i prevents recycling.
@@ -267,7 +269,7 @@ type
   v_iflag:QWORD;         //i vnode flags (see below)
   v_vflag:QWORD;         //v vnode flags
 
-  v_object:Pointer;
+  v_object:Pointer;      //vm_object_t
 
   v_actfreelist:TAILQ_ENTRY;
 

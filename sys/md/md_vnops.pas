@@ -1745,7 +1745,7 @@ begin
  VI_LOCK(vp);
  sx_xlock(@de^.ufs_md_lock);
 
- Result:=md_update_dirent(THandle(vp^.v_un),de,nil);
+ Result:=md_update_dirent(vp^.v_handle,de,nil);
 
  vnode_pager_setsize(vp, de^.ufs_size);
 
@@ -2636,8 +2636,8 @@ begin
  ap^.a_vpp^:=vp;
 
  //save to vnode
- vp^.v_un  :=Pointer(FD);
- vp^.v_prot:=(flags and (FREAD or FWRITE));
+ vp^.v_handle:=FD;
+ vp^.v_prot  :=(flags and (FREAD or FWRITE));
 
  //emu ext
  with ap^ do
@@ -2708,9 +2708,9 @@ begin
  sx_xlock(@dd^.ufs_md_lock);
  sx_xlock(@de^.ufs_md_lock);
 
- if (vp^.v_un<>nil) then
+ if (vp^.v_handle<>0) then
  begin
-  FD:=THandle(vp^.v_un);
+  FD:=vp^.v_handle;
  end else
  begin
   w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
@@ -2745,8 +2745,8 @@ begin
   end;
 
   //save to vnode
-  vp^.v_un  :=Pointer(FD);
-  vp^.v_prot:=(flags and (FREAD or FWRITE));
+  vp^.v_handle:=FD;
+  vp^.v_prot  :=(flags and (FREAD or FWRITE));
  end;
 
  Result:=md_update_dirent(FD,de,nil);
@@ -2782,7 +2782,7 @@ var
 begin
  vp:=ap^.a_vp;
 
- FD:=THandle(System.InterlockedExchange(vp^.v_un,nil));
+ FD:=THandle(System.InterlockedExchange(Pointer(vp^.v_handle),nil));
  if (FD<>0) then
  begin
   NtClose(FD);
@@ -2800,7 +2800,7 @@ var
  BLK:IO_STATUS_BLOCK;
 begin
  vp:=ap^.a_vp;
- FD:=THandle(vp^.v_un);
+ FD:=vp^.v_handle;
  fullsync:=((ap^.a_waitfor and 2)<>0);
 
  if (FD=0) then Exit(EINVAL);
@@ -2970,9 +2970,9 @@ begin
  if change_time or change_size then
  begin
 
-  if (vp^.v_un<>nil) then
+  if (vp^.v_handle<>0) then
   begin
-   FD:=THandle(vp^.v_un);
+   FD:=vp^.v_handle;
    RL:=0;
   end else
   if (de^.ufs_md_fp<>nil) then
@@ -3135,7 +3135,7 @@ var
 begin
  Result:=0;
  de:=vp^.v_data;
- F:=THandle(vp^.v_un);
+ F:=vp^.v_handle;
 
  td:=curkthread;
  if (td=nil) then Exit(-1);
@@ -3327,7 +3327,7 @@ begin
  op:=ap^.a_op;
  wf:=ap^.a_flags;
 
- F:=THandle(vp^.v_un);
+ F:=vp^.v_handle;
 
  case op of
   F_SETLK:;
@@ -3479,7 +3479,7 @@ begin
  VI_LOCK(vp);
 
   de:=vp^.v_data;
-  fd:=THandle(vp^.v_un);
+  fd:=vp^.v_handle;
   md:=0;
   maxp:=vp^.v_prot;
 
