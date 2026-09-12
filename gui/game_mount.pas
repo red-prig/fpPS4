@@ -519,7 +519,7 @@ begin
                             ord(mfBudget   in flags)*MNT_BIG_APP,
                             mfIgnoreErr in flags);
 
-    if (err=0) and (mode=MM_GAME) then
+    if (err=0) and (mode=MM_GAME) and (fs_dst='./app0') then
     begin
 
      //load overlays
@@ -532,7 +532,7 @@ begin
       fs_layer:='/layer'+IntToStr(i);
       fs_src  :=OverlayList.values[i];
 
-      err:=mount_into_sandbox('ufs',
+      err:=mount_into_sandbox(fs_type,
                               pchar(fs_layer),
                               pchar(fs_src),
                               nil,
@@ -554,6 +554,27 @@ begin
       end;
 
      end; //For
+
+     // /app0/sce_sys/about/right.sprx
+     // /app0/sce_sys/keystone
+
+     err:=mount_into_sandbox('tmpfs',
+                             './sce_sys',
+                             '/',
+                             nil,
+                             0,
+                             True);
+     if (err=0) then
+     begin
+      mount_mkdir('./sce_sys/about');
+
+      err:=mount_into_sandbox('tmpfs',
+                              './sce_sys',
+                              '/',
+                              nil,
+                              MNT_UPDATE or MNT_RDONLY,
+                              True);
+     end;
 
     end; //MM_GAME
 

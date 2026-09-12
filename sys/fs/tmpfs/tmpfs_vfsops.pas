@@ -210,10 +210,10 @@ begin
    Exit(EOPNOTSUPP);
   end;
 
-  if (vfs_flagopt(mp^.mnt_optnew, 'ro', nil, 0)<>p_tmpfs_mount(mp^.mnt_data)^.tm_ronly) then
-  begin
-   Exit(EOPNOTSUPP);
-  end;
+  //if (vfs_flagopt(mp^.mnt_optnew, 'ro', nil, 0)<>p_tmpfs_mount(mp^.mnt_data)^.tm_ronly) then
+  //begin
+  // Exit(EOPNOTSUPP);
+  //end;
 
   Exit(0);
  end;
@@ -311,8 +311,6 @@ begin
      @tmpfs_node_ctor, @tmpfs_node_dtor,
      @tmpfs_node_init, @tmpfs_node_fini,
      UMA_ALIGN_PTR, 0);
-
- tmp^.tm_ronly:=ord((mp^.mnt_flag and MNT_RDONLY)<>0);
 
  { Allocate the root node. }
  error:=tmpfs_alloc_node(tmp, VDIR, root_uid,

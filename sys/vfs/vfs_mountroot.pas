@@ -383,7 +383,7 @@ end;
 function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 begin
  Result:=kern_mkdir(fspath,UIO_SYSSPACE,&777);
- if (Result=0) or (Result=EEXIST) then
+ if (Result=0) or (Result=EEXIST) or (Result=EROFS) then
  begin
   Result:=vfs_mount_path(fstype,fspath,from,opts,flags);
  end;

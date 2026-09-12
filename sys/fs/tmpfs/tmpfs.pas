@@ -123,7 +123,6 @@ type
   allnode_lock  :mtx;
   tm_dirent_pool:uma_zone_t;
   tm_node_pool  :uma_zone_t;
-  tm_ronly      :Integer;
  end;
 
 procedure TMPFS_LOCK  (tm:p_tmpfs_mount); inline;
