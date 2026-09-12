@@ -559,17 +559,17 @@ begin
      // /app0/sce_sys/keystone
 
      err:=mount_into_sandbox('tmpfs',
-                             './sce_sys',
+                             './app0/sce_sys',
                              '/',
                              nil,
                              0,
                              True);
      if (err=0) then
      begin
-      mount_mkdir('./sce_sys/about');
+      mount_mkdir('./app0/sce_sys/about');
 
       err:=mount_into_sandbox('tmpfs',
-                              './sce_sys',
+                              './app0/sce_sys',
                               '/',
                               nil,
                               MNT_UPDATE or MNT_RDONLY,
