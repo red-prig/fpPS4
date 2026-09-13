@@ -1164,7 +1164,7 @@ begin
  if (de^.d_type=DT_DIR) then
  begin
 
-  if ((mp^.mnt_flag and MNT_BIG_APP)<>0) then //only app0
+  if (mp^.mnt_budget_id=0) then //only app0
   begin
    if ((dd^.ufs_flags and UFS_DROOT)<>0) then
    begin
