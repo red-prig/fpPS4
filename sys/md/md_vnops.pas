@@ -1124,6 +1124,7 @@ begin
 
  while (list^<>nil) do
  begin
+  if (strlen(list^)=namelen) then
   if (strncmp(name,list^,namelen)=0) then
   begin
    Exit(True);
@@ -1652,6 +1653,11 @@ begin
 
    if (i<=0) then i:=1;
 
+   if md_name_is_hidden(dd,@dt.d_name,i-1) then
+   begin
+    Continue;
+   end;
+
    if emu_pfs then
    begin
     //sizeof(body)+8+AlignUp(namelen,8)
@@ -1669,7 +1675,6 @@ begin
    end;
 
    if (off >= in_off) then
-   if not md_name_is_hidden(dd,@dt.d_name,i-1) then
    begin
     dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
     dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
@@ -1796,6 +1801,11 @@ begin
 
    if (i<=0) then i:=1;
 
+   if md_name_is_hidden(dd,@dt.d_name,i-1) then
+   begin
+    Continue;
+   end;
+
    //sizeof(body)+8+AlignUp(namelen,8)
    dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
 
@@ -1806,7 +1816,6 @@ begin
    end;
 
    if (off >= in_off) then
-   if not md_name_is_hidden(dd,@dt.d_name,i-1) then
    begin
     dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
     dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
