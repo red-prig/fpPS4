@@ -555,30 +555,6 @@ begin
 
      end; //For
 
-     // /app0/sce_sys/about/right.sprx
-     // /app0/sce_sys/keystone
-
-     err:=mount_into_sandbox('tmpfs',
-                             '/layer_sce_sys',
-                             '/',
-                             nil,
-                             0,
-                             True);
-     if (err=0) then
-     begin
-      mount_mkdir('/layer_sce_sys/sce_sys');
-      mount_mkdir('/layer_sce_sys/sce_sys/about');
-
-      //TODO: copy of right.sprx and keystone ?
-
-      err:=mount_into_sandbox('unionfs',
-                              pchar(fs_dst),
-                              '/layer_sce_sys',
-                              nil,
-                              ord(mfReadOnly in flags)*MNT_RDONLY,
-                              False);
-     end;
-
     end; //MM_GAME
 
    end; //MM_CREATE
