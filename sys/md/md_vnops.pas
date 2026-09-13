@@ -1107,6 +1107,20 @@ const
   nil
  );
 
+function md_str_eq(str1:PChar;namelen:Integer;str2:PChar):Boolean; inline;
+var
+ i:Integer;
+begin
+ Result:=false;
+
+ For i:=0 to namelen-1 do
+ begin
+  if (str1[i]<>str2[i]) then Exit;
+ end;
+
+ Result:=(str2[namelen]=#0);
+end;
+
 function md_name_is_hidden(dd:p_ufs_dirent;name:PChar;namelen:Integer):Boolean;
 var
  list:PPChar;
@@ -1124,8 +1138,7 @@ begin
 
  while (list^<>nil) do
  begin
-  if (strlen(list^)=namelen) then
-  if (strncmp(name,list^,namelen)=0) then
+  if md_str_eq(name,namelen,list^) then
   begin
    Exit(True);
   end;
