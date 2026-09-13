@@ -129,6 +129,7 @@ implementation
 uses
  sysutils,
  errno,
+ libkern,
  vfcntl,
  vstat,
  vfs_subr,
@@ -1049,7 +1050,7 @@ begin
    continue;
   end;
 
-  if (CompareByte(name^, de^.ufs_dirent^.d_name, namelen)<>0) then
+  if (strncmp(name, @de^.ufs_dirent^.d_name, namelen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.ufs_list);
    continue;
@@ -1058,6 +1059,79 @@ begin
  end;
 
  Exit(de);
+end;
+
+const
+ MARKER_SCE_SYS      =1;
+ MARKER_SCE_SYS_ABOUT=2;
+
+ c_sce_sys_hidden:array[0..31] of PChar=(
+  '.gitkeep',
+  //
+  'app',
+  'changeinfo',
+  'trophy',
+  //
+  'license.dat',
+  'license.info',
+  'nptitle.dat',
+  'npbind.dat',
+  'selfinfo.dat',
+  'param.sfo',
+  'playgo-chunk.dat',
+  'playgo-chunk.sha',
+  'playgo-manifest.xml',
+  'pronunciation.xml',
+  'pronunciation.sig',
+  'pic1.png',
+  'psreserved.dat',
+  'pubtoolinfo.dat',
+  'shareparam.json',
+  'shareoverlayimage.png',
+  'shareprivacyguardimage.png',
+  'save_data.png',
+  'icon0.png',
+  'pic0.png',
+  'snd0.at9',
+  'icon0.dds',
+  'pic0.dds',
+  'pic1.dds',
+  'origin-deltainfo.dat',
+  'target-deltainfo.dat',
+  'param.json',
+  nil
+ );
+
+ c_about_hidden:array[0..1] of PChar=(
+  '.gitkeep',
+  nil
+ );
+
+function md_name_is_hidden(dd:p_ufs_dirent;name:PChar;namelen:Integer):Boolean;
+var
+ list:PPChar;
+begin
+ Result:=false;
+
+ list:=nil;
+
+ case dd^.ufs_marker of
+  MARKER_SCE_SYS      :list:=@c_sce_sys_hidden;
+  MARKER_SCE_SYS_ABOUT:list:=@c_about_hidden;
+  else;
+ end;
+ if (list=nil) then Exit;
+
+ while (list^<>nil) do
+ begin
+  if (strncmp(name,list^,namelen)=0) then
+  begin
+   Exit(True);
+  end;
+  //
+  Inc(list);
+ end;
+
 end;
 
 function md_new_cache(mp:p_mount;dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION;var nd:p_ufs_dirent):Integer;
@@ -1089,6 +1163,25 @@ begin
 
  if (de^.d_type=DT_DIR) then
  begin
+
+  if ((mp^.mnt_flag and MNT_BIG_APP)<>0) then //only app0
+  begin
+   if ((dd^.ufs_flags and UFS_DROOT)<>0) then
+   begin
+    if (strncmp(name, 'sce_sys', namelen)=0) then
+    begin
+     nd^.ufs_marker:=MARKER_SCE_SYS;
+    end;
+   end else
+   if (dd^.ufs_marker=MARKER_SCE_SYS) then
+   begin
+    if (strncmp(name, 'about', namelen)=0) then
+    begin
+     nd^.ufs_marker:=MARKER_SCE_SYS_ABOUT;
+    end;
+   end;
+  end;
+
   nd^.ufs_links:=2;
   Result:=md_open_dirent(nd);
   if (Result<>0) then
@@ -1381,6 +1474,10 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
+  if md_name_is_hidden(dd,cnp^.cn_nameptr,cnp^.cn_namelen) then
+  begin
+   Result:=ENOENT;
+  end else
   if ((flags and ISDOTDOT)<>0) then
   begin
    de:=dd^.ufs_dir;
@@ -1572,6 +1669,7 @@ begin
    end;
 
    if (off >= in_off) then
+   if not md_name_is_hidden(dd,@dt.d_name,i-1) then
    begin
     dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
     dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
@@ -1708,6 +1806,7 @@ begin
    end;
 
    if (off >= in_off) then
+   if not md_name_is_hidden(dd,@dt.d_name,i-1) then
    begin
     dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
     dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);

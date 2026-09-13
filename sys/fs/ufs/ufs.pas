@@ -23,7 +23,8 @@ type
 
  t_ufs_dirent=packed record
   ufs_inode  :Integer;
-  ufs_flags  :Integer;      //UFS_*
+  ufs_flags  :Word;      //UFS_*
+  ufs_marker :Word;
   ufs_ref    :Integer;
   ufs_vref   :Integer;
   ufs_dirent :p_dirent;
