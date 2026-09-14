@@ -1145,7 +1145,7 @@ begin
 
  map:=QWORD(src) and HAMT48.root_mask;
 
- td^.td_urcu_epoch:=QWORD(urcu_global_epoch);
+ td^.td_urcu_epoch:=urcu_global_epoch;
  System.ReadWriteBarrier;
 
  repeat
@@ -1792,7 +1792,7 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  my_epoch:=QWORD(System.InterlockedIncrement64(urcu_global_epoch));
+  my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
   System.ReadWriteBarrier;
   System.InterlockedIncrement(entry_hamt[map].version);
   data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node,@urcu_hamt_allocator);
@@ -1869,7 +1869,7 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  my_epoch:=QWORD(System.InterlockedIncrement64(urcu_global_epoch));
+  my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
   System.ReadWriteBarrier;
   System.InterlockedIncrement(entry_hamt[map].version);
   _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old,@urcu_hamt_allocator);

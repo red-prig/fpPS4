@@ -194,7 +194,7 @@ begin
  defer:=calloc(SizeOf(t_urcu_node));
  defer^.cnode:=node;
  defer^.cfree:=free;
- defer^.epoch:=QWORD(urcu_global_epoch);
+ defer^.epoch:=urcu_global_epoch;
 
  rlist_lf.Push(defer);
  System.InterlockedIncrement(rcount);
