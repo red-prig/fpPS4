@@ -311,10 +311,20 @@ begin
  if (addr=nil) then Exit;
  b:=PByte(addr);
 
- if (b[-1]=HEAP_HEADER_MARKER_S) then
- begin
-  FreeMem(b-HEAP_HDR_8);
-  Exit;
+ case b[-1] of
+  HEAP_HEADER_MARKER_S:
+   begin
+    FreeMem(b-HEAP_HDR_8);
+    Exit;
+   end;
+  0..BUCKET_COUNT:;
+  HEAP_HEADER_MARKER_8:;
+  HEAP_HEADER_MARKER_4:;
+  HEAP_HEADER_MARKER_2:;
+  else
+   begin
+    Assert(False,'Unknow marker:0x'+HexStr(b[-1],2));
+   end;
  end;
 
  b:=b-mkofs[b[-1]];
