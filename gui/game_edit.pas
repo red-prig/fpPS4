@@ -470,11 +470,12 @@ begin
 
  err:=TestDlcByPath(new,GetAllServiceID(FParamSfo));
 
- if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_service_id]) then
+ if (err in [ls_io,ls_not_exists,ls_broken,ls_wrong_category,ls_wrong_service_id]) then
  begin
 
   dlg:='';
   case err of
+   ls_not_exists      :dlg:='param.sfo not found';
    ls_io              :dlg:='Error reading file param.sfo';
    ls_broken          :dlg:='param.sfo is broken';
    ls_wrong_category  :dlg:='It looks like you''re trying to add a non-DLC folder';
