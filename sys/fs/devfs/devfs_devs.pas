@@ -44,6 +44,7 @@ uses
  vfs_subr,
  vnode_if,
  subr_unit,
+ libkern,
  kern_malloc;
 
 //
@@ -139,7 +140,7 @@ begin
    continue;
   end;
 
-  if (CompareByte(name^, de^.de_dirent^.d_name, namelen)<>0) then
+  if (strncmp(name, @de^.de_dirent^.d_name, namelen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.de_list);
    continue;

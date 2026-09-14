@@ -33,6 +33,7 @@ implementation
 
 uses
  sysutils,
+ libkern,
  tmpfs_seg,
  tmpfs_fifoops,
  tmpfs_vnops;
@@ -540,7 +541,7 @@ begin
   Assert(cnp^.cn_namelen < $ffff);
 
   if (de^.td_namelen=cnp^.cn_namelen) AND
-     (CompareByte(de^.td_name^, cnp^.cn_nameptr^, de^.td_namelen)=0) then
+     (strncmp(de^.td_name, cnp^.cn_nameptr, de^.td_namelen)=0) then
   begin
    break;
   end;

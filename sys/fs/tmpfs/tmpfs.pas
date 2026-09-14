@@ -187,6 +187,9 @@ var
 
 implementation
 
+uses
+ libkern;
+
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 procedure TMPFS_NODE_LOCK(node:p_tmpfs_node); inline;
@@ -258,7 +261,7 @@ end;
 function TMPFS_DIRENT_MATCHES(de:p_tmpfs_dirent;name:PChar;len:Word):Boolean; inline;
 begin
  Result:=(de^.td_namelen=len) and
-         (CompareByte(de^.td_name^,name^,de^.td_namelen)=0);
+         (strncmp(de^.td_name,name,de^.td_namelen)=0);
 end;
 
 procedure TMPFS_VALIDATE_DIR(node:p_tmpfs_node); inline;

@@ -84,6 +84,7 @@ implementation
 
 uses
  sysutils,
+ libkern,
  errno,
  kern_thr,
  kern_proc,
@@ -424,7 +425,7 @@ begin
    continue;
   end;
 
-  if (CompareByte(name^, de^.ufs_dirent^.d_name, namelen)<>0) then
+  if (strncmp(name, @de^.ufs_dirent^.d_name, namelen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.ufs_list);
    continue;

@@ -97,7 +97,7 @@ const
  * so sizes above 4095 stay with the heap (see the header comment).
  }
 const
- BUCKET_FULL_SIZES:array[0..28] of Integer=(
+ BUCKET_FULL_SIZES:array[0..28] of Word=(
   16,24,32,40,48,56,64,72,88,104,120,136,
   168,200,232,264,328,392,440,512,648,808,1000,1024,
   1352,1992,2024,2048,4096);

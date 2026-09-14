@@ -198,6 +198,7 @@ uses
  kern_mtxpool,
  subr_uio,
  vnode_pager,
+ libkern,
  kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -1320,7 +1321,7 @@ begin
    de:=TAILQ_NEXT(de,@de^.de_list);
    continue;
   end;
-  if (CompareByte(cnp^.cn_nameptr^, de^.de_dirent^.d_name, de^.de_dirent^.d_namlen)<>0) then
+  if (strncmp(cnp^.cn_nameptr, @de^.de_dirent^.d_name, de^.de_dirent^.d_namlen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.de_list);
    continue;

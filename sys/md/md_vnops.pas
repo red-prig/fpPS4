@@ -1108,15 +1108,10 @@ const
  );
 
 function md_str_eq(str1:PChar;namelen:Integer;str2:PChar):Boolean; inline;
-var
- i:Integer;
 begin
  Result:=false;
 
- For i:=0 to namelen-1 do
- begin
-  if (str1[i]<>str2[i]) then Exit;
- end;
+ if (strncmp(str1,str2,namelen)<>0) then Exit;
 
  Result:=(str2[namelen]=#0);
 end;

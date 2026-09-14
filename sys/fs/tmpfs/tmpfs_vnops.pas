@@ -41,6 +41,7 @@ function tmpfs_reclaim(v:p_vop_reclaim_args):Integer;
 implementation
 
 uses
+ libkern,
  tmpfs_seg;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -1116,7 +1117,7 @@ begin
  { Ensure that we have enough memory to hold the new name, if it
   * has to be changed. }
  if (fcnp^.cn_namelen<>tcnp^.cn_namelen) OR
-    (CompareByte(fcnp^.cn_nameptr^, tcnp^.cn_nameptr^, fcnp^.cn_namelen)<>0) then
+    (strncmp(fcnp^.cn_nameptr, tcnp^.cn_nameptr, fcnp^.cn_namelen)<>0) then
  begin
   newname:=calloc(tcnp^.cn_namelen)
  end else
