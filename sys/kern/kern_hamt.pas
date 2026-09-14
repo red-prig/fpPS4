@@ -157,7 +157,7 @@ end;
 
 function need_expand(A:PHAL;old_ptr:Pointer;new_count:DWORD):Boolean; inline;
 begin
- Result:=A^.msize(old_ptr)<new_count*sizeof(THAMTNode64);
+ Result:=A^.msize(old_ptr)<(new_count*sizeof(THAMTNode64));
 end;
 
 function need_shrink(A:PHAL;old_ptr:Pointer;new_count:DWORD):Boolean; inline;

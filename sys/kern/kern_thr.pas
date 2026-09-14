@@ -386,9 +386,9 @@ function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
 
-procedure threads_lock;            external;
-function  threads_trylock:Boolean; external;
-procedure threads_unlock;          external;
+procedure threads_rlock;            external;
+function  threads_tryrlock:Boolean; external;
+procedure threads_runlock;          external;
 
 function  get_p_threads:Pointer;   external;
 

@@ -1494,7 +1494,7 @@ var
 begin
  bend:=QWORD(base)+size;
 
- threads_lock;
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(get_p_threads);
    while (ttd<>nil) do
@@ -1538,7 +1538,7 @@ begin
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 var

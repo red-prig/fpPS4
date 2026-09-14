@@ -442,7 +442,7 @@ begin
  sigqueue_init(@worklist);
  sigqueue_move_set(@p_proc.p_sigqueue,@worklist,_set);
 
- threads_lock;
+ threads_rlock;
 
   td0:=TAILQ_FIRST(get_p_threads);
   while (td0<>nil) do
@@ -456,7 +456,7 @@ begin
    td0:=TAILQ_NEXT(td0,@td0^.td_plist)
   end;
 
- threads_unlock;
+ threads_runlock;
 
  sigqueue_flush(@worklist);
 end;
@@ -1409,7 +1409,7 @@ begin
  first_td :=nil;
  signal_td:=nil;
 
- threads_lock;
+ threads_rlock;
 
    td:=TAILQ_FIRST(get_p_threads);
    while (td<>nil) do
@@ -1433,7 +1433,7 @@ begin
     td:=TAILQ_NEXT(td,@td^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 
  if (signal_td=nil) then
  begin

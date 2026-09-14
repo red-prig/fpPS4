@@ -45,9 +45,9 @@ procedure thread_lock   (td:p_kthread);
 procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 
-procedure threads_lock;
-function  threads_trylock:Boolean;
-procedure threads_unlock;
+procedure threads_rlock;
+function  threads_tryrlock:Boolean;
+procedure threads_runlock;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 
@@ -328,17 +328,17 @@ begin
  end;
 end;
 
-procedure threads_lock; public;
+procedure threads_rlock; public;
 begin
  rw_rlock(tidhash_lock);
 end;
 
-function threads_trylock:Boolean; public;
+function threads_tryrlock:Boolean; public;
 begin
  Result:=rw_try_rlock(tidhash_lock);
 end;
 
-procedure threads_unlock; public;
+procedure threads_runlock; public;
 begin
  rw_runlock(tidhash_lock);
 end;
@@ -896,7 +896,7 @@ begin
  td:=curkthread;
  thread_suspend_source:=td;
 
- threads_lock;
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(@p_threads);
    while (ttd<>nil) do
@@ -912,7 +912,7 @@ begin
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 procedure thread_resume_all(exclude:p_kthread); public;
@@ -922,7 +922,7 @@ begin
  td:=curkthread;
  thread_suspend_source:=nil;
 
- threads_lock;
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(@p_threads);
    while (ttd<>nil) do
@@ -938,7 +938,7 @@ begin
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 function sys_thr_kill(id,sig:Integer):Integer;
@@ -965,7 +965,7 @@ begin
    Result:=ESRCH;
    PROC_LOCK;
 
-   threads_lock;
+   threads_rlock;
 
      ttd:=TAILQ_FIRST(@p_threads);
      while (ttd<>nil) do
@@ -983,7 +983,7 @@ begin
       ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
      end;
 
-    threads_unlock;
+    threads_runlock;
 
    PROC_UNLOCK;
   end;

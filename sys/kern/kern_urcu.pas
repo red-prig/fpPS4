@@ -17,15 +17,13 @@ procedure urcu_synchronize_rcu(my_epoch:QWORD);
 
 procedure urcu_free(node:Pointer;free:t_urcu_free);
 
-function  urcu_hamt_alloc(size:QWORD):Pointer;
 procedure urcu_hamt_free (node:Pointer);
-function  urcu_hamt_msize(node:Pointer):QWORD;
 
 const
  urcu_hamt_allocator:THAL=(
-  alloc:@urcu_hamt_alloc;
+  alloc:@default_hamt_alloc;
   free :@urcu_hamt_free;
-  msize:@urcu_hamt_msize
+  msize:@default_hamt_msize
  );
 
 var
@@ -40,6 +38,7 @@ uses
  kern_thr,
  time,
  md_sleep,
+ kern_mtx,
  kern_malloc,
  kern_daemon;
 
@@ -56,6 +55,7 @@ type
 
 var
  rlist_lf:TIntrusiveMPSCQueue;
+ rlist_mx:mtx;
  rlist_bs:LIST_HEAD=(lh_first:nil);
  rcount  :Integer=0;
 
@@ -77,10 +77,10 @@ begin
 
  if (smForce) then
  begin
-  threads_lock;
+  mtx_lock(rlist_mx);
  end else
  begin
-  if not threads_trylock then Exit;
+  if not mtx_trylock(rlist_mx) then Exit;
  end;
 
  //flush to base list
@@ -92,12 +92,14 @@ begin
  r_node:=LIST_FIRST(@rlist_bs);
  if (r_node=nil) then
  begin
-  threads_unlock;
+  mtx_unlock(rlist_mx);
   Exit;
  end;
 
  //find minimum non-zero epoch
  min_epoch:=QWORD(-1);
+
+ threads_rlock;
  ttd:=TAILQ_FIRST(get_p_threads);
  while (ttd<>nil) do
  begin
@@ -108,6 +110,7 @@ begin
   end;
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist);
  end;
+ threads_runlock;
 
  //collect safe nodes
  r_node:=LIST_FIRST(@rlist_bs);
@@ -124,7 +127,7 @@ begin
   r_node:=p_node;
  end;
 
- threads_unlock;
+ mtx_unlock(rlist_mx);
 
  //free nodes
  r_node:=LIST_FIRST(@f_list);
@@ -154,7 +157,7 @@ end;
 
 procedure urcu_flush_deferred;
 begin
- urcu_scan(True);
+ urcu_scan(False);
 end;
 
 //
@@ -166,7 +169,8 @@ var
 begin
  repeat
   all_clear:=True;
-  threads_lock;
+
+  threads_rlock;
   td:=TAILQ_FIRST(get_p_threads);
   while (td<>nil) do
   begin
@@ -177,7 +181,8 @@ begin
    end;
    td:=TAILQ_NEXT(td,@td^.td_plist);
   end;
-  threads_unlock;
+  threads_runlock;
+
   if not all_clear then
   begin
    md_yield;
@@ -207,19 +212,9 @@ end;
 
 //
 
-function urcu_hamt_alloc(size:QWORD):Pointer;
-begin
- Result:=default_hamt_alloc(size);
-end;
-
 procedure urcu_hamt_free(node:Pointer);
 begin
  urcu_free(node,@default_hamt_free);
-end;
-
-function urcu_hamt_msize(node:Pointer):QWORD;
-begin
- Result:=default_hamt_msize(node);
 end;
 
 //
@@ -234,6 +229,7 @@ end;
 
 procedure kern_urcu_init;
 begin
+ mtx_init(rlist_mx,'rlist_mx');
  rlist_lf.Create;
  sys_daemon_add_cbs(@daemon_stub,@urcu_daemon_scan);
 end;
