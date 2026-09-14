@@ -1149,6 +1149,8 @@ begin
  System.ReadWriteBarrier;
 
  repeat
+  Result:=nil;
+
   v1:=entry_hamt[map].version;
   if (v1 and 1)<>0 then Continue;
 
