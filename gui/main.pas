@@ -8,6 +8,7 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
   StdCtrls,
+  ExtCtrls,
   LCLType,
   LCLIntf,
 
@@ -24,6 +25,7 @@ uses
 
   core_serialization,
   host_ipc,
+  host_ipc_interface,
   game_info,
   game_edit,
   cfg_edit,
@@ -80,6 +82,8 @@ type
     function  DoShowError(const msg:RawByteString):Integer; override;
     function  DoShowWarning(const msg:RawByteString):Integer; override;
     procedure DoProcessExitMsg; override;
+    procedure DoJitLabel   (mode:Byte;const name:RawByteString); override;
+    procedure DoJitProgress(const data:TJitProgressData); override;
    end;
 
   { TfrmMain }
@@ -113,6 +117,10 @@ type
     TBDown: TToolButton;
     TBUp: TToolButton;
     TBSep3: TToolButton;
+
+    PnlProgress: TPanel;
+    LblJitName: TLabel;
+    PBarJit: TProgressBar;
 
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
@@ -192,6 +200,10 @@ type
                                   out AText: string;
                                   const ALineInfo: TSynEditGutterLineInfo);
 
+    procedure UpdateJitLabel(mode:Byte;const aName:RawByteString);
+    procedure UpdateJitProgress(const data:TJitProgressData);
+    procedure HideJitProgress;
+
     procedure SetButtonsState(s:TMainButtonsState);
   end;
 
@@ -226,11 +238,13 @@ Const
 procedure TGameRunContextGui.DoGameRunned;
 begin
  frmMain.SetButtonsState(mdsRunned);
+ frmMain.HideJitProgress;
 end;
 
 procedure TGameRunContextGui.DoGameStop;
 begin
  frmMain.TBStopClick(frmMain);
+ frmMain.HideJitProgress;
 end;
 
 procedure TGameRunContextGui.DoLoadExec(const data:TPS4LoadExec);
@@ -287,6 +301,16 @@ end;
 procedure TGameRunContextGui.DoProcessExitMsg;
 begin
  ShowMessage('The process reported exit!');
+end;
+
+procedure TGameRunContextGui.DoJitLabel(mode:Byte;const name:RawByteString);
+begin
+ frmMain.UpdateJitLabel(mode,name);
+end;
+
+procedure TGameRunContextGui.DoJitProgress(const data:TJitProgressData);
+begin
+ frmMain.UpdateJitProgress(data);
 end;
 
 //
@@ -1507,6 +1531,43 @@ begin
  FGameList.UpdateItem(Item);
  //
  SaveGameList;
+end;
+
+procedure TfrmMain.HideJitProgress;
+begin
+ PnlProgress.Visible:=False;
+end;
+
+procedure TfrmMain.UpdateJitLabel(mode:Byte;const aName:RawByteString);
+begin
+ case mode of
+  jpsBegin:
+   begin
+    LblJitName.Caption:=aName;
+    PBarJit.Position:=0;
+    PBarJit.Style:=pbstNormal;
+    PnlProgress.Visible:=True;
+    PnlProgress.BringToFront;
+   end;
+  jpsPrep:
+   begin
+    PBarJit.Style:=pbstMarquee;
+   end;
+  jpsEnd:
+   begin
+    HideJitProgress;
+   end;
+  else;
+ end;
+end;
+
+procedure TfrmMain.UpdateJitProgress(const data:TJitProgressData);
+begin
+ if (PBarJit.Max<>data.total) then
+ begin
+  PBarJit.Max:=data.total;
+ end;
+ PBarJit.Position:=data.curr;
 end;
 
 procedure TfrmMain.SetButtonsState(s:TMainButtonsState);

@@ -1,7 +1,7 @@
 object frmMain: TfrmMain
-  Left = 317
+  Left = 401
   Height = 343
-  Top = 384
+  Top = 112
   Width = 623
   Caption = 'fpPS4'
   ClientHeight = 343
@@ -14,7 +14,7 @@ object frmMain: TfrmMain
   OnShow = FormShow
   object Pages: TPageControl
     Left = 0
-    Height = 275
+    Height = 227
     Top = 68
     Width = 623
     ActivePage = TabList
@@ -23,12 +23,12 @@ object frmMain: TfrmMain
     TabOrder = 1
     object TabList: TTabSheet
       Caption = 'Games'
-      ClientHeight = 247
+      ClientHeight = 199
       ClientWidth = 615
       PopupMenu = MenuList
       object ListGrid: TStringGrid
         Left = 0
-        Height = 247
+        Height = 199
         Top = 0
         Width = 615
         Align = alClient
@@ -152,6 +152,35 @@ object frmMain: TfrmMain
       Height = 64
       Top = 2
       Style = tbsSeparator
+    end
+  end
+  object PnlProgress: TPanel
+    Left = 0
+    Height = 48
+    Top = 295
+    Width = 623
+    Align = alBottom
+    BevelOuter = bvNone
+    ClientHeight = 48
+    ClientWidth = 623
+    TabOrder = 2
+    Visible = False
+    object LblJitName: TLabel
+      Left = 0
+      Height = 1
+      Top = 0
+      Width = 623
+      Align = alTop
+      ParentShowHint = False
+    end
+    object PBarJit: TProgressBar
+      Left = 0
+      Height = 47
+      Top = 1
+      Width = 623
+      Align = alClient
+      Smooth = True
+      TabOrder = 0
     end
   end
   object MenuList: TPopupMenu

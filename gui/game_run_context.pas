@@ -10,6 +10,7 @@ uses
  game_process,
  md_pipe,
  host_ipc,
+ host_ipc_interface,
  game_info,
  param_sfo_gui,
  playgo_chunk_gui,
@@ -47,6 +48,8 @@ uses
     function  DoShowError(const msg:RawByteString):Integer; virtual;
     function  DoShowWarning(const msg:RawByteString):Integer; virtual;
     procedure DoProcessExitMsg; virtual;
+    procedure DoJitLabel   (mode:Byte;const name:RawByteString); virtual;
+    procedure DoJitProgress(const data:TJitProgressData); virtual;
    published
     function  KEV_EVENT     (Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  ERROR         (Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -55,6 +58,8 @@ uses
     function  PLAYGO_INIT   (Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  LOAD_EXEC      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+    function  JIT_LABEL      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+    function  JIT_PROGRESS   (Client:THostIpc;Value:TIpcValue):TIpcValue;
    end;
 
  {$M-}
@@ -402,6 +407,40 @@ end;
 
 //
 
+function TGameRunContext.JIT_LABEL(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ mode:Byte;
+ name:RawByteString;
+ len:LongInt;
+begin
+ Result:=0;
+
+ len:=Value.GetLen;
+ if (len<1) then Exit;
+
+ mode:=PByte(Value.GetBuf)^;
+
+ name:='';
+ if (len>1) then
+ begin
+  SetString(name,PAnsiChar(Value.GetBuf)+1,len-1);
+ end;
+
+ DoJitLabel(mode,name);
+end;
+
+function TGameRunContext.JIT_PROGRESS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ data:TJitProgressData;
+begin
+ Result:=0;
+
+ data:=Default(TJitProgressData);
+ Value.MoveTo(@data,SizeOf(data));
+
+ DoJitProgress(data);
+end;
+
 procedure TGameRunContext.DoGameRunned;
 begin
  //
@@ -428,6 +467,16 @@ begin
 end;
 
 procedure TGameRunContext.DoProcessExitMsg;
+begin
+ //
+end;
+
+procedure TGameRunContext.DoJitLabel(mode:Byte;const name:RawByteString);
+begin
+ //
+end;
+
+procedure TGameRunContext.DoJitProgress(const data:TJitProgressData);
 begin
  //
 end;

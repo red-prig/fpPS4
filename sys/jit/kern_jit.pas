@@ -32,6 +32,7 @@ uses
  vm_map,
  vm_tracking_map,
  sys_bootparam,
+ host_ipc_interface,
  kern_proc,
  kern_jit_ops,
  kern_jit_ops_sse,
@@ -1861,6 +1862,8 @@ var
  tobj:p_vm_track_object;
 
  blob:p_jit_dynamic_blob;
+
+ modes:t_ctx_modes;
 begin
  map:=p_proc.p_vmspace;
 
@@ -1892,12 +1895,26 @@ begin
   vm_map_track_insert(p_proc.p_vmspace,tobj);
   }
 
-  if (cmInternal in ctx.modes) then
+  modes:=ctx.modes;
+
+  if (cmInternal in modes) then
   begin
    blob:=pick_locked_internal(ctx);
   end else
   begin
+   if (cmDynlib in modes) then
+   if (p_host_ipc<>nil) then
+   begin
+    p_host_ipc.SetJitLabel(jpsBegin,ctx.name);
+   end;
+
    blob:=pick_locked_normal(ctx);
+
+   if (cmDynlib in modes) then
+   if (p_host_ipc<>nil) then
+   begin
+    p_host_ipc.SetJitLabel(jpsEnd,'');
+   end;
   end;
 
   if (blob<>nil) then
@@ -2311,8 +2328,14 @@ var
  node,node_curr,node_next:p_jit_instruction;
 
  i:Integer;
+
+ jit_walk_size:QWORD;
+ jit_walk_time:QWORD;
 begin
  Result:=nil;
+
+ jit_walk_size:=0;
+ jit_walk_time:=0;
 
  nid:=0;
 
@@ -2430,13 +2453,31 @@ begin
 
   dis.Disassemble(dm64,ptr,din);
 
-  if (ptr-ctx.code)>15 then
+  i:=(ptr-ctx.code);
+
+  if (i>15) then
   begin
    //trunc error
    ptr:=ctx.code+15;
+   i:=15;
   end;
 
-  apply_din_stat(din,(ptr-ctx.code));
+  apply_din_stat(din,i);
+
+  jit_walk_size:=jit_walk_size+i;
+
+  if (cmDynlib in ctx.modes) then
+  begin
+   if ((md_rdtsc_unit-jit_walk_time)>(hz div 8)) then
+   begin
+    jit_walk_time:=md_rdtsc_unit;
+
+    if (p_host_ipc<>nil) then
+    begin
+     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.text___end-ctx.text_start));
+    end;
+   end;
+  end;
 
   ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
 
@@ -2790,6 +2831,7 @@ begin
  sw_next :=nil;
  if ctx.fetch_switchtable(sw_table,sw_next) then
  begin
+  jit_walk_size:=jit_walk_size+SizeOf(Integer);
   //
   repeat
    if scan_step_switchtable(ctx,sw_table,sw_next) then
@@ -2813,6 +2855,12 @@ begin
  end;
 
  ctx.print_alloc_stats;
+
+ if (cmDynlib in ctx.modes) then
+ if (p_host_ipc<>nil) then
+ begin
+  p_host_ipc.SetJitLabel(jpsPrep,'');
+ end;
 
  Result:=build(ctx);
 

@@ -17,7 +17,7 @@ const
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
- t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop,cmInternal);
+ t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop,cmDynlib,cmInternal);
 
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object

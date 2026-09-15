@@ -3361,11 +3361,11 @@ begin
  LOG_INFO('pick_obj_internal:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
- ctx.obj:=obj;
+ ctx.obj       :=obj;
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
- ctx.modes:=[cmInternal];
+ ctx.modes     :=[cmInternal];
 
  //load export dt_init
  if (obj^.init_proc_addr.native<>nil) then
@@ -3511,11 +3511,12 @@ begin
  LOG_INFO('pick_obj:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
- ctx.obj:=obj;
- ctx.name:=dynlib_basename(obj^.lib_path);
+ ctx.obj       :=obj;
+ ctx.name      :=dynlib_basename(obj^.lib_path);
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
+ ctx.modes     :=[cmDynlib];
 
  ctx.add_forward_point(fpCall,obj^.entry_addr);
 

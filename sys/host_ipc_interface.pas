@@ -84,6 +84,18 @@ type
   procedure InvokeResult(value:TIpcValue); virtual; abstract;
  end;
 
+const
+ jpsBegin=0;
+ jpsPrep =1;
+ jpsEnd  =2;
+
+type
+ TJitProgressData=packed record
+  curr :QWORD;
+  total:QWORD;
+ end;
+
+type
  THostIpc=class
   public
    //
@@ -92,6 +104,8 @@ type
    procedure   kevent(kev:p_kevent;count:Integer);
    function    OpenMainWindows():THandle;
    procedure   SetCaptionFps(Ffps:QWORD);
+   procedure   SetJitLabel(mode:Byte;name:PChar);
+   procedure   SetJitProgress(curr,total:QWORD);
    //
    function    handler:THostIpcHandler; virtual; abstract;
    //
@@ -130,6 +144,8 @@ var
  iKEV_EVENT   :TMsgHash=(msg:'KEV_EVENT');
  iMAIN_WINDOWS:TMsgHash=(msg:'MAIN_WINDOWS');
  iCAPTION_FPS :TMsgHash=(msg:'CAPTION_FPS');
+ iJIT_LABEL   :TMsgHash=(msg:'JIT_LABEL');
+ iJIT_PROGRESS:TMsgHash=(msg:'JIT_PROGRESS');
 
 implementation
 
@@ -597,6 +613,25 @@ procedure THostIpc.SetCaptionFps(Ffps:QWORD);
 begin
  if (self=nil) then Exit;
  InvokeAsyn(iCAPTION_FPS.mtype,@Ffps,SizeOf(Ffps));
+end;
+
+procedure THostIpc.SetJitLabel(mode:Byte;name:PChar);
+var
+ s:RawByteString;
+begin
+ if (self=nil) then Exit;
+ s:=char(mode)+name;
+ InvokeAsyn(iJIT_LABEL.mtype,pchar(s),Length(s));
+end;
+
+procedure THostIpc.SetJitProgress(curr,total:QWORD);
+var
+ data:TJitProgressData;
+begin
+ if (self=nil) then Exit;
+ data.curr :=curr;
+ data.total:=total;
+ InvokeAsyn(iJIT_PROGRESS.mtype,@data,SizeOf(data));
 end;
 
 
