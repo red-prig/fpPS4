@@ -1750,6 +1750,7 @@ begin
  jit_cbs[OPPnone,OPsmsw     ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPlmsw     ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPinvlpg   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvd     ,OPSnone]:=@op_invalid;
 
  jit_cbs[OPPnone,OPlds      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPles      ,OPSnone]:=@op_invalid;
