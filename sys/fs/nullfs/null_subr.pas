@@ -84,7 +84,7 @@ begin
  end else
  if force then
  begin
-  Result:=calloc(SizeOf(LIST_HEAD),MALIGN_2);
+  Result:=calloc(SizeOf(LIST_HEAD),MALIGN_8);
   if (Result=nil) then Exit;
   data:=HAMT_insert32(@null_node_hashtbl,vfs_hash_index(vp),Result);
   if (data=nil) then

@@ -140,7 +140,7 @@ uses
 
 Function default_hamt_alloc(size:QWORD):Pointer;
 begin
- Result:=calloc(size,MALIGN_2);
+ Result:=calloc(size,MALIGN_8);
 end;
 
 Procedure default_hamt_free(node:Pointer);
