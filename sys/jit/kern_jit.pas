@@ -1772,6 +1772,8 @@ begin
  jit_cbs[OPPnone,OPverr    ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPverw    ,OPSnone]:=@op_invalid;
 
+ jit_cbs[OPPnone,OPgetsec  ,OPSnone]:=@op_invalid;
+
  jit_cbs[OPPnone,OPsha1nexte  ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsha1msg1   ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsha1msg2   ,OPSnone]:=@op_invalid;
@@ -2244,7 +2246,7 @@ begin
   begin
    ofs:=Int64(sw_table^.table)+rel;
 
-   if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+   if ctx.is_text_addr(ofs) then
    begin
     LOG_TRACE(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
     //
@@ -2366,7 +2368,7 @@ begin
  if (cmDontScanRipRel in ctx.modes) then
  begin
   //dont scan rip relative
-  ctx.max_reloc:=0;
+  ctx.max_reloc:=ctx.text___end;
  end else
  begin
   ctx.max_reloc:=QWORD(ctx.max_forward_point);
@@ -2464,20 +2466,27 @@ begin
 
   apply_din_stat(din,i);
 
-  jit_walk_size:=jit_walk_size+i;
-
   if (cmDynlib in ctx.modes) then
   begin
+   jit_walk_size:=jit_walk_size+i;
+
+   if (ctx.get_chunk_ptype=fpCall) then
+   if (QWORD(ptr)>ctx.max_reloc) then
+   begin
+    ctx.max_reloc:=QWORD(ptr);
+   end;
+
    if ((md_rdtsc_unit-jit_walk_time)>(hz div 8)) then
    begin
     jit_walk_time:=md_rdtsc_unit;
 
     if (p_host_ipc<>nil) then
     begin
-     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.text___end-ctx.text_start));
+     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.max_reloc-ctx.text_start));
     end;
    end;
-  end;
+
+  end; //cmDynlib
 
   ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
 
@@ -2831,7 +2840,10 @@ begin
  sw_next :=nil;
  if ctx.fetch_switchtable(sw_table,sw_next) then
  begin
-  jit_walk_size:=jit_walk_size+SizeOf(Integer);
+  if (cmDynlib in ctx.modes) then
+  begin
+   jit_walk_size:=jit_walk_size+SizeOf(Integer);
+  end;
   //
   repeat
    if scan_step_switchtable(ctx,sw_table,sw_next) then

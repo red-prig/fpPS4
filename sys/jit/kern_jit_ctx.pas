@@ -568,6 +568,13 @@ begin
   forward_set.Insert(Result);
  end;
  add_forward_link(Result,instruction);
+
+ //extend rip-relative scan limit
+ if (ptype=fpCall) then
+ if (QWORD(dst)>max_reloc) then
+ begin
+  max_reloc:=QWORD(dst);
+ end;
 end;
 
 function t_jit_context2.add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;

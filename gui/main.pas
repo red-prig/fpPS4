@@ -173,6 +173,8 @@ type
 
     FDialogsManager:TDialogsManager;
 
+    FJitNameCaption:RawByteString;
+
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
     procedure SaveGameList;
@@ -238,13 +240,11 @@ Const
 procedure TGameRunContextGui.DoGameRunned;
 begin
  frmMain.SetButtonsState(mdsRunned);
- frmMain.HideJitProgress;
 end;
 
 procedure TGameRunContextGui.DoGameStop;
 begin
  frmMain.TBStopClick(frmMain);
- frmMain.HideJitProgress;
 end;
 
 procedure TGameRunContextGui.DoLoadExec(const data:TPS4LoadExec);
@@ -1419,6 +1419,7 @@ begin
   FDialogsManager.CloseMainWindow;
   //
   SetButtonsState(mbsStopped);
+  frmMain.HideJitProgress;
   Pages.ActivePage:=TabList;
 
   if (exit_code<>0) then
@@ -1543,6 +1544,7 @@ begin
  case mode of
   jpsBegin:
    begin
+    FJitNameCaption:=aName;
     LblJitName.Caption:=aName;
     PBarJit.Position:=0;
     PBarJit.Style:=pbstNormal;
@@ -1567,7 +1569,12 @@ begin
  begin
   PBarJit.Max:=data.total;
  end;
- PBarJit.Position:=data.curr;
+ if (data.curr<=data.total) then
+ begin
+  PBarJit.Position:=data.curr;
+ end;
+
+ LblJitName.Caption:=FJitNameCaption+' ('+IntToStr(data.curr)+'/'+IntToStr(data.total)+')';
 end;
 
 procedure TfrmMain.SetButtonsState(s:TMainButtonsState);
