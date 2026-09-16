@@ -816,6 +816,8 @@ begin
  begin
   Exit(False);
  end;
+
+ Result:=True;
 end;
 
 procedure load_mtime(const fs_src:RawByteString;var mtime:QWORD);
