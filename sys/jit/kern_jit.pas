@@ -2457,39 +2457,19 @@ begin
   dis.Disassemble(dm64,ptr,din);
 
   i:=(ptr-ctx.code);
+  ctx.dis.CodeIdx:=i;
 
   if (i>15) then
   begin
-   //trunc error
-   ptr:=ctx.code+15;
-   i:=15;
+   i:=15; //need for builder
+   ctx.ptr_next:=ctx.ptr_curr+i;
+   LOG_TRACE('invalid3:0x',HexStr(ctx.ptr_curr));
+   goto _invalid;
   end;
 
-  apply_din_stat(din,i);
+  ctx.ptr_next:=ctx.ptr_curr+i;
 
-  if (cmDynlib in ctx.modes) then
-  begin
-   jit_walk_size:=jit_walk_size+i;
-
-   if (ctx.get_chunk_ptype=fpCall) then
-   if (QWORD(ptr)>ctx.max_reloc) then
-   begin
-    ctx.max_reloc:=QWORD(ptr);
-   end;
-
-   if ((md_rdtsc_unit-jit_walk_time)>(hz div 8)) then
-   begin
-    jit_walk_time:=md_rdtsc_unit;
-
-    if (p_host_ipc<>nil) then
-    begin
-     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.max_reloc-ctx.text_start));
-    end;
-   end;
-
-  end; //cmDynlib
-
-  ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
+  apply_din_stat(din,ctx.dis.CodeIdx);
 
   case din.OpCode.Opcode of
    OPX_Invalid..OPX_GroupP:
@@ -2538,6 +2518,28 @@ begin
    LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr));
    goto _invalid;
   end;
+
+  if (cmDynlib in ctx.modes) then
+  begin
+   jit_walk_size:=jit_walk_size+i;
+
+   if (ctx.get_chunk_ptype=fpCall) then
+   if (QWORD(ptr)>ctx.max_reloc) then
+   begin
+    ctx.max_reloc:=QWORD(ptr);
+   end;
+
+   if ((md_rdtsc_unit-jit_walk_time)>(hz div 8)) then
+   begin
+    jit_walk_time:=md_rdtsc_unit;
+
+    if (p_host_ipc<>nil) then
+    begin
+     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.max_reloc-ctx.text_start));
+    end;
+   end;
+
+  end; //cmDynlib
 
   if print_asm then
   begin
