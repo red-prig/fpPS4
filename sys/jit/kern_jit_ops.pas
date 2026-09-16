@@ -1197,9 +1197,9 @@ const
 
 procedure op_mov(var ctx:t_jit_context2);
 type
- tdata16=array[0..15] of Byte;
+ tdata24=array[0..23] of Byte;
 var
- data:tdata16;
+ data:tdata24;
  Code:Pointer;
  Operand:TOperand;
  i:Byte;
@@ -1215,7 +1215,7 @@ begin
   begin
    i:=ctx.dis.CodeIdx;
 
-   data:=Default(tdata16);
+   data:=Default(tdata24);
    Move(ctx.Code^,data,i);
 
    data[i]:=get_segment_value(ctx.din.Operand[2]);
@@ -1226,6 +1226,9 @@ begin
    ctx.din.Operand[2].RegValue :=Default(TRegValues);
    ctx.din.Operand[2].Size     :=os16;
    ctx.din.Operand[2].ByteCount:=2;
+   ctx.din.Operand[2].CodeIndex:=i;
+
+   ctx.Code:=@data;
 
    op_emit2(ctx,mov_desc);
 
