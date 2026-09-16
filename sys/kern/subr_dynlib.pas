@@ -499,7 +499,7 @@ procedure t_lib_info.init_rel_data;
 begin
  if (rel_data=nil) then
  begin
-  rel_data:=calloc(SizeOf(t_rel_data));
+  rel_data:=AllocMem(SizeOf(t_rel_data));
  end;
 end;
 
