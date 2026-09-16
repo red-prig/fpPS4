@@ -500,7 +500,7 @@ begin
  ndp^.ni_cnd.cn_flags:=ndp^.ni_cnd.cn_flags and (not GIANTHELD);
  _wantparent:=cnp^.cn_flags and (LOCKPARENT or WANTPARENT);
 
- Assert((cnp^.cn_nameiop=LOOKUP) or (wantparent<>0),'CREATE, DELETE, RENAME require LOCKPARENT or WANTPARENT.');
+ Assert((cnp^.cn_nameiop=LOOKUP) or (_wantparent<>0),'CREATE, DELETE, RENAME require LOCKPARENT or WANTPARENT.');
 
  docache:=(cnp^.cn_flags and NOCACHE) xor NOCACHE;
  if (cnp^.cn_nameiop=DELETE) or

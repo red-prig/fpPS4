@@ -1485,6 +1485,7 @@ begin
 
   if md_name_is_hidden(dd,cnp^.cn_nameptr,cnp^.cn_namelen) then
   begin
+   de:=nil;
    Result:=ENOENT;
   end else
   if ((flags and ISDOTDOT)<>0) then
