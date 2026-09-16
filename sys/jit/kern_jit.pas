@@ -1721,6 +1721,7 @@ begin
  jit_cbs[OPPnone,OPstr      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPbndldx   ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmcall   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmptrst  ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmlaunch ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmresume ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmxoff   ,OPSnone]:=@op_invalid;
@@ -1813,7 +1814,7 @@ begin
   end;
 
   if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (adec.Instr.ParseFlags * [preF3,preF2] <> []) or
+     (adec.Instr.ParseFlags * [preF3,preF2,flagEvex] <> []) or
      is_invalid(adec.Instr) then
   begin
    Result:=False;
@@ -2531,7 +2532,7 @@ begin
   end;
 
   if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (din.ParseFlags * [preF3,preF2] <> []) or
+     (din.ParseFlags * [preF3,preF2,flagEvex] <> []) or
      is_invalid(din) then
   begin
    LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr));

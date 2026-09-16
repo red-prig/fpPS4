@@ -1998,6 +1998,7 @@ begin
  jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfisubr ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfidiv  ,OPSnone]:=@op_emit1_ro_np;
