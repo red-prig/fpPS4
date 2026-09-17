@@ -455,7 +455,7 @@ type
   Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
   Procedure _LinkNode(node:p_jit_instruction);
-  Procedure _ZipNode(node:p_jit_instruction;is_forward:Boolean;var is_change:Boolean);
+  function  _ZipNode(node:p_jit_instruction):Integer;
   Procedure LinkData;
   Function  CopyChunks(var rec:t_jit_copy_ptr):Boolean;
   Function  CopyData  (var rec:t_jit_copy_ptr):Boolean;
@@ -2879,13 +2879,7 @@ begin
  With node^ do
   case ATargetType of
    lnkData,
-   lnkPlt :
-     begin
-      d:=_get_link_offset(ATargetType,ATargetAddr);
-      d:=d+_get_base_offset(ATargetType);
-      d:=d-AInstructionEnd;
-      _set_data(node,d);
-     end;
+   lnkPlt,
    lnkLabelBefore,
    lnkLabelAfter:
      begin
@@ -2899,11 +2893,12 @@ begin
 
 end;
 
-Procedure t_jit_builder._ZipNode(node:p_jit_instruction;is_forward:Boolean;var is_change:Boolean);
+function t_jit_builder._ZipNode(node:p_jit_instruction):Integer;
 var
  d:Integer;
  mop:Byte;
 begin
+ Result:=0;
 
  With node^ do
   case ATargetType of
@@ -2924,11 +2919,12 @@ begin
       begin
        //clear instr
 
+       Result:=-AInstructionSize;
+
        ATargetRequired :=False;
        ATargetType     :=lnkNone;
        AInstructionSize:=0;
 
-       is_change:=True;
        Exit;
       end;
 
@@ -2945,19 +2941,19 @@ begin
           begin
            //jmp_32->jmp_8
            m_jmp_8();
-           is_change:=True;
+           Result:=-3;
           end;
          MOP_JCC:
           begin
            //jcc_32->jcc_8
            m_jcc_8(mop);
-           is_change:=True;
+           Result:=-3;
           end;
          MOP_JCX:
           begin
            //jcx_32->jcx_8
            m_jcx_8(mop);
-           is_change:=True;
+           Result:=-3;
           end;
          else;
         end;
@@ -2973,19 +2969,19 @@ begin
           begin
            //jmp_8->jmp_32
            m_jmp_32();
-           is_change:=True;
+           Result:=+3;
           end;
          MOP_JCC:
           begin
            //jcc_8->jcc_32
            m_jcc_32(mop);
-           is_change:=True;
+           Result:=+3;
           end;
          MOP_JCX:
           begin
            //jcx_8->jcx_32
            m_jcx_32(mop);
-           is_change:=True;
+           Result:=+3;
           end;
          else;
         end;
@@ -3011,11 +3007,14 @@ var
  is_forward:Boolean;
  is_change:Boolean;
  pass_count:Integer;
+ zip_size:Integer;
+ i:Integer;
 begin
 
  //Zip Data
 
  pass_count:=0;
+ zip_size  :=0;
  is_forward:=True;
 
  RebuldInstructionOffset;
@@ -3036,7 +3035,9 @@ begin
    //
    while (node<>nil) do
    begin
-    _ZipNode(node,is_forward,is_change);
+    i:=_ZipNode(node);
+    is_change:=is_change or (i<>0);
+    zip_size:=zip_size+i;
     //
     node:=node^.zNext.unzip;
    end;
@@ -3055,7 +3056,9 @@ begin
    //
    while (node<>nil) do
    begin
-    _ZipNode(node,is_forward,is_change);
+    i:=_ZipNode(node);
+    is_change:=is_change or (i<>0);
+    zip_size:=zip_size+i;
     //
     node:=node^.zPrev.unzip;
    end;
@@ -3068,9 +3071,14 @@ begin
  if is_change then
  begin
   RebuldInstructionOffset;
-  is_forward:=not is_forward;
-  goto _start;
+  if (pass_count<4) then
+  begin
+   is_forward:=not is_forward;
+   goto _start;
+  end;
  end;
+
+ //Writeln('zip_pass:',pass_count,'->',zip_size);
 
  //Link Data
 
