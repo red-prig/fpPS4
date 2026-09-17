@@ -377,6 +377,9 @@ const
  //print calls of exported library functions
  jit_trace_hle_call=False;
 
+const
+ switchtable_mask=$FFF00000;
+
 implementation
 
 uses
@@ -1299,6 +1302,7 @@ end;
 function scan_switchtable(var ctx:t_jit_context2;start:Int64):Boolean;
 var
  table:PInteger;
+ ofs:Int64;
  rel:Integer;
 begin
  Result:=False;
@@ -1316,10 +1320,14 @@ begin
    Exit;
   end;
 
-  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  if (DWORD(rel) and switchtable_mask)=switchtable_mask then
   begin
-   ctx.add_switchtable(table);
-   Result:=True;
+   ofs:=Int64(table)+rel;
+   if ctx.is_text_addr(ofs) then
+   begin
+    ctx.add_switchtable(table);
+    Result:=True;
+   end;
   end;
 
  end;

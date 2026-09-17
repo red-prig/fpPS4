@@ -2243,7 +2243,7 @@ begin
    Exit;
   end;
 
-  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  if (DWORD(rel) and switchtable_mask)=switchtable_mask then
   begin
    ofs:=Int64(sw_table^.table)+rel;
 
