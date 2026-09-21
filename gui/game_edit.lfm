@@ -519,6 +519,25 @@ object frmGameEditor: TfrmGameEditor
         ParentShowHint = False
         OnClick = BtnUpLayerClick
       end
+      object Edt_MountList_AllowApp0RW: TCheckBox
+        AnchorSideLeft.Control = BtnUpLayer
+        AnchorSideLeft.Side = asrBottom
+        AnchorSideTop.Control = BtnAddLayer
+        AnchorSideTop.Side = asrCenter
+        AnchorSideRight.Control = TabFolders
+        AnchorSideRight.Side = asrBottom
+        Left = 293
+        Height = 19
+        Top = 130
+        Width = 96
+        Hint = 'Mounts a writable layer on /app0 so test/homebrew apps can write into the game folder. Changes are stored in LocalDir/app0rw.'
+        BorderSpacing.Left = 10
+        BorderSpacing.Right = 10
+        Caption = 'Writable /app0'
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 5
+      end
     end
     object TabDlc: TTabSheet
       Caption = 'DLC'
@@ -532,7 +551,7 @@ object frmGameEditor: TfrmGameEditor
         Left = 10
         Height = 15
         Hint = 'Downloadable content (DLC) folders installed for this game.'
-        Top = 11
+        Top = 3
         Width = 156
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -546,10 +565,10 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideLeft.Side = asrBottom
         AnchorSideTop.Control = TabDlc
         Left = 230
-        Height = 26
+        Height = 10
         Hint = 'Add a DLC folder'
         Top = 5
-        Width = 26
+        Width = 10
         AutoSize = True
         BorderSpacing.Top = 5
         BorderSpacing.Right = 5
@@ -565,11 +584,11 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideTop.Control = BtnDlcAdd
         AnchorSideTop.Side = asrCenter
         AnchorSideRight.Side = asrBottom
-        Left = 261
-        Height = 26
+        Left = 245
+        Height = 10
         Hint = 'Remove selected DLC folder'
         Top = 5
-        Width = 26
+        Width = 10
         AutoSize = True
         Images = frmMain.SmallImageList
         ImageIndex = 2
@@ -585,9 +604,9 @@ object frmGameEditor: TfrmGameEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Side = asrBottom
         Left = 10
-        Height = 185
+        Height = 201
         Hint = 'DLC folders available for this game. Each must contain sce_sys/param.sfo with CATEGORY=ac'
-        Top = 36
+        Top = 20
         Width = 439
         Anchors = [akTop, akLeft, akRight, akBottom]
         BorderSpacing.Left = 10
@@ -609,7 +628,7 @@ object frmGameEditor: TfrmGameEditor
         Left = 176
         Height = 19
         Hint = 'Automatically detect update/patch/mod folders next to the game'
-        Top = 9
+        Top = 1
         Width = 44
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -640,7 +659,7 @@ object frmGameEditor: TfrmGameEditor
         TitleStyle = tsNative
         ColWidths = (
           64
-          391
+          374
         )
       end
     end

@@ -555,6 +555,33 @@ begin
 
      end; //For
 
+     if GameStartupInfo.FGameItem.MountList.AllowApp0RW then
+     begin
+      fs_layer:='/layer_app0rw';
+      fs_src:=Format(unix_to_host('%s/app0rw'),[fs_source[MM_LOCAL]]);
+
+      ForceDirectories(fs_src);
+
+      err:=mount_into_sandbox(fs_type,
+                              pchar(fs_layer),
+                              pchar(fs_src),
+                              nil,
+                              ord(mfBudget in flags)*MNT_BIG_APP,
+                              True);
+
+      if (err=0) then
+      begin
+       err:=mount_into_sandbox('unionfs',
+                               pchar(fs_dst),
+                               pchar(fs_layer),
+                               nil,
+                               0,
+                               False);
+
+       Writeln('Apply layer:',fs_src);
+      end;
+     end;
+
     end; //MM_GAME
 
    end; //MM_CREATE

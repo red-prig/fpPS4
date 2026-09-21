@@ -1143,6 +1143,73 @@ begin
 
 end;
 
+function pfs_get_va_mode(mp:p_mount;va_mode:Integer;p_out:PInteger):Integer;
+var
+ is_system:Boolean;
+ val:Integer;
+begin
+
+ //only for PFS emulate
+ if ((mp^.mnt_flag and MNT_PFS_ANY)=0) then
+ begin
+  p_out^:=va_mode;
+  Exit(0);
+ end;
+
+ is_system:=(mp^.mnt_budget_id<>0);
+
+ if (not is_system) then
+ begin
+  if ((va_mode and 6)=6) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  val:=&0555;
+
+  if ((va_mode and S_IROTH)=0) then
+  begin
+   Exit(22);
+  end;
+ end else
+ begin
+  if ((va_mode and &0606)=&0606) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0604)=&0604) then
+  begin
+   p_out^:=&0775;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0404)=&0404) then
+  begin
+   p_out^:=&0555;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0600)=&0600) then
+  begin
+   p_out^:=&0770;
+   Exit(0);
+  end;
+
+  val:=&0550;
+
+  if ((va_mode and S_IRUSR)=0) then
+  begin
+   Exit(22);
+  end;
+ end;
+
+ p_out^:=val;
+ Exit(0);
+end;
+
 function md_new_cache(mp:p_mount;dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION;var nd:p_ufs_dirent):Integer;
 var
  de:p_dirent;
@@ -1156,14 +1223,13 @@ begin
  nd^.ufs_mode:=UFS_DEFAULT_MODE;
  nd^.ufs_dir :=dd;
 
- if ((mp^.mnt_flag and MNT_RDONLY)<>0) then
- begin
-  nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
- end else
  if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)<>0) then
  begin
   nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
  end;
+
+ //fixup
+ pfs_get_va_mode(mp,nd^.ufs_mode,@nd^.ufs_mode);
 
  de:=nd^.ufs_dirent;
 
@@ -2147,65 +2213,6 @@ begin
  NtClose(FD);
 end;
 
-function pfs_get_va_mode(vp:p_vnode;va_mode,is_system:Integer;p_out:PInteger):Integer;
-var
- val:Integer;
-begin
-
- //only for PFS emulate
- if ((vp^.v_mount^.mnt_flag and MNT_PFS_ANY)=0) then
- begin
-  p_out^:=va_mode;
-  Exit(0);
- end;
-
- if (is_system=0) then
- begin
-  if ((va_mode and 6)=6) then
-  begin
-   p_out^:=&0777;
-   Exit(0);
-  end;
-
-  val:=&0555;
- end else
- begin
-  if ((va_mode and &0606)=&0606) then
-  begin
-   p_out^:=&0777;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0604)=&0604) then
-  begin
-   p_out^:=&0775;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0404)=&0404) then
-  begin
-   p_out^:=&0555;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0600)=&0600) then
-  begin
-   p_out^:=&0770;
-   Exit(0);
-  end;
-
-  val:=&0550;
- end;
-
- if ((va_mode and S_IRUSR)=0) then
- begin
-  Exit(22);
- end;
-
- p_out^:=val;
- Exit(0);
-end;
-
 function md_mkdir(ap:p_vop_mkdir_args):Integer;
 var
  dvp:p_vnode;
@@ -2228,7 +2235,7 @@ begin
  dmp:=VFSTOUFS(dvp^.v_mount);
 
  va_mode:=0;
- Result:=pfs_get_va_mode(dvp,vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp^.v_mount,vap^.va_mode,@va_mode);
  if (Result<>0) then Exit;
 
  dd:=dvp^.v_data;
@@ -2671,7 +2678,7 @@ begin
  vap:=ap^.a_vap;
 
  va_mode:=0;
- Result:=pfs_get_va_mode(dvp,vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp^.v_mount,vap^.va_mode,@va_mode);
  if (Result<>0) then Exit;
 
  //emu ext
@@ -3039,7 +3046,7 @@ begin
   //end;
 
   va_mode:=0;
-  Result:=pfs_get_va_mode(vp,vap^.va_mode,0,@va_mode);
+  Result:=pfs_get_va_mode(vp^.v_mount,vap^.va_mode,@va_mode);
   if (Result<>0) then goto _err;
 
   de^.ufs_mode:=va_mode;
