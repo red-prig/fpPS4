@@ -106,7 +106,8 @@ implementation
 
 uses
  TypInfo,
- open_dialog;
+ open_dialog,
+ elf64;
 
 { TfrmGameEditor }
 
@@ -235,6 +236,20 @@ begin
  Provider.Free;
 end;
 
+Function ReadHeader(const fname:RawByteString):DWORD;
+var
+ F:THandle;
+begin
+ Result:=DWORD(-1);
+
+ F:=FileOpen(fname,fmOpenRead);
+ if (F=THandle(-1)) then Exit;
+
+ FileRead(F,Result,SizeOf(DWORD));
+
+ FileClose(F);
+end;
+
 procedure TfrmGameEditor.LoadElfList;
 var
  CurParent:RawByteString;
@@ -258,14 +273,15 @@ begin
     '.elf':
       begin
        new:='/app0/'+FileInfo.Name;
-
        if not SameFileName(new,Trim(Edt_GameInfo_Exec.Text)) then
        begin
-        Edt_GameInfo_Exec.AddItem(new,nil);
-       end;
-
+        case ReadHeader(CurParent+FileInfo.Name) of
+         ELFMAG,
+         SELF_MAGIC:Edt_GameInfo_Exec.AddItem(new,nil);
+         else;
+        end; //case
+       end; //SameFileName
       end;
-
     else;
    end;
 
