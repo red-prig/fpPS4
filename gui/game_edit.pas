@@ -31,9 +31,9 @@ type
     BtnDwLayer: TSpeedButton;
     BtnUpLayer: TSpeedButton;
     EditPages: TPageControl;
+    Edt_GameInfo_Exec: TComboBox;
     Edt_MountList_OverlayAuto: TCheckBox;
     Edt_GameInfo_Name: TEdit;
-    Edt_GameInfo_Exec: TEdit;
     Edt_GameInfo_TitleId: TEdit;
     Edt_GameInfo_Version: TEdit;
     Edt_GameInfo_AppVer: TEdit;
@@ -77,6 +77,7 @@ type
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormInit(UpdateTitle:Boolean);
     procedure FormSave;
+    procedure LoadElfList;
     procedure LoadParamSfo(UpdateTitle:Boolean);
     Procedure UpdateOverlays;
   private
@@ -203,6 +204,7 @@ begin
  Provider.Free;
 
  //////
+ LoadElfList;
 
  OverlayAutoChangeButtons;
  DlcAutoChangeButtons;
@@ -231,6 +233,46 @@ begin
  form_filler.FormSave(Self,Provider,FItem);
 
  Provider.Free;
+end;
+
+procedure TfrmGameEditor.LoadElfList;
+var
+ CurParent:RawByteString;
+ ext      :RawByteString;
+ new      :RawByteString;
+ FileInfo:TSearchRec;
+begin
+ Edt_GameInfo_Exec.Items.Clear;
+ Edt_GameInfo_Exec.AddItem(Edt_GameInfo_Exec.Text,nil);
+
+ CurParent:=IncludeTrailingPathDelimiter(Edt_MountList_game.Text);
+
+ if SysUtils.FindFirst(CurParent+'*',faDirectory,FileInfo)=0 then
+ begin
+  repeat
+   ext:=ExtractFileExt(FileInfo.Name);
+   ext:=LowerCase(ext);
+
+   case ext of
+    '.bin',
+    '.elf':
+      begin
+       new:='/app0/'+FileInfo.Name;
+
+       if not SameFileName(new,Trim(Edt_GameInfo_Exec.Text)) then
+       begin
+        Edt_GameInfo_Exec.AddItem(new,nil);
+       end;
+
+      end;
+
+    else;
+   end;
+
+  until SysUtils.FindNext(FileInfo)<>0;
+  SysUtils.FindClose(FileInfo);
+ end;
+
 end;
 
 procedure TfrmGameEditor.LoadParamSfo(UpdateTitle:Boolean);
@@ -299,6 +341,8 @@ end;
 
 procedure TfrmGameEditor.Edt_MountList_gameExit(Sender: TObject);
 begin
+ LoadElfList;
+
  UpdateOverlays;
  UpdateDlcs;
  LoadParamSfo(True);
@@ -312,6 +356,8 @@ begin
  if (new='') then Exit;
 
  Edt_MountList_game.Text:=new;
+
+ LoadElfList;
 
  LoadParamSfo(True);
  //reupdate

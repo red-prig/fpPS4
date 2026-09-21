@@ -1,7 +1,7 @@
 object frmGameEditor: TfrmGameEditor
-  Left = 695
+  Left = 924
   Height = 311
-  Top = 146
+  Top = 184
   Width = 467
   Caption = 'Game editor'
   ClientHeight = 311
@@ -15,11 +15,11 @@ object frmGameEditor: TfrmGameEditor
     Height = 266
     Top = 0
     Width = 467
-    ActivePage = TabDlc
+    ActivePage = TabFolders
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
     BorderSpacing.Bottom = 10
-    TabIndex = 2
+    TabIndex = 1
     TabOrder = 0
     object TabMain: TTabSheet
       Caption = 'Main'
@@ -160,26 +160,6 @@ object frmGameEditor: TfrmGameEditor
         ParentShowHint = False
         ShowHint = True
       end
-      object Edt_GameInfo_Exec: TEdit
-        AnchorSideLeft.Control = TabMain
-        AnchorSideTop.Control = Label4
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = TabMain
-        AnchorSideRight.Side = asrBottom
-        Left = 10
-        Height = 23
-        Hint = 'Command line used to launch the game executable'
-        Top = 209
-        Width = 439
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 10
-        BorderSpacing.Top = 10
-        BorderSpacing.Right = 10
-        MaxLength = 4096
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 5
-      end
       object PanelHalf: TPanel
         AnchorSideLeft.Control = TabMain
         AnchorSideLeft.Side = asrCenter
@@ -234,6 +214,26 @@ object frmGameEditor: TfrmGameEditor
         ReadOnly = True
         ShowHint = True
         TabOrder = 3
+      end
+      object Edt_GameInfo_Exec: TComboBox
+        AnchorSideLeft.Control = TabMain
+        AnchorSideTop.Control = Label4
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = TabMain
+        AnchorSideRight.Side = asrBottom
+        Left = 10
+        Height = 23
+        Hint = 'Command line used to launch the game executable'
+        Top = 209
+        Width = 439
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 10
+        BorderSpacing.Top = 10
+        BorderSpacing.Right = 10
+        ItemHeight = 15
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 5
       end
     end
     object TabFolders: TTabSheet
