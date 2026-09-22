@@ -304,7 +304,10 @@ type
  t_lea_hint=Set Of (not_use_segment,
                     not_use_r_tmp0,
                     not_use_r_tmp1,
-                    code_ref);
+                    code_ref,
+                    lea_ref,
+                    mov32_ref,
+                    mov64_ref);
 
 procedure build_lea(var ctx:t_jit_context2;id:Byte;
                     reg:TRegValue;hint:t_lea_hint=[]);
@@ -1337,13 +1340,13 @@ procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 var
  new_ofs:Int64;
 begin
+ if (cmDontScanRipRel in ctx.modes) then Exit;
 
- if (code_ref in hint) then
+ if (hint*[code_ref,mov64_ref]<>[]) then
  begin
   //call [addr]
   //jmp  [addr]
-
-  if not (cmDontScanRipRel in ctx.modes) then
+  //mov  [addr]
 
   if ctx.is_map_addr(ofs) then
   if not ctx.is_jumpslot(Pointer(ofs)) then
@@ -1362,10 +1365,9 @@ begin
   end;
 
  end else
+ if (lea_ref in hint) then
  begin
   //lea
-
-  if not (cmDontScanRipRel in ctx.modes) then
 
   if scan_switchtable(ctx,ofs) then
   begin
@@ -1376,7 +1378,14 @@ begin
    ctx.add_forward_point(fpData,Pointer(ofs));
   end;
 
+ end else
+ if (mov32_ref in hint) then
+ begin
+  //mov  [32]
+
+  scan_switchtable(ctx,ofs)
  end;
+
 end;
 
 function is_segment(const i:TInstruction):Boolean; inline;
@@ -2963,6 +2972,8 @@ var
 
  ovr:t_override_ctx;
 
+ hint:t_lea_hint;
+
  procedure mem_out;
  begin
   with ctx.builder do
@@ -3113,9 +3124,16 @@ begin
    mo_mem_ctx,
    mo_ctx_mem:
      begin
-      build_lea(ctx,get_lea_id(memop),r_tmp0);
-
       mem_size:=ctx.din.Operand[get_lea_id(memop)].Size;
+
+      hint:=[];
+      if (his_mov in desc.hint) then
+      case mem_size of
+       os32:hint:=[mov32_ref];
+       os64:hint:=[mov64_ref];
+      end;
+
+      build_lea(ctx,get_lea_id(memop),r_tmp0,hint);
      end;
    else;
   end;

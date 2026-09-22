@@ -2284,16 +2284,16 @@ begin
   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_next));
 
   LOG_ERROR('builder error:',
-          din.OpCode.Prefix,',',
-          din.OpCode.Opcode,',',
-          din.OpCode.Suffix,' ',
-          din.Operand[1].Size,' ',
-          din.Operand[2].Size);
+            din.OpCode.Prefix,',',
+            din.OpCode.Opcode,',',
+            din.OpCode.Suffix,' ',
+            din.Operand[1].Size,' ',
+            din.Operand[2].Size);
 
   LOG_TRACE('opcode=$',HexStr(dis.opcode,8),' ',
-          'MIndex=',dis.ModRM.Index,' ',
-          'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
-          'mm=',MCODES[dis.mm and 3],':',dis.mm);
+            'MIndex=',dis.ModRM.Index,' ',
+            'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
+            'mm=',MCODES[dis.mm and 3],':',dis.mm);
 
  end;
 

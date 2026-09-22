@@ -1678,7 +1678,7 @@ begin
    if (new.ASize=os16) then
    begin
     //low part
-    build_lea(ctx,2,r_tmp0,[not_use_segment]);
+    build_lea(ctx,2,r_tmp0,[not_use_segment,lea_ref]);
     //
     ctx.builder.movq(new,r_tmp0);
    end else
