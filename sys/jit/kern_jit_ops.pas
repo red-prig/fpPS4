@@ -1668,7 +1668,7 @@ begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
    new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
-   build_lea(ctx,2,new,[not_use_segment]);
+   build_lea(ctx,2,new,[not_use_segment,lea_ref]);
    //
    op_save(ctx,1,fix_size(new));
   end else
@@ -1683,7 +1683,7 @@ begin
     ctx.builder.movq(new,r_tmp0);
    end else
    begin
-    build_lea(ctx,2,new,[not_use_segment]);
+    build_lea(ctx,2,new,[not_use_segment,lea_ref]);
    end;
   end;
  end else
