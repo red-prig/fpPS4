@@ -35,6 +35,8 @@ function  sys_execve(fname:pchar;argv,envv:ppchar):Integer;
 implementation
 
 uses
+ sys_bootparam,
+ md_thread,
  systm,
  md_systm,
  errno,
@@ -68,7 +70,6 @@ uses
  kern_authinfo,
  vfs_syscalls,
  signal,
- trap,
  md_context,
  md_arc4random,
  subr_backtrace;
@@ -1144,6 +1145,15 @@ begin
  ///
 end;
 
+procedure change_cpumode;
+begin
+ if (p_proc.p_sdk_version < $3000000) then
+ begin
+  sys_bootparam.set_cpumode(2); //COMPAT
+ end;
+ cpuset_setaffinity(curkthread,sys_bootparam.p_cpuset);
+end;
+
 function get_sdk_version_str(version:QWORD):RawByteString;
 begin
  Result:=HexStr((version shr 24),2)+'.'+HexStr(((version shr 12) and $fff),3)+'.'+HexStr((version and $fff),3);
@@ -1163,7 +1173,12 @@ begin
  begin
   Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
  end;
- LOG_INFO('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
+
+ if (Result=0) then
+ begin
+  LOG_INFO('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
+  change_cpumode;
+ end;
 end;
 
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);

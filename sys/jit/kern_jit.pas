@@ -1273,8 +1273,35 @@ begin
  end;
 end;
 
+var
+ cpuid_h2g:array[0..63] of Byte; external;
+
+procedure op_tsc_aux(var ctx:t_jit_context2);
+begin
+ with ctx.builder do
+ begin
+  movi(eax,1);
+  cpuid;
+  //
+  shri8(ebx,24); //get CPUID_LOCAL_APIC_ID
+
+  movq(eax,[r13-jit_frame_offset+(@kthread(nil^).td_cpuset)]); //eax = td_cpuset
+
+  movi64(rcx,QWORD(@cpuid_h2g)); //rcx = cpuid_h2g
+  movzb (ecx,[rcx+rbx]);         //ecx = cpuid_h2g[rbx]
+  andq  (ecx,eax);               //ecx = cpuset and cpuid_h2g[rbx]
+
+  bsfq  (ecx,eax);               //IA32_TSC_AUX = first masked cpu
+ end;
+end;
+
 procedure op_rdtscp(var ctx:t_jit_context2);
 begin
+ //rdx //result0
+ //rax //result1
+ //rcx //result3
+ //rbx //backup
+
  if time.strict_ps4_freq then
  begin
   with ctx.builder do
@@ -1282,16 +1309,9 @@ begin
    laxf;
    movq(r15,rax);
    //
-   movq(r14,rbx); //save rbx
+   movq(r14,rbx);  //save rbx
    //
-   movi(eax,1);
-   cpuid;
-   //
-   shri8  (ebx,6); //cpu_id
-   andi8se(ebx,7); //0..7
-   //
-   movi(ecx,7);
-   subq(ecx,ebx);  //7-cpu_id
+   op_tsc_aux(ctx);
    //
    movq(rbx,r14);  //restore rbx
    //
@@ -1299,49 +1319,24 @@ begin
    rdtsc ;
    lfence;
    //
-   shli8(rdx, 32);
-   orq  (rax,rdx);
-   //
-   //inline md_rev_guest
-   movi64(r14,md_rev_guest);
-   //replacing div with mul, the result in %rdx
-   mulq  (r14);
-   //
-   movq (eax,edx); //get lo
-   shri8(rdx, 32); //get hi
+   if time.strict_ps4_freq then
+   begin
+    shli8(rdx, 32);
+    orq  (rax,rdx);
+    //
+    //inline md_rev_guest
+    movi64(r14,md_rev_guest);
+    //replacing div with mul, the result in %rdx
+    mulq  (r14);
+    //
+    movq (eax,edx); //get lo
+    shri8(rdx, 32); //get hi
+   end;
    //
    xchgq(rax,r15);
    saxf;
    movq (rax,r15);
   end;
- end else
- with ctx.builder do
- begin
-  //rdx //result0
-  //rax //result1
-  //rcx //result3
-  //rbx //backup -> CPUID_LOCAL_APIC_ID 0xff000000 0..7
-
-  movq(r14,rbx); //save rbx
-  //
-  movi(eax,1);
-  cpuid;
-  //
-  laxf;
-  //
-  shri8  (ebx,6); //cpu_id
-  andi8se(ebx,7); //0..7
-  //
-  movi   (ecx,7);
-  subq   (ecx,ebx); //7-cpu_id
-  //
-  saxf;
-  //
-  movq   (rbx,r14); //restore rbx
-  //
-  lfence;
-  rdtsc ;
-  lfence;
  end;
 end;
 

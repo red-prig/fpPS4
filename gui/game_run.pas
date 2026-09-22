@@ -154,47 +154,54 @@ begin
  inherited;
 end;
 
-procedure load_config(ConfInfo:TConfigInfo);
+procedure load_config(GameStartupInfo:TGameStartupInfo);
 begin
- sys_bootparam.set_neo_mode(ConfInfo.BootParamInfo.Neo);
+ sys_bootparam.set_neo_mode(GameStartupInfo.FConfInfo.BootParamInfo.Neo);
 
- sys_bootparam.p_halt_on_exit       :=ConfInfo.BootParamInfo.halt_on_exit;
- sys_bootparam.p_print_guest_syscall:=ConfInfo.BootParamInfo.print_guest_syscall;
- sys_bootparam.p_print_gpu_ops      :=ConfInfo.BootParamInfo.print_gpu_ops;
- sys_bootparam.p_print_gpu_hint     :=ConfInfo.BootParamInfo.print_gpu_hint;
+ case ((GameStartupInfo.ATTRIBUTE shr 15) and 3) of
+  0:set_cpumode(5); //7CPU_NORMAL
+  1:set_cpumode(0); //6CPU
+  2:set_cpumode(5); //7CPU_NORMAL
+  3:set_cpumode(2); //COMPAT
+ end;
+
+ sys_bootparam.p_halt_on_exit       :=GameStartupInfo.FConfInfo.BootParamInfo.halt_on_exit;
+ sys_bootparam.p_print_guest_syscall:=GameStartupInfo.FConfInfo.BootParamInfo.print_guest_syscall;
+ sys_bootparam.p_print_gpu_ops      :=GameStartupInfo.FConfInfo.BootParamInfo.print_gpu_ops;
+ sys_bootparam.p_print_gpu_hint     :=GameStartupInfo.FConfInfo.BootParamInfo.print_gpu_hint;
 
  //
 
- kern_jit.print_asm :=ConfInfo.JITInfo.print_asm;
- kern_jit.debug_info:=ConfInfo.JITInfo.debug_info;
+ kern_jit.print_asm :=GameStartupInfo.FConfInfo.JITInfo.print_asm;
+ kern_jit.debug_info:=GameStartupInfo.FConfInfo.JITInfo.debug_info;
 
- kern_jit_ctx.jit_relative_analize:=ConfInfo.JITInfo.relative_analize;
- kern_jit_ctx.jit_scan_switchtable:=ConfInfo.JITInfo.scan_switchtable;
- kern_jit_ctx.jit_scan_nopsequence:=ConfInfo.JITInfo.scan_nopsequence;
- kern_jit_ctx.jit_memory_guard    :=ConfInfo.JITInfo.memory_guard;
- kern_lazy_jit.use_lazy_jit       :=ConfInfo.JITInfo.lazy_jit;
+ kern_jit_ctx.jit_relative_analize:=GameStartupInfo.FConfInfo.JITInfo.relative_analize;
+ kern_jit_ctx.jit_scan_switchtable:=GameStartupInfo.FConfInfo.JITInfo.scan_switchtable;
+ kern_jit_ctx.jit_scan_nopsequence:=GameStartupInfo.FConfInfo.JITInfo.scan_nopsequence;
+ kern_jit_ctx.jit_memory_guard    :=GameStartupInfo.FConfInfo.JITInfo.memory_guard;
+ kern_lazy_jit.use_lazy_jit       :=GameStartupInfo.FConfInfo.JITInfo.lazy_jit;
  //
 
- time.strict_ps4_freq        :=ConfInfo.MiscInfo.strict_ps4_freq;
- pm4_me.use_renderdoc_capture:=ConfInfo.MiscInfo.renderdoc_capture;
+ time.strict_ps4_freq        :=GameStartupInfo.FConfInfo.MiscInfo.strict_ps4_freq;
+ pm4_me.use_renderdoc_capture:=GameStartupInfo.FConfInfo.MiscInfo.renderdoc_capture;
  //
 
  vDevice.VulkanDeviceGuid:=Default(TGUID);
- TryStringToGUID(ConfInfo.VulkanInfo.device,vDevice.VulkanDeviceGuid);
+ TryStringToGUID(GameStartupInfo.FConfInfo.VulkanInfo.device,vDevice.VulkanDeviceGuid);
 
- vDevice.VulkanAppFlags:=t_vulkan_app_flags(ConfInfo.VulkanInfo.app_flags);
+ vDevice.VulkanAppFlags:=t_vulkan_app_flags(GameStartupInfo.FConfInfo.VulkanInfo.app_flags);
  //
 
- ps4_libSceSystemService.FSystemName  :=ConfInfo.PS4SystemService.SystemName;
- ps4_libSceSystemService.FLanguage    :=ConfInfo.PS4SystemService.Language;
- ps4_libSceSystemService.FDateFormat  :=ConfInfo.PS4SystemService.DateFormat;
- ps4_libSceSystemService.FTimeFormat  :=ConfInfo.PS4SystemService.TimeFormat;
- ps4_libSceSystemService.FButtonAssign:=ConfInfo.PS4SystemService.ButtonAssign;
+ ps4_libSceSystemService.FSystemName  :=GameStartupInfo.FConfInfo.PS4SystemService.SystemName;
+ ps4_libSceSystemService.FLanguage    :=GameStartupInfo.FConfInfo.PS4SystemService.Language;
+ ps4_libSceSystemService.FDateFormat  :=GameStartupInfo.FConfInfo.PS4SystemService.DateFormat;
+ ps4_libSceSystemService.FTimeFormat  :=GameStartupInfo.FConfInfo.PS4SystemService.TimeFormat;
+ ps4_libSceSystemService.FButtonAssign:=GameStartupInfo.FConfInfo.PS4SystemService.ButtonAssign;
 
- ps4_libSceAudioOut.FMainDevice      :=ConfInfo.PS4Audio.MainDevice;
- ps4_libSceAudioOut.FHeadphoneDevice :=ConfInfo.PS4Audio.HeadphoneDevice;
- ps4_libSceAudioOut.FControllerDevice:=ConfInfo.PS4Audio.ControllerDevice;
- ps4_libSceAudioOut.FSpecialDevice   :=ConfInfo.PS4Audio.SpecialDevice;
+ ps4_libSceAudioOut.FMainDevice      :=GameStartupInfo.FConfInfo.PS4Audio.MainDevice;
+ ps4_libSceAudioOut.FHeadphoneDevice :=GameStartupInfo.FConfInfo.PS4Audio.HeadphoneDevice;
+ ps4_libSceAudioOut.FControllerDevice:=GameStartupInfo.FConfInfo.PS4Audio.ControllerDevice;
+ ps4_libSceAudioOut.FSpecialDevice   :=GameStartupInfo.FConfInfo.PS4Audio.SpecialDevice;
 end;
 
 function get_errno_str(err:Integer):RawByteString;
@@ -235,7 +242,7 @@ var
  LoadExec:Boolean;
 begin
 
- load_config(GameStartupInfo.FConfInfo);
+ load_config(GameStartupInfo);
 
  sys_tty.sys_tty_init(GameStartupInfo.FConfInfo.LogInfo.TtyPrefix,GameStartupInfo.FConfInfo.LogInfo.TtyRedirect);
  md_tty.md_init_tty;

@@ -487,6 +487,7 @@ type
   procedure movi64  (reg:TRegValue  ;imm:Int64);
   procedure movq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure movq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure movzb   (reg:TRegValue  ;mem:t_jit_leas);
   procedure movbe   (reg:TRegValue  ;mem:t_jit_leas);
   procedure movbe   (mem:t_jit_leas ;reg:TRegValue);
   procedure bswap   (reg:TRegValue);
@@ -522,6 +523,8 @@ type
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
   procedure notq    (reg:TRegValue);
   procedure negq    (reg:TRegValue);
+  procedure bsfq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure bsfq    (reg0:TRegValue ;reg1:TRegValue);
   procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
   procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
@@ -4510,6 +4513,13 @@ begin
  _RM(desc,reg,mem); //MOV r/m64, r64
 end;
 
+procedure t_jit_builder.movzb(reg:TRegValue;mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$0FB6;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
 procedure t_jit_builder.movbe(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$0F38F0;opt:[not_os8]);
@@ -4765,6 +4775,20 @@ const
  desc:t_op_type=(op:$F7;index:3);
 begin
  _R(desc,reg);
+end;
+
+procedure t_jit_builder.bsfq(reg:TRegValue;mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$0FBC;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
+procedure t_jit_builder.bsfq(reg0:TRegValue;reg1:TRegValue);
+const
+ desc:t_op_type=(op:$0FBC;opt:[not_os8]);
+begin
+ _RR(desc,reg0,reg1,True);
 end;
 
 ///

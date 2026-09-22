@@ -30,6 +30,7 @@ function sys_cpuset_getid(level,which,id:Integer;setid:PInteger):Integer;
 implementation
 
 uses
+ sys_bootparam,
  errno,
  systm,
  kern_thr,
@@ -104,6 +105,21 @@ begin
  Result:=copyout(@old,mask,SizeOf(QWORD));
 end;
 
+function budget_resource_use_cpuset(td:p_kthread;new:QWORD):Integer;
+begin
+ Result:=0;
+ if ((td^.td_pflags and TDP_KTHREAD)<>0) then
+ begin
+  //system thread
+ end else
+ begin
+  if ((not QWORD(p_cpuset)) and new)<>0 then
+  begin
+   Result:=EPERM;
+  end;
+ end;
+end;
+
 function sys_cpuset_setaffinity(level,which,id:Integer;cpusetsize:QWORD;mask:Pointer):Integer;
 var
  td:p_kthread;
@@ -136,6 +152,10 @@ begin
 
      if (td=nil) then Exit(ESRCH);
 
+     //budget
+     Result:=budget_resource_use_cpuset(td,new);
+     if (Result<>0) then Exit;
+
      thread_lock(td);
      Result:=cpuset_setaffinity(td,new);
      thread_unlock(td);
@@ -163,6 +183,10 @@ begin
      if (id=-1) or (id=0) then
      begin
       td:=curkthread;
+
+      //budget
+      Result:=budget_resource_use_cpuset(td,new);
+      if (Result<>0) then Exit;
 
       thread_lock(td);
       Result:=cpuset_setaffinity(td,new);

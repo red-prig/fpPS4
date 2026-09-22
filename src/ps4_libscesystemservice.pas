@@ -538,7 +538,7 @@ begin
  status^.eventNum                :=ord(display_safe_area_update<>0) + ord(entitlement_update<>0);
  status^.isSystemUiOverlaid      :=false;
  status^.isInBackgroundExecution :=false;
- status^.isCpuMode7CpuNormal     :=true;
+ status^.isCpuMode7CpuNormal     :=(p_cpumode = 5);
  status^.isGameLiveStreamingOnAir:=false;
  status^.isOutOfVrPlayArea       :=false;
  Result:=0;

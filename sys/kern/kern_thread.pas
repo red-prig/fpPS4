@@ -70,6 +70,7 @@ var
 implementation
 
 uses
+ sys_bootparam,
  errno,
  systm,
  kern_mtx,
@@ -138,6 +139,8 @@ begin
  if (System.InterlockedExchange(_t_init,1)<>0) then Exit;
  //init internals
  BeginThread(@_thread_null);
+ //
+ cpuset_init;
 end;
 
 {
@@ -428,6 +431,7 @@ begin
  td^.td_priority     :=68;
  td^.td_pri_class    :=10;
  td^.td_user_pri     :=700;
+ td^.td_cpuset       :=sys_bootparam.p_cpuset;
 end;
 
 function create_thread(td        :p_kthread; //calling thread
@@ -546,9 +550,9 @@ begin
  end;
 
  LOG_INFO('create_thread[',name,']'#13#10,
-         ' newtd:0x',HexStr(newtd),#13#10,
-         '   tid:',newtd^.td_tid
-        );
+          ' newtd:0x',HexStr(newtd),#13#10,
+          '   tid:',newtd^.td_tid
+         );
 
  if (child_tid<>nil) then
  begin
@@ -677,6 +681,7 @@ begin
  if (newtd=nil) then Exit(ENOMEM);
 
  thread0_param(newtd);
+ newtd^.td_cpuset:=$FF;
 
  stack.ss_sp  :=newtd^.td_kstack.sttop;
  stack.ss_size:=(ptruint(newtd^.td_kstack.stack)-ptruint(newtd^.td_kstack.sttop));

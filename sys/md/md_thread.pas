@@ -41,6 +41,8 @@ function  cpu_sched_add(td:p_kthread):Integer;
 procedure cpu_sched_throw;
 function  cpu_thread_finished(td:p_kthread):Boolean;
 
+procedure cpuset_init;
+
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpu_set_priority  (td:p_kthread;prio:Integer):Integer;
 
@@ -185,7 +187,6 @@ begin
  if (P_TBI^.TebBaseAddress=nil) then Exit(-1);
 
  td^.td_teb   :=P_TBI^.TebBaseAddress;
- td^.td_cpuset:=P_TBI^.AffinityMask;
 
  td^.td_teb^.stack:=Pointer(-1); //MAX
  td^.td_teb^.sttop:=nil;         //MIN
@@ -417,40 +418,66 @@ begin
  end;
 end;
 
-function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+var
+ cpuid_h2g:array[0..63] of Byte; public;
+ cpuid_g2h:array[0.. 7] of Byte;
+
+function GetNumberOfProcessors:DWORD;
 var
  info:SYSTEM_INFO;
- i,m,t,n:Integer;
+begin
+ info.dwNumberOfProcessors:=1;
+ GetSystemInfo(info);
+ Result:=info.dwNumberOfProcessors;
+end;
+
+procedure cpuset_init;
+var
+ cpu_num  :DWORD;
+ guest_cpu:DWORD;
+ host_cpu :DWORD;
+begin
+ cpu_num:=GetNumberOfProcessors;
+ if (cpu_num>64) then cpu_num:=64;
+
+ //remap
+ host_cpu:=0;
+
+ for guest_cpu:=7 downto 0 do
+ begin
+  cpuid_h2g[host_cpu ]:=cpuid_h2g[host_cpu] or (QWORD(1) shl guest_cpu);
+  cpuid_g2h[guest_cpu]:=host_cpu;
+
+  //next
+  host_cpu:=(host_cpu+1) mod cpu_num;
+ end;
+
+end;
+
+function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+var
+ i:Integer;
  data:array[0..SizeOf(Ptruint)-1+7] of Byte;
- p_mask:PPtruint;
+ mask:QWORD;
+ p_mask:PQWORD;
 begin
  if (td=nil) then Exit;
  if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
 
- new:=new and $FF;
-
- info.dwNumberOfProcessors:=1;
- GetSystemInfo(info);
-
- if (info.dwNumberOfProcessors<8) then
+ //remap
+ mask:=0;
+ for i:=0 to 7 do
+ if (new and (1 shl i))<>0 then
  begin
-  //remap
-  m:=0;
-  for i:=0 to 7 do
-  begin
-   t:=(new shr i) and 1;
-   n:=(i mod info.dwNumberOfProcessors);
-   m:=m or (t shl n);
-  end;
-  new:=m;
+  mask:=mask or (1 shl cpuid_g2h[i]);
  end;
 
  td^.td_cpuset:=new;
 
  p_mask:=Align(@data,8);
- p_mask^:=new;
+ p_mask^:=mask;
 
- Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,p_mask,SizeOf(Ptruint));
+ Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,p_mask,SizeOf(QWORD));
 end;
 
 function cpu_set_priority(td:p_kthread;prio:Integer):Integer;

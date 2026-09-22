@@ -720,6 +720,9 @@ begin
  Assert(False);
 end;
 
+var
+ cpuid_h2g:array[0..63] of Byte; external;
+
 //cpuid(0x00000000,0x0):eax=0x0000000d ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
 //cpuid(0x00000001,0x0):eax=0x00710f31 ebx=0x07080800 ecx=0x3ed8220b edx=0x178bfbff
 //cpuid(0x00000002,0x0):eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000 //all zero
@@ -883,6 +886,29 @@ asm
  //get host
  cpuid
 
+//                    0x07080800
+//CPUID_BRAND_INDEX   0x000000ff
+//CPUID_CLFUSH_SIZE   0x0000ff00
+//CPUID_HTT_CORES     0x00ff0000
+//CPUID_LOCAL_APIC_ID 0xff000000  //sceKernelGetCurrentCpu 0..7
+
+ shr $24,%ebx                       //get CPUID_LOCAL_APIC_ID
+
+ movqq %gs:teb.thread,%rax          //curkthread
+ movqq kthread.td_cpuset(%rax),%eax //cpuset
+ lea cpuid_h2g(%rip),%rcx           //rcx = cpuid_h2g
+ movzbl (%rcx,%rbx),%ecx            //ecx = cpuid_h2g[rbx]
+ and %ecx, %eax                     //eax = cpuset and cpuid_h2g[rbx]
+
+ bsf %eax, %ecx                     //ecx = first masked cpu
+
+ mov $7,%ebx
+ sub %ecx,%ebx                      //ebx = 7-ecx
+
+ shl $24,%ebx                       //set CPUID_LOCAL_APIC_ID
+
+ or  $0x00080800,%ebx //cpu_procinfo
+
  //if ((cpu_id & 0xffffff80) == 0x740f00) then
  //if "machdep.bootparams.base_ps4_mode" then sceKernelHasNeoMode
 
@@ -892,16 +918,6 @@ asm
 
  mov $0x178bfbff,%edx //cpu_feature
  mov $0x3ed8220b,%ecx //cpu_feature2
-
-//                    0x07080800
-//CPUID_BRAND_INDEX   0x000000ff
-//CPUID_CLFUSH_SIZE   0x0000ff00
-//CPUID_HTT_CORES     0x00ff0000
-//CPUID_LOCAL_APIC_ID 0xff000000  //sceKernelGetCurrentCpu 0..7
-
- and $0x07000000,%ebx //filter CPUID_LOCAL_APIC_ID 0..7
-
- or  $0x00080800,%ebx //cpu_procinfo
 
  jmp _exit
 
