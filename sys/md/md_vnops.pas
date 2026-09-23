@@ -1243,14 +1243,14 @@ begin
   begin
    if ((dd^.ufs_flags and UFS_DROOT)<>0) then
    begin
-    if (strncmp(name, 'sce_sys', namelen)=0) then
+    if (namelen=7) and (strncmp(name, 'sce_sys', namelen)=0) then
     begin
      nd^.ufs_marker:=MARKER_SCE_SYS;
     end;
    end else
    if (dd^.ufs_marker=MARKER_SCE_SYS) then
    begin
-    if (strncmp(name, 'about', namelen)=0) then
+    if (namelen=5) and (strncmp(name, 'about', namelen)=0) then
     begin
      nd^.ufs_marker:=MARKER_SCE_SYS_ABOUT;
     end;
