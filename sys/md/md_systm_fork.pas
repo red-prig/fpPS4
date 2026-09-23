@@ -87,40 +87,35 @@ function AssignProcessToJobObject(hJob,hProcess:THandle):BOOL; stdcall; external
 
 function NtQueryTeb(td_handle:THandle;var teb:p_teb):Integer;
 var
- data:array[0..SizeOf(THREAD_BASIC_INFORMATION)-1+7] of Byte;
- P_TBI:PTHREAD_BASIC_INFORMATION;
+ tbi:THREAD_BASIC_INFORMATION;
 begin
  Result:=0;
  teb:=nil;
- P_TBI:=Align(@data,8);
- P_TBI^:=Default(THREAD_BASIC_INFORMATION);
+ tbi:=Default(THREAD_BASIC_INFORMATION);
 
  Result:=NtQueryInformationThread(
           td_handle,
           ThreadBasicInformation,
-          P_TBI,
+          @tbi,
           SizeOf(THREAD_BASIC_INFORMATION),
           nil);
  if (Result<>0) then Exit;
 
- teb:=P_TBI^.TebBaseAddress;
+ teb:=tbi.TebBaseAddress;
 end;
 
 function NtQueryPeb(hProcess:THandle;var peb:PPEB):Integer;
 var
- data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
- p_info:PPROCESS_BASIC_INFORMATION;
+ pbi:PROCESS_BASIC_INFORMATION;
 begin
- p_info:=Align(@data,8);
-
  Result:=NtQueryInformationProcess(hProcess,
                                    ProcessBasicInformation,
-                                   p_info,
+                                   @pbi,
                                    SizeOf(PROCESS_BASIC_INFORMATION),
                                    nil);
  if (Result=0) then
  begin
-  peb:=p_info^.PebBaseAddress;
+  peb:=pbi.PebBaseAddress;
  end;
 end;
 

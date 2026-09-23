@@ -470,23 +470,21 @@ end;
 
 function NtQueryTeb(td_handle:THandle;var teb:Pointer):Integer;
 var
- data:array[0..SizeOf(THREAD_BASIC_INFORMATION)-1+7] of Byte;
- P_TBI:PTHREAD_BASIC_INFORMATION;
+ tbi:THREAD_BASIC_INFORMATION;
 begin
  Result:=0;
  teb:=nil;
- P_TBI:=Align(@data,8);
- P_TBI^:=Default(THREAD_BASIC_INFORMATION);
+ tbi:=Default(THREAD_BASIC_INFORMATION);
 
  Result:=NtQueryInformationThread(
           td_handle,
           ThreadBasicInformation,
-          P_TBI,
+          @tbi,
           SizeOf(THREAD_BASIC_INFORMATION),
           nil);
  if (Result<>0) then Exit;
 
- teb:=P_TBI^.TebBaseAddress;
+ teb:=tbi.TebBaseAddress;
 end;
 
 const
