@@ -900,6 +900,8 @@ asm
  movzbl (%rcx,%rbx),%ecx            //ecx = cpuid_h2g[rbx]
  and %ecx, %eax                     //eax = cpuset and cpuid_h2g[rbx]
 
+ jz _cpuid_1                        //if eax=0 repeat
+
  bsf %eax, %ecx                     //ecx = first masked cpu
 
  mov $7,%ebx

@@ -1277,10 +1277,14 @@ var
  cpuid_h2g:array[0..63] of Byte; external;
 
 procedure op_tsc_aux(var ctx:t_jit_context2);
+var
+ _repeat:t_jit_i_link;
 begin
  with ctx.builder do
  begin
   movi(eax,1);
+  _repeat:=ctx.builder.get_curr_label.after;
+
   cpuid;
   //
   shri8(ebx,24); //get CPUID_LOCAL_APIC_ID
@@ -1289,7 +1293,9 @@ begin
 
   movi64(rcx,QWORD(@cpuid_h2g)); //rcx = cpuid_h2g
   movzb (ecx,[rcx+rbx]);         //ecx = cpuid_h2g[rbx]
-  andq  (ecx,eax);               //ecx = cpuset and cpuid_h2g[rbx]
+  andq  (eax,ecx);               //eax = cpuset and cpuid_h2g[rbx]
+
+  jcc(OPSc_z,_repeat,os8);       //if eax=0 repeat
 
   bsfq  (ecx,eax);               //IA32_TSC_AUX = first masked cpu
  end;
