@@ -54,6 +54,10 @@ function  md_resume (td:p_kthread):Integer;
 procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 
+var
+ cpuid_h2g:array[0..63] of Byte; public;
+ cpuid_g2h:array[0.. 7] of Byte;
+
 implementation
 
 uses
@@ -418,10 +422,6 @@ begin
  end;
 end;
 
-var
- cpuid_h2g:array[0..63] of Byte; public;
- cpuid_g2h:array[0.. 7] of Byte;
-
 function GetNumberOfProcessors:DWORD;
 var
  info:SYSTEM_INFO;
@@ -461,8 +461,9 @@ var
  mask:QWORD;
  p_mask:PQWORD;
 begin
- if (td=nil) then Exit;
+ if (td=nil) then Exit(-1);
  if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
+ if (new=0) then Exit(-1);
 
  //remap
  mask:=0;

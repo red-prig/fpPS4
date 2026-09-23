@@ -20,35 +20,28 @@ Procedure md_halt(errnum:DWORD); noreturn;
 implementation
 
 uses
+ md_thread,
  kern_proc;
 
 function cpuset_setproc(new:Ptruint):Integer;
 var
- info:SYSTEM_INFO;
- i,m,t,n:Integer;
+ i:Integer;
  data:array[0..SizeOf(Ptruint)-1+7] of Byte;
- p_mask:PPtruint;
+ mask:QWORD;
+ p_mask:PQWORD;
 begin
- new:=new and $FF;
+ if (new=0) then Exit(-1);
 
- info.dwNumberOfProcessors:=1;
- GetSystemInfo(info);
-
- if (info.dwNumberOfProcessors<8) then
+ //remap
+ mask:=0;
+ for i:=0 to 7 do
+ if (new and (1 shl i))<>0 then
  begin
-  //remap
-  m:=0;
-  for i:=0 to 7 do
-  begin
-   t:=(new shr i) and 1;
-   n:=(i mod info.dwNumberOfProcessors);
-   m:=m or (t shl n);
-  end;
-  new:=m;
+  mask:=mask or (1 shl cpuid_g2h[i]);
  end;
 
  p_mask:=Align(@data,8);
- p_mask^:=new;
+ p_mask^:=mask;
 
  Result:=NtSetInformationProcess(NtCurrentProcess,
                                  ProcessAffinityMask,
