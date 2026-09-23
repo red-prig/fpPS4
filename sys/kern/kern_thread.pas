@@ -681,7 +681,6 @@ begin
  if (newtd=nil) then Exit(ENOMEM);
 
  thread0_param(newtd);
- newtd^.td_cpuset:=$FF;
 
  stack.ss_sp  :=newtd^.td_kstack.sttop;
  stack.ss_size:=(ptruint(newtd^.td_kstack.stack)-ptruint(newtd^.td_kstack.sttop));
@@ -734,7 +733,9 @@ begin
  end;
  KernSetThreadDebugName(newtd,'kern:');
 
- sched_fork_thread(td,newtd);
+ //not inherited by internal threads
+ cpuset_setaffinity   (newtd,$FF);
+ sched_thread_priority(newtd,700);
 
  tidhash_add(newtd);
 
