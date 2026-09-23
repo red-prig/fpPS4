@@ -157,15 +157,15 @@ begin
  Result:=Integer(a^.FStage>b^.FStage)-Integer(a^.FStage<b^.FStage);
  if (Result<>0) then Exit;
 
- //3 FAddr
- Result:=Integer((a^.FAddr>b^.FAddr) and (b^.FAddr<>0))-Integer((a^.FAddr<b^.FAddr) and (a^.FAddr<>0));
+ //2 FAddr
+ Result:=Integer(a^.FAddr>b^.FAddr)-Integer(a^.FAddr<b^.FAddr);
  if (Result<>0) then Exit;
 
- //4 FLen
+ //3 FLen
  Result:=Integer((a^.FLen>b^.FLen) and (b^.FLen<>0))-Integer((a^.FLen<b^.FLen) and (a^.FLen<>0));
  if (Result<>0) then Exit;
 
- //5 pData
+ //4 pData
  Result:=CompareDWord(a^.pData^,b^.pData^,Max(a^.FLen,b^.FLen) div 4);
 end;
 
