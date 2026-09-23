@@ -168,6 +168,7 @@ type
 
   FDescSetId:Integer;
 
+  FAddr    :QWORD;
   FHash_gcn:QWORD;
   FHash_spv:QWORD;
 
