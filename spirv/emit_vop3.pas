@@ -626,7 +626,7 @@ begin
  pImm:=src.pWriter.specialize AsType<ntConst>;
  if (pImm<>nil) then
  begin
-  Result:=NewImm_i(dtUInt32,(pImm.AsInt32 and $FFFFFF));
+  Result:=NewImm_i(dtUInt32,(pImm.AsUint32 and $FFFFFF));
  end else
  begin
   Result:=OpAndTo(src,NewImm_q(dtUInt32,$FFFFFF));
