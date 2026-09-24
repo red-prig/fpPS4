@@ -554,7 +554,7 @@ begin
   if (A[i]=node) then Exit;
  end;
  //
- Insert([node],A,High(A));
+ Insert([node],A,Length(A));
 end;
 
 procedure add_volatile(var A:a_volatile_node;V:TsrVolatile);

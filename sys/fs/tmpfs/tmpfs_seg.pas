@@ -84,7 +84,7 @@ function tmpfs_seg_create(map:p_tmpfs_seg_map):p_tmpfs_seg;
 var
  new_entry:p_tmpfs_seg;
 begin
- new_entry:=calloc(sizeof(t_tmpfs_seg_map));
+ new_entry:=calloc(sizeof(t_tmpfs_seg));
 
  //new_entry:=uma_zalloc(mapentzone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'tmpfs_seg_create: kernel resources exhausted');
@@ -432,7 +432,7 @@ begin
  Result:=0;
  next:=entry^.next;
 
- if (entry=@map^.header) then
+ if (entry=@map^.header) or (next=@map^.header) then
  begin
   pos:=map^.max_offset;
  end else

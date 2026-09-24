@@ -1122,11 +1122,11 @@ begin
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
  dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
 
- init_proc_addr:=obj^.fini_proc_addr.addr;
- fini_proc_addr:=obj^.init_proc_addr.addr;
+ init_proc_addr:=obj^.init_proc_addr.addr;
+ fini_proc_addr:=obj^.fini_proc_addr.addr;
 
- obj^.fini_proc_addr.addr:=nil;
  obj^.init_proc_addr.addr:=nil;
+ obj^.fini_proc_addr.addr:=nil;
 
  tail:=TAILQ_LAST(@dynlibs_info.obj_list);
  if (tail=nil) then
@@ -1679,7 +1679,9 @@ begin
   * Malloc things before we need locks.
   }
  i:=imgp^.args^.begin_envv - imgp^.args^.begin_argv;
+
  { Cache arguments if they fit inside our allowance }
+ newargs:=nil;
  if (ps_arg_cache_limit >= (i + sizeof(t_pargs))) then
  begin
   newargs:=pargs_alloc(i);
@@ -1704,7 +1706,7 @@ begin
 
  if (args^.fname<>nil) then
  begin
-  Move(nd.ni_cnd.cn_nameptr^, p_proc.p_comm, maxInt64(nd.ni_cnd.cn_namelen, MAXCOMLEN));
+  Move(nd.ni_cnd.cn_nameptr^, p_proc.p_comm, minInt64(nd.ni_cnd.cn_namelen, MAXCOMLEN));
  end else
  begin
   Move(fexecv_proc_title, p_proc.p_comm, sizeof(fexecv_proc_title));

@@ -347,24 +347,36 @@ end;
 
 function strsep(stringp:PPChar;delim:PChar):PChar;
 var
- b,e:PChar;
+ s:pchar;
+ spanp:pchar;
+ c,sc:Char;
+ tok:pchar;
 begin
- b:=stringp^;
- if (b=nil) then Exit(nil);
+ s:=stringp^;
+ if (s=nil) then Exit(nil);
 
- e:=strpos(b,delim)+strlen(delim);
-
- if (e^<>#0) then
+ tok:=s;
+ While (True) do
  begin
-  e^:=#0;
-  Inc(e);
-  stringp^:=e;
- end else
- begin
-  stringp^:=nil;
- end;
+  c:=s^; Inc(s);
+  spanp:=delim;
+  repeat
+   sc:=spanp^; Inc(spanp);
+   if (sc=c) then
+   begin
+    if (c=#0) then
+    begin
+     s:=nil;
+    end else
+    begin
+     s[-1]:=#0;
+    end;
+    stringp^:=s;
+    Exit(tok);
+   end;
+  until (sc=#0);
+ end; //While
 
- Result:=b;
 end;
 
 function strlcpy(dst,src:PChar;size:ptrint):ptrint;

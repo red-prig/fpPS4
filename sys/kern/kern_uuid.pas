@@ -49,7 +49,7 @@ begin
 
  kstore:=calloc(count * sizeof(t_uuid));
 
- kern_uuidgen(store, count);
+ kern_uuidgen(kstore, count);
 
  Result:=copyout(kstore, store, count * sizeof(t_uuid));
 

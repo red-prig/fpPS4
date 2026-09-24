@@ -512,7 +512,6 @@ begin
  if (node^.tn_size <= uio^.uio_offset) then
  begin
   error:=0;
-  TMPFS_NODE_UNLOCK(node);
   goto _out;
  end;
 

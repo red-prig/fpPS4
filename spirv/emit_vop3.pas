@@ -874,7 +874,7 @@ begin
  voffset.PrepType(ord(dtUint32));
 
  val:=OpShlTo (NewImm_q(dtUint32,1),vsize);
- val:=OpISubTo(vsize,1);
+ val:=OpISubTo(val,1);
 
  val:=OpShlTo(val,voffset);
 

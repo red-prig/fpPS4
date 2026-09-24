@@ -1244,9 +1244,8 @@ begin
   { Reset the attributes. Ignore errors. }
   uva.va_type:=VNON;
   VOP_SETATTR(uvp, @uva);
+  unionfs_node_update(unp, uvp);
  end;
-
- unionfs_node_update(unp, uvp);
 
  Exit(error);
 end;

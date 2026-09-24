@@ -1071,7 +1071,7 @@ begin
  if (mtime^.tv_sec<>VNOVAL) AND (mtime^.tv_nsec<>VNOVAL) then
   node^.tn_status:=node^.tn_status or TMPFS_NODE_MODIFIED;
 
- if (birthtime^.tv_nsec<>VNOVAL) AND (birthtime^.tv_nsec<>VNOVAL) then
+ if (birthtime^.tv_sec<>VNOVAL) AND (birthtime^.tv_nsec<>VNOVAL) then
   node^.tn_status:=node^.tn_status or TMPFS_NODE_MODIFIED;
 
  tmpfs_itimes(vp, atime, mtime);

@@ -3935,7 +3935,7 @@ begin
    tocopy:=BATCH_SIZE;
   end;
 
-  Result:=copyin(upp+pos,@uaddrs,tocopy);
+  Result:=copyin(upp+pos,@uaddrs,tocopy*SizeOf(Pointer));
   if (Result<>0) then Exit;
 
   For i:=0 to tocopy-1 do

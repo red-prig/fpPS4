@@ -649,7 +649,7 @@ begin
   end;
   Result:=malloc(size);
   td^.td_temp.addr:=Result;
-  td^.td_temp.size:=MemSize(Result);
+  td^.td_temp.size:=msize(Result);
  end;
 
 end;

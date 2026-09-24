@@ -597,23 +597,23 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r14 <-> rdi
+ //(r_tmp0)r14 <-> rsi
  with ctx.builder do
  begin
 
   new:=new_reg_size(rax,size);
 
-   movq(r_tmp0,rdi);
+   movq(r_tmp0,rsi);
    op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    movq(new,[r_tmp0]);
 
    if (dflag=0) then
    begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
    end else
    begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
    end;
 
  end;

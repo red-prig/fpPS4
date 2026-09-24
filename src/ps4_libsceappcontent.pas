@@ -454,9 +454,10 @@ var
  i:Integer;
 begin
  Result:=0;
- LOG_TRACE('sceAppContentAddcontMount:',serviceLabel,':',entitlementLabel^.data);
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (entitlementLabel=nil) or (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ LOG_TRACE('sceAppContentAddcontMount:',serviceLabel,':',entitlementLabel^.data);
 
  Result:=CheckEntitlementLabel(entitlementLabel);
  if (Result<>0) then Exit;

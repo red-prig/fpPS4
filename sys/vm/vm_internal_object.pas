@@ -84,13 +84,13 @@ end;
 
 procedure vm_int_obj_destroy(obj:p_vm_int_obj);
 var
- free:t_nt_obj_free_cb;
+ vfree:t_nt_obj_free_cb;
 begin
- free:=obj^.vtable^.free;
+ vfree:=obj^.vtable^.free;
 
- if (free<>nil) then
+ if (vfree<>nil) then
  begin
-  free(obj);
+  vfree(obj);
  end;
 
  if ((obj^.flags and INT_MOBJ_FREE)<>0) then

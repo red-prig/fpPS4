@@ -3625,6 +3625,7 @@ begin
     if (maxp=VM_RO) and ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
     begin
      r:=md_memfd_open(md,fd,maxp);
+     r:=ntf2px(r);
     end else
     if (maxp<>VM_RW) then
     begin
@@ -3635,17 +3636,19 @@ begin
      begin
       maxp:=VM_RW;
       r:=md_memfd_open(md,fd,maxp);
+      r:=ntf2px(r);
       md_close(fd); //close dub
      end;
 
     end else
     begin
      r:=md_memfd_open(md,fd,maxp);
+     r:=ntf2px(r);
     end;
 
     if (r<>0) then
     begin
-     Result:=ntf2px(R);
+     Result:=r;
     end else
     begin
      ap^.a_length:=size; //fixup

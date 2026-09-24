@@ -577,10 +577,10 @@ begin
    oact^.u.sa_handler:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
   end;
 
-  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDSTOP) then
+  if (sig=SIGCHLD) and ((p_sigacts.ps_flag and PS_NOCLDSTOP)<>0) then
    oact^.sa_flags:=oact^.sa_flags or SA_NOCLDSTOP;
 
-  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDWAIT) then
+  if (sig=SIGCHLD) and ((p_sigacts.ps_flag and PS_NOCLDWAIT)<>0) then
    oact^.sa_flags:=oact^.sa_flags or SA_NOCLDWAIT;
 
  end;
@@ -592,7 +592,7 @@ begin
   begin
    ps_mtx_unlock;
    PROC_UNLOCK;
-   Result:=EINVAL;
+   Exit(EINVAL);
   end;
 
   p_sigacts.ps_catchmask[_SIG_IDX(sig)]:=act^.sa_mask;
