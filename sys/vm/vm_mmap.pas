@@ -1514,6 +1514,7 @@ begin
 
    if (Result<>0) then Break;
 
+   Inc(num_out);
   end; //For
 
 

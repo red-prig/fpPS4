@@ -4816,7 +4816,7 @@ end;
 
 procedure t_jit_builder.cmpi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$810;index:7);
+ desc:t_op_type=(op:$81;index:7);
 begin
  _RI(desc,reg,imm);
 end;

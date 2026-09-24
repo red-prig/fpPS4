@@ -554,8 +554,6 @@ begin
  if (StackSize       <MinStackSize)     then StackSize       :=MinStackSize;
  if (StackSize       <MaximumStackSize) then StackSize       :=MaximumStackSize;
 
- StackSize:=MinStackSize;
-
  stack_base:=nil;
  Result:=real_NtAllocateVirtualMemoryEx(
           ProcessHandle            ,

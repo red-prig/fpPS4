@@ -544,7 +544,7 @@ begin
 
  //calc full size
  full:=SizeOf(shared_info)+info.size;
- full:=(info.size+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
+ full:=(full+(MD_PAGE_SIZE-1)) and (not (MD_PAGE_SIZE-1));
 
  //alloc page
  base:=Pointer(KERNEL_LOWER + fast_aslr());
