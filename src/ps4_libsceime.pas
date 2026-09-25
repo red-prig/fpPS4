@@ -56,7 +56,7 @@ type
   supportedLanguages      :QWORD;
   maxTextLength           :DWORD;
   PosAndForm              :TImePosAndForm;
-  inputText               :array[0..2047] of WideChar;
+  inputText               :array[0..SCE_IME_MAX_TEXT_LENGTH-1] of WideChar;
   //
   colorBase               :SceImeColor;
   colorLine               :SceImeColor;
@@ -863,7 +863,7 @@ begin
   Exit(SCE_IME_ERROR_INVALID_HANDLER);
  end;
 
- if (DWORD(param^.maxTextLength-1) > 2047) then
+ if (DWORD(param^.maxTextLength-1) > (SCE_IME_MAX_TEXT_LENGTH-1)) then
  begin
   Exit(SCE_IME_ERROR_INVALID_MAX_TEXT_LENGTH);
  end;
@@ -1002,7 +1002,7 @@ begin
 
  len:=wcsnlen_s(src,maxlen);
 
- if (len>=pos) then
+ if (len>=pos) and (len<maxlen) then
  begin
   Move(src[pos],src[pos+1],(len-pos)*SizeOf(WideChar));
   src[pos]:=chr;

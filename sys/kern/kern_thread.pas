@@ -312,7 +312,7 @@ begin
  rw_wunlock(tidhash_lock);
 end;
 
-procedure tidhash_remove(td:p_kthread);
+function tidhash_unlink(td:p_kthread):Pointer;
 var
  data:Pointer;
 begin
@@ -324,6 +324,14 @@ begin
  HAMT_delete32(@tidhashtbl,td^.td_tid,@data);
 
  rw_wunlock(tidhash_lock);
+ Result:=data;
+end;
+
+procedure tidhash_remove(td:p_kthread);
+var
+ data:Pointer;
+begin
+ data:=tidhash_unlink(td);
 
  if (data=td) then
  begin
@@ -645,6 +653,8 @@ begin
  if (n<>0) then
  begin
   cpu_thread_terminate(newtd);
+  tidhash_unlink(newtd);
+  thread_unlink(newtd);
   thread_free(newtd);
   Exit(EFAULT);
  end;
@@ -745,7 +755,8 @@ begin
  if (n<>0) then
  begin
   cpu_thread_terminate(newtd);
-  thread_dec_ref(newtd);
+  tidhash_unlink(newtd);
+  thread_unlink(newtd);
   thread_free(newtd);
   Exit(EFAULT);
  end;

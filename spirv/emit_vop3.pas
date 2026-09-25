@@ -867,8 +867,8 @@ begin
 
  emit_src_abs_neg(@src,2,dtUint32);
 
- vsize  :=OpAndTo(src[0],15); //[0:4]
- voffset:=OpAndTo(src[1],15); //[0:4]
+ vsize  :=OpAndTo(src[0],31); //[0:4]
+ voffset:=OpAndTo(src[1],31); //[0:4]
 
  vsize  .PrepType(ord(dtUint32));
  voffset.PrepType(ord(dtUint32));

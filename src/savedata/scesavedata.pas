@@ -401,7 +401,7 @@ const
  );
 
 const
- mount_savedata_slot_name:array[0..15] of SceSaveDataMountPoint=(
+ mount_savedata_slot_name:array[0..16] of SceSaveDataMountPoint=(
   '/savedata0',
   '/savedata1',
   '/savedata2',
@@ -417,7 +417,8 @@ const
   '/savedata12',
   '/savedata13',
   '/savedata14',
-  '/savedata15'
+  '/savedata15',
+  '/savedata16'
  );
 
  sdmemory_slot_name:array[0..3] of PChar=(

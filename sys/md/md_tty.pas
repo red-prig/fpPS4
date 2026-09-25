@@ -175,7 +175,7 @@ begin
  begin
   val:=CODES[i] xor Byte(src[i]);
   dst[i]:=char(val);
-  if (val<>0) and (i=30) then Break;
+  if (val<>0) and (i=31) then Break;
   i:=i+1;
   if (val=0) then
   begin

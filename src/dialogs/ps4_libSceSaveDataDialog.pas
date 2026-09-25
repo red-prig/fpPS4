@@ -1143,7 +1143,7 @@ begin
  Result:=SCE_COMMON_DIALOG_ERROR_PARAM_INVALID;
  if (wizardParam<>nil) then
  if (wizardParam^.option<>0) then
- if ((wizardParam^.option and (not $30003))<>0) then
+ if ((wizardParam^.option and (not $30003))=0) then
  if ((wizardParam^.option and $ffff) in [0..3]) then
  if (wizardParam^.fingerprint = nil) or
     (CheckFingerprint(wizardParam^.fingerprint)=0) then
@@ -1586,8 +1586,6 @@ begin
   end;
 
  mtx_unlock(g_SaveDialog_mtx);
-
- Result:=0;
 end;
 
 function CheckCloseParam(closeParam:pSceSaveDataDialogCloseParam):Integer;

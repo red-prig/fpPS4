@@ -21,7 +21,7 @@ type
  TImeDialogResult=packed record
   result   :Integer;
   endstatus:SceImeDialogEndStatus;
-  inputText:array[0..2047] of WideChar;
+  inputText:array[0..SCE_IME_MAX_TEXT_LENGTH-1] of WideChar;
  end;
 
  TImeDialogPosAndForm=record
@@ -502,6 +502,11 @@ begin
  if (param^.inputTextBuffer=nil) then
  begin
   Exit(SCE_IME_ERROR_INVALID_INPUT_TEXT_BUFFER);
+ end;
+
+ if (DWORD(param^.maxTextLength-1) > (SCE_IME_MAX_TEXT_LENGTH-1)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_MAX_TEXT_LENGTH);
  end;
 
  //

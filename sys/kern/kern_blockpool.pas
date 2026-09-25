@@ -1067,7 +1067,6 @@ begin
     Exit(ENOTTY);
  end;
 
- Result:=0;
 end;
 
 function blockpool_stat(fp:p_file;sb:p_stat):Integer;

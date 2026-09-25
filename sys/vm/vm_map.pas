@@ -2870,6 +2870,12 @@ begin
   entry:=entry^.next;
  end;
 
+ if (entry=@map^.header) then
+ begin
+  vm_map_unlock(map);
+  Exit(KERN_SUCCESS);
+ end;
+
  obj:=entry^.vm_obj;
 
  if (obj<>nil) then
@@ -4341,7 +4347,7 @@ begin
  begin
 
   if (next^.__end>__end) then
-  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+  if ((next^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
   begin
    obj:=next^.vm_obj;
 

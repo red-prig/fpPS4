@@ -199,9 +199,12 @@ begin
    if (p_data<>nil) and
       (p_data<>Pointer(1)) then
    begin
-    p_node:=AllocMem(SizeOf(t_pointer_node));
-    p_node^.P:=p_data;
-    p_set.Insert(p_node);
+    if (p_set.Find(@p_data)=nil) then
+    begin
+     p_node:=AllocMem(SizeOf(t_pointer_node));
+     p_node^.P:=p_data;
+     p_set.Insert(p_node);
+    end;
    end;
   end;
 

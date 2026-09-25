@@ -797,6 +797,8 @@ var
 
  function _insert(node:p_vm_priv_fd;addr,size,flag:DWORD):Integer;
  begin
+  Result:=0;
+
   if (flag=0) then
   begin
    Result:=vm_priv_map_insert(@node^.map,addr,addr + size);
