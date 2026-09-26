@@ -307,6 +307,7 @@ type
   pcb_onfault     :Pointer;
   td_guards       :array[0..1] of Pointer;
   td_urcu_epoch   :QWORD;
+  td_qsbr         :QWORD;
   td_temp         :t_td_buffer;
   td_padding      :t_td_buffer;
  end;

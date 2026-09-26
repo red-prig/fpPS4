@@ -215,6 +215,7 @@ implementation
 
 uses
  sysutils,
+ atomic,
  vmparam,
  signal,
  sys_bootparam,
@@ -362,6 +363,21 @@ begin
    begin
     //system thread
 
+    System.ReadWriteBarrier;
+    td^.td_qsbr:=0;
+    System.ReadWriteBarrier;
+
+    //clear stale jit caches
+    if (jctx^.local_cache<>nil) then
+    begin
+     FillChar(jctx^.local_cache^,64*1024,0);
+    end;
+
+    if (jctx^.call_ret_cache<>nil) then
+    begin
+     FillChar(jctx^.call_ret_cache^,64*1024,0);
+    end;
+
     //clear jit flag
     td^.pcb_flags:=td^.pcb_flags and (not PCB_IS_JIT);
 
@@ -384,6 +400,9 @@ begin
   if is_guest_addr(td^.td_frame.tf_rip) then
   begin
    //host->jit
+   System.ReadWriteBarrier;
+   td^.td_qsbr:=urcu_qsbr_seq;
+   System.ReadWriteBarrier;
    set_pcb_flags(td,PCB_IS_JIT);
   end else
   begin
@@ -1482,58 +1501,64 @@ begin
  end;
 end;
 
-procedure t_jit_dynamic_blob.detach_threads;
+procedure jit_urcu_scrub(td:p_kthread;base:ptruint;size:ptruint); Register;
 var
- ttd:p_kthread;
+ bend:QWORD;
  call_ret_cache:PQWORD;
  local_cache   :p_local_cache_node;
  lcache:t_local_cache_node;
- bend:QWORD;
  src:QWORD;
  i:Integer;
 begin
+ if (td=nil) then Exit;
+
  bend:=QWORD(base)+size;
 
+ call_ret_cache:=td^.td_jctx.call_ret_cache;
+ if (call_ret_cache<>nil) then
+ For i:=0 to (64*1024 div 16)-1 do
+ begin
+  src:=-call_ret_cache[i*2]; //-(-src)
+
+  if (src>=QWORD(base)) and (src<bend) then
+  begin
+   System.InterlockedCompareExchange64(call_ret_cache[i*2],0,-src);
+  end;
+ end;
+
+ local_cache:=td^.td_jctx.local_cache;
+ if (local_cache<>nil) then
+ For i:=0 to (64*1024 div 16)-1 do
+ begin
+  AtomicLoad128(@lcache,@local_cache[i]);
+
+  if ((QWORD(lcache.src)>=QWORD(base)) and (QWORD(lcache.src)<bend)) or
+     ((QWORD(lcache.dst)>=QWORD(base)) and (QWORD(lcache.dst)<bend)) then
+  begin
+   lcache.src:=nil;
+   lcache.dst:=nil;
+   AtomicStore128(@local_cache[i],@lcache);
+  end;
+ end;
+
+ src:=td^.td_frame.tf_rip;
+ if (src>=QWORD(base)) and (src<bend) then
+ begin
+  atomic_set_byte(@td^.pcb_flags,PCB_FULL_IRET);
+ end;
+
+end;
+
+procedure t_jit_dynamic_blob.detach_threads;
+var
+ ttd:p_kthread;
+begin
  threads_rlock;
 
    ttd:=TAILQ_FIRST(get_p_threads);
    while (ttd<>nil) do
    begin
-
-    //
-    call_ret_cache:=ttd^.td_jctx.call_ret_cache;
-
-    if (call_ret_cache<>nil) then
-    For i:=0 to (64*1024 div 16)-1 do
-    begin
-     src:=-call_ret_cache[i*2]; //-(-src)
-
-     if (src>=QWORD(base)) and (src<bend) then
-     begin
-      System.InterlockedCompareExchange64(call_ret_cache[i*2],0,-src);
-     end;
-
-    end;
-    //
-
-    //
-    local_cache:=ttd^.td_jctx.local_cache;
-
-    if (local_cache<>nil) then
-    for i:=0 to (64*1024 div 16)-1 do
-    begin
-     AtomicLoad128(@lcache,@local_cache[i]);
-
-     if ((QWORD(lcache.src)>=QWORD(base)) and (QWORD(lcache.src)<bend)) or
-        ((QWORD(lcache.dst)>=QWORD(base)) and (QWORD(lcache.dst)<bend)) then
-     begin
-      lcache.src:=nil;
-      lcache.dst:=nil;
-      AtomicStore128(@local_cache[i],@lcache);
-     end;
-
-    end;
-    //
+    jit_urcu_scrub(ttd,QWORD(base),size);
 
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
@@ -1686,14 +1711,24 @@ begin
  base:=@mchunk^.body;
 end;
 
+procedure deferred_jit_free(p:Pointer); Register;
+begin
+ p_free(p_stub_chunk(p));
+end;
+
 procedure t_jit_dynamic_blob.free_base;
 begin
- p_free(mchunk);
+ if (mchunk=nil) then Exit;
 
- ////md_unmap(base,size);
+ FillChar(base^,size,$CC); //fill int3
 
+ urcu_retire_text(base,size,mchunk,@deferred_jit_free);
+
+ mchunk:=nil;
  base:=nil;
  size:=0;
+
+ ////md_unmap(base,size);
 end;
 
 //
@@ -1792,9 +1827,9 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
+  System.InterlockedIncrement(entry_hamt[map].version);
   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
   System.ReadWriteBarrier;
-  System.InterlockedIncrement(entry_hamt[map].version);
   data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node,@urcu_hamt_allocator);
   Assert(data<>nil);
   if (data^<>node) then
@@ -1809,7 +1844,6 @@ begin
  rw_wunlock(entry_hamt[map].lock);
 
  urcu_synchronize_rcu(my_epoch);
- urcu_flush_deferred;
 end;
 
 procedure t_jit_dynamic_blob.attach_all_entry;
@@ -1869,15 +1903,14 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
+  System.InterlockedIncrement(entry_hamt[map].version);
   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
   System.ReadWriteBarrier;
-  System.InterlockedIncrement(entry_hamt[map].version);
   _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old,@urcu_hamt_allocator);
   System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
 
  urcu_synchronize_rcu(my_epoch);
- urcu_flush_deferred;
 
  if (old=node) then
  begin
@@ -2072,6 +2105,8 @@ begin
 
 end;
 
+initialization
+ urcu_set_scrub_proc(@jit_urcu_scrub);
 
 end.
 

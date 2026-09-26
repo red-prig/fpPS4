@@ -105,7 +105,6 @@ uses
  errno,
  vm,
  vmparam,
- vm_map,
  vm_fault,
  machdep,
  md_context,
@@ -114,7 +113,7 @@ uses
  sys_bootparam,
  signalvar,
  kern_sig,
- kern_jit_asm,
+ kern_urcu,
  subr_backtrace;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -271,6 +270,8 @@ begin
  begin
   set_pcb_flags(td,PCB_FULL_IRET); //call ipi_sigreturn
  end;
+
+ urcu_qs(td);
 
  //move to pcb?
  Set8087CW(FPUCW);

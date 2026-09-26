@@ -207,6 +207,7 @@ end;
 
 procedure thread_free(td:p_kthread);
 begin
+ td^.td_qsbr:=0;
  mtx_destroy(td^.tdq_lock);
  sleepq_free(td^.td_sleepqueue);
  rlqentry_free(td^.td_rlqe);
