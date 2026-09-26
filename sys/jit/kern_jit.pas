@@ -1307,42 +1307,38 @@ begin
  //rax //result1
  //rcx //result3
  //rbx //backup
-
- if time.strict_ps4_freq then
+ with ctx.builder do
  begin
-  with ctx.builder do
+  laxf;
+  movq(r15,rax);
+  //
+  movq(r14,rbx);  //save rbx
+  //
+  op_tsc_aux(ctx);
+  //
+  movq(rbx,r14);  //restore rbx
+  //
+  lfence;
+  rdtsc ;
+  lfence;
+  //
+  if time.strict_ps4_freq then
   begin
-   laxf;
-   movq(r15,rax);
+   shli8(rdx, 32);
+   orq  (rax,rdx);
    //
-   movq(r14,rbx);  //save rbx
+   //inline md_rev_guest
+   movi64(r14,md_rev_guest);
+   //replacing div with mul, the result in %rdx
+   mulq  (r14);
    //
-   op_tsc_aux(ctx);
-   //
-   movq(rbx,r14);  //restore rbx
-   //
-   lfence;
-   rdtsc ;
-   lfence;
-   //
-   if time.strict_ps4_freq then
-   begin
-    shli8(rdx, 32);
-    orq  (rax,rdx);
-    //
-    //inline md_rev_guest
-    movi64(r14,md_rev_guest);
-    //replacing div with mul, the result in %rdx
-    mulq  (r14);
-    //
-    movq (eax,edx); //get lo
-    shri8(rdx, 32); //get hi
-   end;
-   //
-   xchgq(rax,r15);
-   saxf;
-   movq (rax,r15);
+   movq (eax,edx); //get lo
+   shri8(rdx, 32); //get hi
   end;
+  //
+  xchgq(rax,r15);
+  saxf;
+  movq (rax,r15);
  end;
 end;
 
