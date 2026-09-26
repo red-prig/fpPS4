@@ -2950,13 +2950,13 @@ begin
           begin
            //jcc_32->jcc_8
            m_jcc_8(mop);
-           Result:=-3;
+           Result:=-4;
           end;
          MOP_JCX:
           begin
            //jcx_32->jcx_8
            m_jcx_8(mop);
-           Result:=-3;
+           Result:=-7;
           end;
          else;
         end;
@@ -2978,13 +2978,13 @@ begin
           begin
            //jcc_8->jcc_32
            m_jcc_32(mop);
-           Result:=+3;
+           Result:=+4;
           end;
          MOP_JCX:
           begin
            //jcx_8->jcx_32
            m_jcx_32(mop);
-           Result:=+3;
+           Result:=+7;
           end;
          else;
         end;
