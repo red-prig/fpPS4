@@ -146,11 +146,11 @@ type
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
   procedure free_base;
-  procedure attach_entry(node:p_jit_entry_point);
+  procedure attach_entry(node:p_jit_entry_point;do_sync:Boolean=True);
   procedure attach_all_entry;
   procedure attach_all_chunk;
   procedure attach;
-  function  detach_entry(node:p_jit_entry_point):Boolean;
+  function  detach_entry(node:p_jit_entry_point;do_sync:Boolean=True):Boolean;
   procedure detach_all_entry;
   procedure detach_entry(c_start,c___end:QWORD);
   procedure detach_chunk(node:p_jcode_chunk);
@@ -1812,7 +1812,7 @@ end;
 
 //
 
-procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point);
+procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point;do_sync:Boolean=True);
 var
  data:PPointer;
  old:p_jit_entry_point;
@@ -1828,7 +1828,10 @@ begin
 
  rw_wlock(entry_hamt[map].lock);
   System.InterlockedIncrement(entry_hamt[map].version);
-  my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  if (do_sync) then
+  begin
+   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  end;
   System.ReadWriteBarrier;
   data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node,@urcu_hamt_allocator);
   Assert(data<>nil);
@@ -1843,22 +1846,30 @@ begin
   System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
 
- urcu_synchronize_rcu(my_epoch);
+ if (do_sync) then
+ begin
+  urcu_synchronize_rcu(my_epoch);
+ end;
 end;
 
 procedure t_jit_dynamic_blob.attach_all_entry;
 var
  node,next:p_jit_entry_point;
+ my_epoch:QWORD;
 begin
+ my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+
  node:=entry_list;
  while (node<>nil) do
  begin
   next:=node^.next;
 
-  attach_entry(node);
+  attach_entry(node,False);
 
   node:=next;
  end;
+
+ urcu_synchronize_rcu(my_epoch);
 end;
 
 procedure t_jit_dynamic_blob.attach_all_chunk;
@@ -1890,12 +1901,14 @@ begin
  attach_all_chunk;
 end;
 
-function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
+function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point;do_sync:Boolean=True):Boolean;
 var
  old:p_jit_entry_point;
  map:DWORD;
  my_epoch:QWORD;
 begin
+ Result:=False;
+
  if (node^.entry_public=0) then Exit;
 
  old:=nil;
@@ -1904,11 +1917,16 @@ begin
 
  rw_wlock(entry_hamt[map].lock);
   System.InterlockedIncrement(entry_hamt[map].version);
-  my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  if (do_sync) then
+  begin
+   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  end;
   System.ReadWriteBarrier;
   _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old,@urcu_hamt_allocator);
   System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
+
+ if (not do_sync) then Exit;
 
  urcu_synchronize_rcu(my_epoch);
 
@@ -1925,13 +1943,33 @@ end;
 procedure t_jit_dynamic_blob.detach_all_entry;
 var
  node,next:p_jit_entry_point;
+ my_epoch:QWORD;
 begin
+ my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+
  node:=entry_list;
  while (node<>nil) do
  begin
   next:=node^.next;
 
-  detach_entry(node);
+  detach_entry(node,False);
+
+  node:=next;
+ end;
+
+ urcu_synchronize_rcu(my_epoch);
+
+ //release every detached entry
+ node:=entry_list;
+ while (node<>nil) do
+ begin
+  next:=node^.next;
+
+  if (System.InterlockedExchange(node^.entry_public,0)<>0) then
+  begin
+   self.dec_attach_count;
+   node^.dec_ref('attach_entry');
+  end;
 
   node:=next;
  end;
