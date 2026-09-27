@@ -795,6 +795,8 @@ begin
   //Exit(@jit_jmp_internal);
  end;
 
+ urcu_qs(td,True);
+
  _start:
 
  jctx:=@td^.td_jctx;

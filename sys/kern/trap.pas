@@ -271,7 +271,7 @@ begin
   set_pcb_flags(td,PCB_FULL_IRET); //call ipi_sigreturn
  end;
 
- urcu_qs(td);
+ urcu_qs(td,True);
 
  //move to pcb?
  Set8087CW(FPUCW);
