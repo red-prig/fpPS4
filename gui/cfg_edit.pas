@@ -138,12 +138,14 @@ type
     procedure BtnLogOpenClick(Sender: TObject);
     procedure BtnRemFwClick(Sender: TObject);
     procedure Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
+    procedure Edt_MainInfo_FirmwareListSelectionChange(Sender: TObject; User: Boolean);
     procedure VulkanInit;
     procedure VulkanPostInit;
     procedure AudioInit;
     procedure FormInit;
     procedure FormSave;
     procedure OnIdleUpdate(Sender:TObject;var Done:Boolean);
+    procedure UpdateFwButtons;
     constructor Create(AOwner: TComponent); override;
   private
 
@@ -171,8 +173,7 @@ implementation
 
 uses
  TypInfo,
-
- ms_shell_hack,
+ open_dialog,
  ps4_libSceSystemService;
 
 var
@@ -229,78 +230,27 @@ begin
  Close;
 end;
 
-function DoOpenFile(const Input,InitialDir:RawByteString;var Output:RawByteString):Boolean;
-var
- d:TOpenDialog;
- Cookie:Pointer;
-begin
- Result:=False;
- Output:='';
-
- Cookie:=RegisterDllHack;
-
- d:=nil;
- try
-  d:=TOpenDialog.Create(nil);
-  d.InitialDir:=InitialDir;
-  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-  Result:=d.Execute;
-  if Result then
-  begin
-   Output:=d.FileName;
-  end;
- except
-  //
- end;
- FreeAndNil(d);
-
- UnregisterDllHack(Cookie);
-end;
-
-function DoOpenDir(const Input,InitialDir:RawByteString):RawByteString;
-var
- d:TSelectDirectoryDialog;
- Cookie:Pointer;
-begin
- Cookie:=RegisterDllHack;
-
- Result:=Input;
- d:=nil;
- try
-  d:=TSelectDirectoryDialog.Create(nil);
-  d.InitialDir:=InitialDir;
-  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-  if d.Execute then
-  begin
-   Result:=d.FileName;
-  end;
- except
-  //
- end;
- FreeAndNil(d);
-
- UnregisterDllHack(Cookie);
-end;
-
 procedure TfrmCfgEditor.BtnLogOpenClick(Sender: TObject);
 var
- fname:RawByteString;
+ fname,new:RawByteString;
 begin
  fname:=ResolvePath(Edt_LogInfo_LogFile.Text);
- if DoOpenFile(fname,fname,fname) then
+ new:=DoOpenFile(fname,fname);
+ if (new<>fname) then
  begin
-  Edt_LogInfo_LogFile.Text:=fname;
+  Edt_LogInfo_LogFile.Text:=new;
  end;
 end;
 
 procedure TfrmCfgEditor.BtnLocalDirOpenClick(Sender: TObject);
 var
- fname:RawByteString;
+ fname,new:RawByteString;
 begin
  fname:=ResolvePath(Edt_MainInfo_LocalDir.Text);
- if DoOpenFile(fname,fname,fname) then
+ new:=DoOpenFile(fname,fname);
+ if (new<>fname) then
  begin
-  Edt_MainInfo_LocalDir.Text:=fname;
+  Edt_MainInfo_LocalDir.Text:=new;
  end;
 end;
 
@@ -313,6 +263,8 @@ begin
 
  Edt_MainInfo_FirmwareList   .Items.Add(new);
  Edt_MainInfo_DefaultFirmware.Items.Add(new);
+
+ UpdateFwButtons;
 end;
 
 procedure TfrmCfgEditor.BtnRemFwClick(Sender: TObject);
@@ -324,7 +276,19 @@ begin
  begin
   Edt_MainInfo_FirmwareList   .Items.Delete(i);
   Edt_MainInfo_DefaultFirmware.Items.Delete(i);
+
+  UpdateFwButtons;
  end;
+end;
+
+procedure TfrmCfgEditor.Edt_MainInfo_FirmwareListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateFwButtons;
+end;
+
+procedure TfrmCfgEditor.UpdateFwButtons;
+begin
+ BtnRemFw.Enabled:=(Edt_MainInfo_FirmwareList.ItemIndex>=0);
 end;
 
 procedure TfrmCfgEditor.Edt_MainInfo_DefaultFirmwareGetItems(Sender: TObject);
@@ -342,6 +306,8 @@ begin
    Edt_MainInfo_DefaultFirmware.Items.Add(S);
   end;
  end;
+
+ UpdateFwButtons;
 end;
 
 function OpenFolderOfFile(APath:RawByteString): Boolean;
@@ -622,42 +588,24 @@ end;
 procedure TCfgFormData.SetClass(control:TComponent;Obj:TObject);
 var
  A:TSerializeStringArray;
- i:Integer;
 begin
  if control.InheritsFrom(TListBox) then
  begin
   A:=TSerializeStringArray(Obj);
 
-  TListBox(control).Items.Clear;
-
-  if (Length(A.values)>0) then
-  For i:=0 to High(A.values) do
-  begin
-   TListBox(control).Items.Add(A.values[i]);
-  end;
-
+  SerializeStringArray2Strings(A,TListBox(control).Items);
  end;
 end;
 
 procedure TCfgFormData.GetClass(control:TComponent;Obj:TObject);
 var
  A:TSerializeStringArray;
- i,c:Integer;
 begin
  if control.InheritsFrom(TListBox) then
  begin
   A:=TSerializeStringArray(Obj);
 
-  c:=TListBox(control).Items.Count;
-
-  SetLength(A.values,c);
-
-  if (c>0) then
-  For i:=0 to c-1 do
-  begin
-   A.values[i]:=TListBox(control).Items.Strings[i];
-  end;
-
+  Strings2SerializeStringArray(TListBox(control).Items,A);
  end;
 end;
 
@@ -865,6 +813,8 @@ begin
  FormLoad(Self,Provider,FConfigInfo);
 
  Provider.Free;
+
+ UpdateFwButtons;
 
  Show;
 end;

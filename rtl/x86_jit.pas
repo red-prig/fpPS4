@@ -454,6 +454,8 @@ type
   Function  GetMemSize:Integer;
   Procedure RebuldChunkList;
   Procedure RebuldInstructionOffset;
+  Procedure _LinkNode(node:p_jit_instruction);
+  function  _ZipNode(node:p_jit_instruction):Integer;
   Procedure LinkData;
   Function  CopyChunks(var rec:t_jit_copy_ptr):Boolean;
   Function  CopyData  (var rec:t_jit_copy_ptr):Boolean;
@@ -485,6 +487,7 @@ type
   procedure movi64  (reg:TRegValue  ;imm:Int64);
   procedure movq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure movq    (mem:t_jit_leas ;reg:TRegValue);
+  procedure movzb   (reg:TRegValue  ;mem:t_jit_leas);
   procedure movbe   (reg:TRegValue  ;mem:t_jit_leas);
   procedure movbe   (mem:t_jit_leas ;reg:TRegValue);
   procedure bswap   (reg:TRegValue);
@@ -520,6 +523,8 @@ type
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
   procedure notq    (reg:TRegValue);
   procedure negq    (reg:TRegValue);
+  procedure bsfq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure bsfq    (reg0:TRegValue ;reg1:TRegValue);
   procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
   procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
@@ -2860,156 +2865,240 @@ begin
  end;
 end;
 
+Procedure t_jit_builder._LinkNode(node:p_jit_instruction);
+var
+ d:Integer;
+begin
+
+ With node^ do
+  if ATargetRequired then
+  begin
+   if not _test_link(ATargetType,ATargetAddr) then
+   begin
+    Assert(False,'_test_link');
+   end;
+  end;
+
+ With node^ do
+  case ATargetType of
+   lnkData,
+   lnkPlt,
+   lnkLabelBefore,
+   lnkLabelAfter:
+     begin
+      d:=_get_link_offset(ATargetType,ATargetAddr);
+      d:=d+_get_base_offset(ATargetType);
+      d:=d-AInstructionEnd;
+      _set_data(node,d);
+     end;
+   else;
+  end;
+
+end;
+
+function t_jit_builder._ZipNode(node:p_jit_instruction):Integer;
+var
+ d:Integer;
+ mop:Byte;
+begin
+ Result:=0;
+
+ With node^ do
+  case ATargetType of
+
+   lnkLabelBefore,
+   lnkLabelAfter:
+    begin
+     mop:=node^.get_micro_op;
+
+     if ((mop and MOP_ANY)<>MOP_NONE) then
+     begin
+
+      d:=_get_link_offset(ATargetType,ATargetAddr);
+      d:=d+_get_base_offset(ATargetType);
+      d:=d-AInstructionEnd;
+
+      if (d=0) then
+      begin
+       //clear instr
+
+       Result:=-AInstructionSize;
+
+       ATargetRequired :=False;
+       ATargetType     :=lnkNone;
+       AInstructionSize:=0;
+
+       Exit;
+      end;
+
+      //if is_forward xor (d<0) then Exit;
+
+      if (AInstructionSize<>0) then
+      if is_8bit_offset(d) then
+      begin
+       if ((mop and MT_32BIT)<>0) then
+       begin
+        //32 -> 8
+        case (mop and MOP_ANY) of
+         MOP_JMP:
+          begin
+           //jmp_32->jmp_8
+           m_jmp_8();
+           Result:=-3;
+          end;
+         MOP_JCC:
+          begin
+           //jcc_32->jcc_8
+           m_jcc_8(mop);
+           Result:=-4;
+          end;
+         MOP_JCX:
+          begin
+           //jcx_32->jcx_8
+           m_jcx_8(mop);
+           Result:=-7;
+          end;
+         else;
+        end;
+        //32 -> 8
+       end;
+      end else
+      begin
+       if ((mop and MT_32BIT)=0) then
+       begin
+        //8 -> 32
+        case (mop and MOP_ANY) of
+         MOP_JMP:
+          begin
+           //jmp_8->jmp_32
+           m_jmp_32();
+           Result:=+3;
+          end;
+         MOP_JCC:
+          begin
+           //jcc_8->jcc_32
+           m_jcc_32(mop);
+           Result:=+4;
+          end;
+         MOP_JCX:
+          begin
+           //jcx_8->jcx_32
+           m_jcx_32(mop);
+           Result:=+7;
+          end;
+         else;
+        end;
+        //8 -> 32
+       end;
+      end;
+
+     end; //<>MOP_NONE
+
+    end;
+   else;
+  end;
+
+end;
+
 Procedure t_jit_builder.LinkData;
 label
  _start;
 var
  chunk:p_jit_code_chunk;
  node:p_jit_instruction;
- d:Integer;
 
- mop:Byte;
+ is_forward:Boolean;
  is_change:Boolean;
+ pass_count:Integer;
+ zip_size:Integer;
+ i:Integer;
 begin
+
+ //Zip Data
+
+ pass_count:=0;
+ zip_size  :=0;
+ is_forward:=True;
+
+ RebuldInstructionOffset;
 
  _start:
  is_change:=False;
 
- d:=0;
+ Inc(pass_count);
+
+ if is_forward then
+ begin
+
+  chunk:=ACodeChunkList.pHead;
+
+  while (chunk<>nil) do
+  begin
+   node:=chunk^.AInstructions.zHead.unzip;
+   //
+   while (node<>nil) do
+   begin
+    i:=_ZipNode(node);
+    is_change:=is_change or (i<>0);
+    zip_size:=zip_size+i;
+    //
+    node:=node^.zNext.unzip;
+   end;
+   //
+   chunk:=chunk^.zNext.unzip;
+  end;
+
+ end else
+ begin
+
+  chunk:=ACodeChunkList.pTail;
+
+  while (chunk<>nil) do
+  begin
+   node:=chunk^.AInstructions.zTail.unzip;
+   //
+   while (node<>nil) do
+   begin
+    i:=_ZipNode(node);
+    is_change:=is_change or (i<>0);
+    zip_size:=zip_size+i;
+    //
+    node:=node^.zPrev.unzip;
+   end;
+   //
+   chunk:=chunk^.zPrev.unzip;
+  end;
+
+ end;
+
+ if is_change then
+ begin
+  RebuldInstructionOffset;
+  if (pass_count<4) then
+  begin
+   is_forward:=not is_forward;
+   goto _start;
+  end;
+ end;
+
+ //Writeln('zip_pass:',pass_count,'->',zip_size);
+
+ //Link Data
 
  chunk:=ACodeChunkList.pHead;
 
  while (chunk<>nil) do
  begin
   node:=chunk^.AInstructions.zHead.unzip;
-  //node:=TAILQ_FIRST(@chunk^.AInstructions);
   //
   while (node<>nil) do
   begin
-
-   With node^ do
-    if ATargetRequired then
-    begin
-     if not _test_link(ATargetType,ATargetAddr) then
-     begin
-      Assert(False,'_test_link');
-     end;
-    end;
-
-   With node^ do
-    case ATargetType of
-     lnkData,
-     lnkPlt :
-       if not is_change then
-       begin
-        d:=_get_link_offset(ATargetType,ATargetAddr);
-        d:=d+_get_base_offset(ATargetType);
-        d:=d-AInstructionEnd;
-        _set_data(node,d);
-       end;
-     lnkLabelBefore,
-     lnkLabelAfter:
-      begin
-       d:=_get_link_offset(ATargetType,ATargetAddr);
-       d:=d+_get_base_offset(ATargetType);
-       d:=d-AInstructionEnd;
-
-       mop:=node^.get_micro_op;
-
-       if ((mop and MOP_ANY)<>MOP_NONE) then
-       begin
-
-        if (d=0) then
-        begin
-         //clear instr
-
-         ATargetRequired :=False;
-         ATargetType     :=lnkNone;
-         AInstructionSize:=0;
-
-         is_change:=True;
-        end;
-
-        if (AInstructionSize<>0) then
-        if is_8bit_offset(d) then
-        begin
-         if ((mop and MT_32BIT)<>0) then
-         begin
-          //32 -> 8
-          case (mop and MOP_ANY) of
-           MOP_JMP:
-            begin
-             //jmp_32->jmp_8
-             m_jmp_8();
-             is_change:=True;
-            end;
-           MOP_JCC:
-            begin
-             //jcc_32->jcc_8
-             m_jcc_8(mop);
-             is_change:=True;
-            end;
-           MOP_JCX:
-            begin
-             //jcx_32->jcx_8
-             m_jcx_8(mop);
-             is_change:=True;
-            end;
-           else;
-          end;
-          //32 -> 8
-         end;
-        end else
-        begin
-         if ((mop and MT_32BIT)=0) then
-         begin
-          //8 -> 32
-          case (mop and MOP_ANY) of
-           MOP_JMP:
-            begin
-             //jmp_8->jmp_32
-             m_jmp_32();
-             is_change:=True;
-            end;
-           MOP_JCC:
-            begin
-             //jcc_8->jcc_32
-             m_jcc_32(mop);
-             is_change:=True;
-            end;
-           MOP_JCX:
-            begin
-             //jcx_8->jcx_32
-             m_jcx_32(mop);
-             is_change:=True;
-            end;
-           else;
-          end;
-          //8 -> 32
-         end;
-        end;
-
-       end; //<>MOP_NONE
-
-       if not is_change then
-       begin
-        _set_data(node,d);
-       end;
-
-      end;
-     else;
-    end;
+   _LinkNode(node);
    //
    node:=node^.zNext.unzip;
   end;
   //
   chunk:=chunk^.zNext.unzip;
- end;
-
- if is_change then
- begin
-  RebuldInstructionOffset;
-  goto _start;
  end;
 
 end;
@@ -3114,7 +3203,6 @@ var
  rec:t_jit_copy_ptr;
 begin
  RebuldChunkList;
- RebuldInstructionOffset;
  LinkData;
 
  Result:=0;
@@ -4425,6 +4513,13 @@ begin
  _RM(desc,reg,mem); //MOV r/m64, r64
 end;
 
+procedure t_jit_builder.movzb(reg:TRegValue;mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$0FB6;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
 procedure t_jit_builder.movbe(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$0F38F0;opt:[not_os8]);
@@ -4682,6 +4777,20 @@ begin
  _R(desc,reg);
 end;
 
+procedure t_jit_builder.bsfq(reg:TRegValue;mem:t_jit_leas);
+const
+ desc:t_op_type=(op:$0FBC;opt:[not_os8]);
+begin
+ _RM(desc,reg,mem);
+end;
+
+procedure t_jit_builder.bsfq(reg0:TRegValue;reg1:TRegValue);
+const
+ desc:t_op_type=(op:$0FBC;opt:[not_os8]);
+begin
+ _RR(desc,reg0,reg1,True);
+end;
+
 ///
 
 procedure t_jit_builder.cmpq(mem:t_jit_leas;reg:TRegValue);
@@ -4707,7 +4816,7 @@ end;
 
 procedure t_jit_builder.cmpi(reg:TRegValue;imm:Int64);
 const
- desc:t_op_type=(op:$810;index:7);
+ desc:t_op_type=(op:$81;index:7);
 begin
  _RI(desc,reg,imm);
 end;

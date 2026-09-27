@@ -22,6 +22,8 @@ procedure vfs_mountroot();
 function  vfs_mount_path      (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 function  mount_mkdir         (path:PChar):Integer;
 function  mount_rmdir         (path:PChar):Integer;
+function  mount_chdir         (path:PChar):Integer;
+function  mount_chroot        (path:PChar):Integer;
 function  mount_into_sandbox  (fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 function  unmount_from_sandbox(path:PChar;flags:Integer):Integer;
 
@@ -40,7 +42,9 @@ uses
  vfs_mount,
  vfs_syscalls,
  kern_thr,
- kern_mtx;
+ kern_mtx,
+ kern_malloc,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -49,30 +53,8 @@ var
  i:ptrint;
 begin
  i:=strlen(src);
- Result:=AllocMem(i+1);
+ Result:=calloc(i+1);
  Move(src^,Result^,i);
-end;
-
-function strsep(stringp:PPChar;delim:PChar):PChar;
-var
- b,e:PChar;
-begin
- b:=stringp^;
- if (b=nil) then Exit(nil);
-
- e:=strpos(b,delim)+strlen(delim);
-
- if (e^<>#0) then
- begin
-  e^:=#0;
-  Inc(e);
-  stringp^:=e;
- end else
- begin
-  stringp^:=nil;
- end;
-
- Result:=b;
 end;
 
 function parse_mountroot_options(ma:p_mntarg;options:PChar):p_mntarg;
@@ -120,7 +102,7 @@ begin
   name:=strsep(@p, ',');
  end;
 
- FreeMem(opts);
+ free(opts);
  Exit(ma);
 end;
 
@@ -177,7 +159,7 @@ begin
  if (error<>0) then
   Exit(error);
 
- opts:=AllocMem(sizeof(vfsoptlist));
+ opts:=calloc(sizeof(vfsoptlist));
  TAILQ_INIT(opts);
  mp^.mnt_opt:=opts;
 
@@ -291,6 +273,10 @@ begin
 
  //mount_print;
 
+ { The new root fs can come up empty (e.g. tmpfs) and has no /dev yet.
+   Create it so devfs can be remounted onto it below}
+ error:=mount_mkdir('/dev');
+
  { Remount devfs under /dev }
  NDINIT(@nd, LOOKUP, FOLLOW or LOCKLEAF, UIO_SYSSPACE, '/dev', curkthread);
 
@@ -381,13 +367,23 @@ end;
 
 function mount_rmdir(path:PChar):Integer;
 begin
-Result:=kern_rmdir(path,UIO_SYSSPACE);
+ Result:=kern_rmdir(path,UIO_SYSSPACE);
+end;
+
+function mount_chdir(path:PChar):Integer;
+begin
+ Result:=kern_chdir(path,UIO_SYSSPACE);
+end;
+
+function mount_chroot(path:PChar):Integer;
+begin
+ Result:=kern_chroot(path,UIO_SYSSPACE);
 end;
 
 function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD):Integer;
 begin
  Result:=kern_mkdir(fspath,UIO_SYSSPACE,&777);
- if (Result=0) or (Result=EEXIST) then
+ if (Result=0) or (Result=EEXIST) or (Result=EROFS) then
  begin
   Result:=vfs_mount_path(fstype,fspath,from,opts,flags);
  end;
@@ -416,7 +412,7 @@ begin
 
  //mount_print;
 
- error:=vfs_mount_path('ufs','/','/',nil,MNT_ROOTFS);
+ error:=vfs_mount_path('tmpfs','/','/',nil,MNT_ROOTFS);
  if (error<>0) then goto _end;
 
  //mount_print;

@@ -6,15 +6,16 @@ unit devfs_vfsops;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  vnode,
  vmount,
  devfs_int,
  devfs,
- kern_id;
+ subr_unit;
 
 var
- devfs_unr:p_id_desc_table;
+ devfs_unr:p_unrhdr=nil;
 
 function  devfs_mount  (mp:p_mount):Integer;
 function  devfs_unmount(mp:p_mount;mntflags:Integer):Integer;
@@ -28,21 +29,21 @@ const
  );
 
  _devfs_vfsops:vfsops=(
-  vfs_mount          :@devfs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@devfs_unmount;
-  vfs_root           :@devfs_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@devfs_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :nil;
-  vfs_uninit         :nil;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@devfs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@devfs_unmount;
+  vfs_root      :@devfs_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@devfs_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :nil;
+  vfs_checkexp  :nil;
+  vfs_init      :nil;
+  vfs_uninit    :nil;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
 var
@@ -69,34 +70,9 @@ uses
  vnode_if,
  devfs_devs;
 
-var
- unr_desc:t_id_desc=(free:nil;refs:0); //temp
-
 function VFSTODEVFS(mp:p_mount):p_devfs_mount; inline;
 begin
  Result:=mp^.mnt_data;
-end;
-
-function new_unrhdr(min,max:Integer):p_id_desc_table;
-begin
- Result:=AllocMem(SizeOf(t_id_desc_table));
- id_table_init(Result,min,max);
-end;
-
-function alloc_unr(p:p_id_desc_table):Integer;
-begin
- if id_new(p,@unr_desc,@Result) then
- begin
-  id_release(@unr_desc); //<-id_new
- end else
- begin
-  Result:=-1;
- end;
-end;
-
-procedure free_unr(p:p_id_desc_table;i:Integer);
-begin
- id_del(p,i,nil);
 end;
 
 {
@@ -111,12 +87,16 @@ var
 begin
 
  if (devfs_unr=nil) then
-  devfs_unr:=new_unrhdr(0, High(Integer));
+ begin
+  devfs_unr:=new_unrhdr(0, High(Integer), nil);
+ end;
 
  error:=0;
 
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  //if (!prison_allow(td^.td_ucred, PR_ALLOW_MOUNT_DEVFS))
  // Exit(EPERM);
@@ -167,7 +147,7 @@ begin
   Exit(0);
  end;
 
- fmp:=AllocMem(sizeof(t_devfs_mount));
+ fmp:=calloc(sizeof(t_devfs_mount));
  fmp^.dm_idx:=alloc_unr(devfs_unr);
  sx_init(@fmp^.dm_lock, 'devfsmount');
  fmp^.dm_holdcnt:=1;
@@ -194,7 +174,7 @@ begin
   sx_xunlock(@fmp^.dm_lock);
   sx_destroy(@fmp^.dm_lock);
   free_unr(devfs_unr, fmp^.dm_idx);
-  FreeMem(fmp);
+  free(fmp);
   Exit(error);
  end;
 
@@ -215,7 +195,7 @@ end;
 procedure devfs_unmount_final(fmp:p_devfs_mount); public;
 begin
  sx_destroy(@fmp^.dm_lock);
- FreeMem(fmp);
+ free(fmp);
 end;
 
 function devfs_unmount(mp:p_mount;mntflags:Integer):Integer;

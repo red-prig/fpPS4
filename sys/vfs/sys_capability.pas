@@ -6,6 +6,7 @@ unit sys_capability;
 interface
 
 uses
+ kern_malloc,
  sys_event,
  vcapability,
  vfile,
@@ -243,7 +244,7 @@ begin
   fp_object:=fp;
 
  fhold(fp_object);
- cp:=AllocMem(SizeOf(t_capability));
+ cp:=calloc(SizeOf(t_capability));
  cp^.cap_rights:=rights;
  cp^.cap_object:=fp_object;
  cp^.cap_file:=fcapp;
@@ -277,7 +278,7 @@ begin
  fp^.f_ops:=@badfileops;
  fp^.f_data:=nil;
  fp_object:=c^.cap_object;
- FreeMem(c);
+ free(c);
 
  Exit(fdrop(fp_object));
 end;

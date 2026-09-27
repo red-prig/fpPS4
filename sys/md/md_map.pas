@@ -25,6 +25,8 @@ const
 function MD_MAP_ALIGN(align:QWORD):DWORD; inline;
 
 const
+ VM_RO =VM_PROT_READ;
+ VM_WO =VM_PROT_WRITE;
  VM_RW =VM_PROT_READ or VM_PROT_WRITE;
  VM_RX =VM_PROT_READ or VM_PROT_EXECUTE;
  VM_RWX=VM_PROT_READ or VM_PROT_WRITE or VM_PROT_EXECUTE;
@@ -326,7 +328,7 @@ function md_placeholder_decommit(base:Pointer;size:QWORD;hProcess:THandle=NtCurr
 begin
  Result:=NtUnmapViewOfSectionEx(hProcess,base,MEM_PRESERVE_PLACEHOLDER);
 
- if (DWORD(Result)=$C0000019) then //STATUS_NOT_MAPPED_VIEW
+ if (DWORD(Result)=STATUS_NOT_MAPPED_VIEW) then
  begin
   Result:=NtFreeVirtualMemory(
            hProcess,

@@ -62,12 +62,14 @@ procedure init_sleepqueues; //SYSINIT
 implementation
 
 uses
+ sysutils,
  errno,
  uma,
  signal,
  signalvar,
  kern_proc,
- sched_ule;
+ sched_ule,
+ kern_malloc;
 
 //
 
@@ -76,7 +78,6 @@ function  mi_switch(flags:Integer):Integer; external;
 //
 
 var
- sleepq_zone:uma_zone_t=nil;
  sleepq_chains:array[0..SC_MASK] of sleepqueue_chain;
 
 function sleepq_init(mem:Pointer;size,flags:Integer):Integer;
@@ -98,8 +99,6 @@ procedure init_sleepqueues;
 var
  i:Integer;
 begin
- sleepq_zone:=uma_zcreate('SLEEPQUEUE', sizeof(sleepqueue), nil, nil, @sleepq_init, nil, UMA_ALIGN_CACHE, 0);
-
  For i:=0 to SC_MASK do
  begin
   LIST_INIT(@sleepq_chains[i].sc_queues);
@@ -113,28 +112,15 @@ procedure sleepq_timeout(arg:Pointer); forward;
 
 function sleepq_alloc:p_sleepqueue; public;
 begin
- if (sleepq_zone=nil) then
- begin
-  Result:=GetMem(SizeOf(sleepqueue));
-  sleepq_init(Result,SizeOf(sleepqueue),M_WAITOK);
-  Result^.sq_mem:=1;
- end else
- begin
-  Result:=uma_zalloc(sleepq_zone, M_WAITOK);
- end;
+ Result:=malloc(SizeOf(sleepqueue));
+ sleepq_init(Result,SizeOf(sleepqueue),M_WAITOK);
 end;
 
 procedure sleepq_free(sq:p_sleepqueue); public;
 begin
  if (sq<>nil) then
  begin
-  if (sq^.sq_mem<>0) then
-  begin
-   FreeMem(sq);
-  end else
-  begin
-   uma_zfree(sleepq_zone, sq);
-  end;
+  free(sq);
  end;
 end;
 
@@ -232,8 +218,8 @@ begin
 
   For i:=0 to NR_SLEEPQS-1 do
   begin
-   Assert(TAILQ_EMPTY(@sq^.sq_blocked[i]),'threads sleep queue %d is not empty');
-   Assert(sq^.sq_blockedcnt[i]=0         ,'threads sleep queue %d count mismatches');
+   Assert(TAILQ_EMPTY(@sq^.sq_blocked[i]), 'threads sleep queue ' + IntToStr(i) + ' is not empty');
+   Assert(sq^.sq_blockedcnt[i]=0         , 'threads sleep queue ' + IntToStr(i) + ' count mismatches');
   end;
 
   Assert(LIST_EMPTY(@sq^.sq_free),'threads sleep queue has a non-empty free list');

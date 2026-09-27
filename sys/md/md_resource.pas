@@ -33,10 +33,8 @@ var
 
  user,syst:Int64;
 
- data:array[0..SizeOf(VM_COUNTERS)-1+7] of Byte;
-
- P_IO:PIO_COUNTERS;
- P_VM:PVM_COUNTERS;
+ ioc:IO_COUNTERS;
+ vmc:VM_COUNTERS;
 
  R:DWORD;
 
@@ -62,24 +60,22 @@ begin
      rup^.ru_idrss   :=pgtok(vms^.vm_dsize);
      rup^.ru_isrss   :=pgtok(vms^.vm_ssize);
 
-     P_IO:=Align(@data,8);
-     P_IO^:=Default(IO_COUNTERS);
-     R:=NtQueryInformationProcess(NtCurrentProcess,ProcessIoCounters,P_IO,SizeOf(IO_COUNTERS),nil);
+     ioc:=Default(IO_COUNTERS);
+     R:=NtQueryInformationProcess(NtCurrentProcess,ProcessIoCounters,@ioc,SizeOf(IO_COUNTERS),nil);
 
      if (R=0) then
      begin
-      rup^.ru_inblock:=P_IO^.ReadOperationCount;
-      rup^.ru_oublock:=P_IO^.WriteOperationCount;
+      rup^.ru_inblock:=ioc.ReadOperationCount;
+      rup^.ru_oublock:=ioc.WriteOperationCount;
      end;
 
-     P_VM:=Align(@data,8);
-     P_VM^:=Default(VM_COUNTERS);
-     R:=NtQueryInformationProcess(NtCurrentProcess,ProcessVmCounters,P_VM,SizeOf(VM_COUNTERS),nil);
+     vmc:=Default(VM_COUNTERS);
+     R:=NtQueryInformationProcess(NtCurrentProcess,ProcessVmCounters,@vmc,SizeOf(VM_COUNTERS),nil);
 
      if (R=0) then
      begin
-      rup^.ru_maxrss:=P_VM^.PeakWorkingSetSize div 1024;
-      rup^.ru_majflt:=P_VM^.PageFaultCount;
+      rup^.ru_maxrss:=vmc.PeakWorkingSetSize div 1024;
+      rup^.ru_majflt:=vmc.PageFaultCount;
      end;
 
      calcru_proc(@user,@syst);

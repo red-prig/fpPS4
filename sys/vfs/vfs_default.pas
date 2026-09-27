@@ -6,6 +6,7 @@ unit vfs_default;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  kern_param,
  vnode,
@@ -147,6 +148,8 @@ const
   vop_unp_bind      :@vop_stdunp_bind      ;
   vop_unp_connect   :@vop_stdunp_connect   ;
   vop_unp_detach    :@vop_stdunp_detach    ;
+
+  vop_get_int_obj   :@VOP_EOPNOTSUPP       ;
 );
 
 implementation
@@ -155,7 +158,8 @@ uses
  errno,
  vfs_subr,
  vfs_vnops,
- vsys_generic;
+ vsys_generic,
+ md_map;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -199,7 +203,7 @@ end;
  }
 function vop_panic(ap:Pointer):Integer;
 begin
- Assert(false,'filesystem goof: vop_panic[%s]');
+ Assert(false, 'filesystem goof: vop_panic[' + p_vop_generic_args(ap)^.a_desc^.vdesc_name + ']');
  Exit(ENOENT);
 end;
 
@@ -247,7 +251,7 @@ end;
 
 function vop_nostrategy(ap:p_vop_strategy_args):Integer;
 begin
- LOG_INFO('No strategy for buffer at %p');
+ LOG_INFO('No strategy for buffer at ', HexStr(ap^.a_bp));
  //ap^.a_bp^.b_ioflags:=ap^.a_bp^.b_ioflags or BIO_ERROR;
  //ap^.a_bp^.b_error:=EOPNOTSUPP;
  //bufdone(ap^.a_bp);
@@ -268,8 +272,8 @@ var
  iov:iovec;
  dp:p_dirent;
 begin
- Assert(VOP_ISLOCKED(vp)<>0,'vp %p is not locked');
- Assert(vp^.v_type=VDIR,'vp %p is not a directory');
+ Assert(VOP_ISLOCKED(vp)<>0, 'vp ' + HexStr(vp) + ' is not locked');
+ Assert(vp^.v_type=VDIR, 'vp ' + HexStr(vp) + ' is not a directory');
 
  if (len^=0) then
  begin
@@ -329,8 +333,8 @@ var
  dp:p_dirent;
  va:t_vattr;
 begin
- Assert(VOP_ISLOCKED(vp)<>0, 'vp %p is not locked');
- Assert(vp^.v_type=VDIR, 'vp %p is not a directory');
+ Assert(VOP_ISLOCKED(vp)<>0, 'vp ' + HexStr(vp) + ' is not locked');
+ Assert(vp^.v_type=VDIR, 'vp ' + HexStr(vp) + ' is not a directory');
 
  found:=0;
 
@@ -342,7 +346,7 @@ begin
  if (dirbuflen < va.va_blocksize) then
   dirbuflen:=va.va_blocksize;
 
- dirbuf:=AllocMem(dirbuflen);
+ dirbuf:=calloc(dirbuflen);
 
  off:=0;
  len:=0;
@@ -360,7 +364,7 @@ begin
  until not ((len>0) or (eofflag=0));
 
 _out:
- FreeMem(dirbuf);
+ free(dirbuf);
  Exit(found);
 end;
 
@@ -708,8 +712,7 @@ loop2:
   end;
   BO_UNLOCK(bo);
   Assert(bp^.b_bufobj=bo,
-      ('bp %p wrong b_bufobj %p should be %p',
-      bp, bp^.b_bufobj, bo));
+      'bp ' + HexStr(bp) + ' wrong b_bufobj ' + HexStr(bp^.b_bufobj) + ' should be ' + HexStr(bo));
   if ((bp^.b_flags and B_DELWRI)=0) then
    panic('fsync: not dirty');
   if ((vp^.v_object<>nil) and (bp^.b_flags and B_CLUSTEROK)) then
@@ -833,9 +836,9 @@ begin
 
  if (vp^.v_mount<>dvp^^.v_mount) and
     ((dvp^^.v_vflag and VV_ROOT)<>0) and
-    ((p_mount(dvp^^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+    ((dvp^^.v_mount^.mnt_flag and MNT_UNION)<>0) then
  begin
-  dvp^:=p_mount(dvp^^.v_mount)^.mnt_vnodecovered;
+  dvp^:=dvp^^.v_mount^.mnt_vnodecovered;
   VREF(mvp);
   VOP_UNLOCK(mvp, 0);
   vn_close(mvp, FREAD);
@@ -848,7 +851,9 @@ begin
 
  dirbuflen:=DEV_BSIZE;
  if (dirbuflen < va.va_blocksize) then
+ begin
   dirbuflen:=va.va_blocksize;
+ end;
 
  dirbuf:=AllocMem(dirbuflen);
 
@@ -955,7 +960,7 @@ begin
   iosize:=BLKDEV_IOSIZE;
  if (iosize > MAXPHYS) then
   iosize:=MAXPHYS;
- buf:=AllocMem(iosize);
+ buf:=calloc(iosize);
 
  if (offset + len > vap^.va_size) then
  begin
@@ -1033,7 +1038,7 @@ begin
  _out:
  ap^.a_len^:=len;
  ap^.a_offset^:=offset;
- FreeMem(buf);
+ free(buf);
  Exit(error);
 end;
 

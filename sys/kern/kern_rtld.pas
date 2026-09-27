@@ -6,6 +6,7 @@ unit kern_rtld;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  kern_param,
  kern_thr,
@@ -317,7 +318,7 @@ begin
  case Magic of
   ELFMAG: //elf64
     begin
-      elf_hdr:=AllocMem(obj_size);
+      elf_hdr:=GetMem(obj_size);
 
       Result:=kread(vp,elf_hdr,obj_size,0);
       if (Result<>0) then
@@ -332,7 +333,7 @@ begin
     end;
   SELF_MAGIC: //self
     begin
-      self_hdr:=AllocMem(obj_size);
+      self_hdr:=GetMem(obj_size);
 
       Result:=kread(vp,self_hdr,obj_size,0);
       if (Result<>0) then
@@ -350,7 +351,7 @@ begin
        //new size
        obj_size:=self_hdr^.File_size;
 
-       //FreeMem(self_hdr);
+       //free(self_hdr);
        //Exit(EFAULT);
       end;
 

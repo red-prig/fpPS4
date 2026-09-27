@@ -13,7 +13,6 @@ uses
  vfile,
  vfilio,
  vttycom,
- vmount,
  vdirent,
  vstat,
  vuio,
@@ -118,10 +117,6 @@ const
   vop_putpages      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
  devfs_specops:vop_vector=(
@@ -172,10 +167,6 @@ const
   vop_putpages      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :@devfs_vptocnp;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
  devfs_ops_f:fileops=(
@@ -206,7 +197,9 @@ uses
  kern_descrip,
  kern_mtxpool,
  subr_uio,
- vnode_pager;
+ vnode_pager,
+ libkern,
+ kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -232,7 +225,7 @@ begin
 
   Exit(ENXIO);
  end;
- Assert(devp^^.si_refcount > 0,'devfs: un-referenced struct cdev');
+ Assert(devp^^.si_refcount > 0, 'devfs: un-referenced struct cdev *(' + devtoname(devp^) + ')');
  if (dswp^=nil) then Exit(ENXIO);
  curkthread^.td_fpop:=fp;
  Exit(0);
@@ -271,7 +264,7 @@ begin
  if (fp=nil) then Exit(ENOENT);
 
  cdp:=cdev2priv(fp^.f_data);
- p:=AllocMem(sizeof(t_cdev_privdata));
+ p:=calloc(sizeof(t_cdev_privdata));
  p^.cdpd_data:=priv;
  p^.cdpd_dtr :=priv_dtr;
  p^.cdpd_fp  :=fp;
@@ -285,7 +278,7 @@ begin
  end else
  begin
   mtx_unlock(cdevpriv_mtx);
-  FreeMem(p);
+  free(p);
   error:=EBUSY;
  end;
  Exit(error);
@@ -298,7 +291,7 @@ begin
  LIST_REMOVE(p,@p^.cdpd_list);
  mtx_unlock(cdevpriv_mtx);
  p^.cdpd_dtr(p^.cdpd_data);
- FreeMem(p);
+ free(p);
 end;
 
 procedure devfs_fpdrop(fp:p_file); public;
@@ -819,6 +812,11 @@ begin
   * NB: td may be nil if this descriptor is closed due to
   * garbage collection from a closed UNIX domain socket.
   }
+ if (td=nil) then
+ begin
+  Exit(vnops.fo_close(fp));
+ end;
+
  fpop:=td^.td_fpop;
  td^.td_fpop:=fp;
  Result:=vnops.fo_close(fp);
@@ -829,7 +827,9 @@ begin
   * are destroying the file.
   }
  if (fp^.f_cdevpriv<>nil) then
+ begin
   devfs_fpdrop(fp);
+ end;
 end;
 
 function devfs_fsync(ap:p_vop_fsync_args):Integer;
@@ -844,9 +844,7 @@ begin
   de:=ap^.a_vp^.v_data;
   if (error=ENXIO) {and (bo^.bo_dirty.bv_cnt > 0)} then
   begin
-   LOG_ERROR('Device %s went missing before all of the data ',
-           'could be written to it; expect data loss.',
-           de^.de_dirent^.d_name);
+   LOG_ERROR('Device ', de^.de_dirent^.d_name, ' went missing before all of the data could be written to it; expect data loss.');
 
    error:=vop_stdfsync(ap);
    if {(bo^.bo_dirty.bv_cnt<>0) or} (error<>0) then
@@ -892,11 +890,11 @@ begin
  sx_xunlock(@dmp^.dm_lock);
 
  de:=vp^.v_data;
- Assert(de<>nil,'nil dirent in devfs_getattr vp=%p');
+ Assert(de<>nil, 'nil dirent in devfs_getattr vp=' + HexStr(vp));
  if (vp^.v_type=VDIR) then
  begin
   de:=de^.de_dir;
-  Assert(de<>nil,'nil dir dirent in devfs_getattr vp=%p');
+  Assert(de<>nil, 'nil dir dirent in devfs_getattr vp=' + HexStr(vp));
  end;
 
  vap^.va_uid :=de^.de_uid;
@@ -1301,7 +1299,9 @@ begin
   * character device, for anything else return EOPNOTSUPP.
   }
  if (ap^.a_vap^.va_type<>VCHR) then
+ begin
   Exit(EOPNOTSUPP);
+ end;
 
  dvp:=ap^.a_dvp;
  dmp:=VFSTODEVFS(dvp^.v_mount);
@@ -1321,20 +1321,27 @@ begin
    de:=TAILQ_NEXT(de,@de^.de_list);
    continue;
   end;
-  if (CompareByte(cnp^.cn_nameptr^, de^.de_dirent^.d_name, de^.de_dirent^.d_namlen)<>0) then
+  if (strncmp(cnp^.cn_nameptr, @de^.de_dirent^.d_name, de^.de_dirent^.d_namlen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.de_list);
    continue;
   end;
   if ((de^.de_flags and DE_WHITEOUT)<>0) then
+  begin
    break;
+  end;
   goto notfound;
  end;
+
  if (de=nil) then
+ begin
   goto notfound;
+ end;
+
  de^.de_flags:=de^.de_flags and (not DE_WHITEOUT);
  error:=devfs_allocv(de, dvp^.v_mount, LK_EXCLUSIVE, vpp);
  Exit(error);
+
 notfound:
  sx_xunlock(@dmp^.dm_lock);
  Exit(error);
@@ -1839,8 +1846,7 @@ end;
 
 function devfs_rread(ap:p_vop_read_args):Integer;
 begin
- if (ap^.a_vp^.v_type<>VDIR) then
-  Exit(EINVAL);
+ if (ap^.a_vp^.v_type<>VDIR) then Exit(EINVAL);
  Exit(VOP_READDIR(ap^.a_vp, ap^.a_uio, nil, nil, nil));
 end;
 
@@ -1988,7 +1994,7 @@ begin
    Exit(EEXIST);
   end;
 
-  Assert((de_cov^.de_flags and DE_COVERED)=0,'devfs_symlink: entry %p already covered');
+  Assert((de_cov^.de_flags and DE_COVERED)=0, 'devfs_symlink: entry ' + HexStr(de_cov) + ' already covered');
   de_cov^.de_flags:=de_cov^.de_flags or DE_COVERED;
  end;
 
@@ -2002,7 +2008,7 @@ begin
  de^.de_dirent^.d_type:=DT_LNK;
 
  i:=strlen(ap^.a_target) + 1;
- de^.de_symlink:=AllocMem(i);
+ de^.de_symlink:=calloc(i);
  Move(ap^.a_target^, de^.de_symlink^, i);
 
  //mac_devfs_create_symlink(ap^.a_cnp^.cn_cred, dmp^.dm_mount, dd, de);
@@ -2041,7 +2047,7 @@ begin
  error:=devfs_fp_check(fp, @dev, @dsw, @ref);
  if (error<>0) then Exit(error);
 
- Assert(uio^.uio_td=td, 'uio_td %p is not td %p');
+ Assert(uio^.uio_td=td, 'uio_td ' + HexStr(uio^.uio_td) + ' is not td ' + HexStr(td));
  ioflag:=fp^.f_flag and (O_NONBLOCK or O_DIRECT or O_FSYNC);
 
  if ((ioflag and O_DIRECT)<>0) then

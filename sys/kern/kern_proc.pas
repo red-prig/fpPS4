@@ -6,6 +6,7 @@ unit kern_proc;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  kern_mtx,
  sysent,
@@ -92,14 +93,14 @@ uses
 
 function pargs_alloc(len:Integer):p_pargs;
 begin
- Result:=AllocMem(sizeof(t_pargs) + len);
+ Result:=calloc(sizeof(t_pargs) + len);
  Result^.ar_ref   :=1;
  Result^.ar_length:=len;
 end;
 
 procedure pargs_free(pa:p_pargs);
 begin
- FreeMem(pa);
+ free(pa);
 end;
 
 procedure pargs_hold(pa:p_pargs);

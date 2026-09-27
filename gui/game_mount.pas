@@ -24,6 +24,8 @@ type
   //
   DownloadKb:array[0..1] of QWORD;
   //
+  AddContMount:QWORD;
+  //
   Constructor Create;
   function GetTemporaryTitleIdFile:RawByteString;
   function GetAppTemporaryFolder:RawByteString;
@@ -65,6 +67,8 @@ procedure InitMount(GameStartupInfo:TGameStartupInfo);
 function  GameMountConfigExport:TGameMountConfigExport;
 
 //
+function AddContMount        (mountPoint:pchar;fs_src:RawByteString):Integer;
+function AddContUnmount      (mountPoint:pchar;var slot_id:Integer):Integer;
 
 function TemporaryDataMount  (mountPoint:pchar;format:Boolean):Integer;
 function TemporaryDataUnmount(mountPoint:pchar):Integer;
@@ -95,6 +99,7 @@ uses
  errno,
  kern_proc,
  vfs_mountroot,
+ vfs_cache,
  ps4_libSceSystemService,
  subr_backtrace;
 
@@ -258,6 +263,30 @@ begin
  end;
 end;
 
+function mount_chdir(path:PChar):Integer;
+begin
+ Result:=vfs_mountroot.mount_chdir(path);
+ if (Result<>0) then
+ begin
+  print_error_td('[chdir error]'+#13#10+
+                 ' path:"'+path+'"'#13#10+
+                 '  err:'+get_errno_str(Result)
+                ,True);
+ end;
+end;
+
+function mount_chroot(path:PChar):Integer;
+begin
+ Result:=vfs_mountroot.mount_chroot(path);
+ if (Result<>0) then
+ begin
+  print_error_td('[chroot error]'+#13#10+
+                 ' path:"'+path+'"'#13#10+
+                 '  err:'+get_errno_str(Result)
+                ,True);
+ end;
+end;
+
 function mount_into_sandbox(fstype,fspath,from,opts:PChar;flags:QWORD;ignore:Boolean):Integer;
 begin
  Result:=vfs_mountroot.mount_into_sandbox(fstype,fspath,from,opts,flags);
@@ -285,12 +314,13 @@ type
  pp_mount_dir=^p_mount_dir;
  p_mount_dir=^t_mount_dir;
  t_mount_dir=object
-  dst   :pchar;
-  src   :pchar;
-  mode  :Shortint;
-  flags :t_mnt_flags;
-  term  :Boolean;
-  childs:p_mount_dir;
+  dst  :pchar;
+  src  :pchar;
+  mode :Shortint;
+  flags:t_mnt_flags;
+  ftype:PChar;
+  term :Boolean;
+  child:p_mount_dir;
  end;
 
  t_mount_dir_iterator=object
@@ -320,10 +350,10 @@ begin
 
  prev:=_curr^;
 
- if (err=0) and (prev^.childs<>nil) then
+ if (err=0) and (prev^.child<>nil) then
  begin
   _curr:=_curr+1; //down
-  _curr^:=prev^.childs;
+  _curr^:=prev^.child;
  end else
  begin
   _curr^:=prev+1; //next
@@ -353,55 +383,66 @@ end;
 
 const
  SYSTEM_COMMON_DIRS:array[0..12] of t_mount_dir=(
-  (dst:'/%s/common/cert'          ;src:'%s/system/common/cert'          ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // CA_LIST.cer
-  (dst:'/%s/common/etc'           ;src:'%s/system/common/etc'           ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/font'          ;src:'%s/preinst/common/font'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // *.ttf
-  (dst:'/%s/common/font2'         ;src:'%s/system/common/font2'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
-  (dst:'/%s/common/httpcache'     ;src:'%s/system_data/common/httpcache';mode:MM_LOCAL   ;flags:[mfForceDir]),
-  (dst:'/%s/common/lib'           ;src:'%s/system/common/lib'           ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
-  (dst:'/%s/common/mms'           ;src:'%s/system_data/common/mms/'     ;mode:MM_LOCAL   ;flags:[mfForceDir]),             // av_content.db
-  (dst:'/%s/common/mms_ro'        ;src:'%s/system/common/mms_ro'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]), // template_content.db
-  (dst:'/%s/common/playready'     ;src:'%s/user/common/playready'       ;mode:MM_LOCAL   ;flags:[mfReadOnly,mfForceDir ]),
-  (dst:'/%s/common/text_layout'   ;src:'%s/system/common/text_layout'   ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/text_to_speech';src:'%s/system/common/text_to_speech';mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
-  (dst:'/%s/common/webkit'        ;src:'%s/system/common/webkit'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/cert'          ;src:'%s/system/common/cert'          ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // CA_LIST.cer
+  (dst:'./%s/common/etc'           ;src:'%s/system/common/etc'           ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/font'          ;src:'%s/preinst/common/font'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),             // *.ttf
+  (dst:'./%s/common/font2'         ;src:'%s/system/common/font2'         ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
+  (dst:'./%s/common/httpcache'     ;src:'%s/system_data/common/httpcache';mode:MM_LOCAL   ;flags:[mfForceDir]),
+  (dst:'./%s/common/lib'           ;src:'%s/system/common/lib'           ;mode:MM_FIRMWARE;flags:[mfReadOnly]),
+  (dst:'./%s/common/mms'           ;src:'%s/system_data/common/mms/'     ;mode:MM_LOCAL   ;flags:[mfForceDir]),             // av_content.db
+  (dst:'./%s/common/mms_ro'        ;src:'%s/system/common/mms_ro'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]), // template_content.db
+  (dst:'./%s/common/playready'     ;src:'%s/user/common/playready'       ;mode:MM_LOCAL   ;flags:[mfReadOnly,mfForceDir ]),
+  (dst:'./%s/common/text_layout'   ;src:'%s/system/common/text_layout'   ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/text_to_speech';src:'%s/system/common/text_to_speech';mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
+  (dst:'./%s/common/webkit'        ;src:'%s/system/common/webkit'        ;mode:MM_FIRMWARE;flags:[mfReadOnly,mfIgnoreErr]),
   (term:True)
  );
 
  SYSTEM_DIRS:array[0..5] of t_mount_dir=(
-  (dst:'/%s/becore'     ;src:''              ;mode:MM_CREATE  ;flags:[]),           // system app only
-  (dst:'/%s/common'     ;src:''              ;mode:MM_CREATE  ;flags:[];childs:@SYSTEM_COMMON_DIRS),
-  (dst:'/%s/common_temp';src:''              ;mode:MM_CREATE  ;flags:[]),
-  (dst:'/%s/priv'       ;src:'%s/system/priv';mode:MM_FIRMWARE;flags:[mfReadOnly]), // system app only
-  (dst:'/%s/sqlite'     ;src:''              ;mode:MM_CREATE  ;flags:[]),
+  (dst:'./%s/becore'     ;src:''              ;mode:MM_CREATE),                      // system app only
+  (dst:'./%s/common'     ;src:''              ;mode:MM_CREATE;child:@SYSTEM_COMMON_DIRS),
+  (dst:'./%s/common_temp';src:''              ;mode:MM_CREATE),
+  (dst:'./%s/priv'       ;src:'%s/system/priv';mode:MM_FIRMWARE;flags:[mfReadOnly]), // system app only
+  (dst:'./%s/sqlite'     ;src:''              ;mode:MM_CREATE),
   (term:True)
  );
 
- SANDBOX_DIRS:array[0..7] of t_mount_dir=(
-  (dst:'/app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
-  (dst:'/av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
-  (dst:'/hostapp'    ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
-  (dst:'/system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
-  (dst:'/%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];childs:@SYSTEM_DIRS),
+ SANDBOX_DIRS:array[0..8] of t_mount_dir=(
+  (dst:'./app0'       ;src:'%s'                 ;mode:MM_GAME  ;flags:[mfReadOnly,mfPFS,mfBudget]),
+  (dst:'./dev'        ;src:'devfs'              ;mode:MM_LOCAL ;ftype:'devfs'),
+  (dst:'./system_tmp' ;src:'%s/system_tmp'      ;mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./data'       ;src:'%s/user/data'       ;mode:MM_LOCAL ;flags:[mfForceDir]),
+  (dst:'./host'       ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
+  (dst:'./hostapp'    ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly]),
+  (dst:'./%s'         ;src:''                   ;mode:MM_CREATE;flags:[mfReadOnly];child:@SYSTEM_DIRS),
+  (dst:'./av_contents';src:'%s/user/av_contents';mode:MM_LOCAL ;flags:[mfForceDir]),
   (term:True)
  );
 
  DOWNLOAD_DIRS:array[0..1] of pchar=(
+  './download0',
+  './download1'
+ );
+
+ DOWNLOAD_MP:array[0..1] of pchar=(
   '/download0',
   '/download1'
  );
 
 procedure InitMount(GameStartupInfo:TGameStartupInfo);
 var
- i,err:Integer;
+ i,count,err:Integer;
 
  fs_iterator:t_mount_dir_iterator;
 
  fs_source:array[0..MM_LAST] of RawByteString;
+
+ fs_type:PChar;
  fs_dst:RawByteString;
  fs_src:RawByteString;
+
+ OverlayList:TSerializeStringArray;
+ fs_layer:RawByteString;
 begin
 
  //save to global
@@ -436,6 +477,16 @@ begin
  fs_source[MM_LOCAL   ]:=ExcludeTrailingPathDelimiter(GameStartupInfo.LocalDir);
 
  //--sandbox--
+
+ //create sandbox
+ err:=mount_mkdir('/sandbox');
+ if (err<>0) then Exit;
+
+ //move to
+ err:=mount_chdir('/sandbox');
+ if (err<>0) then Exit;
+ //create sandbox
+
  fs_iterator.init(@SANDBOX_DIRS);
  repeat
 
@@ -456,7 +507,10 @@ begin
      ForceDirectories(fs_src);
     end;
 
-    err:=mount_into_sandbox('ufs',
+    fs_type:=ftype;
+    if (fs_type=nil) then fs_type:='ufs';
+
+    err:=mount_into_sandbox(fs_type,
                             pchar(fs_dst),
                             pchar(fs_src),
                             nil,
@@ -464,9 +518,75 @@ begin
                             ord(mfPFS      in flags)*MNT_PFS_64K or
                             ord(mfBudget   in flags)*MNT_BIG_APP,
                             mfIgnoreErr in flags);
-   end;
 
-  end;
+    if (err=0) and (mode=MM_GAME) and (fs_dst='./app0') then
+    begin
+
+     //load overlays
+     OverlayList:=GameStartupInfo.FGameItem.MountList.OverlayList;
+     count:=Length(OverlayList.values);
+
+     if (count<>0) then
+     For i:=0 to count-1 do
+     begin
+      fs_layer:='/layer'+IntToStr(i);
+      fs_src  :=OverlayList.values[i];
+
+      err:=mount_into_sandbox(fs_type,
+                              pchar(fs_layer),
+                              pchar(fs_src),
+                              nil,
+                              ord(mfReadOnly in flags)*MNT_RDONLY  or
+                              ord(mfPFS      in flags)*MNT_PFS_64K or
+                              ord(mfBudget   in flags)*MNT_BIG_APP,
+                              True);
+
+      if (err=0) then
+      begin
+       err:=mount_into_sandbox('unionfs',
+                               pchar(fs_dst),
+                               pchar(fs_layer),
+                               nil,
+                               ord(mfReadOnly in flags)*MNT_RDONLY,
+                               False);
+
+       Writeln('Apply layer:',fs_src);
+      end;
+
+     end; //For
+
+     if GameStartupInfo.FGameItem.MountList.AllowApp0RW then
+     begin
+      fs_layer:='/layer_app0rw';
+      fs_src:=Format(unix_to_host('%s/app0rw'),[fs_source[MM_LOCAL]]);
+
+      ForceDirectories(fs_src);
+
+      err:=mount_into_sandbox(fs_type,
+                              pchar(fs_layer),
+                              pchar(fs_src),
+                              nil,
+                              ord(mfBudget in flags)*MNT_BIG_APP,
+                              True);
+
+      if (err=0) then
+      begin
+       err:=mount_into_sandbox('unionfs',
+                               pchar(fs_dst),
+                               pchar(fs_layer),
+                               nil,
+                               0,
+                               False);
+
+       Writeln('Apply layer:',fs_src);
+      end;
+     end;
+
+    end; //MM_GAME
+
+   end; //MM_CREATE
+
+  end; //with
 
  until (not fs_iterator.next(err));
  //--sandbox--
@@ -490,6 +610,12 @@ begin
  //UPDATE: sandbox root IS NOT read-only
  //err:=vfs_mount_path('ufs','/','/',nil,MNT_RDONLY or MNT_UPDATE);
 
+ //lock sandbox
+ err:=mount_chroot('.');
+ //lock sandbox
+
+ //enable relative mount
+ vfs_cache.disablefullpath:=1;
 end;
 
 function GameMountConfigExport:TGameMountConfigExport;
@@ -1022,6 +1148,99 @@ begin
  end;
 end;
 
+function AddContMount(mountPoint:pchar;fs_src:RawByteString):Integer;
+var
+ i:Integer;
+ m:QWORD;
+ fspath:array[0..15] of Char;
+begin
+ Result:=ESRCH;
+ mtx_lock(gGameMountConfig.mount_mtx);
+
+  For i:=0 to 63 do
+  begin
+   m:=QWORD(1) shl i;
+
+   if ((gGameMountConfig.AddContMount and m)=0) then
+   begin
+    fspath:='/addcont'+IntToStr(i);
+
+    Result:=vfs_mountroot.mount_into_sandbox('ufs',
+                                             fspath,
+                                             pchar(fs_src),
+                                             nil,
+                                             0);
+
+    if (Result=0) then
+    begin
+     strlcopy(mountPoint,fspath,MOUNT_MAXSIZE);
+     gGameMountConfig.AddContMount:=gGameMountConfig.AddContMount or m;
+    end; //(Result=0)
+
+    Break;
+   end; //((AddContMount and m)=0)
+
+  end; //For
+
+ mtx_unlock(gGameMountConfig.mount_mtx);
+end;
+
+function GetMountAddContId(name:pchar;var slot_id:Integer):Integer;
+begin
+ Result:=ENOTDIR;
+ if (name<>nil) then
+ if (PQWORD(@name[0])^=QWORD($746E6F636464612F)) then // /addcont
+ begin
+  if (name[9]=#0) then
+  begin
+   case name[8] of
+    '0'..'9':
+     begin
+      slot_id:=ord(name[8])-ord('0');
+      Result:=0;
+     end;
+    else;
+   end;
+  end else
+  if (name[10]=#0) and
+     (name[8] in ['0'..'9']) and
+     (name[9] in ['0'..'9']) then
+  begin
+   slot_id:=(ord(name[8])-ord('0'))*10 + (ord(name[9])-ord('0'));
+   Result:=ord(DWORD(slot_id)>63)*ENOTDIR;
+  end;
+ end;
+end;
+
+function AddContUnmount(mountPoint:pchar;var slot_id:Integer):Integer;
+var
+ m:QWORD;
+begin
+ Result:=GetMountAddContId(mountPoint,slot_id);
+ if (Result<>0) then Exit;
+
+ m:=QWORD(1) shl slot_id;
+
+ mtx_lock(gGameMountConfig.mount_mtx);
+
+  if ((gGameMountConfig.AddContMount and m)<>0) then
+  begin
+
+   Result:=vfs_mountroot.unmount_from_sandbox(mountPoint,0);
+
+   if (Result=0) then
+   begin
+    gGameMountConfig.AddContMount:=gGameMountConfig.AddContMount and (not m);
+   end;
+
+  end else
+  begin
+   Result:=ENOTDIR;
+  end;
+
+ mtx_unlock(gGameMountConfig.mount_mtx);
+end;
+
 function TemporaryDataMount(mountPoint:pchar;format:Boolean):Integer;
 var
  fs_src:RawByteString;
@@ -1060,9 +1279,9 @@ begin
     SaveTemporaryTitleId(gGameMountConfig.TitleId);
    end;
 
-  end;
+  end; //(Result=0)
 
- end;
+ end; //gGameMountConfig.TemporaryMount
 
  mtx_unlock(gGameMountConfig.mount_mtx);
 end;
@@ -1154,11 +1373,11 @@ var
  size:QWORD;
  fs_src:RawByteString;
 begin
- if (strlcomp(mountPoint,DOWNLOAD_DIRS[0],MOUNT_MAXSIZE)=0) then
+ if (strlcomp(mountPoint,DOWNLOAD_MP[0],MOUNT_MAXSIZE)=0) then
  begin
   i:=0;
  end else
- if (strlcomp(mountPoint,DOWNLOAD_DIRS[1],MOUNT_MAXSIZE)=0) then
+ if (strlcomp(mountPoint,DOWNLOAD_MP[1],MOUNT_MAXSIZE)=0) then
  begin
   i:=1;
  end else

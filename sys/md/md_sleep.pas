@@ -59,13 +59,9 @@ begin
  Result:=ntd2px(NtDelayExecution(True,@timo));
 end;
 
-procedure _apc_null(dwParam:PTRUINT); stdcall;
-begin
-end;
-
 function wakeup_td(td:p_kthread):Integer;
 begin
- Result:=ntw2px(NtQueueApcThread(td^.td_handle,@_apc_null,nil,nil,0));
+ Result:=ntw2px(NtAlertThread(td^.td_handle));
 end;
 
 procedure md_reset_wakeup;

@@ -6,6 +6,7 @@ unit vfs_syscalls;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  kern_proc,
  time,
@@ -127,6 +128,7 @@ function kern_mkdir(path:PChar;segflg:uio_seg;mode:Integer):Integer;
 function kern_rmdirat(fd:Integer;path:PChar;pathseg:uio_seg):Integer;
 function kern_rmdir(path:PChar;pathseg:uio_seg):Integer;
 function kern_getdirentries(fd:Integer;buf:Pointer;count:DWORD;basep:PInt64):Integer;
+function kern_chroot(path:PChar;pathseg:uio_seg):Integer;
 
 /////
 
@@ -407,7 +409,7 @@ begin
   begin
    maxcount:=count;
   end;
-  sfsp:=AllocMem(maxcount*sizeof(t_statfs));
+  sfsp:=calloc(maxcount*sizeof(t_statfs));
   buf^:=sfsp;
  end;
  count:=0;
@@ -671,10 +673,7 @@ const
 
 function change_root(vp:p_vnode):Integer; forward;
 
-{
- * Change notion of root (``/'') directory.
- }
-function sys_chroot(path:PChar):Integer;
+function kern_chroot(path:PChar;pathseg:uio_seg):Integer;
 label
  _error,
  e_vunlock;
@@ -683,19 +682,13 @@ var
  nd:t_nameidata;
  vfslocked:Integer;
 begin
- error:=EPERM;
- //error:=priv_check(td, PRIV_VFS_CHROOT);
- if (error<>0) then
- begin
-  Exit(error);
- end;
-
- NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, UIO_USERSPACE, path, curkthread);
+ NDINIT(@nd, LOOKUP, FOLLOW or LOCKSHARED or LOCKLEAF or MPSAFE or AUDITVNODE1, pathseg, path, curkthread);
  error:=nd_namei(@nd);
  if (error<>0) then
  begin
   goto _error;
  end;
+
  vfslocked:=NDHASGIANT(@nd);
  error:=change_dir(nd.ni_vp);
  if (error<>0) then
@@ -718,6 +711,23 @@ e_vunlock:
 _error:
  NDFREE(@nd, NDF_ONLY_PNBUF);
  Exit(error);
+end;
+
+{
+ * Change notion of root (``/'') directory.
+ }
+function sys_chroot(path:PChar):Integer;
+var
+ error:Integer;
+begin
+ error:=EPERM;
+ //error:=priv_check(td, PRIV_VFS_CHROOT);
+ if (error<>0) then
+ begin
+  Exit(error);
+ end;
+
+ Exit(kern_chroot(path,UIO_USERSPACE));
 end;
 
 {
@@ -1510,7 +1520,8 @@ begin
  VATTR_NULL(@vattr);
  vattr.va_mode:=ACCESSPERMS and (not fd_table.fd_cmask);
 
- //vattr.va_type:=VLNK;
+ vattr.va_type:=VLNK;
+
  //error:=mac_vnode_check_create(td^.td_ucred, nd.ni_dvp, @nd.ni_cnd, @vattr);
  //if (error)
  // goto out2;
@@ -3278,10 +3289,10 @@ unionread:
  end;
  if (count=auio.uio_resid) and
     ((vp^.v_vflag and VV_ROOT)<>0) and
-    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_UNION)<>0) then
+    ((vp^.v_mount^.mnt_flag and MNT_UNION)<>0) then
  begin
   tvp:=vp;
-  vp:=p_mount(vp^.v_mount)^.mnt_vnodecovered;
+  vp:=vp^.v_mount^.mnt_vnodecovered;
   VREF(vp);
   fp^.f_vnode:=vp;
   fp^.f_data:=vp;

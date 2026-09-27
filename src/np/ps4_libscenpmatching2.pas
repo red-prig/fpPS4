@@ -147,6 +147,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpMatching2ContextStop(ctxId:SceNpMatching2ContextId):Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpMatching2CreateContext(param:pSceNpMatching2CreateContextParam;
                                          ctxId:PWord):Integer;
 begin
@@ -155,6 +160,11 @@ end;
 
 function ps4_sceNpMatching2CreateContextA(param:pSceNpMatching2CreateContextParamA;
                                           ctxId:PWord):Integer;
+begin
+ Result:=0;
+end;
+
+function ps4_sceNpMatching2DestroyContext(ctxId:SceNpMatching2ContextId):Integer;
 begin
  Result:=0;
 end;
@@ -185,8 +195,10 @@ begin
  lib.set_proc($B81112CF3E02430B,@ps4_sceNpMatching2RegisterRoomMessageCallback);
  lib.set_proc($D1431E5911A764A0,@ps4_sceNpMatching2RegisterSignalingCallback);
  lib.set_proc($EEF8CD43A675A29D,@ps4_sceNpMatching2ContextStart);
+ lib.set_proc($FDFE8CE1C68D7BC9,@ps4_sceNpMatching2ContextStop);
  lib.set_proc($61F9A95BBD7DACCA,@ps4_sceNpMatching2CreateContext);
  lib.set_proc($6A3BF373C7B6BA9A,@ps4_sceNpMatching2CreateContextA);
+ lib.set_proc($373FD913BBABDF62,@ps4_sceNpMatching2DestroyContext);
  lib.set_proc($FBC7BBC172E68DDB,@ps4_sceNpMatching2SetDefaultRequestOptParam);
  lib.set_proc($32AA77949FAC8F2E,@ps4_sceNpMatching2Terminate);
 end;

@@ -6,9 +6,9 @@ unit fdesc_vnops;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_param,
- vmount,
  vnode,
  vfs_default,
  vnode_if,
@@ -65,18 +65,6 @@ const
   vop_getwritemount :nil;
   vop_print         :nil;
   vop_pathconf      :@vop_stdpathconf;
-  vop_advlock       :nil;
-  vop_advlockasync  :nil;
-  vop_advlockpurge  :nil;
-  vop_reallocblks   :nil;
-  vop_getpages      :nil;
-  vop_putpages      :nil;
-  vop_vptofh        :nil;
-  vop_vptocnp       :nil;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
 procedure fdesc_insmntque_dtr(vp:p_vnode;arg:Pointer);
@@ -201,12 +189,12 @@ loop:
  end;
  mtx_unlock(fdesc_hashmtx);
 
- fd:=AllocMem(sizeof(t_fdescnode));
+ fd:=calloc(sizeof(t_fdescnode));
 
  error:=getnewvnode('fdescfs', mp, @fdesc_vnodeops, @vp);
  if (error<>0) then
  begin
-  FreeMem(fd);
+  free(fd);
   Exit(error);
  end;
 
@@ -634,7 +622,7 @@ begin
  vp:=ap^.a_vp;
  fd:=VTOFDESC(vp);
  fdesc_remove_entry(fd);
- FreeMem(vp^.v_data);
+ free(vp^.v_data);
  vp^.v_data:=nil;
  Exit(0);
 end;

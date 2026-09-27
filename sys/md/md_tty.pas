@@ -175,7 +175,7 @@ begin
  begin
   val:=CODES[i] xor Byte(src[i]);
   dst[i]:=char(val);
-  if (val<>0) and (i=30) then Break;
+  if (val<>0) and (i=31) then Break;
   i:=i+1;
   if (val=0) then
   begin
@@ -200,30 +200,6 @@ begin
 end;
 
 //  if (td^.td_name='SceVideoOutServiceThread') then exit;
-
-procedure uio_drain(uio:p_uio);
-var
- iov:p_iovec;
- cnt:QWORD;
-begin
- while (uio^.uio_resid > 0) do
- begin
-  iov:=uio^.uio_iov;
-  cnt:=iov^.iov_len;
-
-  if (cnt=0) then
-  begin
-   Inc(uio^.uio_iov);
-   Dec(uio^.uio_iovcnt);
-   continue;
-  end;
-
-  Inc(iov^.iov_base  ,cnt);
-  Dec(iov^.iov_len   ,cnt);
-  Dec(uio^.uio_resid ,cnt);
-  Inc(uio^.uio_offset,cnt);
- end;
-end;
 
 function md_tty_write(tp:p_tty;priv:p_priv_tty;uio:p_uio;ioflag:Integer):Integer;
 var

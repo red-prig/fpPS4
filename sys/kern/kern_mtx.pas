@@ -17,12 +17,13 @@ type
  end;
 
  p_mtx=^mtx;
- mtx=packed record
+ mtx=packed object
   n:PChar;
   fast_mutex:t_fast_mutex;
   {$IFDEF DEBUG_MTX}
   debug_own:array[0..2] of Pointer;
   {$ENDIF}
+  property lk_recurse:WORD read fast_mutex.recursion;
  end;
 
 const

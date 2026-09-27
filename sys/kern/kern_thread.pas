@@ -45,9 +45,9 @@ procedure thread_lock   (td:p_kthread);
 procedure thread_unlock (td:p_kthread);
 function  tdfind(tid:DWORD):p_kthread;
 
-procedure threads_lock;
-function  threads_trylock:Boolean;
-procedure threads_unlock;
+procedure threads_rlock;
+function  threads_tryrlock:Boolean;
+procedure threads_runlock;
 
 procedure KernSetThreadDebugName(newtd:p_kthread;prefix:PChar);
 
@@ -70,6 +70,7 @@ var
 implementation
 
 uses
+ sys_bootparam,
  errno,
  systm,
  kern_mtx,
@@ -81,7 +82,8 @@ uses
  kern_proc,
  kern_rangelock,
  sched_ule,
- sys_sleepqueue;
+ sys_sleepqueue,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -137,6 +139,8 @@ begin
  if (System.InterlockedExchange(_t_init,1)<>0) then Exit;
  //init internals
  BeginThread(@_thread_null);
+ //
+ cpuset_init;
 end;
 
 {
@@ -203,6 +207,7 @@ end;
 
 procedure thread_free(td:p_kthread);
 begin
+ td^.td_qsbr:=0;
  mtx_destroy(td^.tdq_lock);
  sleepq_free(td^.td_sleepqueue);
  rlqentry_free(td^.td_rlqe);
@@ -308,7 +313,7 @@ begin
  rw_wunlock(tidhash_lock);
 end;
 
-procedure tidhash_remove(td:p_kthread);
+function tidhash_unlink(td:p_kthread):Pointer;
 var
  data:Pointer;
 begin
@@ -320,6 +325,14 @@ begin
  HAMT_delete32(@tidhashtbl,td^.td_tid,@data);
 
  rw_wunlock(tidhash_lock);
+ Result:=data;
+end;
+
+procedure tidhash_remove(td:p_kthread);
+var
+ data:Pointer;
+begin
+ data:=tidhash_unlink(td);
 
  if (data=td) then
  begin
@@ -327,17 +340,17 @@ begin
  end;
 end;
 
-procedure threads_lock; public;
+procedure threads_rlock; public;
 begin
  rw_rlock(tidhash_lock);
 end;
 
-function threads_trylock:Boolean; public;
+function threads_tryrlock:Boolean; public;
 begin
  Result:=rw_try_rlock(tidhash_lock);
 end;
 
-procedure threads_unlock; public;
+procedure threads_runlock; public;
 begin
  rw_runlock(tidhash_lock);
 end;
@@ -427,6 +440,7 @@ begin
  td^.td_priority     :=68;
  td^.td_pri_class    :=10;
  td^.td_user_pri     :=700;
+ td^.td_cpuset       :=sys_bootparam.p_cpuset;
 end;
 
 function create_thread(td        :p_kthread; //calling thread
@@ -545,9 +559,9 @@ begin
  end;
 
  LOG_INFO('create_thread[',name,']'#13#10,
-         ' newtd:0x',HexStr(newtd),#13#10,
-         '   tid:',newtd^.td_tid
-        );
+          ' newtd:0x',HexStr(newtd),#13#10,
+          '   tid:',newtd^.td_tid
+         );
 
  if (child_tid<>nil) then
  begin
@@ -640,6 +654,8 @@ begin
  if (n<>0) then
  begin
   cpu_thread_terminate(newtd);
+  tidhash_unlink(newtd);
+  thread_unlink(newtd);
   thread_free(newtd);
   Exit(EFAULT);
  end;
@@ -728,7 +744,9 @@ begin
  end;
  KernSetThreadDebugName(newtd,'kern:');
 
- sched_fork_thread(td,newtd);
+ //not inherited by internal threads
+ cpuset_setaffinity   (newtd,$FF);
+ sched_thread_priority(newtd,700);
 
  tidhash_add(newtd);
 
@@ -738,7 +756,8 @@ begin
  if (n<>0) then
  begin
   cpu_thread_terminate(newtd);
-  thread_dec_ref(newtd);
+  tidhash_unlink(newtd);
+  thread_unlink(newtd);
   thread_free(newtd);
   Exit(EFAULT);
  end;
@@ -895,7 +914,7 @@ begin
  td:=curkthread;
  thread_suspend_source:=td;
 
- threads_lock;
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(@p_threads);
    while (ttd<>nil) do
@@ -911,7 +930,7 @@ begin
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 procedure thread_resume_all(exclude:p_kthread); public;
@@ -921,7 +940,7 @@ begin
  td:=curkthread;
  thread_suspend_source:=nil;
 
- threads_lock;
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(@p_threads);
    while (ttd<>nil) do
@@ -937,7 +956,7 @@ begin
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 function sys_thr_kill(id,sig:Integer):Integer;
@@ -964,7 +983,7 @@ begin
    Result:=ESRCH;
    PROC_LOCK;
 
-   threads_lock;
+   threads_rlock;
 
      ttd:=TAILQ_FIRST(@p_threads);
      while (ttd<>nil) do
@@ -982,7 +1001,7 @@ begin
       ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
      end;
 
-    threads_unlock;
+    threads_runlock;
 
    PROC_UNLOCK;
   end;
@@ -1158,21 +1177,6 @@ begin
 
  thread_unlock(td);
  thread_dec_ref(td);
-end;
-
-function strnlen(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
 end;
 
 function sys_thr_get_name(id:DWORD;pname:PChar):Integer;

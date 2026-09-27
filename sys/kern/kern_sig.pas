@@ -442,7 +442,7 @@ begin
  sigqueue_init(@worklist);
  sigqueue_move_set(@p_proc.p_sigqueue,@worklist,_set);
 
- threads_lock;
+ threads_rlock;
 
   td0:=TAILQ_FIRST(get_p_threads);
   while (td0<>nil) do
@@ -456,7 +456,7 @@ begin
    td0:=TAILQ_NEXT(td0,@td0^.td_plist)
   end;
 
- threads_unlock;
+ threads_runlock;
 
  sigqueue_flush(@worklist);
 end;
@@ -577,10 +577,10 @@ begin
    oact^.u.sa_handler:=p_sigacts.ps_sigact[_SIG_IDX(sig)];
   end;
 
-  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDSTOP) then
+  if (sig=SIGCHLD) and ((p_sigacts.ps_flag and PS_NOCLDSTOP)<>0) then
    oact^.sa_flags:=oact^.sa_flags or SA_NOCLDSTOP;
 
-  if (sig=SIGCHLD and p_sigacts.ps_flag and PS_NOCLDWAIT) then
+  if (sig=SIGCHLD) and ((p_sigacts.ps_flag and PS_NOCLDWAIT)<>0) then
    oact^.sa_flags:=oact^.sa_flags or SA_NOCLDWAIT;
 
  end;
@@ -592,7 +592,7 @@ begin
   begin
    ps_mtx_unlock;
    PROC_UNLOCK;
-   Result:=EINVAL;
+   Exit(EINVAL);
   end;
 
   p_sigacts.ps_catchmask[_SIG_IDX(sig)]:=act^.sa_mask;
@@ -1409,7 +1409,7 @@ begin
  first_td :=nil;
  signal_td:=nil;
 
- threads_lock;
+ threads_rlock;
 
    td:=TAILQ_FIRST(get_p_threads);
    while (td<>nil) do
@@ -1433,7 +1433,7 @@ begin
     td:=TAILQ_NEXT(td,@td^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 
  if (signal_td=nil) then
  begin

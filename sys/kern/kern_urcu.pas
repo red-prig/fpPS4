@@ -1,0 +1,384 @@
+unit kern_urcu;
+
+{$mode ObjFPC}{$H+}
+
+interface
+
+uses
+ mqueue,
+ kern_hamt,
+ kern_thr;
+
+type
+ t_urcu_free=procedure(P:Pointer);
+
+procedure urcu_flush_deferred;
+
+procedure urcu_synchronize_rcu(my_epoch:QWORD);
+
+procedure urcu_free(node:Pointer;free:t_urcu_free);
+
+procedure urcu_hamt_free (node:Pointer);
+
+const
+ urcu_hamt_allocator:THAL=(
+  alloc:@default_hamt_alloc;
+  free :@urcu_hamt_free;
+  msize:@default_hamt_msize
+ );
+
+var
+ urcu_global_epoch:Int64=1;
+
+procedure kern_urcu_init;
+
+type
+ t_urcu_text_free =procedure(mchunk:Pointer);
+ t_urcu_scrub_proc=procedure(td:p_kthread;base:ptruint;size:ptruint);
+
+var
+ urcu_qsbr_seq:Int64=1;
+
+procedure urcu_retire_text(base:Pointer;size:ptruint;mchunk:Pointer;cfree:t_urcu_text_free);
+
+procedure urcu_set_scrub_proc(p:t_urcu_scrub_proc);
+
+procedure urcu_qs(td:p_kthread);
+
+procedure urcu_text_scan;
+
+implementation
+
+uses
+ LFQueue,
+ time,
+ md_sleep,
+ kern_mtx,
+ kern_malloc,
+ kern_daemon;
+
+type
+ p_urcu_node=^t_urcu_node;
+ t_urcu_node=record
+  entry:LIST_ENTRY;
+  //
+  cnode:Pointer;
+  cfree:t_urcu_free;
+  //
+  epoch:QWORD;
+ end;
+
+var
+ rlist_lf:TIntrusiveMPSCQueue;
+ rlist_mx:mtx;
+ rlist_bs:LIST_HEAD=(lh_first:nil);
+ rcount  :Integer=0;
+
+procedure urcu_scan(smForce:Boolean);
+label
+ _again;
+var
+ p_node:p_urcu_node;
+ r_node:p_urcu_node;
+ ttd:p_kthread;
+ min_epoch:QWORD;
+ f_list:LIST_HEAD;
+begin
+
+ _again:
+
+ r_node:=nil;
+ f_list:=Default(LIST_HEAD);
+
+ if (smForce) then
+ begin
+  mtx_lock(rlist_mx);
+ end else
+ begin
+  if not mtx_trylock(rlist_mx) then Exit;
+ end;
+
+ //flush to base list
+ while rlist_lf.Pop(r_node) do
+ begin
+  LIST_INSERT_HEAD(@rlist_bs,r_node,@r_node^.entry);
+ end;
+
+ r_node:=LIST_FIRST(@rlist_bs);
+ if (r_node=nil) then
+ begin
+  mtx_unlock(rlist_mx);
+  Exit;
+ end;
+
+ //find minimum non-zero epoch
+ min_epoch:=QWORD(-1);
+
+ threads_rlock;
+ ttd:=TAILQ_FIRST(get_p_threads);
+ while (ttd<>nil) do
+ begin
+  if (ttd^.td_urcu_epoch<>0) and
+     (ttd^.td_urcu_epoch<min_epoch) then
+  begin
+   min_epoch:=ttd^.td_urcu_epoch;
+  end;
+  ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist);
+ end;
+ threads_runlock;
+
+ //collect safe nodes
+ r_node:=LIST_FIRST(@rlist_bs);
+ while (r_node<>nil) do
+ begin
+  p_node:=LIST_NEXT(r_node,@r_node^.entry);
+  //
+  if (r_node^.epoch<min_epoch) then
+  begin
+   LIST_REMOVE(r_node,@r_node^.entry);
+   LIST_INSERT_HEAD(@f_list,r_node,@r_node^.entry);
+  end;
+  //
+  r_node:=p_node;
+ end;
+
+ mtx_unlock(rlist_mx);
+
+ //free nodes
+ r_node:=LIST_FIRST(@f_list);
+ while (r_node<>nil) do
+ begin
+  LIST_REMOVE(r_node,@r_node^.entry);
+  //free element
+  if (r_node^.cfree<>nil) then
+  begin
+   r_node^.cfree(r_node^.cnode);
+  end;
+  //free node
+  System.InterlockedDecrement(rcount);
+  free(r_node);
+  //
+  r_node:=LIST_FIRST(@f_list);
+ end;
+
+ if (smForce) and
+     (LIST_FIRST(@rlist_bs)<>nil) then
+ begin
+  msleep_td(hz div 10000);
+  goto _again;
+ end;
+
+end;
+
+procedure urcu_flush_deferred;
+begin
+ urcu_scan(False);
+end;
+
+//
+
+procedure urcu_synchronize_rcu(my_epoch:QWORD);
+var
+ td:p_kthread;
+ all_clear:Boolean;
+begin
+ repeat
+  all_clear:=True;
+
+  threads_rlock;
+  td:=TAILQ_FIRST(get_p_threads);
+  while (td<>nil) do
+  begin
+   if (td<>curkthread) and
+      (td^.td_urcu_epoch<>0) and (td^.td_urcu_epoch<=my_epoch) then
+   begin
+    all_clear:=False;
+    Break;
+   end;
+   td:=TAILQ_NEXT(td,@td^.td_plist);
+  end;
+  threads_runlock;
+
+  if not all_clear then
+  begin
+   md_yield;
+  end;
+ until all_clear;
+end;
+
+procedure urcu_free(node:Pointer;free:t_urcu_free);
+var
+ defer:p_urcu_node;
+begin
+ if (node=nil) then Exit;
+
+ defer:=calloc(SizeOf(t_urcu_node));
+ defer^.cnode:=node;
+ defer^.cfree:=free;
+ defer^.epoch:=urcu_global_epoch;
+
+ rlist_lf.Push(defer);
+ System.InterlockedIncrement(rcount);
+ //
+ if rcount>(4*256) then
+ begin
+  urcu_scan(False);
+ end;
+end;
+
+//
+
+procedure urcu_hamt_free(node:Pointer);
+begin
+ urcu_free(node,@default_hamt_free);
+end;
+
+type
+ p_urcu_text_node=^t_urcu_text_node;
+ t_urcu_text_node=record
+  entry :LIST_ENTRY;
+  base  :Pointer;
+  size  :ptruint;
+  mchunk:Pointer;
+  cfree :t_urcu_text_free;
+  epoch :QWORD;
+ end;
+
+var
+ urcu_text_mx:mtx;
+ urcu_text_list:LIST_HEAD=(lh_first:nil);
+ urcu_scrub_proc:t_urcu_scrub_proc=nil;
+
+procedure urcu_set_scrub_proc(p:t_urcu_scrub_proc);
+begin
+ urcu_scrub_proc:=p;
+end;
+
+procedure urcu_retire_text(base:Pointer;size:ptruint;mchunk:Pointer;cfree:t_urcu_text_free);
+var
+ node:p_urcu_text_node;
+begin
+ if (base=nil) or (size=0) then
+ begin
+  if (cfree<>nil) then cfree(mchunk);
+  Exit;
+ end;
+
+ node:=calloc(SizeOf(t_urcu_text_node));
+ node^.base  :=base;
+ node^.size  :=size;
+ node^.mchunk:=mchunk;
+ node^.cfree :=cfree;
+ node^.epoch :=System.InterlockedIncrement64(urcu_qsbr_seq);
+
+ mtx_lock(urcu_text_mx);
+  LIST_INSERT_HEAD(@urcu_text_list,node,@node^.entry);
+ mtx_unlock(urcu_text_mx);
+end;
+
+procedure urcu_qs(td:p_kthread);
+var
+ node:p_urcu_text_node;
+ scrub:t_urcu_scrub_proc;
+begin
+ if (td=nil) then Exit;
+ if (LIST_FIRST(@urcu_text_list)=nil) then Exit;
+ if ((td^.pcb_flags and PCB_IS_JIT)=0) then Exit;
+
+ scrub:=urcu_scrub_proc;
+ if (scrub<>nil) then
+ begin
+  if not mtx_trylock(urcu_text_mx) then Exit;
+   node:=LIST_FIRST(@urcu_text_list);
+   while (node<>nil) do
+   begin
+    scrub(td,ptruint(node^.base),node^.size);
+    node:=LIST_NEXT(node,@node^.entry);
+   end;
+  mtx_unlock(urcu_text_mx);
+ end;
+
+ System.ReadWriteBarrier;
+ td^.td_qsbr:=urcu_qsbr_seq;
+ System.ReadWriteBarrier;
+end;
+
+procedure urcu_text_scan;
+var
+ node,next:p_urcu_text_node;
+ ttd:p_kthread;
+ min_epoch:QWORD;
+begin
+ if (LIST_FIRST(@urcu_text_list)=nil) then Exit;
+
+ //find minimum non-zero epoch
+ min_epoch:=QWORD(-1);
+
+ threads_rlock;
+  ttd:=TAILQ_FIRST(get_p_threads);
+  while (ttd<>nil) do
+  begin
+
+   if (ttd<>curkthread) then
+   begin
+    urcu_qs(ttd);
+
+    if (ttd^.td_qsbr<>0) and
+       (ttd^.td_qsbr<min_epoch) then
+    begin
+     min_epoch:=ttd^.td_qsbr;
+    end;
+
+   end;
+
+   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist);
+  end;
+ threads_runlock;
+
+ //free the ranges every live thread has already passed
+ mtx_lock(urcu_text_mx);
+  node:=LIST_FIRST(@urcu_text_list);
+  while (node<>nil) do
+  begin
+   next:=LIST_NEXT(node,@node^.entry);
+
+   if (node^.epoch<min_epoch) then
+   begin
+    LIST_REMOVE(node,@node^.entry);
+    if (node^.cfree<>nil) then
+    begin
+     node^.cfree(node^.mchunk);
+    end;
+    free(node);
+   end;
+
+   node:=next;
+  end;
+ mtx_unlock(urcu_text_mx);
+
+ //next epoch
+ System.InterlockedIncrement64(urcu_qsbr_seq);
+end;
+
+//
+
+var
+ daemon_stub:t_daemon_node;
+
+procedure urcu_daemon_scan; SysV_ABI_CDecl;
+begin
+ urcu_scan(False);
+ urcu_text_scan;
+end;
+
+procedure kern_urcu_init;
+begin
+ mtx_init(rlist_mx,'rlist_mx');
+ mtx_init(urcu_text_mx,'urcu_text_mx');
+ rlist_lf.Create;
+ sys_daemon_add_cbs(@daemon_stub,@urcu_daemon_scan);
+end;
+
+end.
+
+

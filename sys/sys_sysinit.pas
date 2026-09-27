@@ -37,8 +37,10 @@ uses
  vm_object,
  uma_core,
  kern_hamt,
+ kern_urcu,
  kern_dmem,
  kern_mtxpool,
+ kern_malloc,
  vsys_generic,
  vfs_subr,
  vfs_lookup,
@@ -50,6 +52,8 @@ uses
  devfs_vfsops,
  fdesc_vfsops,
  null_vfsops,
+ tmpfs_vfsops,
+ union_vfsops,
  ufs,
  kern_descrip,
  vfs_mount,
@@ -76,6 +80,8 @@ begin
  vfs_register(@fdescfs_vfsconf);
  vfs_register(@nullfs_vfsconf);
  vfs_register(@ufs_vfsconf);
+ vfs_register(@tmpfs_vfsconf);
+ vfs_register(@unionfs_vfsconf);
  vfs_mount_init();
  vfs_mountroot.vfs_mountroot();
  fildesc_drvinit;
@@ -97,7 +103,8 @@ end;
 procedure sys_init;
 begin
  uma_startup4();
- kern_hamt_init;
+ malloc_init;
+ kern_urcu_init;
  timeinit;
  init_sleepqueues;
  sysctl_register_all;

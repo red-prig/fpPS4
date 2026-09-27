@@ -261,17 +261,17 @@ begin
    offset1:=QWORD(frame)-QWORD(info.base_addr);
    offset2:=QWORD(frame)-QWORD(info.func_addr);
 
-   LOG_TRACE(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
+   LOG_INFO(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source,':',info.func,'+$',HexStr(offset2,6));
   end else
   begin
    if (info.base_addr<>0) then
    begin
     offset1:=QWORD(frame)-QWORD(info.base_addr);
 
-    LOG_TRACE(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source);
+    LOG_INFO(f,'  offset $',HexStr(offset1 shr 24,5),'|',HexStr(offset1,6),'  ',info.source);
    end else
    begin
-    LOG_TRACE(f,'  $',HexStr(frame),'  ',info.source);
+    LOG_INFO(f,'  $',HexStr(frame),'  ',info.source);
    end;
   end;
  end else
@@ -280,7 +280,7 @@ begin
   LOG_INFO(f,BackTraceStrFunc(frame));
  end else
  begin
-  LOG_TRACE(f,'  $',HexStr(frame));
+  LOG_INFO(f,'  $',HexStr(frame));
  end;
 end;
 

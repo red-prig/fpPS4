@@ -7,14 +7,21 @@ interface
 
 uses
  subr_dynlib,
- kern_proc;
+ kern_proc,
+ param_sfo_gui;
+
+var
+ DlcList:ARawByteString=nil;
 
 implementation
 
 uses
  errno,
+ libkern,
+ kern_mtx,
  param_sfo_ipc,
- game_mount;
+ game_mount,
+ ps4_libSceSystemService;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -68,20 +75,20 @@ type
  pSceAppContentBootParam=^SceAppContentBootParam;
  SceAppContentBootParam=packed record
   reserved1:array[0..3] of Byte;
-  attr:DWORD;
+  attr     :DWORD;
   reserved2:array[0..31] of Byte;
  end;
 
  pSceNpUnifiedEntitlementLabel=^SceNpUnifiedEntitlementLabel;
  SceNpUnifiedEntitlementLabel=packed record
-  data:array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
+  data   :array[0..SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE-1] of AnsiChar;
   padding:array[0..2] of Byte;
  end;
 
  pSceAppContentAddcontInfo=^SceAppContentAddcontInfo;
  SceAppContentAddcontInfo=packed record
   entitlementLabel:SceNpUnifiedEntitlementLabel;
-  status:DWORD; //SceAppContentAddcontDownloadStatus
+  status          :DWORD; //SceAppContentAddcontDownloadStatus
  end;
 
  pSceAppContentMountPoint=^SceAppContentMountPoint;
@@ -92,8 +99,75 @@ type
 
 var
  InitAppContent:Boolean=False;
+ mtx_app_content:mtx;
 
-function CheckReserved(var buf;len:DWORD):Boolean; inline;
+type
+ TAddContInfo=record
+  path            :RawByteString;
+  EntitlementLabel:SceNpUnifiedEntitlementLabel;
+  EntitlementKey  :SceAppContentEntitlementKey;
+ end;
+ AAddContInfo=array of TAddContInfo;
+
+var
+ AddContInfoByServiceLabel:array[0..7] of AAddContInfo;
+
+Function GetAllServiceID():ARawByteString;
+var
+ V:RawByteString;
+ c:Char;
+begin
+ V:=TContentID(ParamSfoGetString('CONTENT_ID')).GetServiceID;
+ Result:=[V];
+
+ For c:='1' to '7' do
+ begin
+  V:=ParamSfoGetString('SERVICE_ID_ADDCONT_ADD_'+c);
+  Insert(V,Result,Length(Result));
+ end;
+end;
+
+procedure AddDlcByPath(const path:RawByteString;const ServiceID:ARawByteString);
+var
+ ParamSfo:TParamSfoFile;
+ CONTENT_ID:RawByteString;
+ current:RawByteString;
+ node:TAddContInfo;
+ i:Integer;
+begin
+ if Length(ServiceID)=0 then Exit;
+
+ ParamSfo:=nil;
+ LoadParamSfoByPath(path,ParamSfo);
+ if (ParamSfo=nil) then Exit;
+
+ if (ParamSfo.GetString('CATEGORY')='ac') then
+ begin
+  CONTENT_ID:=ParamSfo.GetString('CONTENT_ID');
+  current:=TContentID(CONTENT_ID).GetServiceID;
+
+  For i:=0 to High(ServiceID) do
+  if (current=ServiceID[i]) then
+  begin
+   LOG_INFO('Apply DLC :',path);
+   LOG_INFO('TITLE     :',ParamSfo.GetString('TITLE'));
+   LOG_INFO('CONTENT_ID:',CONTENT_ID);
+
+   node:=Default(TAddContInfo);
+
+   node.path                 :=path;
+   node.EntitlementLabel.data:=TContentID(CONTENT_ID).GetEntitlementLabel;
+   //node.EntitlementKey:=;
+
+   Insert(node,AddContInfoByServiceLabel[i],Length(AddContInfoByServiceLabel[i]));
+   Break;
+  end;
+ end;
+
+ ParamSfo.Free;
+end;
+
+function CheckReserved(var buf;len:DWORD):Boolean;
 var
  i:DWORD;
 begin
@@ -106,10 +180,13 @@ begin
 end;
 
 function ps4_sceAppContentInitialize(initParam:pSceAppContentInitParam;bootParam:pSceAppContentBootParam):Integer;
+var
+ i:Integer;
+ ServiceID:ARawByteString;
 begin
  LOG_INFO('sceAppContentInitialize');
 
- if ($14fffff < p_proc.p_sdk_version) then
+ if (p_proc.p_sdk_version > $14fffff) then
  begin
 
   if InitAppContent then Exit(SCE_APP_CONTENT_ERROR_BUSY);
@@ -138,9 +215,24 @@ begin
 
  if InitAppContent then Exit(0);
 
+ //
  param_sfo_ipc.init_param_sfo;
 
+ mtx_init(mtx_app_content,'mtx_app_content');
+
+ if Length(DlcList)<>0 then
+ begin
+  ServiceID:=GetAllServiceID();
+
+  For i:=0 to High(DlcList) do
+  begin
+   AddDlcByPath(DlcList[i],ServiceID);
+  end;
+ end;
+ //
+
  InitAppContent:=True;
+ entitlement_update:=1;
  Result:=0;
 end;
 
@@ -190,29 +282,152 @@ begin
  Result:=0;
 end;
 
-function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
-                                             list:pSceAppContentAddcontInfo;
-                                             listNum:DWORD;
-                                             hitNum:PDWORD):Integer;
+function CheckServiceLabel(serviceLabel:SceNpServiceLabel):Integer;
 begin
- Result:=0;
- LOG_TRACE('sceAppContentGetAddcontInfoList:0x',HexStr(serviceLabel,8));
- if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
- if (hitNum<>nil) then
+ if (DWORD(serviceLabel)>7) then
  begin
-  hitNum^:=0; //no DLC
+  Result:=SCE_APP_CONTENT_ERROR_PARAMETER;
+ end else
+ begin
+  Result:=0;
  end;
 end;
 
-function ps4_sceAppContentGetAddcontInfo(serviceLabel:SceNpServiceLabel;
+function Min(a,b:DWORD): DWORD; inline;
+begin
+ if (a<b) then Result:=a else Result:=b;
+end;
+
+function ps4_sceAppContentGetAddcontInfoList(serviceLabel:SceNpServiceLabel;
+                                             list        :pSceAppContentAddcontInfo;
+                                             listNum     :DWORD;
+                                             hitNum      :PDWORD):Integer;
+var
+ i,len:Integer;
+begin
+ Result:=0;
+ LOG_TRACE('sceAppContentGetAddcontInfoList:',serviceLabel);
+ if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
+ if (hitNum=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ Result:=CheckServiceLabel(serviceLabel);
+ if (Result<>0) then Exit;
+
+ mtx_lock(mtx_app_content);
+
+  len:=Length(AddContInfoByServiceLabel[serviceLabel]);
+
+  if (list<>nil) then
+  begin
+   len:=Min(listNum,len);
+
+   hitNum^:=len;
+
+   if (len>0) then
+   For i:=0 to len-1 do
+   begin
+    list[i].entitlementLabel:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel;
+    list[i].status          :=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+   end;
+
+  end;
+
+ mtx_unlock(mtx_app_content);
+
+ hitNum^:=len;
+end;
+
+function CheckEntitlementLabel(entitlementLabel:pSceNpUnifiedEntitlementLabel):Integer;
+begin
+ Result:=0;
+ if (p_proc.p_sdk_version > $14fffff) then
+ begin
+  if not CheckReserved(entitlementLabel^.padding,sizeof(entitlementLabel^.padding)) then
+  begin
+   Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+  end;
+ end;
+end;
+
+function FindByEntitlementLabel(serviceLabel    :SceNpServiceLabel;
+                                entitlementLabel:pSceNpUnifiedEntitlementLabel):Integer;
+var
+ i,c:Integer;
+begin
+ Result:=-1;
+ c:=Length(AddContInfoByServiceLabel[serviceLabel]);
+ if (c<>0) then
+ For i:=0 to c-1 do
+ if strncmp(@AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel.data,
+            @entitlementLabel^.data,SCE_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE)=0 then
+ begin
+  Exit(i);
+ end;
+end;
+
+function ps4_sceAppContentGetAddcontInfo(serviceLabel    :SceNpServiceLabel;
                                          entitlementLabel:pSceNpUnifiedEntitlementLabel;
-                                         info:pSceAppContentAddcontInfo
+                                         info            :pSceAppContentAddcontInfo
                                         ):Integer;
+var
+ i:Integer;
 begin
  if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
  if (entitlementLabel=nil) or (info=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
 
- Result:=SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT;
+ Result:=CheckEntitlementLabel(entitlementLabel);
+ if (Result<>0) then Exit;
+
+ Result:=CheckServiceLabel(serviceLabel);
+ if (Result<>0) then Exit;
+
+ mtx_lock(mtx_app_content);
+
+  i:=FindByEntitlementLabel(serviceLabel,entitlementLabel);
+  if (i=-1) then
+  begin
+   mtx_unlock(mtx_app_content);
+   Exit(SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT);
+  end;
+
+  info^.entitlementLabel:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel;
+  info^.status          :=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+
+ mtx_unlock(mtx_app_content);
+
+ Result:=0;
+end;
+
+function ps4_sceAppContentGetEntitlementKey(serviceLabel    :SceNpServiceLabel;
+                                            entitlementLabel:pSceNpUnifiedEntitlementLabel;
+                                            key             :pSceAppContentEntitlementKey
+                                           ):Integer;
+var
+ i:Integer;
+begin
+ if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
+ if (entitlementLabel=nil) or (key=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ Result:=CheckEntitlementLabel(entitlementLabel);
+ if (Result<>0) then Exit;
+
+ Result:=CheckServiceLabel(serviceLabel);
+ if (Result<>0) then Exit;
+
+ mtx_lock(mtx_app_content);
+
+  i:=FindByEntitlementLabel(serviceLabel,entitlementLabel);
+  if (i=-1) then
+  begin
+   mtx_unlock(mtx_app_content);
+   Exit(SCE_APP_CONTENT_ERROR_DRM_NO_ENTITLEMENT);
+  end;
+
+  key^:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementKey;
+
+ mtx_unlock(mtx_app_content);
+
+ Result:=0;
 end;
 
 function px2ce(err:Integer):Integer; inline;
@@ -223,11 +438,58 @@ begin
   EBUSY  :Result:=SCE_APP_CONTENT_ERROR_BUSY;
   ENOTDIR:Result:=SCE_APP_CONTENT_ERROR_NOT_MOUNTED;
   ENOENT :Result:=SCE_APP_CONTENT_ERROR_NOT_FOUND;
+  ESRCH  :Result:=SCE_APP_CONTENT_ERROR_MOUNT_FULL;
   ENOSPC :Result:=SCE_APP_CONTENT_ERROR_NO_SPACE;
   ENOTSUP:Result:=SCE_APP_CONTENT_ERROR_NOT_SUPPORTED;
   else
           Result:=SCE_APP_CONTENT_ERROR_INTERNAL;
  end;
+end;
+
+function ps4_sceAppContentAddcontMount(serviceLabel    :SceNpServiceLabel;
+	                               entitlementLabel:pSceNpUnifiedEntitlementLabel;
+	                               mountPoint      :pSceAppContentMountPoint
+                                      ):Integer;
+var
+ i:Integer;
+begin
+ Result:=0;
+ if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
+ if (entitlementLabel=nil) or (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ LOG_TRACE('sceAppContentAddcontMount:',serviceLabel,':',entitlementLabel^.data);
+
+ Result:=CheckEntitlementLabel(entitlementLabel);
+ if (Result<>0) then Exit;
+
+ Result:=CheckServiceLabel(serviceLabel);
+ if (Result<>0) then Exit;
+
+ mtx_lock(mtx_app_content);
+
+  i:=FindByEntitlementLabel(serviceLabel,entitlementLabel);
+  if (i=-1) then
+  begin
+   mtx_unlock(mtx_app_content);
+   Exit(SCE_APP_CONTENT_ERROR_NOT_FOUND);
+  end;
+
+  Result:=px2ce(AddContMount(pchar(mountPoint),AddContInfoByServiceLabel[serviceLabel][i].path));
+
+ mtx_unlock(mtx_app_content);
+end;
+
+function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer;
+var
+ slot_id:Integer;
+begin
+ Result:=0;
+ LOG_TRACE('sceAppContentAddcontUnmount:',pchar(mountPoint));
+ if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
+ if (mountPoint=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
+
+ slot_id:=0;
+ Result:=px2ce(AddContUnmount(pchar(mountPoint),slot_id));
 end;
 
 function ps4_sceAppContentTemporaryDataFormat(mountPoint:pSceAppContentMountPoint):Integer;
@@ -290,23 +552,6 @@ begin
  Result:=px2ce(DownloadDataGetAvailableSpaceKb(pchar(mountPoint),availableSpaceKb));
 end;
 
-function ps4_sceAppContentGetEntitlementKey(serviceLabel:SceNpServiceLabel;
-                                            entitlementLabel:pSceNpUnifiedEntitlementLabel;
-                                            key:pSceAppContentEntitlementKey
-                                           ):Integer;
-begin
- if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
- if (entitlementLabel=nil) or (key=nil) then Exit(SCE_APP_CONTENT_ERROR_PARAMETER);
-
- Result:=0;
-end;
-
-function ps4_sceAppContentAddcontUnmount(mountPoint:pSceAppContentMountPoint):Integer;
-begin
- if not InitAppContent then Exit(SCE_APP_CONTENT_ERROR_NOT_INITIALIZED);
- Result:=0;
-end;
-
 {$WARN 4110 off}
 function Load_libSceAppContent(name:pchar):p_lib_info;
 var
@@ -323,14 +568,15 @@ begin
  lib.set_proc($EF8FF5C7797264AF,@ps4_sceAppContentGetRegion);
  lib.set_proc($C6777C049CC0C669,@ps4_sceAppContentGetAddcontInfoList);
  lib.set_proc($9B8EE3B8E987D151,@ps4_sceAppContentGetAddcontInfo);
+ lib.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
+ lib.set_proc($54036121672A61A9,@ps4_sceAppContentAddcontMount);
+ lib.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
  lib.set_proc($6B937B9401B4CB64,@ps4_sceAppContentTemporaryDataFormat);
  lib.set_proc($EDB38B5FAE88CFF5,@ps4_sceAppContentTemporaryDataMount);
  lib.set_proc($6EE61B78B3865A60,@ps4_sceAppContentTemporaryDataMount2);
  lib.set_proc($6DCA255CC9A9EAA4,@ps4_sceAppContentTemporaryDataUnmount);
  lib.set_proc($49A2A26F6520D322,@ps4_sceAppContentTemporaryDataGetAvailableSpaceKb);
  lib.set_proc($1A5EB0E62D09A246,@ps4_sceAppContentDownloadDataGetAvailableSpaceKb);
- lib.set_proc($5D3591D145EF720B,@ps4_sceAppContentGetEntitlementKey);
- lib.set_proc($DEB1D6695FF5282E,@ps4_sceAppContentAddcontUnmount);
 end;
 
 var

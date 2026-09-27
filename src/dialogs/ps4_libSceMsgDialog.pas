@@ -10,7 +10,8 @@ uses
  subr_dynlib,
  kern_proc,
  ps4_libSceUserService,
- ps4_libSceCommonDialog;
+ ps4_libSceCommonDialog,
+ libkern;
 
 const
  //SceMsgDialogMode

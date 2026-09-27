@@ -1,0 +1,121 @@
+unit vm_internal_object;
+
+{$mode ObjFPC}{$H+}
+{$CALLING SysV_ABI_CDecl}
+
+interface
+
+uses
+ uma;
+
+const
+ INT_MOBJ_FREE=1;
+ INT_UNION_OBJ=2;
+
+type
+ pp_vm_int_obj=^p_vm_int_obj;
+ p_vm_int_obj=^vm_int_obj;
+
+ t_nt_obj_free_cb =procedure(obj:p_vm_int_obj);
+ t_nt_obj_mmmap_cb=procedure(obj:p_vm_int_obj;start,offset,size:QWORD);
+
+ p_vm_int_obj_vtable=^vm_int_obj_vtable;
+ vm_int_obj_vtable=object
+  free :t_nt_obj_free_cb;
+  mmmap:t_nt_obj_mmmap_cb;
+  unmap:t_nt_obj_mmmap_cb;
+ end;
+
+ vm_int_obj=packed record
+  vtable:p_vm_int_obj_vtable;
+  hfile :THandle;
+  refs  :DWORD;
+  flags :Byte;
+  maxp  :Byte;
+ end;
+
+const
+ dummy_vtable:vm_int_obj_vtable=();
+
+function  vm_int_obj_allocate  (vtable:p_vm_int_obj_vtable;hfile:THandle;maxp:Byte):p_vm_int_obj;
+procedure vm_int_obj_init      (obj:p_vm_int_obj;vtable:p_vm_int_obj_vtable;hfile:THandle;maxp,flags:Byte);
+procedure vm_int_obj_destroy   (obj:p_vm_int_obj);
+procedure vm_int_obj_reference (obj:p_vm_int_obj);
+procedure vm_int_obj_deallocate(obj:p_vm_int_obj);
+
+implementation
+
+uses
+ kern_malloc;
+
+function vm_int_obj_allocate(vtable:p_vm_int_obj_vtable;hfile:THandle;maxp:Byte):p_vm_int_obj;
+begin
+ Assert(maxp<>0);
+
+ Result:=calloc(sizeof(vm_int_obj));
+
+ if (vtable=nil) then
+ begin
+  vtable:=@dummy_vtable;
+ end;
+
+ Result^.vtable:=vtable;
+ Result^.hfile :=hfile;
+ Result^.refs  :=1;
+ Result^.flags :=INT_MOBJ_FREE or INT_UNION_OBJ;
+ Result^.maxp  :=maxp;
+end;
+
+procedure vm_int_obj_init(obj:p_vm_int_obj;vtable:p_vm_int_obj_vtable;hfile:THandle;maxp,flags:Byte);
+begin
+ Assert(obj<>nil);
+ Assert(maxp<>0);
+
+ if (vtable=nil) then
+ begin
+  vtable:=@dummy_vtable;
+ end;
+
+ obj^.vtable:=vtable;
+ obj^.hfile :=hfile;
+ obj^.flags :=flags;
+ obj^.maxp  :=maxp;
+end;
+
+procedure vm_int_obj_destroy(obj:p_vm_int_obj);
+var
+ vfree:t_nt_obj_free_cb;
+begin
+ vfree:=obj^.vtable^.free;
+
+ if (vfree<>nil) then
+ begin
+  vfree(obj);
+ end;
+
+ if ((obj^.flags and INT_MOBJ_FREE)<>0) then
+ begin
+  free(obj);
+ end;
+end;
+
+procedure vm_int_obj_reference(obj:p_vm_int_obj);
+begin
+ if (obj=nil) then Exit;
+
+ System.InterlockedIncrement(obj^.refs);
+end;
+
+procedure vm_int_obj_deallocate(obj:p_vm_int_obj);
+begin
+ if (obj=nil) then Exit;
+
+ if (System.InterlockedDecrement(obj^.refs)=0) then
+ begin
+  vm_int_obj_destroy(obj);
+ end;
+end;
+
+
+end.
+

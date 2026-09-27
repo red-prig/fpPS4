@@ -6,6 +6,7 @@ unit vm_patch_link;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_stub;
 
@@ -70,7 +71,7 @@ begin
 
  if (data=nil) then
  begin
-  page:=AllocMem(SizeOf(t_patch_page));
+  page:=calloc(SizeOf(t_patch_page));
   TAILQ_INIT(page);
   data:=HAMT_insert32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),page);
  end;
@@ -104,7 +105,7 @@ begin
  if TAILQ_EMPTY(page) then
  begin
   HAMT_delete32(@hamt_page,OFF_TO_IDX(node^.info.vaddr),nil);
-  FreeMem(page);
+  free(page);
  end;
 
  rw_wunlock(hamt_lock);
@@ -235,7 +236,7 @@ begin
  //LOG_TRACE('patch:vaddr=0x',HexStr(vaddr),' type:',ptype);
 
  obj:=_obj;
- node:=AllocMem(SizeOf(t_patch_node));
+ node:=calloc(SizeOf(t_patch_node));
  node^.info.vaddr:=vaddr;
  node^.info.vsize:=vsize;
  node^.info.ptype:=ptype;
@@ -244,7 +245,8 @@ begin
  p_inc_ref(stub);
 
  VM_OBJECT_LOCK(obj);
- TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
+ Assert(False);
+ //TAILQ_INSERT_TAIL(@obj^.patchq,node,@node^.link);
  VM_OBJECT_UNLOCK(obj);
 
  hamt_insert_link(node);
@@ -255,12 +257,13 @@ var
  obj:vm_object_t;
 begin
  obj:=_obj;
- TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
+ Assert(False);
+ //TAILQ_REMOVE(@obj^.patchq,node,@node^.link);
 
  hamt_remove_link(node);
 
  p_dec_ref(node^.info.stub);
- FreeMem(node);
+ free(node);
 end;
 
 procedure vm_object_patch_remove(_obj:Pointer;start,__end:DWORD); public;
@@ -270,6 +273,7 @@ var
 begin
  obj:=_obj;
 
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -287,6 +291,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 function vm_get_patch_link(_obj,vaddr:Pointer):p_stub_chunk;
@@ -297,6 +302,8 @@ begin
  Result:=nil;
  obj:=_obj;
 
+ Assert(False);
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -317,6 +324,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 procedure vm_rem_patch_link(_obj,vaddr:Pointer);
@@ -326,6 +334,7 @@ var
 begin
  obj:=_obj;
 
+ {
  VM_OBJECT_LOCK(obj);
 
  entry:=TAILQ_FIRST(@obj^.patchq);
@@ -342,6 +351,7 @@ begin
  end;
 
  VM_OBJECT_UNLOCK(obj);
+ }
 end;
 
 end.

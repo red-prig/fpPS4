@@ -53,6 +53,9 @@ procedure FormSave(Parent:TComponent;
                    Provider:TFormDataProvider;
                    dst:TSerializeObject);
 
+procedure SerializeStringArray2Strings(src:TSerializeStringArray;dst:TStrings);
+procedure Strings2SerializeStringArray(src:TStrings;dst:TSerializeStringArray);
+
 implementation
 
 procedure PageLoad(Parent:TComponent;
@@ -254,6 +257,35 @@ begin
  finally
   i.free;
  end;
+end;
+
+procedure SerializeStringArray2Strings(src:TSerializeStringArray;dst:TStrings);
+var
+ i:Integer;
+begin
+ dst.Clear;
+
+ if (Length(src.values)>0) then
+ For i:=0 to High(src.values) do
+ begin
+  dst.Add(src.values[i]);
+ end;
+end;
+
+procedure Strings2SerializeStringArray(src:TStrings;dst:TSerializeStringArray);
+var
+ i,c:Integer;
+begin
+ c:=src.Count;
+
+ SetLength(dst.values,c);
+
+ if (c>0) then
+ For i:=0 to c-1 do
+ begin
+  dst.values[i]:=src.Strings[i];
+ end;
+
 end;
 
 

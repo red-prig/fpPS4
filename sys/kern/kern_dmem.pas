@@ -630,7 +630,7 @@ begin
                            @d_mtype);
    if (ret<>0) then
    begin
-    Assert(false,'dmem_vmo_get_type error %d');
+    Assert(false, 'dmem_vmo_get_type error ' + IntToStr(ret));
    end;
 
    qinfo^.bits.isDirectMemory:=1;
@@ -663,7 +663,7 @@ begin
    OBJT_DEFAULT:
      begin
       //fake shared
-      if obj^.fakeshared then Exit;
+      if (obj^.flags and OBJ_FAKE_SHARED)<>0 then Exit;
      end;
    OBJT_SWAP   ,
    OBJT_VNODE  ,

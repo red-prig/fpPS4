@@ -179,11 +179,21 @@ type
 
  TMountList=class(TSerializeObject)
   private
-   Fgame    :RawByteString;
-   Ffirmware:RawByteString;
+   FGame       :RawByteString;
+   FFirmware   :RawByteString;
+   FOverlayAuto:Boolean;
+   FDlcAuto    :Boolean;
+   FAllowApp0RW:Boolean;
+   FOverlayList:TSerializeStringArray;
+   FDlcList    :TSerializeStringArray;
   published
-   property game    :RawByteString read Fgame     write Fgame    ;
-   property firmware:RawByteString read Ffirmware write Ffirmware;
+   property Game       :RawByteString         read FGame        write FGame;
+   property Firmware   :RawByteString         read FFirmware    write FFirmware;
+   property OverlayAuto:Boolean               read FOverlayAuto write FOverlayAuto;
+   property DlcAuto    :Boolean               read FDlcAuto     write FDlcAuto;
+   property AllowApp0RW:Boolean               read FAllowApp0RW write FAllowApp0RW;
+   property OverlayList:TSerializeStringArray read FOverlayList write FOverlayList;
+   property DlcList    :TSerializeStringArray read FDlcList     write FDlcList;
   public
    Constructor Create; override;
  end;
@@ -215,6 +225,7 @@ type
    FINSTALL_DIR_SAVEDATA            :RawByteString;
    FSAVE_DATA_TRANSFER_TITLE_ID_LIST:RawByteString;
    FAPP_VER                         :RawByteString;
+   FVERSION                         :RawByteString;
    FSYSTEM_VER                      :DWORD;
    FATTRIBUTE                       :DWORD;
    FATTRIBUTE2                      :DWORD;
@@ -232,6 +243,7 @@ type
    property    INSTALL_DIR_SAVEDATA            :RawByteString read FINSTALL_DIR_SAVEDATA             write FINSTALL_DIR_SAVEDATA;
    property    SAVE_DATA_TRANSFER_TITLE_ID_LIST:RawByteString read FSAVE_DATA_TRANSFER_TITLE_ID_LIST write FSAVE_DATA_TRANSFER_TITLE_ID_LIST;
    property    APP_VER                         :RawByteString read FAPP_VER                          write FAPP_VER;
+   property    VERSION                         :RawByteString read FVERSION                          write FVERSION;
    property    SYSTEM_VER                      :DWORD         read FSYSTEM_VER                       write FSYSTEM_VER;
    property    ATTRIBUTE                       :DWORD         read FATTRIBUTE                        write FATTRIBUTE;
    property    ATTRIBUTE2                      :DWORD         read FATTRIBUTE2                       write FATTRIBUTE2;
@@ -307,8 +319,11 @@ end;
 Constructor TMountList.Create;
 begin
  inherited;
- Fgame    :=DirectorySeparator;
- Ffirmware:=DirectorySeparator+'firmware';
+ Fgame       :=DirectorySeparator;
+ Ffirmware   :=DirectorySeparator+'firmware';
+ FOverlayAuto:=True;
+ FDlcAuto    :=True;
+ FAllowApp0RW:=False;
 end;
 
 //

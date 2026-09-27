@@ -6,6 +6,7 @@ unit subr_hash;
 interface
 
 uses
+ kern_malloc,
  mqueue;
 
 function  hashinit(elements:Integer;hashmask:PQWORD):Pointer;
@@ -23,13 +24,13 @@ var
  hashtbl:P_LIST_HEAD;
  i:Integer;
 begin
- Assert((elements > 0),'%s: bad elements');
+ Assert((elements > 0), 'hashinit: bad elements');
 
  hashsize:=1;
  while (hashsize <= elements) do hashsize:=hashsize shl 1;
  hashsize:=hashsize shr 1;
 
- hashtbl:=AllocMem(hashsize*sizeof(LIST_HEAD));
+ hashtbl:=calloc(hashsize*sizeof(LIST_HEAD));
 
  if (hashtbl<>nil) then
  begin
@@ -52,10 +53,10 @@ begin
  hp:=hashtbl;
  while (hp <= @hashtbl[hashmask]) do
  begin
-  Assert(LIST_EMPTY(hp),'%s: hash not empty');
+  Assert(LIST_EMPTY(hp), 'hashdestroy: hash not empty');
   Inc(hp);
  end;
- FreeMem(hashtbl);
+ free(hashtbl);
 end;
 
 const
@@ -75,7 +76,7 @@ var
  hashtbl:P_LIST_HEAD;
  i:Integer;
 begin
- Assert(elements > 0,'%s: bad elements');
+ Assert(elements > 0, 'phashinit: bad elements');
 
  i:=1;
  hashsize:=primes[1];
@@ -88,7 +89,7 @@ begin
  end;
  hashsize:=primes[i - 1];
 
- hashtbl:=AllocMem(hashsize*sizeof(LIST_HEAD));
+ hashtbl:=calloc(hashsize*sizeof(LIST_HEAD));
 
  if (hashtbl<>nil) then
  begin

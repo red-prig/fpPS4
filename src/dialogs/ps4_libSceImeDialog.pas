@@ -12,7 +12,8 @@ uses
  kern_proc,
  sys_bootparam,
  ime_types,
- host_ipc;
+ host_ipc,
+ libkern;
 
 {$CALLING default}
 
@@ -20,7 +21,7 @@ type
  TImeDialogResult=packed record
   result   :Integer;
   endstatus:SceImeDialogEndStatus;
-  inputText:array[0..2047] of WideChar;
+  inputText:array[0..SCE_IME_MAX_TEXT_LENGTH-1] of WideChar;
  end;
 
  TImeDialogPosAndForm=record
@@ -104,12 +105,6 @@ const
  SCE_IME_DIALOG_END_STATUS_OK           =0;
  SCE_IME_DIALOG_END_STATUS_USER_CANCELED=1;
  SCE_IME_DIALOG_END_STATUS_ABORTED      =2;
-
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar; inline;
-begin
- if (dst=nil) or (src=nil) then Exit(nil);
- Result:=StrLCopy(dst,src,maxlen);
-end;
 
 function wcsncpy_s(dst,src:PWideChar;maxlen:ptrint):PWideChar; inline;
 begin
@@ -507,6 +502,11 @@ begin
  if (param^.inputTextBuffer=nil) then
  begin
   Exit(SCE_IME_ERROR_INVALID_INPUT_TEXT_BUFFER);
+ end;
+
+ if (DWORD(param^.maxTextLength-1) > (SCE_IME_MAX_TEXT_LENGTH-1)) then
+ begin
+  Exit(SCE_IME_ERROR_INVALID_MAX_TEXT_LENGTH);
  end;
 
  //

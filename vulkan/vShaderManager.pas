@@ -43,6 +43,7 @@ type
   FStage:TvShaderStage;
   FLen  :Ptruint;
   pData :PDWORD;
+  FAddr :QWORD;
   FHash :QWORD;
   function  c(a,b:PShaderDataKey):Integer; static;
   Procedure SetData(Stage:TvShaderStage;Src:Pointer);
@@ -156,11 +157,15 @@ begin
  Result:=Integer(a^.FStage>b^.FStage)-Integer(a^.FStage<b^.FStage);
  if (Result<>0) then Exit;
 
- //2 FLen
+ //2 FAddr
+ Result:=Integer(a^.FAddr>b^.FAddr)-Integer(a^.FAddr<b^.FAddr);
+ if (Result<>0) then Exit;
+
+ //3 FLen
  Result:=Integer((a^.FLen>b^.FLen) and (b^.FLen<>0))-Integer((a^.FLen<b^.FLen) and (a^.FLen<>0));
  if (Result<>0) then Exit;
 
- //3 pData
+ //4 pData
  Result:=CompareDWord(a^.pData^,b^.pData^,Max(a^.FLen,b^.FLen) div 4);
 end;
 
@@ -172,6 +177,7 @@ end;
 function TShaderCodeCache.AddShader(FDescSetId:Integer;Stream:TStream;pUserData:Pointer):TvShaderExt;
 begin
  Result:=TvShaderExt.Create;
+ Result.FAddr    :=key.FAddr;
  Result.FHash_gcn:=key.FHash;
 
  Result.FDescSetId:=FDescSetId; //set before loading
@@ -227,8 +233,8 @@ begin
 
  key:=Default(TShaderDataKey);
  key.FStage:=FStage;
-
- key.pData:=get_dmem_ptr(pData);
+ key.FAddr :=QWORD(pData);
+ key.pData :=get_dmem_ptr(pData);
 
  t:=_FindShaderCodeCache(key);
 

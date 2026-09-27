@@ -597,23 +597,23 @@ begin
    Assert(False);
  end;
 
- //(r_tmp0)r14 <-> rdi
+ //(r_tmp0)r14 <-> rsi
  with ctx.builder do
  begin
 
   new:=new_reg_size(rax,size);
 
-   movq(r_tmp0,rdi);
+   movq(r_tmp0,rsi);
    op_uplift(ctx,r_tmp0,size); //in/out:r14
 
    movq(new,[r_tmp0]);
 
    if (dflag=0) then
    begin
-    leaq(rdi,[rdi+OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi+OPERAND_BYTES[size]]);
    end else
    begin
-    leaq(rdi,[rdi-OPERAND_BYTES[size]]);
+    leaq(rsi,[rsi-OPERAND_BYTES[size]]);
    end;
 
  end;
@@ -1197,9 +1197,9 @@ const
 
 procedure op_mov(var ctx:t_jit_context2);
 type
- tdata16=array[0..15] of Byte;
+ tdata24=array[0..23] of Byte;
 var
- data:tdata16;
+ data:tdata24;
  Code:Pointer;
  Operand:TOperand;
  i:Byte;
@@ -1215,7 +1215,7 @@ begin
   begin
    i:=ctx.dis.CodeIdx;
 
-   data:=Default(tdata16);
+   data:=Default(tdata24);
    Move(ctx.Code^,data,i);
 
    data[i]:=get_segment_value(ctx.din.Operand[2]);
@@ -1226,6 +1226,9 @@ begin
    ctx.din.Operand[2].RegValue :=Default(TRegValues);
    ctx.din.Operand[2].Size     :=os16;
    ctx.din.Operand[2].ByteCount:=2;
+   ctx.din.Operand[2].CodeIndex:=i;
+
+   ctx.Code:=@data;
 
    op_emit2(ctx,mov_desc);
 
@@ -1665,7 +1668,7 @@ begin
   if is_preserved(ctx.din.Operand[1]) then
   begin
    new:=new_reg_size(r_tmp0,ctx.din.Operand[1]);
-   build_lea(ctx,2,new,[not_use_segment]);
+   build_lea(ctx,2,new,[not_use_segment,lea_ref]);
    //
    op_save(ctx,1,fix_size(new));
   end else
@@ -1675,12 +1678,12 @@ begin
    if (new.ASize=os16) then
    begin
     //low part
-    build_lea(ctx,2,r_tmp0,[not_use_segment]);
+    build_lea(ctx,2,r_tmp0,[not_use_segment,lea_ref]);
     //
     ctx.builder.movq(new,r_tmp0);
    end else
    begin
-    build_lea(ctx,2,new,[not_use_segment]);
+    build_lea(ctx,2,new,[not_use_segment,lea_ref]);
    end;
   end;
  end else
@@ -1995,6 +1998,7 @@ begin
  jit_cbs[OPPnone,OPfsub   ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfsubr  ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfisub  ,OPSnone]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfisubr ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfdiv   ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfdivr  ,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfidiv  ,OPSnone]:=@op_emit1_ro_np;

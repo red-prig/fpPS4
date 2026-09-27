@@ -10,6 +10,7 @@ uses
  game_process,
  md_pipe,
  host_ipc,
+ host_ipc_interface,
  game_info,
  param_sfo_gui,
  playgo_chunk_gui,
@@ -47,6 +48,8 @@ uses
     function  DoShowError(const msg:RawByteString):Integer; virtual;
     function  DoShowWarning(const msg:RawByteString):Integer; virtual;
     procedure DoProcessExitMsg; virtual;
+    procedure DoJitLabel   (mode:Byte;const name:RawByteString); virtual;
+    procedure DoJitProgress(const data:TJitProgressData); virtual;
    published
     function  KEV_EVENT     (Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  ERROR         (Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -55,16 +58,20 @@ uses
     function  PLAYGO_INIT   (Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  OpenSaveDataBackend(Client:THostIpc;Value:TIpcValue):TIpcValue;
     function  LOAD_EXEC      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+    function  JIT_LABEL      (Client:THostIpc;Value:TIpcValue):TIpcValue;
+    function  JIT_PROGRESS   (Client:THostIpc;Value:TIpcValue):TIpcValue;
    end;
 
  {$M-}
 
-function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
+function LoadParamSfoByItem(Item:TGameItem):TParamSfoFile;
+function LoadPlaygoFileByItem(Item:TGameItem):TPlaygoFile;
 
 implementation
 
 uses
  Controls,
+ form_filler,
  sys_event;
 
 //
@@ -94,6 +101,7 @@ begin
   FGameItem.FLock:=False;
   FGameItem:=nil;
  end;
+ FreeAndNil(FParamSfo);
 end;
 
 //
@@ -164,13 +172,48 @@ end;
 
 //
 
-function LoadParamSfoFile2(const game:RawByteString):TParamSfoFile;
+function LoadParamSfoByItem(Item:TGameItem):TParamSfoFile;
+var
+ List:TStringList;
 begin
- Result:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(game)+
-                          DirectorySeparator+
-                          'sce_sys'+
-                          DirectorySeparator+
-                          'param.sfo');
+ Result:=nil;
+ if (Item=nil)  then Exit;
+
+ List:=TStringList.Create;
+
+ if Item.MountList.OverlayAuto then
+ begin
+  AutoDetectOverlays(Item.MountList.game,Item.FGameInfo.TitleId,List);
+ end else
+ begin
+  SerializeStringArray2Strings(Item.MountList.OverlayList,List);
+ end;
+
+ Result:=LoadParamSfoByOverlays(Item.MountList.game,List);
+
+ FreeAndNil(List);
+end;
+
+function LoadPlaygoFileByItem(Item:TGameItem):TPlaygoFile;
+var
+ List:TStringList;
+begin
+ Result:=nil;
+ if (Item=nil) then Exit;
+
+ List:=TStringList.Create;
+
+ if Item.MountList.OverlayAuto then
+ begin
+  AutoDetectOverlays(Item.MountList.game,Item.FGameInfo.TitleId,List);
+ end else
+ begin
+  SerializeStringArray2Strings(Item.MountList.OverlayList,List);
+ end;
+
+ Result:=LoadPlaygoFileByOverlays(Item.MountList.game,List);
+
+ FreeAndNil(List);
 end;
 
 function TGameRunContext.PARAM_SFO_INIT(Client:THostIpc;Value:TIpcValue):TIpcValue;
@@ -183,7 +226,7 @@ begin
 
  if (FParamSfo=nil) then
  begin
-  FParamSfo:=LoadParamSfoFile2(FGameItem.MountList.game);
+  FParamSfo:=LoadParamSfoByItem(FGameItem);
  end;
 
  if (FParamSfo=nil) then
@@ -214,13 +257,7 @@ begin
 
  if (FGameItem=nil) then Exit;
 
- V:=FGameItem.MountList.game;
-
- playgo_file:=LoadPlaygoFile(ExcludeTrailingPathDelimiter(V)+
-                             DirectorySeparator+
-                             'sce_sys'+
-                             DirectorySeparator+
-                             'playgo-chunk.dat');
+ playgo_file:=LoadPlaygoFileByItem(FGameItem);
 
  if (playgo_file=nil) then
  begin
@@ -234,6 +271,38 @@ begin
    DoGameStop;
    Exit(0);
   end;
+ end;
+
+ if (FParamSfo=nil) then
+ begin
+  FParamSfo:=LoadParamSfoByItem(FGameItem);
+ end;
+
+ if (FParamSfo<>nil) then
+ begin
+
+  V:=FParamSfo.GetString('CONTENT_ID');
+
+  if (V<>playgo_file.content_id) then
+  begin
+   V:='"{$GAME}/sce_sys/playgo-chunk.dat" content_id ('+
+      playgo_file.content_id+
+      ') not match param.sfo ('+
+      V+
+      '), continue?';
+
+   FreeAndNil(playgo_file);
+
+   if (DoShowError(V)=mrOK) then
+   begin
+    Exit(0);
+   end else
+   begin
+    DoGameStop;
+    Exit(0);
+   end;
+  end;
+
  end;
 
  Result:=TIpcValue.&Object(playgo_file);
@@ -338,6 +407,40 @@ end;
 
 //
 
+function TGameRunContext.JIT_LABEL(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ mode:Byte;
+ name:RawByteString;
+ len:LongInt;
+begin
+ Result:=0;
+
+ len:=Value.GetLen;
+ if (len<1) then Exit;
+
+ mode:=PByte(Value.GetBuf)^;
+
+ name:='';
+ if (len>1) then
+ begin
+  SetString(name,PAnsiChar(Value.GetBuf)+1,len-1);
+ end;
+
+ DoJitLabel(mode,name);
+end;
+
+function TGameRunContext.JIT_PROGRESS(Client:THostIpc;Value:TIpcValue):TIpcValue;
+var
+ data:TJitProgressData;
+begin
+ Result:=0;
+
+ data:=Default(TJitProgressData);
+ Value.MoveTo(@data,SizeOf(data));
+
+ DoJitProgress(data);
+end;
+
 procedure TGameRunContext.DoGameRunned;
 begin
  //
@@ -364,6 +467,16 @@ begin
 end;
 
 procedure TGameRunContext.DoProcessExitMsg;
+begin
+ //
+end;
+
+procedure TGameRunContext.DoJitLabel(mode:Byte;const name:RawByteString);
+begin
+ //
+end;
+
+procedure TGameRunContext.DoJitProgress(const data:TJitProgressData);
 begin
  //
 end;

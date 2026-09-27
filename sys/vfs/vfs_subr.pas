@@ -6,6 +6,7 @@ unit vfs_subr;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  uma,
  vmount,
@@ -191,6 +192,7 @@ var
 implementation
 
 uses
+ sysutils,
  errno,
  vfs_vnops,
  subr_uio,
@@ -645,7 +647,7 @@ function vtryrecycle(vp:p_vnode):Integer;
 var
  vnmp:p_mount;
 begin
- Assert(vp^.v_holdcnt<>0,'vtryrecycle: Recycling vp %p without a reference.');
+ Assert(vp^.v_holdcnt<>0, 'vtryrecycle: Recycling vp ' + HexStr(vp) + ' without a reference.');
  {
   * This vnode may found and locked via some other list, if so we
   * can't recycle it yet.
@@ -1338,7 +1340,7 @@ begin
  struct buf *root;
  struct bufv *bv;
 
- Assert(bp^.b_bufobj<>nil, 'No b_bufobj %p", bp));
+ Assert(bp^.b_bufobj<>nil, 'No b_bufobj ' + HexStr(bp^.b_bufobj));
  ASSERT_BO_LOCKED(bp^.b_bufobj);
  Assert((bp^.b_xflags and (BX_VNDIRTY|BX_VNCLEAN)) !=
      (BX_VNDIRTY|BX_VNCLEAN),
@@ -1453,7 +1455,7 @@ begin
 
  bo:=@vp^.v_bufobj;
  ASSERT_BO_LOCKED(bo);
- Assert(bp^.b_vp=nil, bp^.b_vp, 'bgetvp: not free');
+ Assert(bp^.b_vp=nil, 'bgetvp: not free');
 
  CTR3(KTR_BUF, "bgetvp(%p) vp %p flags %X", bp, vp, bp^.b_flags);
  Assert((bp^.b_xflags and (BX_VNDIRTY|BX_VNCLEAN))=0, vp,
@@ -2490,7 +2492,7 @@ loop:
    }
   VI_LOCK(rootvp);
   Assert(busy > 0, 'vflush: not busy');
-  Assert(rootvp^.v_usecount >= rootrefs,'vflush: usecount %d < rootrefs %d');
+  Assert(rootvp^.v_usecount >= rootrefs, 'vflush: usecount ' + IntToStr(rootvp^.v_usecount) + ' < rootrefs ' + IntToStr(rootrefs));
   if (busy=1) and (rootvp^.v_usecount=rootrefs) then
   begin
    VOP_LOCK(rootvp, LK_EXCLUSIVE or LK_INTERLOCK,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
@@ -2556,7 +2558,7 @@ var
 begin
  ASSERT_VOP_ELOCKED(vp, 'vgonel');
  ASSERT_VI_LOCKED(vp, 'vgonel');
- Assert(vp^.v_holdcnt<>0,'vgonel: vp %p has no reference.');
+ Assert(vp^.v_holdcnt<>0, 'vgonel: vp ' + HexStr(vp) + ' has no reference.');
 
  {
   * Don't vgonel if we're already doomed.
@@ -3038,15 +3040,21 @@ begin
  dac_granted:=0;
 
  { Check the owner. }
- if {(cred^.cr_uid=file_uid)} True then
+ //if (cred^.cr_uid=file_uid) then
  begin
   dac_granted:=dac_granted or VADMIN;
   if ((file_mode and S_IXUSR)<>0) then
+  begin
    dac_granted:=dac_granted or VEXEC;
+  end;
   if ((file_mode and S_IRUSR)<>0) then
+  begin
    dac_granted:=dac_granted or VREAD;
+  end;
   if ((file_mode and S_IWUSR)<>0) then
+  begin
    dac_granted:=dac_granted or (VWRITE or VAPPEND);
+  end;
 
   if ((accmode and dac_granted)=accmode) then
   begin
@@ -3057,7 +3065,7 @@ begin
  end;
 
  { Otherwise, check the groups (first match) }
- if {(groupmember(file_gid, cred))} True then
+ //if (groupmember(file_gid, cred)) then
  begin
   if ((file_mode and S_IXGRP)<>0) then
    dac_granted:=dac_granted or VEXEC;
@@ -3076,11 +3084,17 @@ begin
 
  { Otherwise, check everyone else. }
  if ((file_mode and S_IXOTH)<>0) then
+ begin
   dac_granted:=dac_granted or VEXEC;
+ end;
  if ((file_mode and S_IROTH)<>0) then
+ begin
   dac_granted:=dac_granted or VREAD;
+ end;
  if ((file_mode and S_IWOTH)<>0) then
+ begin
   dac_granted:=dac_granted or (VWRITE or VAPPEND);
+ end;
 
  if ((accmode and dac_granted)=accmode) then
  begin
@@ -3626,7 +3640,7 @@ begin
   begin
    if (ap^.a_cookies<>nil) then
    begin
-    FreeMem(ap^.a_cookies);
+    free(ap^.a_cookies);
    end;
    ap^.a_cookies:=nil;
    ap^.a_ncookies^:=0;
@@ -3638,7 +3652,7 @@ begin
 
  Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
 
- ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
+ ap^.a_cookies^:=realloc(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
  ap^.a_cookies^[ap^.a_ncookies^]:=off;
 
  Inc(ap^.a_ncookies^);
@@ -3661,7 +3675,7 @@ begin
   begin
    if (ap^.a_cookies<>nil) then
    begin
-    FreeMem(ap^.a_cookies);
+    free(ap^.a_cookies);
    end;
    ap^.a_cookies:=nil;
    ap^.a_ncookies^:=0;
@@ -3673,7 +3687,7 @@ begin
 
  Assert(ap^.a_cookies<>nil,'null ap^.a_cookies value with non-null ap^.a_ncookies!');
 
- ap^.a_cookies^:=ReAllocMem(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
+ ap^.a_cookies^:=realloc(ap^.a_cookies^,(ap^.a_ncookies^ + 1) * sizeof(QWORD));
  ap^.a_cookies^[ap^.a_ncookies^]:=off;
 
  Inc(ap^.a_ncookies^);
@@ -3792,7 +3806,7 @@ function __mnt_vnode_first_all(mvp:pp_vnode;mp:p_mount):p_vnode;
 var
  vp:p_vnode;
 begin
- mvp^:=AllocMem(sizeof(t_vnode));
+ mvp^:=calloc(sizeof(t_vnode));
  MNT_ILOCK(mp);
  MNT_REF(mp);
  mvp^^.v_type:=VMARKER;
@@ -3809,7 +3823,7 @@ begin
  begin
   MNT_REL(mp);
   MNT_IUNLOCK(mp);
-  FreeMem(mvp^);
+  free(mvp^);
   mvp^:=nil;
   Exit(nil);
  end;
@@ -3834,7 +3848,7 @@ begin
  TAILQ_REMOVE(@mp^.mnt_nvnodelist,mvp^,@mvp^^.v_nmntvnodes);
  MNT_REL(mp);
  MNT_IUNLOCK(mp);
- FreeMem(mvp^);
+ free(mvp^);
  mvp^:=nil;
 end;
 
@@ -3849,7 +3863,7 @@ begin
  MNT_ILOCK(mp);
  MNT_REL(mp);
  MNT_IUNLOCK(mp);
- FreeMem(mvp^);
+ free(mvp^);
  mvp^:=nil;
 end;
 
@@ -3875,8 +3889,8 @@ restart:
   begin
    continue;
   end;
-  Assert(vp^.v_type<>VMARKER, 'locked marker %p');
-  Assert((vp^.v_mount=mp) or (vp^.v_mount=nil),'alien vnode on the active list %p %p');
+  Assert(vp^.v_type<>VMARKER, 'locked marker ' + HexStr(vp));
+  Assert((vp^.v_mount=mp) or (vp^.v_mount=nil), 'alien vnode on the active list ' + HexStr(vp^.v_mount) + ' ' + HexStr(mp));
   if (vp^.v_mount=mp) and ((vp^.v_iflag and VI_DOOMED)=0) then
   begin
    break;
@@ -3896,7 +3910,7 @@ restart:
  TAILQ_INSERT_AFTER(@mp^.mnt_activevnodelist,vp,mvp^,@mvp^^.v_actfreelist);
  mtx_unlock(vnode_free_list_mtx);
  ASSERT_VI_LOCKED(vp, 'active iter');
- Assert((vp^.v_iflag and VI_ACTIVE)<>0, 'Non-active vp %p');
+ Assert((vp^.v_iflag and VI_ACTIVE)<>0, 'Non-active vp ' + HexStr(vp));
  Exit(vp);
 end;
 
@@ -3912,7 +3926,7 @@ function __mnt_vnode_first_active(mvp:pp_vnode;mp:p_mount):p_vnode;
 var
  vp:p_vnode;
 begin
- mvp^:=AllocMem(sizeof(t_vnode));
+ mvp^:=calloc(sizeof(t_vnode));
  MNT_ILOCK(mp);
  MNT_REF(mp);
  MNT_IUNLOCK(mp);

@@ -8,6 +8,7 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, Grids, Menus,
 
   StdCtrls,
+  ExtCtrls,
   LCLType,
   LCLIntf,
 
@@ -20,10 +21,11 @@ uses
   TypInfo,
   jsonscanner,
 
-  ms_shell_hack,
+  open_dialog,
 
   core_serialization,
   host_ipc,
+  host_ipc_interface,
   game_info,
   game_edit,
   cfg_edit,
@@ -80,6 +82,8 @@ type
     function  DoShowError(const msg:RawByteString):Integer; override;
     function  DoShowWarning(const msg:RawByteString):Integer; override;
     procedure DoProcessExitMsg; override;
+    procedure DoJitLabel   (mode:Byte;const name:RawByteString); override;
+    procedure DoJitProgress(const data:TJitProgressData); override;
    end;
 
   { TfrmMain }
@@ -114,6 +118,10 @@ type
     TBUp: TToolButton;
     TBSep3: TToolButton;
 
+    PnlProgress: TPanel;
+    LblJitName: TLabel;
+    PBarJit: TProgressBar;
+
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -147,7 +155,7 @@ type
     FLogReadFname :RawByteString;
     FLogReadHandle:THandle;
 
-    Fmlog:TSynEdit;
+    Fmlog   :TSynEdit;
     FLogMenu:TPopupMenu;
 
     FLogPollInterval:QWORD;
@@ -164,6 +172,8 @@ type
     FMainButtonsState:TMainButtonsState;
 
     FDialogsManager:TDialogsManager;
+
+    FJitNameCaption:RawByteString;
 
     procedure OpenLog(Const LogFile:RawByteString);
     procedure ReadConfigFile;
@@ -191,6 +201,10 @@ type
     procedure LogFormatLineNumber(Sender: TSynGutterLineNumber; ALine: Integer;
                                   out AText: string;
                                   const ALineInfo: TSynEditGutterLineInfo);
+
+    procedure UpdateJitLabel(mode:Byte;const aName:RawByteString);
+    procedure UpdateJitProgress(const data:TJitProgressData);
+    procedure HideJitProgress;
 
     procedure SetButtonsState(s:TMainButtonsState);
   end;
@@ -287,6 +301,16 @@ end;
 procedure TGameRunContextGui.DoProcessExitMsg;
 begin
  ShowMessage('The process reported exit!');
+end;
+
+procedure TGameRunContextGui.DoJitLabel(mode:Byte;const name:RawByteString);
+begin
+ frmMain.UpdateJitLabel(mode,name);
+end;
+
+procedure TGameRunContextGui.DoJitProgress(const data:TJitProgressData);
+begin
+ frmMain.UpdateJitProgress(data);
 end;
 
 //
@@ -797,38 +821,24 @@ end;
 
 procedure TfrmMain.MIAddFolderClick(Sender: TObject);
 var
- d:TSelectDirectoryDialog;
  form:TfrmGameEditor;
-
- Cookie:Pointer;
+ path:RawByteString;
 begin
- Cookie:=RegisterDllHack;
+ path:=open_dialog.DoOpenDir('','');
+ if (path='') then Exit;
 
- d:=TSelectDirectoryDialog.Create(Self);
+ form:=TfrmGameEditor.Create(Self);
 
- //d.InitialDir:=
+ form.FConfigInfo:=FContext.FConfigInfo;
+ form.FItem      :=TGameItem.Create;
 
- d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
+ form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
 
- if d.Execute then
- begin
-  form:=TfrmGameEditor.Create(Self);
+ form.FItem.FMountList.game:=path;
 
-  form.FConfigInfo:=FContext.FConfigInfo;
-  form.FItem      :=TGameItem.Create;
+ form.OnSave:=@Self.DoAdd;
 
-  form.FItem.FMountList.firmware:=FContext.FConfigInfo.MainInfo.DefaultFirmware;
-
-  form.FItem.FMountList.game:=d.FileName;
-
-  form.OnSave:=@Self.DoAdd;
-
-  form.FormInit(True);
- end;
-
- FreeAndNil(d);
-
- UnregisterDllHack(Cookie);
+ form.FormInit(True);
 end;
 
 procedure TfrmMain.MIEditClick(Sender: TObject);
@@ -1295,7 +1305,7 @@ begin
 
  Item:=FGameList.GetItemRow(aRow);
 
- ParamSfo:=LoadParamSfoFile2(Item.MountList.game);
+ ParamSfo:=LoadParamSfoByItem(Item);
 
  LogEnd;
  ClearLog;
@@ -1403,14 +1413,13 @@ begin
   //terminate
   FContext.StopAndNil();
   //
-  FreeAndNil(FContext.FParamSfo);
-  //
   FContext.CloseItem();
   FContext.CloseSavdata();
   //
   FDialogsManager.CloseMainWindow;
   //
   SetButtonsState(mbsStopped);
+  frmMain.HideJitProgress;
   Pages.ActivePage:=TabList;
 
   if (exit_code<>0) then
@@ -1523,6 +1532,49 @@ begin
  FGameList.UpdateItem(Item);
  //
  SaveGameList;
+end;
+
+procedure TfrmMain.HideJitProgress;
+begin
+ PnlProgress.Visible:=False;
+end;
+
+procedure TfrmMain.UpdateJitLabel(mode:Byte;const aName:RawByteString);
+begin
+ case mode of
+  jpsBegin:
+   begin
+    FJitNameCaption:=aName;
+    LblJitName.Caption:=aName;
+    PBarJit.Position:=0;
+    PBarJit.Style:=pbstNormal;
+    PnlProgress.Visible:=True;
+    PnlProgress.BringToFront;
+   end;
+  jpsPrep:
+   begin
+    PBarJit.Style:=pbstMarquee;
+   end;
+  jpsEnd:
+   begin
+    HideJitProgress;
+   end;
+  else;
+ end;
+end;
+
+procedure TfrmMain.UpdateJitProgress(const data:TJitProgressData);
+begin
+ if (PBarJit.Max<>data.total) then
+ begin
+  PBarJit.Max:=data.total;
+ end;
+ if (data.curr<=data.total) then
+ begin
+  PBarJit.Position:=data.curr;
+ end;
+
+ LblJitName.Caption:=FJitNameCaption+' ('+IntToStr(data.curr)+'/'+IntToStr(data.total)+')';
 end;
 
 procedure TfrmMain.SetButtonsState(s:TMainButtonsState);

@@ -41,6 +41,8 @@ function  cpu_sched_add(td:p_kthread):Integer;
 procedure cpu_sched_throw;
 function  cpu_thread_finished(td:p_kthread):Boolean;
 
+procedure cpuset_init;
+
 function  cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
 function  cpu_set_priority  (td:p_kthread;prio:Integer):Integer;
 
@@ -51,6 +53,10 @@ function  md_resume (td:p_kthread):Integer;
 
 procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 procedure seh_wrapper_after (td:p_kthread;func:Pointer);
+
+var
+ cpuid_h2g:array[0..63] of Byte; public;
+ cpuid_g2h:array[0.. 7] of Byte;
 
 implementation
 
@@ -168,24 +174,21 @@ end;
 
 function cpu_teb_init(td:p_kthread):Integer;
 var
- data:array[0..SizeOf(THREAD_BASIC_INFORMATION)-1+7] of Byte;
- P_TBI:PTHREAD_BASIC_INFORMATION;
+ tbi:THREAD_BASIC_INFORMATION;
 begin
- P_TBI:=Align(@data,8);
- P_TBI^:=Default(THREAD_BASIC_INFORMATION);
+ tbi:=Default(THREAD_BASIC_INFORMATION);
 
  Result:=NtQueryInformationThread(
            td^.td_handle,
            ThreadBasicInformation,
-           P_TBI,
+           @tbi,
            SizeOf(THREAD_BASIC_INFORMATION),
            nil);
  if (Result<>0) then Exit;
 
- if (P_TBI^.TebBaseAddress=nil) then Exit(-1);
+ if (tbi.TebBaseAddress=nil) then Exit(-1);
 
- td^.td_teb   :=P_TBI^.TebBaseAddress;
- td^.td_cpuset:=P_TBI^.AffinityMask;
+ td^.td_teb   :=tbi.TebBaseAddress;
 
  td^.td_teb^.stack:=Pointer(-1); //MAX
  td^.td_teb^.sttop:=nil;         //MIN
@@ -417,40 +420,58 @@ begin
  end;
 end;
 
-function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+function GetNumberOfProcessors:DWORD;
 var
  info:SYSTEM_INFO;
- i,m,t,n:Integer;
- data:array[0..SizeOf(Ptruint)-1+7] of Byte;
- p_mask:PPtruint;
 begin
- if (td=nil) then Exit;
- if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
-
- new:=new and $FF;
-
  info.dwNumberOfProcessors:=1;
  GetSystemInfo(info);
+ Result:=info.dwNumberOfProcessors;
+end;
 
- if (info.dwNumberOfProcessors<8) then
+procedure cpuset_init;
+var
+ cpu_num  :DWORD;
+ guest_cpu:DWORD;
+ host_cpu :DWORD;
+begin
+ cpu_num:=GetNumberOfProcessors;
+ if (cpu_num>64) then cpu_num:=64;
+
+ //remap
+ host_cpu:=0;
+
+ for guest_cpu:=7 downto 0 do
  begin
-  //remap
-  m:=0;
-  for i:=0 to 7 do
-  begin
-   t:=(new shr i) and 1;
-   n:=(i mod info.dwNumberOfProcessors);
-   m:=m or (t shl n);
-  end;
-  new:=m;
+  cpuid_h2g[host_cpu ]:=cpuid_h2g[host_cpu] or (QWORD(1) shl guest_cpu);
+  cpuid_g2h[guest_cpu]:=host_cpu;
+
+  //next
+  host_cpu:=(host_cpu+1) mod cpu_num;
+ end;
+
+end;
+
+function cpuset_setaffinity(td:p_kthread;new:Ptruint):Integer;
+var
+ i:Integer;
+ mask:QWORD;
+begin
+ if (td=nil) then Exit(-1);
+ if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit(-1);
+ if (new=0) then Exit(-1);
+
+ //remap
+ mask:=0;
+ for i:=0 to 7 do
+ if (new and (1 shl i))<>0 then
+ begin
+  mask:=mask or (1 shl cpuid_g2h[i]);
  end;
 
  td^.td_cpuset:=new;
 
- p_mask:=Align(@data,8);
- p_mask^:=new;
-
- Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,p_mask,SizeOf(Ptruint));
+ Result:=NtSetInformationThread(td^.td_handle,ThreadAffinityMask,@mask,SizeOf(QWORD));
 end;
 
 function cpu_set_priority(td:p_kthread;prio:Integer):Integer;
@@ -496,29 +517,23 @@ function cpu_thread_set_name(td:p_kthread;const name:shortstring):Integer;
 Const
  MAX_LEN=256;
 var
- W:array[0..MAX_LEN-1+7] of WideChar;
- P_W:PWideChar;
- data:array[0..SizeOf(UNICODE_STRING)-1+7] of Byte;
- P_UNAME:PUNICODE_STRING;
+ W:array[0..MAX_LEN] of WideChar;
+ uname:UNICODE_STRING;
  L:DWORD;
 begin
  Result:=0;
  if (td=nil) then Exit;
  if (td^.td_handle=0) or (td^.td_handle=THandle(-1)) then Exit;
 
- P_W:=Align(@W,8);
+ FillWord(W,MAX_LEN,0);
+ L:=Utf8ToUnicode(@W[0],MAX_LEN,@name[1],length(name));
 
- FillWord(P_W^,MAX_LEN,0);
- L:=Utf8ToUnicode(P_W,MAX_LEN,@name[1],length(name));
+ uname.Length       :=L*SizeOf(WideChar);
+ uname.MaximumLength:=uname.Length;
+ uname._Align       :=0;
+ uname.Buffer       :=@W[0];
 
- P_UNAME:=Align(@data,8);
-
- P_UNAME^.Length       :=L*SizeOf(WideChar);
- P_UNAME^.MaximumLength:=P_UNAME^.Length;
- P_UNAME^._Align       :=0;
- P_UNAME^.Buffer       :=P_W;
-
- Result:=NtSetInformationThread(td^.td_handle,ThreadNameInformation,P_UNAME,SizeOf(UNICODE_STRING));
+ Result:=NtSetInformationThread(td^.td_handle,ThreadNameInformation,@uname,SizeOf(UNICODE_STRING));
 end;
 
 function md_suspend(td:p_kthread):Integer;

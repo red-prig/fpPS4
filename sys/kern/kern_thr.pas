@@ -6,6 +6,7 @@ unit kern_thr;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  ucontext,
  signal,
@@ -217,13 +218,18 @@ type
   orig:QWORD;
  end;
 
+ p_local_cache_node=^t_local_cache_node;
+ t_local_cache_node=packed record
+  src:Pointer;
+  dst:Pointer;
+ end;
+
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
-  //block:Pointer;
   rsp:Pointer;
   rbp:Pointer;
-  local_cache:array[0..255] of Pointer;
-  call_ret_cache:Pointer;
+  local_cache   :p_local_cache_node;
+  call_ret_cache:PQWORD;
   lacuna:t_lacuna;
  end;
 
@@ -300,6 +306,8 @@ type
   pcb_gsbase      :Pointer;
   pcb_onfault     :Pointer;
   td_guards       :array[0..1] of Pointer;
+  td_urcu_epoch   :QWORD;
+  td_qsbr         :QWORD;
   td_temp         :t_td_buffer;
   td_padding      :t_td_buffer;
  end;
@@ -379,9 +387,9 @@ function  curthread_pflags_set(flags:Integer):Integer;
 procedure curthread_pflags_restore(save:Integer);
 procedure curthread_set_pcb_onfault(v:Pointer);
 
-procedure threads_lock;            external;
-function  threads_trylock:Boolean; external;
-procedure threads_unlock;          external;
+procedure threads_rlock;            external;
+function  threads_tryrlock:Boolean; external;
+procedure threads_runlock;          external;
 
 function  get_p_threads:Pointer;   external;
 
@@ -638,11 +646,11 @@ begin
  begin
   if (td^.td_temp.addr<>nil) then
   begin
-   FreeMem(td^.td_temp.addr);
+   free(td^.td_temp.addr);
   end;
-  Result:=GetMem(size);
+  Result:=malloc(size);
   td^.td_temp.addr:=Result;
-  td^.td_temp.size:=MemSize(Result);
+  td^.td_temp.size:=msize(Result);
  end;
 
 end;
@@ -653,7 +661,7 @@ begin
 
  if (td^.td_temp.addr<>nil) then
  begin
-  FreeMem(td^.td_temp.addr);
+  free(td^.td_temp.addr);
  end;
  td^.td_temp:=Default(t_td_buffer);
 end;

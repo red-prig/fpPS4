@@ -16,7 +16,8 @@ uses
  game_mount,
  ps4_libSceUserService,
  SceSaveData,
- SaveDataBackendSfo;
+ SaveDataBackendSfo,
+ libkern;
 
 type
  TMountSlot=packed record
@@ -815,6 +816,8 @@ begin
  begin
   Exit(False);
  end;
+
+ Result:=True;
 end;
 
 procedure load_mtime(const fs_src:RawByteString;var mtime:QWORD);

@@ -14,7 +14,8 @@ uses
  vmount,
  sys_conf,
  kern_mtx,
- kern_sx;
+ kern_sx,
+ subr_unit;
 
 const
  DEVFS_MAGIC=$db0a087a;
@@ -216,6 +217,8 @@ var
 
 var
  cdevp_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@cdevp_list.tqh_first);
+
+ devfs_inos:p_unrhdr=nil;
 
 function  devfs_alloc(flags:Integer):p_cdev;         external;
 function  devfs_dev_exists(name:PChar):Integer;      external;

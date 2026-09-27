@@ -69,10 +69,6 @@ var
   vop_putpages      :nil;
   vop_vptofh        :nil;
   vop_vptocnp       :@VOP_EBADF;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );  public;
 
 implementation

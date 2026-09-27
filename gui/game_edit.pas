@@ -10,8 +10,6 @@ uses
 
   LCLIntf,
 
-  ms_shell_hack,
-
   game_info,
   form_filler,
   param_sfo_gui;
@@ -21,17 +19,27 @@ type
   { TfrmGameEditor }
 
   TfrmGameEditor = class(TForm)
+    BtnAddLayer: TSpeedButton;
+    BtnDlcAdd: TSpeedButton;
+    BtnDlcRem: TSpeedButton;
     BtnExpGame: TSpeedButton;
     BtnExpFw: TSpeedButton;
     BtnGameOpen: TButton;
     BtnOk: TButton;
     BtnCancel: TButton;
+    BtnRemLayer: TSpeedButton;
+    BtnDwLayer: TSpeedButton;
+    BtnUpLayer: TSpeedButton;
     EditPages: TPageControl;
+    Edt_GameInfo_Exec: TComboBox;
+    Edt_MountList_OverlayAuto: TCheckBox;
     Edt_GameInfo_Name: TEdit;
-    Edt_GameInfo_Exec: TEdit;
     Edt_GameInfo_TitleId: TEdit;
     Edt_GameInfo_Version: TEdit;
     Edt_GameInfo_AppVer: TEdit;
+    Edt_MountList_DlcAuto: TCheckBox;
+    Edt_MountList_OverlayList: TListBox;
+    Edt_MountList_DlcList: TListBox;
     Edt_MountList_game: TEdit;
     Edt_MountList_firmware: TComboBox;
     GridParamSfo: TStringGrid;
@@ -42,23 +50,46 @@ type
     Label5: TLabel;
     Label6: TLabel;
     Label7: TLabel;
+    Label8: TLabel;
+    Label9: TLabel;
     PanelHalf: TPanel;
     TabMain: TTabSheet;
+    TabDlc: TTabSheet;
     TabFolders: TTabSheet;
     TabParamSfo: TTabSheet;
+    procedure BtnAddLayerClick(Sender: TObject);
+    procedure BtnDlcAddClick(Sender: TObject);
+    procedure BtnDlcRemClick(Sender: TObject);
     procedure BtnExpFwClick(Sender: TObject);
     procedure BtnExpGameClick(Sender: TObject);
     procedure BtnGameOpenClick(Sender: TObject);
     procedure BtnOkClick(Sender: TObject);
     procedure BtnCancelClick(Sender: TObject);
+    procedure BtnDwLayerClick(Sender: TObject);
+    procedure BtnRemLayerClick(Sender: TObject);
+    procedure BtnUpLayerClick(Sender: TObject);
+    procedure Edt_MountList_DlcAutoChange(Sender: TObject);
+    procedure Edt_MountList_DlcListSelectionChange(Sender: TObject; User: Boolean);
+    procedure Edt_MountList_OverlayAutoChange(Sender: TObject);
+    procedure Edt_MountList_OverlayListSelectionChange(Sender: TObject; User: Boolean);
     procedure Edt_MountList_firmwareGetItems(Sender: TObject);
     procedure Edt_MountList_gameExit(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormInit(UpdateTitle:Boolean);
     procedure FormSave;
+    procedure LoadElfList;
     procedure LoadParamSfo(UpdateTitle:Boolean);
+    Procedure UpdateOverlays;
   private
-    Fgame:RawByteString;
+    FOverlaysNotChanged:Boolean;
+    FDlcsNotChanged:Boolean;
+    FGame:RawByteString;
+    procedure DoMoveLayer(Dir:Integer);
+    Procedure UpdateDlcs;
+    Procedure UpdateDlcButtons;
+    Procedure UpdateLayerButtons;
+    procedure OverlayAutoChangeButtons;
+    procedure DlcAutoChangeButtons;
   public
     OnSave     :TNotifyEvent;
     FConfigInfo:TConfigInfo;
@@ -74,34 +105,11 @@ implementation
 {$R *.lfm}
 
 uses
- TypInfo;
+ TypInfo,
+ open_dialog,
+ elf64;
 
 { TfrmGameEditor }
-
-function DoOpenDir(const Input,InitialDir:RawByteString):RawByteString;
-var
- d:TSelectDirectoryDialog;
- Cookie:Pointer;
-begin
- Cookie:=RegisterDllHack;
-
- Result:=Input;
- d:=nil;
- try
-  d:=TSelectDirectoryDialog.Create(nil);
-  d.InitialDir:=InitialDir;
-  d.Options:=[ofPathMustExist,ofEnableSizing,ofViewDetail];
-  if d.Execute then
-  begin
-   Result:=d.FileName;
-  end;
- except
-  //
- end;
- FreeAndNil(d);
-
- UnregisterDllHack(Cookie);
-end;
 
 procedure AddRow(Grid:TStringGrid;const name,value:RawByteString;obj:TObject);
 var
@@ -118,6 +126,10 @@ type
  TGameFormData=class(TFormDataProvider)
   procedure SetText(control:TComponent;const Text:RawByteString); override;
   function  GetText(control:TComponent):RawByteString;            override;
+  procedure SetBool(control:TComponent;B:Boolean);                override;
+  function  GetBool(control:TComponent):Boolean;                  override;
+  procedure SetClass(control:TComponent;Obj:TObject);             override;
+  procedure GetClass(control:TComponent;Obj:TObject);             override;
  end;
 
 procedure TGameFormData.SetText(control:TComponent;const Text:RawByteString);
@@ -137,6 +149,49 @@ begin
  end;
 end;
 
+procedure TGameFormData.SetBool(control:TComponent;B:Boolean);
+begin
+ if control.InheritsFrom(TButtonControl) then
+ begin
+  TMyButtonControl(control).Checked:=B;
+ end;
+end;
+
+function TGameFormData.GetBool(control:TComponent):Boolean;
+begin
+ Result:=False;
+ if control.InheritsFrom(TButtonControl) then
+ begin
+  Result:=TMyButtonControl(control).Checked;
+ end;
+end;
+
+procedure TGameFormData.SetClass(control:TComponent;Obj:TObject);
+var
+ A:TSerializeStringArray;
+begin
+ if control.InheritsFrom(TListBox) then
+ begin
+  A:=TSerializeStringArray(Obj);
+
+  SerializeStringArray2Strings(A,TListBox(control).Items);
+ end;
+end;
+
+procedure TGameFormData.GetClass(control:TComponent;Obj:TObject);
+var
+ A:TSerializeStringArray;
+begin
+ if control.InheritsFrom(TListBox) then
+ begin
+  A:=TSerializeStringArray(Obj);
+
+  Strings2SerializeStringArray(TListBox(control).Items,A);
+ end;
+end;
+
+//
+
 procedure TfrmGameEditor.FormInit(UpdateTitle:Boolean);
 var
  Provider:TGameFormData;
@@ -150,8 +205,22 @@ begin
  Provider.Free;
 
  //////
+ LoadElfList;
+
+ OverlayAutoChangeButtons;
+ DlcAutoChangeButtons;
 
  LoadParamSfo(UpdateTitle);
+
+ //reupdate
+ if UpdateTitle then
+ begin
+  FOverlaysNotChanged:=False;
+  FDlcsNotChanged:=False;
+  UpdateOverlays;
+  UpdateDlcs;
+  LoadParamSfo(UpdateTitle);
+ end;
 
  Show;
 end;
@@ -167,23 +236,76 @@ begin
  Provider.Free;
 end;
 
+Function ReadHeader(const fname:RawByteString):DWORD;
+var
+ F:THandle;
+begin
+ Result:=DWORD(-1);
+
+ F:=FileOpen(fname,fmOpenRead);
+ if (F=THandle(-1)) then Exit;
+
+ FileRead(F,Result,SizeOf(DWORD));
+
+ FileClose(F);
+end;
+
+procedure TfrmGameEditor.LoadElfList;
+var
+ CurParent:RawByteString;
+ ext      :RawByteString;
+ new      :RawByteString;
+ FileInfo:TSearchRec;
+begin
+ Edt_GameInfo_Exec.Items.Clear;
+ Edt_GameInfo_Exec.AddItem(Edt_GameInfo_Exec.Text,nil);
+
+ CurParent:=IncludeTrailingPathDelimiter(Edt_MountList_game.Text);
+
+ if SysUtils.FindFirst(CurParent+'*',faDirectory,FileInfo)=0 then
+ begin
+  repeat
+   ext:=ExtractFileExt(FileInfo.Name);
+   ext:=LowerCase(ext);
+
+   case ext of
+    '.bin',
+    '.elf':
+      begin
+       new:='/app0/'+FileInfo.Name;
+       if not SameFileName(new,Trim(Edt_GameInfo_Exec.Text)) then
+       begin
+        case ReadHeader(CurParent+FileInfo.Name) of
+         ELFMAG,
+         SELF_MAGIC:Edt_GameInfo_Exec.AddItem(new,nil);
+         else;
+        end; //case
+       end; //SameFileName
+      end;
+    else;
+   end;
+
+  until SysUtils.FindNext(FileInfo)<>0;
+  SysUtils.FindClose(FileInfo);
+ end;
+
+end;
+
 procedure TfrmGameEditor.LoadParamSfo(UpdateTitle:Boolean);
 var
  i:Integer;
  V:RawByteString;
 begin
  V:=Edt_MountList_game.Text;
- if (Fgame=V) then Exit;
+ if FOverlaysNotChanged and SameFileName(FGame,V) then Exit;
 
  FreeAndNil(FParamSfo);
 
- FParamSfo:=LoadParamSfoFile(ExcludeTrailingPathDelimiter(V)+
-                             DirectorySeparator+
-                             'sce_sys'+
-                             DirectorySeparator+
-                             'param.sfo');
+ FParamSfo:=LoadParamSfoByOverlays(V,Edt_MountList_OverlayList.Items);
 
- Fgame:=V;
+ //update cache state
+ FGame:=V;
+ FOverlaysNotChanged:=True;
 
  GridParamSfo.Clear;
 
@@ -232,8 +354,13 @@ begin
  Edt_GameInfo_AppVer.Text:=V;
 end;
 
+
 procedure TfrmGameEditor.Edt_MountList_gameExit(Sender: TObject);
 begin
+ LoadElfList;
+
+ UpdateOverlays;
+ UpdateDlcs;
  LoadParamSfo(True);
 end;
 
@@ -245,6 +372,15 @@ begin
  if (new='') then Exit;
 
  Edt_MountList_game.Text:=new;
+
+ LoadElfList;
+
+ LoadParamSfo(True);
+ //reupdate
+ FOverlaysNotChanged:=False;
+ FDlcsNotChanged:=False;
+ UpdateOverlays;
+ UpdateDlcs;
  LoadParamSfo(True);
 end;
 
@@ -256,6 +392,117 @@ end;
 procedure TfrmGameEditor.BtnExpFwClick(Sender: TObject);
 begin
  OpenDocument(Edt_MountList_firmware.Text);
+end;
+
+procedure TfrmGameEditor.BtnAddLayerClick(Sender: TObject);
+var
+ new:RawByteString;
+ err:t_load_sfo_err;
+ dlg:RawByteString;
+begin
+ new:=DoOpenDir('','');
+ if (new='') then Exit;
+
+ err:=TestPatchByPath(new,Edt_GameInfo_TitleId.Text);
+
+ if (err in [ls_io,ls_broken,ls_wrong_category,ls_wrong_title_id]) then
+ begin
+
+  dlg:='';
+  case err of
+   ls_io            :dlg:='Error reading file param.sfo';
+   ls_broken        :dlg:='param.sfo is broken';
+   ls_wrong_category:dlg:='It looks like you''re trying to add a non-patch to the game';
+   ls_wrong_title_id:dlg:='It looks like you''re trying to add a patch from another game';
+   else;
+  end;
+
+  if (MessageDlg('Question',
+                 dlg+', Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Exit;
+  end;
+
+ end;
+
+ Edt_MountList_OverlayList.Items.Add(new);
+ Edt_MountList_OverlayList.ItemIndex:=Edt_MountList_OverlayList.Count-1;
+
+ FOverlaysNotChanged:=False;
+ LoadParamSfo(True);
+ UpdateLayerButtons;
+end;
+
+procedure TfrmGameEditor.DoMoveLayer(Dir:Integer);
+var
+ c,n:Integer;
+begin
+ c:=Edt_MountList_OverlayList.ItemIndex;
+ if (c<0) then Exit;
+
+ n:=c+Dir;
+ if (n<0) or (n>=Edt_MountList_OverlayList.Count) then Exit;
+
+ Edt_MountList_OverlayList.Items.Move(c,n);
+ Edt_MountList_OverlayList.ItemIndex:=n;
+
+ FOverlaysNotChanged:=False;
+ LoadParamSfo(True);
+ UpdateLayerButtons;
+end;
+
+procedure TfrmGameEditor.BtnDwLayerClick(Sender: TObject);
+begin
+ DoMoveLayer(1);
+end;
+
+procedure TfrmGameEditor.BtnUpLayerClick(Sender: TObject);
+begin
+ DoMoveLayer(-1);
+end;
+
+procedure TfrmGameEditor.Edt_MountList_DlcAutoChange(Sender: TObject);
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_DlcAuto.Checked;
+
+ if Checked and (Edt_MountList_DlcList.Items.Count<>0) then
+ begin
+  if (MessageDlg('Question',
+                 'Auto will replace the current DLC list with auto-detected folders. Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Edt_MountList_DlcAuto.Checked:=False;
+   Exit;
+  end;
+ end;
+
+ DlcAutoChangeButtons;
+
+ FDlcsNotChanged:=False;
+
+ UpdateDlcs;
+end;
+
+procedure TfrmGameEditor.BtnRemLayerClick(Sender: TObject);
+var
+ i:Integer;
+begin
+ i:=Edt_MountList_OverlayList.ItemIndex;
+ if (i>=0) and (i<Edt_MountList_OverlayList.Count) then
+ begin
+  Edt_MountList_OverlayList.Items.Delete(i);
+
+  FOverlaysNotChanged:=False;
+  LoadParamSfo(True);
+  UpdateLayerButtons;
+ end;
 end;
 
 procedure TfrmGameEditor.BtnOkClick(Sender: TObject);
@@ -272,6 +519,185 @@ end;
 procedure TfrmGameEditor.BtnCancelClick(Sender: TObject);
 begin
  Close;
+end;
+
+procedure TfrmGameEditor.BtnDlcAddClick(Sender: TObject);
+var
+ new:RawByteString;
+ err:t_load_sfo_err;
+ dlg:RawByteString;
+begin
+ new:=DoOpenDir('','');
+ if (new='') then Exit;
+
+ err:=TestDlcByPath(new,GetAllServiceID(FParamSfo));
+
+ if (err in [ls_io,ls_not_exists,ls_broken,ls_wrong_category,ls_wrong_service_id]) then
+ begin
+
+  dlg:='';
+  case err of
+   ls_not_exists      :dlg:='param.sfo not found';
+   ls_io              :dlg:='Error reading file param.sfo';
+   ls_broken          :dlg:='param.sfo is broken';
+   ls_wrong_category  :dlg:='It looks like you''re trying to add a non-DLC folder';
+   ls_wrong_service_id:dlg:='It looks like you''re trying to add DLC from another game';
+   else;
+  end;
+
+  if (MessageDlg('Question',
+                 dlg+', Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Exit;
+  end;
+
+ end;
+
+ Edt_MountList_DlcList.Items.Add(new);
+ Edt_MountList_DlcList.ItemIndex:=Edt_MountList_DlcList.Count-1;
+
+ UpdateDlcButtons;
+end;
+
+procedure TfrmGameEditor.BtnDlcRemClick(Sender: TObject);
+var
+ i:Integer;
+begin
+ i:=Edt_MountList_DlcList.ItemIndex;
+ if (i>=0) and (i<Edt_MountList_DlcList.Count) then
+ begin
+  Edt_MountList_DlcList.Items.Delete(i);
+
+  UpdateDlcButtons;
+ end;
+end;
+
+procedure TfrmGameEditor.Edt_MountList_DlcListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateDlcButtons;
+end;
+
+Procedure TfrmGameEditor.UpdateOverlays;
+begin
+ if FOverlaysNotChanged and SameFileName(FGame,Edt_MountList_game.Text) then Exit;
+
+ if Edt_MountList_OverlayAuto.Checked then
+ begin
+  //read auto list
+
+  Edt_MountList_OverlayList.Clear;
+
+  AutoDetectOverlays(Edt_MountList_game.Text,Edt_GameInfo_TitleId.Text,Edt_MountList_OverlayList.Items);
+
+  FOverlaysNotChanged:=False;
+
+  UpdateLayerButtons;
+ end else
+ begin
+  //
+ end;
+
+end;
+
+procedure TfrmGameEditor.OverlayAutoChangeButtons;
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_OverlayAuto.Checked;
+
+ BtnAddLayer.Enabled              :=not Checked;
+ BtnRemLayer.Enabled              :=not Checked;
+ BtnUpLayer.Enabled               :=not Checked;
+ BtnDwLayer.Enabled               :=not Checked;
+ Edt_MountList_OverlayList.Enabled:=not Checked;
+
+ UpdateLayerButtons;
+end;
+
+Procedure TfrmGameEditor.UpdateLayerButtons;
+var
+ i:Integer;
+begin
+ if Edt_MountList_OverlayAuto.Checked then Exit;
+
+ i:=Edt_MountList_OverlayList.ItemIndex;
+
+ BtnRemLayer.Enabled:=(i>=0);
+ BtnUpLayer .Enabled:=(i>0);
+ BtnDwLayer .Enabled:=(i>=0) and (i<Edt_MountList_OverlayList.Count-1);
+end;
+
+procedure TfrmGameEditor.DlcAutoChangeButtons;
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_DlcAuto.Checked;
+
+ BtnDlcAdd.Enabled:=not Checked;
+ BtnDlcRem.Enabled:=not Checked;
+ Edt_MountList_DlcList.Enabled:=not Checked;
+
+ UpdateDlcButtons;
+end;
+
+Procedure TfrmGameEditor.UpdateDlcs;
+begin
+ if FDlcsNotChanged and SameFileName(FGame,Edt_MountList_game.Text) then Exit;
+
+ if Edt_MountList_DlcAuto.Checked then
+ begin
+  Edt_MountList_DlcList.Clear;
+
+  AutoDetectDlcs(Edt_MountList_game.Text,GetAllServiceID(FParamSfo),Edt_MountList_DlcList.Items);
+
+  FDlcsNotChanged:=True;
+
+  UpdateDlcButtons;
+ end;
+end;
+
+Procedure TfrmGameEditor.UpdateDlcButtons;
+var
+ i:Integer;
+begin
+ if Edt_MountList_DlcAuto.Checked then Exit;
+
+ i:=Edt_MountList_DlcList.ItemIndex;
+
+ BtnDlcRem.Enabled:=(i>=0);
+end;
+
+procedure TfrmGameEditor.Edt_MountList_OverlayAutoChange(Sender: TObject);
+var
+ Checked:Boolean;
+begin
+ Checked:=Edt_MountList_OverlayAuto.Checked;
+
+ if Checked and (Edt_MountList_OverlayList.Items.Count<>0) then
+ begin
+  if (MessageDlg('Question',
+                 'Auto will replace the current patch/mod list with auto-detected folders. Continue?',
+                 mtConfirmation,
+                 [mbYes, mbNo],
+                 0)=mrNo) then
+  begin
+   Edt_MountList_OverlayAuto.Checked:=False;
+   Exit;
+  end;
+ end;
+
+ OverlayAutoChangeButtons;
+
+ FOverlaysNotChanged:=False;
+ UpdateOverlays;
+end;
+
+procedure TfrmGameEditor.Edt_MountList_OverlayListSelectionChange(Sender: TObject; User: Boolean);
+begin
+ UpdateLayerButtons;
 end;
 
 procedure TfrmGameEditor.Edt_MountList_firmwareGetItems(Sender: TObject);

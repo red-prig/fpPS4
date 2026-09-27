@@ -59,7 +59,7 @@ begin
  rw_runlock(param_sfo_lock);
 end;
 
-function  ParamSfoGetUInt(const name:RawByteString):DWORD;
+function ParamSfoGetUInt(const name:RawByteString):DWORD;
 begin
  init_param_sfo;
  rw_rlock(param_sfo_lock);

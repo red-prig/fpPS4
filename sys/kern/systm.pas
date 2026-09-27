@@ -13,6 +13,7 @@ function copyin(udaddr,kaddr:Pointer;len:ptruint):Integer;
 function copyin_nofault(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint=nil):Integer;
 function copyinstr(udaddr,kaddr:Pointer;len:ptruint;lencopied:pptruint):Integer;
 function copyout(kaddr,udaddr:Pointer;len:ptruint):Integer;
+function fillout_zero(udaddr:Pointer;len:ptruint):Integer;
 function copyout_nofault(kaddr,udaddr:Pointer;len:ptruint):Integer;
 function fubyte(var base:Byte):Byte;
 function fuword32(var base:DWORD):DWORD;
@@ -295,6 +296,62 @@ done_copyout:
 copyout_fault:
         movqq       %gs:teb.thread,%rdx
         movq        $0,kthread.pcb_onfault(%rdx)
+        movq        $EFAULT,%rax
+        //ret
+end;
+
+{
+ * fillout_zero(to_user, len) - MP SAFE
+ *         %rdi,        %rsi
+}
+function fillout_zero(udaddr:Pointer;len:ptruint):Integer; assembler; nostackframe;
+label
+ cz_fault,
+ cz_done;
+asm
+        cmpq        $0x4000,%rdi //udaddr <= 0x4000
+        jle         cz_fault
+
+        movqq       %gs:teb.thread,%rax
+        leaq        cz_fault(%rip),%rcx
+        movqq       %rcx,kthread.pcb_onfault(%rax)
+        testq       %rsi,%rsi                        { anything to do? }
+        jz          cz_done
+
+        movq        %rdi,%rax
+        addq        %rsi,%rax
+        jc          cz_fault
+
+        movq        $VM_MAXUSER_ADDRESS,%rcx
+        cmpq        %rcx,%rax
+        ja          cz_fault
+
+        { zero-fill [%rdi, %rdi+%rsi) }
+        movq        %rsi,%rcx
+        shrq        $3,%rcx
+        xorl        %eax,%eax
+        cld
+        rep
+        stosq
+        movb        %sil,%cl
+        andb        $7,%cl
+        rep
+        stosb
+
+cz_done:
+        xorl        %eax,%eax
+        movq        %gs:teb.thread,%rsi
+        movq        %rax,kthread.pcb_onfault(%rsi)
+        ret
+
+        //ALIGN_TEXT
+        nop; nop; nop; nop;
+        nop; nop; nop; nop;
+        nop; nop;
+
+cz_fault:
+        movqq       %gs:teb.thread,%rsi
+        movq        $0,kthread.pcb_onfault(%rsi)
         movq        $EFAULT,%rax
         //ret
 end;

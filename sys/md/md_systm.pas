@@ -75,21 +75,19 @@ end;
 
 function md_getppid:DWORD;
 var
- data:array[0..SizeOf(PROCESS_BASIC_INFORMATION)-1+7] of Byte;
- p_info:PPROCESS_BASIC_INFORMATION;
+ pbi:PROCESS_BASIC_INFORMATION;
  R:DWORD;
 begin
  Result:=0;
- p_info:=Align(@data,8);
 
  R:=NtQueryInformationProcess(NtCurrentProcess,
                               ProcessBasicInformation,
-                              p_info,
+                              @pbi,
                               SizeOf(PROCESS_BASIC_INFORMATION),
                               nil);
  if (R=0) then
  begin
-  Result:=p_info^.InheritedFromUPI;
+  Result:=pbi.InheritedFromUPI;
  end;
 end;
 

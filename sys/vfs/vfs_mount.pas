@@ -111,11 +111,13 @@ uses
  murmurhash,
  errno,
  uma,
+ kern_malloc,
  systm,
  subr_uio,
  vfs_vnops,
  vfs_subr,
- vfs_cache;
+ vfs_cache,
+ libkern;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -128,12 +130,12 @@ uses
 procedure vfs_freeopt(opts:p_vfsoptlist;opt:p_vfsopt);
 begin
  TAILQ_REMOVE(opts,opt,@opt^.link);
- FreeMem(opt^.name);
+ free(opt^.name);
  if (opt^.value<>nil) then
  begin
-  FreeMem(opt^.value);
+  free(opt^.value);
  end;
- FreeMem(opt);
+ free(opt);
 end;
 
 { Release all resources related to the mount options. }
@@ -146,7 +148,7 @@ begin
   opt:=TAILQ_FIRST(opts);
   vfs_freeopt(opts, opt);
  end;
- FreeMem(opts);
+ free(opts);
 end;
 
 procedure vfs_deleteopt(opts:p_vfsoptlist;name:PChar);
@@ -286,7 +288,7 @@ var
  i,iovcnt:DWORD;
  error:Integer;
 begin
- opts:=AllocMem(sizeof(vfsoptlist));
+ opts:=calloc(sizeof(vfsoptlist));
  TAILQ_INIT(opts);
  memused:=0;
  iovcnt:=auio^.uio_iovcnt;
@@ -308,8 +310,8 @@ begin
    goto bad;
   end;
 
-  opt:=AllocMem(sizeof(vfsopt));
-  opt^.name :=AllocMem(namelen);
+  opt:=calloc(sizeof(vfsopt));
+  opt^.name :=calloc(namelen);
   opt^.value:=nil;
   opt^.len  :=0;
   opt^.pos  :=i div 2;
@@ -341,7 +343,7 @@ begin
   if (optlen<>0)  then
   begin
    opt^.len:=optlen;
-   opt^.value:=AllocMem(optlen);
+   opt^.value:=calloc(optlen);
    if (auio^.uio_segflg=UIO_SYSSPACE) then
    begin
     Move(auio^.uio_iov[i + 1].iov_base^, opt^.value^, optlen);
@@ -370,7 +372,7 @@ var
  i:ptrint;
 begin
  i:=strlen(src);
- Result:=AllocMem(i+1);
+ Result:=calloc(i+1);
  Move(src^,Result^,i);
 end;
 
@@ -389,11 +391,11 @@ begin
  opt:=TAILQ_FIRST(oldopts);
  while (opt<>nil) do
  begin
-  new:=AllocMem(sizeof(vfsopt));
+  new:=calloc(sizeof(vfsopt));
   new^.name:=strdup(opt^.name);
   if (opt^.len<>0) then
   begin
-   new^.value:=AllocMem(opt^.len);
+   new^.value:=calloc(opt^.len);
    Move(opt^.value^, new^.value^, opt^.len);
   end else
   begin
@@ -735,12 +737,6 @@ begin
  Exit(ENOENT);
 end;
 
-function strlcpy(dst,src:PChar;size:ptrint):ptrint; inline;
-begin
- strlcopy(dst,src,size);
- Result:=strlen(dst);
-end;
-
 function vfs_setopts(opts:p_vfsoptlist;name,value:PChar):Integer;
 var
  opt:p_vfsopt;
@@ -932,12 +928,12 @@ begin
  begin
   VI_LOCK(vp);
 
-  if ((fsflags and MNT_ROOTFS)=0) and
-     ((vp^.v_vflag and VV_ROOT)<>0) and
-     (vp^.v_mount<>nil) then
-  begin
-   error:=EBUSY;
-  end else
+  //if ((fsflags and MNT_ROOTFS)=0) and
+  //   ((vp^.v_vflag and VV_ROOT)<>0) and
+  //   (vp^.v_mount<>nil) then
+  //begin
+  // error:=EBUSY;
+  //end else
   if ((vp^.v_iflag and VI_MOUNT)=0) and
      (vp^.v_mountedhere=nil) then
   begin
@@ -1393,7 +1389,7 @@ begin
      end;
    'atime':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonoatime');
      end;
    'noclusterr':
@@ -1402,7 +1398,7 @@ begin
      end;
    'clusterr':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonoclusterr');
      end;
    'noclusterw':
@@ -1411,7 +1407,7 @@ begin
      end;
    'clusterw':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonoclusterw');
      end;
    'noexec':
@@ -1420,7 +1416,7 @@ begin
      end;
    'exec':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonoexec');
      end;
    'nosuid':
@@ -1429,7 +1425,7 @@ begin
      end;
    'suid':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonosuid');
      end;
    'nosymfollow':
@@ -1438,7 +1434,7 @@ begin
      end;
    'symfollow':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('nonosymfollow');
      end;
    'noro':
@@ -1455,7 +1451,7 @@ begin
      end;
    'rdonly':
      begin
-      FreeMem(opt^.name);
+      free(opt^.name);
       opt^.name:=strdup('ro');
       fsflags:=fsflags or MNT_RDONLY;
      end;
@@ -1600,8 +1596,8 @@ begin
   error:=msleep(@mp^.mnt_lockref, MNT_MTX(mp), PVFS, 'mount drain', 0);
  end;
  MNT_IUNLOCK(mp);
- Assert(mp^.mnt_lockref=0,'%s: invalid lock refcount in the drain path @ %s:%d');
- Assert(error=0,'%s: invalid Exitvalue for msleep in the drain path @ %s:%d');
+ Assert(mp^.mnt_lockref=0, 'vfs_unmount: invalid lock refcount in the drain path @ ' + {$INCLUDE %FILE%} + ':' + {$INCLUDE %line%});
+ Assert(error=0, 'vfs_unmount: invalid Exitvalue for msleep in the drain path @ ' + {$INCLUDE %FILE%} + ':' + {$INCLUDE %line%});
 
  //if (mp^.mnt_flag and MNT_EXPUBLIC) then
  // vfs_setpublicfs(nil, nil, nil);
@@ -1715,7 +1711,7 @@ end;
  }
 function mount_argb(ma:p_mntarg;flag:Integer;name:PChar):p_mntarg;
 begin
- Assert((name[0]='n') and (name[1]='o'),'mount_argb(...,%s): name must start with no');
+ Assert((name[0]='n') and (name[1]='o'), 'mount_argb(...,' + name + '): name must start with no');
 
  Exit(mount_arg(ma, name + (ord(flag<>0)*2), nil, 0));
 end;
@@ -1731,7 +1727,7 @@ var
 begin
  if (ma=nil) then
  begin
-  ma:=AllocMem(sizeof(t_mntarg));
+  ma:=calloc(sizeof(t_mntarg));
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
@@ -1739,14 +1735,14 @@ begin
   Exit(ma);
  end;
 
- ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
+ ma^.v:=realloc(ma^.v, sizeof(iovec) * (ma^.len + 2));
  ma^.v[ma^.len].iov_base:=name;
  ma^.v[ma^.len].iov_len :=strlen(name) + 1;
  Inc(ma^.len);
 
  sb:=Format(fmt,Args);
  len:=Length(sb) + 1;
- maa:=AllocMem(sizeof(t_mntaarg) + len);
+ maa:=calloc(sizeof(t_mntaarg) + len);
  SLIST_INSERT_HEAD(@ma^.list,maa,@maa^.next);
  Move(PChar(sb)^, (maa + 1)^, len);
 
@@ -1771,14 +1767,14 @@ begin
  end;
  if (ma=nil) then
  begin
-  ma:=AllocMem(sizeof(t_mntarg));
+  ma:=calloc(sizeof(t_mntarg));
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
  begin
   Exit(ma);
  end;
- maa:=AllocMem(sizeof(t_mntaarg) + len);
+ maa:=calloc(sizeof(t_mntaarg) + len);
  SLIST_INSERT_HEAD(@ma^.list,maa,@maa^.next);
  tbuf:=Pointer(maa + 1);
  ma^.error:=copyinstr(val, tbuf, len, nil);
@@ -1794,7 +1790,7 @@ function mount_arg(ma:p_mntarg;name:PChar;val:Pointer;len:Integer):p_mntarg;
 begin
  if (ma=nil) then
  begin
-  ma:=AllocMem(sizeof(t_mntarg));
+  ma:=calloc(sizeof(t_mntarg));
   SLIST_INIT(@ma^.list);
  end;
  if (ma^.error<>0) then
@@ -1804,7 +1800,7 @@ begin
 
  if (val=nil) or (len=0) then Exit(ma);
 
- ma^.v:=ReAllocMem(ma^.v, sizeof(iovec) * (ma^.len + 2));
+ ma^.v:=realloc(ma^.v, sizeof(iovec) * (ma^.len + 2));
  ma^.v[ma^.len].iov_base:=name;
  ma^.v[ma^.len].iov_len :=strlen(name) + 1;
  Inc(ma^.len);
@@ -1832,10 +1828,10 @@ begin
  begin
   maa:=SLIST_FIRST(@ma^.list);
   SLIST_REMOVE_HEAD(@ma^.list,@p_mntaarg(nil)^.next);
-  FreeMem(maa);
+  free(maa);
  end;
- FreeMem(ma^.v);
- FreeMem(ma);
+ free(ma^.v);
+ free(ma);
 end;
 
 {
@@ -1848,7 +1844,7 @@ var
 begin
  Assert(ma<>nil,           'kernel_mount nil ma');
  Assert(ma^.v<>nil,        'kernel_mount nil ma^.v');
- Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (%d)');
+ Assert((ma^.len and 1)=0, 'kernel_mount odd ma^.len (' + IntToStr(ma^.len) + ')');
 
  auio.uio_iov   :=ma^.v;
  auio.uio_iovcnt:=ma^.len;
@@ -1966,7 +1962,7 @@ begin
  end;
  error:=vfs_donmount(flags, auio);
 
- FreeMem(auio);
+ free(auio);
  Exit(error);
 end;
 
@@ -1996,18 +1992,18 @@ begin
   }
  flags:=flags and (not MNT_ROOTFS);
 
- fstype:=AllocMem(MFSNAMELEN);
+ fstype:=calloc(MFSNAMELEN);
 
  error:=copyinstr(ftype, fstype, MFSNAMELEN, nil);
  if (error<>0) then
  begin
-  FreeMem(fstype);
+  free(fstype);
   Exit(error);
  end;
 
  mtx_lock(VFS_Giant);
  vfsp:=vfs_byname_kld(fstype, @error);
- FreeMem(fstype);
+ free(fstype);
 
  if (vfsp=nil) then
  begin

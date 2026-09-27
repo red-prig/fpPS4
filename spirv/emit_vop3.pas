@@ -626,7 +626,7 @@ begin
  pImm:=src.pWriter.specialize AsType<ntConst>;
  if (pImm<>nil) then
  begin
-  Result:=NewImm_i(dtUInt32,(pImm.AsInt32 and $FFFFFF));
+  Result:=NewImm_i(dtUInt32,(pImm.AsUint32 and $FFFFFF));
  end else
  begin
   Result:=OpAndTo(src,NewImm_q(dtUInt32,$FFFFFF));
@@ -867,14 +867,14 @@ begin
 
  emit_src_abs_neg(@src,2,dtUint32);
 
- vsize  :=OpAndTo(src[0],15); //[0:4]
- voffset:=OpAndTo(src[1],15); //[0:4]
+ vsize  :=OpAndTo(src[0],31); //[0:4]
+ voffset:=OpAndTo(src[1],31); //[0:4]
 
  vsize  .PrepType(ord(dtUint32));
  voffset.PrepType(ord(dtUint32));
 
  val:=OpShlTo (NewImm_q(dtUint32,1),vsize);
- val:=OpISubTo(vsize,1);
+ val:=OpISubTo(val,1);
 
  val:=OpShlTo(val,voffset);
 

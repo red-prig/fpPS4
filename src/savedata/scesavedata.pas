@@ -8,7 +8,8 @@ interface
 uses
  sysutils,
  kern_proc,
- ps4_libSceUserService;
+ ps4_libSceUserService,
+ libkern;
 
 Const
  SCE_SAVE_DATA_ERROR_PARAMETER                           =-2137063424; // 0x809F0000
@@ -400,7 +401,7 @@ const
  );
 
 const
- mount_savedata_slot_name:array[0..15] of SceSaveDataMountPoint=(
+ mount_savedata_slot_name:array[0..16] of SceSaveDataMountPoint=(
   '/savedata0',
   '/savedata1',
   '/savedata2',
@@ -416,7 +417,8 @@ const
   '/savedata12',
   '/savedata13',
   '/savedata14',
-  '/savedata15'
+  '/savedata15',
+  '/savedata16'
  );
 
  sdmemory_slot_name:array[0..3] of PChar=(
@@ -425,10 +427,6 @@ const
   'sce_sdmemory2',
   'sce_sdmemory3'
  );
-
-function strnlen_s  (s:PChar;maxlen:ptrint):ptrint;
-function strncasecmp(str1,str2:PChar;maxlen:ptrint):Integer;
-function strncpy_s  (dst,src:PChar;maxlen:ptrint):PChar; inline;
 
 function is_sdmemory(name:pchar):Boolean;
 function GetMountSlotIdByMountPoint(name:pchar;var slot_id:Integer):Integer;
@@ -498,50 +496,6 @@ function CheckDirNameSearchCond  (cond:pSceSaveDataDirNameSearchCond;internal:Bo
 function CheckDirNameSearchResult(pResult:pSceSaveDataDirNameSearchResult):Integer;
 
 implementation
-
-function strnlen_s(s:PChar;maxlen:ptrint):ptrint;
-var
- i:size_t;
-begin
- if (s=nil) then Exit(0);
- i:=0;
- if (maxlen<>0) then
- begin
-  repeat
-   if (s[i]=#0) then Exit(i);
-   Inc(i);
-  until (maxlen = i);
- end;
- Exit(maxlen);
-end;
-
-function strncasecmp(str1,str2:PChar;maxlen:ptrint):Integer;
-begin
- if (maxlen<>0) then
- begin
-  repeat
-   if (LowerCase(str1^)<>LowerCase(str2^)) then
-   begin
-    Exit(ord(LowerCase(str1^))-ord(LowerCase(str2^)));
-   end;
-
-   if (str1^=#0) then break;
-
-   Inc(str1);
-   Inc(str2);
-
-   Dec(maxlen);
-  until (maxlen=0);
-
- end;
- Result:=0;
-end;
-
-function strncpy_s(dst,src:PChar;maxlen:ptrint):PChar; inline;
-begin
- if (dst=nil) or (src=nil) then Exit(nil);
- Result:=StrLCopy(dst,src,maxlen);
-end;
 
 function is_sdmemory(name:pchar):Boolean;
 begin

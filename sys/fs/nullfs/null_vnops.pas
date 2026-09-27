@@ -6,6 +6,7 @@ unit null_vnops;
 interface
 
 uses
+ kern_malloc,
  vnode,
  vnode_if,
  vfs_default;
@@ -79,10 +80,6 @@ var
   vop_putpages      :nil;
   vop_vptofh        :@null_vptofh;
   vop_vptocnp       :@null_vptocnp;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  ); public;
 
 implementation
@@ -270,7 +267,7 @@ begin
  flags:=cnp^.cn_flags;
 
  if ((flags and ISLASTCN)<>0) and
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     ((cnp^.cn_nameiop=DELETE) or (cnp^.cn_nameiop=RENAME)) then
  begin
   Exit(EROFS);
@@ -293,7 +290,7 @@ begin
 
  if (error=EJUSTRETURN) and
     ((flags and ISLASTCN)<>0) and
-    ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+    ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     ((cnp^.cn_nameiop=CREATE) or (cnp^.cn_nameiop=RENAME)) then
   error:=EROFS;
 
@@ -347,7 +344,7 @@ begin
  vp:=ap^.a_vp;
  vap:=ap^.a_vap;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+ if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     (
      (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or
@@ -384,7 +381,7 @@ begin
       * Disallow write attempts if the filesystem is
       * mounted read-only.
       }
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -413,7 +410,7 @@ begin
   Exit(error);
  end;
 
- ap^.a_vap^.va_fsid:=p_mount(ap^.a_vp^.v_mount)^.mnt_stat.f_fsid.val[0];
+ ap^.a_vap^.va_fsid:=ap^.a_vp^.v_mount^.mnt_stat.f_fsid.val[0];
  Exit(0);
 end;
 
@@ -440,7 +437,7 @@ begin
    VLNK,
    VREG:
     begin
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -474,7 +471,7 @@ begin
    VLNK,
    VREG:
     begin
-     if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+     if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -503,31 +500,25 @@ var
  tnn:p_null_node;
 begin
  vp:=ap^.a_vp;
+
  if (vrefcnt(vp) > 1) then
  begin
   lvp:=NULLVPTOLOWERVP(vp);
-  if (lvp<>nil) then
-  begin
-   VREF(lvp);
-  end;
+  VREF(lvp);
   vreleit:=1;
  end else
+ begin
   vreleit:=0;
+ end;
 
- if (lvp<>nil) then
+ tnn:=VTONULL(vp);
+ tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
+
+ retval:=null_bypass(Pointer(ap));
+
+ if (vreleit<>0) then
  begin
-  tnn:=VTONULL(vp);
-  tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
-
-  retval:=null_bypass(Pointer(ap));
-
-  if (vreleit<>0) then
-  begin
-   vrele(lvp);
-  end;
- end else
- begin
-  retval:=0;
+  vrele(lvp);
  end;
 
  Exit(retval);
@@ -578,8 +569,6 @@ begin
   tnn:=VTONULL(tvp);
   tnn^.null_flags:=tnn^.null_flags or NULLV_DROP;
  end;
-
- if (tnn^.null_lowervp=nil) then Exit(0);
 
  Exit(null_bypass(Pointer(ap)));
 end;
@@ -665,7 +654,7 @@ begin
        ap^.a_flags:=ap^.a_flags or LK_EXCLUSIVE;
       end;
      else
-      Assert(False,'Unsupported lock request');
+      Assert(False, 'Unsupported lock request ' + IntToStr(flags));
     end;
     VOP_UNLOCK(lvp, 0);
     error:=vop_stdlock(ap);
@@ -815,7 +804,7 @@ begin
    vput(lowervp);
  end;
 
- FreeMem(xp);
+ free(xp);
 
  Exit(0);
 end;

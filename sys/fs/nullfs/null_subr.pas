@@ -6,7 +6,7 @@ unit null_subr;
 interface
 
 uses
- vmount,
+ kern_malloc,
  vnode,
  vfs_default,
  nullfs;
@@ -69,7 +69,7 @@ end;
 function vfs_hash_index(vp:p_vnode):DWORD;
 begin
  if (vp=nil) then Exit(0);
- Result:=(vp^.v_hash + p_mount(vp^.v_mount)^.mnt_hashseed);
+ Result:=(vp^.v_hash + vp^.v_mount^.mnt_hashseed);
 end;
 
 function NULL_NHASH(vp:p_vnode;force:Boolean):Pointer;
@@ -84,17 +84,17 @@ begin
  end else
  if force then
  begin
-  Result:=AllocMem(SizeOf(LIST_HEAD));
+  Result:=calloc(SizeOf(LIST_HEAD),MALIGN_8);
   if (Result=nil) then Exit;
   data:=HAMT_insert32(@null_node_hashtbl,vfs_hash_index(vp),Result);
   if (data=nil) then
   begin
-   FreeMem(Result);
+   free(Result);
    Result:=nil;
   end else
   if (data^<>Result) then
   begin
-   FreeMem(Result);
+   free(Result);
    Result:=data^;
   end;
  end;
@@ -114,7 +114,7 @@ procedure free_hash_data_cb(data,userdata:Pointer); register;
 begin
  if (data<>nil) then
  begin
-  FreeMem(data);
+  free(data);
  end;
 end;
 
@@ -226,7 +226,7 @@ begin
  vgone(vp);
  vput(vp);
 
- FreeMem(xp);
+ free(xp);
 end;
 
 procedure null_insmntque_dtr(vp:p_vnode;xp:Pointer);
@@ -253,7 +253,7 @@ begin
 
  if (lowervp<>nil) then
  begin
-  Assert(lowervp^.v_usecount >= 1,'Unreferenced vnode %p');
+  Assert(lowervp^.v_usecount >= 1, 'Unreferenced vnode ' + HexStr(lowervp));
  end;
 
  { Lookup the hash firstly. }
@@ -272,7 +272,7 @@ begin
  if (lowervp<>nil) then
  if (VOP_ISLOCKED(lowervp)<>LK_EXCLUSIVE) then
  begin
-  Assert((MOUNTTONULLMOUNT(mp)^.nullm_flags and NULLM_CACHE)<>0,'lowervp %p is not excl locked and cache is disabled');
+  Assert((MOUNTTONULLMOUNT(mp)^.nullm_flags and NULLM_CACHE)<>0, 'lowervp ' + HexStr(lowervp) + ' is not excl locked and cache is disabled');
   vn_lock(lowervp, LK_UPGRADE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
   if ((lowervp^.v_iflag and VI_DOOMED)<>0) then
   begin
@@ -291,13 +291,13 @@ begin
   * might cause a bogus v_data pointer to get dereferenced
   * elsewhere if MALLOC should block.
   }
- xp:=AllocMem(sizeof(t_null_node));
+ xp:=calloc(sizeof(t_null_node));
 
  error:=getnewvnode('nil', mp, @null_vnodeops, @vp);
  if (error<>0) then
  begin
   vput(lowervp);
-  FreeMem(xp);
+  free(xp);
   Exit(error);
  end;
 
@@ -359,7 +359,7 @@ begin
    if LIST_EMPTY(hd) then
    if HAMT_delete32(@null_node_hashtbl,idx,nil) then
    begin
-    FreeMem(hd);
+    free(hd);
    end;
   end;
  end;

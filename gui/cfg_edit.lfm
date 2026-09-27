@@ -1,11 +1,11 @@
 object frmCfgEditor: TfrmCfgEditor
-  Left = 534
-  Height = 339
-  Top = 84
-  Width = 459
+  Left = 615
+  Height = 350
+  Top = 161
+  Width = 525
   Caption = 'Config Editor'
-  ClientHeight = 339
-  ClientWidth = 459
+  ClientHeight = 350
+  ClientWidth = 525
   Position = poMainFormCenter
   LCLVersion = '4.4.0.0'
   object EditPages: TPageControl
@@ -15,9 +15,9 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideRight.Side = asrBottom
     AnchorSideBottom.Control = BtnOk
     Left = 5
-    Height = 289
+    Height = 300
     Top = 5
-    Width = 449
+    Width = 515
     ActivePage = Tab_MainInfo
     Align = alCustom
     Anchors = [akTop, akLeft, akRight, akBottom]
@@ -29,8 +29,8 @@ object frmCfgEditor: TfrmCfgEditor
     TabOrder = 0
     object Tab_MainInfo: TTabSheet
       Caption = 'Main'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Label2: TLabel
         AnchorSideLeft.Control = Tab_MainInfo
         AnchorSideTop.Control = Edt_MainInfo_LocalDir
@@ -41,7 +41,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Default PS4 firmware used at game launch.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -59,10 +59,10 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideBottom.Control = Tab_MainInfo
         AnchorSideBottom.Side = asrBottom
         Left = 10
-        Height = 96
+        Height = 107
         Hint = 'List of known PS4 firmware folders'
         Top = 155
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight, akBottom]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 3
@@ -72,6 +72,7 @@ object frmCfgEditor: TfrmCfgEditor
         ParentShowHint = False
         ShowHint = True
         TabOrder = 1
+        OnSelectionChange = Edt_MainInfo_FirmwareListSelectionChange
       end
       object BtnAddFw: TSpeedButton
         AnchorSideLeft.Control = Edt_MainInfo_FirmwareList
@@ -125,7 +126,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Folders that contain PS4 system firmware.'
         Top = 130
-        Width = 354
+        Width = 420
         Anchors = [akLeft, akRight, akBottom]
         BorderSpacing.Left = 10
         BorderSpacing.Right = 10
@@ -143,7 +144,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'PS4 firmware used by default when launching a game'
         Top = 93
-        Width = 390
+        Width = 456
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -160,7 +161,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Side = asrCenter
-        Left = 405
+        Left = 471
         Height = 26
         Hint = 'Open the firmware folder'
         Top = 91
@@ -184,7 +185,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Base folder for emulator data.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -202,7 +203,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Base folder for emulator data. %AppConfigDir% means %USERPROFILE%\AppData\Local\fpPS4'
         Top = 35
-        Width = 390
+        Width = 456
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -216,7 +217,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Control = Edt_MainInfo_LocalDir
         AnchorSideBottom.Side = asrBottom
-        Left = 364
+        Left = 430
         Height = 21
         Hint = 'Browse for local directory'
         Top = 36
@@ -239,7 +240,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Control = Tab_MainInfo
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Side = asrCenter
-        Left = 405
+        Left = 471
         Height = 26
         Hint = 'Open the local directory folder'
         Top = 33
@@ -257,8 +258,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_LogInfo: TTabSheet
       Caption = 'Log'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Label1: TLabel
         AnchorSideLeft.Control = Tab_LogInfo
         AnchorSideTop.Control = Tab_LogInfo
@@ -268,7 +269,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Main log file path written by the emulator.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -286,7 +287,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Path to the main log file written by the emulator'
         Top = 35
-        Width = 390
+        Width = 456
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -300,7 +301,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Control = Edt_LogInfo_LogFile
         AnchorSideBottom.Side = asrBottom
-        Left = 364
+        Left = 430
         Height = 21
         Hint = 'Browse for log file'
         Top = 36
@@ -324,7 +325,7 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideRight.Side = asrBottom
         AnchorSideBottom.Control = Edt_LogInfo_LogFile
         AnchorSideBottom.Side = asrCenter
-        Left = 405
+        Left = 471
         Height = 26
         Hint = 'Open the folder containing the log file'
         Top = 33
@@ -349,7 +350,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Controls verbosity per source module. Entries are separated by spaces, e.g. "*:Info" "lib:Debug".'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -368,7 +369,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Separated by spaces. Example: "*:Info" "lib:Debug".'
         Top = 93
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -387,7 +388,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Line prefix shown before each tty output.'
         Top = 126
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -406,7 +407,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Placeholders: %tty_name% %td_name% %td_tid% %fib_addr%.'
         Top = 151
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -425,7 +426,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Routes each tty output to a file or device. Entries are separated by spaces.'
         Top = 184
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -444,7 +445,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Separated by spaces. Target = null/stdin/stdout/stderr or a file name. Example: "stdout:out.log" "tty*:null".'
         Top = 209
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -456,8 +457,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_BootparamInfo: TTabSheet
       Caption = 'Bootparam'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Edt_BootparamInfo_neo: TCheckBox
         AnchorSideLeft.Control = Tab_BootparamInfo
         AnchorSideTop.Control = Tab_BootparamInfo
@@ -467,7 +468,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Emulate the PS4 Pro hardware profile instead of a base PS4.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -487,7 +488,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Stop the emulated process when the game requests to exit.'
         Top = 39
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -507,7 +508,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Log every guest system call executed by the game.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -527,7 +528,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Log packed (container) GPU command operations.'
         Top = 97
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -547,7 +548,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Log heuristic hints about packed GPU operations.'
         Top = 126
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -560,8 +561,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_JIT: TTabSheet
       Caption = 'JIT'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Edt_JITInfo_print_asm: TCheckBox
         AnchorSideLeft.Control = Tab_JIT
         AnchorSideTop.Control = Tab_JIT
@@ -571,7 +572,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Print assembled CPU instructions to the log.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -591,7 +592,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Inline extended debug information for use in a debugger.'
         Top = 39
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -611,7 +612,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Attempts to find code that is located relative to jumps within the current memory segment.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -631,7 +632,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Software check of addressable memory'
         Top = 155
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -651,7 +652,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Heuristics for reading case-switch tables that are compiled as jump tables'
         Top = 97
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -671,7 +672,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Attempts to find sequences of nop instructions and the start of the next function after the terminating instruction'
         Top = 126
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -691,7 +692,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Simplified recompilation mode, for debugging purposes only.'
         Top = 184
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -704,8 +705,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_Misc: TTabSheet
       Caption = 'Misc'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Edt_MiscInfo_strict_ps4_freq: TCheckBox
         AnchorSideLeft.Control = Tab_Misc
         AnchorSideTop.Control = Edt_MiscInfo_fork_proc
@@ -716,7 +717,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Lock the emulated timer to a fixed frequency for consistent timing.'
         Top = 39
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -736,7 +737,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Enable RenderDoc frame capture for GPU debugging.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -757,7 +758,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 19
         Hint = 'Run the guest code in its own emulated process (closer to real PS4).'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -771,8 +772,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_Vulkan: TTabSheet
       Caption = 'Vulkan'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Edt_VulkanInfo_device_cmb: TComboBox
         AnchorSideLeft.Control = Tab_Vulkan
         AnchorSideTop.Control = Label4
@@ -783,7 +784,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Graphics device used for rendering'
         Top = 35
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -803,7 +804,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Graphics device used for rendering.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -822,7 +823,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 165
         Hint = 'Vulkan validation layers and debugging features for graphics development.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         AutoFill = True
         AutoSize = True
@@ -839,7 +840,7 @@ object frmCfgEditor: TfrmCfgEditor
         ChildSizing.Layout = cclTopToBottomThenLeftToRight
         ChildSizing.ControlsPerLine = 7
         ClientHeight = 145
-        ClientWidth = 417
+        ClientWidth = 483
         ColumnLayout = clVerticalThenHorizontal
         Columns = 2
         Items.Strings = (
@@ -868,13 +869,13 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_PS4System: TTabSheet
       Caption = 'PS4 System'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object PanelHalf: TPanel
         AnchorSideLeft.Control = Tab_PS4System
         AnchorSideLeft.Side = asrCenter
         AnchorSideRight.Side = asrCenter
-        Left = 214
+        Left = 247
         Height = 26
         Top = 151
         Width = 12
@@ -892,7 +893,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'System UI language reported to the game.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -911,7 +912,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'System UI language reported to the game'
         Top = 93
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -964,7 +965,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Date format reported to the game'
         Top = 151
-        Width = 194
+        Width = 227
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -989,7 +990,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Date format reported to the game.'
         Top = 126
-        Width = 194
+        Width = 227
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1005,11 +1006,11 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_PS4System
         AnchorSideRight.Side = asrBottom
-        Left = 236
+        Left = 269
         Height = 23
         Hint = 'Time format reported to the game'
         Top = 151
-        Width = 195
+        Width = 228
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1031,11 +1032,11 @@ object frmCfgEditor: TfrmCfgEditor
         AnchorSideTop.Side = asrBottom
         AnchorSideRight.Control = Tab_PS4System
         AnchorSideRight.Side = asrBottom
-        Left = 236
+        Left = 269
         Height = 15
         Hint = 'Time format reported to the game.'
         Top = 126
-        Width = 195
+        Width = 228
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1053,7 +1054,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Which physical button acts as the confirm key.'
         Top = 184
-        Width = 194
+        Width = 227
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1071,7 +1072,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Which physical button acts as the confirm key'
         Top = 209
-        Width = 194
+        Width = 227
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1095,7 +1096,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Console host name shown in the emulated system menu.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1114,7 +1115,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Console host name shown in the emulated system menu'
         Top = 35
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1127,8 +1128,8 @@ object frmCfgEditor: TfrmCfgEditor
     end
     object Tab_PS4Audio: TTabSheet
       Caption = 'PS4 Audio'
-      ClientHeight = 261
-      ClientWidth = 441
+      ClientHeight = 272
+      ClientWidth = 507
       object Label10: TLabel
         AnchorSideLeft.Control = Tab_PS4Audio
         AnchorSideTop.Control = Tab_PS4Audio
@@ -1138,7 +1139,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Primary audio output device.'
         Top = 10
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1157,7 +1158,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Primary audio output device'
         Top = 35
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1178,7 +1179,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Audio device used when headphones are connected.'
         Top = 68
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1197,7 +1198,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Audio device used when headphones are connected'
         Top = 93
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1218,7 +1219,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Audio device used for controller speaker/headset audio.'
         Top = 126
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1237,7 +1238,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Audio device used for controller speaker/headset audio'
         Top = 151
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1258,7 +1259,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 15
         Hint = 'Special-purpose audio device (e.g. for a specific game feature).'
         Top = 184
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1277,7 +1278,7 @@ object frmCfgEditor: TfrmCfgEditor
         Height = 23
         Hint = 'Special-purpose audio device'
         Top = 209
-        Width = 421
+        Width = 487
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 10
         BorderSpacing.Top = 10
@@ -1296,9 +1297,9 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideRight.Side = asrBottom
     AnchorSideBottom.Control = Owner
     AnchorSideBottom.Side = asrBottom
-    Left = 374
+    Left = 440
     Height = 25
-    Top = 304
+    Top = 315
     Width = 75
     Anchors = [akRight, akBottom]
     AutoSize = True
@@ -1316,7 +1317,7 @@ object frmCfgEditor: TfrmCfgEditor
     AnchorSideBottom.Side = asrBottom
     Left = 10
     Height = 25
-    Top = 304
+    Top = 315
     Width = 75
     Anchors = [akLeft, akBottom]
     AutoSize = True

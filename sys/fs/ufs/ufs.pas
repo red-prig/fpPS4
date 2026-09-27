@@ -21,9 +21,10 @@ type
  pp_ufs_dirent=^p_ufs_dirent;
  p_ufs_dirent=^t_ufs_dirent;
 
- t_ufs_dirent=record
+ t_ufs_dirent=packed record
   ufs_inode  :Integer;
-  ufs_flags  :Integer;      //UFS_*
+  ufs_flags  :Word;      //UFS_*
+  ufs_marker :Word;
   ufs_ref    :Integer;
   ufs_vref   :Integer;
   ufs_dirent :p_dirent;
@@ -31,7 +32,7 @@ type
   ufs_dlist  :TAILQ_HEAD;   //dir list
   ufs_dir    :p_ufs_dirent; //parent
   ufs_links  :Integer;
-  ufs_mode   :mode_t;       //S_IFMT
+  ufs_mode   :Integer;      //S_IFMT
   ufs_uid    :uid_t;
   ufs_gid    :gid_t;
   ufs_size   :Int64;        // file size in bytes
@@ -44,10 +45,12 @@ type
   ufs_symlink:PChar;
   ufs_md_lock:t_sx;
   ufs_md_fp  :Pointer; //host data
+  //
+  ufs_dr_off :Int64;   //readdir state: last returned offset
  end;
 
  p_ufs_mount=^t_ufs_mount;
- t_ufs_mount=record
+ t_ufs_mount=packed record
   //ufs_idx       :DWORD;
   ufs_mount     :p_mount;
   ufs_rootdir   :p_ufs_dirent;
@@ -69,21 +72,21 @@ function ufs_statfs(mp:p_mount;sbp:p_statfs):Integer;
 
 const
  _ufs_vfsops:vfsops=(
-  vfs_mount          :@ufs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@ufs_unmount;
-  vfs_root           :@ufs_root;
-  vfs_quotactl       :nil;
-  vfs_statfs         :@ufs_statfs;
-  vfs_sync           :nil;
-  vfs_vget           :nil;
-  vfs_fhtovp         :nil;
-  vfs_checkexp       :nil;
-  vfs_init           :@ufs_init;
-  vfs_uninit         :@ufs_uinit;
-  vfs_extattrctl     :nil;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@ufs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@ufs_unmount;
+  vfs_root      :@ufs_root;
+  vfs_quotactl  :nil;
+  vfs_statfs    :@ufs_statfs;
+  vfs_sync      :nil;
+  vfs_vget      :nil;
+  vfs_fhtovp    :nil;
+  vfs_checkexp  :nil;
+  vfs_init      :@ufs_init;
+  vfs_uninit    :@ufs_uinit;
+  vfs_extattrctl:nil;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
 var
@@ -134,42 +137,39 @@ uses
  vnode_if,
  ufs_vnops,
  md_vnops,
- kern_id;
+ kern_malloc,
+ subr_unit;
 
 var
- ufs_desc:t_id_desc=(free:nil;refs:0);
- ufs_inos:t_id_desc_table;
+ ufs_inos:p_unrhdr=nil;
 
 function ufs_alloc_cdp_inode():Integer;
 begin
- if id_new(@ufs_inos,@ufs_desc,@Result) then
- begin
-  id_release(@ufs_desc); //<-id_new
- end else
- begin
-  Result:=-1;
- end;
+ Result:=alloc_unr(ufs_inos);
 end;
 
 procedure ufs_free_cdp_inode(ino:Integer);
 begin
  if (ino>0) then
  begin
-  id_del(@ufs_inos,ino,nil);
+  free_unr(ufs_inos, ino);
  end;
 end;
 
 function ufs_init(cf:p_vfsconf):Integer;
 begin
  Result:=0;
- id_table_init(@ufs_inos,UFS_ROOTINO+1);
+ if (ufs_inos=nil) then
+ begin
+  ufs_inos:=new_unrhdr(UFS_ROOTINO + 1, High(Integer), nil);
+ end;
  mtx_init(ufs_interlock,'ufs_interlock');
 end;
 
 function ufs_uinit(cf:p_vfsconf):Integer;
 begin
  Result:=0;
- id_table_fini(@ufs_inos);
+ clean_unrhdrl(ufs_inos);
  mtx_destroy(ufs_interlock);
 end;
 
@@ -190,7 +190,7 @@ begin
  begin
   md_free_dirent(p);
   sx_destroy(@p^.ufs_md_lock);
-  FreeMem(p);
+  free(p);
   Result:=True;
  end;
 end;
@@ -207,8 +207,8 @@ Result:=False;
  begin
   md_unmount(p);
   sx_destroy(@p^.ufs_lock);
-  FreeMem(p^.ufs_path);
-  FreeMem(p);
+  free(p^.ufs_path);
+  free(p);
   Result:=True;
  end;
 end;
@@ -449,11 +449,11 @@ begin
   end;
  end;
 
- fmp:=AllocMem(sizeof(t_ufs_mount));
+ fmp:=calloc(sizeof(t_ufs_mount));
 
  if (path<>nil) then
  begin
-  fmp^.ufs_path:=AllocMem(plen);
+  fmp^.ufs_path:=calloc(plen);
   Move(path^,fmp^.ufs_path^,plen);
  end;
 
@@ -505,7 +505,7 @@ begin
   sx_xunlock(@fmp^.ufs_lock);
   sx_destroy(@fmp^.ufs_lock);
   //free_unr(ufs_unr, fmp^.ufs_idx);
-  FreeMem(fmp);
+  free(fmp);
   Exit(error);
  end;
 

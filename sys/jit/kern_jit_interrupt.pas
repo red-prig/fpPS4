@@ -271,7 +271,7 @@ begin
   GetTargetOfs(ctx.din,ctx.code,1,ofs);
   dst:=ctx.ptr_next+ofs;
 
-  if IsInRange(dst,ctx) then
+  if (dst<>Pointer(ctx.__end)) and IsInRange(dst,ctx) then
   begin
    //near imm
    id:=ctx.builder.call(nil_link);
@@ -351,7 +351,7 @@ begin
   else;
  end;
 
- if IsInRange(dst,ctx) then
+ if (dst<>Pointer(ctx.__end)) and IsInRange(dst,ctx) then
  begin
   //near imm
   ctx.add_linkg(id1,dst);

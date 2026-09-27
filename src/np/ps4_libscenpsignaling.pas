@@ -58,6 +58,11 @@ begin
  Result:=0;
 end;
 
+function ps4_sceNpSignalingDeleteContext(ctxId:DWORD):Integer;
+begin
+ Result:=0;
+end;
+
 function ps4_sceNpSignalingGetLocalNetInfo(ctxId:DWORD;
                                            info :pSceNpSignalingNetInfo):Integer;
 begin
@@ -82,6 +87,7 @@ begin
  lib.set_proc($DCA3AE0B84666595,@ps4_sceNpSignalingInitialize);
  lib.set_proc($E7262311D778B7C6,@ps4_sceNpSignalingCreateContext);
  lib.set_proc($7432CD15D63C770B,@ps4_sceNpSignalingCreateContextA);
+ lib.set_proc($871F8B220FF59282,@ps4_sceNpSignalingDeleteContext);
  lib.set_proc($53C01032538505CF,@ps4_sceNpSignalingGetLocalNetInfo);
  lib.set_proc($207443BD9A1D3D86,@ps4_sceNpSignalingSetContextOption);
 end;

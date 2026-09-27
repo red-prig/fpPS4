@@ -239,7 +239,7 @@ begin
  begin
   imm:=GetRegConst(regs[i]);
   if (imm=nil) then Exit;
-  PDWORD(@ssharp)[i]:=imm.AsInt32;
+  PDWORD(@ssharp)[i]:=imm.AsUint32;
  end;
 
  //print_ssharp4(@ssharp);
@@ -264,7 +264,7 @@ begin
  begin
   imm:=GetRegConst(regs[i]);
   if (imm=nil) then Exit;
-  PDWORD(@vsharp)[i]:=imm.AsInt32;
+  PDWORD(@vsharp)[i]:=imm.AsUint32;
  end;
 
  //print_vsharp(@vsharp);
@@ -325,12 +325,12 @@ begin
 
  vsharp:=Default(TVSharpResource4);
 
- PQWORD(@vsharp)[0]:=imms_p0[0].AsInt32 + imms_p0[1].AsInt32;
+ PQWORD(@vsharp)[0]:=QWORD(imms_p0[0].AsUint32) + QWORD(imms_p0[1].AsUint32);
 
- PDWORD(@vsharp)[1]:=PDWORD(@vsharp)[1] + imms_p1[0].AsInt32 + imms_p1[1].AsInt32;
+ PDWORD(@vsharp)[1]:=PDWORD(@vsharp)[1] + imms_p1[0].AsUint32 + imms_p1[1].AsUint32;
 
- PDWORD(@vsharp)[2]:=imms_p2.AsInt32;
- PDWORD(@vsharp)[3]:=imms_p3.AsInt32;
+ PDWORD(@vsharp)[2]:=imms_p2.AsUint32;
+ PDWORD(@vsharp)[3]:=imms_p3.AsUint32;
 
  //print_vsharp(@vsharp);
 

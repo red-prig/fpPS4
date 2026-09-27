@@ -17,7 +17,7 @@ const
 type
  t_point_type=(fpCall,fpData,fpInvalid);
 
- t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop,cmInternal);
+ t_ctx_modes=Set of (cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop,cmDynlib,cmInternal);
 
  p_jit_context2=^t_jit_context2;
  t_jit_context2=object
@@ -304,7 +304,10 @@ type
  t_lea_hint=Set Of (not_use_segment,
                     not_use_r_tmp0,
                     not_use_r_tmp1,
-                    code_ref);
+                    code_ref,
+                    lea_ref,
+                    mov32_ref,
+                    mov64_ref);
 
 procedure build_lea(var ctx:t_jit_context2;id:Byte;
                     reg:TRegValue;hint:t_lea_hint=[]);
@@ -376,6 +379,9 @@ var
 const
  //print calls of exported library functions
  jit_trace_hle_call=False;
+
+const
+ switchtable_mask=$FFF00000;
 
 implementation
 
@@ -568,6 +574,13 @@ begin
   forward_set.Insert(Result);
  end;
  add_forward_link(Result,instruction);
+
+ //extend rip-relative scan limit
+ if (ptype=fpCall) then
+ if (QWORD(dst)>max_reloc) then
+ begin
+  max_reloc:=QWORD(dst);
+ end;
 end;
 
 function t_jit_context2.add_forward_point(ptype:t_point_type;dst:Pointer):p_forward_point;
@@ -1292,6 +1305,7 @@ end;
 function scan_switchtable(var ctx:t_jit_context2;start:Int64):Boolean;
 var
  table:PInteger;
+ ofs:Int64;
  rel:Integer;
 begin
  Result:=False;
@@ -1309,10 +1323,14 @@ begin
    Exit;
   end;
 
-  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  if (DWORD(rel) and switchtable_mask)=switchtable_mask then
   begin
-   ctx.add_switchtable(table);
-   Result:=True;
+   ofs:=Int64(table)+rel;
+   if ctx.is_text_addr(ofs) then
+   begin
+    ctx.add_switchtable(table);
+    Result:=True;
+   end;
   end;
 
  end;
@@ -1322,13 +1340,13 @@ procedure add_rip_entry(var ctx:t_jit_context2;ofs:Int64;hint:t_lea_hint);
 var
  new_ofs:Int64;
 begin
+ if (cmDontScanRipRel in ctx.modes) then Exit;
 
- if (code_ref in hint) then
+ if (hint*[code_ref,mov64_ref]<>[]) then
  begin
   //call [addr]
   //jmp  [addr]
-
-  if not (cmDontScanRipRel in ctx.modes) then
+  //mov  [addr]
 
   if ctx.is_map_addr(ofs) then
   if not ctx.is_jumpslot(Pointer(ofs)) then
@@ -1347,10 +1365,9 @@ begin
   end;
 
  end else
+ if (lea_ref in hint) then
  begin
   //lea
-
-  if not (cmDontScanRipRel in ctx.modes) then
 
   if scan_switchtable(ctx,ofs) then
   begin
@@ -1361,7 +1378,14 @@ begin
    ctx.add_forward_point(fpData,Pointer(ofs));
   end;
 
+ end else
+ if (mov32_ref in hint) then
+ begin
+  //mov  [32]
+
+  scan_switchtable(ctx,ofs)
  end;
+
 end;
 
 function is_segment(const i:TInstruction):Boolean; inline;
@@ -2948,6 +2972,8 @@ var
 
  ovr:t_override_ctx;
 
+ hint:t_lea_hint;
+
  procedure mem_out;
  begin
   with ctx.builder do
@@ -3098,9 +3124,16 @@ begin
    mo_mem_ctx,
    mo_ctx_mem:
      begin
-      build_lea(ctx,get_lea_id(memop),r_tmp0);
-
       mem_size:=ctx.din.Operand[get_lea_id(memop)].Size;
+
+      hint:=[];
+      if (his_mov in desc.hint) then
+      case mem_size of
+       os32:hint:=[mov32_ref];
+       os64:hint:=[mov64_ref];
+      end;
+
+      build_lea(ctx,get_lea_id(memop),r_tmp0,hint);
      end;
    else;
   end;

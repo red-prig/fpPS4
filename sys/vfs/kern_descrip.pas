@@ -6,6 +6,7 @@ unit kern_descrip;
 interface
 
 uses
+ kern_malloc,
  kern_param,
  kern_thr,
  kern_proc,
@@ -686,7 +687,7 @@ begin
      error:=vn_lock(vp, LK_SHARED,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
      if (error<>0) then
       goto readahead_vnlock_fail;
-     bsize:=p_mount(fp^.f_vnode^.v_mount)^.mnt_stat.f_iosize;
+     bsize:=fp^.f_vnode^.v_mount^.mnt_stat.f_iosize;
      VOP_UNLOCK(vp, 0);
      fp^.f_seqcount:=(arg + bsize - 1) div bsize;
      repeat
@@ -1308,7 +1309,7 @@ begin
 
  System.InterlockedDecrement(openfiles);
 
- FreeMem(fp^.f_advice);
+ free(fp^.f_advice);
  uma_zfree(file_zone, fp);
 end;
 

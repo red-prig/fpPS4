@@ -76,7 +76,8 @@ implementation
 uses
  errno,
  vdirent,
- sys_fnmatch;
+ sys_fnmatch,
+ kern_malloc;
 
 //
 
@@ -185,10 +186,10 @@ begin
      error:=ESRCH;
      goto _break;
     end;
-    dk:=AllocMem(sizeof(t_devfs_krule));
+    dk:=calloc(sizeof(t_devfs_krule));
     Move(dr^,dk^.dk_rule,sizeof(t_devfs_rule));
     devfs_rule_applydm(dk, dm);
-    FreeMem(dk);
+    free(dk);
    end;
   DEVFSIO_RAPPLYID:
    begin
@@ -416,7 +417,7 @@ begin
  ds:=dk^.dk_ruleset;
  TAILQ_REMOVE(@ds^.ds_rules,dk,@dk^.dk_list);
  devfs_ruleset_reap(ds);
- FreeMem(dk);
+ free(dk);
  Exit(0);
 end;
 
@@ -506,7 +507,7 @@ begin
   end;
  end;
 
- dk:=AllocMem(sizeof(t_devfs_krule));
+ dk:=calloc(sizeof(t_devfs_krule));
  dk^.dk_ruleset:=ds;
  if (dsi<>nil) then
  begin
@@ -605,14 +606,14 @@ begin
      (de<>dm^.dm_rootdir) and
      ((de^.de_flags and (DE_DOT or DE_DOTDOT))=0)) then
  begin
-  specname:=AllocMem(SPECNAMELEN + 1);
+  specname:=calloc(SPECNAMELEN + 1);
   pname:=devfs_fqpn(specname, dm, de, nil);
  end else
   Exit(0);
 
  Assert(pname<>nil, ('devfs_rule_matchpath: nil pname'));
  Result:=ord(fnmatch(dr^.dr_pathptrn, pname, FNM_PATHNAME)=0);
- FreeMem(specname);
+ free(specname);
  Exit;
 end;
 
@@ -739,7 +740,7 @@ begin
 
  Assert(devfs_ruleset_bynum(rsnum)=nil,'creating already existent ruleset');
 
- ds:=AllocMem(sizeof(t_devfs_ruleset));
+ ds:=calloc(sizeof(t_devfs_ruleset));
  ds^.ds_number:=rsnum;
  TAILQ_INIT(@ds^.ds_rules);
 
@@ -775,7 +776,7 @@ begin
  end;
 
  TAILQ_REMOVE(@devfs_rulesets,ds,@ds^.ds_list);
- FreeMem(ds);
+ free(ds);
 end;
 
 {

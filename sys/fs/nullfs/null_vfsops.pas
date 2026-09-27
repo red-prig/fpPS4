@@ -6,6 +6,7 @@ unit null_vfsops;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  kern_param,
  vnode,
@@ -25,23 +26,24 @@ function  nullfs_extattrctl(mp:p_mount;cmd:Integer;filename_vp:p_vnode;namespace
 
 const
  _null_vfsops:vfsops=(
-  vfs_mount          :@nullfs_mount;
-  vfs_cmount         :nil;
-  vfs_unmount        :@nullfs_unmount;
-  vfs_root           :@nullfs_root;
-  vfs_quotactl       :@nullfs_quotactl;
-  vfs_statfs         :@nullfs_statfs;
-  vfs_sync           :@nullfs_sync;
-  vfs_vget           :@nullfs_vget;
-  vfs_fhtovp         :@nullfs_fhtovp;
-  vfs_checkexp       :nil;
-  vfs_init           :@nullfs_init;
-  vfs_uninit         :@nullfs_uninit;
-  vfs_extattrctl     :@nullfs_extattrctl;
-  vfs_sysctl         :nil;
-  vfs_susp_clean     :nil;
+  vfs_mount     :@nullfs_mount;
+  vfs_cmount    :nil;
+  vfs_unmount   :@nullfs_unmount;
+  vfs_root      :@nullfs_root;
+  vfs_quotactl  :@nullfs_quotactl;
+  vfs_statfs    :@nullfs_statfs;
+  vfs_sync      :@nullfs_sync;
+  vfs_vget      :@nullfs_vget;
+  vfs_fhtovp    :@nullfs_fhtovp;
+  vfs_checkexp  :nil;
+  vfs_init      :@nullfs_init;
+  vfs_uninit    :@nullfs_uninit;
+  vfs_extattrctl:@nullfs_extattrctl;
+  vfs_sysctl    :nil;
+  vfs_susp_clean:nil;
  );
 
+var
  //VFS_SET(null_vfsops, nullfs, VFCF_LOOPBACK or VFCF_JAIL);
  nullfs_vfsconf:vfsconf=(
   vfc_version :VFS_VERSION;
@@ -106,8 +108,10 @@ begin
  //if (prison_allow(td^.td_ucred, PR_ALLOW_MOUNT_NULLFS)=0) then
  // Exit(EPERM);
 
- //if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
- // Exit(EOPNOTSUPP);
+ if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
+ begin
+  Exit(EOPNOTSUPP);
+ end;
 
  {
   * Update is a no-op
@@ -127,8 +131,10 @@ begin
   * Get argument
   }
  error:=vfs_getopt(mp^.mnt_optnew, {'target'} 'from', @target, @len);
- if (error<>0) or (target[len - 1]<>#0) then
+ if (error<>0) or (len=0) or (target[len - 1]<>#0) then
+ begin
   Exit(EINVAL);
+ end;
 
  {
   * Unlock lower node to avoid possible deadlock.
@@ -155,8 +161,7 @@ begin
   vn_lock(mp^.mnt_vnodecovered, LK_EXCLUSIVE or LK_RETRY,{$INCLUDE %FILE%},{$INCLUDE %LINENUM%});
  end;
 
- if (error<>0) then
-  Exit(error);
+ if (error<>0) then Exit(error);
 
  NDFREE(ndp, NDF_ONLY_PNBUF);
 
@@ -174,7 +179,7 @@ begin
   Exit(EDEADLK);
  end;
 
- xmp:=AllocMem(sizeof(t_null_mount));
+ xmp:=calloc(sizeof(t_null_mount));
 
  if (lowerrootvp=nil) then
  begin
@@ -201,7 +206,7 @@ begin
   }
  if (error<>0) then
  begin
-  FreeMem(xmp);
+  free(xmp);
   Exit(error);
  end;
 
@@ -233,7 +238,9 @@ begin
  xmp^.nullm_flags:=xmp^.nullm_flags or NULLM_CACHE;
 
  if (vfs_getopt(mp^.mnt_optnew, 'nocache', nil, nil)=0) then
+ begin
   xmp^.nullm_flags:=xmp^.nullm_flags and (not NULLM_CACHE);
+ end;
 
  MNT_ILOCK(mp);
  if ((xmp^.nullm_flags and NULLM_CACHE)<>0) then
@@ -301,7 +308,7 @@ begin
 
  mp^.mnt_data:=nil;
 
- FreeMem(mntdata);
+ free(mntdata);
  Exit(0);
 end;
 

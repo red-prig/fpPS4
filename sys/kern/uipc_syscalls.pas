@@ -19,6 +19,7 @@ function sys_getsockopt (s,level,name:Integer;val:Pointer;avalsize:PDWORD):Integ
 implementation
 
 uses
+ kern_malloc,
  errno,
  mqueue,
  systm,
@@ -153,13 +154,13 @@ begin
   Exit(EINVAL);
  end;
 
- sa:=AllocMem(len);
+ sa:=calloc(len);
 
  Result:=copyin(uaddr, sa, len);
 
  if (Result<>0) then
  begin
-  FreeMem(sa);
+  free(sa);
  end else
  begin
   sa^.sa_len:=len;
@@ -198,7 +199,7 @@ begin
 
  error:=kern_bind(s, sa);
 
- FreeMem(sa);
+ free(sa);
 
  Exit(error);
 end;
@@ -420,7 +421,7 @@ begin
 noconnection:
  if (sa<>nil) then
  begin
-  FreeMem(sa);
+  free(sa);
  end;
 
  {
@@ -508,7 +509,7 @@ begin
  end;
 
  fdrop(fp);
- FreeMem(name);
+ free(name);
 
  Exit(error);
 end;
@@ -528,7 +529,7 @@ begin
 
  Result:=kern_connect(fd, sa);
 
- FreeMem(sa);
+ free(sa);
 end;
 
 function kern_setsockopt(s,level,name:Integer;val:Pointer;valseg:uio_seg;valsize:Integer):Integer;

@@ -16,7 +16,8 @@ var
  p_cpuid              :DWORD=CPUID_BASE_MODE; //base mode = 0x710f13 / neo mode = 0x740f00
  p_base_ps4_mode      :DWORD=1; //[0..1]
  p_neomode            :DWORD=0; //[0..1]
- p_cpumode            :DWORD=5; //NORMAL
+ p_cpumode            :DWORD=5; //6CPU(0) 7CPU_LOW(1) COMPAT(2) 7CPU_NORMAL(5)
+ p_cpuset             :QWORD=$7F;
  p_openpsid           :array[0..15] of Byte;
 
  //dipsw
@@ -35,6 +36,7 @@ var
  p_host_ipc           :THostIpc=nil;
 
 procedure set_neo_mode(neo:Boolean);
+procedure set_cpumode(cpumode:DWORD);
 
 implementation
 
@@ -56,5 +58,23 @@ begin
  end;
 end;
 
+procedure set_cpumode(cpumode:DWORD);
+begin
+ case cpumode of
+  0:p_cpuset:=$3f; //6CPU
+  1:p_cpuset:=$7f; //7CPU_LOW
+  2:p_cpuset:=$3f; //COMPAT
+  5:p_cpuset:=$7f; //7CPU_NORMAL
+  else
+   Exit;
+ end;
+
+ p_cpumode:=cpumode;
+end;
+
+
 end.
+
+
+
 

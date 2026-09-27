@@ -445,7 +445,8 @@ uses
  kern_thread,
  kern_jit_ctx,
  kern_jit_asm,
- kern_jit_dynamic;
+ kern_jit_dynamic,
+ kern_malloc;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -511,7 +512,7 @@ begin
  len:=strlen(str)+1;
  size:=rel_data^.strtab_size;
 
- rel_data^.strtab_addr:=ReAllocMem(rel_data^.strtab_addr,size+len);
+ rel_data^.strtab_addr:=realloc(rel_data^.strtab_addr,size+len);
 
  Result:=size;
 
@@ -1228,7 +1229,7 @@ begin
  while (needed<>nil) do
  begin
   TAILQ_REMOVE(@obj^.needed,needed,@needed^.link);
-  FreeMem(needed);
+  free(needed);
   needed:=TAILQ_FIRST(@obj^.needed);
  end;
 
@@ -1236,7 +1237,7 @@ begin
  while (names<>nil) do
  begin
   TAILQ_REMOVE(@obj^.names,names,@names^.link);
-  FreeMem(names);
+  free(names);
   names:=TAILQ_FIRST(@obj^.names);
  end;
 
@@ -1258,13 +1259,13 @@ begin
 
  if (obj^.lib_dirname<>nil) then
  begin
-  FreeMem(obj^.lib_dirname);
+  free(obj^.lib_dirname);
   obj^.lib_dirname:=nil;
  end;
 
  if (obj^.lib_path<>nil) then
  begin
-  FreeMem(obj^.lib_path);
+  free(obj^.lib_path);
   obj^.lib_path:=nil;
  end;
 
@@ -1274,7 +1275,7 @@ begin
   obj^.relo_bits:=nil
  end;
 
- FreeMem(obj^.hle_import_table); //HLE
+ free(obj^.hle_import_table); //HLE
 
  Lib_Entry:=TAILQ_FIRST(@obj^.lib_table);
  while (Lib_Entry<>nil) do
@@ -1352,7 +1353,7 @@ var
  entry:p_Name_Entry;
 begin
  len:=strlen(name);
- entry:=AllocMem(SizeOf(Name_Entry)+len);
+ entry:=calloc(SizeOf(Name_Entry)+len);
  Move(name^,entry^.name,len);
  //
  TAILQ_INSERT_TAIL(@obj^.names,entry,@entry^.link);
@@ -1379,7 +1380,7 @@ var
  size:int64;
 begin
  size:=strlen(path);
- obj^.lib_path:=AllocMem(size+1);
+ obj^.lib_path:=calloc(size+1);
  Move(path^,obj^.lib_path^,size);
 end;
 
@@ -1388,7 +1389,7 @@ var
  len:Integer;
 begin
  len:=strlen(str);
- Result:=AllocMem(SizeOf(Needed_Entry)+len);
+ Result:=calloc(SizeOf(Needed_Entry)+len);
  Result^.obj :=obj;
  Move(str^,Result^.name,len);
 end;
@@ -1835,7 +1836,7 @@ begin
 
  if (obj^.lib_path<>nil) then
  begin
-  obj^.lib_dirname:=AllocMem(strlen(obj^.lib_path)+1);
+  obj^.lib_dirname:=calloc(strlen(obj^.lib_path)+1);
   //
   Result:=rtld_dirname(obj^.lib_path,obj^.lib_dirname);
   if (Result<>0) then
@@ -2045,7 +2046,7 @@ begin
    end;
    if (Result<>0) then
    begin
-    FreeMem(cache);
+    free(cache);
     Exit;
    end;
 
@@ -2073,7 +2074,7 @@ begin
   Inc(phdr);
  end;
 
- FreeMem(cache);
+ free(cache);
 
  if (data_addr=0) and (data_size=0) then
  begin
@@ -2252,7 +2253,7 @@ begin
   Exit(error);
  end;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) or
+ if ((vp^.v_mount^.mnt_flag and MNT_NOEXEC)<>0) or
     ((attr.va_mode and (S_IXUSR or S_IXGRP or S_IXOTH))=0) or
     (attr.va_type<>VREG) then
  begin
@@ -3170,7 +3171,7 @@ begin
 
   if (import_count<>0) then
   begin
-   hle_import_table:=AllocMem(import_count*SizeOf(t_hle_import_entry));
+   hle_import_table:=calloc(import_count*SizeOf(t_hle_import_entry));
    obj^.hle_import_table:=hle_import_table;
   end;
 
@@ -3360,11 +3361,11 @@ begin
  LOG_INFO('pick_obj_internal:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
- ctx.obj:=obj;
+ ctx.obj       :=obj;
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
- ctx.modes:=[cmInternal];
+ ctx.modes     :=[cmInternal];
 
  //load export dt_init
  if (obj^.init_proc_addr.native<>nil) then
@@ -3510,11 +3511,12 @@ begin
  LOG_INFO('pick_obj:',obj^.lib_path);
 
  ctx:=Default(t_jit_context2);
- ctx.obj:=obj;
- ctx.name:=dynlib_basename(obj^.lib_path);
+ ctx.obj       :=obj;
+ ctx.name      :=dynlib_basename(obj^.lib_path);
  ctx.text_start:=QWORD(obj^.map_base);
  ctx.text___end:=ctx.text_start+obj^.text_size;
  ctx.map____end:=ctx.text_start+obj^.map_size;
+ ctx.modes     :=[cmDynlib];
 
  ctx.add_forward_point(fpCall,obj^.entry_addr);
 

@@ -6,6 +6,7 @@ unit vm_map;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  vm,
  vmparam,
@@ -29,7 +30,7 @@ type
 
  p_vm_map_entry_t=^vm_map_entry_t;
  vm_map_entry_t=^vm_map_entry;
- vm_map_entry=packed record
+ vm_map_entry=packed object
   prev          :vm_map_entry_t;       // previous entry
   next          :vm_map_entry_t;       // next entry
   left          :vm_map_entry_t;       // left child in binary search tree
@@ -48,9 +49,13 @@ type
   inheritance   :vm_inherit_t;         // inheritance
   budget_id     :shortint;             // budget/ptype id
   name          :t_entry_name;         // entry name
-  cred          :Boolean;              // ucred imitate
   anon_addr     :Pointer;              // source code address
   entry_id      :QWORD;                // order id
+  //
+  function  get_cred:Boolean;
+  procedure set_cred(b:Boolean);
+  //
+  property  cred:Boolean read get_cred write set_cred;
  end;
 
  p_vm_map_t=^vm_map_t;
@@ -132,6 +137,9 @@ const
  MAP_ENTRY_WIRE_BUDGET     =$100000; // entry in wire budget
  MAP_ENTRY_IN_BUDGET       =$200000; // entry in budget
  MAP_ENTRY_NO_COALESCE     =$400000; // do not merge nearby areas
+
+ //emu ext
+ MAP_ENTRY_CRED            =$800000; // ucred imitate
 
  //vm_flags_t values
  MAP_WIREFUTURE =$01; // wire all future pages
@@ -358,7 +366,8 @@ uses
  md_map,
  kern_proc,
  rmem_map,
- kern_budget;
+ kern_budget,
+ vnode_pager;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -378,6 +387,18 @@ function dmem_includes_wbgarlic(map  :Pointer;
                                 __end:DWORD):Boolean; external;
 
 ////
+
+function vm_map_entry.get_cred:Boolean;
+begin
+ Result:=(eflags and MAP_ENTRY_CRED)<>0;
+end;
+
+procedure vm_map_entry.set_cred(b:Boolean);
+begin
+ eflags:=(eflags and (not MAP_ENTRY_CRED)) or (ord(b)*MAP_ENTRY_CRED);
+end;
+
+//
 
 var
  mapentzone:uma_zone_t; public;
@@ -589,6 +610,7 @@ procedure vm_map_process_deferred;
 var
  td:p_kthread;
  entry,next:vm_map_entry_t;
+ obj:vm_map_object;
 begin
  td:=curkthread;
  if (td=nil) then Exit;
@@ -597,10 +619,17 @@ begin
  while (entry<>nil) do
  begin
   next:=entry^.next;
+
   if ((entry^.eflags and MAP_ENTRY_VN_WRITECNT)<>0) then
   begin
    Assert((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0,'Submap with writecount');
+
+   obj:=entry^.vm_obj;
+   Assert(obj<>nil, 'No object for writecount');
+
+   vnode_pager_release_writecount(obj, entry^.start, entry^.__end);
   end;
+
   vm_map_entry_deallocate(entry);
   entry:=next;
  end;
@@ -750,7 +779,7 @@ end;
  }
 function vm_map_create(pmap:pmap_t;min,max:vm_offset_t):vm_map_t;
 begin
- Result:=AllocMem(SizeOf(_vm_map));
+ Result:=calloc(SizeOf(_vm_map));
  vm_map_init(Result,pmap,min,max);
 end;
 
@@ -2841,6 +2870,12 @@ begin
   entry:=entry^.next;
  end;
 
+ if (entry=@map^.header) then
+ begin
+  vm_map_unlock(map);
+  Exit(KERN_SUCCESS);
+ end;
+
  obj:=entry^.vm_obj;
 
  if (obj<>nil) then
@@ -3231,7 +3266,7 @@ end;
  exceeded.
 
  WARNING!  This function does not perform deferred deallocations of
- objects and map	entries.  Therefore, the calling thread is expected to
+ objects and map entries.  Therefore, the calling thread is expected to
  reacquire the map lock after reawakening and later perform an ordinary
  unlock operation, such as vm_map_unlock(), before completing its
  operation on the map.
@@ -3268,7 +3303,7 @@ begin
 end;
 
 {
- vm_map_entry_unwire:	[ internal use only ]
+ vm_map_entry_unwire: [ internal use only ]
 
  Make the region specified by this entry pageable.
 
@@ -3531,7 +3566,7 @@ _done:
 
   end;
 
-  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0,'vm_map_unwire: in-transition flag missing %p');
+  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0, 'vm_map_unwire: in-transition flag missing ' + HexStr(entry));
 
   //Assert(entry^.wiring_thread=curthread,'vm_map_unwire: alien wire %p');
 
@@ -3951,7 +3986,7 @@ _done:
   end;
 
 _next_entry_done:
-  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0,'vm_map_wire: in-transition flag missing %p');
+  Assert((entry^.eflags and MAP_ENTRY_IN_TRANSITION)<>0, 'vm_map_wire: in-transition flag missing ' + HexStr(entry));
   //Assert(entry^.wiring_thread=curthread,'vm_map_wire: alien wire %p');
 
   entry^.eflags:=entry^.eflags and (not (MAP_ENTRY_IN_TRANSITION or MAP_ENTRY_WIRE_SKIPPED));
@@ -4312,7 +4347,7 @@ begin
  begin
 
   if (next^.__end>__end) then
-  if ((entry^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
+  if ((next^.eflags and MAP_ENTRY_IS_SUB_MAP)=0) then
   begin
    obj:=next^.vm_obj;
 

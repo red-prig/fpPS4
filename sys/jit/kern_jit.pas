@@ -32,6 +32,7 @@ uses
  vm_map,
  vm_tracking_map,
  sys_bootparam,
+ host_ipc_interface,
  kern_proc,
  kern_jit_ops,
  kern_jit_ops_sse,
@@ -1272,32 +1273,57 @@ begin
  end;
 end;
 
+var
+ cpuid_h2g:array[0..63] of Byte; external;
+
+procedure op_tsc_aux(var ctx:t_jit_context2);
+var
+ _repeat:t_jit_i_link;
+begin
+ with ctx.builder do
+ begin
+  movi(eax,1);
+  _repeat:=ctx.builder.get_curr_label.after;
+
+  cpuid;
+  //
+  shri8(ebx,24); //get CPUID_LOCAL_APIC_ID
+
+  movq(eax,[r13-jit_frame_offset+(@kthread(nil^).td_cpuset)]); //eax = td_cpuset
+
+  movi64(rcx,QWORD(@cpuid_h2g)); //rcx = cpuid_h2g
+  movzb (ecx,[rcx+rbx]);         //ecx = cpuid_h2g[rbx]
+  andq  (eax,ecx);               //eax = cpuset and cpuid_h2g[rbx]
+
+  jcc(OPSc_z,_repeat,os8);       //if eax=0 repeat
+
+  bsfq  (ecx,eax);               //IA32_TSC_AUX = first masked cpu
+ end;
+end;
+
 procedure op_rdtscp(var ctx:t_jit_context2);
 begin
- if time.strict_ps4_freq then
+ //rdx //result0
+ //rax //result1
+ //rcx //result3
+ //rbx //backup
+ with ctx.builder do
  begin
-  with ctx.builder do
+  laxf;
+  movq(r15,rax);
+  //
+  movq(r14,rbx);  //save rbx
+  //
+  op_tsc_aux(ctx);
+  //
+  movq(rbx,r14);  //restore rbx
+  //
+  lfence;
+  rdtsc ;
+  lfence;
+  //
+  if time.strict_ps4_freq then
   begin
-   laxf;
-   movq(r15,rax);
-   //
-   movq(r14,rbx); //save rbx
-   //
-   movi(eax,1);
-   cpuid;
-   //
-   shri8  (ebx,6); //cpu_id
-   andi8se(ebx,7); //0..7
-   //
-   movi(ecx,7);
-   subq(ecx,ebx);  //7-cpu_id
-   //
-   movq(rbx,r14);  //restore rbx
-   //
-   lfence;
-   rdtsc ;
-   lfence;
-   //
    shli8(rdx, 32);
    orq  (rax,rdx);
    //
@@ -1308,39 +1334,11 @@ begin
    //
    movq (eax,edx); //get lo
    shri8(rdx, 32); //get hi
-   //
-   xchgq(rax,r15);
-   saxf;
-   movq (rax,r15);
   end;
- end else
- with ctx.builder do
- begin
-  //rdx //result0
-  //rax //result1
-  //rcx //result3
-  //rbx //backup -> CPUID_LOCAL_APIC_ID 0xff000000 0..7
-
-  movq(r14,rbx); //save rbx
   //
-  movi(eax,1);
-  cpuid;
-  //
-  laxf;
-  //
-  shri8  (ebx,6); //cpu_id
-  andi8se(ebx,7); //0..7
-  //
-  movi   (ecx,7);
-  subq   (ecx,ebx); //7-cpu_id
-  //
+  xchgq(rax,r15);
   saxf;
-  //
-  movq   (rbx,r14); //restore rbx
-  //
-  lfence;
-  rdtsc ;
-  lfence;
+  movq (rax,r15);
  end;
 end;
 
@@ -1720,6 +1718,7 @@ begin
  jit_cbs[OPPnone,OPstr      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPbndldx   ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmcall   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmptrst  ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmlaunch ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmresume ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPvmxoff   ,OPSnone]:=@op_invalid;
@@ -1750,6 +1749,7 @@ begin
  jit_cbs[OPPnone,OPsmsw     ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPlmsw     ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPinvlpg   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvd     ,OPSnone]:=@op_invalid;
 
  jit_cbs[OPPnone,OPlds      ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPles      ,OPSnone]:=@op_invalid;
@@ -1769,6 +1769,8 @@ begin
 
  jit_cbs[OPPnone,OPverr    ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPverw    ,OPSnone]:=@op_invalid;
+
+ jit_cbs[OPPnone,OPgetsec  ,OPSnone]:=@op_invalid;
 
  jit_cbs[OPPnone,OPsha1nexte  ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsha1msg1   ,OPSnone]:=@op_invalid;
@@ -1809,7 +1811,7 @@ begin
   end;
 
   if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (adec.Instr.ParseFlags * [preF3,preF2] <> []) or
+     (adec.Instr.ParseFlags * [preF3,preF2,flagEvex] <> []) or
      is_invalid(adec.Instr) then
   begin
    Result:=False;
@@ -1860,6 +1862,8 @@ var
  tobj:p_vm_track_object;
 
  blob:p_jit_dynamic_blob;
+
+ modes:t_ctx_modes;
 begin
  map:=p_proc.p_vmspace;
 
@@ -1891,12 +1895,26 @@ begin
   vm_map_track_insert(p_proc.p_vmspace,tobj);
   }
 
-  if (cmInternal in ctx.modes) then
+  modes:=ctx.modes;
+
+  if (cmInternal in modes) then
   begin
    blob:=pick_locked_internal(ctx);
   end else
   begin
+   if (cmDynlib in modes) then
+   if (p_host_ipc<>nil) then
+   begin
+    p_host_ipc.SetJitLabel(jpsBegin,ctx.name);
+   end;
+
    blob:=pick_locked_normal(ctx);
+
+   if (cmDynlib in modes) then
+   if (p_host_ipc<>nil) then
+   begin
+    p_host_ipc.SetJitLabel(jpsEnd,'');
+   end;
   end;
 
   if (blob<>nil) then
@@ -2222,11 +2240,11 @@ begin
    Exit;
   end;
 
-  if (DWORD(rel) and $FFFF0000)=$FFFF0000 then
+  if (DWORD(rel) and switchtable_mask)=switchtable_mask then
   begin
    ofs:=Int64(sw_table^.table)+rel;
 
-   if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+   if ctx.is_text_addr(ofs) then
    begin
     LOG_TRACE(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
     //
@@ -2263,16 +2281,16 @@ begin
   LOG_TRACE('original------------------------':32,' ','0x',HexStr(ptr_next));
 
   LOG_ERROR('builder error:',
-          din.OpCode.Prefix,',',
-          din.OpCode.Opcode,',',
-          din.OpCode.Suffix,' ',
-          din.Operand[1].Size,' ',
-          din.Operand[2].Size);
+            din.OpCode.Prefix,',',
+            din.OpCode.Opcode,',',
+            din.OpCode.Suffix,' ',
+            din.Operand[1].Size,' ',
+            din.Operand[2].Size);
 
   LOG_TRACE('opcode=$',HexStr(dis.opcode,8),' ',
-          'MIndex=',dis.ModRM.Index,' ',
-          'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
-          'mm=',MCODES[dis.mm and 3],':',dis.mm);
+            'MIndex=',dis.ModRM.Index,' ',
+            'SimdOp=',dis.SimdOpcode,':',SCODES[dis.SimdOpcode],' ',
+            'mm=',MCODES[dis.mm and 3],':',dis.mm);
 
  end;
 
@@ -2310,8 +2328,14 @@ var
  node,node_curr,node_next:p_jit_instruction;
 
  i:Integer;
+
+ jit_walk_size:QWORD;
+ jit_walk_time:QWORD;
 begin
  Result:=nil;
+
+ jit_walk_size:=0;
+ jit_walk_time:=0;
 
  nid:=0;
 
@@ -2342,7 +2366,7 @@ begin
  if (cmDontScanRipRel in ctx.modes) then
  begin
   //dont scan rip relative
-  ctx.max_reloc:=0;
+  ctx.max_reloc:=ctx.text___end;
  end else
  begin
   ctx.max_reloc:=QWORD(ctx.max_forward_point);
@@ -2429,15 +2453,20 @@ begin
 
   dis.Disassemble(dm64,ptr,din);
 
-  if (ptr-ctx.code)>15 then
+  i:=(ptr-ctx.code);
+  ctx.dis.CodeIdx:=i;
+
+  if (i>15) then
   begin
-   //trunc error
-   ptr:=ctx.code+15;
+   i:=15; //need for builder
+   ctx.ptr_next:=ctx.ptr_curr+i;
+   LOG_TRACE('invalid3:0x',HexStr(ctx.ptr_curr));
+   goto _invalid;
   end;
 
-  apply_din_stat(din,(ptr-ctx.code));
+  ctx.ptr_next:=ctx.ptr_curr+i;
 
-  ctx.ptr_next:=ctx.ptr_curr+(ptr-ctx.code);
+  apply_din_stat(din,ctx.dis.CodeIdx);
 
   case din.OpCode.Opcode of
    OPX_Invalid..OPX_GroupP:
@@ -2480,12 +2509,34 @@ begin
   end;
 
   if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (din.ParseFlags * [preF3,preF2] <> []) or
+     (din.ParseFlags * [preF3,preF2,flagEvex] <> []) or
      is_invalid(din) then
   begin
    LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr));
    goto _invalid;
   end;
+
+  if (cmDynlib in ctx.modes) then
+  begin
+   jit_walk_size:=jit_walk_size+i;
+
+   if (ctx.get_chunk_ptype=fpCall) then
+   if (QWORD(ptr)>ctx.max_reloc) then
+   begin
+    ctx.max_reloc:=QWORD(ptr);
+   end;
+
+   if ((md_rdtsc_unit-jit_walk_time)>(hz div 8)) then
+   begin
+    jit_walk_time:=md_rdtsc_unit;
+
+    if (p_host_ipc<>nil) then
+    begin
+     p_host_ipc.SetJitProgress(jit_walk_size,(ctx.max_reloc-ctx.text_start));
+    end;
+   end;
+
+  end; //cmDynlib
 
   if print_asm then
   begin
@@ -2789,6 +2840,10 @@ begin
  sw_next :=nil;
  if ctx.fetch_switchtable(sw_table,sw_next) then
  begin
+  if (cmDynlib in ctx.modes) then
+  begin
+   jit_walk_size:=jit_walk_size+SizeOf(Integer);
+  end;
   //
   repeat
    if scan_step_switchtable(ctx,sw_table,sw_next) then
@@ -2812,6 +2867,12 @@ begin
  end;
 
  ctx.print_alloc_stats;
+
+ if (cmDynlib in ctx.modes) then
+ if (p_host_ipc<>nil) then
+ begin
+  p_host_ipc.SetJitLabel(jpsPrep,'');
+ end;
 
  Result:=build(ctx);
 

@@ -8,6 +8,7 @@ interface
 uses
  mqueue,
  kern_hamt,
+ kern_urcu,
  //g23tree,
  g_node_splay,
  murmurhash,
@@ -145,11 +146,11 @@ type
   function  new_chunk(count:QWORD):p_jcode_chunk;
   procedure alloc_base(_size:ptruint);
   procedure free_base;
-  procedure attach_entry(node:p_jit_entry_point);
+  procedure attach_entry(node:p_jit_entry_point;do_sync:Boolean=True);
   procedure attach_all_entry;
   procedure attach_all_chunk;
   procedure attach;
-  function  detach_entry(node:p_jit_entry_point):Boolean;
+  function  detach_entry(node:p_jit_entry_point;do_sync:Boolean=True):Boolean;
   procedure detach_all_entry;
   procedure detach_entry(c_start,c___end:QWORD);
   procedure detach_chunk(node:p_jcode_chunk);
@@ -173,7 +174,8 @@ type
  TNestedNode48=record
   case Byte of
    0:(node:THAMTNode64;
-      lock:Pointer);
+      lock:Pointer;
+      version:DWORD);
    1:(line:array[0..63] of Byte);
  end;
 
@@ -213,6 +215,7 @@ implementation
 
 uses
  sysutils,
+ atomic,
  vmparam,
  signal,
  sys_bootparam,
@@ -306,6 +309,9 @@ begin
  //kmem_free(td^.td_jctx.call_ret_cache,64*1024);
  //td^.td_jctx.call_ret_cache:=nil;
 
+ kmem_free(td^.td_jctx.local_cache,64*1024);
+ td^.td_jctx.local_cache:=nil;
+
  if (td^.td_jctx.lacuna.chnk<>nil) then
  begin
   p_free(td^.td_jctx.lacuna.chnk);
@@ -324,6 +330,8 @@ var
  frame:p_jit_frame;
 begin
  if (td=nil) then Exit;
+
+ jctx:=@td^.td_jctx;
 
  if ((td^.pcb_flags and PCB_IS_HLE)<>0) then
  begin
@@ -355,6 +363,21 @@ begin
    begin
     //system thread
 
+    System.ReadWriteBarrier;
+    td^.td_qsbr:=0;
+    System.ReadWriteBarrier;
+
+    //clear stale jit caches
+    if (jctx^.local_cache<>nil) then
+    begin
+     FillChar(jctx^.local_cache^,64*1024,0);
+    end;
+
+    if (jctx^.call_ret_cache<>nil) then
+    begin
+     FillChar(jctx^.call_ret_cache^,64*1024,0);
+    end;
+
     //clear jit flag
     td^.pcb_flags:=td^.pcb_flags and (not PCB_IS_JIT);
 
@@ -377,6 +400,9 @@ begin
   if is_guest_addr(td^.td_frame.tf_rip) then
   begin
    //host->jit
+   System.ReadWriteBarrier;
+   td^.td_qsbr:=urcu_qsbr_seq;
+   System.ReadWriteBarrier;
    set_pcb_flags(td,PCB_IS_JIT);
   end else
   begin
@@ -399,8 +425,6 @@ begin
 
  _no_preload:
 
- jctx:=@td^.td_jctx;
-
  frame:=@td^.td_frame.tf_r13;
 
  if (jctx^.rsp=nil) then
@@ -418,8 +442,14 @@ begin
   jctx^.call_ret_cache:=Pointer(td)-64*1024;
   md_commit(jctx^.call_ret_cache,64*1024,VM_RW);
   //jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
+  Assert(jctx^.call_ret_cache<>nil,'call_ret_cache alocation fail');
  end;
- Assert(jctx^.call_ret_cache<>nil,'call_ret_cache aalocation fail');
+
+ if (jctx^.local_cache=nil) then
+ begin
+  jctx^.local_cache:=kmem_alloc(64*1024,VM_RW);
+  Assert(jctx^.local_cache<>nil,'local_cache alocation fail');
+ end;
 
  set_jit_ctx_state(@td^.td_frame,True);
 
@@ -699,9 +729,9 @@ begin
  end;
 end;
 
-function hash_addr(addr:Pointer):Byte; inline;
+function hash_addr(addr:Pointer):Word; inline;
 begin
- Result:=Byte(QWORD(addr) shr 4) xor Byte(QWORD(addr) shr 12);
+ Result:=(Word(QWORD(addr) shr 4) xor Word(QWORD(addr) shr 14)) and $FFF;
 end;
 
 procedure ExecuteStop; external;
@@ -709,16 +739,31 @@ procedure ExecuteStop; external;
 const
  EXECUTE_MAGIC_ADDR:QWORD=QWORD($FFFFFFFFFCAFEDAD);
 
+//rdi, rsi
+procedure AtomicLoad128(dst,src:Pointer); assembler; nostackframe; sysv_abi_cdecl;
+asm
+ vmovdqa (%rsi), %xmm0
+ vmovdqu  %xmm0, (%rdi)
+end;
+
+//rdi, rsi
+procedure AtomicStore128(dst,src:Pointer); assembler; nostackframe; sysv_abi_cdecl;
+asm
+ vmovdqu (%rsi), %xmm0
+ vmovdqa  %xmm0, (%rdi)
+end;
+
 function jmp_dispatcher(addr:Pointer;plt:p_jit_plt;from:Pointer):Pointer; public;
 label
  _start;
 var
- td   :p_kthread;
- node :p_jit_entry_point;
- jctx :p_td_jctx;
- curr :p_jit_dynamic_blob;
- cache:p_jplt_cache;
- info:t_jit_addr_info;
+ td    :p_kthread;
+ node  :p_jit_entry_point;
+ jctx  :p_td_jctx;
+ curr  :p_jit_dynamic_blob;
+ lcache:t_local_cache_node;
+ pcache:p_jplt_cache;
+ info  :t_jit_addr_info;
 begin
  td:=curkthread;
  if (td=nil) then Exit(nil);
@@ -752,39 +797,19 @@ begin
 
  _start:
 
+ jctx:=@td^.td_jctx;
+
+ AtomicLoad128(@lcache,@jctx^.local_cache[hash_addr(addr)]);
+
+ if (lcache.src=addr) then
+ begin
+  Exit(lcache.dst);
+ end;
+
  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
  begin
   LOG_CRITICAL(StdErr,'not excec:0x',HexStr(addr));
   Assert(False,'attempted execute of noexecute memory:0x'+HexStr(addr));
- end;
-
- jctx:=@td^.td_jctx;
-
- cache:=jctx^.local_cache[hash_addr(addr)];
-
- if (cache<>nil) then
- begin
-  if (cache^.src=addr) then
-  begin
-   //jctx^.block:=cache^.blk;
-
-   Result:=cache^.dst;
-
-   if (InterlockedExchangeAdd64(QWORD(cache^.dest_block),0)=0) then
-   begin
-    //reset all
-    cache:=nil;
-    Result:=nil;
-    jctx^.local_cache[hash_addr(addr)]:=nil;
-   end else
-   begin
-    Exit;
-   end;
-
-  end else
-  begin
-   cache:=nil;
-  end;
  end;
 
  node:=fetch_entry(addr);
@@ -804,8 +829,8 @@ begin
 
  if (plt<>nil) then
  begin
-  cache:=plt^.cache;
-  curr:=cache^.self_block;
+  pcache:=plt^.cache;
+  curr:=pcache^.self_block;
  end else
  begin
   curr:=nil;
@@ -816,18 +841,21 @@ begin
   //jctx^.block:=node^.blob;
  end else
  begin
-  cache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
+  pcache:=curr^.add_plt_cache(plt,node^.src,node^.dst,node^.blob);
 
-  jctx^.local_cache[hash_addr(addr)]:=cache;
+  lcache.src:=pcache^.src;
+  lcache.dst:=pcache^.dst;
+
+  AtomicStore128(@jctx^.local_cache[hash_addr(addr)],@lcache);
 
   //jctx^.block:=node^.blob;
 
-  Assert(cache<>nil);
-  Assert(cache^.src<>nil);
-  Assert(cache^.dst<>nil);
+  Assert(pcache<>nil);
+  Assert(pcache^.src<>nil);
+  Assert(pcache^.dst<>nil);
 
   //one element plt cache
-  System.InterlockedExchange(plt^.cache,cache);
+  System.InterlockedExchange(plt^.cache,pcache);
  end;
 
  Result:=node^.dst;
@@ -1126,25 +1154,47 @@ function fetch_entry(src:Pointer):p_jit_entry_point;
 var
  data:PPointer;
  map:DWORD;
+ td:p_kthread;
+ v1,v2:DWORD;
 begin
  Result:=nil;
 
+ td:=curkthread;
+ if (td=nil) then Exit;
+
  map:=QWORD(src) and HAMT48.root_mask;
 
- rw_rlock(entry_hamt[map].lock);
+ td^.td_urcu_epoch:=urcu_global_epoch;
+ System.ReadWriteBarrier;
 
- data:=_HAMT_search64(@entry_hamt[map].node,QWORD(src),HAMT48.root_bits);
- if (data<>nil) then
- begin
-  Result:=data^;
- end;
+ repeat
+  Result:=nil;
+
+  v1:=entry_hamt[map].version;
+  if (v1 and 1)<>0 then Continue;
+
+  System.ReadWriteBarrier;
+
+  data:=_HAMT_search64(@entry_hamt[map].node,QWORD(src),HAMT48.root_bits);
+  if (data<>nil) then
+  begin
+   Result:=data^;
+  end;
+
+  System.ReadWriteBarrier;
+
+  v2:=entry_hamt[map].version;
+ until (v1=v2);
+
+ System.ReadWriteBarrier;
 
  if (Result<>nil) then
  begin
   Result^.inc_ref('fetch_entry');
  end;
 
- rw_runlock(entry_hamt[map].lock);
+ System.ReadWriteBarrier;
+ td^.td_urcu_epoch:=0;
 end;
 
 function exist_entry(src:Pointer):Boolean;
@@ -1451,61 +1501,69 @@ begin
  end;
 end;
 
-procedure t_jit_dynamic_blob.detach_threads;
+procedure jit_urcu_scrub(td:p_kthread;base:ptruint;size:ptruint); Register;
 var
- ttd:p_kthread;
- call_ret_cache:PQWORD;
- cache:p_jplt_cache;
  bend:QWORD;
+ call_ret_cache:PQWORD;
+ local_cache   :p_local_cache_node;
+ lcache:t_local_cache_node;
  src:QWORD;
  i:Integer;
 begin
+ if (td=nil) then Exit;
+
  bend:=QWORD(base)+size;
 
- threads_lock;
+ call_ret_cache:=td^.td_jctx.call_ret_cache;
+ if (call_ret_cache<>nil) then
+ For i:=0 to (64*1024 div 16)-1 do
+ begin
+  src:=-call_ret_cache[i*2]; //-(-src)
+
+  if (src>=QWORD(base)) and (src<bend) then
+  begin
+   System.InterlockedCompareExchange64(call_ret_cache[i*2],0,-src);
+  end;
+ end;
+
+ local_cache:=td^.td_jctx.local_cache;
+ if (local_cache<>nil) then
+ For i:=0 to (64*1024 div 16)-1 do
+ begin
+  AtomicLoad128(@lcache,@local_cache[i]);
+
+  if ((QWORD(lcache.src)>=QWORD(base)) and (QWORD(lcache.src)<bend)) or
+     ((QWORD(lcache.dst)>=QWORD(base)) and (QWORD(lcache.dst)<bend)) then
+  begin
+   lcache.src:=nil;
+   lcache.dst:=nil;
+   AtomicStore128(@local_cache[i],@lcache);
+  end;
+ end;
+
+ src:=td^.td_frame.tf_rip;
+ if (src>=QWORD(base)) and (src<bend) then
+ begin
+  atomic_set_byte(@td^.pcb_flags,PCB_FULL_IRET);
+ end;
+
+end;
+
+procedure t_jit_dynamic_blob.detach_threads;
+var
+ ttd:p_kthread;
+begin
+ threads_rlock;
 
    ttd:=TAILQ_FIRST(get_p_threads);
    while (ttd<>nil) do
    begin
-
-    //
-    call_ret_cache:=ttd^.td_jctx.call_ret_cache;
-
-    if (call_ret_cache<>nil) then
-    For i:=0 to (64*1024 div 16)-1 do
-    begin
-     src:=-call_ret_cache[i*2]; //-(-src)
-
-     if (src>=QWORD(base)) and (src<bend) then
-     begin
-      System.InterlockedCompareExchange64(call_ret_cache[i*2],0,-src);
-     end;
-
-    end;
-    //
-
-    //
-    for i:=0 to High(ttd^.td_jctx.local_cache) do
-    begin
-     cache:=ttd^.td_jctx.local_cache[i];
-
-     if (cache<>nil) then
-     begin
-      src:=QWORD(cache^.src);
-
-      if (src>=QWORD(base)) and (src<bend) then
-      begin
-       System.InterlockedCompareExchange64(QWORD(ttd^.td_jctx.local_cache[i]),0,QWORD(cache));
-      end;
-     end;
-
-    end;
-    //
+    jit_urcu_scrub(ttd,QWORD(base),size);
 
     ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
    end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 var
@@ -1653,14 +1711,24 @@ begin
  base:=@mchunk^.body;
 end;
 
+procedure deferred_jit_free(p:Pointer); Register;
+begin
+ p_free(p_stub_chunk(p));
+end;
+
 procedure t_jit_dynamic_blob.free_base;
 begin
- p_free(mchunk);
+ if (mchunk=nil) then Exit;
 
- ////md_unmap(base,size);
+ FillChar(base^,size,$CC); //fill int3
 
+ urcu_retire_text(base,size,mchunk,@deferred_jit_free);
+
+ mchunk:=nil;
  base:=nil;
  size:=0;
+
+ ////md_unmap(base,size);
 end;
 
 //
@@ -1744,11 +1812,12 @@ end;
 
 //
 
-procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point);
+procedure t_jit_dynamic_blob.attach_entry(node:p_jit_entry_point;do_sync:Boolean=True);
 var
  data:PPointer;
  old:p_jit_entry_point;
  map:DWORD;
+ my_epoch:QWORD;
 begin
  node^.inc_ref('attach_entry');
  self.inc_attach_count;
@@ -1758,7 +1827,13 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node);
+  System.InterlockedIncrement(entry_hamt[map].version);
+  if (do_sync) then
+  begin
+   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  end;
+  System.ReadWriteBarrier;
+  data:=_HAMT_insert64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,node,@urcu_hamt_allocator);
   Assert(data<>nil);
   if (data^<>node) then
   begin
@@ -1768,22 +1843,33 @@ begin
    self.dec_attach_count;
   end;
   node^.entry_public:=1;
+  System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
+
+ if (do_sync) then
+ begin
+  urcu_synchronize_rcu(my_epoch);
+ end;
 end;
 
 procedure t_jit_dynamic_blob.attach_all_entry;
 var
  node,next:p_jit_entry_point;
+ my_epoch:QWORD;
 begin
+ my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+
  node:=entry_list;
  while (node<>nil) do
  begin
   next:=node^.next;
 
-  attach_entry(node);
+  attach_entry(node,False);
 
   node:=next;
  end;
+
+ urcu_synchronize_rcu(my_epoch);
 end;
 
 procedure t_jit_dynamic_blob.attach_all_chunk;
@@ -1815,11 +1901,14 @@ begin
  attach_all_chunk;
 end;
 
-function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point):Boolean;
+function t_jit_dynamic_blob.detach_entry(node:p_jit_entry_point;do_sync:Boolean=True):Boolean;
 var
  old:p_jit_entry_point;
  map:DWORD;
+ my_epoch:QWORD;
 begin
+ Result:=False;
+
  if (node^.entry_public=0) then Exit;
 
  old:=nil;
@@ -1827,8 +1916,19 @@ begin
  map:=QWORD(node^.src) and HAMT48.root_mask;
 
  rw_wlock(entry_hamt[map].lock);
-  _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old);
+  System.InterlockedIncrement(entry_hamt[map].version);
+  if (do_sync) then
+  begin
+   my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+  end;
+  System.ReadWriteBarrier;
+  _HAMT_delete64(@entry_hamt[map].node,QWORD(node^.src),HAMT48.root_bits,@old,@urcu_hamt_allocator);
+  System.InterlockedIncrement(entry_hamt[map].version);
  rw_wunlock(entry_hamt[map].lock);
+
+ if (not do_sync) then Exit;
+
+ urcu_synchronize_rcu(my_epoch);
 
  if (old=node) then
  begin
@@ -1843,13 +1943,33 @@ end;
 procedure t_jit_dynamic_blob.detach_all_entry;
 var
  node,next:p_jit_entry_point;
+ my_epoch:QWORD;
 begin
+ my_epoch:=System.InterlockedIncrement64(urcu_global_epoch);
+
  node:=entry_list;
  while (node<>nil) do
  begin
   next:=node^.next;
 
-  detach_entry(node);
+  detach_entry(node,False);
+
+  node:=next;
+ end;
+
+ urcu_synchronize_rcu(my_epoch);
+
+ //release every detached entry
+ node:=entry_list;
+ while (node<>nil) do
+ begin
+  next:=node^.next;
+
+  if (System.InterlockedExchange(node^.entry_public,0)<>0) then
+  begin
+   self.dec_attach_count;
+   node^.dec_ref('attach_entry');
+  end;
 
   node:=next;
  end;
@@ -2023,6 +2143,8 @@ begin
 
 end;
 
+initialization
+ urcu_set_scrub_proc(@jit_urcu_scrub);
 
 end.
 

@@ -408,7 +408,7 @@ begin
         begin
          if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_READ)<>0) then
          begin
-          LOG_ERROR(stderr,'Unhandled VM_PROT_READ');
+          LOG_ERROR(stderr,'Unhandled VM_PROT_READ:0x',HexStr(get_pageflt_addr(p),11));
 
           //
           Exit(EXCEPTION_CONTINUE_EXECUTION);

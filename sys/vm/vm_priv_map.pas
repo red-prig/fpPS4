@@ -6,11 +6,12 @@ unit vm_priv_map;
 interface
 
 uses
+ kern_malloc,
  mqueue,
  uma,
  kern_mtx,
  md_map,
- vm_nt_map;
+ vm_internal_object;
 
 type
  pp_vm_priv_map_entry=^p_vm_priv_map_entry;
@@ -54,14 +55,14 @@ type
  t_vm_priv_fd=record
   elist:TAILQ_ENTRY;
   pool :p_vm_priv_pool;
-  obj  :vm_nt_file_obj;
+  obj  :vm_int_obj;
   map  :t_vm_priv_map;
   inval:DWORD;
  end;
 
  p_vm_priv_alloc=^t_vm_priv_alloc;
  t_vm_priv_alloc=record
-  obj  :p_vm_nt_file_obj;
+  obj  :p_vm_int_obj;
   start:DWORD;
   size :DWORD;
  end;
@@ -125,7 +126,7 @@ procedure vm_priv_map_entry_dispose(map:p_vm_priv_map;entry:p_vm_priv_map_entry)
 begin
  if (map^.zone=nil) then
  begin
-  FreeMem(entry);
+  free(entry);
  end else
  begin
   uma_zfree(map^.zone, entry);
@@ -138,7 +139,7 @@ var
 begin
  if (map^.zone=nil) then
  begin
-  new_entry:=AllocMem(sizeof(t_vm_priv_map_entry));
+  new_entry:=calloc(sizeof(t_vm_priv_map_entry));
  end else
  begin
   new_entry:=uma_zalloc(map^.zone, M_WAITOK or M_ZERO);
@@ -756,9 +757,16 @@ begin
  pool^.invm:=0;
 end;
 
-procedure on_free_priv (obj:p_vm_nt_file_obj); forward;
-procedure on_mmmap_priv(obj:p_vm_nt_file_obj;start,offset,size:QWORD); forward;
-procedure on_unmap_priv(obj:p_vm_nt_file_obj;start,offset,size:QWORD); forward;
+procedure on_free_priv (obj:p_vm_int_obj); forward;
+procedure on_mmmap_priv(obj:p_vm_int_obj;start,offset,size:QWORD); forward;
+procedure on_unmap_priv(obj:p_vm_int_obj;start,offset,size:QWORD); forward;
+
+const
+ priv_vtable:vm_int_obj_vtable=(
+  free :@on_free_priv;
+  mmmap:@on_mmmap_priv;
+  unmap:@on_unmap_priv;
+ );
 
 type
  t_addr_cell=record
@@ -789,6 +797,8 @@ var
 
  function _insert(node:p_vm_priv_fd;addr,size,flag:DWORD):Integer;
  begin
+  Result:=0;
+
   if (flag=0) then
   begin
    Result:=vm_priv_map_insert(@node^.map,addr,addr + size);
@@ -899,16 +909,12 @@ begin
    Exit;
   end;
 
-  node:=AllocMem(sizeof(t_vm_priv_fd));
+  node:=calloc(sizeof(t_vm_priv_fd));
 
   node^.pool:=pool;
 
-  node^.obj.hfile:=hfile;
-  node^.obj.free :=@on_free_priv;
-  node^.obj.mmmap:=@on_mmmap_priv;
-  node^.obj.unmap:=@on_unmap_priv;
-  node^.obj.flags:=0;
-  node^.obj.maxp :=VM_RW;
+  vm_int_obj_init(@node^.obj,@priv_vtable,hfile,VM_RW,0);
+
   vm_priv_map_init(@node^.map,pool^.zone,0,MAX_PRIV_SIZE);
 
   //insert list
@@ -1025,7 +1031,7 @@ begin
 
 end;
 
-procedure on_mmmap_priv(obj:p_vm_nt_file_obj;start,offset,size:QWORD);
+procedure on_mmmap_priv(obj:p_vm_int_obj;start,offset,size:QWORD);
 var
  ctx:t_ctx_inv;
 begin
@@ -1042,7 +1048,7 @@ begin
  mtx_unlock(ctx.pool^.lock);
 end;
 
-procedure on_unmap_priv(obj:p_vm_nt_file_obj;start,offset,size:QWORD);
+procedure on_unmap_priv(obj:p_vm_int_obj;start,offset,size:QWORD);
 var
  ctx:t_ctx_inv;
 begin
@@ -1059,7 +1065,7 @@ begin
  mtx_unlock(ctx.pool^.lock);
 end;
 
-procedure on_free_priv(obj:p_vm_nt_file_obj);
+procedure on_free_priv(obj:p_vm_int_obj);
 var
  node:p_vm_priv_fd;
  pool:p_vm_priv_pool;
@@ -1104,7 +1110,7 @@ begin
      Assert(false,'on_free_priv');
     end;
 
-    FreeMem(node);
+    free(node);
 
    end else
    begin

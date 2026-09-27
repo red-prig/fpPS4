@@ -78,30 +78,20 @@ const
   vop_getwritemount :nil;
   vop_print         :nil;
   vop_pathconf      :@vop_stdpathconf;
-  vop_advlock       :nil;
-  vop_advlockasync  :nil;
-  vop_advlockpurge  :nil;
-  vop_reallocblks   :nil;
-  vop_getpages      :nil;
-  vop_putpages      :nil;
-  vop_vptofh        :nil;
-  vop_vptocnp       :nil;
-  vop_allocate      :nil;
-  vop_unp_bind      :nil;
-  vop_unp_connect   :nil;
-  vop_unp_detach    :nil;
  );
 
 implementation
 
 uses
  sysutils,
+ libkern,
  errno,
  kern_thr,
  kern_proc,
  vfs_subr,
  subr_uio,
- vnode_pager;
+ vnode_pager,
+ kern_malloc;
 
 const
  UFS_DEL_VNLOCKED =$01;
@@ -125,7 +115,7 @@ var
 begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
- de:=AllocMem(i);
+ de:=calloc(i);
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;
  de^.ufs_dirent^.d_reclen:=GENERIC_DIRSIZ(@d);
@@ -208,7 +198,7 @@ begin
 
  if (de^.ufs_symlink<>nil) then
  begin
-  FreeMem(de^.ufs_symlink);
+  free(de^.ufs_symlink);
   de^.ufs_symlink:=nil;
  end;
 
@@ -314,15 +304,28 @@ begin
 
  next:
 
- Assert(de_dot^.ufs_dir=de);
- Assert(de_dotdot^.ufs_dir=de);
- Assert(de^.ufs_dir=dd);
+ if (de_dot<>nil) then
+ begin
+  Assert(de_dot^.ufs_dir=de);
+  ufs_delete(dm, de_dot, UFS_DEL_NORECURSE);
+ end;
 
- ufs_de_hold(dd);
- ufs_delete(dm, de_dot   ,UFS_DEL_NORECURSE);
- ufs_delete(dm, de_dotdot,UFS_DEL_NORECURSE);
- ufs_delete(dm, de       ,UFS_DEL_NORECURSE);
- ufs_de_drop(dd);
+ if (de_dotdot<>nil) then
+ begin
+  Assert(de_dotdot^.ufs_dir=de);
+  ufs_delete(dm, de_dotdot, UFS_DEL_NORECURSE);
+ end;
+
+ if (dd<>nil) then
+ begin
+  Assert(de^.ufs_dir=dd);
+  ufs_de_hold(dd);
+  ufs_delete(dm, de, UFS_DEL_NORECURSE);
+  ufs_de_drop(dd);
+ end else
+ begin
+  ufs_delete(dm, de, UFS_DEL_NORECURSE);
+ end;
 end;
 
 procedure ufs_purge(dm:p_ufs_mount;dd:p_ufs_dirent);
@@ -422,7 +425,7 @@ begin
    continue;
   end;
 
-  if (CompareByte(name^, de^.ufs_dirent^.d_name, namelen)<>0) then
+  if (strncmp(name, @de^.ufs_dirent^.d_name, namelen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.ufs_list);
    continue;
@@ -463,7 +466,7 @@ begin
 
  //If read-only and op is not CREATE|LOOKUP, will return EROFS.
  if ((flags and ISLASTCN)<>0) and
-     ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+     ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
      (nameiop <> CREATE) and
      (nameiop <> LOOKUP) then
  begin
@@ -529,7 +532,7 @@ begin
 
      //If read-only and op is CREATE|RENAME, will return EROFS.
      if ((flags and ISLASTCN)<>0) and
-         ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+         ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -602,7 +605,7 @@ begin
  accmode:=ap^.a_accmode;
 
  if ((accmode and VWRITE)<>0) and
-    ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+    ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
  begin
   case vp^.v_type of
    VREG,
@@ -654,6 +657,7 @@ begin
  //masquerade
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
+  //tmpfs
   d_fsid   :=$8700ff03;
   d_size   :=320;   //dirent sizes?
   d_bytes  :=16384;
@@ -661,6 +665,7 @@ begin
  end else
  if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
+  //pfs
   d_fsid   :=$2905ff1e;
   d_size   :=65536; //dirent sizes?
   d_bytes  :=65536;
@@ -668,12 +673,14 @@ begin
  end else
  if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
  begin
+  //pfs
   d_fsid   :=$2905ff1e;
   d_size   :=32768; //dirent sizes?
   d_bytes  :=32768;
   d_blksize:=32768;
  end else
  begin
+  //ufs
   d_fsid   :=$2905ff22;
   d_size   :=1024; //dirent sizes?
   d_bytes  :=4096;
@@ -741,7 +748,7 @@ begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+ if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     (
      (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or
@@ -905,6 +912,12 @@ begin
  end;
 
  sx_xunlock(@dmp^.ufs_lock);
+
+ if (dd=nil) and (error=0) and (ap^.a_eofflag<>nil) then
+ begin
+  (ap^.a_eofflag)^:=1;
+ end;
+
  uio^.uio_offset:=off;
 
  {
@@ -973,7 +986,7 @@ begin
  de^.ufs_dirent^.d_type:=DT_LNK;
 
  i:=strlen(ap^.a_target) + 1;
- de^.ufs_symlink:=AllocMem(i);
+ de^.ufs_symlink:=calloc(i);
  Move(ap^.a_target^, de^.ufs_symlink^, i);
 
  TAILQ_INSERT_TAIL(@dd^.ufs_dlist,de,@de^.ufs_list);

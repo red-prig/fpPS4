@@ -6,6 +6,7 @@ unit md_vnops;
 interface
 
 uses
+ kern_malloc,
  windows,
  ntapi,
  mqueue,
@@ -22,7 +23,6 @@ uses
  vnamei,
  vfs_vnops,
  vnode_if,
- vfilio,
  vfs_default,
  ufs,
  ufs_vnops,
@@ -53,8 +53,8 @@ function md_rmdir(ap:p_vop_rmdir_args):Integer;
 function md_rename(ap:p_vop_rename_args):Integer;
 
 function md_create(ap:p_vop_create_args):Integer;
-function md_open(ap:p_vop_open_args):Integer;
-function md_close(ap:p_vop_close_args):Integer;
+function md_open_ap(ap:p_vop_open_args):Integer;
+function md_close_ap(ap:p_vop_close_args):Integer;
 function md_fsync(ap:p_vop_fsync_args):Integer;
 function md_setattr(ap:p_vop_setattr_args):Integer;
 
@@ -66,6 +66,8 @@ function md_write(ap:p_vop_write_args):Integer;
 function md_advlock(ap:p_vop_advlock_args):Integer;
 function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
 
+function md_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+
 const
  md_vnodeops_host:vop_vector=(
   vop_default       :@ufs_vnodeops_root;
@@ -76,8 +78,8 @@ const
   vop_create        :@md_create;
   vop_whiteout      :nil;
   vop_mknod         :nil;
-  vop_open          :@md_open;
-  vop_close         :@md_close;
+  vop_open          :@md_open_ap;
+  vop_close         :@md_close_ap;
   vop_access        :nil; //parent
   vop_accessx       :nil;
   vop_getattr       :@md_getattr;
@@ -119,6 +121,7 @@ const
   vop_unp_bind      :nil;
   vop_unp_connect   :nil;
   vop_unp_detach    :nil;
+  vop_get_int_obj   :@md_get_int_obj;
  );
 
 implementation
@@ -126,12 +129,18 @@ implementation
 uses
  sysutils,
  errno,
+ libkern,
  vfcntl,
  vstat,
  vfs_subr,
  subr_uio,
  kern_thr,
- vnode_pager;
+ vnode_pager,
+ md_map,
+ md_file,
+ vm_internal_object;
+
+{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 const
  UFS_SET_READONLY=(not &0222);
@@ -225,6 +234,7 @@ begin
   STATUS_NOT_A_DIRECTORY       :Result:=ENOTDIR;
   STATUS_NAME_TOO_LONG         :Result:=ENAMETOOLONG;
   STATUS_IO_DEVICE_ERROR       :Result:=EIO;
+  STATUS_USER_MAPPED_FILE      :Result:=EBUSY;
   STATUS_TOO_MANY_LINKS        :Result:=EMLINK;
   STATUS_CANT_CROSS_RM_BOUNDARY:Result:=EXDEV;
   else
@@ -504,17 +514,21 @@ begin
  //masquerade
  if ((mp^.mnt_flag and MNT_ROOTFS)<>0) then
  begin
+  //tmpfs
   d_blksize:=16384;
  end else
  if ((mp^.mnt_flag and MNT_PFS_64K)<>0) then
  begin
+  //pfs
   d_blksize:=65536;
  end else
  if ((mp^.mnt_flag and MNT_PFS_32K)<>0) then
  begin
+  //pfs
   d_blksize:=32768;
  end else
  begin
+  //ufs
   d_blksize:=32768;
  end;
 
@@ -550,7 +564,7 @@ begin
  s:=System.InterlockedExchange(de^.ufs_symlink,nil);
  if (s<>nil) then
  begin
-  FreeMem(s);
+  free(s);
  end;
 
  if ((de^.ufs_flags and UFS_DROOT)=0) then //if not root dir
@@ -593,7 +607,8 @@ begin
  Result:=ntf2px(R);
  if (Result<>0) then Exit;
 
- de^.ufs_md_fp:=Pointer(F);
+ de^.ufs_md_fp :=Pointer(F);
+ de^.ufs_dr_off:=0; //init state
 end;
 
 function md_open_dirent_file(de:p_ufs_dirent;symlink:Boolean;fdr:PHandle):Integer;
@@ -805,7 +820,7 @@ begin
  fix_unix_path(PAnsiChar(U),Length(U));
 
  //save to cache
- de^.ufs_symlink:=AllocMem(Length(U)+1);
+ de^.ufs_symlink:=calloc(Length(U)+1);
  Move(PAnsiChar(U)^, de^.ufs_symlink^, Length(U));
 end;
 
@@ -950,7 +965,7 @@ var
 begin
  d.d_namlen:=namelen;
  i:=sizeof(t_ufs_dirent) + GENERIC_DIRSIZ(@d);
- de:=AllocMem(i);
+ de:=calloc(i);
 
  de^.ufs_dirent:=p_dirent(de + 1);
  de^.ufs_dirent^.d_namlen:=namelen;
@@ -1035,7 +1050,7 @@ begin
    continue;
   end;
 
-  if (CompareByte(name^, de^.ufs_dirent^.d_name, namelen)<>0) then
+  if (strncmp(name, @de^.ufs_dirent^.d_name, namelen)<>0) then
   begin
    de:=TAILQ_NEXT(de,@de^.ufs_list);
    continue;
@@ -1044,6 +1059,155 @@ begin
  end;
 
  Exit(de);
+end;
+
+const
+ MARKER_SCE_SYS      =1;
+ MARKER_SCE_SYS_ABOUT=2;
+
+ c_sce_sys_hidden:array[0..31] of PChar=(
+  '.gitkeep',
+  //
+  'app',
+  'changeinfo',
+  'trophy',
+  //
+  'license.dat',
+  'license.info',
+  'nptitle.dat',
+  'npbind.dat',
+  'selfinfo.dat',
+  'param.sfo',
+  'playgo-chunk.dat',
+  'playgo-chunk.sha',
+  'playgo-manifest.xml',
+  'pronunciation.xml',
+  'pronunciation.sig',
+  'pic1.png',
+  'psreserved.dat',
+  'pubtoolinfo.dat',
+  'shareparam.json',
+  'shareoverlayimage.png',
+  'shareprivacyguardimage.png',
+  'save_data.png',
+  'icon0.png',
+  'pic0.png',
+  'snd0.at9',
+  'icon0.dds',
+  'pic0.dds',
+  'pic1.dds',
+  'origin-deltainfo.dat',
+  'target-deltainfo.dat',
+  'param.json',
+  nil
+ );
+
+ c_about_hidden:array[0..1] of PChar=(
+  '.gitkeep',
+  nil
+ );
+
+function md_str_eq(str1:PChar;namelen:Integer;str2:PChar):Boolean; inline;
+begin
+ Result:=false;
+
+ if (strncmp(str1,str2,namelen)<>0) then Exit;
+
+ Result:=(str2[namelen]=#0);
+end;
+
+function md_name_is_hidden(dd:p_ufs_dirent;name:PChar;namelen:Integer):Boolean;
+var
+ list:PPChar;
+begin
+ Result:=false;
+
+ list:=nil;
+
+ case dd^.ufs_marker of
+  MARKER_SCE_SYS      :list:=@c_sce_sys_hidden;
+  MARKER_SCE_SYS_ABOUT:list:=@c_about_hidden;
+  else;
+ end;
+ if (list=nil) then Exit;
+
+ while (list^<>nil) do
+ begin
+  if md_str_eq(name,namelen,list^) then
+  begin
+   Exit(True);
+  end;
+  //
+  Inc(list);
+ end;
+
+end;
+
+function pfs_get_va_mode(mp:p_mount;va_mode:Integer;p_out:PInteger):Integer;
+var
+ is_system:Boolean;
+ val:Integer;
+begin
+
+ //only for PFS emulate
+ if ((mp^.mnt_flag and MNT_PFS_ANY)=0) then
+ begin
+  p_out^:=va_mode;
+  Exit(0);
+ end;
+
+ is_system:=(mp^.mnt_budget_id<>0);
+
+ if (not is_system) then
+ begin
+  if ((va_mode and 6)=6) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  val:=&0555;
+
+  if ((va_mode and S_IROTH)=0) then
+  begin
+   Exit(22);
+  end;
+ end else
+ begin
+  if ((va_mode and &0606)=&0606) then
+  begin
+   p_out^:=&0777;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0604)=&0604) then
+  begin
+   p_out^:=&0775;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0404)=&0404) then
+  begin
+   p_out^:=&0555;
+   Exit(0);
+  end;
+
+  if ((va_mode and &0600)=&0600) then
+  begin
+   p_out^:=&0770;
+   Exit(0);
+  end;
+
+  val:=&0550;
+
+  if ((va_mode and S_IRUSR)=0) then
+  begin
+   Exit(22);
+  end;
+ end;
+
+ p_out^:=val;
+ Exit(0);
 end;
 
 function md_new_cache(mp:p_mount;dd:p_ufs_dirent;name:PChar;namelen:Integer;prev:PFILE_BASIC_INFORMATION;var nd:p_ufs_dirent):Integer;
@@ -1059,14 +1223,13 @@ begin
  nd^.ufs_mode:=UFS_DEFAULT_MODE;
  nd^.ufs_dir :=dd;
 
- if ((mp^.mnt_flag and MNT_RDONLY)<>0) then
- begin
-  nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
- end else
  if ((prev^.FileAttributes and FILE_ATTRIBUTE_READONLY)<>0) then
  begin
   nd^.ufs_mode:=nd^.ufs_mode and UFS_SET_READONLY;
  end;
+
+ //fixup
+ pfs_get_va_mode(mp,nd^.ufs_mode,@nd^.ufs_mode);
 
  de:=nd^.ufs_dirent;
 
@@ -1075,6 +1238,25 @@ begin
 
  if (de^.d_type=DT_DIR) then
  begin
+
+  if (mp^.mnt_budget_id=0) then //only app0
+  begin
+   if ((dd^.ufs_flags and UFS_DROOT)<>0) then
+   begin
+    if (namelen=7) and (strncmp(name, 'sce_sys', namelen)=0) then
+    begin
+     nd^.ufs_marker:=MARKER_SCE_SYS;
+    end;
+   end else
+   if (dd^.ufs_marker=MARKER_SCE_SYS) then
+   begin
+    if (namelen=5) and (strncmp(name, 'about', namelen)=0) then
+    begin
+     nd^.ufs_marker:=MARKER_SCE_SYS_ABOUT;
+    end;
+   end;
+  end;
+
   nd^.ufs_links:=2;
   Result:=md_open_dirent(nd);
   if (Result<>0) then
@@ -1324,7 +1506,7 @@ begin
 
  //If read-only and op is not CREATE|LOOKUP, will return EROFS.
  if ((flags and ISLASTCN)<>0) and
-     ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+     ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
      (nameiop <> CREATE) and
      (nameiop <> LOOKUP) then
  begin
@@ -1367,6 +1549,11 @@ begin
 
  sx_xlock(@dd^.ufs_md_lock);
 
+  if md_name_is_hidden(dd,cnp^.cn_nameptr,cnp^.cn_namelen) then
+  begin
+   de:=nil;
+   Result:=ENOENT;
+  end else
   if ((flags and ISDOTDOT)<>0) then
   begin
    de:=dd^.ufs_dir;
@@ -1394,7 +1581,7 @@ begin
 
      //If read-only and op is CREATE|RENAME, will return EROFS.
      if ((flags and ISLASTCN)<>0) and
-         ((p_mount(dvp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) then
+         ((dvp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
      begin
       Exit(EROFS);
      end;
@@ -1439,11 +1626,10 @@ end;
 
 function md_readdir(ap:p_vop_readdir_args):Integer;
 var
- mp:p_mount;
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_dirent;
- off:Int64;
+ in_off,off:Int64;
  i:Integer;
 
  NT_DIRENT:TNT_DIRENT;
@@ -1458,85 +1644,133 @@ begin
  end;
 
  uio:=ap^.a_uio;
- if (uio^.uio_offset < 0) then
+ in_off:=uio^.uio_offset;
+ if (in_off < 0) then
  begin
   Exit(EINVAL);
  end;
 
  dd:=ap^.a_vp^.v_data;
- off:=0;
- restart:=True;
 
- mp:=ap^.a_vp^.v_mount;
- emu_pfs:=((mp^.mnt_flag and MNT_PFS_ANY)<>0);
+ emu_pfs:=((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_ANY)<>0);
 
  sx_xlock(@dd^.ufs_md_lock);
 
- repeat
-  NT_DIRENT:=Default(TNT_DIRENT);
-  BLK:=Default(IO_STATUS_BLOCK);
+  off:=dd^.ufs_dr_off; //load cache
 
-  R:=NtQueryDirectoryFile(
-            THandle(dd^.ufs_md_fp),
-            0,
-            nil,
-            nil,
-            @BLK,
-            @NT_DIRENT,
-            SizeOf(NT_DIRENT),
-            FileIdFullDirectoryInformation,
-            True,
-            nil,
-            restart
-           );
-  restart:=false;
+  restart:=(off<0) or (off>in_off);
+  if restart then off:=0;
 
-  if (R=STATUS_NO_MORE_FILES) then Break;
+  repeat
+   NT_DIRENT:=Default(TNT_DIRENT);
+   BLK:=Default(IO_STATUS_BLOCK);
 
-  Result:=ntf2px(R);
-  if (Result<>0) then Break;
+   R:=NtQueryDirectoryFile(
+             THandle(dd^.ufs_md_fp),
+             0,
+             nil,
+             nil,
+             @BLK,
+             @NT_DIRENT,
+             SizeOf(NT_DIRENT),
+             FileIdFullDirectoryInformation,
+             True,
+             nil,
+             restart
+            );
+   restart:=false;
 
-  dt:=Default(t_dirent);
+   if (R=STATUS_NO_MORE_FILES) then
+   begin
 
-  i:=WinToUnix(@dt.d_name,
-               t_dirent.MAXNAMLEN+1,
-               @NT_DIRENT.Name,
-               NT_DIRENT.Info.FileNameLength div 2);
-  //i->zero include
+    //masquerade
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_ROOTFS)<>0) then
+    begin
+     //tmpfs
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_64K)<>0) then
+    begin
+     //pfs
+     off:=(off+$FFFF) and (not Int64($FFFF));
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_32K)<>0) then
+    begin
+     //pfs
+     off:=(off+$7FFF) and (not Int64($7FFF));
+    end;
+    begin
+     //ufs
+     off:=(off+$1FF) and (not Int64($1FF));
+    end;
 
-  if (i<=0) then
-  begin
-   //skip error
-   Continue;
-  end;
+    if (ap^.a_eofflag<>nil) then
+    begin
+     (ap^.a_eofflag)^:=1;
+    end;
 
-  if emu_pfs then
-  begin
-   //sizeof(body)+8+AlignUp(namelen,8)
-   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
-  end else
-  begin
-   //sizeof(body)+AlignUp(namelen,4)
-   dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 3) and (not 3)); //zero include
-  end;
+    Break;
+   end;
 
-  if (dt.d_reclen > uio^.uio_resid) then break;
+   Result:=ntf2px(R);
+   if (Result<>0) then
+   begin
+    in_off:=-1; //reset
+    Break;
+   end;
 
-  if (off >= uio^.uio_offset) then
-  begin
-   dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
-   dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
-   dt.d_namlen:=i-1; //zero exclude
+   dt:=Default(t_dirent);
 
-   Result:=vfs_read_dirent(ap, @dt, off);
-   if (Result<>0) then break;
-  end;
+   i:=WinToUnix(@dt.d_name,
+                t_dirent.MAXNAMLEN+1,
+                @NT_DIRENT.Name,
+                NT_DIRENT.Info.FileNameLength div 2);
+   //i->zero include
 
-  Inc(off,dt.d_reclen);
- until false;
+   if (i<=0) then i:=1;
+
+   if md_name_is_hidden(dd,@dt.d_name,i-1) then
+   begin
+    Continue;
+   end;
+
+   if emu_pfs then
+   begin
+    //sizeof(body)+8+AlignUp(namelen,8)
+    dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+   end else
+   begin
+    //sizeof(body)+AlignUp(namelen,4)
+    dt.d_reclen:=(SizeOf(t_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 3) and (not 3)); //zero include
+   end;
+
+   if (dt.d_reclen > uio^.uio_resid) then
+   begin
+    in_off:=-1; //reset
+    break;
+   end;
+
+   if (off >= in_off) then
+   begin
+    dt.d_fileno:=get_inode(NT_DIRENT.Info.FileId);
+    dt.d_type  :=NT_FA_TO_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize);
+    dt.d_namlen:=i-1; //zero exclude
+
+    Result:=vfs_read_dirent(ap, @dt, off);
+    if (Result<>0) then break;
+   end;
+
+   Inc(off,dt.d_reclen);
+  until false;
+
+  //save cache
+  if (in_off<0) then
+   dd^.ufs_dr_off:=-1
+  else
+   dd^.ufs_dr_off:=off;
 
  sx_xunlock(@dd^.ufs_md_lock);
- uio^.uio_offset:=off;
+
+ uio^.uio_offset:=off; //save to uio
 
  Exit(0);
 end;
@@ -1546,7 +1780,7 @@ var
  uio:p_uio;
  dd:p_ufs_dirent;
  dt:t_pfs_dirent;
- off:Int64;
+ in_off,off:Int64;
  i:Integer;
 
  NT_DIRENT:TNT_DIRENT;
@@ -1560,75 +1794,124 @@ begin
  end;
 
  uio:=ap^.a_uio;
- if (uio^.uio_offset < 0) then
+ in_off:=uio^.uio_offset;
+ if (in_off < 0) then
  begin
   Exit(EINVAL);
  end;
 
  dd:=ap^.a_vp^.v_data;
- off:=0;
- restart:=True;
 
  sx_xlock(@dd^.ufs_md_lock);
 
- repeat
-  NT_DIRENT:=Default(TNT_DIRENT);
-  BLK:=Default(IO_STATUS_BLOCK);
+  off:=-dd^.ufs_dr_off-2; //load cache
 
-  R:=NtQueryDirectoryFile(
-            THandle(dd^.ufs_md_fp),
-            0,
-            nil,
-            nil,
-            @BLK,
-            @NT_DIRENT,
-            SizeOf(NT_DIRENT),
-            FileIdFullDirectoryInformation,
-            True,
-            nil,
-            restart
-           );
-  restart:=false;
+  restart:=(off<0) or (off>in_off);
+  if restart then off:=0;
 
-  if (R=STATUS_NO_MORE_FILES) then Break;
+  repeat
+   NT_DIRENT:=Default(TNT_DIRENT);
+   BLK:=Default(IO_STATUS_BLOCK);
 
-  Result:=ntf2px(R);
-  if (Result<>0) then Break;
+   R:=NtQueryDirectoryFile(
+             THandle(dd^.ufs_md_fp),
+             0,
+             nil,
+             nil,
+             @BLK,
+             @NT_DIRENT,
+             SizeOf(NT_DIRENT),
+             FileIdFullDirectoryInformation,
+             True,
+             nil,
+             restart
+            );
+   restart:=false;
 
-  dt:=Default(t_pfs_dirent);
+   if (R=STATUS_NO_MORE_FILES) then
+   begin
 
-  i:=WinToUnix(@dt.d_name,
-               t_dirent.MAXNAMLEN+1,
-               @NT_DIRENT.Name,
-               NT_DIRENT.Info.FileNameLength div 2);
-  //i->zero include
+    //masquerade
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_ROOTFS)<>0) then
+    begin
+     //tmpfs
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_64K)<>0) then
+    begin
+     //pfs
+     off:=(off+$FFFF) and (not Int64($FFFF));
+    end else
+    if ((ap^.a_vp^.v_mount^.mnt_flag and MNT_PFS_32K)<>0) then
+    begin
+     //pfs
+     off:=(off+$7FFF) and (not Int64($7FFF));
+    end;
+    begin
+     //ufs
+     off:=(off+$1FF) and (not Int64($1FF));
+    end;
 
-  if (i<=0) then
-  begin
-   //skip error
-   Continue;
-  end;
+    if (ap^.a_eofflag<>nil) then
+    begin
+     (ap^.a_eofflag)^:=1;
+    end;
 
-  //sizeof(body)+8+AlignUp(namelen,8)
-  dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+    Break;
+   end;
 
-  if (dt.d_entsize > uio^.uio_resid) then break;
+   Result:=ntf2px(R);
+   if (Result<>0) then
+   begin
+    in_off:=-1; //reset
+    Break;
+   end;
 
-  if (off >= uio^.uio_offset) then
-  begin
-   dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
-   dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
-   dt.d_namelen:=i-1; //zero exclude
+   dt:=Default(t_pfs_dirent);
 
-   Result:=vfs_read_pfs_dirent(ap, @dt, off);
-   if (Result<>0) then break;
-  end;
+   i:=WinToUnix(@dt.d_name,
+                t_dirent.MAXNAMLEN+1,
+                @NT_DIRENT.Name,
+                NT_DIRENT.Info.FileNameLength div 2);
+   //i->zero include
 
-  Inc(off,dt.d_entsize);
- until false;
+   if (i<=0) then i:=1;
+
+   if md_name_is_hidden(dd,@dt.d_name,i-1) then
+   begin
+    Continue;
+   end;
+
+   //sizeof(body)+8+AlignUp(namelen,8)
+   dt.d_entsize:=(SizeOf(t_pfs_dirent)-(t_dirent.MAXNAMLEN+1))+((i + 8 + 7) and (not 7)); //zero include
+
+   if (dt.d_entsize > uio^.uio_resid) then
+   begin
+    in_off:=-1; //reset
+    break;
+   end;
+
+   if (off >= in_off) then
+   begin
+    dt.d_ino    :=get_inode(NT_DIRENT.Info.FileId);
+    dt.d_type   :=NT_FA_TO_PFS_DT(NT_DIRENT.Info.FileAttributes,NT_DIRENT.Info.EaSize,@dt.d_name);
+    dt.d_namelen:=i-1; //zero exclude
+
+    Result:=vfs_read_pfs_dirent(ap, @dt, off);
+    if (Result<>0) then break;
+   end;
+
+   Inc(off,dt.d_entsize);
+  until false;
+
+  //save cache
+  if (in_off<0) then
+   dd^.ufs_dr_off:=-(-1+2)
+  else
+   dd^.ufs_dr_off:=-(off+2);
 
  sx_xunlock(@dd^.ufs_md_lock);
- uio^.uio_offset:=off;
+
+ uio^.uio_offset:=off; //save to uio
 
  Exit(0);
 end;
@@ -1645,7 +1928,7 @@ begin
  VI_LOCK(vp);
  sx_xlock(@de^.ufs_md_lock);
 
- Result:=md_update_dirent(THandle(vp^.v_un),de,nil);
+ Result:=md_update_dirent(vp^.v_handle,de,nil);
 
  vnode_pager_setsize(vp, de^.ufs_size);
 
@@ -1844,6 +2127,8 @@ begin
  //new dirent
  Result:=md_new_cache(dvp^.v_mount,dd,ap^.a_cnp^.cn_nameptr,ap^.a_cnp^.cn_namelen,@FBI,de);
 
+ dd^.ufs_dr_off:=-1; //dir changed
+
  sx_xunlock(@dd^.ufs_md_lock);
  RtlReleasePrivilege(PrivState);
 
@@ -1920,61 +2205,12 @@ begin
   //clear cache
   de:=md_find_cache(dd,cnp^.cn_nameptr,cnp^.cn_namelen,0);
   md_unlink_cache(de,False,True);
+
+  dd^.ufs_dr_off:=-1; //dir changed
  end;
 
  sx_xunlock(@dd^.ufs_md_lock);
  NtClose(FD);
-end;
-
-function pfs_get_va_mode(va_mode,is_system:Integer;p_out:PInteger):Integer;
-var
- val:Integer;
-begin
- if (is_system=0) then
- begin
-  if ((va_mode and 6)=6) then
-  begin
-   p_out^:=&0777;
-   Exit(0);
-  end;
-
-  val:=&0555;
- end else
- begin
-  if ((va_mode and &0606)=&0606) then
-  begin
-   p_out^:=&0777;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0604)=&0604) then
-  begin
-   p_out^:=&0775;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0404)=&0404) then
-  begin
-   p_out^:=&0555;
-   Exit(0);
-  end;
-
-  if ((va_mode and &0600)=&0600) then
-  begin
-   p_out^:=&0770;
-   Exit(0);
-  end;
-
-  val:=&0550;
- end;
-
- if ((va_mode and S_IRUSR)=0) then
- begin
-  Exit(22);
- end;
-
- p_out^:=val;
- Exit(0);
 end;
 
 function md_mkdir(ap:p_vop_mkdir_args):Integer;
@@ -1999,7 +2235,7 @@ begin
  dmp:=VFSTOUFS(dvp^.v_mount);
 
  va_mode:=0;
- Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp^.v_mount,vap^.va_mode,@va_mode);
  if (Result<>0) then Exit;
 
  dd:=dvp^.v_data;
@@ -2062,6 +2298,8 @@ begin
 
  de^.ufs_mode:=va_mode;
 
+ dd^.ufs_dr_off:=-1; //dir changed
+
  sx_xunlock(@dd^.ufs_md_lock);
 
  sx_xlock(@dmp^.ufs_lock);
@@ -2110,6 +2348,8 @@ begin
 
  //clear cache
  md_unlink_cache(de,False,True);
+
+ dd^.ufs_dr_off:=-1; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2167,6 +2407,8 @@ begin
 
  //clear cache
  md_unlink_cache(de,False,True);
+
+ dd^.ufs_dr_off:=-1; //dir changed
 
  NtClose(FD); //<-deleted
 
@@ -2298,6 +2540,9 @@ begin
  //clear cache
  md_unlink_cache(de_f,True ,True);
  md_unlink_cache(de_t,False,True);
+
+ dd_f^.ufs_dr_off:=-1; //dir changed
+ dd_t^.ufs_dr_off:=-1; //dir changed
 
  de_f:=nil;
 
@@ -2433,7 +2678,7 @@ begin
  vap:=ap^.a_vap;
 
  va_mode:=0;
- Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+ Result:=pfs_get_va_mode(dvp^.v_mount,vap^.va_mode,@va_mode);
  if (Result<>0) then Exit;
 
  //emu ext
@@ -2502,6 +2747,8 @@ begin
    Exit;
  end;
 
+ dd^.ufs_dr_off:=-1; //dir changed
+
  dmp:=VFSTOUFS(dvp^.v_mount);
  sx_xlock(@dmp^.ufs_lock);
 
@@ -2513,8 +2760,8 @@ begin
  ap^.a_vpp^:=vp;
 
  //save to vnode
- vp^.v_un  :=Pointer(FD);
- vp^.v_prot:=(flags and (FREAD or FWRITE));
+ vp^.v_handle:=FD;
+ vp^.v_prot  :=(flags and (FREAD or FWRITE));
 
  //emu ext
  with ap^ do
@@ -2540,7 +2787,7 @@ begin
  sx_xunlock(@dd^.ufs_md_lock);
 end;
 
-function md_open(ap:p_vop_open_args):Integer;
+function md_open_ap(ap:p_vop_open_args):Integer;
 var
  vp:p_vnode;
  mp:p_mount;
@@ -2585,9 +2832,9 @@ begin
  sx_xlock(@dd^.ufs_md_lock);
  sx_xlock(@de^.ufs_md_lock);
 
- if (vp^.v_un<>nil) then
+ if (vp^.v_handle<>0) then
  begin
-  FD:=THandle(vp^.v_un);
+  FD:=vp^.v_handle;
  end else
  begin
   w:=UnixToWin(@de^.ufs_dirent^.d_name,de^.ufs_dirent^.d_namlen);
@@ -2622,8 +2869,8 @@ begin
   end;
 
   //save to vnode
-  vp^.v_un  :=Pointer(FD);
-  vp^.v_prot:=(flags and (FREAD or FWRITE));
+  vp^.v_handle:=FD;
+  vp^.v_prot  :=(flags and (FREAD or FWRITE));
  end;
 
  Result:=md_update_dirent(FD,de,nil);
@@ -2652,14 +2899,14 @@ begin
 
 end;
 
-function md_close(ap:p_vop_close_args):Integer;
+function md_close_ap(ap:p_vop_close_args):Integer;
 var
  vp:p_vnode;
  FD:THandle;
 begin
  vp:=ap^.a_vp;
 
- FD:=THandle(System.InterlockedExchange(vp^.v_un,nil));
+ FD:=THandle(System.InterlockedExchange(Pointer(vp^.v_handle),nil));
  if (FD<>0) then
  begin
   NtClose(FD);
@@ -2677,7 +2924,7 @@ var
  BLK:IO_STATUS_BLOCK;
 begin
  vp:=ap^.a_vp;
- FD:=THandle(vp^.v_un);
+ FD:=vp^.v_handle;
  fullsync:=((ap^.a_waitfor and 2)<>0);
 
  if (FD=0) then Exit(EINVAL);
@@ -2731,7 +2978,7 @@ begin
  vap:=ap^.a_vap;
  vp:=ap^.a_vp;
 
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_RDONLY)<>0) and
+ if ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) and
     (
      (vap^.va_flags       <>VNOVAL) or
      (vap^.va_uid         <>VNOVAL) or
@@ -2799,7 +3046,7 @@ begin
   //end;
 
   va_mode:=0;
-  Result:=pfs_get_va_mode(vap^.va_mode,0,@va_mode);
+  Result:=pfs_get_va_mode(vp^.v_mount,vap^.va_mode,@va_mode);
   if (Result<>0) then goto _err;
 
   de^.ufs_mode:=va_mode;
@@ -2847,9 +3094,9 @@ begin
  if change_time or change_size then
  begin
 
-  if (vp^.v_un<>nil) then
+  if (vp^.v_handle<>0) then
   begin
-   FD:=THandle(vp^.v_un);
+   FD:=vp^.v_handle;
    RL:=0;
   end else
   if (de^.ufs_md_fp<>nil) then
@@ -3012,7 +3259,7 @@ var
 begin
  Result:=0;
  de:=vp^.v_data;
- F:=THandle(vp^.v_un);
+ F:=vp^.v_handle;
 
  td:=curkthread;
  if (td=nil) then Exit(-1);
@@ -3204,7 +3451,7 @@ begin
  op:=ap^.a_op;
  wf:=ap^.a_flags;
 
- F:=THandle(vp^.v_un);
+ F:=vp^.v_handle;
 
  case op of
   F_SETLK:;
@@ -3296,6 +3543,123 @@ function md_advlockpurge(ap:p_vop_advlockpurge_args):Integer;
 begin
  //Locks are automatically released on NtClose
  Result:=0;
+end;
+
+function fit_to_vnode_size(de:p_ufs_dirent;offset,size:QWORD):QWORD; inline;
+begin
+ //max unaligned size
+ size:=size+offset;
+
+ size:=Min(size,de^.ufs_size);
+
+ //dec offset
+ if (size>offset) then
+ begin
+  size:=size-offset;
+ end else
+ begin
+  size:=0;
+ end;
+
+ Result:=size;
+end;
+
+procedure md_int_obj_free(obj:p_vm_int_obj);
+var
+ r:Integer;
+begin
+ if (obj^.hfile<>0) then
+ begin
+  r:=md_memfd_close(obj^.hfile);
+  if (r<>0) then
+  begin
+   LOG_CRITICAL(StdErr,'failed md_memfd_close(',obj^.hfile,'):0x',HexStr(r,8));
+   Assert(false,'md_int_obj_free');
+  end;
+  obj^.hfile:=0;
+ end;
+end;
+
+const
+ md_int_obj_vtable:vm_int_obj_vtable=(
+  free:@md_int_obj_free;
+ );
+
+function md_get_int_obj(ap:p_vop_get_int_obj_args):Integer;
+var
+ vp:p_vnode;
+ de:p_ufs_dirent;
+ fd,md:THandle;
+ size:QWORD;
+ r:Integer;
+ maxp:Byte;
+begin
+ Result:=0;
+ vp:=ap^.a_vp;
+
+ if (vp=nil) then Exit(EINVAL);
+ if (vp^.v_type<>VREG) then Exit(EBADF);
+
+ VI_LOCK(vp);
+
+  de:=vp^.v_data;
+  fd:=vp^.v_handle;
+  md:=0;
+  maxp:=vp^.v_prot;
+
+  if (fd=0) then
+  begin
+   Result:=EBADF;
+  end else
+  begin
+   size:=fit_to_vnode_size(de,ap^.a_offset,ap^.a_length);
+
+   if (size=0) then
+   begin
+    ap^.a_offset:=0;
+    ap^.a_length:=0;
+    ap^.a_obj   :=nil;
+   end else
+   begin
+
+    if (maxp=VM_RO) and ((vp^.v_mount^.mnt_flag and MNT_RDONLY)<>0) then
+    begin
+     r:=md_memfd_open(md,fd,maxp);
+     r:=ntf2px(r);
+    end else
+    if (maxp<>VM_RW) then
+    begin
+     //reopen file to RW
+     r:=md_openat(fd,'',O_RDWR,0,fd);
+
+     if (r=0) then
+     begin
+      maxp:=VM_RW;
+      r:=md_memfd_open(md,fd,maxp);
+      r:=ntf2px(r);
+      md_close(fd); //close dub
+     end;
+
+    end else
+    begin
+     r:=md_memfd_open(md,fd,maxp);
+     r:=ntf2px(r);
+    end;
+
+    if (r<>0) then
+    begin
+     Result:=r;
+    end else
+    begin
+     ap^.a_length:=size; //fixup
+     ap^.a_obj   :=vm_int_obj_allocate(@md_int_obj_vtable,md,maxp);
+    end;
+
+   end; //(size=0)
+
+  end; //(fd=0)
+
+ VI_UNLOCK(vp);
 end;
 
 

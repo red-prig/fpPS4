@@ -42,11 +42,13 @@ uses
  kern_thr,
  time,
  md_sleep,
+ kern_mtx,
  kern_daemon;
 
 var
- rlist_bs:LIST_HEAD=(lh_first:nil);
  rlist_lf:TIntrusiveMPSCQueue=(tail_:@rlist_lf.stub_;stub_:(next_:nil);head_:@rlist_lf.stub_);
+ rlist_bs:LIST_HEAD=(lh_first:nil);
+ rlist_mx:mtx;
  rcount  :Integer=0;
 
 function AllocGuard:Pointer;
@@ -113,7 +115,7 @@ begin
 
  _again:
 
- threads_lock;
+ threads_rlock;
 
  ttd:=TAILQ_FIRST(get_p_threads);
  while (ttd<>nil) do
@@ -127,7 +129,7 @@ begin
 
     if (p_data=P) then
     begin
-     threads_unlock;
+     threads_runlock;
      msleep_td(hz div 10000);
      goto _again;
     end;
@@ -138,7 +140,7 @@ begin
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
  end;
 
- threads_unlock;
+ threads_runlock;
 end;
 
 type
@@ -166,10 +168,10 @@ begin
 
  if (mode=smForce) then
  begin
-  threads_lock;
+  mtx_lock(rlist_mx);
  end else
  begin
-  if not threads_trylock then Exit;
+  if not mtx_trylock(rlist_mx) then Exit;
  end;
 
  //flush to base list
@@ -182,10 +184,11 @@ begin
  if (r_node=nil) then
  begin
   //zero list
-  threads_unlock;
+  mtx_unlock(rlist_mx);
   Exit;
  end;
 
+ threads_rlock;
  ttd:=TAILQ_FIRST(get_p_threads);
  while (ttd<>nil) do
  begin
@@ -196,14 +199,18 @@ begin
    if (p_data<>nil) and
       (p_data<>Pointer(1)) then
    begin
-    p_node:=AllocMem(SizeOf(t_pointer_node));
-    p_node^.P:=p_data;
-    p_set.Insert(p_node);
+    if (p_set.Find(@p_data)=nil) then
+    begin
+     p_node:=AllocMem(SizeOf(t_pointer_node));
+     p_node^.P:=p_data;
+     p_set.Insert(p_node);
+    end;
    end;
   end;
 
   ttd:=TAILQ_NEXT(ttd,@ttd^.td_plist)
  end;
+ threads_runlock;
 
  while (r_node<>nil) do
  begin
@@ -222,7 +229,7 @@ begin
   r_node:=r_next;
  end;
 
- threads_unlock;
+ mtx_unlock(rlist_mx);
 
  //free set
  p_node:=p_set.Min;
@@ -382,6 +389,7 @@ var
 
 procedure hazard_init;
 begin
+ mtx_init(rlist_mx,'rlist_mx');
  sys_daemon_add_cbs(@stub,@Guard_Lazy);
 end;
 

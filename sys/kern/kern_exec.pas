@@ -6,6 +6,7 @@ unit kern_exec;
 interface
 
 uses
+ kern_malloc,
  sysutils,
  mqueue,
  kern_param,
@@ -34,6 +35,8 @@ function  sys_execve(fname:pchar;argv,envv:ppchar):Integer;
 implementation
 
 uses
+ sys_bootparam,
+ md_thread,
  systm,
  md_systm,
  errno,
@@ -67,8 +70,8 @@ uses
  kern_authinfo,
  vfs_syscalls,
  signal,
- trap,
  md_context,
+ md_arc4random,
  subr_backtrace;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -89,7 +92,7 @@ begin
  end;
  if (args^.fname_buf<>nil) then
  begin
-  FreeMem(args^.fname_buf);
+  free(args^.fname_buf);
   args^.fname_buf:=nil;
  end;
 end;
@@ -349,7 +352,7 @@ begin
 
  //create fake shared
  obj:=vm_pager_allocate(OBJT_DEFAULT,nil,shared_page_len,0,0);
- obj^.fakeshared:=True;
+ obj^.flags:=obj^.flags or OBJ_FAKE_SHARED;
 
  //mapping shared page (sv_usrstack_len=0x4000)
  error:=vm_map_fixed(map,obj,0,
@@ -482,8 +485,6 @@ begin
  {
   * Prepare the canary for SSP.
   }
- //arc4rand(canary, sizeof(canary), 0);
-
  canary[0]:=QWORD($FEEDBABEFEEDBABE);
  canary[1]:=QWORD($FEEDBABEFEEDBABE);
  canary[2]:=QWORD($FEEDBABEFEEDBABE);
@@ -492,6 +493,8 @@ begin
  canary[5]:=QWORD($FEEDBABEFEEDBABE);
  canary[6]:=QWORD($FEEDBABEFEEDBABE);
  canary[7]:=QWORD($FEEDBABEFEEDBABE);
+
+ arc4rand(@canary, sizeof(canary), 0);
 
  Dec(destp,sizeof(canary));
  imgp^.canary:=destp;
@@ -640,7 +643,7 @@ begin
   *    to happen unless the file really is executable.
   * 3) Ensure that the file is a regular file.
   }
- if ((p_mount(vp^.v_mount)^.mnt_flag and MNT_NOEXEC)<>0) or
+ if ((vp^.v_mount^.mnt_flag and MNT_NOEXEC)<>0) or
     ((attr^.va_mode and (S_IXUSR or S_IXGRP or S_IXOTH))=0) or
     (attr^.va_type<>VREG) then
  begin
@@ -966,7 +969,7 @@ begin
   imgp^.reloc_base:=Pointer(addr);
  end;
 
- auxargs:=AllocMem(SizeOf(t_elf64_auxargs));
+ auxargs:=calloc(SizeOf(t_elf64_auxargs));
 
  auxargs^.execfd:=-1;
  auxargs^.phdr  :=0;
@@ -1119,11 +1122,11 @@ begin
  dynlibs_info.sym_zero.st_shndx:=SHN_UNDEF;
  dynlibs_info.sym_zero.st_value:=-Int64(obj^.relocbase);
 
- init_proc_addr:=obj^.fini_proc_addr.addr;
- fini_proc_addr:=obj^.init_proc_addr.addr;
+ init_proc_addr:=obj^.init_proc_addr.addr;
+ fini_proc_addr:=obj^.fini_proc_addr.addr;
 
- obj^.fini_proc_addr.addr:=nil;
  obj^.init_proc_addr.addr:=nil;
+ obj^.fini_proc_addr.addr:=nil;
 
  tail:=TAILQ_LAST(@dynlibs_info.obj_list);
  if (tail=nil) then
@@ -1140,6 +1143,15 @@ begin
  obj^.fini_proc_addr.addr:=fini_proc_addr;
 
  ///
+end;
+
+procedure change_cpumode;
+begin
+ if (p_proc.p_sdk_version < $3000000) then
+ begin
+  sys_bootparam.set_cpumode(2); //COMPAT
+ end;
+ cpuset_setaffinity(curkthread,sys_bootparam.p_cpuset);
 end;
 
 function get_sdk_version_str(version:QWORD):RawByteString;
@@ -1161,7 +1173,12 @@ begin
  begin
   Result:=copyin(@proc_param^.SDK_version,@p_proc.p_sdk_version,SizeOf(Integer));
  end;
- LOG_INFO('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
+
+ if (Result=0) then
+ begin
+  LOG_INFO('p_sdk_version=0x',HexStr(p_proc.p_sdk_version,8),'(',get_sdk_version_str(p_proc.p_sdk_version),')');
+  change_cpumode;
+ end;
 end;
 
 procedure dynlib_proc_initialize_step3(imgp:p_image_params);
@@ -1474,7 +1491,7 @@ begin
 
  AUXARGS_ENTRY(pos, AT_NULL, 0);
 
- FreeMem(imgp^.auxargs);
+ free(imgp^.auxargs);
  imgp^.auxargs:=nil;
 
  Dec(base);
@@ -1662,7 +1679,9 @@ begin
   * Malloc things before we need locks.
   }
  i:=imgp^.args^.begin_envv - imgp^.args^.begin_argv;
+
  { Cache arguments if they fit inside our allowance }
+ newargs:=nil;
  if (ps_arg_cache_limit >= (i + sizeof(t_pargs))) then
  begin
   newargs:=pargs_alloc(i);
@@ -1687,7 +1706,7 @@ begin
 
  if (args^.fname<>nil) then
  begin
-  Move(nd.ni_cnd.cn_nameptr^, p_proc.p_comm, maxInt64(nd.ni_cnd.cn_namelen, MAXCOMLEN));
+  Move(nd.ni_cnd.cn_nameptr^, p_proc.p_comm, minInt64(nd.ni_cnd.cn_namelen, MAXCOMLEN));
  end else
  begin
   Move(fexecv_proc_title, p_proc.p_comm, sizeof(fexecv_proc_title));
@@ -1807,7 +1826,7 @@ exec_fail_dealloc:
 
  vm_object_deallocate(imgp^.obj);
 
- FreeMem(imgp^.freepath);
+ free(imgp^.freepath);
 
  if (error=0) then
  begin
