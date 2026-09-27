@@ -23,7 +23,8 @@ implementation
 
 uses
  subr_backtrace,
- g_node_splay;
+ g_node_splay,
+ kern_urcu;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -194,6 +195,8 @@ var
  info:t_jit_addr_info;
  fin:Pointer;
 begin
+ urcu_qs(curkthread,True);
+
  if exist_jit_host(addr,@info) then
  begin
 

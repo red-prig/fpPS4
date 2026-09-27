@@ -43,7 +43,7 @@ procedure urcu_retire_text(base:Pointer;size:ptruint;mchunk:Pointer;cfree:t_urcu
 
 procedure urcu_set_scrub_proc(p:t_urcu_scrub_proc);
 
-procedure urcu_qs(td:p_kthread);
+procedure urcu_qs(td:p_kthread;update:Boolean);
 
 procedure urcu_text_scan;
 
@@ -276,19 +276,24 @@ begin
  mtx_unlock(urcu_text_mx);
 end;
 
-procedure urcu_qs(td:p_kthread);
+procedure urcu_qs(td:p_kthread;update:Boolean);
 var
  node:p_urcu_text_node;
  scrub:t_urcu_scrub_proc;
+ cur_seq:QWORD;
 begin
  if (td=nil) then Exit;
  if (LIST_FIRST(@urcu_text_list)=nil) then Exit;
  if ((td^.pcb_flags and PCB_IS_JIT)=0) then Exit;
+ if (td^.td_qsbr=urcu_qsbr_seq) then Exit;
+
+ cur_seq:=0;
 
  scrub:=urcu_scrub_proc;
  if (scrub<>nil) then
  begin
   if not mtx_trylock(urcu_text_mx) then Exit;
+   cur_seq:=urcu_qsbr_seq;
    node:=LIST_FIRST(@urcu_text_list);
    while (node<>nil) do
    begin
@@ -298,9 +303,12 @@ begin
   mtx_unlock(urcu_text_mx);
  end;
 
- System.ReadWriteBarrier;
- td^.td_qsbr:=urcu_qsbr_seq;
- System.ReadWriteBarrier;
+ if update and (cur_seq<>0) then
+ begin
+  System.ReadWriteBarrier;
+  td^.td_qsbr:=cur_seq;
+  System.ReadWriteBarrier;
+ end;
 end;
 
 procedure urcu_text_scan;
@@ -321,7 +329,7 @@ begin
 
    if (ttd<>curkthread) then
    begin
-    urcu_qs(ttd);
+    urcu_qs(ttd,False);
 
     if (ttd^.td_qsbr<>0) and
        (ttd^.td_qsbr<min_epoch) then
