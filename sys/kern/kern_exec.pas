@@ -1309,6 +1309,11 @@ begin
 
  imgp^.hdr_e_type:=hdr^.e_type;
 
+ if (hdr^.e_phoff<>64) then
+ begin
+  LOG_ERROR(StdErr,'exec_self_imgact:','Unexpected e_phoff:',hdr^.e_phoff);
+ end;
+
  phdr:=get_elf_phdr(hdr);
 
  Result:=scan_phdr(imgp,phdr,hdr^.e_phnum);
