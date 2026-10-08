@@ -14,6 +14,7 @@ var
  md_tsc_freq :QWORD=0;
  md_rev_unit :QWORD=0;
  md_rev_guest:QWORD=0;
+ md_net_time :Int64=0;
 
 Procedure md_timeinit;
 
@@ -71,6 +72,9 @@ begin
  md_tsc_freq :=md_get_rdtsc_freq;
  md_rev_unit :=flip_value_u64(md_tsc_freq,UNIT_PER_SEC);
  md_rev_guest:=flip_value_u64(md_tsc_freq,PS4_TSC_FREQ);
+ //-monotonic+realtime
+ unittime(@md_net_time);
+ md_net_time:=md_net_time-md_rdtsc_unit-DELTA_EPOCH_IN_UNIT;
 end;
 
 function md_rdtsc:QWORD; assembler; nostackframe;
@@ -384,7 +388,7 @@ begin
   CLOCK_EXT_RAW_NETWORK:
    begin
     //nanouptime + SCE_REGMGR_ENT_KEY_DATE_rtc_net/SCE_REGMGR_ENT_KEY_DATE_rtc_net_dbg
-    time^:=md_rdtsc_unit;
+    time^:=md_rdtsc_unit+md_net_time;
    end;
 
   CLOCK_SECOND:
