@@ -483,7 +483,7 @@ var
   begin
    movq  (a,rax);         // save rax
    pextrq(rax,xmm_a,1);   // rax = xmm_a[64:127]
-   sahf;                  // flags = ax
+   saxf;                  // flags = ax
    movq  (rax,a);         // restore rax
   end;
   saved:=False;
@@ -684,7 +684,7 @@ var
   begin
    movq  (a,rax);         // save rax
    pextrq(rax,xmm_a,1);   // rax = xmm_a[64:127]
-   sahf;                  // flags = ax
+   saxf;                  // flags = ax
    movq  (rax,a);         // restore rax
   end;
   saved:=False;

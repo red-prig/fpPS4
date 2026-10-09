@@ -6029,14 +6029,14 @@ procedure t_jit_builder.pinsrq(reg0,reg1:TRegValue;imm8:Byte);
 const
  desc:t_op_type=(op:$660F3A22;index:0);
 begin
- _RRI8(desc,reg1,reg0,imm8,reg1.ASize);
+ _RRI8(desc,reg1,reg0,imm8,os64);
 end;
 
 procedure t_jit_builder.pextrq(reg0,reg1:TRegValue;imm8:Byte);
 const
  desc:t_op_type=(op:$660F3A16;index:0);
 begin
- _RRI8(desc,reg0,reg1,imm8,reg0.ASize);
+ _RRI8(desc,reg0,reg1,imm8,os64);
 end;
 
 end.
