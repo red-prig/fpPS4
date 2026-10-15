@@ -61,6 +61,45 @@ const
 
 procedure md_cacheflush(addr:Pointer;nbytes,cache:Integer);
 
+type
+ t_NtAllocateVirtualMemoryEx=function(
+          ProcessHandle         :THandle;
+          BaseAddress           :PPointer;
+          RegionSize            :PULONG_PTR;
+          AllocationType        :ULONG;
+          Protect               :ULONG;
+          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
+          ExtendedParameterCount:ULONG
+         ):DWORD; stdcall;
+
+type
+ t_NtAllocateVirtualMemory=function(
+          ProcessHandle :THandle;
+          BaseAddress   :PPointer;
+          ZeroBits      :ULONG_PTR;
+          RegionSize    :PULONG_PTR;
+          AllocationType:ULONG;
+          Protect       :ULONG
+         ):DWORD; stdcall;
+
+type
+ t_NtMapViewOfSectionEx=function(
+          SectionHandle         :THandle;
+          ProcessHandle         :THandle;
+          BaseAddress           :PPointer;
+          SectionOffset         :PLARGE_INTEGER;
+          ViewSize              :PULONG_PTR;
+          AllocationType        :ULONG;
+          Protect               :ULONG;
+          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
+          ExtendedParameterCount:ULONG
+         ):DWORD; stdcall;
+
+var
+ real_NtAllocateVirtualMemory  :t_NtAllocateVirtualMemory  =@NtAllocateVirtualMemory;
+ real_NtAllocateVirtualMemoryEx:t_NtAllocateVirtualMemoryEx=@NtAllocateVirtualMemoryEx;
+ real_NtMapViewOfSectionEx     :t_NtMapViewOfSectionEx     =@NtMapViewOfSectionEx;
+
 implementation
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -173,7 +212,7 @@ begin
 
  REQ.HighestEndingAddress:=nil;
 
- Result:=NtAllocateVirtualMemoryEx(
+ Result:=real_NtAllocateVirtualMemoryEx(
           hProcess,
           @ADDR,
           @size,
@@ -296,7 +335,7 @@ function md_placeholder_commit(base:Pointer;size:QWORD;prot:DWORD;hProcess:THand
 begin
  prot:=wprots[prot and VM_RWX];
 
- Result:=NtAllocateVirtualMemoryEx(
+ Result:=real_NtAllocateVirtualMemoryEx(
           hProcess,
           @base,
           @size,
@@ -311,7 +350,7 @@ function md_placeholder_commit(base:Pointer;size:QWORD;prot:DWORD;fd:THandle;off
 begin
  prot:=wprots[prot and VM_RWX];
 
- Result:=NtMapViewOfSectionEx(
+ Result:=real_NtMapViewOfSectionEx(
           fd,
           hProcess,
           @base,
@@ -411,7 +450,7 @@ var
  range:MEMORY_RANGE_ENTRY;
  MemoryPriority:ULONG;
 begin
- Result:=NtAllocateVirtualMemory(
+ Result:=real_NtAllocateVirtualMemory(
           hProcess,
           @base,
           0,
@@ -439,7 +478,7 @@ end;
 
 function md_willneed(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer; inline;
 begin
- Result:=NtAllocateVirtualMemory(
+ Result:=real_NtAllocateVirtualMemory(
           hProcess,
           @base,
           0,
@@ -451,7 +490,7 @@ end;
 
 const
  atypes:array[0..3] of DWORD=(
-  MEM_COMMIT               , //___
+  MEM_COMMIT or MEM_RESERVE, //___
   MEM_COMMIT or MEM_RESERVE, //__F
   MEM_RESERVE              , //_R_
   MEM_RESERVE                //_RF
@@ -490,8 +529,6 @@ begin
 
  REQ.HighestEndingAddress:=nil;
 
- atype:=atypes[(prot shr 8) and 3];
-
  if (prot and MD_MAP_RESERVED)<>0 then
  begin
   prot:=PAGE_NOACCESS;
@@ -503,7 +540,15 @@ begin
 
  if (fd=THandle(0)) or (fd=THandle(-1)) then
  begin
-  Result:=NtAllocateVirtualMemoryEx(
+  atype:=atypes[(prot shr 8) and 3];
+
+  //boost
+  if (size and (MD_ALLOC_GRANULARITY-1))=0 then
+  begin
+   atype:=atype or MEM_64K_PAGES;
+  end;
+
+  Result:=real_NtAllocateVirtualMemoryEx(
            hProcess,
            @ADDR,
            @size,
@@ -514,7 +559,7 @@ begin
           );
  end else
  begin
-  Result:=NtMapViewOfSectionEx(
+  Result:=real_NtMapViewOfSectionEx(
            fd,
            hProcess,
            @ADDR,
@@ -610,7 +655,7 @@ begin
 
  if (fd=THandle(0)) or (fd=THandle(-1)) then
  begin
-  Result:=NtAllocateVirtualMemoryEx(
+  Result:=real_NtAllocateVirtualMemoryEx(
            hProcess,
            @ADDR,
            @size,
@@ -621,17 +666,8 @@ begin
           );
  end else
  begin
-  Result:=NtMapViewOfSectionEx(
-           fd,
-           hProcess,
-           @ADDR,
-           @offset,
-           @size,
-           0,
-           prot,
-           nil,
-           0
-          );
+  //not support
+  ADDR:=nil;
  end;
 
  if (Result=0) then

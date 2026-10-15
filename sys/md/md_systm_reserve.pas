@@ -101,22 +101,6 @@ function Inj_NtMapViewOfSection(
 
 ///////////////////////////////////////////////////////
 
-type
- t_NtMapViewOfSectionEx=function(
-          SectionHandle         :THandle;
-          ProcessHandle         :THandle;
-          BaseAddress           :PPointer;
-          SectionOffset         :PLARGE_INTEGER;
-          ViewSize              :PULONG_PTR;
-          AllocationType        :ULONG;
-          Protect               :ULONG;
-          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
-          ExtendedParameterCount:ULONG
-         ):DWORD; stdcall;
-
-var
- real_NtMapViewOfSectionEx:t_NtMapViewOfSectionEx=@NtMapViewOfSectionEx;
-
 function Inj_NtMapViewOfSectionEx(
           SectionHandle         :THandle;
           ProcessHandle         :THandle;
@@ -131,19 +115,6 @@ function Inj_NtMapViewOfSectionEx(
 
 ///////////////////////////////////////////////////////
 
-type
- t_NtAllocateVirtualMemory=function(
-          ProcessHandle :THandle;
-          BaseAddress   :PPointer;
-          ZeroBits      :ULONG_PTR;
-          RegionSize    :PULONG_PTR;
-          AllocationType:ULONG;
-          Protect       :ULONG
-         ):DWORD; stdcall;
-
-var
- real_NtAllocateVirtualMemory:t_NtAllocateVirtualMemory=@NtAllocateVirtualMemory;
-
 function Inj_NtAllocateVirtualMemory(
           ProcessHandle :THandle;
           BaseAddress   :PPointer;
@@ -154,20 +125,6 @@ function Inj_NtAllocateVirtualMemory(
          ):DWORD; stdcall; forward;
 
 ///////////////////////////////////////////////////////
-
-type
- t_NtAllocateVirtualMemoryEx=function(
-          ProcessHandle         :THandle;
-          BaseAddress           :PPointer;
-          RegionSize            :PULONG_PTR;
-          AllocationType        :ULONG;
-          Protect               :ULONG;
-          ExtendedParameters    :Pointer; //MEM_EXTENDED_PARAMETER
-          ExtendedParameterCount:ULONG
-         ):DWORD; stdcall;
-
-var
- real_NtAllocateVirtualMemoryEx:t_NtAllocateVirtualMemoryEx=@NtAllocateVirtualMemoryEx;
 
 function Inj_NtAllocateVirtualMemoryEx(
           ProcessHandle         :THandle;
@@ -520,6 +477,8 @@ var
 
  Attribute :PS_ATTRIBUTE;
 
+ AllocationType:ULONG;
+
  a,count:Integer;
 begin
 
@@ -554,14 +513,22 @@ begin
  if (StackSize       <MinStackSize)     then StackSize       :=MinStackSize;
  if (StackSize       <MaximumStackSize) then StackSize       :=MaximumStackSize;
 
+ AllocationType:=MEM_COMMIT or MEM_RESERVE;
+
+ //boost
+ if (StackSize and (MD_ALLOC_GRANULARITY-1))=0 then
+ begin
+  AllocationType:=AllocationType or MEM_64K_PAGES;
+ end;
+
  stack_base:=nil;
  Result:=real_NtAllocateVirtualMemoryEx(
-          ProcessHandle            ,
-          @stack_base              ,
-          @StackSize               ,
-          MEM_COMMIT or MEM_RESERVE,
-          PAGE_READWRITE           ,
-          @C_EXT                   ,
+          ProcessHandle ,
+          @stack_base   ,
+          @StackSize    ,
+          AllocationType,
+          PAGE_READWRITE,
+          @C_EXT        ,
           1
          );
  if (Result<>0) then Exit;
@@ -753,6 +720,14 @@ begin
   begin
    AllocationType:=AllocationType and (not MEM_TOP_DOWN);
 
+   //boost
+   if (RegionSize<>nil) then
+   if (RegionSize^ and (MD_ALLOC_GRANULARITY-1))=0 then
+   case AllocationType of
+    MEM_RESERVE,
+    MEM_RESERVE or MEM_COMMIT:AllocationType:=AllocationType or MEM_64K_PAGES;
+   end;
+
    Result:=real_NtAllocateVirtualMemoryEx(
             ProcessHandle ,
             BaseAddress   ,
@@ -804,6 +779,15 @@ begin
   begin
    EXT.Patch(ExtendedParameters,ExtendedParameterCount);
   end;
+ end;
+
+ //boost
+ if (RegionSize<>nil) and (BaseAddress<>nil) then
+ if (RegionSize^ and (MD_ALLOC_GRANULARITY-1))=0 then
+ if (PULONG_PTR(BaseAddress)^ and (MD_ALLOC_GRANULARITY-1))=0 then
+ case AllocationType of
+  MEM_RESERVE,
+  MEM_RESERVE or MEM_COMMIT:AllocationType:=AllocationType or MEM_64K_PAGES;
  end;
 
  Result:=real_NtAllocateVirtualMemoryEx(
