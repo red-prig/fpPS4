@@ -47,7 +47,6 @@ type
   function  OnRegCollapse    (node:TspirvOp):Integer; //backward
   function  OnPostForward1   (node:TspirvOp):Integer; //forward
   function  PostForward2     (node:TspirvOp):Integer; //forward
-  function  OnVolatileReslove(node:TspirvOp):Integer; //forward
   function  OnWeakReslove    (node:TspirvOp):Integer; //backward
   function  OnRegTypecast    (node:TspirvOp):Integer; //backward
   function  OnPassCSE        (node:TspirvOp):Integer; //forward
@@ -175,13 +174,53 @@ end;
 
 function TSprvEmit_post.RegFindCond(pLine:TspirvOp;var node:TsrRegNode):Integer;
 var
- old:TsrRegNode;
+ old   :TsrRegNode;
  pBlock:TsrOpBlock;
  pCond :TsrOpBlock;
  pIf   :TsrOpBlock;
- src:TsrRegNode;
- pOpNot:TspirvOp;
- Invert:Boolean;
+ src   :TsrRegNode;
+ pop   :TspirvOp;
+ Invert,InvertCond:Boolean;
+
+ function FoldLAnd(src:TsrRegNode):Integer;
+ begin
+  Result:=0;
+  src:=RegDown(src);
+
+  if not src.is_const then
+  begin
+
+   InvertCond:=False;
+   pCond:=pBlock.FindUpCondByReg(src,True,InvertCond);
+   if (pCond<>nil) then
+   begin
+    InvertCond:=InvertCond xor pCond.Cond.FNormalOrder;
+
+    //!(A and false) = !A or true  = true | Invert=true  : InvertCond=false
+    //!(A and true ) = !A or false = !A   | Invert=true  : InvertCond=true
+
+    // (A and false) = false              | Invert=false : InvertCond=false
+    // (A and true ) = A                  | Invert=false : InvertCond=true
+
+    if (InvertCond=false) then
+    begin
+     node:=NewImm_q(old.dtype,ord(Invert xor InvertCond),pLine);
+
+     if (pIf<>nil) then
+     begin
+      //replace cond
+      pIf.Cond.pReg:=node;
+     end;
+
+     Exit(1);
+    end;
+
+   end;
+
+  end;
+
+ end;
+
 begin
  Result:=0;
  if (node=nil) then Exit;
@@ -219,7 +258,8 @@ begin
  repeat
   if src.is_const then Exit;
 
-  pCond:=pBlock.FindUpCondByReg(src,True,Invert);
+  InvertCond:=False;
+  pCond:=pBlock.FindUpCondByReg(src,True,InvertCond);
   if (pCond<>nil) then
   begin
    //Exit(0);
@@ -231,9 +271,9 @@ begin
    //FNormalOrder=false Invert=false : result=false
    //FNormalOrder=false Invert=true  : result=true
 
-   Invert:=Invert xor pCond.Cond.FNormalOrder;
+   InvertCond:=(Invert xor InvertCond) xor pCond.Cond.FNormalOrder;
 
-   node:=NewImm_q(old.dtype,ord(Invert),pLine);
+   node:=NewImm_q(old.dtype,ord(InvertCond),pLine);
 
    if (pIf<>nil) then
    begin
@@ -244,17 +284,29 @@ begin
    Exit(1);
   end;
 
-  pOpNot:=src.pWriter.specialize AsType<ntOp>;
-  if (pOpNot=nil) then Exit;
+  pop:=src.pWriter.specialize AsType<ntOp>;
+  if (pop=nil) then Exit;
 
-  Case pOpNot.OpId of
+  Case pop.OpId of
+   Op.OpLogicalAnd:
+    begin
+     Result:=FoldLAnd(pop.ParamNode(0).AsReg);
+
+     if (Result=0) then
+     begin
+      Result:=FoldLAnd(pop.ParamNode(1).AsReg);
+     end;
+
+     Exit;
+    end;
+
    Op.OpLogicalNot:;
    Op.OpNot:;
    else
     Exit;
   end;
 
-  src:=pOpNot.ParamFirst.AsReg;
+  src:=pop.ParamFirst.AsReg;
   if (src=nil) then Exit;
   src:=RegDown(src);
   Invert:=not Invert;
@@ -267,6 +319,7 @@ var
  relax:Boolean;
 begin
  Case OpId of
+  Op.OpPhi               ,
   Op.OpLoad              ,
   Op.OpImageRead         ,
   Op.OpImageWrite        ,
@@ -337,13 +390,6 @@ begin
  old:=node;
 
  node:=RegDown(old);
- if node.pWriter.IsType(ntVolatile) then
- begin
-  //create load/store
-  //use forward only
-  node:=PrivateList.PrepVolatile(pLine,node);
-  Inc(Result);
- end;
 
  if (old<>node) then //is change?
  begin
@@ -619,21 +665,6 @@ begin
  end;
 end;
 
-function TSprvEmit_post.OnVolatileReslove(node:TspirvOp):Integer; //forward
-begin
- Result:=0;
-
- if node.is_cleared then Exit;
-
- if node.can_clear then
- begin
-  if node.Clear then Inc(Result);
- end else
- begin
-  Result:=Result+EnumLineRegs(@RegVResolve,node);
- end;
-end;
-
 function TSprvEmit_post.OnWeakReslove(node:TspirvOp):Integer; //backward
 begin
  Result:=0;
@@ -728,6 +759,8 @@ begin
   Op.OpImageRead,
   Op.OpImageWrite,
   Op.OpImageQuerySizeLod:Exit;
+
+  srOpInternal.OpExport:Exit;
 
   else
    //Exit;
@@ -898,7 +931,7 @@ var
  pFunc:TSpirvFunc;
  data_layout:Boolean;
  cse_pass:Boolean;
- i,r4:Integer;
+ i,rw,r2:Integer;
 begin
  Result:=0;
  data_layout:=false;
@@ -915,22 +948,15 @@ begin
 
   repeat //Weak Reslove
 
-   repeat //PostForward2
+   repeat //OnPostForward1
 
-    repeat //OnPostForward1
-
-     repeat //OnRegCollapse
-      i:=EnumBlockOpBackward(@OnRegCollapse,pFunc.pTop); //Reg Collapse
-      if (i=0) then Break;
-      Result:=Result+i;
-     until false;
-
-     i:=EnumBlockOpForward(@OnPostForward1,pFunc.pTop); //PostForward1
+    repeat //OnRegCollapse
+     i:=EnumBlockOpBackward(@OnRegCollapse,pFunc.pTop); //Reg Collapse
      if (i=0) then Break;
      Result:=Result+i;
     until false;
 
-    i:=EnumBlockOpForward(@PostForward2,pFunc.pTop); //PostForward2
+    i:=EnumBlockOpForward(@OnPostForward1,pFunc.pTop); //PostForward1
     if (i=0) then Break;
     Result:=Result+i;
    until false;
@@ -940,21 +966,15 @@ begin
     Result:=Result+PostAllocField;
    end;
 
-   repeat //Volatile Reslove
-    i:=EnumBlockOpForward(@OnVolatileReslove,pFunc.pTop);
-    if (i=0) then Break;
-    Result:=Result+i;
-   until false;
-
-   r4:=0;
+   rw:=0;
    repeat //Weak Reslove
     i:=EnumBlockOpBackward(@OnWeakReslove,pFunc.pTop);
     if (i=0) then Break;
-    r4:=r4+i;
+    rw:=rw+i;
    until false;
 
-   if (r4=0) then Break;
-   Result:=Result+r4;
+   if (rw=0) then Break;
+   Result:=Result+rw;
   until false;
 
   if data_layout then
@@ -995,9 +1015,12 @@ begin
 
   if cse_pass then
   begin
-   cse_pass:=False;
+   //cse_pass:=False;
    //CSE
    i:=EnumBlockOpForward(@OnPassCSE,pFunc.pTop);
+   CacheOpList.ClearCSE;
+   //
+   Result:=Result+i;
    if (i<>0) then
    begin
     //pass agian
@@ -1005,9 +1028,21 @@ begin
    end;
   end;
 
-  EnumBlockOpForward(@OnRemoveTerm,pFunc.pTop); //Remove term
+  r2:=0;
+  repeat
+   i:=EnumBlockOpForward(@PostForward2,pFunc.pTop); //PostForward2
+   if (i=0) then Break;
+   r2:=r2+i;
+  until false;
+  Result:=Result+r2;
 
-  PrivateList.RemoveAllStore;
+  if (r2<>0) then
+  begin
+   //pass agian
+   goto _pass;
+  end;
+
+  EnumBlockOpForward(@OnRemoveTerm,pFunc.pTop); //Remove term
 
   Result:=Result+EnumBlockOpBackward(@OnRemoveLines,pFunc.pTop); //Remove Lines
 

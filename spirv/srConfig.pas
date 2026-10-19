@@ -5,7 +5,8 @@ unit srConfig;
 interface
 
 type
- TcbGetDmem=function(P:Pointer):Pointer; register;
+ TGetDmemCb=function(P:Pointer):Pointer; register;
+ TsrReadResourceCb=function(src,dst:Pointer;size:PtrUint):PtrUint;
 
  PsrConfig=^TsrConfig;
  TsrConfig=packed object
@@ -33,7 +34,8 @@ type
    Storage  :Boolean;
   end;
   //
-  OnGetDmem:TcbGetDmem;
+  OnGetDmem:TGetDmemCb;
+  OnReadResource:TsrReadResourceCb;
   //
   Procedure Init;
   Function  CanUseStorageBufferClass:Boolean;

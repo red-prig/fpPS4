@@ -1,6 +1,7 @@
 {$mode objfpc}{$H+}
 
 Uses
+ windows,
  classes,
  Sysutils,
  si_ci_vi_merged_offset,
@@ -9,6 +10,7 @@ Uses
  ps4_shader,
 
  srConfig,
+ srLayout,
  SprvEmit,
 
  emit_post,
@@ -113,23 +115,108 @@ var
   SDP:p_shader_draw_params;
  end;
 
- Blocks:TFPList;
+type
+ TLoadedBlock=record
+  addr:Pointer;
+  size:QWORD;
+ end;
+
+var
+ Blocks:array of TLoadedBlock;
+
+function NewBlock(size:QWORD):Pointer;
+var
+ base:Pointer;
+begin
+ base:=Pointer($10000000);
+
+ repeat
+  Result:=VirtualAlloc(base, size, MEM_RESERVE or MEM_COMMIT, PAGE_READWRITE);
+
+  base:=base+(64*1024);
+ until (Result<>nil);
+
+end;
+
+procedure FreeBlock(addr:Pointer;size:QWORD);
+begin
+ VirtualFree(addr,0,MEM_RELEASE);
+end;
+
+procedure AddBlock(addr:Pointer;size:QWORD);
+var
+ node:TLoadedBlock;
+begin
+ node.addr:=addr;
+ node.size:=size;
+
+ Insert(node,Blocks,Length(Blocks));
+end;
 
 procedure ClearBlocks;
 var
  i:Integer;
 begin
- if (Blocks=nil) then
+ if (Length(Blocks)<>0) then
+ For i:=0 to Length(Blocks)-1 do
  begin
-  Blocks:=TFPList.Create;
-  Exit;
+  FreeBlock(Blocks[i].addr,Blocks[i].size);
  end;
- if (Blocks.Count<>0) then
- For i:=0 to Blocks.Count-1 do
+ SetLength(Blocks,0);
+end;
+
+function GetBlockSize(addr:Pointer):QWORD;
+var
+ i:Integer;
+begin
+ Result:=0;
+ if (Length(Blocks)<>0) then
+ For i:=0 to Length(Blocks)-1 do
+ if (Blocks[i].addr=addr) then
  begin
-  FreeMem(Blocks.Items[i]);
+  Exit(Blocks[i].size);
  end;
- Blocks.Clear;
+end;
+
+function ReadResourceData(src,dst:Pointer;size:PtrUint):PtrUint;
+var
+ i:Integer;
+ eadr:Pointer;
+ n:PtrUint;
+ mbi:TMemoryBasicInformation;
+begin
+ Result:=0;
+ if (src=nil) or (dst=nil) or (size=0) then Exit;
+
+ if (Length(Blocks)<>0) then
+ For i:=0 to Length(Blocks)-1 do
+ begin
+  eadr:=Blocks[i].addr+Blocks[i].size;
+
+  if (src>=Blocks[i].addr) and (src<eadr) then
+  begin
+   FillChar(dst^,size,0);
+
+   n:=PtrUint(eadr)-PtrUint(src);
+   if (n>size) then n:=size;
+   Move(src^,dst^,n);
+   Result:=n;
+   Exit;
+  end;
+
+ end;
+
+ FillChar(mbi,SizeOf(mbi),0);
+ if (VirtualQuery(src,@mbi,SizeOf(mbi))<>0) and
+    (mbi.State=MEM_COMMIT) and
+    (mbi.Protect<>PAGE_NOACCESS) then
+ begin
+  Move(src^,dst^,size);
+  Result:=size;
+ end else
+ begin
+  FillChar(dst^,size,0);
+ end;
 end;
 
 procedure _print_hex(addr:Pointer;size:DWORD);
@@ -230,15 +317,14 @@ begin
    if cfg.FPrintInfo then
     if (W.COUNT<>0) then Writeln('block:',getRegName(W.REG),' size:',size);
 
-   addr:=AllocMem(size+7);
-   if M.Read(Align(addr,8)^,size)<>size then
+   addr:=NewBlock(size);
+   if M.Read(addr^,size)<>size then
    begin
-    FreeMem(addr);
+    FreeBlock(addr,size);
     Break;
    end else
    begin
-    Blocks.Add(addr);
-    addr:=Align(addr,8);
+    AddBlock(addr,size);
    end;
 
    //_print_hex(addr,size);
@@ -343,7 +429,7 @@ var
 begin
  if (base=nil) then Exit;
 
- info:=_calc_shader_info(base,MemSize(base) div 4);
+ info:=_calc_shader_info(base,GetBlockSize(base) div 4);
 
  if cfg.FPrintInfo then
  if (info<>nil) then
@@ -640,6 +726,8 @@ begin
  UTF8CompareLocale:=CP_UTF8;
 
  FillChar(cfg,SizeOf(cfg),0);
+
+ cfg.cfg.OnReadResource:=@ReadResourceData;
 
  ParseCmd;
 

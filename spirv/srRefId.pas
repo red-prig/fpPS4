@@ -24,6 +24,11 @@ type
   function  GetPrintName:RawByteString;
  end;
 
+ TsrOpLabel=class(TsrRefNode)
+  line:TsrNode;
+  pred:TsrNode;
+ end;
+
  ntRefId=TsrRefNode;
 
  PsrRefIdAlloc=^TsrRefIdAlloc;

@@ -135,6 +135,8 @@ begin
  node:=NewLabelOp(True);
  Main.AddSpirvOp(node);
 
+ Main.pBlock.SetLabels(node,nil,nil);
+
  Result:=Main;
 end;
 
@@ -154,6 +156,7 @@ begin
  SetConst_b(get_vcc1 ,false); //0
  SetConst_b(get_exec0,true ); //1
  SetConst_b(get_exec1,false); //0
+ //SetConst_b(get_scc  ,false); //0
 
  MarkWave(get_exec0);
  MarkWave(get_exec1);
@@ -959,7 +962,7 @@ procedure TSprvEmit.emit_spi;
 var
  obj:TObject absolute Self;
 begin
- //OpLine(line,Cursor.prev_adr.Offdw*4,0);
+ //OpLine(line,Cursor.e_adr.Offset,0);
 
  //
  Case FSPI.CMD.EN of

@@ -38,19 +38,39 @@ type
 
  TCustomEmit=class;
 
+ TDependenceStack=object
+  pTop :TDependenceNode;
+  FEmit:TCustomEmit;
+  procedure Init(Emit:TCustomEmit);
+  procedure Push(v:Pointer);
+  function  Pop(out v):Boolean;
+  procedure Clear;
+ end;
+
+ TDependenceList=object
+  FList:TDependenceNodeList;
+  FEmit:TCustomEmit;
+  procedure Init(Emit:TCustomEmit);
+  procedure Push_head(v:Pointer);
+  procedure Push_tail(v:Pointer);
+  function  Pop_head(out v):Boolean;
+  function  Pop_tail(out v):Boolean;
+  procedure Clear;
+ end;
+
  TsrNode=class
   private
    fread_count :DWORD;
    fwrite_count:DWORD;
-   FOrder      :Ptruint;
+   FOrder      :DWORD;
+   FMarker     :DWORD;
    FDependence :TDependenceNodeTree;
    FEmit       :TCustomEmit;
   public
-   function  Order:Ptruint;
+   function  Order:DWORD;
+   property  Marker:DWORD read FMarker write FMarker;
    property  Emit:TCustomEmit read FEmit;
    //
-   function  NewDependence:TDependenceNode;
-   procedure FreeDependence(D:TDependenceNode);
    function  FirstDependence:TDependenceNode;
    function  NextDependence(D:TDependenceNode):TDependenceNode;
    //
@@ -122,13 +142,16 @@ type
 
  TCustomEmit=class
   private
-   FOrder:Ptruint;
+   FOrder :DWORD;
+   FMarker:DWORD;
    FDependenceCache:TDependenceNodeList;
   public
   //
   Function  Alloc(Size:ptruint):Pointer;                   virtual abstract;
   generic Function New<T>:T;
+  Function  NewMarker:DWORD;
   Function  GetDmem(P:Pointer) :Pointer;                   virtual abstract;
+  function  ReadResource(src,dst:Pointer;size:PtrUint):PtrUint; virtual abstract;
   Function  GetExecutionModel  :Word;                      virtual abstract;
   Function  GetConfig          :Pointer;                   virtual abstract;
   Function  GetCodeHeap        :Pointer;                   virtual abstract;
@@ -160,6 +183,9 @@ type
   function  OpStore (pLine,      dst,src:TsrNode):TsrNode; virtual abstract;
   Function  PostLink(pLine,      dst:TsrNode):TsrNode;     virtual abstract;
   procedure emit_spi;                                      virtual abstract;
+  //
+  function  NewDependence:TDependenceNode;
+  procedure FreeDependence(D:TDependenceNode);
  end;
 
 function CompareNodes(buf1,buf2:PPsrNode;count:PtrUint):Integer;
@@ -171,7 +197,7 @@ begin
  Result:=ord(ptruint(n1^)>ptruint(n2^))-ord(ptruint(n1^)<ptruint(n2^));
 end;
 
-function TsrNode.Order:Ptruint;
+function TsrNode.Order:DWORD;
 begin
  Result:=0;
  if (Self<>nil) then
@@ -180,22 +206,125 @@ begin
  end;
 end;
 
-function TsrNode.NewDependence:TDependenceNode;
+//
+
+procedure TDependenceStack.Init(Emit:TCustomEmit);
 begin
- if (Self=nil) then Exit(nil);
- Result:=FEmit.FDependenceCache.Pop_tail;
- if (Result=nil) then
+ pTop :=nil;
+ FEmit:=Emit;
+end;
+
+procedure TDependenceStack.Push(v:Pointer);
+var
+ new:TDependenceNode;
+begin
+ new:=FEmit.NewDependence;
+ new.pNode:=TsrNode(v);
+ new.pNext:=pTop;
+ pTop:=new;
+end;
+
+function TDependenceStack.Pop(out v):Boolean;
+var
+ old:TDependenceNode;
+begin
+ Result:=False;
+ old:=pTop;
+ if (old<>nil) then
  begin
-  Result:=FEmit.specialize New<TDependenceNode>;
+  TsrNode(v):=old.pNode;
+  pTop:=old.pNext;
+  FEmit.FreeDependence(old);
+  Result:=True;
  end;
 end;
 
-procedure TsrNode.FreeDependence(D:TDependenceNode);
+procedure TDependenceStack.Clear;
+var
+ v:Pointer;
+begin
+ while Pop(v) do;
+end;
+
+//
+
+procedure TDependenceList.Init(Emit:TCustomEmit);
+begin
+ FList:=Default(TDependenceNodeList);
+ FEmit:=Emit;
+end;
+
+procedure TDependenceList.Push_head(v:Pointer);
+var
+ new:TDependenceNode;
+begin
+ new:=FEmit.NewDependence;
+ new.pNode:=TsrNode(v);
+ FList.Push_head(new);
+end;
+
+procedure TDependenceList.Push_tail(v:Pointer);
+var
+ new:TDependenceNode;
+begin
+ new:=FEmit.NewDependence;
+ new.pNode:=TsrNode(v);
+ FList.Push_tail(new);
+end;
+
+function TDependenceList.Pop_head(out v):Boolean;
+var
+ old:TDependenceNode;
+begin
+ Result:=False;
+ old:=FList.Pop_head;
+ if (old<>nil) then
+ begin
+  TsrNode(v):=old.pNode;
+  FEmit.FreeDependence(old);
+  Result:=True;
+ end;
+end;
+
+function TDependenceList.Pop_tail(out v):Boolean;
+var
+ old:TDependenceNode;
+begin
+ Result:=False;
+ old:=FList.Pop_tail;
+ if (old<>nil) then
+ begin
+  TsrNode(v):=old.pNode;
+  FEmit.FreeDependence(old);
+  Result:=True;
+ end;
+end;
+
+procedure TDependenceList.Clear;
+var
+ v:Pointer;
+begin
+ while Pop_tail(v) do;
+end;
+
+//
+
+function TCustomEmit.NewDependence:TDependenceNode;
+begin
+ if (Self=nil) then Exit(nil);
+ Result:=FDependenceCache.Pop_tail;
+ if (Result=nil) then
+ begin
+  Result:=specialize New<TDependenceNode>;
+ end;
+end;
+
+procedure TCustomEmit.FreeDependence(D:TDependenceNode);
 begin
  if (Self=nil) then Exit;
  if (D=nil) then Exit;
  D.pNode:=nil;
- FEmit.FDependenceCache.Push_head(D);
+ FDependenceCache.Push_head(D);
 end;
 
 function TsrNode.FirstDependence:TDependenceNode;
@@ -215,7 +344,7 @@ begin
  D:=FDependence.Find(@src);
  if (D=nil) then
  begin
-  D:=NewDependence;
+  D:=FEmit.NewDependence;
   //
   D.pNode:=src;
   FDependence.Insert(D);
@@ -242,7 +371,7 @@ begin
   begin
    FDependence.Delete(D);
    //
-   FreeDependence(D);
+   FEmit.FreeDependence(D);
   end;
   //
   Dec(fread_count);
@@ -259,7 +388,7 @@ begin
  D:=FDependence.Find(@src);
  if (D=nil) then
  begin
-  D:=NewDependence;
+  D:=FEmit.NewDependence;
   //
   D.pNode:=src;
   FDependence.Insert(D);
@@ -286,7 +415,7 @@ begin
   begin
    FDependence.Delete(D);
    //
-   FreeDependence(D);
+   FEmit.FreeDependence(D);
   end;
   //
   Dec(fwrite_count);
@@ -695,6 +824,12 @@ begin
   TsrNode(Result).FOrder:=FOrder;
   TsrNode(Result).FEmit :=Self;
  end;
+end;
+
+Function TCustomEmit.NewMarker:DWORD;
+begin
+ Inc(FMarker);
+ Result:=FMarker;
 end;
 
 function CompareNodes(buf1,buf2:PPsrNode;count:PtrUint):Integer;

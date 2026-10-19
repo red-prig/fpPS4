@@ -673,7 +673,6 @@ end;
 function TsrDataLayoutList.Fetch(p:TsrDataLayout;o,m:PtrUint;t:TsrResourceType;pData:Pointer):TsrDataLayout;
 var
  key:TsrDataLayoutKey;
- i:Integer;
 begin
  Assert(p<>nil);
  key:=Default(TsrDataLayoutKey);
@@ -702,20 +701,14 @@ begin
 
    case t of
     rtRoot   :PPointer(@Result.FData)^:=pData;
-    rtFunPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^);
-    rtBufPtr2:PPointer(@Result.FData)^:=Pointer(PPtrUint(pData+o)^);
     rtImmData:PPointer(@Result.FData)^:=pData;
+    rtFunPtr2,
+    rtBufPtr2:FTop.FEmit.ReadResource(pData+o,@Result.FData,SizeOf(PtrUint));
     rtVSharp2,
     rtVSharp4,
     rtSSharp4,
     rtTSharp4,
-    rtTSharp8://Move(Pointer(pData+o)^,Result.FData,GetResourceSizeDw(t)*SizeOf(DWORD));
-     begin
-      for i:=0 to GetResourceSizeDw(t)-1 do
-      begin
-       Result.FData[i]:=PDWORD(pData+o)[i];
-      end;
-     end;
+    rtTSharp8:FTop.FEmit.ReadResource(pData+o,@Result.FData,GetResourceSizeDw(t)*SizeOf(DWORD));
    end;
 
   end;
@@ -1435,7 +1428,7 @@ procedure TsrChain.AddLine(pLine:TSpirvOp);
 var
  node:TDependenceNode;
 begin
- node:=NewDependence;
+ node:=Emit.NewDependence;
  node.pNode:=pLine;
  FList.Push_tail(node);
 end;

@@ -24,18 +24,22 @@ type
   public
    key:TsrCSEKey;
   public
+   property pNext:TsrCSENode read pLeft write pLeft;
  end;
 
  PsrCacheOpList=^TsrCacheOpList;
  TsrCacheOpList=object
   type
-   TCSETree=specialize TNodeTreeClass<TsrCSENode>;
+   TCSETree =specialize TNodeTreeClass <TsrCSENode>;
+   TCSEStack=specialize TNodeStackClass<TsrCSENode>;
   var
    FEmit:TCustomEmit;
    FCSETree:TCSETree;
+   FCSEList:TCSEStack;
   Procedure Init(Emit:TCustomEmit); inline;
   function  FindLocalCSE(node:TspirvOp):TsrCSENode;
   function  AddLocalCSE (node:TspirvOp):TsrCSENode;
+  procedure ClearCSE;
  end;
 
 function  _up_to_real(t:TsrOpBlock):TsrOpBlock;
@@ -125,11 +129,32 @@ begin
  key.pLine  :=node;
  key.pParent:=_up_to_real(node.Parent);
 
- Result:=FEmit.specialize New<TsrCSENode>;
+ Result:=FCSEList.Pop_head;
+ if (Result=nil) then
+ begin
+  Result:=FEmit.specialize New<TsrCSENode>;
+ end;
+
  Result.key:=key;
 
  FCSETree.Insert(Result);
 end;
+
+procedure TsrCacheOpList.ClearCSE;
+var
+ node:TsrCSENode;
+begin
+ node:=FCSETree.Min;
+ while (node<>nil) do
+ begin
+  FCSETree.Delete(node);
+  FCSEList.Push_head(node);
+  //
+  node:=FCSETree.Min;
+ end;
+end;
+
+
 
 end.
 

@@ -800,7 +800,7 @@ var
 begin
  if (t=nil) or (Self=nil) then Exit;
 
- node:=NewDependence;
+ node:=Emit.NewDependence;
  node.pNode:=t;
 
  FDList.Push_head(node);
@@ -818,7 +818,7 @@ begin
   begin
    FDList.Remove(node);
 
-   FreeDependence(node);
+   Emit.FreeDependence(node);
 
    Exit;
   end;

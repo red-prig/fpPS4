@@ -64,6 +64,7 @@ begin
   Assert(name<>'','GetNodeStr$2');
   Result:=name;
  end;
+ //Result:=Result+'('+IntToStr(Node.Order)+')';
 end;
 
 procedure TSprvEmit_print.PrintCaps;
@@ -199,10 +200,10 @@ begin
  if Info.result then //dst
  begin
   Assert(node.pDst<>nil,'PrintOp$1');
-  Write(PadRight(GetNodeStr(node.pDst),PadAssign),' = ',OpGetStrInternal(node.OpId));
+  Write(PadRight(GetNodeStr(node.pDst),PadAssign),' = ',OpGetStrInternal(node.OpId){+'('+IntToStr(node.Order)+')'});
  end else
  begin  //no dst
-  Write(OpGetStrInternal(node.OpId));
+  Write(OpGetStrInternal(node.OpId){+'('+IntToStr(node.Order)+')'});
   if (node.pDst<>nil) then
   begin
    Write(' ',GetNodeStr(node.pDst));

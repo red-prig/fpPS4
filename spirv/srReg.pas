@@ -35,7 +35,7 @@ type
     dsbgr:Boolean;
    end;
    FSlot:PsrRegSlot;
-   FWriter:TsrNode;        //ntReg,ntConst,ntOp,ntVolatile
+   FWriter:TsrNode;        //ntReg,ntConst,ntOp
    FCustomLine:TsrNode;    //PspirvOp;
    function  GetDtype:TsrDataType;
    Procedure SetDtype(t:TsrDataType);
@@ -115,7 +115,7 @@ type
 
  TString7=string[7];
 
- TSlotCategory=(cNone,cUnattach,cScalar,cScc,cVector,cVectorArray,cLane);
+ TSlotCategory=(cNone,cUnattach,cScalar,cScc,cVector,cVectorArray,cLane,cCondVar);
 
  PsrBitKey=^TsrBitKey;
  TsrBitKey=bitpacked record
@@ -134,7 +134,6 @@ type
    FBits   :TsrBitKey;
    procedure set_current(c:TsrRegNode);
   public
-   FPrivate:TsrNode;
    property  Emit    :TCustomEmit   read FEmit;
    property  current :TsrRegNode    read FCurrent write set_current;
    property  Name    :TString7      read FName;
@@ -152,39 +151,32 @@ type
    function  New(rtype:TsrDataType;pLine:TsrRegNode=nil):TsrRegNode;
  end;
 
- PsrRegsSnapshot=^TsrRegsSnapshot;
- TsrRegsSnapshot=record
+ TsrRegsSnapshot=class
+  //cond vars
+  CONDVALS:TDependenceNodeList;
   //366
-  case Byte of
-   0:(REGS:array[0..365] of TsrRegNode;);
-   1:(
-      SGRP:array[0..103] of TsrRegNode; //104
-      VCC :array[0..1] of TsrRegNode;   //2
-      M0  :TsrRegNode;                  //1
-      EXEC:array[0..1] of TsrRegNode;   //2
-      SCC :TsrRegNode;                  //1
-      VGRP:array[0..255] of TsrRegNode; //256
-     );
+  REGS:array[0..365] of TsrRegNode;
  end;
 
- TsrVolatileNode=class
-  pPrev,pNext:TsrVolatileNode;
-  //
-  V:TsrNode;
-  N:TsrNode;
+ TsrCondSlot=class
+  pNext,pPrev:TsrCondSlot;
+  slot:TsrRegSlot;
  end;
- TsrVolatileNodeList=specialize TNodeListClass<TsrVolatileNode>;
+ TsrCondSlotList=specialize TNodeListClass<TsrCondSlot>;
 
  TsrVolatileContext=object
-  Emit:TCustomEmit;
-  //
   befor:TsrNode;
-  after:TsrNode;
-  block:TsrNode;
-  //
-  FList:TsrVolatileNodeList;
-  //
-  Procedure AddVolatile(V,N:TsrNode);
+
+  pMrgOp:TsrNode;
+  pPrvOp:TsrNode;
+  pAftOp:TsrNode;
+
+  pBegLabel:TsrNode;
+  pPrdLabel:TsrNode;
+  pPrvLabel:TsrNode;
+  pCurLabel:TsrNode;
+
+  FBreaks:TDependenceList;
  end;
 
  TForEachSlot=procedure(pSlot:PsrRegSlot) of object;
@@ -202,8 +194,17 @@ type
   VGRP:array[0..255] of TsrRegSlot; //256
   FUnattach:TsrRegSlot;
   //
+  //condition variables (on-demand node list)
+  FCond:TsrCondSlotList;
+  FCondCount:Integer;
+  //
+  FSnap:TsrRegsSnapshot;
+  //
+  FEmit:TCustomEmit;
+  //
   Procedure Init(Emit:TCustomEmit);
   Function  SLOT:PsrRegSlot; inline;
+  Function  alloc_cond:PsrRegSlot;
   //
   function  get_sdst7(SDST:Byte):PsrRegSlot;
   function  get_sdst7_pair(SDST:Byte;dst:PPsrRegSlot):Boolean;
@@ -216,10 +217,14 @@ type
   function  get_sbase(SBASE,count:Byte;src:PPsrRegSlot):Boolean;
   function  get_srsrc(SRSRC,count:Byte;src:PPsrRegSlot):Boolean;
   //
+  function  new_snapshot:TsrRegsSnapshot;
   function  get_snapshot:TsrRegsSnapshot;
+  procedure FillSnapshot (dst:TsrRegsSnapshot);
+  function  SnapshotClone(src:TsrRegsSnapshot):TsrRegsSnapshot;
+  procedure FreeSnapshot (src:TsrRegsSnapshot);
   procedure ForEachSlot(cb:TForEachSlot);
-  procedure ForEachSnap(cb:TForEachSnp1;orig:PsrRegsSnapshot);
-  procedure ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:PsrRegsSnapshot);
+  procedure ForEachSnap(cb:TForEachSnp1;orig:TsrRegsSnapshot);
+  procedure ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:TsrRegsSnapshot);
  end;
 
 function RegDown(node:TsrRegNode):TsrRegNode;
@@ -234,19 +239,6 @@ implementation
 operator := (i:TsrNode):TsrRegNode; inline;
 begin
  Result:=TsrRegNode(Pointer(i)); //typecast hack
-end;
-
-//
-
-Procedure TsrVolatileContext.AddVolatile(V,N:TsrNode);
-var
- node:TsrVolatileNode;
-begin
- node:=Emit.specialize New<TsrVolatileNode>;
- node.V:=V;
- node.N:=N;
- //
- FList.Push_tail(node);
 end;
 
 //
@@ -315,7 +307,7 @@ begin
   Exit;
  end;
 
- if FSlot^.isBoolOnly then
+ if (FSlot<>nil) and FSlot^.isBoolOnly then
  begin
   //next
   node^.rtype:=ord(dtBool);
@@ -336,6 +328,13 @@ begin
    node^.dnode:=pWriter;
    Exit;
   end;
+ end else
+ if is_const and (dtype<>dtUnknow) then
+ if (dtype<>TsrConst(pWriter).dtype) then
+ begin
+  //fixup
+  pConstList:=FSlot^.FEmit.GetConstList;
+  pWriter:=pConstList^.Bitcast(new,pWriter.specialize AsType<ntConst>);
  end;
 
  node^.dnode:=nil;
@@ -411,6 +410,7 @@ begin
   FLanes[p].PrepType(node^.rtype);
  end;
 
+ inherited _PrepType(node);
 end;
 
 //
@@ -439,12 +439,31 @@ begin
   VGRP[i].Init(Emit,n,cVector);
  end;
  FUnattach.Init(Emit,'UNATT',cUnattach);
+ FEmit:=Emit;
+ FCondCount:=0;
  //init order
  For i:=0 to RegCount-1 do
  begin
   SLOT[i].FBits.id:=i;
  end;
  //init order
+end;
+
+Function TsrRegsStory.alloc_cond:PsrRegSlot;
+var
+ n:TString7;
+ cond:TsrCondSlot;
+begin
+ cond:=FEmit.specialize New<TsrCondSlot>;
+ //
+ Str(FCondCount,n);
+ n:='C'+n;
+ cond.slot.Init(FEmit,n,cCondVar,FCondCount);
+ Inc(FCondCount);
+ //
+ FCond.Push_tail(cond);
+ //
+ Result:=@cond.slot;
 end;
 
 Function TsrRegsStory.SLOT:PsrRegSlot; inline;
@@ -613,11 +632,34 @@ end;
 
 //
 
+function TsrRegsStory.new_snapshot:TsrRegsSnapshot;
+begin
+ if (FSnap<>nil) then
+ begin
+  Result:=FSnap;
+  FSnap :=TsrRegsSnapshot(FSnap.CONDVALS.pHead);
+ end else
+ begin
+  Result:=SLOT[0].Emit.specialize New<TsrRegsSnapshot>;
+ end;
+ //
+ Result.CONDVALS:=Default(TDependenceNodeList);
+end;
+
 function TsrRegsStory.get_snapshot:TsrRegsSnapshot;
+begin
+ Result:=new_snapshot;
+ //
+ FillSnapshot(Result);
+end;
+
+procedure TsrRegsStory.FillSnapshot(dst:TsrRegsSnapshot);
 var
  PTR :PsrRegSlot;
  Emit:TCustomEmit;
  node:TsrVectorArray;
+ cond:TsrCondSlot;
+ pDep:TDependenceNode;
  i,p:Word;
 begin
  Emit:=SLOT[0].Emit;
@@ -636,19 +678,81 @@ begin
     node.FLanes[p]:=PTR^.pLanes[p].current;
    end;
    //
-   Result.REGS[i]:=node;
+   dst.REGS[i]:=node;
   end else
   begin
-   Result.REGS[i]:=PTR^.current;
+   dst.REGS[i]:=PTR^.current;
   end;
-
  end;
+ //
+ //condition variables
+ //
+ while (dst.CONDVALS.pHead<>nil) do
+ begin
+  pDep:=dst.CONDVALS.Pop_tail;
+  Emit.FreeDependence(pDep);
+ end;
+ //
+ cond:=FCond.pHead;
+ while (cond<>nil) do
+ begin
+  pDep:=Emit.NewDependence;
+  pDep.pNode:=cond.slot.current;
+  //
+  dst.CONDVALS.Push_tail(pDep);
+  //
+  cond:=cond.pNext;
+ end;
+end;
+
+function TsrRegsStory.SnapshotClone(src:TsrRegsSnapshot):TsrRegsSnapshot;
+var
+ Emit:TCustomEmit;
+ nnew,nold:TDependenceNode;
+begin
+ if (src=nil) then Exit(nil);
+ //
+ Emit:=SLOT[0].Emit;
+ //
+ Result:=new_snapshot;
+ //
+ Result.REGS:=src.REGS;
+ //
+ nold:=src.CONDVALS.pHead;
+ while (nold<>nil) do
+ begin
+  nnew:=Emit.NewDependence;
+  nnew.pNode:=nold.pNode;
+  Result.CONDVALS.Push_tail(nnew);
+  //
+  nold:=nold.pNext;
+ end;
+end;
+
+procedure TsrRegsStory.FreeSnapshot(src:TsrRegsSnapshot);
+var
+ Emit:TCustomEmit;
+ pDep:TDependenceNode;
+begin
+ if (src=nil) then Exit;
+ //
+ Emit:=SLOT[0].Emit;
+ //
+ while (src.CONDVALS.pHead<>nil) do
+ begin
+  pDep:=src.CONDVALS.Pop_tail;
+  Emit.FreeDependence(pDep);
+ end;
+ //
+ TsrRegsSnapshot(src.CONDVALS.pHead):=FSnap;
+ FSnap:=src;
 end;
 
 procedure TsrRegsStory.ForEachSlot(cb:TForEachSlot);
 var
  i:Word;
  PTR:PsrRegSlot;
+ cond:TsrCondSlot;
 begin
  if (cb=nil) then Exit;
  //
@@ -657,12 +761,22 @@ begin
  begin
   cb(@PTR[i]);
  end;
+ //
+ //condition variables
+ cond:=FCond.pHead;
+ while (cond<>nil) do
+ begin
+  cb(@cond.slot);
+  cond:=cond.pNext;
+ end;
 end;
 
-procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp1;orig:PsrRegsSnapshot);
+procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp1;orig:TsrRegsSnapshot);
 var
  i,p:Word;
  PTR:PsrRegSlot;
+ cond:TsrCondSlot;
+ pDep:TDependenceNode;
  nodes:record
   orig:TsrVectorArray;
  end;
@@ -676,10 +790,10 @@ begin
  begin
   PTR:=@PsrRegSlot(SLOT)[i];
 
-  if ((orig^.REGS[i]=nil) or (orig^.REGS[i].IsType(TsrVectorArray))) and
+  if ((orig.REGS[i]=nil) or (orig.REGS[i].IsType(TsrVectorArray))) and
      (PTR^.Category=cVectorArray) then
   begin
-   nodes.orig:=orig^.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.orig:=orig.REGS[i].specialize AsType<TsrVectorArray>;
 
    For p:=0 to LaneCount-1 do
    begin
@@ -697,7 +811,7 @@ begin
     if (nodes.orig=nil) and (regs.orig<>nil) then
     begin
      nodes.orig:=SLOT[0].Emit.specialize New<TsrVectorArray>;
-     orig^.REGS[i]:=nodes.orig;
+     orig.REGS[i]:=nodes.orig;
     end;
 
     if (nodes.orig<>nil) then
@@ -709,16 +823,30 @@ begin
 
   end else
   begin
-   cb(PTR,orig^.REGS[i]);
+   cb(PTR,orig.REGS[i]);
   end;
 
  end;
+
+ //condition variables
+ cond:=FCond.pHead;
+ pDep:=orig.CONDVALS.pHead;
+ while (cond<>nil) and (pDep<>nil) do
+ begin
+  regs.orig:=pDep.pNode;
+  cb(@cond.slot,regs.orig);
+  pDep.pNode:=regs.orig;
+  //
+  cond:=cond.pNext;
+  pDep:=pDep.pNext;
+ end;
 end;
 
-procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:PsrRegsSnapshot);
+procedure TsrRegsStory.ForEachSnap(cb:TForEachSnp3;var ctx:TsrVolatileContext;orig,prev,next:TsrRegsSnapshot);
 var
  i,p:Word;
  PTR:PsrRegSlot;
+ cond:TsrCondSlot;
  nodes:record
   orig:TsrVectorArray;
   prev:TsrVectorArray;
@@ -729,6 +857,21 @@ var
   prev:TsrRegNode;
   next:TsrRegNode;
  end;
+ pDep:record
+  orig:TDependenceNode;
+  prev:TDependenceNode;
+  next:TDependenceNode;
+ end;
+
+ procedure prealloc(var pDep:TDependenceNode;var List:TDependenceNodeList);
+ begin
+  if (pDep=nil) then
+  begin
+   pDep:=FEmit.NewDependence;
+   List.Push_tail(pDep);
+  end;
+ end;
+
 begin
  if (cb=nil) then Exit;
  //
@@ -736,14 +879,14 @@ begin
  begin
   PTR:=@PsrRegSlot(SLOT)[i];
 
-  if ((orig^.REGS[i]=nil) or (orig^.REGS[i].IsType(TsrVectorArray))) and
-     ((prev^.REGS[i]=nil) or (prev^.REGS[i].IsType(TsrVectorArray))) and
-     ((next^.REGS[i]=nil) or (next^.REGS[i].IsType(TsrVectorArray))) and
+  if ((orig.REGS[i]=nil) or (orig.REGS[i].IsType(TsrVectorArray))) and
+     ((prev.REGS[i]=nil) or (prev.REGS[i].IsType(TsrVectorArray))) and
+     ((next.REGS[i]=nil) or (next.REGS[i].IsType(TsrVectorArray))) and
      (PTR^.Category=cVectorArray) then
   begin
-   nodes.orig:=orig^.REGS[i].specialize AsType<TsrVectorArray>;
-   nodes.prev:=prev^.REGS[i].specialize AsType<TsrVectorArray>;
-   nodes.next:=next^.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.orig:=orig.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.prev:=prev.REGS[i].specialize AsType<TsrVectorArray>;
+   nodes.next:=next.REGS[i].specialize AsType<TsrVectorArray>;
 
    For p:=0 to LaneCount-1 do
    begin
@@ -777,19 +920,19 @@ begin
     if (nodes.orig=nil) and (regs.orig<>nil) then
     begin
      nodes.orig:=SLOT[0].Emit.specialize New<TsrVectorArray>;
-     orig^.REGS[i]:=nodes.orig;
+     orig.REGS[i]:=nodes.orig;
     end;
 
     if (nodes.prev=nil) and (regs.prev<>nil) then
     begin
      nodes.prev:=SLOT[0].Emit.specialize New<TsrVectorArray>;
-     prev^.REGS[i]:=nodes.prev;
+     prev.REGS[i]:=nodes.prev;
     end;
 
     if (nodes.next=nil) and (regs.next<>nil) then
     begin
      nodes.next:=SLOT[0].Emit.specialize New<TsrVectorArray>;
-     next^.REGS[i]:=nodes.next;
+     next.REGS[i]:=nodes.next;
     end;
 
     if (nodes.orig<>nil) then
@@ -811,9 +954,36 @@ begin
 
   end else
   begin
-   cb(ctx,PTR,orig^.REGS[i],prev^.REGS[i],next^.REGS[i]);
+   cb(ctx,PTR,orig.REGS[i],prev.REGS[i],next.REGS[i]);
   end;
 
+ end;
+ //
+ //condition variables
+ cond:=FCond.pHead;
+ pDep.orig:=orig.CONDVALS.pHead;
+ pDep.prev:=prev.CONDVALS.pHead;
+ pDep.next:=next.CONDVALS.pHead;
+ while (cond<>nil) do
+ begin
+  prealloc(pDep.orig,orig.CONDVALS);
+  prealloc(pDep.prev,prev.CONDVALS);
+  prealloc(pDep.next,next.CONDVALS);
+  //
+  regs.orig:=pDep.orig.pNode;
+  regs.prev:=pDep.prev.pNode;
+  regs.next:=pDep.next.pNode;
+  //
+  cb(ctx,@cond.slot,regs.orig,regs.prev,regs.next);
+  //
+  pDep.orig.pNode:=regs.orig;
+  pDep.prev.pNode:=regs.prev;
+  pDep.next.pNode:=regs.next;
+  //
+  cond:=cond.pNext;
+  pDep.orig:=pDep.orig.pNext;
+  pDep.prev:=pDep.prev.pNext;
+  pDep.next:=pDep.next.pNext;
  end;
 end;
 
@@ -1097,7 +1267,7 @@ end;
 
 function TsrRegSlot.isBoolOnly:Boolean;
 begin
- Result:=(FBits.Category=cScc);
+ Result:=(FBits.Category=cScc) or (FBits.Category=cCondVar);
 end;
 
 function TsrRegSlot.isScalar:Boolean;

@@ -136,7 +136,7 @@ procedure TsrOutput.AddLine(pLine:TSpirvOp);
 var
  node:TDependenceNode;
 begin
- node:=NewDependence;
+ node:=Emit.NewDependence;
  node.pNode:=pLine;
  FLineList.Push_tail(node);
 end;

@@ -124,6 +124,7 @@ type
   //
   function  Alloc(Size:ptruint):Pointer; override;
   Function  GetDmem(P:Pointer) :Pointer; override;
+  function  ReadResource(src,dst:Pointer;size:PtrUint):PtrUint; override;
   Function  GetExecutionModel  :Word;    override;
   Function  GetConfig          :Pointer; override;
   Function  GetCodeHeap        :Pointer; override;
@@ -258,6 +259,21 @@ begin
  end else
  begin
   Result:=P;
+ end;
+end;
+
+function TEmitInterface.ReadResource(src,dst:Pointer;size:PtrUint):PtrUint;
+begin
+ Result:=0;
+ if (src=nil) or (dst=nil) or (size=0) then Exit;
+
+ if (Config.OnReadResource=nil) then
+ begin
+  Move(src^,dst^,size);
+  Result:=size;
+ end else
+ begin
+  Result:=Config.OnReadResource(src,dst,size);
  end;
 end;
 
@@ -506,9 +522,15 @@ end;
 function TEmitInterface.NewLabelOp(sdep:Boolean):TSpirvOp;
 Var
  node:TSpirvOp;
+ ref:TsrOpLabel;
 begin
+ ref:=specialize New<TsrOpLabel>;
+
  node:=NewSpirvOp(Op.OpLabel);
- node.pDst:=NewRefNode;
+ node.pDst:=ref;
+
+ ref.line:=node;
+
  Result:=node;
  if sdep then node.pDst.mark_read(nil);
 end;
@@ -655,13 +677,9 @@ function TEmitInterface.NewBlockOp(const curr:TsrRegsSnapshot):TsrOpBlock;
 begin
  Result:=AllocBlockOp;
  //
- Result.Regs.orig :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.prev :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.next :=Alloc(SizeOf(TsrRegsSnapshot));
- //
- Result.Regs.orig^:=curr;
- Result.Regs.prev^:=curr;
- Result.Regs.next^:=curr;
+ Result.Regs.orig:=curr;
+ Result.Regs.prev:=RegsStory.SnapshotClone(curr);
+ Result.Regs.next:=RegsStory.SnapshotClone(curr);
  Result.Cond.FUseCont:=false;
 end;
 
@@ -669,13 +687,9 @@ function TEmitInterface.NewBlockOp(const curr,orig:TsrRegsSnapshot):TsrOpBlock;
 begin
  Result:=AllocBlockOp;
  //
- Result.Regs.orig :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.prev :=Alloc(SizeOf(TsrRegsSnapshot));
- Result.Regs.next :=Alloc(SizeOf(TsrRegsSnapshot));
- //
- Result.Regs.orig^:=orig;
- Result.Regs.prev^:=curr;
- Result.Regs.next^:=curr;
+ Result.Regs.orig:=orig;
+ Result.Regs.prev:=curr;
+ Result.Regs.next:=RegsStory.SnapshotClone(curr);
  Result.Cond.FUseCont:=false;
 end;
 

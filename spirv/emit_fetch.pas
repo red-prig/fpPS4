@@ -110,16 +110,20 @@ begin
  Insert([node],A,High(A));
 end;
 
-procedure add_volatile(var A:a_volatile_node;V:TsrVolatile);
+procedure add_volatile(var A:a_volatile_node;V:TSpirvOp);
 var
- node:TStoreNode;
+ pValue :POpParamNode;
+ pParent:POpParamNode;
 begin
- node:=V.FList.pHead;
- while (node<>nil) do
+ pValue:=V.ParamFirst;
+ while (pValue<>nil) do
  begin
-  add_node(A,RegDown(node.src));
+  pParent:=pValue.Next;
+  if (pParent=nil) then Exit;
   //
-  node:=node.pNext;
+  add_node(A,RegDown(pValue.Value));
+  //
+  pValue:=pParent.Next;
  end;
 end;
 
@@ -135,12 +139,24 @@ begin
  end;
 end;
 
+function IsPhi(node:TsrRegNode):Boolean;
+var
+ V:TSpirvOp;
+begin
+ Result:=False;
+ V:=node.pWriter.specialize AsType<ntOp>;
+ if (V<>nil) then
+ begin
+  Result:=V.OpId=Op.OpPhi;
+ end;
+end;
+
 type
  AsrInput=array of TsrInput;
 
 function GetInputRegNode2(node:TsrRegNode):AsrInput;
 var
- V:TsrVolatile;
+ V:TSpirvOp;
  C:TsrInput;
  pSource:TsrNode;
  A:a_volatile_node;
@@ -154,9 +170,9 @@ begin
  begin
   node:=RegDown(node);
 
-  while node.pWriter.IsType(TsrVolatile) do
+  while IsPhi(node) do
   begin
-   V:=node.pWriter.specialize AsType<TsrVolatile>;
+   V:=node.pWriter.specialize AsType<ntOp>;
    add_volatile(A,V);
    node:=next_volatile(A,i);
   end;
@@ -354,32 +370,31 @@ end;
 function GetVariantPairLine(node:TsrRegNode):TSpirvOp;
 var
  pOp:TSpirvOp;
- V:TsrVolatile;
- snode:TStoreNode;
- reg:TsrRegNode;
+ V:TSpirvOp;
+ pValue :POpParamNode;
+ pParent:POpParamNode;
 begin
  Result:=nil;
 
  node:=RegDown(node);
 
- if node.pWriter.IsType(TsrVolatile) then
+ if IsPhi(node) then
  begin
-  V:=node.pWriter.specialize AsType<TsrVolatile>;
+  V:=node.pWriter.specialize AsType<ntOp>;
 
-  snode:=V.FList.pHead;
-
-  while (snode<>nil) do
+  pValue:=V.ParamFirst;
+  while (pValue<>nil) do
   begin
-   reg:=snode.src;
-
-   pOp:=GetRegPairOp(reg);
-
+   pParent:=pValue.Next;
+   if (pParent=nil) then Exit;
+   //
+   pOp:=GetRegPairOp(pValue.AsReg);
    if (pOp<>nil) then
    begin
     Exit(pOp)
    end;
-
-   snode:=snode.pNext;
+   //
+   pValue:=pParent.Next;
   end;
 
  end;

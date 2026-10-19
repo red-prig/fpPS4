@@ -17,6 +17,7 @@ uses
  srReg,
  srOp,
  srOpUtils,
+ srRefId,
  srConfig,
  emit_op;
 
@@ -37,7 +38,7 @@ type
   function  LoadStatment(C:TConvertResult):TConvertResult;
   procedure emit_break(pCurr:TsrOpBlock);
   procedure EmitStatment(node:TsrStatement);
-  function  NewMerge(iCursor:TsrCursor):TsrOpBlock;
+  function  NewMerge(pLine:TspirvOp;iCursor:TsrCursor):TsrOpBlock;
   function  NewIf   (pOpMerge:TsrOpBlock;iCursor:TsrCursor;src:TsrRegNode;ForceElse:Boolean):TsrOpBlock;
   function  NewElse (pOpMerge:TsrOpBlock;iCursor:TsrCursor):TsrOpBlock;
   function  NewLoop (iCursor:TsrCursor):TsrOpBlock;
@@ -89,14 +90,98 @@ begin
  end;
 end;
 
+function FindPredecessor(pLine:TspirvOp):TspirvOp;
+var
+ node :TspirvOp;
+ block:TsrOpBlock;
+begin
+ repeat
+
+  node:=pLine;
+  repeat
+   if node.IsType(TsrOpBlock) then
+   begin
+    block:=node;
+    if (block.Labels.pMrgOp<>nil) then
+    begin
+     Exit(block.Labels.pMrgOp);
+    end;
+   end;
+
+   node:=node.Prev;
+  until (node=nil);
+
+  repeat
+   block:=pLine.Parent;
+
+   if (block.Labels.pRepOp<>nil) then
+   begin
+    Exit(block.Labels.pRepOp);
+   end else
+   if (block.Labels.pBegOp<>nil) then
+   begin
+    Exit(block.Labels.pBegOp);
+   end;
+
+   pLine:=block;
+  until (pLine.Prev<>nil);
+  pLine:=pLine.Prev;
+
+ until false;
+end;
+
+procedure SetupPredecessor(pChild:TsrOpBlock);
+
+ procedure SetupLabel(pLine:TspirvOp);
+ begin
+  if (pLine<>nil) then
+  if (TsrOpLabel(pLine.pDst).pred=nil) then
+  begin
+   TsrOpLabel(pLine.pDst).pred:=pChild.vctx.pPrdLabel;
+  end;
+ end;
+
+begin
+ pChild.Labels.pPrdOp:=FindPredecessor(pChild.Prev);
+
+ pChild.vctx.pPrdLabel:=pChild.Labels.pPrdOp.pDst;
+
+ if (pChild.Labels.pPrdOp<>nil) then
+ begin
+  SetupLabel(pChild.Labels.pBegOp);
+  SetupLabel(pChild.Labels.pMrgOp);
+  SetupLabel(pChild.Labels.pRepOp);
+ end;
+end;
+
 Procedure TEmitFlow.PushBlockOp(pLine:TspirvOp;pChild:TsrOpBlock;iCursor:TsrCursor);
+var
+ node,last:TspirvOp;
 begin
  pChild.FCursor:=iCursor; //prev
  //pChild.FLBlock:=pLBlock;
 
- InsSpirvOp(pLine,pChild);
+ pChild.Labels.pPrdOp:=FindPredecessor(pLine);
+
+ pLine:=InsSpirvOp(pLine,pChild);
 
  Main.PushBlock(pChild);
+
+ SetupPredecessor(pChild);
+
+ node:=pChild.First;
+ last:=pChild.Next;
+
+ while (node<>nil) and (node<>last) do
+ begin
+
+  if node.IsType(ntOpBlock) then
+  begin
+   SetupPredecessor(node);
+  end;
+
+  node:=flow_down_next_up(node);
+ end;
 
  {
  if (pLBlock<>nil) then
@@ -106,23 +191,42 @@ begin
  }
 end;
 
+Function IsUnconditional(cond:TsrStatement):Boolean; inline;
+begin
+ Result:=(cond=nil) or ((cond.sType=sCond) and (cond.u.cond=cTrue));
+end;
+
+Function IsUnreachable(cond:TsrStatement):Boolean; inline;
+begin
+ Result:=(cond.sType=sCond) and (cond.u.cond=cFalse);
+end;
+
 function TEmitFlow.PopBlockOp:Boolean;
 var
  pOpBlock:TsrOpBlock;
- pOpChild:TsrOpBlock;
  pBegOp,pEndOp,pMrgOp:TspirvOp;
+
+ procedure pop_free(pOpBlock:TsrOpBlock);
+ begin
+  RegsStory.FreeSnapshot(pOpBlock.Regs.orig);
+  RegsStory.FreeSnapshot(pOpBlock.Regs.prev);
+  RegsStory.FreeSnapshot(pOpBlock.Regs.next);
+  //
+  pOpBlock.Regs.orig:=nil;
+  pOpBlock.Regs.prev:=nil;
+  pOpBlock.Regs.next:=nil;
+  //
+  pOpBlock.vctx.FBreaks.Clear;
+ end;
 
  procedure pop_merge(pOpBlock:TsrOpBlock);
  begin
-  Assert(pMrgOp<>nil);
-
-  OpBranch  (line,pMrgOp);
-  AddSpirvOp(line,pMrgOp); //end
+  //
  end;
 
  procedure pop_merge_after(pOpBlock:TsrOpBlock);
  begin
-  //
+  pop_free(pOpBlock.pIf);
  end;
 
  procedure pop_cond(pOpBlock:TsrOpBlock);
@@ -135,13 +239,13 @@ var
   if (pOpBlock.pElse<>nil) then //have else
   begin
    //save current to prev
-   pOpBlock.Regs.prev^:=RegsStory.get_snapshot;
+   RegsStory.FillSnapshot(pOpBlock.Regs.prev);
    //restore original by start "else"
    PrivateList.build_volatile_reset(pOpBlock.Regs.orig);
   end else
   begin
    //save current to prev
-   pOpBlock.Regs.prev^:=RegsStory.get_snapshot;
+   RegsStory.FillSnapshot(pOpBlock.Regs.prev);
    //
    if (pOpBlock.FVolMark<>vmNone) then
    begin
@@ -149,6 +253,10 @@ var
     PrivateList.build_volatile_reset(pOpBlock.Regs.orig);
    end else
    begin
+
+    pOpBlock.vctx.pPrvLabel:=nil;
+    pOpBlock.vctx.pCurLabel:=FindPredecessor(pOpBlock.pBody.line).pDst;
+
     //calc next volatile state
     PrivateList.build_volatile_endif(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
     //set next volatile state
@@ -182,6 +290,9 @@ var
    end;
   end else
   begin
+   pOpBlock.vctx.pPrvLabel:=FindPredecessor(pIf.pBody.line).pDst;
+   pOpBlock.vctx.pCurLabel:=FindPredecessor(pOpBlock.pBody.line).pDst;
+
    //calc next volatile state
    PrivateList.build_volatile_endif(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
    //set next volatile state
@@ -204,59 +315,29 @@ var
   parent:=pOpBlock.FCursor.AsBlock;
   Assert(parent<>nil);
 
-  pLine:=line; //before close
+  pLine:=pOpBlock.pBody.line; //before close
 
-  //if pOpBlock.Cond.FUseCont then //use continue
-
-  if (parent.pCond<>nil) then
-  begin
-   //have post conditions
-   OpBranch(line,pMrgOp); //LoopMerge
-  end else
+  if IsUnconditional(parent.pCond) then
   begin
    //not post conditions
-   OpBranch(line,pEndOp); //break
+   OpBranch(pOpBlock.pPCond.line,pBegOp); //continue
+  end else
+  begin
+   //have post conditions
+   src:=LoadStatment(ConvertStatment(parent.pCond,pLine)).pNode;
+   Assert(src<>nil);
+   OpBranchCond(pOpBlock.pPCond.line,pBegOp,pMrgOp,src); //True|False
   end;
 
-  AddSpirvOp(line,pMrgOp); //OpLoopMerge end
-
-    pOpChild:=AllocBlockOp;
-    pOpChild.SetInfo(btOther);
-    PushBlockOp(line,pOpChild,Default(TsrCursor));
-
-    if (parent.pCond<>nil) then
-    begin
-     //have post conditions
-     src:=LoadStatment(ConvertStatment(parent.pCond,pLine)).pNode;
-     Assert(src<>nil);
-     //
-     OpBranchCond(line,pBegOp,pEndOp,src); //True|False
-    end else
-    begin
-     //not post conditions
-     OpBranch(line,pBegOp); //continue
-    end;
-
-  Main.PopBlock;
-
-  AddSpirvOp(line,pEndOp); //end
-
- end;
-
- Function IsUnconditional(cond:TsrStatement):Boolean; inline;
- begin
-  Result:=(cond.sType=sCond) and (cond.u.cond=cTrue)
- end;
-
- Function IsUnreachable(cond:TsrStatement):Boolean; inline;
- begin
-  Result:=(cond.sType=sCond) and (cond.u.cond=cFalse)
  end;
 
  procedure pop_loop_after(pOpBlock:TsrOpBlock);
  var
   parent:TsrSourceBlock;
  begin
+
+  pOpBlock.vctx.pAftOp:=pEndOp;
+
   if (pOpBlock.FVolMark<>vmNone) then
   begin
    //set next volatile state
@@ -265,11 +346,6 @@ var
   begin
    parent:=pOpBlock.FCursor.AsBlock;
 
-   if (parent.pCond=nil) then
-   begin
-    //continue
-    PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
-   end else
    if IsUnconditional(parent.pCond) then
    begin
     //continue
@@ -287,9 +363,14 @@ var
     PrivateList.build_volatile_conti(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
    end;
 
+   //break
+   PrivateList.build_volatile_bloop(pOpBlock.vctx,pOpBlock.Regs.orig,pOpBlock.Regs.prev,pOpBlock.Regs.next);
+
    //set next volatile state
    PrivateList.build_volatile_reset(pOpBlock.Regs.next);
   end;
+
+  pop_free(pOpBlock);
  end;
 
  procedure pop_other(pOpBlock:TsrOpBlock);
@@ -440,8 +521,6 @@ begin
 end;
 
 function TEmitFlow.ConvertStatment(node:TsrStatement;pLine:TspirvOp):TConvertResult;
-var
- V:TsrVolatile;
 begin
  Result.pNode:=nil;
  Result.pLine:=pLine;
@@ -455,19 +534,19 @@ begin
           Assert(Result.pNode<>nil);
          end;
   sVar  :begin
-          if (node.pCache<>nil) then
+          if (node.pCache=nil) then
           begin
-           Result.pNode:=TsrNode(node.pCache);
-          end else
-          begin
-           V:=PrivateList.NewVolatile(@RegsStory.FUnattach);
-           V.ForceBool:=True;
-           //
-           Result.pNode:=V;
-           node.pCache:=Result.pNode;
+           node.pCache:=TsrNode(RegsStory.alloc_cond);
+           Assert(node.pCache<>nil,'alloc_cond');
           end;
-          //load
 
+          Result.pNode:=PsrRegSlot(node.pCache)^.current;
+
+          if (Result.pNode=nil) then
+          begin
+           Result.pNode:=NewImm_b(False,pLine);
+           PsrRegSlot(node.pCache)^.current:=Result.pNode;
+          end;
          end;
   sNot  :begin
           Result.pNode:=TsrNode(node.pCache);
@@ -487,56 +566,30 @@ begin
 end;
 
 function TEmitFlow.LoadStatment(C:TConvertResult):TConvertResult;
-var
- V:TsrVolatile;
- R:TsrRegNode;
 begin
  Result:=C;
-
- if C.pNode.IsType(ntVolatile) then
- begin
-  V:=C.pNode.specialize AsType<TsrVolatile>;
-  Assert(V<>nil);
-
-  R:=NewReg(dtBool);
-  R.pWriter:=V;
-  R.CustomLine:=C.pLine;
-
-  Result.pNode:=R;
- end;
-
 end;
 
 procedure TEmitFlow.emit_break(pCurr:TsrOpBlock);
 var
+ pMrgOp  :TspirvOp;
+ pOpBreak:TspirvOp;
  pOpLabel:TspirvOp;
 
  parent:TsrSourceBlock;
 
  pLoop:TsrOpBlock;
+ pIf  :TsrOpBlock;
 
  bnew:Boolean;
+
+ node:TDependenceNode;
 begin
  pLoop:=Main.pBlock.FindUpLoop;
  Assert(pLoop<>nil,'Break to Unknow');
 
- pOpLabel:=nil;
-
- {
- parent:=pLoop.FCursor.AsBlock;
- Assert(parent<>nil);
-
- if (parent.Last=Cursor.pNode) then //is break?
- begin
-  pOpLabel:=pLoop.Labels.pEndOp;
- end else
- begin
-  Assert(false,'break');
- end;
- }
-
- pOpLabel:=pLoop.Labels.pEndOp;
- Assert(pOpLabel<>nil);
+ pMrgOp:=pLoop.Labels.pMrgOp;
+ Assert(pMrgOp<>nil);
 
  Assert(pLoop.FCursor.pNode<>nil);
  parent:=pLoop.FCursor.AsBlock;
@@ -551,22 +604,38 @@ begin
   end;
  end;
 
+ pLoop.vctx.pAftOp:=FindPredecessor(line);
+
  //calc volatile
  PrivateList.build_volatile_break(pLoop.vctx,pLoop.Regs.orig,pLoop.Regs.prev,pLoop.Regs.next);
 
  //mark hints
  mark_end_of(vmBreak);
 
- OpBranch(pCurr.line,pOpLabel);
+ pOpBreak:=OpBranch(pCurr.line,pMrgOp);
  if bnew then
  begin
-  AddSpirvOp(pCurr.line,NewLabelOp(True));
+  pOpLabel:=NewLabelOp(True);
+  AddSpirvOp(pCurr.line,pOpLabel);
+
+  pIf:=pCurr;
+  while (not IsReal(pIf.bType)) do
+  begin
+   pIf:=pIf.Parent;
+  end;
+
+  pMrgOp:=pIf.Labels.pMrgOp;
+
+  //push to list
+  TsrOpLabel(pOpLabel.pDst).pred:=TsrOpLabel(pMrgOp.pDst).pred;
+  TsrOpLabel(pMrgOp.pDst).pred:=pOpLabel.pDst;
  end;
+
+ pLoop.vctx.FBreaks.Push_tail(pOpBreak);
 end;
 
 procedure TEmitFlow.EmitStatment(node:TsrStatement);
 Var
- V:TsrVolatile;
  R:TsrRegNode;
  D:TsrRegNode;
  C:TConvertResult;
@@ -584,18 +653,20 @@ begin
    end;
   sStore:
    begin
-    C:=ConvertStatment(node.pDst,line);
-    V:=C.pNode.specialize AsType<TsrVolatile>;
-    Assert(V<>nil);
-
-    C:=ConvertStatment(node.pSrc,C.pLine);
+    C:=ConvertStatment(node.pSrc,line);
     C:=LoadStatment(C);
     D:=C.pNode.specialize AsType<TsrRegNode>;
     Assert(D<>nil);
 
+    if (node.pDst.pCache=nil) then
+    begin
+     node.pDst.pCache:=TsrNode(RegsStory.alloc_cond);
+     Assert(node.pDst.pCache<>nil,'alloc_cond');
+    end;
+
     //Writeln('sStore to:',node.pDst.u.id,' from ',node.pSrc.u.id);
 
-    V.AddStore(D);
+    PsrRegSlot(node.pDst.pCache)^.current:=D;
    end;
   sBreak:
    begin
@@ -649,16 +720,12 @@ begin
  end;
 end;
 
-function TEmitFlow.NewMerge(iCursor:TsrCursor):TsrOpBlock;
+function TEmitFlow.NewMerge(pLine:TspirvOp;iCursor:TsrCursor):TsrOpBlock;
 var
  pMrgOp:TspirvOp;
- pLine:TspirvOp;
- pNop :TspirvOp;
+ pNop  :TspirvOp;
 begin
  pMrgOp:=NewLabelOp(False); //merge
-
- //save push point
- pLine:=line;
 
  pNop:=nil;
  if pLine.IsType(ntOp) then
@@ -679,16 +746,11 @@ begin
  Result:=AllocBlockOp;
  Result.SetInfo(btMerg);
  Result.SetLabels(nil,nil,pMrgOp);
- //Result.Cond.FExcMerg:=pLBlock.ExcMerg;
+
+ Result.vctx.pMrgOp:=pMrgOp;
 
  //save nop before
  Result.vctx.Befor:=pNop;
-
- //add nop aka PostLink
- pNop:=AddSpirvOp(pLine,Op.OpNop);
- pNop.mark([soNotUsed,soPost]);
-
- Result.vctx.After:=pNop;
 
  //add by push point
  PushBlockOp(pLine,Result,iCursor);
@@ -713,7 +775,8 @@ var
  orig:TsrRegsSnapshot;
  pLBlock:TsrSourceBlock;
  pLElse:TsrSourceBlock;
- pBegOp,pEndOp,pMrgOp,pAfter,pBefor:TspirvOp;
+ pBegOp,pEndOp,pMrgOp,pBefor:TspirvOp;
+ pLine:TspirvOp;
  pOpElse:TsrOpBlock;
  pOpBody:TsrOpBlock;
 
@@ -729,7 +792,6 @@ var
 
 begin
  pMrgOp:=pOpMerge.Labels.pMrgOp;
- pAfter:=pOpMerge.vctx.After;
  pBefor:=pOpMerge.vctx.Befor;
 
  pLBlock:=iCursor.AsBlock;
@@ -747,18 +809,19 @@ begin
    //early optimization
 
    pOpMerge.bType:=btOther;
+   pOpMerge.SetLabels(nil,nil,nil);
 
    //down body group
    pOpBody:=AllocBlockOp;
    pOpBody.SetInfo(btOther);
-   PushBlockOp(line,pOpBody,Default(TsrCursor));
+   PushBlockOp(pOpMerge.line,pOpBody,Default(TsrCursor));
 
    Exit(pOpBody);
   end;
  end;
 
  //Add deferred instruction
- OpCondMerge(line,pMrgOp);
+ OpCondMerge(pOpMerge.line,pMrgOp);
 
  if (pLBlock<>nil) then
  begin
@@ -785,9 +848,18 @@ begin
  Result.SetInfo(btCond);
 
  Result.vctx.Befor:=pBefor;
- Result.vctx.After:=pAfter; //move nop link
 
- PushBlockOp(line,Result,iCursor);
+ Result.vctx.pMrgOp:=pMrgOp;
+
+ //add if to merge
+ PushBlockOp(pOpMerge.line,Result,iCursor);
+
+ pLine:=pOpMerge.line;
+
+ pLine:=OpBranch  (pLine,pMrgOp);
+ pLine:=AddSpirvOp(pLine,pMrgOp);
+
+ Result.vctx.pBegLabel:=pBegOp.pDst;
 
  pOpMerge.pBody:=Result; //Merge->if
 
@@ -836,7 +908,12 @@ begin
   pOpElse:=AllocBlockOp;
   pOpElse.SetLabels(pEndOp,pMrgOp,pMrgOp);
   pOpElse.SetInfo(btElse);
-  pOpElse.vctx.After:=pAfter; //move nop link
+
+  pOpElse.vctx.pMrgOp:=pMrgOp;
+  pOpElse.vctx.pPrvOp:=pEndOp;
+
+  pOpElse.vctx.pPrdLabel:=Result.Labels.pPrdOp.pDst;
+  pOpElse.vctx.pBegLabel:=pEndOp.pDst;
 
   //save snap links
   pOpElse.Regs.orig:=Result.Regs.orig;
@@ -866,8 +943,27 @@ begin
  Result:=pOpMerge.pElse;
  Assert(Result<>nil);
 
+ {
+  merge {
+
+   if {
+    ......
+   }
+
+   else {
+    OpBranch
+    OpLine
+    ......
+   }
+
+   OpBranch
+   OpLine
+   OpPhi
+  }
+ }
+
  //down else block
- PushBlockOp(line,Result,iCursor);
+ PushBlockOp(pOpMerge.pIf,Result,iCursor);
 
  pBegOp:=Result.Labels.pBegOp;
  pMrgOp:=Result.Labels.pMrgOp;
@@ -886,9 +982,56 @@ function TEmitFlow.NewLoop(iCursor:TsrCursor):TsrOpBlock;
 var
  orig:TsrRegsSnapshot;
  pLine:TspirvOp;
- pBegOp,pEndOp,pMrgOp,pRepOp:TspirvOp;
+ pBegOp,pMrgOp,pEndOp,pRepOp:TspirvOp;
  pNop:TspirvOp;
  pOpBody:TsrOpBlock;
+
+ procedure add_after(pLoop:TsrOpBlock);
+ var
+  //pLine:TspirvOp;
+  pOpBreak:TspirvOp;
+  parent:TsrSourceBlock;
+  pOpChild:TsrOpBlock;
+  node:TDependenceNode;
+ begin
+  //add OpLoopMerge continue
+
+  parent:=pLoop.FCursor.AsBlock;
+  Assert(parent<>nil);
+
+  //pLine:=line; //before close
+
+  if IsUnconditional(parent.pCond) then
+  begin
+   //not post conditions
+   pOpBreak:=OpBranch(line,pMrgOp); //break
+
+   pLoop.vctx.FBreaks.Push_tail(pOpBreak);
+  end else
+  begin
+   //have post conditions
+   OpBranch(line,pEndOp); //LoopMerge
+  end;
+
+  AddSpirvOp(line,pEndOp); //OpLoopMerge end
+
+    pOpChild:=AllocBlockOp;
+    pOpChild.SetInfo(btOther);
+    PushBlockOp(line,pOpChild,Default(TsrCursor));
+
+    pLoop.pPCond:=pOpChild;
+
+  Main.PopBlock;
+
+   pOpChild:=AllocBlockOp;
+   pOpChild.SetInfo(btOther);
+   PushBlockOp(line,pOpChild,Default(TsrCursor));
+
+   AddSpirvOp(line,pMrgOp); //end
+
+  Main.PopBlock;
+ end;
+
 begin
  orig:=RegsStory.get_snapshot;
  PrivateList.make_copy_all;
@@ -916,32 +1059,31 @@ begin
  Assert(pLine.OpId=Op.OpNop,'WTF');
 
  pBegOp:=NewLabelOp(False); //continue
- pEndOp:=NewLabelOp(False); //end
- pMrgOp:=NewLabelOp(False); //cond
+ pMrgOp:=NewLabelOp(False); //end
+ pEndOp:=NewLabelOp(False); //cond
  pRepOp:=NewLabelOp(False); //start
 
  Result:=NewBlockOp(RegsStory.get_snapshot,orig);
  Result.SetLabels(pBegOp,pEndOp,pMrgOp);
+ Result.Labels.pRepOp:=pRepOp;
  Result.SetInfo(btLoop);
 
  //save nop before
  Result.vctx.Befor:=pNop;
 
+ Result.vctx.pMrgOp:=pMrgOp;
+ Result.vctx.pPrvOp:=pBegOp;
+ Result.vctx.pAftOp:=pEndOp;
+
  //save push point
  pLine:=line;
-
- //add nop aka PostLink
- pNop:=AddSpirvOp(pLine,Op.OpNop);
- pNop.mark([soNotUsed,soPost]);
- //
- Result.vctx.After:=pNop;
 
  PushBlockOp(pLine,Result,iCursor);
 
  OpBranch  (line,pBegOp);
  AddSpirvOp(line,pBegOp);    //continue loop
 
- OpLoopMerge(line,pEndOp,pMrgOp);
+ OpLoopMerge(line,pMrgOp,pEndOp);
  OpBranch   (line,pRepOp);
  AddSpirvOp (line,pRepOp);
 
@@ -950,7 +1092,12 @@ begin
  pOpBody.SetInfo(btOther);
  Result.pBody:=pOpBody; //save body link
 
- PushBlockOp(line,pOpBody,Default(TsrCursor));
+ //save push point
+ pLine:=line;
+
+ add_after(Result);
+
+ PushBlockOp(pLine,pOpBody,Default(TsrCursor));
 end;
 
 function TEmitFlow.BlockBeg:Boolean;
@@ -968,7 +1115,7 @@ begin
  Case parent.bType of
   btMerg:
    begin
-    pOpMerge:=NewMerge(Cursor);
+    pOpMerge:=NewMerge(line,Cursor);
 
     Result:=True;
    end;

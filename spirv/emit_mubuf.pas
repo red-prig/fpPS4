@@ -468,7 +468,7 @@ begin
 
  vsrc:=OpIsSSignTo(vsrc);
 
- pOpMerge:=NewMerge(Default(TsrCursor)); //open merge
+ pOpMerge:=NewMerge(line,Default(TsrCursor)); //open merge
 
  NewIf(pOpMerge,Default(TsrCursor),vsrc,True); //open if
 

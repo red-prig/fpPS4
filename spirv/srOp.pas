@@ -93,6 +93,7 @@ type
    procedure AddLiteral(Value:PtrUint;const name:RawByteString='');
    procedure AddString(const name:RawByteString);
    function  is_cleared:Boolean;
+   function  is_notused:Boolean;
    function  is_force:Boolean;
    function  is_post:Boolean;
    function  Clear:Boolean;
@@ -137,30 +138,32 @@ type
 
    Labels:record
     pBegOp:TspirvOp;
+    pRepOp:TspirvOp;
     pEndOp:TspirvOp;
     pMrgOp:TspirvOp;
     pBcnOp:TspirvOp;
+    pPrdOp:TspirvOp;
    end;
 
    pBody :TsrOpBlock;
    pIf   :TsrOpBlock;
    pElse :TsrOpBlock;
+   pPCond:TsrOpBlock;
 
    vctx  :TsrVolatileContext;
 
    FCursor:TsrCursor;
 
    Regs:record
-    orig:PsrRegsSnapshot;
-    prev:PsrRegsSnapshot;
-    next:PsrRegsSnapshot;
+    orig:TsrRegsSnapshot;
+    prev:TsrRegsSnapshot;
+    next:TsrRegsSnapshot;
    end;
 
    Cond:record
     pReg        :TsrRegNode;
     FNormalOrder:Boolean;
     FUseCont    :Boolean;
-    FExcMerg    :Boolean;
    end;
 
    FVolMark:TsrVolMark;
@@ -222,6 +225,8 @@ type
 
 Function classif_rw_op(OpId:DWORD):Byte;
 function OpGetStrDebug(pLine:TSpirvOp):RawByteString;
+function FindNestLAnd(node,src:TsrRegNode):Boolean;
+function FindNestLOr (node,src:TsrRegNode):Boolean;
 
 operator := (i:TsrNode):TspirvOp;   inline;
 operator := (i:TsrNode):TsrOpBlock; inline;
@@ -490,6 +495,8 @@ procedure TspirvOp.AddParam(p:TsrNode);
 var
  node:POpParamNode;
 begin
+ Assert(p<>nil);
+
  node:=Emit.specialize New<TOpParamNode>;
  node.pParent:=Self;
  //
@@ -553,6 +560,11 @@ end;
 function TspirvOp.is_cleared:Boolean;
 begin
  Result:=(soClear in flags);
+end;
+
+function TspirvOp.is_notused:Boolean;
+begin
+ Result:=(soNotUsed in flags);
 end;
 
 function TspirvOp.is_force:Boolean;
@@ -670,8 +682,7 @@ begin
  dummy.Init(Op.OpNop);
  AddSpirvOp(dummy);
  //
- vctx.Emit :=Emit;
- vctx.block:=Self;
+ vctx.FBreaks.Init(Emit);
 end;
 
 procedure TsrOpBlock.SetInfo(_bType:TsrBlockType);
@@ -746,6 +757,24 @@ begin
    begin
     Exit(node);
    end;
+
+   if rDown then
+   begin
+    if node.Cond.FNormalOrder then
+    begin
+     if FindNestLAnd(pCond,pReg) then
+     begin
+      Exit(node);
+     end;
+    end else
+    begin
+     if FindNestLOr(pCond,pReg) then
+     begin
+      Exit(node);
+     end;
+    end;
+   end;
+
   end else
   if (node.bType=btElse) then
   begin
@@ -766,6 +795,102 @@ begin
   end;
   node:=node.pParent;
  end;
+end;
+
+function FindNestLAnd(node,src:TsrRegNode):Boolean;
+var
+ p:TSpirvOp;
+ tmp,cur:TsrRegNode;
+ stack:TDependenceStack;
+begin
+ Result:=False;
+ if (node=nil) or (src=nil) then Exit;
+
+ stack.Init(node.Emit);
+ stack.Push(node);
+
+ while stack.Pop(cur) do
+ begin
+
+  repeat
+   if (cur=nil) then Break;
+
+   p:=cur.pWriter.specialize AsType<ntOp>;
+   if (p=nil) or (p.OpId<>Op.OpLogicalAnd) then Break;
+
+   tmp:=RegDown(p.ParamNode(0).AsReg);
+   if (tmp=src) then
+   begin
+    Result:=True;
+    Break;
+   end;
+   if (tmp<>nil) then
+   begin
+    stack.Push(tmp);
+   end;
+
+   tmp:=RegDown(p.ParamNode(1).AsReg);
+   if (tmp=src) then
+   begin
+    Result:=True;
+    Break;
+   end;
+
+   cur:=tmp;
+  until false;
+
+  if Result then Break;
+ end; //while
+
+ stack.Clear;
+end;
+
+function FindNestLOr(node,src:TsrRegNode):Boolean;
+var
+ p:TSpirvOp;
+ tmp,cur:TsrRegNode;
+ stack:TDependenceStack;
+begin
+ Result:=False;
+ if (node=nil) or (src=nil) then Exit;
+
+ stack.Init(node.Emit);
+ stack.Push(node);
+
+ while stack.Pop(cur) do
+ begin
+
+  repeat
+   if (cur=nil) then Break;
+
+   p:=cur.pWriter.specialize AsType<ntOp>;
+   if (p=nil) or (p.OpId<>Op.OpLogicalOr) then Break;
+
+   tmp:=RegDown(p.ParamNode(0).AsReg);
+   if (tmp=src) then
+   begin
+    Result:=True;
+    Break;
+   end;
+   if (tmp<>nil) then
+   begin
+    stack.Push(tmp);
+   end;
+
+   tmp:=RegDown(p.ParamNode(1).AsReg);
+   if (tmp=src) then
+   begin
+    Result:=True;
+    Break;
+   end;
+
+   cur:=tmp;
+  until false;
+
+  if Result then Break;
+ end; //while
+
+ stack.Clear;
 end;
 
 class function TSpirvFunc.c(n1,n2:PRawByteString):Integer;

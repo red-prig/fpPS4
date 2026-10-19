@@ -9,6 +9,8 @@ uses
  srNode,
  srType,
  srConst,
+ spirv,
+ srOp,
  srReg;
 
 type
@@ -154,11 +156,40 @@ begin
  Result:=dst;
 end;
 
+function FindAfterLine(pLine:TspirvOp):TspirvOp;
+begin
+ Result:=nil;
+
+ repeat
+  pLine:=pLine.Next;
+  if (pLine=nil) then Exit;
+  if not (pLine.IsType(ntOp))   then Exit(pLine);
+  if not (pLine.OpId=Op.OpLine) then Exit(pLine);
+ until false;
+
+end;
+
+function FindAfterPhi(pLine:TspirvOp):TspirvOp;
+begin
+ Result:=pLine;
+
+ repeat
+  pLine:=FindAfterLine(pLine);
+  if (pLine=nil) then Exit;
+  if not (pLine.IsType(ntOp))  then Exit;
+  if not (pLine.OpId=Op.OpPhi) then Exit;
+
+  Result:=pLine;
+ until false;
+
+end;
+
 //post process
 function TsrBitcastList.FetchCast(dtype:TsrDataType;src:TsrRegNode):TsrRegNode;
 var
  dst:TsrRegNode;
  prv:TsrRegNode;
+ pLine:TspirvOp;
 begin
  Result:=src;
 
@@ -184,7 +215,10 @@ begin
   begin
    dst:=rSlot.New(dtype);
 
-   rSlot.Emit.OpCast(prv.pLine,dst,src);
+   pLine:=FindAfterPhi(prv.pLine);
+
+   //
+   rSlot.Emit.OpCast(pLine,dst,src);
   end else
   begin
    Writeln('bitcast:',src.dtype,'<>',dtype);

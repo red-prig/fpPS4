@@ -30,7 +30,6 @@ function  MaxLine(p1,p2:TSpirvOp):TSpirvOp;
 function  MinLine(p1,p2:TSpirvOp):TSpirvOp;
 Function  IsParentOf(pLine,pCurr:TsrOpBlock):Boolean;
 Function  IsParentOfLine(pLine,pCurr:TSpirvOp):Boolean;
-function  GetMaxPlace(pLine:TSpirvOp;count:Byte;src:PPsrRegNode):TSpirvOp;
 
 type
  AsrChain=array of TsrChain;
@@ -263,32 +262,6 @@ end;
 Function IsParentOfLine(pLine,pCurr:TSpirvOp):Boolean;
 begin
  Result:=IsParentOf(pLine.Parent,pCurr.Parent);
-end;
-
-function GetMaxPlace(pLine:TSpirvOp;count:Byte;src:PPsrRegNode):TSpirvOp;
-var
- m:TSpirvOp;
- i:Byte;
- r:TsrRegNode;
-begin
- Result:=pLine;
- if (count=0) or (src=nil) then Exit;
-
- m:=nil;
- For i:=0 to count-1 do
- begin
-  r:=RegDown(src[i]);
-  if (not r.is_const) and (not r.pWriter.IsType(ntVolatile)) then
-  //Dependencies can be in grouping blocks
-  //if IsParentOfLine(pLine,src[i].pLine) then
-  begin
-   m:=MaxLine(m,src[i].pLine);
-  end;
- end;
- if (m<>nil) then
- begin
-  Result:=m;
- end;
 end;
 
 Function get_inverse_left_cmp_op(OpId:DWORD):DWORD;
@@ -557,16 +530,20 @@ begin
  Insert([node],A,Length(A));
 end;
 
-procedure add_volatile(var A:a_volatile_node;V:TsrVolatile);
+procedure add_volatile(var A:a_volatile_node;V:TSpirvOp);
 var
- node:TStoreNode;
+ pValue :POpParamNode;
+ pParent:POpParamNode;
 begin
- node:=V.FList.pHead;
- while (node<>nil) do
+ pValue:=V.ParamFirst;
+ while (pValue<>nil) do
  begin
-  add_node(A,RegDown(node.src));
+  pParent:=pValue.Next;
+  if (pParent=nil) then Exit;
   //
-  node:=node.pNext;
+  add_node(A,RegDown(pValue.Value));
+  //
+  pValue:=pParent.Next;
  end;
 end;
 
@@ -582,10 +559,22 @@ begin
  end;
 end;
 
+function IsPhi(node:TsrRegNode):Boolean;
+var
+ V:TSpirvOp;
+begin
+ Result:=False;
+ V:=node.pWriter.specialize AsType<ntOp>;
+ if (V<>nil) then
+ begin
+  Result:=V.OpId=Op.OpPhi;
+ end;
+end;
+
 function GetChainRegNode2(node:TsrRegNode):AsrChain;
 var
  pOp:TSpirvOp;
- V:TsrVolatile;
+ V:TSpirvOp;
  C:TsrChain;
  A:a_volatile_node;
  i:Integer;
@@ -598,9 +587,9 @@ begin
  begin
   node:=RegDown(node);
 
-  while node.pWriter.IsType(TsrVolatile) do
+  while IsPhi(node) do
   begin
-   V:=node.pWriter.specialize AsType<TsrVolatile>;
+   V:=node.pWriter.specialize AsType<ntOp>;
    add_volatile(A,V);
    node:=next_volatile(A,i);
   end;

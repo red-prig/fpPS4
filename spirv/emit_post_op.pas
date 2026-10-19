@@ -17,7 +17,6 @@ uses
   srRefId,
   srConst,
   srReg,
-  srPrivate,
   srLiteral,
   srOp,
   srOpInternal,
@@ -28,6 +27,7 @@ type
  TEmitPostOp=class(TEmitFetch)
   function  PostForward1(node:TSpirvOp):Integer;
   function  PostForward2(node:TSpirvOp):Integer;
+
   //
   function  OpConvert1(node:TSpirvOp):Integer;
   function  OnCompositeExtract1(node:TSpirvOp):Integer;
@@ -44,6 +44,7 @@ type
   function  _Fetch_PackAnc(node:TsrRegNode;index,count:Byte):TsrRegNode;
   function  OnBFE_32_1(node:TSpirvOp):Integer;
   function  OnBFIB32_1(node:TSpirvOp):Integer;
+  function  OnBitFieldSExtract_1(node:TSpirvOp):Integer;
   //
   function  OnBitwiseAnd1(node:TSpirvOp):Integer;
   function  OnLogicalAnd1(node:TSpirvOp):Integer;
@@ -52,6 +53,11 @@ type
   function  OnNot1(node:TSpirvOp):Integer;
   function  OnLogicalNot1(node:TSpirvOp):Integer;
   function  OnBranchConditional1(node:TSpirvOp):Integer;
+  function  OnBranchConditional2(node:TSpirvOp):Integer;
+  function  OpExport1(node:TSpirvOp):Integer;
+  function  TryFoldGuardPhi(node,phi:TSpirvOp):Integer;
+  function  HoistGuardOps(pIns:TsrOpBlock;pRoot:TspirvOp):TspirvOp;
+  function  BuildPhiPredicate(cnd,vReg,cReg:TsrRegNode;vOnTrue:Boolean;work:TspirvOp):TsrRegNode;
   //
   function  OpBitCount1(node:TSpirvOp):Integer;
   function  OpBitReverse1(node:TSpirvOp):Integer;
@@ -102,6 +108,8 @@ begin
   srOpInternal.OpBFE_32    :Result:=OnBFE_32_1(node);
   srOpInternal.OpBFIB32    :Result:=OnBFIB32_1(node);
 
+  Op.OpBitFieldSExtract    :Result:=OnBitFieldSExtract_1(node);
+
   Op.OpSelect           :Result:=OnSelect1(node);
 
   Op.OpBitwiseAnd       :Result:=OnBitwiseAnd1(node);
@@ -113,6 +121,9 @@ begin
   Op.OpLogicalNot       :Result:=OnLogicalNot1(node);
 
   Op.OpBranchConditional:Result:=OnBranchConditional1(node);
+  srOpInternal.OpExport :Result:=OpExport1(node);
+
+  Op.OpPhi              :Result:=PrivateList.PrepPhi(node);
 
   Op.OpBitCount         :Result:=OpBitCount1(node);
   Op.OpBitReverse       :Result:=OpBitReverse1(node);
@@ -136,6 +147,9 @@ begin
   srOpInternal.OpPackAnc:Result:=OnPackAnc2(node);
 
   Op.OpCompositeConstruct:Result:=OnVector_2(node);
+
+  Op.OpBranchConditional:Result:=OnBranchConditional2(node);
+  Op.OpPhi              :Result:=PrivateList.PrepPhi(node);
 
   OpExport   :Result:=OnMakeExp2(node);
 
@@ -303,35 +317,6 @@ begin
  Result:=Result+PrepTypeParam(node.ParamNode(1),dst.dtype);
 end;
 
-Function _FindNest_LAnd(node,src:TsrRegNode):Boolean;
-var
- p:TSpirvOp;
- tmp:TsrRegNode;
-begin
- Result:=False;
- if (node=nil) or (src=nil) then Exit;
-
- repeat
-
-  p:=node.pWriter.specialize AsType<ntOp>;
-  if (p<>nil) then
-   if (p.OpId=Op.OpLogicalAnd) then
-   begin
-    tmp:=RegDown(p.ParamNode(0).AsReg);
-    if (tmp=src) then Exit(True);
-    Result:=_FindNest_LAnd(tmp,src); //recursion
-    if Result then Exit(True);
-    tmp:=RegDown(p.ParamNode(1).AsReg);
-    if (tmp=src) then Exit(True);
-    node:=tmp;
-    Continue; //cycle
-   end;
-  Exit;
-
- until false;
-
-end;
-
 function TEmitPostOp.OnLogicalAnd1(node:TSpirvOp):Integer;
 var
  dst:TsrRegNode;
@@ -391,13 +376,13 @@ begin
   Exit;
  end;
 
- if _FindNest_LAnd(src[1],src[0]) then //Find src[0] in src[1]
+ if FindNestLAnd(src[1],src[0]) then //Find src[0] in src[1]
  begin
   _SetReg(src[1]);
   Exit;
  end;
 
- if _FindNest_LAnd(src[0],src[1]) then //Find src[1] in src[0]
+ if FindNestLAnd(src[0],src[1]) then //Find src[1] in src[0]
  begin
   _SetReg(src[0]);
   Exit;
@@ -800,6 +785,14 @@ var
   Inc(Result);
  end;
 
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst.pWriter:=NewImm_q(dtype,value,node);
+  node.mark([soNotUsed]);
+  node.pDst:=nil;
+  Inc(Result);
+ end;
+
 begin
  Result:=0;
  dst:=node.pDst.specialize AsType<ntReg>;
@@ -809,16 +802,30 @@ begin
 
  Assert(dst.dtype=dtBool);
 
- if (src.read_count>1) then Exit;
+ if src.is_const then
+ begin
+  _SetConst(src.dtype,not TsrConst(src.pWriter).AsUint64);
+  Exit;
+ end;
 
  pop:=src.pWriter.specialize AsType<ntOp>;
-
  if (pop=nil) then Exit;
 
  cmp:=pop.OpId;
- cmp:=get_inverse_not_cmp_op(cmp);
 
+ if (cmp=Op.OpLogicalNot) then
+ begin
+  dst2:=pop.ParamNode(0).AsReg;
+
+  _SetReg(dst2);
+  Exit;
+ end;
+
+ cmp:=get_inverse_not_cmp_op(cmp);
  if (cmp=0) then Exit;
+
+ if (src.read_count>1) then Exit;
+ if (dst.read_count>1) then Exit;
 
  srp[0]:=pop.ParamNode(0).AsReg;
  srp[1]:=pop.ParamNode(1).AsReg;
@@ -845,7 +852,8 @@ begin
     Op.OpLabel,
     Op.OpSelectionMerge,
     Op.OpBranch,
-    Op.OpBranchConditional:node.mark([soNotUsed,soForce]);
+    Op.OpBranchConditional,
+    Op.OpPhi:node.mark([soNotUsed,soForce]);
     else;
    end;
    //
@@ -854,65 +862,587 @@ begin
  end;
 end;
 
-procedure _restore(var vctx:TsrVolatileContext);
+function _value_of(pNode:TSpirvOp;pLabel:TsrNode):TsrRegNode;
 var
- node:TsrVolatileNode;
- V:TsrVolatile;
- N:TsrRegNode;
+ pValue :POpParamNode;
+ pParent:POpParamNode;
 begin
- node:=vctx.FList.pHead;
+ Result:=nil;
+
+ pValue:=pNode.ParamFirst;
+ while (pValue<>nil) do
+ begin
+  pParent:=pValue.Next;
+  if (pParent=nil) then Exit;
+
+  if (pParent.Value=pLabel) then
+  begin
+   Result:=pValue.AsReg;
+   Exit;
+  end;
+
+  pValue:=pParent.Next;
+ end;
+
+end;
+
+function _fold_phi(pMerg:TsrOpBlock;pLabel:TsrNode):Boolean;
+var
+ node:TSpirvOp;
+ dst:TsrRegNode;
+begin
+ if (pLabel=nil) then Exit(False);
+
+ node:=pMerg.First;
  while (node<>nil) do
  begin
-  V:=TsrVolatile(node.V);
-  N:=TsrRegNode(node.N);
-
-  if (N.pWriter<>V) then
+  if node.IsType(ntOp) then
+  if (node.OpId=Op.OpPhi) then
+  if (_value_of(node,pLabel)=nil) then
   begin
-   Assert(false,'_restore:1');
+   Exit(False);
+  end;
+  //
+  node:=node.Next;
+ end;
+
+ node:=pMerg.First;
+ while (node<>nil) do
+ begin
+  if node.IsType(ntOp) then
+  if (node.OpId=Op.OpPhi) then
+  begin
+   dst:=node.pDst.specialize AsType<ntReg>;
+   if (dst<>nil) then
+   begin
+    dst.pWriter:=_value_of(node,pLabel);
+    dst.pWriter.PrepType(ord(dst.dtype));
+   end;
+   node.mark([soNotUsed,soForce]);
+  end;
+  //
+  node:=node.Next;
+ end;
+
+ Result:=True;
+end;
+
+function CanHoist(node:TSpirvOp):Boolean;
+begin
+ Result:=False;
+ if (node=nil) then Exit;
+ if node.is_force then Exit;
+ if node.is_post  then Exit;
+ Case node.OpId of
+  Op.OpLoad,
+  Op.OpAccessChain,
+  Op.OpCompositeExtract,
+  Op.OpCompositeConstruct,
+  Op.OpSelect,
+  Op.OpLogicalNot,
+  Op.OpNot,
+  Op.OpLogicalAnd,
+  Op.OpLogicalOr,
+  Op.OpBitwiseAnd,
+  Op.OpBitwiseOr,
+  Op.OpBitwiseXor,
+  Op.OpIEqual,
+  Op.OpINotEqual,
+  Op.OpUGreaterThan,
+  Op.OpUGreaterThanEqual,
+  Op.OpULessThan,
+  Op.OpULessThanEqual,
+  Op.OpSGreaterThan,
+  Op.OpSGreaterThanEqual,
+  Op.OpSLessThan,
+  Op.OpSLessThanEqual,
+  Op.OpFOrdEqual,
+  Op.OpFUnordEqual,
+  Op.OpFOrdNotEqual,
+  Op.OpFUnordNotEqual,
+  Op.OpFOrdLessThan,
+  Op.OpFUnordLessThan,
+  Op.OpFOrdGreaterThan,
+  Op.OpFUnordGreaterThan,
+  Op.OpFOrdLessThanEqual,
+  Op.OpFUnordLessThanEqual,
+  Op.OpFOrdGreaterThanEqual,
+  Op.OpFUnordGreaterThanEqual,
+  Op.OpFAdd,
+  Op.OpFSub,
+  Op.OpFMul,
+  Op.OpFDiv,
+  Op.OpFMod,
+  Op.OpFNegate,
+  Op.OpIAdd,
+  Op.OpISub,
+  Op.OpIMul,
+  Op.OpSNegate,
+  Op.OpConvertFToU,
+  Op.OpConvertFToS,
+  Op.OpConvertSToF,
+  Op.OpConvertUToF,
+  Op.OpFConvert:Result:=True;
+  else;
+ end;
+end;
+
+function SplitPhi(phi:TSpirvOp;out vReg,cReg:TsrRegNode;out vLabel:TsrNode):Boolean;
+var
+ pValue :POpParamNode;
+ pParent:POpParamNode;
+ reg:TsrRegNode;
+begin
+ Result:=False;
+ vReg:=nil;
+ cReg:=nil;
+ vLabel:=nil;
+
+ pValue:=phi.ParamFirst;
+ while (pValue<>nil) do
+ begin
+  pParent:=pValue.Next;
+  if (pParent=nil) then Exit;
+
+  reg:=pValue.AsReg;
+  if (reg=nil) then Exit;
+
+  if (reg.is_const) then
+  begin
+   if (cReg<>nil) then Exit;
+   cReg:=reg;
+  end else
+  begin
+   if (vReg<>nil) then Exit;
+   vReg:=reg;
+   vLabel:=pParent.Value;
   end;
 
-  if (V.FBase=nil) then
+  pValue:=pParent.Next;
+ end;
+
+ Result:=(vReg<>nil) and (cReg<>nil);
+end;
+
+//find the guard branch of the phi: the branch of the merge block body that targets
+//the non-const arm label
+function FindPhiGuard(pMerg:TsrOpBlock;vLabel:TsrNode;out vOnTrue:Boolean):TspirvOp;
+begin
+ Result:=nil;
+ vOnTrue:=False;
+ if (pMerg=nil) or (pMerg.pBody=nil) then Exit;
+
+ Result:=pMerg.pBody.Labels.pBcnOp;
+ if (Result=nil) or (Result.OpId<>Op.OpBranchConditional) then Exit(nil);
+
+ if (Result.ParamNode(1).Value=vLabel) then
+ begin
+  vOnTrue:=True
+ end else
+ if (Result.ParamNode(2).Value=vLabel) then
+ begin
+  vOnTrue:=False
+ end else
+ begin
+  Exit(nil);
+ end;
+end;
+
+//collect the ops
+function TEmitPostOp.HoistGuardOps(pIns:TsrOpBlock;pRoot:TspirvOp):TspirvOp;
+var
+ ops:TDependenceList;
+ MarkerOps:DWORD;
+ before:TspirvOp;
+ node:TDependenceNode;
+ o:TspirvOp;
+
+ function _inlist(o:TspirvOp):Boolean; inline;
+ begin
+  Result:=(o.Marker=MarkerOps);
+ end;
+
+ function _inGuardBody(o:TspirvOp):Boolean;
+ var
+  x:TsrNode;
+ begin
+  Result:=False;
+  if (o=nil) or (pIns=nil) then Exit;
+  //must be below pIns at all
+  x:=o.Parent;
+  while (x<>nil) and (x<>pIns) do
   begin
-   Assert(false,'_restore:2');
+   x:=x.Parent;
+  end;
+  if (x<>pIns) then Exit;
+  x:=o.Parent;
+  while (x<>nil) and (x<>pIns) do
+  begin
+   if x.IsType(ntOpBlock) and
+      (TsrOpBlock(x).bType=btOther) then
+   begin
+    Exit(True);
+   end;
+   x:=x.Parent;
+  end;
+ end;
+
+ function _collect(o:TspirvOp):Boolean;
+ var
+  stack:TDependenceStack;
+  pp,npp:POpParamNode;
+  r:TsrRegNode;
+  w:TspirvOp;
+  descend:Boolean;
+ begin
+  Result:=False;
+  if (o=nil) then Exit;
+  if _inlist(o) then Exit(True);
+  if not _inGuardBody(o) then Exit(True);
+  if not CanHoist(o) then Exit;
+
+  o.Marker:=MarkerOps;
+  if (o.ParamFirst=nil) then
+  begin
+   ops.Push_tail(o);
+   Exit(True);
   end;
 
-  //Preventing circular markings
-  V.mark_read(nil);
+  stack.Init(o.Emit);
+  stack.Push(o.ParamFirst);
 
-  N.pWriter:=V.FBase;
-  N.pWriter.PrepType(ord(N.dtype));
+  while stack.Pop(pp) do
+  begin
+   w:=nil;
+   r:=RegDown(pp.AsReg);
+   if (r<>nil) and (r.pWriter<>nil) then
+   begin
+    w:=r.pWriter.specialize AsType<ntOp>;
+   end;
 
-  V.mark_unread(nil);
+   descend:=(w<>nil) and (not _inlist(w)) and _inGuardBody(w);
+   if descend and (not CanHoist(w)) then
+   begin
+    stack.Clear;
+    Exit;
+   end;
 
+   if descend then
+   begin
+    w.Marker:=MarkerOps;
+    if (w.ParamFirst=nil) then
+    begin
+     ops.Push_tail(w);
+     npp:=pp.Next;
+     if (npp=nil) then
+     begin
+      ops.Push_tail(pp.Parent);
+     end else
+     begin
+      stack.Push(npp);
+     end;
+    end else
+    begin
+     stack.Push(pp);
+     stack.Push(w.ParamFirst);
+    end;
+    Continue;
+   end;
+
+   npp:=pp.Next;
+   if (npp=nil) then
+   begin
+    ops.Push_tail(pp.Parent);
+   end else
+   begin
+    stack.Push(npp);
+   end;
+
+  end; //while
+
+  Result:=True;
+ end;
+
+begin
+ Result:=nil;
+
+ before:=nil;
+ if (pIns<>nil) and
+    (pIns.vctx.Befor<>nil) and
+    pIns.vctx.Befor.IsType(ntOp) then
+ begin
+  before:=pIns.vctx.Befor;
+ end;
+ if (before=nil) or (before.Parent=nil) then Exit;
+
+ MarkerOps:=NewMarker;
+ ops.Init(Self);
+ if not _collect(pRoot) then Exit;
+
+ node:=ops.FList.pHead;
+ if (node=nil) then
+ begin
+  Exit(before);
+ end;
+
+ while (node<>nil) do
+ begin
+  o:=node.pNode;
+  //
+  TsrOpBlock(o.Parent).Remove(o);
+  TsrOpBlock(before.Parent).InsertBefore(before,o);
   //
   node:=node.pNext;
  end;
+
+ Result:=ops.FList.pTail.pNode;
+ ops.Clear;
+end;
+
+function FetchLogicalNot(reg:TsrRegNode):TsrRegNode;
+var
+ pop:TSpirvOp;
+begin
+ Result:=nil;
+
+ pop:=reg.pWriter.specialize AsType<ntOp>;
+ if (pop=nil) then Exit;
+
+ if (pop.OpId=Op.OpLogicalNot) then
+ begin
+  Result:=pop.ParamNode(0).AsReg;
+ end;
+end;
+
+//predicate: C ? V : const, reduced to bool
+function TEmitPostOp.BuildPhiPredicate(cnd,vReg,cReg:TsrRegNode;vOnTrue:Boolean;work:TspirvOp):TsrRegNode;
+var
+ not_vReg:TsrRegNode;
+begin
+ Result:=nil;
+ if cReg.AsConst.AsBool then //const=true: (!C or V) / (C or V)
+ begin
+  if (vOnTrue) then
+  begin
+   not_vReg:=FetchLogicalNot(vReg);
+
+   if (not_vReg=nil) then
+   begin
+    // (!C or V)
+    Result:=OpLogicalNotTo(cnd,@work);
+    Result:=OpLogicalOrTo(Result,vReg,@work);
+   end else
+   begin
+    // !(C and !V)
+    Result:=OpLogicalAndTo(cnd,not_vReg,@work);
+    Result:=OpLogicalNotTo(Result,@work);
+   end;
+
+  end else
+  begin
+   Result:=OpLogicalOrTo(cnd,vReg,@work);
+  end;
+ end else
+ begin //const=false: (C and V) / (!C and V)
+  if (vOnTrue) then
+  begin
+   Result:=OpLogicalAndTo(cnd,vReg,@work);
+  end else
+  begin
+   not_vReg:=FetchLogicalNot(vReg);
+
+   if (not_vReg=nil) then
+   begin
+    // (!C and V)
+    Result:=OpLogicalNotTo(cnd,@work);
+    Result:=OpLogicalAndTo(Result,vReg,@work);
+   end else
+   begin
+    // !(C or !V)
+    Result:=OpLogicalOrTo (cnd,not_vReg,@work);
+    Result:=OpLogicalNotTo(Result,@work);
+   end;
+
+  end;
+ end;
+end;
+
+//move the predicate op into the consuming block so the guard condition is not known-true there
+function PlacePhiPredicate(node,mkOp:TspirvOp):Boolean;
+var
+ pBlk:TsrOpBlock;
+ before:TspirvOp;
+begin
+ Result:=False;
+ if (node=nil) or (mkOp=nil) then Exit;
+ if (mkOp.Parent=node.Parent) then Exit(True);
+
+ TsrOpBlock(mkOp.Parent).Remove(mkOp);
+
+ pBlk:=node.Parent;
+ while (pBlk<>nil) do
+ begin
+  if (pBlk.bType=btMerg) then Break;
+  pBlk:=pBlk.Parent;
+ end;
+
+ before:=nil;
+ if (pBlk<>nil) and
+    (pBlk.vctx.Befor<>nil) and
+    pBlk.vctx.Befor.IsType(ntOp) then
+ begin
+  before:=pBlk.vctx.Befor;
+ end;
+
+ if (before<>nil) then
+  before.InsertBefore(mkOp)
+ else
+  node.InsertBefore(mkOp);
+
+ Result:=True;
+end;
+
+{btMerg
+
+ OpCondMerge
+
+ {btCond
+  OpBranch
+  OpLabel
+  OpBranchCond
+
+  {btOther (Body)
+   .......
+  }
+
+  OpLabel
+ }
+
+ {btElse
+  OpBranch
+  OpLabel
+
+  {btOther (Body)
+   .......
+  }
+
+  OpLabel
+ }
+
+}
+
+function TEmitPostOp.TryFoldGuardPhi(node,phi:TSpirvOp):Integer;
+var
+ pMerg,pIns,pCond:TsrOpBlock;
+ Guard,pRoot,work:TspirvOp;
+ cnd,vReg,cReg,vpReg,pred:TsrRegNode;
+ vLabel:TsrNode;
+ vOnTrue:Boolean;
+begin
+ Result:=0;
+ if (node=nil) or (phi=nil) then Exit;
+ if (phi.OpId<>Op.OpPhi) then Exit;
+
+ pMerg:=phi.Parent;
+ if (pMerg=nil) then Exit;
+
+ if not SplitPhi(phi,vReg,cReg,vLabel) then Exit;
+
+ Guard:=FindPhiGuard(pMerg,vLabel,vOnTrue);
+ if (Guard=nil) then Exit;
+
+ pIns:=Guard.Parent;
+ if (pIns=nil) then Exit;
+
+ cnd:=RegDown(Guard.ParamNode(0).AsReg);
+ if (cnd=nil) then Exit;
+
+ vpReg:=RegDown(vReg);
+ if (vpReg=nil) or (vpReg.pWriter=nil) then Exit;
+
+ pRoot:=vpReg.pWriter.specialize AsType<ntOp>;
+ if (pRoot=nil) or (pRoot.Parent=nil) then Exit;
+
+ work:=HoistGuardOps(pIns,pRoot);
+ if (work=nil) then Exit;
+
+ pred:=BuildPhiPredicate(cnd,vpReg,cReg,vOnTrue,work);
+ if (pred=nil) then Exit;
+
+ PlacePhiPredicate(node,pred.pWriter.specialize AsType<ntOp>);
+
+ node.ParamNode(0).Value:=pred;
+ phi.mark([soNotUsed,soForce]);
+
+ if (node.OpId=Op.OpBranchConditional) then
+ begin
+  pCond:=TsrOpBlock(node.Parent).FindUpCond;
+  if (pCond<>nil) then
+  if (RegDown(pCond.Cond.pReg)=phi.pDst) then
+  begin
+   pCond.Cond.pReg:=pred;
+  end;
+ end;
+
+ Result:=1;
+end;
+
+function FoldCondBlock(node:TSpirvOp;pMerg,pCond:TsrOpBlock):Integer;
+begin
+ Result:=0;
+
+ //Clear ref in BranchConditional
+ node.ParamNode(0).Value:=nil;
+
+ //set type
+ pMerg.bType:=btOther;
+ pCond.bType:=btOther;
+
+ pMerg.SetLabels(nil,nil,nil);
+ pCond.SetLabels(nil,nil,nil);
+
+ //clear instructions
+ mark_not_used_branch_op(pMerg);
+ mark_not_used_branch_op(pCond);
+
+ if (pCond.pElse<>nil) then
+ begin
+  pCond.pElse.bType:=btOther;
+  pCond.pElse.SetLabels(nil,nil,nil);
+  mark_not_used_branch_op(pCond.pElse);
+ end;
+
+ Result:=1;
 end;
 
 function TEmitPostOp.OnBranchConditional1(node:TSpirvOp):Integer;
 var
  src,prv:TsrRegNode;
- pOpNot:TSpirvOp;
- pLabel:array[0..1] of TsrRefNode;
+ pop:TSpirvOp;
+ pLabel:array[0..1] of TsrNode;
  pCond:TsrOpBlock;
  pMerg:TsrOpBlock;
  cst  :TsrConst;
+ folded:Boolean;
 begin
  Result:=0;
 
- //exit;
-
  src:=RegDown(node.ParamNode(0).AsReg);
-
  if (src=nil) then Exit;
+
+ pCond:=TsrOpBlock(node.Parent).FindUpCond;
+ if (pCond=nil) then Exit;
 
  if (src.is_const) then
  begin
+
+  //exit;
+
   cst:=src.AsConst;
   if (cst<>nil) then
+  if (pCond<>nil) then
   begin
-   pCond:=TsrOpBlock(node.Parent).FindUpCond;
-   if (pCond<>nil) then
+
    if (pCond.pElse=nil) then //no else
    if (RegDown(pCond.Cond.pReg)=src) then
    if ((cst.AsBool=True)  and (pCond.Cond.FNormalOrder=True )) or   //if (true)
@@ -920,65 +1450,150 @@ begin
    begin
     //Remove the condition block
 
-    //Clear ref in BranchConditional
-    node.ParamNode(0).Value:=nil;
-
     //Get merge block
     pMerg:=pCond.Parent;
     Assert(pMerg.bType=btMerg);
 
-    //set type
-    pMerg.bType:=btOther;
+    folded:=_fold_phi(pMerg,pCond.vctx.pBegLabel);
 
-    _restore(pCond.vctx);
+    if (folded) then
+    begin
+     Result:=FoldCondBlock(node,pMerg,pCond);
+     Exit;
+    end; //folded
 
-    //simplification of connections
-    //PrivateList.build_volatile_ctrue(pCond.pAfter,pCond.Regs.orig,pCond.Regs.prev,pCond.Regs.next);
+   end;
 
-    //set type
-    pCond.bType:=btOther;
+  end;
 
-    //clear instructions
-    mark_not_used_branch_op(pMerg);
-    mark_not_used_branch_op(pCond);
+ end;
+
+ pop:=src.pWriter.specialize AsType<ntOp>;
+ if (pop=nil) then Exit;
+
+ Case pop.OpId of
+  Op.OpPhi:
+   begin
+    Exit(TryFoldGuardPhi(node,pop));
+   end;
+  Op.OpLogicalNot:
+   begin
+    prv:=pop.ParamNode(0).AsReg;
+    if (prv=nil) then Exit;
+
+    node.ParamNode(0).Value:=prv; //set new
+
+    pLabel[0]:=node.ParamNode(1).Value; //read
+    pLabel[1]:=node.ParamNode(2).Value; //read
+
+    node.ParamNode(1).Value:=pLabel[1]; //swap
+    node.ParamNode(2).Value:=pLabel[0]; //swap
+
+    if (RegDown(pCond.Cond.pReg)=src) then
+    begin
+     //broken?
+     //set new
+     pCond.Cond.pReg:=prv;
+     //invert mark
+     pCond.Cond.FNormalOrder:=not pCond.Cond.FNormalOrder;
+    end;
 
     Exit(1);
    end;
+
+  else;
+ end;
+
+end;
+
+Function IsBlankBlock(pMerg,pCond:TsrOpBlock):Boolean;
+var
+ node,last:TSpirvOp;
+begin
+ Result:=True;
+ if (pMerg=nil) or (pCond=nil) then Exit;
+ if (pMerg.bType<>btMerg) then Exit;
+
+ node:=pMerg.First;
+ last:=pMerg.Next;
+
+ while (node<>nil) and (node<>last) do
+ begin
+  if node.IsType(ntOp) then
+  begin
+   if node.is_notused or
+      node.is_cleared then
+   begin
+    //
+   end else
+   begin
+    //
+    Case node.OpId of
+     Op.OpLabel,
+     Op.OpSelectionMerge:;
+     //
+     Op.OpBranch:
+      if (node.ParamNode(0).Value<>pCond.Labels.pMrgOp.pDst) then
+      begin
+       Exit(False);
+      end;
+     Op.OpBranchConditional:
+      if (node<>pCond.Labels.pBcnOp) then
+      begin
+       Exit(False);
+      end;
+     //
+     else
+      Exit(False);
+    end;
+    //
+   end;
   end;
+  //
+  node:=flow_down_next_up(node);
  end;
 
- pOpNot:=src.pWriter.specialize AsType<ntOp>;
- if (pOpNot=nil) then Exit;
+end;
 
- Case pOpNot.OpId of
-  Op.OpLogicalNot:;
-  else
-   Exit;
- end;
-
- prv:=pOpNot.ParamNode(0).AsReg;
- if (prv=nil) then Exit;
-
- node.ParamNode(0).Value:=prv; //set new
-
- pLabel[0]:=node.ParamNode(1).Value.specialize AsType<ntRefId>; //read
- pLabel[1]:=node.ParamNode(2).Value.specialize AsType<ntRefId>; //read
-
- node.ParamNode(1).Value:=pLabel[1]; //swap
- node.ParamNode(2).Value:=pLabel[0]; //swap
+function TEmitPostOp.OnBranchConditional2(node:TSpirvOp):Integer;
+var
+ pCond:TsrOpBlock;
+ pMerg:TsrOpBlock;
+begin
+ Result:=0;
 
  pCond:=TsrOpBlock(node.Parent).FindUpCond;
- if (pCond<>nil) then
- if (RegDown(pCond.Cond.pReg)=src) then
+ if (pCond=nil) then Exit;
+
+ //Get merge block
+ pMerg:=pCond.Parent;
+ Assert(pMerg.bType=btMerg);
+
+ if IsBlankBlock(pMerg,pCond) then
  begin
-  //broken?
-  //set new
-  pCond.Cond.pReg:=prv;
-  //invert mark
-  pCond.Cond.FNormalOrder:=not pCond.Cond.FNormalOrder;
+  //Remove blank condition block
+  Result:=FoldCondBlock(node,pMerg,pCond);
  end;
 
- Exit(1);
+end;
+
+function TEmitPostOp.OpExport1(node:TSpirvOp):Integer;
+var
+ src:TsrRegNode;
+ pop:TSpirvOp;
+begin
+ Result:=0;
+
+ src:=RegDown(node.ParamNode(0).AsReg);
+ if (src=nil) then Exit;
+
+ pop:=src.pWriter.specialize AsType<ntOp>;
+ if (pop=nil) then Exit;
+
+ if (pop.OpId=Op.OpPhi) then
+ begin
+  Result:=TryFoldGuardPhi(node,pop);
+ end;
 end;
 
 function TEmitPostOp.OpBitCount1(node:TSpirvOp):Integer;
@@ -2588,6 +3203,49 @@ begin
  node.pDst:=nil;
 end;
 
+function TEmitPostOp.OnBitFieldSExtract_1(node:TSpirvOp):Integer;
+var
+ dst:TsrRegNode;
+
+ rBase,rOffset,rCount:TsrRegNode;
+
+ base,offset,count:Int64;
+
+ procedure _SetConst(dtype:TsrDataType;value:QWORD);
+ begin
+  dst.pWriter:=NewImm_q(dtype,value,node);
+  node.mark([soNotUsed]);
+  node.pDst:=nil;
+  Inc(Result);
+ end;
+
+begin
+ Result:=0;
+ dst:=node.pDst.specialize AsType<ntReg>;
+ if (dst=nil) then Exit;
+
+ rBase  :=RegDown(node.ParamNode(0).AsReg);
+ rOffset:=RegDown(node.ParamNode(1).AsReg);
+ rCount :=RegDown(node.ParamNode(2).AsReg);
+
+ if (rBase=nil) or (rOffset=nil) or (rCount=nil) then Exit;
+
+ if rBase.is_const and rOffset.is_const and rCount.is_const then
+ begin
+  base  :=rBase.AsConst.GetData;
+  offset:=rOffset.AsConst.GetData;
+  count :=rCount.AsConst.GetData;
+
+  base:=base shr offset;
+  count:=64-count;
+  base:=base shl count;
+  base:=SarInt64(base,count);
+
+  _SetConst(rBase.dtype,base);
+ end;
+
+end;
+
 function _IsFma(node:TSpirvOp):Boolean;
 var
  OpId:PtrUint;
@@ -2837,8 +3495,7 @@ end;
 function TEmitPostOp.OnMakeExp2(node:TSpirvOp):Integer;
 var
  pLine:TSpirvOp;
- pOpBlock:TsrOpBlock;
- pChild:TsrOpBlock;
+ pOpBlock,pChild,pMerg,pParent:TsrOpBlock;
  pBegOp,pEndOp,pMrgOp:TspirvOp;
  exc:TsrRegNode;
 begin
@@ -2916,8 +3573,8 @@ begin
    pOpBlock.SetCond(exc,false); //reverse
 
    pLine:=node;
-   pLine:=OpCondMerge (pLine,pMrgOp);
    pLine:=OpBranchCond(pLine,pEndOp,pBegOp,exc); //reverse
+   pOpBlock.Labels.pBcnOp:=pLine;
    pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
@@ -2946,8 +3603,8 @@ begin
    pOpBlock.pElse.bType:=btElse;
 
    pLine:=node;
-   pLine:=OpCondMerge (pLine,pMrgOp);
    pLine:=OpBranchCond(pLine,pEndOp,pBegOp,exc); //reverse
+   pOpBlock.Labels.pBcnOp:=pLine;
    pLine:=AddSpirvOp  (pLine,pBegOp);
 
      pChild:=AllocBlockOp; //create new
@@ -2966,7 +3623,29 @@ begin
    pLine:=pOpBlock.Last;
    pLine:=OpBranch  (pLine,pMrgOp);
    pLine:=AddSpirvOp(pLine,pMrgOp); //end
+  end;
 
+  pOpBlock.vctx.pBegLabel:=pBegOp.pDst;
+  pOpBlock.vctx.pMrgOp   :=pMrgOp;
+
+  pParent:=pOpBlock.Parent;
+  if (pParent<>nil) then
+  begin
+   pMerg:=AllocBlockOp;
+   pMerg.SetInfo(btMerg);
+   pMerg.SetLabels(nil,nil,pMrgOp);
+   pMerg.vctx.pMrgOp:=pMrgOp;
+   pMerg.vctx.Befor :=pMerg;
+
+   pParent.InsertBefore(pOpBlock,pMerg);
+   pParent.Remove(pOpBlock);
+
+   pLine:=pMerg.line;
+   pLine:=OpCondMerge(pLine,pMrgOp);
+
+   pMerg.InsertAfter(pLine,pOpBlock);
+   pMerg.pBody:=pOpBlock;
+   pOpBlock.UpdateLevel;
   end;
 
  end;
