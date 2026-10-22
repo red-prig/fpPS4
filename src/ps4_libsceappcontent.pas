@@ -16,6 +16,7 @@ var
 implementation
 
 uses
+ sysutils,
  errno,
  libkern,
  kern_mtx,
@@ -106,6 +107,7 @@ type
   path            :RawByteString;
   EntitlementLabel:SceNpUnifiedEntitlementLabel;
   EntitlementKey  :SceAppContentEntitlementKey;
+  status          :DWORD;
  end;
  AAddContInfo=array of TAddContInfo;
 
@@ -127,9 +129,44 @@ begin
  end;
 end;
 
+const
+ PS4GD=$1A; //PS4 Game Data
+ PS4AC=$1B; //PS4 Additional Content
+ PS4AL=$1C; //PS4 Additional License
+
+type
+ t_license_info=packed record
+  Content_ID     :array[0..47] of AnsiChar;
+  EntitlementKey :SceAppContentEntitlementKey;
+  Unknown1       :DWORD;
+  ContentType    :DWORD;
+  Unknown2       :DWORD;
+  Unknown3       :DWORD;
+  Padding        :array[0..431] of Byte;
+ end;
+ {$IF sizeof(t_license_info)<>512}{$STOP sizeof(t_license_info)<>512}{$ENDIF}
+
+function LoadLicenseInfo(const path:RawByteString;var dst:t_license_info):Boolean;
+var
+ F:THandle;
+begin
+ Result:=False;
+
+ F:=FileOpen(path,fmOpenRead);
+ if (F=THandle(-1)) then Exit;
+
+ FileRead(F,dst,SizeOf(t_license_info));
+
+ FileClose(F);
+
+ Result:=True;
+end;
+
 procedure AddDlcByPath(const path:RawByteString;const ServiceID:ARawByteString);
 var
  ParamSfo:TParamSfoFile;
+ LicenseInfo:t_license_info;
+ LicenseInfoLoaded:Boolean;
  CONTENT_ID:RawByteString;
  current:RawByteString;
  node:TAddContInfo;
@@ -149,15 +186,72 @@ begin
   For i:=0 to High(ServiceID) do
   if (current=ServiceID[i]) then
   begin
-   LOG_INFO('Apply DLC :',path);
-   LOG_INFO('TITLE     :',ParamSfo.GetString('TITLE'));
-   LOG_INFO('CONTENT_ID:',CONTENT_ID);
+   LicenseInfo:=Default(t_license_info);
+
+   LicenseInfoLoaded:=LoadLicenseInfo(ExcludeTrailingPathDelimiter(path)+
+                                      DirectorySeparator+'sce_sys'+
+                                      DirectorySeparator+'LICENSE.INFO',
+                                      LicenseInfo);
+
+   if not LicenseInfoLoaded then
+   begin
+    LicenseInfoLoaded:=LoadLicenseInfo(ExcludeTrailingPathDelimiter(path)+
+                                       DirectorySeparator+'sce_sys'+
+                                       DirectorySeparator+'LICENSE_INFO',
+                                       LicenseInfo)
+   end;
+
+   if LicenseInfoLoaded then
+   begin
+    if (LicenseInfo.Content_ID<>CONTENT_ID) then
+    begin
+     LOG_ERROR(stderr,'Unknow LicenseInfo.Content_ID:',LicenseInfo.Content_ID);
+     LicenseInfo:=Default(t_license_info);
+     LicenseInfoLoaded:=False;
+    end;
+   end;
+
+   if LicenseInfoLoaded then
+   begin
+    case SwapEndian(LicenseInfo.ContentType) of
+     PS4AC:;
+     PS4AL:;
+     else
+      begin
+       LOG_ERROR(stderr,'Unknow LicenseInfo.ContentType:',HexStr(LicenseInfo.ContentType,8));
+       LicenseInfo:=Default(t_license_info);
+       LicenseInfoLoaded:=False;
+      end;
+    end;
+   end;
+
+   LOG_INFO('APPLY DLC   :',path);
+   LOG_INFO('TITLE       :',ParamSfo.GetString('TITLE'));
+   LOG_INFO('CONTENT_ID  :',CONTENT_ID);
+   LOG_INFO('LICENSE.INFO:',HexStr(LicenseInfo.ContentType,8));
 
    node:=Default(TAddContInfo);
 
    node.path                 :=path;
    node.EntitlementLabel.data:=TContentID(CONTENT_ID).GetEntitlementLabel;
-   //node.EntitlementKey:=;
+
+   if LicenseInfoLoaded then
+   begin
+    node.EntitlementKey:=LicenseInfo.EntitlementKey;
+    //
+    if (SwapEndian(LicenseInfo.ContentType)=PS4AL) then
+    begin
+     node.status:=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_NO_EXTRA_DATA;
+    end else
+    begin
+     node.status:=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+    end;
+    //
+   end else
+   begin
+    //fallback
+    node.status:=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+   end;
 
    Insert(node,AddContInfoByServiceLabel[i],Length(AddContInfoByServiceLabel[i]));
    Break;
@@ -327,7 +421,7 @@ begin
    For i:=0 to len-1 do
    begin
     list[i].entitlementLabel:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel;
-    list[i].status          :=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+    list[i].status          :=AddContInfoByServiceLabel[serviceLabel][i].status;
    end;
 
   end;
@@ -391,7 +485,7 @@ begin
   end;
 
   info^.entitlementLabel:=AddContInfoByServiceLabel[serviceLabel][i].EntitlementLabel;
-  info^.status          :=SCE_APP_CONTENT_ADDCONT_DOWNLOAD_STATUS_INSTALLED;
+  info^.status          :=AddContInfoByServiceLabel[serviceLabel][i].status;
 
  mtx_unlock(mtx_app_content);
 
