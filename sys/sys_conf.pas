@@ -84,6 +84,7 @@ type
  d_mmap_t        =Function (dev:p_cdev;offset:vm_ooffset_t;paddr:p_vm_paddr_t;nprot:Integer;memattr:p_vm_memattr_t):Integer;
  d_mmap_single_t =Function (dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer):Integer;
  d_mmap_single2_t=Function (dev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;obj:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
+ d_mmap_after_t  =Function (dev:p_cdev;vaddr:vm_offset_t;size:vm_size_t):Integer; //emu ext
  d_purge_t       =Procedure(dev:p_cdev);
 
  dumper_t=Function(
@@ -152,9 +153,10 @@ type
   d_purge       :d_purge_t;
   d_mmap_single :d_mmap_single_t;
   d_mmap_single2:d_mmap_single2_t;
+  d_mmap_after  :d_mmap_after_t;  //emu ext
 
   d_spare0:array[0..1] of Integer;
-  d_spare1:array[0..2] of Pointer;
+  d_spare1:array[0..1] of Pointer;
 
   { These fields should not be messed with by drivers }
   d_devs:Pointer; //cdev

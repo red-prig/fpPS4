@@ -19,9 +19,14 @@ procedure jit_interrupt_ast; external;
 
 procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
 
+function  JIT_PATCHER(td:p_kthread;Rip:QWORD):Boolean;
+
 implementation
 
 uses
+ vmparam,
+ vm_pmap_prot,
+ kern_jit_asm,
  subr_backtrace,
  g_node_splay,
  kern_urcu;
@@ -717,6 +722,249 @@ _start:
    end;
  end;
 end;
+
+type
+ TMemInstInfo=record
+  addr:Pointer;
+  size:Byte;
+  full:Byte;
+  mema:Byte;
+  regi:TRegValue;
+  data:array[0..7] of Byte;
+ end;
+
+function GetMemInstLen(addr:Pointer;var info:TMemInstInfo):Boolean;
+var
+ ptr :Pointer;
+ size:DWORD;
+ full:DWORD;
+
+ dis:TX86Disassembler;
+ din:TInstruction;
+
+ i,mema:Byte;
+ regi:TRegValue;
+begin
+ Result:=False;
+
+ case PByte(addr)[0] of
+  $D6:Exit(False); //SALC
+  $E9:Exit(False); //jmp 32
+  $F4:Exit(False); //HLT
+  else;
+ end;
+
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ ptr:=addr;
+
+ dis.Disassemble(dm64,ptr,din);
+
+ mema:=0;
+ if (din.OperCnt<>0) then
+ For i:=1 to din.OperCnt do
+ if is_memory(din.Operand[i]) then
+ if (din.Operand[i].RegValue[1].AType=regNone) then    //only one reg
+ if (din.Operand[i].RegValue[0].AType=regGeneral) then //only general reg
+ if (din.Operand[i].RegValue[0].AScale<=1) then        //no scale
+ begin
+  mema:=OPERAND_BYTES[din.Operand[i].Size];
+  regi:=din.Operand[i].RegValue[0];
+ end;
+
+ if (mema=0) then
+ begin
+  Assert(False,'TODO');
+  Exit;
+ end;
+
+ size:=(ptr-addr);
+ if (size=5) then
+ begin
+  info.addr:=addr;
+  info.size:=size;
+  info.full:=size;
+  info.mema:=mema;
+  info.regi:=regi;
+  Move(addr^,info.data,size);
+
+  case info.data[0] of
+   $D6:Exit(False); //SALC
+   $E9:Exit(False); //jmp 32
+   $F4:Exit(False); //HLT
+   else;
+  end;
+
+  Exit(True);
+ end;
+
+ dis.Disassemble(dm64,ptr,din);
+
+ if (din.OpCode.Opcode<>OPnop) then
+ begin
+  Exit(False);
+ end;
+
+ full:=(ptr-addr);
+ if (full=5) then
+ begin
+  info.addr:=addr;
+  info.size:=size;
+  info.full:=full;
+  info.mema:=mema;
+  info.regi:=regi;
+  Move(addr^,info.data,size);
+
+  case info.data[0] of
+   $D6:Exit(False); //SALC
+   $E9:Exit(False); //jmp 32
+   $F4:Exit(False); //HLT
+   else;
+  end;
+
+  Exit(True);
+ end;
+
+ Result:=False;
+end;
+
+procedure add_orig(var info:TMemInstInfo;var builder:t_jit_builder);
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ Move(info.data[0],ji.AData^,info.size);
+
+ ji.AInstructionSize:=info.size;
+
+ builder._add(ji);
+end;
+
+var
+ gc_page:Pointer; external; //SceGnmDingDongArea
+
+function jmp_patcher(addr:Pointer):Pointer; public;
+var
+ p:Byte;
+begin
+ p:=ppmap_get_prot(QWORD(addr));
+
+ if (p and PAGE_TRACK_GC)<>0 then
+ begin
+  Exit( gc_page + (QWORD(addr) and PAGE_MASK) );
+ end;
+
+ Result:=addr;
+ //Writeln;
+end;
+
+function JIT_PATCHER(td:p_kthread;Rip:QWORD):Boolean;
+var
+ hinfo:t_jit_addr_info;
+ minfo:TMemInstInfo;
+ old,new:QWORD;
+
+ builder:t_jit_builder;
+
+ mem_size:QWORD;
+ mem_code:Pointer;
+ mem_ofs :Integer;
+
+ mchunk:p_stub_chunk;
+begin
+
+ if not exist_jit_host(Pointer(Rip),@hinfo) then
+ begin
+  Exit(False);
+ end;
+
+ if not GetMemInstLen(Pointer(Rip),minfo) then
+ begin
+  Exit(False);
+ end;
+
+ //0   1  2  3  4  5  6  7
+ //00 00 00 00 00 FF FF FF
+ //E9 FB FF FF FF
+
+ old:=PQWORD(Rip)^;
+ new:=old and QWORD($FFFFFF0000000000);
+ new:=new or  QWORD($000000FFFFFFFBE9);
+
+ if System.InterlockedCompareExchange64(PQWORD(Rip)^,new,old)<>old then Exit;
+
+ builder:=Default(t_jit_builder);
+
+ with builder do
+ begin
+
+  //int3;
+
+  push(r13);
+  push(r14);
+  push(r15);
+
+  if not cmp_reg(r14,minfo.regi) then
+  begin
+   xchgq(r14,minfo.regi);
+  end;
+
+  movi64(r15,QWORD(@jmp_patcher));
+  call_far(@jit_mem);
+
+  if not cmp_reg(r14,minfo.regi) then
+  begin
+   xchgq(r14,minfo.regi);
+  end;
+
+  if not cmp_reg(r13,minfo.regi) then
+  begin
+   movq(r13,[rsp+0]);
+  end;
+
+  if not cmp_reg(r14,minfo.regi) then
+  begin
+   movq(r14,[rsp+8]);
+  end;
+
+  if not cmp_reg(r15,minfo.regi) then
+  begin
+   movq(r15,[rsp+16]);
+  end;
+
+  add_orig(minfo,builder);
+
+  pop(r15);
+  pop(r14);
+  pop(r13);
+
+  jmp_far(minfo.addr+minfo.full);
+ end;
+
+ mem_size:=builder.GetMemSize;
+
+ mchunk:=p_alloc(minfo.addr,mem_size,False);
+ mem_code:=@mchunk^.body;
+
+ builder.SaveTo(mem_code,mem_size);
+ builder.Free;
+
+ mem_ofs:=QWORD(mem_code)-(Rip+5);
+
+ old:=new;
+ new:=old and QWORD($FFFFFF00000000FF);
+ new:=new or  (QWORD(DWORD(mem_ofs)) shl 8); //need zero extend
+
+ if System.InterlockedCompareExchange64(PQWORD(Rip)^,new,old)<>old then
+ begin
+  Assert(false,'WTF');
+ end;
+
+ Result:=True;
+end;
+
 
 end.
 

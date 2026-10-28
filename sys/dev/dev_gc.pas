@@ -56,7 +56,7 @@ uses
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 var
- gc_page:PDWORD; //SceGnmDingDongArea
+ gc_page:PDWORD; public; //SceGnmDingDongArea
 
  gc_submits_allowed_vaddr:PInteger=nil; //0=true,1=false (0xfe0100000)
  gc_submits_allowed_vmirr:PInteger=nil;
@@ -1155,7 +1155,19 @@ begin
 
 end;
 
-Function gc_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer):Integer;
+Function gc_mmap_after(dev:p_cdev;vaddr:vm_offset_t;size:vm_size_t):Integer; //emu ext
+var
+ map:vm_map_t;
+begin
+ Result:=0;
+ LOG_INFO('gc_page:0x',HexStr(vaddr,11));
+
+ map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+
+ pmap_mark_gc(map^.pmap,vaddr,vaddr+size);
+end;
+
+Function gc_mmap_single2(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
 var
  obj:vm_object_t;
 begin
@@ -1183,6 +1195,8 @@ begin
  obj^.un_pager.map_base:=gc_page;
 
  objp^:=obj;
+
+ maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE));
 
  Result:=0;
 end;
@@ -1212,7 +1226,8 @@ const
   d_name        :'gc';
   d_ioctl       :@gc_ioctl;
   d_mmap        :@gc_mmap;
-  d_mmap_single :@gc_mmap_single;
+  d_mmap_single2:@gc_mmap_single2;
+  d_mmap_after  :@gc_mmap_after;
  );
 
 {

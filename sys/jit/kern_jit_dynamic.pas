@@ -630,6 +630,13 @@ function exist_jit_host(src:Pointer;info:p_jit_addr_info):Boolean;
 var
  blob:p_jit_dynamic_blob;
 begin
+
+ if (QWORD(src)<VM_MIN_JIT) or
+    (QWORD(src)>=VM_MAX_JIT) then
+ begin
+  Exit(False);
+ end;
+
  blob:=fetch_blob_by_host(src);
  if (blob<>nil) then
  begin
@@ -1722,7 +1729,7 @@ procedure t_jit_dynamic_blob.free_base;
 begin
  if (mchunk=nil) then Exit;
 
- FillChar(base^,size,$CC); //fill int3
+ FillChar(base^,size,$F4); //fill HLT
 
  urcu_retire_text(base,size,mchunk,@deferred_jit_free);
 
