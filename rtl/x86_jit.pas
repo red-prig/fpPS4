@@ -462,20 +462,20 @@ type
   Function  CopyPlt   (var rec:t_jit_copy_ptr):Boolean;
   Function  SaveTo    (ptr:PByte;size:Integer):Integer;
   //
-  procedure _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
-  procedure _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64);
-  procedure _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte);
+  function  _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
+  function  _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):DWORD;
+  function  _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):DWORD;
   procedure _RR     (const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean);
   procedure _RRI    (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
   procedure _RRI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
   procedure _R      (const desc:t_op_type;reg:TRegValue);
   procedure _O      (op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]);
   procedure _O      (const desc:t_op_type;reg:TRegValue);
-  procedure _M      (const desc:t_op_type;mem:t_jit_leas);
+  function  _M      (const desc:t_op_type;mem:t_jit_leas):DWORD;
   procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
-  procedure _MI     (const desc:t_op_type;mem:t_jit_leas;imm:Int64);
+  function  _MI     (const desc:t_op_type;mem:t_jit_leas;imm:Int64):DWORD;
   procedure _RI8    (const desc:t_op_type;reg:TRegValue;imm:Byte);
-  procedure _MI8    (const desc:t_op_type;mem:t_jit_leas;imm:Byte);
+  function  _MI8    (const desc:t_op_type;mem:t_jit_leas;imm:Byte):DWORD;
   procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
   procedure cmov    (op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
   procedure _push   (op,index:Byte;mem:t_jit_leas);
@@ -542,18 +542,18 @@ type
   procedure pop     (reg:TRegValue);
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
-  procedure _VM     (const desc:t_op_type;mem:t_jit_leas);
-  procedure _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+  function  _VM     (const desc:t_op_type;mem:t_jit_leas):DWORD;
+  function  _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
   procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
-  procedure _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+  function  _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
   procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
-  procedure _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas);
-  procedure _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte);
-  procedure _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue);
+  function  _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):DWORD;
+  function  _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
+  function  _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):DWORD;
   procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize=os0);
   procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize=os0);
   procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize=os0);
-  procedure _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte);
+  function  _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_leas);
   procedure vmovdqu (mem:t_jit_leas;reg:TRegValue);
   procedure vmovdqa (reg:TRegValue ;mem:t_jit_leas);
@@ -3226,16 +3226,17 @@ begin
  Exit(rec.pos);
 end;
 
-procedure t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+function t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
 var
  ji:t_jit_instruction;
 begin
  ji._RM(desc,reg,mem);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
-procedure t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64);
+function t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -3323,9 +3324,10 @@ begin
  end;
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
-procedure t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte);
+function t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -3407,6 +3409,7 @@ begin
  ji.EmitByte(imm);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 procedure t_jit_builder._RR(const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean);
@@ -3851,7 +3854,7 @@ end;
 
 ////
 
-procedure t_jit_builder._M(const desc:t_op_type;mem:t_jit_leas);
+function t_jit_builder._M(const desc:t_op_type;mem:t_jit_leas):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -3936,6 +3939,7 @@ begin
  modrm_info.emit_mrm(ji);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 ////
@@ -4004,7 +4008,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64);
+function t_jit_builder._MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -4085,6 +4089,7 @@ begin
  end;
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 procedure t_jit_builder._RI8(const desc:t_op_type;reg:TRegValue;imm:Byte);
@@ -4145,7 +4150,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte);
+function t_jit_builder._MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -4220,6 +4225,7 @@ begin
  ji.EmitByte(imm); //1
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 ///
@@ -4918,7 +4924,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VM(const desc:t_op_type;mem:t_jit_leas);
+function t_jit_builder._VM(const desc:t_op_type;mem:t_jit_leas):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -4995,9 +5001,10 @@ begin
  modrm_info.emit_mrm(ji);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
-procedure t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+function t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -5084,6 +5091,7 @@ begin
  modrm_info.emit_mrm(ji);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 procedure t_jit_builder._VV(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
@@ -5158,7 +5166,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
+function t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -5238,6 +5246,7 @@ begin
  modrm_info.emit_mrm(ji);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 procedure t_jit_builder._VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
@@ -5305,7 +5314,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas);
+function t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -5399,9 +5408,10 @@ begin
  modrm_info.emit_mrm(ji);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
-procedure t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte);
+function t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -5497,11 +5507,12 @@ begin
  ji.EmitByte(imm8);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
-procedure t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue);
+function t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):DWORD;
 begin
- _VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
+ Result:=_VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
 end;
 
 procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
@@ -5726,7 +5737,7 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte);
+function t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
 var
  mreg:t_jit_lea;
 
@@ -5803,6 +5814,7 @@ begin
  ji.EmitByte(imm8);
 
  _add(ji);
+ Result:=ji.AInstructionSize;
 end;
 
 procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_leas);

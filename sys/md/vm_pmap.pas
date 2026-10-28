@@ -123,6 +123,10 @@ procedure pmap_prot_restore(pmap :pmap_t;
                             start:vm_offset_t;
                             __end:vm_offset_t);
 
+procedure pmap_mark_gc(pmap :pmap_t;
+                       start:vm_offset_t;
+                       __end:vm_offset_t);
+
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -1250,6 +1254,24 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
+procedure pmap_mark_gc(pmap :pmap_t;
+                       start:vm_offset_t;
+                       __end:vm_offset_t);
+var
+ lock:Pointer;
+begin
+ LOG_DEBUG('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
+
+ start:=start              and (not PMAPP_MASK);
+ __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
+
+ lock:=pmap_wlock(pmap,start,__end);
+
+ ppmap_mark_gc(start,__end);
+
+ pmap_unlock(pmap,lock);
+end;
+
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -1328,7 +1350,7 @@ begin
 
  lock:=pmap_wlock(pmap,start,__end);
 
- ppmap_unmark(start,__end,VM_PROT_ALL);
+ ppmap_unmark(start,__end,VM_PROT_ALL or PAGE_TRACK_GC);
 
  vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
 

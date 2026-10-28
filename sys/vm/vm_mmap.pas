@@ -138,6 +138,25 @@ begin
  Result:=vm_mmap_to_errno(error);
 end;
 
+procedure vm_mmap_cdev_after(cdev:p_cdev;vaddr:vm_offset_t;size:vm_size_t);
+var
+ dsw:p_cdevsw;
+ ref:Integer;
+begin
+ dsw:=dev_refthread(cdev, @ref);
+ if (dsw=nil) then
+ begin
+  Exit;
+ end;
+
+ if (dsw^.d_mmap_after<>nil) then
+ begin
+  dsw^.d_mmap_after(cdev,vaddr,size);
+ end;
+
+ dev_relthread(cdev, ref);
+end;
+
 function vm_mmap_cdev(objsize     :vm_size_t;
                       prot        :vm_prot_t;
                       maxprotp    :p_vm_prot_t;
@@ -227,7 +246,11 @@ function vm_mmap_vnode(size        :vm_size_t;
                        vp          :p_vnode;
                        foffp       :p_vm_ooffset_t;
                        objp        :p_vm_object_t;
-                       writecounted:PBoolean):Integer;
+                       writecounted:PBoolean;
+                       //emu ext
+                       phandle_type:p_objtype_t;
+                       phandle     :PPointer
+                      ):Integer;
 label
  mark_atime,
  done;
@@ -296,6 +319,10 @@ begin
        end;
   VCHR:
        begin
+        //
+        phandle_type^:=OBJT_DEVICE;
+        phandle     ^:=vp^.v_rdev;
+        //
         error:=vm_mmap_cdev(objsize, prot, maxprotp, flagsp, vp^.v_rdev, foffp, objp);
         if (error=0) then goto mark_atime;
         goto done;
@@ -500,7 +527,7 @@ begin
    end;
   OBJT_VNODE:
    begin
-    error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@obj,@writecounted);
+    error:=vm_mmap_vnode(size,prot,@maxprot,@flags,handle,@foff,@obj,@writecounted,@handle_type,@handle);
    end;
   OBJT_SWAP:
    begin
@@ -686,6 +713,19 @@ begin
         anon);
   end;
 
+ end;
+
+ //emu ext
+ if (rv=KERN_SUCCESS) then
+ if (obj<>nil) then
+ if (obj^.otype=OBJT_DEVICE) then
+ begin
+  Case handle_type of
+   OBJT_DEVICE:
+    begin
+     vm_mmap_cdev_after(handle,addr^,size);
+    end;
+   end;
  end;
 
  if (handle_type=OBJT_BLOCKPOOL) and (rv=KERN_SUCCESS) then
