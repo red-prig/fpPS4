@@ -24,8 +24,12 @@ function  JIT_PATCHER(td:p_kthread;Rip:QWORD):Boolean;
 implementation
 
 uses
+ kern_proc,
  vmparam,
+ vm_map,
+ vm_pmap,
  vm_pmap_prot,
+ vm_tracking_map,
  kern_jit_asm,
  subr_backtrace,
  g_node_splay,
@@ -845,8 +849,11 @@ end;
 var
  gc_page:Pointer; external; //SceGnmDingDongArea
 
-function jmp_patcher(addr:Pointer):Pointer; public;
+function jmp_patcher_before(addr:Pointer):Pointer; public;
 var
+ td:p_kthread;
+ map:vm_map_t;
+ mirror:p_vm_nt_mirror;
  p:Byte;
 begin
  p:=ppmap_get_prot(QWORD(addr));
@@ -856,8 +863,53 @@ begin
   Exit( gc_page + (QWORD(addr) and PAGE_MASK) );
  end;
 
- Result:=addr;
- //Writeln;
+ td:=curkthread;
+
+ mirror:=td^.td_mirror;
+
+ if (mirror<>nil) then
+ begin
+  if (mirror^.base=nil) or
+     (QWORD(addr)>=mirror^.__end) or
+     (QWORD(addr)< mirror^.start) then
+  begin
+   td^.td_mirror:=nil;
+   pmap_mirror_deref2(mirror);
+   mirror:=nil;
+  end;
+ end;
+
+ if (mirror=nil) then
+ begin
+  map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+
+  mirror:=pmap_mirror_map2(map^.pmap,QWORD(addr));
+
+  td^.td_mirror:=mirror;
+ end;
+
+ vm_map_track_trigger(p_proc.p_vmspace,
+                      QWORD(addr),
+                      QWORD(addr)+8,
+                      nil,
+                      M_CPU_WRITE,
+                      False);
+
+ Result:=mirror^.base + (QWORD(addr)-mirror^.start);
+end;
+
+function jmp_patcher_after(addr:Pointer):Pointer; public;
+begin
+ Result:=nil;
+
+ vm_map_track_trigger(p_proc.p_vmspace,
+                      QWORD(addr),
+                      QWORD(addr)+8,
+                      nil,
+                      M_CPU_WRITE,
+                      False);
+
+
 end;
 
 function JIT_PATCHER(td:p_kthread;Rip:QWORD):Boolean;
@@ -874,6 +926,7 @@ var
 
  mchunk:p_stub_chunk;
 begin
+ //Exit(False);
 
  if not exist_jit_host(Pointer(Rip),@hinfo) then
  begin
@@ -911,7 +964,7 @@ begin
    xchgq(r14,minfo.regi);
   end;
 
-  movi64(r15,QWORD(@jmp_patcher));
+  movi64(r15,QWORD(@jmp_patcher_before));
   call_far(@jit_mem);
 
   if not cmp_reg(r14,minfo.regi) then
@@ -935,6 +988,21 @@ begin
   end;
 
   add_orig(minfo,builder);
+
+  {
+  if not cmp_reg(r14,minfo.regi) then
+  begin
+   xchgq(r14,minfo.regi);
+  end;
+
+  movi64(r15,QWORD(@jmp_patcher_after));
+  call_far(@jit_mem);
+
+  if not cmp_reg(r14,minfo.regi) then
+  begin
+   xchgq(r14,minfo.regi);
+  end;
+  }
 
   pop(r15);
   pop(r14);

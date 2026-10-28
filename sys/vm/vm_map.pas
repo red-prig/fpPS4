@@ -350,7 +350,7 @@ procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
 procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
 function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
 function  _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer):Boolean;
-function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
+function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
 procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
@@ -5516,12 +5516,12 @@ begin
  Result:=_vm_track_map_delete_deferred(@map^.pmap^.tr_map,tobj);
 end;
 
-function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE):Integer;
+function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
 begin
  //vm_track_map_trigger2 is broken
  Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
 
- if (mode=M_CPU_WRITE) then
+ if rst and (mode=M_CPU_WRITE) then
  begin
   pmap_prot_restore(map^.pmap,start,__end);
  end;

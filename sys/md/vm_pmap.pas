@@ -150,6 +150,12 @@ procedure pmap_mirror_unmap(pmap:pmap_t;
                             base:Pointer;
                             size:QWORD);
 
+type
+ p_vm_nt_mirror=vm_nt_map.p_vm_nt_mirror;
+
+function  pmap_mirror_map2  (pmap:pmap_t;addr:vm_offset_t):p_vm_nt_mirror;
+procedure pmap_mirror_deref2(mirror:p_vm_nt_mirror);
+
 function  pmap_danger_zone(pmap:pmap_t;
                            addr:vm_offset_t;
                            size:vm_offset_t):Boolean;
@@ -1470,6 +1476,22 @@ begin
   LOG_CRITICAL(StdErr,'failed md_placeholder_unmap:0x',HexStr(r,8));
   Assert(false,'pmap_mirror_unmap');
  end;
+end;
+
+function pmap_mirror_map2(pmap:pmap_t;addr:vm_offset_t):p_vm_nt_mirror;
+var
+ lock:Pointer;
+begin
+ lock:=pmap_rlock(pmap,addr,addr+1);
+
+ Result:=vm_nt_map_mirror2(@pmap^.nt_map,addr);
+
+ pmap_unlock(pmap,lock);
+end;
+
+procedure pmap_mirror_deref2(mirror:p_vm_nt_mirror);
+begin
+ vm_nt_mirror_deallocate(mirror);
 end;
 
 function pmap_danger_zone(pmap:pmap_t;
