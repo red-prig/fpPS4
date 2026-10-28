@@ -81,6 +81,9 @@ const
 
  KERNEL_LOWER         =QWORD($700000000000); //should be aligned to the huge page (1GB)
 
+ VM_MIN_JIT           =QWORD($730000000000);
+ VM_MAX_JIT           =QWORD($740000000000);
+
  VM_DMEM_SIZE         =$180000000; // 6144MB
 
  VM_DEFAULT_MAP_BASE  =QWORD(0);

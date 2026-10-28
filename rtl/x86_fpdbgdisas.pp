@@ -295,7 +295,7 @@ type
     OPPv
   );
 
-  TFullOpcode = record
+  TFullOpcode = packed record
     Prefix: TOpcodePrefix;
     Opcode: TOpcode;
     Suffix: TOpcodeSuffix;
@@ -304,7 +304,7 @@ type
   TOperandFlag = (ofMemory);
   TOperandFlags = set of TOperandFlag;
 
-  TRegValue = object
+  TRegValue = packed object
    AType : TRegisterType;
    ASize : TOperandSize;
    AIndex: Byte;
@@ -355,19 +355,19 @@ type
     opcode: DWORD;
     Flags: TFlags;
     SimdOpcode: TSimdOpcode;
-    ModRM: record
+    ModRM: packed record
       Mode: Byte;
       Index: Byte;
       RM: Byte;
     end;
-    Vex: record
+    Vex: packed record
       Index: Byte;
       Length: Byte;
       VectorLength: TOperandSize;
       MaskIndex: Byte;
     end;
     AddrSize: TAddressSize;
-    Sib: record
+    Sib: packed record
       Scale, Index, Base: Byte;
     end;
 

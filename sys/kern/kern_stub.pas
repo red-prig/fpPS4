@@ -139,9 +139,9 @@ begin
  begin
   size:=AlignUp(size+SizeOf(stub_chunk),MD_ALLOC_GRANULARITY);
 
-  if (start=0) then
+  if (start<VM_MIN_JIT) then
   begin
-   start:=KERNEL_LOWER;
+   start:=VM_MIN_JIT;
   end;
 
   err:=md_mmap(Pointer(start),size,VM_RWX);

@@ -379,7 +379,9 @@ begin
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
 
-  EXCEPTION_ILLEGAL_INSTRUCTION:
+  EXCEPTION_PRIV_INSTRUCTION:; //HLT
+
+  EXCEPTION_ILLEGAL_INSTRUCTION: //UD2, SALC
     with p^.ContextRecord^ do
     if (Rip=QWORD(@jit_interrupt_ud2)) then
     begin
@@ -419,6 +421,12 @@ begin
          if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
           LOG_TRACE('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
+
+          with p^.ContextRecord^ do
+           if JIT_PATCHER(curkthread,Rip) then
+           begin
+            Exit(EXCEPTION_CONTINUE_EXECUTION);
+           end;
 
           //trigger and restore
           vm_map_track_trigger(p_proc.p_vmspace,

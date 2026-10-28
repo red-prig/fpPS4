@@ -58,6 +58,7 @@ procedure jit_jmp_dispatch;  assembler;
 procedure jit_jmp_null;      assembler;
 
 procedure jit_hle_trace; assembler;
+procedure jit_mem; assembler;
 
 procedure jit_jmp_internal;  assembler;
 
@@ -640,6 +641,38 @@ asm
  jmp %gs:teb.jit_trp
  //marker
  .globl .endof_jit_hle_trace
+end;
+
+procedure jit_mem; assembler; nostackframe;
+asm
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ movq %gs:teb.thread,%r13                //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ call jit_save_ctx // -> pushf
+
+ andq  $-16,%rsp //align stack
+
+ //rdi
+ mov  %r14,%rdi //addr
+
+ call %r15
+
+ mov  %rax,%r14
+
+ call jit_load_ctx // -> popf
+
+ //epilog
+ movq %rbp,%rsp
+ pop  %rbp
+
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
+ //marker
+ .globl .endof_jit_mem
 end;
 
 //unused

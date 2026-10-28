@@ -27,6 +27,7 @@ type
   );
 
  objtype_t=obj_type;
+ p_objtype_t=^objtype_t;
 
  p_vm_object_t=^vm_object_t;
  vm_object_t=^t_vm_object;
