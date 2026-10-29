@@ -1130,7 +1130,7 @@ begin
 
  TAILQ_INSERT_TAIL(@map^.delete_deferred,obj,@obj^.del_link);
 
-  Result:=True;
+ Result:=True;
 end;
 
 procedure _vm_track_map_process_deferred(map:p_vm_track_map);
