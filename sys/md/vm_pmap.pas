@@ -7,6 +7,7 @@ interface
 
 uses
  subr_backtrace,
+ kern_malloc,
  vm,
  vmparam,
  vm_object,
@@ -14,6 +15,7 @@ uses
  vuio,
  kern_mtx,
  kern_rangelock,
+ kern_thr,
  md_map,
  md_file,
  vm_pmap_prot,
@@ -45,9 +47,8 @@ procedure iov_uplift(iov:p_iovec);
 type
  p_pmap=^t_pmap;
  t_pmap=packed object
-  vm_map:Pointer;
-  //rmlock:rangelock;
-  //rm_mtx:mtx;
+  rmlock:rangelock;
+  rm_mtx:mtx;
   nt_map:t_vm_nt_map;
   gp_map:t_vm_nt_map;
   tr_map:t_vm_track_map;
@@ -64,7 +65,7 @@ function  btoc(x:QWORD):QWORD; inline;
 
 function  dev_mem_alloc(pages:Integer):Pointer;
 
-procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 
 procedure pmap_align_superpage(obj   :vm_object_t;
                                offset:vm_ooffset_t;
@@ -126,6 +127,14 @@ procedure pmap_prot_restore(pmap :pmap_t;
 procedure pmap_mark_gc(pmap :pmap_t;
                        start:vm_offset_t;
                        __end:vm_offset_t);
+
+function  pmap_track_insert(pmap:pmap_t;tobj:Pointer):Integer;
+procedure pmap_track_remove(pmap:pmap_t;tobj:Pointer);
+function  pmap_track_next(pmap:pmap_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
+function  pmap_track_delete_deferred(pmap:pmap_t;tobj:Pointer):Boolean;
+function  pmap_track_trigger(pmap:pmap_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
+procedure pmap_track_restore(pmap:pmap_t;tobj:Pointer);
+procedure pmap_track_remove_memory(pmap:pmap_t;start,__end:vm_offset_t);
 
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
@@ -275,7 +284,7 @@ begin
  DEV_INFO.DEV_POS:=DEV_INFO.DEV_POS+size;
 end;
 
-procedure pmap_pinit(pmap:p_pmap;vm_map:Pointer);
+procedure pmap_pinit(pmap:p_pmap);
 var
  i:Integer;
  m:t_md_map_reserve_result;
@@ -299,14 +308,12 @@ begin
   md_dontneed(PAGE_PROT,PAGE_MAP_COUNT_SZ1);
  end;
 
- //rangelock_init(@pmap^.rmlock);
- //mtx_init(pmap^.rm_mtx,'pmap');
-
- pmap^.vm_map:=vm_map;
+ rangelock_init(@pmap^.rmlock);
+ mtx_init(pmap^.rm_mtx,'pmap');
 
  sys_init_vm_nt;
 
- vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
+ vm_nt_map_init(@pmap^.nt_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,True);
  vm_nt_map_init(@pmap^.gp_map,VM_MIN_GPU_ADDRESS,VM_MAX_GPU_ADDRESS);
 
  //exclude
@@ -329,7 +336,7 @@ begin
   end;
  end;
 
- vm_track_map_init(@pmap^.tr_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS,vm_map);
+ vm_track_map_init(@pmap^.tr_map,VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
  pmap^.tr_map.pmap:=pmap;
 
@@ -612,8 +619,77 @@ begin
  end;
 end;
 
-function  vm_map_lock_range  (map:Pointer;start,__end:off_t;mode:Integer):Pointer; external;
-procedure vm_map_unlock_range(map:Pointer;cookie:Pointer); external;
+function pmap_normalize_mode(mode:Integer):Integer; inline;
+begin
+ if (mode and RL_LOCK_WRITE)<>0 then
+ begin
+  Result:=RL_LOCK_WRITE;
+ end else
+ begin
+  Result:=RL_LOCK_READ;
+ end;
+end;
+
+function pmap_lock_range(pmap :pmap_t;
+                         start:vm_offset_t;
+                         __end:vm_offset_t;
+                         mode :Integer):Pointer;
+label
+ _on_inc;
+var
+ flags:Integer;
+begin
+ Result:=nil;
+
+ mode:=pmap_normalize_mode(mode);
+
+ with curkthread^ do
+ begin
+  if (td_pmap_cookie=nil) then
+  begin
+   td_pmap_cookie:=rangelock_enqueue(@pmap^.rmlock,start,__end,mode,@pmap^.rm_mtx);
+
+   if (td_pmap_cookie<>nil) then
+   begin
+    Result:=pmap;
+   end;
+  end else
+  with p_rl_q_entry(td_pmap_cookie)^ do
+  begin
+   flags:=pmap_normalize_mode(rl_q_flags);
+
+   if (rl_q_start<>start) or (rl_q___end<>__end) or
+      (flags<>mode) then
+   begin
+    if (rl_q_start<start) then start:=rl_q_start;
+    if (rl_q___end>__end) then __end:=rl_q___end;
+
+    if (flags=RL_LOCK_READ) and (mode=RL_LOCK_READ) then
+    begin
+     mode:=RL_LOCK_READ;
+    end else
+    begin
+     mode:=RL_LOCK_WRITE;
+    end;
+
+    if (rl_q_start=start) and (rl_q___end=__end) and (flags=mode) then
+    begin
+     goto _on_inc;
+    end;
+
+    if rangelock_update(@pmap^.rmlock,start,__end,mode,@pmap^.rm_mtx,td_pmap_cookie) then
+    begin
+     goto _on_inc;
+    end;
+   end else
+   begin
+    _on_inc:
+     Inc(rl_q_count);
+     Result:=pmap;
+   end;
+  end;
+ end;
+end;
 
 function pmap_wlock(pmap :pmap_t;
                     start:vm_offset_t;
@@ -621,7 +697,7 @@ function pmap_wlock(pmap :pmap_t;
 begin
  LOG_TRACE('pmap_wlock:',HexStr(start,11),'..',HexStr(__end,11));
 
- Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_WRITE);
+ Result:=pmap_lock_range(pmap,start,__end,RL_LOCK_WRITE);
 end;
 
 function pmap_rlock(pmap :pmap_t;
@@ -630,14 +706,29 @@ function pmap_rlock(pmap :pmap_t;
 begin
  LOG_TRACE('pmap_rlock:',HexStr(start,11),'..',HexStr(__end,11));
 
- Result:=vm_map_lock_range(pmap^.vm_map,start,__end,RL_LOCK_READ);
+ Result:=pmap_lock_range(pmap,start,__end,RL_LOCK_READ);
 end;
 
 procedure pmap_unlock(pmap:pmap_t;cookie:Pointer); inline;
 begin
  LOG_TRACE('pmap_unlock:',HexStr(p_rl_q_entry(cookie)^.rl_q_start,11),'..',HexStr(p_rl_q_entry(cookie)^.rl_q___end,11));
 
- vm_map_unlock_range(pmap^.vm_map,cookie);
+ Assert(pmap=cookie,'pmap_unlock');
+
+ with curkthread^ do
+ begin
+  Assert(td_pmap_cookie<>nil);
+
+  with p_rl_q_entry(td_pmap_cookie)^ do
+  if (rl_q_count=0) then
+  begin
+   rangelock_unlock(@pmap^.rmlock,td_pmap_cookie,@pmap^.rm_mtx);
+   td_pmap_cookie:=nil;
+  end else
+  begin
+   Dec(rl_q_count);
+  end;
+ end;
 end;
 
 procedure pmap_copy_dst(src_adr :Pointer;
@@ -705,6 +796,8 @@ begin
  //fixup writeonly cpu/gpu
  Result:=prot or ((prot and (VM_PROT_WRITE or VM_PROT_GPU_WRITE)) shr 1);
 end;
+
+procedure pmap_track_new_mappings(pmap:pmap_t;start,__end:vm_offset_t); forward;
 
 procedure pmap_copy_pages(pmap :pmap_t;
                           start:vm_offset_t;
@@ -803,6 +896,9 @@ var
 
  pages_cb:t_get_fd_pages_cb;
 
+ mirror:Boolean;
+ mirror_end:vm_offset_t;
+
  lock:Pointer;
 
  r:Integer;
@@ -812,6 +908,11 @@ begin
  prot:=fixup_prot(prot);
 
  pages_cb:=get_fd_pages_cb(obj);
+
+ //only file-backed and DMEM objects may have aliases
+ mirror:=(pages_cb=@get_vnode_fd) or
+         (pages_cb=@get_dmem_fd);
+ mirror_end:=start;
 
  lock:=pmap_wlock(pmap,start,__end);
 
@@ -845,6 +946,7 @@ begin
   begin
    //in the case of files, need to fill the top pages with private map
    pages_cb:=@get_priv_fd;
+   mirror:=False;
 
    vm_int_obj_deallocate(info.obj);
 
@@ -879,6 +981,11 @@ begin
    Assert      (false,'pmap_enter_object');
   end;
 
+  if mirror then
+  begin
+   mirror_end:=info.__end;
+  end;
+
   //map to GPU
   if (prot and VM_PROT_GPU_ALL)<>0 then
   begin
@@ -906,6 +1013,11 @@ begin
  end; //while
 
  pmap_unlock(pmap,lock);
+
+ if (mirror_end>start) then
+ begin
+  pmap_track_new_mappings(pmap,start,mirror_end);
+ end;
 end;
 
 procedure pmap_gpu_enter_object(pmap :pmap_t;
@@ -1063,6 +1175,8 @@ begin
  end;
 
  pmap_unlock(pmap,lock);
+
+ pmap_track_new_mappings(pmap,start,__end);
 end;
 
 procedure pmap_gpu_get_bound(pmap:pmap_t;
@@ -1260,6 +1374,353 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
+function pmap_track_insert(pmap:pmap_t;tobj:Pointer):Integer;
+const
+ TRACK_HITS_STACK=16;
+var
+ hits_stack:array[0..TRACK_HITS_STACK-1] of t_vm_nt_rmap_hit;
+ hits:p_vm_nt_rmap_hit;
+ heap:Boolean;
+
+ start,__end:vm_offset_t;
+ cur:vm_offset_t;
+ s,e:vm_offset_t;
+ off:vm_offset_t;
+ obj:p_vm_int_obj;
+
+ count,fill,i:Integer;
+
+ o_start,o_end:vm_offset_t;
+ h_end:vm_offset_t;
+
+ a_start,a_end:vm_offset_t;
+ src:vm_offset_t;
+ inserted:Boolean;
+begin
+ Result:=0;
+
+ if (pmap=nil) or (tobj=nil) then Exit;
+
+ start:=p_vm_track_object(tobj)^.align.start;
+ __end:=p_vm_track_object(tobj)^.align.__end;
+
+ s:=0;
+ e:=0;
+ off:=0;
+ obj:=nil;
+
+ cur:=start;
+
+ while (cur<__end) do
+ begin
+  if not vm_nt_map_fetch(@pmap^.nt_map,cur,__end,s,e,off,obj) then
+  begin
+   //no nt entry - fallback to direct tracking
+   vm_track_map_lock(@pmap^.tr_map);
+    _vm_track_map_insert(@pmap^.tr_map,
+                                  cur,__end,cur,
+                                  p_vm_track_object(tobj));
+   vm_track_map_unlock(@pmap^.tr_map);
+
+   Inc(Result);
+   Exit;
+  end;
+
+  if (s<cur) then
+  begin
+   off:=off+(cur-s);
+   s:=cur;
+  end;
+
+  if (e>__end) then
+  begin
+   e:=__end;
+  end;
+
+  if (e<=s) then Break;
+
+  if (obj<>nil) then
+  begin
+   inserted:=False;
+
+   count:=vm_nt_map_rmap_lookup(@pmap^.nt_map,
+                                obj,
+                                vm_ooffset_t(off),
+                                e-s,
+                                nil,
+                                0);
+
+   if (count>0) then
+   begin
+    heap:=(count>TRACK_HITS_STACK);
+
+    if heap then
+    begin
+     hits:=calloc(count*SizeOf(t_vm_nt_rmap_hit));
+    end else
+    begin
+     hits:=@hits_stack[0];
+    end;
+
+    if (hits<>nil) then
+    begin
+     fill:=vm_nt_map_rmap_lookup(@pmap^.nt_map,
+                                 obj,
+                                 vm_ooffset_t(off),
+                                 e-s,
+                                 hits,
+                                 count);
+
+     if (fill>count) then
+     begin
+      fill:=count;
+     end;
+
+     vm_track_map_lock(@pmap^.tr_map);
+
+      //translate alias vaddr range back to the canonical source address
+      for i:=0 to fill-1 do
+      begin
+       h_end:=vm_offset_t(hits[i].offset)+(hits[i].__end-hits[i].start);
+
+       o_start:=off;
+       if (vm_offset_t(hits[i].offset)>o_start) then
+       begin
+        o_start:=vm_offset_t(hits[i].offset);
+       end;
+
+       o_end:=off+(e-s);
+       if (h_end<o_end) then
+       begin
+        o_end:=h_end;
+       end;
+
+       if (o_start<o_end) then
+       begin
+        a_start:=hits[i].start+(o_start-vm_offset_t(hits[i].offset));
+        a_end  :=a_start+(o_end-o_start);
+        src    :=s+(o_start-off);
+
+        _vm_track_map_insert(@pmap^.tr_map,
+                                      a_start,
+                                      a_end,
+                                      src,
+                                      p_vm_track_object(tobj));
+        inserted:=True;
+        Inc(Result);
+       end;
+      end;
+
+     vm_track_map_unlock(@pmap^.tr_map);
+
+     if heap then
+     begin
+      free(hits);
+     end;
+    end;
+   end;
+
+   if not inserted then
+   begin
+    vm_track_map_lock(@pmap^.tr_map);
+     _vm_track_map_insert(@pmap^.tr_map,
+                                   s,e,s,
+                                   p_vm_track_object(tobj));
+    vm_track_map_unlock(@pmap^.tr_map);
+
+    Inc(Result);
+   end;
+  end;
+
+  cur:=e;
+ end;
+end;
+
+procedure pmap_track_remove(pmap:pmap_t;tobj:Pointer);
+begin
+ if (pmap=nil) or (tobj=nil) then Exit;
+
+ vm_track_map_remove_object(@pmap^.tr_map,p_vm_track_object(tobj));
+end;
+
+function pmap_track_next(pmap:pmap_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
+begin
+ if (pmap=nil) then Exit(nil);
+
+ Result:=vm_track_map_next_object(@pmap^.tr_map,start,p_vm_track_object(tobj),htype);
+end;
+
+function pmap_track_delete_deferred(pmap:pmap_t;tobj:Pointer):Boolean;
+begin
+ if (pmap=nil) or (tobj=nil) then Exit(False);
+
+ vm_track_map_lock(@pmap^.tr_map);
+  Result:=_vm_track_map_delete_deferred(@pmap^.tr_map,p_vm_track_object(tobj));
+ vm_track_map_unlock(@pmap^.tr_map);
+end;
+
+function pmap_track_trigger(pmap:pmap_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
+begin
+ Result:=0;
+ if (pmap=nil) then Exit;
+
+ //vm_track_map_trigger2 is broken
+ Result:=vm_track_map_trigger(@pmap^.tr_map,start,__end,exclude,mode);
+
+ if rst and (mode=M_CPU_WRITE) then
+ begin
+  pmap_prot_restore(pmap,start,__end);
+ end;
+end;
+
+procedure pmap_track_restore(pmap:pmap_t;tobj:Pointer);
+begin
+ if (pmap=nil) or (tobj=nil) then Exit;
+
+ vm_track_map_restore_object(@pmap^.tr_map,p_vm_track_object(tobj));
+end;
+
+procedure pmap_track_remove_memory(pmap:pmap_t;start,__end:vm_offset_t);
+begin
+ if (pmap=nil) then Exit;
+
+ vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
+end;
+
+procedure pmap_track_new_mappings(pmap:pmap_t;start,__end:vm_offset_t);
+const
+ TRACK_HITS_STACK=16;
+var
+ hits_stack:array[0..TRACK_HITS_STACK-1] of t_vm_nt_rmap_hit;
+ hits:p_vm_nt_rmap_hit;
+ heap:Boolean;
+
+ cur:vm_offset_t;
+ s,e:vm_offset_t;
+ off:vm_offset_t;
+ obj:p_vm_int_obj;
+
+ count,fill,i:Integer;
+
+ o_start,o_end:vm_offset_t;
+ h_end:vm_offset_t;
+
+ src_start,src_end:vm_offset_t;
+ dst_start:vm_offset_t;
+begin
+ if (pmap=nil) then Exit;
+
+ s:=0;
+ e:=0;
+ off:=0;
+ obj:=nil;
+
+ cur:=start;
+
+ while (cur<__end) do
+ begin
+  if not vm_nt_map_fetch(@pmap^.nt_map,cur,__end,s,e,off,obj) then
+  begin
+   Break;
+  end;
+
+  if (s<cur) then
+  begin
+   off:=off+(cur-s);
+   s:=cur;
+  end;
+
+  if (e>__end) then
+  begin
+   e:=__end;
+  end;
+
+  if (e<=s) then Break;
+
+  if (obj<>nil) then
+  begin
+   count:=vm_nt_map_rmap_lookup(@pmap^.nt_map,
+                                obj,
+                                vm_ooffset_t(off),
+                                e-s,
+                                nil,
+                                0);
+
+   if (count>0) then
+   begin
+    heap:=(count>TRACK_HITS_STACK);
+
+    if heap then
+    begin
+     hits:=calloc(count*SizeOf(t_vm_nt_rmap_hit));
+    end else
+    begin
+     hits:=@hits_stack[0];
+    end;
+
+    if (hits<>nil) then
+    begin
+     fill:=vm_nt_map_rmap_lookup(@pmap^.nt_map,
+                                 obj,
+                                 vm_ooffset_t(off),
+                                 e-s,
+                                 hits,
+                                 count);
+
+     if (fill>count) then
+     begin
+      fill:=count;
+     end;
+
+     vm_track_map_lock(@pmap^.tr_map);
+
+      for i:=0 to fill-1 do
+      begin
+       h_end:=vm_offset_t(hits[i].offset)+(hits[i].__end-hits[i].start);
+
+       o_start:=off;
+       if (vm_offset_t(hits[i].offset)>o_start) then
+       begin
+        o_start:=vm_offset_t(hits[i].offset);
+       end;
+
+       o_end:=off+(e-s);
+       if (h_end<o_end) then
+       begin
+        o_end:=h_end;
+       end;
+
+       if (o_start<o_end) then
+       begin
+        src_start:=hits[i].start+(o_start-vm_offset_t(hits[i].offset));
+        src_end  :=src_start+(o_end-o_start);
+        dst_start:=s+(o_start-off);
+
+        //skip the mapping itself
+        if (src_start<>s) or (src_end<>e) then
+        begin
+         _vm_track_map_insert_mirror(@pmap^.tr_map,
+                                     src_start,
+                                     src_end,
+                                     dst_start);
+        end;
+       end;
+      end;
+
+     vm_track_map_unlock(@pmap^.tr_map);
+
+     if heap then
+     begin
+      free(hits);
+     end;
+    end;
+   end;
+  end;
+
+  cur:=e;
+ end;
+end;
+
 procedure pmap_mark_gc(pmap :pmap_t;
                        start:vm_offset_t;
                        __end:vm_offset_t);
@@ -1354,11 +1815,11 @@ var
 begin
  LOG_DEBUG('pmap_remove:',HexStr(start,11),':',HexStr(__end,11));
 
+ vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
+
  lock:=pmap_wlock(pmap,start,__end);
 
  ppmap_unmark(start,__end,VM_PROT_ALL or PAGE_TRACK_GC);
-
- vm_track_map_remove_memory(@pmap^.tr_map,start,__end);
 
  r:=0;
  case vm_object_type(obj) of

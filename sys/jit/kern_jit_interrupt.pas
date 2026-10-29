@@ -856,13 +856,14 @@ var
  mirror:p_vm_nt_mirror;
  p:Byte;
 begin
- p:=ppmap_get_prot(QWORD(addr));
+ //p:=ppmap_get_prot(QWORD(addr));
+ //
+ //if (p and PAGE_TRACK_GC)<>0 then
+ //begin
+ // Exit( gc_page + (QWORD(addr) and PAGE_MASK) );
+ //end;
 
- if (p and PAGE_TRACK_GC)<>0 then
- begin
-  Exit( gc_page + (QWORD(addr) and PAGE_MASK) );
- end;
-
+ {
  td:=curkthread;
 
  mirror:=td^.td_mirror;
@@ -887,22 +888,25 @@ begin
 
   td^.td_mirror:=mirror;
  end;
+ }
 
- vm_map_track_trigger(p_proc.p_vmspace,
+ pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                       QWORD(addr),
                       QWORD(addr)+8,
                       nil,
                       M_CPU_WRITE,
-                      False);
+                      True);
 
- Result:=mirror^.base + (QWORD(addr)-mirror^.start);
+ Result:=addr;
+
+ //Result:=mirror^.base + (QWORD(addr)-mirror^.start);
 end;
 
 function jmp_patcher_after(addr:Pointer):Pointer; public;
 begin
  Result:=nil;
 
- vm_map_track_trigger(p_proc.p_vmspace,
+ pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                       QWORD(addr),
                       QWORD(addr)+8,
                       nil,
@@ -926,7 +930,7 @@ var
 
  mchunk:p_stub_chunk;
 begin
- //Exit(False);
+ Exit(False);
 
  if not exist_jit_host(Pointer(Rip),@hinfo) then
  begin

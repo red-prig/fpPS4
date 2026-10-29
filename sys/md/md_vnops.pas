@@ -3246,6 +3246,9 @@ var
  iocb:t_uio_cb;
  ioin:PInt64;
 
+ pmap:pmap_t;
+ lock:Pointer;
+
  append:Boolean;
  locked:Boolean;
 
@@ -3263,6 +3266,8 @@ begin
 
  td:=curkthread;
  if (td=nil) then Exit(-1);
+
+ pmap:=vmspace_pmap(p_proc.p_vmspace);
 
  ioin:=nil;
  case uio^.uio_rw of
@@ -3313,27 +3318,36 @@ begin
    OFFSET:=uio^.uio_offset;
   end;
 
-  //TODO: lock/unlock vm_map or pmap
-
   //trigger and restore
-  vm_map_track_trigger(p_proc.p_vmspace,
-                       QWORD(vec.iov_base),
-                       QWORD(vec.iov_base)+vec.iov_len,
-                       nil,
-                       M_CPU_WRITE);
+  pmap_track_trigger(pmap,
+                     QWORD(vec.iov_base),
+                     QWORD(vec.iov_base)+vec.iov_len,
+                     nil,
+                     M_CPU_WRITE,
+                     False);
 
-  BLK:=Default(IO_STATUS_BLOCK);
+  lock:=pmap_wlock(pmap,
+                   QWORD(vec.iov_base),
+                   QWORD(vec.iov_base)+vec.iov_len);
 
-  R:=iocb(F,0,nil,nil,@BLK,vec.iov_base,vec.iov_len,@OFFSET,nil);
+   pmap_prot_restore(pmap,
+                     QWORD(vec.iov_base),
+                     QWORD(vec.iov_base)+vec.iov_len);
 
-  if (R=STATUS_PENDING) then
-  begin
-   R:=NtWaitForSingleObject(F,False,nil);
-   if (R=0) then
+   BLK:=Default(IO_STATUS_BLOCK);
+
+   R:=iocb(F,0,nil,nil,@BLK,vec.iov_base,vec.iov_len,@OFFSET,nil);
+
+   if (R=STATUS_PENDING) then
    begin
-    R:=BLK.Status;
+    R:=NtWaitForSingleObject(F,False,nil);
+    if (R=0) then
+    begin
+     R:=BLK.Status;
+    end;
    end;
-  end;
+
+  pmap_unlock(pmap,lock);
 
   Result:=ntf2px(R);
 

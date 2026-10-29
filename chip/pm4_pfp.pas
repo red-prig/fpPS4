@@ -93,6 +93,7 @@ uses
  kern_dmem,
  kern_proc,
  vm_map,
+ vm_pmap,
  vm_tracking_map;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -731,14 +732,14 @@ begin
 
         Move(adrSrc_dmem^,adrDst_dmem^,byteCount);
 
-        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+        pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
      (kDmaDataSrcData          or (kDmaDataDstMemory        shl 4)),
      (kDmaDataSrcData          or (kDmaDataDstMemoryUsingL2 shl 4)):
        begin
         FillDWORD(adrDst_dmem^,(byteCount div 4),DWORD(adrSrc));
 
-        vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+        pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
        end;
     else
        Assert(false,'DmaData: srcSel=0x'+HexStr(srcSel,1)+' dstSel=0x'+HexStr(dstSel,1));
@@ -816,7 +817,7 @@ begin
 
          Move(src_dmem^,dst_dmem^,count*SizeOf(DWORD));
 
-         vm_map_track_trigger(p_proc.p_vmspace,QWORD(dst),QWORD(dst)+count*SizeOf(DWORD),nil,M_DMEM_WRITE);
+         pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(dst),QWORD(dst)+count*SizeOf(DWORD),nil,M_DMEM_WRITE);
         end;
       else
         Assert(false,'WriteData: dstSel=0x'+HexStr(dstSel,1));

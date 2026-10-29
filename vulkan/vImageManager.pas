@@ -16,6 +16,7 @@ uses
  vCmdBuffer,
  kern_proc,
  vm_map,
+ vm_pmap,
  vm_tracking_map{,
  vImageTiling};
 
@@ -268,7 +269,7 @@ Destructor TvCustomImage2.Destroy;
 begin
  if (tobj<>nil) then
  begin
-  vm_map_track_remove(p_proc.p_vmspace,tobj);
+  pmap_track_remove(vmspace_pmap(p_proc.p_vmspace),tobj);
  end;
 
  inherited;
@@ -280,7 +281,7 @@ begin
 
  rw_wlock(lock);
 
- vm_map_track_restore(p_proc.p_vmspace,tobj);
+ pmap_track_restore(vmspace_pmap(p_proc.p_vmspace),tobj);
 
  rw_wunlock(lock)
 end;
@@ -304,7 +305,7 @@ begin
   tobj^.on_destroy:=@on_destroy;
   tobj^.on_trigger:=@on_trigger;
 
-  vm_map_track_insert(p_proc.p_vmspace,tobj);
+  pmap_track_insert(vmspace_pmap(p_proc.p_vmspace),tobj);
 
   vm_track_object_deallocate(tobj);
  end;

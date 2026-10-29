@@ -115,8 +115,6 @@ begin
 
  dmem.vmap:=vmap;
  dmem.rmap:=@rmap;
-
- rmap.tmap:=@vmap^.pmap^.tr_map;
 end;
 
 function sys_dmem_container(d_pool_id:Integer):Integer;
