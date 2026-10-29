@@ -846,8 +846,8 @@ begin
  builder._add(ji);
 end;
 
-var
- gc_page:Pointer; external; //SceGnmDingDongArea
+//var
+// gc_page:Pointer; external; //SceGnmDingDongArea
 
 function jmp_patcher_before(addr:Pointer):Pointer; public;
 var

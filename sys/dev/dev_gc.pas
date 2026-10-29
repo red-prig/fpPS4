@@ -20,6 +20,7 @@ var
 implementation
 
 uses
+ mqueue,
  errno,
  kern_mtx,
  sys_event,
@@ -51,12 +52,14 @@ uses
 
  sys_bootparam,
 
+ vm_tracking_map,
+
  subr_backtrace;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
 var
- gc_page:PDWORD; public; //SceGnmDingDongArea
+ gc_page:PDWORD; //SceGnmDingDongArea
 
  gc_submits_allowed_vaddr:PInteger=nil; //0=true,1=false (0xfe0100000)
  gc_submits_allowed_vmirr:PInteger=nil;
@@ -310,6 +313,8 @@ end;
 
 procedure pfp_idle; forward;
 
+procedure gc_retrack; forward;
+
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
  buff:Pointer;
@@ -367,6 +372,8 @@ begin
 
   if (bits<>0) then
   begin
+   gc_retrack;
+
    //init sended bits
    send:=0;
 
@@ -377,7 +384,7 @@ begin
     //start
     rw_wlock(ring_gfx_lock);
 
-    p_id:=2; //double check
+    p_id:=1; //count check
 
     while (p_id<>0) and gc_map_hdq_peek(@map_queue_hqd[c_id],@size,@buff) do
     begin
@@ -438,7 +445,7 @@ begin
     end;
     //
 
-    Continue;
+    //Continue;
    end; //(send<>0)
 
   end; //(bits<>0)
@@ -446,21 +453,21 @@ begin
   //PFP idle
   pfp_idle;
 
-  if (gc_priv.watchdog_label=0) then
+  //if (gc_priv.watchdog_label=0) then
   begin
    mtx_lock(gc_priv.gc_suspend_lock);
 
    _cv_wait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock);
 
    mtx_unlock(gc_priv.gc_suspend_lock);
-  end else
+  end{ else
   begin
    mtx_lock(gc_priv.gc_suspend_lock);
 
    _cv_timedwait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock, hz div 10000);
 
    mtx_unlock(gc_priv.gc_suspend_lock);
-  end;
+  end};
 
  until false;
 
@@ -1155,19 +1162,81 @@ begin
 
 end;
 
+var
+ gc_track_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@gc_track_list.tqh_first);
+ gc_track_lock:Pointer=nil;
+ gc_track_mark:Integer=0;
+
+function on_destroy(handle:Pointer):Integer;
+var
+ tobj:p_vm_track_object;
+begin
+ tobj:=handle;
+
+ rw_wlock(gc_track_lock);
+  TAILQ_REMOVE(@gc_track_list,tobj,@tobj^.del_link);
+ rw_wunlock(gc_track_lock);
+
+ Result:=DO_DELETE;
+end;
+
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+begin
+ rw_wlock(gc_track_lock);
+  gc_track_mark:=1;
+ rw_wunlock(gc_track_lock);
+
+ gc_retrigger_watchdog;
+
+ Result:=DO_INCREMENT;
+end;
+
 Function gc_mmap_after(dev:p_cdev;vaddr:vm_offset_t;size:vm_size_t):Integer; //emu ext
 var
- map:vm_map_t;
+ tobj:p_vm_track_object;
 begin
  Result:=0;
  LOG_INFO('gc_page:0x',HexStr(vaddr,11));
 
- map:=@p_vmspace(p_proc.p_vmspace)^.vm_map;
+ pmap_mark_gc(vmspace_pmap(p_proc.p_vmspace),vaddr,vaddr+size);
 
- pmap_mark_gc(map^.pmap,vaddr,vaddr+size);
+ tobj:=vm_track_object_allocate(nil,vaddr,vaddr+size,H_GPU_BUF,PAGE_TRACK_W);
+ tobj^.handle    :=tobj;
+ tobj^.on_destroy:=@on_destroy;
+ tobj^.on_trigger:=@on_trigger;
+
+ pmap_track_insert(vmspace_pmap(p_proc.p_vmspace),tobj);
+
+ rw_wlock(gc_track_lock);
+  TAILQ_INSERT_TAIL(@gc_track_list,tobj,@tobj^.del_link);
+ rw_wunlock(gc_track_lock);
+
+ vm_track_object_deallocate(tobj);
 end;
 
-Function gc_mmap_single2(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer;maxprotp:p_vm_prot_t;flagsp:PInteger):Integer;
+procedure gc_retrack;
+var
+ tobj:p_vm_track_object;
+begin
+ rw_rlock(gc_track_lock);
+
+  if (gc_track_mark<>0) then
+  begin
+   gc_track_mark:=0;
+
+   tobj:=TAILQ_FIRST(@gc_track_list);
+   while (tobj<>nil) do
+   begin
+    pmap_track_restore(vmspace_pmap(p_proc.p_vmspace),tobj);
+    //
+    tobj:=TAILQ_NEXT(tobj,@tobj^.del_link);
+   end;
+  end;
+
+ rw_runlock(gc_track_lock);
+end;
+
+Function gc_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer):Integer;
 var
  obj:vm_object_t;
 begin
@@ -1196,8 +1265,6 @@ begin
 
  objp^:=obj;
 
- maxprotp^:=maxprotp^ and (not (VM_PROT_WRITE));
-
  Result:=0;
 end;
 
@@ -1221,13 +1288,13 @@ end;
 
 const
  gc_cdevsw:t_cdevsw=(
-  d_version     :D_VERSION;
-  d_flags       :0;
-  d_name        :'gc';
-  d_ioctl       :@gc_ioctl;
-  d_mmap        :@gc_mmap;
-  d_mmap_single2:@gc_mmap_single2;
-  d_mmap_after  :@gc_mmap_after;
+  d_version    :D_VERSION;
+  d_flags      :0;
+  d_name       :'gc';
+  d_ioctl      :@gc_ioctl;
+  d_mmap       :@gc_mmap;
+  d_mmap_single:@gc_mmap_single;
+  d_mmap_after :@gc_mmap_after;
  );
 
 {
