@@ -1165,7 +1165,6 @@ end;
 var
  gc_track_list:TAILQ_HEAD=(tqh_first:nil;tqh_last:@gc_track_list.tqh_first);
  gc_track_lock:Pointer=nil;
- gc_track_mark:Integer=0;
 
 function on_destroy(handle:Pointer):Integer;
 var
@@ -1174,19 +1173,29 @@ begin
  tobj:=handle;
 
  rw_wlock(gc_track_lock);
-  TAILQ_REMOVE(@gc_track_list,tobj,@tobj^.del_link);
+  if (tobj^.user_link.tqe_prev<>nil) then
+  begin
+   TAILQ_REMOVE(@gc_track_list,tobj,@tobj^.user_link);
+   tobj^.user_link:=Default(TAILQ_ENTRY);
+  end;
  rw_wunlock(gc_track_lock);
 
  Result:=DO_DELETE;
 end;
 
 function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+var
+ tobj:p_vm_track_object;
 begin
- rw_wlock(gc_track_lock);
-  gc_track_mark:=1;
- rw_wunlock(gc_track_lock);
+ tobj:=handle;
 
- gc_retrigger_watchdog;
+ rw_wlock(gc_track_lock);
+  if (tobj^.user_link.tqe_prev=nil) then
+  begin
+   TAILQ_INSERT_TAIL(@gc_track_list,tobj,@tobj^.user_link);
+  end;
+  gc_retrigger_watchdog;
+ rw_wunlock(gc_track_lock);
 
  Result:=DO_INCREMENT;
 end;
@@ -1207,10 +1216,6 @@ begin
 
  pmap_track_insert(vmspace_pmap(p_proc.p_vmspace),tobj);
 
- rw_wlock(gc_track_lock);
-  TAILQ_INSERT_TAIL(@gc_track_list,tobj,@tobj^.del_link);
- rw_wunlock(gc_track_lock);
-
  vm_track_object_deallocate(tobj);
 end;
 
@@ -1218,22 +1223,28 @@ procedure gc_retrack;
 var
  tobj:p_vm_track_object;
 begin
- rw_rlock(gc_track_lock);
+ repeat
+  tobj:=nil;
 
-  if (gc_track_mark<>0) then
-  begin
-   gc_track_mark:=0;
+  rw_wlock(gc_track_lock);
 
    tobj:=TAILQ_FIRST(@gc_track_list);
-   while (tobj<>nil) do
+   if (tobj<>nil) then
    begin
-    pmap_track_restore(vmspace_pmap(p_proc.p_vmspace),tobj);
-    //
-    tobj:=TAILQ_NEXT(tobj,@tobj^.del_link);
-   end;
-  end;
+    TAILQ_REMOVE(@gc_track_list,tobj,@tobj^.user_link);
+    tobj^.user_link:=Default(TAILQ_ENTRY);
 
- rw_runlock(gc_track_lock);
+    vm_track_object_reference(tobj);
+   end;
+
+  rw_wunlock(gc_track_lock);
+
+  if (tobj=nil) then Break;
+
+  pmap_track_restore(vmspace_pmap(p_proc.p_vmspace),tobj);
+  vm_track_object_deallocate(tobj);
+
+ until false;
 end;
 
 Function gc_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer):Integer;

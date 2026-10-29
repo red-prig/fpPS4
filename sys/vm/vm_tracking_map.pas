@@ -41,6 +41,7 @@ type
  p_vm_track_object=^t_vm_track_object;
  t_vm_track_object=packed record
   del_link  :TAILQ_ENTRY; //p_vm_track_map->delete_deferred
+  user_link :TAILQ_ENTRY; //owner-specific list
   //iter_link :TAILQ_ENTRY;
   //
   handle    :Pointer;
