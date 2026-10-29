@@ -13,7 +13,8 @@ uses
  systm,
  vm_pmap_prot,
  vm_internal_object,
- vm_nt_sub_map;
+ vm_nt_sub_map,
+ vm_key_instance;
 
 const
  MAX_UNION_SIZE=256*1024*1024;
@@ -43,6 +44,21 @@ type
  pp_vm_nt_entry=^p_vm_nt_entry;
  p_vm_nt_entry=^vm_nt_entry;
  p_vm_nt_mirror=^vm_nt_mirror;
+ p_vm_nt_rmap_range=^t_vm_nt_rmap_range;
+
+ //reverse map entry: vaddr range -> (obj,offset)
+ t_vm_nt_rmap_range=packed record
+  next  :p_vm_nt_rmap_range;
+  obj   :p_vm_int_obj;
+  offset:vm_ooffset_t;
+  start :vm_offset_t;
+  __end :vm_offset_t;
+ end;
+
+ t_vm_nt_rmap=object
+  root:p_vm_key_instance; //p_vm_nt_rmap_obj
+ end;
+
  vm_nt_entry=packed object
   prev  :p_vm_nt_entry;     // previous entry
   next  :p_vm_nt_entry;     // next entry
@@ -63,6 +79,8 @@ type
   lock       :mtx;           // Lock for map data
   root       :p_vm_nt_entry; // Root of a binary search tree
   danger_zone:t_danger_zone;
+  rmap       :t_vm_nt_rmap;  // (obj,offset) -> vaddr ranges
+  rmap_on    :Boolean;       // reverse map is optional
   property min_offset:vm_offset_t read header.sub.header.start write header.sub.header.start;
   property max_offset:vm_offset_t read header.sub.header.__end write header.sub.header.__end;
  end;
@@ -75,12 +93,28 @@ type
   __end:vm_offset_t;
  end;
 
+ t_vm_nt_rmap_hit=packed record
+  obj   :p_vm_int_obj;
+  offset:vm_ooffset_t;
+  start :vm_offset_t;
+  __end :vm_offset_t;
+ end;
+ p_vm_nt_rmap_hit=^t_vm_nt_rmap_hit;
+
 procedure sys_init_vm_nt;
 
 function  vm_nt_map_max(map:p_vm_nt_map):vm_offset_t;
 function  vm_nt_map_min(map:p_vm_nt_map):vm_offset_t;
 
-procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;enable_rmap:Boolean=False);
+
+procedure vm_nt_map_rmap_enable(map:p_vm_nt_map;enable:Boolean);
+
+function  vm_nt_map_rmap_lookup(map:p_vm_nt_map;
+                                obj:p_vm_int_obj;
+                                offset,size:vm_ooffset_t;
+                                hits:p_vm_nt_rmap_hit;
+                                max:Integer):Integer;
 
 function  vm_nt_map_insert(
              map   :p_vm_nt_map;
@@ -167,15 +201,24 @@ type
      );
  end;
 
+ p_vm_nt_rmap_obj=^t_vm_nt_rmap_obj;
+ t_vm_nt_rmap_obj=object(t_vm_key_instance)
+  ranges:p_vm_nt_rmap_range;
+ end;
+
 var
  vm_nt_entry_zone :uma_zone_t=nil;
  vm_nt_mirror_zone:uma_zone_t=nil;
+ vm_nt_rmap_obj_zone:uma_zone_t=nil;
+ vm_nt_rmap_range_zone:uma_zone_t=nil;
 
 procedure sys_init_vm_nt;
 begin
  vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_mirror_zone   :=uma_zcreate('vm_nt_mirror'   , sizeof(vm_nt_mirror)   , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ vm_nt_rmap_obj_zone :=uma_zcreate('vm_nt_rmap_obj' , sizeof(t_vm_nt_rmap_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
+ vm_nt_rmap_range_zone:=uma_zcreate('vm_nt_rmap_range',sizeof(t_vm_nt_rmap_range),nil,nil,nil,nil,UMA_ALIGN_PTR,0);
 end;
 
 procedure _vm_nt_mirror_invalidate_entry(entry:p_vm_nt_entry); forward;
@@ -621,13 +664,15 @@ begin
  end;
 end;
 
-procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t);
+procedure vm_nt_map_init(map:p_vm_nt_map;min,max:vm_offset_t;enable_rmap:Boolean=False);
 begin
  map^.header.next:=@map^.header;
  map^.header.prev:=@map^.header;
  map^.min_offset:=min;
  map^.max_offset:=max;
  map^.root:=nil;
+ map^.rmap.root:=nil;
+ map^.rmap_on:=enable_rmap;
  map^.danger_zone.Init;
  mtx_init(map^.lock,'vm_nt_map');
 end;
@@ -663,6 +708,314 @@ begin
  new_entry:=uma_zalloc(vm_nt_entry_zone, M_WAITOK or M_ZERO);
  Assert((new_entry<>nil),'vm_nt_entry_create: kernel resources exhausted');
  Result:=new_entry;
+end;
+
+//
+//reverse map: (obj,offset) -> vaddr ranges
+//
+
+function vm_nt_rmap_obj_find(map:p_vm_nt_map;obj:p_vm_int_obj;create:Boolean):p_vm_nt_rmap_obj;
+var
+ node:p_vm_nt_rmap_obj;
+begin
+ Result:=nil;
+
+ if (map=nil) or (obj=nil) then Exit;
+
+ if (map^.rmap.root<>nil) then
+ if vm_key_instance_find(map^.rmap.root,obj) then
+ begin
+  Exit(p_vm_nt_rmap_obj(map^.rmap.root));
+ end;
+
+ if not create then Exit;
+
+ node:=uma_zalloc(vm_nt_rmap_obj_zone, M_WAITOK or M_ZERO);
+ Assert((node<>nil),'vm_nt_rmap_obj_find: kernel resources exhausted');
+
+ node^.key:=obj;
+
+ vm_key_instance_insert(map^.rmap.root,node);
+
+ Result:=node;
+end;
+
+function vm_nt_rmap_range_link(obj:p_vm_nt_rmap_obj;r:p_vm_nt_rmap_range):p_vm_nt_rmap_range; inline;
+var
+ curr,prev:p_vm_nt_rmap_range;
+begin
+ prev:=nil;
+ curr:=obj^.ranges;
+
+ while (curr<>nil) and
+       ((curr^.start<r^.start) or
+        ((curr^.start=r^.start) and (curr^.offset<r^.offset))) do
+ begin
+  prev:=curr;
+  curr:=curr^.next;
+ end;
+
+ r^.next:=curr;
+
+ if (prev=nil) then
+ begin
+  obj^.ranges:=r;
+ end else
+ begin
+  prev^.next:=r;
+ end;
+
+ Result:=prev;
+end;
+
+procedure vm_nt_rmap_range_unlink(obj:p_vm_nt_rmap_obj;r:p_vm_nt_rmap_range);
+var
+ curr,prev:p_vm_nt_rmap_range;
+begin
+ prev:=nil;
+ curr:=obj^.ranges;
+
+ while (curr<>nil) do
+ begin
+  if (curr=r) then
+  begin
+   if (prev=nil) then
+   begin
+    obj^.ranges:=curr^.next;
+   end else
+   begin
+    prev^.next:=curr^.next;
+   end;
+
+   curr^.next:=nil;
+   Exit;
+  end;
+
+  prev:=curr;
+  curr:=curr^.next;
+ end;
+end;
+
+procedure vm_nt_rmap_add(map:p_vm_nt_map;
+                         obj:p_vm_int_obj;
+                         offset:vm_ooffset_t;
+                         start,__end:vm_offset_t);
+var
+ robj:p_vm_nt_rmap_obj;
+ r,prev,next:p_vm_nt_rmap_range;
+begin
+ if (map=nil) or (not map^.rmap_on) or (obj=nil) then Exit;
+ if (start>=__end) then Exit;
+
+ robj:=vm_nt_rmap_obj_find(map,obj,True);
+ if (robj=nil) then Exit;
+
+ r:=uma_zalloc(vm_nt_rmap_range_zone, M_WAITOK or M_ZERO);
+ Assert((r<>nil),'vm_nt_rmap_add: kernel resources exhausted');
+
+ r^.obj   :=obj;
+ r^.offset:=offset;
+ r^.start :=start;
+ r^.__end :=__end;
+
+ prev:=vm_nt_rmap_range_link(robj,r);
+
+ //merge with the following range if it is contiguous
+ next:=r^.next;
+ if (next<>nil) and
+    (r^.__end=next^.start) and
+    (r^.offset+(r^.__end-r^.start)=next^.offset) then
+ begin
+  r^.__end:=next^.__end;
+
+  vm_nt_rmap_range_unlink(robj,next);
+  uma_zfree(vm_nt_rmap_range_zone,next);
+ end;
+
+ //merge with the previous range if it is contiguous
+ if (prev<>nil) and
+    (prev^.__end=r^.start) and
+    (prev^.offset+(prev^.__end-prev^.start)=r^.offset) then
+ begin
+  prev^.__end:=r^.__end;
+
+  vm_nt_rmap_range_unlink(robj,r);
+  uma_zfree(vm_nt_rmap_range_zone,r);
+ end;
+end;
+
+//Remove a part of the mapping.
+procedure vm_nt_rmap_remove(map:p_vm_nt_map;
+                            obj:p_vm_int_obj;
+                            start,__end:vm_offset_t);
+var
+ robj:p_vm_nt_rmap_obj;
+ r,next,newr:p_vm_nt_rmap_range;
+ r_start,r_end:vm_offset_t;
+ i_start,i_end:vm_offset_t;
+begin
+ if (map=nil) or (not map^.rmap_on) or (obj=nil) then Exit;
+ if (start>=__end) then Exit;
+
+ robj:=vm_nt_rmap_obj_find(map,obj,False);
+ if (robj=nil) then Exit;
+
+ r:=robj^.ranges;
+
+ while (r<>nil) do
+ begin
+  next:=r^.next;
+
+  r_start:=r^.start;
+  r_end  :=r^.__end;
+
+  i_start:=start;
+  if (i_start<r_start) then
+  begin
+   i_start:=r_start;
+  end;
+
+  i_end:=__end;
+  if (i_end>r_end) then
+  begin
+   i_end:=r_end;
+  end;
+
+  if (i_start<i_end) then
+  begin
+   if (i_start=r_start) and (i_end=r_end) then
+   begin
+    //full range
+    vm_nt_rmap_range_unlink(robj,r);
+    uma_zfree(vm_nt_rmap_range_zone,r);
+   end else
+   if (i_start=r_start) then
+   begin
+    //cut left part
+    r^.offset:=r^.offset + (i_end-r_start);
+    r^.start :=i_end;
+   end else
+   if (i_end=r_end) then
+   begin
+    //cut right part
+    r^.__end:=i_start;
+   end else
+   begin
+    //cut middle
+    newr:=uma_zalloc(vm_nt_rmap_range_zone, M_WAITOK or M_ZERO);
+    Assert((newr<>nil),'vm_nt_rmap_remove: kernel resources exhausted');
+
+    newr^.obj   :=obj;
+    newr^.offset:=r^.offset + (i_end-r_start);
+    newr^.start :=i_end;
+    newr^.__end :=r_end;
+
+    newr^.next:=r^.next;
+    r^.next   :=newr;
+
+    r^.__end:=i_start;
+   end;
+  end;
+
+  r:=next;
+ end;
+
+ if (robj^.ranges=nil) then
+ begin
+  vm_key_instance_delete(map^.rmap.root,robj);
+  uma_zfree(vm_nt_rmap_obj_zone,robj);
+ end;
+end;
+
+procedure vm_nt_map_rmap_enable(map:p_vm_nt_map;enable:Boolean);
+var
+ entry:p_vm_nt_entry;
+begin
+ if (map=nil) then Exit;
+
+ vm_nt_map_lock(map);
+
+  if enable then
+  begin
+   if (not map^.rmap_on) then
+   begin
+    map^.rmap_on:=True;
+
+    entry:=map^.header.next;
+    while (entry<>@map^.header) do
+    begin
+     vm_nt_rmap_add(map,entry^.obj,entry^.offset,entry^.start,entry^.__end);
+
+     entry:=entry^.next;
+    end;
+   end;
+  end else
+  begin
+   if map^.rmap_on then
+   begin
+    entry:=map^.header.next;
+    while (entry<>@map^.header) do
+    begin
+     vm_nt_rmap_remove(map,entry^.obj,entry^.start,entry^.__end);
+
+     entry:=entry^.next;
+    end;
+
+    map^.rmap_on:=False;
+   end;
+  end;
+
+ vm_nt_map_unlock(map);
+end;
+
+function vm_nt_map_rmap_lookup(map:p_vm_nt_map;
+                               obj:p_vm_int_obj;
+                               offset,size:vm_ooffset_t;
+                               hits:p_vm_nt_rmap_hit;
+                               max:Integer):Integer;
+var
+ robj:p_vm_nt_rmap_obj;
+ r:p_vm_nt_rmap_range;
+ r_end:vm_ooffset_t;
+ endoff:vm_ooffset_t;
+begin
+ Result:=0;
+
+ if (map=nil) or (not map^.rmap_on) or (obj=nil) then Exit;
+ if (size<=0) then Exit;
+
+ endoff:=offset+size;
+
+ vm_nt_map_lock(map);
+
+  if (map^.rmap.root<>nil) then
+  if vm_key_instance_find(map^.rmap.root,obj) then
+  begin
+   robj:=p_vm_nt_rmap_obj(map^.rmap.root);
+
+   r:=robj^.ranges;
+   while (r<>nil) do
+   begin
+    r_end:=r^.offset + (r^.__end-r^.start);
+
+    if (r_end>offset) and (r^.offset<endoff) then
+    begin
+     if (hits<>nil) and (Result<max) then
+     begin
+      hits[Result].obj   :=obj;
+      hits[Result].offset:=r^.offset;
+      hits[Result].start :=r^.start;
+      hits[Result].__end :=r^.__end;
+     end;
+
+     Inc(Result);
+    end;
+
+    r:=r^.next;
+   end;
+  end;
+
+ vm_nt_map_unlock(map);
 end;
 
 function vm_nt_entry_splay(addr:vm_offset_t;root:p_vm_nt_entry):p_vm_nt_entry;
@@ -878,6 +1231,8 @@ begin
 
  vm_nt_entry_link(map, prev_entry, new_entry);
 
+ vm_nt_rmap_add(map,obj,offset,start,__end);
+
  vm_map(map,new_entry,prot);
 
  vm_nt_map_simplify_entry(map,new_entry,stat);
@@ -1017,6 +1372,7 @@ var
  prev:p_vm_nt_entry;
  next:p_vm_nt_entry;
  stat:t_range_stat;
+ del_end:vm_offset_t;
 begin
  prev:=nil;
  next:=nil;
@@ -1089,6 +1445,14 @@ begin
  if (prev<>nil) or (next<>nil) then
  begin
   //exclude entry
+  del_end:=__end;
+  if (del_end>entry^.__end) then
+  begin
+   del_end:=entry^.__end;
+  end;
+
+  vm_nt_rmap_remove(map,entry^.obj,entry^.start,del_end);
+
   vm_int_obj_deallocate(entry^.obj);
   entry^.obj:=nil;
  end;
@@ -1145,6 +1509,8 @@ begin
  if (next<>nil) then
  begin
   //exclude entry
+  vm_nt_rmap_remove(map,entry^.obj,entry^.start,entry^.__end);
+
   vm_int_obj_deallocate(entry^.obj);
   entry^.obj:=nil;
  end;
@@ -1189,6 +1555,8 @@ begin
   vm_nt_map_clip_end(map, entry, __end);
 
   next:=entry^.next;
+
+  vm_nt_rmap_remove(map,entry^.obj,entry^.start,entry^.__end);
 
   vm_unmap(map,entry);
 

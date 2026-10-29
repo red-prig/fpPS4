@@ -429,7 +429,7 @@ begin
            end;
 
           //trigger and restore
-          vm_map_track_trigger(p_proc.p_vmspace,
+          pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                                get_pageflt_addr(p),
                                get_pageflt_addr(p)+data.instr.mema_size,
                                nil,
