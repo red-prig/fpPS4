@@ -64,12 +64,22 @@ procedure ppmap_track     (start,__end:vm_offset_t;prots:Byte);
 procedure ppmap_mark_gc   (start,__end:vm_offset_t);
 function  ppmap_scan      (start,__end:vm_offset_t):vm_offset_t;
 function  ppmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
-function  ppmap_get_prot  (addr:vm_offset_t):Byte;
+function  ppmap_get_prot  (addr:vm_offset_t):Byte; inline;
 function  ppmap_get_prot  (addr,size:vm_offset_t):Byte;
 
 implementation
 
 //PAGE_MAP
+
+function LV1_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=x shr 16;
+end;
+
+function LV2_IDX(x:QWORD):DWORD; inline;
+begin
+ Result:=x and (PAGE_MAP_COUNT_LV2-1);
+end;
 
 function IDX_TO_OFF(x:QWORD):QWORD; inline;
 begin
@@ -89,14 +99,26 @@ begin
   Result:=x;
 end;
 
-function LV1_IDX(x:QWORD):DWORD; inline;
+function ppmap_get_prot(addr:vm_offset_t):Byte; inline;
+var
+ idx:QWORD;
+ p:PByte;
 begin
- Result:=x shr 16;
-end;
+ idx:=OFF_TO_IDX(addr);
 
-function LV2_IDX(x:QWORD):DWORD; inline;
-begin
- Result:=x and (PAGE_MAP_COUNT_LV2-1);
+ if (idx>PAGE_MAP_MASK_ALL) then
+ begin
+  Exit(0);
+ end;
+
+ p:=PAGE_PROT[LV1_IDX(idx)];
+
+ if (p=nil) then
+ begin
+  Exit(0);
+ end;
+
+ Result:=p[LV2_IDX(idx)];
 end;
 
 procedure prealloc(var P:PByte);
@@ -133,14 +155,24 @@ procedure _ppmap_mark(start,__end:vm_offset_t;prots,clear:Byte); inline;
 var
  lv1_last,lv1,lv2_last:QWORD;
  pCur,pEnd:PByte;
+ qmask,qprots:QWORD;
+ b:Byte;
+ end_partial:Boolean;
 begin
+ end_partial:=(__end and PMAPP_MASK)<>0;
+
  start:=OFF_TO_IDX(start);
  if (start>PAGE_MAP_MASK_ALL) then Exit;
 
  __end:=OFF_TO_IDX(__end);
+ if end_partial then Inc(__end);
  __end:=MAX_IDX   (__end);
 
  lv1_last:=LV1_IDX(__end);
+
+ b:=Byte(not clear);
+ qmask :=QWORD(b)    *QWORD($0101010101010101);
+ qprots:=QWORD(prots)*QWORD($0101010101010101);
 
  while (start < __end) do
  begin
@@ -149,7 +181,7 @@ begin
 
   if (lv1_last=lv1) then
   begin
-   lv2_last:=LV2_IDX(__end)+1;
+   lv2_last:=LV2_IDX(__end);
   end else
   begin
    lv2_last:=PAGE_MAP_COUNT_LV2;
@@ -158,9 +190,21 @@ begin
   pCur:=@PAGE_PROT[lv1][LV2_IDX(start)];
   pEnd:=@PAGE_PROT[lv1][lv2_last];
 
-  while (pCur < pEnd) do
+  while (pCur<pEnd) and ((QWORD(pCur) and 7)<>0) do
   begin
-   pCur^:=(pCur^ and Byte(not clear)) or Byte(prots);
+   pCur^:=(pCur^ and b) or prots;
+   Inc(pCur);
+  end;
+
+  while (QWORD(pEnd-pCur)>=8) do
+  begin
+   PQWORD(pCur)^:=(PQWORD(pCur)^ and qmask) or qprots;
+   Inc(pCur,8);
+  end;
+
+  while (pCur<pEnd) do
+  begin
+   pCur^:=(pCur^ and b) or prots;
    Inc(pCur);
   end;
 
@@ -188,14 +232,21 @@ procedure ppmap_unmark(start,__end:vm_offset_t;prots:Byte);
 var
  lv1_last,lv1,lv2_last:QWORD;
  pCur,pEnd:PByte;
+ qmask:QWORD;
+ end_partial:Boolean;
 begin
+ end_partial:=(__end and PMAPP_MASK)<>0;
+
  start:=OFF_TO_IDX(start);
  if (start>PAGE_MAP_MASK_ALL) then Exit;
 
  __end:=OFF_TO_IDX(__end);
+ if end_partial then Inc(__end);
  __end:=MAX_IDX   (__end);
 
  lv1_last:=LV1_IDX(__end);
+
+ qmask:=QWORD(Byte(not prots))*QWORD($0101010101010101);
 
  while (start < __end) do
  begin
@@ -204,7 +255,7 @@ begin
 
   if (lv1_last=lv1) then
   begin
-   lv2_last:=LV2_IDX(__end)+1;
+   lv2_last:=LV2_IDX(__end);
   end else
   begin
    lv2_last:=PAGE_MAP_COUNT_LV2;
@@ -213,9 +264,21 @@ begin
   pCur:=@PAGE_PROT[lv1][LV2_IDX(start)];
   pEnd:=@PAGE_PROT[lv1][lv2_last];
 
-  while (pCur < pEnd) do
+  while (pCur<pEnd) and ((QWORD(pCur) and 7)<>0) do
   begin
-   pCur^:=(pCur^ and Byte(not prots));
+   pCur^:=pCur^ and Byte(not prots);
+   Inc(pCur);
+  end;
+
+  while (QWORD(pEnd-pCur)>=8) do
+  begin
+   PQWORD(pCur)^:=PQWORD(pCur)^ and qmask;
+   Inc(pCur,8);
+  end;
+
+  while (pCur<pEnd) do
+  begin
+   pCur^:=pCur^ and Byte(not prots);
    Inc(pCur);
   end;
 
@@ -225,126 +288,183 @@ begin
 end;
 
 function _get_prot(addr:QWORD):Byte; inline;
+var
+ p:PByte;
 begin
  if (addr>PAGE_MAP_MASK_ALL) then
  begin
   Result:=0
  end else
- if (PAGE_PROT[LV1_IDX(addr)]=nil) then
  begin
-  Result:=0
- end else
- begin
-  Result:=PAGE_PROT[LV1_IDX(addr)][LV2_IDX(addr)];
+  p:=PAGE_PROT[LV1_IDX(addr)];
+
+  if (p=nil) then
+  begin
+   Result:=0
+  end else
+  begin
+   Result:=p[LV2_IDX(addr)];
+  end;
  end;
 end;
 
 function ppmap_scan(start,__end:vm_offset_t):vm_offset_t;
 var
+ idx,endidx,lv1,chunk_end:QWORD;
+ p:PByte;
  b,v:Byte;
 begin
- start:=OFF_TO_IDX(start);
- __end:=OFF_TO_IDX(__end);
- start:=MAX_IDX(start);
- __end:=MAX_IDX(__end);
+ idx:=MAX_IDX(OFF_TO_IDX(start));
+ endidx:=MAX_IDX(OFF_TO_IDX(__end));
 
  ReadBarrier;
 
- b:=_get_prot(start);
- Inc(start);
-
- while (start<__end) do
+ if (idx>=endidx) then
  begin
-  v:=_get_prot(start);
-
-  if (b<>v) then
-  begin
-   start:=IDX_TO_OFF(start);
-   Exit(start);
-  end;
-
-  Inc(start);
+  Exit(IDX_TO_OFF(endidx));
  end;
 
- __end:=IDX_TO_OFF(__end);
+ b:=_get_prot(idx);
+ Inc(idx);
 
- Result:=__end;
+ while (idx<endidx) do
+ begin
+  lv1:=LV1_IDX(idx);
+  chunk_end:=(lv1+1) shl 16;
+  if (chunk_end>endidx) then
+  begin
+   chunk_end:=endidx;
+  end;
+
+  p:=PAGE_PROT[lv1];
+
+  if (p=nil) then
+  begin
+   if (b<>0) then
+   begin
+    Exit(IDX_TO_OFF(idx));
+   end;
+
+   idx:=chunk_end;
+  end else
+  begin
+   repeat
+    v:=p[LV2_IDX(idx)];
+
+    if (b<>v) then
+    begin
+     Exit(IDX_TO_OFF(idx));
+    end;
+
+    Inc(idx);
+   until (idx>=chunk_end);
+  end;
+ end;
+
+ Result:=IDX_TO_OFF(endidx);
 end;
 
 function ppmap_scan_rwx(start,__end:vm_offset_t):vm_offset_t;
 var
+ idx,endidx,lv1,chunk_end:QWORD;
+ p:PByte;
  b,v:Byte;
 begin
- start:=OFF_TO_IDX(start);
- __end:=OFF_TO_IDX(__end);
- start:=MAX_IDX(start);
- __end:=MAX_IDX(__end);
+ idx:=MAX_IDX(OFF_TO_IDX(start));
+ endidx:=MAX_IDX(OFF_TO_IDX(__end));
 
  ReadBarrier;
 
- b:=(_get_prot(start) and PAGE_PROT_RWX);
- Inc(start);
-
- while (start<__end) do
+ if (idx>=endidx) then
  begin
-  v:=(_get_prot(start) and PAGE_PROT_RWX);
-
-  if (b<>v) then
-  begin
-   start:=IDX_TO_OFF(start);
-   Exit(start);
-  end;
-
-  Inc(start);
+  Exit(IDX_TO_OFF(endidx));
  end;
 
- __end:=IDX_TO_OFF(__end);
+ b:=_get_prot(idx) and PAGE_PROT_RWX;
+ Inc(idx);
 
- Result:=__end;
-end;
+ while (idx<endidx) do
+ begin
+  lv1:=LV1_IDX(idx);
+  chunk_end:=(lv1+1) shl 16;
+  if (chunk_end>endidx) then
+  begin
+   chunk_end:=endidx;
+  end;
 
-function ppmap_get_prot(addr:vm_offset_t):Byte;
-begin
- Result:=_get_prot(OFF_TO_IDX(addr));
+  p:=PAGE_PROT[lv1];
+
+  if (p=nil) then
+  begin
+   if (b<>0) then
+   begin
+    Exit(IDX_TO_OFF(idx));
+   end;
+
+   idx:=chunk_end;
+  end else
+  begin
+   repeat
+    v:=p[LV2_IDX(idx)] and PAGE_PROT_RWX;
+
+    if (b<>v) then
+    begin
+     Exit(IDX_TO_OFF(idx));
+    end;
+
+    Inc(idx);
+   until (idx>=chunk_end);
+  end;
+ end;
+
+ Result:=IDX_TO_OFF(endidx);
 end;
 
 function ppmap_get_prot(addr,size:vm_offset_t):Byte;
 var
- a,b:PPBYTE;
+ start_idx,end_idx:QWORD;
+ pa,pb:PBYTE;
  c,d:Byte;
 begin
- size:=OFF_TO_IDX(addr+size);
- addr:=OFF_TO_IDX(addr);
+ start_idx:=OFF_TO_IDX(addr);
 
- if (addr>PAGE_MAP_MASK_ALL) then
+ if (start_idx>PAGE_MAP_MASK_ALL) then
  begin
   Exit(0);
  end;
 
- a:=@PAGE_PROT[LV1_IDX(addr)];
- if (a^=nil) then
+ pa:=PAGE_PROT[LV1_IDX(start_idx)];
+ if (pa=nil) then
  begin
   Exit(0);
  end;
 
- if (addr=size) then
+ c:=pa[LV2_IDX(start_idx)];
+
+ if (size<=1) then
  begin
-  Exit(a^[LV2_IDX(addr)]);
+  Exit(c);
  end;
 
- if (size>PAGE_MAP_MASK_ALL) then
+ end_idx:=OFF_TO_IDX(addr+size-1);
+
+ if (end_idx=start_idx) then
+ begin
+  Exit(c);
+ end;
+
+ if (end_idx>PAGE_MAP_MASK_ALL) then
  begin
   Exit(0);
  end;
 
- b:=@PAGE_PROT[LV1_IDX(size)];
- if (b^=nil) then
+ pb:=PAGE_PROT[LV1_IDX(end_idx)];
+ if (pb=nil) then
  begin
   Exit(0);
  end;
 
- c:=a^[LV2_IDX(addr)];
- d:=a^[LV2_IDX(size)];
+ d:=pb[LV2_IDX(end_idx)];
 
  Result:=((c and Byte(PAGE_PROT_RWX)) and (d and Byte(PAGE_PROT_RWX))) or
          ((c and Byte(not PAGE_PROT_RWX)) or (d and Byte(not PAGE_PROT_RWX)));
