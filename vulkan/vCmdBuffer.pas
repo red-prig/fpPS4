@@ -12,6 +12,7 @@ uses
 
   kern_proc,
   vm_map,
+  vm_pmap,
   vm_tracking_map,
 
   Vulkan,
@@ -771,7 +772,7 @@ begin
  begin
 
   //deffered trigger
-  vm_map_track_trigger(p_proc.p_vmspace,node^.start,node^.__end,node^.exclude,M_GPU_APPLY);
+  pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),node^.start,node^.__end,node^.exclude,M_GPU_APPLY);
 
   if IsLinearAlloc then
   begin
@@ -798,7 +799,7 @@ Var
  node:p_cmd_track_deferred;
 begin
  //planned trigger
- vm_map_track_trigger(p_proc.p_vmspace,start,__end,exclude,M_GPU_PLANNED);
+ pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),start,__end,exclude,M_GPU_PLANNED);
 
  tmp:=Default(t_cmd_track_deferred);
  tmp.start  :=start;

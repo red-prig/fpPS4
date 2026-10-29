@@ -11,8 +11,7 @@ uses
  mqueue,
  vm_key_instance,
  vm_pmap_prot,
- //kern_mtx
- kern_rangelock
+ kern_mtx
  ;
 
 type
@@ -99,8 +98,7 @@ type
  p_vm_track_map=^t_vm_track_map;
  t_vm_track_map=object
   header   :t_vm_track_map_entry; // List of entries
-  //lock     :mtx;                  // Lock for map data
-  vm_map   :Pointer;
+  lock     :mtx;                  // Lock for map data
   root     :p_vm_track_map_entry; // Root of a binary search tree
   nentries :Integer;              // Number of entries
 
@@ -111,13 +109,14 @@ type
   end;
 
   delete_deferred:TAILQ_HEAD;     //p_vm_track_object
+  deferred_active:Boolean;         //deferred list is being processed
 
   pmap     :Pointer;
   property  min_offset:vm_offset_t read header.start write header.start;
   property  max_offset:vm_offset_t read header.__end write header.__end;
  end;
 
-procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t;vm_map:Pointer);
+procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 
 //
 
@@ -295,6 +294,7 @@ var
  node:p_vm_track_object_instance;
 begin
  node:=calloc(SizeOf(t_vm_track_object_instance));
+ Assert((node<>nil),'_vm_track_entry_add_obj: kernel resources exhausted');
 
  node^.entry :=entry;
  node^.key   :=obj;
@@ -485,14 +485,9 @@ begin
  end;
 end;
 
-function  vm_map_lock_range  (map:Pointer;start,__end:off_t;mode:Integer):Pointer; external;
-procedure vm_map_unlock_range(map:Pointer;cookie:Pointer); external;
-function  vm_map_locked      (map:Pointer):Boolean; external;
-
 procedure vm_track_map_lock(map:p_vm_track_map); inline;
 begin
- //mtx_lock(map^.lock);
- vm_map_lock_range(map^.vm_map,0,High(Int64),RL_LOCK_WRITE);
+ mtx_lock(map^.lock);
 end;
 
 procedure _vm_track_map_process_deferred(map:p_vm_track_map); forward;
@@ -503,22 +498,20 @@ begin
  begin
   _vm_track_map_process_deferred(map);
  end;
- //mtx_unlock(map^.lock);
- vm_map_unlock_range(map^.vm_map,map^.vm_map);
+ mtx_unlock(map^.lock);
 end;
 
 function vm_track_locked(map:p_vm_track_map):Boolean; inline;
 begin
- //Result:=mtx_owned(map^.lock);
- Result:=vm_map_locked(map^.vm_map);
+ Result:=mtx_owned(map^.lock);
 end;
 
-procedure VM_MAP_ASSERT_LOCKED(map:p_vm_track_map); inline;
+procedure VM_TRACK_MAP_ASSERT_LOCKED(map:p_vm_track_map); inline;
 begin
  Assert(vm_track_locked(map));
 end;
 
-procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t;vm_map:Pointer);
+procedure vm_track_map_init(map:p_vm_track_map;min,max:vm_offset_t);
 var
  i:Integer;
 begin
@@ -527,6 +520,8 @@ begin
  map^.min_offset:=min;
  map^.max_offset:=max;
  map^.root:=nil;
+ map^.nentries:=0;
+ map^.deferred_active:=False;
 
  //
  TAILQ_INIT(@map^.insert_deferred.free);
@@ -542,8 +537,7 @@ begin
  TAILQ_INIT(@map^.delete_deferred);
 
  //
- //mtx_init(map^.lock,'vm_track_map');
- map^.vm_map:=vm_map;
+ mtx_init(map^.lock,'vm_track_map');
 end;
 
 procedure vm_track_entry_dispose(map:p_vm_track_map;pmap:Pointer;entry:p_vm_track_map_entry); inline;
@@ -659,7 +653,7 @@ procedure vm_track_map_entry_link(
            after_where:p_vm_track_map_entry;
            entry      :p_vm_track_map_entry);
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  Inc(map^.nentries);
  entry^.prev:=after_where;
@@ -691,7 +685,7 @@ procedure vm_track_map_entry_unlink(
 var
  next,prev,root:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (entry<>map^.root) then
  begin
@@ -721,7 +715,7 @@ function vm_track_map_lookup_entry(
 var
  cur:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  cur:=map^.root;
  if (cur=nil) then
@@ -761,7 +755,7 @@ function vm_track_map_insert_internal(
 var
  new_entry:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (after<>@map^.header) and
     (start<after^.__end) then
@@ -811,6 +805,7 @@ begin
   begin
    vm_track_map_entry_unlink(map, prev);
    entry^.start :=prev^.start;
+   entry^.mark_cpu:=entry^.mark_cpu or prev^.mark_cpu;
 
    dec_obj_list(entry,prevsize);
 
@@ -827,6 +822,7 @@ begin
   begin
    vm_track_map_entry_unlink(map, next);
    entry^.__end:=next^.__end;
+   entry^.mark_cpu:=entry^.mark_cpu or next^.mark_cpu;
 
    vm_track_entry_dispose(map, nil, next);
   end;
@@ -838,7 +834,7 @@ procedure _vm_track_map_clip_start(map:p_vm_track_map;entry:p_vm_track_map_entry
 var
  new_entry:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  vm_track_map_simplify_entry(map, entry);
 
@@ -868,7 +864,7 @@ procedure _vm_track_map_clip_end(map:p_vm_track_map;entry:p_vm_track_map_entry;_
 var
  new_entry:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  new_entry:=vm_track_entry_create(map);
  new_entry^:=entry^;
@@ -899,7 +895,7 @@ begin
   Exit(KERN_SUCCESS);
  end;
 
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (obj^.mark_del<>0) then Exit(KERN_SUCCESS);
 
@@ -943,7 +939,7 @@ var
  node,next:p_vm_track_object_instance;
  entry:p_vm_track_map_entry;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  obj^.mark_del:=1;
 
@@ -976,9 +972,8 @@ begin
   Exit(KERN_INVALID_ARGUMENT);
  end;
 
- obj^.mark_del:=1;
-
  vm_track_map_lock(map);
+  obj^.mark_del:=1;
   vm_track_map_delete_object(map, obj);
  vm_track_map_unlock(map);
 
@@ -992,7 +987,7 @@ var
 begin
  Result:=False;
 
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  node:=vm_key_instance_first(entry^.instances);
 
@@ -1023,7 +1018,7 @@ var
 begin
  vm_track_map_RANGE_CHECK(map,start,__end);
 
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (start>=__end) then
  begin
@@ -1106,7 +1101,7 @@ var
 begin
  vm_track_map_RANGE_CHECK(map,start,__end);
 
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (obj^.mark_del<>0) then Exit;
 
@@ -1125,7 +1120,7 @@ function _vm_track_map_delete_deferred(map:p_vm_track_map;obj:p_vm_track_object)
 begin
  Result:=False;
 
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (obj=nil) then Exit;
 
@@ -1144,38 +1139,47 @@ var
 
  dnode,dnext:p_vm_track_object;
 begin
+ if map^.deferred_active then Exit;
 
- inode:=TAILQ_FIRST(@map^.insert_deferred.list);
+ map^.deferred_active:=True;
 
- while (inode<>nil) do
- begin
-  inext:=TAILQ_NEXT(inode,@inode^.entry);
+ repeat
+  inode:=TAILQ_FIRST(@map^.insert_deferred.list);
 
-  TAILQ_REMOVE(@map^.insert_deferred.list,inode,@inode^.entry);
+  while (inode<>nil) do
+  begin
+   inext:=TAILQ_NEXT(inode,@inode^.entry);
 
-  _vm_track_map_insert(map,inode^.start,inode^.__end,inode^.source,inode^.obj);
+   TAILQ_REMOVE(@map^.insert_deferred.list,inode,@inode^.entry);
 
-  _free_deferred(map,inode);
+   _vm_track_map_insert(map,inode^.start,inode^.__end,inode^.source,inode^.obj);
 
-  inode:=inext;
- end;
+   _free_deferred(map,inode);
 
- //
+   inode:=inext;
+  end;
 
- dnode:=TAILQ_FIRST(@map^.delete_deferred);
+  //
 
- while (dnode<>nil) do
- begin
-  dnext:=TAILQ_NEXT(dnode,@dnode^.del_link);
+  dnode:=TAILQ_FIRST(@map^.delete_deferred);
 
-  TAILQ_REMOVE(@map^.delete_deferred,dnode,@dnode^.del_link);
+  while (dnode<>nil) do
+  begin
+   dnext:=TAILQ_NEXT(dnode,@dnode^.del_link);
 
-  dnode^.del_link:=Default(TAILQ_ENTRY);
+   TAILQ_REMOVE(@map^.delete_deferred,dnode,@dnode^.del_link);
 
-  vm_track_map_delete_object(map,dnode);
+   dnode^.del_link:=Default(TAILQ_ENTRY);
 
-  dnode:=dnext;
- end;
+   vm_track_map_delete_object(map,dnode);
+
+   dnode:=dnext;
+  end;
+
+ until (TAILQ_FIRST(@map^.insert_deferred.list)=nil) and
+       (TAILQ_FIRST(@map^.delete_deferred)=nil);
+
+ map^.deferred_active:=False;
 end;
 
 function _vm_track_map_insert_mirror(map:p_vm_track_map;start,__end,dst:vm_offset_t):Integer;
@@ -1188,7 +1192,7 @@ var
  node,next:p_vm_track_object_instance;
  obj:p_vm_track_object;
 begin
- VM_MAP_ASSERT_LOCKED(map);
+ VM_TRACK_MAP_ASSERT_LOCKED(map);
 
  if (start>=__end) then
  begin
@@ -1421,7 +1425,7 @@ begin
 
    tmp:=node^.key;
 
-   if (tmp^.htype=htype) then
+   if (tmp^.htype=htype) and (tmp^.mark_del=0) then
    begin
     Result:=tmp;
     Break;
@@ -1476,9 +1480,13 @@ var
 begin
  if (map=nil) or (obj=nil) then Exit;
 
- if (obj^.prot=prot) then Exit;
-
  vm_track_map_lock(map);
+
+ if (obj^.prot=prot) then
+ begin
+  vm_track_map_unlock(map);
+  Exit;
+ end;
 
  node:=TAILQ_FIRST(@obj^.instances);
 
@@ -1517,6 +1525,7 @@ begin
   obj:=node^.key;
 
   if (obj<>exclude) then
+  if (obj^.mark_del=0) then
   if (obj^.on_overlap<>nil) then
   begin
    Result:=Result+obj^.on_overlap(obj^.handle,data);

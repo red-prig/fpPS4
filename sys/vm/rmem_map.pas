@@ -34,7 +34,6 @@ type
   lock         :mtx;              // Lock for map data
   root         :p_rmem_map_entry; // Root of a binary search tree
   nentries     :QWORD;            // Number of entries
-  tmap         :Pointer;          // p_vm_track_map
   instance_zone:uma_zone_t;
   entry_zone   :uma_zone_t;
   property min_offset:QWORD read header.start write header.start;
@@ -69,15 +68,10 @@ function  rmem_map_delete(map:p_rmem_map;
                           vaddr:QWORD;
                           start,__end:QWORD):Integer;
 
-procedure rmem_map_track(map:p_rmem_map;
-                         start,__end,source:QWORD;
-                         tobj:Pointer);
-
 implementation
 
 uses
- kern_thr,
- vm_tracking_map;
+ kern_thr;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -117,35 +111,6 @@ begin
 
  Result:=True;
  _rmem_entry_add_vaddr(map,entry,vaddr);
-end;
-
-procedure rmem_entry_add_track(tmap:Pointer;entry:p_rmem_map_entry;dst:QWORD);
-var
- node:p_rmem_vaddr_instance;
- size:vm_offset_t;
- vaddr:QWORD;
-begin
- //try add mirror track
-
- size:=(entry^.__end-entry^.start);
-
- vm_track_map_lock(tmap);
-
- node:=vm_key_instance_first(entry^.vinst);
-
- while (node<>nil) do
- begin
-
-  vaddr:=QWORD(node^.key);
-  if (vaddr<>dst) then
-  begin
-   _vm_track_map_insert_mirror(tmap,vaddr,vaddr+size,dst);
-  end;
-
-  node:=vm_key_instance_next(entry^.vinst,node);
- end;
-
- vm_track_map_unlock(tmap);
 end;
 
 function _rmem_entry_del_node(map:p_rmem_map;entry:p_rmem_map_entry;node:p_rmem_vaddr_instance):Boolean;
@@ -782,10 +747,7 @@ begin
 
   entry:=rmem_map_insert_internal(map,entry,entry^.__end,__end);
 
-  if rmem_entry_add_vaddr(map,entry,vaddr) then
-  begin
-   rmem_entry_add_track(map^.tmap,entry,vaddr);
-  end;
+  rmem_entry_add_vaddr(map,entry,vaddr);
 
   entry:=entry^.next;
  end;
@@ -862,92 +824,6 @@ begin
 
  Result:=(KERN_SUCCESS);
 end;
-
-procedure rmem_entry_track(tmap:Pointer;entry:p_rmem_map_entry;diff,size,source:QWORD;tobj:Pointer);
-var
- node:p_rmem_vaddr_instance;
- start:vm_offset_t;
- __end:vm_offset_t;
-begin
- node:=vm_key_instance_first(entry^.vinst);
-
- while (node<>nil) do
- begin
-
-  start:=QWORD(node^.key)+diff;
-  __end:=start+size;
-
-  //LOG_TRACE('rmem_entry_track:',HexStr(start,16),'..',HexStr(__end,16),'..',HexStr(source,16));
-
-  _vm_track_map_insert_deferred(tmap,start,__end,source,tobj);
-
-  node:=vm_key_instance_next(entry^.vinst,node);
- end;
-end;
-
-procedure rmem_map_track(map:p_rmem_map;
-                         start,__end,source:QWORD;
-                         tobj:Pointer);
-var
- entry:p_rmem_map_entry;
-
- e_start:QWORD;
- e___end:QWORD;
-
- diff:QWORD;
- size:QWORD;
-begin
- rmem_map_lock(map);
-
- vm_track_map_lock(map^.tmap);
-
- if (rmem_map_lookup_entry(map, start, @entry)) then
- begin
-  //
- end else
- begin
-  entry:=entry^.next;
- end;
-
- while (entry<>@map^.header) and (entry^.start<__end) do
- begin
-
-  e_start:=entry^.start;
-  e___end:=entry^.__end;
-
-  if (start>e_start) then
-  begin
-   e_start:=start;
-  end;
-
-  if (__end<e___end) then
-  begin
-   e___end:=__end;
-  end;
-
-  if (e___end>e_start) then
-  begin
-   diff:=(e_start-entry^.start);
-   size:=(e___end-e_start);
-
-   rmem_entry_track(map^.tmap,
-                    entry,
-                    diff,
-                    size,
-                    source+(e_start-start),
-                    tobj);
-  end;
-
-  entry:=entry^.next;
- end;
-
- vm_track_map_unlock(map^.tmap);
-
- rmem_map_unlock(map);
-end;
-
-
-
 
 end.
 

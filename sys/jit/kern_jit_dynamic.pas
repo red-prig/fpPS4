@@ -486,7 +486,7 @@ var
 begin
  Result:=nil;
 
- obj:=vm_map_track_next(p_proc.p_vmspace,
+ obj:=pmap_track_next(vmspace_pmap(p_proc.p_vmspace),
                         vm_offset_t(src),
                         nil,
                         H_JIT_CHUNK);
@@ -534,7 +534,7 @@ begin
  Result:=nil;
  //
 
- obj:=vm_map_track_next(p_proc.p_vmspace,
+ obj:=pmap_track_next(vmspace_pmap(p_proc.p_vmspace),
                         vm_offset_t(src),
                         node^.tobj,
                         H_JIT_CHUNK);
@@ -2013,7 +2013,7 @@ begin
 
  if (tobj<>nil) then
  begin
-  _vm_map_track_delete_deferred(p_proc.p_vmspace,tobj);
+  pmap_track_delete_deferred(vmspace_pmap(p_proc.p_vmspace),tobj);
  end;
 
  removed:=False;
@@ -2142,7 +2142,7 @@ begin
 
    node^.tobj:=tobj;
 
-   vm_map_track_insert(p_proc.p_vmspace,tobj);
+   pmap_track_insert(vmspace_pmap(p_proc.p_vmspace),tobj);
 
    vm_track_object_deallocate(tobj); //<-vm_track_object_allocate
   end;

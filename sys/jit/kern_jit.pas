@@ -1892,7 +1892,7 @@ begin
   tobj^.on_destroy:=@pick_on_destroy;
   tobj^.on_trigger:=@pick_on_trigger;
 
-  vm_map_track_insert(p_proc.p_vmspace,tobj);
+  pmap_track_insert(vmspace_pmap(p_proc.p_vmspace),tobj);
   }
 
   modes:=ctx.modes;
@@ -1919,14 +1919,14 @@ begin
 
   if (blob<>nil) then
   begin
-   blob^.attach; //blob.attach-> blob_track-> vm_map_track_insert
+   blob^.attach; //blob.attach-> blob_track-> pmap_track_insert
   end;
 
   //restore non tracked  (mirrors?)
 
   //TODO: Works slowly, needs optimization
   {
-  vm_map_track_remove(p_proc.p_vmspace,tobj);
+  pmap_track_remove(vmspace_pmap(p_proc.p_vmspace),tobj);
 
   tobj^.on_destroy:=nil;
   tobj^.on_trigger:=nil;

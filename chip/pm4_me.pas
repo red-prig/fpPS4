@@ -223,6 +223,7 @@ uses
  kern_dmem,
  kern_proc,
  vm_map,
+ vm_pmap,
  vm_tracking_map,
  dev_dce;
 
@@ -3180,7 +3181,7 @@ begin
   end;
 
   if (addr_dmem<>nil) then
-  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
+  pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
  end;
 
  if (node^.intSel=EVENTWRITEEOP_INT_SEL_SEND_INT) or
@@ -3294,7 +3295,7 @@ begin
   end;
 
   if (addr_dmem<>nil) then
-  vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
+  pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(node^.addr),QWORD(node^.addr)+data_size,nil,M_DMEM_WRITE);
  end;
 
  if (node^.intSel=RELEASEMEM_INT_SEL_SEND_INT) or
@@ -3429,7 +3430,7 @@ begin
 
      PDWORD(addr_dmem)^:=node^.data;
 
-     vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.addr),QWORD(node^.addr)+4,nil,M_DMEM_WRITE);
+     pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(node^.addr),QWORD(node^.addr)+4,nil,M_DMEM_WRITE);
     end;
 
    end;
@@ -3483,7 +3484,7 @@ begin
 
       Move(src_dmem^,dst_dmem^,byteSize);
 
-      vm_map_track_trigger(p_proc.p_vmspace,QWORD(node^.dst),QWORD(node^.dst)+byteSize,nil,M_DMEM_WRITE);
+      pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(node^.dst),QWORD(node^.dst)+byteSize,nil,M_DMEM_WRITE);
      end;
     end;
   else
@@ -3554,7 +3555,7 @@ begin
 
       Move(adrSrc_dmem^,adrDst_dmem^,byteCount);
 
-      vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+      pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
 
       //soft
      end;
@@ -3579,7 +3580,7 @@ begin
 
       FillDWORD(adrDst_dmem^,(byteCount div 4),DWORD(adrSrc));
 
-      vm_map_track_trigger(p_proc.p_vmspace,QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
+      pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),QWORD(adrDst),QWORD(adrDst)+byteCount,nil,M_DMEM_WRITE);
 
       //soft
      end;

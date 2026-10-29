@@ -16,11 +16,9 @@ uses
  vm_object,
  kern_vm_object,
  kern_mtx,
- kern_rangelock,
  kern_thr,
  sys_resource,
- kern_resource,
- vm_tracking_map;
+ kern_resource;
 
 type
  vm_flags_t =type Byte;
@@ -62,7 +60,6 @@ type
  vm_map_t=^_vm_map;
  _vm_map=object
   header   :vm_map_entry;   // List of entries
-  vmlock   :rangelock;
   vm_mtx   :mtx;            // Lock for map data
   size     :vm_size_t;      // virtual size
   nentries :Integer;        // Number of entries
@@ -335,9 +332,6 @@ procedure vm_map_lock   (map:vm_map_t;tm:Boolean=True);
 function  vm_map_trylock(map:vm_map_t):Boolean;
 procedure vm_map_unlock (map:vm_map_t;def:Boolean=True);
 
-function  vm_map_lock_range  (map:vm_map_t;start,__end:off_t;mode:Integer):Pointer;
-procedure vm_map_unlock_range(map:vm_map_t;cookie:Pointer);
-
 function  vm_map_delete(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 function  vm_map_remove(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t;cow:DWORD=0):Integer;
 
@@ -345,13 +339,6 @@ function  vm_map_expand(map:vm_map_t;start:vm_offset_t;__end:vm_offset_t):Intege
 
 procedure vm_map_set_name(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
 procedure vm_map_set_name_locked(map:vm_map_t;start,__end:vm_offset_t;name:PChar);
-
-procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
-procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
-function  vm_map_track_next  (map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
-function  _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer):Boolean;
-function  vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
-procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);
 
 function  vmspace_pmap(vm:p_vmspace):pmap_t; inline;
 
@@ -496,7 +483,7 @@ var
 begin
  vm:=@g_vmspace;
 
- pmap_pinit(vmspace_pmap(vm),@vm^.vm_map);
+ pmap_pinit(vmspace_pmap(vm));
 
  vm_map_init(@vm^.vm_map,vmspace_pmap(vm),VM_MINUSER_ADDRESS,VM_MAXUSER_ADDRESS);
 
@@ -528,40 +515,9 @@ begin
  Result:=vm;
 end;
 
-function NormalizeMode(mode:Integer):Integer; inline;
-const
- _f:array[0..3] of Byte=(
-  RL_LOCK_READ,  //
-  RL_LOCK_READ,  //RL_LOCK_READ
-  RL_LOCK_WRITE, //RL_LOCK_WRITE
-  RL_LOCK_WRITE  //RL_LOCK_READ | RL_LOCK_WRITE
- );
-begin
- Result:=_f[(mode and (RL_LOCK_READ or RL_LOCK_WRITE))];
-end;
-
 procedure vm_map_lock(map:vm_map_t;tm:Boolean=True); public;
 begin
- with curkthread^ do
- begin
-  if (td_map_cookie=nil) then
-  begin
-   td_map_cookie:=rangelock_enqueue(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE,@map^.vm_mtx);
-  end else
-  with p_rl_q_entry(td_map_cookie)^ do
-  begin
-
-   if (rl_q_start<>0) or (rl_q___end<>High(off_t)) or
-      (NormalizeMode(rl_q_flags)=RL_LOCK_READ) then
-   begin
-    rangelock_update(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE,@map^.vm_mtx,td_map_cookie);
-   end;
-
-   Inc(rl_q_count);
-  end;
- end;
-
- //mtx_lock(map^.lock);
+ mtx_lock(map^.vm_mtx);
 
  if tm then
  begin
@@ -571,34 +527,7 @@ end;
 
 function vm_map_trylock(map:vm_map_t):Boolean;
 begin
- with curkthread^ do
- begin
-  if (td_map_cookie=nil) then
-  begin
-   td_map_cookie:=rangelock_enqueue(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE or RL_LOCK_TRYLOCK,@map^.vm_mtx);
-   Result:=(td_map_cookie<>nil);
-  end else
-  with p_rl_q_entry(td_map_cookie)^ do
-  begin
-
-   if (rl_q_start<>0) or (rl_q___end<>High(off_t)) or
-      (NormalizeMode(rl_q_flags)=RL_LOCK_READ) then
-   begin
-    Result:=rangelock_update(@map^.vmlock,0,High(off_t),RL_LOCK_WRITE or RL_LOCK_TRYLOCK,@map^.vm_mtx,td_map_cookie);
-   end else
-   begin
-    Result:=True;
-   end;
-
-   if Result then
-   begin
-    Inc(rl_q_count);
-   end;
-
-  end;
- end;
-
- //Result:=mtx_trylock(map^.lock);
+ Result:=mtx_trylock(map^.vm_mtx);
 
  if Result then
  begin
@@ -639,22 +568,9 @@ function vm_map_locked(map:vm_map_t):Boolean; forward;
 
 procedure vm_map_unlock(map:vm_map_t;def:Boolean=True); public;
 begin
- Assert(vm_map_locked(map));
+ Assert(mtx_owned(map^.vm_mtx));
 
- with curkthread^ do
- begin
-  with p_rl_q_entry(td_map_cookie)^ do
-   if (rl_q_count=0) then
-   begin
-    rangelock_unlock(@map^.vmlock,td_map_cookie,@map^.vm_mtx);
-    td_map_cookie:=nil;
-   end else
-   begin
-    Dec(rl_q_count);
-   end;
- end;
-
- //mtx_unlock(map^.lock);
+ mtx_unlock(map^.vm_mtx);
 
  if def then
  begin
@@ -664,105 +580,9 @@ end;
 
 ///
 
-function vm_map_lock_range(map:vm_map_t;start,__end:off_t;mode:Integer):Pointer; public;
-label
- _on_inc;
-const
- _f:array[0..1] of Byte=(RL_LOCK_WRITE,RL_LOCK_READ);
-var
- flags:Integer;
-begin
- Result:=nil;
- //
- mode:=NormalizeMode(mode);
- //
- with curkthread^ do
- begin
-  if (td_map_cookie=nil) then
-  begin
-   td_map_cookie:=rangelock_enqueue(@map^.vmlock,start,__end,mode,@map^.vm_mtx);
-   //
-   if (td_map_cookie<>nil) then
-   begin
-    Result:=map; //true
-   end;
-  end else
-  with p_rl_q_entry(td_map_cookie)^ do
-  begin
-
-   flags:=NormalizeMode(rl_q_flags);
-
-   if (rl_q_start<>start) or (rl_q___end<>__end) or
-      (flags<>mode) then
-   begin
-
-    if (rl_q_start<start) then start:=rl_q_start;
-    if (rl_q___end>__end) then __end:=rl_q___end;
-
-    mode:=_f[flags and mode and RL_LOCK_READ];
-
-    if (rl_q_start=start) and (rl_q___end=__end) and (flags=mode) then
-    begin
-     goto _on_inc;
-    end;
-
-    if rangelock_update(@map^.vmlock,start,__end,mode,@map^.vm_mtx,td_map_cookie) then
-    begin
-     goto _on_inc;
-    end;
-
-   end else
-   begin
-    _on_inc:
-     Inc(rl_q_count);
-     Result:=map; //true
-   end;
-
-  end;
- end;
-end;
-
-procedure vm_map_unlock_range(map:vm_map_t;cookie:Pointer); public;
-begin
- Assert(map=cookie,'vm_map_unlock_range');
- //
- with curkthread^ do
- begin
-  Assert(td_map_cookie<>nil);
-  //
-  with p_rl_q_entry(td_map_cookie)^ do
-   if (rl_q_count=0) then
-   begin
-    rangelock_unlock(@map^.vmlock,td_map_cookie,@map^.vm_mtx);
-    td_map_cookie:=nil;
-   end else
-   begin
-    Dec(rl_q_count);
-   end;
- end;
-end;
-
-{
- * vm_map_locked:
- *
- * Returns a non-zero value if the caller holds a write (exclusive) lock
- * on the specified map and the value "0" otherwise.
- }
 function vm_map_locked(map:vm_map_t):Boolean; public;
 begin
-
- if (curkthread^.td_map_cookie=nil) then
- begin
-  Result:=False;
- end else
- with p_rl_q_entry(curkthread^.td_map_cookie)^ do
- begin
-  Result:=(rl_q_start=0) and
-          (rl_q___end=High(off_t)) and
-          ((rl_q_flags and RL_LOCK_WRITE)<>0);
- end;
-
- //Result:=mtx_owned(map^.lock);
+ Result:=mtx_owned(map^.vm_mtx);
 end;
 
 procedure VM_MAP_ASSERT_LOCKED(map:vm_map_t); inline;
@@ -806,10 +626,7 @@ procedure vm_map_init(map:vm_map_t;pmap:pmap_t;min,max:vm_offset_t);
 begin
  _vm_map_init(map, pmap, min, max);
 
- rangelock_init(@map^.vmlock);
  mtx_init(map^.vm_mtx,'user map');
-
- //mtx_init(map^.lock,'user map');
 
  vm_blockpool_name_map_init(@map^.bname_map,min,max);
 end;
@@ -5404,134 +5221,6 @@ begin
  vm_map_lock(map);
  vm_map_set_name_locked(map,start,__end,name);
  vm_map_unlock(map);
-end;
-
-procedure vm_map_track_insert(map:vm_map_t;tobj:Pointer);
-var
- entry:vm_map_entry_t;
- obj:vm_object_t;
-
- start:vm_offset_t;
- __end:vm_offset_t;
-
- e_start:vm_offset_t;
- e___end:vm_offset_t;
-
- diff:QWORD;
- size:QWORD;
- offset:QWORD;
-begin
- if (tobj=nil) then Exit;
-
- vm_map_lock(map);
-
- start:=p_vm_track_object(tobj)^.align.start;
- __end:=p_vm_track_object(tobj)^.align.__end;
-
- VM_MAP_RANGE_CHECK(map, start, __end);
-
- if (vm_map_lookup_entry(map, start, @entry)) then
- begin
-  //
- end else
- begin
-  entry:=entry^.next;
- end;
-
- while (entry<>@map^.header) and (entry^.start<__end) do
- begin
-
-  e_start:=entry^.start;
-  e___end:=entry^.__end;
-
-  if (start>e_start) then
-  begin
-   e_start:=start;
-  end;
-
-  if (__end<e___end) then
-  begin
-   e___end:=__end;
-  end;
-
-  if (e___end>e_start) then
-  begin
-   obj:=entry^.vm_obj;
-
-   if (obj<>nil) then
-   begin
-    if ((obj^.flags and OBJ_DMEM_EXT)<>0) then
-    begin
-     //ext rmap track
-
-     diff:=e_start-entry^.start;
-     size:=e___end-e_start;
-
-     offset:=entry^.offset;
-
-     offset:=offset+diff;
-
-     //LOG_TRACE('rmem_map_track:  ',HexStr(e_start,16),'..',HexStr(e___end,16));
-
-     rmem_map_track(map^.rmap,
-                    offset,
-                    offset+size,
-                    e_start,
-                    tobj);
-
-     //next
-     entry:=entry^.next;
-     Continue;
-    end;
-
-    //file mirrors TODO
-   end;
-
-   //one map track
-   vm_track_map_lock(@map^.pmap^.tr_map);
-    _vm_track_map_insert(@map^.pmap^.tr_map,e_start,e___end,e_start,tobj);
-   vm_track_map_unlock(@map^.pmap^.tr_map)
-  end; //
-
-  entry:=entry^.next;
- end;
-
- vm_map_unlock(map);
-end;
-
-procedure vm_map_track_remove(map:vm_map_t;tobj:Pointer);
-begin
- if (tobj=nil) then Exit;
-
- vm_track_map_remove_object(@map^.pmap^.tr_map,tobj);
-end;
-
-function vm_map_track_next(map:vm_map_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
-begin
- Result:=vm_track_map_next_object(@map^.pmap^.tr_map,start,tobj,htype);
-end;
-
-function _vm_map_track_delete_deferred(map:vm_map_t;tobj:Pointer):Boolean;
-begin
- Result:=_vm_track_map_delete_deferred(@map^.pmap^.tr_map,tobj);
-end;
-
-function vm_map_track_trigger(map:vm_map_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
-begin
- //vm_track_map_trigger2 is broken
- Result:=vm_track_map_trigger(@map^.pmap^.tr_map,start,__end,exclude,mode);
-
- if rst and (mode=M_CPU_WRITE) then
- begin
-  pmap_prot_restore(map^.pmap,start,__end);
- end;
-end;
-
-procedure vm_map_track_restore(map:vm_map_t;tobj:Pointer);
-begin
- if (tobj=nil) then Exit;
-
- vm_track_map_restore_object(@map^.pmap^.tr_map,tobj);
 end;
 
 procedure vminit;
