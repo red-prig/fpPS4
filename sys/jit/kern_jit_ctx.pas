@@ -2402,17 +2402,6 @@ end;
 
 //
 
-procedure nop5(var ctx:t_jit_context2;length:DWORD);
-begin
- if (length>5) then Exit;
- with ctx.builder do
- begin
-  //_O($F4); //HLT 0xF4
-  //_O($D6);   //SALC 0xD6
-  nop(5-length);
- end;
-end;
-
 procedure op_emit1(var ctx:t_jit_context2;const desc:t_op_type;hint:t_op_hint);
 var
  i:Integer;
@@ -2428,7 +2417,7 @@ var
   begin
    //input:r14
 
-   nop5(ctx,_M(desc,[flags(ctx)+r_tmp0,mem_size]));
+   _M(desc,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -2438,7 +2427,7 @@ var
   begin
    //input:r14
 
-   nop5(ctx,_M(desc,[flags(ctx)+r_tmp0,mem_size]));
+   _M(desc,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -2551,10 +2540,10 @@ begin
      (get_mem_size(mem)<>os8) and
      (not (not_impl in desc.reg_im8.opt)) then
   begin
-   nop5(ctx,_MI8(desc.reg_im8,mem,imm));
+   _MI8(desc.reg_im8,mem,imm);
   end else
   begin
-   nop5(ctx,_MI(desc.reg_imm,mem,imm));
+   _MI(desc.reg_imm,mem,imm);
   end;
 end;
 
@@ -2585,16 +2574,16 @@ begin
  with ctx.builder do
   if (not_impl in desc.reg_imm.opt) then
   begin
-   nop5(ctx,_RMI8(desc.reg_im8,reg,mem,imm));
+   _RMI8(desc.reg_im8,reg,mem,imm);
   end else
   if (imm_size=os8) and
     (get_mem_size(mem)<>os8) and
     (not (not_impl in desc.reg_im8.opt)) then
   begin
-   nop5(ctx,_RMI8(desc.reg_im8,reg,mem,imm));
+   _RMI8(desc.reg_im8,reg,mem,imm);
   end else
   begin
-   nop5(ctx,_RMI(desc.reg_imm,reg,mem,imm));
+   _RMI(desc.reg_imm,reg,mem,imm);
   end;
 end;
 
@@ -2617,7 +2606,7 @@ begin
   op_rmi(ctx,desc,reg,mem,imm,imm_size);
  end else
  begin
-  nop5(ctx,ctx.builder._RM(desc.reg_mem,reg,mem));
+  ctx.builder._RM(desc.reg_mem,reg,mem);
  end;
 end;
 
@@ -2640,7 +2629,7 @@ begin
   op_rmi(ctx,desc,reg,mem,imm,imm_size);
  end else
  begin
-  nop5(ctx,ctx.builder._RM(desc.mem_reg,reg,mem));
+  ctx.builder._RM(desc.mem_reg,reg,mem);
  end;
 end;
 
@@ -3422,19 +3411,19 @@ var
        Assert(imm_size=os8);
        Assert(not (not_impl in desc.reg_im8.opt));
 
-       nop5(ctx,_MI8(desc.reg_im8,[flags(ctx)+r_tmp0,mem_size],imm));
+       _MI8(desc.reg_im8,[flags(ctx)+r_tmp0,mem_size],imm);
       end;
     mo_mem_cl:
       begin
        //input:r14
 
-       nop5(ctx,_M(desc.mem__cl,[flags(ctx)+r_tmp0,mem_size]));
+       _M(desc.mem__cl,[flags(ctx)+r_tmp0,mem_size]);
       end;
     mo_mem_one:
      begin
       //input:r14
 
-      nop5(ctx,_M(desc.mem_one,[flags(ctx)+r_tmp0,mem_size]));
+      _M(desc.mem_one,[flags(ctx)+r_tmp0,mem_size]);
      end
 
     else
@@ -3597,7 +3586,7 @@ var
 
        Assert(not is_high(new2));
 
-       nop5(ctx,_RMI8(desc.reg_im8,new2,[flags(ctx)+r_tmp0],imm));
+       _RMI8(desc.reg_im8,new2,[flags(ctx)+r_tmp0],imm);
       end;
     mo_mem_cl:
       begin
@@ -3617,7 +3606,7 @@ var
 
        Assert(not is_high(new2));
 
-       nop5(ctx,_RM(desc.mem__cl,new2,[flags(ctx)+r_tmp0]));
+       _RM(desc.mem__cl,new2,[flags(ctx)+r_tmp0]);
       end;
 
     else
@@ -3811,7 +3800,7 @@ var
   begin
    //input:r14
 
-   nop5(ctx,_VM(desc,[flags(ctx)+r_tmp0,mem_size]));
+   _VM(desc,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -3821,7 +3810,7 @@ var
   begin
    //input:r14
 
-   nop5(ctx,_VM(desc,[flags(ctx)+r_tmp0,mem_size]));
+   _VM(desc,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -3963,7 +3952,7 @@ var
    //input:r14
 
    new2:=new_reg(ctx.din.Operand[2]);
-   nop5(ctx,_VM(desc.mem_reg,new2,[flags(ctx)+r_tmp0,mem_size]));
+   _VM(desc.mem_reg,new2,[flags(ctx)+r_tmp0,mem_size]);
   end;
  end;
 
@@ -3977,7 +3966,7 @@ var
        //input:r14
 
        new1:=new_reg(ctx.din.Operand[1]);
-       nop5(ctx,_VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]));
+       _VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]);
       end;
 
     mo_ctx_mem:
@@ -3992,7 +3981,7 @@ var
         op_load(ctx,new1,1);
        end;
 
-       nop5(ctx,_VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]));
+       _VM(desc.reg_mem,new1,[flags(ctx)+r_tmp0,mem_size]);
 
        if not (his_ro in desc.hint) then
        begin
@@ -4151,10 +4140,10 @@ var
    imm:=0;
    if GetTargetOfs(ctx.din,ctx.code,4,imm) then
    begin
-    nop5(ctx,_VVMI8(desc,new2,new1,[flags(ctx)+r_tmp0,mem_size],imm));
+    _VVMI8(desc,new2,new1,[flags(ctx)+r_tmp0,mem_size],imm);
    end else
    begin
-    nop5(ctx,_VVM(desc,new2,new1,[flags(ctx)+r_tmp0,mem_size])); //[mem],arg2,arg3 -> arg3,arg2,[mem]
+    _VVM(desc,new2,new1,[flags(ctx)+r_tmp0,mem_size]); //[mem],arg2,arg3 -> arg3,arg2,[mem]
    end;
 
   end;
@@ -4172,10 +4161,10 @@ var
    imm:=0;
    if GetTargetOfs(ctx.din,ctx.code,4,imm) then
    begin
-    nop5(ctx,_VVMI8(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size],imm));
+    _VVMI8(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size],imm);
    end else
    begin
-    nop5(ctx,_VVM(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size]));
+    _VVM(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size]);
    end;
 
   end;
@@ -4293,7 +4282,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   nop5(ctx,_VMI8(desc.mri,new2,[flags(ctx)+r_tmp0,mem_size],imm));
+   _VMI8(desc.mri,new2,[flags(ctx)+r_tmp0,mem_size],imm);
   end;
  end;
 
@@ -4311,7 +4300,7 @@ var
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,3,imm);
 
-   nop5(ctx,_VMI8(desc.rmi,new1,[flags(ctx)+r_tmp0,mem_size],imm));
+   _VMI8(desc.rmi,new1,[flags(ctx)+r_tmp0,mem_size],imm);
   end;
  end;
 
@@ -4426,7 +4415,7 @@ var
       //input:r14
 
       new1:=new_reg(ctx.din.Operand[1]);
-      nop5(ctx,_VM_F3(desc,new1,[flags(ctx)+r_tmp0,mem_size]));
+      _VM_F3(desc,new1,[flags(ctx)+r_tmp0,mem_size]);
      end;
     mo_ctx_mem:
      begin
@@ -4436,7 +4425,7 @@ var
 
       new1:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
-      nop5(ctx,_VM_F3(desc,new1,[flags(ctx)+r_tmp0,mem_size]));
+      _VM_F3(desc,new1,[flags(ctx)+r_tmp0,mem_size]);
 
       op_save(ctx,1,fix_size(new1));
      end;
@@ -4547,7 +4536,7 @@ var
    new2:=new_reg(ctx.din.Operand[2]);
    new3:=new_reg(ctx.din.Operand[4]);
 
-   nop5(ctx,_VVMV(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size],new3));
+   _VVMV(desc,new1,new2,[flags(ctx)+r_tmp0,mem_size],new3);
   end;
  end;
 
@@ -4648,7 +4637,7 @@ begin
 
   if pr_mem then
   begin
-   nop5(ctx,_VVM(desc,new1,new2,[new3])); //1 2 3
+   _VVM(desc,new1,new2,[new3]); //1 2 3
   end else
   if is_preserved(ctx.din.Operand[3]) then
   begin
