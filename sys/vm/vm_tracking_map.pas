@@ -11,8 +11,7 @@ uses
  mqueue,
  vm_key_instance,
  vm_pmap_prot,
- kern_mtx
- ;
+ kern_mtx;
 
 type
  p_vm_track_interval=^t_vm_track_interval;
