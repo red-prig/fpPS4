@@ -107,12 +107,11 @@ label
  _ast,
  _doreti_exit;
 asm
+ movq  %rbp,%r14
+
  //prolog (debugger)
  pushq %rbp
  movqq %rsp,%rbp
-
- pushf
- pop %r14
 
  movqq %gs:teb.thread,%r15 //curkthread
  test  %r15,%r15
@@ -121,6 +120,12 @@ asm
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%r15) //clear PCB_FULL_IRET
 
  andq  $-16,%rsp //align stack
+
+ //tf_rbp
+ movqq %r14,kthread.td_frame.tf_rbp(%r15)
+
+ pushf
+ pop %r14
 
  movqq %r14,kthread.td_frame.tf_rflags(%r15) //save flags
 
@@ -149,10 +154,6 @@ asm
  //tf_rsp
  movqq             jit_frame.tf_rsp(%r13),%r14
  movqq %r14,kthread.td_frame.tf_rsp(%r15)
-
- //tf_rbp
- movqq             jit_frame.tf_rbp(%r13),%r14
- movqq %r14,kthread.td_frame.tf_rbp(%r15)
 
  movqq   $1,kthread.td_frame.tf_trapno(%r15)
  movqq   $0,kthread.td_frame.tf_addr  (%r15)
@@ -226,22 +227,22 @@ asm
  movqq kthread.td_frame.tf_rsp(%r15),%r14
  movqq   %r14,jit_frame.tf_rsp(%r13)
 
- //tf_rbp
- movqq kthread.td_frame.tf_rbp(%r15),%r14
- movqq   %r14,jit_frame.tf_rbp(%r13)
-
  movqq $0,%r8
  movqq $0,%r9
  movqq $0,%r10
 
  //epilog (debugger)
  movq  %rbp,%rsp
- popq  %rbp
+ popq  %rbp  //<-restore tf_rbp
+
  //interrupt/ret
  jmp %gs:teb.jit_trp
 
  //fail (curkthread=nil)
  _fail:
+
+ pushf
+ pop %r14
 
  or $1,%r14 //set CF
  push  %r14
@@ -258,7 +259,8 @@ asm
 
  //epilog (debugger)
  movq  %rbp,%rsp
- popq  %rbp
+ popq  %rbp  //<-restore tf_rbp
+
  //interrupt/ret
  jmp %gs:teb.jit_trp
 
@@ -310,7 +312,6 @@ begin
 
   td_frame^.tf_r13:=frame^.tf_r13;
   td_frame^.tf_rsp:=frame^.tf_rsp;
-  td_frame^.tf_rbp:=frame^.tf_rbp;
 
   td_frame^.tf_trapno:=0;
   td_frame^.tf_BrF   :=0;
@@ -335,7 +336,6 @@ begin
 
   frame^.tf_r13:=td_frame^.tf_r13;
   frame^.tf_rsp:=td_frame^.tf_rsp;
-  frame^.tf_rbp:=td_frame^.tf_rbp;
 
   td_frame^.tf_flags:=td_frame^.tf_flags or TF_JIT_CTX;
  end;
@@ -372,6 +372,9 @@ asm
 
  //tf_r14=tf_r14
  //tf_r15=tf_r15
+
+ //tf_rbp
+ movqq %rbp, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
 
  {
  //tf_r13
@@ -490,8 +493,12 @@ asm
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r10(%r13), %r10
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r11(%r13), %r11
  movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_r12(%r13), %r12
+
  //tf_r14=tf_r14
  //tf_r15=tf_r15
+
+ //tf_rbp
+ movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13),%rbp
 
  //marker
  .globl .endof_jit_load_ctx
@@ -548,14 +555,14 @@ end;
 //in:r14(addr) r15(plt) out:r14(addr)
 procedure jit_jmp_dispatch; assembler; nostackframe;
 asm
- //prolog (debugger)
- push %rbp
- movq %rsp,%rbp
-
  movq %gs:teb.thread,%r13                //curkthread
  leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
 
  call jit_save_ctx // -> pushf
+
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
 
  andq  $-16,%rsp //align stack
 
@@ -568,11 +575,11 @@ asm
 
  mov  %rax,%r14
 
- call jit_load_ctx // -> popf
-
  //epilog
  movq %rbp,%rsp
- pop  %rbp
+ pop  %rbp  //<-restore tf_rbp
+
+ call jit_load_ctx // -> popf
 
  //interrupt/ret
  jmp %gs:teb.jit_trp
@@ -582,14 +589,14 @@ end;
 
 procedure jit_jmp_null; assembler; nostackframe;
 asm
- //prolog (debugger)
- push %rbp
- movq %rsp,%rbp
-
  movq %gs:teb.thread,%r13                //curkthread
  leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
 
  call jit_save_ctx // -> pushf
+
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
 
  andq  $-16,%rsp //align stack
 
@@ -602,11 +609,11 @@ asm
 
  mov  %rax,%r14
 
- call jit_load_ctx // -> popf
-
  //epilog
  movq %rbp,%rsp
- pop  %rbp
+ pop  %rbp  //<-restore tf_rbp
+
+ call jit_load_ctx // -> popf
 
  //interrupt/ret
  jmp %gs:teb.jit_trp
@@ -617,11 +624,11 @@ end;
 //in:r14(nid) r15(caller)
 procedure jit_hle_trace; assembler; nostackframe;
 asm
+ call jit_save_ctx // -> pushf
+
  //prolog (debugger)
  push %rbp
  movq %rsp,%rbp
-
- call jit_save_ctx // -> pushf
 
  andq  $-16,%rsp //align stack
 
@@ -630,39 +637,16 @@ asm
 
  call %r15
 
- call jit_load_ctx // -> popf
-
  //epilog
  movq %rbp,%rsp
- pop  %rbp
+ pop  %rbp  //<-restore tf_rbp
+
+ call jit_load_ctx // -> popf
 
  //interrupt/ret
  jmp %gs:teb.jit_trp
  //marker
  .globl .endof_jit_hle_trace
-end;
-
-//unused
-procedure stack_set_user; assembler; nostackframe;
-asm
- //switch stack
- movqq %rsp, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13)
- movqq %rbp, - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13)
-
- movq jit_frame.tf_rsp(%r13),%rsp
- movq jit_frame.tf_rbp(%r13),%rbp
- //switch stack
-end;
-
-//unused
-procedure stack_set_jit; assembler; nostackframe;
-asm
- //switch stack
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rsp(%r13), %rsp
- movqq - kthread.td_frame.tf_r13 + kthread.td_frame.tf_rbp(%r13), %rbp
- //switch stack
-
- //uplift %rsp/%rbp ???
 end;
 
 //unused

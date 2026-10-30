@@ -900,7 +900,6 @@ begin
   begin
    case RegValue.AIndex of
      4:Result:=Integer(@p_jit_frame(nil)^.tf_rsp);
-     5:Result:=Integer(@p_jit_frame(nil)^.tf_rbp);
     13:Result:=Integer(@p_jit_frame(nil)^.tf_r13);
     14:Result:=Integer(@p_jit_frame(nil)^.tf_r14);
     15:Result:=Integer(@p_jit_frame(nil)^.tf_r15);
@@ -936,9 +935,8 @@ end;
 
 function is_preserved(AIndex:Byte):Boolean; inline;
 begin
- Result:=AIndex in [4,5,13..15];
+ Result:=AIndex in [4,13..15];
  //  4 rsp
- //  5 rbp
  // 13 r13
  // 14 r14
  // 15 r15
@@ -1612,6 +1610,40 @@ begin
  Result:=ord(addres.ARegValue[0].AType<>regNone) + ord(addres.ARegValue[1].AType<>regNone);
 end;
 
+function get_free_reg(var ctx:t_jit_context2):TRegValue;
+var
+ i,j,k:Integer;
+ used:Boolean;
+begin
+ Result:=Default(TRegValue);
+
+ for i:=0 to 15 do
+ begin
+  if is_preserved(i) then Continue;
+
+  used:=False;
+
+  For j:=1 to ctx.din.OperCnt do
+  For k:=0 to 1 do
+  if (ctx.din.Operand[j].RegValue[k].AType=regGeneral) then
+  begin
+   used:=(ctx.din.Operand[j].RegValue[k].AIndex=i);
+   if used then Break;
+  end;
+
+  if not used then
+  begin
+   Result.AType :=regGeneral;
+   Result.ASize :=os64;
+   Result.AIndex:=i;
+   Exit;
+  end;
+
+ end; //for
+
+ Assert(False,'get_free_reg');
+end;
+
 procedure build_lea(var ctx:t_jit_context2;id:Byte;
                     reg:TRegValue;hint:t_lea_hint=[]);
 var
@@ -1764,10 +1796,9 @@ begin
  begin
   if ([not_use_r_tmp0,not_use_r_tmp1]*hint=[not_use_r_tmp0,not_use_r_tmp1]) then
   begin
-   //use rbp
    with ctx.builder do
    begin
-    tmp:=rbp;
+    tmp:=get_free_reg(ctx);
     push(tmp);
    end;
    saved_reg:=True;
@@ -2255,24 +2286,24 @@ end;
 //
 
 procedure op_load_rbp(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
 begin
  with ctx.builder do
  begin
-  i:=GetFrameOffset(rbp);
-  movq(reg,[r_thrd+i]);
+  if not cmp_reg(reg,rbp) then
+  begin
+   movq(reg,rbp);
+  end;
  end;
 end;
 
 procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
 begin
  with ctx.builder do
  begin
-  i:=GetFrameOffset(rbp);
-  movq([r_thrd+i],reg);
+  if not cmp_reg(reg,rbp) then
+  begin
+   movq(rbp,reg);
+  end;
  end;
 end;
 

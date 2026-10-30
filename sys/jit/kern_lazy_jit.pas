@@ -67,7 +67,7 @@ begin
 end;
 
 type
- t_preserved_regs=Set of (_rip,_rsp,_rbp,_r13,_r14,_r15);
+ t_preserved_regs=Set of (_rip,_rsp,_r13,_r14,_r15);
 
 function get_preserved_regs(const r:TRegValue):t_preserved_regs;
 begin
@@ -78,7 +78,6 @@ begin
   regGeneral:
    case r.AIndex of
      4:Result:=[_rsp];
-     5:Result:=[_rbp];
     13:Result:=[_r13];
     14:Result:=[_r14];
     15:Result:=[_r15];
@@ -315,19 +314,11 @@ begin
   begin
    movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)],rsp);
   end;
-  if (_rbp in p_regs) then
-  begin
-   movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rbp)],rbp);
-  end;
 
-  //load rsp,rbp
+  //load rsp
   if (_rsp in p_regs) then
   begin
    movq(rsp,[r13+(@p_jit_frame(nil)^.tf_rsp)]);
-  end;
-  if (_rbp in p_regs) then
-  begin
-   movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rbp)]);
   end;
   //
 
@@ -378,24 +369,16 @@ begin
    movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14);
   end;
 
-  //load rsp,rbp
+  //load rsp
   if (_rsp in p_regs) then
   begin
    movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rsp);
-  end;
-  if (_rbp in p_regs) then
-  begin
-   movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp);
   end;
 
   //load internal stack
   if (_rsp in p_regs) then
   begin
    movq(rsp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)]);
-  end;
-  if (_rbp in p_regs) then
-  begin
-   movq(rbp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rbp)]);
   end;
   //
  end;
