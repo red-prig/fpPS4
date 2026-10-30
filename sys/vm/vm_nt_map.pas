@@ -43,7 +43,6 @@ type
 
  pp_vm_nt_entry=^p_vm_nt_entry;
  p_vm_nt_entry=^vm_nt_entry;
- p_vm_nt_mirror=^vm_nt_mirror;
  p_vm_nt_rmap_range=^t_vm_nt_rmap_range;
 
  //reverse map entry: vaddr range -> (obj,offset)
@@ -68,7 +67,6 @@ type
   offset:vm_ooffset_t;      // offset into object
   obj   :p_vm_int_obj;      // object I point to
   sub   :t_vm_nt_sub_map;
-  mirror:p_vm_nt_mirror;    // at most one mirror per entry
   property start:vm_offset_t read sub.header.start write sub.header.start; // start address
   property __end:vm_offset_t read sub.header.__end write sub.header.__end; // end address
  end;
@@ -155,13 +153,6 @@ function  vm_nt_map_mirror(map  :p_vm_nt_map;
                            start:vm_offset_t;
                            __end:vm_offset_t):Pointer;
 
-//Create a mirror of the entry block containing addr
-function  vm_nt_map_mirror2(map :p_vm_nt_map;
-                            addr:vm_offset_t):p_vm_nt_mirror;
-
-function  vm_nt_mirror_reference (mirror:p_vm_nt_mirror):p_vm_nt_mirror;
-procedure vm_nt_mirror_deallocate(mirror:p_vm_nt_mirror);
-
 function  vm_nt_map_fetch(map         :p_vm_nt_map;
                           start       :vm_offset_t;
                           __end       :vm_offset_t;
@@ -208,7 +199,6 @@ type
 
 var
  vm_nt_entry_zone :uma_zone_t=nil;
- vm_nt_mirror_zone:uma_zone_t=nil;
  vm_nt_rmap_obj_zone:uma_zone_t=nil;
  vm_nt_rmap_range_zone:uma_zone_t=nil;
 
@@ -216,12 +206,9 @@ procedure sys_init_vm_nt;
 begin
  vm_nt_entry_zone    :=uma_zcreate('vm_nt_entry'    , sizeof(vm_nt_entry)    , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_sub_entry_zone:=uma_zcreate('vm_nt_sub_entry', sizeof(vm_nt_sub_entry), nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
- vm_nt_mirror_zone   :=uma_zcreate('vm_nt_mirror'   , sizeof(vm_nt_mirror)   , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_rmap_obj_zone :=uma_zcreate('vm_nt_rmap_obj' , sizeof(t_vm_nt_rmap_obj) , nil, nil, nil, nil, UMA_ALIGN_PTR, 0);
  vm_nt_rmap_range_zone:=uma_zcreate('vm_nt_rmap_range',sizeof(t_vm_nt_rmap_range),nil,nil,nil,nil,UMA_ALIGN_PTR,0);
 end;
-
-procedure _vm_nt_mirror_invalidate_entry(entry:p_vm_nt_entry); forward;
 
 //
 
@@ -694,8 +681,6 @@ end;
 
 procedure vm_nt_entry_deallocate(map:p_vm_nt_map;entry:p_vm_nt_entry); inline;
 begin
- _vm_nt_mirror_invalidate_entry(entry);
-
  vm_nt_sub_map_free       (@entry^.sub);
  vm_int_obj_deallocate(entry^.obj);
  vm_nt_entry_dispose      (map,entry);
@@ -1301,9 +1286,6 @@ begin
      ((prev^.obj=nil) or (prev^.offset + prevsize=entry^.offset))
      then
   begin
-   _vm_nt_mirror_invalidate_entry(prev);
-   _vm_nt_mirror_invalidate_entry(entry);
-
    vm_nt_entry_unlink(map, prev);
 
    stat.rprev.start:=prev^.start;
@@ -1333,9 +1315,6 @@ begin
      ((stat.obj=nil) or (entry^.offset + esize=next^.offset))
      then
   begin
-   _vm_nt_mirror_invalidate_entry(next);
-   _vm_nt_mirror_invalidate_entry(entry);
-
    vm_nt_entry_unlink(map, next);
 
    stat.rnext.start:=next^.start;
@@ -1376,8 +1355,6 @@ var
 begin
  prev:=nil;
  next:=nil;
-
- _vm_nt_mirror_invalidate_entry(entry);
 
  vm_nt_map_simplify_entry(map,entry,stat);
 
@@ -1467,8 +1444,6 @@ var
  stat:t_range_stat;
 begin
  next:=nil;
-
- _vm_nt_mirror_invalidate_entry(entry);
 
  vm_init_stat(stat,entry);
 
@@ -1883,121 +1858,6 @@ begin
  vm_nt_map_lock(map);
 
  Result:=_vm_nt_map_mirror_locked(map,start,__end);
-
- vm_nt_map_unlock(map);
-end;
-
-procedure _vm_nt_mirror_invalidate(mirror:p_vm_nt_mirror);
-var
- base:Pointer;
- size:vm_size_t;
-begin
- base:=mirror^.base;
- size:=mirror^.size;
-
- mirror^.base:=nil;
- mirror^.size:=0;
-
- if (base<>nil) then
- begin
-  md_placeholder_unmap(base,size);
- end;
-end;
-
-procedure vm_nt_mirror_destroy(mirror:p_vm_nt_mirror);
-begin
- _vm_nt_mirror_invalidate(mirror);
-
- uma_zfree(vm_nt_mirror_zone,mirror);
-end;
-
-function vm_nt_mirror_reference(mirror:p_vm_nt_mirror):p_vm_nt_mirror;
-begin
- if (mirror<>nil) then
- begin
-  System.InterlockedIncrement(mirror^.refs);
- end;
- Result:=mirror;
-end;
-
-procedure vm_nt_mirror_deallocate(mirror:p_vm_nt_mirror);
-begin
- if (mirror=nil) then Exit;
-
- if (System.InterlockedDecrement(mirror^.refs)=0) then
- begin
-  vm_nt_mirror_destroy(mirror);
- end;
-end;
-
-procedure _vm_nt_mirror_invalidate_entry(entry:p_vm_nt_entry);
-var
- mirror:p_vm_nt_mirror;
-begin
- mirror:=entry^.mirror;
- if (mirror=nil) then Exit;
-
- entry^.mirror:=nil;
-
- _vm_nt_mirror_invalidate(mirror);
-
- vm_nt_mirror_deallocate(mirror); //entry reference
-end;
-
-function _vm_nt_mirror_create_locked(map:p_vm_nt_map;entry:p_vm_nt_entry):p_vm_nt_mirror;
-var
- start:vm_offset_t;
- __end:vm_offset_t;
- size :vm_size_t;
- base :Pointer;
-begin
- Result:=nil;
-
- if (entry^.obj=nil) or (entry^.obj^.hfile=0) then Exit;
-
- start:=entry^.start;
- __end:=entry^.__end;
-
- base:=_vm_nt_map_mirror_locked(map,start,__end);
- if (base=nil) then Exit;
-
- size:=(__end-start);
-
- Result:=uma_zalloc(vm_nt_mirror_zone, M_WAITOK or M_ZERO);
- Assert((Result<>nil),'vm_nt_mirror_create_locked: kernel resources exhausted');
-
- Result^.base :=base;
- Result^.size :=(size+MD_PAGE_MASK) and (not MD_PAGE_MASK);
- Result^.start:=start;
- Result^.__end:=__end;
- Result^.refs :=1; //entry
-
- entry^.mirror:=Result;
-end;
-
-function vm_nt_map_mirror2(map :p_vm_nt_map;
-                           addr:vm_offset_t):p_vm_nt_mirror;
-var
- entry:p_vm_nt_entry;
-begin
- Result:=nil;
-
- vm_nt_map_lock(map);
-
-  if vm_nt_map_lookup_entry(map, addr, @entry) then
-  begin
-   if (entry^.mirror<>nil) then
-   begin
-    Result:=vm_nt_mirror_reference(entry^.mirror);
-   end else
-   begin
-    Result:=_vm_nt_mirror_create_locked(map,entry);
-    if (Result<>nil) then
-    begin
-     Result:=vm_nt_mirror_reference(Result);
-    end;
-   end;
-  end;
 
  vm_nt_map_unlock(map);
 end;

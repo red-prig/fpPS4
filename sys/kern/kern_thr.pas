@@ -305,7 +305,6 @@ type
   pcb_fsbase      :Pointer;
   pcb_gsbase      :Pointer;
   pcb_onfault     :Pointer;
-  td_mirror       :Pointer;
   td_guards       :array[0..1] of Pointer;
   td_urcu_epoch   :QWORD;
   td_qsbr         :QWORD;

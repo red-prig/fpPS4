@@ -422,12 +422,6 @@ begin
          begin
           LOG_TRACE('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
 
-          with p^.ContextRecord^ do
-           if JIT_PATCHER(curkthread,Rip) then
-           begin
-            Exit(EXCEPTION_CONTINUE_EXECUTION);
-           end;
-
           //trigger and restore
           pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                                get_pageflt_addr(p),
