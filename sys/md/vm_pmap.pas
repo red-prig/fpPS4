@@ -1380,7 +1380,6 @@ const
 var
  hits_stack:array[0..TRACK_HITS_STACK-1] of t_vm_nt_rmap_hit;
  hits:p_vm_nt_rmap_hit;
- heap:Boolean;
 
  start,__end:vm_offset_t;
  cur:vm_offset_t;
@@ -1452,9 +1451,8 @@ begin
 
    if (count>0) then
    begin
-    heap:=(count>TRACK_HITS_STACK);
 
-    if heap then
+    if (count>TRACK_HITS_STACK) then
     begin
      hits:=calloc(count*SizeOf(t_vm_nt_rmap_hit));
     end else
@@ -1513,11 +1511,12 @@ begin
 
      vm_track_map_unlock(@pmap^.tr_map);
 
-     if heap then
+     if (hits<>@hits_stack[0]) then
      begin
       free(hits);
      end;
     end;
+
    end;
 
    if not inserted then
@@ -1593,7 +1592,6 @@ const
 var
  hits_stack:array[0..TRACK_HITS_STACK-1] of t_vm_nt_rmap_hit;
  hits:p_vm_nt_rmap_hit;
- heap:Boolean;
 
  cur:vm_offset_t;
  s,e:vm_offset_t;
@@ -1648,9 +1646,8 @@ begin
 
    if (count>0) then
    begin
-    heap:=(count>TRACK_HITS_STACK);
 
-    if heap then
+    if (count>TRACK_HITS_STACK) then
     begin
      hits:=calloc(count*SizeOf(t_vm_nt_rmap_hit));
     end else
@@ -1709,11 +1706,12 @@ begin
 
      vm_track_map_unlock(@pmap^.tr_map);
 
-     if heap then
+     if (hits<>@hits_stack[0]) then
      begin
       free(hits);
      end;
     end;
+
    end;
   end;
 
