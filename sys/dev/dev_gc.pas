@@ -1207,8 +1207,6 @@ begin
  Result:=0;
  LOG_INFO('gc_page:0x',HexStr(vaddr,11));
 
- pmap_mark_gc(vmspace_pmap(p_proc.p_vmspace),vaddr,vaddr+size);
-
  tobj:=vm_track_object_allocate(nil,vaddr,vaddr+size,H_GPU_BUF,PAGE_TRACK_W);
  tobj^.handle    :=tobj;
  tobj^.on_destroy:=@on_destroy;

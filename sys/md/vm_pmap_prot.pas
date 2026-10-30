@@ -16,9 +16,6 @@ const
  PMAPP_SIZE =MD_PAGE_SIZE;  //1 shl PMAPP_SHIFT; //4*1024
  PMAPP_MASK =MD_PAGE_MASK;  //PMAPP_SIZE-1;
 
- //VM_MAX_BITS          =46;
- //VM_MAXUSER_ADDRESS   =QWORD(1) shl VM_MAX_BITS; //[0..45]
-
  PAGE_MAP_COUNT_ALL=(QWORD(VM_MAXUSER_ADDRESS) shr PMAPP_SHIFT);
  PAGE_MAP_MASK_ALL =PAGE_MAP_COUNT_ALL-1;
 
@@ -27,15 +24,6 @@ const
 
  PAGE_MAP_COUNT_SZ1=PAGE_MAP_COUNT_LV1*SizeOf(Pointer);
  PAGE_MAP_COUNT_SZ2=PAGE_MAP_COUNT_LV2*SizeOf(Byte);
-
- //VM_PROT_NONE      =vm_prot_t($00);
- //VM_PROT_READ      =vm_prot_t($01);
- //VM_PROT_WRITE     =vm_prot_t($02);
- //VM_PROT_EXECUTE   =vm_prot_t($04);
- //VM_PROT_COPY      =vm_prot_t($08);
- //VM_PROT_GPU_READ  =vm_prot_t($10);
- //VM_PROT_GPU_WRITE =vm_prot_t($20);
- //VM_PROT_GPU_ALL   =vm_prot_t($30);
 
  PAGE_PROT_READ   =VM_PROT_READ;
  PAGE_PROT_WRITE  =VM_PROT_WRITE;
@@ -50,8 +38,6 @@ const
  PAGE_TRACK_RWX   =PAGE_TRACK_R or PAGE_TRACK_W or PAGE_TRACK_X;
  PAGE_TRACK_SHIFT =3;
 
- PAGE_TRACK_GC    =$40;
-
  TRACK_PROT=1; //Take tracking bits into account
  REMAP_PROT=2; //Ignore protect bit checking
 
@@ -61,7 +47,6 @@ var
 procedure ppmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
 procedure ppmap_unmark    (start,__end:vm_offset_t;prots:Byte);
 procedure ppmap_track     (start,__end:vm_offset_t;prots:Byte);
-procedure ppmap_mark_gc   (start,__end:vm_offset_t);
 function  ppmap_scan      (start,__end:vm_offset_t):vm_offset_t;
 function  ppmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
 function  ppmap_get_prot  (addr:vm_offset_t):Byte; inline;
@@ -221,11 +206,6 @@ end;
 procedure ppmap_track(start,__end:vm_offset_t;prots:Byte);
 begin
  _ppmap_mark(start,__end,prots and PAGE_TRACK_RWX,PAGE_TRACK_RWX);
-end;
-
-procedure ppmap_mark_gc(start,__end:vm_offset_t);
-begin
- _ppmap_mark(start,__end,PAGE_TRACK_GC,0);
 end;
 
 procedure ppmap_unmark(start,__end:vm_offset_t;prots:Byte);

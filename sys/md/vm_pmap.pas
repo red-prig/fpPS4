@@ -124,10 +124,6 @@ procedure pmap_prot_restore(pmap :pmap_t;
                             start:vm_offset_t;
                             __end:vm_offset_t);
 
-procedure pmap_mark_gc(pmap :pmap_t;
-                       start:vm_offset_t;
-                       __end:vm_offset_t);
-
 function  pmap_track_insert(pmap:pmap_t;tobj:Pointer):Integer;
 procedure pmap_track_remove(pmap:pmap_t;tobj:Pointer);
 function  pmap_track_next(pmap:pmap_t;start:vm_offset_t;tobj:Pointer;htype:T_THANDLE_TYPE):Pointer;
@@ -1719,24 +1715,6 @@ begin
  end;
 end;
 
-procedure pmap_mark_gc(pmap :pmap_t;
-                       start:vm_offset_t;
-                       __end:vm_offset_t);
-var
- lock:Pointer;
-begin
- LOG_DEBUG('pmap_prot_restore:',HexStr(start,11),':',HexStr(__end,11));
-
- start:=start              and (not PMAPP_MASK);
- __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
-
- lock:=pmap_wlock(pmap,start,__end);
-
- ppmap_mark_gc(start,__end);
-
- pmap_unlock(pmap,lock);
-end;
-
 procedure pmap_madvise(pmap  :pmap_t;
                        obj   :vm_object_t;
                        start :vm_offset_t;
@@ -1817,7 +1795,7 @@ begin
 
  lock:=pmap_wlock(pmap,start,__end);
 
- ppmap_unmark(start,__end,VM_PROT_ALL or PAGE_TRACK_GC);
+ ppmap_unmark(start,__end,VM_PROT_ALL);
 
  r:=0;
  case vm_object_type(obj) of
