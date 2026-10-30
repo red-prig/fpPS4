@@ -455,7 +455,6 @@ begin
  set_jit_ctx_state(@td^.td_frame,True);
 
  td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
- td^.td_frame.tf_rbp:=QWORD(td^.td_kstack.stack);
 
  td^.td_frame.tf_r13:=QWORD(frame);
 

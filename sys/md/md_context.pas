@@ -315,6 +315,7 @@ begin
  begin
   dst^.tf_rax:=src^.Rax;
   dst^.tf_rbx:=src^.Rbx;
+  dst^.tf_rbp:=src^.Rbp;
   dst^.tf_rcx:=src^.Rcx;
   dst^.tf_rdx:=src^.Rdx;
   dst^.tf_rsi:=src^.Rsi;
@@ -329,7 +330,6 @@ begin
    dst^.tf_r13:=src^.R13;
    dst^.tf_r14:=src^.R14;
    dst^.tf_r15:=src^.R15;
-   dst^.tf_rbp:=src^.Rbp;
   end;
  end;
 
@@ -337,8 +337,8 @@ begin
  begin
   if not is_jit then
   begin
-   dst^.tf_rsp   :=src^.Rsp;
-   dst^.tf_rip   :=src^.Rip;
+   dst^.tf_rsp:=src^.Rsp;
+   dst^.tf_rip:=src^.Rip;
   end;
   dst^.tf_rflags:=src^.EFlags;
  end;
@@ -373,6 +373,7 @@ begin
  begin
   dst^.Rax:=src^.tf_rax;
   dst^.Rbx:=src^.tf_rbx;
+  dst^.Rbp:=src^.tf_rbp;
   dst^.Rcx:=src^.tf_rcx;
   dst^.Rdx:=src^.tf_rdx;
   dst^.Rsi:=src^.tf_rsi;
@@ -387,7 +388,6 @@ begin
    dst^.R13:=src^.tf_r13;
    dst^.R14:=src^.tf_r14;
    dst^.R15:=src^.tf_r15;
-   dst^.Rbp:=src^.tf_rbp;
   end;
  end;
 
@@ -395,8 +395,8 @@ begin
  begin
   if not is_jit then
   begin
-   dst^.Rsp   :=src^.tf_rsp;
-   dst^.Rip   :=src^.tf_rip;
+   dst^.Rsp:=src^.tf_rsp;
+   dst^.Rip:=src^.tf_rip;
   end;
   dst^.EFlags:=src^.tf_rflags;
  end;

@@ -1403,12 +1403,12 @@ begin
   ori([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_HLE));
 
   //prolog (debugger)
+  movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp); //update
   push(rbp);
   movq(rbp,rsp);
 
   //load guest stack
 
-  //movq  %rsp,%rbp
   movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
 
   leaq(rsp,[rsp-$8]); //shift guard
@@ -1474,12 +1474,9 @@ begin
 
   //restore guest/host stack
 
-  //movq  %rbp,%rsp
-  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rbp)]); //<-rbp
-  movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //->rsp
-
-  //popq  %rbp
-  pop([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+  //epilog (debugger)
+  movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rbp); //movq  %rbp,%rsp
+  pop(rbp);                                    //popq  %rbp (restore host rbp)
   //
 
   //load r14,r15,r13
@@ -1518,14 +1515,11 @@ begin
 
   //load guest stack
 
-  //pushq %rbp
-  push([r13+(@p_jit_frame(nil)^.tf_rbp),os64]);
+  //prolog (debugger)
+  push(rbp);                                   //pushq %rbp
+  movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //movq  %rsp,%rbp
 
-  //movq  %rsp,%rbp
-  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
-  movq([r13+(@p_jit_frame(nil)^.tf_rbp)],r14); //->rbp
-
-  leaq(r14,[r14-$8]); //shift guard
+  leaq(r14,[rbp-$8]); //shift guard
 
   if (count>0) then
   begin
@@ -1541,6 +1535,9 @@ begin
     movq([r14+(i*8)],r15);
    end;
    //
+  end else
+  begin
+   movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //rsp
   end;
 
   //reset PCB_IS_HLE
@@ -1561,6 +1558,9 @@ end;
 
 procedure ExecuteGuest; SysV_ABI_CDecl; assembler; nostackframe; public;
 asm
+ //prolog (debugger)
+ pushq %rbp
+
  //save r13
  movq %r13,%gs:teb.jitcall
 
@@ -1577,12 +1577,13 @@ asm
  movq %r14,jit_frame.tf_r13(%r13)
 
  //alloc stack frame[
- movq jit_frame.tf_rsp(%r13), %r15 //mov r15,rsp
- leaq -8(%r15), %r15               //lea r15,[r15-8]
+ movq jit_frame.tf_rsp(%r13), %rbp //mov rbp,rsp
+ leaq -8(%rbp), %rbp               //lea rbp,[rbp-8]
  movq jit_frame.tf_rbp(%r13), %r14 //mov r14,rbp      (pushq %rbp)
- movq %r14,(%r15)                  //mov [r15],r14
- movq %r15, jit_frame.tf_rbp(%r13) //mov rbp,r15      (movqq %rsp,%rbp)
- andq     $-16, %r15               //align stack
+ movq %r14,(%rbp)                  //mov [rbp],r14
+ movq %rbp, jit_frame.tf_rbp(%r13) //mov rbp,rbp      (movqq %rsp,%rbp)
+ movq %rbp, %r15
+ andq $-16, %r15                   //align stack
  //]
 
  //load addr
@@ -1608,9 +1609,9 @@ asm
  call %r14
 
  //restore rbp,rsp[
- movq jit_frame.tf_rbp(%r13), %r15 //mov r15,rbp     (movqq %rbp,%rsp)
- movq (%r15),%r14                  //mov [r15],r14
- movq %r14, jit_frame.tf_rbp(%r13) //mov rbp,r15     (popq  %rbp)
+ movq %rbp, %r15                   //mov r15,rbp     (movqq %rbp,%rsp)
+ movq (%rbp),%rbp                  //mov rbp,[rbp]   (popq  %rbp)
+ movq %rbp, jit_frame.tf_rbp(%r13) //update
  leaq 8(%r15), %r15                //lea r15,[r15+8]
  movq %r15, jit_frame.tf_rsp(%r13) //mov rsp,r15
  //]
@@ -1619,6 +1620,9 @@ asm
  movq jit_frame.tf_r14(%r13),%r14
  movq jit_frame.tf_r15(%r13),%r15
  movq jit_frame.tf_r13(%r13),%r13
+
+ //epilog (debugger)
+ popq %rbp
 end;
 
 procedure ExecuteStop; assembler; nostackframe; public;
