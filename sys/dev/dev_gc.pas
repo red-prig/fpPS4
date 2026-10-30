@@ -1222,9 +1222,9 @@ end;
 procedure gc_retrack;
 var
  tobj:p_vm_track_object;
+ empty:Boolean;
 begin
  repeat
-  tobj:=nil;
 
   rw_wlock(gc_track_lock);
 
@@ -1237,6 +1237,8 @@ begin
     vm_track_object_reference(tobj);
    end;
 
+   empty:=(TAILQ_FIRST(@gc_track_list)=nil);
+
   rw_wunlock(gc_track_lock);
 
   if (tobj=nil) then Break;
@@ -1244,7 +1246,7 @@ begin
   pmap_track_restore(vmspace_pmap(p_proc.p_vmspace),tobj);
   vm_track_object_deallocate(tobj);
 
- until false;
+ until empty;
 end;
 
 Function gc_mmap_single(cdev:p_cdev;offset:p_vm_ooffset_t;size:vm_size_t;objp:p_vm_object_t;nprot:Integer):Integer;
