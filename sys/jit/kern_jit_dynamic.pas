@@ -115,7 +115,8 @@ type
    mchunk:p_stub_chunk;
 
    base:Pointer;
-   size:ptruint;
+   size:DWORD;
+   code:DWORD;
 
    plta:p_jit_plt;
    pltc:ptruint;
@@ -1084,6 +1085,7 @@ begin
  if (ctx.builder.GetMemSize=0) then Exit;
 
  blob:=new_blob(ctx.builder.GetMemSize);
+ blob^.code:=ctx.builder.GetInstructionsSize;
 
  ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
 
@@ -1729,7 +1731,7 @@ procedure t_jit_dynamic_blob.free_base;
 begin
  if (mchunk=nil) then Exit;
 
- FillChar(base^,size,$F4); //fill HLT
+ FillChar(base^,code,$F4); //fill HLT
 
  urcu_retire_text(base,size,mchunk,@deferred_jit_free);
 
