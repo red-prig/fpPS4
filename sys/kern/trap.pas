@@ -306,6 +306,7 @@ asm
  jne _align
 
  movqq kthread.td_kstack.stack(%rax),%rsp //td_kstack (Implicit lock interrupt)
+ movqq %rsp,kthread.td_jctx.host_rsp(%rax) //host stack anchor
 
  andl  NOT_PCB_FULL_IRET,kthread.pcb_flags(%rax) //clear PCB_FULL_IRET
 

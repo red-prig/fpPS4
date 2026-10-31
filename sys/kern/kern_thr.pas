@@ -226,11 +226,11 @@ type
 
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
-  rsp:Pointer;
-  rbp:Pointer;
+  tmp_rsp       :QWORD;
+  host_rsp      :QWORD; //host stack anchor of the current jit nesting level
   local_cache   :p_local_cache_node;
   call_ret_cache:PQWORD;
-  lacuna:t_lacuna;
+  lacuna        :t_lacuna;
  end;
 
  pp_kthread=^p_kthread;

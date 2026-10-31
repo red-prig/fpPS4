@@ -312,7 +312,7 @@ begin
   //save internal stack
   if (_rsp in p_regs) then
   begin
-   movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)],rsp);
+   movq([r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.tmp_rsp)],rsp);
   end;
 
   //load rsp
@@ -378,7 +378,7 @@ begin
   //load internal stack
   if (_rsp in p_regs) then
   begin
-   movq(rsp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.rsp)]);
+   movq(rsp,[r13-jit_frame_offset+(@p_kthread(nil)^.td_jctx.tmp_rsp)]);
   end;
   //
  end;

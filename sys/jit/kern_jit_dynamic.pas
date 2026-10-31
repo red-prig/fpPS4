@@ -405,6 +405,7 @@ begin
    td^.td_qsbr:=urcu_qsbr_seq;
    System.ReadWriteBarrier;
    set_pcb_flags(td,PCB_IS_JIT);
+   jctx^.host_rsp:=QWORD(td^.td_kstack.stack);
   end else
   begin
    //host->host
@@ -428,16 +429,6 @@ begin
 
  frame:=@td^.td_frame.tf_r13;
 
- if (jctx^.rsp=nil) then
- begin
-  jctx^.rsp:=td^.td_kstack.stack;
- end;
-
- if (jctx^.rbp=nil) then
- begin
-  jctx^.rbp:=td^.td_kstack.stack;
- end;
-
  if (jctx^.call_ret_cache=nil) then
  begin
   jctx^.call_ret_cache:=Pointer(td)-64*1024;
@@ -454,7 +445,11 @@ begin
 
  set_jit_ctx_state(@td^.td_frame,True);
 
- td^.td_frame.tf_rsp:=QWORD(td^.td_kstack.stack);
+ if (jctx^.host_rsp=0) then
+ begin
+  jctx^.host_rsp:=QWORD(td^.td_kstack.stack);
+ end;
+ td^.td_frame.tf_rsp:=jctx^.host_rsp;
 
  td^.td_frame.tf_r13:=QWORD(frame);
 
