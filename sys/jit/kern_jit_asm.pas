@@ -107,6 +107,10 @@ label
  _ast,
  _doreti_exit;
 asm
+ //save host stack anchor (block level)
+ leaq 8(%rsp),%r14
+ movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.host_rsp(%r13)
+
  movq  %rbp,%r14
 
  //prolog (debugger)
@@ -1096,6 +1100,10 @@ asm
 
  movq %gs:teb.thread,%r13                //curkthread
  leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ //save host stack anchor (block level)
+ leaq 8(%rsp),%r14
+ movqq %r14, - kthread.td_frame.tf_r13 + kthread.td_jctx.host_rsp(%r13)
 
  call jit_save_ctx // -> pushf
 

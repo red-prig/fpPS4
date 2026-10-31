@@ -122,6 +122,10 @@ end;
 
 procedure _jit_SIGILL; assembler; nostackframe;
 asm
+ //save host stack anchor (block level)
+ leaq 8(%rsp),%r15
+ movqq %r15, - kthread.td_frame.tf_r13 + kthread.td_jctx.host_rsp(%r13)
+
  call jit_save_ctx
  mov  %r14,%rdi
  jmp  jit_SIGILL

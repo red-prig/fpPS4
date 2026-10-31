@@ -465,6 +465,9 @@ begin
       td_frame.tf_rip:=data.info.original;
       //TODO: override_mem_*
 
+      //host stack anchor for the resume (level of the faulting jit block)
+      td_jctx.host_rsp  :=p^.ContextRecord^.Rsp;
+
       td_frame.tf_trapno:=T_PAGEFLT;
       td_frame.tf_err   :=get_pageflt_err(p);
       td_frame.tf_addr  :=get_pageflt_addr(p);
@@ -504,6 +507,9 @@ begin
       set_jit_ctx_state(@td_frame,False);
       td_frame.tf_rip:=data.info.original;
       //TODO: override_mem_*
+
+      //host stack anchor for the resume (level of the faulting jit block)
+      td_jctx.host_rsp  :=p^.ContextRecord^.Rsp;
 
       td_frame.tf_trapno:=get_trapno(p);
       td_frame.tf_err   :=0;
