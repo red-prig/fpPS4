@@ -6,6 +6,7 @@ unit kern_jit_interrupt;
 interface
 
 uses
+ windows,
  kern_stub,
  kern_thr,
  kern_jit_dynamic,
@@ -17,7 +18,12 @@ function  GET_JIT_FUNC(rip:qword):Byte; external;
 procedure jit_interrupt_ud2; external;
 procedure jit_interrupt_ast; external;
 
+function  is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
+
 procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
+
+procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
+function  JIT_TRACK_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var info:t_instruction_info):Boolean;
 
 implementation
 
@@ -31,7 +37,8 @@ uses
  kern_jit_asm,
  subr_backtrace,
  g_node_splay,
- kern_urcu;
+ kern_urcu,
+ md_map;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
 
@@ -610,6 +617,12 @@ begin
  ctx.builder.SaveTo(td^.td_jctx.lacuna.addr,mem_size);
 end;
 
+function is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
+begin
+ Result:=(Rip>=QWORD(td^.td_jctx.track_blocks.addr)) and
+         (Rip<=(QWORD(td^.td_jctx.track_blocks.addr + td^.td_jctx.track_blocks.size)));
+end;
+
 procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
 label
  _start;
@@ -664,6 +677,14 @@ _start:
      //jit lacuna
      LOG_TRACE('jit lacuna');
      //skip
+     Exit;
+    end else
+    if is_jit_track_blocks(td,Rip) then
+    begin
+     //jit track blobs
+     LOG_TRACE('jit track blobs');
+
+     Assert(False,'TODO');
      Exit;
     end else
     if exist_jit_host(Pointer(Rip),@info) then
@@ -725,6 +746,169 @@ _start:
  end;
 end;
 
+type
+ p_track_jit_block=^t_track_jit_block;
+ t_track_jit_block=packed record
+  code_addr:QWORD;
+  fault_ofs:DWORD;
+  mema_size:DWORD;
+  disp     :Int64;
+  data:array[0..64-1-8-4-4-8] of Byte;
+ end;
+
+const
+ m_chunk_count=(t_track_blob.size div sizeof(t_track_jit_block));
+
+function hash_addr(addr:QWORD):Word; inline;
+begin
+ Result:=(Word(addr shr 4) xor Word(addr shr 14)) mod m_chunk_count;
+end;
+
+function index_addr(addr:QWORD):Word;// inline;
+begin
+ Result:=Word(addr) div sizeof(t_track_jit_block);
+end;
+
+procedure add_orig(var info:t_instruction_info;var builder:t_jit_builder); inline;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ Move(info.data[0],ji.AData^,info.code_size);
+
+ ji.AInstructionSize:=info.code_size;
+
+ builder._add(ji);
+end;
+
+procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
+var
+ i:Word;
+ mblock:p_track_jit_block;
+ reg:Pointer;
+ addr:Int64;
+begin
+ i:=index_addr(Context^.Rip);
+
+ mblock:=td^.td_jctx.track_blocks.addr;
+ mblock:=@mblock[i];
+
+ reg:=Pointer(Context)+mblock^.fault_ofs;
+ reg:=PPointer(reg)^;
+
+ //effective address is base+disp
+ addr:=Int64(PtrUint(reg))+mblock^.disp;
+
+ pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
+                    QWORD(addr),
+                    QWORD(addr+mblock^.mema_size),
+                    nil,
+                    M_CPU_WRITE,
+                    False);
+
+ Context^.Rip:=Context^.Rip+2; //skip ud2
+end;
+
+function JIT_TRACK_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var info:t_instruction_info):Boolean;
+label
+ _run;
+var
+ base:Pointer;
+ mblock:p_track_jit_block;
+
+ builder:t_jit_builder;
+begin
+
+ if is_jit_track_blocks(td,Rip) then
+ begin
+  Exit(False);
+ end;
+
+ if (info.mema_size=0) then
+ begin
+  Exit(False);
+ end;
+
+ if (td^.td_jctx.track_blocks.addr=nil) then
+ begin
+  base:=Pointer(VM_MIN_JIT);
+  if (md_mmap(base,t_track_blob.size,VM_RWX)<>0) then
+  begin
+   Exit(False);
+  end;
+  //
+  td^.td_jctx.track_blocks.addr:=base;
+ end;
+
+ mblock:=td^.td_jctx.track_blocks.addr;
+ mblock:=@mblock[hash_addr(Rip)];
+
+ if (mblock^.code_addr=Rip) then
+ begin
+  _run:
+  //push %rip
+  Rsp:=Rsp-8;
+  PQWORD(Rsp)[0]:=(Rip+info.code_size);
+  //
+  Rip:=QWORD(@mblock^.data);
+  Exit(True);
+ end;
+
+ if (info.RegValues[1].AType<>regNone) or     //only one reg
+    (info.RegValues[0].AType<>regGeneral) or  //only general reg
+    (info.RegValues[0].AScale>1) then         //no scale
+ begin
+  Exit(False);
+ end;
+
+ builder:=Default(t_jit_builder);
+
+ with builder do
+ begin
+  add_orig(info,builder);
+  ud2;
+  jmp([GS+teb_jit_trp]);
+ end;
+
+ Assert(builder.GetMemSize<=32,'builder.GetMemSize<=32');
+
+ builder.SaveTo(@mblock^.data,32);
+ builder.Free;
+
+ mblock^.code_addr:=Rip;
+ mblock^.mema_size:=info.mema_size;
+ mblock^.disp     :=info.disp;
+
+ case info.RegValues[0].AIndex of
+   0:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rax);//rax
+   1:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rcx);//rcx
+   2:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rdx);//rdx
+   3:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rbx);//rbx
+   4:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rsp);//rsp
+   5:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rbp);//rbp
+   6:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rsi);//rsi
+   7:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rdi);//rdi
+   8:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r8 );//r8
+   9:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r9 );//r9
+  10:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r10);//r10
+  11:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r11);//r11
+  12:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r12);//r12
+  13:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r13);//r13
+  14:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r14);//r14
+  15:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r15);//r15
+  else
+   Assert(False);
+ end;
+
+ goto _run;
+end;
+
+
 
 end.
+
+
+
+
 

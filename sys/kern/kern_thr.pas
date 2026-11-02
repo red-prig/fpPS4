@@ -218,6 +218,13 @@ type
   orig:QWORD;
  end;
 
+ t_track_blob=packed object
+  const
+   size=64*1024;
+  var
+   addr:Pointer;
+ end;
+
  p_local_cache_node=^t_local_cache_node;
  t_local_cache_node=packed record
   src:Pointer;
@@ -231,6 +238,7 @@ type
   local_cache   :p_local_cache_node;
   call_ret_cache:PQWORD;
   lacuna        :t_lacuna;
+  track_blocks  :t_track_blob;
  end;
 
  pp_kthread=^p_kthread;

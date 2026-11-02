@@ -388,6 +388,11 @@ begin
      LOG_TRACE('ILLEGAL_INSTRUCTION:',HexStr(Rip,16));
      JIT_AST_HANDLER(curkthread,Rip,Rsp,EFlags,@Dr0);
      Exit(EXCEPTION_CONTINUE_EXECUTION);
+    end else
+    if is_jit_track_blocks(curkthread,Rip) then
+    begin
+     ON_JIT_TRACK(curkthread,p^.ContextRecord);
+     Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
 
   EXCEPTION_ACCESS_VIOLATION:
@@ -421,6 +426,20 @@ begin
          if ((ppmap_get_prot(get_pageflt_addr(p),data.instr.mema_size) and VM_PROT_WRITE)<>0) then
          begin
           LOG_TRACE('TRACK_WRITE:',HexStr(get_pageflt_addr(p),11));
+
+          with p^.ContextRecord^ do
+          begin
+           if JIT_TRACK_HANDLER(curkthread,Rip,Rsp,data.instr) then
+           begin
+            //restore
+            pmap_prot_restore(vmspace_pmap(p_proc.p_vmspace),
+                              get_pageflt_addr(p),
+                              get_pageflt_addr(p)+data.instr.mema_size
+                             );
+            //
+            Exit(EXCEPTION_CONTINUE_EXECUTION);
+           end;
+          end;
 
           //trigger and restore
           pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),

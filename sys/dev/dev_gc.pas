@@ -192,7 +192,7 @@ type
 
   gc_suspend_lock:mtx;
 
-  watchdog_label:Integer;
+  wake_pending  :Integer;
   GC_SRI_label  :Integer;
   pfp_label     :Integer;
   sync_to_imdone:Integer;
@@ -205,7 +205,7 @@ var
   GC_IDLE_event:(cv_description:nil;cv_waiters:0);
   //pfp_event    :(cv_description:nil;cv_waiters:0);
 
-  watchdog_label:0;
+  wake_pending  :0;
   GC_SRI_label  :0;
   pfp_label     :0;
   sync_to_imdone:0;
@@ -368,12 +368,12 @@ begin
    Continue;
   end;
 
+  gc_retrack;
+
   bits:=map_queue_valid;
 
   if (bits<>0) then
   begin
-   gc_retrack;
-
    //init sended bits
    send:=0;
 
@@ -453,21 +453,16 @@ begin
   //PFP idle
   pfp_idle;
 
-  //if (gc_priv.watchdog_label=0) then
-  begin
-   mtx_lock(gc_priv.gc_suspend_lock);
+  mtx_lock(gc_priv.gc_suspend_lock);
 
-   _cv_wait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock);
+   while (gc_priv.wake_pending=0) do
+   begin
+    _cv_wait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock);
+   end;
 
-   mtx_unlock(gc_priv.gc_suspend_lock);
-  end{ else
-  begin
-   mtx_lock(gc_priv.gc_suspend_lock);
+   gc_priv.wake_pending:=0;
 
-   _cv_timedwait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock, hz div 10000);
-
-   mtx_unlock(gc_priv.gc_suspend_lock);
-  end};
+  mtx_unlock(gc_priv.gc_suspend_lock);
 
  until false;
 
@@ -490,13 +485,20 @@ begin
  end;
 end;
 
-procedure gc_retrigger_watchdog;
+procedure gc_wakeup_watchdog;
 begin
  if (gc_priv.ring_watchdog.cv_description<>nil) then
  begin
-  gc_priv.watchdog_label:=1; //thread can`t wait
-  cv_signal(@gc_priv.ring_watchdog);
+  mtx_lock(gc_priv.gc_suspend_lock);
+   gc_priv.wake_pending:=1;
+   cv_signal(@gc_priv.ring_watchdog);
+  mtx_unlock(gc_priv.gc_suspend_lock);
  end;
+end;
+
+procedure gc_retrigger_watchdog;
+begin
+ gc_wakeup_watchdog;
 end;
 
 procedure gc_retrigger_watchdog_imdone;
@@ -630,8 +632,6 @@ begin
  begin
   gc_submits_allowed_vmirr^:=1; //false
  end;
-
- gc_priv.watchdog_label:=0; //thread can wait
 
  //-> gc_imdone_tasklet
 
@@ -1194,7 +1194,7 @@ begin
   begin
    TAILQ_INSERT_TAIL(@gc_track_list,tobj,@tobj^.user_link);
   end;
-  gc_retrigger_watchdog;
+  gc_wakeup_watchdog;
  rw_wunlock(gc_track_lock);
 
  Result:=DO_INCREMENT;
