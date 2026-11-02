@@ -363,9 +363,12 @@ procedure op_emit_avx4(var ctx:t_jit_context2;const desc:t_op_type);
 procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 
 type
- t_instruction_info=record
+ t_instruction_info=packed record
   code_size:Byte;
   mema_size:Byte;
+  data     :array[0..15] of Byte;
+  RegValues:TRegValues;
+  disp     :Int64;
  end;
 
 function get_instruction_info(addr:Pointer):t_instruction_info;
@@ -4703,26 +4706,23 @@ end;
 //
 
 function get_instruction_info(addr:Pointer):t_instruction_info;
-type
- t_data_16=array[0..15] of Byte;
 var
  ptr:Pointer;
- data:t_data_16;
 
  dis:TX86Disassembler;
  din:TInstruction;
 
  i:Byte;
 begin
- if (Int64(addr)<$4000) then Exit(Default(t_instruction_info));
+ Result:=Default(t_instruction_info);
+ if (Int64(addr)<$4000) then Exit;
 
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
- data:=Default(t_data_16);
- md_copyin(addr,@data,16,nil);
-
- ptr:=@data;
+ md_copyin(addr,@Result.data,16,nil);
+ addr:=@Result.data;
+ ptr :=@Result.data;
 
  dis.Disassemble(dm64,ptr,din);
 
@@ -4734,6 +4734,8 @@ begin
  if is_memory(din.Operand[i]) then
  begin
   Result.mema_size:=OPERAND_BYTES[din.Operand[i].Size];
+  Result.RegValues:=din.Operand[i].RegValue;
+  GetTargetOfs(din,PByte(@Result.data),i,Result.disp);
   Exit;
  end;
 
@@ -4763,7 +4765,7 @@ begin
   end;
  end;
 
- print_disassemble(@data,Result.code_size);
+ print_disassemble(@Result.data,Result.code_size);
 
  Assert(false,'get_instruction_info');
 end;
