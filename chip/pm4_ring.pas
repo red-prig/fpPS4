@@ -30,13 +30,14 @@ type
  end;
 
  p_gc_hqd=^t_gc_hqd;
- t_gc_hqd=record
+ t_gc_hqd=packed record
   base_guest_addr:Pointer;
   base_dmem_addr :Pointer;
   read_guest_addr:PDWORD;
   read_mirr_addr :PDWORD;
   next_dmem_addr :PDWORD;
-  enable         :DWORD;
+  enable         :WORD;
+  active         :WORD;
   lenDWLog2      :DWORD;
   g_queueId      :DWORD;
   pipePriority   :DWORD;
@@ -94,8 +95,13 @@ begin
  ring^.wptr:=0;
  ring^.aptr:=0;
 
+ ring^.buff:=Pointer(KERNEL_LOWER); //lower
  Result:=md_placeholder_mmap(ring^.buff,size shl 1);
- if (Result<>0) then Exit;
+ if (Result<>0) then
+ begin
+  ring^.buff:=nil;
+  Exit;
+ end;
 
  Result:=md_placeholder_split(ring^.buff,size);
  if (Result<>0) then Exit;
@@ -392,6 +398,7 @@ begin
  hqd^.ringSizeDw     :=1 shl lenDWLog2;
  hqd^.ReadOffsetDw   :=0;
 
+ hqd^.active         :=0;
  hqd^.enable         :=1;
 end;
 
@@ -399,6 +406,13 @@ Function gc_unmap_hqd(hqd:p_gc_hqd):Integer;
 var
  base:Pointer;
 begin
+ hqd^.enable:=0;
+
+ while (hqd^.active<>0) do;
+
+ hqd^.read_mirr_addr^:=0;
+ hqd^.next_dmem_addr^:=0;
+
  base:=Pointer(QWORD(hqd^.read_mirr_addr) and QWORD(not PAGE_MASK));
 
  mirror_unmap(base,PAGE_SIZE);
@@ -416,9 +430,6 @@ begin
  if (NextOffsetDw <= hqd^.ringSizeDw) then
  begin
   hqd^.next_dmem_addr^:=NextOffsetDw;
-
-  //hqd^.read_dmem_addr^:=NextOffsetDw;
-
   Result:=0;
  end else
  begin
@@ -434,7 +445,12 @@ var
 begin
  Result:=False;
 
- if (hqd^.enable=0) then Exit;
+ hqd^.enable:=1;
+ if (hqd^.enable=0) then
+ begin
+  hqd^.enable:=0;
+  Exit;
+ end;
 
  ReadOffsetDw:=hqd^.ReadOffsetDw    and (hqd^.ringSizeDw-1);
  NextOffsetDw:=hqd^.next_dmem_addr^ and (hqd^.ringSizeDw-1);
@@ -456,6 +472,8 @@ end;
 
 //single consumer
 function gc_map_hdq_drain(hqd:p_gc_hqd;size:DWORD):Boolean;
+label
+ _exit;
 var
  ReadOffsetDw:DWORD;
  NextOffsetDw:DWORD;
@@ -463,12 +481,12 @@ var
 begin
  Result:=False;
 
- if (hqd^.enable=0) then Exit;
+ if (hqd^.enable=0) then goto _exit;
 
  ReadOffsetDw:=hqd^.ReadOffsetDw    and (hqd^.ringSizeDw-1);
  NextOffsetDw:=hqd^.next_dmem_addr^ and (hqd^.ringSizeDw-1);
 
- if (ReadOffsetDw=NextOffsetDw) then Exit;
+ if (ReadOffsetDw=NextOffsetDw) then goto _exit;
 
  if (NextOffsetDw>ReadOffsetDw) then
  begin
@@ -478,7 +496,7 @@ begin
   s:=(hqd^.ringSizeDw-ReadOffsetDw+NextOffsetDw) shl 2;
  end;
 
- if (size>s) then Exit;
+ if (size>s) then  goto _exit;
 
  ReadOffsetDw:=(ReadOffsetDw + (size shr 2)) and (hqd^.ringSizeDw-1);
 
@@ -486,6 +504,9 @@ begin
  hqd^.read_mirr_addr^:=ReadOffsetDw;
 
  Result:=True;
+
+ _exit:
+  hqd^.active:=0;
 end;
 
 

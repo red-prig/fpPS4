@@ -11,6 +11,7 @@ uses
  uma,
  kern_mtx,
  systm,
+ vmparam,
  vm_pmap_prot,
  vm_internal_object,
  vm_nt_sub_map,
@@ -1774,6 +1775,7 @@ begin
  Result:=nil;
  if (start=__end) then Exit;
 
+ Result:=Pointer(KERNEL_LOWER); //lower
  r:=md_placeholder_mmap(Result,__end-start);
  if (r<>0) then
  begin

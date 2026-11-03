@@ -313,7 +313,7 @@ end;
 
 procedure pfp_idle; forward;
 
-procedure gc_retrack; forward;
+function gc_retrack:Boolean; forward;
 
 procedure parse_gfx_ring(parameter:pointer); SysV_ABI_CDecl;
 var
@@ -325,9 +325,11 @@ var
 
  base_guest_addr:Pointer;
  bits:QWORD;
+ map_queue_snapshot:QWORD;
  c_id:DWORD;
  p_id:DWORD;
- send:DWORD;
+ send:QWORD;
+
 begin
  sched_prio(curkthread,64);
 
@@ -370,7 +372,9 @@ begin
 
   gc_retrack;
 
-  bits:=map_queue_valid;
+  map_queue_snapshot:=map_queue_valid;
+
+  bits:=map_queue_snapshot;
 
   if (bits<>0) then
   begin
@@ -436,7 +440,7 @@ begin
     //
     while (send<>0) do
     begin
-     c_id:=BsfDWord(send);
+     c_id:=BsfQWord(send);
 
      pfp_ctx.Flush_stream( t_pm4_stream_type(ord(stCompute0) + c_id) );
 
@@ -455,7 +459,7 @@ begin
 
   mtx_lock(gc_priv.gc_suspend_lock);
 
-   while (gc_priv.wake_pending=0) do
+   while (gc_priv.wake_pending=0) and (map_queue_valid=map_queue_snapshot) do
    begin
     _cv_wait_sig(@gc_priv.ring_watchdog,@gc_priv.gc_suspend_lock);
    end;
@@ -485,7 +489,7 @@ begin
  end;
 end;
 
-procedure gc_wakeup_watchdog;
+procedure gc_retrigger_watchdog;
 begin
  if (gc_priv.ring_watchdog.cv_description<>nil) then
  begin
@@ -494,11 +498,6 @@ begin
    cv_signal(@gc_priv.ring_watchdog);
   mtx_unlock(gc_priv.gc_suspend_lock);
  end;
-end;
-
-procedure gc_retrigger_watchdog;
-begin
- gc_wakeup_watchdog;
 end;
 
 procedure gc_retrigger_watchdog_imdone;
@@ -1185,18 +1184,20 @@ end;
 
 //called from pmap_track_trigger under tr_map:
 //tr_map -> gc_track_lock -> gc_suspend_lock
-function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE;addr:Pointer):Integer;
 var
  tobj:p_vm_track_object;
 begin
  tobj:=handle;
 
  rw_wlock(gc_track_lock);
+
   if (tobj^.user_link.tqe_prev=nil) then
   begin
    TAILQ_INSERT_TAIL(@gc_track_list,tobj,@tobj^.user_link);
   end;
-  gc_wakeup_watchdog;
+
+  gc_retrigger_watchdog;
  rw_wunlock(gc_track_lock);
 
  Result:=DO_INCREMENT;
@@ -1220,11 +1221,13 @@ begin
 end;
 
 //gc_track_lock is dropped before pmap_track_restore (tr_map): keep it this way
-procedure gc_retrack;
+function gc_retrack:Boolean;
 var
  tobj:p_vm_track_object;
  empty:Boolean;
 begin
+ Result:=False;
+
  repeat
 
   rw_wlock(gc_track_lock);
@@ -1236,6 +1239,8 @@ begin
     tobj^.user_link:=Default(TAILQ_ENTRY);
 
     vm_track_object_reference(tobj);
+
+    Result:=True;
    end;
 
    empty:=(TAILQ_FIRST(@gc_track_list)=nil);

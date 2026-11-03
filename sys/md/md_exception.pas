@@ -397,7 +397,10 @@ begin
 
   EXCEPTION_ACCESS_VIOLATION:
     begin
-     data.instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
+     if not jit_track_lookup(curkthread,p^.ContextRecord^.Rip,data.instr) then
+     begin
+      data.instr:=get_instruction_info(Pointer(p^.ContextRecord^.Rip));
+     end;
 
      //Checking for memory splitting and remapping.
      //An exception can occur after the danger zone has been canceled,

@@ -228,7 +228,7 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer; SysV_ABI_CDecl;
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE;addr:Pointer):Integer; SysV_ABI_CDecl;
 var
  image:TvCustomImage2;
  i:Integer;

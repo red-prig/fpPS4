@@ -306,18 +306,27 @@ end;
 
 procedure jit_ctx_free(td:p_kthread); public;
 begin
- //td^.td_jctx.block:=nil;
- //kmem_free(td^.td_jctx.call_ret_cache,64*1024);
- //td^.td_jctx.call_ret_cache:=nil;
 
- kmem_free(td^.td_jctx.local_cache,64*1024);
- td^.td_jctx.local_cache:=nil;
-
- if (td^.td_jctx.lacuna.chnk<>nil) then
+ with td^.td_jctx do
  begin
-  p_free(td^.td_jctx.lacuna.chnk);
-  td^.td_jctx.lacuna:=Default(t_lacuna);
+  kmem_free(local_cache.addr,local_cache.size);
+  local_cache.addr:=nil;
  end;
+
+ with td^.td_jctx do
+ if (lacuna.chnk<>nil) then
+ begin
+  p_free(lacuna.chnk);
+  lacuna:=Default(t_lacuna);
+ end;
+
+ with td^.td_jctx do
+ if (track_blocks.addr<>nil) then
+ begin
+  kmem_free(track_blocks.addr,track_blocks.size);
+  track_blocks.addr:=nil;
+ end;
+
 end;
 
 procedure switch_to_jit(td:p_kthread); public;
@@ -369,9 +378,10 @@ begin
     System.ReadWriteBarrier;
 
     //clear stale jit caches
-    if (jctx^.local_cache<>nil) then
+    with jctx^.local_cache do
+    if (addr<>nil) then
     begin
-     FillChar(jctx^.local_cache^,64*1024,0);
+     FillChar(addr^,size,0);
     end;
 
     if (jctx^.call_ret_cache<>nil) then
@@ -433,14 +443,14 @@ begin
  begin
   jctx^.call_ret_cache:=Pointer(td)-64*1024;
   md_commit(jctx^.call_ret_cache,64*1024,VM_RW);
-  //jctx^.call_ret_cache:=kmem_alloc(64*1024,VM_RW);
   Assert(jctx^.call_ret_cache<>nil,'call_ret_cache alocation fail');
  end;
 
- if (jctx^.local_cache=nil) then
+ with jctx^.local_cache do
+ if (addr=nil) then
  begin
-  jctx^.local_cache:=kmem_alloc(64*1024,VM_RW);
-  Assert(jctx^.local_cache<>nil,'local_cache alocation fail');
+  addr:=kmem_alloc(size,VM_RW);
+  Assert(addr<>nil,'local_cache alocation fail');
  end;
 
  set_jit_ctx_state(@td^.td_frame,True);
@@ -803,7 +813,7 @@ begin
 
  jctx:=@td^.td_jctx;
 
- AtomicLoad128(@lcache,@jctx^.local_cache[hash_addr(addr)]);
+ AtomicLoad128(@lcache,@jctx^.local_cache.addr[hash_addr(addr)]);
 
  if (lcache.src=addr) then
  begin
@@ -850,7 +860,7 @@ begin
   lcache.src:=pcache^.src;
   lcache.dst:=pcache^.dst;
 
-  AtomicStore128(@jctx^.local_cache[hash_addr(addr)],@lcache);
+  AtomicStore128(@jctx^.local_cache.addr[hash_addr(addr)],@lcache);
 
   //jctx^.block:=node^.blob;
 
@@ -1506,11 +1516,12 @@ begin
  end;
 end;
 
+procedure jit_track_reset(td:p_kthread;base,bend:QWORD); external;
+
 procedure jit_urcu_scrub(td:p_kthread;base:ptruint;size:ptruint); Register;
 var
  bend:QWORD;
  call_ret_cache:PQWORD;
- local_cache   :p_local_cache_node;
  lcache:t_local_cache_node;
  src:QWORD;
  i:Integer;
@@ -1531,20 +1542,22 @@ begin
   end;
  end;
 
- local_cache:=td^.td_jctx.local_cache;
- if (local_cache<>nil) then
- For i:=0 to (64*1024 div 16)-1 do
+ with td^.td_jctx.local_cache do
+ if (addr<>nil) then
+ For i:=0 to (size div 16)-1 do
  begin
-  AtomicLoad128(@lcache,@local_cache[i]);
+  AtomicLoad128(@lcache,@addr[i]);
 
   if ((QWORD(lcache.src)>=QWORD(base)) and (QWORD(lcache.src)<bend)) or
      ((QWORD(lcache.dst)>=QWORD(base)) and (QWORD(lcache.dst)<bend)) then
   begin
    lcache.src:=nil;
    lcache.dst:=nil;
-   AtomicStore128(@local_cache[i],@lcache);
+   AtomicStore128(@addr[i],@lcache);
   end;
  end;
+
+ jit_track_reset(td,QWORD(base),bend);
 
  src:=td^.td_frame.tf_rip;
  if (src>=QWORD(base)) and (src<bend) then
@@ -2097,7 +2110,7 @@ begin
  Result:=DO_DELETE;
 end;
 
-function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE;addr:Pointer):Integer;
 begin
  Result:=DO_NOTHING;
 
