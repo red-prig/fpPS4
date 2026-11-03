@@ -1321,8 +1321,6 @@ procedure pmap_prot_track(pmap :pmap_t;
                           start:vm_offset_t;
                           __end:vm_offset_t;
                           prot :Byte); public;
-var
- lock:Pointer;
 begin
  //exit;
 
@@ -1331,16 +1329,13 @@ begin
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
- lock:=pmap_wlock(pmap,start,__end);
-
+ //no pmap range lock here: this is called under tr_map (vm tracking map),
  ppmap_track(start,__end,prot);
 
  vm_nt_map_tracking(@pmap^.nt_map,
                     start,
                     __end,
                     prot);
-
- pmap_unlock(pmap,lock);
 end;
 
 procedure pmap_prot_restore(pmap :pmap_t;
