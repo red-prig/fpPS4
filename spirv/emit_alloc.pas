@@ -139,6 +139,7 @@ begin
  //Decorate Name
  BufferList  .AllocName;
  VariableList.AllocName;
+ InputList   .AllocName;
 
  //header id
  AllocOpListId(HeaderList.First);

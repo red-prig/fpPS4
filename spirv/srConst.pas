@@ -35,6 +35,7 @@ type
  TsrConst=class(TsrNode)
   public
    pPrev,pNext,pLeft,pRight:TsrConst;
+   pName:RawByteString; //custom name
    class function c(n1,n2:PsrConstKey):Integer; static;
   private
    ID:TsrRefId; //post id
@@ -91,6 +92,7 @@ type
   function  _Fetch1(dtype:TsrDataType;OpId:DWORD;value:QWORD):TsrConst;
   function  _FetchVector(dtype:TsrDataType;value:QWORD):TsrConst;
   function  Fetch(dtype:TsrDataType;value:QWORD):TsrConst;
+  function  FetchUnique(dtype:TsrDataType;value:QWORD):TsrConst;
   function  Fetch_b(value:Boolean):TsrConst; inline;
   function  Fetch_i(dtype:TsrDataType;value:Integer):TsrConst; inline;
   Function  Fetch_s(dtype:TsrDataType;value:Single):TsrConst; inline;
@@ -367,6 +369,12 @@ var
 begin
  Result:='';
 
+ if (pName<>'') then
+ begin
+  Result:=pName;
+  Exit;
+ end;
+
  Case dtype of
   dtBool:
     begin
@@ -581,6 +589,19 @@ begin
     Assert(false);
  end;
 
+end;
+
+function TsrConstList.FetchUnique(dtype:TsrDataType;value:QWORD):TsrConst;
+var
+ key:TsrConstKey;
+begin
+ Result:=Fetch(dtype,value);
+ if (Result=nil) then Exit;
+ //
+ key:=Result.key;
+ Result:=FEmit.specialize New<TsrConst>;
+ Result.key:=key;
+ FList.Push_tail(Result);
 end;
 
 function TsrConstList.Fetch_b(value:Boolean):TsrConst; inline;

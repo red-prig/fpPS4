@@ -381,6 +381,7 @@ begin
   //s_ps_state
   // {bc_optimize, prim_mask[14:0],
   // lds_offset[15:0]}
+  //V_INTERP_*
  end;
 
  if (RSRC2.WAVE_CNT_EN<>0) then

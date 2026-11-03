@@ -112,6 +112,7 @@ type
   Function  First:TsrInput;
   Function  Next(node:TsrInput):TsrInput;
   procedure Test;
+  procedure AllocName;
   procedure AllocBinding;
   procedure AllocEntryPoint(EntryPoint:TSpirvOp);
  end;
@@ -214,8 +215,9 @@ var
   l:=node.pReg.pWriter.specialize AsType<ntOp>;
   l.mark([soNotUsed]);
 
-  c:=PsrConstList(FEmit.GetConstList)^.Fetch(node.pReg.dtype,0);
-  node.pReg.pWriter:=c;
+  c:=PsrConstList(FEmit.GetConstList)^.FetchUnique(node.pReg.dtype,0);
+  c.pName:=node.GetStorageName;
+  node.pReg.pWriter   :=c;
   node.pReg.CustomLine:=l;
  end;
 
@@ -240,7 +242,35 @@ begin
        SetConst;
       end;
 
+    itPsState: //V_INTERP_*
+      begin
+       //TODO: s_ps_state
+       SetConst;
+      end;
+
     else;
+   end;
+  end;
+  node:=Next(node);
+ end;
+end;
+
+procedure TsrInputList.AllocName;
+var
+ node:TsrInput;
+ pConst:TsrConst;
+ FDebugInfo:TsrDebugInfoList;
+begin
+ FDebugInfo:=FEmit.GetDebugInfoList;
+ node:=First;
+ While (node<>nil) do
+ begin
+  if (node.pReg<>nil) then
+  begin
+   pConst:=node.pReg.pWriter.specialize AsType<ntConst>;
+   if (pConst<>nil) and (pConst.pName<>'') and pConst.IsUsed then
+   begin
+    FDebugInfo.OpName(pConst,pConst.pName);
    end;
   end;
   node:=Next(node);
