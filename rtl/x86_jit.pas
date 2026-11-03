@@ -427,6 +427,7 @@ type
   //
   function  call_far(P:Pointer):t_jit_i_link;
   function  jmp_far (P:Pointer):t_jit_i_link;
+  function  push_far(P:Pointer):t_jit_i_link;
   //
   function  call(target:t_jit_i_link):t_jit_i_link;
   function  jmp (target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
@@ -2347,6 +2348,29 @@ begin
 
  ji.EmitByte($FF);
  ji.EmitByte($25);
+
+ ji.ATargetRequired:=True;
+ ji.ATargetType    :=lnkData;
+ ji.ATargetSize    :=tz4;
+ ji.ATargetOffset  :=ji.AInstructionSize;
+ ji.ATargetAddr    :=_add_data(P);
+
+ ji.EmitInt32(0);
+
+ Result.ALink:=_add(ji);
+ Result.AType:=lnkLabelBefore;
+ LinkLabel(Result.ALink);
+end;
+
+//push qword ptr [rip+P]
+Function t_jit_builder.push_far(P:Pointer):t_jit_i_link;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitByte($FF);
+ ji.EmitByte($35);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=lnkData;

@@ -6,11 +6,11 @@ unit kern_jit_interrupt;
 interface
 
 uses
- windows,
  kern_stub,
  kern_thr,
  kern_jit_dynamic,
  kern_jit_ctx,
+ kern_jit_asm,
  x86_fpdbgdisas,
  x86_jit;
 
@@ -22,11 +22,26 @@ procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQ
 
 function  is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
 
-procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
-function  JIT_TRACK_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var info:t_instruction_info):Boolean;
+function  JIT_TRACK_HANDLER(td:p_kthread;var Rip:QWORD;var info:t_instruction_info):Boolean;
 
 function  jit_track_lookup(td:p_kthread;Rip:QWORD;var info:t_instruction_info):Boolean;
 procedure jit_track_reset(td:p_kthread;base,bend:QWORD);
+
+type
+ p_track_jit_block=^t_track_jit_block;
+ t_track_jit_block=packed record
+  code_addr:QWORD;
+  code_next:QWORD;
+  reg_index:Byte;
+  disp_idx :Byte;
+  disp_cnt :Byte;
+  code_size:Byte;
+  mema_size:Word;
+  data     :array[0..31] of Byte;
+ end;
+
+const
+ m_chunk_count=(t_track_blob.size div sizeof(t_track_jit_block));
 
 implementation
 
@@ -678,8 +693,7 @@ _start:
     begin
      //jit track blobs
      LOG_TRACE('jit track blobs');
-
-     Assert(False,'TODO');
+     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
      Exit;
     end else
     if exist_jit_host(Pointer(Rip),@info) then
@@ -751,20 +765,6 @@ begin
  end;
 end;
 
-type
- p_track_jit_block=^t_track_jit_block;
- t_track_jit_block=packed record
-  code_addr:QWORD;
-  disp     :Int64;
-  fault_ofs:WORD;
-  code_size:Byte;
-  mema_size:Byte;
-  data     :array[0..27] of Byte;
- end;
-
-const
- m_chunk_count=(t_track_blob.size div sizeof(t_track_jit_block));
-
 function hash_addr(addr:QWORD):Word; inline;
 begin
  Result:=(Word(addr shr 4) xor Word(addr shr 14)) mod m_chunk_count;
@@ -799,13 +799,14 @@ begin
  mblock:=td^.td_jctx.track_blocks.addr;
  mblock:=@mblock[hash_addr(Rip)];
 
- if (mblock^.code_addr<>Rip) then Exit;
+ if (Rip=0) or (mblock^.code_addr<>Rip) then Exit;
 
  info:=Default(t_instruction_info);
 
  info.code_size:=mblock^.code_size;
+ info.disp_idx :=mblock^.disp_idx ;
+ info.disp_cnt :=mblock^.disp_cnt ;
  info.mema_size:=mblock^.mema_size;
- info.disp     :=mblock^.disp;
 
  Result:=True;
 end;
@@ -830,24 +831,50 @@ begin
 
 end;
 
-procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
+function jit_track_trigger(rip,r13,r14,r15:QWORD):QWORD; public;
 var
- i:Word;
+ td:p_kthread;
  mblock:p_track_jit_block;
- reg:Pointer;
- addr:Int64;
+ addr:QWORD;
+ i:Word;
 begin
- i:=index_addr(Context^.Rip);
+ td:=curkthread;
+
+ i:=index_addr(rip);
 
  mblock:=td^.td_jctx.track_blocks.addr;
+ Assert(mblock<>nil);
+
  mblock:=@mblock[i];
 
- Assert(QWORD(@mblock^.data)+mblock^.code_size=Context^.Rip,'ON_JIT_TRACK');
+ case mblock^.reg_index of
+   0:addr:=td^.td_frame.tf_rax; //rax
+   1:addr:=td^.td_frame.tf_rcx; //rcx
+   2:addr:=td^.td_frame.tf_rdx; //rdx
+   3:addr:=td^.td_frame.tf_rbx; //rbx
+   4:addr:=td^.td_frame.tf_rsp; //rsp
+   5:addr:=td^.td_frame.tf_rbp; //rbp
+   6:addr:=td^.td_frame.tf_rsi; //rsi
+   7:addr:=td^.td_frame.tf_rdi; //rdi
+   8:addr:=td^.td_frame.tf_r8 ; //r8
+   9:addr:=td^.td_frame.tf_r9 ; //r9
+  10:addr:=td^.td_frame.tf_r10; //r10
+  11:addr:=td^.td_frame.tf_r11; //r11
+  12:addr:=td^.td_frame.tf_r12; //r12
+  13:addr:=r13; //r13
+  14:addr:=r14; //r14
+  15:addr:=r15; //r15
+  else
+   Assert(False);
+ end;
 
- reg:=Pointer(Context)+mblock^.fault_ofs;
- reg:=PPointer(reg)^;
-
- addr:=Int64(reg)+mblock^.disp;
+ case mblock^.disp_cnt of
+   1: addr:=addr+PShortint(@mblock^.data[mblock^.disp_idx])^;
+   2: addr:=addr+PSmallint(@mblock^.data[mblock^.disp_idx])^;
+   4: addr:=addr+PInteger (@mblock^.data[mblock^.disp_idx])^;
+   8: addr:=addr+PInt64   (@mblock^.data[mblock^.disp_idx])^;
+   else;
+ end;
 
  pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                     QWORD(addr),
@@ -856,15 +883,16 @@ begin
                     M_CPU_WRITE,
                     False);
 
- Context^.Rip:=Context^.Rip+2; //skip ud2
+ Result:=mblock^.code_next;
 end;
 
-function JIT_TRACK_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var info:t_instruction_info):Boolean;
+function JIT_TRACK_HANDLER(td:p_kthread;var Rip:QWORD;var info:t_instruction_info):Boolean;
 label
  _run;
 var
  base:Pointer;
  mblock:p_track_jit_block;
+ is_jit:Boolean;
 
  builder:t_jit_builder;
 begin
@@ -893,24 +921,26 @@ begin
  mblock:=td^.td_jctx.track_blocks.addr;
  mblock:=@mblock[hash_addr(Rip)];
 
- if (mblock^.code_addr=Rip) then
+ if (Rip<>0) and (mblock^.code_addr=Rip) then
  begin
   _run:
-   //push %rip
-   Rsp:=Rsp-8;
-   PQWORD(Rsp)[0]:=(Rip+info.code_size);
-   //
    Rip:=QWORD(@mblock^.data);
    Exit(True);
  end;
 
+ is_jit:=(QWORD(Rip)>=VM_MIN_JIT) and (QWORD(Rip)<VM_MAX_JIT);
+
  if (info.RegValues[1].AType<>regNone)    or  //only one reg
     (info.RegValues[0].AType<>regGeneral) or  //only general reg
     (info.RegValues[0].ASize<>os64)       or  //only 64bit
-    (info.RegValues[0].AIndex=4)          or  //not Rsp
     (info.RegValues[0].AScale>1) then         //no scale
  begin
   //not support
+  Exit(False);
+ end;
+
+ if is_jit and (info.RegValues[0].AIndex=4) then
+ begin
   Exit(False);
  end;
 
@@ -919,45 +949,37 @@ begin
  with builder do
  begin
   add_orig(info,builder);
-  ud2;
-  jmp([GS+teb_jit_trp]);
+
+  if is_jit then
+  begin
+   call_far(@jit_track_guest);
+  end else
+  begin
+   ud2;
+  end;
+
  end;
 
- Assert(builder.GetMemSize<=sizeof(mblock^.data),'builder.GetMemSize<=28');
+ if (builder.GetMemSize>sizeof(mblock^.data)) then
+ begin
+  builder.Free;
+  Exit(False);
+ end;
 
  builder.SaveTo(@mblock^.data,sizeof(mblock^.data));
  builder.Free;
 
  mblock^.code_addr:=Rip;
+ mblock^.code_next:=Rip+info.code_size;
+ mblock^.reg_index:=info.RegValues[0].AIndex;
+ mblock^.disp_idx :=info.disp_idx;
+ mblock^.disp_cnt :=info.disp_cnt;
  mblock^.code_size:=info.code_size;
  mblock^.mema_size:=info.mema_size;
- mblock^.disp     :=info.disp;
-
- case info.RegValues[0].AIndex of
-   0:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rax);//rax
-   1:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rcx);//rcx
-   2:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rdx);//rdx
-   3:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rbx);//rbx
-   4:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rsp);//rsp
-   5:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rbp);//rbp
-   6:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rsi);//rsi
-   7:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rdi);//rdi
-   8:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r8 );//r8
-   9:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r9 );//r9
-  10:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r10);//r10
-  11:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r11);//r11
-  12:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r12);//r12
-  13:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r13);//r13
-  14:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r14);//r14
-  15:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r15);//r15
-  else
-   Assert(False);
- end;
+ mblock^.code_addr:=Rip;
 
  goto _run;
 end;
-
-
 
 end.
 

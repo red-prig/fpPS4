@@ -365,10 +365,11 @@ procedure op_emit_bmi_rrm(var ctx:t_jit_context2;const desc:t_op_type);
 type
  t_instruction_info=packed record
   code_size:Byte;
-  mema_size:Byte;
-  data     :array[0..15] of Byte;
+  disp_idx :Byte;
+  disp_cnt :Byte;
+  mema_size:Word;
+  data     :array[0..14] of Byte;
   RegValues:TRegValues;
-  disp     :Int64;
  end;
 
 function get_instruction_info(addr:Pointer):t_instruction_info;
@@ -4720,7 +4721,7 @@ begin
  dis:=Default(TX86Disassembler);
  din:=Default(TInstruction);
 
- md_copyin(addr,@Result.data,16,nil);
+ md_copyin(addr,@Result.data,sizeof(Result.data),nil);
  addr:=@Result.data;
  ptr :=@Result.data;
 
@@ -4735,7 +4736,8 @@ begin
  begin
   Result.mema_size:=OPERAND_BYTES[din.Operand[i].Size];
   Result.RegValues:=din.Operand[i].RegValue;
-  GetTargetOfs(din,PByte(@Result.data),i,Result.disp);
+  Result.disp_idx :=din.Operand[i].CodeIndex;
+  Result.disp_cnt :=din.Operand[i].ByteCount;
   Exit;
  end;
 
