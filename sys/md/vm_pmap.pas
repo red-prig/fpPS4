@@ -1195,7 +1195,7 @@ begin
  min_start:=0;
  max___end:=0;
 
- lock:=pmap_wlock(pmap,start,__end);
+ lock:=pmap_rlock(pmap,start-VM_MIN_GPU_ADDRESS,__end-VM_MIN_GPU_ADDRESS);
 
  while (i_start<i___end) do
  begin
