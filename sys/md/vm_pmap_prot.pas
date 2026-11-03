@@ -58,6 +58,8 @@ procedure ppmap_unmark    (start,__end:vm_offset_t;prots:Byte);
 procedure ppmap_track     (start,__end:vm_offset_t;prots:Byte);
 function  ppmap_scan      (start,__end:vm_offset_t):vm_offset_t;
 function  ppmap_scan_rwx  (start,__end:vm_offset_t):vm_offset_t;
+function  ppmap_scan_up_exc(addr:vm_offset_t):vm_offset_t;
+function  ppmap_scan_dw_exc(addr:vm_offset_t):vm_offset_t;
 function  ppmap_get_prot  (addr:vm_offset_t):Byte; inline;
 function  ppmap_get_prot  (addr,size:vm_offset_t):Byte;
 
@@ -359,7 +361,8 @@ var
  p:TZKPTR;
  b,v:Byte;
 begin
- idx:=MAX_IDX(OFF_TO_IDX(start));
+ idx:=OFF_TO_IDX(start);
+ if (idx>PAGE_MAP_MASK_ALL) then Exit(start);
  endidx:=MAX_IDX(OFF_TO_IDX(__end));
 
  ReadBarrier;
@@ -415,7 +418,8 @@ var
  p:TZKPTR;
  b,v:Byte;
 begin
- idx:=MAX_IDX(OFF_TO_IDX(start));
+ idx:=OFF_TO_IDX(start);
+ if (idx>PAGE_MAP_MASK_ALL) then Exit(start);
  endidx:=MAX_IDX(OFF_TO_IDX(__end));
 
  ReadBarrier;
@@ -463,6 +467,79 @@ begin
  end;
 
  Result:=IDX_TO_OFF(endidx);
+end;
+
+function ppmap_scan_up_exc(addr:vm_offset_t):vm_offset_t;
+var
+ idx,endidx,lv1,chunk_end:QWORD;
+ p:TZKPTR;
+begin
+ idx:=OFF_TO_IDX(addr);
+ if (idx>PAGE_MAP_MASK_ALL) then Exit(addr);
+ endidx:=PAGE_MAP_COUNT_ALL;
+
+ ReadBarrier;
+
+ while (idx<endidx) do
+ begin
+  lv1:=LV1_IDX(idx);
+  chunk_end:=(lv1+1) shl 16;
+  if (chunk_end>endidx) then
+  begin
+   chunk_end:=endidx;
+  end;
+
+  p:=PAGE_PROT[lv1];
+
+  if (p.raw=0) then
+  begin
+   Exit(IDX_TO_OFF(idx)); //no pages allocated -> not executable
+  end;
+
+  repeat
+   if ((p.unzip[LV2_IDX(idx)] and PAGE_PROT_EXECUTE)=0) then
+   begin
+    Exit(IDX_TO_OFF(idx));
+   end;
+
+   Inc(idx);
+  until (idx>=chunk_end);
+ end;
+
+ Result:=IDX_TO_OFF(endidx);
+end;
+
+function ppmap_scan_dw_exc(addr:vm_offset_t):vm_offset_t;
+var
+ idx:QWORD;
+ lv1:QWORD;
+ p:TZKPTR;
+begin
+ idx:=MAX_IDX(OFF_TO_IDX(addr));
+
+ ReadBarrier;
+
+ while True do
+ begin
+  lv1:=LV1_IDX(idx);
+  p:=PAGE_PROT[lv1];
+
+  if (p.raw=0) then
+  begin
+   Exit(IDX_TO_OFF(idx)); //no pages allocated -> not executable
+  end;
+
+  if ((p.unzip[LV2_IDX(idx)] and PAGE_PROT_EXECUTE)=0) then
+  begin
+   Exit(IDX_TO_OFF(idx));
+  end;
+
+  if (idx=0) then Break;
+
+  Dec(idx);
+ end;
+
+ Result:=0;
 end;
 
 function ppmap_get_prot(addr,size:vm_offset_t):Byte;

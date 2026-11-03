@@ -240,42 +240,6 @@ procedure pick(var ctx:t_jit_context2;preload:Pointer); external name 'kern_jit_
 
 //
 
-function scan_up_exc(addr:QWORD):QWORD;
-begin
- addr:=(addr+PAGE_MASK) and QWORD(not PAGE_MASK);
-
- while is_guest_addr(addr) do
- begin
-  Result:=addr;
-
-  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
-  begin
-   Break;
-  end;
-
-  addr:=addr+PAGE_SIZE;
- end;
-
-end;
-
-function scan_dw_exc(addr:QWORD):QWORD;
-begin
- addr:=addr and QWORD(not PAGE_MASK);
-
- while is_guest_addr(addr) do
- begin
-  Result:=addr;
-
-  if ((ppmap_get_prot(QWORD(addr)) and PAGE_PROT_EXECUTE)=0) then
-  begin
-   Break;
-  end;
-
-  addr:=addr-PAGE_SIZE;
- end;
-
-end;
-
 procedure jit_preload(addr:Pointer); public;
 var
  node:p_jit_entry_point;
@@ -289,8 +253,8 @@ begin
  begin
   ctx:=Default(t_jit_context2);
 
-  ctx.text_start:=scan_dw_exc(QWORD(addr));
-  ctx.text___end:=scan_up_exc(QWORD(addr));
+  ctx.text_start:=ppmap_scan_dw_exc(QWORD(addr));
+  ctx.text___end:=ppmap_scan_up_exc(QWORD(addr));
   ctx.map____end:=ctx.text___end;
 
   ctx.modes     :=[cmDontScanRipRel,cmDontScanSwitchTable,cmDontScanNop];
