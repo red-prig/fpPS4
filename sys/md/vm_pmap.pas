@@ -620,6 +620,9 @@ begin
  end;
 end;
 
+//Global lock order:
+//pmap range lock -> tr_map -> ppmap stripe / nt map
+//Never take the pmap range lock while holding tr_map.
 function pmap_lock_range(pmap :pmap_t;
                          start:vm_offset_t;
                          __end:vm_offset_t;
@@ -1329,7 +1332,8 @@ begin
  start:=start              and (not PMAPP_MASK);
  __end:=(__end+PMAPP_MASK) and (not PMAPP_MASK);
 
- //no pmap range lock here: this is called under tr_map (vm tracking map),
+ //no pmap range lock here: it is called under tr_map (vm tracking map),
+ //taking the range lock would invert the order (jit: range lock -> tr_map)
  ppmap_track(start,__end,prot);
 
  vm_nt_map_tracking(@pmap^.nt_map,
@@ -1359,6 +1363,7 @@ begin
  pmap_unlock(pmap,lock);
 end;
 
+//takes tr_map; the tracking code must not take the pmap range lock
 function pmap_track_insert(pmap:pmap_t;tobj:Pointer):Integer;
 const
  TRACK_HITS_STACK=16;
@@ -1543,6 +1548,7 @@ begin
  vm_track_map_unlock(@pmap^.tr_map);
 end;
 
+//takes tr_map; callbacks run under it (tr_map -> gc_track_lock -> ...)
 function pmap_track_trigger(pmap:pmap_t;start,__end:vm_offset_t;exclude:Pointer;mode:T_TRIGGER_MODE;rst:Boolean=True):Integer;
 begin
  Result:=0;
@@ -1557,6 +1563,7 @@ begin
  end;
 end;
 
+//takes tr_map; the tracking code must not take the pmap range lock
 procedure pmap_track_restore(pmap:pmap_t;tobj:Pointer);
 begin
  if (pmap=nil) or (tobj=nil) then Exit;

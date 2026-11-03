@@ -63,6 +63,9 @@ function  ppmap_get_prot  (addr,size:vm_offset_t):Byte;
 
 implementation
 
+//PAGE_PROT is shared, so read-modify-write is guarded by LV1 chunk.
+//Lock order: pmap range lock -> ppmap stripe; tr_map -> ppmap stripe.
+//Never take the pmap range lock or tr_map while holding a ppmap stripe.
 const
  PPMMAP_LOCK_COUNT=1024;
  PPMMAP_LOCK_MASK =PPMMAP_LOCK_COUNT-1;

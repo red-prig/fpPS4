@@ -485,6 +485,9 @@ begin
  end;
 end;
 
+//tr_map lock order:
+//tr_map -> ppmap stripe / nt map (pmap_prot_track under tr_map)
+//the pmap range lock is never taken under tr_map
 procedure vm_track_map_lock(map:p_vm_track_map); inline;
 begin
  mtx_lock(map^.lock);
