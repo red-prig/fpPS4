@@ -72,6 +72,8 @@ procedure set_jit_ctx_state(td_frame:p_trapframe;state:Boolean);
 procedure jit_cpuid;         assembler;
 procedure jit_interrupt_nop; assembler;
 
+procedure jit_track_guest; assembler;
+
 implementation
 
 uses
@@ -1076,16 +1078,66 @@ asm
  .globl .endof_jit_cpuid
 end;
 
+function jit_track_trigger(rip,r13,r14,r15:QWORD):QWORD; external;
+
+//in:push(rip)
+procedure jit_track_guest; assembler; nostackframe;
+asm
+ push %r13
+
+ movq %gs:teb.thread,%r13                //curkthread
+ leaq kthread.td_frame.tf_r13(%r13),%r13 //jit_frame
+
+ call jit_save_ctx // -> pushf
+
+ //Callee-saved
+ //R12, R13, R14, R15
+
+ pop %r12 //pop r13
+ pop %rdi //pop rip
+
+ //prolog (debugger)
+ push %rbp
+ movq %rsp,%rbp
+
+ andq  $-16,%rsp //align stack
+
+ //rdi, rsi, rdx, rcx
+
+ mov %r12,%rsi //r13
+ mov %r14,%rdx //r14
+ mov %r15,%rcx //r15
+
+ call jit_track_trigger
+
+ //epilog
+ movq %rbp,%rsp
+ pop  %rbp  //<-restore tf_rbp
+
+ push %rax  //<-ret addr
+
+ push %r12  //push r13
+
+ call jit_load_ctx // -> popf
+
+ pop %r13  //pop r13
+
+ //interrupt/ret
+ jmp %gs:teb.jit_trp
+ //marker
+ .globl .endof_jit_track_guest
+end;
+
 procedure jit_interrupt_nop; assembler; nostackframe;
 asm
 end;
-
-procedure rev_dispatcher(addr:Pointer); external;
 
 procedure jit_interrupt_ud2; assembler; nostackframe; public;
 asm
  ud2
 end;
+
+procedure rev_dispatcher(addr:Pointer); external;
 
 procedure jit_interrupt_ast; assembler; nostackframe; public;
 label
@@ -1155,6 +1207,7 @@ procedure endof_jit_jmp_null     ; external name '.endof_jit_jmp_null';
 procedure endof_jit_hle_trace    ; external name '.endof_jit_hle_trace';
 procedure endof_jit_cpuid        ; external name '.endof_jit_cpuid';
 procedure endof_jit_interrupt_ast; external name '.endof_jit_interrupt_ast';
+procedure endof_jit_track_guest  ; external name '.endof_jit_track_guest';
 
 procedure ipi_interrupt_nop;       external name 'ipi_interrupt_nop';
 procedure endof_ipi_interrupt_nop; external name '.endof_ipi_interrupt_nop';
@@ -1197,6 +1250,10 @@ begin
     (
      (rip>=QWORD(@jit_interrupt_ast)) and
      (rip<=(QWORD(@endof_jit_interrupt_ast)))
+    ) or
+    (
+     (rip>=QWORD(@jit_track_guest)) and
+     (rip<=(QWORD(@endof_jit_track_guest)))
     ) then
  begin
   Exit(1);

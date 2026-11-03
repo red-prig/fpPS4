@@ -345,6 +345,64 @@ begin
  end;
 end;
 
+procedure ON_HOST_TRACK(td:p_kthread;Context:PCONTEXT);
+var
+ mblock:p_track_jit_block;
+ addr:QWORD;
+ i:Word;
+
+ function index_addr(addr:QWORD):Word; inline;
+ begin
+  Result:=Word(addr) div sizeof(t_track_jit_block);
+ end;
+
+begin
+ i:=index_addr(Context^.rip);
+
+ mblock:=td^.td_jctx.track_blocks.addr;
+ Assert(mblock<>nil);
+
+ mblock:=@mblock[i];
+
+ case mblock^.reg_index of
+   0:addr:=Context^.rax; //rax
+   1:addr:=Context^.rcx; //rcx
+   2:addr:=Context^.rdx; //rdx
+   3:addr:=Context^.rbx; //rbx
+   4:addr:=Context^.rsp; //rsp
+   5:addr:=Context^.rbp; //rbp
+   6:addr:=Context^.rsi; //rsi
+   7:addr:=Context^.rdi; //rdi
+   8:addr:=Context^.r8 ; //r8
+   9:addr:=Context^.r9 ; //r9
+  10:addr:=Context^.r10; //r10
+  11:addr:=Context^.r11; //r11
+  12:addr:=Context^.r12; //r12
+  13:addr:=Context^.r13; //r13
+  14:addr:=Context^.r14; //r14
+  15:addr:=Context^.r15; //r15
+  else
+   Assert(False);
+ end;
+
+ case mblock^.disp_cnt of
+   1: addr:=addr+PShortint(@mblock^.data[mblock^.disp_idx])^;
+   2: addr:=addr+PSmallint(@mblock^.data[mblock^.disp_idx])^;
+   4: addr:=addr+PInteger (@mblock^.data[mblock^.disp_idx])^;
+   8: addr:=addr+PInt64   (@mblock^.data[mblock^.disp_idx])^;
+   else;
+ end;
+
+ pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
+                    QWORD(addr),
+                    QWORD(addr+mblock^.mema_size),
+                    nil,
+                    M_CPU_WRITE,
+                    False);
+
+ Context^.rip:=mblock^.code_next;
+end;
+
 function ProcessException(p:PExceptionPointers):longint; stdcall;
 var
  data:record
@@ -391,7 +449,7 @@ begin
     end else
     if is_jit_track_blocks(curkthread,Rip) then
     begin
-     ON_JIT_TRACK(curkthread,p^.ContextRecord);
+     ON_HOST_TRACK(curkthread,p^.ContextRecord);
      Exit(EXCEPTION_CONTINUE_EXECUTION);
     end;
 
@@ -432,7 +490,7 @@ begin
 
           with p^.ContextRecord^ do
           begin
-           if JIT_TRACK_HANDLER(curkthread,Rip,Rsp,data.instr) then
+           if JIT_TRACK_HANDLER(curkthread,Rip,data.instr) then
            begin
             //restore
             pmap_prot_restore(vmspace_pmap(p_proc.p_vmspace),
