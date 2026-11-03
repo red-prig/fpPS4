@@ -1183,6 +1183,8 @@ begin
  Result:=DO_DELETE;
 end;
 
+//called from pmap_track_trigger under tr_map:
+//tr_map -> gc_track_lock -> gc_suspend_lock
 function on_trigger(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
 var
  tobj:p_vm_track_object;
@@ -1217,6 +1219,7 @@ begin
  vm_track_object_deallocate(tobj);
 end;
 
+//gc_track_lock is dropped before pmap_track_restore (tr_map): keep it this way
 procedure gc_retrack;
 var
  tobj:p_vm_track_object;

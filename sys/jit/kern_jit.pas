@@ -1878,6 +1878,7 @@ begin
  lock_start:=ctx.text_start;
  lock___end:=ctx.text___end;
 
+ //lock order: pmap range lock -> tr_map (blob^.attach -> blob_track here)
  lock:=pmap_wlock(map^.pmap,lock_start,lock___end);
 
   if (preload<>nil) then
