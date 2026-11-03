@@ -6,10 +6,19 @@ unit vm_pmap_prot;
 interface
 
 uses
- atomic,
  vm,
  vmparam,
- md_map;
+ md_map,
+ kern_mtx;
+
+type
+ PZKPTR=^TZKPTR;
+ TZKPTR=packed object
+  raw:DWORD;
+  function  get_ptr:PBYTE;    inline;
+  procedure set_ptr(p:PBYTE); inline;
+  property  unzip:PBYTE read get_ptr write set_ptr;
+ end;
 
 const
  PMAPP_SHIFT=MD_PAGE_SHIFT; //12;
@@ -22,7 +31,7 @@ const
  PAGE_MAP_COUNT_LV1=PAGE_MAP_COUNT_ALL shr 16;
  PAGE_MAP_COUNT_LV2=1 shl 16; //64KB
 
- PAGE_MAP_COUNT_SZ1=PAGE_MAP_COUNT_LV1*SizeOf(Pointer);
+ PAGE_MAP_COUNT_SZ1=PAGE_MAP_COUNT_LV1*SizeOf(TZKPTR);
  PAGE_MAP_COUNT_SZ2=PAGE_MAP_COUNT_LV2*SizeOf(Byte);
 
  PAGE_PROT_READ   =VM_PROT_READ;
@@ -42,7 +51,7 @@ const
  REMAP_PROT=2; //Ignore protect bit checking
 
 var
- PAGE_PROT:PPBYTE=nil;
+ PAGE_PROT:PZKPTR=nil;
 
 procedure ppmap_mark_rwx  (start,__end:vm_offset_t;prots:Byte);
 procedure ppmap_unmark    (start,__end:vm_offset_t;prots:Byte);
@@ -53,6 +62,48 @@ function  ppmap_get_prot  (addr:vm_offset_t):Byte; inline;
 function  ppmap_get_prot  (addr,size:vm_offset_t):Byte;
 
 implementation
+
+const
+ PPMMAP_LOCK_COUNT=1024;
+ PPMMAP_LOCK_MASK =PPMMAP_LOCK_COUNT-1;
+
+var
+ ppmap_mtx:array[0..PPMMAP_LOCK_COUNT-1] of mtx;
+
+procedure ppmap_mtx_init;
+var
+ i:Integer;
+begin
+ For i:=0 to High(ppmap_mtx) do
+ begin
+  mtx_init(ppmap_mtx[i],'ppmap');
+ end;
+end;
+
+///
+
+function TZKPTR.get_ptr:PBYTE; inline;
+begin
+ if (raw=0) then
+ begin
+  Result:=nil;
+ end else
+ begin
+  Result:=Pointer(KERNEL_LOWER+(QWORD(RAW) shl 16));
+ end;
+end;
+
+procedure TZKPTR.set_ptr(p:PBYTE); inline;
+begin
+ if (p=nil) then
+ begin
+  raw:=0;
+ end else
+ begin
+  raw:=(QWORD(p)-KERNEL_LOWER) shr 16;
+  //Assert(get_ptr=p,HexStr(get_ptr)+'<>'+HexStr(p));
+ end;
+end;
 
 //PAGE_MAP
 
@@ -87,7 +138,7 @@ end;
 function ppmap_get_prot(addr:vm_offset_t):Byte; inline;
 var
  idx:QWORD;
- p:PByte;
+ p:TZKPTR;
 begin
  idx:=OFF_TO_IDX(addr);
 
@@ -98,21 +149,22 @@ begin
 
  p:=PAGE_PROT[LV1_IDX(idx)];
 
- if (p=nil) then
+ if (p.raw=0) then
  begin
   Exit(0);
  end;
 
- Result:=p[LV2_IDX(idx)];
+ Result:=p.unzip[LV2_IDX(idx)];
 end;
 
-procedure prealloc(var P:PByte);
+procedure prealloc(var P:TZKPTR);
 var
  ptr:Pointer;
+ new:TZKPTR;
 begin
  repeat
 
-  if (P=nil) then
+  if (P.raw=0) then
   begin
 
    ptr:=kmem_alloc(PAGE_MAP_COUNT_SZ2,VM_RW);
@@ -121,7 +173,9 @@ begin
    //Set cache to be enabled on demand
    md_dontneed(ptr,PAGE_MAP_COUNT_SZ2);
 
-   if (System.InterlockedCompareExchange(P,ptr,nil)=nil) then
+   new.unzip:=ptr;
+
+   if (System.InterlockedCompareExchange(P.raw,new.raw,0)=0) then
    begin
     Exit;
    end;
@@ -172,8 +226,10 @@ begin
    lv2_last:=PAGE_MAP_COUNT_LV2;
   end;
 
-  pCur:=@PAGE_PROT[lv1][LV2_IDX(start)];
-  pEnd:=@PAGE_PROT[lv1][lv2_last];
+  pCur:=@PAGE_PROT[lv1].unzip[LV2_IDX(start)];
+  pEnd:=@PAGE_PROT[lv1].unzip[lv2_last];
+
+  mtx_lock(ppmap_mtx[lv1 and PPMMAP_LOCK_MASK]);
 
   while (pCur<pEnd) and ((QWORD(pCur) and 7)<>0) do
   begin
@@ -192,6 +248,8 @@ begin
    pCur^:=(pCur^ and b) or prots;
    Inc(pCur);
   end;
+
+  mtx_unlock(ppmap_mtx[lv1 and PPMMAP_LOCK_MASK]);
 
   start:=(lv1 + 1) shl 16;
  end;
@@ -241,8 +299,10 @@ begin
    lv2_last:=PAGE_MAP_COUNT_LV2;
   end;
 
-  pCur:=@PAGE_PROT[lv1][LV2_IDX(start)];
-  pEnd:=@PAGE_PROT[lv1][lv2_last];
+  pCur:=@PAGE_PROT[lv1].unzip[LV2_IDX(start)];
+  pEnd:=@PAGE_PROT[lv1].unzip[lv2_last];
+
+  mtx_lock(ppmap_mtx[lv1 and PPMMAP_LOCK_MASK]);
 
   while (pCur<pEnd) and ((QWORD(pCur) and 7)<>0) do
   begin
@@ -262,6 +322,8 @@ begin
    Inc(pCur);
   end;
 
+  mtx_unlock(ppmap_mtx[lv1 and PPMMAP_LOCK_MASK]);
+
   start:=(lv1 + 1) shl 16;
  end;
  WriteBarrier;
@@ -269,7 +331,7 @@ end;
 
 function _get_prot(addr:QWORD):Byte; inline;
 var
- p:PByte;
+ p:TZKPTR;
 begin
  if (addr>PAGE_MAP_MASK_ALL) then
  begin
@@ -278,12 +340,12 @@ begin
  begin
   p:=PAGE_PROT[LV1_IDX(addr)];
 
-  if (p=nil) then
+  if (p.raw=0) then
   begin
    Result:=0
   end else
   begin
-   Result:=p[LV2_IDX(addr)];
+   Result:=p.unzip[LV2_IDX(addr)];
   end;
  end;
 end;
@@ -291,7 +353,7 @@ end;
 function ppmap_scan(start,__end:vm_offset_t):vm_offset_t;
 var
  idx,endidx,lv1,chunk_end:QWORD;
- p:PByte;
+ p:TZKPTR;
  b,v:Byte;
 begin
  idx:=MAX_IDX(OFF_TO_IDX(start));
@@ -318,7 +380,7 @@ begin
 
   p:=PAGE_PROT[lv1];
 
-  if (p=nil) then
+  if (p.raw=0) then
   begin
    if (b<>0) then
    begin
@@ -329,7 +391,7 @@ begin
   end else
   begin
    repeat
-    v:=p[LV2_IDX(idx)];
+    v:=p.unzip[LV2_IDX(idx)];
 
     if (b<>v) then
     begin
@@ -347,7 +409,7 @@ end;
 function ppmap_scan_rwx(start,__end:vm_offset_t):vm_offset_t;
 var
  idx,endidx,lv1,chunk_end:QWORD;
- p:PByte;
+ p:TZKPTR;
  b,v:Byte;
 begin
  idx:=MAX_IDX(OFF_TO_IDX(start));
@@ -374,7 +436,7 @@ begin
 
   p:=PAGE_PROT[lv1];
 
-  if (p=nil) then
+  if (p.raw=0) then
   begin
    if (b<>0) then
    begin
@@ -385,7 +447,7 @@ begin
   end else
   begin
    repeat
-    v:=p[LV2_IDX(idx)] and PAGE_PROT_RWX;
+    v:=p.unzip[LV2_IDX(idx)] and PAGE_PROT_RWX;
 
     if (b<>v) then
     begin
@@ -403,7 +465,7 @@ end;
 function ppmap_get_prot(addr,size:vm_offset_t):Byte;
 var
  start_idx,end_idx:QWORD;
- pa,pb:PBYTE;
+ pa,pb:TZKPTR;
  c,d:Byte;
 begin
  start_idx:=OFF_TO_IDX(addr);
@@ -414,12 +476,12 @@ begin
  end;
 
  pa:=PAGE_PROT[LV1_IDX(start_idx)];
- if (pa=nil) then
+ if (pa.raw=0) then
  begin
   Exit(0);
  end;
 
- c:=pa[LV2_IDX(start_idx)];
+ c:=pa.unzip[LV2_IDX(start_idx)];
 
  if (size<=1) then
  begin
@@ -439,17 +501,20 @@ begin
  end;
 
  pb:=PAGE_PROT[LV1_IDX(end_idx)];
- if (pb=nil) then
+ if (pb.raw=0) then
  begin
   Exit(0);
  end;
 
- d:=pb[LV2_IDX(end_idx)];
+ d:=pb.unzip[LV2_IDX(end_idx)];
 
  Result:=((c and Byte(PAGE_PROT_RWX)) and (d and Byte(PAGE_PROT_RWX))) or
          ((c and Byte(not PAGE_PROT_RWX)) or (d and Byte(not PAGE_PROT_RWX)));
 end;
 
+
+initialization
+ ppmap_mtx_init;
 
 end.
 
