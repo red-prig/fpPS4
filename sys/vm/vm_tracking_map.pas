@@ -34,7 +34,7 @@ type
 
 type
  t_on_destroy=function(handle:Pointer):Integer;
- t_on_trigger=function(handle:Pointer;mode:T_TRIGGER_MODE):Integer;
+ t_on_trigger=function(handle:Pointer;mode:T_TRIGGER_MODE;addr:Pointer):Integer;
  t_on_overlap=function(handle:Pointer;data:Pointer):Integer;
 
  p_vm_track_object=^t_vm_track_object;
@@ -221,7 +221,7 @@ begin
 end;
 }
 
-function vm_track_object_trigger(obj:p_vm_track_object;start,__end:vm_offset_t;mode:T_TRIGGER_MODE):Integer;
+function vm_track_object_trigger(obj:p_vm_track_object;start,__end:vm_offset_t;mode:T_TRIGGER_MODE;addr:Pointer):Integer;
 begin
  Result:=DO_NOTHING;
 
@@ -234,7 +234,7 @@ begin
  begin
   if (obj^.on_trigger<>nil) then
   begin
-   Result:=obj^.on_trigger(obj^.handle,mode);
+   Result:=obj^.on_trigger(obj^.handle,mode,addr);
   end else
   begin
    Result:=DO_INCREMENT;
@@ -1338,7 +1338,7 @@ begin
     s_start:=node^.source-diff;
     s___end:=s_start+size;
 
-    ret:=vm_track_object_trigger(node^.key,s_start,s___end,mode);
+    ret:=vm_track_object_trigger(node^.key,s_start,s___end,mode,Pointer(o_start));
 
     if ((ret and DO_DELETE)<>0) then
     begin

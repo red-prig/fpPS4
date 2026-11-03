@@ -231,11 +231,18 @@ type
   dst:Pointer;
  end;
 
+ t_local_cache=packed object
+  const
+   size=64*1024;
+  var
+   addr:p_local_cache_node;
+ end;
+
  p_td_jctx=^t_td_jctx;
  t_td_jctx=packed record
   tmp_rsp       :QWORD;
   host_rsp      :QWORD; //host stack anchor of the current jit nesting level
-  local_cache   :p_local_cache_node;
+  local_cache   :t_local_cache;
   call_ret_cache:PQWORD;
   lacuna        :t_lacuna;
   track_blocks  :t_track_blob;

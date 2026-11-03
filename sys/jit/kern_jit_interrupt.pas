@@ -18,12 +18,15 @@ function  GET_JIT_FUNC(rip:qword):Byte; external;
 procedure jit_interrupt_ud2; external;
 procedure jit_interrupt_ast; external;
 
-function  is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
-
 procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
+
+function  is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
 
 procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
 function  JIT_TRACK_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var info:t_instruction_info):Boolean;
+
+function  jit_track_lookup(td:p_kthread;Rip:QWORD;var info:t_instruction_info):Boolean;
+procedure jit_track_reset(td:p_kthread;base,bend:QWORD);
 
 implementation
 
@@ -34,8 +37,6 @@ uses
  vm_pmap,
  vm_pmap_prot,
  vm_tracking_map,
- kern_jit_asm,
- subr_backtrace,
  g_node_splay,
  kern_urcu,
  md_map;
@@ -617,12 +618,6 @@ begin
  ctx.builder.SaveTo(td^.td_jctx.lacuna.addr,mem_size);
 end;
 
-function is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
-begin
- Result:=(Rip>=QWORD(td^.td_jctx.track_blocks.addr)) and
-         (Rip<=(QWORD(td^.td_jctx.track_blocks.addr + td^.td_jctx.track_blocks.size)));
-end;
-
 procedure JIT_AST_HANDLER(td:p_kthread;var Rip,Rsp:QWORD;var EFlags:DWORD;DrX:PQWORD);
 label
  _start;
@@ -746,14 +741,25 @@ _start:
  end;
 end;
 
+function is_jit_track_blocks(td:p_kthread;Rip:QWORD):Boolean; inline;
+begin
+ with td^.td_jctx.track_blocks do
+ begin
+  Result:=(addr<>nil) and
+          (Rip>=QWORD(addr)) and
+          (Rip<QWORD(addr)+QWORD(size));
+ end;
+end;
+
 type
  p_track_jit_block=^t_track_jit_block;
  t_track_jit_block=packed record
   code_addr:QWORD;
-  fault_ofs:DWORD;
-  mema_size:DWORD;
   disp     :Int64;
-  data:array[0..64-1-8-4-4-8] of Byte;
+  fault_ofs:WORD;
+  code_size:Byte;
+  mema_size:Byte;
+  data     :array[0..27] of Byte;
  end;
 
 const
@@ -764,7 +770,7 @@ begin
  Result:=(Word(addr shr 4) xor Word(addr shr 14)) mod m_chunk_count;
 end;
 
-function index_addr(addr:QWORD):Word;// inline;
+function index_addr(addr:QWORD):Word; inline;
 begin
  Result:=Word(addr) div sizeof(t_track_jit_block);
 end;
@@ -782,6 +788,48 @@ begin
  builder._add(ji);
 end;
 
+function jit_track_lookup(td:p_kthread;Rip:QWORD;var info:t_instruction_info):Boolean;
+var
+ mblock:p_track_jit_block;
+begin
+ Result:=False;
+
+ if (td^.td_jctx.track_blocks.addr=nil) then Exit;
+
+ mblock:=td^.td_jctx.track_blocks.addr;
+ mblock:=@mblock[hash_addr(Rip)];
+
+ if (mblock^.code_addr<>Rip) then Exit;
+
+ info:=Default(t_instruction_info);
+
+ info.code_size:=mblock^.code_size;
+ info.mema_size:=mblock^.mema_size;
+ info.disp     :=mblock^.disp;
+
+ Result:=True;
+end;
+
+procedure jit_track_reset(td:p_kthread;base,bend:QWORD); public;
+var
+ i:Integer;
+ mblock:p_track_jit_block;
+begin
+
+ with td^.td_jctx.track_blocks do
+ if (addr<>nil) then
+ For i:=0 to m_chunk_count-1 do
+ begin
+  mblock:=@p_track_jit_block(addr)[i];
+
+  if ((QWORD(mblock^.code_addr)>=base) and (QWORD(mblock^.code_addr)<bend)) then
+  begin
+   mblock^.code_addr:=0;
+  end;
+ end;
+
+end;
+
 procedure ON_JIT_TRACK(td:p_kthread;Context:PCONTEXT);
 var
  i:Word;
@@ -794,11 +842,12 @@ begin
  mblock:=td^.td_jctx.track_blocks.addr;
  mblock:=@mblock[i];
 
+ Assert(QWORD(@mblock^.data)+mblock^.code_size=Context^.Rip,'ON_JIT_TRACK');
+
  reg:=Pointer(Context)+mblock^.fault_ofs;
  reg:=PPointer(reg)^;
 
- //effective address is base+disp
- addr:=Int64(PtrUint(reg))+mblock^.disp;
+ addr:=Int64(reg)+mblock^.disp;
 
  pmap_track_trigger(vmspace_pmap(p_proc.p_vmspace),
                     QWORD(addr),
@@ -847,18 +896,21 @@ begin
  if (mblock^.code_addr=Rip) then
  begin
   _run:
-  //push %rip
-  Rsp:=Rsp-8;
-  PQWORD(Rsp)[0]:=(Rip+info.code_size);
-  //
-  Rip:=QWORD(@mblock^.data);
-  Exit(True);
+   //push %rip
+   Rsp:=Rsp-8;
+   PQWORD(Rsp)[0]:=(Rip+info.code_size);
+   //
+   Rip:=QWORD(@mblock^.data);
+   Exit(True);
  end;
 
- if (info.RegValues[1].AType<>regNone) or     //only one reg
+ if (info.RegValues[1].AType<>regNone)    or  //only one reg
     (info.RegValues[0].AType<>regGeneral) or  //only general reg
+    (info.RegValues[0].ASize<>os64)       or  //only 64bit
+    (info.RegValues[0].AIndex=4)          or  //not Rsp
     (info.RegValues[0].AScale>1) then         //no scale
  begin
+  //not support
   Exit(False);
  end;
 
@@ -871,32 +923,33 @@ begin
   jmp([GS+teb_jit_trp]);
  end;
 
- Assert(builder.GetMemSize<=32,'builder.GetMemSize<=32');
+ Assert(builder.GetMemSize<=sizeof(mblock^.data),'builder.GetMemSize<=28');
 
- builder.SaveTo(@mblock^.data,32);
+ builder.SaveTo(@mblock^.data,sizeof(mblock^.data));
  builder.Free;
 
  mblock^.code_addr:=Rip;
+ mblock^.code_size:=info.code_size;
  mblock^.mema_size:=info.mema_size;
  mblock^.disp     :=info.disp;
 
  case info.RegValues[0].AIndex of
-   0:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rax);//rax
-   1:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rcx);//rcx
-   2:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rdx);//rdx
-   3:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rbx);//rbx
-   4:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rsp);//rsp
-   5:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rbp);//rbp
-   6:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rsi);//rsi
-   7:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.rdi);//rdi
-   8:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r8 );//r8
-   9:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r9 );//r9
-  10:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r10);//r10
-  11:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r11);//r11
-  12:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r12);//r12
-  13:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r13);//r13
-  14:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r14);//r14
-  15:mblock^.fault_ofs:=DWORD(@PCONTEXT(nil)^.r15);//r15
+   0:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rax);//rax
+   1:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rcx);//rcx
+   2:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rdx);//rdx
+   3:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rbx);//rbx
+   4:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rsp);//rsp
+   5:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rbp);//rbp
+   6:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rsi);//rsi
+   7:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.rdi);//rdi
+   8:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r8 );//r8
+   9:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r9 );//r9
+  10:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r10);//r10
+  11:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r11);//r11
+  12:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r12);//r12
+  13:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r13);//r13
+  14:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r14);//r14
+  15:mblock^.fault_ofs:=WORD(@PCONTEXT(nil)^.r15);//r15
   else
    Assert(False);
  end;
