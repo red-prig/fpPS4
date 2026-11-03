@@ -448,7 +448,7 @@ begin
  hqd^.enable:=1;
  if (hqd^.enable=0) then
  begin
-  hqd^.enable:=0;
+  hqd^.active:=0;
   Exit;
  end;
 
