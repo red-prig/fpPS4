@@ -216,7 +216,7 @@ begin
 
  md_get_frame(p^.ContextRecord,@td^.td_frame,@td^.td_fpstate);
 
- if (is_jit) then
+ if (is_jit) and info.mapped then
  begin
   td^.td_frame.tf_flags:=td^.td_frame.tf_flags or TF_JIT_CTX;
   set_jit_ctx_state(@td^.td_frame,False);
@@ -349,6 +349,7 @@ procedure ON_HOST_TRACK(td:p_kthread;Context:PCONTEXT);
 var
  mblock:p_track_jit_block;
  addr:QWORD;
+ code_next:QWORD;
  i:Word;
 
  function index_addr(addr:QWORD):Word; inline;
@@ -363,6 +364,8 @@ begin
  Assert(mblock<>nil);
 
  mblock:=@mblock[i];
+
+ code_next:=mblock^.code_next;
 
  case mblock^.reg_index of
    0:addr:=Context^.rax; //rax
@@ -400,7 +403,7 @@ begin
                     M_CPU_WRITE,
                     False);
 
- Context^.rip:=mblock^.code_next;
+ Context^.rip:=code_next;
 end;
 
 function ProcessException(p:PExceptionPointers):longint; stdcall;
@@ -534,7 +537,7 @@ begin
      end;
 
      if is_sigcatch(curkthread,SIGSEGV) then
-     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) then
+     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) and data.info.mapped then
      with curkthread^ do
      begin
       td_frame.tf_flags:=td_frame.tf_flags or TF_JIT_CTX;
@@ -577,7 +580,7 @@ begin
     begin
 
      if is_sigcatch(curkthread,get_sig(p)) then
-     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) then
+     if exist_jit_host(p^.ExceptionRecord^.ExceptionAddress,@data.info) and data.info.mapped then
      with curkthread^ do
      begin
       td_frame.tf_flags:=td_frame.tf_flags or TF_JIT_CTX;

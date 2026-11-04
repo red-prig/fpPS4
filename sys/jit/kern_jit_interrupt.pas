@@ -223,11 +223,11 @@ end;
 procedure rev_dispatcher(addr:Pointer); public;
 var
  info:t_jit_addr_info;
- fin:Pointer;
+ fin,str:Pointer;
 begin
  urcu_qs(curkthread,True);
 
- if exist_jit_host(addr,@info) then
+ if exist_jit_host(addr,@info) and info.mapped then
  begin
 
   if (info.recompil = QWORD(addr)) then
@@ -240,10 +240,10 @@ begin
    Exit;
   end;
 
-  fin :=Pointer(info.recompil + info.jflags.recompil);
-  addr:=FixupEnd(addr,QWORD(info.recompil),QWORD(fin));
+  fin:=Pointer(info.recompil + info.jflags.recompil);
+  str:=FixupEnd(addr,QWORD(info.recompil),QWORD(fin));
 
-  if (addr=fin) then
+  if (str=fin) then
   begin
 
    with curkthread^.td_frame do
@@ -251,23 +251,23 @@ begin
     tf_rip:=(info.original + info.jflags.original); //need by AST
 
     //recheck
-    exist_jit_host(addr,@info);
+    exist_jit_host(str,@info);
 
     Assert((info.original = tf_rip),'rev_dispatcher:1');
 
-    //LOG_TRACE('rev_dispatcher:2:',HexStr(addr),'->',HexStr(info.original,16));
+    //LOG_TRACE('rev_dispatcher:2:',HexStr(str),'->',HexStr(info.original,16));
    end;
 
    Exit;
   end else
   begin
-   LOG_CRITICAL(StdErr,'rev_dispatcher:3:',HexStr(addr));
+   LOG_CRITICAL(StdErr,'rev_dispatcher:3:',HexStr(addr),' ',HexStr(str),' ',HexStr(fin),' ',HexStr(info.original,16),' ',HexStr(info.recompil,16));
    Assert(False,'rev_dispatcher:3');
   end;
 
  end else
  begin
-  LOG_CRITICAL(StdErr,'rev_dispatcher:4:',HexStr(addr));
+  LOG_CRITICAL(StdErr,'rev_dispatcher:4:',HexStr(addr),' internal:',info.internal,' mapped:',info.mapped);
   Assert(False,'rev_dispatcher:4');
  end;
 end;
@@ -648,7 +648,7 @@ _start:
 
  if (f<>3) and (td^.td_teb^.iflag<>0) then
  begin
-  LOG_WARNING('TODO:rare ipi case!');
+  LOG_WARNING('TODO:rare ipi case!:',HexStr(Rip,16));
   td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
   Exit;
  end;
@@ -657,14 +657,14 @@ _start:
   1:
    begin
     //jit handler
-    LOG_TRACE('jit handler');
+    LOG_TRACE('jit handler:',HexStr(Rip,16));
     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
     Exit;
    end;
   2:
    begin
     //jit nop handler
-    LOG_TRACE('jit nop handler');
+    LOG_TRACE('jit nop handler:',HexStr(Rip,16),'->',HexStr(PQWORD(Rsp)[0],16));
 
     //pop %rip
     Rip:=PQWORD(Rsp)[0];
@@ -674,7 +674,7 @@ _start:
   3:
    begin
     //ipi nop
-    LOG_TRACE('ipi nop');
+    LOG_TRACE('ipi nop:',HexStr(Rip,16));
     td^.td_teb^.iflag:=0;
     Rip:=QWORD(td^.td_teb^.ipi_rip);
     goto _start;
@@ -685,23 +685,23 @@ _start:
        (Rip<=(QWORD(td^.td_jctx.lacuna.addr + td^.td_jctx.lacuna.size))) then
     begin
      //jit lacuna
-     LOG_TRACE('jit lacuna');
+     LOG_TRACE('jit lacuna:',HexStr(Rip,16));
      //skip
-     Exit;
-    end else
-    if is_jit_track_blocks(td,Rip) then
-    begin
-     //jit track blobs
-     LOG_TRACE('jit track blobs');
-     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
      Exit;
     end else
     if exist_jit_host(Pointer(Rip),@info) then
     begin
 
+     if info.internal then
+     begin
+      LOG_TRACE('jit internal:',HexStr(Rip,16));
+      td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
+      Exit;
+     end;
+
      if (info.recompil = Rip) then
      begin
-      LOG_TRACE('jit_direct');
+      LOG_TRACE('jit_direct:',HexStr(Rip,16));
 
       //push %rip
       Rsp:=Rsp-8;
@@ -714,7 +714,7 @@ _start:
 
      jit_analize(Pointer(Rip),@info,ctx);
 
-     LOG_TRACE('jit_analize=',ctx.atype);
+     LOG_TRACE('jit_analize=',ctx.atype,':',HexStr(Rip,16));
 
      case ctx.atype of
       naRipUnknow:
@@ -745,9 +745,16 @@ _start:
      //
      Exit;
     end else
+    if is_jit_track_blocks(td,Rip) then
+    begin
+     //jit track blobs
+     LOG_TRACE('jit track blobs:',HexStr(Rip,16));
+     td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
+     Exit;
+    end else
     begin
      //internal? hle?
-     LOG_TRACE('internal handler');
+     LOG_TRACE('internal handler:',HexStr(Rip,16));
      td^.td_teb^.jit_trp:=@jit_interrupt_ud2;
      Exit;
     end;
@@ -836,6 +843,7 @@ var
  td:p_kthread;
  mblock:p_track_jit_block;
  addr:QWORD;
+ code_next:QWORD;
  i:Word;
 begin
  td:=curkthread;
@@ -846,6 +854,8 @@ begin
  Assert(mblock<>nil);
 
  mblock:=@mblock[i];
+
+ code_next:=mblock^.code_next;
 
  case mblock^.reg_index of
    0:addr:=td^.td_frame.tf_rax; //rax
@@ -883,7 +893,7 @@ begin
                     M_CPU_WRITE,
                     False);
 
- Result:=mblock^.code_next;
+ Result:=code_next;
 end;
 
 function JIT_TRACK_HANDLER(td:p_kthread;var Rip:QWORD;var info:t_instruction_info):Boolean;
