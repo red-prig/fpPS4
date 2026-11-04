@@ -54,10 +54,12 @@ type
  end;
 
  p_jit_addr_info=^t_jit_addr_info;
- t_jit_addr_info=packed record
+ t_jit_addr_info=packed object
   original:QWORD;
   recompil:QWORD;
   jflags  :t_jinstr_len;
+  internal:Boolean;
+  function mapped:Boolean;
  end;
 
  p_jcode_chunk=^t_jcode_chunk;
@@ -128,12 +130,14 @@ type
 
    attach_count:Integer;
 
+   is_internal:Boolean;
+
   procedure inc_ref(name:pchar);
   procedure dec_ref(name:pchar);
   procedure inc_attach_count;
   function  dec_attach_count:Boolean;
   function  find_guest_by_host(addr:QWORD;info:p_jit_addr_info):Boolean;
-  function  cross_host(c_start,c___end:QWORD):Boolean;
+  function  cross_host(c_start:QWORD):Boolean;
   procedure Free;
   function  add_entry_point(src,dst:Pointer):p_jit_entry_point;
   procedure free_entry_point(node:p_jit_entry_point);
@@ -233,6 +237,11 @@ uses
  subr_backtrace;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
+
+function t_jit_addr_info.mapped:Boolean;
+begin
+ Result:=(original<>0) and (not internal);
+end;
 
 //
 
@@ -575,7 +584,7 @@ begin
    blob:=node^.blob;
    if (blob<>nil) and (blob<>prev) then
    begin
-    if blob^.cross_host(QWORD(src),QWORD(src)+1) then
+    if blob^.cross_host(QWORD(src)) then
     begin
      blob^.inc_ref('fetch_blob_by_host');
 
@@ -599,6 +608,7 @@ function exist_jit_host(src:Pointer;info:p_jit_addr_info):Boolean;
 var
  blob:p_jit_dynamic_blob;
 begin
+ Result:=False;
 
  if (QWORD(src)<VM_MIN_JIT) or
     (QWORD(src)>=VM_MAX_JIT) then
@@ -609,17 +619,22 @@ begin
  blob:=fetch_blob_by_host(src);
  if (blob<>nil) then
  begin
+  Result:=True;
+
   if (info<>nil) then
   begin
-   rw_rlock(blob^.lock);
-   blob^.find_guest_by_host(QWORD(src),info);
-   rw_runlock(blob^.lock);
+   info^:=Default(t_jit_addr_info);
+   info^.internal:=blob^.is_internal;
+
+   if not info^.internal then
+   begin
+    rw_rlock(blob^.lock);
+     Result:=blob^.find_guest_by_host(QWORD(src),info);
+    rw_runlock(blob^.lock);
+   end;
+
   end;
   blob^.dec_ref('fetch_blob_by_host');
-  Result:=True;
- end else
- begin
-  Result:=False;
  end;
 end;
 
@@ -756,7 +771,7 @@ begin
   end else
   if ((QWORD(addr) and UNRESOLVE_MAGIC_MASK)=UNRESOLVE_MAGIC_ADDR) then
   begin
-   if exist_jit_host(from,@info) then
+   if exist_jit_host(from,@info) and info.mapped then
    begin
     td^.td_frame.tf_rip  :=info.original;
     td^.td_frame.tf_flags:=td^.td_frame.tf_flags and (not TF_JIT_RIP);
@@ -1054,6 +1069,7 @@ begin
 
  blob:=new_blob(ctx.builder.GetMemSize);
  blob^.code:=ctx.builder.GetInstructionsSize;
+ blob^.is_internal:=(cmInternal in ctx.modes);
 
  ctx.builder.SaveTo(blob^.base,ctx.builder.GetMemSize);
 
@@ -1280,9 +1296,9 @@ begin
  end;
 end;
 
-function t_jit_dynamic_blob.cross_host(c_start,c___end:QWORD):Boolean;
+function t_jit_dynamic_blob.cross_host(c_start:QWORD):Boolean;
 begin
- Result:=(c___end>QWORD(base)) and (c_start<(QWORD(base)+size));
+ Result:=(c_start>=QWORD(base)) and (c_start<(QWORD(base)+size));
 end;
 
 //
@@ -1755,6 +1771,7 @@ begin
  if (addr>=dest) and (addr<=d_end) then
  if (count<>0) then
  begin
+
   src:=start;
   dst:=dest;
   _table:=@table;
@@ -1778,8 +1795,9 @@ begin
 
    src:=src+_table[i].original;
    dst:=dst+_table[i].recompil;
-  end;
- end;
+  end; //For
+
+ end; //(count<>0)
 end;
 
 function t_jcode_chunk.cross_guest(c_start,c___end:QWORD):Boolean;
