@@ -334,14 +334,11 @@ procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
 
-procedure op_load_r14(var ctx:t_jit_context2;reg:TRegValue);
-procedure op_save_r14(var ctx:t_jit_context2;reg:TRegValue);
-
 procedure op_load_rsp(var ctx:t_jit_context2;reg:TRegValue);
 procedure op_save_rsp(var ctx:t_jit_context2;reg:TRegValue);
 
-procedure op_load_rbp(var ctx:t_jit_context2;reg:TRegValue);
-procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
+function  c_load_rsp(reg:TRegValue):t_jit_instruction;
+function  c_save_rsp(reg:TRegValue):t_jit_instruction;
 
 procedure op_load(var ctx:t_jit_context2;reg:TRegValue;opr:Byte);
 procedure op_save(var ctx:t_jit_context2;opr:Byte;reg:TRegValue);
@@ -2247,74 +2244,26 @@ begin
  end;
 end;
 
-procedure op_load_r14(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
-begin
- with ctx.builder do
- begin
-  i:=GetFrameOffset(r14);
-  movq(reg,[r_thrd+i]);
- end;
-end;
-
-procedure op_save_r14(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
-begin
- with ctx.builder do
- begin
-  i:=GetFrameOffset(r14);
-  movq([r_thrd+i],reg);
- end;
-end;
-
 //
 
-procedure op_load_rsp(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
+function c_load_rsp(reg:TRegValue):t_jit_instruction;
 begin
- with ctx.builder do
- begin
-  i:=GetFrameOffset(rsp);
-  movq(reg,[r_thrd+i]);
- end;
+ Result:=c_movq(reg,[r_thrd+(@p_jit_frame(nil)^.tf_rsp)]);
+end;
+
+function c_save_rsp(reg:TRegValue):t_jit_instruction;
+begin
+ Result:=c_movq([r_thrd+(@p_jit_frame(nil)^.tf_rsp)],reg);
+end;
+
+procedure op_load_rsp(var ctx:t_jit_context2;reg:TRegValue);
+begin
+ ctx.builder._add(c_load_rsp(reg));
 end;
 
 procedure op_save_rsp(var ctx:t_jit_context2;reg:TRegValue);
-var
- i:Integer;
 begin
- with ctx.builder do
- begin
-  i:=GetFrameOffset(rsp);
-  movq([r_thrd+i],reg);
- end;
-end;
-
-//
-
-procedure op_load_rbp(var ctx:t_jit_context2;reg:TRegValue);
-begin
- with ctx.builder do
- begin
-  if not cmp_reg(reg,rbp) then
-  begin
-   movq(reg,rbp);
-  end;
- end;
-end;
-
-procedure op_save_rbp(var ctx:t_jit_context2;reg:TRegValue);
-begin
- with ctx.builder do
- begin
-  if not cmp_reg(reg,rbp) then
-  begin
-   movq(rbp,reg);
-  end;
- end;
+ ctx.builder._add(c_save_rsp(reg));
 end;
 
 //
