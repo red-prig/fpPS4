@@ -976,12 +976,12 @@ begin
     os8:
      begin
       new:=new_reg_size(new,os64);
-      ctx.builder._RR(movsx8_desc,new,new,False);
+      ctx.builder._add(c_RR(movsx8_desc,new,new,False));
      end;
    os32:
      begin
       new:=new_reg_size(new,os64);
-      ctx.builder._RR(movsxd_desc,new,new,False);
+      ctx.builder._add(c_RR(movsxd_desc,new,new,False));
      end
    else;
   end;
@@ -1367,6 +1367,32 @@ end;
  sahf;
 }
 
+function c_debug_imm(imm:Int64):t_jit_instruction;
+begin
+ if (r_tmp0.ASize=os64) then
+ begin
+  if (classif_offset_u64(imm)=os64) then
+  begin
+   if (imm and QWORD($FFFFFFFF80000000))=QWORD($FFFFFFFF80000000) then
+   begin
+    //32bit sign extend
+    Result:=c_movi(r_tmp0,imm);
+   end else
+   begin
+    //64bit imm
+    Result:=c_movi64(r_tmp0,imm);
+   end;
+  end else
+  begin
+   //32bit zero extend
+   Result:=c_movi(new_reg_size(r_tmp0,os32),imm);
+  end;
+ end else
+ begin
+  Result:=c_movi(r_tmp0,imm);
+ end;
+end;
+
 //
 procedure op_debug_info(var ctx:t_jit_context2);
 var
@@ -1377,14 +1403,16 @@ begin
  begin
   link_jmp:=ctx.builder.jmp(nil_link,os8);
   //
-  //ctx.builder.int3;
-  ctx.builder.cli;
-  //op_set_r14_imm(ctx,$FACEADD7);
-  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
-  add_orig(ctx);
-  op_set_r14_imm(ctx,Int64(ctx.ptr_next));
-  //op_set_r14_imm(ctx,$FACEADDE);
-  ctx.builder.sti;
+  with ctx.builder do
+  begin
+   Compact([
+    c_cli,
+    c_debug_imm(Int64(ctx.ptr_curr)),
+    c_orig(ctx),
+    c_debug_imm(Int64(ctx.ptr_next)),
+    c_sti
+   ]);
+  end;
   //
   link_jmp.target:=ctx.builder.get_curr_label.after;
  end;
@@ -1408,8 +1436,10 @@ begin
 
   //prolog (debugger)
   movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp); //update
-  push(rbp);
-  movq(rbp,rsp);
+  Compact([
+   c_push(rbp),
+   c_movq(rbp,rsp)
+  ]);
 
   //load guest stack
 
@@ -1460,8 +1490,10 @@ begin
   //free host stack
 
   //epilog (debugger)
-  movq(rsp,rbp);
-  pop (rbp);
+  Compact([
+   c_movq(rsp,rbp),
+   c_pop(rbp)
+  ]);
 
   //reset PCB_IS_HLE
   andi([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],not Byte(PCB_IS_HLE));
@@ -1957,9 +1989,14 @@ begin
  begin
   link_jmp:=ctx.builder.jmp(nil_link,os8);
   //
-  ctx.builder.cli;
-  op_set_r14_imm(ctx,Int64(addr));
-  ctx.builder.sti;
+  with ctx.builder do
+  begin
+   Compact([
+    c_cli,
+    c_debug_imm(Int64(addr)),
+    c_sti
+   ]);
+  end;
   //
   link_jmp.target:=ctx.builder.get_curr_label.after;
  end;
@@ -2498,13 +2535,20 @@ begin
      link_curr:=ctx.builder.get_curr_label.after;
      node_curr:=link_curr._node;
 
-     ctx.builder.int3;
-     ctx.builder.int3;
-     ctx.builder.ud2;
-
      if debug_info then
      begin
-      op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+      ctx.builder.Compact([
+       c_int3,
+       c_int3,
+       c_ud2,
+       c_debug_imm(Int64(ctx.ptr_curr))
+      ]);
+     end else
+     begin
+      ctx.builder.Compact([
+       c_int3,
+       c_ud2
+      ]);
      end;
 
      link_next:=ctx.builder.get_curr_label.after;
@@ -2865,14 +2909,21 @@ begin
 
  //build blob
 
- ctx.builder.int3;
- ctx.builder.int3;
- ctx.builder.int3;
- ctx.builder.ud2;
-
  if debug_info then
  begin
-  op_set_r14_imm(ctx,Int64(ctx.ptr_curr));
+  ctx.builder.Compact([
+   c_int3,
+   c_int3,
+   c_int3,
+   c_ud2,
+   c_debug_imm(Int64(ctx.ptr_curr))
+  ]);
+ end else
+ begin
+  ctx.builder.Compact([
+   c_int3,
+   c_ud2
+  ]);
  end;
 
  ctx.print_alloc_stats;

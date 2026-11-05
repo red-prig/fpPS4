@@ -134,8 +134,6 @@ type
   procedure EmitRvvv(rexR:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
   procedure EmitRXBm(rexB,rexX,rexR:Boolean;mm:Byte); inline;
   procedure EmitWvvv(rexW:Boolean;VectorIndex,VectorLength,SimdOpcode:Byte); inline;
-  //
-  procedure _RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
   //micro core
   procedure m_jmp_8 ();
   procedure m_jmp_32();
@@ -146,6 +144,34 @@ type
   //
   function  get_micro_op:Byte;
  end;
+
+function c_RM   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_RMI  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+function c_RMI8 (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+function c_RR   (const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean):t_jit_instruction;
+function c_RRI  (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0):t_jit_instruction;
+function c_RRI8 (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0):t_jit_instruction;
+function c_R    (const desc:t_op_type;reg:TRegValue):t_jit_instruction;
+function c_O    (op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]):t_jit_instruction;
+function c_O    (const desc:t_op_type;reg:TRegValue):t_jit_instruction;
+function c_M    (const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+function c_RI   (const desc:t_op_type;reg:TRegValue;imm:Int64):t_jit_instruction;
+function c_MI   (const desc:t_op_type;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+function c_RI8  (const desc:t_op_type;reg:TRegValue;imm:Byte):t_jit_instruction;
+function c_MI8  (const desc:t_op_type;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+
+function c_VM   (const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+function c_VM   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VV   (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
+function c_VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
+function c_VVM  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+function c_VVMV (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):t_jit_instruction;
+function c_VVV  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize):t_jit_instruction;
+function c_VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
+function c_VVI8 (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
+function c_VMI8 (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
 
 const
  default_jit_instruction:t_jit_instruction=(
@@ -418,6 +444,7 @@ type
   Function  _new_chunk(start:QWORD):p_jit_code_chunk;
   procedure _end_chunk(__end:QWORD);
   Function  _add(const ji:t_jit_instruction;min_isize:Byte=0):p_jit_instruction;
+  procedure Compact(const a:array of t_jit_instruction);
   Function  get_curr_label:t_jit_i_link;
   Function  _add_data(P:Pointer):p_jit_data;
   Function  _add_plt:Integer;
@@ -463,20 +490,6 @@ type
   Function  CopyPlt   (var rec:t_jit_copy_ptr):Boolean;
   Function  SaveTo    (ptr:PByte;size:Integer):Integer;
   //
-  function  _RM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-  function  _RMI    (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):DWORD;
-  function  _RMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):DWORD;
-  procedure _RR     (const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean);
-  procedure _RRI    (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
-  procedure _RRI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
-  procedure _R      (const desc:t_op_type;reg:TRegValue);
-  procedure _O      (op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]);
-  procedure _O      (const desc:t_op_type;reg:TRegValue);
-  function  _M      (const desc:t_op_type;mem:t_jit_leas):DWORD;
-  procedure _RI     (const desc:t_op_type;reg:TRegValue;imm:Int64);
-  function  _MI     (const desc:t_op_type;mem:t_jit_leas;imm:Int64):DWORD;
-  procedure _RI8    (const desc:t_op_type;reg:TRegValue;imm:Byte);
-  function  _MI8    (const desc:t_op_type;mem:t_jit_leas;imm:Byte):DWORD;
   procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
   procedure cmov    (op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
   procedure _push   (op,index:Byte;mem:t_jit_leas);
@@ -543,18 +556,6 @@ type
   procedure pop     (reg:TRegValue);
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
-  function  _VM     (const desc:t_op_type;mem:t_jit_leas):DWORD;
-  function  _VM     (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-  procedure _VV     (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
-  function  _VM_F3  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-  procedure _VV_F3  (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize=os0);
-  function  _VVM    (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):DWORD;
-  function  _VVMI8  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
-  function  _VVMV   (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):DWORD;
-  procedure _VVV    (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize=os0);
-  procedure _VVVI8  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize=os0);
-  procedure _VVI8   (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize=os0);
-  function  _VMI8   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
   procedure vmovdqu (reg:TRegValue ;mem:t_jit_leas);
   procedure vmovdqu (mem:t_jit_leas;reg:TRegValue);
   procedure vmovdqa (reg:TRegValue ;mem:t_jit_leas);
@@ -582,6 +583,19 @@ type
   procedure pinsrq(reg0,reg1:TRegValue;imm8:Byte);
   procedure pextrq(reg0,reg1:TRegValue;imm8:Byte);
  end;
+
+function c_reta:t_jit_instruction;
+function c_ud2:t_jit_instruction;
+function c_cli:t_jit_instruction;
+function c_sti:t_jit_instruction;
+function c_int3:t_jit_instruction;
+function c_movi(reg:TRegValue;imm:Int64):t_jit_instruction;
+function c_movi64(reg:TRegValue;imm:Int64):t_jit_instruction;
+function c_push(reg:TRegValue):t_jit_instruction;
+function c_pop(reg:TRegValue):t_jit_instruction;
+function c_movq(reg0,reg1:TRegValue):t_jit_instruction;
+function c_xchgq(reg0,reg1:TRegValue):t_jit_instruction;
+function c_shrx(reg0,reg1,reg2:TRegValue):t_jit_instruction;
 
 operator :=(const A:TRegValue):t_jit_lea;
 operator + (const A,B:t_jit_lea):t_jit_lea;
@@ -1859,86 +1873,6 @@ end;
 
 //
 
-procedure t_jit_instruction._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas);
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- Self:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
- case mreg.AMemSize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- if mreg.ALock then
- begin
-  Self.EmitByte($F0);
- end;
-
- Self.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  Self.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  Self.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(Self,rexW,op);
-
- modrm_info.emit_mrm(Self);
-end;
-
-//
-
 procedure t_jit_instruction.m_jmp_8();
 begin
  AInstructionSize:=0;
@@ -2072,6 +2006,1967 @@ begin
   else;
  end;
 end;
+
+//construction sets
+
+function c_RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case mreg.AMemSize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case mreg.AMemSize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ case reg.ASize of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ Result:=ji;
+end;
+
+function c_RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case mreg.AMemSize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm);
+
+ Result:=ji;
+end;
+
+function c_RR(const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean):t_jit_instruction;
+var
+ size:TOperandSize;
+ modrm_info:t_modrm_info;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
+
+ Assert(reg0.AScale<=1);
+ Assert(reg1.AScale<=1);
+
+ //RM + R -> reg0 | 1 xor 1 = 0
+ //MR + R -> reg1 | 1 xor 0 = 1
+ //RM + M -> reg1 | 0 xor 1 = 1
+ //MR + M -> reg0 | 0 xor 0 = 0
+
+ if (reg_size_pri in desc.opt) xor RM then
+ begin
+  size:=reg1.ASize;
+ end else
+ begin
+  size:=reg0.ASize;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case size of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ if RM then
+ begin
+  modrm_info.build_rr(reg1,reg0); //swapped
+ end else
+ begin
+  modrm_info.build_rr(reg0,reg1);
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+////
+
+function c_RRI(const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
+
+ Assert(reg0.AScale<=1);
+ Assert(reg1.AScale<=1);
+
+ if (size=os0) then
+ begin
+  if (reg_size_pri in desc.opt) then
+  begin
+   size:=reg1.ASize;
+  end else
+  begin
+   size:=reg0.ASize;
+  end;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case size of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg0,reg1);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ case size of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ Result:=ji;
+end;
+
+function c_RRI8(const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
+
+ Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
+
+ Assert(reg0.AScale<=1);
+ Assert(reg1.AScale<=1);
+
+ if (size=os0) then
+ begin
+  if (reg_size_pri in desc.opt) then
+  begin
+   size:=reg1.ASize;
+  end else
+  begin
+   size:=reg0.ASize;
+  end;
+ end;
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case size of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg0,reg1);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte (imm);
+
+ Result:=ji;
+end;
+
+function c_R(const desc:t_op_type;reg:TRegValue):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case reg.ASize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_ir(desc.index,reg);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+///
+
+function c_O(op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]):t_jit_instruction;
+var
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ case Size of
+   os8:
+       if (not (not_os8 in opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if rexW then
+ begin
+  ji.EmitREX(False,False,False,rexW);
+ end;
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+  else
+   begin
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+ end;
+
+ Result:=ji;
+end;
+
+function c_O(const desc:t_op_type;reg:TRegValue):t_jit_instruction;
+var
+ op:DWORD;
+ rexW,rexB:Boolean;
+ Index:Byte;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os16,os32,os64,os128]));
+ Assert(is_reg_type(reg,[regGeneral]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ rexB:=false;
+ Prefix:=0;
+
+ op:=desc.op;
+ case reg.ASize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ Index:=reg.AIndex;
+ if (Index>=8) then
+ begin
+  rexB:=true;
+  Dec(Index,8);
+ end;
+
+ op:=op+Index;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if rexB or rexW then
+ begin
+  ji.EmitREX(rexB,False,False,rexW);
+ end;
+
+ case op of
+  $00..$FF:
+   begin
+    ji.EmitByte(Byte(op));
+   end;
+  $100..$FFFF:
+   begin
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+  else
+   begin
+    ji.EmitByte(Lo(Hi(op)));
+    ji.EmitByte(Hi(Lo(op)));
+    ji.EmitByte(Lo(Lo(op)));
+   end;
+ end;
+
+ Result:=ji;
+end;
+
+////
+
+function c_M(const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64,os128]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+
+ if (op=$0FC7) and
+    (desc.index=1) then //cmpxchg8b/cmpxchg16b
+ begin
+  case mreg.AMemSize of
+   os128:
+        begin
+         rexW:=True;
+        end;
+   else;
+  end;
+ end else
+ begin
+  case mreg.AMemSize of
+    os8:
+        if (not (not_os8 in desc.opt)) then
+        begin
+         Dec(op);
+        end;
+   os16:
+        if (not (not_prefix in desc.opt)) then
+        begin
+         Prefix:=$66;
+        end;
+   os32:;
+   os64:
+        begin
+         rexW:=True;
+        end;
+   else;
+  end;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+////
+
+function c_RI(const desc:t_op_type;reg:TRegValue;imm:Int64):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_ir(desc.index,reg);
+
+ op:=desc.op;
+ case reg.ASize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ case reg.ASize of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ Result:=ji;
+end;
+
+function c_MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ mreg:=Sums(mem);
+
+ Assert(mreg.AMemSize in [os8,os16,os32,os64]);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case mreg.AMemSize of
+   os8:
+       if (not (not_os8 in desc.opt)) then
+       begin
+        Dec(op);
+       end;
+  os16:
+       if (not (not_prefix in desc.opt)) then
+       begin
+        Prefix:=$66;
+       end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ case mreg.AMemSize of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt32(imm);
+  else;
+ end;
+
+ Result:=ji;
+end;
+
+function c_RI8(const desc:t_op_type;reg:TRegValue;imm:Byte):t_jit_instruction;
+var
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(is_reg_size(reg,[os8,os16,os32,os64]));
+ Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexW:=false;
+ Prefix:=0;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_ir(desc.index,reg);
+
+ op:=desc.op;
+ case reg.ASize of
+   os8:
+      if (not (not_os8 in desc.opt)) then
+      begin
+       Dec(op);
+      end;
+  os16:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Prefix:=$66;
+      end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm);
+
+ Result:=ji;
+end;
+
+function c_MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ op:DWORD;
+ rexW:Boolean;
+ Prefix:Byte;
+
+ modrm_info:t_modrm_info;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ mreg:=Sums(mem);
+
+ Assert(mreg.AMemSize in [os8,os16,os32,os64]);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ rexW:=False;
+ Prefix:=0;
+
+ op:=desc.op;
+ case mreg.AMemSize of
+   os8:
+      if (not (not_os8 in desc.opt)) then
+      begin
+       Dec(op);
+      end;
+  os16:
+      if (not (not_prefix in desc.opt)) then
+      begin
+       Prefix:=$66;
+      end;
+  os32:;
+  os64:
+       begin
+        rexW:=True;
+       end;
+  else;
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ modrm_info.emit_gop(ji,rexW,op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm); //1
+
+ Result:=ji;
+end;
+
+//
+
+function c_VM(const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ Vex.Length:=get_vex_len(desc,mreg.AMemSize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len');
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,os0,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg,[regGeneral,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VV(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,size,size);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg1,reg0);
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=2);
+ Assert(desc.op=$F3);
+
+ Assert(is_reg_size(reg,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg,[regGeneral,regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_im(desc.index,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
+ ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm=2);
+ Assert(desc.op=$F3);
+
+ Assert(is_reg_size(reg0,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,size,size);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg0.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_ir(desc.index,reg1);
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
+ ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg1.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg0,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg1.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg0,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm8);
+
+ Result:=ji;
+end;
+
+function c_VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):t_jit_instruction;
+begin
+ Result:=c_VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
+end;
+
+function c_VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ Assert(is_reg_size(reg2,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg2,[regGeneral,regXmm]));
+ Assert(reg2.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,size,size);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg1.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg2,reg0);
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ Result:=ji;
+end;
+
+function c_VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Index :Byte;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+ Assert(desc.mm<>0);
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ Assert(is_reg_size(reg2,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg2,[regGeneral,regXmm]));
+ Assert(reg2.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,size,size);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ Vex.Index:=reg1.AIndex;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg2,reg0);
+
+ if Vex.rexW or
+    modrm_info.rexB or
+    modrm_info.rexX or
+    (desc.mm>1) then
+ begin
+  ji.EmitByte($C4); //VEX3
+
+  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
+ end else
+ begin
+  ji.EmitByte($C5); //VEX2
+
+  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
+ end;
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm8);
+
+ Result:=ji;
+end;
+
+function c_VVI8(const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
+var
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg0,[regGeneral,regXmm]));
+ Assert(reg0.AScale<=1);
+
+ Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg1,[regGeneral,regXmm]));
+ Assert(reg1.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ if (size=os0) then
+ begin
+  size:=reg0.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,size,size);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw');
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rr(reg1,reg0);
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm8);
+
+ Result:=ji;
+end;
+
+function c_VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+var
+ mreg:t_jit_lea;
+
+ modrm_info:t_modrm_info;
+
+ Vex:record
+  rexW  :Boolean;
+  Length:Byte;
+ end;
+
+ ji:t_jit_instruction;
+begin
+ Assert(not (not_impl in desc.opt));
+
+ Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
+ Assert(is_reg_type(reg,[regXmm]));
+ Assert(reg.AScale<=1);
+
+ mreg:=Sums(mem);
+
+ Assert(is_reg_size(mreg,[os0,os32,os64]));
+ Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
+ Assert(is_valid_scale(mreg));
+
+ ji:=default_jit_instruction;
+
+ if (reg_size_pri in desc.opt) or
+    (mreg.AMemSize=os0) then
+ begin
+  mreg.AMemSize:=reg.ASize;
+ end;
+
+ Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_vex_len in desc.opt) then
+ if (Vex.Length<>desc.vx_len) then
+ begin
+  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
+ end;
+
+ Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
+
+ if (verif_rexw in desc.opt) then
+ if (Vex.rexW<>desc.rexw) then
+ begin
+  Assert(false,'verif_rexw op=$'+HexStr(desc.op,8));
+ end;
+
+ modrm_info:=Default(t_modrm_info);
+
+ modrm_info.build_rm(reg,mreg);
+
+ if mreg.ALock then
+ begin
+  ji.EmitByte($F0);
+ end;
+
+ ji.EmitSelector(mreg.ASegment);
+
+ if (mreg.ARegValue[0].ASize=os32) then
+ begin
+  ji.EmitByte($67); //Address-size override prefix (32)
+ end;
+
+ ji.EmitByte($C4); //VEX3
+
+ ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
+ ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
+
+ ji.EmitByte(desc.op);
+
+ modrm_info.emit_mrm(ji);
+
+ ji.EmitByte(imm8);
+
+ Result:=ji;
+end;
+
 
 //
 
@@ -2251,6 +4146,60 @@ begin
  Inc(AInstructionSize,ji.AInstructionSize);
 
  Result:=node;
+end;
+
+procedure t_jit_builder.Compact(const a:array of t_jit_instruction);
+var
+ i:Integer;
+ last:t_jit_instruction;
+
+ procedure Flush;
+ begin
+  if (last.AInstructionSize<>0) then
+  begin
+   _add(last);
+   last:=Default(t_jit_instruction);
+  end;
+ end;
+
+ procedure Concat(const new:t_jit_instruction);
+ var
+  ofs:Integer;
+ begin
+  if (new.ATargetType<>lnkNone) or new.ATargetRequired then
+  begin
+   Flush;
+   _add(new);
+   Exit;
+  end;
+
+  ofs:=last.AInstructionSize;
+  if ((ofs+new.AInstructionSize)>15) then
+  begin
+   Flush;
+   ofs:=0;
+  end;
+
+  if (new.AInstructionSize<>0) then
+  begin
+   Move(new.AData[0],last.AData[ofs],new.AInstructionSize);
+  end;
+  last.AInstructionSize:=ofs+new.AInstructionSize;
+ end;
+
+begin
+
+ if Length(a)<>0 then
+ begin
+  last:=Default(t_jit_instruction);
+  //
+  For i:=0 to High(a) do
+  begin
+   Concat(a[i]);
+  end;
+
+  Flush;
+ end;
 end;
 
 Function t_jit_builder.get_curr_label:t_jit_i_link;
@@ -2528,7 +4477,7 @@ const
 var
  ji:t_jit_instruction;
 begin
- ji._RM(movq_desc,reg,mem);
+ ji:=c_RM(movq_desc,reg,mem);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=target.AType;
@@ -2545,7 +4494,7 @@ const
 var
  ji:t_jit_instruction;
 begin
- ji._RM(movq_desc,reg,[rip+$7FFFFFFF]);
+ ji:=c_RM(movq_desc,reg,[rip+$7FFFFFFF]);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=lnkData;
@@ -2562,7 +4511,7 @@ const
 var
  ji:t_jit_instruction;
 begin
- ji._RM(leaq_desc,reg,mem);
+ ji:=c_RM(leaq_desc,reg,mem);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=target.AType;
@@ -2579,7 +4528,7 @@ const
 var
  ji:t_jit_instruction;
 begin
- ji._RM(leaq_desc,reg,[rip+$7FFFFFFF]);
+ ji:=c_RM(leaq_desc,reg,[rip+$7FFFFFFF]);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=lnkPlt;
@@ -2603,7 +4552,7 @@ begin
  plt:=jt^.ATargetAddr;
  //
 
- ji._RM(leaq_desc,reg,[rip+$7FFFFFFF]);
+ ji:=c_RM(leaq_desc,reg,[rip+$7FFFFFFF]);
 
  ji.ATargetRequired:=True;
  ji.ATargetType    :=lnkPlt;
@@ -2620,14 +4569,14 @@ const
 begin
  Assert(is_reg_size(reg,[os64]));
 
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 Procedure t_jit_builder.jmp(mem:t_jit_leas);
 const
  desc:t_op_type=(op:$FF;index:4);
 begin
- _M(desc,mem);
+ _add(c_M(desc,mem));
 end;
 
 Procedure t_jit_builder.call(reg:TRegValue);
@@ -2636,24 +4585,24 @@ const
 begin
  Assert(is_reg_size(reg,[os64]));
 
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 Procedure t_jit_builder.call(mem:t_jit_leas);
 const
  desc:t_op_type=(op:$FF;index:2);
 begin
- _M(desc,mem);
+ _add(c_M(desc,mem));
 end;
 
 Procedure t_jit_builder.reta;
 begin
- _O($C3);
+ _add(c_O($C3));
 end;
 
 Procedure t_jit_builder.ud2;
 begin
- _O($0F0B);
+ _add(c_O($0F0B));
 end;
 
 Procedure _gen_nop(P:Pointer;length:DWORD);
@@ -3035,7 +4984,7 @@ var
  is_change:Boolean;
  pass_count:Integer;
  zip_size:Integer;
- i:Integer;
+ i:DWORD;
 begin
 
  //Zip Data
@@ -3250,1008 +5199,6 @@ begin
  Exit(rec.pos);
 end;
 
-function t_jit_builder._RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-var
- ji:t_jit_instruction;
-begin
- ji._RM(desc,reg,mem);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-function t_jit_builder._RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):DWORD;
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
- case mreg.AMemSize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- case reg.ASize of
-   os8:ji.EmitByte (imm);
-  os16:ji.EmitWord (imm);
-  os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt32(imm);
-  else;
- end;
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-function t_jit_builder._RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):DWORD;
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
- case mreg.AMemSize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-procedure t_jit_builder._RR(const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean);
-var
- size:TOperandSize;
- modrm_info:t_modrm_info;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
-
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
-
- Assert(reg0.AScale<=1);
- Assert(reg1.AScale<=1);
-
- //RM + R -> reg0 | 1 xor 1 = 0
- //MR + R -> reg1 | 1 xor 0 = 1
- //RM + M -> reg1 | 0 xor 1 = 1
- //MR + M -> reg0 | 0 xor 0 = 0
-
- if (reg_size_pri in desc.opt) xor RM then
- begin
-  size:=reg1.ASize;
- end else
- begin
-  size:=reg0.ASize;
- end;
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- op:=desc.op;
- case size of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- if RM then
- begin
-  modrm_info.build_rr(reg1,reg0); //swapped
- end else
- begin
-  modrm_info.build_rr(reg0,reg1);
- end;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-////
-
-procedure t_jit_builder._RRI(const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0);
-var
- modrm_info:t_modrm_info;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
-
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
-
- Assert(reg0.AScale<=1);
- Assert(reg1.AScale<=1);
-
- if (size=os0) then
- begin
-  if (reg_size_pri in desc.opt) then
-  begin
-   size:=reg1.ASize;
-  end else
-  begin
-   size:=reg0.ASize;
-  end;
- end;
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- op:=desc.op;
- case size of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg0,reg1);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- case size of
-   os8:ji.EmitByte (imm);
-  os16:ji.EmitWord (imm);
-  os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt32(imm);
-  else;
- end;
-
- _add(ji);
-end;
-
-procedure t_jit_builder._RRI8(const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0);
-var
- modrm_info:t_modrm_info;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128]));
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128]));
-
- Assert(is_reg_type(reg0,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(is_reg_type(reg1,[regGeneral,regGeneralH,regMm,regXmm]));
-
- Assert(reg0.AScale<=1);
- Assert(reg1.AScale<=1);
-
- if (size=os0) then
- begin
-  if (reg_size_pri in desc.opt) then
-  begin
-   size:=reg1.ASize;
-  end else
-  begin
-   size:=reg0.ASize;
-  end;
- end;
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- op:=desc.op;
- case size of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg0,reg1);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte (imm);
-
- _add(ji);
-end;
-
-procedure t_jit_builder._R(const desc:t_op_type;reg:TRegValue);
-var
- modrm_info:t_modrm_info;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- op:=desc.op;
- case reg.ASize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_ir(desc.index,reg);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-///
-
-procedure t_jit_builder._O(op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]);
-var
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- case Size of
-   os8:
-       if (not (not_os8 in opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if rexW then
- begin
-  ji.EmitREX(False,False,False,rexW);
- end;
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
-
- _add(ji);
-end;
-
-procedure t_jit_builder._O(const desc:t_op_type;reg:TRegValue);
-var
- op:DWORD;
- rexW,rexB:Boolean;
- Index:Byte;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os16,os32,os64,os128]));
- Assert(is_reg_type(reg,[regGeneral]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- rexB:=false;
- Prefix:=0;
-
- op:=desc.op;
- case reg.ASize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- Index:=reg.AIndex;
- if (Index>=8) then
- begin
-  rexB:=true;
-  Dec(Index,8);
- end;
-
- op:=op+Index;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if rexB or rexW then
- begin
-  ji.EmitREX(rexB,False,False,rexW);
- end;
-
- case op of
-  $00..$FF:
-   begin
-    ji.EmitByte(Byte(op));
-   end;
-  $100..$FFFF:
-   begin
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
-  else
-   begin
-    ji.EmitByte(Lo(Hi(op)));
-    ji.EmitByte(Hi(Lo(op)));
-    ji.EmitByte(Lo(Lo(op)));
-   end;
- end;
-
- _add(ji);
-end;
-
-////
-
-function t_jit_builder._M(const desc:t_op_type;mem:t_jit_leas):DWORD;
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64,os128]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
-
- if (op=$0FC7) and
-    (desc.index=1) then //cmpxchg8b/cmpxchg16b
- begin
-  case mreg.AMemSize of
-   os128:
-        begin
-         rexW:=True;
-        end;
-   else;
-  end;
- end else
- begin
-  case mreg.AMemSize of
-    os8:
-        if (not (not_os8 in desc.opt)) then
-        begin
-         Dec(op);
-        end;
-   os16:
-        if (not (not_prefix in desc.opt)) then
-        begin
-         Prefix:=$66;
-        end;
-   os32:;
-   os64:
-        begin
-         rexW:=True;
-        end;
-   else;
-  end;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(desc.index,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16,128)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-////
-
-procedure t_jit_builder._RI(const desc:t_op_type;reg:TRegValue;imm:Int64);
-var
- modrm_info:t_modrm_info;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_ir(desc.index,reg);
-
- op:=desc.op;
- case reg.ASize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- case reg.ASize of
-   os8:ji.EmitByte (imm);
-  os16:ji.EmitWord (imm);
-  os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt32(imm);
-  else;
- end;
-
- _add(ji);
-end;
-
-function t_jit_builder._MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64):DWORD;
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- mreg:=Sums(mem);
-
- Assert(mreg.AMemSize in [os8,os16,os32,os64]);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
- case mreg.AMemSize of
-   os8:
-       if (not (not_os8 in desc.opt)) then
-       begin
-        Dec(op);
-       end;
-  os16:
-       if (not (not_prefix in desc.opt)) then
-       begin
-        Prefix:=$66;
-       end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(desc.index,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- case mreg.AMemSize of
-   os8:ji.EmitByte (imm);
-  os16:ji.EmitWord (imm);
-  os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt32(imm);
-  else;
- end;
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-procedure t_jit_builder._RI8(const desc:t_op_type;reg:TRegValue;imm:Byte);
-var
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(is_reg_size(reg,[os8,os16,os32,os64]));
- Assert(is_reg_type(reg,[regGeneral,regGeneralH,regMm,regXmm]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexW:=false;
- Prefix:=0;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_ir(desc.index,reg);
-
- op:=desc.op;
- case reg.ASize of
-   os8:
-      if (not (not_os8 in desc.opt)) then
-      begin
-       Dec(op);
-      end;
-  os16:
-      if (not (not_prefix in desc.opt)) then
-      begin
-       Prefix:=$66;
-      end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm);
-
- _add(ji);
-end;
-
-function t_jit_builder._MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte):DWORD;
-var
- mreg:t_jit_lea;
-
- op:DWORD;
- rexW:Boolean;
- Prefix:Byte;
-
- modrm_info:t_modrm_info;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- mreg:=Sums(mem);
-
- Assert(mreg.AMemSize in [os8,os16,os32,os64]);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- rexW:=False;
- Prefix:=0;
-
- op:=desc.op;
- case mreg.AMemSize of
-   os8:
-      if (not (not_os8 in desc.opt)) then
-      begin
-       Dec(op);
-      end;
-  os16:
-      if (not (not_prefix in desc.opt)) then
-      begin
-       Prefix:=$66;
-      end;
-  os32:;
-  os64:
-       begin
-        rexW:=True;
-       end;
-  else;
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(desc.index,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- modrm_info.emit_gop(ji,rexW,op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm); //1
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
 ///
 
 const
@@ -4273,7 +5220,7 @@ begin
  desc:=Default(t_op_type);
  desc.op:=$0F00 or CMOV_8[op];
 
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
@@ -4289,7 +5236,7 @@ begin
  desc:=Default(t_op_type);
  desc.op:=$0F00 or CMOV_8[op];
 
- _RR(desc,reg0,reg1,True);
+ _add(c_RR(desc,reg0,reg1,True));
 end;
 
 ////
@@ -4439,136 +5386,68 @@ procedure t_jit_builder.movq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$89;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.movi(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$C7;index:0);
 begin
- _MI(desc,mem,imm);
+ _add(c_MI(desc,mem,imm));
 end;
 
 procedure t_jit_builder.movi(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$C7;index:0);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.movi64(reg:TRegValue;imm:Int64);
-var
- rexF,rexB,rexW:Boolean;
-
- Index,Prefix,op:Byte;
-
- ji:t_jit_instruction;
 begin
- Assert(is_reg_size(reg,[os8,os16,os32,os64]));
- Assert(is_reg_type(reg,[regGeneral]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexF:=false;
- rexB:=false;
- rexW:=false;
- Prefix:=0;
-
- Index:=reg.AIndex;
- if (Index>=8) then
- begin
-  rexB:=true;
-  Dec(Index,8);
- end;
-
- rexF:=get_force_rex(reg);
-
- case reg.ASize of
-   os8:
-       begin
-        op:=$B0+Index;
-       end;
-  os16:
-       begin
-        Prefix:=$66;
-        op:=$B8+Index;
-       end;
-  os32:
-       begin
-        op:=$B8+Index;
-       end;
-  os64:
-       begin
-        rexW:=True;
-        op:=$B8+Index;
-       end;
-  else;
- end;
-
- if (Prefix<>0) then
- begin
-  ji.EmitByte(Prefix); //Operand-size override prefix (16)
- end;
-
- if rexF or rexB or rexW then
- begin
-  ji.EmitREX(rexB,False,False,rexW);
- end;
-
- ji.EmitByte(op);
-
- case reg.ASize of
-   os8:ji.EmitByte (imm);
-  os16:ji.EmitWord (imm);
-  os32:ji.EmitInt32(imm);
-  os64:ji.EmitInt64(imm);
-  else;
- end;
-
- _add(ji);
+ _add(c_movi64(reg,imm));
 end;
 
 procedure t_jit_builder.movq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$8B;index:0);
 begin
- _RM(desc,reg,mem); //MOV r64, r/m64
+ _add(c_RM(desc,reg,mem)); //MOV r64, r/m64
 end;
 
 procedure t_jit_builder.movq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$89;index:0);
 begin
- _RM(desc,reg,mem); //MOV r/m64, r64
+ _add(c_RM(desc,reg,mem)); //MOV r/m64, r64
 end;
 
 procedure t_jit_builder.movzb(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$0FB6;opt:[not_os8]);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.movbe(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$0F38F0;opt:[not_os8]);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.movbe(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$0F38F1;opt:[not_os8]);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.bswap(reg:TRegValue);
 const
  desc:t_op_type=(op:$0FC8;opt:[not_os8,not_prefix]);
 begin
- _O(desc,reg);
+ _add(c_O(desc,reg));
 end;
 
 //
@@ -4579,7 +5458,7 @@ const
 begin
  Assert(is_reg_size(reg,[os16,os32,os64]));
 
- _RM(desc,reg,mem); //LEA r64,m
+ _add(c_RM(desc,reg,mem)); //LEA r64,m
 end;
 
 //
@@ -4588,42 +5467,42 @@ procedure t_jit_builder.addq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$01;index:0);
 begin
- _RM(desc,reg,mem); //ADD r/m64, r64
+ _add(c_RM(desc,reg,mem)); //ADD r/m64, r64
 end;
 
 procedure t_jit_builder.addq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$03;index:0);
 begin
- _RM(desc,reg,mem); //ADD r64, r/m64
+ _add(c_RM(desc,reg,mem)); //ADD r64, r/m64
 end;
 
 procedure t_jit_builder.addq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$01;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.addi(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:0);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.addi8se(reg:TRegValue;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:0);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.addi8se(mem:t_jit_leas;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:0);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 //
@@ -4632,56 +5511,56 @@ procedure t_jit_builder.subq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$29;index:0);
 begin
- _RM(desc,reg,mem); //SUB r/m64, r64
+ _add(c_RM(desc,reg,mem)); //SUB r/m64, r64
 end;
 
 procedure t_jit_builder.subq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$2B;index:0);
 begin
- _RM(desc,reg,mem); //SUB r64, r/m64
+ _add(c_RM(desc,reg,mem)); //SUB r64, r/m64
 end;
 
 procedure t_jit_builder.subq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$29;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.subi(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:5);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.subi8se(reg:TRegValue;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:5);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.subi8se(mem:t_jit_leas;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:5);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 procedure t_jit_builder.mulq(reg:TRegValue);
 const
  desc:t_op_type=(op:$F7;index:4);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.mulq(mem:t_jit_leas);
 const
  desc:t_op_type=(op:$F7;index:4);
 begin
- _M(desc,mem);
+ _add(c_M(desc,mem));
 end;
 
 ///
@@ -4690,28 +5569,28 @@ procedure t_jit_builder.shl_cl(reg:TRegValue);
 const
  desc:t_op_type=(op:$D3;index:4);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.shr_cl(reg:TRegValue);
 const
  desc:t_op_type=(op:$D3;index:5);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.shli8(reg:TRegValue;imm:Byte);
 const
  desc:t_op_type=(op:$C1;index:4);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.shri8(reg:TRegValue;imm:Byte);
 const
  desc:t_op_type=(op:$C1;index:5);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 ///
@@ -4720,105 +5599,105 @@ procedure t_jit_builder.andi(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:4);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.andi(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:4);
 begin
- _MI(desc,mem,imm);
+ _add(c_MI(desc,mem,imm));
 end;
 
 procedure t_jit_builder.andi8se(reg:TRegValue;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:4);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.andi8se(mem:t_jit_leas;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:4);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 procedure t_jit_builder.andq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$21;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.ori(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:1);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.ori(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:1);
 begin
- _MI(desc,mem,imm);
+ _add(c_MI(desc,mem,imm));
 end;
 
 procedure t_jit_builder.ori8se(reg:TRegValue;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:1);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.ori8se(mem:t_jit_leas;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:1);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 procedure t_jit_builder.orq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$09;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.xorq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$31;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.notq(reg:TRegValue);
 const
  desc:t_op_type=(op:$F7;index:2);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.negq(reg:TRegValue);
 const
  desc:t_op_type=(op:$F7;index:3);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.bsfq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$0FBC;opt:[not_os8]);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.bsfq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$0FBC;opt:[not_os8]);
 begin
- _RR(desc,reg0,reg1,True);
+ _add(c_RR(desc,reg0,reg1,True));
 end;
 
 ///
@@ -4827,56 +5706,56 @@ procedure t_jit_builder.cmpq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$39;index:0);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.cmpq(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$3B;index:0);
 begin
- _RM(desc,reg,mem);
+ _add(c_RM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.cmpq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$39;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.cmpi(reg:TRegValue;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:7);
 begin
- _RI(desc,reg,imm);
+ _add(c_RI(desc,reg,imm));
 end;
 
 procedure t_jit_builder.cmpi(mem:t_jit_leas;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:7);
 begin
- _MI(desc,mem,imm);
+ _add(c_MI(desc,mem,imm));
 end;
 
 procedure t_jit_builder.cmpi8(reg:TRegValue;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:7);
 begin
- _RI8(desc,reg,imm);
+ _add(c_RI8(desc,reg,imm));
 end;
 
 procedure t_jit_builder.cmpi8(mem:t_jit_leas;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:7);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 procedure t_jit_builder.xchgq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$87;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 ///
@@ -4948,961 +5827,58 @@ begin
  _add(ji);
 end;
 
-function t_jit_builder._VM(const desc:t_op_type;mem:t_jit_leas):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- Vex.Length:=get_vex_len(desc,mreg.AMemSize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len');
- end;
-
- Vex.rexW:=get_vex_rexw(desc,os0,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(desc.index,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-function t_jit_builder._VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg,[regGeneral,regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-procedure t_jit_builder._VV(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
-var
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- ji:=default_jit_instruction;
-
- if (size=os0) then
- begin
-  size:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,size,size);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg1,reg0);
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,0,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-function t_jit_builder._VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm=2);
- Assert(desc.op=$F3);
-
- Assert(is_reg_size(reg,[os32,os64,os128,os256]));
- Assert(is_reg_type(reg,[regGeneral,regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_im(desc.index,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- ji.EmitByte($C4); //VEX3
-
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
- ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-procedure t_jit_builder._VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize);
-var
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm=2);
- Assert(desc.op=$F3);
-
- Assert(is_reg_size(reg0,[os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- ji:=default_jit_instruction;
-
- if (size=os0) then
- begin
-  size:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,size,size);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg0.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_ir(desc.index,reg1);
-
- ji.EmitByte($C4); //VEX3
-
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,2);
- ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,0);
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-function t_jit_builder._VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg1.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg0,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-function t_jit_builder._VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg1.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg0,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm8);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
-function t_jit_builder._VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):DWORD;
-begin
- Result:=_VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
-end;
-
-procedure t_jit_builder._VVV(const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize);
-var
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- Assert(is_reg_size(reg2,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg2,[regGeneral,regXmm]));
- Assert(reg2.AScale<=1);
-
- ji:=default_jit_instruction;
-
- if (size=os0) then
- begin
-  size:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,size,size);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg1.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg2,reg0);
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- _add(ji);
-end;
-
-procedure t_jit_builder._VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize);
-var
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Index :Byte;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
- Assert(desc.mm<>0);
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- Assert(is_reg_size(reg2,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg2,[regGeneral,regXmm]));
- Assert(reg2.AScale<=1);
-
- ji:=default_jit_instruction;
-
- if (size=os0) then
- begin
-  size:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,size,size);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- Vex.Index:=reg1.AIndex;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg2,reg0);
-
- if Vex.rexW or
-    modrm_info.rexB or
-    modrm_info.rexX or
-    (desc.mm>1) then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
-  ji.EmitWvvv(Vex.rexW,Vex.Index,Vex.Length,desc.simdop);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(modrm_info.rexR,Vex.Index,Vex.Length,desc.simdop);
- end;
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm8);
-
- _add(ji);
-end;
-
-procedure t_jit_builder._VVI8(const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize);
-var
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- Assert(is_reg_size(reg0,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg0,[regGeneral,regXmm]));
- Assert(reg0.AScale<=1);
-
- Assert(is_reg_size(reg1,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg1,[regGeneral,regXmm]));
- Assert(reg1.AScale<=1);
-
- ji:=default_jit_instruction;
-
- if (size=os0) then
- begin
-  size:=reg0.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,size,size);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw');
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rr(reg1,reg0);
-
- ji.EmitByte($C4); //VEX3
-
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
- ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm8);
-
- _add(ji);
-end;
-
-function t_jit_builder._VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):DWORD;
-var
- mreg:t_jit_lea;
-
- modrm_info:t_modrm_info;
-
- Vex:record
-  rexW  :Boolean;
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
-begin
- Assert(not (not_impl in desc.opt));
-
- Assert(is_reg_size(reg,[os8,os16,os32,os64,os128,os256]));
- Assert(is_reg_type(reg,[regXmm]));
- Assert(reg.AScale<=1);
-
- mreg:=Sums(mem);
-
- Assert(is_reg_size(mreg,[os0,os32,os64]));
- Assert(is_reg_type(mreg,[regNone,regGeneral,regRip]));
- Assert(is_valid_scale(mreg));
-
- ji:=default_jit_instruction;
-
- if (reg_size_pri in desc.opt) or
-    (mreg.AMemSize=os0) then
- begin
-  mreg.AMemSize:=reg.ASize;
- end;
-
- Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_vex_len in desc.opt) then
- if (Vex.Length<>desc.vx_len) then
- begin
-  Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
- end;
-
- Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
-
- if (verif_rexw in desc.opt) then
- if (Vex.rexW<>desc.rexw) then
- begin
-  Assert(false,'verif_rexw op=$'+HexStr(desc.op,8));
- end;
-
- modrm_info:=Default(t_modrm_info);
-
- modrm_info.build_rm(reg,mreg);
-
- if mreg.ALock then
- begin
-  ji.EmitByte($F0);
- end;
-
- ji.EmitSelector(mreg.ASegment);
-
- if (mreg.ARegValue[0].ASize=os32) then
- begin
-  ji.EmitByte($67); //Address-size override prefix (32)
- end;
-
- ji.EmitByte($C4); //VEX3
-
- ji.EmitRXBm(modrm_info.rexB,modrm_info.rexX,modrm_info.rexR,desc.mm);
- ji.EmitWvvv(Vex.rexW,0,Vex.Length,desc.simdop);
-
- ji.EmitByte(desc.op);
-
- modrm_info.emit_mrm(ji);
-
- ji.EmitByte(imm8);
-
- _add(ji);
- Result:=ji.AInstructionSize;
-end;
-
 procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$6F;simdop:2;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovdqu(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;simdop:2;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$6F;simdop:1;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovdqa(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;simdop:1;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovntdq(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$E7;simdop:1;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_leas);
 const
  desc:t_op_type=(op:$10;simdop:0;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovups(mem:t_jit_leas;reg:TRegValue);
 const
  desc:t_op_type=(op:$11;simdop:0;mm:1);
 begin
- _VM(desc,reg,mem);
+ _add(c_VM(desc,reg,mem));
 end;
 
 procedure t_jit_builder.vmovdqa(reg0:TRegValue;reg1:TRegValue);
-var
- rexB,rexX,rexR:Boolean;
-
- ModRM:record
-  Index,RM:Byte;
- end;
-
- Vex:record
-  Length:Byte;
- end;
-
- ji:t_jit_instruction;
+const
+ desc:t_op_type=(op:$6F;simdop:1;mm:1);
 begin
  Assert(is_reg_size(reg0,[os128,os256]));
  Assert(is_reg_size(reg1,[os128,os256]));
@@ -5915,125 +5891,90 @@ begin
 
  Assert(reg0.ASize=reg1.ASize);
 
- ji:=default_jit_instruction;
-
- rexB:=false;
- rexX:=false;
- rexR:=false;
-
- ModRM.Index:=reg0.AIndex;
- if (ModRM.Index>=8) then
- begin
-  rexR:=true;
-  Dec(ModRM.Index,8);
- end;
-
- ModRM.RM:=reg1.AIndex;
- if (ModRM.RM>=8) then
- begin
-  rexB:=true;
-  Dec(ModRM.RM,8);
- end;
-
- case reg0.ASize of
-  os128:Vex.Length:=0;
-  os256:Vex.Length:=1;
-  else;
- end;
-
- if rexB or rexX then
- begin
-  ji.EmitByte($C4); //VEX3
-
-  ji.EmitRXBm(rexB,rexX,rexR,1);
-  ji.EmitWvvv(False,0,Vex.Length,1);
- end else
- begin
-  ji.EmitByte($C5); //VEX2
-
-  ji.EmitRvvv(rexR,0,Vex.Length,1);
- end;
-
- ji.EmitByte($6F);
-
- ji.EmitModRM(3,ModRM.Index,ModRM.RM);
-
- _add(ji);
+ _add(c_VV(desc,reg0,reg1,reg0.ASize));
 end;
 
 procedure t_jit_builder.sahf;
 begin
- _O($9E);
+ _add(c_O($9E));
 end;
 
 procedure t_jit_builder.lahf;
 begin
- _O($9F);
+ _add(c_O($9F));
 end;
 
 procedure t_jit_builder.saxf;
+const
+ add_desc:t_op_type=(op:$81;index:0);
 begin
  //store flags from al,ah
- addi(al,127);
- sahf;
+ Compact([
+  c_RI(add_desc,al,127), //addi(al,127);
+  c_O($9E)               //sahf;
+ ]);
 end;
 
 procedure t_jit_builder.laxf;
+const
+ seto_desc:t_op_type=(op:$0F90;opt:[not_prefix,not_os8]);
 begin
  //load flags to al,ah
- seto(al);
- lahf;
+ Compact([
+  c_R(seto_desc,al), //seto(al);
+  c_O($9F)           //lahf;
+ ]);
 end;
 
 procedure t_jit_builder.cpuid;
 begin
- _O($0FA2);
+ _add(c_O($0FA2));
 end;
 
 procedure t_jit_builder.rdtsc;
 begin
- _O($0F31);
+ _add(c_O($0F31));
 end;
 
 procedure t_jit_builder.lfence;
 begin
- _O($0FAEE8);
+ _add(c_O($0FAEE8));
 end;
 
 procedure t_jit_builder.cli;
 begin
- _O($FA);
+ _add(c_O($FA));
 end;
 
 procedure t_jit_builder.sti;
 begin
- _O($FB);
+ _add(c_O($FB));
 end;
 
 procedure t_jit_builder.seto(reg:TRegValue);
 const
  desc:t_op_type=(op:$0F90;opt:[not_prefix,not_os8]);
 begin
- _R(desc,reg);
+ _add(c_R(desc,reg));
 end;
 
 procedure t_jit_builder.int3;
 begin
- _O($CC);
+ _add(c_O($CC));
 end;
 
 procedure t_jit_builder.testq(reg0:TRegValue;reg1:TRegValue);
 const
  desc:t_op_type=(op:$85;index:0);
 begin
- _RR(desc,reg0,reg1,False);
+ _add(c_RR(desc,reg0,reg1,False));
 end;
 
 procedure t_jit_builder.bti8(mem:t_jit_leas;imm:Byte);
 const
  desc:t_op_type=(op:$0FBA;index:4);
 begin
- _MI8(desc,mem,imm);
+ _add(c_MI8(desc,mem,imm));
 end;
 
 procedure t_jit_builder.shlx(reg0,reg1,reg2:TRegValue);
@@ -6042,7 +5983,7 @@ const
   op:$F7;simdop:1;mm:2;vw_mode:vwR64;
  );
 begin
- _VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+ _add(c_VVV(desc,reg0,reg2,reg1,os64)); //1 3 2
 end;
 
 procedure t_jit_builder.shrx(reg0,reg1,reg2:TRegValue);
@@ -6051,29 +5992,206 @@ const
   op:$F7;simdop:3;mm:2;vw_mode:vwR64;
  );
 begin
- _VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+ _add(c_VVV(desc,reg0,reg2,reg1,os64)); //1 3 2
 end;
 
 procedure t_jit_builder.movqx(reg0,reg1:TRegValue);
 const
  desc:t_op_type=(op:$660F7E;index:0);
 begin
- _RR(desc,reg0,reg1,False); //66 REX.W 0F 7E /r MOVQ r/m64, xmm
+ _add(c_RR(desc,reg0,reg1,False)); //66 REX.W 0F 7E /r MOVQ r/m64, xmm
 end;
 
 procedure t_jit_builder.pinsrq(reg0,reg1:TRegValue;imm8:Byte);
 const
  desc:t_op_type=(op:$660F3A22;index:0);
 begin
- _RRI8(desc,reg1,reg0,imm8,os64);
+ _add(c_RRI8(desc,reg1,reg0,imm8,os64));
 end;
 
 procedure t_jit_builder.pextrq(reg0,reg1:TRegValue;imm8:Byte);
 const
  desc:t_op_type=(op:$660F3A16;index:0);
 begin
- _RRI8(desc,reg0,reg1,imm8,os64);
+ _add(c_RRI8(desc,reg0,reg1,imm8,os64));
 end;
+
+//
+
+function c_reta:t_jit_instruction;
+begin
+ Result:=c_O($C3);
+end;
+
+function c_ud2:t_jit_instruction;
+begin
+ Result:=c_O($0F0B);
+end;
+
+function c_cli:t_jit_instruction;
+begin
+ Result:=c_O($FA);
+end;
+
+function c_sti:t_jit_instruction;
+begin
+ Result:=c_O($FB);
+end;
+
+function c_int3:t_jit_instruction;
+begin
+ Result:=c_O($CC);
+end;
+
+function c_movi(reg:TRegValue;imm:Int64):t_jit_instruction;
+const
+ desc:t_op_type=(op:$C7;index:0);
+begin
+ Result:=c_RI(desc,reg,imm);
+end;
+
+function c_movi64(reg:TRegValue;imm:Int64):t_jit_instruction;
+var
+ rexF,rexB,rexW:Boolean;
+
+ Index,Prefix,op:Byte;
+
+ ji:t_jit_instruction;
+begin
+ Assert(is_reg_size(reg,[os8,os16,os32,os64]));
+ Assert(is_reg_type(reg,[regGeneral]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexF:=false;
+ rexB:=false;
+ rexW:=false;
+ Prefix:=0;
+
+ Index:=reg.AIndex;
+ if (Index>=8) then
+ begin
+  rexB:=true;
+  Dec(Index,8);
+ end;
+
+ rexF:=get_force_rex(reg);
+
+ case reg.ASize of
+   os8:
+       begin
+        op:=$B0+Index;
+       end;
+  os16:
+       begin
+        Prefix:=$66;
+        op:=$B8+Index;
+       end;
+  os32:
+       begin
+        op:=$B8+Index;
+       end;
+  os64:
+       begin
+        rexW:=True;
+        op:=$B8+Index;
+       end;
+  else;
+ end;
+
+ if (Prefix<>0) then
+ begin
+  ji.EmitByte(Prefix); //Operand-size override prefix (16)
+ end;
+
+ if rexF or rexB or rexW then
+ begin
+  ji.EmitREX(rexB,False,False,rexW);
+ end;
+
+ ji.EmitByte(op);
+
+ case reg.ASize of
+   os8:ji.EmitByte (imm);
+  os16:ji.EmitWord (imm);
+  os32:ji.EmitInt32(imm);
+  os64:ji.EmitInt64(imm);
+  else;
+ end;
+
+ Result:=ji;
+end;
+
+function c_pushreg(op:Byte;reg:TRegValue):t_jit_instruction;
+var
+ rexB:Boolean;
+ Index:Byte;
+ ji:t_jit_instruction;
+begin
+ Assert(is_reg_size(reg,[os16,os64]));
+ Assert(is_reg_type(reg,[regGeneral]));
+ Assert(reg.AScale<=1);
+
+ ji:=default_jit_instruction;
+
+ rexB:=False;
+
+ Index:=reg.AIndex;
+ if (Index>=8) then
+ begin
+  rexB:=True;
+  Dec(Index,8);
+ end;
+
+ if (reg.ASize=os16) then
+ begin
+  ji.EmitByte($66);
+ end;
+
+ if rexB then
+ begin
+  ji.EmitREX(rexB,False,False,False);
+ end;
+
+ ji.EmitByte(op+Index);
+
+ Result:=ji;
+end;
+
+function c_push(reg:TRegValue):t_jit_instruction;
+begin
+ Result:=c_pushreg($50,reg);
+end;
+
+function c_pop(reg:TRegValue):t_jit_instruction;
+begin
+ Result:=c_pushreg($58,reg);
+end;
+
+function c_movq(reg0,reg1:TRegValue):t_jit_instruction;
+const
+ desc:t_op_type=(op:$89;index:0);
+begin
+ Result:=c_RR(desc,reg0,reg1,False);
+end;
+
+function c_xchgq(reg0,reg1:TRegValue):t_jit_instruction;
+const
+ desc:t_op_type=(op:$87;index:0);
+begin
+ Result:=c_RR(desc,reg0,reg1,False);
+end;
+
+function c_shrx(reg0,reg1,reg2:TRegValue):t_jit_instruction;
+const
+ desc:t_op_type=(
+  op:$F7;simdop:3;mm:2;vw_mode:vwR64;
+ );
+begin
+ Result:=c_VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+end;
+
 
 end.
 
