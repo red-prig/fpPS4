@@ -66,8 +66,6 @@ type
  TOperandSizeSet =Set of TOperandSize;
  TRegisterTypeSet=Set of TRegisterType;
 
- t_jit_leas =array of t_jit_lea;
-
  t_jit_link_type=(lnkNone,lnkData,lnkPlt,lnkLabelBefore,lnkLabelAfter);
 
  t_jit_target_size=(tz1,tz4);
@@ -145,33 +143,33 @@ type
   function  get_micro_op:Byte;
  end;
 
-function c_RM   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
-function c_RMI  (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):t_jit_instruction;
-function c_RMI8 (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+function c_RM   (const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
+function c_RMI  (const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm:Int64):t_jit_instruction;
+function c_RMI8 (const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm:Byte):t_jit_instruction;
 function c_RR   (const desc:t_op_type;reg0,reg1:TRegValue;RM:Boolean):t_jit_instruction;
 function c_RRI  (const desc:t_op_type;reg0,reg1:TRegValue;imm:Int64;size:TOperandSize=os0):t_jit_instruction;
 function c_RRI8 (const desc:t_op_type;reg0,reg1:TRegValue;imm:Byte;size:TOperandSize=os0):t_jit_instruction;
 function c_R    (const desc:t_op_type;reg:TRegValue):t_jit_instruction;
 function c_O    (op:DWORD;Size:TOperandSize=os0;opt:t_op_opt=[]):t_jit_instruction;
 function c_O    (const desc:t_op_type;reg:TRegValue):t_jit_instruction;
-function c_M    (const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+function c_M    (const desc:t_op_type;const mem:array of t_jit_lea):t_jit_instruction;
 function c_RI   (const desc:t_op_type;reg:TRegValue;imm:Int64):t_jit_instruction;
-function c_MI   (const desc:t_op_type;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+function c_MI   (const desc:t_op_type;const mem:array of t_jit_lea;imm:Int64):t_jit_instruction;
 function c_RI8  (const desc:t_op_type;reg:TRegValue;imm:Byte):t_jit_instruction;
-function c_MI8  (const desc:t_op_type;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+function c_MI8  (const desc:t_op_type;const mem:array of t_jit_lea;imm:Byte):t_jit_instruction;
 
-function c_VM   (const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
-function c_VM   (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VM   (const desc:t_op_type;const mem:array of t_jit_lea):t_jit_instruction;
+function c_VM   (const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 function c_VV   (const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
-function c_VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VM_F3(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 function c_VV_F3(const desc:t_op_type;reg0,reg1:TRegValue;size:TOperandSize):t_jit_instruction;
-function c_VVM  (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):t_jit_instruction;
-function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
-function c_VVMV (const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):t_jit_instruction;
+function c_VVM  (const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
+function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea;imm8:Byte):t_jit_instruction;
+function c_VVMV (const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea;reg2:TRegValue):t_jit_instruction;
 function c_VVV  (const desc:t_op_type;reg0,reg1,reg2:TRegValue;size:TOperandSize):t_jit_instruction;
 function c_VVVI8(const desc:t_op_type;reg0,reg1,reg2:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
 function c_VVI8 (const desc:t_op_type;reg0,reg1:TRegValue;imm8:Byte;size:TOperandSize):t_jit_instruction;
-function c_VMI8 (const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+function c_VMI8 (const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm8:Byte):t_jit_instruction;
 
 const
  default_jit_instruction:t_jit_instruction=(
@@ -461,16 +459,16 @@ type
   function  jcc (op:TOpCodeSuffix;target:t_jit_i_link;osize:TOperandSize=os32):t_jit_i_link;
   function  loop(op:TOpCodeSuffix;target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
   function  jcxz(target:t_jit_i_link;rsize:TAddressSize;osize:TOperandSize=os32):t_jit_i_link;
-  function  movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+  function  movj(reg:TRegValue;const mem:array of t_jit_lea;target:t_jit_i_link):t_jit_i_link;
   function  movp(reg:TRegValue;P:Pointer):t_jit_i_link;
-  function  leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+  function  leaj(reg:TRegValue;const mem:array of t_jit_lea;target:t_jit_i_link):t_jit_i_link;
   function  leap(reg:TRegValue):t_jit_i_link;
   function  leap(reg:TRegValue;prev:t_jit_i_link):t_jit_i_link;
   //
   Procedure jmp(reg:TRegValue);
-  Procedure jmp(mem:t_jit_leas);
+  Procedure jmp(const mem:array of t_jit_lea);
   Procedure call(reg:TRegValue);
-  Procedure call(mem:t_jit_leas);
+  Procedure call(const mem:array of t_jit_lea);
   Procedure reta;
   Procedure ud2;
   Procedure nop(length:DWORD);
@@ -490,79 +488,79 @@ type
   Function  CopyPlt   (var rec:t_jit_copy_ptr):Boolean;
   Function  SaveTo    (ptr:PByte;size:Integer):Integer;
   //
-  procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
+  procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;const mem:array of t_jit_lea);
   procedure cmov    (op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
-  procedure _push   (op,index:Byte;mem:t_jit_leas);
+  procedure _push   (op,index:Byte;const mem:array of t_jit_lea);
   procedure _push   (op:Byte;reg:TRegValue);
   procedure _pushi  (size:TOperandSize;imm:Integer);
   procedure movq    (reg0:TRegValue ;reg1:TRegValue);
-  procedure movi    (mem:t_jit_leas ;imm:Int64);
+  procedure movi    (const mem:array of t_jit_lea ;imm:Int64);
   procedure movi    (reg:TRegValue  ;imm:Int64);
   procedure movi64  (reg:TRegValue  ;imm:Int64);
-  procedure movq    (reg:TRegValue  ;mem:t_jit_leas);
-  procedure movq    (mem:t_jit_leas ;reg:TRegValue);
-  procedure movzb   (reg:TRegValue  ;mem:t_jit_leas);
-  procedure movbe   (reg:TRegValue  ;mem:t_jit_leas);
-  procedure movbe   (mem:t_jit_leas ;reg:TRegValue);
+  procedure movq    (reg:TRegValue  ;const mem:array of t_jit_lea);
+  procedure movq    (const mem:array of t_jit_lea ;reg:TRegValue);
+  procedure movzb   (reg:TRegValue  ;const mem:array of t_jit_lea);
+  procedure movbe   (reg:TRegValue  ;const mem:array of t_jit_lea);
+  procedure movbe   (const mem:array of t_jit_lea ;reg:TRegValue);
   procedure bswap   (reg:TRegValue);
-  procedure leaq    (reg:TRegValue  ;mem:t_jit_leas);
-  procedure addq    (mem:t_jit_leas ;reg:TRegValue);
-  procedure addq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure leaq    (reg:TRegValue  ;const mem:array of t_jit_lea);
+  procedure addq    (const mem:array of t_jit_lea ;reg:TRegValue);
+  procedure addq    (reg:TRegValue  ;const mem:array of t_jit_lea);
   procedure addq    (reg0:TRegValue ;reg1:TRegValue);
   procedure addi    (reg:TRegValue  ;imm:Int64);
   procedure addi8se (reg:TRegValue  ;imm:ShortInt);
-  procedure addi8se (mem:t_jit_leas ;imm:ShortInt);
-  procedure subq    (mem:t_jit_leas ;reg:TRegValue);
-  procedure subq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure addi8se (const mem:array of t_jit_lea ;imm:ShortInt);
+  procedure subq    (const mem:array of t_jit_lea ;reg:TRegValue);
+  procedure subq    (reg:TRegValue  ;const mem:array of t_jit_lea);
   procedure subq    (reg0:TRegValue ;reg1:TRegValue);
   procedure subi    (reg:TRegValue  ;imm:Int64);
   procedure subi8se (reg:TRegValue  ;imm:ShortInt);
-  procedure subi8se (mem:t_jit_leas ;imm:ShortInt);
+  procedure subi8se (const mem:array of t_jit_lea ;imm:ShortInt);
   procedure mulq    (reg:TRegValue);
-  procedure mulq    (mem:t_jit_leas);
+  procedure mulq    (const mem:array of t_jit_lea);
   procedure shl_cl  (reg:TRegValue);
   procedure shr_cl  (reg:TRegValue);
   procedure shli8   (reg:TRegValue  ;imm:Byte);
   procedure shri8   (reg:TRegValue  ;imm:Byte);
   procedure andi    (reg:TRegValue  ;imm:Int64);
-  procedure andi    (mem:t_jit_leas ;imm:Int64);
+  procedure andi    (const mem:array of t_jit_lea ;imm:Int64);
   procedure andi8se (reg:TRegValue  ;imm:ShortInt);
-  procedure andi8se (mem:t_jit_leas ;imm:ShortInt);
+  procedure andi8se (const mem:array of t_jit_lea ;imm:ShortInt);
   procedure andq    (reg0:TRegValue ;reg1:TRegValue);
   procedure orq     (reg0:TRegValue ;reg1:TRegValue);
   procedure ori     (reg:TRegValue  ;imm:Int64);
-  procedure ori     (mem:t_jit_leas ;imm:Int64);
+  procedure ori     (const mem:array of t_jit_lea ;imm:Int64);
   procedure ori8se  (reg:TRegValue  ;imm:ShortInt);
-  procedure ori8se  (mem:t_jit_leas ;imm:ShortInt);
+  procedure ori8se  (const mem:array of t_jit_lea ;imm:ShortInt);
   procedure xorq    (reg0:TRegValue ;reg1:TRegValue);
   procedure notq    (reg:TRegValue);
   procedure negq    (reg:TRegValue);
-  procedure bsfq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure bsfq    (reg:TRegValue  ;const mem:array of t_jit_lea);
   procedure bsfq    (reg0:TRegValue ;reg1:TRegValue);
-  procedure cmpq    (mem:t_jit_leas ;reg:TRegValue);
-  procedure cmpq    (reg:TRegValue  ;mem:t_jit_leas);
+  procedure cmpq    (const mem:array of t_jit_lea ;reg:TRegValue);
+  procedure cmpq    (reg:TRegValue  ;const mem:array of t_jit_lea);
   procedure cmpq    (reg0:TRegValue ;reg1:TRegValue);
   procedure cmpi    (reg:TRegValue  ;imm:Int64);
-  procedure cmpi    (mem:t_jit_leas ;imm:Int64);
+  procedure cmpi    (const mem:array of t_jit_lea ;imm:Int64);
   procedure cmpi8   (reg:TRegValue  ;imm:Byte);
-  procedure cmpi8   (mem:t_jit_leas ;imm:Byte);
+  procedure cmpi8   (const mem:array of t_jit_lea ;imm:Byte);
   procedure xchgq   (reg0:TRegValue ;reg1:TRegValue);
-  procedure push    (mem:t_jit_leas);
+  procedure push    (const mem:array of t_jit_lea);
   procedure push    (reg:TRegValue);
   procedure push8   (imm:Integer);
   procedure push16  (imm:Integer);
   procedure push32  (imm:Integer);
-  procedure pop     (mem:t_jit_leas);
+  procedure pop     (const mem:array of t_jit_lea);
   procedure pop     (reg:TRegValue);
   procedure pushfq  (size:TOperandSize);
   procedure popfq   (size:TOperandSize);
-  procedure vmovdqu (reg:TRegValue ;mem:t_jit_leas);
-  procedure vmovdqu (mem:t_jit_leas;reg:TRegValue);
-  procedure vmovdqa (reg:TRegValue ;mem:t_jit_leas);
-  procedure vmovdqa (mem:t_jit_leas;reg:TRegValue);
-  procedure vmovntdq(mem:t_jit_leas;reg:TRegValue);
-  procedure vmovups (reg:TRegValue ;mem:t_jit_leas);
-  procedure vmovups (mem:t_jit_leas;reg:TRegValue);
+  procedure vmovdqu (reg:TRegValue ;const mem:array of t_jit_lea);
+  procedure vmovdqu (const mem:array of t_jit_lea;reg:TRegValue);
+  procedure vmovdqa (reg:TRegValue ;const mem:array of t_jit_lea);
+  procedure vmovdqa (const mem:array of t_jit_lea;reg:TRegValue);
+  procedure vmovntdq(const mem:array of t_jit_lea;reg:TRegValue);
+  procedure vmovups (reg:TRegValue ;const mem:array of t_jit_lea);
+  procedure vmovups (const mem:array of t_jit_lea;reg:TRegValue);
   procedure vmovdqa (reg0:TRegValue;reg1:TRegValue);
   procedure sahf;
   procedure lahf;
@@ -576,7 +574,7 @@ type
   procedure seto(reg:TRegValue);
   procedure int3;
   procedure testq(reg0:TRegValue;reg1:TRegValue);
-  procedure bti8 (mem:t_jit_leas;imm:Byte);
+  procedure bti8 (const mem:array of t_jit_lea;imm:Byte);
   procedure shlx (reg0,reg1,reg2:TRegValue);
   procedure shrx (reg0,reg1,reg2:TRegValue);
   procedure movqx (reg0,reg1:TRegValue);
@@ -614,8 +612,8 @@ operator + (const A:t_jit_lea;B:TOperandSize):t_jit_lea; inline;
 operator :=(const A:TOperandSize):t_jit_lea; inline;
 operator * (const A:t_jit_lea;B:Integer):t_jit_lea;
 
-function Sums(mem:t_jit_leas):t_jit_lea;
-function get_mem_size(mem:t_jit_leas):TOperandSize; inline;
+function Sums(const mem:array of t_jit_lea):t_jit_lea;
+function get_mem_size(const mem:array of t_jit_lea):TOperandSize;
 
 function classif_offset_32(AOffset:Integer):Byte;
 function classif_offset_64(AOffset:Int64):TOperandSize;
@@ -1012,7 +1010,7 @@ begin
  end;
 end;
 
-function Sums(mem:t_jit_leas):t_jit_lea;
+function Sums(const mem:array of t_jit_lea):t_jit_lea;
 var
  i:Integer;
 begin
@@ -1033,7 +1031,7 @@ begin
  end;
 end;
 
-function get_mem_size(mem:t_jit_leas):TOperandSize; inline;
+function get_mem_size(const mem:array of t_jit_lea):TOperandSize;
 begin
  Result:=Sums(mem).AMemSize;
 end;
@@ -2009,7 +2007,7 @@ end;
 
 //construction sets
 
-function c_RM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_RM(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -2091,7 +2089,7 @@ begin
  Result:=ji;
 end;
 
-function c_RMI(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+function c_RMI(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm:Int64):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -2181,7 +2179,7 @@ begin
  Result:=ji;
 end;
 
-function c_RMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+function c_RMI8(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm:Byte):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -2707,7 +2705,7 @@ end;
 
 ////
 
-function c_M(const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+function c_M(const desc:t_op_type;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -2860,7 +2858,7 @@ begin
  Result:=ji;
 end;
 
-function c_MI(const desc:t_op_type;mem:t_jit_leas;imm:Int64):t_jit_instruction;
+function c_MI(const desc:t_op_type;const mem:array of t_jit_lea;imm:Int64):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3001,7 +2999,7 @@ begin
  Result:=ji;
 end;
 
-function c_MI8(const desc:t_op_type;mem:t_jit_leas;imm:Byte):t_jit_instruction;
+function c_MI8(const desc:t_op_type;const mem:array of t_jit_lea;imm:Byte):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3080,7 +3078,7 @@ end;
 
 //
 
-function c_VM(const desc:t_op_type;mem:t_jit_leas):t_jit_instruction;
+function c_VM(const desc:t_op_type;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3159,7 +3157,7 @@ begin
  Result:=ji;
 end;
 
-function c_VM(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VM(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3320,7 +3318,7 @@ begin
  Result:=ji;
 end;
 
-function c_VM_F3(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VM_F3(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3467,7 +3465,7 @@ begin
  Result:=ji;
 end;
 
-function c_VVM(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas):t_jit_instruction;
+function c_VVM(const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3563,7 +3561,7 @@ begin
  Result:=ji;
 end;
 
-function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+function c_VVMI8(const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea;imm8:Byte):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -3661,7 +3659,7 @@ begin
  Result:=ji;
 end;
 
-function c_VVMV(const desc:t_op_type;reg0,reg1:TRegValue;mem:t_jit_leas;reg2:TRegValue):t_jit_instruction;
+function c_VVMV(const desc:t_op_type;reg0,reg1:TRegValue;const mem:array of t_jit_lea;reg2:TRegValue):t_jit_instruction;
 begin
  Result:=c_VVMI8(desc,reg0,reg1,mem,reg2.AIndex shl 4);
 end;
@@ -3888,7 +3886,7 @@ begin
  Result:=ji;
 end;
 
-function c_VMI8(const desc:t_op_type;reg:TRegValue;mem:t_jit_leas;imm8:Byte):t_jit_instruction;
+function c_VMI8(const desc:t_op_type;reg:TRegValue;const mem:array of t_jit_lea;imm8:Byte):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -4471,7 +4469,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.movj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.movj(reg:TRegValue;const mem:array of t_jit_lea;target:t_jit_i_link):t_jit_i_link;
 const
  movq_desc:t_op_type=(op:$8B;index:0);
 var
@@ -4505,7 +4503,7 @@ begin
  LinkLabel(Result.ALink);
 end;
 
-function t_jit_builder.leaj(reg:TRegValue;mem:t_jit_leas;target:t_jit_i_link):t_jit_i_link;
+function t_jit_builder.leaj(reg:TRegValue;const mem:array of t_jit_lea;target:t_jit_i_link):t_jit_i_link;
 const
  leaq_desc:t_op_type=(op:$8D;index:0);
 var
@@ -4572,7 +4570,7 @@ begin
  _add(c_R(desc,reg));
 end;
 
-Procedure t_jit_builder.jmp(mem:t_jit_leas);
+Procedure t_jit_builder.jmp(const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$FF;index:4);
 begin
@@ -4588,7 +4586,7 @@ begin
  _add(c_R(desc,reg));
 end;
 
-Procedure t_jit_builder.call(mem:t_jit_leas);
+Procedure t_jit_builder.call(const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$FF;index:2);
 begin
@@ -5207,7 +5205,7 @@ const
   $48,$49,$4A,$4B,$4C,$4D,$4E,$4F
  );
 
-procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.cmov(op:TOpCodeSuffix;reg:TRegValue;const mem:array of t_jit_lea);
 var
  desc:t_op_type;
 begin
@@ -5241,7 +5239,7 @@ end;
 
 ////
 
-procedure t_jit_builder._push(op,index:Byte;mem:t_jit_leas);
+procedure t_jit_builder._push(op,index:Byte;const mem:array of t_jit_lea);
 var
  mreg:t_jit_lea;
 
@@ -5389,7 +5387,7 @@ begin
  _add(c_RR(desc,reg0,reg1,False));
 end;
 
-procedure t_jit_builder.movi(mem:t_jit_leas;imm:Int64);
+procedure t_jit_builder.movi(const mem:array of t_jit_lea;imm:Int64);
 const
  desc:t_op_type=(op:$C7;index:0);
 begin
@@ -5408,35 +5406,35 @@ begin
  _add(c_movi64(reg,imm));
 end;
 
-procedure t_jit_builder.movq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.movq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$8B;index:0);
 begin
  _add(c_RM(desc,reg,mem)); //MOV r64, r/m64
 end;
 
-procedure t_jit_builder.movq(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.movq(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$89;index:0);
 begin
  _add(c_RM(desc,reg,mem)); //MOV r/m64, r64
 end;
 
-procedure t_jit_builder.movzb(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.movzb(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$0FB6;opt:[not_os8]);
 begin
  _add(c_RM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.movbe(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.movbe(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$0F38F0;opt:[not_os8]);
 begin
  _add(c_RM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.movbe(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.movbe(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$0F38F1;opt:[not_os8]);
 begin
@@ -5452,7 +5450,7 @@ end;
 
 //
 
-procedure t_jit_builder.leaq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.leaq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$8D;index:0);
 begin
@@ -5463,14 +5461,14 @@ end;
 
 //
 
-procedure t_jit_builder.addq(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.addq(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$01;index:0);
 begin
  _add(c_RM(desc,reg,mem)); //ADD r/m64, r64
 end;
 
-procedure t_jit_builder.addq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.addq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$03;index:0);
 begin
@@ -5498,7 +5496,7 @@ begin
  _add(c_RI8(desc,reg,imm));
 end;
 
-procedure t_jit_builder.addi8se(mem:t_jit_leas;imm:ShortInt);
+procedure t_jit_builder.addi8se(const mem:array of t_jit_lea;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:0);
 begin
@@ -5507,14 +5505,14 @@ end;
 
 //
 
-procedure t_jit_builder.subq(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.subq(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$29;index:0);
 begin
  _add(c_RM(desc,reg,mem)); //SUB r/m64, r64
 end;
 
-procedure t_jit_builder.subq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.subq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$2B;index:0);
 begin
@@ -5542,7 +5540,7 @@ begin
  _add(c_RI8(desc,reg,imm));
 end;
 
-procedure t_jit_builder.subi8se(mem:t_jit_leas;imm:ShortInt);
+procedure t_jit_builder.subi8se(const mem:array of t_jit_lea;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:5);
 begin
@@ -5556,7 +5554,7 @@ begin
  _add(c_R(desc,reg));
 end;
 
-procedure t_jit_builder.mulq(mem:t_jit_leas);
+procedure t_jit_builder.mulq(const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$F7;index:4);
 begin
@@ -5602,7 +5600,7 @@ begin
  _add(c_RI(desc,reg,imm));
 end;
 
-procedure t_jit_builder.andi(mem:t_jit_leas;imm:Int64);
+procedure t_jit_builder.andi(const mem:array of t_jit_lea;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:4);
 begin
@@ -5616,7 +5614,7 @@ begin
  _add(c_RI8(desc,reg,imm));
 end;
 
-procedure t_jit_builder.andi8se(mem:t_jit_leas;imm:ShortInt);
+procedure t_jit_builder.andi8se(const mem:array of t_jit_lea;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:4);
 begin
@@ -5637,7 +5635,7 @@ begin
  _add(c_RI(desc,reg,imm));
 end;
 
-procedure t_jit_builder.ori(mem:t_jit_leas;imm:Int64);
+procedure t_jit_builder.ori(const mem:array of t_jit_lea;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:1);
 begin
@@ -5651,7 +5649,7 @@ begin
  _add(c_RI8(desc,reg,imm));
 end;
 
-procedure t_jit_builder.ori8se(mem:t_jit_leas;imm:ShortInt);
+procedure t_jit_builder.ori8se(const mem:array of t_jit_lea;imm:ShortInt);
 const
  desc:t_op_type=(op:$83;index:1);
 begin
@@ -5686,7 +5684,7 @@ begin
  _add(c_R(desc,reg));
 end;
 
-procedure t_jit_builder.bsfq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.bsfq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$0FBC;opt:[not_os8]);
 begin
@@ -5702,14 +5700,14 @@ end;
 
 ///
 
-procedure t_jit_builder.cmpq(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.cmpq(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$39;index:0);
 begin
  _add(c_RM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.cmpq(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.cmpq(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$3B;index:0);
 begin
@@ -5730,7 +5728,7 @@ begin
  _add(c_RI(desc,reg,imm));
 end;
 
-procedure t_jit_builder.cmpi(mem:t_jit_leas;imm:Int64);
+procedure t_jit_builder.cmpi(const mem:array of t_jit_lea;imm:Int64);
 const
  desc:t_op_type=(op:$81;index:7);
 begin
@@ -5744,7 +5742,7 @@ begin
  _add(c_RI8(desc,reg,imm));
 end;
 
-procedure t_jit_builder.cmpi8(mem:t_jit_leas;imm:Byte);
+procedure t_jit_builder.cmpi8(const mem:array of t_jit_lea;imm:Byte);
 const
  desc:t_op_type=(op:$83;index:7);
 begin
@@ -5760,7 +5758,7 @@ end;
 
 ///
 
-procedure t_jit_builder.push(mem:t_jit_leas);
+procedure t_jit_builder.push(const mem:array of t_jit_lea);
 begin
  _push($FF,6,mem);
 end;
@@ -5785,7 +5783,7 @@ begin
  _pushi(os32,imm);
 end;
 
-procedure t_jit_builder.pop(mem:t_jit_leas);
+procedure t_jit_builder.pop(const mem:array of t_jit_lea);
 begin
  _push($8F,0,mem);
 end;
@@ -5827,49 +5825,49 @@ begin
  _add(ji);
 end;
 
-procedure t_jit_builder.vmovdqu(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.vmovdqu(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$6F;simdop:2;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovdqu(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.vmovdqu(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;simdop:2;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovdqa(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.vmovdqa(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$6F;simdop:1;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovdqa(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.vmovdqa(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$7F;simdop:1;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovntdq(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.vmovntdq(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$E7;simdop:1;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovups(reg:TRegValue;mem:t_jit_leas);
+procedure t_jit_builder.vmovups(reg:TRegValue;const mem:array of t_jit_lea);
 const
  desc:t_op_type=(op:$10;simdop:0;mm:1);
 begin
  _add(c_VM(desc,reg,mem));
 end;
 
-procedure t_jit_builder.vmovups(mem:t_jit_leas;reg:TRegValue);
+procedure t_jit_builder.vmovups(const mem:array of t_jit_lea;reg:TRegValue);
 const
  desc:t_op_type=(op:$11;simdop:0;mm:1);
 begin
@@ -5970,7 +5968,7 @@ begin
  _add(c_RR(desc,reg0,reg1,False));
 end;
 
-procedure t_jit_builder.bti8(mem:t_jit_leas;imm:Byte);
+procedure t_jit_builder.bti8(const mem:array of t_jit_lea;imm:Byte);
 const
  desc:t_op_type=(op:$0FBA;index:4);
 begin
