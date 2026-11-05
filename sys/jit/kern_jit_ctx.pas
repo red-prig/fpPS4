@@ -329,7 +329,7 @@ function  flags(const ctx:t_jit_context2):t_jit_lea;
 
 procedure op_jit_interrupt(var ctx:t_jit_context2);
 
-procedure op_set_mem_imm(var ctx:t_jit_context2;mem:t_jit_leas;imm:Int64;hint:t_lea_hint=[]);
+procedure op_set_mem_imm(var ctx:t_jit_context2;const mem:array of t_jit_lea;imm:Int64;hint:t_lea_hint=[]); register;
 procedure op_set_reg_imm(var ctx:t_jit_context2;reg:TRegValue;imm:Int64);
 procedure op_set_r14_imm(var ctx:t_jit_context2;imm:Int64);
 procedure op_set_rip_imm(var ctx:t_jit_context2;imm:Int64);
@@ -2147,7 +2147,7 @@ end;
 
 //
 
-procedure op_set_mem_imm(var ctx:t_jit_context2;mem:t_jit_leas;imm:Int64;hint:t_lea_hint=[]);
+procedure op_set_mem_imm(var ctx:t_jit_context2;const mem:array of t_jit_lea;imm:Int64;hint:t_lea_hint=[]); register;
 var
  mreg:t_jit_lea;
  reg:TRegValue;
@@ -2571,9 +2571,9 @@ end;
 
 procedure op_mi(var ctx:t_jit_context2;
                  const desc:t_op_desc;
-                 mem:t_jit_leas;
+                 const mem:array of t_jit_lea;
                  imm:Int64;
-                 imm_size:TOperandSize);
+                 imm_size:TOperandSize); register;
 begin
  with ctx.builder do
   if (imm_size=os8) and
@@ -2607,9 +2607,9 @@ end;
 
 procedure op_rmi(var ctx:t_jit_context2;
                  const desc:t_op_desc;
-                 reg:TRegValue;mem:t_jit_leas;
+                 reg:TRegValue;const mem:array of t_jit_lea;
                  imm:Int64;
-                 imm_size:TOperandSize);
+                 imm_size:TOperandSize); register;
 begin
  with ctx.builder do
   if (not_impl in desc.reg_imm.opt) then
@@ -2629,7 +2629,7 @@ end;
 
 procedure op_rm_or_rmi(var ctx:t_jit_context2;
                        const desc:t_op_desc;
-                       reg:TRegValue;mem:t_jit_leas);
+                       reg:TRegValue;const mem:array of t_jit_lea); register;
 var
  mem_size:TOperandSize;
 
@@ -2652,7 +2652,7 @@ end;
 
 procedure op_mr_or_mri(var ctx:t_jit_context2;
                        const desc:t_op_desc;
-                       reg:TRegValue;mem:t_jit_leas);
+                       reg:TRegValue;const mem:array of t_jit_lea); register;
 var
  mem_size:TOperandSize;
 
