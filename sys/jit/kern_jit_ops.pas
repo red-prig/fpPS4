@@ -65,13 +65,17 @@ begin
    movq(r_tmp1,rsi);
    op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
-   _O($A7,Size);
+   _add(c_O($A7,Size));
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
    leaq(rcx,[rcx-1]);
 
@@ -277,13 +281,17 @@ begin
 
    //[RSI] -> [RDI].
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
-   _O($A5,Size);
+   _add(c_O($A5,Size));
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
    leaq(rcx,[rcx-1]);
 
@@ -369,13 +377,17 @@ begin
    movq(r_tmp1,rsi);
    op_uplift(ctx,r_tmp1,size,[not_use_r_tmp0]); //in/out:r15
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
-   _O($A7,Size);
+   _add(c_O($A7,Size));
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
    if (dflag=0) then
    begin
@@ -452,13 +464,17 @@ begin
 
    //[RSI] -> [RDI].
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
-   _O($A5,Size);
+   _add(c_O($A5,Size));
 
-   xchgq(rdi,r_tmp0);
-   xchgq(rsi,r_tmp1);
+   Compact([
+    c_xchgq(rdi,r_tmp0),
+    c_xchgq(rsi,r_tmp1)
+   ]);
 
    if (dflag=0) then
    begin
@@ -677,7 +693,7 @@ begin
 
    xchgq(rdi,r_tmp0);
 
-   _O($AF,Size);
+   _add(c_O($AF,Size));
 
    xchgq(rdi,r_tmp0);
 
