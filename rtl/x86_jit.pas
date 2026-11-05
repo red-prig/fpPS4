@@ -490,9 +490,6 @@ type
   //
   procedure cmov    (op:TOpCodeSuffix;reg:TRegValue;const mem:array of t_jit_lea);
   procedure cmov    (op:TOpCodeSuffix;reg0:TRegValue;reg1:TRegValue);
-  procedure _push   (op,index:Byte;const mem:array of t_jit_lea);
-  procedure _push   (op:Byte;reg:TRegValue);
-  procedure _pushi  (size:TOperandSize;imm:Integer);
   procedure movq    (reg0:TRegValue ;reg1:TRegValue);
   procedure movi    (const mem:array of t_jit_lea ;imm:Int64);
   procedure movi    (reg:TRegValue  ;imm:Int64);
@@ -591,9 +588,14 @@ function c_movi(reg:TRegValue;imm:Int64):t_jit_instruction;
 function c_movi64(reg:TRegValue;imm:Int64):t_jit_instruction;
 function c_push(reg:TRegValue):t_jit_instruction;
 function c_pop(reg:TRegValue):t_jit_instruction;
+function c_pushfq(size:TOperandSize):t_jit_instruction;
+function c_popfq(size:TOperandSize):t_jit_instruction;
 function c_movq(reg0,reg1:TRegValue):t_jit_instruction;
+function c_movq(reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
+function c_movq(const mem:array of t_jit_lea;reg:TRegValue):t_jit_instruction;
 function c_xchgq(reg0,reg1:TRegValue):t_jit_instruction;
 function c_shrx(reg0,reg1,reg2:TRegValue):t_jit_instruction;
+function c_leaq(reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 
 operator :=(const A:TRegValue):t_jit_lea;
 operator + (const A,B:t_jit_lea):t_jit_lea;
@@ -5239,7 +5241,7 @@ end;
 
 ////
 
-procedure t_jit_builder._push(op,index:Byte;const mem:array of t_jit_lea);
+function c_push(op,index:Byte;const mem:array of t_jit_lea):t_jit_instruction;
 var
  mreg:t_jit_lea;
 
@@ -5284,10 +5286,10 @@ begin
 
  modrm_info.emit_mrm(ji);
 
- _add(ji);
+ Result:=ji;
 end;
 
-procedure t_jit_builder._push(op:Byte;reg:TRegValue);
+function c_push(op:Byte;reg:TRegValue):t_jit_instruction;
 var
  rexB:Boolean;
 
@@ -5338,10 +5340,10 @@ begin
 
  ji.EmitByte(op);
 
- _add(ji);
+ Result:=ji;
 end;
 
-procedure t_jit_builder._pushi(size:TOperandSize;imm:Integer);
+function c_pushi(size:TOperandSize;imm:Integer):t_jit_instruction;
 var
  op,Prefix:Byte;
 
@@ -5375,7 +5377,7 @@ begin
   else;
  end;
 
- _add(ji);
+ Result:=ji;
 end;
 
 //
@@ -5760,37 +5762,37 @@ end;
 
 procedure t_jit_builder.push(const mem:array of t_jit_lea);
 begin
- _push($FF,6,mem);
+ _add(c_push($FF,6,mem));
 end;
 
 procedure t_jit_builder.push(reg:TRegValue);
 begin
- _push($50,reg);
+ _add(c_push($50,reg));
 end;
 
 procedure t_jit_builder.push8(imm:Integer);
 begin
- _pushi(os8,imm);
+ _add(c_pushi(os8,imm));
 end;
 
 procedure t_jit_builder.push16(imm:Integer);
 begin
- _pushi(os16,imm);
+ _add(c_pushi(os16,imm));
 end;
 
 procedure t_jit_builder.push32(imm:Integer);
 begin
- _pushi(os32,imm);
+ _add(c_pushi(os32,imm));
 end;
 
 procedure t_jit_builder.pop(const mem:array of t_jit_lea);
 begin
- _push($8F,0,mem);
+ _add(c_push($8F,0,mem));
 end;
 
 procedure t_jit_builder.pop(reg:TRegValue);
 begin
- _push($58,reg);
+ _add(c_push($58,reg));
 end;
 
 procedure t_jit_builder.pushfq(size:TOperandSize);
@@ -6121,50 +6123,46 @@ begin
  Result:=ji;
 end;
 
-function c_pushreg(op:Byte;reg:TRegValue):t_jit_instruction;
-var
- rexB:Boolean;
- Index:Byte;
- ji:t_jit_instruction;
-begin
- Assert(is_reg_size(reg,[os16,os64]));
- Assert(is_reg_type(reg,[regGeneral]));
- Assert(reg.AScale<=1);
-
- ji:=default_jit_instruction;
-
- rexB:=False;
-
- Index:=reg.AIndex;
- if (Index>=8) then
- begin
-  rexB:=True;
-  Dec(Index,8);
- end;
-
- if (reg.ASize=os16) then
- begin
-  ji.EmitByte($66);
- end;
-
- if rexB then
- begin
-  ji.EmitREX(rexB,False,False,False);
- end;
-
- ji.EmitByte(op+Index);
-
- Result:=ji;
-end;
-
 function c_push(reg:TRegValue):t_jit_instruction;
 begin
- Result:=c_pushreg($50,reg);
+ Result:=c_push($50,reg);
 end;
 
 function c_pop(reg:TRegValue):t_jit_instruction;
 begin
- Result:=c_pushreg($58,reg);
+ Result:=c_push($58,reg);
+end;
+
+function c_pushfq(size:TOperandSize):t_jit_instruction;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ if (size=os16) then
+ begin
+  ji.EmitByte($66);
+ end;
+
+ ji.EmitByte($9C);
+
+ Result:=ji;
+end;
+
+function c_popfq(size:TOperandSize):t_jit_instruction;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ if (size=os16) then
+ begin
+  ji.EmitByte($66);
+ end;
+
+ ji.EmitByte($9D);
+
+ Result:=ji;
 end;
 
 function c_movq(reg0,reg1:TRegValue):t_jit_instruction;
@@ -6188,6 +6186,28 @@ const
  );
 begin
  Result:=c_VVV(desc,reg0,reg2,reg1,os64); //1 3 2
+end;
+
+function c_movq(reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
+const
+ desc:t_op_type=(op:$8B;index:0);
+begin
+ Result:=c_RM(desc,reg,mem); //MOV r64, r/m64
+end;
+
+function c_movq(const mem:array of t_jit_lea;reg:TRegValue):t_jit_instruction;
+const
+ desc:t_op_type=(op:$89;index:0);
+begin
+ Result:=c_RM(desc,reg,mem); //MOV r/m64, r64
+end;
+
+function c_leaq(reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
+const
+ desc:t_op_type=(op:$8D;index:0);
+begin
+ Assert(is_reg_size(reg,[os16,os32,os64]));
+ Result:=c_RM(desc,reg,mem); //LEA r64,m
 end;
 
 

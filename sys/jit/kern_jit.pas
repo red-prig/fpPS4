@@ -145,11 +145,14 @@ begin
   movq(r13,rcx); //save rcx (break jit_frame)
 
   plt:=leap(r15);
-  movq(r15,[r15]); //plt^
 
-  movq(rcx,[r15+(@p_jplt_cache_asm(nil)^.neg)]); //plt^.neg
+  Compact([
+   c_movq(r15,[r15]), //plt^
 
-  leaq(rcx,[rcx+r14]);
+   c_movq(rcx,[r15+(@p_jplt_cache_asm(nil)^.neg)]), //plt^.neg
+
+   c_leaq(rcx,[rcx+r14])
+  ]);
 
   link_jcxz:=jcxz(nil_link,as64,os8);
 
@@ -169,13 +172,14 @@ begin
   //plt cache succes
   link_jcxz.target:=ctx.builder.get_curr_label.after;
 
-  movq(rcx,r13); //restore rcx
+  Compact([
+   c_movq(rcx,r13), //restore rcx
 
-  //restore jit_frame
-  movq(r13,[GS +teb_thread]);
-  leaq(r13,[r13+jit_frame_offset]);
-
-  movq(r14,[r15+(@p_jplt_cache_asm(nil)^.dst)]); //plt^.dst
+   //restore jit_frame
+   c_movq(r13,[GS +teb_thread]),
+   c_leaq(r13,[r13+jit_frame_offset]),
+   c_movq(r14,[r15+(@p_jplt_cache_asm(nil)^.dst)]) //plt^.dst
+  ]);
 
   //exit
   link_jmp.target:=ctx.builder.get_curr_label.after;
@@ -305,28 +309,32 @@ var
 begin
  with ctx.builder do
  begin
-  //convert jit_frame->call_ret_cache
-  leaq(r13,[r13-jit_frame_offset-64*1024]);
+  Compact([
+   //convert jit_frame->call_ret_cache
+   c_leaq(r13,[r13-jit_frame_offset-64*1024]),
 
-  movq(r15,rcx); //save rcx
+   c_movq(r15,rcx), //save rcx
 
-  leaq(ecx ,[r14d+r14d]);
-  leaq(r13w,[ecx*8]); //r13 = r13 && (!0xFFFF) || Word(r14*16)
+   c_leaq(ecx ,[r14d+r14d]),
+   c_leaq(r13w,[ecx*8]), //r13 = r13 && (!0xFFFF) || Word(r14*16)
 
-  movq(rcx,[r13]); //-src
+   c_movq(rcx,[r13]), //-src
 
-  leaq(rcx,[r14+rcx]); //r14+(-src)
+   c_leaq(rcx,[r14+rcx]) //r14+(-src)
+  ]);
 
   link_jcxz:=jcxz(nil_link,as64,os8); //r14+(-src)=0
 
   //plt cache fail
 
-  movq(rcx,r15); //restore rcx
+  Compact([
+   c_movq(rcx,r15), //restore rcx
 
-  //restore jit_frame in jit_jmp_dispatch
+   //restore jit_frame in jit_jmp_dispatch
 
-  //stub plt link
-  movi(r15,0);
+   //stub plt link
+   c_movi(r15,0)
+  ]);
   call_far(@jit_jmp_dispatch); //input:r14,r15 out:r14
 
   //exit:
@@ -335,14 +343,16 @@ begin
   //plt cache succes
   link_jcxz.target:=ctx.builder.get_curr_label.after;
 
-  movq(r14,[r13+8]); //dst
+  Compact([
+   c_movq(r14,[r13+8]), //dst
 
-  movq(rcx,r15); //restore rcx
+   c_movq(rcx,r15), //restore rcx
 
-  //r13 = r13 && (!0xFFFF) || 0
-  movi(r13w,0);
-  //convert call_ret_cache->jit_frame
-  leaq(r13,[r13+jit_frame_offset+64*1024]);
+   //r13 = r13 && (!0xFFFF) || 0
+   c_movi(r13w,0),
+   //convert call_ret_cache->jit_frame
+   c_leaq(r13,[r13+jit_frame_offset+64*1024])
+  ]);
 
   //exit
   link_jmp.target:=ctx.builder.get_curr_label.after;
@@ -460,8 +470,10 @@ begin
  begin
   stack:=r_tmp0;
 
-  op_load_rsp(ctx,stack);
-  leaq(stack,[stack-8]);
+  Compact([
+   c_load_rsp(stack),
+   c_leaq    (stack,[stack-8])
+  ]);
 
   op_uplift(ctx,stack,os64); //in/out:r14
 
@@ -472,13 +484,17 @@ begin
    if (classif_offset_u64(imm)=os64) then
    begin
     //64bit imm
-    movi64(r_tmp1,imm);
-    movq([stack],r_tmp1);
+    Compact([
+     c_movi64(r_tmp1,imm),
+     c_movq  ([stack],r_tmp1)
+    ]);
    end else
    begin
     //32bit zero extend
-    movi(new_reg_size(r_tmp1,os32),imm);
-    movq([stack],r_tmp1);
+    Compact([
+     c_movi(new_reg_size(r_tmp1,os32),imm),
+     c_movq([stack],r_tmp1)
+    ]);
    end;
   end else
   begin
@@ -510,9 +526,11 @@ begin
   //For transactionality,
   //first we move the memory,
   //then we update the register
-  op_load_rsp(ctx,stack);
-  leaq(stack,[stack-8]);
-  op_save_rsp(ctx,stack);
+  Compact([
+   c_load_rsp(stack),
+   c_leaq    (stack,[stack-8]),
+   c_save_rsp(stack)
+  ]);
 
  end;
 end;
@@ -560,9 +578,11 @@ begin
   //For transactionality,
   //first we move the memory,
   //then we update the register
-  op_load_rsp(ctx,stack);
-  leaq(stack,[stack+8+imm]);
-  op_save_rsp(ctx,stack);
+  Compact([
+   c_load_rsp(stack),
+   c_leaq    (stack,[stack+8+imm]),
+   c_save_rsp(stack)
+  ]);
 
  end;
 end;
@@ -986,8 +1006,10 @@ begin
    else;
   end;
 
-  op_load_rsp(ctx,stack);
-  leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
+  Compact([
+   c_load_rsp(stack),
+   c_leaq    (stack,[stack-OPERAND_BYTES[new.ASize]])
+  ]);
 
   if (new.AIndex=r_tmp1.AIndex) then
   begin
@@ -997,14 +1019,16 @@ begin
    op_uplift(ctx,stack,new.ASize); //in/out:r14
   end;
 
-  movq([stack],new);
+  Compact([
+   c_movq([stack],new),
 
-  //For transactionality,
-  //first we move the memory,
-  //then we update the register
-  //[op_uplift] op_load_rsp(ctx,stack);
-  //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
-  op_save_rsp(ctx,stack);
+   //For transactionality,
+   //first we move the memory,
+   //then we update the register
+   //[op_uplift] op_load_rsp(ctx,stack);
+   //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[new.ASize]]);
+   c_save_rsp(stack)
+  ]);
 
  end;
 end;
@@ -1025,23 +1049,27 @@ begin
 
   mem_size:=ctx.din.Operand[1].Size;
 
-  op_load_rsp(ctx,stack);
-  leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
+  Compact([
+   c_load_rsp(stack),
+   c_leaq    (stack,[stack-OPERAND_BYTES[mem_size]])
+  ]);
 
   op_uplift(ctx,stack,mem_size); //in/out:r14
 
-  //get all flags
-  pushfq(mem_size);
-  pop(new);
+  Compact([
+   //get all flags
+   c_pushfq(mem_size),
+   c_pop   (new),
 
-  movq([stack],new);
+   c_movq  ([stack],new),
 
-  //For transactionality,
-  //first we move the memory,
-  //then we update the register
-  //[op_uplift] op_load_rsp(ctx,stack);
-  //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
-  op_save_rsp(ctx,stack);
+   //For transactionality,
+   //first we move the memory,
+   //then we update the register
+   //[op_uplift] op_load_rsp(ctx,stack);
+   //[op_uplift] leaq(stack,[stack-OPERAND_BYTES[mem_size]]);
+   c_save_rsp(stack)
+  ]);
 
  end;
 end;
@@ -1059,22 +1087,23 @@ begin
   stack:=r_tmp0;
   new  :=r_tmp1;
 
-  op_load_rbp(ctx,stack);
+  movq(stack,rbp);
 
   op_uplift(ctx,stack,os64); //in/out:r14
-
-  movq(new,[stack]);
 
   //For transactionality,
   //first we move the memory,
   //then we update the register
   //[op_uplift] op_load_rbp(ctx,stack);
   //[op_uplift] op_save_rsp(ctx,stack);
-  op_save_rbp(ctx,new);
 
   //[op_uplift] op_load_rsp(ctx,stack);
-  leaq(stack,[stack+OPERAND_BYTES[ctx.dis.OperandSize]]);
-  op_save_rsp(ctx,stack);
+  Compact([
+   c_movq    (new,[stack]),
+   c_movq    (rbp,new),
+   c_leaq    (stack,[stack+OPERAND_BYTES[ctx.dis.OperandSize]]),
+   c_save_rsp(stack)
+  ]);
  end;
 
 end;
@@ -1099,16 +1128,17 @@ begin
 
   op_uplift(ctx,stack,mem_size); //in/out:r14
 
-  movq(new,[stack]);
-  push(new);
-  popfq(mem_size);
-
   //For transactionality,
   //first we move the memory,
   //then we update the register
   //[op_uplift] op_load_rsp(ctx,stack);
-  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
-  op_save_rsp(ctx,stack);
+  Compact([
+   c_movq    (new,[stack]),
+   c_push    (new),
+   c_popfq   (mem_size),
+   c_leaq    (stack,[stack+OPERAND_BYTES[new.ASize]]),
+   c_save_rsp(stack)
+  ]);
  end;
 end;
 
@@ -1163,10 +1193,19 @@ begin
   //then we update the register
   if reload_rsp then
   begin
-   op_load_rsp(ctx,stack);
+   Compact([
+    c_load_rsp(stack),
+    c_leaq    (stack,[stack+OPERAND_BYTES[new.ASize]]),
+    c_save_rsp(stack)
+   ]);
+  end else
+  begin
+   Compact([
+    c_leaq    (stack,[stack+OPERAND_BYTES[new.ASize]]),
+    c_save_rsp(stack)
+   ]);
   end;
-  leaq(stack,[stack+OPERAND_BYTES[new.ASize]]);
-  op_save_rsp(ctx,stack);
+
  end;
 end;
 
@@ -1434,18 +1473,19 @@ begin
   //set PCB_IS_HLE
   ori([r13-jit_frame_offset+(@p_kthread(nil)^.pcb_flags),os8],Byte(PCB_IS_HLE));
 
-  //prolog (debugger)
-  movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp); //update
   Compact([
+   c_movq([r13+(@p_jit_frame(nil)^.tf_rbp)],rbp), //update
+
+   //prolog (debugger)
    c_push(rbp),
-   c_movq(rbp,rsp)
+   c_movq(rbp,rsp),
+
+   //load guest stack
+
+   c_movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]), //<-rsp
+
+   c_leaq(rsp,[rsp-$8]) //shift guard
   ]);
-
-  //load guest stack
-
-  movq(r14,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //<-rsp
-
-  leaq(rsp,[rsp-$8]); //shift guard
 
   if (count>0) then
   begin
@@ -1455,16 +1495,20 @@ begin
    //preload stack argc
    For i:=0 to count-1 do
    begin
-    movq(r15,[r14+(i*8)+(8)]); //call(8)
-    movq([rsp+(i*8)],r15);
+    Compact([
+     c_movq(r15,[r14+(i*8)+(8)]), //call(8)
+     c_movq([rsp+(i*8)],r15)
+    ]);
    end;
    //
   end;
 
   //load r14,r15,r13
-  movq(r14,[r13+(@p_jit_frame(nil)^.tf_r14)]);
-  movq(r15,[r13+(@p_jit_frame(nil)^.tf_r15)]);
-  movq(r13,[r13+(@p_jit_frame(nil)^.tf_r13)]);
+  Compact([
+   c_movq(r14,[r13+(@p_jit_frame(nil)^.tf_r14)]),
+   c_movq(r15,[r13+(@p_jit_frame(nil)^.tf_r15)]),
+   c_movq(r13,[r13+(@p_jit_frame(nil)^.tf_r13)])
+  ]);
  end;
 end;
 
@@ -1472,25 +1516,25 @@ procedure op_native2jit_export(var ctx:t_jit_context2);
 begin
  with ctx.builder do
  begin
-  //save r13
-  movq([GS+teb_jitcall],r13);
-
-  //load curkthread,jit_ctx
-  movq(r13,[GS +teb_thread]);
-  leaq(r13,[r13+jit_frame_offset]);
-
-  //load r14,r15
-  movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14);
-  movq([r13+(@p_jit_frame(nil)^.tf_r15)],r15);
-
-  //load r13
-  movq(r14,[GS+teb_jitcall]);
-  movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14);
-
-  //free host stack
-
-  //epilog (debugger)
   Compact([
+   //save r13
+   c_movq([GS+teb_jitcall],r13),
+
+   //load curkthread,jit_ctx
+   c_movq(r13,[GS +teb_thread]),
+   c_leaq(r13,[r13+jit_frame_offset]),
+
+   //load r14,r15
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14),
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r15)],r15),
+
+   //load r13
+   c_movq(r14,[GS+teb_jitcall]),
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14),
+
+   //free host stack
+
+   //epilog (debugger)
    c_movq(rsp,rbp),
    c_pop(rbp)
   ]);
@@ -1510,15 +1554,17 @@ begin
 
   //restore guest/host stack
 
-  //epilog (debugger)
-  movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rbp); //movq  %rbp,%rsp
-  pop(rbp);                                    //popq  %rbp (restore host rbp)
-  //
+  Compact([
+   //epilog (debugger)
+   c_movq([r13+(@p_jit_frame(nil)^.tf_rsp)],rbp), //movq  %rbp,%rsp
+   c_pop(rbp),                                    //popq  %rbp (restore host rbp)
+   //
 
-  //load r14,r15,r13
-  movq(r14,[r13+(@p_jit_frame(nil)^.tf_r14)]);
-  movq(r15,[r13+(@p_jit_frame(nil)^.tf_r15)]);
-  movq(r13,[r13+(@p_jit_frame(nil)^.tf_r13)]);
+   //load r14,r15,r13
+   c_movq(r14,[r13+(@p_jit_frame(nil)^.tf_r14)]),
+   c_movq(r15,[r13+(@p_jit_frame(nil)^.tf_r15)]),
+   c_movq(r13,[r13+(@p_jit_frame(nil)^.tf_r13)])
+  ]);
  end;
 end;
 
@@ -1534,41 +1580,47 @@ begin
 
  with ctx.builder do
  begin
-  //save r13
-  movq([GS+teb_jitcall],r13);
+  Compact([
+   //save r13
+   c_movq([GS+teb_jitcall],r13),
 
-  //load curkthread,jit_ctx
-  movq(r13,[GS +teb_thread]);
-  leaq(r13,[r13+jit_frame_offset]);
+   //load curkthread,jit_ctx
+   c_movq(r13,[GS +teb_thread]),
+   c_leaq(r13,[r13+jit_frame_offset]),
 
-  //load r14,r15
-  movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14);
-  movq([r13+(@p_jit_frame(nil)^.tf_r15)],r15);
+   //load r14,r15
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r14)],r14),
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r15)],r15),
 
-  //load r13
-  movq(r14,[GS+teb_jitcall]);
-  movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14);
+   //load r13
+   c_movq(r14,[GS+teb_jitcall]),
+   c_movq([r13+(@p_jit_frame(nil)^.tf_r13)],r14),
 
-  //load guest stack
+   //load guest stack
 
-  //prolog (debugger)
-  push(rbp);                                   //pushq %rbp
-  movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rsp)]); //movq  %rsp,%rbp
+   //prolog (debugger)
+   c_push(rbp),                                   //pushq %rbp
+   c_movq(rbp,[r13+(@p_jit_frame(nil)^.tf_rsp)]), //movq  %rsp,%rbp
 
-  leaq(r14,[rbp-$8]); //shift guard
+   c_leaq(r14,[rbp-$8]) //shift guard
+  ]);
 
   if (count>0) then
   begin
-   //alloc guest rsp
-   leaq(r14,[r14-(count*8)]);
-   movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14); //rsp
+   Compact([
+    //alloc guest rsp
+    c_leaq(r14,[r14-(count*8)]),
+    c_movq([r13+(@p_jit_frame(nil)^.tf_rsp)],r14) //rsp
+   ]);
 
    //preload stack argc
 
    For i:=0 to count-1 do
    begin
-    movq(r15,[rsp+(i*8)+(8+8)]); //call(8) + push(8)
-    movq([r14+(i*8)],r15);
+    Compact([
+     c_movq(r15,[rsp+(i*8)+(8+8)]), //call(8) + push(8)
+     c_movq([r14+(i*8)],r15)
+    ]);
    end;
    //
   end else
