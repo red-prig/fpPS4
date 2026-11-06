@@ -597,6 +597,18 @@ function c_xchgq(reg0,reg1:TRegValue):t_jit_instruction;
 function c_shrx(reg0,reg1,reg2:TRegValue):t_jit_instruction;
 function c_leaq(reg:TRegValue;const mem:array of t_jit_lea):t_jit_instruction;
 
+function c_nop_marker(data:Byte):t_jit_instruction;
+
+type
+ t_nop_marker=bitpacked record
+  valid:Boolean;
+  align:0..7;
+  next :0..15;
+  data :Byte;
+ end;
+
+function nop_marker_decode(p:Pointer):t_nop_marker;
+
 operator :=(const A:TRegValue):t_jit_lea;
 operator + (const A,B:t_jit_lea):t_jit_lea;
 operator + (const A:t_jit_lea;const B:TRegValue):t_jit_lea;
@@ -6209,6 +6221,30 @@ const
 begin
  Assert(is_reg_size(reg,[os16,os32,os64]));
  Result:=c_RM(desc,reg,mem); //LEA r64,m
+end;
+
+//marker nop: F3 0F 1F 40 <data>
+function c_nop_marker(data:Byte):t_jit_instruction;
+var
+ ji:t_jit_instruction;
+begin
+ ji:=default_jit_instruction;
+
+ ji.EmitInt32($401F0FF3);
+ ji.EmitByte(data);
+
+ Result:=ji;
+end;
+
+function nop_marker_decode(p:Pointer):t_nop_marker;
+begin
+ Result:=Default(t_nop_marker);
+ if (PDWORD(p)^=$401F0FF3) then
+ begin
+  Result.valid:=True;
+  Result.next :=5;
+  Result.data :=PByte(p)[4];
+ end;
 end;
 
 

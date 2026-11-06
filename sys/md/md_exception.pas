@@ -544,9 +544,10 @@ begin
 
       md_get_frame(p^.ContextRecord,@td_frame,@td_fpstate);
 
+      jit_fix_swap(@td_frame,p^.ContextRecord^.Rip,@data.info);
+
       set_jit_ctx_state(@td_frame,False);
       td_frame.tf_rip:=data.info.original;
-      //TODO: override_mem_*
 
       //host stack anchor for the resume (level of the faulting jit block)
       td_jctx.host_rsp  :=p^.ContextRecord^.Rsp;
@@ -587,9 +588,10 @@ begin
 
       md_get_frame(p^.ContextRecord,@td_frame,@td_fpstate);
 
+      jit_fix_swap(@td_frame,p^.ContextRecord^.Rip,@data.info);
+
       set_jit_ctx_state(@td_frame,False);
       td_frame.tf_rip:=data.info.original;
-      //TODO: override_mem_*
 
       //host stack anchor for the resume (level of the faulting jit block)
       td_jctx.host_rsp  :=p^.ContextRecord^.Rsp;

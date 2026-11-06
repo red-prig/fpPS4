@@ -12,6 +12,7 @@ uses
  //g23tree,
  g_node_splay,
  murmurhash,
+ ucontext,
  x86_jit,
  kern_jit_ctx,
  kern_jit_asm,
@@ -202,6 +203,8 @@ function  fetch_chunk_by_guest(src:Pointer):p_jcode_chunk;
 function  fetch_blob_by_host(src:Pointer):p_jit_dynamic_blob;
 function  exist_jit_host(src:Pointer;info:p_jit_addr_info):Boolean;
 
+procedure jit_fix_swap(tf:p_trapframe;Rip:QWORD;info:p_jit_addr_info);
+
 function  next_chunk(node:p_jcode_chunk;src:Pointer):p_jcode_chunk;
 //procedure unmap_jit_cache(start,__end:QWORD);
 function  preload_entry(addr:Pointer):p_jit_entry_point;
@@ -231,6 +234,7 @@ uses
  vm_pmap_prot,
  vm_pmap,
  md_map,
+ x86_fpdbgdisas,
  vm_tracking_map,
  subr_dynlib,
  kern_dlsym,
@@ -241,6 +245,136 @@ uses
 function t_jit_addr_info.mapped:Boolean;
 begin
  Result:=(original<>0) and (not internal);
+end;
+
+//
+
+function tf_get_reg_ptr(tf:p_trapframe;reg:TRegValue):Pointer;
+var
+ ptr:Pointer;
+begin
+
+ ptr:=nil;
+ case reg.AIndex of
+   0:ptr:=@tf^.tf_rax;
+   1:ptr:=@tf^.tf_rcx;
+   2:ptr:=@tf^.tf_rdx;
+   3:ptr:=@tf^.tf_rbx;
+   4:ptr:=@tf^.tf_rsp;
+   5:ptr:=@tf^.tf_rbp;
+   6:ptr:=@tf^.tf_rsi;
+   7:ptr:=@tf^.tf_rdi;
+   8:ptr:=@tf^.tf_r8 ;
+   9:ptr:=@tf^.tf_r9 ;
+  10:ptr:=@tf^.tf_r10;
+  11:ptr:=@tf^.tf_r11;
+  12:ptr:=@tf^.tf_r12;
+  13:ptr:=@tf^.tf_r13;
+  14:ptr:=@tf^.tf_r14;
+  15:ptr:=@tf^.tf_r15;
+  else
+     Assert(False);
+ end;
+
+ if (reg.AType=regGeneralH) then
+ begin
+  ptr:=ptr+1;
+ end;
+
+ Result:=ptr;
+end;
+
+procedure do_xchg(tf:p_trapframe;const din:TInstruction);
+var
+ ptra,ptrb:Pointer;
+
+ procedure SwapByte(a,b:PByte); inline;
+ var
+  t:Byte;
+ begin
+  t:=a^; a^:=b^; b^:=t;
+ end;
+
+ procedure SwapWord(a,b:PWord); inline;
+ var
+  t:Word;
+ begin
+  t:=a^; a^:=b^; b^:=t;
+ end;
+
+ procedure SwapDWord(a,b:PDWord); inline;
+ var
+  t:DWord;
+ begin
+  t:=a^; a^:=b^; b^:=t;
+ end;
+
+ procedure SwapQWord(a,b:PQWord); inline;
+ var
+  t:QWord;
+ begin
+  t:=a^; a^:=b^; b^:=t;
+ end;
+
+begin
+ if (din.OpCode.Opcode<>OPxchg) then Exit;
+ if (din.OperCnt<>2) then Exit;
+
+ if (ofMemory in din.Operand[1].Flags) or
+    (ofMemory in din.Operand[2].Flags) then Exit;
+
+ ptra:=tf_get_reg_ptr(tf,din.Operand[1].RegValue[0]);
+ ptrb:=tf_get_reg_ptr(tf,din.Operand[2].RegValue[0]);
+
+ case din.Operand[1].RegValue[0].ASize of
+  os8 :SwapByte (ptra,ptrb);
+  os16:SwapWord (ptra,ptrb);
+  os32:SwapDWord(ptra,ptrb);
+  os64:SwapQWord(ptra,ptrb);
+  else
+     Assert(False);
+ end;
+
+end;
+
+procedure jit_fix_swap(tf:p_trapframe;Rip:QWORD;info:p_jit_addr_info);
+var
+ dis:TX86Disassembler;
+ din:TInstruction;
+ ptr:Pointer;
+ fin:Pointer;
+
+ marker:t_nop_marker;
+begin
+ if (tf=nil) or (info=nil) then Exit;
+ if not info^.mapped then Exit;
+
+ fin:=Pointer(info^.recompil+info^.jflags.recompil);
+ if (Rip<info^.recompil) or (Rip>=QWORD(fin)) then Exit;
+
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ ptr:=Pointer(Rip);
+
+ //original
+ dis.Disassemble(dm64,ptr,din);
+ if (ptr>=fin) then Exit;
+
+ //marker
+ marker:=nop_marker_decode(ptr);
+ if not marker.valid then Exit;
+ if (marker.data<>SWAP_MARK_XCHG) then Exit;
+
+ ptr:=ptr+marker.next;
+ if (ptr>=fin) then Exit;
+
+ //read xchg
+ dis.Disassemble(dm64,ptr,din);
+ if (ptr>fin) then Exit;
+
+ //do swap
+ do_xchg(tf,din);
 end;
 
 //
