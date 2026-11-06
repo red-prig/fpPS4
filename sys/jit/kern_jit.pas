@@ -423,6 +423,12 @@ begin
    Exit(False);
   end;
 
+  if is_invalid(din) then
+  begin
+   //invalid code
+   Exit(False);
+  end;
+
   addr:=addr+(ptr-beg);
 
   case din.OpCode.Opcode of
@@ -430,11 +436,6 @@ begin
     begin
      //mark is nop
      Result:=True;
-    end;
-   OPX_Invalid..OPX_GroupP:
-    begin
-     //invalid code
-     Exit(False);
     end;
    else
     begin
@@ -1874,48 +1875,6 @@ begin
 
 end;
 
-function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
-var
- proc:TDbgProcess;
- adec:TX86AsmDecoder;
- ptr,fin:Pointer;
- ACodeBytes,ACode:RawByteString;
-begin
- Result:=True;
-
- ptr:=addr;
- fin:=addr+vsize;
-
- proc:=TDbgProcess.Create(dm64);
- adec:=TX86AsmDecoder.Create(proc);
-
- while (ptr<fin) do
- begin
-  adec.Disassemble(ptr,ACodeBytes,ACode);
-
-  case adec.Instr.OpCode.Opcode of
-   OPX_Invalid..OPX_GroupP:
-    begin
-     Result:=False;
-     Break;
-    end;
-   else;
-  end;
-
-  if (adec.Instr.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (adec.Instr.ParseFlags * [preF3,preF2,flagEvex] <> []) or
-     is_invalid(adec.Instr) then
-  begin
-   Result:=False;
-   Break;
-  end;
-
- end;
-
- adec.Free;
- proc.Free;
-end;
-
 function pick_on_destroy(handle:Pointer):Integer;
 begin
  Result:=DO_NOTHING;
@@ -2342,7 +2301,7 @@ begin
   begin
    ofs:=Int64(sw_table^.table)+rel;
 
-   if ctx.is_text_addr(ofs) then
+   if ctx.is_text_addr(ofs) and test_disassemble(Pointer(ofs),1) then
    begin
     LOG_TRACE(' [0x',HexStr(QWORD(sw_data),11),']->0x',HexStr(ofs,11));
     //
@@ -2558,7 +2517,7 @@ begin
   begin
    i:=15; //need for builder
    ctx.ptr_next:=ctx.ptr_curr+i;
-   LOG_TRACE('invalid3:0x',HexStr(ctx.ptr_curr));
+   LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr),' start:0x',HexStr(ctx.builder.ACodeChunkList.pCurr^.start,16));
    goto _invalid;
   end;
 
@@ -2566,59 +2525,48 @@ begin
 
   apply_din_stat(din,ctx.dis.CodeIdx);
 
-  case din.OpCode.Opcode of
-   OPX_Invalid..OPX_GroupP:
-    begin
-     //invalid
-     LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr));
-
-     _invalid:
-
-     if IS_LOG_TRACE then
-     begin
-      print_frame(stdout,ctx.ptr_curr);
-      LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
-      print_disassemble(ctx.code,dis.CodeIdx);
-      LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
-     end;
-
-     ctx.mark_chunk(fpInvalid);
-
-     link_curr:=ctx.builder.get_curr_label.after;
-     node_curr:=link_curr._node;
-
-     if debug_info then
-     begin
-      ctx.builder.Compact([
-       c_int3,
-       c_int3,
-       c_ud2,
-       c_debug_imm(Int64(ctx.ptr_curr))
-      ]);
-     end else
-     begin
-      ctx.builder.Compact([
-       c_int3,
-       c_ud2
-      ]);
-     end;
-
-     link_next:=ctx.builder.get_curr_label.after;
-     node_next:=link_next._node;
-
-     cb:=@op_invalid;
-     ctx.trim:=True;
-     goto _next; //trim
-    end;
-   else;
-  end;
-
-  if (din.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
-     (din.ParseFlags * [preF3,preF2,flagEvex] <> []) or
-     is_invalid(din) then
+  if is_invalid(din) then
   begin
-   LOG_TRACE('invalid2:0x',HexStr(ctx.ptr_curr));
-   goto _invalid;
+   //invalid
+   LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr),' startt:0x',HexStr(ctx.builder.ACodeChunkList.pCurr^.start,16));
+
+   _invalid:
+
+   if IS_LOG_TRACE then
+   begin
+    print_frame(stdout,ctx.ptr_curr);
+    LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_curr));
+    print_disassemble(ctx.code,dis.CodeIdx);
+    LOG_TRACE('original------------------------':32,' ','0x',HexStr(ctx.ptr_next));
+   end;
+
+   ctx.mark_chunk(fpInvalid);
+
+   link_curr:=ctx.builder.get_curr_label.after;
+   node_curr:=link_curr._node;
+
+   if debug_info then
+   begin
+    ctx.builder.Compact([
+     c_int3,
+     c_int3,
+     c_ud2,
+     c_debug_imm(Int64(ctx.ptr_curr))
+    ]);
+   end else
+   begin
+    ctx.builder.Compact([
+     c_int3,
+     c_ud2
+    ]);
+   end;
+
+   link_next:=ctx.builder.get_curr_label.after;
+   node_next:=link_next._node;
+
+   cb:=@op_invalid;
+   ctx.trim:=True;
+   goto _next; //trim
   end;
 
   if (cmDynlib in ctx.modes) then

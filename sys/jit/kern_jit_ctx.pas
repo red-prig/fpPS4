@@ -233,6 +233,7 @@ function is_rsp(const r:TRegValues):Boolean;
 function is_imm(const r:TInstruction):Boolean;
 function is_invalid(const r:TRegValue):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
+function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
 
 type
  t_memop_type1=(mo_reg,
@@ -1301,12 +1302,76 @@ var
  i:Integer;
 begin
  Result:=False;
+
+ case r.OpCode.Opcode of
+  OPX_Invalid..OPX_GroupP:
+   begin
+    Exit(True);
+   end;
+  else;
+ end;
+
+ if (r.Flags * [ifOnly32, ifOnly64, ifOnlyVex] <> []) or
+    (r.ParseFlags * [preF3,preF2,flagEvex] <> []) then
+ begin
+  Exit(True);
+ end;
+
  if (r.OperCnt<>0) then
  For i:=1 to r.OperCnt do
  begin
   Result:=is_invalid(r.Operand[i]);
   if Result then Exit;
  end;
+
+end;
+
+function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
+type
+ t_data_16=array[0..15] of Byte;
+var
+ beg:Pointer;
+ ptr:Pointer;
+ fin:Pointer;
+ data:t_data_16;
+
+ dis:TX86Disassembler;
+ din:TInstruction;
+begin
+ Result:=True;
+
+ ptr:=addr;
+ fin:=addr+vsize;
+
+ dis:=Default(TX86Disassembler);
+ din:=Default(TInstruction);
+
+ repeat
+
+  data:=Default(t_data_16);
+  md_copyin(addr,@data,16,nil);
+
+  ptr:=@data;
+  beg:=ptr;
+
+  dis.Disassemble(dm64,ptr,din);
+
+  if (ptr-beg)>15 then
+  begin
+   //invalid size
+   Exit(False);
+  end;
+
+  if is_invalid(din) then
+  begin
+   //invalid code
+   Exit(False);
+  end;
+
+  addr:=addr+(ptr-beg);
+
+ until (addr>=fin);
+
 end;
 
 function scan_switchtable(var ctx:t_jit_context2;start:Int64):Boolean;
@@ -1364,6 +1429,7 @@ begin
    if (copyin(Pointer(ofs),@new_ofs,SizeOf(Pointer))=0) then
    begin
     if ctx.is_text_addr(new_ofs) and (new_ofs<=ctx.max_reloc) then
+    if test_disassemble(Pointer(new_ofs),1) then
     begin
      ctx.add_forward_point(fpCall,Pointer(new_ofs));
     end;
@@ -1381,6 +1447,7 @@ begin
    //
   end else
   if ctx.is_text_addr(ofs) and (ofs<=ctx.max_reloc) then
+  if test_disassemble(Pointer(ofs),1) then
   begin
    ctx.add_forward_point(fpData,Pointer(ofs));
   end;
