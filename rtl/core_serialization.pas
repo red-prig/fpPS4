@@ -116,6 +116,7 @@ type
   Function   AddObject:TSerializeObject;     override;
   Function   AddArray :TSerializeArray;      override;
   procedure  AddValue(Value:TValue);         override;
+  Procedure  CopyTo  (dst:TSerializeObject); override;
  end;
 
 implementation
@@ -204,7 +205,7 @@ Procedure TJSONStreamWriter.WriteStopObject;
 var
  S:RawByteString;
 begin
- Assert(FLevel>0,'WriteStopObject');
+ Assert(FLevel>0,ClassName+'.'+{$I %CURRENTROUTINE%});
 
  Dec(FLevel);
  FState:=swNext;
@@ -237,7 +238,7 @@ Procedure TJSONStreamWriter.WriteStopArray;
 var
  S:RawByteString;
 begin
- Assert(FLevel>1,'WriteStopArray');
+ Assert(FLevel>1,ClassName+'.'+{$I %CURRENTROUTINE%});
 
  Dec(FLevel);
  FState:=swNext;
@@ -273,7 +274,7 @@ begin
   tkBool   :S:=S+BoolToStr(value.AsBoolean,'true','false');
 
   else
-   Assert(False);
+   Assert(False,ClassName+'.'+{$I %CURRENTROUTINE%});
  end;
 
  FState:=swNext;
@@ -535,7 +536,7 @@ begin
       end;
 
     else
-     Assert(false);
+     Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
    end;
 
    i.Next;
@@ -582,7 +583,7 @@ begin
       end;
 
     else
-     Assert(false);
+     Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
    end;
 
    i.Next;
@@ -633,7 +634,7 @@ begin
       end;
 
     else
-     Assert(false);
+     Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
    end;
 
    i.Next;
@@ -760,7 +761,7 @@ begin
       end;
 
     else
-     Assert(false);
+     Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
    end;
 
    i.Next;
@@ -834,7 +835,7 @@ begin
      end;
 
    else
-    Assert(false);
+    Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
   end;
 
  end;
@@ -886,7 +887,7 @@ begin
      end;
 
    else
-    Assert(false);
+    Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
   end;
 
   //save
@@ -897,7 +898,7 @@ end;
 
 Procedure TSerializeArray.CopyTo(dst:TSerializeObject);
 begin
- Assert(false);
+ Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
 end;
 
 Procedure TSerializeArray.WriteJSON(const name:RawByteString;Stream:TJSONStreamWriter);
@@ -935,7 +936,7 @@ begin
      end;
 
    else
-    Assert(false);
+    Assert(false,ClassName+'.'+{$I %CURRENTROUTINE%});
   end;
 
  end;
@@ -980,6 +981,11 @@ end;
 procedure TSerializeStringArray.AddValue(Value:TValue);
 begin
  Insert(Value.AsString,values,Length(values));
+end;
+
+Procedure TSerializeStringArray.CopyTo(dst:TSerializeObject);
+begin
+ TSerializeStringArray(dst).values:=values;
 end;
 
 end.
