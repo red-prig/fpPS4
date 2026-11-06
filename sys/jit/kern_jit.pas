@@ -112,7 +112,7 @@ begin
 
  trapsignal(td, @ksi);
 
- //userret(td, frame);
+ userret(td);
 
  //interrupt guard set
  td^.td_teb^.iflag:=1;

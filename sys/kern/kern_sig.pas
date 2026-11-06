@@ -94,6 +94,8 @@ Function  kern_sigprocmask(td:p_kthread;
 
 procedure ast;
 
+procedure userret(td:p_kthread);
+
 procedure ps_mtx_lock;
 procedure ps_mtx_unlock;
 
@@ -1933,6 +1935,26 @@ begin
   thread_unlock(td);
  end;
 
+end;
+
+procedure userret(td:p_kthread);
+var
+ iflag:QWORD;
+begin
+ if (td=nil) then Exit;
+
+ if (td<>curkthread) then Exit;
+
+ if ((td^.td_flags and TDF_AST)=0) then Exit;
+
+ //interrupt guard off while ast() runs (same as doreti)
+ iflag:=td^.td_teb^.iflag;
+ while ((td^.td_flags and TDF_AST)<>0) do
+ begin
+  td^.td_teb^.iflag:=0;
+  ast;
+ end;
+ td^.td_teb^.iflag:=iflag;
 end;
 
 //
