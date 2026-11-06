@@ -1166,7 +1166,7 @@ begin
 
    movq(new,[stack]);
 
-   build_lea(ctx,1,stack,[not_use_r_tmp1]);
+   build_lea(ctx,1,stack,[not_use_r_tmp1],OPERAND_BYTES[new.ASize]);
 
    op_uplift(ctx,stack,os64,[not_use_r_tmp1]); //in/out:r14
 
