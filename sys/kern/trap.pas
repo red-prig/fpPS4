@@ -590,7 +590,7 @@ begin
  trapsignal(curkthread, @ksi);
 
 _user:
- //userret(td, frame);
+ if usermode then userret(curkthread);
 
 _userout:
 
