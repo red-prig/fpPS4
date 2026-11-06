@@ -23,6 +23,7 @@ procedure pick(var ctx:t_jit_context2;preload:Pointer);
 implementation
 
 uses
+ ntapi,
  time,
  md_time,
  vm,
@@ -1318,20 +1319,34 @@ begin
 end;
 
 var
- cpuid_h2g:array[0..63] of Byte; external;
+ cpuid_h2g:array[0..255] of Byte; external;
+ cpu_aux_ok:Boolean; external;
 
 procedure op_tsc_aux(var ctx:t_jit_context2);
 var
- _repeat:t_jit_i_link;
+ _ok:t_jit_i_link;
 begin
  with ctx.builder do
  begin
-  movi(eax,1);
-  _repeat:=ctx.builder.get_curr_label.after;
-
-  cpuid;
-  //
-  shri8(ebx,24); //get CPUID_LOCAL_APIC_ID
+  //get dense host cpu number
+  if cpu_aux_ok then
+  begin
+   rdtscp;                        //ecx = IA32_TSC_AUX (dense cpu number)
+   movq(ebx,ecx);
+  end else
+  begin
+   //TSC_AUX is not usable: ask the kernel (KPCR based)
+   push(r8);
+   push(r9);
+   push(r10);
+   push(r11);
+   call_far(@NtGetCurrentProcessorNumber);
+   pop(r11);
+   pop(r10);
+   pop(r9);
+   pop(r8);
+   movq(ebx,eax);
+  end;
 
   movq(eax,[r13-jit_frame_offset+(@kthread(nil^).td_cpuset)]); //eax = td_cpuset
 
@@ -1339,7 +1354,12 @@ begin
   movzb (ecx,[rcx+rbx]);         //ecx = cpuid_h2g[rbx]
   andq  (eax,ecx);               //eax = cpuset and cpuid_h2g[rbx]
 
-  jcc(OPSc_z,_repeat,os8);       //if eax=0 repeat
+  _ok:=jcc(OPSc_nz,nil_link,os8); //if eax<>0 mapping found
+
+  //no mapping for this host cpu: use any allowed guest cpu
+  movq  (eax,[r13-jit_frame_offset+(@kthread(nil^).td_cpuset)]);
+
+  _ok.target:=ctx.builder.get_curr_label.after;
 
   bsfq  (ecx,eax);               //IA32_TSC_AUX = first masked cpu
  end;

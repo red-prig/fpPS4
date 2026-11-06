@@ -55,8 +55,9 @@ procedure seh_wrapper_before(td:p_kthread;var func:Pointer);
 procedure seh_wrapper_after (td:p_kthread;func:Pointer);
 
 var
- cpuid_h2g:array[0..63] of Byte; public;
- cpuid_g2h:array[0.. 7] of Byte;
+ cpuid_h2g:array[0..255] of Byte; public;
+ cpuid_g2h:array[0..  7] of Byte;
+ cpu_aux_ok:Boolean; public; //IA32_TSC_AUX holds the dense host cpu number
 
 implementation
 
@@ -429,6 +430,80 @@ begin
  Result:=info.dwNumberOfProcessors;
 end;
 
+function cpuid_max_ext:DWORD; assembler; nostackframe;
+asm
+ pushq %rbx
+ movl $0x80000000,%eax
+ xorl %ecx,%ecx
+ cpuid
+ popq %rbx
+end;
+
+function cpuid_has_rdtscp:Boolean; assembler; nostackframe;
+asm
+ pushq %rbx
+ movl $0x80000001,%eax
+ xorl %ecx,%ecx
+ cpuid
+ shrl $27,%edx
+ andl $1,%edx
+ movl %edx,%eax
+ popq %rbx
+end;
+
+//IA32_TSC_AUX as maintained by the OS: the dense host cpu number
+function cpu_tsc_aux:DWORD; assembler; nostackframe;
+asm
+ rdtscp
+ movl %ecx,%eax
+end;
+
+//TSC_AUX is usable only if the OS keeps the dense processor number in it
+function cpu_aux_check:Boolean;
+var
+ cpu_num:DWORD;
+ cpu    :DWORD;
+ old    :DWORD_PTR;
+ pn     :DWORD;
+ n      :Integer;
+begin
+ Result:=False;
+
+ if not ((cpuid_max_ext>=$80000001) and cpuid_has_rdtscp) then Exit;
+
+ cpu_num:=GetNumberOfProcessors;
+ if (cpu_num<=1) then
+ begin
+  Result:=True; //only cpu 0, AUX=0 is correct
+  Exit;
+ end;
+
+ //validate on a cpu <> 0 (on cpu 0 a broken AUX also reads 0)
+ cpu:=1;
+ repeat
+  old:=SetThreadAffinityMask(GetCurrentThread,DWORD_PTR(1) shl cpu);
+  if (old<>0) then
+  begin
+   n:=0;
+   repeat
+    if not SwitchToThread then Sleep(0);
+    pn:=NtGetCurrentProcessorNumber;
+    Inc(n);
+    if (n mod 64)=0 then Sleep(1);
+   until (pn=cpu) or (n>=4096);
+
+   Result:=(cpu_tsc_aux=NtGetCurrentProcessorNumber);
+
+   SetThreadAffinityMask(GetCurrentThread,old);
+   Exit;
+  end;
+  Inc(cpu);
+ until (cpu>=cpu_num);
+
+ //cannot pin: compare both sources on the current cpu
+ Result:=(cpu_tsc_aux=NtGetCurrentProcessorNumber);
+end;
+
 procedure cpuset_init;
 var
  cpu_num  :DWORD;
@@ -438,12 +513,15 @@ begin
  cpu_num:=GetNumberOfProcessors;
  if (cpu_num>64) then cpu_num:=64;
 
+ //dense host cpu number comes from IA32_TSC_AUX (rdtscp); ntdll is the fallback
+ cpu_aux_ok:=cpu_aux_check;
+
  //remap
  host_cpu:=0;
 
  for guest_cpu:=7 downto 0 do
  begin
-  cpuid_h2g[host_cpu ]:=cpuid_h2g[host_cpu] or (QWORD(1) shl guest_cpu);
+  cpuid_h2g[host_cpu ]:=cpuid_h2g[host_cpu] or Byte(1 shl guest_cpu);
   cpuid_g2h[guest_cpu]:=host_cpu;
 
   //next
