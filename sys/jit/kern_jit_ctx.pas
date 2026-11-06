@@ -4645,8 +4645,10 @@ begin
   if (tmp_count=3) then
   begin
    //restore jit_frame
-   movq(r13,[GS +teb_thread]);
-   leaq(r13,[r13+jit_frame_offset]);
+   Compact([
+    c_movq(r13,[GS +teb_thread]),
+    c_leaq(r13,[r13+jit_frame_offset])
+   ]);
   end;
 
   //store result
