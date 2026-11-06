@@ -208,6 +208,8 @@ const
  r_tmp0:TRegValue=(AType:regGeneral;ASize:os64;AIndex:14); //r14
  r_tmp1:TRegValue=(AType:regGeneral;ASize:os64;AIndex:15); //r15
 
+ SWAP_MARK_XCHG=1;
+
  OPERAND_BYTES:array[TOperandSize] of Word=(0,1,2,4,8,6,10,16,32,64,512);
 
  SCODES:array[TSimdOpcode] of Byte=(0,0,1,3,2);
@@ -2880,7 +2882,6 @@ type
  t_override_ctx=record
   original:TRegValue;
   enable  :Boolean;
-  xchg    :Boolean;
  end;
 
 procedure override_mem_in_beg(var ctx:t_jit_context2;
@@ -2899,24 +2900,8 @@ begin
    //get override reg
    reg:=alloc_tmp_lo(ctx,1);
 
-   ovr.xchg:=True;
-
-   if ovr.xchg then
-   begin
-    //xchg hack
-    xchgq(reg,ovr.original);
-   end else
-   begin
-    //save reg
-    push(fix_size8(reg));
-    //
-    if (not (his_wo in hint)) or
-       (his_ro in hint) then
-    begin
-     movq(reg,ovr.original);
-    end;
-   end;
-
+   //xchg hack
+   xchgq(reg,ovr.original);
   end;
 
  end;
@@ -2933,19 +2918,10 @@ begin
   if (ovr.enable) then
   begin
 
-   if ovr.xchg then
-   begin
-    //xchg hack
-    xchgq(ovr.original,reg);
-   end else
-   begin
-    if not (his_ro in hint) then
-    begin
-     movq(ovr.original,reg);
-    end;
-    //restore reg
-    pop(fix_size8(reg));
-   end;
+   _add(c_nop_marker(SWAP_MARK_XCHG));
+
+   //xchg hack
+   xchgq(ovr.original,reg);
 
    reg:=ovr.original;
   end;
@@ -2969,20 +2945,8 @@ begin
    //get override reg
    reg:=alloc_tmp_lo(ctx,2);
 
-   ovr.xchg:=True;
-
-   if ovr.xchg then
-   begin
-    //xchg hack
-    xchgq(reg,ovr.original);
-   end else
-   begin
-    //save reg
-    push(fix_size8(reg));
-    //
-    movq(reg,ovr.original);
-   end;
-
+   //xchg hack
+   xchgq(reg,ovr.original);
   end;
 
  end;
@@ -2999,19 +2963,10 @@ begin
   if ovr.enable then
   begin
 
-   if ovr.xchg then
-   begin
-    //xchg hack
-    xchgq(ovr.original,reg);
-   end else
-   begin
-    if (his_xchg in hint) then
-    begin
-     movq(ovr.original,reg);
-    end;
-    //restore reg
-    pop(fix_size8(reg));
-   end;
+   _add(c_nop_marker(SWAP_MARK_XCHG));
+
+   //xchg hack
+   xchgq(ovr.original,reg);
 
    reg:=ovr.original;
   end;
