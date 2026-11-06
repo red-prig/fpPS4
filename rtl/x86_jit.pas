@@ -565,6 +565,7 @@ type
   procedure laxf;
   procedure cpuid;
   procedure rdtsc;
+  procedure rdtscp;
   procedure lfence;
   procedure cli;
   procedure sti;
@@ -5947,6 +5948,11 @@ end;
 procedure t_jit_builder.rdtsc;
 begin
  _add(c_O($0F31));
+end;
+
+procedure t_jit_builder.rdtscp;
+begin
+ _add(c_O($0F01F9));
 end;
 
 procedure t_jit_builder.lfence;

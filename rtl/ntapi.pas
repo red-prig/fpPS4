@@ -1377,6 +1377,8 @@ function RtlReleasePrivilege(
           ReturnedState:Pointer
          ):DWORD; stdcall; external 'ntdll';
 
+function NtGetCurrentProcessorNumber:DWORD; stdcall; external 'ntdll';
+function SwitchToThread:BOOL; stdcall; external 'kernel32';
 
 implementation
 

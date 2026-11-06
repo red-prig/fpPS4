@@ -77,6 +77,7 @@ procedure jit_track_guest; assembler;
 implementation
 
 uses
+ ntapi,
  trap,
  md_context,
  signal,
@@ -711,7 +712,8 @@ begin
 end;
 
 var
- cpuid_h2g:array[0..63] of Byte; external;
+ cpuid_h2g:array[0..255] of Byte; external;
+ cpu_aux_ok:Boolean; external;
 
 //cpuid(0x00000000,0x0):eax=0x0000000d ebx=0x68747541 ecx=0x444d4163 edx=0x69746e65
 //cpuid(0x00000001,0x0):eax=0x00710f31 ebx=0x07080800 ecx=0x3ed8220b edx=0x178bfbff
@@ -757,6 +759,9 @@ label
  _zero,
  _cpuid_0,
  _cpuid_1,
+ _cpuid_1_nt,
+ _cpuid_1_have,
+ _cpuid_1_ok,
  _cpuid_5,
  _cpuid_6,
  _cpuid_7,
@@ -873,16 +878,33 @@ asm
 
  _cpuid_1:
 
- //get host
- cpuid
+ //sceKernelGetCurrentCpu 0..7
 
-//                    0x07080800
-//CPUID_BRAND_INDEX   0x000000ff
-//CPUID_CLFUSH_SIZE   0x0000ff00
-//CPUID_HTT_CORES     0x00ff0000
-//CPUID_LOCAL_APIC_ID 0xff000000  //sceKernelGetCurrentCpu 0..7
+ //get dense host cpu
+ cmpb $0,cpu_aux_ok(%rip)
+ je _cpuid_1_nt
 
- shr $24,%ebx                       //get CPUID_LOCAL_APIC_ID
+ rdtscp                             //ecx = IA32_TSC_AUX (dense cpu number)
+ movl %ecx,%ebx
+ jmp _cpuid_1_have
+
+_cpuid_1_nt:
+
+ //TSC_AUX is not usable: ask the kernel (KPCR based)
+ push %r8
+ push %r9
+ push %r10
+ push %r11
+ call NtGetCurrentProcessorNumber
+ pop %r11
+ pop %r10
+ pop %r9
+ pop %r8
+ movl %eax,%ebx
+
+_cpuid_1_have:
+
+ and $0xFF,%ebx                     //dense host cpu number
 
  movqq %gs:teb.thread,%rax          //curkthread
  movqq kthread.td_cpuset(%rax),%eax //cpuset
@@ -890,7 +912,15 @@ asm
  movzbl (%rcx,%rbx),%ecx            //ecx = cpuid_h2g[rbx]
  and %ecx, %eax                     //eax = cpuset and cpuid_h2g[rbx]
 
- jz _cpuid_1                        //if eax=0 repeat
+ jnz _cpuid_1_ok
+
+ //fail
+ movqq %gs:teb.thread,%rax
+ movqq kthread.td_cpuset(%rax),%eax
+ test %eax,%eax
+ jz _zero
+
+_cpuid_1_ok:
 
  bsf %eax, %ecx                     //ecx = first masked cpu
 
