@@ -4166,7 +4166,8 @@ var
  var
   ofs:Integer;
  begin
-  if (new.ATargetType<>lnkNone) or new.ATargetRequired then
+  if (new.ATargetType<>lnkNone) or
+     (new.ATargetRequired) then
   begin
    Flush;
    _add(new);
@@ -4182,7 +4183,7 @@ var
 
   if (new.AInstructionSize<>0) then
   begin
-   Move(new.AData[0],last.AData[ofs],new.AInstructionSize);
+   SmallMove(@new.FData[0],@last.FData[ofs],new.AInstructionSize);
   end;
   last.AInstructionSize:=ofs+new.AInstructionSize;
  end;
