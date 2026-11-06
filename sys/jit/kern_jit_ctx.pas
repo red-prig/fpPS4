@@ -309,8 +309,10 @@ type
                     mov32_ref,
                     mov64_ref);
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;
-                    reg:TRegValue;hint:t_lea_hint=[]);
+procedure build_lea(var ctx:t_jit_context2;
+                    id:Byte;
+                    reg:TRegValue;hint:t_lea_hint=[];
+                    rsp_offset:Byte=0);
 
 function  cmp_reg(const r1,r2:TRegValue):Boolean;
 function  cmp_reg(const r1,r2:TOperand):Boolean;
@@ -1651,8 +1653,10 @@ begin
  Assert(False,'get_free_reg');
 end;
 
-procedure build_lea(var ctx:t_jit_context2;id:Byte;
-                    reg:TRegValue;hint:t_lea_hint=[]);
+procedure build_lea(var ctx:t_jit_context2;
+                    id:Byte;
+                    reg:TRegValue;hint:t_lea_hint=[];
+                    rsp_offset:Byte=0);
 var
  RegValue:TRegValues;
  adr:TRegValue;
@@ -1753,6 +1757,11 @@ begin
 
  ofs:=0;
  GetTargetOfs(ctx.din,ctx.code,id,ofs);
+
+ if (rsp_offset<>0) and is_rsp(RegValue) then
+ begin
+  Inc(ofs,rsp_offset);
+ end;
 
  lea_builder.add_offset(ofs);
 
