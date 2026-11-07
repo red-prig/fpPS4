@@ -948,14 +948,11 @@ begin
  end;
 end;
 
-const
- movsx8_desc:t_op_type=(op:$0FBE);
- movsxd_desc:t_op_type=(op:$63);
-
 procedure op_push(var ctx:t_jit_context2);
 var
  imm:Int64;
  stack,new:TRegValue;
+ mem_size:TOperandSize;
 begin
  //lea rsp,[rsp-len]
  //mov [rsp],reg
@@ -973,52 +970,52 @@ begin
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
    movq(new,[r_tmp0]);
+
+   mem_size:=ctx.din.Operand[1].Size; //mem
   end else
   if (ctx.din.Operand[1].ByteCount<>0) then
   begin
    imm:=0;
    GetTargetOfs(ctx.din,ctx.code,1,imm);
 
-   new:=new_reg_size(r_tmp1,ctx.din.Operand[1].Size);
+   if (pre66 in ctx.dis.Flags) then //this is the only real marker
+   begin
+    new:=new_reg_size(r_tmp1,os16);
+    movi(new,imm);
+    mem_size:=os16;
+   end else
+   begin
+    new:=new_reg_size(r_tmp1,os64);
+    movi(new,imm);
+    mem_size:=os64;
+   end;
 
-   movi(new,imm);
   end else
   if is_preserved(ctx.din) then
   begin
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
    op_load(ctx,new,1);
+
+   mem_size:=new.ASize; //reg
   end else
   begin
    new:=new_reg(ctx.din.Operand[1]);
-  end;
 
-  //sign extend
-  case new.ASize of
-    os8:
-     begin
-      new:=new_reg_size(new,os64);
-      ctx.builder._add(c_RR(movsx8_desc,new,new,False));
-     end;
-   os32:
-     begin
-      new:=new_reg_size(new,os64);
-      ctx.builder._add(c_RR(movsxd_desc,new,new,False));
-     end
-   else;
+   mem_size:=new.ASize; //reg
   end;
 
   Compact([
    c_load_rsp(stack),
-   c_leaq    (stack,[stack-OPERAND_BYTES[new.ASize]])
+   c_leaq    (stack,[stack-OPERAND_BYTES[mem_size]])
   ]);
 
   if (new.AIndex=r_tmp1.AIndex) then
   begin
-   op_uplift(ctx,stack,new.ASize,[not_use_r_tmp1]); //in/out:r14
+   op_uplift(ctx,stack,mem_size,[not_use_r_tmp1]); //in/out:r14
   end else
   begin
-   op_uplift(ctx,stack,new.ASize); //in/out:r14
+   op_uplift(ctx,stack,mem_size); //in/out:r14
   end;
 
   Compact([
@@ -1148,6 +1145,7 @@ procedure op_pop(var ctx:t_jit_context2);
 var
  new,stack:TRegValue;
  reload_rsp:Boolean;
+ mem_size:TOperandSize;
 begin
  //mov reg,[rsp]
  //lea rsp,[rsp+len]
@@ -1164,11 +1162,13 @@ begin
 
   if is_memory(ctx.din) then
   begin
+   mem_size:=ctx.din.Operand[1].Size; //mem
+
    new:=new_reg_size(r_tmp1,ctx.din.Operand[1]);
 
    movq(new,[stack]);
 
-   build_lea(ctx,1,stack,[not_use_r_tmp1],OPERAND_BYTES[new.ASize]);
+   build_lea(ctx,1,stack,[not_use_r_tmp1],OPERAND_BYTES[mem_size]);
 
    op_uplift(ctx,stack,os64,[not_use_r_tmp1]); //in/out:r14
 
@@ -1183,11 +1183,15 @@ begin
    movq(new,[stack]);
 
    op_save(ctx,1,fix_size(new));
+
+   mem_size:=new.ASize; //reg
   end else
   begin
    new:=new_reg(ctx.din.Operand[1]);
 
    movq(new,[stack]);
+
+   mem_size:=new.ASize; //reg
   end;
 
   //For transactionality,
@@ -1197,13 +1201,13 @@ begin
   begin
    Compact([
     c_load_rsp(stack),
-    c_leaq    (stack,[stack+OPERAND_BYTES[new.ASize]]),
+    c_leaq    (stack,[stack+OPERAND_BYTES[mem_size]]),
     c_save_rsp(stack)
    ]);
   end else
   begin
    Compact([
-    c_leaq    (stack,[stack+OPERAND_BYTES[new.ASize]]),
+    c_leaq    (stack,[stack+OPERAND_BYTES[mem_size]]),
     c_save_rsp(stack)
    ]);
   end;
