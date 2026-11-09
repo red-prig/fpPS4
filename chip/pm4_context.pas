@@ -52,6 +52,9 @@ type
 
 implementation
 
+uses
+ sys_bootparam;
+
 function convert_loc(i:Word):Word; inline;
 begin
  Result:=SH_REG_BASE+i;
@@ -155,6 +158,19 @@ end;
 
 procedure t_amd_context.clear_state;
 begin
+ if (p_neomode=0) then
+ begin
+  //base mode
+  PDWORD(@CX_REG)[$200]:=$00000001;
+  PDWORD(@CX_REG)[$204]:=$00000000;
+  PDWORD(@CX_REG)[$205]:=$00000004;
+ end else
+ begin
+  //Neo mode
+  PDWORD(@CX_REG)[$200]:=$00000000;
+  PDWORD(@CX_REG)[$204]:=$00090000;
+  PDWORD(@CX_REG)[$205]:=$00000000;
+ end;
  PDWORD(@CX_REG)[$000]:=$00000000;
  PDWORD(@CX_REG)[$001]:=$00000000;
  PDWORD(@CX_REG)[$002]:=$00000000;
@@ -187,6 +203,7 @@ begin
  PDWORD(@CX_REG)[$080]:=$00000000;
  PDWORD(@CX_REG)[$081]:=$80000000;
  PDWORD(@CX_REG)[$082]:=$40004000;
+ PDWORD(@CX_REG)[$083]:=$0000ffff;
  PDWORD(@CX_REG)[$084]:=$00000000;
  PDWORD(@CX_REG)[$085]:=$40004000;
  PDWORD(@CX_REG)[$086]:=$00000000;
@@ -197,6 +214,8 @@ begin
  PDWORD(@CX_REG)[$08b]:=$40004000;
  PDWORD(@CX_REG)[$08c]:=$aa99aaaa;
  PDWORD(@CX_REG)[$08d]:=$00000000;
+ PDWORD(@CX_REG)[$08e]:=$ffffffff;
+ PDWORD(@CX_REG)[$08f]:=$ffffffff;
  PDWORD(@CX_REG)[$090]:=$80000000;
  PDWORD(@CX_REG)[$091]:=$40004000;
  PDWORD(@CX_REG)[$092]:=$00000000;
@@ -451,12 +470,9 @@ begin
  PDWORD(@CX_REG)[$1f6]:=$00000000;
  PDWORD(@CX_REG)[$1f7]:=$00000000;
  PDWORD(@CX_REG)[$1f8]:=$00000000;
- PDWORD(@CX_REG)[$200]:=$00000000;
  PDWORD(@CX_REG)[$201]:=$00000000;
  PDWORD(@CX_REG)[$202]:=$00000000;
  PDWORD(@CX_REG)[$203]:=$00000000;
- PDWORD(@CX_REG)[$204]:=$00090000;
- PDWORD(@CX_REG)[$205]:=$00000004;
  PDWORD(@CX_REG)[$206]:=$00000000;
  PDWORD(@CX_REG)[$207]:=$00000000;
  PDWORD(@CX_REG)[$208]:=$00000000;
@@ -566,6 +582,8 @@ begin
  PDWORD(@CX_REG)[$30b]:=$00000000;
  PDWORD(@CX_REG)[$30c]:=$00000000;
  PDWORD(@CX_REG)[$30d]:=$00000000;
+ PDWORD(@CX_REG)[$30e]:=$ffffffff;
+ PDWORD(@CX_REG)[$30f]:=$ffffffff;
  PDWORD(@CX_REG)[$316]:=$0000000e;
  PDWORD(@CX_REG)[$317]:=$00000010;
  PDWORD(@CX_REG)[$318]:=$00000000;

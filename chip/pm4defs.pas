@@ -731,11 +731,14 @@ type
  PPM4CMDCLEARSTATE=^DWORD;
 
  PPM4CMDSETDATA=^TPM4CMDSETDATA;
- TPM4CMDSETDATA=packed record
-  header    :PM4_TYPE_3_HEADER;
-  REG_OFFSET:WORD;
-  RESERVED  :WORD;
-  REG_DATA  :packed record end;
+ TPM4CMDSETDATA=bitpacked record
+  header     :PM4_TYPE_3_HEADER;
+  REG_OFFSET :WORD;
+  RESERVED   :bit7;
+  VMID_SHIFT :bit5; //neo mode
+  INSERT_VMID:bit1; //neo mode
+  RESERVED2  :bit3;
+  REG_DATA   :packed record end;
  end;
 
  PPM4CMDDRAWINDEXBUFFERSIZE=^TPM4CMDDRAWINDEXBUFFERSIZE;
