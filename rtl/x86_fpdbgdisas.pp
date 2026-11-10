@@ -2850,7 +2850,11 @@ begin
     SetOpcode(OPprefetch, OPS[ModRM.Index]);
     AddMb;
   end
-  else SetOpcode(OPnop);
+  else begin
+    SetOpcode(OPnop);
+    if (ModRM.Mode <> 3)
+    then AddM;
+  end;
 end;
 
 procedure TX86Disassembler.DoGroup17;
