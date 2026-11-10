@@ -411,6 +411,7 @@ type
     procedure AddHq;
     procedure AddHqq;
     procedure AddIb;
+    procedure AddIs;
     procedure AddIv;
     procedure AddIw;
     procedure AddIz;
@@ -1520,6 +1521,11 @@ end;
 procedure TX86Disassembler.AddIb;
 begin
   AddOperand(RegValue(regNone), os8, 1, [hvfIncludeHexchar]);
+end;
+
+procedure TX86Disassembler.AddIs;
+begin
+  AddOperand(RegValue(regNone), OperandSize, 1, [hvfIncludeHexchar]);
 end;
 
 procedure TX86Disassembler.AddIv;
@@ -4288,7 +4294,7 @@ begin
       $6A: begin
         Default64;
         SetOpcode(OPpush);
-        AddIb;
+        AddIs;
       end;
       $6B: begin
         SetOpcode(OPimul);
@@ -4980,7 +4986,9 @@ begin
       or (Instr.Operand[1].Size <> Instr.Operand[2].Size)
       then S := MEMPTR[Instr.Operand[n].Size] + S;
       HasMem := True;
-    end;
+    end
+    else if (Instr.OpCode.Opcode = OPpush) and (Instr.Operand[n].Size = os16) and (Instr.Operand[n].ByteCount = 1)
+    then S := 'word ' + S;
 
     if Soper = ''
     then begin
