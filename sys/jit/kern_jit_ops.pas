@@ -1951,11 +1951,13 @@ begin
  jit_cbs[OPPnone,OPfucom,OPSx_i ]:=@add_orig;
  jit_cbs[OPPnone,OPfucom,OPSx_ip]:=@add_orig;
  jit_cbs[OPPnone,OPfucom,OPSx_p ]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfucom,OPSx_pp]:=@add_orig;
 
  jit_cbs[OPPnone,OPfcom,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPfcom,OPSx_i ]:=@add_orig;
  jit_cbs[OPPnone,OPfcom,OPSx_ip]:=@add_orig;
  jit_cbs[OPPnone,OPfcom,OPSx_p ]:=@op_emit1_ro_np;
+ jit_cbs[OPPnone,OPfcom,OPSx_pp]:=@add_orig;
 
  jit_cbs[OPPnone,OPficom,OPSnone]:=@op_emit1_ro_np;
  jit_cbs[OPPnone,OPficom,OPSx_p ]:=@op_emit1_ro_np;

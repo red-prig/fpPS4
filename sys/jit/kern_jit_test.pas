@@ -347,9 +347,11 @@ begin
  used_op[OPPnone,OPfsubr,OPSnone]:=True;
  used_op[OPPnone,OPfsubr,OPSx_p]:=True;
  used_op[OPPnone,OPftst,OPSnone]:=True;
+ used_op[OPPnone,OPfucom,OPSnone]:=True;
  used_op[OPPnone,OPfucom,OPSx_i]:=True;
  used_op[OPPnone,OPfucom,OPSx_ip]:=True;
  used_op[OPPnone,OPfucom,OPSx_p]:=True;
+ used_op[OPPnone,OPfucom,OPSx_pp]:=True;
  used_op[OPPnone,OPfwait,OPSnone]:=True;
  used_op[OPPnone,OPfxam,OPSnone]:=True;
  used_op[OPPnone,OPfxch,OPSnone]:=True;

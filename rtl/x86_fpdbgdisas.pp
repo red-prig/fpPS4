@@ -2117,7 +2117,7 @@ procedure TX86Disassembler.DoX87;
         AddReg0; AddRegN;
       end;
       $E9: begin
-        SetOpcode(OPfucom, OPSx_p);
+        SetOpcode(OPfucom, OPSx_pp);
       end;
     else
       SetOpcode(OPX_InvalidX87);
