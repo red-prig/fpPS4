@@ -1947,6 +1947,7 @@ begin
  jit_cbs[OPPnone,OPfldpi ,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfldz  ,OPSnone]:=@add_orig;
 
+ jit_cbs[OPPnone,OPfucom,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPfucom,OPSx_i ]:=@add_orig;
  jit_cbs[OPPnone,OPfucom,OPSx_ip]:=@add_orig;
  jit_cbs[OPPnone,OPfucom,OPSx_p ]:=@op_emit1_ro_np;

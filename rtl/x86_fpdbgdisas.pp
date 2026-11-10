@@ -2185,7 +2185,7 @@ procedure TX86Disassembler.DoX87;
   const
     OPC: array[0..7] of TOpCode =       (OPfld,   OPfisttp, OPfst,   OPfst,  OPfrstor, OPX_InvalidX87, OPfnsave, OPfnstsw);
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,  OPSnone, OPSx_p, OPSnone,  OPSnone,        OPSnone,  OPSnone);
-    OPCx: array[0..7] of TOpCode =       (OPffree, OPX_InvalidX87, OPfst,   OPfst,  OPX_InvalidX87, OPfucom, OPX_InvalidX87, OPX_InvalidX87);
+    OPCx: array[0..7] of TOpCode =       (OPffree, OPX_InvalidX87, OPfst,   OPfst,  OPfucom,        OPfucom, OPX_InvalidX87, OPX_InvalidX87);
     OPSx: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,        OPSnone, OPSx_p, OPSnone,        OPSx_p,  OPSnone,        OPSnone);
   begin
     case Code[ModRMIdx] of
