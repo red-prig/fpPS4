@@ -470,6 +470,7 @@ type
     procedure AddVy;
     procedure AddWd;
     procedure AddWdq;
+    procedure AddW128;
     procedure AddWpd;
     procedure AddWps;
     procedure AddWq;
@@ -1946,6 +1947,11 @@ end;
 procedure TX86Disassembler.AddWdq;
 begin
   AddModRM([modReg, modMem], VectorSize, regXmm);
+end;
+
+procedure TX86Disassembler.AddW128;
+begin
+  AddModRM([modReg, modMem], os128, regXmm);
 end;
 
 procedure TX86Disassembler.AddWpd;
@@ -3968,13 +3974,13 @@ begin
         $16: begin SetOpcode(OPpextr,       OPS_d_q,  True); AddEy;    AddVq;  AddIb;                      end;
         $17: begin SetOpcode(OPextract,     OPSx_ps,  True); AddEd;    AddVdq; AddIb;                      end;
         $18: begin SetOpcode(OPinsert,      OPSx_f128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
-        $19: begin SetOpcode(OPextract,     OPSx_f128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
+        $19: begin SetOpcode(OPextract,     OPSx_f128,True); AddW128;  AddVqq; AddIb;            CheckVex; end;
         $1D: begin SetOpcode(OPcvtps2,      OPSx_ph,  True); AddWx_Mq; AddVx;  AddIb;            CheckVex; end;
         $20: begin SetOpcode(OPpinsr,       OPSx_b,   True); AddVdq;   AddHx;  AddRd_Mb;  AddIb;           end;
         $21: begin SetOpcode(OPinsert,      OPSx_ps,  True); AddVdq;   AddHx;  AddUdq_Md; AddIb;           end;
         $22: begin SetOpcode(OPpinsr,       OPS_d_q,  True); AddVdq;   AddHx;  AddEy;     AddIb;           end;
         $38: begin SetOpcode(OPinsert,      OPSx_i128,True); AddVqq;   AddHqq; AddWqq;    AddIb; CheckVex; end;
-        $39: begin SetOpcode(OPextract,     OPSx_i128,True); AddWdq;   AddVqq; AddIb;            CheckVex; end;
+        $39: begin SetOpcode(OPextract,     OPSx_i128,True); AddW128;  AddVqq; AddIb;            CheckVex; end;
         $40: begin SetOpcode(OPdp,          OPSx_ps,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
         $41: begin SetOpcode(OPdp,          OPSx_pd,  True); AddVdq;   AddHx;  AddWdq;    AddIb;           end;
         $42: begin SetOpcode(OPmpsadbw,     OPSnone,  True); AddVx;    AddHx;  AddWx;     AddIb;           end;
