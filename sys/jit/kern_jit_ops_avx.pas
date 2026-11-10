@@ -1322,7 +1322,7 @@ begin
  //AVX2
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_b   ]:=@op_invalid;
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_d   ]:=@op_invalid;
- jit_cbs[OPPnone,OPvpbroadcast,OPSx_i128]:=@op_invalid;
+ jit_cbs[OPPnone,OPvbroadcast ,OPSx_i128]:=@op_invalid;
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_q   ]:=@op_invalid;
  jit_cbs[OPPnone,OPvpbroadcast,OPSx_w   ]:=@op_invalid;
 

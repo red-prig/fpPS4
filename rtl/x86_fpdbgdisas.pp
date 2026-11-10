@@ -3866,7 +3866,7 @@ begin
         $47: begin SetOpcode(OPvpsllv,      OPS_d_q       ); AddVx;  AddHx;  AddWx;  CheckVex; end;
         $58: begin SetOpcode(OPvpbroadcast, OPSx_d        ); AddVx;  AddWx;          CheckVex; end;
         $59: begin SetOpcode(OPvpbroadcast, OPSx_q        ); AddVx;  AddWx;          CheckVex; end;
-        $5A: begin SetOpcode(OPvpbroadcast, OPSx_i128     ); AddVqq; AddMdq;         CheckVex; end;
+        $5A: begin SetOpcode(OPvbroadcast,  OPSx_i128     ); AddVqq; AddMdq;         CheckVex; end;
         $78: begin SetOpcode(OPvpbroadcast, OPSx_b        ); AddVx;  AddWx;          CheckVex; end;
         $79: begin SetOpcode(OPvpbroadcast, OPSx_w        ); AddVx;  AddWx;          CheckVex; end;
         $80: begin SetOpcode(OPinvept                     ); AddGy;  AddMdq;                   end;
