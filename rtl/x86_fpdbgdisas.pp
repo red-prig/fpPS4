@@ -3749,7 +3749,10 @@ begin
       end;
     end;
     // $F8..$FE: see $F1
-    $FF: SetOpcode(OPud1);
+    $FF: begin
+      SetOpcode(OPud0);
+      AddGv; AddEv;
+    end;
   end;
 
   if not HasOpcode
