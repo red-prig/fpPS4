@@ -184,7 +184,7 @@ type
     OPfsubr, OPftst, OPfucom, OPfwait, OPfxam, OPfxch, OPfxrstor, OPfxsave, OPfxtract,
     OPfyl2x, OPfyl2xp1, OPgf2p8affineinvqb, OPgf2p8affineqb, OPgf2p8mulb,
 
-    OPgetbv, OPgetsec,
+    OPgetsec,
 
     OPhadd, OPhlt, OPhreset, OPhsub,
 
@@ -231,7 +231,7 @@ type
     OPrmpadjust, OPrmpupdate,OProl, OPror, OProrx, OPround, OPrsm, OPrsqrt, OPrstorssp,
 
     OPsahf, OPsal, OPsalc, OPsar, OPsaveprevssp, OPsbb, OPscas, OPserialize, OPset__,
-    OPsetbv, OPsetssbsy, OPsfence, OPsgdt, OPsha1msg1, OPsha1msg2, OPsha1nexte,
+    OPsetssbsy, OPsfence, OPsgdt, OPsha1msg1, OPsha1msg2, OPsha1nexte,
     OPsha1rnds4, OPsha256msg1, OPsha256msg2, OPsha256rnds2, OPshl, OPshr, OPshuf,
     OPsidt, OPskinit, OPsldt, OPsmsw, OPsqrt, OPstac, OPstc, OPstd, OPstgi, OPsti,
     OPstmxcsr, OPstos, OPstr, OPsub, OPswapgs, OPsyscall, OPsysenter, OPsysexit,
@@ -655,7 +655,7 @@ const
       'fsubr', 'ftst', 'fucom', 'fwait', 'fxam', 'fxch', 'fxrstor', 'fxsave', 'fxtract',
       'fyl2x', 'fyl2xp1', 'gf2p8affineinvqb', 'gf2p8affineqb', 'gf2p8mulb',
 
-      'getbv', 'getsec',
+      'getsec',
 
       'hadd', 'hlt', 'hreset', 'hsub',
 
@@ -702,7 +702,7 @@ const
       'rmpadjust', 'rmpupdate','rol', 'ror', 'rorx', 'round', 'rsm', 'rsqrt', 'rstorssp',
 
       'sahf', 'sal', 'salc', 'sar', 'saveprevssp', 'sbb', 'scas', 'serialize', 'set',
-      'setbv', 'setssbsy', 'sfence', 'sgdt', 'sha1msg1', 'sha1msg2', 'sha1nexte',
+      'setssbsy', 'sfence', 'sgdt', 'sha1msg1', 'sha1msg2', 'sha1nexte',
       'sha1rnds4', 'sha256msg1', 'sha256msg2', 'sha256rnds2', 'shl', 'shr', 'shuf',
       'sidt', 'skinit', 'sldt', 'smsw', 'sqrt', 'stac', 'stc', 'std', 'stgi', 'sti',
       'stmxcsr', 'stos', 'str', 'sub', 'swapgs', 'syscall', 'sysenter', 'sysexit',
@@ -2508,7 +2508,7 @@ procedure TX86Disassembler.DoGroup7;
 const
   RM0: array [0..7] of TOpCode = (OPX_Group7, OPvmcall, OPvmlaunch, OPvmresume, OPvmxoff, OPX_Group7, OPX_Group7, OPX_Group7);
   RM1: array [0..7] of TOpCode = (OPmonitor, OPmwait, OPclac, OPstac, OPX_Group7, OPX_Group7, OPX_Group7, OPencls);
-  RM2: array [0..7] of TOpCode = (OPgetbv, OPsetbv, OPX_Group7, OPX_Group7, OPvmfunc, OPxend, OPxtest, OPenclu);
+  RM2: array [0..7] of TOpCode = (OPxgetbv, OPxsetbv, OPX_Group7, OPX_Group7, OPvmfunc, OPxend, OPxtest, OPenclu);
   RM3: array [0..7] of TOpCode = (OPvmrun, OPvmmcall, OPvmload, OPvmsave, OPstgi, OPclgi, OPskinit, OPinvlpga);
 begin
   Assert(Code[CodeIdx] = $01, 'Not group 7');

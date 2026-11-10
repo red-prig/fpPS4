@@ -360,7 +360,7 @@ begin
  used_op[OPPnone,OPfxtract,OPSnone]:=True;
  used_op[OPPnone,OPfyl2x,OPSnone]:=True;
  used_op[OPPnone,OPfyl2xp1,OPSnone]:=True;
- used_op[OPPnone,OPgetbv,OPSnone]:=True;
+ used_op[OPPnone,OPxgetbv,OPSnone]:=True;
  used_op[OPPnone,OPhadd,OPSx_pd]:=True;
  used_op[OPPnone,OPhadd,OPSx_ps]:=True;
  used_op[OPPnone,OPhlt,OPSnone]:=True;
@@ -718,7 +718,7 @@ begin
  used_op[OPPnone,OPset__,OPSc_nl]:=True;
  used_op[OPPnone,OPset__,OPSc_le]:=True;
  used_op[OPPnone,OPset__,OPSc_nle]:=True;
- used_op[OPPnone,OPsetbv,OPSnone]:=True;
+ used_op[OPPnone,OPxsetbv,OPSnone]:=True;
  used_op[OPPnone,OPsetssbsy,OPSnone]:=True;
  used_op[OPPnone,OPsfence,OPSnone]:=True;
  used_op[OPPnone,OPsgdt,OPSnone]:=True;

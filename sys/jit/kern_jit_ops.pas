@@ -1906,8 +1906,8 @@ begin
  jit_cbs[OPPnone,OPcwde,OPSnone]:=@add_orig;
  jit_cbs[OPPnone,OPcdqe,OPSnone]:=@add_orig;
 
- jit_cbs[OPPnone,OPgetbv,OPSnone]:=@add_orig;
- jit_cbs[OPPnone,OPrdpmc,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPxgetbv,OPSnone]:=@add_orig;
+ jit_cbs[OPPnone,OPrdpmc ,OPSnone]:=@add_orig;
 
  jit_cbs[OPPnone,OPlea,OPSnone]:=@op_lea;
 
