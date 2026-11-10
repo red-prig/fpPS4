@@ -2760,7 +2760,7 @@ begin
     end;
   end
   else begin
-    SetOpcode(OPX_Group12);
+    SetOpcode(OPX_Group13);
   end;
 end;
 
@@ -2777,8 +2777,6 @@ begin
   if OPC[ModRM.Index] <> OPX_Invalid
   then begin
     DecodeSIMD([soNone, so66]);
-
-    SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
 
     case SimdOpcode of
       soNone: begin
