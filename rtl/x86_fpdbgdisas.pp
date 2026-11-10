@@ -545,38 +545,6 @@ type
     procedure Disassemble(AMode: TFPDMode; var AAddress: Pointer; out AnInstruction: TInstruction);
   end;
 
-  TX86AsmDecoder = class;
-
-  { TX86AsmInstruction }
-
-  TX86AsmInstruction = class
-  const
-    INSTR_CODEBIN_LEN = 16;
-  private
-    FProcess: TDbgProcess;
-    FAddress: TDBGPtr;
-    FCodeBin: array[0..INSTR_CODEBIN_LEN-1] of byte;
-    FInstruction: TInstruction;
-    FInstrLen: Integer;
-    FFlags: set of (diCodeRead, diCodeReadError, diDisAss);
-  protected
-    procedure ReadCode; inline;
-    procedure Disassemble; inline;
-  public
-    constructor Create(AProcess: TDbgProcess);
-    procedure SetAddress(AnAddress: TDBGPtr);
-    function IsCallInstruction: boolean;
-    function IsReturnInstruction: boolean;
-    function IsLeaveStackFrame: boolean;
-    function ModifiesStackPointer: boolean;
-    function IsJumpInstruction(IncludeConditional: Boolean = True; IncludeUncoditional: Boolean = True): boolean;
-    function InstructionLength: Integer;
-    function X86OpCode: TOpCode;
-    property X86Instruction: TInstruction read FInstruction; // only valid after call to X86OpCode
-  end;
-
-  TDbgAsmInstruction=TX86AsmInstruction;
-
   { TX86AsmDecoder }
 
   TX86AsmDecoder = class
@@ -588,7 +556,6 @@ type
     FProcess: TDbgProcess;
     FLastErrWasMem: Boolean;
     FCodeBin: array[0..MAX_CODEBIN_LEN-1] of byte;
-    FLastInstr: TX86AsmInstruction;
   protected
     function GetLastErrorWasMemReadErr: Boolean;
     function GetMaxInstrSize: integer;
@@ -603,10 +570,6 @@ type
 
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: RawByteString; out ACode: RawByteString; out AnInfo: TDbgInstInfo);
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: RawByteString; out ACode: RawByteString);
-    function GetInstructionInfo(AnAddress: TDBGPtr): TDbgAsmInstruction;
-
-    function GetFunctionFrameInfo(AnAddress: TDBGPtr; out
-      AnIsOutsideFrame: Boolean): Boolean;
   end;
 
 function RegName(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte): RawByteString;
@@ -4864,227 +4827,6 @@ begin
  Result:=True;
 end;
 
-{ TX86AsmInstruction }
-
-procedure TX86AsmInstruction.ReadCode;
-begin
-  if not (diCodeRead in FFlags) then begin
-    if not FProcess.ReadData(FAddress, INSTR_CODEBIN_LEN, FCodeBin) then
-      Include(FFlags, diCodeReadError);
-    Include(FFlags, diCodeRead);
-  end;
-end;
-
-procedure TX86AsmInstruction.Disassemble;
-var
-  a: PByte;
-  Disassembler: TX86Disassembler;
-begin
-  if not (diDisAss in FFlags) then begin
-    ReadCode;
-    if diCodeReadError in FFlags then
-      exit;
-    a := @FCodeBin[0];
-    FillChar(Disassembler, SizeOf(Disassembler), 0);
-    Disassembler.Disassemble(FProcess.Mode, a, FInstruction);
-    FInstrLen := a - @FCodeBin[0];
-    Include(FFlags, diDisAss);
-  end;
-end;
-
-constructor TX86AsmInstruction.Create(AProcess: TDbgProcess);
-begin
- FProcess:=AProcess;
-end;
-
-procedure TX86AsmInstruction.SetAddress(AnAddress: TDBGPtr);
-begin
-  FAddress := AnAddress;
-  FFlags := [];
-end;
-
-function TX86AsmInstruction.IsCallInstruction: boolean;
-var
-  a: PByte;
-begin
-  Result := False;
-  ReadCode;
-  if diCodeReadError in FFlags then
-    exit;
-  a := @FCodeBin[0];
-
-  if (FProcess.Mode = dm64) then begin
-    while (a < @FCodeBin[0] + INSTR_CODEBIN_LEN) and (a^ in [$40..$4F, $64..$67]) do
-      inc(a);
-    if not (a^ in [$E8, $FF]) then
-      exit;
-  end
-  else begin
-    while (a < @FCodeBin[0] + INSTR_CODEBIN_LEN) and (a^ in [$26, $2E, $36, $3E, $64..$67]) do
-      inc(a);
-    if not (a^ in [$9A, $E8, $FF]) then
-      exit;
-  end;
-
-  Disassemble;
-  Result := FInstruction.OpCode.Opcode = OPcall;
-end;
-
-function TX86AsmInstruction.IsReturnInstruction: boolean;
-var
-  a: PByte;
-begin
-  ReadCode;
-  if diCodeReadError in FFlags then
-    exit(False);
-  a := @FCodeBin[0];
-
-  // CF: IRET
-  Result := (a^ in [$C2, $C3, $CA, $CB, $CF]);
-end;
-
-function TX86AsmInstruction.IsLeaveStackFrame: boolean;
-var
-  a: PByte;
-begin
-  ReadCode;
-  if diCodeReadError in FFlags then
-    exit(False);
-  a := @FCodeBin[0];
-  // C9: leave
-  Result := (a^ = $C9);
-  if Result then
-    exit;
-  if (FProcess.Mode = dm64) then begin
-    Result :=
-      // 48 8D 65 00 / 5D: lea rsp,[rbp+$00] / pop ebp
-      ( (a^ = $48) and (a[1] = $8D) and (a[2] = $65) and (a[3] = $00)
-        and (a[4] = $5D)
-      ) or
-      // 48 89 ec / 5D: mov esp,ebp / pop ebp
-      ( (a^ = $48) and (a[1] = $89) and (a[2] = $EC)
-        and (a[3] = $5D)
-      );
-  end
-  else begin
-    Result :=
-      // 8D 65 00 / 5D: lea rsp,[rbp+$00] / pop ebp
-      ( (a[0] = $8D) and (a[1] = $65) and (a[2] = $00)
-       and (a[3] = $5D)
-      ) or
-      // 89 ec / 5D: mov esp,ebp / pop ebp
-      ( (a[0] = $89) and (a[1] = $EC)
-       and (a[2] = $5D)
-      );
-  end;
-end;
-
-function TX86AsmInstruction.ModifiesStackPointer: boolean;
-var
-  a: PByte;
-begin
-  (* Enter, Leave
-     mov sp, ...
-     lea sp, ...
-     pop / push
-
-     BUT NOT ret
-  *)
-  Result := False;
-  ReadCode;
-  if diCodeReadError in FFlags then
-    exit;
-  a := @FCodeBin[0];
-
-  if (FProcess.Mode = dm64) then begin
-    while (a < @FCodeBin[0] + INSTR_CODEBIN_LEN) and (a^ in [$40..$4F, $64..$67]) do
-      inc(a);
-
-    // Pop/Push
-    if (a^ in [$50..$61, $68, $8F, $9C, $9d])
-    then
-      exit(True);
-  end
-  else begin
-    while (a < @FCodeBin[0] + INSTR_CODEBIN_LEN) and (a^ in [$26, $2E, $36, $3E, $64..$67]) do
-      inc(a);
-
-    // Pop/Push
-    if (a^ in [$06, $07, $0E, $16, $17, $1E, $1F, $50..$61, $68, $6A, $8F, $9C, $9d])
-    then
-      exit(True);
-  end;
-
-  // Pop/Push
-  if (a^ in [$FF])
-  then begin
-    Disassemble;
-    exit(FInstruction.OpCode.Opcode = OPpush);
-  end;
-
-  if (a^ = $0F) and (a[1] in [$A0, $A1, $A8, $A9]) then
-    exit(True);
-
-  // Enter/Leave
-  if (a^ in [$C8, $C9])
-  then
-    exit(True);
-
-  // Mov/Lea
-  if (a^ in [$89, $8B, $8D]) and
-     (  ((a[1] and $38) = $20) or ((a[1] and $03) = $04)  )  // SP is involved
-  then begin
-    //Disassemble;
-    exit(True);  // does report some "false positives"
-  end;
-end;
-
-function TX86AsmInstruction.IsJumpInstruction(IncludeConditional: Boolean;
-  IncludeUncoditional: Boolean): boolean;
-var
-  a: PByte;
-begin
-  (* Excluding
-     E1, E2  loop
-     E3   JCXZ   Jump short if eCX register is 0
-  *)
-  Result := False;
-  ReadCode;
-  if diCodeReadError in FFlags then
-    exit;
-  a := @FCodeBin[0];
-
-  if IncludeConditional and (a^ in [$70..$7F]) then
-    exit(True);
-  if IncludeConditional and (a^ = $0F) and (a[1] in [$80..$8F]) then
-    exit(True);
-
-  if IncludeUncoditional and (a^ in [$E9..$EB]) then
-    exit(True);
-
-  if IncludeUncoditional and (a^ in [$FF]) then begin
-    Disassemble;
-    exit(FInstruction.OpCode.Opcode = OPjmp);
-  end;
-
-end;
-
-function TX86AsmInstruction.InstructionLength: Integer;
-begin
-  Disassemble;
-  if diCodeReadError in FFlags then
-    exit(0);
-  Result := FInstrLen;
-end;
-
-function TX86AsmInstruction.X86OpCode: TOpCode;
-begin
-  Disassemble;
-  if diCodeReadError in FFlags then
-    exit(OPX_Invalid);
-  Result := FInstruction.OpCode.Opcode;
-end;
-
 function HexValue(const AValue; ASize: Byte; AFlags: THexValueFormatFlags): RawByteString;
 var
   i: Int64;
@@ -5308,12 +5050,6 @@ begin
   Disassemble(AAddress, ACodeBytes, ACode, AnInfo);
 end;
 
-function TX86AsmDecoder.GetInstructionInfo(AnAddress: TDBGPtr): TDbgAsmInstruction;
-begin
-  FLastInstr.SetAddress(AnAddress);
-  Result := FLastInstr;
-end;
-
 { TX86AsmDecoder }
 
 function TX86AsmDecoder.GetLastErrorWasMemReadErr: Boolean;
@@ -5350,67 +5086,6 @@ end;
 constructor TX86AsmDecoder.Create(AProcess: TDbgProcess);
 begin
   FProcess := AProcess;
-end;
-
-function TX86AsmDecoder.GetFunctionFrameInfo(AnAddress: TDBGPtr; out
-  AnIsOutsideFrame: Boolean): Boolean;
-var
-  ADataLen: Cardinal;
-  AData: PByte;
-begin
-  ADataLen := MAX_CODEBIN_LEN;
-  Result := False;
-  if not ReadCodeAt(AnAddress, ADataLen) then
-    exit;
-  AData := @FCodeBin[0];
-
-  while (ADataLen > 0) and (AData^ = $90) do begin // nop
-    inc(AData);
-    dec(ADataLen);
-  end;
-  Result := ADataLen > 0;
-  if not Result then
-    exit;
-
-  AnIsOutsideFrame := False;
-  if AData^ = $55 then begin // push ebp
-    AnIsOutsideFrame := True;
-    exit;
-  end;
-
-  if AData^ = $C3 then begin // ret
-    AnIsOutsideFrame := True;
-    exit;
-  end;
-
-  if AData^ in [$50..$54, $56..$57] then begin // push
-    while (ADataLen > 1) and (AData^ in [$50..$57]) do begin
-      inc(AData);
-      dec(ADataLen);
-    end;
-    if AData^ = $55 then begin // push ebp
-      AnIsOutsideFrame := True;
-      exit;
-    end;
-    //48 8D A4 24 50FBFFFF         lea rsp,[rsp-$000004B0]
-    //48 8D 64 24 C0               lea rsp,[rsp-$40]
-    //but NOT  48 8D A4 24 B040000         lea rsp,[rsp+$000004B0]
-    if (ADataLen >= 4) and (AData[0] = $48) and (AData[1] = $8D) and (AData[3] = $24) and (
-         (                     (AData[2] = $64) and ((AData[4] and $80) <> 0) ) or
-         ( (ADataLen >= 8) and (AData[2] = $A4) and ((AData[7] and $80) <> 0) )
-       )
-    then begin // mov rbp,rsp // AFTER push ebp
-      AnIsOutsideFrame := True;
-      exit;
-    end;
-  end;
-
-  //if (ADataLen >= 2) and (AData[0] = $89) and (AData[1] = $E5) // 32 bit mov ebp, esp
-  if (ADataLen >= 3) and (AData[0] = $48) and (AData[1] = $89) and (AData[2] = $E5)
-  then begin // mov rbp,rsp // AFTER push ebp
-    // Need 1 byte before, to check for "push ebp"
-    exit;
-  end;
 end;
 
 end.
