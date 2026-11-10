@@ -3920,7 +3920,7 @@ begin
           Flags := Flags - [pre66];
         end;
         $F5: begin SetOpcode(OPpdep                       ); AddGy;  AddBy;  AddEy;  CheckVex; end;
-        $F6: begin SetOpcode(OPmul,         OPSx_x        ); AddBy;  AddGy;  AddReg(regGeneral, MODE_SIZE[ProcessMode], REG_D); AddEy; CheckVex; end;
+        $F6: begin SetOpcode(OPmul,         OPSx_x        ); AddGy;  AddBy;  AddEy;  CheckVex; end;
         $F7: begin SetOpcode(OPshr,         OPSx_x        ); AddGy;  AddEy;  AddBy;  CheckVex; end;
       end;
     end;

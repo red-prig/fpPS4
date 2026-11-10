@@ -501,7 +501,6 @@ begin
  used_op[OPPnone,OPmul,OPSx_ps]:=True;
  used_op[OPPnone,OPmul,OPSx_sd]:=True;
  used_op[OPPnone,OPmul,OPSx_ss]:=True;
- used_op[OPPnone,OPmul,OPSx_x]:=True;
  used_op[OPPnone,OPmwait,OPSnone]:=True;
  used_op[OPPnone,OPmwait,OPSx_x]:=True;
  used_op[OPPnone,OPneg,OPSnone]:=True;
