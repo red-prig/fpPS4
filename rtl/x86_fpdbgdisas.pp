@@ -3521,7 +3521,7 @@ begin
       AddEv; AddGv; AddIb;
     end;
     $AD: begin
-      SetOpcode(OPshl, OPSx_d);
+      SetOpcode(OPshr, OPSx_d);
       AddEv; AddGv;
       AddReg(regGeneral, os8, REG_C);
     end;
