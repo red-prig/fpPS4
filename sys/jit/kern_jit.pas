@@ -2552,7 +2552,7 @@ begin
   if is_invalid(din) then
   begin
    //invalid
-   LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr),' startt:0x',HexStr(ctx.builder.ACodeChunkList.pCurr^.start,16));
+   LOG_ERROR('invalid1:0x',HexStr(ctx.ptr_curr),' start:0x',HexStr(ctx.builder.ACodeChunkList.pCurr^.start,16));
 
    _invalid:
 
