@@ -4597,9 +4597,11 @@ begin
       end;
       $D4: begin
         SetOpcode(OPaam); Check32;
+        AddIb;
       end;
       $D5: begin
         SetOpcode(OPaad); Check32;
+        AddIb;
       end;
       $D6: begin
         // AMD (old)
