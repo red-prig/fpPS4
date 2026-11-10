@@ -4814,6 +4814,9 @@ begin
   CodeIdx := 0;
   OperIdx := 0;
   SimdOpcode := soInvalid;
+  Vex.Index := 0;
+  Vex.Length := 0;
+  Vex.VectorLength := os128;
   Vex.MaskIndex := 0;
   mm:=0;
 
@@ -4882,6 +4885,7 @@ begin
     if diCodeReadError in FFlags then
       exit;
     a := @FCodeBin[0];
+    FillChar(Disassembler, SizeOf(Disassembler), 0);
     Disassembler.Disassemble(FProcess.Mode, a, FInstruction);
     FInstrLen := a - @FCodeBin[0];
     Include(FFlags, diDisAss);
