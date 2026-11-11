@@ -468,6 +468,7 @@ type
     procedure AddVsd;
     procedure AddVss;
     procedure AddVx;
+    procedure AddVxh;
     procedure AddVy;
     procedure AddWd;
     procedure AddWdq;
@@ -479,6 +480,7 @@ type
     procedure AddWsd;
     procedure AddWss;
     procedure AddWx;
+    procedure AddWxh;
     procedure AddWx_Mq;
     //---
 
@@ -1821,13 +1823,7 @@ var
 begin
   if ModRM.Mode = 3 // reg
   then begin
-    case Vex.VectorLength of
-      os512: Size := os256;
-    else
-      Size := os128;
-    end;
-
-    AddModRM([modReg], Size, regXmm);
+    AddModRM([modReg], os128, regXmm);
   end
   else
   begin
@@ -1877,13 +1873,7 @@ var
 begin
   if ModRM.Mode = 3 // reg
   then begin
-    case Vex.VectorLength of
-      os512: Size := os256;
-    else
-      Size := os128;
-    end;
-
-    AddModRM([modReg], Size, regXmm);
+    AddModRM([modReg], os128, regXmm);
   end
   else
   begin
@@ -1943,6 +1933,13 @@ begin
   else AddModReg(regXmm, os128)
 end;
 
+procedure TX86Disassembler.AddVxh;
+begin
+  if VectorSize = os512
+  then AddModReg(regXmm, os256)
+  else AddModReg(regXmm, os128);
+end;
+
 procedure TX86Disassembler.AddVy;
 begin
   if OperandSize = os64
@@ -2000,6 +1997,16 @@ end;
 procedure TX86Disassembler.AddWx;
 begin
   AddModRM([modReg, modMem], VectorSize, regXmm);
+end;
+
+procedure TX86Disassembler.AddWxh;
+begin
+  case VectorSize of
+    os512: AddModRM([modReg, modMem], os256, regXmm);
+    os256: AddModRM([modReg, modMem], os128, regXmm);
+  else
+    AddModRM([modReg, modMem], os64, regXmm);
+  end;
 end;
 
 procedure TX86Disassembler.AddWx_Mq;
@@ -3202,8 +3209,8 @@ begin
       case SimdOpcode of
         soNone: begin SetOpcode(OPmovnt, OPSx_ps, True); AddMps; AddVps; end;
         so66:   begin SetOpcode(OPmovnt, OPSx_pd, True); AddMpd; AddVpd; end;
-        soF2:   begin SetOpcode(OPmovnt, OPSx_sd, True); AddMpd; AddVpd; end;
-        soF3:   begin SetOpcode(OPmovnt, OPSx_ss, True); AddMpd; AddVpd; end;
+        soF2:   begin SetOpcode(OPmovnt, OPSx_sd, True); AddMq; AddVpd; end;
+        soF3:   begin SetOpcode(OPmovnt, OPSx_ss, True); AddMd; AddVpd; end;
       end;
     end;
     $2C: begin
@@ -3736,9 +3743,9 @@ begin
     $E6: begin
       DecodeSIMD([so66, soF2, soF3]);
       case SimdOpcode of
-        so66: begin SetOpcode(OPcvttpd2, OPSx_dq, True); AddVx; AddWpd; end;
-        soF2: begin SetOpcode(OPcvtpd2,  OPSx_dq, True); AddVx; AddWpd; end;
-        soF3: begin SetOpcode(OPcvtdq2,  OPSx_pd, True); AddVx; AddWpd; end;
+        so66: begin SetOpcode(OPcvttpd2, OPSx_dq, True); AddVxh; AddWpd; end;
+        soF2: begin SetOpcode(OPcvtpd2,  OPSx_dq, True); AddVxh; AddWpd; end;
+        soF3: begin SetOpcode(OPcvtdq2,  OPSx_pd, True); AddVx;  AddWxh; end;
       end;
     end;
     $E7: begin
