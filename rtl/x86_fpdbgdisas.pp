@@ -3927,11 +3927,11 @@ begin
     end;
     soF2: begin
       case Code[CodeIdx] of
-        $F0: begin SetOpcode(OPcrc32                      ); AddGd;  AddEb;                    end;
+        $F0: begin SetOpcode(OPcrc32                      ); AddGy;  AddEb;                    end;
         $F1: begin
           SetOpcode(OPcrc32);
-          AddGd;
-          if pre66 in Flags then AddEw else AddEy;
+          AddGy;
+          if OperandSize = os16 then AddEw else AddEy;
           Flags := Flags - [pre66];
         end;
         $F5: begin SetOpcode(OPpdep                       ); AddGy;  AddBy;  AddEy;  CheckVex; end;
