@@ -534,6 +534,7 @@ type
     procedure SetOpcode(AOpcode: TOpcode; ASuffix: TOpCodeSuffix = OPSnone; APrefixV: Boolean = False);
     procedure Default64;
     procedure Force64;
+    procedure IgnoreRex;
     function Ignore64Reg(s: ShortInt): ShortInt;
     function OperandSize: TOperandSize;
     function StdCond(AIndex: Byte): TOpCodeSuffix;
@@ -808,6 +809,10 @@ begin
     Include(Flags, oprForce64);
 end;
 
+procedure TX86Disassembler.IgnoreRex;
+begin
+  Flags := Flags - [flagRex, rexR, rexX, rexB, rexW];
+end;
 
 procedure TX86Disassembler.CheckLock;
   function CheckMem: boolean;
@@ -4172,6 +4177,7 @@ begin
         CheckLock;
       end;
       $26: begin
+        IgnoreRex;
         Instruction^.SegmentReg := Ignore64Reg(REG_ES);
       end;
       $27: begin
@@ -4183,6 +4189,7 @@ begin
         CheckLock;
       end;
       $2E: begin
+        IgnoreRex;
         Instruction^.SegmentReg := Ignore64Reg(REG_CS);
       end;
       $2F: begin
@@ -4195,6 +4202,7 @@ begin
         CheckLock;
       end;
       $36: begin
+        IgnoreRex;
         Instruction^.SegmentReg := Ignore64Reg(REG_SS);
       end;
       $37: begin
@@ -4205,6 +4213,7 @@ begin
         AddStdOperands(Code[CodeIdx]);
       end;
       $3E: begin
+        IgnoreRex;
         Instruction^.SegmentReg := Ignore64Reg(REG_DS);
       end;
       $3F: begin
@@ -4214,6 +4223,8 @@ begin
       $40..$4F: begin
         if (ProcessMode = dm64)
         then begin
+          //reset before
+          Flags := Flags - [rexR, rexX, rexB, rexW];
           if (Code[CodeIdx] and Byte(1)) <> 0 then Include(Flags, rexB);
           if (Code[CodeIdx] and Byte(2)) <> 0 then Include(Flags, rexX);
           if (Code[CodeIdx] and Byte(4)) <> 0 then Include(Flags, rexR);
@@ -4275,15 +4286,19 @@ begin
         end;
       end;
       $64: begin
+        IgnoreRex;
         Instruction^.SegmentReg := REG_FS;
       end;
       $65: begin
+        IgnoreRex;
         Instruction^.SegmentReg := REG_GS;
       end;
       $66: begin
+        IgnoreRex;
         Include(FLags, pre66);
       end;
       $67: begin
+        IgnoreRex;
         Include(FLags, preAdr);
       end;
       $68: begin
@@ -4726,15 +4741,18 @@ begin
         AddReg(regGeneral, OperandSize, REG_A);
       end;
       $F0: begin
+        IgnoreRex;
         Include(Flags, preLock);
       end;
       $F1: begin
         SetOpcode(OPint1);
       end;
       $F2: begin
+        IgnoreRex;
         Include(Flags, preF2);
       end;
       $F3: begin
+        IgnoreRex;
         Include(Flags, preF3);
       end;
       $F4: begin
