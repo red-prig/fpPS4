@@ -2649,8 +2649,8 @@ begin
   SetOpcode(OPX_Group9);
   case ModRM.Index of
     1: begin
-      DecodeSIMD([soNone]);
-      if SimdOpcode = soNone
+      DecodeSIMD([soNone, so66]);
+      if SimdOpcode in [soNone, so66]
       then begin
         if OperandSize = os64
         then begin
@@ -2693,9 +2693,10 @@ begin
         end;
       end
       else begin
-        DecodeSIMD([soNone]);
+        DecodeSIMD([soNone, so66]);
         case SimdOpcode of
-          soNone: begin SetOpcode(OPvmptrst); AddMq; end;
+          soNone,
+          so66:   begin SetOpcode(OPvmptrst); AddMq; end;
         end;
       end;
     end;
@@ -2815,7 +2816,8 @@ begin
   SetOpcode(OPX_Group15);
 
   case SimdOpcode of
-    soNone: begin
+    soNone,
+    so66: begin
       if ModRM.Mode = 3
       then begin
         case ModRM.Index of
@@ -2834,13 +2836,14 @@ begin
           4: begin SetOpcode(OPxsave                 ); AddModRM([modMem], os4096, regNone); end; // the data is variable in size.
           5: begin SetOpcode(OPxrstor                ); AddModRM([modMem], os4096, regNone); end; // the first 512 bytes are the same as fxsave
           6: begin SetOpcode(OPxsaveopt              ); AddModRM([modMem], os4096, regNone); end; //
-          7: begin SetOpcode(OPclflush               ); AddMb; end
+          7: begin
+               if SimdOpcode = so66
+               then SetOpcode(OPclflushopt)
+               else SetOpcode(OPclflush);
+               AddMb;
+             end;
         end;
       end;
-    end;
-    so66: begin
-      if (ModRM.Mode <> 3) and (ModRM.Index = 7)
-      then begin SetOpcode(OPclflushopt); AddMb; end;
     end;
     soF3: begin
       if ModRM.Mode = 3
@@ -3144,7 +3147,8 @@ begin
     $1E: begin
       DecodeSIMD([soNone, soF3]);
       case SimdOpcode of
-        soNone: begin SetOpcode(OPNop);          AddEv; end;
+        soNone,
+        so66:   begin SetOpcode(OPNop);          AddEv; end;
         soF3:   begin SetOpcode(OPrdss, OPSx_p); AddRy; end;
       end;
     end;
@@ -3433,8 +3437,9 @@ begin
         soNone: begin SetOpcode(OPvmread); AddEy; AddGy; end;
         so66:   begin
                  DecodeModRM;
-                 if ModRM.Index = 0
-                 then begin SetOpcode(OPextrq); AddUdq; AddIb; AddIb; end;
+                 if (ModRM.Mode = 3) and (ModRM.Index = 0)
+                 then begin SetOpcode(OPextrq);  AddUdq; AddIb; AddIb; end
+                 else begin SetOpcode(OPvmread); AddEw;  AddGd; end;
                 end;
         soF2:   begin SetOpcode(OPinsert, OPSx_q); AddVq; AddUdq; AddIb; AddIb; end;
       end;
@@ -3629,9 +3634,10 @@ begin
     end;
     //---
     $C0: begin
-      DecodeSIMD([soNone]);
+      DecodeSIMD([soNone, so66]);
       case SimdOpcode of
-        soNone: begin SetOpcode(OPxadd); AddEb; AddGb; CheckLock; end;
+        soNone,
+        so66:   begin SetOpcode(OPxadd); AddEb; AddGb; CheckLock; end;
       end;
     end;
     $C1: begin
