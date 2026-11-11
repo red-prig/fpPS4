@@ -2805,7 +2805,7 @@ begin
   Assert(Code[CodeIdx] = $AE, 'Not group 15');
 
   DecodeModRM;
-  DecodeSIMD([soNone, soF3]);
+  DecodeSIMD([soNone, so66, soF3]);
 
   SetOpcode(OPX_Group15);
 
@@ -2832,6 +2832,10 @@ begin
           7: begin SetOpcode(OPclflush               ); AddMb; end
         end;
       end;
+    end;
+    so66: begin
+      if (ModRM.Mode <> 3) and (ModRM.Index = 7)
+      then begin SetOpcode(OPclflushopt); AddMb; end;
     end;
     soF3: begin
       if ModRM.Mode = 3
