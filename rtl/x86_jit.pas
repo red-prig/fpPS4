@@ -40,14 +40,16 @@ type
  // vwOne  -> always 1
  // vwR64  -> 64bit regster sets 1
  // vwM64  -> 64bit memory  sets 1
- t_vw_mode=(vwZero,vwOne,vwR64,vwM64);
+ // vwAny  -> W is ignored (WIG), emit 0 and skip verify
+ t_vw_mode=(vwZero,vwOne,vwR64,vwM64,vwAny);
 
  //vex len modes:
  // vlM256 -> 256bit memory  sets 1
  // vlR256 -> 256bit regster sets 1
  // vlZero -> always 0
  // vlOne  -> always 1
- t_vl_mode=(vlM256,vlR256,vlZero,vlOne);
+ // vlAny  -> L is ignored (LIG), emit 0 and skip verify
+ t_vl_mode=(vlM256,vlR256,vlZero,vlOne,vlAny);
 
  t_op_opt=Set of (not_impl,not_os8,reg_size_pri,not_prefix,verif_vex_len,verif_rexw);
 
@@ -1058,6 +1060,7 @@ begin
   vlM256:Result:=ord(msize=os256);
   vlZero:Result:=0;
   vlOne :Result:=1;
+  vlAny :Result:=0;
  end;
 end;
 
@@ -1073,6 +1076,7 @@ begin
   vwOne :Result:=True;
   vwR64 :Result:=(rsize=os64);
   vwM64 :Result:=(msize=os64);
+  vwAny :Result:=False;
  end;
 end;
 
@@ -3119,7 +3123,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,mreg.AMemSize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len');
@@ -3127,7 +3131,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,os0,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3208,7 +3212,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3216,7 +3220,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3292,7 +3296,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,size,size);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3300,7 +3304,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3371,7 +3375,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3379,7 +3383,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3448,7 +3452,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,size,size);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3456,7 +3460,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3521,7 +3525,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3529,7 +3533,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3617,7 +3621,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,reg0.ASize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3625,7 +3629,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,reg0.ASize,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3715,7 +3719,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,size,size);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3723,7 +3727,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3794,7 +3798,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,size,size);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3802,7 +3806,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3869,7 +3873,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,size,size);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3877,7 +3881,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc.vw_mode,size,os0);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw');
@@ -3936,7 +3940,7 @@ begin
 
  Vex.Length:=get_vex_len(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_vex_len in desc.opt) then
+ if (verif_vex_len in desc.opt) and (desc.vl_mode<>vlAny) then
  if (Vex.Length<>desc.vx_len) then
  begin
   Assert(false,'verif_vex_len op=$'+HexStr(desc.op,8));
@@ -3944,7 +3948,7 @@ begin
 
  Vex.rexW:=get_vex_rexw(desc,reg.ASize,mreg.AMemSize);
 
- if (verif_rexw in desc.opt) then
+ if (verif_rexw in desc.opt) and (desc.vw_mode<>vwAny) then
  if (Vex.rexW<>desc.rexw) then
  begin
   Assert(false,'verif_rexw op=$'+HexStr(desc.op,8));

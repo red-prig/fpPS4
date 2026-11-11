@@ -177,7 +177,7 @@ end;
 
 function get_vw_mode(var ctx:t_jit_context2):t_vw_mode;
 begin
- Result:=vwZero; //default
+ Result:=vwAny; //default
 
  case ctx.din.OpCode.Opcode of
 
@@ -226,6 +226,39 @@ begin
  Result:=vlM256; //default
 
  case ctx.din.OpCode.Opcode of
+
+  OPmov,
+  OPmovnt,
+  OPadd,
+  OPsub,
+  OPmul,
+  OPdiv,
+  OPmin,
+  OPmax,
+  OPcmp,
+  OPsqrt,
+  OPrsqrt,
+  OPrcp,
+  OPcomi,
+  OPucomi,
+  OPround,
+  OPcvtsi2:
+    case ctx.din.OpCode.Suffix of
+     OPSx_ss,
+     OPSx_sd:Result:=vlAny;
+     else;
+    end;
+
+  OPcvtss2,
+  OPcvtsd2,
+  OPcvttss2,
+  OPcvttsd2:
+    case ctx.din.OpCode.Suffix of
+     OPSx_ss,
+     OPSx_sd,
+     OPSx_si:Result:=vlAny;
+     else;
+    end;
 
   OPpmovsx:Result:=vlR256;
   OPpmovzx:Result:=vlR256;
@@ -417,7 +450,7 @@ begin
   tmp.simdop :=SCODES[ctx.dis.SimdOpcode];
   tmp.mm     :=ctx.dis.mm;
   tmp.vw_mode:=get_vw_mode(ctx);
-  tmp.vl_mode:=vlZero;
+  tmp.vl_mode:=vlAny;
   //
   op_emit_avx3(ctx,tmp);
  end else
@@ -690,8 +723,8 @@ end;
 
 const
  vmov_ss_desc:t_op_desc=(
-  mem_reg:(op:$11;simdop:2;mm:1);
-  reg_mem:(op:$10;simdop:2;mm:1);
+  mem_reg:(op:$11;simdop:2;mm:1;vl_mode:vlAny);
+  reg_mem:(op:$10;simdop:2;mm:1;vl_mode:vlAny);
   reg_imm:(opt:[not_impl]);
   reg_im8:(opt:[not_impl]);
   hint:[his_mov,his_wo];
