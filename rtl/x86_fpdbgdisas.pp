@@ -351,6 +351,7 @@ type
     OperIdx: Integer;
     CodeIdx: Byte;
     ModRMIdx: Byte;
+    TooLong: Boolean;
     mm: Byte;
     opcode: DWORD;
     Flags: TFlags;
@@ -359,6 +360,7 @@ type
       Mode: Byte;
       Index: Byte;
       RM: Byte;
+      Value: Byte;
     end;
     Vex: packed record
       Index: Byte;
@@ -532,6 +534,8 @@ type
 
     function AddressSize: TAddressSize;
     function HasOpcode: Boolean;
+    function LenOk(AIdx: Integer): Boolean;
+    procedure SetTooLong;
     procedure AddOpPrefix;
     procedure SetOpcode(AOpcode: TOpcode; ASuffix: TOpCodeSuffix = OPSnone; APrefixV: Boolean = False);
     procedure Default64;
@@ -581,9 +585,8 @@ function RegName(AType: TRegisterType; ASize: TOperandSize; AIndex: Byte): RawBy
 
 implementation
 
-{$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
-
 const
+  MAX_INSTR_LEN = 15;
   ADDRESS_BYTES: array[TAddressSize] of Byte = (2, 4, 8);
   OPERAND_BYTES: array[TOperandSize] of Word = (0, 1,  2,  4,  8,   6, 10,  16,  32,  64,  512);
   OPERAND_BITS:  array[TOperandSize] of Word = (0, 8, 16, 32, 64,  48, 80, 128, 256, 512, 4096);
@@ -883,12 +886,37 @@ begin
   then Flags := Flags - check;
 end;
 
+function TX86Disassembler.LenOk(AIdx: Integer): Boolean;
+begin
+  Result := AIdx < MAX_INSTR_LEN;
+  if not Result then SetTooLong;
+end;
+
+procedure TX86Disassembler.SetTooLong;
+begin
+  TooLong := True;
+  opcode := 0;
+  Instruction^.OpCode.Prefix := OPPnone;
+  Instruction^.OpCode.Opcode := OPX_Invalid;
+  Instruction^.OpCode.Suffix := OPSnone;
+end;
+
 procedure TX86Disassembler.DecodeModRM;
 begin
+  if not LenOk(ModRMIdx) then
+  begin
+    ModRM.Mode := 3;
+    ModRM.Index:= 0;
+    ModRM.RM   := 0;
+    ModRM.Value:= 0;
+    Exit;
+  end;
+
   Include(Flags, flagModRM);
-  ModRM.Mode := (Code[ModRMIdx] shr 6) and 3;
-  ModRM.Index:= (Code[ModRMIdx] shr 3) and 7;
-  ModRM.RM   := (Code[ModRMIdx]      ) and Byte(7);
+  ModRM.Value:= Code[ModRMIdx];
+  ModRM.Mode := (ModRM.Value shr 6) and 3;
+  ModRM.Index:= (ModRM.Value shr 3) and 7;
+  ModRM.RM   := (ModRM.Value      ) and Byte(7);
 end;
 
 procedure TX86Disassembler.ClearSIMDPrefix;
@@ -978,7 +1006,7 @@ begin
   Inc(OperIdx);
   if OperIdx > High(Instruction^.Operand)
   then begin
-    LOG_TRACE(Format('AddOperand: Only %d operands supported, got %d', [High(Instruction^.Operand), OperIdx]));
+    //Writeln(Format('AddOperand: Only %d operands supported, got %d', [High(Instruction^.Operand), OperIdx]));
     Exit;
   end;
 
@@ -1300,6 +1328,7 @@ begin
   if ModRM.RM = 4 then
   begin
     // sib folows
+    if not LenOk(ModRMIdx+1) then Exit;
     Include(Flags, flagSib);
     sib.Scale := Code[ModRMIdx+1] shr 6;
     sib.Index := (Code[ModRMIdx+1] shr 3) and $7;
@@ -1583,6 +1612,7 @@ begin
   end;
 
   //@@@ todo: check, Instruction^.Operand[OperIdx].CodeIndex + ByteCount(2) should be the same as CodeIdx + idx;
+  if not LenOk(CodeIdx + idx + 1) then Exit;
   idx := Code[CodeIdx + idx + 1] shr 4; // bit 7..4 -> reg
   if ProcessMode = dm32
   then idx := idx and $07;
@@ -2077,7 +2107,7 @@ procedure TX86Disassembler.DoX87;
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone, OPSnone, OPSx_p, OPSnone, OPSnone, OPSnone, OPSnone);
   begin
     SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: AddMem32
     else
       AddReg0; AddRegN;
@@ -2095,7 +2125,7 @@ procedure TX86Disassembler.DoX87;
       OPfprem, OPfyl2xp1, OPfsqrt, OPfsincos, OPfrndint, OPfscale, OPfsin, OPfcos
     );
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         case ModRM.Index of
@@ -2108,7 +2138,7 @@ procedure TX86Disassembler.DoX87;
       $C0..$CF: begin SetOpcode(OPC[ModRM.Index]); AddReg0; AddRegN; end;
       $D0:      begin SetOpcode(OPnop); end;
       $D8..$DF: begin SetOpcode(OPX_ReservedX87); end;
-      $E0..$FF: begin SetOpcode(OPCx[Code[ModRMIdx] and Byte($1F)]); end;
+      $E0..$FF: begin SetOpcode(OPCx[ModRM.Value and Byte($1F)]); end;
     else
       SetOpcode(OPX_InvalidX87);
     end;
@@ -2119,7 +2149,7 @@ procedure TX86Disassembler.DoX87;
     OPC: array[0..7] of TOpCode =       (OPfiadd, OPfimul, OPficom, OPficom, OPfisub, OPfisubr, OPfidiv, OPfidivr);
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone, OPSnone, OPSx_p,  OPSnone, OPSnone,  OPSnone, OPSnone);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         AddMem32;
@@ -2153,7 +2183,7 @@ procedure TX86Disassembler.DoX87;
     OPC: array[0..7] of TOpCode =       (OPfild,  OPfisttp, OPfist,  OPfist, OPX_InvalidX87, OPfld,    OPX_InvalidX87, OPfst);
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,  OPSnone, OPSx_p, OPSnone,        OPSnone,  OPSnone,        OPSx_p);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         case ModRM.Index of
@@ -2190,7 +2220,7 @@ procedure TX86Disassembler.DoX87;
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,  OPSnone, OPSx_p, OPSnone, OPSnone, OPSnone, OPSnone);
     OPCx: array[0..7] of TOpCode = (OPfadd, OPfmul, OPX_InvalidX87, OPX_InvalidX87, OPfsubr, OPfsub, OPfdivr, OPfdiv);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         AddMem64;
@@ -2212,7 +2242,7 @@ procedure TX86Disassembler.DoX87;
     OPCx: array[0..7] of TOpCode =       (OPffree, OPX_InvalidX87, OPfst,   OPfst,  OPfucom,        OPfucom, OPX_InvalidX87, OPX_InvalidX87);
     OPSx: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,        OPSnone, OPSx_p, OPSnone,        OPSx_p,  OPSnone,        OPSnone);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         case ModRM.Index of
@@ -2244,7 +2274,7 @@ procedure TX86Disassembler.DoX87;
     OPCx: array[0..7] of TOpCode =       (OPfadd, OPfmul, OPX_InvalidX87, OPX_InvalidX87, OPfsubr, OPfsub, OPfdivr, OPfdiv);
     OPSx: array[0..7] of TOpCodeSuffix = (OPSx_p, OPSx_p, OPSnone,        OPSnone,        OPSx_p,  OPSx_p, OPSx_p,  OPSx_p);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         AddMem16;
@@ -2270,7 +2300,7 @@ procedure TX86Disassembler.DoX87;
     OPC: array[0..7] of TOpCode =       (OPfild,  OPfisttp, OPfist,  OPfist, OPfbld,  OPfild,  OPfbstp, OPfist);
     OPS: array[0..7] of TOpCodeSuffix = (OPSnone, OPSnone,  OPSnone, OPSx_p, OPSnone, OPSnone, OPSnone, OPSx_p);
   begin
-    case Code[ModRMIdx] of
+    case ModRM.Value of
       $00..$BF: begin
         SetOpcode(OPC[ModRM.Index], OPS[ModRM.Index]);
         case ModRM.Index of
@@ -2335,6 +2365,7 @@ begin
     Inc(idx, Instruction^.Operand[n].ByteCount2);
   end;
   // now we can lookup the Instruction^.Opcode
+  if not LenOk(CodeIdx + idx) then Exit;
   case Code[CodeIdx + idx] of
     $0C: SetOpcode(OPpi2fw);
     $0D: SetOpcode(OPpi2fd);
@@ -3272,6 +3303,7 @@ begin
       AddOpPrefix;
       Inc(CodeIdx);
       Inc(ModRMIdx);
+      if not LenOk(CodeIdx) then Exit;
       Do3ByteOpcode38;
     end;
     // $39: OPX_Invalid
@@ -3279,6 +3311,7 @@ begin
       AddOpPrefix;
       Inc(CodeIdx);
       Inc(ModRMIdx);
+      if not LenOk(CodeIdx) then Exit;
       Do3ByteOpcode3A;
     end;
     // $3B..$3F: OPX_Invalid
@@ -4044,6 +4077,8 @@ var
 begin
   Assert(ASize in [2..4], Format('Invalid VEX size: %u', [ASize]));
 
+  if not LenOk(CodeIdx + ASize - 1) then Exit;
+
   // remove rexRXBW flags, they are illegal. the presence of flagRex wil signal this
   Flags := Flags - [rexR, rexX, rexB, rexW];
 
@@ -4110,6 +4145,8 @@ begin
   Inc(CodeIdx, ASize);
   Inc(ModRMIdx, ASize);
 
+  if not LenOk(CodeIdx) then Exit;
+
   case mm of
     1: Do2ByteOpcode;
     2: Do3ByteOpcode38;
@@ -4126,6 +4163,7 @@ procedure TX86Disassembler.DoDisassemble;
 begin
   SetOpcode(OPX_InternalUnknown);
   repeat
+    if not LenOk(CodeIdx) then Exit;
     ModRMIdx := CodeIdx + 1;
     case Code[CodeIdx] of
       $00..$05: begin
@@ -4154,6 +4192,7 @@ begin
         AddOpPrefix;
         Inc(CodeIdx);
         Inc(ModRMIdx);
+        if not LenOk(CodeIdx) then Exit;
         Do2ByteOpcode;
       end;
       //---
@@ -4806,11 +4845,6 @@ begin
     end;
 
     Inc(CodeIdx);
-    if CodeIdx > 16 // max instruction length
-    then begin
-      LOG_DEBUG('Disassemble: instruction longer than 16 bytes');
-      Exit;
-    end;
   until Instruction^.Opcode.Opcode <> OPX_InternalUnknown;
 end;
 
@@ -4830,6 +4864,7 @@ begin
   Flags := [];
   CodeIdx := 0;
   OperIdx := 0;
+  TooLong := False;
   SimdOpcode := soInvalid;
   Vex.Index := 0;
   Vex.Length := 0;
@@ -4858,6 +4893,15 @@ begin
     Inc(CodeIdx, AnInstruction.Operand[n].ByteCount);
     Inc(CodeIdx, AnInstruction.Operand[n].ByteCount2);
   end;
+
+  if TooLong or (CodeIdx > MAX_INSTR_LEN) then
+  begin
+    CodeIdx := MAX_INSTR_LEN;
+    SetTooLong;
+    OperIdx := 0;
+    Instruction^.OperCnt := 0;
+  end;
+
   Inc(AAddress, CodeIdx);
 end;
 
