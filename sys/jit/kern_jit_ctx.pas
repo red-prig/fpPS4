@@ -235,6 +235,7 @@ function is_rsp(const r:TRegValues):Boolean;
 function is_imm(const r:TInstruction):Boolean;
 function is_invalid(const r:TRegValue):Boolean;
 function is_invalid(const r:TInstruction):Boolean;
+function is_privileged(const r:TInstruction):Boolean;
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
 
 type
@@ -1328,6 +1329,93 @@ begin
 
 end;
 
+function is_privileged(const r:TInstruction):Boolean;
+begin
+ Result:=False;
+
+ case r.OpCode.Opcode of
+   OPbndldx     ,
+   OPclgi       ,
+   OPclrssbsy   ,
+   OPclts       ,
+   OPencls      ,
+   OPenclu      ,
+   OPgetsec     ,
+   OPin         ,
+   OPins        ,
+   OPinvd       ,
+   OPinvept     ,
+   OPinvlpg     ,
+   OPinvlpga    ,
+   OPinvpcid    ,
+   OPinvvpid    ,
+   OPlds        ,
+   OPles        ,
+   OPlfs        ,
+   OPlgdt       ,
+   OPlgs        ,
+   OPlidt       ,
+   OPlldt       ,
+   OPlmsw       ,
+   OPloadiwkey  ,
+   OPlsl        ,
+   OPltr        ,
+   OPmcommit    ,
+   OPmonitor    ,
+   OPmwait      ,
+   OPout        ,
+   OPouts       ,
+   OPrdmsr      ,
+   OPrmpadjust  ,
+   OPrmpupdate  ,
+   OPrsm        ,
+   OPsaveprevssp,
+   OPsetssbsy   ,
+   OPsgdt       ,
+   OPsidt       ,
+   OPskinit     ,
+   OPsldt       ,
+   OPsmsw       ,
+   OPstgi       ,
+   OPstr        ,
+   OPswapgs     ,
+   OPsysenter   ,
+   OPsysexit    ,
+   OPsysret     ,
+   OPverr       ,
+   OPverw       ,
+   OPvmcall     ,
+   OPvmclear    ,
+   OPvmfunc     ,
+   OPvmlaunch   ,
+   OPvmload     ,
+   OPvmmcall    ,
+   OPvmptrld    ,
+   OPvmptrst    ,
+   OPvmread     ,
+   OPvmresume   ,
+   OPvmrun      ,
+   OPvmsave     ,
+   OPvmwrite    ,
+   OPvmxoff     ,
+   OPvmxon      ,
+   OPwbinvd     ,
+   OPwbnoinvd   ,
+   OPwrmsr      ,
+   OPwruss      ,
+   OPxabort     ,
+   OPxbegin     ,
+   OPxend       ,
+   OPxsetbv     ,
+   OPxtest      :
+   begin
+    Exit(True);
+   end;
+  else;
+ end;
+
+end;
+
 function test_disassemble(addr:Pointer;vsize:Integer):Boolean;
 type
  t_data_16=array[0..15] of Byte;
@@ -1365,6 +1453,12 @@ begin
   end;
 
   if is_invalid(din) then
+  begin
+   //invalid code
+   Exit(False);
+  end;
+
+  if is_privileged(din) then
   begin
    //invalid code
    Exit(False);

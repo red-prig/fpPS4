@@ -430,6 +430,12 @@ begin
    Exit(False);
   end;
 
+  if is_privileged(din) then
+  begin
+   //invalid code
+   Exit(False);
+  end;
+
   addr:=addr+(ptr-beg);
 
   case din.OpCode.Opcode of
@@ -1816,79 +1822,84 @@ begin
 
  jit_cbs[OPPnone,OPnop,OPSnone]:=@op_nop;
 
- jit_cbs[OPPnone,OPin  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPins ,OPSx_b ]:=@op_invalid;
- jit_cbs[OPPnone,OPins ,OPSx_w ]:=@op_invalid;
- jit_cbs[OPPnone,OPins ,OPSx_d ]:=@op_invalid;
-
- jit_cbs[OPPnone,OPout ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPouts,OPSx_b ]:=@op_invalid;
- jit_cbs[OPPnone,OPouts,OPSx_w ]:=@op_invalid;
- jit_cbs[OPPnone,OPouts,OPSx_d ]:=@op_invalid;
-
- jit_cbs[OPPnone,OPrdmsr,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPwrmsr,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPsldt,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlldt,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPwbinvd   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPstr      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPbndldx   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmcall   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmptrst  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmlaunch ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmresume ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmxoff   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPmonitor  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPmwait    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPencls    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmfunc   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPxbegin   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPxend     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPxtest    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPenclu    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmrun    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmmcall  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmload   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPvmsave   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPstgi     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPclgi     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPskinit   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPinvlpga  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPmcommit  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPmwait    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPrmpadjust,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPrmpupdate,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsgdt     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsidt     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlgdt     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlidt     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsmsw     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlmsw     ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPinvlpg   ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPinvd     ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPlds      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPles      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlfs      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlgs      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPlsl      ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPltr      ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPswapgs  ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsysenter,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsysexit ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPsysret  ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPrsm     ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPxabort  ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPverr    ,OPSnone]:=@op_invalid;
- jit_cbs[OPPnone,OPverw    ,OPSnone]:=@op_invalid;
-
- jit_cbs[OPPnone,OPgetsec  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPbndldx     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPclgi       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPclrssbsy   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPclts       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPencls      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPenclu      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPgetsec     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPin         ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPins        ,OPSx_b ]:=@op_invalid;
+ jit_cbs[OPPnone,OPins        ,OPSx_w ]:=@op_invalid;
+ jit_cbs[OPPnone,OPins        ,OPSx_d ]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvd       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvept     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvlpg     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvlpga    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvpcid    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPinvvpid    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlds        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPles        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlfs        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlgdt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlgs        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlidt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlldt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlmsw       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPloadiwkey  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPlsl        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPltr        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPmcommit    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPmonitor    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPmwait      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPout        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts       ,OPSx_b ]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts       ,OPSx_w ]:=@op_invalid;
+ jit_cbs[OPPnone,OPouts       ,OPSx_d ]:=@op_invalid;
+ jit_cbs[OPPnone,OPrdmsr      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPrmpadjust  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPrmpupdate  ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPrsm        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsaveprevssp,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsetssbsy   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsgdt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsidt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPskinit     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsldt       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsmsw       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPstgi       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPstr        ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPswapgs     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysenter   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysexit    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPsysret     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPverr       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPverw       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmcall     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmclear    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmfunc     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmlaunch   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmload     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmmcall    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmptrld    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmptrst    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmread     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmresume   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmrun      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmsave     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmwrite    ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmxoff     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPvmxon      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPwbinvd     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPwbnoinvd   ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPwrmsr      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPwruss      ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPxabort     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPxbegin     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPxend       ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPxsetbv     ,OPSnone]:=@op_invalid;
+ jit_cbs[OPPnone,OPxtest      ,OPSnone]:=@op_invalid;
 
  jit_cbs[OPPnone,OPsha1nexte  ,OPSnone]:=@op_invalid;
  jit_cbs[OPPnone,OPsha1msg1   ,OPSnone]:=@op_invalid;
