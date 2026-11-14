@@ -63,6 +63,7 @@ implementation
 
 uses
  md_context,
+ md_map,
  vmparam;
 
 {$I log.inc}{$DEFINE LOG_FILE:={$I %FILE%}}
@@ -100,17 +101,10 @@ begin
  size:=SYS_CACHE_SIZE+headr_size+SYS_GUARD_SIZE+stack_size;
  size:=System.Align(size,64*1024);
 
- data:=nil;
+ data:=Pointer(KERNEL_LOWER);
 
  //reserve
- R:=NtAllocateVirtualMemory(
-     NtCurrentProcess,
-     @data,
-     0,
-     @size,
-     MEM_RESERVE,
-     PAGE_READWRITE
-    );
+ R:=md_mmap(data,size,VM_RW or MD_MAP_RESERVED);
  if (R<>0) then Exit;
 
  //cache
@@ -118,15 +112,10 @@ begin
  size:=size-SYS_CACHE_SIZE;
 
  //header
- R:=NtAllocateVirtualMemory(
-     NtCurrentProcess,
-     @data,
-     0,
-     @headr_size,
-     MEM_COMMIT,
-     PAGE_READWRITE
-    );
+ R:=md_commit(data,headr_size,VM_RW);
  if (R<>0) then Exit;
+
+ md_lock(data,headr_size);
 
  td:=data;
  td^.td_umtxq:=Pointer(td+1);
@@ -135,14 +124,7 @@ begin
  data:=data+size-stack_size;
 
  //kernel stack
- R:=NtAllocateVirtualMemory(
-     NtCurrentProcess,
-     @data,
-     0,
-     @stack_size,
-     MEM_COMMIT,
-     PAGE_READWRITE
-    );
+ R:=md_commit(data,stack_size,VM_RW);
  if (R<>0) then Exit;
 
  td^.td_kstack.sttop:=data;

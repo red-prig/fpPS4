@@ -924,6 +924,7 @@ begin
   begin
    Exit(False);
   end;
+  md_lock(base,t_track_blob.size);
   //
   td^.td_jctx.track_blocks.addr:=base;
  end;

@@ -551,6 +551,7 @@ begin
   jctx^.call_ret_cache:=Pointer(td)-64*1024;
   md_commit(jctx^.call_ret_cache,64*1024,VM_RW);
   Assert(jctx^.call_ret_cache<>nil,'call_ret_cache alocation fail');
+  md_lock(jctx^.call_ret_cache,64*1024);
  end;
 
  with jctx^.local_cache do

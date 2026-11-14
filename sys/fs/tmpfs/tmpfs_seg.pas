@@ -346,7 +346,7 @@ begin
  r:=md_memfd_create(md, size, VM_RW);
  if (r<>0) then Exit(ENOSPC);
 
- base:=nil;
+ base:=Pointer(KERNEL_LOWER);
  r:=md_mmap(base, size, VM_RW, md, 0);
  if (r<>0) then
  begin

@@ -42,6 +42,7 @@ const
  STATUS_FILE_IS_A_DIRECTORY    =$C00000BA; //EISDIR
  STATUS_NOT_SAME_DEVICE        =$C00000D4; //EXDEV
  STATUS_INSUFFICIENT_RESOURCES =$C000009A; //ENOMEM
+ STATUS_WORKING_SET_QUOTA      =$C00000A1;
  STATUS_DIRECTORY_NOT_EMPTY    =$C0000101; //ENOTEMPTY
  STATUS_FILE_CORRUPT_ERROR     =$C0000102; //EIO
  STATUS_NOT_A_DIRECTORY        =$C0000103; //ENOTDIR
@@ -1336,6 +1337,20 @@ function NtFreeVirtualMemory(
           BaseAddress          :PPointer;
           RegionSize           :PULONG_PTR;
           FreeType             :ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtLockVirtualMemory(
+          ProcessHandle        :THandle;
+          BaseAddress          :PPointer;
+          RegionSize           :PULONG_PTR;
+          MapType              :ULONG
+         ):DWORD; stdcall; external 'ntdll';
+
+function NtUnlockVirtualMemory(
+          ProcessHandle        :THandle;
+          BaseAddress          :PPointer;
+          RegionSize           :PULONG_PTR;
+          MapType              :ULONG
          ):DWORD; stdcall; external 'ntdll';
 
 function NtProtectVirtualMemory(

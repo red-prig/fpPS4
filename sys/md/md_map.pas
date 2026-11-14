@@ -51,6 +51,9 @@ function md_mmap  (var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QW
 function md_unmap (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
 function md_commit(var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QWORD=0;hProcess:THandle=NtCurrentProcess):Integer;
 
+function md_lock  (base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+function md_unlock(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+
 function  kmem_alloc(size:QWORD;prot:DWORD):Pointer;
 procedure kmem_free (base:Pointer;size:QWORD); inline;
 
@@ -650,7 +653,7 @@ function md_commit(var base:Pointer;size:QWORD;prot:DWORD;fd:THandle=0;offset:QW
 var
  ADDR:Pointer;
 begin
- ADDR:=md_dw_gran(base);
+ ADDR:=base;
  prot:=wprots[prot and VM_RWX];
 
  if (fd=THandle(0)) or (fd=THandle(-1)) then
@@ -678,6 +681,38 @@ begin
   base:=nil;
  end;
 
+end;
+
+function md_lock(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+var
+ MinimumWorkingSetSize,MaximumWorkingSetSize:PTRUINT;
+ b:Boolean;
+begin
+ repeat
+  Result:=NtLockVirtualMemory(hProcess,@base,@size,1);
+
+  if (DWORD(Result)=STATUS_WORKING_SET_QUOTA) then
+  begin
+   MinimumWorkingSetSize:=0;
+   MaximumWorkingSetSize:=0;
+   GetProcessWorkingSetSize(hProcess,MinimumWorkingSetSize,MaximumWorkingSetSize);
+
+   MinimumWorkingSetSize:=MinimumWorkingSetSize+128*1024;
+   MaximumWorkingSetSize:=MaximumWorkingSetSize+128*1024;
+
+   b:=SetProcessWorkingSetSize(hProcess,MinimumWorkingSetSize,MaximumWorkingSetSize);
+   if (not b) then Break;
+  end else
+  begin
+   Break;
+  end;
+
+ until false;
+end;
+
+function md_unlock(base:Pointer;size:QWORD;hProcess:THandle=NtCurrentProcess):Integer;
+begin
+ Result:=NtUnlockVirtualMemory(hProcess,@base,@size,1);
 end;
 
 function kmem_alloc(size:QWORD;prot:DWORD):Pointer;
